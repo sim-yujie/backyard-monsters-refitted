@@ -14,7 +14,7 @@ bin/
 
 # Documentation / misc
 CLAUDE.md
-/docs
+# /docs  (un-ignored for the revamp: reference specs live in docs/)
 
 # API / versioning
 api-versioning
