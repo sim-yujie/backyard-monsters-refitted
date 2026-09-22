@@ -106,7 +106,9 @@ const validateRangeV2 = async (user: User, save: Save, options: RangeOptions) =>
   if (outposts.length === 0)
     throw new Error("No outposts owned, and main base is out of range.");
 
-  const userOutposts = new Map(outposts.map(([x, y, id]) => [`${x}${y}`, id]));
+  // Keys are comma-separated: plain concatenation makes (1, 23) and (12, 3) both "123",
+  // which would grant or deny outpost range against the wrong cell.
+  const userOutposts = new Map(outposts.map(([x, y, id]) => [`${x},${y}`, id]));
   const outpostsInRange: { baseid: string; dx: number; dy: number }[] = [];
 
   // Otherwise, we collect the baseid's of outposts within reach of the attack cell.
@@ -117,7 +119,7 @@ const validateRangeV2 = async (user: User, save: Save, options: RangeOptions) =>
       const neighborX = (cellX + dx + MapRoom2.WIDTH) % MapRoom2.WIDTH;
       const neighborY = (cellY + dy + MapRoom2.HEIGHT) % MapRoom2.HEIGHT;
 
-      const outpostId = userOutposts.get(`${neighborX}${neighborY}`);
+      const outpostId = userOutposts.get(`${neighborX},${neighborY}`);
       if (outpostId) outpostsInRange.push({ baseid: outpostId, dx, dy });
     }
   }

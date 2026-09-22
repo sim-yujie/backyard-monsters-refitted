@@ -5,12 +5,7 @@ import { postgres } from "../../../../server.js";
 import { tribeSaveHandler } from "../../../../services/maproom/tribeSaveHandler.js";
 import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { MR1_TRIBE_IDS } from "../../../../game-data/tribes/v1/index.js";
-
-/**
- * The expiration time for a wild monster save in seconds.
- * 12 hours.
- */
-const WILD_MONSTER_EXPIRATION = 43200;
+import { isWildMonsterExpired } from "../../../../services/maproom/wildMonsterExpiry.js";
 
 /**
  * Handles viewing the base mode for a given base ID.
@@ -29,14 +24,13 @@ export const baseModeView = async (baseid: string, mapversion: MapRoomVersion = 
 
   if (!save) save = await tribeSaveHandler(baseid, mapversion, worldid, user);
 
-  if (mapversion !== MapRoomVersion.V3 && save && save.wmid !== 0) {
-    const currentTimestamp = getCurrentDateTime();
-
-    if (currentTimestamp - save.savetime > WILD_MONSTER_EXPIRATION) {
-      postgres.em.remove(save);
-      await postgres.em.flush();
-      save = await tribeSaveHandler(baseid, mapversion, worldid, user);
-    }
+  // Opening the yard is the one place allowed to write, so it reclaims the row and
+  // regenerates the camp. Read-only paths share the same rule via isWildMonsterExpired
+  // but only report the camp as fresh - see wildMonsterCell and worldSnapshot.
+  if (mapversion !== MapRoomVersion.V3 && isWildMonsterExpired(save, getCurrentDateTime())) {
+    postgres.em.remove(save!);
+    await postgres.em.flush();
+    save = await tribeSaveHandler(baseid, mapversion, worldid, user);
   }
 
   return save;

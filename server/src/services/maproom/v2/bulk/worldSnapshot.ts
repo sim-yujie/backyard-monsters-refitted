@@ -7,6 +7,8 @@ import { User } from "../../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../../database/models/worldmapcell.model.js";
 import { postgres } from "../../../../server.js";
 import { lazyEncoding, type LazyEncoding } from "./terrainMap.js";
+import { isWildMonsterExpired } from "../../wildMonsterExpiry.js";
+import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 
 /**
  * Builds and caches the MR2 occupancy snapshot served by /worldmapv2/snapshot.
@@ -66,6 +68,8 @@ interface CellRow {
   damage: number;
   protected: number;
   destroyed: number;
+  savetime: number;
+  wmid: number;
 }
 
 interface OwnerRow {
@@ -110,6 +114,8 @@ const buildSnapshot = async (worldid: string): Promise<WorldSnapshot> => {
       "s.damage",
       "s.protected",
       "s.destroyed",
+      "s.savetime",
+      "s.wmid",
     ])
     .where({
       world: worldid,
@@ -135,7 +141,17 @@ const buildSnapshot = async (worldid: string): Promise<WorldSnapshot> => {
     players[owner.userid] = { name: owner.username, avatar: owner.pic_square };
   }
 
+  const now = getCurrentDateTime();
+
   for (const row of rows) {
+    // Same 12-hour rule the map and the yard view apply: a regenerated camp is
+    // reported as untouched. Expiry is evaluated when the snapshot is built, and the
+    // build is cached for SNAPSHOT_TTL_MS, so a camp can read as destroyed for up to
+    // five minutes past its expiry. The ETag is a hash of the payload, so zeroing
+    // these two fields changes it on the next rebuild and consumers are not held on a
+    // 304 any longer than that TTL - no cache key change is needed.
+    const expired = isWildMonsterExpired(row, now);
+
     cells.push([
       row.x,
       row.y,
@@ -145,9 +161,9 @@ const buildSnapshot = async (worldid: string): Promise<WorldSnapshot> => {
       row.empirevalue,
       row.flinger,
       row.catapult,
-      row.damage,
+      expired ? 0 : row.damage,
       row.protected,
-      row.destroyed,
+      expired ? 0 : row.destroyed,
     ]);
   }
 

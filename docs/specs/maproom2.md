@@ -1064,11 +1064,13 @@ Note that the snapshot carries the same stale `damage` and `destroyed` for wild 
    appears set only in Inferno fixture data. UNVERIFIED how a Map Room 2 player's empire is flagged as
    destroyed; the `PopupLostMainBase` trigger also fires purely on local health and outpost count
    (`BASE.as:2341`).
-7. **Takeover cost authority.** The cost formulas live entirely in the client
-   (`PopupTakeover.as:50-80`) and the server subtracts whatever it is sent
-   (`takeoverCell.ts:59-65`). UNVERIFIED whether an anti-cheat pass elsewhere covers this.
-8. **Monster transfer authorisation.** `transferMonsters` never checks the caller owns the two saves
-   (`transferMonsters.ts:51-55`). UNVERIFIED whether a middleware before the controller does.
+7. **Takeover cost authority.** RESOLVED on the revamp branch: the cost formulas from
+   `PopupTakeover.as:50-80` are now reproduced server-side in
+   `server/src/services/maproom/v2/takeoverCost.ts` and `takeoverCell.ts` charges that figure,
+   ignoring the client-posted `resources` / `shiny` amounts. The outpost-count tier table in
+   `PopupInfoEnemy.as:498-513` is dead code (its floor of 2,000,000 means its zero-cost branch never runs).
+8. **Monster transfer authorisation.** RESOLVED on the revamp branch: no middleware did this, so
+   `transferMonsters.ts` now rejects the request with 403 unless both saves belong to the caller.
 9. **Outpost cap.** 3500 client-side (`GLOBAL.as:440`); no server-side cap was found. UNVERIFIED
    whether the number is intentional or vestigial — the takeover cost tiers in
    `PopupInfoEnemy.as:505-510` suggest a design around single-digit outpost counts.

@@ -434,6 +434,14 @@ export const notEnoughShinyErr = () =>
     isClientFriendly: true,
   });
 
+export const notEnoughResourcesErr = () =>
+  new ClientSafeError({
+    message: "You do not have enough resources for that.",
+    status: Status.CONFLICT,
+    data: {},
+    isClientFriendly: true,
+  });
+
 export const powerupLeaderOnlyErr = () =>
   new ClientSafeError({
     message: `Only the leader of the alliance can activate a Power-Up.`,

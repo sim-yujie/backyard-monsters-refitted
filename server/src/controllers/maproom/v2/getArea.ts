@@ -66,6 +66,9 @@ const CELL_SAVE_FIELDS = [
   "save.monsters",
   "save.damage",
   "save.destroyed",
+  // Needed by the wild monster expiry rule - a camp regenerates 12 hours after its last save.
+  "save.savetime",
+  "save.wmid",
   "save.points",
   "save.basevalue",
   "save.attackid",

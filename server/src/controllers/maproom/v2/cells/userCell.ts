@@ -82,8 +82,14 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     n: cellOwner.username,
     fr: 0,
     p: isProtected ? 1 : 0,
-    r: cellSave.resources,
-    m: cellSave.monsters || {},
+    // Only the owner's own cells carry live resources and monsters. Every client read of
+    // `r`/`m` is gated on the cell being the viewer's own - the 1 Hz production sim bails
+    // at `if (!this._mine) return true` (MapRoomCell.as:706), the attack monster roll-up
+    // checks `mapRoomCell._mine` (PopupAttackA.as:218), the spend path checks
+    // `attackerCell.mine` (BASE.as:2989), and the garrison popups are own-yard only
+    // (PopupInfoMine.as:361, PopupMonstersA.as:72). Omitting them makes MapRoomCell.Setup
+    // fall back to its zeroed defaults (MapRoomCell.as:375-395, :410-420).
+    ...(mine && { r: cellSave.resources, m: cellSave.monsters || {} }),
     l: baseLevel,
     d: damage >= 90 ? 1 : 0,
     lo: locked,

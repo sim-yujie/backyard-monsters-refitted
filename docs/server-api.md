@@ -253,9 +253,10 @@ are plain water and carry only `{ i }`. A user cell additionally carries: `uid`,
 viewer's own cell), `p` (protection active), `t` (truce **expiry unix timestamp** with that
 owner, absent for the viewer's own cell), `mine` (1 for the caller's own cell), `pic_square`,
 `pi` (always `0` — UNVERIFIED: unused placeholder), `fr` (always `0` — UNVERIFIED: unused
-placeholder). **It also always includes `r` (the owner's live `resources` object) and `m`
-(the owner's `monsters` object, `{}` if unset) — every player's resource and monster counts are
-visible to anyone who pans the map over their cell, not just the owner.** A wild-monster
+placeholder). `r` (the owner's live `resources` object) and `m` (the owner's `monsters`
+object, `{}` if unset) are included **only when `mine` is 1**. Before the revamp branch every
+cell carried them, which exposed every player's resource and monster counts to anyone panning the
+map; the Flash client only ever read them for the viewer's own cell (`userCell.ts`). A wild-monster
 cell carries only `{ uid: 0, b, i, bid, n (tribe name, purely `(x+y) % 4`-derived — not random
 per-world), l (tribe level), dm, d }` — no `r`/`m`/ownership fields, since it is unowned until
 captured.

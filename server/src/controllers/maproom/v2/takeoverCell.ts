@@ -8,13 +8,28 @@ import { BaseType } from "../../../enums/Base.js";
 import { MapRoomCell, MapRoomVersion } from "../../../enums/MapRoom.js";
 import {
   Operation,
+  RESOURCE_KEYS,
   updateResources,
 } from "../../../services/base/updateResources.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { validateRange } from "../../../services/maproom/v2/validateRange.js";
 import { TakeoverCellSchema } from "../../../schemas/TakeoverCellSchema.js";
-import { takeoverCellErr, shinyLockedErr } from "../../../errors/errors.js";
+import {
+  takeoverCellErr,
+  shinyLockedErr,
+  notEnoughShinyErr,
+  notEnoughResourcesErr,
+} from "../../../errors/errors.js";
 import { isShinyLocked } from "../../../services/user/shinyLock.js";
+import {
+  isAdjacentToMainYard,
+  takeoverResourceCost,
+  takeoverShinyCost,
+} from "../../../services/maproom/v2/takeoverCost.js";
+import { calculateTribeLevel } from "../../../services/maproom/v2/calculateTribeLevel.js";
+import { Tribes } from "../../../enums/Tribes.js";
+import { runningPowerups } from "../../../services/alliance/powerups.js";
+import { AlliancePowerupType } from "../../../enums/Alliance.js";
 
 /**
  * Controller to handle the takeover of a cell on the world map via shiny or resources.
@@ -27,7 +42,9 @@ import { isShinyLocked } from "../../../services/user/shinyLock.js";
  * @throws Will throw an error if the base or base type is invalid.
  */
 export const takeoverCell: KoaController = async (ctx) => {
-  const { baseid, resources, shiny } = TakeoverCellSchema.parse(ctx.request.body);
+  // `resources` is still accepted by the schema for wire compatibility, but the client's
+  // figure is no longer trusted - the cost is recomputed below.
+  const { baseid, shiny } = TakeoverCellSchema.parse(ctx.request.body);
 
   const currentUser: User = ctx.authUser;
   const shinyLocked = isShinyLocked(currentUser);
@@ -56,13 +73,50 @@ export const takeoverCell: KoaController = async (ctx) => {
 
   await validateRange(currentUser, userSave, mapversion, { attackCell: cell });
 
-  if (shiny) userSave.credits = userSave.credits - shiny;
-  if (resources)
+  // The price used to be whatever the client posted in `resources` / `shiny`, which
+  // made every takeover free for anyone willing to edit the request. Recompute the
+  // client's own formula here (see takeoverCost.ts for the citations) and charge that
+  // instead. Neither client path can produce a zero price - both floor above a
+  // million - so a request that omits both fields is charged the resource cost rather
+  // than taking the cell for nothing.
+  // The client branches on the cell payload's `b` field, which is base_type, so match it.
+  const isWildMonster = cell.base_type === MapRoomCell.WM;
+
+  const [homeX, homeY] = (userSave.homebase ?? []).map(Number);
+
+  const tribe = Tribes[(cell.x + cell.y) % Tribes.length];
+
+  const powerups = await runningPowerups(currentUser.alliance_id);
+
+  const cost = takeoverResourceCost({
+    isWildMonster,
+    level: calculateTribeLevel(cell.x, cell.y, tribe),
+    empireValue: cellSave.empirevalue,
+    adjacentToMainYard:
+      Number.isFinite(homeX) &&
+      Number.isFinite(homeY) &&
+      isAdjacentToMainYard(homeX, homeY, cell.x, cell.y),
+    conquestActive: powerups.some(({ id }) => id === AlliancePowerupType.CONQUEST),
+  });
+
+  if (shiny) {
+    const shinyCost = takeoverShinyCost(cost);
+
+    if (userSave.credits < shinyCost) throw notEnoughShinyErr();
+
+    userSave.credits = userSave.credits - shinyCost;
+  } else {
+    const ownedResources = userSave.resources ?? {};
+
+    if (RESOURCE_KEYS.some((key) => Number(ownedResources[key] ?? 0) < cost))
+      throw notEnoughResourcesErr();
+
     userSave.resources = updateResources(
-      resources,
-      userSave.resources ?? {},
+      { r1: cost, r2: cost, r3: cost, r4: cost },
+      ownedResources,
       Operation.SUBTRACT
     );
+  }
 
   // Clean up previous owner's save if the cell was player-owned
   const previousOwner = await postgres.em.findOne(

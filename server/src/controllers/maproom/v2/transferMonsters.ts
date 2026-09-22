@@ -3,7 +3,9 @@ import z from "zod";
 import type { KoaController } from "../../../utils/KoaController.js";
 import { postgres } from "../../../server.js";
 import { Save } from "../../../database/models/save.model.js";
+import { User } from "../../../database/models/user.model.js";
 import { Status } from "../../../enums/StatusCodes.js";
+import { permissionErr } from "../../../errors/errors.js";
 
 interface Monster {
   hid: number[];
@@ -31,6 +33,8 @@ export const transferMonsters: KoaController = async (ctx) => {
     ctx.request.body
   );
 
+  const currentUser: User = ctx.authUser;
+
   const [fromMonsters, toMonsters]: MonstersTransfer = monsters;
 
   // Determine the order so the query always makes the source base the first result.
@@ -52,6 +56,16 @@ export const transferMonsters: KoaController = async (ctx) => {
     ctx.status = Status.FORBIDDEN;
     ctx.body = { error: 1 };
     throw new Error(`Bases belong to different users. From: ${frombaseid} with SaveId: ${fromBase.saveuserid}, To: ${tobaseid} with SaveId: ${toBase.saveuserid}`);
+  }
+
+  // A shared saveuserid only proves the two yards have the same owner, not that the
+  // caller is that owner. Without this, any authenticated player can rewrite the
+  // monster garrisons of any other player's main yard and outpost.
+  if (
+    fromBase.saveuserid !== currentUser.userid ||
+    toBase.saveuserid !== currentUser.userid
+  ) {
+    throw permissionErr();
   }
 
   fromBase.monsters = fromMonsters;
