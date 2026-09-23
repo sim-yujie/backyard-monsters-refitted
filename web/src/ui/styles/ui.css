@@ -29,8 +29,10 @@ body {
   inset: 0;
 }
 
-/* The Pixi canvas fills the window and sits under everything else. */
-#game-root canvas {
+/* The Pixi canvas fills the window and sits under everything else.
+   Direct child only: the overlay has canvases of its own (the minimap), and a
+   descendant selector would pin those to the viewport too. */
+#game-root > canvas {
   position: absolute;
   inset: 0;
   display: block;

@@ -1,318 +1,436 @@
-import { Container, Graphics } from "pixi.js";
 import { logout } from "@/api/auth";
-import { WATER_MAX_HEIGHT, WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
+import { loadOwnYard } from "@/api/base";
+import { ApiError, NetworkError } from "@/api/http";
+import { DEFAULT_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
 import { Camera } from "@/game/Camera";
-import { HexGrid, mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
-import { Hud } from "@/ui/Hud";
+import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
+import { Bookmarks } from "@/game/maproom/Bookmarks";
+import { MapInput } from "@/game/maproom/MapInput";
+import { MapRenderer } from "@/game/maproom/MapRenderer";
+import { ZoneStore, type ZoneError } from "@/game/maproom/ZoneStore";
+import { inWorld, type CellRange } from "@/game/maproom/zones";
+import { MapRoomUi } from "@/ui/maproom/MapRoomUi";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
 
 /**
- * Placeholder Map Room 2 screen.
+ * Map Room 2.
  *
- * It draws the real 800 x 800 odd-q grid with the real cell geometry and the
- * real camera, but the heights are a local stand-in: terrain comes from the
- * server's noise function seeded by the world uuid, and cell contents come from
- * /worldmapv2/getarea. Both arrive in a later task. What is exercised here is
- * the camera, the grid maths and the overlay.
+ * Wiring only. The zone cache, the renderer, the camera and the overlay each
+ * own their own behaviour; this decides when they talk to each other.
+ *
+ * The one piece of policy that lives here is the refresh clock — how often
+ * stale zones are re-requested and what a regained tab focus means — because it
+ * is a product decision rather than a property of any one part.
  */
 
-/** Terrain bands from server/src/enums/MapRoom.ts, as fill colours. */
-const TERRAIN_COLOURS: { maxHeight: number; colour: number }[] = [
-  { maxHeight: 79, colour: 0x123253 },
-  { maxHeight: 89, colour: 0x17416b },
-  { maxHeight: WATER_MAX_HEIGHT, colour: 0x1d5183 },
-  { maxHeight: 104, colour: 0xd9c489 },
-  { maxHeight: 109, colour: 0xc9b070 },
-  { maxHeight: 119, colour: 0x5c8f47 },
-  { maxHeight: 139, colour: 0x4b7b3c },
-  { maxHeight: 159, colour: 0x3f6833 },
-  { maxHeight: 169, colour: 0x37592c },
-  { maxHeight: 174, colour: 0x7a776e },
-  { maxHeight: Number.POSITIVE_INFINITY, colour: 0x6e6b63 },
-];
-
-const GRID_LINE_COLOUR = 0x0d1017;
-const HOVER_COLOUR = 0xf0a12e;
-
-/**
- * Upper bound on hexes drawn in one pass. A wide monitor at minimum zoom is
- * around 4,000; the cap stops an unusual viewport from stalling the frame.
- */
-const MAX_DRAWN_CELLS = 12_000;
+/** How often the request queue is drained. Faster than this just burns budget. */
+const PUMP_INTERVAL_SECONDS = 0.25;
+/** How often visible zones are checked for staleness. */
+const STALE_CHECK_INTERVAL_SECONDS = 5;
+/** How often countdowns, the status line and the open cell panel are refreshed. */
+const UI_TICK_SECONDS = 1;
 
 export class MapRoom2Scene implements Scene {
   private readonly camera = new Camera({
     bounds: mapRoomGrid.worldBounds(WORLD_WIDTH, WORLD_HEIGHT),
   });
 
-  private readonly world = new Container();
-  private readonly terrain = new Graphics();
-  private readonly highlight = new Graphics();
+  private readonly store = new ZoneStore({
+    onZone: (zone) => this.renderer.applyZone(zone),
+    onResources: (resources, credits) => this.ui?.setResources(resources, credits),
+    onError: (error) => this.reportError(error),
+    onAuthFailure: () => this.context?.goTo(SceneName.LOGIN),
+  });
 
-  private canvas: HTMLCanvasElement | null = null;
-  private hud: Hud | null = null;
-  private readout: HTMLElement | null = null;
-  private hint: HTMLElement | null = null;
+  private readonly renderer = new MapRenderer(this.store);
 
-  /** The cell range last drawn, so a pan only rebuilds geometry when it must. */
-  private drawnRange: {
-    minCol: number;
-    maxCol: number;
-    minRow: number;
-    maxRow: number;
-  } | null = null;
-  private hovered: OffsetCell | null = null;
+  private readonly bookmarks = new Bookmarks({
+    onError: (message) => this.ui?.notices.show("bookmarks", message, { level: "warning" }),
+    onChange: () => this.ui?.setBookmarks(this.bookmarks.all),
+  });
 
-  enter(context: SceneContext): void {
-    this.canvas = context.canvas;
+  private context: SceneContext | null = null;
+  private ui: MapRoomUi | null = null;
+  private input: MapInput | null = null;
 
-    this.world.addChild(this.terrain, this.highlight);
-    context.stage.addChild(this.world);
+  private home: OffsetCell | null = null;
+  private selected: OffsetCell | null = null;
+  private range: CellRange = { minCol: 0, maxCol: 0, minRow: 0, maxRow: 0 };
+
+  /**
+   * True once the home cell is known, or known to be unavailable.
+   *
+   * Nothing is fetched before this. The request queue is ordered by distance
+   * from the viewport centre, and until the home cell arrives that centre is
+   * the middle of the world — so fetching early would spend the opening burst
+   * on zones the player is about to be moved away from.
+   */
+  private ready = false;
+
+  // Starts at the interval so the first update after `ready` pumps at once.
+  private sincePump = PUMP_INTERVAL_SECONDS;
+  private sinceStaleCheck = 0;
+  private sinceUiTick = 0;
+  /** Rolling average of the scene's own per-frame cost, in milliseconds. */
+  private frameCostMs = 0;
+
+  async enter(context: SceneContext): Promise<void> {
+    this.context = context;
+    context.stage.addChild(this.renderer.root);
 
     this.camera.resize(context.width, context.height);
-    this.camera.centreOn(mapRoomGrid.cellToPixel(WORLD_WIDTH / 2, WORLD_HEIGHT / 2));
     this.camera.attach(context.canvas);
 
-    context.canvas.addEventListener("pointermove", this.handleHover);
-    context.canvas.addEventListener("pointerleave", this.clearHover);
-
-    this.hud = new Hud({
-      scenes: [
+    this.ui = new MapRoomUi(
+      {
+        onSceneSelect: (id) => context.goTo(id),
+        onSignOut: () => {
+          logout();
+          context.goTo(SceneName.LOGIN);
+        },
+        onHome: () => this.goHome(),
+        onRefresh: () => this.refreshNow(),
+        onJump: (cell) => this.jumpTo(cell),
+        onBookmarkAdd: (name) => this.addBookmark(name),
+        onBookmarkRemove: (index) => {
+          this.bookmarks.remove(index);
+          this.ui?.setBookmarks(this.bookmarks.all);
+          this.updateBookmarkTarget();
+        },
+        onBookmarkCell: (cell) => this.addBookmark("", cell),
+        canBookmark: () => !this.bookmarks.isFull,
+        onZoom: (zoom) => this.zoomTo(zoom),
+        onZoomReset: () => this.fitWorld(),
+        onCellPanelClose: () => this.clearSelection(),
+      },
+      SceneName.MAP_ROOM_2,
+      [
         { id: SceneName.MAP_ROOM_2, label: "Map" },
         { id: SceneName.LOGIN, label: "Account" },
       ],
-      onSceneSelect: (id) => context.goTo(id),
-      onSignOut: () => {
-        logout();
-        context.goTo(SceneName.LOGIN);
-      },
-    }).mount(context.overlay.content);
-    this.hud.setActiveScene(SceneName.MAP_ROOM_2);
+    ).mount(context.overlay.content);
 
-    this.readout = document.createElement("div");
-    this.readout.className = "cell-readout";
-    this.readout.textContent = "—";
-    context.overlay.content.append(this.readout);
+    this.ui.setBookmarks(this.bookmarks.all);
+    this.updateBookmarkTarget();
+    this.ui.setZoom(this.camera.zoom);
 
-    this.hint = document.createElement("p");
-    this.hint.className = "map-hint";
-    this.hint.textContent =
-      "Drag to pan, scroll or pinch to zoom. Cell data is not loaded yet.";
-    context.overlay.content.append(this.hint);
+    this.input = new MapInput({
+      camera: this.camera,
+      canvas: context.canvas,
+      onHover: (cell) => this.handleHover(cell),
+      onSelect: (cell) => this.selectCell(cell),
+      onZoomToCell: (cell) => this.zoomToCell(cell),
+      onZoomStep: (direction) => this.zoomTo(this.camera.zoom * Math.pow(1.5, direction)),
+      onZoomReset: () => this.fitWorld(),
+      onCancel: () => this.clearSelection(),
+    });
+    this.input.attach();
+
+    window.addEventListener("focus", this.handleFocus);
+    document.addEventListener("visibilitychange", this.handleFocus);
+    window.addEventListener("online", this.handleOnline);
+    window.addEventListener("offline", this.handleOffline);
+
+    // A sensible view before the network answers, replaced by the home cell.
+    this.camera.centreOn(mapRoomGrid.cellToPixel(WORLD_WIDTH / 2, WORLD_HEIGHT / 2));
+    await this.loadOwnCell();
   }
 
   exit(): void {
+    this.input?.detach();
+    this.input = null;
     this.camera.detach();
-    this.canvas?.removeEventListener("pointermove", this.handleHover);
-    this.canvas?.removeEventListener("pointerleave", this.clearHover);
-    this.canvas = null;
 
-    this.hud?.destroy();
-    this.hud = null;
-    this.readout?.remove();
-    this.readout = null;
-    this.hint?.remove();
-    this.hint = null;
+    window.removeEventListener("focus", this.handleFocus);
+    document.removeEventListener("visibilitychange", this.handleFocus);
+    window.removeEventListener("online", this.handleOnline);
+    window.removeEventListener("offline", this.handleOffline);
 
-    this.world.destroy({ children: true });
+    this.ui?.destroy();
+    this.ui = null;
+    this.renderer.destroy();
+    this.context = null;
   }
 
   resize(width: number, height: number): void {
     this.camera.resize(width, height);
   }
 
-  update(): void {
-    if (!this.camera.dirty) return;
-    this.camera.dirty = false;
-    this.applyCamera();
-    this.redrawIfRangeChanged();
-    // The outline width is in world units, so it has to follow the zoom.
-    if (this.hovered) this.drawHighlight();
-  }
+  update(deltaSeconds: number): void {
+    const started = performance.now();
 
-  /**
-   * Moves the whole world container instead of re-projecting every vertex, so
-   * panning and zooming cost one transform rather than a geometry rebuild.
-   */
-  private applyCamera(): void {
-    const { zoom, position } = this.camera;
-    this.world.scale.set(zoom);
-    this.world.position.set(-position.x * zoom, -position.y * zoom);
-  }
-
-  /** The inclusive cell range covering the viewport, with a one-cell margin. */
-  private visibleRange(): { minCol: number; maxCol: number; minRow: number; maxRow: number } {
-    const view = this.camera.visibleWorldRect();
-
-    const topLeft = mapRoomGrid.pixelToCell(view.left, view.top);
-    const bottomRight = mapRoomGrid.pixelToCell(view.right, view.bottom);
-
-    const clampCol = (value: number) => Math.min(Math.max(value, 0), WORLD_WIDTH - 1);
-    const clampRow = (value: number) => Math.min(Math.max(value, 0), WORLD_HEIGHT - 1);
-
-    return {
-      minCol: clampCol(topLeft.col - 1),
-      maxCol: clampCol(bottomRight.col + 1),
-      minRow: clampRow(topLeft.row - 2),
-      maxRow: clampRow(bottomRight.row + 2),
-    };
-  }
-
-  private redrawIfRangeChanged(): void {
-    const range = this.visibleRange();
-    const previous = this.drawnRange;
-
-    if (
-      previous &&
-      previous.minCol === range.minCol &&
-      previous.maxCol === range.maxCol &&
-      previous.minRow === range.minRow &&
-      previous.maxRow === range.maxRow
-    ) {
-      return;
+    if (this.camera.dirty) {
+      this.camera.dirty = false;
+      this.applyCamera();
+      this.range = this.visibleRange();
+      if (this.ready) this.store.ensureVisible(this.range);
+      this.ui?.setViewport(this.range);
+      this.ui?.setZoom(this.camera.zoom);
     }
 
-    this.drawnRange = range;
-    this.drawTerrain(range);
-  }
+    this.renderer.draw(this.range, this.camera.zoom);
+    this.ui?.drawMinimap();
 
-  private drawTerrain(range: {
-    minCol: number;
-    maxCol: number;
-    minRow: number;
-    maxRow: number;
-  }): void {
-    this.terrain.clear();
+    if (this.ready) {
+      this.sincePump += deltaSeconds;
+      if (this.sincePump >= PUMP_INTERVAL_SECONDS) {
+        this.sincePump = 0;
+        void this.store.pump();
+      }
 
-    const cols = range.maxCol - range.minCol + 1;
-    const rows = range.maxRow - range.minRow + 1;
-    if (cols * rows > MAX_DRAWN_CELLS) return;
-
-    // Batch by colour: every polygon of one band is added to a single path and
-    // filled once, which keeps the draw-call count at the number of bands.
-    const byColour = new Map<number, number[][]>();
-
-    for (let col = range.minCol; col <= range.maxCol; col++) {
-      for (let row = range.minRow; row <= range.maxRow; row++) {
-        const colour = terrainColour(placeholderHeight(col, row));
-        const polygons = byColour.get(colour) ?? [];
-        polygons.push(flatten(mapRoomGrid.cellCorners(col, row)));
-        byColour.set(colour, polygons);
+      this.sinceStaleCheck += deltaSeconds;
+      if (this.sinceStaleCheck >= STALE_CHECK_INTERVAL_SECONDS) {
+        this.sinceStaleCheck = 0;
+        this.store.refreshStale(ZONE_STALE_SECONDS);
       }
     }
 
-    for (const [colour, polygons] of byColour) {
-      for (const points of polygons) this.terrain.poly(points);
-      this.terrain.fill({ color: colour });
+    this.sinceUiTick += deltaSeconds;
+    if (this.sinceUiTick >= UI_TICK_SECONDS) {
+      this.sinceUiTick = 0;
+      this.refreshUi();
     }
 
-    // One pass of hairlines over the top, so cell edges read at any zoom.
-    for (const polygons of byColour.values()) {
-      for (const points of polygons) this.terrain.poly(points);
+    // Exponential moving average: one slow frame should show, but not dominate.
+    this.frameCostMs += (performance.now() - started - this.frameCostMs) * 0.1;
+  }
+
+  /**
+   * Loads the caller's own yard to find the home cell, then centres on it.
+   *
+   * Centring before anything is fetched matters: the queue is ordered by
+   * distance from the viewport centre, so the home zone and its neighbours go
+   * out first and the screen fills from the middle outwards.
+   */
+  private async loadOwnCell(): Promise<void> {
+    try {
+      const base = await loadOwnYard();
+
+      const home = base.homebase;
+      if (home) {
+        // `homebase` arrives as a pair of strings, not numbers.
+        const cell = { col: Number(home[0]), row: Number(home[1]) };
+        if (inWorld(cell.col, cell.row)) {
+          this.home = cell;
+          this.ui?.setHome(cell);
+          this.jumpTo(cell, DEFAULT_ZOOM);
+        }
+      }
+
+      // worldsize is [height, width], the server's WORLD_SIZE order.
+      const size = base.worldsize;
+      if (size && (size[1] !== WORLD_WIDTH || size[0] !== WORLD_HEIGHT)) {
+        console.warn(
+          `Server world is ${size[1]} x ${size[0]}; this client is built for ${WORLD_WIDTH} x ${WORLD_HEIGHT}`,
+        );
+      }
+
+      if (base.resources) this.ui?.setResources(base.resources, base.credits);
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.isAuthFailure) {
+        this.context?.goTo(SceneName.LOGIN);
+        return;
+      }
+      this.ui?.notices.show(
+        "own-yard",
+        caught instanceof NetworkError
+          ? "Could not reach the server to find your yard."
+          : "Could not load your yard, so the map opened at the world centre.",
+        { level: "warning", actionLabel: "Retry", onAction: () => void this.loadOwnCell() },
+      );
+    } finally {
+      // Either the camera is on the home cell or it is on the world centre.
+      // Whichever it is, that is now the right place to start fetching from.
+      this.ready = true;
+      this.camera.dirty = true;
     }
-    this.terrain.stroke({ width: 1, color: GRID_LINE_COLOUR, alpha: 0.35 });
   }
 
-  private drawHighlight(): void {
-    this.highlight.clear();
-    if (!this.hovered) return;
+  /* ── Camera ─────────────────────────────────────────────────────────── */
 
-    this.highlight.poly(flatten(mapRoomGrid.cellCorners(this.hovered.col, this.hovered.row)));
-    this.highlight.fill({ color: HOVER_COLOUR, alpha: 0.22 });
-
-    this.highlight.poly(flatten(mapRoomGrid.cellCorners(this.hovered.col, this.hovered.row)));
-    this.highlight.stroke({ width: 2 / this.camera.zoom, color: HOVER_COLOUR });
+  /**
+   * Moves the whole world container rather than re-projecting every vertex, so
+   * panning and zooming cost one transform, not a geometry rebuild.
+   */
+  private applyCamera(): void {
+    const { zoom, position } = this.camera;
+    this.renderer.root.scale.set(zoom);
+    this.renderer.root.position.set(-position.x * zoom, -position.y * zoom);
   }
 
-  private readonly handleHover = (event: PointerEvent): void => {
-    const rect = this.canvas?.getBoundingClientRect();
-    const world = this.camera.screenToWorld({
-      x: event.clientX - (rect?.left ?? 0),
-      y: event.clientY - (rect?.top ?? 0),
-    });
+  /** The inclusive cell range covering the viewport, with a small margin. */
+  private visibleRange(): CellRange {
+    const view = this.camera.visibleWorldRect();
+    const topLeft = mapRoomGrid.pixelToCell(view.left, view.top);
+    const bottomRight = mapRoomGrid.pixelToCell(view.right, view.bottom);
 
-    const cell = mapRoomGrid.pixelToCell(world.x, world.y);
-    const inWorld =
-      cell.col >= 0 && cell.col < WORLD_WIDTH && cell.row >= 0 && cell.row < WORLD_HEIGHT;
+    return {
+      minCol: clamp(topLeft.col - 1, WORLD_WIDTH),
+      maxCol: clamp(bottomRight.col + 1, WORLD_WIDTH),
+      // Two rows of margin vertically: the odd-column stagger means a column
+      // reaches half a cell further up and down than its neighbour.
+      minRow: clamp(topLeft.row - 2, WORLD_HEIGHT),
+      maxRow: clamp(bottomRight.row + 2, WORLD_HEIGHT),
+    };
+  }
 
-    if (!inWorld) {
-      this.clearHover();
+  private zoomTo(zoom: number): void {
+    const context = this.context;
+    if (!context) return;
+    this.camera.zoomAt(zoom, { x: context.width / 2, y: context.height / 2 });
+  }
+
+  /** Double click: zoom in a step and put that cell in the middle. */
+  private zoomToCell(cell: OffsetCell): void {
+    this.camera.zoom = Math.min(this.camera.zoom * 2, this.camera.maxZoom);
+    this.camera.centreOn(mapRoomGrid.cellToPixel(cell.col, cell.row));
+    this.selectCell(cell);
+  }
+
+  /** Keyboard `0` and the Fit button: pull back until the world is on screen. */
+  private fitWorld(): void {
+    this.camera.zoom = this.camera.minZoom;
+    this.camera.centreOn(mapRoomGrid.cellToPixel(WORLD_WIDTH / 2, WORLD_HEIGHT / 2));
+    this.camera.dirty = true;
+  }
+
+  private jumpTo(cell: OffsetCell, zoom?: number): void {
+    if (!inWorld(cell.col, cell.row)) return;
+    if (zoom !== undefined) this.camera.zoom = zoom;
+    this.camera.centreOn(mapRoomGrid.cellToPixel(cell.col, cell.row));
+    this.camera.dirty = true;
+    this.selectCell(cell);
+  }
+
+  private goHome(): void {
+    if (!this.home) {
+      this.ui?.notices.show("own-yard", "Your home cell is not known yet.", {
+        level: "info",
+        timeoutMs: 4_000,
+      });
       return;
     }
+    this.jumpTo(this.home);
+  }
 
-    if (this.hovered?.col === cell.col && this.hovered.row === cell.row) return;
+  /* ── Selection ──────────────────────────────────────────────────────── */
 
-    this.hovered = cell;
-    this.drawHighlight();
-
-    const height = placeholderHeight(cell.col, cell.row);
-    const axial = HexGrid.toAxial(cell.col, cell.row);
-
-    if (this.readout) {
-      this.readout.textContent =
-        `x ${cell.col}  y ${cell.row}` +
-        `   q ${axial.q}  r ${axial.r}` +
-        `   h ${height}${height <= WATER_MAX_HEIGHT ? "  water" : ""}`;
+  private handleHover(cell: OffsetCell | null): void {
+    this.renderer.setHovered(cell);
+    if (!cell) {
+      this.ui?.setReadout("—");
+      return;
     }
+    const payload = this.store.getCell(cell.col, cell.row);
+    this.ui?.setReadout(
+      `x ${cell.col}  y ${cell.row}` +
+        (payload ? `  h ${payload.i}` : "  loading") +
+        (payload && "n" in payload ? `  ${String(payload.n)}` : ""),
+    );
+  }
+
+  private selectCell(cell: OffsetCell): void {
+    this.selected = cell;
+    this.renderer.setSelected(cell);
+    this.updateBookmarkTarget();
+    this.ui?.showCell(cell, this.store.getCell(cell.col, cell.row));
+  }
+
+  private clearSelection(): void {
+    this.selected = null;
+    this.renderer.setSelected(null);
+    this.ui?.closeCell();
+    this.updateBookmarkTarget();
+  }
+
+  private addBookmark(name: string, cell: OffsetCell | null = this.selected): void {
+    if (!cell) return;
+    const refused = this.bookmarks.add(cell.col, cell.row, name);
+    if (refused) {
+      this.ui?.notices.show("bookmarks", refused, { level: "info", timeoutMs: 4_000 });
+      return;
+    }
+    this.ui?.setBookmarks(this.bookmarks.all);
+    this.updateBookmarkTarget();
+  }
+
+  private updateBookmarkTarget(): void {
+    const cell = this.selected;
+    const reason = !cell
+      ? undefined
+      : this.bookmarks.isFull
+        ? "You already have the maximum of 8 bookmarks."
+        : this.bookmarks.has(cell.col, cell.row)
+          ? "This cell is already bookmarked."
+          : undefined;
+    this.ui?.setBookmarkTarget(cell, reason);
+  }
+
+  /* ── Refresh and status ─────────────────────────────────────────────── */
+
+  private refreshNow(): void {
+    this.store.resume();
+    this.store.refreshVisible();
+    void this.store.pump();
+    this.ui?.notices.show("refresh", "Refetching the visible map.", {
+      level: "info",
+      timeoutMs: 2_000,
+    });
+  }
+
+  /**
+   * Regaining focus refetches everything visible.
+   *
+   * A backgrounded tab is throttled to roughly one frame a second, so the stale
+   * clock keeps running but what the player comes back to is whatever was last
+   * drawn. Refetching on focus makes "look away, look back" mean "current".
+   */
+  private readonly handleFocus = (): void => {
+    if (document.visibilityState === "hidden") return;
+    this.store.resume();
+    this.store.refreshVisible();
+    void this.store.pump();
   };
 
-  private readonly clearHover = (): void => {
-    if (!this.hovered) return;
-    this.hovered = null;
-    this.highlight.clear();
-    if (this.readout) this.readout.textContent = "—";
+  private readonly handleOffline = (): void => {
+    this.ui?.notices.show("network", "You are offline. The map will stop updating.", {
+      level: "warning",
+    });
   };
+
+  private readonly handleOnline = (): void => {
+    this.ui?.notices.clear("network");
+    this.store.resume();
+    void this.store.pump();
+  };
+
+  private refreshUi(): void {
+    const ui = this.ui;
+    if (!ui) return;
+
+    ui.tickCell(Date.now() / 1000);
+    const shown = ui.shownCell;
+    if (shown) ui.updateCell(this.store.getCell(shown.col, shown.row));
+
+    ui.setZones(this.store.loadedZoneRefs());
+    ui.setStatus(
+      `${this.store.loadedZones} zones · ${this.store.pendingRequests} queued · ` +
+        `${this.frameCostMs.toFixed(1)} ms/frame`,
+    );
+  }
+
+  private reportError(error: ZoneError): void {
+    if (error.kind === "auth") return; // The scene switch is the message.
+    this.ui?.notices.show(
+      `zone-${error.kind}`,
+      error.message,
+      error.kind === "network"
+        ? { level: "warning", actionLabel: "Retry", onAction: () => this.refreshNow() }
+        : { level: "warning", timeoutMs: 8_000 },
+    );
+  }
 }
 
-const flatten = (points: { x: number; y: number }[]): number[] => {
-  const flat: number[] = [];
-  for (const point of points) flat.push(point.x, point.y);
-  return flat;
-};
-
-const terrainColour = (height: number): number => {
-  for (const band of TERRAIN_COLOURS) {
-    if (height <= band.maxHeight) return band.colour;
-  }
-  return TERRAIN_COLOURS[TERRAIN_COLOURS.length - 1]!.colour;
-};
-
-/**
- * A stand-in height so the placeholder grid looks like a map rather than a
- * chequerboard. Value noise over a hashed integer lattice, scaled to roughly
- * the server's 60..190 output range. Replaced by the real terrain once
- * /worldmapv2/getarea is wired in.
- */
-const placeholderHeight = (col: number, row: number): number => {
-  const frequency = 1 / 11;
-  const x = col * frequency;
-  const y = row * frequency;
-
-  const value = valueNoise(x, y) * 0.65 + valueNoise(x * 2.3, y * 2.3) * 0.35;
-  return Math.round(60 + value * 130);
-};
-
-/** Bilinear value noise in 0..1 over a hashed lattice. */
-const valueNoise = (x: number, y: number): number => {
-  const x0 = Math.floor(x);
-  const y0 = Math.floor(y);
-  const fx = smoothstep(x - x0);
-  const fy = smoothstep(y - y0);
-
-  const top = lerp(hash(x0, y0), hash(x0 + 1, y0), fx);
-  const bottom = lerp(hash(x0, y0 + 1), hash(x0 + 1, y0 + 1), fx);
-  return lerp(top, bottom, fy);
-};
-
-const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-
-const smoothstep = (t: number): number => t * t * (3 - 2 * t);
-
-/** Deterministic 0..1 hash of an integer pair. */
-const hash = (x: number, y: number): number => {
-  let h = Math.imul(x, 0x27d4eb2d) ^ Math.imul(y, 0x165667b1);
-  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
-  h ^= h >>> 12;
-  return (h >>> 0) / 0xffffffff;
-};
+const clamp = (value: number, size: number): number =>
+  Math.min(Math.max(value, 0), size - 1);

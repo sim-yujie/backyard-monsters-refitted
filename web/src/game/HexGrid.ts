@@ -125,6 +125,35 @@ export class HexGrid {
     return HexGrid.toOffset(rounded.q, rounded.r);
   }
 
+  /**
+   * The six corners of a cell written into `out` as a flat `[x, y, ...]`.
+   *
+   * The allocating form below is the one to reach for; this exists because the
+   * renderer builds several thousand hexes per rebuild and the object churn
+   * from `cellCorners` alone was enough to show up as collection pauses. `out`
+   * must have room for 12 numbers, and is returned for convenience.
+   */
+  writeCellCorners(col: number, row: number, out: number[]): number[] {
+    const centre = this.cellToPixel(col, row);
+    const halfWidth = this.cellWidth / 2;
+    const quarterWidth = this.cellWidth / 4;
+    const halfHeight = this.cellHeight / 2;
+
+    out[0] = centre.x - halfWidth;
+    out[1] = centre.y;
+    out[2] = centre.x - quarterWidth;
+    out[3] = centre.y - halfHeight;
+    out[4] = centre.x + quarterWidth;
+    out[5] = centre.y - halfHeight;
+    out[6] = centre.x + halfWidth;
+    out[7] = centre.y;
+    out[8] = centre.x + quarterWidth;
+    out[9] = centre.y + halfHeight;
+    out[10] = centre.x - quarterWidth;
+    out[11] = centre.y + halfHeight;
+    return out;
+  }
+
   /** The six corners of a cell in world pixels, for drawing its outline. */
   cellCorners(col: number, row: number): Point[] {
     const centre = this.cellToPixel(col, row);

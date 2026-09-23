@@ -57,10 +57,96 @@ export const AREA_RESPONSE_SPAN = 11;
 export const CELL_WIDTH = 150;
 export const CELL_HEIGHT = 75;
 
-/** Camera zoom limits. 1 renders cell art at its native size. */
-export const MIN_ZOOM = 0.15;
+/**
+ * Camera zoom limits. 1 renders cell art at its native size.
+ *
+ * MIN_ZOOM is set so the whole world fits a 1080p viewport. The grid is
+ * 112.5 x 75 world pixels per cell, so 800 x 800 cells span 90,075 x 60,075
+ * pixels; 1080 / 60,075 = 0.01798 is the binding constraint (height, not
+ * width). 0.0175 clears it with a little margin on both axes.
+ */
+export const MIN_ZOOM = 0.0175;
 export const MAX_ZOOM = 2.5;
 export const DEFAULT_ZOOM = 0.6;
+
+/* ── Level of detail ───────────────────────────────────────────────────────
+ * Four thresholds, each chosen by what is legible and then checked against the
+ * frame budget, because both constraints point the same way: a cell too small
+ * to read is also a cell there are too many of.
+ *
+ * At zoom z a 1920 x 1080 viewport covers 245.8 / z^2 cells.
+ *
+ *   LOD_HEX_ZOOM   0.22  cell 24.8 x 16.5 px, ~5,100 cells. Below this the
+ *                        renderer switches to the one-texel-per-cell raster;
+ *                        hex outlines have stopped reading by then and the
+ *                        count doubles for every 30% of zoom given up. Measured
+ *                        at 0.16 the rebuild cost was ~10 ms a frame during a
+ *                        continuous zoom, against ~4 ms here.
+ *   LOD_GLYPH_ZOOM 0.30  cell 33.8 px. Camp glyphs appear. Below it almost
+ *                        every land cell is a camp, so the tents are noise
+ *                        rather than information, and skipping them halves the
+ *                        geometry in the band that costs the most.
+ *   LOD_BADGE_ZOOM 0.55  cell 61.9 px, ~810 cells: room for a two-digit level.
+ *   LOD_LABEL_ZOOM 0.90  cell 101 px, ~300 cells: room for a name.
+ */
+export const LOD_HEX_ZOOM = 0.22;
+export const LOD_GLYPH_ZOOM = 0.3;
+export const LOD_BADGE_ZOOM = 0.55;
+export const LOD_LABEL_ZOOM = 0.9;
+
+/**
+ * Upper bound on text objects built in one pass.
+ *
+ * Text is the expensive part of the map: every badge and label is its own
+ * display object with its own transform. At the badge threshold a 1080p
+ * viewport holds about 800 cells, so the cap is headroom for a taller window
+ * rather than something the normal path meets.
+ */
+export const MAX_TEXT_OBJECTS = 1_100;
+
+/**
+ * Hard cap on hexes built in one geometry pass. At LOD_HEX_ZOOM a 1080p
+ * viewport covers about 5,100 cells; the cap is the safety net for a much
+ * taller window, not the normal path.
+ */
+export const MAX_HEX_CELLS = 16_000;
+
+/* ── Zone request budget ───────────────────────────────────────────────────
+ * The server allows 120 getarea requests per minute per user
+ * (server/src/middleware/rateLimiters.ts, koa2-ratelimit fixed window).
+ *
+ * A token bucket admits at most `capacity + rate * window` requests in any
+ * window, so 20 + 1.5 * 60 = 110 per minute is the worst case here: a burst of
+ * 20 to fill the first screen quickly, then a sustained 90/min. The 10-request
+ * gap absorbs clock skew between the browser and the server's window edges.
+ */
+export const AREA_BURST = 20;
+export const AREA_REFILL_PER_SECOND = 1.5;
+
+/** Parallel getarea requests. The old Flash client managed one; four keeps the
+ * pipe busy without making the priority order meaningless. */
+export const AREA_MAX_CONCURRENT = 4;
+
+/**
+ * A visible zone older than this is refetched.
+ *
+ * The Flash client used 30 s plus 0..9 s of jitter (MapRoom.as:521, :634) and
+ * stacked a 10-tick per-sprite gate on top, so a cell could lag reality by 40 s.
+ * 60 s here covers the same ground at half the request rate, which matters
+ * because the web client's viewport is far larger than the old 16 x 14 grid.
+ * Camp damage and destroyed state therefore stay fresh without opening a yard —
+ * as fresh as the server is willing to report it (docs/specs/maproom2.md §5
+ * records that getarea itself never expires a wild monster save).
+ */
+export const ZONE_STALE_SECONDS = 60;
+
+/** Jitter fraction on the staleness threshold, so zones do not all expire on
+ * the same tick and empty the token bucket in one go. */
+export const ZONE_STALE_JITTER = 0.25;
+
+/** How often one area request also asks for the caller's resources, which is
+ * what keeps the HUD numbers live. The Flash client used 20 s. */
+export const RESOURCE_SYNC_SECONDS = 30;
 
 /** localStorage key holding the Bearer token between sessions. */
 export const SESSION_STORAGE_KEY = "bymr.session";

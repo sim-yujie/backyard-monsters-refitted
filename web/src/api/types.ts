@@ -48,6 +48,11 @@ export interface LoginResponse extends ApiEnvelope {
   email?: string;
   pic_square?: string | null;
   language?: string;
+  /**
+   * The map bookmark blob, stored unvalidated on `user.bookmarks`. `{}` on a
+   * new account. See api/bookmarks.ts for the shape and why it is not an array.
+   */
+  bookmarks?: unknown;
 }
 
 /** What the client keeps once a login succeeds. */

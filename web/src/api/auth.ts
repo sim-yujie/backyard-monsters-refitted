@@ -14,8 +14,21 @@ const LOGIN_PATH = "/api/:apiVersion/player/getinfo";
 
 let current: Session | null = null;
 
+/**
+ * The map bookmark blob from the last successful login.
+ *
+ * There is no endpoint that reads bookmarks back: `savebookmarks` only writes,
+ * and the list is returned on the login response and nowhere else. Every route
+ * into the map runs through a login or a token re-login first (BootScene), so
+ * holding it here is enough and nothing has to re-authenticate to read it.
+ */
+let lastBookmarks: unknown = undefined;
+
 /** The active session, or null when signed out. */
 export const getSession = (): Session | null => current;
+
+/** The raw bookmark blob the server last sent. Decode it with api/bookmarks.ts. */
+export const getStoredBookmarks = (): unknown => lastBookmarks;
 
 const remember = (session: Session): Session => {
   current = session;
@@ -43,6 +56,7 @@ export const login = async (
 ): Promise<Session> => {
   const body: LoginRequest = { email, password, sessionType };
   const response = await post<LoginResponse>(LOGIN_PATH, { ...body });
+  lastBookmarks = response.bookmarks;
   return remember(toSession(response, sessionType));
 };
 
@@ -60,6 +74,7 @@ export const loginWithToken = async (
 ): Promise<Session> => {
   const body: LoginRequest = { token, sessionType };
   const response = await post<LoginResponse>(LOGIN_PATH, { ...body });
+  lastBookmarks = response.bookmarks;
   // The route mints a fresh token, so prefer the new one over the one sent.
   return remember(toSession(response, sessionType));
 };
@@ -100,6 +115,7 @@ export const restoreStoredSession = (): Session | null => {
  */
 export const logout = (): void => {
   current = null;
+  lastBookmarks = undefined;
   setAuthToken(null);
   try {
     localStorage.removeItem(SESSION_STORAGE_KEY);

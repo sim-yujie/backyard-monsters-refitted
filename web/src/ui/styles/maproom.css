@@ -1,0 +1,275 @@
+/*
+ * Map Room 2 overlay chrome.
+ *
+ * Same rule as ui.css: every value comes from tokens.css. Nothing here declares
+ * a raw colour. Layout is anchored to the viewport corners because the canvas
+ * underneath fills the window and must stay reachable between the panels.
+ */
+
+/* ── Shared shell for the floating map panels ───────────────────────────── */
+
+.map-dock {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.map-dock > * {
+  pointer-events: auto;
+}
+
+.map-dock--left {
+  left: var(--space-4);
+  top: calc(var(--hud-height) + var(--space-4));
+  width: 248px;
+}
+
+.map-dock--right {
+  right: var(--space-4);
+  top: calc(var(--hud-height) + var(--space-4));
+  width: 300px;
+  max-height: calc(100vh - var(--hud-height) - var(--space-6));
+}
+
+.map-dock--bottom-right {
+  right: var(--space-4);
+  bottom: var(--space-4);
+  align-items: flex-end;
+}
+
+.map-dock--top-centre {
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(var(--hud-height) + var(--space-3));
+  width: min(92vw, 460px);
+  align-items: stretch;
+}
+
+/* ── Notices ────────────────────────────────────────────────────────────── */
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-strong);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-panel);
+  font-size: var(--text-sm);
+}
+
+.notice--error {
+  border-left-color: var(--colour-danger);
+}
+
+.notice--warning {
+  border-left-color: var(--colour-accent);
+}
+
+.notice--info {
+  border-left-color: var(--colour-info);
+}
+
+.notice__text {
+  flex: 1;
+}
+
+/* ── Compact panel body for the map docks ───────────────────────────────── */
+
+.map-panel .panel__body {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.map-panel .panel__titlebar {
+  padding: var(--space-2) var(--space-3);
+}
+
+.map-panel .panel__title {
+  font-size: var(--text-md);
+}
+
+.map-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.map-row--wrap {
+  flex-wrap: wrap;
+}
+
+.map-row > .btn {
+  flex: 1;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.map-coord-input {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+}
+
+.map-coord-input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ── Definition list used by the cell inspector ─────────────────────────── */
+
+.cell-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.cell-facts dt {
+  color: var(--colour-text-muted);
+  white-space: nowrap;
+}
+
+.cell-facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.cell-facts dd.is-danger {
+  color: var(--colour-danger);
+}
+
+.cell-facts dd.is-good {
+  color: var(--colour-success);
+}
+
+.cell-facts dd.is-info {
+  color: var(--colour-info);
+}
+
+.cell-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--colour-text-muted);
+}
+
+.cell-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--colour-text-muted);
+}
+
+/* ── Bookmarks ──────────────────────────────────────────────────────────── */
+
+.bookmark-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 168px;
+  overflow-y: auto;
+}
+
+.bookmark {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.bookmark__jump {
+  flex: 1;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmark__coords {
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Zoom controls ──────────────────────────────────────────────────────── */
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-panel);
+}
+
+.zoom-controls__slider {
+  width: 140px;
+  accent-color: var(--colour-accent);
+}
+
+.zoom-controls__value {
+  min-width: 46px;
+  text-align: right;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text-muted);
+}
+
+/* ── Minimap ────────────────────────────────────────────────────────────── */
+
+.minimap {
+  display: block;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  box-shadow: var(--shadow-panel);
+  cursor: crosshair;
+}
+
+.minimap:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ── Status strip under the map ─────────────────────────────────────────── */
+
+.map-status {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text-muted);
+}
