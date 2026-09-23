@@ -9,6 +9,7 @@ import { User } from "../../../../database/models/user.model.js";
 import { tribeSaveHandler } from "../../../../services/maproom/tribeSaveHandler.js";
 import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { validateRange } from "../../../../services/maproom/v2/validateRange.js";
+import { cellCoordsFromBaseId } from "../../../../services/maproom/v2/rangeCheck.js";
 import { getGeneratedCells, cellKey } from "../../../../services/maproom/v3/generateCells.js";
 import { createAttackLog } from "../../../../services/base/createAttackLog.js";
 import { updateResources, Operation } from "../../../../services/base/updateResources.js";
@@ -44,10 +45,14 @@ interface BaseModeAttack {
 }
 
 /**
- * Processes an attack from a user against a specific base
+ * Processes an attack from a user against a specific base.
+ *
+ * Every refusal — protection, an attack already running, the defender being
+ * online, a truce, and now range — is decided before anything is written, so a
+ * refused attack leaves the defender exactly as it found them.
  *
  * @param {BaseModeAttack} options - Attack options
- * @returns Result of range validation check
+ * @returns {Promise<Save>} The base being attacked
  */
 export const baseModeAttack = async ({ user, baseid, mapversion, attackCost }: BaseModeAttack) => {
   const userSave = user.save!;
@@ -77,6 +82,28 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost }: B
     if (activeTruce) throw truceActiveErr();
   }
 
+  // Range is decided here, before a single field is touched (issue #26). It used
+  // to run as the last statement of this function, long after the `attackid`,
+  // the appended attack record, the map cell, the attack log and the Map Room 3
+  // attack cost had been flushed — so an attack the server then refused still
+  // left the defender flagged as under attack for the full 7-minute window of
+  // `isAttackActive`, with nobody attacking them and nothing to clear it.
+  //
+  // The cell row is read now rather than in the block below: a wild monster camp
+  // attacked for the first time has no `world_map_cell` row yet, and the old
+  // order was what made one exist in time for the check. Its coordinates come
+  // from the base id instead, which is the same derivation that block uses, so
+  // the check sees exactly the cell it saw before.
+  const cell =
+    mapversion === MapRoomVersion.V1
+      ? null
+      : await postgres.em.findOne(WorldMapCell, { baseid });
+
+  const cellCoords = cell ? { x: cell.x, y: cell.y } : cellCoordsFromBaseId(baseid);
+
+  await validateRange(user, save, mapversion, { baseid, cell: cellCoords });
+
+  // Past this point the attack is committed: everything below writes.
   if (save.attacks.length > 3) save.attacks = save.attacks.slice(-2);
 
   // Track the details of the attack
@@ -99,11 +126,13 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost }: B
   save.attackid = Math.floor(Math.random() * 99999) + 1;
 
   if (mapversion !== MapRoomVersion.V1) {
-    let cell = await postgres.em.findOne(WorldMapCell, { baseid });
+    let attackCell: WorldMapCell | null = cell;
 
-    if (!cell) {
-      const cellX = parseInt(baseid.slice(-6, -3));
-      const cellY = parseInt(baseid.slice(-3));
+    if (!attackCell) {
+      const { x: cellX, y: cellY } = cellCoords ?? {
+        x: parseInt(baseid.slice(-6, -3)),
+        y: parseInt(baseid.slice(-3)),
+      };
 
       const world = await postgres.em.findOne(World, { uuid: userSave.worldid });
 
@@ -112,25 +141,25 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost }: B
       if (mapversion === MapRoomVersion.V3) {
         const genCell = getGeneratedCells().get(cellKey(cellX, cellY));
 
-        cell = new WorldMapCell(world, cellX, cellY, genCell?.altitude ?? 0);
-        cell.uid = save.saveuserid;
-        cell.base_type = genCell?.type ?? save.wmid;
-        cell.map_version = MapRoomVersion.V3;
-        cell.baseid = baseid;
+        attackCell = new WorldMapCell(world, cellX, cellY, genCell?.altitude ?? 0);
+        attackCell.uid = save.saveuserid;
+        attackCell.base_type = genCell?.type ?? save.wmid;
+        attackCell.map_version = MapRoomVersion.V3;
+        attackCell.baseid = baseid;
       } else {
         const noise = generateNoise(world.uuid);
         const terrainHeight = getTerrainHeight(noise, cellX, cellY);
 
-        cell = new WorldMapCell(world, cellX, cellY, terrainHeight);
-        cell.uid = save.saveuserid;
-        cell.base_type = MapRoomCell.WM;
-        cell.map_version = MapRoomVersion.V2;
-        cell.baseid = baseid;
+        attackCell = new WorldMapCell(world, cellX, cellY, terrainHeight);
+        attackCell.uid = save.saveuserid;
+        attackCell.base_type = MapRoomCell.WM;
+        attackCell.map_version = MapRoomVersion.V2;
+        attackCell.baseid = baseid;
       }
     }
 
-    save.cell = cell;
-    postgres.em.persist(cell);
+    save.cell = attackCell;
+    postgres.em.persist(attackCell);
   }
 
   // Handle attack cost for MR3 attack range
@@ -174,5 +203,5 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost }: B
     await createAttackLog(user, defender, save)
   }
 
-  return await validateRange(user, save, mapversion, { baseid });
+  return save;
 };

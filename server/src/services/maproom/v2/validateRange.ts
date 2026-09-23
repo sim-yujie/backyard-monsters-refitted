@@ -4,25 +4,37 @@ import { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres } from "../../../server.js";
 import { logReport } from "../../base/reportManager.js";
-import { MapRoom2, MapRoomVersion } from "../../../enums/MapRoom.js";
+import { MapRoomVersion } from "../../../enums/MapRoom.js";
+import {
+  checkOutpostRange,
+  planRangeCheck,
+  type CellCoords,
+  type NearbyOutpost,
+  type RangeRefusal,
+  type RangeVerdict,
+} from "./rangeCheck.js";
 
-type RangeOptions = { baseid?: string; attackCell?: Loaded<WorldMapCell, never> };
-
-const DECLARE_WAR_RANGE = 2;
-
-const MAX_OUTPOST_RANGE = 4;
-
-/**
- * A base's flinger range, with the Declare War allowance always included.
- *
- * @param {number} range - The base's own flinger range.
- * @returns {number} The range to validate against.
- */
-const withDeclareWar = (range: number) => (range > 0 ? range + DECLARE_WAR_RANGE : 0);
+type RangeOptions = {
+  baseid?: string;
+  attackCell?: Loaded<WorldMapCell, never>;
+  /**
+   * Coordinates of the cell under attack, when the caller already knows them.
+   *
+   * The attack path resolves the cell before anything is persisted, because the
+   * `world_map_cell` row for a wild monster camp may not exist until the attack
+   * creates it (issue #26).
+   */
+  cell?: CellCoords | null;
+};
 
 /**
  * Validates if the target is within the attack range of the user's base.
  * Delegates to the appropriate version-specific handler based on map version.
+ *
+ * The rule itself lives in `rangeCheck.ts` and is pure; this is the half that
+ * loads what the rule needs and turns a refusal into the error the client
+ * already handles — a raw `Error`, which the error interceptor renders as the
+ * generic 500 the Flash client shows for an out-of-range attack.
  *
  * @param {User} user - The user object containing the save data
  * @param {Save} save - The save object containing the user's base and outposts
@@ -31,11 +43,11 @@ const withDeclareWar = (range: number) => (range > 0 ? range + DECLARE_WAR_RANGE
  * @returns {Promise<Save>} - The save object if the attack is valid
  */
 export const validateRange = async (
-  user: User, 
-  save: Save, mapversion: MapRoomVersion | undefined, 
+  user: User,
+  save: Save, mapversion: MapRoomVersion | undefined,
   options: RangeOptions) => {
   if (!mapversion) throw new Error("Map version is required for range validation.");
-  
+
   switch (mapversion) {
     case MapRoomVersion.V1:
       return save;
@@ -81,127 +93,96 @@ const validateRangeV3 = (save: Save) => save;
 const validateRangeV2 = async (user: User, save: Save, options: RangeOptions) => {
   const { homebase, outposts, flinger } = user.save!;
 
-  if (!homebase) throw new Error(`${user.username} has no homebase.`);
-  
-  let attackCell: Loaded<WorldMapCell, never> | null | undefined = options?.attackCell;
+  const cell = await resolveAttackCell(options);
 
-  // First, retrieve the cell under attack
-  if (!attackCell && options?.baseid) {
-    attackCell = await postgres.em.findOne(WorldMapCell, { baseid: options.baseid });
+  const plan = planRangeCheck({ homebase, flinger, cell, outposts });
+
+  let verdict: RangeVerdict;
+
+  if ("pending" in plan) {
+    verdict = checkOutpostRange(plan.pending, await outpostFlingers(plan.pending));
+  } else {
+    verdict = plan;
   }
 
-  if (!attackCell) throw new Error("Attack cell not found.");
+  if (verdict.ok) return save;
 
-  const [cellX, cellY] = [attackCell.x, attackCell.y];
-  const [homeX, homeY] = homebase.map(Number);
+  // Only a target that really is out of reach is worth a report; the other
+  // refusals are missing data, not a player reaching too far.
+  if (verdict.reason === "out-of-range") {
+    const target =
+      options.attackCell?.baseid ??
+      options.baseid ??
+      (cell ? `${cell.x},${cell.y}` : "unknown");
 
-  // Then, we determine if the main yard is within range
-  const mainYardRange = getMainYardRange(flinger);
-
-  const totalRange = withDeclareWar(mainYardRange);
-  const distanceFromMain = getDistanceFromMain(cellX, cellY, homeX, homeY);
-
-  if (distanceFromMain <= totalRange) return save;
-
-  if (outposts.length === 0)
-    throw new Error("No outposts owned, and main base is out of range.");
-
-  // Keys are comma-separated: plain concatenation makes (1, 23) and (12, 3) both "123",
-  // which would grant or deny outpost range against the wrong cell.
-  const userOutposts = new Map(outposts.map(([x, y, id]) => [`${x},${y}`, id]));
-  const outpostsInRange: { baseid: string; dx: number; dy: number }[] = [];
-
-  // Otherwise, we collect the baseid's of outposts within reach of the attack cell.
-  const sweep = MAX_OUTPOST_RANGE + DECLARE_WAR_RANGE;
-
-  for (let dx = -sweep; dx <= sweep; dx++) {
-    for (let dy = -sweep; dy <= sweep; dy++) {
-      const neighborX = (cellX + dx + MapRoom2.WIDTH) % MapRoom2.WIDTH;
-      const neighborY = (cellY + dy + MapRoom2.HEIGHT) % MapRoom2.HEIGHT;
-
-      const outpostId = userOutposts.get(`${neighborX},${neighborY}`);
-      if (outpostId) outpostsInRange.push({ baseid: outpostId, dx, dy });
-    }
+    await logReport(user, `${user.username} attacked out of range base: ${target}`);
   }
 
-  if (outpostsInRange.length === 0)
-    throw new Error("No outposts near attack cell.");
+  throw rangeError(user, verdict.reason);
+};
 
-  // Query the database for the in-range outposts
+/**
+ * The cell under attack, from whichever the caller could supply.
+ *
+ * Takeover passes the row it already loaded. The attack path passes the
+ * coordinates it resolved from the base id, because the row may not exist yet.
+ * A bare `baseid` is still looked up, for any caller that has only that.
+ *
+ * @param {RangeOptions} options - What the caller knows about the target.
+ * @returns {Promise<CellCoords | null>} The cell, or null if it could not be resolved.
+ */
+const resolveAttackCell = async (options: RangeOptions): Promise<CellCoords | null> => {
+  if (options.cell) return options.cell;
+
+  const attackCell =
+    options.attackCell ??
+    (options.baseid
+      ? await postgres.em.findOne(WorldMapCell, { baseid: options.baseid })
+      : null);
+
+  return attackCell ? { x: attackCell.x, y: attackCell.y } : null;
+};
+
+/**
+ * Flinger level of every outpost inside the sweep box.
+ *
+ * @param {NearbyOutpost[]} nearby - The outposts whose reach decides the attack.
+ * @returns {Promise<Map<string, number | undefined>>} Flinger level per baseid.
+ */
+const outpostFlingers = async (
+  nearby: readonly NearbyOutpost[]
+): Promise<Map<string, number | undefined>> => {
   const outpostSaves = await postgres.em.find(
     Save,
-    { baseid: { $in: outpostsInRange.map((outpost) => outpost.baseid) } },
-    { fields: ["flinger"] },
+    { baseid: { $in: nearby.map((outpost) => outpost.baseid) } },
+    { fields: ["baseid", "flinger"] },
   );
 
-  for (const outpostSave of outpostSaves) {
-    const outpostRange = getOutpostRange(outpostSave.flinger);
-    const totalRange = withDeclareWar(outpostRange);
-
-    for (const { dx, dy } of outpostsInRange) {
-      if (Math.abs(dx) <= totalRange && Math.abs(dy) <= totalRange) {
-        return save;
-      }
-    }
-  }
-
-  const message = `${user.username} attacked out of range base: ${attackCell.baseid}`;
-  await logReport(user, message);
-
-  throw new Error("No outposts are within attack range.");
+  return new Map(outpostSaves.map(({ baseid, flinger }) => [baseid, flinger]));
 };
 
-// TODO: This is not perfect, it creates a square range instead of a diamond range.
-// Using 'Manhattan distance' seems to also not be perfect,
-// as it doesn't account for the diagonal distance.
-const getDistanceFromMain = (
-  cellX: number,
-  cellY: number,
-  baseX: number,
-  baseY: number
-) => {
-  // Calculate the straight-line distances
-  const deltaX = Math.abs(baseX - cellX);
-  const deltaY = Math.abs(baseY - cellY);
+/**
+ * The error for a refusal, with the wording the client already gets today.
+ *
+ * @param {User} user - The attacker.
+ * @param {RangeRefusal} reason - Why the attack was refused.
+ * @returns {Error} The error to throw.
+ */
+const rangeError = (user: User, reason: RangeRefusal): Error => {
+  switch (reason) {
+    case "no-homebase":
+      return new Error(`${user.username} has no homebase.`);
 
-  // Wrap-around distances (for toroidal map)
-  const wrappedDeltaX = Math.min(deltaX, MapRoom2.WIDTH - deltaX);
-  const wrappedDeltaY = Math.min(deltaY, MapRoom2.HEIGHT - deltaY);
+    case "no-attack-cell":
+      return new Error("Attack cell not found.");
 
-  // Use the maximum wrapped distance to calculate square range distance
-  return Math.max(wrappedDeltaX, wrappedDeltaY);
-};
+    case "no-outposts":
+      return new Error("No outposts owned, and main base is out of range.");
 
-const getMainYardRange = (flinger: number) => {
-  switch (flinger) {
-    case 0:
-      return 0;
-    case 1:
-      return 4;
-    case 2:
-      return 6;
-    case 3:
-      return 8;
-    case 4:
-      return 10;
-    default:
-      return 10;
-  }
-};
+    case "no-outposts-near-cell":
+      return new Error("No outposts near attack cell.");
 
-const getOutpostRange = (flinger: number) => {
-  switch (flinger) {
-    case 0:
-      return 0;
-    case 1:
-      return 1;
-    case 2:
-      return 2;
-    case 3:
-      return 3;
-    case 4:
-      return 4;
-    default:
-      return 4;
+    case "out-of-range":
+      return new Error("No outposts are within attack range.");
   }
 };

@@ -28,7 +28,7 @@ An attack has four phases.
 
 | Phase | What happens | Authoritative side |
 | --- | --- | --- |
-| 1. Gate | The client checks range, protection and truce, then posts `/base/load` with `type=attack` or `type=wmattack`. The server re-checks protection, active attack, defender presence, truce and range, and mints an `attackid`. | **Server** |
+| 1. Gate | The client checks range, protection and truce, then posts `/base/load` with `type=attack` or `type=wmattack`. The server re-checks protection, active attack, defender presence, truce and range — all of them before it writes anything — and only then mints an `attackid`. | **Server** |
 | 2. Load | The server returns the defender's whole yard: buildings, per-building health, traps, housed monsters, champion, resources, powerups. | **Server** |
 | 3. Battle | The entire fight — flinging, pathfinding, targeting, damage, tower fire, traps, loot pickup, death, the damage percentage and the loot totals — runs in the browser. Not one byte of it is recomputed anywhere else. | **Client** |
 | 4. Save | The client posts `/base/save` with `damage`, `destroyed`, `attackloot`, the defender's negative resource delta, the surviving trap set, champion hp, and the attack report. The server applies almost all of it as given. | **Client, with narrow server clamps** |
@@ -157,10 +157,10 @@ declaring more monsters than it owns.
 
 There is **no resource or energy cost to attacking in Map Room 2.** The `attackcost` field on
 `/base/load` is read only when `mapversion === MapRoomVersion.V3`
-(`server/src/controllers/base/load/modes/baseModeAttack.ts:135-146`). Where it is read, the client
+(`server/src/controllers/base/load/modes/baseModeAttack.ts:165-177`). Where it is read, the client
 sets the price: there is no server-side cost table, no affordability check, `r4` is ignored, and the
-subtraction can drive the pool negative (`:136-138`). The shiny branch is clamped at zero and
-refuses shiny-locked accounts (`:139-145`).
+subtraction can drive the pool negative (`:167-169`). The shiny branch is clamped at zero and
+refuses shiny-locked accounts (`:170-176`).
 
 ### Server validation
 
@@ -169,16 +169,25 @@ skipped when the target is a wild monster camp (`save.type === BaseType.TRIBE`, 
 
 | Check | Error | Line |
 | --- | --- | --- |
-| `save.protected > now` | `baseProtectedErr()` | `:64` |
-| `isAttackActive(save)` | `baseUnderAttackErr()` | `:66` |
-| Main yards only: defender's `last-seen:main:<uid>` within 60 s | `userOnlineErr()` | `:68-71` |
-| Active truce between the two users | `truceActiveErr()` | `:73-75` |
-| Range, evaluated after the attack is already recorded | throws, and writes a report | `:167` |
+| `save.protected > now` | `baseProtectedErr()` | `:71` |
+| `isAttackActive(save)` | `baseUnderAttackErr()` | `:73` |
+| Main yards only: defender's `last-seen:main:<uid>` within 60 s | `userOnlineErr()` | `:75-78` |
+| Active truce between the two users | `truceActiveErr()` | `:80-82` |
+| Range | throws, and writes a report | `:104` |
 
-The ordering matters. The `attackid`, the appended `AttackDetails`, the attack log and the Map
-Room 3 attack cost are all persisted and flushed at `baseModeAttack.ts:150-165`, **before**
-`validateRange` runs at `:167`. A failed range check therefore leaves the defender flagged as under
-attack for the full 7-minute window with no attacker present.
+Every one of them runs before the first write. The `attackid`, the appended `AttackDetails`, the
+map cell, the attack log, the Map Room 3 attack cost and the attack session are all produced after
+`validateRange` returns (`baseModeAttack.ts:107-206`), so an attack the server refuses leaves the
+defender exactly as it found them.
+
+This is the fix for issue #26. Range used to be the *last* statement of the function, after the
+flush, so a refusal left the defender flagged as under attack for the full 7-minute
+`isAttackActive` window with no attacker present, no session to authorise a save and nothing to
+clear it early. Moving the check needed one other change: a wild monster camp attacked for the
+first time has no `world_map_cell` row, and the old order was what created one in time for the
+check to find it. The cell's coordinates now come from the last six digits of the base id instead
+(`rangeCheck.ts:165`), which is the same derivation the row-creation block uses, so the check sees
+the same cell it always did without anything being written to reach it.
 | Attack modes require `ctx.meetsDiscordAgeCheck` unless the target is a scripted Map Room 1 tribe | `discordAgeErr()` 401 | see `docs/server-api.md` §Base / Yard |
 
 Level restrictions exist but are disabled. `canAttack` only blocks level-32+ players from Map Room
@@ -190,10 +199,10 @@ Side effects of a successful entry:
 
 - `save.attacks` is trimmed to the last two entries when longer than three, then an `AttackDetails`
   record `{ fbid, name, pic_square, friend, count: 1, starttime, seen: false }` is appended — for
-  non-tribe targets only (`baseModeAttack.ts:78-91`).
+  non-tribe targets only (`baseModeAttack.ts:107-120`).
 - The **attacker's** own damage protection is cleared (`damageProtection(userSave, BaseMode.ATTACK)`
-  → `protection = 0`, `baseModeAttack.ts:93-95`, `server/src/services/maproom/v2/damageProtection.ts:34-36`).
-- `save.attackid = floor(random() * 99999) + 1` (`baseModeAttack.ts:97`). It marks the row as under
+  → `protection = 0`, `baseModeAttack.ts:122-124`, `server/src/services/maproom/v2/damageProtection.ts:34-36`).
+- `save.attackid = floor(random() * 99999) + 1` (`baseModeAttack.ts:126`). It marks the row as under
   attack and is echoed to the client, which sends it back on every save.
 - An attack session is written to Redis under `attack-session:<basesaveid>`, naming the attacker,
   that `attackid` and the start time (`services/base/attackSessionStore.ts`). This, not the
@@ -201,14 +210,20 @@ Side effects of a successful entry:
   written after the flush, so a wild monster camp created by this very request already has its
   `basesaveid`.
 - A `world_map_cell` row is created for a wild monster camp being attacked for the first time, with
-  `base_type = WM` and terrain height recomputed from noise (`baseModeAttack.ts:100-132`).
+  `base_type = WM` and terrain height recomputed from noise (`baseModeAttack.ts:128-163`). The row
+  it would have found is looked up earlier, at `:97`, so the range check can use its coordinates.
 - An `AttackLogs` row is written and `save.lastattackername` set, for non-tribe targets
-  (`baseModeAttack.ts:156-165`, `server/src/services/base/createAttackLog.ts:17-39`).
+  (`baseModeAttack.ts:194-204`, `server/src/services/base/createAttackLog.ts:17-39`).
 
 ### Range
 
+The rule itself is pure and lives in `server/src/services/maproom/v2/rangeCheck.ts`: coordinates
+and flinger levels in, a verdict out, no database. `validateRange.ts` is the half that loads what
+the rule needs and turns a refusal into the error the client gets. That split is what let the check
+move ahead of the writes (issue #26); the rule's arithmetic is unchanged.
+
 Map Room 2 range is a **square** (Chebyshev) distance on the toroidal grid, not a hex distance —
-the code says so (`server/src/services/maproom/v2/validateRange.ts:168-169`).
+the code says so (`rangeCheck.ts:136-158`).
 
 | Flinger level | Main-yard range | Outpost range |
 | --- | --- | --- |
@@ -218,14 +233,22 @@ the code says so (`server/src/services/maproom/v2/validateRange.ts:168-169`).
 | 3 | 8 | 3 |
 | 4+ | 10 | 4 |
 
-(`validateRange.ts:175-207`.) `DECLARE_WAR_RANGE = 2` is added to any non-zero range
+(`rangeCheck.ts:87-128`.) `DECLARE_WAR_RANGE = 2` is added to any non-zero range
 unconditionally on the server, whether or not the powerup is active
-(`validateRange.ts:11`, `:20`). The client only adds it when `ALLIANCE_DECLAREWAR` is really
+(`rangeCheck.ts:23`, `:79`). The client only adds it when `ALLIANCE_DECLAREWAR` is really
 running (`PowDeclareWar` returns `range + 2`, `client/scripts/POWERUPS.as:341-344`).
 
 The main yard is checked first; if it is out of range the server sweeps a
-`MAX_OUTPOST_RANGE + DECLARE_WAR_RANGE = 6` cell box around the target for owned outposts and
-tests each one's flinger range (`validateRange.ts:113-147`).
+`MAX_OUTPOST_RANGE + DECLARE_WAR_RANGE = 6` cell box around the target for owned outposts
+(`rangeCheck.ts:192`), looks up just those outposts' flinger levels, and tests them
+(`rangeCheck.ts:271`). One quirk survives the move, deliberately: the flinger level of one nearby
+outpost is tested against the *offsets of every other*, so in practice the strongest flinger inside
+the box decides for all of them. Issue #26 was about when the check runs, not what it decides, so
+it was preserved exactly rather than quietly tightened.
+
+A refusal is one of five reasons, each keeping the wording it threw before
+(`validateRange.ts:171-190`): no homebase, no attack cell, no outposts owned, no outposts near the
+cell, and nothing in range. Only the last writes a report row.
 
 ### What the client loads about the target
 
@@ -1168,7 +1191,7 @@ Three separate things carry the word "report".
 
 **1. The `AttackLogs` table.** One row per attack, written once, at the moment the attack
 *starts* (`server/src/services/base/createAttackLog.ts:17-39`, called from
-`baseModeAttack.ts:164`). Columns: attacker id/name/avatar, defender id/name/avatar, `type`, `x`,
+`baseModeAttack.ts:203`). Columns: attacker id/name/avatar, defender id/name/avatar, `type`, `x`,
 `y`, `loot`, `attackreport`, `attacktime`
 (`server/src/database/models/attacklogs.model.ts`).
 
@@ -1205,7 +1228,7 @@ appended `AttackDetails`, and `attackreport`. The client shows `ATTACK.PoorDefen
 list (`server/src/services/alliance/allianceMember.ts:44`, `:86`).
 
 The `seen` flag on each `AttackDetails` is written `false` at attack start
-(`baseModeAttack.ts:88`) and **is never set to `true` anywhere in the codebase**. There is no
+(`baseModeAttack.ts:117`) and **is never set to `true` anywhere in the codebase**. There is no
 read-receipt.
 
 The attack-logs endpoint caches per user and filter for 30 minutes
@@ -1218,17 +1241,20 @@ to the defender's log for up to half an hour.
 | --- | --- | --- |
 | `discordAgeErr` | 401 | `baseLoad.ts:77`, `:96`, `:103`, `:114` |
 | `loadFailureErr` | 404 | `validateAttack.ts:30`, `:36`, `:48`, `:61`, `:74`, `:87`; `getAttackLogs.ts:71` |
-| `baseProtectedErr` | 403 | `baseModeAttack.ts:64`; `infernoModeAttack.ts:44` |
-| `baseUnderAttackErr` | 409 | `baseModeAttack.ts:66`; `infernoModeAttack.ts:50` |
-| `userOnlineErr` | 409 | `baseModeAttack.ts:70`; `infernoModeAttack.ts:48` |
-| `truceActiveErr` | 403 | `baseModeAttack.ts:75` |
-| `shinyLockedErr` | 403 | `baseModeAttack.ts:142` |
+| `baseProtectedErr` | 403 | `baseModeAttack.ts:71`; `infernoModeAttack.ts:44` |
+| `baseUnderAttackErr` | 409 | `baseModeAttack.ts:73`; `infernoModeAttack.ts:50` |
+| `userOnlineErr` | 409 | `baseModeAttack.ts:77`; `infernoModeAttack.ts:48` |
+| `truceActiveErr` | 403 | `baseModeAttack.ts:82` |
+| `shinyLockedErr` | 403 | `baseModeAttack.ts:173` |
 | `permissionErr` | 403 | `baseSave.ts:67`; `infernoSave.ts:57` |
 | `saveFailureErr` | 500 | `baseSave.ts:60` |
 | `antiCheatBanErr` | 403 | Defined in `server/src/errors/errors.ts:91-98`; **no call site in this tree** |
-| Raw `Error` → 500 | — | `baseModeAttack.ts:61`, `:108`, `:161`; `validateRange.ts:84`, `:107`, `:126`, `:149` |
+| Raw `Error` → 500 | — | `baseModeAttack.ts:68`, `:139`, `:200`; `validateRange.ts:49`, `:62`, `:171-190` |
 
-Out-of-range attacks surface as a raw 500, not a typed error.
+Out-of-range attacks surface as a raw 500, not a typed error — the body is the interceptor's
+generic `{ error: "Something went wrong, please contact support.", errorDetails: { status: 500, … } }`.
+Moving the check ahead of the writes (issue #26) did not change that shape, so the Flash client sees
+exactly what it saw before; the only difference is that the defender is no longer left locked.
 
 ### The attacker's end-of-attack UI
 
@@ -1290,7 +1316,7 @@ else, the previous attacker can no longer save against the row.
 ### Online guard
 
 A main yard whose owner was seen within 60 seconds cannot be attacked
-(`baseModeAttack.ts:68-71`), reading the Redis key `last-seen:main:<uid>`. That key is refreshed
+(`baseModeAttack.ts:75-78`), reading the Redis key `last-seen:main:<uid>`. That key is refreshed
 with a 120-second TTL on every **non-attack** save (`baseSave.ts:220-222`), so a player who closes
 the game stays unattackable for up to a minute after their last save.
 
@@ -1299,7 +1325,7 @@ the game stays unattackable for up to a minute after their last save.
 Truces are per-pair rows with an expiry. `TRUCE_DURATION = 14 * 24 * 60 * 60`
 (`server/src/controllers/mail/requestTruce.ts:21`), stamped on accept
 (`server/src/services/mail/handleTruceResponse.ts:36-38`). The server rejects an attack while one is
-active (`baseModeAttack.ts:73-75`, `server/src/services/mail/isTruceActive.ts:12-29`), and the
+active (`baseModeAttack.ts:80-82`, `server/src/services/mail/isTruceActive.ts:12-29`), and the
 client blocks the button. **Inferno attacks skip the truce check and the range check entirely**
 (`server/src/controllers/base/load/modes/infernoModeAttack.ts:36-79`). Full rules are in
 `docs/specs/maproom2.md` §7.
@@ -1310,7 +1336,7 @@ client blocks the button. **Inferno attacks skip the truce check and the range c
 | --- | --- | --- |
 | `ap_declarewar`, `NORMAL` scope | Attack countdown 300 s → 420 s | `client/scripts/GLOBAL.as:840-842` |
 | `ap_declarewar`, `OFFENSE` scope | Flinger capacity +25% | `client/scripts/ATTACK.as:593-595` |
-| `ap_declarewar` | +2 cells of attack range; the client adds it conditionally, the server unconditionally | `POWERUPS.as:341-344`, `validateRange.ts:11`, `:20` |
+| `ap_declarewar` | +2 cells of attack range; the client adds it conditionally, the server unconditionally | `POWERUPS.as:341-344`, `rangeCheck.ts:23`, `:79` |
 | `ap_armament`, `DEFENSE` scope | Applied as a base buff, not a numeric modifier here | `POWERUPS.as:129-131`, `:332-335` |
 | `ap_conquest` | Takeover cost × 0.75, rounded up | `POWERUPS.as:337-339` |
 
