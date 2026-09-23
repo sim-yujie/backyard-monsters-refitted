@@ -26,8 +26,8 @@ const fixtureTypes = [
 const fileOf = (url: string): string => url.slice(url.lastIndexOf("/") + 1);
 
 describe("the art table", () => {
-  it("covers 130 building types with no duplicates", () => {
-    expect(BUILDING_ART_ROWS.length).toBe(130);
+  it("covers 131 building types with no duplicates", () => {
+    expect(BUILDING_ART_ROWS.length).toBe(131);
     expect(artTypes().length).toBe(BUILDING_ART_ROWS.length);
   });
 
@@ -62,18 +62,21 @@ describe("the art table", () => {
     expect(missing).toEqual([]);
   });
 
-  it("knows the seven shadows the game server is missing, and nothing else", () => {
-    // Every one is an Inferno or Map Room 3 building's shadow, and each falls
-    // back to a drawn building with no shadow rather than to a hole.
-    expect(manifest.missing).toEqual([
-      "132 buildings/imagmatower/shadow.1.destroyed.v2.jpg",
-      "136 buildings/spurtztower/destroyed_shadow.jpg",
-      "137 buildings/blackspurtztower/destroyed_shadow.jpg",
-      "138 buildings/guardtower/shadow.v2.1.damaged.png",
-      "138 buildings/guardtower/shadow.v2.1.destroyed.png",
-      "138 buildings/guardtower/shadow.v2.1.png",
-      "139 buildings/resourceoutpost/shadow.v2.1.png",
-    ]);
+  it("names only files the game server actually has", () => {
+    // Every file the table references exists. It did not always: the props file
+    // keeps dead image lines commented out, and reading those as live named
+    // seven shadows that are not on disk. The generator strips comments.
+    expect(manifest.missing).toEqual([]);
+  });
+
+  it("keeps the Inferno Portal, whose level keys are bare numbers", () => {
+    // The one entry in YARD_PROPS.as spelled `1: {` rather than `"1": {`.
+    const portal = BUILDING_ART_ROWS.find((row) => row[0] === 127);
+    expect(portal?.[3].map((level) => level[0])).toEqual([1, 2, 3, 4, 5]);
+    // Its level 1 to 4 shadows are commented out in the props, so only the
+    // level 5 one is live.
+    expect(resolveArt(127, 1, ArtState.DEFAULT)?.shadow).toBeNull();
+    expect(resolveArt(127, 5, ArtState.DEFAULT)?.shadow?.url).toContain("shadow.5.v2.jpg");
   });
 });
 

@@ -46,12 +46,13 @@ interface ArtRowIndex {
   readonly folder: string;
   readonly levels: readonly ArtLevel[];
   readonly hp: readonly number[];
+  readonly size: number;
 }
 
 const ROWS = new Map<number, ArtRowIndex>(
   BUILDING_ART_ROWS.map((row) => [
     row[0],
-    { name: row[1], folder: row[2], levels: row[3], hp: row[4] },
+    { name: row[1], folder: row[2], levels: row[3], hp: row[4], size: row[5] },
   ]),
 );
 
@@ -81,6 +82,20 @@ export const maxHealth = (type: number, level: number): number | null => {
   if (!ladder || ladder.length === 0) return null;
   const index = Math.min(Math.max(level - 1, 0), ladder.length - 1);
   return ladder[index] ?? null;
+};
+
+/**
+ * The props table's `size` for a type, or null.
+ *
+ * For most buildings this is a build-menu size class and says nothing about the
+ * footprint, which each class sets in its own constructor. For decorations it
+ * *is* the footprint: `BDECORATION` reads it straight out of the props table
+ * (`client/scripts/BDECORATION.as:20-25`). `YardGrid.footprintOf` uses it only
+ * for the types its own table does not name, which is exactly the decorations.
+ */
+export const propsSize = (type: number): number | null => {
+  const size = ROWS.get(type)?.size;
+  return size === undefined || size <= 0 ? null : size;
 };
 
 /**

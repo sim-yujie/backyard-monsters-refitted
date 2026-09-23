@@ -79,7 +79,15 @@ export interface YardMushroom {
   readonly worldX: number;
   readonly worldY: number;
   readonly depth: number;
-  /** One in four is golden (`client/scripts/MUSHROOMS.as:223-224`). */
+  /**
+   * Which of the five art variants this mushroom shows, 1..5, as the save
+   * stores it (`client/scripts/BMUSHROOM.as:52-62`, generated at
+   * `MUSHROOMS.as:62`). The art is an embedded Flash MovieClip and has no file
+   * on the server, so this client draws one glyph for all five and carries the
+   * field for when that art is recovered.
+   */
+  readonly variant: number;
+  /** One in four is worth shiny when picked (`MUSHROOMS.as:223-224`). */
   readonly golden: boolean;
 }
 
@@ -152,13 +160,19 @@ const countdownOf = (building: BuildingData, savedAt: number): YardCountdown | n
 };
 
 /**
- * Golden mushrooms are decided from the position, not stored
- * (`client/scripts/MUSHROOMS.as:223-224`: `new Rndm(int(x * y)).random() * 4 == 0`).
+ * Whether a mushroom is worth shiny when picked.
  *
+ * Decided from the position rather than stored
+ * (`client/scripts/MUSHROOMS.as:223-224`: `new Rndm(int(x * y)).random() * 4 == 0`).
  * `Rndm` is the client's own generator and is not reproduced here, so this uses
- * the position parity as a stand-in: the same one-in-four proportion, decided
- * from the same inputs, but not the same mushrooms the Flash client would gild.
- * Nothing in a read-only yard turns on it.
+ * the position parity as a stand-in: the same one-in-four proportion from the
+ * same inputs, but not the same mushrooms the original would pick.
+ *
+ * Two caveats for whoever wires up picking. The original draws no visual
+ * difference — a golden mushroom looks like any other until it is cleared — so
+ * the renderer tinting them is this client's own affordance, not the game's.
+ * And once picking exists the reward has to come from the server, at which
+ * point this guess must go rather than be reconciled with it.
  */
 const isGolden = (x: number, y: number): boolean => (Math.abs(Math.trunc(x * y)) & 3) === 0;
 
@@ -232,6 +246,7 @@ export const readYard = (response: BaseLoadResponse): Yard => {
       worldX: world.x,
       worldY: world.y,
       depth: depthKey(world.x, world.y, index),
+      variant: typeof entry.frame === "number" ? entry.frame : 1,
       golden: isGolden(x, y),
     };
   });

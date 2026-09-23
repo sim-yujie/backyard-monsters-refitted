@@ -14,8 +14,11 @@ import type { YardBounds } from "./YardGrid";
  * are composited over image one through Perlin-noise alpha masks seeded from the
  * base's own seed, so no two yards get the same grass
  * (`client/scripts/MAPBG.as:58-105`). `MAP.swapBG` then repeats that composite
- * on a plain grid, stepping 998 x 498 so the seams overlap by two pixels
- * (`client/scripts/MAP.as:276-287`).
+ * on a plain 4 x 4 grid stepping exactly 1000 x 500, which is what the live
+ * bitmap renderer does (`client/scripts/MAP.as:262-274`); the legacy
+ * display-list path beside it steps 998 x 498 instead, overlapping by a pixel
+ * to hide seams (`:277-289`). This follows the live path, so the tiling sprite
+ * repeats on the block's own size with no overlap.
  *
  * This follows that structure exactly — same 1000 x 500 block, same layer
  * order, same per-layer feature sizes — on a 2D canvas, substituting seeded
@@ -28,7 +31,13 @@ import type { YardBounds } from "./YardGrid";
  *
  * The images themselves are full 200 x 100 rectangles of texture rather than
  * isometric diamonds — the original lays them on a plain grid with no stagger,
- * which only works if they tile as rectangles.
+ * which only works if they tile as rectangles. The size is the one the embedded
+ * bitmap classes declare (`client/scripts/isograss1.as:6`); the extracted PNGs
+ * under `yardbg/` match it, except `rock/` and `sand/`, which are 200 x 101.
+ *
+ * Note that the Flash client never reads `server/public/assets/yardbg/` at all:
+ * it uses bitmaps embedded in the SWF, and the folder is the extracted form of
+ * those, staged for this client.
  *
  * The composite is one canvas, built once when the yard opens. Everything after
  * that is a `TilingSprite` repeating it, clipped to the plot.

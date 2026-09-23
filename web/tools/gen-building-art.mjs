@@ -31,7 +31,18 @@ const OUT = resolve(here, "../src/game/yard/buildingArtData.ts");
 const MANIFEST = resolve(here, "../test/fixtures/building-art-files.json");
 const ASSETS = resolve(repo, "server/public/assets");
 
-const source = readFileSync(PROPS, "utf8");
+/**
+ * The props file, with `//` line comments stripped.
+ *
+ * Several entries keep dead image lines commented out — the Inferno Portal's
+ * shadows for levels 1 to 4 are the clearest case (`YARD_PROPS.as:6832`, `:6836`,
+ * `:6840`, `:6844`) — and reading those as live would put files on screen that
+ * the game never draws. No string literal in this file contains `//`, so
+ * stripping to end of line is safe. Line numbers are taken from the original
+ * text, so citations still point at the right place.
+ */
+const original = readFileSync(PROPS, "utf8");
+const source = original.replace(/\/\/[^\n]*/g, "");
 const strings = JSON.parse(readFileSync(STRINGS, "utf8")).core;
 
 /** Index of the matching `}` for the `{` at `open`. */
@@ -69,6 +80,7 @@ for (let hit = marker.exec(source); hit; hit = marker.exec(source)) {
 
   const nameHit = [...before.matchAll(/"name"\s*:\s*"([^"]*)"/g)].pop();
   const clsHit = [...before.matchAll(/"type"\s*:\s*"([^"]*)"/g)].pop();
+  const sizeHit = [...before.matchAll(/"size"\s*:\s*(\d+)/g)].pop();
 
   // `hp` follows imageData in every entry, so it is read forwards from here,
   // stopping at the next entry's `"id":` so a missing array cannot borrow the
@@ -86,6 +98,7 @@ for (let hit = marker.exec(source); hit; hit = marker.exec(source)) {
     id: Number(idHit[1]),
     name: nameHit?.[1] ?? "",
     kind: clsHit?.[1] ?? "",
+    size: sizeHit ? Number(sizeHit[1]) : 0,
     hp,
     body,
     line: lineOf(hit.index),
@@ -143,9 +156,12 @@ for (const block of blocks) {
   const baseurl = /"baseurl"\s*:\s*"([^"]*)"/.exec(block.body)?.[1];
   if (!baseurl) continue;
 
-  // Each image level is `"<n>": { ... }` directly inside the block.
+  // Each image level is `"<n>": { ... }` directly inside the block. The
+  // Inferno Portal (id 127) is the one entry whose keys are bare numbers rather
+  // than strings, so both spellings have to be accepted or it drops out of the
+  // table entirely.
   const levels = [];
-  const levelMarker = /"(\d+)"\s*:\s*\{/g;
+  const levelMarker = /(?:"(\d+)"|(?<![\w"])(\d+))\s*:\s*\{/g;
   for (let hit = levelMarker.exec(block.body); hit; hit = levelMarker.exec(block.body)) {
     const open = hit.index + hit[0].length - 1;
     const close = matchBrace(block.body, open);
@@ -156,7 +172,7 @@ for (const block of blocks) {
     if (!top) continue;
 
     levels.push({
-      level: Number(hit[1]),
+      level: Number(hit[1] ?? hit[2]),
       top,
       damaged: readTop(body, "damaged"),
       destroyed: readTop(body, "destroyed"),
@@ -173,6 +189,7 @@ for (const block of blocks) {
     id: block.id,
     name: strings[block.name] ?? block.name.replaceAll("#", ""),
     kind: block.kind,
+    size: block.size,
     baseurl,
     hp: block.hp,
     levels,
@@ -202,7 +219,7 @@ const body = entries
       `— YARD_PROPS.as:${entry.line}\n` +
       `  [${entry.id}, ${JSON.stringify(entry.name)}, ${JSON.stringify(entry.baseurl)}, [\n` +
       entry.levels.map((one) => `    ${level(one)},`).join("\n") +
-      `\n  ], [${entry.hp.join(",")}]],`,
+      `\n  ], [${entry.hp.join(",")}], ${entry.size}],`,
   )
   .join("\n");
 
@@ -256,6 +273,12 @@ export type ArtRow = readonly [
   levels: readonly ArtLevel[],
   /** Maximum health per level, \`hp[level - 1]\`. Empty when the props table has none. */
   hp: readonly number[],
+  /**
+   * The props table's \`size\`. A build-menu size class for most buildings, but
+   * the actual footprint for decorations
+   * (\`client/scripts/BDECORATION.as:20-25\`). 0 when the entry has none.
+   */
+  size: number,
 ];
 
 export const BUILDING_ART_ROWS: readonly ArtRow[] = [

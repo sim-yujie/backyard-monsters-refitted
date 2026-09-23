@@ -822,6 +822,17 @@
         "top6.png"
       ]
     },
+    "buildings/iportal/": {
+      "exists": true,
+      "files": [
+        "shadow.5.v2.jpg",
+        "top.1.v2.png",
+        "top.2.v2.png",
+        "top.3.v2.png",
+        "top.4.v2.png",
+        "top.5.v2.png"
+      ]
+    },
     "buildings/iquaketower/": {
       "exists": true,
       "files": [
@@ -923,13 +934,5 @@
       ]
     }
   },
-  "missing": [
-    "132 buildings/imagmatower/shadow.1.destroyed.v2.jpg",
-    "136 buildings/spurtztower/destroyed_shadow.jpg",
-    "137 buildings/blackspurtztower/destroyed_shadow.jpg",
-    "138 buildings/guardtower/shadow.v2.1.damaged.png",
-    "138 buildings/guardtower/shadow.v2.1.destroyed.png",
-    "138 buildings/guardtower/shadow.v2.1.png",
-    "139 buildings/resourceoutpost/shadow.v2.1.png"
-  ]
+  "missing": []
 }

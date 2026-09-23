@@ -18,6 +18,8 @@
  * the way the original did or a saved yard would drift a pixel every load.
  */
 
+import { propsSize } from "./buildingArt";
+
 export interface Point {
   x: number;
   y: number;
@@ -235,19 +237,27 @@ for (const [size, types] of FOOTPRINT_GROUPS) {
 const PORTAL: readonly [number, number] = [190, 160];
 
 /**
- * Footprint for a type this table does not name.
+ * Footprint for a type with no entry above and no `size` in the props table.
  *
- * Decorations (ids 28–50, 55–111, 120, 121, 131, 135) take their footprint from
- * the props table's `size` field (`client/scripts/BDECORATION.as:23-26`), which
- * this client does not carry yet; the spec records the range as 20 to 100. 40 is
- * the middle of it, and nothing in the main yard fixture is a decoration.
+ * Only one id reaches this: 111, the small Halloween pumpkin, which has no
+ * `cls` at all (`client/scripts/YARD_PROPS.as:5901-5932`). `BASE.addBuildingB`
+ * falls back to a bare `BFOUNDATION` when `cls` is missing, and that never
+ * assigns a footprint, so the original has no answer either.
  */
 export const DEFAULT_FOOTPRINT = 40;
 
-/** Footprint in yard units, as `[width, height]`. */
+/**
+ * Footprint in yard units, as `[width, height]`.
+ *
+ * Decorations are not in the table above because they do not set a footprint in
+ * a class constructor: `BDECORATION` takes the props table's `size` field
+ * instead (`client/scripts/BDECORATION.as:20-25`). So anything the table does
+ * not name falls through to that, which covers ids 28–50, 55–111, 120, 121, 131
+ * and 135.
+ */
 export const footprintOf = (type: number): readonly [width: number, height: number] => {
   if (type === 127) return PORTAL;
-  const size = FOOTPRINTS.get(type) ?? DEFAULT_FOOTPRINT;
+  const size = FOOTPRINTS.get(type) ?? propsSize(type) ?? DEFAULT_FOOTPRINT;
   return [size, size];
 };
 

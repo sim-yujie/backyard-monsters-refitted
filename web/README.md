@@ -192,6 +192,18 @@ It also writes `test/fixtures/building-art-files.json`, a record of which of the
 files the table names exist under `server/public/assets/`, so the unit tests can
 check the mapping without reading the filesystem.
 
+Two things about that props file will bite anyone re-deriving the table. The
+generator strips `//` comments first, because several entries keep dead image
+lines commented out and reading those as live names seven files that are not on
+disk. And one entry, the Inferno Portal, spells its level keys as bare numbers
+rather than strings, so a parser that only accepts `"1":` drops the building
+entirely.
+
+The `<n>` in a filename is not the level and is never parsed: it is a literal
+part of the string in whichever level block was chosen. The Storage Silo has one
+block, keyed 1, whose picture is `top.3.png` and which serves all ten levels;
+the Hatchery's levels 1, 2 and 3 use `top.2.png`, `top.3.png` and `top.4.png`.
+
 A building's art does not change at every level. The table holds one entry per
 *image* level and `resolveArt` takes the exact entry if there is one and
 otherwise walks down to the nearest lower one, exactly as `BFOUNDATION.as:896-914`
@@ -202,7 +214,15 @@ are drawn from the first cell of their animation strip.
 
 Shadows are JPEGs with no alpha channel and are drawn with a multiply blend, one
 layer below every building, which is what the original did
-(`BFOUNDATION.as:1108`, `MAP.as:102`).
+(`BFOUNDATION.as:1108`, `:1119`, `MAP.as:102`). Multiply is what makes the white
+background disappear.
+
+Not yet drawn: fortification plating, which has its own ladder keyed 1 to 4 in
+`fortImgData` and is selected by footprint width (`BFOUNDATION.as:959-1020`,
+`:3532-3562`); the fire overlay on a freshly destroyed building
+(`topdestroyedfire`, `:1227`); and mushrooms, whose five variants were an
+embedded Flash MovieClip with no file on the server
+(`BMUSHROOM.as:24-44`), so this client draws one glyph for all of them.
 
 #### Ground
 

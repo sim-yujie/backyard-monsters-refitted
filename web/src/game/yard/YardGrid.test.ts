@@ -153,7 +153,17 @@ describe("footprints", () => {
     expect(footprintOf(7)).toEqual([30, 30]); // Mushroom
   });
 
-  it("falls back for a type it does not name", () => {
+  it("takes a decoration's footprint from the props table's size", () => {
+    // BDECORATION.as:20-25. Values from docs/specs/base-building.md section 3.
+    expect(footprintOf(28)).toEqual([20, 20]); // American Flag
+    expect(footprintOf(55)).toEqual([30, 30]); // Acorn
+    expect(footprintOf(56)).toEqual([40, 40]); // Beehive
+    expect(footprintOf(89)).toEqual([70, 70]); // Flytrap
+    expect(footprintOf(102)).toEqual([100, 100]); // Pool
+    expect(footprintOf(121)).toEqual([40, 40]); // Totem
+  });
+
+  it("falls back for a type with neither an entry nor a size", () => {
     expect(footprintOf(9999)).toEqual([40, 40]);
   });
 
