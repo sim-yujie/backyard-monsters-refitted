@@ -19,6 +19,11 @@ describe("plannerAction", () => {
     expect(plannerAction(key("B"))).toEqual({ kind: "tool", tool: "box" });
   });
 
+  it("switches the view on Tab", () => {
+    expect(plannerAction(key("Tab"))).toEqual({ kind: "view" });
+    expect(plannerAction(key("Tab", { ctrl: true }))).toBeNull();
+  });
+
   it("nudges by one grid step on the arrows", () => {
     expect(plannerAction(key("ArrowUp"))).toEqual({ kind: "nudge", dx: 0, dy: -5 });
     expect(plannerAction(key("ArrowDown"))).toEqual({ kind: "nudge", dx: 0, dy: 5 });
@@ -60,7 +65,7 @@ describe("plannerAction", () => {
   });
 
   it("leaves everything else alone", () => {
-    for (const k of ["a", "p", "Tab", "Enter", " ", "F5", "1"]) {
+    for (const k of ["a", "p", "Enter", " ", "F5", "1"]) {
       expect(plannerAction(key(k))).toBeNull();
     }
   });

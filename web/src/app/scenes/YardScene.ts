@@ -4,7 +4,7 @@ import { ApiError, NetworkError } from "@/api/http";
 import type { BaseLoadResponse, BuildingDataMap } from "@/api/types";
 import { Camera } from "@/game/Camera";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
-import { YardRenderer } from "@/game/yard/YardRenderer";
+import { YardRenderer, YardView } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
@@ -155,6 +155,7 @@ export class YardScene implements Scene {
           -camera.position.x * camera.zoom,
           -camera.position.y * camera.zoom,
         );
+        this.renderer.setZoom(camera.zoom);
       }
 
       const view = camera.visibleWorldRect();
@@ -181,6 +182,30 @@ export class YardScene implements Scene {
   }
 
   /* ── Loading ────────────────────────────────────────────────────────────── */
+
+  /**
+   * Switches between the isometric yard and the planner's blueprint.
+   *
+   * The two views are different worlds under one camera, so the camera is
+   * re-bounded and its zoom floor recomputed, and the point that was in the
+   * middle of the screen is carried across in yard units so the player is
+   * looking at the same part of the yard afterwards.
+   */
+  private setView(view: YardView): void {
+    const camera = this.camera;
+    const context = this.context;
+    if (!camera || !context) return;
+    if (this.renderer.view === view) return;
+
+    const middle = camera.screenToWorld({ x: context.width / 2, y: context.height / 2 });
+    const focus = this.renderer.worldToYard(middle.x, middle.y);
+
+    this.renderer.setView(view);
+    camera.setBounds(this.renderer.worldSize());
+    this.applyZoomLimits(context.width, context.height);
+    camera.centreOn(this.renderer.yardToWorld(focus.x, focus.y));
+    camera.dirty = true;
+  }
 
   private async load(): Promise<void> {
     const context = this.context;
@@ -234,6 +259,7 @@ export class YardScene implements Scene {
     });
     camera.resize(context.width, context.height);
     this.applyZoomLimits(context.width, context.height, camera);
+    this.renderer.setZoom(camera.zoom);
 
     const focus = yard.townHall
       ? { x: yard.townHall.centreX, y: yard.townHall.centreY }
@@ -268,7 +294,8 @@ export class YardScene implements Scene {
     const yard = this.yard;
     if (!yard || !target) return;
 
-    const fit = Math.min(width / yard.bounds.width, height / yard.bounds.height);
+    const frame = this.renderer.fitRect();
+    const fit = Math.min(width / frame.width, height / frame.height);
     // A camera's limits are readonly, so the floor is applied by clamping the
     // current zoom against it and remembering it for `fitYard`.
     this.fitZoom = Math.min(fit, MAX_ZOOM);
@@ -282,8 +309,9 @@ export class YardScene implements Scene {
     const yard = this.yard;
     const context = this.context;
     if (!camera || !yard || !context) return;
+    const frame = this.renderer.fitRect();
     camera.zoom = this.fitZoom;
-    camera.centreOn({ x: yard.bounds.width / 2, y: yard.bounds.height / 2 });
+    camera.centreOn({ x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 });
     camera.dirty = true;
   }
 
@@ -354,6 +382,7 @@ export class YardScene implements Scene {
       overlay: context.overlay.content,
       notices: this.notices,
       onApplied: (buildingdata, moved) => this.onApplied(buildingdata, moved),
+      onView: (view) => this.setView(view),
       onExit: () => this.closePlanner(),
     });
     if (this.plannerButton) {
@@ -365,6 +394,8 @@ export class YardScene implements Scene {
   private closePlanner(): void {
     this.planner?.destroy();
     this.planner = null;
+    // The blueprint is a planner view; the yard itself is always isometric.
+    this.setView(YardView.ISO);
     this.plannerButton?.setAttribute("aria-pressed", "false");
     if (this.plannerButton) this.plannerButton.textContent = "Plan";
   }

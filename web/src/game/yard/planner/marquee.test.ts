@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { diamondCorners, diamondIntersectsRect, rectFromCorners } from "./marquee";
+import {
+  diamondCorners,
+  diamondIntersectsRect,
+  polygonIntersectsRect,
+  rectFromCorners,
+} from "./marquee";
 
 /** A 70 x 70 tower whose top corner is at the origin. */
 const tower = { x: 0, y: 0, width: 70, height: 70 };
@@ -86,5 +91,25 @@ describe("diamondIntersectsRect", () => {
     const walls = [0, 1, 2].map((i) => ({ x: i * 20, y: i * 10, width: 20, height: 20 }));
     const box = { x: -30, y: -10, width: 120, height: 90 };
     expect(walls.every((wall) => diamondIntersectsRect(wall, box))).toBe(true);
+  });
+});
+
+describe("polygonIntersectsRect", () => {
+  const tile: readonly (readonly [number, number])[] = [
+    [100, 100],
+    [170, 100],
+    [170, 170],
+    [100, 170],
+  ];
+
+  it("treats a blueprint tile as a plain rectangle overlap", () => {
+    expect(polygonIntersectsRect(tile, { x: 0, y: 0, width: 101, height: 101 })).toBe(true);
+    expect(polygonIntersectsRect(tile, { x: 120, y: 120, width: 10, height: 10 })).toBe(true);
+    expect(polygonIntersectsRect(tile, { x: 0, y: 0, width: 99, height: 99 })).toBe(false);
+    expect(polygonIntersectsRect(tile, { x: 171, y: 100, width: 50, height: 50 })).toBe(false);
+  });
+
+  it("counts a shared edge as touching", () => {
+    expect(polygonIntersectsRect(tile, { x: 170, y: 100, width: 20, height: 20 })).toBe(true);
   });
 });

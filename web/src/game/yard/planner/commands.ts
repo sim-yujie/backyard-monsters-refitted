@@ -33,11 +33,25 @@ export interface MoveEntry {
   readonly toY: number;
 }
 
+/** A position no stack can ever be at, so `isClean` stays false forever. */
+const UNREACHABLE = -1;
+
 export class CommandStack {
   private readonly done: PlanCommand[] = [];
   private readonly undone: PlanCommand[] = [];
   private readonly depth: number;
   private readonly onChange: (() => void) | undefined;
+
+  /**
+   * The position the plan was last saved at, or `UNREACHABLE`.
+   *
+   * "Unsaved changes" is a question about where the stack is, not about whether
+   * anything has ever been edited: undoing back to the saved state leaves the
+   * plan byte-for-byte what the slot holds, and a sticky flag would still call
+   * it dirty. Holding a position instead makes undo and redo cross the line in
+   * both directions for free.
+   */
+  private cleanAt = 0;
 
   constructor(options: { depth?: number; onChange?: () => void } = {}) {
     this.depth = options.depth ?? UNDO_DEPTH;
@@ -66,6 +80,21 @@ export class CommandStack {
     return this.done.length;
   }
 
+  /** How many commands deep the stack currently is. */
+  get position(): number {
+    return this.done.length;
+  }
+
+  /** True while the stack sits where `markClean` last left it. */
+  get isClean(): boolean {
+    return this.done.length === this.cleanAt;
+  }
+
+  /** Records that the plan as it stands right now has been saved. */
+  markClean(): void {
+    this.cleanAt = this.done.length;
+  }
+
   /**
    * Runs a command and records it.
    *
@@ -74,10 +103,7 @@ export class CommandStack {
    */
   push(command: PlanCommand): void {
     command.apply();
-    this.done.push(command);
-    this.undone.length = 0;
-    if (this.done.length > this.depth) this.done.shift();
-    this.onChange?.();
+    this.record(command);
   }
 
   /**
@@ -87,9 +113,22 @@ export class CommandStack {
    * be a no-op at best and a double move at worst.
    */
   pushApplied(command: PlanCommand): void {
+    this.record(command);
+  }
+
+  /** The bookkeeping `push` and `pushApplied` share. */
+  private record(command: PlanCommand): void {
+    // The saved position may have been on the redo side this push just threw
+    // away, and a forked history can never be walked back to.
+    if (this.cleanAt > this.done.length) this.cleanAt = UNREACHABLE;
     this.done.push(command);
     this.undone.length = 0;
-    if (this.done.length > this.depth) this.done.shift();
+    if (this.done.length > this.depth) {
+      this.done.shift();
+      // Everything above shifted down one; a saved position that fell off the
+      // bottom with it is gone.
+      this.cleanAt = this.cleanAt > 0 ? this.cleanAt - 1 : UNREACHABLE;
+    }
     this.onChange?.();
   }
 
@@ -113,8 +152,12 @@ export class CommandStack {
 
   /** Forgets everything. Apply and loading a different slot both do this. */
   clear(): void {
+    // Forgetting the history does not save the plan: a stack that was dirty
+    // stays dirty, it just has nothing left to undo.
+    const clean = this.isClean;
     this.done.length = 0;
     this.undone.length = 0;
+    this.cleanAt = clean ? 0 : UNREACHABLE;
     this.onChange?.();
   }
 }

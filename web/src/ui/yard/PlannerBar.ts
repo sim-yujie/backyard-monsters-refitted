@@ -1,4 +1,5 @@
 import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
+import { YardView } from "@/game/yard/YardRenderer";
 
 /**
  * The planner's two bars: tools across the top, the plan summary and the
@@ -15,6 +16,7 @@ import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSessi
 
 export interface PlannerBarActions {
   onTool: (tool: PlannerTool) => void;
+  onView: (view: YardView) => void;
   onUndo: () => void;
   onRedo: () => void;
   onLayouts: () => void;
@@ -38,6 +40,7 @@ export class PlannerBar {
   readonly actionBar: HTMLElement;
 
   private readonly tools = new Map<PlannerTool, HTMLButtonElement>();
+  private readonly views = new Map<YardView, HTMLButtonElement>();
   private readonly undo: HTMLButtonElement;
   private readonly redo: HTMLButtonElement;
   private readonly apply: HTMLButtonElement;
@@ -64,6 +67,13 @@ export class PlannerBar {
     this.tools.set(PlannerTool.SELECT, select);
     this.tools.set(PlannerTool.BOX, box);
 
+    const iso = button("3D", "The yard as it looks (Tab switches)");
+    iso.addEventListener("click", () => actions.onView(YardView.ISO));
+    const blueprint = button("Blueprint", "Flat top-down view for planning (Tab switches)");
+    blueprint.addEventListener("click", () => actions.onView(YardView.BLUEPRINT));
+    this.views.set(YardView.ISO, iso);
+    this.views.set(YardView.BLUEPRINT, blueprint);
+
     this.undo = button("Undo", "Undo (Ctrl+Z)");
     this.undo.addEventListener("click", actions.onUndo);
     this.redo = button("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)");
@@ -79,6 +89,7 @@ export class PlannerBar {
       title,
       this.slotLabel,
       group(select, box),
+      group(iso, blueprint),
       group(this.undo, this.redo),
       spacer(),
       help,
@@ -116,6 +127,9 @@ export class PlannerBar {
   update(state: PlannerState): void {
     for (const [tool, element] of this.tools) {
       element.setAttribute("aria-pressed", String(state.tool === tool));
+    }
+    for (const [view, element] of this.views) {
+      element.setAttribute("aria-pressed", String(state.view === view));
     }
 
     this.undo.disabled = !state.canUndo;
@@ -163,6 +177,7 @@ const summarise = (state: PlannerState): string => {
   );
   parts.push(state.movedCount === 1 ? "1 moved" : `${state.movedCount} moved`);
   if (state.dragInvalid) parts.push("cannot drop here");
+  else if (state.carrying) parts.push("in hand · click to drop, right-click to put back");
   else if (state.previewing) parts.push("read-only preview");
   return parts.join(" · ");
 };

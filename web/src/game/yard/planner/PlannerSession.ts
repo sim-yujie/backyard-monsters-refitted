@@ -2,25 +2,30 @@ import type { Layout, LayoutPayload } from "@/api/types";
 import type { Camera } from "@/game/Camera";
 import type { Point, Rect } from "../YardGrid";
 import type { Yard } from "../yardModel";
-import type { YardRenderer } from "../YardRenderer";
+import type { YardRenderer, YardView } from "../YardRenderer";
 import { buildChecklist, type Checklist } from "./checklist";
 import { CommandStack, moveCommand, type MoveEntry } from "./commands";
 import { planLoad, payloadFor, type LoadResult } from "./layout";
 import { rectFromCorners } from "./marquee";
 import { Grab, PlannerInput } from "./PlannerInput";
 import { PlannerView } from "./PlannerView";
-import { dragToYard } from "./placement";
 import { Plan } from "./plan";
 import { plannerAction } from "./shortcuts";
 
 /**
  * Planner mode: the state a yard is in while it is being rearranged.
  *
- * Holds the plan, the selection, the tool, the undo stack and the live drag.
- * `PlannerView` is the only thing here that touches the renderer, `Plan` is the
- * only thing that touches geometry, and `shortcuts.ts` is the only thing that
- * reads a key. What is left is the decisions: what a press means, when an edit
- * becomes a command, and when the plan is dirty.
+ * Holds the plan, the selection, the tool, the undo stack and the live drag or
+ * carry. `PlannerView` is the only thing here that touches the renderer, `Plan`
+ * is the only thing that touches geometry, and `shortcuts.ts` is the only thing
+ * that reads a key. What is left is the decisions: what a press means, when a
+ * click becomes a carry, when an edit becomes a command, and when the plan is
+ * dirty.
+ *
+ * A carried selection is a drag that outlives the button: the plan keeps it
+ * lifted, every pointer move retests the drop, and a refused drop keeps it in
+ * hand rather than snapping it back — the original's `stopDragBuilding`
+ * behaviour, which is what makes walls quick to lay.
  *
  * The scene wires it up and the DOM panels read `state()`; neither knows how a
  * drag works and this knows nothing about either.
@@ -45,6 +50,10 @@ export interface PlannerState {
   readonly slotName: string;
   /** True while a drag is over an illegal spot. */
   readonly dragInvalid: boolean;
+  /** True while the selection follows the pointer, waiting for a click to drop. */
+  readonly carrying: boolean;
+  /** Which drawing of the yard is showing. */
+  readonly view: YardView;
   /** True while a layout is being previewed rather than edited. */
   readonly previewing: boolean;
 }
@@ -56,6 +65,7 @@ export class PlannerSession {
   private readonly input: PlannerInput;
   private readonly stack: CommandStack;
   private readonly onChange: () => void;
+  private readonly onViewToggle: () => void;
 
   private tool: PlannerTool = PlannerTool.SELECT;
   private selection = new Set<number>();
@@ -65,7 +75,6 @@ export class PlannerSession {
   private pressWorld: Point | null = null;
   private dragDelta = { dx: 0, dy: 0 };
   private dragInvalid = false;
-  private dirty = false;
   private slot: number | null = null;
   private slotName = "";
   /** Positions to restore when a preview is dismissed. */
@@ -77,14 +86,13 @@ export class PlannerSession {
     camera: Camera;
     canvas: HTMLCanvasElement;
     onChange: () => void;
+    /** Tab was pressed: the scene owns the camera, so it does the switch. */
+    onViewToggle: () => void;
   }) {
     this.onChange = options.onChange;
+    this.onViewToggle = options.onViewToggle;
     this.plan = Plan.fromYard(options.yard);
-    this.view = new PlannerView({
-      yard: options.yard,
-      renderer: options.renderer,
-      plan: this.plan,
-    });
+    this.view = new PlannerView({ renderer: options.renderer, plan: this.plan });
 
     this.stack = new CommandStack({ onChange: () => this.onChange() });
     this.input = new PlannerInput({
@@ -93,10 +101,12 @@ export class PlannerSession {
       handlers: {
         claim: (world, shift) => this.claim(world, shift),
         move: (world, grab) => this.onMove(world, grab),
-        release: (world, grab) => this.onRelease(world, grab),
+        release: (world, grab, travelled) => this.onRelease(world, grab, travelled),
         clickEmpty: (shift) => {
           if (!shift) this.clearSelection();
         },
+        cancel: () => this.cancel(),
+        grabChanged: () => this.refresh(),
         key: (event) => this.onKey(event),
       },
     });
@@ -120,7 +130,7 @@ export class PlannerSession {
       tool: this.tool,
       selectionCount: this.selection.size,
       movedCount: this.moved.size,
-      dirty: this.dirty,
+      dirty: !this.stack.isClean,
       canUndo: this.stack.canUndo,
       canRedo: this.stack.canRedo,
       undoLabel: this.stack.undoLabel,
@@ -128,7 +138,9 @@ export class PlannerSession {
       slot: this.slot,
       slotName: this.slotName,
       dragInvalid: this.dragInvalid,
+      carrying: this.input.isCarrying,
       previewing: this.preview !== null,
+      view: this.view.view,
     };
   }
 
@@ -162,6 +174,7 @@ export class PlannerSession {
   /** Arrow keys: one grid step, or ten with Shift. */
   nudge(dx: number, dy: number): void {
     if (this.selection.size === 0) return;
+    if (this.input.isGrabbing) this.cancel();
     this.plan.beginMove(this.selection);
     const entries = this.plan.commitMove(dx, dy);
     if (entries) this.record(entries);
@@ -172,11 +185,28 @@ export class PlannerSession {
   }
 
   undo(): void {
+    if (this.input.isGrabbing) this.cancel();
     if (this.stack.undo()) this.afterHistory();
   }
 
   redo(): void {
+    if (this.input.isGrabbing) this.cancel();
     if (this.stack.redo()) this.afterHistory();
+  }
+
+  /**
+   * Called by the scene after it has switched the renderer's view.
+   *
+   * A drag or a carry is anchored to a world point in the view it started in,
+   * and the two views put the same building in completely different places, so
+   * a gesture cannot survive the switch — the next pointer move would read the
+   * new position against the old anchor and jump. `cancel` puts it back;
+   * guarding on `isGrabbing` keeps its other branch, which clears the
+   * selection, out of an ordinary view switch.
+   */
+  viewChanged(): void {
+    if (this.input.isGrabbing) this.cancel();
+    this.refresh();
   }
 
   /* ── Layouts ────────────────────────────────────────────────────────── */
@@ -209,7 +239,6 @@ export class PlannerSession {
           `Load “${layout.name}”`,
         ),
       );
-      this.dirty = true;
       this.slot = layout.slot;
       this.slotName = layout.name;
     }
@@ -227,11 +256,16 @@ export class PlannerSession {
     this.afterHistory();
   }
 
-  /** Records that the plan now matches a saved slot. */
+  /**
+   * Records that the plan now matches a saved slot.
+   *
+   * The stack remembers the position rather than a flag being cleared, so
+   * undoing back to here reads clean again and redoing forward reads dirty.
+   */
   markSaved(slot: number, name: string): void {
     this.slot = slot;
     this.slotName = name;
-    this.dirty = false;
+    this.stack.markClean();
     this.refresh();
   }
 
@@ -294,7 +328,7 @@ export class PlannerSession {
       return;
     }
 
-    const { dx, dy } = dragToYard(world.x - press.x, world.y - press.y);
+    const { dx, dy } = this.view.dragToYard(world.x - press.x, world.y - press.y);
     if (dx === this.dragDelta.dx && dy === this.dragDelta.dy) return;
     this.dragDelta = { dx, dy };
 
@@ -310,11 +344,11 @@ export class PlannerSession {
     this.refresh();
   }
 
-  private onRelease(world: Point, grab: Grab): void {
+  private onRelease(world: Point, grab: Grab, travelled: boolean): "carry" | void {
     const press = this.pressWorld;
-    this.pressWorld = null;
 
     if (grab === Grab.MARQUEE) {
+      this.pressWorld = null;
       if (press) {
         this.selection = this.view.inMarquee(rectFromCorners(press.x, press.y, world.x, world.y));
       }
@@ -323,12 +357,33 @@ export class PlannerSession {
       return;
     }
 
+    // A click on a selected building picks it up. `press` is null when the
+    // press was a Shift toggle, which selects but never carries.
+    if (grab === Grab.DRAG && !travelled && press && this.selection.size > 0) {
+      this.dragDelta = { dx: 0, dy: 0 };
+      this.dragInvalid = false;
+      this.faulted.clear();
+      this.view.syncSome(this.selection);
+      this.refresh();
+      return "carry";
+    }
+
     const { dx, dy } = this.dragDelta;
+    const entries = press ? this.plan.commitMove(dx, dy) : null;
+
+    // A carried selection that cannot be dropped stays in hand: the grid is
+    // reopened and the pointer keeps testing, exactly as before the click.
+    if (grab === Grab.CARRY && !entries && (dx !== 0 || dy !== 0)) {
+      this.plan.beginMove(this.selection);
+      this.refresh();
+      return "carry";
+    }
+
+    this.pressWorld = null;
     this.dragDelta = { dx: 0, dy: 0 };
     this.dragInvalid = false;
     this.faulted.clear();
 
-    const entries = press ? this.plan.commitMove(dx, dy) : null;
     if (entries) this.record(entries);
     else this.plan.cancelMove();
 
@@ -376,6 +431,9 @@ export class PlannerSession {
       case "cancel":
         this.cancel();
         return true;
+      case "view":
+        this.onViewToggle();
+        return true;
       case "ignore":
         return true;
     }
@@ -385,7 +443,6 @@ export class PlannerSession {
 
   private record(entries: readonly MoveEntry[]): void {
     this.stack.pushApplied(moveCommand(entries, (batch, reverse) => this.plan.move(batch, reverse)));
-    this.dirty = true;
   }
 
   /** After an edit: the moved set may have changed and the plan is dirty. */

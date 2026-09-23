@@ -19,6 +19,8 @@ export type PlannerAction =
   | { readonly kind: "undo" }
   | { readonly kind: "redo" }
   | { readonly kind: "cancel" }
+  /** Tab: switch between the isometric yard and the blueprint. */
+  | { readonly kind: "view" }
   /** Bound so it cannot reach the browser; storing arrives in phase 2. */
   | { readonly kind: "ignore" };
 
@@ -49,6 +51,8 @@ export const plannerAction = (event: {
       return { kind: "tool", tool: "box" };
     case "Escape":
       return { kind: "cancel" };
+    case "Tab":
+      return { kind: "view" };
     case "ArrowUp":
       return { kind: "nudge", dx: 0, dy: -step };
     case "ArrowDown":

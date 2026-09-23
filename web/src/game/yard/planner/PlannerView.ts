@@ -1,7 +1,8 @@
-import { toIso, type Rect } from "../YardGrid";
-import type { Yard, YardBuilding } from "../yardModel";
-import type { YardRenderer } from "../YardRenderer";
-import { diamondIntersectsRect } from "./marquee";
+import type { Rect } from "../YardGrid";
+import { YardView, type YardRenderer } from "../YardRenderer";
+import { blueprintDragToYard } from "./blueprint";
+import { polygonIntersectsRect } from "./marquee";
+import { dragToYard } from "./placement";
 import type { Plan } from "./plan";
 
 /**
@@ -9,46 +10,41 @@ import type { Plan } from "./plan";
  *
  * The session owns the plan, the selection and the history; this owns the one
  * question that needs both the plan and the screen — where should each
- * building's sprites be drawn — and the two that need only the screen: which
- * footprints a marquee touches, and what chrome to draw.
+ * building be drawn — and the ones that need only the screen: what is under a
+ * point, which footprints a marquee touches, what a pixel drag is in yard
+ * units, and what chrome to draw.
  *
  * Keeping it apart is what stops the session growing a second job. It is also
- * the only place a world pixel and a yard unit meet, so a drift between the
- * plan and what is on screen can come from exactly one function.
+ * the only place the session meets a world pixel: the renderer answers every
+ * question in whichever view is showing, so the session never learns whether
+ * the yard is isometric or flat.
  */
 
 export class PlannerView {
   private readonly renderer: YardRenderer;
   private readonly plan: Plan;
-  private readonly byId = new Map<number, YardBuilding>();
-  private readonly plot: readonly { x: number; y: number }[];
 
-  constructor(options: { yard: Yard; renderer: YardRenderer; plan: Plan }) {
+  constructor(options: { renderer: YardRenderer; plan: Plan }) {
     this.renderer = options.renderer;
     this.plan = options.plan;
-    this.plot = options.yard.bounds.corners;
-    for (const building of options.yard.buildings) this.byId.set(building.id, building);
   }
 
-  /** Every building id the yard has, in draw order. */
-  ids(): IterableIterator<number> {
-    return this.byId.keys();
+  /** Which drawing of the yard is showing. */
+  get view(): YardView {
+    return this.renderer.view;
   }
 
   /**
    * Draws a building where the plan says it is, plus an optional drag offset.
    *
-   * The offset is recomputed from the plan against the saved position every
-   * time rather than accumulated, so a long session of drags, undos and loads
-   * cannot walk a sprite away from its building.
+   * The position is recomputed from the plan every time rather than
+   * accumulated, so a long session of drags, undos and loads cannot walk a
+   * sprite away from its building.
    */
   sync(id: number, dx = 0, dy = 0): void {
     const node = this.plan.get(id);
-    const building = this.byId.get(id);
-    if (!node || !building) return;
-    const from = toIso(building.x, building.y);
-    const to = toIso(node.x + dx, node.y + dy);
-    this.renderer.offsetBuilding(id, to.x - from.x, to.y - from.y);
+    if (!node) return;
+    this.renderer.placeBuilding(id, node.x + dx, node.y + dy);
   }
 
   /** Redraws a set of buildings, shifted by a live drag. */
@@ -58,7 +54,7 @@ export class PlannerView {
 
   /** Redraws the whole yard: what undo, redo and a load need. */
   syncAll(): void {
-    for (const id of this.byId.keys()) this.sync(id);
+    for (const node of this.plan.buildings()) this.sync(node.id);
   }
 
   /** Re-stacks the draw list. Worth doing on a commit, not on a drag. */
@@ -71,12 +67,19 @@ export class PlannerView {
     return this.renderer.pick(worldX, worldY)?.id ?? null;
   }
 
+  /** A world-pixel drag in snapped yard units, in the view that is showing. */
+  dragToYard(worldDx: number, worldDy: number): { dx: number; dy: number } {
+    return this.view === YardView.BLUEPRINT
+      ? blueprintDragToYard(worldDx, worldDy)
+      : dragToYard(worldDx, worldDy);
+  }
+
   /** Every building whose footprint the rectangle touches. */
   inMarquee(rect: Rect): Set<number> {
     const hit = new Set<number>();
-    for (const id of this.byId.keys()) {
-      const shape = this.renderer.shapeOf(id);
-      if (shape && diamondIntersectsRect(shape, rect)) hit.add(id);
+    for (const node of this.plan.buildings()) {
+      const corners = this.renderer.cornersOf(node.id);
+      if (corners && polygonIntersectsRect(corners, rect)) hit.add(node.id);
     }
     return hit;
   }
@@ -88,13 +91,12 @@ export class PlannerView {
     invalid: ReadonlySet<number>;
     marquee: Rect | null;
   }): void {
-    this.renderer.setPlannerVisuals({ ...state, plot: this.plot });
+    this.renderer.setPlannerVisuals({ ...state, plot: this.renderer.plotCorners() });
   }
 
   /** Puts every sprite back where the save had it and hides the chrome. */
   reset(): void {
-    for (const id of this.byId.keys()) this.renderer.offsetBuilding(id, 0, 0);
-    this.renderer.resortByDepth();
+    this.renderer.resetPlacements();
     this.renderer.setPlannerVisuals(null);
   }
 }

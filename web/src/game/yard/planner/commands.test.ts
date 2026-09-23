@@ -97,6 +97,88 @@ describe("CommandStack", () => {
   });
 });
 
+describe("the clean position", () => {
+  it("is the empty stack until something is pushed", () => {
+    const stack = new CommandStack();
+    expect(stack.isClean).toBe(true);
+    stack.push(trace("a", []));
+    expect(stack.isClean).toBe(false);
+  });
+
+  it("is crossed in both directions by undo and redo", () => {
+    const stack = new CommandStack();
+    stack.push(trace("a", []));
+    stack.markClean();
+    stack.push(trace("b", []));
+    expect(stack.isClean).toBe(false);
+
+    stack.undo();
+    expect(stack.isClean).toBe(true);
+    expect(stack.position).toBe(1);
+
+    stack.redo();
+    expect(stack.isClean).toBe(false);
+  });
+
+  it("reads clean again after undoing back to an unedited stack", () => {
+    const stack = new CommandStack();
+    stack.push(trace("a", []));
+    stack.undo();
+    expect(stack.isClean).toBe(true);
+  });
+
+  it("can never be reached again once a new edit forks past it", () => {
+    const stack = new CommandStack();
+    stack.push(trace("a", []));
+    stack.push(trace("b", []));
+    stack.markClean();
+    stack.undo();
+    // "b" is on the redo side; pushing throws it away, so position 2 is no
+    // longer the saved plan even though the depth matches.
+    stack.push(trace("c", []));
+    expect(stack.position).toBe(2);
+    expect(stack.isClean).toBe(false);
+  });
+
+  it("gives up on a clean position that falls off the bottom of the stack", () => {
+    const stack = new CommandStack({ depth: 2 });
+    stack.markClean();
+    stack.push(trace("a", []));
+    stack.push(trace("b", []));
+    stack.push(trace("c", []));
+    while (stack.canUndo) stack.undo();
+    expect(stack.isClean).toBe(false);
+  });
+
+  it("keeps a saved position as the stack shifts under it", () => {
+    const stack = new CommandStack({ depth: 3 });
+    stack.push(trace("a", []));
+    stack.push(trace("b", []));
+    stack.markClean();
+    stack.push(trace("c", []));
+    stack.push(trace("d", []));
+    expect(stack.isClean).toBe(false);
+    stack.undo();
+    stack.undo();
+    expect(stack.isClean).toBe(true);
+  });
+
+  it("does not call a dirty plan saved just because the history was cleared", () => {
+    const stack = new CommandStack();
+    stack.push(trace("a", []));
+    stack.clear();
+    expect(stack.isClean).toBe(false);
+  });
+
+  it("stays clean through a clear when it already was", () => {
+    const stack = new CommandStack();
+    stack.push(trace("a", []));
+    stack.markClean();
+    stack.clear();
+    expect(stack.isClean).toBe(true);
+  });
+});
+
 describe("moveCommand", () => {
   const entries: MoveEntry[] = [
     { id: 1, fromX: 0, fromY: 0, toX: 100, toY: 0 },

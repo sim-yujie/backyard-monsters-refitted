@@ -4,7 +4,7 @@ import { applyConflictIds, applyLayout } from "@/api/yardplanner";
 import type { Camera } from "@/game/Camera";
 import { PlannerSession } from "@/game/yard/planner/PlannerSession";
 import type { Yard } from "@/game/yard/yardModel";
-import type { YardRenderer } from "@/game/yard/YardRenderer";
+import { YardView, type YardRenderer } from "@/game/yard/YardRenderer";
 import type { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { PlannerBar } from "@/ui/yard/PlannerBar";
@@ -35,6 +35,8 @@ export interface YardPlannerOptions {
   notices: Notices;
   /** Called after a successful apply, with the yard the server wrote. */
   onApplied: (buildingdata: BuildingDataMap, moved: number) => void;
+  /** Switches the renderer's view and re-bounds the camera to match. */
+  onView: (view: YardView) => void;
   /** Called when the planner closes itself. */
   onExit: () => void;
 }
@@ -63,6 +65,11 @@ export class YardPlanner {
       camera: options.camera,
       canvas: options.canvas,
       onChange: () => this.bar.update(this.session.state()),
+      onViewToggle: () => {
+        this.setView(
+          this.session.state().view === YardView.ISO ? YardView.BLUEPRINT : YardView.ISO,
+        );
+      },
     });
 
     this.layouts = new YardPlannerLayouts({
@@ -79,6 +86,7 @@ export class YardPlanner {
 
     this.bar = new PlannerBar({
       onTool: (tool) => this.session.setTool(tool),
+      onView: (view) => this.setView(view),
       onUndo: () => this.session.undo(),
       onRedo: () => this.session.redo(),
       onLayouts: () => void this.layouts.toggle(),
@@ -96,6 +104,13 @@ export class YardPlanner {
   /** True when there are edits that have not been saved to a slot. */
   get hasUnsavedChanges(): boolean {
     return this.session.state().dirty;
+  }
+
+  /** Shows the yard flat or isometric. The plan is untouched either way. */
+  setView(view: YardView): void {
+    if (this.session.state().view === view) return;
+    this.options.onView(view);
+    this.session.viewChanged();
   }
 
   /** Asks before discarding, then closes. */
@@ -223,12 +238,9 @@ export class YardPlanner {
     this.session.selectOnly(ids);
     const first = ids[0];
     if (first === undefined) return;
-    const shape = this.options.renderer.shapeOf(first);
-    if (!shape) return;
-    this.options.camera.centreOn({
-      x: shape.x + (shape.width - shape.height) / 2,
-      y: shape.y + (shape.width + shape.height) / 4,
-    });
+    const centre = this.options.renderer.centreOf(first);
+    if (!centre) return;
+    this.options.camera.centreOn(centre);
     this.options.camera.dirty = true;
   }
 

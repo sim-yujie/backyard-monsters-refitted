@@ -79,6 +79,9 @@ export const shortcutsPanel = (onClose: () => void): Panel => {
 
   const rows: [string, string][] = [
     ["P", "Enter or leave the planner"],
+    ["Tab", "Switch between the 3D yard and the blueprint"],
+    ["Click a building", "Pick it up; it follows the pointer until you click again to drop it"],
+    ["Right-click", "Put a carried selection back where it was"],
     ["V", "Select tool"],
     ["B", "Box select"],
     ["Shift + drag", "Box select with the select tool"],
@@ -88,7 +91,7 @@ export const shortcutsPanel = (onClose: () => void): Panel => {
     ["Ctrl + Z", "Undo"],
     ["Ctrl + Shift + Z, Ctrl + Y", "Redo"],
     ["Ctrl + S", "Save to the current slot"],
-    ["Escape", "Cancel a drag, or clear the selection"],
+    ["Escape", "Cancel a drag or carry, or clear the selection"],
     ["Delete", "Nothing yet — storing arrives with the store tool"],
   ];
 

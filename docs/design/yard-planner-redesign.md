@@ -553,7 +553,9 @@ context menu with store, upgrade, select-all-of-type and copy.
 **Drag.** Press and drag a selected building to move the whole selection. A translucent ghost follows
 the cursor at the snapped position while the original stays visible at reduced opacity, so the player
 sees the delta. Release commits if valid and snaps back if not; Escape cancels, matching
-`cancelDragBuilding:510-525`.
+`cancelDragBuilding:510-525`. A click with no travel picks the selection up instead: it follows the
+pointer, the next click drops it, a refused drop keeps it in hand, and right-click or Escape returns
+it to its original position.
 
 **Place from inventory.** Click or drag an inventory row; the building attaches to the cursor and
 places on click. With paint mode on, which the code already supports as `ADD_INVENTORY_PAINTMODE`
@@ -564,6 +566,11 @@ Escape is pressed. This matters enormously for walls.
 `PlannerDesignView.as:52`); Alt places unsnapped. Add edge snapping: within 4 units of alignment with
 another building's edge, the drag snaps and a thin guide line appears. This alone removes most of the
 tedium from wall building.
+
+**View.** Tab or the toolbar's view buttons switch between the isometric canvas and a flat top-down
+blueprint: grass rectangle, plot outline, next expansion dashed, and buildings as square tiles
+coloured by category with name and level. Selection, drag, click-to-carry and snapping all work the
+same way in either view.
 
 **Hover.** A building shows a compact tooltip with name, level, and for towers range and damage per
 second. Hovering an inventory row highlights every matching placed building on the canvas.
@@ -865,3 +872,4 @@ any conflicting statement in sections 3 to 6.
 | Q6 | **No thumbnails.** The load dialog shows name, building count, expansion level and last-saved date, plus a read-only preview that opens the layout in the planner. Thumbnails go to the backlog with sharing. |
 | Q7 | **F5 (attack path preview) is discarded.** The Wild Monster Baiter (building 19) becomes the defence simulator as a separate feature: full roster and champions, any drop point, chosen monster levels, replay, a per-tower results report, no lasting damage. |
 | Q8 | Loading a layout into a smaller yard **places what fits, inventories the rest, and shows a banner** naming the expansion level it was designed for and the count that did not fit. With Q4, Apply then stays blocked until those are placed or removed. |
+| Q9 | **Blueprint view added (decided 2026-09-23).** The planner gets a flat top-down "blueprint" view, drawn like the original Flash planner's `PlannerDesignView`: grass rectangle, plot outline, next expansion shown dashed, buildings as square tiles coloured by category with name and level. It is switchable with Tab or toolbar buttons alongside the isometric view. Reason: the isometric art makes footprints hard to read while placing. **Click-to-carry added** as an alternative to press-and-drag: a click picks the selection up, it follows the pointer, the next click drops it, a refused drop keeps it in hand, and right-click or Escape puts it back, matching the original planner's `dragBuilding` behaviour. Paint mode for placing from inventory is deferred until inventory placement exists. |

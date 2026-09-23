@@ -1,6 +1,6 @@
 import { Graphics } from "pixi.js";
 import type { Rect } from "../YardGrid";
-import { diamondCorners, type Diamond } from "./marquee";
+import type { Corners } from "./marquee";
 
 /**
  * The planner's chrome: selection, the marquee, the moved marks and the red
@@ -14,6 +14,9 @@ import { diamondCorners, type Diamond } from "./marquee";
  * Colour is never the only channel the design allows, so an invalid drop is
  * drawn as a heavier stroke as well as a red fill, and a moved building gets a
  * dashed outline rather than a tint.
+ *
+ * The overlay does not know which view is showing: it is handed each
+ * building's corners and draws whatever polygon that is.
  */
 
 export interface PlannerVisuals {
@@ -26,11 +29,15 @@ export interface PlannerVisuals {
   /** The box-select rectangle in world pixels, while one is being dragged. */
   readonly marquee: Rect | null;
   /** The plot outline for the current expansion, in world pixels. */
-  readonly plot: readonly { x: number; y: number }[] | null;
+  readonly plot: Corners | null;
 }
 
-/** Where a building is drawn right now, or null if the yard has no such id. */
-export type ShapeLookup = (id: number) => Diamond | null;
+/**
+ * Where a building is drawn right now — its footprint's corners in world
+ * pixels, a diamond in the isometric view and a rectangle in the blueprint —
+ * or null if the yard has no such id.
+ */
+export type ShapeLookup = (id: number) => Corners | null;
 
 const ACCENT = 0xf0a12e;
 const MOVED = 0x8fd0ff;
@@ -56,7 +63,7 @@ export class PlannerOverlay {
     g.visible = true;
 
     if (visuals.plot && visuals.plot.length > 0) {
-      g.poly(visuals.plot.flatMap((point) => [point.x, point.y])).stroke({
+      g.poly(path(visuals.plot)).stroke({
         width: 2,
         color: ACCENT,
         alpha: 0.35,
@@ -89,7 +96,7 @@ export class PlannerOverlay {
     for (const id of visuals.selected) {
       const shape = shapeOf(id);
       if (!shape) continue;
-      for (const [x, y] of diamondCorners(shape)) {
+      for (const [x, y] of shape) {
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y < minY) minY = y;
@@ -145,10 +152,20 @@ export class PlannerOverlay {
   }
 }
 
-const path = (shape: Diamond): number[] => diamondCorners(shape).flatMap(([x, y]) => [x, y]);
+const path = (shape: Corners): number[] => shape.flatMap(([x, y]) => [x, y]);
 
 /** A dashed rectangle, which `Graphics` has no primitive for. */
-const dashedRect = (g: Graphics, rect: Rect, dash = 12, gap = 8): void => {
+export const dashedRect = (
+  g: Graphics,
+  rect: Rect,
+  style: { color: number; alpha: number; width: number } = {
+    color: ACCENT,
+    alpha: 0.55,
+    width: 1.5,
+  },
+  dash = 12,
+  gap = 8,
+): void => {
   const { x, y, width, height } = rect;
   const edges: [number, number, number, number][] = [
     [x, y, x + width, y],
@@ -167,5 +184,5 @@ const dashedRect = (g: Graphics, rect: Rect, dash = 12, gap = 8): void => {
       g.moveTo(x1 + ux * at, y1 + uy * at).lineTo(x1 + ux * end, y1 + uy * end);
     }
   }
-  g.stroke({ width: 1.5, color: ACCENT, alpha: 0.55 });
+  g.stroke(style);
 };
