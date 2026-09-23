@@ -1,6 +1,7 @@
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
+import type { BaseLoadResponse, BuildingDataMap } from "@/api/types";
 import { Camera } from "@/game/Camera";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
 import { YardRenderer } from "@/game/yard/YardRenderer";
@@ -8,6 +9,7 @@ import { YardInput } from "@/game/yard/YardInput";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
+import { YardPlanner } from "./YardPlanner";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
 
@@ -49,6 +51,10 @@ export class YardScene implements Scene {
   private panelDock: HTMLElement | null = null;
 
   private yard: Yard | null = null;
+  /** The save the yard was built from, so an apply can rebuild it in place. */
+  private save: BaseLoadResponse | null = null;
+  private planner: YardPlanner | null = null;
+  private plannerButton: HTMLButtonElement | null = null;
   private selected: YardBuilding | null = null;
   private sinceUiTick = 0;
   /** The zoom at which the whole plot fits the viewport; also the floor. */
@@ -82,7 +88,23 @@ export class YardScene implements Scene {
     this.status = document.createElement("div");
     this.status.className = "cell-readout";
     this.status.textContent = "Loading your yard…";
-    context.overlay.content.append(this.status);
+
+    // Entry is a toolbar button, not the Yard Planner building's popup
+    // (design §8, Q5).
+    this.plannerButton = document.createElement("button");
+    this.plannerButton.type = "button";
+    this.plannerButton.className = "btn btn--ghost yard-toolbar__plan";
+    this.plannerButton.textContent = "Plan";
+    this.plannerButton.title = "Open the Yard Planner (P)";
+    this.plannerButton.disabled = true;
+    this.plannerButton.addEventListener("click", () => this.togglePlanner());
+
+    const toolbar = document.createElement("div");
+    toolbar.className = "yard-toolbar";
+    toolbar.append(this.plannerButton, this.status);
+    context.overlay.content.append(toolbar);
+
+    window.addEventListener("keydown", this.onKeyDown);
 
     this.panelDock = document.createElement("div");
     this.panelDock.className = "map-dock map-dock--right";
@@ -92,6 +114,10 @@ export class YardScene implements Scene {
   }
 
   exit(): void {
+    window.removeEventListener("keydown", this.onKeyDown);
+    this.planner?.destroy();
+    this.planner = null;
+    this.plannerButton = null;
     this.input?.detach();
     this.input = null;
     this.camera?.detach();
@@ -167,7 +193,9 @@ export class YardScene implements Scene {
 
       const yard = readYard(response);
       this.yard = yard;
+      this.save = response;
       this.notices.clear("yard-load");
+      if (this.plannerButton) this.plannerButton.disabled = false;
 
       this.renderer.show(yard);
       this.startCamera(yard, context);
@@ -270,6 +298,9 @@ export class YardScene implements Scene {
   /* ── Selection ──────────────────────────────────────────────────────────── */
 
   private select(building: YardBuilding | null): void {
+    // In planner mode the selection belongs to the planner, which draws its own
+    // chrome and has its own multi-selection; the read-only panel stays shut.
+    if (this.planner) return;
     this.selected = building;
     this.renderer.setSelected(building);
 
@@ -292,6 +323,91 @@ export class YardScene implements Scene {
     }
     this.panel.show(building);
   }
+
+  /* ── Planner ────────────────────────────────────────────────────────── */
+
+  /**
+   * Enters or leaves planner mode.
+   *
+   * The planner is a mode over the same scene, not a second screen: the yard
+   * keeps its camera, its sprites and its art, and the planner moves them. That
+   * is why entering is instant on a 575-building yard and why leaving cannot
+   * leave anything half-drawn — the sprites go back to the save's positions.
+   */
+  private togglePlanner(): void {
+    if (this.planner) {
+      this.planner.requestExit();
+      return;
+    }
+
+    const yard = this.yard;
+    const camera = this.camera;
+    const context = this.context;
+    if (!yard || !camera || !context) return;
+
+    this.select(null);
+    this.planner = new YardPlanner({
+      yard,
+      renderer: this.renderer,
+      camera,
+      canvas: context.canvas,
+      overlay: context.overlay.content,
+      notices: this.notices,
+      onApplied: (buildingdata, moved) => this.onApplied(buildingdata, moved),
+      onExit: () => this.closePlanner(),
+    });
+    if (this.plannerButton) {
+      this.plannerButton.setAttribute("aria-pressed", "true");
+      this.plannerButton.textContent = "Close plan";
+    }
+  }
+
+  private closePlanner(): void {
+    this.planner?.destroy();
+    this.planner = null;
+    this.plannerButton?.setAttribute("aria-pressed", "false");
+    if (this.plannerButton) this.plannerButton.textContent = "Plan";
+  }
+
+  /**
+   * Rebuilds the yard from the `buildingdata` the apply wrote.
+   *
+   * The response is authoritative — it is the save as the server now holds it —
+   * so the honest thing is to re-read it rather than to assume the client's own
+   * plan and the server's answer agree.
+   */
+  private onApplied(buildingdata: BuildingDataMap, moved: number): void {
+    const save = this.save;
+    const context = this.context;
+    if (!save || !context) return;
+
+    this.closePlanner();
+
+    const merged: BaseLoadResponse = { ...save, buildingdata };
+    this.save = merged;
+    const yard = readYard(merged);
+    this.yard = yard;
+    this.renderer.show(yard);
+    this.notices.show("yard-applied", `Moved ${moved} building${moved === 1 ? "" : "s"}.`, {
+      level: "info",
+      timeoutMs: 5000,
+    });
+  }
+
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key !== "p" && event.key !== "P") return;
+    const target = event.target;
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      (target instanceof HTMLElement && target.isContentEditable)
+    ) {
+      return;
+    }
+    event.preventDefault();
+    this.togglePlanner();
+  };
 
   private refreshStatus(): void {
     const status = this.status;

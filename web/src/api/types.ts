@@ -317,3 +317,75 @@ export const isWaterCell = (cell: MapCell): cell is WaterCell => cell.b === unde
 /** Narrows a cell payload to a player-owned main yard or outpost. */
 export const isPlayerCell = (cell: MapCell): cell is PlayerCell =>
   cell.b === CellType.HOME_CELL || cell.b === CellType.OUTPOST;
+
+/* ── Yard Planner ───────────────────────────────────────────────────────── */
+
+/**
+ * One building in a saved layout.
+ *
+ * Same units as `buildingdata` — yard units with the origin at the plot centre
+ * — but the position fields are lower case `x` and `y` where a save row spells
+ * them `X` and `Y`. That is the server's contract, not a slip: a layout node is
+ * its own record rather than a save row, and keeping the case different makes
+ * it obvious which of the two a value came from.
+ *
+ * `l` and `fort` carry the level and fortification a layout was designed
+ * around, which phase 2 needs for planned upgrades and which phase 1 only
+ * round-trips.
+ */
+export interface LayoutNode {
+  /** Building id, matching the id in `buildingdata`. */
+  id: number;
+  /** Building type id. */
+  t: number;
+  x: number;
+  y: number;
+  l?: number;
+  fort?: number;
+}
+
+/** The layout format version this client writes and reads. */
+export const LAYOUT_VERSION = 2;
+
+/** A saved layout in one of the account's slots. */
+export interface Layout {
+  slot: number;
+  name: string;
+  version: number;
+  /** `storedata.ENL.q` at save time: the plot the layout was designed for. */
+  expansion: number;
+  /** Unix seconds, or an ISO string; the client formats whichever arrives. */
+  updatedAt: number | string;
+  nodes: LayoutNode[];
+}
+
+/** The body of the `data` form field on save and apply. */
+export interface LayoutPayload {
+  version: number;
+  expansion: number;
+  nodes: LayoutNode[];
+}
+
+export interface LayoutsResponse extends ApiEnvelope {
+  error: number;
+  /** How many slots the account has. Ten for everyone (design §8, Q2). */
+  slots: number;
+  layouts: Layout[];
+}
+
+export interface SaveLayoutResponse extends ApiEnvelope {
+  error: number;
+  layout: Layout;
+}
+
+export interface ApplyLayoutResponse extends ApiEnvelope {
+  error: number;
+  /** How many buildings changed position. */
+  moved: number;
+  buildingdata: BuildingDataMap;
+}
+
+/** The 409 body: a layout naming a building the yard no longer has. */
+export interface ApplyConflictDetails {
+  unplaced?: number[];
+}

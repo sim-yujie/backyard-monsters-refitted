@@ -2,6 +2,8 @@ import { Container, Graphics, Sprite, type Renderer } from "pixi.js";
 import { YardBuildings } from "./YardBuildings";
 import { YardGround } from "./YardGround";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
+import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
+import type { Diamond } from "./planner/marquee";
 import type { Rect } from "./YardGrid";
 import type { Yard, YardBuilding } from "./yardModel";
 
@@ -26,12 +28,16 @@ export class YardRenderer {
   private readonly buildings = new YardBuildings();
   private readonly mushroomLayer = new Container();
   private readonly chrome = new Graphics();
+  private readonly planner = new PlannerOverlay();
 
   private atlas: YardArtAtlas | null = null;
+  private yard: Yard | null = null;
+  private readonly byId = new Map<number, YardBuilding>();
 
   private hovered: YardBuilding | null = null;
   private selected: YardBuilding | null = null;
   private chromeDirty = true;
+  private plannerVisuals: PlannerVisuals | null = null;
 
   constructor() {
     this.mushroomLayer.eventMode = "none";
@@ -41,6 +47,7 @@ export class YardRenderer {
       this.mushroomLayer,
       this.buildings.tops,
       this.chrome,
+      this.planner.root,
       this.buildings.markers,
       this.buildings.labels,
     );
@@ -64,6 +71,9 @@ export class YardRenderer {
     this.clearMushrooms();
     this.setHovered(null);
     this.setSelected(null);
+    this.yard = yard;
+    this.byId.clear();
+    for (const building of yard.buildings) this.byId.set(building.id, building);
 
     // The base seed keeps one yard's grass the same between visits.
     this.ground.layout(yard.bounds, yard.savedAt || 1);
@@ -91,6 +101,7 @@ export class YardRenderer {
       this.chromeDirty = false;
       this.drawChrome();
     }
+
   }
 
   setHovered(building: YardBuilding | null): void {
@@ -105,6 +116,51 @@ export class YardRenderer {
     this.chromeDirty = true;
   }
 
+  /* ── Planner ────────────────────────────────────────────────────────── */
+
+  /**
+   * Shows the planner's chrome, or hides it when passed null.
+   *
+   * The planner never owns sprites of its own: it moves the buildings that are
+   * already on screen and draws its outlines over them, so entering and leaving
+   * it costs one `Graphics` rather than a second copy of the yard.
+   *
+   * Called once per change, including once per pointer move during a drag —
+   * never per frame, because an idle selection has nothing to redraw.
+   */
+  setPlannerVisuals(visuals: PlannerVisuals | null): void {
+    this.plannerVisuals = visuals;
+    if (!visuals) {
+      this.planner.clear();
+      return;
+    }
+    this.planner.draw(visuals, (id) => this.shapeOf(id));
+  }
+
+  /** Draws a building away from where the save put it, in world pixels. */
+  offsetBuilding(id: number, worldX: number, worldY: number): void {
+    this.buildings.offsetBuilding(id, worldX, worldY);
+  }
+
+  /** Re-stacks the draw list after a planner move is committed. */
+  resortByDepth(): void {
+    this.buildings.resortByDepth();
+  }
+
+  /** A building's footprint diamond where it is currently drawn. */
+  shapeOf(id: number): Diamond | null {
+    const building = this.byId.get(id);
+    if (!building) return null;
+    const offset = this.buildings.offsetOf(id);
+    const [width, height] = building.footprint;
+    return { x: building.worldX + offset.x, y: building.worldY + offset.y, width, height };
+  }
+
+  /** The yard currently on screen. */
+  get shown(): Yard | null {
+    return this.yard;
+  }
+
   /** The building under a world point, or null. */
   pick(worldX: number, worldY: number): YardBuilding | null {
     return this.buildings.pick(worldX, worldY);
@@ -112,6 +168,9 @@ export class YardRenderer {
 
   destroy(): void {
     this.clearMushrooms();
+    this.planner.destroy();
+    this.byId.clear();
+    this.yard = null;
     this.buildings.destroy();
     this.atlas?.destroy();
     this.atlas = null;
@@ -131,7 +190,7 @@ export class YardRenderer {
         .stroke({ width: 2, color: 0xffffff, alpha: 0.5 });
     }
 
-    if (this.selected) {
+    if (this.selected && !this.plannerVisuals) {
       this.chrome
         .poly(diamondPath(this.selected))
         .fill({ color: 0x7ec8ff, alpha: 0.16 })

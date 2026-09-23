@@ -154,48 +154,58 @@ export interface RequestOptions {
   signal?: AbortSignal;
 }
 
+export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
+
+export interface SendOptions extends RequestOptions {
+  /** Form-encoded into the body. Omit for a request that carries none. */
+  form?: FormBody;
+  /** Form-encoded onto the query string. */
+  query?: FormBody;
+}
+
+/**
+ * One request, one envelope.
+ *
+ * Every route on this server speaks the same two dialects — form-encoded in,
+ * `{ error }` envelope out — so the method is the only thing that varies and
+ * `post`, `get` and the planner's PUT and DELETE are all thin wrappers. Keeping
+ * the failure handling in one place is the point: both of the server's error
+ * channels are decided in `unwrap`, and a second copy of that logic would drift.
+ */
+export const send = async <T extends ApiEnvelope>(
+  method: HttpMethod,
+  path: string,
+  options: SendOptions = {},
+): Promise<T> => {
+  const search = options.query ? encodeForm(options.query) : "";
+  const url = `${apiUrl(path)}${search ? `?${search}` : ""}`;
+  const hasBody = options.form !== undefined;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers: buildHeaders(hasBody ? "application/x-www-form-urlencoded;charset=UTF-8" : undefined),
+      ...(hasBody ? { body: encodeForm(options.form ?? {}) } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+  } catch (cause) {
+    throw new NetworkError(`Could not reach ${url}`, cause);
+  }
+
+  return unwrap<T>(response, await readBody(response));
+};
+
 /** POSTs a form-encoded body and unwraps the JSON envelope. */
-export const post = async <T extends ApiEnvelope>(
+export const post = <T extends ApiEnvelope>(
   path: string,
   body: FormBody = {},
   options: RequestOptions = {},
-): Promise<T> => {
-  const url = apiUrl(path);
-  let response: Response;
-
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers: buildHeaders("application/x-www-form-urlencoded;charset=UTF-8"),
-      body: encodeForm(body),
-      ...(options.signal ? { signal: options.signal } : {}),
-    });
-  } catch (cause) {
-    throw new NetworkError(`Could not reach ${url}`, cause);
-  }
-
-  return unwrap<T>(response, await readBody(response));
-};
+): Promise<T> => send<T>("POST", path, { ...options, form: body });
 
 /** GETs a path with an optional query string and unwraps the JSON envelope. */
-export const get = async <T extends ApiEnvelope>(
+export const get = <T extends ApiEnvelope>(
   path: string,
   query: FormBody = {},
   options: RequestOptions = {},
-): Promise<T> => {
-  const search = encodeForm(query);
-  const url = `${apiUrl(path)}${search ? `?${search}` : ""}`;
-  let response: Response;
-
-  try {
-    response = await fetch(url, {
-      method: "GET",
-      headers: buildHeaders(),
-      ...(options.signal ? { signal: options.signal } : {}),
-    });
-  } catch (cause) {
-    throw new NetworkError(`Could not reach ${url}`, cause);
-  }
-
-  return unwrap<T>(response, await readBody(response));
-};
+): Promise<T> => send<T>("GET", path, { ...options, query });

@@ -1,0 +1,414 @@
+import type { Layout, LayoutPayload } from "@/api/types";
+import type { Camera } from "@/game/Camera";
+import type { Point, Rect } from "../YardGrid";
+import type { Yard } from "../yardModel";
+import type { YardRenderer } from "../YardRenderer";
+import { buildChecklist, type Checklist } from "./checklist";
+import { CommandStack, moveCommand, type MoveEntry } from "./commands";
+import { planLoad, payloadFor, type LoadResult } from "./layout";
+import { rectFromCorners } from "./marquee";
+import { Grab, PlannerInput } from "./PlannerInput";
+import { PlannerView } from "./PlannerView";
+import { dragToYard } from "./placement";
+import { Plan } from "./plan";
+import { plannerAction } from "./shortcuts";
+
+/**
+ * Planner mode: the state a yard is in while it is being rearranged.
+ *
+ * Holds the plan, the selection, the tool, the undo stack and the live drag.
+ * `PlannerView` is the only thing here that touches the renderer, `Plan` is the
+ * only thing that touches geometry, and `shortcuts.ts` is the only thing that
+ * reads a key. What is left is the decisions: what a press means, when an edit
+ * becomes a command, and when the plan is dirty.
+ *
+ * The scene wires it up and the DOM panels read `state()`; neither knows how a
+ * drag works and this knows nothing about either.
+ */
+
+export const PlannerTool = {
+  SELECT: "select",
+  BOX: "box",
+} as const;
+export type PlannerTool = (typeof PlannerTool)[keyof typeof PlannerTool];
+
+export interface PlannerState {
+  readonly tool: PlannerTool;
+  readonly selectionCount: number;
+  readonly movedCount: number;
+  readonly dirty: boolean;
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+  readonly undoLabel: string | null;
+  readonly redoLabel: string | null;
+  readonly slot: number | null;
+  readonly slotName: string;
+  /** True while a drag is over an illegal spot. */
+  readonly dragInvalid: boolean;
+  /** True while a layout is being previewed rather than edited. */
+  readonly previewing: boolean;
+}
+
+export class PlannerSession {
+  readonly plan: Plan;
+
+  private readonly view: PlannerView;
+  private readonly input: PlannerInput;
+  private readonly stack: CommandStack;
+  private readonly onChange: () => void;
+
+  private tool: PlannerTool = PlannerTool.SELECT;
+  private selection = new Set<number>();
+  private moved = new Set<number>();
+  private faulted = new Set<number>();
+  private marquee: Rect | null = null;
+  private pressWorld: Point | null = null;
+  private dragDelta = { dx: 0, dy: 0 };
+  private dragInvalid = false;
+  private dirty = false;
+  private slot: number | null = null;
+  private slotName = "";
+  /** Positions to restore when a preview is dismissed. */
+  private preview: Map<number, readonly [number, number]> | null = null;
+
+  constructor(options: {
+    yard: Yard;
+    renderer: YardRenderer;
+    camera: Camera;
+    canvas: HTMLCanvasElement;
+    onChange: () => void;
+  }) {
+    this.onChange = options.onChange;
+    this.plan = Plan.fromYard(options.yard);
+    this.view = new PlannerView({
+      yard: options.yard,
+      renderer: options.renderer,
+      plan: this.plan,
+    });
+
+    this.stack = new CommandStack({ onChange: () => this.onChange() });
+    this.input = new PlannerInput({
+      camera: options.camera,
+      canvas: options.canvas,
+      handlers: {
+        claim: (world, shift) => this.claim(world, shift),
+        move: (world, grab) => this.onMove(world, grab),
+        release: (world, grab) => this.onRelease(world, grab),
+        clickEmpty: (shift) => {
+          if (!shift) this.clearSelection();
+        },
+        key: (event) => this.onKey(event),
+      },
+    });
+  }
+
+  attach(): void {
+    this.input.attach();
+    this.view.resort();
+    this.refresh();
+  }
+
+  /** Leaves planner mode, putting every sprite back where the save had it. */
+  detach(): void {
+    this.input.detach();
+    this.plan.cancelMove();
+    this.view.reset();
+  }
+
+  state(): PlannerState {
+    return {
+      tool: this.tool,
+      selectionCount: this.selection.size,
+      movedCount: this.moved.size,
+      dirty: this.dirty,
+      canUndo: this.stack.canUndo,
+      canRedo: this.stack.canRedo,
+      undoLabel: this.stack.undoLabel,
+      redoLabel: this.stack.redoLabel,
+      slot: this.slot,
+      slotName: this.slotName,
+      dragInvalid: this.dragInvalid,
+      previewing: this.preview !== null,
+    };
+  }
+
+  /* ── Tools and selection ────────────────────────────────────────────── */
+
+  setTool(tool: PlannerTool): void {
+    if (this.tool === tool) return;
+    this.tool = tool;
+    this.refresh();
+  }
+
+  selectOnly(ids: Iterable<number>): void {
+    this.selection = new Set([...ids].filter((id) => this.plan.get(id)?.fixed === false));
+    this.refresh();
+  }
+
+  clearSelection(): void {
+    if (this.selection.size === 0) return;
+    this.selection.clear();
+    this.faulted.clear();
+    this.refresh();
+  }
+
+  /** The current selection, for the inspector and the tests. */
+  selectedIds(): number[] {
+    return [...this.selection];
+  }
+
+  /* ── Editing ────────────────────────────────────────────────────────── */
+
+  /** Arrow keys: one grid step, or ten with Shift. */
+  nudge(dx: number, dy: number): void {
+    if (this.selection.size === 0) return;
+    this.plan.beginMove(this.selection);
+    const entries = this.plan.commitMove(dx, dy);
+    if (entries) this.record(entries);
+    else this.plan.cancelMove();
+    this.view.syncSome(this.selection);
+    this.view.resort();
+    this.afterEdit();
+  }
+
+  undo(): void {
+    if (this.stack.undo()) this.afterHistory();
+  }
+
+  redo(): void {
+    if (this.stack.redo()) this.afterHistory();
+  }
+
+  /* ── Layouts ────────────────────────────────────────────────────────── */
+
+  /** The `data` field for a save or an apply. */
+  payload(): LayoutPayload {
+    return payloadFor(this.plan);
+  }
+
+  /**
+   * Loads a layout into the plan.
+   *
+   * A preview is the same load with the positions remembered, so leaving it
+   * puts the plan back without going through the undo stack and without ever
+   * marking the plan dirty (design §8, Q6).
+   */
+  load(layout: Layout, options: { preview?: boolean } = {}): LoadResult {
+    this.dismissPreview();
+    const result = planLoad(this.plan, layout);
+
+    if (options.preview) {
+      this.preview = new Map();
+      for (const node of this.plan.buildings()) this.preview.set(node.id, [node.x, node.y]);
+      this.plan.move(result.entries, false);
+    } else {
+      this.stack.push(
+        moveCommand(
+          result.entries,
+          (batch, reverse) => this.plan.move(batch, reverse),
+          `Load “${layout.name}”`,
+        ),
+      );
+      this.dirty = true;
+      this.slot = layout.slot;
+      this.slotName = layout.name;
+    }
+
+    this.afterHistory();
+    return result;
+  }
+
+  /** Ends a read-only preview, restoring what was there before it. */
+  dismissPreview(): void {
+    const preview = this.preview;
+    if (!preview) return;
+    this.preview = null;
+    for (const [id, [x, y]] of preview) this.plan.setPosition(id, x, y);
+    this.afterHistory();
+  }
+
+  /** Records that the plan now matches a saved slot. */
+  markSaved(slot: number, name: string): void {
+    this.slot = slot;
+    this.slotName = name;
+    this.dirty = false;
+    this.refresh();
+  }
+
+  /** The three blocking checks Apply runs before it calls the server. */
+  checklist(): Checklist {
+    const checklist = buildChecklist(this.plan.index(), this.plan.validate());
+    this.faulted = checklist.faulted;
+    this.refresh();
+    return checklist;
+  }
+
+  /** Puts the red outline on ids the server named. */
+  faultIds(ids: Iterable<number>): void {
+    this.faulted = new Set(ids);
+    this.refresh();
+  }
+
+  /* ── Pointer ────────────────────────────────────────────────────────── */
+
+  private claim(world: Point, shift: boolean): Grab | null {
+    if (this.tool === PlannerTool.BOX) return this.startMarquee(world);
+
+    const id = this.view.pick(world.x, world.y);
+    // A press on bare ground is the camera's, unless Shift asks for a marquee.
+    if (id === null) return shift ? this.startMarquee(world) : null;
+
+    if (shift) {
+      if (this.selection.has(id)) this.selection.delete(id);
+      else this.selection.add(id);
+    } else if (!this.selection.has(id)) {
+      this.selection = new Set([id]);
+    }
+    this.refresh();
+
+    // Shift-clicking a building *out* of the selection still belongs to the
+    // planner — it must not also pan the view — but there is nothing to drag.
+    if (!this.selection.has(id)) return Grab.DRAG;
+
+    this.pressWorld = world;
+    this.dragDelta = { dx: 0, dy: 0 };
+    this.dragInvalid = false;
+    this.plan.beginMove(this.selection);
+    return Grab.DRAG;
+  }
+
+  private startMarquee(world: Point): Grab {
+    this.pressWorld = world;
+    this.marquee = rectFromCorners(world.x, world.y, world.x, world.y);
+    return Grab.MARQUEE;
+  }
+
+  private onMove(world: Point, grab: Grab): void {
+    const press = this.pressWorld;
+    if (!press) return;
+
+    if (grab === Grab.MARQUEE) {
+      this.marquee = rectFromCorners(press.x, press.y, world.x, world.y);
+      this.selection = this.view.inMarquee(this.marquee);
+      this.refresh();
+      return;
+    }
+
+    const { dx, dy } = dragToYard(world.x - press.x, world.y - press.y);
+    if (dx === this.dragDelta.dx && dy === this.dragDelta.dy) return;
+    this.dragDelta = { dx, dy };
+
+    const result = this.plan.testMove(dx, dy);
+    this.dragInvalid = !result.valid;
+    this.faulted = new Set<number>();
+    for (const issue of result.issues) {
+      this.faulted.add(issue.id);
+      if (issue.otherId !== undefined) this.faulted.add(issue.otherId);
+    }
+
+    this.view.syncSome(this.selection, dx, dy);
+    this.refresh();
+  }
+
+  private onRelease(world: Point, grab: Grab): void {
+    const press = this.pressWorld;
+    this.pressWorld = null;
+
+    if (grab === Grab.MARQUEE) {
+      if (press) {
+        this.selection = this.view.inMarquee(rectFromCorners(press.x, press.y, world.x, world.y));
+      }
+      this.marquee = null;
+      this.refresh();
+      return;
+    }
+
+    const { dx, dy } = this.dragDelta;
+    this.dragDelta = { dx: 0, dy: 0 };
+    this.dragInvalid = false;
+    this.faulted.clear();
+
+    const entries = press ? this.plan.commitMove(dx, dy) : null;
+    if (entries) this.record(entries);
+    else this.plan.cancelMove();
+
+    // Either way the sprites go to where the plan now says they are: forward
+    // for an accepted drop, back to the start for a refused one.
+    this.view.syncSome(this.selection);
+    this.view.resort();
+    this.afterEdit();
+  }
+
+  /** Cancels a live gesture; Escape with nothing in hand clears instead. */
+  private cancel(): void {
+    if (!this.input.isGrabbing) {
+      this.clearSelection();
+      return;
+    }
+    this.input.cancel();
+    this.plan.cancelMove();
+    this.marquee = null;
+    this.pressWorld = null;
+    this.dragDelta = { dx: 0, dy: 0 };
+    this.dragInvalid = false;
+    this.faulted.clear();
+    this.view.syncSome(this.selection);
+    this.refresh();
+  }
+
+  private onKey(event: KeyboardEvent): boolean {
+    const action = plannerAction(event);
+    if (!action) return false;
+
+    switch (action.kind) {
+      case "tool":
+        this.setTool(action.tool === "box" ? PlannerTool.BOX : PlannerTool.SELECT);
+        return true;
+      case "nudge":
+        this.nudge(action.dx, action.dy);
+        return true;
+      case "undo":
+        this.undo();
+        return true;
+      case "redo":
+        this.redo();
+        return true;
+      case "cancel":
+        this.cancel();
+        return true;
+      case "ignore":
+        return true;
+    }
+  }
+
+  /* ── Bookkeeping ────────────────────────────────────────────────────── */
+
+  private record(entries: readonly MoveEntry[]): void {
+    this.stack.pushApplied(moveCommand(entries, (batch, reverse) => this.plan.move(batch, reverse)));
+    this.dirty = true;
+  }
+
+  /** After an edit: the moved set may have changed and the plan is dirty. */
+  private afterEdit(): void {
+    this.moved = new Set(this.plan.movedIds());
+    this.refresh();
+  }
+
+  /** After undo, redo or a load: every building may have moved. */
+  private afterHistory(): void {
+    this.view.syncAll();
+    this.view.resort();
+    this.moved = new Set(this.plan.movedIds());
+    this.refresh();
+  }
+
+  private refresh(): void {
+    this.view.draw({
+      selected: this.selection,
+      moved: this.moved,
+      invalid: this.faulted,
+      marquee: this.marquee,
+    });
+    this.onChange();
+  }
+}

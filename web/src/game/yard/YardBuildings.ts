@@ -60,6 +60,18 @@ interface BuildingView {
   readonly anims: readonly AnimLayer[];
   /** Dropped once the real picture arrives. */
   label: Text | null;
+  /** The countdown badge, if this building has one. */
+  marker: Sprite | null;
+  /**
+   * World pixels this building is drawn away from where the save put it.
+   *
+   * Zero for every building outside the planner. The planner moves buildings by
+   * translating their existing sprites rather than rebuilding the draw list,
+   * because a drag of 400 walls has to stay at the vsync floor and destroying
+   * and recreating 400 sprites per pointer move does not.
+   */
+  offsetX: number;
+  offsetY: number;
   /** True once the real picture is on the sprite. */
   resolved: boolean;
   /**
@@ -92,6 +104,7 @@ export class YardBuildings {
 
   private readonly textures: YardTextures;
   private views: BuildingView[] = [];
+  private readonly byId = new Map<number, BuildingView>();
   /** Set when art has arrived and the sprites need another resolution pass. */
   private pending = true;
 
@@ -146,20 +159,23 @@ export class YardBuildings {
         this.labels.addChild(label);
       }
 
-      this.views.push({
+      const view: BuildingView = {
         building,
         art,
         top,
         shadow,
         anims,
         label,
+        marker: building.countdown ? this.addCountdownMarker(building, atlas) : null,
+        offsetX: 0,
+        offsetY: 0,
         resolved: false,
         shadowResolved: shadow === null,
         animsPending: anims.length > 0,
         topIsAnim: art?.topIsAnim === true,
-      });
-
-      if (building.countdown) this.addCountdownMarker(building, atlas);
+      };
+      this.views.push(view);
+      this.byId.set(building.id, view);
     }
 
     this.pending = true;
@@ -187,8 +203,10 @@ export class YardBuildings {
 
     for (const view of this.views) {
       const box = view.building.box;
+      const boxX = box.x + view.offsetX;
+      const boxY = box.y + view.offsetY;
       const on =
-        box.x <= right && box.x + box.width >= left && box.y <= bottom && box.y + box.height >= top;
+        boxX <= right && boxX + box.width >= left && boxY <= bottom && boxY + box.height >= top;
       // A building drawn entirely from its first strip keeps its still top only
       // until that strip is playing; both at once would show cell 0 through the
       // transparent parts of every other cell.
@@ -211,27 +229,77 @@ export class YardBuildings {
    */
   pick(worldX: number, worldY: number): YardBuilding | null {
     for (let i = this.views.length - 1; i >= 0; i--) {
-      const building = this.views[i]?.building;
-      if (!building) continue;
-      const box = building.box;
-      if (
-        worldX < box.x ||
-        worldX > box.x + box.width ||
-        worldY < box.y ||
-        worldY > box.y + box.height
-      ) {
-        continue;
-      }
-      if (inDiamond(building, worldX, worldY)) return building;
+      const view = this.views[i];
+      if (!view) continue;
+      // Test against where the building is *drawn*, which in the planner is not
+      // where the save put it.
+      const x = worldX - view.offsetX;
+      const y = worldY - view.offsetY;
+      const box = view.building.box;
+      if (x < box.x || x > box.x + box.width || y < box.y || y > box.y + box.height) continue;
+      if (inDiamond(view.building, x, y)) return view.building;
     }
     return null;
+  }
+
+  /* ── Moving, for the planner ────────────────────────────────────────── */
+
+  /**
+   * Draws a building `(worldX, worldY)` pixels away from where the save put it.
+   *
+   * Every sprite the building owns — picture, shadow, animation strips,
+   * placeholder label and countdown badge — shifts by the same amount, because
+   * an isometric translation is a translation on screen and nothing has to be
+   * reprojected. The offset is absolute rather than incremental so a drag can
+   * re-issue it on every pointer move without accumulating drift.
+   */
+  offsetBuilding(id: number, worldX: number, worldY: number): void {
+    const view = this.byId.get(id);
+    if (!view || (view.offsetX === worldX && view.offsetY === worldY)) return;
+
+    const dx = worldX - view.offsetX;
+    const dy = worldY - view.offsetY;
+    view.offsetX = worldX;
+    view.offsetY = worldY;
+
+    for (const sprite of [view.top, view.shadow, view.label, view.marker]) {
+      if (sprite) sprite.position.set(sprite.position.x + dx, sprite.position.y + dy);
+    }
+    for (const layer of view.anims) {
+      layer.sprite.position.set(layer.sprite.position.x + dx, layer.sprite.position.y + dy);
+    }
+  }
+
+  /** The offset a building is currently drawn at. */
+  offsetOf(id: number): { x: number; y: number } {
+    const view = this.byId.get(id);
+    return view ? { x: view.offsetX, y: view.offsetY } : { x: 0, y: 0 };
+  }
+
+  /**
+   * Re-sorts the draw list so moved buildings stack correctly again.
+   *
+   * Only worth doing when a move is committed: during a drag the group is
+   * briefly drawn through its neighbours, which reads as "picked up" and costs
+   * nothing, while re-sorting 575 sprites per pointer move would not.
+   */
+  resortByDepth(): void {
+    for (const view of this.views) {
+      const base = (view.building.depth + view.offsetY * 4_000_000 + view.offsetX * 1_000) * 8;
+      view.top.zIndex = base;
+      view.anims.forEach((layer, index) => (layer.sprite.zIndex = base + index + 1));
+    }
+    this.tops.sortableChildren = true;
+    this.tops.sortChildren();
   }
 
   clear(): void {
     for (const layer of [this.shadows, this.tops, this.labels, this.markers]) {
       for (const child of layer.removeChildren()) child.destroy();
     }
+    this.tops.sortableChildren = false;
     this.views = [];
+    this.byId.clear();
   }
 
   destroy(): void {
@@ -275,11 +343,12 @@ export class YardBuildings {
   }
 
   /** A badge over anything mid-build, mid-upgrade or mid-fortify. */
-  private addCountdownMarker(building: YardBuilding, atlas: YardArtAtlas): void {
+  private addCountdownMarker(building: YardBuilding, atlas: YardArtAtlas): Sprite {
     const marker = new Sprite(atlas.working);
     marker.anchor.set(0.5, 1);
     marker.position.set(building.centreX, building.box.y - 6);
     marker.tint = building.countdown?.kind === "build" ? 0xffd479 : 0x8fd0ff;
     this.markers.addChild(marker);
+    return marker;
   }
 }

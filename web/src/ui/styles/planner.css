@@ -1,0 +1,232 @@
+/*
+ * Yard Planner chrome.
+ *
+ * Same rule as the rest: every value comes from tokens.css and nothing here
+ * declares a raw colour. The two bars are pinned to the top and bottom edges of
+ * the viewport with the canvas between them, which is the layout in design
+ * §4.1; the panels dock down the left so they never cover the action bar.
+ */
+
+.yard-toolbar {
+  position: absolute;
+  left: var(--space-4);
+  top: calc(var(--hud-height) + var(--space-4));
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  pointer-events: auto;
+}
+
+.yard-toolbar__plan[aria-pressed="true"] {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+/* ── The two bars ─────────────────────────────────────────────────────── */
+
+.planner-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--colour-surface-raised);
+  border-block: 1px solid var(--colour-border);
+  box-shadow: var(--shadow-panel);
+  pointer-events: auto;
+  z-index: var(--z-hud);
+  flex-wrap: wrap;
+}
+
+.planner-bar--top {
+  top: var(--hud-height);
+}
+
+.planner-bar--bottom {
+  bottom: 0;
+}
+
+.planner-bar__title {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  letter-spacing: 0.02em;
+}
+
+.planner-bar__slot,
+.planner-bar__summary {
+  font-size: var(--text-sm);
+}
+
+.planner-bar__group {
+  display: flex;
+  gap: var(--space-1);
+  padding-inline: var(--space-2);
+  border-inline-start: 1px solid var(--colour-border);
+}
+
+.planner-bar__spacer {
+  flex: 1 1 auto;
+}
+
+.planner-bar button[aria-pressed="true"] {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.planner-bar__checklist--bad {
+  color: var(--colour-danger);
+  border-color: var(--colour-danger);
+}
+
+/* ── Docked panels ────────────────────────────────────────────────────── */
+
+.planner-dock {
+  position: absolute;
+  left: var(--space-4);
+  top: calc(var(--hud-height) + 56px);
+  bottom: 64px;
+  width: min(420px, 38vw);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow-y: auto;
+  pointer-events: none;
+}
+
+.planner-dock > * {
+  pointer-events: auto;
+  flex: 0 0 auto;
+}
+
+/* ── Banner ───────────────────────────────────────────────────────────── */
+
+.planner-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--colour-border-strong);
+  background: var(--colour-surface-overlay);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  box-shadow: var(--shadow-panel);
+}
+
+.planner-banner--warning {
+  border-inline-start: 4px solid var(--colour-accent);
+}
+
+.planner-banner--error {
+  border-inline-start: 4px solid var(--colour-danger);
+}
+
+.planner-banner--info {
+  border-inline-start: 4px solid var(--colour-info);
+}
+
+.planner-banner > span {
+  flex: 1 1 auto;
+}
+
+/* ── Checklist ────────────────────────────────────────────────────────── */
+
+.planner-checklist__rows,
+.planner-checklist__faults,
+.planner-layouts__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.planner-checklist__row + .planner-checklist__row {
+  margin-top: var(--space-3);
+}
+
+.planner-checklist__heading {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.planner-checklist__row--ok .planner-checklist__heading {
+  color: var(--colour-success);
+}
+
+.planner-checklist__row--bad .planner-checklist__heading {
+  color: var(--colour-danger);
+}
+
+.planner-checklist__faults {
+  margin-top: var(--space-1);
+  padding-inline-start: var(--space-4);
+}
+
+.planner-checklist__show {
+  font-size: var(--text-sm);
+  text-align: start;
+  padding-block: var(--space-1);
+}
+
+/* ── Layout slots ─────────────────────────────────────────────────────── */
+
+.planner-layouts__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.planner-layouts__row + .planner-layouts__row {
+  border-top: 1px solid var(--colour-border);
+}
+
+.planner-layouts__row--current {
+  border-color: var(--colour-accent);
+  background: var(--colour-surface-overlay);
+}
+
+.planner-layouts__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.planner-layouts__name {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.planner-layouts__meta {
+  font-size: var(--text-xs);
+}
+
+.planner-layouts__controls {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.planner-layouts__controls .btn {
+  font-size: var(--text-sm);
+  padding-inline: var(--space-2);
+}
+
+.planner-layouts__confirm {
+  color: var(--colour-danger);
+  border-color: var(--colour-danger);
+}
+
+@media (width <= 900px) {
+  .planner-dock {
+    width: min(92vw, 420px);
+  }
+
+  .planner-bar {
+    font-size: var(--text-sm);
+  }
+}
