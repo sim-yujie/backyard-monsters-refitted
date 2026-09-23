@@ -54,6 +54,17 @@ export class MapRoom2Scene implements Scene {
   private ui: MapRoomUi | null = null;
   private input: MapInput | null = null;
 
+  /**
+   * The current viewport size in CSS px. `SceneContext.width`/`height` are a
+   * one-time snapshot taken at `enter`, never updated after — `resize` is the
+   * only place the manager hands us a live size, so it is mirrored here for
+   * every other method that needs "the viewport right now" (the keyboard zoom
+   * anchor). Reading `this.context.width` instead is the bug that leaves the
+   * zoom anchored at the size the scene opened at.
+   */
+  private viewportWidth = 0;
+  private viewportHeight = 0;
+
   private home: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
   private range: CellRange = { minCol: 0, maxCol: 0, minRow: 0, maxRow: 0 };
@@ -77,6 +88,8 @@ export class MapRoom2Scene implements Scene {
 
   async enter(context: SceneContext): Promise<void> {
     this.context = context;
+    this.viewportWidth = context.width;
+    this.viewportHeight = context.height;
     context.stage.addChild(this.renderer.root);
     // Bakes the sprite atlas the chunk renderer draws from.
     this.renderer.attach(context.renderer);
@@ -162,6 +175,8 @@ export class MapRoom2Scene implements Scene {
   }
 
   resize(width: number, height: number): void {
+    this.viewportWidth = width;
+    this.viewportHeight = height;
     this.camera.resize(width, height);
   }
 
@@ -284,9 +299,7 @@ export class MapRoom2Scene implements Scene {
   }
 
   private zoomTo(zoom: number): void {
-    const context = this.context;
-    if (!context) return;
-    this.camera.zoomAt(zoom, { x: context.width / 2, y: context.height / 2 });
+    this.camera.zoomAt(zoom, { x: this.viewportWidth / 2, y: this.viewportHeight / 2 });
   }
 
   /** Double click: zoom in a step and put that cell in the middle. */
