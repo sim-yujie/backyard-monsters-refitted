@@ -1,10 +1,12 @@
-import type { Container } from "pixi.js";
+import type { Container, Renderer } from "pixi.js";
 import type { Overlay } from "@/ui/overlay";
 
 /** What a scene is handed when it is created. */
 export interface SceneContext {
   /** The Pixi container this scene draws into. Emptied when the scene exits. */
   readonly stage: Container;
+  /** The live renderer, for a scene that bakes textures of its own. */
+  readonly renderer: Renderer;
   /** The HTML overlay layers for this scene's panels and popups. */
   readonly overlay: Overlay;
   /** The element the canvas lives in, for attaching input. */
@@ -48,6 +50,7 @@ export class SceneManager {
 
   constructor(
     private readonly stage: Container,
+    private readonly renderer: Renderer,
     private readonly overlay: Overlay,
     private readonly canvas: HTMLCanvasElement,
     private width: number,
@@ -122,6 +125,7 @@ export class SceneManager {
 
       await scene.enter?.({
         stage: this.stage,
+        renderer: this.renderer,
         overlay: this.overlay,
         canvas: this.canvas,
         width: this.width,

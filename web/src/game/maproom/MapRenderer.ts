@@ -1,101 +1,111 @@
-import { Container, Graphics } from "pixi.js";
-import { LOD_BADGE_ZOOM, LOD_GLYPH_ZOOM, LOD_HEX_ZOOM, LOD_LABEL_ZOOM, MAX_HEX_CELLS } from "@/config";
+import { Container, Graphics, type Renderer } from "pixi.js";
+import { MAX_TEXT_OBJECTS } from "@/config";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
-import { drawCellDecoration, flatten, markerPolygon } from "./cellMarkers";
-import { LabelLayer, type LabelRequest } from "./LabelLayer";
+import { HOVER_COLOUR, SELECT_COLOUR } from "./cellVisuals";
 import {
-  CellMarker,
-  GRID_LINE_COLOUR,
-  HOVER_COLOUR,
-  SELECT_COLOUR,
-  appearanceOf,
-  type CellAppearance,
-} from "./cellVisuals";
+  CHUNK_TTL_MS,
+  MAX_RESIDENT_CHUNKS,
+  ChunkResidency,
+  chunksForRange,
+} from "./chunks";
+import { TextPool } from "./LabelLayer";
+import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
+import { MapAtlas } from "./mapAtlas";
+import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
 import { TerrainRaster } from "./TerrainRaster";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
 import type { CellRange } from "./zones";
 
-/** How much detail the current zoom earns. */
-export const LodTier = {
-  /** One texel per cell: the whole world at once. */
-  RASTER: 0,
-  /** Hexagons and glyphs, no text. */
-  SHAPES: 1,
-  /** Plus level badges. */
-  BADGES: 2,
-  /** Plus owner and tribe names. */
-  LABELS: 3,
-} as const;
-export type LodTier = (typeof LodTier)[keyof typeof LodTier];
-
-export const tierForZoom = (zoom: number): LodTier => {
-  if (zoom < LOD_HEX_ZOOM) return LodTier.RASTER;
-  if (zoom < LOD_BADGE_ZOOM) return LodTier.SHAPES;
-  if (zoom < LOD_LABEL_ZOOM) return LodTier.BADGES;
-  return LodTier.LABELS;
-};
-
 /**
- * Hairlines between cells are dropped once there are this many on screen. The
- * stroker walks six segments per hex, so the cost grows faster than the fills
- * do, and at that density the outlines have merged into a grey wash anyway.
+ * Chunks built in one frame.
+ *
+ * A pan crosses a chunk boundary about twice a second, bringing three or four
+ * chunks with it, so two a frame keeps up with any plausible drag. Pulling back
+ * to the far tier asks for sixty at once; those arrive over the next half
+ * second, and until they do the raster shows through underneath rather than a
+ * hole.
  */
-const MAX_OUTLINED_CELLS = 3_000;
+const MAX_BUILDS_PER_FRAME = 2;
+
+/** Eviction is housekeeping; nothing about the answer is urgent. */
+const SWEEP_INTERVAL_MS = 2_000;
 
 /**
  * Draws the map.
  *
  * Two levels of detail, chosen by zoom: a single stretched texture for the
- * whole world (TerrainRaster) and real hexagons for anything closer. The
- * expensive path only rebuilds when something it depends on changed — the
- * visible range, the level of detail, or the zone store's revision — so panning
- * within a cell and idling both cost nothing.
+ * whole world (TerrainRaster) and, above the hex threshold, chunks of sprites
+ * over the top of it.
+ *
+ * A chunk is one server zone, ten cells square, built once from the shared
+ * texture atlas. Panning therefore does no geometry work at all: the visible
+ * set of chunks changes, their parent's transform moves, and that is the whole
+ * frame. A zone arriving marks its own chunk dirty and nothing else. Changing
+ * zoom within the chunked tiers toggles layer visibility and, across a tier
+ * boundary, swaps the outline texture — it never rebuilds.
  */
 export class MapRenderer {
-  readonly root = new Container();
+  /**
+   * A render group, so moving the camera is one matrix update rather than a
+   * walk over every sprite in every chunk.
+   */
+  readonly root = new Container({ isRenderGroup: true });
 
   private readonly raster = new TerrainRaster();
-  private readonly terrain = new Graphics();
-  private readonly markers = new Graphics();
-  private readonly decoration = new Graphics();
-  private readonly labels = new LabelLayer();
+  private readonly world = new Container();
   private readonly highlight = new Graphics();
 
-  /**
-   * Reused hex corner arrays, one per cell drawn.
-   *
-   * A rebuild can touch five thousand cells, and allocating a twelve-number
-   * array plus six point objects for each was the largest single source of
-   * garbage in the frame — enough to turn a 4 ms rebuild into a 10 ms one
-   * whenever a collection landed. Graphics keeps a reference to each array
-   * until the next `clear()`, and `clear()` happens at the top of the rebuild
-   * that reuses them, so recycling is safe.
-   */
-  private readonly polygonPool: number[][] = [];
-  private polygonCursor = 0;
+  private readonly pool = new TextPool();
+  private readonly chunks = new Map<number, MapChunk>();
+  private readonly residency = new ChunkResidency({
+    ttlMs: CHUNK_TTL_MS,
+    maxResident: MAX_RESIDENT_CHUNKS,
+  });
+  /** Chunks whose zone has been refetched since they were built. */
+  private readonly dirty = new Set<number>();
+
+  private atlas: MapAtlas | null = null;
 
   private lastRange: CellRange | null = null;
   private lastTier: LodTier | null = null;
-  private lastRevision = -1;
+  private lastView: ChunkView | null = null;
   private lastZoom = 0;
+  private visibleIds: number[] = [];
+  /** Set when a frame ran out of build budget, so the next frame continues. */
+  private backlog = false;
+  private lastSweepMs = 0;
+  private buildMs = 0;
 
   private hovered: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
 
   constructor(private readonly store: ZoneStore) {
-    this.root.addChild(
-      this.raster.sprite,
-      this.terrain,
-      this.markers,
-      this.decoration,
-      this.highlight,
-      this.labels.container,
-    );
+    this.world.interactiveChildren = false;
+    // The raster stays under the chunks at every tier, so a chunk that has not
+    // been built yet shows the world at one texel per cell instead of nothing.
+    this.root.addChild(this.raster.sprite, this.world, this.highlight);
   }
 
-  /** Feeds a freshly loaded zone into the far-detail texture. */
+  /** How long the last chunk build took, in milliseconds. */
+  get lastBuildMs(): number {
+    return this.buildMs;
+  }
+
+  /**
+   * Bakes the texture atlas. Nothing is drawn above the raster tier until this
+   * has run, because it needs a live renderer to rasterise the shapes.
+   */
+  attach(renderer: Renderer): void {
+    this.atlas?.destroy();
+    this.atlas = new MapAtlas(renderer);
+    this.dropAllChunks();
+    this.lastRange = null;
+  }
+
+  /** Feeds a freshly loaded zone into the raster and invalidates its chunk. */
   applyZone(zone: ZoneRecord): void {
     this.raster.applyZone(zone);
+    if (this.chunks.has(zone.id)) this.dirty.add(zone.id);
   }
 
   setHovered(cell: OffsetCell | null): void {
@@ -111,185 +121,168 @@ export class MapRenderer {
   }
 
   /**
-   * Redraws if anything it depends on moved. Returns true when it did work,
-   * which the scene uses for its frame-time readout.
+   * Brings the chunk set in line with the viewport. Returns true when it did
+   * work, which the scene uses for its frame-time readout.
    */
   draw(range: CellRange, zoom: number): boolean {
     this.raster.flush();
+    const atlas = this.atlas;
+    if (!atlas) return false;
 
-    const tier = tierForZoom(zoom);
-    const revision = this.store.revision;
-    const unchanged =
-      tier === this.lastTier &&
-      revision === this.lastRevision &&
-      sameRange(range, this.lastRange) &&
-      // Stroke widths are in world units and divided by the zoom, so a zoom
-      // change inside one tier still has to redraw them.
-      (tier === LodTier.RASTER || zoom === this.lastZoom);
-    if (unchanged) return false;
-
-    this.lastTier = tier;
-    this.lastRevision = revision;
-    this.lastRange = { ...range };
-    this.lastZoom = zoom;
-
-    if (tier === LodTier.RASTER) {
-      this.showRasterOnly();
+    if (zoom !== this.lastZoom) {
+      this.lastZoom = zoom;
+      // Highlight strokes are one screen pixel, so they are the one thing that
+      // still depends on the zoom rather than on the tier.
       this.drawHighlight();
-      return true;
     }
 
-    this.raster.sprite.visible = false;
-    this.terrain.visible = true;
-    this.markers.visible = true;
-    this.decoration.visible = true;
-    this.labels.visible = tier >= LodTier.BADGES;
+    const tier = tierForZoom(zoom);
+    const view = viewFor(tier, zoom, atlas);
+    const nowMs = Date.now();
 
-    this.rebuild(range, tier, zoom);
-    this.drawHighlight();
+    if (tier === LodTier.RASTER) {
+      const changed = this.lastTier !== tier;
+      this.world.visible = false;
+      this.lastTier = tier;
+      this.lastRange = null;
+      this.visibleIds = [];
+      this.sweep(nowMs);
+      return changed;
+    }
+
+    this.world.visible = true;
+    if (
+      !this.backlog &&
+      this.dirty.size === 0 &&
+      tier === this.lastTier &&
+      sameView(view, this.lastView) &&
+      sameRange(range, this.lastRange)
+    ) {
+      this.residency.keep(this.visibleIds, nowMs);
+      this.sweep(nowMs);
+      return false;
+    }
+
+    this.lastTier = tier;
+    this.lastView = view;
+    this.lastRange = { ...range };
+    this.reconcile(range, view, atlas, nowMs);
+    this.sweep(nowMs);
     return true;
   }
 
   destroy(): void {
+    this.dropAllChunks();
+    this.pool.destroy();
+    this.atlas?.destroy();
+    this.atlas = null;
     this.raster.destroy();
     this.root.destroy({ children: true });
   }
 
-  private showRasterOnly(): void {
-    this.raster.sprite.visible = true;
-    this.terrain.visible = false;
-    this.markers.visible = false;
-    this.decoration.visible = false;
-    this.labels.visible = false;
-  }
+  /** Builds what is missing, hides what is not on screen, shows the rest. */
+  private reconcile(range: CellRange, view: ChunkView, atlas: MapAtlas, nowMs: number): void {
+    const refs = chunksForRange(range);
+    const visible = new Set<number>();
+    for (const ref of refs) visible.add(ref.id);
 
-  private rebuild(range: CellRange, tier: LodTier, zoom: number): void {
-    this.terrain.clear();
-    this.markers.clear();
-    this.decoration.clear();
-
-    const cols = range.maxCol - range.minCol + 1;
-    const rows = range.maxRow - range.minRow + 1;
-    if (cols <= 0 || rows <= 0 || cols * rows > MAX_HEX_CELLS) {
-      this.showRasterOnly();
-      return;
+    for (const [id, chunk] of this.chunks) {
+      if (visible.has(id)) continue;
+      chunk.container.visible = false;
+      // Text is the scarce resource, so an off-screen chunk gives its share
+      // back as soon as the on-screen ones might want it.
+      if (this.pool.inUse > MAX_TEXT_OBJECTS) chunk.releaseText();
     }
 
-    this.polygonCursor = 0;
-    const nowSeconds = Date.now() / 1000;
-    const showCamps = zoom >= LOD_GLYPH_ZOOM;
-    const context = {
-      cellWidth: mapRoomGrid.cellWidth,
-      cellHeight: mapRoomGrid.cellHeight,
-      zoom,
-    };
+    const wanted = view.names
+      ? TextLevel.NAMES
+      : view.badges
+        ? TextLevel.BADGES
+        : TextLevel.NONE;
 
-    // Batching by colour keeps the draw-call count at the number of distinct
-    // terrain bands rather than the number of cells.
-    const hexes = new Map<number, number[][]>();
-    const glyphs = new Map<number, number[][]>();
-    const decorated: { appearance: CellAppearance; col: number; row: number }[] = [];
-    const texts: LabelRequest[] = [];
+    let budget = MAX_BUILDS_PER_FRAME;
+    this.backlog = false;
+    const nowSeconds = nowMs / 1000;
 
-    for (let col = range.minCol; col <= range.maxCol; col++) {
-      for (let row = range.minRow; row <= range.maxRow; row++) {
-        const appearance = appearanceOf(this.store.getCell(col, row), nowSeconds);
-        push(
-          hexes,
-          appearance.terrain,
-          mapRoomGrid.writeCellCorners(col, row, this.takePolygon()),
-        );
+    for (const ref of refs) {
+      let chunk = this.chunks.get(ref.id);
+      const stale = this.dirty.has(ref.id);
 
-        if (appearance.marker === CellMarker.NONE && !appearance.own) continue;
-        // Almost every land cell is a camp, so below the glyph threshold their
-        // tents are the bulk of the geometry and none of the information.
-        const isCamp =
-          appearance.marker === CellMarker.CAMP ||
-          appearance.marker === CellMarker.CAMP_DESTROYED;
-        if (isCamp && !showCamps && !appearance.own) continue;
-
-        const centre = mapRoomGrid.cellToPixel(col, row);
-        const polygon = markerPolygon(appearance, centre, context);
-        if (polygon) push(glyphs, appearance.markerColour, polygon);
-
-        // Rings and damage bars need real corner objects, but only a handful of
-        // cells ever have them, so they are built here rather than for every cell.
-        if (appearance.own || appearance.shielded || appearance.damage > 0) {
-          decorated.push({ appearance, col, row });
+      if (!chunk || stale) {
+        if (budget <= 0) {
+          this.backlog = true;
+          continue;
         }
-        if (tier >= LodTier.BADGES && appearance.badge) {
-          texts.push({ badge: appearance.badge, name: appearance.label, centre });
+        budget -= 1;
+        if (!chunk) {
+          chunk = new MapChunk(ref, atlas, this.pool);
+          this.chunks.set(ref.id, chunk);
+          this.world.addChild(chunk.container);
         }
+        const started = performance.now();
+        chunk.build(this.store, nowSeconds);
+        this.buildMs = performance.now() - started;
+        this.dirty.delete(ref.id);
       }
-    }
 
-    fillBatched(this.terrain, hexes);
-    if (cols * rows <= MAX_OUTLINED_CELLS) {
-      for (const polygons of hexes.values()) {
-        for (const points of polygons) this.terrain.poly(points);
+      if (wanted > chunk.textLevel && this.pool.inUse < MAX_TEXT_OBJECTS) {
+        chunk.ensureText(wanted);
       }
-      // One screen pixel whatever the zoom, so the grid does not disappear.
-      this.terrain.stroke({ width: 1 / zoom, color: GRID_LINE_COLOUR, alpha: 0.35 });
+      chunk.applyView(view);
+      chunk.container.visible = true;
     }
 
-    fillBatched(this.markers, glyphs);
-    for (const item of decorated) {
-      drawCellDecoration(
-        this.decoration,
-        item.appearance,
-        mapRoomGrid.cellToPixel(item.col, item.row),
-        mapRoomGrid.cellCorners(item.col, item.row),
-        context,
-      );
-    }
-
-    this.labels.layOut(texts, tier >= LodTier.LABELS);
+    this.visibleIds = [...visible];
+    this.residency.keep(this.visibleIds, nowMs);
   }
 
-  /** Next recycled corner array, growing the pool only on the first pass. */
-  private takePolygon(): number[] {
-    const existing = this.polygonPool[this.polygonCursor];
-    this.polygonCursor += 1;
-    if (existing) return existing;
-    const fresh = new Array<number>(12).fill(0);
-    this.polygonPool.push(fresh);
-    return fresh;
+  private sweep(nowMs: number): void {
+    if (nowMs - this.lastSweepMs < SWEEP_INTERVAL_MS) return;
+    this.lastSweepMs = nowMs;
+    for (const id of this.residency.evict(nowMs)) {
+      this.chunks.get(id)?.destroy();
+      this.chunks.delete(id);
+      this.dirty.delete(id);
+    }
   }
 
+  private dropAllChunks(): void {
+    for (const chunk of this.chunks.values()) chunk.destroy();
+    this.chunks.clear();
+    this.dirty.clear();
+    this.visibleIds = [];
+    for (const id of this.residency.ids()) this.residency.forget(id);
+  }
+
+  /**
+   * The one thing still drawn as vectors, because there is at most one of each
+   * and both strokes are a fixed number of *screen* pixels.
+   *
+   * Each cell gets its own corner array: `Graphics.poly` keeps the array it is
+   * handed rather than copying it, so a shared buffer would move the selection
+   * outline onto the hovered cell.
+   */
   private drawHighlight(): void {
     this.highlight.clear();
     const zoom = this.lastZoom || 1;
 
     if (this.selected) {
-      const corners = mapRoomGrid.cellCorners(this.selected.col, this.selected.row);
-      this.highlight.poly(flatten(corners));
+      const corners = mapRoomGrid.writeCellCorners(this.selected.col, this.selected.row, []);
+      this.highlight.poly(corners);
       this.highlight.fill({ color: SELECT_COLOUR, alpha: 0.12 });
-      this.highlight.poly(flatten(corners));
+      this.highlight.poly(corners);
       this.highlight.stroke({ width: 3 / zoom, color: SELECT_COLOUR });
     }
 
     if (this.hovered && !same(this.hovered, this.selected)) {
-      const corners = mapRoomGrid.cellCorners(this.hovered.col, this.hovered.row);
-      this.highlight.poly(flatten(corners));
+      const corners = mapRoomGrid.writeCellCorners(this.hovered.col, this.hovered.row, []);
+      this.highlight.poly(corners);
       this.highlight.fill({ color: HOVER_COLOUR, alpha: 0.2 });
-      this.highlight.poly(flatten(corners));
+      this.highlight.poly(corners);
       this.highlight.stroke({ width: 2 / zoom, color: HOVER_COLOUR });
     }
   }
 }
-
-const push = (into: Map<number, number[][]>, key: number, polygon: number[]): void => {
-  const existing = into.get(key);
-  if (existing) existing.push(polygon);
-  else into.set(key, [polygon]);
-};
-
-const fillBatched = (graphics: Graphics, byColour: Map<number, number[][]>): void => {
-  for (const [colour, polygons] of byColour) {
-    for (const points of polygons) graphics.poly(points);
-    graphics.fill({ color: colour });
-  }
-};
 
 const same = (a: OffsetCell | null, b: OffsetCell | null): boolean =>
   a === b || (a !== null && b !== null && a.col === b.col && a.row === b.row);

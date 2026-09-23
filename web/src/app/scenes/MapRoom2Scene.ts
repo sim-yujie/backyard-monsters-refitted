@@ -78,6 +78,8 @@ export class MapRoom2Scene implements Scene {
   async enter(context: SceneContext): Promise<void> {
     this.context = context;
     context.stage.addChild(this.renderer.root);
+    // Bakes the sprite atlas the chunk renderer draws from.
+    this.renderer.attach(context.renderer);
 
     this.camera.resize(context.width, context.height);
     this.camera.attach(context.canvas);
@@ -416,7 +418,8 @@ export class MapRoom2Scene implements Scene {
     ui.setZones(this.store.loadedZoneRefs());
     ui.setStatus(
       `${this.store.loadedZones} zones · ${this.store.pendingRequests} queued · ` +
-        `${this.frameCostMs.toFixed(1)} ms/frame`,
+        `${this.frameCostMs.toFixed(1)} ms/frame · ` +
+        `${this.renderer.lastBuildMs.toFixed(2)} ms/chunk`,
     );
   }
 

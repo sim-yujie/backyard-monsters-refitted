@@ -55,6 +55,7 @@ export class App {
 
     this.scenes = new SceneManager(
       this.stage,
+      this.pixi.renderer,
       this.overlay,
       canvas,
       this.pixi.screen.width,

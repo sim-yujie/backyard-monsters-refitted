@@ -95,14 +95,23 @@ export const LOD_BADGE_ZOOM = 0.55;
 export const LOD_LABEL_ZOOM = 0.9;
 
 /**
- * Upper bound on text objects built in one pass.
+ * Upper bound on text objects the map may hold at once.
  *
- * Text is the expensive part of the map: every badge and label is its own
- * display object with its own transform. At the badge threshold a 1080p
- * viewport holds about 800 cells, so the cap is headroom for a taller window
- * rather than something the normal path meets.
+ * Text is the expensive part of the map: every badge and name is its own
+ * display object with its own transform. Three things set the size of this
+ * number, and the cap has to clear all of them or labels go missing from cells
+ * that should have them:
+ *
+ *   - a cell at the label tier carries two lines, the name and the level;
+ *   - text is built per chunk, and a chunk is ten cells square, so the visible
+ *     set is rounded up to whole chunks — at the label threshold that is about
+ *     16 chunks, or 1,600 cells;
+ *   - the badge tier has no names but many more cells: about 20 chunks.
+ *
+ * 3,200 is the worst of those. 4,000 leaves room for a taller window without
+ * pretending the objects are free.
  */
-export const MAX_TEXT_OBJECTS = 1_100;
+export const MAX_TEXT_OBJECTS = 4_000;
 
 /**
  * Hard cap on hexes built in one geometry pass. At LOD_HEX_ZOOM a 1080p
