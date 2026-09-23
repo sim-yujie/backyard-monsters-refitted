@@ -36,7 +36,9 @@ export const devConfig = {
    * Inserts a sandbox test base into the database, with all buildings placed.
    * Must be set before creating a new record.
    */
-  devSandbox: process.env.ENV === Env.PROD ? false : false,
+  // Local development only: DEV_SANDBOX=true gives every new main yard the
+  // fully built sandbox base (utils/sandbox/overworldYard.ts). Never in production.
+  devSandbox: process.env.ENV !== Env.PROD && process.env.DEV_SANDBOX === "true",
 
   /*
    * Inserts an Inferno sandbox test base into the database, with all buildings placed.
