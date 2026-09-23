@@ -79,7 +79,8 @@ export class PerfOverlay {
       `>33 ms: ${over}\n` +
       `gpu ${this.gpu}\n` +
       `dpr ${window.devicePixelRatio}   canvas ${this.pixi.canvas.width}x${this.pixi.canvas.height}   ` +
-      `${navigator.userAgent.includes("Firefox") ? "firefox" : "chromium/other"}`;
+      `${navigator.userAgent.includes("Firefox") ? "firefox" : "chromium/other"}` +
+      dragLine();
   };
 }
 
@@ -96,4 +97,13 @@ const readGpuName = (canvas: HTMLCanvasElement): string => {
   } catch {
     return "unreadable";
   }
+};
+
+/** Last drag: how many frames the camera actually moved on, if a camera is attached. */
+const dragLine = (): string => {
+  const camera = (globalThis as { __bymrCamera?: { dragStats: { frames: number; moved: number } } })
+    .__bymrCamera;
+  if (!camera || camera.dragStats.frames === 0) return "";
+  const { frames, moved } = camera.dragStats;
+  return `\nlast drag: moved on ${moved} of ${frames} frames`;
 };
