@@ -69,6 +69,8 @@ import { getLayouts } from "./controllers/yardplanner/getLayouts.js";
 import { saveLayout } from "./controllers/yardplanner/saveLayout.js";
 import { deleteLayout } from "./controllers/yardplanner/deleteLayout.js";
 import { applyLayout } from "./controllers/yardplanner/applyLayout.js";
+import { upgradeWalls } from "./controllers/yardplanner/upgradeWalls.js";
+import { rearmTraps } from "./controllers/yardplanner/rearmTraps.js";
 import { layoutRoute } from "./controllers/yardplanner/layoutRoute.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
@@ -175,6 +177,8 @@ router.get("/api/:apiVersion/bm/yardplanner/layouts", apiVersion, verifyUserAuth
 router.put("/api/:apiVersion/bm/yardplanner/layouts/:slot", apiVersion, verifyUserAuth, logRequest, layoutRoute(saveLayout));
 router.delete("/api/:apiVersion/bm/yardplanner/layouts/:slot", apiVersion, verifyUserAuth, logRequest, layoutRoute(deleteLayout));
 router.post("/api/:apiVersion/bm/yardplanner/apply", apiVersion, verifyUserAuth, logRequest, layoutRoute(applyLayout));
+router.post("/api/:apiVersion/bm/yardplanner/walls/upgrade", apiVersion, verifyUserAuth, logRequest, layoutRoute(upgradeWalls));
+router.post("/api/:apiVersion/bm/yardplanner/traps/rearm", apiVersion, verifyUserAuth, logRequest, layoutRoute(rearmTraps));
 
 // Deprecated aliases for the Flash client. `deletetemplate` is the route it has
 // always called and the server never implemented (`BasePlannerService.as:64-67`).

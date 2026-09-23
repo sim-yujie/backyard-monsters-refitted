@@ -105,6 +105,46 @@ export const withinBounds = (rect: FootprintRect, type: number, expansion: numbe
   );
 };
 
+/** A footprint with whatever the caller needs to name it again afterwards. */
+export interface PlacedRect<T> {
+  readonly key: T;
+  readonly rect: FootprintRect;
+}
+
+/**
+ * The first pair of footprints that share any area, or `null` when none do.
+ *
+ * Sweeps on the x axis: sort by left edge, and only compare against footprints
+ * whose right edge is still ahead of the current left edge. The widest
+ * footprint is 190 units, so the active set stays small even on a full yard.
+ *
+ * `accept` lets a caller ignore pairs it is not asking about. Trap re-arm uses
+ * it to ignore two *existing* buildings that overlap each other, which a yard
+ * built before the footprint table existed can genuinely contain and which is
+ * none of that route's business.
+ *
+ * The input is not mutated: the sort runs on a copy, so a caller can keep using
+ * its own ordering afterwards.
+ */
+export const sweepOverlaps = <T>(
+  entries: readonly PlacedRect<T>[],
+  accept: (a: T, b: T) => boolean = () => true
+): readonly [T, T] | null => {
+  const sorted = [...entries].sort((a, b) => a.rect.x - b.rect.x || a.rect.y - b.rect.y);
+
+  let active: PlacedRect<T>[] = [];
+  for (const entry of sorted) {
+    active = active.filter((other) => other.rect.x + other.rect.w > entry.rect.x);
+    for (const other of active) {
+      if (overlaps(entry.rect, other.rect) && accept(other.key, entry.key)) {
+        return [other.key, entry.key];
+      }
+    }
+    active.push(entry);
+  }
+  return null;
+};
+
 /**
  * Mushroom footprints from `save.mushrooms`, which stores `{ l: [[frame, X, Y], ...] }`
  * (`client/scripts/MUSHROOMS.as:84-90`). Entries that are not a usable

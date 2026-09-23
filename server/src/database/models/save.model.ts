@@ -10,7 +10,7 @@ import type { AttackDetails } from "../../controllers/base/load/modes/baseModeAt
 import type { Stats } from "../../services/events/wmi/invasionUtils.js";
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import type { JsonObject } from "../../types/JsonObject.js";
-import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
+import type { BuildingDataMap, BuildingHealthData, FiredTrap } from "../../types/BuildingData.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 
 const NEXT_USER_BASEID = `SELECT nextval('bym.user_baseid_seq') AS baseid`;
@@ -358,6 +358,20 @@ export class Save {
   @FrontendKey
   @Property({ columnType: "jsonb", nullable: true })
   mushrooms?: JsonObject | null = {};
+
+  /**
+   * Traps that fired and were removed, newest last, so the Yard Planner can
+   * offer to put them back where they were.
+   *
+   * Written only by `buildingDataHandler.ts` (as an attack drops a trap) and by
+   * the planner's re-arm route (as one is rebuilt). Deliberately absent from
+   * {@link Save.saveKeys}: a client must never be able to write it, or it could
+   * mint itself free trap positions. `@FrontendKey` so it still rides out on
+   * `/base/load`.
+   */
+  @FrontendKey
+  @Property({ columnType: "jsonb", defaultRaw: "'[]'" })
+  firedtraps: Opt<FiredTrap[]> = [];
 
   @FrontendKey
   @Property({ columnType: "jsonb", nullable: true })

@@ -479,3 +479,22 @@ export const layoutUnplacedErr = (ids: number[]) =>
     data: { unplaced: ids },
     isClientFriendly: true,
   });
+
+/**
+ * A Yard Planner batch action the yard's own state will not allow: not enough
+ * resources, a prerequisite the yard does not meet, or a trap cap already
+ * reached.
+ *
+ * Separate from {@link layoutInvalidErr} because the request is well formed and
+ * nothing about it is the client's fault — the player simply cannot afford or
+ * unlock the action yet, which is a `409`, the same reading `layoutUnplacedErr`
+ * takes. `data` carries `shortfall`, `townHall`, `requirements` or `capReached`
+ * so the panel can say which (`docs/server-api.md`, the Yard Planner table).
+ */
+export const batchBlockedErr = (message: string, data: object = {}) =>
+  new ClientSafeError({
+    message,
+    status: Status.CONFLICT,
+    data,
+    isClientFriendly: true,
+  });

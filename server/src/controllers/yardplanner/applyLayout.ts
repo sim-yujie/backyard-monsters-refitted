@@ -1,5 +1,6 @@
 import { Status } from "../../enums/StatusCodes.js";
 import { layoutUnplacedErr } from "../../errors/errors.js";
+import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers.js";
 import { ApplyLayoutSchema } from "../../schemas/YardPlannerSchemas.js";
 import {
   currentExpansion,
@@ -40,8 +41,10 @@ import type { KoaController } from "../../utils/KoaController.js";
  *   building left where it was can collide with one the layout moves onto it.
  *
  * Buildings under construction, upgrading or fortifying may be moved, matching
- * the original, which never looked at build state before calling `moveTo`.
- * Only `X` and `Y` are written: no resource, level or timer is touched.
+ * the original, which never looked at build state before calling `moveTo`. Of
+ * a moved building only `X` and `Y` change; no resource or level is touched.
+ * Countdowns across the whole yard are brought forward to now, because
+ * `savetime` moves and a countdown is read as remaining time from it.
  *
  * @param {Context} ctx - The Koa context object, which includes the authenticated user.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
@@ -65,7 +68,15 @@ export const applyLayout: KoaController = async (ctx) => {
     mushroomRects(save.mushrooms)
   );
 
-  const buildingdata = { ...(save.buildingdata ?? {}) };
+  // Bring the countdowns forward before `savetime` moves, or every running job
+  // is handed the elapsed time a second time when the base is next loaded. Same
+  // sequence as the attack path (`controllers/base/save/baseSave.ts:213-218`).
+  const now = getCurrentDateTime();
+  const buildingdata = advanceBuildingTimers(
+    save.buildingdata ?? {},
+    save.buildinghealthdata,
+    now - Number(save.savetime ?? now)
+  );
   let moved = 0;
 
   for (const node of payload.nodes) {
@@ -78,7 +89,7 @@ export const applyLayout: KoaController = async (ctx) => {
   }
 
   save.buildingdata = buildingdata;
-  save.savetime = getCurrentDateTime();
+  save.savetime = now;
 
   postgres.em.persist(save);
   await postgres.em.flush();

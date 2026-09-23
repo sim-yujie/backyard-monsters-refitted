@@ -24,3 +24,23 @@ export type BuildingDataMap = Record<string, BuildingData>;
  * The client only writes buildings below full health, and 0 for traps that have fired.
  */
 export type BuildingHealthData = Record<string, number>;
+
+/**
+ * One trap that fired and was removed from the yard, kept so the Yard Planner
+ * can offer to put it back where it was.
+ *
+ * A fired trap leaves nothing behind but a zero in `buildinghealthdata`
+ * (`client/scripts/BFOUNDATION.as:439-441`), so the position is gone from the
+ * save the moment the attack lands. `buildingDataHandler.ts` records it here as
+ * the trap is dropped, using the same `X`/`Y` spelling `buildingdata` does.
+ * `at` is unix seconds, for nothing more than ordering and eviction.
+ */
+export interface FiredTrap {
+  t: number;
+  X: number;
+  Y: number;
+  at: number;
+}
+
+/** How many fired traps a save remembers; the oldest fall off the front. */
+export const FIRED_TRAP_MAX = 200;

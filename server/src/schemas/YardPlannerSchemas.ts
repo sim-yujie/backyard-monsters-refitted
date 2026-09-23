@@ -86,6 +86,53 @@ export const ApplyLayoutSchema = z.object({
   data: z.string().catch(""),
 });
 
+/**
+ * `POST /walls/upgrade` body.
+ *
+ * `ids` is a JSON string of building ids, parsed by
+ * `services/yardplanner/wallUpgrade.ts` the way `parsePayload` parses `data`, so
+ * a malformed list is reported in words rather than as a raw schema error.
+ * `level` is the target level every listed wall ends up at; 0 stands in for a
+ * missing or unreadable field and is refused by the target check.
+ */
+export const WallUpgradeSchema = z.object({
+  ids: z.string().catch(""),
+  level: z.coerce.number().int().catch(0),
+});
+
+/** The parsed form of `ids`: a plain list of building ids. */
+export const WallIdListSchema = z.array(z.number().int()).max(LAYOUT_NODE_MAX);
+
+/**
+ * One trap to (re-)place: type id and origin in yard units.
+ *
+ * Lower-case `x`/`y` matches the layout node shape the planner already posts,
+ * even though `buildingdata` stores the same numbers as `X`/`Y`.
+ */
+export const TrapPlacementSchema = z.object({
+  t: z.number().int().nonnegative(),
+  x: z.number().int(),
+  y: z.number().int(),
+});
+
+export type TrapPlacement = z.infer<typeof TrapPlacementSchema>;
+
+/**
+ * Hard ceiling on traps in one re-arm. The Town Hall 10 caps are 75 Booby Traps
+ * and 18 Heavy Traps (`client/scripts/YARD_PROPS.as:2723`, `:6307`), so 200 is
+ * well past anything a yard can actually be short of while still bounding the
+ * placement sweep per request.
+ */
+export const BATCH_TRAP_MAX = 200;
+
+/** `POST /traps/rearm` body. Same fallback as {@link WallUpgradeSchema}. */
+export const TrapRearmSchema = z.object({
+  traps: z.string().catch(""),
+});
+
+/** The parsed form of `traps`. */
+export const TrapPlacementListSchema = z.array(TrapPlacementSchema).max(BATCH_TRAP_MAX);
+
 /** `POST /deletetemplate` body, the legacy alias for `DELETE /layouts/:slot`. */
 export const DeleteTemplateSchema = z.object({
   slotid: z.coerce.number().int().min(0).max(LAYOUT_SLOTS - 1),

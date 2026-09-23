@@ -9,7 +9,13 @@ import {
   type LayoutPayload,
 } from "../../schemas/YardPlannerSchemas.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
-import { overlaps, rectOf, withinBounds, type FootprintRect } from "./layoutGeometry.js";
+import {
+  overlaps,
+  rectOf,
+  sweepOverlaps,
+  withinBounds,
+  type FootprintRect,
+} from "./layoutGeometry.js";
 
 /**
  * Every rule the server enforces on a layout, in one place, so that saving a
@@ -21,10 +27,17 @@ import { overlaps, rectOf, withinBounds, type FootprintRect } from "./layoutGeom
  * the player actually has while a save checks the plot the layout was drawn for.
  */
 
-/** How many offending ids an error message names before it stops. */
-const MAX_LISTED = 5;
+/**
+ * How many offending ids an error message names before it stops.
+ *
+ * Shared with the batch routes (`wallUpgrade.ts`, `trapRearm.ts`) so that every
+ * Yard Planner rejection reads the same way and carries the same amount of
+ * detail.
+ */
+export const MAX_LISTED = 5;
 
-const listIds = (ids: number[]): string => {
+/** `1, 2, 3, 4, 5 and 7 more` — a readable prefix of a list of ids or indexes. */
+export const listIds = (ids: number[]): string => {
   const shown = ids.slice(0, MAX_LISTED).join(", ");
   return ids.length > MAX_LISTED ? `${shown} and ${ids.length - MAX_LISTED} more` : shown;
 };
@@ -160,23 +173,12 @@ export const checkNodePlacement = (
     );
   }
 
-  // Sweep on the x axis: sort by left edge, and only compare against buildings
-  // whose right edge is still ahead of the current left edge. The widest
-  // footprint is 190 units, so the active set stays small even on a full yard.
-  placed.sort((a, b) => a.rect.x - b.rect.x || a.rect.y - b.rect.y);
-
-  let active: { id: number; rect: FootprintRect }[] = [];
-  for (const entry of placed) {
-    active = active.filter((other) => other.rect.x + other.rect.w > entry.rect.x);
-    for (const other of active) {
-      if (overlaps(entry.rect, other.rect)) {
-        throw layoutInvalidErr(
-          `Two buildings in this layout are on top of each other (${other.id} and ${entry.id}).`,
-          { overlapping: [other.id, entry.id] }
-        );
-      }
-    }
-    active.push(entry);
+  const collision = sweepOverlaps(placed.map(({ id, rect }) => ({ key: id, rect })));
+  if (collision) {
+    throw layoutInvalidErr(
+      `Two buildings in this layout are on top of each other (${collision[0]} and ${collision[1]}).`,
+      { overlapping: [collision[0], collision[1]] }
+    );
   }
 
   if (obstacles.length === 0) return;

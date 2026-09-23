@@ -1,6 +1,11 @@
 import { SaveKeys } from "../../../../enums/SaveKeys.js";
 import { Save } from "../../../../database/models/save.model.js";
-import type { BuildingDataMap } from "../../../../types/BuildingData.js";
+import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
+import {
+  FIRED_TRAP_MAX,
+  type BuildingDataMap,
+  type FiredTrap,
+} from "../../../../types/BuildingData.js";
 
 enum Building {
   TRAP = 24,
@@ -18,6 +23,14 @@ enum Building {
  * triggered traps (types 24 and 117). We detect which traps were triggered
  * by checking which trap keys are absent from the client's submission.
  *
+ * This is also the one moment the server knows where a trap was standing when
+ * it fired. Nothing else records it: the trap is about to leave buildingdata
+ * and only a zero in buildinghealthdata will be left behind, so the position
+ * would be lost for good. Each dropped trap is therefore appended to
+ * `save.firedtraps` as `{ t, X, Y, at }`, newest last and capped at
+ * {@link FIRED_TRAP_MAX}, which is what the Yard Planner's re-arm route offers
+ * the player back (`docs/design/yard-planner-phase1-remainder.md` §2.5).
+ *
  * @param {Record<string, any> | null} buildingData - The building data submitted by the attacker
  * @param {Save} save - The defender's save record
  */
@@ -27,6 +40,8 @@ export const buildingDataHandler = (buildingData: Record<string, any> | null, sa
   const savedBuildingData = save.buildingdata || {};
 
   const result: BuildingDataMap = {};
+  const fired: FiredTrap[] = [];
+  const at = getCurrentDateTime();
 
   for (const [key, building] of Object.entries(savedBuildingData)) {
     const isTrap = building.t === Building.TRAP || building.t === Building.HEAVY_TRAP;
@@ -35,6 +50,7 @@ export const buildingDataHandler = (buildingData: Record<string, any> | null, sa
       // Keep the trap only if the client still reports it as present.
       // Absent = triggered during the attack, so we drop it.
       if (buildingData[key]) result[key] = building;
+      else fired.push({ t: Number(building.t), X: Number(building.X), Y: Number(building.Y), at });
     } else {
       // Non-trap buildings are never modified by attacks - always keep DB value.
       result[key] = building;
@@ -42,4 +58,9 @@ export const buildingDataHandler = (buildingData: Record<string, any> | null, sa
   }
 
   save[SaveKeys.BUILDINGDATA] = result;
+
+  if (fired.length > 0) {
+    const kept = Array.isArray(save.firedtraps) ? save.firedtraps : [];
+    save.firedtraps = [...kept, ...fired].slice(-FIRED_TRAP_MAX);
+  }
 };
