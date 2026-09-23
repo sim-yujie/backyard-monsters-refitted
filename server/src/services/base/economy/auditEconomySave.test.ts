@@ -319,6 +319,22 @@ describe("buildings", () => {
     expect(audit(stored, submitted).violations).toEqual([]);
   });
 
+  test("paying for nothing at all is not a violation either", () => {
+    const stored = at(60);
+    const [existing] = firstOf(stored.buildingdata!, 20);
+    delete stored.buildingdata![existing];
+
+    const submitted = unchanged(stored);
+    submitted.buildingdata!["9001"] = { x: 0, y: 0, t: 20, id: 9001, cB: 30 };
+    submitted.resources = { r1: 0, r2: 0, r3: 0, r4: 0 };
+
+    // A charge inside one save window drags the budget below zero, which is
+    // fine: only a *gain* needs a source, and reporting no delta at all only
+    // ever costs the player. Flagging this was a false positive the §4.2
+    // verification script caught on an honest wall swap.
+    expect(audit(stored, submitted).violations).toEqual([]);
+  });
+
   test("a building that appeared without the delta to pay for it is refused", () => {
     const stored = at(60);
     const [existing] = firstOf(stored.buildingdata!, 20);

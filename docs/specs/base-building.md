@@ -1468,6 +1468,15 @@ write a `Report` row, and throw `antiCheatBanErr()`
   (`server/src/controllers/base/save/baseSave.ts:86-92`), and the level is derived from them
   (`server/src/services/base/calculateBaseLevel.ts:11-20`).
 
+**2026-09-23.** The server now audits every non-attack owner save of a `main`/`outpost` yard
+against the building cost table, per `docs/design/economy-save-validation.md`: build/upgrade
+costs, storage caps, countdowns and levels, building-count caps and the `points`/`basevalue`
+bullets above are checked or derived; placement and the shiny-item-key trust are not (that
+plan's §1.4 "Out of scope"). Controlled by `ECONOMY_SAVE_VALIDATION` (`off`/`log`/`reject`),
+defaulting to **`log`**: violations are recorded (a `logger.warn` line and a `Report` row) but
+nothing a player sees changes until the mode is switched to `reject`. See
+`docs/server-api.md`'s "Economy save validation" for the wire shape and rule names.
+
 ### Rate limits
 
 `/base/load`, `/base/save`, `/base/updatesaved` and both yardplanner routes carry **no rate limiter**

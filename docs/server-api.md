@@ -92,7 +92,9 @@ All thrown errors that controllers want to surface use `ClientSafeError`
     the Flash client mishandles certain non-200 responses for ordinary game-flow conditions.
     Errors constructed with `isClientFriendly: false` are exactly the "this is a normal game
     outcome, not a real HTTP error" set: `baseUnderAttackErr`, `baseProtectedErr`,
-    `userOnlineErr`, `takeoverCellErr`, `truceActiveErr`, `mapRoomDisabledErr`.
+    `userOnlineErr`, `takeoverCellErr`, `truceActiveErr`, `mapRoomDisabledErr`, and
+    `economySaveRejectedErr` (a rejected `/base/save` under the economy audit — see "Economy
+    save validation" under Base / Yard).
   - **A new client must therefore check the response body's `error` field, not just the HTTP
     status code**, to detect all failure cases — a 200 response can still mean "the request
     failed," and the message to show the player is in `error` (when present) or
@@ -150,7 +152,7 @@ on any of these four routes.
 | Method | Path | Middleware | Request fields | Response (`ctx.body`) | Description |
 |---|---|---|---|---|---|
 | POST | `/base/load` | verifyUserAuth, logRequest | `BaseLoadSchema`: `type` (a `BaseMode` value — see below), `userid` (accepted but unused by the handler), `baseid`, `mapversion?` (coerced number), `attackData?` (JSON string → `{champions?, monsters?}`), `attackcost?` (JSON string → `{resources?: number[], shiny?: number}`) | See "Base load/save response envelope" below | **The main "open a base" call.** `type` selects a mode handler: `build` (own yard, editable), `view`/`wmview` (someone else's yard, read-only), `attack`/`wmattack` (start an attack — validates range/level/protection, mints an `attackid`, logs the attack), and Inferno equivalents `ibuild`/`iview`/`iattack`/`iwmattack`/`iwmview`/`idescent`. `attack`/`wmattack`/`iattack`/`iwmattack` require `ctx.meetsDiscordAgeCheck` (else `discordAgeErr()` 401) unless the target is a scripted MR1 tribe. Also used for Map Room 1's `/api/:apiVersion/bm/base/load` (identical controller, different mount). |
-| POST | `/base/save` | verifyUserAuth, logRequest | `BaseSaveSchema` (`baseid`, `basesaveid`→number, plus a long list of optional JSON-string fields — `purchase`, `champion`/`attackerchampion`, `buildingdata`, `buildinghealthdata`, `monsterupdate`, `attackloot`, `resources`, `monsters`, `attackcreatures`, `attackersiege`, `over`→number, `destroyed`→number, `attackid`) **and** every raw body key matching `Save.saveKeys` (own base) or `Save.attackSaveKeys` (attack) is separately JSON-parsed onto the entity — see "Save write keys" below | `{ error: 0, basesaveid, ...filteredSave, ...(takeoverData && { takeover: takeoverData }) }` | **The main "close/checkpoint a base" call.** Throws `permissionErr()` (403) if the caller neither owns the base nor holds an active `attackid` on it (i.e. isn't mid-attack against it). Runs `scripts/anticheat/anticheat.ts`'s `validateSave` before applying anything. On `over` (attack finished) with damage ≥ 90%, triggers MR3 structure takeover (`takeoverCellMR3`) or destroys an MR3 tribe cell, and grants the defender fresh damage protection. Advances building timers to "now" using the pre-save health snapshot. |
+| POST | `/base/save` | verifyUserAuth, logRequest | `BaseSaveSchema` (`baseid`, `basesaveid`→number, plus a long list of optional JSON-string fields — `purchase`, `champion`/`attackerchampion`, `buildingdata`, `buildinghealthdata`, `monsterupdate`, `attackloot`, `resources`, `monsters`, `attackcreatures`, `attackersiege`, `over`→number, `destroyed`→number, `attackid`) **and** every raw body key matching `Save.saveKeys` (own base) or `Save.attackSaveKeys` (attack) is separately JSON-parsed onto the entity — see "Save write keys" below | `{ error: 0, basesaveid, ...filteredSave, ...(takeoverData && { takeover: takeoverData }) }` | **The main "close/checkpoint a base" call.** Throws `permissionErr()` (403) if the caller neither owns the base nor holds an active `attackid` on it (i.e. isn't mid-attack against it). Runs `scripts/anticheat/anticheat.ts`'s `validateSave` before applying anything. On `over` (attack finished) with damage ≥ 90%, triggers MR3 structure takeover (`takeoverCellMR3`) or destroys an MR3 tribe cell, and grants the defender fresh damage protection. Advances building timers to "now" using the pre-save health snapshot. **Non-attack owner saves of a `main`/`outpost` yard are also run through the economy audit** before any key is applied — see "Economy save validation" below; controlled by `ECONOMY_SAVE_VALIDATION` (`off`/`log`/`reject`, default `log`). |
 | POST | `/base/updatesaved` | verifyUserAuth, logRequest | inline schema: `type`, `version`, `lastupdate`, `baseid`, `mapversion`→number | `{ error: 0, flags, ...filteredSave, credits, ...(alliancedata && {alliancedata}), ...(powerups && {powerups}) }` | **Polling heartbeat**, called by the client roughly every 30 seconds while a base screen is open, to refresh timers/resources without a full `/base/load`. Does not accept any save data from the client — read-only refresh. |
 | POST | `/base/migrate` | verifyUserAuth, logRequest | `MigrateBaseSchema`: `type` (`BaseType`), `baseid`, `resources?` (JSON), `shiny?`→number | Three shapes depending on branch: cooldown active → `{ error: 0, cantMoveTill, currenttime }`; `type="random"` (empire overrun) → `{ error: 0 }`; normal migrate-to-outpost → `{ error: 0, coords: [x, y] }` | Relocates the player's home base. A 24-hour cooldown (`userSave.cantmovetill`) applies after any migration. `type="random"` leaves and rejoins a Map Room 2/3 world at a new random location (blocked if the player still owns outposts — `relocateOutpostErr()` 403). Otherwise it swaps the home cell onto a **captured outpost's** coordinates, deletes the old outpost cell/save, and charges the given `resources`/`shiny` (throws `shinyLockedErr()` 403 if shiny-locked and `shiny` is set). |
 
@@ -216,6 +218,82 @@ purchased quantity onto `save.storedata[itemKey].q`, sets/refreshes an expiry
 (`PRO1`/`PRO2`/`PRO3` extend `save.protected`), and calls `updateCredits` to charge or credit
 shiny (throws `shinyLockedErr()` 403 if the account is shiny-locked and the item isn't a shiny
 *gain* per `game-data/store/purchaseKeys.ts`'s `isShinyGain`).
+
+### Economy save validation
+
+Every non-attack owner save of a `main` or `outpost` yard is audited against the building cost
+table before any key is applied, controlled by the `ECONOMY_SAVE_VALIDATION` environment
+variable (`off` | `log` | `reject`, default `log`). The rule set, the reference-yard method
+(advancing the stored countdowns to "now" before comparing, so a countdown that merely ticked is
+never a violation) and the rollout plan are in
+[`docs/design/economy-save-validation.md`](design/economy-save-validation.md).
+
+- **`off`** — today's behaviour: nothing is audited, nothing is derived.
+- **`log`** — the audit runs and every violation is written as a structured `logger.warn` line
+  plus one `Report` row (`services/base/reportManager.ts`'s `logReport`), but nothing the player
+  sees changes: `resources.r1max..r4max`, `basevalue` and `points` are still stored exactly as
+  the client sent them, and the save always succeeds.
+- **`reject`** — the same audit, but a save carrying an *enforced* violation is refused (see
+  below), and `resources.r1max..r4max` / `basevalue` are overwritten with the server-derived
+  values instead of the client's.
+
+Attack saves, Inferno saves and Map Room 1 tribe saves are never audited.
+
+**Rejection shape.** A rejected save is still an HTTP **200** with `error` set — the same
+`isClientFriendly: false` convention as the other six cases in §1 "Errors" — because that is the
+one failure shape the archived Flash client can show the player; a real `409` would instead
+trigger its silent-retry path. A client should check `errorDetails.data.violations` the same way
+it already checks `error`/`errorDetails.message` for every other soft failure:
+
+```json
+{
+  "error": "This save does not add up (resourceBudget). Reload your yard.",
+  "errorDetails": {
+    "status": 409,
+    "message": "This save does not add up (resourceBudget). Reload your yard.",
+    "data": {
+      "violations": [
+        {
+          "rule": "resourceBudget",
+          "detail": { "resource": "r1", "delta": 1000000000, "budget": 43200 },
+          "enforced": true
+        }
+      ],
+      "elapsed": 61
+    }
+  }
+}
+```
+
+A malformed save (`buildingdata` not a map of `{ t, id }` objects, or `points`/`basevalue`/
+`resources` not numeric) is instead a real `400` in every mode, since only a broken client sends
+one — the request is rejected before an audit verdict exists at all.
+
+**Rule names.** Every violation the audit can record. "Enforced" means it rejects the save in
+`reject` mode; a recorded-only rule is always written to the log and the `Report` row but never
+rejects, in any mode:
+
+| Rule | Enforced? | Meaning |
+|---|---|---|
+| `typeChanged` | Yes | A building changed type other than the legacy Stone→Wooden Block (18→17) rewrite. |
+| `unknownType` | Yes | A new building has no row in the cost table. |
+| `unpaidBuild` | Yes | A new, finished building has no free finish, voucher or inventory source explaining it. |
+| `levelJumped` | Yes | A building's level rose by more than the ladder walk allows, or a `cB` building reports a level past 1. |
+| `levelDropped` | Yes | A building's level fell. |
+| `unpaidUpgrade` | Yes | A level step finished with no countdown, free finish or `IU` voucher. |
+| `upgradeBlocked` | Yes | A new countdown started on a building the yard cannot upgrade yet — town hall, prerequisites, busy or damaged, the same detail keys the Yard Planner batch routes use. |
+| `countdownJumped` | Yes | A countdown shrank faster than elapsed time with no speed-up voucher to explain the gap. |
+| `countdownTooLong` | Yes | A countdown started above `costs[level].time` (scaled by the Sharper Tools multiplier). |
+| `capReached` | Yes | More buildings of a type than `quantity[townHallLevel]` allows. |
+| `voucherShort` | Yes | An `IB`/`IU`/`BRTOPUP` voucher is smaller than the price it needs to cover. |
+| `negativePool` | Yes | The resource delta would take a pool below zero. |
+| `resourceBudget` | Yes for `r1`/`r2`; recorded-only for `r3`/`r4` | A positive resource delta exceeds what harvesting, outpost income, refunds and top-ups can explain. `r3`/`r4` (putty/goo) are recorded only, because monster and academy accounting — which also returns putty/goo — is out of scope for this audit. |
+| `bufferJumped` | Yes | A harvester's buffered amount is above what it could have produced since the last save. |
+| `overCap` | Yes | A positive delta carries a pool from at/below the derived storage cap to above it. |
+| `capMismatch` | No (recorded-only) | The client's `rNmax` differs from the server-derived cap. Can't reject, because `reject` mode overwrites `rNmax` instead of comparing it. |
+| `basevalueMismatch` | No (recorded-only) | The client's `basevalue` differs from the server-derived value, for the same reason. |
+| `pointsJumped` | Yes | `points` grew by more than banking, completions and outpost income allow, or shrank. |
+| `fortifyUnpriced` | No (recorded-only) | A fortification step has no ladder to price yet — no Map Room 2 main-yard building can fortify today. |
 
 ### Map Room 1 / Inferno
 
@@ -518,6 +596,10 @@ the DB schema):
 `Save.saveKeys` / `Save.attackSaveKeys` (static arrays on the entity) enumerate exactly which
 of the above the save endpoint will accept from the client in which context — see the Base
 Save table above.
+
+When `ECONOMY_SAVE_VALIDATION=reject`, `resources.r1max..r4max` and `basevalue` on a `main`/
+`outpost` owner save are computed server-side by the economy audit rather than stored as the
+client sent them — see "Economy save validation" under Base / Yard.
 
 ### `World` (table `world`)
 

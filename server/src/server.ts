@@ -19,6 +19,7 @@ import { initAnticheat } from "./scripts/anticheat/anticheat.js";
 import { initialize as initVersionManifest } from "./config/VersionManifestConfig.js";
 import { startChatServer } from "./chat/chatServer.js";
 import { exitOnRedisReconnect } from "./utils/redisReconnectGuard.js";
+import { economyConfig, economyModeWasUnrecognised } from "./config/EconomyConfig.js";
 
 export const app = new Koa();
 app.proxy = true;
@@ -82,6 +83,18 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
 
   await initVersionManifest();
   await initAnticheat();
+
+  // Say which economy audit mode is live, once, at boot: `log` and `reject`
+  // behave very differently for a player and the variable is read only here
+  // (docs/design/economy-save-validation.md §3.2).
+  if (economyModeWasUnrecognised) {
+    logger.warn(
+      "ECONOMY_SAVE_VALIDATION is set to {requested}, which is not a mode - falling back to {mode}",
+      { requested: process.env.ECONOMY_SAVE_VALIDATION, mode: economyConfig.mode }
+    );
+  }
+
+  logger.info(`Economy save validation: ${economyConfig.mode}`);
 
   app.listen(PORT, () => {
     console.log(`

@@ -1,5 +1,6 @@
 import { Status } from "../enums/StatusCodes.js";
 import { ClientSafeError } from "../middleware/clientSafeError.js";
+import type { EconomyViolation } from "../services/base/economy/auditEconomySave.js";
 
 /**
  * Creates a new instance of `ClientSafeError` with the specified properties.
@@ -497,4 +498,34 @@ export const batchBlockedErr = (message: string, data: object = {}) =>
     status: Status.CONFLICT,
     data,
     isClientFriendly: true,
+  });
+
+/**
+ * An owner save the economy audit refused in `reject` mode
+ * (`docs/design/economy-save-validation.md` §3.5).
+ *
+ * `isClientFriendly: false` is deliberate, and the one thing about this error
+ * that is not obvious. The interceptor answers a non-friendly error with HTTP
+ * **200** and `error` set (`middleware/clientSafeError.ts:90-93`), which is the
+ * only failure shape the archived Flash client turns into a message the player
+ * can read (`handleLoadSuccessful`, `client/scripts/BASE.as:3413-3416`). A real
+ * `409` would instead reach its `handleLoadError` path: five silent retries and
+ * a generic "BASE.Save HTTP" popup. The intended status still travels in
+ * `errorDetails.status`, which is where the web client reads it from
+ * (`web/src/api/http.ts:19-22`).
+ *
+ * `violations` are the *enforced* ones — the rules that actually refused this
+ * save. Anything recorded but not enforced (the `r3`/`r4` budgets, fortify, the
+ * two derived-field mismatches) stays in the log and the `Report` row, where it
+ * belongs, rather than in a message telling the player to reload over something
+ * the server did not mind.
+ */
+export const economySaveRejectedErr = (violations: EconomyViolation[], elapsed: number) =>
+  new ClientSafeError({
+    message:
+      `This save does not add up (${violations.map((violation) => violation.rule).join(", ")}). ` +
+      "Reload your yard.",
+    status: Status.CONFLICT,
+    data: { violations, elapsed },
+    isClientFriendly: false,
   });

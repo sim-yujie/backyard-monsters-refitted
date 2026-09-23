@@ -28,6 +28,15 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
 import { scaledMR1Tribes } from "../../../services/maproom/v1/scaledMR1Tribes.js";
+import { economyConfig } from "../../../config/EconomyConfig.js";
+import {
+  auditEconomySave,
+  type EconomyAuditKind,
+} from "../../../services/base/economy/auditEconomySave.js";
+import {
+  applyDerivedFields,
+  recordEconomyVerdict,
+} from "../../../services/base/economy/recordVerdict.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -67,6 +76,34 @@ export const baseSave: KoaController = async (ctx) => {
   if (!isOwner && baseSave.attackid === 0) throw permissionErr();
 
   await validateSave(user, baseSave, body);
+
+  const now = getCurrentDateTime();
+
+  // The economy audit (docs/design/economy-save-validation.md §3.3). It runs
+  // before any key is applied, so a refusal in `reject` mode leaves the stored
+  // row untouched. Attacks, Map Room 1 tribes and anything that is not a main
+  // or outpost yard are not audited (§2.1), and `off` skips it entirely.
+  const auditKind = economyAuditKind(isAttack, isOutpostOwner, baseSave.type);
+
+  const verdict =
+    economyConfig.mode === "off" || auditKind === "none"
+      ? null
+      : auditEconomySave({
+          kind: auditKind,
+          stored: baseSave,
+          // An outpost session's delta lands on the player's main pool.
+          pool: isOutpostOwner ? userSave : baseSave,
+          submitted: {
+            ...saveData,
+            points: body.points,
+            basevalue: body.basevalue,
+            researchdata: body.researchdata,
+          },
+          now,
+          config: economyConfig,
+        });
+
+  if (verdict) await recordEconomyVerdict(ctx, user, baseSave, verdict, economyConfig.mode);
 
   const storedHealthData = baseSave.buildinghealthdata;
 
@@ -147,6 +184,15 @@ export const baseSave: KoaController = async (ctx) => {
 
   if (!isAttack && saveData.purchase) purchaseHandler(ctx, saveData.purchase, userSave);
 
+  // In `reject` mode the storage caps and the base value are the server's to
+  // work out, so the client's copies are overwritten once the purchase has been
+  // applied (§3.3). `log` mode derives nothing: the promise it makes is that
+  // not one byte written changes (§6, item 8). Only a main-yard audit derives
+  // anything of its own — an outpost verdict carries the main pool's caps.
+  if (verdict && economyConfig.mode === "reject" && auditKind === "main") {
+    applyDerivedFields(baseSave, verdict.derived);
+  }
+
   const outpostOwnerSave = await getOutpostOwnerSave(baseSave, user);
 
   let takeoverData: TakeoverData | null = null;
@@ -206,8 +252,6 @@ export const baseSave: KoaController = async (ctx) => {
 
   baseSave.attackid = saveData.over ? 0 : baseSave.attackid;
 
-  const now = getCurrentDateTime();
-
   // Attack saves store health from the attacker's replay but keep buildingdata from the DB,
   // so the owner's countdowns are brought up to the attack before savetime moves to it.
   if (isAttack && baseSave.buildingdata) {
@@ -236,6 +280,27 @@ export const baseSave: KoaController = async (ctx) => {
 
   ctx.status = Status.OK;
   ctx.body = responseBody;
+};
+
+/**
+ * Which economy rules this save is subject to
+ * (`docs/design/economy-save-validation.md` §2.1).
+ *
+ * `main` is an owner save of a main yard, the only yard the cost table
+ * describes, and gets every rule. `outpost` is an owner save from an outpost
+ * session: its delta lands on the player's main pool, so the resource rules
+ * still apply, but outpost buildings have their own props table the server
+ * cannot price. Everything else — attacks, Map Room 1 tribes, anything that is
+ * neither a main yard nor an outpost — is `none`.
+ */
+const economyAuditKind = (
+  isAttack: boolean,
+  isOutpostOwner: boolean,
+  type: Save["type"]
+): EconomyAuditKind => {
+  if (isAttack) return "none";
+  if (isOutpostOwner) return "outpost";
+  return type === BaseType.MAIN ? "main" : "none";
 };
 
 const updateOutposts = (

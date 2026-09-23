@@ -556,10 +556,17 @@ export const auditEconomySave = (input: AuditInput): EconomyVerdict => {
       });
     }
 
-    // Deltas more negative than `-spend` are deliberately not violations:
-    // monsters, champions and the academy spend goo and putty outside this
-    // model, and under-reporting only ever costs the player.
-    if (delta[resource] > budget[resource]) {
+    // Only a *gain* needs a source (§2.6). A delta of zero or less is never a
+    // violation, however far below it the budget sits: spending less than the
+    // server charged is allowed (§4.1, the zero-delta Cannon Tower; §4.2 step
+    // 6, the free wall), and a delta more negative than `-spend` is the honest
+    // shape of a save that also fed a monster, since monsters, champions and
+    // the academy move goo and putty outside this model.
+    //
+    // Without the `> 0` guard a save that merely bought something inside one
+    // save window reads as a cheat: the budget goes negative by the price, and
+    // a zero delta is then "above" it.
+    if (delta[resource] > 0 && delta[resource] > budget[resource]) {
       violations.push({
         rule: "resourceBudget",
         detail: { resource, delta: delta[resource], budget: budget[resource] },
