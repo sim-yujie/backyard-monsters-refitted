@@ -1,9 +1,16 @@
 import { Container, Sprite, Text, Texture } from "pixi.js";
-import type { ResolvedArt, ResolvedImage } from "./buildingArt";
+import type { ResolvedArt } from "./buildingArt";
+import { applyArt, fillBox, inDiamond, placeholderTint } from "./yardPlacement";
+import {
+  advanceAnimLayers,
+  buildAnimLayers,
+  resolveAnimLayers,
+  type AnimLayer,
+} from "./YardAnimations";
 import { YardTextures } from "./YardTextures";
 import type { YardArtAtlas } from "./yardAtlas";
 import type { Rect } from "./YardGrid";
-import { artFor, BuildingCondition, type Yard, type YardBuilding } from "./yardModel";
+import { artFor, type Yard, type YardBuilding } from "./yardModel";
 
 /**
  * The building sprites: one per building, built once and never rebuilt.
@@ -23,6 +30,13 @@ import { artFor, BuildingCondition, type Yard, type YardBuilding } from "./yardM
  * A building whose picture has not arrived, or never will, shows a diamond the
  * size of its footprint with its name on it. The yard is therefore never full
  * of holes, and a broken asset path is visible rather than silent.
+ *
+ * The one thing here that does change frame to frame is the animation layers —
+ * a turret's gun, a mill's wheel. They go into the same container as the tops,
+ * immediately after the building they belong to, which puts them above it and
+ * below the next building along. They are advanced only while on screen, so a
+ * yard scrolled off its towers costs nothing for them. `YardAnimations.ts` owns
+ * the rest.
  */
 
 /** Culling margin in world pixels: art reaches well past its footprint box. */
@@ -42,6 +56,8 @@ interface BuildingView {
   readonly art: ResolvedArt | null;
   readonly top: Sprite;
   readonly shadow: Sprite | null;
+  /** In stacking order; empty for the 78 types that never animate. */
+  readonly anims: readonly AnimLayer[];
   /** Dropped once the real picture arrives. */
   label: Text | null;
   /** True once the real picture is on the sprite. */
@@ -55,6 +71,13 @@ interface BuildingView {
    * the moment the building itself arrived.
    */
   shadowResolved: boolean;
+  /** True while any animation strip is still on its way. */
+  animsPending: boolean;
+  /**
+   * True when the still top is only cell 0 of the first strip, so it has to go
+   * once that strip is playing. Types 22, 53, 105 and 129.
+   */
+  readonly topIsAnim: boolean;
 }
 
 export class YardBuildings {
@@ -99,6 +122,10 @@ export class YardBuildings {
       top.alpha = 0.55;
       this.tops.addChild(top);
 
+      // Straight after their own top, so depth order still reads down the list.
+      const anims = art ? buildAnimLayers(building, art) : [];
+      for (const layer of anims) this.tops.addChild(layer.sprite);
+
       let shadow: Sprite | null = null;
       if (art?.shadow) {
         shadow = new Sprite(Texture.EMPTY);
@@ -124,9 +151,12 @@ export class YardBuildings {
         art,
         top,
         shadow,
+        anims,
         label,
         resolved: false,
         shadowResolved: shadow === null,
+        animsPending: anims.length > 0,
+        topIsAnim: art?.topIsAnim === true,
       });
 
       if (building.countdown) this.addCountdownMarker(building, atlas);
@@ -136,12 +166,15 @@ export class YardBuildings {
   }
 
   /**
-   * Applies newly arrived art, then hides everything outside `visible`.
+   * Applies newly arrived art, advances the animations, then hides everything
+   * outside `visible`.
    *
    * The sprites stay in the scene graph either way: culling is a flag, so
-   * nothing is created or destroyed while panning.
+   * nothing is created or destroyed while panning. An animation off screen is
+   * not advanced at all — it picks up wherever it was left, which nobody can
+   * see, and a yard looking at its grass pays nothing for its towers.
    */
-  draw(visible: Rect): void {
+  draw(visible: Rect, deltaSeconds = 0): void {
     if (this.pending) {
       this.pending = false;
       this.resolveTextures();
@@ -156,9 +189,16 @@ export class YardBuildings {
       const box = view.building.box;
       const on =
         box.x <= right && box.x + box.width >= left && box.y <= bottom && box.y + box.height >= top;
-      view.top.visible = on;
+      // A building drawn entirely from its first strip keeps its still top only
+      // until that strip is playing; both at once would show cell 0 through the
+      // transparent parts of every other cell.
+      view.top.visible = on && !(view.topIsAnim && view.anims[0]?.resolved === true);
       if (view.shadow) view.shadow.visible = on && view.shadowResolved;
       if (view.label) view.label.visible = on;
+
+      if (view.anims.length === 0) continue;
+      for (const layer of view.anims) layer.sprite.visible = on && layer.resolved;
+      if (on && deltaSeconds > 0) advanceAnimLayers(view.anims, deltaSeconds);
     }
   }
 
@@ -202,9 +242,13 @@ export class YardBuildings {
   /** Swaps in whichever pictures have arrived since the last pass. */
   private resolveTextures(): void {
     for (const view of this.views) {
-      if (view.resolved && view.shadowResolved) continue;
+      if (view.resolved && view.shadowResolved && !view.animsPending) continue;
       const art = view.art;
       if (!art) continue;
+
+      if (view.animsPending) {
+        view.animsPending = resolveAnimLayers(view.anims, this.textures);
+      }
 
       if (!view.resolved) {
         const texture = this.textures.get(art.top);
@@ -239,56 +283,3 @@ export class YardBuildings {
     this.markers.addChild(marker);
   }
 }
-
-/** A placeholder fills its footprint box, whatever the picture would do. */
-const fillBox = (sprite: Sprite, box: Rect): void => {
-  sprite.anchor.set(0, 0);
-  sprite.position.set(box.x, box.y);
-  sprite.width = box.width;
-  sprite.height = box.height;
-};
-
-/**
- * Puts a real picture on a sprite.
- *
- * The offset in the art table is the bitmap's top-left corner relative to the
- * building's isometric origin, which is exactly what the Flash client set on
- * its Bitmap (`client/scripts/BFOUNDATION.as:1109-1111`, `:1250-1252`). So the
- * anchor goes back to the top-left and the size back to native.
- */
-const applyArt = (
-  sprite: Sprite,
-  texture: Texture,
-  building: YardBuilding,
-  image: ResolvedImage,
-): void => {
-  sprite.texture = texture;
-  sprite.anchor.set(0, 0);
-  sprite.scale.set(1);
-  sprite.position.set(building.worldX + image.x, building.worldY + image.y);
-};
-
-/**
- * Whether a world point is inside a building's footprint diamond.
- *
- * The footprint rectangle starts at the building's origin and extends
- * positively on both axes (`client/scripts/BUILDING14.as:18`), so undoing the
- * isometric projection relative to that corner gives the two distances
- * directly.
- */
-const inDiamond = (building: YardBuilding, worldX: number, worldY: number): boolean => {
-  const [width, height] = building.footprint;
-  const dx = worldX - building.worldX;
-  const dy = worldY - building.worldY;
-  const alongWidth = dy + dx / 2;
-  const alongHeight = dy - dx / 2;
-  return alongWidth >= 0 && alongWidth <= width && alongHeight >= 0 && alongHeight <= height;
-};
-
-/** Placeholder colour: enough to tell a wrecked building from a healthy one. */
-const placeholderTint = (building: YardBuilding): number =>
-  building.condition === BuildingCondition.DESTROYED
-    ? 0x8a4a4a
-    : building.condition === BuildingCondition.DAMAGED
-      ? 0xb08a4a
-      : 0x6f8fb0;

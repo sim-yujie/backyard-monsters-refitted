@@ -18,7 +18,7 @@
  * Nothing here runs in the browser and nothing in the client imports it.
  */
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, readSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -143,6 +143,47 @@ const readStrip = (level, key) => {
 const readTop = (level, suffix) =>
   readImage(level, `top${suffix}`) ?? readStrip(level, `anim${suffix}`);
 
+/**
+ * `["anim.3.png", new Rectangle(-27, -50, 55, 47), 30]` -> the strip plus its
+ * frame count.
+ *
+ * Same shape as `readStrip`, but carrying the third element the Flash client
+ * reads as `_animFrames` (`BFOUNDATION.as:1134`). All 86 animation entries in
+ * the props table have one, so a missing count means the regex is wrong rather
+ * than the data being sparse, and the caller treats it as absent.
+ */
+const readAnim = (level, key) => {
+  const hit = new RegExp(
+    `"${key}"\\s*:\\s*\\[\\s*"([^"]+)"\\s*,\\s*new Rectangle\\(\\s*(-?\\d+)\\s*,\\s*(-?\\d+)\\s*,` +
+      `\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)\\s*,\\s*(\\d+)`,
+  ).exec(level);
+  if (!hit) return null;
+  return {
+    file: hit[1],
+    x: Number(hit[2]),
+    y: Number(hit[3]),
+    w: Number(hit[4]),
+    h: Number(hit[5]),
+    frames: Number(hit[6]),
+  };
+};
+
+/**
+ * The three animation layers for one state, in the order they stack.
+ *
+ * The Flash client loads `anim`, `anim2` and `anim3` into separate containers
+ * drawn in that order above the top (`BFOUNDATION.as:1127-1200`), and only the
+ * Monster Lab and the Siege Lab use more than the first. There is no
+ * `animdestroyed` anywhere in the table, so a wrecked building has no animation
+ * at all — which is why the destroyed state is not read here.
+ */
+const readAnims = (level, suffix) =>
+  [
+    readAnim(level, `anim${suffix}`),
+    readAnim(level, `anim2${suffix}`),
+    readAnim(level, `anim3${suffix}`),
+  ].filter((one) => one !== null);
+
 const entries = [];
 const seen = new Set();
 
@@ -179,6 +220,8 @@ for (const block of blocks) {
       shadow: readImage(body, "shadow"),
       shadowDamaged: readImage(body, "shadowdamaged"),
       shadowDestroyed: readImage(body, "shadowdestroyed"),
+      anims: readAnims(body, ""),
+      animsDamaged: readAnims(body, "damaged"),
     });
   }
 
@@ -208,9 +251,25 @@ const image = (value) =>
       ? `["${value.file}",${value.x},${value.y},${value.w},${value.h}]`
       : `["${value.file}",${value.x},${value.y}]`;
 
-const level = (entry) =>
-  `[${entry.level},${image(entry.top)},${image(entry.damaged)},${image(entry.destroyed)},` +
-  `${image(entry.shadow)},${image(entry.shadowDamaged)},${image(entry.shadowDestroyed)}]`;
+const anim = (value) => `["${value.file}",${value.x},${value.y},${value.w},${value.h},${value.frames}]`;
+
+const animList = (values) => `[${values.map(anim).join(",")}]`;
+
+/**
+ * A level tuple, with the two animation slots left off when both are empty.
+ *
+ * Only 53 of the 131 types animate at all, so emitting the slots
+ * unconditionally would add two dead entries to every row for nothing. The
+ * tuple type makes them optional; `resolveArt` reads them with `?? []`.
+ */
+const level = (entry) => {
+  const fixed =
+    `[${entry.level},${image(entry.top)},${image(entry.damaged)},${image(entry.destroyed)},` +
+    `${image(entry.shadow)},${image(entry.shadowDamaged)},${image(entry.shadowDestroyed)}`;
+  if (entry.anims.length === 0 && entry.animsDamaged.length === 0) return `${fixed}]`;
+  if (entry.animsDamaged.length === 0) return `${fixed},${animList(entry.anims)}]`;
+  return `${fixed},${animList(entry.anims)},${animList(entry.animsDamaged)}]`;
+};
 
 const body = entries
   .map(
@@ -255,7 +314,31 @@ export type ArtImage =
   | readonly [file: string, x: number, y: number, width: number, height: number]
   | null;
 
-/** \`[level, top, topDamaged, topDestroyed, shadow, shadowDamaged, shadowDestroyed]\`. */
+/**
+ * One animation layer: a horizontal strip of \`frames\` cells of \`width\` x
+ * \`height\`, the first of which sits at \`x\`, \`y\` from the building's origin.
+ *
+ * Cell \`i\` is the rectangle \`(i * width, 0, width, height)\`
+ * (\`BFOUNDATION.as:1495\`).
+ */
+export type ArtAnim = readonly [
+  file: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  frames: number,
+];
+
+/**
+ * \`[level, top, topDamaged, topDestroyed, shadow, shadowDamaged, shadowDestroyed,
+ * anims?, animsDamaged?]\`.
+ *
+ * The two animation lists hold \`anim\`, \`anim2\` and \`anim3\` in the order they
+ * stack above the top, and are omitted entirely for the 78 types that have
+ * none. There is no destroyed list because the props table has no
+ * \`animdestroyed\` anywhere: a wrecked building does not animate.
+ */
 export type ArtLevel = readonly [
   level: number,
   top: ArtImage,
@@ -264,6 +347,8 @@ export type ArtLevel = readonly [
   shadow: ArtImage,
   shadowDamaged: ArtImage,
   shadowDestroyed: ArtImage,
+  anims?: readonly ArtAnim[],
+  animsDamaged?: readonly ArtAnim[],
 ];
 
 export type ArtRow = readonly [
@@ -292,8 +377,51 @@ writeFileSync(OUT, `${header}${body}\n];\n`, "utf8");
  * something when they run somewhere the server checkout is not.
  */
 
+/**
+ * A PNG's pixel size, read from its IHDR header.
+ *
+ * Eight signature bytes, then a four-byte length and the tag `IHDR`, then width
+ * and height as big-endian 32-bit integers. Every animation strip in the props
+ * table is a PNG, so nothing else needs decoding and no image library is
+ * needed. Null when the file is absent or is not a PNG.
+ */
+const pngSize = (path) => {
+  if (!existsSync(path)) return null;
+  const head = Buffer.alloc(24);
+  const handle = openSync(path, "r");
+  try {
+    if (readSync(handle, head, 0, 24, 0) < 24) return null;
+  } finally {
+    closeSync(handle);
+  }
+  if (head.toString("latin1", 1, 4) !== "PNG" || head.toString("latin1", 12, 16) !== "IHDR") {
+    return null;
+  }
+  return { width: head.readUInt32BE(16), height: head.readUInt32BE(20) };
+};
+
+/**
+ * The real pixel size of every animation strip, keyed by `folder + file`.
+ *
+ * The table records a frame size and a frame count; the test multiplies them
+ * back out and checks the strip is exactly that wide, which is the one thing
+ * that catches a mis-parsed rectangle. Reading the sizes here rather than in
+ * the test keeps the test filesystem-free, the same bargain the file listing
+ * below makes.
+ */
+const strips = {};
+
 const folders = {};
 const missing = [];
+
+for (const entry of entries) {
+  for (const level of entry.levels) {
+    for (const one of [...level.anims, ...level.animsDamaged]) {
+      const key = `${entry.baseurl}${one.file}`;
+      strips[key] ??= pngSize(resolve(ASSETS, entry.baseurl, one.file));
+    }
+  }
+}
 
 for (const entry of entries) {
   // Several types share one folder — every flower is `decorations/flowers/` —
@@ -307,6 +435,8 @@ for (const entry of entries) {
       level.shadow,
       level.shadowDamaged,
       level.shadowDestroyed,
+      ...level.anims,
+      ...level.animsDamaged,
     ]) {
       if (!image || present.includes(image.file)) continue;
       if (existsSync(resolve(ASSETS, entry.baseurl, image.file))) present.push(image.file);
@@ -328,6 +458,7 @@ writeFileSync(
         "buildingArtData.ts exist under server/public/assets/.",
       assetRoot: "server/public/assets/",
       folders,
+      strips,
       missing: missing.sort(),
     },
     null,

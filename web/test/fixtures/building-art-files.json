@@ -5,6 +5,10 @@
     "buildings/twigsnapper.v2/": {
       "exists": true,
       "files": [
+        "anim.1.png",
+        "anim.10.png",
+        "anim.3.png",
+        "anim.6.png",
         "shadow.1.damaged.jpg",
         "shadow.1.jpg",
         "shadow.10.damaged.jpg",
@@ -28,6 +32,10 @@
     "buildings/pebbleshiner.v2/": {
       "exists": true,
       "files": [
+        "anim.1.png",
+        "anim.10.png",
+        "anim.3.png",
+        "anim.6.png",
         "shadow.1.damaged.jpg",
         "shadow.1.jpg",
         "shadow.10.damaged.jpg",
@@ -51,6 +59,10 @@
     "buildings/puttysquisher.v2/": {
       "exists": true,
       "files": [
+        "anim.1.png",
+        "anim.10.png",
+        "anim.3.png",
+        "anim.6.png",
         "shadow.1.damaged.jpg",
         "shadow.1.jpg",
         "shadow.10.damaged.jpg",
@@ -74,6 +86,10 @@
     "buildings/goofactory.v2/": {
       "exists": true,
       "files": [
+        "anim.1.png",
+        "anim.10.png",
+        "anim.3.png",
+        "anim.6.png",
         "shadow.1.damaged.jpg",
         "shadow.1.jpg",
         "shadow.10.damaged.jpg",
@@ -120,6 +136,7 @@
     "buildings/storagesilo/": {
       "exists": true,
       "files": [
+        "anim.3.png",
         "shadow.3.damaged.jpg",
         "shadow.3.destroyed.jpg",
         "shadow.3.jpg",
@@ -131,6 +148,10 @@
     "buildings/monsterlocker/": {
       "exists": true,
       "files": [
+        "anim.1.png",
+        "anim.2.png",
+        "anim.3.png",
+        "anim.4.png",
         "shadow.1.damaged.jpg",
         "shadow.1.jpg",
         "shadow.2.damaged.jpg",
@@ -154,6 +175,7 @@
     "buildings/monsterjuiceloosener/": {
       "exists": true,
       "files": [
+        "anim.2.png",
         "shadow.2.damaged.jpg",
         "shadow.2.destroyed.jpg",
         "shadow.2.jpg",
@@ -198,6 +220,9 @@
     "buildings/hatchery/": {
       "exists": true,
       "files": [
+        "anim.2.png",
+        "anim.3.png",
+        "anim.4.png",
         "shadow.1.destroyed.jpg",
         "shadow.2.damaged.jpg",
         "shadow.2.jpg",
@@ -335,6 +360,7 @@
     "buildings/monsterbaiter/": {
       "exists": true,
       "files": [
+        "anim.1.png",
         "shadow.1.jpg",
         "top.1.damaged.png",
         "top.1.destroyed.png",
@@ -353,6 +379,8 @@
     "buildings/snipertower/": {
       "exists": true,
       "files": [
+        "anim.3.damaged.png",
+        "anim.3.png",
         "shadow.3.jpg",
         "top.3.damaged.png",
         "top.3.destroyed.png",
@@ -373,6 +401,8 @@
     "buildings/lasertower/": {
       "exists": true,
       "files": [
+        "anim.1.damaged.png",
+        "anim.1.png",
         "shadow.1.jpg",
         "top.1.damaged.png",
         "top.1.destroyed.png",
@@ -390,6 +420,8 @@
     "buildings/lightningtower/": {
       "exists": true,
       "files": [
+        "anim.3.damaged.png",
+        "anim.3.png",
         "shadow.3.jpg",
         "top.3.damaged.png",
         "top.3.destroyed.png",
@@ -399,6 +431,9 @@
     "buildings/academy/": {
       "exists": true,
       "files": [
+        "anim.1.v2.png",
+        "anim.2.png",
+        "anim.3.png",
         "shadow.1.damaged.jpg",
         "shadow.1.destroyed.jpg",
         "shadow.1.jpg",
@@ -422,6 +457,7 @@
     "buildings/trojanhorse/": {
       "exists": true,
       "files": [
+        "anim.1.png",
         "shadow.1.jpg",
         "top.1.png"
       ]
@@ -429,6 +465,29 @@
     "buildings/decorations/flags/": {
       "exists": true,
       "files": [
+        "flag-australia.png",
+        "flag-austria.png",
+        "flag-brazil.png",
+        "flag-britain.png",
+        "flag-canadian.png",
+        "flag-denmark.png",
+        "flag-dutch.png",
+        "flag-europe.png",
+        "flag-france.png",
+        "flag-germany.png",
+        "flag-indonesian.png",
+        "flag-italy.png",
+        "flag-malaysia.png",
+        "flag-newzealand.png",
+        "flag-norway.png",
+        "flag-peace.png",
+        "flag-philippines.png",
+        "flag-pirate.png",
+        "flag-poland.png",
+        "flag-singapore.png",
+        "flag-sweden.png",
+        "flag-turkey.png",
+        "flag-usa.png",
         "flagpole.png",
         "shadow.jpg"
       ]
@@ -460,6 +519,7 @@
         "attended-large-top.png",
         "attended-small-shadow.jpg",
         "attended-small-top.png",
+        "large-anim-6.png",
         "large-shadow-6.jpg",
         "large-top-6.png",
         "shadow.jpg"
@@ -568,6 +628,7 @@
     "buildings/decorations/tikitorch/": {
       "exists": true,
       "files": [
+        "anim.png",
         "shadow.jpg",
         "top.png"
       ]
@@ -755,6 +816,8 @@
     "buildings/flaktower/": {
       "exists": true,
       "files": [
+        "anim.3.damaged.png",
+        "anim.3.png",
         "shadow.3.destroyed.jpg",
         "shadow.3.jpg",
         "top.3.damaged.png",
@@ -765,6 +828,9 @@
     "buildings/monsterlab/": {
       "exists": true,
       "files": [
+        "anim.1.png",
+        "anim.2.png",
+        "anim.3.png",
         "shadow.1.destroyed.jpg",
         "shadow.1.jpg",
         "top.1.damaged.png",
@@ -783,6 +849,8 @@
     "buildings/railguntower/": {
       "exists": true,
       "files": [
+        "anim.3.damaged.png",
+        "anim.3.loaded.png",
         "shadow.3.destroyed.jpg",
         "shadow.3.jpg",
         "top.3.damaged.png",
@@ -836,6 +904,7 @@
     "buildings/iquaketower/": {
       "exists": true,
       "files": [
+        "anim.1.damaged.png",
         "anim.1.png",
         "shadow.1.v2.jpg",
         "top.1.damaged.png",
@@ -860,6 +929,8 @@
     "buildings/imagmatower/": {
       "exists": true,
       "files": [
+        "anim.1.v2.png",
+        "anim.2.v2.png",
         "shadow.1.v2.jpg",
         "top.1.damaged.v2.png",
         "top.1.destroyed.v2.png",
@@ -869,6 +940,7 @@
     "buildings/siegefactory/": {
       "exists": true,
       "files": [
+        "anim.1.v2.png",
         "shadow.1.jpg",
         "top.1.damaged.v3.png",
         "top.1.destroyed.png",
@@ -878,6 +950,9 @@
     "buildings/siegelab/": {
       "exists": true,
       "files": [
+        "anim1.v4.png",
+        "anim2.v3.png",
+        "anim3.v3.png",
         "shadow.1.jpg",
         "top.1.damaged.v4.png",
         "top.1.destroyed.png",
@@ -897,7 +972,9 @@
         "damaged_base.png",
         "destroyed_base.png",
         "normal_base.png",
-        "normal_damaged_shadow.jpg"
+        "normal_damaged_shadow.jpg",
+        "top-damaged-anim.v2.png",
+        "top-normal-anim.v2.png"
       ]
     },
     "buildings/blackspurtztower/": {
@@ -906,7 +983,9 @@
         "damaged_base.png",
         "destroyed_base.png",
         "normal_base.png",
-        "normal_damaged_shadow.jpg"
+        "normal_damaged_shadow.jpg",
+        "top-damaged-anim.v2.png",
+        "top-normal-anim.v2.png"
       ]
     },
     "buildings/guardtower/": {
@@ -926,12 +1005,351 @@
     "buildings/outpostdefender/": {
       "exists": true,
       "files": [
+        "anim.1.png",
         "shadow.1.destroyed.png",
         "shadow.1.png",
         "top.1.damaged.png",
         "top.1.destroyed.png",
         "top.1.png"
       ]
+    }
+  },
+  "strips": {
+    "buildings/twigsnapper.v2/anim.1.png": {
+      "width": 782,
+      "height": 33
+    },
+    "buildings/twigsnapper.v2/anim.3.png": {
+      "width": 782,
+      "height": 30
+    },
+    "buildings/twigsnapper.v2/anim.6.png": {
+      "width": 1156,
+      "height": 34
+    },
+    "buildings/twigsnapper.v2/anim.10.png": {
+      "width": 1190,
+      "height": 33
+    },
+    "buildings/pebbleshiner.v2/anim.1.png": {
+      "width": 1092,
+      "height": 24
+    },
+    "buildings/pebbleshiner.v2/anim.3.png": {
+      "width": 1508,
+      "height": 31
+    },
+    "buildings/pebbleshiner.v2/anim.6.png": {
+      "width": 1508,
+      "height": 41
+    },
+    "buildings/pebbleshiner.v2/anim.10.png": {
+      "width": 1488,
+      "height": 72
+    },
+    "buildings/puttysquisher.v2/anim.1.png": {
+      "width": 728,
+      "height": 18
+    },
+    "buildings/puttysquisher.v2/anim.3.png": {
+      "width": 754,
+      "height": 20
+    },
+    "buildings/puttysquisher.v2/anim.6.png": {
+      "width": 754,
+      "height": 19
+    },
+    "buildings/puttysquisher.v2/anim.10.png": {
+      "width": 1100,
+      "height": 52
+    },
+    "buildings/goofactory.v2/anim.1.png": {
+      "width": 572,
+      "height": 40
+    },
+    "buildings/goofactory.v2/anim.3.png": {
+      "width": 650,
+      "height": 45
+    },
+    "buildings/goofactory.v2/anim.6.png": {
+      "width": 1326,
+      "height": 48
+    },
+    "buildings/goofactory.v2/anim.10.png": {
+      "width": 1326,
+      "height": 47
+    },
+    "buildings/storagesilo/anim.3.png": {
+      "width": 1924,
+      "height": 121
+    },
+    "buildings/monsterlocker/anim.1.png": {
+      "width": 756,
+      "height": 41
+    },
+    "buildings/monsterlocker/anim.2.png": {
+      "width": 1281,
+      "height": 69
+    },
+    "buildings/monsterlocker/anim.3.png": {
+      "width": 1740,
+      "height": 89
+    },
+    "buildings/monsterlocker/anim.4.png": {
+      "width": 1840,
+      "height": 89
+    },
+    "buildings/monsterjuiceloosener/anim.2.png": {
+      "width": 3060,
+      "height": 39
+    },
+    "buildings/hatchery/anim.2.png": {
+      "width": 3193,
+      "height": 80
+    },
+    "buildings/hatchery/anim.3.png": {
+      "width": 3255,
+      "height": 124
+    },
+    "buildings/hatchery/anim.4.png": {
+      "width": 3503,
+      "height": 105
+    },
+    "buildings/monsterbaiter/anim.1.png": {
+      "width": 2747,
+      "height": 77
+    },
+    "buildings/snipertower/anim.3.png": {
+      "width": 1650,
+      "height": 47
+    },
+    "buildings/snipertower/anim.3.damaged.png": {
+      "width": 1650,
+      "height": 46
+    },
+    "buildings/bunker/anim.1.png": {
+      "width": 1350,
+      "height": 83
+    },
+    "buildings/lasertower/anim.1.png": {
+      "width": 1566,
+      "height": 32
+    },
+    "buildings/lasertower/anim.1.damaged.png": {
+      "width": 2808,
+      "height": 44
+    },
+    "buildings/lightningtower/anim.3.png": {
+      "width": 1485,
+      "height": 53
+    },
+    "buildings/lightningtower/anim.3.damaged.png": {
+      "width": 1650,
+      "height": 27
+    },
+    "buildings/academy/anim.1.v2.png": {
+      "width": 1008,
+      "height": 26
+    },
+    "buildings/academy/anim.2.png": {
+      "width": 987,
+      "height": 24
+    },
+    "buildings/academy/anim.3.png": {
+      "width": 1008,
+      "height": 24
+    },
+    "buildings/trojanhorse/anim.1.png": {
+      "width": 78,
+      "height": 31
+    },
+    "buildings/decorations/flags/flag-usa.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-britain.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-australia.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-brazil.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-europe.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-france.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-indonesian.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-italy.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-malaysia.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-dutch.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-newzealand.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-norway.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-poland.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-sweden.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-turkey.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-canadian.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-denmark.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-germany.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-philippines.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-singapore.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-austria.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-pirate.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/flags/flag-peace.png": {
+      "width": 504,
+      "height": 30
+    },
+    "buildings/decorations/pumpkins/anim.png": {
+      "width": 1110,
+      "height": 36
+    },
+    "buildings/decorations/pumpkins/large-anim-6.png": {
+      "width": 2835,
+      "height": 465
+    },
+    "buildings/decorations/tikitorch/anim.png": {
+      "width": 400,
+      "height": 36
+    },
+    "buildings/decorations/fountain/anim.png": {
+      "width": 4005,
+      "height": 114
+    },
+    "buildings/flaktower/anim.3.png": {
+      "width": 1984,
+      "height": 52
+    },
+    "buildings/flaktower/anim.3.damaged.png": {
+      "width": 1984,
+      "height": 53
+    },
+    "buildings/monsterlab/anim.1.png": {
+      "width": 1728,
+      "height": 48
+    },
+    "buildings/monsterlab/anim.2.png": {
+      "width": 165,
+      "height": 31
+    },
+    "buildings/monsterlab/anim.3.png": {
+      "width": 165,
+      "height": 31
+    },
+    "buildings/railguntower/anim.3.loaded.png": {
+      "width": 3072,
+      "height": 56
+    },
+    "buildings/railguntower/anim.3.damaged.png": {
+      "width": 3104,
+      "height": 56
+    },
+    "buildings/iquaketower/anim.1.png": {
+      "width": 2475,
+      "height": 132
+    },
+    "buildings/iquaketower/anim.1.damaged.png": {
+      "width": 2772,
+      "height": 133
+    },
+    "buildings/imagmatower/anim.1.v2.png": {
+      "width": 1674,
+      "height": 42
+    },
+    "buildings/imagmatower/anim.2.v2.png": {
+      "width": 1178,
+      "height": 19
+    },
+    "buildings/siegefactory/anim.1.v2.png": {
+      "width": 4515,
+      "height": 77
+    },
+    "buildings/siegelab/anim1.v4.png": {
+      "width": 2580,
+      "height": 39
+    },
+    "buildings/siegelab/anim2.v3.png": {
+      "width": 3540,
+      "height": 100
+    },
+    "buildings/siegelab/anim3.v3.png": {
+      "width": 2280,
+      "height": 40
+    },
+    "buildings/spurtztower/top-normal-anim.v2.png": {
+      "width": 1674,
+      "height": 42
+    },
+    "buildings/spurtztower/top-damaged-anim.v2.png": {
+      "width": 1674,
+      "height": 42
+    },
+    "buildings/blackspurtztower/top-normal-anim.v2.png": {
+      "width": 1728,
+      "height": 42
+    },
+    "buildings/blackspurtztower/top-damaged-anim.v2.png": {
+      "width": 1728,
+      "height": 42
+    },
+    "buildings/outpostdefender/anim.1.png": {
+      "width": 5696,
+      "height": 156
     }
   },
   "missing": []

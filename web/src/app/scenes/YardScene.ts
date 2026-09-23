@@ -132,12 +132,15 @@ export class YardScene implements Scene {
       }
 
       const view = camera.visibleWorldRect();
-      this.renderer.draw({
-        x: view.left,
-        y: view.top,
-        width: view.right - view.left,
-        height: view.bottom - view.top,
-      });
+      this.renderer.draw(
+        {
+          x: view.left,
+          y: view.top,
+          width: view.right - view.left,
+          height: view.bottom - view.top,
+        },
+        deltaSeconds,
+      );
     }
 
     this.sinceUiTick += deltaSeconds;

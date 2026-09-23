@@ -79,9 +79,13 @@ export class YardRenderer {
     }
   }
 
-  /** Advances one frame: `visible` is the world rectangle on screen. */
-  draw(visible: Rect): void {
-    this.buildings.draw(visible);
+  /**
+   * Advances one frame: `visible` is the world rectangle on screen and
+   * `deltaSeconds` is how long the last one took, which is what the building
+   * animations run on.
+   */
+  draw(visible: Rect, deltaSeconds = 0): void {
+    this.buildings.draw(visible, deltaSeconds);
 
     if (this.chromeDirty) {
       this.chromeDirty = false;

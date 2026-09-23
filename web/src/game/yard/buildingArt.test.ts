@@ -3,6 +3,7 @@ import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import manifest from "../../../test/fixtures/building-art-files.json";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
 import { artFolder, artTypes, ArtState, buildingName, maxHealth, resolveArt } from "./buildingArt";
+import { stripCells } from "./yardAnim";
 
 /**
  * The art table against the art that is actually on the game server.
@@ -16,6 +17,9 @@ import { artFolder, artTypes, ArtState, buildingName, maxHealth, resolveArt } fr
  */
 
 const folders = manifest.folders as Record<string, { exists: boolean; files: string[] }>;
+
+/** The real pixel size of each animation strip, keyed by `folder + file`. */
+const strips = manifest.strips as Record<string, { width: number; height: number } | null>;
 
 /** The distinct building types in the captured 575-building yard. */
 const fixtureTypes = [
@@ -207,5 +211,127 @@ describe("names and health", () => {
 
   it("has no ladder for a type it does not know", () => {
     expect(maxHealth(9999, 1)).toBeNull();
+  });
+});
+
+describe("animation layers", () => {
+  it("cuts every strip into cells the file on disk actually holds", () => {
+    // The one check that catches a mis-read rectangle. `stripCells` is the same
+    // fitting the renderer does, so this asserts what ends up on the GPU: every
+    // cell inside its source, and at least one cell per strip. Sizes come from
+    // the generated manifest, so no filesystem is touched.
+    const wrong: string[] = [];
+
+    for (const [type, , folder, levels] of BUILDING_ART_ROWS) {
+      for (const level of levels) {
+        for (const anim of [...(level[7] ?? []), ...(level[8] ?? [])]) {
+          const [file, , , width, height, frames] = anim;
+          const size = strips[`${folder}${file}`];
+          if (!size) {
+            wrong.push(`${type} ${folder}${file}: not on disk`);
+            continue;
+          }
+          const cut = stripCells({ width, height, frames }, size.width, size.height);
+          if (cut.frames < 1 || cut.frames * cut.width > size.width || cut.height > size.height) {
+            wrong.push(
+              `${type} ${folder}${file}: cut ${cut.frames} x ${cut.width}x${cut.height} ` +
+                `does not fit ${size.width}x${size.height}`,
+            );
+          }
+        }
+      }
+    }
+
+    expect(wrong).toEqual([]);
+  });
+
+  it("records the nine strips whose props entry disagrees with its file", () => {
+    // Pinned rather than fixed: the table is a faithful copy of YARD_PROPS.as,
+    // and these nine entries are wrong in the original. The list exists so a
+    // tenth shows up as a diff instead of quietly being clamped away. Anything
+    // outside it must satisfy `width * frames == file width` exactly.
+    const disagreeing: string[] = [];
+
+    for (const [type, , folder, levels] of BUILDING_ART_ROWS) {
+      for (const level of levels) {
+        for (const [file, , , width, height, frames] of [
+          ...(level[7] ?? []),
+          ...(level[8] ?? []),
+        ]) {
+          const size = strips[`${folder}${file}`];
+          if (size && (size.width !== width * frames || size.height !== height)) {
+            disagreeing.push(`${type} ${file}`);
+          }
+        }
+      }
+    }
+
+    expect(disagreeing).toEqual([
+      // 21 cells claimed of a 21-cell file, but the table plays 20 of them.
+      "8 anim.2.png",
+      // 21 cells claimed of a 20-cell file.
+      "8 anim.4.png",
+      // Cells 57 tall claimed of a 27-tall file.
+      "25 anim.3.damaged.png",
+      // A 15 x 3 grid described as 45 cells in a row.
+      "54 large-anim-6.png",
+      // 45 cells on disk, 42 played.
+      "105 anim.png",
+      // Cells a pixel taller than the file, and 51 wide where the pitch is 54.
+      "136 top-normal-anim.v2.png",
+      "136 top-damaged-anim.v2.png",
+      // 32 cells on disk, 31 played.
+      "137 top-normal-anim.v2.png",
+      "137 top-damaged-anim.v2.png",
+    ]);
+  });
+
+  it("covers every animated type the captured yard contains", () => {
+    const animated = fixtureTypes.filter(
+      (type) => (resolveArt(type, 1, ArtState.DEFAULT)?.anims.length ?? 0) > 0,
+    );
+    expect(animated).toEqual([1, 2, 3, 4, 6, 8, 9, 13, 19, 21, 22, 23, 25, 26, 115, 116, 118, 137]);
+  });
+
+  it("reads the Sniper Tower's turret strip", () => {
+    // YARD_PROPS.as: ["anim.3.png", new Rectangle(-27, -50, 55, 47), 30].
+    const art = resolveArt(21, 1, ArtState.DEFAULT);
+    expect(art?.anims).toHaveLength(1);
+    expect(art?.anims[0]).toMatchObject({ x: -27, y: -50, width: 55, height: 47, frames: 30 });
+    expect(art?.anims[0]?.url).toContain("snipertower/anim.3.png");
+  });
+
+  it("reads all three layers of the Monster Lab", () => {
+    const art = resolveArt(116, 1, ArtState.DEFAULT);
+    expect(art?.anims.map((one) => one.frames)).toEqual([32, 5, 5]);
+    expect(art?.anims.map((one) => fileOf(one.url))).toEqual([
+      "anim.1.png",
+      "anim.2.png",
+      "anim.3.png",
+    ]);
+  });
+
+  it("swaps in the damaged strip for a damaged building", () => {
+    expect(fileOf(resolveArt(21, 1, ArtState.DAMAGED)?.anims[0]?.url ?? "")).toBe(
+      "anim.3.damaged.png",
+    );
+  });
+
+  it("gives a destroyed building no animation at all", () => {
+    // There is no `animdestroyed` anywhere in the props table.
+    for (const type of fixtureTypes) {
+      expect(resolveArt(type, 1, ArtState.DESTROYED)?.anims ?? [], `type ${type}`).toEqual([]);
+    }
+  });
+
+  it("leaves a type with no strip alone", () => {
+    // The Block is a wall: one picture, no moving parts.
+    expect(resolveArt(17, 1, ArtState.DEFAULT)?.anims).toEqual([]);
+    expect(resolveArt(17, 1, ArtState.DEFAULT)?.topIsAnim).toBe(false);
+  });
+
+  it("flags the four types whose top is only their first cell", () => {
+    const flagged = artTypes().filter((type) => resolveArt(type, 1, ArtState.DEFAULT)?.topIsAnim);
+    expect(flagged).toEqual([22, 53, 105, 129]);
   });
 });

@@ -1,4 +1,4 @@
-import { BUILDING_ART_ROWS, type ArtImage, type ArtLevel } from "./buildingArtData";
+import { BUILDING_ART_ROWS, type ArtAnim, type ArtImage, type ArtLevel } from "./buildingArtData";
 
 /**
  * Resolving a building to its art.
@@ -25,6 +25,20 @@ import { BUILDING_ART_ROWS, type ArtImage, type ArtLevel } from "./buildingArtDa
  * Default, damaged or destroyed. If a building has no picture for the state it
  * is in, the Flash client falls back to the default one rather than drawing
  * nothing (`client/scripts/BFOUNDATION.as:921-923`), and so does this.
+ *
+ * ## Animation layers
+ *
+ * A building is `shadow` + `top` + up to three animation strips, `anim`,
+ * `anim2` and `anim3`, stacked in that order above the top
+ * (`client/scripts/BFOUNDATION.as:1127-1200`). Each strip is a horizontal run
+ * of equal cells; which cell is showing is the building class's business, not
+ * the art table's, and lives in `yardAnim.ts`.
+ *
+ * The props table has no `animdestroyed` for any type, so a destroyed building
+ * has no animation layers at all. A damaged one uses `animdamaged` if the type
+ * has it and otherwise shows none: the Flash client keeps the state it chose
+ * for the top and simply skips any image the state has no entry for
+ * (`BFOUNDATION.as:920-931`).
  *
  * Nothing here touches Pixi: resolution is a table lookup, and keeping it that
  * way is what lets the unit tests check every building type against the art on
@@ -118,6 +132,18 @@ export interface ResolvedImage {
   readonly frame: { readonly width: number; readonly height: number } | null;
 }
 
+/** One animation layer: the whole strip, its offset and how to cut it up. */
+export interface ResolvedAnim {
+  readonly url: string;
+  /** Top-left of cell 0 relative to the building's isometric origin. */
+  readonly x: number;
+  readonly y: number;
+  /** One cell. Cell `i` is the rectangle `(i * width, 0, width, height)`. */
+  readonly width: number;
+  readonly height: number;
+  readonly frames: number;
+}
+
 export interface ResolvedArt {
   readonly name: string;
   readonly folder: string;
@@ -126,6 +152,20 @@ export interface ResolvedArt {
   readonly top: ResolvedImage;
   /** Absent for the several buildings that ship no shadow for this state. */
   readonly shadow: ResolvedImage | null;
+  /**
+   * The animation layers for this state, bottom to top. Empty for a destroyed
+   * building and for the 78 types that never animate.
+   */
+  readonly anims: readonly ResolvedAnim[];
+  /**
+   * True when `top` is only cell 0 of `anims[0]`, because this level ships no
+   * still picture of its own — types 22, 53, 105 and 129.
+   *
+   * The top is still resolved so the building is visible the moment its image
+   * arrives, but the renderer hides it once the strip is on screen; leaving
+   * both would show cell 0 through the transparent parts of every other cell.
+   */
+  readonly topIsAnim: boolean;
 }
 
 const imageOf = (folder: string, entry: ArtImage): ResolvedImage | null => {
@@ -139,9 +179,20 @@ const imageOf = (folder: string, entry: ArtImage): ResolvedImage | null => {
   };
 };
 
+const animOf = (folder: string, entry: ArtAnim): ResolvedAnim => ({
+  url: `${ASSET_ROOT}${folder}${entry[0]}`,
+  x: entry[1],
+  y: entry[2],
+  width: entry[3],
+  height: entry[4],
+  frames: entry[5],
+});
+
 /** Indices into an `ArtLevel` tuple for the default, damaged and destroyed art. */
 const TOP_INDEX: Record<ArtState, 1 | 2 | 3> = { "": 1, damaged: 2, destroyed: 3 };
 const SHADOW_INDEX: Record<ArtState, 4 | 5 | 6> = { "": 4, damaged: 5, destroyed: 6 };
+/** Destroyed has no slot: the props table ships no `animdestroyed` anywhere. */
+const ANIM_INDEX: Record<ArtState, 7 | 8 | null> = { "": 7, damaged: 8, destroyed: null };
 
 /**
  * The art for one building, or null when the type is not in the table.
@@ -180,5 +231,20 @@ export const resolveArt = (type: number, level: number, state: ArtState): Resolv
     imageOf(row.folder, chosen[SHADOW_INDEX[usedState]]) ??
     imageOf(row.folder, chosen[SHADOW_INDEX[ArtState.DEFAULT]]);
 
-  return { name: row.name, folder: row.folder, level: chosen[0], top, shadow };
+  const animIndex = ANIM_INDEX[usedState];
+  const anims = (animIndex === null ? [] : (chosen[animIndex] ?? [])).map((entry) =>
+    animOf(row.folder, entry),
+  );
+
+  return {
+    name: row.name,
+    folder: row.folder,
+    level: chosen[0],
+    top,
+    shadow,
+    anims,
+    // `imageOf` only reports a frame for a five-number entry, which the
+    // generator writes only when the top was taken from the animation strip.
+    topIsAnim: top.frame !== null && anims[0]?.url === top.url,
+  };
 };
