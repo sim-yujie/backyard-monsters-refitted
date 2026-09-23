@@ -529,3 +529,31 @@ export const economySaveRejectedErr = (violations: EconomyViolation[], elapsed: 
     data: { violations, elapsed },
     isClientFriendly: false,
   });
+
+/**
+ * An attack save whose sender is not the player the server recorded as this
+ * attack's attacker, or whose attack has run out (issue #25,
+ * `services/base/attackSession.ts`).
+ *
+ * `isClientFriendly: false` for the same reason `economySaveRejectedErr` uses
+ * it: the interceptor answers a non-friendly error with HTTP **200** and
+ * `error` set (`middleware/clientSafeError.ts:90-93`), the only failure shape
+ * the archived Flash client turns into a readable message
+ * (`client/scripts/BASE.as:3413-3416`). A real `403` reaches its
+ * `handleLoadError` path instead — five silent retries and a generic popup. The
+ * intended status travels in `errorDetails.status`, where the web client reads
+ * it (`web/src/api/http.ts:19-22`).
+ *
+ * The `reason` is carried in `data` rather than in the message, because the
+ * player who sees the message is usually the honest attacker whose attack timed
+ * out, and "who are you" is not a useful thing to tell them.
+ *
+ * @param {string} reason - Which binding rule refused the save.
+ */
+export const attackNotBoundErr = (reason: string) =>
+  new ClientSafeError({
+    message: "This attack is no longer yours to save. Reload your yard.",
+    status: Status.FORBIDDEN,
+    data: { reason },
+    isClientFriendly: false,
+  });

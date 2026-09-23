@@ -92,9 +92,10 @@ All thrown errors that controllers want to surface use `ClientSafeError`
     the Flash client mishandles certain non-200 responses for ordinary game-flow conditions.
     Errors constructed with `isClientFriendly: false` are exactly the "this is a normal game
     outcome, not a real HTTP error" set: `baseUnderAttackErr`, `baseProtectedErr`,
-    `userOnlineErr`, `takeoverCellErr`, `truceActiveErr`, `mapRoomDisabledErr`, and
+    `userOnlineErr`, `takeoverCellErr`, `truceActiveErr`, `mapRoomDisabledErr`,
     `economySaveRejectedErr` (a rejected `/base/save` under the economy audit — see "Economy
-    save validation" under Base / Yard).
+    save validation" under Base / Yard) and `attackNotBoundErr` (an attack save from someone
+    other than the attacker, or after the attack ran out — see "Attack session binding").
   - **A new client must therefore check the response body's `error` field, not just the HTTP
     status code**, to detect all failure cases — a 200 response can still mean "the request
     failed," and the message to show the player is in `error` (when present) or
@@ -152,7 +153,7 @@ on any of these four routes.
 | Method | Path | Middleware | Request fields | Response (`ctx.body`) | Description |
 |---|---|---|---|---|---|
 | POST | `/base/load` | verifyUserAuth, logRequest | `BaseLoadSchema`: `type` (a `BaseMode` value — see below), `userid` (accepted but unused by the handler), `baseid`, `mapversion?` (coerced number), `attackData?` (JSON string → `{champions?, monsters?}`), `attackcost?` (JSON string → `{resources?: number[], shiny?: number}`) | See "Base load/save response envelope" below | **The main "open a base" call.** `type` selects a mode handler: `build` (own yard, editable), `view`/`wmview` (someone else's yard, read-only), `attack`/`wmattack` (start an attack — validates range/level/protection, mints an `attackid`, logs the attack), and Inferno equivalents `ibuild`/`iview`/`iattack`/`iwmattack`/`iwmview`/`idescent`. `attack`/`wmattack`/`iattack`/`iwmattack` require `ctx.meetsDiscordAgeCheck` (else `discordAgeErr()` 401) unless the target is a scripted MR1 tribe. Also used for Map Room 1's `/api/:apiVersion/bm/base/load` (identical controller, different mount). |
-| POST | `/base/save` | verifyUserAuth, logRequest | `BaseSaveSchema` (`baseid`, `basesaveid`→number, plus a long list of optional JSON-string fields — `purchase`, `champion`/`attackerchampion`, `buildingdata`, `buildinghealthdata`, `monsterupdate`, `attackloot`, `resources`, `monsters`, `attackcreatures`, `attackersiege`, `over`→number, `destroyed`→number, `attackid`) **and** every raw body key matching `Save.saveKeys` (own base) or `Save.attackSaveKeys` (attack) is separately JSON-parsed onto the entity — see "Save write keys" below | `{ error: 0, basesaveid, ...filteredSave, ...(takeoverData && { takeover: takeoverData }) }` | **The main "close/checkpoint a base" call.** Throws `permissionErr()` (403) if the caller neither owns the base nor holds an active `attackid` on it (i.e. isn't mid-attack against it). Runs `scripts/anticheat/anticheat.ts`'s `validateSave` before applying anything. On `over` (attack finished) with damage ≥ 90%, triggers MR3 structure takeover (`takeoverCellMR3`) or destroys an MR3 tribe cell, and grants the defender fresh damage protection. Advances building timers to "now" using the pre-save health snapshot. **Non-attack owner saves of a `main`/`outpost` yard are also run through the economy audit** before any key is applied — see "Economy save validation" below; controlled by `ECONOMY_SAVE_VALIDATION` (`off`/`log`/`reject`, default `log`). |
+| POST | `/base/save` | verifyUserAuth, logRequest | `BaseSaveSchema` (`baseid`, `basesaveid`→number, plus a long list of optional JSON-string fields — `purchase`, `champion`/`attackerchampion`, `buildingdata`, `buildinghealthdata`, `monsterupdate`, `attackloot`, `resources`, `monsters`, `attackcreatures`, `attackersiege`, `over`→number, `destroyed`→number, `attackid`) **and** every raw body key matching `Save.saveKeys` (own base) or `Save.attackSaveKeys` (attack) is separately JSON-parsed onto the entity — see "Save write keys" below | `{ error: 0, basesaveid, ...filteredSave, ...(takeoverData && { takeover: takeoverData }) }` | **The main "close/checkpoint a base" call.** Throws `permissionErr()` (403) if the caller neither owns the base nor is saving a base that carries a non-zero `attackid`. An attack save must additionally be the result of *this caller's* attack, or it is refused with `attackNotBoundErr()` — see "Attack session binding" below. Runs `scripts/anticheat/anticheat.ts`'s `validateSave` before applying anything. On `over` (attack finished) with damage ≥ 90%, triggers MR3 structure takeover (`takeoverCellMR3`) or destroys an MR3 tribe cell, and grants the defender fresh damage protection. Advances building timers to "now" using the pre-save health snapshot. **Non-attack owner saves of a `main`/`outpost` yard are also run through the economy audit** before any key is applied — see "Economy save validation" below; controlled by `ECONOMY_SAVE_VALIDATION` (`off`/`log`/`reject`, default `log`). |
 | POST | `/base/updatesaved` | verifyUserAuth, logRequest | inline schema: `type`, `version`, `lastupdate`, `baseid`, `mapversion`→number | `{ error: 0, flags, ...filteredSave, credits, ...(alliancedata && {alliancedata}), ...(powerups && {powerups}) }` | **Polling heartbeat**, called by the client roughly every 30 seconds while a base screen is open, to refresh timers/resources without a full `/base/load`. Does not accept any save data from the client — read-only refresh. |
 | POST | `/base/migrate` | verifyUserAuth, logRequest | `MigrateBaseSchema`: `type` (`BaseType`), `baseid`, `resources?` (JSON), `shiny?`→number | Three shapes depending on branch: cooldown active → `{ error: 0, cantMoveTill, currenttime }`; `type="random"` (empire overrun) → `{ error: 0 }`; normal migrate-to-outpost → `{ error: 0, coords: [x, y] }` | Relocates the player's home base. A 24-hour cooldown (`userSave.cantmovetill`) applies after any migration. `type="random"` leaves and rejoins a Map Room 2/3 world at a new random location (blocked if the player still owns outposts — `relocateOutpostErr()` 403). Otherwise it swaps the home cell onto a **captured outpost's** coordinates, deletes the old outpost cell/save, and charges the given `resources`/`shiny` (throws `shinyLockedErr()` 403 if shiny-locked and `shiny` is set). |
 
@@ -218,6 +219,68 @@ purchased quantity onto `save.storedata[itemKey].q`, sets/refreshes an expiry
 (`PRO1`/`PRO2`/`PRO3` extend `save.protected`), and calls `updateCredits` to charge or credit
 shiny (throws `shinyLockedErr()` 403 if the account is shiny-locked and the item isn't a shiny
 *gain* per `game-data/store/purchaseKeys.ts`'s `isShinyGain`).
+
+### Attack session binding
+
+A non-zero `attackid` on a base says only that *somebody* is attacking it. On its own that is
+not permission to write to the row, so `/base/save` also requires the save to come from the
+account the server recorded when the attack began (`services/base/attackSession.ts`).
+
+**Minting.** A successful `/base/load` with `type=attack` or `type=wmattack` mints the random
+`attackid` onto the defender's row and, in the same step, writes a session to Redis under
+`attack-session:<basesaveid>` holding `attackerid:attackid:startedat`
+(`controllers/base/load/modes/baseModeAttack.ts`). The key's TTL is 480 seconds; the window it
+authorises is **420 seconds**, the same `ATTACK_TIMEOUT` `isAttackActive` uses, so a defender
+that is free to be attacked by somebody else can no longer be written to by the previous
+attacker. The extra 60 seconds of key lifetime exist only so a late save is logged as `expired`
+rather than as a base with no attack at all. A Map Room 1 tribe has no stored row and mints no
+session; its saves never reach the attack branch (they return early through `scaledMR1Tribes`).
+
+**Checking.** On an attack save — the caller is not the owner and the row's `attackid` is
+non-zero — the session is read back and checked before `validateSave`, before the economy audit
+and before any key is applied, so a refusal leaves the stored row byte-for-byte untouched. The
+rule is pure and lives in `checkAttackBinding`:
+
+| Order | Condition | `errorDetails.data.reason` |
+|---|---|---|
+| 1 | No session stored for this `basesaveid` | `no-session` |
+| 2 | `now - startedat >= 420` | `expired` |
+| 3 | The session's `attackerid` is not the authenticated caller's `userid` | `wrong-attacker` |
+| 4 | The session's `attackid` is not the one now on the row, or not the one the client sent | `stale-attack` |
+
+The binding is derived from the authenticated user, not from anything new the client sends: the
+archived Flash client cannot be taught new fields. It does already send `attackid` on every
+non-build save (`client/scripts/BASE.as:3264`), and that value is compared when it is present
+and non-zero, but only as a consistency check — a value the client holds authorises nothing.
+
+**Refusal shape.** `attackNotBoundErr()` is `isClientFriendly: false`, so like the economy
+refusal it comes back as **HTTP 200** with `error` set — the only failure shape the Flash client
+turns into a readable message rather than five silent retries. The intended status travels in
+`errorDetails.status` as `403`, and the reason in `errorDetails.data.reason`:
+
+```json
+{
+  "error": "This attack is no longer yours to save. Reload your yard.",
+  "errorDetails": {
+    "error": "This attack is no longer yours to save. Reload your yard.",
+    "status": 403,
+    "data": { "reason": "wrong-attacker" },
+    "message": "This attack is no longer yours to save. Reload your yard."
+  }
+}
+```
+
+Every refusal writes one `attack-binding-refused` line to the log with the caller, the recorded
+attacker and the reason.
+
+**Ending.** A save carrying `over` clears the row's `attackid` and deletes the session key, so
+the base is immediately free rather than carrying a key that authorises nothing until it times
+out.
+
+**Not yet covered.** The Inferno save endpoint (`/api/:apiVersion/bm/base/save` →
+`controllers/inferno/infernoSave.ts`) still has the original gate — a non-zero `attackid` on the
+Inferno row is enough — and `infernoModeAttack` mints no session. The two sides have to land
+together, so the Inferno twin is left for a follow-up.
 
 ### Economy save validation
 

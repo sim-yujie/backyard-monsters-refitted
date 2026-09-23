@@ -62,12 +62,23 @@ deliberate:
 | Building layout | On an attack save, only traps may be removed. Every non-trap building's type, level and position is re-read from the database and the client's copy discarded. | `server/src/controllers/base/save/handlers/buildingDataHandler.ts:31-42` |
 | Defender champion | Only `hp` is taken from the client, and only if lower than stored (`Math.min`). | `server/src/controllers/base/save/handlers/championHandler.ts:16-22` |
 | Defender resources | The reported delta is applied only where it is negative, capped at 10,000,000 per resource per save, and floored at 0. | `server/src/controllers/base/save/handlers/defenderLootHandler.ts:29-45` |
-| Permission | The caller must own the base, or the base must carry a non-zero `attackid`. | `baseSave.ts:62-67` |
+| Permission | The caller must own the base, or be the attacker the server recorded for the attack the base is currently under. | `baseSave.ts`, `services/base/attackSession.ts` |
 
-A fifth gap sits above all of them: `baseSave.ts:62-67` only requires that the target row carry a
-non-zero `attackid`. The random `attackid` minted at attack start is never stored against the
-attacker and never compared, so **any authenticated user can post an attack save against any base
-that is currently under attack by anyone**.
+The permission clamp used to be weaker than it looks, and issue #25 closed the gap. It once
+required only that the target row carry a non-zero `attackid`; the random `attackid` minted at
+attack start was never stored against the attacker and never compared, so any authenticated user
+could post an attack save against any base that was under attack by anyone, and bank the
+`attackloot` into their own pool. Attack start now also writes a session —
+`attackerid:attackid:startedat` under `attack-session:<basesaveid>` in Redis — and an attack save
+is refused unless the authenticated caller is that attacker and the attack is inside the same
+420-second window `isAttackActive` uses. The check runs before `validateSave` and before the
+economy audit, so a refusal changes nothing on the row. The full contract, including the four
+refusal reasons and the HTTP-200-with-`error` shape the Flash client needs, is in
+`docs/server-api.md` under "Attack session binding".
+
+The Inferno save endpoint (`controllers/inferno/infernoSave.ts`) still carries the original
+`attackid`-only gate; binding it needs the matching session to be minted in `infernoModeAttack`,
+and the two have to land together.
 
 Everything else on `Save.attackSaveKeys` — `destroyed`, `damage`, `locked`, `protected`,
 `monsters`, `over`, `buildinghealthdata`, `buildingresources`, `attackreport`, `attackersiege` —
@@ -182,8 +193,13 @@ Side effects of a successful entry:
   non-tribe targets only (`baseModeAttack.ts:78-91`).
 - The **attacker's** own damage protection is cleared (`damageProtection(userSave, BaseMode.ATTACK)`
   → `protection = 0`, `baseModeAttack.ts:93-95`, `server/src/services/maproom/v2/damageProtection.ts:34-36`).
-- `save.attackid = floor(random() * 99999) + 1` (`baseModeAttack.ts:97`). This is the token that
-  later authorises the attacker's `/base/save` against someone else's row.
+- `save.attackid = floor(random() * 99999) + 1` (`baseModeAttack.ts:97`). It marks the row as under
+  attack and is echoed to the client, which sends it back on every save.
+- An attack session is written to Redis under `attack-session:<basesaveid>`, naming the attacker,
+  that `attackid` and the start time (`services/base/attackSessionStore.ts`). This, not the
+  `attackid`, is what authorises the attacker's `/base/save` against someone else's row. It is
+  written after the flush, so a wild monster camp created by this very request already has its
+  `basesaveid`.
 - A `world_map_cell` row is created for a wild monster camp being attacked for the first time, with
   `base_type = WM` and terrain height recomputed from noise (`baseModeAttack.ts:100-132`).
 - An `AttackLogs` row is written and `save.lastattackername` set, for non-tribe targets
@@ -1129,6 +1145,7 @@ build (`:3250-3291`):
 | Step | Line |
 | --- | --- |
 | Permission: owner, or the row carries a non-zero `attackid` | `:62-67` |
+| Attack binding: the caller must be the attacker recorded for this attack, inside the 420-second window (`checkAttackBinding`, issue #25). Refused before anything is applied, so the row is untouched | `services/base/attackSession.ts` |
 | `validateSave` — the anticheat hook, a no-op in open-source builds. The Inferno counterpart `server/src/controllers/inferno/infernoSave.ts` never calls it at all | `:69` |
 | Iterate `Save.attackSaveKeys`, with the trap filter, champion clamp and resource handler | `:74-146` |
 | `monsterupdate` → attacker's save, and possibly other bases | `:155-157` |
@@ -1263,7 +1280,12 @@ than `ATTACK_TIMEOUT = 7 * 60` seconds ago
 stale — the usual cause is an attacker who disconnected mid-battle. The lock also feeds the map's
 `lo` field (see `docs/specs/maproom2.md` §7).
 
-`attackid` is cleared on the final save (`baseSave.ts:207`).
+`attackid` is cleared on the final save (`baseSave.ts:207`), which also deletes the attack session
+that authorised it.
+
+The attack session shares the same 7 minutes by construction: `ATTACK_SESSION_WINDOW` is
+`ATTACK_TIMEOUT`, so the moment the lock goes stale and the defender may be attacked by somebody
+else, the previous attacker can no longer save against the row.
 
 ### Online guard
 

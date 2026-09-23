@@ -19,6 +19,8 @@ import { isTruceActive } from "../../../../services/mail/isTruceActive.js";
 import { MR1_TRIBE_IDS } from "../../../../game-data/tribes/v1/index.js";
 import { registerAttacker } from "../../../../services/maproom/v1/registerAttacker.js";
 import { isShinyLocked } from "../../../../services/user/shinyLock.js";
+import { newAttackSession } from "../../../../services/base/attackSession.js";
+import { startAttackSession } from "../../../../services/base/attackSessionStore.js";
 import {
   generateNoise,
   getTerrainHeight,
@@ -151,6 +153,14 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost }: B
 
   postgres.em.persist(userSave);
   await postgres.em.flush();
+
+  // Bind this attack to the player who started it (issue #25). Only the account
+  // recorded here may post the result to `/base/save`, and only for as long as
+  // `isAttackActive` would still call the attack live. The flush above is what
+  // gives a freshly created wild-monster row its `basesaveid`; a Map Room 1
+  // tribe never gets one, and its save never reaches the attack branch either.
+  if (save.basesaveid)
+    await startAttackSession(save.basesaveid, newAttackSession(user.userid, save.attackid));
 
   // Create an attack log and update neighbour attack counters
   if (save.type !== BaseType.TRIBE) {

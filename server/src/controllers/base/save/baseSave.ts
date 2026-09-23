@@ -1,3 +1,4 @@
+import type { Context } from "koa";
 import type { KoaController } from "../../../utils/KoaController.js";
 import { Save } from "../../../database/models/save.model.js";
 import { User } from "../../../database/models/user.model.js";
@@ -12,7 +13,7 @@ import { resourcesHandler } from "./handlers/resourceHandler.js";
 import { purchaseHandler } from "./handlers/purchaseHandler.js";
 import { academyHandler } from "./handlers/academyHandler.js";
 import { BaseType } from "../../../enums/Base.js";
-import { permissionErr, saveFailureErr } from "../../../errors/errors.js";
+import { attackNotBoundErr, permissionErr, saveFailureErr } from "../../../errors/errors.js";
 import { attackLootHandler } from "./handlers/attackLootHandler.js";
 import { defenderLootHandler } from "./handlers/defenderLootHandler.js";
 import { monsterUpdateHandler } from "./handlers/monsterUpdateHandler.js";
@@ -37,6 +38,11 @@ import {
   applyDerivedFields,
   recordEconomyVerdict,
 } from "../../../services/base/economy/recordVerdict.js";
+import { checkAttackBinding } from "../../../services/base/attackSession.js";
+import {
+  endAttackSession,
+  readAttackSession,
+} from "../../../services/base/attackSessionStore.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -75,9 +81,16 @@ export const baseSave: KoaController = async (ctx) => {
   // Not the owner and not in an attack
   if (!isOwner && baseSave.attackid === 0) throw permissionErr();
 
-  await validateSave(user, baseSave, body);
-
   const now = getCurrentDateTime();
+
+  // The attack must be this caller's (issue #25). A non-zero `attackid` on the
+  // row is not on its own permission to write to it: the save has to come from
+  // the account the server recorded when the attack started, inside the same
+  // 7-minute window `isAttackActive` uses. Checked before `validateSave` and
+  // before the economy audit so a refusal touches nothing at all.
+  if (isAttack) await requireAttackBinding(ctx, user, baseSave, saveData.attackid, now);
+
+  await validateSave(user, baseSave, body);
 
   // The economy audit (docs/design/economy-save-validation.md §3.3). It runs
   // before any key is applied, so a refusal in `reject` mode leaves the stored
@@ -252,6 +265,11 @@ export const baseSave: KoaController = async (ctx) => {
 
   baseSave.attackid = saveData.over ? 0 : baseSave.attackid;
 
+  // The attack is finished, so its session is spent. Dropping it now frees the
+  // row immediately instead of leaving a key that authorises nothing until it
+  // times out (issue #25).
+  if (isAttack && saveData.over) await endAttackSession(baseSave.basesaveid);
+
   // Attack saves store health from the attacker's replay but keep buildingdata from the DB,
   // so the owner's countdowns are brought up to the attack before savetime moves to it.
   if (isAttack && baseSave.buildingdata) {
@@ -280,6 +298,61 @@ export const baseSave: KoaController = async (ctx) => {
 
   ctx.status = Status.OK;
   ctx.body = responseBody;
+};
+
+/**
+ * Refuses an attack save that did not come from this attack's attacker
+ * (issue #25, `services/base/attackSession.ts`).
+ *
+ * The decision itself is pure and lives in `checkAttackBinding`; this reads the
+ * stored session, logs a refusal and turns it into a client error. The log line
+ * carries the caller and the recorded attacker, because a `wrong-attacker`
+ * refusal is somebody attempting to bank another player's attack and is worth
+ * seeing in the audit trail.
+ *
+ * @param {Context} ctx - The Koa context, for the caller's IP.
+ * @param {User} user - The account that sent the save.
+ * @param {Save} baseSave - The defender's stored row.
+ * @param {string | undefined} submitted - The `attackid` the client sent, if any.
+ * @param {number} now - Server seconds.
+ * @throws {ClientSafeError} When the save is not this attack's result.
+ */
+const requireAttackBinding = async (
+  ctx: Context,
+  user: User,
+  baseSave: Save,
+  submitted: string | undefined,
+  now: number
+): Promise<void> => {
+  const session = await readAttackSession(baseSave.basesaveid);
+
+  const result = checkAttackBinding({
+    session,
+    callerid: user.userid,
+    storedAttackId: baseSave.attackid,
+    submittedAttackId: submitted ? Number(submitted) : undefined,
+    now,
+  });
+
+  if (result.ok) return;
+
+  logger.warn(
+    "Attack save refused for {username} (userid {userid}) on base {baseid}: {reason}",
+    {
+      event: "attack-binding-refused",
+      reason: result.reason,
+      userid: user.userid,
+      username: user.username,
+      baseid: baseSave.baseid,
+      basesaveid: baseSave.basesaveid,
+      attackerid: session?.attackerid ?? null,
+      attackid: baseSave.attackid,
+      submittedAttackId: submitted ?? null,
+      ip: ctx.ip,
+    }
+  );
+
+  throw attackNotBoundErr(result.reason);
 };
 
 /**
