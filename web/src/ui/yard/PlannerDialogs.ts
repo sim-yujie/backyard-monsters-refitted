@@ -1,11 +1,18 @@
+import type { TrapPlacement } from "@/api/types";
+import { costOf, sumCosts } from "@/game/yard/buildingCosts";
 import type { Checklist } from "@/game/yard/planner/checklist";
+import { PlaceBlock, type PlaceCheck } from "@/game/yard/planner/plan";
+import { heldResources, isShort, shortfallOf, typeName } from "@/game/yard/planner/summary";
+import type { Yard } from "@/game/yard/yardModel";
 import { Panel } from "@/ui/Panel";
+import { costRows } from "./costRows";
 
 /**
- * The planner's small overlays: the pre-Apply checklist, the shortcut sheet and
- * the banner that reports what a loaded layout could not place.
+ * The planner's small overlays: the pre-Apply checklist, the trap re-arm
+ * confirmation, the shortcut sheet and the banner that reports what a loaded
+ * layout could not place.
  *
- * All three are transient and none of them owns state, so they are plain
+ * All of them are transient and none of them owns state, so they are plain
  * builders returning an element the scene docks and drops. The checklist is the
  * one that matters (design §3, F17): every failing row lists the buildings it
  * failed on, and clicking one selects it on the canvas.
@@ -69,6 +76,130 @@ export const checklistPanel = (options: ChecklistPanelOptions): Panel => {
   return panel;
 };
 
+/* ── Trap re-arm ──────────────────────────────────────────────────────── */
+
+export interface RearmPanelOptions {
+  /** Every fired trap the planner knows a position for, de-duplicated. */
+  traps: readonly TrapPlacement[];
+  yard: Yard;
+  /** The plan's own placement check: `Plan.canPlace`. */
+  canPlace: (type: number, x: number, y: number) => PlaceCheck;
+  /** Puts the camera on a spot so the player can clear it. */
+  onShow: (trap: TrapPlacement) => void;
+  onConfirm: (traps: TrapPlacement[]) => void;
+  onClose: () => void;
+}
+
+/**
+ * The re-arm confirmation (plan §3.4).
+ *
+ * Re-arming is a build, not a repair: a trap that fires is deleted from the
+ * save, so the server allocates a fresh id and charges the full build cost.
+ * The panel says so in money before anything is sent.
+ *
+ * The local placement check is the reason this is a panel rather than a plain
+ * confirm. The route is all-or-nothing (§6, Q4), so one trap now standing under
+ * a wall the player moved would refuse the whole batch with nothing to look at.
+ * Checking the plan's own grid first turns that into a list with a "show me"
+ * against each spot, which is something the player can act on.
+ */
+export const rearmPanel = (options: RearmPanelOptions): Panel => {
+  const panel = new Panel({
+    title: "Re-arm traps",
+    className: "map-panel planner-rearm",
+    onClose: options.onClose,
+  });
+
+  const blocked = options.traps
+    .map((trap) => ({ trap, check: options.canPlace(trap.t, trap.x, trap.y) }))
+    .filter((entry) => entry.check.reason !== null);
+
+  const steps = options.traps
+    .map((trap) => costOf(trap.t, 0))
+    .filter((step): step is NonNullable<typeof step> => step !== null);
+  const cost = sumCosts(steps);
+  const held = heldResources(options.yard.resources);
+  const shortfall = shortfallOf(cost, held);
+
+  const counts = new Map<number, number>();
+  for (const trap of options.traps) counts.set(trap.t, (counts.get(trap.t) ?? 0) + 1);
+
+  const heading = document.createElement("p");
+  heading.className = "planner-rearm__heading";
+  heading.textContent =
+    options.traps.length === 0
+      ? "No fired traps are waiting."
+      : `${options.traps.length} fired ${options.traps.length === 1 ? "trap" : "traps"} to put back: ${[
+          ...counts.entries(),
+        ]
+          .sort((a, b) => a[0] - b[0])
+          .map(([type, count]) => `${count} × ${typeName(type)}`)
+          .join(", ")}.`;
+
+  const costList = document.createElement("dl");
+  costList.className = "cell-facts planner-rearm__costs";
+  costList.replaceChildren(...costRows(cost, held, shortfall));
+
+  const note = document.createElement("p");
+  note.className = "u-muted";
+  note.textContent =
+    "Each one is built fresh at its old spot, with a new id and the full build cost. The five-second countdown finishes on the spot.";
+
+  const problems = document.createElement("ul");
+  problems.className = "planner-rearm__blocked";
+  problems.hidden = blocked.length === 0;
+
+  for (const { trap, check } of blocked) {
+    const item = document.createElement("li");
+
+    const text = document.createElement("span");
+    text.textContent = `${typeName(trap.t)} at ${trap.x}, ${trap.y} — ${
+      check.reason === PlaceBlock.BOUNDS
+        ? "outside your yard at its current size"
+        : "something is standing there"
+    }`;
+
+    const show = document.createElement("button");
+    show.type = "button";
+    show.className = "btn btn--ghost planner-rearm__show";
+    show.textContent = "Show me";
+    show.title = "Put the camera on this spot";
+    show.addEventListener("click", () => options.onShow(trap));
+
+    item.append(text, show);
+    problems.append(item);
+  }
+
+  const confirm = document.createElement("button");
+  confirm.type = "button";
+  confirm.className = "btn btn--primary";
+  confirm.textContent = "Confirm";
+  confirm.disabled = options.traps.length === 0 || blocked.length > 0 || isShort(shortfall);
+  confirm.title = confirm.disabled
+    ? options.traps.length === 0
+      ? "Nothing to put back."
+      : blocked.length > 0
+        ? "Clear the blocked spots first."
+        : "You cannot afford this yet."
+    : `Build ${options.traps.length} ${options.traps.length === 1 ? "trap" : "traps"}.`;
+  if (!confirm.disabled) {
+    confirm.addEventListener("click", () => options.onConfirm([...options.traps]));
+  }
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "btn btn--ghost";
+  cancel.textContent = "Cancel";
+  cancel.addEventListener("click", () => panel.close());
+
+  const actions = document.createElement("div");
+  actions.className = "planner-rearm__actions";
+  actions.append(confirm, cancel);
+
+  panel.setContent(heading, costList, note, problems, actions);
+  return panel;
+};
+
 /** F13's shortcut sheet, listing only what phase 1 actually binds. */
 export const shortcutsPanel = (onClose: () => void): Panel => {
   const panel = new Panel({
@@ -84,6 +215,7 @@ export const shortcutsPanel = (onClose: () => void): Panel => {
     ["Right-click", "Put a carried selection back where it was"],
     ["V", "Select tool"],
     ["B", "Box select"],
+    ["F", "Find buildings by name or type"],
     ["Shift + drag", "Box select with the select tool"],
     ["Shift + click", "Add or remove one building"],
     ["Arrow keys", "Nudge the selection by one grid step"],

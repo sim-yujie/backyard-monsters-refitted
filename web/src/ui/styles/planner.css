@@ -80,6 +80,216 @@
   border-color: var(--colour-danger);
 }
 
+/* ── F3: the cost and time cells ──────────────────────────────────────── */
+
+.planner-cost {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.planner-cost__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 72px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--colour-border);
+  background: var(--colour-surface-overlay);
+}
+
+.planner-cost__label {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.planner-cost__value {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Shortfall is a colour *and* a border, and the tooltip says "short" in words,
+ * so the state never rests on hue alone (§4.3).
+ */
+.planner-cost__cell--short {
+  border-color: var(--colour-danger);
+}
+
+.planner-cost__cell--short .planner-cost__value {
+  color: var(--colour-danger);
+}
+
+.planner-cost__cell--shiny .planner-cost__value {
+  color: var(--colour-accent);
+}
+
+/* The same rule, for the cost rows inside the two batch panels. */
+.planner-cost__row--short {
+  color: var(--colour-danger);
+}
+
+.planner-bar__badge {
+  display: inline-block;
+  margin-inline-start: var(--space-1);
+  padding-inline: var(--space-1);
+  min-width: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.planner-bar__rearm[disabled] .planner-bar__badge {
+  background: var(--colour-border);
+  color: var(--colour-text-muted);
+}
+
+/* ── Batch wall upgrade ───────────────────────────────────────────────── */
+
+.planner-walls__levels {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  margin-block: var(--space-2);
+}
+
+.planner-walls__levels-label {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.planner-walls__level[aria-pressed="true"] {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.planner-walls__preview,
+.planner-rearm__heading {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.planner-walls__note {
+  margin-block: var(--space-2) 0;
+  font-size: var(--text-xs);
+}
+
+.planner-walls__actions,
+.planner-rearm__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* ── Trap re-arm ──────────────────────────────────────────────────────── */
+
+.planner-rearm__blocked {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  font-size: var(--text-sm);
+}
+
+.planner-rearm__blocked li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+  color: var(--colour-danger);
+}
+
+.planner-rearm__blocked li + li {
+  border-top: 1px solid var(--colour-border);
+}
+
+.planner-rearm__show {
+  font-size: var(--text-sm);
+  padding-inline: var(--space-2);
+}
+
+/* ── Find ─────────────────────────────────────────────────────────────── */
+
+.planner-search__input {
+  width: 100%;
+}
+
+.planner-search__chips {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  margin-block: var(--space-2);
+}
+
+.planner-search__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+  padding-inline: var(--space-2);
+}
+
+.planner-search__chip[aria-pressed="true"] {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.planner-search__count {
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text-muted);
+}
+
+.planner-search__chip[aria-pressed="true"] .planner-search__count {
+  color: var(--colour-accent-text);
+}
+
+.planner-search__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 44vh;
+  overflow-y: auto;
+}
+
+.planner-search__row + .planner-search__row {
+  border-top: 1px solid var(--colour-border);
+}
+
+.planner-search__pick {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  text-align: start;
+  font-size: var(--text-sm);
+  padding-block: var(--space-1);
+}
+
+.planner-search__empty {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-block: var(--space-2) 0;
+  font-size: var(--text-sm);
+}
+
+.planner-search__clear {
+  font-size: var(--text-sm);
+  padding-inline: var(--space-2);
+}
+
 /* ── Docked panels ────────────────────────────────────────────────────── */
 
 .planner-dock {

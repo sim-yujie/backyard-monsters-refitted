@@ -244,12 +244,13 @@ export class CellPanel {
     }
   }
 
+  /** `r1`..`r4` in the order the game has always shown them (`docs/specs/base-building.md:569-574`). */
   private addResources(resources: Resources): void {
     const names: [string, string][] = [
       ["r1", "Twigs"],
       ["r2", "Pebbles"],
-      ["r3", "Goo"],
-      ["r4", "Putty"],
+      ["r3", "Putty"],
+      ["r4", "Goo"],
     ];
     for (const [key, label] of names) {
       const amount = resources[key];

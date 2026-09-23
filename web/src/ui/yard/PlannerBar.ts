@@ -1,5 +1,7 @@
+import type { SelectionSummary } from "@/game/yard/planner/summary";
 import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
 import { YardView } from "@/game/yard/YardRenderer";
+import { formatAmount, formatCountdown } from "@/ui/format";
 
 /**
  * The planner's two bars: tools across the top, the plan summary and the
@@ -12,6 +14,18 @@ import { YardView } from "@/game/yard/YardRenderer";
  *
  * The bar is stateless: `update` is handed the session's state and rewrites the
  * bits that changed. Nothing here calls back into the plan.
+ *
+ * ## The cost cells
+ *
+ * The left of the bottom bar is F3: four resource cells reading "needed /
+ * held", a worker time and a shiny price, then the selection sentence. "Needed"
+ * is what it would cost to take everything selected one level up — phase 1 has
+ * no planned upgrades to add up, so the selection is the plan (plan §6, Q5).
+ * A cell whose need is past what the yard holds carries `--short`, which is a
+ * colour *and* a word in the tooltip, per §4.3.
+ *
+ * Shiny is shown and never purchasable (§6, Q6), so it is a readout like the
+ * rest and not a button.
  */
 
 export interface PlannerBarActions {
@@ -19,12 +33,35 @@ export interface PlannerBarActions {
   onView: (view: YardView) => void;
   onUndo: () => void;
   onRedo: () => void;
+  onFind: () => void;
   onLayouts: () => void;
   onChecklist: () => void;
+  onUpgradeWalls: () => void;
+  onRearmTraps: () => void;
   onApply: () => void;
   onHelp: () => void;
   onExit: () => void;
 }
+
+/** `r1`..`r4` as the spec names them (docs/specs/base-building.md:573). */
+const RESOURCE_LABELS: readonly (readonly [keyof SelectionSummary["needed"], string])[] = [
+  ["r1", "Twigs"],
+  ["r2", "Pebbles"],
+  ["r3", "Putty"],
+  ["r4", "Goo"],
+];
+
+const ZERO = { r1: 0, r2: 0, r3: 0, r4: 0 } as const;
+
+const EMPTY_SUMMARY: SelectionSummary = {
+  needed: ZERO,
+  held: ZERO,
+  shortfall: ZERO,
+  seconds: 0,
+  shiny: 0,
+  byType: [],
+  maxed: 0,
+};
 
 const button = (label: string, title: string, className = "btn btn--ghost"): HTMLButtonElement => {
   const element = document.createElement("button");
@@ -34,6 +71,34 @@ const button = (label: string, title: string, className = "btn btn--ghost"): HTM
   element.title = title;
   return element;
 };
+
+/** One "needed / held" readout, with its own label and its own tooltip. */
+class CostCell {
+  readonly element: HTMLElement;
+
+  private readonly value: HTMLElement;
+
+  constructor(label: string, className = "planner-cost__cell") {
+    this.element = document.createElement("span");
+    this.element.className = className;
+
+    const name = document.createElement("span");
+    name.className = "planner-cost__label";
+    name.textContent = label;
+
+    this.value = document.createElement("span");
+    this.value.className = "planner-cost__value";
+    this.value.textContent = "—";
+
+    this.element.append(name, this.value);
+  }
+
+  set(text: string, title: string, short = false): void {
+    this.value.textContent = text;
+    this.element.title = title;
+    this.element.classList.toggle("planner-cost__cell--short", short);
+  }
+}
 
 export class PlannerBar {
   readonly toolbar: HTMLElement;
@@ -45,8 +110,14 @@ export class PlannerBar {
   private readonly redo: HTMLButtonElement;
   private readonly apply: HTMLButtonElement;
   private readonly checklist: HTMLButtonElement;
+  private readonly upgradeWalls: HTMLButtonElement;
+  private readonly rearm: HTMLButtonElement;
+  private readonly rearmBadge: HTMLElement;
   private readonly summary: HTMLElement;
   private readonly slotLabel: HTMLElement;
+  private readonly resourceCells = new Map<string, CostCell>();
+  private readonly timeCell: CostCell;
+  private readonly shinyCell: CostCell;
 
   constructor(actions: PlannerBarActions) {
     this.toolbar = document.createElement("div");
@@ -66,6 +137,9 @@ export class PlannerBar {
     box.addEventListener("click", () => actions.onTool(PlannerTool.BOX));
     this.tools.set(PlannerTool.SELECT, select);
     this.tools.set(PlannerTool.BOX, box);
+
+    const find = button("Find", "Find buildings by name or type (F)");
+    find.addEventListener("click", actions.onFind);
 
     const iso = button("3D", "The yard as it looks (Tab switches)");
     iso.addEventListener("click", () => actions.onView(YardView.ISO));
@@ -88,7 +162,7 @@ export class PlannerBar {
     this.toolbar.append(
       title,
       this.slotLabel,
-      group(select, box),
+      group(select, box, find),
       group(iso, blueprint),
       group(this.undo, this.redo),
       spacer(),
@@ -102,6 +176,21 @@ export class PlannerBar {
     this.actionBar.className = "planner-bar planner-bar--bottom";
     this.actionBar.setAttribute("aria-label", "Plan summary and actions");
 
+    const costs = document.createElement("div");
+    costs.className = "planner-cost";
+    costs.setAttribute("role", "group");
+    costs.setAttribute("aria-label", "What the selection would cost");
+
+    for (const [key, label] of RESOURCE_LABELS) {
+      const cell = new CostCell(label);
+      this.resourceCells.set(key, cell);
+      costs.append(cell.element);
+    }
+
+    this.timeCell = new CostCell("Time", "planner-cost__cell planner-cost__cell--time");
+    this.shinyCell = new CostCell("Shiny", "planner-cost__cell planner-cost__cell--shiny");
+    costs.append(this.timeCell.element, this.shinyCell.element);
+
     this.summary = document.createElement("span");
     this.summary.className = "planner-bar__summary";
     this.summary.setAttribute("role", "status");
@@ -112,10 +201,38 @@ export class PlannerBar {
     this.checklist = button("Checklist", "What is blocking Apply");
     this.checklist.addEventListener("click", actions.onChecklist);
 
+    this.upgradeWalls = button("Upgrade walls", "Select some walls first");
+    this.upgradeWalls.className = "btn btn--ghost planner-bar__walls";
+    this.upgradeWalls.disabled = true;
+    this.upgradeWalls.addEventListener("click", actions.onUpgradeWalls);
+
+    // The label and the badge are separate children so the count can be
+    // rewritten without the label being rebuilt around it.
+    this.rearm = button("", "No fired traps to put back", "btn btn--ghost planner-bar__rearm");
+    const rearmLabel = document.createElement("span");
+    rearmLabel.textContent = "Re-arm traps";
+    this.rearmBadge = document.createElement("span");
+    this.rearmBadge.className = "planner-bar__badge";
+    this.rearmBadge.hidden = true;
+    this.rearm.append(rearmLabel, this.rearmBadge);
+    this.rearm.disabled = true;
+    this.rearm.addEventListener("click", actions.onRearmTraps);
+
     this.apply = button("Apply", "Write this layout to your yard", "btn btn--primary");
     this.apply.addEventListener("click", actions.onApply);
 
-    this.actionBar.append(this.summary, spacer(), this.checklist, layouts, this.apply);
+    this.actionBar.append(
+      costs,
+      this.summary,
+      spacer(),
+      this.upgradeWalls,
+      this.rearm,
+      this.checklist,
+      layouts,
+      this.apply,
+    );
+
+    this.setSummary(EMPTY_SUMMARY);
   }
 
   mount(container: HTMLElement): this {
@@ -154,10 +271,69 @@ export class PlannerBar {
       : "Write this layout to your yard";
   }
 
+  /**
+   * Rewrites the six cost cells from a selection summary.
+   *
+   * The breakdown by type goes into every needed cell's tooltip rather than
+   * into a popover: it is a list of at most a handful of rows, it is wanted
+   * while the pointer is already over the number, and a popover here would sit
+   * under the bar it belongs to.
+   */
+  setSummary(summary: SelectionSummary): void {
+    const breakdown = describeBreakdown(summary);
+
+    for (const [key, label] of RESOURCE_LABELS) {
+      const cell = this.resourceCells.get(key);
+      if (!cell) continue;
+      const needed = summary.needed[key];
+      const held = summary.held[key];
+      const short = summary.shortfall[key];
+      cell.set(
+        `${formatAmount(needed)} / ${formatAmount(held)}`,
+        short > 0
+          ? `${label}: ${needed.toLocaleString()} needed, ${held.toLocaleString()} held — ${short.toLocaleString()} short.\n${breakdown}`
+          : `${label}: ${needed.toLocaleString()} needed, ${held.toLocaleString()} held.\n${breakdown}`,
+        short > 0,
+      );
+    }
+
+    this.timeCell.set(
+      summary.seconds === 0 ? "—" : formatCountdown(summary.seconds),
+      summary.seconds === 0
+        ? "No worker time: nothing selected has a next level."
+        : `${summary.seconds.toLocaleString()} worker seconds for the next level of everything selected.`,
+    );
+
+    this.shinyCell.set(
+      summary.shiny === 0 ? "—" : formatAmount(summary.shiny),
+      "What it would cost in shiny to buy every step outright. Not for sale in the planner yet.",
+    );
+  }
+
   /** Shows the count of blocking problems on the checklist button. */
   setBlocking(count: number): void {
     this.checklist.textContent = count > 0 ? `Checklist · ${count}` : "Checklist";
     this.checklist.classList.toggle("planner-bar__checklist--bad", count > 0);
+  }
+
+  /** How many walls the selection holds, which is what Upgrade walls acts on. */
+  setWallCount(count: number): void {
+    this.upgradeWalls.disabled = count === 0;
+    this.upgradeWalls.title =
+      count === 0
+        ? "Select some walls first"
+        : `Raise ${count} selected ${count === 1 ? "wall" : "walls"} to a higher level`;
+  }
+
+  /** How many fired traps are waiting to be put back. Zero disables the button. */
+  setRearmCount(count: number): void {
+    this.rearmBadge.hidden = count === 0;
+    this.rearmBadge.textContent = String(count);
+    this.rearm.disabled = count === 0;
+    this.rearm.title =
+      count === 0
+        ? "No fired traps to put back"
+        : `Put ${count} fired ${count === 1 ? "trap" : "traps"} back where ${count === 1 ? "it" : "they"} stood`;
   }
 
   destroy(): void {
@@ -165,6 +341,31 @@ export class PlannerBar {
     this.actionBar.remove();
   }
 }
+
+/**
+ * The breakdown line under every needed cell's tooltip.
+ *
+ * Named types rather than ids, because the player selected pictures and not
+ * numbers, and the maxed count last so a selection that costs nothing still
+ * says why.
+ */
+const describeBreakdown = (summary: SelectionSummary): string => {
+  const lines = summary.byType.map(
+    (row) =>
+      `${row.count} × ${row.name}: ${[
+        row.needed.r1 > 0 ? `${row.needed.r1.toLocaleString()} twigs` : "",
+        row.needed.r2 > 0 ? `${row.needed.r2.toLocaleString()} pebbles` : "",
+        row.needed.r3 > 0 ? `${row.needed.r3.toLocaleString()} putty` : "",
+        row.needed.r4 > 0 ? `${row.needed.r4.toLocaleString()} goo` : "",
+      ]
+        .filter(Boolean)
+        .join(", ") || "free"}`,
+  );
+  if (summary.maxed > 0) {
+    lines.push(`${summary.maxed} already at the top of ${summary.maxed === 1 ? "its" : "their"} ladder`);
+  }
+  return lines.length > 0 ? lines.join("\n") : "Nothing selected has a next level.";
+};
 
 const summarise = (state: PlannerState): string => {
   const parts: string[] = [];

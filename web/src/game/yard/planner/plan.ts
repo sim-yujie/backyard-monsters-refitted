@@ -1,6 +1,8 @@
+import { footprintOf } from "../YardGrid";
 import type { Yard } from "../yardModel";
 import type { MoveEntry } from "./commands";
 import {
+  inBounds,
   isDecoration,
   Occupancy,
   plotBounds,
@@ -36,6 +38,25 @@ export const MUSHROOM_ID_BASE = 1_000_000;
 /** Mushroom footprint, `client/scripts/BUILDING7.as:9-10`. */
 const MUSHROOM_TYPE = 7;
 const MUSHROOM_SIZE = 30;
+
+/** Why a bare spot will not take a building. */
+export const PlaceBlock = {
+  /** Outside the plot for the expansion the account has now. */
+  BOUNDS: "bounds",
+  /** Held by a building or a mushroom. */
+  OCCUPIED: "occupied",
+} as const;
+export type PlaceBlock = (typeof PlaceBlock)[keyof typeof PlaceBlock];
+
+/** The answer to "could a building of this type go here". */
+export interface PlaceCheck {
+  /** Null when the spot is free. */
+  readonly reason: PlaceBlock | null;
+  /** The node already on those cells, when the reason is `occupied`. */
+  readonly blockedBy: number | null;
+}
+
+const FREE: PlaceCheck = { reason: null, blockedBy: null };
 
 /** What `absorb` changed, for the notice and the tests. */
 export interface AbsorbResult {
@@ -322,6 +343,45 @@ export class Plan {
     }
 
     return { added, removed, changed };
+  }
+
+  /**
+   * Whether a building of `type` could stand at `(x, y)`, and what stops it.
+   *
+   * Read-only: nothing is stamped, nothing is added, and the caller is expected
+   * to be a panel rather than a drag — the re-arm confirmation asks this of
+   * every fired trap's old spot so the player is told which ones are now under
+   * a wall *before* the server refuses the whole batch (plan §3.4).
+   *
+   * It is the same pair of tests `planLoad` runs (`layout.ts:125-134`), against
+   * the plan's live grid rather than a scratch one, so it answers for the yard
+   * as the player has arranged it and not as the save has it. A selection in
+   * hand has its cells lifted out of that grid; `Plan.cancelMove` puts them
+   * back, and every caller of this is a click on a panel, which cannot happen
+   * mid-drag.
+   */
+  canPlace(type: number, x: number, y: number): PlaceCheck {
+    const [width, height] = footprintOf(type);
+    const probe: PlanNode = {
+      // Negative, so it can never collide with a real id if it were stamped.
+      id: -1,
+      type,
+      x,
+      y,
+      width,
+      height,
+      level: 1,
+      fort: 0,
+      decoration: isDecoration(type),
+      fixed: false,
+    };
+
+    if (!inBounds(probe, x, y, this.plot)) {
+      return { reason: PlaceBlock.BOUNDS, blockedBy: null };
+    }
+    const other = this.occupancy.blockedBy(probe, x, y);
+    if (other) return { reason: PlaceBlock.OCCUPIED, blockedBy: other };
+    return FREE;
   }
 
   /** Puts a building at an absolute position. Used by the load path. */

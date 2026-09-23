@@ -135,7 +135,7 @@ export const isShort = (shortfall: ResourceAmounts): boolean =>
  * Flash client reads one on load (`BASE.as:1523-1526`) and how the server will
  * charge one.
  */
-const effectiveLevel = (node: PlanNode): number =>
+export const effectiveLevel = (node: PlanNode): number =>
   node.type === 18 ? Math.max(node.level, 2) : Math.max(node.level, 1);
 
 /** The ladder a node upgrades along; a type 18 wall climbs type 17's. */

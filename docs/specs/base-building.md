@@ -568,18 +568,26 @@ Housing count allowed per town hall level: `[0,1,1,2,2,3,3,3,4,4,4]`.
 
 | Key | Name | Produced by | Name key |
 | --- | --- | --- | --- |
-| `r1` | Pebbles | Pebble Shiner (id 2) | `#r_pebbles#` |
-| `r2` | Twigs | Twig Snapper (id 1) | `#r_twigs#` |
+| `r1` | Twigs | Twig Snapper (id 1) | `#r_twigs#` |
+| `r2` | Pebbles | Pebble Shiner (id 2) | `#r_pebbles#` |
 | `r3` | Putty | Putty Squisher (id 3) | `#r_putty#` |
 | `r4` | Goo | Goo Factory (id 4) | `#r_goo#` |
 
 `client/scripts/BRESOURCE.as:45-70`. In the Inferno yard the same four slots are relabelled Bone,
 Coal, Sulfur, Magma (`BRESOURCE.as:20-26`, `:46-48`) and live in the separate `iresources` pool.
 
-Note the mismatch: harvester **type id** equals the **resource index it produces**, so the Twig
-Snapper is type 1 but fills `r2` and the Pebble Shiner is type 2 but fills `r1`. The code indexes
-both by `_type` (`client/scripts/BASE.as:4741-4774`), which is consistent internally, but the
-*display names* are swapped relative to the ids.
+Harvester **type id** equals the **resource index it produces**: Twig Snapper is type 1 and fills
+`r1`, Pebble Shiner is type 2 and fills `r2`, Putty Squisher is type 3 and fills `r3`, Goo Factory
+is type 4 and fills `r4` — no mismatch. Confirmed by `client/scripts/GLOBAL.as:890`
+(`_resourceNames = ["#r_twigs#", "#r_pebbles#", "#r_putty#", "#r_goo#", ...]`, indexed `r1..r4`),
+`GLOBAL.as:911-925` (`getResourceFrame`: `r1` → `"twig"`, `r2` → `"pebble"`, `r3` → `"putty"`, `r4`
+→ `"goo"`), `client/scripts/BRESOURCE.as:47-60` (`GetResourceNameKey`, 0-indexed the same way —
+every call site passes `3` for the monster attack cost, which Backyard Monsters pays in Goo, i.e.
+`r4`), and `client/scripts/BASE.as:4741-4774` (`CalcResources`: harvester `_type` 1 drives
+`r1Rate`, `_type` 2 drives `r2Rate`, `_type` 3 drives `r3Rate`, `_type` 4 drives `r4Rate`). Note
+that harvesters do *not* cost the resource they themselves produce: Twig Snapper's build/upgrade
+price is denominated in `r2` and Pebble Shiner's in `r1` (see the cost ladder above), which is a
+separate fact from which resource each one fills.
 
 **Shiny** is the premium currency, held on `save.credits` (DB-constrained to ≥ 0,
 `docs/server-api.md` §3) and mirrored client-side as `BASE._credits`. New accounts start with 1,000

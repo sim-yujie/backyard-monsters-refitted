@@ -1,7 +1,7 @@
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
-import type { BaseLoadResponse, BuildingDataMap } from "@/api/types";
+import type { BaseLoadResponse, BuildingDataMap, Resources } from "@/api/types";
 import { Camera } from "@/game/Camera";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
 import { YardRenderer, YardView } from "@/game/yard/YardRenderer";
@@ -428,7 +428,9 @@ export class YardScene implements Scene {
       overlay: context.overlay.content,
       notices: this.notices,
       readOnlyToolbar: toolbar,
+      ...(this.save?.firedtraps ? { firedtraps: this.save.firedtraps } : {}),
       onApplied: (buildingdata, moved) => this.onApplied(buildingdata, moved),
+      onYardChanged: (buildingdata, resources) => this.onYardChanged(buildingdata, resources),
       onView: (view) => this.setView(view),
       onInset: (inset) => this.setInset(inset),
       onExit: () => this.closePlanner(),
@@ -471,6 +473,33 @@ export class YardScene implements Scene {
       level: "info",
       timeoutMs: 5000,
     });
+  }
+
+  /**
+   * Rebuilds the yard after a batch action, with the planner left open.
+   *
+   * This is the other half of `onApplied` and it differs in exactly one way
+   * that matters: the planner stays up. A wall upgrade or a trap re-arm is
+   * something a player does *during* a layout, so closing the planner would
+   * throw away the arrangement in progress and the undo stack with it. The
+   * plan is brought up to date instead, through `rebase`.
+   *
+   * `renderer.show` rebuilds the blueprint layer as well as the isometric one
+   * and re-activates whichever view is current (`YardRenderer.show`), so the
+   * flat view survives the rebuild; `rebase` then puts every sprite back where
+   * the plan has it rather than where the save does.
+   */
+  private onYardChanged(buildingdata: BuildingDataMap, resources: Resources): void {
+    const save = this.save;
+    if (!save) return;
+
+    const merged: BaseLoadResponse = { ...save, buildingdata, resources };
+    this.save = merged;
+    const yard = readYard(merged);
+    this.yard = yard;
+    this.renderer.show(yard);
+    this.hud?.setResources(yard.resources, yard.credits);
+    this.planner?.rebase(yard);
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {

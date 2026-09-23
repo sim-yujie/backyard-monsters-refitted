@@ -20,12 +20,15 @@ export interface HudOptions {
   onSignOut?: () => void;
 }
 
-/** `r1`..`r4` in the order the game has always shown them. */
+/**
+ * `r1`..`r4` in the order the game has always shown them
+ * (`docs/specs/base-building.md:569-574`).
+ */
 const RESOURCE_LABELS: [keyof Resources, string][] = [
   ["r1", "Twigs"],
   ["r2", "Pebbles"],
-  ["r3", "Goo"],
-  ["r4", "Putty"],
+  ["r3", "Putty"],
+  ["r4", "Goo"],
 ];
 
 export class Hud {
