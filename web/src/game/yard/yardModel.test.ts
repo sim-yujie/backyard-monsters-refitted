@@ -59,6 +59,11 @@ describe("reading the captured yard", () => {
     expect(yard.credits).toBe(980_412);
   });
 
+  it("counts the workers off the store purchases and the countdowns", () => {
+    // `BEW.q` is 4 in the capture, and nothing is being built.
+    expect(yard.workers).toEqual({ total: 5, busy: 0 });
+  });
+
   it("has no damaged buildings, no countdowns and no mushrooms", () => {
     expect(yard.buildings.every((one) => one.condition === BuildingCondition.HEALTHY)).toBe(true);
     expect(yard.buildings.every((one) => one.countdown === null)).toBe(true);

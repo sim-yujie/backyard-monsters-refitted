@@ -10,6 +10,7 @@ import {
   type Rect,
   type YardBounds,
 } from "./YardGrid";
+import { busyWorkers, workerCount } from "./workers";
 
 /**
  * The yard, in the form the renderer and the panels want it.
@@ -91,6 +92,20 @@ export interface YardMushroom {
   readonly golden: boolean;
 }
 
+/**
+ * The yard's workers: how many it has, and how many are already on a job.
+ *
+ * Derived, never stored (spec `docs/specs/base-building.md:741-743`). The rules
+ * live in `workers.ts` so that the planner's "2 free / 5" and the number the
+ * server charges against are the same reading of the same save.
+ */
+export interface YardWorkers {
+  /** `1 + storedata.BEW.q`, capped at five. */
+  readonly total: number;
+  /** Buildings with a build, upgrade or fortify countdown running. */
+  readonly busy: number;
+}
+
 export interface Yard {
   readonly bounds: YardBounds;
   readonly expansionLevel: number;
@@ -103,6 +118,11 @@ export interface Yard {
   readonly baseLevel: number;
   /** The town hall, if this yard has one. The camera opens on it. */
   readonly townHall: YardBuilding | null;
+  /**
+   * Workers, counted off the store purchases and the running countdowns. The
+   * planner needs both numbers to say how many planned upgrades can start.
+   */
+  readonly workers: YardWorkers;
   /** Unix seconds the save was taken at; countdowns are measured from it. */
   readonly savedAt: number;
 }
@@ -261,6 +281,10 @@ export const readYard = (response: BaseLoadResponse): Yard => {
     baseName: response.basename ?? "Your yard",
     baseLevel: typeof response.level === "number" ? response.level : 0,
     townHall: buildings.find((one) => one.type === TOWN_HALL_TYPE) ?? null,
+    workers: {
+      total: workerCount(response.storedata),
+      busy: busyWorkers({ buildings }),
+    },
     savedAt,
   };
 };

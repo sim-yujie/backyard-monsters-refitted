@@ -1,4 +1,5 @@
 import { layoutInvalidErr } from "../../errors/errors.js";
+import { costOf, maxLevel } from "../../game-data/buildingCosts.js";
 import { footprintOf, MUSHROOM_TYPE } from "../../game-data/buildingFootprints.js";
 import {
   LAYOUT_NAME_MAX,
@@ -16,6 +17,7 @@ import {
   withinBounds,
   type FootprintRect,
 } from "./layoutGeometry.js";
+import { levelOf } from "./costs.js";
 
 /**
  * Every rule the server enforces on a layout, in one place, so that saving a
@@ -222,4 +224,90 @@ export const unplacedBuildings = (
     if (!placed.has(id)) unplaced.push(id);
   }
   return unplaced.sort((a, b) => a - b);
+};
+
+/**
+ * Props `kind` strings that carry cost rows but are not buildings a player
+ * upgrades.
+ *
+ * Two totems (types 121 and 131) and the mushroom row have ladders in the
+ * generated table even though nothing in the game climbs them, and the
+ * `placeholder` entries are build-menu stubs. Refusing them by kind rather
+ * than by type id means a regenerated table cannot quietly open one up
+ * (`docs/design/planner-upgrades.md` §2.2).
+ */
+const UNPLANNABLE_KINDS: ReadonlySet<string> = new Set([
+  "decoration",
+  "mushroom",
+  "placeholder",
+]);
+
+/** Options for {@link checkPlans}. */
+export interface CheckPlansOptions {
+  /**
+   * Refuse a plan the yard has already reached, as `planCaughtUp`.
+   *
+   * Saving a layout does: a plan below the building's own level is a client
+   * that has lost track of the yard. Apply does not, because a layout saved
+   * before a job finished is not the client's fault; the walk skips that node
+   * with reason `caughtUp` and reports it instead
+   * (`docs/design/planner-upgrades.md` §2.2).
+   */
+  readonly refuseCaughtUp?: boolean;
+}
+
+/**
+ * Checks every node's planned upgrade against the cost table and, on save,
+ * against the caller's own buildings.
+ *
+ * Shape faults are the client's: a target past the top of a type's ladder, or
+ * a plan on a type that has no ladder at all, is a 400 carrying `planLevel`,
+ * the same way a bad position is a 400 carrying `outOfBounds`. Everything that
+ * depends on the yard's state — busy, damaged, unaffordable, gated — is the
+ * walk's business and is reported rather than refused (§3.2, "Partial by
+ * design").
+ *
+ * The level is measured against the caller's *save*, not the node's advisory
+ * `l`, because `l` is whatever the layout was drawn with and may be months old.
+ */
+export const checkPlans = (
+  nodes: LayoutNode[],
+  buildingdata: BuildingDataMap | null | undefined,
+  options: CheckPlansOptions = {}
+): void => {
+  const buildings = buildingdata ?? {};
+  const planLevel: number[] = [];
+  const caughtUp: number[] = [];
+
+  for (const node of nodes) {
+    const plan = node.plan;
+    if (!plan) continue;
+
+    const row = costOf(node.t);
+    if (!row || UNPLANNABLE_KINDS.has(row.kind) || plan.level > maxLevel(node.t)) {
+      planLevel.push(node.id);
+      continue;
+    }
+
+    if (!options.refuseCaughtUp) continue;
+    const building = buildings[String(node.id)] as BuildingData | undefined;
+    if (plan.level <= levelOf(building)) caughtUp.push(node.id);
+  }
+
+  if (planLevel.length > 0) {
+    throw layoutInvalidErr(
+      `${planLevel.length} planned upgrade${
+        planLevel.length === 1 ? " goes" : "s go"
+      } past what that building can reach (${listIds(planLevel)}).`,
+      { planLevel: planLevel.slice(0, MAX_LISTED) }
+    );
+  }
+  if (caughtUp.length > 0) {
+    throw layoutInvalidErr(
+      `${caughtUp.length} planned upgrade${
+        caughtUp.length === 1 ? " is" : "s are"
+      } at or below the level those buildings are already at (${listIds(caughtUp)}).`,
+      { planCaughtUp: caughtUp.slice(0, MAX_LISTED) }
+    );
+  }
 };

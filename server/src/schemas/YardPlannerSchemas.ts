@@ -32,6 +32,27 @@ export const LAYOUT_NODE_MAX = 1200;
 /** Payload cap for the legacy `savetemplate` route, in bytes. */
 export const LEGACY_PAYLOAD_MAX = 64 * 1024;
 
+/**
+ * A planned upgrade on one node (`docs/design/planner-upgrades.md` §2.1).
+ *
+ * `level` is the target the player wants that building to reach, so it is at
+ * least 2: the first upgrade leaves level 1. The ladder check — that the type
+ * has a cost row at all and that the target is within it — needs the cost
+ * table and the caller's save, so it lives in
+ * `services/yardplanner/validateLayout.ts` (`checkPlans`) rather than here.
+ *
+ * `order` is the player's own queue position, assigned as they plan. Apply
+ * walks the plans in ascending `order`, ties broken by building id, which is
+ * decision Q2 of the plan (§8): the order they planned in is the order they
+ * get. It defaults to 0 so a client that omits it still round-trips.
+ */
+export const PlanSchema = z.object({
+  level: z.number().int().min(2),
+  order: z.number().int().nonnegative().default(0),
+});
+
+export type Plan = z.infer<typeof PlanSchema>;
+
 /** One placed building in a layout. */
 export const LayoutNodeSchema = z.object({
   /** Building id, matching a key in the caller's `buildingdata`. */
@@ -46,6 +67,11 @@ export const LayoutNodeSchema = z.object({
   l: z.number().int().nonnegative().optional(),
   /** Fortification tier at save time. Advisory: Apply never writes it. */
   fort: z.number().int().nonnegative().optional(),
+  /**
+   * Planned upgrade. Read by Apply when `startUpgrades` is set; validated on
+   * save. Absent means no change, which is what almost every node will say.
+   */
+  plan: PlanSchema.optional(),
 });
 
 export type LayoutNode = z.infer<typeof LayoutNodeSchema>;
@@ -81,9 +107,19 @@ export const SaveLayoutSchema = z.object({
   data: z.string().catch(""),
 });
 
-/** `POST /apply` body. Same fallback as {@link SaveLayoutSchema}. */
+/**
+ * `POST /apply` body. Same fallback as {@link SaveLayoutSchema}.
+ *
+ * `startUpgrades` is `1` to walk the nodes' `plan` fields after the move and
+ * start what the yard's free workers and resources allow, `0` or absent to
+ * move only (`docs/design/planner-upgrades.md` §3.2). It arrives as a form
+ * field like everything else, so it is coerced, and anything unreadable falls
+ * back to 0: the safe reading is "move only", never "spend the player's
+ * resources".
+ */
 export const ApplyLayoutSchema = z.object({
   data: z.string().catch(""),
+  startUpgrades: z.coerce.number().int().min(0).max(1).catch(0),
 });
 
 /**
