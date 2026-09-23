@@ -85,6 +85,16 @@ export interface YardPlannerOptions {
    * fit-to-plot floor out from under the bars.
    */
   onInset: (inset: { top: number; bottom: number }) => void;
+  /**
+   * Called whenever the plan changes — a drag step, a drop, an undo, a load, a
+   * rebase — so the scene can refresh anything drawn from the buildings'
+   * current positions, the minimap above all.
+   *
+   * A bare signal rather than the plan itself, and optional, so the session
+   * still knows nothing about what is listening. Fires once per pointer move
+   * during a drag, which is exactly the rate a live minimap wants.
+   */
+  onPlanChanged?: () => void;
   /** Called when the planner closes itself. */
   onExit: () => void;
 }
@@ -471,6 +481,7 @@ export class YardPlanner {
 
   /** Rewrites the bar from the session's state and the selection's cost. */
   private refreshBar(): void {
+    this.options.onPlanChanged?.();
     this.bar.update(this.session.state());
     const nodes = this.session.selectedNodes();
     this.bar.setSummary(summariseSelection(nodes, this.yard));

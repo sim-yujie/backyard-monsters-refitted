@@ -9,6 +9,8 @@ import { YardInput } from "@/game/yard/YardInput";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
+import { YardMinimap } from "@/ui/yard/YardMinimap";
+import { ZoomControl } from "@/ui/yard/ZoomControl";
 import { YardPlanner } from "./YardPlanner";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
@@ -38,6 +40,12 @@ const OPENING_ZOOM = 0.9;
  * than a useful working zoom.
  */
 const MAX_ZOOM = 2.5;
+
+/**
+ * What one press of a zoom key, or of the slider's minus and plus, multiplies
+ * the zoom by. One constant so the keyboard and the buttons cannot drift.
+ */
+const ZOOM_STEP = 1.5;
 
 export class YardScene implements Scene {
   private readonly renderer = new YardRenderer();
@@ -80,6 +88,16 @@ export class YardScene implements Scene {
   /** Rolling average of the scene's own per-frame cost, in milliseconds. */
   private frameCostMs = 0;
   private status: HTMLElement | null = null;
+
+  /**
+   * The canvas's bottom-right corner furniture (design §4.1): the zoom slider
+   * and the minimap. Both belong to the yard rather than to the planner — the
+   * design puts them on the canvas, and a player reading a yard wants to zoom
+   * and to know where they are just as much as one editing it.
+   */
+  private viewTools: HTMLElement | null = null;
+  private zoomControl: ZoomControl | null = null;
+  private minimap: YardMinimap | null = null;
 
   async enter(context: SceneContext): Promise<void> {
     this.context = context;
@@ -145,6 +163,13 @@ export class YardScene implements Scene {
     this.camera?.detach();
     this.camera = null;
 
+    this.minimap?.destroy();
+    this.minimap = null;
+    this.zoomControl?.destroy();
+    this.zoomControl = null;
+    this.viewTools?.remove();
+    this.viewTools = null;
+
     this.panel?.close();
     this.panel = null;
     this.panelDock?.remove();
@@ -165,6 +190,9 @@ export class YardScene implements Scene {
     this.viewportHeight = height;
     this.camera?.resize(width, height);
     if (this.yard) this.applyZoomLimits(width, height);
+    // A different viewport is a different visible rectangle even when the
+    // camera did not move.
+    this.minimap?.markDirty();
   }
 
   update(deltaSeconds: number): void {
@@ -180,6 +208,12 @@ export class YardScene implements Scene {
           -camera.position.y * camera.zoom,
         );
         this.renderer.setZoom(camera.zoom);
+        // The camera is the only thing that knows a wheel or a pinch happened;
+        // it goes straight through `Camera`'s own listeners without passing
+        // through this scene, so this is where the slider and the minimap find
+        // out about it.
+        this.zoomControl?.setZoom(camera.zoom);
+        this.minimap?.markDirty();
       }
 
       const view = camera.visibleWorldRect();
@@ -193,6 +227,9 @@ export class YardScene implements Scene {
         deltaSeconds,
       );
     }
+
+    // A no-op on every frame nothing moved; see YardMinimap's dirty flag.
+    this.minimap?.draw();
 
     this.sinceUiTick += deltaSeconds;
     if (this.sinceUiTick >= UI_TICK_SECONDS) {
@@ -231,6 +268,9 @@ export class YardScene implements Scene {
     this.applyZoomLimits(this.viewportWidth, this.viewportHeight);
     camera.centreOn(this.renderer.yardToWorld(focus.x, focus.y));
     camera.dirty = true;
+    // A different world size and a different projection: everything the
+    // minimap draws is in the other view's coordinates now.
+    this.minimap?.markDirty();
   }
 
   private async load(): Promise<void> {
@@ -302,11 +342,62 @@ export class YardScene implements Scene {
       pick: (x, y) => this.renderer.pick(x, y),
       onHover: (building) => this.renderer.setHovered(building),
       onSelect: (building) => this.select(building),
-      onZoomStep: (direction) => this.zoomBy(Math.pow(1.5, direction)),
+      onZoomStep: (direction) => this.zoomBy(Math.pow(ZOOM_STEP, direction)),
       onZoomReset: () => this.fitYard(),
       onCancel: () => this.select(null),
     });
     this.input.attach();
+
+    this.startViewTools(camera, context);
+  }
+
+  /**
+   * Builds the zoom slider and the minimap and docks them bottom-right.
+   *
+   * Both are created once the camera exists and destroyed with the scene; the
+   * planner never owns them, it only marks the minimap dirty when it moves
+   * something. That keeps the plan and the session free of any knowledge of
+   * the DOM, which is the reason the planner reports through a callback rather
+   * than being handed the canvas.
+   */
+  private startViewTools(camera: Camera, context: SceneContext): void {
+    const tools = document.createElement("div");
+    tools.className = "yard-viewtools";
+    context.overlay.content.append(tools);
+    this.viewTools = tools;
+
+    this.zoomControl = new ZoomControl({
+      onZoom: (zoom) =>
+        camera.zoomAt(zoom, { x: this.viewportWidth / 2, y: this.viewportHeight / 2 }),
+      onStep: (direction) => this.zoomBy(Math.pow(ZOOM_STEP, direction)),
+      onFit: () => this.fitYard(),
+    }).mount(tools);
+    this.zoomControl.setRange(this.fitZoom, MAX_ZOOM);
+    this.zoomControl.setZoom(camera.zoom);
+
+    this.minimap = new YardMinimap({
+      renderer: this.renderer,
+      camera,
+      onJump: (world) => {
+        camera.centreOn(world);
+        camera.dirty = true;
+      },
+    }).mount(tools);
+    this.minimap.refreshBuildings();
+
+    this.placeViewTools();
+  }
+
+  /**
+   * Keeps the bottom-right furniture clear of whatever is along the bottom
+   * edge: nothing in read-only mode, the planner's action bar when it is open.
+   *
+   * The same number `applyZoomLimits` keeps the fit floor out from under, so
+   * the two cannot disagree about where the bottom of the canvas is.
+   */
+  private placeViewTools(): void {
+    if (!this.viewTools) return;
+    this.viewTools.style.bottom = `calc(${this.inset.bottom}px + var(--space-3))`;
   }
 
   /**
@@ -331,6 +422,10 @@ export class YardScene implements Scene {
     // straight through Camera's own listeners, not through this scene) respect
     // it too, not just the keyboard and toolbar paths that call back in here.
     target.setMinZoom(this.fitZoom);
+
+    // The slider's left end *is* the fit floor, so it moves with it.
+    this.zoomControl?.setRange(this.fitZoom, MAX_ZOOM);
+    this.zoomControl?.setZoom(target.zoom);
   }
 
   private fitYard(): void {
@@ -358,6 +453,7 @@ export class YardScene implements Scene {
   private setInset(inset: { top: number; bottom: number }): void {
     this.inset = inset;
     this.applyZoomLimits(this.viewportWidth, this.viewportHeight);
+    this.placeViewTools();
   }
 
   private zoomBy(factor: number): void {
@@ -433,6 +529,10 @@ export class YardScene implements Scene {
       onYardChanged: (buildingdata, resources) => this.onYardChanged(buildingdata, resources),
       onView: (view) => this.setView(view),
       onInset: (inset) => this.setInset(inset),
+      // The plan moved something. The session stays ignorant of the DOM and
+      // the minimap reads the positions back off the renderer itself; all this
+      // carries is "look again".
+      onPlanChanged: () => this.minimap?.markDirty(),
       onExit: () => this.closePlanner(),
     });
     if (this.plannerButton) {
@@ -444,6 +544,9 @@ export class YardScene implements Scene {
   private closePlanner(): void {
     this.planner?.destroy();
     this.planner = null;
+    // Leaving puts every sprite back where the save had it, which the minimap
+    // has to be told about even when the view does not change.
+    this.minimap?.markDirty();
     // The blueprint is a planner view; the yard itself is always isometric.
     this.setView(YardView.ISO);
     this.plannerButton?.setAttribute("aria-pressed", "false");
@@ -469,6 +572,7 @@ export class YardScene implements Scene {
     const yard = readYard(merged);
     this.yard = yard;
     this.renderer.show(yard);
+    this.minimap?.refreshBuildings();
     this.notices.show("yard-applied", `Moved ${moved} building${moved === 1 ? "" : "s"}.`, {
       level: "info",
       timeoutMs: 5000,
@@ -498,6 +602,7 @@ export class YardScene implements Scene {
     const yard = readYard(merged);
     this.yard = yard;
     this.renderer.show(yard);
+    this.minimap?.refreshBuildings();
     this.hud?.setResources(yard.resources, yard.credits);
     this.planner?.rebase(yard);
   }

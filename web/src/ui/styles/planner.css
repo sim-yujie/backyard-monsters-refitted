@@ -431,6 +431,86 @@
   border-color: var(--colour-danger);
 }
 
+/* ── F15: the zoom slider and the minimap ─────────────────────────────── */
+
+/*
+ * Both live in the canvas's bottom-right corner (design §4.1). `bottom` is set
+ * from the script, not from here, because what is along the bottom edge
+ * changes: nothing in read-only mode, the planner's action bar when it is
+ * open, and that bar's height depends on how far its contents wrap.
+ */
+.yard-viewtools {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  pointer-events: auto;
+  z-index: var(--z-hud);
+}
+
+.yard-zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-panel);
+}
+
+.yard-zoom__slider {
+  width: 132px;
+  accent-color: var(--colour-accent);
+  cursor: ew-resize;
+}
+
+.yard-zoom__slider:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-pill);
+}
+
+.yard-zoom__step {
+  font-size: var(--text-md);
+  min-width: 26px;
+  padding: 0 var(--space-1);
+}
+
+/* Tabular figures and a fixed width: the readout changes on every wheel notch
+   and must not shove the Fit button sideways while it does. */
+.yard-zoom__readout {
+  min-width: 46px;
+  margin-inline-end: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--colour-text-muted);
+}
+
+.yard-zoom__fit {
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-2);
+}
+
+.yard-minimap {
+  display: block;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  box-shadow: var(--shadow-panel);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.yard-minimap:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 @media (width <= 900px) {
   .planner-dock {
     width: min(92vw, 420px);
@@ -438,5 +518,16 @@
 
   .planner-bar {
     font-size: var(--text-sm);
+  }
+
+  /* Stacked rather than side by side, with the minimap on top so the slider
+     stays nearest the thumb along the bottom edge. */
+  .yard-viewtools {
+    flex-direction: column-reverse;
+    align-items: flex-end;
+  }
+
+  .yard-zoom__slider {
+    width: 96px;
   }
 }
