@@ -172,8 +172,9 @@ The world also wraps toroidally in the real game. That is not implemented yet.
 ### Tribe avatars
 
 The four wild monster tribes — Legionnaire, Kozu, Abunakki and Dreadnaut — have
-a portrait each: 256 px in `public/tribes/` (served as `/tribes/*.png`), with the 1024 px sources kept out of the build in `docs/art/tribes/`, and at
-256 px for the map. Map Room 2 loads only the 256 px set, once, and every camp
+a portrait each. The 256 px versions in `public/tribes/` are served as
+`/tribes/*.png`; the 1024 px sources are kept out of the build in
+`docs/art/tribes/` at the repo root. Map Room 2 loads only the 256 px set, once, and every camp
 on screen is a sprite pointing at one of those four textures.
 
 They live directly under `public/` and **not** under `public/assets/` because
