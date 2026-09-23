@@ -33,10 +33,22 @@ export interface YardPlannerOptions {
   /** Where the bars and panels are docked. */
   overlay: HTMLElement;
   notices: Notices;
+  /**
+   * The read-only mode's own top toolbar (the Plan button and status line),
+   * which stays mounted under the planner's bars and is measured again once
+   * they are gone (see `onInset`).
+   */
+  readOnlyToolbar: HTMLElement;
   /** Called after a successful apply, with the yard the server wrote. */
   onApplied: (buildingdata: BuildingDataMap, moved: number) => void;
   /** Switches the renderer's view and re-bounds the camera to match. */
   onView: (view: YardView) => void;
+  /**
+   * Called whenever the chrome overlaying the canvas changes height, in CSS
+   * px from the viewport's top and bottom edges, so the scene can keep the
+   * fit-to-plot floor out from under the bars.
+   */
+  onInset: (inset: { top: number; bottom: number }) => void;
   /** Called when the planner closes itself. */
   onExit: () => void;
 }
@@ -96,6 +108,7 @@ export class YardPlanner {
       onExit: () => this.requestExit(),
     });
     this.bar.mount(options.overlay);
+    this.reportPlannerInset();
 
     this.session.attach();
     this.bar.update(this.session.state());
@@ -131,6 +144,7 @@ export class YardPlanner {
     this.bar.destroy();
     this.dock.remove();
     this.options.notices.clear(NOTICE);
+    this.reportReadOnlyInset();
   }
 
   /* ── Loading a slot ─────────────────────────────────────────────────── */
@@ -232,6 +246,19 @@ export class YardPlanner {
   }
 
   /* ── Chrome ─────────────────────────────────────────────────────────── */
+
+  /** Reports how far the planner's own top and bottom bars cut into the canvas. */
+  private reportPlannerInset(): void {
+    const top = this.bar.toolbar.getBoundingClientRect().bottom;
+    const bottom = window.innerHeight - this.bar.actionBar.getBoundingClientRect().top;
+    this.options.onInset({ top, bottom });
+  }
+
+  /** Reports the read-only toolbar's inset, once the planner's own bars are gone. */
+  private reportReadOnlyInset(): void {
+    const top = this.options.readOnlyToolbar.getBoundingClientRect().bottom;
+    this.options.onInset({ top, bottom: 0 });
+  }
 
   /** Selects buildings and puts the camera on the first of them. */
   private selectAndFrame(ids: number[]): void {

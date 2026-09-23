@@ -45,6 +45,16 @@ export class YardScene implements Scene {
 
   private camera: Camera | null = null;
   private context: SceneContext | null = null;
+  /**
+   * The current viewport size in CSS px. `SceneContext.width`/`height` are a
+   * one-time snapshot taken at `enter`, never updated after — `resize` is the
+   * only place the manager hands us a live size, so it is mirrored here for
+   * every other method that needs "the viewport right now" (fitYard, setView,
+   * zoomBy, the inset recompute). Reading `this.context.width` instead is the
+   * bug that leaves the zoom floor pinned to the size the scene opened at.
+   */
+  private viewportWidth = 0;
+  private viewportHeight = 0;
   private hud: Hud | null = null;
   private input: YardInput | null = null;
   private panel: BuildingPanel | null = null;
@@ -55,16 +65,26 @@ export class YardScene implements Scene {
   private save: BaseLoadResponse | null = null;
   private planner: YardPlanner | null = null;
   private plannerButton: HTMLButtonElement | null = null;
+  private toolbar: HTMLElement | null = null;
   private selected: YardBuilding | null = null;
   private sinceUiTick = 0;
   /** The zoom at which the whole plot fits the viewport; also the floor. */
   private fitZoom = 0.05;
+  /**
+   * How much of the canvas, in CSS px from the top and bottom edges, is
+   * covered by HTML chrome (the HUD and toolbar, or the planner's bars) and so
+   * should not count toward the fit-to-plot floor. Kept current by `enter`
+   * and by the planner's `onInset` reports.
+   */
+  private inset = { top: 0, bottom: 0 };
   /** Rolling average of the scene's own per-frame cost, in milliseconds. */
   private frameCostMs = 0;
   private status: HTMLElement | null = null;
 
   async enter(context: SceneContext): Promise<void> {
     this.context = context;
+    this.viewportWidth = context.width;
+    this.viewportHeight = context.height;
     context.stage.addChild(this.renderer.root);
     this.renderer.attach(context.renderer);
 
@@ -99,10 +119,11 @@ export class YardScene implements Scene {
     this.plannerButton.disabled = true;
     this.plannerButton.addEventListener("click", () => this.togglePlanner());
 
-    const toolbar = document.createElement("div");
-    toolbar.className = "yard-toolbar";
-    toolbar.append(this.plannerButton, this.status);
-    context.overlay.content.append(toolbar);
+    this.toolbar = document.createElement("div");
+    this.toolbar.className = "yard-toolbar";
+    this.toolbar.append(this.plannerButton, this.status);
+    context.overlay.content.append(this.toolbar);
+    this.inset = { top: this.toolbar.getBoundingClientRect().bottom, bottom: 0 };
 
     window.addEventListener("keydown", this.onKeyDown);
 
@@ -118,6 +139,7 @@ export class YardScene implements Scene {
     this.planner?.destroy();
     this.planner = null;
     this.plannerButton = null;
+    this.toolbar = null;
     this.input?.detach();
     this.input = null;
     this.camera?.detach();
@@ -139,6 +161,8 @@ export class YardScene implements Scene {
   }
 
   resize(width: number, height: number): void {
+    this.viewportWidth = width;
+    this.viewportHeight = height;
     this.camera?.resize(width, height);
     if (this.yard) this.applyZoomLimits(width, height);
   }
@@ -193,16 +217,18 @@ export class YardScene implements Scene {
    */
   private setView(view: YardView): void {
     const camera = this.camera;
-    const context = this.context;
-    if (!camera || !context) return;
+    if (!camera) return;
     if (this.renderer.view === view) return;
 
-    const middle = camera.screenToWorld({ x: context.width / 2, y: context.height / 2 });
+    const middle = camera.screenToWorld({
+      x: this.viewportWidth / 2,
+      y: this.viewportHeight / 2,
+    });
     const focus = this.renderer.worldToYard(middle.x, middle.y);
 
     this.renderer.setView(view);
     camera.setBounds(this.renderer.worldSize());
-    this.applyZoomLimits(context.width, context.height);
+    this.applyZoomLimits(this.viewportWidth, this.viewportHeight);
     camera.centreOn(this.renderer.yardToWorld(focus.x, focus.y));
     camera.dirty = true;
   }
@@ -257,8 +283,8 @@ export class YardScene implements Scene {
       minZoom: 0.05,
       zoom: OPENING_ZOOM,
     });
-    camera.resize(context.width, context.height);
-    this.applyZoomLimits(context.width, context.height, camera);
+    camera.resize(this.viewportWidth, this.viewportHeight);
+    this.applyZoomLimits(this.viewportWidth, this.viewportHeight, camera);
     this.renderer.setZoom(camera.zoom);
 
     const focus = yard.townHall
@@ -295,7 +321,11 @@ export class YardScene implements Scene {
     if (!yard || !target) return;
 
     const frame = this.renderer.fitRect();
-    const fit = Math.min(width / frame.width, height / frame.height);
+    // The HUD, toolbar and (in planner mode) the two planner bars overlay the
+    // canvas top and bottom, so the fit is against the band still visible
+    // between them, not the whole canvas.
+    const visibleHeight = Math.max(height - this.inset.top - this.inset.bottom, 1);
+    const fit = Math.min(width / frame.width, visibleHeight / frame.height);
     this.fitZoom = Math.min(fit, MAX_ZOOM);
     // The camera enforces this floor itself, so wheel and pinch zoom (which go
     // straight through Camera's own listeners, not through this scene) respect
@@ -306,21 +336,36 @@ export class YardScene implements Scene {
   private fitYard(): void {
     const camera = this.camera;
     const yard = this.yard;
-    const context = this.context;
-    if (!camera || !yard || !context) return;
+    if (!camera || !yard) return;
     const frame = this.renderer.fitRect();
     camera.zoom = this.fitZoom;
-    camera.centreOn({ x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 });
+    // Centre on the visible band, not the whole canvas: the same top/bottom
+    // offset applied in applyZoomLimits, translated to a screen-space shift.
+    const centreX = this.viewportWidth / 2;
+    const centreY = this.viewportHeight / 2 + (this.inset.top - this.inset.bottom) / 2;
+    camera.setPosition(
+      frame.x + frame.width / 2 - centreX / camera.zoom,
+      frame.y + frame.height / 2 - centreY / camera.zoom,
+    );
     camera.dirty = true;
+  }
+
+  /**
+   * Called by the planner (and, back to the default, when it closes) with how
+   * much of the canvas its bars cover. Recomputes the fit against the new
+   * band immediately, matching a viewport resize.
+   */
+  private setInset(inset: { top: number; bottom: number }): void {
+    this.inset = inset;
+    this.applyZoomLimits(this.viewportWidth, this.viewportHeight);
   }
 
   private zoomBy(factor: number): void {
     const camera = this.camera;
-    const context = this.context;
-    if (!camera || !context) return;
+    if (!camera) return;
     // The floor lives on the camera now (see applyZoomLimits), so this needs
     // no clamp of its own.
-    camera.zoomBy(factor, { x: context.width / 2, y: context.height / 2 });
+    camera.zoomBy(factor, { x: this.viewportWidth / 2, y: this.viewportHeight / 2 });
   }
 
   /* ── Selection ──────────────────────────────────────────────────────────── */
@@ -371,7 +416,8 @@ export class YardScene implements Scene {
     const yard = this.yard;
     const camera = this.camera;
     const context = this.context;
-    if (!yard || !camera || !context) return;
+    const toolbar = this.toolbar;
+    if (!yard || !camera || !context || !toolbar) return;
 
     this.select(null);
     this.planner = new YardPlanner({
@@ -381,8 +427,10 @@ export class YardScene implements Scene {
       canvas: context.canvas,
       overlay: context.overlay.content,
       notices: this.notices,
+      readOnlyToolbar: toolbar,
       onApplied: (buildingdata, moved) => this.onApplied(buildingdata, moved),
       onView: (view) => this.setView(view),
+      onInset: (inset) => this.setInset(inset),
       onExit: () => this.closePlanner(),
     });
     if (this.plannerButton) {
