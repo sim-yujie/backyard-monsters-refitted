@@ -849,3 +849,19 @@ genuinely useful output and does not depend on simulating destruction.
 it, place every node that fits, inventory the rest, and show a banner: "designed for expansion level
 4, you are at level 2, so 7 buildings did not fit." Refusing to load is a dead end; loading with a
 clear report shows the player what they are working toward.
+
+## 8. Decisions (2026-09-23)
+
+The owner answered the eight questions above. These override the recommendations in section 7 and
+any conflicting statement in sections 3 to 6.
+
+| # | Decision |
+|---|---|
+| Q1 | **No job queue.** Walls and traps get batch actions that complete instantly under the existing rule that jobs of 300 seconds or less finish free (every wall build/upgrade and trap placement is 5 seconds). Batch wall upgrade: select any set of walls, see the total cost, confirm once, all upgrade immediately with no worker. Re-arm traps: one button re-places every fired trap at its last position. Towers and other buildings keep one job per worker with no queue; Apply starts as many planned upgrades as there are free workers and reports the rest. F1 stands with this change; F2 (batch upgrade) is scoped to walls and traps. |
+| Q2 | **10 layout slots for everyone**, enforced server-side. No subscriber tier for slots. |
+| Q3 | **Tabled.** F10 (sharing) and F11 (gallery) move to the backlog with no decisions taken. |
+| Q4 | **Apply stays hard-blocked** while any non-decoration building is unplaced. F17's checklist names each unplaced building and selects it in the inventory on click. **No auto-place.** Reason: a building left in the yard can collide with a building the new layout puts on the same cells. |
+| Q5 | Planner opens **read-only from anywhere** and is **editable in build mode**. Owning the Yard Planner building unlocks it; its damage, build, upgrade or fortify state never locks it. Entry is a toolbar button, not the building's popup. |
+| Q6 | **No thumbnails.** The load dialog shows name, building count, expansion level and last-saved date, plus a read-only preview that opens the layout in the planner. Thumbnails go to the backlog with sharing. |
+| Q7 | **F5 (attack path preview) is discarded.** The Wild Monster Baiter (building 19) becomes the defence simulator as a separate feature: full roster and champions, any drop point, chosen monster levels, replay, a per-tower results report, no lasting damage. |
+| Q8 | Loading a layout into a smaller yard **places what fits, inventories the rest, and shows a banner** naming the expansion level it was designed for and the count that did not fit. With Q4, Apply then stays blocked until those are placed or removed. |
