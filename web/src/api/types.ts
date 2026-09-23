@@ -203,6 +203,14 @@ export interface BaseLoadResponse extends ApiEnvelope {
   level?: number;
   tutorialstage?: unknown;
   flags?: Record<string, unknown>;
+  /**
+   * Traps that fired and were dropped from `buildingdata`, newest last.
+   *
+   * Written by the attack save and never by the client — it is not one of the
+   * save's writable keys — so this is the only record of where a fired trap
+   * stood. The planner's re-arm button counts it.
+   */
+  firedtraps?: FiredTrap[];
 }
 
 /* ── Map Room 2 ─────────────────────────────────────────────────────────── */
@@ -388,8 +396,9 @@ export interface ApplyLayoutResponse extends ApiEnvelope {
 /**
  * The failure bodies, which are flat rather than wrapped in `errorDetails`.
  *
- * 400 carries `overlapping` or `unknown`, 409 carries `unplaced`. All three are
- * building ids the planner should outline and offer to show, which is why
+ * 400 carries `overlapping`, `unknown`, `notWalls`, `alreadyAtLevel`, `busy` or
+ * `damaged`; 409 carries `unplaced`. Every one of them is a list of building
+ * ids the planner should outline and offer to show, which is why
  * `applyConflictIds` reads them together.
  */
 export interface ApplyConflictDetails {
@@ -397,4 +406,84 @@ export interface ApplyConflictDetails {
   unplaced?: number[];
   overlapping?: number[];
   unknown?: number[];
+  /** Batch wall upgrade: ids whose type is not a wall. */
+  notWalls?: number[];
+  /** Batch wall upgrade: ids already at or above the target level. */
+  alreadyAtLevel?: number[];
+  /** Batch wall upgrade: ids with a build, upgrade or fortify countdown. */
+  busy?: number[];
+  /** Batch wall upgrade: ids that have to be repaired before they upgrade. */
+  damaged?: number[];
+}
+
+/* ── Batch actions ──────────────────────────────────────────────────────── */
+
+/**
+ * What a batch action cost, as the server charged it.
+ *
+ * All four are always present, zero included, because the panel shows a row per
+ * resource and an absent field would have to be read as a zero anyway.
+ */
+export interface BatchCost {
+  r1: number;
+  r2: number;
+  r3: number;
+  r4: number;
+}
+
+/**
+ * `POST /bm/yardplanner/walls/upgrade`.
+ *
+ * `resources` and `buildingdata` are the save as the server now holds it, not a
+ * delta: the client re-reads them rather than assuming its own arithmetic won,
+ * exactly as it does with `ApplyLayoutResponse.buildingdata`.
+ */
+export interface WallUpgradeResponse extends ApiEnvelope {
+  error: number;
+  /** How many walls were raised. */
+  upgraded: number;
+  /** The level they were all raised to. */
+  level: number;
+  cost: BatchCost;
+  resources: Resources;
+  buildingdata: BuildingDataMap;
+}
+
+/**
+ * One trap to re-arm: a type and a position in yard units.
+ *
+ * Lower case `x` and `y`, like a `LayoutNode` and unlike a `buildingdata` row,
+ * because this is a request field rather than a save row.
+ */
+export interface TrapPlacement {
+  t: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * A trap that fired, recorded by the attack save so it can be put back.
+ *
+ * Upper case `X` and `Y`: this one *is* lifted straight off the save row the
+ * attacker's client stopped reporting. `at` is unix seconds.
+ */
+export interface FiredTrap {
+  t: number;
+  X: number;
+  Y: number;
+  at: number;
+}
+
+/** `POST /bm/yardplanner/traps/rearm`. */
+export interface TrapRearmResponse extends ApiEnvelope {
+  error: number;
+  /** How many traps were built. */
+  placed: number;
+  /** The ids they were given, continuing from the highest id in the yard. */
+  ids: number[];
+  cost: BatchCost;
+  resources: Resources;
+  buildingdata: BuildingDataMap;
+  /** What is left of the fired list once the placed traps are struck off. */
+  firedtraps: FiredTrap[];
 }

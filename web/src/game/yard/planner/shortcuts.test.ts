@@ -19,6 +19,16 @@ describe("plannerAction", () => {
     expect(plannerAction(key("B"))).toEqual({ kind: "tool", tool: "box" });
   });
 
+  it("opens find on F, in either case", () => {
+    expect(plannerAction(key("f"))).toEqual({ kind: "find" });
+    expect(plannerAction(key("F"))).toEqual({ kind: "find" });
+  });
+
+  it("leaves Ctrl+F to the browser's own find bar", () => {
+    expect(plannerAction(key("f", { ctrl: true }))).toBeNull();
+    expect(plannerAction(key("f", { meta: true }))).toBeNull();
+  });
+
   it("switches the view on Tab", () => {
     expect(plannerAction(key("Tab"))).toEqual({ kind: "view" });
     expect(plannerAction(key("Tab", { ctrl: true }))).toBeNull();

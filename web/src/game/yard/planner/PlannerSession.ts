@@ -7,9 +7,10 @@ import { buildChecklist, type Checklist } from "./checklist";
 import { CommandStack, moveCommand, type MoveEntry } from "./commands";
 import { planLoad, payloadFor, type LoadResult } from "./layout";
 import { rectFromCorners } from "./marquee";
+import type { PlanNode } from "./placement";
 import { Grab, PlannerInput } from "./PlannerInput";
 import { PlannerView } from "./PlannerView";
-import { Plan } from "./plan";
+import { Plan, type AbsorbResult } from "./plan";
 import { plannerAction } from "./shortcuts";
 
 /**
@@ -66,6 +67,7 @@ export class PlannerSession {
   private readonly stack: CommandStack;
   private readonly onChange: () => void;
   private readonly onViewToggle: () => void;
+  private readonly onFind: (() => void) | undefined;
 
   private tool: PlannerTool = PlannerTool.SELECT;
   private selection = new Set<number>();
@@ -88,9 +90,18 @@ export class PlannerSession {
     onChange: () => void;
     /** Tab was pressed: the scene owns the camera, so it does the switch. */
     onViewToggle: () => void;
+    /**
+     * F was pressed: the scene owns the panels, so it opens the search box.
+     *
+     * Optional so a harness — or a scene that has no search panel yet — can
+     * leave it out; the key is still swallowed, because the alternative is the
+     * browser's own find bar opening over the yard.
+     */
+    onFind?: () => void;
   }) {
     this.onChange = options.onChange;
     this.onViewToggle = options.onViewToggle;
+    this.onFind = options.onFind;
     this.plan = Plan.fromYard(options.yard);
     this.view = new PlannerView({ renderer: options.renderer, plan: this.plan });
 
@@ -169,6 +180,23 @@ export class PlannerSession {
     return [...this.selection];
   }
 
+  /**
+   * The selected buildings themselves, for the cost summary and the batch
+   * panels.
+   *
+   * An id with no node is dropped rather than reported: `rebase` can remove a
+   * building the server no longer has while it is still selected, and a caller
+   * adding up costs wants the buildings, not the gaps.
+   */
+  selectedNodes(): PlanNode[] {
+    const nodes: PlanNode[] = [];
+    for (const id of this.selection) {
+      const node = this.plan.get(id);
+      if (node) nodes.push(node);
+    }
+    return nodes;
+  }
+
   /* ── Editing ────────────────────────────────────────────────────────── */
 
   /** Arrow keys: one grid step, or ten with Shift. */
@@ -207,6 +235,39 @@ export class PlannerSession {
   viewChanged(): void {
     if (this.input.isGrabbing) this.cancel();
     this.refresh();
+  }
+
+  /* ── Taking the server's word for it ─────────────────────────────────── */
+
+  /**
+   * Re-reads a yard a batch action has changed under the plan.
+   *
+   * A wall upgrade or a trap re-arm is a server-side write that lands while the
+   * planner is open, and the planner is not closed for it: the player is in the
+   * middle of a layout and expects to carry on. So the plan absorbs the new
+   * levels, the new traps and anything that has gone (`Plan.absorb`), the
+   * selection drops whatever no longer exists, and every sprite is put back
+   * where the plan — not the save — says it belongs.
+   *
+   * The undo stack is untouched on purpose. The moves it holds are still the
+   * player's moves, and a wall that is now level 5 is the same wall at the same
+   * place. A stack entry naming a building the re-read removed is skipped by
+   * `Plan.move`, which already tolerates exactly this.
+   *
+   * The caller must have rebuilt the renderer's sprites from the new yard
+   * first; this puts them in the right places, it does not create them.
+   */
+  rebase(yard: Yard): AbsorbResult {
+    if (this.input.isGrabbing) this.cancel();
+
+    const result = this.plan.absorb(yard);
+    for (const id of result.removed) {
+      this.selection.delete(id);
+      this.faulted.delete(id);
+    }
+
+    this.afterHistory();
+    return result;
   }
 
   /* ── Layouts ────────────────────────────────────────────────────────── */
@@ -433,6 +494,11 @@ export class PlannerSession {
         return true;
       case "view":
         this.onViewToggle();
+        return true;
+      case "find":
+        // Deliberately does not touch the tool: the player is still selecting,
+        // they are only choosing what with.
+        this.onFind?.();
         return true;
       case "ignore":
         return true;

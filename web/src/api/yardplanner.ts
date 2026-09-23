@@ -5,6 +5,9 @@ import type {
   LayoutPayload,
   LayoutsResponse,
   SaveLayoutResponse,
+  TrapPlacement,
+  TrapRearmResponse,
+  WallUpgradeResponse,
 } from "./types";
 
 /**
@@ -17,6 +20,8 @@ import type {
  *   PUT    /api/:apiVersion/bm/yardplanner/layouts/:slot   name, data
  *   DELETE /api/:apiVersion/bm/yardplanner/layouts/:slot
  *   POST   /api/:apiVersion/bm/yardplanner/apply           data
+ *   POST   /api/:apiVersion/bm/yardplanner/walls/upgrade   ids, level
+ *   POST   /api/:apiVersion/bm/yardplanner/traps/rearm     traps
  *
  * `data` is a JSON *string* in a single form field, the same convention every
  * other structured field on this server uses (see `http.ts`, `encodeForm`).
@@ -26,6 +31,8 @@ import type {
 
 const LAYOUTS_PATH = "/api/:apiVersion/bm/yardplanner/layouts";
 const APPLY_PATH = "/api/:apiVersion/bm/yardplanner/apply";
+const WALLS_UPGRADE_PATH = "/api/:apiVersion/bm/yardplanner/walls/upgrade";
+const TRAPS_REARM_PATH = "/api/:apiVersion/bm/yardplanner/traps/rearm";
 
 /** Names are trimmed and cut to this length before being sent. */
 export const MAX_LAYOUT_NAME_LENGTH = 20;
@@ -65,13 +72,47 @@ export const deleteLayout = async (slot: number): Promise<void> => {
 export const applyLayout = (payload: LayoutPayload): Promise<ApplyLayoutResponse> =>
   post<ApplyLayoutResponse>(APPLY_PATH, { data: JSON.stringify(payload) });
 
+/** Every detail key a rejection can carry a list of building ids under. */
+const CONFLICT_KEYS = [
+  "unplaced",
+  "overlapping",
+  "unknown",
+  "notWalls",
+  "alreadyAtLevel",
+  "busy",
+  "damaged",
+] as const;
+
+/**
+ * Raises every listed wall to `level` in one charged, instant step.
+ *
+ * `ids` goes over the wire as a JSON string in a single form field, the same
+ * convention `data` uses on save and apply. The response carries the save's own
+ * `resources` and `buildingdata` afterwards, so the caller rebuilds its yard
+ * from the server's answer rather than from its own preview.
+ */
+export const upgradeWalls = (ids: number[], level: number): Promise<WallUpgradeResponse> =>
+  post<WallUpgradeResponse>(WALLS_UPGRADE_PATH, { ids: JSON.stringify(ids), level });
+
+/**
+ * Builds a trap at each position, which is what re-arming a fired trap is.
+ *
+ * A trap that fires is deleted from the save, so there is nothing to revive:
+ * the server allocates fresh ids and charges the build cost, and the 5-second
+ * countdown completes on the spot under the free-finish rule.
+ */
+export const rearmTraps = (traps: readonly TrapPlacement[]): Promise<TrapRearmResponse> =>
+  post<TrapRearmResponse>(TRAPS_REARM_PATH, { traps: JSON.stringify(traps) });
+
 /**
  * Building ids the server named as the reason a call failed.
  *
  * The error bodies are flat and carry the ids under whichever key fits the
- * fault: `overlapping` and `unknown` on a 400, `unplaced` on a 409. All three
- * mean the same thing to the planner — outline these and show them to the
- * player — so they are read together rather than teaching the UI three shapes.
+ * fault: `overlapping` and `unknown` on a 400, `unplaced` on a 409, and the
+ * batch wall upgrade's own four — `notWalls`, `alreadyAtLevel`, `busy` and
+ * `damaged`. They all mean the same thing to the planner — outline these and
+ * show them to the player — so they are read together rather than teaching the
+ * UI a shape per route.
  */
 export const applyConflictIds = (caught: unknown): number[] => {
   if (!(caught instanceof ApiError)) return [];
@@ -82,7 +123,7 @@ export const applyConflictIds = (caught: unknown): number[] => {
   for (const source of sources) {
     if (typeof source !== "object" || source === null) continue;
     const record = source as Record<string, unknown>;
-    for (const key of ["unplaced", "overlapping", "unknown"]) {
+    for (const key of CONFLICT_KEYS) {
       const value = record[key];
       if (!Array.isArray(value)) continue;
       for (const id of value) if (typeof id === "number") ids.add(id);

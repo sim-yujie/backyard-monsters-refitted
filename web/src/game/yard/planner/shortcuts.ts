@@ -21,6 +21,8 @@ export type PlannerAction =
   | { readonly kind: "cancel" }
   /** Tab: switch between the isometric yard and the blueprint. */
   | { readonly kind: "view" }
+  /** F: open the search box. Takes the key off the browser's own find bar. */
+  | { readonly kind: "find" }
   /** Bound so it cannot reach the browser; storing arrives in phase 2. */
   | { readonly kind: "ignore" };
 
@@ -49,6 +51,11 @@ export const plannerAction = (event: {
     case "b":
     case "B":
       return { kind: "tool", tool: "box" };
+    // Plain F only: Ctrl+F is caught above and left to the browser, and a key
+    // typed into the search box never reaches here (`PlannerInput`).
+    case "f":
+    case "F":
+      return { kind: "find" };
     case "Escape":
       return { kind: "cancel" };
     case "Tab":

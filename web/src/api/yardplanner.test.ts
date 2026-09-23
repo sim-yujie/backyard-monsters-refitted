@@ -1,6 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./http";
-import { applyConflictIds, MAX_LAYOUT_NAME_LENGTH, normaliseLayoutName } from "./yardplanner";
+import {
+  applyConflictIds,
+  MAX_LAYOUT_NAME_LENGTH,
+  normaliseLayoutName,
+  rearmTraps,
+  upgradeWalls,
+} from "./yardplanner";
 
 /** A rejection as the server sends it: a flat body, no `errorDetails`. */
 const rejection = (status: number, body: Record<string, unknown>): ApiError =>
@@ -56,6 +62,79 @@ describe("applyConflictIds", () => {
   it("returns nothing for a failure that is not an ApiError", () => {
     expect(applyConflictIds(new Error("offline"))).toEqual([]);
     expect(applyConflictIds(null)).toEqual([]);
+  });
+
+  it("reads the batch wall upgrade's own four lists", () => {
+    expect(applyConflictIds(rejection(400, { error: "x", notWalls: [11] }))).toEqual([11]);
+    expect(applyConflictIds(rejection(400, { error: "x", alreadyAtLevel: [12] }))).toEqual([12]);
+    expect(applyConflictIds(rejection(400, { error: "x", busy: [13] }))).toEqual([13]);
+    expect(applyConflictIds(rejection(400, { error: "x", damaged: [14] }))).toEqual([14]);
+  });
+
+  it("merges a wall rejection that names several faults at once", () => {
+    const caught = rejection(400, {
+      error: "Those walls cannot be upgraded",
+      busy: [1, 2],
+      damaged: [2, 3],
+      unknown: [4],
+    });
+    expect(applyConflictIds(caught).sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+  });
+});
+
+/* ── The batch routes ─────────────────────────────────────────────────────── */
+
+/**
+ * What the server was actually sent.
+ *
+ * The two batch calls are one line each, so the only thing worth testing is the
+ * thing the server has to agree with: the path, and structure JSON-stringified
+ * into a single form field rather than sent as nested JSON.
+ */
+const sent: { url: string; body: URLSearchParams }[] = [];
+
+const stubFetch = (payload: Record<string, unknown>): void => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string, init: RequestInit) => {
+      sent.push({ url, body: new URLSearchParams(String(init.body)) });
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: 0, ...payload }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }),
+  );
+};
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  sent.length = 0;
+});
+
+describe("upgradeWalls", () => {
+  it("posts the ids as a JSON string beside a plain level", async () => {
+    stubFetch({ upgraded: 2, level: 5, cost: { r1: 1, r2: 2, r3: 0, r4: 0 } });
+    const response = await upgradeWalls([7, 9], 5);
+
+    const call = sent[0]!;
+    expect(call.url).toContain("/bm/yardplanner/walls/upgrade");
+    expect(call.body.get("ids")).toBe("[7,9]");
+    expect(call.body.get("level")).toBe("5");
+    expect(response.upgraded).toBe(2);
+  });
+});
+
+describe("rearmTraps", () => {
+  it("posts the placements as a JSON string in one field", async () => {
+    stubFetch({ placed: 1, ids: [601], firedtraps: [] });
+    const response = await rearmTraps([{ t: 24, x: 105, y: -60 }]);
+
+    const call = sent[0]!;
+    expect(call.url).toContain("/bm/yardplanner/traps/rearm");
+    expect(call.body.get("traps")).toBe('[{"t":24,"x":105,"y":-60}]');
+    expect(response.ids).toEqual([601]);
   });
 });
 

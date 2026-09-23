@@ -15,7 +15,7 @@ import {
   tileRect,
 } from "./blueprint";
 import type { Corners } from "./marquee";
-import { PlannerSession, type PlannerState } from "./PlannerSession";
+import { PlannerSession, PlannerTool, type PlannerState } from "./PlannerSession";
 
 /**
  * The planner's pointer behaviour, driven through real DOM events.
@@ -48,7 +48,7 @@ const BUILDINGS: readonly BuildingData[] = [
   { id: 3, t: 17, X: -300, Y: -300 },
 ];
 
-const testYard = (): Yard =>
+const yardOf = (buildings: readonly BuildingData[]): Yard =>
   readYard({
     error: 0,
     id: 1,
@@ -58,9 +58,11 @@ const testYard = (): Yard =>
     currenttime: 1_700_000_000,
     savetime: 1_700_000_000,
     storedata: { ENL: { q: 0 } },
-    buildingdata: Object.fromEntries(BUILDINGS.map((entry) => [String(entry.id), entry])),
+    buildingdata: Object.fromEntries(buildings.map((entry) => [String(entry.id), entry])),
     mushrooms: { l: [] },
   } as unknown as BaseLoadResponse);
+
+const testYard = (): Yard => yardOf(BUILDINGS);
 
 /** The middle of a tile, which is where a press on that building lands. */
 const tileCentre = (type: number, x: number, y: number): Point => {
@@ -83,6 +85,8 @@ interface Harness {
   readonly canvas: HTMLCanvasElement;
   /** Every state the session pushed at its owner, newest last. */
   readonly states: PlannerState[];
+  /** How many times the session asked its owner to open the search box. */
+  readonly finds: () => number;
   /** Where the renderer has each building drawn, in yard units. */
   readonly placements: ReadonlyMap<number, Point>;
   readonly view: () => YardView;
@@ -177,6 +181,7 @@ const planner = (): Harness => {
   } as unknown as YardRenderer;
 
   const states: PlannerState[] = [];
+  let finds = 0;
 
   const setView = (next: YardView): void => {
     if (view === next) return;
@@ -192,6 +197,9 @@ const planner = (): Harness => {
     onChange: () => states.push(session.state()),
     onViewToggle: () =>
       setView(view === YardView.ISO ? YardView.BLUEPRINT : YardView.ISO),
+    onFind: () => {
+      finds++;
+    },
   });
   session.attach();
 
@@ -215,6 +223,7 @@ const planner = (): Harness => {
     session,
     canvas,
     states,
+    finds: () => finds,
     placements,
     view: () => view,
     setView,
@@ -516,6 +525,108 @@ describe("the state pushed to the bar", () => {
     harness.click(ONE);
     harness.key("Escape");
     expect(harness.states[harness.states.length - 1]?.carrying).toBe(false);
+  });
+});
+
+/* ── Search ───────────────────────────────────────────────────────────────── */
+
+describe("the find key", () => {
+  it("asks the owner to open the search box without changing the tool", () => {
+    const harness = planner();
+    harness.key("b");
+    expect(harness.session.state().tool).toBe(PlannerTool.BOX);
+
+    harness.key("f");
+
+    expect(harness.finds()).toBe(1);
+    expect(harness.session.state().tool).toBe(PlannerTool.BOX);
+  });
+
+  it("leaves the selection and the plan alone", () => {
+    const harness = planner();
+    harness.session.selectOnly([1, 2]);
+    harness.key("f");
+
+    expect(harness.session.selectedIds()).toEqual([1, 2]);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+  });
+});
+
+/* ── A yard the server changed underneath ─────────────────────────────────── */
+
+describe("rebase", () => {
+  it("keeps the plan's positions and the undo stack after a move", () => {
+    const harness = planner();
+    harness.click(ONE);
+    harness.drag(by(ONE, 100, 0));
+    harness.click(by(ONE, 100, 0));
+
+    harness.session.rebase(testYard());
+
+    // The yard still has the tower at the origin; the plan's move survives.
+    expect(at(harness, 1)).toEqual({ x: 100, y: 0 });
+    expect(harness.placements.get(1)).toEqual({ x: 100, y: 0 });
+
+    const state = harness.session.state();
+    expect(state.canUndo).toBe(true);
+    expect(state.undoLabel).toBe("Move building");
+    expect(state.movedCount).toBe(1);
+  });
+
+  it("takes the new level from the yard", () => {
+    const harness = planner();
+    expect(harness.session.plan.get(3)?.level).toBe(1);
+
+    const result = harness.session.rebase(
+      yardOf([BUILDINGS[0]!, BUILDINGS[1]!, { id: 3, t: 17, X: -300, Y: -300, l: 5 }]),
+    );
+
+    expect(result.changed).toEqual([3]);
+    expect(harness.session.plan.get(3)?.level).toBe(5);
+  });
+
+  it("adds a trap the yard has gained, where the yard has it", () => {
+    const harness = planner();
+    const result = harness.session.rebase(
+      yardOf([...BUILDINGS, { id: 4, t: 24, X: 50, Y: 200 }]),
+    );
+
+    expect(result.added).toEqual([4]);
+    expect(at(harness, 4)).toEqual({ x: 50, y: 200 });
+    expect(harness.placements.get(4)).toEqual({ x: 50, y: 200 });
+    // Its yard position is its origin, so a fresh trap does not read as moved.
+    expect(harness.session.state().movedCount).toBe(0);
+    expect(harness.session.plan.hasMoved(4)).toBe(false);
+  });
+
+  it("removes a building the yard no longer has and frees its cells", () => {
+    const harness = planner();
+    harness.session.selectOnly([1, 2]);
+
+    const result = harness.session.rebase(yardOf([BUILDINGS[0]!, BUILDINGS[2]!]));
+
+    expect(result.removed).toEqual([2]);
+    expect(harness.session.plan.get(2)).toBeUndefined();
+    expect(harness.session.selectedIds()).toEqual([1]);
+
+    // Where the second tower stood is open ground now.
+    const plan = harness.session.plan;
+    plan.beginMove([1]);
+    expect(plan.testMove(200, 0).valid).toBe(true);
+    plan.cancelMove();
+  });
+
+  it("puts a carried selection down before it re-reads", () => {
+    const harness = planner();
+    harness.click(ONE);
+    harness.drag(by(ONE, 100, 0));
+    expect(harness.session.state().carrying).toBe(true);
+
+    harness.session.rebase(testYard());
+
+    expect(harness.session.state().carrying).toBe(false);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(stillOccupies(harness, 1, 2)).toBe(true);
   });
 });
 

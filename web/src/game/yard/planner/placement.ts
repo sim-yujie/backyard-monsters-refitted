@@ -50,7 +50,14 @@ const GRID_ROWS = DECORATION_HEIGHT / GRID_STEP;
 const GRID_ORIGIN_X = DECORATION_WIDTH / 2;
 const GRID_ORIGIN_Y = DECORATION_HEIGHT / 2;
 
-/** One building in the plan. Positions are mutable; everything else is not. */
+/**
+ * One building in the plan.
+ *
+ * Positions, level and fortification are mutable; identity and footprint are
+ * not. The level moves because a batch action can change it under the plan —
+ * `Plan.absorb` takes the server's word for it after a wall upgrade rather than
+ * rebuilding the plan and losing every drag the player has made.
+ */
 export interface PlanNode {
   readonly id: number;
   readonly type: number;
@@ -59,8 +66,8 @@ export interface PlanNode {
   y: number;
   readonly width: number;
   readonly height: number;
-  readonly level: number;
-  readonly fort: number;
+  level: number;
+  fort: number;
   /** Decorations get the larger bounds and are not required to be placed. */
   readonly decoration: boolean;
   /** Mushrooms: obstacles the planner may not move. */

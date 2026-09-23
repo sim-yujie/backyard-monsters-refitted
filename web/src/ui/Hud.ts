@@ -1,4 +1,5 @@
 import type { Resources } from "@/api/types";
+import { formatAmount } from "./format";
 
 /**
  * The persistent top bar: resource readouts on the left, a scene switcher on
@@ -26,14 +27,6 @@ const RESOURCE_LABELS: [keyof Resources, string][] = [
   ["r3", "Goo"],
   ["r4", "Putty"],
 ];
-
-const formatAmount = (value: number | undefined): string => {
-  if (value === undefined) return "—";
-  if (value < 1_000) return String(Math.round(value));
-  if (value < 1_000_000) return `${(value / 1_000).toFixed(1)}K`;
-  if (value < 1_000_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  return `${(value / 1_000_000_000).toFixed(2)}B`;
-};
 
 export class Hud {
   readonly element: HTMLElement;

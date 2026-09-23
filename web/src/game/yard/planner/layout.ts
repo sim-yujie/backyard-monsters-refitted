@@ -55,13 +55,32 @@ export interface LoadMiss {
   readonly reason: MissReason;
 }
 
+/**
+ * A saved node whose building the yard no longer has.
+ *
+ * The position is carried, not just the id, because this is one of the two
+ * places the client can learn where a trap stood before it fired: a trap that
+ * explodes is deleted from the save, so a layout that still names it is the
+ * only record of its spot for a player whose `firedtraps` list has been
+ * trimmed. The re-arm button reads `t`, `x` and `y` straight into a
+ * `TrapPlacement`.
+ */
+export interface LoadMissing {
+  readonly id: number;
+  /** Building type as the layout recorded it. */
+  readonly t: number;
+  /** Yard units, snapped, as the layout recorded them. */
+  readonly x: number;
+  readonly y: number;
+}
+
 export interface LoadResult {
   /** Before-and-after positions, so a load is one entry on the undo stack. */
   readonly entries: MoveEntry[];
   /** Saved nodes that stayed where they were, for the banner. */
   readonly didNotFit: LoadMiss[];
-  /** Saved ids this yard has no building for. */
-  readonly missing: number[];
+  /** Saved nodes this yard has no building for, with where they stood. */
+  readonly missing: LoadMissing[];
   /** The expansion level the layout was designed for. */
   readonly expansion: number;
 }
@@ -91,17 +110,17 @@ export const planLoad = (plan: Plan, layout: Layout): LoadResult => {
 
   const entries: MoveEntry[] = [];
   const didNotFit: LoadMiss[] = [];
-  const missing: number[] = [];
+  const missing: LoadMissing[] = [];
 
   for (const saved of layout.nodes) {
     const node = plan.get(saved.id);
-    if (!node || node.fixed) {
-      missing.push(saved.id);
-      continue;
-    }
-
     const x = snap(Number(saved.x) || 0);
     const y = snap(Number(saved.y) || 0);
+
+    if (!node || node.fixed) {
+      missing.push({ id: saved.id, t: saved.t, x, y });
+      continue;
+    }
 
     if (!inBounds(node, x, y, plan.plot)) {
       didNotFit.push({ id: node.id, type: node.type, reason: MissReason.BOUNDS });

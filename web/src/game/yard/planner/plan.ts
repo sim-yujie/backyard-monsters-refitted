@@ -37,6 +37,16 @@ export const MUSHROOM_ID_BASE = 1_000_000;
 const MUSHROOM_TYPE = 7;
 const MUSHROOM_SIZE = 30;
 
+/** What `absorb` changed, for the notice and the tests. */
+export interface AbsorbResult {
+  /** Buildings the yard has that the plan did not. */
+  readonly added: number[];
+  /** Buildings the plan had that the yard no longer does. */
+  readonly removed: number[];
+  /** Buildings whose level or fortification moved. */
+  readonly changed: number[];
+}
+
 export class Plan {
   readonly plot: PlotBounds;
   readonly expansion: number;
@@ -238,6 +248,80 @@ export class Plan {
       node.y = reverse ? entry.fromY : entry.toY;
     }
     for (const [node] of pairs) this.occupancy.stamp(node);
+  }
+
+  /* ── Taking the server's word for it ────────────────────────────────── */
+
+  /**
+   * Brings the plan up to date with a yard the server has changed under it.
+   *
+   * A batch wall upgrade or a trap re-arm rewrites `buildingdata` while the
+   * planner is open. Rebuilding the plan from the new yard would be simpler and
+   * would throw away every drag the player has made, so instead the plan keeps
+   * its positions, its origins and its undo stack, and only the facts the
+   * server owns are taken from the yard:
+   *
+   * - **levels and fortification** are copied onto the nodes that already exist;
+   * - **buildings the yard has gained** — the re-armed traps, with fresh ids —
+   *   are added where the yard puts them, which becomes their origin, so they
+   *   do not immediately read as moved;
+   * - **buildings the yard has lost** are removed and their cells freed.
+   *
+   * Positions are *not* copied back: the plan is the edit in progress and the
+   * yard is where the buildings stood at the last save. Overwriting one with the
+   * other is exactly what Apply is for.
+   *
+   * Mushrooms are left alone. They are obstacles rather than buildings, the yard
+   * reseeds them on its own, and nothing a batch action does can move one.
+   */
+  absorb(yard: Yard): AbsorbResult {
+    // A selection in hand has its cells out of the grid; putting it down first
+    // means the adds and removes below see a grid that matches the nodes.
+    this.cancelMove();
+
+    const seen = new Set<number>();
+    const added: number[] = [];
+    const removed: number[] = [];
+    const changed: number[] = [];
+
+    for (const building of yard.buildings) {
+      seen.add(building.id);
+      const node = this.nodes.get(building.id);
+
+      if (!node) {
+        const [width, height] = building.footprint;
+        this.add({
+          id: building.id,
+          type: building.type,
+          x: building.x,
+          y: building.y,
+          width,
+          height,
+          level: building.level,
+          fort: building.fortification,
+          decoration: isDecoration(building.type),
+          fixed: false,
+        });
+        added.push(building.id);
+        continue;
+      }
+
+      if (node.level !== building.level || node.fort !== building.fortification) {
+        node.level = building.level;
+        node.fort = building.fortification;
+        changed.push(node.id);
+      }
+    }
+
+    for (const node of [...this.nodes.values()]) {
+      if (node.fixed || seen.has(node.id)) continue;
+      this.occupancy.erase(node);
+      this.nodes.delete(node.id);
+      this.origin.delete(node.id);
+      removed.push(node.id);
+    }
+
+    return { added, removed, changed };
   }
 
   /** Puts a building at an absolute position. Used by the load path. */

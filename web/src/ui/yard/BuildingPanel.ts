@@ -1,4 +1,5 @@
 import { Panel } from "@/ui/Panel";
+import { formatCountdown } from "@/ui/format";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
 import {
   artStateFor,
@@ -229,17 +230,4 @@ const disabledAction = (label: string, tooltip: string): HTMLButtonElement => {
   // `title` alone is not exposed on a disabled control in every browser.
   button.setAttribute("aria-label", `${label}. ${tooltip}`);
   return button;
-};
-
-/** Seconds remaining as a compact duration, or "Done". */
-const formatCountdown = (seconds: number): string => {
-  if (seconds <= 0) return "Done";
-  const days = Math.floor(seconds / 86_400);
-  const hours = Math.floor((seconds % 86_400) / 3_600);
-  const minutes = Math.floor((seconds % 3_600) / 60);
-  const rest = Math.floor(seconds % 60);
-  if (days > 0) return `${days}d ${hours}h`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${rest}s`;
-  return `${rest}s`;
 };

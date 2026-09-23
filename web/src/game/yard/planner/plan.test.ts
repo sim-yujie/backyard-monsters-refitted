@@ -292,11 +292,17 @@ describe("loading a layout that does not fit", () => {
     });
   });
 
-  it("names saved ids this yard no longer has", () => {
+  it("names saved ids this yard no longer has, with where they stood", () => {
     const plan = freshPlan();
-    const result = planLoad(plan, asLayout([{ id: 987_654, t: 20, x: 0, y: 0 }], 6));
-    expect(result.missing).toEqual([987_654]);
+    const result = planLoad(plan, asLayout([{ id: 987_654, t: 24, x: 105, y: -60 }], 6));
+    expect(result.missing).toEqual([{ id: 987_654, t: 24, x: 105, y: -60 }]);
     expect(result.didNotFit).toEqual([]);
+  });
+
+  it("snaps a missing node's remembered position onto the grid", () => {
+    const plan = freshPlan();
+    const result = planLoad(plan, asLayout([{ id: 987_654, t: 117, x: 103, y: -58 }], 6));
+    expect(result.missing).toEqual([{ id: 987_654, t: 117, x: 105, y: -60 }]);
   });
 
   it("never auto-places: what did not fit is not moved anywhere", () => {
