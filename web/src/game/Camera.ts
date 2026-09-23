@@ -37,7 +37,7 @@ export class Camera {
   position: Point = { x: 0, y: 0 };
   zoom: number;
 
-  readonly minZoom: number;
+  private _minZoom: number;
   readonly maxZoom: number;
 
   private viewportWidth = 0;
@@ -73,10 +73,33 @@ export class Camera {
   dirty = true;
 
   constructor(options: CameraOptions = {}) {
-    this.minZoom = options.minZoom ?? MIN_ZOOM;
+    this._minZoom = options.minZoom ?? MIN_ZOOM;
     this.maxZoom = options.maxZoom ?? MAX_ZOOM;
-    this.zoom = clamp(options.zoom ?? DEFAULT_ZOOM, this.minZoom, this.maxZoom);
+    this.zoom = clamp(options.zoom ?? DEFAULT_ZOOM, this._minZoom, this.maxZoom);
     this.bounds = options.bounds ?? null;
+  }
+
+  /** The current zoom floor. Raised or lowered after construction via `setMinZoom`. */
+  get minZoom(): number {
+    return this._minZoom;
+  }
+
+  /**
+   * Moves the zoom floor, e.g. when a scene recomputes how far a view can be
+   * zoomed out to still fit its content.
+   *
+   * Raising the floor above the current zoom pulls the camera in to meet it,
+   * clamped about the viewport centre so wheel, pinch and keyboard zoom all
+   * end up respecting the same limit rather than each clamping separately.
+   * Lowering the floor never forces a zoom change — it just permits zooming
+   * out further on the next interaction.
+   */
+  setMinZoom(zoom: number): void {
+    if (zoom === this._minZoom) return;
+    this._minZoom = zoom;
+    if (this.zoom < zoom) {
+      this.zoomAt(zoom, { x: this.viewportWidth / 2, y: this.viewportHeight / 2 });
+    }
   }
 
   /* ── Transforms ─────────────────────────────────────────────────────── */

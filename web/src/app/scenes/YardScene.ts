@@ -296,12 +296,11 @@ export class YardScene implements Scene {
 
     const frame = this.renderer.fitRect();
     const fit = Math.min(width / frame.width, height / frame.height);
-    // A camera's limits are readonly, so the floor is applied by clamping the
-    // current zoom against it and remembering it for `fitYard`.
     this.fitZoom = Math.min(fit, MAX_ZOOM);
-    if (target.zoom < this.fitZoom) {
-      target.zoomAt(this.fitZoom, { x: width / 2, y: height / 2 });
-    }
+    // The camera enforces this floor itself, so wheel and pinch zoom (which go
+    // straight through Camera's own listeners, not through this scene) respect
+    // it too, not just the keyboard and toolbar paths that call back in here.
+    target.setMinZoom(this.fitZoom);
   }
 
   private fitYard(): void {
@@ -319,8 +318,9 @@ export class YardScene implements Scene {
     const camera = this.camera;
     const context = this.context;
     if (!camera || !context) return;
-    const next = Math.max(camera.zoom * factor, this.fitZoom);
-    camera.zoomAt(next, { x: context.width / 2, y: context.height / 2 });
+    // The floor lives on the camera now (see applyZoomLimits), so this needs
+    // no clamp of its own.
+    camera.zoomBy(factor, { x: context.width / 2, y: context.height / 2 });
   }
 
   /* ── Selection ──────────────────────────────────────────────────────────── */
