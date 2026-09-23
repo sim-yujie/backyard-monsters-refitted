@@ -3,7 +3,8 @@ import type { Application } from "pixi.js";
 /**
  * A small frame-time readout for diagnosing "it feels laggy".
  *
- * Toggled with the backtick key. It samples the Pixi ticker every frame and
+ * Toggled with the backtick key or F8, or shown from the start with `?perf` in
+ * the page URL (for keyboards without a backtick). It samples the Pixi ticker every frame and
  * shows, over the last two seconds: frames per second, median and 95th
  * percentile frame interval, the worst frame, plus the GPU the browser
  * reports and the device pixel ratio. The GPU line is the one to read first:
@@ -28,6 +29,7 @@ export class PerfOverlay {
     host.append(this.element);
 
     this.gpu = readGpuName(pixi.canvas);
+    if (new URLSearchParams(window.location.search).has("perf")) this.setVisible(true);
     window.addEventListener("keydown", this.onKey);
     pixi.ticker.add(this.onTick);
   }
@@ -39,13 +41,20 @@ export class PerfOverlay {
   }
 
   private readonly onKey = (event: KeyboardEvent): void => {
-    if (event.key !== "`" || event.repeat) return;
+    if (event.repeat) return;
+    const isToggle = event.key === "F8" || event.key === "`";
+    if (!isToggle) return;
     const target = event.target as HTMLElement | null;
-    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
-    this.visible = !this.visible;
-    this.element.hidden = !this.visible;
-    this.samples.length = 0;
+    if (event.key === "`" && target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+    event.preventDefault();
+    this.setVisible(!this.visible);
   };
+
+  private setVisible(visible: boolean): void {
+    this.visible = visible;
+    this.element.hidden = !visible;
+    this.samples.length = 0;
+  }
 
   private readonly onTick = (): void => {
     if (!this.visible) return;
