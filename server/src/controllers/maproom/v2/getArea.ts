@@ -15,6 +15,7 @@ import { BaseType } from "../../../enums/Base.js";
 import { mapRoomDisabledErr } from "../../../errors/errors.js";
 import { getAllianceRoster } from "../../../services/alliance/allianceData.js";
 import { visibleCredits } from "../../../services/user/shinyLock.js";
+import { emptyAreaResponse, hasWorldPlacement } from "../../../services/maproom/v2/emptyAreaResponse.js";
 
 /**
  * Schema for validating the request body when getting area data.
@@ -95,10 +96,21 @@ export const getArea: KoaController = async (ctx) => {
 
   await postgres.em.populate(user, ["save"], { fields: OWN_SAVE_FIELDS });
 
-  const save = user.save!;
-  const worldid = save.worldid;
+  const save = user.save;
 
-  if (!worldid) throw new Error(`${user.username} has no world ID.`);
+  // No Save row yet (brand-new account, before its first /base/load), or a
+  // Save that has never been placed on a Map Room 2 world (Town Hall 6 gate
+  // on /worldmapv2/setmapversion). Neither is an error - see
+  // emptyAreaResponse.ts.
+  if (!hasWorldPlacement(save)) {
+    ctx.status = Status.OK;
+    ctx.body = emptyAreaResponse(x, y);
+    return;
+  }
+
+  // hasWorldPlacement guarantees both `save` and `save.worldid` from here on.
+  const placedSave = save!;
+  const worldid = placedSave.worldid!;
 
   const width = 10;
   const height = 10;
@@ -178,7 +190,7 @@ export const getArea: KoaController = async (ctx) => {
     }
   }
 
-  const credits = visibleCredits(user, save.credits);
+  const credits = visibleCredits(user, placedSave.credits);
 
   ctx.status = Status.OK;
   ctx.body = {
@@ -188,7 +200,7 @@ export const getArea: KoaController = async (ctx) => {
     data: cells,
     alliancedata,
     ...(sendresources === 1 && {
-      resources: save.resources,
+      resources: placedSave.resources,
       credits,
     }),
   };
