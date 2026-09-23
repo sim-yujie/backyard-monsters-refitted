@@ -50,7 +50,12 @@ export const validateSave = async (_user: User, _save: Save, _rawBody: unknown):
 implementation when `process.env.ENV === Env.PROD`, and falls back to the stub if that module is
 absent (`server/src/scripts/anticheat/anticheat.ts:15-25`).
 
-Four narrow clamps are the whole of the server's defence, and each is deliberate:
+One real check does exist, but it runs at the *start* of an attack, not on the result:
+`validateAttack` compares the stat block the client declares for each monster and champion against
+the server's own tables and bans on mismatch (§2). It never sees the battle.
+
+On the result itself, four narrow clamps are the whole of the server's defence, and each is
+deliberate:
 
 | Clamp | Rule | Source |
 | --- | --- | --- |
@@ -58,6 +63,11 @@ Four narrow clamps are the whole of the server's defence, and each is deliberate
 | Defender champion | Only `hp` is taken from the client, and only if lower than stored (`Math.min`). | `server/src/controllers/base/save/handlers/championHandler.ts:16-22` |
 | Defender resources | The reported delta is applied only where it is negative, capped at 10,000,000 per resource per save, and floored at 0. | `server/src/controllers/base/save/handlers/defenderLootHandler.ts:29-45` |
 | Permission | The caller must own the base, or the base must carry a non-zero `attackid`. | `baseSave.ts:62-67` |
+
+A fifth gap sits above all of them: `baseSave.ts:62-67` only requires that the target row carry a
+non-zero `attackid`. The random `attackid` minted at attack start is never stored against the
+attacker and never compared, so **any authenticated user can post an attack save against any base
+that is currently under attack by anyone**.
 
 Everything else on `Save.attackSaveKeys` — `destroyed`, `damage`, `locked`, `protected`,
 `monsters`, `over`, `buildinghealthdata`, `buildingresources`, `attackreport`, `attackersiege` —
@@ -121,12 +131,25 @@ Neither applies in Map Room 2, where flinger ownership is decided by the map cel
 | `champions[]` | `{ type: "G<n>", stats: <full champion prop block> }` for every champion the player owns |
 | `monsters[]` | `{ id: "<creatureID>", count: <available>, stats: <full creature prop block> }` per monster type |
 
-The client is therefore telling the server its own monster stats. **The server stores nothing from
-`attackData` and validates nothing in it.**
+The client is therefore telling the server its own monster stats, and the server checks them.
+`validateAttack` (`server/src/services/maproom/validateAttack.ts:25-91`, called at
+`server/src/controllers/base/load/baseLoad.ts:79`, `:117`) compares every property of every
+declared monster and champion against `monsterStats` / `mr3MonsterStats` / `championStats`, to two
+decimal places (`:102-109`, `:119-135`). Any mismatch, unknown creature id, missing payload or
+altered structure calls `logAttackViolation`, which increments `attackViolations`, writes a report
+row and **sets `user.banned = true`** (`server/src/services/base/reportManager.ts:39-53`).
+
+Two limits on that check. It is skipped entirely when `process.env.ENV === Env.LOCAL`
+(`validateAttack.ts:25`). And it validates stat *values*, never *counts* — the file's own TODO says
+so: `// Validate monster count from flinger` (`validateAttack.ts:10-11`). Nothing stops a client
+declaring more monsters than it owns.
 
 There is **no resource or energy cost to attacking in Map Room 2.** The `attackcost` field on
 `/base/load` is read only when `mapversion === MapRoomVersion.V3`
-(`server/src/controllers/base/load/modes/baseModeAttack.ts:135-146`).
+(`server/src/controllers/base/load/modes/baseModeAttack.ts:135-146`). Where it is read, the client
+sets the price: there is no server-side cost table, no affordability check, `r4` is ignored, and the
+subtraction can drive the pool negative (`:136-138`). The shiny branch is clamped at zero and
+refuses shiny-locked accounts (`:139-145`).
 
 ### Server validation
 
@@ -140,6 +163,11 @@ skipped when the target is a wild monster camp (`save.type === BaseType.TRIBE`, 
 | Main yards only: defender's `last-seen:main:<uid>` within 60 s | `userOnlineErr()` | `:68-71` |
 | Active truce between the two users | `truceActiveErr()` | `:73-75` |
 | Range, evaluated after the attack is already recorded | throws, and writes a report | `:167` |
+
+The ordering matters. The `attackid`, the appended `AttackDetails`, the attack log and the Map
+Room 3 attack cost are all persisted and flushed at `baseModeAttack.ts:150-165`, **before**
+`validateRange` runs at `:167`. A failed range check therefore leaves the defender flagged as under
+attack for the full 7-minute window with no attacker present.
 | Attack modes require `ctx.meetsDiscordAgeCheck` unless the target is a scripted Map Room 1 tribe | `discordAgeErr()` 401 | see `docs/server-api.md` §Base / Yard |
 
 Level restrictions exist but are disabled. `canAttack` only blocks level-32+ players from Map Room
@@ -435,7 +463,7 @@ space. `targetGroup` is explained below.
 | C2 | Octo-ooze | 1.4 | 1000→1800 | 15→35 | melee | 60 | 4 towers | 10 | `:66` |
 | C3 | Bolt | 2.5→3.2 | 150 | 15→55 | melee | 60 | 3 resources | 15 | `:91` |
 | C4 | Fink | 1.3 | 200→240 | 300→520 | melee | 60 | 1 all | 20 | `:116` |
-| C5 | Eye-ra | 2→3 | 600→2400 | 4000→24000 | melee | 60 | 2 walls | 60 | `:141` |
+| C5 | Eye-ra | 2→3 | 600→2400 | 4000→24000 | suicide | 60 | 2 walls | 60 | `:141` |
 | C6 | Ichi | 1.2 | 2000→2800 | 50→110 | melee | 60 | 4 towers | 20 | `:167` |
 | C7 | Bandito | 1.0 | 500→900 | 200→450 | melee | 60 | 1 all | 20 | `:192` |
 | C8 | Fang | 1.1→1.6 | 400 | 600→800 | melee | 60 | 1 all | 30 | `:217` |
@@ -466,10 +494,20 @@ Inferno monsters, same file:
 
 Notes on the fields:
 
+- **Speed in the table is the raw data value, which is not the movement rate.** It is halved on
+  construction (`CreepBase.as:84`) and halved again every step
+  (`_speed = moveSpeed * 0.5`, `CreepBase.as:1456`), so the effective per-tick step is a quarter of
+  the number shown. Behaviour then scales it: pen ×0.5, juice/housing/bunker ×1.5, defend ×1.5,
+  attacking ×0 (`CreepBase.as:1457-1471`). During the tutorial (`TUTORIAL._stage < 200`) the base
+  value is doubled back (`CreepBase.as:85-87`).
 - **Attack delay** is in fast ticks between attacks. The default when `attackDelay` is absent is 60
   (`client/scripts/com/monsters/monsters/creeps/CreepBase.as:108-111`), so roughly 0.75 s at 80 Hz.
 - **Negative damage heals.** Zafreeti and Vorg use `targetGroup 5` and negative `damage`; they
-  switch to `changeModeHeal()` on spawn (`CreepBase.as:195-197`).
+  switch to `changeModeHeal()` on spawn (`CreepBase.as:195-197`). Zafreeti has five levels, not six.
+- **`explode: [1]`** replaces the normal attack with a suicide blast (`CreepBase.as:75`, `:896-898`,
+  `:762-835`). Eye-ra is the only user. Buildings within 60 px take
+  `damage * (3600 - d²) / 3600`; the creep it is touching takes full damage inside 30 px; defending
+  non-flying creeps within 90 px take falloff damage; then the attacker sets its own health to 0.
 - **Movement** is `"ground"` unless the stat block overrides it. Only Wormzer declares
   `movement: "burrow"` with `pathing: "direct"` in the overworld set
   (`server/src/game-data/stats/monsterStats.ts:342` block), and only in `monsterStats` — the
@@ -522,6 +560,30 @@ tower gets jarred (`CreepBase.as:854-857`). A hunting creep re-runs it every 150
 
 `targetGroup 3` creeps carry a permanent loot bonus: an `AdditionPropertyModifier(1.5)` is added to
 their loot property at construction (`CreepBase.as:224-226`).
+
+**Specialists also hit their preferred class harder.** The multiplier is applied per swing in
+`tickBAttack` (`CreepBase.as:884-894`):
+
+| Condition | Damage multiplier |
+| --- | --- |
+| Behaviour is hunt and the target is a creep | × 3 |
+| `targetGroup 2` and the target's `_class` is `wall` | × 2 |
+| `targetGroup 4` and the target's `_class` is `tower` | × 2 |
+
+Eye-ra's listed 4000–24000 damage is therefore 8000–48000 against a wall, and a tower specialist
+does double against towers. The two building multipliers are independent `if`s rather than an
+else-chain, but no monster has both groups, so they never stack.
+
+Two further melee rules. Hitting a creep in melee drags it into defend mode against the attacker if
+it was not already engaged (`CreepBase.as:906-915`), which is how a bunker dispatch turns into a
+brawl. And a ranged attack needs line of sight, not just range: `canShootCreep` and
+`canShootBuilding` test squared distance **and** `PATHING.LineOfSight`
+(`CreepBase.as:720-748`).
+
+Attacking creeps also ignore the hit counter. `_hitLimit` defaults to 50 and a creep despawns once
+`_hits` exceeds it (`MonsterBase.as:168`, `CreepBase.as:928-943`), but `ATTACK.Spawn` sets
+`_hitLimit = int.MAX_VALUE` on every flung creep (`ATTACK.as:549`), so the limit only bites
+defenders.
 
 ### Pathfinding
 
@@ -623,9 +685,25 @@ All five declare `targetGroup: [0]`, which matches none of the preference branch
 (`client/scripts/com/monsters/monsters/champions/ChampionBase.as:116`, `:547`); it refuses to treat
 a wall as a target unless `_targetGroup == 2` (`ChampionBase.as:708`).
 
+**Every champion attacks on a fixed 56-tick delay**, not a per-champion value
+(`ChampionBase.as:164`). Fomor overrides it to 8 (`champions/Fomor.as:12`); Korath sets
+72/72/80/80/80/80 by level (`champions/Korath.as:25-46`).
+
+Champions also carry the same permanent +1.5 loot modifier as `targetGroup 3` creeps
+(`ChampionBase.as:221`).
+
 Two champions carry aura values. Fomor's `buffs` runs 0.1→0.6 and Krallen's 0.2→0.3 with a
-`buffRadius` of 250→350. Krallen's buff also raises the attacker's resource **cap** during looting
-(`client/scripts/ATTACK.as:698-702`).
+`buffRadius` of 250→350. Krallen's buff raises the attacker's resource **cap** during looting
+(`client/scripts/ATTACK.as:698-702`), and she additionally carries hard-coded per-building loot
+multipliers: **×2 against `BRESOURCE` and ×3 against `BSTORAGE`**
+(`champions/Krallen.as:31-32`). She overrides `findTarget` to sweep un-looted lootables first, then
+non-jarred towers, then bunkers (`champions/Krallen.as:60-110`).
+
+Korath and Fomor have combat behaviour beyond their stat lines. Korath applies a burning damage-over-time
+of `damage * 0.1` on every hit (`champions/Korath.as:162-165`) and unlocks an anti-air fireball at
+power level 2 and a ground stomp over `range * 2.5` at power level 3
+(`Korath.as:110-134`, `:167-200`). Fomor attaches `AOEEnrage(250, 1 + buff*2, buff)`, buffing nearby
+allies rather than only shooting (`champions/Fomor.as:18-19`).
 
 `bonusSpeed`, `bonusHealth`, `bonusRange`, `bonusDamage` and `bonusBuffs` are the three
 post-maximum feeding tiers.
@@ -656,7 +734,7 @@ Stats live in the client's yard-props table, indexed `GLOBAL._buildingProps[type
 | 132 | Magma Tower (Inferno) | 6 | 180→230 | 180→480 | 20 | 0 | 15k→70k | `:7142` |
 | 136 | Spurtz Cannon (Inferno) | 5 | 300→500 | 280→360 | 72→170 | 35→75 | 15k→60k | `:7551` |
 | 137 | Black Spurtz Cannon | 5 | 300→500 | 330→410 | 72→170 | 35→75 | 16.5k→66k | `:7663` |
-| 22 | Monster Bunker | 5 | — | — | — | — | 10k→105k | `:2410` |
+| 22 | Monster Bunker | 5 | 300→500 | dispatches monsters | — | — | 10k→105k | `:2410` |
 | 128 | Housing Bunker | — | — | — | — | — | — | `:6857` |
 | 138 | Stronghold | 3 | — | — | — | — | 400k→600k | `:7775` |
 
@@ -681,8 +759,13 @@ Types absent from the table fall through to mode 0 as well (`_loc9_` stays 0).
 3. Keep the first `maxTargets` entries.
 
 Every `BTOWER` constructs with `_maxTargets = 1` and `_priority = 1`
-(`BTOWER.as:71`, `:75`), so the default behaviour is **one target, the nearest**. Subclasses may
-override; `HOUSINGBUNKER` calls `FindTargets(3)` (`client/scripts/HOUSINGBUNKER.as:270`).
+(`BTOWER.as:71`, `:75`), so the default behaviour is **one target, the nearest**. Subclasses
+override: `SpurtzCannon` sets `_maxTargets = 10` (`client/scripts/SpurtzCannon.as:53`) and
+`HOUSINGBUNKER` calls `FindTargets(3)` (`client/scripts/HOUSINGBUNKER.as:270`).
+
+Note that `rate` is used inconsistently. The fire loop re-arms with `_rate * 2`
+(`BTOWER.as:179`) while the upgrade tooltip prints damage per second as `damage * 40 / rate`
+(`BTOWER.as:144-148`). The two disagree by a factor of two; the fire loop is what actually runs.
 
 **Fire loop.** `TickAttack` (`BTOWER.as:171-229`):
 
@@ -702,6 +785,26 @@ cell altitude: `cellHeight * range / GLOBAL._averageAltitude` (125), applied onl
 **Jars.** A jarred tower has `targetableStatus` raised so monsters skip it, and its jar has its own
 health pool `Jars.durability` (`BTOWER.as:255-256`, `:280-281`).
 
+**Two towers do not use the shared engine.**
+
+The Stronghold (type 138, `client/scripts/GuardTower.as`) runs four independent Tesla emitters, each
+covering its own arc: `(-180, 0)`, `(-90, 90)`, `(0, 180)` and a special `(90, 180)` compared on
+absolute angle (`GuardTower.as:27-28`, `:206-208`). All four share the tower's level stats, so a
+level-3 Stronghold is four emitters of 1100 damage at range 400. Each fires **hitscan** — a direct
+`modifyHealth` with a lightning effect, no projectile (`:182-187`) — at the nearest
+ground-or-flying attacker inside its arc (`:194-215`). Emitter positions shift as the tower takes
+damage (`:105-114`). `ApplyJar` is overridden to a no-op, so **the Stronghold cannot be jarred**
+(`:38-39`).
+
+The Spurtz Cannons (types 136 and 137, `client/scripts/SpurtzCannon.as`) burst-fire. They hold up to
+10 targets, rotate the barrel 1° per tick, and begin firing once within 20° of the current target;
+at 2° they advance to the next one, so a burst sweeps across the group
+(`:35-41`, `:121-165`). Shots per burst come from the `shots` stat. Damage scales with the cannon's
+own condition: `damage * (0.5 + 0.5 * health / maxHealth)`, so a wrecked cannon still does half
+(`:179`, `:187`), times 1.25 under tower overdrive (`:184-186`). Every impact has a **50% chance to
+spawn a live defending Spurtz (IC1)**, culled after 100 frames on a 10%-per-tick roll
+(`:35`, `:94-107`, `:229-250`).
+
 ### Traps
 
 `BTRAP` (`client/scripts/BTRAP.as`) and its subclass `BHEAVYTRAP`.
@@ -715,6 +818,7 @@ health pool `Jars.durability` (`BTOWER.as:255-256`, `:280-281`).
 | Targets | `getOldStyleTargets(-1)` — ground, invisible, attackers. Flying units never trigger a trap. | `BTRAP.as:26` |
 | Retarget interval | 20 fast ticks while unfired | `BTRAP.as:50-54` |
 | Single use | Yes: `_fired = true` and `setHealth(0)` | `BTRAP.as:114`, `:146` |
+| Quantity allowed, by yard level | Type 24: 0,0,8,15,20,28,35,42,50,60,75. Type 117: 0,0,0,0,4,6,8,10,12,15,18 | `YARD_PROPS.as:2682` / `:6283` blocks |
 
 Damage falls off linearly with distance:
 `damage / size * (size - distance * 0.5)` (`BTRAP.as:106`). At distance 0 the target takes full
@@ -869,8 +973,10 @@ holds.
 
 The `amount` passed in is `damage * attacker.lootingMultiplier`
 (`BFOUNDATION.as:528-534`). `lootingMultiplier` starts at 1, is raised 1.5 for `targetGroup 3`
-creeps (`CreepBase.as:877-879`), and is further modified by the `LootingMultiplier`,
-`ProximityLootBuff` and Vacuum `lootBonus` components.
+creeps and for every champion (`CreepBase.as:224-226`, `ChampionBase.as:221`), and is further
+modified by the `LootingMultiplier`, `ProximityLootBuff` and Vacuum `lootBonus` components. Krallen
+bypasses the property entirely for her own hits, applying ×2 against resource buildings and ×3
+against storage (`champions/Krallen.as:31-32`).
 
 ### Loot caps
 
@@ -925,6 +1031,12 @@ regenerated — but only inside `baseModeView`, that is, only when someone opens
 (`server/src/controllers/base/load/modes/baseModeView.ts:13`, `:32-40`). There is no scheduled job
 and no check on the map read path, so the map keeps showing a camp as destroyed indefinitely. This
 is analysed in full in `docs/specs/maproom2.md` §5, "Root cause of the stale NPC yard bug".
+
+Two other regeneration clocks exist for the other map rooms: Map Room 1 per-user tribes respawn
+after **10 minutes** (`server/src/services/maproom/v1/createMR1Tribes.ts:46`, `:86-96`), and
+Inferno tribes after **1 hour**
+(`server/src/services/maproom/inferno/createInfernoTribes.ts:43`, `:78-91`). Only Map Room 2's
+12-hour rule is gated behind a manual yard view.
 
 Wild monster camps never receive damage protection: `damageProtection` is only called for
 `MAIN` and `OUTPOST` types (`baseSave.ts:200-204`).
@@ -1017,7 +1129,7 @@ build (`:3250-3291`):
 | Step | Line |
 | --- | --- |
 | Permission: owner, or the row carries a non-zero `attackid` | `:62-67` |
-| `validateSave` — the anticheat hook, a no-op in open-source builds | `:69` |
+| `validateSave` — the anticheat hook, a no-op in open-source builds. The Inferno counterpart `server/src/controllers/inferno/infernoSave.ts` never calls it at all | `:69` |
 | Iterate `Save.attackSaveKeys`, with the trap filter, champion clamp and resource handler | `:74-146` |
 | `monsterupdate` → attacker's save, and possibly other bases | `:155-157` |
 | `attackcreatures` → `userSave.monsters` | `:159-161` |
@@ -1063,11 +1175,43 @@ alliance members list as `last_attacker`
 
 ### What the defender sees
 
+**No attack mail is ever generated.** Nothing under `server/src/controllers/mail/` writes a
+`Message` row on an attack or a save.
+
 On their next `/base/load`, the defender's save carries: `damage`, `destroyed`, the reduced
 `buildinghealthdata`, the reduced `resources`, the new `protected` timestamp, `attacks` with the
-appended `AttackDetails` (including `seen: false`), `attackreport`, and `lastattackername`. The
-client shows `ATTACK.PoorDefense()` or `ATTACK.WellDefended()` accordingly
-(`client/scripts/ATTACK.as:1006-1096`).
+appended `AttackDetails`, and `attackreport`. The client shows `ATTACK.PoorDefense()` or
+`ATTACK.WellDefended()` accordingly (`client/scripts/ATTACK.as:1006-1096`).
+
+`lastattackername` does **not** reach the defender: it has no `@FrontendKey` decorator
+(`save.model.ts:244-245`), so `mapSaveData` filters it out. Its only reader is the alliance members
+list (`server/src/services/alliance/allianceMember.ts:44`, `:86`).
+
+The `seen` flag on each `AttackDetails` is written `false` at attack start
+(`baseModeAttack.ts:88`) and **is never set to `true` anywhere in the codebase**. There is no
+read-receipt.
+
+The attack-logs endpoint caches per user and filter for 30 minutes
+(`server/src/controllers/attacklogs/getAttackLogs.ts:15`, `:66`), so a fresh attack can be invisible
+to the defender's log for up to half an hour.
+
+### Errors on the combat path
+
+| Error | Status | Thrown at |
+| --- | --- | --- |
+| `discordAgeErr` | 401 | `baseLoad.ts:77`, `:96`, `:103`, `:114` |
+| `loadFailureErr` | 404 | `validateAttack.ts:30`, `:36`, `:48`, `:61`, `:74`, `:87`; `getAttackLogs.ts:71` |
+| `baseProtectedErr` | 403 | `baseModeAttack.ts:64`; `infernoModeAttack.ts:44` |
+| `baseUnderAttackErr` | 409 | `baseModeAttack.ts:66`; `infernoModeAttack.ts:50` |
+| `userOnlineErr` | 409 | `baseModeAttack.ts:70`; `infernoModeAttack.ts:48` |
+| `truceActiveErr` | 403 | `baseModeAttack.ts:75` |
+| `shinyLockedErr` | 403 | `baseModeAttack.ts:142` |
+| `permissionErr` | 403 | `baseSave.ts:67`; `infernoSave.ts:57` |
+| `saveFailureErr` | 500 | `baseSave.ts:60` |
+| `antiCheatBanErr` | 403 | Defined in `server/src/errors/errors.ts:91-98`; **no call site in this tree** |
+| Raw `Error` → 500 | — | `baseModeAttack.ts:61`, `:108`, `:161`; `validateRange.ts:84`, `:107`, `:126`, `:149` |
+
+Out-of-range attacks surface as a raw 500, not a typed error.
 
 ### The attacker's end-of-attack UI
 
@@ -1102,7 +1246,14 @@ protection** (`:34-36`). Wild monster camps and Map Room 3 structures are exclud
 (`baseSave.ts:200-202`).
 
 A cell taken over receives a flat 12 hours
-(`server/src/controllers/maproom/v2/takeoverCell.ts:89`, `:99`).
+(`server/src/controllers/maproom/v2/takeoverCell.ts:89`, `:99`). A Map Room 3 capture grants none
+(`server/src/services/maproom/v3/takeoverCellMR3.ts:73-85`).
+
+**Protection is also silently cleared by the monster-update path.** Any base named in a
+`monsterupdate` entry has `save.protected = 0` written alongside its new roster
+(`server/src/services/base/updateMonsters.ts:29-33`). Since flinging from an outpost reports that
+outpost's housing, launching an attack drops protection on every source yard, not just the main
+one.
 
 ### Attack lock
 
@@ -1123,9 +1274,13 @@ the game stays unattackable for up to a minute after their last save.
 
 ### Truce
 
-Truces are per-pair rows with an expiry, 14 days when accepted. The server rejects an attack while
-one is active (`baseModeAttack.ts:73-75`, `server/src/services/mail/isTruceActive.ts`), and the
-client blocks the button. Full rules are in `docs/specs/maproom2.md` §7.
+Truces are per-pair rows with an expiry. `TRUCE_DURATION = 14 * 24 * 60 * 60`
+(`server/src/controllers/mail/requestTruce.ts:21`), stamped on accept
+(`server/src/services/mail/handleTruceResponse.ts:36-38`). The server rejects an attack while one is
+active (`baseModeAttack.ts:73-75`, `server/src/services/mail/isTruceActive.ts:12-29`), and the
+client blocks the button. **Inferno attacks skip the truce check and the range check entirely**
+(`server/src/controllers/base/load/modes/infernoModeAttack.ts:36-79`). Full rules are in
+`docs/specs/maproom2.md` §7.
 
 ### Alliance powerups affecting combat
 
@@ -1187,6 +1342,18 @@ The active set depends on which side the player is on. `_powerups` is the defend
   traced to a use (the loot cap at `ATTACK.as:700-702`). Fomor's 0.1→0.6 aura was not traced.
 - **Map Room 1 and Inferno** paths are cited where they intersect Map Room 2 but were not specified.
   `IATTACK`, `IWMATTACK` and descent modes differ in several branches of `ATTACK.EndB`.
+- **`creeps/rebalance/`** holds twelve `*v2.as` variants plus `RebalancedCreatures.as`, and
+  `creeps/inferno/` holds four more subclasses. Neither set was read; whether they are live or dead
+  code was not determined.
+- **Three parallel tower tables** exist: `YARD_PROPS.as` (main yard), `INFERNOYARDPROPS.as` and
+  `OUTPOST_YARD_PROPS.as`, selected at `GLOBAL.as:719-746`. Per-level values match where they
+  overlap, but maximum levels differ (main yard 10 for cannon and sniper, Inferno 7). Section 5's
+  table is the main-yard set only.
+- **`speed` on a tower** versus the twice-halved `speed` on a monster are different quantities with
+  the same field name; only the monster halving was traced to source.
+- **`targetMode`** on `BTOWER` versus the `_targetFlyerMode` lookup: `BUILDING118.as:44` and
+  `INFERNOQUAKETOWER.as:29` set `attackFlags = getOldStyleTargets(-1)`, but `FindTargets` reads the
+  static map instead, so those assignments appear to have no effect. Not confirmed.
 
 ---
 
@@ -1204,20 +1371,24 @@ These are load-bearing. Change any of them and the economy or the meta breaks.
    monsters sweep a yard instead of grinding one silo. Without it, `targetGroup 3` is useless.
 3. **Walls do not count toward the damage percentage.** A maze must cost the attacker time without
    giving them progress. If walls counted, mazing would be self-defeating.
-4. **Preference falls back to "all buildings", and the fallback is sticky.** A monster whose
+4. **Specialists hit their class harder**: ×2 against walls for wall-breakers, ×2 against towers
+   for tower-killers, ×3 against creeps when hunting. Together with the preference system this is
+   what makes a mixed composition beat a mono-composition. Remove it and monster choice collapses to
+   damage-per-housing-space.
+5. **Preference falls back to "all buildings", and the fallback is sticky.** A monster whose
    preferred class is exhausted becomes a generalist permanently, except tower specialists. This is
    what stops a yard from stalling a wave forever by simply not having the preferred building type.
-5. **90% is the victory threshold** for outposts and wild monster camps, and it is also the takeover
+6. **90% is the victory threshold** for outposts and wild monster camps, and it is also the takeover
    threshold. The two must stay equal.
-6. **Damage protection tiers**: 4 attacks in an hour → 1 hour; 50% damage → 36 hours; outposts 25%
+7. **Damage protection tiers**: 4 attacks in an hour → 1 hour; 50% damage → 36 hours; outposts 25%
    → 8 hours. Attacking clears your own protection. This is the whole anti-farming system.
-7. **Traps only fire on ground units, and heavy traps only on the five large monsters.** That is
+8. **Traps only fire on ground units, and heavy traps only on the five large monsters.** That is
    the counter-play that makes flying and small units worth bringing.
-8. **A flinger's range is a function of its level**, 4/6/8/10 for main yards and 1/2/3/4 for
+9. **A flinger's range is a function of its level**, 4/6/8/10 for main yards and 1/2/3/4 for
    outposts, and outposts are how a player projects reach. This is the entire spatial layer of
    Map Room 2.
-9. **The 5-minute limit** (7 with Declare War) with a hard retreat 2 minutes after expiry.
-10. **Wild monster camps regenerate after 12 hours** and never get damage protection.
+10. **The 5-minute limit** (7 with Declare War) with a hard retreat 2 minutes after expiry.
+11. **Wild monster camps regenerate after 12 hours** and never get damage protection.
 
 ### Flash-era constraints that can be dropped
 
