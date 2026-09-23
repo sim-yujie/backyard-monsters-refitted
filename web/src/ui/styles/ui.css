@@ -1,0 +1,375 @@
+/*
+ * Layout and component styles for the HTML overlay.
+ *
+ * Everything here reads from tokens.css. No component declares a raw colour or
+ * a raw pixel gap.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+#game-root {
+  position: fixed;
+  inset: 0;
+}
+
+/* The Pixi canvas fills the window and sits under everything else. */
+#game-root canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  z-index: var(--z-canvas);
+  /* Without this the browser treats a drag as a scroll and the camera never
+     sees the pointermove events. */
+  touch-action: none;
+}
+
+/* ── Overlay root ─────────────────────────────────────────────────────────
+ * Covers the canvas but is transparent to the pointer, so a click on empty
+ * space reaches the game. Each child opts back in.
+ */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-overlay);
+  pointer-events: none;
+}
+
+.overlay__layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.overlay__layer > * {
+  pointer-events: auto;
+}
+
+.overlay__layer--modal {
+  z-index: var(--z-popup);
+}
+
+/* ── Typography helpers ─────────────────────────────────────────────────── */
+
+.u-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: var(--leading-tight);
+}
+
+.u-muted {
+  color: var(--colour-text-muted);
+}
+
+.u-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+
+.btn {
+  font: inherit;
+  font-weight: 700;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  color: var(--colour-text);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--easing),
+    transform var(--motion-fast) var(--easing);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--colour-surface-overlay);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.btn--primary {
+  background: var(--colour-accent);
+  border-color: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--colour-accent-hover);
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--colour-text-muted);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: var(--colour-surface-overlay);
+  color: var(--colour-text);
+}
+
+.btn--icon {
+  padding: var(--space-1) var(--space-2);
+  min-width: 32px;
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+
+/* ── Fields ─────────────────────────────────────────────────────────────── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field__label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-muted);
+}
+
+.field__input {
+  font: inherit;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+}
+
+.field__input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.form-error {
+  min-height: var(--space-5);
+  color: var(--colour-danger);
+  font-size: var(--text-sm);
+}
+
+/* ── Panel ──────────────────────────────────────────────────────────────── */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 240px;
+  max-width: min(92vw, 560px);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+}
+
+.panel__titlebar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--colour-surface-overlay);
+  border-bottom: 1px solid var(--colour-border);
+}
+
+.panel__title {
+  flex: 1;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 400;
+  line-height: var(--leading-tight);
+}
+
+.panel__body {
+  padding: var(--space-4);
+  overflow: auto;
+  max-height: min(70vh, 640px);
+}
+
+/* ── Popup ──────────────────────────────────────────────────────────────── */
+
+.popup-backdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--colour-scrim);
+  z-index: var(--z-popup);
+}
+
+.popup-backdrop > .panel {
+  box-shadow: var(--shadow-popup);
+}
+
+/* ── HUD ────────────────────────────────────────────────────────────────── */
+
+.hud {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: var(--z-hud);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--hud-height);
+  padding: 0 var(--space-4);
+  background: linear-gradient(
+    to bottom,
+    var(--colour-surface-raised),
+    color-mix(in srgb, var(--colour-surface-raised) 88%, transparent)
+  );
+  border-bottom: 1px solid var(--colour-border);
+}
+
+.hud__brand {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  white-space: nowrap;
+}
+
+.hud__resources {
+  display: flex;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.hud__resource {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.hud__resource-name {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--colour-text-muted);
+}
+
+.hud__resource-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.hud__spacer {
+  flex: 1;
+}
+
+.hud__scenes {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+}
+
+.hud__scene-button {
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.hud__scene-button[aria-current="true"] {
+  background: var(--colour-accent);
+  border-color: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+/* ── Scene chrome ───────────────────────────────────────────────────────── */
+
+.scene-centre {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: min(84vw, 320px);
+}
+
+.boot-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--colour-text-muted);
+}
+
+/* A small readout pinned to the bottom-left, used for the hovered cell. */
+.cell-readout {
+  position: absolute;
+  left: var(--space-4);
+  bottom: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-panel);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.map-hint {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  max-width: 280px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  border: 1px solid var(--colour-border);
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+  pointer-events: none;
+}
