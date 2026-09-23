@@ -22,6 +22,12 @@ export interface LayoutsControllerOptions {
   session: PlannerSession;
   /** Where the panel docks. */
   dock: HTMLElement;
+  /**
+   * A read-only planner (design §8, Q5) has no slots at all: the panel never
+   * opens and Ctrl+S is left to the browser, because saving a layout writes to
+   * the signed-in player's own slots and this yard is not theirs to plan.
+   */
+  readOnly?: boolean;
   onLoad: (layout: Layout) => void;
   onPreview: (layout: Layout) => void;
   notify: (message: string, level: "info" | "error") => void;
@@ -33,7 +39,7 @@ export class YardPlannerLayouts {
 
   constructor(options: LayoutsControllerOptions) {
     this.options = options;
-    window.addEventListener("keydown", this.onKeyDown, true);
+    if (!options.readOnly) window.addEventListener("keydown", this.onKeyDown, true);
   }
 
   destroy(): void {
@@ -44,6 +50,7 @@ export class YardPlannerLayouts {
 
   /** Opens the panel, or closes it if it is already up. */
   async toggle(): Promise<void> {
+    if (this.options.readOnly) return;
     if (this.panel) {
       this.panel.close();
       this.panel = null;

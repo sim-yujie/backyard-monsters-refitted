@@ -1,8 +1,13 @@
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
-import type { BaseLoadResponse, BuildingDataMap, Resources } from "@/api/types";
+import { BaseMode, type BaseLoadResponse, type BuildingDataMap, type Resources } from "@/api/types";
 import { Camera } from "@/game/Camera";
+import {
+  PlannerAccess,
+  plannerAccess,
+  plannerEntryTooltip,
+} from "@/game/yard/planner/access";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
 import { YardRenderer, YardView } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
@@ -73,6 +78,13 @@ export class YardScene implements Scene {
   private save: BaseLoadResponse | null = null;
   private planner: YardPlanner | null = null;
   private plannerButton: HTMLButtonElement | null = null;
+  /**
+   * What the player may do with the planner in the yard now open (§8, Q5).
+   *
+   * Locked until the yard has loaded, because the rule is read off the
+   * buildings and there are none to read before then.
+   */
+  private access: PlannerAccess = PlannerAccess.LOCKED;
   private toolbar: HTMLElement | null = null;
   private selected: YardBuilding | null = null;
   private sinceUiTick = 0;
@@ -133,7 +145,7 @@ export class YardScene implements Scene {
     this.plannerButton.type = "button";
     this.plannerButton.className = "btn btn--ghost yard-toolbar__plan";
     this.plannerButton.textContent = "Plan";
-    this.plannerButton.title = "Open the Yard Planner (P)";
+    this.plannerButton.title = "Loading your yard…";
     this.plannerButton.disabled = true;
     this.plannerButton.addEventListener("click", () => this.togglePlanner());
 
@@ -286,7 +298,16 @@ export class YardScene implements Scene {
       this.yard = yard;
       this.save = response;
       this.notices.clear("yard-load");
-      if (this.plannerButton) this.plannerButton.disabled = false;
+
+      // Q5's entry rule. This scene always asks for the player's own main yard
+      // in build mode (`loadOwnYard`), so today the only answer that varies is
+      // whether the yard holds a Yard Planner at all; the other two arguments
+      // are here so a visit flow only has to change what it passes.
+      this.access = plannerAccess(yard, BaseMode.BUILD, true);
+      if (this.plannerButton) {
+        this.plannerButton.disabled = this.access === PlannerAccess.LOCKED;
+        this.plannerButton.title = plannerEntryTooltip(this.access);
+      }
 
       this.renderer.show(yard);
       this.startCamera(yard, context);
@@ -509,6 +530,10 @@ export class YardScene implements Scene {
       return;
     }
 
+    // No Yard Planner in this yard, so there is no planner to open. Checked
+    // here as well as on the button because the P key does not go through it.
+    if (this.access === PlannerAccess.LOCKED) return;
+
     const yard = this.yard;
     const camera = this.camera;
     const context = this.context;
@@ -524,6 +549,7 @@ export class YardScene implements Scene {
       overlay: context.overlay.content,
       notices: this.notices,
       readOnlyToolbar: toolbar,
+      readOnly: this.access === PlannerAccess.READ_ONLY,
       ...(this.save?.firedtraps ? { firedtraps: this.save.firedtraps } : {}),
       onApplied: (buildingdata, moved) => this.onApplied(buildingdata, moved),
       onYardChanged: (buildingdata, resources) => this.onYardChanged(buildingdata, resources),

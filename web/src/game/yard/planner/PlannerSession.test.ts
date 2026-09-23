@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import type { BaseLoadResponse, BuildingData } from "@/api/types";
+import { LAYOUT_VERSION, type BaseLoadResponse, type BuildingData } from "@/api/types";
 import type { Camera } from "@/game/Camera";
 import type { Point, Rect } from "../YardGrid";
 import { readYard, type Yard, type YardBuilding } from "../yardModel";
@@ -116,7 +116,7 @@ afterEach(() => {
  * it reports, because the one test that switches views is about the gesture
  * being dropped rather than about where anything lands.
  */
-const planner = (): Harness => {
+const planner = (options: { readOnly?: boolean } = {}): Harness => {
   const yard = testYard();
   const canvas = document.createElement("canvas");
   document.body.append(canvas);
@@ -200,6 +200,7 @@ const planner = (): Harness => {
     onFind: () => {
       finds++;
     },
+    ...(options.readOnly === undefined ? {} : { readOnly: options.readOnly }),
   });
   session.attach();
 
@@ -671,5 +672,120 @@ describe("the unsaved-changes flag", () => {
     harness.drag(by(ONE, 100, 0));
     harness.key("Escape");
     expect(harness.session.state().dirty).toBe(false);
+  });
+});
+
+/* ── Read-only ────────────────────────────────────────────────────────────── */
+
+/**
+ * A read-only session (design §8, Q5).
+ *
+ * The rule is that the planner still *opens* — the views, the selection, the
+ * search and the cost cells all answer questions about the yard — and that no
+ * path through the pointer or the keyboard can move anything. These press the
+ * canvas exactly as the editing tests do and check the plan afterwards, which
+ * is the only way to know the refusal is in the session rather than in a
+ * button the tests never touch.
+ */
+describe("read-only", () => {
+  it("reports itself in the state, as read-only and as previewing", () => {
+    const state = planner({ readOnly: true }).session.state();
+    expect(state.readOnly).toBe(true);
+    // One flag for "looking, not editing", whatever the cause, so Apply and
+    // the slot label need no second condition.
+    expect(state.previewing).toBe(true);
+  });
+
+  it("still selects on a click, because the cost cells read the selection", () => {
+    const harness = planner({ readOnly: true });
+    harness.click(ONE);
+    expect(harness.session.selectedIds()).toEqual([1]);
+    // Selected, but never picked up.
+    expect(harness.session.state().carrying).toBe(false);
+  });
+
+  it("refuses a drag: the building is still where the save had it", () => {
+    const harness = planner({ readOnly: true });
+
+    harness.press(ONE);
+    harness.drag(by(ONE, 100, 0));
+    harness.release(by(ONE, 100, 0));
+
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(harness.placements.get(1)).toEqual({ x: 0, y: 0 });
+    expect(harness.session.state().dirty).toBe(false);
+    expect(harness.session.state().canUndo).toBe(false);
+  });
+
+  it("refuses a carry: a click never puts anything in hand", () => {
+    const harness = planner({ readOnly: true });
+
+    harness.click(ONE);
+    expect(harness.session.state().carrying).toBe(false);
+
+    // A pointer move after the click would be the carry following it.
+    harness.drag(by(ONE, 100, 0));
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(harness.placements.get(1)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("refuses a nudge from the arrow keys", () => {
+    const harness = planner({ readOnly: true });
+    harness.click(ONE);
+
+    harness.key("ArrowRight");
+    harness.session.nudge(10, 0);
+
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(harness.session.state().dirty).toBe(false);
+  });
+
+  it("box-selects, which changes nothing but what the cost cells add up", () => {
+    const harness = planner({ readOnly: true });
+    harness.session.setTool(PlannerTool.BOX);
+
+    harness.press(blueprintToWorld(-50, -50));
+    harness.drag(blueprintToWorld(300, 100));
+    harness.release(blueprintToWorld(300, 100));
+
+    expect(harness.session.selectedIds().sort()).toEqual([1, 2]);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(at(harness, 2)).toEqual({ x: 200, y: 0 });
+  });
+
+  it("opens a layout as a preview, never as an edit", () => {
+    const harness = planner({ readOnly: true });
+
+    // Asked for as a real load; a read-only session downgrades it.
+    harness.session.load(
+      {
+        slot: 0,
+        name: "Turtle",
+        version: LAYOUT_VERSION,
+        expansion: 0,
+        updatedAt: 1_700_000_000,
+        nodes: [{ id: 1, t: 20, x: 400, y: 200 }],
+      },
+      { preview: false },
+    );
+
+    expect(harness.session.state().previewing).toBe(true);
+    expect(harness.session.state().dirty).toBe(false);
+    expect(harness.session.state().slot).toBeNull();
+
+    harness.session.dismissPreview();
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("leaves an editable session alone", () => {
+    const harness = planner();
+    expect(harness.session.state().readOnly).toBe(false);
+    expect(harness.session.state().previewing).toBe(false);
+
+    harness.press(ONE);
+    harness.drag(by(ONE, 100, 0));
+    harness.release(by(ONE, 100, 0));
+
+    expect(at(harness, 1)).toEqual({ x: 100, y: 0 });
   });
 });

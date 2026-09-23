@@ -55,8 +55,24 @@ export interface PlannerState {
   readonly carrying: boolean;
   /** Which drawing of the yard is showing. */
   readonly view: YardView;
-  /** True while a layout is being previewed rather than edited. */
+  /**
+   * True whenever the plan is being looked at rather than edited: a layout
+   * preview is up, or the whole session is read-only.
+   *
+   * One flag for both because everything that reads it — Apply's disabled
+   * state, the slot label, the summary's last word — wants the same answer for
+   * both causes. `readOnly` below says which cause it is, for the bar that has
+   * to word it differently.
+   */
   readonly previewing: boolean;
+  /**
+   * True when this session can never be edited (design §8, Q5: the yard is not
+   * the player's own, or it is not loaded in build mode).
+   *
+   * Unlike a preview this cannot be dismissed, so the bar drops the edit
+   * controls rather than disabling them one by one.
+   */
+  readonly readOnly: boolean;
 }
 
 export class PlannerSession {
@@ -68,6 +84,13 @@ export class PlannerSession {
   private readonly onChange: () => void;
   private readonly onViewToggle: () => void;
   private readonly onFind: (() => void) | undefined;
+  /**
+   * Set for the life of the session: this plan may be read, never changed.
+   *
+   * Enforced here rather than by the bar hiding buttons, because the keyboard
+   * and the pointer reach the plan without going near the bar.
+   */
+  private readonly readOnly: boolean;
 
   private tool: PlannerTool = PlannerTool.SELECT;
   private selection = new Set<number>();
@@ -98,10 +121,20 @@ export class PlannerSession {
      * browser's own find bar opening over the yard.
      */
     onFind?: () => void;
+    /**
+     * Opens the plan for reading only (design §8, Q5).
+     *
+     * Selection, search, the two views and the cost cells all still work —
+     * they answer questions about the yard and change nothing. What is refused
+     * is every path that could move a building: a drag, a carry, a nudge, undo
+     * and redo, and a layout load, which is downgraded to a preview.
+     */
+    readOnly?: boolean;
   }) {
     this.onChange = options.onChange;
     this.onViewToggle = options.onViewToggle;
     this.onFind = options.onFind;
+    this.readOnly = options.readOnly ?? false;
     this.plan = Plan.fromYard(options.yard);
     this.view = new PlannerView({ renderer: options.renderer, plan: this.plan });
 
@@ -150,7 +183,8 @@ export class PlannerSession {
       slotName: this.slotName,
       dragInvalid: this.dragInvalid,
       carrying: this.input.isCarrying,
-      previewing: this.preview !== null,
+      previewing: this.preview !== null || this.readOnly,
+      readOnly: this.readOnly,
       view: this.view.view,
     };
   }
@@ -201,6 +235,7 @@ export class PlannerSession {
 
   /** Arrow keys: one grid step, or ten with Shift. */
   nudge(dx: number, dy: number): void {
+    if (this.readOnly) return;
     if (this.selection.size === 0) return;
     if (this.input.isGrabbing) this.cancel();
     this.plan.beginMove(this.selection);
@@ -213,11 +248,13 @@ export class PlannerSession {
   }
 
   undo(): void {
+    if (this.readOnly) return;
     if (this.input.isGrabbing) this.cancel();
     if (this.stack.undo()) this.afterHistory();
   }
 
   redo(): void {
+    if (this.readOnly) return;
     if (this.input.isGrabbing) this.cancel();
     if (this.stack.redo()) this.afterHistory();
   }
@@ -283,12 +320,16 @@ export class PlannerSession {
    * A preview is the same load with the positions remembered, so leaving it
    * puts the plan back without going through the undo stack and without ever
    * marking the plan dirty (design §8, Q6).
+   *
+   * A read-only session has no other kind: an editing load would put the plan
+   * somewhere Apply could never take the yard, so it is downgraded rather than
+   * refused, and the player still gets to look at the layout.
    */
   load(layout: Layout, options: { preview?: boolean } = {}): LoadResult {
     this.dismissPreview();
     const result = planLoad(this.plan, layout);
 
-    if (options.preview) {
+    if (options.preview || this.readOnly) {
       this.preview = new Map();
       for (const node of this.plan.buildings()) this.preview.set(node.id, [node.x, node.y]);
       this.plan.move(result.entries, false);
@@ -364,6 +405,13 @@ export class PlannerSession {
     // Shift-clicking a building *out* of the selection still belongs to the
     // planner — it must not also pan the view — but there is nothing to drag.
     if (!this.selection.has(id)) return Grab.DRAG;
+
+    // Read-only: the press is still the planner's, so it selects and does not
+    // pan out from under the player, but no move is begun. With `pressWorld`
+    // left null every later step — `onMove`, the carry test in `onRelease`,
+    // `commitMove` — falls through to doing nothing, so there is one guard
+    // here rather than four downstream.
+    if (this.readOnly) return Grab.DRAG;
 
     this.pressWorld = world;
     this.dragDelta = { dx: 0, dy: 0 };

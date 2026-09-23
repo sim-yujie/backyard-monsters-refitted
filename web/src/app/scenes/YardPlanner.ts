@@ -59,6 +59,15 @@ export interface YardPlannerOptions {
    */
   readOnlyToolbar: HTMLElement;
   /**
+   * Opens the planner for reading only (design §8, Q5): the yard is not the
+   * player's own, or it is not loaded in build mode.
+   *
+   * The session refuses every edit and the bar drops the controls that would
+   * write to the yard; Apply, the batch actions and the layout slots are never
+   * reachable, so the three network calls below cannot fire.
+   */
+  readOnly?: boolean;
+  /**
    * Traps the attack save recorded as fired, from the load response.
    *
    * One of the two sources the re-arm button counts; the other is whatever a
@@ -119,10 +128,14 @@ export class YardPlanner {
   /** Trap positions a loaded layout named that this yard has no building for. */
   private missingTraps: readonly TrapPlacement[] = [];
 
+  /** True when nothing in this session may change the yard (§8, Q5). */
+  private readonly readOnly: boolean;
+
   constructor(options: YardPlannerOptions) {
     this.options = options;
     this.yard = options.yard;
     this.fired = options.firedtraps ?? [];
+    this.readOnly = options.readOnly ?? false;
 
     this.dock = document.createElement("div");
     this.dock.className = "planner-dock";
@@ -140,11 +153,13 @@ export class YardPlanner {
         );
       },
       onFind: () => this.openSearch(),
+      readOnly: this.readOnly,
     });
 
     this.layouts = new YardPlannerLayouts({
       session: this.session,
       dock: this.dock,
+      readOnly: this.readOnly,
       onLoad: (layout) => this.loadLayout(layout, false),
       onPreview: (layout) => this.loadLayout(layout, true),
       notify: (message, level) =>
@@ -167,7 +182,7 @@ export class YardPlanner {
       onApply: () => void this.apply(),
       onHelp: () => this.openDialog(shortcutsPanel(() => this.closeDialog())),
       onExit: () => this.requestExit(),
-    });
+    }, { readOnly: this.readOnly });
     this.bar.mount(options.overlay);
     this.reportPlannerInset();
 
@@ -299,7 +314,7 @@ export class YardPlanner {
   }
 
   private async apply(): Promise<void> {
-    if (this.applying) return;
+    if (this.readOnly || this.applying) return;
 
     const checklist = this.session.checklist();
     this.bar.setBlocking(checklist.rows.filter((row) => !row.ok).length);
@@ -348,7 +363,7 @@ export class YardPlanner {
   }
 
   private async runWallUpgrade(ids: number[], level: number): Promise<void> {
-    if (this.batching) return;
+    if (this.readOnly || this.batching) return;
     this.batching = true;
     try {
       const response = await postWallUpgrade(ids, level);
@@ -410,7 +425,7 @@ export class YardPlanner {
   }
 
   private async runRearm(traps: TrapPlacement[]): Promise<void> {
-    if (this.batching) return;
+    if (this.readOnly || this.batching) return;
     this.batching = true;
     try {
       const response = await postTrapRearm(traps);

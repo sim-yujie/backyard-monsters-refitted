@@ -26,6 +26,16 @@ import { formatAmount, formatCountdown } from "@/ui/format";
  *
  * Shiny is shown and never purchasable (§6, Q6), so it is a readout like the
  * rest and not a button.
+ *
+ * ## Read-only
+ *
+ * A read-only session (design §8, Q5) gets the same bars minus everything that
+ * would change the yard: no undo or redo, no Layouts, no Checklist, no batch
+ * actions and no Apply, and a "Read-only" chip where the slot name goes. The
+ * controls are left out rather than disabled, because a row of six dead
+ * buttons reads as a broken planner and a player cannot tell which of them
+ * they are meant to wait for. What stays is what answers questions: the two
+ * selection tools, Find, the view switch and the cost cells.
  */
 
 export interface PlannerBarActions {
@@ -118,8 +128,11 @@ export class PlannerBar {
   private readonly resourceCells = new Map<string, CostCell>();
   private readonly timeCell: CostCell;
   private readonly shinyCell: CostCell;
+  private readonly readOnly: boolean;
 
-  constructor(actions: PlannerBarActions) {
+  constructor(actions: PlannerBarActions, options: { readOnly?: boolean } = {}) {
+    this.readOnly = options.readOnly ?? false;
+
     this.toolbar = document.createElement("div");
     this.toolbar.className = "planner-bar planner-bar--top";
     this.toolbar.setAttribute("aria-label", "Planner tools");
@@ -164,7 +177,7 @@ export class PlannerBar {
       this.slotLabel,
       group(select, box, find),
       group(iso, blueprint),
-      group(this.undo, this.redo),
+      ...(this.readOnly ? [] : [group(this.undo, this.redo)]),
       spacer(),
       help,
       exit,
@@ -221,16 +234,26 @@ export class PlannerBar {
     this.apply = button("Apply", "Write this layout to your yard", "btn btn--primary");
     this.apply.addEventListener("click", actions.onApply);
 
-    this.actionBar.append(
-      costs,
-      this.summary,
-      spacer(),
-      this.upgradeWalls,
-      this.rearm,
-      this.checklist,
-      layouts,
-      this.apply,
-    );
+    if (this.readOnly) {
+      // Every action below writes to the yard, so none of them is mounted.
+      // `disabled` is set as well as the button being left out, so a caller
+      // that reaches one through the actions object still finds it inert.
+      for (const control of [this.upgradeWalls, this.rearm, this.checklist, layouts, this.apply]) {
+        control.disabled = true;
+      }
+      this.actionBar.append(costs, this.summary, spacer());
+    } else {
+      this.actionBar.append(
+        costs,
+        this.summary,
+        spacer(),
+        this.upgradeWalls,
+        this.rearm,
+        this.checklist,
+        layouts,
+        this.apply,
+      );
+    }
 
     this.setSummary(EMPTY_SUMMARY);
   }
@@ -256,15 +279,23 @@ export class PlannerBar {
       ? `Redo ${state.redoLabel} (Ctrl+Shift+Z)`
       : "Nothing to redo";
 
-    this.slotLabel.textContent = state.previewing
-      ? `Previewing “${state.slotName}”`
-      : state.slotName
-        ? `${state.slotName}${state.dirty ? " · unsaved" : ""}`
-        : state.dirty
-          ? "Unsaved changes"
-          : "No layout loaded";
+    this.slotLabel.textContent = state.readOnly
+      ? "Read-only"
+      : state.previewing
+        ? `Previewing “${state.slotName}”`
+        : state.slotName
+          ? `${state.slotName}${state.dirty ? " · unsaved" : ""}`
+          : state.dirty
+            ? "Unsaved changes"
+            : "No layout loaded";
+    this.slotLabel.title = state.readOnly
+      ? "This yard can be looked at but not rearranged. Open your own yard in build mode to edit."
+      : "";
+    this.slotLabel.classList.toggle("planner-bar__slot--read-only", state.readOnly);
 
     this.summary.textContent = summarise(state);
+    if (this.readOnly) return;
+
     this.apply.disabled = state.previewing;
     this.apply.title = state.previewing
       ? "Close the preview before applying"
@@ -312,12 +343,14 @@ export class PlannerBar {
 
   /** Shows the count of blocking problems on the checklist button. */
   setBlocking(count: number): void {
+    if (this.readOnly) return;
     this.checklist.textContent = count > 0 ? `Checklist · ${count}` : "Checklist";
     this.checklist.classList.toggle("planner-bar__checklist--bad", count > 0);
   }
 
   /** How many walls the selection holds, which is what Upgrade walls acts on. */
   setWallCount(count: number): void {
+    if (this.readOnly) return;
     this.upgradeWalls.disabled = count === 0;
     this.upgradeWalls.title =
       count === 0
@@ -327,6 +360,7 @@ export class PlannerBar {
 
   /** How many fired traps are waiting to be put back. Zero disables the button. */
   setRearmCount(count: number): void {
+    if (this.readOnly) return;
     this.rearmBadge.hidden = count === 0;
     this.rearmBadge.textContent = String(count);
     this.rearm.disabled = count === 0;
@@ -379,6 +413,7 @@ const summarise = (state: PlannerState): string => {
   parts.push(state.movedCount === 1 ? "1 moved" : `${state.movedCount} moved`);
   if (state.dragInvalid) parts.push("cannot drop here");
   else if (state.carrying) parts.push("in hand · click to drop, right-click to put back");
+  else if (state.readOnly) parts.push("read-only · nothing here can be moved");
   else if (state.previewing) parts.push("read-only preview");
   return parts.join(" · ");
 };

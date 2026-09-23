@@ -59,6 +59,21 @@
   font-size: var(--text-sm);
 }
 
+/*
+ * The read-only chip. A word, not a colour alone: the planner already uses
+ * colour for "short of resources" and "blocking", and a third meaning on a
+ * fourth hue is one more than anyone can hold (design §4.3).
+ */
+.planner-bar__slot--read-only {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  color: var(--colour-text);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: var(--text-xs);
+}
+
 .planner-bar__group {
   display: flex;
   gap: var(--space-1);
