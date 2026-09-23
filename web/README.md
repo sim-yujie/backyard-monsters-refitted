@@ -4,9 +4,9 @@ A browser client for the Backyard Monsters Refitted server. Vite, TypeScript and
 PixiJS v8 for the game canvas, with plain DOM and CSS for every menu, popup and
 HUD element layered over it.
 
-This is the foundation only: the app shell, the scene system, the camera and hex
-grid, the API client and the UI primitives. Map Room 2 data, the yard and the
-game screens come later.
+The app shell, the scene system, the camera and hex grid, the API client and the
+UI primitives, plus Map Room 2 and a read-only view of the player's own yard.
+Editing the yard, opening other players' yards and combat come later.
 
 ## Getting started
 
@@ -80,6 +80,17 @@ web/
       Camera.ts         Pan, zoom, world/screen transforms
       HexGrid.ts        Odd-q offset grid maths
       HexGrid.test.ts
+      yard/             The base screen: geometry, art, renderer
+        YardGrid.ts       Yard units, isometric pixels, plot size, footprints
+        buildingArt.ts    Type and level to a picture
+        buildingArtData.ts  The art table (generated)
+        YardTextures.ts   On-demand texture cache
+        yardModel.ts      /base/load into a draw list
+        YardRenderer.ts   Ground, shadows, buildings, selection
+        YardGround.ts     The tiled grass, clipped to the plot
+        groundNoise.ts    The mask that blends one ground texture into another
+        yardAtlas.ts      Baked glyphs: placeholder, mushroom, build badge
+        YardInput.ts      Hover, click-to-select, keyboard zoom
     ui/
       overlay.ts        The HTML layer above the canvas
       Panel.ts          Framed box with a title bar and body
@@ -150,6 +161,59 @@ may have been superseded by a later login. A restored session is therefore
 revalidated by sending the token back through the login route. There is no
 logout endpoint; `logout()` forgets the token locally, which is all a client
 can do.
+
+### The yard
+
+The yard is a rectangular plot in **yard units** with its origin at the plot
+centre, which is what `buildingdata` stores as `X` and `Y`. `YardGrid.ts`
+converts those to isometric pixels with the same `ToISO` / `FromISO` pair the
+Flash client used (`client/scripts/GRID.as:135-144`), floors and ceilings
+included: the two round in opposite directions and that is what makes the round
+trip exact. Everything the renderer draws is then shifted into **world pixels**,
+isometric pixels moved into the positive quadrant, because `Camera` clamps
+against a rectangle anchored at the origin.
+
+Three things about the wire format are easy to get wrong, and all three are
+absences that mean something:
+
+- **An omitted `l` means level 1**, not level 0. `Export` writes the level only
+  when it is not 1 (`BFOUNDATION.as:2975-2977`). A building is at level 0 only
+  while `cB` is counting down.
+- **An omitted `hp` means full health** (`:3025`). `buildinghealthdata` carries
+  the same numbers keyed by building id, for buildings that have one.
+- **`fz` is not fortification.** Fortification is `fort`; `fz` is the Champion
+  Chamber's frozen-champion blob (`CHAMPIONCHAMBER.as:376`).
+
+#### Building art
+
+`buildingArtData.ts` is generated from the Flash client's props table by
+`tools/gen-building-art.mjs`; run it from `web/` after changing the source data.
+It also writes `test/fixtures/building-art-files.json`, a record of which of the
+files the table names exist under `server/public/assets/`, so the unit tests can
+check the mapping without reading the filesystem.
+
+A building's art does not change at every level. The table holds one entry per
+*image* level and `resolveArt` takes the exact entry if there is one and
+otherwise walks down to the nearest lower one, exactly as `BFOUNDATION.as:896-914`
+does. A building under construction shows the level 1 art, and a state with no
+picture of its own — most traps have no damaged art — falls back to the default.
+A few buildings, the Monster Bunker among them, ship no still image at all and
+are drawn from the first cell of their animation strip.
+
+Shadows are JPEGs with no alpha channel and are drawn with a multiply blend, one
+layer below every building, which is what the original did
+(`BFOUNDATION.as:1108`, `MAP.as:102`).
+
+#### Ground
+
+`MAPBG.MakeTile` builds a 1000 x 500 block from seven 200 x 100 images: the
+first laid down solid, the other six composited over it through seeded
+Perlin-noise alpha masks at progressively coarser feature sizes
+(`client/scripts/MAPBG.as:58-105`). `YardGround.ts` follows that structure on a
+2D canvas, substituting the value noise in `groundNoise.ts` for Flash's
+`perlinNoise`, whose exact output cannot be recovered from the ActionScript. The
+blend is not decoration: the seven images are different ground, not variations
+on grass, so compositing them hard-edged gives a checkerboard.
 
 ### Coordinates
 

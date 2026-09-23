@@ -103,6 +103,79 @@ export interface Resources {
 }
 
 /**
+ * One building in `buildingdata`.
+ *
+ * Mirrors `server/src/types/BuildingData.ts`, which in turn mirrors what
+ * `BFOUNDATION.Export()` writes (`client/scripts/BFOUNDATION.as:2968-3029`).
+ * Almost every field is omitted at its default, so absence is meaningful:
+ *
+ * - **`l` absent means level 1**, not level 0. `Export` only writes the level
+ *   when it is not 1 (`:2975-2977`) and `Setup` defaults it to 1
+ *   (`:3043-3048`). A building is at level 0 only while `cB` is counting down.
+ * - `hp` is written only below full health (`:3025`), so its absence means
+ *   undamaged. `buildinghealthdata` carries the same numbers keyed by id.
+ * - `fort` is the fortification level. `fz` is *not* fortification: it is the
+ *   Champion Chamber's frozen-champion blob (`CHAMPIONCHAMBER.as:376`).
+ */
+export interface BuildingData {
+  /** Yard units, origin at the plot centre. */
+  X: number;
+  Y: number;
+  /** Building type id. */
+  t: number;
+  /** Building id, unique within the yard. */
+  id: number;
+  /** Level. Absent means 1. */
+  l?: number;
+  /** Fortification level, 0 when absent. */
+  fort?: number;
+  /** Seconds left on the initial build. Present means level 0, under construction. */
+  cB?: number;
+  /** Seconds left on an upgrade. */
+  cU?: number;
+  /** Seconds left on a rebuild. */
+  cR?: number;
+  /** Seconds left on a fortification. */
+  cF?: number;
+  /** Current health. Absent means full. 0 means destroyed. */
+  hp?: number;
+  /** 1 while a worker is repairing. */
+  rE?: number;
+  /** Harvester: units banked in the building's own buffer. */
+  st?: number;
+  /** Harvester: 1 while producing. */
+  pr?: number;
+  /** Seconds left on the current production cycle. */
+  rCP?: number;
+  [key: string]: unknown;
+}
+
+/** `buildingdata`, keyed by building id as a string. */
+export type BuildingDataMap = Record<string, BuildingData>;
+
+/** `buildinghealthdata`: current health keyed by building id. */
+export type BuildingHealthData = Record<string, number>;
+
+/**
+ * One yard mushroom. Positions are yard units, as for a building
+ * (`client/scripts/MUSHROOMS.as:84`).
+ */
+export interface MushroomData {
+  X?: number;
+  Y?: number;
+  id?: number;
+  /** Which of the art's frames this one shows. */
+  frame?: number;
+  [key: string]: unknown;
+}
+
+/** `mushrooms`: a list plus the timestamp of the last spawn. */
+export interface MushroomSave {
+  l?: MushroomData[];
+  s?: number;
+}
+
+/**
  * The /base/load envelope. The server spreads every @FrontendKey field of the
  * Save entity into the top level, so this lists the handful the client needs
  * now and leaves the rest to the index signature.
@@ -116,10 +189,18 @@ export interface BaseLoadResponse extends ApiEnvelope {
   /** [height, width]; 800 x 800 on Map Room 2. */
   worldsize: [number, number];
   currenttime: number;
+  /** When the yard was last saved, in unix seconds. 0 on a yard never saved. */
+  savetime?: number;
   resources?: Resources;
   credits?: number;
   homebase?: [number, number];
-  buildingdata?: unknown;
+  buildingdata?: BuildingDataMap | null;
+  buildinghealthdata?: BuildingHealthData | null;
+  mushrooms?: MushroomSave | null;
+  /** Owned store items. `ENL.q` is the yard expansion level, 0..6. */
+  storedata?: Record<string, { q?: number } | undefined> | null;
+  basename?: string;
+  level?: number;
   tutorialstage?: unknown;
   flags?: Record<string, unknown>;
 }

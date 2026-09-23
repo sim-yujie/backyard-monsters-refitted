@@ -4,12 +4,14 @@ import { SceneManager } from "./SceneManager";
 import { BootScene } from "./scenes/BootScene";
 import { LoginScene } from "./scenes/LoginScene";
 import { MapRoom2Scene } from "./scenes/MapRoom2Scene";
+import { YardScene } from "./scenes/YardScene";
 
 /** Scene names, so nothing depends on a bare string in two places. */
 export const SceneName = {
   BOOT: "boot",
   LOGIN: "login",
   MAP_ROOM_2: "maproom2",
+  YARD: "yard",
 } as const;
 export type SceneName = (typeof SceneName)[keyof typeof SceneName];
 
@@ -65,7 +67,8 @@ export class App {
     this.scenes
       .register(SceneName.BOOT, () => new BootScene())
       .register(SceneName.LOGIN, () => new LoginScene())
-      .register(SceneName.MAP_ROOM_2, () => new MapRoom2Scene());
+      .register(SceneName.MAP_ROOM_2, () => new MapRoom2Scene())
+      .register(SceneName.YARD, () => new YardScene());
 
     // Pixi's renderer resize fires on the window; mirror it to the scenes.
     this.pixi.renderer.on("resize", this.handleResize);

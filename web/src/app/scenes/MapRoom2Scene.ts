@@ -106,6 +106,7 @@ export class MapRoom2Scene implements Scene {
         },
         onBookmarkCell: (cell) => this.addBookmark("", cell),
         canBookmark: () => !this.bookmarks.isFull,
+        onViewYard: () => context.goTo(SceneName.YARD),
         onZoom: (zoom) => this.zoomTo(zoom),
         onZoomReset: () => this.fitWorld(),
         onCellPanelClose: () => this.clearSelection(),
@@ -113,6 +114,7 @@ export class MapRoom2Scene implements Scene {
       SceneName.MAP_ROOM_2,
       [
         { id: SceneName.MAP_ROOM_2, label: "Map" },
+        { id: SceneName.YARD, label: "Yard" },
         { id: SceneName.LOGIN, label: "Account" },
       ],
     ).mount(context.overlay.content);

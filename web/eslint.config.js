@@ -21,7 +21,9 @@ export default tseslint.config(
     },
   },
   {
-    files: ["*.config.ts", "*.config.js"],
+    // Config files and the asset generators in tools/ run under Node, not in a
+    // browser, and are not part of the client bundle.
+    files: ["*.config.ts", "*.config.js", "tools/**/*.mjs"],
     languageOptions: { globals: globals.node },
   },
   // Must stay last: turns off every rule Prettier already handles.

@@ -19,9 +19,22 @@ export interface CellPanelOptions {
   onBookmark: (cell: OffsetCell) => void;
   /** Whether "Bookmark" should be offered for this cell. */
   canBookmark: () => boolean;
+  /** Opens the yard screen. Only offered on the caller's own cell. */
+  onViewYard: () => void;
 }
 
-const COMING_SOON = "Coming soon: the yard screen is a later task.";
+const ATTACK_SOON = "Coming soon: attacking is a later task.";
+
+/**
+ * Why "View yard" is limited to the caller's own cell.
+ *
+ * Opening someone else's yard is a `/base/load` in `view` mode against their
+ * base id, and that mode is not implemented yet — `api/base.ts` only has the
+ * own-yard call. The button therefore stays disabled on every other cell rather
+ * than opening a screen that would show the player their own base under
+ * somebody else's name.
+ */
+const OTHERS_YARD = "Coming soon: only your own yard opens in this build.";
 
 export class CellPanel {
   readonly element: HTMLElement;
@@ -31,6 +44,7 @@ export class CellPanel {
   private readonly kind: HTMLElement;
   private readonly swatch: HTMLElement;
   private readonly bookmarkButton: HTMLButtonElement;
+  private readonly viewYardButton: HTMLButtonElement;
   private readonly options: CellPanelOptions;
 
   private cell: OffsetCell | null = null;
@@ -57,12 +71,15 @@ export class CellPanel {
     this.facts = document.createElement("dl");
     this.facts.className = "cell-facts";
 
+    this.viewYardButton = document.createElement("button");
+    this.viewYardButton.type = "button";
+    this.viewYardButton.className = "btn";
+    this.viewYardButton.textContent = "View yard";
+    this.viewYardButton.addEventListener("click", () => options.onViewYard());
+
     const actions = document.createElement("div");
     actions.className = "map-row map-row--wrap";
-    actions.append(
-      disabledAction("View yard", COMING_SOON),
-      disabledAction("Attack", COMING_SOON),
-    );
+    actions.append(this.viewYardButton, disabledAction("Attack", ATTACK_SOON));
 
     this.bookmarkButton = document.createElement("button");
     this.bookmarkButton.type = "button";
@@ -82,6 +99,7 @@ export class CellPanel {
     this.payload = payload;
     this.panel.setTitle(`Cell ${cell.col}, ${cell.row}`);
     this.bookmarkButton.disabled = !this.options.canBookmark();
+    this.setViewYardEnabled(payload !== undefined && isPlayerCell(payload) && payload.mine === 1);
     this.render();
   }
 
@@ -89,7 +107,20 @@ export class CellPanel {
   update(payload: MapCell | undefined): void {
     if (!this.cell) return;
     this.payload = payload;
+    this.setViewYardEnabled(payload !== undefined && isPlayerCell(payload) && payload.mine === 1);
     this.render();
+  }
+
+  /** Enabled on the caller's own cell, and explained on every other. */
+  private setViewYardEnabled(enabled: boolean): void {
+    this.viewYardButton.disabled = !enabled;
+    if (enabled) {
+      this.viewYardButton.title = "Open your yard";
+      this.viewYardButton.setAttribute("aria-label", "View yard. Open your yard.");
+    } else {
+      this.viewYardButton.title = OTHERS_YARD;
+      this.viewYardButton.setAttribute("aria-label", `View yard. ${OTHERS_YARD}`);
+    }
   }
 
   get shownCell(): OffsetCell | null {

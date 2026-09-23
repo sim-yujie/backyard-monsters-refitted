@@ -33,6 +33,8 @@ export interface MapRoomUiHandlers {
   /** The cell inspector's own Bookmark button. */
   onBookmarkCell: (cell: OffsetCell) => void;
   canBookmark: () => boolean;
+  /** The cell inspector's "View yard" button, on the caller's own cell. */
+  onViewYard: () => void;
   onZoom: (zoom: number) => void;
   onZoomReset: () => void;
   onCellPanelClose: () => void;
@@ -168,6 +170,7 @@ export class MapRoomUi {
         onClose: this.handlers.onCellPanelClose,
         onBookmark: this.handlers.onBookmarkCell,
         canBookmark: this.handlers.canBookmark,
+        onViewYard: this.handlers.onViewYard,
       }).mount(this.dock("map-dock map-dock--right"));
     }
     this.cellPanel.show(cell, payload);
