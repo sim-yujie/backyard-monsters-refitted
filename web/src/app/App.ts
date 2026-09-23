@@ -1,5 +1,6 @@
 import { Application, Container } from "pixi.js";
 import { createOverlay, type Overlay } from "@/ui/overlay";
+import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager } from "./SceneManager";
 import { BootScene } from "./scenes/BootScene";
 import { LoginScene } from "./scenes/LoginScene";
@@ -27,6 +28,7 @@ export class App {
   readonly stage: Container;
 
   private overlay: Overlay | null = null;
+  private perf: PerfOverlay | null = null;
   private scenes: SceneManager | null = null;
   private resizeObserver: ResizeObserver | null = null;
 
@@ -54,6 +56,8 @@ export class App {
     this.pixi.stage.addChild(this.stage);
 
     this.overlay = createOverlay(this.host);
+    // Backtick toggles a frame-time readout; costs nothing while hidden.
+    this.perf = new PerfOverlay(this.pixi, this.host);
 
     this.scenes = new SceneManager(
       this.stage,
@@ -92,6 +96,8 @@ export class App {
     this.pixi.renderer.off("resize", this.handleResize);
     this.scenes?.destroy();
     this.scenes = null;
+    this.perf?.destroy();
+    this.perf = null;
     this.overlay?.destroy();
     this.overlay = null;
     this.pixi.destroy(true, { children: true });
