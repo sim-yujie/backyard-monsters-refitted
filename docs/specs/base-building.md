@@ -163,11 +163,25 @@ The plot is a rectangle in yard units centred on the origin, so it spans
 | Base plot | 1000 x 800 yard units | `client/scripts/STORE.as:2346-2347` |
 | Per "More Yardage" purchase | both axes x 1.1, then rounded up to a multiple of 20 | `client/scripts/STORE.as:2357-2365` |
 | Max purchases | 6 (`ENL` price ladder has 6 entries) | `server/src/game-data/store/storeItems.ts:39-46`, `client/scripts/com/monsters/baseplanner/popups/BasePlannerPopup.as:341` |
-| Resulting max plot | 1000 x 1.1^6 ≈ 1780 x 1420 (rounded to 20s) | derived from `STORE.as:2357-2365` |
+| Resulting max plot | 1780 x 1420 | `client/scripts/com/monsters/baseplanner/PlannerDesignView.as:106` |
 | Hard defaults before purchases load | 800 x 800 | `client/scripts/GLOBAL.as:802-803` |
 
 The 800 x 800 default at `GLOBAL.as:802-803` is overwritten by `STORE.ProcessPurchases()` on every
 load, so the effective minimum is 1000 x 800.
+
+The Yard Planner hardcodes the same ladder as a lookup table indexed by `ENL.q`, which confirms
+every step of the 1.1x-rounded-to-20 sequence
+(`client/scripts/com/monsters/baseplanner/PlannerDesignView.as:106`):
+
+```
+[1000x800, 1100x880, 1220x980, 1340x1080, 1480x1180, 1620x1300, 1780x1420]
+```
+
+It also carries a separate, much larger bound for decorations,
+`MAX_YARD_DIMENSIONS = 3240 x 2600`
+(`client/scripts/com/monsters/baseplanner/PlannerDesignView.as:104`, applied at `:576-579`). That is
+the planner's own limit; the live yard instead lets decorations go anywhere inside the 2600 x 2600
+grid bitmap (`client/scripts/GRID.as:102-106`), so the two bounds do not agree on the X axis.
 
 The Inferno yard uses the separate `ENLI` ladder (`client/scripts/STORE.as:2350-2356`).
 
@@ -708,10 +722,12 @@ subtracts**, caps each resource at 10,000,000 per save, and clamps to zero
 | Rule | Value | Source |
 | --- | --- | --- |
 | Base workers, main yard | 1 | `client/scripts/QUEUE.as:42-43` |
+| Where workers are created | one `QUEUE.Spawn(0)` per base load | `client/scripts/BASE.as:1498` |
 | Extra workers | `+ STORE._storeData.BEW.q` | `client/scripts/QUEUE.as:44-52` |
 | Extra-worker price ladder (shiny) | 250, 500, 1,000, 2,000 | `server/src/game-data/store/storeItems.ts:15-22` |
-| Maximum workers | 5 (1 base + 4 purchases) | `server/src/game-data/store/storeItems.ts:19`, `client/scripts/QUEUE.as:103-104`, `client/scripts/STORE.as:1175` |
-| Workers in an outpost | always 1, regardless of `BEW` | `client/scripts/QUEUE.as:32-39`, `:45-49` |
+| Maximum workers | 5 (1 base + 4 purchases) | `server/src/game-data/store/storeItems.ts:19`, `client/scripts/QUEUE.as:103-104`, `client/scripts/STORE.as:1175`, `client/scripts/UI_WORKERS.as:43` |
+| Total shiny for all four | 3,750 | `server/src/game-data/store/storeItems.ts:19` |
+| Workers in an outpost | always 1, regardless of `BEW` | `client/scripts/QUEUE.as:32-39`, `:45-49`, `client/scripts/UI_WORKERS.as:44-46` |
 | Workers in attack/view modes | none spawned | `client/scripts/QUEUE.as:57` |
 
 Buying `BEW` calls `QUEUE.Spawn(1)` immediately, so the new worker appears without a reload
@@ -734,13 +750,26 @@ worker closest to the building, within 3000 units (`client/scripts/WORKERS.as:65
 `QUEUE.Remove(id, wasCompleted, building)` frees the slot and sends the worker wandering
 (`client/scripts/QUEUE.as:189-208`, `client/scripts/WORKERS.as:104-135`).
 
+Three details a reimplementation should not copy:
+
+- **`_items[id]` is written before the `CanDo()` check**, so the bookkeeping map grows even when the
+  job is refused (`client/scripts/QUEUE.as:156-165`).
+- **`Add` returns true even when `WORKERS.Assign` returns null.** `Assign` only considers workers
+  within 3000 units (`client/scripts/WORKERS.as:70-79`); if none qualifies it returns null, `Add`
+  skips the slot-writing loop but still falls through to `return true`
+  (`client/scripts/QUEUE.as:165-185`). The caller treats the job as started, but no slot is marked
+  active and `_hasWorker` never becomes true, so the countdown never ticks.
+- **`QUEUE.Move(from, to)` is an empty stub** (`client/scripts/QUEUE.as:280-281`). Manual worker
+  reassignment was never implemented; clicking a worker icon only pans the camera
+  (`client/scripts/QUEUE.as:275-278`, `client/scripts/UI_WORKERS.as:107-109`).
+
 Jobs that consume a worker slot:
 
 | Job | Enqueued at |
 | --- | --- |
 | New building under construction | `client/scripts/BFOUNDATION.as:1701-1703` |
 | Upgrade | `client/scripts/BFOUNDATION.as:2321` |
-| Fortify | `client/scripts/BFOUNDATION.as:2200` (via `FortifyB`) |
+| Fortify | `client/scripts/BFOUNDATION.as:2203` (via `FortifyB`) |
 | Picking a mushroom | `client/scripts/MUSHROOMS.as:199` |
 | Restoring an in-progress job on load | `client/scripts/BFOUNDATION.as:3154-3182` |
 
@@ -754,9 +783,11 @@ zero-time items do not.
 ### Worker travel
 
 A worker must physically walk to the site. Until it arrives, `_hasWorker` is false and the countdown
-does not tick (`client/scripts/BFOUNDATION.as:1376-1393`). On arrival the building calls
-`HasWorker()`, which spawns resource-delivery packages for each non-zero cost component
-(`client/scripts/BFOUNDATION.as:2034-2054`). `_hasResources` is set when the job is registered
+does not tick (`client/scripts/BFOUNDATION.as:1376-1393`). The worker's own movement tick calls
+`HasWorker()` on arrival (`client/scripts/WORKER.as:263-265`), which sets `_hasWorker = true` and
+spawns one resource-delivery package per non-zero cost component
+(`client/scripts/BFOUNDATION.as:2034-2054`). `_hasResources` flips true when the first package lands
+(`client/scripts/ResourcePackage.as:104-106`), or immediately when the job is re-registered on load
 (`client/scripts/BFOUNDATION.as:3160`, `:3166`, `:3172`).
 
 During catch-up replay both flags are forced true so the walk does not cost simulated time
@@ -835,6 +866,16 @@ Two other timers modify build time globally:
 
 Cancelling a build and cancelling an upgrade each show a confirmation dialog first
 (`client/scripts/BFOUNDATION.as:2517`, `:2402`).
+
+Why cancelling a build refunds 100%: an unfinished building is level **0**, both when freshly placed
+(`client/scripts/BFOUNDATION.as:368`) and after a reload
+(`if (this._countdownBuild.Get() > 0 && !this._prefab) { this._lvl.Set(0); }`,
+`client/scripts/BFOUNDATION.as:3121-3123`), and `RecycleCost` takes the full `costs[0]` on the
+`lvl == 0` branch rather than the 50% branch (`client/scripts/BFOUNDATION.as:2639-2664`).
+
+**Shiny is never refunded.** There is no refund branch for `IB`, `IU`, `IF` or any `SP` purchase
+anywhere in `BFOUNDATION.as` or `STORE.as`. Elapsed build time is also never compensated — cancelling
+returns the resources and discards the progress.
 
 **Outposts cannot recycle or cancel builds at all** — both paths show a refusal message
 (`client/scripts/BFOUNDATION.as:2513-2515`, `:2538-2540`), and every building placed in an outpost
@@ -1084,19 +1125,43 @@ by category. Opening it snapshots the live yard into a `PlannerTemplate`
 
 | Operation | Handler | Notes |
 | --- | --- | --- |
-| Move a building (drag) | `PlannerDesignView.onBuildingClick` → `dragBuilding` with `TOOL_SELECTMOVE` (`PlannerDesignView.as:376-392`) | The default tool |
-| Put a building into the sidebar inventory | `TOOL_STORE` → `storeBuilding` (`PlannerDesignView.as:391-392`, `:407-411`) | Removes it from the plan; it must be replaced before Apply |
-| Place a building from inventory | `addInventoryItem` / `addMode` (`PlannerDesignView.as:330-357`) | Includes decorations held in real storage |
-| Zoom | `zoomScrollerUpdate`, `zoomMin`..`zoomMax` (`popups/BasePlannerPopup.as:540-547`) | Continuous slider |
-| Show tower ranges | `redrawRanges` (`PlannerDesignView.as:392`) | Read from `PlannerNode.range` |
-| Expand the yard | `onStoreOpen` opens the `ENL` store item (`popups/BasePlannerPopup.as:341-349`) | Hidden once `ENL.q == 6` |
-| Save the layout to a slot | `BasePlanner.clickedSave` → `BasePlannerService.saveTemplate` (`BasePlanner.as:82-95`, `BasePlannerService.as:16-20`) | Server round-trip |
-| Load a layout from a slot | `BasePlanner.clickedLoad` → `loadTemplateAtSlot` (`BasePlanner.as:97-110`, `:57-59`) | Purely client-side once the list is fetched |
-| Apply the layout to the real yard | `BasePlanner.clickedApply` → `BASE.applyTemplate` (`BasePlanner.as:112-126`, `BASE.as:5025-5041`) | The only action that touches the live yard |
-| Clear / discard | `onClearClick` with a confirmation popup (`popups/BasePlannerPopup.as:575-592`) | — |
+| Move a building (drag) | `onBuildingClick` → `dragBuilding` → `stopDragBuilding` with `TOOL_SELECTMOVE` (`PlannerDesignView.as:377-395`, `:430-508`) | Default tool; snaps on a 5-unit threshold (`MOUSE_POSITION_SNAP_THRESHHOLD`, `PlannerDesignView.as:52`) |
+| Put a building into the sidebar inventory | `TOOL_STORE` → `storeBuilding` (`PlannerDesignView.as:50`, `:391-392`, `:407-411`) | Removes it from the plan; it must be replaced before Apply |
+| Place a building from inventory | `onExplorerItemClick` → `addInventoryItem` / `addMode` (`popups/BasePlannerPopup.as:645-650`, `PlannerDesignView.as:309-357`) | Includes decorations held in real storage |
+| Cancel a placement or drag | `cancelAddInventory`, `cancelDragBuilding`, `removeSelection` (`PlannerDesignView.as:344-352`, `:510-525`, `:371-375`) | — |
+| Overlap and bounds validation | `validateBuilding` (`PlannerDesignView.as:558-582`) | Bitmap hit-test against every other item, plus the `YARD_EXPANSIONS` bound (`:106`) or `MAX_YARD_DIMENSIONS` for decorations (`:104`) |
+| Pan the canvas | `canvasDragStart` / `canvasDrag` / `canvasDragStop` (`PlannerDesignView.as:247`, `:257`, `:264`) | — |
+| Zoom | `setZoom` (`PlannerDesignView.as:212`), buttons at `popups/BasePlannerPopup.as:519-535`, wheel at `:510-517` | Range 0.25 to 2.0 in steps of 0.25 (`PlannerDesignView.as:76-80`). The slider handler `onZoomScroll` is an empty stub (`:537-538`) |
+| Toggle range overlays | checkboxes (`popups/BasePlannerPopup.as:307-320`, `:498-504`) → `toggleView` → `drawRanges` (`PlannerDesignView.as:642-712`) | Separate ground, air and trap overlays |
+| Toggle level and fortification labels | `toggleMoreInfo` (`PlannerDesignView.as:659-668`, `components/BuildingItem.as:137-161`) | Display only |
+| Expand the yard | `onStoreOpen` opens the `ENL` store item (`popups/BasePlannerPopup.as:346-352`, `:484-491`) | Hidden outside the main yard, disabled once `ENL.q == 6` (`:341-356`) |
+| Fullscreen | `popups/BasePlannerPopup.as:373-377` | — |
+| Save the layout to a slot | `clickedSave` → `BasePlannerService.saveTemplate` (`BasePlanner.as:82-95`, `BasePlannerService.as:16-20`) | Server round-trip |
+| Rename a slot | inline field, 15 characters (`popups/transfer/BasePlannerTransferRow.as:26-33`) | — |
+| Load a layout from a slot | `clickedLoad` → `loadTemplateAtSlot` (`BasePlanner.as:97-110`, `:57-59`) | Purely client-side once the list is fetched |
+| Apply the layout to the real yard | `clickedApply` → `BASE.applyTemplate` (`BasePlanner.as:112-126`, `BASE.as:5025-5041`) | The only action that touches the live yard |
+| Clear the layout | `onClearClick` with a confirmation popup (`popups/BasePlannerPopup.as:574-592`) → `clear()` (`:615-633`) | Moves everything except misc nodes into the inventory |
+
+**Not present anywhere in `com/monsters/baseplanner/`:** rotate, upgrade, sell or delete-by-choice,
+undo/redo, copy/paste, multi-select, instant-finish. `BaseTemplateNode` carries only `x`, `y`, `id`
+and `type` (`BaseTemplateNode.as:6-12`), so rotation could not be persisted even if it were added to
+the UI.
 
 **It is client-only rearrangement.** Nothing moves in the real yard while the player drags; the plan
-is a parallel data structure of `PlannerNode` objects. `Apply` is what writes back:
+is a parallel data structure of `PlannerNode` objects. Contrast the old planner, which wrote
+`_building._mc.x/y` on every drag frame (`client/scripts/plannerBuilding.as:135-145`).
+
+There are exactly three server interactions: `gettemplates` on open
+(`BasePlanner.as:43`, `BasePlannerService.as:30-33`), `savetemplate` on Save-to-slot
+(`BasePlannerService.as:16-20`), and the ordinary `/base/save` after Apply. All three go through
+`URLLoaderApi` as form-urlencoded POSTs with a bearer token
+(`client/scripts/URLLoaderApi.as:95-132`); `gettemplates` sends no variables, so Flash degrades it to
+a GET, which is why the route is registered with `router.get`.
+
+Save-to-slot persists the template and moves nothing. Apply moves buildings and writes no slot. The
+two are independent.
+
+`Apply` is what writes back:
 
 ```as3
 BASE.applyTemplate(template):
@@ -1129,7 +1194,14 @@ Apply is blocked if any **non-decoration, non-misc** node is still sitting in th
 inventory — every real building must be placed somewhere
 (`client/scripts/com/monsters/baseplanner/popups/BasePlannerPopup.as:127-142`, `:557-563`).
 Decorations left in inventory are recycled into real storage on Apply
-(`BasePlanner.as:113-122`).
+(`BasePlanner.as:113-122`), and decorations taken *out* of storage are materialised into real
+buildings by `BASE.getBuildingFromNode`, which instantiates them and decrements
+`_buildingsStored["b" + type]` (`client/scripts/BASE.as:5043-5080`).
+
+`Apply` triggers two saves, because `BASE.applyTemplate` ends with `Save()`
+(`client/scripts/BASE.as:5040`) and `clickedApply` calls `BASE.Save()` again immediately after
+(`BasePlanner.as:125`). Both are coalesced by the save counter, so the effect is one request, but a
+reimplementation should not copy the double call.
 
 Mushrooms (type 7) are excluded from the plan (`client/scripts/BASE.as:5097-5109`) and buildings
 whose class is `enemy` are excluded from a saved template
@@ -1188,10 +1260,12 @@ base data when `unlockAllEventRewards` is on
 | Limit | Behaviour | Source |
 | --- | --- | --- |
 | Outposts | Save and Load are disabled; Apply still works | `BasePlanner.as:41`, `popups/BasePlannerPopup.as:268-269`, `:282-284` |
-| Buildings under construction / upgrading | Included in the plan and movable; nothing blocks them | `PlannerNode.as:54-85` reads level and fortification but not countdowns |
+| Buildings under construction / upgrading | Included in the plan and **movable** | No countdown check exists anywhere in `com/monsters/baseplanner/`, and `BFOUNDATION.moveTo` has none either (`client/scripts/BFOUNDATION.as:3601-3613`). The old planner did lock them (`client/scripts/plannerBuilding.as:37-44`) |
 | `enemy`-class buildings | Not clickable in the plan, not saved | `PlannerDesignView.as:383-385`, `BASE.as:5111-5113` |
 | Mushrooms | Absent from the plan | `BASE.as:5104` |
-| Attack modes | The planner is reachable only from the building info panel, which only shows action buttons in `build` mode | `client/scripts/BUILDINGINFO.as:97` |
+| Attack and view modes | `PLANNER.Show()` itself has no mode check; the gate is the entry point, whose buttons are only built inside `if (GLOBAL.mode == GLOBAL.e_BASE_MODE.BUILD)` — note that is `build` exactly, not `ibuild` | `client/scripts/PLANNER.as:25-65`, `client/scripts/BUILDINGINFO.as:97`, `:164-166` |
+| Yard Planner building itself damaged or busy | The `btn_yardplanner` button is not built at all, because the branch that adds it requires the idle/undamaged flag | `client/scripts/BUILDINGINFO.as:98-127`, `:143` |
+| Slot ids outside the allowed range | Dropped silently when the template list is parsed | `BasePlannerService.as:40`, `:48-50` |
 | Unsaved changes on close | Confirmation popup offering Save or Discard | `popups/BasePlannerPopup.as:701-713` |
 
 Note the contrast with the **old** planner, which moved the real buildings live as you dragged
@@ -1207,8 +1281,10 @@ The planner already has most of what it needs in scope and is missing only the a
 - `PlannerNode` holds a live reference to the real `BFOUNDATION` (`PlannerNode.as:32`, `:56`), plus
   `level`, `fortification`, `range` and the full `props` object
   (`PlannerNode.as:61-64`, `:105`). It already renders "Name Level N" in the sidebar
-  (`PlannerNode.as:75`).
-- Because `node.building` is the real object, `node.building.Upgrade()` would work unchanged.
+  (`PlannerNode.as:75`), and a "more info" toggle adds the fortification tier
+  (`components/BuildingItem.as:137-161`).
+- Because `node.building` is the real object, `node.building.Upgrade()` would work unchanged for
+  anything already standing in the yard.
 - `BASE.CanUpgrade`, `UpgradeCost` and `InstantUpgradeCost` are static/instance helpers with no UI
   dependency (`client/scripts/BASE.as:3828`, `client/scripts/BFOUNDATION.as:2668`, `:2114`).
 
@@ -1231,9 +1307,15 @@ The planner already has most of what it needs in scope and is missing only the a
 5. **Applicability check interaction.** `checkIfApplicable` refuses Apply while any real building is
    in the inventory (`popups/BasePlannerPopup.as:132-142`). A building upgraded while stored would
    be in an inconsistent state; storing should be disallowed for anything with a running countdown.
-6. **No server work is required.** Upgrades never touch the yardplanner endpoints; they ride the
+6. **Inventory items are not real buildings.** A node that came out of storage wraps a synthetic
+   `BFOUNDATION` that was constructed and then immediately removed from the instance manager, with
+   only `_id = 1000000`, `_type`, `_lvl`, `_fortification` and `_range` set and **no `_buildingProps`
+   at all** (`PlannerTemplate.as:160-176`). Calling `UpgradeCost()` or `Upgrade()` on one would throw.
+   Any upgrade affordance has to be hidden for inventory nodes, or the stub has to be given props.
+7. **No server work is required.** Upgrades never touch the yardplanner endpoints; they ride the
    normal `/base/save` `buildingdata` blob. The planner's own save format
-   (`{x, y, id, type}`) carries no level and does not need to.
+   (`{x, y, id, type}`) carries no level and does not need to — but that also means a saved layout
+   cannot describe an intended upgrade, so deferring upgrades to Apply would need a new node field.
 
 The cheapest version: add a third tool (or a click-through on the selected node) that opens the same
 `BUILDINGOPTIONS` upgrade popup the yard screen uses, scoped to `node.building`, and disable the
@@ -1415,9 +1497,12 @@ routes is `verifyUserAuth` and `logRequest`.
    7200 seconds, but the client's label keys are `str_30minutes` and `str_60minutes`
    (`client/scripts/STORE.as:1354-1359`). Which is shown to the player depends on the language pack,
    which I did not read.
-8. **Max yard size.** 1780 x 1420 is derived from six `ENL` purchases at 1.1x with a round-up to 20.
-   The exact sequence depends on the rounding order in `STORE.as:2357-2365` and was not checked
-   numerically against a maxed account.
+8. ~~Max yard size.~~ **Resolved.** The full ladder is hardcoded in the Yard Planner as
+   `YARD_EXPANSIONS` (`client/scripts/com/monsters/baseplanner/PlannerDesignView.as:106`) and agrees
+   with the runtime computation: 1000x800 through 1780x1420. What remains unverified is the
+   3240 x 2600 decoration bound in the planner (`:104`) versus the 2600 x 2600 grid bitmap the live
+   yard uses (`client/scripts/GRID.as:8-10`); the two disagree on the X axis and I did not determine
+   which one a player actually hits first.
 9. **Empire value high-water mark.** `_baseValue` only rises for main yards
    (`client/scripts/BASE.as:4857-4859`). Whether the server ever resets it (for example on takeover)
    was not traced.
@@ -1493,10 +1578,15 @@ These are load-bearing and a new client that changes them will diverge from exis
 - **The 2-worker default planner slot limit tied to a subscription reward**
   (`client/scripts/com/monsters/baseplanner/BasePlanner.as:20-24`) can be reconsidered; the storage
   is a `jsonb` array with no bound.
-- **Dead code to not port:** `PLANNERPOPUP.as` and friends (old planner, `yp_version` 1), the friend
-  "help" system (`client/scripts/BFOUNDATION.as:2337-2399`, dead because `_friendCount` is always
-  0), `buildingkeydata` (written, never read), and the `BasePlannerService.clearSlot` call to a
-  nonexistent endpoint.
+- **Dead code to not port:** `PLANNERPOPUP.as`, `PLANNERPOPUP_CLIP.as`, `plannerBuilding.as`,
+  `plannerBuilding_CLIP.as`, `plannerBuildingSquare.as` and `plannerRange.as` (old planner,
+  `yp_version` 1); `PLANNER.Update()`, which is a no-op under the new planner and makes its two
+  callers `client/scripts/STORE.as:2244` and `:2248` do nothing; the friend "help" system
+  (`client/scripts/BFOUNDATION.as:2337-2399`, dead because `_friendCount` is always 0);
+  `buildingkeydata` (written, never read); `QUEUE.Move` (empty stub,
+  `client/scripts/QUEUE.as:280-281`); the dead empty branch in `QUEUE.Tick`
+  (`client/scripts/QUEUE.as:221-222`); and `BasePlannerService.clearSlot`, which posts to a
+  nonexistent endpoint and is never called.
 
 ### Manual clicks to remove
 
