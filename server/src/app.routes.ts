@@ -65,6 +65,11 @@ import { reportMessageThread } from "./controllers/mail/reportMessageThread.js";
 
 import { getTemplates } from "./controllers/yardplanner/getTemplates.js";
 import { saveTemplate } from "./controllers/yardplanner/saveTemplate.js";
+import { getLayouts } from "./controllers/yardplanner/getLayouts.js";
+import { saveLayout } from "./controllers/yardplanner/saveLayout.js";
+import { deleteLayout } from "./controllers/yardplanner/deleteLayout.js";
+import { applyLayout } from "./controllers/yardplanner/applyLayout.js";
+import { layoutRoute } from "./controllers/yardplanner/layoutRoute.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
@@ -166,8 +171,16 @@ router.post("/api/:apiVersion/player/reportmessagethread", apiVersion, verifyUse
 /**  ────────────────────────────────────────────────
 * 📦 Yard Planner
 * ──────────────────────────────────────────────── */
+router.get("/api/:apiVersion/bm/yardplanner/layouts", apiVersion, verifyUserAuth, logRequest, layoutRoute(getLayouts));
+router.put("/api/:apiVersion/bm/yardplanner/layouts/:slot", apiVersion, verifyUserAuth, logRequest, layoutRoute(saveLayout));
+router.delete("/api/:apiVersion/bm/yardplanner/layouts/:slot", apiVersion, verifyUserAuth, logRequest, layoutRoute(deleteLayout));
+router.post("/api/:apiVersion/bm/yardplanner/apply", apiVersion, verifyUserAuth, logRequest, layoutRoute(applyLayout));
+
+// Deprecated aliases for the Flash client. `deletetemplate` is the route it has
+// always called and the server never implemented (`BasePlannerService.as:64-67`).
 router.get("/api/:apiVersion/bm/yardplanner/gettemplates", apiVersion, verifyUserAuth, logRequest, getTemplates);
-router.post("/api/:apiVersion/bm/yardplanner/savetemplate", apiVersion, verifyUserAuth, logRequest, saveTemplate);
+router.post("/api/:apiVersion/bm/yardplanner/savetemplate", apiVersion, verifyUserAuth, logRequest, layoutRoute(saveTemplate));
+router.post("/api/:apiVersion/bm/yardplanner/deletetemplate", apiVersion, verifyUserAuth, logRequest, layoutRoute(deleteLayout));
 
 /**  ────────────────────────────────────────────────
 * 📦 Leaderboards & Attack Logs

@@ -377,10 +377,32 @@ every route.
 
 ### Yard Planner
 
+Two generations of routes share one storage column, `save.savetemplate`. The four `layouts`
+routes are the version 2 API the web client uses; `gettemplates` and `savetemplate` are the
+Flash client's and are deprecated. A layout saved through either is visible through both —
+version 1 rows are converted to version 2 on read and never rewritten in place, and version 2
+rows are converted back down for `gettemplates`.
+
+A **layout** is `{ slot, name, version: 2, expansion, updatedAt, nodes }`. `expansion` is the
+`storedata.ENL.q` the layout was drawn for (0-6) and `updatedAt` is unix seconds. A **node** is
+`{ id, t, x, y, l?, fort? }`: the building id from `buildingdata`, its type, and its origin in
+yard units. `l` and `fort` are advisory — Apply never writes them. Every account gets 10 slots,
+enforced server-side (`docs/design/yard-planner-redesign.md` §8, decision Q2).
+
+The `layouts` routes answer a rejection with the error status and the detail flattened next to
+`error` (`{ error: "...", unplaced: [...] }`), not under `errorDetails` as the rest of the API
+does. Validation lives in `server/src/services/yardplanner/validateLayout.ts` and the footprint
+table it measures against is `server/src/game-data/buildingFootprints.ts`.
+
 | Method | Path | Middleware | Request fields | Response | Description |
 |---|---|---|---|---|---|
-| GET | `/api/:apiVersion/bm/yardplanner/gettemplates` | apiVersion, verifyUserAuth, logRequest | none | `{ error: 0, ...save.savetemplate }` | Returns the caller's saved yard-planner layouts. **Quirk**: `save.savetemplate` is an array, spread into a plain object — the client receives it as a numeric-string-keyed object (`{"0": {...}, "1": {...}}`), not a JSON array, and not under a named key. |
-| POST | `/api/:apiVersion/bm/yardplanner/savetemplate` | apiVersion, verifyUserAuth, logRequest | `{ slotid: number, name: string, data: object }` — **not zod-validated**, cast directly | `{ error: 0, ...save.savetemplate }` (same spread-array quirk) | Upserts one template slot by `slotid` (overwrite if found, else append). No bounds checking on slot count or `slotid`, and no schema validation at all. |
+| GET | `/api/:apiVersion/bm/yardplanner/layouts` | apiVersion, verifyUserAuth, logRequest | none | `{ error: 0, slots: 10, layouts: Layout[] }` | Every saved layout, ordered by slot, converted to version 2. Slots with nothing in them are simply absent from the array. |
+| PUT | `/api/:apiVersion/bm/yardplanner/layouts/:slot` | apiVersion, verifyUserAuth, logRequest | `name` (trimmed, 1-20 chars), `data` (JSON string of `{ version: 2, expansion, nodes }`) | `{ error: 0, layout }` | Overwrites one slot. Rejects with `400` for a slot outside 0-9, a name outside 1-20 characters, unreadable or non-version-2 data, more than 1200 nodes, a node id the caller's `buildingdata` does not have or has at a different type, a duplicate id, a position outside the plot for the layout's own `expansion`, or two footprints that overlap. Decorations are measured against the planner's extended 3240 x 2600 area instead of the plot. Mushrooms are ignored here. |
+| DELETE | `/api/:apiVersion/bm/yardplanner/layouts/:slot` | apiVersion, verifyUserAuth, logRequest | none | `{ error: 0 }` | Empties one slot. Deleting an empty slot succeeds. `400` if the slot is outside 0-9. |
+| POST | `/api/:apiVersion/bm/yardplanner/apply` | apiVersion, verifyUserAuth, logRequest | `data` (JSON string, same shape as PUT) | `{ error: 0, moved: number, buildingdata }` | **Server-authoritative**: the server moves the buildings, where the Flash client moved them itself and let an ordinary `/base/save` carry the result (`client/scripts/BASE.as:5025-5041`). Runs the same node checks as PUT, then three more: positions are measured against the caller's **current** `storedata.ENL.q` rather than the layout's `expansion`; mushrooms from `save.mushrooms` are obstacles no node may overlap; and every non-decoration, non-mushroom building in `buildingdata` must appear in `nodes`, else `409 { error, unplaced: [ids] }` with no auto-place (decision Q4). On success it writes only `X` and `Y` on the listed buildings, bumps `savetime`, and returns the updated `buildingdata`. Buildings under construction, upgrading or fortifying may be moved. No resource, level or timer is touched. |
+| GET | `/api/:apiVersion/bm/yardplanner/gettemplates` | apiVersion, verifyUserAuth, logRequest | none | `{ error: 0, ...entries }` | **Deprecated**, the Flash client's route. Keeps its original quirk: the array is spread into the body, so the client receives a numeric-string-keyed object, not a JSON array under a named key. Each entry is `{ slotid, name, data }` with `data` a JSON **string** of an index-keyed `{x, y, id, type}` object, because the client runs `JSON.parse` on it. Layouts written by the new client are converted down to this shape on the way out. |
+| POST | `/api/:apiVersion/bm/yardplanner/savetemplate` | apiVersion, verifyUserAuth, logRequest | `{ slotid: number, name: string, data: string }` | `{ error: 0, ...entries }` (same spread-array quirk) | **Deprecated**, the Flash client's route. Now rejects `400` for a `slotid` outside 0-9 or a `data` payload over 64 KB, where before the request body was spread into the column unchecked. Everything else is taken as best it can be — the name is trimmed and clipped to 20 characters, unreadable nodes are dropped — because a Flash client cannot show a validation message from here. The nodes are converted to version 2 and stored alongside anything the new client wrote, with `expansion: 0` since a version 1 body never said which plot it was drawn for. |
+| POST | `/api/:apiVersion/bm/yardplanner/deletetemplate` | apiVersion, verifyUserAuth, logRequest | `{ slotid: number }` | `{ error: 0 }` | **Deprecated** alias for `DELETE /layouts/:slot`. This is the route `BasePlannerService.clearSlot:64-67` has always called and the server never implemented, so until now a slot could only be overwritten, never emptied. |
 
 ### Debug
 

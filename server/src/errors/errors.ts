@@ -449,3 +449,33 @@ export const powerupLeaderOnlyErr = () =>
     data: {},
     isClientFriendly: true,
   });
+
+/**
+ * A Yard Planner layout the server will not accept: a bad slot, a node it
+ * cannot match to a building, a position outside the plot, or two footprints on
+ * the same cells. The message is written to be shown to the player as-is, and
+ * `data` carries whatever detail the client needs to point at the problem.
+ */
+export const layoutInvalidErr = (message: string, data: object = {}) =>
+  new ClientSafeError({
+    message,
+    status: Status.BAD_REQUEST,
+    data,
+    isClientFriendly: true,
+  });
+
+/**
+ * Apply was blocked because buildings are missing from the layout. Apply stays
+ * hard-blocked while any non-decoration building is unplaced, and there is no
+ * auto-place (`docs/design/yard-planner-redesign.md` §8, decision Q4), so the
+ * ids come back for the client to list.
+ */
+export const layoutUnplacedErr = (ids: number[]) =>
+  new ClientSafeError({
+    message: `Every building has to be placed before you can apply this layout. ${ids.length} ${
+      ids.length === 1 ? "building is" : "buildings are"
+    } still unplaced.`,
+    status: Status.CONFLICT,
+    data: { unplaced: ids },
+    isClientFriendly: true,
+  });
