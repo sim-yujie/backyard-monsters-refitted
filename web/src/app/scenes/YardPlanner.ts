@@ -1,6 +1,6 @@
 import type { BuildingDataMap, Layout } from "@/api/types";
 import { ApiError, NetworkError } from "@/api/http";
-import { applyConflictIds, applyLayout, usingMock } from "@/api/yardplanner";
+import { applyConflictIds, applyLayout } from "@/api/yardplanner";
 import type { Camera } from "@/game/Camera";
 import { PlannerSession } from "@/game/yard/planner/PlannerSession";
 import type { Yard } from "@/game/yard/yardModel";
@@ -91,13 +91,6 @@ export class YardPlanner {
 
     this.session.attach();
     this.bar.update(this.session.state());
-
-    if (usingMock()) {
-      this.showBanner(
-        "The server's layout routes are not up yet, so layouts are kept in this browser and Apply will not change your real yard.",
-        "info",
-      );
-    }
   }
 
   /** True when there are edits that have not been saved to a slot. */
@@ -208,9 +201,7 @@ export class YardPlanner {
       const response = await applyLayout(this.session.payload());
       this.options.notices.show(
         NOTICE,
-        usingMock()
-          ? `Moved ${response.moved} buildings in this browser only: the server route is not up yet.`
-          : `Moved ${response.moved} ${plural(response.moved, "building")}.`,
+        `Moved ${response.moved} ${plural(response.moved, "building")}.`,
         { level: "info", timeoutMs: 5000 },
       );
       this.options.onApplied(response.buildingdata, response.moved);

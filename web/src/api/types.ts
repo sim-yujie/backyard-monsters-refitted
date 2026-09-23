@@ -385,7 +385,16 @@ export interface ApplyLayoutResponse extends ApiEnvelope {
   buildingdata: BuildingDataMap;
 }
 
-/** The 409 body: a layout naming a building the yard no longer has. */
+/**
+ * The failure bodies, which are flat rather than wrapped in `errorDetails`.
+ *
+ * 400 carries `overlapping` or `unknown`, 409 carries `unplaced`. All three are
+ * building ids the planner should outline and offer to show, which is why
+ * `applyConflictIds` reads them together.
+ */
 export interface ApplyConflictDetails {
+  error?: string;
   unplaced?: number[];
+  overlapping?: number[];
+  unknown?: number[];
 }
