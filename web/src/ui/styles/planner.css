@@ -90,6 +90,44 @@
   color: var(--colour-accent-text);
 }
 
+/*
+ * F7's Align and Distribute menus.
+ *
+ * The list is positioned against the group button rather than the bar, so it
+ * hangs under whichever of the two was pressed, and it sits above the canvas
+ * chrome for the same reason the bars do.
+ */
+.planner-menu {
+  position: relative;
+  display: flex;
+}
+
+.planner-menu__list {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: calc(var(--z-hud) + 1);
+  display: flex;
+  flex-direction: column;
+  min-width: 100%;
+  padding: var(--space-1);
+  gap: var(--space-1);
+  background: var(--colour-surface-raised);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-panel);
+}
+
+.planner-menu__list[hidden] {
+  display: none;
+}
+
+.planner-menu__item {
+  justify-content: flex-start;
+  text-align: start;
+  white-space: nowrap;
+}
+
 .planner-bar__checklist--bad {
   color: var(--colour-danger);
   border-color: var(--colour-danger);

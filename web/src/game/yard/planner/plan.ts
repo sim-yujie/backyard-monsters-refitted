@@ -8,9 +8,12 @@ import {
   plotBounds,
   validateOffset,
   validatePlan,
+  validateTargets,
+  type PlacementIssue,
   type PlacementResult,
   type PlanNode,
   type PlotBounds,
+  type Position,
 } from "./placement";
 
 /**
@@ -57,6 +60,17 @@ export interface PlaceCheck {
 }
 
 const FREE: PlaceCheck = { reason: null, blockedBy: null };
+
+/**
+ * What `commitTargets` did.
+ *
+ * `entries` is null whenever nothing moved, and `issues` then says whether that
+ * was because the operation was refused or because it had nothing to do.
+ */
+export interface TargetCommit {
+  readonly entries: MoveEntry[] | null;
+  readonly issues: readonly PlacementIssue[];
+}
 
 /** What `absorb` changed, for the notice and the tests. */
 export interface AbsorbResult {
@@ -237,6 +251,57 @@ export class Plan {
       this.occupancy.stamp(node);
     }
     return entries;
+  }
+
+  /**
+   * Drops the lifted selection at one position each: mirror, align, distribute.
+   *
+   * The counterpart of `commitMove` for the operations that move every
+   * building by a different amount. It is all-or-nothing by design (F7): if any
+   * one of them would leave the plot or land on something, nothing moves at
+   * all, and the issues come back so the caller can outline the buildings that
+   * caused it. A building the map does not name stays where it is and is still
+   * tested, because its neighbour may have been sent on top of it.
+   *
+   * Either way the grid is closed again before this returns.
+   */
+  commitTargets(targets: ReadonlyMap<number, Position>): TargetCommit {
+    const lifted = this.lifted;
+    this.lifted = null;
+    if (!lifted || lifted.length === 0) return { entries: null, issues: [] };
+
+    const moving: [PlanNode, Position][] = [];
+    for (const node of lifted) {
+      const to = targets.get(node.id);
+      if (to && (to.x !== node.x || to.y !== node.y)) moving.push([node, to]);
+    }
+
+    const result =
+      moving.length === 0
+        ? { valid: false, issues: [] }
+        : validateTargets(lifted, targets, this.occupancy, this.plot);
+
+    if (!result.valid) {
+      for (const node of lifted) this.occupancy.stamp(node);
+      return { entries: null, issues: result.issues };
+    }
+
+    const entries: MoveEntry[] = moving.map(([node, to]) => ({
+      id: node.id,
+      fromX: node.x,
+      fromY: node.y,
+      toX: to.x,
+      toY: to.y,
+    }));
+
+    for (const [node, to] of moving) {
+      node.x = to.x;
+      node.y = to.y;
+    }
+    // Every lifted node, not just the moved ones: the ones that stayed put had
+    // their cells taken out of the grid by `beginMove` and need them back.
+    for (const node of lifted) this.occupancy.stamp(node);
+    return { entries, issues: [] };
   }
 
   /** Puts a lifted selection back without moving it. */

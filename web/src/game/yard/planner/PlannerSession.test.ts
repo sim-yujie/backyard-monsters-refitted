@@ -15,7 +15,14 @@ import {
   tileRect,
 } from "./blueprint";
 import type { Corners } from "./marquee";
-import { PlannerSession, PlannerTool, type PlannerState } from "./PlannerSession";
+import { GroupOp } from "./groupTools";
+import {
+  GroupRefusal,
+  PlannerSession,
+  PlannerTool,
+  type GroupOutcome,
+  type PlannerState,
+} from "./PlannerSession";
 
 /**
  * The planner's pointer behaviour, driven through real DOM events.
@@ -85,6 +92,10 @@ interface Harness {
   readonly canvas: HTMLCanvasElement;
   /** Every state the session pushed at its owner, newest last. */
   readonly states: PlannerState[];
+  /** Every group operation the session reported, newest last. */
+  readonly groups: GroupOutcome[];
+  /** The ids the session last asked for a red outline on. */
+  readonly faulted: () => ReadonlySet<number>;
   /** How many times the session asked its owner to open the search box. */
   readonly finds: () => number;
   /** Where the renderer has each building drawn, in yard units. */
@@ -116,8 +127,10 @@ afterEach(() => {
  * it reports, because the one test that switches views is about the gesture
  * being dropped rather than about where anything lands.
  */
-const planner = (options: { readOnly?: boolean } = {}): Harness => {
-  const yard = testYard();
+const planner = (
+  options: { readOnly?: boolean; buildings?: readonly BuildingData[] } = {},
+): Harness => {
+  const yard = yardOf(options.buildings ?? BUILDINGS);
   const canvas = document.createElement("canvas");
   document.body.append(canvas);
 
@@ -169,7 +182,9 @@ const planner = (options: { readOnly?: boolean } = {}): Harness => {
       return rect ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null;
     },
     plotCorners: (): Corners => rectCorners(centredRect(500, 400)),
-    setPlannerVisuals: (): void => {},
+    setPlannerVisuals: (visuals: { invalid: ReadonlySet<number> } | null): void => {
+      faulted = visuals ? visuals.invalid : new Set<number>();
+    },
     worldSize: (): { width: number; height: number } => ({
       width: BLUEPRINT_WORLD.width,
       height: BLUEPRINT_WORLD.height,
@@ -181,7 +196,9 @@ const planner = (options: { readOnly?: boolean } = {}): Harness => {
   } as unknown as YardRenderer;
 
   const states: PlannerState[] = [];
+  const groups: GroupOutcome[] = [];
   let finds = 0;
+  let faulted: ReadonlySet<number> = new Set<number>();
 
   const setView = (next: YardView): void => {
     if (view === next) return;
@@ -200,6 +217,7 @@ const planner = (options: { readOnly?: boolean } = {}): Harness => {
     onFind: () => {
       finds++;
     },
+    onGroup: (outcome) => groups.push(outcome),
     ...(options.readOnly === undefined ? {} : { readOnly: options.readOnly }),
   });
   session.attach();
@@ -224,6 +242,8 @@ const planner = (options: { readOnly?: boolean } = {}): Harness => {
     session,
     canvas,
     states,
+    groups,
+    faulted: () => faulted,
     finds: () => finds,
     placements,
     view: () => view,
@@ -787,5 +807,175 @@ describe("read-only", () => {
     harness.release(by(ONE, 100, 0));
 
     expect(at(harness, 1)).toEqual({ x: 100, y: 0 });
+  });
+});
+
+/* ── F7: mirror, align and distribute ────────────────────────────────────── */
+
+/** A ragged row of three walls, close enough to be worth straightening. */
+const RAGGED: readonly BuildingData[] = [
+  { id: 1, t: 17, X: 0, Y: 0 },
+  { id: 2, t: 17, X: 40, Y: 25 },
+  { id: 3, t: 17, X: 80, Y: 60 },
+];
+
+describe("mirror, align and distribute", () => {
+  it("commits a mirror as a single undo entry", () => {
+    const harness = planner();
+    harness.session.selectOnly([1, 2]);
+
+    // The two towers span 0 to 270, so the reflection swaps them.
+    const outcome = harness.session.groupTool(GroupOp.MIRROR_X);
+
+    expect(outcome).toEqual({
+      op: GroupOp.MIRROR_X,
+      ok: true,
+      moved: 2,
+      blocked: 0,
+      reason: null,
+    });
+    expect(at(harness, 1)).toEqual({ x: 200, y: 0 });
+    expect(at(harness, 2)).toEqual({ x: 0, y: 0 });
+    expect(harness.placements.get(1)).toEqual({ x: 200, y: 0 });
+    expect(harness.session.state().undoLabel).toBe("Mirror left to right · 2 buildings");
+
+    harness.session.undo();
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(at(harness, 2)).toEqual({ x: 200, y: 0 });
+    // One entry for the whole operation: a second undo has nothing to reverse.
+    expect(harness.session.state().canUndo).toBe(false);
+    expect(harness.session.state().movedCount).toBe(0);
+  });
+
+  it("straightens a ragged row in one command", () => {
+    const harness = planner({ buildings: RAGGED });
+    harness.session.selectOnly([1, 2, 3]);
+
+    // The lowest bottom edge is 60 + 20, so every 20-unit wall starts at 60.
+    const outcome = harness.session.groupTool(GroupOp.ALIGN_BOTTOM);
+
+    expect(outcome.ok).toBe(true);
+    expect(outcome.moved).toBe(2);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 60 });
+    expect(at(harness, 2)).toEqual({ x: 40, y: 60 });
+    expect(at(harness, 3)).toEqual({ x: 80, y: 60 });
+    expect(harness.session.state().undoLabel).toBe("Align bottom · 2 buildings");
+    expect(harness.session.state().movedCount).toBe(2);
+  });
+
+  it("counts the buildings it moved, not the ones selected", () => {
+    const harness = planner({ buildings: RAGGED });
+    harness.session.selectOnly([1, 2]);
+
+    // Only the second wall is off the top line, so only it moves.
+    expect(harness.session.groupTool(GroupOp.ALIGN_TOP).moved).toBe(1);
+    expect(harness.session.state().undoLabel).toBe("Align top · 1 building");
+  });
+
+  it("spaces a row evenly and leaves the outermost two where they are", () => {
+    const harness = planner({
+      buildings: [
+        { id: 1, t: 17, X: 0, Y: 0 },
+        { id: 2, t: 17, X: 30, Y: 0 },
+        { id: 3, t: 17, X: 200, Y: 0 },
+      ],
+    });
+    harness.session.selectOnly([1, 2, 3]);
+
+    // Span 220 less three 20-unit walls is 160 of space over two gaps.
+    expect(harness.session.groupTool(GroupOp.DISTRIBUTE_X).moved).toBe(1);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(at(harness, 2)).toEqual({ x: 100, y: 0 });
+    expect(at(harness, 3)).toEqual({ x: 200, y: 0 });
+  });
+
+  it("answers M and Shift+M from the canvas", () => {
+    const harness = planner();
+    harness.session.selectOnly([1, 2]);
+
+    harness.key("m");
+    expect(at(harness, 1)).toEqual({ x: 200, y: 0 });
+
+    // Both towers sit at y 0 and are the same height, so the other axis is the
+    // identity and the session says so rather than pushing an empty command.
+    harness.key("M", { shiftKey: true });
+    expect(harness.groups.at(-1)?.reason).toBe(GroupRefusal.NO_CHANGE);
+    expect(harness.session.state().canUndo).toBe(true);
+    harness.session.undo();
+    expect(harness.session.state().canUndo).toBe(false);
+  });
+
+  it("says a selection is too small rather than doing half of it", () => {
+    const harness = planner({ buildings: RAGGED });
+
+    harness.session.selectOnly([1]);
+    expect(harness.session.groupTool(GroupOp.MIRROR_X).reason).toBe(GroupRefusal.TOO_FEW);
+
+    harness.session.selectOnly([1, 3]);
+    expect(harness.session.groupTool(GroupOp.DISTRIBUTE_X).reason).toBe(GroupRefusal.TOO_FEW);
+    expect(harness.session.state().canUndo).toBe(false);
+  });
+});
+
+describe("a group operation that cannot be done", () => {
+  it("moves nothing when two of the selection would land on each other", () => {
+    const harness = planner();
+    harness.session.selectOnly([1, 2]);
+
+    // Both towers sit at y 0, so putting their left edges on one line stacks
+    // the second on the first.
+    const outcome = harness.session.groupTool(GroupOp.ALIGN_LEFT);
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.reason).toBe(GroupRefusal.BLOCKED);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(at(harness, 2)).toEqual({ x: 200, y: 0 });
+    expect(harness.session.state().canUndo).toBe(false);
+    expect(harness.session.state().dirty).toBe(false);
+    expect([...harness.faulted()].sort((a, b) => a - b)).toEqual([1, 2]);
+  });
+
+  it("names a building that was never selected", () => {
+    // A tower at the top, a wall below it, and an unselected wall in the gap
+    // that the tower's mirrored footprint reaches over.
+    const harness = planner({
+      buildings: [
+        { id: 1, t: 20, X: 0, Y: 0 },
+        { id: 2, t: 17, X: 0, Y: 100 },
+        { id: 4, t: 17, X: 0, Y: 80 },
+      ],
+    });
+    harness.session.selectOnly([1, 2]);
+
+    const outcome = harness.session.groupTool(GroupOp.MIRROR_Y);
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.blocked).toBeGreaterThan(0);
+    expect(harness.faulted().has(4)).toBe(true);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(at(harness, 2)).toEqual({ x: 0, y: 100 });
+    expect(harness.placements.get(1)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("leaves the grid intact, so the next drag still sees every building", () => {
+    const harness = planner();
+    harness.session.selectOnly([1, 2]);
+    harness.session.groupTool(GroupOp.ALIGN_LEFT);
+
+    // The refused operation put both towers' cells back: tower 2 still cannot
+    // be dragged onto tower 1, and can still be dragged somewhere free.
+    expect(stillOccupies(harness, 1, 2)).toBe(true);
+    harness.session.nudge(0, 100);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 100 });
+    expect(at(harness, 2)).toEqual({ x: 200, y: 100 });
+  });
+
+  it("is refused outright in a read-only session", () => {
+    const harness = planner({ readOnly: true });
+    harness.session.selectOnly([1, 2]);
+
+    expect(harness.session.groupTool(GroupOp.MIRROR_X).reason).toBe(GroupRefusal.READ_ONLY);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(harness.session.state().canUndo).toBe(false);
   });
 });

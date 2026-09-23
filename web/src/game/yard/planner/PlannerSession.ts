@@ -5,6 +5,7 @@ import type { Yard } from "../yardModel";
 import type { YardRenderer, YardView } from "../YardRenderer";
 import { buildChecklist, type Checklist } from "./checklist";
 import { CommandStack, moveCommand, type MoveEntry } from "./commands";
+import { groupTargets, GroupOp, GROUP_OPS } from "./groupTools";
 import { planLoad, payloadFor, type LoadResult } from "./layout";
 import { rectFromCorners } from "./marquee";
 import type { PlanNode } from "./placement";
@@ -37,6 +38,30 @@ export const PlannerTool = {
   BOX: "box",
 } as const;
 export type PlannerTool = (typeof PlannerTool)[keyof typeof PlannerTool];
+
+/** Why a group operation did nothing, or null when it did something. */
+export const GroupRefusal = {
+  /** The session may not be edited at all (§8, Q5). */
+  READ_ONLY: "read-only",
+  /** Fewer buildings selected than the operation needs.  */
+  TOO_FEW: "too-few",
+  /** The selection is already like that: a mirror of a symmetric row. */
+  NO_CHANGE: "no-change",
+  /** Somebody would have left the plot or landed on something. */
+  BLOCKED: "blocked",
+} as const;
+export type GroupRefusal = (typeof GroupRefusal)[keyof typeof GroupRefusal];
+
+/** What a mirror, align or distribute did, for the notice that reports it. */
+export interface GroupOutcome {
+  readonly op: GroupOp;
+  readonly ok: boolean;
+  /** How many buildings moved. Zero unless `ok`. */
+  readonly moved: number;
+  /** How many the refusal named, which are the ones outlined in red. */
+  readonly blocked: number;
+  readonly reason: GroupRefusal | null;
+}
 
 export interface PlannerState {
   readonly tool: PlannerTool;
@@ -84,6 +109,7 @@ export class PlannerSession {
   private readonly onChange: () => void;
   private readonly onViewToggle: () => void;
   private readonly onFind: (() => void) | undefined;
+  private readonly onGroup: ((outcome: GroupOutcome) => void) | undefined;
   /**
    * Set for the life of the session: this plan may be read, never changed.
    *
@@ -122,6 +148,15 @@ export class PlannerSession {
      */
     onFind?: () => void;
     /**
+     * A mirror, align or distribute finished — or was refused.
+     *
+     * Reported through the session rather than returned to the caller because
+     * `M` on the keyboard and the toolbar's menu are the same operation, and
+     * only one of the two has anywhere to put the answer. The scene turns it
+     * into a notice; the session has already put the red outlines on.
+     */
+    onGroup?: (outcome: GroupOutcome) => void;
+    /**
      * Opens the plan for reading only (design §8, Q5).
      *
      * Selection, search, the two views and the cost cells all still work —
@@ -134,6 +169,7 @@ export class PlannerSession {
     this.onChange = options.onChange;
     this.onViewToggle = options.onViewToggle;
     this.onFind = options.onFind;
+    this.onGroup = options.onGroup;
     this.readOnly = options.readOnly ?? false;
     this.plan = Plan.fromYard(options.yard);
     this.view = new PlannerView({ renderer: options.renderer, plan: this.plan });
@@ -245,6 +281,59 @@ export class PlannerSession {
     this.view.syncSome(this.selection);
     this.view.resort();
     this.afterEdit();
+  }
+
+  /**
+   * Mirror, align or distribute the selection (design §3, F7).
+   *
+   * One command per press, whatever it moves, so a mirror of four hundred walls
+   * is one Ctrl+Z and not four hundred. It goes through the same validation a
+   * drag does — `beginMove`, test, `commitTargets` — so an operation that would
+   * put anything outside the plot or on top of something is refused whole, with
+   * the offenders outlined in red, rather than applied to whichever half of the
+   * selection happened to fit.
+   */
+  groupTool(op: GroupOp): GroupOutcome {
+    const refuse = (reason: GroupRefusal, blocked = 0): GroupOutcome => {
+      const outcome: GroupOutcome = { op, ok: false, moved: 0, blocked, reason };
+      this.onGroup?.(outcome);
+      return outcome;
+    };
+
+    if (this.readOnly) return refuse(GroupRefusal.READ_ONLY);
+    if (this.input.isGrabbing) this.cancel();
+
+    const nodes = this.selectedNodes().filter((node) => !node.fixed);
+    if (nodes.length < GROUP_OPS[op].minimum) return refuse(GroupRefusal.TOO_FEW);
+
+    const targets = groupTargets(op, nodes);
+    if (targets.size === 0) return refuse(GroupRefusal.NO_CHANGE);
+
+    this.plan.beginMove(nodes.map((node) => node.id));
+    const { entries, issues } = this.plan.commitTargets(targets);
+
+    if (!entries) {
+      this.faulted = new Set<number>();
+      for (const issue of issues) {
+        this.faulted.add(issue.id);
+        if (issue.otherId !== undefined) this.faulted.add(issue.otherId);
+      }
+      this.refresh();
+      return refuse(GroupRefusal.BLOCKED, this.faulted.size);
+    }
+
+    this.record(
+      entries,
+      `${GROUP_OPS[op].label} · ${entries.length} ${entries.length === 1 ? "building" : "buildings"}`,
+    );
+    this.faulted.clear();
+    this.view.syncSome(this.selection);
+    this.view.resort();
+    this.afterEdit();
+
+    const outcome: GroupOutcome = { op, ok: true, moved: entries.length, blocked: 0, reason: null };
+    this.onGroup?.(outcome);
+    return outcome;
   }
 
   undo(): void {
@@ -548,6 +637,9 @@ export class PlannerSession {
         // they are only choosing what with.
         this.onFind?.();
         return true;
+      case "mirror":
+        this.groupTool(action.axis === "x" ? GroupOp.MIRROR_X : GroupOp.MIRROR_Y);
+        return true;
       case "ignore":
         return true;
     }
@@ -555,8 +647,13 @@ export class PlannerSession {
 
   /* ── Bookkeeping ────────────────────────────────────────────────────── */
 
-  private record(entries: readonly MoveEntry[]): void {
-    this.stack.pushApplied(moveCommand(entries, (batch, reverse) => this.plan.move(batch, reverse)));
+  /** Pushes an already-applied move. A label names it in the undo tooltip. */
+  private record(entries: readonly MoveEntry[], label?: string): void {
+    const move = (batch: readonly MoveEntry[], reverse: boolean): void =>
+      this.plan.move(batch, reverse);
+    this.stack.pushApplied(
+      label === undefined ? moveCommand(entries, move) : moveCommand(entries, move, label),
+    );
   }
 
   /** After an edit: the moved set may have changed and the plan is dirty. */

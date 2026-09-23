@@ -16,7 +16,8 @@ import {
 import type { Camera } from "@/game/Camera";
 import { TRAP_TYPES, WALL_TYPES } from "@/game/yard/buildingCosts";
 import { blueprintToWorld } from "@/game/yard/planner/blueprint";
-import { PlannerSession } from "@/game/yard/planner/PlannerSession";
+import { GROUP_OPS } from "@/game/yard/planner/groupTools";
+import { GroupRefusal, PlannerSession, type GroupOutcome } from "@/game/yard/planner/PlannerSession";
 import { summariseSelection } from "@/game/yard/planner/summary";
 import { footprintCentre, footprintOf } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
@@ -153,6 +154,7 @@ export class YardPlanner {
         );
       },
       onFind: () => this.openSearch(),
+      onGroup: (outcome) => this.reportGroupTool(outcome),
       readOnly: this.readOnly,
     });
 
@@ -172,6 +174,9 @@ export class YardPlanner {
     this.bar = new PlannerBar({
       onTool: (tool) => this.session.setTool(tool),
       onView: (view) => this.setView(view),
+      onGroupTool: (op) => {
+        this.session.groupTool(op);
+      },
       onUndo: () => this.session.undo(),
       onRedo: () => this.session.redo(),
       onFind: () => this.toggleSearch(),
@@ -297,6 +302,56 @@ export class YardPlanner {
         ? { label: "Show me", run: () => this.selectAndFrame(result.didNotFit.map((m) => m.id)) }
         : undefined,
     );
+  }
+
+  /* ── Mirror, align and distribute ───────────────────────────────────── */
+
+  /**
+   * Says what a group operation did, or why it did nothing (design §3, F7).
+   *
+   * Refusals matter more than successes here: a mirror moves everything at
+   * once, so a player who is told only "nothing happened" has no way to guess
+   * which of forty walls was the problem. The session has already outlined the
+   * offenders in red, and this names the count and the reason so the two read
+   * as one answer.
+   *
+   * A read-only session cannot reach the operation at all, so that refusal is
+   * only ever a programming error and is left silent.
+   */
+  private reportGroupTool(outcome: GroupOutcome): void {
+    const name = GROUP_OPS[outcome.op].label;
+
+    if (outcome.ok) {
+      this.options.notices.show(
+        NOTICE,
+        `${name}: moved ${outcome.moved} ${plural(outcome.moved, "building")}. Ctrl+Z puts them back.`,
+        { level: "info", timeoutMs: 4000 },
+      );
+      return;
+    }
+
+    switch (outcome.reason) {
+      case GroupRefusal.READ_ONLY:
+        return;
+      case GroupRefusal.TOO_FEW:
+        this.options.notices.show(NOTICE, `${name} needs a bigger selection.`, {
+          level: "warning",
+          timeoutMs: 4000,
+        });
+        return;
+      case GroupRefusal.NO_CHANGE:
+        this.options.notices.show(NOTICE, `${name}: the selection is already like that.`, {
+          level: "info",
+          timeoutMs: 4000,
+        });
+        return;
+      default:
+        this.options.notices.show(
+          NOTICE,
+          `Cannot ${name.toLowerCase()} here: ${outcome.blocked} ${plural(outcome.blocked, "building")} would overlap or leave the plot. Nothing moved.`,
+          { level: "warning" },
+        );
+    }
   }
 
   /* ── Checklist and Apply ────────────────────────────────────────────── */

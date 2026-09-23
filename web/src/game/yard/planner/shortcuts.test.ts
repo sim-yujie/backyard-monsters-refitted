@@ -61,6 +61,13 @@ describe("plannerAction", () => {
     expect(plannerAction(key("z", { meta: true }))).toEqual({ kind: "undo" });
   });
 
+  it("mirrors on M, and takes Shift as the other axis rather than as a modifier", () => {
+    expect(plannerAction(key("m"))).toEqual({ kind: "mirror", axis: "x" });
+    expect(plannerAction(key("M", { shift: true }))).toEqual({ kind: "mirror", axis: "y" });
+    // Ctrl+M is the browser's, as with every other single-letter binding.
+    expect(plannerAction(key("m", { ctrl: true }))).toBeNull();
+  });
+
   it("binds Escape to cancel", () => {
     expect(plannerAction(key("Escape"))).toEqual({ kind: "cancel" });
   });

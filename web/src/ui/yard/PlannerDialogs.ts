@@ -220,6 +220,8 @@ export const shortcutsPanel = (onClose: () => void): Panel => {
     ["Shift + click", "Add or remove one building"],
     ["Arrow keys", "Nudge the selection by one grid step"],
     ["Shift + arrows", "Nudge by ten steps"],
+    ["M", "Mirror the selection left to right — positions, not artwork"],
+    ["Shift + M", "Mirror it top to bottom"],
     ["Ctrl + Z", "Undo"],
     ["Ctrl + Shift + Z, Ctrl + Y", "Redo"],
     ["Ctrl + S", "Save to the current slot"],

@@ -1,4 +1,5 @@
 import type { SelectionSummary } from "@/game/yard/planner/summary";
+import { GroupOp, GROUP_OPS } from "@/game/yard/planner/groupTools";
 import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
 import { YardView } from "@/game/yard/YardRenderer";
 import { formatAmount, formatCountdown } from "@/ui/format";
@@ -30,8 +31,9 @@ import { formatAmount, formatCountdown } from "@/ui/format";
  * ## Read-only
  *
  * A read-only session (design §8, Q5) gets the same bars minus everything that
- * would change the yard: no undo or redo, no Layouts, no Checklist, no batch
- * actions and no Apply, and a "Read-only" chip where the slot name goes. The
+ * would change the yard: no undo or redo, no group operations, no Layouts, no
+ * Checklist, no batch actions and no Apply, and a "Read-only" chip where the
+ * slot name goes. The
  * controls are left out rather than disabled, because a row of six dead
  * buttons reads as a broken planner and a player cannot tell which of them
  * they are meant to wait for. What stays is what answers questions: the two
@@ -41,6 +43,8 @@ import { formatAmount, formatCountdown } from "@/ui/format";
 export interface PlannerBarActions {
   onTool: (tool: PlannerTool) => void;
   onView: (view: YardView) => void;
+  /** Mirror, align or distribute the selection (F7). */
+  onGroupTool: (op: GroupOp) => void;
   onUndo: () => void;
   onRedo: () => void;
   onFind: () => void;
@@ -82,6 +86,102 @@ const button = (label: string, title: string, className = "btn btn--ghost"): HTM
   return element;
 };
 
+/** One row in a toolbar menu. */
+interface MenuRow {
+  readonly label: string;
+  readonly title: string;
+  readonly run: () => void;
+}
+
+/**
+ * A toolbar button that drops a short list of actions under it.
+ *
+ * Align has six members and Distribute two, and putting eight more buttons in
+ * a row that already holds nine would push the undo pair off the end of a
+ * laptop screen. Written by hand rather than with `<select>` or `<details>`
+ * because both of those carry a meaning this does not have: a select holds a
+ * value, and a details discloses content rather than firing an action.
+ *
+ * It closes on a choice, on Escape and on a press anywhere else, which are the
+ * three ways anyone tries to dismiss a menu. Disabling the trigger closes it
+ * too: a selection can shrink below two while the list is open, and a menu of
+ * dead rows is worse than no menu.
+ */
+class Menu {
+  readonly element: HTMLElement;
+
+  private readonly trigger: HTMLButtonElement;
+  private readonly list: HTMLElement;
+  private readonly dismiss: (event: Event) => void;
+
+  constructor(label: string, title: string, rows: readonly MenuRow[]) {
+    this.element = document.createElement("div");
+    this.element.className = "planner-menu";
+
+    this.trigger = button(`${label} ▾`, title);
+    this.trigger.classList.add("planner-menu__trigger");
+    this.trigger.setAttribute("aria-haspopup", "true");
+    this.trigger.setAttribute("aria-expanded", "false");
+    this.trigger.addEventListener("click", () => {
+      this.toggle(this.list.hidden);
+    });
+
+    this.list = document.createElement("div");
+    this.list.className = "planner-menu__list";
+    this.list.setAttribute("role", "menu");
+    this.list.setAttribute("aria-label", title);
+    this.list.hidden = true;
+
+    for (const row of rows) {
+      const item = button(row.label, row.title, "btn btn--ghost planner-menu__item");
+      item.setAttribute("role", "menuitem");
+      item.addEventListener("click", () => {
+        this.toggle(false);
+        row.run();
+      });
+      this.list.append(item);
+    }
+
+    this.element.append(this.trigger, this.list);
+
+    this.dismiss = (event: Event): void => {
+      if (this.list.hidden) return;
+      if (event instanceof KeyboardEvent) {
+        if (event.key !== "Escape") return;
+        this.toggle(false);
+        this.trigger.focus();
+        return;
+      }
+      if (event.target instanceof Node && this.element.contains(event.target)) return;
+      this.toggle(false);
+    };
+    document.addEventListener("pointerdown", this.dismiss, true);
+    document.addEventListener("keydown", this.dismiss, true);
+  }
+
+  /** Whether the list can be opened at all, and why not when it cannot. */
+  setEnabled(enabled: boolean, title: string): void {
+    this.trigger.disabled = !enabled;
+    this.trigger.title = title;
+    if (!enabled) this.toggle(false);
+  }
+
+  get open(): boolean {
+    return !this.list.hidden;
+  }
+
+  destroy(): void {
+    document.removeEventListener("pointerdown", this.dismiss, true);
+    document.removeEventListener("keydown", this.dismiss, true);
+    this.element.remove();
+  }
+
+  private toggle(open: boolean): void {
+    this.list.hidden = !open;
+    this.trigger.setAttribute("aria-expanded", String(open));
+  }
+}
+
 /** One "needed / held" readout, with its own label and its own tooltip. */
 class CostCell {
   readonly element: HTMLElement;
@@ -116,6 +216,9 @@ export class PlannerBar {
 
   private readonly tools = new Map<PlannerTool, HTMLButtonElement>();
   private readonly views = new Map<YardView, HTMLButtonElement>();
+  private readonly mirrors: HTMLButtonElement[] = [];
+  private readonly align: Menu;
+  private readonly distribute: Menu;
   private readonly undo: HTMLButtonElement;
   private readonly redo: HTMLButtonElement;
   private readonly apply: HTMLButtonElement;
@@ -161,6 +264,38 @@ export class PlannerBar {
     this.views.set(YardView.ISO, iso);
     this.views.set(YardView.BLUEPRINT, blueprint);
 
+    /* ── F7: mirror, align and distribute ───────────────────────────── */
+
+    const groupButton = (op: GroupOp): HTMLButtonElement => {
+      const info = GROUP_OPS[op];
+      const element = button(info.menu, info.hint);
+      element.disabled = true;
+      element.addEventListener("click", () => actions.onGroupTool(op));
+      return element;
+    };
+
+    const groupRow = (op: GroupOp): MenuRow => ({
+      label: GROUP_OPS[op].menu,
+      title: GROUP_OPS[op].hint,
+      run: () => actions.onGroupTool(op),
+    });
+
+    this.mirrors.push(groupButton(GroupOp.MIRROR_X), groupButton(GroupOp.MIRROR_Y));
+
+    this.align = new Menu("Align", "Align the selection's edges or centres", [
+      groupRow(GroupOp.ALIGN_LEFT),
+      groupRow(GroupOp.ALIGN_RIGHT),
+      groupRow(GroupOp.ALIGN_TOP),
+      groupRow(GroupOp.ALIGN_BOTTOM),
+      groupRow(GroupOp.ALIGN_CENTRE_X),
+      groupRow(GroupOp.ALIGN_CENTRE_Y),
+    ]);
+    this.distribute = new Menu("Distribute", "Space the selection evenly", [
+      groupRow(GroupOp.DISTRIBUTE_X),
+      groupRow(GroupOp.DISTRIBUTE_Y),
+    ]);
+    this.setGroupEnabled(0);
+
     this.undo = button("Undo", "Undo (Ctrl+Z)");
     this.undo.addEventListener("click", actions.onUndo);
     this.redo = button("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)");
@@ -177,7 +312,14 @@ export class PlannerBar {
       this.slotLabel,
       group(select, box, find),
       group(iso, blueprint),
-      ...(this.readOnly ? [] : [group(this.undo, this.redo)]),
+      // Every one of these moves buildings, so a read-only session gets none
+      // of them, the same way it gets no undo and no Apply.
+      ...(this.readOnly
+        ? []
+        : [
+            group(...this.mirrors, this.align.element, this.distribute.element),
+            group(this.undo, this.redo),
+          ]),
       spacer(),
       help,
       exit,
@@ -272,6 +414,8 @@ export class PlannerBar {
       element.setAttribute("aria-pressed", String(state.view === view));
     }
 
+    this.setGroupEnabled(state.selectionCount);
+
     this.undo.disabled = !state.canUndo;
     this.undo.title = state.canUndo ? `Undo ${state.undoLabel} (Ctrl+Z)` : "Nothing to undo";
     this.redo.disabled = !state.canRedo;
@@ -341,6 +485,45 @@ export class PlannerBar {
     );
   }
 
+  /**
+   * Lights the group operations up for a selection of `count` buildings.
+   *
+   * Each control asks for the minimum its own geometry needs rather than one
+   * number for all of them: mirroring or aligning one building about its own
+   * centre is the identity, and distributing holds the outermost two still, so
+   * it has nothing to space until there is a third between them. A button that
+   * is off says what would turn it on, because that is the question a player
+   * with one tower selected is actually asking.
+   */
+  setGroupEnabled(selected: number): void {
+    // A read-only session never mounts these, and they stay inert as well as
+    // absent so a caller holding one cannot fire it (§8, Q5).
+    const count = this.readOnly ? 0 : selected;
+
+    for (const element of this.mirrors) {
+      element.disabled = count < 2;
+      if (count < 2) element.title = "Select two or more buildings to mirror";
+    }
+    if (count >= 2) {
+      const [horizontal, vertical] = this.mirrors;
+      if (horizontal) horizontal.title = GROUP_OPS[GroupOp.MIRROR_X].hint;
+      if (vertical) vertical.title = GROUP_OPS[GroupOp.MIRROR_Y].hint;
+    }
+
+    this.align.setEnabled(
+      count >= 2,
+      count >= 2
+        ? "Align the selection's edges or centres"
+        : "Select two or more buildings to align",
+    );
+    this.distribute.setEnabled(
+      count >= 3,
+      count >= 3
+        ? "Space the selection evenly"
+        : "Select three or more buildings to space out evenly",
+    );
+  }
+
   /** Shows the count of blocking problems on the checklist button. */
   setBlocking(count: number): void {
     if (this.readOnly) return;
@@ -371,6 +554,9 @@ export class PlannerBar {
   }
 
   destroy(): void {
+    // The menus listen on the document, so dropping the bar is not enough.
+    this.align.destroy();
+    this.distribute.destroy();
     this.toolbar.remove();
     this.actionBar.remove();
   }

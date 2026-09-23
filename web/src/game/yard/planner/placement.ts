@@ -74,6 +74,12 @@ export interface PlanNode {
   readonly fixed: boolean;
 }
 
+/** An absolute spot in yard units. What a group operation answers with. */
+export interface Position {
+  readonly x: number;
+  readonly y: number;
+}
+
 /** Half-extents of the area a node of a given kind may occupy. */
 export interface PlotBounds {
   readonly halfWidth: number;
@@ -255,6 +261,54 @@ export const validateOffset = (
     const other = occupancy.blockedBy(node, x, y);
     if (other) issues.push({ id: node.id, reason: InvalidReason.OVERLAP, otherId: other });
   }
+
+  return issues.length === 0 ? VALID : { valid: false, issues };
+};
+
+/**
+ * Tests a selection moved to per-building positions: mirror, align, distribute.
+ *
+ * Unlike `validateOffset` this cannot assume the movers stay clear of each
+ * other. A translation preserves the gaps inside the selection, so a set that
+ * was valid before the drag is valid after it; an align does the opposite on
+ * purpose, and two towers told to share a left edge can end up on the same
+ * cells. So the movers are stamped in as they are cleared, and a later one that
+ * lands on an earlier one is reported exactly like a collision with a wall that
+ * never moved.
+ *
+ * The grid is left as it was found. The caller must have erased the movers
+ * first (`Plan.beginMove`), and everything this stamps it takes back out, so a
+ * refused operation changes nothing — which is the whole point: F7 is
+ * all-or-nothing, never a partial application.
+ */
+export const validateTargets = (
+  moving: readonly PlanNode[],
+  targets: ReadonlyMap<number, Position>,
+  occupancy: Occupancy,
+  plot: PlotBounds,
+): PlacementResult => {
+  const issues: PlacementIssue[] = [];
+  const placed: [PlanNode, Position][] = [];
+
+  for (const node of moving) {
+    // A building the operation does not name stays put, and still has to be
+    // tested: an align can move its neighbour on top of it.
+    const to = targets.get(node.id) ?? { x: node.x, y: node.y };
+
+    if (!inBounds(node, to.x, to.y, plot)) {
+      issues.push({ id: node.id, reason: InvalidReason.BOUNDS });
+      continue;
+    }
+    const other = occupancy.blockedBy(node, to.x, to.y);
+    if (other) {
+      issues.push({ id: node.id, reason: InvalidReason.OVERLAP, otherId: other });
+      continue;
+    }
+    occupancy.stamp(node, to.x, to.y);
+    placed.push([node, to]);
+  }
+
+  for (const [node, to] of placed) occupancy.erase(node, to.x, to.y);
 
   return issues.length === 0 ? VALID : { valid: false, issues };
 };
