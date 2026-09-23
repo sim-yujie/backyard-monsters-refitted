@@ -26,6 +26,14 @@ export interface CellAppearance {
   terrain: number;
   marker: CellMarker;
   markerColour: number;
+  /**
+   * Which tribe's portrait a camp should wear. Empty for everything else.
+   *
+   * Separate from `label` even though a camp's label is the same string: the
+   * label is text to draw, this is a key into the avatar set, and a player
+   * cell has a label but no tribe.
+   */
+  tribe: string;
   /** Damage bar fraction, 0..1. Zero means no bar. */
   damage: number;
   /** Short badge text, usually the level. Empty means no badge. */
@@ -102,6 +110,7 @@ export const loadingAppearance = (): CellAppearance => ({
   terrain: LOADING_COLOUR,
   marker: CellMarker.NONE,
   markerColour: 0,
+  tribe: "",
   damage: 0,
   badge: "",
   label: "",
@@ -116,6 +125,7 @@ export const appearanceOf = (cell: MapCell | undefined, nowSeconds: number): Cel
 
   const base = {
     terrain: terrainColour(cell.i),
+    tribe: "",
     damage: 0,
     badge: "",
     label: "",
@@ -147,6 +157,7 @@ export const appearanceOf = (cell: MapCell | undefined, nowSeconds: number): Cel
     ...base,
     marker: cell.d === 1 ? CellMarker.CAMP_DESTROYED : CellMarker.CAMP,
     markerColour: TRIBE_COLOURS[cell.n] ?? TRIBE_FALLBACK,
+    tribe: cell.n,
     damage: clamp01(cell.dm / 100),
     badge: String(cell.l),
     label: cell.n,

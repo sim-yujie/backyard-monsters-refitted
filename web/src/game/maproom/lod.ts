@@ -55,6 +55,10 @@ export const viewFor = (tier: LodTier, zoom: number, atlas: MapAtlas): ChunkView
         ? atlas.outlineBold
         : atlas.outlineFine,
   details: zoom >= LOD_GLYPH_ZOOM,
+  // A cell is about 62 screen pixels across at the badge threshold, so a
+  // portrait is finally big enough to tell one creature from another. Below
+  // it the tent glyph reads better than a 20 pixel monster would.
+  avatars: tier >= LodTier.BADGES,
   badges: tier >= LodTier.BADGES,
   names: tier >= LodTier.LABELS,
 });
@@ -63,5 +67,6 @@ export const sameView = (a: ChunkView, b: ChunkView | null): boolean =>
   b !== null &&
   a.outline === b.outline &&
   a.details === b.details &&
+  a.avatars === b.avatars &&
   a.badges === b.badges &&
   a.names === b.names;

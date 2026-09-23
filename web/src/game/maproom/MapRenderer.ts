@@ -13,6 +13,7 @@ import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
 import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
 import { TerrainRaster } from "./TerrainRaster";
+import { TribeAvatars } from "./tribeAvatars";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
 import type { CellRange } from "./zones";
 
@@ -56,6 +57,14 @@ export class MapRenderer {
   private readonly highlight = new Graphics();
 
   private readonly pool = new TextPool();
+  /**
+   * The tribe portraits, shared by every chunk.
+   *
+   * Owned here rather than by the atlas because it is fetched over the
+   * network: the atlas is baked synchronously from a live renderer, this
+   * arrives whenever it arrives, and the map has to look right in between.
+   */
+  private readonly avatars = new TribeAvatars();
   private readonly chunks = new Map<number, MapChunk>();
   private readonly residency = new ChunkResidency({
     ttlMs: CHUNK_TTL_MS,
@@ -89,6 +98,19 @@ export class MapRenderer {
   /** How long the last chunk build took, in milliseconds. */
   get lastBuildMs(): number {
     return this.buildMs;
+  }
+
+  /**
+   * Fetches the tribe portraits and puts them on the map.
+   *
+   * Until this resolves the camps wear their tent glyphs, which is also where
+   * they stay if the art cannot be fetched. Chunks built in the meantime hold
+   * no portrait sprites, so they are marked dirty and rebuilt once; that is at
+   * most a screenful, and only ever on the first visit to the map.
+   */
+  async loadTribeAvatars(): Promise<void> {
+    if (!(await this.avatars.load())) return;
+    for (const id of this.chunks.keys()) this.dirty.add(id);
   }
 
   /**
@@ -174,6 +196,7 @@ export class MapRenderer {
   destroy(): void {
     this.dropAllChunks();
     this.pool.destroy();
+    this.avatars.destroy();
     this.atlas?.destroy();
     this.atlas = null;
     this.raster.destroy();
@@ -215,7 +238,7 @@ export class MapRenderer {
         }
         budget -= 1;
         if (!chunk) {
-          chunk = new MapChunk(ref, atlas, this.pool);
+          chunk = new MapChunk(ref, atlas, this.avatars, this.pool);
           this.chunks.set(ref.id, chunk);
           this.world.addChild(chunk.container);
         }

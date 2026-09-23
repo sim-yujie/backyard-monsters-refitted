@@ -59,6 +59,10 @@ register one through `POST /api/<version>/player/register`.
 web/
   index.html            Page shell, font links, the #game-root mount point
   vite.config.ts        Dev proxy for the game routes, build settings
+  public/
+    tribes/             Wild monster tribe avatars, served as /tribes/*.png
+  tools/
+    gen-tribe-avatars.py  Regenerates those avatars from the original art
   src/
     main.ts             Entry point: loads styles, starts the App
     config.ts           Server URL, zoom limits, world constants from the server
@@ -162,6 +166,40 @@ regular hexagons. `pixelToCell` scales the vertical axis into regular-hex space
 before rounding; the scaling is affine, so it maps hex to hex exactly.
 
 The world also wraps toroidally in the real game. That is not implemented yet.
+
+## Art
+
+### Tribe avatars
+
+The four wild monster tribes — Legionnaire, Kozu, Abunakki and Dreadnaut — have
+a portrait each: 256 px in `public/tribes/` (served as `/tribes/*.png`), with the 1024 px sources kept out of the build in `docs/art/tribes/`, and at
+256 px for the map. Map Room 2 loads only the 256 px set, once, and every camp
+on screen is a sprite pointing at one of those four textures.
+
+They live directly under `public/` and **not** under `public/assets/` because
+the dev server proxies the whole `/assets` prefix to the game server
+(`vite.config.ts`), which does not have these files. Anything put there is
+unreachable in development.
+
+The PNGs keep whatever transparent margin they were generated with;
+`src/game/maproom/tribeAvatars.ts` measures each one on load and draws the
+cropped region, so the four read as the same size on the map however they were
+framed. Nothing has to be trimmed by hand before adding a new one.
+
+To regenerate them, either run
+
+```sh
+pip install google-genai pillow
+export GEMINI_API_KEY=...          # PowerShell: $env:GEMINI_API_KEY="..."
+python web/tools/gen-tribe-avatars.py [--tribe kozu] [--variants 3]
+```
+
+which sends each tribe's original artwork from
+`server/public/assets/popups/tribe_<name>.v2.png` to Gemini's image model as a
+reference and writes numbered variants back to `public/tribes/`, or produce them
+in Antigravity from the same reference images. Either way, pick a variant,
+chroma-key it to transparency, and save it as `<tribe>.png` at 1024 px with a
+`<tribe>-256.png` beside it.
 
 ## Fonts
 

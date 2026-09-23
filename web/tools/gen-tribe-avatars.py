@@ -10,7 +10,10 @@ Usage (from the repo root):
 Each tribe's original avatar (server/public/assets/popups/tribe_<name>.v2.png)
 is sent as a reference image together with a prompt describing the refresh, so
 the result keeps the creature's identity and silhouette while updating the
-rendering. Output goes to web/public/assets/tribes/<name>-<variant>.png.
+rendering. Output goes to web/public/tribes/<name>-<variant>.png. The art direction
+(2D cel-shaded, chosen 2026-09-23) is fixed in STYLE below; keep new assets
+consistent with it. The published 256 px files are derived from the 1024 px
+sources kept in docs/art/tribes/.
 
 The model name is an argument because Google renames image models often; the
 default is the current general-purpose image model at the time of writing. If
@@ -35,7 +38,7 @@ except ImportError as exc:  # pragma: no cover
 
 REPO = Path(__file__).resolve().parents[2]
 REFERENCE_DIR = REPO / "server" / "public" / "assets" / "popups"
-OUT_DIR = REPO / "web" / "public" / "assets" / "tribes"
+OUT_DIR = REPO / "web" / "public" / "tribes"
 
 # What each tribe is, from the original art, so the refresh keeps the identity.
 TRIBES: dict[str, str] = {
@@ -62,14 +65,17 @@ TRIBES: dict[str, str] = {
 }
 
 STYLE = (
-    "Refresh this character portrait for a modern browser strategy game. "
-    "Keep the same creature, pose, silhouette, colours and personality so "
-    "players still recognise it. Render it as clean high-resolution stylised "
-    "3D-look game art: painterly with crisp edges, rich saturated colours, "
-    "soft rim lighting, subtle ambient occlusion, readable at small sizes. "
-    "Square composition, character centred and filling the frame, plain "
+    "Redesign this character for a modern browser strategy game as a 2D "
+    "cel-shaded illustration in the style of Brawl Stars 2D promo art or Hades "
+    "character portraits. Keep the character's identity: species, pose, key "
+    "equipment and colour scheme. Bold clean dark outlines of varying weight, "
+    "flat colour zones with two-tone shading and one crisp highlight, strong "
+    "graphic silhouette, slightly angular stylisation, vivid but controlled "
+    "palette, minimal gradients. No painterly blending, no 3D render look, no "
+    "gritty texture. Square composition, character centred with at least 8% "
+    "empty margin on every side and the weapon fully inside the frame, plain "
     "fully transparent background, no text, no logo, no border, no ground "
-    "shadow outside the character."
+    "shadow."
 )
 
 

@@ -80,6 +80,10 @@ export class MapRoom2Scene implements Scene {
     context.stage.addChild(this.renderer.root);
     // Bakes the sprite atlas the chunk renderer draws from.
     this.renderer.attach(context.renderer);
+    // The tribe portraits are a network fetch, so they are started here and
+    // not waited on: the map opens on tent glyphs and swaps them for the art
+    // the moment it lands.
+    void this.renderer.loadTribeAvatars();
 
     this.camera.resize(context.width, context.height);
     this.camera.attach(context.canvas);
