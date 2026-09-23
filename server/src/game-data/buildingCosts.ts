@@ -8,7 +8,8 @@
  * runs Map Room 2 as the default overworld. Regenerate with
  * `node tools/gen-building-costs.mjs` from `web/`.
  *
- * A row is `[type, name, kind, group, costs, quantity]`.
+ * A row is `[type, name, kind, group, costs, quantity]`, with a seventh
+ * element, `stats`, on the five types that carry an economy ladder.
  *
  * `costs[k]` is the step that *leaves* level `k`: `costs[0]` is the initial
  * build, `costs[1]` the level 1 to 2 upgrade, and so on, so a type's maximum
@@ -19,6 +20,12 @@
  *
  * `quantity[hall]` is how many of this type a yard may hold at Town Hall level
  * `hall` (spec `:400`); it is empty for a type the props table does not cap.
+ *
+ * `stats` is present only on the four harvesters (types 1 to 4) and the
+ * Storage Silo (type 6), the types whose numbers the economy audit derives
+ * from (spec `:484-526`). Other entries in the props file spell `capacity`
+ * and `produce` for monsters, Flinger payloads and bunker room, none of which
+ * is a resource amount, so they carry no `stats` here.
  *
  * The two copies of this table, here and in the other of
  * `web/src/game/yard/buildingCostData.ts` and
@@ -51,6 +58,23 @@ export type CostStep = readonly [
   re: readonly CostRequirement[],
 ];
 
+/**
+ * A harvester's or silo's economy ladder, indexed by level minus one.
+ *
+ * `produce[l - 1]` is what a level `l` harvester adds to its buffer each
+ * cycle, `cycleTime[l - 1]` is how many seconds that cycle takes at full
+ * health, and `capacity[l - 1]` is the buffer it fills
+ * (`client/scripts/BRESOURCE.as:425`, `:385`, `:444`). For the Storage Silo
+ * `capacity[l - 1]` is instead what a finished silo adds to every resource
+ * pool's cap (`client/scripts/BASE.as:4705-4828`), and `produce` and
+ * `cycleTime` are empty because a silo produces nothing.
+ */
+export interface BuildingStats {
+  readonly produce: readonly number[];
+  readonly cycleTime: readonly number[];
+  readonly capacity: readonly number[];
+}
+
 export type CostRow = readonly [
   type: number,
   name: string,
@@ -61,6 +85,8 @@ export type CostRow = readonly [
   costs: readonly CostStep[],
   /** Cap on how many of this type a yard may hold, indexed by Town Hall level. */
   quantity: readonly number[],
+  /** Present on the harvesters (1 to 4) and the Storage Silo (6) only. */
+  stats?: BuildingStats,
 ];
 
 export const BUILDING_COST_ROWS: readonly CostRow[] = [
@@ -76,7 +102,11 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
     [0,135000,0,0,86400,[[14,1,4]]],
     [0,283600,0,0,172800,[[14,1,4]]],
     [0,600000,0,0,259200,[[14,1,5]]],
-  ], [0,1,2,4,5,6,6,6,6,6,6]],
+  ], [0,1,2,4,5,6,6,6,6,6,6], {
+    produce: [2,4,7,11,16,22,29,37,46,56],
+    cycleTime: [10,10,10,10,10,10,10,10,10,10],
+    capacity: [720,2160,5670,13365,29160,60142,118918,227584,424414,775018],
+  }],
   // 2 Pebble Shiner (resource) — YARD_PROPS.as:170
   [2, "Pebble Shiner", "resource", 1, [
     [750,0,0,0,15,[[14,1,1]]],
@@ -89,7 +119,11 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
     [135000,0,0,0,86400,[[14,1,4]]],
     [283600,0,0,0,172800,[[14,1,4]]],
     [600000,0,0,0,259200,[[14,1,5]]],
-  ], [0,1,2,4,5,6,6,6,6,6,6]],
+  ], [0,1,2,4,5,6,6,6,6,6,6], {
+    produce: [2,4,7,11,16,22,29,37,46,56],
+    cycleTime: [10,10,10,10,10,10,10,10,10,10],
+    capacity: [720,2160,5670,13365,29160,60142,118918,227584,424414,775018],
+  }],
   // 3 Putty Squisher (resource) — YARD_PROPS.as:317
   [3, "Putty Squisher", "resource", 1, [
     [525,224,0,0,20,[[14,1,1]]],
@@ -102,7 +136,11 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
     [94557,40524,0,0,86400,[[14,1,4]]],
     [198570,85102,0,0,172800,[[14,1,4]]],
     [416997,178716,0,0,259200,[[14,1,5]]],
-  ], [0,1,2,4,5,6,6,6,6,6,6]],
+  ], [0,1,2,4,5,6,6,6,6,6,6], {
+    produce: [2,4,7,11,16,22,29,37,46,56],
+    cycleTime: [10,10,10,10,10,10,10,10,10,10],
+    capacity: [720,2160,5670,13365,29160,60142,118918,227584,424414,775018],
+  }],
   // 4 Goo Factory (resource) — YARD_PROPS.as:464
   [4, "Goo Factory", "resource", 1, [
     [247,577,0,0,20,[[14,1,1]]],
@@ -115,7 +153,11 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
     [44580,104012,0,0,86400,[[14,1,4]]],
     [93600,218427,0,0,172800,[[14,1,4]]],
     [196584,458696,0,0,259200,[[14,1,5]]],
-  ], [0,1,2,4,5,6,6,6,6,6,6]],
+  ], [0,1,2,4,5,6,6,6,6,6,6], {
+    produce: [2,4,7,11,16,22,29,37,46,56],
+    cycleTime: [10,10,10,10,10,10,10,10,10,10],
+    capacity: [720,2160,5670,13365,29160,60142,118918,227584,424414,775018],
+  }],
   // 5 Flinger (special) — YARD_PROPS.as:610, Map Room 2 override GLOBAL.as:684-712
   [5, "Flinger", "special", 2, [
     [1000,1000,500,0,900,[[14,1,1]]],
@@ -135,7 +177,11 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
     [475000,237500,0,0,20503,[[14,1,4]]],
     [950000,475000,0,0,30754,[[14,1,5]]],
     [1900000,950000,0,0,46132,[[14,1,6]]],
-  ], [0,1,2,3,4,5,5,5,5,6,6]],
+  ], [0,1,2,3,4,5,5,5,5,6,6], {
+    produce: [],
+    cycleTime: [],
+    capacity: [7500,15000,30000,60000,120000,240000,480000,960000,1920000,3840000],
+  }],
   // 7 Mushroom (mushroom) — YARD_PROPS.as:885
   [7, "Mushroom", "mushroom", 999, [
     [0,0,0,0,0,[[0,0,0]]],
@@ -800,18 +846,47 @@ export interface BuildingCost {
   readonly group: number;
   readonly costs: readonly CostStep[];
   readonly quantity: readonly number[];
+  /** Undefined for every type but the harvesters (1 to 4) and the Storage Silo (6). */
+  readonly stats: BuildingStats | undefined;
 }
 
 /** Every row above, keyed by type id. */
 export const COSTS: Record<number, BuildingCost> = Object.fromEntries(
-  BUILDING_COST_ROWS.map(([type, name, kind, group, costs, quantity]) => [
+  BUILDING_COST_ROWS.map(([type, name, kind, group, costs, quantity, stats]) => [
     type,
-    { name, kind, group, costs, quantity },
+    { name, kind, group, costs, quantity, stats },
   ])
 );
 
 /** The costs for a building type, or undefined for a type this table has no row for. */
 export const costOf = (type: number): BuildingCost | undefined => COSTS[type];
+
+/** The Storage Silo, the only building that raises a resource pool's cap. */
+export const STORAGE_SILO_TYPE = 6;
+
+/**
+ * A harvester's production ladder, or undefined for anything that is not one.
+ *
+ * The four harvester types are the resource ids: type 1 banks `r1`, type 2
+ * `r2`, and so on (spec `docs/specs/base-building.md:578-590`). The Storage
+ * Silo carries a `capacity` ladder but produces nothing, so it reads as
+ * undefined here and through {@link siloCapacity} instead.
+ */
+export const productionOf = (type: number): BuildingStats | undefined => {
+  const stats = COSTS[type]?.stats;
+  return stats && stats.produce.length > 0 ? stats : undefined;
+};
+
+/**
+ * What one finished Storage Silo at `level` adds to every resource pool's cap.
+ *
+ * `level` is the building's own level, 1 to 10, matching the `capacity[l - 1]`
+ * lookup the client makes (`client/scripts/BASE.as:4705-4828`). A silo still
+ * counting its initial build down is level 0 and adds nothing, which is what
+ * the 0 for an out-of-range level says.
+ */
+export const siloCapacity = (level: number): number =>
+  COSTS[STORAGE_SILO_TYPE]?.stats?.capacity[level - 1] ?? 0;
 
 /**
  * The highest level a type can reach, which is the number of cost steps it has

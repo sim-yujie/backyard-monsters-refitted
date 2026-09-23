@@ -14,6 +14,11 @@
  * The entry's `quantity` array caps how many of that type a yard may hold,
  * indexed by Town Hall level (`docs/specs/base-building.md:400`).
  *
+ * Five entries also carry the economy ladders the server needs to derive
+ * production and storage: the four harvesters' `produce`, `cycleTime` and
+ * `capacity` (`client/scripts/YARD_PROPS.as:151-153` and the three parallel
+ * entries) and the Storage Silo's `capacity` (`:869`). See `readStats`.
+ *
  * Display names come from the game's own English string table
  * (`server/public/gamestage/assets/archived/en.v612.txt`), because the props
  * table stores a `#b_key#` placeholder rather than a name — the same lookup
@@ -140,6 +145,59 @@ const readIntArray = (text, key) => {
     .filter((one) => Number.isFinite(one));
 };
 
+/**
+ * The Storage Silo.
+ *
+ * Its `capacity` ladder is the only non-harvester one this table carries,
+ * because `BASE.CalcResources` sums exactly it and nothing else when it works
+ * out the pool cap (`client/scripts/BASE.as:4705-4828`; spec
+ * `docs/specs/base-building.md:655-679`).
+ */
+const STORAGE_SILO = 6;
+
+/**
+ * The `produce`, `cycleTime` and `capacity` ladders of one entry, or null.
+ *
+ * Only the four harvesters and the Storage Silo get them. Several other
+ * entries spell `capacity` too — the Flinger's payload (`:709`), Monster
+ * Housing's monster room (`:1659`), the Monster Bunker's (`:2483`) — and the
+ * Wild Monster Baiter has a `produce` array of monsters rather than resources
+ * (`:1961`). None of those is a resource amount, so pricing an economy rule
+ * from them would be a category error; they stay out of the table, as the Map
+ * Room 2 override notes below already say for two of them.
+ *
+ * The silo produces nothing, so its `produce` and `cycleTime` come back empty
+ * and `productionOf` reads that as "not a harvester".
+ *
+ * Every ladder is indexed by level minus one — `produce[l - 1]` is what a
+ * level `l` harvester banks per cycle (`client/scripts/BRESOURCE.as:425`,
+ * `:385`, `:444`) — so each must be exactly as long as the cost ladder. A
+ * short one would silently price a top-level harvester at zero, which is why
+ * the length mismatch throws rather than warns.
+ */
+const readStats = (entry, after) => {
+  const harvester = entry.kind === "resource";
+  if (!harvester && entry.id !== STORAGE_SILO) return null;
+
+  const stats = {
+    produce: harvester ? readIntArray(after, "produce") : [],
+    cycleTime: harvester ? readIntArray(after, "cycleTime") : [],
+    capacity: readIntArray(after, "capacity"),
+  };
+
+  const levels = entry.steps.length;
+  for (const key of harvester ? ["produce", "cycleTime", "capacity"] : ["capacity"]) {
+    if (stats[key].length !== levels) {
+      throw new Error(
+        `YARD_PROPS.as:${entry.line}: id ${entry.id} has ${stats[key].length} ` +
+          `"${key}" entries for ${levels} cost steps; re-read the entry.`,
+      );
+    }
+  }
+
+  return stats;
+};
+
 /* ── Parse ────────────────────────────────────────────────────────────────── */
 
 const entries = [];
@@ -174,12 +232,13 @@ for (let hit = marker.exec(source); hit; hit = marker.exec(source)) {
 
   // `quantity` follows `costs` in every entry, so it is read forwards from
   // here, stopping at the next entry's `"id":` so an entry without one cannot
-  // borrow the next building's cap.
+  // borrow the next building's cap. `produce`, `cycleTime` and `capacity` sit
+  // in the same span, beside `quantity`.
   const nextId = source.indexOf('"id"', close);
   const after = source.slice(close, nextId < 0 ? source.length : nextId);
 
   const key = nameHit?.[1] ?? "";
-  entries.push({
+  const entry = {
     id,
     name: strings[key] ?? key.replaceAll("#", ""),
     kind: kindHit?.[1] ?? "",
@@ -187,7 +246,9 @@ for (let hit = marker.exec(source); hit; hit = marker.exec(source)) {
     steps: readSteps(costs),
     quantity: readIntArray(after, "quantity"),
     line: lineOf(hit.index),
-  });
+  };
+  entry.stats = readStats(entry, after);
+  entries.push(entry);
 }
 
 entries.sort((a, b) => a.id - b.id);
@@ -312,6 +373,16 @@ const re = (list) => `[${list.map((one) => `[${one.join(",")}]`).join(",")}]`;
 
 const step = (one) => `[${one.r1},${one.r2},${one.r3},${one.r4},${one.time},${re(one.re)}]`;
 
+/** The trailing `, { produce, cycleTime, capacity }`, or nothing at all. */
+const stats = (one) =>
+  one
+    ? `, {\n` +
+      `    produce: [${one.produce.join(",")}],\n` +
+      `    cycleTime: [${one.cycleTime.join(",")}],\n` +
+      `    capacity: [${one.capacity.join(",")}],\n` +
+      `  }`
+    : "";
+
 const rows = entries
   .map(
     (entry) =>
@@ -320,7 +391,7 @@ const rows = entries
       `  [${entry.id}, ${JSON.stringify(entry.name)}, ${JSON.stringify(entry.kind)}, ` +
       `${entry.group}, [\n` +
       entry.steps.map((one) => `    ${step(one)},`).join("\n") +
-      `\n  ], [${entry.quantity.join(",")}]],`,
+      `\n  ], [${entry.quantity.join(",")}]${stats(entry.stats)}],`,
   )
   .join("\n");
 
@@ -334,7 +405,8 @@ const header = `/**
  * runs Map Room 2 as the default overworld. Regenerate with
  * \`node tools/gen-building-costs.mjs\` from \`web/\`.
  *
- * A row is \`[type, name, kind, group, costs, quantity]\`.
+ * A row is \`[type, name, kind, group, costs, quantity]\`, with a seventh
+ * element, \`stats\`, on the five types that carry an economy ladder.
  *
  * \`costs[k]\` is the step that *leaves* level \`k\`: \`costs[0]\` is the initial
  * build, \`costs[1]\` the level 1 to 2 upgrade, and so on, so a type's maximum
@@ -345,6 +417,12 @@ const header = `/**
  *
  * \`quantity[hall]\` is how many of this type a yard may hold at Town Hall level
  * \`hall\` (spec \`:400\`); it is empty for a type the props table does not cap.
+ *
+ * \`stats\` is present only on the four harvesters (types 1 to 4) and the
+ * Storage Silo (type 6), the types whose numbers the economy audit derives
+ * from (spec \`:484-526\`). Other entries in the props file spell \`capacity\`
+ * and \`produce\` for monsters, Flinger payloads and bunker room, none of which
+ * is a resource amount, so they carry no \`stats\` here.
  *
  * The two copies of this table, here and in the other of
  * \`web/src/game/yard/buildingCostData.ts\` and
@@ -377,6 +455,23 @@ export type CostStep = readonly [
   re: readonly CostRequirement[],
 ];
 
+/**
+ * A harvester's or silo's economy ladder, indexed by level minus one.
+ *
+ * \`produce[l - 1]\` is what a level \`l\` harvester adds to its buffer each
+ * cycle, \`cycleTime[l - 1]\` is how many seconds that cycle takes at full
+ * health, and \`capacity[l - 1]\` is the buffer it fills
+ * (\`client/scripts/BRESOURCE.as:425\`, \`:385\`, \`:444\`). For the Storage Silo
+ * \`capacity[l - 1]\` is instead what a finished silo adds to every resource
+ * pool's cap (\`client/scripts/BASE.as:4705-4828\`), and \`produce\` and
+ * \`cycleTime\` are empty because a silo produces nothing.
+ */
+export interface BuildingStats {
+  readonly produce: readonly number[];
+  readonly cycleTime: readonly number[];
+  readonly capacity: readonly number[];
+}
+
 export type CostRow = readonly [
   type: number,
   name: string,
@@ -387,6 +482,8 @@ export type CostRow = readonly [
   costs: readonly CostStep[],
   /** Cap on how many of this type a yard may hold, indexed by Town Hall level. */
   quantity: readonly number[],
+  /** Present on the harvesters (1 to 4) and the Storage Silo (6) only. */
+  stats?: BuildingStats,
 ];
 
 export const BUILDING_COST_ROWS: readonly CostRow[] = [
@@ -400,18 +497,47 @@ export interface BuildingCost {
   readonly group: number;
   readonly costs: readonly CostStep[];
   readonly quantity: readonly number[];
+  /** Undefined for every type but the harvesters (1 to 4) and the Storage Silo (6). */
+  readonly stats: BuildingStats | undefined;
 }
 
 /** Every row above, keyed by type id. */
 export const COSTS: Record<number, BuildingCost> = Object.fromEntries(
-  BUILDING_COST_ROWS.map(([type, name, kind, group, costs, quantity]) => [
+  BUILDING_COST_ROWS.map(([type, name, kind, group, costs, quantity, stats]) => [
     type,
-    { name, kind, group, costs, quantity },
+    { name, kind, group, costs, quantity, stats },
   ])
 );
 
 /** The costs for a building type, or undefined for a type this table has no row for. */
 export const costOf = (type: number): BuildingCost | undefined => COSTS[type];
+
+/** The Storage Silo, the only building that raises a resource pool's cap. */
+export const STORAGE_SILO_TYPE = 6;
+
+/**
+ * A harvester's production ladder, or undefined for anything that is not one.
+ *
+ * The four harvester types are the resource ids: type 1 banks \`r1\`, type 2
+ * \`r2\`, and so on (spec \`docs/specs/base-building.md:578-590\`). The Storage
+ * Silo carries a \`capacity\` ladder but produces nothing, so it reads as
+ * undefined here and through {@link siloCapacity} instead.
+ */
+export const productionOf = (type: number): BuildingStats | undefined => {
+  const stats = COSTS[type]?.stats;
+  return stats && stats.produce.length > 0 ? stats : undefined;
+};
+
+/**
+ * What one finished Storage Silo at \`level\` adds to every resource pool's cap.
+ *
+ * \`level\` is the building's own level, 1 to 10, matching the \`capacity[l - 1]\`
+ * lookup the client makes (\`client/scripts/BASE.as:4705-4828\`). A silo still
+ * counting its initial build down is level 0 and adds nothing, which is what
+ * the 0 for an out-of-range level says.
+ */
+export const siloCapacity = (level: number): number =>
+  COSTS[STORAGE_SILO_TYPE]?.stats?.capacity[level - 1] ?? 0;
 
 /**
  * The highest level a type can reach, which is the number of cost steps it has
@@ -438,7 +564,11 @@ writeFileSync(WEB_OUT, body, "utf8");
 writeFileSync(SERVER_OUT, `${body}${SERVER_FOOTER}`, "utf8");
 
 const steps = entries.reduce((total, one) => total + one.steps.length, 0);
-console.log(`${entries.length} building types, ${steps} cost steps`);
+const statted = entries.filter((one) => one.stats).map((one) => one.id);
+console.log(
+  `${entries.length} building types, ${steps} cost steps, ` +
+    `stats on ${statted.length} (${statted.join(", ")})`,
+);
 console.log(`-> ${WEB_OUT}`);
 console.log(`-> ${SERVER_OUT}`);
 console.log(
@@ -446,7 +576,8 @@ console.log(
     .map(
       (one) =>
         `${one.id}\t${one.name}\t${one.kind}\tg${one.group}\t` +
-        `${one.steps.length} steps\tquantity ${one.quantity.length}${one.mr2 ? `\tMR2 ${one.mr2}` : ""}`,
+        `${one.steps.length} steps\tquantity ${one.quantity.length}` +
+        `${one.stats ? "\tstats" : ""}${one.mr2 ? `\tMR2 ${one.mr2}` : ""}`,
     )
     .join("\n"),
 );

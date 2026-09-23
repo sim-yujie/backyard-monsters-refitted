@@ -115,6 +115,44 @@ describe("the cost table", () => {
     expect(FREE_FINISH_SECONDS).toBe(300);
   });
 
+  it("carries the harvester and silo ladders, and nothing else's", () => {
+    /**
+     * The five rows with a seventh element. The server derives production and
+     * storage caps from these same numbers
+     * (`server/src/game-data/buildingCosts.ts`,
+     * `docs/design/economy-save-validation.md` §3.6), so the two copies have to
+     * agree here as much as they do on prices. The ladders are the spec's
+     * (`docs/specs/base-building.md:484-526`).
+     */
+    const statted = BUILDING_COST_ROWS.filter((row) => row[6] !== undefined).map(([type]) => type);
+    expect(statted).toEqual([1, 2, 3, 4, 6]);
+
+    for (const type of [1, 2, 3, 4]) {
+      // `YARD_PROPS.as:151-153` and the three parallel entries.
+      const stats = rowOf(type)?.[6];
+      expect(stats?.produce, `type ${type}`).toEqual([2, 4, 7, 11, 16, 22, 29, 37, 46, 56]);
+      expect(stats?.cycleTime, `type ${type}`).toEqual([10, 10, 10, 10, 10, 10, 10, 10, 10, 10]);
+      expect(stats?.capacity, `type ${type}`).toEqual([
+        720, 2160, 5670, 13365, 29160, 60142, 118918, 227584, 424414, 775018,
+      ]);
+      expect(stats?.capacity.at(-1), `type ${type}`).toBe(775_018);
+      expect(stats?.capacity.length, `type ${type}`).toBe(maxLevel(type));
+    }
+
+    // The Storage Silo stores rather than produces (`YARD_PROPS.as:869`).
+    const silo = rowOf(6)?.[6];
+    expect(silo?.produce).toEqual([]);
+    expect(silo?.cycleTime).toEqual([]);
+    expect(silo?.capacity).toEqual([
+      7500, 15000, 30000, 60000, 120000, 240000, 480000, 960000, 1920000, 3840000,
+    ]);
+    expect(silo?.capacity.at(-1)).toBe(3_840_000);
+
+    // The other four entries that spell `capacity` or `produce` mean monsters,
+    // Flinger payloads and bunker garrison, not resources, so they carry none.
+    for (const type of [5, 15, 19, 22]) expect(rowOf(type)?.[6], `type ${type}`).toBeUndefined();
+  });
+
   it("answers for an unknown type instead of throwing", () => {
     expect(rowOf(99999)).toBeNull();
     expect(costOf(99999, 0)).toBeNull();
