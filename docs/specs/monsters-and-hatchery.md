@@ -57,15 +57,16 @@ opaque JSON and re-serves it.
 | Academy training cost, duration, level cap | **Client**, except the level clamp | `ACADEMY.as:54-131`; server clamps `level` to 6 at `server/src/controllers/base/save/handlers/academyHandler.ts:24-26` |
 | Lab powerup cost, duration, rank cap | **Client only** | `MONSTERLAB.as:51-73`, `:269-325` |
 | Hatchery queue length, per-stack cap, production timer | **Client only** | `HATCHERYPOPUP.as:241`, `:255`; `BUILDING13.as:313-347` |
-| Housing capacity and overflow | **Client only** | `HOUSING.as:55-86`, `:161-199` |
+| Housing capacity and overflow | **Client**, except on a yard transfer, where the server derives capacity from the destination's buildings | `HOUSING.as:55-86`, `:161-199`; `server/src/services/monsters/transferRules.ts` |
 | Bunker capacity and contents | **Client only** | `BUILDING22.as:294-320` |
 | Champion level, feeds, food bonus, power level | **Client**, except during an attack | `CHAMPIONCAGE.as:682-877`; attack-time clamp at `server/src/controllers/base/save/handlers/championHandler.ts:17-27` |
 | Shiny spend | **Server**, via the purchase handler | `server/src/controllers/base/save/baseSave.ts:148` |
-| Monster transfer between yards | **Server** checks ownership only | `server/src/controllers/maproom/v2/transferMonsters.ts:48-69` |
+| Monster transfer between yards | **Server** checks ownership, endpoints, quantities, holdings, conservation and destination housing | `server/src/controllers/maproom/v2/transferMonsters.ts`, `server/src/services/monsters/transferRules.ts`; see [§9](#9-transfers-between-yards) |
 
 The only server-side monster logic outside combat is: the academy level clamp, the champion `hp`
-clamp during an attack, the transfer ownership check, and the post-attack `monsterupdate` fan-out
-(`server/src/services/base/updateMonsters.ts:15-35`). Everything else is read, stored and echoed.
+clamp during an attack, the transfer rules in [§9](#9-transfers-between-yards), and the post-attack
+`monsterupdate` fan-out (`server/src/services/base/updateMonsters.ts:15-35`). Everything else is
+read, stored and echoed.
 
 ### Realms
 
@@ -1122,21 +1123,64 @@ Ordering: the request is held back until no `getarea` covering either zone is in
 
 `server/src/controllers/maproom/v2/transferMonsters.ts`:
 
-| Check | Line |
+| Check | Where |
 | --- | --- |
-| Both `baseid`s resolve to a `Save` | `:44-52` |
-| `fromBase.saveuserid === toBase.saveuserid` | `:55-59` |
-| **`fromBase.saveuserid === currentUser.userid` and `toBase.saveuserid === currentUser.userid`** | `:64-69` |
+| Both `baseid`s resolve to a `Save` | `transferMonsters.ts` |
+| `fromBase.saveuserid === toBase.saveuserid` | `transferMonsters.ts` |
+| **`fromBase.saveuserid === currentUser.userid` and `toBase.saveuserid === currentUser.userid`** | `transferMonsters.ts` |
+| The five transfer rules below | `server/src/services/monsters/transferRules.ts` |
 
-The caller-ownership check at `:64-69` **is present in the current code**, with a comment explaining
-that the shared-`saveuserid` test alone would let any authenticated player rewrite another player's
+The caller-ownership check **is present in the current code**, with a comment explaining that the
+shared-`saveuserid` test alone would let any authenticated player rewrite another player's
 garrisons. The check was added on the revamp branch; `docs/specs/maproom2.md` (open question 8)
 records the original gap as resolved.
 
-What the server still does **not** check (`:71-72`): quantities, `cStorage` totals against the
-target's housing capacity, whether the source ever had those monsters, or that the two blobs conserve
-anything. It assigns `fromBase.monsters = fromMonsters` and `toBase.monsters = toMonsters` verbatim.
-Monster duplication across two owned yards is a one-request operation.
+#### The five rules (issue #27)
+
+Until issue #27 the server assigned `fromBase.monsters = fromMonsters` and
+`toBase.monsters = toMonsters` verbatim, checking neither quantities, nor `cStorage` totals against
+the target's housing capacity, nor whether the source ever had those monsters, nor that the two
+blobs conserved anything. Monster duplication across two owned yards was a one-request operation.
+
+`checkMonsterTransfer()` now decides the request. The rules run in this order and the first refusal
+names itself in `data.rule`:
+
+| `rule` | What it refuses |
+| --- | --- |
+| `endpoints` | A yard sending to itself, an endpoint that is not `main` or `outpost`, or a main-to-main move — `PopupInfoMine.as:80-84` only offers the flow to a player holding an outpost, so one end is always one |
+| `quantities` | A `housed` count that is not a non-negative whole number |
+| `holdings` | The source ending up holding more of a type than it could have had — the client only ever decrements the source (`MapRoom.as:839-841`) |
+| `conservation` | The two yards' combined total for a type rising |
+| `capacity` | The destination's resulting roster not fitting its Monster Housing |
+
+**Capacity** is derived from the destination's own `buildingdata`, not from the client-written
+`space` field on its `monsters` blob. It mirrors `HOUSING.HousingSpace()` ([§6.1](#61-monster-housing)):
+every building of type 15 that has finished building (`cB` elapsed) and is above 10 health, at its
+stored level against the Map Room 2 table `[200, 260, 320, 380, 450, 540]`, times 1.25 while
+`EXH`/`EXHI` is running in `storedata`. Type 128 (Housing Bunker) and its Inferno table are handled
+for completeness. Monster Bunkers ([§6.3](#63-monster-bunker)) and champions are separate pools and
+add nothing. `cStorage` is read at the caller's Academy level, which only changes the answer for
+`C1` (10, 10, 10, 9, 8, 7).
+
+**Conservation carries a production allowance.** A strict `before === after` test would refuse
+honest transfers, because `MapRoomCell.Tick` replays the cell forward from the stored blob's `saved`
+and **adds finished monsters to `housed`** (`MapRoomCell.as:800-811`). A yard last saved a year ago
+therefore shows the player more monsters than the server stored. What bounds that replay is the
+hatchery work the stored blob already carries — the map cannot enqueue anything — so the allowance
+is the monster in production on each hatchery plus the per-hatchery queues plus the shared `hcc`
+queue, capped by how many of that type the yard could house at all. Totals are then checked against
+`stored + allowance`. The allowance is deliberate slack: a stored blob is itself client-written, so
+a forged queue inflates it, but never by more than one yard-full of a type per request, where the
+old hole was unbounded. Closing it entirely needs a server-authoritative production replay.
+
+An accepted transfer is still written byte-for-byte as it was before — both blobs verbatim, so the
+hatchery countdowns the map ticked forward are preserved.
+
+Refusals use `monsterTransferRejectedErr()`, `isClientFriendly: false`, which the interceptor turns
+into HTTP **200** with `error` set to a readable fragment. That is the only shape the Flash client
+shows the player: `transferSuccessful` branches on `param1.error == 0` and otherwise prints
+`msg_err_transfer` — "There was a problem with the transfer:" — with `param1.error` appended
+(`MapRoom.as:735-792`).
 
 ### After an attack
 

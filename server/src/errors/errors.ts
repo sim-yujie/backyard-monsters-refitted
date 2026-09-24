@@ -557,3 +557,41 @@ export const attackNotBoundErr = (reason: string) =>
     data: { reason },
     isClientFriendly: false,
   });
+
+/**
+ * A monster transfer the rules in `services/monsters/transferRules.ts` refused
+ * (issue #27, `docs/specs/monsters-and-hatchery.md` §9).
+ *
+ * `isClientFriendly: false` for the same reason `economySaveRejectedErr` and
+ * `attackNotBoundErr` use it, and here the archived Flash client makes the
+ * choice unusually plain. `transferSuccessful` is the only handler that shows
+ * the player anything the server said: it branches on `param1.error == 0` and
+ * otherwise prints `msg_err_transfer` — "There was a problem with the transfer:"
+ * — with `param1.error` appended (`MapRoom.as:735-792`). A non-friendly error is
+ * the one shape that fills that slot, because the interceptor answers it with
+ * HTTP **200** and `error` set to the message
+ * (`middleware/clientSafeError.ts:90-93`). A friendly error would leave `error`
+ * undefined and the player would read "There was a problem with the transfer:
+ * undefined".
+ *
+ * The message is therefore written as a sentence fragment that continues that
+ * prefix, and carries no ids or numbers. Which rule refused, and the figures
+ * behind it, travel in `data` for the web client and the logs. The intended
+ * status still travels in `errorDetails.status`, where the web client reads it
+ * (`web/src/api/http.ts:19-22`).
+ *
+ * @param {string} rule - Which transfer rule refused the request.
+ * @param {string} message - The fragment shown to the player after the prefix.
+ * @param {object} detail - The figures behind the refusal.
+ */
+export const monsterTransferRejectedErr = (
+  rule: string,
+  message: string,
+  detail: object = {}
+) =>
+  new ClientSafeError({
+    message,
+    status: Status.CONFLICT,
+    data: { rule, ...detail },
+    isClientFriendly: false,
+  });
