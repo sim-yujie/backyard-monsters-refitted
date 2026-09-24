@@ -218,6 +218,26 @@ describe("the inventory drawer", () => {
     expect(icon?.alt).toBe("Cannon Tower");
   });
 
+  it("crops an animation strip to its first cell rather than squeezing it in", () => {
+    // The Monster Bunker ships no still picture: its `top` is a 1350 x 83
+    // strip of fifteen 90 x 83 cells. Fitting the whole file into 28 pixels
+    // draws a 28 x 2 smear, which is what "no icon" looked like.
+    const panel = mount();
+    panel.setNodes([node({ id: 1, type: 22, level: 1, width: 90, height: 90 })]);
+
+    const box = panel.element.querySelector<HTMLElement>(".planner-inventory__icon");
+    expect(box?.tagName).toBe("SPAN");
+    expect(box?.style.overflow).toBe("hidden");
+
+    const icon = box?.querySelector("img");
+    expect(icon?.getAttribute("src")).toContain("bunker/anim.1.png");
+    expect(icon?.alt).toBe("Monster Bunker");
+    // One cell tall at 28 px wide: the strip's own width is never needed.
+    expect(icon?.style.width).toBe("auto");
+    expect(icon?.style.height).toBe(`${(83 * 28) / 90}px`);
+    expect(icon?.style.left).toBe("0px");
+  });
+
   it("shows a swatch rather than a broken image for a type with no art", () => {
     const panel = mount();
     panel.setNodes([node({ id: 1, type: 99_999 })]);

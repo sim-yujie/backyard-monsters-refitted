@@ -174,6 +174,48 @@ export interface ResolvedAnim {
   readonly frames: number;
 }
 
+/**
+ * Where to put a strip's first cell inside a square icon box, for the HTML
+ * lists that show a building as an `<img>`.
+ *
+ * Four types ship no still picture at all — the Monster Bunker among them —
+ * and their `top` is cell 0 of an animation strip, flagged by `frame`. An
+ * `<img>` cannot crop, so a list that sets `src` to the strip and trusts
+ * `object-fit: contain` renders all fifteen cells squeezed into 28 pixels: a
+ * 28 x 2 smear that reads as no icon at all.
+ *
+ * The cure is a box with `overflow: hidden` holding an oversized image. The
+ * strip is exactly one cell tall, so giving the image a height and letting its
+ * width follow scales the cells by that same factor without anyone having to
+ * know how wide the file is — which nothing does until it has loaded. The cell
+ * is then placed so it sits in the middle of the box and the cells after it
+ * fall outside.
+ */
+export interface StripCrop {
+  /** Height for the whole strip; its width follows from its own ratio. */
+  readonly height: number;
+  /** Where the strip's top-left corner goes, relative to the box. */
+  readonly left: number;
+  readonly top: number;
+  /** How wide cell 0 ends up. What is visible, for a caller that needs it. */
+  readonly cellWidth: number;
+}
+
+/**
+ * Fits cell 0 of a strip into a `size` x `size` box, `contain`-style: scaled
+ * by whichever side of the cell runs out first, never magnified, centred.
+ */
+export const stripCrop = (
+  frame: { readonly width: number; readonly height: number },
+  size: number,
+): StripCrop | null => {
+  if (frame.width <= 0 || frame.height <= 0 || size <= 0) return null;
+  const scale = Math.min(size / frame.width, size / frame.height, 1);
+  const height = frame.height * scale;
+  const cellWidth = frame.width * scale;
+  return { height, left: (size - cellWidth) / 2, top: (size - height) / 2, cellWidth };
+};
+
 export interface ResolvedArt {
   readonly name: string;
   readonly folder: string;

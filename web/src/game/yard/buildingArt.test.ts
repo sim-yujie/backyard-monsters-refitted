@@ -10,6 +10,7 @@ import {
   maxHealth,
   prettifyArtKey,
   resolveArt,
+  stripCrop,
 } from "./buildingArt";
 import { stripCells } from "./yardAnim";
 
@@ -378,5 +379,39 @@ describe("animation layers", () => {
   it("flags the four types whose top is only their first cell", () => {
     const flagged = artTypes().filter((type) => resolveArt(type, 1, ArtState.DEFAULT)?.topIsAnim);
     expect(flagged).toEqual([22, 53, 105, 129]);
+  });
+});
+
+describe("cropping a strip into an icon box", () => {
+  /** The Monster Bunker's cell: `anim.1.png` is fifteen of these in a row. */
+  const BUNKER = { width: 90, height: 83 };
+
+  it("scales by the cell's wider side and centres what is left", () => {
+    const crop = stripCrop(BUNKER, 28);
+    expect(crop?.height).toBeCloseTo((83 * 28) / 90);
+    expect(crop?.cellWidth).toBeCloseTo(28);
+    expect(crop?.left).toBeCloseTo(0);
+    expect(crop?.top).toBeCloseTo((28 - (83 * 28) / 90) / 2);
+  });
+
+  it("centres a cell taller than it is wide, so the next cell falls outside", () => {
+    // The Quake Tower's cell is 75 x 132: height binds, and the 28 px box has
+    // room to spare on either side that cell 1 must not creep into.
+    const crop = stripCrop({ width: 75, height: 132 }, 28);
+    expect(crop?.height).toBeCloseTo(28);
+    expect(crop?.cellWidth).toBeCloseTo((75 * 28) / 132);
+    expect(crop?.left).toBeGreaterThan(0);
+    expect((crop?.left ?? 0) + (crop?.cellWidth ?? 0)).toBeCloseTo(28 - (crop?.left ?? 0));
+  });
+
+  it("never magnifies a cell smaller than the box", () => {
+    const crop = stripCrop({ width: 10, height: 12 }, 28);
+    expect(crop?.height).toBe(12);
+    expect(crop?.cellWidth).toBe(10);
+  });
+
+  it("has nothing to place for a cell or a box with no size", () => {
+    expect(stripCrop({ width: 0, height: 83 }, 28)).toBeNull();
+    expect(stripCrop(BUNKER, 0)).toBeNull();
   });
 });

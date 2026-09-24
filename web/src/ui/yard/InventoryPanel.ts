@@ -1,4 +1,4 @@
-import { ArtState, resolveArt } from "@/game/yard/buildingArt";
+import { ArtState, resolveArt, stripCrop } from "@/game/yard/buildingArt";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import {
   categorise,
@@ -391,6 +391,13 @@ export class InventoryPanel {
  * A type the art table has no row for gets a swatch of its kind's colour. That
  * is better than an `<img>` whose `src` is empty, which renders as a broken
  * image and pulls the row's height around.
+ *
+ * Four types ship no still picture and draw from an animation strip instead —
+ * the Monster Bunker's `top` is a 1350 x 83 file of fifteen cells. Pointed at
+ * one of those, `object-fit: contain` fits the whole strip and the row wears a
+ * 28 x 2 smear, which is what "no icon" looked like. Those get a clipping box
+ * around an oversized image instead; `stripCrop` has the arithmetic and the
+ * reasoning.
  */
 const renderIcon = (group: SearchGroup): HTMLElement => {
   const art = resolveArt(group.type, group.level, ArtState.DEFAULT);
@@ -403,14 +410,36 @@ const renderIcon = (group: SearchGroup): HTMLElement => {
   }
 
   const icon = document.createElement("img");
-  icon.className = "planner-inventory__icon";
   icon.src = art.top.url;
   icon.alt = group.name;
   // Set as attributes: the properties do not reflect in jsdom, and the whole
   // point is that the browser sees them before it fetches.
   icon.setAttribute("loading", "lazy");
   icon.setAttribute("decoding", "async");
-  icon.width = ICON_PX;
-  icon.height = ICON_PX;
-  return icon;
+
+  const crop = art.top.frame ? stripCrop(art.top.frame, ICON_PX) : null;
+  if (!crop) {
+    icon.className = "planner-inventory__icon";
+    icon.width = ICON_PX;
+    icon.height = ICON_PX;
+    return icon;
+  }
+
+  // Styled here rather than in the stylesheet: the numbers are the cell's, and
+  // a rule cannot know them.
+  const box = document.createElement("span");
+  box.className = "planner-inventory__icon planner-inventory__icon--strip";
+  box.style.position = "relative";
+  box.style.display = "inline-block";
+  box.style.overflow = "hidden";
+  icon.style.position = "absolute";
+  icon.style.height = `${crop.height}px`;
+  // Width follows the strip's own ratio, which is the trick: the file's width
+  // is not known until it has loaded, and this never needs it.
+  icon.style.width = "auto";
+  icon.style.maxWidth = "none";
+  icon.style.left = `${crop.left}px`;
+  icon.style.top = `${crop.top}px`;
+  box.append(icon);
+  return box;
 };
