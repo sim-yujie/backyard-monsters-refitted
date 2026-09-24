@@ -9,6 +9,8 @@ import {
 import type { YardWorkers } from "@/game/yard/yardModel";
 import { YardView } from "@/game/yard/YardRenderer";
 import { formatAmount, formatCountdown } from "@/ui/format";
+import { attachPopover } from "@/ui/Popover";
+import { demo, GROUP_OP_DEMOS, type DemoName } from "./demos";
 
 /**
  * The planner's two bars: tools across the top, the plan summary and the
@@ -119,10 +121,64 @@ const button = (label: string, title: string, className = "btn btn--ghost"): HTM
   return element;
 };
 
+/**
+ * A control's title, kept on the control *and* on its demo wrapper.
+ *
+ * `.planner-tip` gives a disabled button `pointer-events: none` so the wrapper
+ * can still be hovered (see `Popover.ts`), and a button that takes no pointer
+ * events shows no native tooltip either. Putting the same text on the wrapper
+ * puts that back: the browser shows the innermost title it can reach, which is
+ * the button's while it is live and the wrapper's while it is not.
+ */
+const setTitle = (control: HTMLElement, text: string): void => {
+  control.title = text;
+  const wrapper = control.parentElement;
+  if (wrapper?.classList.contains("planner-tip")) wrapper.title = text;
+};
+
+/** The body of a tool's popover: the demo, then the line it already said. */
+const tipContent = (name: DemoName, text: string): Node => {
+  const body = document.createElement("div");
+  body.className = "popover__body";
+  const figure = document.createElement("span");
+  figure.className = "popover__demo";
+  figure.append(demo(name));
+  const line = document.createElement("p");
+  line.className = "popover__text";
+  line.textContent = text;
+  body.append(figure, line);
+  return body;
+};
+
+/**
+ * Wraps a control so a demo of it can pop up on hover, focus or a long press.
+ *
+ * The wrapper is what listens, not the control, because Chrome dispatches no
+ * pointer events at all over a disabled button — and a disabled Mirror is
+ * exactly when a player wants to know what Mirror does.
+ */
+const withDemo = (
+  control: HTMLElement,
+  name: DemoName,
+  text: () => string,
+): { element: HTMLElement; dispose: () => void } => {
+  const element = document.createElement("span");
+  element.className = "planner-tip";
+  element.append(control);
+  element.title = control.title;
+  const dispose = attachPopover(element, {
+    build: () => tipContent(name, text()),
+    className: "popover--demo",
+  });
+  return { element, dispose };
+};
+
 /** One row in a toolbar menu. */
 interface MenuRow {
   readonly label: string;
   readonly title: string;
+  /** The demo shown when the row is hovered. */
+  readonly demo: DemoName;
   readonly run: () => void;
 }
 
@@ -146,8 +202,10 @@ class Menu {
   private readonly trigger: HTMLButtonElement;
   private readonly list: HTMLElement;
   private readonly dismiss: (event: Event) => void;
+  /** Detaches every popover this menu attached, trigger and rows alike. */
+  private readonly popovers: (() => void)[] = [];
 
-  constructor(label: string, title: string, rows: readonly MenuRow[]) {
+  constructor(label: string, title: string, demoName: DemoName, rows: readonly MenuRow[]) {
     this.element = document.createElement("div");
     this.element.className = "planner-menu";
 
@@ -172,10 +230,20 @@ class Menu {
         this.toggle(false);
         row.run();
       });
+      // A row is never disabled — the trigger is — so the popover can hang off
+      // the button itself and the row needs no wrapper.
+      this.popovers.push(
+        attachPopover(item, {
+          build: () => tipContent(row.demo, row.title),
+          className: "popover--demo",
+        }),
+      );
       this.list.append(item);
     }
 
-    this.element.append(this.trigger, this.list);
+    const trigger = withDemo(this.trigger, demoName, () => this.trigger.title);
+    this.popovers.push(trigger.dispose);
+    this.element.append(trigger.element, this.list);
 
     this.dismiss = (event: Event): void => {
       if (this.list.hidden) return;
@@ -195,7 +263,7 @@ class Menu {
   /** Whether the list can be opened at all, and why not when it cannot. */
   setEnabled(enabled: boolean, title: string): void {
     this.trigger.disabled = !enabled;
-    this.trigger.title = title;
+    setTitle(this.trigger, title);
     if (!enabled) this.toggle(false);
   }
 
@@ -206,6 +274,8 @@ class Menu {
   destroy(): void {
     document.removeEventListener("pointerdown", this.dismiss, true);
     document.removeEventListener("keydown", this.dismiss, true);
+    for (const dispose of this.popovers) dispose();
+    this.popovers.length = 0;
     this.element.remove();
   }
 
@@ -250,6 +320,10 @@ export class PlannerBar {
   private readonly tools = new Map<PlannerTool, HTMLButtonElement>();
   private readonly views = new Map<YardView, HTMLButtonElement>();
   private readonly mirrors: HTMLButtonElement[] = [];
+  /** The `.planner-tip` wrappers the mirror buttons are mounted inside. */
+  private readonly mirrorTips: HTMLElement[] = [];
+  /** Detaches every popover the bar attached. */
+  private readonly popovers: (() => void)[] = [];
   private readonly align: Menu;
   private readonly distribute: Menu;
   private readonly undo: HTMLButtonElement;
@@ -307,18 +381,29 @@ export class PlannerBar {
       const element = button(info.menu, info.hint);
       element.disabled = true;
       element.addEventListener("click", () => actions.onGroupTool(op));
+      // Wrapped so the demo can pop up even while the button is off, and the
+      // wrapper is what goes in the bar (`this.mirrors` keeps the buttons,
+      // because that is what `setGroupEnabled` has to reach).
+      const { element: wrapper, dispose } = withDemo(
+        element,
+        GROUP_OP_DEMOS[op],
+        () => element.title,
+      );
+      this.popovers.push(dispose);
+      this.mirrorTips.push(wrapper);
       return element;
     };
 
     const groupRow = (op: GroupOp): MenuRow => ({
       label: GROUP_OPS[op].menu,
       title: GROUP_OPS[op].hint,
+      demo: GROUP_OP_DEMOS[op],
       run: () => actions.onGroupTool(op),
     });
 
     this.mirrors.push(groupButton(GroupOp.MIRROR_X), groupButton(GroupOp.MIRROR_Y));
 
-    this.align = new Menu("Align", "Align the selection's edges or centres", [
+    this.align = new Menu("Align", "Align the selection's edges or centres", "alignLeft", [
       groupRow(GroupOp.ALIGN_LEFT),
       groupRow(GroupOp.ALIGN_RIGHT),
       groupRow(GroupOp.ALIGN_TOP),
@@ -326,7 +411,7 @@ export class PlannerBar {
       groupRow(GroupOp.ALIGN_CENTRE_X),
       groupRow(GroupOp.ALIGN_CENTRE_Y),
     ]);
-    this.distribute = new Menu("Distribute", "Space the selection evenly", [
+    this.distribute = new Menu("Distribute", "Space the selection evenly", "distributeH", [
       groupRow(GroupOp.DISTRIBUTE_X),
       groupRow(GroupOp.DISTRIBUTE_Y),
     ]);
@@ -337,7 +422,10 @@ export class PlannerBar {
     this.redo = button("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)");
     this.redo.addEventListener("click", actions.onRedo);
 
-    const help = button("?", "Keyboard shortcuts", "btn btn--ghost btn--icon");
+    const help = button("?", "How the planner works, and every shortcut", "btn btn--ghost btn--icon");
+    // "?" is not a name, so the button gets a real one for anything that reads
+    // the accessible name rather than the glyph.
+    help.setAttribute("aria-label", "How the planner works, and every shortcut");
     help.addEventListener("click", actions.onHelp);
 
     const exit = button("Leave planner", "Leave planner (P)");
@@ -353,7 +441,7 @@ export class PlannerBar {
       ...(this.readOnly
         ? []
         : [
-            group(...this.mirrors, this.align.element, this.distribute.element),
+            group(...this.mirrorTips, this.align.element, this.distribute.element),
             group(this.undo, this.redo),
           ]),
       spacer(),
@@ -647,12 +735,12 @@ export class PlannerBar {
 
     for (const element of this.mirrors) {
       element.disabled = count < 2;
-      if (count < 2) element.title = "Select two or more buildings to mirror";
+      if (count < 2) setTitle(element, "Select two or more buildings to mirror");
     }
     if (count >= 2) {
       const [horizontal, vertical] = this.mirrors;
-      if (horizontal) horizontal.title = GROUP_OPS[GroupOp.MIRROR_X].hint;
-      if (vertical) vertical.title = GROUP_OPS[GroupOp.MIRROR_Y].hint;
+      if (horizontal) setTitle(horizontal, GROUP_OPS[GroupOp.MIRROR_X].hint);
+      if (vertical) setTitle(vertical, GROUP_OPS[GroupOp.MIRROR_Y].hint);
     }
 
     this.align.setEnabled(
@@ -702,6 +790,10 @@ export class PlannerBar {
     // The menus listen on the document, so dropping the bar is not enough.
     this.align.destroy();
     this.distribute.destroy();
+    // So do the popovers, and their bubbles hang off the body rather than off
+    // the bar, so they outlive it unless they are taken down by hand.
+    for (const dispose of this.popovers) dispose();
+    this.popovers.length = 0;
     this.toolbar.remove();
     this.actionBar.remove();
   }

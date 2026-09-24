@@ -38,9 +38,14 @@ import {
   describeLoadProblems,
   didNotFitPanel,
   rearmPanel,
-  shortcutsPanel,
   type BannerAction,
 } from "@/ui/yard/PlannerDialogs";
+import {
+  hasSeenPlannerHint,
+  markPlannerHintSeen,
+  plannerHelpPanel,
+  type HelpTab,
+} from "@/ui/yard/PlannerHelp";
 import { SearchPanel } from "@/ui/yard/SearchPanel";
 import { describeCost } from "@/ui/yard/upgradeText";
 import { wallUpgradePanel } from "@/ui/yard/WallUpgradePanel";
@@ -152,8 +157,19 @@ export class YardPlanner {
    * around on every click.
    */
   private readonly inspectorDock: HTMLElement;
+  /**
+   * Where the help card sits: centred over the canvas rather than in the left
+   * column with the checklist and the search box.
+   *
+   * It is the one panel here that is not a reply to something the player just
+   * did — the first opening puts it up unasked — so it has to be where they
+   * are already looking, and it has to be obvious enough that dismissing it is
+   * a decision rather than an accident.
+   */
+  private readonly helpDock: HTMLElement;
 
   private openPanel: Panel | null = null;
+  private helpPanel: Panel | null = null;
   private inspector: InspectorPanel | null = null;
   private search: SearchPanel | null = null;
   private notice: HTMLElement | null = null;
@@ -183,6 +199,10 @@ export class YardPlanner {
     this.inspectorDock = document.createElement("div");
     this.inspectorDock.className = "planner-dock planner-dock--right";
     options.overlay.append(this.inspectorDock);
+
+    this.helpDock = document.createElement("div");
+    this.helpDock.className = "planner-help-dock";
+    options.overlay.append(this.helpDock);
 
     this.session = new PlannerSession({
       yard: options.yard,
@@ -228,7 +248,7 @@ export class YardPlanner {
       onRearmTraps: () => this.showRearm(),
       onApply: () => this.apply(),
       onPutBack: () => this.session.putBack(),
-      onHelp: () => this.openDialog(shortcutsPanel(() => this.closeDialog())),
+      onHelp: () => this.openHelp("basics", false),
       onExit: () => this.requestExit(),
     }, { readOnly: this.readOnly });
     this.bar.mount(options.overlay);
@@ -237,6 +257,11 @@ export class YardPlanner {
     this.session.attach();
     this.refreshBar();
     this.bar.setRearmCount(this.rearmTargets().length);
+
+    // First opening only. The flag is per browser rather than per account: it
+    // is about whether this person has seen the card, and the client has no
+    // per-player settings to hang it on.
+    if (!hasSeenPlannerHint()) this.openHelp("basics", true);
   }
 
   /** True when there are edits that have not been saved to a slot. */
@@ -278,6 +303,8 @@ export class YardPlanner {
 
   destroy(): void {
     this.closeDialog();
+    this.helpPanel?.close();
+    this.helpPanel = null;
     this.inspector?.close();
     this.inspector = null;
     this.search?.close();
@@ -287,6 +314,7 @@ export class YardPlanner {
     this.bar.destroy();
     this.dock.remove();
     this.inspectorDock.remove();
+    this.helpDock.remove();
     this.options.notices.clear(NOTICE);
     this.reportReadOnlyInset();
   }
@@ -798,6 +826,27 @@ export class YardPlanner {
     if (!centre) return;
     this.options.camera.centreOn(centre);
     this.options.camera.dirty = true;
+  }
+
+  /**
+   * Opens the help card, on the tab asked for.
+   *
+   * Closing it in any way sets the "seen" flag, not just the "Got it" button.
+   * A player who shuts a card with its cross has read as much of it as they
+   * mean to, and showing it to them again every time they open the planner
+   * would be the worst kind of help — the `?` button is right there, and it
+   * brings the same card back.
+   */
+  private openHelp(tab: HelpTab, firstOpen: boolean): void {
+    this.helpPanel?.close();
+    this.helpPanel = plannerHelpPanel({
+      tab,
+      firstOpen,
+      onClose: () => {
+        this.helpPanel = null;
+        markPlannerHintSeen();
+      },
+    }).mount(this.helpDock);
   }
 
   private openDialog(panel: Panel): void {

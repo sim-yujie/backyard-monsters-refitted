@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
 import type { ApplyPreview, PlanTotals } from "@/game/yard/planner/upgrades";
 import { YardView } from "@/game/yard/YardRenderer";
@@ -425,5 +425,85 @@ describe("the read-only bar", () => {
 
     expect(labels(bar)).not.toContain("Upgrade walls");
     expect(bar.actionBar.querySelector("button:not([disabled])")).toBeNull();
+  });
+});
+
+/**
+ * The demos that replaced the tooltips (#49).
+ *
+ * The owner's verdict on the old ones was "your words aren't exactly helpful",
+ * and the fix is a picture of the move. What can be checked here is that the
+ * picture reaches the player: on hover, on a disabled control as much as a
+ * live one, and without the `title` a screen reader relies on going anywhere.
+ */
+describe("the tool demos", () => {
+  const popovers = (): Element[] => [...document.querySelectorAll(".popover")];
+
+  const hover = (element: Element): void => {
+    element.dispatchEvent(new Event("pointerenter"));
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    for (const stale of popovers()) stale.remove();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("shows a moving picture when a group tool is hovered", () => {
+    const bar = mount();
+    const mirror = bar.toolbar.querySelector(".planner-tip");
+    expect(mirror).not.toBeNull();
+
+    hover(mirror!);
+    // Not instantly: sweeping a pointer across nine buttons should not strobe.
+    expect(popovers()).toHaveLength(0);
+    vi.advanceTimersByTime(400);
+
+    const [bubble] = popovers();
+    expect(bubble).toBeDefined();
+    expect(bubble?.querySelector("svg.planner-demo")).not.toBeNull();
+    expect(bubble?.querySelectorAll(".planner-demo__anim").length ?? 0).toBeGreaterThan(0);
+    bar.destroy();
+  });
+
+  it("shows one for a tool that is off, which is when it is most wanted", () => {
+    const bar = mount();
+    bar.setGroupEnabled(0);
+
+    const wrapper = bar.toolbar.querySelector<HTMLElement>(".planner-tip");
+    expect(wrapper?.querySelector("button")?.disabled).toBe(true);
+    hover(wrapper!);
+    vi.advanceTimersByTime(400);
+
+    const [bubble] = popovers();
+    // The reason it is off, rather than the hint for what it would do.
+    expect(bubble?.textContent).toContain("two or more");
+    expect(bubble?.querySelector("svg.planner-demo")).not.toBeNull();
+    bar.destroy();
+  });
+
+  it("leaves the native tooltip where the wrapper can still show it", () => {
+    const bar = mount();
+    const wrapper = bar.toolbar.querySelector<HTMLElement>(".planner-tip");
+    const button = wrapper?.querySelector("button");
+    bar.setGroupEnabled(4);
+    expect(button?.title).toContain("Flip the selection left to right");
+    // A disabled button takes no pointer events, so the wrapper carries the
+    // same words for the browser to show instead.
+    expect(wrapper?.title).toBe(button?.title);
+    bar.destroy();
+  });
+
+  it("takes its bubbles down with it", () => {
+    const bar = mount();
+    hover(bar.toolbar.querySelector(".planner-tip")!);
+    vi.advanceTimersByTime(400);
+    expect(popovers()).toHaveLength(1);
+
+    bar.destroy();
+    expect(popovers()).toHaveLength(0);
   });
 });

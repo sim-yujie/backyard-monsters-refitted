@@ -1,6 +1,7 @@
 import { Panel } from "@/ui/Panel";
 import { formatCountdown } from "@/ui/format";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
+import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import {
   artStateFor,
   BuildingCondition,
@@ -19,10 +20,33 @@ import {
  *
  * Editing is a later task, so the Upgrade button is present and disabled: the
  * shape of the screen is easier to judge with it there.
+ *
+ * ## The Yard Planner's own popup
+ *
+ * One building here has an action that is not about that building: clicking
+ * the Yard Planner offers to open the planner. Design §8, Q5 said entry was a
+ * toolbar button and *not* the building's popup, and that was the wrong call —
+ * players click the Yard Planner expecting it to do something, and finding it
+ * inert teaches them that the planner is somewhere else without telling them
+ * where. The toolbar control is still the main door; this is the door people
+ * actually try.
  */
 
 export interface BuildingPanelOptions {
   onClose: () => void;
+  /**
+   * The offer to open the layout planner, shown on the Yard Planner building
+   * and on nothing else.
+   *
+   * Left out when the yard has no planner to open, which is also the only case
+   * in which this building cannot be on screen — so in practice it is always
+   * supplied, and the option exists so the panel does not have to guess.
+   */
+  planner?: {
+    readonly label: string;
+    readonly title: string;
+    readonly open: () => void;
+  };
 }
 
 const UPGRADE_SOON = "Coming soon: the yard is read-only in this build.";
@@ -32,6 +56,8 @@ export class BuildingPanel {
 
   private readonly panel: Panel;
   private readonly facts: HTMLDListElement;
+  private readonly actions: HTMLElement;
+  private readonly planner: BuildingPanelOptions["planner"];
   private readonly kind: HTMLElement;
   private readonly kindLabel: HTMLElement;
   private readonly swatch: HTMLElement;
@@ -41,6 +67,7 @@ export class BuildingPanel {
   private countdowns: { node: HTMLElement; endsAt: number }[] = [];
 
   constructor(options: BuildingPanelOptions) {
+    this.planner = options.planner;
     this.panel = new Panel({
       title: "Building",
       className: "map-panel",
@@ -58,11 +85,12 @@ export class BuildingPanel {
     this.facts = document.createElement("dl");
     this.facts.className = "cell-facts";
 
-    const actions = document.createElement("div");
-    actions.className = "map-row map-row--wrap";
-    actions.append(disabledAction("Upgrade", UPGRADE_SOON));
+    // Rebuilt per building rather than filled once, because which actions a
+    // building has depends on which building it is.
+    this.actions = document.createElement("div");
+    this.actions.className = "map-row map-row--wrap";
 
-    this.panel.setContent(this.kind, this.facts, actions);
+    this.panel.setContent(this.kind, this.facts, this.actions);
   }
 
   get shownBuilding(): YardBuilding | null {
@@ -125,6 +153,31 @@ export class BuildingPanel {
     this.addCountdown(building);
     this.addProduction(building);
     this.addArt(building);
+    this.setActions(building);
+  }
+
+  /**
+   * The buttons under the facts.
+   *
+   * Upgrade is there and dead for every building, so the shape of the panel is
+   * honest about what is coming. The planner button is the Yard Planner's
+   * alone, and it leads the row: it is the only thing on this panel that does
+   * anything today.
+   */
+  private setActions(building: YardBuilding): void {
+    const children: HTMLElement[] = [];
+    if (this.planner && building.type === YARD_PLANNER_TYPE) {
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "btn btn--primary building-panel__planner";
+      open.textContent = this.planner.label;
+      open.title = this.planner.title;
+      const run = this.planner.open;
+      open.addEventListener("click", () => run());
+      children.push(open);
+    }
+    children.push(disabledAction("Upgrade", UPGRADE_SOON));
+    this.actions.replaceChildren(...children);
   }
 
   private addHealth(building: YardBuilding): void {

@@ -13,8 +13,12 @@ import { describeCost, describeSkip, describeStep } from "./upgradeText";
 
 /**
  * The planner's small overlays: the pre-Apply checklist, the Apply dialog, the
- * list of what a loaded layout could not place, the trap re-arm confirmation,
- * the shortcut sheet and the banner.
+ * list of what a loaded layout could not place, the trap re-arm confirmation
+ * and the banner.
+ *
+ * The shortcut sheet used to live here too. It is now the second tab of
+ * `PlannerHelp`, so the `?` button leads to the pictures a new player needs
+ * and to the keys a returning one wants, rather than only to the keys.
  *
  * All of them are transient and none of them owns state, so they are plain
  * builders returning an element the scene docks and drops. The checklist is the
@@ -581,49 +585,6 @@ export const rearmPanel = (options: RearmPanelOptions): Panel => {
   actions.append(confirm, cancel);
 
   panel.setContent(heading, costList, note, problems, actions);
-  return panel;
-};
-
-/** F13's shortcut sheet, listing only what phase 1 actually binds. */
-export const shortcutsPanel = (onClose: () => void): Panel => {
-  const panel = new Panel({
-    title: "Keyboard shortcuts",
-    className: "map-panel planner-shortcuts",
-    onClose,
-  });
-
-  const rows: [string, string][] = [
-    ["P", "Enter or leave the planner"],
-    ["Tab", "Switch between the 3D yard and the blueprint"],
-    ["Click a building", "Pick it up; it follows the pointer until you click again to drop it"],
-    ["Right-click", "Put a carried selection back where it was"],
-    ["V", "Select tool"],
-    ["B", "Box select"],
-    ["F", "Find buildings by name or type"],
-    ["Shift + drag", "Box select with the select tool"],
-    ["Shift + click", "Add or remove one building"],
-    ["Arrow keys", "Nudge the selection by one grid step"],
-    ["Shift + arrows", "Nudge by ten steps"],
-    ["M", "Mirror the selection left to right — positions, not artwork"],
-    ["Shift + M", "Mirror it top to bottom"],
-    ["Ctrl + Z", "Undo"],
-    ["Ctrl + Shift + Z, Ctrl + Y", "Redo"],
-    ["Ctrl + S", "Save to the current slot"],
-    ["Escape", "Cancel a drag or carry, or clear the selection"],
-    ["Delete", "Nothing yet — storing arrives with the store tool"],
-  ];
-
-  const list = document.createElement("dl");
-  list.className = "cell-facts";
-  for (const [key, meaning] of rows) {
-    const term = document.createElement("dt");
-    term.textContent = key;
-    const value = document.createElement("dd");
-    value.textContent = meaning;
-    list.append(term, value);
-  }
-
-  panel.setContent(list);
   return panel;
 };
 

@@ -17,9 +17,42 @@
   pointer-events: auto;
 }
 
-.yard-toolbar__plan[aria-pressed="true"] {
-  background: var(--colour-accent);
-  color: var(--colour-accent-text);
+/*
+ * The Layout control (#46).
+ *
+ * Primary fill, a glyph and a word, and a shadow so it reads as a control
+ * floating over the yard rather than as a label printed on it. Bigger than the
+ * ghost button it replaced because the owner could not find that one, and
+ * bigger again under a coarse pointer, where it is also the first thing a
+ * thumb reaches for.
+ */
+.yard-toolbar__layout {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-md);
+  box-shadow: var(--shadow-panel);
+}
+
+.yard-toolbar__icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: currentcolor;
+}
+
+/* Open: the control is now the way out, so it stops shouting. */
+.yard-toolbar__layout[aria-pressed="true"] {
+  background: var(--colour-surface-raised);
+  border-color: var(--colour-border-strong);
+  color: var(--colour-text);
+}
+
+@media (pointer: coarse) {
+  .yard-toolbar__layout {
+    min-height: 44px;
+  }
 }
 
 /* ── The two bars ─────────────────────────────────────────────────────── */
@@ -869,5 +902,435 @@
    */
   .planner-bar__group {
     gap: var(--space-2);
+  }
+}
+
+/* ── Showing rather than telling (#49) ────────────────────────────────────
+ *
+ * Three things live below: the bubble that opens under a tool, the looping
+ * pictures inside it (`src/ui/yard/demos.ts`) and the card those pictures also
+ * fill on the planner's first opening.
+ *
+ * The animation is all here rather than in the builders, because every demo
+ * moves in one of five ways and the distance is the only thing that differs.
+ * Each moving element carries `.planner-demo__anim` plus the class naming its
+ * motion, and sets `--dx`/`--dy` inline; one keyframe rule then drives fifteen
+ * different pictures, and `prefers-reduced-motion` has one place to switch
+ * them all off.
+ */
+
+/* The wrapper a popover listens on. */
+.planner-tip {
+  display: inline-flex;
+}
+
+/*
+ * Chrome dispatches no pointer events over a disabled control and does not let
+ * them through to its ancestors, so without this the wrapper never sees the
+ * hover — and a disabled Mirror is exactly when a player wants to know what
+ * Mirror would do. The wrapper carries a copy of the button's `title`, so the
+ * native tooltip survives the handover.
+ */
+.planner-tip .btn:disabled {
+  pointer-events: none;
+}
+
+.popover {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-popup);
+  max-width: 232px;
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-overlay);
+  box-shadow: var(--shadow-popup);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  /* Never in the way of the control it is describing. */
+  pointer-events: none;
+}
+
+.popover--demo {
+  width: 216px;
+}
+
+.popover__demo {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+  overflow: hidden;
+}
+
+.popover__text {
+  margin: var(--space-2) 0 0;
+}
+
+/* ── The pictures ─────────────────────────────────────────────────────── */
+
+.planner-demo {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.planner-demo__grid line {
+  stroke: var(--colour-border);
+  stroke-width: 0.5;
+}
+
+.planner-demo__block {
+  fill: var(--colour-border-strong);
+}
+
+.planner-demo__block--lead {
+  fill: var(--colour-accent);
+}
+
+.planner-demo__ghost {
+  fill: none;
+  stroke: var(--colour-text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.planner-demo__ring {
+  fill: none;
+  stroke: var(--colour-info);
+  stroke-width: 2;
+}
+
+.planner-demo__axis {
+  stroke: var(--colour-info);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+.planner-demo__marquee {
+  fill: color-mix(in srgb, var(--colour-info) 22%, transparent);
+  stroke: var(--colour-info);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+.planner-demo__cursor {
+  fill: var(--colour-text);
+  stroke: var(--colour-surface-sunken);
+  stroke-width: 1;
+}
+
+.planner-demo__ping {
+  fill: none;
+  stroke: var(--colour-accent);
+  stroke-width: 2;
+}
+
+.planner-demo__lens {
+  fill: none;
+  stroke: var(--colour-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* ── The five motions ─────────────────────────────────────────────────── */
+
+.planner-demo__anim {
+  animation-duration: 2.4s;
+  animation-iteration-count: infinite;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.planner-demo__move {
+  animation-name: planner-demo-move;
+}
+
+.planner-demo__grow {
+  animation-name: planner-demo-grow;
+  transform-box: fill-box;
+  transform-origin: top left;
+}
+
+.planner-demo__appear {
+  animation-name: planner-demo-appear;
+}
+
+.planner-demo__ping {
+  animation-name: planner-demo-ping;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* The second click of a carry: pick up, move, put down. */
+.planner-demo__ping--late {
+  animation-delay: 1.15s;
+}
+
+/* `view-box`, because the axis a mirror reflects about is a place on the
+   picture and not a place on the shape. The origin is set inline. */
+.planner-demo__flip-x {
+  animation-name: planner-demo-flip-x;
+  transform-box: view-box;
+}
+
+.planner-demo__flip-y {
+  animation-name: planner-demo-flip-y;
+  transform-box: view-box;
+}
+
+@keyframes planner-demo-move {
+  0%,
+  12% {
+    transform: translate(0, 0);
+  }
+
+  56%,
+  88% {
+    transform: translate(var(--dx, 0px), var(--dy, 0px));
+  }
+
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes planner-demo-grow {
+  0%,
+  10% {
+    opacity: 0;
+    transform: scale(0.02, 0.02);
+  }
+
+  22% {
+    opacity: 1;
+  }
+
+  56%,
+  86% {
+    opacity: 1;
+    transform: scale(1, 1);
+  }
+
+  96%,
+  100% {
+    opacity: 0;
+    transform: scale(0.02, 0.02);
+  }
+}
+
+@keyframes planner-demo-appear {
+  0%,
+  34% {
+    opacity: 0;
+  }
+
+  46%,
+  88% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes planner-demo-ping {
+  0%,
+  22% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+
+  32% {
+    opacity: 0.9;
+    transform: scale(0.7);
+  }
+
+  48%,
+  100% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+@keyframes planner-demo-flip-x {
+  0%,
+  16% {
+    transform: scaleX(1);
+  }
+
+  58%,
+  88% {
+    transform: scaleX(-1);
+  }
+
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes planner-demo-flip-y {
+  0%,
+  16% {
+    transform: scaleY(1);
+  }
+
+  58%,
+  88% {
+    transform: scaleY(-1);
+  }
+
+  100% {
+    transform: scaleY(1);
+  }
+}
+
+/*
+ * Reduced motion: the loop stops and every element is pinned at its *end*
+ * state. A still picture of the "after" still answers "what does this button
+ * do"; a frozen "before" answers nothing, which is why this is not simply
+ * `animation: none`.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .planner-demo__anim {
+    animation: none;
+  }
+
+  .planner-demo__move {
+    transform: translate(var(--dx, 0px), var(--dy, 0px));
+  }
+
+  .planner-demo__grow {
+    opacity: 1;
+    transform: none;
+  }
+
+  .planner-demo__appear {
+    opacity: 1;
+  }
+
+  /* A click is a moment, and a moment has no still frame. */
+  .planner-demo__ping {
+    opacity: 0;
+  }
+
+  .planner-demo__flip-x {
+    transform: scaleX(-1);
+  }
+
+  .planner-demo__flip-y {
+    transform: scaleY(-1);
+  }
+}
+
+/* ── The first-opening card ───────────────────────────────────────────── */
+
+/*
+ * Centred over the canvas rather than docked with the checklist and the search
+ * box: it is the one panel here that nobody asked for, so it has to be where
+ * the player is already looking. Between the two bars, so it never covers
+ * either of the things it is explaining.
+ */
+.planner-help-dock {
+  position: absolute;
+  inset: calc(var(--hud-height) + 56px) 0 64px;
+  display: grid;
+  place-items: center;
+  padding: var(--space-3);
+  z-index: var(--z-popup);
+  pointer-events: none;
+}
+
+.planner-help-dock > * {
+  pointer-events: auto;
+}
+
+.planner-help {
+  width: min(94vw, 460px);
+  max-height: 100%;
+}
+
+.planner-help__intro {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.planner-help__tabs {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.planner-help__tab[aria-selected="true"] {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.planner-help__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planner-help__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.planner-help__row + .planner-help__row {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--colour-border);
+}
+
+.planner-help__demo {
+  flex: none;
+  width: 92px;
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+  overflow: hidden;
+}
+
+.planner-help__text {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+/*
+ * Pinned to the bottom of the body rather than parked at the end of it.
+ *
+ * Six rows of picture overflow a 720 px window, so the body scrolls — and a
+ * dismiss button below the fold of a card that appeared uninvited is the one
+ * thing this card must not do. The negative margin cancels the body's own
+ * padding so the sticky edge sits flush with it.
+ */
+.planner-help__footer {
+  position: sticky;
+  bottom: calc(var(--space-4) * -1);
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: calc(var(--space-4) * -1);
+  padding-block: var(--space-2) var(--space-4);
+  background: var(--colour-surface-raised);
+}
+
+/* Beats `.cell-facts`'s own `display: grid`, so the hidden tab stays hidden. */
+.planner-help [hidden] {
+  display: none;
+}
+
+/*
+ * A phone keeps the picture beside the text rather than above it.
+ *
+ * Stacking was the obvious answer and the wrong one: a full-width demo is
+ * 212 px tall, so two rows fill the screen and the other four are a scroll
+ * away — on the one card whose whole job is to show six things at once.
+ */
+@media (width <= 620px) {
+  .planner-help__demo {
+    width: 80px;
   }
 }

@@ -40,6 +40,36 @@ import { SceneName } from "../App";
  * absent.
  */
 
+/**
+ * The floor-plan glyph on the Layout control.
+ *
+ * Four rectangles rather than an icon font or a file: it is four elements, it
+ * takes its colour from the button it sits in, and it cannot arrive late.
+ */
+const layoutIcon = (): SVGSVGElement => {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("class", "yard-toolbar__icon");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  for (const [x, y, width, height] of [
+    [1, 1, 6, 6],
+    [9, 1, 6, 4],
+    [1, 9, 6, 6],
+    [9, 7, 6, 8],
+  ]) {
+    const rect = document.createElementNS(ns, "rect");
+    rect.setAttribute("x", String(x));
+    rect.setAttribute("y", String(y));
+    rect.setAttribute("width", String(width));
+    rect.setAttribute("height", String(height));
+    rect.setAttribute("rx", "1.5");
+    svg.append(rect);
+  }
+  return svg;
+};
+
 /** How often the open panel's countdowns are refreshed. */
 const UI_TICK_SECONDS = 1;
 
@@ -85,6 +115,8 @@ export class YardScene implements Scene {
   private save: BaseLoadResponse | null = null;
   private planner: YardPlanner | null = null;
   private plannerButton: HTMLButtonElement | null = null;
+  /** The word inside the Layout control, beside its glyph. */
+  private plannerLabel: HTMLElement | null = null;
   /**
    * What the player may do with the planner in the yard now open (§8, Q5).
    *
@@ -146,20 +178,44 @@ export class YardScene implements Scene {
     this.status.className = "cell-readout";
     this.status.textContent = "Loading your yard…";
 
-    // Entry is a toolbar button, not the Yard Planner building's popup
-    // (design §8, Q5).
+    /*
+     * The way into the planner, and the first thing on this screen anyone has
+     * to find.
+     *
+     * It used to be a ghost button labelled "Plan", which is to say grey text
+     * on a dark background beside a wall of grey text, and the owner's verdict
+     * on it was "I really don't see the Plan button". So: the accent fill the
+     * rest of the client keeps for its primary action, a floor-plan glyph
+     * beside the word, and "Layout" rather than "Plan" because a plan is a
+     * thing and a layout is what the player is trying to do. The P shortcut and
+     * the Q5 access rule are unchanged — only how loudly it asks to be clicked.
+     */
     this.plannerButton = document.createElement("button");
     this.plannerButton.type = "button";
-    this.plannerButton.className = "btn btn--ghost yard-toolbar__plan";
-    this.plannerButton.textContent = "Plan";
+    this.plannerButton.className = "btn btn--primary yard-toolbar__layout";
+    this.plannerLabel = document.createElement("span");
+    this.plannerLabel.className = "yard-toolbar__layout-label";
+    this.plannerLabel.textContent = "Layout";
+    this.plannerButton.append(layoutIcon(), this.plannerLabel);
     this.plannerButton.title = "Loading your yard…";
+    this.plannerButton.setAttribute("aria-label", "Layout. Loading your yard…");
+    this.plannerButton.setAttribute("aria-pressed", "false");
     this.plannerButton.disabled = true;
     this.plannerButton.addEventListener("click", () => this.togglePlanner());
 
     this.toolbar = document.createElement("div");
     this.toolbar.className = "yard-toolbar";
-    this.toolbar.append(this.plannerButton, this.status);
-    context.overlay.content.append(this.toolbar);
+    this.toolbar.append(this.plannerButton);
+    /*
+     * The readout is docked to the overlay and not to the toolbar.
+     *
+     * `.cell-readout` pins itself to the bottom-left *of its positioned
+     * ancestor*, and the toolbar is one, so as a child of the toolbar it
+     * became a 102 x 213 box sitting squarely on top of the very control
+     * this task is about making visible. Out here it lands where the class
+     * always meant it to: the bottom-left of the screen.
+     */
+    context.overlay.content.append(this.toolbar, this.status);
     this.inset = { top: this.toolbar.getBoundingClientRect().bottom, bottom: 0 };
 
     window.addEventListener("keydown", this.onKeyDown);
@@ -176,6 +232,7 @@ export class YardScene implements Scene {
     this.planner?.destroy();
     this.planner = null;
     this.plannerButton = null;
+    this.plannerLabel = null;
     this.toolbar = null;
     this.input?.detach();
     this.input = null;
@@ -311,10 +368,7 @@ export class YardScene implements Scene {
       // whether the yard holds a Yard Planner at all; the other two arguments
       // are here so a visit flow only has to change what it passes.
       this.access = plannerAccess(yard, BaseMode.BUILD, true);
-      if (this.plannerButton) {
-        this.plannerButton.disabled = this.access === PlannerAccess.LOCKED;
-        this.plannerButton.title = plannerEntryTooltip(this.access);
-      }
+      this.refreshPlannerButton();
 
       this.renderer.show(yard);
       this.startCamera(yard, context);
@@ -516,6 +570,21 @@ export class YardScene implements Scene {
           this.selected = null;
           this.renderer.setSelected(null);
         },
+        // Clicking the Yard Planner should open the yard planner. The offer is
+        // left out entirely when there is none to open, which is also the only
+        // state in which that building cannot be on screen.
+        ...(this.access === PlannerAccess.LOCKED
+          ? {}
+          : {
+              planner: {
+                label:
+                  this.access === PlannerAccess.READ_ONLY
+                    ? "View layout planner"
+                    : "Open layout planner",
+                title: plannerEntryTooltip(this.access),
+                open: () => this.togglePlanner(),
+              },
+            }),
       }).mount(dock);
     }
     this.panel.show(building);
@@ -574,10 +643,37 @@ export class YardScene implements Scene {
     // measured height here — that is what the notice dock tucks under
     // instead of the HUD, so it stops sitting partly behind the bar (#44).
     this.notices.setTopInset(this.inset.top);
-    if (this.plannerButton) {
-      this.plannerButton.setAttribute("aria-pressed", "true");
-      this.plannerButton.textContent = "Close plan";
-    }
+    this.refreshPlannerButton();
+  }
+
+  /**
+   * Rewrites the Layout control for the access rule and for whether the
+   * planner is open.
+   *
+   * One place, because the label, the tooltip, the pressed state and the
+   * disabled state all answer the same two questions, and they drifted apart
+   * while they were being set from three.
+   */
+  private refreshPlannerButton(): void {
+    const control = this.plannerButton;
+    const label = this.plannerLabel;
+    if (!control || !label) return;
+
+    const open = this.planner !== null;
+    const text = open
+      ? "Close layout"
+      : this.access === PlannerAccess.READ_ONLY
+        ? "View layout"
+        : "Layout";
+    const title = open ? "Leave the layout planner (P)" : plannerEntryTooltip(this.access);
+
+    label.textContent = text;
+    control.disabled = this.access === PlannerAccess.LOCKED;
+    control.title = title;
+    // A disabled control's `title` is not announced by every screen reader, and
+    // the whole point of the locked state is that it says what would unlock it.
+    control.setAttribute("aria-label", text + ". " + title);
+    control.setAttribute("aria-pressed", String(open));
   }
 
   private closePlanner(): void {
@@ -590,8 +686,7 @@ export class YardScene implements Scene {
     this.minimap?.markDirty();
     // The blueprint is a planner view; the yard itself is always isometric.
     this.setView(YardView.ISO);
-    this.plannerButton?.setAttribute("aria-pressed", "false");
-    if (this.plannerButton) this.plannerButton.textContent = "Plan";
+    this.refreshPlannerButton();
   }
 
   /**
