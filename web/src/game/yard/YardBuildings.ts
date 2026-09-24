@@ -1,6 +1,14 @@
 import { Container, Sprite, Text, Texture } from "pixi.js";
 import type { ResolvedArt } from "./buildingArt";
-import { applyArt, fillBox, inDiamond, placeholderTint } from "./yardPlacement";
+import {
+  applyArt,
+  fillBox,
+  inBox,
+  inDiamond,
+  pickBySpriteBox,
+  placeholderTint,
+  type SpriteBoxCandidate,
+} from "./yardPlacement";
 import {
   advanceAnimLayers,
   buildAnimLayers,
@@ -226,6 +234,16 @@ export class YardBuildings {
    * Walks the draw list backwards so the topmost building wins, and tests the
    * footprint diamond rather than its box so a click in the gap between two
    * towers does not pick one of them.
+   *
+   * Tall art reaches well above its footprint — a Hatchery, a Monster Lab, a
+   * Storage Silo — so a diamond miss falls through to a second pass over the
+   * resolved sprites' own bounding boxes (issue #41); `pickBySpriteBox` in
+   * `yardPlacement.ts` has the tie-break rules. Placeholders sit out of this
+   * pass because their box is exactly the footprint the first pass already
+   * ruled out. Hover runs this every pointer move, so the second pass only
+   * allocates a candidate for a sprite that has already passed both the box
+   * test and the "rises above its footprint" test — cheap property reads, no
+   * allocation, for every building that can't be the answer.
    */
   pick(worldX: number, worldY: number): YardBuilding | null {
     for (let i = this.views.length - 1; i >= 0; i--) {
@@ -239,7 +257,19 @@ export class YardBuildings {
       if (x < box.x || x > box.x + box.width || y < box.y || y > box.y + box.height) continue;
       if (inDiamond(view.building, x, y)) return view.building;
     }
-    return null;
+
+    const candidates: SpriteBoxCandidate[] = [];
+    for (let i = this.views.length - 1; i >= 0; i--) {
+      const view = this.views[i];
+      if (!view || !view.resolved) continue;
+      const sprite = view.top;
+      const footprintTop = view.building.box.y + view.offsetY;
+      if (sprite.y >= footprintTop) continue; // art does not rise above its footprint
+      const box: Rect = { x: sprite.x, y: sprite.y, width: sprite.width, height: sprite.height };
+      if (!inBox(worldX, worldY, box)) continue;
+      candidates.push({ building: view.building, box, footprintTop });
+    }
+    return pickBySpriteBox(worldX, worldY, candidates);
   }
 
   /* ── Moving, for the planner ────────────────────────────────────────── */
