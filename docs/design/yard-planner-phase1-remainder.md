@@ -110,9 +110,10 @@ unplaced items are deferred to the store tool.
 
 ### 1.4 Deferred
 
-- Planned upgrades stored on nodes (`plan: { level, fort }`, F1), tower upgrades, and starting jobs
-  at Apply. Nodes keep `l` and `fort` as advisory fields only
-  (`server/src/schemas/YardPlannerSchemas.ts:45-48`).
+- **Done 2026-09-24, commit `712ded04`.** Planned upgrades stored on nodes (`plan: { level, fort }`,
+  F1), tower upgrades, and starting jobs at Apply. Nodes keep `l` and `fort` as advisory fields only
+  (`server/src/schemas/YardPlannerSchemas.ts:45-48`). Shipped as `plan: { level, order }`; see
+  docs/design/planner-upgrades.md.
 - Fortification, and any shiny purchase, including instant finish (design §3 F1, "Instant finish").
 - Outposts and Inferno yards. The planner opens the main yard only (`web/src/api/base.ts:24-37`).
 - Storing, paint mode, the inventory panel proper (design §8 Q9, last sentence).
