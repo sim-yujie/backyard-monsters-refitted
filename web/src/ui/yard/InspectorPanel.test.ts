@@ -97,6 +97,26 @@ const facts = (element: HTMLElement): Record<string, string> => {
   return rows;
 };
 
+/** The collapsed disclosure the descriptive rows live in. */
+const detailsOf = (element: HTMLElement): HTMLDetailsElement => {
+  const found = element.querySelector<HTMLDetailsElement>(".planner-inspector__details");
+  if (!found) throw new Error("no Details disclosure");
+  return found;
+};
+
+/** The same rows, but only the ones outside Details. */
+const topFacts = (element: HTMLElement): Record<string, string> => {
+  const rows: Record<string, string> = {};
+  for (const term of element.querySelectorAll("dt")) {
+    if (term.closest(".planner-inspector__details")) continue;
+    rows[term.textContent ?? ""] = term.nextElementSibling?.textContent ?? "";
+  }
+  return rows;
+};
+
+const title = (element: HTMLElement): string =>
+  element.querySelector(".panel__title")?.textContent ?? "";
+
 const planLine = (element: HTMLElement): string =>
   element.querySelector(".planner-inspector__plan-line")?.textContent ?? "";
 
@@ -106,13 +126,38 @@ const notes = (element: HTMLElement): string[] =>
   );
 
 describe("one building", () => {
-  it("names the level, the health and what one more step costs", () => {
+  it("heads the panel with the name and the level, and nothing else", () => {
     const yard = yardOf([HALL, CANNON]);
     const { nodes } = nodesOf(yard, [1]);
     const { panel, element } = mount();
     panel.show(nodes, yard);
 
-    expect(element.querySelector(".panel__title")?.textContent).toBe("Cannon Tower");
+    expect(title(element)).toBe("Cannon Tower · Lv 1");
+    // Owner feedback: a click should not open with type id, position and
+    // health. Nothing descriptive sits outside the disclosure.
+    expect(topFacts(element)).toEqual({});
+  });
+
+  it("names the target level in the title once one is planned", () => {
+    const yard = yardOf([HALL, CANNON]);
+    const { nodes } = nodesOf(yard, [1]);
+    nodes[0]!.plan = { level: 6, order: 0 };
+    const { panel, element } = mount();
+    panel.show(nodes, yard);
+
+    expect(title(element)).toBe("Cannon Tower · Lv 1 → Lv 6");
+  });
+
+  it("keeps the level, the health and what one more step costs under Details", () => {
+    const yard = yardOf([HALL, CANNON]);
+    const { nodes } = nodesOf(yard, [1]);
+    const { panel, element } = mount();
+    panel.show(nodes, yard);
+
+    const box = detailsOf(element);
+    expect(box.open).toBe(false);
+    expect(box.querySelector("summary")?.textContent).toBe("Details");
+
     const rows = facts(element);
     expect(rows["Level"]).toBe("1 of 10");
     expect(rows["Health"]).toBe("6,000");
@@ -121,6 +166,22 @@ describe("one building", () => {
     expect(rows["Next step"]).toContain("7.5K pebbles");
     expect(rows["Next step"]).toContain("2.5K putty");
     expect(rows["Next step"]).toContain("15m 0s");
+    expect(rows["Position"]).toBe("200, 0");
+    expect(rows["Type id"]).toBe("20");
+    for (const term of ["Level", "Health", "Next step", "Position", "Type id"]) {
+      expect([...box.querySelectorAll("dt")].map((dt) => dt.textContent)).toContain(term);
+    }
+  });
+
+  it("opens the disclosure closed again after a redraw", () => {
+    const yard = yardOf([HALL, CANNON]);
+    const { nodes } = nodesOf(yard, [1]);
+    const { panel, element } = mount();
+    panel.show(nodes, yard);
+
+    detailsOf(element).open = true;
+    panel.show(nodes, yard);
+    expect(detailsOf(element).open).toBe(false);
   });
 
   it("offers every level above its own, the top one labelled Max", () => {
@@ -226,7 +287,10 @@ describe("one building", () => {
 
     expect(levels(element).every((button) => button.disabled)).toBe(true);
     expect(levelButton(element, 2).title).toContain("already on a job");
-    expect(facts(element)["Upgrading"]).toContain("left");
+    // The countdown is the answer to "why is the ladder dead", so it stays
+    // above the disclosure and the reason is spelled out, not only on hover.
+    expect(topFacts(element)["Upgrading"]).toContain("left");
+    expect(notes(element).join(" ")).toContain("already on a job");
   });
 
   it("disables the ladder on a damaged building and shows its health", () => {
@@ -237,6 +301,7 @@ describe("one building", () => {
 
     expect(levels(element).every((button) => button.disabled)).toBe(true);
     expect(levelButton(element, 2).title).toContain("Repair");
+    expect(notes(element).join(" ")).toContain("Repair");
     expect(facts(element)["Health"]).toBe("1,200 of 6,000");
   });
 
@@ -273,10 +338,13 @@ describe("a multi-selection", () => {
     const { panel, element, fired } = mount();
     panel.show(nodes, yard);
 
-    expect(element.querySelector(".panel__title")?.textContent).toBe("2 buildings selected");
+    expect(title(element)).toBe("2 buildings selected");
     expect(levels(element)).toHaveLength(0);
-    // Two blocks from level 1 to 2: 10,000 pebbles each.
+    // Two blocks from level 1 to 2: 10,000 pebbles each. The count is in the
+    // title and the button is the point, so the four rows sit under Details.
     expect(facts(element)["Pebbles"]).toContain("20.0K");
+    expect(topFacts(element)).toEqual({});
+    expect(detailsOf(element).open).toBe(false);
 
     const walls = element.querySelector<HTMLButtonElement>(".planner-inspector__walls");
     expect(walls?.textContent).toBe("Upgrade 2 walls");
@@ -305,5 +373,18 @@ describe("a multi-selection", () => {
     panel.show(nodes, yard);
 
     expect(element.querySelector(".planner-inspector__walls")).toBeNull();
+    // Nothing to do with this selection, so the panel says what would give it
+    // something to do rather than showing an empty row of buttons.
+    expect(notes(element).join(" ")).toContain("Select one building");
+  });
+
+  it("prompts on an empty selection and shows no Details", () => {
+    const yard = yardOf([HALL, CANNON]);
+    const { panel, element } = mount();
+    panel.show([], yard);
+
+    expect(title(element)).toBe("Nothing selected");
+    expect(element.textContent).toContain("Click a building");
+    expect(element.querySelector(".planner-inspector__details")).toBeNull();
   });
 });

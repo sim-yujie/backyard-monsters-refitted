@@ -395,12 +395,23 @@
   line-height: var(--leading-normal);
 }
 
+.planner-inspector__status {
+  margin-bottom: var(--space-2);
+}
+
 .planner-inspector__ladder {
   display: flex;
   align-items: center;
   gap: var(--space-1);
   flex-wrap: wrap;
   margin-block: var(--space-3);
+}
+
+/* The reason nothing on the ladder can be pressed takes its own line under
+   the buttons rather than squeezing in beside them. */
+.planner-inspector__ladder .planner-inspector__note {
+  flex-basis: 100%;
+  margin-top: 0;
 }
 
 .planner-inspector__ladder-label {
@@ -436,6 +447,43 @@
   gap: var(--space-2);
   flex-wrap: wrap;
   margin-top: var(--space-3);
+}
+
+/* Everything that only describes the building. Closed on every redraw: the
+   panel keeps no state, so the marker is the only thing that has to look
+   pressable. */
+.planner-inspector__details {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--colour-border);
+  padding-top: var(--space-2);
+}
+
+.planner-inspector__summary {
+  cursor: pointer;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  list-style: none;
+}
+
+.planner-inspector__summary::-webkit-details-marker {
+  display: none;
+}
+
+.planner-inspector__summary::before {
+  content: "▸ ";
+}
+
+.planner-inspector__details[open] .planner-inspector__summary::before {
+  content: "▾ ";
+}
+
+.planner-inspector__summary:hover,
+.planner-inspector__summary:focus-visible {
+  color: var(--colour-text);
+}
+
+.planner-inspector__details > :not(summary) {
+  margin-top: var(--space-2);
 }
 
 /* ── The Apply dialog ─────────────────────────────────────────────────── */

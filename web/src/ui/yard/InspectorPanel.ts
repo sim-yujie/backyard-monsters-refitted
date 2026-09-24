@@ -45,6 +45,24 @@ import { describeCost } from "./upgradeText";
  * for all of them and a row of buttons that each say something different about
  * one broken building is noise.
  *
+ * ## What is on top, and what is under Details
+ *
+ * The panel leads with the one line a player came for — the building's name and
+ * its level, with the planned level beside it — then the things they can *do*,
+ * then what the plan costs. Everything that only describes the building (its
+ * full rung on the ladder, health, the next step's own price, where it sits,
+ * its type id) sits inside a collapsed `<details>`. Owner feedback on the
+ * planner: the technical rows were the first thing a click produced and none of
+ * them was the reason for the click.
+ *
+ * The disclosure is deliberately stateless. `show` rebuilds the body on every
+ * redraw, so a selection change closes it again; remembering it would mean the
+ * panel kept state about a building that may no longer be selected, and the one
+ * rule this panel keeps is that it holds no state of its own.
+ *
+ * The countdown stays above the fold even though it is a fact rather than an
+ * action, because it is the answer to "why is every level greyed out".
+ *
  * ## Redrawing
  *
  * `show` rebuilds the body from the nodes and the yard it is handed. It keeps
@@ -113,27 +131,19 @@ export class InspectorPanel {
   private showOne(node: PlanNode, yard: Yard): void {
     const building = yard.buildings.find((one) => one.id === node.id) ?? null;
     const ladder = ladderFor(node, yard);
-    this.panel.setTitle(typeName(node.type));
+    this.panel.setTitle(headline(node));
 
-    const facts = document.createElement("dl");
-    facts.className = "cell-facts";
-    for (const row of this.factsFor(node, ladder, building)) {
-      const dt = document.createElement("dt");
-      dt.textContent = row.term;
-      const dd = document.createElement("dd");
-      dd.textContent = row.value;
-      if (row.className) dd.className = row.className;
-      facts.append(dt, dd);
-    }
+    const countdown = countdownRow(building);
 
     this.panel.setContent(
-      facts,
+      ...(countdown ? [factList([countdown], "cell-facts planner-inspector__status")] : []),
       this.ladderRow(node, ladder),
       this.planRow(node, ladder),
+      details(factList(this.factsFor(node, ladder, building))),
     );
   }
 
-  /** Every `dt`/`dd` pair the single-building view shows, in order. */
+  /** Every `dt`/`dd` pair the Details disclosure shows, in order. */
   private factsFor(node: PlanNode, ladder: Ladder, building: YardBuilding | null): FactRow[] {
     const rows: FactRow[] = [];
 
@@ -155,22 +165,6 @@ export class InspectorPanel {
         value:
           hp === null ? now.toLocaleString() : `${hp.toLocaleString()} of ${now.toLocaleString()}`,
         ...(hp === null ? {} : { className: "is-danger" }),
-      });
-    }
-
-    const countdown = building?.countdown ?? null;
-    if (countdown) {
-      rows.push({
-        term:
-          countdown.kind === "build"
-            ? "Building"
-            : countdown.kind === "upgrade"
-              ? "Upgrading"
-              : countdown.kind === "fortify"
-                ? "Fortifying"
-                : "Rebuilding",
-        value: `${formatCountdown(countdown.endsAt - Date.now() / 1000)} left`,
-        className: "is-info",
       });
     }
 
@@ -236,6 +230,11 @@ export class InspectorPanel {
       }
       row.append(button);
     }
+
+    // With health and the rest under Details, a dead row of buttons would
+    // otherwise only explain itself on hover, which is no explanation on a
+    // touch screen.
+    if (stop !== null) row.append(note(stop));
 
     return row;
   }
@@ -332,12 +331,6 @@ export class InspectorPanel {
     );
 
     const summary = summariseSelection(nodes, yard);
-    const heading = document.createElement("p");
-    heading.className = "planner-inspector__heading";
-    heading.textContent =
-      nodes.length === 0
-        ? "Click a building to see its levels and plan an upgrade."
-        : `What one more level would cost for all ${nodes.length}.`;
 
     const costs = document.createElement("dl");
     costs.className = "cell-facts planner-inspector__costs";
@@ -387,6 +380,18 @@ export class InspectorPanel {
       actions.append(button);
     }
 
+    if (nodes.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "planner-inspector__heading";
+      empty.textContent = "Click a building to see its levels and plan an upgrade.";
+      this.panel.setContent(empty);
+      return;
+    }
+
+    const lead = document.createElement("p");
+    lead.className = "planner-inspector__heading";
+    lead.textContent = `What one more level would cost for all ${nodes.length}.`;
+
     const maxed =
       summary.maxed > 0
         ? note(
@@ -394,14 +399,71 @@ export class InspectorPanel {
           )
         : null;
 
+    // The count is in the title and the actions are the reason to keep a
+    // multi-selection alive, so the four resource rows go under the same
+    // disclosure the single-building view uses.
     this.panel.setContent(
-      heading,
-      ...(nodes.length === 0 ? [] : [costs]),
-      ...(maxed ? [maxed] : []),
       actions,
+      ...(actions.childElementCount === 0
+        ? [note("Select one building on its own to plan an upgrade on it.")]
+        : []),
+      ...(maxed ? [maxed] : []),
+      details(lead, costs),
     );
   }
 }
+
+/** "Sniper Tower · Lv 4", and "· Lv 4 → Lv 6" once a level is planned. */
+const headline = (node: PlanNode): string => {
+  const name = typeName(node.type);
+  const level = node.level === 0 ? "under construction" : `Lv ${node.level}`;
+  const plan = node.plan && node.plan.level > node.level ? ` → Lv ${node.plan.level}` : "";
+  return `${name} · ${level}${plan}`;
+};
+
+/** The one fact that stays above the fold: what this building is busy doing. */
+const countdownRow = (building: YardBuilding | null): FactRow | null => {
+  const countdown = building?.countdown ?? null;
+  if (!countdown) return null;
+  return {
+    term:
+      countdown.kind === "build"
+        ? "Building"
+        : countdown.kind === "upgrade"
+          ? "Upgrading"
+          : countdown.kind === "fortify"
+            ? "Fortifying"
+            : "Rebuilding",
+    value: `${formatCountdown(countdown.endsAt - Date.now() / 1000)} left`,
+    className: "is-info",
+  };
+};
+
+/** A `dl` of `dt`/`dd` pairs. */
+const factList = (rows: readonly FactRow[], className = "cell-facts"): HTMLElement => {
+  const list = document.createElement("dl");
+  list.className = className;
+  for (const row of rows) {
+    const term = document.createElement("dt");
+    term.textContent = row.term;
+    const value = document.createElement("dd");
+    value.textContent = row.value;
+    if (row.className) value.className = row.className;
+    list.append(term, value);
+  }
+  return list;
+};
+
+/** The collapsed disclosure everything descriptive lives in. */
+const details = (...content: readonly Node[]): HTMLElement => {
+  const box = document.createElement("details");
+  box.className = "planner-inspector__details";
+  const summary = document.createElement("summary");
+  summary.className = "planner-inspector__summary";
+  summary.textContent = "Details";
+  box.append(summary, ...content);
+  return box;
+};
 
 /** The four resource amounts of a cost step or a cost total. */
 const amounts = (source: {
