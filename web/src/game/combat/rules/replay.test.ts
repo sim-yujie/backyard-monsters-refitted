@@ -95,6 +95,9 @@ const actualOf = (outcome: ReturnType<typeof replayAttack>) => ({
   digest: outcome.digest,
 });
 
+// The largest fixture replays in ~4 s on an idle machine; two runs under load pass 5 s.
+const REPLAY_TIMEOUT_MS = 30_000;
+
 describe("golden replays", () => {
   it("has fixtures to run", () => {
     expect(names.length).toBeGreaterThanOrEqual(5);
@@ -105,7 +108,7 @@ describe("golden replays", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const outcome = replayAttack(inputOf(fixture) as any);
     expect(actualOf(outcome)).toEqual(fixture.expected);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   it.each(names)("%s is reproducible within this runtime", (file) => {
     const fixture = read<Fixture>(`${FIXTURE_DIR}${file}`);
@@ -115,7 +118,7 @@ describe("golden replays", () => {
     const twice = replayAttack(inputOf(fixture) as any);
     expect(twice.digest).toBe(once.digest);
     expect(twice.checkpoints).toEqual(once.checkpoints);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   it("takes a checkpoint every 800 ticks", () => {
     const fixture = read<Fixture>(`${FIXTURE_DIR}pokey-rush.json`);
