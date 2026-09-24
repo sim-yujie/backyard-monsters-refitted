@@ -1,11 +1,13 @@
 import { Status } from "../../enums/StatusCodes.js";
 import { layoutUnplacedErr } from "../../errors/errors.js";
 import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers.js";
+import { Operation, updateResources } from "../../services/base/updateResources.js";
 import { ApplyLayoutSchema } from "../../schemas/YardPlannerSchemas.js";
 import {
   currentExpansion,
   mushroomRects,
 } from "../../services/yardplanner/layoutGeometry.js";
+import { walkUpgrades, type UpgradeWalk } from "../../services/yardplanner/startUpgrades.js";
 import {
   checkNodesOwned,
   checkNodePlacement,
@@ -17,6 +19,7 @@ import { postgres } from "../../server.js";
 import type { BuildingData } from "../../types/BuildingData.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
+import { debitOf } from "./upgradeWalls.js";
 
 /**
  * `POST /bm/yardplanner/apply` — move the caller's buildings to the positions a
@@ -46,6 +49,20 @@ import type { KoaController } from "../../utils/KoaController.js";
  * Countdowns across the whole yard are brought forward to now, because
  * `savetime` moves and a countdown is read as remaining time from it.
  *
+ * With `startUpgrades=1` the request does one thing more: after the moves, it
+ * walks the nodes' `plan` fields and starts as many of them as the yard's free
+ * workers and resources allow (`services/yardplanner/startUpgrades.ts`). That
+ * happens inside the same `flush`, so the moves, the new countdowns, the
+ * charge and the `savetime` move land together or not at all, and the player's
+ * Apply stays one transaction rather than two.
+ *
+ * The upgrade half is **partial by design**. Moves are still all or nothing —
+ * any placement fault throws before a byte is written — but a planned upgrade
+ * the yard cannot start now is a row in the report, never a refusal of the
+ * whole request (`docs/design/planner-upgrades.md` §3.2). The only plan that
+ * does refuse the request is a malformed one: a target past the top of a
+ * type's ladder, raised as a 400 carrying `planLevel`.
+ *
  * @param {Context} ctx - The Koa context object, which includes the authenticated user.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
  */
@@ -72,7 +89,7 @@ export const applyLayout: KoaController = async (ctx) => {
   // is handed the elapsed time a second time when the base is next loaded. Same
   // sequence as the attack path (`controllers/base/save/baseSave.ts:213-218`).
   const now = getCurrentDateTime();
-  const buildingdata = advanceBuildingTimers(
+  let buildingdata = advanceBuildingTimers(
     save.buildingdata ?? {},
     save.buildinghealthdata,
     now - Number(save.savetime ?? now)
@@ -88,6 +105,31 @@ export const applyLayout: KoaController = async (ctx) => {
     moved++;
   }
 
+  // The walk reads the yard the moves have just written, so the report and the
+  // `buildingdata` that comes back describe the same yard. Nothing in it reads
+  // a position, so the order is for consistency rather than for correctness.
+  let upgrades: UpgradeWalk | null = null;
+  if (body.startUpgrades === 1) {
+    upgrades = walkUpgrades(
+      {
+        buildingdata,
+        buildinghealthdata: save.buildinghealthdata,
+        resources: save.resources,
+        storedata: save.storedata,
+      },
+      payload.nodes,
+      now
+    );
+
+    buildingdata = upgrades.buildingdata;
+    save.resources = updateResources(
+      debitOf(upgrades.cost),
+      { ...(save.resources ?? {}) },
+      Operation.SUBTRACT
+    );
+    save.points = String(Number(save.points ?? "0") + upgrades.points);
+  }
+
   save.buildingdata = buildingdata;
   save.savetime = now;
 
@@ -95,5 +137,25 @@ export const applyLayout: KoaController = async (ctx) => {
   await postgres.em.flush();
 
   ctx.status = Status.OK;
-  ctx.body = { error: 0, moved, buildingdata };
+  ctx.body = {
+    error: 0,
+    moved,
+    buildingdata,
+    resources: save.resources,
+    upgrades: upgrades && report(upgrades),
+  };
 };
+
+/**
+ * The walk's result without the new `buildingdata`, which the response already
+ * carries at the top level and which is the largest thing in a save.
+ */
+const report = (walk: UpgradeWalk) => ({
+  started: walk.started,
+  finished: walk.finished,
+  waiting: walk.waiting,
+  skipped: walk.skipped,
+  cost: walk.cost,
+  points: walk.points,
+  workers: walk.workers,
+});

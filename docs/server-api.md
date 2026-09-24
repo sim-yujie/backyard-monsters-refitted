@@ -384,7 +384,7 @@ live from a noise function seeded by the world's uuid, and is not persisted.
 | GET | `/worldmapv2/alliances` | **verifyApiConsumer**, alliancesLimiter (10/min/consumer), logRequest | none | JSON directory of every MR2 alliance across all worlds: membership, leader, and hostile(-1)/friendly(1) relationship flags | **API-consumer only.** Lets an external map viewer color/label territory by alliance without per-alliance calls. |
 | POST | `/worldmapv2/setmapversion` | verifyUserAuth, logRequest (Discord-age check done manually in the controller) | `{ version }` (string→`MapRoomVersion`: 0=NONE, 1=V1, 2=V2, 3=V3) | `{ error: 0, id, baseurl, ...filteredSave }` | Switches the player's Map Room version. `NONE`: leaves the current world, drops to `mapversion=1`. `V2`: requires Town Hall ≥ 6 (unless already `mr2upgraded`) and no alliance; joins a random MR2 world under 2500 players or creates one. `V3`: same TH6 gate; calls the MR3 world-join flow. Shared controller with the MR3 routes below. |
 | POST | `/worldmapv2/takeoverCell` | verifyUserAuth, verifyAccountStatus, logRequest | `TakeoverCellSchema`: `{ baseid, resources?: JSON, shiny?→number }` | `{ error: 0 }` | Converts a ≥90%-damaged wild-monster/tribe cell into a player Outpost: deducts the given resources/shiny, evicts any previous owner, grants a 12h protection window. Throws `takeoverCellErr()` (500, but rewritten to 200) if damage is below 90%. |
-| POST | `/worldmapv2/transferassets` | verifyUserAuth, verifyAccountStatus, logRequest | `{ frombaseid, tobaseid, monsters: JSON [Monster[], Monster[]] }` | `{ error: 0 }`, or `{ error: 1 }` with a 400/403 status on failure | Moves a monster garrison between two of the caller's own bases (main yard ↔ outpost). |
+| POST | `/worldmapv2/transferassets` | verifyUserAuth, verifyAccountStatus, logRequest | `{ frombaseid, tobaseid, monsters: JSON [sourceMonsters, targetMonsters] }` — two **complete replacement** `monsters` blobs, not a delta | `{ error: 0 }`; `{ error: 1 }` with a 400/403 status if a `baseid` doesn't resolve or the two bases have different owners; `permissionErr()` (403) if either base isn't the caller's; `monsterTransferRejectedErr()` (200 + `error`) if a transfer rule refuses | Moves a monster garrison between two of the caller's own bases (main yard ↔ outpost). Since issue #27 the two blobs are validated before they're written — see "Monster transfer rules" below. An accepted transfer is still written verbatim, exactly as before. |
 | POST | `/api/:apiVersion/player/savebookmarks` | apiVersion, verifyUserAuth, verifyAccountStatus, logRequest | `{ bookmarks: JSON string }` (no zod schema) | `{ error: 0 }` | Persists the player's map bookmark list onto `user.bookmarks`. |
 
 **MR2 cell payload.** `b` (base_type, `MapRoomCell`): `1`=wild monster camp, `2`=own/other
@@ -403,6 +403,41 @@ map; the Flash client only ever read them for the viewer's own cell (`userCell.t
 cell carries only `{ uid: 0, b, i, bid, n (tribe name, purely `(x+y) % 4`-derived — not random
 per-world), l (tribe level), dm, d }` — no `r`/`m`/ownership fields, since it is unowned until
 captured.
+
+**Monster transfer rules** (`services/monsters/transferRules.ts`, issue #27). `transferassets`
+posts a *replacement* `monsters` blob for each yard, so before the revamp branch a hand-made
+request could hand the destination a copy of the source's army and leave the source untouched —
+monster duplication in one request. Five rules now run after the ownership check, in this order,
+and the first one to refuse names itself in `data.rule`:
+
+| `rule` | What it refuses | Refusal `data` |
+|---|---|---|
+| `endpoints` | A yard sending to itself, an endpoint that is not a main yard or an outpost, or a main-to-main move — the client only offers the flow to a player holding at least one outpost | `baseid`, or `from`/`to` base types |
+| `quantities` | A `housed` count that is not a non-negative whole number, or a `housed` field that is not an object | `monsters` (the offending ids) |
+| `holdings` | The source ending up with more of a type than it could have held | `monster`, `claimed`, `held` |
+| `conservation` | The two yards' combined total for a type rising | `monster`, `before`, `after` |
+| `capacity` | The destination's resulting roster not fitting its Monster Housing | `used`, `capacity` |
+
+Capacity is derived from the destination's own `buildingdata` — every type-15 Monster Housing that
+has finished building and is above 10 health, at its stored level, against the Map Room 2 capacity
+table `[200, 260, 320, 380, 450, 540]` (`GLOBAL.as:682`), times 1.25 while `EXH`/`EXHI` is running
+in `storedata`. The client-written `space` field on the `monsters` blob is **not** trusted for
+this. Monster Bunkers and champions are separate pools and add nothing. Housing space per monster
+(`cStorage`) is read at the caller's Monster Academy level, which only changes the answer for `C1`.
+
+`conservation` is checked against the stored totals **plus a production allowance**, because the
+map ticks hatchery production locally and adds finished monsters to `housed`
+(`MapRoomCell.as:800-811`) — a yard last saved long ago legitimately shows more monsters than the
+server stored. The allowance is the hatchery work the stored blob already carries (the monster in
+production, the per-hatchery queues and the shared HCC queue), capped by how many of that type the
+yard could house at all. It is deliberate, bounded slack; closing it entirely needs a
+server-authoritative production replay.
+
+Refusals use `monsterTransferRejectedErr()`, which is `isClientFriendly: false` — HTTP **200** with
+`error` set to a readable sentence fragment. That is the only shape the Flash client shows the
+player: `transferSuccessful` branches on `param1.error == 0` and otherwise prints
+`msg_err_transfer` ("There was a problem with the transfer:") with `param1.error` appended
+(`MapRoom.as:735-792`). The intended `409` travels in `errorDetails.status`.
 
 ### Map Room 3
 
@@ -528,37 +563,88 @@ rows are converted back down for `gettemplates`.
 
 A **layout** is `{ slot, name, version: 2, expansion, updatedAt, nodes }`. `expansion` is the
 `storedata.ENL.q` the layout was drawn for (0-6) and `updatedAt` is unix seconds. A **node** is
-`{ id, t, x, y, l?, fort? }`: the building id from `buildingdata`, its type, and its origin in
-yard units. `l` and `fort` are advisory — Apply never writes them. Every account gets 10 slots,
-enforced server-side (`docs/design/yard-planner-redesign.md` §8, decision Q2).
+`{ id, t, x, y, l?, fort?, plan? }`: the building id from `buildingdata`, its type, and its
+origin in yard units. `l` and `fort` are advisory — Apply never writes them. `plan` is
+`{ level, order }`, a planned upgrade: the level the player wants that building to reach and
+their own queue position for it, walked by Apply when `startUpgrades` is set and ignored
+otherwise (`docs/design/planner-upgrades.md` §2). It is additive and optional, so the layout
+version stays 2. Every account gets 10 slots, enforced server-side
+(`docs/design/yard-planner-redesign.md` §8, decision Q2).
 
 The `layouts` routes answer a rejection with the error status and the detail flattened next to
 `error` (`{ error: "...", unplaced: [...] }`), not under `errorDetails` as the rest of the API
 does. Validation lives in `server/src/services/yardplanner/validateLayout.ts` and the footprint
 table it measures against is `server/src/game-data/buildingFootprints.ts`.
 
-The two **batch** routes below (`walls/upgrade`, `traps/rearm`) are the only place in this API
-where the server decides what something costs instead of adding a delta the client worked out.
-Prices come from `server/src/game-data/buildingCosts.ts`, generated from the Flash props table
-and byte-identical to the copy the web client shows them from; the rules live in
-`services/yardplanner/wallUpgrade.ts` and `trapRearm.ts`. Both are all-or-nothing, both award
-empire points the way the Flash client's `Upgraded()`/`Constructed()` do, and both answer a
-rejection in the same flattened shape. `400` means the request names something wrong (`unknown`,
-`notWalls`, `alreadyAtLevel`, `busy`, `damaged`, `level`, `notTraps`, `offGrid`, `outOfBounds`,
+The two **batch** routes below (`walls/upgrade`, `traps/rearm`) and `apply` with
+`startUpgrades=1` are the only places in this API where the server decides what something costs
+instead of adding a delta the client worked out. Prices come from
+`server/src/game-data/buildingCosts.ts`, generated from the Flash props table and byte-identical
+to the copy the web client shows them from; the rules live in `services/yardplanner/wallUpgrade.ts`,
+`trapRearm.ts` and `startUpgrades.ts`. All three award empire points the way the Flash client's
+`Upgraded()`/`Constructed()` do and answer a rejection in the same flattened shape. The two batch
+routes are all-or-nothing: `400` means the request names something wrong (`unknown`, `notWalls`,
+`alreadyAtLevel`, `busy`, `damaged`, `level`, `notTraps`, `offGrid`, `outOfBounds`,
 `overlapping`); `409` means the yard cannot do it yet (`shortfall`, `townHall`, `requirements`,
-`capReached`).
+`capReached`). Apply's upgrade walk is **partial by design** and reports the same conditions
+instead of refusing the request.
 
 | Method | Path | Middleware | Request fields | Response | Description |
 |---|---|---|---|---|---|
 | GET | `/api/:apiVersion/bm/yardplanner/layouts` | apiVersion, verifyUserAuth, logRequest | none | `{ error: 0, slots: 10, layouts: Layout[] }` | Every saved layout, ordered by slot, converted to version 2. Slots with nothing in them are simply absent from the array. |
-| PUT | `/api/:apiVersion/bm/yardplanner/layouts/:slot` | apiVersion, verifyUserAuth, logRequest | `name` (trimmed, 1-20 chars), `data` (JSON string of `{ version: 2, expansion, nodes }`) | `{ error: 0, layout }` | Overwrites one slot. Rejects with `400` for a slot outside 0-9, a name outside 1-20 characters, unreadable or non-version-2 data, more than 1200 nodes, a node id the caller's `buildingdata` does not have or has at a different type, a duplicate id, a position outside the plot for the layout's own `expansion`, or two footprints that overlap. Decorations are measured against the planner's extended 3240 x 2600 area instead of the plot. Mushrooms are ignored here. |
+| PUT | `/api/:apiVersion/bm/yardplanner/layouts/:slot` | apiVersion, verifyUserAuth, logRequest | `name` (trimmed, 1-20 chars), `data` (JSON string of `{ version: 2, expansion, nodes }`) | `{ error: 0, layout }` | Overwrites one slot. Rejects with `400` for a slot outside 0-9, a name outside 1-20 characters, unreadable or non-version-2 data, more than 1200 nodes, a node id the caller's `buildingdata` does not have or has at a different type, a duplicate id, a position outside the plot for the layout's own `expansion`, or two footprints that overlap. Decorations are measured against the planner's extended 3240 x 2600 area instead of the plot. Mushrooms are ignored here. Planned upgrades are checked too, and more strictly than Apply checks them: `400 { planLevel: [ids] }` for a target past the top of that type's ladder or on a type with no ladder, and `400 { planCaughtUp: [ids] }` for one at or below the level the building is already at. |
 | DELETE | `/api/:apiVersion/bm/yardplanner/layouts/:slot` | apiVersion, verifyUserAuth, logRequest | none | `{ error: 0 }` | Empties one slot. Deleting an empty slot succeeds. `400` if the slot is outside 0-9. |
-| POST | `/api/:apiVersion/bm/yardplanner/apply` | apiVersion, verifyUserAuth, logRequest | `data` (JSON string, same shape as PUT) | `{ error: 0, moved: number, buildingdata }` | **Server-authoritative**: the server moves the buildings, where the Flash client moved them itself and let an ordinary `/base/save` carry the result (`client/scripts/BASE.as:5025-5041`). Runs the same node checks as PUT, then three more: positions are measured against the caller's **current** `storedata.ENL.q` rather than the layout's `expansion`; mushrooms from `save.mushrooms` are obstacles no node may overlap; and every non-decoration, non-mushroom building in `buildingdata` must appear in `nodes`, else `409 { error, unplaced: [ids] }` with no auto-place (decision Q4). On success it writes only `X` and `Y` on the listed buildings, brings every countdown in the yard forward to now before moving `savetime`, and returns the updated `buildingdata`. Buildings under construction, upgrading or fortifying may be moved. No resource or level is touched. |
+| POST | `/api/:apiVersion/bm/yardplanner/apply` | apiVersion, verifyUserAuth, logRequest | `data` (JSON string, same shape as PUT), `startUpgrades` (`0` or `1`, default `0`) | `{ error: 0, moved: number, buildingdata, resources, upgrades: UpgradeReport \| null }` | **Server-authoritative**: the server moves the buildings, where the Flash client moved them itself and let an ordinary `/base/save` carry the result (`client/scripts/BASE.as:5025-5041`). Runs the same node checks as PUT, then three more: positions are measured against the caller's **current** `storedata.ENL.q` rather than the layout's `expansion`; mushrooms from `save.mushrooms` are obstacles no node may overlap; and every non-decoration, non-mushroom building in `buildingdata` must appear in `nodes`, else `409 { error, unplaced: [ids] }` with no auto-place (decision Q4). On success it writes only `X` and `Y` on the listed buildings, brings every countdown in the yard forward to now before moving `savetime`, and returns the updated `buildingdata`. Buildings under construction, upgrading or fortifying may be moved. With `startUpgrades=0` no resource or level is touched and `upgrades` is `null`; with `startUpgrades=1` the nodes' `plan` fields are walked after the move, in the same flush — see below. |
 | POST | `/api/:apiVersion/bm/yardplanner/walls/upgrade` | apiVersion, verifyUserAuth, logRequest | `ids` (JSON string, `number[]`), `level` | `{ error: 0, upgraded, level, cost, resources, buildingdata }` | Raises every listed wall (type 17, or legacy 18) to `level` at once, charging `costs[k]` for each step server-side and completing instantly under the 300-second free-finish rule (decision Q1). All-or-nothing: `400` for unknown, non-wall, busy or damaged ids or a bad level; `409 { shortfall }`, `{ townHall }`, `{ requirements }` for state. Countdowns are advanced to now before `savetime` moves. |
 | POST | `/api/:apiVersion/bm/yardplanner/traps/rearm` | apiVersion, verifyUserAuth, logRequest | `traps` (JSON string, `{ t, x, y }[]`) | `{ error: 0, placed, ids, cost, resources, buildingdata, firedtraps }` | Builds a Booby Trap (24) or Heavy Trap (117) at each position, charging `costs[0]`, capped by `quantity[townHallLevel]`, checked against the plot, every building and every mushroom. New ids continue from the highest existing id. Matching entries are removed from `save.firedtraps`, which the attack save fills when a trap fires. |
 | GET | `/api/:apiVersion/bm/yardplanner/gettemplates` | apiVersion, verifyUserAuth, logRequest | none | `{ error: 0, ...entries }` | **Deprecated**, the Flash client's route. Keeps its original quirk: the array is spread into the body, so the client receives a numeric-string-keyed object, not a JSON array under a named key. Each entry is `{ slotid, name, data }` with `data` a JSON **string** of an index-keyed `{x, y, id, type}` object, because the client runs `JSON.parse` on it. Layouts written by the new client are converted down to this shape on the way out. |
 | POST | `/api/:apiVersion/bm/yardplanner/savetemplate` | apiVersion, verifyUserAuth, logRequest | `{ slotid: number, name: string, data: string }` | `{ error: 0, ...entries }` (same spread-array quirk) | **Deprecated**, the Flash client's route. Now rejects `400` for a `slotid` outside 0-9 or a `data` payload over 64 KB, where before the request body was spread into the column unchecked. Everything else is taken as best it can be — the name is trimmed and clipped to 20 characters, unreadable nodes are dropped — because a Flash client cannot show a validation message from here. The nodes are converted to version 2 and stored alongside anything the new client wrote, with `expansion: 0` since a version 1 body never said which plot it was drawn for. |
 | POST | `/api/:apiVersion/bm/yardplanner/deletetemplate` | apiVersion, verifyUserAuth, logRequest | `{ slotid: number }` | `{ error: 0 }` | **Deprecated** alias for `DELETE /layouts/:slot`. This is the route `BasePlannerService.clearSlot:64-67` has always called and the server never implemented, so until now a slot could only be overwritten, never emptied. |
+
+#### Apply with `startUpgrades=1`
+
+After the move loop, the server walks every node that carries a `plan`, in ascending `plan.order`
+with ties broken by building id, and starts as many upgrades as the yard's free workers and
+resources allow (`services/yardplanner/startUpgrades.ts`;
+`docs/design/planner-upgrades.md` §3.4). A yard has `min(5, 1 + storedata.BEW.q)` workers and
+every running `cB`, `cU` or `cF` holds one, so the walk may start at most `total - busy` jobs.
+
+Each planned building is walked one step at a time. A step of **300 seconds or less is free to
+finish**, so it is written straight to its finished level, charged, awarded its points and holds
+no worker, and the walk carries on to the next step of the same building — this is the rule the
+batch wall route runs on, applied wherever it holds. The first step longer than that takes a free
+worker, is charged, gets `cU = floor(time * bst)` where `bst` is 0.8 while Sharper Tools is
+running, and **ends that building's turn**: there is no job queue, so whatever the plan still
+wants stays in the layout for a later Apply.
+
+The walk is partial. Nothing about the yard's state refuses the request; it is reported instead,
+and the rest of the queue carries on, so one unaffordable tower does not silence the cheap walls
+behind it. Only a malformed plan is a rejection: `400 { planLevel: [ids] }` for a target past the
+top of that type's ladder.
+
+`upgrades` is:
+
+```ts
+{
+  started:  { id, t, from, to, seconds, cost }[],   // cU written, one worker each
+  finished: { id, t, from, to, cost }[],            // free-finish steps, written complete
+  waiting:  { id, t, from, to, reason: "workers" }[],
+  skipped:  { id, t, reason, from?, to?, ...detail }[],
+  cost:     { r1, r2, r3, r4 },                     // total actually charged
+  points:   number,                                 // free-finish steps only
+  workers:  { total, busyBefore, busyAfter },
+}
+```
+
+`skipped[].reason` is one of `shortfall` (with `shortfall: { r1..r4 }`, what that job was still
+short of), `busy`, `damaged`, `townHall` (with `townHall: { have, need }`), `requirements` (with
+`requirements: [type, count, level][]`), `caughtUp` (the yard is already at or past
+`plan.level`) or `noLadder`. The detail keys are the ones the batch routes already use, so a
+client reads a skipped row the same way it reads their `409`.
+
+`resources` is the pool as the server now holds it, so the HUD re-reads it rather than
+subtracting its own arithmetic. Points for a started job are **not** awarded here; they are
+awarded by whoever completes it, as in the Flash client.
 
 ### Debug
 

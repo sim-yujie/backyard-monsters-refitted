@@ -461,6 +461,121 @@ describe("explainTransition: fortification", () => {
   });
 });
 
+/**
+ * The Yard Planner's Apply route starts upgrades server-side
+ * (`services/yardplanner/startUpgrades.ts`), so the audit never runs on the
+ * walk itself. What it does run on is the player's *next* save, against the row
+ * the walk wrote. These cases are section 4 of
+ * `docs/design/planner-upgrades.md` turned into assertions: the state the walk
+ * leaves behind has to be a state these rules accept, or an honest player is
+ * logged as a cheat the first time they save after pressing Apply.
+ *
+ * `S` below is the stored row as the walk wrote it, `R` the same row with its
+ * countdowns advanced to now, and `T` what the Flash client then submits.
+ */
+describe("explainTransition: what the upgrade walk writes", () => {
+  /** The Cannon Tower's level 1 to 2 step: 900 seconds, three resources. */
+  const CANNON_STEP = COSTS[CANNON]!.costs[1]!;
+
+  test("a job the walk started, saved a minute later, is charged nothing", () => {
+    const stored = at({ t: CANNON, id: 1, cU: CANNON_STEP[4] });
+    const reference = at({ t: CANNON, id: 1, cU: CANNON_STEP[4] - 60 });
+    const submitted = at({ t: CANNON, id: 1, cU: CANNON_STEP[4] - 60 });
+
+    const result = explainTransition(stored, reference, submitted, ctx({ elapsed: 60 }));
+
+    expect(result.violations).toEqual([]);
+    expect(result.charged).toEqual([]);
+    expect(result.points).toBe(0);
+  });
+
+  test("a countdown a few seconds behind the reference is still inside the tolerance", () => {
+    const stored = at({ t: CANNON, id: 1, cU: CANNON_STEP[4] });
+    const reference = at({ t: CANNON, id: 1, cU: CANNON_STEP[4] - 60 });
+    const submitted = at({ t: CANNON, id: 1, cU: CANNON_STEP[4] - 62 });
+
+    expect(explainTransition(stored, reference, submitted, ctx({ elapsed: 60 })).violations).toEqual(
+      []
+    );
+  });
+
+  test("the same job saved after it completes costs nothing either", () => {
+    const stored = at({ t: CANNON, id: 1, cU: CANNON_STEP[4] });
+    // `advanceBuildingTimers` drops the countdown and raises the level.
+    const reference = at({ t: CANNON, id: 1, l: 2 });
+    const submitted = at({ t: CANNON, id: 1, l: 2 });
+
+    const result = explainTransition(
+      stored,
+      reference,
+      submitted,
+      ctx({ elapsed: CANNON_STEP[4] })
+    );
+
+    expect(result.violations).toEqual([]);
+    expect(result.charged).toEqual([]);
+  });
+
+  test("a job started under Sharper Tools is written inside the shortened bound", () => {
+    const started = Math.floor(CANNON_STEP[4] * 0.8);
+    const stored = at({ t: CANNON, id: 1, cU: started });
+    const reference = at({ t: CANNON, id: 1, cU: started - 60 });
+    const submitted = at({ t: CANNON, id: 1, cU: started - 60 });
+
+    const result = explainTransition(stored, reference, submitted, ctx({ elapsed: 60, bst: 0.8 }));
+
+    expect(started).toBe(720);
+    expect(result.violations).toEqual([]);
+    expect(result.charged).toEqual([]);
+  });
+
+  test("a buff that expired between the apply and the save widens the bound, never narrows it", () => {
+    const started = Math.floor(CANNON_STEP[4] * 0.8);
+    const stored = at({ t: CANNON, id: 1, cU: started });
+    const reference = at({ t: CANNON, id: 1, cU: started - 60 });
+    const submitted = at({ t: CANNON, id: 1, cU: started - 60 });
+
+    expect(
+      explainTransition(stored, reference, submitted, ctx({ elapsed: 60, bst: 1 })).violations
+    ).toEqual([]);
+  });
+
+  test("the countdown the walk writes is exactly what the start rule expects", () => {
+    // The mirror case: had the client started the job itself in the same second
+    // the walk did, `startUpgrade` would charge the step and measure the
+    // countdown against `floor(time * bst)`. The walk writes that number.
+    const before = at({ t: CANNON, id: 1 });
+    const submitted = at({ t: CANNON, id: 1, cU: CANNON_STEP[4] });
+
+    const result = explainTransition(before, before, submitted, ctx({ elapsed: 0 }));
+
+    expect(result.violations).toEqual([]);
+    expect(result.charged).toEqual([CANNON_STEP]);
+  });
+
+  test("the same, with the buff running", () => {
+    const before = at({ t: CANNON, id: 1 });
+    const submitted = at({ t: CANNON, id: 1, cU: Math.floor(CANNON_STEP[4] * 0.8) });
+
+    const result = explainTransition(before, before, submitted, ctx({ elapsed: 0, bst: 0.8 }));
+
+    expect(result.violations).toEqual([]);
+    expect(result.charged).toEqual([CANNON_STEP]);
+  });
+
+  test("a free step the walk finished leaves nothing for the next save to explain", () => {
+    // The walk wrote the Block straight to level 5 and added its points to the
+    // save, so the client loads a level 5 wall and saves one back.
+    const written = at({ t: WALL, id: 1, l: 5 });
+
+    const result = explainTransition(written, written, written, ctx());
+
+    expect(result.violations).toEqual([]);
+    expect(result.charged).toEqual([]);
+    expect(result.points).toBe(0);
+  });
+});
+
 describe("explainNewBuilding", () => {
   test("a build in progress is charged the first step", () => {
     const result = explainNewBuilding(at({ t: CANNON, id: 9, cB: 30 }), newCtx());

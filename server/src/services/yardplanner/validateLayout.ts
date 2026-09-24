@@ -236,7 +236,7 @@ export const unplacedBuildings = (
  * than by type id means a regenerated table cannot quietly open one up
  * (`docs/design/planner-upgrades.md` §2.2).
  */
-const UNPLANNABLE_KINDS: ReadonlySet<string> = new Set([
+export const UNPLANNABLE_KINDS: ReadonlySet<string> = new Set([
   "decoration",
   "mushroom",
   "placeholder",

@@ -4,6 +4,7 @@ import { makeLayout, writeLayout } from "../../services/yardplanner/layoutStorag
 import {
   checkNodesOwned,
   checkNodePlacement,
+  checkPlans,
   parseName,
   parsePayload,
   parseSlot,
@@ -21,6 +22,14 @@ import type { KoaController } from "../../utils/KoaController.js";
  * problem to report (`docs/design/yard-planner-redesign.md` §8, decision Q8).
  * Mushrooms are ignored here for the same reason — they move.
  *
+ * Planned upgrades are checked here too, and more strictly than Apply checks
+ * them: a target past the top of a type's ladder is refused as `planLevel`, and
+ * so is one at or below the level the building is already at, as
+ * `planCaughtUp`. Apply reports that second case rather than refusing it,
+ * because by then the layout may simply be older than a job that finished, but
+ * a client *writing* a plan the yard has already passed has lost track of the
+ * yard (`docs/design/planner-upgrades.md` §2.2).
+ *
  * @param {Context} ctx - The Koa context object, which includes the authenticated user.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
  */
@@ -35,6 +44,7 @@ export const saveLayout: KoaController = async (ctx) => {
   const payload = parsePayload(body.data);
 
   checkNodesOwned(payload.nodes, save.buildingdata);
+  checkPlans(payload.nodes, save.buildingdata, { refuseCaughtUp: true });
   checkNodePlacement(payload.nodes, payload.expansion);
 
   const layout = makeLayout(slot, name, payload.expansion, payload.nodes);

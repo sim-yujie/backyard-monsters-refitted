@@ -15,6 +15,7 @@ import {
   type ResourceAmounts,
 } from "../../yardplanner/costs.js";
 import { MAX_LISTED } from "../../yardplanner/validateLayout.js";
+import { SHARPER_TOOLS_MULTIPLIER, sharperToolsActive } from "../../yardplanner/workers.js";
 import { referenceYard } from "./referenceYard.js";
 import {
   addAmounts,
@@ -273,10 +274,6 @@ const parseDelta = (raw: Record<string, unknown> | null): ResourceAmounts => {
 const poolAmount = (resources: JsonObject | null | undefined, resource: ResourceKey): number =>
   finite(resources?.[resource]) ?? 0;
 
-/** Whether Sharper Tools was still running (`client/scripts/STORE.as:2513-2519`). */
-const sharperToolsActive = (storedata: JsonObject | null | undefined, now: number): boolean =>
-  (finite(storedata?.BST?.e) ?? 0) > now;
-
 /**
  * Whether a stored building was damaged or repairing, and so had its countdown
  * paused (`services/yardplanner/wallUpgrade.ts:101-102`).
@@ -387,7 +384,7 @@ export const auditEconomySave = (input: AuditInput): EconomyVerdict => {
   const currentYard = submittedYard ?? reference;
 
   const voucher = readVoucher(submitted.purchase as readonly unknown[] | null | undefined);
-  const bst = sharperToolsActive(stored.storedata, now) ? 0.8 : 1;
+  const bst = sharperToolsActive(stored.storedata, now) ? SHARPER_TOOLS_MULTIPLIER : 1;
   const hall = townHallLevel(reference);
   const bootstrap = kind === "main" && isTutorialBootstrap(storedYard, submittedYard);
   const inventory = inventoryTypes(stored.researchdata);
