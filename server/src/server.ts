@@ -10,6 +10,7 @@ import { EntityManager, PostgreSqlDriver } from "@mikro-orm/postgresql";
 import { logger } from "./utils/logger.js";
 import { ascii_node } from "./utils/ascii_art.js";
 import { ErrorInterceptor } from "./middleware/clientSafeError.js";
+import { jsonBodyCompat } from "./middleware/jsonBody.js";
 import { processLanguagesFile } from "./middleware/processLanguageFile.js";
 import { logMissingAssets, requestLogging } from "./middleware/requestLogging.js";
 import { corsCacheControl } from "./middleware/corsCacheControlSetup.js";
@@ -59,6 +60,11 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
 
   app.use(corsCacheControl);
   app.use(bodyParser({ enableTypes: ["json", "form"], jsonLimit: "8mb", formLimit: "8mb"}));
+
+  // Flattens a native JSON body to the flat, string-field shape every schema
+  // and service downstream expects. A form body never reaches it (issue #28).
+  app.use(jsonBodyCompat);
+
   app.use((_, next: Next) => RequestContext.create(postgres.orm.em, next));
 
   // Logs

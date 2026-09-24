@@ -18,16 +18,54 @@ automatically on boot outside of `ENV=production`.
 ### Request body format
 
 `koa-bodyparser` is configured with `enableTypes: ["json", "form"]` and an 8 MB limit for
-both. **A route can receive either a JSON body or a form-urlencoded body** — the original
-Flash client used `URLLoader`/`URLVariables` (form-encoded), so most controllers read
-individual string fields off `ctx.request.body` and `JSON.parse` them by hand rather than
-expecting a nested JSON object. Concretely: fields like `resources`, `buildingdata`,
-`buildinghealthdata`, `champion`, `purchase`, `attackData`, `attackcost`, `monsterupdate`,
-`bookmarks`, `imonsters` etc. are all **JSON-stringified inside a single form field**, and
-the zod schema (or the controller) does `z.string().transform(JSON.parse)` on them. A new
-client can send either encoding, but must still JSON-stringify these specific fields — the
-server does not accept them as native nested JSON objects. Query strings are used for GET
-routes.
+both. **Every route accepts either encoding**, and both reach a controller as the same flat
+body. Query strings are used for GET routes.
+
+**Form-urlencoded (`application/x-www-form-urlencoded`)** — what the archived Flash client
+sends, via `URLLoader`/`URLVariables`. Every field is a string, so fields that hold structure
+(`data`, `ids`, `traps`, `resources`, `buildingdata`, `buildinghealthdata`, `champion`,
+`purchase`, `attackData`, `attackcost`, `monsterupdate`, `bookmarks`, `cellids`, `imonsters`
+and friends) are **JSON-stringified into a single field**, and the zod schema (or the
+controller) does `z.string().transform(JSON.parse)` on them. This is the contract the
+schemas and services are written against and it has not changed.
+
+**Native JSON (`application/json`)** — a structured field may be sent as the object or array
+it is. `middleware/jsonBody.ts` (`jsonBodyCompat`, mounted directly after `koa-bodyparser`)
+re-stringifies every **top-level** field of a JSON body whose value is an object or an array,
+so what the router sees is identical to the form body above. A form body never enters that
+middleware, so the Flash path is untouched. Two rules for a JSON client:
+
+- **Scalars are passed through as sent.** Numbers are fine — the numeric body fields are
+  declared `z.coerce.number()` — and booleans must not be stringified, because
+  `POST /api/:apiVersion/player/settings` takes `shinyLocked: z.boolean()` and only a JSON
+  body can satisfy it. `null` is left in place rather than becoming the string `"null"`.
+  The id fields the schemas declare as plain `z.string()` — `baseid`, `basesaveid`,
+  `attackid`, `userid` on `/base/load` — must still be **sent as strings**.
+- **A field that is already a string stays a string**, so stringifying some fields yourself
+  and not others is read the same way either way. Only the top level is converted, which is
+  exactly as deep as a form body can go.
+
+The two calls below are equivalent, and were verified against the dev server
+(`PUT /api/:apiVersion/bm/yardplanner/layouts/:slot`):
+
+```http
+PUT /api/v1/bm/yardplanner/layouts/9
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{"name":"Main","data":{"version":2,"expansion":6,"nodes":[{"id":1,"t":1,"x":355,"y":375}]}}
+```
+
+```http
+PUT /api/v1/bm/yardplanner/layouts/9
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer <token>
+
+name=Main&data=%7B%22version%22%3A2%2C%22expansion%22%3A6%2C%22nodes%22%3A%5B%7B%22id%22%3A1%2C%22t%22%3A1%2C%22x%22%3A355%2C%22y%22%3A375%7D%5D%7D
+```
+
+On the web client, `post()` in `web/src/api/http.ts` sends the form encoding and `postJson()`
+(or `send(..., { json })`) sends the JSON one.
 
 ### Authentication
 
@@ -1022,10 +1060,13 @@ surface automatically through the normal base-load flow per cell.
   `errorDetails.message`) rather than trusting the HTTP status code alone, especially for
   gameplay outcomes like "base under attack," "under protection," "player online," "truce
   active" — these are all forced to HTTP 200.
-- **Form-encoded JSON-in-a-string fields are pervasive, not legacy cruft to clean up.** Zod
-  schemas across the codebase expect `resources`, `buildingdata`, `champion`, `purchase`,
-  `attackData`, `bookmarks`, `monsterupdate`, etc. as JSON **strings**, not native nested JSON,
-  even on JSON-content-type requests. A new client must keep double-encoding these fields.
+- **JSON-in-a-string fields are pervasive, not legacy cruft to clean up.** Zod schemas across
+  the codebase expect `resources`, `buildingdata`, `champion`, `purchase`, `attackData`,
+  `bookmarks`, `monsterupdate`, etc. as JSON **strings**, and that is still the shape every
+  controller and service works with. Since issue #28 a client sending `application/json` may
+  pass them as native objects and arrays — `middleware/jsonBody.ts` does the stringifying at
+  the edge — but nothing downstream of that middleware was changed, so a form-encoded client
+  must keep double-encoding them (see §1, "Request body format").
 - **Polling, not push, for base state.** `/base/updatesaved` is a client-driven ~30s poll while
   a base screen is open; there is no server-push equivalent for base/resource state (only chat
   is push-based, over its own WebSocket). `GET /connection` is a similar ~30s heartbeat with no

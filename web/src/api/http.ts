@@ -62,6 +62,12 @@ export class NetworkError extends Error {
 export type FormValue = string | number | boolean | undefined | null;
 export type FormBody = Record<string, FormValue>;
 
+/**
+ * A native JSON body, where a field holding structure is passed as the object
+ * or array it is, not as a string. See {@link send}'s `json` option.
+ */
+export type JsonBody = Record<string, unknown>;
+
 let authToken: string | null = null;
 
 /** Sets the Bearer token attached to every subsequent request. */
@@ -78,14 +84,17 @@ export const apiUrl = (path: string): string =>
 /**
  * Encodes a body as application/x-www-form-urlencoded.
  *
- * Why form encoding rather than JSON: koa-bodyparser accepts both, but the
- * controllers were written for the Flash client's URLVariables payloads and
- * read individual string fields off the body. Fields that hold structure —
- * `resources`, `buildingdata`, `attackData`, `attackcost`, `monsters`,
- * `bookmarks`, `champion`, `purchase` and friends — are JSON-stringified into a
- * single form field and the zod schemas run `z.string().transform(JSON.parse)`
- * over them. Sending them as nested JSON objects does not work. Staying on
- * form encoding for everything keeps one rule instead of two.
+ * Why form encoding is still the default: the controllers were written for the
+ * Flash client's URLVariables payloads and read individual string fields off
+ * the body. Fields that hold structure — `resources`, `buildingdata`,
+ * `attackData`, `attackcost`, `monsters`, `bookmarks`, `champion`, `purchase`
+ * and friends — are JSON-stringified into a single form field and the zod
+ * schemas run `z.string().transform(JSON.parse)` over them. Existing callers
+ * stringify those themselves and keep working unchanged.
+ *
+ * The server now also accepts a native JSON body and does that stringifying at
+ * the edge (`server/src/middleware/jsonBody.ts`, issue #28), so a new call can
+ * pass structure as structure — see {@link postJson}.
  *
  * Undefined and null values are dropped rather than sent as the strings
  * "undefined"/"null", which several optional zod fields would then reject.
@@ -159,9 +168,19 @@ export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 export interface SendOptions extends RequestOptions {
   /** Form-encoded into the body. Omit for a request that carries none. */
   form?: FormBody;
+  /**
+   * Sent as an `application/json` body instead of a form one. Nested objects
+   * and arrays are sent as they are: the server re-stringifies its top-level
+   * fields before the schemas see them, so both encodings reach a controller
+   * as the same flat body. Ignored when `form` is set.
+   */
+  json?: JsonBody;
   /** Form-encoded onto the query string. */
   query?: FormBody;
 }
+
+const FORM_CONTENT_TYPE = "application/x-www-form-urlencoded;charset=UTF-8";
+const JSON_CONTENT_TYPE = "application/json";
 
 /**
  * One request, one envelope.
@@ -179,14 +198,22 @@ export const send = async <T extends ApiEnvelope>(
 ): Promise<T> => {
   const search = options.query ? encodeForm(options.query) : "";
   const url = `${apiUrl(path)}${search ? `?${search}` : ""}`;
-  const hasBody = options.form !== undefined;
+
+  // `form` wins if a caller somehow passes both, so the encoding a call site
+  // already has can never be changed out from under it by a second option.
+  const body =
+    options.form !== undefined
+      ? { contentType: FORM_CONTENT_TYPE, payload: encodeForm(options.form) }
+      : options.json !== undefined
+        ? { contentType: JSON_CONTENT_TYPE, payload: JSON.stringify(options.json) }
+        : undefined;
 
   let response: Response;
   try {
     response = await fetch(url, {
       method,
-      headers: buildHeaders(hasBody ? "application/x-www-form-urlencoded;charset=UTF-8" : undefined),
-      ...(hasBody ? { body: encodeForm(options.form ?? {}) } : {}),
+      headers: buildHeaders(body?.contentType),
+      ...(body ? { body: body.payload } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
     });
   } catch (cause) {
@@ -202,6 +229,20 @@ export const post = <T extends ApiEnvelope>(
   body: FormBody = {},
   options: RequestOptions = {},
 ): Promise<T> => send<T>("POST", path, { ...options, form: body });
+
+/**
+ * POSTs a native `application/json` body and unwraps the JSON envelope.
+ *
+ * The one thing that differs from {@link post}: a field holding structure is
+ * passed as the object or array it is, rather than pre-stringified. Numeric
+ * fields may be sent as numbers, but the few ids the server declares as strings
+ * (`baseid`, `basesaveid`, `attackid`) must still be sent as strings.
+ */
+export const postJson = <T extends ApiEnvelope>(
+  path: string,
+  body: JsonBody = {},
+  options: RequestOptions = {},
+): Promise<T> => send<T>("POST", path, { ...options, json: body });
 
 /** GETs a path with an optional query string and unwraps the JSON envelope. */
 export const get = <T extends ApiEnvelope>(
