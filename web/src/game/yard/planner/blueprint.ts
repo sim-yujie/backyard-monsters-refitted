@@ -148,6 +148,95 @@ export const TILE_COLOURS: Readonly<Record<TileCategory, { fill: number; edge: n
 /** Fixed obstacles the planner cannot move: mushrooms. */
 export const OBSTACLE_COLOURS = { fill: 0x8a6a4a, edge: 0x5a4330 } as const;
 
+/* ── Icons ────────────────────────────────────────────────────────────────── */
+
+/**
+ * The building's own top-down art, shrunk into its tile.
+ *
+ * This is what the original drew (`BuildingItem.as` puts the type's icon in the
+ * middle of the tile), and it is what makes a blueprint readable at a glance: a
+ * player recognises a Sniper Tower's silhouette far faster than they read the
+ * word "Sniper" at nine pixels. The name stays as the fallback for anything
+ * with no art, and for the moment before the picture arrives.
+ */
+
+/** Yard units of clear space between a tile's edge and its icon. */
+export const ICON_PADDING = 3;
+
+/**
+ * Icons are never drawn larger than their own pixels.
+ *
+ * The art is isometric and mostly bigger than the footprint, so this only ever
+ * bites on a small decoration in a large tile, where magnifying a 24 pixel
+ * bitmap to 90 units would be a blur pretending to be detail.
+ */
+export const MAX_ICON_SCALE = 1;
+
+/**
+ * Tiles narrower than this get no icon.
+ *
+ * At 40 units a tile is 40 screen pixels at zoom 1, and the padding leaves 34
+ * for the picture. Below that a shrunk tower is a few dark pixels, which says
+ * less than the flat colour underneath it.
+ */
+export const MIN_ICON_WIDTH = 40;
+
+/** Categories whose tiles are too small or too repetitive to carry a picture. */
+const ICONLESS: ReadonlySet<TileCategory> = new Set([TileCategory.WALL, TileCategory.TRAP]);
+
+/**
+ * Whether a tile of this category and size is worth drawing a picture on.
+ *
+ * Walls and traps are excluded by category as well as by size: four hundred
+ * walls all wearing the same twenty-pixel sprite is noise, and a wall run reads
+ * better as an unbroken band of grey.
+ */
+export const tileShowsIcon = (
+  category: TileCategory,
+  width: number,
+  height: number,
+): boolean =>
+  !ICONLESS.has(category) && Math.min(width, height) >= MIN_ICON_WIDTH;
+
+/** Where a picture of `artWidth × artHeight` goes inside a tile, in tile units. */
+export interface IconBox {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Fits a picture inside a tile: aspect ratio kept, centred, never overflowing.
+ *
+ * The art is isometric and the tile is the footprint, so the two shapes rarely
+ * agree — a 190 × 160 portal wears a 260 × 180 picture. Scaling by whichever
+ * side runs out first keeps the whole silhouette on the tile, and centring what
+ * is left over means the icon sits where the eye already is. Null when there is
+ * nothing sensible to draw: a tile with no room, or art with no size, which is
+ * a texture that has not finished loading.
+ */
+export const iconBox = (
+  tileWidth: number,
+  tileHeight: number,
+  artWidth: number,
+  artHeight: number,
+): IconBox | null => {
+  if (artWidth <= 0 || artHeight <= 0) return null;
+
+  // A tile smaller than twice the padding would have a negative box; the
+  // padding gives way rather than the icon vanishing.
+  const pad = Math.min(ICON_PADDING, tileWidth / 4, tileHeight / 4);
+  const boxWidth = tileWidth - pad * 2;
+  const boxHeight = tileHeight - pad * 2;
+  if (boxWidth <= 0 || boxHeight <= 0) return null;
+
+  const scale = Math.min(boxWidth / artWidth, boxHeight / artHeight, MAX_ICON_SCALE);
+  const width = artWidth * scale;
+  const height = artHeight * scale;
+  return { x: (tileWidth - width) / 2, y: (tileHeight - height) / 2, width, height };
+};
+
 /* ── Labels ───────────────────────────────────────────────────────────────── */
 
 /** Tiles narrower than this get no name, only a level. Walls and traps. */
@@ -156,10 +245,10 @@ export const MIN_NAMED_WIDTH = 60;
 /**
  * What a tile says on it.
  *
- * A 70 unit tile at zoom 1 is 70 pixels, so a name has to be short: the
- * original solved it with an icon per type, which this client does not have
- * yet, so the name is shortened to what fits. Levels are shown as a number
- * because that is what the player scans a plan for.
+ * A 70 unit tile at zoom 1 is 70 pixels, so a name has to be short. The name is
+ * the fallback, shown while the icon is still loading and kept for good on a
+ * type the art table does not know; `iconBox` is the usual answer. Levels are
+ * shown as a number because that is what the player scans a plan for.
  */
 export const tileLabel = (
   name: string,

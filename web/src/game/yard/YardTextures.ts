@@ -27,8 +27,30 @@ export class YardTextures {
   private readonly pending = new Map<string, Promise<void>>();
   private readonly failed = new Set<string>();
 
+  /** Extra listeners added by `watch`, alongside the one the owner passed in. */
+  private readonly watchers = new Set<(key: string) => void>();
+
   /** Called once per texture that arrives, so the renderer knows to redraw. */
   constructor(private readonly onReady: (key: string) => void) {}
+
+  /**
+   * Adds another listener for arriving textures, and returns its undo.
+   *
+   * The cache belongs to the isometric yard, but the blueprint draws the same
+   * pictures on its tiles and has to know when one lands. Sharing the cache is
+   * the point: a second one would be a second set of `Texture` objects over the
+   * same images, and a second pass of resolution work for a yard that has
+   * already paid for it.
+   */
+  watch(listener: (key: string) => void): () => void {
+    this.watchers.add(listener);
+    return () => this.watchers.delete(listener);
+  }
+
+  private announce(key: string): void {
+    this.onReady(key);
+    for (const watcher of this.watchers) watcher(key);
+  }
 
   /**
    * The texture for an image, requesting it if this is the first ask.
@@ -58,7 +80,7 @@ export class YardTextures {
                 })
               : texture,
           );
-          this.onReady(key);
+          this.announce(key);
         })
         .catch((caught: unknown) => {
           console.warn(`Building art ${image.url} did not load; drawing a placeholder.`, caught);
@@ -103,7 +125,7 @@ export class YardTextures {
             );
           }
           this.strips.set(key, cells);
-          this.onReady(key);
+          this.announce(key);
         })
         .catch((caught: unknown) => {
           console.warn(`Building animation ${anim.url} did not load; skipping the layer.`, caught);
@@ -151,6 +173,7 @@ export class YardTextures {
     this.ready.clear();
     this.failed.clear();
     this.pending.clear();
+    this.watchers.clear();
   }
 }
 

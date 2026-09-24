@@ -5,12 +5,16 @@ import {
   blueprintToWorld,
   blueprintToYard,
   centredRect,
+  iconBox,
+  MAX_ICON_SCALE,
+  MIN_ICON_WIDTH,
   rectContains,
   rectCorners,
   tileCategory,
   tileLabel,
   tileRect,
   TileCategory,
+  tileShowsIcon,
 } from "./blueprint";
 import { DECORATION_HEIGHT, DECORATION_WIDTH } from "./placement";
 
@@ -130,5 +134,86 @@ describe("tileLabel", () => {
 
   it("keeps a whole name that fits and hides level zero", () => {
     expect(tileLabel("Town Hall", 0, 130)).toEqual({ name: "Town Hall", level: "" });
+  });
+});
+
+describe("tileShowsIcon", () => {
+  it("leaves walls and traps as flat colour", () => {
+    expect(tileShowsIcon(TileCategory.WALL, 20, 20)).toBe(false);
+    expect(tileShowsIcon(TileCategory.TRAP, 20, 20)).toBe(false);
+    // Even given a tile with room, because a wall run reads better unbroken.
+    expect(tileShowsIcon(TileCategory.WALL, 200, 200)).toBe(false);
+  });
+
+  it("draws on anything else that is wide enough", () => {
+    expect(tileShowsIcon(TileCategory.DEFENSIVE, 70, 70)).toBe(true);
+    expect(tileShowsIcon(TileCategory.BUILDING, 130, 130)).toBe(true);
+    expect(tileShowsIcon(TileCategory.RESOURCE, 190, 160)).toBe(true);
+    expect(tileShowsIcon(TileCategory.DECORATION, MIN_ICON_WIDTH, MIN_ICON_WIDTH)).toBe(true);
+  });
+
+  it("skips a tile too small to show a picture on either axis", () => {
+    expect(tileShowsIcon(TileCategory.MISC, MIN_ICON_WIDTH - 1, 100)).toBe(false);
+    expect(tileShowsIcon(TileCategory.MISC, 100, MIN_ICON_WIDTH - 1)).toBe(false);
+  });
+});
+
+describe("iconBox", () => {
+  it("fits by whichever side runs out first and centres the rest", () => {
+    // A wide picture on a square tile: width binds, so it is padded off the
+    // left and right edges and floats in the middle vertically.
+    const wide = iconBox(100, 100, 200, 100);
+    expect(wide).not.toBeNull();
+    expect(wide?.width).toBeCloseTo(94);
+    expect(wide?.height).toBeCloseTo(47);
+    expect(wide?.x).toBeCloseTo(3);
+    expect((wide?.y ?? 0) + (wide?.height ?? 0) / 2).toBeCloseTo(50);
+
+    // A tall picture on the same tile: height binds instead.
+    const tall = iconBox(100, 100, 100, 200);
+    expect(tall?.height).toBeCloseTo(94);
+    expect(tall?.width).toBeCloseTo(47);
+    expect(tall?.y).toBeCloseTo(3);
+    expect((tall?.x ?? 0) + (tall?.width ?? 0) / 2).toBeCloseTo(50);
+  });
+
+  it("never lets the picture reach the tile's edge", () => {
+    for (const [tileWidth, tileHeight] of [
+      [40, 40],
+      [70, 70],
+      [130, 130],
+      [190, 160],
+    ] as const) {
+      const box = iconBox(tileWidth, tileHeight, 260, 180);
+      expect(box).not.toBeNull();
+      expect(box?.x).toBeGreaterThan(0);
+      expect(box?.y).toBeGreaterThan(0);
+      expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThan(tileWidth);
+      expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThan(tileHeight);
+    }
+  });
+
+  it("keeps the picture's aspect ratio", () => {
+    const box = iconBox(190, 160, 260, 180);
+    expect((box?.width ?? 0) / (box?.height ?? 1)).toBeCloseTo(260 / 180);
+  });
+
+  it("does not magnify a picture smaller than its tile", () => {
+    const box = iconBox(130, 130, 32, 24);
+    expect(box).toEqual({ x: (130 - 32) / 2, y: (130 - 24) / 2, width: 32, height: 24 });
+    expect(MAX_ICON_SCALE).toBe(1);
+  });
+
+  it("gives up the padding rather than the picture on a tiny tile", () => {
+    const box = iconBox(4, 4, 100, 100);
+    expect(box).not.toBeNull();
+    expect(box?.width).toBeGreaterThan(0);
+    expect(box?.height).toBeGreaterThan(0);
+  });
+
+  it("has nothing to draw for art with no size, which is art still loading", () => {
+    expect(iconBox(100, 100, 0, 100)).toBeNull();
+    expect(iconBox(100, 100, 100, 0)).toBeNull();
+    expect(iconBox(0, 0, 100, 100)).toBeNull();
   });
 });

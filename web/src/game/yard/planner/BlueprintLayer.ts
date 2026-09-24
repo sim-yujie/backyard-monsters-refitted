@@ -1,11 +1,15 @@
-import { BitmapFontManager, BitmapText, Container, Graphics } from "pixi.js";
+import { BitmapFontManager, BitmapText, Container, Graphics, Sprite, type Texture } from "pixi.js";
 import type { Point, Rect } from "../YardGrid";
 import { yardSize } from "../YardGrid";
+import { ArtState, resolveArt, type ResolvedImage } from "../buildingArt";
+import type { YardTextures } from "../YardTextures";
 import type { Yard, YardBuilding } from "../yardModel";
 import {
   BLUEPRINT_WORLD,
   blueprintToWorld,
   centredRect,
+  iconBox,
+  MIN_NAMED_WIDTH,
   OBSTACLE_COLOURS,
   rectContains,
   rectCorners,
@@ -13,6 +17,7 @@ import {
   tileCategory,
   tileLabel,
   tileRect,
+  tileShowsIcon,
 } from "./blueprint";
 import type { Corners } from "./marquee";
 import { DECORATION_HEIGHT, DECORATION_WIDTH, isDecoration } from "./placement";
@@ -21,6 +26,12 @@ import { dashedRect } from "./PlannerOverlay";
 /**
  * The blueprint view's scene graph: flat ground, a grid, the plot and its next
  * expansion, one tile per building and one blob per mushroom.
+ *
+ * A tile is its footprint in category colour with the building's own picture
+ * shrunk onto it and a level pill in the corner. The picture comes from the
+ * yard's texture cache, so opening the planner on a yard that is already drawn
+ * costs no fetches; until one arrives — or for good, on a type the art table
+ * does not know — the tile wears the shortened name instead.
  *
  * Built lazily the first time the view is shown, because most visits to the
  * yard never open the planner and a 575-tile scene is not free. After that it
@@ -75,22 +86,46 @@ const MIN_LEVELLED_WIDTH = 40;
 /**
  * Zoom below which the tile labels are hidden.
  *
- * The smaller of the two label sizes is 9 px and the name is 11 px, and text
- * under about 6 screen pixels is a smear rather than a word: 6 / 11 is 0.55.
- * Pulled back past that the tiles are read as coloured blocks anyway, which is
- * what a whole-yard overview is for.
+ * The label is 9 px and the name is 11 px, and text under about 6 screen pixels
+ * is a smear rather than a word: 6 / 11 is 0.55. The icons stay on past this,
+ * because a silhouette survives being shrunk in a way that lettering does not.
  */
 const LABEL_MIN_ZOOM = 0.55;
+
+/**
+ * Zoom below which the icons go too, leaving plain colour blocks.
+ *
+ * A 70 unit tile is 20 screen pixels here, which is about where a building
+ * stops being a shape and starts being a speck. Hiding them is also what keeps
+ * a whole-yard pan cheap: at this zoom every one of the 575 tiles is on screen
+ * at once, and a hidden sprite is skipped before it reaches the batcher.
+ */
+const ICON_MIN_ZOOM = 0.28;
+
+/** The level pill: inset from the tile's corner, and padding around its text. */
+const PILL_INSET = 2;
+const PILL_PAD_X = 3;
+const PILL_PAD_Y = 1;
+const PILL_FILL = 0x101418;
+const PILL_ALPHA = 0.72;
 
 interface Tile {
   readonly building: YardBuilding;
   readonly root: Container;
-  /** The name and level text, or null when the tile carries neither. */
-  readonly labels: Container | null;
+  /** The shortened name: the stand-in shown until an icon arrives, if ever. */
+  nameText: BitmapText | null;
+  /** The level pill, background and text together; null when unlevelled. */
+  readonly badge: Container | null;
+  /** The pill's background, redrawn when a plan makes the text wider. */
+  readonly pill: Graphics | null;
   /** The level text alone, which a planned upgrade rewrites; null when absent. */
   readonly levelText: BitmapText | null;
   /** What that text says with nothing planned, so the arrow can be taken off. */
   readonly levelBase: string;
+  /** The top-down picture this tile wants, or null when it wants none. */
+  readonly art: ResolvedImage | null;
+  /** That picture, once it has arrived. */
+  icon: Sprite | null;
   /** Where the tile is drawn right now, in yard units. */
   x: number;
   y: number;
@@ -106,10 +141,19 @@ export class BlueprintLayer {
   /** Draw order, so `pick` can walk it backwards. */
   private order: Tile[] = [];
 
+  /** Tiles whose picture has been asked for but has not arrived yet. */
+  private awaiting: Tile[] = [];
+  /** Drops the texture-cache subscription when the layer goes away. */
+  private readonly unwatch: () => void;
+  /** Set while a sweep of `awaiting` is already queued for this tick. */
+  private sweeping = false;
+
   private yard: Yard | null = null;
   private built = false;
   /** Whether the labels are showing; `setZoom` is the only thing that sets it. */
   private labelsVisible = true;
+  /** Whether the icons are showing. Hidden further out than the labels. */
+  private iconsVisible = true;
   /**
    * Planned target level by building id, or null when the planner is closed.
    *
@@ -120,10 +164,18 @@ export class BlueprintLayer {
    */
   private planned: ReadonlyMap<number, number> | null = null;
 
-  constructor() {
+  /**
+   * @param textures The yard's texture cache, shared rather than duplicated:
+   * the blueprint draws the same pictures the isometric view does, and by the
+   * time the planner is open most of them are already in it.
+   */
+  constructor(private readonly textures: YardTextures) {
     this.root.visible = false;
     this.root.eventMode = "none";
     this.root.addChild(this.ground, this.obstacles, this.tiles);
+    this.unwatch = textures.watch(() => {
+      this.scheduleSweep();
+    });
   }
 
   /** Remembers the yard; the scene is built on the first `setActive(true)`. */
@@ -139,19 +191,23 @@ export class BlueprintLayer {
   }
 
   /**
-   * Tells the layer the camera's zoom, which decides whether the tile labels
-   * are worth drawing.
+   * Tells the layer the camera's zoom, which decides how much of a tile is
+   * worth drawing: name and level pill, then the icon, then nothing but colour.
    *
-   * Only the crossing costs anything: the flag is compared first, so the loop
+   * Only a crossing costs anything: both flags are compared first, so the loop
    * over the tiles runs twice in a zoom from the plot to a single building
    * rather than once per wheel notch.
    */
   setZoom(zoom: number): void {
-    const visible = zoom >= LABEL_MIN_ZOOM;
-    if (visible === this.labelsVisible) return;
-    this.labelsVisible = visible;
+    const labels = zoom >= LABEL_MIN_ZOOM;
+    const icons = zoom >= ICON_MIN_ZOOM;
+    if (labels === this.labelsVisible && icons === this.iconsVisible) return;
+    this.labelsVisible = labels;
+    this.iconsVisible = icons;
     for (const tile of this.byId.values()) {
-      if (tile.labels) tile.labels.visible = visible;
+      if (tile.nameText) tile.nameText.visible = labels;
+      if (tile.badge) tile.badge.visible = labels;
+      if (tile.icon) tile.icon.visible = icons;
     }
   }
 
@@ -231,6 +287,7 @@ export class BlueprintLayer {
   }
 
   destroy(): void {
+    this.unwatch();
     this.clearTiles();
     this.root.destroy({ children: true });
   }
@@ -303,7 +360,8 @@ export class BlueprintLayer {
 
   private addTile(building: YardBuilding): void {
     const [width, height] = building.footprint;
-    const colours = TILE_COLOURS[tileCategory(building.type, isDecoration(building.type))];
+    const category = tileCategory(building.type, isDecoration(building.type));
+    const colours = TILE_COLOURS[category];
 
     const root = new Container();
     const world = blueprintToWorld(building.x, building.y);
@@ -316,55 +374,135 @@ export class BlueprintLayer {
       .stroke({ width: 2, color: colours.edge, alignment: 1 });
     root.addChild(shape);
 
-    // The text goes in a container of its own so a zoom change is one
-    // `visible` write per tile rather than a walk of its children.
-    const labels = new Container();
+    // Walls and traps stay flat colour; everything wide enough asks the shared
+    // cache for its picture, which usually answers at once because the
+    // isometric yard has already fetched it.
+    const art = tileShowsIcon(category, width, height)
+      ? (resolveArt(building.type, building.level, ArtState.DEFAULT)?.top ?? null)
+      : null;
+    const texture = art ? this.textures.get(art) : null;
+
     const label = tileLabel(building.name, building.level, width);
-    let levelText: BitmapText | null = null;
-    let levelBase = "";
-    if (label.name) {
-      const name = new BitmapText({
+
+    // The name is the icon's understudy: built only while there is no picture
+    // on the tile, and thrown away the moment one turns up.
+    let nameText: BitmapText | null = null;
+    if (label.name && !texture) {
+      nameText = new BitmapText({
         text: label.name,
         style: { fontFamily: FONT, fontSize: 11 },
       });
-      name.anchor.set(0.5, 0.5);
-      name.position.set(width / 2, height / 2 - (label.level ? 5 : 0));
-      labels.addChild(name);
-    }
-    if (label.level && width >= MIN_LEVELLED_WIDTH) {
-      levelBase = label.name ? `Lv ${label.level}` : label.level;
-      const level = new BitmapText({
-        text: levelBase,
-        style: { fontFamily: FONT, fontSize: label.name ? 9 : 11 },
-      });
-      level.anchor.set(0.5, 0.5);
-      level.position.set(width / 2, label.name ? height / 2 + 8 : height / 2);
-      labels.addChild(level);
-      levelText = level;
+      nameText.anchor.set(0.5, 0.5);
+      nameText.position.set(width / 2, height / 2);
+      nameText.visible = this.labelsVisible;
+      root.addChild(nameText);
     }
 
-    const lettered = labels.children.length > 0;
-    if (lettered) {
-      labels.visible = this.labelsVisible;
-      root.addChild(labels);
-    } else {
-      labels.destroy();
+    // The level lives in a pill in the bottom-right corner, where it sits over
+    // the edge of the picture rather than across its middle.
+    let badge: Container | null = null;
+    let pill: Graphics | null = null;
+    let levelText: BitmapText | null = null;
+    let levelBase = "";
+    if (label.level && width >= MIN_LEVELLED_WIDTH) {
+      // "Lv 3" needs room the narrow tiles have not got, so they carry the
+      // bare number, exactly as they did when the level was centred.
+      levelBase = width >= MIN_NAMED_WIDTH ? `Lv ${label.level}` : label.level;
+      levelText = new BitmapText({
+        text: levelBase,
+        style: { fontFamily: FONT, fontSize: 9 },
+      });
+      levelText.anchor.set(1, 1);
+      levelText.position.set(width - PILL_INSET - PILL_PAD_X, height - PILL_INSET - PILL_PAD_Y);
+      pill = new Graphics();
+      badge = new Container();
+      badge.visible = this.labelsVisible;
+      badge.addChild(pill, levelText);
+      root.addChild(badge);
     }
 
     this.tiles.addChild(root);
     const tile: Tile = {
       building,
       root,
-      labels: lettered ? labels : null,
+      nameText,
+      badge,
+      pill,
       levelText,
       levelBase,
+      art,
+      icon: null,
       x: building.x,
       y: building.y,
     };
     this.byId.set(building.id, tile);
     this.order.push(tile);
     this.labelPlan(tile);
+
+    if (texture) this.attachIcon(tile, texture);
+    else if (art && !this.textures.isMissing(art)) this.awaiting.push(tile);
   }
+
+  /* ── Icons ──────────────────────────────────────────────────────────── */
+
+  /**
+   * Draws a tile's picture, fitted and centred inside its footprint.
+   *
+   * It goes directly above the coloured rectangle and below the pill, so the
+   * category is still readable around the edges and the level is never hidden
+   * behind a tower.
+   */
+  private attachIcon(tile: Tile, texture: Texture): void {
+    const [width, height] = tile.building.footprint;
+    const box = iconBox(width, height, texture.width, texture.height);
+    if (!box) return;
+
+    const icon = new Sprite(texture);
+    icon.position.set(box.x, box.y);
+    icon.width = box.width;
+    icon.height = box.height;
+    icon.visible = this.iconsVisible;
+    // Index 1: above the tile's own rectangle, under the name and the pill.
+    tile.root.addChildAt(icon, 1);
+    tile.icon = icon;
+
+    tile.nameText?.destroy();
+    tile.nameText = null;
+  }
+
+  /**
+   * Queues one pass over the tiles still waiting for a picture.
+   *
+   * A yard's art arrives in bursts — a dozen textures resolving in the same
+   * tick is normal — so the sweep is deferred to the end of it and the list is
+   * walked once rather than a dozen times.
+   */
+  private scheduleSweep(): void {
+    if (this.sweeping || this.awaiting.length === 0) return;
+    this.sweeping = true;
+    queueMicrotask(() => {
+      this.sweeping = false;
+      this.sweepAwaiting();
+    });
+  }
+
+  /** Gives a picture to every waiting tile whose texture has turned up. */
+  private sweepAwaiting(): void {
+    if (this.awaiting.length === 0) return;
+    const still: Tile[] = [];
+    for (const tile of this.awaiting) {
+      const art = tile.art;
+      if (!art || tile.icon) continue;
+      const texture = this.textures.get(art);
+      if (texture) this.attachIcon(tile, texture);
+      // A picture the server does not have is never coming; the tile keeps its
+      // name and stops being asked about.
+      else if (!this.textures.isMissing(art)) still.push(tile);
+    }
+    this.awaiting = still;
+  }
+
+  /* ── Labels ─────────────────────────────────────────────────────────── */
 
   /** Writes "3→5" on a planned tile's level, or the plain level on the rest. */
   private labelPlan(tile: Tile): void {
@@ -372,11 +510,33 @@ export class BlueprintLayer {
     if (!text) return;
     const target = this.planned?.get(tile.building.id);
     text.text = target === undefined ? tile.levelBase : `${tile.levelBase}→${target}`;
+    this.drawPill(tile);
+  }
+
+  /** Sizes the pill to whatever the level text now says. */
+  private drawPill(tile: Tile): void {
+    const pill = tile.pill;
+    const text = tile.levelText;
+    if (!pill || !text) return;
+    const [tileWidth, tileHeight] = tile.building.footprint;
+    const width = text.width + PILL_PAD_X * 2;
+    const height = text.height + PILL_PAD_Y * 2;
+    pill
+      .clear()
+      .roundRect(
+        tileWidth - PILL_INSET - width,
+        tileHeight - PILL_INSET - height,
+        width,
+        height,
+        Math.min(4, height / 2),
+      )
+      .fill({ color: PILL_FILL, alpha: PILL_ALPHA });
   }
 
   private clearTiles(): void {
     for (const child of this.tiles.removeChildren()) child.destroy({ children: true });
     this.byId.clear();
     this.order = [];
+    this.awaiting = [];
   }
 }

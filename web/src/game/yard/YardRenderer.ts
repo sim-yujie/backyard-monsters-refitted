@@ -42,7 +42,7 @@ export class YardRenderer {
   private readonly ground = new YardGround();
   private readonly buildings = new YardBuildings();
   private readonly mushroomLayer = new Container();
-  private readonly blueprint = new BlueprintLayer();
+  private readonly blueprint = new BlueprintLayer(this.buildings.art);
   private readonly chrome = new Graphics();
   private readonly planner = new PlannerOverlay();
 

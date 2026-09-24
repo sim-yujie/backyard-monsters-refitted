@@ -123,6 +123,14 @@ export class YardBuildings {
     for (const layer of [this.shadows, this.tops, this.markers]) layer.eventMode = "none";
   }
 
+  /**
+   * The texture cache, so the blueprint can draw the same pictures on its
+   * tiles without fetching or cutting any of them a second time.
+   */
+  get art(): YardTextures {
+    return this.textures;
+  }
+
   /** Buildings still showing a placeholder. */
   get placeholderCount(): number {
     return this.views.reduce((count, view) => count + (view.resolved ? 0 : 1), 0);
