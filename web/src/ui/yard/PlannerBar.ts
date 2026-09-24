@@ -45,6 +45,15 @@ import { formatAmount, formatCountdown } from "@/ui/format";
  * Shiny is shown and never purchasable (§6, Q6), so it is a readout like the
  * rest and not a button.
  *
+ * ## Touch
+ *
+ * Two things here are F14's. The "Put back" chip appears beside the summary
+ * while something is in hand, because a finger cannot right-click the carried
+ * selection to put it down again. And every button in both bars is given a
+ * 44 px target under `@media (pointer: coarse)` in `planner.css` — the size the
+ * spec asks for, applied by how the device is being touched rather than by how
+ * wide the window is, so a small window on a laptop keeps its compact bar.
+ *
  * ## Read-only
  *
  * A read-only session (design §8, Q5) gets the same bars minus everything that
@@ -70,6 +79,13 @@ export interface PlannerBarActions {
   onUpgradeWalls: () => void;
   onRearmTraps: () => void;
   onApply: () => void;
+  /**
+   * Puts a carried selection back where it came from (F14).
+   *
+   * The chip this fires is touch's answer to right-clicking a carried
+   * selection, which a finger cannot do.
+   */
+  onPutBack: () => void;
   onHelp: () => void;
   onExit: () => void;
 }
@@ -244,6 +260,7 @@ export class PlannerBar {
   private readonly rearm: HTMLButtonElement;
   private readonly rearmBadge: HTMLElement;
   private readonly summary: HTMLElement;
+  private readonly putBack: HTMLButtonElement;
   private readonly slotLabel: HTMLElement;
   private readonly resourceCells = new Map<string, CostCell>();
   private readonly timeCell: CostCell;
@@ -382,6 +399,21 @@ export class PlannerBar {
     this.summary.className = "planner-bar__summary";
     this.summary.setAttribute("role", "status");
 
+    /*
+     * F14's "put back", for a hand that has no second button.
+     *
+     * Only on screen while something is in hand, because that is the only
+     * moment it means anything, and beside the summary line that says so
+     * rather than out among the actions: it undoes a gesture, not an edit.
+     */
+    this.putBack = button(
+      "Put back",
+      "Put the buildings in hand back where they were (Esc)",
+      "btn btn--ghost planner-bar__put-back",
+    );
+    this.putBack.hidden = true;
+    this.putBack.addEventListener("click", actions.onPutBack);
+
     const layouts = button("Layouts", "Saved layouts (Ctrl+S saves to the current slot)");
     layouts.addEventListener("click", actions.onLayouts);
 
@@ -412,7 +444,15 @@ export class PlannerBar {
       // Every action below writes to the yard, so none of them is mounted.
       // `disabled` is set as well as the button being left out, so a caller
       // that reaches one through the actions object still finds it inert.
-      for (const control of [this.upgradeWalls, this.rearm, this.checklist, layouts, this.apply]) {
+      // Nothing can be picked up either, so the put-back chip goes with them.
+      for (const control of [
+        this.upgradeWalls,
+        this.rearm,
+        this.checklist,
+        layouts,
+        this.apply,
+        this.putBack,
+      ]) {
         control.disabled = true;
       }
       this.actionBar.append(costs, this.summary, spacer());
@@ -420,6 +460,7 @@ export class PlannerBar {
       this.actionBar.append(
         costs,
         this.summary,
+        this.putBack,
         spacer(),
         this.upgradeWalls,
         this.rearm,
@@ -470,6 +511,9 @@ export class PlannerBar {
     this.slotLabel.classList.toggle("planner-bar__slot--read-only", state.readOnly);
 
     this.summary.textContent = summarise(state);
+    // A read-only session never mounts the chip; hiding it as well keeps the
+    // two states from disagreeing if one ever slips through.
+    this.putBack.hidden = this.readOnly || !state.carrying;
     if (this.readOnly) return;
 
     this.apply.disabled = state.previewing;
@@ -704,7 +748,11 @@ const summarise = (state: PlannerState): string => {
   // Left out at zero: an untouched plan should not carry a count of nothing.
   if (state.plannedCount > 0) parts.push(`${state.plannedCount} planned`);
   if (state.dragInvalid) parts.push("cannot drop here");
-  else if (state.carrying) parts.push("in hand · click to drop, right-click to put back");
+  else if (state.carrying) {
+    // Both spellings of "put it back", because the bar is read on a phone too
+    // and a finger has no second button (F14).
+    parts.push("in hand · click to drop, right-click or Put back to cancel");
+  }
   else if (state.readOnly) parts.push("read-only · nothing here can be moved");
   else if (state.previewing) parts.push("read-only preview");
   return parts.join(" · ");

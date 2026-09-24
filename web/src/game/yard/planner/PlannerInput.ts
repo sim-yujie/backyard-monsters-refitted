@@ -30,6 +30,29 @@ import type { Point } from "../YardGrid";
  * the selection and the tools, and the answer is only "I am taking this" or
  * "let it through". Likewise a release asks the session whether the gesture
  * turns into a carry.
+ *
+ * ## Touch (F14)
+ *
+ * A finger is not a mouse in two ways that matter here, so a press whose
+ * `pointerType` is not `"mouse"` takes a different route down.
+ *
+ * *The first finger belongs to the camera.* Claiming a building on the way
+ * down, as a mouse does, would take the second finger away from the pinch —
+ * the camera only pinches with two pointers it saw press — and would lift a
+ * building the player meant to scroll past. So a touch on a building is left
+ * to the camera and only *watched*: if it stays within the click slop for
+ * `LONG_PRESS_MS` it becomes a carry, which is the same state a click gives a
+ * mouse; if it travels, or a second finger lands, the watch is dropped and the
+ * pan or pinch carries on untouched. `wouldClaim` is how the input asks what is
+ * under the finger without anything being picked up.
+ *
+ * *A finger has no second button.* Putting a carried selection back is a chip
+ * in the bar instead (`PlannerSession.putBack`).
+ *
+ * The box tool is the one press still claimed on the way down: it has nothing
+ * to do with what is under the finger, and §4 asks for a one-finger box. A
+ * second finger during that box — or during any drag — hands the gesture back
+ * and lets the camera have both pointers.
  */
 
 /** What the session decided a press is. */
@@ -46,6 +69,22 @@ export type Grab = (typeof Grab)[keyof typeof Grab];
 export interface PlannerInputHandlers {
   /** Whether this press belongs to the planner, and what it starts. */
   claim: (world: Point, shift: boolean) => Grab | null;
+  /**
+   * What `claim` *would* answer, changing nothing (F14).
+   *
+   * A touch cannot claim on the way down — the camera needs the pointer for a
+   * pan or a pinch — but the input still has to know whether there is anything
+   * under the finger worth watching for a long press.
+   */
+  wouldClaim: (world: Point, shift: boolean) => Grab | null;
+  /**
+   * A touch that pressed and lifted without travelling or being held.
+   *
+   * It selects, and never picks anything up: on touch the pick-up is the long
+   * press, so a tap that also carried would make scrolling past a building a
+   * lottery.
+   */
+  tap: (world: Point, shift: boolean) => void;
   /** The pointer moved during a claimed gesture. */
   move: (world: Point, grab: Grab) => void;
   /**
@@ -74,6 +113,32 @@ export interface PlannerInputHandlers {
 /** Pointer travel in CSS pixels below which a press counts as a click. */
 const CLICK_SLOP = 5;
 
+/**
+ * How long a finger has to sit still on a building to pick it up (F14).
+ *
+ * 400 ms is the figure the platform conventions land on — Android's long press
+ * is 400 ms and iOS's is 500 ms — and it is the useful compromise either way:
+ * short enough that holding something does not feel like waiting, long enough
+ * that the start of a flick never trips it.
+ */
+const LONG_PRESS_MS = 400;
+
+/**
+ * A short buzz when a long press takes hold.
+ *
+ * Touch has no cursor to change and no button to depress, so without this the
+ * only sign the building is now in hand is the bar redrawing at the far edge of
+ * the screen. Absent on iOS and blockable everywhere, hence the guard: it is a
+ * bonus on top of the "Put back" chip appearing, never the only feedback.
+ */
+const buzz = (): void => {
+  try {
+    navigator.vibrate?.(10);
+  } catch {
+    // Some browsers throw rather than return false when vibration is blocked.
+  }
+};
+
 export class PlannerInput {
   private readonly camera: Camera;
   private readonly canvas: HTMLCanvasElement;
@@ -93,6 +158,10 @@ export class PlannerInput {
    * and the menu handler reads the latch rather than the grab.
    */
   private suppressContextMenu = false;
+  /** Set while the press being watched came from a finger or a pen. */
+  private touchPress = false;
+  /** The pending long-press timer, or null when nothing is being held. */
+  private longPress: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: {
     camera: Camera;
@@ -107,6 +176,7 @@ export class PlannerInput {
   attach(): void {
     window.addEventListener("pointerdown", this.onPointerDown, true);
     window.addEventListener("pointermove", this.onPointerMove, true);
+    window.addEventListener("pointerrawupdate", this.onRawUpdate as EventListener, true);
     window.addEventListener("pointerup", this.onPointerUp, true);
     window.addEventListener("pointercancel", this.onPointerUp, true);
     window.addEventListener("keydown", this.onKeyDown, true);
@@ -116,6 +186,7 @@ export class PlannerInput {
   detach(): void {
     window.removeEventListener("pointerdown", this.onPointerDown, true);
     window.removeEventListener("pointermove", this.onPointerMove, true);
+    window.removeEventListener("pointerrawupdate", this.onRawUpdate as EventListener, true);
     window.removeEventListener("pointerup", this.onPointerUp, true);
     window.removeEventListener("pointercancel", this.onPointerUp, true);
     window.removeEventListener("keydown", this.onKeyDown, true);
@@ -133,9 +204,15 @@ export class PlannerInput {
     return this.grab === Grab.CARRY;
   }
 
+  /** True while a finger is being held on a building, waiting to pick it up. */
+  get isLongPressing(): boolean {
+    return this.longPress !== null;
+  }
+
   /** Abandons a gesture without a release; Escape uses it. */
   cancel(): void {
     const had = this.grab !== null;
+    this.cancelLongPress();
     this.grab = null;
     this.pointerId = null;
     this.watchingClick = false;
@@ -165,16 +242,50 @@ export class PlannerInput {
         this.handlers.cancel();
         return;
       }
-      this.finish(this.handlers.release(this.worldAt(event), Grab.CARRY, true));
+      // Touch sends no move before a press, so the carried selection is still
+      // wherever the last drag left it: walk it under this press before
+      // dropping, or the finger would put it down somewhere else. A mouse is
+      // already there, and `move` returns at its own no-op test.
+      const world = this.worldAt(event);
+      this.handlers.move(world, Grab.CARRY);
+      this.finish(this.handlers.release(world, Grab.CARRY, true));
+      return;
+    }
+
+    // A second pointer is a pinch starting (F14). Whatever the planner had
+    // begun is handed back — a half-drawn box would otherwise follow the
+    // zoom — and the press is left for the camera, which needs both pointers.
+    if (this.pointerId !== null && event.pointerId !== this.pointerId) {
+      this.cancelLongPress();
+      this.watchingClick = false;
+      if (this.grab !== null) this.handlers.cancel();
+      this.pointerId = null;
       return;
     }
 
     if (event.pointerType === "mouse" && event.button !== 0) return;
 
+    this.cancelLongPress();
     this.pressX = event.clientX;
     this.pressY = event.clientY;
+    this.touchPress = event.pointerType !== "mouse";
 
-    const grab = this.handlers.claim(this.worldAt(event), event.shiftKey);
+    const world = this.worldAt(event);
+
+    // Touch: everything but a box goes to the camera, watched for a tap on the
+    // way up and for a long press while it is down. See "Touch" above.
+    if (this.touchPress) {
+      const would = this.handlers.wouldClaim(world, event.shiftKey);
+      if (would !== Grab.MARQUEE) {
+        this.watchingClick = true;
+        this.grab = null;
+        this.pointerId = event.pointerId;
+        if (would === Grab.DRAG) this.startLongPress(event.pointerId, world);
+        return;
+      }
+    }
+
+    const grab = this.handlers.claim(world, event.shiftKey);
     if (!grab) {
       // Left for the camera. Still watched, so a press that does not travel
       // can clear the selection on the way up.
@@ -192,6 +303,11 @@ export class PlannerInput {
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
+    // A finger that has started travelling is panning, not pressing.
+    if (this.longPress !== null && event.pointerId === this.pointerId && this.travelled(event)) {
+      this.cancelLongPress();
+    }
+
     const grab = this.grab;
     if (!grab) return;
     // A carry follows any pointer; a drag follows the one that pressed.
@@ -205,12 +321,12 @@ export class PlannerInput {
     if (this.grab === Grab.CARRY) return;
     if (this.pointerId !== event.pointerId) return;
     this.pointerId = null;
+    this.cancelLongPress();
 
     const grab = this.grab;
     this.grab = null;
 
-    const travelled =
-      Math.hypot(event.clientX - this.pressX, event.clientY - this.pressY) > CLICK_SLOP;
+    const travelled = this.travelled(event);
 
     if (grab) {
       event.stopPropagation();
@@ -220,8 +336,59 @@ export class PlannerInput {
 
     if (!this.watchingClick) return;
     this.watchingClick = false;
-    if (!travelled) this.handlers.clickEmpty(event.shiftKey);
+    if (travelled) return;
+    // A finger that was never held is a tap: it selects and nothing else.
+    if (this.touchPress) this.handlers.tap(this.worldAt(event), event.shiftKey);
+    else this.handlers.clickEmpty(event.shiftKey);
   };
+
+  /**
+   * Chromium's early sibling of `pointermove`.
+   *
+   * The camera pans from it, so a gesture the planner has taken over has to be
+   * stopped here as well — otherwise a carry begun by a long press would drag
+   * the building and the view at once, since the camera saw that finger press.
+   */
+  private readonly onRawUpdate = (event: PointerEvent): void => {
+    const grab = this.grab;
+    if (!grab) return;
+    if (grab !== Grab.CARRY && this.pointerId !== event.pointerId) return;
+    event.stopPropagation();
+  };
+
+  /** Whether a press has left the click slop. */
+  private travelled(event: PointerEvent): boolean {
+    return Math.hypot(event.clientX - this.pressX, event.clientY - this.pressY) > CLICK_SLOP;
+  }
+
+  /**
+   * Watches a finger on a building for `LONG_PRESS_MS` (F14).
+   *
+   * When it fires, the press takes the click-to-carry path a mouse takes —
+   * `claim` then a release that never travelled — so a long press and a click
+   * leave the planner in exactly the same state, and everything downstream
+   * (the drop, the chip, Escape, the summary line) works without knowing which
+   * of the two happened.
+   */
+  private startLongPress(pointerId: number, world: Point): void {
+    this.longPress = setTimeout(() => {
+      this.longPress = null;
+      if (this.pointerId !== pointerId || this.grab !== null) return;
+
+      const grab = this.handlers.claim(world, false);
+      if (!grab) return;
+      this.grab = grab;
+      this.watchingClick = false;
+      this.finish(this.handlers.release(world, grab, false));
+      if (this.grab === Grab.CARRY) buzz();
+    }, LONG_PRESS_MS);
+  }
+
+  private cancelLongPress(): void {
+    if (this.longPress === null) return;
+    clearTimeout(this.longPress);
+    this.longPress = null;
+  }
 
   /** Applies the session's answer to a release. */
   private finish(outcome: "carry" | void): void {

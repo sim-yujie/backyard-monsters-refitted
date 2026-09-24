@@ -227,6 +227,7 @@ export class YardPlanner {
       onUpgradeWalls: () => this.showWallUpgrade(),
       onRearmTraps: () => this.showRearm(),
       onApply: () => this.apply(),
+      onPutBack: () => this.session.putBack(),
       onHelp: () => this.openDialog(shortcutsPanel(() => this.closeDialog())),
       onExit: () => this.requestExit(),
     }, { readOnly: this.readOnly });

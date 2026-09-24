@@ -28,6 +28,7 @@ const actions = (): PlannerBarActions => ({
   onUpgradeWalls: vi.fn(),
   onRearmTraps: vi.fn(),
   onApply: vi.fn(),
+  onPutBack: vi.fn(),
   onHelp: noop,
   onExit: noop,
 });
@@ -313,6 +314,49 @@ describe("the group operations", () => {
     expect(distribute?.getAttribute("aria-expanded")).toBe("true");
     bar.update(stateOf({ selectionCount: 1 }));
     expect(distribute?.getAttribute("aria-expanded")).toBe("false");
+  });
+});
+
+describe("the put-back chip (F14)", () => {
+  /** The chip, which is in the DOM whether or not it is on screen. */
+  const chip = (bar: PlannerBar): HTMLButtonElement | null =>
+    bar.actionBar.querySelector(".planner-bar__put-back");
+
+  it("appears only while something is in hand", () => {
+    const bar = mount();
+    bar.update(stateOf());
+    expect(chip(bar)?.hidden).toBe(true);
+
+    bar.update(stateOf({ carrying: true, selectionCount: 2 }));
+    expect(chip(bar)?.hidden).toBe(false);
+
+    bar.update(stateOf({ carrying: false, selectionCount: 2 }));
+    expect(chip(bar)?.hidden).toBe(true);
+  });
+
+  it("puts the selection back when it is pressed", () => {
+    const { bar, fired } = mountWith();
+    bar.update(stateOf({ carrying: true, selectionCount: 1 }));
+
+    chip(bar)?.click();
+    expect(fired.onPutBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("says both ways of putting it back in the summary line", () => {
+    const bar = mount();
+    bar.update(stateOf({ carrying: true, selectionCount: 1 }));
+
+    // A finger has no second button, so the chip has to be named where the
+    // right-click is.
+    expect(bar.actionBar.querySelector(".planner-bar__summary")?.textContent).toContain(
+      "right-click or Put back to cancel",
+    );
+  });
+
+  it("is not mounted at all in a read-only session", () => {
+    const bar = mount({ readOnly: true });
+    bar.update(stateOf({ readOnly: true, previewing: true }));
+    expect(chip(bar)).toBeNull();
   });
 });
 

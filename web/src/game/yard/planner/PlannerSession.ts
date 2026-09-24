@@ -227,6 +227,8 @@ export class PlannerSession {
       canvas: options.canvas,
       handlers: {
         claim: (world, shift) => this.claim(world, shift),
+        wouldClaim: (world, shift) => this.wouldClaim(world, shift),
+        tap: (world, shift) => this.tap(world, shift),
         move: (world, grab) => this.onMove(world, grab),
         release: (world, grab, travelled) => this.onRelease(world, grab, travelled),
         clickEmpty: (shift) => {
@@ -624,6 +626,42 @@ export class PlannerSession {
 
   /* ── Pointer ────────────────────────────────────────────────────────── */
 
+  /**
+   * What a press at `world` would start, without starting it (F14).
+   *
+   * `claim` cannot answer this, because answering is how it selects and lifts:
+   * touch needs to know whether there is anything under the finger *before*
+   * anything moves, since until the long press fires that finger still belongs
+   * to the camera. Kept beside `claim` so the two cannot drift.
+   */
+  private wouldClaim(world: Point, shift: boolean): Grab | null {
+    if (this.tool === PlannerTool.BOX) return Grab.MARQUEE;
+    const id = this.view.pick(world.x, world.y);
+    if (id === null) return shift ? Grab.MARQUEE : null;
+    return Grab.DRAG;
+  }
+
+  /**
+   * A tap, which is touch's click (F14).
+   *
+   * It selects and stops there. On a mouse a click on an already-selected
+   * building picks it up, but touch spells that as the long press, and a tap
+   * that could also carry would turn every scroll past a building into a
+   * gamble on how still the finger was.
+   */
+  private tap(world: Point, shift: boolean): void {
+    const id = this.view.pick(world.x, world.y);
+    if (id === null) {
+      if (!shift) this.clearSelection();
+      return;
+    }
+
+    if (!shift) this.selection = new Set([id]);
+    else if (this.selection.has(id)) this.selection.delete(id);
+    else this.selection.add(id);
+    this.refresh();
+  }
+
   private claim(world: Point, shift: boolean): Grab | null {
     if (this.tool === PlannerTool.BOX) return this.startMarquee(world);
 
@@ -738,6 +776,19 @@ export class PlannerSession {
     this.view.syncSome(this.selection);
     this.view.resort();
     this.afterEdit();
+  }
+
+  /**
+   * Puts a carried selection back where it came from (F14).
+   *
+   * The touch spelling of the secondary button: a finger has none, so the bar
+   * grows a "Put back" chip while something is in hand and it lands here. Same
+   * path as Escape, and a no-op when nothing is in hand — the chip is hidden
+   * then, and clearing the selection would be a surprising answer to a button
+   * that says "put back".
+   */
+  putBack(): void {
+    if (this.input.isGrabbing) this.cancel();
   }
 
   /** Cancels a live gesture; Escape with nothing in hand clears instead. */

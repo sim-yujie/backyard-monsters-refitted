@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   LAYOUT_VERSION,
   type BaseLoadResponse,
@@ -1189,5 +1189,192 @@ describe("a group operation that cannot be done", () => {
     expect(harness.session.groupTool(GroupOp.MIRROR_X).reason).toBe(GroupRefusal.READ_ONLY);
     expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
     expect(harness.session.state().canUndo).toBe(false);
+  });
+});
+
+/* ── Touch and mobile gestures (F14) ──────────────────────────────────────── */
+
+/** A press or release from a particular finger. */
+const finger = (id: number): PointerEventInit => ({ pointerType: "touch", pointerId: id });
+
+/**
+ * Every `pointerdown` that got past the planner to the canvas.
+ *
+ * The planner listens on `window` in the capture phase and stops the presses it
+ * claims, so a press that arrives here is one the camera will see — which is
+ * the whole question for a pinch: the camera needs both pointers to have
+ * pressed on it, and it never gets a second one if the planner ate the first.
+ */
+const reachedCanvas = (harness: Harness): number[] => {
+  const seen: number[] = [];
+  harness.canvas.addEventListener("pointerdown", (event) => {
+    seen.push((event as PointerEvent).pointerId);
+  });
+  return seen;
+};
+
+describe("touch gestures", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("picks a building up when a finger is held still on it", () => {
+    const harness = planner();
+    harness.press(ONE, finger(1));
+
+    // Not yet. Anything shorter than this is a tap, and until it fires the
+    // finger is the camera's.
+    vi.advanceTimersByTime(399);
+    expect(harness.session.state().carrying).toBe(false);
+
+    vi.advanceTimersByTime(1);
+    expect(harness.session.state().carrying).toBe(true);
+    expect(harness.session.selectedIds()).toEqual([1]);
+
+    // From here it is the state a click gives a mouse: the finger drags it,
+    // lifting leaves it in hand, and the next tap drops it.
+    harness.drag(by(ONE, 100, 0));
+    expect(harness.placements.get(1)).toEqual({ x: 100, y: 0 });
+
+    harness.release(by(ONE, 100, 0), finger(1));
+    expect(harness.session.state().carrying).toBe(true);
+
+    harness.press(by(ONE, 100, 0), finger(1));
+    expect(harness.session.state().carrying).toBe(false);
+    expect(at(harness, 1)).toEqual({ x: 100, y: 0 });
+  });
+
+  it("drops where the tap lands, with no move between lifting and tapping", () => {
+    const harness = planner();
+    harness.press(ONE, finger(1));
+    vi.advanceTimersByTime(400);
+    harness.release(ONE, finger(1));
+
+    // Touch sends no `pointermove` before a press, so the drop has to read its
+    // own position rather than the last drag's.
+    harness.press(by(ONE, 100, 0), finger(1));
+    expect(harness.session.state().carrying).toBe(false);
+    expect(at(harness, 1)).toEqual({ x: 100, y: 0 });
+  });
+
+  it("gives up the hold as soon as the finger travels", () => {
+    const harness = planner();
+    harness.press(ONE, finger(1));
+    harness.drag(by(ONE, 40, 0));
+    vi.advanceTimersByTime(600);
+    harness.release(by(ONE, 40, 0), finger(1));
+
+    // A pan across a building, which is what this is, moves the view and
+    // leaves the yard alone.
+    expect(harness.session.state().carrying).toBe(false);
+    expect(harness.session.selectedIds()).toEqual([]);
+    expect(harness.placements.get(1)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("selects on a tap and picks nothing up", () => {
+    const harness = planner();
+    harness.press(ONE, finger(1));
+    vi.advanceTimersByTime(100);
+    harness.release(ONE, finger(1));
+
+    const state = harness.session.state();
+    expect(harness.session.selectedIds()).toEqual([1]);
+    expect(state.carrying).toBe(false);
+    expect(state.movedCount).toBe(0);
+
+    // And a tap on bare ground clears it again, as a click does.
+    harness.press(GROUND, finger(1));
+    harness.release(GROUND, finger(1));
+    expect(harness.session.selectedIds()).toEqual([]);
+  });
+
+  it("adds to the selection when a tap comes with Shift", () => {
+    const harness = planner();
+    harness.press(ONE, finger(1));
+    harness.release(ONE, finger(1));
+    harness.press(TWO, { ...finger(1), shiftKey: true });
+    harness.release(TWO, { ...finger(1), shiftKey: true });
+
+    expect(harness.session.selectedIds()).toEqual([1, 2]);
+  });
+
+  it("leaves both fingers to the camera, so a pinch still zooms", () => {
+    const harness = planner();
+    const seen = reachedCanvas(harness);
+
+    harness.press(ONE, finger(1));
+    harness.press(by(ONE, 200, 200), finger(2));
+    vi.advanceTimersByTime(600);
+
+    expect(seen).toEqual([1, 2]);
+    expect(harness.session.state().carrying).toBe(false);
+    expect(harness.session.selectedIds()).toEqual([]);
+  });
+
+  it("draws a box from one finger and hands it back when a second lands", () => {
+    const harness = planner();
+    harness.session.setTool(PlannerTool.BOX);
+    const seen = reachedCanvas(harness);
+
+    // The box tool is the one press touch still claims on the way down: it has
+    // nothing to do with what is under the finger.
+    harness.press(GROUND, finger(1));
+    harness.drag(by(GROUND, 20, 20));
+    expect(seen).toEqual([]);
+
+    harness.press(by(GROUND, 120, 120), finger(2));
+    expect(seen).toEqual([2]);
+
+    // The box is over rather than still growing: dragging the first finger
+    // across a tower no longer sweeps it up.
+    harness.drag(ONE);
+    expect(harness.session.selectedIds()).toEqual([]);
+  });
+
+  it("puts a drag back when a second pointer joins it", () => {
+    const harness = planner();
+    harness.press(ONE);
+    harness.drag(by(ONE, 100, 0));
+    expect(harness.placements.get(1)).toEqual({ x: 100, y: 0 });
+
+    harness.press(by(ONE, 300, 200), finger(2));
+
+    // Restored, and the gesture is finished: both pointers are the camera's
+    // now, so a pinch does not drag the building along with the zoom.
+    expect(harness.placements.get(1)).toEqual({ x: 0, y: 0 });
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(harness.session.state().movedCount).toBe(0);
+
+    harness.drag(by(ONE, 200, 0));
+    expect(harness.placements.get(1)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("puts a carried selection back on the chip's behalf", () => {
+    const harness = planner();
+    harness.press(ONE, finger(1));
+    vi.advanceTimersByTime(400);
+    harness.drag(by(ONE, 100, 0));
+    expect(harness.placements.get(1)).toEqual({ x: 100, y: 0 });
+
+    harness.session.putBack();
+
+    const state = harness.session.state();
+    expect(state.carrying).toBe(false);
+    expect(state.movedCount).toBe(0);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(harness.placements.get(1)).toEqual({ x: 0, y: 0 });
+    // The selection survives: putting a move back is not a deselect.
+    expect(harness.session.selectedIds()).toEqual([1]);
+  });
+
+  it("leaves the selection alone when nothing is in hand", () => {
+    const harness = planner();
+    harness.session.selectOnly([1, 2]);
+    harness.session.putBack();
+    expect(harness.session.selectedIds()).toEqual([1, 2]);
   });
 });
