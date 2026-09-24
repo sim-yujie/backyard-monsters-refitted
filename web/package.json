@@ -13,7 +13,9 @@
     "test": "vitest run",
     "lint": "eslint .",
     "gen:combat": "bun tools/gen-combat-stats.mjs",
-    "sync:combat": "node tools/sync-combat-rules.mjs"
+    "sync:combat": "node tools/sync-combat-rules.mjs",
+    "fixtures:combat": "bun tools/gen-combat-fixture.mjs",
+    "bench:combat": "bun tools/bench-combat.mjs"
   },
   "dependencies": {
     "pixi.js": "8.21.0"

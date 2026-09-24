@@ -1,0 +1,143 @@
+{
+  "name": "burrow-rush",
+  "description": "Sand Hogs, the one monster that walks through walls.",
+  "yard": "sandbox",
+  "kind": "main",
+  "levels": {
+    "C1": 6,
+    "C2": 6,
+    "C3": 6,
+    "C4": 6,
+    "C5": 6,
+    "C6": 6,
+    "C7": 6,
+    "C8": 6,
+    "C13": 6,
+    "C14": 6
+  },
+  "playerLevel": 20,
+  "tailTicks": 16000,
+  "log": {
+    "v": 1,
+    "seed": 424242,
+    "events": [
+      {
+        "kind": "fling",
+        "t": 160,
+        "x": -720,
+        "y": -585,
+        "r": 300,
+        "monsters": {
+          "C13": 30
+        }
+      }
+    ]
+  },
+  "expected": {
+    "ticks": 16160,
+    "damage": 4.258073418910982,
+    "destroyed": null,
+    "attackloot": {
+      "r1": 0,
+      "r2": 0,
+      "r3": 0,
+      "r4": 0
+    },
+    "defenderLoss": {
+      "r1": 0,
+      "r2": 0,
+      "r3": 0,
+      "r4": 0
+    },
+    "firedTraps": 22,
+    "destroyedBuildings": 15,
+    "creepsFlung": 30,
+    "creepsKilled": 30,
+    "championHp": null,
+    "damagedBuildings": 38,
+    "rngDraws": 10046,
+    "checkpoints": [
+      {
+        "tick": 800,
+        "digest": "b0bc0df706612cdd"
+      },
+      {
+        "tick": 1600,
+        "digest": "3b20f5f89582f052"
+      },
+      {
+        "tick": 2400,
+        "digest": "b6d0ede2d05592dc"
+      },
+      {
+        "tick": 3200,
+        "digest": "8479ac0a9c2a2118"
+      },
+      {
+        "tick": 4000,
+        "digest": "735fab0838c4e4c6"
+      },
+      {
+        "tick": 4800,
+        "digest": "ad5dc815f69004eb"
+      },
+      {
+        "tick": 5600,
+        "digest": "40ef30167720ad5c"
+      },
+      {
+        "tick": 6400,
+        "digest": "d853477a4ce9a188"
+      },
+      {
+        "tick": 7200,
+        "digest": "3ca341dfbeccfdd5"
+      },
+      {
+        "tick": 8000,
+        "digest": "a94ca138e6014e76"
+      },
+      {
+        "tick": 8800,
+        "digest": "8768bab279d01100"
+      },
+      {
+        "tick": 9600,
+        "digest": "dc0baf45162b3a1b"
+      },
+      {
+        "tick": 10400,
+        "digest": "4e4ebd17b88233ed"
+      },
+      {
+        "tick": 11200,
+        "digest": "7cb504c62a9ddf0c"
+      },
+      {
+        "tick": 12000,
+        "digest": "11970510289d6a2e"
+      },
+      {
+        "tick": 12800,
+        "digest": "466433aa7faeffb8"
+      },
+      {
+        "tick": 13600,
+        "digest": "859637dd4485bfd3"
+      },
+      {
+        "tick": 14400,
+        "digest": "8e0fec0f15d5d945"
+      },
+      {
+        "tick": 15200,
+        "digest": "7a9933de18b41784"
+      },
+      {
+        "tick": 16000,
+        "digest": "20b0e6a84a4594e6"
+      }
+    ],
+    "digest": "64802ad883de6c16"
+  }
+}

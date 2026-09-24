@@ -137,13 +137,28 @@ describe("champions", () => {
   });
 
   it("swings every 56 ticks unless the class overrides it", () => {
-    // `ChampionBase.as:164`, `Fomor.as:12`, `Korath.as:25-46`.
+    // `ChampionBase.as:164`, `Fomor.as:12`, `Korath.as:25-46`. The ids are the
+    // stat table's, where G3 is Fomor, G4 is Korath and G5 is Krallen
+    // (`server/src/game-data/stats/championStats.ts:98-158`) — the override
+    // table named the wrong two when it landed, which made the damage bound of
+    // `docs/design/server-combat.md` §2.3 seven times too tight for a Fomor.
     expect(championAttackDelay("G1", 1)).toBe(56);
-    expect(championAttackDelay("G4", 1)).toBe(8);
-    expect(championAttackDelay("G5", 1)).toBe(72);
-    expect(championAttackDelay("G5", 2)).toBe(72);
-    expect(championAttackDelay("G5", 3)).toBe(80);
-    expect(championAttackDelay("G5", 9)).toBe(80);
+    expect(championAttackDelay("G2", 1)).toBe(56);
+    expect(championAttackDelay("G3", 1)).toBe(8);
+    expect(championAttackDelay("G3", 6)).toBe(8);
+    expect(championAttackDelay("G4", 1)).toBe(72);
+    expect(championAttackDelay("G4", 2)).toBe(72);
+    expect(championAttackDelay("G4", 3)).toBe(80);
+    expect(championAttackDelay("G4", 9)).toBe(80);
+    expect(championAttackDelay("G5", 1)).toBe(56);
+  });
+
+  it("names the champions the stat table names", () => {
+    // The delay overrides and the AoE table of `potential.ts` are both keyed by
+    // id, so a shifted id is a silent wrong answer rather than a failure.
+    expect(championByType(3)).toBe("G3");
+    expect(championByType(4)).toBe("G4");
+    expect(championByType(5)).toBe("G5");
   });
 });
 

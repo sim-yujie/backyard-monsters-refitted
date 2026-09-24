@@ -1,0 +1,228 @@
+{
+  "name": "mixed-waves",
+  "description": "Four flings over five minutes with a level 5 Korath and one pebble bomb; the bench case.",
+  "yard": "sandbox",
+  "kind": "main",
+  "levels": {
+    "C1": 6,
+    "C2": 6,
+    "C3": 6,
+    "C4": 6,
+    "C5": 6,
+    "C6": 6,
+    "C7": 6,
+    "C8": 6,
+    "C13": 6,
+    "C14": 6
+  },
+  "playerLevel": 12,
+  "tailTicks": 24000,
+  "log": {
+    "v": 1,
+    "seed": 90210,
+    "events": [
+      {
+        "kind": "fling",
+        "t": 400,
+        "x": -615,
+        "y": 115,
+        "r": 300,
+        "monsters": {
+          "C1": 120,
+          "C2": 30
+        },
+        "champion": {
+          "t": 5,
+          "l": 5
+        }
+      },
+      {
+        "kind": "bomb",
+        "t": 2400,
+        "x": 180,
+        "y": -480,
+        "id": "pb1"
+      },
+      {
+        "kind": "fling",
+        "t": 4800,
+        "x": 180,
+        "y": -480,
+        "r": 300,
+        "monsters": {
+          "C4": 40,
+          "C8": 20
+        }
+      },
+      {
+        "kind": "fling",
+        "t": 9600,
+        "x": 355,
+        "y": 375,
+        "r": 300,
+        "monsters": {
+          "C3": 40,
+          "C7": 30
+        }
+      },
+      {
+        "kind": "fling",
+        "t": 16000,
+        "x": 450,
+        "y": -470,
+        "r": 300,
+        "monsters": {
+          "C6": 30,
+          "C2": 30
+        }
+      }
+    ]
+  },
+  "expected": {
+    "ticks": 24000,
+    "damage": 99.64091528820408,
+    "destroyed": null,
+    "attackloot": {
+      "r1": 475622.4599999957,
+      "r2": 508388.2199999943,
+      "r3": 494767.43999999674,
+      "r4": 485878.4999999952
+    },
+    "defenderLoss": {
+      "r1": 425705,
+      "r2": 455065,
+      "r3": 442860,
+      "r4": 434895
+    },
+    "firedTraps": 0,
+    "destroyedBuildings": 82,
+    "creepsFlung": 340,
+    "creepsKilled": 157,
+    "championHp": 0,
+    "damagedBuildings": 82,
+    "rngDraws": 305864,
+    "checkpoints": [
+      {
+        "tick": 800,
+        "digest": "5d254506df1fd8bc"
+      },
+      {
+        "tick": 1600,
+        "digest": "bf3d303e37ff9bc4"
+      },
+      {
+        "tick": 2400,
+        "digest": "70ea8a6a84b54450"
+      },
+      {
+        "tick": 3200,
+        "digest": "cde642c5214c5843"
+      },
+      {
+        "tick": 4000,
+        "digest": "977bb7f6daa5dfd8"
+      },
+      {
+        "tick": 4800,
+        "digest": "4c7fbff203ce781c"
+      },
+      {
+        "tick": 5600,
+        "digest": "49545981ee5b65ab"
+      },
+      {
+        "tick": 6400,
+        "digest": "81e3793321f288cd"
+      },
+      {
+        "tick": 7200,
+        "digest": "f959260335f7d359"
+      },
+      {
+        "tick": 8000,
+        "digest": "0e7661b5c7b80133"
+      },
+      {
+        "tick": 8800,
+        "digest": "389e95702bb189ba"
+      },
+      {
+        "tick": 9600,
+        "digest": "06c6f043f5548a5d"
+      },
+      {
+        "tick": 10400,
+        "digest": "138201cbb6716545"
+      },
+      {
+        "tick": 11200,
+        "digest": "17d781c248940690"
+      },
+      {
+        "tick": 12000,
+        "digest": "27d0597c8ee3015a"
+      },
+      {
+        "tick": 12800,
+        "digest": "d7be62b08ff6ca36"
+      },
+      {
+        "tick": 13600,
+        "digest": "b2593461bb1e6123"
+      },
+      {
+        "tick": 14400,
+        "digest": "d01feea13c0b6f53"
+      },
+      {
+        "tick": 15200,
+        "digest": "cdf5fa1f7a4fae1d"
+      },
+      {
+        "tick": 16000,
+        "digest": "d2fce51e95ff76ec"
+      },
+      {
+        "tick": 16800,
+        "digest": "73effa4d2b03e8cb"
+      },
+      {
+        "tick": 17600,
+        "digest": "ebfb7bec593fbb16"
+      },
+      {
+        "tick": 18400,
+        "digest": "d6c31017b4810395"
+      },
+      {
+        "tick": 19200,
+        "digest": "8310ac650e7243a3"
+      },
+      {
+        "tick": 20000,
+        "digest": "3518853fa3715899"
+      },
+      {
+        "tick": 20800,
+        "digest": "fd67df58ecef0e62"
+      },
+      {
+        "tick": 21600,
+        "digest": "74e8f7217106f0cb"
+      },
+      {
+        "tick": 22400,
+        "digest": "be5b571990c3dc13"
+      },
+      {
+        "tick": 23200,
+        "digest": "98fbfd4aa2b7e37c"
+      },
+      {
+        "tick": 24000,
+        "digest": "a3702f2b4b7d2f1d"
+      }
+    ],
+    "digest": "a3702f2b4b7d2f1d"
+  }
+}

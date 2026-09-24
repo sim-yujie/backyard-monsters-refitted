@@ -1,0 +1,172 @@
+{
+  "name": "pokey-rush",
+  "description": "300 level-1 Pokeys, one fling into the south-west corner.",
+  "yard": "sandbox",
+  "kind": "main",
+  "levels": {},
+  "playerLevel": 20,
+  "tailTicks": 24000,
+  "log": {
+    "v": 1,
+    "seed": 1834027731,
+    "events": [
+      {
+        "kind": "fling",
+        "t": 480,
+        "x": -615,
+        "y": 115,
+        "r": 300,
+        "monsters": {
+          "C1": 300
+        }
+      }
+    ]
+  },
+  "expected": {
+    "ticks": 24480,
+    "damage": 74.66859405029814,
+    "destroyed": null,
+    "attackloot": {
+      "r1": 396522,
+      "r2": 393930,
+      "r3": 392580,
+      "r4": 400356
+    },
+    "defenderLoss": {
+      "r1": 440100,
+      "r2": 437220,
+      "r3": 435720,
+      "r4": 444360
+    },
+    "firedTraps": 0,
+    "destroyedBuildings": 50,
+    "creepsFlung": 300,
+    "creepsKilled": 169,
+    "championHp": null,
+    "damagedBuildings": 52,
+    "rngDraws": 391875,
+    "checkpoints": [
+      {
+        "tick": 800,
+        "digest": "c5b98396a224f05c"
+      },
+      {
+        "tick": 1600,
+        "digest": "09aa113c5ba5bc4a"
+      },
+      {
+        "tick": 2400,
+        "digest": "0f7a43941ed6715a"
+      },
+      {
+        "tick": 3200,
+        "digest": "03ba5606477345e0"
+      },
+      {
+        "tick": 4000,
+        "digest": "0665536e5de86b78"
+      },
+      {
+        "tick": 4800,
+        "digest": "048844355f09a933"
+      },
+      {
+        "tick": 5600,
+        "digest": "3d9bcc567868e31c"
+      },
+      {
+        "tick": 6400,
+        "digest": "fcc89718ccb9306e"
+      },
+      {
+        "tick": 7200,
+        "digest": "1d4598336f9ddc25"
+      },
+      {
+        "tick": 8000,
+        "digest": "10b49412669f35a8"
+      },
+      {
+        "tick": 8800,
+        "digest": "14be580ad6fe3970"
+      },
+      {
+        "tick": 9600,
+        "digest": "f23c097a6b994408"
+      },
+      {
+        "tick": 10400,
+        "digest": "99f1d237e71d5b45"
+      },
+      {
+        "tick": 11200,
+        "digest": "808c0a07c6082d85"
+      },
+      {
+        "tick": 12000,
+        "digest": "21fdc4b5ead99efb"
+      },
+      {
+        "tick": 12800,
+        "digest": "a35d699f1c98fa45"
+      },
+      {
+        "tick": 13600,
+        "digest": "3cbae2d8ae1b5d1e"
+      },
+      {
+        "tick": 14400,
+        "digest": "10c7869167e42fa7"
+      },
+      {
+        "tick": 15200,
+        "digest": "e3744d0ce3a37d82"
+      },
+      {
+        "tick": 16000,
+        "digest": "5ec2b6b674ef6d18"
+      },
+      {
+        "tick": 16800,
+        "digest": "7680ba8b522634e1"
+      },
+      {
+        "tick": 17600,
+        "digest": "d65d4ca2521bccf0"
+      },
+      {
+        "tick": 18400,
+        "digest": "e30413b74df95c55"
+      },
+      {
+        "tick": 19200,
+        "digest": "7576f09517f60c7b"
+      },
+      {
+        "tick": 20000,
+        "digest": "7b39316ce2dd24de"
+      },
+      {
+        "tick": 20800,
+        "digest": "db4ab38012330366"
+      },
+      {
+        "tick": 21600,
+        "digest": "f6c4264c0b25c0c6"
+      },
+      {
+        "tick": 22400,
+        "digest": "2688c7040dccd65a"
+      },
+      {
+        "tick": 23200,
+        "digest": "7f7f89b95ac2e07b"
+      },
+      {
+        "tick": 24000,
+        "digest": "8be3d3765ecfa738"
+      }
+    ],
+    "digest": "00d8cf7aaadd7a94"
+  }
+}

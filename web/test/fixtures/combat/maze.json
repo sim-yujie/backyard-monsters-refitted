@@ -1,0 +1,169 @@
+{
+  "name": "maze",
+  "description": "Eye-ras and Crabatrons against the sandbox yard's 400 walls.",
+  "yard": "sandbox",
+  "kind": "main",
+  "levels": {
+    "C1": 6,
+    "C2": 6,
+    "C3": 6,
+    "C4": 6,
+    "C5": 6,
+    "C6": 6,
+    "C7": 6,
+    "C8": 6,
+    "C13": 6,
+    "C14": 6
+  },
+  "playerLevel": 20,
+  "tailTicks": 16000,
+  "log": {
+    "v": 1,
+    "seed": 7,
+    "events": [
+      {
+        "kind": "fling",
+        "t": 240,
+        "x": -615,
+        "y": 115,
+        "r": 300,
+        "monsters": {
+          "C5": 24
+        }
+      },
+      {
+        "kind": "fling",
+        "t": 3200,
+        "x": -615,
+        "y": 115,
+        "r": 300,
+        "monsters": {
+          "C8": 40
+        }
+      }
+    ]
+  },
+  "expected": {
+    "ticks": 19200,
+    "damage": 81.69259326182302,
+    "destroyed": null,
+    "attackloot": {
+      "r1": 399600,
+      "r2": 390240,
+      "r3": 386640,
+      "r4": 408960
+    },
+    "defenderLoss": {
+      "r1": 443520,
+      "r2": 433120,
+      "r3": 429120,
+      "r4": 453920
+    },
+    "firedTraps": 0,
+    "destroyedBuildings": 216,
+    "creepsFlung": 64,
+    "creepsKilled": 38,
+    "championHp": null,
+    "damagedBuildings": 219,
+    "rngDraws": 55846,
+    "checkpoints": [
+      {
+        "tick": 800,
+        "digest": "bd8224d1d73ae50b"
+      },
+      {
+        "tick": 1600,
+        "digest": "88618f6e8b5d9f34"
+      },
+      {
+        "tick": 2400,
+        "digest": "ad337b6d61bbe383"
+      },
+      {
+        "tick": 3200,
+        "digest": "e683463e16e7a484"
+      },
+      {
+        "tick": 4000,
+        "digest": "834261ff34f4e54d"
+      },
+      {
+        "tick": 4800,
+        "digest": "228f399667383d34"
+      },
+      {
+        "tick": 5600,
+        "digest": "834f41ca6f6e1b24"
+      },
+      {
+        "tick": 6400,
+        "digest": "e4d6907b3970a311"
+      },
+      {
+        "tick": 7200,
+        "digest": "3d7cac23ec354479"
+      },
+      {
+        "tick": 8000,
+        "digest": "399d4dd10b5fc313"
+      },
+      {
+        "tick": 8800,
+        "digest": "a59c80a4e96ef322"
+      },
+      {
+        "tick": 9600,
+        "digest": "7a22914507c0f70b"
+      },
+      {
+        "tick": 10400,
+        "digest": "c38842cfdf4b4879"
+      },
+      {
+        "tick": 11200,
+        "digest": "41f028af80e4f5f5"
+      },
+      {
+        "tick": 12000,
+        "digest": "daaa12a8cdfbf9ce"
+      },
+      {
+        "tick": 12800,
+        "digest": "3496dde984edc3a7"
+      },
+      {
+        "tick": 13600,
+        "digest": "960b4c5c9d702052"
+      },
+      {
+        "tick": 14400,
+        "digest": "7c6a2ab7ac47f25d"
+      },
+      {
+        "tick": 15200,
+        "digest": "d1e5ff80665c98c6"
+      },
+      {
+        "tick": 16000,
+        "digest": "6f6579cde087537b"
+      },
+      {
+        "tick": 16800,
+        "digest": "bf0721daab6b2a0c"
+      },
+      {
+        "tick": 17600,
+        "digest": "1935662741d04a25"
+      },
+      {
+        "tick": 18400,
+        "digest": "e973ee11debce98b"
+      },
+      {
+        "tick": 19200,
+        "digest": "749f2d47febfca21"
+      }
+    ],
+    "digest": "749f2d47febfca21"
+  }
+}

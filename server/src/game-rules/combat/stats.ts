@@ -286,10 +286,10 @@ export const CHAMPION_ATTACK_DELAY_DEFAULT = 56;
 
 /** Per-champion overrides, indexed by level minus one where the ladder varies. */
 export const CHAMPION_ATTACK_DELAY: Readonly<Record<string, readonly number[]>> = {
-  // Fomor, `champions/Fomor.as:12`
-  G4: [8],
-  // Korath, `champions/Korath.as:25-46`
-  G5: [72, 72, 80, 80, 80, 80],
+  // Fomor is G3, `champions/Fomor.as:12`
+  G3: [8],
+  // Korath is G4, `champions/Korath.as:25-46`
+  G4: [72, 72, 80, 80, 80, 80],
 };
 
 /** A champion's swing interval in fast ticks at one level. */
