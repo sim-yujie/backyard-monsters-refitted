@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { LAYOUT_VERSION, type BaseLoadResponse, type BuildingData } from "@/api/types";
+import {
+  LAYOUT_VERSION,
+  type BaseLoadResponse,
+  type BuildingData,
+  type Layout,
+} from "@/api/types";
 import type { Camera } from "@/game/Camera";
 import type { Point, Rect } from "../YardGrid";
 import { readYard, type Yard, type YardBuilding } from "../yardModel";
@@ -65,6 +70,9 @@ const yardOf = (buildings: readonly BuildingData[]): Yard =>
     currenttime: 1_700_000_000,
     savetime: 1_700_000_000,
     storedata: { ENL: { q: 0 } },
+    // Enough of everything that a planned upgrade is never held back for
+    // resources: what these tests are about is workers, undo and the stack.
+    resources: { r1: 1e9, r2: 1e9, r3: 1e9, r4: 1e9 },
     buildingdata: Object.fromEntries(buildings.map((entry) => [String(entry.id), entry])),
     mushrooms: { l: [] },
   } as unknown as BaseLoadResponse);
@@ -807,6 +815,210 @@ describe("read-only", () => {
     harness.release(by(ONE, 100, 0));
 
     expect(at(harness, 1)).toEqual({ x: 100, y: 0 });
+  });
+});
+
+/* ── F1: planned upgrades ────────────────────────────────────────────────── */
+
+/** The three-building yard plus a level 10 Town Hall, so gates are clear. */
+const WITH_HALL: readonly BuildingData[] = [...BUILDINGS, { id: 4, t: 14, X: 300, Y: 200, l: 10 }];
+
+/** A layout naming one tower, with a plan on it. */
+const plannedLayout = (over: Partial<Layout> = {}): Layout => ({
+  slot: 1,
+  name: "Towers",
+  version: LAYOUT_VERSION,
+  expansion: 0,
+  updatedAt: 1_700_000_000,
+  nodes: [{ id: 1, t: 20, x: 400, y: 200, plan: { level: 4, order: 0 } }],
+  ...over,
+});
+
+describe("planning an upgrade", () => {
+  it("is one undo entry, and dirties the plan like any other edit", () => {
+    const harness = planner();
+
+    expect(harness.session.setPlanLevel([1], 3)).toBe(1);
+
+    const state = harness.session.state();
+    expect(state.plannedCount).toBe(1);
+    expect(state.dirty).toBe(true);
+    expect(state.canUndo).toBe(true);
+    expect(state.undoLabel).toBe("Plan Cannon Tower to L3");
+
+    harness.session.undo();
+    expect(harness.session.state().plannedCount).toBe(0);
+    expect(harness.session.plan.get(1)!.plan).toBeNull();
+  });
+
+  it("plans a whole selection in one command", () => {
+    const harness = planner();
+
+    expect(harness.session.setPlanLevel([1, 2], 2)).toBe(2);
+    expect(harness.session.state().undoLabel).toBe("Plan 2 buildings to L2");
+
+    harness.session.undo();
+    expect(harness.session.state().plannedCount).toBe(0);
+  });
+
+  it("counts only what actually changed", () => {
+    const harness = planner();
+    harness.session.setPlanLevel([1], 2);
+
+    // The wall is a Block at level 1, which can be planned; the same level
+    // again on the tower is not a change.
+    expect(harness.session.setPlanLevel([1, 3], 2)).toBe(1);
+    expect(harness.session.state().plannedCount).toBe(2);
+  });
+
+  it("clears a plan, and says so on the undo button", () => {
+    const harness = planner();
+    harness.session.setPlanLevel([1], 5);
+
+    expect(harness.session.setPlanLevel([1], null)).toBe(1);
+    expect(harness.session.state().undoLabel).toBe("Clear plan on Cannon Tower");
+    expect(harness.session.state().plannedCount).toBe(0);
+
+    harness.session.undo();
+    expect(harness.session.plan.get(1)!.plan).toEqual({ level: 5, order: 0 });
+  });
+
+  it("pushes nothing when every building refuses", () => {
+    const harness = planner();
+    // Level 1 is the level they are at.
+    expect(harness.session.setPlanLevel([1, 2], 1)).toBe(0);
+    expect(harness.session.state().canUndo).toBe(false);
+    expect(harness.session.state().dirty).toBe(false);
+  });
+
+  it("lists the planned buildings in walk order and by id", () => {
+    const harness = planner();
+    harness.session.setPlanLevel([2], 2);
+    harness.session.setPlanLevel([1], 3);
+
+    expect(harness.session.plannedNodes().map((node) => node.id)).toEqual([2, 1]);
+    expect(harness.session.plannedLevels()).toEqual(
+      new Map([
+        [1, 3],
+        [2, 2],
+      ]),
+    );
+  });
+
+  it("is refused outright in a read-only session", () => {
+    const harness = planner({ readOnly: true });
+
+    expect(harness.session.setPlanLevel([1], 3)).toBe(0);
+    expect(harness.session.state().plannedCount).toBe(0);
+    expect(harness.session.state().canUndo).toBe(false);
+  });
+});
+
+describe("the Apply preview through the session", () => {
+  it("starts one job per free worker and holds the rest back", () => {
+    // One worker: `storedata` has no `BEW`, so the second tower waits.
+    const harness = planner({ buildings: WITH_HALL });
+    harness.session.setPlanLevel([1], 2);
+    harness.session.setPlanLevel([2], 2);
+
+    const preview = harness.session.applyPreview();
+    expect(preview.workers.total).toBe(1);
+    expect(preview.started.map((row) => row.id)).toEqual([1]);
+    expect(preview.waiting.map((row) => row.id)).toEqual([2]);
+  });
+
+  it("adds warning rows to the checklist that do not block Apply", () => {
+    const harness = planner({ buildings: WITH_HALL });
+    harness.session.setPlanLevel([1], 2);
+    harness.session.setPlanLevel([2], 2);
+
+    const checklist = harness.session.checklist();
+    const workers = checklist.rows.find((row) => row.key === "upgradeWorkers")!;
+
+    expect(workers.warning).toBe(true);
+    expect(workers.ok).toBe(false);
+    expect(workers.items.map((item) => item.id)).toEqual([2]);
+    // A warning never stops Apply, and never outlines anything in red.
+    expect(checklist.ok).toBe(true);
+    expect(harness.faulted().has(2)).toBe(false);
+  });
+
+  it("leaves the upgrade rows out entirely when nothing is planned", () => {
+    const harness = planner({ buildings: WITH_HALL });
+    const keys = harness.session.checklist().rows.map((row) => row.key);
+
+    expect(keys).toEqual(["placed", "overlap", "bounds"]);
+  });
+});
+
+describe("loading a layout with plans", () => {
+  it("moves and plans in one undo entry", () => {
+    const harness = planner();
+    const result = harness.session.load(plannedLayout());
+
+    expect(result.plans).toHaveLength(1);
+    expect(harness.session.plan.get(1)!.plan).toEqual({ level: 4, order: 0 });
+    expect(at(harness, 1)).toEqual({ x: 400, y: 200 });
+    expect(harness.session.state().undoLabel).toBe("Load “Towers”");
+
+    harness.session.undo();
+    expect(harness.session.plan.get(1)!.plan).toBeNull();
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    // One entry, not two.
+    expect(harness.session.state().canUndo).toBe(false);
+  });
+
+  it("reports the plans it had to drop", () => {
+    const harness = planner();
+    const result = harness.session.load(
+      plannedLayout({ nodes: [{ id: 1, t: 20, x: 400, y: 200, plan: { level: 99, order: 0 } }] }),
+    );
+
+    expect(result.plans).toEqual([]);
+    expect(result.plansDropped).toBe(1);
+    expect(harness.session.state().plannedCount).toBe(0);
+  });
+
+  it("puts plans back when a preview is dismissed", () => {
+    const harness = planner();
+    harness.session.setPlanLevel([2], 6);
+
+    harness.session.load(plannedLayout(), { preview: true });
+    expect(harness.session.plan.get(1)!.plan).toEqual({ level: 4, order: 0 });
+
+    harness.session.dismissPreview();
+    expect(harness.session.plan.get(1)!.plan).toBeNull();
+    // The plan made before the preview is still there afterwards.
+    expect(harness.session.plan.get(2)!.plan).toEqual({ level: 6, order: 0 });
+    expect(harness.session.state().dirty).toBe(true);
+  });
+});
+
+describe("rebase against a plan", () => {
+  it("drops a plan the yard has caught up with and reports it", () => {
+    const harness = planner();
+    harness.session.setPlanLevel([1], 2);
+
+    const result = harness.session.rebase(
+      yardOf(BUILDINGS.map((one) => (one.id === 1 ? { ...one, l: 2 } : one))),
+    );
+
+    expect(result.plansDropped).toEqual([1]);
+    expect(harness.session.state().plannedCount).toBe(0);
+  });
+
+  it("measures the preview against the yard it was handed", () => {
+    const harness = planner({ buildings: WITH_HALL });
+    harness.session.setPlanLevel([1], 2);
+
+    // The tower is now mid-upgrade, so Apply would skip it as busy.
+    harness.session.rebase(
+      yardOf(WITH_HALL.map((one) => (one.id === 1 ? { ...one, cU: 600 } : one))),
+    );
+
+    expect(harness.session.applyPreview().skipped).toEqual([
+      { id: 1, t: 20, reason: "busy", from: 1, to: 2 },
+    ]);
   });
 });
 

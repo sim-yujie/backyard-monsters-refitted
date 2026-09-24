@@ -25,6 +25,9 @@ const node = (over: Partial<PlanNode> & { id: number }): PlanNode => ({
   fort: 0,
   decoration: false,
   fixed: false,
+  plan: null,
+  busy: false,
+  damaged: false,
   ...over,
 });
 

@@ -1,6 +1,8 @@
+import { kindOf, maxLevel } from "../buildingCosts";
+import { holdsWorker } from "../workers";
 import { footprintOf } from "../YardGrid";
 import type { Yard } from "../yardModel";
-import type { MoveEntry } from "./commands";
+import type { MoveEntry, PlanEntry } from "./commands";
 import {
   inBounds,
   isDecoration,
@@ -9,6 +11,7 @@ import {
   validateOffset,
   validatePlan,
   validateTargets,
+  type NodePlan,
   type PlacementIssue,
   type PlacementResult,
   type PlanNode,
@@ -80,7 +83,34 @@ export interface AbsorbResult {
   readonly removed: number[];
   /** Buildings whose level or fortification moved. */
   readonly changed: number[];
+  /**
+   * Buildings whose planned upgrade the yard caught up with, and which
+   * therefore no longer have one.
+   *
+   * Reported rather than silently dropped because the batch wall upgrade
+   * raises four hundred walls at once and a bar that quietly loses four
+   * hundred plans looks like a bug (`docs/design/planner-upgrades.md` §2.3).
+   */
+  readonly plansDropped: number[];
 }
+
+/**
+ * Types that have no ladder to plan an upgrade along.
+ *
+ * The same three kinds the server refuses a plan on
+ * (`server/src/services/yardplanner/validateLayout.ts`,
+ * `UNPLANNABLE_KINDS`), so a level this accepts is never a level Apply
+ * answers with a 400.
+ */
+const UNPLANNABLE_KINDS: ReadonlySet<string> = new Set([
+  "decoration",
+  "mushroom",
+  "placeholder",
+]);
+
+/** Whether a type can be planned an upgrade at all. */
+export const plannableType = (type: number): boolean =>
+  maxLevel(type) > 0 && !UNPLANNABLE_KINDS.has(kindOf(type));
 
 export class Plan {
   readonly plot: PlotBounds;
@@ -122,6 +152,9 @@ export class Plan {
         fort: building.fortification,
         decoration: isDecoration(building.type),
         fixed: false,
+        plan: null,
+        busy: holdsWorker(building),
+        damaged: building.hp !== null,
       });
     }
 
@@ -137,6 +170,9 @@ export class Plan {
         fort: 0,
         decoration: false,
         fixed: true,
+        plan: null,
+        busy: false,
+        damaged: false,
       });
     }
 
@@ -164,6 +200,102 @@ export class Plan {
   /** Buildings only: what a layout saves and what Apply moves. */
   buildings(): PlanNode[] {
     return [...this.nodes.values()].filter((node) => !node.fixed);
+  }
+
+  /* ── Planned upgrades ───────────────────────────────────────────────── */
+
+  /**
+   * Every building with a planned upgrade, in the order Apply will walk them:
+   * ascending `plan.order`, ties broken by id.
+   *
+   * The same sort the server's walk uses
+   * (`server/src/services/yardplanner/startUpgrades.ts`), so the preview and
+   * the walk agree on which job runs out of workers.
+   */
+  plannedNodes(): PlanNode[] {
+    return [...this.nodes.values()]
+      .filter((node) => node.plan !== null)
+      .sort((a, b) => a.plan!.order - b.plan!.order || a.id - b.id);
+  }
+
+  /** How many buildings have a plan. */
+  get plannedCount(): number {
+    let count = 0;
+    for (const node of this.nodes.values()) if (node.plan) count++;
+    return count;
+  }
+
+  /** Planned target level by building id, for the canvas badge and the tiles. */
+  plannedLevels(): ReadonlyMap<number, number> {
+    const levels = new Map<number, number>();
+    for (const node of this.nodes.values()) {
+      if (node.plan) levels.set(node.id, node.plan.level);
+    }
+    return levels;
+  }
+
+  /**
+   * Plans an upgrade on one building, or clears the plan with `null`.
+   *
+   * Returns what changed so the caller can push it onto the undo stack, or
+   * null when nothing did — which is also how a refusal reads, because every
+   * refusal here is a thing the player cannot be shown a button for anyway:
+   *
+   * - a mushroom or anything else fixed, and any type with no ladder;
+   * - a **busy** or **damaged** building, which is F1 rule 3 (design
+   *   `yard-planner-redesign.md:131-134`) and which Apply would skip;
+   * - a level at or below the one the building already has, or past the top of
+   *   its ladder, which is the shape fault the server answers with a 400.
+   *
+   * A **gated** level is not refused. A player raising their Town Hall in the
+   * same plan wants the tower behind it queued too; Apply reports what it
+   * could not start (§8, Q5).
+   *
+   * `order` is kept when only the level changes, so re-aiming a plan does not
+   * send it to the back of the queue, and is `max(order) + 1` for a new one.
+   */
+  setPlan(id: number, level: number | null): PlanEntry | null {
+    const node = this.nodes.get(id);
+    if (!node || node.fixed) return null;
+
+    const before = node.plan;
+
+    if (level === null) {
+      if (!before) return null;
+      node.plan = null;
+      return { id, before, after: null };
+    }
+
+    if (node.busy || node.damaged) return null;
+    if (!plannableType(node.type)) return null;
+    if (level <= node.level || level > maxLevel(node.type)) return null;
+    if (before && before.level === level) return null;
+
+    const after: NodePlan = { level, order: before ? before.order : this.nextOrder() };
+    node.plan = after;
+    return { id, before, after };
+  }
+
+  /**
+   * Applies or reverses recorded plan changes. The undo stack's only writer
+   * for plans, the counterpart of {@link move}.
+   */
+  setPlans(entries: readonly PlanEntry[], reverse: boolean): void {
+    for (const entry of entries) {
+      const node = this.nodes.get(entry.id);
+      // As `move`: the stack can outlive a rebase that dropped the building.
+      if (!node) continue;
+      node.plan = reverse ? entry.before : entry.after;
+    }
+  }
+
+  /** The order a plan made now would take: one past the last one planned. */
+  private nextOrder(): number {
+    let highest = -1;
+    for (const node of this.nodes.values()) {
+      if (node.plan && node.plan.order > highest) highest = node.plan.order;
+    }
+    return highest + 1;
   }
 
   /** Whether a building is somewhere other than where the yard had it. */
@@ -369,6 +501,7 @@ export class Plan {
     const added: number[] = [];
     const removed: number[] = [];
     const changed: number[] = [];
+    const plansDropped: number[] = [];
 
     for (const building of yard.buildings) {
       seen.add(building.id);
@@ -387,6 +520,9 @@ export class Plan {
           fort: building.fortification,
           decoration: isDecoration(building.type),
           fixed: false,
+          plan: null,
+          busy: holdsWorker(building),
+          damaged: building.hp !== null,
         });
         added.push(building.id);
         continue;
@@ -396,6 +532,19 @@ export class Plan {
         node.level = building.level;
         node.fort = building.fortification;
         changed.push(node.id);
+      }
+      // Whether a building is on a job or wants repairing is the server's
+      // answer too, and both decide whether its plan can still start.
+      node.busy = holdsWorker(building);
+      node.damaged = building.hp !== null;
+
+      // A plan the yard has reached is finished, not pending: a batch wall
+      // upgrade that raised four hundred blocks to level 5 has done exactly
+      // what four hundred plans asked for, and leaving them set would have the
+      // bar charge for them again and Apply skip them as `caughtUp`.
+      if (node.plan && building.level >= node.plan.level) {
+        node.plan = null;
+        plansDropped.push(node.id);
       }
     }
 
@@ -407,7 +556,7 @@ export class Plan {
       removed.push(node.id);
     }
 
-    return { added, removed, changed };
+    return { added, removed, changed, plansDropped };
   }
 
   /**
@@ -439,6 +588,9 @@ export class Plan {
       fort: 0,
       decoration: isDecoration(type),
       fixed: false,
+      plan: null,
+      busy: false,
+      damaged: false,
     };
 
     if (!inBounds(probe, x, y, this.plot)) {

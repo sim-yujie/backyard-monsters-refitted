@@ -10,7 +10,7 @@ import {
   type Rect,
   type YardBounds,
 } from "./YardGrid";
-import { busyWorkers, workerCount } from "./workers";
+import { busyWorkers, sharperToolsMultiplier, workerCount } from "./workers";
 
 /**
  * The yard, in the form the renderer and the panels want it.
@@ -123,6 +123,16 @@ export interface Yard {
    * planner needs both numbers to say how many planned upgrades can start.
    */
   readonly workers: YardWorkers;
+  /**
+   * What an upgrade's table time is multiplied by to get its countdown: 0.8
+   * while Sharper Tools is running, otherwise 1 (`GLOBAL._buildTime`,
+   * `client/scripts/BFOUNDATION.as:2295`).
+   *
+   * Read once at load, from the same `storedata.BST.e` the server reads when
+   * Apply writes `cU`, so the planner's "15m 0s" and the countdown the yard
+   * comes back with are the same number.
+   */
+  readonly buildTime: number;
   /** Unix seconds the save was taken at; countdowns are measured from it. */
   readonly savedAt: number;
 }
@@ -285,6 +295,9 @@ export const readYard = (response: BaseLoadResponse): Yard => {
       total: workerCount(response.storedata),
       busy: busyWorkers({ buildings }),
     },
+    // Against the server's clock rather than the browser's: a buff that has
+    // seconds left on one and not the other is the server's call to make.
+    buildTime: sharperToolsMultiplier(response.storedata, response.currenttime ?? savedAt),
     savedAt,
   };
 };

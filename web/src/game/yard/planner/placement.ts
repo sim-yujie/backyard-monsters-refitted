@@ -51,12 +51,26 @@ const GRID_ORIGIN_X = DECORATION_WIDTH / 2;
 const GRID_ORIGIN_Y = DECORATION_HEIGHT / 2;
 
 /**
+ * A planned upgrade on one node (`docs/design/planner-upgrades.md` §2.1).
+ *
+ * Immutable, so the undo stack can hold the value that was there before an
+ * edit rather than a copy of it. `level` is the target the player wants and
+ * `order` their place in the queue: Apply walks plans in ascending `order`,
+ * ties broken by id, so the order they planned in is the order they get.
+ */
+export interface NodePlan {
+  readonly level: number;
+  readonly order: number;
+}
+
+/**
  * One building in the plan.
  *
- * Positions, level and fortification are mutable; identity and footprint are
- * not. The level moves because a batch action can change it under the plan —
- * `Plan.absorb` takes the server's word for it after a wall upgrade rather than
- * rebuilding the plan and losing every drag the player has made.
+ * Positions, level, fortification and the planned upgrade are mutable;
+ * identity and footprint are not. The level moves because a batch action can
+ * change it under the plan — `Plan.absorb` takes the server's word for it
+ * after a wall upgrade rather than rebuilding the plan and losing every drag
+ * the player has made.
  */
 export interface PlanNode {
   readonly id: number;
@@ -72,6 +86,33 @@ export interface PlanNode {
   readonly decoration: boolean;
   /** Mushrooms: obstacles the planner may not move. */
   readonly fixed: boolean;
+  /**
+   * The upgrade the player has planned for this building, or null.
+   *
+   * Carried on the node rather than in a side table because every path that
+   * reads a plan — the save, the load, the badge, the bar's totals, the Apply
+   * preview — already has the node in hand.
+   */
+  plan: NodePlan | null;
+  /**
+   * A build, upgrade or fortify countdown is running on this building.
+   *
+   * One of the two facts about the yard the placement layer carries, because
+   * F1 rule 3 refuses to plan an upgrade on a busy building and the Apply walk
+   * skips one (`docs/design/planner-upgrades.md` §3.4). A rebuild does not
+   * count: it holds no worker (spec `docs/specs/base-building.md:784-786`).
+   */
+  busy: boolean;
+  /**
+   * The save carries a health reading for this building.
+   *
+   * Any reading at all, not only one under half maximum: the server refuses to
+   * upgrade a building whose save row has `hp`, or which appears in
+   * `buildinghealthdata` (`server/src/services/yardplanner/startUpgrades.ts`,
+   * `isDamaged`), so the planner reads damage the same way rather than the way
+   * the art does.
+   */
+  damaged: boolean;
 }
 
 /** An absolute spot in yard units. What a group operation answers with. */

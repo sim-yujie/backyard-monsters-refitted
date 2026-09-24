@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import { readYard } from "./yardModel";
-import { busyWorkers, freeWorkers, WORKER_CAP, workerCount } from "./workers";
+import {
+  busyWorkers,
+  freeWorkers,
+  holdsWorker,
+  SHARPER_TOOLS_MULTIPLIER,
+  sharperToolsMultiplier,
+  WORKER_CAP,
+  workerCount,
+} from "./workers";
 
 /**
  * The client half of the worker rules, read over a `readYard` yard so that a
@@ -114,5 +122,47 @@ describe("the yard's worker figures", () => {
     const yard = yardWith({ ...tower(1, { cU: 900 }), ...tower(2, { cU: 900 }) });
     expect(yard.workers).toEqual({ total: 1, busy: 2 });
     expect(freeWorkers(yard)).toBe(0);
+  });
+});
+
+describe("holdsWorker", () => {
+  it("is true for the three countdowns that take a worker and false otherwise", () => {
+    const kinds = (extra: Record<string, number>): boolean =>
+      holdsWorker(yardWith(tower(1, extra)).buildings[0]!);
+
+    expect(kinds({ cB: 60 })).toBe(true);
+    expect(kinds({ cU: 900 })).toBe(true);
+    expect(kinds({ cF: 30 })).toBe(true);
+    expect(kinds({ cR: 300 })).toBe(false);
+    expect(kinds({})).toBe(false);
+  });
+});
+
+describe("sharperToolsMultiplier", () => {
+  const NOW = 1_000_000;
+
+  it("shortens a countdown by a fifth while the buff runs", () => {
+    expect(sharperToolsMultiplier({ BST: { e: NOW + 1 } }, NOW)).toBe(SHARPER_TOOLS_MULTIPLIER);
+    expect(SHARPER_TOOLS_MULTIPLIER).toBe(0.8);
+  });
+
+  it("is 1 once it has expired, and for a yard that never bought it", () => {
+    expect(sharperToolsMultiplier({ BST: { e: NOW } }, NOW)).toBe(1);
+    expect(sharperToolsMultiplier({ BST: { e: NOW - 1 } }, NOW)).toBe(1);
+    expect(sharperToolsMultiplier({}, NOW)).toBe(1);
+    expect(sharperToolsMultiplier(null, NOW)).toBe(1);
+    expect(sharperToolsMultiplier({ BST: {} }, NOW)).toBe(1);
+  });
+
+  it("is what the yard carries as its build time", () => {
+    expect(readYard(fixture as unknown as BaseLoadResponse).buildTime).toBe(1);
+    const buffed = readYard({
+      error: 0,
+      currenttime: NOW,
+      savetime: NOW,
+      buildingdata: {},
+      storedata: { BST: { e: NOW + 3_600 } },
+    } as unknown as BaseLoadResponse);
+    expect(buffed.buildTime).toBe(0.8);
   });
 });

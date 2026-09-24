@@ -12,6 +12,8 @@
  * this file stays a stack and the plan stays the thing being changed.
  */
 
+import type { NodePlan } from "./placement";
+
 /** Depth the design doc specifies. */
 export const UNDO_DEPTH = 200;
 
@@ -31,6 +33,20 @@ export interface MoveEntry {
   readonly fromY: number;
   readonly toX: number;
   readonly toY: number;
+}
+
+/**
+ * One building's planned upgrade before and after an edit.
+ *
+ * Whole values rather than a level, because clearing a plan and setting one
+ * are the same edit from the stack's point of view and because `order` has to
+ * come back exactly as it was: undoing a re-aimed plan that kept its place in
+ * the queue must not send it to the back.
+ */
+export interface PlanEntry {
+  readonly id: number;
+  readonly before: NodePlan | null;
+  readonly after: NodePlan | null;
 }
 
 /** A position no stack can ever be at, so `isClean` stays false forever. */
@@ -182,4 +198,46 @@ export const moveCommand = (
   label,
   apply: () => move(entries, false),
   revert: () => move(entries, true),
+});
+
+/**
+ * A planned upgrade set or cleared on one or more buildings.
+ *
+ * The same shape as a move for the same reason: planning ten towers to level 5
+ * from a multi-selection is one press and has to be one Ctrl+Z, and the stack
+ * should not have to know which kind of edit it is holding.
+ */
+export const planCommand = (
+  entries: readonly PlanEntry[],
+  setPlans: (entries: readonly PlanEntry[], reverse: boolean) => void,
+  label: string,
+): PlanCommand => ({
+  label,
+  apply: () => setPlans(entries, false),
+  revert: () => setPlans(entries, true),
+});
+
+/**
+ * Several commands as one undo entry, applied in order and reverted in
+ * reverse.
+ *
+ * Loading a layout moves buildings *and* restores the upgrades that were
+ * planned when it was saved. Those are two kinds of edit and the player made
+ * one gesture, so they go on the stack as one command rather than two the
+ * player has to undo twice to get back where they were.
+ *
+ * Reverting backwards is not decoration: it is the only order that puts the
+ * plan back when two commands in the list touch the same building.
+ */
+export const compositeCommand = (
+  label: string,
+  parts: readonly PlanCommand[],
+): PlanCommand => ({
+  label,
+  apply: () => {
+    for (const part of parts) part.apply();
+  },
+  revert: () => {
+    for (let index = parts.length - 1; index >= 0; index--) parts[index]!.revert();
+  },
 });

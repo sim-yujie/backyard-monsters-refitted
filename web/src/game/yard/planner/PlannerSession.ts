@@ -3,8 +3,16 @@ import type { Camera } from "@/game/Camera";
 import type { Point, Rect } from "../YardGrid";
 import type { Yard } from "../yardModel";
 import type { YardRenderer, YardView } from "../YardRenderer";
+import { buildingName } from "../buildingArt";
 import { buildChecklist, type Checklist } from "./checklist";
-import { CommandStack, moveCommand, type MoveEntry } from "./commands";
+import {
+  CommandStack,
+  compositeCommand,
+  moveCommand,
+  planCommand,
+  type MoveEntry,
+  type PlanEntry,
+} from "./commands";
 import { groupTargets, GroupOp, GROUP_OPS } from "./groupTools";
 import { planLoad, payloadFor, type LoadResult } from "./layout";
 import { rectFromCorners } from "./marquee";
@@ -13,6 +21,7 @@ import { Grab, PlannerInput } from "./PlannerInput";
 import { PlannerView } from "./PlannerView";
 import { Plan, type AbsorbResult } from "./plan";
 import { plannerAction } from "./shortcuts";
+import { previewApply, type ApplyPreview } from "./upgrades";
 
 /**
  * Planner mode: the state a yard is in while it is being rearranged.
@@ -38,6 +47,13 @@ export const PlannerTool = {
   BOX: "box",
 } as const;
 export type PlannerTool = (typeof PlannerTool)[keyof typeof PlannerTool];
+
+/** What a preview has to put back when it is dismissed. */
+interface PreviewState {
+  readonly x: number;
+  readonly y: number;
+  readonly plan: PlanNode["plan"];
+}
 
 /** Why a group operation did nothing, or null when it did something. */
 export const GroupRefusal = {
@@ -67,6 +83,8 @@ export interface PlannerState {
   readonly tool: PlannerTool;
   readonly selectionCount: number;
   readonly movedCount: number;
+  /** How many buildings have a planned upgrade (`planner-upgrades.md` §2.3). */
+  readonly plannedCount: number;
   readonly dirty: boolean;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
@@ -100,6 +118,25 @@ export interface PlannerState {
   readonly readOnly: boolean;
 }
 
+/**
+ * The undo tooltip for a plan edit: "Plan Cannon Tower to L5", "Clear plan",
+ * "Plan 6 buildings to L5".
+ *
+ * Reads the target off the entries rather than taking it as an argument, so a
+ * mixed batch — some set, some cleared, which `setPlanLevel` cannot produce
+ * but a future caller might — still gets an honest label.
+ */
+const planLabel = (entries: readonly PlanEntry[], plan: Plan): string => {
+  const target = entries[0]?.after;
+  const many = entries.length > 1;
+  const subject = many
+    ? `${entries.length} buildings`
+    : (buildingName(plan.get(entries[0]?.id ?? -1)?.type ?? -1) ?? "building");
+
+  if (!target) return many ? `Clear ${entries.length} plans` : `Clear plan on ${subject}`;
+  return `Plan ${subject} to L${target.level}`;
+};
+
 export class PlannerSession {
   readonly plan: Plan;
 
@@ -128,8 +165,17 @@ export class PlannerSession {
   private dragInvalid = false;
   private slot: number | null = null;
   private slotName = "";
-  /** Positions to restore when a preview is dismissed. */
-  private preview: Map<number, readonly [number, number]> | null = null;
+  /** Positions and plans to restore when a preview is dismissed. */
+  private preview: Map<number, PreviewState> | null = null;
+  /**
+   * The yard as the server last described it.
+   *
+   * Held because every answer about a planned upgrade — what a ladder costs,
+   * what the plan adds up to, what Apply would start — is a question about the
+   * plan *and* the yard, and the panels that ask have only the session.
+   * Replaced wholesale by `rebase`.
+   */
+  private yard: Yard;
 
   constructor(options: {
     yard: Yard;
@@ -171,6 +217,7 @@ export class PlannerSession {
     this.onFind = options.onFind;
     this.onGroup = options.onGroup;
     this.readOnly = options.readOnly ?? false;
+    this.yard = options.yard;
     this.plan = Plan.fromYard(options.yard);
     this.view = new PlannerView({ renderer: options.renderer, plan: this.plan });
 
@@ -210,6 +257,7 @@ export class PlannerSession {
       tool: this.tool,
       selectionCount: this.selection.size,
       movedCount: this.moved.size,
+      plannedCount: this.plan.plannedCount,
       dirty: !this.stack.isClean,
       canUndo: this.stack.canUndo,
       canRedo: this.stack.canRedo,
@@ -265,6 +313,77 @@ export class PlannerSession {
       if (node) nodes.push(node);
     }
     return nodes;
+  }
+
+  /**
+   * The one selected building, or null when the selection is empty or plural.
+   *
+   * What the inspector opens on (`planner-upgrades.md` §5.2): one building
+   * gets the ladder, a multi-selection gets the cost table instead.
+   */
+  selectedNode(): PlanNode | null {
+    if (this.selection.size !== 1) return null;
+    const [id] = this.selection;
+    return (id === undefined ? undefined : this.plan.get(id)) ?? null;
+  }
+
+  /* ── Planned upgrades ───────────────────────────────────────────────── */
+
+  /**
+   * Plans an upgrade on every named building, or clears it with `null`.
+   *
+   * One command however many buildings it touches, so planning a marquee of
+   * ten towers is one Ctrl+Z. Buildings the plan refuses — busy, damaged,
+   * already there, past the top of the ladder — are simply not in the command;
+   * the return value is how many actually changed, which is what a caller
+   * needs to decide whether to say anything.
+   *
+   * Refused outright in a read-only session: the ladder is readable there and
+   * nothing else (design §8, Q5).
+   */
+  setPlanLevel(ids: Iterable<number>, level: number | null): number {
+    if (this.readOnly) return 0;
+
+    const entries: PlanEntry[] = [];
+    for (const id of ids) {
+      const entry = this.plan.setPlan(id, level);
+      if (entry) entries.push(entry);
+    }
+    if (entries.length === 0) return 0;
+
+    this.stack.pushApplied(
+      planCommand(entries, (batch, reverse) => this.plan.setPlans(batch, reverse), planLabel(entries, this.plan)),
+    );
+    this.refresh();
+    return entries.length;
+  }
+
+  /** Every building with a plan, in the order Apply will walk them. */
+  plannedNodes(): PlanNode[] {
+    return this.plan.plannedNodes();
+  }
+
+  /** Planned target level by id, for the canvas badge and the blueprint tiles. */
+  plannedLevels(): ReadonlyMap<number, number> {
+    return this.plan.plannedLevels();
+  }
+
+  /** The yard the plan is measured against. */
+  yardModel(): Yard {
+    return this.yard;
+  }
+
+  /**
+   * What Apply would do with the plan as it stands, in the server's own
+   * report shapes.
+   *
+   * Recomputed on demand rather than cached: it is a walk over the planned
+   * buildings, which is a handful even in a 575-building yard, and a cache
+   * would have to be invalidated by every plan edit, every rebase and every
+   * undo.
+   */
+  applyPreview(): ApplyPreview {
+    return previewApply(this.plan.plannedNodes(), this.yard);
   }
 
   /* ── Editing ────────────────────────────────────────────────────────── */
@@ -386,6 +505,7 @@ export class PlannerSession {
   rebase(yard: Yard): AbsorbResult {
     if (this.input.isGrabbing) this.cancel();
 
+    this.yard = yard;
     const result = this.plan.absorb(yard);
     for (const id of result.removed) {
       this.selection.delete(id);
@@ -420,15 +540,31 @@ export class PlannerSession {
 
     if (options.preview || this.readOnly) {
       this.preview = new Map();
-      for (const node of this.plan.buildings()) this.preview.set(node.id, [node.x, node.y]);
+      for (const node of this.plan.buildings()) {
+        this.preview.set(node.id, { x: node.x, y: node.y, plan: node.plan });
+      }
       this.plan.move(result.entries, false);
+      this.plan.setPlans(result.plans, false);
     } else {
+      // One command for both halves of a load: the positions and the upgrades
+      // the layout was saved with are one gesture and have to be one undo.
+      const label = `Load “${layout.name}”`;
+      const move = moveCommand(
+        result.entries,
+        (batch, reverse) => this.plan.move(batch, reverse),
+        label,
+      );
       this.stack.push(
-        moveCommand(
-          result.entries,
-          (batch, reverse) => this.plan.move(batch, reverse),
-          `Load “${layout.name}”`,
-        ),
+        result.plans.length === 0
+          ? move
+          : compositeCommand(label, [
+              move,
+              planCommand(
+                result.plans,
+                (batch, reverse) => this.plan.setPlans(batch, reverse),
+                label,
+              ),
+            ]),
       );
       this.slot = layout.slot;
       this.slotName = layout.name;
@@ -443,7 +579,14 @@ export class PlannerSession {
     const preview = this.preview;
     if (!preview) return;
     this.preview = null;
-    for (const [id, [x, y]] of preview) this.plan.setPosition(id, x, y);
+    const plans: PlanEntry[] = [];
+    for (const [id, was] of preview) {
+      this.plan.setPosition(id, was.x, was.y);
+      plans.push({ id, before: was.plan, after: was.plan });
+    }
+    // `before` and `after` are the same value here: the preview is being
+    // rolled back, so both directions of the stack want what was there first.
+    this.plan.setPlans(plans, true);
     this.afterHistory();
   }
 
@@ -460,9 +603,14 @@ export class PlannerSession {
     this.refresh();
   }
 
-  /** The three blocking checks Apply runs before it calls the server. */
+  /**
+   * The checks Apply runs before it calls the server: three blocking rows
+   * about placement, and — when anything is planned — three warning rows about
+   * what the upgrade walk will not manage.
+   */
   checklist(): Checklist {
-    const checklist = buildChecklist(this.plan.index(), this.plan.validate());
+    const planned = this.plan.plannedCount > 0 ? this.applyPreview() : null;
+    const checklist = buildChecklist(this.plan.index(), this.plan.validate(), [], planned);
     this.faulted = checklist.faulted;
     this.refresh();
     return checklist;

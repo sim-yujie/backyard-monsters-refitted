@@ -62,15 +62,29 @@ export const deleteLayout = async (slot: number): Promise<void> => {
 };
 
 /**
- * Writes a layout's positions into the real yard.
+ * Writes a layout's positions into the real yard, and optionally starts the
+ * upgrades its nodes have planned.
  *
  * Success carries the new `buildingdata`, which the caller uses to rebuild its
  * own model rather than re-fetching the save — the response is the save as the
  * server now holds it, so re-reading it is the honest move and assuming the
- * client's plan won is not.
+ * client's plan won is not. With `startUpgrades` it also carries `resources`
+ * and an `upgrades` report of what started, finished, waited and was skipped
+ * (`docs/design/planner-upgrades.md` §3.2).
+ *
+ * The flag is a form field rather than a second route because one Apply has to
+ * be one transaction: one timer advance, one `savetime`, one flush (§8, Q1).
+ * The moves are all-or-nothing as they have always been; the upgrades are
+ * partial by design and reported, never a reason to refuse the request.
  */
-export const applyLayout = (payload: LayoutPayload): Promise<ApplyLayoutResponse> =>
-  post<ApplyLayoutResponse>(APPLY_PATH, { data: JSON.stringify(payload) });
+export const applyLayout = (
+  payload: LayoutPayload,
+  options: { startUpgrades?: boolean } = {},
+): Promise<ApplyLayoutResponse> =>
+  post<ApplyLayoutResponse>(APPLY_PATH, {
+    data: JSON.stringify(payload),
+    ...(options.startUpgrades ? { startUpgrades: "1" } : {}),
+  });
 
 /** Every detail key a rejection can carry a list of building ids under. */
 const CONFLICT_KEYS = [
@@ -81,6 +95,8 @@ const CONFLICT_KEYS = [
   "alreadyAtLevel",
   "busy",
   "damaged",
+  "planLevel",
+  "planCaughtUp",
 ] as const;
 
 /**
@@ -108,9 +124,11 @@ export const rearmTraps = (traps: readonly TrapPlacement[]): Promise<TrapRearmRe
  * Building ids the server named as the reason a call failed.
  *
  * The error bodies are flat and carry the ids under whichever key fits the
- * fault: `overlapping` and `unknown` on a 400, `unplaced` on a 409, and the
- * batch wall upgrade's own four — `notWalls`, `alreadyAtLevel`, `busy` and
- * `damaged`. They all mean the same thing to the planner — outline these and
+ * fault: `overlapping` and `unknown` on a 400, `unplaced` on a 409, the batch
+ * wall upgrade's own four — `notWalls`, `alreadyAtLevel`, `busy` and
+ * `damaged` — and the two a planned upgrade can trip, `planLevel` for a target
+ * past the ladder and `planCaughtUp` for one a save says the yard has already
+ * reached. They all mean the same thing to the planner — outline these and
  * show them to the player — so they are read together rather than teaching the
  * UI a shape per route.
  */

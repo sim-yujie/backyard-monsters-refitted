@@ -197,8 +197,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   mushrooms?: MushroomSave | null;
-  /** Owned store items. `ENL.q` is the yard expansion level, 0..6. */
-  storedata?: Record<string, { q?: number } | undefined> | null;
+  /**
+   * Owned store items. `ENL.q` is the yard expansion level, 0..6, `BEW.q` the
+   * extra workers bought, and `e` a buff's expiry as a unix second — `BST.e`
+   * is when Sharper Tools runs out (`client/scripts/STORE.as:2513-2519`).
+   */
+  storedata?: Record<string, { q?: number; e?: number } | undefined> | null;
   basename?: string;
   level?: number;
   tutorialstage?: unknown;
@@ -559,6 +563,12 @@ export interface ApplyConflictDetails {
    * ladder, or on a type with no ladder at all.
    */
   planLevel?: number[];
+  /**
+   * Save only: ids whose planned level the yard has already reached. Apply
+   * skips those with reason `caughtUp` instead of refusing, because a layout
+   * saved before a job finished is not the client's fault.
+   */
+  planCaughtUp?: number[];
 }
 
 /* ── Batch actions ──────────────────────────────────────────────────────── */

@@ -35,6 +35,39 @@ export const WORKER_CAP = 5;
 const WORKER_HELD_BY: ReadonlySet<string> = new Set(["build", "upgrade", "fortify"]);
 
 /**
+ * The multiplier Sharper Tools puts on an upgrade countdown: a 20% head start
+ * (`client/scripts/STORE.as:2513-2519`; spec `:854-857`).
+ */
+export const SHARPER_TOOLS_MULTIPLIER = 0.8;
+
+/**
+ * Whether this building is on a job, which is also what makes it refuse a new
+ * one (`client/scripts/BASE.as:3871-3882`).
+ *
+ * The same reading {@link busyWorkers} counts with, exported so the planner's
+ * "this building is busy" and the yard's free-worker count cannot disagree.
+ */
+export const holdsWorker = (building: Pick<YardBuilding, "countdown">): boolean =>
+  building.countdown !== null && WORKER_HELD_BY.has(building.countdown.kind);
+
+/**
+ * What to multiply an upgrade's `time` by before it is written as a countdown:
+ * {@link SHARPER_TOOLS_MULTIPLIER} while Sharper Tools runs, 1 otherwise.
+ *
+ * `GLOBAL._buildTime` in the Flash client (`BFOUNDATION.as:2295`), and the
+ * value the server's walk writes `cU` with
+ * (`server/src/services/yardplanner/workers.ts`, `sharperToolsMultiplier`).
+ * The buff's expiry is a unix second in `storedata.BST.e`.
+ */
+export const sharperToolsMultiplier = (
+  storedata: BaseLoadResponse["storedata"],
+  now: number,
+): number => {
+  const expiry = Number(storedata?.["BST"]?.e);
+  return Number.isFinite(expiry) && expiry > now ? SHARPER_TOOLS_MULTIPLIER : 1;
+};
+
+/**
  * How many workers this yard has: one, plus every extra worker bought, capped
  * at {@link WORKER_CAP}.
  *
@@ -56,7 +89,7 @@ export const workerCount = (storedata: BaseLoadResponse["storedata"]): number =>
 export const busyWorkers = (yard: { readonly buildings: readonly YardBuilding[] }): number => {
   let busy = 0;
   for (const building of yard.buildings) {
-    if (building.countdown && WORKER_HELD_BY.has(building.countdown.kind)) busy++;
+    if (holdsWorker(building)) busy++;
   }
   return busy;
 };

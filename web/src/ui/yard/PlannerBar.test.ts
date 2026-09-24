@@ -35,6 +35,7 @@ const stateOf = (overrides: Partial<PlannerState> = {}): PlannerState => ({
   tool: PlannerTool.SELECT,
   selectionCount: 0,
   movedCount: 0,
+  plannedCount: 0,
   dirty: false,
   canUndo: false,
   canRedo: false,
