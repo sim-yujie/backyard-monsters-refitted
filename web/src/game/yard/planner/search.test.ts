@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse, BuildingData } from "@/api/types";
 import { readYard, type Yard } from "../yardModel";
 import { Plan } from "./plan";
-import { countByKind, searchNodes, type SearchGroup } from "./search";
+import { categorise, countByKind, searchNodes, type SearchGroup } from "./search";
 
 /**
  * Searching the placed buildings.
@@ -123,5 +123,47 @@ describe("countByKind", () => {
       ["trap", 1],
       ["wall", 4],
     ]);
+  });
+});
+
+describe("categorise", () => {
+  it("files the stacks under their kind, in the order the chips are in", () => {
+    const sections = categorise(searchNodes(nodes(), "", NO_KINDS));
+    expect(sections.map((section) => section.kind)).toEqual([
+      "tower",
+      "special",
+      "trap",
+      "wall",
+    ]);
+    expect(sections.map((section) => section.label)).toEqual([
+      "Towers",
+      "Special",
+      "Traps",
+      "Walls",
+    ]);
+  });
+
+  it("counts buildings on a section, not rows", () => {
+    const sections = categorise(searchNodes(nodes(), "", NO_KINDS));
+    const walls = sections.find((section) => section.kind === "wall");
+    // Four walls across three stacks: two levels of one type and a second type.
+    expect(walls?.total).toBe(4);
+    expect(walls?.groups).toHaveLength(3);
+  });
+
+  it("keeps the name-then-level order inside a section", () => {
+    const walls = categorise(searchNodes(nodes(), "", NO_KINDS)).find(
+      (section) => section.kind === "wall",
+    );
+    expect(walls?.groups.map((group) => `${group.name} L${group.level}`)).toEqual([
+      "Block L1",
+      "Block L3",
+      "Stone Block L1",
+    ]);
+  });
+
+  it("leaves out a kind nothing landed in", () => {
+    const sections = categorise(searchNodes(nodes(), "booby", NO_KINDS));
+    expect(sections.map((section) => section.kind)).toEqual(["trap"]);
   });
 });

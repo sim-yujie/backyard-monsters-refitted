@@ -898,7 +898,62 @@
   font-size: var(--text-sm);
 }
 
-.planner-inventory__empty[hidden] {
+/*
+ * `hidden` sets `display: none`, which a class setting `display` beats. The
+ * drawer hides its box, its chips and its empty line, so each says so itself.
+ */
+.planner-inventory__empty[hidden],
+.planner-inventory__input[hidden],
+.planner-inventory .planner-search__chips[hidden] {
+  display: none;
+}
+
+.planner-inventory__rows {
+  /* Headers, not rows, are what a cleared yard's drawer is scrolled through. */
+  max-height: 52vh;
+}
+
+.planner-inventory__section + .planner-inventory__section {
+  border-top: 1px solid var(--colour-border);
+}
+
+/*
+ * The header is a band rather than a line of text: a drawer holding 575
+ * buildings is read by its categories first, and a heading that looked like a
+ * row would be clicked like one.
+ */
+.planner-inventory__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  text-align: start;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  padding-block: var(--space-1);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--colour-surface-raised);
+}
+
+.planner-inventory__caret {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  inline-size: 1ch;
+}
+
+.planner-inventory__label {
+  flex: 1;
+}
+
+.planner-inventory__stack {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.planner-inventory__stack[hidden] {
   display: none;
 }
 
@@ -910,6 +965,61 @@
 .planner-inventory__row {
   border-inline-start: 2px solid var(--colour-accent);
   padding-inline-start: var(--space-2);
+}
+
+.planner-inventory__row + .planner-inventory__row {
+  border-top: 1px solid var(--colour-border);
+}
+
+/*
+ * Icon, name, level, count. Centred rather than on the baseline, because a row
+ * with a picture in it hangs off the icon and not off the text.
+ */
+.planner-inventory__pick {
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.planner-inventory__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-inventory__icon {
+  inline-size: 28px;
+  block-size: 28px;
+  flex: none;
+  /* The art runs from a one-tile block to a tall tower; never squash it. */
+  object-fit: contain;
+  object-position: center;
+}
+
+/* A type the art table has no row for: its kind's colour, not a broken image. */
+.planner-inventory__swatch {
+  border-radius: var(--radius-sm);
+  background: var(--colour-border);
+}
+
+.planner-inventory__swatch[data-kind="wall"] {
+  background: var(--colour-text-muted);
+}
+
+.planner-inventory__swatch[data-kind="tower"],
+.planner-inventory__swatch[data-kind="trap"] {
+  background: var(--colour-accent);
+}
+
+/* The level, as a chip: it is the second half of the row's identity. */
+.planner-inventory__level {
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--colour-border);
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  padding: 0 var(--space-1);
 }
 
 /* A checklist line that names something with nowhere to be shown. */

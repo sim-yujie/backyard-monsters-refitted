@@ -23,9 +23,9 @@ import { typeName } from "./summary";
  * ## Kinds
  *
  * The chips are the props table's own `type` strings — `wall`, `trap`,
- * `tower`, `resource`, `special`, `decoration` — read through `kindOf`. A type
- * the cost table does not know lands under `other` rather than under nothing,
- * so a chip can always reach it.
+ * `tower`, `resource`, `special`, `decoration` — read through `kindOf`.
+ * Anything else, including a type the cost table does not know, lands under
+ * `other` rather than under nothing, so a chip can always reach it.
  *
  * Pure arithmetic and string matching: no DOM, so the panel is a view over this
  * rather than a place where the rules live a second time.
@@ -36,17 +36,115 @@ export interface SearchGroup {
   readonly type: number;
   readonly name: string;
   readonly level: number;
-  /** The props kind, or `other` for a type with no cost row. */
+  /** The category, from {@link kindFor}: a props kind, or `other`. */
   readonly kind: string;
   /** Ascending, so the first is the one the camera frames. */
   readonly ids: readonly number[];
 }
 
-/** Where a type with no props kind is filed. */
+/** Where a type no category claims is filed. */
 export const OTHER_KIND = "other";
 
-/** The props kind a chip would file a type under. */
-export const kindFor = (type: number): string => kindOf(type) || OTHER_KIND;
+/**
+ * The categories the chips and the headers offer.
+ *
+ * The props table has more kinds than these — `cage`, `taunt`, `enemy`,
+ * `placeholder` — and they are rare, unbuildable or both. They go under
+ * `other` rather than each earning a chip nobody would press, and a type the
+ * cost table has no row for at all goes there too, so every building is under
+ * something a filter can reach.
+ */
+const CATEGORY_KINDS: ReadonlySet<string> = new Set([
+  "tower",
+  "special",
+  "resource",
+  "trap",
+  "wall",
+  "decoration",
+]);
+
+/** The category a chip or a header would file a type under. */
+export const kindFor = (type: number): string => {
+  const kind = kindOf(type);
+  return CATEGORY_KINDS.has(kind) ? kind : OTHER_KIND;
+};
+
+/**
+ * The order the kinds are shown in, for chips and for headers.
+ *
+ * The categories a player reaches for first, then the ones they sort out
+ * afterwards. `other` is last and only appears when something lands in it.
+ * Both lists read this one array, so a drawer header and a Find chip never
+ * disagree about where a type belongs or which comes first.
+ */
+export const KIND_ORDER: readonly string[] = [
+  "tower",
+  "special",
+  "resource",
+  "trap",
+  "wall",
+  "decoration",
+  OTHER_KIND,
+];
+
+/** What a kind is called on screen. */
+export const KIND_LABELS: Readonly<Record<string, string>> = {
+  tower: "Towers",
+  special: "Special",
+  resource: "Resources",
+  trap: "Traps",
+  wall: "Walls",
+  decoration: "Decorations",
+  [OTHER_KIND]: "Other",
+};
+
+/** A kind's screen name, or the raw kind for one the table has not met. */
+export const kindLabel = (kind: string): string => KIND_LABELS[kind] ?? kind;
+
+/** One category's stacks, for a list that shows headers. */
+export interface SearchCategory {
+  readonly kind: string;
+  readonly label: string;
+  /** In {@link searchNodes} order: name, then level ascending. */
+  readonly groups: readonly SearchGroup[];
+  /** Buildings, not stacks — what the header badge counts. */
+  readonly total: number;
+}
+
+/**
+ * Stacks filed under their kind, in {@link KIND_ORDER}.
+ *
+ * A drawer holding four hundred walls, a dozen towers and a handful of traps
+ * is three short lists under headers rather than one long one, and the count
+ * on a header is how many buildings are under it rather than how many rows —
+ * a player wants to know they have 400 walls, not 3 kinds of wall.
+ *
+ * A kind with nothing in it is left out, so the headers describe the drawer
+ * rather than the props table. Groups keep the order `searchNodes` put them
+ * in, which is name then level ascending.
+ */
+export const categorise = (groups: Iterable<SearchGroup>): SearchCategory[] => {
+  const byKind = new Map<string, SearchGroup[]>();
+  for (const group of groups) {
+    const existing = byKind.get(group.kind);
+    if (existing) existing.push(group);
+    else byKind.set(group.kind, [group]);
+  }
+
+  const order = new Map(KIND_ORDER.map((kind, index) => [kind, index]));
+  return [...byKind.entries()]
+    .sort(
+      ([a], [b]) =>
+        (order.get(a) ?? KIND_ORDER.length) - (order.get(b) ?? KIND_ORDER.length) ||
+        a.localeCompare(b),
+    )
+    .map(([kind, found]) => ({
+      kind,
+      label: kindLabel(kind),
+      groups: found,
+      total: found.reduce((count, group) => count + group.ids.length, 0),
+    }));
+};
 
 const DIGITS = /^\d+$/;
 

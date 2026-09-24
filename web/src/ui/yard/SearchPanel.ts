@@ -1,5 +1,11 @@
 import type { PlanNode } from "@/game/yard/planner/placement";
-import { countByKind, searchNodes, OTHER_KIND, type SearchGroup } from "@/game/yard/planner/search";
+import {
+  countByKind,
+  searchNodes,
+  KIND_ORDER,
+  kindLabel,
+  type SearchGroup,
+} from "@/game/yard/planner/search";
 import { Panel } from "@/ui/Panel";
 
 /**
@@ -36,31 +42,6 @@ export interface SearchPanelActions {
   onSelect: (ids: number[]) => void;
   onClose: () => void;
 }
-
-/**
- * Chip order: the categories a player reaches for first, then the ones they
- * sort out afterwards. `other` is last and only appears when something lands
- * in it.
- */
-const KIND_ORDER: readonly string[] = [
-  "tower",
-  "special",
-  "resource",
-  "trap",
-  "wall",
-  "decoration",
-  OTHER_KIND,
-];
-
-const KIND_LABELS: Readonly<Record<string, string>> = {
-  tower: "Towers",
-  special: "Special",
-  resource: "Resources",
-  trap: "Traps",
-  wall: "Walls",
-  decoration: "Decorations",
-  [OTHER_KIND]: "Other",
-};
 
 export class SearchPanel {
   readonly element: HTMLElement;
@@ -160,10 +141,10 @@ export class SearchPanel {
       chip.className = "btn btn--ghost planner-search__chip";
       chip.dataset["kind"] = kind;
       chip.setAttribute("aria-pressed", String(this.kinds.has(kind)));
-      chip.title = `Show only ${KIND_LABELS[kind] ?? kind}`;
+      chip.title = `Show only ${kindLabel(kind)}`;
 
       const label = document.createElement("span");
-      label.textContent = KIND_LABELS[kind] ?? kind;
+      label.textContent = kindLabel(kind);
 
       const badge = document.createElement("span");
       badge.className = "planner-search__count";
