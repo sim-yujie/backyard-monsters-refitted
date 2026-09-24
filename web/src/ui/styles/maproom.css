@@ -42,7 +42,15 @@
 .map-dock--top-centre {
   left: 50%;
   transform: translateX(-50%);
-  top: calc(var(--hud-height) + var(--space-3));
+  /*
+   * Notices dock here under the HUD by default. In the Yard Planner (issue
+   * #44) the planner's own top bar covers this band instead, so the scene
+   * sets `--notice-top-inset` (an inline style, so it wins over this
+   * default) to that bar's measured height while it is mounted, and clears
+   * it on close — the map's dock never sets it, so it never moves.
+   */
+  --notice-top-inset: var(--hud-height);
+  top: calc(var(--notice-top-inset) + var(--space-3));
   width: min(92vw, 460px);
   align-items: stretch;
 }

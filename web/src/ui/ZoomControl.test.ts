@@ -11,6 +11,11 @@ import { ZoomControl } from "./ZoomControl";
  * thumb has to follow. Both are covered here, plus the thing that makes the
  * loop safe: a zoom pushed back in must not rewrite the slider the player is
  * holding.
+ *
+ * The suite below covers the yard's own defaults — percent readout, a range
+ * that moves with `setRange` — and the map's shape of the same control: a
+ * factor readout, a fixed range taken at construction, and its own copy and
+ * classes.
  */
 
 const MIN = 0.08;
@@ -167,5 +172,96 @@ describe("teardown", () => {
     expect(document.querySelector(".yard-zoom")).not.toBeNull();
     harness.control.destroy();
     expect(document.querySelector(".yard-zoom")).toBeNull();
+  });
+});
+
+describe("the factor readout (the map's shape)", () => {
+  it("shows a zoom multiplier instead of a percentage", () => {
+    const control = new ZoomControl({
+      onZoom: () => {},
+      onStep: () => {},
+      onFit: () => {},
+      minZoom: 0.01,
+      maxZoom: 2.5,
+      readout: "factor",
+    });
+    control.mount(document.body);
+    control.setZoom(0.6);
+    const readout = control.element.querySelector("span");
+    expect(readout?.textContent).toBe("0.60×");
+  });
+
+  it("drops to three decimal places under 10%, and never touches aria-valuetext", () => {
+    const control = new ZoomControl({
+      onZoom: () => {},
+      onStep: () => {},
+      onFit: () => {},
+      minZoom: 0.01,
+      maxZoom: 2.5,
+      readout: "factor",
+    });
+    control.mount(document.body);
+    control.setZoom(0.05);
+    const readout = control.element.querySelector("span");
+    const slider = control.element.querySelector("input[type=range]");
+    expect(readout?.textContent).toBe("0.050×");
+    expect(slider?.getAttribute("aria-valuetext")).toBeNull();
+  });
+});
+
+describe("a fixed range (the map's shape)", () => {
+  it("takes minZoom and maxZoom at construction, with no setRange call needed", () => {
+    const zooms: number[] = [];
+    const control = new ZoomControl({
+      onZoom: (zoom) => zooms.push(zoom),
+      onStep: () => {},
+      onFit: () => {},
+      minZoom: 0.0175,
+      maxZoom: 2.5,
+      readout: "factor",
+      classes: {
+        root: "zoom-controls",
+        slider: "zoom-controls__slider",
+        readout: "zoom-controls__value",
+        step: "btn btn--ghost btn--icon",
+        fit: "btn btn--ghost btn--icon",
+      },
+      labels: {
+        out: "Zoom out",
+        into: "Zoom in",
+        fit: "Fit the whole world on screen",
+        slider: "Zoom level",
+      },
+    });
+    control.mount(document.body);
+
+    expect(control.element.className).toBe("zoom-controls");
+    const slider = control.element.querySelector("input[type=range]");
+    if (!(slider instanceof HTMLInputElement)) throw new Error("The control did not build a slider");
+    expect(slider.className).toBe("zoom-controls__slider");
+    expect(slider.getAttribute("aria-label")).toBe("Zoom level");
+
+    dragTo(slider, 1);
+    expect(zooms[0]).toBeCloseTo(2.5);
+  });
+
+  it("carries the given titles and keeps the shared icon-button classes", () => {
+    const control = new ZoomControl({
+      onZoom: () => {},
+      onStep: () => {},
+      onFit: () => {},
+      minZoom: 0.0175,
+      maxZoom: 2.5,
+      classes: { step: "btn btn--ghost btn--icon", fit: "btn btn--ghost btn--icon" },
+      labels: { out: "Zoom out", into: "Zoom in", fit: "Fit the whole world on screen" },
+    });
+    control.mount(document.body);
+
+    const buttons = [...control.element.querySelectorAll("button")];
+    expect(buttons[0]?.title).toBe("Zoom out");
+    expect(buttons[0]?.className).toBe("btn btn--ghost btn--icon");
+    const fit = buttons.find((button) => button.textContent === "Fit");
+    expect(fit?.title).toBe("Fit the whole world on screen");
+    expect(fit?.className).toBe("btn btn--ghost btn--icon");
   });
 });

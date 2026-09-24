@@ -22,7 +22,7 @@ import { Notices } from "@/ui/maproom/Notices";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
 import { describeUpgradeReport } from "@/ui/yard/upgradeText";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
-import { ZoomControl } from "@/ui/yard/ZoomControl";
+import { ZoomControl } from "@/ui/ZoomControl";
 import { YardPlanner } from "./YardPlanner";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
@@ -569,6 +569,11 @@ export class YardScene implements Scene {
       onPlanChanged: () => this.minimap?.markDirty(),
       onExit: () => this.closePlanner(),
     });
+    // The planner's constructor reports its own inset synchronously (via
+    // `onInset` above), so `this.inset.top` is already the top bar's real
+    // measured height here — that is what the notice dock tucks under
+    // instead of the HUD, so it stops sitting partly behind the bar (#44).
+    this.notices.setTopInset(this.inset.top);
     if (this.plannerButton) {
       this.plannerButton.setAttribute("aria-pressed", "true");
       this.plannerButton.textContent = "Close plan";
@@ -578,6 +583,8 @@ export class YardScene implements Scene {
   private closePlanner(): void {
     this.planner?.destroy();
     this.planner = null;
+    // Back to the HUD's own band now the planner's bar is gone.
+    this.notices.setTopInset(null);
     // Leaving puts every sprite back where the save had it, which the minimap
     // has to be told about even when the view does not change.
     this.minimap?.markDirty();

@@ -24,6 +24,13 @@ import { SceneName } from "../App";
  * is a product decision rather than a property of any one part.
  */
 
+/**
+ * One press of the zoom control's minus or plus button, matching a couple of
+ * wheel notches. The keyboard's own step (`MapInput`'s onZoomStep) uses the
+ * same ratio, so the two agree.
+ */
+const ZOOM_STEP = 1.5;
+
 /** How often the request queue is drained. Faster than this just burns budget. */
 const PUMP_INTERVAL_SECONDS = 0.25;
 /** How often visible zones are checked for staleness. */
@@ -121,6 +128,7 @@ export class MapRoom2Scene implements Scene {
         canBookmark: () => !this.bookmarks.isFull,
         onViewYard: () => context.goTo(SceneName.YARD),
         onZoom: (zoom) => this.zoomTo(zoom),
+        onZoomStep: (direction) => this.zoomTo(this.camera.zoom * Math.pow(ZOOM_STEP, direction)),
         onZoomReset: () => this.fitWorld(),
         onCellPanelClose: () => this.clearSelection(),
       },
@@ -142,7 +150,7 @@ export class MapRoom2Scene implements Scene {
       onHover: (cell) => this.handleHover(cell),
       onSelect: (cell) => this.selectCell(cell),
       onZoomToCell: (cell) => this.zoomToCell(cell),
-      onZoomStep: (direction) => this.zoomTo(this.camera.zoom * Math.pow(1.5, direction)),
+      onZoomStep: (direction) => this.zoomTo(this.camera.zoom * Math.pow(ZOOM_STEP, direction)),
       onZoomReset: () => this.fitWorld(),
       onCancel: () => this.clearSelection(),
     });

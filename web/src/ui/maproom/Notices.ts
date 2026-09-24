@@ -101,6 +101,20 @@ export class Notices {
     this.element.remove();
   }
 
+  /**
+   * Pins the dock's top edge to `px` CSS pixels from the viewport top instead
+   * of its usual place under the HUD, for when something taller than the HUD
+   * — the Yard Planner's top bar (issue #44) — covers that band instead.
+   * `null` restores the default position.
+   */
+  setTopInset(px: number | null): void {
+    if (px === null) {
+      this.element.style.removeProperty("--notice-top-inset");
+    } else {
+      this.element.style.setProperty("--notice-top-inset", `${px}px`);
+    }
+  }
+
   private resetTimer(key: string, notice: LiveNotice, timeoutMs: number | undefined): void {
     if (notice.timer !== undefined) window.clearTimeout(notice.timer);
     notice.timer =

@@ -1,14 +1,35 @@
 import type { Bookmark } from "@/api/bookmarks";
 import type { MapCell, Resources } from "@/api/types";
+import { MAX_ZOOM, MIN_ZOOM } from "@/config";
 import type { OffsetCell } from "@/game/HexGrid";
 import type { ZoneRecord } from "@/game/maproom/ZoneStore";
 import type { CellRange } from "@/game/maproom/zones";
 import { Hud } from "@/ui/Hud";
+import { ZoomControl } from "@/ui/ZoomControl";
 import { CellPanel } from "./CellPanel";
 import { Minimap } from "./Minimap";
 import { NavPanel } from "./NavPanel";
 import { Notices } from "./Notices";
-import { ZoomControls } from "./ZoomControls";
+
+/**
+ * The map's own shape of the shared zoom control: a fixed range taken once
+ * at construction (the whole world always fits the same way, so this never
+ * calls `setRange` again), a "0.60×" factor readout instead of a percentage,
+ * and the classes `maproom.css`'s `.zoom-controls` rules already style.
+ */
+const ZOOM_CLASSES = {
+  root: "zoom-controls",
+  slider: "zoom-controls__slider",
+  readout: "zoom-controls__value",
+  step: "btn btn--ghost btn--icon",
+  fit: "btn btn--ghost btn--icon",
+};
+const ZOOM_LABELS = {
+  out: "Zoom out",
+  into: "Zoom in",
+  fit: "Fit the whole world on screen",
+  slider: "Zoom level",
+};
 
 /**
  * Every piece of DOM the map screen puts on the overlay, behind one object.
@@ -36,6 +57,7 @@ export interface MapRoomUiHandlers {
   /** The cell inspector's "View yard" button, on the caller's own cell. */
   onViewYard: () => void;
   onZoom: (zoom: number) => void;
+  onZoomStep: (direction: 1 | -1) => void;
   onZoomReset: () => void;
   onCellPanelClose: () => void;
 }
@@ -46,7 +68,7 @@ export class MapRoomUi {
   private readonly hud: Hud;
   private readonly navPanel: NavPanel;
   private readonly minimap: Minimap;
-  private readonly zoomControls: ZoomControls;
+  private readonly zoomControl: ZoomControl;
   private readonly readout: HTMLElement;
   private readonly docks: HTMLElement[] = [];
 
@@ -74,9 +96,15 @@ export class MapRoomUi {
     });
 
     this.minimap = new Minimap({ onJump: handlers.onJump });
-    this.zoomControls = new ZoomControls({
+    this.zoomControl = new ZoomControl({
       onZoom: handlers.onZoom,
-      onReset: handlers.onZoomReset,
+      onStep: handlers.onZoomStep,
+      onFit: handlers.onZoomReset,
+      minZoom: MIN_ZOOM,
+      maxZoom: MAX_ZOOM,
+      readout: "factor",
+      classes: ZOOM_CLASSES,
+      labels: ZOOM_LABELS,
     });
 
     this.readout = document.createElement("div");
@@ -93,7 +121,7 @@ export class MapRoomUi {
 
     const bottomRight = this.dock("map-dock map-dock--bottom-right");
     this.minimap.mount(bottomRight);
-    this.zoomControls.mount(bottomRight);
+    this.zoomControl.mount(bottomRight);
 
     container.append(this.readout);
     return this;
@@ -105,7 +133,7 @@ export class MapRoomUi {
     this.cellPanel?.close();
     this.cellPanel = null;
     this.minimap.destroy();
-    this.zoomControls.destroy();
+    this.zoomControl.destroy();
     this.notices.destroy();
     this.readout.remove();
     for (const dock of this.docks) dock.remove();
@@ -132,7 +160,7 @@ export class MapRoomUi {
   }
 
   setZoom(zoom: number): void {
-    this.zoomControls.setZoom(zoom);
+    this.zoomControl.setZoom(zoom);
   }
 
   setViewport(range: CellRange): void {
