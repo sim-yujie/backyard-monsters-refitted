@@ -38,6 +38,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { lineCounter, matchBrace, readIntArray, readPropsSource } from "./lib/props.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../..");
@@ -47,44 +48,13 @@ const STRINGS = resolve(repo, "server/public/gamestage/assets/archived/en.v612.t
 const WEB_OUT = resolve(here, "../src/game/yard/buildingCostData.ts");
 const SERVER_OUT = resolve(repo, "server/src/game-data/buildingCosts.ts");
 
-/**
- * The props file, with `//` line comments stripped.
- *
- * Several entries keep dead lines commented out, and reading those as live
- * would price a building from a step the game never charges. No string literal
- * in this file contains `//`, so stripping to end of line is safe. Line numbers
- * are taken from the original text, so citations still point at the right place.
- */
-const original = readFileSync(PROPS, "utf8");
-const source = original.replace(/\/\/[^\n]*/g, "");
+// The comment-stripped read, `matchBrace`, `readIntArray` and `lineCounter`
+// live in `lib/props.mjs`, shared with `gen-combat-stats.mjs`
+// (`docs/design/server-combat.md` §3.3). Their behaviour is unchanged.
+const { source } = readPropsSource(PROPS);
 const strings = JSON.parse(readFileSync(STRINGS, "utf8")).core;
 
-/**
- * Index of the bracket matching the one at `open`, which may be `{` or `[`.
- *
- * `gen-building-art.mjs:49-63` does the same for braces only; the cost table
- * needs it for arrays as well, because `costs` and `re` are both arrays with
- * objects and arrays nested inside them.
- */
-const matchBrace = (text, open) => {
-  const opener = text[open];
-  const closer = opener === "[" ? "]" : "}";
-  let depth = 0;
-  for (let i = open; i < text.length; i++) {
-    const c = text[i];
-    if (c === '"') {
-      // Skip a string literal; AS3 has no escapes worth worrying about here.
-      i = text.indexOf('"', i + 1);
-      if (i < 0) break;
-      continue;
-    }
-    if (c === opener) depth++;
-    else if (c === closer && --depth === 0) return i;
-  }
-  throw new Error(`Unbalanced brackets from ${open}`);
-};
-
-const lineOf = (index) => source.slice(0, index).split("\n").length;
+const lineOf = lineCounter(source);
 
 /**
  * One `"rN": new SecNum(1000)` or `"time": new SecNum(5)` field.
@@ -133,16 +103,6 @@ const readSteps = (costs) => {
     });
   }
   return steps;
-};
-
-/** `[0, 0, 8, 15]` -> the same as numbers; `[]` when the entry has none. */
-const readIntArray = (text, key) => {
-  const hit = new RegExp(`"${key}"\\s*:\\s*\\[([^\\]]*)\\]`).exec(text);
-  if (!hit) return [];
-  return hit[1]
-    .split(",")
-    .map((one) => Number(one.trim()))
-    .filter((one) => Number.isFinite(one));
 };
 
 /**
