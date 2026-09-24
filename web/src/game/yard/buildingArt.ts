@@ -70,8 +70,38 @@ const ROWS = new Map<number, ArtRowIndex>(
   ]),
 );
 
+/**
+ * Prefixes the props table hangs on a string key: `bdg_` for a decoration,
+ * `bi_` for an Inferno building, `b_` for everything else.
+ */
+const KEY_PREFIX = /^(?:bdg|bldg|bi|hwn|b)_/;
+
+/**
+ * A string key made readable: prefix off, underscores to spaces, title case.
+ *
+ * Every type in the table is named, because the generator looks the key up in
+ * both sections of the game's English strings and names the handful they
+ * predate from `docs/specs/` (`tools/gen-building-art.mjs`). This is the net
+ * under that: a type added to the props table before the strings catch up
+ * reads as words rather than as "bi_blackspurtzcannon" in the planner's Find
+ * panel and its drawer (issue #51). It cannot invent the spaces inside a
+ * run-on key, so it is a fallback and not the mechanism.
+ */
+export const prettifyArtKey = (key: string): string =>
+  key
+    .replaceAll("#", "")
+    .replace(KEY_PREFIX, "")
+    .split("_")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
 /** The display name from the game's own string table, or null. */
-export const buildingName = (type: number): string | null => ROWS.get(type)?.name ?? null;
+export const buildingName = (type: number): string | null => {
+  const name = ROWS.get(type)?.name;
+  if (name === undefined) return null;
+  return name.includes("_") ? prettifyArtKey(name) : name;
+};
 
 /** True when the art table knows this building type. */
 export const hasArt = (type: number): boolean => ROWS.has(type);

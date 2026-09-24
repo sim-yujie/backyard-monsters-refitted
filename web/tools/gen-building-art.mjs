@@ -13,7 +13,9 @@
  *
  * Display names come from the game's own English string table
  * (`server/public/gamestage/assets/archived/en.v612.txt`), because the props
- * table stores a `#b_key#` placeholder rather than a name.
+ * table stores a `#b_key#` placeholder rather than a name. Both sections of
+ * that file are searched, and the handful of types it predates are named from
+ * `docs/specs/`; see `LATE_NAMES` below.
  *
  * Nothing here runs in the browser and nothing in the client imports it.
  */
@@ -43,7 +45,57 @@ const ASSETS = resolve(repo, "server/public/assets");
  */
 const original = readFileSync(PROPS, "utf8");
 const source = original.replace(/\/\/[^\n]*/g, "");
-const strings = JSON.parse(readFileSync(STRINGS, "utf8")).core;
+
+/**
+ * The English strings, both sections of them.
+ *
+ * The file has two: `core`, whose keys are wrapped in hashes — `#b_townhall#` —
+ * and `game`, whose keys are bare. The props table's `"name"` is spelled either
+ * way depending on the entry's vintage (`YARD_PROPS.as:3070` against `:4028`),
+ * so both have to be searched or every decoration falls through to its key and
+ * the yard shows "bdg_acorn" (issue #51).
+ */
+const language = JSON.parse(readFileSync(STRINGS, "utf8"));
+const strings = { ...language.game, ...language.core };
+
+/**
+ * Names for the types added after the last archived string table.
+ *
+ * The seven Inferno and Map Room 3 buildings, and one decoration, carry a
+ * `#key#` that neither section of `en.v612.txt` has, so there is nothing to
+ * look up. The names are the game's own, recorded in
+ * `docs/specs/base-building.md` §"Buildings outside Map Room 2" and
+ * `docs/specs/combat.md` §"Towers"; without them the planner's Find panel
+ * offers "bi_blackspurtzcannon".
+ */
+const LATE_NAMES = {
+  "#b_siegefactory#": "Siege Factory",
+  "#b_siegeworks#": "Siege Works",
+  bdg_dave_trophy: "D.A.V.E. Trophy",
+  "#bi_spurtzcannon#": "Spurtz Cannon",
+  "#bi_blackspurtzcannon#": "Black Spurtz Cannon",
+  "#b_stronghold#": "Stronghold",
+  "#b_resourceop#": "Resource Outpost",
+  "#b_opdefender#": "Outpost Defender",
+};
+
+/**
+ * A key nothing names, made readable: prefix off, underscores to spaces, title
+ * case. The same rule `buildingName` applies at run time, so a type added to
+ * the props table before the strings catch up reads as words rather than as a
+ * key.
+ */
+const prettify = (key) =>
+  key
+    .replaceAll("#", "")
+    .replace(/^(?:bdg|bldg|bi|hwn|b)_/, "")
+    .split("_")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
+/** The display name for a props entry's `"name"`. */
+const displayName = (key) => strings[key] ?? LATE_NAMES[key] ?? prettify(key);
 
 /** Index of the matching `}` for the `{` at `open`. */
 const matchBrace = (text, open) => {
@@ -230,7 +282,7 @@ for (const block of blocks) {
 
   entries.push({
     id: block.id,
-    name: strings[block.name] ?? block.name.replaceAll("#", ""),
+    name: displayName(block.name),
     kind: block.kind,
     size: block.size,
     baseurl,

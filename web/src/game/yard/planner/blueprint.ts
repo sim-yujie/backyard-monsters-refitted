@@ -158,6 +158,11 @@ export const OBSTACLE_COLOURS = { fill: 0x8a6a4a, edge: 0x5a4330 } as const;
  * player recognises a Sniper Tower's silhouette far faster than they read the
  * word "Sniper" at nine pixels. The name stays as the fallback for anything
  * with no art, and for the moment before the picture arrives.
+ *
+ * "Its art" is the whole stack the isometric yard draws, not the `top` alone —
+ * see `stackBoxes` below. The shadow is left out: it is an alpha-less JPEG
+ * drawn with a multiply blend onto grass (`BFOUNDATION.as:1108`), which on a
+ * flat coloured tile would be an opaque grey rectangle rather than a shadow.
  */
 
 /** Yard units of clear space between a tile's edge and its icon. */
@@ -235,6 +240,69 @@ export const iconBox = (
   const width = artWidth * scale;
   const height = artHeight * scale;
   return { x: (tileWidth - width) / 2, y: (tileHeight - height) / 2, width, height };
+};
+
+/**
+ * One piece of a building's art: a bitmap and where it sits relative to the
+ * building's isometric origin.
+ *
+ * A building is rarely one picture. A Railgun is a base plus a gun, a Monster
+ * Lab is a body plus three animated parts, and the props table keeps each in
+ * its own file with its own offset (`BFOUNDATION.as:1127-1200`); the isometric
+ * yard stacks them, so a tile drawn from the `top` alone is a Railgun with no
+ * gun. The offsets are in the same space for every piece, which is what makes
+ * the stack a single drawing that can be fitted as one.
+ */
+export interface ArtPiece {
+  /** Top-left of the bitmap relative to the building's isometric origin. */
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Fits a whole stack of pieces inside a tile, keeping them in register.
+ *
+ * The union of the pieces is fitted exactly as a lone picture is — same
+ * padding, same aspect ratio, same refusal to magnify past `MAX_ICON_SCALE` —
+ * and then every piece is placed at its own offset within that box, scaled by
+ * the same factor. So a one-piece building lands exactly where `iconBox` put
+ * it before, and a Railgun's gun stays on top of its base instead of being
+ * fitted separately and landing in the middle.
+ *
+ * Null when there is nothing to draw: no pieces, a piece with no size (a
+ * texture that has not finished loading), or a tile with no room.
+ */
+export const stackBoxes = (
+  tileWidth: number,
+  tileHeight: number,
+  pieces: readonly ArtPiece[],
+): IconBox[] | null => {
+  if (pieces.length === 0) return null;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const piece of pieces) {
+    if (piece.width <= 0 || piece.height <= 0) return null;
+    minX = Math.min(minX, piece.x);
+    minY = Math.min(minY, piece.y);
+    maxX = Math.max(maxX, piece.x + piece.width);
+    maxY = Math.max(maxY, piece.y + piece.height);
+  }
+
+  const box = iconBox(tileWidth, tileHeight, maxX - minX, maxY - minY);
+  if (!box) return null;
+
+  const scale = box.width / (maxX - minX);
+  return pieces.map((piece) => ({
+    x: box.x + (piece.x - minX) * scale,
+    y: box.y + (piece.y - minY) * scale,
+    width: piece.width * scale,
+    height: piece.height * scale,
+  }));
 };
 
 /* ── Labels ───────────────────────────────────────────────────────────────── */

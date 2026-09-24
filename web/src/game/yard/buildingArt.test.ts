@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import manifest from "../../../test/fixtures/building-art-files.json";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
-import { artFolder, artTypes, ArtState, buildingName, maxHealth, resolveArt } from "./buildingArt";
+import {
+  artFolder,
+  artTypes,
+  ArtState,
+  buildingName,
+  maxHealth,
+  prettifyArtKey,
+  resolveArt,
+} from "./buildingArt";
 import { stripCells } from "./yardAnim";
 
 /**
@@ -192,6 +200,43 @@ describe("names and health", () => {
     expect(buildingName(1)).toBe("Twig Snapper");
     expect(buildingName(17)).toBe("Block");
     expect(buildingName(9999)).toBeNull();
+  });
+
+  it("names every type in the table, with no string keys left showing", () => {
+    // The Find panel and the planner's drawer print this straight out, so a
+    // key that never got looked up reads as "bi_blackspurtzcannon" (issue #51).
+    // The props table spells some names `#b_key#` and some bare, and the
+    // generator now searches both sections of the string file for them.
+    const keys = artTypes().filter((type) => (buildingName(type) ?? "").includes("_"));
+    expect(keys).toEqual([]);
+    for (const type of artTypes()) expect(buildingName(type)).not.toBe("");
+  });
+
+  it("names the types the archived string tables predate", () => {
+    // From docs/specs/base-building.md and docs/specs/combat.md; en.v612.txt
+    // has no entry for any of them.
+    expect(buildingName(137)).toBe("Black Spurtz Cannon");
+    expect(buildingName(136)).toBe("Spurtz Cannon");
+    expect(buildingName(133)).toBe("Siege Factory");
+    expect(buildingName(134)).toBe("Siege Works");
+    expect(buildingName(138)).toBe("Stronghold");
+    expect(buildingName(139)).toBe("Resource Outpost");
+    expect(buildingName(140)).toBe("Outpost Defender");
+  });
+
+  it("reads the decorations out of the strings' second section", () => {
+    // These carry a bare key rather than `#bdg_acorn#`, and used to fall
+    // through to it.
+    expect(buildingName(55)).toBe("Acorn");
+    expect(buildingName(68)).toBe("Toy Raceway");
+    expect(buildingName(110)).toBe("D.A.V.E. Pumpkin");
+  });
+
+  it("makes words of a key nothing names", () => {
+    expect(prettifyArtKey("bi_blackspurtzcannon")).toBe("Blackspurtzcannon");
+    expect(prettifyArtKey("bdg_dave_trophy")).toBe("Dave Trophy");
+    expect(prettifyArtKey("#b_stronghold#")).toBe("Stronghold");
+    expect(prettifyArtKey("hwn_pumpkin")).toBe("Pumpkin");
   });
 
   it("reads maximum health off the props ladder", () => {

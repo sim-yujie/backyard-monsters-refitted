@@ -1,18 +1,24 @@
 import { BitmapFontManager, BitmapText, Container, Graphics, Sprite, type Texture } from "pixi.js";
 import type { Point, Rect } from "../YardGrid";
 import { yardSize } from "../YardGrid";
-import { ArtState, resolveArt, type ResolvedImage } from "../buildingArt";
+import {
+  ArtState,
+  resolveArt,
+  type ResolvedAnim,
+  type ResolvedArt,
+  type ResolvedImage,
+} from "../buildingArt";
 import type { YardTextures } from "../YardTextures";
 import type { Yard, YardBuilding } from "../yardModel";
 import {
   BLUEPRINT_WORLD,
   blueprintToWorld,
   centredRect,
-  iconBox,
   MIN_NAMED_WIDTH,
   OBSTACLE_COLOURS,
   rectContains,
   rectCorners,
+  stackBoxes,
   TILE_COLOURS,
   tileCategory,
   tileLabel,
@@ -28,10 +34,12 @@ import { dashedRect } from "./PlannerOverlay";
  * expansion, one tile per building and one blob per mushroom.
  *
  * A tile is its footprint in category colour with the building's own picture
- * shrunk onto it and a level pill in the corner. The picture comes from the
- * yard's texture cache, so opening the planner on a yard that is already drawn
- * costs no fetches; until one arrives — or for good, on a type the art table
- * does not know — the tile wears the shortened name instead.
+ * shrunk onto it and a level pill in the corner. "Picture" is the whole stack
+ * the isometric view draws — a Railgun's base *and* its gun — fitted as one
+ * group so the parts stay in register. The images come from the yard's texture
+ * cache, so opening the planner on a yard that is already drawn costs no
+ * fetches; until they arrive — or for good, on a type the art table does not
+ * know — the tile wears the shortened name instead.
  *
  * Built lazily the first time the view is shown, because most visits to the
  * yard never open the planner and a 575-tile scene is not free. After that it
@@ -109,6 +117,34 @@ const PILL_PAD_Y = 1;
 const PILL_FILL = 0x101418;
 const PILL_ALPHA = 0.72;
 
+/**
+ * One layer of a building's art: a still picture, or cell 0 of an animation
+ * strip.
+ *
+ * The two are fetched differently — `YardTextures.get` against
+ * `YardTextures.strip` — but are drawn the same way, so the tile keeps them in
+ * one list in stacking order and asks `textureOf` for whichever applies.
+ */
+type ArtPart =
+  | { readonly kind: "image"; readonly image: ResolvedImage }
+  | { readonly kind: "anim"; readonly anim: ResolvedAnim };
+
+/**
+ * The layers of a building at rest, bottom to top: its top picture and then
+ * each animation strip's first cell.
+ *
+ * This is the stack `YardBuildings` builds, minus the shadow — the top sprite
+ * with the strips added straight after it, which is what puts a Railgun's gun
+ * over its base. A building whose still top is only cell 0 of its first strip
+ * (types 22, 53, 105 and 129) contributes that strip once rather than twice,
+ * exactly as the isometric view hides the top the moment the strip is playing.
+ */
+const partsOf = (art: ResolvedArt): ArtPart[] => {
+  const parts: ArtPart[] = art.topIsAnim ? [] : [{ kind: "image", image: art.top }];
+  for (const anim of art.anims) parts.push({ kind: "anim", anim });
+  return parts;
+};
+
 interface Tile {
   readonly building: YardBuilding;
   readonly root: Container;
@@ -122,10 +158,10 @@ interface Tile {
   readonly levelText: BitmapText | null;
   /** What that text says with nothing planned, so the arrow can be taken off. */
   readonly levelBase: string;
-  /** The top-down picture this tile wants, or null when it wants none. */
-  readonly art: ResolvedImage | null;
-  /** That picture, once it has arrived. */
-  icon: Sprite | null;
+  /** The pictures this tile wants, bottom to top; empty when it wants none. */
+  readonly art: readonly ArtPart[];
+  /** Those pictures, drawn together, once they have all settled. */
+  icon: Container | null;
   /** Where the tile is drawn right now, in yard units. */
   x: number;
   y: number;
@@ -387,19 +423,24 @@ export class BlueprintLayer {
     root.addChild(shape);
 
     // Walls and traps stay flat colour; everything wide enough asks the shared
-    // cache for its picture, which usually answers at once because the
-    // isometric yard has already fetched it.
-    const art = tileShowsIcon(category, width, height)
-      ? (resolveArt(building.type, building.level, ArtState.DEFAULT)?.top ?? null)
+    // cache for its pictures, which usually answers at once because the
+    // isometric yard has already fetched them.
+    const resolved = tileShowsIcon(category, width, height)
+      ? resolveArt(building.type, building.level, ArtState.DEFAULT)
       : null;
-    const texture = art ? this.textures.get(art) : null;
+    const art = resolved ? partsOf(resolved) : [];
 
     const label = tileLabel(building.name, building.level, width);
+
+    // A stack is drawn all at once or not at all: a base without its gun, then
+    // the gun popping in a moment later, reads as the tile changing shape.
+    const gathered = this.gather(art);
+    const draws = !gathered.waiting && gathered.ready.length > 0;
 
     // The name is the icon's understudy: built only while there is no picture
     // on the tile, and thrown away the moment one turns up.
     let nameText: BitmapText | null = null;
-    if (label.name && !texture) {
+    if (label.name && !draws) {
       nameText = new BitmapText({
         text: label.name,
         style: { fontFamily: FONT, fontSize: 11 },
@@ -451,28 +492,83 @@ export class BlueprintLayer {
     this.order.push(tile);
     this.labelPlan(tile);
 
-    if (texture) this.attachIcon(tile, texture);
-    else if (art && !this.textures.isMissing(art)) this.awaiting.push(tile);
+    if (draws) this.attachIcon(tile, gathered.ready);
+    else if (gathered.waiting) this.awaiting.push(tile);
   }
 
   /* ── Icons ──────────────────────────────────────────────────────────── */
 
-  /**
-   * Draws a tile's picture, fitted and centred inside its footprint.
-   *
-   * It goes directly above the coloured rectangle and below the pill, so the
-   * category is still readable around the edges and the level is never hidden
-   * behind a tower.
-   */
-  private attachIcon(tile: Tile, texture: Texture): void {
-    const [width, height] = tile.building.footprint;
-    const box = iconBox(width, height, texture.width, texture.height);
-    if (!box) return;
+  /** The texture for one layer, or null until it arrives. Starts the fetch. */
+  private textureOf(part: ArtPart): Texture | null {
+    if (part.kind === "image") return this.textures.get(part.image);
+    return this.textures.strip(part.anim)?.[0] ?? null;
+  }
 
-    const icon = new Sprite(texture);
-    icon.position.set(box.x, box.y);
-    icon.width = box.width;
-    icon.height = box.height;
+  /** True once this layer is known not to be coming. */
+  private isPartMissing(part: ArtPart): boolean {
+    return part.kind === "image"
+      ? this.textures.isMissing(part.image)
+      : this.textures.isStripMissing(part.anim);
+  }
+
+  /** Where a layer's bitmap sits relative to the building's isometric origin. */
+  private static offsetOf(part: ArtPart): { x: number; y: number } {
+    return part.kind === "image" ? part.image : part.anim;
+  }
+
+  /**
+   * The layers of a stack that have arrived, and whether any are still coming.
+   *
+   * Nine strips in the props table name a file the game server does not have,
+   * so "settled" is arrived *or* known missing: a Railgun whose gun is on disk
+   * and a building whose third layer is not both end up drawn, the second one
+   * with the layers it has.
+   */
+  private gather(art: readonly ArtPart[]): {
+    ready: { part: ArtPart; texture: Texture }[];
+    waiting: boolean;
+  } {
+    const ready: { part: ArtPart; texture: Texture }[] = [];
+    let waiting = false;
+    for (const part of art) {
+      const texture = this.textureOf(part);
+      if (texture) ready.push({ part, texture });
+      else if (!this.isPartMissing(part)) waiting = true;
+    }
+    return { ready, waiting };
+  }
+
+  /**
+   * Draws a tile's picture — every layer of it — fitted inside its footprint.
+   *
+   * The layers keep their offsets relative to each other and are scaled
+   * together, so the stack lands on the tile as the same drawing the isometric
+   * view shows, only smaller. They go into one container directly above the
+   * coloured rectangle and below the pill, so the category is still readable
+   * around the edges and the level is never hidden behind a tower.
+   */
+  private attachIcon(tile: Tile, ready: readonly { part: ArtPart; texture: Texture }[]): void {
+    const [width, height] = tile.building.footprint;
+    const boxes = stackBoxes(
+      width,
+      height,
+      ready.map(({ part, texture }) => {
+        const offset = BlueprintLayer.offsetOf(part);
+        return { x: offset.x, y: offset.y, width: texture.width, height: texture.height };
+      }),
+    );
+    if (!boxes) return;
+
+    const icon = new Container();
+    ready.forEach(({ texture }, index) => {
+      const box = boxes[index];
+      if (!box) return;
+      const sprite = new Sprite(texture);
+      sprite.position.set(box.x, box.y);
+      sprite.width = box.width;
+      sprite.height = box.height;
+      icon.addChild(sprite);
+    });
     icon.visible = this.iconsVisible;
     // Index 1: above the tile's own rectangle, under the name and the pill.
     tile.root.addChildAt(icon, 1);
@@ -498,18 +594,20 @@ export class BlueprintLayer {
     });
   }
 
-  /** Gives a picture to every waiting tile whose texture has turned up. */
+  /** Gives a picture to every waiting tile whose whole stack has turned up. */
   private sweepAwaiting(): void {
     if (this.awaiting.length === 0) return;
     const still: Tile[] = [];
     for (const tile of this.awaiting) {
-      const art = tile.art;
-      if (!art || tile.icon) continue;
-      const texture = this.textures.get(art);
-      if (texture) this.attachIcon(tile, texture);
-      // A picture the server does not have is never coming; the tile keeps its
-      // name and stops being asked about.
-      else if (!this.textures.isMissing(art)) still.push(tile);
+      if (tile.icon) continue;
+      const gathered = this.gather(tile.art);
+      if (gathered.waiting) {
+        still.push(tile);
+        continue;
+      }
+      // Nothing more is coming: draw whatever arrived, or leave the tile with
+      // its name and stop asking about it.
+      if (gathered.ready.length > 0) this.attachIcon(tile, gathered.ready);
     }
     this.awaiting = still;
   }

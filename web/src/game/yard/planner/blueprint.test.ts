@@ -10,6 +10,7 @@ import {
   MIN_ICON_WIDTH,
   rectContains,
   rectCorners,
+  stackBoxes,
   tileCategory,
   tileLabel,
   tileRect,
@@ -215,5 +216,67 @@ describe("iconBox", () => {
     expect(iconBox(100, 100, 0, 100)).toBeNull();
     expect(iconBox(100, 100, 100, 0)).toBeNull();
     expect(iconBox(0, 0, 100, 100)).toBeNull();
+  });
+});
+
+describe("stackBoxes", () => {
+  /** The Railgun's own numbers: base `top.3.png` and gun `anim.3.loaded.png`. */
+  const RAILGUN = [
+    { x: -39, y: 7, width: 76, height: 51 },
+    { x: -49, y: -9, width: 96, height: 56 },
+  ];
+
+  it("fits a lone picture exactly where iconBox would put it", () => {
+    const piece = { x: -30, y: -40, width: 200, height: 100 };
+    const boxes = stackBoxes(100, 100, [piece]);
+    expect(boxes).toEqual([iconBox(100, 100, 200, 100)]);
+  });
+
+  it("keeps a tower's gun over its base rather than fitting each alone", () => {
+    const boxes = stackBoxes(70, 70, RAILGUN);
+    expect(boxes).not.toBeNull();
+    const [base, gun] = boxes ?? [];
+    // The union is 96 wide and 67 tall, so the gun's top-left is 10 units left
+    // of and 16 above the base's, scaled by the one factor both share.
+    const scale = (base?.width ?? 0) / RAILGUN[0]!.width;
+    expect((gun?.x ?? 0) - (base?.x ?? 0)).toBeCloseTo(-10 * scale);
+    expect((gun?.y ?? 0) - (base?.y ?? 0)).toBeCloseTo(-16 * scale);
+    // Fitting them separately would centre and blow up each one, which is
+    // what the tile must not do: the base alone fills the tile's full width.
+    const alone = iconBox(70, 70, 76, 51);
+    expect(alone?.width).toBeCloseTo(64);
+    expect(base?.width).toBeLessThan(alone?.width ?? 0);
+  });
+
+  it("keeps the whole stack inside the tile", () => {
+    const boxes = stackBoxes(70, 70, RAILGUN) ?? [];
+    for (const box of boxes) {
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(70);
+      expect(box.y + box.height).toBeLessThanOrEqual(70);
+    }
+  });
+
+  it("scales every layer by the same factor, so nothing skews", () => {
+    const boxes = stackBoxes(70, 70, RAILGUN) ?? [];
+    const scales = boxes.map((box, index) => box.width / RAILGUN[index]!.width);
+    expect(scales[1]).toBeCloseTo(scales[0] ?? 0);
+    for (const [index, box] of boxes.entries()) {
+      expect(box.height / RAILGUN[index]!.height).toBeCloseTo(scales[0] ?? 0);
+    }
+  });
+
+  it("centres the union, not any one layer", () => {
+    const boxes = stackBoxes(70, 70, RAILGUN) ?? [];
+    const left = Math.min(...boxes.map((box) => box.x));
+    const right = Math.max(...boxes.map((box) => box.x + box.width));
+    expect((left + right) / 2).toBeCloseTo(35);
+  });
+
+  it("has nothing to draw without pieces, or with one still loading", () => {
+    expect(stackBoxes(70, 70, [])).toBeNull();
+    expect(stackBoxes(70, 70, [{ x: 0, y: 0, width: 0, height: 10 }])).toBeNull();
+    expect(stackBoxes(0, 0, RAILGUN)).toBeNull();
   });
 });

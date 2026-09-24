@@ -326,240 +326,240 @@ export const BUILDING_ART_ROWS: readonly ArtRow[] = [
   [52, "Simple Sign", "buildings/decorations/flags/", [
     [1,["flagpole.png",-5,-33],null,null,["shadow.jpg",-3,15],null,null,[["flag-pirate.png",1,-25,24,30,21]]],
   ], [100], 100],
-  // 53 hwn_pumpkin (immovable) — YARD_PROPS.as:3989
-  [53, "hwn_pumpkin", "buildings/decorations/pumpkins/", [
+  // 53 Pumpkin (immovable) — YARD_PROPS.as:3989
+  [53, "Pumpkin", "buildings/decorations/pumpkins/", [
     [1,["anim.png",-18,-15,37,36],null,null,["shadow.jpg",-22,-1],null,null,[["anim.png",-18,-15,37,36,30]]],
   ], [], 10],
-  // 54 hwn_massivepumpkin (immovable) — YARD_PROPS.as:4013
-  [54, "hwn_massivepumpkin", "buildings/decorations/pumpkins/", [
+  // 54 Giant Pumpkin (immovable) — YARD_PROPS.as:4013
+  [54, "Giant Pumpkin", "buildings/decorations/pumpkins/", [
     [1,["large-top-6.png",-169,-60],null,null,["large-shadow-6.jpg",-168,5],null,null,[["large-anim-6.png",-119,-113,189,155,45]]],
   ], [], 10],
-  // 55 bdg_acorn (decoration) — YARD_PROPS.as:4044
-  [55, "bdg_acorn", "buildings/decorations/acorn/", [
+  // 55 Acorn (decoration) — YARD_PROPS.as:4044
+  [55, "Acorn", "buildings/decorations/acorn/", [
     [1,["top.png",-10,-9],null,null,["shadow.jpg",-9,8],null,null],
   ], [100], 30],
-  // 56 bdg_beehive (decoration) — YARD_PROPS.as:4077
-  [56, "bdg_beehive", "buildings/decorations/beehive/", [
+  // 56 Beehive (decoration) — YARD_PROPS.as:4077
+  [56, "Beehive", "buildings/decorations/beehive/", [
     [1,["top.png",-18,-15],null,null,["shadow.jpg",-14,6],null,null],
   ], [100], 40],
-  // 57 bdg_birdhous (decoration) — YARD_PROPS.as:4110
-  [57, "bdg_birdhous", "buildings/decorations/birdhouse/", [
+  // 57 Bird House (decoration) — YARD_PROPS.as:4110
+  [57, "Bird House", "buildings/decorations/birdhouse/", [
     [1,["top.png",-16,-46],null,null,["shadow.jpg",-2,17],null,null],
   ], [100], 30],
-  // 58 bdg_tent (decoration) — YARD_PROPS.as:4144
-  [58, "bdg_tent", "buildings/decorations/campingtent/", [
+  // 58 Camping Tent (decoration) — YARD_PROPS.as:4144
+  [58, "Camping Tent", "buildings/decorations/campingtent/", [
     [1,["top.png",-30,-12],null,null,["shadow.jpg",-29,6],null,null],
   ], [100], 40],
-  // 59 bdg_jax (decoration) — YARD_PROPS.as:4178
-  [59, "bdg_jax", "buildings/decorations/childrensjax/", [
+  // 59 Childrens Jax (decoration) — YARD_PROPS.as:4178
+  [59, "Childrens Jax", "buildings/decorations/childrensjax/", [
     [1,["top.png",-11,-11],null,null,["shadow.jpg",-7,5],null,null],
   ], [100], 20],
-  // 60 bdg_redgnome (decoration) — YARD_PROPS.as:4211
-  [60, "bdg_redgnome", "buildings/decorations/gnomes/", [
+  // 60 Red Gnome (decoration) — YARD_PROPS.as:4211
+  [60, "Red Gnome", "buildings/decorations/gnomes/", [
     [1,["top-red.png",-10,-31],null,null,["shadow.jpg",-13,2],null,null],
   ], [100], 20],
-  // 61 bdg_bluegnome (decoration) — YARD_PROPS.as:4244
-  [61, "bdg_bluegnome", "buildings/decorations/gnomes/", [
+  // 61 Blue Gnome (decoration) — YARD_PROPS.as:4244
+  [61, "Blue Gnome", "buildings/decorations/gnomes/", [
     [1,["top-blue.png",-10,-31],null,null,["shadow.jpg",-13,2],null,null],
   ], [100], 20],
-  // 62 bdg_greengnome (decoration) — YARD_PROPS.as:4277
-  [62, "bdg_greengnome", "buildings/decorations/gnomes/", [
+  // 62 Green Gnome (decoration) — YARD_PROPS.as:4277
+  [62, "Green Gnome", "buildings/decorations/gnomes/", [
     [1,["top-green.png",-10,-31],null,null,["shadow.jpg",-13,2],null,null],
   ], [100], 20],
-  // 63 bdg_hammock (decoration) — YARD_PROPS.as:4310
-  [63, "bdg_hammock", "buildings/decorations/hammock/", [
+  // 63 Hammock (decoration) — YARD_PROPS.as:4310
+  [63, "Hammock", "buildings/decorations/hammock/", [
     [1,["top.png",-25,-8],null,null,["shadow.jpg",-26,6],null,null],
   ], [100], 40],
-  // 64 bdg_lawnchair (decoration) — YARD_PROPS.as:4343
-  [64, "bdg_lawnchair", "buildings/decorations/lawnchair/", [
+  // 64 Lawn Chair (decoration) — YARD_PROPS.as:4343
+  [64, "Lawn Chair", "buildings/decorations/lawnchair/", [
     [1,["top.png",-24,-14],null,null,["shadow.jpg",-25,4],null,null],
   ], [100], 40],
-  // 65 bdg_outhouse (decoration) — YARD_PROPS.as:4376
-  [65, "bdg_outhouse", "buildings/decorations/outhouse/", [
+  // 65 Outhouse (decoration) — YARD_PROPS.as:4376
+  [65, "Outhouse", "buildings/decorations/outhouse/", [
     [1,["top.png",-16,-19],null,null,["shadow.jpg",-11,10],null,null],
   ], [100], 30],
-  // 66 bdg_pinecone (decoration) — YARD_PROPS.as:4409
-  [66, "bdg_pinecone", "buildings/decorations/pinecone/", [
+  // 66 Pinecone (decoration) — YARD_PROPS.as:4409
+  [66, "Pinecone", "buildings/decorations/pinecone/", [
     [1,["top.png",-13,-10],null,null,["shadow.jpg",-23,3],null,null],
   ], [100], 30],
-  // 67 bdg_rock (decoration) — YARD_PROPS.as:4443
-  [67, "bdg_rock", "buildings/decorations/rock/", [
+  // 67 Rock (decoration) — YARD_PROPS.as:4443
+  [67, "Rock", "buildings/decorations/rock/", [
     [1,["top.png",-15,0],null,null,["shadow.jpg",-15,9],null,null],
   ], [100], 30],
-  // 68 bdg_scaleelectric (decoration) — YARD_PROPS.as:4476
-  [68, "bdg_scaleelectric", "buildings/decorations/scaleelectriccartoyset/", [
+  // 68 Toy Raceway (decoration) — YARD_PROPS.as:4476
+  [68, "Toy Raceway", "buildings/decorations/scaleelectriccartoyset/", [
     [1,["top.png",-48,0],null,null,["shadow.jpg",-57,8],null,null],
   ], [100], 100],
-  // 69 bdg_scarecrow (decoration) — YARD_PROPS.as:4510
-  [69, "bdg_scarecrow", "buildings/decorations/scarecrow/", [
+  // 69 Scarecrow (decoration) — YARD_PROPS.as:4510
+  [69, "Scarecrow", "buildings/decorations/scarecrow/", [
     [1,["top.png",-25,-43],null,null,["shadow.jpg",-20,8],null,null],
   ], [100], 40],
-  // 70 bdg_sundial (decoration) — YARD_PROPS.as:4544
-  [70, "bdg_sundial", "buildings/decorations/sundial/", [
+  // 70 Sun Dial (decoration) — YARD_PROPS.as:4544
+  [70, "Sun Dial", "buildings/decorations/sundial/", [
     [1,["top.png",-23,-6],null,null,["shadow.jpg",-23,8],null,null],
   ], [100], 40],
-  // 71 bdg_tikitorch (decoration) — YARD_PROPS.as:4577
-  [71, "bdg_tikitorch", "buildings/decorations/tikitorch/", [
+  // 71 Tiki Torch (decoration) — YARD_PROPS.as:4577
+  [71, "Tiki Torch", "buildings/decorations/tikitorch/", [
     [1,["top.png",-8,-38],null,null,["shadow.jpg",-6,3],null,null,[["anim.png",-11,-71,16,36,25]]],
   ], [100], 20],
-  // 72 bdg_walnut (decoration) — YARD_PROPS.as:4611
-  [72, "bdg_walnut", "buildings/decorations/walnut/", [
+  // 72 Walnut (decoration) — YARD_PROPS.as:4611
+  [72, "Walnut", "buildings/decorations/walnut/", [
     [1,["top.png",-12,-2],null,null,["shadow.jpg",-23,3],null,null],
   ], [100], 30],
-  // 73 bdg_tombstone (decoration) — YARD_PROPS.as:4644
-  [73, "bdg_tombstone", "buildings/decorations/graveyardtombstone/", [
+  // 73 Tombstone (decoration) — YARD_PROPS.as:4644
+  [73, "Tombstone", "buildings/decorations/graveyardtombstone/", [
     [1,["top.png",-22,-13],null,null,["shadow.jpg",-20,9],null,null],
   ], [100], 40],
-  // 74 bdg_pokeyhead (decoration) — YARD_PROPS.as:4677
-  [74, "bdg_pokeyhead", "buildings/decorations/headsonsticks/", [
+  // 74 Dead Pokey (decoration) — YARD_PROPS.as:4677
+  [74, "Dead Pokey", "buildings/decorations/headsonsticks/", [
     [1,["top-pokey.png",-6,-28],null,null,["shadow.jpg",-1,7],null,null],
   ], [100], 20],
-  // 75 bdg_octohead (decoration) — YARD_PROPS.as:4710
-  [75, "bdg_octohead", "buildings/decorations/headsonsticks/", [
+  // 75 Dead Octo-Ooze (decoration) — YARD_PROPS.as:4710
+  [75, "Dead Octo-Ooze", "buildings/decorations/headsonsticks/", [
     [1,["top-octo.png",-6,-23],null,null,["shadow.jpg",-1,7],null,null],
   ], [100], 20],
-  // 76 bdg_bolthead (decoration) — YARD_PROPS.as:4743
-  [76, "bdg_bolthead", "buildings/decorations/headsonsticks/", [
+  // 76 Dead Bolt (decoration) — YARD_PROPS.as:4743
+  [76, "Dead Bolt", "buildings/decorations/headsonsticks/", [
     [1,["top-bolt.png",-10,-23],null,null,["shadow.jpg",-1,7],null,null],
   ], [100], 20],
-  // 77 bdg_banditohead (decoration) — YARD_PROPS.as:4776
-  [77, "bdg_banditohead", "buildings/decorations/headsonsticks/", [
+  // 77 Dead Bandito (decoration) — YARD_PROPS.as:4776
+  [77, "Dead Bandito", "buildings/decorations/headsonsticks/", [
     [1,["top-bandito.png",-5,-26],null,null,["shadow.jpg",-1,7],null,null],
   ], [100], 20],
-  // 78 bdg_brainhead (decoration) — YARD_PROPS.as:4809
-  [78, "bdg_brainhead", "buildings/decorations/headsonsticks/", [
+  // 78 Dead Brain (decoration) — YARD_PROPS.as:4809
+  [78, "Dead Brain", "buildings/decorations/headsonsticks/", [
     [1,["top-brain.png",-9,-28],null,null,["shadow.jpg",-1,7],null,null],
   ], [100], 20],
-  // 79 bdg_crabhead (decoration) — YARD_PROPS.as:4842
-  [79, "bdg_crabhead", "buildings/decorations/headsonsticks/", [
+  // 79 Dead Crabatron (decoration) — YARD_PROPS.as:4842
+  [79, "Dead Crabatron", "buildings/decorations/headsonsticks/", [
     [1,["top-crabatron.png",-10,-29],null,null,["shadow.jpg",-1,7],null,null],
   ], [100], 20],
-  // 80 bdg_davehead (decoration) — YARD_PROPS.as:4875
-  [80, "bdg_davehead", "buildings/decorations/headsonsticks/", [
+  // 80 Dead D.A.V.E. (decoration) — YARD_PROPS.as:4875
+  [80, "Dead D.A.V.E.", "buildings/decorations/headsonsticks/", [
     [1,["top-dave.png",-14,-30],null,null,["shadow.jpg",-1,7],null,null],
   ], [100], 20],
-  // 81 bdg_eyerahead (decoration) — YARD_PROPS.as:4908
-  [81, "bdg_eyerahead", "buildings/decorations/headsonsticks/", [
+  // 81 Dead Eye-ra (decoration) — YARD_PROPS.as:4908
+  [81, "Dead Eye-ra", "buildings/decorations/headsonsticks/", [
     [1,["top-eyera.png",-4,-23],null,null,["shadow.jpg",-1,7],null,null],
   ], [100], 20],
-  // 82 bdg_fanghead (decoration) — YARD_PROPS.as:4941
-  [82, "bdg_fanghead", "buildings/decorations/headsonsticks/", [
+  // 82 Dead Fang (decoration) — YARD_PROPS.as:4941
+  [82, "Dead Fang", "buildings/decorations/headsonsticks/", [
     [1,["top-fang.png",-10,-30],null,null,["shadow.jpg",-1,7],null,null],
   ], [100], 20],
-  // 83 bdg_finkhead (decoration) — YARD_PROPS.as:4974
-  [83, "bdg_finkhead", "buildings/decorations/headsonsticks/", [
+  // 83 Dead Fink (decoration) — YARD_PROPS.as:4974
+  [83, "Dead Fink", "buildings/decorations/headsonsticks/", [
     [1,["top-fink.png",-11,-29],null,null,["shadow.jpg",-1,7],null,null],
   ], [100], 20],
-  // 84 bdg_ichihead (decoration) — YARD_PROPS.as:5007
-  [84, "bdg_ichihead", "buildings/decorations/headsonsticks/", [
+  // 84 Dead Ichi (decoration) — YARD_PROPS.as:5007
+  [84, "Dead Ichi", "buildings/decorations/headsonsticks/", [
     [1,["top-ichi.png",-6,-29],null,null,["shadow.jpg",-1,7],null,null],
   ], [100], 20],
-  // 85 bdg_projectxhead (decoration) — YARD_PROPS.as:5040
-  [85, "bdg_projectxhead", "buildings/decorations/headsonsticks/", [
+  // 85 Dead Project-X (decoration) — YARD_PROPS.as:5040
+  [85, "Dead Project-X", "buildings/decorations/headsonsticks/", [
     [1,["top-projectx.png",-19,-24],null,null,["shadow.jpg",-1,7],null,null],
   ], [100], 20],
-  // 86 bdg_blackberrybush (decoration) — YARD_PROPS.as:5073
-  [86, "bdg_blackberrybush", "buildings/decorations/blackberrybush/", [
+  // 86 Blackberry Bush (decoration) — YARD_PROPS.as:5073
+  [86, "Blackberry Bush", "buildings/decorations/blackberrybush/", [
     [1,["top.png",-25,-13],null,null,null,null,null],
   ], [100], 40],
-  // 87 bdg_bonsaitree (decoration) — YARD_PROPS.as:5103
-  [87, "bdg_bonsaitree", "buildings/decorations/bonsaitree/", [
+  // 87 Bonsai Tree (decoration) — YARD_PROPS.as:5103
+  [87, "Bonsai Tree", "buildings/decorations/bonsaitree/", [
     [1,["top.png",-41,-36],null,null,["shadow.jpg",-22,15],null,null],
   ], [100], 40],
-  // 88 bdg_cactus (decoration) — YARD_PROPS.as:5136
-  [88, "bdg_cactus", "buildings/decorations/cactus/", [
+  // 88 Cactus (decoration) — YARD_PROPS.as:5136
+  [88, "Cactus", "buildings/decorations/cactus/", [
     [1,["top.png",-14,-30],null,null,["shadow.jpg",-12,2],null,null],
   ], [100], 20],
-  // 89 bdg_flytrap (decoration) — YARD_PROPS.as:5169
-  [89, "bdg_flytrap", "buildings/decorations/flytrap/", [
+  // 89 Monster Fly Trap (decoration) — YARD_PROPS.as:5169
+  [89, "Monster Fly Trap", "buildings/decorations/flytrap/", [
     [1,["top.png",-33,-5],null,null,["shadow.jpg",-38,20],null,null],
   ], [100], 70],
-  // 90 bdg_thorns (decoration) — YARD_PROPS.as:5202
-  [90, "bdg_thorns", "buildings/decorations/thorns/", [
+  // 90 Thorns (decoration) — YARD_PROPS.as:5202
+  [90, "Thorns", "buildings/decorations/thorns/", [
     [1,["top.png",-23,-18],null,null,["shadow.jpg",-25,7],null,null],
   ], [100], 40],
-  // 91 bdg_pinkflowers (decoration) — YARD_PROPS.as:5235
-  [91, "bdg_pinkflowers", "buildings/decorations/flowers/", [
+  // 91 Pink Flowers (decoration) — YARD_PROPS.as:5235
+  [91, "Pink Flowers", "buildings/decorations/flowers/", [
     [1,["top-pink.png",-18,-21],null,null,["shadow.jpg",-10,2],null,null],
   ], [100], 20],
-  // 92 bdg_purpleflowers (decoration) — YARD_PROPS.as:5268
-  [92, "bdg_purpleflowers", "buildings/decorations/flowers/", [
+  // 92 Purple Flowers (decoration) — YARD_PROPS.as:5268
+  [92, "Purple Flowers", "buildings/decorations/flowers/", [
     [1,["top-purple.png",-18,-21],null,null,["shadow.jpg",-10,2],null,null],
   ], [100], 20],
-  // 93 bdg_redflowers (decoration) — YARD_PROPS.as:5301
-  [93, "bdg_redflowers", "buildings/decorations/flowers/", [
+  // 93 Red Flowers (decoration) — YARD_PROPS.as:5301
+  [93, "Red Flowers", "buildings/decorations/flowers/", [
     [1,["top-red.png",-18,-21],null,null,["shadow.jpg",-10,2],null,null],
   ], [100], 20],
-  // 94 bdg_whiteflowers (decoration) — YARD_PROPS.as:5334
-  [94, "bdg_whiteflowers", "buildings/decorations/flowers/", [
+  // 94 White Flowers (decoration) — YARD_PROPS.as:5334
+  [94, "White Flowers", "buildings/decorations/flowers/", [
     [1,["top-white.png",-18,-21],null,null,["shadow.jpg",-10,2],null,null],
   ], [100], 20],
-  // 95 bdg_yellowflowers (decoration) — YARD_PROPS.as:5367
-  [95, "bdg_yellowflowers", "buildings/decorations/flowers/", [
+  // 95 Yellow Flowers (decoration) — YARD_PROPS.as:5367
+  [95, "Yellow Flowers", "buildings/decorations/flowers/", [
     [1,["top-yellow.png",-18,-21],null,null,["shadow.jpg",-10,2],null,null],
   ], [100], 20],
-  // 96 bdg_baseballstatue (decoration) — YARD_PROPS.as:5405
-  [96, "bdg_baseballstatue", "buildings/decorations/statue-baseball/", [
+  // 96 Baseball Trophy (decoration) — YARD_PROPS.as:5405
+  [96, "Baseball Trophy", "buildings/decorations/statue-baseball/", [
     [1,["top.v2.png",-20,-36],null,null,["shadow.v2.jpg",-21,10],null,null],
   ], [100], 40],
-  // 97 bdg_footballstatue (decoration) — YARD_PROPS.as:5443
-  [97, "bdg_footballstatue", "buildings/decorations/statue-football/", [
+  // 97 Football Trophy (decoration) — YARD_PROPS.as:5443
+  [97, "Football Trophy", "buildings/decorations/statue-football/", [
     [1,["top.v2.png",-19,-39],null,null,["shadow.v2.jpg",-17,10],null,null],
   ], [100], 40],
-  // 98 bdg_soccerstatue (decoration) — YARD_PROPS.as:5481
-  [98, "bdg_soccerstatue", "buildings/decorations/statue-soccer/", [
+  // 98 Soccer Trophy (decoration) — YARD_PROPS.as:5481
+  [98, "Soccer Trophy", "buildings/decorations/statue-soccer/", [
     [1,["top.v2.png",-23,-36],null,null,["shadow.v2.jpg",-15,12],null,null],
   ], [100], 40],
-  // 99 bdg_libertystatue (decoration) — YARD_PROPS.as:5519
-  [99, "bdg_libertystatue", "buildings/decorations/statue-liberty/", [
+  // 99 Statue of Liberty (decoration) — YARD_PROPS.as:5519
+  [99, "Statue of Liberty", "buildings/decorations/statue-liberty/", [
     [1,["top.v2.png",-37,-118],null,null,["shadow.v2.jpg",-31,20],null,null],
   ], [100], 70],
-  // 100 bdg_eiffelstatue (decoration) — YARD_PROPS.as:5557
-  [100, "bdg_eiffelstatue", "buildings/decorations/statue-eiffeltower/", [
+  // 100 Eiffel Tower (decoration) — YARD_PROPS.as:5557
+  [100, "Eiffel Tower", "buildings/decorations/statue-eiffeltower/", [
     [1,["top.v2.png",-60,-121],null,null,["shadow.v2.jpg",-60,5],null,null],
   ], [100], 70],
-  // 101 bdg_bigben (decoration) — YARD_PROPS.as:5595
-  [101, "bdg_bigben", "buildings/decorations/statue-bigben/", [
+  // 101 Big Ben (decoration) — YARD_PROPS.as:5595
+  [101, "Big Ben", "buildings/decorations/statue-bigben/", [
     [1,["top.v2.png",-32,-104],null,null,["shadow.v2.jpg",-32,19],null,null],
   ], [100], 70],
-  // 102 bdg_pool (decoration) — YARD_PROPS.as:5628
-  [102, "bdg_pool", "buildings/decorations/pool/", [
+  // 102 Swimming Pool (decoration) — YARD_PROPS.as:5628
+  [102, "Swimming Pool", "buildings/decorations/pool/", [
     [1,["top.png",-65,8],null,null,["shadow.jpg",-65,15],null,null],
   ], [100], 100],
-  // 103 bdg_pond (decoration) — YARD_PROPS.as:5661
-  [103, "bdg_pond", "buildings/decorations/pond/", [
+  // 103 Pond (decoration) — YARD_PROPS.as:5661
+  [103, "Pond", "buildings/decorations/pond/", [
     [1,["top.png",-40,14],null,null,null,null,null],
   ], [100], 100],
-  // 104 bdg_zengarden (decoration) — YARD_PROPS.as:5691
-  [104, "bdg_zengarden", "buildings/decorations/zengarden/", [
+  // 104 Zen Garden (decoration) — YARD_PROPS.as:5691
+  [104, "Zen Garden", "buildings/decorations/zengarden/", [
     [1,["top.png",-72,-5],null,null,["shadow.jpg",-72,16],null,null],
   ], [100], 100],
-  // 105 bdg_fountain (decoration) — YARD_PROPS.as:5724
-  [105, "bdg_fountain", "buildings/decorations/fountain/", [
+  // 105 Fountain (decoration) — YARD_PROPS.as:5724
+  [105, "Fountain", "buildings/decorations/fountain/", [
     [1,["anim.png",-47,-51,89,114],null,null,["shadow.jpg",-41,16],null,null,[["anim.png",-47,-51,89,114,42]]],
   ], [100], 70],
-  // 106 bdg_teagarden (decoration) — YARD_PROPS.as:5757
-  [106, "bdg_teagarden", "buildings/decorations/japaneseteagarden/", [
+  // 106 Tea Garden (decoration) — YARD_PROPS.as:5757
+  [106, "Tea Garden", "buildings/decorations/japaneseteagarden/", [
     [1,["top.png",-62,-38],null,null,["shadow.jpg",-57,12],null,null],
   ], [100], 100],
-  // 107 bdg_monsterskull (decoration) — YARD_PROPS.as:5790
-  [107, "bdg_monsterskull", "buildings/decorations/headsonsticks/", [
+  // 107 Monster Skull (decoration) — YARD_PROPS.as:5790
+  [107, "Monster Skull", "buildings/decorations/headsonsticks/", [
     [1,["top-skull.png",-7,-39],null,null,["shadow.jpg",-1,-7],null,null],
   ], [100], 20],
-  // 108 bdg_rubikunsolved (decoration) — YARD_PROPS.as:5823
-  [108, "bdg_rubikunsolved", "buildings/decorations/rubikscube/", [
+  // 108 Puzzle Cube (unsolved) (decoration) — YARD_PROPS.as:5823
+  [108, "Puzzle Cube (unsolved)", "buildings/decorations/rubikscube/", [
     [1,["top-unsolved.png",-20,-23],null,null,["shadow.jpg",-22,-5],null,null],
   ], [100], 20],
-  // 109 bdg_rubiksolved (decoration) — YARD_PROPS.as:5856
-  [109, "bdg_rubiksolved", "buildings/decorations/rubikscube/", [
+  // 109 Puzzle Cube (solved) (decoration) — YARD_PROPS.as:5856
+  [109, "Puzzle Cube (solved)", "buildings/decorations/rubikscube/", [
     [1,["top-solved.png",-20,-23],null,null,["shadow.jpg",-22,-5],null,null],
   ], [100], 20],
-  // 110 bdg_halloween (decoration) — YARD_PROPS.as:5890
-  [110, "bdg_halloween", "buildings/decorations/pumpkins/", [
+  // 110 D.A.V.E. Pumpkin (decoration) — YARD_PROPS.as:5890
+  [110, "D.A.V.E. Pumpkin", "buildings/decorations/pumpkins/", [
     [1,["attended-large-top.png",-24,-32],null,null,["attended-large-shadow.jpg",-25,1],null,null],
   ], [100], 40],
-  // 111 bdg_halloween_small (decoration) — YARD_PROPS.as:5923
-  [111, "bdg_halloween_small", "buildings/decorations/pumpkins/", [
+  // 111 Mini-Pumpkin (decoration) — YARD_PROPS.as:5923
+  [111, "Mini-Pumpkin", "buildings/decorations/pumpkins/", [
     [1,["attended-small-top.png",-10,-4],null,null,["attended-small-shadow.jpg",-12,2],null,null],
   ], [100], 20],
   // 113 Radio Tower (special) — YARD_PROPS.as:5971
@@ -590,12 +590,12 @@ export const BUILDING_ART_ROWS: readonly ArtRow[] = [
   [119, "Champion Chamber", "buildings/champchamber/", [
     [1,["top.3.png",-66,-62],["top.3.damaged.png",-66,-54],["top.3.destroyed.png",-73,-32],["shadow.3.jpg",-66,10],["shadow.3.jpg",-66,4],["shadow.3.destroyed.jpg",-67,14]],
   ], [16000], 64],
-  // 120 bdg_biggulp (decoration) — YARD_PROPS.as:6586
-  [120, "bdg_biggulp", "buildings/decorations/biggulp/", [
+  // 120 Golden Big Gulp (decoration) — YARD_PROPS.as:6586
+  [120, "Golden Big Gulp", "buildings/decorations/biggulp/", [
     [1,["top.png",-27,-36],null,null,["shadow.jpg",-35,16],null,null],
   ], [100], 70],
-  // 121 bdg_wmitotem1 (decoration) — YARD_PROPS.as:6663
-  [121, "bdg_wmitotem1", "buildings/decorations/wmitotem/", [
+  // 121 Victory Totem Pole (decoration) — YARD_PROPS.as:6663
+  [121, "Victory Totem Pole", "buildings/decorations/wmitotem/", [
     [1,["top1.png",-31,-23],null,null,["shadow1.jpg",-60,-18],null,null],
     [2,["top2.png",-30,-60],null,null,["shadow2.jpg",-71,-44],null,null],
     [3,["top3.png",-30,-90],null,null,["shadow3.jpg",-64,-61],null,null],
@@ -615,8 +615,8 @@ export const BUILDING_ART_ROWS: readonly ArtRow[] = [
   [129, "Quake Tower", "buildings/iquaketower/", [
     [1,["anim.1.png",-37,-75,75,132],["top.1.damaged.png",-40,-75],["top.1.destroyed.png",-42,-8],["shadow.1.v2.jpg",-37,17],["shadow.1.v2.jpg",-40,16],null,[["anim.1.png",-37,-75,75,132,33]],[["anim.1.damaged.png",-40,-75,84,133,33]]],
   ], [10000,16000,22000,28000,34000,34000,34000,34000], 64],
-  // 131 bdg_wmi2totem (decoration) — YARD_PROPS.as:7111
-  [131, "bdg_wmi2totem", "buildings/decorations/wmitotem2/", [
+  // 131 Victory Totem Pole (decoration) — YARD_PROPS.as:7111
+  [131, "Victory Totem Pole", "buildings/decorations/wmitotem2/", [
     [1,["top1.png",-31,-25],null,null,["shadow1.jpg",-55,-20],null,null],
     [2,["top2.png",-31,-60],null,null,["shadow2.jpg",-64,-44],null,null],
     [3,["top3.png",-31,-86],null,null,["shadow3.jpg",-66,-61],null,null],
@@ -628,36 +628,36 @@ export const BUILDING_ART_ROWS: readonly ArtRow[] = [
   [132, "Magma Tower", "buildings/imagmatower/", [
     [1,["top.1.v2.png",-34,-9],["top.1.damaged.v2.png",-38,-4],["top.1.destroyed.v2.png",-36,6],["shadow.1.v2.jpg",-31,10],["shadow.1.v2.jpg",-38,16],null,[["anim.1.v2.png",-26,-50,54,42,31],["anim.2.v2.png",-17,26,38,19,31]]],
   ], [15000,22000,30000,49000,59000,70000], 64],
-  // 133 b_siegefactory (special) — YARD_PROPS.as:7334
-  [133, "b_siegefactory", "buildings/siegefactory/", [
+  // 133 Siege Factory (special) — YARD_PROPS.as:7334
+  [133, "Siege Factory", "buildings/siegefactory/", [
     [1,["top.1.v3.png",-75,-23],["top.1.damaged.v3.png",-75,-88],["top.1.destroyed.png",-75,-48],["shadow.1.jpg",-29,14],["shadow.1.jpg",-29,14],["shadow.1.jpg",-29,14],[["anim.1.v2.png",-58,-99,129,77,35]]],
   ], [10000], 90],
-  // 134 b_siegeworks (special) — YARD_PROPS.as:7443
-  [134, "b_siegeworks", "buildings/siegelab/", [
+  // 134 Siege Works (special) — YARD_PROPS.as:7443
+  [134, "Siege Works", "buildings/siegelab/", [
     [1,["top.1.v6.png",-69,-68],["top.1.damaged.v4.png",-66,-98],["top.1.destroyed.png",-57,-44],["shadow.1.jpg",-50,4],["shadow.1.jpg",-50,4],["shadow.1.jpg",-50,4],[["anim1.v4.png",-54,22,43,39,60],["anim2.v3.png",-24,-92,59,100,60],["anim3.v3.png",19,11,38,40,60]]],
   ], [10000,14400,19200,26100,35300,43200,52000,60000,72000,84000], 90],
-  // 135 bdg_dave_trophy (decoration) — YARD_PROPS.as:7536
-  [135, "bdg_dave_trophy", "buildings/decorations/dave_trophy/", [
+  // 135 D.A.V.E. Trophy (decoration) — YARD_PROPS.as:7536
+  [135, "D.A.V.E. Trophy", "buildings/decorations/dave_trophy/", [
     [1,["top.png",-38,-30],null,null,["shadow.jpg",-38,20],null,null],
   ], [100], 70],
-  // 136 bi_spurtzcannon (tower) — YARD_PROPS.as:7638
-  [136, "bi_spurtzcannon", "buildings/spurtztower/", [
+  // 136 Spurtz Cannon (tower) — YARD_PROPS.as:7638
+  [136, "Spurtz Cannon", "buildings/spurtztower/", [
     [1,["normal_base.png",-39,-35],["damaged_base.png",-39,-35],["destroyed_base.png",-39,-13],["normal_damaged_shadow.jpg",-31,10],["normal_damaged_shadow.jpg",-38,16],null,[["top-normal-anim.v2.png",-27,-57,51,43,31]],[["top-damaged-anim.v2.png",-27,-57,50,43,31]]],
   ], [15000,22000,30000,48000,60000], 64],
-  // 137 bi_blackspurtzcannon (tower) — YARD_PROPS.as:7750
-  [137, "bi_blackspurtzcannon", "buildings/blackspurtztower/", [
+  // 137 Black Spurtz Cannon (tower) — YARD_PROPS.as:7750
+  [137, "Black Spurtz Cannon", "buildings/blackspurtztower/", [
     [1,["normal_base.png",-39,-35],["damaged_base.png",-39,-35],["destroyed_base.png",-39,-13],["normal_damaged_shadow.jpg",-31,10],["normal_damaged_shadow.jpg",-38,16],null,[["top-normal-anim.v2.png",-27,-57,54,42,31]],[["top-damaged-anim.v2.png",-27,-57,54,42,31]]],
   ], [16500,24200,33000,52800,66000], 64],
-  // 138 b_stronghold (tower) — YARD_PROPS.as:7826
-  [138, "b_stronghold", "buildings/guardtower/", [
+  // 138 Stronghold (tower) — YARD_PROPS.as:7826
+  [138, "Stronghold", "buildings/guardtower/", [
     [1,["top.v2.1.png",-98,-100],["top.v2.1.damaged.png",-98,-95],["top.v2.1.destroyed.png",-102,-65],null,null,null],
   ], [400000,500000,600000], 64],
-  // 139 b_resourceop (cage) — YARD_PROPS.as:7876
-  [139, "b_resourceop", "buildings/resourceoutpost/", [
+  // 139 Resource Outpost (cage) — YARD_PROPS.as:7876
+  [139, "Resource Outpost", "buildings/resourceoutpost/", [
     [1,["top.v2.1.png",-86,-64],null,null,null,null,null],
   ], [1], 64],
-  // 140 b_opdefender (special) — YARD_PROPS.as:7942
-  [140, "b_opdefender", "buildings/outpostdefender/", [
+  // 140 Outpost Defender (special) — YARD_PROPS.as:7942
+  [140, "Outpost Defender", "buildings/outpostdefender/", [
     [1,["top.1.png",-59,-19],["top.1.damaged.png",-59,-55],["top.1.destroyed.png",-74,-4],["shadow.1.png",-59,39],["shadow.1.png",-59,39],["shadow.1.destroyed.png",-70,41],[["anim.1.png",-91,-101,178,156,32]]],
   ], [8800,42000,200000,400000,600000], 64],
 ];
