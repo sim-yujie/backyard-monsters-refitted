@@ -181,6 +181,16 @@
   color: var(--colour-accent);
 }
 
+/* The two plan cells (§5.3). Narrower: they carry a count, not an amount. */
+.planner-cost__cell--workers,
+.planner-cost__cell--unplaced {
+  min-width: 64px;
+}
+
+.planner-cost__cell--unplaced[hidden] {
+  display: none;
+}
+
 /* The same rule, for the cost rows inside the two batch panels. */
 .planner-cost__row--short {
   color: var(--colour-danger);
@@ -363,6 +373,175 @@
   flex: 0 0 auto;
 }
 
+/*
+ * The inspector's column, opposite the transient panels (design §4.1).
+ *
+ * A column of its own rather than a slot in the left dock: the inspector is up
+ * for as long as anything is selected, and a checklist or a search box opening
+ * above it in the same stack would shove it down the screen on every click.
+ */
+.planner-dock--right {
+  left: auto;
+  right: var(--space-4);
+  align-items: stretch;
+}
+
+/* ── The inspector ────────────────────────────────────────────────────── */
+
+.planner-inspector__heading,
+.planner-inspector__plan-line {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.planner-inspector__ladder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  margin-block: var(--space-3);
+}
+
+.planner-inspector__ladder-label {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.planner-inspector__level {
+  font-size: var(--text-sm);
+  padding-inline: var(--space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-inspector__level[aria-pressed="true"] {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.planner-inspector__plan {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--colour-border);
+}
+
+.planner-inspector__note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+.planner-inspector__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+
+/* ── The Apply dialog ─────────────────────────────────────────────────── */
+
+.planner-apply__heading {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.planner-apply__check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.planner-apply__list-title {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--text-sm);
+}
+
+/*
+ * Each group of rows carries a word in its heading as well as its colour, so
+ * "starts now" and "cannot start" are never told apart by hue alone (§4.3).
+ */
+.planner-apply__list-title--start {
+  color: var(--colour-success);
+}
+
+.planner-apply__list-title--wait {
+  color: var(--colour-accent);
+}
+
+.planner-apply__list-title--skip {
+  color: var(--colour-danger);
+}
+
+.planner-apply__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-sm);
+  max-height: 24vh;
+  overflow-y: auto;
+}
+
+.planner-apply__list li {
+  padding-block: 1px;
+}
+
+.planner-apply__totals {
+  margin-top: var(--space-3);
+}
+
+.planner-apply__save-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+}
+
+.planner-apply__save-as {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  padding-inline: var(--space-2);
+}
+
+.planner-apply__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* ── What a load could not place (issue #17) ──────────────────────────── */
+
+.planner-misfits__heading {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.planner-misfits__rows {
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  font-size: var(--text-sm);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.planner-misfits__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+}
+
+.planner-misfits__row + .planner-misfits__row {
+  border-top: 1px solid var(--colour-border);
+}
+
+.planner-misfits__show {
+  font-size: var(--text-sm);
+  padding-inline: var(--space-2);
+}
+
 /* ── Banner ───────────────────────────────────────────────────────────── */
 
 .planner-banner {
@@ -419,6 +598,11 @@
 
 .planner-checklist__row--bad .planner-checklist__heading {
   color: var(--colour-danger);
+}
+
+/* A warning reports, it does not refuse: its own mark and its own colour. */
+.planner-checklist__row--warn .planner-checklist__heading {
+  color: var(--colour-accent);
 }
 
 .planner-checklist__faults {

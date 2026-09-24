@@ -823,6 +823,10 @@ export class PlannerSession {
       selected: this.selection,
       moved: this.moved,
       invalid: this.faulted,
+      // Rebuilt rather than cached: a plan edit, an undo, a load and a rebase
+      // can all change it, and it is one pass over the nodes — the same order
+      // as `movedIds`, which this method already pays for.
+      planned: this.plan.plannedLevels(),
       marquee: this.marquee,
     });
     this.onChange();

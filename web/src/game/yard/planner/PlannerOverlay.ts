@@ -26,6 +26,15 @@ export interface PlannerVisuals {
   readonly moved: ReadonlySet<number>;
   /** Buildings the current drag or the checklist says are illegal. */
   readonly invalid: ReadonlySet<number>;
+  /**
+   * Buildings with a planned upgrade, by target level
+   * (`docs/design/planner-upgrades.md` §5.4).
+   *
+   * The level comes along for the blueprint's tile label, which prints "3→5";
+   * the canvas badge is a chevron and draws no text, because text in a
+   * `Graphics` batch is a different cost class from a polygon in it.
+   */
+  readonly planned: ReadonlyMap<number, number> | null;
   /** The box-select rectangle in world pixels, while one is being dragged. */
   readonly marquee: Rect | null;
   /** The plot outline for the current expansion, in world pixels. */
@@ -42,6 +51,14 @@ export type ShapeLookup = (id: number) => Corners | null;
 const ACCENT = 0xf0a12e;
 const MOVED = 0x8fd0ff;
 const INVALID = 0xe05252;
+/** The planned-upgrade badge: green, with a dark edge so it reads on any tile. */
+const PLANNED = 0x5cc26a;
+const PLANNED_EDGE = 0x1b3d22;
+
+/** Half the badge's width, in world pixels. */
+const BADGE_HALF = 7;
+/** How far above the footprint's top corner the badge floats. */
+const BADGE_LIFT = 11;
 
 export class PlannerOverlay {
   readonly root = new Graphics();
@@ -134,6 +151,26 @@ export class PlannerOverlay {
     }
     if (blocker) g.stroke({ width: 3, color: INVALID, alpha: 0.9 });
 
+    // The planned-upgrade badges (§5.4): one chevron per planned building, all
+    // in a single fill and stroke like every other group above.
+    const planned = visuals.planned;
+    if (planned && planned.size > 0) {
+      let badged = false;
+      for (const id of planned.keys()) {
+        const shape = shapeOf(id);
+        if (!shape) continue;
+        g.poly(chevron(shape));
+        badged = true;
+      }
+      if (badged) {
+        g.fill({ color: PLANNED, alpha: 0.95 }).stroke({
+          width: 1.5,
+          color: PLANNED_EDGE,
+          alpha: 0.9,
+        });
+      }
+    }
+
     // A dashed box around a multi-selection, so the group reads as one thing.
     if (visuals.selected.size > 1 && minX < maxX) {
       dashedRect(g, { x: minX, y: minY, width: maxX - minX, height: maxY - minY });
@@ -153,6 +190,51 @@ export class PlannerOverlay {
 }
 
 const path = (shape: Corners): number[] => shape.flatMap(([x, y]) => [x, y]);
+
+/**
+ * The upward chevron that marks a planned upgrade, floating just above a
+ * footprint's topmost corner.
+ *
+ * Anchored on the top of the shape rather than on a stored position because
+ * the overlay is handed corners and never learns which view it is drawing: an
+ * isometric diamond's top vertex and a blueprint tile's top edge are both
+ * "the top", and averaging the corners that share the smallest `y` gives the
+ * middle of either one.
+ *
+ * A shape, not a tint: §4.3 forbids colour as the only channel, so the badge
+ * is readable as a mark even where the green is not.
+ */
+const chevron = (shape: Corners): number[] => {
+  let top = Infinity;
+  for (const [, y] of shape) if (y < top) top = y;
+
+  let sum = 0;
+  let count = 0;
+  for (const [x, y] of shape) {
+    if (y > top) continue;
+    sum += x;
+    count++;
+  }
+  if (count === 0) return [];
+
+  const cx = sum / count;
+  const cy = top - BADGE_LIFT;
+  const half = BADGE_HALF;
+  return [
+    cx - half,
+    cy + half * 0.6,
+    cx,
+    cy - half * 0.6,
+    cx + half,
+    cy + half * 0.6,
+    cx + half,
+    cy + half * 1.3,
+    cx,
+    cy + half * 0.1,
+    cx - half,
+    cy + half * 1.3,
+  ];
+};
 
 /** A dashed rectangle, which `Graphics` has no primitive for. */
 export const dashedRect = (

@@ -1,7 +1,13 @@
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
-import { BaseMode, type BaseLoadResponse, type BuildingDataMap, type Resources } from "@/api/types";
+import {
+  BaseMode,
+  type BaseLoadResponse,
+  type BuildingDataMap,
+  type Resources,
+  type UpgradeReport,
+} from "@/api/types";
 import { Camera } from "@/game/Camera";
 import {
   PlannerAccess,
@@ -14,6 +20,7 @@ import { YardInput } from "@/game/yard/YardInput";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
+import { describeUpgradeReport } from "@/ui/yard/upgradeText";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { ZoomControl } from "@/ui/yard/ZoomControl";
 import { YardPlanner } from "./YardPlanner";
@@ -551,7 +558,8 @@ export class YardScene implements Scene {
       readOnlyToolbar: toolbar,
       readOnly: this.access === PlannerAccess.READ_ONLY,
       ...(this.save?.firedtraps ? { firedtraps: this.save.firedtraps } : {}),
-      onApplied: (buildingdata, moved) => this.onApplied(buildingdata, moved),
+      onApplied: (buildingdata, moved, resources, upgrades) =>
+        this.onApplied(buildingdata, moved, resources, upgrades),
       onYardChanged: (buildingdata, resources) => this.onYardChanged(buildingdata, resources),
       onView: (view) => this.setView(view),
       onInset: (inset) => this.setInset(inset),
@@ -586,23 +594,42 @@ export class YardScene implements Scene {
    * so the honest thing is to re-read it rather than to assume the client's own
    * plan and the server's answer agree.
    */
-  private onApplied(buildingdata: BuildingDataMap, moved: number): void {
+  private onApplied(
+    buildingdata: BuildingDataMap,
+    moved: number,
+    resources: Resources | undefined,
+    upgrades: UpgradeReport | null,
+  ): void {
     const save = this.save;
     const context = this.context;
     if (!save || !context) return;
 
     this.closePlanner();
 
-    const merged: BaseLoadResponse = { ...save, buildingdata };
+    // The pool comes back charged whenever Apply started anything, so it is
+    // taken from the response rather than subtracted here: the server owns
+    // what an upgrade cost, and the walk it ran is partial by design
+    // (`docs/design/planner-upgrades.md` §5.5).
+    const merged: BaseLoadResponse = {
+      ...save,
+      buildingdata,
+      ...(resources ? { resources } : {}),
+    };
     this.save = merged;
     const yard = readYard(merged);
     this.yard = yard;
     this.renderer.show(yard);
     this.minimap?.refreshBuildings();
-    this.notices.show("yard-applied", `Moved ${moved} building${moved === 1 ? "" : "s"}.`, {
-      level: "info",
-      timeoutMs: 5000,
-    });
+    if (resources) this.hud?.setResources(yard.resources, yard.credits);
+
+    // Raised here rather than by the planner because the planner has just been
+    // closed and clears its own notices on the way out (§8, Q4).
+    const moveText = `Moved ${moved} building${moved === 1 ? "" : "s"}.`;
+    this.notices.show(
+      "yard-applied",
+      upgrades ? `${moveText} ${describeUpgradeReport(upgrades)}` : moveText,
+      { level: "info", timeoutMs: upgrades ? 12_000 : 5_000 },
+    );
   }
 
   /**

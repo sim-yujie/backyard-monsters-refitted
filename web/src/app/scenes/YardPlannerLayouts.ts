@@ -98,6 +98,19 @@ export class YardPlannerLayouts {
     this.panel?.setCurrentSlot(slot);
   }
 
+  /**
+   * Writes the plan to a slot from outside the panel.
+   *
+   * The Apply dialog offers "save to '<slot>' first" and has to *wait* for it
+   * before the layout is applied (`docs/design/planner-upgrades.md` §5.5): the
+   * upgrades Apply cannot start stay in the saved layout and nowhere else, and
+   * Apply then closes the planner. So this resolves when the write has landed,
+   * unlike the fire-and-forget paths the panel and Ctrl+S use.
+   */
+  async saveTo(slot: number, name: string): Promise<void> {
+    await this.save(slot, name);
+  }
+
   private async save(slot: number, name: string): Promise<void> {
     this.panel?.setBusy(true);
     try {

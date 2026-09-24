@@ -1,6 +1,12 @@
-import type { SelectionSummary } from "@/game/yard/planner/summary";
+import type { SelectionSummary, SelectionTypeCost } from "@/game/yard/planner/summary";
 import { GroupOp, GROUP_OPS } from "@/game/yard/planner/groupTools";
 import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
+import {
+  wallClockSeconds,
+  type ApplyPreview,
+  type PlanTotals,
+} from "@/game/yard/planner/upgrades";
+import type { YardWorkers } from "@/game/yard/yardModel";
 import { YardView } from "@/game/yard/YardRenderer";
 import { formatAmount, formatCountdown } from "@/ui/format";
 
@@ -19,11 +25,22 @@ import { formatAmount, formatCountdown } from "@/ui/format";
  * ## The cost cells
  *
  * The left of the bottom bar is F3: four resource cells reading "needed /
- * held", a worker time and a shiny price, then the selection sentence. "Needed"
- * is what it would cost to take everything selected one level up — phase 1 has
- * no planned upgrades to add up, so the selection is the plan (plan §6, Q5).
- * A cell whose need is past what the yard holds carries `--short`, which is a
- * colour *and* a word in the tooltip, per §4.3.
+ * held", a worker time, a shiny price, a free-worker count and an unplaced
+ * count, then the selection sentence. A cell whose need is past what the yard
+ * holds carries `--short`, which is a colour *and* a word in the tooltip, per
+ * §4.3.
+ *
+ * "Needed" means **the plan** once anything is planned
+ * (`docs/design/planner-upgrades.md` §5.3): every step from each planned
+ * building's current level to its target, which is what Apply is about to
+ * charge for. With nothing planned there is no plan to add up, so the cells
+ * fall back to the selection's next level — the phase 1 reading, and still the
+ * useful answer to "what would one more level of these cost".
+ *
+ * The workers cell is a readout in both modes, because "how many jobs can I
+ * even start" is a question about the yard rather than about the plan. The
+ * unplaced cell is hidden at zero, which is always, until a store tool can
+ * take a building out of the yard.
  *
  * Shiny is shown and never purchasable (§6, Q6), so it is a readout like the
  * rest and not a button.
@@ -231,6 +248,8 @@ export class PlannerBar {
   private readonly resourceCells = new Map<string, CostCell>();
   private readonly timeCell: CostCell;
   private readonly shinyCell: CostCell;
+  private readonly workersCell: CostCell;
+  private readonly unplacedCell: CostCell;
   private readonly readOnly: boolean;
 
   constructor(actions: PlannerBarActions, options: { readOnly?: boolean } = {}) {
@@ -344,7 +363,20 @@ export class PlannerBar {
 
     this.timeCell = new CostCell("Time", "planner-cost__cell planner-cost__cell--time");
     this.shinyCell = new CostCell("Shiny", "planner-cost__cell planner-cost__cell--shiny");
-    costs.append(this.timeCell.element, this.shinyCell.element);
+    this.workersCell = new CostCell("Workers", "planner-cost__cell planner-cost__cell--workers");
+    // Nothing can be unplaced yet (phase 1 §1.3), so the cell starts hidden and
+    // the store tool turns it on rather than adding it.
+    this.unplacedCell = new CostCell(
+      "Unplaced",
+      "planner-cost__cell planner-cost__cell--unplaced",
+    );
+    this.unplacedCell.element.hidden = true;
+    costs.append(
+      this.timeCell.element,
+      this.shinyCell.element,
+      this.workersCell.element,
+      this.unplacedCell.element,
+    );
 
     this.summary = document.createElement("span");
     this.summary.className = "planner-bar__summary";
@@ -455,22 +487,8 @@ export class PlannerBar {
    * under the bar it belongs to.
    */
   setSummary(summary: SelectionSummary): void {
-    const breakdown = describeBreakdown(summary);
-
-    for (const [key, label] of RESOURCE_LABELS) {
-      const cell = this.resourceCells.get(key);
-      if (!cell) continue;
-      const needed = summary.needed[key];
-      const held = summary.held[key];
-      const short = summary.shortfall[key];
-      cell.set(
-        `${formatAmount(needed)} / ${formatAmount(held)}`,
-        short > 0
-          ? `${label}: ${needed.toLocaleString()} needed, ${held.toLocaleString()} held — ${short.toLocaleString()} short.\n${breakdown}`
-          : `${label}: ${needed.toLocaleString()} needed, ${held.toLocaleString()} held.\n${breakdown}`,
-        short > 0,
-      );
-    }
+    const breakdown = describeBreakdown(summary.byType, summary.maxed);
+    this.setResourceCells(summary.needed, summary.held, summary.shortfall, breakdown);
 
     this.timeCell.set(
       summary.seconds === 0 ? "—" : formatCountdown(summary.seconds),
@@ -483,6 +501,89 @@ export class PlannerBar {
       summary.shiny === 0 ? "—" : formatAmount(summary.shiny),
       "What it would cost in shiny to buy every step outright. Not for sale in the planner yet.",
     );
+  }
+
+  /**
+   * The same six cells, read from the plan rather than from the selection
+   * (§5.3).
+   *
+   * `free` is what the wall-clock lower bound is divided by, and it comes from
+   * the yard rather than from the totals because the plan does not know how
+   * many workers are already on a job.
+   */
+  setPlanSummary(totals: PlanTotals, free: number): void {
+    const breakdown = describeBreakdown(totals.byType, 0);
+    this.setResourceCells(totals.needed, totals.held, totals.shortfall, breakdown);
+
+    const clock = wallClockSeconds(totals, free);
+    this.timeCell.set(
+      totals.seconds === 0 ? "—" : formatCountdown(totals.seconds),
+      totals.seconds === 0
+        ? "No worker time: nothing is planned."
+        : `${totals.seconds.toLocaleString()} worker seconds over ${totals.steps} ${totals.steps === 1 ? "step" : "steps"}.\nAt least ${formatCountdown(clock)} of real time with ${free} free ${free === 1 ? "worker" : "workers"} — a lower bound, because jobs do not parallelise perfectly and one building takes one step at a time.`,
+    );
+
+    this.shinyCell.set(
+      totals.shiny === 0 ? "—" : formatAmount(totals.shiny),
+      "What it would cost in shiny to buy every planned step outright. Not for sale in the planner yet.",
+    );
+  }
+
+  /**
+   * The free-worker readout, and what Apply would do with them.
+   *
+   * The preview is the same walk Apply runs (§5.5), so the tooltip promises
+   * what the dialog will itemise and the server will then report.
+   */
+  setWorkers(workers: YardWorkers, preview: ApplyPreview | null): void {
+    const free = Math.max(0, workers.total - workers.busy);
+    const tail = preview
+      ? `\n${preview.started.length} would start on Apply, ${preview.waiting.length} would wait for a worker, ${preview.finished.length} would finish instantly.`
+      : "";
+    this.workersCell.set(
+      `${free} free / ${workers.total}`,
+      `${workers.busy} of ${workers.total} ${workers.total === 1 ? "worker is" : "workers are"} already on a job.${tail}`,
+      preview !== null && preview.waiting.length > 0,
+    );
+  }
+
+  /**
+   * How many buildings are in the plan but nowhere on the plot.
+   *
+   * Zero today and hidden at zero, because nothing can be taken out of the
+   * yard yet; Apply is hard-blocked while it is not zero (§8, Q4), so the cell
+   * exists to say *why* the moment a store tool can make it happen.
+   */
+  setUnplaced(count: number): void {
+    this.unplacedCell.element.hidden = count === 0;
+    this.unplacedCell.set(
+      String(count),
+      count === 0
+        ? "Every building has a place."
+        : `${count} ${count === 1 ? "building has" : "buildings have"} nowhere to go. Apply is blocked until ${count === 1 ? "it does" : "they do"}.`,
+      count > 0,
+    );
+  }
+
+  /** The four resource cells, from whichever reading of "needed" is current. */
+  private setResourceCells(
+    needed: SelectionSummary["needed"],
+    held: SelectionSummary["held"],
+    shortfall: SelectionSummary["shortfall"],
+    breakdown: string,
+  ): void {
+    for (const [key, label] of RESOURCE_LABELS) {
+      const cell = this.resourceCells.get(key);
+      if (!cell) continue;
+      const short = shortfall[key];
+      cell.set(
+        `${formatAmount(needed[key])} / ${formatAmount(held[key])}`,
+        short > 0
+          ? `${label}: ${needed[key].toLocaleString()} needed, ${held[key].toLocaleString()} held — ${short.toLocaleString()} short.\n${breakdown}`
+          : `${label}: ${needed[key].toLocaleString()} needed, ${held[key].toLocaleString()} held.\n${breakdown}`,
+        short > 0,
+      );
+    }
   }
 
   /**
@@ -569,8 +670,11 @@ export class PlannerBar {
  * numbers, and the maxed count last so a selection that costs nothing still
  * says why.
  */
-const describeBreakdown = (summary: SelectionSummary): string => {
-  const lines = summary.byType.map(
+const describeBreakdown = (
+  byType: readonly SelectionTypeCost[],
+  maxed: number,
+): string => {
+  const lines = byType.map(
     (row) =>
       `${row.count} × ${row.name}: ${[
         row.needed.r1 > 0 ? `${row.needed.r1.toLocaleString()} twigs` : "",
@@ -581,8 +685,8 @@ const describeBreakdown = (summary: SelectionSummary): string => {
         .filter(Boolean)
         .join(", ") || "free"}`,
   );
-  if (summary.maxed > 0) {
-    lines.push(`${summary.maxed} already at the top of ${summary.maxed === 1 ? "its" : "their"} ladder`);
+  if (maxed > 0) {
+    lines.push(`${maxed} already at the top of ${maxed === 1 ? "its" : "their"} ladder`);
   }
   return lines.length > 0 ? lines.join("\n") : "Nothing selected has a next level.";
 };
@@ -597,6 +701,8 @@ const summarise = (state: PlannerState): string => {
         : `${state.selectionCount} selected`,
   );
   parts.push(state.movedCount === 1 ? "1 moved" : `${state.movedCount} moved`);
+  // Left out at zero: an untouched plan should not carry a count of nothing.
+  if (state.plannedCount > 0) parts.push(`${state.plannedCount} planned`);
   if (state.dragInvalid) parts.push("cannot drop here");
   else if (state.carrying) parts.push("in hand · click to drop, right-click to put back");
   else if (state.readOnly) parts.push("read-only · nothing here can be moved");

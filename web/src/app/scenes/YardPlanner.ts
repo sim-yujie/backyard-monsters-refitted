@@ -1,10 +1,10 @@
 import type {
-  BatchCost,
   BuildingDataMap,
   FiredTrap,
   Layout,
   Resources,
   TrapPlacement,
+  UpgradeReport,
 } from "@/api/types";
 import { ApiError, NetworkError } from "@/api/http";
 import {
@@ -17,17 +17,32 @@ import type { Camera } from "@/game/Camera";
 import { TRAP_TYPES, WALL_TYPES } from "@/game/yard/buildingCosts";
 import { blueprintToWorld } from "@/game/yard/planner/blueprint";
 import { GROUP_OPS } from "@/game/yard/planner/groupTools";
+import type { Checklist } from "@/game/yard/planner/checklist";
+import type { LoadMiss } from "@/game/yard/planner/layout";
+import type { PlanNode } from "@/game/yard/planner/placement";
 import { GroupRefusal, PlannerSession, type GroupOutcome } from "@/game/yard/planner/PlannerSession";
 import { summariseSelection } from "@/game/yard/planner/summary";
+import { planTotals } from "@/game/yard/planner/upgrades";
 import { footprintCentre, footprintOf } from "@/game/yard/YardGrid";
+import { freeWorkers } from "@/game/yard/workers";
 import type { Yard } from "@/game/yard/yardModel";
 import { YardView, type YardRenderer } from "@/game/yard/YardRenderer";
-import { formatAmount } from "@/ui/format";
 import type { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
+import { InspectorPanel } from "@/ui/yard/InspectorPanel";
 import { PlannerBar } from "@/ui/yard/PlannerBar";
-import { banner, checklistPanel, rearmPanel, shortcutsPanel } from "@/ui/yard/PlannerDialogs";
+import {
+  applyPanel,
+  banner,
+  checklistPanel,
+  describeLoadProblems,
+  didNotFitPanel,
+  rearmPanel,
+  shortcutsPanel,
+  type BannerAction,
+} from "@/ui/yard/PlannerDialogs";
 import { SearchPanel } from "@/ui/yard/SearchPanel";
+import { describeCost } from "@/ui/yard/upgradeText";
 import { wallUpgradePanel } from "@/ui/yard/WallUpgradePanel";
 import { YardPlannerLayouts } from "./YardPlannerLayouts";
 
@@ -75,8 +90,21 @@ export interface YardPlannerOptions {
    * loaded layout named that this yard no longer has (plan §3.4).
    */
   firedtraps?: readonly FiredTrap[];
-  /** Called after a successful apply, with the yard the server wrote. */
-  onApplied: (buildingdata: BuildingDataMap, moved: number) => void;
+  /**
+   * Called after a successful apply, with the yard the server wrote.
+   *
+   * `resources` and `upgrades` arrive whenever Apply was asked to start the
+   * planned upgrades (`docs/design/planner-upgrades.md` §5.5): the pool has
+   * been charged server-side, so the HUD re-reads it rather than subtracting,
+   * and the report is raised as a notice by the scene — the planner closes on
+   * Apply (§8, Q4) and takes its own notices with it.
+   */
+  onApplied: (
+    buildingdata: BuildingDataMap,
+    moved: number,
+    resources: Resources | undefined,
+    upgrades: UpgradeReport | null,
+  ) => void;
   /**
    * Called after a batch action the server completed, with the save as it now
    * holds it.
@@ -115,8 +143,18 @@ export class YardPlanner {
   private readonly layouts: YardPlannerLayouts;
   private readonly bar: PlannerBar;
   private readonly dock: HTMLElement;
+  /**
+   * The inspector's own dock, on the other side of the canvas.
+   *
+   * Design §4.1 puts the inspector opposite the stack of transient panels, and
+   * they cannot share a column: the inspector is up for as long as anything is
+   * selected, so a checklist or a search box docked above it would push it
+   * around on every click.
+   */
+  private readonly inspectorDock: HTMLElement;
 
   private openPanel: Panel | null = null;
+  private inspector: InspectorPanel | null = null;
   private search: SearchPanel | null = null;
   private notice: HTMLElement | null = null;
   private applying = false;
@@ -141,6 +179,10 @@ export class YardPlanner {
     this.dock = document.createElement("div");
     this.dock.className = "planner-dock";
     options.overlay.append(this.dock);
+
+    this.inspectorDock = document.createElement("div");
+    this.inspectorDock.className = "planner-dock planner-dock--right";
+    options.overlay.append(this.inspectorDock);
 
     this.session = new PlannerSession({
       yard: options.yard,
@@ -184,7 +226,7 @@ export class YardPlanner {
       onChecklist: () => this.showChecklist(),
       onUpgradeWalls: () => this.showWallUpgrade(),
       onRearmTraps: () => this.showRearm(),
-      onApply: () => void this.apply(),
+      onApply: () => this.apply(),
       onHelp: () => this.openDialog(shortcutsPanel(() => this.closeDialog())),
       onExit: () => this.requestExit(),
     }, { readOnly: this.readOnly });
@@ -235,12 +277,15 @@ export class YardPlanner {
 
   destroy(): void {
     this.closeDialog();
+    this.inspector?.close();
+    this.inspector = null;
     this.search?.close();
     this.search = null;
     this.layouts.destroy();
     this.session.detach();
     this.bar.destroy();
     this.dock.remove();
+    this.inspectorDock.remove();
     this.options.notices.clear(NOTICE);
     this.reportReadOnlyInset();
   }
@@ -259,28 +304,44 @@ export class YardPlanner {
     const result = this.session.load(layout, { preview });
     this.layouts.setCurrentSlot(this.session.state().slot);
 
+    const missed = result.didNotFit.length;
+    const message = describeLoadProblems({
+      name: layout.name,
+      layoutExpansion: result.expansion,
+      yardExpansion: this.session.plan.expansion,
+      didNotFit: missed,
+      missing: result.missing.length,
+      plansDropped: result.plansDropped,
+    });
+
+    // A preview reports exactly what a load does. It changes nothing, but what
+    // it could not place is the whole reason to look at a layout before
+    // committing to it — and a read-only session has no other kind of load
+    // (issue #17), so returning early here silenced the report for every
+    // planner opened on somebody else's yard.
+    const actions: BannerAction[] =
+      missed > 0
+        ? [{ label: "Show me", run: () => this.showDidNotFit(result.didNotFit, result.expansion) }]
+        : [];
+
     if (preview) {
-      this.showBanner(`Previewing “${layout.name}”. Nothing has been changed.`, "info", {
+      const head = `Previewing “${layout.name}”. Nothing has been changed.`;
+      // Both buttons, not one: a preview that also left something behind has
+      // two things to offer, and dropping either strands the player with a
+      // preview they cannot close or a list they cannot reach.
+      actions.push({
         label: "Close preview",
         run: () => {
           this.session.dismissPreview();
           this.clearBanner();
         },
       });
+      this.showBanner(
+        message === null ? head : `${head} ${message}`,
+        message === null ? "info" : "warning",
+        actions,
+      );
       return;
-    }
-
-    const problems: string[] = [];
-    const missed = result.didNotFit.length;
-    if (missed > 0) {
-      problems.push(
-        `${missed} ${plural(missed, "building")} did not fit and ${missed === 1 ? "was" : "were"} left where ${missed === 1 ? "it" : "they"} stood`,
-      );
-    }
-    if (result.missing.length > 0) {
-      problems.push(
-        `${result.missing.length} saved ${plural(result.missing.length, "building")} no longer in this yard`,
-      );
     }
 
     // A saved node with no building is the second source of fired-trap
@@ -291,16 +352,24 @@ export class YardPlanner {
       .map((entry) => ({ t: entry.t, x: entry.x, y: entry.y }));
     this.bar.setRearmCount(this.rearmTargets().length);
 
-    if (problems.length === 0) {
+    if (message === null) {
       this.clearBanner();
       return;
     }
-    this.showBanner(
-      `“${layout.name}” was designed for expansion ${result.expansion}: ${problems.join("; ")}. Nothing was placed for you — move or remove them yourself.`,
-      "warning",
-      missed > 0
-        ? { label: "Show me", run: () => this.selectAndFrame(result.didNotFit.map((m) => m.id)) }
-        : undefined,
+    this.showBanner(message, "warning", actions);
+  }
+
+  /** The per-building list behind the banner's "Show me" (issue #17). */
+  private showDidNotFit(misses: readonly LoadMiss[], expansion: number): void {
+    this.selectAndFrame(misses.map((miss) => miss.id));
+    this.openDialog(
+      didNotFitPanel({
+        misses,
+        layoutExpansion: expansion,
+        yardExpansion: this.session.plan.expansion,
+        onShow: (id) => this.selectAndFrame([id]),
+        onClose: () => this.closeDialog(),
+      }),
     );
   }
 
@@ -358,7 +427,7 @@ export class YardPlanner {
 
   private showChecklist(): void {
     const checklist = this.session.checklist();
-    this.bar.setBlocking(checklist.rows.filter((row) => !row.ok).length);
+    this.bar.setBlocking(blockingCount(checklist));
     this.openDialog(
       checklistPanel({
         checklist,
@@ -368,11 +437,20 @@ export class YardPlanner {
     );
   }
 
-  private async apply(): Promise<void> {
+  /**
+   * Apply: check locally, then show what the click is about to do.
+   *
+   * The blocking checklist still comes first and still refuses outright (§8,
+   * Q4). Past it the dialog is not a confirmation so much as a statement of
+   * what Apply will *partly* do: the upgrade walk is partial by design (§3.2),
+   * so the itemised preview is the only place the player is told which of
+   * their six towers is the one that waits.
+   */
+  private apply(): void {
     if (this.readOnly || this.applying) return;
 
     const checklist = this.session.checklist();
-    this.bar.setBlocking(checklist.rows.filter((row) => !row.ok).length);
+    this.bar.setBlocking(blockingCount(checklist));
     if (!checklist.ok) {
       this.showChecklist();
       this.options.notices.show(NOTICE, "Apply is blocked. See the checklist.", {
@@ -381,15 +459,64 @@ export class YardPlanner {
       return;
     }
 
+    const state = this.session.state();
+    this.openDialog(
+      applyPanel({
+        moved: this.session.plan.movedIds().length,
+        preview: this.session.applyPreview(),
+        slotName: state.slot === null ? null : state.slotName || `Slot ${state.slot + 1}`,
+        dirty: state.dirty,
+        onSaveAs: () => {
+          this.closeDialog();
+          void this.layouts.toggle();
+        },
+        onConfirm: (choice) => {
+          this.closeDialog();
+          void this.runApply(choice);
+        },
+        onClose: () => this.closeDialog(),
+      }),
+    );
+  }
+
+  /**
+   * Sends the layout, optionally saving it to its slot first.
+   *
+   * The save is awaited rather than fired alongside: Apply closes the planner
+   * and the upgrades it could not start live in the saved layout and nowhere
+   * else (§5.5). A failed save is reported and the apply is abandoned, because
+   * applying after a failed save is exactly the case the checkbox exists to
+   * prevent.
+   */
+  private async runApply(choice: {
+    startUpgrades: boolean;
+    saveFirst: boolean;
+  }): Promise<void> {
+    if (this.readOnly || this.applying) return;
     this.applying = true;
     try {
-      const response = await applyLayout(this.session.payload());
-      this.options.notices.show(
-        NOTICE,
-        `Moved ${response.moved} ${plural(response.moved, "building")}.`,
-        { level: "info", timeoutMs: 5000 },
+      const state = this.session.state();
+      if (choice.saveFirst && state.slot !== null) {
+        await this.layouts.saveTo(state.slot, state.slotName || `Slot ${state.slot + 1}`);
+        if (this.session.state().dirty) {
+          this.options.notices.show(
+            NOTICE,
+            "The layout could not be saved, so nothing was applied. Try again, or untick “save first”.",
+            { level: "error" },
+          );
+          return;
+        }
+      }
+
+      const response = await applyLayout(this.session.payload(), {
+        startUpgrades: choice.startUpgrades,
+      });
+      this.options.onApplied(
+        response.buildingdata,
+        response.moved,
+        response.resources,
+        response.upgrades ?? null,
       );
-      this.options.onApplied(response.buildingdata, response.moved);
     } catch (caught) {
       const ids = applyConflictIds(caught);
       if (ids.length > 0) this.session.faultIds(ids);
@@ -549,13 +676,86 @@ export class YardPlanner {
 
   /* ── Chrome ─────────────────────────────────────────────────────────── */
 
-  /** Rewrites the bar from the session's state and the selection's cost. */
+  /**
+   * Rewrites the bar and the inspector from the session's state.
+   *
+   * The cost cells read **the plan** once anything is planned and fall back to
+   * the selection when nothing is (§5.3). Both answers are wanted, but not at
+   * once: a player who has planned six towers wants the bar to say what Apply
+   * is about to charge, and a player who has planned nothing wants to know what
+   * the buildings they have just clicked would cost.
+   */
   private refreshBar(): void {
     this.options.onPlanChanged?.();
-    this.bar.update(this.session.state());
+    const state = this.session.state();
+    this.bar.update(state);
+
     const nodes = this.session.selectedNodes();
-    this.bar.setSummary(summariseSelection(nodes, this.yard));
+    if (state.plannedCount > 0) {
+      this.bar.setPlanSummary(
+        planTotals(this.session.plannedNodes(), this.yard),
+        freeWorkers(this.yard),
+      );
+      this.bar.setWorkers(this.yard.workers, this.session.applyPreview());
+    } else {
+      this.bar.setSummary(summariseSelection(nodes, this.yard));
+      this.bar.setWorkers(this.yard.workers, null);
+    }
+    // Nothing can be unplaced yet: every building is in the plan from the
+    // moment the planner opens (phase 1 §1.3). The cell hides itself at zero.
+    this.bar.setUnplaced(0);
     this.bar.setWallCount(nodes.filter((node) => WALL_TYPES.includes(node.type)).length);
+
+    this.refreshInspector(nodes);
+  }
+
+  /**
+   * Opens, redraws or closes the inspector for the current selection.
+   *
+   * One panel for both shapes rather than two that swap: a click that grows a
+   * selection from one building to two changes what the panel says, not which
+   * panel it is, and a panel that is destroyed and rebuilt on every such click
+   * loses the scroll position and flickers.
+   */
+  private refreshInspector(nodes: readonly PlanNode[]): void {
+    if (nodes.length === 0) {
+      this.inspector?.close();
+      this.inspector = null;
+      return;
+    }
+
+    const panel =
+      this.inspector ??
+      new InspectorPanel({
+        onPlan: (ids, level) => this.plan(ids, level),
+        onUpgradeWalls: () => this.showWallUpgrade(),
+        readOnly: this.readOnly,
+        onClose: () => {
+          this.inspector = null;
+        },
+      }).mount(this.inspectorDock);
+    this.inspector = panel;
+    panel.show(nodes, this.yard);
+  }
+
+  /**
+   * Plans a target on the named buildings, or clears it, and says so.
+   *
+   * The session refuses what F1 rule 3 refuses — a busy or damaged building, a
+   * level the yard has already passed — silently, by leaving it out of the
+   * command. The count it returns is how many actually changed, so a click that
+   * did nothing is the one case worth a word.
+   */
+  private plan(ids: readonly number[], level: number | null): void {
+    const changed = this.session.setPlanLevel(ids, level);
+    if (changed > 0 || ids.length === 0) return;
+    this.options.notices.show(
+      NOTICE,
+      level === null
+        ? "Nothing to clear there."
+        : "That upgrade cannot be planned: the building is on a job, damaged, or already there.",
+      { level: "warning", timeoutMs: 4000 },
+    );
   }
 
   /**
@@ -612,13 +812,13 @@ export class YardPlanner {
   private showBanner(
     message: string,
     level: "info" | "warning" | "error",
-    action?: { label: string; run: () => void },
+    actions: readonly BannerAction[] = [],
   ): void {
     this.clearBanner();
     this.notice = banner({
       message,
       level,
-      ...(action ? { actionLabel: action.label, onAction: action.run } : {}),
+      ...(actions.length > 0 ? { actions } : {}),
       onDismiss: () => this.clearBanner(),
     });
     this.dock.prepend(this.notice);
@@ -632,19 +832,16 @@ export class YardPlanner {
 
 const plural = (count: number, word: string): string => (count === 1 ? word : `${word}s`);
 
-/** "280.0M twigs and 284.0M pebbles", leaving out whatever cost nothing. */
-const describeCost = (cost: BatchCost): string => {
-  const parts = [
-    cost.r1 > 0 ? `${formatAmount(cost.r1)} twigs` : "",
-    cost.r2 > 0 ? `${formatAmount(cost.r2)} pebbles` : "",
-    cost.r3 > 0 ? `${formatAmount(cost.r3)} putty` : "",
-    cost.r4 > 0 ? `${formatAmount(cost.r4)} goo` : "",
-  ].filter(Boolean);
-
-  if (parts.length === 0) return "nothing";
-  if (parts.length === 1) return parts[0] as string;
-  return `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
-};
+/**
+ * How many checklist rows actually stop Apply.
+ *
+ * Warning rows are left out: a planned upgrade with no free worker is started
+ * on the next Apply, not a reason to refuse this one
+ * (`docs/design/planner-upgrades.md` §5.5), so counting it on the Checklist
+ * button would put a red badge on a plan that is perfectly fine.
+ */
+const blockingCount = (checklist: Checklist): number =>
+  checklist.rows.filter((row) => !row.ok && !row.warning).length;
 
 const describe = (caught: unknown, fallback: string): string => {
   if (caught instanceof NetworkError) return "Could not reach the server.";

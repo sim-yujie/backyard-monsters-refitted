@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
+import type { ApplyPreview, PlanTotals } from "@/game/yard/planner/upgrades";
 import { YardView } from "@/game/yard/YardRenderer";
 import { PlannerBar, type PlannerBarActions } from "./PlannerBar";
 
@@ -85,6 +86,55 @@ const menuItems = (bar: PlannerBar, index: number): HTMLButtonElement[] => {
   return list ? [...list.querySelectorAll<HTMLButtonElement>("button")] : [];
 };
 
+/** Every cost cell the player can actually see. */
+const visibleCells = (bar: PlannerBar): HTMLElement[] =>
+  [...bar.actionBar.querySelectorAll<HTMLElement>(".planner-cost__cell")].filter(
+    (cell) => !cell.hidden,
+  );
+
+const cell = (bar: PlannerBar, modifier: string): HTMLElement | null =>
+  bar.actionBar.querySelector<HTMLElement>(`.planner-cost__cell--${modifier}`);
+
+/** The four resource cells' readouts, in twigs-pebbles-putty-goo order. */
+const resourceValues = (bar: PlannerBar): string[] =>
+  [...bar.actionBar.querySelectorAll<HTMLElement>(".planner-cost__cell")]
+    .slice(0, 4)
+    .map((element) => element.querySelector(".planner-cost__value")?.textContent ?? "");
+
+/** A plan's totals, in the shape `planTotals` returns. */
+const totalsOf = (over: Partial<PlanTotals> = {}): PlanTotals => ({
+  needed: { r1: 20_000, r2: 15_000, r3: 5_000, r4: 0 },
+  held: { r1: 50_000, r2: 1_000, r3: 5_000, r4: 0 },
+  shortfall: { r1: 0, r2: 14_000, r3: 0, r4: 0 },
+  seconds: 1_800,
+  longest: 900,
+  shiny: 42,
+  byType: [
+    {
+      type: 20,
+      name: "Cannon Tower",
+      count: 2,
+      needed: { r1: 20_000, r2: 15_000, r3: 5_000, r4: 0 },
+    },
+  ],
+  steps: 2,
+  planned: 2,
+  ...over,
+});
+
+/** An Apply preview with nothing in it, for the cases that only need counts. */
+const previewOf = (over: Partial<ApplyPreview> = {}): ApplyPreview => ({
+  started: [],
+  finished: [],
+  waiting: [],
+  skipped: [],
+  cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
+  points: 0,
+  workers: { total: 5, busyBefore: 0, busyAfter: 0 },
+  remaining: { r1: 0, r2: 0, r3: 0, r4: 0 },
+  ...over,
+});
+
 describe("the editing bar", () => {
   it("carries the actions that write to the yard", () => {
     const bar = mount();
@@ -98,6 +148,84 @@ describe("the editing bar", () => {
     const bar = mount();
     bar.update(stateOf({ slotName: "Turtle", dirty: true }));
     expect(bar.toolbar.querySelector(".planner-bar__slot")?.textContent).toBe("Turtle · unsaved");
+  });
+});
+
+describe("the plan cells", () => {
+  it("reads needed against held, and marks a resource the plan is short of", () => {
+    const bar = mount();
+    bar.setPlanSummary(totalsOf(), 5);
+
+    expect(resourceValues(bar)).toEqual(["20.0K / 50.0K", "15.0K / 1.0K", "5.0K / 5.0K", "0 / 0"]);
+
+    const short = bar.actionBar.querySelectorAll(".planner-cost__cell--short");
+    expect(short).toHaveLength(1);
+    // Colour is never the only channel: the word is in the tooltip too.
+    expect((short[0] as HTMLElement).title).toContain("14,000 short");
+  });
+
+  it("shows worker seconds, with the wall-clock lower bound in the tooltip", () => {
+    const bar = mount();
+    bar.setPlanSummary(totalsOf(), 2);
+
+    const time = cell(bar, "time");
+    expect(time?.querySelector(".planner-cost__value")?.textContent).toBe("30m 0s");
+    // max(longest 900, ceil(1800 / 2)) is 900 seconds either way.
+    expect(time?.title).toContain("At least 15m 0s");
+    expect(time?.title).toContain("2 free workers");
+    expect(time?.title).toContain("lower bound");
+  });
+
+  it("counts the free workers and says what Apply would do with them", () => {
+    const bar = mount();
+    bar.setWorkers(
+      { total: 5, busy: 1 },
+      previewOf({
+        started: [{ id: 1, t: 20, from: 1, to: 2, seconds: 900, cost: { r1: 0, r2: 0, r3: 0, r4: 0 } }],
+        waiting: [{ id: 2, t: 20, from: 1, to: 2, reason: "workers" }],
+      }),
+    );
+
+    const workers = cell(bar, "workers");
+    expect(workers?.querySelector(".planner-cost__value")?.textContent).toBe("4 free / 5");
+    expect(workers?.title).toContain("1 would start on Apply");
+    expect(workers?.title).toContain("1 would wait for a worker");
+    // Something waiting is a shortfall of workers, marked like any other.
+    expect(workers?.classList.contains("planner-cost__cell--short")).toBe(true);
+  });
+
+  it("keeps the workers cell plain when nothing is planned", () => {
+    const bar = mount();
+    bar.setWorkers({ total: 5, busy: 0 }, null);
+
+    const workers = cell(bar, "workers");
+    expect(workers?.querySelector(".planner-cost__value")?.textContent).toBe("5 free / 5");
+    expect(workers?.title).not.toContain("would start");
+    expect(workers?.classList.contains("planner-cost__cell--short")).toBe(false);
+  });
+
+  it("hides the unplaced cell at zero and shows it above", () => {
+    const bar = mount();
+    bar.setUnplaced(0);
+    expect(cell(bar, "unplaced")?.hidden).toBe(true);
+
+    bar.setUnplaced(3);
+    const unplaced = cell(bar, "unplaced");
+    expect(unplaced?.hidden).toBe(false);
+    expect(unplaced?.querySelector(".planner-cost__value")?.textContent).toBe("3");
+    expect(unplaced?.title).toContain("Apply is blocked");
+  });
+
+  it("counts the plan in the summary sentence, and leaves it out at zero", () => {
+    const bar = mount();
+    const sentence = (): string =>
+      bar.actionBar.querySelector(".planner-bar__summary")?.textContent ?? "";
+
+    bar.update(stateOf({ selectionCount: 1, plannedCount: 6 }));
+    expect(sentence()).toBe("1 selected · 0 moved · 6 planned");
+
+    bar.update(stateOf({ selectionCount: 1, plannedCount: 0 }));
+    expect(sentence()).toBe("1 selected · 0 moved");
   });
 });
 
@@ -217,8 +345,11 @@ describe("the read-only bar", () => {
     for (const kept of ["Select", "Box", "Find", "3D", "Blueprint", "Leave planner"]) {
       expect(shown).toContain(kept);
     }
-    // The cost cells are the read-only planner's whole point alongside find.
-    expect(bar.actionBar.querySelectorAll(".planner-cost__cell")).toHaveLength(6);
+    // The cost cells are the read-only planner's whole point alongside find:
+    // four resources, time, shiny and the worker count. Unplaced is in the DOM
+    // but hidden, because nothing can be unplaced yet.
+    expect(visibleCells(bar)).toHaveLength(7);
+    expect(bar.actionBar.querySelectorAll(".planner-cost__cell")).toHaveLength(8);
   });
 
   it("says Read-only where the slot name goes, and why in the tooltip", () => {

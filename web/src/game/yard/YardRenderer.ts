@@ -227,8 +227,12 @@ export class YardRenderer {
     this.chromeDirty = true;
     if (!visuals) {
       this.planner.clear();
+      this.blueprint.setPlanned(null);
       return;
     }
+    // The badge has two halves: the chevron the overlay draws over either view,
+    // and the "3→5" the blueprint writes on the tile it already levels.
+    this.blueprint.setPlanned(visuals.planned);
     this.planner.draw(visuals, (id) => this.cornersOf(id));
   }
 

@@ -87,6 +87,10 @@ interface Tile {
   readonly root: Container;
   /** The name and level text, or null when the tile carries neither. */
   readonly labels: Container | null;
+  /** The level text alone, which a planned upgrade rewrites; null when absent. */
+  readonly levelText: BitmapText | null;
+  /** What that text says with nothing planned, so the arrow can be taken off. */
+  readonly levelBase: string;
   /** Where the tile is drawn right now, in yard units. */
   x: number;
   y: number;
@@ -106,6 +110,15 @@ export class BlueprintLayer {
   private built = false;
   /** Whether the labels are showing; `setZoom` is the only thing that sets it. */
   private labelsVisible = true;
+  /**
+   * Planned target level by building id, or null when the planner is closed.
+   *
+   * Held rather than applied and forgotten, because the tiles are rebuilt
+   * whenever the yard is — a batch wall upgrade does exactly that with the
+   * planner still open — and a badge that vanished on a rebuild would look
+   * like the plan had been lost.
+   */
+  private planned: ReadonlyMap<number, number> | null = null;
 
   constructor() {
     this.root.visible = false;
@@ -140,6 +153,23 @@ export class BlueprintLayer {
     for (const tile of this.byId.values()) {
       if (tile.labels) tile.labels.visible = visible;
     }
+  }
+
+  /**
+   * Marks the tiles of buildings with a planned upgrade, and clears the rest.
+   *
+   * The blueprint is where the level is already written, so a plan is a suffix
+   * on that number — "3→5" — rather than a second mark to look for
+   * (`docs/design/planner-upgrades.md` §5.4). The canvas badge is the chevron
+   * `PlannerOverlay` draws; between them the plan is visible in both views and
+   * in two channels, neither of them colour alone.
+   *
+   * A tile with no level text — a wall, or anything still building — gets
+   * nothing here and keeps the chevron as its only mark.
+   */
+  setPlanned(planned: ReadonlyMap<number, number> | null): void {
+    this.planned = planned;
+    for (const tile of this.byId.values()) this.labelPlan(tile);
   }
 
   /** The world extent the camera roams: the decoration area plus margin. */
@@ -290,6 +320,8 @@ export class BlueprintLayer {
     // `visible` write per tile rather than a walk of its children.
     const labels = new Container();
     const label = tileLabel(building.name, building.level, width);
+    let levelText: BitmapText | null = null;
+    let levelBase = "";
     if (label.name) {
       const name = new BitmapText({
         text: label.name,
@@ -300,13 +332,15 @@ export class BlueprintLayer {
       labels.addChild(name);
     }
     if (label.level && width >= MIN_LEVELLED_WIDTH) {
+      levelBase = label.name ? `Lv ${label.level}` : label.level;
       const level = new BitmapText({
-        text: label.name ? `Lv ${label.level}` : label.level,
+        text: levelBase,
         style: { fontFamily: FONT, fontSize: label.name ? 9 : 11 },
       });
       level.anchor.set(0.5, 0.5);
       level.position.set(width / 2, label.name ? height / 2 + 8 : height / 2);
       labels.addChild(level);
+      levelText = level;
     }
 
     const lettered = labels.children.length > 0;
@@ -322,11 +356,22 @@ export class BlueprintLayer {
       building,
       root,
       labels: lettered ? labels : null,
+      levelText,
+      levelBase,
       x: building.x,
       y: building.y,
     };
     this.byId.set(building.id, tile);
     this.order.push(tile);
+    this.labelPlan(tile);
+  }
+
+  /** Writes "3→5" on a planned tile's level, or the plain level on the rest. */
+  private labelPlan(tile: Tile): void {
+    const text = tile.levelText;
+    if (!text) return;
+    const target = this.planned?.get(tile.building.id);
+    text.text = target === undefined ? tile.levelBase : `${tile.levelBase}→${target}`;
   }
 
   private clearTiles(): void {
