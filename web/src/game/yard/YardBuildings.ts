@@ -80,6 +80,14 @@ interface BuildingView {
    */
   offsetX: number;
   offsetY: number;
+  /**
+   * True while the planner holds this building in its drawer.
+   *
+   * A stored building is drawn nowhere and picks up nowhere, but it keeps its
+   * sprites: storing four hundred walls and undoing it would otherwise be two
+   * full rebuilds of the draw list.
+   */
+  hidden: boolean;
   /** True once the real picture is on the sprite. */
   resolved: boolean;
   /**
@@ -185,6 +193,7 @@ export class YardBuildings {
         marker: building.countdown ? this.addCountdownMarker(building, atlas) : null,
         offsetX: 0,
         offsetY: 0,
+        hidden: false,
         resolved: false,
         shadowResolved: shadow === null,
         animsPending: anims.length > 0,
@@ -222,7 +231,11 @@ export class YardBuildings {
       const boxX = box.x + view.offsetX;
       const boxY = box.y + view.offsetY;
       const on =
-        boxX <= right && boxX + box.width >= left && boxY <= bottom && boxY + box.height >= top;
+        !view.hidden &&
+        boxX <= right &&
+        boxX + box.width >= left &&
+        boxY <= bottom &&
+        boxY + box.height >= top;
       // A building drawn entirely from its first strip keeps its still top only
       // until that strip is playing; both at once would show cell 0 through the
       // transparent parts of every other cell.
@@ -256,7 +269,7 @@ export class YardBuildings {
   pick(worldX: number, worldY: number): YardBuilding | null {
     for (let i = this.views.length - 1; i >= 0; i--) {
       const view = this.views[i];
-      if (!view) continue;
+      if (!view || view.hidden) continue;
       // Test against where the building is *drawn*, which in the planner is not
       // where the save put it.
       const x = worldX - view.offsetX;
@@ -269,7 +282,7 @@ export class YardBuildings {
     const candidates: SpriteBoxCandidate[] = [];
     for (let i = this.views.length - 1; i >= 0; i--) {
       const view = this.views[i];
-      if (!view || !view.resolved) continue;
+      if (!view || view.hidden || !view.resolved) continue;
       const sprite = view.top;
       const footprintTop = view.building.box.y + view.offsetY;
       if (sprite.y >= footprintTop) continue; // art does not rise above its footprint
@@ -306,6 +319,33 @@ export class YardBuildings {
     for (const layer of view.anims) {
       layer.sprite.position.set(layer.sprite.position.x + dx, layer.sprite.position.y + dy);
     }
+  }
+
+  /**
+   * Shows or hides one building, for the planner's drawer.
+   *
+   * The culling pass in `draw` reads the flag, but it only runs in the
+   * isometric view and only when a frame is drawn, so the sprites are switched
+   * here as well: a building stored while the blueprint is showing has to be
+   * gone the moment the player switches back.
+   */
+  setHidden(id: number, hidden: boolean): void {
+    const view = this.byId.get(id);
+    if (!view || view.hidden === hidden) return;
+    view.hidden = hidden;
+    // The countdown badge is not culled, so `draw` never touches it: it is the
+    // one sprite that has to be switched in both directions here.
+    if (view.marker) view.marker.visible = !hidden;
+    if (!hidden) return;
+    view.top.visible = false;
+    if (view.shadow) view.shadow.visible = false;
+    if (view.label) view.label.visible = false;
+    for (const layer of view.anims) layer.sprite.visible = false;
+  }
+
+  /** Puts every hidden building back. What leaving the planner does. */
+  showAll(): void {
+    for (const view of this.views) view.hidden = false;
   }
 
   /** The offset a building is currently drawn at. */

@@ -111,7 +111,33 @@ export class YardPlannerLayouts {
     await this.save(slot, name);
   }
 
+  /**
+   * Whether the plan can be written to a slot at all.
+   *
+   * A layout is a list of placed buildings and has no room for a stored one:
+   * the payload the client sends is `plan.buildings()`, and the server's
+   * schema has no field that would say "this one is in the drawer"
+   * (`server/src/schemas/YardPlannerSchemas.ts`, `LayoutNodeSchema`). Saving
+   * anyway would quietly drop the drawer, and loading that slot later would
+   * leave those buildings wherever they happened to be.
+   *
+   * So the save is refused rather than the format extended. The alternative —
+   * a `stored` flag on a layout node, taught to the schema, the validator and
+   * Apply — is a server change for a layout that could never be applied
+   * anyway: Apply is hard-blocked while anything is in the drawer (§8, Q4).
+   */
+  private refuseWhileStored(): boolean {
+    const stored = this.options.session.state().storedCount;
+    if (stored === 0) return false;
+    this.options.notify(
+      `Place the ${stored} stored ${stored === 1 ? "building" : "buildings"} before saving: a layout cannot hold them.`,
+      "error",
+    );
+    return true;
+  }
+
   private async save(slot: number, name: string): Promise<void> {
+    if (this.refuseWhileStored()) return;
     this.panel?.setBusy(true);
     try {
       const layout = await saveLayout(slot, name, this.options.session.payload());

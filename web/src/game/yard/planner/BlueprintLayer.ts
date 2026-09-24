@@ -255,18 +255,30 @@ export class BlueprintLayer {
     tile.root.position.set(world.x, world.y);
   }
 
-  /** Puts every tile back where the save had its building. */
+  /** Puts every tile back where the save had its building, and shows them all. */
   reset(): void {
     for (const tile of this.byId.values()) {
+      tile.root.visible = true;
       this.place(tile.building.id, tile.building.x, tile.building.y);
     }
+  }
+
+  /**
+   * Shows or hides one tile, for the planner's drawer.
+   *
+   * A stored building is not on the plot, so the blueprint — which is a
+   * drawing of the plot and nothing else — simply does not draw it.
+   */
+  setHidden(id: number, hidden: boolean): void {
+    const tile = this.byId.get(id);
+    if (tile) tile.root.visible = !hidden;
   }
 
   /** The topmost building whose tile is under a world point, or null. */
   pick(worldX: number, worldY: number): YardBuilding | null {
     for (let i = this.order.length - 1; i >= 0; i--) {
       const tile = this.order[i];
-      if (!tile) continue;
+      if (!tile || !tile.root.visible) continue;
       if (rectContains(this.rectOf(tile), worldX, worldY)) return tile.building;
     }
     return null;

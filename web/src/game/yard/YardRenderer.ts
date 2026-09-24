@@ -49,6 +49,15 @@ export class YardRenderer {
   private atlas: YardArtAtlas | null = null;
   private yard: Yard | null = null;
   private readonly byId = new Map<number, YardBuilding>();
+  /**
+   * Buildings the planner has taken off the yard and into its drawer.
+   *
+   * Held here as well as on the two views because everything that asks *where*
+   * a building is has to answer "nowhere" for these: the minimap paints every
+   * id it knows, and a stored building left answering would go on being
+   * painted at the spot it was lifted from.
+   */
+  private readonly stored = new Set<number>();
 
   private hovered: YardBuilding | null = null;
   private selected: YardBuilding | null = null;
@@ -91,6 +100,9 @@ export class YardRenderer {
     this.setSelected(null);
     this.yard = yard;
     this.byId.clear();
+    // Fresh sprites are drawn, so nothing is hidden any more. A planner that
+    // is still open re-asserts its drawer through `rebase`.
+    this.stored.clear();
     for (const building of yard.buildings) this.byId.set(building.id, building);
 
     // The base seed keeps one yard's grass the same between visits.
@@ -251,6 +263,21 @@ export class YardRenderer {
     this.blueprint.place(id, x, y);
   }
 
+  /**
+   * Shows or hides one building in both views, for the planner's drawer.
+   *
+   * A stored building is drawn nowhere and cannot be picked, in the isometric
+   * yard and on the blueprint alike, but it keeps its sprites: clearing a
+   * 575-building yard and undoing it has to be two flag sweeps rather than two
+   * rebuilds of the draw list.
+   */
+  setBuildingStored(id: number, stored: boolean): void {
+    if (stored) this.stored.add(id);
+    else this.stored.delete(id);
+    this.buildings.setHidden(id, stored);
+    this.blueprint.setHidden(id, stored);
+  }
+
   /** Re-stacks the isometric draw list after a planner move is committed. */
   resortByDepth(): void {
     this.buildings.resortByDepth();
@@ -259,12 +286,17 @@ export class YardRenderer {
   /** Puts every building back where the save had it, in both views. */
   resetPlacements(): void {
     for (const id of this.byId.keys()) this.buildings.offsetBuilding(id, 0, 0);
+    // Leaving the planner puts back what its drawer was holding: nothing the
+    // player stored was ever applied, so the yard still has all of it.
+    this.buildings.showAll();
+    this.stored.clear();
     this.blueprint.reset();
     this.buildings.resortByDepth();
   }
 
   /** A building's footprint corners where it is drawn now, in the active view. */
   cornersOf(id: number): Corners | null {
+    if (this.stored.has(id)) return null;
     if (this.currentView === YardView.BLUEPRINT) return this.blueprint.cornersOf(id);
     const shape = this.isoShapeOf(id);
     return shape ? diamondCorners(shape) : null;
@@ -272,6 +304,7 @@ export class YardRenderer {
 
   /** The middle of a building's footprint where it is drawn now. */
   centreOf(id: number): Point | null {
+    if (this.stored.has(id)) return null;
     if (this.currentView === YardView.BLUEPRINT) return this.blueprint.centreOf(id);
     const shape = this.isoShapeOf(id);
     if (!shape) return null;

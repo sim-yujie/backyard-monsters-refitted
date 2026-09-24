@@ -72,9 +72,12 @@ describe("plannerAction", () => {
     expect(plannerAction(key("Escape"))).toEqual({ kind: "cancel" });
   });
 
-  it("swallows Delete and Backspace rather than letting the browser have them", () => {
-    expect(plannerAction(key("Delete"))).toEqual({ kind: "ignore" });
-    expect(plannerAction(key("Backspace"))).toEqual({ kind: "ignore" });
+  it("binds Delete and Backspace to storing the selection", () => {
+    expect(plannerAction(key("Delete"))).toEqual({ kind: "store" });
+    // Backspace as well as Delete: half of everyone reaches for one and half
+    // for the other, and an unclaimed Backspace walks the browser back a page
+    // out of the planner.
+    expect(plannerAction(key("Backspace"))).toEqual({ kind: "store" });
   });
 
   it("leaves Ctrl+S to the layouts panel", () => {

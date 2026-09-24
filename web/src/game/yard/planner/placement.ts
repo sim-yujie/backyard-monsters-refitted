@@ -87,6 +87,19 @@ export interface PlanNode {
   /** Mushrooms: obstacles the planner may not move. */
   readonly fixed: boolean;
   /**
+   * The building has been lifted off the plot and into the planner's drawer.
+   *
+   * A stored node holds no cells, is drawn nowhere, and is not written into a
+   * layout. It is still in the plan — it keeps its id, its level and its
+   * planned upgrade — because storing has to be undoable and because the
+   * checklist names it by type when it blocks Apply
+   * (`docs/design/yard-planner-redesign.md` §8, Q4).
+   *
+   * `x` and `y` are left as they were, so undoing a store puts the building
+   * back on the exact cells it came off.
+   */
+  stored: boolean;
+  /**
    * The upgrade the player has planned for this building, or null.
    *
    * Carried on the node rather than in a side table because every path that

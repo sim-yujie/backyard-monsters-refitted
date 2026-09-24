@@ -30,6 +30,14 @@ export interface ChecklistPanelOptions {
   checklist: Checklist;
   /** Selects the building and frames it. */
   onShow: (id: number) => void;
+  /**
+   * Opens the inventory drawer, for the row about stored buildings.
+   *
+   * That row is the one whose items cannot be framed: a stored building is
+   * nowhere on the plot, so "show me" has nothing to put the camera on. The
+   * remedy is the drawer, so the row carries a button to it instead.
+   */
+  onOpenInventory?: () => void;
   onClose: () => void;
 }
 
@@ -65,21 +73,41 @@ export const checklistPanel = (options: ChecklistPanelOptions): Panel => {
     heading.textContent = `${state === "ok" ? "✓" : state === "warn" ? "!" : "✕"} ${row.label}`;
     item.append(heading);
 
+    // A stored building has no place on the canvas to be shown, so its row
+    // lists plain text and offers the drawer once, rather than a column of
+    // buttons that would each put the camera nowhere.
+    const stored = row.key === "placed";
+
     if (row.items.length > 0) {
       const faults = document.createElement("ul");
       faults.className = "planner-checklist__faults";
       for (const fault of row.items) {
         const entry = document.createElement("li");
-        const link = document.createElement("button");
-        link.type = "button";
-        link.className = "btn btn--ghost planner-checklist__show";
-        link.textContent = fault.label;
-        link.title = "Select this building";
-        link.addEventListener("click", () => options.onShow(fault.id));
-        entry.append(link);
+        if (stored) {
+          entry.className = "planner-checklist__fault";
+          entry.textContent = fault.label;
+        } else {
+          const link = document.createElement("button");
+          link.type = "button";
+          link.className = "btn btn--ghost planner-checklist__show";
+          link.textContent = fault.label;
+          link.title = "Select this building";
+          link.addEventListener("click", () => options.onShow(fault.id));
+          entry.append(link);
+        }
         faults.append(entry);
       }
       item.append(faults);
+    }
+
+    if (stored && !row.ok && options.onOpenInventory) {
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "btn btn--ghost planner-checklist__show";
+      open.textContent = "Open the drawer";
+      open.title = "Show what is stored, so it can be put back";
+      open.addEventListener("click", options.onOpenInventory);
+      item.append(open);
     }
 
     list.append(item);
@@ -95,6 +123,72 @@ export const checklistPanel = (options: ChecklistPanelOptions): Panel => {
       : "Nothing is blocking Apply.";
 
   panel.setContent(list, verdict);
+  return panel;
+};
+
+/* ── Confirming something big ─────────────────────────────────────────── */
+
+export interface ConfirmPanelOptions {
+  title: string;
+  /** What is about to happen, in one sentence the player can act on. */
+  message: string;
+  /** A second line, for the reassurance that nothing is permanent yet. */
+  note?: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onClose: () => void;
+}
+
+/**
+ * A two-button question, for an edit too big to take back by hand.
+ *
+ * Clearing a 575-building yard is one keystroke to undo and still worth
+ * asking about: a player who did not mean it has just watched their yard
+ * vanish, and "Ctrl+Z" is not what they will think of first. Everything
+ * smaller is left unasked — the point of an undo stack is that ordinary edits
+ * need no confirmation.
+ *
+ * `window.confirm` would have done the job and is what leaving the planner
+ * still uses, but it cannot say the second sentence in its own voice and it
+ * steals focus from the page, so the one dialog a player meets mid-layout is
+ * a panel like the rest.
+ */
+export const confirmPanel = (options: ConfirmPanelOptions): Panel => {
+  const panel = new Panel({
+    title: options.title,
+    className: "map-panel planner-confirm",
+    onClose: options.onClose,
+  });
+
+  const message = document.createElement("p");
+  message.textContent = options.message;
+
+  const children: HTMLElement[] = [message];
+  if (options.note) {
+    const note = document.createElement("p");
+    note.className = "u-muted";
+    note.textContent = options.note;
+    children.push(note);
+  }
+
+  const confirm = document.createElement("button");
+  confirm.type = "button";
+  confirm.className = "btn btn--primary";
+  confirm.textContent = options.confirmLabel;
+  confirm.addEventListener("click", options.onConfirm);
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "btn btn--ghost";
+  cancel.textContent = "Cancel";
+  cancel.addEventListener("click", () => panel.close());
+
+  const actions = document.createElement("div");
+  actions.className = "planner-apply__actions";
+  actions.append(cancel, confirm);
+  children.push(actions);
+
+  panel.setContent(...children);
   return panel;
 };
 

@@ -2,7 +2,7 @@ import { kindOf, maxLevel } from "../buildingCosts";
 import { holdsWorker } from "../workers";
 import { footprintOf } from "../YardGrid";
 import type { Yard } from "../yardModel";
-import type { MoveEntry, PlanEntry } from "./commands";
+import type { MoveEntry, PlanEntry, StoreEntry } from "./commands";
 import {
   inBounds,
   isDecoration,
@@ -152,6 +152,7 @@ export class Plan {
         fort: building.fortification,
         decoration: isDecoration(building.type),
         fixed: false,
+        stored: false,
         plan: null,
         busy: holdsWorker(building),
         damaged: building.hp !== null,
@@ -170,6 +171,7 @@ export class Plan {
         fort: 0,
         decoration: false,
         fixed: true,
+        stored: false,
         plan: null,
         busy: false,
         damaged: false,
@@ -179,9 +181,16 @@ export class Plan {
     return plan;
   }
 
-  /** Every node, obstacles included. */
+  /**
+   * Every node standing on the plot, obstacles included.
+   *
+   * Stored buildings are left out: they hold no cells, so anything that walks
+   * this to learn what is in the way — the load path's scratch grid above all
+   * — would otherwise block cells nothing is standing on. {@link index} is the
+   * one that still has them, because a name lookup wants every node.
+   */
   all(): IterableIterator<PlanNode> {
-    return this.nodes.values();
+    return placed(this.nodes.values());
   }
 
   get size(): number {
@@ -197,9 +206,106 @@ export class Plan {
     return this.nodes;
   }
 
-  /** Buildings only: what a layout saves and what Apply moves. */
+  /**
+   * Buildings standing on the plot: what a layout saves and what Apply moves.
+   *
+   * Stored buildings are not here. They are not in the yard as the plan has
+   * it, so drawing them, framing them, searching them or writing them into a
+   * layout would all be answering about a building that is nowhere.
+   */
   buildings(): PlanNode[] {
-    return [...this.nodes.values()].filter((node) => !node.fixed);
+    return [...this.nodes.values()].filter((node) => !node.fixed && !node.stored);
+  }
+
+  /* ── Storage ────────────────────────────────────────────────────────── */
+
+  /** Buildings in the drawer, oldest id first. */
+  storedNodes(): PlanNode[] {
+    return [...this.nodes.values()]
+      .filter((node) => node.stored)
+      .sort((a, b) => a.id - b.id);
+  }
+
+  /** Their ids, which is what the checklist and the bar count. */
+  storedIds(): number[] {
+    return this.storedNodes().map((node) => node.id);
+  }
+
+  get storedCount(): number {
+    let count = 0;
+    for (const node of this.nodes.values()) if (node.stored) count++;
+    return count;
+  }
+
+  /**
+   * Lifts buildings off the plot and into the drawer.
+   *
+   * Mushrooms and anything else fixed are skipped rather than refused: the
+   * store button acts on a selection the player made with a marquee, and a
+   * marquee cannot help catching an obstacle. A building already stored is
+   * skipped too, so storing twice is not two undo entries.
+   *
+   * The returned entries carry the cells the building came off, which is what
+   * lets undo put it back exactly there.
+   */
+  store(ids: Iterable<number>): StoreEntry[] {
+    const entries: StoreEntry[] = [];
+    for (const id of ids) {
+      const node = this.nodes.get(id);
+      if (!node || node.fixed || node.stored) continue;
+      entries.push({ id, x: node.x, y: node.y, store: true });
+    }
+    if (entries.length > 0) this.setStored(entries, false);
+    return entries;
+  }
+
+  /**
+   * Puts a stored building back on the plot at `(x, y)`, or refuses.
+   *
+   * Refusal is the same pair of tests a drop runs — inside its bounds, on
+   * free cells — so a building placed from the drawer can never land
+   * somewhere a dragged one could not.
+   */
+  place(id: number, x: number, y: number): StoreEntry | null {
+    const node = this.nodes.get(id);
+    if (!node || !node.stored) return null;
+    if (!inBounds(node, x, y, this.plot)) return null;
+    if (this.occupancy.blockedBy(node, x, y)) return null;
+
+    const entry: StoreEntry = { id, x, y, store: false };
+    this.setStored([entry], false);
+    return entry;
+  }
+
+  /**
+   * Applies or reverses recorded storage changes. The undo stack's only writer
+   * for the drawer, the counterpart of {@link move}.
+   *
+   * Every node is taken off the grid before any is put back on, for the same
+   * reason `move` does it: a batch that stores one building and places another
+   * on its cells would otherwise have the erase clear what the stamp had just
+   * written.
+   */
+  setStored(entries: readonly StoreEntry[], reverse: boolean): void {
+    const landing: PlanNode[] = [];
+
+    for (const entry of entries) {
+      const node = this.nodes.get(entry.id);
+      // As `move`: the stack can outlive a rebase that dropped the building.
+      if (!node || node.fixed) continue;
+      if (!node.stored) this.occupancy.erase(node);
+
+      if (reverse ? !entry.store : entry.store) {
+        node.stored = true;
+        continue;
+      }
+      node.stored = false;
+      node.x = entry.x;
+      node.y = entry.y;
+      landing.push(node);
+    }
+
+    for (const node of landing) this.occupancy.stamp(node);
   }
 
   /* ── Planned upgrades ───────────────────────────────────────────────── */
@@ -214,14 +320,21 @@ export class Plan {
    */
   plannedNodes(): PlanNode[] {
     return [...this.nodes.values()]
-      .filter((node) => node.plan !== null)
+      .filter((node) => node.plan !== null && !node.stored)
       .sort((a, b) => a.plan!.order - b.plan!.order || a.id - b.id);
   }
 
-  /** How many buildings have a plan. */
+  /**
+   * How many buildings have a plan.
+   *
+   * Stored buildings are left out here and in {@link plannedNodes}: Apply is
+   * blocked while anything is in the drawer, so an upgrade planned on a stored
+   * building is not part of what Apply would do and must not be counted into
+   * what the bar says Apply will charge.
+   */
   get plannedCount(): number {
     let count = 0;
-    for (const node of this.nodes.values()) if (node.plan) count++;
+    for (const node of this.nodes.values()) if (node.plan && !node.stored) count++;
     return count;
   }
 
@@ -229,7 +342,7 @@ export class Plan {
   plannedLevels(): ReadonlyMap<number, number> {
     const levels = new Map<number, number>();
     for (const node of this.nodes.values()) {
-      if (node.plan) levels.set(node.id, node.plan.level);
+      if (node.plan && !node.stored) levels.set(node.id, node.plan.level);
     }
     return levels;
   }
@@ -302,7 +415,9 @@ export class Plan {
   hasMoved(id: number): boolean {
     const node = this.nodes.get(id);
     const start = this.origin.get(id);
-    if (!node || !start) return false;
+    // A stored building is not "moved": it is nowhere, which the drawer's own
+    // count says, and outlining it as moved would outline nothing.
+    if (!node || !start || node.stored) return false;
     return node.x !== start[0] || node.y !== start[1];
   }
 
@@ -320,7 +435,7 @@ export class Plan {
     // Re-stamping into the plan's own grid is what rebuilds it, so the check
     // and the repair are the same pass: whatever was lifted is put back down.
     this.lifted = null;
-    return validatePlan(this.nodes.values(), this.plot, this.occupancy);
+    return validatePlan(this.all(), this.plot, this.occupancy);
   }
 
   /* ── Moving ─────────────────────────────────────────────────────────── */
@@ -335,7 +450,9 @@ export class Plan {
     const lifted: PlanNode[] = [];
     for (const id of ids) {
       const node = this.nodes.get(id);
-      if (!node || node.fixed) continue;
+      // A stored building holds no cells and is drawn nowhere, so there is
+      // nothing to pick up: it goes back on the plot through `place`.
+      if (!node || node.fixed || node.stored) continue;
       this.occupancy.erase(node);
       lifted.push(node);
     }
@@ -520,6 +637,7 @@ export class Plan {
           fort: building.fortification,
           decoration: isDecoration(building.type),
           fixed: false,
+          stored: false,
           plan: null,
           busy: holdsWorker(building),
           damaged: building.hp !== null,
@@ -550,7 +668,9 @@ export class Plan {
 
     for (const node of [...this.nodes.values()]) {
       if (node.fixed || seen.has(node.id)) continue;
-      this.occupancy.erase(node);
+      // A stored building holds no cells; erasing its old footprint would
+      // punch a hole in whatever has since been put there.
+      if (!node.stored) this.occupancy.erase(node);
       this.nodes.delete(node.id);
       this.origin.delete(node.id);
       removed.push(node.id);
@@ -588,6 +708,7 @@ export class Plan {
       fort: 0,
       decoration: isDecoration(type),
       fixed: false,
+      stored: false,
       plan: null,
       busy: false,
       damaged: false,
@@ -616,4 +737,9 @@ export class Plan {
     this.origin.set(node.id, [node.x, node.y]);
     this.occupancy.stamp(node);
   }
+}
+
+/** The nodes of `source` that are standing on the plot. */
+function* placed(source: Iterable<PlanNode>): IterableIterator<PlanNode> {
+  for (const node of source) if (!node.stored) yield node;
 }

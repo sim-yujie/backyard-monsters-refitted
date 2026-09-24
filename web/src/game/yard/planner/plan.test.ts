@@ -577,3 +577,234 @@ describe("Plan.absorb", () => {
     expect(plan.get(tower!)!.plan).toEqual({ level: 4, order: 0 });
   });
 });
+
+/* ── Storing (issue #50) ──────────────────────────────────────────────────── */
+
+/** Where the plan currently has a building. */
+const positionOf = (plan: Plan, id: number): { x: number; y: number } => {
+  const node = plan.get(id)!;
+  return { x: node.x, y: node.y };
+};
+
+/** A one-slot layout over the given nodes. */
+const layoutOf = (nodes: { id: number; t: number; x: number; y: number }[]): Layout => ({
+  version: LAYOUT_VERSION,
+  expansion: yard.expansionLevel,
+  nodes,
+  slot: 0,
+  name: "test",
+  updatedAt: 0,
+});
+
+describe("Plan.store", () => {
+  it("takes buildings off the plot and hands back where they came from", () => {
+    const plan = freshPlan();
+    const towers = cannonIds(plan);
+    const was = positionOf(plan, towers[0]!);
+
+    const entries = plan.store(towers);
+
+    expect(entries).toHaveLength(towers.length);
+    expect(entries[0]).toEqual({ id: towers[0], x: was.x, y: was.y, store: true });
+    expect(plan.storedCount).toBe(towers.length);
+    expect(plan.storedIds()).toEqual([...towers].sort((a, b) => a - b));
+    expect(plan.get(towers[0]!)!.stored).toBe(true);
+  });
+
+  it("frees the cells, so something else can be put on them", () => {
+    const plan = freshPlan();
+    const [tower] = cannonIds(plan);
+    const node = plan.get(tower!)!;
+    const spot = positionOf(plan, tower!);
+
+    expect(plan.canPlace(node.type, spot.x, spot.y).blockedBy).toBe(tower);
+    plan.store([tower!]);
+    expect(plan.canPlace(node.type, spot.x, spot.y).reason).toBeNull();
+  });
+
+  it("leaves a stored building out of the yard's own lists", () => {
+    const plan = freshPlan();
+    const before = plan.buildings().length;
+    const [tower] = cannonIds(plan);
+
+    plan.store([tower!]);
+
+    expect(plan.buildings()).toHaveLength(before - 1);
+    expect(plan.buildings().some((node) => node.id === tower)).toBe(false);
+    expect([...plan.all()].some((node) => node.id === tower)).toBe(false);
+    // Still reachable by id: the checklist names it and undo restores it.
+    expect(plan.get(tower!)?.stored).toBe(true);
+    expect(plan.index().get(tower!)).toBeDefined();
+  });
+
+  it("skips mushrooms and anything already stored", () => {
+    const plan = freshPlan();
+    const [tower] = cannonIds(plan);
+
+    expect(plan.store([MUSHROOM_ID_BASE + 99])).toEqual([]);
+    expect(plan.store([tower!])).toHaveLength(1);
+    expect(plan.store([tower!])).toEqual([]);
+    expect(plan.storedCount).toBe(1);
+  });
+
+  it("is not a move: a stored building is not outlined as one", () => {
+    const plan = freshPlan();
+    const [tower] = cannonIds(plan);
+    plan.store([tower!]);
+
+    expect(plan.hasMoved(tower!)).toBe(false);
+    expect(plan.movedIds()).not.toContain(tower);
+  });
+
+  it("leaves a stored building out of what Apply would upgrade", () => {
+    const plan = freshPlan();
+    const [tower] = cannonIds(plan);
+    plan.setPlan(tower!, 3);
+    expect(plan.plannedCount).toBe(1);
+
+    plan.store([tower!]);
+
+    expect(plan.plannedCount).toBe(0);
+    expect(plan.plannedNodes()).toEqual([]);
+    expect(plan.plannedLevels().has(tower!)).toBe(false);
+    // The plan itself is kept, so undoing the store brings it back with it.
+    expect(plan.get(tower!)!.plan).toEqual({ level: 3, order: 0 });
+  });
+});
+
+describe("Plan.setStored", () => {
+  it("reverses a store back onto the exact cells it came off", () => {
+    const plan = freshPlan();
+    const towers = cannonIds(plan);
+    const before = towers.map((id) => ({ id, ...positionOf(plan, id) }));
+
+    const entries = plan.store(towers);
+    plan.setStored(entries, true);
+
+    expect(plan.storedCount).toBe(0);
+    for (const was of before) expect(positionOf(plan, was.id)).toEqual({ x: was.x, y: was.y });
+    // The cells are held again: nothing else could be dropped on them.
+    const first = plan.get(towers[0]!)!;
+    expect(plan.canPlace(first.type, first.x, first.y).blockedBy).toBe(towers[0]);
+  });
+
+  it("redoes a store after it has been undone", () => {
+    const plan = freshPlan();
+    const [tower] = cannonIds(plan);
+    const entries = plan.store([tower!]);
+
+    plan.setStored(entries, true);
+    plan.setStored(entries, false);
+
+    expect(plan.get(tower!)!.stored).toBe(true);
+    expect(plan.storedCount).toBe(1);
+  });
+
+  it("skips a building a rebase has taken away", () => {
+    const plan = freshPlan();
+    expect(() =>
+      plan.setStored([{ id: 9_999_999, x: 0, y: 0, store: true }], false),
+    ).not.toThrow();
+    expect(plan.storedCount).toBe(0);
+  });
+});
+
+describe("Plan.place", () => {
+  it("puts a stored building back where it is asked to", () => {
+    const plan = freshPlan();
+    const [tower] = cannonIds(plan);
+    const node = plan.get(tower!)!;
+    const [entry] = plan.store([tower!]);
+    const to = { x: entry!.x, y: entry!.y };
+
+    expect(plan.place(tower!, to.x, to.y)).toEqual({ id: tower, x: to.x, y: to.y, store: false });
+    expect(node.stored).toBe(false);
+    expect(positionOf(plan, tower!)).toEqual(to);
+    // And it is holding its cells again.
+    expect(plan.canPlace(node.type, to.x, to.y).blockedBy).toBe(tower);
+  });
+
+  it("refuses a spot something else is on, and keeps it stored", () => {
+    const plan = freshPlan();
+    const [first, second] = cannonIds(plan);
+    const other = plan.get(second!)!;
+    plan.store([first!]);
+
+    expect(plan.place(first!, other.x, other.y)).toBeNull();
+    expect(plan.get(first!)!.stored).toBe(true);
+    expect(plan.storedCount).toBe(1);
+  });
+
+  it("refuses a spot outside the plot", () => {
+    const plan = freshPlan();
+    const [tower] = cannonIds(plan);
+    plan.store([tower!]);
+
+    expect(plan.place(tower!, plan.plot.halfWidth, 0)).toBeNull();
+    expect(plan.get(tower!)!.stored).toBe(true);
+  });
+
+  it("refuses a building that is not stored", () => {
+    const plan = freshPlan();
+    const [tower] = cannonIds(plan);
+    expect(plan.place(tower!, 0, 0)).toBeNull();
+  });
+});
+
+describe("a stored building and the rest of the plan", () => {
+  it("is left out of the layout a save would write", () => {
+    const plan = freshPlan();
+    const [tower] = cannonIds(plan);
+    const before = payloadFor(plan).nodes.length;
+
+    plan.store([tower!]);
+
+    const payload = payloadFor(plan);
+    expect(payload.nodes).toHaveLength(before - 1);
+    expect(payload.nodes.some((node) => node.id === tower)).toBe(false);
+  });
+
+  it("does not block the cells a loaded layout wants", () => {
+    const blocked = freshPlan();
+    const [mover, blocker] = cannonIds(blocked);
+    const to = positionOf(blocked, blocker!);
+
+    // With the blocker standing there the saved position is refused...
+    const refused = planLoad(blocked, layoutOf([{ id: mover!, t: 20, x: to.x, y: to.y }]));
+    expect(refused.didNotFit[0]?.reason).toBe(MissReason.BLOCKED);
+
+    // ...and with it stored there is nothing in the way.
+    const clear = freshPlan();
+    clear.store([blocker!]);
+    const loaded = planLoad(clear, layoutOf([{ id: mover!, t: 20, x: to.x, y: to.y }]));
+    expect(loaded.didNotFit).toEqual([]);
+    expect(loaded.entries[0]).toMatchObject({ id: mover, toX: to.x, toY: to.y });
+  });
+
+  it("survives a rebase, and leaves its cells free", () => {
+    const plan = freshPlan();
+    const [tower] = cannonIds(plan);
+    const node = plan.get(tower!)!;
+    const spot = positionOf(plan, tower!);
+    plan.store([tower!]);
+
+    plan.absorb(yardWith({}));
+
+    expect(plan.get(tower!)!.stored).toBe(true);
+    // Absorbing must not erase a footprint the building no longer occupies.
+    expect(plan.canPlace(node.type, spot.x, spot.y).reason).toBeNull();
+  });
+
+  it("is not validated for overlaps or bounds", () => {
+    const plan = freshPlan();
+    const [first, second] = cannonIds(plan);
+    const target = positionOf(plan, second!);
+
+    plan.store([first!]);
+    // Where the other tower stands, which would be an overlap if this one were
+    // on the plot at all.
+    plan.setPosition(first!, target.x, target.y);
+
+    expect(plan.validate().valid).toBe(true);
+  });
+});

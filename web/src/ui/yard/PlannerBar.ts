@@ -88,6 +88,12 @@ export interface PlannerBarActions {
    * selection, which a finger cannot do.
    */
   onPutBack: () => void;
+  /** Lift the selection off the yard into the drawer (Delete). */
+  onStore: () => void;
+  /** Store everything that is not fixed. The caller asks first. */
+  onClearYard: () => void;
+  /** Open or close the inventory drawer. */
+  onInventory: () => void;
   onHelp: () => void;
   onExit: () => void;
 }
@@ -335,6 +341,11 @@ export class PlannerBar {
   private readonly rearmBadge: HTMLElement;
   private readonly summary: HTMLElement;
   private readonly putBack: HTMLButtonElement;
+  private readonly store: HTMLButtonElement;
+  private readonly storeChip: HTMLButtonElement;
+  private readonly inventory: HTMLButtonElement;
+  private readonly inventoryBadge: HTMLElement;
+  private readonly yardMenu: Menu;
   private readonly slotLabel: HTMLElement;
   private readonly resourceCells = new Map<string, CostCell>();
   private readonly timeCell: CostCell;
@@ -417,6 +428,36 @@ export class PlannerBar {
     ]);
     this.setGroupEnabled(0);
 
+    /* ── Store, clear and the drawer (issue #50) ─────────────────────── */
+
+    this.store = button("Store", "Select something to store");
+    this.store.disabled = true;
+    this.store.addEventListener("click", actions.onStore);
+    const storeTip = withDemo(this.store, "store", () => this.store.title);
+    this.popovers.push(storeTip.dispose);
+
+    this.yardMenu = new Menu("Yard", "Actions on the whole yard", "store", [
+      {
+        label: "Clear yard",
+        title: "Put every building in the drawer, ready to lay the yard out again",
+        demo: "store",
+        run: actions.onClearYard,
+      },
+    ]);
+
+    // The label and the badge are separate children so the count can be
+    // rewritten without the label being rebuilt around it, as the re-arm
+    // button does.
+    this.inventory = button("", "Nothing is stored", "btn btn--ghost planner-bar__inventory");
+    const inventoryLabel = document.createElement("span");
+    inventoryLabel.textContent = "Stored";
+    this.inventoryBadge = document.createElement("span");
+    this.inventoryBadge.className = "planner-bar__badge";
+    this.inventoryBadge.hidden = true;
+    this.inventory.append(inventoryLabel, this.inventoryBadge);
+    this.inventory.disabled = true;
+    this.inventory.addEventListener("click", actions.onInventory);
+
     this.undo = button("Undo", "Undo (Ctrl+Z)");
     this.undo.addEventListener("click", actions.onUndo);
     this.redo = button("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)");
@@ -441,6 +482,7 @@ export class PlannerBar {
       ...(this.readOnly
         ? []
         : [
+            group(storeTip.element, this.yardMenu.element, this.inventory),
             group(...this.mirrorTips, this.align.element, this.distribute.element),
             group(this.undo, this.redo),
           ]),
@@ -502,6 +544,21 @@ export class PlannerBar {
     this.putBack.hidden = true;
     this.putBack.addEventListener("click", actions.onPutBack);
 
+    /*
+     * The same Store the toolbar has, beside the count of what is selected.
+     *
+     * Not a duplicate for its own sake: the selection sentence is where a
+     * player looks after a marquee, and asking them to travel back up to the
+     * toolbar to act on what it says is the whole reason the chip exists.
+     */
+    this.storeChip = button(
+      "Store",
+      "Put the selection in the drawer (Delete)",
+      "btn btn--ghost planner-bar__store-chip",
+    );
+    this.storeChip.hidden = true;
+    this.storeChip.addEventListener("click", actions.onStore);
+
     const layouts = button("Layouts", "Saved layouts (Ctrl+S saves to the current slot)");
     layouts.addEventListener("click", actions.onLayouts);
 
@@ -540,6 +597,9 @@ export class PlannerBar {
         layouts,
         this.apply,
         this.putBack,
+        this.store,
+        this.storeChip,
+        this.inventory,
       ]) {
         control.disabled = true;
       }
@@ -548,6 +608,7 @@ export class PlannerBar {
       this.actionBar.append(
         costs,
         this.summary,
+        this.storeChip,
         this.putBack,
         spacer(),
         this.upgradeWalls,
@@ -603,6 +664,15 @@ export class PlannerBar {
     // two states from disagreeing if one ever slips through.
     this.putBack.hidden = this.readOnly || !state.carrying;
     if (this.readOnly) return;
+
+    this.setStoreEnabled(state.selectionCount);
+    // Nothing to store while something is already in hand, and the chip would
+    // sit next to "Put back" saying the opposite thing.
+    this.storeChip.hidden = state.selectionCount === 0 || state.carrying;
+    this.setStoredCount(state.storedCount);
+    this.yardMenu.setEnabled(!state.previewing, state.previewing
+      ? "Close the preview first"
+      : "Actions on the whole yard");
 
     this.apply.disabled = state.previewing;
     this.apply.title = state.previewing
@@ -682,9 +752,9 @@ export class PlannerBar {
   /**
    * How many buildings are in the plan but nowhere on the plot.
    *
-   * Zero today and hidden at zero, because nothing can be taken out of the
-   * yard yet; Apply is hard-blocked while it is not zero (§8, Q4), so the cell
-   * exists to say *why* the moment a store tool can make it happen.
+   * Hidden at zero: an untouched plan should not carry a count of nothing.
+   * Apply is hard-blocked while it is not zero (§8, Q4), so the cell is the
+   * bar's standing answer to "why is Apply refusing me".
    */
   setUnplaced(count: number): void {
     this.unplacedCell.element.hidden = count === 0;
@@ -757,6 +827,42 @@ export class PlannerBar {
     );
   }
 
+  /**
+   * Lights Store up for a selection of `count` buildings.
+   *
+   * Off with nothing selected, and saying what would turn it on: "Store" with
+   * no selection is a button whose answer is "store what?".
+   */
+  setStoreEnabled(count: number): void {
+    if (this.readOnly) return;
+    this.store.disabled = count === 0;
+    setTitle(
+      this.store,
+      count === 0
+        ? "Select something to store"
+        : `Put ${count === 1 ? "it" : `all ${count}`} in the drawer (Delete)`,
+    );
+  }
+
+  /**
+   * How many buildings the drawer holds.
+   *
+   * Drives three things at once, because they are three readings of one
+   * number: the badge on the drawer button, whether that button can be opened
+   * at all, and the Unplaced cost cell that says Apply is blocked.
+   */
+  setStoredCount(count: number): void {
+    if (this.readOnly) return;
+    this.inventoryBadge.hidden = count === 0;
+    this.inventoryBadge.textContent = String(count);
+    this.inventory.disabled = count === 0;
+    this.inventory.title =
+      count === 0
+        ? "Nothing is stored"
+        : `${count} ${count === 1 ? "building is" : "buildings are"} in the drawer`;
+    this.setUnplaced(count);
+  }
+
   /** Shows the count of blocking problems on the checklist button. */
   setBlocking(count: number): void {
     if (this.readOnly) return;
@@ -790,6 +896,7 @@ export class PlannerBar {
     // The menus listen on the document, so dropping the bar is not enough.
     this.align.destroy();
     this.distribute.destroy();
+    this.yardMenu.destroy();
     // So do the popovers, and their bubbles hang off the body rather than off
     // the bar, so they outlive it unless they are taken down by hand.
     for (const dispose of this.popovers) dispose();
@@ -839,8 +946,13 @@ const summarise = (state: PlannerState): string => {
   parts.push(state.movedCount === 1 ? "1 moved" : `${state.movedCount} moved`);
   // Left out at zero: an untouched plan should not carry a count of nothing.
   if (state.plannedCount > 0) parts.push(`${state.plannedCount} planned`);
+  if (state.storedCount > 0) {
+    parts.push(`${state.storedCount} stored`);
+  }
   if (state.dragInvalid) parts.push("cannot drop here");
-  else if (state.carrying) {
+  else if (state.placing) {
+    parts.push("out of the drawer · click to put it down, Esc to put it back");
+  } else if (state.carrying) {
     // Both spellings of "put it back", because the bar is read on a phone too
     // and a finger has no second button (F14).
     parts.push("in hand · click to drop, right-click or Put back to cancel");

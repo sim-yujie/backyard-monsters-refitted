@@ -49,6 +49,22 @@ export interface PlanEntry {
   readonly after: NodePlan | null;
 }
 
+/**
+ * One building moving between the plot and the drawer.
+ *
+ * `x` and `y` are the cells the building leaves from when it is stored and the
+ * cells it lands on when it is placed, which is the same field in both
+ * directions: undoing a store puts the building back exactly where it came
+ * from, and undoing a place takes it off exactly where it went.
+ */
+export interface StoreEntry {
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+  /** True to lift it off the plot, false to put it back on. */
+  readonly store: boolean;
+}
+
 /** A position no stack can ever be at, so `isClean` stays false forever. */
 const UNREACHABLE = -1;
 
@@ -215,6 +231,23 @@ export const planCommand = (
   label,
   apply: () => setPlans(entries, false),
   revert: () => setPlans(entries, true),
+});
+
+/**
+ * Buildings stored off the plot, or placed back onto it.
+ *
+ * The same batch shape as a move, for the same reason: clearing a 575-building
+ * yard is one gesture and has to be one Ctrl+Z, and the stack should not have
+ * to know which kind of edit it is holding.
+ */
+export const storeCommand = (
+  entries: readonly StoreEntry[],
+  setStored: (entries: readonly StoreEntry[], reverse: boolean) => void,
+  label: string,
+): PlanCommand => ({
+  label,
+  apply: () => setStored(entries, false),
+  revert: () => setStored(entries, true),
 });
 
 /**

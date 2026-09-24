@@ -44,6 +44,7 @@ describe("demos", () => {
       "planner-demo__ping",
       "planner-demo__flip-x",
       "planner-demo__flip-y",
+      "planner-demo__vanish",
     ];
     for (const name of names) {
       for (const node of demo(name).querySelectorAll(`.${DEMO_ANIM_CLASS}`)) {

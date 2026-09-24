@@ -29,6 +29,9 @@ const actions = (): PlannerBarActions => ({
   onRearmTraps: vi.fn(),
   onApply: vi.fn(),
   onPutBack: vi.fn(),
+  onStore: vi.fn(),
+  onClearYard: vi.fn(),
+  onInventory: vi.fn(),
   onHelp: noop,
   onExit: noop,
 });
@@ -47,6 +50,8 @@ const stateOf = (overrides: Partial<PlannerState> = {}): PlannerState => ({
   slotName: "",
   dragInvalid: false,
   carrying: false,
+  storedCount: 0,
+  placing: false,
   view: YardView.BLUEPRINT,
   previewing: false,
   readOnly: false,
@@ -77,13 +82,41 @@ const mirrorButtons = (bar: PlannerBar): HTMLButtonElement[] =>
     button.textContent?.startsWith("Mirror"),
   );
 
-/** The Align and Distribute triggers, in that order. */
-const menuTriggers = (bar: PlannerBar): HTMLButtonElement[] => [
-  ...bar.toolbar.querySelectorAll<HTMLButtonElement>(".planner-menu__trigger"),
-];
+/**
+ * The group-operation menus: Align and Distribute, in that order.
+ *
+ * The Yard menu — which holds Clear yard — is a menu in the same toolbar and
+ * is left out here, so these helpers go on meaning the same thing they did
+ * before it existed.
+ */
+const groupMenus = (bar: PlannerBar): HTMLElement[] =>
+  [...bar.toolbar.querySelectorAll<HTMLElement>(".planner-menu")].filter(
+    (menu) =>
+      !menu.querySelector(".planner-menu__trigger")?.textContent?.startsWith("Yard"),
+  );
+
+/**
+ * The demo wrapper around the first Mirror button.
+ *
+ * By name rather than by position: Store is wrapped the same way and sits
+ * ahead of it in the toolbar, so "the first `.planner-tip`" stopped meaning
+ * "a mirror" the moment storing existed.
+ */
+const mirrorTip = (bar: PlannerBar): HTMLElement => {
+  const wrapper = [...bar.toolbar.querySelectorAll<HTMLElement>(".planner-tip")].find(
+    (tip) => tip.querySelector("button")?.textContent?.startsWith("Mirror"),
+  );
+  if (!wrapper) throw new Error("no mirror tip in the toolbar");
+  return wrapper;
+};
+
+const menuTriggers = (bar: PlannerBar): HTMLButtonElement[] =>
+  groupMenus(bar).flatMap((menu) => [
+    ...menu.querySelectorAll<HTMLButtonElement>(".planner-menu__trigger"),
+  ]);
 
 const menuItems = (bar: PlannerBar, index: number): HTMLButtonElement[] => {
-  const list = bar.toolbar.querySelectorAll(".planner-menu__list")[index];
+  const list = groupMenus(bar)[index]?.querySelector(".planner-menu__list");
   return list ? [...list.querySelectorAll<HTMLButtonElement>("button")] : [];
 };
 
@@ -473,9 +506,9 @@ describe("the tool demos", () => {
     const bar = mount();
     bar.setGroupEnabled(0);
 
-    const wrapper = bar.toolbar.querySelector<HTMLElement>(".planner-tip");
-    expect(wrapper?.querySelector("button")?.disabled).toBe(true);
-    hover(wrapper!);
+    const wrapper = mirrorTip(bar);
+    expect(wrapper.querySelector("button")?.disabled).toBe(true);
+    hover(wrapper);
     vi.advanceTimersByTime(400);
 
     const [bubble] = popovers();
@@ -487,13 +520,13 @@ describe("the tool demos", () => {
 
   it("leaves the native tooltip where the wrapper can still show it", () => {
     const bar = mount();
-    const wrapper = bar.toolbar.querySelector<HTMLElement>(".planner-tip");
-    const button = wrapper?.querySelector("button");
+    const wrapper = mirrorTip(bar);
+    const button = wrapper.querySelector("button");
     bar.setGroupEnabled(4);
     expect(button?.title).toContain("Flip the selection left to right");
     // A disabled button takes no pointer events, so the wrapper carries the
     // same words for the browser to show instead.
-    expect(wrapper?.title).toBe(button?.title);
+    expect(wrapper.title).toBe(button?.title);
     bar.destroy();
   });
 
@@ -505,5 +538,136 @@ describe("the tool demos", () => {
 
     bar.destroy();
     expect(popovers()).toHaveLength(0);
+  });
+});
+
+describe("store, clear and the drawer (issue #50)", () => {
+  const storeButton = (bar: PlannerBar): HTMLButtonElement | null =>
+    [...bar.toolbar.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Store",
+    ) ?? null;
+
+  const chip = (bar: PlannerBar): HTMLButtonElement | null =>
+    bar.actionBar.querySelector(".planner-bar__store-chip");
+
+  const drawer = (bar: PlannerBar): HTMLButtonElement | null =>
+    bar.toolbar.querySelector(".planner-bar__inventory");
+
+  const yardMenu = (bar: PlannerBar): HTMLButtonElement | null =>
+    [...bar.toolbar.querySelectorAll<HTMLButtonElement>(".planner-menu__trigger")].find(
+      (button) => button.textContent?.startsWith("Yard"),
+    ) ?? null;
+
+  it("keeps Store off until there is something to store, and says why", () => {
+    const bar = mount();
+    bar.update(stateOf({ selectionCount: 0 }));
+    expect(storeButton(bar)?.disabled).toBe(true);
+    expect(storeButton(bar)?.title).toContain("Select something");
+
+    bar.update(stateOf({ selectionCount: 3 }));
+    expect(storeButton(bar)?.disabled).toBe(false);
+    expect(storeButton(bar)?.title).toContain("all 3");
+  });
+
+  it("shows the chip beside the selection, and takes it away mid-carry", () => {
+    const bar = mount();
+    bar.update(stateOf({ selectionCount: 0 }));
+    expect(chip(bar)?.hidden).toBe(true);
+
+    bar.update(stateOf({ selectionCount: 2 }));
+    expect(chip(bar)?.hidden).toBe(false);
+
+    // Something already in hand is not something to store, and the chip would
+    // sit next to Put back saying the opposite thing.
+    bar.update(stateOf({ selectionCount: 2, carrying: true }));
+    expect(chip(bar)?.hidden).toBe(true);
+  });
+
+  it("fires the same action from the toolbar and from the chip", () => {
+    const { bar, fired } = mountWith();
+    bar.update(stateOf({ selectionCount: 1 }));
+
+    storeButton(bar)?.click();
+    chip(bar)?.click();
+
+    expect(fired.onStore).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers Clear yard in a menu rather than as a bare button", () => {
+    const { bar, fired } = mountWith();
+    bar.update(stateOf());
+
+    const trigger = yardMenu(bar);
+    expect(trigger).not.toBeNull();
+    trigger?.click();
+
+    const items = [
+      ...(trigger?.closest(".planner-menu")?.querySelectorAll<HTMLButtonElement>(
+        ".planner-menu__item",
+      ) ?? []),
+    ];
+    expect(items.map((item) => item.textContent)).toEqual(["Clear yard"]);
+
+    items[0]?.click();
+    expect(fired.onClearYard).toHaveBeenCalledTimes(1);
+    expect(trigger?.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("shuts the Yard menu while a preview is up", () => {
+    const bar = mount();
+    bar.update(stateOf({ previewing: true }));
+    expect(yardMenu(bar)?.disabled).toBe(true);
+    expect(yardMenu(bar)?.title).toContain("preview");
+  });
+
+  it("badges the drawer with what it holds, and opens only when it holds something", () => {
+    const { bar, fired } = mountWith();
+    bar.update(stateOf({ storedCount: 0 }));
+    expect(drawer(bar)?.disabled).toBe(true);
+    expect(drawer(bar)?.querySelector<HTMLElement>(".planner-bar__badge")?.hidden).toBe(true);
+
+    bar.update(stateOf({ storedCount: 12 }));
+    expect(drawer(bar)?.disabled).toBe(false);
+    expect(drawer(bar)?.querySelector<HTMLElement>(".planner-bar__badge")?.hidden).toBe(false);
+    expect(drawer(bar)?.querySelector(".planner-bar__badge")?.textContent).toBe("12");
+
+    drawer(bar)?.click();
+    expect(fired.onInventory).toHaveBeenCalledTimes(1);
+  });
+
+  it("turns the Unplaced cell on with the drawer and says Apply is blocked", () => {
+    const bar = mount();
+    bar.update(stateOf({ storedCount: 0 }));
+    expect(cell(bar, "unplaced")?.hidden).toBe(true);
+
+    bar.update(stateOf({ storedCount: 3 }));
+    const unplaced = cell(bar, "unplaced");
+    expect(unplaced?.hidden).toBe(false);
+    expect(unplaced?.querySelector(".planner-cost__value")?.textContent).toBe("3");
+    expect(unplaced?.title).toContain("Apply is blocked");
+    expect(unplaced?.classList.contains("planner-cost__cell--short")).toBe(true);
+  });
+
+  it("counts the drawer in the summary line, and words a placement its own way", () => {
+    const bar = mount();
+    const summary = (): string =>
+      bar.actionBar.querySelector(".planner-bar__summary")?.textContent ?? "";
+
+    bar.update(stateOf({ storedCount: 4 }));
+    expect(summary()).toContain("4 stored");
+
+    bar.update(stateOf({ storedCount: 4, carrying: true, placing: true, selectionCount: 1 }));
+    expect(summary()).toContain("out of the drawer");
+    expect(summary()).not.toContain("right-click or Put back");
+  });
+
+  it("gives a read-only session none of it", () => {
+    const bar = mount({ readOnly: true });
+    bar.update(stateOf({ readOnly: true, previewing: true, storedCount: 2 }));
+
+    expect(storeButton(bar)).toBeNull();
+    expect(chip(bar)).toBeNull();
+    expect(drawer(bar)).toBeNull();
+    expect(yardMenu(bar)).toBeNull();
   });
 });

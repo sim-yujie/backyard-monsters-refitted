@@ -868,12 +868,55 @@
  * carry and goes with it, and a chip that arrives unannounced has to be
  * findable at a glance.
  */
-.planner-bar__put-back {
+.planner-bar__put-back,
+.planner-bar__store-chip {
   border-color: var(--colour-accent);
   border-radius: var(--radius-pill);
   color: var(--colour-text);
   padding: var(--space-1) var(--space-3);
   font-size: var(--text-sm);
+}
+
+/*
+ * The drawer button's badge greys out with the button, exactly as the re-arm
+ * count does: an accent pill on a dead button reads as something waiting.
+ */
+.planner-bar__inventory[disabled] .planner-bar__badge {
+  background: var(--colour-border);
+  color: var(--colour-text-muted);
+}
+
+/* ── The inventory drawer ─────────────────────────────────────────────── */
+
+.planner-inventory__summary:empty {
+  display: none;
+}
+
+.planner-inventory__summary,
+.planner-inventory__empty {
+  margin-block: 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.planner-inventory__empty[hidden] {
+  display: none;
+}
+
+/*
+ * A stored building is not in the yard, so its row is drawn as an outline
+ * rather than as a solid one: the difference between "this is here" and "this
+ * is waiting" should be visible before the words are read.
+ */
+.planner-inventory__row {
+  border-inline-start: 2px solid var(--colour-accent);
+  padding-inline-start: var(--space-2);
+}
+
+/* A checklist line that names something with nowhere to be shown. */
+.planner-checklist__fault {
+  padding-block: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
 }
 
 @media (pointer: coarse) {
@@ -1033,6 +1076,14 @@
   stroke-linecap: round;
 }
 
+/* The drawer the store demo puts things into: shelves, not a box. */
+.planner-demo__tray {
+  fill: none;
+  stroke: var(--colour-text-muted);
+  stroke-width: 1.5;
+  stroke-dasharray: none;
+}
+
 /* ── The five motions ─────────────────────────────────────────────────── */
 
 .planner-demo__anim {
@@ -1053,6 +1104,11 @@
 
 .planner-demo__appear {
   animation-name: planner-demo-appear;
+}
+
+/* Store: the selection fades out of the yard and leaves its outline behind. */
+.planner-demo__vanish {
+  animation-name: planner-demo-vanish;
 }
 
 .planner-demo__ping {
@@ -1115,6 +1171,22 @@
   100% {
     opacity: 0;
     transform: scale(0.02, 0.02);
+  }
+}
+
+@keyframes planner-demo-vanish {
+  0%,
+  28% {
+    opacity: 1;
+  }
+
+  52%,
+  88% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
   }
 }
 
@@ -1207,6 +1279,11 @@
 
   .planner-demo__appear {
     opacity: 1;
+  }
+
+  /* The end state of a store is an empty yard, so the blocks stay gone. */
+  .planner-demo__vanish {
+    opacity: 0;
   }
 
   /* A click is a moment, and a moment has no still frame. */

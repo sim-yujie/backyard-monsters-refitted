@@ -13,11 +13,18 @@ import type { ApplyPreview } from "./upgrades";
  * of this into one untargeted `basePlanner_cantApply` message
  * (`BasePlannerPopup.as:557-563`).
  *
- * The first check is structural for now. Section 8, Q4 keeps Apply hard-blocked
- * while any non-decoration building is unplaced and forbids auto-placing, but
- * phase 1 has no way to unplace one: every building in the yard is in the plan
- * from the moment the planner opens. The check is here, and reads the same set
- * a store tool would empty, so phase 2 turns it on rather than adding it.
+ * The first check is the one Apply is hard-blocked on. Section 8, Q4 keeps
+ * Apply blocked while any non-decoration building is unplaced and forbids
+ * auto-placing; the store tool made unplacing possible, so the set it reads is
+ * the planner's drawer.
+ *
+ * Decorations are in that set too, although the server would accept a layout
+ * that leaves one out (`services/yardplanner/validateLayout.ts`,
+ * `unplacedBuildings`). The server does not *remove* a building it is not sent
+ * — it simply leaves it where it stands — so a stored decoration would come
+ * back at its old position, possibly under whatever the plan has since moved
+ * onto those cells. Blocking on it is the only reading of "stored" that the
+ * yard can keep its side of.
  */
 
 export interface ChecklistItem {
@@ -89,7 +96,7 @@ export const buildChecklist = (
 
   const missing: ChecklistItem[] = unplaced.map((id) => ({
     id,
-    label: `${nameOf(nodes.get(id))} has nowhere to go`,
+    label: `${nameOf(nodes.get(id))} is in the drawer`,
   }));
   for (const item of missing) faulted.add(item.id);
 

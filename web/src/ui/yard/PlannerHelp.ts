@@ -91,12 +91,13 @@ interface HintRow {
 }
 
 /**
- * The six moves the planner is made of.
+ * The seven moves the planner is made of.
  *
- * Six and not sixteen: this is the set a player needs before the planner stops
- * being a wall of buttons, and everything left out is on the Shortcuts tab or
- * on a button's own popover. Ordered the way a session goes — pick something,
- * pick several, move them, move them the other way, tidy them, find them.
+ * Seven and not seventeen: this is the set a player needs before the planner
+ * stops being a wall of buttons, and everything left out is on the Shortcuts
+ * tab or on a button's own popover. Ordered the way a session goes — pick
+ * something, pick several, move them, move them the other way, tidy them, get
+ * them out of the way, find them.
  */
 const HINT_ROWS: readonly HintRow[] = [
   { demo: "select", text: "Click a building to select it. Shift-click adds or removes one." },
@@ -115,6 +116,11 @@ const HINT_ROWS: readonly HintRow[] = [
   {
     demo: "mirrorH",
     text: "Mirror, Align and Distribute tidy a selection: two or more to mirror or align, three or more to space out.",
+  },
+  {
+    demo: "store",
+    text:
+      "Store (Delete) lifts the selection off the yard into a drawer, so there is room to move the rest. Click a stack in the drawer to put one back.",
   },
   {
     demo: "find",

@@ -29,8 +29,14 @@ export type PlannerAction =
    * both and a player who has learned one will try the other.
    */
   | { readonly kind: "mirror"; readonly axis: "x" | "y" }
-  /** Bound so it cannot reach the browser; storing arrives in phase 2. */
-  | { readonly kind: "ignore" };
+  /**
+   * Delete or Backspace: lift the selection off the yard into the drawer.
+   *
+   * Both keys, because half of everyone reaches for one and half for the
+   * other, and Backspace has to be caught here anyway or the browser walks
+   * back a page out of the planner.
+   */
+  | { readonly kind: "store" };
 
 /** A key event's meaning inside the planner, or null to let it through. */
 export const plannerAction = (event: {
@@ -82,7 +88,7 @@ export const plannerAction = (event: {
       return { kind: "nudge", dx: step, dy: 0 };
     case "Delete":
     case "Backspace":
-      return { kind: "ignore" };
+      return { kind: "store" };
     default:
       return null;
   }

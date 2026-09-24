@@ -59,7 +59,8 @@ export type DemoName =
   | "alignCentreY"
   | "distributeH"
   | "distributeV"
-  | "find";
+  | "find"
+  | "store";
 
 /** `[x, y, width, height]` in the demo's own 120 × 72 grid. */
 type Rect = readonly [x: number, y: number, width: number, height: number];
@@ -424,6 +425,33 @@ export const distributeV = (): SVGSVGElement => {
   return svg;
 };
 
+/**
+ * The selection leaves the yard and goes into the drawer.
+ *
+ * Drawn as the two selected blocks fading out over their own dashed outlines
+ * while a tray fills at the edge: "gone from here, kept over there" is the one
+ * thing a player has to believe before they will press a button called Store.
+ */
+export const store = (): SVGSVGElement => {
+  const svg = frame("store");
+  const first: Rect = [16, 16, 24, 16];
+  const second: Rect = [16, 40, 24, 16];
+
+  const tray = el("g", { class: "planner-demo__tray" });
+  tray.append(
+    el("rect", { x: 78, y: 14, width: 32, height: 44, rx: 3 }),
+    el("line", { x1: 78, y1: 28, x2: 110, y2: 28 }),
+    el("line", { x1: 78, y1: 42, x2: 110, y2: 42 }),
+  );
+
+  const leaving = el("g");
+  leaving.classList.add(DEMO_ANIM_CLASS, "planner-demo__vanish");
+  leaving.append(block(first, true), block(second, true));
+
+  svg.append(block([48, 28, 20, 14]), ghost(first), ghost(second), tray, leaving);
+  return svg;
+};
+
 /** Search finds a building and puts the camera on it. */
 export const find = (): SVGSVGElement => {
   const svg = frame("find");
@@ -462,6 +490,7 @@ export const DEMOS: Readonly<Record<DemoName, () => SVGSVGElement>> = {
   distributeH,
   distributeV,
   find,
+  store,
 };
 
 /** Draws one by name. */

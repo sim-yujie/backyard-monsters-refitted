@@ -23,6 +23,8 @@ import type { Plan } from "./plan";
 export class PlannerView {
   private readonly renderer: YardRenderer;
   private readonly plan: Plan;
+  /** The buildings this has told the renderer to stop drawing. */
+  private hidden = new Set<number>();
 
   constructor(options: { renderer: YardRenderer; plan: Plan }) {
     this.renderer = options.renderer;
@@ -62,9 +64,61 @@ export class PlannerView {
     this.renderer.resortByDepth();
   }
 
+  /**
+   * Makes the drawing agree with the plan about what is stored.
+   *
+   * Diffed against what it did last time rather than re-asserted over every
+   * node: a rebase rebuilds the renderer's sprites from the new save and
+   * forgets which ones were hidden, so this has to be able to run over a
+   * 575-building yard without being a 575-call sweep every time the pointer
+   * moves.
+   */
+  syncStored(): void {
+    const now = new Set<number>();
+    for (const node of this.plan.storedNodes()) {
+      now.add(node.id);
+      if (!this.hidden.has(node.id)) this.renderer.setBuildingStored(node.id, true);
+    }
+    for (const id of this.hidden) {
+      if (!now.has(id)) this.renderer.setBuildingStored(id, false);
+    }
+    this.hidden = now;
+  }
+
+  /**
+   * Forgets what this has told the renderer to hide.
+   *
+   * The renderer rebuilds its sprites from a yard the server has changed, and
+   * the new ones are all visible; without this the diff in `syncStored` would
+   * see its own stale answer and leave the drawer's buildings on screen.
+   */
+  forgetStored(): void {
+    this.hidden.clear();
+  }
+
+  /**
+   * Draws a stored building at a spot it has not been put down on yet.
+   *
+   * What a carry out of the drawer follows the pointer with. The plan still
+   * has it stored — nothing is committed until the drop — so this is the one
+   * place a building is drawn somewhere the plan does not say it is.
+   */
+  ghost(id: number, x: number, y: number): void {
+    if (this.hidden.has(id)) {
+      this.hidden.delete(id);
+      this.renderer.setBuildingStored(id, false);
+    }
+    this.renderer.placeBuilding(id, x, y);
+  }
+
   /** The building under a world point, or null. */
   pick(worldX: number, worldY: number): number | null {
     return this.renderer.pick(worldX, worldY)?.id ?? null;
+  }
+
+  /** A world point in yard units, in the view that is showing. */
+  worldToYard(worldX: number, worldY: number): { x: number; y: number } {
+    return this.renderer.worldToYard(worldX, worldY);
   }
 
   /** A world-pixel drag in snapped yard units, in the view that is showing. */
@@ -98,6 +152,7 @@ export class PlannerView {
 
   /** Puts every sprite back where the save had it and hides the chrome. */
   reset(): void {
+    this.hidden.clear();
     this.renderer.resetPlacements();
     this.renderer.setPlannerVisuals(null);
   }

@@ -108,6 +108,13 @@ interface Harness {
   readonly finds: () => number;
   /** Where the renderer has each building drawn, in yard units. */
   readonly placements: ReadonlyMap<number, Point>;
+  /**
+   * The buildings the renderer has been told to stop drawing.
+   *
+   * Mutable, because one test has to forget them: rebuilding the sprites for a
+   * rebase is exactly what clears them in the real renderer.
+   */
+  readonly hidden: Set<number>;
   readonly view: () => YardView;
   readonly setView: (view: YardView) => void;
   readonly press: (at: Point, init?: PointerEventInit) => void;
@@ -154,6 +161,7 @@ const planner = (
   );
 
   let view: YardView = YardView.BLUEPRINT;
+  const hidden = new Set<number>();
 
   const rectOf = (id: number): Rect | null => {
     const building = byId.get(id);
@@ -168,14 +176,20 @@ const planner = (
     placeBuilding: (id: number, x: number, y: number): void => {
       placements.set(id, { x, y });
     },
+    setBuildingStored: (id: number, stored: boolean): void => {
+      if (stored) hidden.add(id);
+      else hidden.delete(id);
+    },
     resortByDepth: (): void => {},
     resetPlacements: (): void => {
       for (const building of yard.buildings) {
         placements.set(building.id, { x: building.x, y: building.y });
       }
+      hidden.clear();
     },
     pick: (worldX: number, worldY: number): YardBuilding | null => {
       for (const building of yard.buildings) {
+        if (hidden.has(building.id)) continue;
         const rect = rectOf(building.id);
         if (rect && rectContains(rect, worldX, worldY)) return building;
       }
@@ -254,6 +268,7 @@ const planner = (
     faulted: () => faulted,
     finds: () => finds,
     placements,
+    hidden,
     view: () => view,
     setView,
     press: (at, init) => pointer("pointerdown", at, init),
@@ -1376,5 +1391,226 @@ describe("touch gestures", () => {
     harness.session.selectOnly([1, 2]);
     harness.session.putBack();
     expect(harness.session.selectedIds()).toEqual([1, 2]);
+  });
+});
+
+/* ── Storing and placing (issue #50) ──────────────────────────────────────── */
+
+describe("storing", () => {
+  it("takes the selection off the yard on Delete", () => {
+    const harness = planner();
+    harness.click(ONE);
+    harness.key("Delete");
+
+    const state = harness.session.state();
+    expect(state.storedCount).toBe(1);
+    expect(harness.session.plan.get(1)?.stored).toBe(true);
+    // Drawn nowhere, and out of the selection: it cannot be dragged now.
+    expect(harness.hidden.has(1)).toBe(true);
+    expect(harness.session.selectedIds()).toEqual([]);
+  });
+
+  it("takes Backspace too, and frees the cells it left", () => {
+    const harness = planner();
+    harness.click(ONE);
+    harness.key("Backspace");
+
+    expect(harness.session.state().storedCount).toBe(1);
+    // Tower two can now be dragged onto tower one's old spot.
+    harness.press(TWO);
+    harness.drag(by(TWO, -200, 0));
+    harness.release(by(TWO, -200, 0));
+    expect(at(harness, 2)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("is one undo entry however many it took", () => {
+    const harness = planner();
+    harness.session.selectOnly([1, 2]);
+
+    expect(harness.session.store()).toBe(2);
+    expect(harness.session.state().undoLabel).toBe("Store · 2 buildings");
+
+    harness.session.undo();
+
+    expect(harness.session.state().storedCount).toBe(0);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(at(harness, 2)).toEqual({ x: 200, y: 0 });
+    // Drawn again, and back where they stood.
+    expect(harness.hidden.size).toBe(0);
+    expect(harness.placements.get(1)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("names the one building it stored", () => {
+    const harness = planner();
+    harness.session.selectOnly([1]);
+    harness.session.store();
+    expect(harness.session.state().undoLabel).toContain("Store ");
+  });
+
+  it("does nothing with an empty selection", () => {
+    const harness = planner();
+    expect(harness.session.store()).toBe(0);
+    expect(harness.session.state().canUndo).toBe(false);
+  });
+
+  it("clears the whole yard as one entry", () => {
+    const harness = planner();
+    const total = harness.session.plan.buildings().length;
+
+    expect(harness.session.clearYard()).toBe(total);
+
+    expect(harness.session.state().storedCount).toBe(total);
+    expect(harness.session.plan.buildings()).toEqual([]);
+    expect(harness.session.state().undoLabel).toBe(`Store · ${total} buildings`);
+
+    harness.session.undo();
+    expect(harness.session.state().storedCount).toBe(0);
+    expect(harness.session.plan.buildings()).toHaveLength(total);
+  });
+
+  it("blocks Apply while anything is in the drawer, and names it", () => {
+    const harness = planner();
+    expect(harness.session.checklist().ok).toBe(true);
+
+    harness.session.selectOnly([1]);
+    harness.session.store();
+
+    const checklist = harness.session.checklist();
+    expect(checklist.ok).toBe(false);
+    const row = checklist.rows.find((entry) => entry.key === "placed");
+    expect(row?.ok).toBe(false);
+    expect(row?.items.map((item) => item.id)).toEqual([1]);
+    expect(row?.items[0]?.label).toContain("drawer");
+  });
+
+  it("refuses every part of it in a read-only session", () => {
+    const harness = planner({ readOnly: true });
+    harness.session.selectOnly([1]);
+
+    expect(harness.session.store()).toBe(0);
+    expect(harness.session.clearYard()).toBe(0);
+    harness.key("Delete");
+
+    expect(harness.session.state().storedCount).toBe(0);
+    expect(harness.session.state().canUndo).toBe(false);
+  });
+});
+
+describe("placing from the drawer", () => {
+  /** Stores tower one and picks it back up. */
+  const inHand = (): Harness => {
+    const harness = planner();
+    harness.session.selectOnly([1]);
+    harness.session.store();
+    expect(harness.session.startPlacing(1)).toBe(true);
+    return harness;
+  };
+
+  it("follows the pointer by its own centre, then drops on a click", () => {
+    const harness = inHand();
+    expect(harness.session.state().placing).toBe(true);
+    expect(harness.session.state().carrying).toBe(true);
+
+    // A 70-unit tower centred on (400, 300) has its origin at (365, 265),
+    // snapped onto the five-unit grid.
+    const target = blueprintToWorld(400, 300);
+    harness.drag(target);
+    expect(harness.placements.get(1)).toEqual({ x: 365, y: 265 });
+
+    harness.press(target);
+
+    const state = harness.session.state();
+    expect(state.placing).toBe(false);
+    expect(state.storedCount).toBe(0);
+    expect(at(harness, 1)).toEqual({ x: 365, y: 265 });
+    expect(harness.hidden.has(1)).toBe(false);
+    expect(state.undoLabel).toContain("Place ");
+  });
+
+  it("undoes back into the drawer", () => {
+    const harness = inHand();
+    const target = blueprintToWorld(400, 300);
+    harness.drag(target);
+    harness.press(target);
+
+    harness.session.undo();
+
+    expect(harness.session.state().storedCount).toBe(1);
+    expect(harness.session.plan.get(1)?.stored).toBe(true);
+    expect(harness.hidden.has(1)).toBe(true);
+  });
+
+  it("keeps it in hand when the spot is taken", () => {
+    const harness = inHand();
+
+    // Straight over tower two, which has not moved.
+    harness.drag(TWO);
+    expect(harness.session.state().dragInvalid).toBe(true);
+    harness.press(TWO);
+
+    const state = harness.session.state();
+    expect(state.placing).toBe(true);
+    expect(state.storedCount).toBe(1);
+    expect(state.canUndo).toBe(true); // the store, not a placement
+    expect(state.undoLabel).toContain("Store");
+  });
+
+  it("goes back to the drawer on Escape", () => {
+    const harness = inHand();
+    harness.drag(blueprintToWorld(400, 300));
+
+    harness.key("Escape");
+
+    const state = harness.session.state();
+    expect(state.placing).toBe(false);
+    expect(state.carrying).toBe(false);
+    expect(state.storedCount).toBe(1);
+    expect(harness.hidden.has(1)).toBe(true);
+    // Nothing was committed, so the only entry is the store itself.
+    expect(state.undoLabel).toContain("Store");
+  });
+
+  it("goes back to the drawer on the Put back chip", () => {
+    const harness = inHand();
+    harness.drag(blueprintToWorld(400, 300));
+
+    harness.session.putBack();
+
+    expect(harness.session.state().placing).toBe(false);
+    expect(harness.session.state().storedCount).toBe(1);
+  });
+
+  it("refuses a building that is not in the drawer, and a read-only session", () => {
+    const harness = planner();
+    expect(harness.session.startPlacing(1)).toBe(false);
+
+    const readOnly = planner({ readOnly: true });
+    expect(readOnly.session.startPlacing(1)).toBe(false);
+  });
+
+  it("hides the drawer's buildings again after a rebase rebuilds the sprites", () => {
+    const harness = planner();
+    harness.session.selectOnly([1]);
+    harness.session.store();
+    expect(harness.hidden.has(1)).toBe(true);
+
+    // A batch action rebuilds the renderer's sprites from the new save, and
+    // fresh sprites are all visible.
+    harness.hidden.clear();
+    harness.session.rebase(testYard());
+
+    expect(harness.session.state().storedCount).toBe(1);
+    expect(harness.hidden.has(1)).toBe(true);
+  });
+
+  it("drops a stored building the yard no longer has", () => {
+    const harness = planner();
+    harness.session.selectOnly([3]);
+    harness.session.store();
+
+    harness.session.rebase(yardOf([BUILDINGS[0]!, BUILDINGS[1]!]));
+
+    expect(harness.session.state().storedCount).toBe(0);
+    expect(harness.session.plan.get(3)).toBeUndefined();
   });
 });

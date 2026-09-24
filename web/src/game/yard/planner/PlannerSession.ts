@@ -10,13 +10,15 @@ import {
   compositeCommand,
   moveCommand,
   planCommand,
+  storeCommand,
   type MoveEntry,
   type PlanEntry,
+  type StoreEntry,
 } from "./commands";
 import { groupTargets, GroupOp, GROUP_OPS } from "./groupTools";
 import { planLoad, payloadFor, type LoadResult } from "./layout";
 import { rectFromCorners } from "./marquee";
-import type { PlanNode } from "./placement";
+import { snap, type PlanNode } from "./placement";
 import { Grab, PlannerInput } from "./PlannerInput";
 import { PlannerView } from "./PlannerView";
 import { Plan, type AbsorbResult } from "./plan";
@@ -96,6 +98,16 @@ export interface PlannerState {
   readonly dragInvalid: boolean;
   /** True while the selection follows the pointer, waiting for a click to drop. */
   readonly carrying: boolean;
+  /** How many buildings are in the drawer rather than on the plot. */
+  readonly storedCount: number;
+  /**
+   * True while a building out of the drawer follows the pointer.
+   *
+   * A kind of carry, and `carrying` is true with it, but the bar words it
+   * differently: nothing is being moved, something is being put down for the
+   * first time, and Escape returns it to the drawer rather than to the yard.
+   */
+  readonly placing: boolean;
   /** Which drawing of the yard is showing. */
   readonly view: YardView;
   /**
@@ -137,6 +149,22 @@ const planLabel = (entries: readonly PlanEntry[], plan: Plan): string => {
   return `Plan ${subject} to L${target.level}`;
 };
 
+/**
+ * The undo tooltip for a storage change: "Store · 12 buildings", "Place
+ * Sniper Tower".
+ *
+ * One building is named, several are counted. A player undoing a store of
+ * twelve wants to know it was twelve; a player undoing one wants to know which.
+ */
+const storeLabel = (verb: string, count: number, plan: Plan, id?: number): string => {
+  if (count === 1) {
+    const type = id === undefined ? -1 : (plan.get(id)?.type ?? -1);
+    const name = buildingName(type);
+    return name ? `${verb} ${name}` : `${verb} building`;
+  }
+  return `${verb} · ${count} buildings`;
+};
+
 export class PlannerSession {
   readonly plan: Plan;
 
@@ -167,6 +195,16 @@ export class PlannerSession {
   private slotName = "";
   /** Positions and plans to restore when a preview is dismissed. */
   private preview: Map<number, PreviewState> | null = null;
+  /**
+   * The building being carried out of the drawer, and the cells it is hovering
+   * over, or null.
+   *
+   * It stays *stored* in the plan for the whole gesture: only the drop commits
+   * it. That is what keeps every other path — validate, absorb, a checklist
+   * opened mid-carry — looking at a plan where the building is simply in the
+   * drawer, rather than at one where it is half on the plot.
+   */
+  private placing: { id: number; x: number; y: number; ok: boolean } | null = null;
   /**
    * The yard as the server last described it.
    *
@@ -269,6 +307,8 @@ export class PlannerSession {
       slotName: this.slotName,
       dragInvalid: this.dragInvalid,
       carrying: this.input.isCarrying,
+      storedCount: this.plan.storedCount,
+      placing: this.placing !== null,
       previewing: this.preview !== null || this.readOnly,
       readOnly: this.readOnly,
       view: this.view.view,
@@ -386,6 +426,164 @@ export class PlannerSession {
    */
   applyPreview(): ApplyPreview {
     return previewApply(this.plan.plannedNodes(), this.yard);
+  }
+
+  /* ── Storage ────────────────────────────────────────────────────────── */
+
+  /** Buildings in the drawer, for the inventory panel. */
+  storedNodes(): PlanNode[] {
+    return this.plan.storedNodes();
+  }
+
+  /**
+   * Lifts the selection off the yard and into the drawer (issue #50).
+   *
+   * One command however many buildings it takes, so storing a marquee of
+   * twelve towers is one Ctrl+Z. Mushrooms and anything else fixed are left
+   * where they are rather than refusing the whole action: a marquee cannot
+   * help catching one, and refusing would make the tool useless in exactly the
+   * yards it is for.
+   *
+   * Returns how many were stored, which is what the caller needs to decide
+   * whether to say anything.
+   */
+  store(ids: Iterable<number> = this.selection): number {
+    if (this.readOnly) return 0;
+    // Copied before anything else: the default is the live selection, and the
+    // gesture this is about to drop can empty it.
+    const targets = [...ids];
+    if (this.input.isGrabbing) this.cancel();
+
+    const entries = this.plan.store(targets);
+    if (entries.length === 0) return 0;
+    this.recordStore(
+      entries,
+      storeLabel("Store", entries.length, this.plan, entries[0]?.id),
+    );
+    return entries.length;
+  }
+
+  /**
+   * Clears the yard: everything not fixed goes into the drawer.
+   *
+   * One command, like any other store, so a 575-building clear is one Ctrl+Z
+   * rather than 575. The confirmation belongs to the caller: this is the edit,
+   * not the question.
+   */
+  clearYard(): number {
+    if (this.readOnly) return 0;
+    return this.store(this.plan.buildings().map((node) => node.id));
+  }
+
+  /**
+   * Takes a building out of the drawer and puts it in the player's hand.
+   *
+   * The same carry a click on a placed building starts, with one difference:
+   * the building is nowhere, so it follows the pointer by its own centre
+   * rather than by the offset a press gave it. Nothing is committed until the
+   * drop, and a refused drop keeps it in hand exactly as a refused move does.
+   *
+   * Returns false when there is nothing to place: a read-only session, or an
+   * id the drawer does not hold.
+   */
+  startPlacing(id: number): boolean {
+    if (this.readOnly) return false;
+    const node = this.plan.get(id);
+    if (!node || !node.stored) return false;
+
+    if (this.input.isGrabbing) this.cancel();
+    this.selection = new Set([id]);
+    this.moveGhost(node, node.x, node.y);
+    this.input.beginCarry();
+    this.refresh();
+    return true;
+  }
+
+  /** Where the pointer would put the building in hand, and whether it fits. */
+  private moveGhost(node: PlanNode, x: number, y: number): void {
+    const check = this.plan.canPlace(node.type, x, y);
+    this.placing = { id: node.id, x, y, ok: check.reason === null };
+    this.dragInvalid = check.reason !== null;
+    this.faulted =
+      check.blockedBy === null || check.blockedBy === 0
+        ? new Set<number>()
+        : new Set<number>([check.blockedBy]);
+    this.view.ghost(node.id, x, y);
+  }
+
+  /** Follows the pointer with a building out of the drawer. */
+  private dragPlacement(world: Point): void {
+    const placing = this.placing;
+    const node = placing ? this.plan.get(placing.id) : undefined;
+    if (!placing || !node) {
+      this.placing = null;
+      return;
+    }
+
+    const yard = this.view.worldToYard(world.x, world.y);
+    // By its centre, not its origin: a building picked out of a list was never
+    // grabbed anywhere, so the only spot the pointer can mean is the middle.
+    const x = snap(yard.x - node.width / 2);
+    const y = snap(yard.y - node.height / 2);
+    if (x === placing.x && y === placing.y) return;
+
+    this.moveGhost(node, x, y);
+    this.refresh();
+  }
+
+  /**
+   * Puts the carried building down, or keeps it in hand.
+   *
+   * Returning `"carry"` is how a refused drop says "still in hand", the same
+   * answer `onRelease` gives a refused move.
+   */
+  private dropPlacement(world: Point): "carry" | void {
+    // Touch sends no move before a press, so the ghost may still be wherever
+    // the last move left it: walk it under this press before dropping.
+    this.dragPlacement(world);
+
+    const placing = this.placing;
+    if (!placing) return;
+
+    const entry = placing.ok ? this.plan.place(placing.id, placing.x, placing.y) : null;
+    if (!entry) return "carry";
+
+    this.placing = null;
+    this.dragInvalid = false;
+    this.faulted.clear();
+    this.recordStore([entry], storeLabel("Place", 1, this.plan, entry.id));
+    return;
+  }
+
+  /** Escape, the secondary button or the Put back chip: back to the drawer. */
+  private abandonPlacement(): void {
+    const placing = this.placing;
+    this.placing = null;
+    this.input.cancel();
+    this.dragInvalid = false;
+    this.faulted.clear();
+    if (placing) {
+      // Back to where the plan still says it is, then out of sight again.
+      this.view.sync(placing.id);
+      this.view.syncStored();
+    }
+    this.refresh();
+  }
+
+  /** Pushes an already-applied storage change and redraws what it changed. */
+  private recordStore(entries: readonly StoreEntry[], label: string): void {
+    this.stack.pushApplied(
+      storeCommand(entries, (batch, reverse) => this.plan.setStored(batch, reverse), label),
+    );
+    for (const entry of entries) {
+      if (!entry.store) continue;
+      this.selection.delete(entry.id);
+      this.faulted.delete(entry.id);
+    }
+    this.view.syncStored();
+    this.view.syncSome(entries.filter((entry) => !entry.store).map((entry) => entry.id));
+    this.view.resort();
+    this.afterEdit();
   }
 
   /* ── Editing ────────────────────────────────────────────────────────── */
@@ -508,6 +706,9 @@ export class PlannerSession {
     if (this.input.isGrabbing) this.cancel();
 
     this.yard = yard;
+    // The caller has rebuilt the renderer's sprites, so everything is drawn
+    // again: what the drawer holds has to be hidden a second time.
+    this.view.forgetStored();
     const result = this.plan.absorb(yard);
     for (const id of result.removed) {
       this.selection.delete(id);
@@ -612,7 +813,12 @@ export class PlannerSession {
    */
   checklist(): Checklist {
     const planned = this.plan.plannedCount > 0 ? this.applyPreview() : null;
-    const checklist = buildChecklist(this.plan.index(), this.plan.validate(), [], planned);
+    const checklist = buildChecklist(
+      this.plan.index(),
+      this.plan.validate(),
+      this.plan.storedIds(),
+      planned,
+    );
     this.faulted = checklist.faulted;
     this.refresh();
     return checklist;
@@ -702,6 +908,13 @@ export class PlannerSession {
   }
 
   private onMove(world: Point, grab: Grab): void {
+    // A building out of the drawer has no press to measure from: it follows
+    // the pointer absolutely.
+    if (this.placing) {
+      if (grab === Grab.CARRY) this.dragPlacement(world);
+      return;
+    }
+
     const press = this.pressWorld;
     if (!press) return;
 
@@ -729,6 +942,8 @@ export class PlannerSession {
   }
 
   private onRelease(world: Point, grab: Grab, travelled: boolean): "carry" | void {
+    if (this.placing) return this.dropPlacement(world);
+
     const press = this.pressWorld;
 
     if (grab === Grab.MARQUEE) {
@@ -793,6 +1008,10 @@ export class PlannerSession {
 
   /** Cancels a live gesture; Escape with nothing in hand clears instead. */
   private cancel(): void {
+    if (this.placing) {
+      this.abandonPlacement();
+      return;
+    }
     if (!this.input.isGrabbing) {
       this.clearSelection();
       return;
@@ -839,7 +1058,8 @@ export class PlannerSession {
       case "mirror":
         this.groupTool(action.axis === "x" ? GroupOp.MIRROR_X : GroupOp.MIRROR_Y);
         return true;
-      case "ignore":
+      case "store":
+        this.store();
         return true;
     }
   }
@@ -863,6 +1083,9 @@ export class PlannerSession {
 
   /** After undo, redo or a load: every building may have moved. */
   private afterHistory(): void {
+    // Before the sync, not after: a building undo has just taken out of the
+    // drawer needs its sprite shown again before it is put back in place.
+    this.view.syncStored();
     this.view.syncAll();
     this.view.resort();
     this.moved = new Set(this.plan.movedIds());

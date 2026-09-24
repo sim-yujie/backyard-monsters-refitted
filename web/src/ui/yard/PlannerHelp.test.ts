@@ -76,7 +76,7 @@ describe("the help card", () => {
     const panel = plannerHelpPanel({ onClose: () => {} });
     const rows = panel.element.querySelectorAll(".planner-help__row");
     expect(rows.length).toBeGreaterThanOrEqual(4);
-    expect(rows.length).toBeLessThanOrEqual(6);
+    expect(rows.length).toBeLessThanOrEqual(8);
     for (const row of rows) {
       expect(row.querySelector("svg.planner-demo")).not.toBeNull();
       expect(row.querySelector(".planner-help__text")?.textContent?.length ?? 0).toBeGreaterThan(

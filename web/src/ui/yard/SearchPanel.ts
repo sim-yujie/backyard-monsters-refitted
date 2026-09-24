@@ -3,13 +3,17 @@ import { countByKind, searchNodes, OTHER_KIND, type SearchGroup } from "@/game/y
 import { Panel } from "@/ui/Panel";
 
 /**
- * F16, as phase 1 can deliver it: search over the buildings already in the yard
- * (plan §1.3).
+ * F16: search over the buildings standing in the yard.
  *
- * There is no inventory yet — everything is placed from the moment the planner
- * opens — so this finds rather than stocks. That is still the thing the feature
- * was for: picking the 400 walls out of 575 buildings without hunting for them,
- * which is exactly what the batch wall upgrade needs to select against.
+ * This finds rather than stocks. What the store tool has lifted off the yard
+ * is in the drawer next door (`InventoryPanel.ts`), which stacks its rows with
+ * the same {@link searchNodes}; this panel lists only what is placed, because
+ * a row here selects buildings and frames the camera on them, and neither
+ * means anything for a building that is nowhere.
+ *
+ * It is still the thing the feature was for: picking the 400 walls out of 575
+ * buildings without hunting for them, which is exactly what the batch wall
+ * upgrade needs to select against.
  *
  * ## Rows are stacks
  *

@@ -31,10 +31,12 @@ import type { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { InspectorPanel } from "@/ui/yard/InspectorPanel";
 import { PlannerBar } from "@/ui/yard/PlannerBar";
+import { InventoryPanel } from "@/ui/yard/InventoryPanel";
 import {
   applyPanel,
   banner,
   checklistPanel,
+  confirmPanel,
   describeLoadProblems,
   didNotFitPanel,
   rearmPanel,
@@ -172,6 +174,9 @@ export class YardPlanner {
   private helpPanel: Panel | null = null;
   private inspector: InspectorPanel | null = null;
   private search: SearchPanel | null = null;
+  private inventory: InventoryPanel | null = null;
+  /** The drawer count the docked panels were last drawn from. */
+  private storedShown = 0;
   private notice: HTMLElement | null = null;
   private applying = false;
   private batching = false;
@@ -248,6 +253,9 @@ export class YardPlanner {
       onRearmTraps: () => this.showRearm(),
       onApply: () => this.apply(),
       onPutBack: () => this.session.putBack(),
+      onStore: () => this.storeSelection(),
+      onClearYard: () => this.confirmClearYard(),
+      onInventory: () => this.toggleInventory(),
       onHelp: () => this.openHelp("basics", false),
       onExit: () => this.requestExit(),
     }, { readOnly: this.readOnly });
@@ -301,6 +309,100 @@ export class YardPlanner {
     this.search?.setNodes(this.session.plan.buildings());
   }
 
+  /* ── Storing (issue #50) ────────────────────────────────────────────── */
+
+  /**
+   * Store, from the bar button, the selection chip or Delete.
+   *
+   * The session drops mushrooms and anything else fixed out of the selection
+   * silently, so a marquee that caught one still stores the rest; a press that
+   * stored nothing at all is the one case worth a word, because the player
+   * pressed a button and watched the yard not change.
+   */
+  private storeSelection(): void {
+    if (this.readOnly) return;
+    const stored = this.session.store();
+    if (stored === 0) {
+      this.options.notices.show(
+        NOTICE,
+        this.session.state().selectionCount === 0
+          ? "Select some buildings first, then press Store."
+          : "Nothing there can be stored: mushrooms stay where they are.",
+        { level: "warning", timeoutMs: 4000 },
+      );
+      return;
+    }
+    this.openInventory();
+    this.options.notices.show(
+      NOTICE,
+      `Stored ${stored} ${plural(stored, "building")}. Ctrl+Z puts ${stored === 1 ? "it" : "them"} back.`,
+      { level: "info", timeoutMs: 4000 },
+    );
+  }
+
+  /**
+   * Clear yard: everything not fixed into the drawer, after asking.
+   *
+   * Asked about rather than simply done, although it is one Ctrl+Z away: a
+   * player who mis-clicks watches their whole yard disappear, and undo is not
+   * the first thing anyone thinks of in that second.
+   */
+  private confirmClearYard(): void {
+    if (this.readOnly) return;
+    const count = this.session.plan.buildings().length;
+    if (count === 0) {
+      this.options.notices.show(NOTICE, "The yard is already empty.", {
+        level: "info",
+        timeoutMs: 4000,
+      });
+      return;
+    }
+
+    this.openDialog(
+      confirmPanel({
+        title: "Clear the yard?",
+        message: `Store all ${count} ${plural(count, "building")}?`,
+        note: "Nothing changes in your yard until you press Apply, and Ctrl+Z puts them all back.",
+        confirmLabel: "Clear yard",
+        onConfirm: () => {
+          this.closeDialog();
+          const stored = this.session.clearYard();
+          this.openInventory();
+          this.options.notices.show(
+            NOTICE,
+            `Stored ${stored} ${plural(stored, "building")}. Ctrl+Z puts them all back.`,
+            { level: "info", timeoutMs: 6000 },
+          );
+        },
+        onClose: () => this.closeDialog(),
+      }),
+    );
+  }
+
+  /** Opens the drawer, or brings its contents up to date if it is already up. */
+  private openInventory(): void {
+    if (this.readOnly) return;
+    const panel =
+      this.inventory ??
+      new InventoryPanel({
+        onPlace: (id) => this.session.startPlacing(id),
+        onClose: () => {
+          this.inventory = null;
+        },
+      }).mount(this.dock);
+    this.inventory = panel;
+    panel.setNodes(this.session.storedNodes());
+  }
+
+  private toggleInventory(): void {
+    if (this.inventory) {
+      this.inventory.close();
+      this.inventory = null;
+      return;
+    }
+    this.openInventory();
+  }
+
   destroy(): void {
     this.closeDialog();
     this.helpPanel?.close();
@@ -309,6 +411,8 @@ export class YardPlanner {
     this.inspector = null;
     this.search?.close();
     this.search = null;
+    this.inventory?.close();
+    this.inventory = null;
     this.layouts.destroy();
     this.session.detach();
     this.bar.destroy();
@@ -461,6 +565,7 @@ export class YardPlanner {
       checklistPanel({
         checklist,
         onShow: (id) => this.selectAndFrame([id]),
+        ...(this.readOnly ? {} : { onOpenInventory: () => this.openInventory() }),
         onClose: () => this.closeDialog(),
       }),
     );
@@ -730,10 +835,19 @@ export class YardPlanner {
       this.bar.setSummary(summariseSelection(nodes, this.yard));
       this.bar.setWorkers(this.yard.workers, null);
     }
-    // Nothing can be unplaced yet: every building is in the plan from the
-    // moment the planner opens (phase 1 §1.3). The cell hides itself at zero.
-    this.bar.setUnplaced(0);
     this.bar.setWallCount(nodes.filter((node) => WALL_TYPES.includes(node.type)).length);
+
+    // The drawer and the Find list are views over the plan, so they follow
+    // every store and every placement. Only then, though: this runs once per
+    // pointer move during a drag, and regrouping 575 buildings into stacks at
+    // that rate would cost more than the drag does. Every edit that moves a
+    // building between the yard and the drawer changes the count, and every
+    // edit refreshes, so the count is a complete signal here.
+    if (state.storedCount !== this.storedShown) {
+      this.storedShown = state.storedCount;
+      this.inventory?.setNodes(this.session.storedNodes());
+      this.search?.setNodes(this.session.plan.buildings());
+    }
 
     this.refreshInspector(nodes);
   }

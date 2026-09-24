@@ -209,6 +209,25 @@ export class PlannerInput {
     return this.longPress !== null;
   }
 
+  /**
+   * Puts something in hand with no press at all.
+   *
+   * Clicking a stack in the inventory drawer starts a carry, and that click
+   * lands on a DOM panel rather than on the canvas — so there is no press for
+   * the usual "a click that did not travel becomes a carry" path to grow out
+   * of. From here on it is an ordinary carry: the pointer moves it, a press on
+   * the canvas drops it, the secondary button puts it back.
+   */
+  beginCarry(): void {
+    if (this.grab === Grab.CARRY) return;
+    this.cancelLongPress();
+    this.grab = Grab.CARRY;
+    this.pointerId = null;
+    this.watchingClick = false;
+    this.setCursor(true);
+    this.handlers.grabChanged();
+  }
+
   /** Abandons a gesture without a release; Escape uses it. */
   cancel(): void {
     const had = this.grab !== null;

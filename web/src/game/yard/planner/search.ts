@@ -3,13 +3,15 @@ import type { PlanNode } from "./placement";
 import { typeName } from "./summary";
 
 /**
- * Searching the buildings that are already in the yard.
+ * Stacking buildings by type and level, for the two lists that show them.
  *
- * Phase 1 has no inventory: every building is in the plan from the moment the
- * planner opens and nothing can be stored, so F16's "inventory search" is a
- * search over what is placed (plan §1.3). That is still the thing the feature
- * was for — finding the 400 walls among 575 buildings without hunting for them
- * — and it is what the batch wall upgrade needs to select against.
+ * F16 asked for a search over the inventory. This is the arithmetic behind
+ * both halves of that: the Find panel runs it over the buildings standing in
+ * the yard, which is what finds the 400 walls among 575 without hunting for
+ * them and what the batch wall upgrade selects against, and the inventory
+ * drawer runs it over the buildings the store tool has lifted off
+ * (`ui/yard/InventoryPanel.ts`). One grouping for both, so a stack reads the
+ * same wherever it is shown.
  *
  * ## Stacking
  *
