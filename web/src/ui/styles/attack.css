@@ -561,6 +561,130 @@
 }
 /* end WP3 army panel */
 
+/* WP6 end ── the end-of-attack panel (docs/design/attack-flow.md §F6) ──── */
+
+.attack-end__backdrop {
+  pointer-events: auto;
+}
+
+.attack-end {
+  width: min(92vw, 440px);
+}
+
+.attack-end__outcome {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.attack-end--win .attack-end__outcome {
+  color: var(--colour-success, var(--colour-text));
+}
+
+.attack-end--lose .attack-end__outcome {
+  color: var(--colour-warning, var(--colour-text));
+}
+
+.attack-end__reason {
+  margin: 0 0 var(--space-3);
+}
+
+.attack-end__reason:empty {
+  display: none;
+}
+
+.attack-end__stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-3);
+}
+
+.attack-end__stats dt {
+  color: var(--colour-text-muted);
+}
+
+.attack-end__stats dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.attack-end__loot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.attack-end__loot-item {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.attack-end__loot-item--none {
+  color: var(--colour-text-muted);
+}
+
+.attack-end__status {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--colour-border);
+}
+
+.attack-end__status--saving {
+  color: var(--colour-text-muted);
+}
+
+.attack-end__status--saved {
+  border-color: var(--colour-success, var(--colour-border));
+}
+
+.attack-end__status--failed {
+  border-color: var(--colour-danger, var(--colour-border));
+  color: var(--colour-danger, var(--colour-text));
+}
+
+.attack-end__protection {
+  margin: 0 0 var(--space-2);
+}
+
+.attack-end__leave-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+}
+
+.attack-end__leave-confirm[hidden] {
+  display: none;
+}
+
+.attack-end__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.attack-end__actions [hidden] {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .attack-end__actions .btn,
+  .attack-end__leave-confirm .btn {
+    min-height: 44px;
+  }
+}
+/* end WP6 end */
+
 /* WP4 drop, catapult, siege ───────────────────────────────────────────────
  * The tool bar under the army panel, the two pickers it opens, and their
  * tiles. Same rule as the rest of the file: every value is a token. */
