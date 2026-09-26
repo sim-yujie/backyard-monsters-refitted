@@ -69,6 +69,22 @@ export const formatClock = (seconds: number): string => {
   return `${minutes}:${rest < 10 ? "0" : ""}${rest}`;
 };
 
+/** One line for the interim end display; WP6's panel replaces it. */
+export const describeEnd = (state: AttackSessionState): string => {
+  switch (state.endReason) {
+    case "destroyed":
+      return "Attack over: the yard is destroyed.";
+    case "exhausted":
+      return "Attack over: nothing left to send.";
+    case "expired":
+      return "Attack over: time ran out.";
+    case "retreat":
+      return "Attack over: retreat.";
+    default:
+      return "";
+  }
+};
+
 export class AttackScene implements Scene {
   private readonly renderer = new YardRenderer();
   private readonly notices = new Notices();
@@ -99,6 +115,7 @@ export class AttackScene implements Scene {
   private dockBody: HTMLElement | null = null;
   private dockHandle: HTMLButtonElement | null = null;
   private dockOpen = false;
+  private endNote: HTMLElement | null = null;
   private panel: BuildingPanel | null = null;
   private selected: YardBuilding | null = null;
   private status: HTMLElement | null = null;
@@ -188,6 +205,7 @@ export class AttackScene implements Scene {
     this.dock = null;
     this.dockBody = null;
     this.dockHandle = null;
+    this.endNote = null;
     this.strip?.remove();
     this.strip = null;
     this.clock = null;
@@ -467,11 +485,16 @@ export class AttackScene implements Scene {
     const body = document.createElement("div");
     body.className = "attack-dock__body";
 
-    dock.append(handle, body);
+    const endNote = document.createElement("p");
+    endNote.className = "attack-dock__end";
+    endNote.hidden = true;
+
+    dock.append(handle, body, endNote);
     context.overlay.content.append(dock);
     this.dock = dock;
     this.dockHandle = handle;
     this.dockBody = body;
+    this.endNote = endNote;
     this.measureDock();
   }
 
@@ -514,12 +537,7 @@ export class AttackScene implements Scene {
   private onSessionChange(state: AttackSessionState): void {
     this.refreshStrip(state);
     this.refreshStatus(state);
-    // The end plugin (WP6) takes over from here; a pending retreat question
-    // is moot once the attack is over.
-    if (state.phase === "ended") {
-      this.confirm?.close();
-      this.confirm = null;
-    }
+    if (state.phase === "ended") this.showEnd(state);
   }
 
   private refreshStrip(state: AttackSessionState): void {
@@ -562,6 +580,25 @@ export class AttackScene implements Scene {
       (this.selected ? ` · selected #${this.selected.id}` : "");
   }
 
+  private showEnd(state: AttackSessionState): void {
+    this.confirm?.close();
+    this.confirm = null;
+    const note = this.endNote;
+    if (!note) return;
+    note.replaceChildren();
+    const text = document.createElement("span");
+    text.textContent = describeEnd(state);
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "btn btn--primary";
+    back.textContent = "Back to the map";
+    back.addEventListener("click", () => this.context?.goTo(SceneName.MAP_ROOM_2));
+    note.append(text, back);
+    note.hidden = false;
+    if (!this.dockOpen) this.toggleDock();
+    this.measureDock();
+  }
+
   /* ── Retreat ────────────────────────────────────────────────────────── */
 
   /** One confirmation (§7, Q9), then the session's own retreat. */
@@ -592,17 +629,13 @@ export class AttackScene implements Scene {
     this.confirm.mount(context.overlay.modal);
   }
 
-  /**
-   * A HUD switch away from a running attack is a retreat, asked once. Once
-   * confirmed, the end-of-attack panel (WP6) saves the result and offers the
-   * map; the scene does not leave on its own, or the save would go unseen.
-   */
+  /** A HUD switch away from a running attack is a retreat, asked once. */
   private leaveFor(scene: string): void {
     const context = this.context;
     if (!context) return;
     const phase = this.session?.state().phase;
     if (phase === "running" || phase === "loaded") {
-      this.askRetreat();
+      this.askRetreat(() => context.goTo(scene));
       return;
     }
     context.goTo(scene);
