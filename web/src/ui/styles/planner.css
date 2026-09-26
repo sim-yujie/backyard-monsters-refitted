@@ -161,6 +161,43 @@
   white-space: nowrap;
 }
 
+/*
+ * A switch row in a menu: the tick sits in a fixed gutter so the labels line
+ * up whether or not they are ticked, and the gutter is a pseudo-element so the
+ * button's own text stays the accessible name. `aria-checked` on the button is
+ * what a screen reader reads; the mark is for everyone else.
+ */
+.planner-menu__item--check::before {
+  /*
+   * The empty alternative text is load-bearing: without it Chrome folds the
+   * glyph into the button's accessible name, so every row read as "✓ Land"
+   * whether it was ticked or not. `aria-checked` is what says so.
+   */
+  content: "✓" / "";
+  display: inline-block;
+  width: 1em;
+  margin-inline-end: var(--space-1);
+  opacity: 0;
+}
+
+.planner-menu__item--on::before {
+  opacity: 1;
+}
+
+/* A child of the row above: Land and Air under Tower ranges. */
+.planner-menu__item--nested {
+  padding-inline-start: var(--space-3);
+}
+
+/*
+ * Dimmed, not disabled: Land and Air still say what the overlay will show once
+ * Tower ranges is back on, and pressing one turns the parent on rather than
+ * doing nothing.
+ */
+.planner-menu__item--dim {
+  opacity: 0.55;
+}
+
 .planner-bar__checklist--bad {
   color: var(--colour-danger);
   border-color: var(--colour-danger);
@@ -1471,6 +1508,15 @@
 .planner-help__row + .planner-help__row {
   padding-top: var(--space-2);
   border-top: 1px solid var(--colour-border);
+}
+
+/*
+ * A row with no picture: the View menu's switches, which have no move to show.
+ * Indented to where the figures' text starts, so the column of sentences is
+ * unbroken even though the column of figures stops.
+ */
+.planner-help__row--plain {
+  padding-inline-start: calc(92px + var(--space-3));
 }
 
 .planner-help__demo {

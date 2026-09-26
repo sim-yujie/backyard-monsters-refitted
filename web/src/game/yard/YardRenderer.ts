@@ -46,6 +46,22 @@ export class YardRenderer {
   private readonly chrome = new Graphics();
   private readonly planner = new PlannerOverlay();
 
+  /**
+   * Where the planner hangs its world-space decals: the tower range discs and
+   * the centre mark.
+   *
+   * Two containers because "under the buildings" is a different place in each
+   * view. In the isometric yard it is above the ground and below the sprites,
+   * so a disc reads as paint on the grass. The blueprint draws its own ground,
+   * its grid and its tiles inside one container, so its decal slot lives in
+   * there, between the grid and the tiles, and shows and hides with it.
+   *
+   * Public because the planner owns what goes in them and the renderer has no
+   * opinion about it; empty and invisible until something is put in.
+   */
+  readonly isoDecals = new Container();
+  readonly flatDecals: Container = this.blueprint.decals;
+
   private atlas: YardArtAtlas | null = null;
   private yard: Yard | null = null;
   private readonly byId = new Map<number, YardBuilding>();
@@ -64,11 +80,15 @@ export class YardRenderer {
   private chromeDirty = true;
   private plannerVisuals: PlannerVisuals | null = null;
   private currentView: YardView = YardView.ISO;
+  private zoomLevel = 1;
+  private zoomWatcher: ((zoom: number) => void) | null = null;
 
   constructor() {
     this.mushroomLayer.eventMode = "none";
+    this.isoDecals.eventMode = "none";
     this.root.addChild(
       this.ground.root,
+      this.isoDecals,
       this.buildings.shadows,
       this.mushroomLayer,
       this.buildings.tops,
@@ -162,6 +182,7 @@ export class YardRenderer {
     const iso = view === YardView.ISO;
     for (const layer of [
       this.ground.root,
+      this.isoDecals,
       this.buildings.shadows,
       this.mushroomLayer,
       this.buildings.tops,
@@ -178,12 +199,33 @@ export class YardRenderer {
   /**
    * Tells the views the camera's zoom.
    *
-   * Only the blueprint cares: its tile labels are 11 px of text drawn in yard
-   * units, so past a certain zoom out they are noise rather than writing. The
-   * isometric yard sizes nothing by zoom, so this is a no-op for it.
+   * The blueprint cares because its tile labels are 11 px of text drawn in
+   * yard units, so past a certain zoom out they are noise rather than writing.
+   * The isometric yard sizes nothing by zoom. The decals care because a
+   * fixed-size mark — the planner's centre crosshair — has to hold its size on
+   * screen rather than shrink with the yard.
    */
   setZoom(zoom: number): void {
+    this.zoomLevel = zoom;
     this.blueprint.setZoom(zoom);
+    this.zoomWatcher?.(zoom);
+  }
+
+  /** The camera's zoom, as the scene last reported it. */
+  get zoom(): number {
+    return this.zoomLevel;
+  }
+
+  /**
+   * Asks to be told when the zoom changes, or stops asking when passed null.
+   *
+   * One watcher, because there is one thing in the decals that needs it and a
+   * list would outlive its only member. The planner registers on the way in
+   * and clears it on the way out.
+   */
+  watchZoom(watcher: ((zoom: number) => void) | null): void {
+    this.zoomWatcher = watcher;
+    if (watcher) watcher(this.zoomLevel);
   }
 
   /** The world extent of the active view, for the camera's clamp. */

@@ -68,9 +68,20 @@ import { demo, GROUP_OP_DEMOS, type DemoName } from "./demos";
  * selection tools, Find, the view switch and the cost cells.
  */
 
+/** The switches in the View menu: what each one draws over the yard. */
+export type OverlayName = "ranges" | "land" | "air" | "centre";
+
 export interface PlannerBarActions {
   onTool: (tool: PlannerTool) => void;
   onView: (view: YardView) => void;
+  /**
+   * One of the View menu's switches was flipped.
+   *
+   * The bar does not hold the answer — the toggles are remembered across
+   * sessions and the layers are drawn by the scene — so it reports the press
+   * and waits to be told what to tick.
+   */
+  onOverlay: (name: OverlayName) => void;
   /** Mirror, align or distribute the selection (F7). */
   onGroupTool: (op: GroupOp) => void;
   onUndo: () => void;
@@ -183,8 +194,24 @@ const withDemo = (
 interface MenuRow {
   readonly label: string;
   readonly title: string;
-  /** The demo shown when the row is hovered. */
-  readonly demo: DemoName;
+  /**
+   * The demo shown when the row is hovered.
+   *
+   * Optional: Q13 asks for a picture of every *move*, and a picture is worse
+   * than nothing when it shows the wrong one. A row that only turns a drawing
+   * on has no move to illustrate, so it gets its sentence and no figure.
+   */
+  readonly demo?: DemoName;
+  /**
+   * The row is a switch rather than an action: it carries a tick, reports its
+   * state to a screen reader, and leaves the menu open when it is pressed so
+   * two of them can be flipped in one visit.
+   */
+  readonly checkable?: boolean;
+  /** A child of the row above it, which is off while its parent is. */
+  readonly nested?: boolean;
+  /** Names the row for {@link Menu.setChecked}. */
+  readonly key?: string;
   readonly run: () => void;
 }
 
@@ -210,8 +237,16 @@ class Menu {
   private readonly dismiss: (event: Event) => void;
   /** Detaches every popover this menu attached, trigger and rows alike. */
   private readonly popovers: (() => void)[] = [];
+  /** The rows that carry a tick, by their key. */
+  private readonly checks = new Map<string, HTMLButtonElement>();
 
-  constructor(label: string, title: string, demoName: DemoName, rows: readonly MenuRow[]) {
+  constructor(
+    label: string,
+    title: string,
+    /** The trigger's own demo, or null where no picture would be honest. */
+    demoName: DemoName | null,
+    rows: readonly MenuRow[],
+  ) {
     this.element = document.createElement("div");
     this.element.className = "planner-menu";
 
@@ -231,25 +266,40 @@ class Menu {
 
     for (const row of rows) {
       const item = button(row.label, row.title, "btn btn--ghost planner-menu__item");
-      item.setAttribute("role", "menuitem");
+      item.setAttribute("role", row.checkable ? "menuitemcheckbox" : "menuitem");
+      if (row.checkable) {
+        item.classList.add("planner-menu__item--check");
+        item.setAttribute("aria-checked", "false");
+        if (row.key) this.checks.set(row.key, item);
+      }
+      if (row.nested) item.classList.add("planner-menu__item--nested");
       item.addEventListener("click", () => {
-        this.toggle(false);
+        // A switch leaves the list up: turning Land off and Air on is one
+        // errand, and a menu that shut after each would make it two.
+        if (!row.checkable) this.toggle(false);
         row.run();
       });
       // A row is never disabled — the trigger is — so the popover can hang off
       // the button itself and the row needs no wrapper.
-      this.popovers.push(
-        attachPopover(item, {
-          build: () => tipContent(row.demo, row.title),
-          className: "popover--demo",
-        }),
-      );
+      if (row.demo) {
+        const demoName = row.demo;
+        this.popovers.push(
+          attachPopover(item, {
+            build: () => tipContent(demoName, row.title),
+            className: "popover--demo",
+          }),
+        );
+      }
       this.list.append(item);
     }
 
-    const trigger = withDemo(this.trigger, demoName, () => this.trigger.title);
-    this.popovers.push(trigger.dispose);
-    this.element.append(trigger.element, this.list);
+    if (demoName) {
+      const trigger = withDemo(this.trigger, demoName, () => this.trigger.title);
+      this.popovers.push(trigger.dispose);
+      this.element.append(trigger.element, this.list);
+    } else {
+      this.element.append(this.trigger, this.list);
+    }
 
     this.dismiss = (event: Event): void => {
       if (this.list.hidden) return;
@@ -275,6 +325,22 @@ class Menu {
 
   get open(): boolean {
     return !this.list.hidden;
+  }
+
+  /**
+   * Ticks or unticks one switch, and says whether it can be pressed.
+   *
+   * A nested row whose parent is off is left enabled and marked rather than
+   * disabled, because pressing it is a reasonable thing to want and the scene
+   * answers it by turning the parent on too. The class is what the stylesheet
+   * dims.
+   */
+  setChecked(key: string, checked: boolean, dimmed = false): void {
+    const item = this.checks.get(key);
+    if (!item) return;
+    item.setAttribute("aria-checked", String(checked));
+    item.classList.toggle("planner-menu__item--on", checked);
+    item.classList.toggle("planner-menu__item--dim", dimmed);
   }
 
   destroy(): void {
@@ -332,6 +398,7 @@ export class PlannerBar {
   private readonly popovers: (() => void)[] = [];
   private readonly align: Menu;
   private readonly distribute: Menu;
+  private readonly viewMenu: Menu;
   private readonly undo: HTMLButtonElement;
   private readonly redo: HTMLButtonElement;
   private readonly apply: HTMLButtonElement;
@@ -384,6 +451,41 @@ export class PlannerBar {
     blueprint.addEventListener("click", () => actions.onView(YardView.BLUEPRINT));
     this.views.set(YardView.ISO, iso);
     this.views.set(YardView.BLUEPRINT, blueprint);
+
+    /* ── What is drawn over the yard (issues #4 and #54) ─────────────── */
+
+    this.viewMenu = new Menu("View", "What is drawn over the yard", null, [
+      {
+        label: "Tower ranges",
+        title: "Show how far every defence tower reaches (R)",
+        checkable: true,
+        key: "ranges",
+        run: () => actions.onOverlay("ranges"),
+      },
+      {
+        label: "Land",
+        title: "The reach of towers that shoot at creeps on the ground",
+        checkable: true,
+        nested: true,
+        key: "land",
+        run: () => actions.onOverlay("land"),
+      },
+      {
+        label: "Air",
+        title: "The reach of towers that shoot at flyers",
+        checkable: true,
+        nested: true,
+        key: "air",
+        run: () => actions.onOverlay("air"),
+      },
+      {
+        label: "Centre of yard",
+        title: "Mark the middle of the plot and its two axes",
+        checkable: true,
+        key: "centre",
+        run: () => actions.onOverlay("centre"),
+      },
+    ]);
 
     /* ── F7: mirror, align and distribute ───────────────────────────── */
 
@@ -476,7 +578,10 @@ export class PlannerBar {
       title,
       this.slotLabel,
       group(select, box, find),
-      group(iso, blueprint),
+      // The overlays live with the view switch and not with the edit tools:
+      // they change what the yard looks like, never what it is, so they stay
+      // mounted in a read-only session too.
+      group(iso, blueprint, this.viewMenu.element),
       // Every one of these moves buildings, so a read-only session gets none
       // of them, the same way it gets no undo and no Apply.
       ...(this.readOnly
@@ -625,6 +730,27 @@ export class PlannerBar {
   mount(container: HTMLElement): this {
     container.append(this.toolbar, this.actionBar);
     return this;
+  }
+
+  /**
+   * Ticks the View menu to match what is being drawn.
+   *
+   * Land and Air are dimmed while their parent is off, rather than removed or
+   * disabled: they are still what the overlay will show when it comes back on,
+   * and a player who turned Air off three sessions ago has to be able to find
+   * out why the flyer discs are missing. Pressing a dimmed one turns Tower
+   * ranges back on with it, so the row never does nothing.
+   */
+  setOverlays(toggles: {
+    readonly ranges: boolean;
+    readonly land: boolean;
+    readonly air: boolean;
+    readonly centre: boolean;
+  }): void {
+    this.viewMenu.setChecked("ranges", toggles.ranges);
+    this.viewMenu.setChecked("land", toggles.land, !toggles.ranges);
+    this.viewMenu.setChecked("air", toggles.air, !toggles.ranges);
+    this.viewMenu.setChecked("centre", toggles.centre);
   }
 
   /** Redraws from the session's state. */
@@ -897,6 +1023,7 @@ export class PlannerBar {
     this.align.destroy();
     this.distribute.destroy();
     this.yardMenu.destroy();
+    this.viewMenu.destroy();
     // So do the popovers, and their bubbles hang off the body rather than off
     // the bar, so they outlive it unless they are taken down by hand.
     for (const dispose of this.popovers) dispose();

@@ -19,6 +19,7 @@ const noop = (): void => {};
 const actions = (): PlannerBarActions => ({
   onTool: noop,
   onView: noop,
+  onOverlay: vi.fn(),
   onGroupTool: vi.fn(),
   onUndo: vi.fn(),
   onRedo: vi.fn(),
@@ -85,15 +86,15 @@ const mirrorButtons = (bar: PlannerBar): HTMLButtonElement[] =>
 /**
  * The group-operation menus: Align and Distribute, in that order.
  *
- * The Yard menu — which holds Clear yard — is a menu in the same toolbar and
- * is left out here, so these helpers go on meaning the same thing they did
- * before it existed.
+ * Named rather than counted. The toolbar now holds three other menus — Yard
+ * (Clear yard) and View (the overlays) — and every one of them would shift the
+ * indices these helpers are indexed by.
  */
 const groupMenus = (bar: PlannerBar): HTMLElement[] =>
-  [...bar.toolbar.querySelectorAll<HTMLElement>(".planner-menu")].filter(
-    (menu) =>
-      !menu.querySelector(".planner-menu__trigger")?.textContent?.startsWith("Yard"),
-  );
+  [...bar.toolbar.querySelectorAll<HTMLElement>(".planner-menu")].filter((menu) => {
+    const label = menu.querySelector(".planner-menu__trigger")?.textContent ?? "";
+    return label.startsWith("Align") || label.startsWith("Distribute");
+  });
 
 /**
  * The demo wrapper around the first Mirror button.
@@ -411,7 +412,10 @@ describe("the read-only bar", () => {
   it("keeps the group operations inert even though they are not mounted", () => {
     const bar = mount({ readOnly: true });
     bar.update(stateOf({ readOnly: true, previewing: true, selectionCount: 6 }));
-    expect(bar.toolbar.querySelector(".planner-menu")).toBeNull();
+    expect(groupMenus(bar)).toHaveLength(0);
+    // The View menu is not one of them: it draws over the yard rather than
+    // changing it, so a read-only session keeps it.
+    expect(bar.toolbar.querySelector(".planner-menu")).not.toBeNull();
   });
 
   it("keeps the tools that only answer questions", () => {
@@ -669,5 +673,65 @@ describe("store, clear and the drawer (issue #50)", () => {
     expect(chip(bar)).toBeNull();
     expect(drawer(bar)).toBeNull();
     expect(yardMenu(bar)).toBeNull();
+  });
+});
+
+describe("the View menu (issues #4 and #54)", () => {
+  const viewMenu = (bar: PlannerBar): HTMLButtonElement | null =>
+    [...bar.toolbar.querySelectorAll<HTMLButtonElement>(".planner-menu__trigger")].find(
+      (button) => button.textContent?.startsWith("View"),
+    ) ?? null;
+
+  const rows = (bar: PlannerBar): HTMLButtonElement[] => [
+    ...(viewMenu(bar)
+      ?.closest(".planner-menu")
+      ?.querySelectorAll<HTMLButtonElement>(".planner-menu__item") ?? []),
+  ];
+
+  it("offers the two range families under one switch, plus the centre mark", () => {
+    const bar = mount();
+    expect(rows(bar).map((row) => row.textContent)).toEqual([
+      "Tower ranges",
+      "Land",
+      "Air",
+      "Centre of yard",
+    ]);
+  });
+
+  it("reports a press without deciding anything itself", () => {
+    const { bar, fired } = mountWith();
+    viewMenu(bar)?.click();
+    const [ranges, land] = rows(bar);
+
+    ranges?.click();
+    land?.click();
+
+    expect(fired.onOverlay).toHaveBeenNthCalledWith(1, "ranges");
+    expect(fired.onOverlay).toHaveBeenNthCalledWith(2, "land");
+    // A switch leaves the menu up, so two of them are one errand.
+    expect(viewMenu(bar)?.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("ticks what is being drawn, and dims the families while their parent is off", () => {
+    const bar = mount();
+    const [ranges, land, air, centre] = rows(bar);
+
+    bar.setOverlays({ ranges: false, land: true, air: false, centre: true });
+    expect(ranges?.getAttribute("aria-checked")).toBe("false");
+    expect(land?.getAttribute("aria-checked")).toBe("true");
+    expect(land?.classList.contains("planner-menu__item--dim")).toBe(true);
+    expect(air?.getAttribute("aria-checked")).toBe("false");
+    expect(centre?.getAttribute("aria-checked")).toBe("true");
+
+    bar.setOverlays({ ranges: true, land: true, air: true, centre: false });
+    expect(ranges?.getAttribute("aria-checked")).toBe("true");
+    expect(land?.classList.contains("planner-menu__item--dim")).toBe(false);
+    expect(centre?.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("stays in a read-only session, because it changes nothing in the yard", () => {
+    const bar = mount({ readOnly: true });
+    expect(viewMenu(bar)).not.toBeNull();
+    expect(rows(bar)).toHaveLength(4);
   });
 });

@@ -21,6 +21,13 @@ import type { Checklist } from "@/game/yard/planner/checklist";
 import type { LoadMiss } from "@/game/yard/planner/layout";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import { GroupRefusal, PlannerSession, type GroupOutcome } from "@/game/yard/planner/PlannerSession";
+import {
+  CentreMarker,
+  loadOverlays,
+  RangeLayer,
+  saveOverlays,
+  type OverlayToggles,
+} from "@/game/yard/planner/RangeLayer";
 import { summariseSelection } from "@/game/yard/planner/summary";
 import { planTotals } from "@/game/yard/planner/upgrades";
 import { footprintCentre, footprintOf } from "@/game/yard/YardGrid";
@@ -66,6 +73,16 @@ import { YardPlannerLayouts } from "./YardPlannerLayouts";
  */
 
 const NOTICE = "yard-planner";
+
+/**
+ * How wide the middle of the yard is, for the status line's "centre".
+ *
+ * The plot spans `[-w/2, w/2) x [-h/2, h/2)`, so its centre is yard (0, 0)
+ * exactly and the mark is drawn on a cell corner. A point has no area to hover,
+ * so the readout answers for the pathing grid's 10-unit cell around it — the
+ * same cell F4 would sample.
+ */
+const CENTRE_CELL = 10;
 
 export interface YardPlannerOptions {
   yard: Yard;
@@ -140,6 +157,16 @@ export interface YardPlannerOptions {
    * during a drag, which is exactly the rate a live minimap wants.
    */
   onPlanChanged?: () => void;
+  /**
+   * The pointer is over something worth naming in the yard's status line, or
+   * over nothing.
+   *
+   * Today that is one word, "centre", when the pointer is on the middle cell
+   * of the plot. The planner has no readout of its own — the bottom bar is the
+   * plan's arithmetic and the summary is the selection's — so the line the
+   * scene already owns is where this belongs.
+   */
+  onHint?: (note: string | null) => void;
   /** Called when the planner closes itself. */
   onExit: () => void;
 }
@@ -191,6 +218,17 @@ export class YardPlanner {
   /** True when nothing in this session may change the yard (§8, Q5). */
   private readonly readOnly: boolean;
 
+  /* ── The overlays (issues #4 and #54) ───────────────────────────────── */
+
+  /** Every placed tower's reach, land and air kept apart. */
+  private readonly ranges = new RangeLayer();
+  /** The crosshair and axes at yard (0, 0). */
+  private readonly centreMark = new CentreMarker();
+  /** Which of them are on, remembered across sessions. */
+  private overlays: OverlayToggles = loadOverlays();
+  /** The last thing `onHint` was told, so a still pointer says nothing twice. */
+  private hint: string | null = null;
+
   constructor(options: YardPlannerOptions) {
     this.options = options;
     this.yard = options.yard;
@@ -221,6 +259,7 @@ export class YardPlanner {
         );
       },
       onFind: () => this.openSearch(),
+      onRanges: () => this.toggleOverlay("ranges"),
       onGroup: (outcome) => this.reportGroupTool(outcome),
       readOnly: this.readOnly,
     });
@@ -241,6 +280,7 @@ export class YardPlanner {
     this.bar = new PlannerBar({
       onTool: (tool) => this.session.setTool(tool),
       onView: (view) => this.setView(view),
+      onOverlay: (name) => this.toggleOverlay(name),
       onGroupTool: (op) => {
         this.session.groupTool(op);
       },
@@ -263,6 +303,12 @@ export class YardPlanner {
     this.reportPlannerInset();
 
     this.session.attach();
+    this.mountOverlays();
+    // The crosshair holds its size on screen, so it has to hear about a wheel
+    // as well as about a plan edit.
+    options.renderer.watchZoom((zoom) => this.centreMark.setZoom(zoom));
+    this.bar.setOverlays(this.overlays);
+    options.canvas.addEventListener("pointermove", this.onHoverMove, { passive: true });
     this.refreshBar();
     this.bar.setRearmCount(this.rearmTargets().length);
 
@@ -281,6 +327,10 @@ export class YardPlanner {
   setView(view: YardView): void {
     if (this.session.state().view === view) return;
     this.options.onView(view);
+    // The overlays hang off whichever view is showing, and the two draw the
+    // same circle differently, so they move before the redraw `viewChanged`
+    // sets off rather than after it.
+    this.mountOverlays();
     this.session.viewChanged();
   }
 
@@ -307,6 +357,104 @@ export class YardPlanner {
     this.session.rebase(yard);
     this.refreshBar();
     this.search?.setNodes(this.session.plan.buildings());
+  }
+
+  /* ── The overlays: tower ranges and the centre mark ─────────────────── */
+
+  /**
+   * Flips one switch in the View menu, remembers it and redraws.
+   *
+   * Turning Tower ranges on while both families are off would draw nothing and
+   * look broken, so it brings Land and Air back with it. Turning the last
+   * family off is read as turning the whole thing off, which is what the
+   * player just asked for in as many words.
+   */
+  private toggleOverlay(name: "ranges" | "land" | "air" | "centre"): void {
+    const now = { ...this.overlays, [name]: !this.overlays[name] };
+    if (name === "ranges" && now.ranges && !now.land && !now.air) {
+      now.land = true;
+      now.air = true;
+    }
+    if ((name === "land" || name === "air") && !now.land && !now.air) now.ranges = false;
+    if ((name === "land" || name === "air") && now[name] && !now.ranges) now.ranges = true;
+
+    this.overlays = now;
+    saveOverlays(now);
+    this.bar.setOverlays(now);
+    this.drawOverlays();
+  }
+
+  /** Hands both layers to whichever view is showing. */
+  private mountOverlays(): void {
+    const renderer = this.options.renderer;
+    const host =
+      renderer.view === YardView.BLUEPRINT ? renderer.flatDecals : renderer.isoDecals;
+    host.addChild(this.centreMark.root, this.ranges.root);
+  }
+
+  /**
+   * Redraws both layers from the plan.
+   *
+   * Called from `refreshBar`, so once per plan edit, selection change, undo,
+   * load and rebase — and once per pointer move during a drag, which is what
+   * makes a dragged tower's disc travel with it. Positions come from the
+   * renderer rather than from the plan for the same reason the selection
+   * outlines do: the plan has not moved yet mid-drag, and the sprites have.
+   */
+  private drawOverlays(): void {
+    const renderer = this.options.renderer;
+    const on = this.overlays;
+
+    this.ranges.draw({
+      nodes: on.ranges ? this.session.plan.buildings() : [],
+      centreOf: (id) => renderer.centreOf(id),
+      selected: new Set(this.session.selectedIds()),
+      view: renderer.view,
+      land: on.ranges && on.land,
+      air: on.ranges && on.air,
+    });
+
+    if (!on.centre) {
+      this.centreMark.draw(null);
+      return;
+    }
+    const halfWidth = this.yard.bounds.yardWidth / 2;
+    const halfHeight = this.yard.bounds.yardHeight / 2;
+    const at = (x: number, y: number): { x: number; y: number } => renderer.yardToWorld(x, y);
+    this.centreMark.draw({
+      centre: at(0, 0),
+      axes: [
+        [at(-halfWidth, 0), at(halfWidth, 0)],
+        [at(0, -halfHeight), at(0, halfHeight)],
+      ],
+    });
+  }
+
+  /**
+   * Names the middle cell under the pointer, for the yard's status line.
+   *
+   * A listener of its own rather than a hook into `PlannerInput`, because the
+   * planner's input is about what a press *means* and this is about what the
+   * pointer is merely over. It is passive and does nothing but compare two
+   * numbers, so it costs nothing on a pointer that is dragging a wall run.
+   */
+  private readonly onHoverMove = (event: PointerEvent): void => {
+    const rect = this.options.canvas.getBoundingClientRect();
+    const world = this.options.camera.screenToWorld({
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
+    const yard = this.options.renderer.worldToYard(world.x, world.y);
+    const inside =
+      Math.abs(yard.x) <= CENTRE_CELL / 2 && Math.abs(yard.y) <= CENTRE_CELL / 2;
+    this.setHint(inside ? "centre" : null);
+  };
+
+  /** Reports a change of hint, and only a change. */
+  private setHint(note: string | null): void {
+    if (note === this.hint) return;
+    this.hint = note;
+    this.options.onHint?.(note);
   }
 
   /* ── Storing (issue #50) ────────────────────────────────────────────── */
@@ -414,7 +562,12 @@ export class YardPlanner {
     this.inventory?.close();
     this.inventory = null;
     this.layouts.destroy();
+    this.options.canvas.removeEventListener("pointermove", this.onHoverMove);
+    this.setHint(null);
+    this.options.renderer.watchZoom(null);
     this.session.detach();
+    this.ranges.destroy();
+    this.centreMark.destroy();
     this.bar.destroy();
     this.dock.remove();
     this.inspectorDock.remove();
@@ -823,6 +976,7 @@ export class YardPlanner {
     this.options.onPlanChanged?.();
     const state = this.session.state();
     this.bar.update(state);
+    this.drawOverlays();
 
     const nodes = this.session.selectedNodes();
     if (state.plannedCount > 0) {

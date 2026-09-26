@@ -128,6 +128,19 @@ const HINT_ROWS: readonly HintRow[] = [
   },
 ];
 
+/**
+ * The rows with no picture: the View menu's switches.
+ *
+ * They go under the demos rather than among them because Q13's card is about
+ * *moves*, and turning a drawing on is not one. An animated circle appearing
+ * would illustrate the button rather than the idea, which is the failure mode
+ * that decision was taken to avoid.
+ */
+const VIEW_ROWS: readonly string[] = [
+  "View ▸ Tower ranges (R) draws how far every defence tower reaches — Land and Air separately, because an Aerial Defense Tower will not stop a creep walking under it.",
+  "View ▸ Centre of yard marks the middle of the plot and its two axes, for laying a base out symmetrically.",
+];
+
 /** F13's shortcut list, as it always was. */
 const SHORTCUT_ROWS: readonly (readonly [string, string])[] = [
   ["P", "Enter or leave the planner"],
@@ -137,6 +150,7 @@ const SHORTCUT_ROWS: readonly (readonly [string, string])[] = [
   ["V", "Select tool"],
   ["B", "Box select"],
   ["F", "Find buildings by name or type"],
+  ["R", "Show or hide how far your defence towers reach"],
   ["Shift + drag", "Box select with the select tool"],
   ["Shift + click", "Add or remove one building"],
   ["Arrow keys", "Nudge the selection by one grid step"],
@@ -271,6 +285,16 @@ const hintList = (): HTMLElement => {
     text.textContent = row.text;
 
     item.append(figure, text);
+    list.append(item);
+  }
+
+  for (const line of VIEW_ROWS) {
+    const item = document.createElement("li");
+    item.className = "planner-help__row planner-help__row--plain";
+    const text = document.createElement("p");
+    text.className = "planner-help__text";
+    text.textContent = line;
+    item.append(text);
     list.append(item);
   }
   return list;

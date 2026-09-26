@@ -174,6 +174,7 @@ export class PlannerSession {
   private readonly onChange: () => void;
   private readonly onViewToggle: () => void;
   private readonly onFind: (() => void) | undefined;
+  private readonly onRanges: (() => void) | undefined;
   private readonly onGroup: ((outcome: GroupOutcome) => void) | undefined;
   /**
    * Set for the life of the session: this plan may be read, never changed.
@@ -232,6 +233,13 @@ export class PlannerSession {
      */
     onFind?: () => void;
     /**
+     * R was pressed: show or hide the tower range discs.
+     *
+     * The scene owns the overlays and remembers whether they are on, so the
+     * session only forwards the key — the same arrangement Tab and F have.
+     */
+    onRanges?: () => void;
+    /**
      * A mirror, align or distribute finished — or was refused.
      *
      * Reported through the session rather than returned to the caller because
@@ -253,6 +261,7 @@ export class PlannerSession {
     this.onChange = options.onChange;
     this.onViewToggle = options.onViewToggle;
     this.onFind = options.onFind;
+    this.onRanges = options.onRanges;
     this.onGroup = options.onGroup;
     this.readOnly = options.readOnly ?? false;
     this.yard = options.yard;
@@ -1054,6 +1063,11 @@ export class PlannerSession {
         // Deliberately does not touch the tool: the player is still selecting,
         // they are only choosing what with.
         this.onFind?.();
+        return true;
+      case "ranges":
+        // The scene owns what is drawn over the yard, the same way it owns the
+        // view switch: the session knows nothing about the overlays.
+        this.onRanges?.();
         return true;
       case "mirror":
         this.groupTool(action.axis === "x" ? GroupOp.MIRROR_X : GroupOp.MIRROR_Y);

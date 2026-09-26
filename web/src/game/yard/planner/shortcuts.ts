@@ -24,6 +24,14 @@ export type PlannerAction =
   /** F: open the search box. Takes the key off the browser's own find bar. */
   | { readonly kind: "find" }
   /**
+   * R: show or hide the tower range discs.
+   *
+   * The parent switch only. Land and Air are the View menu's job: a key that
+   * turns one family off would leave a player looking at half an answer with
+   * nothing on screen saying which half.
+   */
+  | { readonly kind: "ranges" }
+  /**
    * M mirrors the selection left to right, which is the binding F13's table
    * names. Shift+M is the same operation on the other axis: the toolbar offers
    * both and a player who has learned one will try the other.
@@ -68,6 +76,9 @@ export const plannerAction = (event: {
     case "f":
     case "F":
       return { kind: "find" };
+    case "r":
+    case "R":
+      return { kind: "ranges" };
     // The two cases are deliberately not folded together: Shift is the axis
     // here rather than a modifier on one action, so `M` is not `m`.
     case "m":

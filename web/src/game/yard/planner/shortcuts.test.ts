@@ -24,6 +24,14 @@ describe("plannerAction", () => {
     expect(plannerAction(key("F"))).toEqual({ kind: "find" });
   });
 
+  it("shows or hides the tower ranges on R, in either case", () => {
+    expect(plannerAction(key("r"))).toEqual({ kind: "ranges" });
+    expect(plannerAction(key("R"))).toEqual({ kind: "ranges" });
+    // Ctrl+R is the browser's reload and Cmd+R with it; neither is ours.
+    expect(plannerAction(key("r", { ctrl: true }))).toBeNull();
+    expect(plannerAction(key("r", { meta: true }))).toBeNull();
+  });
+
   it("leaves Ctrl+F to the browser's own find bar", () => {
     expect(plannerAction(key("f", { ctrl: true }))).toBeNull();
     expect(plannerAction(key("f", { meta: true }))).toBeNull();

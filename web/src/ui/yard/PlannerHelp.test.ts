@@ -74,7 +74,11 @@ describe("the hint flag", () => {
 describe("the help card", () => {
   it("shows a picture and a line of text for each move", () => {
     const panel = plannerHelpPanel({ onClose: () => {} });
-    const rows = panel.element.querySelectorAll(".planner-help__row");
+    const rows = [
+      ...panel.element.querySelectorAll(
+        ".planner-help__row:not(.planner-help__row--plain)",
+      ),
+    ];
     expect(rows.length).toBeGreaterThanOrEqual(4);
     expect(rows.length).toBeLessThanOrEqual(8);
     for (const row of rows) {
@@ -83,6 +87,17 @@ describe("the help card", () => {
         10,
       );
     }
+  });
+
+  it("names the View menu's switches in words, with no picture to mislead", () => {
+    const panel = plannerHelpPanel({ onClose: () => {} });
+    const plain = [...panel.element.querySelectorAll(".planner-help__row--plain")];
+    expect(plain.length).toBeGreaterThan(0);
+    for (const row of plain) expect(row.querySelector("svg.planner-demo")).toBeNull();
+
+    const text = plain.map((row) => row.textContent ?? "").join(" ");
+    expect(text).toContain("Tower ranges");
+    expect(text).toContain("Centre of yard");
   });
 
   it("opens on the pictures and keeps the shortcut sheet a tab away", () => {

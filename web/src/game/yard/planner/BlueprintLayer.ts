@@ -172,6 +172,15 @@ export class BlueprintLayer {
 
   private readonly ground = new Graphics();
   private readonly obstacles = new Graphics();
+  /**
+   * The planner's decals in this view: range discs and the centre mark.
+   *
+   * Between the ground and the tiles, so a disc tints the grass and never the
+   * buildings, the same place the isometric view puts it. Over the tiles, 23
+   * overlapping discs washed the towers in the middle of a base out of sight.
+   * Only the tiles are ever rebuilt, so whatever the planner hangs here stays.
+   */
+  readonly decals = new Container();
   private readonly tiles = new Container();
   private readonly byId = new Map<number, Tile>();
   /** Draw order, so `pick` can walk it backwards. */
@@ -208,7 +217,8 @@ export class BlueprintLayer {
   constructor(private readonly textures: YardTextures) {
     this.root.visible = false;
     this.root.eventMode = "none";
-    this.root.addChild(this.ground, this.obstacles, this.tiles);
+    this.decals.eventMode = "none";
+    this.root.addChild(this.ground, this.obstacles, this.decals, this.tiles);
     this.unwatch = textures.watch(() => {
       this.scheduleSweep();
     });

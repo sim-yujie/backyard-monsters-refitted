@@ -126,6 +126,13 @@ export class YardScene implements Scene {
   private access: PlannerAccess = PlannerAccess.LOCKED;
   private toolbar: HTMLElement | null = null;
   private selected: YardBuilding | null = null;
+  /**
+   * One word the planner adds to the status line: what the pointer is over.
+   *
+   * Null whenever it is over nothing worth naming, and always null once the
+   * planner has gone, because the planner clears it on its way out.
+   */
+  private hint: string | null = null;
   private sinceUiTick = 0;
   /** The zoom at which the whole plot fits the viewport; also the floor. */
   private fitZoom = 0.05;
@@ -636,6 +643,12 @@ export class YardScene implements Scene {
       // the minimap reads the positions back off the renderer itself; all this
       // carries is "look again".
       onPlanChanged: () => this.minimap?.markDirty(),
+      // One word from the planner about what the pointer is over. The line it
+      // lands on is this scene's, so this scene is what rewrites it.
+      onHint: (note) => {
+        this.hint = note;
+        this.refreshStatus();
+      },
       onExit: () => this.closePlanner(),
     });
     // The planner's constructor reports its own inset synchronously (via
@@ -788,6 +801,7 @@ export class YardScene implements Scene {
       `plot ${yard.bounds.yardWidth} x ${yard.bounds.yardHeight} (expansion ${yard.expansionLevel}) · ` +
       `${this.frameCostMs.toFixed(1)} ms/frame` +
       (waiting > 0 ? ` · ${waiting} awaiting art` : "") +
-      (this.selected ? ` · selected #${this.selected.id}` : "");
+      (this.selected ? ` · selected #${this.selected.id}` : "") +
+      (this.hint ? ` · ${this.hint}` : "");
   }
 }
