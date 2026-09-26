@@ -5,6 +5,11 @@ import "@/ui/styles/planner.css";
 import "@/ui/styles/attack.css";
 
 import { App } from "@/app/App";
+// Registers every attack-scene package (army, drop, battle, end) onto
+// ATTACK_PLUGINS. Imported here rather than by AttackScene.ts, because the
+// plugins import that file and a cycle would push onto a constant not yet
+// initialised.
+import "@/game/attack/plugins";
 
 const host = document.querySelector<HTMLElement>("#game-root");
 
