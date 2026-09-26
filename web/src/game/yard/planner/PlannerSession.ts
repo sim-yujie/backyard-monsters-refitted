@@ -632,6 +632,9 @@ export class PlannerSession {
       // Back to where the plan still says it is, then out of sight again.
       this.view.sync(placing.id);
       this.view.syncStored();
+      // A building in the drawer is not on the yard, so it cannot stay
+      // selected: the bar would say "1 selected" of something drawn nowhere.
+      this.selection.delete(placing.id);
     }
     this.refresh();
   }

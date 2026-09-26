@@ -1712,6 +1712,30 @@ describe("placing a run from the drawer (issue #57)", () => {
     expect(at(harness, 1)).toEqual({ x: 365, y: 265 });
   });
 
+  it("leaves nothing selected once the one in hand is back in the drawer", () => {
+    const harness = armed();
+    harness.drag(FIRST);
+    harness.press(FIRST);
+    // Tower two is in hand, and selected while it is.
+    expect(harness.session.selectedIds()).toEqual([2]);
+
+    harness.key("Escape");
+    expect(harness.session.state().selectionCount).toBe(0);
+    expect(harness.session.selectedIds()).toEqual([]);
+
+    // The Put back chip is the same path.
+    harness.session.startPlacing(2);
+    harness.session.putBack();
+    expect(harness.session.selectedIds()).toEqual([]);
+
+    // Whereas the last one placed is on the yard, so it stays selected.
+    harness.session.startPlacing(2);
+    harness.drag(SECOND);
+    harness.press(SECOND);
+    expect(harness.session.state().placing).toBe(false);
+    expect(harness.session.selectedIds()).toEqual([2]);
+  });
+
   it("stops on the secondary button", () => {
     const harness = armed();
     harness.drag(FIRST);
