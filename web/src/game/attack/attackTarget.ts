@@ -1,4 +1,4 @@
-import type { BaseLoadResponse, ChampionSaveEntry, PlayerCell } from "@/api/types";
+import type { BaseLoadResponse, ChampionSaveEntry, PlayerCell, Resources } from "@/api/types";
 import type { MonsterLevels, Roster } from "@/game/combat/rules/types";
 import type { OffsetCell } from "@/game/HexGrid";
 
@@ -95,6 +95,15 @@ export interface AttackRoster {
    * Read it as `roster.siege ?? null`.
    */
   readonly siege?: SiegeInventory | null;
+  /**
+   * The attacker's own resource pool and caps (`r1`..`r4`, `r1max`..`r4max`)
+   * from the own-yard load, which prices Catapult bombs
+   * (`GLOBAL.as:819`, `_attackersResources = GLOBAL._resources`). The attack
+   * load's `resources` is the defender's, so it cannot stand in. Null when
+   * the own save carries none. Always set by `rosterInRange`; optional for
+   * the same reason as `sources`. Read it as `roster.resources ?? null`.
+   */
+  readonly resources?: Resources | null;
 }
 
 /** The cell an attack is about to open. */

@@ -157,6 +157,14 @@ describe("rosterInRange", () => {
     expect((roster.sources ?? []).map((source) => source.baseid)).toEqual(["near"]);
   });
 
+  it("carries the attacker's own resource pool from the own-yard load, and null when absent", () => {
+    const resources = { r1: 100, r2: 200, r3: 300, r4: 400, r1max: 1000 };
+    const cells = [ownCell(100, 101)];
+    expect(rosterInRange({ col: 100, row: 100 }, cells, { resources }).resources).toBe(resources);
+    expect(rosterInRange({ col: 100, row: 100 }, cells, {}).resources).toBeNull();
+    expect(rosterInRange({ col: 100, row: 100 }, cells, null).resources).toBeNull();
+  });
+
   it("carries the siege inventory from the own-yard load, and null when there is none", () => {
     const siege = { decoy: { quantity: 2 }, jars: { quantity: 1 } };
     const cells = [ownCell(100, 101)];

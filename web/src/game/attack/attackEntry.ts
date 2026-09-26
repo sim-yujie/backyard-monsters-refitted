@@ -123,7 +123,9 @@ export const rosterInRange = (
   target: OffsetCell,
   ownCells: readonly OwnCell[],
   ownSave:
-    | (Pick<BaseLoadResponse, "champion" | "academy" | "catapult"> & { siege?: unknown })
+    | (Pick<BaseLoadResponse, "champion" | "academy" | "catapult" | "resources"> & {
+        siege?: unknown;
+      })
     | null,
 ): AttackRoster => {
   const monsters: Record<string, number> = {};
@@ -163,6 +165,7 @@ export const rosterInRange = (
     catapultLevel: ownSave?.catapult ?? 0,
     sources,
     siege: typeof siege === "object" && siege !== null ? (siege as SiegeInventory) : null,
+    resources: ownSave?.resources ?? null,
   };
 };
 
