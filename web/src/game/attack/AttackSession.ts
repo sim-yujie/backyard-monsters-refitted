@@ -217,10 +217,6 @@ export class AttackSession {
   private readonly events: FlingEvent[] = [];
   private flung: Record<string, number> = {};
   private championFlung = false;
-  /** The champion's last health above zero, for the save (see {@link championHpAfter}). */
-  private championHpSeen: number | null = null;
-  private championDied = false;
-  private killedSeen = 0;
   private unusedTools = 0;
   private readonly listeners = new Set<AttackSessionListener>();
   /** The last quarter-second the listeners heard about, to rate-limit `advance`. */
@@ -301,7 +297,6 @@ export class AttackSession {
     // Sixty frames of 1/60 s sum to 79.999…, not 80; the nudge keeps a whole
     // second of frames worth a whole second of ticks.
     battle.runTo(Math.floor(this.targetTick + 1e-6));
-    this.trackChampion(battle.state());
     this.checkEnd(battle);
 
     if (this.phase !== "running") return;
@@ -459,20 +454,13 @@ export class AttackSession {
    * The flung champion's health as the save should report it, or null when
    * none was flung.
    *
-   * The engine reports `championHp` as 0 both when the champion died and when
-   * it merely left the field — after a retreat, or on walking home once
-   * nothing was left to attack (`engine.ts` `step`, the `gone` branch). A
-   * champion that walked home is not dead, and `attackerchampion` overwrites
-   * the attacker's stored champion verbatim, so the session keeps the last
-   * health it saw above zero and reports 0 only for a death, which the
-   * engine's kill count does record (`creepsKilled`).
+   * The engine's `championHp` is 0 only for a death; a champion that retreated
+   * or walked home keeps the health it left with (`engine.ts` `step`), which
+   * is what `attackerchampion` writes back over the attacker's stored champion.
    */
   championHpAfter(): number | null {
     if (!this.championFlung) return null;
-    if (this.championDied) return 0;
-    const live = this.battle_?.state().championHp ?? null;
-    if (live !== null && live > 0) return live;
-    return this.championHpSeen ?? 0;
+    return this.battle_?.state().championHp ?? 0;
   }
 
   /** Whether a champion could still be sent: healthy, active, and not yet flung. */
@@ -540,27 +528,8 @@ export class AttackSession {
   }
 
   private afterEvent(battle: Battle): void {
-    this.trackChampion(battle.state());
     this.checkEnd(battle);
     this.notify();
-  }
-
-  /**
-   * Follows the champion between frames (see {@link championHpAfter}). A
-   * frame is one to a few ticks, so when the champion's health reads 0 and
-   * the kill count rose in the same frame the champion is taken as killed;
-   * when nothing died, it left the field with the health last seen.
-   */
-  private trackChampion(battleState: BattleState): void {
-    if (!this.championFlung || this.championDied) return;
-    const hp = battleState.championHp;
-    const killed = battleState.creepsKilled;
-    if (hp !== null && hp > 0) {
-      this.championHpSeen = hp;
-    } else if (hp === 0 && this.championHpSeen !== null && killed > this.killedSeen) {
-      this.championDied = true;
-    }
-    this.killedSeen = killed;
   }
 
   private damageOf(battleState: BattleState): number {

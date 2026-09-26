@@ -200,7 +200,11 @@ export interface BattleState {
   readonly creepsFlung: number;
   readonly creepsAlive: number;
   readonly creepsKilled: number;
-  /** The champion's remaining health, or null when none was flung. */
+  /**
+   * The champion's remaining health, or null when none was flung. Zero only
+   * when it died; a champion that retreated or walked home keeps the health
+   * it left the field with.
+   */
   readonly championHp: number | null;
   readonly towers: readonly TowerReport[];
   /** Draws taken from the battle's random stream, a cheap divergence tripwire. */
@@ -1104,7 +1108,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         const creep = creeps[read] as Creep;
         if (creep.gone || creep.hp <= 0) {
           byCreepId.delete(creep.id);
-          if (creep.champion) championHp = 0;
+          // Only a death zeroes the champion's health: one that retreated or
+          // walked home keeps the health it left with, which the attack save
+          // writes back verbatim as the attacker's champion.
+          if (creep.champion && creep.hp <= 0) championHp = 0;
           continue;
         }
         if (creep.champion) championHp = creep.hp;

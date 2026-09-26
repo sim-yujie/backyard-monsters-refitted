@@ -297,3 +297,75 @@ describe("the renderer's view of the field (issue #32, WP5)", () => {
     expect(battle.recentEvents(0)).toEqual([]);
   });
 });
+
+describe("the champion's health after the field is left (issue #32)", () => {
+  /** A Gorgo alone against a lone level 1 Cannon Tower, which barely scratches it. */
+  const flung = () => {
+    const yard = yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 1 });
+    battle.apply({
+      kind: "fling",
+      t: 0,
+      x: -100,
+      y: -100,
+      r: 200,
+      monsters: {},
+      champion: { t: 1, l: 1 },
+    });
+    return battle;
+  };
+
+  it("keeps the health a retreated champion left with, rather than reporting it dead", () => {
+    const battle = flung();
+    run(battle, 400);
+    const before = battle.state().championHp;
+    expect(before).not.toBeNull();
+    expect(before).toBeGreaterThan(0);
+    battle.apply({ kind: "retreat", t: battle.tick });
+    run(battle, 10);
+    expect(battle.over()).toBe(true);
+    expect(battle.state().creepsKilled).toBe(0);
+    expect(battle.state().championHp).toBe(before);
+  });
+
+  it("keeps the health of a champion that walked home once the yard was flat", () => {
+    const yard = yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 1 });
+    battle.apply({
+      kind: "fling",
+      t: 0,
+      x: -100,
+      y: -100,
+      r: 200,
+      monsters: { C1: 60 },
+      champion: { t: 1, l: 1 },
+    });
+    // Two minutes: the tower falls, everyone walks home and is taken off the
+    // field, long before the countdown ends the battle.
+    run(battle, 80 * 120);
+    expect(battle.state().creepsAlive).toBe(0);
+    expect(battle.state().creepsKilled).toBe(0);
+    const hp = battle.state().championHp;
+    expect(hp).not.toBeNull();
+    expect(hp).toBeGreaterThan(0);
+  });
+
+  it("reports zero once the champion has actually died", () => {
+    const ring: Record<string, { id: number; t: number; l: number; X: number; Y: number }> = {};
+    for (let index = 0; index < 24; index += 1) {
+      const angle = (index / 24) * Math.PI * 2;
+      ring[String(index + 1)] = {
+        id: index + 1,
+        t: 21,
+        l: 5,
+        X: Math.round(Math.cos(angle) * 400),
+        Y: Math.round(Math.sin(angle) * 400),
+      };
+    }
+    const battle = createBattle(yardOf(ring), { seed: 1 });
+    battle.apply({ kind: "fling", t: 0, x: 0, y: 0, r: 200, monsters: {}, champion: { t: 5, l: 5 } });
+    run(battle, 80 * 100);
+    expect(battle.state().creepsKilled).toBe(1);
+    expect(battle.state().championHp).toBe(0);
+  });
+});
