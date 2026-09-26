@@ -120,7 +120,7 @@ const HINT_ROWS: readonly HintRow[] = [
   {
     demo: "store",
     text:
-      "Store (Delete) lifts the selection off the yard into a drawer, so there is room to move the rest. Click a stack in the drawer to put one back.",
+      "Store (Delete) lifts the selection off the yard into a drawer, so there is room to move the rest. Click a stack in the drawer, then click the yard once per building; Esc stops.",
   },
   {
     demo: "find",

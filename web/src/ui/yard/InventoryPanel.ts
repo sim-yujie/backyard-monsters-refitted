@@ -49,13 +49,20 @@ import { Panel } from "@/ui/Panel";
  * equal — falls back to a coloured swatch of its kind rather than a broken
  * image.
  *
- * ## Clicking places one
+ * ## Clicking arms the row
  *
  * A click takes the lowest id off the stack and puts it in the player's hand,
  * which is the carry a click on a placed building starts: the pointer moves it,
  * the next click on the yard drops it, a refused drop keeps it in hand and
  * Escape returns it to the drawer. Nothing places a whole stack at once —
  * where would four hundred walls go? — so the row is a source, not a command.
+ *
+ * But it is a source that keeps giving (#57): after a drop the session takes
+ * the next building off the same stack, so a run of walls is one click on the
+ * yard per wall, not a trip back to the drawer each time. The row shows as
+ * pressed while it is armed, and clicking it again is how the drawer itself
+ * ends the run; Escape, the secondary button, another tool or an empty stack
+ * end it from elsewhere, and {@link setArmed} keeps the row honest about which.
  *
  * The panel stays docked while the player works and redraws from
  * {@link setNodes} after every edit, so the stack it just handed a building
@@ -71,8 +78,19 @@ export interface InventoryPanelActions {
    * and it should not look like a dead button.
    */
   onPlace: (id: number) => boolean;
+  /** The armed row was clicked again: put the building in hand back. */
+  onPutBack: () => void;
   onClose: () => void;
 }
+
+/** A stack, as the session names the one it is placing from. */
+export interface InventoryStack {
+  readonly type: number;
+  readonly level: number;
+}
+
+/** One string per stack, so two stacks compare with `===`. */
+const stackKey = (stack: InventoryStack): string => `${stack.type}:${stack.level}`;
 
 /**
  * The icon's intrinsic size, matching `.planner-inventory__icon` in the CSS.
@@ -101,6 +119,8 @@ export class InventoryPanel {
   private nodes: readonly PlanNode[] = [];
   private groups: SearchGroup[] = [];
   private categories: SearchCategory[] = [];
+  /** The stack being placed from, as {@link stackKey}, or null. */
+  private armed: string | null = null;
 
   constructor(actions: InventoryPanelActions) {
     this.actions = actions;
@@ -171,6 +191,27 @@ export class InventoryPanel {
     this.renderSummary();
     this.renderChips();
     this.render();
+  }
+
+  /**
+   * Tells the drawer which stack the session is placing from, or that it has
+   * stopped.
+   *
+   * Called from the scene on every refresh, because most of the ways a run
+   * ends — Escape, a right-click, another tool, the last one placed — happen
+   * nowhere near this panel. Cheap when nothing changed, which is nearly
+   * always; a redraw only when the pressed row has to move.
+   */
+  setArmed(stack: InventoryStack | null): void {
+    const key = stack ? stackKey(stack) : null;
+    if (key === this.armed) return;
+    this.armed = key;
+    this.render();
+  }
+
+  /** The stack the drawer shows as pressed, for the tests. */
+  get armedStack(): string | null {
+    return this.armed;
   }
 
   /**
@@ -300,13 +341,18 @@ export class InventoryPanel {
     const item = document.createElement("li");
     item.className = "planner-search__row planner-inventory__row";
 
+    const armed = this.armed === stackKey(group);
+
     const pick = document.createElement("button");
     pick.type = "button";
     pick.className = "btn btn--ghost planner-search__pick planner-inventory__pick";
-    pick.title =
-      group.ids.length === 1
+    pick.classList.toggle("planner-inventory__pick--armed", armed);
+    pick.setAttribute("aria-pressed", String(armed));
+    pick.title = armed
+      ? "Placing from this stack. Click again, or press Esc, to stop"
+      : group.ids.length === 1
         ? "Pick it up, then click the yard to put it down"
-        : "Pick one up, then click the yard to put it down";
+        : "Pick one up, then click the yard once per building. Esc stops";
 
     const name = document.createElement("span");
     name.className = "planner-search__name planner-inventory__name";
@@ -322,6 +368,12 @@ export class InventoryPanel {
 
     pick.append(renderIcon(group), name, level, count);
     pick.addEventListener("click", () => {
+      // A second click on the armed row is the stop, not another pick-up:
+      // the building in hand is already the next one off this stack.
+      if (armed) {
+        this.actions.onPutBack();
+        return;
+      }
       // The lowest id, which is the order the rows themselves are in: taking
       // them off a stack in a stable order is what makes a run of walls come
       // back out in the order it went in.

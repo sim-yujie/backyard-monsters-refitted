@@ -1078,7 +1078,9 @@ const summarise = (state: PlannerState): string => {
   }
   if (state.dragInvalid) parts.push("cannot drop here");
   else if (state.placing) {
-    parts.push("out of the drawer · click to put it down, Esc to put it back");
+    // The next one off the stack follows each drop (#57), so this is worded
+    // as a run rather than a single placement.
+    parts.push("out of the drawer · click the yard once per building, Esc to stop");
   } else if (state.carrying) {
     // Both spellings of "put it back", because the bar is read on a phone too
     // and a finger has no second button (F14).

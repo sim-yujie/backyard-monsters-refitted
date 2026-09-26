@@ -37,8 +37,13 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-const mount = (onPlace: (id: number) => boolean = () => true): InventoryPanel => {
-  const panel = new InventoryPanel({ onPlace, onClose: () => {} }).mount(document.body);
+const mount = (
+  onPlace: (id: number) => boolean = () => true,
+  onPutBack: () => void = () => {},
+): InventoryPanel => {
+  const panel = new InventoryPanel({ onPlace, onPutBack, onClose: () => {} }).mount(
+    document.body,
+  );
   panels.push(panel);
   return panel;
 };
@@ -260,6 +265,44 @@ describe("the inventory drawer", () => {
     expect(placed).toEqual([3]);
   });
 
+  it("presses the row being placed from, and lets go when told (#57)", () => {
+    const panel = mount();
+    panel.setNodes([node({ id: 1, type: 17 }), node({ id: 2, type: 17 }), node({ id: 3, type: 20 })]);
+
+    panel.setArmed({ type: 17, level: 1 });
+
+    const pressed = rows(panel).map((row) => row.getAttribute("aria-pressed"));
+    expect(pressed).toEqual(["false", "true"]);
+    expect(rows(panel)[1]?.title).toContain("Click again");
+
+    // The same answer again is not a redraw; a different one moves the press.
+    panel.setArmed({ type: 17, level: 1 });
+    panel.setArmed(null);
+    expect(rows(panel).map((row) => row.getAttribute("aria-pressed"))).toEqual([
+      "false",
+      "false",
+    ]);
+  });
+
+  it("turns a click on the armed row into a stop, not another pick-up (#57)", () => {
+    const placed: number[] = [];
+    const putBack = vi.fn();
+    const panel = mount((id) => {
+      placed.push(id);
+      return true;
+    }, putBack);
+    panel.setNodes([node({ id: 1, type: 17 }), node({ id: 2, type: 17 })]);
+
+    rows(panel)[0]?.click();
+    expect(placed).toEqual([1]);
+
+    panel.setArmed({ type: 17, level: 1 });
+    rows(panel)[0]?.click();
+
+    expect(placed).toEqual([1]);
+    expect(putBack).toHaveBeenCalledTimes(1);
+  });
+
   it("says how many are waiting and that Apply is blocked", () => {
     const panel = mount();
     panel.setNodes([node({ id: 1 }), node({ id: 2 })]);
@@ -314,7 +357,11 @@ describe("the inventory drawer", () => {
 
   it("closes through its own cross", () => {
     const closed = vi.fn();
-    const panel = new InventoryPanel({ onPlace: () => true, onClose: closed }).mount(
+    const panel = new InventoryPanel({
+      onPlace: () => true,
+      onPutBack: () => {},
+      onClose: closed,
+    }).mount(
       document.body,
     );
     panel.element.querySelector<HTMLButtonElement>("button[aria-label='Close']")?.click();

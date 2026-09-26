@@ -328,6 +328,9 @@ export class PlannerSession {
 
   setTool(tool: PlannerTool): void {
     if (this.tool === tool) return;
+    // Choosing a tool is one of the ways out of a run of placements (#57):
+    // the building in hand goes back to the drawer before the tool changes.
+    if (this.placing) this.abandonPlacement();
     this.tool = tool;
     this.refresh();
   }
@@ -485,12 +488,30 @@ export class PlannerSession {
   }
 
   /**
+   * The stack the building in hand came off, or null when nothing is being
+   * placed.
+   *
+   * The drawer marks that row as armed and turns a second click on it into a
+   * stop (#57). Type and level, not an id: the id in hand changes with every
+   * drop while the row stays the same.
+   */
+  armedStack(): { type: number; level: number } | null {
+    const node = this.placing ? this.plan.get(this.placing.id) : undefined;
+    return node ? { type: node.type, level: node.level } : null;
+  }
+
+  /**
    * Takes a building out of the drawer and puts it in the player's hand.
    *
    * The same carry a click on a placed building starts, with one difference:
    * the building is nowhere, so it follows the pointer by its own centre
    * rather than by the offset a press gave it. Nothing is committed until the
    * drop, and a refused drop keeps it in hand exactly as a refused move does.
+   *
+   * The row stays armed after the drop (#57): while the drawer holds another
+   * building of the same type and level, the next one is in hand at once, so
+   * a run of walls is one click per wall rather than two. See
+   * {@link dropPlacement} for how the run ends.
    *
    * Returns false when there is nothing to place: a read-only session, or an
    * id the drawer does not hold.
@@ -541,10 +562,19 @@ export class PlannerSession {
   }
 
   /**
-   * Puts the carried building down, or keeps it in hand.
+   * Puts the carried building down, then either takes the next one off the
+   * same stack or lets go.
    *
    * Returning `"carry"` is how a refused drop says "still in hand", the same
-   * answer `onRelease` gives a refused move.
+   * answer `onRelease` gives a refused move — and, since #57, how an accepted
+   * drop says "and the next one is in hand now". One undo entry per building
+   * either way: a run of ten walls is ten Ctrl+Z, each putting one back, which
+   * is what a player who overshot by one wants.
+   *
+   * The run ends when the stack is empty (the drop lands and nothing follows),
+   * or from outside: Escape, the secondary button or the Put back chip
+   * (`abandonPlacement`), another tool (`setTool`), or the drawer row clicked
+   * again (the scene calls `putBack`).
    */
   private dropPlacement(world: Point): "carry" | void {
     // Touch sends no move before a press, so the ghost may still be wherever
@@ -557,11 +587,38 @@ export class PlannerSession {
     const entry = placing.ok ? this.plan.place(placing.id, placing.x, placing.y) : null;
     if (!entry) return "carry";
 
+    const next = this.nextInStack(placing.id);
     this.placing = null;
     this.dragInvalid = false;
     this.faulted.clear();
     this.recordStore([entry], storeLabel("Place", 1, this.plan, entry.id));
-    return;
+    if (!next) return;
+
+    // After `recordStore`, not before: it re-hides everything stored, which
+    // would include the ghost. The ghost starts under the pointer, on the
+    // cells just filled — so it reads as blocked until the pointer moves,
+    // which is the truth, and a second click on the same spot is refused
+    // rather than stacking two walls on one square.
+    this.selection = new Set([next.id]);
+    this.moveGhost(next, placing.x, placing.y);
+    this.refresh();
+    return "carry";
+  }
+
+  /** The lowest-id stored building of the same type and level, or null. */
+  private nextInStack(placedId: number): PlanNode | null {
+    const placed = this.plan.get(placedId);
+    if (!placed) return null;
+    // `storedNodes` is ascending by id, the order the drawer's rows hand them
+    // out in, so a run comes out in the order it went in.
+    return (
+      this.plan
+        .storedNodes()
+        .find(
+          (node) =>
+            node.id !== placedId && node.type === placed.type && node.level === placed.level,
+        ) ?? null
+    );
   }
 
   /** Escape, the secondary button or the Put back chip: back to the drawer. */

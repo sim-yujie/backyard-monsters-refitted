@@ -1614,3 +1614,141 @@ describe("placing from the drawer", () => {
     expect(harness.session.plan.get(3)).toBeUndefined();
   });
 });
+
+describe("placing a run from the drawer (issue #57)", () => {
+  /** Stores both cannon towers — one stack of two — and picks the first up. */
+  const armed = (): Harness => {
+    const harness = planner();
+    harness.session.selectOnly([1, 2]);
+    harness.session.store();
+    expect(harness.session.startPlacing(1)).toBe(true);
+    expect(harness.session.armedStack()).toEqual({ type: 20, level: 1 });
+    return harness;
+  };
+
+  const FIRST = blueprintToWorld(400, 300);
+  const SECOND = blueprintToWorld(200, 300);
+
+  it("keeps the row armed after a drop while the stack has more", () => {
+    const harness = armed();
+    harness.drag(FIRST);
+    harness.press(FIRST);
+
+    const state = harness.session.state();
+    expect(at(harness, 1)).toEqual({ x: 365, y: 265 });
+    expect(state.storedCount).toBe(1);
+    // Tower two is in hand now, without another trip to the drawer.
+    expect(state.placing).toBe(true);
+    expect(state.carrying).toBe(true);
+    expect(harness.session.selectedIds()).toEqual([2]);
+    expect(harness.session.armedStack()).toEqual({ type: 20, level: 1 });
+    expect(harness.hidden.has(2)).toBe(false);
+  });
+
+  it("starts the next one under the pointer, blocked until it moves", () => {
+    const harness = armed();
+    harness.drag(FIRST);
+    harness.press(FIRST);
+    expect(harness.session.state().dragInvalid).toBe(true);
+
+    // A second click on the same spot puts nothing down and drops nothing.
+    harness.press(FIRST);
+    expect(harness.session.state().storedCount).toBe(1);
+    expect(harness.session.state().placing).toBe(true);
+
+    harness.drag(SECOND);
+    expect(harness.session.state().dragInvalid).toBe(false);
+  });
+
+  it("lets go when the stack runs out", () => {
+    const harness = armed();
+    harness.drag(FIRST);
+    harness.press(FIRST);
+    harness.drag(SECOND);
+    harness.press(SECOND);
+
+    const state = harness.session.state();
+    expect(state.storedCount).toBe(0);
+    expect(state.placing).toBe(false);
+    expect(state.carrying).toBe(false);
+    expect(harness.session.armedStack()).toBeNull();
+    expect(at(harness, 2)).toEqual({ x: 165, y: 265 });
+  });
+
+  it("is one undo entry per building", () => {
+    const harness = armed();
+    harness.drag(FIRST);
+    harness.press(FIRST);
+    harness.drag(SECOND);
+    harness.press(SECOND);
+    expect(harness.session.state().undoLabel).toContain("Place ");
+
+    harness.session.undo();
+    expect(harness.session.state().storedCount).toBe(1);
+    expect(harness.session.plan.get(2)?.stored).toBe(true);
+    expect(harness.session.plan.get(1)?.stored).toBe(false);
+
+    harness.session.undo();
+    expect(harness.session.state().storedCount).toBe(2);
+
+    // The third entry back is the store itself.
+    expect(harness.session.state().undoLabel).toContain("Store");
+  });
+
+  it("stops on Escape and puts the one in hand back", () => {
+    const harness = armed();
+    harness.drag(FIRST);
+    harness.press(FIRST);
+
+    harness.key("Escape");
+
+    const state = harness.session.state();
+    expect(state.placing).toBe(false);
+    expect(state.carrying).toBe(false);
+    expect(state.storedCount).toBe(1);
+    expect(harness.hidden.has(2)).toBe(true);
+    expect(harness.session.armedStack()).toBeNull();
+    // The one already placed stays placed: Escape is not an undo.
+    expect(at(harness, 1)).toEqual({ x: 365, y: 265 });
+  });
+
+  it("stops on the secondary button", () => {
+    const harness = armed();
+    harness.drag(FIRST);
+    harness.press(FIRST);
+
+    harness.press(SECOND, { button: 2, buttons: 2 });
+
+    expect(harness.session.state().placing).toBe(false);
+    expect(harness.session.state().storedCount).toBe(1);
+  });
+
+  it("stops when another tool is chosen", () => {
+    const harness = armed();
+    harness.drag(FIRST);
+    harness.press(FIRST);
+
+    harness.session.setTool(PlannerTool.BOX);
+
+    const state = harness.session.state();
+    expect(state.tool).toBe(PlannerTool.BOX);
+    expect(state.placing).toBe(false);
+    expect(state.storedCount).toBe(1);
+    expect(harness.hidden.has(2)).toBe(true);
+  });
+
+  it("only follows with the same type and level", () => {
+    // One tower and one wall stored: placing the tower leaves the wall alone.
+    const harness = planner();
+    harness.session.selectOnly([1, 3]);
+    harness.session.store();
+    harness.session.startPlacing(1);
+    harness.drag(FIRST);
+    harness.press(FIRST);
+
+    const state = harness.session.state();
+    expect(state.placing).toBe(false);
+    expect(state.storedCount).toBe(1);
+    expect(harness.session.plan.get(3)?.stored).toBe(true);
+  });
+});

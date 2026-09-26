@@ -534,6 +534,7 @@ export class YardPlanner {
       this.inventory ??
       new InventoryPanel({
         onPlace: (id) => this.session.startPlacing(id),
+        onPutBack: () => this.session.putBack(),
         onClose: () => {
           this.inventory = null;
         },
@@ -1002,6 +1003,10 @@ export class YardPlanner {
       this.inventory?.setNodes(this.session.storedNodes());
       this.search?.setNodes(this.session.plan.buildings());
     }
+    // Outside the count guard: Escape ends a run of placements without moving
+    // anything between the yard and the drawer, and the pressed row has to let
+    // go all the same (#57). The panel ignores a repeat of the same answer.
+    this.inventory?.setArmed(this.session.armedStack());
 
     this.refreshInspector(nodes);
   }

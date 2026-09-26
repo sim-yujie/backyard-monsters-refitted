@@ -1017,6 +1017,20 @@
   gap: var(--space-2);
 }
 
+/*
+ * The row being placed from (#57): pressed like a chip, so the drawer says
+ * which stack the next click on the yard will draw from.
+ */
+.planner-inventory__pick[aria-pressed="true"] {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.planner-inventory__pick[aria-pressed="true"] .planner-search__count,
+.planner-inventory__pick[aria-pressed="true"] .planner-inventory__level {
+  color: var(--colour-accent-text);
+}
+
 .planner-inventory__name {
   flex: 1;
   overflow: hidden;
