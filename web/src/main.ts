@@ -2,6 +2,7 @@ import "@/ui/styles/tokens.css";
 import "@/ui/styles/ui.css";
 import "@/ui/styles/maproom.css";
 import "@/ui/styles/planner.css";
+import "@/ui/styles/attack.css";
 
 import { App } from "@/app/App";
 

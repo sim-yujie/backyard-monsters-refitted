@@ -1,0 +1,249 @@
+/*
+ * Attack scene chrome (docs/design/attack-flow.md §4.2, §4.3).
+ *
+ * Same rule as planner.css: every value comes from tokens.css and nothing here
+ * declares a raw colour. The strip sits under the HUD with the countdown,
+ * the readouts, the speed toggle and Retreat; the dock is a right-hand column
+ * on a desktop and a bottom sheet with a handle on a phone.
+ */
+
+/* ── The strip ────────────────────────────────────────────────────────── */
+
+.attack-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--hud-height);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--colour-surface-raised);
+  border-block: 1px solid var(--colour-border);
+  box-shadow: var(--shadow-panel);
+  pointer-events: auto;
+  z-index: var(--z-hud);
+  flex-wrap: wrap;
+}
+
+.attack-strip__title {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.attack-strip__clock {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-variant-numeric: tabular-nums;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  min-width: 4.5ch;
+  text-align: center;
+}
+
+/* Near the end the clock turns a warning colour rather than only ticking. */
+.attack-strip__clock--warning {
+  color: var(--colour-accent);
+  border-color: var(--colour-accent);
+}
+
+.attack-strip__readout {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.attack-strip__loot {
+  color: var(--colour-text-muted);
+}
+
+.attack-strip__spacer {
+  flex: 1 1 auto;
+}
+
+.attack-strip__slot {
+  display: contents;
+}
+
+.attack-strip__speed {
+  display: inline-flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+}
+
+.attack-strip__speed-button {
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.attack-strip__speed-button[aria-pressed="true"] {
+  background: var(--colour-accent);
+  border-color: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+/* Retreat is destructive: danger on the border, never on the fill. */
+.attack-strip__retreat {
+  border-color: var(--colour-danger);
+  color: var(--colour-danger);
+}
+
+.attack-strip__retreat:not(:disabled):hover {
+  background: color-mix(in srgb, var(--colour-danger) 18%, transparent);
+}
+
+/* ── The dock ─────────────────────────────────────────────────────────── */
+
+.attack-dock {
+  position: absolute;
+  right: var(--space-4);
+  top: calc(var(--hud-height) + var(--space-7) + var(--space-3));
+  width: 300px;
+  max-height: calc(100vh - var(--hud-height) - var(--space-7) - var(--space-6));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.attack-dock > * {
+  pointer-events: auto;
+}
+
+.attack-dock__handle {
+  display: none;
+}
+
+.attack-dock__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.attack-dock__body:empty {
+  display: none;
+}
+
+/* The interim "attack over" line; the end panel (WP6) replaces it. */
+.attack-dock__end {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-panel);
+  font-size: var(--text-md);
+}
+
+.attack-status {
+  max-width: min(60vw, 520px);
+}
+
+.attack-confirm {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+/* ── Phone (§4.3) ─────────────────────────────────────────────────────── */
+
+@media (width <= 620px) {
+  /* The HUD gives way to the strip alone: timer, readouts, Retreat. */
+  .hud--attack {
+    display: none;
+  }
+
+  .attack-strip {
+    top: 0;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .attack-strip__title,
+  .attack-strip__loot {
+    display: none;
+  }
+
+  .attack-status {
+    display: none;
+  }
+
+  /* The dock is a bottom sheet: a handle, and a body that opens on tap. */
+  .attack-dock--sheet {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    width: auto;
+    max-height: 70vh;
+    gap: 0;
+    background: var(--colour-surface-raised);
+    border-top: 1px solid var(--colour-border);
+    box-shadow: var(--shadow-panel);
+    z-index: var(--z-hud);
+  }
+
+  .attack-dock--sheet .attack-dock__handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+    color: var(--colour-text);
+    font: inherit;
+    font-weight: 700;
+  }
+
+  .attack-dock--sheet .attack-dock__handle::before {
+    content: "▲";
+    font-size: var(--text-xs);
+    color: var(--colour-text-muted);
+  }
+
+  .attack-dock--sheet.attack-dock--open .attack-dock__handle::before {
+    content: "▼";
+  }
+
+  .attack-dock--sheet .attack-dock__body,
+  .attack-dock--sheet .attack-dock__end {
+    display: none;
+    padding: 0 var(--space-3) var(--space-3);
+    border: 0;
+    box-shadow: none;
+  }
+
+  .attack-dock--sheet.attack-dock--open .attack-dock__body {
+    display: flex;
+  }
+
+  .attack-dock--sheet.attack-dock--open .attack-dock__end:not([hidden]) {
+    display: flex;
+  }
+
+  .attack-dock--sheet .panel {
+    box-shadow: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .attack-strip__retreat,
+  .attack-strip__speed-button {
+    min-height: 44px;
+  }
+}
