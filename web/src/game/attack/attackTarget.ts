@@ -1,4 +1,4 @@
-import type { BaseLoadResponse, ChampionSaveEntry } from "@/api/types";
+import type { BaseLoadResponse, ChampionSaveEntry, PlayerCell } from "@/api/types";
 import type { MonsterLevels, Roster } from "@/game/combat/rules/types";
 import type { OffsetCell } from "@/game/HexGrid";
 
@@ -28,6 +28,32 @@ import type { OffsetCell } from "@/game/HexGrid";
 export type AttackTargetKind = "wild" | "main" | "outpost";
 
 /**
+ * One own cell's housing, as the map cell carries it in `m`
+ * (`docs/specs/maproom2.md:286-290`: `hcc`, `h`, `hstage`, `hid`, `housed`,
+ * `space`, `hcount`, `finishtime`, …).
+ *
+ * Kept whole rather than reduced to `housed` because the attack save's
+ * `monsterupdate` is `[{ baseid, m }]` per cell and the server writes each
+ * `m` verbatim over the cell's housing (`monsterUpdateHandler.ts`,
+ * `docs/server-api.md` "Save write keys"): a blob missing `hid` or `space`
+ * would erase them. The save builder subtracts what was flung from
+ * `m.housed` and sends the rest untouched.
+ */
+export interface RosterSource {
+  readonly baseid: string;
+  readonly m: NonNullable<PlayerCell["m"]>;
+}
+
+/**
+ * The attacker's siege weapon inventory, `save.siege` on the own-yard load
+ * (`docs/specs/combat.md:440-464`). Opaque to the server, which stores and
+ * echoes it (`docs/server-api.md:783`); the Flash shape is a map of weapon id
+ * to `{ quantity, … }`. The attack save sends it back, decremented, as
+ * `attackersiege`, which overwrites `userSave.siege` (`baseSave.ts`).
+ */
+export type SiegeInventory = Readonly<Record<string, unknown>>;
+
+/**
  * What the attacker has to send, gathered on the map before the yard opens —
  * the same moment the Flash client fills `ATTACK._curCreaturesAvailable`
  * (`docs/specs/combat.md:278-286`, `PopupAttackA.as:214-239`).
@@ -53,6 +79,22 @@ export interface AttackRoster {
   readonly flingerLevel: number;
   /** The attacker's catapult level, 0 when none. */
   readonly catapultLevel: number;
+  /**
+   * The own cells whose housing `monsters` was summed from — every own cell
+   * in flinger range that carries an `m` blob, main yard and outposts alike,
+   * ordered by base id. What `monsterupdate` is built from.
+   *
+   * `rosterInRange` always sets it. Optional in the type only because rosters
+   * written before the field existed (test fixtures in other packages) must
+   * keep compiling; read it as `roster.sources ?? []`.
+   */
+  readonly sources?: readonly RosterSource[];
+  /**
+   * The attacker's siege inventory, or null when the save carries none.
+   * Always set by `rosterInRange`; optional for the same reason as `sources`.
+   * Read it as `roster.siege ?? null`.
+   */
+  readonly siege?: SiegeInventory | null;
 }
 
 /** The cell an attack is about to open. */

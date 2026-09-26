@@ -12,7 +12,15 @@ const target: AttackTarget = {
   kind: "wild",
   cell: { col: 243, row: 208 },
   name: "Abunakki",
-  roster: { monsters: { C1: 3 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0 },
+  roster: {
+    monsters: { C1: 3 },
+    levels: {},
+    champions: [],
+    flingerLevel: 4,
+    catapultLevel: 0,
+    sources: [{ baseid: "3502", m: { housed: { C1: 3 } } }],
+    siege: null,
+  },
 };
 
 describe("attackTarget", () => {

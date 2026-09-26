@@ -124,10 +124,59 @@ describe("rosterInRange", () => {
     );
     expect(roster.monsters).toEqual({ C4: 1 });
   });
+
+  it("keeps each contributing cell's whole housing blob as a source, ordered by base id", () => {
+    const outpostHousing = { housed: { C1: 5 }, hid: [7], space: 900, hcc: [], h: [], hstage: [0] };
+    const mainHousing = { housed: { C1: 10, C4: 2 }, hid: [1, 2], space: 2160 };
+    const roster = rosterInRange(
+      { col: 100, row: 100 },
+      [
+        ownCell(104, 96, { b: 3, bid: "9002", m: outpostHousing }),
+        ownCell(95, 100, { bid: "3502", m: mainHousing }),
+      ],
+      null,
+    );
+    expect(roster.sources).toEqual([
+      { baseid: "3502", m: mainHousing },
+      { baseid: "9002", m: outpostHousing },
+    ]);
+    // Verbatim, not reduced to `housed`: the save writes `m` back whole.
+    expect(roster.sources?.[1]?.m).toBe(outpostHousing);
+  });
+
+  it("leaves out of range cells and cells without housing out of the sources", () => {
+    const roster = rosterInRange(
+      { col: 100, row: 100 },
+      [
+        ownCell(107, 100, { f: 1, bid: "far" }),
+        { col: 101, row: 100, cell: playerCell({ mine: 1, uid: 1, f: 4, bid: "bare" }) },
+        ownCell(100, 101, { bid: "near" }),
+      ],
+      null,
+    );
+    expect((roster.sources ?? []).map((source) => source.baseid)).toEqual(["near"]);
+  });
+
+  it("carries the siege inventory from the own-yard load, and null when there is none", () => {
+    const siege = { decoy: { quantity: 2 }, jars: { quantity: 1 } };
+    const cells = [ownCell(100, 101)];
+    expect(rosterInRange({ col: 100, row: 100 }, cells, { siege }).siege).toBe(siege);
+    expect(rosterInRange({ col: 100, row: 100 }, cells, { siege: null }).siege).toBeNull();
+    expect(rosterInRange({ col: 100, row: 100 }, cells, {}).siege).toBeNull();
+    expect(rosterInRange({ col: 100, row: 100 }, cells, null).siege).toBeNull();
+  });
 });
 
 describe("hasAnythingToSend", () => {
-  const base = { monsters: {}, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0 };
+  const base = {
+    monsters: {},
+    levels: {},
+    champions: [],
+    flingerLevel: 4,
+    catapultLevel: 0,
+    sources: [],
+    siege: null,
+  };
 
   it("is true with a monster", () => {
     expect(hasAnythingToSend({ ...base, monsters: { C1: 1 } })).toBe(true);
@@ -141,7 +190,15 @@ describe("hasAnythingToSend", () => {
 });
 
 describe("attackRefusal", () => {
-  const armed = { monsters: { C1: 5 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0 };
+  const armed = {
+    monsters: { C1: 5 },
+    levels: {},
+    champions: [],
+    flingerLevel: 4,
+    catapultLevel: 0,
+    sources: [],
+    siege: null,
+  };
   const unarmed = { ...armed, monsters: {} };
   const outOfRange = { ...armed, flingerLevel: 0 };
 

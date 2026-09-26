@@ -59,6 +59,8 @@ const sandboxRoster = (): AttackRoster => {
     champions: sandbox.champion ?? [],
     flingerLevel: 4,
     catapultLevel: 1,
+    sources: [{ baseid: sandbox.baseid, m: sandbox.monsters ?? {} }],
+    siege: null,
   };
 };
 
@@ -95,6 +97,8 @@ describe("buildAttackData", () => {
       champions: [{ t: 9, hp: 1, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 }],
       flingerLevel: 1,
       catapultLevel: 0,
+      sources: [],
+      siege: null,
     };
     const data = buildAttackData(roster);
     expect(data.monsters.map((monster) => monster.id)).toEqual(["C1"]);
