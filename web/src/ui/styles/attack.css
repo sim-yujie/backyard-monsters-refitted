@@ -251,3 +251,312 @@
     min-height: 44px;
   }
 }
+
+/* WP3 army panel ─────────────────────────────────────────────────────────
+ * The army composition panel (§F2, §4.2, §4.3): a capacity meter, a row per
+ * housed monster type with a number box flanked by −/+ and a Fill, the
+ * champion radio group. Every value comes from tokens.css.
+ */
+
+.attack-army {
+  max-width: none;
+}
+
+.attack-army .panel__body {
+  gap: var(--space-2);
+}
+
+/* The capacity meter: bucket cost against the flinger's payload. */
+.attack-army__meter {
+  position: relative;
+  /* A fixed-height flex item shrinks to nothing when the sheet is short. */
+  flex: none;
+  height: 22px;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+  overflow: hidden;
+}
+
+.attack-army__meter-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--colour-accent);
+  transition: width var(--motion-fast) var(--easing);
+}
+
+.attack-army__meter--full .attack-army__meter-fill {
+  background: var(--colour-success);
+}
+
+.attack-army__meter-text {
+  position: relative;
+  display: block;
+  line-height: 20px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--colour-text);
+  text-shadow: 0 0 3px var(--colour-surface-base);
+}
+
+.attack-army__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.attack-army__actions .btn {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.attack-army__fill-all {
+  flex: 1 1 auto;
+}
+
+/* Rows */
+
+.attack-army__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.attack-army__row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "icon label"
+    "icon controls"
+    "icon note";
+  column-gap: var(--space-2);
+  row-gap: var(--space-1);
+  align-items: center;
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.attack-army__row--clamped,
+.attack-army__row--exhausted,
+.attack-army__champion--unavailable {
+  color: var(--colour-text-muted);
+}
+
+.attack-army__row--exhausted .attack-army__icon,
+.attack-army__champion--unavailable .attack-army__icon {
+  opacity: 0.4;
+}
+
+.attack-army__icon {
+  grid-area: icon;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-raised);
+  overflow: hidden;
+  flex: none;
+}
+
+.attack-army__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.attack-army__icon--missing {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  color: var(--colour-text-muted);
+}
+
+.attack-army__label {
+  grid-area: label;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+.attack-army__name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attack-army__level {
+  font-size: var(--text-xs);
+  padding: 0 var(--space-1);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  color: var(--colour-text-muted);
+}
+
+.attack-army__housed {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.attack-army__controls {
+  grid-area: controls;
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+}
+
+.attack-army__step {
+  min-width: 36px;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-lg);
+  line-height: 1;
+  /* A held finger must not select text or open the context menu. */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.attack-army__count {
+  flex: 1 1 4ch;
+  min-width: 0;
+  width: 4ch;
+  padding: var(--space-1) var(--space-2);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.attack-army__count::-webkit-outer-spin-button,
+.attack-army__count::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.attack-army__row--clamped .attack-army__count {
+  color: var(--colour-text-muted);
+  border-style: dashed;
+}
+
+.attack-army__fill {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.attack-army__note {
+  grid-area: note;
+  font-size: var(--text-xs);
+  color: var(--colour-accent);
+}
+
+.attack-army__note:empty {
+  display: none;
+}
+
+/* The champion: a radio group, one at most. */
+
+.attack-army__champions {
+  margin: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.attack-army__champions[hidden] {
+  display: none;
+}
+
+.attack-army__legend {
+  padding: 0 var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-muted);
+}
+
+.attack-army__champion {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.attack-army__champion:hover {
+  background: var(--colour-surface-overlay);
+}
+
+.attack-army__champion--picked {
+  background: color-mix(in srgb, var(--colour-accent) 18%, transparent);
+}
+
+.attack-army__champion--unavailable {
+  cursor: not-allowed;
+}
+
+.attack-army__champion .attack-army__label {
+  flex: 1 1 auto;
+}
+
+.attack-army__champion .attack-army__note {
+  color: var(--colour-text-muted);
+}
+
+.attack-army__champion-pick {
+  accent-color: var(--colour-accent);
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: none;
+}
+
+.attack-army__hint {
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+/* Phone: the sheet is short, so the rows go tighter and the targets bigger. */
+@media (width <= 620px) {
+  .attack-army__row {
+    grid-template-areas:
+      "icon label"
+      "icon controls"
+      "icon note";
+  }
+
+  .attack-army__actions .btn {
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+}
+
+@media (pointer: coarse) {
+  .attack-army__step,
+  .attack-army__fill,
+  .attack-army__count {
+    min-height: 44px;
+  }
+
+  .attack-army__champion {
+    min-height: 44px;
+  }
+}
+/* end WP3 army panel */
