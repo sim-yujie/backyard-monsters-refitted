@@ -86,7 +86,157 @@ export interface BaseLoadRequest {
   userid: string;
   /** `"0"` (BaseMode.DEFAULT) opens the caller's main yard. */
   baseid: string;
+  /**
+   * Which Map Room the caller is in. Optional on the schema, but the attack
+   * modes' range check throws without it (`validateRange.ts:49`), so an attack
+   * load always sends it.
+   */
   mapversion?: number;
+  /**
+   * The attacker's declared roster and stats, as a JSON string in one form
+   * field (`BaseLoadSchema.ts`, `z.string().transform(JSON.parse)`). Required
+   * on `attack`/`wmattack` and read on nothing else; see {@link AttackData}.
+   */
+  attackData?: string;
+}
+
+/* ── Attack ─────────────────────────────────────────────────────────────── */
+
+/**
+ * One monster type on an attack load's `attackData`
+ * (`server/src/schemas/AttackSchema.ts`, `MonsterSchema`).
+ *
+ * `count` is how many the attacker can send; the server does not check it
+ * (`validateAttack.ts:10-11`'s own TODO). `stats` is the full prop block the
+ * server holds for that id, every key of which it compares against its own
+ * copy to two decimal places and bans on a mismatch (`validateAttack.ts:44-66`).
+ */
+export interface AttackDataMonster {
+  /** Roster id: `C1`, `IC7`, … */
+  id: string;
+  count: number;
+  stats: Record<string, unknown>;
+}
+
+/** One champion on `attackData` (`ChampionSchema` in `AttackSchema.ts`). */
+export interface AttackDataChampion {
+  /** `G<t>`, the key the server's `championStats` table uses. */
+  type: string;
+  stats: Record<string, unknown>;
+}
+
+/**
+ * What `ATTACK.AttackData()` builds (`client/scripts/ATTACK.as:199-222`,
+ * `docs/specs/combat.md` §2 "The request"): every champion the player owns and
+ * every monster type available to fling, each with its stat block.
+ */
+export interface AttackData {
+  champions: AttackDataChampion[];
+  monsters: AttackDataMonster[];
+}
+
+/**
+ * One entry of a save's `champion` list (`server/src/schemas/ChampionSchema.ts`).
+ *
+ * The attacker's own list rides out on the own-yard load and back in as
+ * `attackerchampion` on an attack save; the defender's arrives on the attack
+ * load and goes back as `champion`, of which only a lower `hp` is honoured.
+ */
+export interface ChampionSaveEntry {
+  /** Champion type, 1 to 5; `G<t>` keys the stat table. */
+  t: number;
+  hp: number;
+  /** Evolution level. */
+  l: number;
+  /** Feed time, unix seconds. */
+  ft: number;
+  /** Feed count. */
+  fd: number;
+  /** Food bonus level. */
+  fb: number;
+  /** Power level, 0 to 3. */
+  pl: number;
+  /** 0 active, 1 frozen, 2 juiced. Only 0 may be flung (`combat.md:750-751`). */
+  status: number;
+  nm?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * A save's `monsters` blob: housing state (`docs/specs/maproom2.md:286-290`,
+ * `MapRoomCell.as:397-432`). Only `housed` is read here; the hatchery fields
+ * are left to the index signature.
+ */
+export interface MonstersSave {
+  /** Monster count by roster id. */
+  housed?: Record<string, number | undefined>;
+  /** Housing capacity in `cStorage` units. */
+  space?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * What an attack save sends, before form encoding (`docs/design/attack-flow.md`
+ * §5.2 and §5.3; `docs/server-api.md` "Save write keys" and the attack branch of
+ * `baseSave.ts`).
+ *
+ * Every structured field goes over the wire JSON-stringified into its own form
+ * field and the scalars as strings, which `saveAttack` does; this is the
+ * client-side shape before that. Fields not on `Save.attackSaveKeys` and not
+ * read by the attack branch — `flinglog` today — are sent and ignored by a
+ * server that predates them.
+ */
+export interface AttackSavePayload {
+  /** The defender's base id, echoed from the attack load. */
+  baseid: string;
+  /** The defender's `basesaveid`, echoed from the attack load. */
+  basesaveid: number;
+  /** Echoed from the attack load; a consistency check only, never authority. */
+  attackid: number;
+  /** True on the final save: clears `attackid`, ends the session, grants protection. */
+  over?: boolean;
+  /** The enemy yard after the battle. Only a fired trap's absence is honoured. */
+  buildingdata?: BuildingDataMap;
+  /** Written verbatim onto the defender. */
+  buildinghealthdata?: BuildingHealthData;
+  /** Damage percent, 0..100, walls excluded. */
+  damage?: number;
+  /** 1 once damage reaches the takeover threshold; wild camps and outposts. */
+  destroyed?: number;
+  /** The defender's housing after consumption. */
+  monsters?: MonstersSave;
+  /** The defender's champions; only a lower `hp` is honoured. */
+  champion?: ChampionSaveEntry[];
+  /** The attacker's own champions, written verbatim onto the attacker. */
+  attackerchampion?: ChampionSaveEntry[];
+  /**
+   * `[{ baseid, m }]` per attacker cell in range, housing minus what was flung
+   * (`monsterUpdateHandler.ts`, Map Room 2 shape).
+   */
+  monsterupdate?: { baseid: string; m: MonstersSave }[];
+  /** What the attacker looted; added to the attacker's pool. */
+  attackloot?: Resources;
+  /** The defender's loss as a delta; only subtractions are honoured. */
+  resources?: Resources;
+  /** Plain-text summary for the defender's attack log (§7, Q5). */
+  attackreport?: string;
+  /** The attacker's siege inventory after use; overwrites `userSave.siege`. */
+  attackersiege?: unknown;
+  /** The fling log, `docs/design/server-combat.md` §3.10; inert until #23 WP5. */
+  flinglog?: unknown;
+}
+
+/**
+ * The /base/save envelope: `{ error: 0, basesaveid, ...filteredSave }` plus
+ * `takeover` when the save completed a Map Room 3 takeover.
+ */
+export interface BaseSaveResponse extends ApiEnvelope {
+  error: number;
+  basesaveid: number;
+  attackid?: number;
+  damage?: number;
+  destroyed?: number;
+  takeover?: unknown;
 }
 
 /** Resource counts and their caps, as carried on a save and on a map cell. */
@@ -215,6 +365,32 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * stood. The planner's re-arm button counts it.
    */
   firedtraps?: FiredTrap[];
+  /** `main`, `outpost` or `tribe` (`server/src/enums/Base.ts`, BaseType). */
+  type?: string;
+  /** Owner username; the tribe name on a wild monster camp. */
+  name?: string;
+  /** Housing and hatchery state. On the own-yard load, the roster to fling. */
+  monsters?: MonstersSave | null;
+  /** The base's champions. On the own-yard load, the attacker's own. */
+  champion?: ChampionSaveEntry[] | null;
+  /** Academy levels by roster id, `{ C1: { level: 6 } }`; absent means level 1. */
+  academy?: Record<string, { level?: number; powerup?: number } | undefined> | null;
+  /** Flinger and catapult levels of this base. */
+  flinger?: number;
+  catapult?: number;
+  /** Damage protection expiry, unix seconds; at or below now means none. */
+  protected?: number;
+  /**
+   * Attack modes only. Minted by `baseModeAttack` once every refusal has
+   * passed, and echoed back on every save of this attack. 0 on any other load.
+   */
+  attackid?: number;
+  /** `canAttack()`'s verdict on the caller against this base. */
+  canattack?: boolean;
+  /** Attack modes only: the attacker's running alliance powerups. */
+  attpowerups?: unknown[];
+  /** The base owner's running alliance powerups. */
+  powerups?: unknown[];
 }
 
 /* ── Map Room 2 ─────────────────────────────────────────────────────────── */

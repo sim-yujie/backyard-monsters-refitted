@@ -1,7 +1,16 @@
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
+import type { BaseLoadResponse, MapCell } from "@/api/types";
 import { DEFAULT_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
+import {
+  attackRefusal,
+  ownCellsIn,
+  rosterInRange,
+  targetKind,
+  targetName,
+} from "@/game/attack/attackEntry";
+import { setAttackTarget, type AttackRoster } from "@/game/attack/attackTarget";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
 import { Bookmarks } from "@/game/maproom/Bookmarks";
@@ -75,6 +84,12 @@ export class MapRoom2Scene implements Scene {
   private home: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
   private range: CellRange = { minCol: 0, maxCol: 0, minRow: 0, maxRow: 0 };
+  /**
+   * The own-yard load that found the home cell, kept for what an attack needs
+   * of the player rather than of any one cell: champions, academy levels and
+   * the catapult (`game/attack/attackEntry.ts`, `rosterInRange`).
+   */
+  private ownSave: BaseLoadResponse | null = null;
 
   /**
    * True once the home cell is known, or known to be unavailable.
@@ -127,6 +142,8 @@ export class MapRoom2Scene implements Scene {
         onBookmarkCell: (cell) => this.addBookmark("", cell),
         canBookmark: () => !this.bookmarks.isFull,
         onViewYard: () => context.goTo(SceneName.YARD),
+        attackRefusal: (payload) => this.attackRefusalFor(payload),
+        onAttack: () => this.startAttack(),
         onZoom: (zoom) => this.zoomTo(zoom),
         onZoomStep: (direction) => this.zoomTo(this.camera.zoom * Math.pow(ZOOM_STEP, direction)),
         onZoomReset: () => this.fitWorld(),
@@ -237,6 +254,7 @@ export class MapRoom2Scene implements Scene {
   private async loadOwnCell(): Promise<void> {
     try {
       const base = await loadOwnYard();
+      this.ownSave = base;
 
       const home = base.homebase;
       if (home) {
@@ -394,6 +412,62 @@ export class MapRoom2Scene implements Scene {
           ? "This cell is already bookmarked."
           : undefined;
     this.ui?.setBookmarkTarget(cell, reason);
+  }
+
+  /* ── Attack ─────────────────────────────────────────────────────────── */
+
+  /**
+   * What the player could fling at `cell` right now, read off the own cells
+   * in the loaded zones and the own-yard load.
+   *
+   * Only loaded zones are consulted. An own outpost whose zone has not arrived
+   * yet is simply not counted, which errs toward refusing; the server runs the
+   * same range rule over every owned cell and is the one that decides.
+   */
+  private rosterFor(cell: OffsetCell): AttackRoster {
+    return rosterInRange(cell, ownCellsIn(this.store.loadedZoneRefs()), this.ownSave);
+  }
+
+  /** The cell panel's Attack gate, for the cell it is showing. */
+  private attackRefusalFor(payload: MapCell | undefined): string | null {
+    const cell = this.selected;
+    if (!cell) return "No cell is selected.";
+    return attackRefusal(payload, this.rosterFor(cell), Date.now() / 1000);
+  }
+
+  /**
+   * Hands the selected cell to the attack scene.
+   *
+   * The gate is asked once more here rather than trusted from the button,
+   * because the zone under the panel may have refreshed since it was drawn.
+   */
+  private startAttack(): void {
+    const cell = this.selected;
+    const context = this.context;
+    if (!cell || !context) return;
+
+    const payload = this.store.getCell(cell.col, cell.row);
+    const roster = this.rosterFor(cell);
+    const refusal = attackRefusal(payload, roster, Date.now() / 1000);
+    if (refusal || !payload) {
+      this.ui?.notices.show("attack", refusal ?? "This cell cannot be attacked.", {
+        level: "info",
+        timeoutMs: 4_000,
+      });
+      return;
+    }
+
+    const kind = targetKind(payload);
+    if (!kind || !("bid" in payload)) return;
+
+    setAttackTarget({
+      baseid: payload.bid,
+      kind,
+      cell,
+      name: targetName(payload),
+      roster,
+    });
+    context.goTo(SceneName.ATTACK);
   }
 
   /* ── Refresh and status ─────────────────────────────────────────────── */

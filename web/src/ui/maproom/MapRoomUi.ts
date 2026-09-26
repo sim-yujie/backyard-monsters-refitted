@@ -56,6 +56,9 @@ export interface MapRoomUiHandlers {
   canBookmark: () => boolean;
   /** The cell inspector's "View yard" button, on the caller's own cell. */
   onViewYard: () => void;
+  /** The cell inspector's Attack gate and button; see `CellPanelOptions`. */
+  attackRefusal: (payload: MapCell | undefined) => string | null;
+  onAttack: () => void;
   onZoom: (zoom: number) => void;
   onZoomStep: (direction: 1 | -1) => void;
   onZoomReset: () => void;
@@ -199,6 +202,8 @@ export class MapRoomUi {
         onBookmark: this.handlers.onBookmarkCell,
         canBookmark: this.handlers.canBookmark,
         onViewYard: this.handlers.onViewYard,
+        attackRefusal: this.handlers.attackRefusal,
+        onAttack: this.handlers.onAttack,
       }).mount(this.dock("map-dock map-dock--right"));
     }
     this.cellPanel.show(cell, payload);

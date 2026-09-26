@@ -21,9 +21,18 @@ export interface CellPanelOptions {
   canBookmark: () => boolean;
   /** Opens the yard screen. Only offered on the caller's own cell. */
   onViewYard: () => void;
+  /**
+   * Why Attack is not offered on this cell, or null when it is
+   * (`game/attack/attackEntry.ts`, `attackRefusal`). Asked again on every
+   * `show` and `update`, since the answer moves with the zone data and the
+   * player's own roster.
+   */
+  attackRefusal: (payload: MapCell | undefined) => string | null;
+  /** Starts an attack on the shown cell. Only called while enabled. */
+  onAttack: () => void;
 }
 
-const ATTACK_SOON = "Coming soon: attacking is a later task.";
+const ATTACK_READY = "Open this yard and attack it.";
 
 /**
  * Why "View yard" is limited to the caller's own cell.
@@ -45,6 +54,7 @@ export class CellPanel {
   private readonly swatch: HTMLElement;
   private readonly bookmarkButton: HTMLButtonElement;
   private readonly viewYardButton: HTMLButtonElement;
+  private readonly attackButton: HTMLButtonElement;
   private readonly options: CellPanelOptions;
 
   private cell: OffsetCell | null = null;
@@ -77,9 +87,17 @@ export class CellPanel {
     this.viewYardButton.textContent = "View yard";
     this.viewYardButton.addEventListener("click", () => options.onViewYard());
 
+    this.attackButton = document.createElement("button");
+    this.attackButton.type = "button";
+    this.attackButton.className = "btn btn--primary";
+    this.attackButton.textContent = "Attack";
+    this.attackButton.addEventListener("click", () => {
+      if (!this.attackButton.disabled) options.onAttack();
+    });
+
     const actions = document.createElement("div");
     actions.className = "map-row map-row--wrap";
-    actions.append(this.viewYardButton, disabledAction("Attack", ATTACK_SOON));
+    actions.append(this.viewYardButton, this.attackButton);
 
     this.bookmarkButton = document.createElement("button");
     this.bookmarkButton.type = "button";
@@ -100,6 +118,7 @@ export class CellPanel {
     this.panel.setTitle(`Cell ${cell.col}, ${cell.row}`);
     this.bookmarkButton.disabled = !this.options.canBookmark();
     this.setViewYardEnabled(payload !== undefined && isPlayerCell(payload) && payload.mine === 1);
+    this.setAttackRefusal(this.options.attackRefusal(payload));
     this.render();
   }
 
@@ -108,7 +127,21 @@ export class CellPanel {
     if (!this.cell) return;
     this.payload = payload;
     this.setViewYardEnabled(payload !== undefined && isPlayerCell(payload) && payload.mine === 1);
+    this.setAttackRefusal(this.options.attackRefusal(payload));
     this.render();
+  }
+
+  /**
+   * Enabled when nothing refuses the attack, and explained when something
+   * does. The reason is on the control itself rather than in a notice because
+   * a disabled button with no reason attached is the worst version of this.
+   */
+  private setAttackRefusal(refusal: string | null): void {
+    const button = this.attackButton;
+    button.disabled = refusal !== null;
+    button.title = refusal ?? ATTACK_READY;
+    // `title` alone is not exposed on a disabled control in every browser.
+    button.setAttribute("aria-label", `Attack. ${refusal ?? ATTACK_READY}`);
   }
 
   /** Enabled on the caller's own cell, and explained on every other. */
@@ -290,18 +323,6 @@ export class CellPanel {
     this.countdowns.push({ node: definition, expiresAt: expiresAtSeconds });
   }
 }
-
-const disabledAction = (label: string, tooltip: string): HTMLButtonElement => {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "btn";
-  button.textContent = label;
-  button.disabled = true;
-  button.title = tooltip;
-  // `title` alone is not exposed on a disabled control in every browser.
-  button.setAttribute("aria-label", `${label}. ${tooltip}`);
-  return button;
-};
 
 /** Seconds remaining as a compact duration, or "Expired". */
 const formatCountdown = (seconds: number): string => {

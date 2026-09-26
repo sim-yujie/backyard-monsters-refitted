@@ -6,6 +6,7 @@ import { BootScene } from "./scenes/BootScene";
 import { LoginScene } from "./scenes/LoginScene";
 import { MapRoom2Scene } from "./scenes/MapRoom2Scene";
 import { YardScene } from "./scenes/YardScene";
+import { AttackScene } from "./scenes/AttackScene";
 
 /** Scene names, so nothing depends on a bare string in two places. */
 export const SceneName = {
@@ -13,6 +14,8 @@ export const SceneName = {
   LOGIN: "login",
   MAP_ROOM_2: "maproom2",
   YARD: "yard",
+  /** An attack on a foreign yard; opened through `game/attack/attackTarget`. */
+  ATTACK: "attack",
 } as const;
 export type SceneName = (typeof SceneName)[keyof typeof SceneName];
 
@@ -72,7 +75,8 @@ export class App {
       .register(SceneName.BOOT, () => new BootScene())
       .register(SceneName.LOGIN, () => new LoginScene())
       .register(SceneName.MAP_ROOM_2, () => new MapRoom2Scene())
-      .register(SceneName.YARD, () => new YardScene());
+      .register(SceneName.YARD, () => new YardScene())
+      .register(SceneName.ATTACK, () => new AttackScene());
 
     // Pixi's renderer resize fires on the window; mirror it to the scenes.
     this.pixi.renderer.on("resize", this.handleResize);
