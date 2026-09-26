@@ -536,18 +536,24 @@ export class AttackScene implements Scene {
     this.measureDock();
   }
 
-  /** The dock's bottom-sheet height, when it is one, as the bottom inset. */
+  /**
+   * Re-reads how much chrome covers the canvas: the strip along the top (which
+   * moves to the top edge once the HUD hides on a phone) and the dock along
+   * the bottom, when it is a sheet.
+   */
   private measureDock(): void {
     const dock = this.dock;
     if (!dock) return;
     const phone = this.viewportWidth > 0 && this.viewportWidth <= PHONE_WIDTH;
     dock.classList.toggle("attack-dock--sheet", phone);
     const bottom = phone ? dock.getBoundingClientRect().height : 0;
-    if (bottom !== this.inset.bottom) this.setInset({ ...this.inset, bottom });
+    const top = this.strip ? this.strip.getBoundingClientRect().bottom : this.inset.top;
+    if (bottom !== this.inset.bottom || top !== this.inset.top) this.setInset({ top, bottom });
   }
 
   private setInset(inset: { top: number; bottom: number }): void {
     this.inset = inset;
+    this.notices.setTopInset(inset.top);
     this.applyZoomLimits(this.viewportWidth, this.viewportHeight);
     this.placeViewTools();
   }

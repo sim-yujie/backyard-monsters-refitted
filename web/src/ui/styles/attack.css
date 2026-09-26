@@ -147,6 +147,10 @@
   font-size: var(--text-md);
 }
 
+.attack-dock__end[hidden] {
+  display: none;
+}
+
 .attack-status {
   max-width: min(60vw, 520px);
 }
