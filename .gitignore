@@ -36,3 +36,6 @@ server/src/scripts/anticheat/priv/*
 
 # Claude Code session markers (handoff hook)
 .claude/
+
+# local-only notes
+docs/dev-accounts.md
