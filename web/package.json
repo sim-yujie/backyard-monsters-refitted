@@ -13,6 +13,7 @@
     "test": "vitest run",
     "lint": "eslint .",
     "gen:combat": "bun tools/gen-combat-stats.mjs",
+    "gen:monster-sprites": "node tools/gen-monster-sprites.mjs",
     "sync:combat": "node tools/sync-combat-rules.mjs",
     "fixtures:combat": "bun tools/gen-combat-fixture.mjs",
     "bench:combat": "bun tools/bench-combat.mjs"
