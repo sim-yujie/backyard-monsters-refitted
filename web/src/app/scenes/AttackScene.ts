@@ -39,47 +39,12 @@ import { SceneName } from "../App";
  * zoom leaves room for it, the way the planner's bars report theirs.
  */
 
-/** Everything a package mounted on the attack scene can reach. */
-export interface AttackMounts {
-  readonly session: AttackSession;
-  readonly target: AttackTarget;
-  readonly yard: Yard;
-  readonly renderer: YardRenderer;
-  readonly camera: Camera;
-  readonly canvas: HTMLCanvasElement;
-  /**
-   * The docked panel slot: right column on desktop, bottom sheet on a phone.
-   * The army panel, the catapult and siege pickers mount here (`Panel.mount`).
-   */
-  readonly dock: HTMLElement;
-  /** A spare slot on the HUD strip, between the readouts and Retreat. */
-  readonly hudSlot: HTMLElement;
-  /** The overlay's modal layer, for the end-of-attack panel. */
-  readonly modal: HTMLElement;
-  /**
-   * World-space container above the enemy yard's buildings, under the same
-   * camera transform. Yard units go through `renderer.yardToWorld`.
-   */
-  readonly battleLayer: Container;
-  readonly notices: Notices;
-  /** Leaves for the map. */
-  readonly goToMap: () => void;
-  /**
-   * How much of the canvas, in CSS px from the bottom edge, the dock covers.
-   * The bottom sheet reports through this so the fit zoom stays honest.
-   */
-  readonly setBottomInset: (px: number) => void;
-}
+// The registry is a leaf module and the stubs run here, after it, so a stub's
+// push never lands in a module still being evaluated.
+import { ATTACK_PLUGINS, type AttackMounts, type AttackPlugin } from "@/game/attack/attackPlugins";
+import "@/game/attack/plugins";
 
-/** A package mounted on the scene; may return its teardown. */
-export type AttackPlugin = (mounts: AttackMounts) => (() => void) | void;
-
-/**
- * What mounts on every attack. Later packages add themselves here — the army
- * panel, the pickers, the battle layer, the end panel — in the order they
- * should mount.
- */
-export const ATTACK_PLUGINS: AttackPlugin[] = [];
+export { ATTACK_PLUGINS, type AttackMounts, type AttackPlugin };
 
 /** How often the strip is refreshed between session notifications. */
 const UI_TICK_SECONDS = 0.25;
