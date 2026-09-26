@@ -208,6 +208,66 @@ export interface BattleState {
   readonly over: boolean;
 }
 
+/**
+ * One creep as the live renderer sees it (issue #32, WP5).
+ *
+ * A read-only copy taken by {@link Battle.creeps}; nothing the renderer does
+ * with it reaches the simulation. Positions are isometric yard units, the
+ * space `buildingdata.X/Y` and a fling's `x`/`y` are in, not the cartesian
+ * projection range tests use.
+ */
+export interface CreepSnapshot {
+  readonly id: number;
+  /** The creature id: `C1`, `G1`. */
+  readonly monsterId: string;
+  readonly level: number;
+  readonly champion: boolean;
+  /** A bunker's defender rather than an attacker. */
+  readonly friendly: boolean;
+  readonly ix: number;
+  readonly iy: number;
+  readonly hp: number;
+  readonly maxHp: number;
+  readonly flying: boolean;
+  /** `attacking` while it swings at what it is on; `walking` otherwise. */
+  readonly state: "walking" | "attacking";
+  /** The building it is on, or -1. */
+  readonly targetBuilding: number;
+  /** The creep it is on — a defender's quarry — or -1. */
+  readonly targetCreep: number;
+}
+
+/**
+ * Something the renderer draws a moment for: a tower firing, a creep dying.
+ *
+ * Kept for {@link VISUAL_MEMORY_TICKS} ticks and read back through
+ * {@link Battle.recentEvents}; never folded into the checkpoint.
+ */
+export type BattleVisualEvent =
+  | {
+      readonly kind: "shot";
+      readonly tick: number;
+      readonly towerId: number;
+      readonly creepId: number;
+      /** Where the shot landed: the creep's isometric position that tick. */
+      readonly ix: number;
+      readonly iy: number;
+    }
+  | {
+      readonly kind: "death";
+      readonly tick: number;
+      readonly creepId: number;
+      readonly monsterId: string;
+      readonly champion: boolean;
+      readonly friendly: boolean;
+      readonly flying: boolean;
+      readonly ix: number;
+      readonly iy: number;
+    };
+
+/** How many ticks of shots and deaths a battle remembers: two seconds. */
+export const VISUAL_MEMORY_TICKS = 160;
+
 /** The running battle. */
 export interface Battle {
   /** Ticks elapsed since the attack started. */
@@ -223,6 +283,17 @@ export interface Battle {
   state(): BattleState;
   /** The values a checkpoint digest folds in, in a fixed order. */
   checkpoint(): number[];
+  /**
+   * Every creep on the field, attackers and defenders, ascending id. A fresh
+   * copy per call; the renderer reads it once a frame (§F5, Q8).
+   */
+  creeps(): readonly CreepSnapshot[];
+  /**
+   * The shots and deaths after `sinceTick`, oldest first. Only the last
+   * {@link VISUAL_MEMORY_TICKS} ticks are kept, so a caller that reads every
+   * frame sees everything and one that does not sees the recent past.
+   */
+  recentEvents(sinceTick: number): readonly BattleVisualEvent[];
 }
 
 /* ── Internals ────────────────────────────────────────────────────────────── */
@@ -329,6 +400,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const bunkers: Bunker[] = [];
   const firedTraps: number[] = [];
   const destroyedIds: number[] = [];
+  /** Shots and deaths for the renderer, pruned each step; not simulation state. */
+  const visual: BattleVisualEvent[] = [];
 
   const loot: ResourceAmounts = { r1: 0, r2: 0, r3: 0, r4: 0 };
   const defenderLoss: ResourceAmounts = { r1: 0, r2: 0, r3: 0, r4: 0 };
@@ -477,6 +550,20 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     return applied;
   };
 
+  const recordDeath = (creep: Creep): void => {
+    visual.push({
+      kind: "death",
+      tick,
+      creepId: creep.id,
+      monsterId: creep.monsterId,
+      champion: creep.champion,
+      friendly: creep.friendly,
+      flying: creep.flying,
+      ix: creep.ix,
+      iy: creep.iy,
+    });
+  };
+
   const damageCreep = (creep: Creep, raw: number): number => {
     if (creep.hp <= 0) return 0;
     const applied = Math.min(raw, creep.hp);
@@ -485,6 +572,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creep.hp = 0;
       creep.gone = true;
       if (!creep.friendly) creepsKilled += 1;
+      recordDeath(creep);
     }
     return applied;
   };
@@ -737,6 +825,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     creep.hp = 0;
     creep.gone = true;
+    recordDeath(creep);
   };
 
   const moveCreep = (creep: Creep): void => {
@@ -900,6 +989,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
     for (const creep of live) {
       tower.report.shots += 1;
+      visual.push({
+        kind: "shot",
+        tick,
+        towerId: building.id,
+        creepId: creep.id,
+        ix: creep.ix,
+        iy: creep.iy,
+      });
       const before = creep.hp;
       tower.report.damageDealt += damageCreep(creep, damage);
       if (before > 0 && creep.hp <= 0) tower.report.kills += 1;
@@ -978,9 +1075,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const anyAttackerLeft = (): boolean =>
     creeps.some((creep) => !creep.friendly && !creep.gone && creep.hp > 0);
 
+  /** Drops visual events older than the memory window; the list stays short. */
+  const pruneVisual = (): void => {
+    const oldest = tick - VISUAL_MEMORY_TICKS;
+    let drop = 0;
+    while (drop < visual.length && (visual[drop] as BattleVisualEvent).tick < oldest) drop += 1;
+    if (drop > 0) visual.splice(0, drop);
+  };
+
   const step = (): void => {
     if (finished) return;
     tick += 1;
+    pruneVisual();
     if (tick >= retreatAt || (retreated && !anyAttackerLeft())) {
       finished = true;
       return;
@@ -1036,6 +1142,31 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
     }
     return map;
+  };
+
+  const creepSnapshots = (): CreepSnapshot[] =>
+    creeps.map((creep) => ({
+      id: creep.id,
+      monsterId: creep.monsterId,
+      level: creep.level,
+      champion: creep.champion,
+      friendly: creep.friendly,
+      ix: creep.ix,
+      iy: creep.iy,
+      hp: creep.hp,
+      maxHp: creep.maxHp,
+      flying: creep.flying,
+      state: creep.attacking ? "attacking" : "walking",
+      targetBuilding: creep.targetBuilding,
+      targetCreep: creep.targetCreep,
+    }));
+
+  const recentEvents = (sinceTick: number): BattleVisualEvent[] => {
+    let start = 0;
+    while (start < visual.length && (visual[start] as BattleVisualEvent).tick <= sinceTick) {
+      start += 1;
+    }
+    return visual.slice(start);
   };
 
   const state = (): BattleState => ({
@@ -1098,6 +1229,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     over: () => finished,
     state,
     checkpoint,
+    creeps: creepSnapshots,
+    recentEvents,
   };
 };
 

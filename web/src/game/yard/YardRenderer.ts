@@ -325,6 +325,33 @@ export class YardRenderer {
     this.buildings.resortByDepth();
   }
 
+  /* ── A live battle ──────────────────────────────────────────────────── */
+
+  /**
+   * The isometric building container with depth sorting switched on, for a
+   * battle layer that wants its creeps interleaved with the buildings
+   * (issue #32, WP5).
+   *
+   * Every building's `zIndex` is `depth * 8` (see `YardBuildings.resortByDepth`)
+   * and its animation layers sit at the next few keys; a caller adds children
+   * of its own and gives each a `zIndex` from `depthKey` of its ground point.
+   * Pixi re-sorts the container on the frames a `zIndex` changes. The caller
+   * owns what it adds and must remove it before the yard is torn down.
+   * The read-only yard never asks for this, so its draw order is unchanged.
+   */
+  depthSortedLayer(): Container {
+    this.buildings.resortByDepth();
+    return this.buildings.tops;
+  }
+
+  /**
+   * Draws a building as battered as `fraction` of its health says, 1 being
+   * untouched and 0 a ruin; see `YardBuildings.setDamage`.
+   */
+  setBuildingDamage(id: number, fraction: number): void {
+    this.buildings.setDamage(id, fraction);
+  }
+
   /** Puts every building back where the save had it, in both views. */
   resetPlacements(): void {
     for (const id of this.byId.keys()) this.buildings.offsetBuilding(id, 0, 0);

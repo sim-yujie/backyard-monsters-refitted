@@ -196,3 +196,104 @@ describe("the flinger", () => {
     expect(dropRadius(2000)).toBe(250);
   });
 });
+
+describe("the renderer's view of the field (issue #32, WP5)", () => {
+  /** The determinism yard: a Pokey drop against a tower, a wall and a trap. */
+  const scripted = () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 14, X: 0, Y: 0 },
+      "2": { id: 2, t: 20, l: 2, X: 200, Y: 100 },
+      "3": { id: 3, t: 17, X: -100, Y: -100 },
+      "4": { id: 4, t: 24, X: -60, Y: -60 },
+      "5": { id: 5, t: 1, X: 150, Y: -150, st: 900 },
+    });
+    const battle = createBattle(yard, { seed: 777, playerLevel: 8 });
+    battle.apply({ kind: "fling", t: 0, x: -300, y: -300, r: 200, monsters: { C1: 8, C5: 2 } });
+    return battle;
+  };
+
+  it("lists every creep with its position, health and state, ascending id", () => {
+    const battle = scripted();
+    run(battle, 10);
+    const creeps = battle.creeps();
+    expect(creeps.map((creep) => creep.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(creeps.filter((creep) => creep.monsterId === "C1")).toHaveLength(8);
+    expect(creeps.filter((creep) => creep.monsterId === "C5")).toHaveLength(2);
+    for (const creep of creeps) {
+      expect(creep.hp).toBe(creep.maxHp);
+      expect(creep.flying).toBe(false);
+      expect(creep.champion).toBe(false);
+      expect(creep.friendly).toBe(false);
+      expect(creep.state).toBe("walking");
+      // Inside the drop circle around (-300, -300), in the fling's own units.
+      expect(Math.hypot(creep.ix + 300, creep.iy + 300)).toBeLessThanOrEqual(200);
+    }
+    expect(battle.state().creepsAlive).toBe(creeps.length);
+  });
+
+  it("shows a creep attacking once it reaches its target, and drops it when it dies", () => {
+    const battle = scripted();
+    run(battle, 6000);
+    const creeps = battle.creeps();
+    expect(creeps.length).toBe(battle.state().creepsAlive);
+    for (const creep of creeps) expect(creep.hp).toBeGreaterThan(0);
+    const attacking = creeps.filter((creep) => creep.state === "attacking");
+    for (const creep of attacking) expect(creep.targetBuilding).toBeGreaterThan(0);
+  });
+
+  it("changes nothing about the battle: the digest is the same whether or not it is read", () => {
+    const watched = scripted();
+    const unwatched = scripted();
+    for (let step = 0; step < 6000; step += 1) {
+      watched.step();
+      unwatched.step();
+      if (step % 7 === 0) {
+        watched.creeps();
+        watched.recentEvents(step - 3);
+      }
+    }
+    expect(digestOf(watched.checkpoint())).toBe(digestOf(unwatched.checkpoint()));
+    expect(watched.state()).toEqual(unwatched.state());
+  });
+
+  it("reports each tower shot with the tick and the creep it hit", () => {
+    const yard = yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 1 });
+    battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 200, monsters: { C1: 1 } });
+    let seen = 0;
+    let shots = 0;
+    let deaths = 0;
+    for (let step = 0; step < 1200; step += 1) {
+      battle.step();
+      // Read every few ticks, as a renderer at 60 fps would.
+      if (step % 3 !== 0) continue;
+      for (const event of battle.recentEvents(seen)) {
+        expect(event.tick).toBeGreaterThan(seen);
+        if (event.kind === "shot") {
+          shots += 1;
+          expect(event.towerId).toBe(1);
+          expect(event.creepId).toBe(1);
+        } else {
+          deaths += 1;
+          expect(event.creepId).toBe(1);
+          expect(event.monsterId).toBe("C1");
+        }
+      }
+      seen = battle.tick;
+    }
+    // Ten shots kill the Pokey, which is what the tower report says too.
+    expect(shots).toBe(battle.state().towers[0]?.shots);
+    expect(shots).toBe(10);
+    expect(deaths).toBe(1);
+  });
+
+  it("forgets events older than the memory window", () => {
+    const yard = yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 1 });
+    battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 200, monsters: { C1: 1 } });
+    run(battle, 1200);
+    // The Pokey died around tick 800; two seconds later nothing is left to tell.
+    run(battle, 400);
+    expect(battle.recentEvents(0)).toEqual([]);
+  });
+});

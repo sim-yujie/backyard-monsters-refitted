@@ -1,5 +1,5 @@
 import { Container, Sprite, Text, Texture } from "pixi.js";
-import type { ResolvedArt } from "./buildingArt";
+import { ArtState, resolveArt, type ResolvedArt } from "./buildingArt";
 import {
   applyArt,
   fillBox,
@@ -106,7 +106,44 @@ interface BuildingView {
    * once that strip is playing. Types 22, 53, 105 and 129.
    */
   readonly topIsAnim: boolean;
+  /**
+   * How battered the building is drawn, 0 (untouched) to 4 (destroyed); see
+   * `damageStep`. Zero for every building outside a live battle: the read-only
+   * yard draws the save's condition through `art` and never calls `setDamage`.
+   */
+  damageStep: number;
+  /**
+   * Art a live battle has swapped in over `art` — the damaged or destroyed
+   * state — with the flags that say whether its top and shadow have arrived.
+   * Null until `setDamage` asks for a state the building was not saved in.
+   */
+  swap: ResolvedArt | null;
+  swapResolved: boolean;
+  swapShadowResolved: boolean;
+  /** True once a swap has taken the animation layers off: a ruin does not turn. */
+  animsSuppressed: boolean;
 }
+
+/**
+ * The tint a building is drawn with at each damage step: white untouched,
+ * then three darker greys as its health falls through 75, 50 and 25 percent,
+ * and the darkest for a ruin. Step 0 is what every sprite already gets, so a
+ * yard that never takes damage draws exactly as before.
+ */
+export const DAMAGE_TINTS: readonly number[] = [0xffffff, 0xdcdcdc, 0xb8b8b8, 0x949494, 0x7a7a7a];
+
+/**
+ * The damage step for a health fraction: 0 at or above 75 percent, 1 below
+ * it, 2 below 50, 3 below 25, and 4 at zero. Anything not a finite number
+ * counts as untouched, which is what a building with no health ladder is.
+ */
+export const damageStep = (fraction: number): number => {
+  if (!Number.isFinite(fraction) || fraction >= 0.75) return 0;
+  if (fraction <= 0) return 4;
+  if (fraction < 0.25) return 3;
+  if (fraction < 0.5) return 2;
+  return 1;
+};
 
 export class YardBuildings {
   /** Beneath every building. Add to the scene before `tops`. */
@@ -198,6 +235,11 @@ export class YardBuildings {
         shadowResolved: shadow === null,
         animsPending: anims.length > 0,
         topIsAnim: art?.topIsAnim === true,
+        damageStep: 0,
+        swap: null,
+        swapResolved: true,
+        swapShadowResolved: true,
+        animsSuppressed: false,
       };
       this.views.push(view);
       this.byId.set(building.id, view);
@@ -239,13 +281,15 @@ export class YardBuildings {
       // A building drawn entirely from its first strip keeps its still top only
       // until that strip is playing; both at once would show cell 0 through the
       // transparent parts of every other cell.
-      view.top.visible = on && !(view.topIsAnim && view.anims[0]?.resolved === true);
+      const animsOn = on && !view.animsSuppressed;
+      view.top.visible =
+        on && !(view.topIsAnim && animsOn && view.anims[0]?.resolved === true);
       if (view.shadow) view.shadow.visible = on && view.shadowResolved;
       if (view.label) view.label.visible = on;
 
       if (view.anims.length === 0) continue;
-      for (const layer of view.anims) layer.sprite.visible = on && layer.resolved;
-      if (on && deltaSeconds > 0) advanceAnimLayers(view.anims, deltaSeconds);
+      for (const layer of view.anims) layer.sprite.visible = animsOn && layer.resolved;
+      if (animsOn && deltaSeconds > 0) advanceAnimLayers(view.anims, deltaSeconds);
     }
   }
 
@@ -348,6 +392,51 @@ export class YardBuildings {
     for (const view of this.views) view.hidden = false;
   }
 
+  /* ── Damage, for a live battle ──────────────────────────────────────── */
+
+  /**
+   * Draws a building as battered as `fraction` of its health says
+   * (issue #32, WP5).
+   *
+   * The tint darkens a step at 75, 50 and 25 percent (`DAMAGE_TINTS`), the
+   * damaged art goes on below half and the destroyed art at zero, the same
+   * states a saved yard shows through `artFor`. The swap is a texture fetch
+   * like any other, so the ruin appears when its picture does and the tinted
+   * whole building stands in until then. A step already applied costs a map
+   * lookup; the battle layer calls this for every building whose health
+   * changed, several times a second.
+   *
+   * The read-only yard never calls this, and a building at step 0 is drawn
+   * exactly as it always was.
+   */
+  setDamage(id: number, fraction: number): void {
+    const view = this.byId.get(id);
+    if (!view) return;
+    const step = damageStep(fraction);
+    if (view.damageStep === step) return;
+    view.damageStep = step;
+
+    const tint = DAMAGE_TINTS[step] ?? 0xffffff;
+    if (view.resolved) view.top.tint = tint;
+    for (const layer of view.anims) layer.sprite.tint = tint;
+
+    const state =
+      step >= 4 ? ArtState.DESTROYED : step >= 2 ? ArtState.DAMAGED : ArtState.DEFAULT;
+    const wanted = resolveArt(view.building.type, view.building.level, state);
+    const current = view.swap ?? view.art;
+    if (!wanted || wanted === current || wanted.top.url === current?.top.url) {
+      // Same picture as now (a type with one state, or a wall at every level):
+      // the tint alone tells the story, and a ruin still stops its wheels.
+      view.animsSuppressed = step >= 4;
+      return;
+    }
+    view.swap = wanted;
+    view.swapResolved = false;
+    view.swapShadowResolved = false;
+    view.animsSuppressed = wanted.anims.length === 0;
+    this.pending = true;
+  }
+
   /** The offset a building is currently drawn at. */
   offsetOf(id: number): { x: number; y: number } {
     const view = this.byId.get(id);
@@ -388,6 +477,7 @@ export class YardBuildings {
   /** Swaps in whichever pictures have arrived since the last pass. */
   private resolveTextures(): void {
     for (const view of this.views) {
+      if (view.swap && !(view.swapResolved && view.swapShadowResolved)) this.resolveSwap(view);
       if (view.resolved && view.shadowResolved && !view.animsPending) continue;
       const art = view.art;
       if (!art) continue;
@@ -400,7 +490,7 @@ export class YardBuildings {
         const texture = this.textures.get(art.top);
         if (texture) {
           applyArt(view.top, texture, view.building, art.top);
-          view.top.tint = 0xffffff;
+          view.top.tint = DAMAGE_TINTS[view.damageStep] ?? 0xffffff;
           view.top.alpha = 1;
           view.resolved = true;
 
@@ -417,6 +507,51 @@ export class YardBuildings {
           view.shadowResolved = true;
         }
       }
+    }
+  }
+
+  /**
+   * Puts a battle's damaged or destroyed picture on a building once it has
+   * arrived. The top and the shadow are separate fetches, resolved apart; a
+   * state that ships no shadow takes the old one away.
+   */
+  private resolveSwap(view: BuildingView): void {
+    const swap = view.swap;
+    if (!swap) return;
+    if (!view.swapResolved) {
+      const texture = this.textures.get(swap.top);
+      if (texture) {
+        applyArt(view.top, texture, view.building, swap.top);
+        view.top.tint = DAMAGE_TINTS[view.damageStep] ?? 0xffffff;
+        view.top.alpha = 1;
+        view.resolved = true;
+        view.swapResolved = true;
+        view.label?.destroy();
+        view.label = null;
+      } else if (this.textures.isMissing(swap.top)) {
+        view.swapResolved = true;
+      }
+    }
+    if (view.swapShadowResolved) return;
+    const shadow = view.shadow;
+    if (!shadow) {
+      view.swapShadowResolved = true;
+      return;
+    }
+    if (!swap.shadow) {
+      shadow.visible = false;
+      view.shadowResolved = false;
+      view.swapShadowResolved = true;
+      return;
+    }
+    const shadowTexture = this.textures.get(swap.shadow);
+    if (shadowTexture) {
+      applyArt(shadow, shadowTexture, view.building, swap.shadow);
+      shadow.visible = true;
+      view.shadowResolved = true;
+      view.swapShadowResolved = true;
+    } else if (this.textures.isMissing(swap.shadow)) {
+      view.swapShadowResolved = true;
     }
   }
 
