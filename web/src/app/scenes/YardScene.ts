@@ -1,5 +1,5 @@
 import { logout } from "@/api/auth";
-import { loadOwnYard } from "@/api/base";
+import { loadAttack, loadOwnYard, viewBase } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
 import {
   BaseMode,
@@ -8,6 +8,7 @@ import {
   type Resources,
   type UpgradeReport,
 } from "@/api/types";
+import { consumeViewTarget, setAttackTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { Camera } from "@/game/Camera";
 import {
   PlannerAccess,
@@ -28,7 +29,8 @@ import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
 
 /**
- * The player's own yard, read-only.
+ * A yard: the player's own, or — handed a {@link ViewTarget} by the map —
+ * anyone else's, read-only.
  *
  * Wiring only, the same division as Map Room 2: the camera owns the view, the
  * renderer owns the scene graph and the panel owns the DOM. What lives here is
@@ -38,7 +40,33 @@ import { SceneName } from "../App";
  * The yard is one request and then static, so there is no refresh clock and no
  * request budget — the two things that make the map scene complicated are both
  * absent.
+ *
+ * A foreign yard is the same screen with the own-yard doors shut
+ * (`docs/design/attack-flow.md` §F1, §4.1): the load is a `view`/`wmview`
+ * rather than a `build`, the planner opens to look and not to change
+ * (`plannerAccess` with `ownYard` false, the visit flow its comment names),
+ * and the HUD shows no resources because the response's pool is the
+ * defender's. The one thing it gains is an Attack button, offered only when
+ * the map's gate passed, which issues the attack load while this yard stays
+ * on screen and hands the response straight to the attack scene.
  */
+
+/** The two calls a yard can be loaded with, so the choice can be tested. */
+export interface YardLoaders {
+  loadOwnYard: typeof loadOwnYard;
+  viewBase: typeof viewBase;
+}
+
+/**
+ * Loads the yard a target names: the player's own in build mode when there
+ * is no target, otherwise the foreign yard read-only. Pure in the sense that
+ * matters — which call is made is decided by the target and nothing else.
+ */
+export const loadYardFor = (
+  target: ViewTarget | null,
+  api: YardLoaders = { loadOwnYard, viewBase },
+): Promise<BaseLoadResponse> =>
+  target ? api.viewBase(target.baseid, target.kind) : api.loadOwnYard();
 
 /**
  * The floor-plan glyph on the Layout control.
@@ -125,6 +153,15 @@ export class YardScene implements Scene {
    */
   private access: PlannerAccess = PlannerAccess.LOCKED;
   private toolbar: HTMLElement | null = null;
+  /**
+   * The foreign cell this visit is looking at, or null for the player's own
+   * yard. Taken from the map's handoff once, in `enter`, and never changed.
+   */
+  private target: ViewTarget | null = null;
+  /** The visit's Attack button; only built when the target can be attacked. */
+  private attackButton: HTMLButtonElement | null = null;
+  /** True while the attack load is in flight, so a second click does nothing. */
+  private attacking = false;
   private selected: YardBuilding | null = null;
   /**
    * One word the planner adds to the status line: what the pointer is over.
@@ -161,6 +198,10 @@ export class YardScene implements Scene {
     this.context = context;
     this.viewportWidth = context.width;
     this.viewportHeight = context.height;
+    // Consumed, not read: a target left behind would turn the next plain
+    // "Yard" click into a visit to somebody else's base.
+    this.target = consumeViewTarget();
+    const whose = this.target ? `${this.target.name}'s yard` : "your yard";
     context.stage.addChild(this.renderer.root);
     this.renderer.attach(context.renderer);
 
@@ -183,7 +224,7 @@ export class YardScene implements Scene {
 
     this.status = document.createElement("div");
     this.status.className = "cell-readout";
-    this.status.textContent = "Loading your yard…";
+    this.status.textContent = `Loading ${whose}…`;
 
     /*
      * The way into the planner, and the first thing on this screen anyone has
@@ -204,8 +245,8 @@ export class YardScene implements Scene {
     this.plannerLabel.className = "yard-toolbar__layout-label";
     this.plannerLabel.textContent = "Layout";
     this.plannerButton.append(layoutIcon(), this.plannerLabel);
-    this.plannerButton.title = "Loading your yard…";
-    this.plannerButton.setAttribute("aria-label", "Layout. Loading your yard…");
+    this.plannerButton.title = `Loading ${whose}…`;
+    this.plannerButton.setAttribute("aria-label", `Layout. Loading ${whose}…`);
     this.plannerButton.setAttribute("aria-pressed", "false");
     this.plannerButton.disabled = true;
     this.plannerButton.addEventListener("click", () => this.togglePlanner());
@@ -213,6 +254,24 @@ export class YardScene implements Scene {
     this.toolbar = document.createElement("div");
     this.toolbar.className = "yard-toolbar";
     this.toolbar.append(this.plannerButton);
+
+    /*
+     * A visit's way into the attack (§4.1). Omitted entirely, not disabled,
+     * when the map's gate refused — the cell panel already said why, and a
+     * greyed-out control with no reason attached is the worse version.
+     * Disabled until the yard has loaded, so an attack cannot start against
+     * a yard that failed to open.
+     */
+    if (this.target?.attack) {
+      this.attackButton = document.createElement("button");
+      this.attackButton.type = "button";
+      this.attackButton.className = "btn btn--primary yard-toolbar__layout";
+      this.attackButton.textContent = "Attack";
+      this.attackButton.title = `Attack ${this.target.name}'s yard`;
+      this.attackButton.disabled = true;
+      this.attackButton.addEventListener("click", () => void this.startAttack());
+      this.toolbar.append(this.attackButton);
+    }
     /*
      * The readout is docked to the overlay and not to the toolbar.
      *
@@ -240,6 +299,7 @@ export class YardScene implements Scene {
     this.planner = null;
     this.plannerButton = null;
     this.plannerLabel = null;
+    this.attackButton = null;
     this.toolbar = null;
     this.input?.detach();
     this.input = null;
@@ -360,8 +420,11 @@ export class YardScene implements Scene {
     const context = this.context;
     if (!context) return;
 
+    const target = this.target;
+    const whose = target ? `${target.name}'s yard` : "your yard";
+
     try {
-      const response = await loadOwnYard();
+      const response = await loadYardFor(target);
       // The scene may have been swapped out while the request was in flight.
       if (this.context !== context) return;
 
@@ -370,17 +433,24 @@ export class YardScene implements Scene {
       this.save = response;
       this.notices.clear("yard-load");
 
-      // Q5's entry rule. This scene always asks for the player's own main yard
-      // in build mode (`loadOwnYard`), so today the only answer that varies is
-      // whether the yard holds a Yard Planner at all; the other two arguments
-      // are here so a visit flow only has to change what it passes.
-      this.access = plannerAccess(yard, BaseMode.BUILD, true);
+      // Q5's entry rule. The player's own main yard arrives in build mode and
+      // is editable; a visit arrives in view mode and opens the planner, if
+      // the yard holds one, to look at and never to change.
+      this.access = plannerAccess(
+        yard,
+        target ? (target.kind === "wild" ? BaseMode.WORLD_MAP_VIEW : BaseMode.VIEW) : BaseMode.BUILD,
+        target === null,
+      );
       this.refreshPlannerButton();
 
       this.renderer.show(yard);
       this.startCamera(yard, context);
 
-      this.hud?.setResources(yard.resources, yard.credits);
+      // A visit's response carries the defender's pool, not the player's, so
+      // the HUD is left at its placeholders rather than shown somebody else's
+      // twigs as if they were the player's own.
+      if (!target) this.hud?.setResources(yard.resources, yard.credits);
+      if (this.attackButton) this.attackButton.disabled = false;
     } catch (caught) {
       if (caught instanceof ApiError && caught.isAuthFailure) {
         context.goTo(SceneName.LOGIN);
@@ -389,11 +459,59 @@ export class YardScene implements Scene {
       this.notices.show(
         "yard-load",
         caught instanceof NetworkError
-          ? "Could not reach the server to load your yard."
-          : "Could not load your yard.",
+          ? `Could not reach the server to load ${whose}.`
+          : caught instanceof ApiError && target
+            ? `Could not load ${whose}: ${caught.message}`
+            : `Could not load ${whose}.`,
         { level: "error", actionLabel: "Retry", onAction: () => void this.load() },
       );
-      if (this.status) this.status.textContent = "Your yard did not load.";
+      if (this.status) this.status.textContent = `${target ? "This" : "Your"} yard did not load.`;
+    }
+  }
+
+  /**
+   * Starts the attack from inside a visit (§F1 "Attacking from inside View
+   * yard needs a second load").
+   *
+   * A view load minted no `attackid` and no session, so this is a genuine
+   * second `/base/load`, now in attack mode. The yard already on screen stays
+   * there while it resolves — there is no map screen in between — and the
+   * response goes to the attack scene inside the target so it need not fetch
+   * again. A refusal (protection, a truce, the defender online, range) comes
+   * back as the server's own message and is shown here, with the yard intact.
+   */
+  private async startAttack(): Promise<void> {
+    const attack = this.target?.attack;
+    const context = this.context;
+    const button = this.attackButton;
+    if (!attack || !context || this.attacking) return;
+
+    this.attacking = true;
+    if (button) button.disabled = true;
+    this.notices.show("attack", `Starting the attack on ${attack.name}…`, { level: "info" });
+
+    try {
+      const load = await loadAttack(attack.baseid, attack.kind, attack.roster);
+      if (this.context !== context) return;
+      setAttackTarget({ ...attack, load });
+      context.goTo(SceneName.ATTACK);
+    } catch (caught) {
+      if (this.context !== context) return;
+      if (caught instanceof ApiError && caught.isAuthFailure) {
+        context.goTo(SceneName.LOGIN);
+        return;
+      }
+      this.notices.show(
+        "attack",
+        caught instanceof NetworkError
+          ? "Could not reach the server to start the attack."
+          : caught instanceof Error
+            ? `The attack could not start: ${caught.message}`
+            : "The attack could not start.",
+        { level: "error", timeoutMs: 8_000 },
+      );
+      this.attacking = false;
+      if (button) button.disabled = false;
     }
   }
 
@@ -797,6 +915,7 @@ export class YardScene implements Scene {
 
     const waiting = this.renderer.placeholderCount;
     status.textContent =
+      (this.target ? `${this.target.name}'s yard, read-only · ` : "") +
       `${yard.buildings.length} buildings · ${yard.mushrooms.length} mushrooms · ` +
       `plot ${yard.bounds.yardWidth} x ${yard.bounds.yardHeight} (expansion ${yard.expansionLevel}) · ` +
       `${this.frameCostMs.toFixed(1)} ms/frame` +

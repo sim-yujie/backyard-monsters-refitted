@@ -54,7 +54,7 @@ export interface MapRoomUiHandlers {
   /** The cell inspector's own Bookmark button. */
   onBookmarkCell: (cell: OffsetCell) => void;
   canBookmark: () => boolean;
-  /** The cell inspector's "View yard" button, on the caller's own cell. */
+  /** The cell inspector's "View yard" button, on any cell with a yard. */
   onViewYard: () => void;
   /** The cell inspector's Attack gate and button; see `CellPanelOptions`. */
   attackRefusal: (payload: MapCell | undefined) => string | null;

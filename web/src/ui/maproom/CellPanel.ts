@@ -19,7 +19,11 @@ export interface CellPanelOptions {
   onBookmark: (cell: OffsetCell) => void;
   /** Whether "Bookmark" should be offered for this cell. */
   canBookmark: () => boolean;
-  /** Opens the yard screen. Only offered on the caller's own cell. */
+  /**
+   * Opens the yard screen on the shown cell: the player's own yard editable,
+   * anyone else's — a wild monster camp included — read-only
+   * (`docs/design/attack-flow.md` §F1, Open Question 7).
+   */
   onViewYard: () => void;
   /**
    * Why Attack is not offered on this cell, or null when it is
@@ -34,16 +38,11 @@ export interface CellPanelOptions {
 
 const ATTACK_READY = "Open this yard and attack it.";
 
-/**
- * Why "View yard" is limited to the caller's own cell.
- *
- * Opening someone else's yard is a `/base/load` in `view` mode against their
- * base id, and that mode is not implemented yet — `api/base.ts` only has the
- * own-yard call. The button therefore stays disabled on every other cell rather
- * than opening a screen that would show the player their own base under
- * somebody else's name.
- */
-const OTHERS_YARD = "Coming soon: only your own yard opens in this build.";
+/** What "View yard" does on each kind of cell, or why it cannot. */
+const VIEW_OWN = "Open your yard";
+const VIEW_OTHER = "Look around this yard. Nothing can be changed from here.";
+const VIEW_LOADING = "Waiting for this zone to load.";
+const VIEW_WATER = "There is no yard on water.";
 
 export class CellPanel {
   readonly element: HTMLElement;
@@ -117,7 +116,7 @@ export class CellPanel {
     this.payload = payload;
     this.panel.setTitle(`Cell ${cell.col}, ${cell.row}`);
     this.bookmarkButton.disabled = !this.options.canBookmark();
-    this.setViewYardEnabled(payload !== undefined && isPlayerCell(payload) && payload.mine === 1);
+    this.setViewYard(payload);
     this.setAttackRefusal(this.options.attackRefusal(payload));
     this.render();
   }
@@ -126,9 +125,30 @@ export class CellPanel {
   update(payload: MapCell | undefined): void {
     if (!this.cell) return;
     this.payload = payload;
-    this.setViewYardEnabled(payload !== undefined && isPlayerCell(payload) && payload.mine === 1);
+    this.setViewYard(payload);
     this.setAttackRefusal(this.options.attackRefusal(payload));
     this.render();
+  }
+
+  /**
+   * Enabled on any cell with a yard to look at; the tooltip says whether the
+   * look is the player's own editable yard or a read-only visit.
+   */
+  private setViewYard(payload: MapCell | undefined): void {
+    const button = this.viewYardButton;
+    let title: string;
+    let enabled = false;
+    if (!payload) {
+      title = VIEW_LOADING;
+    } else if (isWaterCell(payload)) {
+      title = VIEW_WATER;
+    } else {
+      enabled = true;
+      title = isPlayerCell(payload) && payload.mine === 1 ? VIEW_OWN : VIEW_OTHER;
+    }
+    button.disabled = !enabled;
+    button.title = title;
+    button.setAttribute("aria-label", `View yard. ${title}`);
   }
 
   /**
@@ -142,18 +162,6 @@ export class CellPanel {
     button.title = refusal ?? ATTACK_READY;
     // `title` alone is not exposed on a disabled control in every browser.
     button.setAttribute("aria-label", `Attack. ${refusal ?? ATTACK_READY}`);
-  }
-
-  /** Enabled on the caller's own cell, and explained on every other. */
-  private setViewYardEnabled(enabled: boolean): void {
-    this.viewYardButton.disabled = !enabled;
-    if (enabled) {
-      this.viewYardButton.title = "Open your yard";
-      this.viewYardButton.setAttribute("aria-label", "View yard. Open your yard.");
-    } else {
-      this.viewYardButton.title = OTHERS_YARD;
-      this.viewYardButton.setAttribute("aria-label", `View yard. ${OTHERS_YARD}`);
-    }
   }
 
   get shownCell(): OffsetCell | null {

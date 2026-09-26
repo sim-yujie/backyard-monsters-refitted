@@ -10,7 +10,12 @@ import {
   targetKind,
   targetName,
 } from "@/game/attack/attackEntry";
-import { setAttackTarget, type AttackRoster } from "@/game/attack/attackTarget";
+import {
+  setAttackTarget,
+  setViewTarget,
+  type AttackRoster,
+  type AttackTarget,
+} from "@/game/attack/attackTarget";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
 import { Bookmarks } from "@/game/maproom/Bookmarks";
@@ -141,7 +146,7 @@ export class MapRoom2Scene implements Scene {
         },
         onBookmarkCell: (cell) => this.addBookmark("", cell),
         canBookmark: () => !this.bookmarks.isFull,
-        onViewYard: () => context.goTo(SceneName.YARD),
+        onViewYard: () => this.viewYard(),
         attackRefusal: (payload) => this.attackRefusalFor(payload),
         onAttack: () => this.startAttack(),
         onZoom: (zoom) => this.zoomTo(zoom),
@@ -436,20 +441,36 @@ export class MapRoom2Scene implements Scene {
   }
 
   /**
-   * Hands the selected cell to the attack scene.
+   * The attack the selected cell could receive right now, or the reason it
+   * cannot.
    *
-   * The gate is asked once more here rather than trusted from the button,
-   * because the zone under the panel may have refreshed since it was drawn.
+   * The gate is asked here rather than trusted from the button, because the
+   * zone under the panel may have refreshed since it was drawn.
    */
+  private attackFor(
+    cell: OffsetCell,
+    payload: MapCell | undefined,
+  ): { attack: AttackTarget | null; refusal: string | null } {
+    const roster = this.rosterFor(cell);
+    const refusal = attackRefusal(payload, roster, Date.now() / 1000);
+    const kind = payload ? targetKind(payload) : null;
+    if (refusal || !payload || !kind || !("bid" in payload)) {
+      return { attack: null, refusal: refusal ?? "This cell cannot be attacked." };
+    }
+    return {
+      attack: { baseid: payload.bid, kind, cell, name: targetName(payload), roster },
+      refusal: null,
+    };
+  }
+
+  /** Hands the selected cell to the attack scene. */
   private startAttack(): void {
     const cell = this.selected;
     const context = this.context;
     if (!cell || !context) return;
 
-    const payload = this.store.getCell(cell.col, cell.row);
-    const roster = this.rosterFor(cell);
-    const refusal = attackRefusal(payload, roster, Date.now() / 1000);
-    if (refusal || !payload) {
+    const { attack, refusal } = this.attackFor(cell, this.store.getCell(cell.col, cell.row));
+    if (!attack) {
       this.ui?.notices.show("attack", refusal ?? "This cell cannot be attacked.", {
         level: "info",
         timeoutMs: 4_000,
@@ -457,17 +478,35 @@ export class MapRoom2Scene implements Scene {
       return;
     }
 
-    const kind = targetKind(payload);
-    if (!kind || !("bid" in payload)) return;
-
-    setAttackTarget({
-      baseid: payload.bid,
-      kind,
-      cell,
-      name: targetName(payload),
-      roster,
-    });
+    setAttackTarget(attack);
     context.goTo(SceneName.ATTACK);
+  }
+
+  /**
+   * Opens the yard screen on the selected cell.
+   *
+   * The player's own cell opens as it always has — no target, so the yard
+   * scene loads it editable. Any other cell with a yard becomes a read-only
+   * visit, carrying the attack it could turn into so the yard's own Attack
+   * button needs nothing from the map (`docs/design/attack-flow.md` §F1).
+   */
+  private viewYard(): void {
+    const cell = this.selected;
+    const context = this.context;
+    if (!cell || !context) return;
+
+    const payload = this.store.getCell(cell.col, cell.row);
+    if (!payload || !("bid" in payload)) return;
+    if ("mine" in payload && payload.mine === 1) {
+      context.goTo(SceneName.YARD);
+      return;
+    }
+
+    const kind = targetKind(payload);
+    if (!kind) return;
+    const { attack, refusal } = this.attackFor(cell, payload);
+    setViewTarget({ baseid: payload.bid, kind, cell, name: targetName(payload), attack, refusal });
+    context.goTo(SceneName.YARD);
   }
 
   /* ── Refresh and status ─────────────────────────────────────────────── */
