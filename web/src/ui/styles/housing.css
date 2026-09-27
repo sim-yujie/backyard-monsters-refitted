@@ -1,0 +1,210 @@
+/* ── Housing tab (`web/src/ui/monsters/HousingTab.ts`) ─────────────────────── */
+
+.housing {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Hatcheries stalled on housing: a state the player should act on. */
+.housing__stalled {
+  margin: var(--space-3) var(--space-4) 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-accent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--colour-accent) 12%, var(--colour-surface-sunken));
+  color: var(--colour-accent);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.housing__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.housing-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.housing-section__title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 800;
+}
+
+.housing__figures {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.housing__figures strong {
+  color: var(--colour-text);
+}
+
+.housing__bar {
+  height: 8px;
+}
+
+.housing__bar .monsters-bar__fill {
+  background: var(--colour-success);
+}
+
+.housing__empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  color: var(--colour-text-muted);
+}
+
+.housing__empty p {
+  margin: 0;
+}
+
+/* ── Tables ──────────────────────────────────────────────────────────────── */
+
+.housing-table__box {
+  overflow-x: auto;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.housing-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.housing-table th,
+.housing-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.housing-table thead th {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--colour-text-muted);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--colour-border);
+}
+
+.housing-table tbody tr + tr {
+  border-top: 1px solid var(--colour-border);
+}
+
+.housing-table tfoot tr {
+  border-top: 1px solid var(--colour-border-strong);
+  font-weight: 800;
+}
+
+.housing-table .housing-table__num,
+.housing-table thead th:not(:first-child) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The name takes the slack; the figures sit tight on the right. */
+.housing-table tbody th,
+.housing-table tfoot th {
+  width: 100%;
+}
+
+.housing-table__monster {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 700;
+}
+
+.housing-table__picture {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  object-fit: contain;
+}
+
+.housing-table__name {
+  font-weight: 700;
+}
+
+.housing-table__note {
+  display: block;
+  font-weight: 400;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.housing-table__row--zero td:nth-child(3),
+.housing-table__row--zero .housing-table__note {
+  color: var(--colour-accent);
+}
+
+.housing-table__row--focus {
+  background: color-mix(in srgb, var(--colour-accent) 16%, var(--colour-surface-sunken));
+  box-shadow: inset 3px 0 0 var(--colour-accent);
+}
+
+.housing-table td:last-child:has(.housing-table__show) {
+  text-align: right;
+  width: 1%;
+}
+
+.housing-table__show {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+}
+
+/* ── Housing Expansion ───────────────────────────────────────────────────── */
+
+.housing-expansion {
+  align-items: flex-start;
+}
+
+.housing-expansion__text {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.housing-expansion__text--on {
+  color: var(--colour-success);
+}
+
+.housing-expansion__clock {
+  font-variant-numeric: tabular-nums;
+}
+
+.housing-expansion__buy {
+  min-height: 34px;
+}
+
+@media (width <= 620px) {
+  .housing__stalled {
+    margin: var(--space-2) var(--space-3) 0;
+  }
+
+  .housing__scroll {
+    padding: var(--space-2) var(--space-3) var(--space-3);
+    gap: var(--space-3);
+  }
+
+  .housing-table th,
+  .housing-table td {
+    padding: var(--space-2);
+  }
+}

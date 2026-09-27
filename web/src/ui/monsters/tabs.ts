@@ -1,4 +1,5 @@
 import { LockerTab } from "./LockerTab";
+import { HousingTab } from "./HousingTab";
 import {
   MonsterBuilding,
   MonstersTabId,
@@ -48,7 +49,7 @@ export const MONSTERS_TABS: readonly MonstersTabDefinition[] = [
     label: "Housing",
     buildings: [MonsterBuilding.HOUSING],
     // WP2.7.
-    create: () => placeholderTab("The housing roster is on its way."),
+    create: (context) => new HousingTab(context),
   },
   {
     id: MonstersTabId.TRAIN,
