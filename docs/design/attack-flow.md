@@ -511,7 +511,17 @@ the moment nothing a creep could attack is left standing — no building outside
 decoration, cage and mushroom classes with health above zero — which is `ATTACK.Tick`'s own rule
 (`ATTACK.as:276-291`). Without it a flyer army that flattens a trapped camp never reaches 100%,
 because a trap that never fired counts at full health, and never empties the field, because the
-survivors stay alive. A new `web/src/ui/attack/EndAttackPanel.ts` replaces the Flash pair — the attack log
+survivors stay alive. **Added 2026-09-27 (issue #79):** none of these automatic ends counts before
+the player's first action — the first drop, bomb or siege weapon. A yard that opens with nothing
+standing (a camp attacked flat earlier) would otherwise end as `destroyed` at tick 0, and the end
+screen would send a real save before anything was dropped. Flash ran the same check from the first
+frame (`ATTACK.as:282-291`), so this is a deliberate departure. Before the first action only the
+countdown running out (with its grace) and a Retreat end the attack, and the end screen does not
+save either: it says "Nothing was sent, so there was nothing to save." and opens Return to map at
+once. After the first action every end works as above. Refusing the attack outright on a yard with
+nothing left standing is still an open owner question; the check would go in `attackRefusal`
+(`web/src/game/attack/attackEntry.ts`), which the map's cell panel already asks. A new
+`web/src/ui/attack/EndAttackPanel.ts` replaces the Flash pair — the attack log
 popup and `popup_attackend` (`combat.md:1259-1268`) — with one modal: damage percentage, resources
 looted (from `battle.state().loot`), buildings destroyed, and one Return-to-map button. This is the
 one click at the end of the click table in §4.5, against Flash's two.

@@ -62,6 +62,15 @@ import type { AttackTarget } from "./attackTarget";
  * the attacker, finished. The session checks all of these after every advance.
  * A Retreat is `retreat`, and the countdown running out is `expired`.
  *
+ * None of the automatic ends counts before the player's first action — a
+ * drop, a bomb or a siege weapon (issue #79). A yard that opens already flat
+ * has nothing standing at tick 0, and without this guard the attack would end
+ * and the end screen would save it before anything was sent. Flash ticked
+ * the same check from the first frame (`ATTACK.as:282-291`); this is a
+ * deliberate departure. Only the countdown running out and a Retreat end an
+ * attack the player never touched, and the end screen saves neither
+ * ({@link hasActed}).
+ *
  * ## The state machine
  *
  * `idle` (constructed) → `loaded` ({@link load}: the battle exists, the clock
@@ -161,6 +170,8 @@ export interface AttackSessionState {
   readonly championsHp: Readonly<Record<number, number>>;
   /** Bombs and siege weapons WP4 reports as still usable (see `setUnusedTools`). */
   readonly unusedTools: number;
+  /** Whether the player has dropped, bombed or sieged yet (issue #79). */
+  readonly acted: boolean;
   /** How many events the fling log holds. */
   readonly eventCount: number;
 }
@@ -259,6 +270,8 @@ export class AttackSession {
   /** Champion types flung so far this attack. */
   private readonly championsFlung = new Set<number>();
   private unusedTools = 0;
+  /** Set by the first drop, bomb or siege; until then no automatic end applies (#79). */
+  private acted = false;
   private readonly listeners = new Set<AttackSessionListener>();
   /** The last quarter-second the listeners heard about, to rate-limit `advance`. */
   private lastNotifiedQuarter = -1;
@@ -412,6 +425,7 @@ export class AttackSession {
       if (count > 0) this.flung[id] = (this.flung[id] ?? 0) + count;
     }
     if (input.champion) this.championsFlung.add(input.champion.t);
+    this.acted = true;
     this.afterEvent(battle);
     return event;
   }
@@ -422,6 +436,7 @@ export class AttackSession {
     const event: BombDrop = { kind: "bomb", t: battle.tick, x: input.x, y: input.y, id: input.id };
     battle.apply(event);
     this.events.push(event);
+    this.acted = true;
     this.afterEvent(battle);
     return event;
   }
@@ -442,6 +457,7 @@ export class AttackSession {
     };
     battle.apply(event);
     this.events.push(event);
+    this.acted = true;
     this.afterEvent(battle);
     return event;
   }
@@ -487,6 +503,15 @@ export class AttackSession {
   /** The fling log as it stands: the §3.10 shape, resent in full on every save. */
   flingLog(): FlingLog {
     return { v: 1, seed: this.seed, events: [...this.events] };
+  }
+
+  /**
+   * Whether the player has done anything yet: a drop, a bomb or a siege
+   * weapon. Until then no automatic end applies, and an attack that ends
+   * anyway (the countdown, or a Retreat) has nothing worth saving (#79).
+   */
+  hasActed(): boolean {
+    return this.acted;
   }
 
   /** Housed monsters in range minus what has been flung. */
@@ -571,6 +596,7 @@ export class AttackSession {
       championAvailable: this.championAvailable(),
       championsHp: this.championsHpOf(battleState),
       unusedTools: this.unusedTools,
+      acted: this.acted,
       eventCount: this.events.length,
     };
   }
@@ -639,10 +665,18 @@ export class AttackSession {
     return false;
   }
 
-  /** §F6's rule, in the order the design lists it. */
+  /**
+   * §F6's rule, in the order the design lists it, once the player has acted.
+   * Before that only the countdown running out ends the attack (#79).
+   */
   private checkEnd(battle: Battle): void {
     if (this.phase !== "running") return;
     const battleState = battle.state();
+
+    if (!this.acted) {
+      if (battleState.over) this.end("expired");
+      return;
+    }
 
     if (this.damageOf(battleState) >= 100 || !this.targetStanding(battleState)) {
       this.end("destroyed");

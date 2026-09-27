@@ -141,6 +141,64 @@ describe("AttackSession events and the fling log", () => {
     ).toThrow(/\(flung\)/);
   });
 
+  describe("no automatic end before the first action (#79)", () => {
+    /** A yard with nothing a creep could attack: one wall, already the whole camp. */
+    const flatYard = (): BaseLoadResponse =>
+      ({
+        ...towerYard(),
+        buildingdata: { "1": { id: 1, t: 17, l: 1, X: 0, Y: 0 } },
+      }) as unknown as BaseLoadResponse;
+
+    const flatSession = (): AttackSession => {
+      const session = new AttackSession({ target: targetOf(), seed: 1 });
+      session.load(flatYard());
+      session.start();
+      return session;
+    };
+
+    it("keeps a yard that opens with nothing standing running until the first drop", () => {
+      const session = flatSession();
+      play(session, 5);
+      expect(session.state().phase).toBe("running");
+      expect(session.state().acted).toBe(false);
+      expect(session.hasActed()).toBe(false);
+
+      session.appendFling({ x: -100, y: -100, monsters: { C1: 1 } });
+      expect(session.hasActed()).toBe(true);
+      expect(session.state().phase).toBe("ended");
+      expect(session.state().endReason).toBe("destroyed");
+    });
+
+    it("counts a bomb or a siege weapon as the first action too", () => {
+      const bombed = flatSession();
+      bombed.appendBomb({ x: 0, y: 0, id: "tw0" });
+      expect(bombed.hasActed()).toBe(true);
+      expect(bombed.state().endReason).toBe("destroyed");
+
+      const sieged = flatSession();
+      sieged.appendSiege({ x: 0, y: 0, weapon: "jars" });
+      expect(sieged.hasActed()).toBe(true);
+      expect(sieged.state().endReason).toBe("destroyed");
+    });
+
+    it("does not end as exhausted when the attacker opens with nothing to send", () => {
+      const session = sessionOf({
+        roster: { monsters: {}, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0 },
+      });
+      session.start();
+      play(session, 5);
+      expect(session.state().phase).toBe("running");
+    });
+
+    it("still ends an untouched attack when the countdown and its grace run out", () => {
+      const session = flatSession();
+      play(session, 300 + 120 + 1);
+      expect(session.state().phase).toBe("ended");
+      expect(session.state().endReason).toBe("expired");
+      expect(session.hasActed()).toBe(false);
+    });
+  });
+
   describe("champions (Flash: one ordinary champion plus Krallen, UI_TOP.as:336-347)", () => {
     const entry = (t: number, hp = 1000, status = 0) => ({
       t,

@@ -131,13 +131,19 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       if (ended) return;
       ended = true;
       notices.clear("attack-window");
-      payload = buildAttackSave(session, { nameOf });
       panel = new EndAttackPanel({
         summary: summariseAttack(session),
         onReturn: goToMap,
         onRetry: () => void attempt(),
         onLeave: goToMap,
       }).mount(modal);
+      // An attack the player never touched is not saved (#79): no drop, no
+      // bomb, no siege means nothing happened to either yard.
+      if (!session.hasActed()) {
+        panel.setNothingSent();
+        return;
+      }
+      payload = buildAttackSave(session, { nameOf });
       void attempt();
     };
 

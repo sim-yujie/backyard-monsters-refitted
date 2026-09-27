@@ -637,7 +637,8 @@
   border: 1px solid var(--colour-border);
 }
 
-.attack-end__status--saving {
+.attack-end__status--saving,
+.attack-end__status--unsent {
   color: var(--colour-text-muted);
 }
 

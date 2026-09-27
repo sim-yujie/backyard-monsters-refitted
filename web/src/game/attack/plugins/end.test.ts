@@ -92,6 +92,45 @@ describe("the end plugin", () => {
     teardown = createEndPlugin({ save, now: () => clock })(mountsFor(session, modal, notices, goToMap));
   };
 
+  /** The player's first action: a one-Pokey drop, so the end is worth saving (#79). */
+  const act = (): void => {
+    session.appendFling({ x: -100, y: -100, monsters: { C1: 1 } });
+  };
+
+  it("does not save an attack the player never touched, and lets them return at once (#79)", () => {
+    const save = vi.fn(
+      async (_payload: AttackSavePayload): Promise<BaseSaveResponse> =>
+        ({ error: 0, basesaveid: 1 }) as BaseSaveResponse,
+    );
+    mount(save);
+    session.retreat();
+    expect(save).not.toHaveBeenCalled();
+    const status = modal.querySelector(".attack-end__status")!;
+    expect(status.textContent).toBe("Nothing was sent, so there was nothing to save.");
+    expect(status.classList.contains("attack-end__status--unsent")).toBe(true);
+    expect(modal.querySelector<HTMLElement>(".attack-end__retry")!.hidden).toBe(true);
+    expect(modal.querySelector<HTMLElement>(".attack-end__leave")!.hidden).toBe(true);
+    const back = modal.querySelector<HTMLButtonElement>(".attack-end__return")!;
+    expect(back.disabled).toBe(false);
+    back.click();
+    expect(goToMap).toHaveBeenCalledTimes(1);
+    teardown?.();
+    teardown = undefined;
+    expect(modal.children).toHaveLength(0);
+  });
+
+  it("saves as before once the player has dropped something (#79)", () => {
+    const save = vi.fn(
+      async (_payload: AttackSavePayload): Promise<BaseSaveResponse> =>
+        ({ error: 0, basesaveid: 1 }) as BaseSaveResponse,
+    );
+    mount(save);
+    act();
+    session.retreat();
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(modal.querySelector(".attack-end__status")!.textContent).toBe("Saving the result…");
+  });
+
   it("sends the save once when the attack ends, shows the panel, then lets the player return", async () => {
     const save = vi.fn(
       async (_payload: AttackSavePayload): Promise<BaseSaveResponse> =>
@@ -101,6 +140,7 @@ describe("the end plugin", () => {
     expect(modal.querySelector(".attack-end")).toBeNull();
     expect(save).not.toHaveBeenCalled();
 
+    act();
     session.retreat();
     expect(save).toHaveBeenCalledTimes(1);
     const payload = save.mock.calls[0]![0]!;
@@ -135,6 +175,7 @@ describe("the end plugin", () => {
 
   it("shows the defender's new protection when the save's envelope carries one", async () => {
     mount(async () => ({ error: 0, basesaveid: 1, protected: clock / 1000 + 8 * 3600 }) as BaseSaveResponse);
+    act();
     session.retreat();
     await flush();
     const protection = modal.querySelector<HTMLElement>(".attack-end__protection")!;
@@ -147,6 +188,7 @@ describe("the end plugin", () => {
     const second = deferred<BaseSaveResponse>();
     const save = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     mount(save);
+    act();
     session.retreat();
     expect(save).toHaveBeenCalledTimes(1);
 
@@ -181,6 +223,7 @@ describe("the end plugin", () => {
     mount(async () => {
       throw error;
     });
+    act();
     session.retreat();
     await flush();
     expect(modal.querySelector(".attack-end__status")!.textContent).toMatch(/expired before it could be saved/);
@@ -222,6 +265,7 @@ describe("the end plugin", () => {
 
   it("tears down the panel and the timer", () => {
     mount(async () => ({ error: 0, basesaveid: 1 }) as BaseSaveResponse);
+    act();
     session.retreat();
     expect(modal.children).toHaveLength(1);
     teardown?.();

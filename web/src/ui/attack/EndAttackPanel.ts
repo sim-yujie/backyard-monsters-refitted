@@ -32,7 +32,8 @@ export interface EndAttackPanelOptions {
 }
 
 /** Where the save stands, as the panel shows it. */
-export type EndAttackSaveStatus = "saving" | "saved" | "failed";
+/** `unsent`: the player never acted, so there is nothing to save (#79). */
+export type EndAttackSaveStatus = "saving" | "saved" | "failed" | "unsent";
 
 export interface SaveFailure {
   readonly message: string;
@@ -167,7 +168,7 @@ export class EndAttackPanel {
     this.returnButton.textContent = "Return to map";
     this.returnButton.disabled = true;
     this.returnButton.addEventListener("click", () => {
-      if (this.status_ === "saved") this.options.onReturn();
+      if (this.status_ === "saved" || this.status_ === "unsent") this.options.onReturn();
     });
 
     this.retryButton = document.createElement("button");
@@ -263,6 +264,21 @@ export class EndAttackPanel {
     } else {
       this.protection.hidden = true;
     }
+    this.focusPrimary();
+  }
+
+  /**
+   * Nothing was sent, so nothing is saved and Return to map opens at once
+   * (#79): an attack the player never touched leaves no trace on either yard.
+   */
+  setNothingSent(): void {
+    this.status_ = "unsent";
+    this.setStatus("unsent", "Nothing was sent, so there was nothing to save.");
+    this.retryButton.hidden = true;
+    this.leaveButton.hidden = true;
+    this.hideLeave();
+    this.returnButton.disabled = false;
+    this.protection.hidden = true;
     this.focusPrimary();
   }
 
