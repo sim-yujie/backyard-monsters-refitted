@@ -389,7 +389,7 @@ time after WP1.1.
 | WP1.0 | Levels from a fixture yard; no Flinger → 0; a Flinger still under construction does not count. |
 | WP1.1 | `catchUpBuildings`: completion awards points once; idempotent at the same `now`; 30-day clamp; paused while damaged (existing rule); `yardRoute` refuses a non-main save and a yard under attack; a thrown `ClientSafeError` gives the flat shape. Row lock: two concurrent `state` calls produce one consistent `savetime`. |
 | WP1.2 | Every refusal reason in order; free-finish step ≤ 300 s uses no worker; Sharper Tools duration; cancel refund full and capped; the planner walk's existing tests still pass unchanged. |
-| WP1.3 | Price table in §2.6 against hand-computed values (24 h → 277); SP rules per remaining time; shiny lock refuses; credits never below 0 (the column has a check, `save.model.ts:174`). |
+| WP1.3 | Price table in §2.6 against hand-computed values (24 h → 262); SP rules per remaining time; shiny lock refuses; credits never below 0 (the column has a check, `save.model.ts:174`). |
 | WP1.4 | Job end times per kind; a finish triggers one coalesced `state` call; the action queue never has two requests in flight. |
 | WP1.5 | Which actions show per type and state; gate message order; tower numbers from `TOWER_STATS`. |
 | WP1.6 | Cap bar states; notice grouping. |

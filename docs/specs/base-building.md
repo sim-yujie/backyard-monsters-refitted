@@ -842,9 +842,9 @@ GetTimeCost(t):
 `client/scripts/BFOUNDATION.as:2063-2083`)
 
 So a job under 5 minutes is free, and the price is the **lower** of a linear term (20 shiny per
-hour) and a square-root term. The two cross at 10,368 seconds (2.88 hours); below that the linear
+hour) and a square-root term. The two cross at 25,920 seconds (7.2 hours, 144 shiny); below that the linear
 term wins, above it the square-root term caps growth. A 24-hour job costs
-`min(480, 277) = 277` shiny.
+`min(480, 262) = 262` shiny.
 
 `QUEUE.GetFinishCost()` applies the same function to the shortest-remaining job
 (`client/scripts/QUEUE.as:142-150`).
