@@ -40,7 +40,8 @@ import type { YardBounds } from "./YardGrid";
  * those, staged for this client.
  *
  * The composite is one canvas, built once when the yard opens. Everything after
- * that is a `TilingSprite` repeating it, clipped to the plot.
+ * that is a `TilingSprite` repeating it, clipped to the plot — or, on a
+ * foreign yard, left to cover the whole world (see {@link GroundStyle}).
  */
 
 /** Where the game server keeps the yard backgrounds. Proxied in development. */
@@ -76,6 +77,18 @@ const GROUND_COLOUR = 0x4a7a3a;
 /** Outside the plot: darker, so the boundary reads without a hard line. */
 const SURROUND_COLOUR = 0x2a3a26;
 
+/**
+ * How the ground treats the plot edge.
+ *
+ * `plot` clips the grass to the plot diamond and strokes its edge, for the
+ * player's own yard, where the edge is where building stops. `open` tiles
+ * grass over the whole world with no edge at all: the Flash client drew the
+ * edge only in BUILD mode (`client/scripts/MAP.as:362-365`) and laid a
+ * 4000 x 2000 grass field under every yard (`MAP.as:262-274`), so an enemy
+ * camp sat in open country rather than on a marked plot in the dark.
+ */
+export type GroundStyle = "plot" | "open";
+
 /** A small deterministic generator, so one base seed always gives one yard. */
 /** Covers a canvas with one image, on the plain grid `MAPBG` uses. */
 const tile = (context: CanvasRenderingContext2D, image: CanvasImageSource): void => {
@@ -108,7 +121,7 @@ export class YardGround {
   }
 
   /** Draws the plot outline and the flat fill. Safe to call before the art. */
-  layout(bounds: YardBounds, seed: number): void {
+  layout(bounds: YardBounds, seed: number, style: GroundStyle = "plot"): void {
     this.bounds = bounds;
     this.seed = seed;
 
@@ -116,7 +129,12 @@ export class YardGround {
     const first = corners[0];
     if (!first) return;
 
-    const path = corners.flatMap((point) => [point.x, point.y]);
+    // Open ground is the plot diamond grown to the whole world: the same
+    // fill, clip and (empty) edge code runs on a rectangle instead.
+    const path =
+      style === "open"
+        ? [0, 0, bounds.width, 0, bounds.width, bounds.height, 0, bounds.height]
+        : corners.flatMap((point) => [point.x, point.y]);
 
     // A wash over everything the camera can reach, so panning to the margin
     // does not show the page background.
@@ -127,10 +145,10 @@ export class YardGround {
 
     this.plot.clear().poly(path).fill({ color: GROUND_COLOUR });
     this.clip.clear().poly(path).fill({ color: 0xffffff });
-    this.boundary
-      .clear()
-      .poly(path)
-      .stroke({ width: 4, color: 0x1b2418, alignment: 1, alpha: 0.85 });
+    this.boundary.clear();
+    if (style === "plot") {
+      this.boundary.poly(path).stroke({ width: 4, color: 0x1b2418, alignment: 1, alpha: 0.85 });
+    }
 
     if (this.tiles) this.sizeTiles(bounds);
   }

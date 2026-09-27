@@ -3,6 +3,7 @@ import type { BaseLoadResponse } from "@/api/types";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import { artStateFor, BuildingCondition, readYard, TOWN_HALL_TYPE } from "./yardModel";
 import { ArtState } from "./buildingArt";
+import { FOREIGN_YARD_MARGIN, YARD_MARGIN } from "./YardGrid";
 
 const yard = readYard(fixture as unknown as BaseLoadResponse);
 
@@ -81,6 +82,43 @@ describe("reading the captured yard", () => {
     // savetime is 0 in the capture, which would put countdowns decades back.
     expect(fixture.savetime).toBe(0);
     expect(yard.savedAt).toBe(fixture.currenttime);
+  });
+});
+
+describe("whose yard it is", () => {
+  it("is the player's own by default, on the store's plot with its edge", () => {
+    expect(yard.foreign).toBe(false);
+    expect(yard.bounds.margin).toBe(YARD_MARGIN);
+    const small = yardWith({});
+    expect(small.foreign).toBe(false);
+    expect(small.bounds.yardWidth).toBe(1000);
+  });
+
+  it("puts a wild monster camp on the plot WMBASE.Setup grows, whatever the caller says", () => {
+    // A tribe save has no store purchases (server/src/game-data/tribes/v2/kozu.ts).
+    const camp = yardWith({ "1": { X: -640, Y: -580, t: 17, id: 1 } }, { type: "tribe", storedata: {} });
+    expect(camp.foreign).toBe(true);
+    expect(camp.expansionLevel).toBe(0);
+    expect(camp.bounds.yardWidth).toBe(1840);
+    expect(camp.bounds.yardHeight).toBe(1500);
+    expect(camp.bounds.margin).toBe(FOREIGN_YARD_MARGIN);
+    // A wall at the far reach of the level 1 layout is inside the world.
+    const wall = camp.buildings[0]!;
+    expect(wall.box.x).toBeGreaterThan(0);
+    expect(wall.box.y).toBeGreaterThan(0);
+  });
+
+  it("keeps a visited player's plot but gives it the wider margin and no edge", () => {
+    const visit = readYard(fixture as unknown as BaseLoadResponse, { foreign: true });
+    expect(visit.foreign).toBe(true);
+    expect(visit.bounds.yardWidth).toBe(1780);
+    expect(visit.bounds.yardHeight).toBe(1420);
+    expect(visit.bounds.margin).toBe(FOREIGN_YARD_MARGIN);
+    // Same plot, so every building is where the own-yard view has it, shifted
+    // by the extra margin.
+    const shift = FOREIGN_YARD_MARGIN - YARD_MARGIN;
+    expect(visit.townHall!.worldX).toBe(yard.townHall!.worldX + shift);
+    expect(visit.townHall!.worldY).toBe(yard.townHall!.worldY + shift);
   });
 });
 

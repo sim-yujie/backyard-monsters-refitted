@@ -123,6 +123,43 @@ export const yardSize = (expansionLevel: number): readonly [number, number] => {
 };
 
 /**
+ * How many times `WMBASE.Setup` grows the plot of a wild monster camp
+ * (`client/scripts/com/monsters/ai/WMBASE.as:60-65`).
+ */
+const WILD_ENLARGEMENTS = 6;
+
+/**
+ * Plot size in yard units for a wild monster camp.
+ *
+ * A tribe base is saved with an empty `storedata`, so by the store's rule it
+ * would sit on the smallest plot; but its layouts were drawn for a far larger
+ * one. When the Flash client opens a camp in WMATTACK or WMVIEW mode
+ * (`client/scripts/BASE.as:1067-1068`) it grows `GLOBAL._mapWidth` and
+ * `_mapHeight` six more times, and unlike `STORE.ProcessPurchases` it rounds
+ * **up to a multiple of 20 after every step**, not once at the end
+ * (`WMBASE.as:60-65`). The per-step rounding compounds: from 1000 x 800 the
+ * ladder runs 1100 x 900, 1220 x 1000, 1360 x 1100, 1500 x 1220, 1660 x 1360
+ * and lands on **1840 x 1500**, where the store's own six purchases would give
+ * 1780 x 1420. The Kozu layouts were drawn for that plot
+ * (`server/src/game-data/tribes/v2/kozu.ts`): level 0 already spills past
+ * 1000 x 800 on every side (x -590..495, y -600..430 yard units, before
+ * footprints) and level 1 reaches x -650..670, y -590..555.
+ *
+ * The growth starts from whatever the store's rule gave, so a camp that did
+ * carry `ENL` purchases would grow from that rung; none does today.
+ */
+export const wildYardSize = (expansionLevel = 0): readonly [number, number] => {
+  let [width, height] = yardSize(expansionLevel);
+  for (let i = 0; i < WILD_ENLARGEMENTS; i++) {
+    width *= 1.1;
+    height *= 1.1;
+    width = Math.ceil(width / 20) * 20;
+    height = Math.ceil(height / 20) * 20;
+  }
+  return [width, height];
+};
+
+/**
  * Isometric pixels of headroom around the plot.
  *
  * Building art is anchored by its top-left corner at an offset that reaches up
@@ -131,6 +168,21 @@ export const yardSize = (expansionLevel: number): readonly [number, number] => {
  * would cut the top off the outermost town hall at the closest zoom.
  */
 export const YARD_MARGIN = 120;
+
+/**
+ * Headroom around somebody else's plot: an enemy yard under attack or a yard
+ * being visited.
+ *
+ * The Flash client never framed a yard by its plot. It laid a 4000 x 2000 field
+ * of grass under every yard (`client/scripts/MAP.as:262-274`) and clamped the
+ * scroll to a fixed box of about 2000 x 990 px either side of the plot's
+ * centre (`MAP.as:590-624`), whatever the plot's size. An attacker could pull
+ * back to see the whole camp with open grass on every side of it, which is
+ * where a drop on the outskirts goes. This margin, on the wild plot above,
+ * gives the camera a reach of about 2070 x 1235 px either side — the same
+ * order as the original's.
+ */
+export const FOREIGN_YARD_MARGIN = 400;
 
 /**
  * The plot, in every form the scene needs.
@@ -143,7 +195,9 @@ export interface YardBounds {
   /** Plot size in yard units. */
   readonly yardWidth: number;
   readonly yardHeight: number;
-  /** World-pixel extent, including `YARD_MARGIN` on every side. */
+  /** Isometric pixels of headroom around the plot diamond, on every side. */
+  readonly margin: number;
+  /** World-pixel extent, including `margin` on every side. */
   readonly width: number;
   readonly height: number;
   /** World pixels to add to an isometric pixel. */
@@ -153,6 +207,13 @@ export interface YardBounds {
   readonly corners: readonly Point[];
 }
 
+export interface YardBoundsOptions {
+  /** A wild monster camp: the plot `WMBASE.Setup` grows, not the store's. */
+  readonly wild?: boolean;
+  /** Headroom around the plot; `YARD_MARGIN` unless said otherwise. */
+  readonly margin?: number;
+}
+
 /**
  * Geometry for one expansion level.
  *
@@ -160,8 +221,11 @@ export interface YardBounds {
  * (docs/specs/base-building.md §2), so its isometric diamond is symmetric about
  * the origin and half as tall as it is wide.
  */
-export const yardBounds = (expansionLevel: number): YardBounds => {
-  const [yardWidth, yardHeight] = yardSize(expansionLevel);
+export const yardBounds = (expansionLevel: number, options: YardBoundsOptions = {}): YardBounds => {
+  const [yardWidth, yardHeight] = options.wild
+    ? wildYardSize(expansionLevel)
+    : yardSize(expansionLevel);
+  const margin = options.margin ?? YARD_MARGIN;
   const halfW = yardWidth / 2;
   const halfH = yardHeight / 2;
 
@@ -177,17 +241,37 @@ export const yardBounds = (expansionLevel: number): YardBounds => {
   const extentX = halfW + halfH;
   const extentY = (halfW + halfH) / 2;
 
-  const originX = extentX + YARD_MARGIN;
-  const originY = extentY + YARD_MARGIN;
+  const originX = extentX + margin;
+  const originY = extentY + margin;
 
   return {
     yardWidth,
     yardHeight,
-    width: extentX * 2 + YARD_MARGIN * 2,
-    height: extentY * 2 + YARD_MARGIN * 2,
+    margin,
+    width: extentX * 2 + margin * 2,
+    height: extentY * 2 + margin * 2,
     originX,
     originY,
     corners: iso.map((point) => ({ x: point.x + originX, y: point.y + originY })),
+  };
+};
+
+/**
+ * The world rectangle "zoom to fit" frames: the plot diamond's box plus
+ * `YARD_MARGIN`, never more.
+ *
+ * On the player's own yard that is the whole world. On a foreign yard the
+ * world carries `FOREIGN_YARD_MARGIN` of open grass beyond this, which the
+ * camera can pan into but the fit does not show — pulling all the way back
+ * would shrink the camp to make room for empty ground.
+ */
+export const yardFitRect = (bounds: YardBounds): Rect => {
+  const inset = Math.max(bounds.margin - YARD_MARGIN, 0);
+  return {
+    x: inset,
+    y: inset,
+    width: bounds.width - inset * 2,
+    height: bounds.height - inset * 2,
   };
 };
 

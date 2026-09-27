@@ -1,8 +1,17 @@
 import type { Camera } from "@/game/Camera";
-import { BOMBS, buildingClass, isTower, type BombStats } from "@/game/combat/rules";
+import {
+  BOMBS,
+  buildingClass,
+  cellOfIso,
+  GRID_CELL,
+  GRID_HEIGHT,
+  GRID_WIDTH,
+  isTower,
+  type BombStats,
+} from "@/game/combat/rules";
 import { propsSize } from "@/game/yard/buildingArt";
 import type { Point } from "@/game/yard/YardGrid";
-import { toIso } from "@/game/yard/YardGrid";
+import { fromIso, toIso } from "@/game/yard/YardGrid";
 import type { Yard, YardBuilding } from "@/game/yard/yardModel";
 import type { YardRenderer } from "@/game/yard/YardRenderer";
 import type { AttackSession } from "./AttackSession";
@@ -266,6 +275,47 @@ export const dropZoneOf = (tool: DropTool, bucketRadius: number): DropZone => {
   }
 };
 
+/* ── The grid's edge ──────────────────────────────────────────────────────── */
+
+/**
+ * How far from the yard's centre a drop may land, in the pathing grid's
+ * cartesian units: one cell short of the grid's edge on each axis, so the
+ * point is on a cell the engine can path from (`grid.ts`: 260 cells of 10
+ * units, centred on the yard; `cellIndexOf` answers -1 past that).
+ */
+const DROP_REACH_X = (GRID_WIDTH / 2 - 1) * GRID_CELL;
+const DROP_REACH_Y = (GRID_HEIGHT / 2 - 1) * GRID_CELL;
+
+const clamp = (value: number, low: number, high: number): number =>
+  low > high ? (low + high) / 2 : Math.min(Math.max(value, low), high);
+
+/**
+ * A drop point pulled onto the pathing grid.
+ *
+ * A foreign yard is drawn with open grass well past the plot (issue #62), and
+ * the Flash `DROPZONE` never checked bounds — it did not need to, because the
+ * scroll clamp kept the pointer over the 4000 x 2000 field. Here the grass
+ * reaches a little further than the engine's grid does, so a tap on the far
+ * outskirts is moved to the nearest point the creeps can walk from rather
+ * than spawning them where `path()` gives up. `clearance` (yard units, the
+ * drop ring's radius) keeps the scatter around the point on the grid too.
+ *
+ * Yard units to grid units is `fromIso`, which turns a circle of radius r
+ * into an ellipse reaching √2 r, hence the factor.
+ */
+export const clampDropPoint = (point: Point, clearance = 0): Point => {
+  const cart = fromIso(point.x, point.y);
+  const reach = Math.ceil(clearance * Math.SQRT2);
+  const x = clamp(cart.x, -DROP_REACH_X + reach, DROP_REACH_X - reach);
+  const y = clamp(cart.y, -DROP_REACH_Y + reach, DROP_REACH_Y - reach);
+  if (x === cart.x && y === cart.y) return point;
+  const moved = toIso(x, y);
+  // `toIso` and `fromIso` round in opposite directions, so the clamped point
+  // can land a unit past where it was aimed; a unit short of the reach is
+  // still cells away from the edge.
+  return cellOfIso(moved.x, moved.y) >= 0 ? moved : { x: 0, y: 0 };
+};
+
 /** What the yard has to say about a drop point. */
 export interface DropVerdict {
   readonly legal: boolean;
@@ -504,10 +554,13 @@ export class AttackInput {
   }
 
   /** {@link tap} at an explicit yard point. */
-  tapAt(point: Point, building: YardBuilding | null): boolean {
+  tapAt(aimed: Point, building: YardBuilding | null): boolean {
     const { session, bucket } = this.options;
     const phase = session.state().phase;
     if (phase !== "loaded" && phase !== "running") return false;
+
+    // A tap past the pathing grid lands on its edge instead.
+    const point = clampDropPoint(aimed, this.zone().size / 2);
 
     const pending = this.pending;
     if (pending) {

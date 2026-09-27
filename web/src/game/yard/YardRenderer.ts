@@ -6,7 +6,7 @@ import { BlueprintLayer } from "./planner/BlueprintLayer";
 import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
 import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
 import { diamondCorners, type Corners, type Diamond } from "./planner/marquee";
-import { fromIso, toIso, yardToWorld, type Point, type Rect } from "./YardGrid";
+import { fromIso, toIso, yardFitRect, yardToWorld, type Point, type Rect } from "./YardGrid";
 import type { Yard, YardBuilding } from "./yardModel";
 
 /**
@@ -125,8 +125,9 @@ export class YardRenderer {
     this.stored.clear();
     for (const building of yard.buildings) this.byId.set(building.id, building);
 
-    // The base seed keeps one yard's grass the same between visits.
-    this.ground.layout(yard.bounds, yard.savedAt || 1);
+    // The base seed keeps one yard's grass the same between visits. Somebody
+    // else's yard sits on open grass with no plot edge (see `Yard.foreign`).
+    this.ground.layout(yard.bounds, yard.savedAt || 1, yard.foreign ? "open" : "plot");
     void this.ground.loadTiles();
 
     this.buildings.show(yard, atlas);
@@ -238,8 +239,11 @@ export class YardRenderer {
   /** The world rectangle "zoom to fit" should frame in the active view. */
   fitRect(): Rect {
     if (this.currentView === YardView.BLUEPRINT) return this.blueprint.fitRect();
-    const size = this.worldSize();
-    return { x: 0, y: 0, width: size.width, height: size.height };
+    const bounds = this.yard?.bounds;
+    if (!bounds) return { x: 0, y: 0, width: 1, height: 1 };
+    // The plot plus its headroom; a foreign yard's wider world stays pannable
+    // but is not what "fit" shows.
+    return yardFitRect(bounds);
   }
 
   /** Yard units to world pixels in the active view. */

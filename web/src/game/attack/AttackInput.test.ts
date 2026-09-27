@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
-import { BOMBS, TICKS_PER_SECOND } from "@/game/combat/rules";
+import { BOMBS, cellOfIso, TICKS_PER_SECOND } from "@/game/combat/rules";
 import { Camera } from "@/game/Camera";
 import { readYard, type Yard } from "@/game/yard/yardModel";
-import { toIso } from "@/game/yard/YardGrid";
+import { fromIso, toIso } from "@/game/yard/YardGrid";
 import {
   ATTACK_TAP_CLAIMS,
   AttackInput,
+  clampDropPoint,
   DECOY_CLEARANCE,
   dropZoneOf,
   judgeDrop,
@@ -282,6 +283,86 @@ describe("AttackInput taps", () => {
     session.retreat();
     expect(input.tapAt(OPEN, null)).toBe(false);
     expect(session.flingLog().events.map((event) => event.kind)).toEqual(["retreat"]);
+  });
+});
+
+describe("the grid's edge", () => {
+  it("leaves a point the engine can path from alone", () => {
+    expect(clampDropPoint(OPEN)).toBe(OPEN);
+    expect(clampDropPoint({ x: 0, y: 0 })).toEqual({ x: 0, y: 0 });
+    // The far corner of the wild plot is still on the grid.
+    const corner = { x: -920, y: -750 };
+    expect(cellOfIso(corner.x, corner.y)).toBeGreaterThanOrEqual(0);
+    expect(clampDropPoint(corner)).toBe(corner);
+  });
+
+  it("pulls a point past the grid onto it, one cell in from the edge", () => {
+    // Yard (2000, 2000) is cartesian (3000, 1000): well past the 260 x 10 grid.
+    const far = { x: 2000, y: 2000 };
+    expect(cellOfIso(far.x, far.y)).toBe(-1);
+    const moved = clampDropPoint(far);
+    expect(cellOfIso(moved.x, moved.y)).toBeGreaterThanOrEqual(0);
+    const cart = fromIso(moved.x, moved.y);
+    expect(Math.abs(cart.x)).toBeLessThanOrEqual(1291);
+    expect(Math.abs(cart.y)).toBeLessThanOrEqual(1291);
+    // Only the axis that was out moves.
+    expect(cart.y).toBeCloseTo(1000, -1);
+
+    for (const point of [
+      { x: -3000, y: 100 },
+      { x: 100, y: -3000 },
+      { x: 5000, y: -5000 },
+      { x: -1500, y: 1400 },
+    ]) {
+      const on = clampDropPoint(point);
+      expect(cellOfIso(on.x, on.y)).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it("keeps the drop ring's scatter on the grid too", () => {
+    const radius = 281; // dropRadius of a full 2,250-unit bucket
+    const moved = clampDropPoint({ x: 2000, y: 2000 }, radius);
+    const cart = fromIso(moved.x, moved.y);
+    // sqrt(2) * 281 rounds up to 398; the reach is 1290 - 398 = 892 on x.
+    expect(cart.x).toBeLessThanOrEqual(893);
+    expect(cart.x).toBeGreaterThanOrEqual(891);
+    // Every point of the ring maps inside the grid.
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 8) {
+      const edge = fromIso(moved.x + Math.cos(angle) * radius, moved.y + Math.sin(angle) * radius);
+      expect(Math.abs(edge.x)).toBeLessThan(1300);
+      expect(Math.abs(edge.y)).toBeLessThan(1300);
+    }
+  });
+
+  it("flings a tap on the far outskirts from the grid's edge, so the creeps spawn and walk", () => {
+    const { session, bucket, input } = rig();
+    bucket.setCount("C1", 4);
+    const aimed = { x: -2600, y: 900 };
+    expect(cellOfIso(aimed.x, aimed.y)).toBe(-1);
+
+    expect(input.tapAt(aimed, null)).toBe(true);
+
+    const log = session.flingLog();
+    expect(log.events).toHaveLength(1);
+    const drop = log.events[0]!;
+    if (drop.kind !== "fling") throw new Error(`expected a fling, got ${drop.kind}`);
+    expect(cellOfIso(drop.x, drop.y)).toBeGreaterThanOrEqual(0);
+    expect({ x: drop.x, y: drop.y }).not.toEqual(aimed);
+    expect(session.state().creepsFlung).toBe(4);
+    const creeps = session.battle()!.creeps();
+    expect(creeps).toHaveLength(4);
+    for (const creep of creeps) {
+      expect(cellOfIso(Math.trunc(creep.ix), Math.trunc(creep.iy))).toBeGreaterThanOrEqual(0);
+    }
+    // They have somewhere to go: after a few seconds every one has moved.
+    const before = creeps.map((creep) => [creep.ix, creep.iy] as const);
+    session.advance(3);
+    const after = session.battle()!.creeps();
+    expect(after.length).toBeGreaterThan(0);
+    for (const [index, creep] of after.entries()) {
+      const [ix, iy] = before[index]!;
+      expect(Math.hypot(creep.ix - ix, creep.iy - iy)).toBeGreaterThan(0);
+    }
   });
 });
 

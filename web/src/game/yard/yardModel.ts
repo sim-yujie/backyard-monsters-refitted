@@ -5,6 +5,8 @@ import {
   footprintBox,
   footprintCentre,
   footprintOf,
+  FOREIGN_YARD_MARGIN,
+  YARD_MARGIN,
   yardBounds,
   yardToWorld,
   type Rect,
@@ -109,6 +111,14 @@ export interface YardWorkers {
 export interface Yard {
   readonly bounds: YardBounds;
   readonly expansionLevel: number;
+  /**
+   * Somebody else's yard — an attack target or a visit — rather than the
+   * player's own. Drawn on open grass with no plot edge, the way the Flash
+   * client drew every yard outside BUILD mode (`client/scripts/MAP.as:362-365`
+   * draws the edge only there), and with `FOREIGN_YARD_MARGIN` of ground
+   * around the plot. A wild monster camp is always foreign.
+   */
+  readonly foreign: boolean;
   /** Depth-sorted, so the renderer can draw straight down the list. */
   readonly buildings: readonly YardBuilding[];
   readonly mushrooms: readonly YardMushroom[];
@@ -206,10 +216,30 @@ const countdownOf = (building: BuildingData, savedAt: number): YardCountdown | n
  */
 const isGolden = (x: number, y: number): boolean => (Math.abs(Math.trunc(x * y)) & 3) === 0;
 
+export interface ReadYardOptions {
+  /**
+   * The yard belongs to somebody else (a visit or an attack). Only the caller
+   * knows: the response for a visit looks like the response for one's own
+   * yard. A `type: "tribe"` response is foreign whether or not this is set.
+   */
+  readonly foreign?: boolean;
+}
+
+/** The `type` a wild monster camp's save carries (`server/src/enums/Base.ts`). */
+const TRIBE_TYPE = "tribe";
+
 /** Builds the draw list from a `/base/load` response. */
-export const readYard = (response: BaseLoadResponse): Yard => {
+export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = {}): Yard => {
   const expansionLevel = response.storedata?.["ENL"]?.q ?? 0;
-  const bounds = yardBounds(expansionLevel);
+  // A wild monster camp's save has no store purchases, so the store's rule
+  // would put it on the smallest plot; its buildings were laid out for the
+  // plot `WMBASE.Setup` grows it to. See `wildYardSize`.
+  const wild = response.type === TRIBE_TYPE;
+  const foreign = wild || options.foreign === true;
+  const bounds = yardBounds(expansionLevel, {
+    wild,
+    margin: foreign ? FOREIGN_YARD_MARGIN : YARD_MARGIN,
+  });
 
   // A yard that has never been saved reports savetime 0, which would put every
   // countdown decades in the past. The server's own clock is the honest
@@ -284,6 +314,7 @@ export const readYard = (response: BaseLoadResponse): Yard => {
   return {
     bounds,
     expansionLevel,
+    foreign,
     buildings,
     mushrooms,
     resources: response.resources ?? {},

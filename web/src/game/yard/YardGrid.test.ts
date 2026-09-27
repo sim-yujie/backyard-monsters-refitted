@@ -7,8 +7,12 @@ import {
   footprintOf,
   fromIso,
   toIso,
+  FOREIGN_YARD_MARGIN,
+  wildYardSize,
+  YARD_MARGIN,
   YARD_SIZES,
   yardBounds,
+  yardFitRect,
   yardSize,
   yardToWorld,
 } from "./YardGrid";
@@ -136,6 +140,100 @@ describe("plot bounds", () => {
       expect(box.x + box.width).toBeLessThanOrEqual(bounds.width);
       expect(box.y + box.height).toBeLessThanOrEqual(bounds.height);
     }
+  });
+});
+
+describe("wild monster camp plot", () => {
+  it("grows the smallest plot six times, rounding up to 20 after every step", () => {
+    // client/scripts/com/monsters/ai/WMBASE.as:60-65, from GLOBAL._mapWidth /
+    // _mapHeight of 1000 x 800. Worked by hand: 1100 x 900 (880 is 44 x 20
+    // exactly, but the product carries a rounding error and ceils to 900),
+    // 1220 x 1000, 1360 x 1100, 1500 x 1220, 1660 x 1360, 1840 x 1500.
+    expect(wildYardSize()).toEqual([1840, 1500]);
+    expect(wildYardSize(0)).toEqual([1840, 1500]);
+  });
+
+  it("is not the store's sixth rung, which rounds once at the end", () => {
+    expect(YARD_SIZES[6]).toEqual([1780, 1420]);
+    expect(wildYardSize()).not.toEqual(YARD_SIZES[6]);
+  });
+
+  it("holds every Kozu layout, which the store's smallest plot does not", () => {
+    // Extents of server/src/game-data/tribes/v2/kozu.ts in yard units, walls
+    // (20 x 20 footprints) included. Level 0 spans x -590..495, y -600..430;
+    // level 1 spans x -650..670, y -590..555.
+    const reach = [
+      [-590, -600],
+      [495, 430],
+      [-650, -590],
+      [670, 555],
+    ] as const;
+    const inside = (plot: readonly [number, number], x: number, y: number): boolean =>
+      x >= -plot[0] / 2 && x + 20 <= plot[0] / 2 && y >= -plot[1] / 2 && y + 20 <= plot[1] / 2;
+    for (const [x, y] of reach) {
+      expect(inside(wildYardSize(), x, y)).toBe(true);
+      expect(inside(yardSize(0), x, y)).toBe(false);
+    }
+  });
+
+  it("gives the bounds the wild plot and the margin asked for", () => {
+    const wild = yardBounds(0, { wild: true, margin: FOREIGN_YARD_MARGIN });
+    expect(wild.yardWidth).toBe(1840);
+    expect(wild.yardHeight).toBe(1500);
+    expect(wild.margin).toBe(400);
+    // Diamond half-extents (1840 + 1500) / 2 = 1670 by 835, plus 400 a side.
+    expect(wild.width).toBe(3340 + 800);
+    expect(wild.height).toBe(1670 + 800);
+    expect(wild.originX).toBe(1670 + 400);
+    expect(wild.originY).toBe(835 + 400);
+    // The left corner is toIso(-920, 750): x -1670, y (750 - 920) / 2 = -85.
+    expect(wild.corners[3]).toEqual({ x: 400, y: 835 + 400 - 85 });
+
+    // Without the option the store's rule stands, margin and all.
+    const own = yardBounds(0);
+    expect(own.yardWidth).toBe(1000);
+    expect(own.margin).toBe(YARD_MARGIN);
+  });
+
+  it("keeps a building at the layouts' far reach inside the world", () => {
+    const wild = yardBounds(0, { wild: true, margin: FOREIGN_YARD_MARGIN });
+    for (const [x, y] of [
+      [-650, -590],
+      [670, 555],
+      [-590, 555],
+      [670, -600],
+    ] as const) {
+      const box = footprintBox(wild, 17, x, y);
+      expect(box.x).toBeGreaterThan(FOREIGN_YARD_MARGIN);
+      expect(box.y).toBeGreaterThan(FOREIGN_YARD_MARGIN);
+      expect(box.x + box.width).toBeLessThan(wild.width - FOREIGN_YARD_MARGIN);
+      expect(box.y + box.height).toBeLessThan(wild.height - FOREIGN_YARD_MARGIN);
+    }
+  });
+});
+
+describe("fit rectangle", () => {
+  it("is the whole world on the player's own yard", () => {
+    const bounds = yardBounds(3);
+    expect(yardFitRect(bounds)).toEqual({ x: 0, y: 0, width: bounds.width, height: bounds.height });
+  });
+
+  it("frames the plot plus the usual headroom on a foreign yard, not its wider world", () => {
+    const bounds = yardBounds(0, { wild: true, margin: FOREIGN_YARD_MARGIN });
+    const fit = yardFitRect(bounds);
+    const inset = FOREIGN_YARD_MARGIN - YARD_MARGIN;
+    expect(fit).toEqual({
+      x: inset,
+      y: inset,
+      width: bounds.width - inset * 2,
+      height: bounds.height - inset * 2,
+    });
+    // The plot diamond sits YARD_MARGIN inside the fit on every side.
+    const [top, right, bottom, left] = bounds.corners;
+    expect(top!.y - fit.y).toBe(YARD_MARGIN);
+    expect(fit.x + fit.width - right!.x).toBe(YARD_MARGIN);
+    expect(fit.y + fit.height - bottom!.y).toBe(YARD_MARGIN);
+    expect(left!.x - fit.x).toBe(YARD_MARGIN);
   });
 });
 

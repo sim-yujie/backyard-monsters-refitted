@@ -428,7 +428,9 @@ export class YardScene implements Scene {
       // The scene may have been swapped out while the request was in flight.
       if (this.context !== context) return;
 
-      const yard = readYard(response);
+      // A visit is somebody else's yard: open grass and no plot edge, as the
+      // Flash client drew it outside BUILD mode. The own yard keeps its edge.
+      const yard = readYard(response, { foreign: target !== null });
       this.yard = yard;
       this.save = response;
       this.notices.clear("yard-load");

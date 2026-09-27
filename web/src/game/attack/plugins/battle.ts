@@ -2,6 +2,7 @@ import { ATTACK_PLUGINS, type AttackPlugin } from "@/app/scenes/AttackScene";
 import type { Yard } from "@/game/yard/yardModel";
 import type { AttackSession, FlingInput } from "../AttackSession";
 import { AttackBattleLayer } from "../AttackBattleLayer";
+import { clampDropPoint } from "../AttackInput";
 
 /**
  * Attack-scene plugin for the "battle" work package (issue #32, WP5): mounts
@@ -23,6 +24,10 @@ const CLEARANCE = 60;
  * A drop point on open ground: the first spot along the plot's left edge,
  * moving down, that is at least `CLEARANCE` from every footprint. Falls back
  * to the top-left corner if the yard is packed to its edge.
+ *
+ * A wild camp's plot is the one `WMBASE.Setup` grows it to (`wildYardSize`),
+ * so on Kozu the left edge is open ground outside the walls, not a spot
+ * between them; the result is on the pathing grid either way.
  */
 export const openDropSpot = (yard: Yard): { x: number; y: number } => {
   const halfW = yard.bounds.yardWidth / 2;
@@ -42,15 +47,15 @@ export const openDropSpot = (yard: Yard): { x: number; y: number } => {
         break;
       }
     }
-    if (clear) return { x, y };
+    if (clear) return clampDropPoint({ x, y });
   }
-  return { x: -halfW + CLEARANCE, y: -halfH + CLEARANCE };
+  return clampDropPoint({ x: -halfW + CLEARANCE, y: -halfH + CLEARANCE });
 };
 
 interface DevHook {
   session: AttackSession;
   layer: AttackBattleLayer;
-  /** Flings a roster at a clear spot, or at `at`. */
+  /** Flings a roster at a clear spot, or at `at` (pulled onto the grid). */
   fling: (
     monsters: FlingInput["monsters"],
     extra?: { champion?: FlingInput["champion"]; at?: { x: number; y: number } },
@@ -73,13 +78,15 @@ const plugin: AttackPlugin = (mounts) => {
       session: mounts.session,
       layer,
       dropSpot: spot,
-      fling: (monsters, extra) =>
-        mounts.session.appendFling({
-          x: extra?.at?.x ?? spot.x,
-          y: extra?.at?.y ?? spot.y,
+      fling: (monsters, extra) => {
+        const at = extra?.at ? clampDropPoint(extra.at) : spot;
+        return mounts.session.appendFling({
+          x: at.x,
+          y: at.y,
           monsters,
           ...(extra?.champion ? { champion: extra.champion } : {}),
-        }),
+        });
+      },
     };
     (window as unknown as { __attackBattle?: DevHook }).__attackBattle = hook;
     hooked = true;

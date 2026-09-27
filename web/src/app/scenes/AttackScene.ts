@@ -282,7 +282,9 @@ export class AttackScene implements Scene {
       return;
     }
 
-    const yard = readYard(response);
+    // An attack target is always somebody else's yard: open grass, no plot
+    // edge, and room around the camp to drop on (issue #62).
+    const yard = readYard(response, { foreign: true });
     this.yard = yard;
     this.renderer.show(yard);
     this.startCamera(yard, context);
