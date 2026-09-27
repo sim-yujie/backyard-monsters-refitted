@@ -2,6 +2,7 @@ import type { SpeedupItem } from "@/api/types";
 import type { YardRefusal } from "@/api/yard";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, WALL_TYPES } from "@/game/yard/buildingCosts";
+import { harvesterNow } from "@/game/yard/harvest";
 import { progressFraction } from "@/game/yard/jobs";
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import { typeName } from "@/game/yard/planner/summary";
@@ -785,15 +786,17 @@ export class BuildingPanel {
     this.countdowns.push({ node: definition, endsAt: countdown.endsAt });
   }
 
-  /** Harvester fields: what is banked in the building and whether it is running. */
+  /**
+   * Harvester fields: what its buffer holds, predicted to now on the own yard
+   * (`harvest.ts`) and as saved elsewhere, and whether it is being repaired.
+   */
   private addProduction(building: YardBuilding): void {
-    const stored = building.raw.st;
-    if (typeof stored === "number") {
-      this.add("Stored", stored.toLocaleString());
-    }
-    const cycle = building.raw.rCP;
-    if (typeof cycle === "number" && cycle > 0) {
-      this.add("Cycle left", `${cycle}s at the last save`);
+    const store = this.yard?.store;
+    const now = store ? harvesterNow(building.raw, store.save, store.now()) : null;
+    if (now) {
+      this.add("Stored", `${formatAmount(now.stored)} / ${formatAmount(now.capacity)}`);
+    } else if (typeof building.raw.st === "number") {
+      this.add("Stored", formatAmount(building.raw.st));
     }
     if (building.raw.rE === 1) this.add("Repairing", "Yes", "is-info");
   }

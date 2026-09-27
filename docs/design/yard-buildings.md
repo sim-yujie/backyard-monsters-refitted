@@ -140,7 +140,7 @@ which clock it uses, and what completing it does. Completion is always done by t
 | Build | `buildingdata[id].cB` (+ `prefab`, + `cL` once a server route starts builds) | seconds left at `savetime` | level 1 (or `prefab`); points `pointsForBuild` (`server/src/services/yardplanner/costs.ts:228`) | yes, except walls and traps (D13) |
 | Upgrade | `cU` (+ `cL`, the job's length) | seconds left at `savetime` | level + 1, health full, points `pointsForUpgrade` (`costs.ts:215`); `cL` removed | yes |
 | Repair | `rE` flag, `hp`, `buildinghealthdata` | heal rate from `savetime` | full health, entries removed | no |
-| Harvester cycle | `st` buffer, `rCP` | seconds from `savetime` | buffer grows to `capacity` | no |
+| Harvester cycle | `st` buffer, `cP` (and `pr`) | seconds from `savetime` | buffer grows to `capacity` | no |
 | Locker unlock | `lockerdata[id] = {t:1, s, e}` | absolute `e` | `t: 2`, `s`/`e` deleted, `academy[id] ??= {level: 1}` | no |
 | Academy training | `academy[id].time`, `.duration`; academy building `upg` | absolute `time` | `level + 1`, `time`/`duration`/`upg` cleared | no |
 | Lab research | lab building `upg`, `upt`, `upl` | absolute `upt` | `academy[upg].powerup = upl`, fields cleared | no |

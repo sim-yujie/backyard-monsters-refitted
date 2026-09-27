@@ -92,3 +92,28 @@ export const YardHatcheryRemoveSchema = z.object({
 export const YardHatcheryFinishSchema = z.object({
   hatchery: HatcheryTargetField,
 });
+
+/**
+ * `POST /bm/yard/bank`: `ids`, a JSON array of harvester building ids (a JSON
+ * body's array arrives stringified, `middleware/jsonBody.ts`), or `all=1` for
+ * every eligible harvester (the HUD's Collect all). Exactly one of the two.
+ */
+export const YardBankSchema = z
+  .object({
+    ids: z
+      .string()
+      .transform((raw, ctx) => {
+        try {
+          return JSON.parse(raw) as unknown;
+        } catch {
+          ctx.addIssue({ code: "custom", message: "ids must be a JSON array of building ids" });
+          return z.NEVER;
+        }
+      })
+      .pipe(z.array(z.number().int().nonnegative()).min(1).max(1000))
+      .optional(),
+    all: z.coerce.number().int().min(1).max(1).optional(),
+  })
+  .refine((body) => (body.ids === undefined) !== (body.all === undefined), {
+    message: "Send either ids or all=1",
+  });

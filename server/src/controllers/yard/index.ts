@@ -1,4 +1,5 @@
 import type { KoaController } from "../../utils/KoaController.js";
+import { yardBankAction } from "./bank.js";
 import {
   yardHatcheryAddAction,
   yardHatcheryFinishAction,
@@ -45,4 +46,5 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "hatchery/add", controller: yardRoute(yardHatcheryAddAction) },
   { path: "hatchery/remove", controller: yardRoute(yardHatcheryRemoveAction) },
   { path: "hatchery/finish", controller: yardRoute(yardHatcheryFinishAction) },
+  { path: "bank", controller: yardRoute(yardBankAction) },
 ];

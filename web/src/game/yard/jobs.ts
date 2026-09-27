@@ -153,7 +153,8 @@ export const repairEndsAt = (
  *
  * A cycle adds `produce[l-1]` after `cycleTime + ceil(cycleTime × (4 −
  * 4 / maxHealth × health))` seconds (`client/scripts/BRESOURCE.as:384-386`,
- * `:424-439`); `rCP` is what is left of the current one. A harvester below
+ * `:424-439`); `cP` is what is left of the current one (`rCP` read as a
+ * fallback, the name this client first used). A harvester below
  * half health, or with a build, upgrade or fortify running, does not produce
  * (`BRESOURCE.as:301-302`). The Harvester Overdrive buff is not modelled.
  */
@@ -185,7 +186,7 @@ export const harvesterFullAt = (
       ? cycleTime + Math.ceil(cycleTime * (4 - (4 / max) * hp))
       : cycleTime;
   const cycles = Math.ceil((capacity - stored) / produce);
-  const current = finite(building.rCP);
+  const current = finite(building.cP) ?? finite(building.rCP);
   const first = current !== null && current > 0 ? current : cycle;
   return savedAt + first + (cycles - 1) * cycle;
 };

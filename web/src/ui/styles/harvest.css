@@ -1,0 +1,81 @@
+/*
+ * Harvesters (`docs/design/yard-buildings.md` §5.1): the HUD's Collect all
+ * button (`ui/yard/CollectAll.ts`) and the amount that rises off a harvester
+ * when a tap banks it (`YardScene`).
+ */
+
+.hud__collect {
+  display: flex;
+  flex: none;
+  white-space: nowrap;
+}
+
+/* Something is waiting to be picked up: the one HUD control in the accent. */
+.hud__collect-button {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.hud__collect-button:hover {
+  background: var(--colour-accent-hover);
+}
+
+.hud__collect-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* The banked amount, rising off the building it came from and fading. */
+.yard-bank-float {
+  position: fixed;
+  z-index: var(--z-popup);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--colour-surface-sunken) 80%, transparent);
+  color: var(--colour-success);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  animation: yard-bank-float 1.4s var(--easing) forwards;
+}
+
+.yard-bank-float .res-icon {
+  height: 18px;
+}
+
+@keyframes yard-bank-float {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -100%);
+  }
+  15% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 36px));
+  }
+}
+
+@keyframes yard-bank-fade {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yard-bank-float {
+    animation-name: yard-bank-fade;
+  }
+}

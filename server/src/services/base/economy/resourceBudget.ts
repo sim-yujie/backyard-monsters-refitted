@@ -1,9 +1,4 @@
-import {
-  costOf,
-  productionOf,
-  siloCapacity,
-  type CostStep,
-} from "../../../game-data/buildingCosts.js";
+import { costOf, siloCapacity, type CostStep } from "../../../game-data/buildingCosts.js";
 import type { BuildingData, BuildingDataMap } from "../../../types/BuildingData.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
 import {
@@ -12,6 +7,7 @@ import {
   upgradeSteps,
   type ResourceAmounts,
 } from "../../yardplanner/costs.js";
+import { bufferCeiling, isHarvester } from "./production.js";
 
 /**
  * The arithmetic behind the economy audit's resource rules: what a yard can
@@ -72,8 +68,11 @@ export const LEGACY_WALL_TYPE = 18;
 /** The Storage Silo, the only type that adds to the resource caps. */
 export const SILO_TYPE = 6;
 
-/** Twig Snapper, Pebble Shiner, Putty Squisher, Goo Factory: type id = resource index. */
-export const HARVESTER_TYPES = [1, 2, 3, 4] as const;
+/**
+ * The harvester types and the audit's buffer bound live with the rest of the
+ * production arithmetic, which the yard catch-up shares (`production.ts`).
+ */
+export { bufferCeiling, HARVESTER_TYPES } from "./production.js";
 
 /** The type whose cost ladder prices this one. */
 export const pricingType = (type: number): number =>
@@ -144,42 +143,6 @@ export const topupCost = (shortfall: Readonly<ResourceAmounts>): number =>
 /* Production                                                                  */
 /* -------------------------------------------------------------------------- */
 
-/** A production ladder entry at a level, clamped to the ends of the array. */
-const atLevel = (ladder: readonly number[] | undefined, level: number): number => {
-  if (!ladder || ladder.length === 0) return 0;
-  const index = Math.min(Math.max(Math.trunc(level), 1), ladder.length) - 1;
-  return numberOf(ladder[index]);
-};
-
-/**
- * The most a harvester's buffer could hold now.
- *
- * `min(capacity, stored + (floor(elapsed / cycle) + 1) * produce)`: the buffer
- * it was saved with, plus every whole cycle since and one more for the cycle
- * that was already part-way through, capped at the level's buffer
- * (`client/scripts/BRESOURCE.as:384-386`, `:424-439`, `:497`).
- *
- * A harvester is halted while a countdown runs and stops below half health
- * (`:301-302`), both of which only ever make it produce less, so ignoring them
- * keeps this an upper bound.
- */
-export const bufferCeiling = (
-  type: number,
-  level: number,
-  storedBuffer: number,
-  elapsed: number
-): number => {
-  const production = productionOf(type);
-  if (!production) return 0;
-
-  const cycle = Math.max(1, atLevel(production.cycleTime, level));
-  const produce = atLevel(production.produce, level);
-  const capacity = atLevel(production.capacity, level);
-  const cycles = Math.floor(Math.max(0, elapsed) / cycle) + 1;
-
-  return Math.min(capacity, Math.max(0, storedBuffer) + cycles * produce);
-};
-
 /** One harvester whose submitted buffer is above what it could have produced. */
 export interface OverfullHarvester {
   id: number;
@@ -221,7 +184,7 @@ export const harvestAllowance = (
 
   for (const [key, before] of Object.entries(stored ?? {})) {
     const type = Number(before.t);
-    if (!(HARVESTER_TYPES as readonly number[]).includes(type)) continue;
+    if (!isHarvester(type)) continue;
 
     const after = submittedYard[key];
     const level = Math.max(levelOf(before), after ? levelOf(after) : 0, 1);

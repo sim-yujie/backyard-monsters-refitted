@@ -141,7 +141,8 @@ describe("POST /bm/yard/upgrade", () => {
  * completing it awards floor((300 + 1575) / 3) = 625 points.
  */
 describe("a short upgrade (300 s or less)", () => {
-  const SNAPPER_ROW = { id: 3, t: 1, x: 0, y: 0, l: 1 };
+  // A full buffer, so the catch-up's harvester step leaves the row as it is.
+  const SNAPPER_ROW = { id: 3, t: 1, x: 0, y: 0, l: 1, st: 720, pr: 0 };
   const withSnapper = (overrides: Row = {}): Row => {
     const row = rowOf({ credits: 50, ...overrides });
     (row.buildingdata as Record<string, Row>)["3"] = { ...SNAPPER_ROW };

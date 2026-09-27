@@ -384,7 +384,12 @@ export interface BuildingData {
   st?: number;
   /** Harvester: 1 while producing. */
   pr?: number;
-  /** Seconds left on the current production cycle. */
+  /**
+   * Harvester: seconds left of the current production cycle, as the original
+   * (`client/scripts/BRESOURCE.as:487-489`) and the server's catch-up write it.
+   */
+  cP?: number;
+  /** Older name this client read for {@link BuildingData.cP}; read as a fallback only. */
   rCP?: number;
   [key: string]: unknown;
 }

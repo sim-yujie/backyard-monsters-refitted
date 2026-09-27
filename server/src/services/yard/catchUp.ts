@@ -4,6 +4,7 @@ import {
   type CatchUpBuildingsSave,
   type StoreItemJob,
 } from "./catchUpBuildings.js";
+import { catchUpHarvesters, type CatchUpHarvestersSave } from "./catchUpHarvesters.js";
 import { catchUpLocker, type CatchUpLockerSave, type UnlockJob } from "./catchUpLocker.js";
 import { catchUpMonsters, type CatchUpMonstersSave, type MonsterJob } from "./catchUpMonsters.js";
 
@@ -25,7 +26,7 @@ import { catchUpMonsters, type CatchUpMonstersSave, type MonsterJob } from "./ca
  * | 1 | `catchUpBuildings.ts` — countdowns, points, `flinger`/`catapult`, store buffs | 1 |
  * | 2 | `catchUpLocker.ts` — unlocks and the Locker Overdrive (runs first, see there) | 2 |
  * | 2 | `catchUpMonsters.ts` — HCC queue refund, hatchery production, housing cull (after the buildings) | 2 |
- * | 3 | `catchUpHarvesters.ts`, `catchUpRepairs.ts`, `catchUpMushrooms.ts` | 3 |
+ * | 3 | `catchUpHarvesters.ts` — harvester buffers fill (nothing is banked); `catchUpRepairs.ts`, `catchUpMushrooms.ts` | 3 |
  * | 4 | `catchUpTraining.ts` | 4 |
  * | 5 | `catchUpChampions.ts` | 5 |
  *
@@ -49,7 +50,11 @@ import { catchUpMonsters, type CatchUpMonstersSave, type MonsterJob } from "./ca
 export type CompletedJob = BuildingJob | StoreItemJob | UnlockJob | MonsterJob;
 
 /** The slice of a save the catch-up reads and writes. */
-export interface CatchUpSave extends CatchUpBuildingsSave, CatchUpLockerSave, CatchUpMonstersSave {
+export interface CatchUpSave
+  extends CatchUpBuildingsSave,
+    CatchUpLockerSave,
+    CatchUpMonstersSave,
+    CatchUpHarvestersSave {
   savetime?: number;
 }
 
@@ -73,6 +78,7 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
     ...catchUpBuildings(save, from, now),
   ];
   completed.push(...catchUpMonsters(save, from, now, completed));
+  catchUpHarvesters(save, from, now, completed);
 
   save.savetime = now;
 

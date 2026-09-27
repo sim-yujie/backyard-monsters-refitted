@@ -4,6 +4,7 @@ import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/ya
 import { MonstersTabId } from "./monsters/monstersTab";
 import { formatAmount, formatCompact } from "./format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
+import { CollectAll } from "./yard/CollectAll";
 import { JobNotices } from "./yard/JobNotices";
 
 /**
@@ -25,8 +26,9 @@ import { JobNotices } from "./yard/JobNotices";
  * resource's storage cap as "amount / cap" with a thin fill bar that turns
  * amber when the silo is full, a Workers control ("free / total") that goes
  * to the job finishing soonest, and a toast for every job the server says
- * finished (`JobNotices`), and a Monsters button that opens the Monsters
- * screen on its Unlock tab (design §4.1). The map, the attack screen and a
+ * finished (`JobNotices`), a Monsters button that opens the Monsters
+ * screen on its Unlock tab (design §4.1), and a Collect all button while the
+ * harvesters hold something (`CollectAll`, design §5.1). The map, the attack screen and a
  * foreign yard have no binding and show the amounts alone.
  */
 
@@ -160,6 +162,8 @@ export class Hud {
   private readonly workersValue: HTMLElement;
   private readonly monsters: HTMLElement;
   private readonly monstersName: HTMLElement;
+  /** Collect all (design §5.1): only on the own yard, only while something waits. */
+  private readonly collectAll = new CollectAll();
   private fitted: HudFit = HudFit.FULL;
 
   constructor(options: HudOptions) {
@@ -273,7 +277,15 @@ export class Hud {
       this.sceneButtons.set(scene.id, button);
     }
 
-    this.element.append(brand, resources, this.workers, this.monsters, spacer, scenes);
+    this.element.append(
+      brand,
+      resources,
+      this.workers,
+      this.collectAll.element,
+      this.monsters,
+      spacer,
+      scenes,
+    );
 
     if (options.onSignOut) {
       const signOut = document.createElement("button");
@@ -346,6 +358,7 @@ export class Hud {
       this.jobNotices = new JobNotices(binding.notices, (id) => binding.scene.selectBuilding(id));
       this.unsubscribeYard = binding.store.subscribe((change) => this.onYardChange(change));
     }
+    this.collectAll.bind(binding);
     this.syncYard();
   }
 
@@ -412,6 +425,7 @@ export class Hud {
       this.jobNotices?.showAway(change.completed);
       return;
     }
+    this.collectAll.refresh();
     if (change.completed.length > 0) this.jobNotices?.show(change.completed);
     if (change.reason !== YardChangeReason.PENDING) this.syncYard();
   }

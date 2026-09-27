@@ -232,6 +232,10 @@ describe("the HUD on the player's own yard", () => {
         return store.workers;
       },
       jobs: () => store.jobList,
+      // Collect all reads these; an empty yard keeps it hidden (`CollectAll.test.ts`).
+      save: {},
+      now: () => 0,
+      isRunning: () => false,
       subscribe: (listener: YardListener) => {
         listeners.add(listener);
         return () => listeners.delete(listener);

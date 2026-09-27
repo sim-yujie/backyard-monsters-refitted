@@ -189,7 +189,7 @@ describe("repairs", () => {
 describe("harvesters", () => {
   it("fills the buffer after the current cycle plus one cycle per produce step", () => {
     // Twig Snapper level 1: 2 per 10 s cycle into a 720 buffer.
-    const jobs = buildingJobs({ "1": { X: 0, Y: 0, t: 1, id: 1, st: 700, rCP: 4 } }, SAVED);
+    const jobs = buildingJobs({ "1": { X: 0, Y: 0, t: 1, id: 1, st: 700, cP: 4 } }, SAVED);
     expect(only(jobs, JobKind.HARVEST)[0]?.endsAt).toBe(SAVED + 4 + 9 * 10);
   });
 

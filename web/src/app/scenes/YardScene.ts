@@ -8,6 +8,7 @@ import {
   type Resources,
   type UpgradeReport,
 } from "@/api/types";
+import { bankActions } from "@/api/yardBank";
 import { consumeViewTarget, setAttackTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
@@ -16,6 +17,7 @@ import {
   plannerAccess,
   plannerEntryTooltip,
 } from "@/game/yard/planner/access";
+import { harvesterNow, type HarvestKey } from "@/game/yard/harvest";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
 import {
   YardChangeReason,
@@ -25,11 +27,14 @@ import {
 } from "@/game/yard/YardStore";
 import { YardRenderer, YardView } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
+import { formatAmount } from "@/ui/format";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
 import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
 import { monstersTabFor, type MonstersFocus, type MonstersTabId } from "@/ui/monsters/monstersTab";
+import { resourceAmount } from "@/ui/resourceIcon";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
+import { showBankResult } from "@/ui/yard/CollectAll";
 import { describeUpgradeReport } from "@/ui/yard/upgradeText";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { ZoomControl } from "@/ui/ZoomControl";
@@ -606,7 +611,7 @@ export class YardScene implements Scene {
       canvas: context.canvas,
       pick: (x, y) => this.renderer.pick(x, y),
       onHover: (building) => this.renderer.setHovered(building),
-      onSelect: (building) => this.select(building),
+      onSelect: (building) => this.tap(building),
       onZoomStep: (direction) => this.zoomBy(Math.pow(ZOOM_STEP, direction)),
       onZoomReset: () => this.fitYard(),
       onCancel: () => this.select(null),
@@ -730,6 +735,52 @@ export class YardScene implements Scene {
   }
 
   /* ── Selection ──────────────────────────────────────────────────────────── */
+
+  /**
+   * A tap on the yard. On the player's own yard a harvester with something
+   * to bank banks it — one request, through the store's queue — as its panel
+   * opens (design §5.1, decision D12), and the amount rises off the building
+   * when the answer comes. Anything else is a plain selection.
+   */
+  private tap(building: YardBuilding | null): void {
+    this.select(building);
+    const store = this.store;
+    const binding = this.binding;
+    if (!building || !store || !binding || this.planner) return;
+    const waiting = harvesterNow(building.raw, store.save, store.now());
+    if (!waiting?.bankable || waiting.offer <= 0) return;
+
+    void bankActions(store)
+      .one(building.id)
+      .then((result) => {
+        if (this.binding !== binding) return;
+        showBankResult(binding.notices, result);
+        const amount = result.ok ? (result.report.byBuilding[String(building.id)]?.amount ?? 0) : 0;
+        if (amount > 0) this.floatBanked(building.id, waiting.resource, amount);
+      });
+  }
+
+  /** "+720" with the resource's icon, rising off a building and fading (`harvest.css`). */
+  private floatBanked(id: number, resource: HarvestKey, amount: number): void {
+    const camera = this.camera;
+    const context = this.context;
+    const building = this.yard?.buildings.find((one) => one.id === id);
+    if (!camera || !context || !building) return;
+
+    const screen = camera.worldToScreen({ x: building.centreX, y: building.centreY });
+    const canvas = context.canvas.getBoundingClientRect();
+    const float = resourceAmount(resource, `+${formatAmount(amount)}`, {
+      className: "yard-bank-float",
+      decorative: true,
+    });
+    float.setAttribute("aria-hidden", "true");
+    float.style.left = `${Math.round(canvas.left + screen.x)}px`;
+    float.style.top = `${Math.round(canvas.top + screen.y)}px`;
+    document.body.append(float);
+    const remove = (): void => float.remove();
+    float.addEventListener("animationend", remove, { once: true });
+    window.setTimeout(remove, 2_000);
+  }
 
   private select(building: YardBuilding | null): void {
     // In planner mode the selection belongs to the planner, which draws its own
