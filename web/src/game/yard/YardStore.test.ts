@@ -234,6 +234,37 @@ describe("finishing jobs", () => {
     expect(api.state).not.toHaveBeenCalled();
   });
 
+  it("sends nothing while harvesters fill, cycle after cycle and past full (owner 2026-09-28)", async () => {
+    // Two Twig Snappers mid-cycle and a Goo Factory: the per-second tick runs
+    // through many harvest cycles and past both buffers filling up. Collect
+    // all's total grows, but only a press, a tap or a real job asks the server.
+    const save = loadWith({
+      caps: { r1: 1, r2: 1, r3: 1, r4: 1 },
+      buildingdata: {
+        ...baseBuildings(),
+        "4": { X: 300, Y: 0, t: 1, id: 4, l: 1, st: 0, pr: 1, cP: 3 },
+        "5": { X: 400, Y: 0, t: 1, id: 5, l: 2, st: 100, pr: 1, cP: 30 },
+        "6": { X: 500, Y: 0, t: 4, id: 6, l: 1, st: 0, pr: 1, cP: 1 },
+      },
+    });
+    const api = stubApi();
+    const { store, changes, time } = storeWith(save, api);
+    store.start();
+    expect(store.jobs().filter((job) => job.kind === "harvest")).toHaveLength(3);
+    const lastFull = Math.max(
+      ...store.jobs().filter((job) => job.kind === "harvest").map((job) => job.endsAt ?? 0),
+    );
+
+    for (let second = 0; second <= lastFull - T0 + 60; second++) {
+      time.advance(1);
+      store.tick();
+    }
+    await flush();
+
+    for (const call of Object.values(api)) expect(call).not.toHaveBeenCalled();
+    expect(changes).toHaveLength(0);
+  });
+
   it("treats jobs already over at load as the server's to have finished", async () => {
     // A load answered at T0 with a buff that ran out before it: the server
     // had its chance, so the client does not ask again.

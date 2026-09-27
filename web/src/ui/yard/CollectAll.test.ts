@@ -34,6 +34,7 @@ describe("CollectAll", () => {
   let clock: number;
   let save: BaseLoadResponse;
   let run: ReturnType<typeof vi.fn>;
+  let refresh: ReturnType<typeof vi.fn>;
   let binding: YardUiBinding;
   let collect: CollectAll;
 
@@ -50,6 +51,7 @@ describe("CollectAll", () => {
       storedata: {},
     } as unknown as BaseLoadResponse;
     run = vi.fn();
+    refresh = vi.fn();
     const store = {
       get save() {
         return save;
@@ -57,6 +59,7 @@ describe("CollectAll", () => {
       now: () => clock,
       isRunning: () => false,
       run,
+      refresh,
     };
     binding = { store: store as unknown as YardStore, scene: { selectBuilding: () => {} }, notices };
     collect = new CollectAll();
@@ -85,6 +88,17 @@ describe("CollectAll", () => {
     collect.bind(binding);
     clock = T0 + 3600;
     vi.advanceTimersByTime(1_000);
+    expect(button().textContent).toBe(collectAllLabel(1440));
+  });
+
+  it("asks the server nothing from its per-second refresh, however long the buffers fill", () => {
+    collect.bind(binding);
+    for (let second = 1; second <= 6 * 3600; second++) {
+      clock = T0 + second;
+      vi.advanceTimersByTime(1_000);
+    }
+    expect(run).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
     expect(button().textContent).toBe(collectAllLabel(1440));
   });
 

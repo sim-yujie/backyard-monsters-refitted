@@ -78,6 +78,11 @@ export interface YardJob {
  * each later work package adds its kinds here in the same change that adds
  * its catch-up step (`hatch` with `catchUpMonsters.ts`, `research` with
  * Phase 4, `hunger` with Phase 5).
+ *
+ * `harvest` stays out on purpose (owner decision 2026-09-28): a buffer
+ * filling is predicted on the client (`harvest.ts`) and never worth a
+ * request; the server hears about harvesters only when the player presses
+ * Collect all or taps one.
  */
 export const SERVER_COMPLETED_KINDS: ReadonlySet<JobKind> = new Set<JobKind>([
   JobKind.BUILD,

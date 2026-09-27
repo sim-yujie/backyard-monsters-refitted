@@ -770,6 +770,10 @@ rest).
   flying-number effect plays from the building. Empty: opens the panel only.
 - **HUD `[Collect all · 12.4k]`** shows the total waiting and banks every eligible harvester in one
   request. Hidden when nothing is waiting.
+  **Owner decision 2026-09-28:** the button may reappear within seconds as the harvesters refill
+  (kept), but filling asks the server nothing: the total is the client's prediction (`harvest.ts`),
+  a buffer reaching full is not a server job (`harvest` is not in `SERVER_COMPLETED_KINDS`), and
+  the only harvester requests are a Collect all press and a tap on a harvester.
 - Banking moves `min(st, capacity)` into the pool clamped to the cap; what does not fit **stays in
   the buffer** (the original lost it, BB §4 "What happens when full"; keeping it is a deliberate
   kindness because a full buffer also stops production, so nothing is gained by losing it — listed
