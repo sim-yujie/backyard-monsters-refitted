@@ -108,13 +108,14 @@ import type { FlingEvent, MonsterLevels, ResourceAmounts, Roster } from "./types
  *    divides by the length instead, because §3.4 rule 3 forbids trigonometry:
  *    two runtimes may round `atan2` differently and a digest cannot survive
  *    that. The values agree to within floating-point noise.
- * 3. **Spawn positions are rejection-sampled.** `ATTACK.Spawn` places each
- *    creep at a random bearing and a random radius inside the drop circle with
- *    `sin` and `cos` (`ATTACK.as:546-547`). The engine draws a point in the
- *    bounding square and rejects it until it is inside the circle, which needs
- *    no trigonometry. The distribution is uniform over the disc rather than the
- *    client's radius-biased one, so creeps start a little further out on
- *    average.
+ * 3. **Spawn bearings are rejection-sampled.** `ATTACK.Spawn` places each
+ *    creep at a random bearing and a random distance from the drop point, on
+ *    screen, with `sin` and `cos` (`ATTACK.as:546-547`). The engine draws the
+ *    bearing as a point in the unit square, rejected until it is inside the
+ *    unit circle, and scales it to length with `sqrt`, which needs no
+ *    trigonometry. The distance is drawn as the client draws it, uniform along
+ *    the radius, so the scatter crowds the middle just as Flash's does
+ *    ({@link scatterRadius}).
  * 4. **Flyers fly straight.** `findTarget` puts a flying creep on a ring 120
  *    units out and circles it in until it is within 170
  *    (`MonsterBase.as:1121-1158`), which costs two random draws per retarget.
@@ -423,6 +424,17 @@ interface Bunker {
 export const dropRadius = (bucketTotal: number): number =>
   Math.max(200, bucketTotal / 4) / 2;
 
+/**
+ * How far from the drop point a fling's creeps land, in screen pixels.
+ *
+ * `DROPZONE.Drop` hands `ATTACK.Spawn` half the zone's size, which is
+ * {@link dropRadius}, and `Spawn` puts each creep up to half of that away on
+ * screen (`DROPZONE.as:160`, `ATTACK.as:546-547`): a quarter of the size. The
+ * zone's ring is `1.2 x 0.6` of the size (`DROPZONE.as:48-49`), so its short
+ * half-axis, `0.3` of the size, still clears the scatter.
+ */
+export const scatterRadius = (bucketTotal: number): number => dropRadius(bucketTotal) / 2;
+
 /** The bucket units one fling costs, which the flinger's payload caps. */
 export const bucketCost = (roster: Roster, levels: MonsterLevels | undefined): number => {
   let total = 0;
@@ -653,19 +665,27 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /* ── Flinging ──────────────────────────────────────────────────────────── */
 
   /**
-   * A point inside the drop circle, by rejection sampling (fidelity note 3).
+   * Where one creep of a fling lands: a random bearing and a random distance
+   * up to `radius` from the drop point, on screen, as `ATTACK.Spawn` places it
+   * (fidelity note 3), brought back into yard units.
    *
-   * Two draws per attempt, and the expected number of attempts is 4/pi, so the
-   * stream position after a fling depends on the seed. That is fine: the
-   * digest is generated from this engine, not from Flash.
+   * The bearing takes two draws per attempt, and the expected number of
+   * attempts is 4/pi, so the stream position after a fling depends on the
+   * seed. That is fine: the digest is generated from this engine, not from
+   * Flash. A bearing too near the middle to have a direction is redrawn.
    */
   const dropPoint = (centreX: number, centreY: number, radius: number): Cart => {
     for (let attempt = 0; attempt < 32; attempt += 1) {
-      const offsetX = (rng.float() * 2 - 1) * radius;
-      const offsetY = (rng.float() * 2 - 1) * radius;
-      if (offsetX * offsetX + offsetY * offsetY <= radius * radius) {
-        return { x: centreX + offsetX, y: centreY + offsetY };
-      }
+      const across = rng.float() * 2 - 1;
+      const down = rng.float() * 2 - 1;
+      const squared = across * across + down * down;
+      if (squared > 1 || squared < 1e-6) continue;
+      const scale = (rng.float() * radius) / Math.sqrt(squared);
+      const screenX = across * scale;
+      const screenY = down * scale;
+      // `screenPointOf` undone: a screen step (sx, sy) is the yard step
+      // (sy + sx / 2, sy - sx / 2).
+      return { x: centreX + screenY + screenX / 2, y: centreY + screenY - screenX / 2 };
     }
     return { x: centreX, y: centreY };
   };
@@ -776,7 +796,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const ids = Object.keys(event.monsters).sort();
     // The log's own `r` is ignored: §3.10 makes the radius a function of the
     // payload, so the server recomputes it and a mismatch is the client's bug.
-    const radius = dropRadius(bucketCost(event.monsters, options.levels));
+    const radius = scatterRadius(bucketCost(event.monsters, options.levels));
     for (const monsterId of ids) {
       const count = Math.max(0, Math.floor(event.monsters[monsterId] ?? 0));
       const level = clampLevel(options.levels, monsterId);
@@ -1174,7 +1194,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (range <= 0) return;
     // A bunker sends its defenders at anything attacking, air or ground
     // (`HOUSINGBUNKER.as:269-300`); the interceptor pick is the random draw.
-    const found = index.inRange(range, building.cx, building.cy, oldStyleTargets(1));
+    // Scanned from the middle of the footprint, like a tower (`HOUSINGBUNKER.as:156`).
+    const scan = towerScanPoint(building);
+    const found = index.inRange(range, scan.x, scan.y, oldStyleTargets(1));
     if (found.length === 0) return;
 
     const ids: string[] = [];

@@ -5,6 +5,7 @@ import {
   createBattle,
   dropRadius,
   flingerPayload,
+  scatterRadius,
   type BattleVisualEvent,
 } from "./engine.js";
 import { digestOf } from "./digest.js";
@@ -61,8 +62,10 @@ describe("a Pokey against a lone Cannon Tower", () => {
     const { yard, battle } = battleOf();
     run(battle, 1200);
     const tower = yard.buildings[0];
-    // 60 damage a swing, and the Pokey got nine in before it died.
-    expect(tower!.maxHp - tower!.hp).toBe(540);
+    // 60 damage a swing, and the Pokey got ten in before it died. It lands
+    // within 50 screen pixels of (-100, -100) (issue #91), which with this
+    // seed puts it at the tower in time for a tenth swing.
+    expect(tower!.maxHp - tower!.hp).toBe(600);
   });
 
   it("ends the battle once the last attacker is gone and the countdown has run", () => {
@@ -432,6 +435,102 @@ describe("the flinger", () => {
   });
 });
 
+describe("where a fling's creeps land (issue #91)", () => {
+  /** 300 Pokeys, 2,100 bucket units: a zone of size 525 and a scatter of 131.25. */
+  const PAYLOAD = { C1: 300 };
+  const flung = (seed: number) => {
+    const battle = createBattle(yardOf({}), { seed });
+    battle.apply({ kind: "fling", t: 0, x: 40, y: -60, r: 0, monsters: PAYLOAD });
+    return battle.creeps();
+  };
+
+  it("reaches a quarter of the drop zone's size, which is half the logged radius", () => {
+    // `DROPZONE.Drop` passes `_size / 2`, `ATTACK.Spawn` goes up to half of that.
+    for (const bucket of [0, 700, 2100, 2250]) {
+      const size = Math.max(200, bucket / 4);
+      expect(scatterRadius(bucket)).toBe(size / 4);
+      expect(scatterRadius(bucket)).toBe(dropRadius(bucket) / 2);
+    }
+    expect(scatterRadius(bucketCost(PAYLOAD, {}))).toBe(131.25);
+  });
+
+  it("scatters over a circle on screen, not in yard units", () => {
+    const reach = scatterRadius(bucketCost(PAYLOAD, {}));
+    const creeps = flung(9);
+    expect(creeps).toHaveLength(300);
+    let furthestOnScreen = 0;
+    let furthestInYard = 0;
+    for (const creep of creeps) {
+      const onScreen = Math.sqrt(screenDistanceSquared(creep.ix, creep.iy, 40, -60));
+      expect(onScreen).toBeLessThanOrEqual(reach + 1e-9);
+      furthestOnScreen = Math.max(furthestOnScreen, onScreen);
+      furthestInYard = Math.max(furthestInYard, Math.hypot(creep.ix - 40, creep.iy + 60));
+    }
+    expect(furthestOnScreen).toBeGreaterThan(reach * 0.95);
+    // Straight down the screen a pixel is 1.41 yard units, so a screen circle
+    // reaches past its own radius in yard units; a yard circle could not.
+    expect(furthestInYard).toBeGreaterThan(reach * 1.2);
+  });
+
+  it("draws the distance uniformly along the radius, as Flash does", () => {
+    // `random * param2 / 2` crowds the middle: half the creeps inside half
+    // the radius, where a uniform disc would put a quarter there.
+    const reach = scatterRadius(bucketCost(PAYLOAD, {}));
+    const distances = flung(4)
+      .map((creep) => Math.sqrt(screenDistanceSquared(creep.ix, creep.iy, 40, -60)) / reach)
+      .sort((a, b) => a - b);
+    const median = distances[distances.length / 2]!;
+    expect(median).toBeGreaterThan(0.4);
+    expect(median).toBeLessThan(0.6);
+  });
+
+  it("puts every creep of the same log in the same place", () => {
+    expect(flung(12)).toEqual(flung(12));
+  });
+});
+
+describe("a bunker's reach (issue #91)", () => {
+  /**
+   * A level 1 Monster Bunker (range 300, 90 x 90) at the origin scans from the
+   * middle of its footprint, (45, 45) (`HOUSINGBUNKER.as:156`,
+   * `BUILDING22.as:90`). A Pokey dropped by a harvester off to the south-east
+   * stops at it and swings; the bunker's first look is on tick 30.
+   */
+  const battleOf = (harvesterAt: number) => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: harvesterAt, Y: harvesterAt },
+    });
+    const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 2 } } });
+    battle.apply({
+      kind: "fling",
+      t: 0,
+      x: harvesterAt - 20,
+      y: harvesterAt - 20,
+      r: 0,
+      monsters: { C1: 1 },
+    });
+    run(battle, 29);
+    const pokey = battle.creeps()[0]!;
+    run(battle, 1);
+    const defenders = battle.creeps().filter((creep) => creep.friendly);
+    return { pokey, defenders };
+  };
+
+  it("sends a defender at a creep in range of the middle but not of the anchor", () => {
+    const { pokey, defenders } = battleOf(290);
+    expect(Math.hypot(pokey.ix, pokey.iy)).toBeGreaterThan(300);
+    expect(Math.hypot(pokey.ix - 45, pokey.iy - 45)).toBeLessThan(300);
+    expect(defenders).toHaveLength(1);
+  });
+
+  it("still sends nothing at a creep out of range of the middle", () => {
+    const { pokey, defenders } = battleOf(350);
+    expect(Math.hypot(pokey.ix - 45, pokey.iy - 45)).toBeGreaterThan(300);
+    expect(defenders).toHaveLength(0);
+  });
+});
+
 describe("flyers (issue #58)", () => {
   /**
    * A level 1 Cannon Tower (70 x 70 at 0,0) inside a closed ring of twenty
@@ -599,9 +698,9 @@ describe("the renderer's view of the field (issue #32, WP5)", () => {
     }
     const hits = events.filter((event) => event.kind === "hit");
     const hurts = events.filter((event) => event.kind === "hurt");
-    // The Pokey got nine swings in before it died, 60 a swing, on foot, at
+    // The Pokey got ten swings in before it died, 60 a swing, on foot, at
     // the tower it was standing on.
-    expect(hits).toHaveLength(9);
+    expect(hits).toHaveLength(10);
     for (const hit of hits) {
       if (hit.kind !== "hit") throw new Error("filtered");
       expect(hit.creepId).toBe(1);

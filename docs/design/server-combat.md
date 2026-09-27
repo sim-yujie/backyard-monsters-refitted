@@ -505,7 +505,7 @@ renderer, from the same inputs. Five rules, each checked by a test:
    (`:1139-1154`), the bunker interceptor pick (`HOUSINGBUNKER.as:444-451`), the Spurtz spawn roll
    (`SpurtzCannon.as:229`). Sound, particle and frame-offset randomness (`CreepBase.as:125`, `:945-955`)
    is not simulated.
-3. **No transcendental functions.** Spawn positions are drawn by rejection sampling inside the drop
+3. **No transcendental functions.** Spawn bearings are drawn by rejection sampling inside the unit
    circle with `sqrt` only; bearings are compared by cross products; distances use `sqrt`, which
    IEEE 754 rounds identically everywhere, unlike `sin`, `cos` and `atan2`, which engines may
    implement differently. `Math.floor` and integer ticks everywhere a value is stored.

@@ -158,7 +158,9 @@ describe("a sniper's bullet (#77)", () => {
 
   it("keeps a creep the bullet killed on screen until it lands, then splats it", () => {
     const { session, layer } = setUp([{ id: 1, t: 21, l: 1, X: 0, Y: 0 }]);
-    session.appendFling({ x: -150, y: -150, monsters: { C1: 1 } });
+    // Dropped off to the side, so the killing shot finds the Pokey still some
+    // way out and the bullet has a real flight to make.
+    session.appendFling({ x: -200, y: -100, monsters: { C1: 1 } });
 
     let killed = -1;
     for (let step = 0; step < 30 * TICKS_PER_SECOND && killed < 0; step += 1) {

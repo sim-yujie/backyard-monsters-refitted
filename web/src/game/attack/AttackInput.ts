@@ -337,8 +337,10 @@ const clamp = (value: number, low: number, high: number): number =>
  * scroll clamp kept the pointer over the 4000 x 2000 field. Here the grass
  * reaches a little further than the engine's grid does, so a tap on the far
  * outskirts is moved to the nearest point the creeps can walk from rather
- * than spawning them where `path()` gives up. `clearance` (yard units, the
- * radius the engine scatters a fling over) keeps the scatter on the grid too.
+ * than spawning them where `path()` gives up. `clearance` (yard units; the
+ * caller passes half the zone's size, more than a fling's scatter of
+ * `scatterRadius` screen pixels reaches along either yard axis, which is
+ * `sqrt 5 / 2` of it) keeps the scatter on the grid too.
  * The grid is laid over yard units, so the clamp is a plain box.
  */
 export const clampDropPoint = (point: Point, clearance = 0): Point => {

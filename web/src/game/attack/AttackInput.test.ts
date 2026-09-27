@@ -1,7 +1,19 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
-import { BOMBS, bombBlast, bombReaches, cellOf, TICKS_PER_SECOND } from "@/game/combat/rules";
+import {
+  BOMBS,
+  bombBlast,
+  bombReaches,
+  bucketCost,
+  buildEngineYard,
+  cellOf,
+  createBattle,
+  dropRadius,
+  scatterRadius,
+  screenPointOf,
+  TICKS_PER_SECOND,
+} from "@/game/combat/rules";
 import { Camera } from "@/game/Camera";
 import { readYard, type Yard } from "@/game/yard/yardModel";
 import { toIso } from "@/game/yard/YardGrid";
@@ -199,6 +211,25 @@ describe("overlap rule", () => {
       rx: 120,
       ry: 60,
     });
+  });
+
+  it("draws a fling's ring round every creep the engine lands (#91)", () => {
+    const yard = buildEngineYard({ buildingdata: {}, buildinghealthdata: {}, resources: {} });
+    // The floor, a middling payload and a full flinger (321 Pokeys, 2,247).
+    for (const pokeys of [1, 100, 321]) {
+      const monsters = { C1: pokeys };
+      const radius = dropRadius(bucketCost(monsters, {}));
+      const { rx, ry } = dropZoneOf({ kind: "fling" }, radius).ring;
+      // The scatter is a screen circle, so the ring's short half-axis bounds it.
+      expect(scatterRadius(bucketCost(monsters, {}))).toBeLessThan(ry);
+      const battle = createBattle(yard, { seed: pokeys });
+      battle.apply({ kind: "fling", t: 0, x: 100, y: -50, r: radius, monsters });
+      const centre = screenPointOf(100, -50);
+      for (const creep of battle.creeps()) {
+        const at = screenPointOf(creep.ix, creep.iy);
+        expect(((at.x - centre.x) / rx) ** 2 + ((at.y - centre.y) / ry) ** 2).toBeLessThan(1);
+      }
+    }
   });
 
   it("draws a putty bomb's ground circle as its screen ellipse", () => {
