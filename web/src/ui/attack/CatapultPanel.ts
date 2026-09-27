@@ -1,11 +1,10 @@
-import { bombsFor, type BombStats } from "@/game/combat/rules";
+import { BOMBS, type BombStats } from "@/game/combat/rules";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 
 /**
- * The Catapult: resource bombs, one tile per tier the attacker's catapult
- * unlocks (`docs/design/attack-flow.md` §F4, §4.4; `docs/specs/combat.md` §3
- * "Catapult (resource bombs)").
+ * The Catapult: resource bombs (`docs/design/attack-flow.md` §F4, §4.4;
+ * `docs/specs/combat.md` §3 "Catapult (resource bombs)").
  *
  * A docked panel in the same family as the army panel, not a hover bubble:
  * picking a bomb is the primary action, so it opens on a tap and works the
@@ -14,14 +13,30 @@ import { Panel } from "@/ui/Panel";
  * the point of the redesign (`combat.md:412-414` is the Flash behaviour it
  * replaces).
  *
- * Picking a tile arms it; the drop input raises the bomb's ring and the next
- * tap on the yard fires it. A bomb costs its `cost` out of the attacker's own
- * pool and marks every bomb of that resource used for the rest of the attack
- * (`ResourceBombs.as:301-315`), so at most one twig, one pebble and one putty
- * bomb go out. Putty bombs buff the attacker's own monsters, so they are only
- * offered while something is on the field (`ATTACK.as:254-265`), and the
- * engine applies no effect for them yet (`engine.ts` fidelity note 8), which
- * the tile says.
+ * ## One row per resource (issue #76)
+ *
+ * The first cut listed every tier as a tall tile, eleven of them at catapult
+ * level 3, and the panel scrolled on an ordinary desktop. A bomb is really two
+ * choices, which resource and how big, and only one bomb per resource can go
+ * out (`ResourceBombs.as:301-315`), so the panel is three compact rows —
+ * twigs, pebbles, putty — each with its tiers as a small segmented choice and
+ * one Arm button. The row says what the attacker has; each tier shows its
+ * cost; a tier the pool cannot pay for is greyed; a row the catapult has not
+ * unlocked yet stays visible, locked, with the level it needs. A blocked row
+ * says why in place of the bomb's effect, so every row is the same height.
+ *
+ * A row opens on the largest tier the attacker can afford that costs at most
+ * 2,000,000, which is how the Flash client picked its default bomb
+ * (`ResourceBombs.Setup`, `:237-245`): the two 5,000,000-plus tiers are never
+ * the default, so an Arm tap cannot spend ten million by accident. Choosing a
+ * tier while that row's bomb is armed re-arms the new size.
+ *
+ * Arming raises the bomb's ring; the next tap on the yard fires it. A bomb
+ * costs its `cost` out of the attacker's own pool and marks every bomb of that
+ * resource used for the rest of the attack. Putty bombs buff the attacker's
+ * own monsters, so they are only offered while something is on the field
+ * (`ATTACK.as:254-265`), and the engine applies no effect for them yet
+ * (`engine.ts` fidelity note 8), which the row says.
  */
 
 /** Twigs, pebbles, putty: the resources bombs are made of, in tier order. */
@@ -42,9 +57,22 @@ const BOMB_NAMES: Readonly<Record<string, string>> = {
   pu3: "Massive putty bomb",
 };
 
+/** The size word each tier's segment shows, in tier order. */
+const TIER_LABELS = ["Small", "Big", "Huge", "Massive"] as const;
+
+/** The most a pre-selected bomb may cost (`ResourceBombs.Setup`, `cost <= 2000000`). */
+export const DEFAULT_BOMB_COST_CAP = 2_000_000;
+
 export const bombName = (id: string): string => BOMB_NAMES[id] ?? id;
 
-/** What the panel needs to know to light or grey each tile. */
+/** A cost as the segment shows it: `10K`, `100K`, `2M`. */
+const shortCost = (value: number): string => {
+  if (value >= 1_000_000) return `${+(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${+(value / 1_000).toFixed(1)}K`;
+  return String(value);
+};
+
+/** What the panel needs to know to light or grey each row. */
 export interface CatapultView {
   /** The attacker's pool by resource, or null while unknown. */
   readonly pool: { readonly r1: number; readonly r2: number; readonly r3: number } | null;
@@ -59,21 +87,47 @@ export interface CatapultView {
 
 export interface CatapultPanelOptions {
   readonly catapultLevel: number;
-  /** A tile was pressed: arm this bomb, or un-arm with null. */
+  /** A bomb was armed, or un-armed with null. */
   readonly onPick: (bomb: BombStats | null) => void;
   readonly onClose?: () => void;
 }
 
-interface Tile {
+/**
+ * The tier a row opens on: the largest affordable one within the Flash
+ * default's cost cap, else the largest affordable one, else the smallest.
+ */
+export const defaultTier = (tiers: readonly BombStats[], have: number | null): BombStats => {
+  const affordable = tiers.filter((bomb) => have !== null && have >= bomb.cost);
+  const capped = affordable.filter((bomb) => bomb.cost <= DEFAULT_BOMB_COST_CAP);
+  return capped.at(-1) ?? affordable.at(-1) ?? tiers[0]!;
+};
+
+interface Segment {
   readonly bomb: BombStats;
   readonly button: HTMLButtonElement;
-  readonly note: HTMLElement;
 }
+
+interface Row {
+  readonly resource: number;
+  readonly tiers: readonly BombStats[];
+  readonly element: HTMLElement;
+  readonly have: HTMLElement;
+  readonly segments: readonly Segment[];
+  readonly arm: HTMLButtonElement;
+  readonly detail: HTMLElement;
+  /** The tier the player chose, or null for the default. */
+  chosen: string | null;
+}
+
+const poolOf = (view: CatapultView, resource: number): number | null => {
+  const pool = view.pool;
+  if (!pool) return null;
+  return resource === 1 ? pool.r1 : resource === 2 ? pool.r2 : pool.r3;
+};
 
 export class CatapultPanel {
   readonly panel: Panel;
-  private readonly tiles: Tile[] = [];
-  private readonly groups = new Map<number, HTMLElement>();
+  private readonly rows: Row[] = [];
   private readonly note: HTMLElement;
   private readonly options: CatapultPanelOptions;
   private view: CatapultView = { pool: null, used: new Set(), creepsAlive: 0, live: true, armed: null };
@@ -91,8 +145,7 @@ export class CatapultPanel {
     this.note = document.createElement("p");
     this.note.className = "attack-picker__note";
 
-    const bombs = bombsFor(options.catapultLevel);
-    if (options.catapultLevel <= 0 || bombs.length === 0) {
+    if (options.catapultLevel <= 0) {
       this.note.textContent = "You have no Catapult, so there are no bombs to fire.";
       body.append(this.note);
       return;
@@ -100,23 +153,12 @@ export class CatapultPanel {
 
     const lead = document.createElement("p");
     lead.className = "attack-picker__lead";
-    lead.textContent = "Pick a bomb, then tap the yard to fire it. One of each kind per attack.";
+    lead.textContent = "Pick a size, arm it, then tap the yard.";
     body.append(lead);
 
-    for (const bomb of bombs) {
-      let group = this.groups.get(bomb.resource);
-      if (!group) {
-        group = document.createElement("div");
-        group.className = "attack-picker__group";
-        group.dataset["resource"] = String(bomb.resource);
-        const legend = document.createElement("h3");
-        legend.className = "attack-picker__legend";
-        legend.textContent = RESOURCE_NAMES[bomb.resource] ?? `Resource ${bomb.resource}`;
-        group.append(legend);
-        body.append(group);
-        this.groups.set(bomb.resource, group);
-      }
-      group.append(this.buildTile(bomb));
+    for (const resource of [1, 2, 3]) {
+      const tiers = BOMBS.filter((bomb) => bomb.resource === resource);
+      if (tiers.length > 0) body.append(this.buildRow(resource, tiers));
     }
     body.append(this.note);
   }
@@ -131,7 +173,7 @@ export class CatapultPanel {
     return this;
   }
 
-  /** Re-reads what each tile may do. */
+  /** Re-reads what each row may do. */
   update(view: CatapultView): void {
     this.view = view;
     this.refresh();
@@ -145,81 +187,162 @@ export class CatapultPanel {
     this.panel.close();
   }
 
-  private buildTile(bomb: BombStats): HTMLElement {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "attack-picker__tile";
-    button.dataset["bomb"] = bomb.id;
-    button.setAttribute("aria-pressed", "false");
+  private buildRow(resource: number, tiers: readonly BombStats[]): HTMLElement {
+    const name = RESOURCE_NAMES[resource] ?? `Resource ${resource}`;
+    const element = document.createElement("section");
+    element.className = "attack-catapult__row";
+    element.dataset["resource"] = String(resource);
+    element.setAttribute("aria-label", `${name} bombs`);
 
-    const name = document.createElement("span");
-    name.className = "attack-picker__name";
-    name.textContent = bombName(bomb.id);
-
-    const effect = document.createElement("span");
-    effect.className = "attack-picker__effect";
-    if (bomb.damage > 0) {
-      effect.textContent = `${formatAmount(bomb.damage)} damage, radius ${bomb.radius}`;
-    } else {
-      effect.textContent = `Speeds your monsters up, radius ${bomb.radius}`;
+    const head = document.createElement("div");
+    head.className = "attack-catapult__head";
+    const title = document.createElement("h3");
+    title.className = "attack-catapult__resource";
+    title.textContent = name;
+    if (resource === 3) {
       const badge = document.createElement("span");
       badge.className = "attack-picker__badge";
       badge.textContent = "no effect yet";
       badge.title = "The battle engine does not apply putty bombs yet; the drop is still logged.";
-      effect.append(" ", badge);
+      title.append(" ", badge);
     }
+    const have = document.createElement("span");
+    have.className = "attack-catapult__have";
+    head.append(title, have);
 
-    const cost = document.createElement("span");
-    cost.className = "attack-picker__cost";
-    cost.textContent = `${formatAmount(bomb.cost)} ${RESOURCE_NAMES[bomb.resource]?.toLowerCase() ?? ""}`;
-
-    const note = document.createElement("span");
-    note.className = "attack-picker__tile-note";
-
-    button.append(name, effect, cost, note);
-    button.addEventListener("click", () => {
-      const armed = this.view.armed === bomb.id;
-      this.options.onPick(armed ? null : bomb);
+    const group = document.createElement("div");
+    group.className = "attack-catapult__tiers";
+    group.setAttribute("role", "group");
+    group.setAttribute("aria-label", `${name} bomb size`);
+    const segments: Segment[] = tiers.map((bomb, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "attack-catapult__tier";
+      button.dataset["bomb"] = bomb.id;
+      button.setAttribute("aria-pressed", "false");
+      const label = document.createElement("span");
+      label.className = "attack-catapult__tier-name";
+      label.textContent = TIER_LABELS[index] ?? bombName(bomb.id);
+      const cost = document.createElement("span");
+      cost.className = "attack-catapult__tier-cost";
+      cost.textContent = shortCost(bomb.cost);
+      button.append(label, cost);
+      button.addEventListener("click", () => this.choose(row, bomb));
+      group.append(button);
+      return { bomb, button };
     });
-    this.tiles.push({ bomb, button, note });
-    return button;
+
+    const foot = document.createElement("div");
+    foot.className = "attack-catapult__foot";
+    const detail = document.createElement("span");
+    detail.className = "attack-catapult__detail";
+    const arm = document.createElement("button");
+    arm.type = "button";
+    arm.className = "btn btn--primary attack-catapult__arm";
+    arm.dataset["arm"] = String(resource);
+    arm.setAttribute("aria-pressed", "false");
+    arm.addEventListener("click", () => this.toggleArm(row));
+    foot.append(detail, arm);
+
+    element.append(head, group, foot);
+    const row: Row = { resource, tiers, element, have, segments, arm, detail, chosen: null };
+    this.rows.push(row);
+    return element;
+  }
+
+  /** The tier a row is showing: the armed one, the player's pick, or the default. */
+  private selected(row: Row): BombStats {
+    const armed = row.tiers.find((bomb) => bomb.id === this.view.armed);
+    if (armed) return armed;
+    const chosen = row.tiers.find((bomb) => bomb.id === row.chosen);
+    return chosen ?? defaultTier(row.tiers, poolOf(this.view, row.resource));
+  }
+
+  /** Why nothing in the row can be armed right now, or "". */
+  private blocked(row: Row): string {
+    const need = row.tiers[0]!.catapultLevel;
+    if (!this.view.live) return "The attack is over.";
+    if (this.options.catapultLevel < need) return `Needs a level ${need} Catapult.`;
+    if (this.view.used.has(row.resource)) return "Already fired this attack.";
+    if (poolOf(this.view, row.resource) === null) return "Your resources could not be read.";
+    if (row.resource === 3 && this.view.creepsAlive <= 0) {
+      return "Ready once your monsters are on the field.";
+    }
+    return "";
+  }
+
+  private choose(row: Row, bomb: BombStats): void {
+    row.chosen = bomb.id;
+    const armedHere = row.tiers.some((tier) => tier.id === this.view.armed);
+    if (armedHere && this.view.armed !== bomb.id) {
+      this.options.onPick(bomb);
+      return;
+    }
+    this.refresh();
+  }
+
+  private toggleArm(row: Row): void {
+    const bomb = this.selected(row);
+    this.options.onPick(this.view.armed === bomb.id ? null : bomb);
   }
 
   private refresh(): void {
-    const { pool, used, creepsAlive, live, armed } = this.view;
-    let offered = 0;
-    for (const tile of this.tiles) {
-      const { bomb, button, note } = tile;
-      const putty = bomb.resource === 3;
-      const hidden = putty && creepsAlive <= 0;
-      button.hidden = hidden;
-      if (hidden) continue;
-      offered += 1;
+    const { armed } = this.view;
+    for (const row of this.rows) {
+      const have = poolOf(this.view, row.resource);
+      const why = this.blocked(row);
+      const unlocked = this.options.catapultLevel >= row.tiers[0]!.catapultLevel;
+      const bomb = this.selected(row);
+      const payable = have !== null && have >= bomb.cost;
 
-      const have = pool ? (bomb.resource === 1 ? pool.r1 : bomb.resource === 2 ? pool.r2 : pool.r3) : null;
-      let why = "";
-      if (!live) why = "The attack is over.";
-      else if (used.has(bomb.resource)) why = `${RESOURCE_NAMES[bomb.resource]} bomb already fired.`;
-      else if (have === null) why = "Your resources could not be read.";
-      else if (have < bomb.cost) why = `Not enough: you have ${formatAmount(have)}.`;
+      row.element.classList.toggle("attack-catapult__row--locked", !unlocked);
+      row.have.textContent = !unlocked
+        ? "Locked"
+        : have === null
+          ? ""
+          : `${formatAmount(have)} ${RESOURCE_NAMES[row.resource]?.toLowerCase() ?? ""}`;
 
-      button.disabled = why !== "";
-      note.textContent = why;
+      for (const segment of row.segments) {
+        const affordable = have !== null && have >= segment.bomb.cost;
+        segment.button.disabled = why !== "" || !affordable;
+        segment.button.title =
+          why !== ""
+            ? why
+            : affordable
+              ? bombName(segment.bomb.id)
+              : `${bombName(segment.bomb.id)}: costs ${formatAmount(segment.bomb.cost)}`;
+        const on = segment.bomb.id === bomb.id;
+        segment.button.setAttribute("aria-pressed", String(on));
+        segment.button.classList.toggle("attack-catapult__tier--on", on);
+      }
+
+      // Why the row cannot fire takes the effect's place, so a blocked row is
+      // no taller than an open one.
+      const block =
+        why !== "" ? why : payable ? "" : `Not enough: you have ${formatAmount(have ?? 0)}.`;
+      row.detail.textContent =
+        block !== ""
+          ? block
+          : bomb.damage > 0
+            ? `${shortCost(bomb.damage)} damage per building`
+            : "Speeds up your monsters";
+      row.detail.classList.toggle("attack-catapult__detail--blocked", block !== "");
+
       const isArmed = armed === bomb.id;
-      button.setAttribute("aria-pressed", String(isArmed));
-      button.classList.toggle("attack-picker__tile--armed", isArmed);
+      const usable = why === "" && payable;
+      row.arm.disabled = !usable && !isArmed;
+      row.arm.textContent = isArmed ? "Armed" : "Arm";
+      row.arm.title = isArmed
+        ? `${bombName(bomb.id)} armed: tap the yard to fire it. Esc cancels.`
+        : `${bombName(bomb.id)}, ${formatAmount(bomb.cost)} ${
+            RESOURCE_NAMES[row.resource]?.toLowerCase() ?? ""
+          }`;
+      row.arm.setAttribute("aria-pressed", String(isArmed));
+      row.arm.classList.toggle("attack-catapult__arm--armed", isArmed);
+      row.element.classList.toggle("attack-catapult__row--armed", isArmed);
     }
-    for (const [resource, group] of this.groups) {
-      group.hidden = resource === 3 && creepsAlive <= 0;
-    }
-    if (this.tiles.length === 0) return;
-    this.note.textContent =
-      offered === 0
-        ? "Nothing to fire right now."
-        : armed
-          ? `${bombName(armed)} armed: tap the yard to fire it. Esc cancels.`
-          : creepsAlive <= 0 && this.groups.has(3)
-            ? "Putty bombs appear once your monsters are on the field."
-            : "";
+    // Each row says why it cannot fire and the Arm button says "Armed", so the
+    // panel adds no line of its own: a line here would push the last row under
+    // the yard's minimap at 1366 x 768.
   }
 }

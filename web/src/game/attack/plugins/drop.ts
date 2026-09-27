@@ -172,6 +172,16 @@ const plugin: AttackPlugin = (mounts) => {
     return phase === "loaded" || phase === "running";
   };
 
+  /**
+   * A picker takes the Army panel's place while it is open (§7 layout table:
+   * "Docked right, replaces Army temporarily"), so the Catapult fits without
+   * the dock scrolling (#76). The bucket keeps its state underneath and comes
+   * back when the last picker closes.
+   */
+  const syncDockMode = (): void => {
+    sheet?.classList.toggle("attack-dock--picker", catapult !== null || siege !== null);
+  };
+
   const refreshPanels = (): void => {
     catapult?.update({
       pool,
@@ -198,10 +208,12 @@ const plugin: AttackPlugin = (mounts) => {
         catapult = null;
         catapultButton.setAttribute("aria-expanded", "false");
         if (armedBomb()) input.setTool(null);
+        syncDockMode();
         reportSheet();
       },
     }).mount(dock);
     catapultButton.setAttribute("aria-expanded", "true");
+    syncDockMode();
     refreshPanels();
     reportSheet();
   };
@@ -219,10 +231,12 @@ const plugin: AttackPlugin = (mounts) => {
         siege = null;
         siegeButton.setAttribute("aria-expanded", "false");
         if (armedSiege()) input.setTool(null);
+        syncDockMode();
         reportSheet();
       },
     }).mount(dock);
     siegeButton.setAttribute("aria-expanded", "true");
+    syncDockMode();
     refreshPanels();
     reportSheet();
   };
