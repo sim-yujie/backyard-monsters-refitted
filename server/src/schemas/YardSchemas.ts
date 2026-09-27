@@ -59,3 +59,36 @@ export const YardLockerSchema = z.object({});
 export const YardLockerMonsterSchema = z.object({
   monster: z.string().min(1).max(16),
 });
+
+/**
+ * The `hatchery` field of the hatchery routes: a hatchery's building id, or
+ * `hcc` for the Hatchery Control Centre's shared queue.
+ */
+export const HatcheryTargetField = z.union([z.literal("hcc"), BuildingIdField]);
+
+/**
+ * `POST /bm/yard/hatchery/add`: a target, a roster id such as `C5`, and how
+ * many (1..400, five level-3 hatcheries' worth). Only the shape; whether the
+ * monster is unlocked and the queue has room is the route's rule.
+ */
+export const YardHatcheryAddSchema = z.object({
+  hatchery: HatcheryTargetField,
+  monster: z.string().min(1).max(16),
+  count: z.coerce.number().int().min(1).max(400),
+});
+
+/**
+ * `POST /bm/yard/hatchery/remove`: a target, a slot (0 = the monster in
+ * production, n ≥ 1 = the n-th queue stack) and how many of it, or `all`
+ * (1 when absent).
+ */
+export const YardHatcheryRemoveSchema = z.object({
+  hatchery: HatcheryTargetField,
+  slot: z.coerce.number().int().min(0).max(16),
+  count: z.union([z.literal("all"), z.coerce.number().int().min(1)]).default(1),
+});
+
+/** `POST /bm/yard/hatchery/finish`: a hatchery, or `hcc` for everything the HCC feeds. */
+export const YardHatcheryFinishSchema = z.object({
+  hatchery: HatcheryTargetField,
+});

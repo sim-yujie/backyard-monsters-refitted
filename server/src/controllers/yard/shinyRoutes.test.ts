@@ -223,7 +223,7 @@ describe("POST /bm/yard/shop/buy", () => {
   });
 
   test("items off the allowlist are 400 notForSale", async () => {
-    for (const item of ["HOD", "PRO1", "MUSK", "toString", "__proto__"]) {
+    for (const item of ["HODI", "PRO1", "MUSK", "toString", "__proto__"]) {
       const answer = await call(yardShopBuyAction, { item });
       expect(answer).toMatchObject({ status: 400, body: { reason: "notForSale" } });
     }

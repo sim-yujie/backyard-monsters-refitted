@@ -1,5 +1,6 @@
 import { storeItems } from "../../game-data/store/storeItems.js";
 import { YardShopBuySchema } from "../../schemas/YardSchemas.js";
+import { overdriveGate } from "../../services/yard/hatchery.js";
 import { runningOrThrow } from "../../services/yard/locker.js";
 import { storeItemPrice } from "../../services/yard/shiny.js";
 import { yardBadRequestErr, yardRefusedErr } from "../../services/yard/yardErrors.js";
@@ -41,12 +42,19 @@ export interface ShopItemRule {
  *
  * Phase 2: `CLOD` (Monster Locker Overdrive, 60, four hours; the running
  * unlock counts down 5x while it lasts, `services/yard/catchUpLocker.ts`),
- * sold only while an unlock runs (`409 notUnlocking`), §4.3.
+ * sold only while an unlock runs (`409 notUnlocking`), §4.3. `HOD`, `HOD2`,
+ * `HOD3` (Hatchery Overdrive 4x / 6x / 10x, 30 / 50 / 100, one hour; one at a
+ * time, `409 alreadyActive` naming the running one) and `EXH` (Housing
+ * Expansion, 375, 24 hours, housing counts 1.25x), §4.4, §4.5.
  */
 export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
   BEW: {},
   BST: {},
   CLOD: { check: ({ save }) => void runningOrThrow(save) },
+  HOD: { check: ({ save, now }) => overdriveGate(save.storedata, now) },
+  HOD2: { check: ({ save, now }) => overdriveGate(save.storedata, now) },
+  HOD3: { check: ({ save, now }) => overdriveGate(save.storedata, now) },
+  EXH: {},
 };
 
 /** What the route sends back as `report`. */

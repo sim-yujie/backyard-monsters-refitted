@@ -599,6 +599,27 @@ New: Locker building (opens Unlock), row, Start = 3; from the HUD, Monsters, Unl
 A hatchery that is damaged or under construction still accepts queue changes (the original popup
 allowed it) but does not produce until repaired or built.
 
+**As built (WP2.4, issue #105).** `services/yard/hatchery.ts`, `controllers/yard/hatchery.ts`;
+contract in `docs/server-api.md` "Yard actions". Where it differs from or sharpens the table:
+
+- **Charges and refunds at the paid level** (§10 Q2): add charges `hatchCost(id, academy level)`
+  and stores that level on the stack; remove refunds it.
+- **Two stack rules, both original.** A hatchery merges into its *first* non-full stack of the
+  same monster (MH §5.2 step 4); the HCC merges only into its *last* stack
+  (`client/scripts/HATCHERYCCPOPUP.as:328-345`), so the shared queue stays in the order monsters
+  were added. Either way a stack merges only with one paid at the same level.
+- **A batch fills exactly as clicks did.** After each monster, an idle hatchery starts the head of
+  its queue, so an idle level 3 hatchery takes 81 (one in production, 80 queued); with an HCC,
+  idle hatcheries that can work (built, at least half health, as `_canFunction`) take from the
+  shared queue after each one. Goo is tested before the stack room, as `QueueAdd` did.
+- **Remove with an HCC:** `hcc` names the shared stacks; a hatchery id names only slot 0 (the ×
+  on its tile, `HATCHERYCCPOPUP.as:440-459`). `count` defaults to 1.
+- **Finish** refuses `busy` (hatchery being built), `damaged` (below half health; an HCC at 10 or
+  less) and `nothingToFinish` besides `housingFull`; with an HCC only `hcc` is accepted. Queued
+  monsters are priced at their whole hatch time; a monster already waiting for housing costs 0.
+- **Shop:** `HOD`/`HOD2`/`HOD3` are one stage at a time (any running one is `alreadyActive`);
+  `EXH` has no extra rule.
+
 **Clicks.**
 
 | Task | Flash (MH §12.4) | New |

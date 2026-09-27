@@ -1,4 +1,9 @@
 import type { KoaController } from "../../utils/KoaController.js";
+import {
+  yardHatcheryAddAction,
+  yardHatcheryFinishAction,
+  yardHatcheryRemoveAction,
+} from "./hatchery.js";
 import { yardInstantUpgradeAction } from "./instantUpgrade.js";
 import {
   yardLockerCancelAction,
@@ -37,4 +42,7 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "locker/cancel", controller: yardRoute(yardLockerCancelAction) },
   { path: "locker/finish", controller: yardRoute(yardLockerFinishAction) },
   { path: "locker/instant", controller: yardRoute(yardLockerInstantAction) },
+  { path: "hatchery/add", controller: yardRoute(yardHatcheryAddAction) },
+  { path: "hatchery/remove", controller: yardRoute(yardHatcheryRemoveAction) },
+  { path: "hatchery/finish", controller: yardRoute(yardHatcheryFinishAction) },
 ];
