@@ -1262,6 +1262,8 @@ export const MONSTER_PROPS: Readonly<Record<string, MonsterCombatStat>> = {
     },
   },
   C14: {
+    movement: "fly",
+    pathing: "direct",
     props: {
       speed: [2.5, 2.75, 3, 3.25, 3.5],
       health: [1600, 1900, 2400, 3000, 3600, 4200],
@@ -1274,6 +1276,8 @@ export const MONSTER_PROPS: Readonly<Record<string, MonsterCombatStat>> = {
     },
   },
   C15: {
+    movement: "fly",
+    pathing: "direct",
     props: {
       speed: [0.75, 0.8, 0.85, 0.9, 0.95],
       health: [8000],
@@ -1286,6 +1290,8 @@ export const MONSTER_PROPS: Readonly<Record<string, MonsterCombatStat>> = {
     },
   },
   C16: {
+    movement: "fly",
+    pathing: "direct",
     props: {
       speed: [1.5, 1.75, 2, 2.25, 2.5],
       health: [750],
@@ -1354,6 +1360,7 @@ export const MONSTER_PROPS: Readonly<Record<string, MonsterCombatStat>> = {
     },
   },
   IC3: {
+    movement: "jump",
     props: {
       speed: [3.2],
       health: [450, 470, 500, 540, 580, 620],
@@ -1364,6 +1371,8 @@ export const MONSTER_PROPS: Readonly<Record<string, MonsterCombatStat>> = {
     },
   },
   IC4: {
+    movement: "burrow",
+    pathing: "direct",
     props: {
       speed: [2, 2, 2, 2, 2, 2],
       health: [2000, 2400, 2800, 3200, 3600, 4000],
@@ -1374,6 +1383,8 @@ export const MONSTER_PROPS: Readonly<Record<string, MonsterCombatStat>> = {
     },
   },
   IC5: {
+    movement: "fly",
+    pathing: "direct",
     props: {
       speed: [4.5],
       health: [3200, 3600, 4000, 4500, 5000, 5600],
@@ -1405,6 +1416,8 @@ export const MONSTER_PROPS: Readonly<Record<string, MonsterCombatStat>> = {
     },
   },
   IC8: {
+    movement: "burrow",
+    pathing: "direct",
     props: {
       speed: [2.5, 2.6, 2.7, 2.8, 2.9, 3],
       health: [6200, 7600, 8700, 10900, 13100, 16000],

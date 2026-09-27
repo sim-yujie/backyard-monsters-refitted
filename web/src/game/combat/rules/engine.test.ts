@@ -203,6 +203,69 @@ describe("the flinger", () => {
   });
 });
 
+describe("flyers (issue #58)", () => {
+  /**
+   * A level 1 Cannon Tower (70 x 70 at 0,0) inside a closed ring of twenty
+   * walls (20 x 20 each). A flyer is sent straight at the tower with no route
+   * (`MonsterBase.as:1121`), so no wall is ever its target, and the Cannon,
+   * which has flyer mode 0 (`BTOWER.as:25-35`), may not shoot at it.
+   */
+  const ringed = (tower: number): CombatBuildingDataMap => {
+    const buildings: Record<string, CombatBuildingDataMap[string]> = {
+      "1": { id: 1, t: tower, l: 1, X: 0, Y: 0 },
+    };
+    let id = 2;
+    const wall = (X: number, Y: number) => {
+      buildings[String(id)] = { id, t: 17, X, Y };
+      id += 1;
+    };
+    for (let x = -20; x <= 80; x += 20) {
+      wall(x, -20);
+      wall(x, 80);
+    }
+    for (let y = 0; y <= 60; y += 20) {
+      wall(-20, y);
+      wall(80, y);
+    }
+    return buildings;
+  };
+
+  const attack = (tower: number, monsters: Record<string, number>) => {
+    const yard = yardOf(ringed(tower));
+    const battle = createBattle(yard, { seed: 5, playerLevel: 8 });
+    battle.apply({ kind: "fling", t: 0, x: -300, y: -300, r: 200, monsters });
+    return { yard, battle };
+  };
+
+  const wallsHurt = (yard: ReturnType<typeof yardOf>): number =>
+    yard.buildings.filter((one) => one.type === 17 && one.hp < one.maxHp).length;
+
+  it("puts Teratorn and Zafreeti in the air", () => {
+    const { battle } = attack(20, { C14: 1, C15: 1 });
+    run(battle, 5);
+    const creeps = battle.creeps();
+    expect(creeps).toHaveLength(2);
+    for (const creep of creeps) expect(creep.flying).toBe(true);
+  });
+
+  it("flies a Teratorn over the wall ring to the tower, and the Cannon never fires", () => {
+    const { yard, battle } = attack(20, { C14: 1 });
+    run(battle, 3000);
+    const tower = yard.buildings.find((one) => one.type === 20);
+    expect(tower!.hp).toBeLessThan(tower!.maxHp);
+    expect(wallsHurt(yard)).toBe(0);
+    expect(battle.state().towers[0]?.shots).toBe(0);
+  });
+
+  it("lets a Flak Tower, which shoots only flyers, bring a Teratorn down", () => {
+    const { battle } = attack(115, { C14: 1 });
+    run(battle, 6000);
+    const flak = battle.state().towers[0];
+    expect(flak?.shots).toBeGreaterThan(0);
+    expect(flak?.kills).toBe(1);
+  });
+});
+
 describe("the renderer's view of the field (issue #32, WP5)", () => {
   /** The determinism yard: a Pokey drop against a tower, a wall and a trap. */
   const scripted = () => {

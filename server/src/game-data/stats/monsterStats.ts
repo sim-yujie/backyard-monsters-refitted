@@ -376,6 +376,8 @@ export const monsterStats: MonsterStatsMap = {
       [16000000, 60 * 60 * 136],
       [24000000, 60 * 60 * 180],
     ],
+    movement: "fly",
+    pathing: "direct",
     props: {
       range: [150],
       attackDelay: [90],
@@ -402,6 +404,8 @@ export const monsterStats: MonsterStatsMap = {
       [12000000, 60 * 60 * 80],
       [18000000, 60 * 60 * 136],
     ],
+    movement: "fly",
+    pathing: "direct",
     props: {
       range: [150],
       attackDelay: [20],
@@ -429,6 +433,8 @@ export const monsterStats: MonsterStatsMap = {
       [768000, 60 * 60 * 60],
       [1024000, 60 * 60 * 72],
     ],
+    movement: "fly",
+    pathing: "direct",
     props: {
       range: [150],
       attackDelay: [10],
@@ -583,6 +589,7 @@ export const monsterStats: MonsterStatsMap = {
       [307200, 259200],
       [460800, 388800],
     ],
+    movement: "jump",
     props: {
       speed: [3.2],
       health: [450, 470, 500, 540, 580, 620],
@@ -608,6 +615,8 @@ export const monsterStats: MonsterStatsMap = {
       [153600, 259200],
       [230400, 388800],
     ],
+    movement: "burrow",
+    pathing: "direct",
     props: {
       speed: [2, 2, 2, 2, 2, 2],
       health: [2000, 2400, 2800, 3200, 3600, 4000],
@@ -633,6 +642,8 @@ export const monsterStats: MonsterStatsMap = {
       [2457600, 345600],
       [3686400, 518400],
     ],
+    movement: "fly",
+    pathing: "direct",
     props: {
       speed: [4.5],
       health: [3200, 3600, 4000, 4500, 5000, 5600],
@@ -709,6 +720,8 @@ export const monsterStats: MonsterStatsMap = {
       [13624000, 1036800],
       [19248000, 1555200],
     ],
+    movement: "burrow",
+    pathing: "direct",
     props: {
       speed: [2.5, 2.6, 2.7, 2.8, 2.9, 3],
       health: [6200, 7600, 8700, 10900, 13100, 16000],

@@ -380,6 +380,37 @@ const MONSTER_KEYS = [
   "resurrectCooldown",
 ];
 
+/**
+ * `movement` and `pathing` of one creature as `CREATURELOCKER.as` spells them,
+ * read from the entry's head (everything before its `"props"` block).
+ *
+ * The server table is copied rather than re-derived, but these two strings are
+ * what makes a creep fly, burrow or jump (`CreepBase.as:67`), and the server
+ * copy once lacked them for every flyer, so Teratorns walked (issue #58). The
+ * generator refuses to emit a table that disagrees with the Flash client.
+ */
+const LOCKER = readFileSync(resolve(SCRIPTS, "CREATURELOCKER.as"), "utf8");
+const flashMovement = (id) => {
+  const open = new RegExp(`"${id}"\\s*:\\s*\\{`).exec(LOCKER);
+  if (!open) throw new Error(`CREATURELOCKER.as has no "${id}" entry`);
+  const rest = LOCKER.slice(open.index);
+  const head = rest.slice(0, rest.indexOf('"props"'));
+  return {
+    movement: /"movement"\s*:\s*"([^"]*)"/.exec(head)?.[1],
+    pathing: /"pathing"\s*:\s*"([^"]*)"/.exec(head)?.[1],
+  };
+};
+
+for (const [id, stat] of Object.entries(monsterStats)) {
+  const flash = flashMovement(id);
+  if (flash.movement !== stat.movement || flash.pathing !== stat.pathing) {
+    throw new Error(
+      `monsterStats.${id} has movement ${stat.movement} / pathing ${stat.pathing}, ` +
+        `CREATURELOCKER.as says ${flash.movement} / ${flash.pathing}`,
+    );
+  }
+}
+
 const monsters = Object.entries(monsterStats).map(([id, stat]) => {
   const props = {};
   for (const key of MONSTER_KEYS) {

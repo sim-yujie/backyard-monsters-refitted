@@ -11,6 +11,8 @@ import {
   TOWER_STATS,
   TRAP_STATS,
 } from "./combatStatsData";
+import { monsterMovement } from "./stats";
+import { isFlyingMovement } from "./targeting";
 import { monsterStats } from "../../../../../server/src/game-data/stats/monsterStats";
 import { championStats } from "../../../../../server/src/game-data/stats/championStats";
 
@@ -38,6 +40,30 @@ import { championStats } from "../../../../../server/src/game-data/stats/champio
  * save, so every type in it is a type a live account can send us.
  */
 const FIXTURE = "../../../../test/fixtures/baseload-sandbox-yard.json";
+
+/**
+ * `movement` and `pathing` of every `CREATURELOCKER.as` entry, read from each
+ * entry's head (the text before its `"props"` block). Flash sets a creep's
+ * `_movement` from exactly this field (`CreepBase.as:67`).
+ */
+const LOCKER = "../../../../../client/scripts/CREATURELOCKER.as";
+
+const flashMovements = (): Record<string, { movement: string | undefined; pathing: string | undefined }> => {
+  const source = readFileSync(new URL(LOCKER, import.meta.url), "utf8");
+  const heads = [...source.matchAll(/"(I?C\d+)"\s*:\s*\{/g)];
+  const out: Record<string, { movement: string | undefined; pathing: string | undefined }> = {};
+  for (const hit of heads) {
+    const id = hit[1] as string;
+    if (out[id]) continue;
+    const rest = source.slice(hit.index);
+    const head = rest.slice(0, rest.indexOf('"props"'));
+    out[id] = {
+      movement: /"movement"\s*:\s*"([^"]*)"/.exec(head)?.[1],
+      pathing: /"pathing"\s*:\s*"([^"]*)"/.exec(head)?.[1],
+    };
+  }
+  return out;
+};
 
 const fixtureTypes = (): number[] => {
   const raw = JSON.parse(readFileSync(new URL(FIXTURE, import.meta.url), "utf8"));
@@ -216,6 +242,29 @@ describe("MONSTER_PROPS", () => {
       expect(stat.movement, `${id}.movement`).toEqual(source?.movement);
       expect(stat.pathing, `${id}.pathing`).toEqual(source?.pathing);
     }
+  });
+
+  it("moves every creature the way CREATURELOCKER.as says it moves (issue #58)", () => {
+    const flash = flashMovements();
+    expect(Object.keys(flash).length).toBeGreaterThan(20);
+    for (const id of Object.keys(MONSTER_PROPS)) {
+      expect(flash[id], `CREATURELOCKER.as has no ${id}`).toBeDefined();
+      expect(MONSTER_PROPS[id]?.movement, `${id}.movement`).toEqual(flash[id]?.movement);
+      expect(MONSTER_PROPS[id]?.pathing, `${id}.pathing`).toEqual(flash[id]?.pathing);
+    }
+  });
+
+  it("flags every Flash flyer as flying, and nothing else (issue #58)", () => {
+    const flash = flashMovements();
+    const flashFlyers = Object.keys(MONSTER_PROPS).filter((id) =>
+      isFlyingMovement(flash[id]?.movement),
+    );
+    // Teratorn, Zafreeti, Vorg and Balthazar.
+    expect(flashFlyers).toEqual(["C14", "C15", "C16", "IC5"]);
+    const flagged = Object.keys(MONSTER_PROPS).filter((id) =>
+      isFlyingMovement(monsterMovement(id)),
+    );
+    expect(flagged).toEqual(flashFlyers);
   });
 
   it("leaves the training and hatching ladders out", () => {
