@@ -103,6 +103,25 @@ describe("recycleBlock", () => {
   });
 });
 
+describe("a Monster Bunker's contents", () => {
+  it("are listed as lost with the bunker (BUILDING22.as:547-551, owner 2026-09-28)", () => {
+    const bunker = building(1, 22, { l: 2, m: { C1: 4, C5: 2 } });
+    const offer = recycleOffer(bunker, saveOf([bunker]), {}, null, NOW);
+    expect(offer.blocked).toBeNull();
+    expect(offer.bunkered).toEqual({ C1: 4, C5: 2 });
+    expect(offer.culled).toEqual({});
+  });
+
+  it("are empty for an empty bunker, a busy one and any other building", () => {
+    const empty = building(1, 22, { l: 1 });
+    expect(recycleOffer(empty, saveOf([empty]), {}, null, NOW).bunkered).toEqual({});
+    const busy = building(1, 22, { l: 1, cU: 60, m: { C1: 3 } });
+    expect(recycleOffer(busy, saveOf([busy]), {}, null, NOW).bunkered).toEqual({});
+    const housing = building(1, 15, { l: 1, m: { C1: 3 } });
+    expect(recycleOffer(housing, saveOf([housing]), {}, null, NOW).bunkered).toEqual({});
+  });
+});
+
 describe("housingCullPreview", () => {
   it("lists what the cull would remove once a Housing building is gone", () => {
     const housing = [building(1, 15, { l: 1 }), building(2, 15, { l: 1 })];

@@ -1,12 +1,14 @@
 import type { BaseLoadResponse, BuildingData, ResourceCaps, Resources, UpgradeCost } from "@/api/types";
+import { BUNKER_TYPE, bunkerContents } from "@/game/monsters/bunker";
 import { academyLevel, housingCapacity, HOUSING_TYPE } from "@/game/monsters/housing";
 import { housingSpace } from "@/game/monsters/monsterCatalogue";
 import { kindOf, rowOf, sumCosts, upgradeSteps } from "./buildingCosts";
 
 /**
  * Recycling on the client (`docs/design/yard-buildings.md` §5.4): whether a
- * building may be recycled now, what would come back, and the cull recycling
- * a Housing building would run, for the one confirmation the panel shows.
+ * building may be recycled now, what would come back, and the monsters it
+ * takes with it (the cull recycling a Housing building would run, or a Monster
+ * Bunker's contents), for the one confirmation the panel shows.
  *
  * The server's rules, for display (`server/src/services/yard/recycle.ts`):
  * half of every level's cost paid, floored per resource, under the storage cap
@@ -36,6 +38,12 @@ export interface RecycleOffer {
   readonly lost: UpgradeCost;
   /** Monsters the Housing cull would remove, per type; empty when none. */
   readonly culled: Readonly<Record<string, number>>;
+  /**
+   * A Monster Bunker's contents, per type: they go with the bunker, as in the
+   * original (`client/scripts/BUILDING22.as:547-551`; the server deletes the
+   * entry and its `m`). Empty for anything else, or an empty bunker.
+   */
+  readonly bunkered: Readonly<Record<string, number>>;
 }
 
 const TOWN_HALL_TYPE = 14;
@@ -251,5 +259,6 @@ export const recycleOffer = (
     refund,
     lost,
     culled: building.t === HOUSING_TYPE && !blocked ? housingCullPreview(save, building.id, now) : {},
+    bunkered: building.t === BUNKER_TYPE && !blocked ? bunkerContents(building) : {},
   };
 };

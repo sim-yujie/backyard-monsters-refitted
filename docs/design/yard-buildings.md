@@ -825,6 +825,12 @@ original's `Fund` did. A Housing cull runs in the same request. The panel's Recy
 storage for a decoration) sits at the foot of the actions, disabled with the reason where the
 server would refuse, and opens one inline confirmation; the Town Hall offers none.
 
+**Owner decision 2026-09-28:** a Monster Bunker's contents are lost with it, as in the original
+(`client/scripts/BUILDING22.as:547-551`: `RecycleC` drops the capacity to 0 and culls everything),
+so its confirmation lists them the way Housing lists its cull ("The monsters in this bunker go
+with it. These are lost: 4 × Pokey, 2 × Eye-ra."), and the notice after names them. The server
+already deletes them with the building entry (`buildingdata[id].m`).
+
 ### 5.5 Repair and repair all
 
 `POST /bm/yard/repair` `ids` or `all=1` sets `rE` on each damaged building (free, no worker, heals at

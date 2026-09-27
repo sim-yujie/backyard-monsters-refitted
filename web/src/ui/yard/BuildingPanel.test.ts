@@ -5,7 +5,7 @@ import type { YardApi } from "@/api/yard";
 import { YardStore, type YardUiBinding } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
-import { BuildingPanel, type BuildingPanelOptions } from "./BuildingPanel";
+import { BuildingPanel, recycledMessage, type BuildingPanelOptions } from "./BuildingPanel";
 
 /**
  * The panel as a player meets it: which buttons each building shows, what
@@ -373,6 +373,27 @@ describe("BuildingPanel: recycle", () => {
     expect(element.querySelector(".building-recycle__cull")?.textContent).toMatch(
       /^Your monsters will no longer fit\. These are lost: \d+ × /,
     );
+  });
+
+  it("lists a Monster Bunker's contents as lost before confirming", () => {
+    const { element } = setup([HALL, building(2, 22, 1, { m: { C1: 4, C5: 2 } })], 2);
+    buttonNamed(element, "Recycle")!.click();
+    expect(element.querySelector(".building-recycle__cull")?.textContent).toBe(
+      "The monsters in this bunker go with it. These are lost: 4 × Pokey, 2 × Eye-ra.",
+    );
+  });
+
+  it("says nothing about monsters for an empty bunker", () => {
+    const { element } = setup([HALL, building(2, 22, 1)], 2);
+    buttonNamed(element, "Recycle")!.click();
+    expect(element.querySelector(".building-recycle--confirming")).not.toBeNull();
+    expect(element.querySelector(".building-recycle__cull")).toBeNull();
+  });
+
+  it("names a bunker's lost monsters in the notice after recycling", () => {
+    const report = { id: 2, t: 22, refund: { r1: 10, r2: 0, r3: 0, r4: 0 }, lost: {}, stored: null, culled: {} };
+    const line = recycledMessage("Monster Bunker", report as never, { C1: 4 });
+    expect(spokenText(line)).toMatch(/Monster Bunker recycled for .*\. 4 × Pokey lost with it\.$/);
   });
 
   it("stores a decoration instead, and offers nothing on the Town Hall", () => {

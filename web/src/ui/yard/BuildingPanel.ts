@@ -716,12 +716,19 @@ export class BuildingPanel {
       warning.textContent = `Your monsters will no longer fit. These are lost: ${culled}.`;
       wrap.append(warning);
     }
+    const bunkered = cullText(offer.bunkered);
+    if (bunkered) {
+      const warning = document.createElement("p");
+      warning.className = "building-recycle__warning building-recycle__cull";
+      warning.textContent = `The monsters in this bunker go with it. These are lost: ${bunkered}.`;
+      wrap.append(warning);
+    }
 
     const row = document.createElement("div");
     row.className = "map-row";
     const confirm = actionButton(offer.toStorage ? "Yes, store it" : "Yes, recycle", () => {
       this.confirmingRecycle = null;
-      void this.runRecycle(building.id);
+      void this.runRecycle(building.id, offer.bunkered);
     });
     confirm.classList.add("btn--danger", "building-recycle__confirm");
     const keep = actionButton("Keep it", () => {
@@ -867,13 +874,13 @@ export class BuildingPanel {
    * scene closes this panel as the answer lands. A refusal stays on the
    * status line.
    */
-  private async runRecycle(id: number): Promise<void> {
+  private async runRecycle(id: number, bunkered: Readonly<Record<string, number>>): Promise<void> {
     const yard = this.yard;
     if (!yard) return;
     const name = this.building?.name ?? "Building";
     const result = await recycleAction(yard.store, id);
     if (result.ok) {
-      yard.notices.show("yard-recycle", recycledMessage(name, result.report), {
+      yard.notices.show("yard-recycle", recycledMessage(name, result.report, bunkered), {
         level: "info",
         timeoutMs: 6_000,
       });
@@ -1170,15 +1177,23 @@ const infoValue = (value: InfoValue): Node => {
     : document.createTextNode(text);
 };
 
-/** "3 × Pokey, 1 × Octo-ooze", or null for no cull. */
+/** "3 × Pokey, 1 × Octo-ooze", or null for none. */
 const cullText = (culled: Readonly<Record<string, number>>): string | null => {
   const entries = Object.entries(culled);
   if (entries.length === 0) return null;
   return entries.map(([id, count]) => `${count} × ${monsterEntry(id)?.name ?? id}`).join(", ");
 };
 
-/** What a recycle came to, for the notice: what came back, what was lost, what went to storage. */
-export const recycledMessage = (name: string, report: RecycleReport): HTMLElement => {
+/**
+ * What a recycle came to, for the notice: what came back, what was lost, what
+ * went to storage. `bunkered` is what a Monster Bunker held when the player
+ * confirmed: the server deletes it with the bunker and does not report it.
+ */
+export const recycledMessage = (
+  name: string,
+  report: RecycleReport,
+  bunkered: Readonly<Record<string, number>> = {},
+): HTMLElement => {
   const line = document.createElement("span");
   if (report.stored) {
     line.append(`${name} put in storage.`);
@@ -1192,6 +1207,8 @@ export const recycledMessage = (name: string, report: RecycleReport): HTMLElemen
   if (lost) line.append(" ", lost, " did not fit in storage.");
   const culled = cullText(report.culled);
   if (culled) line.append(` Housing shrank: ${culled} lost.`);
+  const emptied = cullText(bunkered);
+  if (emptied) line.append(` ${emptied} lost with it.`);
   return line;
 };
 
