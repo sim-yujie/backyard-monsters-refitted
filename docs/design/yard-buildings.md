@@ -255,7 +255,7 @@ and the Flinger/Catapult cache stops going stale.
 
 **Amounts and costs (D22).** The mock-ups in this document write "120,000 twigs" or "58 shiny" so
 they read as plain text. On screen, every amount and cost is drawn with the shared icon + amount
-helper from issue #93, never the resource word: panel costs, gate messages ("Need 🪨 40,000 more"),
+helper from issue #93, never the resource word: panel costs, gate messages ("Need [pebble icon] 40,000 more"),
 refunds in confirmations, hatch and unlock prices, Shiny buttons, notices and reports. WPs that
 build a screen import that helper and do not make their own.
 
@@ -1017,10 +1017,10 @@ From inventory §7.
 | # | Question | Default |
 | --- | --- | --- |
 | Q1 | D20 asks to extend the cost-table generator with tower stats, but the web already has generated per-level tower stats (`TOWER_STATS`, `web/src/game/combat/rules/combatStatsData.ts:50`, from `web/tools/gen-combat-stats.mjs`). | **Read `TOWER_STATS`** in the panel (WP1.5) instead of duplicating the numbers in the cost table; the server does not need them. If the owner still wants them in the cost table, WP1.5 adds a `stats` column in `gen-building-costs.mjs` for types 20, 21, 23, 25, 115, 118. |
-| Q2 | Hatchery refunds use the monster's price at its current academy level (original). Queue at level 1, train, then cancel refunds more goo than was paid. | **Keep the original.** A fix would store the paid level in each stack (`[id, count, level]`) and refund at that price; one line in WP2.4 if the owner wants it. |
-| Q3 | Banking more than the cap: the original lost the overflow. | **Leave the overflow in the buffer** (§5.1). Say no to keep the original loss. |
+| Q2 | Hatchery refunds used the monster's price at its current academy level in the original (queue at level 1, train, cancel → more goo back than paid). | **Owner 2026-09-27: refund what was paid.** Queue stacks store the paid price level (`[id, count, level]`; a stack merges only with a stack of the same level; old two-element stacks read as the current level once). WP2.4 implements it. |
+| Q3 | Banking more than the cap: the original lost the overflow. | **Owner 2026-09-27: leave the overflow in the buffer** (§5.1). |
 | Q4 | Upgrading a Housing building: does its capacity drop during the upgrade (and cull)? | **No**: the old level counts until the upgrade finishes (§4.5), matching the server's transfer rules. |
-| Q5 | Should the Baiter simulator use the player's academy levels for the attackers? | **No, level 1**, as the original's wild-monster attack did. |
+| Q5 | Should the Baiter simulator use the player's academy levels for the attackers? | **Owner 2026-09-27: the player chooses** — a toggle in the simulator between level 1 (the original's wild attack) and the player's own academy levels. WP6.1 implements it. |
 
 ---
 
@@ -1075,6 +1075,5 @@ issue for the bulk-add part.
 | Combat: Rezghul zombies, Slimeattikus splits, Vorg healing | Model the three abilities in the shared rules engine (`engine.ts` note 8) | should |
 | Combat: reduce defender bunker counts after an attack | Attack save writes bunker `m` from the battle's dispatch counts | should |
 | Transfers: drop the production allowance once catch-up runs first | Strict conservation in `transferRules.ts` | could |
-| Hatchery refunds at the paid price (if Q2 is answered yes) | Store the level in queue stacks | could |
 | Map Room 1 for players below Town Hall 6 | Separate project (D16) | backlog |
 | Fix BB §3 harvester labels and Locker TH text | Spec text only (§9 items 1–2) | could |
