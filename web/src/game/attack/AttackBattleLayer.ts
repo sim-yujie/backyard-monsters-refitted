@@ -14,7 +14,13 @@ import { depthKey, type Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import type { AttackSession } from "./AttackSession";
 import { BuildingBars } from "./buildingBars";
-import { CreepFx, HURT_TICKS, drawsProjectile, lungeOffset } from "./creepFx";
+import {
+  BUILDING_NUMBER_LIFT,
+  CreepFx,
+  HURT_TICKS,
+  drawsProjectile,
+  lungeOffset,
+} from "./creepFx";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
 import { TrapReveal } from "./trapReveal";
@@ -402,6 +408,8 @@ export interface BattleYardHost {
   setAnimFrame(id: number, layer: number, frame: number): void;
   /** Switches a building's hit flash on or off (#63); a host without one shows no flash. */
   flashBuilding?(id: number, on: boolean): void;
+  /** The camera's zoom, so damage numbers keep their size on screen (#68); 1 when absent. */
+  readonly zoom?: number;
 }
 
 export interface AttackBattleLayerOptions {
@@ -442,6 +450,8 @@ interface CreepView {
   lungeY: number;
   /** The tick the creep was last hurt, for the red tint (#68). */
   hurtTick: number;
+  /** Health at the last tick looked at: a rise is healing, shown green (#68). */
+  lastHp: number;
   /** World y of the top of the body as last drawn, for the numbers over it. */
   top: number;
 }
@@ -554,6 +564,7 @@ export class AttackBattleLayer {
       {
         creepAnchor: (id) => this.creepAnchor(id),
         flashBuilding: (id, on) => this.host.flashBuilding?.(id, on),
+        zoom: () => this.host.zoom ?? 1,
       },
       this.reducedMotion,
     );
@@ -731,6 +742,7 @@ export class AttackBattleLayer {
     view.lungeX = 0;
     view.lungeY = 0;
     view.hurtTick = Number.NEGATIVE_INFINITY;
+    view.lastHp = creep.hp;
     view.top = ground.y;
     view.body.visible = true;
     view.barBack.visible = true;
@@ -773,6 +785,7 @@ export class AttackBattleLayer {
       lungeX: 0,
       lungeY: 0,
       hurtTick: Number.NEGATIVE_INFINITY,
+      lastHp: 0,
       top: 0,
     };
   }
@@ -821,6 +834,15 @@ export class AttackBattleLayer {
           view.facedBuilding = creep.targetBuilding;
         }
       }
+      // Health that rose since the last tick is healing — a Zafreeti's — and
+      // shows green; losses come through the engine's "hurt" event instead,
+      // which knows the exact amount of each wound.
+      if (creep.hp > view.lastHp + 0.5) {
+        const gained = creep.hp - view.lastHp;
+        const over = { x: ground.x, y: view.top - 6 };
+        this.fx.number(tick, `creep:${creep.id}`, creep.id, gained, over, "heal");
+      }
+      view.lastHp = creep.hp;
       view.lastX = ground.x;
       view.lastY = ground.y;
       view.lastTick = tick;
@@ -944,7 +966,9 @@ export class AttackBattleLayer {
     if (drawsProjectile(monsterId, event.ranged)) {
       const altitude = event.flying ? flyerAltitude(monsterId) : 0;
       const from = { x: ground.x, y: ground.y - BODY_HEIGHT - altitude };
-      this.fx.projectile(event.tick, from, target, event.buildingId, view?.sheet?.family !== view?.sheet?.key);
+      const champion = view?.sheet ? view.sheet.family !== view.sheet.key : false;
+      // The number over the building lands with the shot.
+      this.fx.projectile(event.tick, from, target, event.buildingId, champion, event.amount);
       return;
     }
     if (view) {
@@ -956,15 +980,21 @@ export class AttackBattleLayer {
       view.lungeY = length > 0 ? dy / length : 0;
     }
     this.fx.flash(event.buildingId, event.tick);
+    // Flash showed the same red numbers on buildings (`BFOUNDATION.as:534`).
+    if (event.buildingId >= 0 && event.amount > 0) {
+      const over = { x: target.x, y: target.y - BUILDING_NUMBER_LIFT };
+      this.fx.number(event.tick, `building:${event.buildingId}`, -1, event.amount, over, "damage");
+    }
   }
 
   /** A creep lost health: tint it and float the number over it. */
   private onHurt(event: Extract<BattleVisualEvent, { kind: "hurt" }>): void {
     const view = this.views.get(event.creepId);
+    // `place` has already read this tick's health, so `lastHp` needs nothing here.
     if (view) view.hurtTick = event.tick;
     const ground = groundWorld(event.ix, event.iy, this.origin);
     const at = { x: ground.x, y: (view?.top ?? ground.y - BODY_HEIGHT) - 6 };
-    this.fx.hurt(event.tick, event.creepId, event.amount, at, event.friendly);
+    this.fx.number(event.tick, `creep:${event.creepId}`, event.creepId, event.amount, at, "damage");
   }
 
   /**

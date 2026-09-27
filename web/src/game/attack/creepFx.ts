@@ -52,14 +52,30 @@ export const FLASH_COOLDOWN_TICKS = 12;
 /** Ticks a hurt creep's body is tinted red. */
 export const HURT_TICKS = 6;
 
-/** Ticks a damage number lives: 0.6 s at 1x. */
-export const LABEL_TICKS = 48;
-/** World px a damage number rises over its life. */
-export const LABEL_RISE = 22;
-/** Damage numbers on screen at once; the oldest is recycled past this. */
-export const LABEL_POOL = 64;
-/** A wound within this many ticks of a creep's last number is added to it. */
-export const LABEL_MERGE_TICKS = 10;
+/**
+ * Damage numbers, as `ATTACK.damage` (`ATTACK.as:773-800`) and
+ * `ParticleDamageItem.as:24-45, :71-80` drew them: bold red over a dark
+ * outline, rising 25 px over half a second with a cubic ease-in-out, then
+ * gone; healing green with a plus. At most three per target within 400 ms —
+ * the second shifted right ten px a digit, the third left — and twenty alive
+ * at once (`ParticleText.as:14-31`).
+ */
+/** Ticks a number lives: 0.5 s at 1x. */
+export const LABEL_TICKS = 40;
+/** World px a number rises over its life. */
+export const LABEL_RISE = 25;
+/** Ticks over which a number fades at the end, so it does not pop off. */
+const LABEL_FADE_TICKS = 8;
+/** Numbers alive at once; a new one past this is not shown. */
+export const LABEL_MAX = 20;
+/** Numbers one target may show within `LABEL_WINDOW_TICKS`. */
+export const LABEL_PER_TARGET = 3;
+/** The window those are counted in: 400 ms at 1x. */
+export const LABEL_WINDOW_TICKS = 32;
+/** World px the second and third number of a target shift, per digit. */
+export const LABEL_DIGIT_SHIFT = 10;
+/** World px above a building's footprint middle its numbers start. */
+export const BUILDING_NUMBER_LIFT = 24;
 
 /** Ticks a smoke puff lives. */
 export const SMOKE_TICKS = 40;
@@ -74,8 +90,8 @@ const FIREBALL_CORE = 0xfff0a0;
 const FIREBALL_BODY = 0xff8c1a;
 const FIREBALL_TAIL = 0xd94a12;
 const SMOKE_COLOUR = 0x5a5a5a;
-const LABEL_COLOUR = 0xff5a5a;
-const LABEL_FRIENDLY_COLOUR = 0xffe680;
+const LABEL_COLOUR = 0xff0000;
+const LABEL_HEAL_COLOUR = 0x39d353;
 const LABEL_STROKE = 0x1a0a0a;
 
 /** The champions that stomp: a long reach in the stats, no projectile in Flash. */
@@ -101,10 +117,29 @@ export const flightPoint = (from: Point, to: Point, age: number): Point => {
   };
 };
 
-/** A damage number's rise and alpha at `age`: up steadily, fading in the second half. */
+/** Cubic ease-in-out, as Flash's `Cubic.easeInOut` tween. */
+const easeInOutCubic = (t: number): number =>
+  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+/**
+ * A number's rise and alpha at `age`: 25 px up with a cubic ease-in-out over
+ * its life (`ParticleDamageItem.as:71-80`), fully opaque until the last few
+ * ticks, when it fades rather than popping off.
+ */
 export const labelPose = (age: number): { rise: number; alpha: number } => {
   const t = Math.max(0, Math.min(1, age / LABEL_TICKS));
-  return { rise: t * LABEL_RISE, alpha: t < 0.5 ? 1 : 1 - (t - 0.5) * 2 };
+  const left = LABEL_TICKS - age;
+  return {
+    rise: easeInOutCubic(t) * LABEL_RISE,
+    alpha: left >= LABEL_FADE_TICKS ? 1 : Math.max(0, left / LABEL_FADE_TICKS),
+  };
+};
+
+/** Where a target's `index`-th number within the window sits sideways: 0, right, left. */
+export const labelShift = (index: number, digits: number): number => {
+  if (index === 1) return LABEL_DIGIT_SHIFT * digits;
+  if (index === 2) return -LABEL_DIGIT_SHIFT * digits;
+  return 0;
 };
 
 /** Whether a swing is drawn as a projectile: from range, and not a stomper. */
@@ -119,7 +154,12 @@ export interface CreepFxHost {
   creepAnchor(id: number): { readonly ground: Point; readonly top: number } | null;
   /** Switches a building's hit flash on or off. */
   flashBuilding(id: number, on: boolean): void;
+  /** The camera's zoom, so a number keeps its size on screen. */
+  zoom(): number;
 }
+
+/** What a number says: health lost in red, health gained in green with a plus. */
+export type NumberKind = "damage" | "heal";
 
 interface Projectile {
   readonly tick: number;
@@ -128,6 +168,8 @@ interface Projectile {
   /** The building to flash when it lands, or -1. */
   readonly buildingId: number;
   readonly big: boolean;
+  /** Health the swing took off, shown over the building when it lands. */
+  readonly amount: number;
   landed: boolean;
 }
 
@@ -148,10 +190,15 @@ interface Stream {
 
 interface Label {
   readonly text: Text;
-  creepId: number;
+  /** The target it counts against: `creep:5`, `building:12`. */
+  key: string;
+  /** The creep it follows, or -1 for a number fixed where it was made. */
+  follow: number;
   bornTick: number;
   amount: number;
-  /** Where it was last drawn, for after the creep is gone. */
+  /** Sideways shift for the second and third number of a target. */
+  shiftX: number;
+  /** Where it was last anchored, for after the creep is gone. */
   x: number;
   y: number;
 }
@@ -171,7 +218,8 @@ export class CreepFx {
   private readonly flashStarted = new Map<number, number>();
   private readonly active: Label[] = [];
   private readonly labelPool: Label[] = [];
-  private readonly labelByCreep = new Map<number, Label>();
+  /** Live numbers per target, oldest first, for the per-target cap and shifts. */
+  private readonly labelsByKey = new Map<string, Label[]>();
   private tick = 0;
   private poofs = 0;
 
@@ -185,9 +233,19 @@ export class CreepFx {
 
   /* ── Adding ─────────────────────────────────────────────────────────── */
 
-  /** A projectile from a monster's body to a target, flashing `buildingId` on arrival. */
-  projectile(tick: number, from: Point, to: Point, buildingId: number, big: boolean): void {
-    this.projectiles.push({ tick, from, to, buildingId, big, landed: false });
+  /**
+   * A projectile from a monster's body to a target. On arrival it flashes
+   * `buildingId` and shows `amount` over it, so the number lands with the shot.
+   */
+  projectile(
+    tick: number,
+    from: Point,
+    to: Point,
+    buildingId: number,
+    big: boolean,
+    amount = 0,
+  ): void {
+    this.projectiles.push({ tick, from, to, buildingId, big, amount, landed: false });
   }
 
   /** Flashes a building for `FLASH_TICKS`, unless it flashed a moment ago. */
@@ -222,28 +280,35 @@ export class CreepFx {
     }
   }
 
-  /** A wound on a creep: a number over it, merged into a very recent one. */
-  hurt(tick: number, creepId: number, amount: number, at: Point, friendly: boolean): void {
-    const shown = Math.max(1, Math.round(amount));
-    const recent = this.labelByCreep.get(creepId);
-    if (recent && tick - recent.bornTick < LABEL_MERGE_TICKS) {
-      recent.amount += shown;
-      recent.text.text = String(recent.amount);
-      return;
-    }
+  /**
+   * A number over a target: health a creep or building lost, or health a
+   * creep gained. `key` names the target for the per-target cap; `follow` is
+   * the creep the number rides on, or -1 to stay where it was made. A fourth
+   * number for one target inside the window, or a twenty-first anywhere, is
+   * not shown, as Flash dropped them.
+   */
+  number(tick: number, key: string, follow: number, amount: number, at: Point, kind: NumberKind): void {
+    const shown = Math.max(1, Math.round(Math.abs(amount)));
+    const siblings = (this.labelsByKey.get(key) ?? []).filter(
+      (label) => tick - label.bornTick < LABEL_WINDOW_TICKS,
+    );
+    if (siblings.length >= LABEL_PER_TARGET) return;
     const label = this.acquireLabel();
-    label.creepId = creepId;
+    if (!label) return;
+    label.key = key;
+    label.follow = follow;
     label.bornTick = tick;
-    label.amount = shown;
+    label.amount = kind === "heal" ? shown : -shown;
+    label.shiftX = labelShift(siblings.length, String(shown).length);
     label.x = at.x;
     label.y = at.y;
-    label.text.text = String(shown);
-    label.text.style.fill = friendly ? LABEL_FRIENDLY_COLOUR : LABEL_COLOUR;
+    label.text.text = kind === "heal" ? `+${shown}` : String(shown);
+    label.text.style.fill = kind === "heal" ? LABEL_HEAL_COLOUR : LABEL_COLOUR;
     label.text.visible = true;
     label.text.alpha = 1;
-    label.text.position.set(Math.round(at.x), Math.round(at.y));
+    label.text.position.set(Math.round(at.x + label.shiftX), Math.round(at.y));
     this.active.push(label);
-    this.labelByCreep.set(creepId, label);
+    this.labelsByKey.set(key, [...siblings, label]);
   }
 
   /* ── Frame ──────────────────────────────────────────────────────────── */
@@ -267,7 +332,7 @@ export class CreepFx {
     this.streams.length = 0;
     this.active.length = 0;
     this.labelPool.length = 0;
-    this.labelByCreep.clear();
+    this.labelsByKey.clear();
     this.root.destroy({ children: true });
   }
 
@@ -299,11 +364,14 @@ export class CreepFx {
     return [...this.flashUntil.keys()];
   }
 
-  /** The number a creep is showing, or null. */
-  labelFor(creepId: number): { amount: number; x: number; y: number } | null {
-    const label = this.labelByCreep.get(creepId);
-    if (!label || tickAge(this.tick, label.bornTick) > LABEL_TICKS) return null;
-    return { amount: label.amount, x: label.text.x, y: label.text.y };
+  /**
+   * The numbers a target is showing, oldest first: negative for damage,
+   * positive for healing, with where each is drawn.
+   */
+  labelsFor(key: string): Array<{ amount: number; x: number; y: number }> {
+    return (this.labelsByKey.get(key) ?? [])
+      .filter((label) => tickAge(this.tick, label.bornTick) <= LABEL_TICKS)
+      .map((label) => ({ amount: label.amount, x: label.text.x, y: label.text.y }));
   }
 
   /* ── Projectiles ────────────────────────────────────────────────────── */
@@ -320,6 +388,10 @@ export class CreepFx {
       if (age >= PROJECTILE_TICKS && !shot.landed) {
         shot.landed = true;
         this.flash(shot.buildingId, tick);
+        if (shot.buildingId >= 0 && shot.amount > 0) {
+          const over = { x: shot.to.x, y: shot.to.y - BUILDING_NUMBER_LIFT };
+          this.number(tick, `building:${shot.buildingId}`, -1, shot.amount, over, "damage");
+        }
       }
       const radius = shot.big ? 6 : 4.5;
       if (age < PROJECTILE_TICKS) {
@@ -409,21 +481,10 @@ export class CreepFx {
 
   /* ── Damage numbers ─────────────────────────────────────────────────── */
 
-  private acquireLabel(): Label {
+  private acquireLabel(): Label | null {
+    if (this.active.length >= LABEL_MAX) return null;
     const pooled = this.labelPool.pop();
     if (pooled) return pooled;
-    if (this.active.length >= LABEL_POOL) {
-      // Past the cap the oldest number goes early rather than a new one being made.
-      let oldest = 0;
-      for (let index = 1; index < this.active.length; index += 1) {
-        if ((this.active[index] as Label).bornTick < (this.active[oldest] as Label).bornTick) {
-          oldest = index;
-        }
-      }
-      const [label] = this.active.splice(oldest, 1) as [Label];
-      this.forget(label);
-      return label;
-    }
     const text = new Text({
       text: "",
       style: {
@@ -437,14 +498,20 @@ export class CreepFx {
     text.anchor.set(0.5, 1);
     text.eventMode = "none";
     this.labels.addChild(text);
-    return { text, creepId: -1, bornTick: 0, amount: 0, x: 0, y: 0 };
+    return { text, key: "", follow: -1, bornTick: 0, amount: 0, shiftX: 0, x: 0, y: 0 };
   }
 
   private forget(label: Label): void {
-    if (this.labelByCreep.get(label.creepId) === label) this.labelByCreep.delete(label.creepId);
+    const list = this.labelsByKey.get(label.key);
+    if (!list) return;
+    const rest = list.filter((other) => other !== label);
+    if (rest.length === 0) this.labelsByKey.delete(label.key);
+    else this.labelsByKey.set(label.key, rest);
   }
 
   private drawLabels(tick: number): void {
+    const zoom = this.host.zoom();
+    const scale = zoom > 0 ? 1 / zoom : 1;
     let keep = 0;
     for (const label of this.active) {
       const age = tick - label.bornTick;
@@ -456,14 +523,18 @@ export class CreepFx {
       }
       this.active[keep] = label;
       keep += 1;
-      const anchor = this.host.creepAnchor(label.creepId);
+      const anchor = label.follow >= 0 ? this.host.creepAnchor(label.follow) : null;
       if (anchor) {
         label.x = anchor.ground.x;
         label.y = anchor.top - 6;
       }
       const pose = labelPose(age);
       const rise = this.reducedMotion ? 0 : pose.rise;
-      label.text.position.set(Math.round(label.x), Math.round(label.y - rise));
+      label.text.scale.set(scale);
+      label.text.position.set(
+        Math.round(label.x + label.shiftX * scale),
+        Math.round(label.y - rise),
+      );
       label.text.alpha = pose.alpha;
     }
     this.active.length = keep;

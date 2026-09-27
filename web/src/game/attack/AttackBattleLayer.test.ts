@@ -327,6 +327,7 @@ const hostOf = (): Host => {
     setConcealed: () => {},
     setAnimFrame: () => {},
     flashBuilding: (id, on) => flashes.push({ id, on }),
+    zoom: 1,
   };
 };
 
@@ -567,6 +568,8 @@ describe("hits, wounds and steady walking", () => {
     });
     expect(lunged).toBe(true);
     expect(host.flashes[0]).toEqual({ id: 1, on: true });
+    // Flash numbered buildings too: a Pokey's swing is 60.
+    expect(layer.creepEffects.labelsFor("building:1")[0]?.amount).toBe(-60);
     // A few frames on, the flash has been switched off again.
     playUntil(session, 0.2, layer, () => false);
     expect(host.flashes.some((flash) => !flash.on)).toBe(true);
@@ -595,10 +598,20 @@ describe("hits, wounds and steady walking", () => {
       return layer.creepEffects.labelCount > 0 && tinted;
     });
     expect(hurt).toBe(true);
-    // A level 1 Cannon Tower does 20 a shot.
-    expect(layer.creepEffects.labelFor(1)?.amount).toBe(20);
+    // A level 1 Cannon Tower does 20 a shot, shown as a loss.
+    expect(layer.creepEffects.labelsFor("creep:1")[0]?.amount).toBe(-20);
     // And the tint clears again once the wound is old.
     playUntil(session, 0.3, layer, () => false);
+    layer.destroy();
+  });
+
+  it("shows nothing over a creep that has only just landed (#68)", async () => {
+    const { session, layer } = setUp();
+    session.appendFling({ x: -100, y: -100, monsters: { C1: 3 } });
+    await flush();
+    layer.update();
+    expect(layer.creepCount).toBe(3);
+    expect(layer.creepEffects.labelCount).toBe(0);
     layer.destroy();
   });
 
