@@ -6,6 +6,7 @@ import {
   GRID_COST_FORMULA,
   MONSTER_PROPS,
   MR2_CAPACITY,
+  PROPS_SIZE,
   TOWER_STATS,
   TRAP_STATS,
 } from "./combatStatsData.js";
@@ -526,7 +527,16 @@ export interface BombStats {
   readonly damage: number;
   /** The fraction a putty bomb takes off a creep's speed. */
   readonly damageMult?: number;
+  /**
+   * `_size` of the blast, in isometric pixels. Despite the name it is a full
+   * width, not a radius: see {@link bombBlast}.
+   */
   readonly radius: number;
+  /**
+   * How many pieces rain down. Each one deals `damage / particles` to every
+   * building the blast reaches (`ResourceBomb.as`, `dpp`).
+   */
+  readonly particles: number;
   /** What firing it costs the attacker, out of the same resource. */
   readonly cost: number;
   /** The catapult level that unlocks this tier. */
@@ -547,33 +557,40 @@ export interface BombStats {
  */
 export const BOMBS: readonly BombStats[] = [
   // :49
-  { id: "tw0", resource: 1, damage: 2200, radius: 200, cost: 10_000, catapultLevel: 1 },
+  { id: "tw0", resource: 1, damage: 2200, radius: 200, particles: 200,
+    cost: 10_000, catapultLevel: 1 },
   // :64
-  { id: "tw1", resource: 1, damage: 7000, radius: 200, cost: 100_000, catapultLevel: 1 },
+  { id: "tw1", resource: 1, damage: 7000, radius: 200, particles: 200,
+    cost: 100_000, catapultLevel: 1 },
   // :79
-  { id: "tw2", resource: 1, damage: 50_000, radius: 200, cost: 5_000_000, catapultLevel: 1 },
+  { id: "tw2", resource: 1, damage: 50_000, radius: 200, particles: 200,
+    cost: 5_000_000, catapultLevel: 1 },
   // :94
-  { id: "pb0", resource: 2, damage: 2400, radius: 200, cost: 10_000, catapultLevel: 2 },
+  { id: "pb0", resource: 2, damage: 2400, radius: 200, particles: 200,
+    cost: 10_000, catapultLevel: 2 },
   // :109
-  { id: "pb1", resource: 2, damage: 9000, radius: 300, cost: 100_000, catapultLevel: 2 },
+  { id: "pb1", resource: 2, damage: 9000, radius: 300, particles: 200,
+    cost: 100_000, catapultLevel: 2 },
   // :124
-  { id: "pb2", resource: 2, damage: 30_000, radius: 350, cost: 2_000_000, catapultLevel: 2 },
+  { id: "pb2", resource: 2, damage: 30_000, radius: 350, particles: 200,
+    cost: 2_000_000, catapultLevel: 2 },
   // :139
-  { id: "pb3", resource: 2, damage: 75_000, radius: 400, cost: 10_000_000, catapultLevel: 2 },
+  { id: "pb3", resource: 2, damage: 75_000, radius: 400, particles: 200,
+    cost: 10_000_000, catapultLevel: 2 },
   // Putty bombs deal no damage: `damageMult` is what they take off a creep's
   // speed, so none of them reaches the damage bound of §2.3.
   // :154
-  { id: "pu0", resource: 3, damage: 0, radius: 150, cost: 10_000, catapultLevel: 3,
-    damageMult: 0.2 },
+  { id: "pu0", resource: 3, damage: 0, radius: 150, particles: 25,
+    cost: 10_000, catapultLevel: 3, damageMult: 0.2 },
   // :172
-  { id: "pu1", resource: 3, damage: 0, radius: 150, cost: 100_000, catapultLevel: 3,
-    damageMult: 0.4 },
+  { id: "pu1", resource: 3, damage: 0, radius: 150, particles: 37,
+    cost: 100_000, catapultLevel: 3, damageMult: 0.4 },
   // :190
-  { id: "pu2", resource: 3, damage: 0, radius: 300, cost: 5_000_000, catapultLevel: 3,
-    damageMult: 0.7 },
+  { id: "pu2", resource: 3, damage: 0, radius: 300, particles: 43,
+    cost: 5_000_000, catapultLevel: 3, damageMult: 0.7 },
   // :208
-  { id: "pu3", resource: 3, damage: 0, radius: 500, cost: 10_000_000, catapultLevel: 3,
-    damageMult: 0.9 },
+  { id: "pu3", resource: 3, damage: 0, radius: 500, particles: 50,
+    cost: 10_000_000, catapultLevel: 3, damageMult: 0.9 },
 ];
 
 /** The bombs a catapult at `catapultLevel` can fire. */
@@ -605,3 +622,124 @@ export const maxBombSpend = (resource: number, catapultLevel: number): number =>
   bombsFor(catapultLevel)
     .filter((bomb) => bomb.resource === resource)
     .reduce((most, bomb) => Math.max(most, bomb.cost), 0);
+
+/* ── The blast ────────────────────────────────────────────────────────────── */
+
+/**
+ * `BASE._angle`: how much the client squashes every ellipse it stands in for
+ * something on the ground (`client/scripts/BASE.as:331`).
+ */
+export const ELLIPSE_SQUASH = 0.8;
+
+/** An ellipse by its two semi-axes, in isometric pixels. */
+export interface Ellipse {
+  /** Half the width. */
+  readonly rx: number;
+  /** Half the height. */
+  readonly ry: number;
+}
+
+/**
+ * The ellipse `BASE.EllipseEdgeDistanceSqrd(angle, width, width * _angle)`
+ * describes (`BASE.as:5008-5019`). Both of its size parameters are declared
+ * `int`, so the width and the squashed height each truncate before halving.
+ */
+export const squashedEllipse = (width: number): Ellipse => ({
+  rx: Math.trunc(width) / 2,
+  ry: Math.trunc(width * ELLIPSE_SQUASH) / 2,
+});
+
+/**
+ * The area a damage bomb hits, centred where it lands.
+ *
+ * `ResourceBomb` hands `EllipseEdgeDistanceSqrd` the bomb's `radius` as the
+ * ellipse's full width (`com/monsters/effects/ResourceBomb.as`, the
+ * constructor), so the blast reaches `radius / 2` either side and
+ * `radius * 0.4` above and below: the "radius" is a diameter. This is the one
+ * figure the engine's hit test and the attack screen's drop ring both read, so
+ * the ring the player aims with is the blast they get.
+ */
+export const bombBlast = (bomb: BombStats): Ellipse => squashedEllipse(bomb.radius);
+
+/**
+ * How far a putty bomb reaches, in yard units: a circle of half its `radius`
+ * around the drop, measured on the ground (`ResourceBomb.as`, the creep loop's
+ * `size * 0.5` against `PATHING.FromISO` positions).
+ */
+export const puttyReach = (bomb: BombStats): number => bomb.radius / 2;
+
+/** The props `size` of a type; 0 when its entry has none (`_size` is an `int`). */
+export const propsSizeOf = (type: number): number => PROPS_SIZE[type] ?? 0;
+
+/**
+ * The squared distance from an ellipse's centre to its edge along `(dx, dy)`.
+ *
+ * `EllipseEdgeDistanceSqrd` gets there with `atan2`, `tan` and `pow`; this is
+ * the same quantity in plain arithmetic, `d² a² b² / (dx² b² + dy² a²)`, because
+ * the transcendental functions are not guaranteed to round alike in V8 and in
+ * Bun and the result decides which buildings a bomb hits. At the centre the
+ * client's `atan2(0, 0)` is 0, which reads the horizontal semi-axis.
+ */
+export const ellipseEdgeSquared = (ellipse: Ellipse, dx: number, dy: number): number => {
+  const a2 = ellipse.rx * ellipse.rx;
+  const b2 = ellipse.ry * ellipse.ry;
+  if (a2 <= 0 || b2 <= 0) return 0;
+  const along = dx * dx + dy * dy;
+  if (along === 0) return a2;
+  return (along * a2 * b2) / (dx * dx * b2 + dy * dy * a2);
+};
+
+/**
+ * Whether a damage bomb reaches a building, `(dx, dy)` apart in isometric
+ * pixels from the blast's centre to the building's (`_mc.y + _middle`).
+ *
+ * The client stands in an ellipse `size * 0.5` wide for the building and tests
+ * the squared distance against the sum of the two squared edge distances,
+ * which is what `d⁴ < (e₁ + e₂)²` comes to (`ResourceBomb.as`). A building is
+ * therefore hit a little outside the blast ellipse, by less than its own
+ * half-size.
+ */
+export const bombReaches = (
+  bomb: BombStats,
+  dx: number,
+  dy: number,
+  buildingSize: number,
+): boolean => {
+  const apart = dx * dx + dy * dy;
+  const reach =
+    ellipseEdgeSquared(bombBlast(bomb), dx, dy) +
+    ellipseEdgeSquared(squashedEllipse(buildingSize * 0.5), dx, dy);
+  return apart < reach;
+};
+
+/**
+ * What one particle of a damage bomb takes off one building, before
+ * fortification (`ResourceBomb.Damage`).
+ *
+ * Every particle hits every building the blast reached for the same share,
+ * `int(damage / particles)`: the client meant to scale it by distance, but the
+ * `dist` it scales by is a field nothing ever assigns, so the factor is always
+ * 1 and there is no falloff. A Storage Silo takes the share times its level,
+ * a wall 6% of it and a tower 90%, each truncated to an integer the way the
+ * client's `int` local truncates. A jarred tower other than a bunker and the
+ * Champion Cage take nothing.
+ */
+export const bombParticleDamage = (
+  bomb: BombStats,
+  target: {
+    readonly type: number;
+    readonly level: number;
+    readonly kind: string;
+    readonly jarred?: boolean;
+  },
+): number => {
+  const share = Math.trunc(bomb.damage / bomb.particles);
+  let dealt = target.type === 6 ? share * target.level : share;
+  if (target.kind === "wall") dealt = Math.trunc(dealt * 0.06);
+  if (target.kind === "tower") {
+    dealt = Math.trunc(dealt * 0.9);
+    if (target.type !== 22 && target.type !== 128 && target.jarred) dealt = 0;
+  }
+  if (target.type === 114) dealt = 0;
+  return dealt;
+};

@@ -589,6 +589,14 @@ const championRows = champions
   )
   .join("\n");
 
+const sizeRows = pack(
+  entries
+    .filter((entry) => entry.size > 0)
+    .sort((a, b) => a.id - b.id)
+    .map((entry) => `${entry.id}: ${entry.size},`),
+  "  ",
+);
+
 const towerKeys = [...new Set(towers.flatMap((one) => one.levels.flatMap(Object.keys)))];
 
 const body = `/**
@@ -729,6 +737,20 @@ export interface GridCostFormula {
  */
 export const GRID_COST_FORMULA: Readonly<Record<number, GridCostFormula>> = {
   ${WALL_GRID_FORMULA.id}: { rect: ${WALL_GRID_FORMULA.rect}, base: ${WALL_GRID_FORMULA.base}, perLevel: ${WALL_GRID_FORMULA.perLevel} },
+};
+
+/**
+ * Every type's props \`size\`, which the client keeps as \`BFOUNDATION._size\`
+ * (\`client/scripts/BFOUNDATION.as:659\`).
+ *
+ * A build-menu size class for most buildings, but also the width of the
+ * ellipse the client stands in for a building's body whenever it asks whether
+ * a blast reaches it: a resource bomb (\`ResourceBomb.as\`) and a drop zone's
+ * overlap test (\`BASE.BuildingOverlap\`, \`BASE.as:4964-4993\`) both do. A type
+ * absent from the table has no \`size\` in its props entry.
+ */
+export const PROPS_SIZE: Readonly<Record<number, number>> = {
+${sizeRows}
 };
 
 /**

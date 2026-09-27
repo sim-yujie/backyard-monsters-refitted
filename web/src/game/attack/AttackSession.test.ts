@@ -271,9 +271,11 @@ describe("AttackSession events and the fling log", () => {
     const session = sessionOf();
     session.start();
     play(session, 0.5);
-    const bomb = session.appendBomb({ x: 10, y: 20, id: "tw1" });
+    // The smallest twig bomb: a full-strength tw1 now flattens the fixture's
+    // only building, which would end the attack before the siege weapon.
+    const bomb = session.appendBomb({ x: 10, y: 20, id: "tw0" });
     const siege = session.appendSiege({ x: 30, y: 40, weapon: "jars" });
-    expect(bomb).toEqual({ kind: "bomb", t: 40, x: 10, y: 20, id: "tw1" });
+    expect(bomb).toEqual({ kind: "bomb", t: 40, x: 10, y: 20, id: "tw0" });
     expect(siege).toEqual({ kind: "siege", t: 40, x: 30, y: 40, weapon: "jars" });
     expect(session.flingLog().events.map((event) => event.kind)).toEqual(["bomb", "siege"]);
   });

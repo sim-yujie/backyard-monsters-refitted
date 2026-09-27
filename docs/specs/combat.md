@@ -437,6 +437,20 @@ attack.
 Putty bombs target your own monsters, so they are only offered while at least one monster or
 champion is still available (`ATTACK.as:254-265`).
 
+**How big the blast is** (`com/monsters/effects/ResourceBomb.as`). "Radius" is a misnomer: it is
+the full width of an ellipse in isometric screen pixels, squashed by `BASE._angle` (0.8), so a
+damage bomb reaches `radius / 2` either side and `radius * 0.4` above and below. A building is
+hit when the squared distance to its middle (`_mc.y + _middle`) is under the sum of the two
+squared edge distances, the bomb's and an ellipse `size * 0.5` wide standing in for the building.
+Traps, decorations, the enemy and immovable classes and anything already destroyed are skipped.
+The damage is split over 200 particles, `int(damage / 200)` each, and every particle hits every
+building on the list: the distance factor is computed from a field that is never assigned, so
+there is no falloff. Per particle a Storage Silo takes the share times its level, a wall 6% and
+a tower 90% (each truncated to an integer), and a jarred tower other than a bunker and the
+Champion Cage take nothing. A putty bomb buffs the attacker's creeps within `radius / 2` yard
+units on the ground. The attack screen draws a bomb's ring as exactly this ellipse (issue #75)
+rather than the wider, flatter `DROPZONE_CLIP` the Flash client showed.
+
 ### Siege weapons
 
 `SIEGEWEAPONPOPUP` appears when `SiegeWeapons.availableWeapon != null` and the yard is not Inferno

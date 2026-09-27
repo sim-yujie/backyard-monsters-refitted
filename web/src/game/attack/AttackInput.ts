@@ -1,15 +1,19 @@
 import type { Camera } from "@/game/Camera";
 import {
   BOMBS,
+  bombBlast,
   buildingClass,
   cellOfIso,
+  ELLIPSE_SQUASH,
   GRID_CELL,
   GRID_HEIGHT,
   GRID_WIDTH,
   isTower,
+  propsSizeOf,
+  puttyReach,
   type BombStats,
+  type Ellipse,
 } from "@/game/combat/rules";
-import { propsSize } from "@/game/yard/buildingArt";
 import type { Point } from "@/game/yard/YardGrid";
 import { fromIso, toIso } from "@/game/yard/YardGrid";
 import type { Yard, YardBuilding } from "@/game/yard/yardModel";
@@ -66,7 +70,7 @@ import type { Bucket } from "./bucket";
 /* ── The overlap test ─────────────────────────────────────────────────────── */
 
 /** `BASE._angle`: how much an isometric ellipse is squashed (`BASE.as:331`). */
-export const ISO_SQUASH = 0.8;
+export const ISO_SQUASH = ELLIPSE_SQUASH;
 
 /** The Decoy's clearance, `DROPZONE.SIEGEWEAPON_GROUND_SPECIAL_RADIUS`. */
 export const DECOY_CLEARANCE = 30;
@@ -91,7 +95,11 @@ export interface DropObstacle {
   /** Yard units, as `buildingdata.X/Y`. */
   readonly x: number;
   readonly y: number;
-  /** The props `size`, `BFOUNDATION._size` (`BFOUNDATION.as:659`). */
+  /**
+   * The props `size`, `BFOUNDATION._size` (`BFOUNDATION.as:659`): an `int`, so
+   * 0 for the few types whose props entry has none (the Laser and Tesla
+   * towers among them).
+   */
   readonly size: number;
   /** Half the footprint height, `BFOUNDATION._middle` (`:678`). */
   readonly middle: number;
@@ -106,7 +114,8 @@ export interface DropObstacle {
  *
  * `destroyed` is the session's `destroyedIds`, so a building the battle has
  * flattened stops blocking the next drop, as `BuildingOverlap`'s health test
- * has it. A type without a props size falls back to its footprint width.
+ * has it. The size comes from the combat rules' props table, the same one the
+ * bomb's hit test reads.
  */
 export const obstaclesOf = (
   yard: Pick<Yard, "buildings">,
@@ -118,7 +127,7 @@ export const obstaclesOf = (
     type: building.type,
     x: building.x,
     y: building.y,
-    size: propsSize(building.type) ?? building.footprint[0],
+    size: propsSizeOf(building.type),
     middle: building.footprint[1] * 0.5,
     kind: buildingClass(building.type),
     tower: isTower(building.type),
@@ -249,22 +258,51 @@ export type DropTool =
   | { readonly kind: "bomb"; readonly bomb: BombStats }
   | { readonly kind: "siege"; readonly weapon: SiegeWeaponSpec; readonly level: number };
 
-/** The drop zone a tool raises: its Flash `_size`, and what it must satisfy. */
+/** The drop zone a tool raises: its Flash `_size`, what it must satisfy, and its ring. */
 export interface DropZone {
   readonly size: number;
   readonly target: "ground" | "buildings" | "monsters" | "clear-special" | "tower";
+  /** The ellipse the attack screen draws, semi-axes in world (isometric) pixels. */
+  readonly ring: Ellipse;
 }
+
+/**
+ * The ring the Flash `DROPZONE_CLIP` drew: `_size * 1.2` wide and half as
+ * tall (`DROPZONE.as:48-49`).
+ */
+const clipRing = (size: number): Ellipse => ({ rx: size * 0.6, ry: size * 0.3 });
+
+/**
+ * The ring a bomb shows: exactly what it will hit (issue #75).
+ *
+ * The Flash client drew the same `_size * 1.2` clip for a bomb as for a fling,
+ * which is wider and flatter than the blast `ResourceBomb` applies. Here a
+ * damage bomb's ring is the rules' {@link bombBlast}, the ellipse the engine's
+ * hit test reads, so the ring and the damage cannot drift apart. A putty bomb
+ * reaches a circle of `radius / 2` yard units on the ground, which on screen is
+ * an ellipse `sqrt 2` times that across and half as tall.
+ */
+export const bombRing = (bomb: BombStats): Ellipse => {
+  if (bomb.resource !== 3) return bombBlast(bomb);
+  const across = puttyReach(bomb) * Math.SQRT2;
+  return { rx: across, ry: across / 2 };
+};
 
 /** `ATTACK.DropZone`'s arguments for a tool (`ATTACK.as:667-672`, `ResourceBombs.as:274-280`). */
 export const dropZoneOf = (tool: DropTool, bucketRadius: number): DropZone => {
   switch (tool.kind) {
     case "fling":
-      return { size: bucketRadius * 2, target: "ground" };
+      return { size: bucketRadius * 2, target: "ground", ring: clipRing(bucketRadius * 2) };
     case "bomb":
-      return { size: tool.bomb.radius, target: tool.bomb.resource === 3 ? "monsters" : "buildings" };
+      return {
+        size: tool.bomb.radius,
+        target: tool.bomb.resource === 3 ? "monsters" : "buildings",
+        ring: bombRing(tool.bomb),
+      };
     case "siege":
       return {
         size: siegeRange(tool.weapon, tool.level),
+        ring: clipRing(siegeRange(tool.weapon, tool.level)),
         target:
           tool.weapon.target === "tower"
             ? "tower"

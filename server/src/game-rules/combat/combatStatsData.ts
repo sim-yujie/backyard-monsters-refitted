@@ -1086,6 +1086,31 @@ export const GRID_COST_FORMULA: Readonly<Record<number, GridCostFormula>> = {
 };
 
 /**
+ * Every type's props `size`, which the client keeps as `BFOUNDATION._size`
+ * (`client/scripts/BFOUNDATION.as:659`).
+ *
+ * A build-menu size class for most buildings, but also the width of the
+ * ellipse the client stands in for a building's body whenever it asks whether
+ * a blast reaches it: a resource bomb (`ResourceBomb.as`) and a drop zone's
+ * overlap test (`BASE.BuildingOverlap`, `BASE.as:4964-4993`) both do. A type
+ * absent from the table has no `size` in its props entry.
+ */
+export const PROPS_SIZE: Readonly<Record<number, number>> = {
+  1: 100, 2: 100, 3: 100, 4: 100, 5: 190, 6: 120, 7: 10, 8: 120, 9: 120, 10: 120, 11: 120, 12: 80,
+  13: 120, 14: 190, 15: 200, 16: 120, 17: 50, 18: 50, 19: 120, 20: 64, 21: 64, 22: 120, 24: 50,
+  27: 100, 28: 20, 29: 20, 30: 20, 31: 20, 32: 20, 33: 20, 34: 20, 35: 20, 36: 20, 37: 20, 38: 20,
+  39: 20, 40: 20, 41: 20, 42: 20, 43: 20, 44: 20, 45: 20, 46: 20, 47: 20, 48: 20, 49: 20, 50: 20,
+  51: 190, 52: 100, 53: 10, 54: 10, 55: 30, 56: 40, 57: 30, 58: 40, 59: 20, 60: 20, 61: 20, 62: 20,
+  63: 40, 64: 40, 65: 30, 66: 30, 67: 30, 68: 100, 69: 40, 70: 40, 71: 20, 72: 30, 73: 40, 74: 20,
+  75: 20, 76: 20, 77: 20, 78: 20, 79: 20, 80: 20, 81: 20, 82: 20, 83: 20, 84: 20, 85: 20, 86: 40,
+  87: 40, 88: 20, 89: 70, 90: 40, 91: 20, 92: 20, 93: 20, 94: 20, 95: 20, 96: 40, 97: 40, 98: 40,
+  99: 70, 100: 70, 101: 70, 102: 100, 103: 100, 104: 100, 105: 70, 106: 100, 107: 20, 108: 20,
+  109: 20, 110: 40, 111: 20, 112: 190, 113: 80, 114: 200, 117: 90, 118: 64, 119: 64, 120: 70,
+  121: 40, 122: 1, 123: 1, 124: 1, 125: 1, 126: 1, 127: 100, 128: 200, 129: 64, 130: 64, 131: 40,
+  132: 64, 133: 90, 134: 90, 135: 70, 136: 64, 137: 64,
+};
+
+/**
  * The combat half of a monster's props, indexed by level minus one.
  *
  * Copied from `server/src/game-data/stats/monsterStats.ts`, which is already

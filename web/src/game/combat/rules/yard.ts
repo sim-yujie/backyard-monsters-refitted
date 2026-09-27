@@ -257,6 +257,19 @@ export const toIso = (x: number, y: number): Cart => ({
   y: Math.trunc((x + y) * 0.5),
 });
 
+/**
+ * Where the Flash client drew a point of `buildingdata` space on screen:
+ * `GRID.ToISO(X, Y, 0)` (`client/scripts/GRID.as:135-139`), which is how a
+ * building's `_mc.x`/`_mc.y` are set from its stored `X`/`Y`
+ * (`BFOUNDATION.as:3040-3051`). The client's blast and drop-zone ellipses are
+ * all measured in this space, so a test that has to agree with them runs here.
+ * It floors, where {@link toIso} truncates.
+ */
+export const screenOf = (x: number, y: number): Cart => ({
+  x: Math.floor(x - y) + 0,
+  y: Math.floor((x + y) * 0.5) + 0,
+});
+
 /** `GLOBAL.QuickDistance`: the plain euclidean distance (`GLOBAL.as:2022-2026`). */
 export const distance = (ax: number, ay: number, bx: number, by: number): number =>
   Math.sqrt(distanceSquared(ax, ay, bx, by));

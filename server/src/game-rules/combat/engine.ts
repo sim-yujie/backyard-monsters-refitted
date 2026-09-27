@@ -4,6 +4,8 @@ import {
   ATTACK_COUNTDOWN_SECONDS,
   BEHAVIOUR_SPEED,
   BOMBS,
+  bombParticleDamage,
+  bombReaches,
   DECLARE_WAR_COUNTDOWN_SECONDS,
   KRALLEN_RESOURCE_LOOT_MULTIPLIER,
   KRALLEN_STORAGE_LOOT_MULTIPLIER,
@@ -31,6 +33,7 @@ import {
   monsterRange,
   monsterStat,
   monsterTickSpeed,
+  propsSizeOf,
   specialistMultiplier,
   ticks,
   towerStats,
@@ -48,7 +51,7 @@ import {
   towerTargets,
   TRAP_TARGETS,
 } from "./targeting.js";
-import { distanceSquared, fromIso, isMainTarget } from "./yard.js";
+import { distanceSquared, fromIso, isMainTarget, screenOf } from "./yard.js";
 import type { Cart, EngineBuilding, EngineYard } from "./yard.js";
 import type { PathGrid } from "./grid.js";
 import type { Rng } from "./rng.js";
@@ -780,22 +783,37 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   /**
-   * A resource bomb, as `Targeting.DealLinearAEDamage` applies one (`:340-389`).
+   * A resource bomb, as `ResourceBomb` applies one
+   * (`client/scripts/com/monsters/effects/ResourceBomb.as`).
    *
-   * Linear falloff over the radius with a floor of a fifth of the full figure,
-   * against every building and creep inside it. Putty bombs carry no damage at
-   * all; their slow is not modelled (fidelity note 8).
+   * The client decides what the blast reached once, when it lands, and in
+   * screen space: the drop and each building's middle (`_mc.y + _middle`) go
+   * through `GRID.ToISO`, and {@link bombReaches} is its ellipse test. Traps,
+   * decorations, the enemy and immovable classes and anything already down are
+   * skipped. Each of the bomb's particles then deals {@link bombParticleDamage}
+   * to every building on the list, with no falloff. The particles land over a
+   * second or so in the client; here they land together, on this tick, which
+   * changes when a building falls but not how much it takes.
+   *
+   * Putty bombs carry no damage at all; their slow is not modelled
+   * (fidelity note 8).
    */
   const bomb = (event: BombDrop): void => {
     const spec = BOMBS.find((one) => one.id === event.id);
     if (!spec || spec.damage <= 0) return;
-    const centre = fromIso(event.x, event.y);
+    const centre = screenOf(event.x, event.y);
     for (const building of yard.buildings) {
-      if (building.hp <= 0 || building.kind === "decoration" || building.kind === "enemy") continue;
-      const away = Math.sqrt(distanceSquared(centre.x, centre.y, building.cx, building.cy));
-      if (away > spec.radius) continue;
-      const linear = (spec.damage / spec.radius) * (spec.radius - away);
-      damageBuilding(building, Math.max(linear, spec.damage / 5), null);
+      if (building.hp <= 0) continue;
+      const kind = building.kind;
+      if (kind === "trap" || kind === "decoration" || kind === "enemy" || kind === "immovable") {
+        continue;
+      }
+      const at = screenOf(building.x, building.y);
+      const dx = at.x - centre.x;
+      const dy = at.y + building.middle - centre.y;
+      if (!bombReaches(spec, dx, dy, propsSizeOf(building.type))) continue;
+      const share = bombParticleDamage(spec, building);
+      if (share > 0) damageBuilding(building, share * spec.particles, null);
     }
   };
 

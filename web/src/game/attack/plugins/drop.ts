@@ -52,9 +52,10 @@ const RING_LEGAL = 0x5bbd6a;
 const RING_ILLEGAL = 0xe05252;
 
 /**
- * The ring the Flash `DROPZONE_CLIP` drew: `_size * 1.2` wide and half as
- * tall (`DROPZONE.as:48-49`), an isometric ellipse in world pixels, green
- * where the drop is legal and red where it is not.
+ * The drop zone's ring, an isometric ellipse in world pixels, green where the
+ * drop is legal and red where it is not. Its size is the zone's own `ring`
+ * (`dropZoneOf`): the Flash `DROPZONE_CLIP` for a fling or siege weapon, and
+ * the blast itself for a bomb.
  */
 class DropRing {
   readonly root = new Container();
@@ -74,8 +75,7 @@ class DropRing {
       return;
     }
     const at = worldOf(preview.x, preview.y);
-    const rx = preview.zone.size * 0.6;
-    const ry = rx * 0.5;
+    const { rx, ry } = preview.zone.ring;
     const colour = preview.legal ? RING_LEGAL : RING_ILLEGAL;
     g.ellipse(at.x, at.y, rx, ry).fill({ color: colour, alpha: 0.16 });
     g.ellipse(at.x, at.y, rx, ry).stroke({ width: 3, color: colour, alpha: 0.9 });

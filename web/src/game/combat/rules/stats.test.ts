@@ -3,6 +3,13 @@ import {
   ATTACK_DELAY_DEFAULT,
   ATTACK_MAX_SECONDS,
   BOMBS,
+  bombBlast,
+  bombParticleDamage,
+  bombReaches,
+  ellipseEdgeSquared,
+  propsSizeOf,
+  puttyReach,
+  squashedEllipse,
   capacity,
   championAttackDelay,
   championByType,
@@ -296,5 +303,90 @@ describe("bombs", () => {
     expect(maxBombSpend(3, 3)).toBe(10_000_000);
     // Goo has no bomb at any catapult level.
     expect(maxBombSpend(4, 3)).toBe(0);
+  });
+});
+
+describe("the bomb blast (#75)", () => {
+  const byId = (id: string) => BOMBS.find((one) => one.id === id)!;
+
+  it("reads the radius as a full width, squashed by 0.8 (`ResourceBomb.as`)", () => {
+    expect(bombBlast(byId("tw0"))).toEqual({ rx: 100, ry: 80 });
+    expect(bombBlast(byId("pb1"))).toEqual({ rx: 150, ry: 120 });
+    expect(bombBlast(byId("pb2"))).toEqual({ rx: 175, ry: 140 });
+    expect(bombBlast(byId("pb3"))).toEqual({ rx: 200, ry: 160 });
+  });
+
+  it("truncates the width and the squashed height separately, as the int parameters do", () => {
+    // `EllipseEdgeDistanceSqrd(a, int(12.5), int(12.5 * 0.8))`: 12 wide, 10 tall.
+    expect(squashedEllipse(12.5)).toEqual({ rx: 6, ry: 5 });
+  });
+
+  it("carries the particle counts the damage is split over", () => {
+    for (const bomb of BOMBS.filter((one) => one.resource !== 3)) {
+      expect(bomb.particles).toBe(200);
+    }
+    expect(BOMBS.filter((one) => one.resource === 3).map((one) => one.particles)).toEqual([
+      25, 37, 43, 50,
+    ]);
+  });
+
+  it("measures the edge of an ellipse without trigonometry", () => {
+    const ellipse = { rx: 100, ry: 80 };
+    expect(ellipseEdgeSquared(ellipse, 5, 0)).toBeCloseTo(100 * 100, 9);
+    expect(ellipseEdgeSquared(ellipse, 0, -5)).toBeCloseTo(80 * 80, 9);
+    // At 45 degrees: x = y, x^2 (1/a^2 + 1/b^2) = 1.
+    const x2 = 1 / (1 / 100 ** 2 + 1 / 80 ** 2);
+    expect(ellipseEdgeSquared(ellipse, 3, 3)).toBeCloseTo(2 * x2, 6);
+    // `atan2(0, 0)` is 0: the horizontal semi-axis.
+    expect(ellipseEdgeSquared(ellipse, 0, 0)).toBe(100 * 100);
+    expect(ellipseEdgeSquared({ rx: 0, ry: 0 }, 3, 4)).toBe(0);
+  });
+
+  it("reaches a sizeless building only inside the blast ellipse", () => {
+    const twig = byId("tw0");
+    expect(bombReaches(twig, 99, 0, 0)).toBe(true);
+    expect(bombReaches(twig, 100, 0, 0)).toBe(false);
+    expect(bombReaches(twig, -99, 0, 0)).toBe(true);
+    expect(bombReaches(twig, 0, 79, 0)).toBe(true);
+    expect(bombReaches(twig, 0, 80, 0)).toBe(false);
+    expect(bombReaches(twig, 0, 0, 0)).toBe(true);
+  });
+
+  it("reaches a little further for a big building, in quadrature", () => {
+    // A 100-size building stands in as an ellipse 50 wide: sqrt(100^2 + 25^2) = 103.08.
+    const twig = byId("tw0");
+    expect(bombReaches(twig, 103, 0, 100)).toBe(true);
+    expect(bombReaches(twig, 104, 0, 100)).toBe(false);
+  });
+
+  it("splits the damage over the particles with no falloff", () => {
+    const pebble = byId("pb3"); // 75,000 over 200: 375 a particle.
+    const plain = { type: 14, level: 1, kind: "special" };
+    expect(bombParticleDamage(pebble, plain)).toBe(375);
+    expect(bombParticleDamage(byId("tw0"), plain)).toBe(11); // int(2200 / 200)
+  });
+
+  it("scales walls, towers, silos and the cage as `ResourceBomb.Damage` does", () => {
+    const pebble = byId("pb3");
+    expect(bombParticleDamage(pebble, { type: 17, level: 1, kind: "wall" })).toBe(22);
+    expect(bombParticleDamage(pebble, { type: 20, level: 1, kind: "tower" })).toBe(337);
+    expect(bombParticleDamage(pebble, { type: 6, level: 3, kind: "special" })).toBe(1125);
+    expect(bombParticleDamage(pebble, { type: 114, level: 1, kind: "cage" })).toBe(0);
+    // A jarred tower takes nothing, except the two bunkers.
+    expect(
+      bombParticleDamage(pebble, { type: 20, level: 1, kind: "tower", jarred: true }),
+    ).toBe(0);
+    expect(
+      bombParticleDamage(pebble, { type: 22, level: 1, kind: "tower", jarred: true }),
+    ).toBe(337);
+    // The smallest twig bomb cannot dent a wall: int(11 * 0.06) is 0.
+    expect(bombParticleDamage(byId("tw0"), { type: 17, level: 1, kind: "wall" })).toBe(0);
+  });
+
+  it("sizes a putty bomb's reach at half its radius, and reads props sizes as ints", () => {
+    expect(puttyReach(byId("pu3"))).toBe(250);
+    expect(propsSizeOf(1)).toBe(100);
+    // The Laser Tower's props entry has no `size`; `GameObject._size` is an int.
+    expect(propsSizeOf(23)).toBe(0);
   });
 });

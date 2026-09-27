@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
-import { BOMBS, cellOfIso, TICKS_PER_SECOND } from "@/game/combat/rules";
+import { BOMBS, bombBlast, bombReaches, cellOfIso, TICKS_PER_SECOND } from "@/game/combat/rules";
 import { Camera } from "@/game/Camera";
 import { readYard, type Yard } from "@/game/yard/yardModel";
 import { fromIso, toIso } from "@/game/yard/YardGrid";
@@ -111,7 +111,7 @@ describe("overlap rule", () => {
     const yard = readYard(fixtureLoad());
     const obstacles = obstaclesOf(yard);
     const zone = dropZoneOf({ kind: "fling" }, 100);
-    expect(zone).toEqual({ size: 200, target: "ground" });
+    expect(zone).toMatchObject({ size: 200, target: "ground" });
 
     expect(overlappingBuildings({ x: 0, y: 0 }, zone.size, obstacles).map((o) => o.id)).toEqual([1]);
     expect(overlappingBuildings(OPEN, zone.size, obstacles)).toEqual([]);
@@ -157,25 +157,59 @@ describe("overlap rule", () => {
     const obstacles = obstaclesOf(yard);
     const twig = BOMBS.find((bomb) => bomb.id === "tw0")!;
     const bombZone = dropZoneOf({ kind: "bomb", bomb: twig }, 100);
-    expect(bombZone).toEqual({ size: 200, target: "buildings" });
+    expect(bombZone).toMatchObject({ size: 200, target: "buildings" });
     expect(judgeDrop(bombZone, { x: 0, y: 0 }, obstacles, 0).legal).toBe(true);
     expect(judgeDrop(bombZone, OPEN, obstacles, 0).legal).toBe(false);
 
     const jars = siegeWeapon("jars")!;
     const jarsZone = dropZoneOf({ kind: "siege", weapon: jars, level: 1 }, 100);
-    expect(jarsZone).toEqual({ size: 200, target: "tower" });
+    expect(jarsZone).toMatchObject({ size: 200, target: "tower" });
     expect(judgeDrop(jarsZone, { x: 0, y: 0 }, obstacles, 0).legal).toBe(true);
     // Over the Town Hall, which is not a tower.
     expect(judgeDrop(jarsZone, { x: 300, y: 300 }, obstacles, 0).legal).toBe(false);
 
     const decoy = siegeWeapon("decoy")!;
     const decoyZone = dropZoneOf({ kind: "siege", weapon: decoy, level: 1 }, 100);
-    expect(decoyZone).toEqual({ size: 250, target: "clear-special" });
+    expect(decoyZone).toMatchObject({ size: 250, target: "clear-special" });
     // Clear within 30 px even though the 250 ring would touch the tower.
     const near = { x: 120, y: 120 };
     expect(overlappingBuildings(near, 250, obstacles).length).toBeGreaterThan(0);
     expect(overlappingBuildings(near, DECOY_CLEARANCE, obstacles)).toEqual([]);
     expect(judgeDrop(decoyZone, near, obstacles, 0).legal).toBe(true);
+  });
+
+  it("draws a damage bomb's ring as the blast the engine applies (#75)", () => {
+    for (const bomb of BOMBS.filter((one) => one.damage > 0)) {
+      const ring = dropZoneOf({ kind: "bomb", bomb }, 100).ring;
+      // The same object the engine's hit test reads, in the same pixels.
+      expect(ring).toEqual(bombBlast(bomb));
+      expect(ring).toEqual({ rx: bomb.radius / 2, ry: (bomb.radius * 0.8) / 2 });
+      // A sizeless building on the ring's edge is just outside; inside is hit.
+      expect(bombReaches(bomb, ring.rx - 0.5, 0, 0)).toBe(true);
+      expect(bombReaches(bomb, ring.rx + 0.5, 0, 0)).toBe(false);
+      expect(bombReaches(bomb, 0, ring.ry - 0.5, 0)).toBe(true);
+      expect(bombReaches(bomb, 0, -(ring.ry + 0.5), 0)).toBe(false);
+    }
+  });
+
+  it("keeps the Flash drop clip for a fling and a siege weapon", () => {
+    expect(dropZoneOf({ kind: "fling" }, 100).ring).toEqual({ rx: 120, ry: 60 });
+    const jars = siegeWeapon("jars")!;
+    expect(dropZoneOf({ kind: "siege", weapon: jars, level: 1 }, 100).ring).toEqual({
+      rx: 120,
+      ry: 60,
+    });
+  });
+
+  it("draws a putty bomb's ground circle as its screen ellipse", () => {
+    const putty = BOMBS.find((bomb) => bomb.id === "pu3")!;
+    const ring = dropZoneOf({ kind: "bomb", bomb: putty }, 100).ring;
+    // 250 yard units on the ground: 250 * sqrt 2 across, half that tall.
+    expect(ring.rx).toBeCloseTo(250 * Math.SQRT2, 9);
+    expect(ring.ry).toBeCloseTo((250 * Math.SQRT2) / 2, 9);
+    // A yard point 250 units along X lands on the ellipse's edge.
+    const edge = toIso(250, 0);
+    expect((edge.x / ring.rx) ** 2 + (edge.y / ring.ry) ** 2).toBeCloseTo(1, 6);
   });
 
   it("lets a putty bomb go only while something is on the field", () => {

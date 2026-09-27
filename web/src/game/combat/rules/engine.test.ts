@@ -8,6 +8,7 @@ import {
   type BattleVisualEvent,
 } from "./engine.js";
 import { digestOf } from "./digest.js";
+import { BOMBS, bombBlast } from "./stats.js";
 import { buildEngineYard } from "./yard.js";
 import type { CombatBuildingDataMap } from "./types.js";
 
@@ -158,6 +159,71 @@ describe("bombs", () => {
     const before = yard.buildings[0]!.hp;
     battle.apply({ kind: "bomb", t: 0, x: 0, y: 0, id: "pu3" });
     expect(yard.buildings[0]!.hp).toBe(before);
+  });
+
+  it("deals particles times the share, with no falloff", () => {
+    // pb1: 9,000 over 200 particles is 45 a particle, 9,000 in all, wherever it
+    // lands. A level 3 Town Hall has 20,000 to lose.
+    const yard = yardOf({ "1": { id: 1, t: 14, l: 3, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 2 });
+    const before = yard.buildings[0]!.hp;
+    battle.apply({ kind: "bomb", t: 0, x: 40, y: 0, id: "pb1" });
+    expect(before - yard.buildings[0]!.hp).toBe(9000);
+  });
+
+  it("takes 6% off a wall and leaves a trap alone", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 17, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 24, l: 1, X: 10, Y: 10 },
+    });
+    const battle = createBattle(yard, { seed: 2 });
+    const [wall, trap] = [yard.buildings[0]!, yard.buildings[1]!];
+    const before = { wall: wall.hp, trap: trap.hp };
+    battle.apply({ kind: "bomb", t: 0, x: 0, y: 0, id: "pb3" });
+    // int(375 * 0.06) = 22 a particle, 4,400 in all.
+    expect(before.wall - wall.hp).toBe(Math.min(4400, before.wall));
+    expect(trap.hp).toBe(before.trap);
+  });
+
+  /**
+   * The ring the attack screen draws for a bomb is `bombBlast`, in world
+   * pixels. A sizeless building (the Laser Tower's props entry has none) just
+   * inside that ellipse must be hit and one just outside must not, for every
+   * damage tier, so the ring and the engine speak the same units (#75).
+   */
+  it("hits exactly what the drawn ring covers", () => {
+    for (const bomb of BOMBS.filter((one) => one.damage > 0)) {
+      const ring = bombBlast(bomb);
+      // Even horizontal offsets keep the yard point whole (x = sy + sx / 2).
+      const inside = 2 * Math.floor((ring.rx - 1) / 2);
+      const outside = 2 * Math.ceil((ring.rx + 1) / 2);
+      const probes: Array<[number, number, boolean]> = [
+        [inside, 0, true],
+        [outside, 0, false],
+        [0, ring.ry - 2, true],
+        [0, ring.ry + 2, false],
+      ];
+      for (const [dx, dy, hit] of probes) {
+        const yard = yardOf({ "1": { id: 1, t: 23, l: 1, X: 0, Y: 0 } });
+        const laser = yard.buildings[0]!;
+        // The building's middle sits at screen (0, middle); put the blast's
+        // centre (dx, dy) short of it. Screen to yard: x = sy + sx / 2.
+        const sx = -dx;
+        const sy = laser.middle - dy;
+        const x = sy + sx / 2;
+        const y = sy - sx / 2;
+        expect(Number.isInteger(x) && Number.isInteger(y)).toBe(true);
+        const battle = createBattle(yard, { seed: 2 });
+        const before = laser.hp;
+        battle.apply({ kind: "bomb", t: 0, x, y, id: bomb.id });
+        expect({ bomb: bomb.id, dx, dy, hit: laser.hp < before }).toEqual({
+          bomb: bomb.id,
+          dx,
+          dy,
+          hit,
+        });
+      }
+    }
   });
 });
 
