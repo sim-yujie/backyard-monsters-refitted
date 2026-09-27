@@ -9,6 +9,7 @@ import {
   type UpgradeReport,
 } from "@/api/types";
 import { consumeViewTarget, setAttackTarget, type ViewTarget } from "@/game/attack/attackTarget";
+import { concealTraps } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
 import {
   PlannerAccess,
@@ -446,6 +447,9 @@ export class YardScene implements Scene {
       this.refreshPlannerButton();
 
       this.renderer.show(yard);
+      // A visitor never sees another yard's traps (`BTRAP.as:33-43`, #66);
+      // the player's own yard shows them, as build mode always did.
+      if (target) concealTraps(this.renderer, yard);
       this.startCamera(yard, context);
 
       // A visit's response carries the defender's pool, not the player's, so

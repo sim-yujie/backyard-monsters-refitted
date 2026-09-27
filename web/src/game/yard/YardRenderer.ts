@@ -74,6 +74,12 @@ export class YardRenderer {
    * painted at the spot it was lifted from.
    */
   private readonly stored = new Set<number>();
+  /**
+   * Buildings hidden from a viewer who must not know they are there: an
+   * enemy's traps until they fire (issue #66). Kept apart from `stored` so the
+   * planner's drawer never gains or loses an entry it did not put there.
+   */
+  private readonly concealed = new Set<number>();
 
   private hovered: YardBuilding | null = null;
   private selected: YardBuilding | null = null;
@@ -121,8 +127,10 @@ export class YardRenderer {
     this.yard = yard;
     this.byId.clear();
     // Fresh sprites are drawn, so nothing is hidden any more. A planner that
-    // is still open re-asserts its drawer through `rebase`.
+    // is still open re-asserts its drawer through `rebase`; a scene that
+    // conceals traps does so again after every `show`.
     this.stored.clear();
+    this.concealed.clear();
     for (const building of yard.buildings) this.byId.set(building.id, building);
 
     // The base seed keeps one yard's grass the same between visits. Somebody
@@ -320,8 +328,32 @@ export class YardRenderer {
   setBuildingStored(id: number, stored: boolean): void {
     if (stored) this.stored.add(id);
     else this.stored.delete(id);
-    this.buildings.setHidden(id, stored);
-    this.blueprint.setHidden(id, stored);
+    this.applyHidden(id);
+  }
+
+  /**
+   * Hides a building from the viewer altogether, or shows it again: an enemy
+   * trap that has not fired (issue #66).
+   *
+   * Hidden the same way a stored building is — drawn in neither view, never
+   * picked, no corners — so the minimap and the outlines forget it too. A
+   * building both stored and concealed stays hidden until both are lifted.
+   */
+  setConcealed(id: number, concealed: boolean): void {
+    if (concealed) this.concealed.add(id);
+    else this.concealed.delete(id);
+    this.applyHidden(id);
+  }
+
+  /** Whether a building is concealed from the viewer. */
+  isConcealed(id: number): boolean {
+    return this.concealed.has(id);
+  }
+
+  private applyHidden(id: number): void {
+    const hidden = this.stored.has(id) || this.concealed.has(id);
+    this.buildings.setHidden(id, hidden);
+    this.blueprint.setHidden(id, hidden);
   }
 
   /** Re-stacks the isometric draw list after a planner move is committed. */
@@ -364,12 +396,14 @@ export class YardRenderer {
     this.buildings.showAll();
     this.stored.clear();
     this.blueprint.reset();
+    // What the viewer must not see stays unseen through the planner's exit.
+    for (const id of this.concealed) this.applyHidden(id);
     this.buildings.resortByDepth();
   }
 
   /** A building's footprint corners where it is drawn now, in the active view. */
   cornersOf(id: number): Corners | null {
-    if (this.stored.has(id)) return null;
+    if (this.stored.has(id) || this.concealed.has(id)) return null;
     if (this.currentView === YardView.BLUEPRINT) return this.blueprint.cornersOf(id);
     const shape = this.isoShapeOf(id);
     return shape ? diamondCorners(shape) : null;
@@ -377,7 +411,7 @@ export class YardRenderer {
 
   /** The middle of a building's footprint where it is drawn now. */
   centreOf(id: number): Point | null {
-    if (this.stored.has(id)) return null;
+    if (this.stored.has(id) || this.concealed.has(id)) return null;
     if (this.currentView === YardView.BLUEPRINT) return this.blueprint.centreOf(id);
     const shape = this.isoShapeOf(id);
     if (!shape) return null;

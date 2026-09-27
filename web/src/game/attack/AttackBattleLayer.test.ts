@@ -320,6 +320,7 @@ const hostOf = (): Host => {
     depthSortedLayer: () => depth,
     centreOf: () => ({ x: 400, y: 400 }),
     setBuildingDamage: (id, fraction) => damage.set(id, fraction),
+    setConcealed: () => {},
   };
 };
 

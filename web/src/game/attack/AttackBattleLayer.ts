@@ -24,6 +24,7 @@ import {
   sheetUrl,
   spriteFor,
 } from "./monsterSprites";
+import { TrapReveal } from "./trapReveal";
 
 /**
  * Everything that moves during a battle (`docs/design/attack-flow.md` §F5, §6
@@ -380,6 +381,8 @@ export interface BattleYardHost {
   centreOf(id: number): Point | null;
   /** Draws a building as battered as `fraction` of its health says. */
   setBuildingDamage(id: number, fraction: number): void;
+  /** Hides a building from the viewer, or shows it again: a trap until it fires. */
+  setConcealed(id: number, concealed: boolean): void;
 }
 
 export interface AttackBattleLayerOptions {
@@ -415,6 +418,13 @@ interface Shot {
   readonly to: Point;
 }
 
+/** A trap going off: a ring that grows and fades over a scorch that stays. */
+interface Burst {
+  readonly tick: number;
+  readonly at: Point;
+  readonly ring: Graphics;
+}
+
 interface Splat {
   readonly tick: number;
   readonly at: Point;
@@ -440,6 +450,10 @@ const TRACER_COLOUR = 0xfff1a8;
 const BAR_BACK_COLOUR = 0x6b1616;
 const BAR_FRONT_COLOUR = 0x5ee06a;
 const BAR_CHAMPION_COLOUR = 0xffd24a;
+
+/** Ticks a trap's blast ring takes to fade. */
+export const BURST_TICKS = 14;
+const SCORCH_COLOUR = 0x1c1410;
 
 /** World px a tower's gun sits above its footprint centre. */
 const GUN_HEIGHT = 30;
@@ -474,6 +488,11 @@ export class AttackBattleLayer {
   private readonly gibPool: Sprite[] = [];
   private readonly damageApplied = new Map<number, number>();
   private readonly maxHpById = new Map<number, number>();
+
+  /* Buildings: the traps the viewer is not shown until they fire (#66). */
+  private readonly traps = new TrapReveal();
+  private readonly bursts: Burst[] = [];
+  private readonly scorches: Graphics[] = [];
 
   private lastEventTick = 0;
   private damageDirty = true;
@@ -529,10 +548,13 @@ export class AttackBattleLayer {
 
     this.drawShots(tick);
     this.drawSplats(tick);
+    this.drawBursts(tick);
 
     if (this.damageDirty) {
       this.damageDirty = false;
-      this.syncDamage(battle.state().health);
+      const state = battle.state();
+      this.revealTraps(state.firedTraps, tick);
+      this.syncDamage(state.health);
     }
   }
 
@@ -559,6 +581,11 @@ export class AttackBattleLayer {
     for (const sprite of this.gibPool) sprite.destroy();
     this.gibPool.length = 0;
     this.shots.length = 0;
+
+    for (const burst of this.bursts) burst.ring.destroy();
+    this.bursts.length = 0;
+    for (const scorch of this.scorches) scorch.destroy();
+    this.scorches.length = 0;
 
     // Only what this added: the overlay and the sorted container are the
     // scene's and the renderer's, and keep their other children.
@@ -890,6 +917,54 @@ export class AttackBattleLayer {
   }
 
   /* ── Buildings ──────────────────────────────────────────────────────── */
+
+  /**
+   * Shows every trap that has just gone off (issue #66): the renderer lifts
+   * its concealment, `syncDamage` then draws it as the ruin its zero health
+   * says, and a scorch with a fading ring marks the blast, as `BTRAP.Explode`
+   * did (`client/scripts/BTRAP.as:88-153`).
+   */
+  private revealTraps(fired: readonly number[], tick: number): void {
+    for (const id of this.traps.sync(fired)) {
+      this.host.setConcealed(id, false);
+      const building = this.yard.buildings.find((candidate) => candidate.id === id);
+      if (!building) continue;
+      // `EFFECTS.Scorch(_mc.x, _mc.y + 5)`: just below the origin.
+      const at = { x: building.worldX, y: building.worldY + 5 };
+      const scorch = new Graphics();
+      scorch.ellipse(0, 0, 26, 13).fill({ color: SCORCH_COLOUR, alpha: 0.55 });
+      scorch.position.set(at.x, at.y);
+      this.effects.addChild(scorch);
+      this.scorches.push(scorch);
+      const ring = new Graphics();
+      ring.position.set(at.x, at.y);
+      this.effects.addChild(ring);
+      this.bursts.push({ tick, at, ring });
+    }
+  }
+
+  private drawBursts(tick: number): void {
+    let keep = 0;
+    for (const burst of this.bursts) {
+      const age = tick - burst.tick;
+      if (age > BURST_TICKS) {
+        burst.ring.destroy();
+        continue;
+      }
+      this.bursts[keep] = burst;
+      keep += 1;
+      const life = 1 - age / BURST_TICKS;
+      const radius = 10 + (1 - life) * 40;
+      burst.ring.clear();
+      burst.ring
+        .ellipse(0, 0, radius, radius / 2)
+        .stroke({ width: 3, color: 0xffb347, alpha: 0.9 * life });
+      if (age <= 3) {
+        burst.ring.circle(0, -8, 12 - age * 3).fill({ color: 0xffffff, alpha: 0.9 });
+      }
+    }
+    this.bursts.length = keep;
+  }
 
   /**
    * Hands the renderer a damage fraction for every building whose health has
