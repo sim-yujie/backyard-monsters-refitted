@@ -8,6 +8,7 @@ import {
 } from "../../services/base/updateResources.js";
 import { parseWallIds, planWallUpgrade } from "../../services/yardplanner/wallUpgrade.js";
 import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
+import { syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { postgres } from "../../server.js";
 import type { User } from "../../database/models/user.model.js";
@@ -60,6 +61,7 @@ export const upgradeWalls: KoaController = async (ctx) => {
     Operation.SUBTRACT
   );
   save.points = String(Number(save.points ?? "0") + plan.points);
+  syncDerivedLevels(save);
   save.savetime = now;
 
   postgres.em.persist(save);

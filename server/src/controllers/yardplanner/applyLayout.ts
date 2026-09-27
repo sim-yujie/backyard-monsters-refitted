@@ -8,6 +8,7 @@ import {
   mushroomRects,
 } from "../../services/yardplanner/layoutGeometry.js";
 import { walkUpgrades, type UpgradeWalk } from "../../services/yardplanner/startUpgrades.js";
+import { syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import {
   checkNodesOwned,
   checkNodePlacement,
@@ -131,6 +132,7 @@ export const applyLayout: KoaController = async (ctx) => {
   }
 
   save.buildingdata = buildingdata;
+  syncDerivedLevels(save);
   save.savetime = now;
 
   postgres.em.persist(save);

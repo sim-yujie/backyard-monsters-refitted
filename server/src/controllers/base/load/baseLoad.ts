@@ -34,6 +34,7 @@ import { calculateBaseLevel } from "../../../services/base/calculateBaseLevel.js
 import { RESOURCE_KEYS } from "../../../services/base/updateResources.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
 import { clearExpiredStoreItems } from "../../../services/base/clearExpiredStoreItems.js";
+import { syncDerivedLevels } from "../../../services/yard/derivedLevels.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
 import { getChatChannel, getOrCreateChatToken } from "../../../chat/chatChannels.js";
 import { getAllianceData } from "../../../services/alliance/allianceData.js";
@@ -141,7 +142,10 @@ export const baseLoad: KoaController = async (ctx) => {
     await postgres.em.flush();
   }
 
-  if (isOwner && clearExpiredStoreItems(baseSave)) {
+  // Both run for an owner, so the Flinger/Catapult cache heals on the next load (issue #94).
+  const levelsChanged = isOwner && syncDerivedLevels(baseSave);
+
+  if (isOwner && (clearExpiredStoreItems(baseSave) || levelsChanged)) {
     postgres.em.persist(baseSave);
     await postgres.em.flush();
   }

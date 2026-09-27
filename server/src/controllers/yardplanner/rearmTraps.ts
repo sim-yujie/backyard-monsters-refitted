@@ -3,6 +3,7 @@ import { TrapRearmSchema } from "../../schemas/YardPlannerSchemas.js";
 import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers.js";
 import { Operation, updateResources } from "../../services/base/updateResources.js";
 import { parseTrapPlacements, planTrapRearm } from "../../services/yardplanner/trapRearm.js";
+import { syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { postgres } from "../../server.js";
 import { debitOf } from "./upgradeWalls.js";
@@ -53,6 +54,7 @@ export const rearmTraps: KoaController = async (ctx) => {
     Operation.SUBTRACT
   );
   save.points = String(Number(save.points ?? "0") + plan.points);
+  syncDerivedLevels(save);
   save.savetime = now;
 
   postgres.em.persist(save);
