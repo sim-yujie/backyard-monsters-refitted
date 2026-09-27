@@ -1,5 +1,6 @@
 import type { SpeedupItem } from "@/api/types";
 import type { YardRefusal } from "@/api/yard";
+import { buildActions } from "@/api/yardBuild";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, WALL_TYPES } from "@/game/yard/buildingCosts";
 import { harvesterNow } from "@/game/yard/harvest";
@@ -541,8 +542,9 @@ export class BuildingPanel {
     wrap.className = "building-cancel";
     const key = actionKey("cancel", building.id);
 
+    const underConstruction = building.countdown?.kind === "build";
     if (this.confirmingCancel !== building.id) {
-      const button = actionButton("Cancel upgrade", () => {
+      const button = actionButton(underConstruction ? "Cancel build" : "Cancel upgrade", () => {
         this.confirmingCancel = building.id;
         this.render();
         this.actions.querySelector<HTMLButtonElement>(".building-cancel__confirm")?.focus();
@@ -580,7 +582,7 @@ export class BuildingPanel {
       void this.runCancel(building.id);
     });
     confirm.classList.add("btn--danger", "building-cancel__confirm");
-    const keep = actionButton("Keep upgrading", () => {
+    const keep = actionButton(underConstruction ? "Keep building" : "Keep upgrading", () => {
       this.confirmingCancel = null;
       this.render();
     });
@@ -673,6 +675,20 @@ export class BuildingPanel {
   private async runCancel(id: number): Promise<void> {
     const store = this.yard?.store;
     if (!store) return;
+    // A building still under construction goes altogether (`build/cancel`, §5.3).
+    if (store.building(id)?.countdown?.kind === "build") {
+      const result = await buildActions(store).cancel(id);
+      if (!result.ok) {
+        this.report(id, result, () => []);
+        return;
+      }
+      // The building is gone, and this panel with it: the refund goes to the notices.
+      const refund = costAmounts(result.report.refund);
+      const text = document.createElement("span");
+      text.append(...(refund ? ["Build cancelled. Got back ", refund, "."] : ["Build cancelled."]));
+      this.yard?.notices.show("build-cancel", text, { level: "info", timeoutMs: 6_000 });
+      return;
+    }
     const result = await store.cancelUpgrade(id);
     this.report(id, result, (report) => {
       const refund = costAmounts(report.refund);

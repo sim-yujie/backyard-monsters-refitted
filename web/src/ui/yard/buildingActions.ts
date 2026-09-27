@@ -142,7 +142,7 @@ export interface JobOffer {
   /** −1 h and −2 h; null for a fortify or rebuild. */
   readonly minusOne: SpeedupOffer | null;
   readonly minusTwo: SpeedupOffer | null;
-  /** Upgrades only: the refund Cancel would give, capped as the server caps it. */
+  /** Upgrades and builds: the refund Cancel would give, capped as the server caps it. */
   readonly cancel: CancelOffer | null;
 }
 
@@ -383,7 +383,12 @@ export const jobOffer = (building: YardBuilding, context: PanelContext): JobOffe
     finish: speedable ? speedup(finishItem, remaining, countdown.paused, credits) : null,
     minusOne: speedable ? speedup("SP2", remaining, countdown.paused, credits) : null,
     minusTwo: speedable ? speedup("SP3", remaining, countdown.paused, credits) : null,
-    cancel: countdown.kind === "upgrade" ? cancelOffer(building, context) : null,
+    // A build still running is at level 0, so this is `costs[0]`: the build's
+    // full price, which `build/cancel` gives back (§5.3).
+    cancel:
+      countdown.kind === "upgrade" || countdown.kind === "build"
+        ? cancelOffer(building, context)
+        : null,
   };
 };
 

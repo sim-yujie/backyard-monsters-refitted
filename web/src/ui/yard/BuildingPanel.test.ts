@@ -271,3 +271,23 @@ describe("BuildingPanel: the monster buildings", () => {
     expect(buttonNamed(element, "Open")).toBeUndefined();
   });
 });
+
+describe("BuildingPanel: a building under construction (§5.3)", () => {
+  it("offers Cancel build, which asks once and calls build/cancel", () => {
+    const fetch = vi.fn(() => new Promise<Response>(() => undefined));
+    vi.stubGlobal("fetch", fetch);
+    try {
+      const { element, api } = setup([HALL, building(2, 20, 0, { cB: 20 })], 2);
+      buttonNamed(element, "Cancel build")!.click();
+      const confirm = element.querySelector(".building-cancel--confirming")!;
+      expect(spokenText(confirm)).toMatch(/^Cancel and get back Twigs 2,000 Pebbles 1,500 Putty 500\?/);
+      expect(element.querySelector(".building-cancel__keep")?.textContent).toBe("Keep building");
+
+      element.querySelector<HTMLButtonElement>(".building-cancel__confirm")!.click();
+      expect(api.cancelUpgrade).not.toHaveBeenCalled();
+      expect(String((fetch.mock.calls[0] as unknown[] | undefined)?.[0])).toMatch(/\/bm\/yard\/build\/cancel$/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

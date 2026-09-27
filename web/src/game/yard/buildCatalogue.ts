@@ -1,0 +1,242 @@
+import type { BaseLoadResponse, ResourceCaps, Resources, UpgradeCost } from "@/api/types";
+import type { CostRequirement } from "./buildingCostData";
+import { instantCost, kindOf, requirementsMet, rowOf, townHallLevel } from "./buildingCosts";
+import { overCap } from "./storage";
+import { freeWorkers, sharperToolsMultiplier } from "./workers";
+import type { Yard, YardWorkers } from "./yardModel";
+
+/**
+ * What the build menu offers and why a tile cannot be built, as data
+ * (`docs/design/yard-buildings.md` §5.3, decisions D13 and D19).
+ *
+ * The menu draws; this decides. Every rule is the server's
+ * (`server/src/services/yard/build.ts`), checked in the server's order, so the
+ * one reason a tile shows is the one the build route would refuse with:
+ *
+ * 1. the Town Hall allows none of this type yet (`quantity[hall]` is 0);
+ * 2. the yard already holds as many as the hall allows (`limit`);
+ * 3. the build step's prerequisites, the Town Hall first;
+ * 4. the resources — "Need more silos" when a cost is over its storage cap;
+ * 5. a free worker, except for walls and traps, which finish at once (D13).
+ *
+ * Where the building goes is the last gate on the server, and it is the
+ * placement's business (`BuildPlacement.ts`), not a tile's.
+ *
+ * The list is {@link BUILD_CATALOGUE}: the original build menu's types
+ * (`client/scripts/BUILDINGSPOPUP.as:124`, props `group` 1 to 3 without
+ * `block`) less the Radio (D15), the Inferno types (D19) and the Map Room 3
+ * structures, in the original's `order` within each tab. The server's
+ * `BUILDABLE_TYPES` is the same set; a test on each side pins it.
+ */
+
+/** The menu's tabs. The original had four; monster buildings get their own here. */
+export const BuildCategory = {
+  RESOURCES: "resources",
+  BUILDINGS: "buildings",
+  MONSTERS: "monsters",
+  DEFENCES: "defences",
+  DECORATIONS: "decorations",
+} as const;
+export type BuildCategory = (typeof BuildCategory)[keyof typeof BuildCategory];
+
+export interface BuildCategoryDefinition {
+  readonly id: BuildCategory;
+  readonly label: string;
+  /** Type ids, in the order the tab lists them. */
+  readonly types: readonly number[];
+}
+
+/**
+ * Every tab and what it lists. Decorations are empty until the decoration
+ * inventory lands (§8.3, WP6.3): they came from the Shiny shop or as rewards,
+ * never for resources.
+ */
+export const BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
+  { id: BuildCategory.RESOURCES, label: "Resources", types: [1, 2, 3, 4, 6] },
+  { id: BuildCategory.BUILDINGS, label: "Buildings", types: [12, 5, 51, 11, 19, 10] },
+  {
+    id: BuildCategory.MONSTERS,
+    label: "Monsters",
+    types: [8, 26, 15, 13, 16, 116, 9, 114, 119],
+  },
+  {
+    id: BuildCategory.DEFENCES,
+    label: "Defences",
+    types: [21, 20, 25, 23, 22, 118, 115, 24, 117, 17],
+  },
+  { id: BuildCategory.DECORATIONS, label: "Decorations", types: [] },
+];
+
+/** Every type the menu offers. */
+export const BUILDABLE_TYPES: ReadonlySet<number> = new Set(
+  BUILD_CATALOGUE.flatMap((category) => category.types),
+);
+
+/** Walls and traps are written finished and hold no worker (D13). */
+export const buildsAtOnce = (type: number): boolean => {
+  const kind = kindOf(type);
+  return kind === "wall" || kind === "trap";
+};
+
+/** What a tile reads: the store, or anything shaped like its read side. */
+export interface BuildContext {
+  readonly yard: Yard;
+  readonly save: BaseLoadResponse;
+  readonly resources: Resources;
+  readonly credits: number;
+  readonly caps: ResourceCaps | null;
+  readonly workers: YardWorkers;
+  now(): number;
+}
+
+/** Why a tile cannot be built (or bought outright), in the server's terms. */
+export type BuildGate =
+  | { readonly reason: "townHall"; readonly have: number; readonly need: number }
+  | {
+      readonly reason: "limit";
+      readonly have: number;
+      readonly allowed: number;
+      /** The hall level that allows more, or null when none does. */
+      readonly next: number | null;
+    }
+  | { readonly reason: "requirements"; readonly requirements: readonly CostRequirement[] }
+  | {
+      readonly reason: "shortfall";
+      readonly shortfall: UpgradeCost;
+      /** Some resource costs more than its storage cap: more silos, not more waiting. */
+      readonly overCap: boolean;
+    }
+  | { readonly reason: "workers"; readonly total: number; readonly busy: number }
+  | { readonly reason: "credits"; readonly need: number };
+
+/** One tile. */
+export interface BuildOffer {
+  readonly type: number;
+  readonly category: BuildCategory;
+  readonly cost: UpgradeCost;
+  /** The countdown the server would write (table time × Sharper Tools); 0 for a wall or trap. */
+  readonly seconds: number;
+  /** Written finished, with no worker (a wall or trap). */
+  readonly atOnce: boolean;
+  /** How many the yard holds, those still being built included. */
+  readonly owned: number;
+  /** How many the Town Hall allows now. */
+  readonly allowed: number;
+  /** Shiny to have it finished the moment it is placed. */
+  readonly instantPrice: number;
+  /** Why Build is disabled; null when it can be placed. */
+  readonly gate: BuildGate | null;
+  /** Why Instant is disabled: the same gates minus resources and workers, plus Shiny. */
+  readonly instantGate: BuildGate | null;
+}
+
+const KEYS = ["r1", "r2", "r3", "r4"] as const;
+
+const held = (resources: Resources, key: (typeof KEYS)[number]): number => {
+  const value = Number(resources[key]);
+  return Number.isFinite(value) ? value : 0;
+};
+
+/** `quantity[hall]`, the last entry standing in for any hall past the end (`BASE.as:3717`). */
+export const allowedAt = (quantity: readonly number[], hall: number): number => {
+  if (quantity.length === 0) return 0;
+  return quantity[Math.min(Math.max(hall, 0), quantity.length - 1)] ?? 0;
+};
+
+/** The first hall level above `hall` that allows more than `allowed`, or null. */
+export const nextHallAllowing = (
+  quantity: readonly number[],
+  hall: number,
+  allowed: number,
+): number | null => {
+  for (let level = hall + 1; level < quantity.length; level++) {
+    if ((quantity[level] ?? 0) > allowed) return level;
+  }
+  return null;
+};
+
+/** The category a type is listed under, or null for a type the menu does not offer. */
+export const categoryOf = (type: number): BuildCategory | null =>
+  BUILD_CATALOGUE.find((category) => category.types.includes(type))?.id ?? null;
+
+/**
+ * The tile for one type, or null for a type the menu does not offer or the
+ * cost table cannot price.
+ */
+export const buildOffer = (type: number, context: BuildContext): BuildOffer | null => {
+  const category = categoryOf(type);
+  const row = rowOf(type);
+  const step = row?.[4][0];
+  if (!category || !row || !step) return null;
+
+  const quantity = row[5];
+  const { yard } = context;
+  const hall = townHallLevel(yard);
+  const owned = yard.buildings.reduce((count, one) => count + (one.type === type ? 1 : 0), 0);
+  const allowed = hall > 0 ? allowedAt(quantity, hall) : 0;
+  const atOnce = buildsAtOnce(type);
+  const cost: UpgradeCost = { r1: step[0], r2: step[1], r3: step[2], r4: step[3] };
+
+  // The gates Build and Instant share, in the server's order.
+  let common: BuildGate | null = null;
+  if (allowed <= 0) {
+    common = {
+      reason: "townHall",
+      have: hall,
+      need: hall <= 0 ? 1 : (nextHallAllowing(quantity, hall, 0) ?? hall + 1),
+    };
+  } else if (owned >= allowed) {
+    common = { reason: "limit", have: owned, allowed, next: nextHallAllowing(quantity, hall, allowed) };
+  } else if (!requirementsMet(step[5], yard)) {
+    const unmet = step[5].filter((entry) => !requirementsMet([entry], yard));
+    const townHall = unmet.find(([required]) => required === 14);
+    common = townHall
+      ? { reason: "townHall", have: hall, need: townHall[2] }
+      : { reason: "requirements", requirements: unmet };
+  }
+
+  let gate: BuildGate | null = common;
+  if (!gate) {
+    const shortfall: UpgradeCost = { r1: 0, r2: 0, r3: 0, r4: 0 };
+    let short = false;
+    let over = false;
+    for (const key of KEYS) {
+      const missing = cost[key] - held(context.resources, key);
+      if (missing > 0) {
+        shortfall[key] = missing;
+        short = true;
+        if (overCap(cost[key], context.caps?.[key])) over = true;
+      }
+    }
+    if (short) gate = { reason: "shortfall", shortfall, overCap: over };
+    else if (!atOnce && freeWorkers(context) === 0) {
+      gate = { reason: "workers", total: context.workers.total, busy: context.workers.busy };
+    }
+  }
+
+  const instantPrice = instantCost(step);
+  const instantGate: BuildGate | null =
+    common ??
+    (context.credits < instantPrice ? { reason: "credits", need: instantPrice - context.credits } : null);
+
+  return {
+    type,
+    category,
+    cost,
+    seconds: atOnce
+      ? 0
+      : Math.floor(step[4] * sharperToolsMultiplier(context.save.storedata, context.now())),
+    atOnce,
+    owned,
+    allowed,
+    instantPrice,
+    gate,
+    instantGate,
+  };
+};
+
+/** Every tile of a tab, in the tab's order. */
+export const buildOffers = (category: BuildCategory, context: BuildContext): BuildOffer[] =>
+  (BUILD_CATALOGUE.find((entry) => entry.id === category)?.types ?? [])
+    .map((type) => buildOffer(type, context))
+    .filter((offer): offer is BuildOffer => offer !== null);

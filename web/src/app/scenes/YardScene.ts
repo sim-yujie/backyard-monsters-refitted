@@ -9,6 +9,7 @@ import {
   type UpgradeReport,
 } from "@/api/types";
 import { bankActions } from "@/api/yardBank";
+import { buildActions } from "@/api/yardBuild";
 import { consumeViewTarget, setAttackTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
@@ -17,6 +18,8 @@ import {
   plannerAccess,
   plannerEntryTooltip,
 } from "@/game/yard/planner/access";
+import { buildOffer, buildsAtOnce } from "@/game/yard/buildCatalogue";
+import { BuildPlacement } from "@/game/yard/BuildPlacement";
 import { harvesterNow, type HarvestKey } from "@/game/yard/harvest";
 import { MushroomPicker, type MushroomPickView } from "@/game/yard/mushroomPick";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
@@ -35,6 +38,7 @@ import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
 import { monstersTabFor, type MonstersFocus, type MonstersTabId } from "@/ui/monsters/monstersTab";
 import { resourceAmount } from "@/ui/resourceIcon";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
+import { BuildMenu, PlacementBar, spotSentence } from "@/ui/yard/BuildMenu";
 import { showBankResult } from "@/ui/yard/CollectAll";
 import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
 import { describeUpgradeReport } from "@/ui/yard/upgradeText";
@@ -199,6 +203,13 @@ export class YardScene implements Scene {
    */
   private access: PlannerAccess = PlannerAccess.LOCKED;
   private toolbar: HTMLElement | null = null;
+  /** The own yard's Build control (§5.3); null on a visit. */
+  private buildButton: HTMLButtonElement | null = null;
+  /** The build menu, made the first time it opens. */
+  private buildMenu: BuildMenu | null = null;
+  /** A new building in hand, and the bar that says what it is; null otherwise. */
+  private placement: BuildPlacement | null = null;
+  private placementBar: PlacementBar | null = null;
   /**
    * The foreign cell this visit is looking at, or null for the player's own
    * yard. Taken from the map's handoff once, in `enter`, and never changed.
@@ -302,6 +313,22 @@ export class YardScene implements Scene {
     this.toolbar.append(this.plannerButton);
 
     /*
+     * The way into the build menu (§5.3), on the player's own yard only.
+     * Disabled until the yard's store is up, because every tile reads it.
+     */
+    if (!this.target) {
+      this.buildButton = document.createElement("button");
+      this.buildButton.type = "button";
+      this.buildButton.className = "btn btn--primary yard-toolbar__layout yard-toolbar__build";
+      this.buildButton.textContent = "Build";
+      this.buildButton.title = "Build something new";
+      this.buildButton.setAttribute("aria-expanded", "false");
+      this.buildButton.disabled = true;
+      this.buildButton.addEventListener("click", () => this.toggleBuildMenu());
+      this.toolbar.append(this.buildButton);
+    }
+
+    /*
      * A visit's way into the attack (§4.1). Omitted entirely, not disabled,
      * when the map's gate refused — the cell panel already said why, and a
      * greyed-out control with no reason attached is the worse version.
@@ -344,6 +371,7 @@ export class YardScene implements Scene {
     window.removeEventListener("keydown", this.onKeyDown);
     document.removeEventListener("visibilitychange", this.onVisibilityChange);
     this.dropStore();
+    this.buildButton = null;
     this.planner?.destroy();
     this.planner = null;
     this.plannerButton = null;
@@ -516,6 +544,7 @@ export class YardScene implements Scene {
       const pool = hudPoolFor(target, yard);
       if (pool) this.hud?.setResources(pool.resources, pool.credits);
       if (this.attackButton) this.attackButton.disabled = false;
+      this.refreshBuildButton();
       // Once the yard is drawn, because the first answer may redraw it.
       store?.start();
     } catch (caught) {
@@ -614,10 +643,14 @@ export class YardScene implements Scene {
       camera,
       canvas: context.canvas,
       pick: (x, y) => this.renderer.pick(x, y),
-      onHover: (building) => this.renderer.setHovered(building),
+      // Carrying a new building, the ghost is what the pointer is over.
+      onHover: (building) => this.renderer.setHovered(this.placement ? null : building),
       onSelect: (building) => this.tap(building),
+      // Not while carrying a new building: that click is a drop.
       pickMushroom: (x, y) =>
-        this.mushroomPicker && !this.planner ? this.renderer.pickMushroom(x, y) : null,
+        this.mushroomPicker && !this.planner && !this.placement
+          ? this.renderer.pickMushroom(x, y)
+          : null,
       onMushroom: (mushroom) => {
         this.select(null);
         void this.mushroomPicker?.pick(mushroom);
@@ -753,6 +786,8 @@ export class YardScene implements Scene {
    * when the answer comes. Anything else is a plain selection.
    */
   private tap(building: YardBuilding | null): void {
+    // Carrying a new building, a click is a drop, which the placement takes.
+    if (this.placement) return;
     this.select(building);
     const store = this.store;
     const binding = this.binding;
@@ -806,6 +841,9 @@ export class YardScene implements Scene {
       return;
     }
 
+    // The panel docks where the build menu does.
+    this.buildMenu?.close();
+
     if (!this.panel) {
       const dock = this.panelDock;
       if (!dock) return;
@@ -854,9 +892,140 @@ export class YardScene implements Scene {
     const binding = this.binding;
     const context = this.context;
     if (!binding || !context || this.planner) return;
+    this.buildMenu?.close();
     this.monsters ??= new MonstersScreen({ binding }).mount(context.overlay.content);
     this.monsters.besidePanel(this.panel !== null);
     this.monsters.open(tab, focus);
+  }
+
+  /* ── Build ──────────────────────────────────────────────────────────── */
+
+  /**
+   * The Build control: opens the menu, closes it, or puts down a building in
+   * hand (§5.3). Own yard only, and not over the planner.
+   */
+  private toggleBuildMenu(): void {
+    if (this.placement) {
+      this.endPlacement();
+      return;
+    }
+    if (this.buildMenu?.isOpen) {
+      this.buildMenu.close();
+      return;
+    }
+    const binding = this.binding;
+    const context = this.context;
+    if (!binding || !context || this.planner) return;
+
+    // The menu docks where the building panel and the Monsters screen do.
+    this.select(null);
+    this.monsters?.close();
+    this.buildMenu ??= new BuildMenu({
+      binding,
+      onPick: (type, instant) => this.startPlacement(type, instant),
+      onClose: () => this.refreshBuildButton(),
+    }).mount(context.overlay.content);
+    this.buildMenu.open();
+    this.refreshBuildButton();
+  }
+
+  /** Enabled on the own yard once it has loaded, and not over the planner. */
+  private refreshBuildButton(): void {
+    const button = this.buildButton;
+    if (!button) return;
+    const carrying = this.placement !== null;
+    const open = carrying || this.buildMenu?.isOpen === true;
+    button.disabled = !this.store || this.planner !== null;
+    button.textContent = carrying ? "Stop building" : "Build";
+    button.title = carrying ? "Put the building down without building it (Esc)" : "Build something new";
+    button.setAttribute("aria-expanded", String(open));
+  }
+
+  /**
+   * Starts carrying a new building of `type`, from a tile of the menu: the
+   * menu closes, the building appears in the middle of the screen and follows
+   * the pointer, and a click builds it (`BuildPlacement.ts`). A wall or trap
+   * stays in hand after each block; anything else is done after one, and its
+   * panel opens on the new building.
+   */
+  private startPlacement(type: number, instant: boolean): void {
+    const store = this.store;
+    const camera = this.camera;
+    const context = this.context;
+    if (!store || !camera || !context || this.planner) return;
+    const offer = buildOffer(type, store);
+    if (!offer) return;
+
+    this.endPlacement();
+    this.buildMenu?.close();
+    this.select(null);
+
+    const actions = buildActions(store);
+    const repeat = buildsAtOnce(type) && !instant;
+    let placed: number | null = null;
+
+    const bar = new PlacementBar({
+      type,
+      instant,
+      instantPrice: offer.instantPrice,
+      cost: offer.cost,
+      onCancel: () => this.endPlacement(),
+    }).mount(context.overlay.content);
+    this.placementBar = bar;
+
+    const placement = new BuildPlacement({
+      type,
+      yard: store.yard,
+      camera,
+      canvas: context.canvas,
+      layer: this.renderer.root,
+      worldToYard: (x, y) => this.renderer.worldToYard(x, y),
+      repeat,
+      onSpot: (check) =>
+        bar.setSpot(
+          check?.problem ? spotSentence(check, (id) => placement.grid.nameOf(id)) : null,
+        ),
+      onDrop: async (x, y) => {
+        const result = instant
+          ? await actions.instant(type, x, y)
+          : await actions.build(type, x, y);
+        if (this.placement !== placement) return result.ok ? "placed" : "refused";
+        if (!result.ok) {
+          bar.setMessage(result.refusal.message, "bad");
+          return "refused";
+        }
+        placed = result.report.id;
+        bar.setMessage(repeat ? "Built. Click again for another." : null);
+        return "placed";
+      },
+      onCancel: () => this.endPlacement(),
+      onDone: () => {
+        this.endPlacement();
+        // The new building's panel: its countdown, Finish now and Cancel build.
+        if (placed !== null) this.focusBuilding(placed);
+      },
+    });
+    this.placement = placement;
+
+    // In the middle of the view, so a touch screen has something to tap.
+    const middle = camera.screenToWorld({
+      x: this.viewportWidth / 2,
+      y: this.viewportHeight / 2 + (this.inset.top - this.inset.bottom) / 2,
+    });
+    const point = this.renderer.worldToYard(middle.x, middle.y);
+    const spot = placement.grid.spotAt(type, point.x, point.y);
+    placement.moveTo(spot.x, spot.y);
+    this.renderer.setHovered(null);
+    this.refreshBuildButton();
+  }
+
+  /** Puts down whatever is in hand, without building it. */
+  private endPlacement(): void {
+    this.placement?.destroy();
+    this.placement = null;
+    this.placementBar?.destroy();
+    this.placementBar = null;
+    this.refreshBuildButton();
   }
 
   /* ── Planner ────────────────────────────────────────────────────────── */
@@ -887,6 +1056,8 @@ export class YardScene implements Scene {
 
     this.select(null);
     this.monsters?.close();
+    this.endPlacement();
+    this.buildMenu?.close();
     this.planner = new YardPlanner({
       yard,
       renderer: this.renderer,
@@ -950,6 +1121,7 @@ export class YardScene implements Scene {
     // the whole point of the locked state is that it says what would unlock it.
     control.setAttribute("aria-label", text + ". " + title);
     control.setAttribute("aria-pressed", String(open));
+    this.refreshBuildButton();
   }
 
   private closePlanner(): void {
@@ -1070,6 +1242,10 @@ export class YardScene implements Scene {
 
   private dropStore(): void {
     this.mushroomPicker = null;
+    // The menu and the placement read the store they were made with.
+    this.endPlacement();
+    this.buildMenu?.destroy();
+    this.buildMenu = null;
     this.monsters?.destroy();
     this.monsters = null;
     this.unsubscribeStore?.();
@@ -1101,6 +1277,7 @@ export class YardScene implements Scene {
     this.minimap?.refreshBuildings();
     this.hud?.setResources(store.resources, store.credits);
     this.planner?.rebase(yard);
+    this.placement?.rebase(yard);
 
     // `show` drops the selection with the old sprites; put it back.
     const selected = this.selected;

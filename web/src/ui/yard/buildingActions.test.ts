@@ -362,11 +362,15 @@ describe("panelModel: which blocks each building gets", () => {
     expect(model.job?.finish?.item).toBe("SP4");
   });
 
-  it("a building under construction has speed-ups but no Cancel", () => {
+  it("a building under construction has speed-ups and Cancel for its build price (§5.3)", () => {
     const context = contextOf({ buildings: [HALL(5), building(2, 20, 0, { cB: 20 })] });
     const job = panelModel(pick(context, 2), context).job;
     expect(job).toMatchObject({ kind: "build", to: 1 });
-    expect(job?.cancel).toBeNull();
+    // Cannon Tower costs[0]: 2,000 / 1,500 / 500.
+    expect(job?.cancel).toEqual({
+      refund: { r1: 2_000, r2: 1_500, r3: 500, r4: 0 },
+      lost: { r1: 0, r2: 0, r3: 0, r4: 0 },
+    });
     expect(job?.finish?.item).toBe("SP1");
   });
 
