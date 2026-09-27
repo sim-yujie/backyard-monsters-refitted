@@ -105,14 +105,51 @@ export const targetKind = (payload: MapCell): AttackTargetKind | null => {
 export const targetName = (payload: MapCell): string =>
   isWaterCell(payload) ? "Water" : payload.n;
 
+/** Building type 51, the Catapult (`YARD_PROPS.as:3849`, `BUILDING51.as`). */
+const CATAPULT_TYPE = 51;
+
+/**
+ * The attacker's catapult level, which decides which bombs exist: twig at 1,
+ * pebble at 2, putty at 3 (`ResourceBombs.as:48-226`).
+ *
+ * The Flash client read it off the Catapult *building* in the player's yard
+ * (`GLOBAL.as:833-835`, `_attackersCatapult = GLOBAL._bCatapult._lvl.Get()`)
+ * and wrote the same figure into the save's `catapult` field on every save
+ * (`BASE.as:3179`), so in the Flash game the two never disagreed. The web
+ * client does not write that field, so on a yard whose Catapult was upgraded
+ * since — or on the sandbox fixture, which starts at `catapult: 1` with a
+ * level-4 building — the copy goes stale and the pebble and putty tiers
+ * vanish (issue #70). The building is the truth; the save field only stands
+ * in for a load that carries no `buildingdata`. The higher of the two is
+ * taken so a save whose building rows are missing cannot lose a level the
+ * field still records.
+ *
+ * A Catapult still on its initial build (`cB` present) is level 0, as the
+ * `BuildingData` type documents; a row without `l` is level 1.
+ */
+export const ownCatapultLevel = (
+  ownSave: Pick<BaseLoadResponse, "catapult" | "buildingdata"> | null,
+): number => {
+  if (!ownSave) return 0;
+  const saved = typeof ownSave.catapult === "number" && ownSave.catapult > 0 ? ownSave.catapult : 0;
+  let built = 0;
+  for (const row of Object.values(ownSave.buildingdata ?? {})) {
+    if (!row || row.t !== CATAPULT_TYPE) continue;
+    if (row.cB !== undefined) continue;
+    const level = typeof row.l === "number" ? row.l : 1;
+    built = Math.max(built, level);
+  }
+  return Math.max(saved, built);
+};
+
 /**
  * What the player can fling at `target`: the housed monsters of every own cell
  * whose flinger reaches it, summed per type
  * (`PopupAttackA.as:214-239`; `docs/specs/combat.md:278-286`).
  *
  * `ownSave` is the map's own-yard load, which carries the champions, the
- * academy levels, the catapult and the siege inventory; all belong to the
- * player, not to any one cell.
+ * academy levels, the Catapult building (see {@link ownCatapultLevel}) and
+ * the siege inventory; all belong to the player, not to any one cell.
  *
  * `sources` keeps each contributing cell's whole `m` blob, keyed by its base
  * id, because the attack save has to write the cell's housing back in full
@@ -123,7 +160,7 @@ export const rosterInRange = (
   target: OffsetCell,
   ownCells: readonly OwnCell[],
   ownSave:
-    | (Pick<BaseLoadResponse, "champion" | "academy" | "catapult" | "resources"> & {
+    | (Pick<BaseLoadResponse, "champion" | "academy" | "catapult" | "buildingdata" | "resources"> & {
         siege?: unknown;
       })
     | null,
@@ -162,7 +199,7 @@ export const rosterInRange = (
     levels,
     champions: ownSave?.champion ?? [],
     flingerLevel,
-    catapultLevel: ownSave?.catapult ?? 0,
+    catapultLevel: ownCatapultLevel(ownSave),
     sources,
     siege: typeof siege === "object" && siege !== null ? (siege as SiegeInventory) : null,
     resources: ownSave?.resources ?? null,

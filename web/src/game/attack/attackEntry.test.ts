@@ -116,6 +116,52 @@ describe("rosterInRange", () => {
     expect(roster.catapultLevel).toBe(2);
   });
 
+  describe("the catapult level (#70)", () => {
+    const catapult = (row: Record<string, number>) => ({
+      "595": { X: 0, Y: 0, t: 51, id: 595, ...row },
+      "12": { X: 100, Y: 100, t: 1, id: 12, l: 6 },
+    });
+
+    it("reads the Catapult building's level when the save's copy is stale", () => {
+      // The sandbox fixture: `save.catapult` says 1 while the building is level 4.
+      const roster = rosterInRange({ col: 100, row: 100 }, [ownCell(100, 101)], {
+        catapult: 1,
+        buildingdata: catapult({ l: 4 }),
+      });
+      expect(roster.catapultLevel).toBe(4);
+    });
+
+    it("keeps the save's figure when it is the higher one", () => {
+      const roster = rosterInRange({ col: 100, row: 100 }, [ownCell(100, 101)], {
+        catapult: 3,
+        buildingdata: catapult({ l: 2 }),
+      });
+      expect(roster.catapultLevel).toBe(3);
+    });
+
+    it("reads a Catapult without an explicit level as level 1", () => {
+      const roster = rosterInRange({ col: 100, row: 100 }, [ownCell(100, 101)], {
+        catapult: 0,
+        buildingdata: catapult({}),
+      });
+      expect(roster.catapultLevel).toBe(1);
+    });
+
+    it("counts a Catapult still under construction as none", () => {
+      const roster = rosterInRange({ col: 100, row: 100 }, [ownCell(100, 101)], {
+        buildingdata: catapult({ cB: 600 }),
+      });
+      expect(roster.catapultLevel).toBe(0);
+    });
+
+    it("is 0 with no Catapult building and no save figure", () => {
+      const roster = rosterInRange({ col: 100, row: 100 }, [ownCell(100, 101)], {
+        buildingdata: { "12": { X: 100, Y: 100, t: 1, id: 12, l: 6 } },
+      });
+      expect(roster.catapultLevel).toBe(0);
+    });
+  });
+
   it("drops non-positive and non-numeric counts", () => {
     const roster = rosterInRange(
       { col: 100, row: 100 },

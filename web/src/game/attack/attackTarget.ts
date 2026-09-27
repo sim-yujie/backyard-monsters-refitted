@@ -77,7 +77,11 @@ export interface AttackRoster {
    * capacity (`combat.md:293-304`). 0 when no cell reaches the target.
    */
   readonly flingerLevel: number;
-  /** The attacker's catapult level, 0 when none. */
+  /**
+   * The attacker's catapult level, 0 when none: the Catapult building's level
+   * from the own-yard load, or the save's `catapult` field when that is higher
+   * (`attackEntry.ts`, `ownCatapultLevel`).
+   */
   readonly catapultLevel: number;
   /**
    * The own cells whose housing `monsters` was summed from — every own cell
