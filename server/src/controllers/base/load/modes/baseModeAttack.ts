@@ -22,6 +22,7 @@ import { registerAttacker } from "../../../../services/maproom/v1/registerAttack
 import { isShinyLocked } from "../../../../services/user/shinyLock.js";
 import { newAttackSession } from "../../../../services/base/attackSession.js";
 import { startAttackSession } from "../../../../services/base/attackSessionStore.js";
+import { catchUpArmiesForAttack } from "../../../../services/yard/armies.js";
 import {
   generateNoise,
   getTerrainHeight,
@@ -102,6 +103,14 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost }: B
   const cellCoords = cell ? { x: cell.x, y: cell.y } : cellCoordsFromBaseId(baseid);
 
   await validateRange(user, save, mapversion, { baseid, cell: cellCoords });
+
+  // Both armies as they are now, before anything below changes either row
+  // (docs/design/yard-buildings.md §4.6): the defender's yard and the
+  // attacker's own yards are caught up and written, and what each of the
+  // attacker's yards houses is kept in the attack session, which caps what
+  // the attack save can take from it.
+  const armies = await catchUpArmiesForAttack({ user, defender: save, cell: cellCoords, mapversion });
+  save = armies.defender;
 
   // Past this point the attack is committed: everything below writes.
   if (save.attacks.length > 3) save.attacks = save.attacks.slice(-2);
@@ -189,7 +198,10 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost }: B
   // gives a freshly created wild-monster row its `basesaveid`; a Map Room 1
   // tribe never gets one, and its save never reaches the attack branch either.
   if (save.basesaveid)
-    await startAttackSession(save.basesaveid, newAttackSession(user.userid, save.attackid));
+    await startAttackSession(
+      save.basesaveid,
+      newAttackSession(user.userid, save.attackid, armies.entryHoused)
+    );
 
   // Create an attack log and update neighbour attack counters
   if (save.type !== BaseType.TRIBE) {

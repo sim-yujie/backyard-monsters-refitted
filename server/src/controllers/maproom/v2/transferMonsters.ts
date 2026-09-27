@@ -15,6 +15,8 @@ import {
   type TransferYard,
 } from "../../../services/monsters/transferRules.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
+import { catchUpTransferYards } from "../../../services/yard/armies.js";
+import { countsOf } from "../../../services/yard/attackRoster.js";
 
 const TransferMonstersScema = z.object({
   frombaseid: z.string(),
@@ -81,8 +83,8 @@ const academyLevels = (
  * an army into the destination without taking it out of the source. Everything
  * past the ownership check is issue #27: quantities, holdings, conservation and
  * the destination's housing capacity, decided by
- * `services/monsters/transferRules.ts`. An accepted transfer is still written
- * exactly as it is today.
+ * `services/monsters/transferRules.ts`. Both yards are caught up first, and an
+ * accepted transfer writes only the two posted `housed` rosters onto them.
  *
  * @param {Object} ctx - The Koa context object.
  * @returns {Promise<void>}
@@ -146,6 +148,11 @@ export const transferMonsters: KoaController = async (ctx) => {
   const mainSave = currentUser.save ?? null;
   const now = getCurrentDateTime();
 
+  // Both yards as they are now (docs/design/yard-buildings.md §2.3): the
+  // rules measure the caught-up rosters, and what is written keeps the
+  // server's production state.
+  catchUpTransferYards([fromBase, toBase], mainSave, now);
+
   const capacityFor = (save: Save): number =>
     deriveHousingCapacity({
       buildingData: save.buildingdata,
@@ -178,8 +185,10 @@ export const transferMonsters: KoaController = async (ctx) => {
       tobaseid,
     });
 
-  fromBase.monsters = fromBlob as JsonObject;
-  toBase.monsters = toBlob as JsonObject;
+  // Only the rosters move. The hatchery state stays the server's: the posted
+  // blobs are the client's copies, and their `h`/`hcc`/`saved` may be older.
+  fromBase.monsters = { ...(fromBase.monsters ?? {}), housed: countsOf((fromBlob as JsonObject | null)?.housed) };
+  toBase.monsters = { ...(toBase.monsters ?? {}), housed: countsOf((toBlob as JsonObject | null)?.housed) };
 
   postgres.em.persist([fromBase, toBase]);
   await postgres.em.flush();

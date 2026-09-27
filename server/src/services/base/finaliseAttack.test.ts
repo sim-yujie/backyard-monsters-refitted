@@ -174,8 +174,9 @@ describe("finaliseAbandonedAttack", () => {
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
 
     // The attacker: 300 Pokeys out of 200 at home and 150 at the outpost.
-    expect(userSave.monsters).toEqual({ housed: { C1: 0 }, space: 400 });
-    expect(outpost.monsters).toEqual({ housed: { C1: 50 } });
+    // Each cell is caught up first (nothing to hatch here), then spent.
+    expect(userSave.monsters).toMatchObject({ housed: { C1: 0 } });
+    expect(outpost.monsters).toMatchObject({ housed: { C1: 50 } });
     expect(outpost.protected).toBe(0);
     // Loot credited, then the pebble bomb's 100,000 charged.
     expect(userSave.resources.r1).toBe(1_000_000 + expected.attackloot.r1);
@@ -195,6 +196,37 @@ describe("finaliseAbandonedAttack", () => {
     // Nothing left to finish from, and the row is free.
     expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(false);
     expect(store.has(attackSessionKey(BASESAVEID))).toBe(false);
+  });
+
+  test("monsters hatched during the attack stay: the flung are taken from the caught-up yard", async () => {
+    await arm();
+    // Home hatches Pokeys (8 s each at academy level 3) from a queue, with
+    // room for 16 more beside the 200 (4 × 540 housing).
+    userSave.buildingdata = {
+      "1": { id: 1, t: 15, l: 6 },
+      "2": { id: 2, t: 15, l: 6 },
+      "3": { id: 3, t: 15, l: 6 },
+      "4": { id: 4, t: 15, l: 6 },
+      "9": { id: 9, t: 13, l: 3 },
+    };
+    userSave.savetime = now() - 80;
+    userSave.monsters = {
+      saved: now() - 80,
+      housed: { C1: 200 },
+      h: [["", 0, [["C1", 20, 3]]]],
+      hid: [9],
+      hstage: [0],
+      hcc: [],
+    };
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    // 300 flung: home gives everything it houses now (200 + what hatched), the
+    // outpost the rest, so the outpost keeps 50 plus what hatched at home.
+    const hatched = 20 - (userSave.monsters.h[0][2][0]?.[1] ?? 0) - (userSave.monsters.h[0][0] ? 1 : 0);
+    expect(hatched).toBeGreaterThanOrEqual(9);
+    expect(userSave.monsters.housed).toEqual({ C1: 0 });
+    expect(outpost.monsters.housed).toEqual({ C1: 50 + hatched });
   });
 
   test("is idempotent: a second finalisation finds nothing and charges nothing", async () => {

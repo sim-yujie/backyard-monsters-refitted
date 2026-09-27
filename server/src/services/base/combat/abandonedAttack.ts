@@ -18,6 +18,7 @@ import {
 import { BaseType } from "../../../enums/Base.js";
 import type { ChampionData } from "../../../schemas/ChampionSchema.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
+import { countsOf, subtractHoused, takeFlung } from "../../yard/attackRoster.js";
 
 /**
  * The result of an attack its attacker left without saving (issue #138),
@@ -257,9 +258,11 @@ export interface SourceCell {
 /**
  * Takes what was flung out of the attacker's cells, first cell first, the way
  * `monsterUpdateOf` does (`web/src/game/attack/attackSave.ts`), but over the
- * housing as stored now rather than as the client loaded it.
+ * housing as stored now rather than as the client loaded it. The same
+ * subtraction the attack save uses (`services/yard/attackRoster.ts`), so the
+ * two ways an attack can end spend monsters alike.
  *
- * @param cells - The source cells, in the checkpoint's order.
+ * @param cells - The source cells, in the checkpoint's order, caught up to now.
  * @param flung - Monsters flung, per id.
  * @returns Each cell's new blob, and anything the cells could not pay for.
  */
@@ -267,23 +270,11 @@ export const spendFlung = (
   cells: readonly SourceCell[],
   flung: Roster
 ): { updates: SourceCell[]; unpaid: Record<string, number> } => {
-  const left: Record<string, number> = { ...flung };
-  const updates = cells.map((cell) => {
-    const stored = cell.m["housed"];
-    const housed: Record<string, unknown> =
-      typeof stored === "object" && stored !== null ? { ...stored } : {};
-    for (const [id, count] of Object.entries(housed)) {
-      const owed = left[id] ?? 0;
-      if (owed <= 0 || typeof count !== "number") continue;
-      const taken = Math.min(count, owed);
-      housed[id] = count - taken;
-      left[id] = owed - taken;
-    }
-    return { baseid: cell.baseid, m: { ...cell.m, housed } };
-  });
-
-  const unpaid: Record<string, number> = {};
-  for (const [id, count] of Object.entries(left)) if (count > 0) unpaid[id] = count;
+  const { taken, unpaid } = takeFlung(
+    cells.map((cell) => ({ baseid: cell.baseid, housed: countsOf(cell.m["housed"]) })),
+    flung
+  );
+  const updates = cells.map((cell) => ({ baseid: cell.baseid, m: subtractHoused(cell.m, taken[cell.baseid]) }));
   return { updates, unpaid };
 };
 

@@ -41,7 +41,7 @@ import {
   applyDerivedFields,
   recordEconomyVerdict,
 } from "../../../services/base/economy/recordVerdict.js";
-import { checkAttackBinding } from "../../../services/base/attackSession.js";
+import { checkAttackBinding, type AttackSession } from "../../../services/base/attackSession.js";
 import {
   endAttackSession,
   readAttackSession,
@@ -138,7 +138,9 @@ const saveBase = async (
   // the account the server recorded when the attack started, inside the same
   // 7-minute window `isAttackActive` uses. Checked before `validateSave` and
   // before the economy audit so a refusal touches nothing at all.
-  if (isAttack) await requireAttackBinding(ctx, user, baseSave, saveData.attackid, now);
+  const session = isAttack
+    ? await requireAttackBinding(ctx, user, baseSave, saveData.attackid, now)
+    : null;
 
   await validateSave(user, baseSave, body);
 
@@ -270,10 +272,17 @@ const saveBase = async (
 
   if (isAttack) {
     if (saveData.monsterupdate) {
-      await monsterUpdateHandler(saveData.monsterupdate, userSave);
+      await monsterUpdateHandler(saveData.monsterupdate, userSave, {
+        session,
+        finalises: Boolean(saveData.over),
+        flinglog: saveData.flinglog,
+        now,
+      });
     }
 
-    if (saveData.attackcreatures) {
+    // Map Room 1's whole-army blob. A Map Room 2 attack (its session carries
+    // `entryHoused`) settles through `monsterupdate` and never writes one.
+    if (saveData.attackcreatures && !session?.entryHoused) {
       userSave.monsters = saveData.attackcreatures;
     }
 
@@ -381,6 +390,7 @@ const saveBase = async (
  * @param {Save} baseSave - The defender's stored row.
  * @param {string | undefined} submitted - The `attackid` the client sent, if any.
  * @param {number} now - Server seconds.
+ * @returns {Promise<AttackSession>} The session the save is bound to.
  * @throws {ClientSafeError} When the save is not this attack's result.
  */
 const requireAttackBinding = async (
@@ -389,7 +399,7 @@ const requireAttackBinding = async (
   baseSave: Save,
   submitted: string | undefined,
   now: number
-): Promise<void> => {
+): Promise<AttackSession> => {
   const session = await readAttackSession(baseSave.basesaveid);
 
   const result = checkAttackBinding({
@@ -400,7 +410,7 @@ const requireAttackBinding = async (
     now,
   });
 
-  if (result.ok) return;
+  if (result.ok) return session!;
 
   logger.warn(
     "Attack save refused for {username} (userid {userid}) on base {baseid}: {reason}",

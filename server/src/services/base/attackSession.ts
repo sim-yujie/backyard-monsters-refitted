@@ -1,4 +1,5 @@
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import type { EntryHoused } from "../yard/attackRoster.js";
 import { ATTACK_TIMEOUT } from "./isAttackActive.js";
 
 /**
@@ -47,6 +48,14 @@ export interface AttackSession {
   attackid: number;
   /** Server seconds at attack start. */
   startedat: number;
+  /**
+   * What each of the attacker's own yards housed at attack entry, after the
+   * server caught their production up (`docs/design/yard-buildings.md` §4.6).
+   * Caps what the attack save can take from each yard
+   * (`services/yard/attackRoster.ts`). Absent on a session minted before it
+   * existed, and for a Map Room 3 attack.
+   */
+  entryHoused?: EntryHoused;
 }
 
 /** Why a save was not accepted as this attack's result. */
@@ -65,14 +74,35 @@ const OK: AttackBindingResult = { ok: true };
 /** The key one defender row's current attack is stored under. */
 export const attackSessionKey = (basesaveid: number) => `attack-session:${basesaveid}`;
 
-/** A session as stored: three integers, so a stray key is readable by eye. */
+/**
+ * A session as stored: three integers, so a stray key is readable by eye, or
+ * JSON once it carries `entryHoused`.
+ */
 export const serialiseAttackSession = (session: AttackSession): string =>
-  `${session.attackerid}:${session.attackid}:${session.startedat}`;
+  session.entryHoused
+    ? JSON.stringify(session)
+    : `${session.attackerid}:${session.attackid}:${session.startedat}`;
+
+/** The `entryHoused` of a JSON session: base id → monster id → whole count ≥ 0. */
+const entryHousedOf = (raw: unknown): EntryHoused | undefined => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const out: EntryHoused = {};
+  for (const [baseid, housed] of Object.entries(raw as Record<string, unknown>)) {
+    if (!housed || typeof housed !== "object" || Array.isArray(housed)) continue;
+    const counts: Record<string, number> = {};
+    for (const [id, count] of Object.entries(housed as Record<string, unknown>)) {
+      if (Number.isSafeInteger(count) && (count as number) >= 0) counts[id] = count as number;
+    }
+    out[baseid] = counts;
+  }
+  return out;
+};
 
 /**
  * Reads a stored session back.
  *
- * Anything that is not three whole numbers is treated as no session at all
+ * Anything that is not three whole numbers (colon-separated, or in JSON with
+ * `entryHoused`) is treated as no session at all
  * rather than thrown, so a key left behind by an older format refuses the save
  * instead of turning it into a 500.
  *
@@ -81,6 +111,23 @@ export const serialiseAttackSession = (session: AttackSession): string =>
  */
 export const parseAttackSession = (raw: string | null | undefined): AttackSession | null => {
   if (!raw) return null;
+
+  if (raw.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const { attackerid, attackid, startedat } = parsed;
+      if (![attackerid, attackid, startedat].every(Number.isSafeInteger)) return null;
+      const entryHoused = entryHousedOf(parsed.entryHoused);
+      return {
+        attackerid: attackerid as number,
+        attackid: attackid as number,
+        startedat: startedat as number,
+        ...(entryHoused && { entryHoused }),
+      };
+    } catch {
+      return null;
+    }
+  }
 
   const parts = raw.split(":");
   if (parts.length !== 3) return null;
@@ -148,9 +195,15 @@ export const checkAttackBinding = ({
  *
  * @param {number} attackerid - The account starting the attack.
  * @param {number} attackid - The `attackid` minted onto the defender's row.
+ * @param {EntryHoused} [entryHoused] - The attacker's yards' `housed` at entry.
  */
-export const newAttackSession = (attackerid: number, attackid: number): AttackSession => ({
+export const newAttackSession = (
+  attackerid: number,
+  attackid: number,
+  entryHoused?: EntryHoused
+): AttackSession => ({
   attackerid,
   attackid,
   startedat: getCurrentDateTime(),
+  ...(entryHoused && { entryHoused }),
 });

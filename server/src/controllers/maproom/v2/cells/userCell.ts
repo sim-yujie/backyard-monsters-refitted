@@ -6,6 +6,7 @@ import { calculateBaseLevel } from "../../../../services/base/calculateBaseLevel
 import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { MapRoomCell } from "../../../../enums/MapRoom.js";
 import { isAttackActive } from "../../../../services/base/isAttackActive.js";
+import { loadArmyOwner, monstersForMap, type ArmyOwner } from "../../../../services/yard/armies.js";
 
 export type UserCellFields =
   | "*"
@@ -17,6 +18,7 @@ export type UserCellFields =
   | "save.catapult"
   | "save.resources"
   | "save.monsters"
+  | "save.basesaveid"
   | "save.attackid"
   | "save.attacks";
 
@@ -67,6 +69,12 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
 
   const truceExpiry = mine ? undefined : truces.get(cellOwner.userid)?.expires_at;
 
+  // The army as it is now (docs/design/yard-buildings.md §2.3): the stored
+  // blob caught up in memory, so the roster the map offers for an attack
+  // equals what the next write stores. The owner's academy and buffs are read
+  // once per request.
+  const monsters = mine ? await ownMonsters(ctx, cellSave, currentUser, currentTime) : undefined;
+
   return {
     uid: cellOwner.userid,
     b: cell.base_type,
@@ -89,11 +97,30 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     // `attackerCell.mine` (BASE.as:2989), and the garrison popups are own-yard only
     // (PopupInfoMine.as:361, PopupMonstersA.as:72). Omitting them makes MapRoomCell.Setup
     // fall back to its zeroed defaults (MapRoomCell.as:375-395, :410-420).
-    ...(mine && { r: cellSave.resources, m: cellSave.monsters || {} }),
+    ...(mine && { r: cellSave.resources, m: monsters || {} }),
     l: baseLevel,
     d: damage >= 90 ? 1 : 0,
     lo: locked,
     dm: damage,
     pic_square: cellOwner.pic_square,
   };
+};
+
+/** `m` for one of the viewer's own cells, caught up; the stored blob if the row cannot be read. */
+const ownMonsters = async (
+  ctx: Context,
+  cellSave: NonNullable<Cell["save"]>,
+  currentUser: User,
+  now: number
+) => {
+  const basesaveid = cellSave.basesaveid;
+  const mainId = currentUser.save?.basesaveid;
+  if (!basesaveid) return cellSave.monsters;
+
+  const owner = (): Promise<ArmyOwner> => {
+    ctx.state.armyOwner ??= mainId ? loadArmyOwner(mainId) : Promise.resolve(null);
+    return ctx.state.armyOwner as Promise<ArmyOwner>;
+  };
+
+  return (await monstersForMap(basesaveid, owner, now)) ?? cellSave.monsters;
 };

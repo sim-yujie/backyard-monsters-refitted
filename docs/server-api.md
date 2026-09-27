@@ -243,9 +243,19 @@ dedicated handler or falls back to `JSON.parse`-and-assign:
 On an **attack** save (`Save.attackSaveKeys`: `destroyed`, `damage`, `locked`, `protected`,
 `monsters`, `champion`, `over`, `buildingdata`, `buildinghealthdata`, `buildingresources`,
 `attackreport`, `attackersiege`), additional attacker-side effects run: `monsterupdate` →
-`monsterUpdateHandler.ts` (branches on MR2 array-of-cells vs MR3 object-keyed-by-creature-id
-shape, and can also push housing updates to a *different* base id, e.g. an outpost, via
-`updateMonsters`); `attackcreatures` overwrites the attacker's own `monsters`; `attackloot` →
+`monsterUpdateHandler.ts`. An MR3 object keyed by creature id is written as sent. An MR2
+array of cells is **never written** (issue #103, `docs/design/yard-buildings.md` §4.6): only the
+save carrying `over` acts on it, holding the final lock. It catches each of the attacker's own
+yards named in it up to now (monsters only, scoped to the caller's `saveuserid`) and subtracts
+the monsters that were flung. With a `flinglog` the count is the log's, taken first yard first,
+and no yard gives more than it housed at attack entry (`entryHoused`, see "Attack session
+binding"). Without a log the count is `clamp(entryHoused − sent, 0, entryHoused)` per yard. A
+sent count can never add a monster, and production during the attack is kept. An outpost
+that flung loses its protection, as before. An earlier save of the same attack does nothing
+with it: every save repeats the whole log, so the final one settles the attack once (the same
+rule `finaliseAttack.ts` uses). `attackcreatures` (Map Room 1's whole-army blob) overwrites the
+attacker's own `monsters` only when the attack session carries no `entryHoused`, which means
+never on an MR2 attack. `attackloot` →
 `attackLootHandler.ts` credits the attacker's resource pool; the resource bombs in the web
 client's `flinglog` are then charged to the attacker at the shared rules' bomb costs, floored at 0
 (issue #90, `services/base/combat/bombSpend.ts`; a bomb the attacker could not have fired is logged
@@ -310,7 +320,15 @@ account the server recorded when the attack began (`services/base/attackSession.
 **Minting.** A successful `/base/load` with `type=attack` or `type=wmattack` mints the random
 `attackid` onto the defender's row and, in the same step, writes a session to Redis under
 `attack-session:<basesaveid>` holding `attackerid:attackid:startedat`
-(`controllers/base/load/modes/baseModeAttack.ts`). Only a successful one: every refusal,
+(`controllers/base/load/modes/baseModeAttack.ts`). For a Map Room 2 attack the session is stored as
+JSON `{ attackerid, attackid, startedat, entryHoused }` instead. `entryHoused` is what each of
+the attacker's own yards housed at entry, keyed by base id. The parser reads both forms.
+Before minting, once every refusal has passed, the load catches both armies up
+(`services/yard/armies.ts`, issue #103). The defender's main yard gets the full locked catch-up
+its owner's load would give it (a defending outpost: its monsters). The attacker's main yard
+gets the same, or is only measured while someone is attacking it. Every attacker outpost
+inside the range rule's sweep box around the target gets its monsters caught up and written.
+Only a successful one: every refusal,
 range included, is decided before the first write, so an attack the server turns down leaves no
 `attackid`, no lock, no attack log and no session key (issue #26). The key's TTL is 480 seconds; the window it
 authorises is **420 seconds**, the same `ATTACK_TIMEOUT` `isAttackActive` uses, so a defender
@@ -391,7 +409,8 @@ by the set `attack-checkpoints` (`services/base/attackCheckpoint.ts`, `attackChe
 **Finalisation** (`services/base/finaliseAttack.ts`) finishes an attack from its checkpoint: the
 log is replayed with the shared engine to the checkpoint's tick (`combat/abandonedAttack.ts`) and
 the result written as an `over` save would write it — flung monsters taken out of the listed cells
-(stored housing, first cell first), bombs charged (`combat/bombSpend.ts`), loot credited, the
+(each caught up to now first, monsters only, so production during the attack stays; first cell
+first, the same subtraction the attack save uses, `services/yard/attackRoster.ts`), bombs charged (`combat/bombSpend.ts`), loot credited, the
 attacker's champion health and siege stock, the defender's health, damage, `destroyed`, fired traps,
 resource loss and report, damage protection, `attackid` cleared, session ended. It runs, under the
 same final lock:
@@ -512,7 +531,7 @@ live from a noise function seeded by the world's uuid, and is not persisted.
 | GET | `/worldmapv2/alliances` | **verifyApiConsumer**, alliancesLimiter (10/min/consumer), logRequest | none | JSON directory of every MR2 alliance across all worlds: membership, leader, and hostile(-1)/friendly(1) relationship flags | **API-consumer only.** Lets an external map viewer color/label territory by alliance without per-alliance calls. |
 | POST | `/worldmapv2/setmapversion` | verifyUserAuth, logRequest (Discord-age check done manually in the controller) | `{ version }` (string→`MapRoomVersion`: 0=NONE, 1=V1, 2=V2, 3=V3) | `{ error: 0, id, baseurl, ...filteredSave }` | Switches the player's Map Room version. `NONE`: leaves the current world, drops to `mapversion=1`. `V2`: requires Town Hall ≥ 6 (unless already `mr2upgraded`) and no alliance; joins a random MR2 world under 2500 players or creates one. `V3`: same TH6 gate; calls the MR3 world-join flow. Shared controller with the MR3 routes below. |
 | POST | `/worldmapv2/takeoverCell` | verifyUserAuth, verifyAccountStatus, logRequest | `TakeoverCellSchema`: `{ baseid, resources?: JSON, shiny?→number }` | `{ error: 0 }` | Converts a ≥90%-damaged wild-monster/tribe cell into a player Outpost: deducts the given resources/shiny, evicts any previous owner, grants a 12h protection window. Throws `takeoverCellErr()` (500, but rewritten to 200) if damage is below 90%. |
-| POST | `/worldmapv2/transferassets` | verifyUserAuth, verifyAccountStatus, logRequest | `{ frombaseid, tobaseid, monsters: JSON [sourceMonsters, targetMonsters] }` — two **complete replacement** `monsters` blobs, not a delta | `{ error: 0 }`; `{ error: 1 }` with a 400/403 status if a `baseid` doesn't resolve or the two bases have different owners; `permissionErr()` (403) if either base isn't the caller's; `monsterTransferRejectedErr()` (200 + `error`) if a transfer rule refuses | Moves a monster garrison between two of the caller's own bases (main yard ↔ outpost). Since issue #27 the two blobs are validated before they're written — see "Monster transfer rules" below. An accepted transfer is still written verbatim, exactly as before. |
+| POST | `/worldmapv2/transferassets` | verifyUserAuth, verifyAccountStatus, logRequest | `{ frombaseid, tobaseid, monsters: JSON [sourceMonsters, targetMonsters] }` — two **complete replacement** `monsters` blobs, not a delta | `{ error: 0 }`; `{ error: 1 }` with a 400/403 status if a `baseid` doesn't resolve or the two bases have different owners; `permissionErr()` (403) if either base isn't the caller's; `monsterTransferRejectedErr()` (200 + `error`) if a transfer rule refuses | Moves a monster garrison between two of the caller's own bases (main yard ↔ outpost). Both yards' monsters are first caught up to now (issue #103). Since issue #27 the two blobs are validated against those caught-up rows before anything is written (see "Monster transfer rules" below). An accepted transfer writes only the two posted `housed` rosters onto the caught-up blobs. The hatchery state (`h`, `hcc`, `saved`, …) stays the server's. |
 | POST | `/api/:apiVersion/player/savebookmarks` | apiVersion, verifyUserAuth, verifyAccountStatus, logRequest | `{ bookmarks: JSON string }` (no zod schema) | `{ error: 0 }` | Persists the player's map bookmark list onto `user.bookmarks`. |
 
 **MR2 cell payload.** `b` (base_type, `MapRoomCell`): `1`=wild monster camp, `2`=own/other
@@ -525,7 +544,10 @@ viewer's own cell), `p` (protection active), `t` (truce **expiry unix timestamp*
 owner, absent for the viewer's own cell), `mine` (1 for the caller's own cell), `pic_square`,
 `pi` (always `0` — UNVERIFIED: unused placeholder), `fr` (always `0` — UNVERIFIED: unused
 placeholder). `r` (the owner's live `resources` object) and `m` (the owner's `monsters`
-object, `{}` if unset) are included **only when `mine` is 1**. Before the revamp branch every
+object, `{}` if unset) are included **only when `mine` is 1**. `m` is the stored blob
+caught up to the request in memory: production, the HCC refund and the cull, at the owner's
+academy levels (issue #103, `services/yard/armies.ts` `monstersForMap`). Nothing is written, and
+the next write catches up from the same snapshot, so the two agree. Before the revamp branch every
 cell carried them, which exposed every player's resource and monster counts to anyone panning the
 map; the Flash client only ever read them for the viewer's own cell (`userCell.ts`). A wild-monster
 cell carries only `{ uid: 0, b, i, bid, n (tribe name, purely `(x+y) % 4`-derived — not random
@@ -806,7 +828,26 @@ JSON), parsed by the route's zod schema in `server/src/schemas/YardSchemas.ts`.
    `e` reduced by 4 × the seconds of the window inside `storedata.CLOD`'s `s`..`e` (the countdown
    runs 5x, as the original's `e -= 4` per tick); once `e` has passed it becomes `{ t: 2 }` and
    `academy[id]` is created as `{ level: 1 }` if absent.
-   `savetime` becomes `now`. Idempotent: a second catch-up at the same `now` changes nothing.
+   Phase 2, monsters (`catchUpMonsters.ts`, issue #103, after the buildings step), with the window split at
+   every hatchery, Housing and HCC build or upgrade that finished inside it:
+   - **HCC finished**: every hatchery's own queue is emptied and refunded in goo at the level each
+     stack was paid at, capped at the storage cap. The monster in production stays.
+   - **Production** (`production.ts`, `simulateProduction`) runs from `monsters.saved`:
+     - A hatchery works when built, not upgrading and at ≥ 50% health.
+     - Each monster takes `cTime` at its academy level in whole seconds, divided by the `HOD*`
+       power while one runs.
+     - A finished monster moves into housing if it fits. Otherwise the hatchery stalls, with
+       nothing lost or refunded.
+     - A built HCC with health > 10 hands its queue out in `hid` order.
+   - **Cull**: while the army does not fit the housing still standing, one of every type is
+     removed per pass, with no refund.
+   - **Write**: `saved`, `space`, `hcount`, `hstage` and `overdrivepower`/`overdrivetime` are
+     written, and the hatchery/HCC building fields `rPS`/`rCP`/`rIP`/`mq` are dropped.
+     `monsters.h[i]` is `[monster, countdown, queue, paidLevel]` (`["", 0, queue]` when idle),
+     and queue stacks are `[id, count, paidLevel]`. An old two-element stack reads as paid at
+     the current academy level.
+   A Map Room 3 blob is left alone. `savetime` becomes `now`. Idempotent: a second catch-up at
+   the same `now` changes nothing.
 4. Run the route's rules against the caught-up save.
 5. Apply the result: Shiny (`409 shinyLocked` for an account with Shiny locked, `409 credits
    { have, need }` if short), resources (`409 shortfall { r1..r4 }`), then the new save slices,
@@ -851,9 +892,13 @@ is `{ kind, id, t, at, detail }`, `at` being the unix second the job ended:
   at: number, detail: { from: number, level: number, fort?: number, points: number } }
 { kind: "storeItem", id: string /* e.g. "BST" */, t: null, at: number /* its e */, detail: {} }
 { kind: "unlock", id: string /* e.g. "C5" */, t: null, at: number /* Overdrive counted */, detail: {} }
+{ kind: "hatch", id: string /* monster */, t: null, at: number /* the last one */, detail: { count } }
+{ kind: "cull", id: string /* monster */, t: null, at: number, detail: { count } }
+{ kind: "queueRefund", id: number /* HCC building id */, t: 16, at: number,
+  detail: { goo: number /* credited, after the cap */, monsters: { [id]: count } } }
 ```
 
-Later phases add kinds (`hatch`, `train`, …) with the same five keys.
+Later phases add kinds (`train`, …) with the same five keys.
 
 **`report`** is the route's own result (`null` for `state`).
 

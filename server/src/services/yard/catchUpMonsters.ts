@@ -369,12 +369,13 @@ export const catchUpMonsters = (
   }
   result.push(...hatched.values());
 
-  // 3. Cull: housing still standing (health above 0) is what the original measured.
-  const { housed, culled } = cullHousing(
-    monsters.housed as Record<string, number>,
-    capacityAt(now, 0),
-    levels
-  );
+  // 3. Cull: housing still standing (health above 0) is what the original
+  // measured. A row with no buildings at all is not a yard whose housing went,
+  // it is one the caller did not load: it is never culled.
+  const measurable = Object.keys(final).length > 0;
+  const { housed, culled } = measurable
+    ? cullHousing(monsters.housed as Record<string, number>, capacityAt(now, 0), levels)
+    : { housed: monsters.housed as Record<string, number>, culled: {} };
   for (const [id, count] of Object.entries(culled)) {
     result.push({ kind: "cull", id, t: null, at: now, detail: { count } });
   }

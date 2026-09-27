@@ -124,6 +124,22 @@ describe("the stored session", () => {
     expect(serialiseAttackSession(session())).toBe(`${ATTACKER}:${DEFENDER_ATTACK_ID}:${START}`);
   });
 
+  test("carries entryHoused as JSON, and reads it back", () => {
+    const stored = { ...session(), entryHoused: { "2000241207": { C1: 120, C4: 3 }, "2000240207": {} } };
+    const raw = serialiseAttackSession(stored);
+
+    expect(raw.startsWith("{")).toBe(true);
+    expect(parseAttackSession(raw)).toEqual(stored);
+  });
+
+  test("a JSON session keeps only whole counts, and broken JSON is no session", () => {
+    const raw = JSON.stringify({ ...session(), entryHoused: { a: { C1: 5, C2: -1, C3: 1.5, C4: "7" } } });
+
+    expect(parseAttackSession(raw)?.entryHoused).toEqual({ a: { C1: 5 } });
+    expect(parseAttackSession("{not json")).toBeNull();
+    expect(parseAttackSession(JSON.stringify({ attackerid: 1, attackid: "x", startedat: 3 }))).toBeNull();
+  });
+
   test.each([
     ["an empty key", ""],
     ["a missing key", null],

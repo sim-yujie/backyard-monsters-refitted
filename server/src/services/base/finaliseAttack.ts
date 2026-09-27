@@ -31,6 +31,7 @@ import {
 } from "./combat/abandonedAttack.js";
 import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpend.js";
 import { getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
+import { catchUpArmyRow } from "../yard/armies.js";
 
 /**
  * Finishes an attack its attacker left without saving (issue #138).
@@ -71,13 +72,17 @@ const hasDeclareWar = async (allianceId: User["alliance_id"]): Promise<boolean> 
   (await runningPowerups(allianceId)).some(({ id }) => id === AlliancePowerupType.DECLARE_WAR);
 
 /**
- * The attacker's source cells as stored now: the main yard's housing lives on
- * the main save, every other cell on its own row, which must be theirs.
+ * The attacker's source cells, each caught up to now (monsters only,
+ * `services/yard/armies.ts`) so what hatched during the attack stays: the
+ * main yard's housing lives on the main save, every other cell on its own
+ * row, which must be theirs. A main yard whose HCC finished meanwhile also
+ * gets its queue refund on `userSave.resources`.
  */
 const sourceCells = async (
   checkpoint: AttackCheckpoint,
   attacker: User,
-  userSave: Save
+  userSave: Save,
+  now: number
 ): Promise<{ cells: SourceCell[]; rows: Map<string, Save> }> => {
   const others = checkpoint.sources.filter((baseid) => baseid !== userSave.baseid);
   const found =
@@ -88,11 +93,11 @@ const sourceCells = async (
 
   const cells: SourceCell[] = [];
   for (const baseid of checkpoint.sources) {
-    if (baseid === userSave.baseid) cells.push({ baseid, m: userSave.monsters ?? {} });
-    else {
-      const row = rows.get(baseid);
-      if (row) cells.push({ baseid, m: row.monsters ?? {} });
-    }
+    const row = baseid === userSave.baseid ? userSave : rows.get(baseid);
+    if (!row) continue;
+    const army = catchUpArmyRow(row, userSave, now);
+    if (army.resources !== row.resources) row.resources = army.resources;
+    cells.push({ baseid, m: army.monsters ?? {} });
   }
   return { cells, rows };
 };
@@ -146,7 +151,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
 
   // The attacker: what was flung leaves its cells for good, and the rest of
   // the attacker's keys land as the save would land them (`baseSave.ts`).
-  const { cells, rows } = await sourceCells(checkpoint, attacker, userSave);
+  const { cells, rows } = await sourceCells(checkpoint, attacker, userSave, now);
   const { updates, unpaid } = spendFlung(cells, outcome.flung);
   for (const update of updates) {
     if (update.baseid === userSave.baseid) {
