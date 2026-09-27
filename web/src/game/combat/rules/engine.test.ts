@@ -8,7 +8,7 @@ import {
   type BattleVisualEvent,
 } from "./engine.js";
 import { digestOf } from "./digest.js";
-import { BOMBS, bombBlast, championStat } from "./stats.js";
+import { BOMBS, bombBlast, championStat, monsterTickSpeed } from "./stats.js";
 import { buildEngineYard, reachesBuilding, screenDistanceSquared } from "./yard.js";
 import type { CombatBuildingDataMap } from "./types.js";
 
@@ -170,6 +170,51 @@ describe("a creep's reach is a circle on screen (issue #85)", () => {
     }
     expect(stoppedAt).toBeLessThanOrEqual(65);
     expect(stoppedAt).toBeGreaterThan(65 - 2 * speed);
+  });
+});
+
+describe("walking speed (issue #86)", () => {
+  it("covers the same screen distance a tick whichever way a creep walks", () => {
+    // Flash moves `_tmpPoint` by `speed` screen px a tick (`CreepBase.as:1679`).
+    const speed = monsterTickSpeed("C1", 1);
+    const lengths: number[] = [];
+    let across = 0;
+    let down = 0;
+    // One Pokey from each side of a lone Town Hall: they walk every way there is.
+    for (const [x, y] of [
+      [-500, -500],
+      [900, 900],
+      [700, -300],
+      [-300, 700],
+      [900, 0],
+      [0, -500],
+    ] as const) {
+      const yard = yardOf({ "1": { id: 1, t: 14, X: 200, Y: 200 } });
+      const battle = createBattle(yard, { seed: 5 });
+      battle.apply({ kind: "fling", t: 0, x, y, r: 100, monsters: { C1: 1 } });
+      battle.step();
+      let before = battle.creeps()[0]!;
+      for (let step = 0; step < 3000; step += 1) {
+        battle.step();
+        const now = battle.creeps()[0];
+        if (!now || now.state === "attacking") break;
+        const dx = now.ix - before.ix;
+        const dy = now.iy - before.iy;
+        const screenX = dx - dy;
+        const screenY = (dx + dy) / 2;
+        const length = Math.hypot(screenX, screenY);
+        if (length > 0) {
+          lengths.push(length);
+          if (Math.abs(screenX) > 2 * Math.abs(screenY)) across += 1;
+          if (Math.abs(screenY) > 2 * Math.abs(screenX)) down += 1;
+        }
+        before = now;
+      }
+    }
+    // Plenty of steps mostly across the screen and plenty mostly down it.
+    expect(across).toBeGreaterThan(100);
+    expect(down).toBeGreaterThan(100);
+    for (const length of lengths) expect(length).toBeCloseTo(speed, 9);
   });
 });
 

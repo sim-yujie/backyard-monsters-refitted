@@ -101,11 +101,12 @@ import type { FlingEvent, MonsterLevels, ResourceAmounts, Roster } from "./types
  *    does not here, so slow towers are slightly stronger and a creep killed by
  *    a shot already in the air dies a few ticks earlier.
  * 2. **Unit steps use a normalised vector, not `cos(atan2(…))`.** The client
- *    advances `_tmpPoint` by `cos(atan2(dy, dx)) * speed` and the matching sine
- *    (`CreepBase.as:1679-1680`), which is the unit vector written the long way.
- *    The engine divides by the length instead, because §3.4 rule 3 forbids
- *    trigonometry: two runtimes may round `atan2` differently and a digest
- *    cannot survive that. The values agree to within floating-point noise.
+ *    advances `_tmpPoint`, a screen point, by `cos(atan2(dy, dx)) * speed` and
+ *    the matching sine (`CreepBase.as:1679-1680`), which is the unit vector
+ *    written the long way. The engine takes the same step on screen but
+ *    divides by the length instead, because §3.4 rule 3 forbids trigonometry:
+ *    two runtimes may round `atan2` differently and a digest cannot survive
+ *    that. The values agree to within floating-point noise.
  * 3. **Spawn positions are rejection-sampled.** `ATTACK.Spawn` places each
  *    creep at a random bearing and a random radius inside the drop circle with
  *    `sin` and `cos` (`ATTACK.as:546-547`). The engine draws a point in the
@@ -948,8 +949,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.waypointIndex >= creep.waypoints.length) return;
 
     let waypoint = creep.waypoints[creep.waypointIndex] as Cart;
-    // `move()` drains waypoints it has arrived at (`CreepBase.as:1494-1503`).
-    while (distanceSquared(creep.ix, creep.iy, waypoint.x, waypoint.y) <= 100) {
+    // `move()` drains waypoints within 10 screen px (`CreepBase.as:1494-1503`).
+    while (screenDistanceSquared(creep.ix, creep.iy, waypoint.x, waypoint.y) <= 100) {
       creep.waypointIndex += 1;
       if (creep.waypointIndex >= creep.waypoints.length) {
         // The route ran out: a melee creep is where it was going.
@@ -959,12 +960,20 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       waypoint = creep.waypoints[creep.waypointIndex] as Cart;
     }
 
+    // Flash walks `_tmpPoint` `speed` screen px towards the waypoint
+    // (`CreepBase.as:1679-1680`), so a creep covers the same ground on screen
+    // whichever way it heads. The step is taken on screen, then turned back
+    // into yard units: screen (a, d) is yard (a / 2 + d, d - a / 2).
     const deltaX = waypoint.x - creep.ix;
     const deltaY = waypoint.y - creep.iy;
-    const length = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    const across = deltaX - deltaY;
+    const down = (deltaX + deltaY) * 0.5;
+    const length = Math.sqrt(across * across + down * down);
     if (length > 0) {
-      creep.ix += (deltaX / length) * speed;
-      creep.iy += (deltaY / length) * speed;
+      const stepAcross = (across / length) * speed;
+      const stepDown = (down / length) * speed;
+      creep.ix += stepAcross * 0.5 + stepDown;
+      creep.iy += stepDown - stepAcross * 0.5;
       const cart = rangePointOf(creep.ix, creep.iy);
       creep.x = cart.x;
       creep.y = cart.y;
