@@ -232,8 +232,9 @@ describe("buildAttackSave", () => {
   });
 
   it("keeps the champion's health when it walked home or was retreated, and zeroes it on a death", () => {
-    // Sixty Pokeys and the champion flatten the lone tower; the champion then
-    // walks home with the health it had, which the engine reports as 0.
+    // Sixty Pokeys and the champion flatten the lone tower, which ends the
+    // attack on the spot (#71); the champion is still on the field with the
+    // health it had, and that, not 0, is what the save carries.
     const walkedHome = new AttackSession({
       target: targetOf({
         load: towerLoad(),
@@ -245,7 +246,8 @@ describe("buildAttackSave", () => {
     walkedHome.appendFling({ x: -100, y: -100, monsters: { C1: 60 }, champion: { t: 5, l: 5 } });
     play(walkedHome, 120);
     expect(walkedHome.state().phase).toBe("ended");
-    expect(walkedHome.state().creepsAlive).toBe(0);
+    expect(walkedHome.state().endReason).toBe("destroyed");
+    expect(walkedHome.state().creepsAlive).toBeGreaterThan(0);
     const kept = buildAttackSave(walkedHome).attackerchampion![0]!.hp;
     expect(kept).toBeGreaterThan(0);
     expect(kept).toBeLessThanOrEqual(OWN_CHAMPION.hp);

@@ -234,6 +234,34 @@ describe("AttackSession ending", () => {
     expect(state.endReason).toBe("destroyed");
   });
 
+  it("ends as destroyed once nothing a creep could attack is standing (#71)", () => {
+    // The tower is the only target; the trap sits far from every path and the
+    // decoration is never chosen, so the percentage stops short of 100 and one
+    // Pokey stays housed. Flash ended here (`ATTACK.as:276-291`); so do we.
+    const trappedYard = towerYard();
+    trappedYard.buildingdata = {
+      ...trappedYard.buildingdata,
+      "2": { id: 2, t: 24, l: 1, X: 300, Y: 300 },
+      "3": { id: 3, t: 30, l: 1, X: -300, Y: 300 },
+    } as never;
+    const session = new AttackSession({
+      target: targetOf({
+        roster: { monsters: { C1: 61 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0 },
+      }),
+      seed: 1,
+    });
+    session.load(trappedYard);
+    session.start();
+    session.appendFling({ x: -100, y: -100, monsters: { C1: 60 } });
+    play(session, 120);
+    const state = session.state();
+    expect(state.buildingsDestroyed).toBe(1);
+    expect(state.damagePercent).toBeLessThan(100);
+    expect(state.remaining).toEqual({ C1: 1 });
+    expect(state.phase).toBe("ended");
+    expect(state.endReason).toBe("destroyed");
+  });
+
   it("tells subscribers about phase changes and events, and lets them leave", () => {
     const session = sessionOf();
     const phases: string[] = [];

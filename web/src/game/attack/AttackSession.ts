@@ -5,11 +5,14 @@ import {
   RETREAT_GRACE_SECONDS,
   TICKS_PER_SECOND,
   buildEngineYard,
+  buildingClass,
   createBattle,
   damagePercent,
   dropRadius,
   bucketCost,
+  healthOf,
   toCombatYard,
+  type BuildingClass,
   type Battle,
   type BattleState,
   type BombDrop,
@@ -50,9 +53,13 @@ import type { AttackTarget } from "./attackTarget";
  * The engine ends a battle only on its countdown (`engine.ts` `step`). §F6
  * adds two earlier ends the engine cannot see, because they depend on what the
  * attacker still has rather than on the field: nothing alive, nothing left to
- * send and no tool pending is `exhausted`; 100% damage is `destroyed`. The
- * session checks both after every advance. A Retreat is `retreat`, and the
- * countdown running out is `expired`.
+ * send and no tool pending is `exhausted`; 100% damage is `destroyed`. So is
+ * a yard with nothing left standing that a creep could attack, which is how
+ * Flash's `ATTACK.Tick` ended an attack (`client/scripts/ATTACK.as:276-291`):
+ * the percentage counts a trap that never fired at full health, so a flyer
+ * army that flattens a trapped camp stops short of 100 while the field is, to
+ * the attacker, finished. The session checks all of these after every advance.
+ * A Retreat is `retreat`, and the countdown running out is `expired`.
  *
  * ## The state machine
  *
@@ -196,6 +203,20 @@ const subtractRoster = (housed: Roster, flung: Roster): Roster => {
   }
   return left;
 };
+
+/**
+ * The building classes a creep never attacks on purpose, which is what Flash's
+ * end-of-attack check left out of "something is still standing"
+ * (`client/scripts/ATTACK.as:278`).
+ */
+const UNTARGETED_CLASSES: ReadonlySet<BuildingClass> = new Set<BuildingClass>([
+  "mushroom",
+  "wall",
+  "trap",
+  "enemy",
+  "decoration",
+  "cage",
+]);
 
 const rosterEmpty = (roster: Roster): boolean =>
   Object.values(roster).every((count) => count <= 0);
@@ -538,12 +559,32 @@ export class AttackSession {
     return damagePercent(yard, battleState.health, new Set(battleState.firedTraps));
   }
 
+  /**
+   * Whether anything a creep could still attack is standing.
+   *
+   * Flash's `ATTACK.Tick` ended the attack the moment no building outside
+   * these six classes had health left (`client/scripts/ATTACK.as:276-291`,
+   * `_loc10_`), whatever was still alive on the field or housed at home. A
+   * trap, a wall, a decoration, a cage, a mushroom and an enemy are the things
+   * `findTarget` never chooses on purpose (`MonsterBase.as:1074`), so a yard
+   * with only those left has nothing an attacker can change.
+   */
+  private targetStanding(battleState: BattleState): boolean {
+    const yard = this.combatYard;
+    if (!yard) return false;
+    for (const building of yard.buildings) {
+      if (UNTARGETED_CLASSES.has(buildingClass(building.type))) continue;
+      if (healthOf(building, battleState.health) > 0) return true;
+    }
+    return false;
+  }
+
   /** §F6's rule, in the order the design lists it. */
   private checkEnd(battle: Battle): void {
     if (this.phase !== "running") return;
     const battleState = battle.state();
 
-    if (this.damageOf(battleState) >= 100) {
+    if (this.damageOf(battleState) >= 100 || !this.targetStanding(battleState)) {
       this.end("destroyed");
       return;
     }

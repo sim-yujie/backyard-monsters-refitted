@@ -485,7 +485,12 @@ every tick: `battle.state().creepsAlive === 0` (`engine.ts:1049`, the field is e
 own bucket and tool-inventory state for the first, and `damagePercent()` over `battle.state().health`
 (`damagePercent.ts`, the same function `replay.ts:188` already calls) against 100 for the second —
 and ends the attack the moment either holds, which in the common case is well before the five-minute
-clock would have. A new `web/src/ui/attack/EndAttackPanel.ts` replaces the Flash pair — the attack log
+clock would have. **Added 2026-09-27 (issue #71):** the session also ends the attack, as `destroyed`,
+the moment nothing a creep could attack is left standing — no building outside the wall, trap, enemy,
+decoration, cage and mushroom classes with health above zero — which is `ATTACK.Tick`'s own rule
+(`ATTACK.as:276-291`). Without it a flyer army that flattens a trapped camp never reaches 100%,
+because a trap that never fired counts at full health, and never empties the field, because the
+survivors stay alive. A new `web/src/ui/attack/EndAttackPanel.ts` replaces the Flash pair — the attack log
 popup and `popup_attackend` (`combat.md:1259-1268`) — with one modal: damage percentage, resources
 looted (from `battle.state().loot`), buildings destroyed, and one Return-to-map button. This is the
 one click at the end of the click table in §4.5, against Flash's two.
