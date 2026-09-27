@@ -40,8 +40,19 @@ export const MUSHROOM_RESPAWN_SECONDS = 17_280;
 /** At most this many grow in one catch-up (`MUSHROOMS.as:132-134`). */
 export const MUSHROOM_BURST = 10;
 
-/** The yard holds at most this many (design §5.6; the stored cap, `MUSHROOMS.as:84`, `:115-121`). */
-export const MUSHROOM_CAP = 20;
+/**
+ * New mushrooms grow only while the yard holds fewer than this many
+ * (`MUSHROOMS.as:135-137`; owner decision 2026-09-28, design §5.6). A yard
+ * already above it keeps what it has; it just grows no more.
+ */
+export const MUSHROOM_CAP = 10;
+
+/**
+ * A stored list is read up to this many (the Flash load cap,
+ * `MUSHROOMS.as:84`, `:115-121`), so an older yard above
+ * {@link MUSHROOM_CAP} loses none.
+ */
+export const MUSHROOM_STORED_CAP = 20;
 
 /** Tries to find a free spot before giving up on one mushroom (`MUSHROOMS.as:171`). */
 export const SPAWN_ATTEMPTS = 5000;
@@ -93,7 +104,7 @@ const entryOf = (raw: unknown): MushroomEntry | null => {
 
 /**
  * The stored mushrooms, cleaned: entries without a position are dropped and
- * the list is cut to {@link MUSHROOM_CAP}, as the Flash load did
+ * the list is cut to {@link MUSHROOM_STORED_CAP}, as the Flash load did
  * (`MUSHROOMS.as:84`, `:115-121`). `s` is 0 when the yard never had a spawn.
  */
 export const readMushrooms = (mushrooms: JsonObject | null | undefined): MushroomSave => {
@@ -102,7 +113,7 @@ export const readMushrooms = (mushrooms: JsonObject | null | undefined): Mushroo
   for (const raw of list) {
     const entry = entryOf(raw);
     if (entry) l.push(entry);
-    if (l.length >= MUSHROOM_CAP) break;
+    if (l.length >= MUSHROOM_STORED_CAP) break;
   }
   const s = finite(mushrooms?.s);
   return { l, s: s !== null && s > 0 ? Math.trunc(s) : 0 };

@@ -146,7 +146,7 @@ which clock it uses, and what completing it does. Completion is always done by t
 | Lab research | lab building `upg`, `upt`, `upl` | absolute `upt` | `academy[upg].powerup = upl`, fields cleared | no |
 | Hatchery production | `monsters.h`, `hid`, `hstage`, `hcc`, `saved` | seconds from `monsters.saved` | `housed[id] + 1`, next monster starts | no |
 | Champion hunger | `champion[i].ft` | absolute while active, relative while frozen | starvation: one feed lost (or one food-bonus rank at level 6) | no |
-| Mushroom respawn | `mushrooms.s` (last spawn) | absolute | new mushroom, 20 cap | no |
+| Mushroom respawn | `mushrooms.s` (last spawn) | absolute | new mushroom, 10 cap | no |
 | Store buffs (BST, EXH, HOD*, CLOD, POD, protection) | `storedata[item].e` | absolute | expire (`clearExpiredStoreItems`) | no |
 
 Relative building countdowns stay (T2). Everything the server writes uses the same convention the
@@ -841,8 +841,11 @@ above the upgrade (Repair, free; Repair all N now, Shiny, free when every repair
 
 ### 5.6 Mushrooms (D14)
 
-- Catch-up respawns one mushroom per 17,280 s since `mushrooms.s`, at most 10 per catch-up and 20
+- Catch-up respawns one mushroom per 17,280 s since `mushrooms.s`, at most 10 per catch-up and 10
   in total, on a free random spot in the plot (BB §2 "Mushrooms"); the server picks the spot.
+  **Owner decision 2026-09-28:** the yard cap is 10, not 20, as the original's growth cap
+  (`client/scripts/MUSHROOMS.as:135-137`). A yard already above 10 keeps what it has (nothing is
+  removed; a stored list is still read up to 20, `MUSHROOMS.as:84`); it just grows no more.
 - `POST /bm/yard/mushroom/pick` `id` → refused 409 `workers` if no worker is free (the pick costs a
   worker as the original did); otherwise the server removes the mushroom at once and decides the
   reward: 1 in 4 golden, then 8 Shiny with probability 1/3 and 3 Shiny with 2/3 (the original's

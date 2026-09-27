@@ -106,9 +106,13 @@ export const RELATIVE_TRAINING_LIMIT = 60 * 60 * 162;
 /** A champion starves this long after its feed time passes (`CHAMPIONCAGE.as:26`). */
 export const STARVE_SECONDS = 24 * 60 * 60;
 
-/** One mushroom respawns per this many seconds, up to the cap (design §5.6). */
+/**
+ * One mushroom respawns per this many seconds while the yard holds fewer than
+ * the cap (design §5.6; the cap is 10, owner decision 2026-09-28,
+ * `MUSHROOMS.as:135-137`). Mirrors `server/src/services/yard/mushrooms.ts`.
+ */
 export const MUSHROOM_RESPAWN_SECONDS = 17_280;
-export const MUSHROOM_CAP = 20;
+export const MUSHROOM_CAP = 10;
 
 /** Hatchery Overdrive multipliers by store code (`docs/specs/monsters-and-hatchery.md` §5.5). */
 export const OVERDRIVE_POWER: Readonly<Record<string, number>> = { HOD: 4, HOD2: 6, HOD3: 10 };

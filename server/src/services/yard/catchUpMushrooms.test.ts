@@ -1,11 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { catchUpYard, type CatchUpSave } from "./catchUp.js";
 import { catchUpMushrooms } from "./catchUpMushrooms.js";
-import { MUSHROOM_RESPAWN_SECONDS, readMushrooms, type MushroomYardSave } from "./mushrooms.js";
+import {
+  MUSHROOM_CAP,
+  MUSHROOM_RESPAWN_SECONDS,
+  readMushrooms,
+  type MushroomYardSave,
+} from "./mushrooms.js";
 
 /**
  * Catch-up step 3, mushrooms (`docs/design/yard-buildings.md` §5.6): one per
- * 17,280 s since the last spawn, at most 10 at a time and 20 in the yard.
+ * 17,280 s since the last spawn, at most 10 at a time and 10 in the yard
+ * (owner decision 2026-09-28).
  */
 
 const LAST = 1_700_000_000;
@@ -49,15 +55,26 @@ describe("catchUpMushrooms", () => {
     expect(countOf(save)).toBe(10);
   });
 
-  test("never more than 20 in the yard; s still moves when the yard is full", () => {
-    const save = saveOf(15);
+  test("never more than 10 in the yard; s still moves when the yard is full", () => {
+    const save = saveOf(7);
     catchUpMushrooms(save, LAST + 10 * PERIOD);
-    expect(countOf(save)).toBe(20);
+    expect(countOf(save)).toBe(MUSHROOM_CAP);
 
-    const full = saveOf(20);
+    const full = saveOf(10);
     catchUpMushrooms(full, LAST + 3 * PERIOD);
-    expect(countOf(full)).toBe(20);
+    expect(countOf(full)).toBe(10);
     expect(full.mushrooms!.s).toBe(LAST + 3 * PERIOD);
+  });
+
+  test("a yard already above 10 keeps every mushroom and grows none", () => {
+    const save = saveOf(16);
+    const before = structuredClone(save.mushrooms!.l);
+
+    catchUpMushrooms(save, LAST + 5 * PERIOD);
+
+    expect(countOf(save)).toBe(16);
+    expect(save.mushrooms!.l).toEqual(before);
+    expect(save.mushrooms!.s).toBe(LAST + 5 * PERIOD);
   });
 
   test("a yard that never had a spawn gets one burst", () => {

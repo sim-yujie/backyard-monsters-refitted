@@ -6,6 +6,7 @@ import {
   GOLDEN_BIG,
   GOLDEN_SMALL,
   MUSHROOM_CAP,
+  MUSHROOM_STORED_CAP,
   planMushroomPick,
   readMushrooms,
   rollReward,
@@ -70,7 +71,13 @@ describe("readMushrooms", () => {
 
   test("keeps the first 20, as the Flash load did", () => {
     const l = Array.from({ length: 25 }, (_, i) => [1, i * 40, 0]);
-    expect(readMushrooms({ l, s: 1 }).l).toHaveLength(MUSHROOM_CAP);
+    expect(readMushrooms({ l, s: 1 }).l).toHaveLength(MUSHROOM_STORED_CAP);
+  });
+
+  test("a stored list above the growth cap is kept whole (owner decision 2026-09-28)", () => {
+    const l = Array.from({ length: 16 }, (_, i) => [1, i * 40, 0]);
+    expect(MUSHROOM_CAP).toBe(10);
+    expect(readMushrooms({ l, s: 1 }).l).toHaveLength(16);
   });
 });
 

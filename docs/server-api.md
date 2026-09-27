@@ -872,7 +872,7 @@ JSON), parsed by the route's zod schema in `server/src/schemas/YardSchemas.ts`.
    level) or below half health; a repair that finished in the window splits it: the health the
    harvester had at the start until the repair's end, full health after; the Production Overdrive
    (`storedata.POD`) doubles `produce` until its `e`. Phase 3, mushrooms (`catchUpMushrooms.ts`, issue #114, last): one grows per 17,280 s
-   since `mushrooms.s`, at most 10 per catch-up and 20 in the yard, each on a random free spot in
+   since `mushrooms.s`, at most 10 per catch-up and 10 in the yard (a yard already above 10 keeps them and grows none), each on a random free spot in
    the plot; whenever a whole period has passed `s` becomes `now` (a yard with no `s` counts as
    overdue). Nothing is reported for them. Phase 4, academy (`catchUpTraining.ts`, issue #116,
    after the mushrooms): a surface `academy[id].time` at or below 583,200 (162 h) is a legacy

@@ -14,7 +14,8 @@ import {
  *
  * One mushroom per {@link MUSHROOM_RESPAWN_SECONDS} since the last spawn,
  * `mushrooms.s`; at most {@link MUSHROOM_BURST} in one catch-up and never more
- * than {@link MUSHROOM_CAP} in the yard. Whenever at least one period has
+ * than {@link MUSHROOM_CAP} in the yard (a yard already above it keeps its
+ * mushrooms and grows none, owner decision 2026-09-28). Whenever at least one period has
  * passed, `s` moves to `now`, capped or not, and the part-period left over is
  * dropped: the Flash load did exactly that (`client/scripts/MUSHROOMS.as:129-141`).
  * A yard that never had a spawn (`s` missing or 0) counts as long overdue and

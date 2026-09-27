@@ -335,6 +335,14 @@ describe("mushrooms and store buffs", () => {
     expect(yardJobs(full).some((job) => job.kind === JobKind.MUSHROOM)).toBe(false);
   });
 
+  it("stops at 10 mushrooms, and a yard above 10 has no respawn either", () => {
+    expect(MUSHROOM_CAP).toBe(10);
+    const nine = saveWith({ mushrooms: { s: SAVED, l: Array.from({ length: 9 }, () => ({})) } });
+    expect(yardJobs(nine).some((job) => job.kind === JobKind.MUSHROOM)).toBe(true);
+    const above = saveWith({ mushrooms: { s: SAVED, l: Array.from({ length: 16 }, () => ({})) } });
+    expect(yardJobs(above).some((job) => job.kind === JobKind.MUSHROOM)).toBe(false);
+  });
+
   it("expires a timed buff at its e and ignores a permanent purchase", () => {
     expect(storeItemJobs({ BST: { q: 1, e: SAVED + 30 }, BEW: { q: 2 } })).toEqual([
       {
