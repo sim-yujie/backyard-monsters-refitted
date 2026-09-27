@@ -2,6 +2,7 @@ import type z from "zod";
 import type { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
+import type { CompletedJob } from "../../services/yard/catchUp.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { catchUpLockedYard, runYardAction, type YardAction } from "./yardAction.js";
 
@@ -24,7 +25,7 @@ export const yardRoute =
 
 /**
  * The catch-up on the owner's build-mode `/base/load` of their main yard,
- * locked and written (`catchUpLockedYard`).
+ * locked and written (`catchUpLockedYard`): the save, and what finished.
  */
-export const catchUpOwnerYard = (save: Save): Promise<Save> =>
+export const catchUpOwnerYard = (save: Save): Promise<{ save: Save; completed: CompletedJob[] }> =>
   catchUpLockedYard(postgres.em, save);

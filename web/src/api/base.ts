@@ -8,6 +8,7 @@ import {
   type BaseLoadRequest,
   type BaseLoadResponse,
   type BaseSaveResponse,
+  type CompletedJob,
 } from "./types";
 import type { AttackCheckpoint } from "@/game/attack/attackCheckpoint";
 import type { AttackRoster, AttackTargetKind } from "@/game/attack/attackTarget";
@@ -28,6 +29,38 @@ const CHECKPOINT_PATH = "/base/checkpoint";
  */
 const MAP_ROOM_VERSION = 2;
 
+/* ── While you were away ─────────────────────────────────────────────── */
+
+/**
+ * What the own-yard loads finished while the player was away and nobody has
+ * shown yet, and whose account it was (issue #135).
+ *
+ * The owner's build-mode load finishes and writes whatever ended while the
+ * player was away, and its answer's `completed` is the only record of it: the
+ * next load finds nothing. The map loads the own yard first, to find the home
+ * cell, and it has no job notices, so every own-yard load keeps its list here
+ * and the yard takes it when its store starts (`takeAwayJobs`).
+ */
+let awayJobs: { userId: number | null; jobs: CompletedJob[] } = { userId: null, jobs: [] };
+
+const noteAwayJobs = (completed: readonly CompletedJob[] | undefined): void => {
+  const userId = getSession()?.userId ?? null;
+  if (awayJobs.userId !== userId) awayJobs = { userId, jobs: [] };
+  if (completed?.length) awayJobs.jobs.push(...completed);
+};
+
+/**
+ * Hands over, once, every job an own-yard load finished while the player was
+ * away that has not been shown yet, oldest first. Only the signed-in
+ * account's: a list another account's load left behind is dropped.
+ */
+export const takeAwayJobs = (): CompletedJob[] => {
+  const userId = getSession()?.userId ?? null;
+  const jobs = awayJobs.userId === userId ? awayJobs.jobs : [];
+  awayJobs = { userId, jobs: [] };
+  return jobs.sort((a, b) => a.at - b.at);
+};
+
 /**
  * Opens the caller's own main yard.
  *
@@ -40,6 +73,8 @@ const MAP_ROOM_VERSION = 2;
  * No field on this call is a JSON string. On other modes `attackData` and
  * `attackcost` are, and must be JSON.stringify'd into the single form field —
  * the server runs z.string().transform(JSON.parse) over them.
+ *
+ * The answer's `completed` is also kept for {@link takeAwayJobs}.
  */
 export const loadOwnYard = async (
   options: { mapversion?: number } = {},
@@ -53,7 +88,9 @@ export const loadOwnYard = async (
     ...(options.mapversion !== undefined ? { mapversion: options.mapversion } : {}),
   };
 
-  return post<BaseLoadResponse>(LOAD_PATH, { ...body });
+  const response = await post<BaseLoadResponse>(LOAD_PATH, { ...body });
+  noteAwayJobs(response.completed);
+  return response;
 };
 
 /**

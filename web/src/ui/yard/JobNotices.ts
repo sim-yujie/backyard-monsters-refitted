@@ -11,10 +11,23 @@ import type { Notices } from "@/ui/maproom/Notices";
  * kind of job, so five upgrades landing in the same second are one line
  * rather than five. Every building in a toast is a button that selects it,
  * which is where a finished upgrade is looked at and the next one started.
+ *
+ * What the owner's own `/base/load` finished while they were away comes as
+ * one toast instead, every kind in it: "While you were away: 2 upgrades
+ * finished: Cannon Tower 5, Silo 7" (issue #135).
  */
 
 /** How long a job toast stays up on its own. */
 export const JOB_NOTICE_TIMEOUT_MS = 10_000;
+
+/**
+ * How long the "While you were away" toast stays up: longer, since it lands
+ * while the player is still taking in the yard they just opened.
+ */
+export const AWAY_NOTICE_TIMEOUT_MS = 20_000;
+
+/** The lead-in of the one toast for what finished while the player was away. */
+export const AWAY_PREFIX = "While you were away: ";
 
 /** One building (or item) a toast names. */
 export interface JobNoticeItem {
@@ -97,6 +110,19 @@ export const groupCompletedJobs = (completed: readonly CompletedJob[]): JobNotic
 export const noticeText = (group: JobNoticeGroup): string =>
   `${group.heading}: ${group.items.map((item) => item.label).join(", ")}`;
 
+/** A heading after the away lead-in, where it no longer starts the sentence. */
+const awayHeading = (group: JobNoticeGroup): JobNoticeGroup => ({
+  ...group,
+  heading: group.heading.charAt(0).toLowerCase() + group.heading.slice(1),
+});
+
+/**
+ * The away toast's plain text: "While you were away: 2 upgrades finished:
+ * Cannon Tower 5, Silo 7; ran out: Sharper Tools". Empty for no groups.
+ */
+export const awayNoticeText = (groups: readonly JobNoticeGroup[]): string =>
+  groups.length === 0 ? "" : AWAY_PREFIX + groups.map((group) => noticeText(awayHeading(group))).join("; ");
+
 export class JobNotices {
   private readonly notices: Notices;
   private readonly select: (buildingId: number) => void;
@@ -121,9 +147,36 @@ export class JobNotices {
     }
   }
 
+  /**
+   * Shows what the owner's load finished while they were away as one toast,
+   * every kind in it. Nothing for an empty list.
+   */
+  showAway(completed: readonly CompletedJob[]): void {
+    const groups = groupCompletedJobs(completed);
+    if (groups.length === 0) return;
+    const line = document.createElement("span");
+    line.className = "job-notice job-notice--away";
+    line.append(AWAY_PREFIX);
+    groups.forEach((group, index) => {
+      if (index > 0) line.append("; ");
+      this.appendGroup(line, awayHeading(group));
+    });
+    this.count += 1;
+    this.notices.show(`job:away:${this.count}`, line, {
+      level: "info",
+      timeoutMs: AWAY_NOTICE_TIMEOUT_MS,
+    });
+  }
+
   private message(group: JobNoticeGroup): HTMLElement {
     const line = document.createElement("span");
     line.className = "job-notice";
+    this.appendGroup(line, group);
+    return line;
+  }
+
+  /** "Heading: " then each item, a building as a button that selects it. */
+  private appendGroup(line: HTMLElement, group: JobNoticeGroup): void {
     line.append(`${group.heading}: `);
     group.items.forEach((item, index) => {
       if (index > 0) line.append(", ");
@@ -140,6 +193,5 @@ export class JobNotices {
       button.addEventListener("click", () => this.select(buildingId));
       line.append(button);
     });
-    return line;
   }
 }

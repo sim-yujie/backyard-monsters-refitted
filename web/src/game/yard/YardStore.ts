@@ -63,7 +63,9 @@ import { readYard, type Yard, type YardBuilding, type YardWorkers } from "./yard
  *   `pending`), the server's `completed` list for that answer (what the
  *   notices of §3.1 group and show; `[]` when nothing finished), and the
  *   jobs the client `predicted` finished. Returns the unsubscribe; call it
- *   on destroy.
+ *   on destroy. `away` comes once, from {@link YardStore.start}, with what
+ *   the load's own catch-up finished while the player was away (#135); the
+ *   yard itself did not change.
  * - `binding.scene.selectBuilding(id)` — pans the camera to a building and
  *   opens its panel: the HUD's Workers control (soonest `nextWorkerJob`) and
  *   a clicked job notice use it.
@@ -87,6 +89,11 @@ export const YardChangeReason = {
   MERGE: "merge",
   /** Only the set of running requests changed; the yard did not. */
   PENDING: "pending",
+  /**
+   * What the own-yard `/base/load` finished while the player was away, once,
+   * at start. The load's save already holds the result, so the yard did not change.
+   */
+  AWAY: "away",
 } as const;
 export type YardChangeReason = (typeof YardChangeReason)[keyof typeof YardChangeReason];
 
@@ -180,6 +187,11 @@ export interface YardStoreTimers {
 export interface YardStoreOptions {
   /** The own-yard `/base/load` response. */
   save: BaseLoadResponse;
+  /**
+   * What that load's catch-up finished while the player was away (its
+   * `completed`), announced once by {@link YardStore.start} (#135).
+   */
+  away?: readonly CompletedJob[];
   api?: YardApi;
   /** The browser's clock, unix seconds. The store corrects it by the server's `currenttime`. */
   clock?: () => number;
@@ -255,6 +267,8 @@ export class YardStore implements YardStoreReader, YardStoreActions {
    * is what stops a kind the server does not complete from looping.
    */
   private readonly handled = new Set<string>();
+  /** The load's `completed`, until {@link start} announces it. */
+  private away: readonly CompletedJob[];
   private destroyed = false;
 
   constructor(options: YardStoreOptions) {
@@ -264,6 +278,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     this.refreshDelayMs = options.refreshDelayMs ?? REFRESH_DELAY_MS;
     this.onAuthFailure = options.onAuthFailure;
     this.current = options.save;
+    this.away = options.away ?? [];
     this.syncClock(options.save.currenttime);
     this.markOverdue(options.save.currenttime);
   }
@@ -332,12 +347,22 @@ export class YardStore implements YardStoreReader, YardStoreActions {
   /* ── Lifecycle ──────────────────────────────────────────────────────── */
 
   /**
-   * Fetches the server's derived figures once when the load did not carry
-   * them. `/base/load` has no `caps` (it is a yard-route field), so the first
-   * open of a yard makes one `state` call; if the load ever sends `caps`,
-   * this call disappears on its own.
+   * Announces what finished while the player was away, then fetches the
+   * server's derived figures once when the load did not carry them.
+   *
+   * The load's catch-up already finished and wrote those jobs, so the `state`
+   * call below finds nothing new; the load's own `completed` is the only
+   * record of them, and it goes out here, once, as an `away` change — after
+   * the scene has bound the HUD, which the constructor runs before.
+   * `/base/load` has no `caps` (it is a yard-route field), so the first open
+   * of a yard makes one `state` call; if the load ever sends `caps`, this
+   * call disappears on its own.
    */
   start(): void {
+    if (this.destroyed) return;
+    const away = this.away;
+    this.away = [];
+    if (away.length > 0) this.emit({ reason: YardChangeReason.AWAY, completed: away, predicted: [] });
     if (!this.current.caps) void this.refresh();
   }
 

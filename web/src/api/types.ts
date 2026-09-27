@@ -489,6 +489,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
   attpowerups?: unknown[];
   /** The base owner's running alliance powerups. */
   powerups?: unknown[];
+  /**
+   * Only on the owner's build-mode load of their own main yard: what the
+   * load's catch-up finished while the player was away, oldest first, in the
+   * yard routes' `completed` shape (issue #135). `[]` when nothing did.
+   */
+  completed?: CompletedJob[];
 }
 
 /* ── Map Room 2 ─────────────────────────────────────────────────────────── */

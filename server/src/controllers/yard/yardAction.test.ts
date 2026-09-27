@@ -9,6 +9,7 @@ import { yardRefusedErr } from "../../services/yard/yardErrors.js";
 import { yardStateAction } from "./state.js";
 import {
   applyOutcome,
+  catchUpLockedYard,
   defineYardAction,
   runYardAction,
   type YardAction,
@@ -204,6 +205,38 @@ describe("POST /bm/yard/state", () => {
     expect(db.row!.points).toBe("6966");
     expect(db.row!.savetime).toBe(b.body!.savetime);
     expect(b.body!.savetime as number).toBeGreaterThanOrEqual(a.body!.savetime as number);
+  });
+});
+
+describe("catchUpLockedYard (the owner's build-mode /base/load)", () => {
+  const catchUp = () =>
+    catchUpLockedYard(em as unknown as EntityManager, { basesaveid: BASESAVEID } as Save);
+
+  test("writes the catch-up and hands back what finished, for the away notice (#135)", async () => {
+    const { save, completed } = await catchUp();
+
+    expect(completed).toMatchObject([
+      { kind: "upgrade", id: 1, t: 20, detail: { from: 1, level: 2, points: 6966 } },
+    ]);
+    expect(db.readOptions).toEqual([{ lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true }]);
+    expect(db.row).toMatchObject({ points: "6966", savetime: save.savetime });
+    expect((db.row!.buildingdata as Record<string, Row>)["1"]).toMatchObject({ l: 2 });
+  });
+
+  test("a second load finds nothing new", async () => {
+    await catchUp();
+
+    expect((await catchUp()).completed).toEqual([]);
+  });
+
+  test("a yard under attack is left alone: nothing written, nothing completed", async () => {
+    db.row = rowOf({ attackid: 42, attacks: [{ starttime: getCurrentDateTime() - 30 }] });
+    const before = structuredClone(db.row);
+
+    const { completed } = await catchUp();
+
+    expect(completed).toEqual([]);
+    expect(db.row).toEqual(before);
   });
 });
 

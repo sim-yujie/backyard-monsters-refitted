@@ -132,8 +132,13 @@ const stubApi = (
     ...overrides,
   }) as unknown as YardApi & { [K in keyof YardApi]: ReturnType<typeof vi.fn> };
 
-const storeWith = (save: BaseLoadResponse, api: YardApi, time = manualTime()) => {
-  const store = new YardStore({ save, api, clock: time.clock, timers: time.timers });
+const storeWith = (
+  save: BaseLoadResponse,
+  api: YardApi,
+  time = manualTime(),
+  away: YardChange["completed"] = [],
+) => {
+  const store = new YardStore({ save, api, clock: time.clock, timers: time.timers, away });
   // Every change but `pending`, which only says which buttons to disable.
   const changes: YardChange[] = [];
   store.subscribe((change) => {
@@ -499,6 +504,39 @@ describe("lifecycle", () => {
     storeWith(loadWith({ caps: { r1: 1, r2: 1, r3: 1, r4: 1 } }), withCaps).store.start();
     await flush();
     expect(withCaps.state).not.toHaveBeenCalled();
+  });
+
+  it("announces what the load finished while the player was away, once, at start (#135)", async () => {
+    const away = [
+      {
+        kind: "upgrade" as const,
+        id: 2,
+        t: 20,
+        at: T0 - 3600,
+        detail: { from: 1, level: 2, points: 10 },
+      },
+    ];
+    const api = stubApi();
+    const { store, changes } = storeWith(loadWith({ completed: away }), api, manualTime(), away);
+    expect(changes).toEqual([]);
+
+    store.start();
+    expect(changes[0]).toEqual({ reason: YardChangeReason.AWAY, completed: away, predicted: [] });
+    await flush();
+    // The state call that follows found nothing new: the load had written it.
+    expect(api.state).toHaveBeenCalledTimes(1);
+    expect(changes.filter((change) => change.reason === YardChangeReason.AWAY)).toHaveLength(1);
+    expect(changes[1]).toMatchObject({ reason: YardChangeReason.REFRESH, completed: [] });
+
+    store.start();
+    await flush();
+    expect(changes.filter((change) => change.reason === YardChangeReason.AWAY)).toHaveLength(1);
+  });
+
+  it("announces nothing at start when nothing finished while the player was away", () => {
+    const { store, changes } = storeWith(loadWith(), stubApi(), manualTime(), []);
+    store.start();
+    expect(changes.filter((change) => change.reason === YardChangeReason.AWAY)).toEqual([]);
   });
 
   it("merges a planner write with savetime at the server's now, then fetches the state", async () => {

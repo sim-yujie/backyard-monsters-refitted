@@ -332,7 +332,12 @@ Twigs 1.2M / 4.0M ▓▓▓░  Pebbles …  Putty …  Goo …   Shiny 1,240   
 
 **Notices** (`web/src/ui/maproom/Notices.ts`, already used by the yard): one toast per completed
 job from `completed`, grouped when several land together ("3 upgrades finished: Cannon Tower 5,
-Sniper Tower 3, Silo 7"). Clicking a toast selects the building.
+Sniper Tower 3, Silo 7"). Clicking a toast selects the building. What the owner's own
+`/base/load` catch-up finished (its `completed`, #135) is one toast instead, every kind in it,
+headed "While you were away: 2 upgrades finished: Cannon Tower 5, Silo 7"; the store announces it
+once when it starts (`YardChangeReason.AWAY`). The map's own-yard load (to find the home cell) comes
+first after a login and is usually the one that finishes those jobs, so every `loadOwnYard` keeps
+its list until the yard takes it (`takeAwayJobs`, `web/src/api/base.ts`).
 
 **Click counts, Phase 1.**
 

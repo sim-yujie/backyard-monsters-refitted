@@ -1,5 +1,5 @@
 import { logout } from "@/api/auth";
-import { loadAttack, loadOwnYard, viewBase } from "@/api/base";
+import { loadAttack, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
 import {
   BaseMode,
@@ -929,6 +929,9 @@ export class YardScene implements Scene {
     this.dropStore();
     const store = new YardStore({
       save: response,
+      // What this load, or the map's load before it, finished while the
+      // player was away (#135); the store announces it once it starts.
+      away: takeAwayJobs(),
       onAuthFailure: () => {
         if (this.context === context) context.goTo(SceneName.LOGIN);
       },
@@ -959,11 +962,13 @@ export class YardScene implements Scene {
    * same building in the new yard.
    *
    * `pending` only says which requests are running, which is the panel's and
-   * the HUD's business through their own subscriptions; nothing here changes.
+   * the HUD's business through their own subscriptions, and `away` is the
+   * HUD's notice about a yard already drawn; nothing here changes.
    */
   private onStoreChange(change: YardChange): void {
     const store = this.store;
-    if (!store || change.reason === YardChangeReason.PENDING || !this.camera) return;
+    if (!store || !this.camera) return;
+    if (change.reason === YardChangeReason.PENDING || change.reason === YardChangeReason.AWAY) return;
 
     const yard = store.yard;
     this.yard = yard;

@@ -378,6 +378,10 @@ export class Hud {
   /* ── The own yard: caps, workers, job notices ──────────────────────── */
 
   private onYardChange(change: YardChange): void {
+    if (change.reason === YardChangeReason.AWAY) {
+      this.jobNotices?.showAway(change.completed);
+      return;
+    }
     if (change.completed.length > 0) this.jobNotices?.show(change.completed);
     if (change.reason !== YardChangeReason.PENDING) this.syncYard();
   }

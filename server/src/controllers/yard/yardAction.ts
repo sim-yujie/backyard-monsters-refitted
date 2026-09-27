@@ -221,17 +221,23 @@ const lockRow = (em: EntityManager, basesaveid: number) =>
  *
  * @param em - The request's entity manager.
  * @param save - The main yard the load is about to answer with.
- * @returns The caught-up save to answer with; the same entity in practice,
- *   since the transaction shares the request's identity map.
+ * @returns The caught-up save to answer with (the same entity in practice,
+ *   since the transaction shares the request's identity map) and what the
+ *   catch-up finished, which the load sends as `completed` so the client can
+ *   say what finished while the player was away (issue #135); `[]` when it
+ *   was skipped.
  */
-export const catchUpLockedYard = async (em: EntityManager, save: Save): Promise<Save> =>
+export const catchUpLockedYard = async (
+  em: EntityManager,
+  save: Save
+): Promise<{ save: Save; completed: CompletedJob[] }> =>
   em.transactional(async (tx) => {
     const locked = await lockRow(tx, save.basesaveid);
-    if (!locked || isAttackActive(locked)) return locked ?? save;
+    if (!locked || isAttackActive(locked)) return { save: locked ?? save, completed: [] };
 
-    catchUpYard(locked, getCurrentDateTime());
+    const completed = catchUpYard(locked, getCurrentDateTime());
     await tx.flush();
-    return locked;
+    return { save: locked, completed };
   });
 
 /** What {@link runYardAction} answers: the HTTP status and the body. */

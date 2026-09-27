@@ -36,6 +36,7 @@ import { mapSaveData } from "../../../services/base/mapSaveData.js";
 import { clearExpiredStoreItems } from "../../../services/base/clearExpiredStoreItems.js";
 import { syncDerivedLevels } from "../../../services/yard/derivedLevels.js";
 import { catchUpOwnerYard } from "../../yard/yardRoute.js";
+import type { CompletedJob } from "../../../services/yard/catchUp.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
 import { getChatChannel, getOrCreateChatToken } from "../../../chat/chatChannels.js";
 import { getAllianceData } from "../../../services/alliance/allianceData.js";
@@ -142,9 +143,11 @@ export const baseLoad: KoaController = async (ctx) => {
 
   // The owner opening their own main yard: finish whatever ended while they
   // were away and write it, before anything below reads the yard
-  // (docs/design/yard-buildings.md §2.3).
+  // (docs/design/yard-buildings.md §2.3). What finished goes back as
+  // `completed`, for the client's "While you were away" notice (issue #135).
+  let completed: CompletedJob[] | undefined;
   if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
-    baseSave = await catchUpOwnerYard(baseSave);
+    ({ save: baseSave, completed } = await catchUpOwnerYard(baseSave));
   }
 
   if (type === BaseMode.BUILD && mapversion === MapRoomVersion.V1) {
@@ -343,6 +346,7 @@ export const baseLoad: KoaController = async (ctx) => {
     pic_square: avatar,
     chatservers: [process.env.CHAT_WS_HOST!],
     ...(isAttack && { attpowerups }),
+    ...(completed && { completed }),
     ...(isOwner && {
       chatenabled: 1,
       chattoken,

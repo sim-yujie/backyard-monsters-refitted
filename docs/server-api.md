@@ -206,7 +206,8 @@ adds: `relationship` (`EnumBaseRelationship`), `canattack` (bool, from `canAttac
 `tutorialstage`, `currenttime`, `pic_square` (base owner's avatar), `chatservers` (a 1-element
 array with `CHAT_WS_HOST`), and — only when the caller owns the base — `chatenabled: 1`,
 `chattoken`, `chatchannel`, `alliancedata`, `powerups` (see §Alliance and §Chat). Attack modes
-add `attpowerups`. Map Room 3 build/attack adds a `player.buffs` / `attackingplayer.buffs` /
+add `attpowerups`. A `build` load of the caller's own main yard adds `completed`: what its
+catch-up finished, in the yard routes' shape (see "The owner's `/base/load`" under "Yard actions"). Map Room 3 build/attack adds a `player.buffs` / `attackingplayer.buffs` /
 `defendingplayer.buffs` object keyed by small numeric buff-type ids (`2`=resource rate,
 `10`=resource capacity, `1`=defender damage reduction %, `5`/`6`=stronghold attacker/defender
 damage bonus %). `idescent` mode additionally overwrites `resources` with the player's
@@ -870,6 +871,15 @@ now), plus `buildingdata` when a countdown ran, `points` when one completed, `fl
 when they were stale, and `storedata` when a buff expired (MikroORM writes only the columns that
 changed, plus the `lastupdateAt` timestamp). Any owner load of any base also re-derives
 `flinger`/`catapult`. The three Yard Planner write routes re-derive them too.
+
+That load's answer carries `completed`: the jobs its catch-up finished, oldest first, in exactly
+the shape of a yard action's `completed` above (`[]` when nothing finished, or when the catch-up
+was skipped because the yard is under attack). Because the load wrote them, the client's first
+`POST /bm/yard/state` finds nothing new, so this list is the only record of what finished while
+the player was away; the web client shows it as one "While you were away: …" notice (issue #135).
+Any such load counts, including the map screen's (it loads the own yard to find the home cell), so
+the client keeps each list until the yard screen shows it.
+No other load (another mode, somebody else's base, an outpost, Inferno) sends `completed`.
 
 ### Debug
 

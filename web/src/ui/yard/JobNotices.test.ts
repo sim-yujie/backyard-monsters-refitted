@@ -3,7 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CompletedJob } from "@/api/types";
 import { typeName } from "@/game/yard/planner/summary";
 import { Notices } from "@/ui/maproom/Notices";
-import { groupCompletedJobs, JOB_NOTICE_TIMEOUT_MS, JobNotices, noticeText } from "./JobNotices";
+import {
+  AWAY_NOTICE_TIMEOUT_MS,
+  awayNoticeText,
+  groupCompletedJobs,
+  JOB_NOTICE_TIMEOUT_MS,
+  JobNotices,
+  noticeText,
+} from "./JobNotices";
 
 /** The yard's job toasts (design §3.1 "Notices"): one per kind, grouped, each building a button. */
 
@@ -61,6 +68,28 @@ describe("groupCompletedJobs", () => {
   });
 });
 
+describe("awayNoticeText", () => {
+  it("heads the jobs the load finished with 'While you were away' (#135)", () => {
+    expect(awayNoticeText(groupCompletedJobs([upgrade(1, CANNON, 5), upgrade(2, SILO, 7)]))).toBe(
+      `While you were away: 2 upgrades finished: ${typeName(CANNON)} 5, ${typeName(SILO)} 7`,
+    );
+  });
+
+  it("puts every kind in the one line, each heading carried on mid-sentence", () => {
+    const groups = groupCompletedJobs([
+      upgrade(1, CANNON, 5),
+      { kind: "storeItem", id: "BST", t: null, at: 200, detail: {} },
+    ]);
+    expect(awayNoticeText(groups)).toBe(
+      `While you were away: upgrade finished: ${typeName(CANNON)} 5; ran out: Sharper Tools`,
+    );
+  });
+
+  it("is empty when nothing finished", () => {
+    expect(awayNoticeText([])).toBe("");
+  });
+});
+
 describe("JobNotices", () => {
   let notices: Notices;
   let select: ReturnType<typeof vi.fn<(id: number) => void>>;
@@ -101,6 +130,34 @@ describe("JobNotices", () => {
 
   it("shows nothing for an answer where nothing finished", () => {
     jobs.show([]);
+    expect(toasts()).toHaveLength(0);
+  });
+
+  it("shows what finished while the player was away as one toast, buildings still buttons", () => {
+    jobs.showAway([
+      upgrade(1, CANNON, 5),
+      { kind: "build", id: 2, t: SILO, at: 150, detail: { from: 0, level: 1, points: 5 } },
+    ]);
+    expect(toasts()).toHaveLength(1);
+    expect(toasts()[0]!.querySelector(".notice__text")!.textContent).toBe(
+      `While you were away: upgrade finished: ${typeName(CANNON)} 5; build finished: ${typeName(SILO)}`,
+    );
+    const buttons = [...toasts()[0]!.querySelectorAll<HTMLButtonElement>(".job-notice__building")];
+    expect(buttons).toHaveLength(2);
+    buttons[1]!.click();
+    expect(select).toHaveBeenCalledWith(2);
+  });
+
+  it("keeps the away toast up longer than a job toast, then clears it", () => {
+    jobs.showAway([upgrade(1, CANNON, 5)]);
+    vi.advanceTimersByTime(JOB_NOTICE_TIMEOUT_MS + 1);
+    expect(toasts()).toHaveLength(1);
+    vi.advanceTimersByTime(AWAY_NOTICE_TIMEOUT_MS - JOB_NOTICE_TIMEOUT_MS);
+    expect(toasts()).toHaveLength(0);
+  });
+
+  it("shows no away toast when nothing finished while the player was away", () => {
+    jobs.showAway([]);
     expect(toasts()).toHaveLength(0);
   });
 });
