@@ -625,4 +625,19 @@ export class YardBuildings {
     this.markers.addChild(marker);
     return marker;
   }
+
+  /* ── Hit flash, for a live battle (#63) ─────────────────────────────── */
+
+  /**
+   * Draws a building lit up for the frames after a monster strikes it, or
+   * puts it back. A tint can only darken, so the flash is the top sprite
+   * drawn additively over the ground for a moment; off restores the tint of
+   * whatever damage step the building is at. A placeholder is left alone.
+   */
+  setFlash(id: number, on: boolean): void {
+    const view = this.byId.get(id);
+    if (!view || !view.resolved) return;
+    view.top.blendMode = on ? "add" : "normal";
+    view.top.tint = on ? 0xffffff : (DAMAGE_TINTS[view.damageStep] ?? 0xffffff);
+  }
 }

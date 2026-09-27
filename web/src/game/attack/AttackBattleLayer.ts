@@ -9,12 +9,14 @@ import {
   type TextureSource,
 } from "pixi.js";
 import type { BattleVisualEvent, CreepSnapshot } from "@/game/combat/rules";
+import { damageStep } from "@/game/yard/YardBuildings";
 import { depthKey, type Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import type { AttackSession } from "./AttackSession";
 import { BuildingBars } from "./buildingBars";
+import { CreepFx, HURT_TICKS, drawsProjectile, lungeOffset } from "./creepFx";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
-import { TowerFx, towersOf } from "./towerFx";
+import { BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
 import { TrapReveal } from "./trapReveal";
 import {
   anchorOffset,
@@ -94,6 +96,16 @@ export const SPLAT_TICKS = 32;
 /** The walking hop of a single-pose creep, in px, and its period in ticks. */
 const HOP_HEIGHT = 2;
 const HOP_PERIOD_TICKS = 12;
+
+/**
+ * Ticks a creep keeps its walk cycle after its last step, so a tick on which
+ * the engine did not move it — arriving at a waypoint, a frame at 144 Hz that
+ * saw no tick at all — does not drop it to its standing pose for one frame.
+ */
+export const STILL_LATCH_TICKS = 3;
+
+/** The tint a creep's body shows for `HURT_TICKS` after it is hit. */
+export const HURT_TINT = 0xff7070;
 
 /** Health bar sizes: creeps and the champion. */
 const BAR = { width: 18, height: 3, gap: 5 } as const;
@@ -189,8 +201,9 @@ export const layoutCreep = (
   const anchor = anchorOffset(sheet);
 
   let lift = 0;
+  let altitude = 0;
   if (creep.flying) {
-    const altitude = flyerAltitude(creep.monsterId);
+    altitude = flyerAltitude(creep.monsterId);
     lift = options.reducedMotion ? -altitude : hoverOffset(pose.age, altitude);
   } else if (pose.moving && !options.reducedMotion && singlePose(sheet)) {
     lift = -Math.abs(Math.sin((pose.age / HOP_PERIOD_TICKS) * Math.PI)) * HOP_HEIGHT;
@@ -206,7 +219,10 @@ export const layoutCreep = (
     key: `${sheet.key}:${column}:${row}`,
     x: ground.x + anchor.x,
     y: ground.y + anchor.y + lift,
-    zIndex: creepZIndex(ground.x, ground.y, creep.id),
+    // A flyer sorts as if it stood its altitude further down the screen
+    // (`MonsterBase.as:726` adds `_altitude` to the depth), so its body is not
+    // hidden behind a building whose top corner is just below its ground point.
+    zIndex: creepZIndex(ground.x, ground.y + altitude, creep.id),
     groundX: ground.x,
     groundY: ground.y,
     shadow: shadowAt ? { x: ground.x + shadowAt.x, y: ground.y + shadowAt.y } : null,
@@ -384,6 +400,8 @@ export interface BattleYardHost {
   setConcealed(id: number, concealed: boolean): void;
   /** Puts one of a building's animation layers on a cell: a tower's facing. */
   setAnimFrame(id: number, layer: number, frame: number): void;
+  /** Switches a building's hit flash on or off (#63); a host without one shows no flash. */
+  flashBuilding?(id: number, on: boolean): void;
 }
 
 export interface AttackBattleLayerOptions {
@@ -398,19 +416,34 @@ export interface AttackBattleLayerOptions {
 
 interface CreepView {
   id: number;
+  monsterId: string;
   sheet: MonsterSheet | null;
   body: Sprite;
   shadow: Sprite | null;
   barBack: Sprite;
   barFront: Sprite;
-  /** The ground point last frame, for the heading. */
+  /** The ground point at the last tick that was looked at, for the heading. */
   lastX: number;
   lastY: number;
+  /** The tick `lastX/lastY` were read on; a frame with no new tick changes nothing. */
+  lastTick: number;
   heading: number;
+  /** Whether the walk cycle is playing; latched `STILL_LATCH_TICKS` past the last step. */
+  moving: boolean;
+  /** The first tick the creep was seen standing still, or -1 while it walks. */
+  stillSince: number;
   /** The building the creep was last seen attacking, for the facing. */
   facedBuilding: number;
   bornTick: number;
   cellKey: string;
+  /** The tick of the last melee hit and the unit vector it lunged along (#63). */
+  lungeTick: number;
+  lungeX: number;
+  lungeY: number;
+  /** The tick the creep was last hurt, for the red tint (#68). */
+  hurtTick: number;
+  /** World y of the top of the body as last drawn, for the numbers over it. */
+  top: number;
 }
 
 /** A trap going off: a ring that grows and fades over a scorch that stays. */
@@ -485,6 +518,12 @@ export class AttackBattleLayer {
   /** The creeps by id this frame, for the guns to aim at. */
   private readonly creepIndex = new Map<number, CreepSnapshot>();
 
+  /** Projectiles, smoke and damage numbers (#63, #68); its root sits last in the overlay. */
+  private readonly fx: CreepFx;
+  /** The damage step each building was last seen at, for the smoke on a crossing. */
+  private readonly smokeStep = new Map<number, number>();
+  private smokePrimed = false;
+
   private lastEventTick = 0;
   private damageDirty = true;
   private limitRead = false;
@@ -511,6 +550,14 @@ export class AttackBattleLayer {
     // Our own children only: the drop ring and anything else already in the
     // overlay stays where it is.
     this.overlay.addChild(this.effects, this.fire, this.bars);
+    this.fx = new CreepFx(
+      {
+        creepAnchor: (id) => this.creepAnchor(id),
+        flashBuilding: (id, on) => this.host.flashBuilding?.(id, on),
+      },
+      this.reducedMotion,
+    );
+    this.overlay.addChild(this.fx.root);
 
     // The building side (issues #64, #66, #67). The towers draw into the same
     // `fire` graphics the tracers used; the building bars go under the splats,
@@ -557,12 +604,14 @@ export class AttackBattleLayer {
     this.towerFx.update(tick, (id) => this.creepIndex.get(id));
     this.drawSplats(tick);
     this.drawBursts(tick);
+    this.fx.update(tick);
 
     if (this.damageDirty) {
       this.damageDirty = false;
       const state = battle.state();
       this.revealTraps(state.firedTraps, tick);
       this.syncDamage(state.health);
+      this.syncSmoke(state.health, tick);
       this.buildingBars.sync(state.health);
     }
   }
@@ -570,6 +619,11 @@ export class AttackBattleLayer {
   /** How many creeps have a sprite right now. */
   get creepCount(): number {
     return this.views.size;
+  }
+
+  /** The projectiles, smoke and damage numbers, for a test or the dev hook to read. */
+  get creepEffects(): CreepFx {
+    return this.fx;
   }
 
   destroy(): void {
@@ -597,6 +651,7 @@ export class AttackBattleLayer {
     for (const scorch of this.scorches) scorch.destroy();
     this.scorches.length = 0;
     this.creepIndex.clear();
+    this.fx.destroy();
 
     // Only what this added: the overlay and the sorted container are the
     // scene's and the renderer's, and keep their other children.
@@ -656,18 +711,27 @@ export class AttackBattleLayer {
     const ground = groundWorld(creep.ix, creep.iy, this.origin);
     const view = this.pool.pop() ?? this.makeView();
     view.id = creep.id;
+    view.monsterId = creep.monsterId;
     view.sheet = spriteFor(creep.monsterId, creep.level) ?? null;
     view.lastX = ground.x;
     view.lastY = ground.y;
+    view.lastTick = tick;
     // Face the yard's middle until the first step says otherwise.
     view.heading =
       headingBetween(ground, {
         x: this.yard.bounds.width / 2,
         y: this.yard.bounds.height / 2,
       }) ?? 0;
+    view.moving = false;
+    view.stillSince = tick;
     view.facedBuilding = -1;
     view.bornTick = tick;
     view.cellKey = "";
+    view.lungeTick = Number.NEGATIVE_INFINITY;
+    view.lungeX = 0;
+    view.lungeY = 0;
+    view.hurtTick = Number.NEGATIVE_INFINITY;
+    view.top = ground.y;
     view.body.visible = true;
     view.barBack.visible = true;
     view.barFront.visible = true;
@@ -690,6 +754,7 @@ export class AttackBattleLayer {
     this.bars.addChild(barBack, barFront);
     return {
       id: -1,
+      monsterId: "",
       sheet: null,
       body,
       shadow: null,
@@ -697,10 +762,18 @@ export class AttackBattleLayer {
       barFront,
       lastX: 0,
       lastY: 0,
+      lastTick: -1,
       heading: 0,
+      moving: false,
+      stillSince: -1,
       facedBuilding: -1,
       bornTick: 0,
       cellKey: "",
+      lungeTick: Number.NEGATIVE_INFINITY,
+      lungeX: 0,
+      lungeY: 0,
+      hurtTick: Number.NEGATIVE_INFINITY,
+      top: 0,
     };
   }
 
@@ -726,24 +799,41 @@ export class AttackBattleLayer {
 
   private place(view: CreepView, creep: CreepSnapshot, tick: number): void {
     const ground = groundWorld(creep.ix, creep.iy, this.origin);
-    const stepped = headingBetween({ x: view.lastX, y: view.lastY }, ground);
-    const moving = stepped !== null;
-    if (stepped !== null) {
-      view.heading = stepped;
-      view.facedBuilding = -1;
-    } else if (creep.state === "attacking" && creep.targetBuilding !== view.facedBuilding) {
-      // Standing and swinging: turn to face what it is hitting.
-      const centre = this.host.centreOf(creep.targetBuilding);
-      const facing = centre ? headingBetween(ground, centre) : null;
-      if (facing !== null) view.heading = facing;
-      view.facedBuilding = creep.targetBuilding;
+    // Heading and motion are read once per battle tick. A frame that saw no
+    // tick — every other frame at 144 Hz, since the battle runs 80 ticks a
+    // second — would otherwise see a zero step and drop a walking champion to
+    // its standing pose for that frame: the flicker of issue #65.
+    if (tick !== view.lastTick) {
+      const stepped = headingBetween({ x: view.lastX, y: view.lastY }, ground);
+      if (stepped !== null) {
+        view.heading = stepped;
+        view.facedBuilding = -1;
+        view.stillSince = -1;
+        view.moving = true;
+      } else {
+        if (view.stillSince < 0) view.stillSince = tick;
+        view.moving = tick - view.stillSince < STILL_LATCH_TICKS;
+        if (creep.state === "attacking" && creep.targetBuilding !== view.facedBuilding) {
+          // Standing and swinging: turn to face what it is hitting.
+          const centre = this.host.centreOf(creep.targetBuilding);
+          const facing = centre ? headingBetween(ground, centre) : null;
+          if (facing !== null) view.heading = facing;
+          view.facedBuilding = creep.targetBuilding;
+        }
+      }
+      view.lastX = ground.x;
+      view.lastY = ground.y;
+      view.lastTick = tick;
     }
-    view.lastX = ground.x;
-    view.lastY = ground.y;
 
     const sheet = view.sheet;
-    const pose: CreepPose = { heading: view.heading, moving, age: tick - view.bornTick };
+    const pose: CreepPose = { heading: view.heading, moving: view.moving, age: tick - view.bornTick };
     const body = view.body;
+
+    // A melee hit nudges the body toward what it struck and back (#63); a
+    // wound tints it for a few ticks (#68). Neither moves the health bar.
+    const lunge = this.reducedMotion ? 0 : lungeOffset(tick - view.lungeTick);
+    const hurt = tick - view.hurtTick < HURT_TICKS;
 
     let top: number;
     if (sheet) {
@@ -757,8 +847,13 @@ export class AttackBattleLayer {
           body.texture = cell;
         }
         body.scale.set(1);
-        body.tint = 0xffffff;
-        body.position.set(layout.x, layout.y);
+        body.tint = hurt ? HURT_TINT : 0xffffff;
+        // Whole pixels, as Flash drew them (`MonsterBase.as:613-616`): a cell
+        // sampled at a fraction of a pixel shimmers as it moves.
+        body.position.set(
+          Math.round(layout.x + lunge * view.lungeX),
+          Math.round(layout.y + lunge * view.lungeY),
+        );
         top = layout.y;
       } else {
         this.placeMarker(body, ground, creep.champion);
@@ -769,9 +864,11 @@ export class AttackBattleLayer {
       this.placeShadow(view, layout);
     } else {
       this.placeMarker(body, ground, creep.champion);
+      if (hurt) body.tint = HURT_TINT;
       top = body.y;
       body.zIndex = creepZIndex(ground.x, ground.y, creep.id);
     }
+    view.top = top;
 
     const bar = creep.champion ? CHAMPION_BAR : BAR;
     const fraction = creep.maxHp > 0 ? Math.max(0, Math.min(1, creep.hp / creep.maxHp)) : 0;
@@ -811,14 +908,100 @@ export class AttackBattleLayer {
       shadow.texture = cell;
     }
     shadow.visible = true;
-    shadow.position.set(layout.shadow.x, layout.shadow.y);
+    shadow.position.set(Math.round(layout.shadow.x), Math.round(layout.shadow.y));
     // Under the body, above whatever building the body is above.
     shadow.zIndex = layout.zIndex - 1;
+  }
+
+  /* ── Creep hits and wounds (#63, #68) ───────────────────────────────── */
+
+  /** Where a creep is drawn right now, for the numbers over it; null once gone. */
+  private creepAnchor(id: number): { ground: Point; top: number } | null {
+    const view = this.views.get(id);
+    if (!view) return null;
+    return { ground: { x: view.lastX, y: view.lastY }, top: view.top };
+  }
+
+  /**
+   * A swing that connected. A ranged monster's is a projectile from its body
+   * to the target, flashing the building when it lands; anyone else's is a
+   * lunge toward the target and the flash at once.
+   */
+  private onHit(event: Extract<BattleVisualEvent, { kind: "hit" }>): void {
+    const view = this.views.get(event.creepId);
+    const ground = groundWorld(event.ix, event.iy, this.origin);
+    const monsterId = view?.monsterId ?? "";
+    let target: Point | null = null;
+    if (event.buildingId >= 0) {
+      target = this.host.centreOf(event.buildingId);
+    } else if (event.creepTargetId >= 0) {
+      const other = this.views.get(event.creepTargetId);
+      const at = other ? { x: other.lastX, y: other.lastY } : groundWorld(event.targetIx, event.targetIy, this.origin);
+      target = { x: at.x, y: at.y - BODY_HEIGHT };
+    }
+    if (!target) target = groundWorld(event.targetIx, event.targetIy, this.origin);
+
+    if (drawsProjectile(monsterId, event.ranged)) {
+      const altitude = event.flying ? flyerAltitude(monsterId) : 0;
+      const from = { x: ground.x, y: ground.y - BODY_HEIGHT - altitude };
+      this.fx.projectile(event.tick, from, target, event.buildingId, view?.sheet?.family !== view?.sheet?.key);
+      return;
+    }
+    if (view) {
+      const dx = target.x - ground.x;
+      const dy = target.y - ground.y;
+      const length = Math.hypot(dx, dy);
+      view.lungeTick = event.tick;
+      view.lungeX = length > 0 ? dx / length : 0;
+      view.lungeY = length > 0 ? dy / length : 0;
+    }
+    this.fx.flash(event.buildingId, event.tick);
+  }
+
+  /** A creep lost health: tint it and float the number over it. */
+  private onHurt(event: Extract<BattleVisualEvent, { kind: "hurt" }>): void {
+    const view = this.views.get(event.creepId);
+    if (view) view.hurtTick = event.tick;
+    const ground = groundWorld(event.ix, event.iy, this.origin);
+    const at = { x: ground.x, y: (view?.top ?? ground.y - BODY_HEIGHT) - 6 };
+    this.fx.hurt(event.tick, event.creepId, event.amount, at, event.friendly);
+  }
+
+  /**
+   * Smoke where a building has just crossed into damaged (below half) or
+   * destroyed, as `BFOUNDATION.as:1070-1092` puffed it. The first pass only
+   * records where every building already stands, so a yard opened with ruins
+   * in it does not smoke on the first frame.
+   */
+  private syncSmoke(health: Readonly<Record<string, number>>, tick: number): void {
+    for (const [key, hp] of Object.entries(health)) {
+      const id = Number(key);
+      const maxHp = this.maxHpById.get(id);
+      const step = damageStep(maxHp === undefined ? (hp <= 0 ? 0 : 1) : hp / maxHp);
+      const before = this.smokeStep.get(id) ?? 0;
+      if (step === before) continue;
+      this.smokeStep.set(id, step);
+      if (!this.smokePrimed) continue;
+      const crossedDestroyed = step >= 4 && before < 4;
+      const crossedDamaged = step >= 2 && before < 2;
+      if (!crossedDestroyed && !crossedDamaged) continue;
+      const centre = this.host.centreOf(id);
+      if (centre) this.fx.poof(tick, centre, crossedDestroyed);
+    }
+    this.smokePrimed = true;
   }
 
   /* ── Shots and deaths ───────────────────────────────────────────────── */
 
   private onEvent(event: BattleVisualEvent): void {
+    if (event.kind === "hit") {
+      this.onHit(event);
+      return;
+    }
+    if (event.kind === "hurt") {
+      this.onHurt(event);
+      return;
+    }
     if (event.kind === "shot") {
       this.towerFx.onShot(event, this.creepIndex.get(event.creepId));
       return;

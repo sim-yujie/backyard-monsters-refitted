@@ -282,15 +282,16 @@ const towerYard = (): BaseLoadResponse =>
     storedata: {},
   }) as unknown as BaseLoadResponse;
 
-const targetOf = (): AttackTarget => ({
+const targetOf = (monsters: Record<string, number> = { C1: 3 }): AttackTarget => ({
   baseid: "3502",
   kind: "wild",
   cell: { col: 241, row: 208 },
   name: "Kozu",
   roster: {
-    monsters: { C1: 3 },
+    monsters,
     levels: {},
-    champions: [],
+    // A level 1 Fomor, awake and fed, so a test can fling it.
+    champions: [{ t: 3, hp: 1000, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 }],
     flingerLevel: 4,
     catapultLevel: 0,
   },
@@ -308,25 +309,32 @@ const blankSheet = (key: string): Texture => {
 interface Host extends BattleYardHost {
   readonly depth: Container;
   readonly damage: Map<number, number>;
+  readonly flashes: Array<{ id: number; on: boolean }>;
 }
 
 const hostOf = (): Host => {
   const depth = new Container();
   depth.sortableChildren = true;
   const damage = new Map<number, number>();
+  const flashes: Array<{ id: number; on: boolean }> = [];
   return {
     depth,
     damage,
+    flashes,
     depthSortedLayer: () => depth,
     centreOf: () => ({ x: 400, y: 400 }),
     setBuildingDamage: (id, fraction) => damage.set(id, fraction),
     setConcealed: () => {},
     setAnimFrame: () => {},
+    flashBuilding: (id, on) => flashes.push({ id, on }),
   };
 };
 
-const setUp = (loader = (url: string) => Promise.resolve(blankSheet(keyOf(url)))) => {
-  const session = new AttackSession({ target: targetOf(), seed: 1 });
+const setUp = (
+  loader = (url: string) => Promise.resolve(blankSheet(keyOf(url))),
+  monsters?: Record<string, number>,
+) => {
+  const session = new AttackSession({ target: targetOf(monsters), seed: 1 });
   const response = towerYard();
   session.load(response);
   const yard = readYard(response);
@@ -366,7 +374,8 @@ describe("AttackBattleLayer over a session", () => {
   it("adds its own containers after what the overlay already holds", () => {
     const { overlay, marker, layer } = setUp();
     expect(overlay.children[0]).toBe(marker);
-    expect(overlay.children).toHaveLength(4);
+    // Effects, tower fire, bars, and the creep effects (projectiles, smoke, numbers).
+    expect(overlay.children).toHaveLength(5);
     layer.destroy();
     expect(overlay.children).toEqual([marker]);
   });
@@ -417,9 +426,11 @@ describe("AttackBattleLayer over a session", () => {
     const snapshot = session.battle()?.creeps()[0];
     if (!snapshot) throw new Error("the Pokey is gone");
     const ground = groundWorld(snapshot.ix, snapshot.iy, origin);
-    expect(body.x).toBe(ground.x - pokey.anchorX);
-    expect(ground.y - pokey.anchorY - body.y).toBeGreaterThanOrEqual(0);
-    expect(ground.y - pokey.anchorY - body.y).toBeLessThanOrEqual(2);
+    // Drawn on whole pixels (`MonsterBase.as:613-616`), so within half a pixel
+    // of the ground point minus the anchor, lifted by the hop.
+    expect(Math.abs(body.x - (ground.x - pokey.anchorX))).toBeLessThanOrEqual(0.5);
+    expect(ground.y - pokey.anchorY - body.y).toBeGreaterThanOrEqual(-0.5);
+    expect(ground.y - pokey.anchorY - body.y).toBeLessThanOrEqual(2.5);
     expect(body.zIndex).toBe(creepZIndex(ground.x, ground.y, 1));
     layer.destroy();
   });
@@ -481,5 +492,129 @@ describe("AttackBattleLayer over a session", () => {
     textures.setMaxTextureSize(8192);
     expect(textures.oversized(korath)).toBe(false);
     textures.destroy();
+  });
+});
+
+/* ── Hits, wounds and steady walking (#63, #65, #68) ────────────────────── */
+
+type BodyLike = { texture: Texture; x: number; y: number; tint: number; visible: boolean };
+
+/** Frame by frame for `seconds`, calling `check` after each frame; stops early on true. */
+const playUntil = (
+  session: AttackSession,
+  seconds: number,
+  layer: AttackBattleLayer,
+  check: () => boolean,
+): boolean => {
+  const frames = Math.ceil(seconds * 60);
+  for (let frame = 0; frame < frames; frame += 1) {
+    session.advance(1 / 60);
+    layer.update();
+    if (check()) return true;
+  }
+  return false;
+};
+
+describe("hits, wounds and steady walking", () => {
+  it("keeps a walking champion on its walk row when a frame brings no new tick (#65)", async () => {
+    const { session, host, layer } = setUp();
+    session.appendFling({ x: -200, y: -200, monsters: {}, champion: { t: 3, l: 1 } });
+    await flush();
+    const fomor = MONSTER_SPRITES["G3_1"];
+    if (!fomor?.animations.walk) throw new Error("Fomor lost its walk cycle");
+    const walk = fomor.animations.walk;
+    // The champion's body is the child cut from its sheet; the other is its shadow.
+    const bodyOf = () =>
+      host.depth.children.find(
+        (child) => (child as unknown as BodyLike).texture.frame.width === fomor.frameWidth,
+      ) as unknown as BodyLike | undefined;
+    const walking = playUntil(session, 3, layer, () => {
+      const found = bodyOf();
+      const row = found ? found.texture.frame.y / fomor.frameHeight : -1;
+      return row >= walk.first && row < walk.first + walk.count;
+    });
+    expect(walking).toBe(true);
+    const body = bodyOf();
+    if (!body) throw new Error("no Fomor body");
+    const before = body.texture.frame.y;
+    // Two more frames with the clock stopped: what a 144 Hz display does
+    // between ticks. The row must not fall back to the standing pose.
+    layer.update();
+    layer.update();
+    expect(body.texture.frame.y).toBe(before);
+    expect(body.texture.frame.y / fomor.frameHeight).not.toBe(fomor.animations.idle?.first);
+    layer.destroy();
+  });
+
+  it("lunges a melee creep toward its target on a hit and flashes the building (#63)", async () => {
+    const { session, host, layer, yard } = setUp();
+    session.appendFling({ x: -100, y: -100, monsters: { C1: 1 } });
+    await flush();
+    const pokey = MONSTER_SPRITES["C1"];
+    if (!pokey) throw new Error("no Pokey");
+    const origin = { x: yard.bounds.originX, y: yard.bounds.originY };
+    let lunged = false;
+    playUntil(session, 8, layer, () => {
+      const body = host.depth.children[0] as BodyLike | undefined;
+      const snapshot = session.battle()?.creeps()[0];
+      if (!body || !snapshot || snapshot.state !== "attacking") return false;
+      const ground = groundWorld(snapshot.ix, snapshot.iy, origin);
+      const restX = Math.round(ground.x - pokey.anchorX);
+      const restY = Math.round(ground.y - pokey.anchorY);
+      // Standing still the body sits at rest; during a lunge it is displaced.
+      if (Math.abs(body.x - restX) + Math.abs(body.y - restY) >= 1) lunged = true;
+      return lunged && host.flashes.length > 0;
+    });
+    expect(lunged).toBe(true);
+    expect(host.flashes[0]).toEqual({ id: 1, on: true });
+    // A few frames on, the flash has been switched off again.
+    playUntil(session, 0.2, layer, () => false);
+    expect(host.flashes.some((flash) => !flash.on)).toBe(true);
+    expect(layer.creepEffects.projectileCount).toBe(0);
+    layer.destroy();
+  });
+
+  it("fires a projectile from a ranged champion instead of lunging (#63)", async () => {
+    const { session, layer } = setUp();
+    // Fomor reaches 140 yard units at level 1, so from 120 away it fires at once.
+    session.appendFling({ x: -80, y: -80, monsters: {}, champion: { t: 3, l: 1 } });
+    await flush();
+    const fired = playUntil(session, 6, layer, () => layer.creepEffects.projectileCount > 0);
+    expect(fired).toBe(true);
+    layer.destroy();
+  });
+
+  it("tints a monster red and floats the damage over it when a tower hits it (#68)", async () => {
+    const { session, host, layer } = setUp();
+    session.appendFling({ x: -100, y: -100, monsters: { C1: 1 } });
+    await flush();
+    let tinted = false;
+    const hurt = playUntil(session, 8, layer, () => {
+      const body = host.depth.children[0] as BodyLike | undefined;
+      if (body && body.tint !== 0xffffff) tinted = true;
+      return layer.creepEffects.labelCount > 0 && tinted;
+    });
+    expect(hurt).toBe(true);
+    // A level 1 Cannon Tower does 20 a shot.
+    expect(layer.creepEffects.labelFor(1)?.amount).toBe(20);
+    // And the tint clears again once the wound is old.
+    playUntil(session, 0.3, layer, () => false);
+    layer.destroy();
+  });
+
+  it("puffs smoke when the tower crosses into damaged, not on the first frame (#63)", async () => {
+    const { session, layer } = setUp(undefined, { C1: 12 });
+    layer.update();
+    expect(layer.creepEffects.poofsMade).toBe(0);
+    session.appendFling({ x: -100, y: -100, monsters: { C1: 12 } });
+    await flush();
+    // A dozen Pokeys at 80 a second each take a 6,000 health tower below half
+    // in a few seconds of battle time, before its splash thins them out.
+    const smoked = playUntil(session, 30, layer, () => layer.creepEffects.poofsMade > 0);
+    expect(smoked).toBe(true);
+    const fraction = session.battle()?.state().health[1];
+    expect(fraction).toBeDefined();
+    expect((fraction ?? 6000) / 6000).toBeLessThan(0.5);
+    layer.destroy();
   });
 });

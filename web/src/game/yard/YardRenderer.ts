@@ -491,6 +491,13 @@ export class YardRenderer {
   private clearMushrooms(): void {
     for (const child of this.mushroomLayer.removeChildren()) child.destroy();
   }
+
+  /* ── A live battle: hit flash (#63) ─────────────────────────────────── */
+
+  /** Lights a building up for the frames after a monster strikes it; see `YardBuildings.setFlash`. */
+  flashBuilding(id: number, on: boolean): void {
+    this.buildings.setFlash(id, on);
+  }
 }
 
 /** Corners as the flat point list `Graphics.poly` wants. */

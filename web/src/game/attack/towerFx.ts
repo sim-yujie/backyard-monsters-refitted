@@ -224,8 +224,8 @@ const BOLT_TICKS = 3;
 /** Ticks the railgun's trail lasts, and the length of each gun-ball segment. */
 const RAIL_TICKS = 16;
 const RAIL_SEGMENT = 32;
-/** World px a shot lands above a walking creep's ground point. */
-const BODY_HEIGHT = 10;
+/** World px a walking creep's body middle sits above its ground point: where shots land and leave. */
+export const BODY_HEIGHT = 10;
 
 const BOLT_COLOUR = 0x30c8fa; // `EFFECTS.Lightning` default 3197178
 const BEAM_GLOW = 0xfca133; // `LASER.Tick` 16555315
