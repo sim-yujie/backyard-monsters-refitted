@@ -78,9 +78,12 @@ const speedup = (id: unknown, item: string, as: User = user): Promise<YardAnswer
 const cancel = (id: unknown): Promise<YardAnswer> =>
   runYardAction(em as unknown as EntityManager, user, yardCancelUpgradeAction, { id });
 
-/** The row without the columns a request always moves. */
+/**
+ * The row without the columns a request always moves: `savetime`, and the
+ * monster production state the catch-up writes on every request (§2.5).
+ */
 const settled = (row: Row | null) => {
-  const { savetime: _savetime, ...rest } = row!;
+  const { savetime: _savetime, monsters: _monsters, ...rest } = row!;
   return rest;
 };
 

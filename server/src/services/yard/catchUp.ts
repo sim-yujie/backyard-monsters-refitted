@@ -5,6 +5,7 @@ import {
   type StoreItemJob,
 } from "./catchUpBuildings.js";
 import { catchUpLocker, type CatchUpLockerSave, type UnlockJob } from "./catchUpLocker.js";
+import { catchUpMonsters, type CatchUpMonstersSave, type MonsterJob } from "./catchUpMonsters.js";
 
 /**
  * `catchUpYard(save, now)`: advances a main yard from its `savetime` to `now`
@@ -23,7 +24,7 @@ import { catchUpLocker, type CatchUpLockerSave, type UnlockJob } from "./catchUp
  * | --- | --- | --- |
  * | 1 | `catchUpBuildings.ts` — countdowns, points, `flinger`/`catapult`, store buffs | 1 |
  * | 2 | `catchUpLocker.ts` — unlocks and the Locker Overdrive (runs first, see there) | 2 |
- * | 2 | `catchUpMonsters.ts` | 2 |
+ * | 2 | `catchUpMonsters.ts` — HCC queue refund, hatchery production, housing cull (after the buildings) | 2 |
  * | 3 | `catchUpHarvesters.ts`, `catchUpRepairs.ts`, `catchUpMushrooms.ts` | 3 |
  * | 4 | `catchUpTraining.ts` | 4 |
  * | 5 | `catchUpChampions.ts` | 5 |
@@ -45,10 +46,10 @@ import { catchUpLocker, type CatchUpLockerSave, type UnlockJob } from "./catchUp
  * Every kind has `{ kind, id, t, at, detail }`. Later steps widen this union
  * with their own kinds (`unlock`, `hatch`, `train`, …).
  */
-export type CompletedJob = BuildingJob | StoreItemJob | UnlockJob;
+export type CompletedJob = BuildingJob | StoreItemJob | UnlockJob | MonsterJob;
 
 /** The slice of a save the catch-up reads and writes. */
-export interface CatchUpSave extends CatchUpBuildingsSave, CatchUpLockerSave {
+export interface CatchUpSave extends CatchUpBuildingsSave, CatchUpLockerSave, CatchUpMonstersSave {
   savetime?: number;
 }
 
@@ -71,6 +72,7 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
     ...catchUpLocker(save, from, now),
     ...catchUpBuildings(save, from, now),
   ];
+  completed.push(...catchUpMonsters(save, from, now, completed));
 
   save.savetime = now;
 

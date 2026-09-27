@@ -296,6 +296,9 @@ export const productionAllowance = (
  * @param {BuildingHealthData | null | undefined} yard.healthData - `Save.buildinghealthdata`
  * @param {boolean} yard.housingExpansionActive - Whether `EXH`/`EXHI` is running
  * @param {boolean} yard.inferno - Whether this is an Inferno yard
+ * @param {number} yard.minHealth - A building at or below this health counts nothing;
+ *   {@link HOUSING_MIN_HEALTH} by default. The overflow cull counts every building
+ *   still standing (health above 0, `client/scripts/HOUSING.as:167`).
  * @returns {number} Total housing capacity
  */
 export const deriveHousingCapacity = ({
@@ -303,11 +306,13 @@ export const deriveHousingCapacity = ({
   healthData,
   housingExpansionActive = false,
   inferno = false,
+  minHealth = HOUSING_MIN_HEALTH,
 }: {
   buildingData: BuildingDataMap | null | undefined;
   healthData?: BuildingHealthData | null;
   housingExpansionActive?: boolean;
   inferno?: boolean;
+  minHealth?: number;
 }): number => {
   if (!buildingData) return 0;
 
@@ -325,7 +330,7 @@ export const deriveHousingCapacity = ({
     const id = String(building.id ?? key);
     const health = healthData?.[id] ?? (building.hp as number | undefined);
 
-    if (health !== undefined && Number(health) <= HOUSING_MIN_HEALTH) continue;
+    if (health !== undefined && Number(health) <= minHealth) continue;
 
     // `l` is only bumped when an upgrade finishes, so a building part-way through
     // one still houses at its old level, which is what the client counts too.
