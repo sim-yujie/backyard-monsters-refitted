@@ -1,0 +1,145 @@
+/* ── Train tab (`web/src/ui/monsters/TrainTab.ts`) ─────────────────────────
+   The list and the card reuse the Unlock tab's `locker__*` / `locker-row` /
+   `locker-detail__*` look; this file adds the academy slots on top. */
+
+.train {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* One slot per academy: side by side while they fit, stacked on a phone. */
+.train__slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.train__slots:empty {
+  display: none;
+}
+
+.train-slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.train-slot--training {
+  border-color: color-mix(in srgb, var(--colour-info) 45%, var(--colour-border));
+}
+
+.train-slot__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.train-slot__title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.train-slot__level {
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--colour-text-muted);
+}
+
+.train-slot__state {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.train-slot--idle .train-slot__state {
+  color: var(--colour-success);
+  font-weight: 700;
+}
+
+.train-slot--damaged .train-slot__state {
+  color: var(--colour-danger);
+  font-weight: 700;
+}
+
+.train-slot__what {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  font-weight: 700;
+}
+
+.train-slot__picture {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.train-slot__countdown {
+  margin-left: auto;
+  color: var(--colour-info);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.train-slot__buttons > .btn {
+  flex: 0 1 auto;
+  min-height: 34px;
+}
+
+.train-slot__cancel {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--colour-danger);
+}
+
+.train .btn--danger {
+  background: var(--colour-danger);
+  border-color: var(--colour-danger);
+  color: var(--colour-text-inverse);
+}
+
+.train-row__level {
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.train-row--training .locker-row__state {
+  color: var(--colour-info);
+  font-weight: 700;
+}
+
+.train-row--max .locker-row__state {
+  color: var(--colour-success);
+}
+
+.train-row--max .locker-row__state::before {
+  content: "✓ ";
+}
+
+.train__empty {
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+@media (width <= 620px) {
+  .train__slots {
+    padding: var(--space-2) var(--space-3) 0;
+    grid-template-columns: 1fr;
+  }
+}
