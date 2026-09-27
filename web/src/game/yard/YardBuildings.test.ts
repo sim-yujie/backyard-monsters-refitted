@@ -1,8 +1,10 @@
+// @vitest-environment jsdom
+// jsdom: a colour-matrix filter asks for a canvas when it is made.
 import { describe, expect, it } from "vitest";
-import { Texture } from "pixi.js";
+import { Texture, type ColorMatrixFilter } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import type { YardArtAtlas } from "./yardAtlas";
-import { YardBuildings } from "./YardBuildings";
+import { HIGHLIGHT_MATRIX, YardBuildings } from "./YardBuildings";
 import { readYard } from "./yardModel";
 
 /**
@@ -84,6 +86,34 @@ describe("YardBuildings.crownOf", () => {
     buildings.offsetBuilding(2, 0, -50);
     expect(buildings.crownOf(2)).toBe(crown - 50);
     expect(buildings.crownOf(99)).toBeNull();
+    buildings.destroy();
+  });
+});
+
+describe("YardBuildings.setHighlight", () => {
+  it("lights a building and its layers with Flash's matrix, through a damage swap, and puts it back (#88)", () => {
+    const buildings = new YardBuildings();
+    buildings.show(readYard(yardResponse()), fakeAtlas());
+    buildings.setHighlight(2, true);
+    expect(buildings.isHighlighted(2)).toBe(true);
+    const lit = buildings.tops.children.filter((child) => (child.filters as unknown[] | null)?.length);
+    // The sniper's top and its gun strip, sharing one filter.
+    expect(lit).toHaveLength(2);
+    const filter = (lit[0]!.filters as ColorMatrixFilter[])[0]!;
+    expect(filter).toBe((lit[1]!.filters as ColorMatrixFilter[])[0]);
+    expect([...filter.matrix]).toEqual([...HIGHLIGHT_MATRIX]);
+
+    // The damaged art brings a new gun strip; it is lit too.
+    buildings.setDamage(2, 0.4);
+    const relit = buildings.tops.children.filter((child) => (child.filters as unknown[] | null)?.length);
+    expect(relit).toHaveLength(2);
+
+    buildings.setHighlight(2, false);
+    expect(buildings.isHighlighted(2)).toBe(false);
+    expect(buildings.tops.children.some((child) => (child.filters as unknown[] | null)?.length)).toBe(false);
+    // An unknown id is ignored.
+    buildings.setHighlight(99, true);
+    expect(buildings.isHighlighted(99)).toBe(false);
     buildings.destroy();
   });
 });

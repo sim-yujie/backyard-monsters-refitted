@@ -53,6 +53,7 @@ import {
 } from "@/game/attack/AttackInput";
 import { hudResources, poolOf, spendBomb, type AttackerPool } from "@/game/attack/attackerPool";
 import { bucketFor } from "@/game/attack/bucket";
+import { DropHighlight } from "@/game/attack/dropHighlight";
 import { CatapultPanel } from "@/ui/attack/CatapultPanel";
 import { SiegePanel } from "@/ui/attack/SiegePanel";
 import { Container, Graphics } from "pixi.js";
@@ -125,6 +126,9 @@ const plugin: AttackPlugin = (mounts) => {
 
   const ring = new DropRing();
   mounts.battleLayer.addChild(ring.root);
+
+  /** The buildings under the ring, lit as Flash lit them (#88). */
+  const highlight = new DropHighlight((id, on) => renderer.highlightBuilding(id, on));
 
   /* ── The pickers ──────────────────────────────────────────────────── */
 
@@ -272,7 +276,10 @@ const plugin: AttackPlugin = (mounts) => {
     yard,
     session,
     bucket,
-    onPreview: (preview) => ring.draw(preview, (x, y) => renderer.yardToWorld(x, y)),
+    onPreview: (preview) => {
+      ring.draw(preview, (x, y) => renderer.yardToWorld(x, y));
+      highlight.show(preview?.highlight ?? []);
+    },
     onRefuse: (reason) => notices.show("attack-drop", reason, { level: "info", timeoutMs: 2500 }),
     onToolUsed,
     onToolChange: () => refreshPanels(),
@@ -281,7 +288,11 @@ const plugin: AttackPlugin = (mounts) => {
   });
   input.attach();
 
-  const unsubscribe = session.subscribe(() => refreshPanels());
+  const unsubscribe = session.subscribe(() => {
+    refreshPanels();
+    // A building the battle flattens under a still pointer stops being lit.
+    input.refresh();
+  });
   refreshPanels();
   showPool();
 
@@ -327,6 +338,7 @@ const plugin: AttackPlugin = (mounts) => {
     disposed = true;
     unsubscribe();
     input.detach();
+    highlight.clear();
     catapult?.close();
     siege?.close();
     tools.remove();

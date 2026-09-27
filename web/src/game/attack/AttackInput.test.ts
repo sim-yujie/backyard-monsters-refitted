@@ -433,6 +433,52 @@ describe("AttackInput preview", () => {
     input.detach();
   });
 
+  it("lights exactly the buildings an armed bomb would hit, and nothing once disarmed (#88)", () => {
+    const { input, session, camera, canvas, previews } = rig();
+    const pebble = BOMBS.find((bomb) => bomb.id === "pb0")!;
+    input.setTool({ kind: "bomb", bomb: pebble });
+    type Shown = { x: number; y: number; legal: boolean; highlight: readonly number[] } | null;
+    const hover = (x: number, y: number): Shown => {
+      const at = camera.worldToScreen({ x, y });
+      canvas.dispatchEvent(
+        pointerEvent("pointermove", { clientX: at.x, clientY: at.y, pointerType: "mouse" }),
+      );
+      return previews.at(-1) as Shown;
+    };
+
+    // On the Cannon Tower: it and only it, and the engine agrees.
+    const over = hover(10, 5)!;
+    expect(over.legal).toBe(true);
+    expect(over.highlight).toEqual([1]);
+    const before = session.battle()!.state().health["1"];
+    expect(before).toBeUndefined();
+    // Open ground: a bomb cannot land, so nothing is lit.
+    const open = hover(OPEN.x, OPEN.y)!;
+    expect(open.legal).toBe(false);
+    expect(open.highlight).toEqual([]);
+
+    // The highlight is what the bomb then does.
+    hover(10, 5);
+    expect(input.tap(null)).toBe(true);
+    const health = session.battle()!.state().health;
+    expect(Object.keys(health)).toEqual(["1"]);
+    // Fired, the bomb is disarmed and the bucket is empty: no ring, nothing lit.
+    expect(previews.at(-1)).toBeNull();
+    input.detach();
+  });
+
+  it("lights the buildings that block a fling, as the Flash drop zone did", () => {
+    const { input, bucket, camera, canvas, previews } = rig();
+    bucket.setCount("C1", 2);
+    const at = camera.worldToScreen({ x: 0, y: 0 });
+    canvas.dispatchEvent(pointerEvent("pointermove", { clientX: at.x, clientY: at.y, pointerType: "mouse" }));
+    expect(previews.at(-1)).toMatchObject({ legal: false, highlight: [1] });
+    const open = camera.worldToScreen(OPEN);
+    canvas.dispatchEvent(pointerEvent("pointermove", { clientX: open.x, clientY: open.y, pointerType: "mouse" }));
+    expect(previews.at(-1)).toMatchObject({ legal: true, highlight: [] });
+    input.detach();
+  });
+
   it("cancels a pending tool on Escape and on right-click", () => {
     const { input, canvas } = rig();
     const twig = BOMBS.find((bomb) => bomb.id === "tw0")!;

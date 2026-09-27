@@ -11,6 +11,7 @@ import {
   isTower,
   propsSizeOf,
   puttyReach,
+  type BattleState,
   type BombStats,
   type Ellipse,
 } from "@/game/combat/rules";
@@ -19,6 +20,7 @@ import { toIso } from "@/game/yard/YardGrid";
 import type { Yard, YardBuilding } from "@/game/yard/yardModel";
 import type { YardRenderer } from "@/game/yard/YardRenderer";
 import type { AttackSession } from "./AttackSession";
+import { bombCandidatesOf, bombHits, type BombCandidate } from "./bombTargets";
 import type { Bucket } from "./bucket";
 
 /**
@@ -457,6 +459,14 @@ export interface DropPreview {
   readonly y: number;
   readonly zone: DropZone;
   readonly legal: boolean;
+  /**
+   * The buildings to light up, as `DROPZONE.UpdateTargetBuildings` did
+   * (issue #88): for a damage bomb, exactly the ones it would hit, by the
+   * engine's own reach test; for a fling or a siege weapon, the ones the zone
+   * touches — what blocks a drop on open ground, the tower a Jar would take.
+   * Empty for a bomb that could not land here, and for a putty bomb.
+   */
+  readonly highlight: readonly number[];
 }
 
 /**
@@ -498,6 +508,7 @@ export class AttackInput {
   private unsubscribeBucket: (() => void) | null = null;
   private obstacles: DropObstacle[] | null = null;
   private obstaclesFor = -1;
+  private candidates: BombCandidate[] | null = null;
 
   constructor(options: AttackInputOptions) {
     this.options = options;
@@ -561,8 +572,10 @@ export class AttackInput {
 
   /** The verdict on a yard point for the current tool. */
   judge(point: Point): DropVerdict {
-    const session = this.options.session;
-    const battle = session.battle()?.state();
+    return this.judgeAt(point, this.options.session.battle()?.state() ?? null);
+  }
+
+  private judgeAt(point: Point, battle: BattleState | null): DropVerdict {
     const destroyed = battle?.destroyedIds ?? [];
     // The obstacle list changes only when the battle flattens something.
     if (!this.obstacles || this.obstaclesFor !== destroyed.length) {
@@ -570,6 +583,23 @@ export class AttackInput {
       this.obstaclesFor = destroyed.length;
     }
     return judgeDrop(this.zone(), point, this.obstacles, battle?.creepsAlive ?? 0);
+  }
+
+  private highlightFor(
+    point: Point,
+    verdict: DropVerdict,
+    destroyed: readonly number[],
+  ): number[] {
+    const tool = this.tool();
+    if (tool.kind !== "bomb") return verdict.touching.map((obstacle) => obstacle.id);
+    if (!verdict.legal) return [];
+    this.candidates ??= bombCandidatesOf(this.options.session.attackLoad());
+    return bombHits(tool.bomb, point, this.candidates, destroyed).map((hit) => hit.id);
+  }
+
+  /** Where a tap at `aimed` would drop the current tool: on the pathing grid. */
+  private landingOf(aimed: Point): Point {
+    return clampDropPoint(aimed, this.zone().size / 2);
   }
 
   /* ── Taps ───────────────────────────────────────────────────────────── */
@@ -591,7 +621,7 @@ export class AttackInput {
     if (phase !== "loaded" && phase !== "running") return false;
 
     // A tap past the pathing grid lands on its edge instead.
-    const point = clampDropPoint(aimed, this.zone().size / 2);
+    const point = this.landingOf(aimed);
 
     const pending = this.pending;
     if (pending) {
@@ -659,6 +689,14 @@ export class AttackInput {
     return this.pending !== null || !this.options.bucket.isEmpty();
   }
 
+  /**
+   * Redraws the preview where the pointer is: after the battle has moved on
+   * under a still pointer, so a building that fell stops being lit.
+   */
+  refresh(): void {
+    this.refreshPreview();
+  }
+
   private refreshPreview(): void {
     const point = this.pointer;
     if (!point || !this.showing()) {
@@ -670,14 +708,18 @@ export class AttackInput {
       this.options.onPreview(null);
       return;
     }
-    const tool = this.tool();
-    const zone = this.zone();
+    // The ring stands where the tap would land, so what it lights up is what
+    // the drop would hit.
+    const at = this.landingOf(point);
+    const battle = this.options.session.battle()?.state() ?? null;
+    const verdict = this.judgeAt(at, battle);
     this.options.onPreview({
-      tool,
-      x: point.x,
-      y: point.y,
-      zone,
-      legal: this.judge(point).legal,
+      tool: this.tool(),
+      x: at.x,
+      y: at.y,
+      zone: this.zone(),
+      legal: verdict.legal,
+      highlight: this.highlightFor(at, verdict, battle?.destroyedIds ?? []),
     });
   }
 

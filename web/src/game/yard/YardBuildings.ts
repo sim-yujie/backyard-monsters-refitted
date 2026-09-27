@@ -1,4 +1,4 @@
-import { Container, Sprite, Text, Texture } from "pixi.js";
+import { ColorMatrixFilter, Container, Sprite, Text, Texture } from "pixi.js";
 import { ArtState, resolveArt, type ResolvedArt } from "./buildingArt";
 import {
   applyArt,
@@ -149,6 +149,19 @@ export const damageStep = (fraction: number): number => {
   return 1;
 };
 
+/**
+ * `BFOUNDATION.highlight`'s colour matrix (`client/scripts/BFOUNDATION.as:3565-3587`):
+ * red and green doubled, blue tripled, alpha untouched — the pale blue glow
+ * the Flash drop zone put on every building it would land on.
+ */
+// prettier-ignore
+export const HIGHLIGHT_MATRIX = [
+  2, 0, 0, 0, 0,
+  0, 2, 0, 0, 0,
+  0, 0, 3, 0, 0,
+  0, 0, 0, 1, 0,
+] as const;
+
 export class YardBuildings {
   /** Beneath every building. Add to the scene before `tops`. */
   readonly shadows = new Container();
@@ -164,6 +177,9 @@ export class YardBuildings {
   private readonly byId = new Map<number, BuildingView>();
   /** Set when art has arrived and the sprites need another resolution pass. */
   private pending = true;
+  /** Buildings drawn highlighted, and the one filter they all share (#88). */
+  private readonly highlighted = new Set<number>();
+  private highlightFilter: ColorMatrixFilter | null = null;
 
   constructor() {
     this.textures = new YardTextures(() => {
@@ -487,6 +503,7 @@ export class YardBuildings {
       );
       layer.sprite.zIndex = view.top.zIndex + index + 1;
       layer.sprite.tint = tint;
+      layer.sprite.filters = this.filtersFor(view);
       this.tops.addChildAt(layer.sprite, Math.min(at, this.tops.children.length));
       at += 1;
     });
@@ -544,10 +561,13 @@ export class YardBuildings {
     this.tops.sortableChildren = false;
     this.views = [];
     this.byId.clear();
+    this.highlighted.clear();
   }
 
   destroy(): void {
     this.clear();
+    this.highlightFilter?.destroy();
+    this.highlightFilter = null;
     this.textures.destroy();
   }
 
@@ -655,5 +675,37 @@ export class YardBuildings {
     if (!view || !view.resolved) return;
     view.top.blendMode = on ? "add" : "normal";
     view.top.tint = on ? 0xffffff : (DAMAGE_TINTS[view.damageStep] ?? 0xffffff);
+  }
+
+  /* ── Highlight, for an armed drop (#88) ─────────────────────────────── */
+
+  /**
+   * Draws a building lit up as `BFOUNDATION.highlight` did, or puts it back:
+   * the building and its animation layers go through {@link HIGHLIGHT_MATRIX}
+   * on top of whatever damage tint they carry. One filter serves every lit
+   * building; it is made on first use.
+   */
+  setHighlight(id: number, on: boolean): void {
+    const view = this.byId.get(id);
+    if (!view || this.highlighted.has(id) === on) return;
+    if (on) this.highlighted.add(id);
+    else this.highlighted.delete(id);
+    const filters = this.filtersFor(view);
+    view.top.filters = filters;
+    for (const layer of view.anims) layer.sprite.filters = filters;
+  }
+
+  /** Whether a building is drawn highlighted. */
+  isHighlighted(id: number): boolean {
+    return this.highlighted.has(id);
+  }
+
+  private filtersFor(view: BuildingView): ColorMatrixFilter[] | null {
+    if (!this.highlighted.has(view.building.id)) return null;
+    if (!this.highlightFilter) {
+      this.highlightFilter = new ColorMatrixFilter();
+      this.highlightFilter.matrix = [...HIGHLIGHT_MATRIX];
+    }
+    return [this.highlightFilter];
   }
 }

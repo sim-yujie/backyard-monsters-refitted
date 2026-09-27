@@ -547,6 +547,15 @@ export class YardRenderer {
   flashBuilding(id: number, on: boolean): void {
     this.buildings.setFlash(id, on);
   }
+
+  /**
+   * Lights a building up, or puts it back, for the drop an armed bomb or the
+   * bucket would make (#88); see `YardBuildings.setHighlight`. The isometric
+   * view only: the blueprint has no building art to light.
+   */
+  highlightBuilding(id: number, on: boolean): void {
+    this.buildings.setHighlight(id, on);
+  }
 }
 
 /** Corners as the flat point list `Graphics.poly` wants. */
