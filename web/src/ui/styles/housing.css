@@ -193,6 +193,146 @@
   min-height: 34px;
 }
 
+/* ── Monster Juicer (`web/src/ui/monsters/HousingJuice.ts`) ──────────────── */
+
+.housing-juice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.housing-juice__note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.housing-juice__note--bad {
+  color: var(--colour-accent);
+}
+
+.housing-juice__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.housing-juice__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+
+.housing-juice__row + .housing-juice__row {
+  border-top: 1px solid var(--colour-border);
+}
+
+.housing-juice__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1 1 140px;
+}
+
+.housing-juice__picture {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  object-fit: contain;
+}
+
+.housing-juice__words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+.housing-juice__have {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.housing-juice__controls {
+  display: flex;
+  flex: 0 1 220px;
+  align-items: stretch;
+  gap: var(--space-1);
+}
+
+.housing-juice__step {
+  min-width: 36px;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-lg);
+  line-height: 1;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.housing-juice__count {
+  flex: 1 1 5ch;
+  min-width: 0;
+  width: 5ch;
+  padding: var(--space-1) var(--space-2);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+}
+
+.housing-juice__count::-webkit-outer-spin-button,
+.housing-juice__count::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.housing-juice__fill {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.housing-juice__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.housing-juice__go {
+  margin-left: auto;
+  min-height: 36px;
+}
+
+.housing-juice__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-danger);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+}
+
+.housing-juice__question,
+.housing-juice__lost {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.housing-juice__lost {
+  color: var(--colour-accent);
+}
+
 @media (width <= 620px) {
   .housing__stalled {
     margin: var(--space-2) var(--space-3) 0;
@@ -206,5 +346,16 @@
   .housing-table th,
   .housing-table td {
     padding: var(--space-2);
+  }
+
+  .housing-juice__controls {
+    flex: 1 1 100%;
+  }
+
+  .housing-juice__step,
+  .housing-juice__fill,
+  .housing-juice__count,
+  .housing-juice__go {
+    min-height: 44px;
   }
 }

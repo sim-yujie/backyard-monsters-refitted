@@ -1,4 +1,5 @@
 import type { YardRefusal } from "@/api/yard";
+import type { JuiceActions } from "@/api/yardJuice";
 import {
   expansionEndsAt,
   HOUSING_EXPANSION,
@@ -16,6 +17,7 @@ import { formatAmount, formatCountdown } from "@/ui/format";
 import { resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/housing.css";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
+import { HousingJuice } from "./HousingJuice";
 import { monsterPicture } from "./LockerTab";
 import { MonstersTabId, type MonstersFocus, type MonstersTab, type MonstersTabContext } from "./monstersTab";
 
@@ -26,12 +28,13 @@ import { MonstersTabId, type MonstersFocus, type MonstersTab, type MonstersTabCo
  * if any; the army, one row per monster type with its count, the space one
  * takes and the space they all take, under the used/total bar; the Housing
  * buildings, one row each with its level and what it houses, saying why one
- * houses nothing; and Housing Expansion (`EXH`), a {@link ShinyButton} while
- * none runs, its time left while one does.
+ * houses nothing; the Monster Juicer (`HousingJuice.ts`, §7.3): pick how many
+ * of each to juice and juice them, confirmed first; and Housing Expansion
+ * (`EXH`), a {@link ShinyButton} while none runs, its time left while one does.
  *
  * Every figure comes from `game/monsters/housing.ts`, the header's own
  * arithmetic, so the tab and the header always agree. The purchase goes
- * through the store's `buy("EXH")`. No Juice (Phase 5) and no Ascend (D19).
+ * through the store's `buy("EXH")`. No Ascend (D19).
  */
 
 /** The store's queue key for the expansion purchase. */
@@ -48,6 +51,8 @@ export class HousingTab implements MonstersTab {
   private readonly army: HTMLElement;
   private readonly buildings: HTMLElement;
   private readonly expansion: HTMLElement;
+  private readonly juiceSection: HTMLElement;
+  private readonly juice: HousingJuice;
 
   /** The building the tab was opened from, marked in the list. */
   private focusBuilding: number | null = null;
@@ -57,7 +62,7 @@ export class HousingTab implements MonstersTab {
   /** Long-lived, so an armed button survives the redraws. */
   private buyButton: ShinyButton | null = null;
 
-  constructor(context: MonstersTabContext) {
+  constructor(context: MonstersTabContext, juiceActions?: JuiceActions) {
     this.context = context;
 
     this.element = document.createElement("div");
@@ -75,9 +80,16 @@ export class HousingTab implements MonstersTab {
     const scroll = document.createElement("div");
     scroll.className = "housing__scroll";
     this.army = section("housing-army", "Army");
+    this.juiceSection = section("housing-juicer", "Monster Juicer");
+    this.juice = new HousingJuice({
+      store: context.binding.store,
+      onStatus: (status) => this.setStatus(status),
+      ...(juiceActions ? { actions: juiceActions } : {}),
+    });
+    this.juiceSection.append(this.juice.element);
     this.buildings = section("housing-buildings", "Housing buildings");
     this.expansion = section("housing-expansion", "Housing Expansion");
-    scroll.append(this.army, this.buildings, this.expansion);
+    scroll.append(this.army, this.juiceSection, this.buildings, this.expansion);
 
     this.element.append(this.stalled, this.status, scroll);
   }
@@ -117,6 +129,7 @@ export class HousingTab implements MonstersTab {
   }
 
   destroy(): void {
+    this.juice.destroy();
     this.buyButton?.destroy();
     this.buyButton = null;
     this.element.remove();
@@ -136,6 +149,7 @@ export class HousingTab implements MonstersTab {
         : `${formatAmount(stalled)} hatcheries are waiting for space.`;
 
     this.renderArmy(housedRows(save), housingSummary(save, now));
+    this.juice.render();
     this.renderBuildings(housingBuildings(save, now));
     this.renderExpansion(expansionEndsAt(save, now), now);
     this.syncPending();
@@ -261,6 +275,7 @@ export class HousingTab implements MonstersTab {
   }
 
   private syncPending(): void {
+    this.juice.syncPending();
     this.buyButton?.setBusy(this.store.isRunning(BUY_KEY));
   }
 

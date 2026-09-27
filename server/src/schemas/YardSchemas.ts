@@ -185,3 +185,50 @@ export const YardRepairInstantSchema = z.object({});
 
 /** `POST /bm/yard/recycle`: the building to recycle. */
 export const YardRecycleSchema = z.object({ id: BuildingIdField });
+
+/**
+ * Monster counts as a JSON object, `{"C2": 20, "C5": 3}` (a JSON body's
+ * object arrives stringified, `middleware/jsonBody.ts`): at least one id,
+ * each a whole count of 1 or more. Which ids are allowed is the route's rule.
+ */
+const MonsterCountsField = z
+  .string()
+  .transform((raw, ctx) => {
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch {
+      ctx.addIssue({ code: "custom", message: "monsters must be a JSON object of counts" });
+      return z.NEVER;
+    }
+  })
+  .pipe(
+    z
+      .record(z.string().min(1).max(16), z.number().int().min(1).max(100_000))
+      .refine((counts) => {
+        const size = Object.keys(counts).length;
+        return size >= 1 && size <= 40;
+      }, "Send between 1 and 40 monster types")
+  );
+
+/** `POST /bm/yard/juice`: housed monsters to juice for goo (`services/yard/juice.ts`). */
+export const YardJuiceSchema = z.object({ monsters: MonsterCountsField });
+
+/**
+ * `POST /bm/yard/bunker/fill`: monsters to put in a Monster Bunker, from
+ * housing (putty) or bought (Shiny) (`services/yard/bunker.ts`).
+ */
+export const YardBunkerFillSchema = z.object({
+  bunker: BuildingIdField,
+  monsters: MonsterCountsField,
+  source: z.enum(["housing", "buy"]),
+});
+
+/**
+ * `POST /bm/yard/bunker/remove`: take monsters out of a Monster Bunker for
+ * good, juiced when a Juicer works; `count` a number or `all`.
+ */
+export const YardBunkerRemoveSchema = z.object({
+  bunker: BuildingIdField,
+  monster: z.string().min(1).max(16),
+  count: z.union([z.literal("all"), z.coerce.number().int().min(1).max(100_000)]).default(1),
+});

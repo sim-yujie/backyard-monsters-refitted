@@ -249,7 +249,7 @@ const handOut = (
  * True for a Map Room 3 `monsters` blob (per-creep arrays under monster ids,
  * MH §10), which the Map Room 2 queue format must not overwrite.
  */
-const isMapRoom3Monsters = (monsters: JsonObject | null | undefined): boolean =>
+export const isMapRoom3Monsters = (monsters: JsonObject | null | undefined): boolean =>
   Array.isArray(monsters?.Q) ||
   Object.entries(monsters ?? {}).some(
     ([key, value]) => /^I?C\d+$/.test(key) && Array.isArray(value)

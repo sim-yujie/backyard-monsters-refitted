@@ -13,6 +13,7 @@ import {
   yardHatcheryRemoveAction,
 } from "./hatchery.js";
 import { yardInstantUpgradeAction } from "./instantUpgrade.js";
+import { yardJuiceAction } from "./juice.js";
 import {
   yardLockerCancelAction,
   yardLockerFinishAction,
@@ -68,4 +69,5 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "repair", controller: yardRoute(yardRepairAction) },
   { path: "repair/instant", controller: yardRoute(yardRepairInstantAction) },
   { path: "recycle", controller: yardRoute(yardRecycleAction) },
+  { path: "juice", controller: yardRoute(yardJuiceAction) },
 ];

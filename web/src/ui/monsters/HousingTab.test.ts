@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, ShopBuyReport, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
+import type { JuiceActions, JuiceReport } from "@/api/yardJuice";
 import { YardStore, type YardActionResult } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
@@ -46,7 +47,11 @@ const loadOf = (extra: Partial<BaseLoadResponse> = {}): BaseLoadResponse =>
 
 const never = <R>() => new Promise<R>(() => undefined);
 
-const setup = (load: Partial<BaseLoadResponse> = {}, focus: { buildingId?: number } = {}) => {
+const setup = (
+  load: Partial<BaseLoadResponse> = {},
+  focus: { buildingId?: number } = {},
+  juice?: JuiceActions,
+) => {
   const api = { state: vi.fn(() => never<YardResponse<null>>()) } as unknown as YardApi;
   let now = T0;
   const store = new YardStore({
@@ -57,10 +62,13 @@ const setup = (load: Partial<BaseLoadResponse> = {}, focus: { buildingId?: numbe
   });
   const showTab = vi.fn();
   const selectBuilding = vi.fn();
-  const tab = new HousingTab({
-    binding: { store, scene: { selectBuilding }, notices: {} as Notices },
-    showTab,
-  });
+  const tab = new HousingTab(
+    {
+      binding: { store, scene: { selectBuilding }, notices: {} as Notices },
+      showTab,
+    },
+    juice,
+  );
   document.body.replaceChildren(tab.element);
   tab.show(focus);
   return {
@@ -226,5 +234,137 @@ describe("HousingTab: Housing Expansion", () => {
     const status = element.querySelector(".monsters-status")!;
     expect(status.textContent).toBe("Not enough Shiny.");
     expect(status.classList.contains("monsters-status--bad")).toBe(true);
+  });
+});
+
+describe("HousingTab: the Monster Juicer", () => {
+  const juicer = (extra: Partial<BuildingData> = {}): BuildingData => ({
+    id: 9,
+    t: 9,
+    l: 2,
+    X: 400,
+    Y: 0,
+    ...extra,
+  });
+  const withJuicer = (extra: Partial<BuildingData> = {}, load: Partial<BaseLoadResponse> = {}) => ({
+    buildingdata: { ...loadOf().buildingdata, "9": juicer(extra) },
+    ...load,
+  });
+  const juiceRows = (root: HTMLElement) => [...root.querySelectorAll<HTMLElement>(".housing-juice__row")];
+  const plus = (row: HTMLElement) => row.querySelector<HTMLButtonElement>(".housing-juice__step--plus")!;
+  const note = (root: HTMLElement) =>
+    [...root.querySelectorAll(".housing-juice__note")].map((one) => one.textContent).join(" | ");
+
+  it("says to build one when there is none, and why one cannot juice", () => {
+    expect(note(setup().element)).toBe("Build a Monster Juicer to turn monsters back into goo.");
+    expect(note(setup(withJuicer({ cU: 600 })).element)).toContain("being upgraded");
+    expect(note(setup(withJuicer({ cB: 600, l: 0 })).element)).toContain("still being built");
+    // Level 2 Juicer: 32,000 health, so 16,000 is half and too damaged.
+    const damaged = setup(withJuicer({}, { buildinghealthdata: { "9": 16_000 } })).element;
+    expect(note(damaged)).toContain("too damaged");
+    expect(juiceRows(damaged)).toHaveLength(0);
+  });
+
+  it("lists each housed type with a stepper and prices the selection at the Juicer's rate", () => {
+    const { element } = setup(withJuicer());
+    expect(note(element)).toContain("Level 2 Juicer: each monster gives back 80% of its hatch cost in goo.");
+    const rows = juiceRows(element);
+    expect(rows.map((row) => row.dataset["monster"])).toEqual(["C15", "C14"]);
+    const go = element.querySelector<HTMLButtonElement>(".housing-juice__go")!;
+    expect(go.disabled).toBe(true);
+    expect(go.textContent).toBe("Juice selected");
+
+    // Teratorn: ceil(70,000 × 0.8) = 56,000 each.
+    plus(rows[1]!).click();
+    plus(rows[1]!).click();
+    expect(rows[1]!.querySelector<HTMLInputElement>("input")!.value).toBe("2");
+    expect(go.disabled).toBe(false);
+    expect(spokenText(go)).toBe("Juice 2 · Goo 112,000");
+
+    // Fill ("All") takes every one of that type, and no more.
+    rows[0]!.querySelector<HTMLButtonElement>(".housing-juice__fill")!.click();
+    expect(rows[0]!.querySelector<HTMLInputElement>("input")!.value).toBe("2");
+    expect(plus(rows[0]!).disabled).toBe(true);
+    expect(spokenText(go)).toBe("Juice 4 · Goo 304,000");
+  });
+
+  it("Select all and Clear", () => {
+    const { element } = setup(withJuicer());
+    buttonNamed(element, "Select all")!.click();
+    const go = element.querySelector<HTMLButtonElement>(".housing-juice__go")!;
+    expect(spokenText(go)).toBe(`Juice 27 · Goo ${(2 * 96_000 + 25 * 56_000).toLocaleString("en-US")}`);
+    expect(buttonNamed(element, "Select all")!.disabled).toBe(true);
+    buttonNamed(element, "Clear")!.click();
+    expect(go.textContent).toBe("Juice selected");
+  });
+
+  it("confirms before juicing, states what the cap would swallow, and can back out", () => {
+    const juice = vi.fn();
+    const { element } = setup(
+      withJuicer({}, { resources: { r1: 0, r2: 0, r3: 0, r4: 90_000 } }),
+      {},
+      { juice },
+    );
+    const rows = juiceRows(element);
+    plus(rows[1]!).click();
+    element.querySelector<HTMLButtonElement>(".housing-juice__go")!.click();
+    expect(juice).not.toHaveBeenCalled();
+    const confirm = element.querySelector(".housing-juice__confirm")!;
+    expect(spokenText(confirm.querySelector(".housing-juice__question")!)).toBe(
+      "Juice 1 monster for Goo 56,000? They are gone for good.",
+    );
+    expect(confirm.querySelector(".housing-juice__lost")).toBeNull();
+    buttonNamed(element, "Keep them")!.click();
+    expect(element.querySelector(".housing-juice__confirm")).toBeNull();
+    expect(juice).not.toHaveBeenCalled();
+  });
+
+  it("says what the goo cap would swallow", () => {
+    const { element, store } = setup(withJuicer({}, { resources: { r1: 0, r2: 0, r3: 0, r4: 90_000 } }));
+    vi.spyOn(store, "caps", "get").mockReturnValue({ r1: 100_000, r2: 100_000, r3: 100_000, r4: 100_000 });
+    plus(juiceRows(element)[1]!).click();
+    element.querySelector<HTMLButtonElement>(".housing-juice__go")!.click();
+    expect(spokenText(element.querySelector(".housing-juice__question")!)).toBe(
+      "Juice 1 monster for Goo 10,000? They are gone for good.",
+    );
+    expect(spokenText(element.querySelector(".housing-juice__lost")!)).toBe(
+      "Your goo storage is full: Goo 46,000 will not fit and is lost.",
+    );
+  });
+
+  it("juices the selection on Yes and reports the goo", async () => {
+    const report: JuiceReport = { juiced: { C14: 3 }, goo: 168_000, lost: 0, rate: 0.8 };
+    const juice = vi.fn(() => Promise.resolve({ ok: true as const, report, completed: [] }));
+    const { element } = setup(withJuicer(), {}, { juice });
+    const row = juiceRows(element)[1]!;
+    const input = row.querySelector<HTMLInputElement>("input")!;
+    input.value = "3";
+    input.dispatchEvent(new Event("input"));
+    input.dispatchEvent(new Event("change"));
+    element.querySelector<HTMLButtonElement>(".housing-juice__go")!.click();
+    buttonNamed(element, "Yes, juice")!.click();
+    expect(juice).toHaveBeenCalledWith({ C14: 3 });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(spokenText(element.querySelector(".monsters-status")!)).toBe("Juiced 3 monsters: Goo 168,000 added.");
+    expect(element.querySelector(".housing-juice__confirm")).toBeNull();
+  });
+
+  it("shows a refusal on the status line", async () => {
+    const juice = vi.fn(() =>
+      Promise.resolve({
+        ok: false as const,
+        refusal: { reason: "damaged", message: "Your Monster Juicer is too damaged to work.", detail: {} },
+      }),
+    );
+    const { element } = setup(withJuicer(), {}, { juice });
+    plus(juiceRows(element)[0]!).click();
+    element.querySelector<HTMLButtonElement>(".housing-juice__go")!.click();
+    buttonNamed(element, "Yes, juice")!.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(element.querySelector(".monsters-status")!.textContent).toBe(
+      "Your Monster Juicer is too damaged to work.",
+    );
   });
 });
