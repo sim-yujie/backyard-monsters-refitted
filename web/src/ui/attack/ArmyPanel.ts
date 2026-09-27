@@ -3,6 +3,10 @@ import type { Bucket } from "@/game/attack/bucket";
 import { CHAMPION_PROPS, championByType } from "@/game/combat/rules";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
+import { QuantityStepper } from "@/ui/QuantityStepper";
+
+// The row control moved to `QuantityStepper.ts`; its timings stay importable from here.
+export { HOLD_DELAY_MS, HOLD_FAST_MS, HOLD_RAMP_MS, HOLD_START_MS, holdInterval, holdToRepeat } from "@/ui/QuantityStepper";
 
 /**
  * The army panel: one row per housed monster type, the champion, and the
@@ -22,12 +26,9 @@ import { Panel } from "@/ui/Panel";
  *
  * ## Hold to repeat
  *
- * A press on `-` or `+` steps once at once, then after a short wait repeats,
- * quickening the longer it is held (`HOLD_*` below). It runs on pointer
- * events so one code path serves a mouse and a finger, and it stops on
- * `pointerup`, `pointercancel` or the pointer leaving the button. A keyboard
- * activation arrives as a `click` with no pointer press before it and steps
- * once.
+ * Each row's `-`, number box, `+` and Fill are the shared
+ * {@link QuantityStepper} (`ui/QuantityStepper.ts`), the same control the
+ * Hatch tab uses: a press steps once, then repeats faster while held.
  *
  * ## After a drop
  *
@@ -35,18 +36,6 @@ import { Panel } from "@/ui/Panel";
  * below its number is greyed and says what is left; a row that ran out shows
  * 0 and is disabled (§F2 "after a drop").
  */
-
-/** Milliseconds a press must last before it starts repeating. */
-export const HOLD_DELAY_MS = 350;
-/** The first repeat interval, and the one it accelerates to. */
-export const HOLD_START_MS = 120;
-export const HOLD_FAST_MS = 40;
-/** Milliseconds of holding over which the interval ramps from start to fast. */
-export const HOLD_RAMP_MS = 2000;
-
-/** How much ArrowUp/Down and PageUp/Down step the number box. */
-const ARROW_STEP = 1;
-const PAGE_STEP = 10;
 
 /** Display names by roster id (`server/src/game-data/stats/monsterKeys.ts`). */
 export const MONSTER_NAMES: Readonly<Record<string, string>> = {
@@ -121,12 +110,6 @@ export const portraitUrl = (id: string, championLevel?: number): string =>
     ? `/assets/monsters/${id}-small.png`
     : `/assets/monsters/${id}_L${Math.max(1, Math.floor(championLevel))}-small.png`;
 
-/** The repeat interval after `heldMs` of holding: a straight ramp. */
-export const holdInterval = (heldMs: number): number => {
-  const progress = Math.min(1, Math.max(0, (heldMs - HOLD_DELAY_MS) / HOLD_RAMP_MS));
-  return Math.round(HOLD_START_MS + (HOLD_FAST_MS - HOLD_START_MS) * progress);
-};
-
 export interface ArmyPanelOptions {
   /**
    * Called whenever the panel's box changes size, for the bottom-sheet inset
@@ -138,10 +121,8 @@ export interface ArmyPanelOptions {
 interface Row {
   readonly id: string;
   readonly element: HTMLElement;
+  readonly stepper: QuantityStepper;
   readonly input: HTMLInputElement;
-  readonly minus: HTMLButtonElement;
-  readonly plus: HTMLButtonElement;
-  readonly fill: HTMLButtonElement;
   readonly note: HTMLElement;
   readonly count: HTMLElement;
 }
@@ -169,7 +150,6 @@ export class ArmyPanel {
   private readonly hint: HTMLElement;
   private readonly unsubscribe: () => void;
   private readonly observer: ResizeObserver | null;
-  private readonly cancelHolds: Array<() => void> = [];
   private readonly radioName = `attack-champion-${Math.random().toString(36).slice(2, 9)}`;
 
   constructor(bucket: Bucket, options: ArmyPanelOptions = {}) {
@@ -254,7 +234,7 @@ export class ArmyPanel {
 
   /** Stops listening and removes the panel. */
   destroy(): void {
-    for (const cancel of this.cancelHolds.splice(0)) cancel();
+    for (const row of this.rows) row.stepper.destroy();
     this.observer?.disconnect();
     this.unsubscribe();
     this.panel.close();
@@ -291,64 +271,24 @@ export class ArmyPanel {
     count.className = "attack-army__housed u-muted";
     label.append(name, level, count);
 
-    const controls = document.createElement("span");
-    controls.className = "attack-army__controls";
-
-    const minus = button("btn attack-army__step attack-army__step--minus", "−", () => {
-      this.bucket.setCount(id, this.bucket.requestedCount(id) - 1);
+    const stepper = new QuantityStepper({
+      block: "attack-army",
+      inputLabel: `${monsterName(id)} to send`,
+      fewerLabel: `Fewer ${monsterName(id)}`,
+      moreLabel: `More ${monsterName(id)}`,
+      fillTitle: `Send as many ${monsterName(id)} as the flinger can carry`,
+      value: () => this.bucket.requestedCount(id),
+      set: (value) => this.bucket.setCount(id, value),
+      fill: () => this.bucket.fill(id),
+      commit: () => this.refreshRow(this.rowFor(id), true),
     });
-    minus.setAttribute("aria-label", `Fewer ${monsterName(id)}`);
-    this.cancelHolds.push(holdToRepeat(minus, () => this.step(id, -1)));
-
-    const input = document.createElement("input");
-    input.type = "number";
-    input.className = "field__input attack-army__count";
-    input.min = "0";
-    input.step = "1";
-    input.inputMode = "numeric";
-    input.setAttribute("aria-label", `${monsterName(id)} to send`);
-    input.addEventListener("input", () => {
-      const value = Number(input.value);
-      if (input.value === "" || !Number.isFinite(value)) return;
-      this.bucket.setCount(id, value);
-    });
-    input.addEventListener("change", () => this.refreshRow(this.rowFor(id), true));
-    input.addEventListener("blur", () => this.refreshRow(this.rowFor(id), true));
-    input.addEventListener("keydown", (event) => {
-      const delta =
-        event.key === "ArrowUp"
-          ? ARROW_STEP
-          : event.key === "ArrowDown"
-            ? -ARROW_STEP
-            : event.key === "PageUp"
-              ? PAGE_STEP
-              : event.key === "PageDown"
-                ? -PAGE_STEP
-                : 0;
-      if (delta === 0) return;
-      event.preventDefault();
-      this.step(id, delta);
-      this.refreshRow(this.rowFor(id), true);
-    });
-    input.addEventListener("focus", () => input.select());
-
-    const plus = button("btn attack-army__step attack-army__step--plus", "+", () => {
-      this.bucket.setCount(id, this.bucket.requestedCount(id) + 1);
-    });
-    plus.setAttribute("aria-label", `More ${monsterName(id)}`);
-    this.cancelHolds.push(holdToRepeat(plus, () => this.step(id, 1)));
-
-    const fill = button("btn btn--ghost attack-army__fill", "Fill", () => this.bucket.fill(id));
-    fill.title = `Send as many ${monsterName(id)} as the flinger can carry`;
-
-    controls.append(minus, input, plus, fill);
 
     const note = document.createElement("span");
     note.className = "attack-army__note";
     note.setAttribute("aria-live", "polite");
 
-    item.append(icon, label, controls, note);
-    return { id, element: item, input, minus, plus, fill, note, count };
+    item.append(icon, label, stepper.element, note);
+    return { id, element: item, stepper, input: stepper.input, note, count };
   }
 
   private buildChampion(t: number, l: number, hp: number): ChampionRow {
@@ -394,10 +334,6 @@ export class ArmyPanel {
   }
 
   /* ── Refreshing ─────────────────────────────────────────────────────── */
-
-  private step(id: string, delta: number): void {
-    this.bucket.setCount(id, this.bucket.requestedCount(id) + delta);
-  }
 
   private rowFor(id: string): Row {
     const row = this.rows.find((candidate) => candidate.id === id);
@@ -459,12 +395,12 @@ export class ArmyPanel {
     const clamped = !exhausted && requested > remaining;
     const shown = exhausted ? 0 : requested;
 
-    if (rewrite || exhausted) row.input.value = String(shown);
-    row.input.max = String(Math.max(max, requested));
-    row.input.disabled = !live || exhausted;
-    row.minus.disabled = !live || exhausted || requested === 0;
-    row.plus.disabled = !live || exhausted || requested >= max;
-    row.fill.disabled = !live || exhausted || requested >= max;
+    row.stepper.sync({
+      value: shown,
+      max: Math.max(max, requested),
+      disabled: !live || exhausted,
+      rewrite: rewrite || exhausted,
+    });
     row.count.textContent = `${remaining} housed`;
     row.element.classList.toggle("attack-army__row--clamped", clamped);
     row.element.classList.toggle("attack-army__row--exhausted", exhausted);
@@ -494,89 +430,8 @@ const button = (className: string, text: string, onClick: () => void): HTMLButto
   element.type = "button";
   element.className = className;
   element.textContent = text;
-  element.addEventListener("click", (event) => {
-    // A pointer press already stepped through holdToRepeat; only an
-    // activation with no press before it — the keyboard — steps here.
-    if (event.detail !== 0 && element.dataset["held"] === "1") {
-      delete element.dataset["held"];
-      return;
-    }
-    delete element.dataset["held"];
-    onClick();
-  });
+  element.addEventListener("click", onClick);
   return element;
-};
-
-/**
- * Makes a button step once on press and keep stepping while held, faster the
- * longer it is held. Returns the cancel, for teardown.
- *
- * Pointer events so a mouse and a finger share one path. The first step is
- * on `pointerdown`; the `click` that follows the release is swallowed by the
- * button's own handler (see {@link button}), which still steps once for a
- * keyboard activation.
- */
-export const holdToRepeat = (element: HTMLButtonElement, step: () => void): (() => void) => {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let startedAt = 0;
-  let pointerId: number | null = null;
-
-  const stop = (): void => {
-    if (timer !== null) {
-      clearTimeout(timer);
-      timer = null;
-    }
-    if (pointerId !== null) {
-      try {
-        if (element.hasPointerCapture?.(pointerId)) element.releasePointerCapture(pointerId);
-      } catch {
-        // Already released; nothing to do.
-      }
-      pointerId = null;
-    }
-  };
-
-  const tick = (): void => {
-    if (element.disabled) {
-      stop();
-      return;
-    }
-    step();
-    const held = Date.now() - startedAt;
-    timer = setTimeout(tick, holdInterval(held));
-  };
-
-  const onDown = (event: PointerEvent): void => {
-    if (event.button !== 0 || element.disabled) return;
-    stop();
-    element.dataset["held"] = "1";
-    pointerId = event.pointerId;
-    try {
-      element.setPointerCapture?.(event.pointerId);
-    } catch {
-      // A synthetic event with no pointer to capture; the leave handler covers it.
-    }
-    startedAt = Date.now();
-    step();
-    timer = setTimeout(tick, HOLD_DELAY_MS);
-  };
-
-  element.addEventListener("pointerdown", onDown);
-  element.addEventListener("pointerup", stop);
-  element.addEventListener("pointercancel", stop);
-  element.addEventListener("pointerleave", stop);
-  element.addEventListener("lostpointercapture", stop);
-  // A long press on a touchscreen would otherwise open the context menu.
-  element.addEventListener("contextmenu", (event) => event.preventDefault());
-
-  return () => {
-    stop();
-    element.removeEventListener("pointerdown", onDown);
-    element.removeEventListener("pointerup", stop);
-    element.removeEventListener("pointercancel", stop);
-    element.removeEventListener("pointerleave", stop);
-    element.removeEventListener("lostpointercapture", stop);
-  };
 };
 
 /**

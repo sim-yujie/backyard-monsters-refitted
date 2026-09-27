@@ -1,3 +1,4 @@
+import { HatchTab } from "./HatchTab";
 import { LockerTab } from "./LockerTab";
 import { HousingTab } from "./HousingTab";
 import {
@@ -41,8 +42,7 @@ export const MONSTERS_TABS: readonly MonstersTabDefinition[] = [
     id: MonstersTabId.HATCH,
     label: "Hatch",
     buildings: [MonsterBuilding.HATCHERY, MonsterBuilding.HCC],
-    // WP2.6.
-    create: () => placeholderTab("Hatching monsters from here is on its way."),
+    create: (context) => new HatchTab(context),
   },
   {
     id: MonstersTabId.HOUSING,

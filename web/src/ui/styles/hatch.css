@@ -1,0 +1,480 @@
+/*
+ * The Hatch tab (`web/src/ui/monsters/HatchTab.ts`, design
+ * `docs/design/yard-buildings.md` §4.4): hatchery chips or the HCC strip, the
+ * monster grid, the quantity control and Add, the queue, Finish now and the
+ * Overdrive.
+ *
+ * Same rule as ui.css: every value comes from tokens.css. The frame, the
+ * header and `.monsters-status` / `.monsters-gate` are monsters.css; buttons
+ * are `.btn`, Shiny spends `.shiny-button`, amounts `.res-amount`.
+ */
+
+.hatch {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Chips, or the HCC header and strip ──────────────────────────────────── */
+
+.hatch__targets {
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.hatch__none {
+  margin: 0;
+  color: var(--colour-text-muted);
+}
+
+.hatch-chips {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-1);
+  scrollbar-width: thin;
+}
+
+.hatch-chip {
+  flex: none;
+  display: grid;
+  gap: 2px;
+  min-width: 132px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hatch-chip:hover {
+  background: var(--colour-surface-overlay);
+}
+
+.hatch-chip[aria-pressed="true"] {
+  border-color: var(--colour-accent);
+  background: color-mix(in srgb, var(--colour-accent) 16%, var(--colour-surface-sunken));
+}
+
+.hatch-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.hatch-chip__title {
+  font-weight: 800;
+}
+
+.hatch-chip__state,
+.hatch-chip__queued {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hatch-chip__queued {
+  color: var(--colour-text-muted);
+}
+
+/* The state colours, shared by the chips and the HCC strip. */
+.hatch-chip--producing .hatch-chip__state,
+.hatch-chip--producing .hatch-strip__label {
+  color: var(--colour-info);
+}
+
+.hatch-chip--stalled .hatch-chip__state,
+.hatch-chip--stalled .hatch-strip__label,
+.hatch-chip--upgrading .hatch-chip__state,
+.hatch-chip--upgrading .hatch-strip__label {
+  color: var(--colour-accent);
+}
+
+.hatch-chip--damaged .hatch-chip__state,
+.hatch-chip--damaged .hatch-strip__label {
+  color: var(--colour-danger);
+}
+
+.hatch-chip--building .hatch-chip__state,
+.hatch-chip--building .hatch-strip__label,
+.hatch-chip--idle .hatch-chip__state,
+.hatch-chip--idle .hatch-strip__label {
+  color: var(--colour-text-muted);
+}
+
+.hatch-clock {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-hcc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+
+.hatch-hcc__title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 800;
+}
+
+.hatch-hcc__queued {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text-muted);
+}
+
+.hatch-hcc__note {
+  flex-basis: 100%;
+  font-size: var(--text-sm);
+  color: var(--colour-danger);
+}
+
+.hatch-strip {
+  display: flex;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0 0 var(--space-1);
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.hatch-strip__item {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 34px;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.hatch-strip__label {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Grid and the add block, side by side ────────────────────────────────── */
+
+.hatch__split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(0, 1.3fr);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.hatch__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  align-content: start;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  overflow-y: auto;
+  min-height: 0;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.hatch-monster {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-1);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hatch-monster:hover {
+  background: var(--colour-surface-overlay);
+}
+
+.hatch-monster[aria-pressed="true"] {
+  border-color: var(--colour-accent);
+  background: color-mix(in srgb, var(--colour-accent) 16%, var(--colour-surface-sunken));
+}
+
+.hatch-monster:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--colour-accent);
+}
+
+.hatch-monster__picture {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.hatch-monster__name {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  text-align: center;
+}
+
+.hatch-monster__note {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-monster--locked .hatch-monster__picture,
+.hatch-monster--unlocking .hatch-monster__picture {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+.hatch-monster--locked .hatch-monster__name,
+.hatch-monster--unlocking .hatch-monster__name {
+  color: var(--colour-text-muted);
+}
+
+.hatch__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.hatch-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.hatch-add__selected,
+.hatch-add__preview,
+.hatch-add__warning {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-add__preview {
+  color: var(--colour-text-muted);
+}
+
+.hatch-add__warning {
+  color: var(--colour-accent);
+  font-weight: 700;
+}
+
+.hatch-add__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+/* The quantity control: the Army panel's, in this block's names. */
+.hatch-add__controls {
+  display: flex;
+  flex: 1 1 220px;
+  align-items: stretch;
+  gap: var(--space-1);
+}
+
+.hatch-add__step {
+  min-width: 40px;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-lg);
+  line-height: 1;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.hatch-add__count {
+  flex: 1 1 5ch;
+  min-width: 0;
+  width: 5ch;
+  padding: var(--space-1) var(--space-2);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.hatch-add__count::-webkit-outer-spin-button,
+.hatch-add__count::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.hatch-add__fill {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.hatch-add__add {
+  flex: 0 0 auto;
+  min-width: 96px;
+  min-height: 36px;
+}
+
+.hatch-add__unlock {
+  padding: 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* ── Queue ───────────────────────────────────────────────────────────────── */
+
+.hatch-queue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.hatch-queue__title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--colour-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hatch-queue__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hatch-queue__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 2px 2px var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-queue__row--producing {
+  border-color: color-mix(in srgb, var(--colour-info) 60%, var(--colour-border));
+}
+
+.hatch-queue__label {
+  flex: 1;
+  min-width: 0;
+}
+
+.hatch-queue__remove {
+  min-width: 34px;
+  min-height: 30px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.hatch-queue__room {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+/* ── Finish now and the Overdrive ────────────────────────────────────────── */
+
+.hatch-boosts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.hatch-boosts__finish,
+.hatch-boosts__overdrive {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hatch-boosts__finish > .btn,
+.hatch-boosts__overdrive > .btn {
+  flex: 0 1 auto;
+  min-height: 34px;
+}
+
+.hatch-boosts__label {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.hatch-boosts__running {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-success);
+}
+
+/* ── Narrow screens ──────────────────────────────────────────────────────── */
+
+@media (width <= 760px) {
+  .hatch__split {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    overflow-y: auto;
+  }
+
+  .hatch__grid {
+    max-height: 30vh;
+  }
+
+  .hatch__side {
+    overflow: visible;
+  }
+}
+
+@media (width <= 620px) {
+  .hatch__targets {
+    padding: var(--space-2) var(--space-3) 0;
+  }
+
+  .hatch__split {
+    padding: var(--space-2) var(--space-3) var(--space-3);
+  }
+
+  .hatch__grid {
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  }
+
+  .hatch-monster__picture {
+    width: 36px;
+    height: 36px;
+  }
+
+  .hatch-add__step,
+  .hatch-add__fill,
+  .hatch-add__count,
+  .hatch-add__add,
+  .hatch-queue__remove {
+    min-height: 44px;
+  }
+}

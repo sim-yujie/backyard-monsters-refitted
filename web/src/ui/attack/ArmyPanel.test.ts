@@ -13,7 +13,6 @@ import {
   HOLD_DELAY_MS,
   HOLD_FAST_MS,
   HOLD_START_MS,
-  holdInterval,
   monsterName,
   championName,
   ONE_CHAMPION_TITLE,
@@ -214,14 +213,6 @@ describe("ArmyPanel rows", () => {
     const released = bucket.count("C1");
     vi.advanceTimersByTime(2000);
     expect(bucket.count("C1")).toBe(released);
-  });
-
-  it("ramps the repeat interval from the start rate to the fast rate", () => {
-    expect(holdInterval(0)).toBe(HOLD_START_MS);
-    expect(holdInterval(HOLD_DELAY_MS)).toBe(HOLD_START_MS);
-    expect(holdInterval(HOLD_DELAY_MS + 1000)).toBeLessThan(HOLD_START_MS);
-    expect(holdInterval(HOLD_DELAY_MS + 1000)).toBeGreaterThan(HOLD_FAST_MS);
-    expect(holdInterval(10_000)).toBe(HOLD_FAST_MS);
   });
 
   it("stops a hold when the pointer leaves or is cancelled, and stops at the ceiling", () => {

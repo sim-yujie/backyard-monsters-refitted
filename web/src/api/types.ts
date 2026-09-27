@@ -179,10 +179,11 @@ export interface MonstersSave {
   saved?: number;
   /**
    * One entry per hatchery, index-aligned with `hid` and `hstage`:
-   * `[inProduction, countdownProduce, queue?]`, the countdown in seconds left
-   * at `saved`.
+   * `[inProduction, countdownProduce, queue?, paidLevel?]`, the countdown in
+   * seconds left at `saved`; queue stacks are `[id, count, paidLevel]` and the
+   * paid level is the academy level the goo was charged at (design §10 Q2).
    */
-  h?: (readonly [monster: string, countdown: number, queue?: unknown])[];
+  h?: (readonly [monster: string, countdown: number, queue?: unknown, paidLevel?: number])[];
   /** The hatcheries' building ids, index-aligned with `h`. */
   hid?: number[];
   /** Production stage per hatchery: 0 idle, 1 producing, 2 waiting for housing, 3/4 starting. */

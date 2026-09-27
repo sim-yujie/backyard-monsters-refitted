@@ -5,6 +5,7 @@ import "@/ui/styles/planner.css";
 import "@/ui/styles/building-panel.css";
 import "@/ui/styles/attack.css";
 import "@/ui/styles/monsters.css";
+import "@/ui/styles/hatch.css";
 
 import { App } from "@/app/App";
 
