@@ -36,7 +36,7 @@ import { JobNotices } from "./yard/JobNotices";
 export const HudFit = {
   /** Brand, every amount in full, and the caps beside them. */
   FULL: "full",
-  /** The brand gives its room to the readouts. */
+  /** The brand and the word "Workers" give their room to the readouts. */
   NO_BRAND: "no-brand",
   /** Caps leave the text for the tooltip and the bubble; the fill bars stay. */
   NO_CAPS: "no-caps",
@@ -149,7 +149,7 @@ export class Hud {
   private yardBinding: YardUiBinding | null = null;
   private unsubscribeYard: (() => void) | null = null;
   private jobNotices: JobNotices | null = null;
-  private readonly workers: HTMLLIElement;
+  private readonly workers: HTMLElement;
   private readonly workersButton: HTMLButtonElement;
   private readonly workersName: HTMLElement;
   private readonly workersValue: HTMLElement;
@@ -159,6 +159,9 @@ export class Hud {
     this.element = document.createElement("header");
     this.element.className = "hud";
     this.element.dataset["fit"] = HudFit.FULL;
+    // Listened for from the start rather than on `mount`: the map places the
+    // bar itself (`MapRoomUi`) and never calls `mount`.
+    window.addEventListener("resize", this.onResize);
 
     const brand = document.createElement("span");
     brand.className = "hud__brand";
@@ -202,8 +205,10 @@ export class Hud {
     }
 
     // Workers: only on the player's own yard, so hidden until a binding comes.
-    this.workers = document.createElement("li");
-    this.workers.className = "hud__resource hud__workers";
+    // Beside the readout list rather than in it, so on a phone, where the list
+    // takes a row of its own, it stays up with the screen buttons.
+    this.workers = document.createElement("div");
+    this.workers.className = "hud__workers";
     this.workers.hidden = true;
     this.workersButton = document.createElement("button");
     this.workersButton.type = "button";
@@ -220,7 +225,6 @@ export class Hud {
     this.workersButton.append(workerIcon, this.workersName, this.workersValue);
     this.workersButton.addEventListener("click", () => this.goToNextJob());
     this.workers.append(this.workersButton);
-    resources.append(this.workers);
 
     const spacer = document.createElement("div");
     spacer.className = "hud__spacer";
@@ -239,7 +243,7 @@ export class Hud {
       this.sceneButtons.set(scene.id, button);
     }
 
-    this.element.append(brand, resources, spacer, scenes);
+    this.element.append(brand, resources, this.workers, spacer, scenes);
 
     if (options.onSignOut) {
       const signOut = document.createElement("button");
@@ -329,7 +333,6 @@ export class Hud {
 
   mount(container: HTMLElement): this {
     container.append(this.element);
-    window.addEventListener("resize", this.onResize);
     this.fit();
     return this;
   }
@@ -419,7 +422,7 @@ export class Hud {
     this.element.dataset["fit"] = level;
     for (const readout of this.readouts.values()) this.render(readout);
     // The icon says "workers" once the bar is short of room.
-    this.workersName.hidden = level === HudFit.NO_CAPS || level === HudFit.COMPACT;
+    this.workersName.hidden = level !== HudFit.FULL;
   }
 
   private readonly onResize = (): void => this.fit();

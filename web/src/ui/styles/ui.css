@@ -390,6 +390,12 @@ body {
 }
 
 /* Workers, free / total; a press goes to the job that finishes soonest. */
+.hud__workers {
+  display: flex;
+  flex: none;
+  white-space: nowrap;
+}
+
 .hud__workers-button {
   gap: var(--space-1);
 }
@@ -523,6 +529,50 @@ body {
   background: var(--colour-accent);
   border-color: var(--colour-accent);
   color: var(--colour-accent-text);
+}
+
+/* A phone: the screen buttons alone fill a 56 px row, which left the readouts
+   no width at all. The bar takes two rows instead — Workers and the screens
+   on top, the readouts underneath with the whole width — and everything placed under the
+   HUD follows through --hud-height. The readouts still fall back to short
+   amounts when even that row is too narrow (`HudFit` in Hud.ts). */
+@media (width <= 620px) {
+  :root {
+    --hud-height: 92px;
+  }
+
+  .hud {
+    flex-wrap: wrap;
+    align-content: center;
+    row-gap: var(--space-1);
+    column-gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .hud__brand {
+    display: none;
+  }
+
+  .hud__resources {
+    order: 1;
+    flex: 1 0 100%;
+    justify-content: space-between;
+    gap: 0;
+  }
+
+  .hud__resource-button {
+    padding: var(--space-1);
+  }
+
+  .hud__cap-bar {
+    left: var(--space-1);
+    right: var(--space-1);
+  }
+
+  .hud__resource-button .res-icon,
+  .hud__workers-icon {
+    height: 18px;
+  }
 }
 
 /* ── Scene chrome ───────────────────────────────────────────────────────── */
