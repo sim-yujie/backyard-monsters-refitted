@@ -108,10 +108,10 @@ export const encodeForm = (body: FormBody): string => {
   return params.toString();
 };
 
-const buildHeaders = (contentType?: string): Headers => {
+const buildHeaders = (contentType?: string, token: string | null = authToken): Headers => {
   const headers = new Headers({ Accept: "application/json" });
   if (contentType) headers.set("Content-Type", contentType);
-  if (authToken) headers.set("Authorization", `Bearer ${authToken}`);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
   return headers;
 };
 
@@ -161,6 +161,17 @@ const unwrap = <T extends ApiEnvelope>(response: Response, body: unknown): T => 
 
 export interface RequestOptions {
   signal?: AbortSignal;
+  /**
+   * Lets the request outlive the page (`fetch`'s `keepalive`), for the one
+   * that must still reach the server as the tab closes or reloads (issue
+   * #138). The browser caps such bodies at 64 KB in total.
+   */
+  keepalive?: boolean;
+  /**
+   * The Bearer token to send instead of the current one. A request sent on
+   * the way out of a scene may go after a sign-out has already cleared it.
+   */
+  token?: string | null;
 }
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
@@ -212,9 +223,10 @@ export const send = async <T extends ApiEnvelope>(
   try {
     response = await fetch(url, {
       method,
-      headers: buildHeaders(body?.contentType),
+      headers: buildHeaders(body?.contentType, options.token === undefined ? authToken : options.token),
       ...(body ? { body: body.payload } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.keepalive ? { keepalive: true } : {}),
     });
   } catch (cause) {
     throw new NetworkError(`Could not reach ${url}`, cause);

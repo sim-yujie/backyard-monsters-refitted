@@ -305,6 +305,25 @@ describe("AttackSession ending", () => {
     expect(session.state().tick).toBe(TICKS_PER_SECOND);
   });
 
+  it("leave ends the battle where it stands, logging nothing (#138)", () => {
+    const session = sessionOf();
+    session.start();
+    play(session, 1);
+    session.appendFling({ x: -100, y: -100, monsters: { C1: 3 } });
+    play(session, 1);
+    const events = session.flingLog().events.length;
+    session.leave();
+    const state = session.state();
+    expect(state.phase).toBe("ended");
+    expect(state.endReason).toBe("left");
+    expect(session.flingLog().events).toHaveLength(events);
+    // The clock stops there, and a second leave or a retreat changes nothing.
+    session.advance(5);
+    session.leave();
+    session.retreat();
+    expect(session.state()).toMatchObject({ tick: 2 * TICKS_PER_SECOND, endReason: "left" });
+  });
+
   it("ends as exhausted once the field is empty and nothing is left to send", () => {
     const session = sessionOf();
     session.start();

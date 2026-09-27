@@ -68,6 +68,8 @@ const endReasonText = (summary: AttackSummary): string => {
       return "Time ran out.";
     case "retreat":
       return "You retreated.";
+    case "left":
+      return "You left the attack, so it ended there.";
     default:
       return "";
   }

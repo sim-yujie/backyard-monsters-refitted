@@ -251,6 +251,7 @@ export const attackReportOf = (
   nameOf: (id: string) => string = (id) => id,
 ): string => {
   const lines = log.events.map((event) => reportLine(event, nameOf));
+  if (state.endReason === "left") lines.push(`${clockOf(state.tick)} Left the attack`);
   const loot = RESOURCE_KEYS.map((key) => Math.floor(state.loot[key]));
   lines.push(
     `Result: ${Math.floor(state.damagePercent)}% damage, ` +
@@ -306,6 +307,24 @@ export const buildAttackSave = (
   if (attackerchampion) payload.attackerchampion = attackerchampion;
   if (attackersiege) payload.attackersiege = attackersiege;
   return payload;
+};
+
+/** `buildingdata.t` of the two traps, the only buildings an attack save changes. */
+const TRAP_TYPES: ReadonlySet<number> = new Set([24, 117]);
+
+/**
+ * The same save, slimmed to fit a keepalive request (issue #138): the browser
+ * caps a body that outlives its page at 64 KB, and a large enemy yard's
+ * `buildingdata` alone can take most of that. The server reads nothing of
+ * `buildingdata` on an attack save but which traps are still there
+ * (`buildingDataHandler.ts`), so only the traps that did not fire are kept.
+ */
+export const forKeepalive = (payload: AttackSavePayload): AttackSavePayload => {
+  const buildingdata: BuildingDataMap = {};
+  for (const [key, building] of Object.entries(payload.buildingdata ?? {})) {
+    if (TRAP_TYPES.has(Number((building as { t?: unknown }).t))) buildingdata[key] = building;
+  }
+  return { ...payload, buildingdata };
 };
 
 /* ── The summary the end panel shows ────────────────────────────────────── */

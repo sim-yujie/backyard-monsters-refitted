@@ -11,6 +11,7 @@ import {
   clockOf,
   describeOutcome,
   attackerSiegeAfter,
+  forKeepalive,
   monsterUpdateOf,
   reportLine,
   summariseAttack,
@@ -94,6 +95,21 @@ const SOURCES = [
 ];
 
 const SIEGE = { jars: { quantity: 2, a: 1 }, decoy: { quantity: 1 } };
+
+describe("the save sent as the page goes (#138)", () => {
+  it("keeps only the traps still standing in buildingdata, and every other key as it was", () => {
+    const session = new AttackSession({ target: targetOf({ load: towerLoad() }), seed: 7 });
+    session.start();
+    session.appendFling({ x: -600, y: 120, monsters: { C1: 1 } });
+    play(session, 1);
+    session.leave();
+    const payload = buildAttackSave(session);
+    const slim = forKeepalive(payload);
+    expect(slim.buildingdata).toEqual({ "7": { id: 7, t: 24, l: 1, X: 300, Y: 300 } });
+    expect({ ...slim, buildingdata: undefined }).toEqual({ ...payload, buildingdata: undefined });
+    expect(payload.attackreport).toContain("0:01 Left the attack");
+  });
+});
 
 describe("buildAttackSave", () => {
   it("carries every §5.2 key, shaped from the session, the battle and the log", () => {

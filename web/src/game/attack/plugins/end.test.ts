@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, NetworkError } from "@/api/http";
+import { ApiError, NetworkError, setAuthToken } from "@/api/http";
 import type { AttackSavePayload, BaseLoadResponse, BaseSaveResponse } from "@/api/types";
 import { AttackSession } from "@/game/attack/AttackSession";
 import type { AttackMounts } from "@/game/attack/attackPlugins";
@@ -88,8 +88,15 @@ describe("the end plugin", () => {
     vi.useRealTimers();
   });
 
-  const mount = (save: (payload: AttackSavePayload) => Promise<BaseSaveResponse>) => {
-    teardown = createEndPlugin({ save, now: () => clock })(mountsFor(session, modal, notices, goToMap));
+  const savedOk = async (_payload?: AttackSavePayload, _token?: string | null): Promise<BaseSaveResponse> => ({ error: 0, basesaveid: 1 }) as BaseSaveResponse;
+
+  const mount = (
+    save: (payload: AttackSavePayload) => Promise<BaseSaveResponse>,
+    saveOnLeave: (payload: AttackSavePayload, token: string | null) => Promise<BaseSaveResponse> = vi.fn(savedOk),
+  ) => {
+    teardown = createEndPlugin({ save, saveOnLeave, now: () => clock })(
+      mountsFor(session, modal, notices, goToMap),
+    );
   };
 
   /** The player's first action: a one-Pokey drop, so the end is worth saving (#79). */
@@ -263,6 +270,120 @@ describe("the end plugin", () => {
     expect(notices.element.textContent).toBe("");
   });
 
+  describe("leaving the attack screen (#138)", () => {
+    const hide = (): void => {
+      Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+    };
+
+    afterEach(() => {
+      Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+      setAuthToken(null);
+    });
+
+    it("a reload or closed tab ends the battle there and sends its save once, as a keepalive", () => {
+      const save = vi.fn(savedOk);
+      const onLeave = vi.fn(savedOk);
+      mount(save, onLeave);
+      act();
+      window.dispatchEvent(new Event("pagehide"));
+
+      expect(session.state()).toMatchObject({ phase: "ended", endReason: "left" });
+      expect(save).not.toHaveBeenCalled();
+      expect(onLeave).toHaveBeenCalledTimes(1);
+      const payload = onLeave.mock.calls[0]![0]!;
+      expect(payload).toMatchObject({ basesaveid: 1, attackid: 77, over: true });
+      expect(payload.flinglog).toEqual(session.flingLog());
+      expect(payload.attackreport).toContain("Left the attack");
+      expect(modal.textContent).toContain("You left the attack");
+
+      // pagehide and visibilitychange both fire on the way out; still once.
+      window.dispatchEvent(new Event("pagehide"));
+      hide();
+      teardown?.();
+      teardown = undefined;
+      expect(onLeave).toHaveBeenCalledTimes(1);
+      expect(save).not.toHaveBeenCalled();
+    });
+
+    it("a hidden tab ends it the same way", async () => {
+      const onLeave = vi.fn(savedOk);
+      mount(vi.fn(savedOk), onLeave);
+      act();
+      hide();
+      expect(session.state().endReason).toBe("left");
+      expect(onLeave).toHaveBeenCalledTimes(1);
+      await flush();
+      expect(modal.querySelector(".attack-end__status")!.textContent).toBe("Result saved.");
+    });
+
+    it("an attack with nothing dropped sends nothing and keeps running (#79)", () => {
+      const save = vi.fn(savedOk);
+      const onLeave = vi.fn(savedOk);
+      mount(save, onLeave);
+      window.dispatchEvent(new Event("pagehide"));
+      hide();
+      teardown?.();
+      teardown = undefined;
+      expect(onLeave).not.toHaveBeenCalled();
+      expect(save).not.toHaveBeenCalled();
+      expect(session.state().phase).toBe("running");
+    });
+
+    it("in-app navigation away ends it too, with the token from before a sign-out", () => {
+      setAuthToken("before-sign-out");
+      const onLeave = vi.fn(savedOk);
+      mount(vi.fn(savedOk), onLeave);
+      act();
+      setAuthToken(null);
+      teardown?.();
+      teardown = undefined;
+      expect(onLeave).toHaveBeenCalledTimes(1);
+      expect(onLeave.mock.calls[0]![1]).toBe("before-sign-out");
+    });
+
+    it("a save still on its way as the page goes is sent again as a keepalive, once", async () => {
+      const pending = deferred<BaseSaveResponse>();
+      const save = vi.fn((_payload: AttackSavePayload) => pending.promise);
+      const onLeave = vi.fn(savedOk);
+      mount(save, onLeave);
+      act();
+      session.retreat();
+      expect(save).toHaveBeenCalledTimes(1);
+
+      window.dispatchEvent(new Event("pagehide"));
+      window.dispatchEvent(new Event("pagehide"));
+      expect(onLeave).toHaveBeenCalledTimes(1);
+      expect(onLeave.mock.calls[0]![0]).toEqual(save.mock.calls[0]![0]);
+
+      // The keepalive copy landed; the ordinary one is then refused as a duplicate.
+      await flush();
+      pending.reject(new ApiError("no", { status: 200, details: { data: { reason: "finalising" } } }));
+      await flush();
+      expect(modal.querySelector(".attack-end__status")!.textContent).toBe("Result saved.");
+    });
+
+    it("an in-app exit leaves a save already on its way to finish on its own", () => {
+      const onLeave = vi.fn(savedOk);
+      mount(() => deferred<BaseSaveResponse>().promise, onLeave);
+      act();
+      session.retreat();
+      teardown?.();
+      teardown = undefined;
+      expect(onLeave).not.toHaveBeenCalled();
+    });
+
+    it("stops listening once torn down", () => {
+      const onLeave = vi.fn(savedOk);
+      mount(vi.fn(savedOk), onLeave);
+      teardown?.();
+      teardown = undefined;
+      act();
+      window.dispatchEvent(new Event("pagehide"));
+      expect(onLeave).not.toHaveBeenCalled();
+    });
+  });
+
   it("tears down the panel and the timer", () => {
     mount(async () => ({ error: 0, basesaveid: 1 }) as BaseSaveResponse);
     act();
@@ -285,6 +406,7 @@ describe("describeSaveFailure", () => {
       new ApiError("no", { status: 200, details: { data: { reason } } });
     expect(describeSaveFailure(refused("expired")).canRetry).toBe(false);
     expect(describeSaveFailure(refused("bombSpend")).canRetry).toBe(false);
+    expect(describeSaveFailure(refused("finalising")).canRetry).toBe(false);
     expect(describeSaveFailure(refused("wrong-attacker"))).toEqual({
       message: "The server refused the result: no",
       canRetry: false,

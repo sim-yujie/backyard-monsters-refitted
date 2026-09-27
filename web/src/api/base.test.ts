@@ -200,4 +200,33 @@ describe("saveAttack", () => {
     await saveAttack({ baseid: "1000", basesaveid: 9, attackid: 1, over: false });
     expect(sent[0]!.body.get("over")).toBe("0");
   });
+
+  it("sends the save that outlives the page as a keepalive JSON body with the token it was given (#138)", async () => {
+    const init: RequestInit[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_url: string, request: RequestInit) => {
+        init.push(request);
+        return Promise.resolve(new Response(JSON.stringify({ error: 0 }), { status: 200 }));
+      }),
+    );
+    await saveAttack(
+      { baseid: "1000", basesaveid: 9, attackid: 1, over: true, attackloot: { r1: 5, r2: 0, r3: 0, r4: 0 } },
+      { keepalive: true, token: "t0k" },
+    );
+
+    const request = init[0]!;
+    expect(request.keepalive).toBe(true);
+    const headers = new Headers(request.headers);
+    expect(headers.get("Authorization")).toBe("Bearer t0k");
+    expect(headers.get("Content-Type")).toBe("application/json");
+    // The same string fields the form carries, so the server reads one body either way.
+    expect(JSON.parse(String(request.body))).toEqual({
+      baseid: "1000",
+      basesaveid: "9",
+      attackid: "1",
+      over: "1",
+      attackloot: '{"r1":5,"r2":0,"r3":0,"r4":0}',
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { post } from "./http";
+import { post, send, type FormBody, type RequestOptions } from "./http";
 import { getSession } from "./auth";
 import {
   BaseMode,
@@ -182,12 +182,20 @@ export const loadAttack = async (
  * recorded, within 420 seconds of it (`checkAttackBinding`,
  * `docs/server-api.md:284-289`); the refusal is HTTP 200 with `error` set and
  * `errorDetails.data.reason`, which `post` raises as an `ApiError`.
+ *
+ * With `keepalive` (the save sent as the page closes, issue #138) the same
+ * string fields go as a JSON body instead: form encoding would roughly double
+ * every JSON field, and a keepalive body must fit the browser's 64 KB. The
+ * server reads both encodings as the same flat body (`jsonBody.ts`).
  */
-export const saveAttack = async (payload: AttackSavePayload): Promise<BaseSaveResponse> => {
+export const saveAttack = async (
+  payload: AttackSavePayload,
+  options: RequestOptions = {},
+): Promise<BaseSaveResponse> => {
   const json = (value: unknown): string | undefined =>
     value === undefined ? undefined : JSON.stringify(value);
 
-  return post<BaseSaveResponse>(SAVE_PATH, {
+  const fields: FormBody = {
     baseid: payload.baseid,
     basesaveid: String(payload.basesaveid),
     attackid: String(payload.attackid),
@@ -205,5 +213,13 @@ export const saveAttack = async (payload: AttackSavePayload): Promise<BaseSaveRe
     attackreport: payload.attackreport,
     attackersiege: json(payload.attackersiege),
     flinglog: json(payload.flinglog),
-  });
+  };
+
+  if (!options.keepalive) return post<BaseSaveResponse>(SAVE_PATH, fields, options);
+
+  const body: Record<string, string> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined && value !== null) body[key] = String(value);
+  }
+  return send<BaseSaveResponse>("POST", SAVE_PATH, { ...options, json: body });
 };

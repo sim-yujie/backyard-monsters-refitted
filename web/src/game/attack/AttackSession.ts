@@ -83,8 +83,12 @@ import type { AttackTarget } from "./attackTarget";
 /** Where the session is in its life. */
 export type AttackPhase = "idle" | "loaded" | "running" | "ended";
 
-/** Why an attack ended (§F6, §F7). */
-export type AttackEndReason = "destroyed" | "exhausted" | "expired" | "retreat";
+/**
+ * Why an attack ended (§F6, §F7). `left` is the player leaving the attack
+ * screen — a reload, a closed tab, navigating away — which ends the battle
+ * where it stands (issue #138).
+ */
+export type AttackEndReason = "destroyed" | "exhausted" | "expired" | "retreat" | "left";
 
 /** The two battle speeds, as ticks advanced per real second over 80. */
 export type AttackSpeed = 1 | 2;
@@ -373,6 +377,18 @@ export class AttackSession {
     battle.apply(event);
     this.events.push(event);
     this.end("retreat");
+  }
+
+  /**
+   * Ends the attack where it stands because the player is leaving the attack
+   * screen (issue #138): the battle stops at this tick with everything that
+   * happened standing, as if it had ended there. Unlike {@link retreat} no
+   * event is logged — the creeps are not called back, the clock simply stops.
+   * Idempotent once ended.
+   */
+  leave(): void {
+    if (this.phase === "ended" || this.phase === "idle" || !this.battle_) return;
+    this.end("left");
   }
 
   /* ── Events ─────────────────────────────────────────────────────────── */

@@ -1,8 +1,8 @@
 import { saveAttack } from "@/api/base";
-import { ApiError, NetworkError } from "@/api/http";
+import { ApiError, NetworkError, getAuthToken } from "@/api/http";
 import type { AttackSavePayload, BaseSaveResponse } from "@/api/types";
 import { ATTACK_PLUGINS, type AttackMounts, type AttackPlugin } from "@/game/attack/attackPlugins";
-import { buildAttackSave, summariseAttack } from "@/game/attack/attackSave";
+import { buildAttackSave, forKeepalive, summariseAttack } from "@/game/attack/attackSave";
 import { monsterName } from "@/ui/attack/ArmyPanel";
 import { EndAttackPanel, type SaveFailure } from "@/ui/attack/EndAttackPanel";
 
@@ -23,6 +23,18 @@ import { EndAttackPanel, type SaveFailure } from "@/ui/attack/EndAttackPanel";
  * `attackid` and ends the server's session, so a second send could only be
  * refused; the guard here is what makes a retry safe, because a retry is
  * offered only after a failure.
+ *
+ * Leaving the attack screen ends the attack (issue #138): a reload, a closed
+ * tab, browser Back or a hidden tab (`pagehide`, `visibilitychange`), or the
+ * scene being torn down by in-app navigation. The session ends where it
+ * stands (`AttackSession.leave`) and the save goes as a keepalive request,
+ * which the browser lets finish after the page is gone, exactly once. If the
+ * ordinary save was already on its way, the keepalive copy is sent too, since
+ * a closing page cuts an ordinary request off; the server lands whichever
+ * arrives first and refuses the other (`baseSave.ts`, the final lock). An
+ * attack with nothing dropped still sends nothing (#79). A keepalive that
+ * never arrives is covered by the server finishing the attack from its last
+ * checkpoint (`server/src/services/base/finaliseAttack.ts`).
  */
 
 /** How long the server accepts this attack's save, from the attack load. */
@@ -33,6 +45,14 @@ export const WINDOW_MARGIN_SECONDS = 30;
 /** What the plugin needs that it would otherwise take from the app. */
 export interface EndPluginDeps {
   readonly save?: (payload: AttackSavePayload) => Promise<BaseSaveResponse>;
+  /**
+   * The save sent as the page goes. A keepalive `saveAttack`, slimmed to fit
+   * (`forKeepalive`), with the token as it was when the attack opened — a
+   * sign-out clears the live one before the scene is torn down.
+   */
+  readonly saveOnLeave?: (payload: AttackSavePayload, token: string | null) => Promise<BaseSaveResponse>;
+  /** Where `pagehide` and `visibilitychange` are heard; the page by default. */
+  readonly page?: { readonly window: Window; readonly document: Document };
   /** Wall-clock milliseconds; `Date.now` by default. */
   readonly now?: () => number;
   /** Display names for the attack report; the army panel's table by default. */
@@ -50,6 +70,7 @@ const FINAL_REASONS = new Set([
   "wrong-attacker",
   "stale-attack",
   "bombSpend",
+  "finalising",
 ]);
 
 /** The refusal's `reason`, when the error carries one. */
@@ -94,16 +115,26 @@ const protectedUntilOf = (response: BaseSaveResponse): number | null => {
 
 export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
   const save = deps.save ?? saveAttack;
+  const saveOnLeave =
+    deps.saveOnLeave ??
+    ((payload: AttackSavePayload, token: string | null) =>
+      saveAttack(forKeepalive(payload), { keepalive: true, token }));
   const now = deps.now ?? (() => Date.now());
   const nameOf = deps.nameOf ?? monsterName;
 
   return (mounts: AttackMounts) => {
     const { session, modal, notices, goToMap } = mounts;
+    const page = deps.page ?? { window, document };
     const mountedAt = now();
+    const token = getAuthToken();
     let warned = false;
     let ended = false;
     let saved = false;
     let inFlight = false;
+    /** The player is leaving the screen: the end in progress is theirs. */
+    let leaving = false;
+    /** The keepalive save has gone; it goes once. */
+    let sentOnLeave = false;
     let panel: EndAttackPanel | null = null;
     let payload: AttackSavePayload | null = null;
 
@@ -131,11 +162,54 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
         saved = true;
         if (panel) panel.setSaved({ protectedUntil: protectedUntilOf(response), now: now() / 1000 });
       } catch (caught) {
-        if (panel) panel.setFailed(describeSaveFailure(caught));
+        // Refused because its keepalive copy landed first is not a failure.
+        if (panel && !saved) panel.setFailed(describeSaveFailure(caught));
       } finally {
         inFlight = false;
       }
     };
+
+    /** The save, as a request that outlives the page. Once. */
+    const sendOnLeave = (): void => {
+      if (saved || sentOnLeave || !payload) return;
+      sentOnLeave = true;
+      panel?.setSaving();
+      saveOnLeave(payload, token).then(
+        (response) => {
+          saved = true;
+          panel?.setSaved({ protectedUntil: protectedUntilOf(response), now: now() / 1000 });
+        },
+        (caught: unknown) => {
+          // A duplicate of a save that already landed is refused; that is not a failure.
+          if (!saved) panel?.setFailed(describeSaveFailure(caught));
+        },
+      );
+    };
+
+    /**
+     * The player is leaving the attack screen. A running attack with a drop
+     * ends here and its save goes as the page goes. When the page itself is
+     * going, a save already sent but not yet answered is sent again the same
+     * way, because the browser cancels an ordinary request with its page; an
+     * in-app exit leaves that request running.
+     */
+    const leave = (unloading: boolean): void => {
+      const phase = session.state().phase;
+      if (phase === "running" || phase === "loaded") {
+        if (!session.hasActed()) return;
+        leaving = true;
+        session.leave();
+        return;
+      }
+      if (phase === "ended" && unloading && !saved) sendOnLeave();
+    };
+
+    const onPageHide = (): void => leave(true);
+    const onVisibility = (): void => {
+      if (page.document.visibilityState === "hidden") leave(true);
+    };
+    page.window.addEventListener("pagehide", onPageHide);
+    page.document.addEventListener("visibilitychange", onVisibility);
 
     const onEnded = (): void => {
       if (ended) return;
@@ -154,7 +228,8 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
         return;
       }
       payload = buildAttackSave(session, { nameOf });
-      void attempt();
+      if (leaving) sendOnLeave();
+      else void attempt();
     };
 
     const unsubscribe = session.subscribe((state) => {
@@ -170,6 +245,10 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     }
 
     return () => {
+      // The scene is going (in-app navigation, a sign-out): that is leaving too.
+      leave(false);
+      page.window.removeEventListener("pagehide", onPageHide);
+      page.document.removeEventListener("visibilitychange", onVisibility);
       unsubscribe();
       window.clearInterval(timer);
       panel?.close();
