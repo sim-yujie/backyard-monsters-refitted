@@ -9,7 +9,6 @@ import type { JsonObject } from "../../types/JsonObject.js";
 import { requirementDetail } from "../base/economy/transitions.js";
 import {
   FREE_FINISH_SECONDS,
-  TOWN_HALL_TYPE,
   isShort,
   levelOf,
   pointsForUpgrade,
@@ -192,6 +191,164 @@ const isDamaged = (
   health: BuildingHealthData | null | undefined
 ): boolean => building.hp != null || (health != null && String(building.id) in health);
 
+/** What {@link planOneUpgrade} refuses a step for. */
+export type OneUpgradeReason =
+  | Exclude<UpgradeSkipReason, "caughtUp">
+  | "missing"
+  | "maxLevel"
+  | "workers";
+
+/** The next step of one building, refused, with the detail for the reason. */
+export interface OneUpgradeRefusal {
+  ok: false;
+  reason: OneUpgradeReason;
+  id: number;
+  /** The building's type; 0 when it is `missing`. */
+  t: number;
+  /** The level the building is at; 0 when it is `missing`. */
+  from: number;
+  /**
+   * Whether the building as a whole is ruled out (missing, no ladder, busy,
+   * damaged, no Town Hall, top of the ladder) or only the step it would take
+   * next (requirements, shortfall, workers). The walk reports the first kind
+   * against the planned level and the second against the next one.
+   */
+  scope: "building" | "step";
+  shortfall?: ResourceAmounts;
+  townHall?: { have: number; need: number };
+  requirements?: CostRequirement[];
+  /** `workers`: the yard's workers, every one of them on a job. */
+  workers?: { total: number; busy: number };
+}
+
+/** The next step of one building, taken. */
+export interface OneUpgradeStep {
+  ok: true;
+  id: number;
+  t: number;
+  from: number;
+  to: number;
+  /** The countdown written, already multiplied by Sharper Tools; 0 for a finished step. */
+  seconds: number;
+  cost: ResourceAmounts;
+  /** Whether the step was free to finish and so written at its new level. */
+  finished: boolean;
+  /** Empire points awarded now: the step's points when finished, 0 when started. */
+  points: number;
+  /** The building as the step leaves it: `cU` set, or `l` raised. */
+  building: BuildingData;
+}
+
+/** One step of one building, taken or refused. */
+export type OneUpgrade = OneUpgradeStep | OneUpgradeRefusal;
+
+/**
+ * The cost row of a type that has an upgrade ladder at all, or null for one
+ * that does not: an unknown type, a kind the planner cannot plan (decorations,
+ * mushrooms, placeholders), or a row with no steps.
+ */
+export const upgradeLadder = (type: number) => {
+  const row = costOf(type);
+  if (!row || UNPLANNABLE_KINDS.has(row.kind) || row.costs.length === 0) return null;
+  return row;
+};
+
+/**
+ * Takes the next upgrade step of one building, or says why it cannot: the one
+ * rule set the planner's walk and the building panel's `POST /bm/yard/upgrade`
+ * share (`docs/design/yard-buildings.md` §3.2).
+ *
+ * The rules, in the order they are checked: the building exists and has a
+ * ladder; it is not busy (`cB`/`cU`/`cF`); it is not damaged; the yard has a
+ * Town Hall; the building is below the top of its ladder; the step's `re`
+ * prerequisites are met; the yard can pay for it; and, for a step longer than
+ * {@link FREE_FINISH_SECONDS}, a worker is free. A long step is written as a
+ * countdown of `floor(time × bst)`; a free one straight to its new level, with
+ * its points (see "Free to finish" above).
+ *
+ * `save.buildingdata` must already be advanced to `now`, as for the walk.
+ * Nothing is charged or written here: the caller takes the returned `building`
+ * and `cost`. Walls and traps are not refused here, because the walk upgrades
+ * them; the panel's route refuses them before it calls this.
+ *
+ * @param save - The yard as it stands, including anything an earlier step of the same walk spent or wrote.
+ * @param id - The building's id in `save.buildingdata`.
+ * @param now - Unix seconds, for the Sharper Tools window.
+ */
+export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): OneUpgrade => {
+  const buildings = save.buildingdata ?? {};
+  const building = buildings[String(id)] as BuildingData | undefined;
+  if (!building) return { ok: false, reason: "missing", id, t: 0, from: 0, scope: "building" };
+
+  const t = Number(building.t);
+  const from = levelOf(building);
+  const refuse = (
+    reason: OneUpgradeReason,
+    scope: OneUpgradeRefusal["scope"],
+    detail: Partial<OneUpgradeRefusal> = {}
+  ): OneUpgradeRefusal => ({ ...detail, ok: false, reason, id, t, from, scope });
+
+  const row = upgradeLadder(t);
+  if (!row) return refuse("noLadder", "building");
+  if (isBusy(building)) return refuse("busy", "building");
+  if (isDamaged(building, save.buildinghealthdata)) return refuse("damaged", "building");
+
+  const hall = townHallLevel(buildings);
+  if (hall <= 0) return refuse("townHall", "building", { townHall: { have: 0, need: 1 } });
+
+  const step = row.costs[from];
+  if (!step) return refuse("maxLevel", "building");
+
+  const unmet = requirementDetail(step[5], buildings, hall);
+  if (unmet) {
+    const gate = unmet.townHall as { have: number; need: number } | undefined;
+    return gate
+      ? refuse("townHall", "step", { townHall: gate })
+      : refuse("requirements", "step", {
+          requirements: unmet.requirements as CostRequirement[],
+        });
+  }
+
+  const cost = stepCost(step);
+  const missing = shortfall(save.resources, cost);
+  if (isShort(missing)) return refuse("shortfall", "step", { shortfall: missing });
+
+  if (step[4] > FREE_FINISH_SECONDS) {
+    // A long step needs a worker of its own, and there is no queue.
+    const total = workerCount(save.storedata);
+    const busy = busyWorkers(buildings);
+    if (busy >= total) return refuse("workers", "step", { workers: { total, busy } });
+
+    const seconds = Math.floor(step[4] * sharperToolsMultiplier(save.storedata, now));
+    return {
+      ok: true,
+      id,
+      t,
+      from,
+      to: from + 1,
+      seconds,
+      cost,
+      finished: false,
+      points: 0,
+      building: { ...building, cU: seconds },
+    };
+  }
+
+  // Free to finish: written complete, points awarded now, no worker held.
+  return {
+    ok: true,
+    id,
+    t,
+    from,
+    to: from + 1,
+    seconds: 0,
+    cost,
+    finished: true,
+    points: pointsForUpgrade(step),
+    building: { ...building, l: from + 1 },
+  };
+};
+
 /**
  * Walks a layout's planned upgrades against the caller's yard and works out
  * what Apply should start, finish, hold back and skip.
@@ -199,6 +356,10 @@ const isDamaged = (
  * `save.buildingdata` must already have had its countdowns advanced to `now`
  * (`services/base/advanceBuildingTimers.ts`), or the busy check counts jobs
  * that finished minutes ago and the worker count comes out short.
+ *
+ * Each step is {@link planOneUpgrade}, taken against the yard as this walk has
+ * already changed it: a gate a free step just opened counts, a resource an
+ * earlier job spent is gone, and a worker an earlier job took is busy.
  *
  * Throws only for a plan the cost table cannot price at all; everything that
  * depends on the yard's state is reported.
@@ -211,7 +372,6 @@ export const walkUpgrades = (
   checkPlans([...nodes], save.buildingdata);
 
   const buildings: BuildingDataMap = { ...(save.buildingdata ?? {}) };
-  const health = save.buildinghealthdata;
 
   const started: StartedUpgrade[] = [];
   const finished: FinishedUpgrade[] = [];
@@ -222,9 +382,6 @@ export const walkUpgrades = (
 
   const total = workerCount(save.storedata);
   const busyBefore = busyWorkers(buildings);
-  let free = Math.max(0, total - busyBefore);
-
-  const bst = sharperToolsMultiplier(save.storedata, now);
 
   // The pool as the walk has spent it, so a later job sees what an earlier one
   // took. Only the four resource keys matter; everything else in the column is
@@ -232,10 +389,13 @@ export const walkUpgrades = (
   const pool: Record<string, number> = {};
   for (const key of RESOURCE_KEYS) pool[key] = amountOf(save.resources, key);
 
-  // Recomputed only when a free step finishes on a Town Hall, which is the one
-  // thing in a walk that can raise the gate the other steps are measured
-  // against.
-  let hall = townHallLevel(buildings);
+  // What every step is measured against: the walk's own buildings and pool.
+  const yard: UpgradeWalkSave = {
+    buildingdata: buildings,
+    buildinghealthdata: save.buildinghealthdata,
+    resources: pool,
+    storedata: save.storedata,
+  };
 
   // The player's own order, ties broken by id so two plans made in the same
   // click are still walked the same way twice (§2.1).
@@ -244,8 +404,7 @@ export const walkUpgrades = (
     .sort((a, b) => (a.plan!.order - b.plan!.order) || (a.id - b.id));
 
   for (const node of candidates) {
-    const key = String(node.id);
-    const building = buildings[key];
+    const building = buildings[String(node.id)];
     // `checkNodesOwned` has already proved every node names a building of the
     // caller's, so a miss here is a caller that skipped it. Nothing to upgrade
     // and nothing to report.
@@ -253,9 +412,8 @@ export const walkUpgrades = (
 
     const type = Number(building.t);
     const target = node.plan!.level;
-    const row = costOf(type);
 
-    if (!row || UNPLANNABLE_KINDS.has(row.kind) || row.costs.length === 0) {
+    if (!upgradeLadder(type)) {
       skipped.push({ id: node.id, t: type, reason: "noLadder" });
       continue;
     }
@@ -266,105 +424,57 @@ export const walkUpgrades = (
       skipped.push({ id: node.id, t: type, reason: "caughtUp", from: level, to: target });
       continue;
     }
-    if (isBusy(building)) {
-      skipped.push({ id: node.id, t: type, reason: "busy", from: level, to: target });
-      continue;
-    }
-    if (isDamaged(building, health)) {
-      skipped.push({ id: node.id, t: type, reason: "damaged", from: level, to: target });
-      continue;
-    }
-    if (hall <= 0) {
-      skipped.push({
-        id: node.id,
-        t: type,
-        reason: "townHall",
-        from: level,
-        to: target,
-        townHall: { have: 0, need: 1 },
-      });
-      continue;
-    }
 
-    // Step by step, against the yard as this walk has already changed it: a
-    // gate a free step just opened counts, and a resource an earlier job spent
-    // is gone.
-    let current = building;
-
+    // Step by step, against the yard as this walk has already changed it.
     while (level < target) {
-      const step = row.costs[level];
-      // Only reachable if the ladder is shorter than `checkPlans` measured,
-      // which it cannot be; stopping is the harmless reading.
-      if (!step) break;
+      const next = planOneUpgrade(yard, node.id, now);
 
-      const unmet = requirementDetail(step[5], buildings, hall);
-      if (unmet) {
-        const gate = unmet.townHall as { have: number; need: number } | undefined;
-        skipped.push(
-          gate
-            ? {
-                id: node.id,
-                t: type,
-                reason: "townHall",
-                from: level,
-                to: level + 1,
-                townHall: gate,
-              }
-            : {
-                id: node.id,
-                t: type,
-                reason: "requirements",
-                from: level,
-                to: level + 1,
-                requirements: unmet.requirements as CostRequirement[],
-              }
-        );
-        break;
-      }
+      if (!next.ok) {
+        // `maxLevel` is only reachable if the ladder is shorter than
+        // `checkPlans` measured, which it cannot be; stopping is the harmless
+        // reading.
+        if (next.reason === "missing" || next.reason === "maxLevel") break;
 
-      const price = stepCost(step);
-      const missing = shortfall(pool, price);
-      if (isShort(missing)) {
-        skipped.push({
-          id: node.id,
-          t: type,
-          reason: "shortfall",
-          from: level,
-          to: level + 1,
-          shortfall: missing,
-        });
-        break;
-      }
-
-      if (step[4] > FREE_FINISH_SECONDS) {
-        // A long step needs a worker of its own, and there is no queue: either
-        // it starts now or it waits for the next Apply.
-        if (free === 0) {
+        if (next.reason === "workers") {
+          // Either it starts now or it waits for the next Apply.
           waiting.push({ id: node.id, t: type, from: level, to: level + 1, reason: "workers" });
           break;
         }
 
-        const seconds = Math.floor(step[4] * bst);
-        current = { ...current, cU: seconds };
-        buildings[key] = current;
+        const row: SkippedUpgrade = {
+          id: node.id,
+          t: type,
+          reason: next.reason,
+          from: level,
+          to: next.scope === "building" ? target : level + 1,
+        };
+        if (next.townHall) row.townHall = next.townHall;
+        if (next.requirements) row.requirements = next.requirements;
+        if (next.shortfall) row.shortfall = next.shortfall;
+        skipped.push(row);
+        break;
+      }
 
-        charge(cost, pool, price);
-        free -= 1;
-        started.push({ id: node.id, t: type, from: level, to: level + 1, seconds, cost: price });
+      buildings[String(node.id)] = next.building;
+      charge(cost, pool, next.cost);
+
+      if (!next.finished) {
+        started.push({
+          id: node.id,
+          t: type,
+          from: level,
+          to: level + 1,
+          seconds: next.seconds,
+          cost: next.cost,
+        });
         // One job per building: the rest of the ladder stays planned.
         break;
       }
 
-      // Free to finish: written complete, points awarded now, no worker held.
-      current = { ...current, l: level + 1 };
-      buildings[key] = current;
-
-      charge(cost, pool, price);
-      points += pointsForUpgrade(step);
-      finished.push({ id: node.id, t: type, from: level, to: level + 1, cost: price });
-
+      // A free step does not end the building's turn.
+      points += next.points;
+      finished.push({ id: node.id, t: type, from: level, to: level + 1, cost: next.cost });
       level += 1;
-      if (type === TOWN_HALL_TYPE) hall = townHallLevel(buildings);
     }
   }
 

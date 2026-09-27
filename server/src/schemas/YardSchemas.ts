@@ -21,3 +21,9 @@ export const BuildingIdField = z.coerce.number().int().nonnegative();
 
 /** `POST /bm/yard/state` takes no fields. */
 export const YardStateSchema = z.object({});
+
+/** `POST /bm/yard/upgrade`: the building to take one level up. */
+export const YardUpgradeSchema = z.object({ id: BuildingIdField });
+
+/** `POST /bm/yard/upgrade/cancel`: the building whose running upgrade to cancel. */
+export const YardCancelUpgradeSchema = z.object({ id: BuildingIdField });
