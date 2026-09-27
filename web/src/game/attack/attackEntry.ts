@@ -160,7 +160,7 @@ export const rosterInRange = (
   target: OffsetCell,
   ownCells: readonly OwnCell[],
   ownSave:
-    | (Pick<BaseLoadResponse, "champion" | "academy" | "catapult" | "buildingdata" | "resources"> & {
+    | (Pick<BaseLoadResponse, "champion" | "academy" | "catapult" | "buildingdata" | "resources" | "credits"> & {
         siege?: unknown;
       })
     | null,
@@ -203,6 +203,7 @@ export const rosterInRange = (
     sources,
     siege: typeof siege === "object" && siege !== null ? (siege as SiegeInventory) : null,
     resources: ownSave?.resources ?? null,
+    ...(typeof ownSave?.credits === "number" ? { credits: ownSave.credits } : {}),
   };
 };
 

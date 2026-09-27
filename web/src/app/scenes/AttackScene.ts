@@ -305,6 +305,9 @@ export class AttackScene implements Scene {
     this.refreshStrip(session.state());
     this.refreshStatus(session.state());
 
+    // The attacker's own pool, not the defender's the load carries; the drop
+    // package keeps it current as bombs go out (#92).
+    this.hud?.setResources(target.roster.resources ?? {}, target.roster.credits);
     this.mountPlugins(session, target, yard, context);
     session.start();
   }
@@ -333,6 +336,7 @@ export class AttackScene implements Scene {
       notices: this.notices,
       goToMap: () => context.goTo(SceneName.MAP_ROOM_2),
       setBottomInset: (px) => this.setInset({ ...this.inset, bottom: px }),
+      showResources: (resources) => this.hud?.setResources(resources),
     };
     for (const plugin of this.plugins) {
       const teardown = plugin(mounts);

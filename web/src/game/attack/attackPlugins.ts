@@ -1,4 +1,5 @@
 import type { Container } from "pixi.js";
+import type { Resources } from "@/api/types";
 import type { Camera } from "@/game/Camera";
 import type { Yard } from "@/game/yard/yardModel";
 import type { YardRenderer } from "@/game/yard/YardRenderer";
@@ -53,6 +54,12 @@ export interface AttackMounts {
    * The bottom sheet reports through this so the fit zoom stays honest.
    */
   readonly setBottomInset: (px: number) => void;
+  /**
+   * Shows the attacker's own pool on the HUD. The drop package owns the pool
+   * a bomb is bought from, and calls this every time it changes, so the HUD
+   * and the Catapult panel read one number (issue #92).
+   */
+  readonly showResources: (resources: Resources) => void;
 }
 
 /** A package mounted on the scene; may return its teardown. */

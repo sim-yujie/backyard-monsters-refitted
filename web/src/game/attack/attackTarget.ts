@@ -108,6 +108,11 @@ export interface AttackRoster {
    * the same reason as `sources`. Read it as `roster.resources ?? null`.
    */
   readonly resources?: Resources | null;
+  /**
+   * The attacker's shiny from the same load, for the HUD during the attack.
+   * Optional for the same reason as `sources`; absent reads as unknown.
+   */
+  readonly credits?: number;
 }
 
 /** The cell an attack is about to open. */

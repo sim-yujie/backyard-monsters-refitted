@@ -211,6 +211,13 @@ describe("rosterInRange", () => {
     expect(rosterInRange({ col: 100, row: 100 }, cells, null).resources).toBeNull();
   });
 
+  it("carries the attacker's shiny for the HUD, and leaves it out when unknown (#92)", () => {
+    const cells = [ownCell(100, 101)];
+    expect(rosterInRange({ col: 100, row: 100 }, cells, { credits: 42 }).credits).toBe(42);
+    expect("credits" in rosterInRange({ col: 100, row: 100 }, cells, {})).toBe(false);
+    expect("credits" in rosterInRange({ col: 100, row: 100 }, cells, null)).toBe(false);
+  });
+
   it("carries the siege inventory from the own-yard load, and null when there is none", () => {
     const siege = { decoy: { quantity: 2 }, jars: { quantity: 1 } };
     const cells = [ownCell(100, 101)];

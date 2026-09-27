@@ -298,7 +298,7 @@ body {
 
 .hud__resources {
   display: flex;
-  gap: var(--space-4);
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -308,17 +308,104 @@ body {
 
 .hud__resource {
   display: flex;
-  align-items: center;
   white-space: nowrap;
 }
 
-.hud__resource .res-icon {
+/* The readout is a button only so a tap can ask for the exact amount. */
+.hud__resource-button {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hud__resource-button:hover,
+.hud__resource-button[aria-expanded="true"] {
+  background: var(--colour-surface-sunken);
+}
+
+.hud__resource-button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.hud__resource-button .res-icon {
   height: 20px;
 }
 
 .hud__resource-value {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
+}
+
+/* A change of amount, floating off the readout (#92). Downwards for a spend,
+   upwards for a gain; a plain fade when motion is reduced. */
+.hud__delta {
+  position: fixed;
+  z-index: var(--z-popup);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--colour-surface-sunken) 80%, transparent);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-tight);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: hud-delta 1.6s var(--easing) forwards;
+}
+
+.hud__delta--down {
+  color: var(--colour-danger);
+  --hud-delta-drift: 8px;
+}
+
+.hud__delta--up {
+  color: var(--colour-success);
+  --hud-delta-drift: -8px;
+}
+
+@keyframes hud-delta {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  12% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(var(--hud-delta-drift, 0));
+  }
+}
+
+@keyframes hud-delta-fade {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud__delta {
+    animation-name: hud-delta-fade;
+  }
+}
+
+.hud__exact {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .hud__spacer {

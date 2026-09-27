@@ -29,8 +29,17 @@
  * back on the bucket. `session.setUnusedTools` is kept equal to the bombs
  * still buyable (one per resource) plus the siege weapons left, so an empty
  * field does not end the attack while there is still something to fire.
+ *
+ * ## One pool on screen
+ *
+ * The pool a bomb is bought from lives here, and the HUD shows it through
+ * `mounts.showResources` every time it changes (issue #92), so the HUD drops
+ * by the bomb's cost the moment the bomb is fired — the same number the
+ * Catapult panel's rows read. The server charges the same cost when the
+ * attack is saved (#90); nothing here writes it.
  */
 import { loadOwnYard } from "@/api/base";
+import type { Resources } from "@/api/types";
 import { ATTACK_PLUGINS, type AttackPlugin } from "@/app/scenes/AttackScene";
 import {
   AttackInput,
@@ -42,6 +51,7 @@ import {
   type SiegeWeaponId,
   type ToolInventory,
 } from "@/game/attack/AttackInput";
+import { hudResources, poolOf, spendBomb, type AttackerPool } from "@/game/attack/attackerPool";
 import { bucketFor } from "@/game/attack/bucket";
 import { CatapultPanel } from "@/ui/attack/CatapultPanel";
 import { SiegePanel } from "@/ui/attack/SiegePanel";
@@ -88,17 +98,6 @@ class DropRing {
   }
 }
 
-type Pool = { r1: number; r2: number; r3: number };
-
-const poolOf = (resources: Record<string, number | undefined> | undefined | null): Pool | null => {
-  if (!resources) return null;
-  const read = (key: string): number => {
-    const value = resources[key];
-    return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
-  };
-  return { r1: read("r1"), r2: read("r2"), r3: read("r3") };
-};
-
 const plugin: AttackPlugin = (mounts) => {
   const { session, target, yard, renderer, camera, canvas, dock, notices } = mounts;
   const bucket = bucketFor(session);
@@ -106,7 +105,9 @@ const plugin: AttackPlugin = (mounts) => {
 
   /* ── The attacker's inventory ─────────────────────────────────────── */
 
-  let pool: Pool | null = poolOf(target.roster.resources ?? null);
+  /** The own-yard resources the pool was read from, for goo and the caps. */
+  let held: Resources | null = target.roster.resources ?? null;
+  let pool: AttackerPool | null = poolOf(held);
   let stock: SiegeStock[] = parseSiegeStock(target.roster.siege ?? null);
   const bombsUsed = new Set<number>();
   const siegeUsed: Partial<Record<SiegeWeaponId, number>> = {};
@@ -182,6 +183,11 @@ const plugin: AttackPlugin = (mounts) => {
     sheet?.classList.toggle("attack-dock--picker", catapult !== null || siege !== null);
   };
 
+  /** The HUD's copy of the pool: goo and the rest as read, bombs spent. */
+  const showPool = (): void => {
+    if (held && pool) mounts.showResources(hudResources(held, pool));
+  };
+
   const refreshPanels = (): void => {
     catapult?.update({
       pool,
@@ -250,8 +256,8 @@ const plugin: AttackPlugin = (mounts) => {
     if (tool.kind === "bomb") {
       bombsUsed.add(tool.bomb.resource);
       if (pool) {
-        const key = tool.bomb.resource === 1 ? "r1" : tool.bomb.resource === 2 ? "r2" : "r3";
-        pool = { ...pool, [key]: Math.max(0, pool[key] - tool.bomb.cost) };
+        pool = spendBomb(pool, tool.bomb);
+        showPool();
       }
     } else {
       siegeUsed[tool.weapon.id] = (siegeUsed[tool.weapon.id] ?? 0) + 1;
@@ -277,6 +283,7 @@ const plugin: AttackPlugin = (mounts) => {
 
   const unsubscribe = session.subscribe(() => refreshPanels());
   refreshPanels();
+  showPool();
 
   /* ── The own-yard read, only for a roster that predates the fields ──── */
 
@@ -287,7 +294,11 @@ const plugin: AttackPlugin = (mounts) => {
     void loadOwnYard()
       .then((own) => {
         if (disposed) return;
-        if (target.roster.resources === undefined) pool = poolOf(own.resources);
+        if (target.roster.resources === undefined) {
+          held = own.resources ?? null;
+          pool = poolOf(held);
+          showPool();
+        }
         if (target.roster.siege === undefined) {
           stock = parseSiegeStock(own["siege"]);
           // A siege panel built before the stock arrived has no tiles; rebuild it.
