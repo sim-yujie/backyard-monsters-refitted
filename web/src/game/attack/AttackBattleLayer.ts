@@ -12,6 +12,7 @@ import type { BattleVisualEvent, CreepSnapshot } from "@/game/combat/rules";
 import { depthKey, type Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import type { AttackSession } from "./AttackSession";
+import { BuildingBars } from "./buildingBars";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import {
   anchorOffset,
@@ -489,7 +490,8 @@ export class AttackBattleLayer {
   private readonly damageApplied = new Map<number, number>();
   private readonly maxHpById = new Map<number, number>();
 
-  /* Buildings: the traps the viewer is not shown until they fire (#66). */
+  /* Buildings: the bars, and the traps the viewer is not shown until they fire (#64, #66). */
+  private readonly buildingBars: BuildingBars;
   private readonly traps = new TrapReveal();
   private readonly bursts: Burst[] = [];
   private readonly scorches: Graphics[] = [];
@@ -520,6 +522,20 @@ export class AttackBattleLayer {
     // Our own children only: the drop ring and anything else already in the
     // overlay stays where it is.
     this.overlay.addChild(this.effects, this.fire, this.bars);
+
+    // The building bars (issue #64) go under the splats, where the Flash
+    // overlay put them, below the projectiles.
+    const originOf = new Map<number, Point>();
+    for (const building of options.yard.buildings) {
+      originOf.set(building.id, { x: building.worldX, y: building.worldY });
+    }
+    this.buildingBars = new BuildingBars(
+      // No bar over a building the viewer cannot see: `centreOf` is null for
+      // a concealed trap, whatever its saved health.
+      (id) => (this.host.centreOf(id) ? (originOf.get(id) ?? null) : null),
+      (id) => this.maxHpById.get(id),
+    );
+    this.effects.addChild(this.buildingBars.root);
 
     // Once a frame, inside the render the scene already drives, after the
     // scene's own `session.advance`. The renderer comes with the call.
@@ -555,6 +571,7 @@ export class AttackBattleLayer {
       const state = battle.state();
       this.revealTraps(state.firedTraps, tick);
       this.syncDamage(state.health);
+      this.buildingBars.sync(state.health);
     }
   }
 
@@ -582,6 +599,7 @@ export class AttackBattleLayer {
     this.gibPool.length = 0;
     this.shots.length = 0;
 
+    this.buildingBars.destroy();
     for (const burst of this.bursts) burst.ring.destroy();
     this.bursts.length = 0;
     for (const scorch of this.scorches) scorch.destroy();
