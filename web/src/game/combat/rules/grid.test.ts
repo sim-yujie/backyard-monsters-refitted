@@ -8,7 +8,7 @@ import {
   GRID_MIN_COST,
   GRID_WIDTH,
   buildPathGrid,
-  cellOfIso,
+  cellOf,
 } from "./grid.js";
 import { mulberry32 } from "./rng.js";
 import { gridCost } from "./stats.js";
@@ -34,14 +34,14 @@ describe("cost", () => {
   it("starts every cell at 10 (`PATHING.Setup`)", () => {
     const grid = buildPathGrid(yardOf({}));
     expect(GRID_BASE_COST).toBe(10);
-    expect(grid.costAt(cellOfIso(0, 0))).toBe(10);
-    expect(grid.costAt(cellOfIso(600, -400))).toBe(10);
+    expect(grid.costAt(cellOf(0, 0))).toBe(10);
+    expect(grid.costAt(cellOf(600, -400))).toBe(10);
   });
 
   it("is 260 x 260 cells over the cartesian yard", () => {
     expect(GRID_WIDTH).toBe(260);
     expect(GRID_HEIGHT).toBe(260);
-    expect(cellOfIso(100000, 100000)).toBe(-1);
+    expect(cellOf(100000, 100000)).toBe(-1);
   });
 
   it("prices a wall's inner rectangle by level (`BFOUNDATION.as:3151`)", () => {
@@ -55,7 +55,7 @@ describe("cost", () => {
   it("stamps the wall's two rectangles on top of the base cost", () => {
     const yard = oneWall();
     const grid = buildPathGrid(yard);
-    const centre = cellOfIso(0, 0);
+    const centre = cellOf(0, 0);
     // Inner: 10 base + 20 outer + 125 inner. The rectangles overlap on purpose.
     expect(grid.costAt(centre)).toBe(155);
     // A cell covered only by the padded outer rectangle.
@@ -67,8 +67,20 @@ describe("cost", () => {
     const grid = buildPathGrid(
       yardOf({ "1": { id: 1, t: 17, X: 0, Y: 0 }, "2": { id: 2, t: 20, X: 400, Y: 400 } }),
     );
-    expect(grid.wallAt(cellOfIso(0, 0))).toBe(1);
-    expect(grid.wallAt(cellOfIso(400, 400))).toBe(-1);
+    expect(grid.wallAt(cellOf(0, 0))).toBe(1);
+    expect(grid.wallAt(cellOf(400, 400))).toBe(-1);
+  });
+
+  it("lays a building on the cells under its saved X/Y, which are already yard units", () => {
+    // `BFOUNDATION.Export` saves `GRID.FromISO(_mc)` and `PATHING.Cost` indexes
+    // the grid with `PATHING.FromISO(_mc)`: the same point, not a second
+    // projection of it (issue #83).
+    const grid = buildPathGrid(yardOf({ "1": { id: 1, t: 17, X: 300, Y: -100 } }));
+    expect(grid.wallAt(cellOf(300, -100))).toBe(1);
+    expect(grid.wallAt(cellOf(310, -90))).toBe(1);
+    expect(grid.wallAt(cellOf(320, -100))).toBe(-1);
+    // Where projecting X/Y a second time would have put it.
+    expect(grid.wallAt(cellOf(50, -250))).toBe(-1);
   });
 
   it("holds no negative rectangle, which is what makes removal exact", () => {
@@ -85,7 +97,7 @@ describe("cost", () => {
   it("gives a dead building's cells back and bumps the version", () => {
     const yard = oneWall();
     const grid = buildPathGrid(yard);
-    const centre = cellOfIso(0, 0);
+    const centre = cellOf(0, 0);
     expect(grid.version).toBe(0);
     const wall = yard.buildings[0];
     expect(wall).toBeDefined();

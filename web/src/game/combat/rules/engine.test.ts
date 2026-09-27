@@ -61,8 +61,8 @@ describe("a Pokey against a lone Cannon Tower", () => {
     const { yard, battle } = battleOf();
     run(battle, 1200);
     const tower = yard.buildings[0];
-    // 60 damage a swing, and the Pokey got eight in before it died.
-    expect(tower!.maxHp - tower!.hp).toBe(480);
+    // 60 damage a swing, and the Pokey got nine in before it died.
+    expect(tower!.maxHp - tower!.hp).toBe(540);
   });
 
   it("ends the battle once the last attacker is gone and the countdown has run", () => {
@@ -73,10 +73,11 @@ describe("a Pokey against a lone Cannon Tower", () => {
 });
 
 describe("traps", () => {
+  /** The trap sits at the Town Hall's near corner, where the Pokeys arrive. */
   const trapYard = () =>
     yardOf({
       "1": { id: 1, t: 14, X: 400, Y: 400 },
-      "2": { id: 2, t: 24, X: -40, Y: -40 },
+      "2": { id: 2, t: 24, X: 380, Y: 380 },
     });
 
   it("fires once when a ground creep walks over it, and kills what it catches", () => {
@@ -436,9 +437,9 @@ describe("the renderer's view of the field (issue #32, WP5)", () => {
     }
     const hits = events.filter((event) => event.kind === "hit");
     const hurts = events.filter((event) => event.kind === "hurt");
-    // The Pokey got eight swings in before it died, 60 a swing, on foot, at
+    // The Pokey got nine swings in before it died, 60 a swing, on foot, at
     // the tower it was standing on.
-    expect(hits).toHaveLength(8);
+    expect(hits).toHaveLength(9);
     for (const hit of hits) {
       if (hit.kind !== "hit") throw new Error("filtered");
       expect(hit.creepId).toBe(1);

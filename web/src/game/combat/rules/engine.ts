@@ -51,7 +51,13 @@ import {
   towerTargets,
   TRAP_TARGETS,
 } from "./targeting.js";
-import { distanceSquared, fromIso, isMainTarget, screenOf } from "./yard.js";
+import {
+  distanceSquared,
+  isMainTarget,
+  rangePointOf,
+  screenOf,
+  towerScanPoint,
+} from "./yard.js";
 import type { Cart, EngineBuilding, EngineYard } from "./yard.js";
 import type { PathGrid } from "./grid.js";
 import type { Rng } from "./rng.js";
@@ -228,9 +234,9 @@ export interface BattleState {
  * One creep as the live renderer sees it (issue #32, WP5).
  *
  * A read-only copy taken by {@link Battle.creeps}; nothing the renderer does
- * with it reaches the simulation. Positions are isometric yard units, the
- * space `buildingdata.X/Y` and a fling's `x`/`y` are in, not the cartesian
- * projection range tests use.
+ * with it reaches the simulation. Positions are yard units, the space
+ * `buildingdata.X/Y` and a fling's `x`/`y` are in; the renderer draws them
+ * through `toIso` like a building.
  */
 export interface CreepSnapshot {
   readonly id: number;
@@ -266,7 +272,7 @@ export type BattleVisualEvent =
       readonly tick: number;
       readonly towerId: number;
       readonly creepId: number;
-      /** Where the shot landed: the creep's isometric position that tick. */
+      /** Where the shot landed: the creep's yard position that tick. */
       readonly ix: number;
       readonly iy: number;
     }
@@ -279,10 +285,10 @@ export type BattleVisualEvent =
       readonly buildingId: number;
       /** The creep struck, or -1 when the target was a building. */
       readonly creepTargetId: number;
-      /** The attacker's isometric position that tick. */
+      /** The attacker's yard position that tick. */
       readonly ix: number;
       readonly iy: number;
-      /** The target's isometric position: a creep's spot, or a building's anchor. */
+      /** The target's yard position: a creep's spot, or a building's anchor. */
       readonly targetIx: number;
       readonly targetIy: number;
       /** True when the creep fights from range (`range > 1`): a projectile, not a bite. */
@@ -297,7 +303,7 @@ export type BattleVisualEvent =
       readonly tick: number;
       readonly creepId: number;
       readonly friendly: boolean;
-      /** The creep's isometric position that tick. */
+      /** The creep's yard position that tick. */
       readonly ix: number;
       readonly iy: number;
       /** Health actually taken, capped at what the creep had left. */
@@ -356,10 +362,10 @@ interface Creep {
   level: number;
   champion: boolean;
   friendly: boolean;
-  /** Isometric position, which is the space movement happens in. */
+  /** Yard units: the exact yard point of the creep's `_tmpPoint`. */
   ix: number;
   iy: number;
-  /** The cartesian projection, which is the space every range test uses. */
+  /** {@link rangePointOf} the above, the truncated point range tests use. */
   x: number;
   y: number;
   hp: number;
@@ -670,7 +676,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const flying = isFlyingMovement(movement);
     const health = monsterStat(monsterId, "health", level);
     const targetGroup = monsterStat(monsterId, "targetGroup", level) || TARGET_GROUP.ALL;
-    const cart = fromIso(at.x, at.y);
+    const cart = rangePointOf(at.x, at.y);
     const creep: Creep = {
       id: nextCreepId,
       monsterId,
@@ -716,7 +722,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const id = championByType(type);
     if (!id) return null;
     const health = championStat(id, "health", level);
-    const cart = fromIso(at.x, at.y);
+    const cart = rangePointOf(at.x, at.y);
     const creep: Creep = {
       id: nextCreepId,
       monsterId: id,
@@ -954,7 +960,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (length > 0) {
       creep.ix += (deltaX / length) * speed;
       creep.iy += (deltaY / length) * speed;
-      const cart = fromIso(creep.ix, creep.iy);
+      const cart = rangePointOf(creep.ix, creep.iy);
       creep.x = cart.x;
       creep.y = cart.y;
     }
@@ -1065,10 +1071,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     tower.fireTick += (stats?.rate ?? 0) * TOWER_REARM_MULTIPLIER;
 
     const flags = towerTargets(building.type);
-    // `FindTargets` scans from the footprint's middle (`BTOWER.as:394`), which
-    // the isometric projection puts at the same offset on both cartesian axes.
-    const scanX = building.cx + building.h / 2;
-    const scanY = building.cy + building.h / 2;
+    const scan = towerScanPoint(building);
+    const scanX = scan.x;
+    const scanY = scan.y;
     const reach = range * range;
 
     const live: Creep[] = [];

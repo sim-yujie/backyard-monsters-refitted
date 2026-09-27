@@ -79,7 +79,7 @@ describe("ShotLedger", () => {
     const ledger = new ShotLedger<Death>();
     ledger.shot(shotAt({ splash: 30 }));
     expect(ledger.hurt(wound())).toBe(true);
-    // Twenty isometric units along x: about ten cartesian, inside the blast.
+    // Twenty yard units along x: inside a blast of thirty.
     expect(ledger.hurt(wound({ creepId: 6, ix: 120, amount: 12 }))).toBe(true);
     // Two hundred along x is far outside it: not this shot's.
     expect(ledger.hurt(wound({ creepId: 7, ix: 300, amount: 12 }))).toBe(false);

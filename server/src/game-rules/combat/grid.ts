@@ -1,5 +1,5 @@
 import { gridCost } from "./stats.js";
-import { blocksPathing, fromIso, toIso } from "./yard.js";
+import { blocksPathing } from "./yard.js";
 import type { Cart, EngineBuilding, EngineYard } from "./yard.js";
 import type { Rng } from "./rng.js";
 
@@ -7,8 +7,12 @@ import type { Rng } from "./rng.js";
  * The pathing grid: what a yard costs to walk across, and the route through it.
  *
  * The Flash client keeps one 260 x 260 grid of cells, ten yard units to a cell,
- * over the cartesian projection of the yard
- * (`client/scripts/com/monsters/pathing/PATHING.as:34-36`, `:84`). Every cell
+ * over the cartesian yard that `buildingdata` is saved in
+ * (`client/scripts/com/monsters/pathing/PATHING.as:34-36`, `:84`), so a
+ * building's anchor and a creep's position index it with no conversion. Flash
+ * hands its waypoints back on screen (`PATHING.ToISO`, `:420`, `:482`), because
+ * its creeps walk on screen; the engine keeps them in yard units, the space its
+ * creeps are held in. Every cell
  * starts at cost 10 and each building adds its `_gridCost` rectangles on top
  * (`:93-119`), so a creep prefers open ground, skirts the expensive middle of a
  * building, and treats a wall line as a price rather than a barrier. Walls are
@@ -102,17 +106,11 @@ export const cellIndexOf = (cellX: number, cellY: number): number =>
     ? -1
     : cellX * GRID_HEIGHT + cellY;
 
-/** The cell a cartesian point falls in, or -1 when it is off the grid. */
+/** The cell a yard point falls in, or -1 when it is off the grid. */
 export const cellOf = (cartX: number, cartY: number): number =>
   cellIndexOf(toCellAxis(cartX, GRID_WIDTH), toCellAxis(cartY, GRID_HEIGHT));
 
-/** The cell an isometric yard point falls in, or -1 when it is off the grid. */
-export const cellOfIso = (x: number, y: number): number => {
-  const cart = fromIso(x, y);
-  return cellOf(cart.x, cart.y);
-};
-
-/** The cartesian corner of a cell, which is what the client's waypoints are. */
+/** The yard corner of a cell, which is what the client's waypoints are. */
 export const cellCorner = (index: number): Cart => ({
   x: toCartAxis(Math.floor(index / GRID_HEIGHT), GRID_WIDTH),
   y: toCartAxis(index % GRID_HEIGHT, GRID_HEIGHT),
@@ -121,7 +119,7 @@ export const cellCorner = (index: number): Cart => ({
 /** A route through the grid. */
 export interface PathResult {
   /**
-   * Waypoints in isometric yard units, the space creeps move in.
+   * Waypoints in yard units, the space the engine holds creeps in.
    *
    * Empty when the flood never reached the creep, which is the client's
    * "no path" answer and makes the creep walk straight at its target.
@@ -140,7 +138,7 @@ export interface PathResult {
 
 /** What a caller asks a route for. */
 export interface PathRequest {
-  /** The creep, in isometric yard units. */
+  /** The creep, in yard units. */
   readonly fromX: number;
   readonly fromY: number;
   /** The building being walked to. */
@@ -350,14 +348,19 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
   const jiggle = (value: number, rng: Rng): number =>
     value + (rng.float() - 0.5) * JIGGLE_SPREAD;
 
-  const waypointOf = (cellX: number, cellY: number): Cart => {
-    const cart = toIso(toCartAxis(cellX, GRID_WIDTH), toCartAxis(cellY, GRID_HEIGHT));
-    return cart;
-  };
+  /**
+   * A cell corner as a waypoint. Flash's `PATHING.ToISO` also truncates it to a
+   * whole screen pixel; the engine keeps the exact corner, under a pixel away.
+   */
+  const waypointOf = (cellX: number, cellY: number): Cart => ({
+    x: toCartAxis(cellX, GRID_WIDTH),
+    y: toCartAxis(cellY, GRID_HEIGHT),
+  });
 
   const path = (request: PathRequest, rng: Rng): PathResult => {
     const ignoreWalls = request.ignoreWalls === true;
-    const start = cellOfIso(Math.trunc(request.fromX), Math.trunc(request.fromY));
+    // `GlobalLocal(FromISO(_tmpPoint))`: the creep's point truncates first.
+    const start = cellOf(Math.trunc(request.fromX), Math.trunc(request.fromY));
     if (start < 0) return { waypoints: [], blockedBy: -1, reached: false };
 
     const flood = floodFor(request.target, ignoreWalls);

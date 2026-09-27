@@ -13,6 +13,7 @@ import {
   fromIso,
   isMainTarget,
   toIso,
+  towerScanPoint,
 } from "./yard.js";
 
 /**
@@ -143,6 +144,26 @@ describe("the isometric projection", () => {
 
   it("measures plain euclidean distance, as `GLOBAL.QuickDistance` does", () => {
     expect(distance(0, 0, 3, 4)).toBe(5);
+  });
+});
+
+describe("a building's anchor (issue #83)", () => {
+  it("is the saved X/Y itself, because Flash saves them already in yard units", () => {
+    // `BFOUNDATION.Export` writes `GRID.FromISO(_mc)`; projecting X/Y again
+    // would shear every distance the engine measures.
+    const yard = buildEngineYard({ buildingdata: { "1": { id: 1, t: 20, X: 180, Y: -480 } } });
+    expect(yard.buildings[0]).toMatchObject({ x: 180, y: -480, cx: 180, cy: -480 });
+  });
+
+  it("goes through the screen and back as `PATHING.FromISO(_mc)` does", () => {
+    // `GRID.ToISO(5, 0)` floors to (5, 2); `PATHING.FromISO` truncates to (4, 0).
+    const yard = buildEngineYard({ buildingdata: { "1": { id: 1, t: 20, X: 5, Y: 0 } } });
+    expect(yard.buildings[0]).toMatchObject({ x: 5, y: 0, cx: 4, cy: 0 });
+  });
+
+  it("puts a tower's scan point at the middle of its footprint", () => {
+    const yard = buildEngineYard({ buildingdata: { "1": { id: 1, t: 20, X: 180, Y: -480 } } });
+    expect(towerScanPoint(yard.buildings[0]!)).toEqual({ x: 215, y: -445 });
   });
 });
 

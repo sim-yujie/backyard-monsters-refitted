@@ -26,13 +26,26 @@ import type {
  * `CombatYard`, so the percentage rule still has exactly one implementation
  * (`docs/design/server-combat.md` §3.1).
  *
- * ## The two coordinate spaces
+ * ## The coordinate spaces
  *
- * A save stores isometric yard units — `X` and `Y` are the `_mc` position of
- * the building in the Flash display list. Distances, footprints and the pathing
- * grid all work in the cartesian space `PATHING.FromISO` projects into
- * (`client/scripts/com/monsters/pathing/PATHING.as:677-681`). Every building
- * therefore carries both: `x`/`y` isometric, `cx`/`cy` cartesian.
+ * A save's `X` and `Y` are already cartesian yard units. `BFOUNDATION.Export`
+ * writes `GRID.FromISO(_mc.x, _mc.y)` (`client/scripts/BFOUNDATION.as:2968-2972`)
+ * and loading puts the building back on screen at `GRID.ToISO(X, Y)`
+ * (`:3040`, `:3050`). Flash's pathing grid, tower range, splash, traps and
+ * Eye-ra's blast all work in this cartesian space, each by running a screen
+ * position through `PATHING.FromISO`
+ * (`client/scripts/com/monsters/pathing/PATHING.as:93-97`, `:677-681`;
+ * `client/scripts/Targeting.as:208`, `:236-241`). A creep's position in the
+ * engine is in the same units, so none of those tests converts anything.
+ *
+ * Screen space — a building's `_mc` and a creep's `_tmpPoint` — is
+ * {@link screenOf} of it. A tower's circle of range in yard units is therefore
+ * a 2:1 ellipse on screen, which is what the Yard Planner's range rings draw.
+ *
+ * Every building carries its stored `x`/`y` and `cx`/`cy`, the anchor as
+ * `PATHING.FromISO(_mc)` sees it: the stored point after a round trip through
+ * the screen, which can sit one unit off it because `GRID.ToISO` floors and
+ * `PATHING.FromISO` truncates.
  *
  * ## Fidelity notes
  *
@@ -234,24 +247,34 @@ export const footprintOf = (type: number): Footprint => {
 
 /* ── Coordinates ──────────────────────────────────────────────────────────── */
 
-/** A point in the cartesian space the grid and every distance work in. */
+/** A point in yard units, or on screen where a name says so. */
 export interface Cart {
   readonly x: number;
   readonly y: number;
 }
 
 /**
- * Isometric yard units to cartesian.
+ * A screen point to yard units.
  *
  * `PATHING.FromISO` (`PATHING.as:677-681`), whose two locals are declared `int`,
- * so each component truncates towards zero.
+ * so each component truncates towards zero (and a -0 is written as 0).
  */
 export const fromIso = (x: number, y: number): Cart => ({
-  x: Math.trunc(x * 0.5 + y),
-  y: Math.trunc(y - x * 0.5),
+  x: Math.trunc(x * 0.5 + y) + 0,
+  y: Math.trunc(y - x * 0.5) + 0,
 });
 
-/** Cartesian back to isometric, `PATHING.ToISO` with a zero offset (`:671-675`). */
+/**
+ * Where a creep stands for a range test: `PATHING.FromISO(_tmpPoint)`
+ * (`Targeting.as:236`). A creep's engine position is the exact yard point of
+ * its screen position, so the conversion is only the truncation.
+ */
+export const rangePointOf = (x: number, y: number): Cart => ({
+  x: Math.trunc(x) + 0,
+  y: Math.trunc(y) + 0,
+});
+
+/** Yard units to a screen point, `PATHING.ToISO` with a zero offset (`:671-675`). */
 export const toIso = (x: number, y: number): Cart => ({
   x: Math.trunc(x - y),
   y: Math.trunc((x + y) * 0.5),
@@ -289,10 +312,10 @@ export interface EngineBuilding {
   readonly type: number;
   readonly level: number;
   readonly kind: BuildingClass;
-  /** Isometric yard units, exactly as `buildingdata` spells them. */
+  /** Yard units, exactly as `buildingdata` spells them. */
   readonly x: number;
   readonly y: number;
-  /** The cartesian projection of the building's anchor point. */
+  /** The anchor as the grid and range tests see it, `PATHING.FromISO(_mc)`. */
   readonly cx: number;
   readonly cy: number;
   readonly w: number;
@@ -387,7 +410,8 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
     const rawLevel = Math.floor(numberOf(data.l));
     const level = rawLevel > 0 ? rawLevel : 1;
     const footprint = footprintOf(type);
-    const anchor = fromIso(numberOf(data.X), numberOf(data.Y));
+    const onScreen = screenOf(numberOf(data.X), numberOf(data.Y));
+    const anchor = fromIso(onScreen.x, onScreen.y);
     const ceiling = buildingMaxHp(type, level);
     const reported = health[String(id)];
     const kind = buildingClass(type);
@@ -437,3 +461,16 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
 /** Whether a building is still standing and able to be hit. */
 export const isAlive = (building: EngineBuilding): boolean =>
   building.hp > 0 && !building.fired;
+
+/**
+ * Where a tower measures its range from: the middle of its footprint.
+ *
+ * `FindTargets` scans from `_position + (0, h / 2)` through `PATHING.FromISO`
+ * (`BTOWER.as:394`, `Targeting.as:208`). Half a footprint down the screen is
+ * half a footprint along both yard axes, so the point is the anchor plus
+ * `h / 2` on each. Every footprint height is even, so nothing truncates.
+ */
+export const towerScanPoint = (building: EngineBuilding): Cart => ({
+  x: building.cx + building.h / 2,
+  y: building.cy + building.h / 2,
+});

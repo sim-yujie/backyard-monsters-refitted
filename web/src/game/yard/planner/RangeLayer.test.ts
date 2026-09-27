@@ -3,7 +3,16 @@
 // of which load Pixi; nothing below touches a canvas, but the import needs a
 // DOM to evaluate in.
 import { describe, expect, it } from "vitest";
-import { TOWER_STATS } from "@/game/combat/rules";
+import {
+  buildEngineYard,
+  createCreepIndex,
+  defenseFlags,
+  rangePointOf,
+  TOWER_STATS,
+  towerScanPoint,
+  towerTargets,
+  type CreepView,
+} from "@/game/combat/rules";
 import { YardView } from "../YardRenderer";
 import {
   DEFAULT_OVERLAYS,
@@ -165,5 +174,68 @@ describe("the remembered toggles", () => {
     expect(loadOverlays(null)).toEqual(DEFAULT_OVERLAYS);
     expect(() => saveOverlays(DEFAULT_OVERLAYS, fakeStorage({ writeThrows: true }))).not.toThrow();
     expect(() => saveOverlays(DEFAULT_OVERLAYS, null)).not.toThrow();
+  });
+});
+
+describe("the ring and the engine (issue #83)", () => {
+  /**
+   * How far from the ring's centre, in screen pixels along `angle`, the combat
+   * engine's tower still picks a creep: the same scan point, creep point and
+   * `inRange` test `tickTower` runs.
+   */
+  const engineReach = (type: number, level: number, angle: number): number => {
+    const yard = buildEngineYard({
+      buildingdata: { "1": { id: 1, t: type, l: level, X: 180, Y: -60 } },
+    });
+    const tower = yard.buildings[0]!;
+    const range = towerRange(type, level)!.range;
+    const scan = towerScanPoint(tower);
+    const centreX = scan.x - scan.y;
+    const centreY = (scan.x + scan.y) / 2;
+    const creep: CreepView = {
+      id: 1,
+      x: 0,
+      y: 0,
+      hp: 1,
+      flags: defenseFlags(false, false, false),
+      targetable: true,
+    };
+    const index = createCreepIndex<CreepView>();
+    let reach = 0;
+    for (let step = 0; step <= range * 3; step += 0.25) {
+      const screenX = centreX + Math.cos(angle) * step;
+      const screenY = centreY + Math.sin(angle) * step;
+      // The exact yard point of that screen point, then the engine's truncation.
+      const at = rangePointOf(screenX * 0.5 + screenY, screenY - screenX * 0.5);
+      creep.x = at.x;
+      creep.y = at.y;
+      index.rebuild([creep]);
+      if (index.inRange(range, scan.x, scan.y, towerTargets(type)).length > 0) reach = step;
+    }
+    return reach;
+  };
+
+  it("reaches exactly as far as the isometric ring is drawn, all the way round", () => {
+    for (const [type, level] of [
+      [20, 1],
+      [21, 3],
+      [118, 1],
+    ] as const) {
+      const { rx, ry } = rangeRadii(towerRange(type, level)!.range, YardView.ISO);
+      for (let degrees = 0; degrees < 360; degrees += 15) {
+        const angle = (degrees * Math.PI) / 180;
+        const drawn = 1 / Math.sqrt((Math.cos(angle) / rx) ** 2 + (Math.sin(angle) / ry) ** 2);
+        // The engine truncates a creep to whole yard units, under 1.5 px on screen.
+        expect(Math.abs(engineReach(type, level, angle) - drawn)).toBeLessThanOrEqual(1.5);
+      }
+    }
+  });
+
+  it("is Flash's circle in yard units: a 2:1 ellipse on screen, twice as wide as tall", () => {
+    const range = towerRange(20, 1)!.range;
+    const east = engineReach(20, 1, 0);
+    const south = engineReach(20, 1, Math.PI / 2);
+    expect(east).toBeCloseTo(range * Math.SQRT2, -0.5);
+    expect(east / south).toBeCloseTo(2, 1);
   });
 });

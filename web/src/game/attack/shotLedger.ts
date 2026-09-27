@@ -1,4 +1,4 @@
-import { fromIso } from "@/game/combat/rules";
+import { rangePointOf } from "@/game/combat/rules";
 
 /**
  * Holds back what a tower's bullet did to the creeps until the bullet has
@@ -36,7 +36,7 @@ import { fromIso } from "@/game/combat/rules";
 /** Ticks a wound is held at most (3 s at 1x), in case its bullet never reports landing. */
 export const HOLD_LIMIT_TICKS = 240;
 
-/** Cartesian units of slack on the splash radius: `fromIso` truncates. */
+/** Yard units of slack on the splash radius: the engine truncates positions. */
 const SPLASH_SLACK = 2;
 
 /** A shot whose wounds wait for its bullet. */
@@ -46,9 +46,9 @@ export interface HeldShot {
   readonly tick: number;
   /** The creep the shot was fired at. */
   readonly creepId: number;
-  /** The tower's splash radius in cartesian units; 0 for none. */
+  /** The tower's splash radius in yard units; 0 for none. */
   readonly splash: number;
-  /** The target's isometric position on the shot tick. */
+  /** The target's yard position on the shot tick. */
   readonly ix: number;
   readonly iy: number;
 }
@@ -169,8 +169,8 @@ export class ShotLedger<D extends { readonly creepId: number }> {
 
   private inBlast(open: HeldShot, wound: WoundLike): boolean {
     if (open.splash <= 0) return false;
-    const centre = fromIso(open.ix, open.iy);
-    const at = fromIso(wound.ix, wound.iy);
+    const centre = rangePointOf(open.ix, open.iy);
+    const at = rangePointOf(wound.ix, wound.iy);
     const reach = open.splash + SPLASH_SLACK;
     const dx = at.x - centre.x;
     const dy = at.y - centre.y;
