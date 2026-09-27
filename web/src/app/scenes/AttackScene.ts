@@ -337,6 +337,7 @@ export class AttackScene implements Scene {
       goToMap: () => context.goTo(SceneName.MAP_ROOM_2),
       setBottomInset: (px) => this.setInset({ ...this.inset, bottom: px }),
       showResources: (resources) => this.hud?.setResources(resources),
+      closeBuildingInfo: () => this.select(null),
     };
     for (const plugin of this.plugins) {
       const teardown = plugin(mounts);
@@ -668,13 +669,21 @@ export class AttackScene implements Scene {
 
   /* ── Enemy building info ────────────────────────────────────────────── */
 
-  /** Read-only facts on a tapped building (§4.4); no planner, no upgrades. */
+  /**
+   * Read-only facts on a tapped building (§4.4); no planner, no upgrades.
+   *
+   * The dock shows one panel at a time (#59): while the info is open it
+   * stands in for the Army panel or an open picker, which keep their state
+   * underneath and come back when it closes; opening a picker closes it
+   * (`AttackMounts.closeBuildingInfo`).
+   */
   private select(building: YardBuilding | null): void {
     this.selected = building;
     this.renderer.setSelected(building);
     if (!building) {
       this.panel?.close();
       this.panel = null;
+      this.syncInfoMode();
       return;
     }
     if (!this.panel) {
@@ -685,10 +694,18 @@ export class AttackScene implements Scene {
           this.panel = null;
           this.selected = null;
           this.renderer.setSelected(null);
+          this.syncInfoMode();
         },
       }).mount(dock);
+      this.panel.element.classList.add("attack-info");
+      this.syncInfoMode();
     }
     this.panel.show(building);
     if (this.session) this.refreshStatus(this.session.state());
+  }
+
+  private syncInfoMode(): void {
+    this.dock?.classList.toggle("attack-dock--info", this.panel !== null);
+    this.measureDock();
   }
 }

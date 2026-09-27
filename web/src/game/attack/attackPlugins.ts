@@ -60,6 +60,12 @@ export interface AttackMounts {
    * and the Catapult panel read one number (issue #92).
    */
   readonly showResources: (resources: Resources) => void;
+  /**
+   * Closes the enemy building's info panel, if one is open. The dock shows
+   * one panel at a time (#59): the info replaces the Army panel or a picker
+   * while it is open, and a picker opening closes the info.
+   */
+  readonly closeBuildingInfo: () => void;
 }
 
 /** A package mounted on the scene; may return its teardown. */
