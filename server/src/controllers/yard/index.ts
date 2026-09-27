@@ -7,6 +7,7 @@ import {
 } from "./academy.js";
 import { yardBankAction } from "./bank.js";
 import { yardBuildAction, yardCancelBuildAction, yardInstantBuildAction } from "./build.js";
+import { yardBunkerFillAction, yardBunkerRemoveAction } from "./bunker.js";
 import {
   yardHatcheryAddAction,
   yardHatcheryFinishAction,
@@ -70,4 +71,6 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "repair/instant", controller: yardRoute(yardRepairInstantAction) },
   { path: "recycle", controller: yardRoute(yardRecycleAction) },
   { path: "juice", controller: yardRoute(yardJuiceAction) },
+  { path: "bunker/fill", controller: yardRoute(yardBunkerFillAction) },
+  { path: "bunker/remove", controller: yardRoute(yardBunkerRemoveAction) },
 ];
