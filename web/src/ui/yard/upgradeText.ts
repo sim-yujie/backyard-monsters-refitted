@@ -94,7 +94,7 @@ export const describeUpgradeReport = (report: UpgradeReport): string => {
 
   if (report.finished.length > 0) {
     parts.push(
-      `${report.finished.length} finished at once${report.started.length === 0 ? ` for ${describeCost(report.cost)}` : ""}`,
+      `${report.finished.length} wall and trap ${report.finished.length === 1 ? "step" : "steps"} finished at once${report.started.length === 0 ? ` for ${describeCost(report.cost)}` : ""}`,
     );
   }
   if (report.waiting.length > 0) {
@@ -114,6 +114,6 @@ export const describeUpgradeReport = (report: UpgradeReport): string => {
   return `${parts.join("; ")}.`;
 };
 
-/** "15m 0s", or "instant" for a step the free-finish rule completes. */
+/** "15m 0s", or "instant" for no time at all. */
 export const describeSeconds = (seconds: number): string =>
   seconds <= 0 ? "instant" : formatCountdown(seconds);

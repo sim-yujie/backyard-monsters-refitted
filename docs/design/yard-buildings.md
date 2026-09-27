@@ -233,7 +233,7 @@ the audit already has (`timeCost`, `instantCost`, `topupCost`,
 
 | Purchase | Price | Source |
 | --- | --- | --- |
-| Finish a building job now (SP4) | `timeCost(remaining)`; free at ≤ 300 s | BB §5 "Speed-ups" |
+| Finish a building job now (SP4) | `timeCost(remaining)`; at ≤ 300 s left it is `SP1`, free, which the player presses (**Finish free**); nothing finishes for free on its own (#137) | BB §5 "Speed-ups" |
 | SP2 / SP3 (−1 h / −2 h) | 20 / 40 | `server/src/game-data/store/storeItems.ts:55-70` |
 | Instant upgrade / build | `int((ceil(sqrt((r1+r2+r3)/2)^0.75) + timeCost(t)) × 0.95)` | BB §6 "Instant upgrade" |
 | Unlock / train / research instantly | `timeCost(t) + ceil(sqrt(putty/2)^0.75)` | MH §3, §4.1, §4.2 |
@@ -335,7 +335,7 @@ All through `yardRoute` (§2.1). Bodies are form fields, like the planner routes
 | Route | Request | Rules checked (in order) | Response `report` | Extra errors |
 | --- | --- | --- | --- | --- |
 | `POST /bm/yard/state` | — | none | `null` | — |
-| `POST /bm/yard/upgrade` | `id` | building exists and is not a wall/trap/decoration/mushroom; not `busy` (`cB`/`cU`/`cF`); not `damaged`; Town Hall exists; `level < maxLevel`; `costs[level].re` met; no `shortfall`; a free worker, unless the step is ≤ 300 s (free finish, `FREE_FINISH_SECONDS`, `costs.ts:49`) | `{ id, from, to, seconds, cost, finished: bool }` | `maxLevel`, `workers` |
+| `POST /bm/yard/upgrade` | `id` | building exists and is not a wall/trap/decoration/mushroom; not `busy` (`cB`/`cU`/`cF`); not `damaged`; Town Hall exists; `level < maxLevel`; `costs[level].re` met; no `shortfall`; a free worker — for every step, however short: a step of ≤ 300 s runs a real countdown too, and its free finish is the player's own **Finish free** (`SP1`), never automatic (#137, owner review 2026-09-27) | `{ id, from, to, seconds, cost }` | `maxLevel`, `workers` |
 | `POST /bm/yard/upgrade/cancel` | `id` | `cU` running | `{ id, refund }` (full `costs[level]`, `cancelRefund`, `resourceBudget.ts:331`, capped) | `notUpgrading` |
 | `POST /bm/yard/upgrade/instant` | `id` | the upgrade checks except resources and worker; enough Shiny | `{ id, from, to, credits }` — level raised now, no resources charged, points awarded | — |
 | `POST /bm/yard/speedup` | `id`, `item` = `SP1`\|`SP2`\|`SP3`\|`SP4` | a `cB`/`cU` is running; `SP1` only at ≤ 300 s, `SP2` only at ≥ 1 h, `SP3` only at ≥ 2 h, `SP4` only at > 300 s (`client/scripts/STORE.as:1071-1082`); enough Shiny | `{ id, item, credits, remaining }` | `notRunning`, `itemRefused` |
@@ -388,7 +388,7 @@ time after WP1.1.
 | --- | --- |
 | WP1.0 | Levels from a fixture yard; no Flinger → 0; a Flinger still under construction does not count. |
 | WP1.1 | `catchUpBuildings`: completion awards points once; idempotent at the same `now`; 30-day clamp; paused while damaged (existing rule); `yardRoute` refuses a non-main save and a yard under attack; a thrown `ClientSafeError` gives the flat shape. Row lock: two concurrent `state` calls produce one consistent `savetime`. |
-| WP1.2 | Every refusal reason in order; free-finish step ≤ 300 s uses no worker; Sharper Tools duration; cancel refund full and capped; the planner walk's existing tests still pass unchanged. |
+| WP1.2 | Every refusal reason in order; a step ≤ 300 s starts a countdown and holds a worker like any other (#137), and `SP1` finishes it for 0 Shiny; Sharper Tools duration; cancel refund full and capped; the planner walk's existing tests still pass unchanged. |
 | WP1.3 | Price table in §2.6 against hand-computed values (24 h → 262); SP rules per remaining time; shiny lock refuses; credits never below 0 (the column has a check, `save.model.ts:174`). |
 | WP1.4 | Job end times per kind; a finish triggers one coalesced `state` call; the action queue never has two requests in flight. |
 | WP1.5 | Which actions show per type and state; gate message order; tower numbers from `TOWER_STATS`. |

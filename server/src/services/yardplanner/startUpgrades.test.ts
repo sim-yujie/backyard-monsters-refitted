@@ -17,8 +17,8 @@ import { walkUpgrades, type UpgradeWalkSave } from "./startUpgrades.js";
  *
  * Every case here is one rule of §3.4 read off one walk. The two the file is
  * really for are the pair decision Q1 turns on: a long step takes a worker and
- * ends its building's turn, and a step short enough to finish for free takes
- * none and does not.
+ * ends its building's turn, however short (#137), and a wall or trap step
+ * takes none and does not (D13).
  */
 
 const FIXTURE = "../../../../web/test/fixtures/baseload-sandbox-yard.json";
@@ -210,7 +210,7 @@ describe("walkUpgrades: workers", () => {
   });
 });
 
-describe("walkUpgrades: steps that finish for free", () => {
+describe("walkUpgrades: wall and trap steps finish at once (D13)", () => {
   test("a Block planned to level 5 finishes every step on the spot", () => {
     const save = sandbox();
     const id = firstWallId(save.buildingdata!);
@@ -229,7 +229,7 @@ describe("walkUpgrades: steps that finish for free", () => {
     expect(walk.buildingdata[String(id)]!.cU).toBeUndefined();
   });
 
-  test("free steps use no worker and are charged and scored as the wall route charges them", () => {
+  test("wall steps use no worker and are charged and scored as the wall route charges them", () => {
     const save = sandbox();
     const id = firstWallId(save.buildingdata!);
 
@@ -242,30 +242,56 @@ describe("walkUpgrades: steps that finish for free", () => {
     );
   });
 
-  test("a harvester's 300-second step is inside the window too", () => {
+  test("a harvester's 300-second step starts a countdown and holds a worker (#137)", () => {
     const save = sandbox();
     const walk = walkUpgrades(save, [planned(1, SNAPPER, 2)], NOW);
 
     expect(step(SNAPPER, 1)[4]).toBe(300);
-    expect(walk.finished).toEqual([
-      { id: 1, t: SNAPPER, from: 1, to: 2, cost: priceOf(SNAPPER, 1, 2) },
+    expect(walk.finished).toEqual([]);
+    expect(walk.started).toEqual([
+      { id: 1, t: SNAPPER, from: 1, to: 2, seconds: 300, cost: priceOf(SNAPPER, 1, 2) },
     ]);
-    expect(walk.buildingdata["1"]).toMatchObject({ l: 2 });
-    expect(walk.points).toBe(pointsForUpgrade(step(SNAPPER, 1)));
-  });
-
-  test("the first step past the window starts and the free ones before it do not wait", () => {
-    const save = sandbox();
-    // Level 1 to 2 is 300 seconds and free; 2 to 3 is 1,200 and is not.
-    const walk = walkUpgrades(save, [planned(1, SNAPPER, 3)], NOW);
-
-    expect(walk.finished.map((row) => [row.from, row.to])).toEqual([[1, 2]]);
-    expect(walk.started.map((row) => [row.from, row.to, row.seconds])).toEqual([[2, 3, 1200]]);
-    expect(walk.buildingdata["1"]).toMatchObject({ l: 2, cU: 1200 });
+    // Level left where the save had it (1, spelled by leaving `l` out); cU set.
+    expect(walk.buildingdata["1"]).toMatchObject({ cU: 300 });
+    expect(walk.buildingdata["1"]!.l).toBe(save.buildingdata!["1"]!.l);
+    expect(walk.cost).toEqual(priceOf(SNAPPER, 1, 2));
+    expect(walk.points).toBe(0);
     expect(walk.workers.busyAfter).toBe(1);
   });
 
-  test("free steps still cost a worker nothing when every worker is already busy", () => {
+  test("a short step is one job: a plan past it waits for a later Apply (#137)", () => {
+    const save = sandbox();
+    // Level 1 to 2 is 300 seconds; it takes the building's turn, so 2 to 3 stays planned.
+    const walk = walkUpgrades(save, [planned(1, SNAPPER, 3)], NOW);
+
+    expect(walk.finished).toEqual([]);
+    expect(walk.started.map((row) => [row.from, row.to, row.seconds])).toEqual([[1, 2, 300]]);
+    // Level left where the save had it (1, spelled by leaving `l` out); cU set.
+    expect(walk.buildingdata["1"]).toMatchObject({ cU: 300 });
+    expect(walk.buildingdata["1"]!.l).toBe(save.buildingdata!["1"]!.l);
+  });
+
+  test("a short step waits when every worker is busy (#137)", () => {
+    const save = sandbox();
+    for (const id of CANNON_IDS.slice(0, 5)) {
+      save.buildingdata![String(id)] = { ...save.buildingdata![String(id)]!, cU: 500 };
+    }
+
+    const walk = walkUpgrades(save, [planned(1, SNAPPER, 2)], NOW);
+
+    expect(walk.started).toEqual([]);
+    expect(walk.waiting).toEqual([{ id: 1, t: SNAPPER, from: 1, to: 2, reason: "workers" }]);
+    expect(walk.buildingdata["1"]).toEqual(save.buildingdata!["1"]!);
+  });
+
+  test("a short step under Sharper Tools is floor(300 × 0.8)", () => {
+    const save = sandbox();
+    save.storedata = { ...save.storedata, BST: { e: NOW + 3600 } };
+
+    expect(walkUpgrades(save, [planned(1, SNAPPER, 2)], NOW).started[0]!.seconds).toBe(240);
+  });
+
+  test("wall steps still cost a worker nothing when every worker is already busy", () => {
     const save = sandbox();
     for (const id of CANNON_IDS.slice(0, 5)) {
       save.buildingdata![String(id)] = { ...save.buildingdata![String(id)]!, cU: 500 };

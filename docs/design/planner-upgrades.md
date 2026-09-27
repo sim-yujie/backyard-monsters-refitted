@@ -69,6 +69,13 @@ under the threshold are the four harvesters' level 1 to 2 steps at exactly 300 s
 (`buildingCostData.ts`, types 1 to 4, `costs[1]`); every tower step is longer, the Cannon Tower's
 level 1 to 2 alone is 900 seconds (`:273`).
 
+> **Changed by #137 (owner review, 2026-09-27).** Only walls and traps are written finished. The
+> harvesters' 300-second steps, like every other building step, now start a real countdown and
+> hold a worker; while 300 s or less remain the player may press **Finish free** (`POST
+> /bm/yard/speedup` `SP1`), which is the only way such a job finishes early for free. Where this
+> document below says "free step" or "free-finish step" for a non-wall building, read it as
+> superseded; section 8 item 9 records the reversal.
+
 **Upgrade rules.** `BASE.CanUpgrade` refuses without a Town Hall, at max level, while any countdown
 runs, when `costs[level].re` is unmet and when any resource is short (`client/scripts/BASE.as:3828-
 3932`; spec `:911-929`). A damaged building shows Repair instead of Upgrade (spec `:926-928`). A
@@ -101,7 +108,7 @@ does, so the state the route writes has to be one those rules accept. Section 4 
 | `plan` on layout nodes | `plan: { level, order }`, optional, in the version 2 format; validated on save; read on apply. |
 | Inspector | A right-hand panel for one selected building: level, health now and next, the upgrade ladder with cost, time, shiny and gates; plan or clear. Multi-selection keeps today's cost summary. |
 | Plan-based F3 bar | The bottom bar sums planned upgrades, shows worker time, wall-clock lower bound, `free / total` workers, jobs that start now versus wait, and the unplaced count. |
-| Apply with upgrades | `POST /apply` gains `startUpgrades`; after moving, the server walks the planned nodes in the player's order, finishes free steps, starts one long step per building while workers and resources last, charges and reports. Partial by design. |
+| Apply with upgrades | `POST /apply` gains `startUpgrades`; after moving, the server walks the planned nodes in the player's order, finishes wall and trap steps, starts one step per building while workers and resources last, charges and reports. Partial by design. |
 | Apply dialog | Itemised moves, upgrades that start, upgrades that wait, total deducted and what is left, "save first" (design §4.5). |
 | Badges | A queued-upgrade mark on the canvas and the blueprint tile label (design §4.3). |
 | Audit compatibility | Verified against the reference-yard rules (section 4). |
@@ -247,7 +254,7 @@ Response on success:
   resources,                     // likewise, so the HUD re-reads rather than subtracts
   upgrades: {
     started:  { id, t, from, to, seconds, cost }[],   // one long step, cU set
-    finished: { id, t, from, to, cost }[],            // free-finish steps, written complete
+    finished: { id, t, from, to, cost }[],            // wall and trap steps, written complete (#137)
     waiting:  { id, t, from, to, reason: "workers" }[],
     skipped:  { id, t, reason, detail? }[],            // see below
     cost: { r1, r2, r3, r4 },                          // total actually charged
@@ -333,14 +340,15 @@ MikroORM wraps in a transaction, the same atomicity argument as phase 1 §2.4.
      - `requirementsMet(step.re, buildingdata)` else `skipped` with `requirementDetail`'s key
        (`transitions.ts:123-135` gives the same `townHall` / `requirements` split as
        `checkRequirements`, `wallUpgrade.ts:312-330`). The step *before* this one may already have
-       been finished for free; that is fine, it was legal.
+       been finished at once (a wall step); that is fine, it was legal.
      - `shortfall(pool, step)` names anything → `skipped: shortfall` with the missing amounts.
        The pool is the save's `resources` minus everything this walk has charged so far.
-     - `step.time <= FREE_FINISH_SECONDS` → **finished**: `l = level + 1`, no countdown, charged
-       `step`, `pointsForUpgrade(step)` awarded now (`costs.ts:215-218`), no worker used, and the
-       walk continues to the next step of the same building. This is the wall route's rule
-       (`wallUpgrade.ts:263-273`) applied wherever it holds; for a Block planned to level 5 it
-       reproduces the batch route exactly.
+     - a wall or trap step (`kind` `wall`/`trap`, and `step.time <= FREE_FINISH_SECONDS`) →
+       **finished**: `l = level + 1`, no countdown, charged `step`, `pointsForUpgrade(step)`
+       awarded now (`costs.ts:215-218`), no worker used, and the walk continues to the next step
+       of the same building. This is the wall route's rule (`wallUpgrade.ts:263-273`); for a Block
+       planned to level 5 it reproduces the batch route exactly. Any other step, however short,
+       takes the next branch (#137).
      - otherwise → needs a worker. `free === 0` → `waiting: workers`, stop this building.
        Else **started**: `cU = floor(step.time * bst)` (`BFOUNDATION.as:2295`; audit
        `transitions.ts:258`), charged `step`, `free -= 1`, no points yet (they are awarded at
@@ -355,9 +363,10 @@ Two deliberate choices, both recorded in section 8:
   F1 says "until workers or resources run out"; stopping at the first unaffordable job would make
   one expensive Town Hall plan silence every wall behind it. The client's preview (5.5) simulates
   the same walk in the same order, so the dialog already says what will happen.
-- **Free steps do not consume a worker, long steps do.** In Flash a five-second wall still needed
-  a worker (spec `:787-789`); Q1 removed that for walls and traps, and this plan applies the same
-  reading to any step under the threshold rather than inventing a third category.
+- **Wall and trap steps do not consume a worker, every other step does.** In Flash a five-second
+  wall still needed a worker (spec `:787-789`); Q1 removed that for walls and traps. This plan
+  first applied the same reading to any step under the threshold; #137 reversed that, so a
+  harvester's 300-second step is a job like any other and its free finish is the player's `SP1`.
 
 ### 3.5 Timers, points and what the Flash client sees afterwards
 
@@ -373,7 +382,7 @@ never starts more than `total - busy` jobs, so it cannot create that state on th
 outpost session (one worker) loading a main save with five jobs was already reachable before this
 plan and stays out of scope.
 
-**Points for started jobs are awarded by whoever completes them.** A free-finish step is complete
+**Points for started jobs are awarded by whoever completes them.** A wall or trap step is complete
 when written, so the walk awards its points at once, as the wall route does. A long step completes
 later, either in the Flash client, which awards points in `Upgraded()` and saves them, or in
 `advanceBuildingTimers` on the server (`:53-59`), which raises the level and awards nothing. The
@@ -384,7 +393,7 @@ widened here; section 8, item 7.
 
 `docs/server-api.md:554` (the `apply` row) gains: request field `startUpgrades` (`0`/`1`); response
 `resources` and `upgrades`; a sentence that upgrades are walked in `plan.order` and reported rather
-than refused, with the `skipped` reasons; and the free-finish rule. The paragraph at `:539-547`
+than refused, with the `skipped` reasons; and which steps are written finished (walls and traps only, #137). The paragraph at `:539-547`
 grows one line naming `apply` as the third route where the server decides a cost.
 
 ---
@@ -421,8 +430,9 @@ building because the transition is `to === from` (`auditEconomySave.ts:408-414`,
 the gain has to fit under the harvest term of the points budget. That is the pre-existing gap of
 3.5 and it applies equally to a job the Flash client started itself.
 
-**A free-finish step.** Twig Snapper (type 1) level 1 to 2, 300 seconds. The walk writes `l = 2`,
-no countdown, charges `costs[1]`, awards points. The next save has `l = 2` in both S and T:
+**A free-finish step (superseded by #137: the walk now starts this step as a 300 s countdown, the
+"started job" case above).** Twig Snapper (type 1) level 1 to 2, 300 seconds. The walk wrote `l = 2`,
+no countdown, charged `costs[1]`, awarded points. The next save has `l = 2` in both S and T:
 nothing to explain, nothing charged, and the points were added to `save.points` by the controller
 so `points_S` already includes them. Passes.
 
@@ -578,8 +588,8 @@ once the blocking checklist passes, in the shape of design §4.5 (`yard-planner-
 609-640`):
 
 - "N buildings will move" from `plan.movedIds()` (`plan.ts:164-170`);
-- "K upgrades will start now", itemised by building name, from → to, cost and time, and "F will
-  finish at once" for free steps;
+- "K upgrades will start now", itemised by building name, from → to, cost and time, and "F wall
+  and trap steps finish at once";
 - "M will wait for a free worker" and "S cannot start" with each reason;
 - "Total deducted now" and "You will have left", per resource, red where the remainder is short of
   a later job;
@@ -734,7 +744,7 @@ Each item below states the default this plan takes; the owner can overturn any o
 | 6 | Workers held by a mushroom pick | **Ignored.** The pick holds a Flash worker (`MUSHROOMS.as:197-206`) but leaves nothing in the save, so neither side can count it; the web client cannot pick mushrooms at all. Worst case the Flash client, on next load, finds one more job than workers and cancels-and-refunds it (spec `:804-815`), which is the existing outpost edge case. |
 | 7 | Points for a long step that completes in `advanceBuildingTimers` | **Not addressed here.** The server raises the level (`advanceBuildingTimers.ts:53-59`) and awards nothing; the Flash client awards on completion and the audit's `completionPoints` misses reference-completed jobs (`auditEconomySave.ts:408-414`, `:649-660`). Pre-existing for every countdown that finishes between saves; belongs to the audit's follow-up, and this plan does not widen it. |
 | 8 | Tower range and damage in the inspector | **Deferred.** Thirteen tower types carry `stats` in the props file (1.3) but neither generated table does. Adding `[range, damage, rate]` per level to the cost generator is one afternoon and would let the inspector print range and `int(damage * 40 / rate)` as the Flash upgrade text does (`BTOWER.as:144-147`); it is not needed for anything Apply does. |
-| 9 | Free-finish steps beyond walls | **Finished on the spot, no worker**, the same reading Q1 gave walls. The only main-yard cases are the harvesters' 300-second level 1 to 2 steps; the guard is per step, so a regenerated table cannot widen it silently. |
-| 10 | Multi-level plans | **One long step per Apply, the rest stays planned.** One job per building and no queue (Q1); free steps before a long one are finished in the same walk. The inspector says so on the plan line. |
+| 9 | Free-finish steps beyond walls | ~~Finished on the spot, no worker.~~ **Reversed by #137 (owner, 2026-09-27): they start a real countdown with a worker**; the free finish is the player's own **Finish free** (`SP1`, ≤ 300 s left). Only wall and trap steps are written finished. |
+| 10 | Multi-level plans | **One step per Apply, the rest stays planned.** One job per building and no queue (Q1); only wall and trap steps are finished in the same walk (#137). The inspector says so on the plan line. |
 | 11 | Version bump for `plan` | **No.** Additive optional field; a bump would refuse every layout saved today. |
 | 12 | Fortify | **Deferred until a ladder exists** (1.1, 1.3). `plan.fort` is an additive field when it comes. |

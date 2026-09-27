@@ -3,9 +3,9 @@ import { planCancelUpgrade, planUpgradeAction } from "../../services/yard/upgrad
 import { defineYardAction } from "./yardAction.js";
 
 /**
- * `POST /bm/yard/upgrade` — start the next upgrade step of one building, or
- * finish it on the spot when it takes 300 seconds or less
- * (`docs/design/yard-buildings.md` §3.2). The rules are
+ * `POST /bm/yard/upgrade` — start the next upgrade step of one building as a
+ * countdown holding a worker, however short (`docs/design/yard-buildings.md`
+ * §3.2, #137). The rules are
  * `services/yard/upgrade.ts`; the wrapper charges the step and writes.
  */
 export const yardUpgradeAction = defineYardAction({

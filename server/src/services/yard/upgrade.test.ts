@@ -11,7 +11,7 @@ import { planCancelUpgrade, planUpgradeAction, type UpgradeActionSave } from "./
  *
  * - Cannon Tower (20) `costs[2]` = 50,000 / 37,500 / 12,500, 2,700 s, Town Hall 3.
  * - Housing (15) `costs[2]` = 34,560 / 34,560, 10,800 s, Town Hall 4 and a Monster Locker.
- * - Twig Snapper (1) `costs[1]` = 0 / 1,575, 300 s: free to finish.
+ * - Twig Snapper (1) `costs[1]` = 0 / 1,575, 300 s: short enough for a free `SP1`, but still a job.
  */
 
 const NOW = 1_700_000_000;
@@ -67,10 +67,9 @@ describe("upgrade", () => {
       to: 3,
       seconds: 2700,
       cost: { r1: 50000, r2: 37500, r3: 12500, r4: 0 },
-      finished: false,
     });
     expect(outcome.debit).toEqual({ r1: 50000, r2: 37500, r3: 12500, r4: 0 });
-    expect(outcome.points).toBe(0);
+    expect(outcome).not.toHaveProperty("points");
     expect(outcome.slices.buildingdata["1"]).toEqual({ id: 1, t: CANNON, x: 0, y: 0, l: 2, cU: 2700 });
     // Every other building is carried over untouched, and the save itself is not written.
     expect(outcome.slices.buildingdata["2"]).toBe(save.buildingdata!["2"]);
@@ -90,25 +89,39 @@ describe("upgrade", () => {
     expect(outcome.report.seconds).toBe(2700);
   });
 
-  test("a step of 300 s or less finishes now, with its points, and needs no worker", () => {
-    // The yard's only worker is on the Cannon Tower.
+  test("a step of 300 s or less starts a countdown too, with no points yet (#137)", () => {
     const save = yard();
-    save.buildingdata!["1"] = { ...save.buildingdata!["1"]!, cU: 1000 };
-
     const outcome = planUpgradeAction(save, 2, NOW);
 
     expect(outcome.report).toEqual({
       id: 2,
       from: 1,
       to: 2,
-      seconds: 0,
+      seconds: 300,
       cost: { r1: 0, r2: 1575, r3: 0, r4: 0 },
-      finished: true,
     });
-    expect(outcome.slices.buildingdata["2"]).toEqual({ id: 2, t: SNAPPER, x: 0, y: 0, l: 2 });
+    // Level unchanged, cU set: the job holds the yard's worker until it ends or SP1 finishes it.
+    expect(outcome.slices.buildingdata["2"]).toEqual({ id: 2, t: SNAPPER, x: 0, y: 0, l: 1, cU: 300 });
     expect(outcome.debit).toEqual({ r1: 0, r2: 1575, r3: 0, r4: 0 });
-    // BFOUNDATION.Upgraded(): floor((300 + 1575) / 3).
-    expect(outcome.points).toBe(625);
+    expect(outcome).not.toHaveProperty("points");
+  });
+
+  test("a step of 300 s or less needs a free worker like any other (#137)", () => {
+    // The yard's only worker is on the Cannon Tower.
+    const save = yard();
+    save.buildingdata!["1"] = { ...save.buildingdata!["1"]!, cU: 1000 };
+
+    expect(refusal(() => planUpgradeAction(save, 2, NOW)).data).toEqual({
+      reason: "workers",
+      workers: { total: 1, busy: 1 },
+    });
+  });
+
+  test("a short step under Sharper Tools is floor(300 × 0.8)", () => {
+    const outcome = planUpgradeAction(yard({ storedata: { BST: { q: 1, e: NOW + 60 } } }), 2, NOW);
+
+    expect(outcome.report.seconds).toBe(240);
+    expect(outcome.slices.buildingdata["2"]!.cU).toBe(240);
   });
 
   test("every refusal, in the order the design checks them", () => {
@@ -161,7 +174,7 @@ describe("upgrade", () => {
     const save = yard({ storedata: { BEW: { q: 1 } } });
     save.buildingdata!["2"] = { ...save.buildingdata!["2"]!, l: 3, cU: 1000 };
 
-    expect(planUpgradeAction(save, 1, NOW).report.finished).toBe(false);
+    expect(planUpgradeAction(save, 1, NOW).report.seconds).toBe(2700);
   });
 
   test("walls and traps are sent to the planner's batch routes", () => {

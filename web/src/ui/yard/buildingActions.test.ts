@@ -88,7 +88,6 @@ describe("upgradeOffer: the next step", () => {
       to: 5,
       cost: { r1: 1_250_000, r2: 937_500, r3: 312_500, r4: 0 },
       seconds: 24_300,
-      finishesAtOnce: false,
       gate: null,
       instantGate: null,
     });
@@ -103,17 +102,29 @@ describe("upgradeOffer: the next step", () => {
     expect(upgradeOffer(pick(context, 2), context)?.seconds).toBe(Math.floor(24_300 * 0.8));
   });
 
-  it("marks a step of five minutes or less as finishing at once, needing no worker", () => {
-    // Twig Snapper L1 → L2 is 300 s; the only worker is busy on another job.
+  it("shows a step of five minutes or less as a real countdown (#137)", () => {
+    // Twig Snapper L1 → L2 is 300 s.
+    const context = contextOf({ buildings: [HALL(5), building(2, 1, 1)], storedata: {} });
+    const offer = upgradeOffer(pick(context, 2), context);
+    expect(offer).toMatchObject({ seconds: 300, gate: null });
+    expect(offer).not.toHaveProperty("finishesAtOnce");
+  });
+
+  it("a five-minute step needs a free worker like any other (#137)", () => {
+    // The only worker is busy on another job.
     const context = contextOf({
       buildings: [HALL(5), building(2, 1, 1), building(3, 20, 1, { cU: 500 })],
       storedata: {},
     });
-    expect(upgradeOffer(pick(context, 2), context)).toMatchObject({
-      finishesAtOnce: true,
-      seconds: 300,
-      gate: null,
+    expect(upgradeOffer(pick(context, 2), context)?.gate).toMatchObject({ reason: "workers" });
+  });
+
+  it("a five-minute step under Sharper Tools is floor(300 × 0.8)", () => {
+    const context = contextOf({
+      buildings: [HALL(5), building(2, 1, 1)],
+      storedata: { BST: { q: 1, e: T0 + 60 } },
     });
+    expect(upgradeOffer(pick(context, 2), context)?.seconds).toBe(240);
   });
 });
 

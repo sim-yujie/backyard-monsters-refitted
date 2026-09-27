@@ -865,7 +865,7 @@ export class PlannerBar {
   setWorkers(workers: YardWorkers, preview: ApplyPreview | null): void {
     const free = Math.max(0, workers.total - workers.busy);
     const tail = preview
-      ? `\n${preview.started.length} would start on Apply, ${preview.waiting.length} would wait for a worker, ${preview.finished.length} would finish instantly.`
+      ? `\n${preview.started.length} would start on Apply, ${preview.waiting.length} would wait for a worker, ${preview.finished.length} wall and trap ${preview.finished.length === 1 ? "step" : "steps"} would finish instantly.`
       : "";
     this.workersCell.set(
       `${free} free / ${workers.total}`,

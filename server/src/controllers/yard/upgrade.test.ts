@@ -3,6 +3,7 @@ import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
 import { storageCap } from "../../services/base/economy/resourceBudget.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { yardSpeedupAction } from "./speedup.js";
 import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
 import { runYardAction, type YardAnswer } from "./yardAction.js";
 
@@ -71,6 +72,9 @@ const rowOf = (overrides: Row = {}): Row => ({
 const upgrade = (id: unknown): Promise<YardAnswer> =>
   runYardAction(em as unknown as EntityManager, user, yardUpgradeAction, { id });
 
+const speedup = (id: unknown, item: string, as: User = user): Promise<YardAnswer> =>
+  runYardAction(em as unknown as EntityManager, as, yardSpeedupAction, { id, item });
+
 const cancel = (id: unknown): Promise<YardAnswer> =>
   runYardAction(em as unknown as EntityManager, user, yardCancelUpgradeAction, { id });
 
@@ -99,7 +103,6 @@ describe("POST /bm/yard/upgrade", () => {
         to: 3,
         seconds: 2700,
         cost: { r1: 50000, r2: 37500, r3: 12500, r4: 0 },
-        finished: false,
       },
     });
     expect((db.row!.buildingdata as Record<string, Row>)["1"]).toMatchObject({ l: 2, cU: 2700 });
@@ -126,6 +129,91 @@ describe("POST /bm/yard/upgrade", () => {
 
     expect(answer.status).toBe(400);
     expect(answer.body).toMatchObject({ reason: "badRequest" });
+  });
+});
+
+/**
+ * #137: a step of five minutes or less is a real job, and its free finish is
+ * the player's own `SP1`. The Twig Snapper's 1 → 2 step is 0 / 1,575, 300 s;
+ * completing it awards floor((300 + 1575) / 3) = 625 points.
+ */
+describe("a short upgrade (300 s or less)", () => {
+  const SNAPPER_ROW = { id: 3, t: 1, x: 0, y: 0, l: 1 };
+  const withSnapper = (overrides: Row = {}): Row => {
+    const row = rowOf({ credits: 50, ...overrides });
+    (row.buildingdata as Record<string, Row>)["3"] = { ...SNAPPER_ROW };
+    return row;
+  };
+  const snapper = () => (db.row!.buildingdata as Record<string, Row>)["3"]!;
+
+  beforeEach(() => {
+    db.row = withSnapper();
+  });
+
+  test("starts a 300 s countdown, holds the worker and awards nothing yet", async () => {
+    const answer = await upgrade(3);
+
+    expect(answer.status).toBe(200);
+    expect(answer.body).toMatchObject({
+      workers: { total: 1, busy: 1 },
+      report: { id: 3, from: 1, to: 2, seconds: 300, cost: { r1: 0, r2: 1575, r3: 0, r4: 0 } },
+    });
+    expect(snapper()).toMatchObject({ l: 1, cU: 300 });
+    expect(db.row!.points).toBe("100");
+    expect(db.row!.resources).toMatchObject({ r2: 40000 - 1575 });
+  });
+
+  test("SP1 finishes it for 0 Shiny: level, points, worker freed", async () => {
+    await upgrade(3);
+    const answer = await speedup(3, "SP1");
+
+    expect(answer.status).toBe(200);
+    expect(answer.body).toMatchObject({
+      credits: 50,
+      workers: { total: 1, busy: 0 },
+      report: { id: 3, item: "SP1", credits: 0, remaining: 0 },
+    });
+    expect(snapper()).toMatchObject({ l: 2 });
+    expect(snapper().cU).toBeUndefined();
+    expect(db.row).toMatchObject({ credits: 50, points: "725" });
+  });
+
+  test("SP1 works on a Shiny-locked account", async () => {
+    await upgrade(3);
+    const locked = { ...user, shiny_locked: true } as unknown as User;
+    const answer = await speedup(3, "SP1", locked);
+
+    expect(answer.status).toBe(200);
+    expect(snapper()).toMatchObject({ l: 2 });
+    expect(db.row).toMatchObject({ credits: 50, points: "725" });
+  });
+
+  test("SP1 is refused while more than 300 s remain, and nothing is written", async () => {
+    await upgrade(1); // the Cannon Tower's 2700 s step
+    const before = settled(db.row);
+    const answer = await speedup(1, "SP1");
+
+    expect(answer.status).toBe(409);
+    expect(answer.body).toMatchObject({ reason: "itemRefused", item: "SP1" });
+    expect(settled(db.row)).toEqual(before);
+  });
+
+  test("with the only worker busy, the short step is refused for workers", async () => {
+    await upgrade(1);
+    const answer = await upgrade(3);
+
+    expect(answer.status).toBe(409);
+    expect(answer.body).toMatchObject({ reason: "workers", workers: { total: 1, busy: 1 } });
+    expect(snapper()).toEqual(SNAPPER_ROW);
+  });
+
+  test("Cancel refunds it in full", async () => {
+    const before = settled(db.row);
+    await upgrade(3);
+    const answer = await cancel(3);
+
+    expect(answer.body).toMatchObject({ report: { id: 3, refund: { r1: 0, r2: 1575, r3: 0, r4: 0 } } });
+    expect(settled(db.row)).toEqual(before);
   });
 });
 

@@ -330,7 +330,7 @@ export const applyPanel = (options: ApplyPanelOptions): Panel => {
         "start",
       ),
       ...upgradeList(
-        `${preview.finished.length} ${preview.finished.length === 1 ? "finishes" : "finish"} at once`,
+        `${preview.finished.length} wall and trap ${preview.finished.length === 1 ? "step finishes" : "steps finish"} at once`,
         preview.finished.map((row) => costLine(`${describeStep(row)} — `, row.cost, "")),
         "finish",
       ),

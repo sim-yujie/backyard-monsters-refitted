@@ -382,10 +382,8 @@ export class BuildingPanel {
     title.textContent = `Upgrade to ${offer.to}`;
     const time = document.createElement("span");
     time.className = "building-panel__time";
-    time.textContent = offer.finishesAtOnce ? "Done at once" : describeSeconds(offer.seconds);
-    time.title = offer.finishesAtOnce
-      ? "Five minutes or less: it finishes the moment you press Upgrade and needs no worker."
-      : "How long the upgrade takes. It holds one worker until it finishes.";
+    time.textContent = describeSeconds(offer.seconds);
+    time.title = "How long the upgrade takes. It holds one worker until it finishes.";
     head.append(title, time);
     block.append(head);
 
@@ -628,9 +626,7 @@ export class BuildingPanel {
     const store = this.yard?.store;
     if (!store) return;
     const result = await store.upgrade(id);
-    this.report(id, result, (report) =>
-      report.finished ? [`Reached level ${report.to}.`] : [`Upgrade to ${report.to} started.`],
-    );
+    this.report(id, result, (report) => [`Upgrade to ${report.to} started.`]);
   }
 
   private async runInstant(id: number): Promise<void> {

@@ -29,8 +29,8 @@ import type { Yard, YardBuilding, YardWorkers } from "@/game/yard/yardModel";
  * When Upgrade cannot be pressed the panel gives one reason, and it is the
  * reason the server would give: `planUpgradeAction` and `planOneUpgrade`
  * check busy, damaged, no Town Hall, top of the ladder, the step's
- * prerequisites (Town Hall first), the resources, then a free worker for a
- * step longer than {@link FREE_FINISH_SECONDS}
+ * prerequisites (Town Hall first), the resources, then a free worker — for
+ * every step, however short (#137)
  * (`server/src/services/yard/upgrade.ts`,
  * `server/src/services/yardplanner/startUpgrades.ts`). The first that fails is
  * the one shown. A shortfall on a resource whose cost is over the storage cap
@@ -93,10 +93,8 @@ export interface UpgradeOffer {
   readonly from: number;
   readonly to: number;
   readonly cost: UpgradeCost;
-  /** The countdown the server would write: table time × Sharper Tools. */
+  /** The countdown the server would write: table time × Sharper Tools, however short (#137). */
   readonly seconds: number;
-  /** A step of 300 s or less completes on the spot, holds no worker, and cannot be undone. */
-  readonly finishesAtOnce: boolean;
   /** Shiny to buy the level outright. */
   readonly instantPrice: number;
   /** Why Upgrade is disabled; null when it can be pressed. */
@@ -230,18 +228,15 @@ export const upgradeOffer = (
       to: from,
       cost: ZERO,
       seconds: 0,
-      finishesAtOnce: false,
       instantPrice: 0,
       gate: { reason: "maxLevel", level: from },
       instantGate: { reason: "maxLevel", level: from },
     };
   }
 
-  const tableSeconds = step.cost.time;
-  const finishesAtOnce = tableSeconds <= FREE_FINISH_SECONDS;
-  const seconds = finishesAtOnce
-    ? tableSeconds
-    : Math.floor(tableSeconds * sharperToolsMultiplier(context.save.storedata, context.now()));
+  const seconds = Math.floor(
+    step.cost.time * sharperToolsMultiplier(context.save.storedata, context.now()),
+  );
   const cost: UpgradeCost = { r1: step.cost.r1, r2: step.cost.r2, r3: step.cost.r3, r4: step.cost.r4 };
 
   // The gates both buttons share, in the server's order.
@@ -270,7 +265,7 @@ export const upgradeOffer = (
       }
     }
     if (short) gate = { reason: "shortfall", shortfall, overCap };
-    else if (!finishesAtOnce && freeWorkers(context) === 0) {
+    else if (freeWorkers(context) === 0) {
       gate = { reason: "workers", total: context.workers.total, busy: context.workers.busy };
     }
   }
@@ -286,7 +281,6 @@ export const upgradeOffer = (
     to: from + 1,
     cost,
     seconds,
-    finishesAtOnce,
     instantPrice: step.shiny,
     gate,
     instantGate,

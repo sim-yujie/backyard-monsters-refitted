@@ -14,7 +14,7 @@ import type {
 import { YARD_STATE_KEYS } from "@/api/types";
 import { yardApi, yardRefusal, type YardApi, type YardRefusal } from "@/api/yard";
 import type { Notices } from "@/ui/maproom/Notices";
-import { costOf, FREE_FINISH_SECONDS, maxLevel, TRAP_TYPES, WALL_TYPES } from "./buildingCosts";
+import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES } from "./buildingCosts";
 import { predictCompletion, SERVER_COMPLETED_KINDS, yardJobs, type YardJob } from "./jobs";
 import { freeWorkers, holdsWorker } from "./workers";
 import { readYard, type Yard, type YardBuilding, type YardWorkers } from "./yardModel";
@@ -654,7 +654,7 @@ const upgradeRefusal = (
 
   const step = costOf(building.type, building.level);
   if (!step) return refuse("maxLevel", "That building is at its highest level.");
-  const [r1, r2, r3, r4, time] = step;
+  const [r1, r2, r3, r4] = step;
   const cost = { r1, r2, r3, r4 };
   const shortfall: Record<string, number> = {};
   let short = false;
@@ -666,7 +666,8 @@ const upgradeRefusal = (
   if (short) {
     return refuse("shortfall", "You do not have enough resources for that.", { shortfall });
   }
-  if (time > FREE_FINISH_SECONDS && freeWorkers(store) === 0) {
+  // Every step holds a worker, however short (#137).
+  if (freeWorkers(store) === 0) {
     return refuse("workers", "All your workers are busy.", { workers: { ...store.workers } });
   }
   return null;

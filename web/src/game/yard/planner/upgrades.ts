@@ -12,6 +12,7 @@ import {
   costOf,
   FREE_FINISH_SECONDS,
   instantCost,
+  kindOf,
   maxLevel,
   sumCosts,
   upgradeSteps,
@@ -51,7 +52,8 @@ import {
  * (`server/src/services/yardplanner/startUpgrades.ts`) against the yard the
  * client holds, in the same order, with the same gates, in the same sequence:
  * no ladder, caught up, busy, damaged, no Town Hall, then per step the
- * prerequisites, the shortfall, and free-to-finish or one worker.
+ * prerequisites, the shortfall, and finished at once (walls and traps) or one
+ * worker (everything else, however short — #137).
  *
  * It is not authoritative and never pretends to be — the response is what
  * happened, and `§5.5` has the dialog read the server's own report afterwards.
@@ -381,7 +383,7 @@ export interface ApplyPreview {
   readonly skipped: SkippedUpgrade[];
   /** The total that would be charged, across started and finished steps. */
   readonly cost: UpgradeCost;
-  /** Empire points awarded on the spot, which is the free-finish steps only. */
+  /** Empire points awarded on the spot, which is the wall and trap steps only. */
   readonly points: number;
   readonly workers: UpgradeWorkers;
   /** The four pools as they would be left. Never negative. */
@@ -416,17 +418,28 @@ const isShort = (missing: UpgradeCost): boolean =>
 
 /**
  * Empire points for completing one step, `BFOUNDATION.Upgraded()` (`:2456`).
- * Only a free-finish step earns them now; a long one earns them when it ends.
+ * Only a wall or trap step earns them now; any other earns them when it ends.
  */
 const pointsForUpgrade = (step: CostStep): number =>
   Math.floor((step[4] + step[0] + step[1] + step[2] + step[3]) / 3);
+
+/**
+ * Whether Apply writes a step at its finished level instead of starting it:
+ * a wall or trap step, all 5 seconds (D13). Any other step, a harvester's
+ * 300-second one included, is a job with a worker (#137); the server's
+ * `finishesAtOnce` in `startUpgrades.ts` is the same rule.
+ */
+const finishesAtOnce = (type: number, step: CostStep): boolean => {
+  const kind = kindOf(type);
+  return (kind === "wall" || kind === "trap") && step[4] <= FREE_FINISH_SECONDS;
+};
 
 /**
  * Runs Apply's upgrade walk against the yard the client holds.
  *
  * A line-for-line mirror of `walkUpgrades`
  * (`server/src/services/yardplanner/startUpgrades.ts`): same candidate order,
- * same refusal sequence, same free-finish rule, same one-long-step-per-
+ * same refusal sequence, same walls-and-traps-at-once rule, same one-job-per-
  * building rule, same running pool so a job earlier in the queue spends what a
  * later one then cannot. Where it reads a different source for the same fact,
  * it reads the fact the server will read — `PlanNode.damaged` is any `hp` at
@@ -545,9 +558,9 @@ export const previewApply = (nodes: Iterable<PlanNode>, yard: Yard): ApplyPrevie
         break;
       }
 
-      if (step[4] > FREE_FINISH_SECONDS) {
-        // A long step takes a worker of its own, and there is no queue: it
-        // starts now or it waits for the next Apply.
+      if (!finishesAtOnce(node.type, step)) {
+        // A job takes a worker of its own, however short (#137), and there is
+        // no queue: it starts now or it waits for the next Apply.
         if (free === 0) {
           waiting.push({
             id: node.id,

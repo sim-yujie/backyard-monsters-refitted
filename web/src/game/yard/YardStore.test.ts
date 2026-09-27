@@ -288,7 +288,6 @@ describe("the action queue", () => {
           to: 3,
           seconds: 900,
           cost: { r1: 1, r2: 1, r3: 1, r4: 0 },
-          finished: false,
         },
       ),
     );
@@ -356,6 +355,26 @@ describe("the action queue", () => {
       refusal: { reason: "workers", detail: { workers: { total: 1, busy: 1 } } },
     });
     expect(api.upgrade).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a five-minute step locally when no worker is free: it holds one too (#137)", async () => {
+    const api = stubApi();
+    const { store } = storeWith(
+      loadWith({
+        buildingdata: {
+          ...baseBuildings(),
+          "2": { X: 100, Y: 0, t: 20, id: 2, l: 2, cU: 900 },
+          "7": { X: 600, Y: 0, t: 1, id: 7, l: 1 },
+        },
+      }),
+      api,
+    );
+    // Twig Snapper L1 → L2 is 300 s; the only worker is on the Cannon Tower.
+    expect(await store.upgrade(7)).toMatchObject({
+      ok: false,
+      refusal: { reason: "workers", local: true },
+    });
+    expect(api.upgrade).not.toHaveBeenCalled();
   });
 
   it("refuses locally what the yard it holds already rules out, sending nothing", async () => {

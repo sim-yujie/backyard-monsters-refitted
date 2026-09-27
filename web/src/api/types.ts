@@ -751,9 +751,9 @@ export interface StartedUpgrade extends UpgradeStepRow {
 /**
  * An upgrade written straight to its finished level.
  *
- * A step of 300 seconds or less is free to finish
- * (`client/scripts/BFOUNDATION.as:2063-2083`), so the walk completes it on the
- * spot, charges it, awards its points and uses no worker.
+ * Only a wall or trap step (5 seconds, D13): the walk completes it on the
+ * spot, charges it, awards its points and uses no worker. Every other step,
+ * however short, is a {@link StartedUpgrade} (#137).
  */
 export interface FinishedUpgrade extends UpgradeStepRow {
   cost: UpgradeCost;
@@ -1025,15 +1025,14 @@ export interface YardRefusalBody {
   [detail: string]: unknown;
 }
 
-/** `POST /bm/yard/upgrade`. `finished` when the step was 300 s or less and completed at once. */
+/** `POST /bm/yard/upgrade`: the countdown started, however short the step (#137). */
 export interface UpgradeStartReport {
   id: number;
   from: number;
   to: number;
-  /** The countdown written, Sharper Tools applied; 0 when `finished`. */
+  /** The countdown written, Sharper Tools applied. */
   seconds: number;
   cost: UpgradeCost;
-  finished: boolean;
 }
 
 /** `POST /bm/yard/upgrade/cancel`: the step's full cost, back, clamped to the cap. */

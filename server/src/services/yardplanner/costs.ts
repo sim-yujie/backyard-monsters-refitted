@@ -42,7 +42,8 @@ import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js"
  * (`client/scripts/BFOUNDATION.as:2063-2083`; spec
  * `docs/specs/base-building.md:809-836`). Every wall and trap step is 5
  * seconds, which is what lets the batch routes write a finished building in one
- * step instead of starting a job.
+ * step instead of starting a job. Any other building's step still starts a
+ * job, however short; the free finish is the player's `SP1` (#137).
  */
 
 /** A countdown at or below this many seconds is free to finish. */

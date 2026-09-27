@@ -40,14 +40,12 @@ export interface UpgradeReport {
   id: number;
   /** The level the building was at. */
   from: number;
-  /** The level the step reaches (already reached when `finished`). */
+  /** The level the step reaches when its countdown ends. */
   to: number;
-  /** The countdown written, after Sharper Tools; 0 when `finished`. */
+  /** The countdown written, after Sharper Tools. */
   seconds: number;
   /** What the step cost: the ladder's `costs[from]`. */
   cost: ResourceAmounts;
-  /** Whether the step was free to finish (≤ 300 s) and so is done already, with no worker used. */
-  finished: boolean;
 }
 
 /** `report` of `POST /bm/yard/upgrade/cancel`. */
@@ -107,8 +105,9 @@ export const refusalErr = (refusal: OneUpgradeRefusal) => {
 };
 
 /**
- * Starts the next upgrade step of one building, or finishes it on the spot
- * when it is free to finish.
+ * Starts the next upgrade step of one building: a countdown and a worker,
+ * however short the step (#137). A step of 300 s or less is finished early
+ * only by the player's own free `SP1` (`services/yard/speedup.ts`).
  *
  * Refuses, in this order: `400 badRequest` (no such building, or one with no
  * ladder: decorations, mushrooms), `400 useBatchRoute` (walls and traps),
@@ -120,7 +119,7 @@ export const refusalErr = (refusal: OneUpgradeRefusal) => {
  * @param save - The caught-up main yard.
  * @param id - The building to upgrade.
  * @param now - Unix seconds, for the Sharper Tools window.
- * @returns The new `buildingdata`, the debit, the points (free steps only) and the report.
+ * @returns The new `buildingdata`, the debit and the report.
  */
 export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: number) => {
   const building = buildingOf(save, id);
@@ -144,14 +143,12 @@ export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: numb
     to: step.to,
     seconds: step.seconds,
     cost: step.cost,
-    finished: step.finished,
   };
 
   return {
     report,
     slices: { buildingdata: { ...save.buildingdata, [String(id)]: step.building } },
     debit: step.cost,
-    points: step.points,
   };
 };
 

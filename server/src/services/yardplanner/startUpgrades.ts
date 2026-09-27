@@ -43,22 +43,25 @@ import { busyWorkers, sharperToolsMultiplier, workerCount } from "./workers.js";
  * it reads and writes the returned `buildingdata`, cost and points itself,
  * which is the bargain `wallUpgrade.ts` and `validateLayout.ts` already make.
  *
- * ## Free to finish
+ * ## Walls and traps finish at once; everything else runs a countdown
  *
- * A step of {@link FREE_FINISH_SECONDS} or less is free to finish
- * (`client/scripts/BFOUNDATION.as:2063-2083`), so it is written as a finished
- * building rather than as a countdown: level up, points awarded now, no worker
- * held. That is exactly what the batch wall route does
- * (`wallUpgrade.ts:263-273`), applied wherever the rule holds rather than only
- * to walls; on the main yard the only non-wall cases are the four harvesters'
- * 300-second level 1 to 2 steps. A free step does not end the building's turn,
- * so a Block planned from 1 to 5 finishes all four steps in one walk and
- * reproduces the batch route exactly.
+ * A wall or trap step is 5 seconds, and decision Q1 (D13 of
+ * `docs/design/yard-buildings.md`) writes those as a finished building rather
+ * than a countdown: level up, points awarded now, no worker held. That is
+ * exactly what the batch wall route does (`wallUpgrade.ts:263-273`), so a
+ * Block planned from 1 to 5 finishes all four steps in one walk and reproduces
+ * the batch route. A finished step does not end the building's turn.
  *
- * ## One long step per building
+ * Every other step is a real job with a worker, however short (#137). A
+ * harvester's 300-second level 1 to 2 step used to be written finished because
+ * it is free to finish (`client/scripts/BFOUNDATION.as:2063-2083`); the owner
+ * wants that free finish to be the player's own press of **Finish free**
+ * (`POST /bm/yard/speedup` `SP1`, `services/yard/speedup.ts`), never automatic.
  *
- * The first step too long to finish for free takes a worker, sets `cU` and
- * ends that building's turn. Whatever the plan still wants stays in the
+ * ## One job per building
+ *
+ * The first step that is not a wall or trap step takes a worker, sets `cU`
+ * and ends that building's turn. Whatever the plan still wants stays in the
  * layout's `plan` for a later Apply: writing a second countdown would be the
  * queue Q1 refused, and the Flash client cancels and refunds jobs beyond its
  * worker count on load (spec `docs/specs/base-building.md:804-815`).
@@ -113,7 +116,7 @@ export interface StartedUpgrade extends UpgradeStepRow {
   cost: ResourceAmounts;
 }
 
-/** A step short enough to be written straight to its finished level. */
+/** A wall or trap step, written straight to its finished level (D13). */
 export interface FinishedUpgrade extends UpgradeStepRow {
   cost: ResourceAmounts;
 }
@@ -155,7 +158,7 @@ export interface UpgradeWalk {
   skipped: SkippedUpgrade[];
   /** The total actually charged, across started and finished steps. */
   cost: ResourceAmounts;
-  /** Empire points awarded now, which is the free-finish steps only. */
+  /** Empire points awarded now, which is the wall and trap steps only. */
   points: number;
   workers: UpgradeWorkers;
 }
@@ -190,6 +193,17 @@ const isDamaged = (
   building: BuildingData,
   health: BuildingHealthData | null | undefined
 ): boolean => building.hp != null || (health != null && String(building.id) in health);
+
+/** The kinds whose steps are written finished instead of started (D13, decision Q1). */
+const AT_ONCE_KINDS: ReadonlySet<string> = new Set(["wall", "trap"]);
+
+/**
+ * Whether a step is written at its finished level rather than as a countdown:
+ * a wall or trap step, all of which are 5 seconds. Any other step starts a
+ * job, even one of {@link FREE_FINISH_SECONDS} or less (#137).
+ */
+const finishesAtOnce = (kind: string, step: CostStep): boolean =>
+  AT_ONCE_KINDS.has(kind) && step[4] <= FREE_FINISH_SECONDS;
 
 /** What {@link planOneUpgrade} refuses a step for. */
 export type OneUpgradeReason =
@@ -231,7 +245,7 @@ export interface OneUpgradeStep {
   /** The countdown written, already multiplied by Sharper Tools; 0 for a finished step. */
   seconds: number;
   cost: ResourceAmounts;
-  /** Whether the step was free to finish and so written at its new level. */
+  /** Whether the step was a wall or trap step and so written at its new level (D13). */
   finished: boolean;
   /** Empire points awarded now: the step's points when finished, 0 when started. */
   points: number;
@@ -261,10 +275,10 @@ export const upgradeLadder = (type: number) => {
  * The rules, in the order they are checked: the building exists and has a
  * ladder; it is not busy (`cB`/`cU`/`cF`); it is not damaged; the yard has a
  * Town Hall; the building is below the top of its ladder; the step's `re`
- * prerequisites are met; the yard can pay for it; and, for a step longer than
- * {@link FREE_FINISH_SECONDS}, a worker is free. A long step is written as a
- * countdown of `floor(time × bst)`; a free one straight to its new level, with
- * its points (see "Free to finish" above).
+ * prerequisites are met; the yard can pay for it; and, unless it is a wall or
+ * trap step, a worker is free. A step is written as a countdown of
+ * `floor(time × bst)`, however short; a wall or trap step straight to its new
+ * level, with its points (see "Walls and traps finish at once" above).
  *
  * `save.buildingdata` must already be advanced to `now`, as for the walk.
  * Nothing is charged or written here: the caller takes the returned `building`
@@ -313,8 +327,8 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
   const missing = shortfall(save.resources, cost);
   if (isShort(missing)) return refuse("shortfall", "step", { shortfall: missing });
 
-  if (step[4] > FREE_FINISH_SECONDS) {
-    // A long step needs a worker of its own, and there is no queue.
+  if (!finishesAtOnce(row.kind, step)) {
+    // A job needs a worker of its own, and there is no queue.
     const total = workerCount(save.storedata);
     const busy = busyWorkers(buildings);
     if (busy >= total) return refuse("workers", "step", { workers: { total, busy } });
@@ -334,7 +348,7 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
     };
   }
 
-  // Free to finish: written complete, points awarded now, no worker held.
+  // A wall or trap step: written complete, points awarded now, no worker held.
   return {
     ok: true,
     id,
@@ -358,7 +372,7 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
  * that finished minutes ago and the worker count comes out short.
  *
  * Each step is {@link planOneUpgrade}, taken against the yard as this walk has
- * already changed it: a gate a free step just opened counts, a resource an
+ * already changed it: a gate a finished step just opened counts, a resource an
  * earlier job spent is gone, and a worker an earlier job took is busy.
  *
  * Throws only for a plan the cost table cannot price at all; everything that
@@ -471,7 +485,7 @@ export const walkUpgrades = (
         break;
       }
 
-      // A free step does not end the building's turn.
+      // A wall or trap step does not end the building's turn.
       points += next.points;
       finished.push({ id: node.id, t: type, from: level, to: level + 1, cost: next.cost });
       level += 1;

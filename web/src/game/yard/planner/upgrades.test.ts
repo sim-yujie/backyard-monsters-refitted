@@ -287,7 +287,7 @@ describe("previewApply", () => {
     expect(preview.waiting.map((row) => row.id)).toEqual([6]);
   });
 
-  it("finishes a whole run of free steps on one building and uses no worker", () => {
+  it("finishes a whole run of wall steps on one building and uses no worker (D13)", () => {
     const yard = yardOf([HALL, { id: 1, t: 17, X: 200, Y: 0 }]);
     const plan = planOf(yard);
     plan.setPlan(1, 5);
@@ -459,28 +459,27 @@ describe("previewApply", () => {
     ]);
   });
 
-  it("finishes free steps before a long one on the same building", () => {
-    // A Twig Snapper's 1 to 2 step is exactly 300 seconds, so it is free; its
-    // 2 to 3 step is 1,200 and takes the worker.
+  it("starts a harvester's 300 s step as a job with a worker, like the server (#137)", () => {
+    // A Twig Snapper's 1 to 2 step is exactly 300 seconds: a countdown, not a
+    // finish, and it takes the building's turn, so 2 to 3 stays planned.
     const yard = yardOf([HALL, { id: 1, t: 1, X: 200, Y: 0 }]);
     const plan = planOf(yard);
     plan.setPlan(1, 3);
 
     const preview = previewApply(plan.plannedNodes(), yard);
 
-    expect(preview.finished).toEqual([
-      { id: 1, t: 1, from: 1, to: 2, cost: { r1: 0, r2: 1_575, r3: 0, r4: 0 } },
-    ]);
+    expect(preview.finished).toEqual([]);
     expect(preview.started).toEqual([
       {
         id: 1,
         t: 1,
-        from: 2,
-        to: 3,
-        seconds: 1_200,
-        cost: { r1: 0, r2: 3_300, r3: 0, r4: 0 },
+        from: 1,
+        to: 2,
+        seconds: 300,
+        cost: { r1: 0, r2: 1_575, r3: 0, r4: 0 },
       },
     ]);
+    expect(preview.points).toBe(0);
     expect(preview.workers.busyAfter).toBe(1);
   });
 

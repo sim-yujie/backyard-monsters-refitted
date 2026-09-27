@@ -38,8 +38,9 @@ export const yardState = (): Promise<YardResponse<null>> =>
   post<YardResponse<null>>(`${YARD_PATH}/state`);
 
 /**
- * Starts an upgrade. A step of 300 seconds or less finishes on the spot and
- * holds no worker (`report.finished`). Refusals, in the server's order:
+ * Starts an upgrade: a countdown holding a worker, however short the step
+ * (#137); with 300 s or less left, `speedup` `SP1` finishes it free.
+ * Refusals, in the server's order:
  * 400 `badRequest`, 400 `useBatchRoute` (walls and traps), `mapRoom`,
  * `busy`, `damaged`, `townHall`, `maxLevel`, `requirements`, `shortfall`,
  * `workers` (`docs/server-api.md` "Yard actions").
