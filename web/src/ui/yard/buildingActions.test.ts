@@ -268,15 +268,45 @@ describe("panelModel: which blocks each building gets", () => {
     }
   });
 
-  it("the Map Room: Open map and never Upgrade", () => {
+  it("a level 1 Map Room at Town Hall 6 offers the move to Map Room 2: no Instant, map not open yet", () => {
     const context = contextOf({ buildings: [HALL(6), building(2, 11, 1)] });
     const model = panelModel(pick(context, 2), context);
-    expect(model).toMatchObject({ upgrade: null, maxed: false, open: "map", openBlocked: null });
+    expect(model).toMatchObject({
+      upgrade: { from: 1, to: 2, seconds: 345_600, gate: null, instant: false },
+      maxed: false,
+      open: "map",
+      openBlocked: "Upgrade the Map Room to level 2 to open Map Room 2.",
+    });
   });
 
-  it("the Map Room below Town Hall 6 says the map is not open yet", () => {
+  it("a level 2 Map Room is Map Room 2: the map opens and the Map Room is at its top", () => {
+    const context = contextOf({ buildings: [HALL(6), building(2, 11, 2)] });
+    expect(panelModel(pick(context, 2), context)).toMatchObject({
+      upgrade: null,
+      maxed: true,
+      open: "map",
+      openBlocked: null,
+    });
+  });
+
+  it("a player already on Map Room 2 (mr2upgraded) opens the map whatever the Map Room says", () => {
+    const context = contextOf({ buildings: [HALL(6), building(2, 11, 1)] });
+    const moved = { ...context, save: { ...context.save, flags: { mr2upgraded: 1 } } };
+    expect(panelModel(pick(context, 2), moved).openBlocked).toBeNull();
+  });
+
+  it("the Map Room below Town Hall 6: the map opens at Town Hall 6, and so does the upgrade", () => {
     const context = contextOf({ buildings: [HALL(5), building(2, 11, 1)] });
-    expect(panelModel(pick(context, 2), context).openBlocked).toMatch(/Town Hall 6/);
+    const model = panelModel(pick(context, 2), context);
+    expect(model.openBlocked).toBe("Map Room 2 opens at Town Hall 6.");
+    expect(model.upgrade?.gate).toEqual({ reason: "townHall", have: 5, need: 6 });
+  });
+
+  it("a running Map Room upgrade has Cancel but no Shiny speed-ups", () => {
+    const context = contextOf({ buildings: [HALL(6), building(2, 11, 1, { cU: 1000, cL: 345_600 })] });
+    const job = panelModel(pick(context, 2), context).job;
+    expect(job).toMatchObject({ kind: "upgrade", finish: null, minusOne: null, minusTwo: null });
+    expect(job?.cancel).not.toBeNull();
   });
 
   it("the Yard Planner opens the planner", () => {

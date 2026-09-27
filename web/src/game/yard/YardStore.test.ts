@@ -400,7 +400,8 @@ describe("the action queue", () => {
       const result = await pending;
       return result.ok ? "ok" : result.refusal.reason;
     };
-    expect(await reasonOf(store.upgrade(4))).toBe("mapRoom");
+    // The Map Room takes a plain upgrade (D16) but no Shiny.
+    expect(await reasonOf(store.instantUpgrade(4))).toBe("mapRoom");
     expect(await reasonOf(store.upgrade(5))).toBe("busy");
     expect(await reasonOf(store.upgrade(6))).toBe("useBatchRoute");
     expect(await reasonOf(store.upgrade(99))).toBe("badRequest");
@@ -408,6 +409,7 @@ describe("the action queue", () => {
     expect(await reasonOf(store.speedUp(5, "SP4"))).toBe("damaged");
     expect(await reasonOf(store.cancelUpgrade(2))).toBe("notUpgrading");
     expect(api.upgrade).not.toHaveBeenCalled();
+    expect(api.instantUpgrade).not.toHaveBeenCalled();
     expect(api.speedUp).not.toHaveBeenCalled();
     expect(api.cancelUpgrade).not.toHaveBeenCalled();
   });

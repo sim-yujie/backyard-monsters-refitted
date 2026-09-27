@@ -423,15 +423,18 @@ export class BuildingPanel {
     row.append(upgrade);
     this.pendingButtons.push({ key: actionKey("upgrade", building.id), button: upgrade });
 
-    const instantKey = `${building.id}:instant`;
-    used.add(instantKey);
-    const instant = this.shinyButton(instantKey, "Instant", () =>
-      void this.runInstant(building.id),
-    );
-    instant.setPrice(offer.instantPrice);
-    instant.setBlocked(offer.instantGate ? gateSentence(offer.instantGate) : null);
-    row.append(instant.element);
-    this.pendingButtons.push({ key: actionKey("instant", building.id), button: instant });
+    // The Map Room is never bought with Shiny (D16): Upgrade alone.
+    if (offer.instant) {
+      const instantKey = `${building.id}:instant`;
+      used.add(instantKey);
+      const instant = this.shinyButton(instantKey, "Instant", () =>
+        void this.runInstant(building.id),
+      );
+      instant.setPrice(offer.instantPrice);
+      instant.setBlocked(offer.instantGate ? gateSentence(offer.instantGate) : null);
+      row.append(instant.element);
+      this.pendingButtons.push({ key: actionKey("instant", building.id), button: instant });
+    }
 
     block.append(row);
     return block;

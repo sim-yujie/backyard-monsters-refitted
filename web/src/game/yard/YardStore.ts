@@ -649,11 +649,12 @@ export class YardStore implements YardStoreReader, YardStoreActions {
 }
 
 /**
- * The Map Room's level is the map version and its upgrade joins a world, so
- * the plain upgrade routes refuse it (decision D16, `docs/server-api.md`).
+ * The Map Room's level is the map version and its L1 to L2 upgrade joins a
+ * world when it finishes, so the Shiny routes (instant, speed-ups) refuse it;
+ * the plain upgrade takes it (decision D16, `docs/server-api.md`).
  */
 const MAP_ROOM_TYPE = 11;
-const MAP_ROOM_MESSAGE = "The Map Room is not upgraded from here.";
+const MAP_ROOM_MESSAGE = "The Map Room cannot be rushed with Shiny.";
 
 const handledKey = (job: YardJob): string => `${job.key}@${job.endsAt ?? "paused"}`;
 
@@ -674,7 +675,9 @@ const upgradeRefusal = (
   if (WALL_TYPES.includes(building.type) || TRAP_TYPES.includes(building.type)) {
     return refuse("useBatchRoute", "Walls and traps are upgraded from the layout planner.");
   }
-  if (building.type === MAP_ROOM_TYPE) return refuse("mapRoom", MAP_ROOM_MESSAGE);
+  if (options.instant && building.type === MAP_ROOM_TYPE) {
+    return refuse("mapRoom", MAP_ROOM_MESSAGE);
+  }
   if (holdsWorker(building)) return refuse("busy", "That building is already busy.");
   // Any health reading counts, as on the server: the save writes one only
   // below full health.

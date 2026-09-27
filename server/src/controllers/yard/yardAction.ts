@@ -11,6 +11,7 @@ import { isShinyLocked } from "../../services/user/shinyLock.js";
 import { catchUpYard, type CompletedJob } from "../../services/yard/catchUp.js";
 import { creditResources } from "../../services/yard/credit.js";
 import { syncDerivedLevels } from "../../services/yard/derivedLevels.js";
+import { joinMapRoom2 } from "../../services/yard/mapRoom.js";
 import {
   notMainYardErr,
   yardBadRequestErr,
@@ -38,7 +39,8 @@ import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
  *    the second sees what the first wrote. `409 notMainYard` unless it is the
  *    caller's own main yard, `409 underAttack` while `isAttackActive`.
  * 3. `catchUpYard(save, now)`: finish every job that ended, award its points,
- *    move `savetime` to `now` (§2.3).
+ *    move `savetime` to `now` (§2.3); then, if that left a level 2 Map Room
+ *    on a yard not yet on Map Room 2, join a world (`joinMapRoom2`, §5.7).
  * 4. `run({ save, user, body, now, completed })`.
  * 5. Check and apply its {@link YardOutcome}: Shiny (`409 shinyLocked`,
  *    `409 credits`), resources (`409 shortfall`), then the new slices, the
@@ -231,6 +233,7 @@ export const catchUpLockedYard = async (
     if (!locked || isAttackActive(locked)) return { save: locked ?? save, completed: [] };
 
     const completed = catchUpYard(locked, getCurrentDateTime());
+    await joinMapRoom2(tx, locked);
     await tx.flush();
     return { save: locked, completed };
   });
@@ -273,6 +276,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       const save = await lockMainYard(tx, user);
       const now = getCurrentDateTime();
       const completed = catchUpYard(save, now);
+      await joinMapRoom2(tx, save, user);
 
       const outcome = await action.run({ save, user, body: parsed.data, now, completed });
       applyOutcome(save, user, outcome);

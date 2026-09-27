@@ -27,6 +27,27 @@ const upgrade = (id: number, t: number, level: number, at = 100): CompletedJob =
 });
 
 describe("groupCompletedJobs", () => {
+  it("says a Radio Tower the server took down, and what came back (D15)", () => {
+    const radio: CompletedJob = {
+      kind: "radioRemoved",
+      id: 9,
+      t: 113,
+      at: 100,
+      detail: { refund: { r1: 2000, r2: 2000, r3: 500, r4: 0 } },
+    };
+    const groups = groupCompletedJobs([radio]);
+    expect(noticeText(groups[0]!)).toBe(
+      "The Radio Tower is gone: 2,000 Twigs, 2,000 Pebbles, 500 Putty refunded",
+    );
+    expect(groups[0]!.items[0]!.buildingId).toBeNull();
+    expect(awayNoticeText(groups)).toBe(
+      "While you were away: the Radio Tower is gone: 2,000 Twigs, 2,000 Pebbles, 500 Putty refunded",
+    );
+    expect(
+      noticeText(groupCompletedJobs([{ ...radio, detail: { refund: { r1: 0, r2: 0, r3: 0, r4: 0 } } }])[0]!),
+    ).toBe("The Radio Tower is gone: nothing refunded (your storage is full)");
+  });
+
   it("groups the upgrades that land together into one line, in the order they finished", () => {
     const groups = groupCompletedJobs([upgrade(1, CANNON, 5), upgrade(2, SNIPER, 3), upgrade(3, SILO, 7)]);
     expect(groups).toHaveLength(1);

@@ -8,6 +8,7 @@ import { catchUpHarvesters, type CatchUpHarvestersSave } from "./catchUpHarveste
 import { catchUpLocker, type CatchUpLockerSave, type UnlockJob } from "./catchUpLocker.js";
 import { catchUpMonsters, type CatchUpMonstersSave, type MonsterJob } from "./catchUpMonsters.js";
 import { catchUpMushrooms } from "./catchUpMushrooms.js";
+import { migrateYard, type MigrationSave, type RadioRemovedJob } from "./mapRoom.js";
 import type { MushroomYardSave } from "./mushrooms.js";
 
 /**
@@ -25,6 +26,7 @@ import type { MushroomYardSave } from "./mushrooms.js";
  *
  * | Step | Module | Phase |
  * | --- | --- | --- |
+ * | 0 | `mapRoom.ts` `migrateYard` — Map Room cap, `mr2upgraded`, Radio removal (§2.5) | 3 |
  * | 1 | `catchUpBuildings.ts` — countdowns, points, `flinger`/`catapult`, store buffs | 1 |
  * | 2 | `catchUpLocker.ts` — unlocks and the Locker Overdrive (runs first, see there) | 2 |
  * | 2 | `catchUpMonsters.ts` — HCC queue refund, hatchery production, housing cull (after the buildings) | 2 |
@@ -49,7 +51,7 @@ import type { MushroomYardSave } from "./mushrooms.js";
  * Every kind has `{ kind, id, t, at, detail }`. Later steps widen this union
  * with their own kinds (`unlock`, `hatch`, `train`, …).
  */
-export type CompletedJob = BuildingJob | StoreItemJob | UnlockJob | MonsterJob;
+export type CompletedJob = BuildingJob | StoreItemJob | UnlockJob | MonsterJob | RadioRemovedJob;
 
 /** The slice of a save the catch-up reads and writes. */
 export interface CatchUpSave
@@ -57,6 +59,7 @@ export interface CatchUpSave
     CatchUpLockerSave,
     CatchUpMonstersSave,
     CatchUpHarvestersSave,
+    MigrationSave,
     MushroomYardSave {
   savetime?: number;
 }
@@ -77,6 +80,7 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
   const from = Number.isFinite(stored) && stored > 0 ? stored : now;
 
   const completed: CompletedJob[] = [
+    ...migrateYard(save, now),
     ...catchUpLocker(save, from, now),
     ...catchUpBuildings(save, from, now),
   ];

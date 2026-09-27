@@ -46,11 +46,16 @@ describe("the cost table", () => {
     expect(fixtureTypes().length).toBeGreaterThan(20);
   });
 
-  it("holds one sorted row for each of the 135 priced types", () => {
+  it("holds one sorted row for each of the 134 priced types", () => {
     const types = BUILDING_COST_ROWS.map(([type]) => type);
-    expect(types.length).toBe(135);
+    expect(types.length).toBe(134);
     expect(new Set(types).size).toBe(types.length);
     expect(types).toEqual([...types].sort((a, b) => a - b));
+  });
+
+  it("stops the Map Room at level 2 and has no Radio Tower (D15, D16)", () => {
+    expect(maxLevel(11)).toBe(2);
+    expect(BUILDING_COST_ROWS.some(([type]) => type === 113)).toBe(false);
   });
 
   it("has non-negative integers throughout", () => {

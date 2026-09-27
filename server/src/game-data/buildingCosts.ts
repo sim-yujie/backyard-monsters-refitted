@@ -5,7 +5,9 @@
  * each entry in `_yardProps` (declared at :9), with the Map Room 2 price
  * changes from `GLOBAL.changeNotMaproom3SpecificBuildings()`
  * (`client/scripts/GLOBAL.as:615-714`) applied on top, because this project
- * runs Map Room 2 as the default overworld. Regenerate with
+ * runs Map Room 2 as the default overworld. Two rows are this project's own
+ * decisions: the Map Room (11) stops at level 2, and the Radio Tower (113) has
+ * no row (`docs/design/yard-buildings.md` §5.7). Regenerate with
  * `node tools/gen-building-costs.mjs` from `web/`.
  *
  * A row is `[type, name, kind, group, costs, quantity]`, with a seventh
@@ -203,10 +205,9 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
   [10, "Yard Planner", "special", 2, [
     [250000,250000,0,0,43200,[[14,1,3]]],
   ], [0,0,0,1,1,1,1,1,1,1,1]],
-  // 11 Map Room (special) — YARD_PROPS.as:1122
+  // 11 Map Room (special) — YARD_PROPS.as:1122, capped at level 2 (D16)
   [11, "Map Room", "special", 2, [
     [2000,2000,0,0,900,[[14,1,1]]],
-    [0,0,0,0,345600,[[14,1,6]]],
     [0,0,0,0,345600,[[14,1,6]]],
   ], [0,1,1,1,1,1,1,1,1,1,1]],
   // 12 General Store (special) — YARD_PROPS.as:1181
@@ -670,10 +671,6 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
   [111, "bdg_halloween_small", "decoration", 4, [
     [0,0,0,0,0,[]],
   ], [6]],
-  // 113 Radio Tower (special) — YARD_PROPS.as:5963
-  [113, "Radio Tower", "special", 2, [
-    [2000,2000,2000,0,300,[[14,1,1]]],
-  ], [0,1,1,1,1,1,1,1,1,1,1]],
   // 114 Champion Cage (cage) — YARD_PROPS.as:6005
   [114, "Champion Cage", "cage", 3, [
     [500000,500000,250000,0,86400,[[14,1,4]]],

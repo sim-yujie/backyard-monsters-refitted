@@ -327,6 +327,35 @@ for (const override of MR2_OVERRIDES) {
   }
 }
 
+/* ── Project decisions ────────────────────────────────────────────────────────
+ *
+ * Two rows this project changes on purpose, not because the Flash client did
+ * (`docs/design/yard-buildings.md` §5.7, decisions D15 and D16):
+ *
+ * - The Map Room (11) stops at level 2. Its level is the map version, and Map
+ *   Room 3 is not offered, so its third step (`YARD_PROPS.as:1122`, the L2 to
+ *   L3 upgrade) is cut. Its L1 to L2 step is the move to Map Room 2.
+ * - The Radio Tower (113) is dropped: email alerts are a Facebook-era feature
+ *   with nothing behind them. The server's catch-up removes any Radio a yard
+ *   still holds and refunds its build cost (`services/yard/mapRoom.ts`), so no
+ *   yard needs its row afterwards, and a build menu read from this table
+ *   cannot offer it.
+ */
+const MAP_ROOM = 11;
+const MAP_ROOM_MAX_LEVEL = 2;
+const RADIO_TOWER = 113;
+
+const mapRoom = entries.find((one) => one.id === MAP_ROOM);
+if (!mapRoom || mapRoom.steps.length < MAP_ROOM_MAX_LEVEL) {
+  throw new Error(`YARD_PROPS.as: the Map Room (${MAP_ROOM}) has fewer than ${MAP_ROOM_MAX_LEVEL} steps`);
+}
+mapRoom.steps = mapRoom.steps.slice(0, MAP_ROOM_MAX_LEVEL);
+mapRoom.capped = MAP_ROOM_MAX_LEVEL;
+
+const radio = entries.findIndex((one) => one.id === RADIO_TOWER);
+if (radio < 0) throw new Error(`YARD_PROPS.as: no Radio Tower (${RADIO_TOWER}) entry to drop`);
+entries.splice(radio, 1);
+
 /* ── Emit ─────────────────────────────────────────────────────────────────── */
 
 const re = (list) => `[${list.map((one) => `[${one.join(",")}]`).join(",")}]`;
@@ -347,7 +376,8 @@ const rows = entries
   .map(
     (entry) =>
       `  // ${entry.id} ${entry.name}${entry.kind ? ` (${entry.kind})` : ""} ` +
-      `— YARD_PROPS.as:${entry.line}${entry.mr2 ? `, Map Room 2 override ${entry.mr2}` : ""}\n` +
+      `— YARD_PROPS.as:${entry.line}${entry.mr2 ? `, Map Room 2 override ${entry.mr2}` : ""}` +
+      `${entry.capped ? `, capped at level ${entry.capped} (D16)` : ""}\n` +
       `  [${entry.id}, ${JSON.stringify(entry.name)}, ${JSON.stringify(entry.kind)}, ` +
       `${entry.group}, [\n` +
       entry.steps.map((one) => `    ${step(one)},`).join("\n") +
@@ -362,7 +392,9 @@ const header = `/**
  * each entry in \`_yardProps\` (declared at :9), with the Map Room 2 price
  * changes from \`GLOBAL.changeNotMaproom3SpecificBuildings()\`
  * (\`client/scripts/GLOBAL.as:615-714\`) applied on top, because this project
- * runs Map Room 2 as the default overworld. Regenerate with
+ * runs Map Room 2 as the default overworld. Two rows are this project's own
+ * decisions: the Map Room (11) stops at level 2, and the Radio Tower (113) has
+ * no row (\`docs/design/yard-buildings.md\` §5.7). Regenerate with
  * \`node tools/gen-building-costs.mjs\` from \`web/\`.
  *
  * A row is \`[type, name, kind, group, costs, quantity]\`, with a seventh

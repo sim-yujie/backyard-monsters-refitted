@@ -1,7 +1,9 @@
 import type { CompletedJob } from "@/api/types";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { typeName } from "@/game/yard/planner/summary";
+import { formatAmount } from "@/ui/format";
 import type { Notices } from "@/ui/maproom/Notices";
+import { RESOURCE_KEYS, RESOURCE_NAMES } from "@/ui/resourceIcon";
 
 /**
  * "3 upgrades finished: Cannon Tower 5, Sniper Tower 3, Silo 7"
@@ -72,11 +74,32 @@ const capitalise = (text: string): string => text.charAt(0).toUpperCase() + text
 
 const headingOf = (kind: string, count: number): string => {
   if (kind === "storeItem") return count === 1 ? "Ran out" : `${count} boosts ran out`;
+  if (kind === RADIO_REMOVED) {
+    return count === 1 ? "The Radio Tower is gone" : `${count} Radio Towers are gone`;
+  }
   const [one, many] = NOUNS[kind] ?? [kind, kind];
   return count === 1 ? `${capitalise(one)} finished` : `${count} ${many} finished`;
 };
 
+/**
+ * The catch-up takes every Radio Tower down once and refunds its build cost
+ * (`server/src/services/yard/mapRoom.ts`, design §5.7, D15); the next load
+ * says so in its away toast.
+ */
+const RADIO_REMOVED = "radioRemoved";
+
+/** "2,000 Twigs, 2,000 Pebbles, 2,000 Putty refunded", or "nothing refunded" (the storage was full). */
+const refundLabel = (detail: Record<string, unknown>): string => {
+  const refund = (detail["refund"] ?? {}) as Record<string, unknown>;
+  const parts = RESOURCE_KEYS.flatMap((key) => {
+    const amount = Number(refund[key]);
+    return amount > 0 ? [`${formatAmount(amount)} ${RESOURCE_NAMES[key]}`] : [];
+  });
+  return parts.length > 0 ? `${parts.join(", ")} refunded` : "nothing refunded (your storage is full)";
+};
+
 const labelOf = (job: CompletedJob): JobNoticeItem => {
+  if (job.kind === RADIO_REMOVED) return { label: refundLabel(job.detail), buildingId: null };
   if (job.kind === "storeItem") {
     const code = String(job.id);
     return { label: STORE_ITEM_NAMES[code] ?? code, buildingId: null };

@@ -52,11 +52,19 @@ import { monstersTabFor, type MonstersTabId } from "@/ui/monsters/monstersTab";
 /** The props kinds with no upgrade ladder the panel could offer. */
 const NO_LADDER_KINDS: ReadonlySet<string> = new Set(["decoration", "mushroom", "taunt", ""]);
 
-/** The Map Room: its level is the map version, so it is never upgraded here (D16). */
+/**
+ * The Map Room. Its level is the map version, capped at 2 (D16): its one step
+ * here, L1 to L2, is the move to Map Room 2, which the server finishes by
+ * putting the yard in a world (`server/src/services/yard/mapRoom.ts`). No
+ * Shiny rushes it: no Instant, no speed-ups (the routes refuse `mapRoom`).
+ */
 export const MAP_ROOM_TYPE = 11;
 
 /** The world map needs a level 6 Town Hall until Map Room 1 exists (D16, §10). */
 export const MAP_TOWN_HALL = 6;
+
+/** The Map Room level that is Map Room 2. */
+export const MAP_ROOM_2_LEVEL = 2;
 
 /** SP2 and SP3: an hour or two off for a fixed price (`server/src/game-data/store/storeItems.ts`). */
 export const SPEEDUP_PRICE: Readonly<Record<"SP2" | "SP3", number>> = { SP2: 20, SP3: 40 };
@@ -100,6 +108,8 @@ export interface UpgradeOffer {
   readonly seconds: number;
   /** Shiny to buy the level outright. */
   readonly instantPrice: number;
+  /** Whether Instant is offered at all: not on the Map Room. */
+  readonly instant: boolean;
   /** Why Upgrade is disabled; null when it can be pressed. */
   readonly gate: UpgradeGate | null;
   /** Why Instant is disabled: the same gates minus resources and workers, plus Shiny. */
@@ -222,7 +232,7 @@ export const upgradeOffer = (
   context: PanelContext,
 ): UpgradeOffer | null => {
   const { type } = building;
-  if (isBatchType(type) || type === MAP_ROOM_TYPE || !hasLadder(type)) return null;
+  if (isBatchType(type) || !hasLadder(type)) return null;
   // A building on a job shows the job instead.
   if (building.countdown) return null;
 
@@ -238,6 +248,7 @@ export const upgradeOffer = (
       cost: ZERO,
       seconds: 0,
       instantPrice: 0,
+      instant: type !== MAP_ROOM_TYPE,
       gate: { reason: "maxLevel", level: from },
       instantGate: { reason: "maxLevel", level: from },
     };
@@ -290,6 +301,7 @@ export const upgradeOffer = (
     cost,
     seconds,
     instantPrice: step.shiny,
+    instant: type !== MAP_ROOM_TYPE,
     gate,
     instantGate,
   };
@@ -356,7 +368,8 @@ export const jobOffer = (building: YardBuilding, context: PanelContext): JobOffe
   if (!progress) return null;
   const { remaining, total } = progress;
   const endsAt = countdown.paused ? now + remaining : countdown.endsAt;
-  const speedable = countdown.kind === "build" || countdown.kind === "upgrade";
+  const speedable =
+    (countdown.kind === "build" || countdown.kind === "upgrade") && building.type !== MAP_ROOM_TYPE;
   const { credits } = context;
   const finishItem: SpeedupItem = Math.trunc(remaining) <= FREE_FINISH_SECONDS ? "SP1" : "SP4";
 
@@ -386,17 +399,32 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
         : monstersTab
           ? "monsters"
           : null;
-  const hall = townHallLevel(context.yard);
   return {
     upgrade: upgrade && upgrade.gate?.reason !== "maxLevel" ? upgrade : null,
     maxed: upgrade?.gate?.reason === "maxLevel",
     job: jobOffer(building, context),
     open,
     monstersTab,
-    openBlocked:
-      open === "map" && hall < MAP_TOWN_HALL
-        ? `The world map opens at Town Hall ${MAP_TOWN_HALL}.`
-        : null,
+    openBlocked: open === "map" ? mapBlocked(context) : null,
     batch: isBatchType(building.type),
   };
+};
+
+/**
+ * Whether the player is on Map Room 2: the server's `mr2upgraded` flag (a
+ * player who moved before the Map Room carried the map version), or a level 2
+ * Map Room standing in the yard, which the server turns into the same thing
+ * when it finishes (D16, §5.7).
+ */
+export const hasMapRoom2 = (context: Pick<PanelContext, "yard" | "save">): boolean =>
+  Boolean(Number(context.save.flags?.["mr2upgraded"])) ||
+  context.yard.buildings.some((one) => one.type === MAP_ROOM_TYPE && one.level >= MAP_ROOM_2_LEVEL);
+
+/** Why Open map cannot be pressed: no Map Room 2 yet, and what gets it. */
+const mapBlocked = (context: PanelContext): string | null => {
+  if (hasMapRoom2(context)) return null;
+  if (townHallLevel(context.yard) < MAP_TOWN_HALL) {
+    return `Map Room 2 opens at Town Hall ${MAP_TOWN_HALL}.`;
+  }
+  return `Upgrade the Map Room to level ${MAP_ROOM_2_LEVEL} to open Map Room 2.`;
 };

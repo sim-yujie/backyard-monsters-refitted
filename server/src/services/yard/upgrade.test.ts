@@ -217,13 +217,45 @@ describe("upgrade", () => {
     expect(reasonOf(() => planUpgradeAction(save, 8, NOW))).toEqual([400, "useBatchRoute"]);
   });
 
-  test("the Map Room is refused: its steps belong to WP3.7 (D16)", () => {
+  test("the Map Room's L1 to L2 step starts at Town Hall 6: the move to Map Room 2 (D16)", () => {
     const save = yard({ resources: { ...RICH } });
     save.buildingdata!["0"] = { id: 0, t: HALL, x: 0, y: 0, l: 6 };
     save.buildingdata!["8"] = { id: 8, t: 11, x: 0, y: 0, l: 1 };
 
-    expect(refusal(() => planUpgradeAction(save, 8, NOW)).data).toEqual({ reason: "mapRoom", id: 8 });
-    expect(refusal(() => planUpgradeAction(save, 8, NOW)).status).toBe(409);
+    const plan = planUpgradeAction(save, 8, NOW);
+
+    // Map Room costs[1]: no resources, 345,600 s (`YARD_PROPS.as:1122`).
+    expect(plan.report).toEqual({
+      id: 8,
+      from: 1,
+      to: 2,
+      seconds: 345_600,
+      cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
+    });
+    expect(plan.slices.buildingdata["8"]).toMatchObject({ l: 1, cU: 345_600, cL: 345_600 });
+  });
+
+  test("the Map Room below Town Hall 6 is 409 townHall", () => {
+    const save = yard({ resources: { ...RICH } });
+    save.buildingdata!["0"] = { id: 0, t: HALL, x: 0, y: 0, l: 5 };
+    save.buildingdata!["8"] = { id: 8, t: 11, x: 0, y: 0, l: 1 };
+
+    expect(refusal(() => planUpgradeAction(save, 8, NOW)).data).toEqual({
+      reason: "townHall",
+      townHall: { have: 5, need: 6 },
+    });
+  });
+
+  test("the Map Room stops at level 2: 409 maxLevel", () => {
+    const save = yard({ resources: { ...RICH } });
+    save.buildingdata!["0"] = { id: 0, t: HALL, x: 0, y: 0, l: 6 };
+    save.buildingdata!["8"] = { id: 8, t: 11, x: 0, y: 0, l: 2 };
+
+    expect(refusal(() => planUpgradeAction(save, 8, NOW)).data).toEqual({
+      reason: "maxLevel",
+      level: 2,
+      max: 2,
+    });
   });
 
   test("decorations, mushrooms and unknown ids are malformed requests", () => {

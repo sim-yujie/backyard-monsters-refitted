@@ -53,9 +53,10 @@ describe("buildingCosts", () => {
 
   test("the table covers the whole props file, not a prefix of it", () => {
     // 135 of the 140 entries in `_yardProps` carry a `costs` array; the five
-    // without one are not buildable at any price.
-    expect(BUILDING_COST_ROWS.length).toBe(135);
-    expect(Object.keys(COSTS).length).toBe(135);
+    // without one are not buildable at any price. The Radio Tower (113) is
+    // dropped on purpose (D15, `web/tools/gen-building-costs.mjs`).
+    expect(BUILDING_COST_ROWS.length).toBe(134);
+    expect(Object.keys(COSTS).length).toBe(134);
   });
 
   test("rows are sorted by type and each type appears once", () => {
