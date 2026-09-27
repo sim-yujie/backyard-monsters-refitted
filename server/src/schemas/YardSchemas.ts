@@ -117,3 +117,24 @@ export const YardBankSchema = z
   .refine((body) => (body.ids === undefined) !== (body.all === undefined), {
     message: "Send either ids or all=1",
   });
+
+/**
+ * A yard position in yard units: a footprint's origin. Bounded well past the
+ * largest plot (1780 x 1420, `services/yardplanner/layoutGeometry.ts`) so only
+ * the shape is checked here; whether the building fits is the route's rule.
+ */
+const YardCoordinateField = z.coerce.number().int().min(-4000).max(4000);
+
+/**
+ * `POST /bm/yard/build` and `/build/instant`: a building type and where its
+ * footprint starts. Whether the type may be built there is the route's rule
+ * (`services/yard/build.ts`).
+ */
+export const YardBuildSchema = z.object({
+  type: z.coerce.number().int().positive(),
+  x: YardCoordinateField,
+  y: YardCoordinateField,
+});
+
+/** `POST /bm/yard/build/cancel`: the building under construction to cancel. */
+export const YardCancelBuildSchema = z.object({ id: BuildingIdField });
