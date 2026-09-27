@@ -13,6 +13,7 @@ import {
   advanceAnimLayers,
   buildAnimLayers,
   resolveAnimLayers,
+  setLayerFrame,
   type AnimLayer,
 } from "./YardAnimations";
 import { YardTextures } from "./YardTextures";
@@ -64,8 +65,11 @@ interface BuildingView {
   readonly art: ResolvedArt | null;
   readonly top: Sprite;
   readonly shadow: Sprite | null;
-  /** In stacking order; empty for the 78 types that never animate. */
-  readonly anims: readonly AnimLayer[];
+  /**
+   * In stacking order; empty for the 78 types that never animate. Replaced
+   * wholesale when a battle swaps in damaged art with strips of its own.
+   */
+  anims: readonly AnimLayer[];
   /** Dropped once the real picture arrives. */
   label: Text | null;
   /** The countdown badge, if this building has one. */
@@ -434,7 +438,64 @@ export class YardBuildings {
     view.swapResolved = false;
     view.swapShadowResolved = false;
     view.animsSuppressed = wanted.anims.length === 0;
+    // Damaged art ships strips of its own — a battered gun on a battered
+    // tower — so the layers are rebuilt from them; the undamaged strip would
+    // otherwise go on turning over the ruin below it (issue #67).
+    if (wanted.anims.length > 0) this.rebuildAnims(view, wanted, tint);
     this.pending = true;
+  }
+
+  /**
+   * Puts one of a building's animation layers on a cell, for a battle turning
+   * a tower toward its target (issue #67); see `setLayerFrame`. A layer index
+   * the building does not have is ignored.
+   */
+  setAnimFrame(id: number, layerIndex: number, frame: number): void {
+    const layer = this.byId.get(id)?.anims[layerIndex];
+    if (layer) setLayerFrame(layer, frame);
+  }
+
+  /** The cell one of a building's layers is on, or null when it has no such layer. */
+  animFrameOf(id: number, layerIndex: number): number | null {
+    const layer = this.byId.get(id)?.anims[layerIndex];
+    return layer ? Math.floor(layer.progress) : null;
+  }
+
+  /** How many animation layers a building has right now. */
+  animLayerCount(id: number): number {
+    return this.byId.get(id)?.anims.length ?? 0;
+  }
+
+  /**
+   * Replaces a building's animation layers with those of another art state.
+   *
+   * The new sprites go exactly where the old ones were in the draw list, so
+   * depth order still reads down it in the read-only yard and the sorted
+   * container keeps its keys, and each takes over the cell its predecessor
+   * was showing so a turret does not snap to a new facing as it is hit.
+   */
+  private rebuildAnims(view: BuildingView, art: ResolvedArt, tint: number): void {
+    const previous = view.anims;
+    const fresh = buildAnimLayers(view.building, art);
+    let at = this.tops.getChildIndex(view.top) + 1;
+    fresh.forEach((layer, index) => {
+      const old = previous[index];
+      if (old) layer.progress = old.progress;
+      layer.sprite.position.set(
+        layer.sprite.position.x + view.offsetX,
+        layer.sprite.position.y + view.offsetY,
+      );
+      layer.sprite.zIndex = view.top.zIndex + index + 1;
+      layer.sprite.tint = tint;
+      this.tops.addChildAt(layer.sprite, Math.min(at, this.tops.children.length));
+      at += 1;
+    });
+    for (const layer of previous) {
+      this.tops.removeChild(layer.sprite);
+      layer.sprite.destroy();
+    }
+    view.anims = fresh;
+    view.animsPending = fresh.length > 0;
   }
 
   /** The offset a building is currently drawn at. */

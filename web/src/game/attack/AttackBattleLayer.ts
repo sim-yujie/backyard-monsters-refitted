@@ -14,6 +14,8 @@ import type { Yard } from "@/game/yard/yardModel";
 import type { AttackSession } from "./AttackSession";
 import { BuildingBars } from "./buildingBars";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
+import { TowerFx, towersOf } from "./towerFx";
+import { TrapReveal } from "./trapReveal";
 import {
   anchorOffset,
   flyerAltitude,
@@ -25,7 +27,6 @@ import {
   sheetUrl,
   spriteFor,
 } from "./monsterSprites";
-import { TrapReveal } from "./trapReveal";
 
 /**
  * Everything that moves during a battle (`docs/design/attack-flow.md` §F5, §6
@@ -86,9 +87,6 @@ export const DEPTH_BIAS = 20;
  * above the building (`+0`) and its animation layers (`+1`..`+3`).
  */
 const CREEP_Z_OFFSET = 4;
-
-/** Ticks a shot's tracer and muzzle flash are shown for. */
-export const SHOT_TICKS = 10;
 
 /** Ticks a death splat takes to fade: 400 ms at 1x. */
 export const SPLAT_TICKS = 32;
@@ -384,6 +382,8 @@ export interface BattleYardHost {
   setBuildingDamage(id: number, fraction: number): void;
   /** Hides a building from the viewer, or shows it again: a trap until it fires. */
   setConcealed(id: number, concealed: boolean): void;
+  /** Puts one of a building's animation layers on a cell: a tower's facing. */
+  setAnimFrame(id: number, layer: number, frame: number): void;
 }
 
 export interface AttackBattleLayerOptions {
@@ -411,12 +411,6 @@ interface CreepView {
   facedBuilding: number;
   bornTick: number;
   cellKey: string;
-}
-
-interface Shot {
-  readonly tick: number;
-  readonly from: Point;
-  readonly to: Point;
 }
 
 /** A trap going off: a ring that grows and fades over a scorch that stays. */
@@ -447,7 +441,6 @@ const MARKER_SIZE = 8;
 
 const SPLAT_COLOUR = 0x5da832;
 const GIB_COLOURS = [0x5da832, 0x3f7a1e, 0x8ad14a] as const;
-const TRACER_COLOUR = 0xfff1a8;
 const BAR_BACK_COLOUR = 0x6b1616;
 const BAR_FRONT_COLOUR = 0x5ee06a;
 const BAR_CHAMPION_COLOUR = 0xffd24a;
@@ -455,12 +448,6 @@ const BAR_CHAMPION_COLOUR = 0xffd24a;
 /** Ticks a trap's blast ring takes to fade. */
 export const BURST_TICKS = 14;
 const SCORCH_COLOUR = 0x1c1410;
-
-/** World px a tower's gun sits above its footprint centre. */
-const GUN_HEIGHT = 30;
-
-/** World px a shot lands above a creep's ground point. */
-const BODY_HEIGHT = 10;
 
 /** Whether the viewer asked for less motion. */
 export const prefersReducedMotion = (): boolean =>
@@ -484,17 +471,19 @@ export class AttackBattleLayer {
 
   private readonly views = new Map<number, CreepView>();
   private readonly pool: CreepView[] = [];
-  private readonly shots: Shot[] = [];
   private readonly splats: Splat[] = [];
   private readonly gibPool: Sprite[] = [];
   private readonly damageApplied = new Map<number, number>();
   private readonly maxHpById = new Map<number, number>();
 
-  /* Buildings: the bars, and the traps the viewer is not shown until they fire (#64, #66). */
+  /* Buildings: the towers' guns and shots, the bars, the traps (#64, #66, #67). */
+  private readonly towerFx: TowerFx;
   private readonly buildingBars: BuildingBars;
   private readonly traps = new TrapReveal();
   private readonly bursts: Burst[] = [];
   private readonly scorches: Graphics[] = [];
+  /** The creeps by id this frame, for the guns to aim at. */
+  private readonly creepIndex = new Map<number, CreepSnapshot>();
 
   private lastEventTick = 0;
   private damageDirty = true;
@@ -523,8 +512,10 @@ export class AttackBattleLayer {
     // overlay stays where it is.
     this.overlay.addChild(this.effects, this.fire, this.bars);
 
-    // The building bars (issue #64) go under the splats, where the Flash
-    // overlay put them, below the projectiles.
+    // The building side (issues #64, #66, #67). The towers draw into the same
+    // `fire` graphics the tracers used; the building bars go under the splats,
+    // where the Flash overlay put them, below the projectiles.
+    this.towerFx = new TowerFx(this.fire, towersOf(options.yard), this.host, this.origin);
     const originOf = new Map<number, Point>();
     for (const building of options.yard.buildings) {
       originOf.set(building.id, { x: building.worldX, y: building.worldY });
@@ -559,10 +550,11 @@ export class AttackBattleLayer {
     const tick = battle.tick;
 
     this.syncCreeps(battle.creeps(), tick);
+    this.indexCreeps(battle.creeps());
     for (const event of battle.recentEvents(this.lastEventTick)) this.onEvent(event);
     this.lastEventTick = tick;
 
-    this.drawShots(tick);
+    this.towerFx.update(tick, (id) => this.creepIndex.get(id));
     this.drawSplats(tick);
     this.drawBursts(tick);
 
@@ -597,13 +589,14 @@ export class AttackBattleLayer {
     this.splats.length = 0;
     for (const sprite of this.gibPool) sprite.destroy();
     this.gibPool.length = 0;
-    this.shots.length = 0;
 
+    this.towerFx.destroy();
     this.buildingBars.destroy();
     for (const burst of this.bursts) burst.ring.destroy();
     this.bursts.length = 0;
     for (const scorch of this.scorches) scorch.destroy();
     this.scorches.length = 0;
+    this.creepIndex.clear();
 
     // Only what this added: the overlay and the sorted container are the
     // scene's and the renderer's, and keep their other children.
@@ -827,39 +820,11 @@ export class AttackBattleLayer {
 
   private onEvent(event: BattleVisualEvent): void {
     if (event.kind === "shot") {
-      const centre = this.host.centreOf(event.towerId);
-      if (!centre) return;
-      const target = groundWorld(event.ix, event.iy, this.origin);
-      this.shots.push({
-        tick: event.tick,
-        from: { x: centre.x, y: centre.y - GUN_HEIGHT },
-        to: { x: target.x, y: target.y - BODY_HEIGHT },
-      });
+      this.towerFx.onShot(event, this.creepIndex.get(event.creepId));
       return;
     }
     const at = groundWorld(event.ix, event.iy, this.origin);
     this.spawnSplat(event.tick, at, event.champion ? 22 : 12);
-  }
-
-  private drawShots(tick: number): void {
-    const fire = this.fire;
-    fire.clear();
-    let keep = 0;
-    for (const shot of this.shots) {
-      const age = tick - shot.tick;
-      if (age > SHOT_TICKS) continue;
-      this.shots[keep] = shot;
-      keep += 1;
-      const fade = 1 - age / SHOT_TICKS;
-      fire
-        .moveTo(shot.from.x, shot.from.y)
-        .lineTo(shot.to.x, shot.to.y)
-        .stroke({ width: 2, color: TRACER_COLOUR, alpha: 0.9 * fade });
-      if (age <= 3) {
-        fire.circle(shot.from.x, shot.from.y, 5 - age).fill({ color: 0xffffff, alpha: 0.9 });
-      }
-    }
-    this.shots.length = keep;
   }
 
   private spawnSplat(tick: number, at: Point, radius: number): void {
@@ -935,6 +900,12 @@ export class AttackBattleLayer {
   }
 
   /* ── Buildings ──────────────────────────────────────────────────────── */
+
+  /** The creeps by id, for the towers to aim at and turn toward. */
+  private indexCreeps(creeps: readonly CreepSnapshot[]): void {
+    this.creepIndex.clear();
+    for (const creep of creeps) this.creepIndex.set(creep.id, creep);
+  }
 
   /**
    * Shows every trap that has just gone off (issue #66): the renderer lifts

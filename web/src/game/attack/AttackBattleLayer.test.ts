@@ -321,6 +321,7 @@ const hostOf = (): Host => {
     centreOf: () => ({ x: 400, y: 400 }),
     setBuildingDamage: (id, fraction) => damage.set(id, fraction),
     setConcealed: () => {},
+    setAnimFrame: () => {},
   };
 };
 

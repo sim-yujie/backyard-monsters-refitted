@@ -388,6 +388,14 @@ export class YardRenderer {
     this.buildings.setDamage(id, fraction);
   }
 
+  /**
+   * Puts one of a building's animation layers on a cell: a tower's gun turned
+   * toward its target (issue #67); see `YardBuildings.setAnimFrame`.
+   */
+  setAnimFrame(id: number, layerIndex: number, frame: number): void {
+    this.buildings.setAnimFrame(id, layerIndex, frame);
+  }
+
   /** Puts every building back where the save had it, in both views. */
   resetPlacements(): void {
     for (const id of this.byId.keys()) this.buildings.offsetBuilding(id, 0, 0);

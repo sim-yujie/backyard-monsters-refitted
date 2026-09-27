@@ -111,6 +111,24 @@ export const resolveAnimLayers = (
 };
 
 /**
+ * Puts a layer on one cell, for a strip whose cell is a facing rather than a
+ * frame — a tower turning toward its target during a battle (issue #67).
+ *
+ * Before the strip has arrived the cell is remembered in `progress`, which
+ * `resolveAnimLayers` reads when it does; after, it is clamped to the cells
+ * the file actually holds, so a facing past the end shows the last cell rather
+ * than nothing.
+ */
+export const setLayerFrame = (layer: AnimLayer, frame: number): void => {
+  const wanted = Math.max(0, Math.floor(frame));
+  layer.progress = wanted;
+  if (!layer.resolved) return;
+  const frames = layer.sprite.totalFrames;
+  if (frames <= 0) return;
+  layer.sprite.currentFrame = Math.min(wanted, frames - 1);
+};
+
+/**
  * Moves every layer on by however much of a second has passed.
  *
  * A policy with no rate — every tower, and the handful of buildings whose strip

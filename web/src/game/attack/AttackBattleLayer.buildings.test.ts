@@ -1,0 +1,167 @@
+import { describe, expect, it } from "vitest";
+import { Container, Texture, TextureSource } from "pixi.js";
+import type { BaseLoadResponse } from "@/api/types";
+import { readYard } from "@/game/yard/yardModel";
+import { AttackBattleLayer, MonsterSheetTextures, type BattleYardHost } from "./AttackBattleLayer";
+import { AttackSession } from "./AttackSession";
+import type { AttackTarget } from "./attackTarget";
+import { MONSTER_SPRITES } from "./monsterSpriteData";
+
+/**
+ * The building side of the battle layer over a real session (issues #64, #66,
+ * #67): a shot turns the tower's gun through the host, a fired trap is
+ * revealed through the host and marked with a scorch, and a damaged building
+ * gets a bar.
+ */
+
+type BuildingRow = { id: number; t: number; l: number; X: number; Y: number };
+
+const yardOf = (buildings: BuildingRow[]): BaseLoadResponse =>
+  ({
+    error: 0,
+    id: 1,
+    baseid: "3502",
+    basesaveid: 1,
+    worldsize: [800, 800],
+    currenttime: 1_700_000_000,
+    buildingdata: Object.fromEntries(buildings.map((row) => [String(row.id), row])),
+    buildinghealthdata: {},
+    resources: { r1: 1000, r2: 0, r3: 0, r4: 0 },
+    attackid: 77,
+    storedata: {},
+  }) as unknown as BaseLoadResponse;
+
+const targetOf = (): AttackTarget => ({
+  baseid: "3502",
+  kind: "wild",
+  cell: { col: 241, row: 208 },
+  name: "Kozu",
+  roster: {
+    monsters: { C1: 20 },
+    levels: {},
+    champions: [],
+    flingerLevel: 4,
+    catapultLevel: 0,
+  },
+});
+
+const blankSheet = (url: string): Promise<Texture> => {
+  const sheet = Object.values(MONSTER_SPRITES).find((candidate) => url.endsWith(candidate.file));
+  if (!sheet) throw new Error(`no sheet at ${url}`);
+  return Promise.resolve(
+    new Texture({ source: new TextureSource({ width: sheet.width, height: sheet.height }) }),
+  );
+};
+
+interface Host extends BattleYardHost {
+  readonly damage: Map<number, number>;
+  readonly concealed: Set<number>;
+  readonly frames: Map<string, number>;
+}
+
+const hostOf = (): Host => {
+  const depth = new Container();
+  depth.sortableChildren = true;
+  const host: Host = {
+    damage: new Map(),
+    concealed: new Set(),
+    frames: new Map(),
+    depthSortedLayer: () => depth,
+    centreOf: (id) => (host.concealed.has(id) ? null : { x: 400, y: 400 }),
+    setBuildingDamage: (id, fraction) => host.damage.set(id, fraction),
+    setConcealed: (id, on) => (on ? host.concealed.add(id) : host.concealed.delete(id)),
+    setAnimFrame: (id, layer, frame) => host.frames.set(`${id}:${layer}`, frame),
+  };
+  return host;
+};
+
+const setUp = (buildings: BuildingRow[]) => {
+  const session = new AttackSession({ target: targetOf(), seed: 1 });
+  const response = yardOf(buildings);
+  session.load(response);
+  const yard = readYard(response);
+  const host = hostOf();
+  const overlay = new Container();
+  const layer = new AttackBattleLayer({
+    session,
+    yard,
+    host,
+    overlay,
+    reducedMotion: false,
+    textures: new MonsterSheetTextures(blankSheet),
+  });
+  return { session, yard, host, overlay, layer };
+};
+
+const play = (session: AttackSession, seconds: number, layer: AttackBattleLayer): void => {
+  const frames = Math.ceil(seconds * 60);
+  for (let frame = 0; frame < frames; frame += 1) {
+    session.advance(1 / 60);
+    layer.update();
+  }
+};
+
+describe("towers", () => {
+  it("turns a sniper's gun through the host once it has shot at something", () => {
+    const { session, host, layer } = setUp([{ id: 1, t: 21, l: 1, X: 0, Y: 0 }]);
+    session.appendFling({ x: -150, y: -150, monsters: { C1: 3 } });
+    play(session, 6, layer);
+    expect(session.battle()?.state().towers[0]?.shots ?? 0).toBeGreaterThan(0);
+    const cell = host.frames.get("1:0");
+    expect(cell).toBeDefined();
+    expect(cell).toBeGreaterThanOrEqual(0);
+    expect(cell).toBeLessThan(30);
+    layer.destroy();
+  });
+
+  it("leaves a cannon's frame alone: it has no gun strip", () => {
+    const { session, host, layer } = setUp([{ id: 1, t: 20, l: 1, X: 0, Y: 0 }]);
+    session.appendFling({ x: -150, y: -150, monsters: { C1: 3 } });
+    play(session, 6, layer);
+    expect(session.battle()?.state().towers[0]?.shots ?? 0).toBeGreaterThan(0);
+    expect(host.frames.size).toBe(0);
+    layer.destroy();
+  });
+});
+
+describe("traps", () => {
+  it("reveals a trap through the host when the engine says it fired, and scorches the ground", () => {
+    // A town hall to walk to, with a trap in the way of the drop.
+    const { session, host, overlay, layer } = setUp([
+      { id: 1, t: 14, l: 1, X: 200, Y: 200 },
+      { id: 2, t: 24, l: 1, X: 0, Y: 0 },
+    ]);
+    host.concealed.add(2);
+    const effects = overlay.children[0] as Container;
+    const decorations = effects.children.length;
+    session.appendFling({ x: 10, y: 10, monsters: { C1: 20 } });
+    play(session, 8, layer);
+    expect(session.battle()?.state().firedTraps).toEqual([2]);
+    expect(host.concealed.has(2)).toBe(false);
+    // Its zero health draws it as a ruin.
+    expect(host.damage.get(2)).toBe(0);
+    // The scorch stays; the ring is gone within a second.
+    expect(effects.children.length).toBeGreaterThan(decorations);
+    layer.destroy();
+  });
+});
+
+describe("building bars", () => {
+  it("puts a bar in the effects layer once a building is hurt, and takes it away at zero", () => {
+    const { session, overlay, layer } = setUp([{ id: 1, t: 20, l: 1, X: 0, Y: 0 }]);
+    const effects = overlay.children[0] as Container;
+    const bars = effects.children[0] as Container;
+    expect(bars.children).toHaveLength(0);
+    session.appendFling({ x: -100, y: -100, monsters: { C1: 8 } });
+    play(session, 6, layer);
+    const state = session.battle()?.state();
+    const hp = state?.health["1"];
+    expect(hp).toBeDefined();
+    expect(hp).toBeGreaterThan(0);
+    expect(bars.children.filter((sprite) => sprite.visible)).toHaveLength(2);
+    play(session, 30, layer);
+    expect(session.battle()?.state().destroyedIds).toEqual([1]);
+    expect(bars.children.filter((sprite) => sprite.visible)).toHaveLength(0);
+    layer.destroy();
+  });
+});
