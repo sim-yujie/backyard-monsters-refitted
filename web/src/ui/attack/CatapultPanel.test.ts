@@ -51,6 +51,23 @@ describe("CatapultPanel", () => {
     panel.destroy();
   });
 
+  it("draws the sizes as the speed switch's pills: shared buttons in a group, the choice pressed (#89)", () => {
+    const panel = new CatapultPanel({ catapultLevel: 3, onPick: () => {} }).mount(document.body);
+    panel.update(view());
+    const group = row(panel, 2).querySelector<HTMLElement>(".attack-catapult__tiers")!;
+    expect(group.getAttribute("role")).toBe("group");
+    expect(group.getAttribute("aria-label")).toBe("Pebbles bomb size");
+    for (const button of group.querySelectorAll("button")) {
+      expect(button.classList).toContain("btn");
+      expect(button.classList).toContain("btn--ghost");
+    }
+    // One pressed per row, and the exact figure on hover for a greyed one.
+    expect(selected(panel, 2)).toEqual(["pb1"]);
+    expect(tier(panel, "pb3").disabled).toBe(true);
+    expect(tier(panel, "pb3").title).toBe("Massive pebble bomb: costs 10,000,000");
+    panel.destroy();
+  });
+
   it("opens each row on the largest affordable tier up to 2,000,000, as Flash did", () => {
     expect(defaultTier(BOMBS.filter((one) => one.resource === 2), 200_000).id).toBe("pb1");
     // 10M in the pool still defaults to the 2M tier, never the 10M one.

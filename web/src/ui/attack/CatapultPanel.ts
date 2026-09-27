@@ -20,8 +20,8 @@ import { resourceIcon, resourceKeyOf } from "@/ui/resourceIcon";
  * level 3, and the panel scrolled on an ordinary desktop. A bomb is really two
  * choices, which resource and how big, and only one bomb per resource can go
  * out (`ResourceBombs.as:301-315`), so the panel is three compact rows —
- * twigs, pebbles, putty — each with its tiers as a small segmented choice and
- * one Arm button. The row says what the attacker has; each tier shows its
+ * twigs, pebbles, putty — each with its tiers as a pill switch, in the idiom
+ * of the attack screen's 1x/2x speed switch (#89), and one Arm button. The row says what the attacker has; each tier shows its
  * cost; a tier the pool cannot pay for is greyed; a row the catapult has not
  * unlocked yet stays visible, locked, with the level it needs. A blocked row
  * says why in place of the bomb's effect, so every row is the same height.
@@ -221,7 +221,7 @@ export class CatapultPanel {
     const segments: Segment[] = tiers.map((bomb, index) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "attack-catapult__tier";
+      button.className = "btn btn--ghost attack-catapult__tier";
       button.dataset["bomb"] = bomb.id;
       button.setAttribute("aria-pressed", "false");
       const label = document.createElement("span");
@@ -319,7 +319,6 @@ export class CatapultPanel {
               : `${bombName(segment.bomb.id)}: costs ${formatAmount(segment.bomb.cost)}`;
         const on = segment.bomb.id === bomb.id;
         segment.button.setAttribute("aria-pressed", String(on));
-        segment.button.classList.toggle("attack-catapult__tier--on", on);
       }
 
       // Why the row cannot fire takes the effect's place, so a blocked row is
