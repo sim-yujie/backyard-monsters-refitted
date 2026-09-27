@@ -27,3 +27,24 @@ export const YardUpgradeSchema = z.object({ id: BuildingIdField });
 
 /** `POST /bm/yard/upgrade/cancel`: the building whose running upgrade to cancel. */
 export const YardCancelUpgradeSchema = z.object({ id: BuildingIdField });
+
+/** `POST /bm/yard/speedup`: a building and one of the four speed-up items. */
+export const YardSpeedupSchema = z.object({
+  id: BuildingIdField,
+  item: z.enum(["SP1", "SP2", "SP3", "SP4"]),
+});
+
+/** `POST /bm/yard/upgrade/instant`: the building to raise one level. */
+export const YardInstantUpgradeSchema = z.object({
+  id: BuildingIdField,
+});
+
+/**
+ * `POST /bm/yard/shop/buy`: a store item code. Only the code: the price is the
+ * server's (`services/yard/shiny.ts`), and a `price` or `cost` field the client
+ * adds is stripped with every other unknown key. Whether the code is for sale
+ * is the route's allowlist (`controllers/yard/shopBuy.ts`).
+ */
+export const YardShopBuySchema = z.object({
+  item: z.string().min(1).max(16),
+});

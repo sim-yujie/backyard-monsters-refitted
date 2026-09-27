@@ -1,4 +1,7 @@
 import type { KoaController } from "../../utils/KoaController.js";
+import { yardInstantUpgradeAction } from "./instantUpgrade.js";
+import { yardShopBuyAction } from "./shopBuy.js";
+import { yardSpeedupAction } from "./speedup.js";
 import { yardStateAction } from "./state.js";
 import { yardRoute } from "./yardRoute.js";
 import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
@@ -21,4 +24,7 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "state", controller: yardRoute(yardStateAction) },
   { path: "upgrade", controller: yardRoute(yardUpgradeAction) },
   { path: "upgrade/cancel", controller: yardRoute(yardCancelUpgradeAction) },
+  { path: "speedup", controller: yardRoute(yardSpeedupAction) },
+  { path: "upgrade/instant", controller: yardRoute(yardInstantUpgradeAction) },
+  { path: "shop/buy", controller: yardRoute(yardShopBuyAction) },
 ];
