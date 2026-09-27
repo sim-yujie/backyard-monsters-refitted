@@ -172,7 +172,84 @@ export interface MonstersSave {
   housed?: Record<string, number | undefined>;
   /** Housing capacity in `cStorage` units. */
   space?: number;
+  /**
+   * Unix seconds the hatchery countdowns in `h` are measured from
+   * (`docs/specs/monsters-and-hatchery.md` §10).
+   */
+  saved?: number;
+  /**
+   * One entry per hatchery, index-aligned with `hid` and `hstage`:
+   * `[inProduction, countdownProduce, queue?]`, the countdown in seconds left
+   * at `saved`.
+   */
+  h?: (readonly [monster: string, countdown: number, queue?: unknown])[];
+  /** The hatcheries' building ids, index-aligned with `h`. */
+  hid?: number[];
+  /** Production stage per hatchery: 0 idle, 1 producing, 2 waiting for housing, 3/4 starting. */
+  hstage?: number[];
   [key: string]: unknown;
+}
+
+/**
+ * One academy entry: the monster's training level and Lab rank
+ * (`docs/specs/monsters-and-hatchery.md` §10 "academy").
+ */
+export interface AcademyEntry {
+  /** Academy level, 1..6; absent means 1. */
+  level?: number;
+  /**
+   * End of the running training, unix seconds. A legacy save may hold a
+   * value of 583,200 or less, which is a remainder relative to `savetime`
+   * (`client/scripts/com/monsters/player/Player.as:170-177`).
+   */
+  time?: number;
+  /** Total seconds of the running training. */
+  duration?: number;
+  /** Monster Lab ability rank, 1..3; absent means 0. */
+  powerup?: number;
+  [key: string]: unknown;
+}
+
+/** `academy`, keyed by roster id. */
+export type AcademyData = Record<string, AcademyEntry | undefined>;
+
+/**
+ * One `lockerdata` entry (`docs/specs/monsters-and-hatchery.md` §10
+ * "lockerdata"): `t` 1 while unlocking, 2 once unlocked; `s` and `e` are the
+ * unlock's start and end in unix seconds and go once it completes.
+ */
+export interface LockerEntry {
+  t: number;
+  s?: number;
+  e?: number;
+  [key: string]: unknown;
+}
+
+/** `lockerdata`, keyed by roster id. A monster not listed is locked. */
+export type LockerData = Record<string, LockerEntry | undefined>;
+
+/** One `storedata` entry: `q` a quantity bought, `e` a buff's expiry in unix seconds. */
+export interface StoreEntry {
+  q?: number;
+  e?: number;
+  [key: string]: unknown;
+}
+
+/** `storedata`, keyed by store item code (`BEW`, `BST`, `ENL`, …). */
+export type StoreData = Record<string, StoreEntry | undefined>;
+
+/** The storage cap per resource, as the server clamps credits to it. */
+export interface ResourceCaps {
+  r1: number;
+  r2: number;
+  r3: number;
+  r4: number;
+}
+
+/** Worker slots, and how many hold a build, upgrade or fortify countdown. */
+export interface WorkerCount {
+  total: number;
+  busy: number;
 }
 
 /**
@@ -356,7 +433,7 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * extra workers bought, and `e` a buff's expiry as a unix second — `BST.e`
    * is when Sharper Tools runs out (`client/scripts/STORE.as:2513-2519`).
    */
-  storedata?: Record<string, { q?: number; e?: number } | undefined> | null;
+  storedata?: StoreData | null;
   basename?: string;
   level?: number;
   tutorialstage?: unknown;
@@ -378,7 +455,17 @@ export interface BaseLoadResponse extends ApiEnvelope {
   /** The base's champions. On the own-yard load, the attacker's own. */
   champion?: ChampionSaveEntry[] | null;
   /** Academy levels by roster id, `{ C1: { level: 6 } }`; absent means level 1. */
-  academy?: Record<string, { level?: number; powerup?: number } | undefined> | null;
+  academy?: AcademyData | null;
+  /** Monster unlocks. Carried by `/base/load` and by every yard action. */
+  lockerdata?: LockerData | null;
+  researchdata?: Record<string, unknown> | null;
+  /**
+   * Only once a yard action has answered (`/bm/yard/*`): the storage cap per
+   * resource. `/base/load` does not send it.
+   */
+  caps?: ResourceCaps;
+  /** Only once a yard action has answered: the server's worker count. */
+  workers?: WorkerCount;
   /** Flinger and catapult levels of this base. */
   flinger?: number;
   catapult?: number;
@@ -821,4 +908,178 @@ export interface TrapRearmResponse extends ApiEnvelope {
   buildingdata: BuildingDataMap;
   /** What is left of the fired list once the placed traps are struck off. */
   firedtraps: FiredTrap[];
+}
+
+/* ── Yard actions ───────────────────────────────────────────────────────── */
+
+/**
+ * The yard state every `/bm/yard/*` answer carries (`docs/server-api.md`
+ * "Yard actions", `server/src/services/yard/yardState.ts`). Frozen on the
+ * server: fields may be added, never renamed or removed.
+ *
+ * The save slices keep their `/base/load` names and shapes, so the client
+ * merges them straight into the `BaseLoadResponse` it holds. Null columns
+ * arrive as `{}` (`champion` as `[]`).
+ */
+export interface YardState {
+  /** Unix seconds the relative countdowns are measured from; equals `currenttime`. */
+  savetime: number;
+  /** The server's clock at the moment of the answer, unix seconds. */
+  currenttime: number;
+  resources: Resources;
+  /** Shiny; 0 while the account has Shiny locked. */
+  credits: number;
+  caps: ResourceCaps;
+  workers: WorkerCount;
+  buildingdata: BuildingDataMap;
+  buildinghealthdata: BuildingHealthData;
+  storedata: StoreData;
+  monsters: MonstersSave;
+  lockerdata: LockerData;
+  academy: AcademyData;
+  champion: ChampionSaveEntry[];
+  mushrooms: MushroomSave;
+  researchdata: Record<string, unknown>;
+}
+
+/** The names of every {@link YardState} field, for merging and tests. */
+export const YARD_STATE_KEYS = [
+  "savetime",
+  "currenttime",
+  "resources",
+  "credits",
+  "caps",
+  "workers",
+  "buildingdata",
+  "buildinghealthdata",
+  "storedata",
+  "monsters",
+  "lockerdata",
+  "academy",
+  "champion",
+  "mushrooms",
+  "researchdata",
+] as const satisfies readonly (keyof YardState)[];
+
+/**
+ * A job the server's catch-up finished during a request, oldest first.
+ *
+ * Every kind has the same five keys. Phase 1 sends `build`, `upgrade`,
+ * `fortify` and `storeItem`; later phases add `unlock`, `hatch`, `train`, …
+ * with the same shape, which {@link CompletedOtherJob} lets through.
+ */
+export type CompletedJob = CompletedBuildingJob | CompletedStoreItemJob | CompletedOtherJob;
+
+export interface CompletedBuildingJob {
+  kind: "build" | "upgrade" | "fortify";
+  /** Building id. */
+  id: number;
+  /** Building type. */
+  t: number;
+  /** Unix second the countdown reached zero. */
+  at: number;
+  detail: {
+    from: number;
+    level: number;
+    fort?: number;
+    /** Empire points the completion awarded. */
+    points: number;
+  };
+}
+
+export interface CompletedStoreItemJob {
+  kind: "storeItem";
+  /** Store item code, e.g. `BST`. */
+  id: string;
+  t: null;
+  /** The buff's expiry, `e`. */
+  at: number;
+  detail: Record<string, never>;
+}
+
+/** A kind a later phase adds; read through its five common keys. */
+export interface CompletedOtherJob {
+  kind: string;
+  id: number | string;
+  t: number | null;
+  at: number;
+  detail: Record<string, unknown>;
+}
+
+/** What every successful yard action answers: the state, what finished, and the route's own report. */
+export type YardResponse<Report> = ApiEnvelope &
+  YardState & {
+    error: 0;
+    completed: CompletedJob[];
+    report: Report;
+  };
+
+/**
+ * A yard refusal's body (`{ error: message, reason, ...detail }`), carried by
+ * the `ApiError` the call throws. 400 = malformed request, 409 = the yard
+ * refuses right now. Read it with `yardRefusal` in `api/yard.ts`.
+ */
+export interface YardRefusalBody {
+  error: string;
+  reason: string;
+  [detail: string]: unknown;
+}
+
+/** `POST /bm/yard/upgrade`. `finished` when the step was 300 s or less and completed at once. */
+export interface UpgradeStartReport {
+  id: number;
+  from: number;
+  to: number;
+  /** The countdown written, Sharper Tools applied; 0 when `finished`. */
+  seconds: number;
+  cost: UpgradeCost;
+  finished: boolean;
+}
+
+/** `POST /bm/yard/upgrade/cancel`: the step's full cost, back, clamped to the cap. */
+export interface UpgradeCancelReport {
+  id: number;
+  refund: UpgradeCost;
+}
+
+/** `POST /bm/yard/upgrade/instant`: level raised now for Shiny, no resources charged. */
+export interface UpgradeInstantReport {
+  id: number;
+  from: number;
+  to: number;
+  /** Shiny spent. */
+  credits: number;
+  /** Empire points the step awarded. */
+  points: number;
+}
+
+/**
+ * The four speed-ups (`client/scripts/STORE.as:1071-1082`): `SP1` finishes a
+ * job of 300 s or less for free, `SP2` / `SP3` take off one / two hours,
+ * `SP4` finishes a longer one now.
+ */
+export type SpeedupItem = "SP1" | "SP2" | "SP3" | "SP4";
+
+/** `POST /bm/yard/speedup`. */
+export interface SpeedupReport {
+  id: number;
+  item: SpeedupItem;
+  /** Shiny spent. */
+  credits: number;
+  /** Seconds left on the job afterwards; 0 when it finished. */
+  remaining: number;
+  /** The job as a `completed` entry when the speed-up finished it, else null. */
+  finished: CompletedJob | null;
+}
+
+/** `POST /bm/yard/shop/buy`. */
+export interface ShopBuyReport {
+  /** Store item code. */
+  item: string;
+  /** Shiny spent. */
+  credits: number;
+  /** How many the account now holds (`storedata[item].q`). */
+  q: number;
+  /** The buff's expiry, unix seconds, for a timed item (`BST`); null for a permanent one (`BEW`). */
+  endsAt: number | null;
 }

@@ -71,8 +71,18 @@ export interface YardBuilding {
 
 export interface YardCountdown {
   readonly kind: "build" | "upgrade" | "fortify" | "rebuild";
-  /** Unix seconds the countdown is expected to finish at. */
+  /** Unix seconds the countdown is expected to finish at, were it running. */
   readonly endsAt: number;
+  /** Seconds left at `savetime`, as the save stores it. */
+  readonly seconds: number;
+  /**
+   * The countdown is frozen: the building is damaged or repairing, and the
+   * server does not advance its countdown until it is back to full health
+   * (`server/src/services/base/advanceBuildingTimers.ts:90-91`,
+   * `client/scripts/BFOUNDATION.as:1367-1394`). `endsAt` is then only what
+   * it would be were it running from `savetime`; `seconds` is the time left.
+   */
+  readonly paused: boolean;
 }
 
 export interface YardMushroom {
@@ -184,7 +194,32 @@ export const artStateFor = (condition: BuildingCondition): ArtState =>
       ? ArtState.DAMAGED
       : ArtState.DEFAULT;
 
-const countdownOf = (building: BuildingData, savedAt: number): YardCountdown | null => {
+/**
+ * Whether a building's countdown is frozen: it is repairing, or the save
+ * holds a health reading for it, which the save only writes below full
+ * health. The server's own test, word for word
+ * (`server/src/services/base/advanceBuildingTimers.ts:90-91`).
+ */
+export const isCountdownPaused = (
+  building: BuildingData,
+  health: BaseLoadResponse["buildinghealthdata"],
+): boolean =>
+  Boolean(building.rE) ||
+  building.hp != null ||
+  (health != null && String(building.id) in health);
+
+/**
+ * The countdown a building is running, measured from `savedAt`.
+ *
+ * Exported for `jobs.ts`, which turns every timer in the yard into a job with
+ * an end time; this is its building half. `health` is the save's
+ * `buildinghealthdata`, for the paused test.
+ */
+export const countdownOf = (
+  building: BuildingData,
+  savedAt: number,
+  health: BaseLoadResponse["buildinghealthdata"] = null,
+): YardCountdown | null => {
   const pairs: readonly [YardCountdown["kind"], number | undefined][] = [
     ["build", building.cB],
     ["upgrade", building.cU],
@@ -193,7 +228,12 @@ const countdownOf = (building: BuildingData, savedAt: number): YardCountdown | n
   ];
   for (const [kind, seconds] of pairs) {
     if (typeof seconds === "number" && seconds > 0) {
-      return { kind, endsAt: savedAt + seconds };
+      return {
+        kind,
+        endsAt: savedAt + seconds,
+        seconds,
+        paused: isCountdownPaused(building, health),
+      };
     }
   }
   return null;
@@ -288,7 +328,7 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
       condition,
       hp,
       maxHp,
-      countdown: countdownOf(raw, savedAt),
+      countdown: countdownOf(raw, savedAt, response.buildinghealthdata),
       raw,
     });
   }

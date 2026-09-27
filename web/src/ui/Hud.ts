@@ -1,4 +1,5 @@
 import type { Resources } from "@/api/types";
+import type { YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount } from "./format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
 
@@ -63,6 +64,7 @@ export class Hud {
   private bubbleFor: ResourceKey | null = null;
   private bubbleTimer: number | undefined;
   private readonly floats = new Set<HTMLElement>();
+  private yardBinding: YardUiBinding | null = null;
 
   constructor(options: HudOptions) {
     this.element = document.createElement("header");
@@ -139,6 +141,22 @@ export class Hud {
   setResources(resources: Resources, shiny?: number): void {
     for (const key of RESOURCE_KEYS) this.setAmount(key, resources[key]);
     this.setAmount("shiny", shiny);
+  }
+
+  /**
+   * The player's own yard, while one is open: its `YardStore`, the scene's
+   * hooks and its notice dock (`YardStore.ts`, "Hooks for the UI work
+   * packages"). Null on any other screen and on a foreign yard. Held for the
+   * cap bars, the Workers control and the job notices (WP1.6); nothing reads
+   * it yet.
+   */
+  get yard(): YardUiBinding | null {
+    return this.yardBinding;
+  }
+
+  /** Hands the HUD the own yard's binding, or takes it away with null. */
+  bindYard(binding: YardUiBinding | null): void {
+    this.yardBinding = binding;
   }
 
   /** The amount a readout is showing, or undefined before the first. */

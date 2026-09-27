@@ -17,6 +17,12 @@ import {
   plannerEntryTooltip,
 } from "@/game/yard/planner/access";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
+import {
+  YardChangeReason,
+  YardStore,
+  type YardChange,
+  type YardUiBinding,
+} from "@/game/yard/YardStore";
 import { YardRenderer, YardView } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
 import { Hud } from "@/ui/Hud";
@@ -38,9 +44,13 @@ import { SceneName } from "../App";
  * the load, the failure paths and the once-a-second tick that keeps the
  * countdowns honest.
  *
- * The yard is one request and then static, so there is no refresh clock and no
- * request budget — the two things that make the map scene complicated are both
- * absent.
+ * The player's own yard is held by a {@link YardStore}
+ * (`docs/design/yard-buildings.md` §2.1, §2.4): the store owns the save, this
+ * scene redraws from it on every change, ticks it once a second so a finished
+ * job flips at once and is confirmed by one `state` call, asks it for a
+ * `state` call when the tab becomes visible again, and hands it to the
+ * building panel and the HUD through one {@link YardUiBinding}. A foreign yard
+ * is one request and then static, with no store.
  *
  * A foreign yard is the same screen with the own-yard doors shut
  * (`docs/design/attack-flow.md` §F1, §4.1): the load is a `view`/`wmview`
@@ -140,8 +150,15 @@ export class YardScene implements Scene {
   private panelDock: HTMLElement | null = null;
 
   private yard: Yard | null = null;
-  /** The save the yard was built from, so an apply can rebuild it in place. */
+  /** The save the yard was built from; on the own yard, always the store's. */
   private save: BaseLoadResponse | null = null;
+  /** The own yard's store; null on a visit and before the load answers. */
+  private store: YardStore | null = null;
+  private unsubscribeStore: (() => void) | null = null;
+  /** What the panel and the HUD are handed on the own yard. */
+  private binding: YardUiBinding | null = null;
+  /** The tab came back while the planner was open; refresh once it closes. */
+  private refreshAfterPlanner = false;
   private planner: YardPlanner | null = null;
   private plannerButton: HTMLButtonElement | null = null;
   /** The word inside the Layout control, beside its glyph. */
@@ -286,6 +303,7 @@ export class YardScene implements Scene {
     this.inset = { top: this.toolbar.getBoundingClientRect().bottom, bottom: 0 };
 
     window.addEventListener("keydown", this.onKeyDown);
+    document.addEventListener("visibilitychange", this.onVisibilityChange);
 
     this.panelDock = document.createElement("div");
     this.panelDock.className = "map-dock map-dock--right";
@@ -296,6 +314,8 @@ export class YardScene implements Scene {
 
   exit(): void {
     window.removeEventListener("keydown", this.onKeyDown);
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
+    this.dropStore();
     this.planner?.destroy();
     this.planner = null;
     this.plannerButton = null;
@@ -378,6 +398,10 @@ export class YardScene implements Scene {
     this.sinceUiTick += deltaSeconds;
     if (this.sinceUiTick >= UI_TICK_SECONDS) {
       this.sinceUiTick = 0;
+      // Not while the planner is open: a flip rebuilds the sprites, which a
+      // drag in progress holds. The jobs stay due and flip on the first tick
+      // after it closes.
+      if (!this.planner) this.store?.tick();
       this.panel?.tick(Date.now() / 1000);
       this.refreshStatus();
     }
@@ -430,8 +454,10 @@ export class YardScene implements Scene {
       if (this.context !== context) return;
 
       // A visit is somebody else's yard: open grass and no plot edge, as the
-      // Flash client drew it outside BUILD mode. The own yard keeps its edge.
-      const yard = readYard(response, { foreign: target !== null });
+      // Flash client drew it outside BUILD mode. The own yard keeps its edge,
+      // and is held by a store from here on.
+      const store = target ? null : this.startStore(response, context);
+      const yard = store ? store.yard : readYard(response, { foreign: true });
       this.yard = yard;
       this.save = response;
       this.notices.clear("yard-load");
@@ -457,6 +483,8 @@ export class YardScene implements Scene {
       // twigs as if they were the player's own.
       if (!target) this.hud?.setResources(yard.resources, yard.credits);
       if (this.attackButton) this.attackButton.disabled = false;
+      // Once the yard is drawn, because the first answer may redraw it.
+      store?.start();
     } catch (caught) {
       if (caught instanceof ApiError && caught.isAuthFailure) {
         context.goTo(SceneName.LOGIN);
@@ -696,6 +724,7 @@ export class YardScene implements Scene {
       const dock = this.panelDock;
       if (!dock) return;
       this.panel = new BuildingPanel({
+        ...(this.binding ? { yard: this.binding } : {}),
         onClose: () => {
           this.panel = null;
           this.selected = null;
@@ -816,6 +845,10 @@ export class YardScene implements Scene {
   private closePlanner(): void {
     this.planner?.destroy();
     this.planner = null;
+    if (this.refreshAfterPlanner) {
+      this.refreshAfterPlanner = false;
+      void this.store?.refresh();
+    }
     // Back to the HUD's own band now the planner's bar is gone.
     this.notices.setTopInset(null);
     // Leaving puts every sprite back where the save had it, which the minimap
@@ -831,7 +864,8 @@ export class YardScene implements Scene {
    *
    * The response is authoritative — it is the save as the server now holds it —
    * so the honest thing is to re-read it rather than to assume the client's own
-   * plan and the server's answer agree.
+   * plan and the server's answer agree. It goes through the store, whose
+   * change redraws the yard and which fetches the full state after it.
    */
   private onApplied(
     buildingdata: BuildingDataMap,
@@ -839,9 +873,8 @@ export class YardScene implements Scene {
     resources: Resources | undefined,
     upgrades: UpgradeReport | null,
   ): void {
-    const save = this.save;
-    const context = this.context;
-    if (!save || !context) return;
+    const store = this.store;
+    if (!store || !this.context) return;
 
     this.closePlanner();
 
@@ -849,17 +882,7 @@ export class YardScene implements Scene {
     // taken from the response rather than subtracted here: the server owns
     // what an upgrade cost, and the walk it ran is partial by design
     // (`docs/design/planner-upgrades.md` §5.5).
-    const merged: BaseLoadResponse = {
-      ...save,
-      buildingdata,
-      ...(resources ? { resources } : {}),
-    };
-    this.save = merged;
-    const yard = readYard(merged);
-    this.yard = yard;
-    this.renderer.show(yard);
-    this.minimap?.refreshBuildings();
-    if (resources) this.hud?.setResources(yard.resources, yard.credits);
+    store.mergeWrite({ buildingdata, ...(resources ? { resources } : {}) });
 
     // Raised here rather than by the planner because the planner has just been
     // closed and clears its own notices on the way out (§8, Q4).
@@ -886,18 +909,102 @@ export class YardScene implements Scene {
    * the plan has it rather than where the save does.
    */
   private onYardChanged(buildingdata: BuildingDataMap, resources: Resources): void {
-    const save = this.save;
-    if (!save) return;
+    // The store's change does the rebuild and the `rebase` (`onStoreChange`).
+    this.store?.mergeWrite({ buildingdata, resources });
+  }
 
-    const merged: BaseLoadResponse = { ...save, buildingdata, resources };
-    this.save = merged;
-    const yard = readYard(merged);
+  /* ── The store ──────────────────────────────────────────────────────── */
+
+  /**
+   * Creates the own yard's store over the load response, and the binding the
+   * panel and the HUD are handed. Not started here: `load` starts it once the
+   * yard is on screen.
+   */
+  private startStore(response: BaseLoadResponse, context: SceneContext): YardStore {
+    this.dropStore();
+    const store = new YardStore({
+      save: response,
+      onAuthFailure: () => {
+        if (this.context === context) context.goTo(SceneName.LOGIN);
+      },
+    });
+    this.store = store;
+    this.unsubscribeStore = store.subscribe((change) => this.onStoreChange(change));
+    this.binding = {
+      store,
+      scene: { selectBuilding: (id) => this.focusBuilding(id) },
+      notices: this.notices,
+    };
+    this.hud?.bindYard(this.binding);
+    return store;
+  }
+
+  private dropStore(): void {
+    this.unsubscribeStore?.();
+    this.unsubscribeStore = null;
+    this.store?.destroy();
+    this.store = null;
+    this.binding = null;
+    this.hud?.bindYard(null);
+  }
+
+  /**
+   * Redraws the yard from the store: the sprites, the minimap, the HUD's pool,
+   * the planner's base when it is open, and the open panel, re-pointed at the
+   * same building in the new yard.
+   *
+   * `pending` only says which requests are running, which is the panel's and
+   * the HUD's business through their own subscriptions; nothing here changes.
+   */
+  private onStoreChange(change: YardChange): void {
+    const store = this.store;
+    if (!store || change.reason === YardChangeReason.PENDING || !this.camera) return;
+
+    const yard = store.yard;
     this.yard = yard;
+    this.save = store.save;
     this.renderer.show(yard);
     this.minimap?.refreshBuildings();
-    this.hud?.setResources(yard.resources, yard.credits);
+    this.hud?.setResources(store.resources, store.credits);
     this.planner?.rebase(yard);
+
+    // `show` drops the selection with the old sprites; put it back.
+    const selected = this.selected;
+    if (selected && !this.planner) {
+      const same = yard.buildings.find((one) => one.id === selected.id) ?? null;
+      if (same) {
+        this.selected = same;
+        this.renderer.setSelected(same);
+        this.panel?.show(same);
+      } else {
+        this.select(null);
+      }
+    }
   }
+
+  /** Pans the camera to a building and opens its panel (the binding's `selectBuilding`). */
+  private focusBuilding(id: number): void {
+    const camera = this.camera;
+    const building = this.yard?.buildings.find((one) => one.id === id) ?? null;
+    if (!camera || !building || this.planner) return;
+    camera.centreOn({ x: building.centreX, y: building.centreY });
+    camera.dirty = true;
+    this.select(building);
+  }
+
+  /**
+   * The tab is visible again: ask the server what happened while it was not
+   * (§2.4). Held while the planner is open, whose sprites a redraw would pull
+   * out from under a drag, and sent when it closes.
+   */
+  private readonly onVisibilityChange = (): void => {
+    if (document.visibilityState !== "visible" || !this.store) return;
+    if (this.planner) {
+      this.refreshAfterPlanner = true;
+      return;
+    }
+    void this.store.refresh();
+  };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;

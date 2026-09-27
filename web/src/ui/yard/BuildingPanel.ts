@@ -2,6 +2,7 @@ import { Panel } from "@/ui/Panel";
 import { formatCountdown } from "@/ui/format";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
+import type { YardUiBinding } from "@/game/yard/YardStore";
 import {
   artStateFor,
   BuildingCondition,
@@ -47,12 +48,21 @@ export interface BuildingPanelOptions {
     readonly title: string;
     readonly open: () => void;
   };
+  /**
+   * The player's own yard: its `YardStore`, the scene's hooks and its notice
+   * dock (`YardStore.ts`, "Hooks for the UI work packages"). Absent on a
+   * foreign yard, which is read-only. Held for the panel's actions (WP1.5);
+   * nothing reads it yet.
+   */
+  yard?: YardUiBinding;
 }
 
 const UPGRADE_SOON = "Coming soon: the yard is read-only in this build.";
 
 export class BuildingPanel {
   readonly element: HTMLElement;
+  /** See {@link BuildingPanelOptions.yard}. */
+  readonly yard: YardUiBinding | undefined;
 
   private readonly panel: Panel;
   private readonly facts: HTMLDListElement;
@@ -68,6 +78,7 @@ export class BuildingPanel {
 
   constructor(options: BuildingPanelOptions) {
     this.planner = options.planner;
+    this.yard = options.yard;
     this.panel = new Panel({
       title: "Building",
       className: "map-panel",

@@ -127,7 +127,12 @@ describe("levels and countdowns", () => {
     const built = yardWith({ "1": { X: 0, Y: 0, t: 14, id: 1, l: 3, cB: 600 } });
     const building = built.buildings[0]!;
     expect(building.level).toBe(0);
-    expect(building.countdown).toEqual({ kind: "build", endsAt: 1_000_600 });
+    expect(building.countdown).toEqual({
+      kind: "build",
+      endsAt: 1_000_600,
+      seconds: 600,
+      paused: false,
+    });
   });
 
   it("prefers a build countdown over an upgrade over a fortify", () => {
@@ -135,7 +140,12 @@ describe("levels and countdowns", () => {
     expect(both.buildings[0]!.countdown?.kind).toBe("build");
 
     const upgrading = yardWith({ "1": { X: 0, Y: 0, t: 14, id: 1, l: 2, cU: 20, cF: 30 } });
-    expect(upgrading.buildings[0]!.countdown).toEqual({ kind: "upgrade", endsAt: 1_000_020 });
+    expect(upgrading.buildings[0]!.countdown).toEqual({
+      kind: "upgrade",
+      endsAt: 1_000_020,
+      seconds: 20,
+      paused: false,
+    });
     // An upgrade does not change the level until it finishes.
     expect(upgrading.buildings[0]!.level).toBe(2);
   });
@@ -143,6 +153,20 @@ describe("levels and countdowns", () => {
   it("ignores a zero countdown", () => {
     const idle = yardWith({ "1": { X: 0, Y: 0, t: 14, id: 1, cB: 0, cU: 0 } });
     expect(idle.buildings[0]!.countdown).toBeNull();
+  });
+
+  it("marks a countdown paused while the building is damaged or repairing, as the server does", () => {
+    const hurt = yardWith({ "1": { X: 0, Y: 0, t: 14, id: 1, l: 2, cU: 20, hp: 100 } });
+    expect(hurt.buildings[0]!.countdown?.paused).toBe(true);
+
+    const repairing = yardWith({ "1": { X: 0, Y: 0, t: 14, id: 1, l: 2, cU: 20, rE: 1 } });
+    expect(repairing.buildings[0]!.countdown?.paused).toBe(true);
+
+    const healthRow = yardWith(
+      { "1": { X: 0, Y: 0, t: 14, id: 1, l: 2, cU: 20 } },
+      { buildinghealthdata: { "1": 500 } },
+    );
+    expect(healthRow.buildings[0]!.countdown?.paused).toBe(true);
   });
 });
 

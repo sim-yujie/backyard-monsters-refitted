@@ -75,7 +75,7 @@ describe("plannerAccess", () => {
           fortification: 0,
           hp: 0,
           condition: "destroyed",
-          countdown: { kind: "upgrade", endsAt: 9_999_999_999 },
+          countdown: { kind: "upgrade", endsAt: 9_999_999_999, seconds: 60, paused: false },
         },
       ],
     };
