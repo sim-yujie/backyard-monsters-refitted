@@ -221,7 +221,8 @@ describe("finishing jobs", () => {
         ...baseBuildings(),
         "2": { X: 100, Y: 0, t: 20, id: 2, l: 2, cU: 5, hp: 10 },
       },
-      lockerdata: { C5: { t: 1, e: T0 + 5 } },
+      // Academy training: the server does not complete it until Phase 4.
+      academy: { C5: { level: 1, time: T0 + 5 } },
     });
     const api = stubApi();
     const { store, changes, time } = storeWith(save, api);

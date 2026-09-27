@@ -48,3 +48,14 @@ export const YardInstantUpgradeSchema = z.object({
 export const YardShopBuySchema = z.object({
   item: z.string().min(1).max(16),
 });
+
+/** `POST /bm/yard/locker/cancel` and `/locker/finish` take no fields: there is only one unlock. */
+export const YardLockerSchema = z.object({});
+
+/**
+ * `POST /bm/yard/locker/start` and `/locker/instant`: a roster id such as `C5`.
+ * Only the shape; whether it is obtainable is the route's rule.
+ */
+export const YardLockerMonsterSchema = z.object({
+  monster: z.string().min(1).max(16),
+});

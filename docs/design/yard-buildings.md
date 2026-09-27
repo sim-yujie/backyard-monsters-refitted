@@ -540,6 +540,14 @@ buff was active (`client/scripts/CREATURELOCKER.as:905-907`), so each real secon
 of the countdown. Catch-up applies exactly that: `e -= 4 × (seconds of the window that overlap
 CLOD's active period)`. (The store text says 4x; the arithmetic was 5x; this keeps the arithmetic.)
 
+**As built (WP2.3, issue #104).** Completion and the CLOD adjustment are their own catch-up step,
+`server/src/services/yard/catchUpLocker.ts`, not part of `catchUpMonsters.ts`, and it runs *before*
+the buildings step, because that step removes an expired `storedata.CLOD` whose overlap with the
+window must still be counted. Rules and prices are `services/yard/locker.ts`. Extra reason:
+`409 notUnlocking` for cancel, finish and `shop/buy item=CLOD` with no unlock running. The client
+predicts the Overdrive-shortened end (`unlockEndsAt`, `web/src/game/yard/jobs.ts`) and treats
+`unlock` as a server-completed kind.
+
 **Clicks.** Flash: building, Open Locker, page, row, Start, dismiss = 5–6 (MH §3 "Click flow").
 New: Locker building (opens Unlock), row, Start = 3; from the HUD, Monsters, Unlock, row, Start = 4.
 

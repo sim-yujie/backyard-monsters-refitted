@@ -1,5 +1,6 @@
 import { storeItems } from "../../game-data/store/storeItems.js";
 import { YardShopBuySchema } from "../../schemas/YardSchemas.js";
+import { runningOrThrow } from "../../services/yard/locker.js";
 import { storeItemPrice } from "../../services/yard/shiny.js";
 import { yardBadRequestErr, yardRefusedErr } from "../../services/yard/yardErrors.js";
 import type { JsonObject } from "../../types/JsonObject.js";
@@ -37,10 +38,15 @@ export interface ShopItemRule {
  * 2,000, four at most; the worker count reads `storedata.BEW.q`,
  * `services/yardplanner/workers.ts`) and `BST` (Sharper Tools, 225, seven
  * days; upgrades started while it runs take 80% of the time).
+ *
+ * Phase 2: `CLOD` (Monster Locker Overdrive, 60, four hours; the running
+ * unlock counts down 5x while it lasts, `services/yard/catchUpLocker.ts`),
+ * sold only while an unlock runs (`409 notUnlocking`), §4.3.
  */
 export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
   BEW: {},
   BST: {},
+  CLOD: { check: ({ save }) => void runningOrThrow(save) },
 };
 
 /** What the route sends back as `report`. */

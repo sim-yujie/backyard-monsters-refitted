@@ -4,6 +4,7 @@ import {
   type CatchUpBuildingsSave,
   type StoreItemJob,
 } from "./catchUpBuildings.js";
+import { catchUpLocker, type CatchUpLockerSave, type UnlockJob } from "./catchUpLocker.js";
 
 /**
  * `catchUpYard(save, now)`: advances a main yard from its `savetime` to `now`
@@ -21,14 +22,16 @@ import {
  * | Step | Module | Phase |
  * | --- | --- | --- |
  * | 1 | `catchUpBuildings.ts` — countdowns, points, `flinger`/`catapult`, store buffs | 1 |
+ * | 2 | `catchUpLocker.ts` — unlocks and the Locker Overdrive (runs first, see there) | 2 |
  * | 2 | `catchUpMonsters.ts` | 2 |
  * | 3 | `catchUpHarvesters.ts`, `catchUpRepairs.ts`, `catchUpMushrooms.ts` | 3 |
  * | 4 | `catchUpTraining.ts` | 4 |
  * | 5 | `catchUpChampions.ts` | 5 |
  *
- * Buildings go first: a finished Housing upgrade changes what the hatcheries
- * may fill. A later step that needs to split its window at a building
- * completion reads the `at` of the `build`/`upgrade` entries step 1 returned.
+ * Buildings go first (after the locker, which only reads a store buff step 1
+ * may expire): a finished Housing upgrade changes what the hatcheries may
+ * fill. A later step that needs to split its window at a building completion
+ * reads the `at` of the `build`/`upgrade` entries step 1 returned.
  *
  * **Guarantees.** Idempotent: a second run at the same `now` changes nothing,
  * because `savetime` has moved to `now` and nothing is left at zero. It never
@@ -42,10 +45,10 @@ import {
  * Every kind has `{ kind, id, t, at, detail }`. Later steps widen this union
  * with their own kinds (`unlock`, `hatch`, `train`, …).
  */
-export type CompletedJob = BuildingJob | StoreItemJob;
+export type CompletedJob = BuildingJob | StoreItemJob | UnlockJob;
 
 /** The slice of a save the catch-up reads and writes. */
-export interface CatchUpSave extends CatchUpBuildingsSave {
+export interface CatchUpSave extends CatchUpBuildingsSave, CatchUpLockerSave {
   savetime?: number;
 }
 
@@ -65,6 +68,7 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
   const from = Number.isFinite(stored) && stored > 0 ? stored : now;
 
   const completed: CompletedJob[] = [
+    ...catchUpLocker(save, from, now),
     ...catchUpBuildings(save, from, now),
   ];
 

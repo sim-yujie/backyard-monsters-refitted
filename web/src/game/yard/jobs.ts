@@ -70,16 +70,18 @@ export interface YardJob {
  * display and trigger a `state` call when they end: flipping a kind the
  * server does not complete yet would show an outcome the next answer takes
  * back. Phase 1 completes building countdowns and store buffs
- * (`server/src/services/yard/catchUpBuildings.ts`); each later work package
- * adds its kinds here in the same change that adds its catch-up step
- * (`unlock` and `hatch` with `catchUpMonsters.ts`, `repair` and `mushroom`
- * with Phase 3, `train` and `research` with Phase 4, `hunger` with Phase 5).
+ * (`server/src/services/yard/catchUpBuildings.ts`), Phase 2 unlocks
+ * (`catchUpLocker.ts`); each later work package adds its kinds here in the
+ * same change that adds its catch-up step (`hatch` with `catchUpMonsters.ts`,
+ * `repair` and `mushroom` with Phase 3, `train` and `research` with Phase 4,
+ * `hunger` with Phase 5).
  */
 export const SERVER_COMPLETED_KINDS: ReadonlySet<JobKind> = new Set<JobKind>([
   JobKind.BUILD,
   JobKind.UPGRADE,
   JobKind.FORTIFY,
   JobKind.STORE_ITEM,
+  JobKind.UNLOCK,
 ]);
 
 /** Monster Academy and Monster Lab type ids (`client/scripts/YARD_PROPS.as:2933`, `:6236`). */
@@ -313,21 +315,53 @@ const firstOfType = (
 
 /* ── Monsters ──────────────────────────────────────────────────────────── */
 
-/** The running unlock (`lockerdata[id] = { t: 1, e }`), absolute `e`. */
+/** The Overdrive's length (`CLOD` `du`, `server/src/game-data/store/storeItems.ts`). */
+const CLOD_SECONDS = 14_400;
+
+/**
+ * When an unlock stored as ending at `e` (at `from`) really ends, with the
+ * Monster Locker Overdrive (`storedata.CLOD`, `{ s, e }`) taking 4 extra
+ * seconds off per second from `from` on: the server's `unlockFinishAt`
+ * (`server/src/services/yard/locker.ts`), which its catch-up applies (§4.3).
+ */
+export const unlockEndsAt = (
+  e: number,
+  from: number,
+  storedata: StoreData | null | undefined,
+): number => {
+  const clodEnd = finite(storedata?.["CLOD"]?.e);
+  if (clodEnd === null) return e;
+  const clodStart = finite(storedata?.["CLOD"]?.s) ?? clodEnd - CLOD_SECONDS;
+  const start = Math.max(from, clodStart);
+  if (clodEnd <= start || e <= start) return e;
+  const boosted = clodEnd - start;
+  if (e - start <= 5 * boosted) return start + Math.ceil((e - start) / 5);
+  return e - 4 * boosted;
+};
+
+/**
+ * The running surface unlock (`lockerdata[id] = { t: 1, e }`), absolute `e`,
+ * brought forward by a Locker Overdrive running after `savedAt`
+ * ({@link unlockEndsAt}). Inferno (`IC…`) entries are not the server's to
+ * finish (D19) and are left out.
+ */
 export const lockerJobs = (
   lockerdata: LockerData | null | undefined,
   lockerId: number | null = null,
+  storedata: StoreData | null | undefined = null,
+  savedAt = 0,
 ): YardJob[] => {
   const jobs: YardJob[] = [];
   for (const [monster, entry] of Object.entries(lockerdata ?? {})) {
     const ends = finite(entry?.e);
-    if (entry?.t !== 1 || ends === null) continue;
+    if (entry?.t !== 1 || ends === null || !monster.startsWith("C")) continue;
+    const started = finite(entry.s);
     jobs.push({
       kind: JobKind.UNLOCK,
       key: `${JobKind.UNLOCK}:${monster}`,
       id: monster,
       buildingId: lockerId,
-      endsAt: ends,
+      endsAt: unlockEndsAt(ends, Math.max(savedAt, started ?? 0), storedata),
       holdsWorker: false,
     });
   }
@@ -524,7 +558,7 @@ export const yardJobs = (save: BaseLoadResponse): YardJob[] => {
   const buildings = save.buildingdata;
   const jobs = [
     ...buildingJobs(buildings, savedAt, save.buildinghealthdata),
-    ...lockerJobs(save.lockerdata, firstOfType(buildings, LOCKER_TYPE)),
+    ...lockerJobs(save.lockerdata, firstOfType(buildings, LOCKER_TYPE), save.storedata, savedAt),
     ...trainingJobs(save.academy, savedAt, firstOfType(buildings, ACADEMY_TYPE)),
     ...researchJobs(buildings),
     ...hatcheryJobs(save.monsters, save.storedata, savedAt),

@@ -1,4 +1,5 @@
 import type { CompletedJob } from "@/api/types";
+import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { typeName } from "@/game/yard/planner/summary";
 import type { Notices } from "@/ui/maproom/Notices";
 
@@ -64,6 +65,7 @@ const NOUNS: Readonly<Record<string, readonly [string, string]>> = {
   upgrade: ["upgrade", "upgrades"],
   build: ["build", "builds"],
   fortify: ["fortification", "fortifications"],
+  unlock: ["unlock", "unlocks"],
 };
 
 const capitalise = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
@@ -78,6 +80,10 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
   if (job.kind === "storeItem") {
     const code = String(job.id);
     return { label: STORE_ITEM_NAMES[code] ?? code, buildingId: null };
+  }
+  if (job.kind === "unlock") {
+    const id = String(job.id);
+    return { label: monsterEntry(id)?.name ?? id, buildingId: null };
   }
   const buildingId = typeof job.id === "number" ? job.id : null;
   const name = job.t === null ? String(job.id) : typeName(job.t);

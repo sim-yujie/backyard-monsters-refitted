@@ -12,6 +12,7 @@ import {
   JobKind,
   LAB_TYPE,
   lockerJobs,
+  unlockEndsAt,
   MUSHROOM_CAP,
   MUSHROOM_RESPAWN_SECONDS,
   nextWorkerJob,
@@ -231,6 +232,24 @@ describe("monster timers", () => {
     ]);
   });
 
+  it("brings an unlock forward by a Locker Overdrive running after savetime (5x)", () => {
+    const clod = { CLOD: { q: 1, s: SAVED - 100, e: SAVED + 1_000 } };
+    // 10,000 s left; 1,000 s of Overdrive takes 4,000 off.
+    const long = lockerJobs({ C5: { t: 1, s: SAVED - 500, e: SAVED + 10_000 } }, 7, clod, SAVED);
+    expect(long[0]?.endsAt).toBe(SAVED + 6_000);
+    // 3,000 s left, all inside the Overdrive: a fifth.
+    const short = lockerJobs({ C5: { t: 1, s: SAVED - 500, e: SAVED + 3_000 } }, 7, clod, SAVED);
+    expect(short[0]?.endsAt).toBe(SAVED + 600);
+    // The Overdrive before savetime is already in e.
+    expect(unlockEndsAt(SAVED + 3_000, SAVED + 2_000, clod)).toBe(SAVED + 3_000);
+    // No s: it started four hours before its e.
+    expect(unlockEndsAt(SAVED + 10_000, SAVED, { CLOD: { e: SAVED + 60 } })).toBe(SAVED + 9_760);
+  });
+
+  it("leaves Inferno unlocks out", () => {
+    expect(lockerJobs({ IC1: { t: 1, s: SAVED, e: SAVED + 5 } })).toEqual([]);
+  });
+
   it("reads an academy time as absolute, converting a legacy remainder once", () => {
     expect(trainingEndsAt(SAVED + 100, SAVED)).toBe(SAVED + 100);
     expect(trainingEndsAt(3_600, SAVED)).toBe(SAVED + 3_600);
@@ -341,11 +360,12 @@ describe("yardJobs", () => {
     expect(nextWorkerJob(jobs)?.key).toBe("upgrade:1");
   });
 
-  it("marks only the Phase 1 kinds as completed by the server", () => {
+  it("marks only the kinds the server's catch-up completes", () => {
     expect([...SERVER_COMPLETED_KINDS].sort()).toEqual([
       "build",
       "fortify",
       "storeItem",
+      "unlock",
       "upgrade",
     ]);
   });

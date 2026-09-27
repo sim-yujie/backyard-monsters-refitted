@@ -58,9 +58,15 @@ describe("groupCompletedJobs", () => {
     expect(groups[3]!.items[0]!.buildingId).toBeNull();
   });
 
-  it("reads a kind a later phase adds through its common keys", () => {
+  it("names an unlocked monster (#104)", () => {
     const [group] = groupCompletedJobs([{ kind: "unlock", id: "C5", t: null, at: 1, detail: {} }]);
-    expect(noticeText(group!)).toBe("Unlock finished: C5");
+    expect(noticeText(group!)).toBe("Unlock finished: Eye-ra");
+    expect(group!.items[0]!.buildingId).toBeNull();
+  });
+
+  it("reads a kind a later phase adds through its common keys", () => {
+    const [group] = groupCompletedJobs([{ kind: "hatch", id: "C5", t: null, at: 1, detail: {} }]);
+    expect(noticeText(group!)).toBe("Hatch finished: C5");
   });
 
   it("makes nothing of nothing", () => {
