@@ -9,7 +9,7 @@ import {
   type UpgradeReport,
 } from "@/api/types";
 import { consumeViewTarget, setAttackTarget, type ViewTarget } from "@/game/attack/attackTarget";
-import { concealTraps } from "@/game/attack/trapReveal";
+import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
 import {
   PlannerAccess,
@@ -1086,9 +1086,14 @@ export class YardScene implements Scene {
     if (!status || !yard) return;
 
     const waiting = this.renderer.placeholderCount;
+    // A visitor is not told how many traps the yard hides (#66), so a visit
+    // counts as the attack does, traps left out (#72).
+    const buildings = this.target
+      ? countedBuildings(yard.buildings.map((building) => building.type))
+      : yard.buildings.length;
     status.textContent =
       (this.target ? `${this.target.name}'s yard, read-only · ` : "") +
-      `${yard.buildings.length} buildings · ${yard.mushrooms.length} mushrooms · ` +
+      `${buildings} buildings · ${yard.mushrooms.length} mushrooms · ` +
       `plot ${yard.bounds.yardWidth} x ${yard.bounds.yardHeight} (expansion ${yard.expansionLevel}) · ` +
       `${this.frameCostMs.toFixed(1)} ms/frame` +
       (waiting > 0 ? ` · ${waiting} awaiting art` : "") +

@@ -53,6 +53,7 @@ import {
 } from "../../../services/base/attackCheckpointStore.js";
 import { ownerSaveConfig } from "../../../config/OwnerSaveConfig.js";
 import { requireOwnerSaveAllowed } from "../../../services/base/ownerSave.js";
+import { storedDamage } from "../../../services/base/storedDamage.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -240,6 +241,14 @@ const saveBase = async (
           userSave.siege = saveData.attackersiege;
         }
         break;
+
+      // A whole number, cut down, as Flash sent it: the column is an integer
+      // and Postgres would round 99.95 up to 100 (#72).
+      case SaveKeys.DAMAGE: {
+        const damage = storedDamage(value);
+        if (damage !== null) baseSave.damage = damage;
+        break;
+      }
 
       default:
         if (value) {

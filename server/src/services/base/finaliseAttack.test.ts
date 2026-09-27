@@ -185,7 +185,8 @@ describe("finaliseAbandonedAttack", () => {
 
     // The defender.
     expect(defender.attackid).toBe(0);
-    expect(defender.damage).toBe(expected.damage);
+    // Stored whole and cut down, as the attack's own save stores it (#72).
+    expect(defender.damage).toBe(Math.trunc(expected.damage));
     expect(defender.damage).toBeGreaterThan(0);
     expect(defender.destroyed).toBe(expected.destroyed!);
     expect(defender.buildinghealthdata).toEqual(expected.buildinghealthdata);

@@ -18,6 +18,7 @@ import {
 } from "@/game/combat/rules";
 import type { AttackEndReason, AttackSession, AttackSessionState } from "./AttackSession";
 import type { AttackTargetKind, RosterSource, SiegeInventory } from "./attackTarget";
+import { countedBuildings } from "./trapReveal";
 
 /**
  * The final `/base/save` of an attack, built from the session alone
@@ -389,7 +390,8 @@ export const summariseAttack = (session: AttackSession): AttackSummary => {
     ...describeOutcome(kind, name, state.damagePercent),
     damagePercent: state.damagePercent,
     buildingsDestroyed: state.buildingsDestroyed,
-    buildingsTotal: Object.keys(load.buildingdata ?? {}).length,
+    // Traps left out, as on the status line (#72).
+    buildingsTotal: countedBuildings(Object.values(load.buildingdata ?? {}).map((entry) => entry.t)),
     loot: { ...state.loot },
     monstersSent: state.creepsFlung,
     monstersLost: state.creepsKilled,

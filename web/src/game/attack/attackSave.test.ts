@@ -384,7 +384,8 @@ describe("the pieces", () => {
       tone: "lose",
       damagePercent: state.damagePercent,
       buildingsDestroyed: state.buildingsDestroyed,
-      buildingsTotal: 575,
+      // 575 buildings, 93 of them traps, which neither count leaves in (#72).
+      buildingsTotal: 482,
       monstersSent: state.creepsFlung,
       monstersLost: state.creepsKilled,
       elapsedSeconds: 6,

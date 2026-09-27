@@ -4,7 +4,7 @@ import type { BaseLoadResponse } from "@/api/types";
 import type { YardArtAtlas } from "@/game/yard/yardAtlas";
 import { YardRenderer } from "@/game/yard/YardRenderer";
 import { readYard } from "@/game/yard/yardModel";
-import { TrapReveal, concealTraps, isTrapType } from "./trapReveal";
+import { TrapReveal, concealTraps, countedBuildings, isTrapType } from "./trapReveal";
 
 /**
  * Hidden enemy traps (issue #66): which types are traps, hiding them through
@@ -55,6 +55,14 @@ describe("isTrapType", () => {
     expect(isTrapType(117)).toBe(true);
     expect(isTrapType(21)).toBe(false);
     expect(isTrapType(14)).toBe(false);
+  });
+});
+
+describe("countedBuildings (#72)", () => {
+  it("counts every building but the traps", () => {
+    // A town hall, a wall, a cannon tower, a Booby Trap and a Heavy Trap.
+    expect(countedBuildings([14, 17, 20, 24, 117])).toBe(3);
+    expect(countedBuildings([])).toBe(0);
   });
 });
 

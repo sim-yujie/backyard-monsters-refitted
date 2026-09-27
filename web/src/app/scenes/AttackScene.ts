@@ -6,7 +6,7 @@ import type { BaseLoadResponse } from "@/api/types";
 import { ATTACK_TAP_CLAIMS } from "@/game/attack/AttackInput";
 import { AttackSession, type AttackSessionState } from "@/game/attack/AttackSession";
 import { consumeAttackTarget, type AttackTarget } from "@/game/attack/attackTarget";
-import { concealTraps } from "@/game/attack/trapReveal";
+import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
 import { YardRenderer } from "@/game/yard/YardRenderer";
@@ -113,8 +113,8 @@ export class AttackScene implements Scene {
   private teardowns: Array<() => void> = [];
 
   private sinceUiTick = 0;
-  /** Buildings the attacker is not shown: the enemy's unfired traps (#66). */
-  private concealedCount = 0;
+  /** The buildings the counts cover, traps left out (#72). */
+  private buildingCount = 0;
   private fitZoom = 0.05;
   private inset = { top: 0, bottom: 0 };
 
@@ -296,7 +296,8 @@ export class AttackScene implements Scene {
     this.renderer.show(yard);
     // An attacker never sees a trap until it fires (`BTRAP.as:33-43`, #66);
     // the battle layer reveals each one as the engine reports it going off.
-    this.concealedCount = concealTraps(this.renderer, yard);
+    concealTraps(this.renderer, yard);
+    this.buildingCount = countedBuildings(yard.buildings.map((building) => building.type));
     this.startCamera(yard, context);
 
     const session = new AttackSession({ target: { ...target, load: response } });
@@ -583,7 +584,7 @@ export class AttackScene implements Scene {
     const sent = Object.values(state.remaining).reduce((sum, count) => sum + count, 0);
     status.textContent =
       `${target.name}'s ${target.kind === "wild" ? "camp" : "yard"} · ` +
-      `${yard.buildings.length - this.concealedCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
+      `${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
       `${state.creepsAlive} on the field · ${sent} left to send` +
       (state.declareWar ? " · Declare War" : "") +
       (this.selected ? ` · selected #${this.selected.id}` : "");

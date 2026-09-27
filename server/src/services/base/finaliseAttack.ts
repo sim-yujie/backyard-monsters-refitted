@@ -31,6 +31,7 @@ import {
 } from "./combat/abandonedAttack.js";
 import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpend.js";
 import { getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
+import { storedDamage } from "./storedDamage.js";
 import { catchUpArmyRow } from "../yard/armies.js";
 
 /**
@@ -189,7 +190,8 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
   const storedHealthData = defender.buildinghealthdata;
   buildingDataHandler(buildingDataWithout(defender.buildingdata, outcome.firedTraps), defender);
   defender.buildinghealthdata = outcome.buildinghealthdata;
-  defender.damage = outcome.damage;
+  // Whole and cut down, as the attack's own save stores it (#72).
+  defender.damage = storedDamage(outcome.damage) ?? defender.damage;
   if (outcome.destroyed !== undefined) defender.destroyed = outcome.destroyed;
   (defender as unknown as { attackreport: unknown }).attackreport = outcome.attackreport;
 
