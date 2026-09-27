@@ -336,8 +336,9 @@ order:
 
 Rule 5 is the real gate: **going from level N to N+1 requires academy level ≥ N.** With five academy
 levels the reachable maximum is level 6; in the Inferno, four academy levels cap monsters at level 5
-(`ACADEMY.as:88-92`). The server independently clamps any reported level to 6
-(`server/src/controllers/base/save/handlers/academyHandler.ts:24-26`).
+(`ACADEMY.as:88-92`). The server independently clamps any reported level to the monster's top
+level from the monster catalogue (5 for `C15`, 6 for the rest; 6 for an id the catalogue lacks)
+(`server/src/controllers/base/save/handlers/academyHandler.ts`).
 
 Rule 1 is per building instance. Two academies (Town Hall 5+) therefore give **two concurrent
 training slots**, one monster each.

@@ -72,7 +72,8 @@ export interface YardJob {
  * back. Phase 1 completes building countdowns and store buffs
  * (`server/src/services/yard/catchUpBuildings.ts`), Phase 2 unlocks
  * (`catchUpLocker.ts`), Phase 3 mushroom respawns (`catchUpMushrooms.ts`: the
- * display changes nothing, the `state` answer brings the new mushroom); each
+ * display changes nothing, the `state` answer brings the new mushroom), Phase 4
+ * trainings (`catchUpTraining.ts`); each
  * later work package adds its kinds here in the
  * same change that adds its catch-up step (`hatch` with `catchUpMonsters.ts`,
  * `repair` and `mushroom` with Phase 3, `train` and `research` with Phase 4,
@@ -85,6 +86,7 @@ export const SERVER_COMPLETED_KINDS: ReadonlySet<JobKind> = new Set<JobKind>([
   JobKind.STORE_ITEM,
   JobKind.UNLOCK,
   JobKind.MUSHROOM,
+  JobKind.TRAIN,
 ]);
 
 /** Monster Academy and Monster Lab type ids (`client/scripts/YARD_PROPS.as:2933`, `:6236`). */
@@ -380,11 +382,26 @@ export const lockerJobs = (
 export const trainingEndsAt = (time: number, savedAt: number): number =>
   time <= RELATIVE_TRAINING_LIMIT ? time + savedAt : time;
 
-/** Academy trainings (`academy[id].time`). */
+/**
+ * The Monster Academy training `monster`: the one whose `upg` names it
+ * (`client/scripts/BUILDING26.as:103-121`), else the first academy.
+ */
+const academyTraining = (
+  buildings: BuildingDataMap | null | undefined,
+  monster: string,
+): number | null => {
+  for (const [key, building] of Object.entries(buildings ?? {})) {
+    if (building?.t === ACADEMY_TYPE && building["upg"] === monster)
+      return typeof building.id === "number" ? building.id : Number(key);
+  }
+  return firstOfType(buildings, ACADEMY_TYPE);
+};
+
+/** Academy trainings (`academy[id].time`), each on the academy doing it. */
 export const trainingJobs = (
   academy: AcademyData | null | undefined,
   savedAt: number,
-  academyId: number | null = null,
+  buildings: BuildingDataMap | null | undefined = null,
 ): YardJob[] => {
   const jobs: YardJob[] = [];
   for (const [monster, entry] of Object.entries(academy ?? {})) {
@@ -394,7 +411,7 @@ export const trainingJobs = (
       kind: JobKind.TRAIN,
       key: `${JobKind.TRAIN}:${monster}`,
       id: monster,
-      buildingId: academyId,
+      buildingId: academyTraining(buildings, monster),
       endsAt: trainingEndsAt(time, savedAt),
       holdsWorker: false,
     });
@@ -563,7 +580,7 @@ export const yardJobs = (save: BaseLoadResponse): YardJob[] => {
   const jobs = [
     ...buildingJobs(buildings, savedAt, save.buildinghealthdata),
     ...lockerJobs(save.lockerdata, firstOfType(buildings, LOCKER_TYPE), save.storedata, savedAt),
-    ...trainingJobs(save.academy, savedAt, firstOfType(buildings, ACADEMY_TYPE)),
+    ...trainingJobs(save.academy, savedAt, buildings),
     ...researchJobs(buildings),
     ...hatcheryJobs(save.monsters, save.storedata, savedAt),
     ...championJobs(save.champion),

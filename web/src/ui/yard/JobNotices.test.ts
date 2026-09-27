@@ -85,6 +85,15 @@ describe("groupCompletedJobs", () => {
     expect(group!.items[0]!.buildingId).toBeNull();
   });
 
+  it("names a trained monster with its new level, pointing at its academy (#116)", () => {
+    const groups = groupCompletedJobs([
+      { kind: "train", id: "C2", t: null, at: 1, detail: { level: 4, academy: 12 } },
+      { kind: "train", id: "C5", t: null, at: 2, detail: { level: 2, academy: null } },
+    ]);
+    expect(noticeText(groups[0]!)).toBe("2 trainings finished: Octo-ooze 4, Eye-ra 2");
+    expect(groups[0]!.items.map((item) => item.buildingId)).toEqual([12, null]);
+  });
+
   it("reads a kind a later phase adds through its common keys", () => {
     const [group] = groupCompletedJobs([{ kind: "hatch", id: "C5", t: null, at: 1, detail: {} }]);
     expect(noticeText(group!)).toBe("Hatch finished: C5");

@@ -68,6 +68,7 @@ const NOUNS: Readonly<Record<string, readonly [string, string]>> = {
   build: ["build", "builds"],
   fortify: ["fortification", "fortifications"],
   unlock: ["unlock", "unlocks"],
+  train: ["training", "trainings"],
 };
 
 const capitalise = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
@@ -107,6 +108,16 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
   if (job.kind === "unlock") {
     const id = String(job.id);
     return { label: monsterEntry(id)?.name ?? id, buildingId: null };
+  }
+  if (job.kind === "train") {
+    // "Fang 4", pointing at the academy that trained it (`catchUpTraining.ts`).
+    const id = String(job.id);
+    const detail = job.detail as { level?: unknown; academy?: unknown };
+    const name = monsterEntry(id)?.name ?? id;
+    return {
+      label: typeof detail.level === "number" ? `${name} ${detail.level}` : name,
+      buildingId: typeof detail.academy === "number" ? detail.academy : null,
+    };
   }
   const buildingId = typeof job.id === "number" ? job.id : null;
   const name = job.t === null ? String(job.id) : typeName(job.t);

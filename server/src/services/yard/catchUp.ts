@@ -8,6 +8,7 @@ import { catchUpHarvesters, type CatchUpHarvestersSave } from "./catchUpHarveste
 import { catchUpLocker, type CatchUpLockerSave, type UnlockJob } from "./catchUpLocker.js";
 import { catchUpMonsters, type CatchUpMonstersSave, type MonsterJob } from "./catchUpMonsters.js";
 import { catchUpMushrooms } from "./catchUpMushrooms.js";
+import { catchUpTraining, type CatchUpTrainingSave, type TrainJob } from "./catchUpTraining.js";
 import { migrateYard, type MigrationSave, type RadioRemovedJob } from "./mapRoom.js";
 import type { MushroomYardSave } from "./mushrooms.js";
 
@@ -31,7 +32,7 @@ import type { MushroomYardSave } from "./mushrooms.js";
  * | 2 | `catchUpLocker.ts` — unlocks and the Locker Overdrive (runs first, see there) | 2 |
  * | 2 | `catchUpMonsters.ts` — HCC queue refund, hatchery production, housing cull (after the buildings) | 2 |
  * | 3 | `catchUpHarvesters.ts` — harvester buffers fill (nothing is banked); `catchUpRepairs.ts`, `catchUpMushrooms.ts` | 3 |
- * | 4 | `catchUpTraining.ts` | 4 |
+ * | 4 | `catchUpTraining.ts` — academy training (legacy relative `time` made absolute once) | 4 |
  * | 5 | `catchUpChampions.ts` | 5 |
  *
  * Buildings go first (after the locker, which only reads a store buff step 1
@@ -51,7 +52,13 @@ import type { MushroomYardSave } from "./mushrooms.js";
  * Every kind has `{ kind, id, t, at, detail }`. Later steps widen this union
  * with their own kinds (`unlock`, `hatch`, `train`, …).
  */
-export type CompletedJob = BuildingJob | StoreItemJob | UnlockJob | MonsterJob | RadioRemovedJob;
+export type CompletedJob =
+  | BuildingJob
+  | StoreItemJob
+  | UnlockJob
+  | MonsterJob
+  | RadioRemovedJob
+  | TrainJob;
 
 /** The slice of a save the catch-up reads and writes. */
 export interface CatchUpSave
@@ -60,7 +67,8 @@ export interface CatchUpSave
     CatchUpMonstersSave,
     CatchUpHarvestersSave,
     MigrationSave,
-    MushroomYardSave {
+    MushroomYardSave,
+    CatchUpTrainingSave {
   savetime?: number;
 }
 
@@ -87,6 +95,7 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
   completed.push(...catchUpMonsters(save, from, now, completed));
   catchUpHarvesters(save, from, now, completed);
   catchUpMushrooms(save, now);
+  completed.push(...catchUpTraining(save, from, now));
 
   save.savetime = now;
 

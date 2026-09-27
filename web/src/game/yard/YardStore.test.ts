@@ -220,9 +220,9 @@ describe("finishing jobs", () => {
       buildingdata: {
         ...baseBuildings(),
         "2": { X: 100, Y: 0, t: 20, id: 2, l: 2, cU: 5, hp: 10 },
+        // Lab research: the server does not complete it until WP4.3.
+        "3": { X: 200, Y: 0, t: 116, id: 3, l: 1, upg: "C5", upt: T0 + 5, upl: 1 },
       },
-      // Academy training: the server does not complete it until Phase 4.
-      academy: { C5: { level: 1, time: T0 + 5 } },
     });
     const api = stubApi();
     const { store, changes, time } = storeWith(save, api);

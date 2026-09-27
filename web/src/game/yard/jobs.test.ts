@@ -10,6 +10,7 @@ import {
   countdownProgress,
   hatcheryJobs,
   JobKind,
+  ACADEMY_TYPE,
   LAB_TYPE,
   lockerJobs,
   unlockEndsAt,
@@ -257,6 +258,19 @@ describe("monster timers", () => {
     expect(jobs.map((job) => [job.key, job.endsAt])).toEqual([["train:C2", SAVED + 99]]);
   });
 
+  it("points a training at the academy whose upg names it", () => {
+    const buildings: BuildingDataMap = {
+      "4": { X: 0, Y: 0, t: ACADEMY_TYPE, id: 4, l: 3 },
+      "7": { X: 0, Y: 0, t: ACADEMY_TYPE, id: 7, l: 3, upg: "C2" },
+    };
+    const academy = { C2: { level: 2, time: SAVED + 99 }, C5: { level: 1, time: SAVED + 9 } };
+    const jobs = trainingJobs(academy, SAVED, buildings);
+    expect(jobs.map((job) => [job.id, job.buildingId])).toEqual([
+      ["C2", 7],
+      ["C5", 4],
+    ]);
+  });
+
   it("ends lab research at the lab's upt", () => {
     const buildings: BuildingDataMap = {
       "9": { X: 0, Y: 0, t: LAB_TYPE, id: 9, upg: "C4", upt: SAVED + 70, upl: 2 },
@@ -366,6 +380,7 @@ describe("yardJobs", () => {
       "fortify",
       "mushroom",
       "storeItem",
+      "train",
       "unlock",
       "upgrade",
     ]);

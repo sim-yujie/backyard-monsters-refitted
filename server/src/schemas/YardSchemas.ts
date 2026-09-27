@@ -138,3 +138,19 @@ export const YardBuildSchema = z.object({
 
 /** `POST /bm/yard/build/cancel`: the building under construction to cancel. */
 export const YardCancelBuildSchema = z.object({ id: BuildingIdField });
+
+/**
+ * `POST /bm/yard/academy/train` and `/academy/instant`: a roster id such as
+ * `C5`, and optionally the Monster Academy to use (its building id; absent
+ * takes the first idle one high enough). Only the shape; the rest is the
+ * route's rule.
+ */
+export const YardAcademyTrainSchema = z.object({
+  monster: z.string().min(1).max(16),
+  academy: BuildingIdField.optional(),
+});
+
+/** `POST /bm/yard/academy/cancel` and `/academy/finish`: the training monster. */
+export const YardAcademyMonsterSchema = z.object({
+  monster: z.string().min(1).max(16),
+});
