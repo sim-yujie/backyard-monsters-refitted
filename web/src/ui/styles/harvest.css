@@ -18,6 +18,28 @@
   font-size: var(--text-sm);
 }
 
+/* A phone: the HUD's top row is exactly full with Workers, Monsters, the
+   screens and Sign out, and it has no third row to wrap into. So the button
+   leaves the bar and sits under the yard's Layout button (`.yard-toolbar`,
+   planner.css) as "Collect 152". */
+@media (width <= 620px) {
+  .hud__collect {
+    position: fixed;
+    z-index: var(--z-popup);
+    top: calc(var(--hud-height) + var(--space-4) + 48px);
+    left: var(--space-4);
+  }
+
+  .hud__collect-button {
+    padding: var(--space-2) var(--space-3);
+    box-shadow: 0 2px 6px rgb(0 0 0 / 35%);
+  }
+
+  .hud__collect-all {
+    display: none;
+  }
+}
+
 .hud__collect-button:hover {
   background: var(--colour-accent-hover);
 }

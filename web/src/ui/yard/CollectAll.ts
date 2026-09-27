@@ -123,7 +123,14 @@ export class CollectAll {
     this.element.hidden = waiting.total <= 0;
     if (waiting.total <= 0) return;
     const label = collectAllLabel(waiting.total);
-    if (this.button.textContent !== label) this.button.textContent = label;
+    if (this.button.textContent !== label) {
+      // "Collect all · 12.4K", with " all ·" in its own span so a phone can
+      // drop it and keep "Collect 12.4K" on the top row (`harvest.css`).
+      const short = document.createElement("span");
+      short.className = "hud__collect-all";
+      short.textContent = " all ·";
+      this.button.replaceChildren("Collect", short, ` ${formatCompact(waiting.total)}`);
+    }
     this.button.title = collectAllTitle(waiting.amounts);
     this.button.setAttribute("aria-label", `${label}. ${collectAllTitle(waiting.amounts)}`);
     this.button.disabled = store.isRunning(BankKey.ALL);
