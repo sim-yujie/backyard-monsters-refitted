@@ -1,6 +1,7 @@
 import { Container, Graphics, Sprite, type Renderer } from "pixi.js";
 import { YardBuildings } from "./YardBuildings";
 import { YardGround } from "./YardGround";
+import { YardJobBars } from "./YardJobBars";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
 import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
@@ -45,6 +46,8 @@ export class YardRenderer {
   private readonly blueprint = new BlueprintLayer(this.buildings.art);
   private readonly chrome = new Graphics();
   private readonly planner = new PlannerOverlay();
+  /** Progress bars over running builds and upgrades, own yard only (#139). */
+  private readonly jobBars = new YardJobBars((id) => this.jobBarAnchor(id));
 
   /**
    * Where the planner hangs its world-space decals: the tower range discs and
@@ -102,6 +105,7 @@ export class YardRenderer {
       this.chrome,
       this.planner.root,
       this.buildings.markers,
+      this.jobBars.root,
       this.buildings.labels,
     );
   }
@@ -139,6 +143,7 @@ export class YardRenderer {
     void this.ground.loadTiles();
 
     this.buildings.show(yard, atlas);
+    this.jobBars.show(yard);
     this.blueprint.show(yard);
     this.blueprint.setActive(this.currentView === YardView.BLUEPRINT);
 
@@ -158,7 +163,10 @@ export class YardRenderer {
   draw(visible: Rect, deltaSeconds = 0): void {
     // The blueprint has no culling and no animation, so a hidden isometric
     // yard costs nothing per frame.
-    if (this.currentView === YardView.ISO) this.buildings.draw(visible, deltaSeconds);
+    if (this.currentView === YardView.ISO) {
+      this.buildings.draw(visible, deltaSeconds);
+      this.jobBars.update();
+    }
 
     if (this.chromeDirty) {
       this.chromeDirty = false;
@@ -196,6 +204,7 @@ export class YardRenderer {
       this.mushroomLayer,
       this.buildings.tops,
       this.buildings.markers,
+      this.jobBars.root,
       this.buildings.labels,
     ]) {
       layer.visible = iso;
@@ -217,7 +226,24 @@ export class YardRenderer {
   setZoom(zoom: number): void {
     this.zoomLevel = zoom;
     this.blueprint.setZoom(zoom);
+    this.jobBars.setZoom(zoom);
     this.zoomWatcher?.(zoom);
+  }
+
+  /**
+   * Draws a progress bar with the time left over every building with a build
+   * or upgrade running, counted against `clock` (server unix seconds), or
+   * stops drawing them when passed null (#139). The yard scene passes its
+   * store's clock on the player's own yard; a visit and an attack never call
+   * this, and a foreign yard gets no bars regardless.
+   */
+  setJobClock(clock: (() => number) | null): void {
+    this.jobBars.setClock(clock);
+  }
+
+  /** The ids of the buildings showing a progress bar, in drawing order. */
+  get jobBarIds(): number[] {
+    return this.jobBars.ids;
   }
 
   /** The camera's zoom, as the scene last reported it. */
@@ -315,6 +341,7 @@ export class YardRenderer {
     const to = toIso(x, y);
     this.buildings.offsetBuilding(id, to.x - from.x, to.y - from.y);
     this.blueprint.place(id, x, y);
+    this.jobBars.reposition();
   }
 
   /**
@@ -354,6 +381,7 @@ export class YardRenderer {
     const hidden = this.stored.has(id) || this.concealed.has(id);
     this.buildings.setHidden(id, hidden);
     this.blueprint.setHidden(id, hidden);
+    this.jobBars.reposition();
   }
 
   /** Re-stacks the isometric draw list after a planner move is committed. */
@@ -417,6 +445,7 @@ export class YardRenderer {
     // What the viewer must not see stays unseen through the planner's exit.
     for (const id of this.concealed) this.applyHidden(id);
     this.buildings.resortByDepth();
+    this.jobBars.reposition();
   }
 
   /** A building's footprint corners where it is drawn now, in the active view. */
@@ -453,6 +482,7 @@ export class YardRenderer {
   destroy(): void {
     this.clearMushrooms();
     this.planner.destroy();
+    this.jobBars.destroy();
     this.blueprint.destroy();
     this.byId.clear();
     this.yard = null;
@@ -461,6 +491,15 @@ export class YardRenderer {
     this.atlas = null;
     this.ground.destroy();
     this.root.destroy({ children: true });
+  }
+
+  /** Where a building's progress bar goes: over its middle, at the top of its art. */
+  private jobBarAnchor(id: number): Point | null {
+    if (this.stored.has(id) || this.concealed.has(id)) return null;
+    const building = this.byId.get(id);
+    const crown = this.buildings.crownOf(id);
+    if (!building || crown === null) return null;
+    return { x: building.centreX + this.buildings.offsetOf(id).x, y: crown };
   }
 
   /** The isometric footprint diamond where a building is currently drawn. */

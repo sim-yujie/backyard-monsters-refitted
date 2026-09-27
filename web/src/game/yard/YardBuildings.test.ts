@@ -67,3 +67,23 @@ describe("YardBuildings.setAnimFrame", () => {
     buildings.destroy();
   });
 });
+
+describe("YardBuildings.crownOf", () => {
+  it("is the top of the building's picture, raised to its countdown badge, and moves with it (#139)", () => {
+    const response = yardResponse();
+    response.buildingdata!["2"] = { id: 2, t: 21, l: 1, X: 200, Y: 200, cU: 600 };
+    const yard = readYard(response);
+    const sniper = yard.buildings.find((one) => one.id === 2)!;
+
+    const buildings = new YardBuildings();
+    buildings.show(yard, fakeAtlas());
+    const crown = buildings.crownOf(2)!;
+    // The placeholder fills the footprint box; the badge stands above it.
+    expect(crown).toBeLessThan(sniper.box.y);
+
+    buildings.offsetBuilding(2, 0, -50);
+    expect(buildings.crownOf(2)).toBe(crown - 50);
+    expect(buildings.crownOf(99)).toBeNull();
+    buildings.destroy();
+  });
+});

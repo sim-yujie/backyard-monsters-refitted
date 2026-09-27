@@ -472,6 +472,9 @@ export class YardScene implements Scene {
       );
       this.refreshPlannerButton();
 
+      // Bars over running jobs are the own yard's alone (#139), on the
+      // store's server-corrected clock.
+      this.renderer.setJobClock(store ? () => store.now() : null);
       this.renderer.show(yard);
       // A visitor never sees another yard's traps (`BTRAP.as:33-43`, #66);
       // the player's own yard shows them, as build mode always did.

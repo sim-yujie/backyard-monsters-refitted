@@ -498,6 +498,22 @@ export class YardBuildings {
     view.animsPending = fresh.length > 0;
   }
 
+  /**
+   * The highest world y anything of a building is drawn at: its picture (or
+   * placeholder), any animation layer that has arrived, and its countdown
+   * badge. Where a bar over the building goes (#139). Offsets included.
+   */
+  crownOf(id: number): number | null {
+    const view = this.byId.get(id);
+    if (!view) return null;
+    let top = view.top.y;
+    for (const layer of view.anims) {
+      if (layer.resolved) top = Math.min(top, layer.sprite.y);
+    }
+    if (view.marker) top = Math.min(top, view.marker.y - view.marker.height);
+    return top;
+  }
+
   /** The offset a building is currently drawn at. */
   offsetOf(id: number): { x: number; y: number } {
     const view = this.byId.get(id);

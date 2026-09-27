@@ -214,6 +214,12 @@ extended with the monster jobs). When one reaches zero:
 The store also calls `state` when the tab becomes visible again (`visibilitychange`), so a player
 returning after hours sees the server's catch-up, not a stale prediction.
 
+On the player's own yard every running build or upgrade also shows a small progress bar with the
+time left just above the building (#139, `web/src/game/yard/YardJobBars.ts`), redrawn once a second
+from the same `countdownProgress` the building panel uses and rebuilt on every store change, so it
+goes when the job finishes. At small zoom the time text is hidden and the bar kept. Visits and
+attacks draw none.
+
 ### 2.5 Save format changes and migration
 
 Everything not listed keeps its current shape.
