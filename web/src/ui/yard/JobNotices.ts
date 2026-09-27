@@ -69,6 +69,7 @@ const NOUNS: Readonly<Record<string, readonly [string, string]>> = {
   fortify: ["fortification", "fortifications"],
   unlock: ["unlock", "unlocks"],
   train: ["training", "trainings"],
+  repair: ["repair", "repairs"],
 };
 
 const capitalise = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);

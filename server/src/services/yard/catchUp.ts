@@ -8,6 +8,7 @@ import { catchUpHarvesters, type CatchUpHarvestersSave } from "./catchUpHarveste
 import { catchUpLocker, type CatchUpLockerSave, type UnlockJob } from "./catchUpLocker.js";
 import { catchUpMonsters, type CatchUpMonstersSave, type MonsterJob } from "./catchUpMonsters.js";
 import { catchUpMushrooms } from "./catchUpMushrooms.js";
+import { catchUpRepairs, type RepairJob } from "./catchUpRepairs.js";
 import { catchUpTraining, type CatchUpTrainingSave, type TrainJob } from "./catchUpTraining.js";
 import { migrateYard, type MigrationSave, type RadioRemovedJob } from "./mapRoom.js";
 import type { MushroomYardSave } from "./mushrooms.js";
@@ -31,12 +32,14 @@ import type { MushroomYardSave } from "./mushrooms.js";
  * | 1 | `catchUpBuildings.ts` — countdowns, points, `flinger`/`catapult`, store buffs | 1 |
  * | 2 | `catchUpLocker.ts` — unlocks and the Locker Overdrive (runs first, see there) | 2 |
  * | 2 | `catchUpMonsters.ts` — HCC queue refund, hatchery production, housing cull (after the buildings) | 2 |
- * | 3 | `catchUpHarvesters.ts` — harvester buffers fill (nothing is banked); `catchUpRepairs.ts`, `catchUpMushrooms.ts` | 3 |
+ * | 3 | `catchUpRepairs.ts` — repairs heal; runs before the buildings, whose paused countdowns it restarts at the repair's end | 3 |
+ * | 3 | `catchUpHarvesters.ts` — harvester buffers fill (nothing is banked); `catchUpMushrooms.ts` | 3 |
  * | 4 | `catchUpTraining.ts` — academy training (legacy relative `time` made absolute once) | 4 |
  * | 5 | `catchUpChampions.ts` | 5 |
  *
  * Buildings go first (after the locker, which only reads a store buff step 1
- * may expire): a finished Housing upgrade changes what the hatcheries may
+ * may expire, and the repairs, which only unpause countdowns step 1 then
+ * advances): a finished Housing upgrade changes what the hatcheries may
  * fill. A later step that needs to split its window at a building completion
  * reads the `at` of the `build`/`upgrade` entries step 1 returned.
  *
@@ -58,7 +61,8 @@ export type CompletedJob =
   | UnlockJob
   | MonsterJob
   | RadioRemovedJob
-  | TrainJob;
+  | TrainJob
+  | RepairJob;
 
 /** The slice of a save the catch-up reads and writes. */
 export interface CatchUpSave
@@ -90,6 +94,7 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
   const completed: CompletedJob[] = [
     ...migrateYard(save, now),
     ...catchUpLocker(save, from, now),
+    ...catchUpRepairs(save, from, now),
     ...catchUpBuildings(save, from, now),
   ];
   completed.push(...catchUpMonsters(save, from, now, completed));

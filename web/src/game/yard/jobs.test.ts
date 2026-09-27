@@ -19,7 +19,6 @@ import {
   nextWorkerJob,
   predictCompletion,
   progressFraction,
-  repairEndsAt,
   researchJobs,
   savedAtOf,
   SERVER_COMPLETED_KINDS,
@@ -164,26 +163,25 @@ describe("countdownProgress (#136)", () => {
 });
 
 describe("repairs", () => {
-  it("heals at ceil(max / min(3600, repairTime)) per second", () => {
-    // 4000 health healed over at most an hour: 2 per second.
-    expect(repairEndsAt(1_000, 4_000, SAVED)).toBe(SAVED + 1_500);
-    // A short repairTime heals faster.
-    expect(repairEndsAt(1_000, 4_000, SAVED, 400)).toBe(SAVED + 300);
-  });
-
-  it("lists a repairing building with health below its maximum", () => {
+  it("lists a repairing building, ending at its own repairTime's rate", () => {
+    // Town Hall level 1: 4000 health (the combat table the server reads),
+    // repairTime 480 s, so ceil(4000 / 480) = 9 a second: 3000 left takes 334 s.
     const jobs = buildingJobs({ "1": { X: 0, Y: 0, t: 14, id: 1, rE: 1, hp: 1_000 } }, SAVED);
-    const max = maxHealth(14, 1)!;
     expect(only(jobs, JobKind.REPAIR)).toEqual([
       {
         kind: "repair",
         key: "repair:1",
         id: 1,
         buildingId: 1,
-        endsAt: repairEndsAt(1_000, max, SAVED),
+        endsAt: SAVED + 334,
         holdsWorker: false,
       },
     ]);
+  });
+
+  it("lists nothing for a damaged building that is not repairing", () => {
+    const jobs = buildingJobs({ "1": { X: 0, Y: 0, t: 14, id: 1, hp: 1_000 } }, SAVED);
+    expect(only(jobs, JobKind.REPAIR)).toEqual([]);
   });
 });
 
@@ -379,6 +377,7 @@ describe("yardJobs", () => {
       "build",
       "fortify",
       "mushroom",
+      "repair",
       "storeItem",
       "train",
       "unlock",

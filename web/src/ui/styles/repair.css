@@ -1,0 +1,34 @@
+/*
+ * Repairs (`docs/design/yard-buildings.md` §5.5): the building panel's repair
+ * block (`ui/yard/RepairBlock.ts`) and the post-attack banner
+ * (`ui/yard/DamageBanner.ts`). The block reuses the job block's bar; the bar
+ * here is the building's health, so it fills in the success colour and the
+ * heading's clock is the repair's own.
+ */
+
+.building-repair .building-panel__heading {
+  color: var(--colour-danger);
+}
+
+.building-repair[aria-label="Repairing"] .building-panel__heading {
+  color: var(--colour-success);
+}
+
+.building-repair__time {
+  font-weight: 700;
+}
+
+.building-repair__fill {
+  background: var(--colour-success);
+}
+
+.building-repair__health {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.damage-banner {
+  font-weight: 600;
+}

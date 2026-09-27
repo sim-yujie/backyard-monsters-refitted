@@ -20,6 +20,7 @@ import {
   yardLockerStartAction,
 } from "./locker.js";
 import { yardMushroomPickAction } from "./mushrooms.js";
+import { yardRepairAction, yardRepairInstantAction } from "./repair.js";
 import { yardShopBuyAction } from "./shopBuy.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { yardStateAction } from "./state.js";
@@ -63,4 +64,6 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "academy/cancel", controller: yardRoute(yardAcademyCancelAction) },
   { path: "academy/finish", controller: yardRoute(yardAcademyFinishAction) },
   { path: "academy/instant", controller: yardRoute(yardAcademyInstantAction) },
+  { path: "repair", controller: yardRoute(yardRepairAction) },
+  { path: "repair/instant", controller: yardRoute(yardRepairInstantAction) },
 ];

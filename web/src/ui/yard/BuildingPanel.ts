@@ -1,11 +1,13 @@
 import type { SpeedupItem } from "@/api/types";
 import type { YardRefusal } from "@/api/yard";
 import { buildActions } from "@/api/yardBuild";
+import { repairActions } from "@/api/yardRepair";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, WALL_TYPES } from "@/game/yard/buildingCosts";
 import { harvesterNow } from "@/game/yard/harvest";
 import { NEED_MORE_SILOS } from "@/game/yard/storage";
 import { progressFraction } from "@/game/yard/jobs";
+import { repairOffer, type RepairOffer } from "@/game/yard/repair";
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import { typeName } from "@/game/yard/planner/summary";
 import {
@@ -29,6 +31,7 @@ import {
   type UpgradeOffer,
 } from "./buildingActions";
 import { buildingInfo, type InfoValue } from "./buildingInfo";
+import { RepairBlock } from "./RepairBlock";
 import { ShinyButton } from "./ShinyButton";
 import { describeSeconds } from "./upgradeText";
 
@@ -138,6 +141,8 @@ export class BuildingPanel {
   /** Countdown rows in Details, refreshed once a second. */
   private countdowns: { node: HTMLElement; endsAt: number }[] = [];
   private jobRefs: JobRefs | null = null;
+  /** The repair block on show, updated once a second. */
+  private repairView: RepairBlock | null = null;
   /**
    * One Shiny button per building and action, kept across redraws so an
    * armed button survives the store's answers and the second's tick.
@@ -235,6 +240,14 @@ export class BuildingPanel {
       entry.node.textContent = formatCountdown(entry.endsAt - now);
     }
     const building = this.building;
+    if (building && this.yard && this.repairView) {
+      const store = this.yard.store;
+      const offer = repairOffer(building.id, store.save, store.credits, store.now());
+      if (!offer || !this.repairView.update(offer)) {
+        this.render();
+        return;
+      }
+    }
     const refs = this.jobRefs;
     if (!building || !refs || !this.yard) return;
     const job = jobOffer(building, this.yard.store);
@@ -306,6 +319,7 @@ export class BuildingPanel {
 
   private renderActions(building: YardBuilding): void {
     this.jobRefs = null;
+    this.repairView = null;
     this.pendingButtons = [];
     const used = new Set<string>();
     const blocks: HTMLElement[] = [];
@@ -313,6 +327,8 @@ export class BuildingPanel {
 
     if (yard) {
       const model = panelModel(building, yard.store);
+      const repair = repairOffer(building.id, yard.store.save, yard.store.credits, yard.store.now());
+      if (repair) blocks.push(this.repairBlock(building, repair, used));
       if (model.job) blocks.push(this.jobBlock(building, model.job, used));
       if (model.upgrade) blocks.push(this.upgradeBlock(building, model.upgrade, used));
       // A one-level building (Yard Planner, General Store) has no ladder to top out.
@@ -385,6 +401,22 @@ export class BuildingPanel {
       return button;
     }
     return null;
+  }
+
+  private repairBlock(building: YardBuilding, offer: RepairOffer, used: Set<string>): HTMLElement {
+    const view = new RepairBlock(
+      building.id,
+      offer,
+      {
+        shinyButton: (key, label, onSpend) => this.shinyButton(key, label, onSpend),
+        pending: (key, button) => this.pendingButtons.push({ key, button }),
+        repair: () => void this.runRepair(building.id),
+        repairNow: () => void this.runRepairNow(building.id),
+      },
+      used,
+    );
+    this.repairView = view;
+    return view.element;
   }
 
   private upgradeBlock(building: YardBuilding, offer: UpgradeOffer, used: Set<string>): HTMLElement {
@@ -693,6 +725,29 @@ export class BuildingPanel {
     this.report(id, result, (report) => {
       const refund = costAmounts(report.refund);
       return refund ? ["Upgrade cancelled. Got back ", refund, "."] : ["Upgrade cancelled."];
+    });
+  }
+
+  private async runRepair(id: number): Promise<void> {
+    const store = this.yard?.store;
+    if (!store) return;
+    const result = await repairActions(store).one(id);
+    this.report(id, result, () => {
+      const left = repairOffer(id, store.save, store.credits, store.now())?.damage.secondsLeft;
+      return [left ? `Repairing: back to full health in ${describeSeconds(left)}.` : "Repaired."];
+    });
+  }
+
+  private async runRepairNow(id: number): Promise<void> {
+    const store = this.yard?.store;
+    if (!store) return;
+    const result = await repairActions(store).now();
+    this.report(id, result, (report) => {
+      const count = report.repaired.length;
+      const what = count === 1 ? "Repaired" : `Repaired ${count} buildings`;
+      return report.credits > 0
+        ? [`${what} for `, resourceAmount("shiny", formatAmount(report.credits)), "."]
+        : [`${what}.`];
     });
   }
 

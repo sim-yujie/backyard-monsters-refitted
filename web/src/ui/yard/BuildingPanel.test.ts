@@ -291,3 +291,39 @@ describe("BuildingPanel: a building under construction (§5.3)", () => {
     }
   });
 });
+
+describe("BuildingPanel: a damaged building", () => {
+  it("offers a free Repair above the upgrade, and Repair now over every damaged building", () => {
+    // A Cannon Tower at half health and a snapper nobody is repairing.
+    const { element } = setup(
+      [HALL, building(2, 20, 4, { hp: 8_820 }), building(3, 1, 1, { hp: 100 })],
+      2,
+    );
+    const block = element.querySelector(".building-repair")!;
+    expect(block.querySelector(".building-panel__heading")?.textContent).toBe("Damaged");
+    expect(block.querySelector(".building-repair__bar")?.getAttribute("aria-valuetext")).toBe(
+      "8,820 of 17,640 health",
+    );
+    expect(block.querySelector<HTMLElement>(".building-repair__health")?.hidden).toBe(true);
+    expect(buttonNamed(element, "Repair")?.disabled).toBe(false);
+    expect(buttonNamed(element, "Repair all 2 now")).toBeDefined();
+    // The upgrade says why it waits.
+    expect(element.querySelector(".building-upgrade .building-panel__gate")?.textContent).toBe(
+      "Repair first.",
+    );
+  });
+
+  it("shows a running repair's countdown and no Repair button", () => {
+    const { element } = setup([HALL, building(2, 20, 4, { hp: 8_820, rE: 1 })], 2);
+    const block = element.querySelector(".building-repair")!;
+    expect(block.querySelector(".building-panel__heading")?.textContent).toBe("Repairing");
+    expect(block.querySelector(".building-repair__time")?.textContent).not.toBe("");
+    expect(block.querySelector(".building-repair__health")?.textContent).toBe("Healed to 8,820 / 17,640");
+    expect(buttons(element).some((one) => one.textContent === "Repair")).toBe(false);
+  });
+
+  it("draws no repair block for a building at full health", () => {
+    const { element } = setup([HALL, building(2, 20, 4)], 2);
+    expect(element.querySelector(".building-repair")).toBeNull();
+  });
+});

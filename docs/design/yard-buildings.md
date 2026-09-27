@@ -819,6 +819,16 @@ Housing building shows the cull that will follow before confirming. One confirma
 banner "Your yard was attacked: 14 buildings damaged [Repair all]" replaces the original popup.
 Clicks: repair everything 1.
 
+As built (#113): `repairTime` per type comes from its own generated table
+(`web/tools/gen-repair-times.mjs` → `server/src/game-data/repairTimes.ts` and
+`web/src/game/yard/repairTimeData.ts`). `catchUpRepairs.ts` runs before the buildings step: a
+repair that ends inside the window adds its paused seconds to the building's running countdown, so
+step 1 resumes the build or upgrade from the repair's end. The harvester step splits its window at
+the repair's end (old health before, full after); the monsters step reads the healed health for the
+whole window (at most an hour early). `FIX` prices every damaged building, repairing or not, as the
+original's Repair Now did after starting a repair on each. The building panel shows a repair block
+above the upgrade (Repair, free; Repair all N now, Shiny, free when every repair is ≤ 300 s).
+
 ### 5.6 Mushrooms (D14)
 
 - Catch-up respawns one mushroom per 17,280 s since `mushrooms.s`, at most 10 per catch-up and 20

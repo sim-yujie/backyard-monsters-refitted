@@ -10,6 +10,7 @@ import {
 } from "../base/economy/production.js";
 import { levelOf } from "../yardplanner/costs.js";
 import type { BuildingJob, StoreItemJob } from "./catchUpBuildings.js";
+import type { RepairJob } from "./catchUpRepairs.js";
 
 /**
  * Catch-up step 3: harvester buffers (`docs/design/yard-buildings.md` §2.3,
@@ -28,8 +29,12 @@ import type { BuildingJob, StoreItemJob } from "./catchUpBuildings.js";
  *   as it was. One that step 1 finished inside the window produces from the
  *   moment it finished, at its new level (the window is split there, §2.3).
  * - **Nothing below half health** (`:302`), and a damaged one cycles slower
- *   (`cycleSeconds`). The health the catch-up reads is the one it finds; a
- *   repair healing during the window is WP3.5's and is not replayed here.
+ *   (`cycleSeconds`). A repair the repairs step finished inside the window
+ *   splits it (`catchUpRepairs.ts`): up to the repair's end the harvester
+ *   works at the health it had at the start of the window, then at full
+ *   health. The original's health rose second by second in between, so this
+ *   undercounts a little, never over. A repair still running at `now` is read
+ *   at the health it has reached (the window is then under an hour).
  * - **Production Overdrive** (`POD`, twice the production for 12 hours,
  *   `client/scripts/STORE.as:2413-2418`) doubles each cycle's `produce` up to
  *   its `e`. Step 1 removes a `POD` whose `e` has passed, so its end comes from
@@ -125,6 +130,12 @@ const finishedAt = (completed: readonly unknown[], id: number): number | undefin
   return at;
 };
 
+/** The repair the repairs step finished on this building inside the window, if it did. */
+const repairOf = (completed: readonly unknown[], id: number): RepairJob | undefined =>
+  completed.find(
+    (job): job is RepairJob => (job as RepairJob)?.kind === "repair" && (job as RepairJob).id === id
+  );
+
 /**
  * Runs one harvester from `start` to `now`, overdriven until `podEnd`.
  * Returns the new buffer, or null when the harvester does not produce.
@@ -156,14 +167,39 @@ export const advanceHarvester = (
 };
 
 /**
+ * Runs one harvester across a repair that finished at `repair.at`, inside
+ * `start`..`now`: at the health it had before the repair up to then, at full
+ * health after. Returns null when it produced in neither part.
+ */
+const advanceAcrossRepair = (
+  save: CatchUpHarvestersSave,
+  key: string,
+  building: BuildingData,
+  start: number,
+  now: number,
+  podEnd: number | undefined,
+  repair: RepairJob
+): HarvesterBuffer | null => {
+  const damaged = repair.detail.from;
+  const before: CatchUpHarvestersSave = {
+    ...save,
+    buildinghealthdata: { ...(save.buildinghealthdata ?? {}), [String(building.id ?? key)]: damaged },
+  };
+  const first = advanceHarvester(before, key, { ...building, hp: damaged }, start, repair.at, podEnd);
+  const mid = first ? withBuffer(building, first) : building;
+  return advanceHarvester(save, key, mid, repair.at, now, podEnd) ?? first;
+};
+
+/**
  * Grows every harvester's buffer from `from` to `now`.
  *
  * @param save - The yard, mutated in place: `buildingdata` is replaced when a
  *   buffer changed.
  * @param from - The moment the stored buffers are measured from (`savetime`).
  * @param now - The moment to advance to.
- * @param completed - What steps 1 and 2 finished in this window, for the
- *   building completions that split it and the Production Overdrive's end.
+ * @param completed - What the earlier steps finished in this window, for the
+ *   building completions and repairs that split it and the Production
+ *   Overdrive's end.
  */
 export const catchUpHarvesters = (
   save: CatchUpHarvestersSave,
@@ -182,7 +218,11 @@ export const catchUpHarvesters = (
 
     const id = Number(building.id ?? key);
     const start = Math.min(now, Math.max(from, finishedAt(completed, id) ?? from));
-    const buffer = advanceHarvester(save, key, building, start, now, podEnd);
+    const repair = repairOf(completed, id);
+    const buffer =
+      repair && repair.at > start
+        ? advanceAcrossRepair(save, key, building, start, now, podEnd, repair)
+        : advanceHarvester(save, key, building, start, now, podEnd);
     if (!buffer) continue;
 
     const before = bufferOf(building);

@@ -9,6 +9,7 @@ import type {
 } from "@/api/types";
 import { maxHealth } from "./buildingArt";
 import { costOf, rowOf } from "./buildingCosts";
+import { damageOf } from "./repair";
 import { countdownOf, type YardBuilding, type YardCountdown } from "./yardModel";
 
 /**
@@ -72,12 +73,11 @@ export interface YardJob {
  * back. Phase 1 completes building countdowns and store buffs
  * (`server/src/services/yard/catchUpBuildings.ts`), Phase 2 unlocks
  * (`catchUpLocker.ts`), Phase 3 mushroom respawns (`catchUpMushrooms.ts`: the
- * display changes nothing, the `state` answer brings the new mushroom), Phase 4
- * trainings (`catchUpTraining.ts`); each
- * later work package adds its kinds here in the
- * same change that adds its catch-up step (`hatch` with `catchUpMonsters.ts`,
- * `repair` and `mushroom` with Phase 3, `train` and `research` with Phase 4,
- * `hunger` with Phase 5).
+ * display changes nothing, the `state` answer brings the new mushroom) and
+ * repairs (`catchUpRepairs.ts`), Phase 4 trainings (`catchUpTraining.ts`);
+ * each later work package adds its kinds here in the same change that adds
+ * its catch-up step (`hatch` with `catchUpMonsters.ts`, `research` with
+ * Phase 4, `hunger` with Phase 5).
  */
 export const SERVER_COMPLETED_KINDS: ReadonlySet<JobKind> = new Set<JobKind>([
   JobKind.BUILD,
@@ -87,6 +87,7 @@ export const SERVER_COMPLETED_KINDS: ReadonlySet<JobKind> = new Set<JobKind>([
   JobKind.UNLOCK,
   JobKind.MUSHROOM,
   JobKind.TRAIN,
+  JobKind.REPAIR,
 ]);
 
 /** Monster Academy and Monster Lab type ids (`client/scripts/YARD_PROPS.as:2933`, `:6236`). */
@@ -95,13 +96,6 @@ export const LAB_TYPE = 116;
 
 /** Twig Snapper to Goo Factory, the four harvesters. */
 const HARVESTER_TYPES: ReadonlySet<number> = new Set([1, 2, 3, 4]);
-
-/**
- * A repair heals `ceil(maxHealth / min(3600, repairTime))` per second
- * (`client/scripts/BFOUNDATION.as:1367-1370`), so no repair takes longer than
- * an hour.
- */
-export const REPAIR_CAP_SECONDS = 3_600;
 
 /**
  * An academy `time` at or below 162 hours is a legacy remainder relative to
@@ -133,25 +127,6 @@ export const savedAtOf = (save: Pick<BaseLoadResponse, "savetime" | "currenttime
   typeof save.savetime === "number" && save.savetime > 0 ? save.savetime : save.currenttime;
 
 /* ── Buildings ─────────────────────────────────────────────────────────── */
-
-/**
- * When a repairing building reaches full health.
- *
- * `repairTime` is the type's own stat at this level, which the client's
- * generated tables do not carry yet; without it the one-hour clamp is
- * assumed, which is exact for every building whose `repairTime` is an hour
- * or more and an upper bound for the rest.
- */
-export const repairEndsAt = (
-  hp: number,
-  max: number,
-  savedAt: number,
-  repairTime: number = REPAIR_CAP_SECONDS,
-): number => {
-  if (hp >= max) return savedAt;
-  const rate = Math.ceil(max / Math.max(1, Math.min(REPAIR_CAP_SECONDS, repairTime)));
-  return savedAt + Math.ceil((max - hp) / rate);
-};
 
 /**
  * When a harvester's buffer fills, or null when it is not filling.
@@ -220,20 +195,17 @@ export const buildingJobs = (
       });
     }
 
-    if (row.rE) {
-      const level = typeof row.l === "number" ? row.l : 1;
-      const max = maxHealth(row.t, level);
-      const hp = finite(row.hp) ?? finite(health?.[String(id)]);
-      if (max !== null && hp !== null && hp < max) {
-        jobs.push({
-          kind: JobKind.REPAIR,
-          key: `${JobKind.REPAIR}:${id}`,
-          id,
-          buildingId: id,
-          endsAt: repairEndsAt(hp, max, savedAt),
-          holdsWorker: false,
-        });
-      }
+    // The server's reading and rate (`repair.ts`): the type's own repairTime.
+    const damage = row.rE ? damageOf(row, { buildinghealthdata: health }, key) : null;
+    if (damage) {
+      jobs.push({
+        kind: JobKind.REPAIR,
+        key: `${JobKind.REPAIR}:${id}`,
+        id,
+        buildingId: id,
+        endsAt: savedAt + Math.ceil((damage.max - damage.health) / damage.rate),
+        holdsWorker: false,
+      });
     }
 
     const full = harvesterFullAt(row, savedAt, health);

@@ -154,3 +154,31 @@ export const YardAcademyTrainSchema = z.object({
 export const YardAcademyMonsterSchema = z.object({
   monster: z.string().min(1).max(16),
 });
+
+/**
+ * `POST /bm/yard/repair`: `ids`, a JSON array of building ids, or `all=1` for
+ * every damaged building (the post-attack banner's Repair all). Exactly one of
+ * the two, read as the bank route reads them.
+ */
+export const YardRepairSchema = z
+  .object({
+    ids: z
+      .string()
+      .transform((raw, ctx) => {
+        try {
+          return JSON.parse(raw) as unknown;
+        } catch {
+          ctx.addIssue({ code: "custom", message: "ids must be a JSON array of building ids" });
+          return z.NEVER;
+        }
+      })
+      .pipe(z.array(z.number().int().nonnegative()).min(1).max(1000))
+      .optional(),
+    all: z.coerce.number().int().min(1).max(1).optional(),
+  })
+  .refine((body) => (body.ids === undefined) !== (body.all === undefined), {
+    message: "Send either ids or all=1",
+  });
+
+/** `POST /bm/yard/repair/instant` takes no fields: it repairs everything damaged. */
+export const YardRepairInstantSchema = z.object({});

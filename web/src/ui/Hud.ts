@@ -5,6 +5,7 @@ import { MonstersTabId } from "./monsters/monstersTab";
 import { formatAmount, formatCompact } from "./format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
 import { CollectAll } from "./yard/CollectAll";
+import { DamageBanner } from "./yard/DamageBanner";
 import { JobNotices } from "./yard/JobNotices";
 
 /**
@@ -28,7 +29,9 @@ import { JobNotices } from "./yard/JobNotices";
  * to the job finishing soonest, and a toast for every job the server says
  * finished (`JobNotices`), a Monsters button that opens the Monsters
  * screen on its Unlock tab (design §4.1), and a Collect all button while the
- * harvesters hold something (`CollectAll`, design §5.1). The map, the attack screen and a
+ * harvesters hold something (`CollectAll`, design §5.1), and the post-attack
+ * "N buildings damaged [Repair all]" line in the notice dock (`DamageBanner`,
+ * design §5.5). The map, the attack screen and a
  * foreign yard have no binding and show the amounts alone.
  */
 
@@ -156,6 +159,8 @@ export class Hud {
   private yardBinding: YardUiBinding | null = null;
   private unsubscribeYard: (() => void) | null = null;
   private jobNotices: JobNotices | null = null;
+  /** The post-attack "N buildings damaged [Repair all]" line, while bound (§5.5). */
+  private damageBanner: DamageBanner | null = null;
   private readonly workers: HTMLElement;
   private readonly workersButton: HTMLButtonElement;
   private readonly workersName: HTMLElement;
@@ -353,9 +358,12 @@ export class Hud {
     this.unsubscribeYard?.();
     this.unsubscribeYard = null;
     this.jobNotices = null;
+    this.damageBanner?.destroy();
+    this.damageBanner = null;
     this.yardBinding = binding;
     if (binding) {
       this.jobNotices = new JobNotices(binding.notices, (id) => binding.scene.selectBuilding(id));
+      this.damageBanner = new DamageBanner(binding);
       this.unsubscribeYard = binding.store.subscribe((change) => this.onYardChange(change));
     }
     this.collectAll.bind(binding);
@@ -426,6 +434,7 @@ export class Hud {
       return;
     }
     this.collectAll.refresh();
+    this.damageBanner?.refresh();
     if (change.completed.length > 0) this.jobNotices?.show(change.completed);
     if (change.reason !== YardChangeReason.PENDING) this.syncYard();
   }
