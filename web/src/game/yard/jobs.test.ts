@@ -364,6 +364,7 @@ describe("yardJobs", () => {
     expect([...SERVER_COMPLETED_KINDS].sort()).toEqual([
       "build",
       "fortify",
+      "mushroom",
       "storeItem",
       "unlock",
       "upgrade",

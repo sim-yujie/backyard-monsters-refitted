@@ -12,6 +12,7 @@ import {
   yardLockerInstantAction,
   yardLockerStartAction,
 } from "./locker.js";
+import { yardMushroomPickAction } from "./mushrooms.js";
 import { yardShopBuyAction } from "./shopBuy.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { yardStateAction } from "./state.js";
@@ -47,4 +48,5 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "hatchery/remove", controller: yardRoute(yardHatcheryRemoveAction) },
   { path: "hatchery/finish", controller: yardRoute(yardHatcheryFinishAction) },
   { path: "bank", controller: yardRoute(yardBankAction) },
+  { path: "mushroom/pick", controller: yardRoute(yardMushroomPickAction) },
 ];

@@ -35,7 +35,6 @@ const yardResponse = (): BaseLoadResponse =>
 const fakeAtlas = (): YardArtAtlas => ({
   placeholder: Texture.WHITE,
   mushroom: Texture.WHITE,
-  mushroomGolden: Texture.WHITE,
   working: Texture.WHITE,
   destroy() {},
 });

@@ -401,8 +401,16 @@ export type BuildingDataMap = Record<string, BuildingData>;
 export type BuildingHealthData = Record<string, number>;
 
 /**
- * One yard mushroom. Positions are yard units, as for a building
- * (`client/scripts/MUSHROOMS.as:84`).
+ * One yard mushroom as the save stores it: `[frame, X, Y]`, the art frame
+ * (1 to 5) and the position in yard units, as for a building
+ * (`client/scripts/BASE.as:2749-2757` writes it, `MUSHROOMS.as:84-90` reads
+ * it). Mushrooms have no stored id; their place in the list is their id.
+ */
+export type MushroomEntry = [frame: number, x: number, y: number];
+
+/**
+ * An older object-shaped mushroom. Nothing writes these; the reader accepts
+ * them so a hand-written save still draws.
  */
 export interface MushroomData {
   X?: number;
@@ -415,7 +423,7 @@ export interface MushroomData {
 
 /** `mushrooms`: a list plus the timestamp of the last spawn. */
 export interface MushroomSave {
-  l?: MushroomData[];
+  l?: (MushroomEntry | MushroomData)[];
   s?: number;
 }
 
@@ -1088,6 +1096,19 @@ export interface SpeedupReport {
   remaining: number;
   /** The job as a `completed` entry when the speed-up finished it, else null. */
   finished: CompletedJob | null;
+}
+
+/** `POST /bm/yard/mushroom/pick` (`docs/design/yard-buildings.md` §5.6). */
+export interface MushroomPickReport {
+  /** The mushroom's place in the list it was picked from. */
+  id: number;
+  /** Where it stood, yard units. */
+  x: number;
+  y: number;
+  /** Golden: one in four, rolled by the server at pick time. */
+  golden: boolean;
+  /** Shiny it gave: 0, 3 or 8. */
+  shiny: number;
 }
 
 /** `POST /bm/yard/shop/buy`. */

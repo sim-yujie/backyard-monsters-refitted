@@ -22,10 +22,12 @@ const RESOLUTION = 2;
 export interface YardArtAtlas {
   /** A unit diamond, stretched to a footprint. */
   readonly placeholder: Texture;
-  /** An ordinary yard mushroom. */
+  /**
+   * A yard mushroom. One glyph for all of them: whether a mushroom is golden
+   * is rolled by the server when it is picked, and the original drew no
+   * difference either (`docs/design/yard-buildings.md` §5.6).
+   */
   readonly mushroom: Texture;
-  /** The one in four that is worth shiny. */
-  readonly mushroomGolden: Texture;
   /** The badge over a building with a countdown running. */
   readonly working: Texture;
   destroy(): void;
@@ -78,16 +80,14 @@ export const yardArtAtlas = (renderer: Renderer): YardArtAtlas => {
       .stroke({ width: 3, color: 0xffffff, cap: "round" }),
   );
 
-  const ordinary = mushroom(renderer, 0xd2694a);
-  const golden = mushroom(renderer, 0xf2c14e);
+  const cap = mushroom(renderer, 0xd2694a);
 
   return {
     placeholder,
-    mushroom: ordinary,
-    mushroomGolden: golden,
+    mushroom: cap,
     working,
     destroy() {
-      for (const texture of [placeholder, working, ordinary, golden]) texture.destroy(true);
+      for (const texture of [placeholder, working, cap]) texture.destroy(true);
     },
   };
 };

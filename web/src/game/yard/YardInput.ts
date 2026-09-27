@@ -1,5 +1,5 @@
 import type { Camera } from "@/game/Camera";
-import type { YardBuilding } from "./yardModel";
+import type { YardBuilding, YardMushroom } from "./yardModel";
 
 /**
  * Pointer and keyboard input for the yard, on top of what Camera already does.
@@ -25,6 +25,13 @@ export interface YardInputOptions {
   pick: (worldX: number, worldY: number) => YardBuilding | null;
   onHover: (building: YardBuilding | null) => void;
   onSelect: (building: YardBuilding | null) => void;
+  /**
+   * The mushroom at a world point, or null. With {@link onMushroom}, a click
+   * on a mushroom (and on no building) goes there instead of `onSelect`. Left
+   * out where mushrooms cannot be picked: somebody else's yard.
+   */
+  pickMushroom?: (worldX: number, worldY: number) => YardMushroom | null;
+  onMushroom?: (mushroom: YardMushroom) => void;
   /** Keyboard `+` and `-`; the argument is +1 or -1. */
   onZoomStep: (direction: number) => void;
   /** Keyboard `0`. */
@@ -63,12 +70,16 @@ export class YardInput {
 
   /** The building under a pointer event, or null. */
   buildingAt(event: { clientX: number; clientY: number }): YardBuilding | null {
+    const world = this.worldAt(event);
+    return this.options.pick(world.x, world.y);
+  }
+
+  private worldAt(event: { clientX: number; clientY: number }): { x: number; y: number } {
     const rect = this.options.canvas.getBoundingClientRect();
-    const world = this.options.camera.screenToWorld({
+    return this.options.camera.screenToWorld({
       x: event.clientX - rect.left,
       y: event.clientY - rect.top,
     });
-    return this.options.pick(world.x, world.y);
   }
 
   private readonly onPointerDown = (event: PointerEvent): void => {
@@ -86,8 +97,19 @@ export class YardInput {
     if (travelled > DRAG_SLOP) return;
 
     // A click on bare ground clears the selection, which is how the panel is
-    // dismissed without reaching for its close button.
-    this.options.onSelect(this.buildingAt(event));
+    // dismissed without reaching for its close button. A mushroom counts only
+    // where no building is: buildings are drawn over it.
+    const building = this.buildingAt(event);
+    const { pickMushroom, onMushroom } = this.options;
+    if (!building && pickMushroom && onMushroom) {
+      const world = this.worldAt(event);
+      const mushroom = pickMushroom(world.x, world.y);
+      if (mushroom) {
+        onMushroom(mushroom);
+        return;
+      }
+    }
+    this.options.onSelect(building);
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {

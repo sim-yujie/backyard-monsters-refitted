@@ -71,7 +71,9 @@ export interface YardJob {
  * server does not complete yet would show an outcome the next answer takes
  * back. Phase 1 completes building countdowns and store buffs
  * (`server/src/services/yard/catchUpBuildings.ts`), Phase 2 unlocks
- * (`catchUpLocker.ts`); each later work package adds its kinds here in the
+ * (`catchUpLocker.ts`), Phase 3 mushroom respawns (`catchUpMushrooms.ts`: the
+ * display changes nothing, the `state` answer brings the new mushroom); each
+ * later work package adds its kinds here in the
  * same change that adds its catch-up step (`hatch` with `catchUpMonsters.ts`,
  * `repair` and `mushroom` with Phase 3, `train` and `research` with Phase 4,
  * `hunger` with Phase 5).
@@ -82,6 +84,7 @@ export const SERVER_COMPLETED_KINDS: ReadonlySet<JobKind> = new Set<JobKind>([
   JobKind.FORTIFY,
   JobKind.STORE_ITEM,
   JobKind.UNLOCK,
+  JobKind.MUSHROOM,
 ]);
 
 /** Monster Academy and Monster Lab type ids (`client/scripts/YARD_PROPS.as:2933`, `:6236`). */

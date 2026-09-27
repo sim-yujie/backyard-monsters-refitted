@@ -1,5 +1,6 @@
 import { ApiError, NetworkError, post } from "./http";
 import type {
+  MushroomPickReport,
   ShopBuyReport,
   SpeedupItem,
   SpeedupReport,
@@ -19,6 +20,7 @@ import type {
  *   POST /api/:apiVersion/bm/yard/upgrade/instant   id
  *   POST /api/:apiVersion/bm/yard/speedup           id, item
  *   POST /api/:apiVersion/bm/yard/shop/buy          item
+ *   POST /api/:apiVersion/bm/yard/mushroom/pick     id, x, y
  *
  * The client names an action and the server does the rest: it loads the
  * save under a row lock, finishes whatever timers ended, checks the rules,
@@ -74,6 +76,19 @@ export const speedUp = (id: number, item: SpeedupItem): Promise<YardResponse<Spe
 export const shopBuy = (item: string): Promise<YardResponse<ShopBuyReport>> =>
   post<YardResponse<ShopBuyReport>>(`${YARD_PATH}/shop/buy`, { item });
 
+/**
+ * Picks a mushroom with a free worker: `id` is its place in `mushrooms.l`,
+ * `x`/`y` where the client saw it, so a stale list is refused rather than a
+ * different mushroom picked. The server rolls the reward (golden one in four:
+ * 3 or 8 Shiny). Refusals: 400 `badRequest`, `moved`, `workers`.
+ */
+export const pickMushroom = (
+  id: number,
+  x: number,
+  y: number,
+): Promise<YardResponse<MushroomPickReport>> =>
+  post<YardResponse<MushroomPickReport>>(`${YARD_PATH}/mushroom/pick`, { id, x, y });
+
 /** Every call above, so the store can be handed a stand-in under test. */
 export interface YardApi {
   state: typeof yardState;
@@ -82,6 +97,7 @@ export interface YardApi {
   instantUpgrade: typeof instantUpgrade;
   speedUp: typeof speedUp;
   shopBuy: typeof shopBuy;
+  pickMushroom: typeof pickMushroom;
 }
 
 export const yardApi: YardApi = {
@@ -91,6 +107,7 @@ export const yardApi: YardApi = {
   instantUpgrade,
   speedUp,
   shopBuy,
+  pickMushroom,
 };
 
 /**

@@ -86,6 +86,11 @@ export interface YardCountdown {
 }
 
 export interface YardMushroom {
+  /**
+   * Its place in `mushrooms.l`. Mushrooms have no stored id; the Flash client
+   * numbered them the same way on every load (`client/scripts/MUSHROOMS.as:89`),
+   * and the pick route takes this index (`POST /bm/yard/mushroom/pick`).
+   */
   readonly id: number;
   readonly x: number;
   readonly y: number;
@@ -100,8 +105,6 @@ export interface YardMushroom {
    * field for when that art is recovered.
    */
   readonly variant: number;
-  /** One in four is worth shiny when picked (`MUSHROOMS.as:223-224`). */
-  readonly golden: boolean;
 }
 
 /**
@@ -240,21 +243,22 @@ export const countdownOf = (
 };
 
 /**
- * Whether a mushroom is worth shiny when picked.
+ * One `mushrooms.l` entry as `[frame, X, Y]`: the save's own shape
+ * (`client/scripts/BASE.as:2749-2757`), or an older object `{ frame, X, Y }`.
  *
- * Decided from the position rather than stored
- * (`client/scripts/MUSHROOMS.as:223-224`: `new Rndm(int(x * y)).random() * 4 == 0`).
- * `Rndm` is the client's own generator and is not reproduced here, so this uses
- * the position parity as a stand-in: the same one-in-four proportion from the
- * same inputs, but not the same mushrooms the original would pick.
- *
- * Two caveats for whoever wires up picking. The original draws no visual
- * difference — a golden mushroom looks like any other until it is cleared — so
- * the renderer tinting them is this client's own affordance, not the game's.
- * And once picking exists the reward has to come from the server, at which
- * point this guess must go rather than be reconciled with it.
+ * Whether a mushroom is golden is not known until it is picked: the server
+ * rolls it then (`docs/design/yard-buildings.md` §5.6), and the original drew
+ * no difference either, so every mushroom looks the same.
  */
-const isGolden = (x: number, y: number): boolean => (Math.abs(Math.trunc(x * y)) & 3) === 0;
+const mushroomEntry = (
+  entry: unknown,
+): { frame: number; x: number; y: number } => {
+  if (Array.isArray(entry)) {
+    return { frame: Number(entry[0]), x: Number(entry[1]) || 0, y: Number(entry[2]) || 0 };
+  }
+  const object = (entry ?? {}) as { frame?: unknown; X?: unknown; Y?: unknown };
+  return { frame: Number(object.frame), x: Number(object.X) || 0, y: Number(object.Y) || 0 };
+};
 
 export interface ReadYardOptions {
   /**
@@ -336,18 +340,16 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
   buildings.sort((a, b) => a.depth - b.depth);
 
   const mushrooms: YardMushroom[] = (response.mushrooms?.l ?? []).map((entry, index) => {
-    const x = Number(entry.X) || 0;
-    const y = Number(entry.Y) || 0;
+    const { frame, x, y } = mushroomEntry(entry);
     const world = yardToWorld(bounds, x, y);
     return {
-      id: typeof entry.id === "number" ? entry.id : index,
+      id: index,
       x,
       y,
       worldX: world.x,
       worldY: world.y,
       depth: depthKey(world.x, world.y, index),
-      variant: typeof entry.frame === "number" ? entry.frame : 1,
-      golden: isGolden(x, y),
+      variant: Number.isInteger(frame) && frame >= 1 && frame <= 5 ? frame : 1,
     };
   });
 

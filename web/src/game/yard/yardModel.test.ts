@@ -205,18 +205,27 @@ describe("damage", () => {
 });
 
 describe("mushrooms", () => {
-  it("places them in world pixels and marks about a quarter golden", () => {
-    const list = Array.from({ length: 20 }, (_, i) => ({ X: i * 37 - 300, Y: i * 53 - 200, id: i }));
+  it("reads the save's [frame, X, Y] entries into world pixels, numbered by their place", () => {
+    const list = Array.from(
+      { length: 20 },
+      (_, i): [number, number, number] => [(i % 5) + 1, i * 37 - 300, i * 53 - 200],
+    );
     const withMushrooms = yardWith({}, { mushrooms: { l: list, s: 0 } });
 
     expect(withMushrooms.mushrooms).toHaveLength(20);
-    for (const mushroom of withMushrooms.mushrooms) {
+    withMushrooms.mushrooms.forEach((mushroom, index) => {
+      expect(mushroom.id).toBe(index);
+      expect([mushroom.x, mushroom.y]).toEqual([index * 37 - 300, index * 53 - 200]);
+      expect(mushroom.variant).toBe((index % 5) + 1);
       expect(mushroom.worldX).toBeGreaterThan(0);
       expect(mushroom.worldY).toBeGreaterThan(0);
-    }
+    });
+  });
 
-    const golden = withMushrooms.mushrooms.filter((one) => one.golden).length;
-    expect(golden).toBeGreaterThan(0);
-    expect(golden).toBeLessThan(withMushrooms.mushrooms.length);
+  it("still reads an object entry, and carries no golden guess", () => {
+    const yard = yardWith({}, { mushrooms: { l: [{ X: 40, Y: -20, frame: 9 }], s: 0 } });
+
+    expect(yard.mushrooms[0]).toMatchObject({ id: 0, x: 40, y: -20, variant: 1 });
+    expect(yard.mushrooms[0]).not.toHaveProperty("golden");
   });
 });

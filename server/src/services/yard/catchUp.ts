@@ -7,6 +7,8 @@ import {
 import { catchUpHarvesters, type CatchUpHarvestersSave } from "./catchUpHarvesters.js";
 import { catchUpLocker, type CatchUpLockerSave, type UnlockJob } from "./catchUpLocker.js";
 import { catchUpMonsters, type CatchUpMonstersSave, type MonsterJob } from "./catchUpMonsters.js";
+import { catchUpMushrooms } from "./catchUpMushrooms.js";
+import type { MushroomYardSave } from "./mushrooms.js";
 
 /**
  * `catchUpYard(save, now)`: advances a main yard from its `savetime` to `now`
@@ -54,7 +56,8 @@ export interface CatchUpSave
   extends CatchUpBuildingsSave,
     CatchUpLockerSave,
     CatchUpMonstersSave,
-    CatchUpHarvestersSave {
+    CatchUpHarvestersSave,
+    MushroomYardSave {
   savetime?: number;
 }
 
@@ -79,6 +82,7 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
   ];
   completed.push(...catchUpMonsters(save, from, now, completed));
   catchUpHarvesters(save, from, now, completed);
+  catchUpMushrooms(save, now);
 
   save.savetime = now;
 

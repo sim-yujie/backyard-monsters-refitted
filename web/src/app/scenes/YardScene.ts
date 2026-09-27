@@ -18,6 +18,7 @@ import {
   plannerEntryTooltip,
 } from "@/game/yard/planner/access";
 import { harvesterNow, type HarvestKey } from "@/game/yard/harvest";
+import { MushroomPicker, type MushroomPickView } from "@/game/yard/mushroomPick";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
 import {
   YardChangeReason,
@@ -35,6 +36,7 @@ import { monstersTabFor, type MonstersFocus, type MonstersTabId } from "@/ui/mon
 import { resourceAmount } from "@/ui/resourceIcon";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
 import { showBankResult } from "@/ui/yard/CollectAll";
+import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
 import { describeUpgradeReport } from "@/ui/yard/upgradeText";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { ZoomControl } from "@/ui/ZoomControl";
@@ -172,6 +174,8 @@ export class YardScene implements Scene {
   private panelDock: HTMLElement | null = null;
   /** The own yard's Monsters screen (§4.1), built the first time it opens. */
   private monsters: MonstersScreen | null = null;
+  /** Picks a tapped mushroom on the own yard (§5.6); null on a foreign one. */
+  private mushroomPicker: MushroomPicker | null = null;
 
   private yard: Yard | null = null;
   /** The save the yard was built from; on the own yard, always the store's. */
@@ -612,6 +616,12 @@ export class YardScene implements Scene {
       pick: (x, y) => this.renderer.pick(x, y),
       onHover: (building) => this.renderer.setHovered(building),
       onSelect: (building) => this.tap(building),
+      pickMushroom: (x, y) =>
+        this.mushroomPicker && !this.planner ? this.renderer.pickMushroom(x, y) : null,
+      onMushroom: (mushroom) => {
+        this.select(null);
+        void this.mushroomPicker?.pick(mushroom);
+      },
       onZoomStep: (direction) => this.zoomBy(Math.pow(ZOOM_STEP, direction)),
       onZoomReset: () => this.fitYard(),
       onCancel: () => this.select(null),
@@ -1042,10 +1052,24 @@ export class YardScene implements Scene {
       notices: this.notices,
     };
     this.hud?.bindYard(this.binding);
+    this.mushroomPicker = new MushroomPicker(store, this.mushroomView(context));
     return store;
   }
 
+  /** What a mushroom pick draws through: the renderer's shake, the notices, the popup. */
+  private mushroomView(context: SceneContext): MushroomPickView {
+    return {
+      shake: (spot) => this.renderer.shakeMushroom(spot, true),
+      stop: (spot) => this.renderer.shakeMushroom(spot, false),
+      golden: (shiny) => void showGoldenMushroom(context.overlay.modal, shiny),
+      ordinary: (quip) => this.notices.show("mushroom", quip, { level: "info", timeoutMs: 4000 }),
+      refused: (message) =>
+        this.notices.show("mushroom", message, { level: "error", timeoutMs: 5000 }),
+    };
+  }
+
   private dropStore(): void {
+    this.mushroomPicker = null;
     this.monsters?.destroy();
     this.monsters = null;
     this.unsubscribeStore?.();

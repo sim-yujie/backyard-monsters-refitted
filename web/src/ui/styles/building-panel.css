@@ -295,3 +295,21 @@
 .building-panel__details > .cell-facts {
   margin-top: var(--space-2);
 }
+
+/* The golden mushroom popup (`ui/yard/MushroomReward.ts`). */
+.mushroom-reward .panel__body {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  max-width: 360px;
+  text-align: center;
+}
+
+.mushroom-reward__art {
+  max-width: 100%;
+  height: auto;
+}
+
+.mushroom-reward__text {
+  margin: 0;
+}

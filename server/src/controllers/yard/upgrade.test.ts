@@ -63,7 +63,8 @@ const rowOf = (overrides: Row = {}): Row => ({
   lockerdata: {},
   academy: {},
   champion: [],
-  mushrooms: {},
+  // Grown just now, so the catch-up grows none and the row compares whole.
+  mushrooms: { l: [], s: getCurrentDateTime() },
   researchdata: {},
   outposts: [],
   ...overrides,

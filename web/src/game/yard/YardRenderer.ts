@@ -8,7 +8,8 @@ import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
 import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
 import { diamondCorners, type Corners, type Diamond } from "./planner/marquee";
 import { fromIso, toIso, yardFitRect, yardToWorld, type Point, type Rect } from "./YardGrid";
-import type { Yard, YardBuilding } from "./yardModel";
+import { mushroomAt, mushroomKey } from "./mushroomPick";
+import type { Yard, YardBuilding, YardMushroom } from "./yardModel";
 
 /**
  * The yard's scene graph: ground, mushrooms, buildings and the selection
@@ -43,6 +44,10 @@ export class YardRenderer {
   private readonly ground = new YardGround();
   private readonly buildings = new YardBuildings();
   private readonly mushroomLayer = new Container();
+  /** Each mushroom's sprite by `mushroomKey`, rebuilt with every `show`. */
+  private readonly mushroomSprites = new Map<string, Sprite>();
+  /** Mushrooms shaking for a pick, by `mushroomKey` (`BMUSHROOM.as:76-81`). */
+  private readonly shaking = new Set<string>();
   private readonly blueprint = new BlueprintLayer(this.buildings.art);
   private readonly chrome = new Graphics();
   private readonly planner = new PlannerOverlay();
@@ -148,10 +153,11 @@ export class YardRenderer {
     this.blueprint.setActive(this.currentView === YardView.BLUEPRINT);
 
     for (const mushroom of yard.mushrooms) {
-      const sprite = new Sprite(mushroom.golden ? atlas.mushroomGolden : atlas.mushroom);
+      const sprite = new Sprite(atlas.mushroom);
       sprite.anchor.set(0.5, 0.85);
       sprite.position.set(mushroom.worldX, mushroom.worldY);
       this.mushroomLayer.addChild(sprite);
+      this.mushroomSprites.set(mushroomKey(mushroom), sprite);
     }
   }
 
@@ -166,6 +172,7 @@ export class YardRenderer {
     if (this.currentView === YardView.ISO) {
       this.buildings.draw(visible, deltaSeconds);
       this.jobBars.update();
+      this.shakeMushrooms();
     }
 
     if (this.chromeDirty) {
@@ -479,6 +486,25 @@ export class YardRenderer {
     return this.buildings.pick(worldX, worldY);
   }
 
+  /** The mushroom under a world point in the isometric yard, or null. */
+  pickMushroom(worldX: number, worldY: number): YardMushroom | null {
+    if (this.currentView !== YardView.ISO || !this.yard) return null;
+    return mushroomAt(this.yard.mushrooms, worldX, worldY);
+  }
+
+  /** Starts or stops a mushroom's pick shake. Stopping puts it back where it stood. */
+  shakeMushroom(spot: Pick<YardMushroom, "x" | "y">, on: boolean): void {
+    const key = mushroomKey(spot);
+    if (on) {
+      this.shaking.add(key);
+      return;
+    }
+    this.shaking.delete(key);
+    const sprite = this.mushroomSprites.get(key);
+    const mushroom = this.yard?.mushrooms.find((one) => mushroomKey(one) === key);
+    if (sprite && mushroom) sprite.position.set(mushroom.worldX, mushroom.worldY);
+  }
+
   destroy(): void {
     this.clearMushrooms();
     this.planner.destroy();
@@ -539,6 +565,26 @@ export class YardRenderer {
 
   private clearMushrooms(): void {
     for (const child of this.mushroomLayer.removeChildren()) child.destroy();
+    this.mushroomSprites.clear();
+  }
+
+  /**
+   * One frame of every pick shake: the mushroom jumps up to 2 px from where
+   * it stands, as `BMUSHROOM.HasWorker` jittered it (`client/scripts/BMUSHROOM.as:76-81`).
+   * A shaking mushroom a redraw removed is simply not found.
+   */
+  private shakeMushrooms(): void {
+    if (this.shaking.size === 0 || !this.yard) return;
+    for (const mushroom of this.yard.mushrooms) {
+      const key = mushroomKey(mushroom);
+      if (!this.shaking.has(key)) continue;
+      this.mushroomSprites
+        .get(key)
+        ?.position.set(
+          mushroom.worldX - 2 + Math.random() * 4,
+          mushroom.worldY - 2 + Math.random() * 4,
+        );
+    }
   }
 
   /* ── A live battle: hit flash (#63) ─────────────────────────────────── */
