@@ -82,6 +82,21 @@ export const loadYardFor = (
   target ? api.viewBase(target.baseid, target.kind) : api.loadOwnYard();
 
 /**
+ * The pool the HUD shows over a yard: the yard's own when it is the player's,
+ * and the visitor's own, as the map read it, on a visit (#60). A visit's load
+ * carries the defender's resources, which are never shown as the player's.
+ * Null leaves the HUD at its placeholders.
+ */
+export const hudPoolFor = (
+  target: ViewTarget | null,
+  yard: { readonly resources: Resources; readonly credits?: number | undefined },
+): { resources: Resources; credits?: number | undefined } | null => {
+  if (!target) return { resources: yard.resources, credits: yard.credits };
+  const own = target.own;
+  return own?.resources ? { resources: own.resources, credits: own.credits } : null;
+};
+
+/**
  * The floor-plan glyph on the Layout control.
  *
  * Four rectangles rather than an icon font or a file: it is four elements, it
@@ -487,9 +502,10 @@ export class YardScene implements Scene {
       this.startCamera(yard, context);
 
       // A visit's response carries the defender's pool, not the player's, so
-      // the HUD is left at its placeholders rather than shown somebody else's
-      // twigs as if they were the player's own.
-      if (!target) this.hud?.setResources(yard.resources, yard.credits);
+      // the HUD shows the visitor's own, as the map read it (#60), and never
+      // somebody else's twigs as if they were the player's own.
+      const pool = hudPoolFor(target, yard);
+      if (pool) this.hud?.setResources(pool.resources, pool.credits);
       if (this.attackButton) this.attackButton.disabled = false;
       // Once the yard is drawn, because the first answer may redraw it.
       store?.start();

@@ -505,7 +505,18 @@ export class MapRoom2Scene implements Scene {
     const kind = targetKind(payload);
     if (!kind) return;
     const { attack, refusal } = this.attackFor(cell, payload);
-    setViewTarget({ baseid: payload.bid, kind, cell, name: targetName(payload), attack, refusal });
+    const own = this.ownSave
+      ? { resources: this.ownSave.resources ?? null, credits: this.ownSave.credits }
+      : undefined;
+    setViewTarget({
+      baseid: payload.bid,
+      kind,
+      cell,
+      name: targetName(payload),
+      attack,
+      refusal,
+      own,
+    });
     context.goTo(SceneName.YARD);
   }
 

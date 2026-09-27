@@ -146,6 +146,15 @@ export interface ViewTarget {
   readonly attack: AttackTarget | null;
   /** Why `attack` is null, for the status line; null when it is not. */
   readonly refusal: string | null;
+  /**
+   * The visitor's own pool and shiny, from the map's own-yard load, for the
+   * HUD (#60). The view load carries the defender's resources, so they
+   * cannot stand in. Absent or null when the map never read the own yard;
+   * the HUD then keeps its placeholders.
+   */
+  readonly own?:
+    | { readonly resources: Resources | null; readonly credits?: number | undefined }
+    | undefined;
 }
 
 let attackTarget: AttackTarget | null = null;
