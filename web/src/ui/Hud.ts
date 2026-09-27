@@ -1,7 +1,9 @@
-import type { Resources } from "@/api/types";
-import type { YardUiBinding } from "@/game/yard/YardStore";
+import type { ResourceCaps, Resources } from "@/api/types";
+import { nextWorkerJob } from "@/game/yard/jobs";
+import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount, formatCompact } from "./format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
+import { JobNotices } from "./yard/JobNotices";
 
 /**
  * The persistent top bar: resource readouts on the left, a scene switcher on
@@ -16,24 +18,59 @@ import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from 
  * screen reader, and in a small bubble on a tap for a finger, which has no
  * hover. A change of amount floats its difference beside the readout for a
  * moment, so a 5M bomb out of 11B is still seen to cost something.
+ *
+ * On the player's own yard the scene hands over a binding (`bindYard`), and
+ * the bar adds what only that yard knows (issue #100, design §3.1): each
+ * resource's storage cap as "amount / cap" with a thin fill bar that turns
+ * amber when the silo is full, a Workers control ("free / total") that goes
+ * to the job finishing soonest, and a toast for every job the server says
+ * finished (`JobNotices`). The map, the attack screen and a foreign yard have
+ * no binding and show the amounts alone.
  */
 
 /**
  * How much the bar shows, most first. {@link Hud} takes the first level at
  * which the readouts fit beside the scene switcher, measured again whenever
- * an amount or the window's width changes.
+ * an amount, a cap or the window's width changes.
  */
 export const HudFit = {
-  /** Brand and every amount in full. */
+  /** Brand, every amount in full, and the caps beside them. */
   FULL: "full",
-  /** Amounts in full; the brand gives its room to them. */
+  /** The brand gives its room to the readouts. */
   NO_BRAND: "no-brand",
+  /** Caps leave the text for the tooltip and the bubble; the fill bars stay. */
+  NO_CAPS: "no-caps",
   /** Short amounts ("15.0M"): the phone fallback. The tap bubble stays exact. */
   COMPACT: "compact",
 } as const;
 export type HudFit = (typeof HudFit)[keyof typeof HudFit];
 
-const FIT_ORDER: readonly HudFit[] = [HudFit.FULL, HudFit.NO_BRAND, HudFit.COMPACT];
+const FIT_ORDER: readonly HudFit[] = [HudFit.FULL, HudFit.NO_BRAND, HudFit.NO_CAPS, HudFit.COMPACT];
+
+/** What a full silo's readout says on hover and in its bubble (design §3.1). */
+export const FULL_NOTE = "Full: new income is lost. Build or upgrade Storage Silos.";
+
+/** The worker art: the orange builder with the hammer and the hard hat. */
+const WORKER_ICON_URL = "/assets/archived/worker.v1.png";
+
+/** How full a silo is: the fill bar's share, and whether new income is lost. */
+export interface CapState {
+  /** 0 to 1. */
+  readonly fraction: number;
+  readonly full: boolean;
+}
+
+/**
+ * A readout's fill against its cap, or null when there is nothing to draw: no
+ * cap known (the map, a foreign yard, a yard before its first `state`
+ * answer) or no amount yet. Full at the cap, not only over it: at the cap the
+ * next twig harvested is already lost.
+ */
+export const capState = (amount: number | undefined, cap: number | undefined): CapState | null => {
+  if (amount === undefined || cap === undefined || !(cap > 0)) return null;
+  const whole = Math.floor(amount);
+  return { fraction: Math.min(1, Math.max(0, whole / cap)), full: whole >= cap };
+};
 
 export interface HudSceneOption {
   id: string;
@@ -65,15 +102,38 @@ export const formatDelta = (delta: number): string =>
 /** "11,158,040,000": an amount in full, the same in every locale (`formatAmount`). */
 export const formatExact = (amount: number): string => formatAmount(amount);
 
-/** "Twigs: 11,158,040,000", the readout's tooltip and accessible name. */
-export const exactLabel = (key: ResourceKey, amount: number | undefined): string =>
-  `${RESOURCE_NAMES[key]}: ${amount === undefined ? "not known yet" : formatExact(amount)}`;
+/**
+ * "Twigs: 11,158,040,000", the readout's tooltip and accessible name; with a
+ * cap, "Twigs: 15,000,000 of 23,050,000".
+ */
+export const exactLabel = (key: ResourceKey, amount: number | undefined, cap?: number): string => {
+  const name = RESOURCE_NAMES[key];
+  if (amount === undefined) return `${name}: not known yet`;
+  return cap === undefined
+    ? `${name}: ${formatExact(amount)}`
+    : `${name}: ${formatExact(amount)} of ${formatExact(cap)}`;
+};
+
+/** "2 / 5" free of total, and the Workers control's tooltip. */
+export const workersText = (free: number, total: number): { value: string; label: string } => ({
+  value: `${free} / ${total}`,
+  label:
+    free >= total
+      ? `Workers: all ${total} free.`
+      : `Workers: ${free === 0 ? "none" : free} of ${total} free. Click to go to the job that finishes soonest.`,
+});
 
 interface Readout {
   readonly key: ResourceKey;
   readonly button: HTMLButtonElement;
   readonly value: HTMLElement;
+  /** " / 23,050,000"; empty without a cap. */
+  readonly capText: HTMLElement;
+  /** The fill bar's track and fill; hidden without a cap. */
+  readonly bar: HTMLElement;
+  readonly fill: HTMLElement;
   amount: number | undefined;
+  cap: number | undefined;
 }
 
 export class Hud {
@@ -87,6 +147,12 @@ export class Hud {
   private bubbleTimer: number | undefined;
   private readonly floats = new Set<HTMLElement>();
   private yardBinding: YardUiBinding | null = null;
+  private unsubscribeYard: (() => void) | null = null;
+  private jobNotices: JobNotices | null = null;
+  private readonly workers: HTMLLIElement;
+  private readonly workersButton: HTMLButtonElement;
+  private readonly workersName: HTMLElement;
+  private readonly workersValue: HTMLElement;
   private fitted: HudFit = HudFit.FULL;
 
   constructor(options: HudOptions) {
@@ -116,15 +182,45 @@ export class Hud {
       const amount = resourceAmount(key, "—", { decorative: true });
       const value = amount.querySelector<HTMLElement>(".res-amount__value")!;
       value.classList.add("hud__resource-value");
-      button.append(amount);
+      const capText = document.createElement("span");
+      capText.className = "hud__resource-cap";
+      const bar = document.createElement("span");
+      bar.className = "hud__cap-bar";
+      bar.setAttribute("aria-hidden", "true");
+      bar.hidden = true;
+      const fill = document.createElement("span");
+      fill.className = "hud__cap-fill";
+      bar.append(fill);
+      button.append(amount, capText, bar);
       button.addEventListener("click", () => this.toggleExact(key));
 
       item.append(button);
       resources.append(item);
-      const readout: Readout = { key, button, value, amount: undefined };
+      const readout: Readout = { key, button, value, capText, bar, fill, amount: undefined, cap: undefined };
       this.readouts.set(key, readout);
       this.label(readout);
     }
+
+    // Workers: only on the player's own yard, so hidden until a binding comes.
+    this.workers = document.createElement("li");
+    this.workers.className = "hud__resource hud__workers";
+    this.workers.hidden = true;
+    this.workersButton = document.createElement("button");
+    this.workersButton.type = "button";
+    this.workersButton.className = "hud__resource-button hud__workers-button";
+    const workerIcon = document.createElement("span");
+    workerIcon.className = "hud__workers-icon";
+    workerIcon.setAttribute("aria-hidden", "true");
+    workerIcon.style.backgroundImage = `url("${WORKER_ICON_URL}")`;
+    this.workersName = document.createElement("span");
+    this.workersName.className = "hud__workers-name";
+    this.workersName.textContent = "Workers";
+    this.workersValue = document.createElement("span");
+    this.workersValue.className = "hud__resource-value";
+    this.workersButton.append(workerIcon, this.workersName, this.workersValue);
+    this.workersButton.addEventListener("click", () => this.goToNextJob());
+    this.workers.append(this.workersButton);
+    resources.append(this.workers);
 
     const spacer = document.createElement("div");
     spacer.className = "hud__spacer";
@@ -193,17 +289,30 @@ export class Hud {
   /**
    * The player's own yard, while one is open: its `YardStore`, the scene's
    * hooks and its notice dock (`YardStore.ts`, "Hooks for the UI work
-   * packages"). Null on any other screen and on a foreign yard. Held for the
-   * cap bars, the Workers control and the job notices (WP1.6); nothing reads
-   * it yet.
+   * packages"). Null on any other screen and on a foreign yard. It gives the
+   * bar its caps, the Workers control and the job notices.
    */
   get yard(): YardUiBinding | null {
     return this.yardBinding;
   }
 
-  /** Hands the HUD the own yard's binding, or takes it away with null. */
+  /**
+   * Hands the HUD the own yard's binding, or takes it away with null.
+   *
+   * The amounts still come through {@link setResources}, which the scene
+   * calls on every store change; the HUD's own subscription reads what only
+   * the store has — caps, workers, the `completed` list — after it.
+   */
   bindYard(binding: YardUiBinding | null): void {
+    this.unsubscribeYard?.();
+    this.unsubscribeYard = null;
+    this.jobNotices = null;
     this.yardBinding = binding;
+    if (binding) {
+      this.jobNotices = new JobNotices(binding.notices, (id) => binding.scene.selectBuilding(id));
+      this.unsubscribeYard = binding.store.subscribe((change) => this.onYardChange(change));
+    }
+    this.syncYard();
   }
 
   /** The amount a readout is showing, or undefined before the first. */
@@ -226,6 +335,7 @@ export class Hud {
   }
 
   destroy(): void {
+    this.bindYard(null);
     window.removeEventListener("resize", this.onResize);
     this.hideExact();
     for (const float of this.floats) float.remove();
@@ -248,11 +358,59 @@ export class Hud {
       : null;
   }
 
-  /** The readout's visible amount, spelled for the current fit. */
+  /** The readout's visible amount, cap and fill bar, spelled for the current fit. */
   private render(readout: Readout): void {
     if (readout.amount === undefined) return;
     readout.value.textContent =
       this.fitted === HudFit.COMPACT ? formatCompact(readout.amount) : formatAmount(readout.amount);
+    const showCap =
+      readout.cap !== undefined && (this.fitted === HudFit.FULL || this.fitted === HudFit.NO_BRAND);
+    readout.capText.textContent = showCap ? ` / ${formatAmount(readout.cap)}` : "";
+    const state = capState(readout.amount, readout.cap);
+    readout.bar.hidden = state === null;
+    readout.fill.style.width = state === null ? "" : `${+(state.fraction * 100).toFixed(2)}%`;
+    readout.button.classList.toggle("hud__resource-button--full", state?.full === true);
+  }
+
+  /* ── The own yard: caps, workers, job notices ──────────────────────── */
+
+  private onYardChange(change: YardChange): void {
+    if (change.completed.length > 0) this.jobNotices?.show(change.completed);
+    if (change.reason !== YardChangeReason.PENDING) this.syncYard();
+  }
+
+  /** Reads the caps and the workers from the bound store, or clears them. */
+  private syncYard(): void {
+    const store = this.yardBinding?.store ?? null;
+    const caps: ResourceCaps | null = store?.caps ?? null;
+    for (const key of RESOURCE_KEYS) {
+      const readout = this.readouts.get(key);
+      if (!readout) continue;
+      readout.cap = caps?.[key];
+      this.render(readout);
+      this.label(readout);
+      if (this.bubbleFor === key) this.fillExact(readout);
+    }
+
+    this.workers.hidden = store === null;
+    if (store) {
+      const { total, busy } = store.workers;
+      const free = Math.max(0, total - busy);
+      const text = workersText(free, total);
+      this.workersValue.textContent = text.value;
+      this.workersButton.title = text.label;
+      this.workersButton.setAttribute("aria-label", text.label);
+      this.workersButton.setAttribute("aria-disabled", String(free >= total));
+    }
+    this.fit();
+  }
+
+  /** The Workers control's click: the building of the job that ends soonest. */
+  private goToNextJob(): void {
+    const binding = this.yardBinding;
+    if (!binding) return;
+    const job = nextWorkerJob(binding.store.jobs());
+    if (job?.buildingId != null) binding.scene.selectBuilding(job.buildingId);
   }
 
   private applyFit(level: HudFit): void {
@@ -260,14 +418,17 @@ export class Hud {
     this.fitted = level;
     this.element.dataset["fit"] = level;
     for (const readout of this.readouts.values()) this.render(readout);
+    // The icon says "workers" once the bar is short of room.
+    this.workersName.hidden = level === HudFit.NO_CAPS || level === HudFit.COMPACT;
   }
 
   private readonly onResize = (): void => this.fit();
 
   private label(readout: Readout): void {
-    const text = exactLabel(readout.key, readout.amount);
-    readout.button.title = text;
-    readout.button.setAttribute("aria-label", text);
+    const text = exactLabel(readout.key, readout.amount, readout.cap);
+    const full = capState(readout.amount, readout.cap)?.full === true;
+    readout.button.title = full ? `${text}\n${FULL_NOTE}` : text;
+    readout.button.setAttribute("aria-label", full ? `${text}. ${FULL_NOTE}` : text);
   }
 
   /**
@@ -324,13 +485,21 @@ export class Hud {
   }
 
   private fillExact(readout: Readout): void {
-    this.bubble?.replaceChildren(
-      resourceAmount(
-        readout.key,
-        readout.amount === undefined ? "Not known yet" : formatExact(readout.amount),
-        { className: "hud__exact-amount" },
-      ),
-    );
+    if (!this.bubble) return;
+    const { amount, cap } = readout;
+    const text =
+      amount === undefined
+        ? "Not known yet"
+        : cap === undefined
+          ? formatExact(amount)
+          : `${formatExact(amount)} / ${formatExact(cap)}`;
+    this.bubble.replaceChildren(resourceAmount(readout.key, text, { className: "hud__exact-amount" }));
+    if (capState(amount, cap)?.full) {
+      const note = document.createElement("p");
+      note.className = "hud__exact-note";
+      note.textContent = FULL_NOTE;
+      this.bubble.append(note);
+    }
   }
 
   private placeExact(readout: Readout, bubble: HTMLElement): void {

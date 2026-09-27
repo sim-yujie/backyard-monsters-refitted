@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { exactLabel, formatDelta, Hud } from "./Hud";
+import type { ResourceCaps } from "@/api/types";
+import type { YardJob } from "@/game/yard/jobs";
+import type { YardChange, YardListener, YardStore, YardUiBinding } from "@/game/yard/YardStore";
+import { capState, exactLabel, formatDelta, FULL_NOTE, Hud, workersText } from "./Hud";
+import { Notices } from "./maproom/Notices";
 import { spokenText } from "./resourceIcon";
 
 /**
@@ -30,7 +34,7 @@ describe("the HUD", () => {
   it("shows each resource as its icon and the amount in full, with the word kept for hover and screen readers", () => {
     hud.setResources({ r1: 11_163_050_000, r2: 2_500, r3: 0, r4: 999 }, 42);
     expect(hud.element.textContent).not.toMatch(/twigs|pebbles|putty|goo|shiny/i);
-    const readouts = [...hud.element.querySelectorAll<HTMLButtonElement>(".hud__resource-button")];
+    const readouts = [...hud.element.querySelectorAll<HTMLButtonElement>(".hud__resource-button[data-resource]")];
     expect(readouts.map((one) => one.textContent)).toEqual(["11,163,050,000", "2,500", "0", "999", "42"]);
     expect(readouts.map((one) => one.querySelectorAll(".res-icon").length)).toEqual([1, 1, 1, 1, 1]);
     // The button's own name carries the word and the exact amount; the icon is
@@ -171,5 +175,219 @@ describe("the HUD's spellings", () => {
   it("writes the exact amount with thousands separators, whole units only", () => {
     expect(exactLabel("r1", 11_158_040_000.7)).toBe("Twigs: 11,158,040,000");
     expect(exactLabel("r4", undefined)).toBe("Goo: not known yet");
+  });
+});
+
+/**
+ * The own yard (#100): caps and fill bars, the Workers control and the job
+ * notices, from a store stand-in that holds just what the HUD reads.
+ */
+describe("the HUD on the player's own yard", () => {
+  interface FakeStore {
+    caps: ResourceCaps | null;
+    workers: { total: number; busy: number };
+    jobList: YardJob[];
+    listeners: Set<YardListener>;
+    emit(change: Partial<YardChange>): void;
+  }
+
+  let hud: Hud;
+  let notices: Notices;
+  let store: FakeStore;
+  let binding: YardUiBinding;
+  let selectBuilding: ReturnType<typeof vi.fn<(id: number) => void>>;
+
+  const job = (key: string, buildingId: number, endsAt: number): YardJob => ({
+    kind: "upgrade",
+    key,
+    id: buildingId,
+    buildingId,
+    endsAt,
+    holdsWorker: true,
+  });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.replaceChildren();
+    hud = new Hud({ scenes: [{ id: "yard", label: "Yard" }], onSceneSelect: () => {} }).mount(document.body);
+    notices = new Notices().mount(document.body);
+    selectBuilding = vi.fn<(id: number) => void>();
+    const listeners = new Set<YardListener>();
+    store = {
+      caps: { r1: 23_050_000, r2: 23_050_000, r3: 23_050_000, r4: 23_050_000 },
+      workers: { total: 5, busy: 2 },
+      jobList: [job("upgrade:7", 7, 500), job("upgrade:3", 3, 900)],
+      listeners,
+      emit: (change) => {
+        for (const listener of [...listeners]) {
+          listener({ reason: "refresh", completed: [], predicted: [], ...change });
+        }
+      },
+    };
+    const fake = {
+      get caps() {
+        return store.caps;
+      },
+      get workers() {
+        return store.workers;
+      },
+      jobs: () => store.jobList,
+      subscribe: (listener: YardListener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    };
+    binding = { store: fake as unknown as YardStore, scene: { selectBuilding }, notices };
+  });
+
+  afterEach(() => {
+    hud.destroy();
+    notices.destroy();
+    vi.useRealTimers();
+  });
+
+  const button = (key: string): HTMLButtonElement =>
+    hud.element.querySelector<HTMLButtonElement>(`.hud__resource-button[data-resource="${key}"]`)!;
+  const bar = (key: string): HTMLElement => button(key).querySelector<HTMLElement>(".hud__cap-bar")!;
+  const fill = (key: string): HTMLElement => button(key).querySelector<HTMLElement>(".hud__cap-fill")!;
+  const workers = (): HTMLButtonElement => hud.element.querySelector<HTMLButtonElement>(".hud__workers-button")!;
+
+  it("shows no caps and no workers without a binding, as on the map or a foreign yard", () => {
+    hud.setResources({ r1: 15_000_000 });
+    expect(button("r1").textContent).toBe("15,000,000");
+    expect(bar("r1").hidden).toBe(true);
+    expect(hud.element.querySelector<HTMLElement>(".hud__workers")!.hidden).toBe(true);
+  });
+
+  it("shows amount / cap with a fill bar once bound, and takes them away on unbind", () => {
+    hud.setResources({ r1: 15_000_000, r2: 23_050_000, r3: 0, r4: 30_000_000 }, 7);
+    hud.bindYard(binding);
+    expect(button("r1").textContent).toBe("15,000,000 / 23,050,000");
+    expect(bar("r1").hidden).toBe(false);
+    expect(fill("r1").style.width).toBe("65.08%");
+    expect(button("r1").classList.contains("hud__resource-button--full")).toBe(false);
+    expect(button("r1").title).toBe("Twigs: 15,000,000 of 23,050,000");
+    // Shiny has no silo.
+    expect(button("shiny").textContent).toBe("7");
+    expect(button("shiny").querySelector<HTMLElement>(".hud__cap-bar")!.hidden).toBe(true);
+
+    hud.bindYard(null);
+    expect(button("r1").textContent).toBe("15,000,000");
+    expect(bar("r1").hidden).toBe(true);
+    expect(button("r1").title).toBe("Twigs: 15,000,000");
+  });
+
+  it("turns the bar amber at the cap and says new income is lost", () => {
+    hud.setResources({ r1: 23_050_000, r4: 30_000_000 });
+    hud.bindYard(binding);
+    for (const key of ["r1", "r4"]) {
+      expect(button(key).classList.contains("hud__resource-button--full")).toBe(true);
+      expect(fill(key).style.width).toBe("100%");
+    }
+    expect(button("r1").title).toBe(`Twigs: 23,050,000 of 23,050,000\n${FULL_NOTE}`);
+    expect(button("r1").getAttribute("aria-label")).toBe(`Twigs: 23,050,000 of 23,050,000. ${FULL_NOTE}`);
+    button("r1").click();
+    const bubble = document.querySelector<HTMLElement>(".hud__exact")!;
+    expect(spokenText(bubble)).toBe(`Twigs 23,050,000 / 23,050,000${FULL_NOTE}`);
+
+    // Spending a little takes it off the cap.
+    hud.setResources({ r1: 23_049_999 });
+    expect(button("r1").classList.contains("hud__resource-button--full")).toBe(false);
+  });
+
+  it("waits for the caps the first state answer brings", () => {
+    store.caps = null;
+    hud.setResources({ r1: 100 });
+    hud.bindYard(binding);
+    expect(button("r1").textContent).toBe("100");
+    store.caps = { r1: 1_000, r2: 1_000, r3: 1_000, r4: 1_000 };
+    store.emit({ reason: "refresh" });
+    expect(button("r1").textContent).toBe("100 / 1,000");
+  });
+
+  it("drops the cap text before the amounts when room runs short, keeping the bars", () => {
+    hud.setResources({ r1: 15_000_000 });
+    hud.bindYard(binding);
+    const list = hud.element.querySelector<HTMLElement>(".hud__resources")!;
+    Object.defineProperty(list, "clientWidth", { configurable: true, get: () => 400 });
+    Object.defineProperty(list, "scrollWidth", {
+      configurable: true,
+      get: () => (button("r1").textContent!.includes("/") ? 700 : 350),
+    });
+    window.dispatchEvent(new Event("resize"));
+    expect(hud.fitLevel).toBe("no-caps");
+    expect(button("r1").textContent).toBe("15,000,000");
+    expect(bar("r1").hidden).toBe(false);
+    expect(button("r1").title).toBe("Twigs: 15,000,000 of 23,050,000");
+    expect(hud.element.querySelector<HTMLElement>(".hud__workers-name")!.hidden).toBe(true);
+  });
+
+  it("shows workers free / total and goes to the job that ends soonest", () => {
+    hud.bindYard(binding);
+    expect(hud.element.querySelector<HTMLElement>(".hud__workers")!.hidden).toBe(false);
+    expect(workers().textContent).toBe("Workers3 / 5");
+    expect(workers().title).toBe(workersText(3, 5).label);
+    expect(workers().getAttribute("aria-disabled")).toBe("false");
+    workers().click();
+    expect(selectBuilding).toHaveBeenCalledWith(7);
+
+    store.workers = { total: 5, busy: 0 };
+    store.jobList = [];
+    store.emit({ reason: "predicted" });
+    expect(workers().textContent).toBe("Workers5 / 5");
+    expect(workers().getAttribute("aria-disabled")).toBe("true");
+    workers().click();
+    expect(selectBuilding).toHaveBeenCalledTimes(1);
+  });
+
+  it("toasts what the server says finished, and a click on a building selects it", () => {
+    hud.bindYard(binding);
+    store.emit({
+      reason: "refresh",
+      completed: [
+        { kind: "upgrade", id: 7, t: 20, at: 1, detail: { from: 4, level: 5, points: 1 } },
+        { kind: "upgrade", id: 3, t: 21, at: 1, detail: { from: 2, level: 3, points: 1 } },
+      ],
+    });
+    const toasts = notices.element.querySelectorAll(".notice");
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]!.textContent).toMatch(/^2 upgrades finished: /);
+    toasts[0]!.querySelectorAll<HTMLButtonElement>(".job-notice__building")[1]!.click();
+    expect(selectBuilding).toHaveBeenCalledWith(3);
+  });
+
+  it("stops listening when unbound or destroyed", () => {
+    hud.bindYard(binding);
+    expect(store.listeners.size).toBe(1);
+    hud.bindYard(binding);
+    expect(store.listeners.size).toBe(1);
+    hud.destroy();
+    expect(store.listeners.size).toBe(0);
+  });
+});
+
+describe("capState", () => {
+  it("is nothing without a cap or an amount", () => {
+    expect(capState(undefined, 100)).toBeNull();
+    expect(capState(50, undefined)).toBeNull();
+    expect(capState(50, 0)).toBeNull();
+  });
+
+  it("fills in proportion, and is full at the cap as well as over it", () => {
+    expect(capState(25, 100)).toEqual({ fraction: 0.25, full: false });
+    expect(capState(99.9, 100)).toEqual({ fraction: 0.99, full: false });
+    expect(capState(100, 100)).toEqual({ fraction: 1, full: true });
+    expect(capState(150, 100)).toEqual({ fraction: 1, full: true });
+  });
+});
+
+describe("workersText", () => {
+  it("counts free of total and says what a click does", () => {
+    expect(workersText(2, 5)).toEqual({
+      value: "2 / 5",
+      label: "Workers: 2 of 5 free. Click to go to the job that finishes soonest.",
+    });
+    expect(workersText(0, 1).label).toBe("Workers: none of 1 free. Click to go to the job that finishes soonest.");
+    expect(workersText(5, 5).label).toBe("Workers: all 5 free.");
   });
 });

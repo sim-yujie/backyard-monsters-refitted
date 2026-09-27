@@ -38,11 +38,15 @@ export class Notices {
     this.element.setAttribute("aria-live", "polite");
   }
 
-  /** Shows or replaces the notice under `key`. */
-  show(key: string, message: string, options: NoticeOptions = {}): void {
+  /**
+   * Shows or replaces the notice under `key`. `message` is text, or a node for
+   * a line with controls in it (the yard's job notices name buildings as
+   * buttons).
+   */
+  show(key: string, message: string | Node, options: NoticeOptions = {}): void {
     const existing = this.live.get(key);
     if (existing) {
-      existing.text.textContent = message;
+      existing.text.replaceChildren(message);
       this.resetTimer(key, existing, options.timeoutMs);
       return;
     }
@@ -52,7 +56,7 @@ export class Notices {
 
     const text = document.createElement("span");
     text.className = "notice__text";
-    text.textContent = message;
+    text.replaceChildren(message);
     element.append(text);
 
     if (options.actionLabel && options.onAction) {

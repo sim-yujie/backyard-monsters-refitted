@@ -318,6 +318,7 @@ body {
 
 /* The readout is a button only so a tap can ask for the exact amount. */
 .hud__resource-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   padding: var(--space-1) var(--space-2);
@@ -346,6 +347,93 @@ body {
 .hud__resource-value {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
+}
+
+.hud [hidden] {
+  display: none;
+}
+
+/* The own yard's storage cap (#100): " / 23,050,000" in a quieter voice, and
+   a thin fill bar under the readout that turns amber when the silo is full.
+   The bar is laid over the button's bottom padding so it adds no height. */
+.hud__resource-cap {
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+}
+
+.hud__cap-bar {
+  position: absolute;
+  left: var(--space-2);
+  right: var(--space-2);
+  bottom: 1px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+  overflow: hidden;
+}
+
+.hud__cap-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--colour-success);
+}
+
+.hud__resource-button--full .hud__cap-fill {
+  background: var(--colour-accent);
+}
+
+.hud__resource-button--full .hud__resource-value {
+  color: var(--colour-accent);
+}
+
+/* Workers, free / total; a press goes to the job that finishes soonest. */
+.hud__workers-button {
+  gap: var(--space-1);
+}
+
+.hud__workers-button[aria-disabled="true"] {
+  cursor: default;
+}
+
+.hud__workers-icon {
+  display: inline-block;
+  height: 22px;
+  aspect-ratio: 140 / 116;
+  background: center / contain no-repeat;
+}
+
+.hud__workers-name {
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.hud__exact-note {
+  max-width: 24ch;
+  margin: var(--space-1) 0 0;
+  color: var(--colour-accent);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+/* A job notice names each building as a link-like button that selects it. */
+.job-notice__building {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.job-notice__building:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* A change of amount, floating off the readout (#92). Downwards for a spend,
