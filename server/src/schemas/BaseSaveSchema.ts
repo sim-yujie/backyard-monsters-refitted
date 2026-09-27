@@ -124,6 +124,26 @@ export const BaseSaveSchema = z.object({
     .transform((data) => (data ? JSON.parse(data) : undefined)),
 
   /**
+   * The web client's fling log (`docs/design/server-combat.md` §3.10): every
+   * fling, bomb and siege of the attack, resent in full on every attack save.
+   * Only its bombs are read today, to charge their cost (issue #90). Anything
+   * that does not parse is kept as the raw string so the charge can report it
+   * rather than the save failing on a parse error. The Flash client sends none.
+   * @type {unknown}
+   */
+  flinglog: z
+    .string()
+    .optional()
+    .transform((data): unknown => {
+      if (!data) return undefined;
+      try {
+        return JSON.parse(data);
+      } catch {
+        return data;
+      }
+    }),
+
+  /**
    * The 'over' property, which indicates a state.
    * This property is optional and remains as a string.
    * @type {number | undefined}

@@ -1,6 +1,7 @@
 import { Status } from "../enums/StatusCodes.js";
 import { ClientSafeError } from "../middleware/clientSafeError.js";
 import type { EconomyViolation } from "../services/base/economy/auditEconomySave.js";
+import type { CombatViolation } from "../game-rules/combat/index.js";
 
 /**
  * Creates a new instance of `ClientSafeError` with the specified properties.
@@ -555,6 +556,27 @@ export const attackNotBoundErr = (reason: string) =>
     message: "This attack is no longer yours to save. Reload your yard.",
     status: Status.FORBIDDEN,
     data: { reason },
+    isClientFriendly: false,
+  });
+
+/**
+ * An attack save whose fling log fired a resource bomb Flash would not have
+ * let go — one the attacker could not afford, a second of one resource, a tier
+ * above their catapult, or an id the bomb table does not know — refused in
+ * `COMBAT_SAVE_VALIDATION=reject` mode (issue #90,
+ * `services/base/combat/bombSpend.ts`).
+ *
+ * `isClientFriendly: false` for the same reason `attackNotBoundErr` uses it.
+ * `reason` is `bombSpend` so the web client can tell a retry will not help;
+ * the violations say which bomb and why.
+ *
+ * @param violations The enforced violations that refused the save.
+ */
+export const attackBombRefusedErr = (violations: CombatViolation[]) =>
+  new ClientSafeError({
+    message: "This attack's bombs do not add up. Reload your yard.",
+    status: Status.CONFLICT,
+    data: { reason: "bombSpend", violations },
     isClientFriendly: false,
   });
 

@@ -39,10 +39,20 @@ export interface EndPluginDeps {
   readonly nameOf?: (id: string) => string;
 }
 
-/** The refusal reasons a retry cannot fix (`docs/server-api.md` "Attack session binding"). */
-const FINAL_REASONS = new Set(["expired", "no-session", "wrong-attacker", "stale-attack"]);
+/**
+ * The refusal reasons a retry cannot fix: the attack-binding ones
+ * (`docs/server-api.md` "Attack session binding") and a bomb the attacker could
+ * not have fired (`bombSpend`, issue #90), which the same payload would hit again.
+ */
+const FINAL_REASONS = new Set([
+  "expired",
+  "no-session",
+  "wrong-attacker",
+  "stale-attack",
+  "bombSpend",
+]);
 
-/** The refusal's `reason`, when the error is the attack-binding one. */
+/** The refusal's `reason`, when the error carries one. */
 const bindingReason = (error: ApiError): string | null => {
   const data = error.details?.data;
   if (typeof data !== "object" || data === null) return null;

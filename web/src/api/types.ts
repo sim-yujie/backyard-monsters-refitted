@@ -183,8 +183,8 @@ export interface MonstersSave {
  * Every structured field goes over the wire JSON-stringified into its own form
  * field and the scalars as strings, which `saveAttack` does; this is the
  * client-side shape before that. Fields not on `Save.attackSaveKeys` and not
- * read by the attack branch — `flinglog` today — are sent and ignored by a
- * server that predates them.
+ * read by the attack branch are sent and ignored by a server that predates
+ * them.
  */
 export interface AttackSavePayload {
   /** The defender's base id, echoed from the attack load. */
@@ -214,7 +214,7 @@ export interface AttackSavePayload {
    * (`monsterUpdateHandler.ts`, Map Room 2 shape).
    */
   monsterupdate?: { baseid: string; m: MonstersSave }[];
-  /** What the attacker looted; added to the attacker's pool. */
+  /** What the attacker looted, bombs not netted in; added to the attacker's pool. */
   attackloot?: Resources;
   /** The defender's loss as a delta; only subtractions are honoured. */
   resources?: Resources;
@@ -222,7 +222,11 @@ export interface AttackSavePayload {
   attackreport?: string;
   /** The attacker's siege inventory after use; overwrites `userSave.siege`. */
   attackersiege?: unknown;
-  /** The fling log, `docs/design/server-combat.md` §3.10; inert until #23 WP5. */
+  /**
+   * The fling log, `docs/design/server-combat.md` §3.10. The server reads its
+   * bombs and charges their cost to the attacker (issue #90); the rest is
+   * inert until #23 WP5.
+   */
   flinglog?: unknown;
 }
 

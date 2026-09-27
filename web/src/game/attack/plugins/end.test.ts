@@ -284,6 +284,7 @@ describe("describeSaveFailure", () => {
     const refused = (reason: string) =>
       new ApiError("no", { status: 200, details: { data: { reason } } });
     expect(describeSaveFailure(refused("expired")).canRetry).toBe(false);
+    expect(describeSaveFailure(refused("bombSpend")).canRetry).toBe(false);
     expect(describeSaveFailure(refused("wrong-attacker"))).toEqual({
       message: "The server refused the result: no",
       canRetry: false,

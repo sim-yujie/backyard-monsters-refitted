@@ -175,6 +175,27 @@ describe("buildAttackSave", () => {
     expect(wire.events[2]).toEqual({ kind: "retreat", t: 6 * TICKS_PER_SECOND });
   });
 
+  it("leaves bomb spend out of attackloot and sends the bomb in the log for the server to charge", () => {
+    const session = new AttackSession({ target: targetOf({ load: towerLoad() }), seed: 1 });
+    session.start();
+    play(session, 0.5);
+    session.appendBomb({ x: 0, y: 0, id: "tw0" });
+    play(session, 1);
+    session.retreat();
+    const payload = buildAttackSave(session);
+    // Flash netted the 10,000-twig cost into attackloot; the server now charges
+    // it from the log (#90), so netting it here too would charge it twice.
+    const battleState = session.battle()!.state();
+    for (const key of ["r1", "r2", "r3", "r4"] as const) {
+      expect(payload.attackloot![key]).toBe(Math.floor(battleState.loot[key]));
+      expect(payload.attackloot![key]).toBeGreaterThanOrEqual(0);
+    }
+    const log = payload.flinglog as { events: { kind: string; id?: string }[] };
+    expect(log.events.filter((event) => event.kind === "bomb")).toEqual([
+      expect.objectContaining({ kind: "bomb", id: "tw0" }),
+    ]);
+  });
+
   it("still builds a closing save when nothing was flung", () => {
     const session = new AttackSession({ target: targetOf({ load: towerLoad() }), seed: 1 });
     session.start();

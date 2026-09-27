@@ -762,7 +762,7 @@ table at `docs/server-api.md:231-239`; the controller at `server/src/controllers
 | `attackerchampion` | Attacker's own champion hp after the battle | Overwrites `userSave.champion` verbatim (`baseSave.ts:162-166`) |
 | `attackcreatures` | **Not sent in Map Room 2** (`combat.md`'s own note, `server-combat.md:73` row) | — |
 | `monsterupdate` | `[{baseid, m}]` per attacker cell in range, housing minus what was flung | Written to attacker's own row and other bases, clears their `protected` (`baseSave.ts:214-215`, `updateMonsters.ts`) |
-| `attackloot` | `battle.state().loot` | Added to the attacker's pool, uncapped (`attackLootHandler.ts`, `baseSave.ts:222-224`) |
+| `attackloot` | `battle.state().loot`, the gain alone: unlike Flash, bomb spend is **not** netted in (#90) | Added to the attacker's pool, uncapped (`attackLootHandler.ts`, `baseSave.ts:222-224`); the bombs in `flinglog` are charged separately (§5.3) |
 | `resources` | Defender's loss (negative of `battle.state().defenderLoss`) | Losses only, capped, floored at 0 (`defenderLootHandler.ts`, `baseSave.ts:226-235`) |
 | `attackreport` | A plain-text summary built from the fling log's own events | Written verbatim onto the defender (`docs/server-api.md`'s "Save write keys", default branch) |
 | `attackersiege` | Attacker's siege inventory after use | Overwrites `userSave.siege` (`baseSave.ts:178-182`) |
@@ -793,6 +793,18 @@ server that has not landed #23's WP5 simply never reads it — sending it now is
 a compatibility risk, and it is what lets #23's Phase B replay be "a wiring job" once it lands
 (`server-combat.md:148-149`) rather than a client rewrite. Open Question 3 covers verifying the
 current schema does not reject the extra field.
+
+**Bombs are the one part the server already reads (issue #90).** Flash paid a bomb's cost when it
+dropped it and netted the spend into `attackloot` (`ResourceBombs.as:292-329`, `BASE.as:2859-2866`);
+the web client sends `attackloot` as the gain alone, so the server works the cost out itself: each
+`bomb` event's id is looked up in the shared rules' `BOMBS` table and its cost is taken off the
+attacker's pool after the loot is credited, never below zero
+(`server/src/services/base/combat/bombSpend.ts`, applied in `baseSave.ts`). A bomb Flash would not
+have fired — unaffordable against the attacker's stored pool, a second of one resource, a tier above
+the attacker's catapult, or an unknown id — is still charged, and `COMBAT_SAVE_VALIDATION` decides
+the rest: `off` says nothing, `log` (the default) writes an `attack-bomb-audit` warning, `reject`
+refuses the save with a 409 whose `reason` is `bombSpend` before anything is written. The charge is
+per save, which is exact while the client sends one save per attack.
 
 ### 5.4 New client-side state
 

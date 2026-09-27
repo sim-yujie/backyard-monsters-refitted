@@ -14,6 +14,9 @@ import { purchaseHandler } from "./handlers/purchaseHandler.js";
 import { academyHandler } from "./handlers/academyHandler.js";
 import { BaseType } from "../../../enums/Base.js";
 import { attackNotBoundErr, permissionErr, saveFailureErr } from "../../../errors/errors.js";
+import { combatConfig } from "../../../config/CombatConfig.js";
+import { chargeBombSpend } from "../../../services/base/combat/bombSpend.js";
+import { recordBombSpend } from "../../../services/base/combat/recordBombSpend.js";
 import { attackLootHandler } from "./handlers/attackLootHandler.js";
 import { defenderLootHandler } from "./handlers/defenderLootHandler.js";
 import { monsterUpdateHandler } from "./handlers/monsterUpdateHandler.js";
@@ -91,6 +94,14 @@ export const baseSave: KoaController = async (ctx) => {
   if (isAttack) await requireAttackBinding(ctx, user, baseSave, saveData.attackid, now);
 
   await validateSave(user, baseSave, body);
+
+  // What the attack's resource bombs cost the attacker (issue #90), worked out
+  // from the fling log and the bomb table before any key is applied, so a
+  // refusal in `reject` mode leaves every row untouched. Charged further down,
+  // after the loot.
+  const bombs = isAttack
+    ? recordBombSpend(ctx, user, userSave, baseSave, saveData.flinglog, combatConfig.mode)
+    : null;
 
   // The economy audit (docs/design/economy-save-validation.md §3.3). It runs
   // before any key is applied, so a refusal in `reject` mode leaves the stored
@@ -221,6 +232,10 @@ export const baseSave: KoaController = async (ctx) => {
 
     if (saveData.attackloot) {
       attackLootHandler(saveData.attackloot, userSave);
+    }
+
+    if (bombs) {
+      userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
     }
 
     if (saveData.resources) {

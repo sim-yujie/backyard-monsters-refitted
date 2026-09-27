@@ -21,6 +21,7 @@ import { initialize as initVersionManifest } from "./config/VersionManifestConfi
 import { startChatServer } from "./chat/chatServer.js";
 import { exitOnRedisReconnect } from "./utils/redisReconnectGuard.js";
 import { economyConfig, economyModeWasUnrecognised } from "./config/EconomyConfig.js";
+import { combatConfig, combatModeWasUnrecognised } from "./config/CombatConfig.js";
 
 export const app = new Koa();
 app.proxy = true;
@@ -101,6 +102,15 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   }
 
   logger.info(`Economy save validation: ${economyConfig.mode}`);
+
+  if (combatModeWasUnrecognised) {
+    logger.warn(
+      "COMBAT_SAVE_VALIDATION is set to {requested}, which is not a mode - falling back to {mode}",
+      { requested: process.env.COMBAT_SAVE_VALIDATION, mode: combatConfig.mode }
+    );
+  }
+
+  logger.info(`Combat save validation: ${combatConfig.mode}`);
 
   app.listen(PORT, () => {
     console.log(`

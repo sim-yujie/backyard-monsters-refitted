@@ -244,7 +244,11 @@ On an **attack** save (`Save.attackSaveKeys`: `destroyed`, `damage`, `locked`, `
 `monsterUpdateHandler.ts` (branches on MR2 array-of-cells vs MR3 object-keyed-by-creature-id
 shape, and can also push housing updates to a *different* base id, e.g. an outpost, via
 `updateMonsters`); `attackcreatures` overwrites the attacker's own `monsters`; `attackloot` →
-`attackLootHandler.ts` credits the attacker's resource pool; `resources` (the defender's
+`attackLootHandler.ts` credits the attacker's resource pool; the resource bombs in the web
+client's `flinglog` are then charged to the attacker at the shared rules' bomb costs, floored at 0
+(issue #90, `services/base/combat/bombSpend.ts`; a bomb the attacker could not have fired is logged
+or, under `COMBAT_SAVE_VALIDATION=reject`, refuses the save with reason `bombSpend`; a Flash save
+carries no log and nets its bomb spend into `attackloot` instead); `resources` (the defender's
 reported delta) → `defenderLootHandler.ts` **only ever subtracts** from the defender/outpost
 pool (any positive value in the client's delta is ignored — an attacker cannot top up a base by
 lying about the delta), capped at 10,000,000 per resource type per save, and clamped to not go

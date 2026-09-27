@@ -64,7 +64,14 @@ const wholeAmounts = (amounts: ResourceAmounts, sign: 1 | -1): Resources => {
   return out;
 };
 
-/** `attackloot`: the gain, before the storage cap the server does not apply. */
+/**
+ * `attackloot`: the gain, before the storage cap the server does not apply.
+ *
+ * The gain alone, unlike Flash, which netted its bomb spend into this key
+ * (`BASE.as:2859-2866`). The server charges each bomb from the fling log and
+ * its own bomb table (issue #90, `server/src/services/base/combat/bombSpend.ts`),
+ * so netting it here as well would charge every bomb twice.
+ */
 export const attackLootOf = (state: BattleState): Resources => wholeAmounts(state.loot, 1);
 
 /**
