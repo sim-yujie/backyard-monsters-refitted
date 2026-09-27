@@ -75,6 +75,15 @@ const hostOf = (): Host => {
   return host;
 };
 
+/** A repeatable stream in [0, 1), for the bomb rain. */
+const seeded = (): (() => number) => {
+  let state = 11;
+  return () => {
+    state = (state * 1664525 + 1013904223) % 4294967296;
+    return state / 4294967296;
+  };
+};
+
 const setUp = (buildings: BuildingRow[]) => {
   const session = new AttackSession({ target: targetOf(), seed: 1 });
   const response = yardOf(buildings);
@@ -89,6 +98,8 @@ const setUp = (buildings: BuildingRow[]) => {
     overlay,
     reducedMotion: false,
     textures: new MonsterSheetTextures(blankSheet),
+    bombArt: { cell: () => Texture.WHITE, destroy() {} },
+    random: seeded(),
   });
   return { session, yard, host, overlay, layer };
 };
@@ -162,6 +173,61 @@ describe("building bars", () => {
     play(session, 30, layer);
     expect(session.battle()?.state().destroyedIds).toEqual([1]);
     expect(bars.children.filter((sprite) => sprite.visible)).toHaveLength(0);
+    layer.destroy();
+  });
+});
+
+describe("bombs (#87)", () => {
+  it("holds a bomb's damage back and lets it go with the rain, ending where the engine is", () => {
+    // A Cannon Tower inside a small pebble bomb's blast, which leaves it
+    // standing, and a wall block beside it, which a pebble share is too small
+    // to dent (6% of 12 truncates to nothing).
+    const { session, host, layer } = setUp([
+      { id: 1, t: 20, l: 1, X: 0, Y: 0 },
+      { id: 2, t: 17, l: 1, X: 60, Y: 0 },
+    ]);
+    session.start();
+    play(session, 0.1, layer);
+    session.appendBomb({ x: 20, y: 10, id: "pb0" });
+    const engine = session.battle()!.state().health;
+    expect(engine["1"]).toBe(4000);
+    expect(engine["2"]).toBeUndefined();
+    layer.update();
+    // Nothing shown yet: the engine has it all, the screen none of it.
+    expect(layer.heldBombDamage(1)).toBe(2000);
+    expect(layer.heldBombDamage(2)).toBe(0);
+    expect(host.damage.get(1) ?? 1).toBe(1);
+    expect(layer.bombEffects.airborne).toBe(200);
+
+    // Part way through the rain the tower is part way down.
+    play(session, 2.5, layer);
+    const partway = layer.heldBombDamage(1);
+    expect(partway).toBeGreaterThan(0);
+    expect(partway).toBeLessThan(2000);
+    expect(host.damage.get(1)).toBeLessThan(1);
+    expect(host.damage.get(1)).toBeGreaterThan(4000 / 6000);
+    expect(layer.bombEffects.airborne).toBeGreaterThan(0);
+    expect(layer.bombEffects.airborne).toBeLessThan(200);
+
+    // Once every particle is down the screen shows exactly what the engine did.
+    play(session, 4, layer);
+    expect(layer.bombEffects.airborne).toBe(0);
+    expect(layer.heldBombDamage(1)).toBe(0);
+    expect(host.damage.get(1)).toBeCloseTo(4000 / 6000, 9);
+    expect(host.damage.has(2)).toBe(false);
+    layer.destroy();
+  });
+
+  it("lands the rest of the rain at once when the attack ends", () => {
+    const { session, layer } = setUp([{ id: 1, t: 20, l: 1, X: 0, Y: 0 }]);
+    session.start();
+    session.appendBomb({ x: 0, y: 0, id: "tw0" });
+    play(session, 1.2, layer);
+    expect(layer.bombEffects.airborne).toBeGreaterThan(0);
+    session.retreat();
+    layer.update();
+    expect(layer.bombEffects.airborne).toBe(0);
+    expect(layer.heldBombDamage(1)).toBe(0);
     layer.destroy();
   });
 });

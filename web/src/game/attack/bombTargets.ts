@@ -40,7 +40,7 @@ const SPARED: ReadonlySet<BuildingClass> = new Set<BuildingClass>([
 /** A building a bomb could reach, as the engine's hit test reads it. */
 export type BombCandidate = Pick<
   EngineBuilding,
-  "id" | "type" | "level" | "kind" | "sx" | "sy" | "middle" | "fortification" | "hp"
+  "id" | "type" | "level" | "kind" | "sx" | "sy" | "middle" | "fortification" | "hp" | "maxHp"
 >;
 
 /**
@@ -61,6 +61,8 @@ export interface BombHit {
   readonly id: number;
   /** Every particle's share together, after fortification (`damageBuilding`). */
   readonly damage: number;
+  /** Its full health: what the battle's health map means by leaving it out. */
+  readonly maxHp: number;
 }
 
 /**
@@ -89,6 +91,7 @@ export const bombHits = (
     hits.push({
       id: building.id,
       damage: fortifiedDamage(share * bomb.particles, building.fortification, 0),
+      maxHp: building.maxHp,
     });
   }
   return hits;

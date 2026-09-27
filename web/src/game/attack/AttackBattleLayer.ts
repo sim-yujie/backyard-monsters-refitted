@@ -8,11 +8,13 @@ import {
   type Renderer,
   type TextureSource,
 } from "pixi.js";
-import type { BattleVisualEvent, CreepSnapshot } from "@/game/combat/rules";
+import { BOMBS, type BattleVisualEvent, type CreepSnapshot } from "@/game/combat/rules";
 import { damageStep } from "@/game/yard/YardBuildings";
 import { depthKey, type Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import type { AttackSession } from "./AttackSession";
+import { BombFx, type BombArt } from "./bombFx";
+import { bombCandidatesOf, bombHits, type BombCandidate } from "./bombTargets";
 import { BuildingBars } from "./buildingBars";
 import {
   BUILDING_NUMBER_LIFT,
@@ -86,6 +88,15 @@ import {
  * creep the engine has already removed stays on screen where it was last
  * seen, as a ghost, until then. A ranged creep's shot at a building holds the
  * building's damage the same way until the fireball lands.
+ *
+ * ## Bombs rain down
+ *
+ * A resource bomb is one event to the engine, applied whole on the tick it is
+ * fired. On screen it is a rain of particles over a few seconds, as Flash drew
+ * it ({@link BombFx}, #87): the layer asks which buildings the bomb hit — the
+ * engine's own reach test, through `bombTargets` — holds back what each lost,
+ * and lets a share of it go with every particle that lands, so the bars, the
+ * darkening, the smoke and the numbers follow the rain.
  *
  * ## Textures
  *
@@ -442,6 +453,10 @@ export interface AttackBattleLayerOptions {
   readonly overlay: Container;
   readonly reducedMotion?: boolean;
   readonly textures?: MonsterSheetTextures;
+  /** The bomb sheets; a test hands in its own (#87). */
+  readonly bombArt?: BombArt;
+  /** The bomb rain's randomness; `Math.random` unless a test fixes it. */
+  readonly random?: () => number;
 }
 
 interface CreepView {
@@ -516,6 +531,9 @@ const BAR_BACK_COLOUR = 0x6b1616;
 const BAR_FRONT_COLOUR = 0x5ee06a;
 const BAR_CHAMPION_COLOUR = 0xffd24a;
 
+/** Ticks between the numbers a bomb's rain floats over a building: a quarter-second at 1x. */
+const BOMB_NUMBER_TICKS = 20;
+
 /** Ticks a trap's blast ring takes to fade. */
 export const BURST_TICKS = 14;
 const SCORCH_COLOUR = 0x1c1410;
@@ -560,6 +578,26 @@ export class AttackBattleLayer {
   /** Building health a ranged creep's projectile has taken but not yet landed. */
   private readonly heldBuildingHp = new Map<number, number>();
 
+  /* Resource bombs (#87): the rain, and the health its particles still carry. */
+  private readonly bombFx: BombFx;
+  /** Falling particles, above the buildings and the bars, under the shots; made on the first bomb. */
+  private air: Container | null = null;
+  /** Landed debris, on the ground under the buildings; made on the first bomb. */
+  private debris: Container | null = null;
+  /** Building health bombs have taken that no particle has brought down yet. */
+  private readonly heldBombHp = new Map<number, number>();
+  /** Per bomb, keyed by its place in the fling log: particles to land, health owed per building. */
+  private readonly rains = new Map<number, { left: number; owed: Map<number, number> }>();
+  /** Health landed particles took off each building since the last number. */
+  private readonly bombNumbers = new Map<number, number>();
+  private lastBombNumber = 0;
+  private bombCandidates: BombCandidate[] | null = null;
+  /** Fling-log events already looked at for bombs. */
+  private eventsSeen = 0;
+  /** The engine's health and ruins at the last pass, before any bomb since. */
+  private lastHealth: Readonly<Record<string, number>> = {};
+  private lastDestroyed: readonly number[] = [];
+
   /** Projectiles, smoke and damage numbers (#63, #68); its root sits last in the overlay. */
   private readonly fx: CreepFx;
   /** The damage step each building was last seen at, for the smoke on a crossing. */
@@ -593,6 +631,18 @@ export class AttackBattleLayer {
     // Our own children only: the drop ring and anything else already in the
     // overlay stays where it is.
     this.overlay.addChild(this.effects, this.fire, this.bars);
+    this.bombFx = new BombFx(
+      {
+        air: () => this.airLayer(),
+        ground: () => this.debrisLayer(),
+        landed: (key) => this.onBombParticle(key),
+      },
+      {
+        reducedMotion: this.reducedMotion,
+        ...(options.bombArt ? { art: options.bombArt } : {}),
+        ...(options.random ? { random: options.random } : {}),
+      },
+    );
     this.fx = new CreepFx(
       {
         creepAnchor: (id) => this.creepAnchor(id),
@@ -663,10 +713,18 @@ export class AttackBattleLayer {
     this.drawSplats(tick);
     this.drawBursts(tick);
     this.fx.update(tick);
+    this.bombFx.update(tick);
+    // The clock stops when the attack ends; whatever is still falling lands now.
+    if (this.bombFx.airborne > 0 && this.session.state().phase === "ended") this.bombFx.settle();
+    this.showBombNumbers(tick);
 
     if (this.damageDirty) {
       this.damageDirty = false;
       const state = battle.state();
+      // Before the health is shown, so a new bomb's damage is held from its first frame.
+      this.noticeBombs(state.health, tick);
+      this.lastHealth = state.health;
+      this.lastDestroyed = state.destroyedIds;
       this.revealTraps(state.firedTraps, tick);
       const health = this.shownHealth(state.health);
       this.syncDamage(health);
@@ -701,6 +759,16 @@ export class AttackBattleLayer {
     return this.ledger.heldShots;
   }
 
+  /** The bomb rain, for a test or the dev hook to read (#87). */
+  get bombEffects(): BombFx {
+    return this.bombFx;
+  }
+
+  /** Building health bombs have taken that the screen does not show yet. */
+  heldBombDamage(id: number): number {
+    return this.heldBombHp.get(id) ?? 0;
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
@@ -728,6 +796,14 @@ export class AttackBattleLayer {
     this.ledger.clear();
     this.heldBuildingHp.clear();
     this.fx.destroy();
+    this.bombFx.destroy();
+    this.heldBombHp.clear();
+    this.rains.clear();
+    this.bombNumbers.clear();
+    for (const layer of [this.air, this.debris]) {
+      layer?.parent?.removeChild(layer);
+      layer?.destroy({ children: true });
+    }
 
     // Only what this added: the overlay and the sorted container are the
     // scene's and the renderer's, and keep their other children.
@@ -1147,17 +1223,123 @@ export class AttackBattleLayer {
   private shownHealth(
     health: Readonly<Record<string, number>>,
   ): Readonly<Record<string, number>> {
-    if (this.heldBuildingHp.size === 0) return health;
+    if (this.heldBuildingHp.size === 0 && this.heldBombHp.size === 0) return health;
     const shown: Record<string, number> = { ...health };
-    for (const [id, held] of this.heldBuildingHp) {
-      const hp = shown[String(id)];
-      if (hp === undefined) continue;
-      const maxHp = this.maxHpById.get(id) ?? Number.POSITIVE_INFINITY;
-      // The engine lets a building's health run below zero; the amount held is
-      // what it actually lost, counted from what it had.
-      shown[String(id)] = Math.min(maxHp, Math.max(0, hp) + held);
+    for (const holding of [this.heldBuildingHp, this.heldBombHp]) {
+      for (const [id, held] of holding) {
+        const hp = shown[String(id)];
+        if (hp === undefined) continue;
+        const maxHp = this.maxHpById.get(id) ?? Number.POSITIVE_INFINITY;
+        // The engine lets a building's health run below zero; the amount held is
+        // what it actually lost, counted from what it had.
+        shown[String(id)] = Math.min(maxHp, Math.max(0, hp) + held);
+      }
     }
     return shown;
+  }
+
+  /* ── Bombs (#87) ────────────────────────────────────────────────────── */
+
+  /** Where particles fall: just above the effects, under the shots. */
+  private airLayer(): Container {
+    if (!this.air) {
+      this.air = new Container();
+      this.air.eventMode = "none";
+      this.overlay.addChildAt(this.air, this.overlay.getChildIndex(this.effects) + 1);
+    }
+    return this.air;
+  }
+
+  /**
+   * Where debris lies: with the buildings' shadows, under every building, as
+   * Flash's `MAP._BUILDINGBASES` did; a host without that layer gets it at
+   * the bottom of the sorted container.
+   */
+  private debrisLayer(): Container {
+    if (!this.debris) {
+      this.debris = new Container();
+      this.debris.eventMode = "none";
+      const ground = this.host.groundShadowLayer?.();
+      if (ground) {
+        ground.addChild(this.debris);
+      } else {
+        this.debris.zIndex = Number.MIN_SAFE_INTEGER;
+        this.depth.addChild(this.debris);
+      }
+    }
+    return this.debris;
+  }
+
+  /**
+   * Starts the rain for every bomb fired since the last pass and holds back
+   * what it took off each building it hit. The engine has already applied
+   * it; what a building lost is the bomb's share after fortification, capped
+   * at the health it had at the last pass.
+   */
+  private noticeBombs(health: Readonly<Record<string, number>>, tick: number): void {
+    const events = this.session.flingLog().events;
+    for (; this.eventsSeen < events.length; this.eventsSeen += 1) {
+      const event = events[this.eventsSeen];
+      if (event?.kind !== "bomb") continue;
+      const bomb = BOMBS.find((one) => one.id === event.id);
+      if (!bomb) continue;
+      this.bombCandidates ??= bombCandidatesOf(this.session.attackLoad());
+      const owed = new Map<number, number>();
+      for (const hit of bombHits(bomb, event, this.bombCandidates, this.lastDestroyed)) {
+        const id = String(hit.id);
+        const before = this.lastHealth[id] ?? hit.maxHp;
+        // A building the last pass saw standing that fell before the bomb
+        // landed took nothing from it: its health did not move.
+        if (health[id] === undefined || health[id] === before) continue;
+        const taken = Math.min(hit.damage, Math.max(0, before));
+        if (taken <= 0) continue;
+        owed.set(hit.id, taken);
+        this.heldBombHp.set(hit.id, (this.heldBombHp.get(hit.id) ?? 0) + taken);
+      }
+      const key = this.eventsSeen;
+      this.rains.set(key, { left: Math.trunc(bomb.particles), owed });
+      const at = groundWorld(event.x, event.y, this.origin);
+      this.bombFx.drop(key, bomb, at, Math.min(event.t, tick), this.host.zoom ?? 1);
+    }
+  }
+
+  /**
+   * One particle of a bomb landed: every building the bomb hit takes its
+   * share, as `ResourceBomb.Damage` dealt it; the last particle brings down
+   * whatever is left.
+   */
+  private onBombParticle(key: number): void {
+    const rain = this.rains.get(key);
+    if (!rain) return;
+    for (const [id, owed] of rain.owed) {
+      const share = rain.left <= 1 ? owed : owed / rain.left;
+      rain.owed.set(id, owed - share);
+      const held = (this.heldBombHp.get(id) ?? 0) - share;
+      if (held > 1e-6) this.heldBombHp.set(id, held);
+      else this.heldBombHp.delete(id);
+      this.bombNumbers.set(id, (this.bombNumbers.get(id) ?? 0) + share);
+    }
+    rain.left -= 1;
+    if (rain.left <= 0) this.rains.delete(key);
+    this.damageDirty = true;
+  }
+
+  /**
+   * Floats what the rain has taken off each building, gathered over a
+   * quarter-second rather than one number per particle; the per-target cap
+   * drops the rest, as it dropped Flash's.
+   */
+  private showBombNumbers(tick: number): void {
+    if (this.bombNumbers.size === 0 || tick - this.lastBombNumber < BOMB_NUMBER_TICKS) return;
+    this.lastBombNumber = tick;
+    for (const [id, amount] of this.bombNumbers) {
+      if (amount < 1) continue;
+      this.bombNumbers.delete(id);
+      const centre = this.host.centreOf(id);
+      if (!centre) continue;
+      const over = { x: centre.x, y: centre.y - BUILDING_NUMBER_LIFT };
+      this.fx.number(tick, `building:${id}`, -1, amount, over, "damage");
+    }
   }
 
   /**
