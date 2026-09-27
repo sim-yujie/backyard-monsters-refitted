@@ -381,6 +381,16 @@ export class YardRenderer {
   }
 
   /**
+   * The container every building's shadow is drawn in, beneath all the
+   * buildings, for a battle layer's flyer shadows (issue #78). Flash draws
+   * both at `MAP.DEPTH_SHADOW`, so a wall block stands over a flyer's shadow.
+   * The same ownership rule as `depthSortedLayer` applies.
+   */
+  groundShadowLayer(): Container {
+    return this.buildings.shadows;
+  }
+
+  /**
    * Draws a building as battered as `fraction` of its health says, 1 being
    * untouched and 0 a ruin; see `YardBuildings.setDamage`.
    */

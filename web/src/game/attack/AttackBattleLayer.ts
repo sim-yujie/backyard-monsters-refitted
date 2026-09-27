@@ -59,6 +59,10 @@ import {
  * screen first: a building's key is its *top* corner, so without the nudge a
  * creep standing at that corner, where the pathing grid puts a melee attacker
  * coming from the north, would draw over the whole building it is behind.
+ * A flyer's key adds its altitude, as Flash's depth does (`MonsterBase.as:726`),
+ * so a body hovering over a wall block sorts in front of it; its shadow lies in
+ * the yard's shadow layer under every building (`MAP.DEPTH_SHADOW`). Both only
+ * apply to creeps the engine flags as flying (issues #58, #78).
  * Health bars, shots and splats live in the scene's own overlay above every
  * building — a bar is a readout, not a thing in the yard.
  *
@@ -409,6 +413,13 @@ export const gpuTextureLimit = (renderer: Renderer): number | null => {
 export interface BattleYardHost {
   /** The depth-sorted building container creep bodies go into. */
   depthSortedLayer(): Container;
+  /**
+   * The container the buildings' own shadows are drawn in, beneath every
+   * building. A flyer's shadow goes there too, as Flash puts it at
+   * `MAP.DEPTH_SHADOW` (`CreepBase.as:140`). A host without one gets the
+   * shadow in the depth container, just under the flyer's body.
+   */
+  groundShadowLayer?(): Container;
   /** The middle of a building's footprint in world px, or null. */
   centreOf(id: number): Point | null;
   /** Draws a building as battered as `fraction` of its health says. */
@@ -522,8 +533,10 @@ export class AttackBattleLayer {
   private readonly reducedMotion: boolean;
   readonly textures: MonsterSheetTextures;
 
-  /** Creep bodies and flyer shadows, inside the renderer's sorted container. */
+  /** Creep bodies, inside the renderer's sorted container. */
   private readonly depth: Container;
+  /** Flyer shadows: the yard's shadow layer, or `depth` when the host has none. */
+  private readonly shadows: Container;
   /** In the overlay, in this order. */
   private readonly effects = new Container();
   private readonly fire = new Graphics();
@@ -575,6 +588,7 @@ export class AttackBattleLayer {
     }
 
     this.depth = this.host.depthSortedLayer();
+    this.shadows = this.host.groundShadowLayer?.() ?? this.depth;
     for (const layer of [this.effects, this.fire, this.bars]) layer.eventMode = "none";
     // Our own children only: the drop ring and anything else already in the
     // overlay stays where it is.
@@ -891,7 +905,7 @@ export class AttackBattleLayer {
     this.depth.removeChild(view.body);
     view.body.destroy();
     if (view.shadow) {
-      this.depth.removeChild(view.shadow);
+      this.shadows.removeChild(view.shadow);
       view.shadow.destroy();
     }
     view.barBack.destroy();
@@ -1012,15 +1026,16 @@ export class AttackBattleLayer {
       shadow = new Sprite(cell);
       shadow.eventMode = "none";
       shadow.alpha = 0.8;
-      this.depth.addChild(shadow);
+      this.shadows.addChild(shadow);
       view.shadow = shadow;
     } else if (shadow.texture !== cell) {
       shadow.texture = cell;
     }
     shadow.visible = true;
     shadow.position.set(Math.round(layout.shadow.x), Math.round(layout.shadow.y));
-    // Under the body, above whatever building the body is above.
-    shadow.zIndex = layout.zIndex - 1;
+    // On the ground under every building (`MAP.DEPTH_SHADOW`); only a host
+    // with no shadow layer sorts it, just under the body.
+    shadow.zIndex = this.shadows === this.depth ? layout.zIndex - 1 : 0;
   }
 
   /* ── Creep hits and wounds (#63, #68) ───────────────────────────────── */

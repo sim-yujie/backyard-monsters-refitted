@@ -19,7 +19,8 @@ import {
 import { AttackSession } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
-import { spriteFor } from "./monsterSprites";
+import { flyerAltitude, spriteFor } from "./monsterSprites";
+import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 
 /**
  * The battle layer's arithmetic without a renderer (`docs/design/attack-flow.md`
@@ -239,7 +240,93 @@ describe("placement", () => {
     // Never a tie with the building's own animation layers at +1..+3.
     expect(creepZIndex(500, 300 + DEPTH_BIAS, 1) % 8).toBe(4);
   });
+
+  it("sorts a flyer its altitude further down the screen than its ground point (#78)", () => {
+    // `MonsterBase.as:726`: depth is `(y + _altitude) * 1000 + x`.
+    for (const id of ["C14", "C15", "C16", "IC5"]) {
+      const flyer = creepOf({ monsterId: id, flying: true });
+      const ground = groundWorld(flyer.ix, flyer.iy, ORIGIN);
+      const layout = layoutCreep(
+        flyer,
+        sheetOf(id),
+        { heading: 0, moving: true, age: 17 },
+        ORIGIN,
+        STILL,
+      );
+      expect(layout.zIndex).toBe(creepZIndex(ground.x, ground.y + flyerAltitude(id), flyer.id));
+      // The same creep on foot sorts by its ground point alone.
+      const walker = layoutCreep(
+        { ...flyer, flying: false },
+        sheetOf(id),
+        { heading: 0, moving: false, age: 17 },
+        ORIGIN,
+        STILL,
+      );
+      expect(walker.zIndex).toBe(creepZIndex(ground.x, ground.y, flyer.id));
+    }
+  });
+
+  it("never lets a wall block cover a flyer hovering over it (#78)", () => {
+    // Every wall picture, at every level and damage state, laid with its top
+    // corner on a fine grid all round the flyer: wherever the block's picture
+    // overlaps the flyer's body, the flyer must sort above the block.
+    const walls: Array<{ x: number; y: number }> = [];
+    for (const type of [17, 18]) {
+      for (let level = 1; level <= 5; level += 1) {
+        for (const state of [ArtState.DEFAULT, ArtState.DAMAGED, ArtState.DESTROYED]) {
+          const art = resolveArt(type, level, state);
+          if (art && !walls.some((one) => one.x === art.top.x && one.y === art.top.y)) {
+            walls.push({ x: art.top.x, y: art.top.y });
+          }
+        }
+      }
+    }
+    expect(walls.length).toBeGreaterThan(5);
+    let overlaps = 0;
+    const covered: string[] = [];
+    for (const id of ["C14", "C15", "C16", "IC5"]) {
+      const sheet = sheetOf(id);
+      const flyer = creepOf({ monsterId: id, flying: true });
+      for (let age = 0; age < 320; age += 40) {
+        const body = layoutCreep(
+          flyer,
+          sheet,
+          { heading: 0, moving: true, age },
+          ORIGIN,
+          STILL,
+        );
+        const left = body.x;
+        const right = body.x + sheet.frameWidth;
+        const top = body.y;
+        const bottom = body.y + sheet.frameHeight;
+        for (let wy = body.groundY - 200; wy <= body.groundY + 200; wy += 3) {
+          for (let wx = left - 50; wx <= right + 10; wx += 8) {
+            const block = depthKey(wx, wy, 7) * 8;
+            for (const art of walls) {
+              const artLeft = wx + art.x;
+              const artTop = wy + art.y;
+              const hit =
+                artLeft < right &&
+                artLeft + WALL_ART_MAX_SIZE > left &&
+                artTop < bottom &&
+                artTop + WALL_ART_MAX_SIZE > top;
+              if (!hit) continue;
+              overlaps += 1;
+              if (body.zIndex <= block)
+                covered.push(`${id} age ${age} under a block at ${wx},${wy}`);
+            }
+          }
+        }
+      }
+    }
+    expect(covered).toEqual([]);
+    // The sweep did put blocks under every flyer's body.
+    expect(overlaps).toBeGreaterThan(1000);
+  });
 });
+
+/** The largest wall picture on either side: `buildings/walls/top.4.v2.png` is 40 x 43. */
+const WALL_ART_MAX_SIZE = 43;
 
 describe("building damage steps", () => {
   it("darkens at 75, 50 and 25 percent and reads zero as a ruin", () => {
@@ -334,12 +421,15 @@ const hostOf = (): Host => {
 const setUp = (
   loader = (url: string) => Promise.resolve(blankSheet(keyOf(url))),
   monsters?: Record<string, number>,
+  shadowLayer?: Container,
 ) => {
   const session = new AttackSession({ target: targetOf(monsters), seed: 1 });
   const response = towerYard();
   session.load(response);
   const yard = readYard(response);
-  const host = hostOf();
+  const host: Host = shadowLayer
+    ? { ...hostOf(), groundShadowLayer: () => shadowLayer }
+    : hostOf();
   const overlay = new Container();
   const marker = new Container();
   overlay.addChild(marker);
@@ -515,6 +605,55 @@ const playUntil = (
   }
   return false;
 };
+
+describe("flyers over the yard (#78)", () => {
+  const flyTeratorn = async (shadowLayer?: Container) => {
+    const setup = setUp(undefined, { C14: 1 }, shadowLayer);
+    setup.session.appendFling({ x: -200, y: -200, monsters: { C14: 1 } });
+    await flush();
+    play(setup.session, 0.5, setup.layer);
+    // The shadow sheet is only asked for once the body is drawn.
+    await flush();
+    play(setup.session, 0.1, setup.layer);
+    const creep = setup.session.battle()?.creeps()[0];
+    if (!creep) throw new Error("the Teratorn is gone");
+    return { ...setup, creep };
+  };
+
+  it("flies the Teratorn, draws it at altitude and sorts it by altitude", async () => {
+    const { host, layer, yard, creep } = await flyTeratorn(new Container());
+    expect(creep.flying).toBe(true);
+    const origin = { x: yard.bounds.originX, y: yard.bounds.originY };
+    const ground = groundWorld(creep.ix, creep.iy, origin);
+    const bodies = host.depth.children as unknown as Array<{ y: number; zIndex: number }>;
+    expect(bodies).toHaveLength(1);
+    const body = bodies[0];
+    if (!body) throw new Error("no body");
+    // Hovering about 108 px up, give or take the bob.
+    expect(ground.y - body.y).toBeGreaterThan(90);
+    expect(body.zIndex).toBe(creepZIndex(ground.x, ground.y + flyerAltitude("C14"), creep.id));
+    layer.destroy();
+  });
+
+  it("lays its shadow in the yard's shadow layer, under every building", async () => {
+    const shadows = new Container();
+    const { host, layer } = await flyTeratorn(shadows);
+    expect(host.depth.children).toHaveLength(1);
+    expect(shadows.children).toHaveLength(1);
+    expect((shadows.children[0] as { visible: boolean }).visible).toBe(true);
+    layer.destroy();
+    expect(shadows.children).toHaveLength(0);
+  });
+
+  it("keeps the shadow just under the body when the host has no shadow layer", async () => {
+    const { host, layer } = await flyTeratorn();
+    const children = host.depth.children as unknown as Array<{ zIndex: number }>;
+    expect(children).toHaveLength(2);
+    const [body, shadow] = children;
+    expect(shadow?.zIndex).toBe((body?.zIndex ?? 0) - 1);
+    layer.destroy();
+  });
+});
 
 describe("hits, wounds and steady walking", () => {
   it("keeps a walking champion on its walk row when a frame brings no new tick (#65)", async () => {
