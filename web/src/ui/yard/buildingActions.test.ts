@@ -287,6 +287,31 @@ describe("panelModel: which blocks each building gets", () => {
     expect(model.maxed).toBe(true);
   });
 
+  it("each monster building opens its tab of the Monsters screen (D4)", () => {
+    const context = contextOf({
+      buildings: [
+        HALL(6),
+        building(2, 8, 1),
+        building(3, 13, 1),
+        building(4, 16, 1),
+        building(5, 15, 1),
+        building(6, 26, 1),
+        building(7, 116, 1),
+      ],
+    });
+    const tabs = [2, 3, 4, 5, 6, 7].map((id) => {
+      const model = panelModel(pick(context, id), context);
+      expect(model.open).toBe("monsters");
+      return model.monstersTab;
+    });
+    expect(tabs).toEqual(["unlock", "hatch", "hatch", "housing", "train", "lab"]);
+  });
+
+  it("no other building names a Monsters tab", () => {
+    const context = contextOf({ buildings: [HALL(6), building(2, 20, 4), building(3, 11, 1)] });
+    for (const id of [2, 3]) expect(panelModel(pick(context, id), context).monstersTab).toBeNull();
+  });
+
   it("a decoration offers nothing", () => {
     const context = contextOf({ buildings: [HALL(5), building(2, 55, 1)] });
     expect(panelModel(pick(context, 2), context)).toMatchObject({

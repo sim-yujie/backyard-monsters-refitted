@@ -55,7 +55,12 @@ const fakeApi = () =>
 const setup = (
   buildings: BuildingData[],
   id: number,
-  options: { load?: Partial<BaseLoadResponse>; own?: boolean; panel?: Partial<BuildingPanelOptions> } = {},
+  options: {
+    load?: Partial<BaseLoadResponse>;
+    own?: boolean;
+    panel?: Partial<BuildingPanelOptions>;
+    scene?: Partial<YardUiBinding["scene"]>;
+  } = {},
 ) => {
   const api = fakeApi();
   const store = new YardStore({
@@ -66,7 +71,7 @@ const setup = (
   });
   const binding: YardUiBinding = {
     store,
-    scene: { selectBuilding: vi.fn() },
+    scene: { selectBuilding: vi.fn(), ...options.scene },
     notices: {} as Notices,
   };
   const panel = new BuildingPanel({
@@ -230,5 +235,28 @@ describe("BuildingPanel: buildings without an Upgrade here", () => {
     const { element } = setup([HALL, building(2, 20, 4)], 2, { own: false });
     expect(buttons(element)).toHaveLength(0);
     expect(infoLines(element)).toContain("Range 190 → 200");
+  });
+});
+
+describe("BuildingPanel: the monster buildings", () => {
+  it("opens the Monster Locker's Unlock tab from Open, with the building named", () => {
+    const openMonsters = vi.fn();
+    const { element } = setup([HALL, building(2, 8, 2)], 2, { scene: { openMonsters } });
+    const open = buttonNamed(element, "Open")!;
+    expect(open).toBeDefined();
+    open.click();
+    expect(openMonsters).toHaveBeenCalledWith("unlock", { buildingId: 2 });
+  });
+
+  it("opens a Hatchery on Hatch", () => {
+    const openMonsters = vi.fn();
+    const { element } = setup([HALL, building(3, 13, 1)], 3, { scene: { openMonsters } });
+    buttonNamed(element, "Open")!.click();
+    expect(openMonsters).toHaveBeenCalledWith("hatch", { buildingId: 3 });
+  });
+
+  it("offers no Open where the scene has no Monsters screen", () => {
+    const { element } = setup([HALL, building(2, 8, 2)], 2);
+    expect(buttonNamed(element, "Open")).toBeUndefined();
   });
 });

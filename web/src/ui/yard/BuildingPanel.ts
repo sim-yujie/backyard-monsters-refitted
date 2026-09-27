@@ -37,7 +37,8 @@ import { describeSeconds } from "./upgradeText";
  * now and after the next level (`buildingInfo.ts`), then one action block —
  * the running job with its countdown, speed-ups and Cancel, or the next
  * upgrade with its cost, time and the one reason it cannot start — then an
- * Open button for the buildings that are doors (Map Room, Yard Planner), and
+ * Open button for the buildings that are doors (Map Room, Yard Planner, the
+ * monster buildings' tabs of the Monsters screen), and
  * finally Details: every field the save sends, collapsed.
  *
  * What is offered and what it costs is decided in `buildingActions.ts`; this
@@ -359,6 +360,18 @@ export class BuildingPanel {
         wrap.append(button, gateText(model.openBlocked));
         return wrap;
       }
+      return button;
+    }
+    const scene = this.yard?.scene;
+    if (model?.open === "monsters" && model.monstersTab && scene?.openMonsters) {
+      const tab = model.monstersTab;
+      const button = actionButton(
+        "Open",
+        () => scene.openMonsters?.(tab, { buildingId: building.id }),
+        "btn--primary",
+      );
+      button.classList.add("building-panel__planner");
+      button.title = "Open the Monsters screen";
       return button;
     }
     if (this.planner && (model ? model.open === "planner" : isPlanner(building))) {

@@ -1,6 +1,7 @@
 import type { ResourceCaps, Resources } from "@/api/types";
 import { nextWorkerJob } from "@/game/yard/jobs";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
+import { MonstersTabId } from "./monsters/monstersTab";
 import { formatAmount, formatCompact } from "./format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
 import { JobNotices } from "./yard/JobNotices";
@@ -24,8 +25,9 @@ import { JobNotices } from "./yard/JobNotices";
  * resource's storage cap as "amount / cap" with a thin fill bar that turns
  * amber when the silo is full, a Workers control ("free / total") that goes
  * to the job finishing soonest, and a toast for every job the server says
- * finished (`JobNotices`). The map, the attack screen and a foreign yard have
- * no binding and show the amounts alone.
+ * finished (`JobNotices`), and a Monsters button that opens the Monsters
+ * screen on its Unlock tab (design §4.1). The map, the attack screen and a
+ * foreign yard have no binding and show the amounts alone.
  */
 
 /**
@@ -52,6 +54,9 @@ export const FULL_NOTE = "Full: new income is lost. Build or upgrade Storage Sil
 
 /** The worker art: the orange builder with the hammer and the hard hat. */
 const WORKER_ICON_URL = "/assets/archived/worker.v1.png";
+
+/** The Monsters button's picture: a Pokey, the first monster every player has. */
+const MONSTERS_ICON_URL = "/assets/monsters/C1-small.png";
 
 /** How full a silo is: the fill bar's share, and whether new income is lost. */
 export interface CapState {
@@ -153,6 +158,8 @@ export class Hud {
   private readonly workersButton: HTMLButtonElement;
   private readonly workersName: HTMLElement;
   private readonly workersValue: HTMLElement;
+  private readonly monsters: HTMLElement;
+  private readonly monstersName: HTMLElement;
   private fitted: HudFit = HudFit.FULL;
 
   constructor(options: HudOptions) {
@@ -226,6 +233,29 @@ export class Hud {
     this.workersButton.addEventListener("click", () => this.goToNextJob());
     this.workers.append(this.workersButton);
 
+    // Monsters: the own yard's Monsters screen (§4.1), so hidden until a
+    // binding that can open it comes.
+    this.monsters = document.createElement("div");
+    this.monsters.className = "hud__monsters";
+    this.monsters.hidden = true;
+    const monstersButton = document.createElement("button");
+    monstersButton.type = "button";
+    monstersButton.className = "hud__resource-button hud__monsters-button";
+    monstersButton.title = "Monsters: unlock, hatch and house your monsters";
+    monstersButton.setAttribute("aria-label", "Monsters");
+    const monstersIcon = document.createElement("span");
+    monstersIcon.className = "hud__monsters-icon";
+    monstersIcon.setAttribute("aria-hidden", "true");
+    monstersIcon.style.backgroundImage = `url("${MONSTERS_ICON_URL}")`;
+    this.monstersName = document.createElement("span");
+    this.monstersName.className = "hud__monsters-name";
+    this.monstersName.textContent = "Monsters";
+    monstersButton.append(monstersIcon, this.monstersName);
+    monstersButton.addEventListener("click", () =>
+      this.yardBinding?.scene.openMonsters?.(MonstersTabId.UNLOCK),
+    );
+    this.monsters.append(monstersButton);
+
     const spacer = document.createElement("div");
     spacer.className = "hud__spacer";
 
@@ -243,7 +273,7 @@ export class Hud {
       this.sceneButtons.set(scene.id, button);
     }
 
-    this.element.append(brand, resources, this.workers, spacer, scenes);
+    this.element.append(brand, resources, this.workers, this.monsters, spacer, scenes);
 
     if (options.onSignOut) {
       const signOut = document.createElement("button");
@@ -400,6 +430,7 @@ export class Hud {
     }
 
     this.workers.hidden = store === null;
+    this.monsters.hidden = !this.yardBinding?.scene.openMonsters;
     if (store) {
       const { total, busy } = store.workers;
       const free = Math.max(0, total - busy);
@@ -427,6 +458,7 @@ export class Hud {
     for (const readout of this.readouts.values()) this.render(readout);
     // The icon says "workers" once the bar is short of room.
     this.workersName.hidden = level !== HudFit.FULL;
+    this.monstersName.hidden = level === HudFit.COMPACT;
   }
 
   private readonly onResize = (): void => this.fit();

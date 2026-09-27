@@ -340,6 +340,25 @@ describe("the HUD on the player's own yard", () => {
     expect(selectBuilding).toHaveBeenCalledTimes(1);
   });
 
+  it("offers Monsters on the own yard only, and opens the screen on Unlock (§4.1)", () => {
+    const monsters = (): HTMLElement => hud.element.querySelector<HTMLElement>(".hud__monsters")!;
+    expect(monsters().hidden).toBe(true);
+    // A binding whose scene has no Monsters screen shows no button either.
+    hud.bindYard(binding);
+    expect(monsters().hidden).toBe(true);
+
+    const openMonsters = vi.fn();
+    hud.bindYard({ ...binding, scene: { selectBuilding, openMonsters } });
+    expect(monsters().hidden).toBe(false);
+    const button = monsters().querySelector<HTMLButtonElement>("button")!;
+    expect(button.getAttribute("aria-label")).toBe("Monsters");
+    button.click();
+    expect(openMonsters).toHaveBeenCalledWith("unlock");
+
+    hud.bindYard(null);
+    expect(monsters().hidden).toBe(true);
+  });
+
   it("toasts what the server says finished, and a click on a building selects it", () => {
     hud.bindYard(binding);
     store.emit({

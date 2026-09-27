@@ -27,6 +27,8 @@ import { YardRenderer, YardView } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
+import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
+import { monstersTabFor, type MonstersFocus, type MonstersTabId } from "@/ui/monsters/monstersTab";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
 import { describeUpgradeReport } from "@/ui/yard/upgradeText";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
@@ -148,6 +150,8 @@ export class YardScene implements Scene {
   private input: YardInput | null = null;
   private panel: BuildingPanel | null = null;
   private panelDock: HTMLElement | null = null;
+  /** The own yard's Monsters screen (§4.1), built the first time it opens. */
+  private monsters: MonstersScreen | null = null;
 
   private yard: Yard | null = null;
   /** The save the yard was built from; on the own yard, always the store's. */
@@ -403,6 +407,7 @@ export class YardScene implements Scene {
       // after it closes.
       if (!this.planner) this.store?.tick();
       this.panel?.tick(Date.now() / 1000);
+      this.monsters?.tick();
       this.refreshStatus();
     }
 
@@ -720,6 +725,7 @@ export class YardScene implements Scene {
     if (!building) {
       this.panel?.close();
       this.panel = null;
+      this.monsters?.besidePanel(false);
       return;
     }
 
@@ -734,6 +740,7 @@ export class YardScene implements Scene {
           this.panel = null;
           this.selected = null;
           this.renderer.setSelected(null);
+          this.monsters?.besidePanel(false);
         },
         // Clicking the Yard Planner should open the yard planner. The offer is
         // left out entirely when there is none to open, which is also the only
@@ -753,6 +760,26 @@ export class YardScene implements Scene {
       }).mount(dock);
     }
     this.panel.show(building);
+    this.monsters?.besidePanel(true);
+
+    // A monster building opens its tab of the Monsters screen (D4), beside
+    // the panel, which keeps the building's own upgrade.
+    const tab = monstersTabFor(building.type);
+    if (tab && this.binding) this.openMonsters(tab, { buildingId: building.id });
+  }
+
+  /**
+   * Opens the Monsters screen on a tab (§4.1): the HUD's Monsters button, a
+   * monster building's click and its panel's Open button come here. Own yard
+   * only, and not over the planner.
+   */
+  private openMonsters(tab: MonstersTabId, focus: MonstersFocus = {}): void {
+    const binding = this.binding;
+    const context = this.context;
+    if (!binding || !context || this.planner) return;
+    this.monsters ??= new MonstersScreen({ binding }).mount(context.overlay.content);
+    this.monsters.besidePanel(this.panel !== null);
+    this.monsters.open(tab, focus);
   }
 
   /* ── Planner ────────────────────────────────────────────────────────── */
@@ -782,6 +809,7 @@ export class YardScene implements Scene {
     if (!yard || !camera || !context || !toolbar) return;
 
     this.select(null);
+    this.monsters?.close();
     this.planner = new YardPlanner({
       yard,
       renderer: this.renderer,
@@ -940,7 +968,10 @@ export class YardScene implements Scene {
     this.unsubscribeStore = store.subscribe((change) => this.onStoreChange(change));
     this.binding = {
       store,
-      scene: { selectBuilding: (id) => this.focusBuilding(id) },
+      scene: {
+        selectBuilding: (id) => this.focusBuilding(id),
+        openMonsters: (tab, focus) => this.openMonsters(tab, focus),
+      },
       notices: this.notices,
     };
     this.hud?.bindYard(this.binding);
@@ -948,6 +979,8 @@ export class YardScene implements Scene {
   }
 
   private dropStore(): void {
+    this.monsters?.destroy();
+    this.monsters = null;
     this.unsubscribeStore?.();
     this.unsubscribeStore = null;
     this.store?.destroy();

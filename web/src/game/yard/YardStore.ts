@@ -14,6 +14,7 @@ import type {
 import { YARD_STATE_KEYS } from "@/api/types";
 import { yardApi, yardRefusal, type YardApi, type YardRefusal } from "@/api/yard";
 import type { Notices } from "@/ui/maproom/Notices";
+import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
 import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES } from "./buildingCosts";
 import { predictCompletion, SERVER_COMPLETED_KINDS, yardJobs, type YardJob } from "./jobs";
 import { freeWorkers, holdsWorker } from "./workers";
@@ -69,6 +70,9 @@ import { readYard, type Yard, type YardBuilding, type YardWorkers } from "./yard
  * - `binding.scene.selectBuilding(id)` — pans the camera to a building and
  *   opens its panel: the HUD's Workers control (soonest `nextWorkerJob`) and
  *   a clicked job notice use it.
+ * - `binding.scene.openMonsters(tab, focus)` — opens the Monsters screen
+ *   (`web/src/ui/monsters/MonstersScreen.ts`) on a tab: the HUD's Monsters
+ *   button and the Open button on a monster building use it.
  * - `binding.notices` — the scene's notice dock, for job toasts.
  *
  * The scene owns the store's lifetime: it creates it after the own-yard
@@ -165,6 +169,11 @@ export interface YardStoreActions {
 export interface YardSceneHooks {
   /** Pans the camera to a building and opens its panel. */
   selectBuilding(id: number): void;
+  /**
+   * Opens the Monsters screen on a tab (§4.1): the HUD's Monsters button and a
+   * monster building's Open button use it. Absent where there is no screen.
+   */
+  openMonsters?(tab: MonstersTabId, focus?: MonstersFocus): void;
 }
 
 /** Handed to the building panel (WP1.5) and the HUD (WP1.6) on the player's own yard. */

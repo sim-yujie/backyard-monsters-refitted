@@ -15,6 +15,7 @@ import { countdownProgress } from "@/game/yard/jobs";
 import { ladderFor } from "@/game/yard/planner/upgrades";
 import { freeWorkers, holdsWorker, sharperToolsMultiplier } from "@/game/yard/workers";
 import type { Yard, YardBuilding, YardWorkers } from "@/game/yard/yardModel";
+import { monstersTabFor, type MonstersTabId } from "@/ui/monsters/monstersTab";
 
 /**
  * What the building panel offers for one building, as data
@@ -141,8 +142,8 @@ export interface CancelOffer {
   readonly lost: UpgradeCost;
 }
 
-/** Which door a building opens. */
-export type OpenTarget = "map" | "planner";
+/** Which door a building opens: the world map, the layout planner, or the Monsters screen. */
+export type OpenTarget = "map" | "planner" | "monsters";
 
 /** Everything the panel shows for a building on the player's own yard. */
 export interface PanelModel {
@@ -152,6 +153,12 @@ export interface PanelModel {
   readonly maxed: boolean;
   readonly job: JobOffer | null;
   readonly open: OpenTarget | null;
+  /**
+   * With `open: "monsters"`, the tab the building opens (§4.1, D4): Monster
+   * Locker → Unlock, Hatchery and HCC → Hatch, Housing → Housing, Academy →
+   * Train, Lab → Lab. Null otherwise.
+   */
+  readonly monstersTab: MonstersTabId | null;
   /** Why an Open button cannot be pressed (the Map Room below Town Hall 6). */
   readonly openBlocked: string | null;
   /** A walls-and-traps pointer to where they are upgraded instead. */
@@ -370,18 +377,22 @@ export const jobOffer = (building: YardBuilding, context: PanelContext): JobOffe
 /** Everything the own-yard panel shows for a building. */
 export const panelModel = (building: YardBuilding, context: PanelContext): PanelModel => {
   const upgrade = upgradeOffer(building, context);
+  const monstersTab = monstersTabFor(building.type);
   const open: OpenTarget | null =
     building.type === MAP_ROOM_TYPE
       ? "map"
       : building.type === YARD_PLANNER_TYPE
         ? "planner"
-        : null;
+        : monstersTab
+          ? "monsters"
+          : null;
   const hall = townHallLevel(context.yard);
   return {
     upgrade: upgrade && upgrade.gate?.reason !== "maxLevel" ? upgrade : null,
     maxed: upgrade?.gate?.reason === "maxLevel",
     job: jobOffer(building, context),
     open,
+    monstersTab,
     openBlocked:
       open === "map" && hall < MAP_TOWN_HALL
         ? `The world map opens at Town Hall ${MAP_TOWN_HALL}.`

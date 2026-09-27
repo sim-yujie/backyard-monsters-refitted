@@ -1,0 +1,605 @@
+/*
+ * The Monsters screen (`web/src/ui/monsters/MonstersScreen.ts`, design
+ * `docs/design/yard-buildings.md` §4.1) and its Unlock tab (`LockerTab.ts`, §4.3).
+ *
+ * Same rule as ui.css: every value comes from tokens.css. The frame is the
+ * shared `.panel`; buttons are `.btn`, Shiny spends `.shiny-button`
+ * (building-panel.css), amounts `.res-amount` (ui.css). What is new here is the
+ * docked frame, the tab strip, the header, the list and the card.
+ */
+
+/* ── The frame: docked right under the HUD, full height ─────────────────── */
+
+.monsters-screen {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  right: var(--space-4);
+  bottom: var(--space-4);
+  /* Over the zoom slider and minimap (planner.css `.yard-viewtools`), which it
+     covers while open; opened after them, so it wins the tie. */
+  z-index: var(--z-hud);
+  width: min(760px, calc(100vw - 2 * var(--space-4)));
+  max-width: none;
+  min-width: 0;
+}
+
+/* Beside the 300px building panel (maproom.css `.map-dock--right`), not over it. */
+.monsters-screen--beside-panel {
+  right: calc(300px + 2 * var(--space-4));
+  width: min(760px, calc(100vw - 300px - 4 * var(--space-4)));
+}
+
+.monsters-screen[hidden] {
+  display: none;
+}
+
+.monsters-screen .panel__titlebar {
+  flex-wrap: wrap;
+  row-gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
+.monsters-screen .panel__title {
+  flex: none;
+}
+
+.monsters-screen__close {
+  margin-left: auto;
+}
+
+.monsters-screen .panel__body {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Tab strip: the HUD's scene switcher, one size down ─────────────────── */
+
+.monsters-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.monsters-tabs__tab {
+  flex: none;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--colour-text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--easing), color var(--motion-fast) var(--easing);
+}
+
+.monsters-tabs__tab:hover {
+  color: var(--colour-text);
+  background: var(--colour-surface-overlay);
+}
+
+.monsters-tabs__tab[aria-selected="true"] {
+  background: var(--colour-accent);
+  border-color: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.monsters-tabs__tab:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ── Header: housing, goo, putty ─────────────────────────────────────────── */
+
+.monsters-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-5);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--colour-border);
+  background: var(--colour-surface-raised);
+  font-size: var(--text-sm);
+}
+
+.monsters-header__housing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1 1 220px;
+}
+
+.monsters-header__label {
+  color: var(--colour-text-muted);
+}
+
+.monsters-header__value,
+.monsters-header__resource {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.monsters-header__meter {
+  flex: 1;
+  min-width: 60px;
+  max-width: 180px;
+}
+
+/* A thin bar, shared by the housing meter and the unlock's progress. */
+.monsters-bar {
+  display: block;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-overlay);
+  overflow: hidden;
+}
+
+.monsters-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--colour-info);
+  transition: width var(--motion-normal) var(--easing);
+}
+
+.monsters-header__meter .monsters-bar__fill {
+  background: var(--colour-success);
+}
+
+.monsters-bar--full .monsters-bar__fill {
+  background: var(--colour-accent);
+}
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+
+.monsters-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.monsters-status {
+  margin: 0;
+  padding: var(--space-2) var(--space-4) 0;
+  font-size: var(--text-sm);
+}
+
+.monsters-status--good {
+  color: var(--colour-success);
+}
+
+.monsters-status--bad {
+  color: var(--colour-danger);
+}
+
+/* Why the button under it is disabled: a state, not an error. */
+.monsters-gate {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-accent);
+}
+
+/* A tab whose building the yard lacks: what to build, and the hall it needs. */
+.monsters-empty,
+.monsters-placeholder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 46ch;
+  margin: var(--space-6) auto;
+  padding: 0 var(--space-4);
+  text-align: center;
+}
+
+.monsters-empty__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 800;
+}
+
+.monsters-empty__text,
+.monsters-empty__gate,
+.monsters-placeholder__text {
+  margin: 0;
+  color: var(--colour-text-muted);
+  text-wrap: pretty;
+}
+
+.monsters-empty__gate--short {
+  color: var(--colour-accent);
+  font-weight: 700;
+}
+
+/* ── Unlock tab ──────────────────────────────────────────────────────────── */
+
+.locker {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.locker__running-slot {
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.locker-running {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.locker-running__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.locker-running__picture {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.locker-running__title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 800;
+}
+
+.locker-running__countdown {
+  color: var(--colour-info);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.locker-running__overdrive {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-success);
+}
+
+.locker-running__buttons > .btn {
+  flex: 0 1 auto;
+  min-height: 34px;
+}
+
+.locker-cancel__open {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--colour-danger);
+}
+
+.locker-cancel--confirming {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-danger);
+  border-radius: var(--radius-sm);
+}
+
+.locker-cancel__question,
+.locker-cancel__lost {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.locker-cancel__lost {
+  color: var(--colour-accent);
+}
+
+.locker .btn--danger {
+  background: var(--colour-danger);
+  border-color: var(--colour-danger);
+  color: var(--colour-text-inverse);
+}
+
+/* The list and the card side by side; each scrolls on its own. */
+.locker__split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(0, 1.25fr);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.locker__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  min-height: 0;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.locker__list > li + li {
+  border-top: 1px solid var(--colour-border);
+}
+
+.locker-row {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: var(--space-2);
+  align-items: center;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.locker-row:hover {
+  background: var(--colour-surface-overlay);
+}
+
+.locker-row[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--colour-accent) 16%, var(--colour-surface-sunken));
+  box-shadow: inset 0 0 0 1px var(--colour-accent);
+}
+
+.locker-row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--colour-accent);
+}
+
+.locker-row__picture {
+  grid-row: 1 / span 2;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.locker-row__name {
+  font-weight: 700;
+}
+
+.locker-row__state {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.locker-row--unlocked .locker-row__state {
+  color: var(--colour-success);
+}
+
+.locker-row--unlocked .locker-row__state::before {
+  content: "✓ ";
+}
+
+.locker-row--unlocking .locker-row__state {
+  color: var(--colour-info);
+  font-weight: 700;
+}
+
+.locker-row--locked .locker-row__picture {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+.locker-row--locked .locker-row__name {
+  color: var(--colour-text-muted);
+}
+
+.locker__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.locker-detail__head {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.locker-detail__portrait {
+  flex: none;
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.locker-detail__heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.locker-detail__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 400;
+  line-height: var(--leading-tight);
+}
+
+.locker-detail__facts,
+.locker-detail__stats {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.locker-detail__stats {
+  color: var(--colour-text-muted);
+}
+
+.locker-detail__action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.locker-detail__action > .btn {
+  align-self: flex-start;
+}
+
+.locker-detail__buttons > .btn {
+  flex: 0 1 auto;
+  min-height: 34px;
+}
+
+.locker-detail__note {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.locker-detail__blurb {
+  margin: 0;
+  max-width: 65ch;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-muted);
+}
+
+.locker-detail__blurb strong {
+  color: var(--colour-text);
+}
+
+/* ── HUD entry ───────────────────────────────────────────────────────────── */
+
+.hud__monsters {
+  display: flex;
+  flex: none;
+  white-space: nowrap;
+}
+
+.hud__monsters-button {
+  gap: var(--space-1);
+}
+
+.hud__monsters-icon {
+  display: inline-block;
+  height: 24px;
+  aspect-ratio: 1;
+  background: center / contain no-repeat;
+}
+
+.hud__monsters-name {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+/* ── Narrow screens ──────────────────────────────────────────────────────── */
+
+/* No room beside the building panel: the screen takes the right side over it. */
+@media (width <= 1080px) {
+  .monsters-screen--beside-panel {
+    right: var(--space-4);
+    width: min(760px, calc(100vw - 2 * var(--space-4)));
+  }
+}
+
+/* The card goes under the list. */
+@media (width <= 760px) {
+  .locker__split {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(140px, 1fr) auto;
+  }
+
+  .locker__detail {
+    overflow: visible;
+  }
+}
+
+/* A phone: a bottom sheet over the lower part of the yard. */
+@media (width <= 620px) {
+  .monsters-screen,
+  .monsters-screen--beside-panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: min(82vh, calc(100vh - var(--hud-height)));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom: 0;
+  }
+
+  .monsters-header {
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-1) var(--space-3);
+  }
+
+  .locker__running-slot {
+    padding: var(--space-2) var(--space-3) 0;
+  }
+
+  .locker__split {
+    padding: var(--space-2) var(--space-3) var(--space-3);
+    overflow-y: auto;
+    grid-template-rows: minmax(160px, 38vh) auto;
+  }
+
+  .locker-detail__portrait {
+    width: 72px;
+    height: 72px;
+  }
+
+  /* The top row is already nearly full with Workers, the screens and Sign
+     out: the button goes icon-only and sits tight against Workers, and the
+     spacer's two gaps give way to an auto margin that does its job. */
+  .hud:has(.hud__monsters:not([hidden])) .hud__spacer {
+    display: none;
+  }
+
+  .hud:has(.hud__monsters:not([hidden])) .hud__scenes {
+    margin-left: auto;
+  }
+
+  .hud__monsters {
+    margin-left: calc(var(--space-1) - var(--space-2));
+  }
+
+  .hud__monsters-button {
+    padding: 0;
+  }
+
+  .hud__monsters-icon {
+    height: 20px;
+  }
+
+  .hud__monsters-name {
+    display: none;
+  }
+}
