@@ -186,6 +186,15 @@ describe("upgrade", () => {
     expect(reasonOf(() => planUpgradeAction(save, 8, NOW))).toEqual([400, "useBatchRoute"]);
   });
 
+  test("the Map Room is refused: its steps belong to WP3.7 (D16)", () => {
+    const save = yard({ resources: { ...RICH } });
+    save.buildingdata!["0"] = { id: 0, t: HALL, x: 0, y: 0, l: 6 };
+    save.buildingdata!["8"] = { id: 8, t: 11, x: 0, y: 0, l: 1 };
+
+    expect(refusal(() => planUpgradeAction(save, 8, NOW)).data).toEqual({ reason: "mapRoom", id: 8 });
+    expect(refusal(() => planUpgradeAction(save, 8, NOW)).status).toBe(409);
+  });
+
   test("decorations, mushrooms and unknown ids are malformed requests", () => {
     const save = yard();
     save.buildingdata!["8"] = { id: 8, t: 57, x: 0, y: 0, l: 1 };

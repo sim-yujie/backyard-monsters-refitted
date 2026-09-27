@@ -13,6 +13,7 @@ import {
   type OneUpgradeRefusal,
   type UpgradeWalkSave,
 } from "../yardplanner/startUpgrades.js";
+import { MAP_ROOM_TYPE, mapRoomErr } from "./buildingJobs.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 
 /**
@@ -110,8 +111,10 @@ export const refusalErr = (refusal: OneUpgradeRefusal) => {
  * when it is free to finish.
  *
  * Refuses, in this order: `400 badRequest` (no such building, or one with no
- * ladder: decorations, mushrooms), `400 useBatchRoute` (walls and traps), then
- * `409` `busy`, `damaged`, `townHall`, `maxLevel`, `requirements`,
+ * ladder: decorations, mushrooms), `400 useBatchRoute` (walls and traps),
+ * `409 mapRoom` (the Map Room's steps belong to WP3.7: its level is the map
+ * version, capped at 2, and its L1 to L2 step joins a world, decision D16),
+ * then `409` `busy`, `damaged`, `townHall`, `maxLevel`, `requirements`,
  * `shortfall`, `workers`.
  *
  * @param save - The caught-up main yard.
@@ -130,6 +133,7 @@ export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: numb
       "useBatchRoute"
     );
   }
+  if (Number(building.t) === MAP_ROOM_TYPE) throw mapRoomErr(id);
 
   const step = planOneUpgrade(save, id, now);
   if (!step.ok) throw refusalErr(step);
