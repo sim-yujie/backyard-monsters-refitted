@@ -148,6 +148,13 @@ describe("startGate: one reason, in the server's order", () => {
     expect(gate).toEqual({ reason: "shortfall", need: 124_000 });
     expect(gateText(gate!)).toBe("Need 124,000 more putty");
   });
+
+  it("says more silos, not more putty, when the price is over the putty cap (§5.2)", () => {
+    // Brain costs 1,024,000 putty; a yard capped at 500,000 can never save that up.
+    const gate = startGate(entry("C9"), contextOf({ putty: 400_000, cap: 500_000 }));
+    expect(gate).toEqual({ reason: "shortfall", need: 624_000, overCap: true });
+    expect(gateText(gate!)).toBe("Need more silos: this costs more than your storage holds");
+  });
 });
 
 describe("instant", () => {

@@ -1,6 +1,7 @@
 import type { LockerData, ResourceCaps, Resources, StoreData } from "@/api/types";
 import { timeCost } from "@/game/yard/buildingCosts";
 import { JobKind, type YardJob } from "@/game/yard/jobs";
+import { NEED_MORE_SILOS_PHRASE, overCap } from "@/game/yard/storage";
 import type { Yard } from "@/game/yard/yardModel";
 import { LISTED_MONSTERS, monsterEntry, type MonsterEntry } from "./monsterCatalogue";
 
@@ -60,7 +61,12 @@ export type UnlockGate =
   | { readonly reason: "unlockRunning"; readonly monster: string }
   | { readonly reason: "noLocker" }
   | { readonly reason: "lockerLevel"; readonly have: number; readonly need: number }
-  | { readonly reason: "shortfall"; readonly need: number }
+  | {
+      readonly reason: "shortfall";
+      readonly need: number;
+      /** The price is above the putty cap: more silos, not more waiting (§5.2). */
+      readonly overCap?: true;
+    }
   | { readonly reason: "credits"; readonly need: number };
 
 /** The unlock running now. */
@@ -154,7 +160,10 @@ export const startGate = (monster: MonsterEntry, context: LockerContext): Unlock
   const common = commonGate(monster, context);
   if (common) return common;
   const missing = monster.resource - puttyOf(context.resources);
-  return missing > 0 ? { reason: "shortfall", need: missing } : null;
+  if (missing <= 0) return null;
+  return overCap(monster.resource, context.caps?.r3)
+    ? { reason: "shortfall", need: missing, overCap: true }
+    : { reason: "shortfall", need: missing };
 };
 
 /**
@@ -228,7 +237,9 @@ export const gateText = (gate: UnlockGate): string => {
     case "lockerLevel":
       return `Needs Monster Locker level ${gate.need}`;
     case "shortfall":
-      return `Need ${gate.need.toLocaleString("en-US")} more putty`;
+      return gate.overCap
+        ? NEED_MORE_SILOS_PHRASE
+        : `Need ${gate.need.toLocaleString("en-US")} more putty`;
     case "credits":
       return "Not enough Shiny";
   }

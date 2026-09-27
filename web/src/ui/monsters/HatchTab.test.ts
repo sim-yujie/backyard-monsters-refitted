@@ -399,3 +399,19 @@ describe("HatchTab: Finish now and Overdrive", () => {
     );
   });
 });
+
+describe("HatchTab: goo over the cap", () => {
+  const gateText = (root: HTMLElement) => root.querySelector<HTMLElement>(".monsters-gate")?.textContent;
+
+  it("says how much goo is missing, or more silos when the price is over the goo cap (§5.2)", () => {
+    const poor = { resources: { r1: 0, r2: 0, r3: 0, r4: 100 } } as Partial<BaseLoadResponse>;
+    const short = setup(twoHatcheries(poor), { buildingId: 11, monster: "C1" });
+    expect(gateText(short.element)).toBe("Need 150 more");
+
+    const capped = setup(
+      twoHatcheries({ ...poor, caps: { r1: 200, r2: 200, r3: 200, r4: 200 } }),
+      { buildingId: 11, monster: "C1" },
+    );
+    expect(gateText(capped.element)).toBe("Need more silos: this costs more than your storage holds.");
+  });
+});

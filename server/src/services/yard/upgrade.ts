@@ -1,12 +1,6 @@
 import { costOf } from "../../game-data/buildingCosts.js";
 import type { BuildingData } from "../../types/BuildingData.js";
-import type { JsonObject } from "../../types/JsonObject.js";
-import {
-  RESOURCE_KEYS,
-  cancelRefund,
-  storageCap,
-  type StorageCapSave,
-} from "../base/economy/resourceBudget.js";
+import { cancelRefund, type StorageCapSave } from "../base/economy/resourceBudget.js";
 import { levelOf, type ResourceAmounts } from "../yardplanner/costs.js";
 import {
   planOneUpgrade,
@@ -14,6 +8,7 @@ import {
   type UpgradeWalkSave,
 } from "../yardplanner/startUpgrades.js";
 import { MAP_ROOM_TYPE, mapRoomErr } from "./buildingJobs.js";
+import { fitCredit } from "./credit.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 
 /**
@@ -152,27 +147,6 @@ export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: numb
   };
 };
 
-/** One resource as the save holds it; anything unreadable is zero, as the wrapper reads it. */
-const heldOf = (resources: JsonObject | null | undefined, key: string): number => {
-  const value = Number(resources?.[key]);
-  return Number.isFinite(value) ? value : 0;
-};
-
-/**
- * What a credit actually adds once the storage cap has had its say: the
- * wrapper's clamp (`applyOutcome`, T3), worked out ahead so the report can say
- * it. A pool already at or over the cap takes nothing and loses nothing.
- */
-const creditedOf = (save: UpgradeActionSave, credit: ResourceAmounts): ResourceAmounts => {
-  const cap = storageCap(save);
-  const credited = { r1: 0, r2: 0, r3: 0, r4: 0 };
-  for (const key of RESOURCE_KEYS) {
-    const held = heldOf(save.resources, key);
-    credited[key] = Math.max(held, Math.min(held + credit[key], cap)) - held;
-  }
-  return credited;
-};
-
 /**
  * Cancels a running upgrade: the countdown and its length `cL` go, the level
  * stays, and the step's full price comes back (`cancelRefund`, `client/scripts/BFOUNDATION.as:2401-2432`),
@@ -195,7 +169,8 @@ export const planCancelUpgrade = (save: UpgradeActionSave, id: number) => {
 
   const { cU: _cancelled, cL: _length, ...rest } = building;
   const refund = cancelRefund(Number(building.t), levelOf(building));
-  const report: CancelUpgradeReport = { id, refund: creditedOf(save, refund) };
+  // What the wrapper's clamp will let through (`credit.ts`, T3), for the report.
+  const report: CancelUpgradeReport = { id, refund: fitCredit(save, refund).credited };
 
   return {
     report,

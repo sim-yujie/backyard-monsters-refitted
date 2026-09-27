@@ -1,0 +1,88 @@
+import type { JsonObject } from "../../types/JsonObject.js";
+import {
+  RESOURCE_KEYS,
+  noAmounts,
+  storageCap,
+  type StorageCapSave,
+} from "../base/economy/resourceBudget.js";
+import type { ResourceAmounts } from "../yardplanner/costs.js";
+
+/**
+ * Crediting resources to a yard: the storage cap on everything the yard is
+ * given (`docs/design/yard-buildings.md` §5.2, technical default T3).
+ *
+ * The original funds through `BASE.Fund`, which clamps every credit to the
+ * resource's cap and returns what it actually added
+ * (`client/scripts/BASE.as:4494-4536`); charges are not clamped. Every server
+ * credit goes through here: the yard action wrapper's `credit`
+ * (`controllers/yard/yardAction.ts`, which carries every refund — upgrade
+ * cancel, locker cancel, hatchery remove — and every bank), the catch-up's HCC
+ * queue refund (`catchUpMonsters.ts`), and the reports that say what came back
+ * ({@link fitCredit}, worked out before the wrapper applies it).
+ *
+ * The cap is `storageCap` (silos, packing, outposts), one figure for all four
+ * resources. A pool already at or over the cap (an old save, a cap that
+ * shrank) takes nothing and loses nothing.
+ */
+
+/** The slice of a save a credit reads and writes. */
+export interface CreditSave extends StorageCapSave {
+  resources?: JsonObject | null;
+}
+
+/** What a credit came to, per resource. */
+export interface CreditResult {
+  /** What landed in the pool. */
+  credited: ResourceAmounts;
+  /** What did not fit under the cap. */
+  overflow: ResourceAmounts;
+}
+
+/** A non-negative whole amount, 0 for anything else (as the wrapper reads amounts). */
+const wholeOf = (raw: number | undefined): number =>
+  raw !== undefined && Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+
+/** One resource as the save holds it; anything unreadable is zero. */
+const heldOf = (save: CreditSave, key: string): number => {
+  const value = Number(save.resources?.[key]);
+  return Number.isFinite(value) ? value : 0;
+};
+
+/**
+ * What crediting `amounts` would do, without doing it: for a report, or to
+ * decide how much of something to hand over before the wrapper credits it.
+ *
+ * @param save - The yard as it will stand when the credit lands (its silos set the cap).
+ * @param amounts - Any of `r1`..`r4`; missing, negative or unreadable amounts are 0.
+ */
+export const fitCredit = (save: CreditSave, amounts: Partial<ResourceAmounts>): CreditResult => {
+  const cap = storageCap(save);
+  const credited = noAmounts();
+  const overflow = noAmounts();
+  for (const key of RESOURCE_KEYS) {
+    const amount = wholeOf(amounts[key]);
+    const held = heldOf(save, key);
+    credited[key] = Math.max(held, Math.min(held + amount, cap)) - held;
+    overflow[key] = amount - credited[key];
+  }
+  return { credited, overflow };
+};
+
+/**
+ * Credits `amounts` to `save.resources`, each clamped to the storage cap, and
+ * says what landed and what did not fit.
+ *
+ * @param save - Mutated: `resources` is replaced when anything landed.
+ * @param amounts - Any of `r1`..`r4`.
+ */
+export const creditResources = (save: CreditSave, amounts: Partial<ResourceAmounts>): CreditResult => {
+  const result = fitCredit(save, amounts);
+  if (RESOURCE_KEYS.some((key) => result.credited[key] > 0)) {
+    const resources = { ...(save.resources ?? {}) };
+    for (const key of RESOURCE_KEYS) {
+      if (result.credited[key] > 0) resources[key] = heldOf(save, key) + result.credited[key];
+    }
+    save.resources = resources;
+  }
+  return result;
+};

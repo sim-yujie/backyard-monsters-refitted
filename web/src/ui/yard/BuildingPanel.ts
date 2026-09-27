@@ -3,6 +3,7 @@ import type { YardRefusal } from "@/api/yard";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, WALL_TYPES } from "@/game/yard/buildingCosts";
 import { harvesterNow } from "@/game/yard/harvest";
+import { NEED_MORE_SILOS } from "@/game/yard/storage";
 import { progressFraction } from "@/game/yard/jobs";
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import { typeName } from "@/game/yard/planner/summary";
@@ -905,9 +906,7 @@ export const gateSentence = (gate: UpgradeGate): string => {
     case "requirements":
       return `Needs ${gate.requirements.map(requirementText).join(", ")}.`;
     case "shortfall":
-      return gate.overCap
-        ? "Need more silos: this costs more than your storage holds."
-        : "Not enough resources.";
+      return gate.overCap ? NEED_MORE_SILOS : "Not enough resources.";
     case "workers":
       return gate.total === 1 ? "Your worker is busy." : `All ${gate.total} workers are busy.`;
     case "credits":

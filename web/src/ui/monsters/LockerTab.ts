@@ -584,7 +584,9 @@ export const describe = (markup: string): Node[] => {
 const gateLine = (gate: UnlockGate): HTMLElement => {
   const line = document.createElement("p");
   line.className = "monsters-gate";
-  if (gate.reason === "shortfall") line.append("Need ", resourceAmount("r3", gate.need), " more");
+  if (gate.reason === "shortfall" && !gate.overCap) {
+    line.append("Need ", resourceAmount("r3", gate.need), " more");
+  }
   else line.textContent = gateText(gate);
   return line;
 };

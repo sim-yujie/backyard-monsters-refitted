@@ -13,6 +13,7 @@ import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import { countdownProgress } from "@/game/yard/jobs";
 import { ladderFor } from "@/game/yard/planner/upgrades";
+import { overCap as overCapOf } from "@/game/yard/storage";
 import { freeWorkers, holdsWorker, sharperToolsMultiplier } from "@/game/yard/workers";
 import type { Yard, YardBuilding, YardWorkers } from "@/game/yard/yardModel";
 import { monstersTabFor, type MonstersTabId } from "@/ui/monsters/monstersTab";
@@ -268,8 +269,7 @@ export const upgradeOffer = (
       if (missing > 0) {
         shortfall[key] = missing;
         short = true;
-        const cap = context.caps?.[key];
-        if (typeof cap === "number" && cost[key] > cap) overCap = true;
+        if (overCapOf(cost[key], context.caps?.[key])) overCap = true;
       }
     }
     if (short) gate = { reason: "shortfall", shortfall, overCap };

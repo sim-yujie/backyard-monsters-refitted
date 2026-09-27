@@ -27,6 +27,7 @@ import {
   type QueueStack,
 } from "@/game/monsters/hatchPlan";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { NEED_MORE_SILOS, overCap } from "@/game/yard/storage";
 import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { QuantityStepper } from "@/ui/QuantityStepper";
@@ -493,7 +494,11 @@ export class HatchTab implements MonstersTab {
     }
     if (!limits) return [];
     if (limits.queue === 0) return ["The queue is full."];
-    if (limits.goo === 0) return ["Need ", resourceAmount("r4", row.price - yard.goo), " more"];
+    if (limits.goo === 0) {
+      return overCap(row.price, this.context.binding.store.caps?.r4)
+        ? [NEED_MORE_SILOS]
+        : ["Need ", resourceAmount("r4", row.price - yard.goo), " more"];
+    }
     return [];
   }
 

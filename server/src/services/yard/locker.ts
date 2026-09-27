@@ -2,8 +2,9 @@ import { monsterEntry, type MonsterEntry } from "../../game-data/monsterCatalogu
 import { storeItems } from "../../game-data/store/storeItems.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
-import { storageCap, type StorageCapSave } from "../base/economy/resourceBudget.js";
+import type { StorageCapSave } from "../base/economy/resourceBudget.js";
 import { levelOf } from "../yardplanner/costs.js";
+import { fitCredit } from "./credit.js";
 import { instantUnlockPrice, timeCost } from "./shiny.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 
@@ -25,9 +26,6 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 
 /** Monster Locker type id (`client/scripts/YARD_PROPS.as:901`). */
 export const LOCKER_TYPE = 8;
-
-/** Putty is the third resource (`BASE.Charge(3, …)`, `CREATURELOCKER.as:982`). */
-const PUTTY = "r3";
 
 /** The Monster Locker Overdrive store item. */
 export const CLOD_ITEM = "CLOD";
@@ -201,12 +199,6 @@ export const unlockedSlices = (save: LockerSave, monster: string) => ({
   academy: { ...(save.academy ?? {}), [monster]: save.academy?.[monster] ?? { level: 1 } },
 });
 
-/** What a putty credit actually adds once the storage cap has had its say (the wrapper's clamp, T3). */
-const creditedPutty = (save: LockerSave, amount: number): number => {
-  const held = finite(save.resources?.[PUTTY]) ?? 0;
-  return Math.max(held, Math.min(held + amount, storageCap(save))) - held;
-};
-
 /** `report` of `POST /bm/yard/locker/start`. */
 export interface LockerStartReport {
   monster: string;
@@ -254,7 +246,11 @@ export const planLockerCancel = (save: LockerSave) => {
   const { monster } = runningOrThrow(save);
   const refund = monsterEntry(monster)?.resource ?? 0;
   const { [monster]: _cancelled, ...lockerdata } = save.lockerdata ?? {};
-  const report: LockerCancelReport = { monster, refund: { r3: creditedPutty(save, refund) } };
+  // What the wrapper's clamp will let through (`credit.ts`, T3), for the report.
+  const report: LockerCancelReport = {
+    monster,
+    refund: { r3: fitCredit(save, { r3: refund }).credited.r3 },
+  };
 
   return { report, slices: { lockerdata }, credit: { r3: refund } };
 };

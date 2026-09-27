@@ -5,14 +5,11 @@ import type { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
-import {
-  RESOURCE_KEYS,
-  storageCap,
-  type ResourceKey,
-} from "../../services/base/economy/resourceBudget.js";
+import { RESOURCE_KEYS, type ResourceKey } from "../../services/base/economy/resourceBudget.js";
 import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { isShinyLocked } from "../../services/user/shinyLock.js";
 import { catchUpYard, type CompletedJob } from "../../services/yard/catchUp.js";
+import { creditResources } from "../../services/yard/credit.js";
 import { syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import {
   notMainYardErr,
@@ -171,16 +168,14 @@ export const applyOutcome = (save: Save, user: User, outcome: YardOutcome<unknow
 
   if (outcome.slices) Object.assign(save, outcome.slices);
 
-  if (RESOURCE_KEYS.some((key) => debit[key] > 0 || credit[key] > 0)) {
-    // The cap is read after the slices land: a silo the action changed moves it.
-    const cap = storageCap(save);
+  if (RESOURCE_KEYS.some((key) => debit[key] > 0)) {
     const resources = { ...(save.resources ?? {}) };
-    for (const key of RESOURCE_KEYS) {
-      const after = held(key) - debit[key];
-      resources[key] = Math.max(after, Math.min(after + credit[key], cap));
-    }
+    for (const key of RESOURCE_KEYS) resources[key] = held(key) - debit[key];
     save.resources = resources;
   }
+  // Credited after the slices land (a silo the action changed moves the cap)
+  // and after the debit, through the one clamp every credit takes (T3).
+  creditResources(save, credit);
 
   if (shiny > 0) save.credits -= shiny;
 

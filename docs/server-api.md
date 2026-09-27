@@ -861,7 +861,8 @@ JSON), parsed by the route's zod schema in `server/src/schemas/YardSchemas.ts`.
 5. Apply the result: Shiny (`409 shinyLocked` for an account with Shiny locked, `409 credits
    { have, need }` if short), resources (`409 shortfall { r1..r4 }`), then the new save slices,
    the debit, any credit clamped to the storage cap (a pool already over the cap is never
-   reduced), points, and `flinger`/`catapult` again. One flush, commit.
+   reduced; `services/yard/credit.ts`, `creditResources`, the one clamp every server credit takes —
+   the route refunds, banking and the catch-up's HCC queue refund, issue #110), points, and `flinger`/`catapult` again. One flush, commit.
 6. Answer `200 { error: 0, ...YardState, completed, report }`.
 
 A refused request rolls the whole transaction back, catch-up included, so it writes nothing.

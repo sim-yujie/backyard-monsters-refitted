@@ -6,12 +6,13 @@ import type {
   BuildingHealthData,
 } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
-import { storageCap, type StorageCapSave } from "../base/economy/resourceBudget.js";
+import type { StorageCapSave } from "../base/economy/resourceBudget.js";
 import {
   deriveHousingCapacity,
   HOUSING_EXPANSION_ITEMS,
   HOUSING_MIN_HEALTH,
 } from "../monsters/transferRules.js";
+import { fitCredit } from "./credit.js";
 import { obtainableOrThrow } from "./locker.js";
 import {
   levelOf,
@@ -242,12 +243,6 @@ const handOut = (
       startNext(hatchery, model.hcc, levels);
     }
   }
-};
-
-/** What a goo credit actually adds once the storage cap has had its say (the wrapper's clamp, T3). */
-const creditedGoo = (save: HatcherySave, amount: number): number => {
-  const held = numberOf(save.resources?.[GOO]);
-  return Math.max(held, Math.min(held + amount, storageCap(save))) - held;
 };
 
 /**
@@ -491,7 +486,8 @@ export const planHatcheryRemove = (
     slot,
     monster,
     removed,
-    refund: { r4: creditedGoo(save, goo) },
+    // What the wrapper's clamp will let through (`credit.ts`, T3).
+    refund: { r4: fitCredit(save, { r4: goo }).credited.r4 },
   };
   return {
     report,

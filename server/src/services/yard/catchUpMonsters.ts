@@ -3,7 +3,7 @@ import { storeItems } from "../../game-data/store/storeItems.js";
 import { maxHp } from "../../game-rules/combat/stats.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
-import { storageCap, type StorageCapSave } from "../base/economy/resourceBudget.js";
+import type { StorageCapSave } from "../base/economy/resourceBudget.js";
 import { HOUSING_MIN_HEALTH } from "../monsters/transferRules.js";
 import {
   catchUpBuildings,
@@ -11,6 +11,7 @@ import {
   type CatchUpBuildingsSave,
   type StoreItemJob,
 } from "./catchUpBuildings.js";
+import { creditResources } from "./credit.js";
 import { cullHousing, housingCapacity, type HousingYard } from "./housing.js";
 import {
   readProduction,
@@ -339,7 +340,7 @@ export const catchUpMonsters = (
     }
     monsters = writeProduction(before.monsters, model, at);
 
-    const credited = creditGoo(save, goo);
+    const credited = creditResources(save, { r4: goo }).credited.r4;
     if (goo > 0) {
       result.push({
         kind: "queueRefund",
@@ -395,17 +396,6 @@ export const catchUpMonsters = (
   if (mainYard) dropBuildingCopies(save);
 
   return result;
-};
-
-/** Credits goo clamped to the cap (T3), never reducing a pool already over it. Returns what landed. */
-const creditGoo = (save: CatchUpMonstersSave, goo: number): number => {
-  if (goo <= 0) return 0;
-  const resources = { ...(save.resources ?? {}) };
-  const have = Math.max(0, Number(resources.r4) || 0);
-  const after = Math.max(have, Math.min(have + goo, storageCap(save)));
-  resources.r4 = after;
-  save.resources = resources;
-  return after - have;
 };
 
 /** Deletes `rPS`/`rCP`/`rIP`/`mq` from every hatchery and HCC, replacing `buildingdata` only if one was there. */

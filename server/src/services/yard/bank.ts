@@ -1,20 +1,14 @@
 import { maxHp } from "../../game-rules/combat/stats.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
-import type { JsonObject } from "../../types/JsonObject.js";
 import {
   canProduce,
   harvesterRates,
   isHarvester,
 } from "../base/economy/production.js";
-import {
-  RESOURCE_KEYS,
-  noAmounts,
-  storageCap,
-  type ResourceKey,
-  type StorageCapSave,
-} from "../base/economy/resourceBudget.js";
+import { noAmounts, type ResourceKey } from "../base/economy/resourceBudget.js";
 import { levelOf, type ResourceAmounts } from "../yardplanner/costs.js";
 import { bufferOf, counting, harvesterHealth, withBuffer } from "./catchUpHarvesters.js";
+import { fitCredit, type CreditSave } from "./credit.js";
 import { yardBadRequestErr } from "./yardErrors.js";
 
 /**
@@ -50,10 +44,9 @@ import { yardBadRequestErr } from "./yardErrors.js";
  */
 
 /** The slice of a save banking reads. */
-export interface BankSave extends StorageCapSave {
+export interface BankSave extends CreditSave {
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
-  resources?: JsonObject | null;
 }
 
 /** What the route was asked to bank. */
@@ -78,12 +71,6 @@ export interface BankReport {
 
 /** From this tutorial stage on, banking pays half its amount in points (`BRESOURCE.as:449-454`). */
 export const HALF_POINTS_STAGE = 200;
-
-/** One resource as the save holds it; anything unreadable is zero, as the wrapper reads it. */
-const heldOf = (save: BankSave, key: ResourceKey): number => {
-  const value = Number(save.resources?.[key]);
-  return Number.isFinite(value) ? value : 0;
-};
 
 /** Points for one harvester's bank. */
 export const bankPoints = (amount: number, tutorialStage: number): number =>
@@ -162,9 +149,10 @@ const choose = (
 export const planBank = (save: BankSave, request: BankRequest, tutorialStage: number) => {
   const { chosen, skipped } = choose(save, request);
 
-  const cap = storageCap(save);
-  const room = noAmounts();
-  for (const key of RESOURCE_KEYS) room[key] = Math.max(0, cap - heldOf(save, key));
+  // What fits under the cap (`credit.ts`), handed out in id order.
+  const offers = noAmounts();
+  for (const [, building] of chosen) offers[`r${Number(building.t)}` as ResourceKey] += offerOf(building);
+  const room = fitCredit(save, offers).credited;
 
   const banked = noAmounts();
   const leftInBuffers = noAmounts();
