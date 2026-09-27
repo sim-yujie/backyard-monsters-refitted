@@ -14,6 +14,7 @@ import {
   championAttackDelay,
   championByType,
   championIds,
+  championMode,
   championStat,
   flyerMode,
   fortifiedDamage,
@@ -141,6 +142,22 @@ describe("champions", () => {
     expect(championStat("G1", "damage", 1)).toBe(1000);
     expect(championStat("G1", "damage", 6)).toBe(3000);
     expect(championStat("G1", "damage", 9)).toBe(3000);
+  });
+
+  it("reads a champion's movement at its level, so only Fomor flies, and from 3 (issue #69)", () => {
+    // `CHAMPIONCAGE.as:160`: Fomor is ["ground", "ground", "fly"]; every other
+    // champion is ["ground"] (`:71`, `:114`, `:205`, `:251`).
+    expect(championMode("G3", "movement", 1)).toBe("ground");
+    expect(championMode("G3", "movement", 2)).toBe("ground");
+    expect(championMode("G3", "movement", 3)).toBe("fly");
+    expect(championMode("G3", "movement", 6)).toBe("fly");
+    for (const id of ["G1", "G2", "G4", "G5"]) {
+      for (let level = 1; level <= 6; level += 1) {
+        expect(championMode(id, "movement", level)).toBe("ground");
+      }
+    }
+    expect(championMode("G3", "attack", 4)).toBe("ranged");
+    expect(championMode("G9", "movement", 1)).toBeUndefined();
   });
 
   it("swings every 56 ticks unless the class overrides it", () => {

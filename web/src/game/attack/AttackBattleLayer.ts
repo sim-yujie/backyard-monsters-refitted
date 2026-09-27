@@ -236,7 +236,11 @@ export const layoutCreep = (
   let altitude = 0;
   if (creep.flying) {
     altitude = flyerAltitude(creep.monsterId);
-    lift = options.reducedMotion ? -altitude : hoverOffset(pose.age, altitude);
+    // A flying champion holds its 108 without the creeps' bob: `ChampionBase`
+    // lifts its body by `_altitude` once (`ChampionBase.as:181-200`) and has no
+    // sine of its own (#69).
+    lift =
+      options.reducedMotion || creep.champion ? -altitude : hoverOffset(pose.age, altitude);
   } else if (pose.moving && !options.reducedMotion && singlePose(sheet)) {
     lift = -Math.abs(Math.sin((pose.age / HOP_PERIOD_TICKS) * Math.PI)) * HOP_HEIGHT;
   }

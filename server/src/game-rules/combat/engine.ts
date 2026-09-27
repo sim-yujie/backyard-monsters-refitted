@@ -25,6 +25,7 @@ import {
   capacity,
   championAttackDelay,
   championByType,
+  championMode,
   championStat,
   fortifiedDamage,
   isLootable,
@@ -747,6 +748,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const id = championByType(type);
     if (!id) return null;
     const health = championStat(id, "health", level);
+    // A `fly` rung puts the champion in the air exactly as it does a monster:
+    // altitude 108 and the flying defence flag (`ChampionBase.as:181-188`), so
+    // walls never stop it and only air-capable towers can shoot it.
+    const flying = isFlyingMovement(championMode(id, "movement", level));
     const cart = rangePointOf(at.x, at.y);
     const creep: Creep = {
       id: nextCreepId,
@@ -765,13 +770,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       range: championStat(id, "range", level) || 1,
       attackDelay: championAttackDelay(id, level),
       targetGroup: championStat(id, "targetGroup", level) || TARGET_GROUP.ALL,
-      flying: false,
+      flying,
       ignoreWalls: false,
       explode: false,
       // Krallen's looting, the largest in the client (`champions/Krallen.as:31-32`).
       resourceLoot: id === KRALLEN_ID ? KRALLEN_RESOURCE_LOOT_MULTIPLIER : 1,
       storageLoot: id === KRALLEN_ID ? KRALLEN_STORAGE_LOOT_MULTIPLIER : 1,
-      flags: defenseFlags(false, false, false),
+      flags: defenseFlags(false, flying, false),
       targetable: true,
       behaviour: "attack",
       attackCooldown: 0,

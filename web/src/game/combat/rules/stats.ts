@@ -257,11 +257,21 @@ export const championStat = (id: string, key: ChampionStatKey, level: number): n
   return typeof value === "number" ? value : 0;
 };
 
-/** A champion's `movement` or `attack` string at one level. */
-export const championMode = (id: string, key: "movement" | "attack"): string | undefined => {
-  const values = CHAMPION_PROPS[id]?.props[key];
-  return values?.[0];
-};
+/**
+ * A champion's `movement` or `attack` string at one level.
+ *
+ * These are ladders like every other champion prop: Fomor's `movement` is
+ * `["ground", "ground", "fly"]` (`client/scripts/CHAMPIONCAGE.as:160`), so it
+ * walks at levels 1 and 2 and flies from 3. `ChampionBase` reads it through
+ * `GetGuardianProperty`, which clamps a level past the end to the last entry
+ * (`CHAMPIONCAGE.as:401-416`, `champions/ChampionBase.as:153`).
+ */
+export const championMode = (
+  id: string,
+  key: "movement" | "attack",
+  level: number,
+): string | undefined =>
+  atLevel<string | undefined>(CHAMPION_PROPS[id]?.props[key], level, undefined);
 
 /**
  * The champion id an `attackerchampion` entry's `t` names, or undefined.

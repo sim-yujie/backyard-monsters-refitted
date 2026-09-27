@@ -228,6 +228,32 @@ describe("placement", () => {
     expect(calm.y).toBe(groundY - zafreeti.anchorY - 108);
   });
 
+  it("flies a level 3 Fomor at a steady 108 with its big shadow on the ground (#69)", () => {
+    const fomor = sheetOf("G3", 3);
+    expect(fomor.shadow).toBe("bigshadow");
+    const flyer = creepOf({ monsterId: "G3", level: 3, champion: true, flying: true });
+    const ground = groundWorld(flyer.ix, flyer.iy, ORIGIN);
+    for (const age of [0, 40, 78, 160]) {
+      const layout = layoutCreep(flyer, fomor, { heading: 0, moving: true, age }, ORIGIN, STILL);
+      // `ChampionBase.as:181-200`: lifted by `_altitude` once, no bob.
+      expect(layout.y).toBe(ground.y - fomor.anchorY - 108);
+      // `MonsterBase.as:726`: the depth includes the altitude.
+      expect(layout.zIndex).toBe(creepZIndex(ground.x, ground.y + 108, flyer.id));
+      expect(layout.shadow).not.toBeNull();
+      expect(layout.shadow!.y).toBeGreaterThan(layout.y);
+    }
+    // On foot, at level 2, it stands on its ground point with no shadow.
+    const walker = layoutCreep(
+      { ...flyer, level: 2, flying: false },
+      sheetOf("G3", 2),
+      { heading: 0, moving: false, age: 0 },
+      ORIGIN,
+      STILL,
+    );
+    expect(walker.shadow).toBeNull();
+    expect(walker.zIndex).toBe(creepZIndex(ground.x, ground.y, flyer.id));
+  });
+
   it("sorts a creep in front of a building it stands below, and behind one it stands above", () => {
     // A building whose top corner is at world (500, 300), sorted as the yard sorts it.
     const building = depthKey(500, 300, 42) * 8;
@@ -284,9 +310,21 @@ describe("placement", () => {
     expect(walls.length).toBeGreaterThan(5);
     let overlaps = 0;
     const covered: string[] = [];
-    for (const id of ["C14", "C15", "C16", "IC5"]) {
-      const sheet = sheetOf(id);
-      const flyer = creepOf({ monsterId: id, flying: true });
+    // A level 3 Fomor is the one champion that flies (#69).
+    for (const [id, level] of [
+      ["C14", 1],
+      ["C15", 1],
+      ["C16", 1],
+      ["IC5", 1],
+      ["G3", 3],
+    ] as const) {
+      const sheet = sheetOf(id, level);
+      const flyer = creepOf({
+        monsterId: id,
+        level,
+        champion: id.startsWith("G"),
+        flying: true,
+      });
       for (let age = 0; age < 320; age += 40) {
         const body = layoutCreep(
           flyer,

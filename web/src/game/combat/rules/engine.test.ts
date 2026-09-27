@@ -592,6 +592,82 @@ describe("flyers (issue #58)", () => {
     expect(flak?.shots).toBeGreaterThan(0);
     expect(flak?.kills).toBe(1);
   });
+
+  describe("a champion's movement ladder (issue #69)", () => {
+    /** One Fomor (type 3) at `level`, dropped where the monsters are. */
+    const fomor = (tower: number, level: number, towerLevel = 1) => {
+      const yard = yardOf({ ...ringed(tower), "1": { id: 1, t: tower, l: towerLevel, X: 0, Y: 0 } });
+      const battle = createBattle(yard, { seed: 5, playerLevel: 8 });
+      battle.apply({
+        kind: "fling",
+        t: 0,
+        x: -300,
+        y: -300,
+        r: 200,
+        monsters: {},
+        champion: { t: 3, l: level },
+      });
+      return { yard, battle };
+    };
+
+    it("walks a Fomor at levels 1 and 2 and flies it from 3 (`CHAMPIONCAGE.as:160`)", () => {
+      for (const [level, flying] of [
+        [1, false],
+        [2, false],
+        [3, true],
+        [6, true],
+      ] as const) {
+        const { battle } = fomor(20, level);
+        run(battle, 1);
+        const [creep] = battle.creeps();
+        expect(creep?.champion).toBe(true);
+        expect(creep?.flying).toBe(flying);
+      }
+    });
+
+    it("keeps every other champion on the ground at every level", () => {
+      for (const t of [1, 2, 4, 5]) {
+        for (let level = 1; level <= 6; level += 1) {
+          const battle = createBattle(yardOf(ringed(20)), { seed: 5, playerLevel: 8 });
+          battle.apply({
+            kind: "fling",
+            t: 0,
+            x: -300,
+            y: -300,
+            r: 200,
+            monsters: {},
+            champion: { t, l: level },
+          });
+          run(battle, 1);
+          expect(battle.creeps()[0]?.flying).toBe(false);
+        }
+      }
+    });
+
+    it("flies a level 3 Fomor over the wall ring, where the Cannon cannot shoot it", () => {
+      const { yard, battle } = fomor(20, 3);
+      run(battle, 6000);
+      const tower = yard.buildings.find((one) => one.type === 20);
+      expect(tower!.hp).toBeLessThan(tower!.maxHp);
+      expect(wallsHurt(yard)).toBe(0);
+      expect(battle.state().towers[0]?.shots).toBe(0);
+    });
+
+    it("lets a Flak Tower shoot a flying Fomor", () => {
+      // A level 3 Fomor hovers to fire just outside a level 1 Flak's 300 (it
+      // stops about 250 out on the diagonal, measured from the Flak's scan point),
+      // so the Flak here is level 3, range 340.
+      const { battle } = fomor(115, 3, 3);
+      run(battle, 6000);
+      expect(battle.state().towers[0]?.shots).toBeGreaterThan(0);
+    });
+
+    it("sends a level 2 Fomor through the walls on foot", () => {
+      const { yard, battle } = fomor(20, 2);
+      run(battle, 6000);
+      expect(wallsHurt(yard)).toBeGreaterThan(0);
+    });
+  });
 });
 
 describe("the renderer's view of the field (issue #32, WP5)", () => {
