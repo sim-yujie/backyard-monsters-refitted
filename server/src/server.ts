@@ -23,6 +23,7 @@ import { exitOnRedisReconnect } from "./utils/redisReconnectGuard.js";
 import { economyConfig, economyModeWasUnrecognised } from "./config/EconomyConfig.js";
 import { combatConfig, combatModeWasUnrecognised } from "./config/CombatConfig.js";
 import { ownerSaveConfig, ownerSaveModeWasUnrecognised } from "./config/OwnerSaveConfig.js";
+import { startAttackFinaliser } from "./services/base/finaliseAttack.js";
 
 export const app = new Koa();
 app.proxy = true;
@@ -91,6 +92,9 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
 
   await initVersionManifest();
   await initAnticheat();
+
+  // Finishes attacks whose window closed without a save (issue #138).
+  startAttackFinaliser();
 
   // Say which economy audit mode is live, once, at boot: `log` and `reject`
   // behave very differently for a player and the variable is read only here

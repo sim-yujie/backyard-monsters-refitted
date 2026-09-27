@@ -46,6 +46,11 @@ import {
   endAttackSession,
   readAttackSession,
 } from "../../../services/base/attackSessionStore.js";
+import {
+  acquireFinalLock,
+  discardCheckpoint,
+  releaseFinalLock,
+} from "../../../services/base/attackCheckpointStore.js";
 import { ownerSaveConfig } from "../../../config/OwnerSaveConfig.js";
 import { requireOwnerSaveAllowed } from "../../../services/base/ownerSave.js";
 
@@ -92,6 +97,40 @@ export const baseSave: KoaController = async (ctx) => {
   // and outpost owner saves pass. `OWNER_SAVE_MODE=allow` turns it back on.
   requireOwnerSaveAllowed(ctx, user, baseSave, ownerSaveConfig.mode);
 
+  // An attack's result lands once (issue #138). The save that ends it, a copy
+  // of that save the web client sends again as the page closes, and the server
+  // finishing the attack from its last checkpoint (`finaliseAttack.ts`) all
+  // take this lock, and whichever holds it ends the attack session before
+  // letting go — so the next one is refused by the binding check below.
+  const finalises = isAttack && Boolean(saveData.over);
+
+  if (finalises && !(await acquireFinalLock(baseSave.basesaveid))) throw attackNotBoundErr("finalising");
+
+  try {
+    await saveBase(ctx, { user, userSave, body, saveData, baseSave, isOutpostOwner, isAttack });
+  } finally {
+    if (finalises) await releaseFinalLock(baseSave.basesaveid);
+  }
+};
+
+interface SaveInput {
+  user: User;
+  userSave: Save;
+  body: Record<string, unknown>;
+  saveData: ReturnType<typeof BaseSaveSchema.parse>;
+  baseSave: Save;
+  isOutpostOwner: boolean;
+  isAttack: boolean;
+}
+
+/**
+ * The save itself, once `baseSave` has decided who is saving what and, for a
+ * save that ends an attack, holds the lock that makes it land once.
+ */
+const saveBase = async (
+  ctx: Context,
+  { user, userSave, body, saveData, baseSave, isOutpostOwner, isAttack }: SaveInput
+): Promise<void> => {
   const now = getCurrentDateTime();
 
   // The attack must be this caller's (issue #25). A non-zero `attackid` on the
@@ -291,7 +330,11 @@ export const baseSave: KoaController = async (ctx) => {
   // The attack is finished, so its session is spent. Dropping it now frees the
   // row immediately instead of leaving a key that authorises nothing until it
   // times out (issue #25).
-  if (isAttack && saveData.over) await endAttackSession(baseSave.basesaveid);
+  if (isAttack && saveData.over) {
+    await endAttackSession(baseSave.basesaveid);
+    // Nothing is left for the server to finish from (issue #138).
+    await discardCheckpoint(baseSave.basesaveid);
+  }
 
   // Attack saves store health from the attacker's replay but keep buildingdata from the DB,
   // so the owner's countdowns are brought up to the attack before savetime moves to it.

@@ -560,6 +560,23 @@ export const attackNotBoundErr = (reason: string) =>
   });
 
 /**
+ * An attack checkpoint the server will not keep (issue #138,
+ * `services/base/attackCheckpoint.ts`): one that does not parse, or one that
+ * would take something back out of the record already held — a shorter log, a
+ * changed event, another seed or an earlier tick. `isClientFriendly: false`
+ * for the reason `attackNotBoundErr` gives; the web client does not show it.
+ *
+ * @param {string} reason - Why the checkpoint was refused.
+ */
+export const attackCheckpointRefusedErr = (reason: string) =>
+  new ClientSafeError({
+    message: "This attack checkpoint was not accepted.",
+    status: Status.CONFLICT,
+    data: { reason },
+    isClientFriendly: false,
+  });
+
+/**
  * An attack save whose fling log fired a resource bomb Flash would not have
  * let go — one the attacker could not afford, a second of one resource, a tier
  * above their catapult, or an id the bomb table does not know — refused in

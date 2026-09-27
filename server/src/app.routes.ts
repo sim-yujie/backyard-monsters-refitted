@@ -35,6 +35,7 @@ import { updateSettings } from "./controllers/auth/updateSettings.js";
 import { baseLoad } from "./controllers/base/load/baseLoad.js";
 import { baseSave } from "./controllers/base/save/baseSave.js";
 import { updateSaved } from "./controllers/base/save/updateSaved.js";
+import { attackCheckpoint } from "./controllers/base/attackCheckpoint.js";
 import { migrateBase } from "./controllers/maproom/v2/migrateBase.js";
 
 import { getNewMap } from "./controllers/maproom/getNewMap.js";
@@ -127,6 +128,8 @@ router.post("/base/load", verifyUserAuth, logRequest, baseLoad);
 router.post("/base/save", verifyUserAuth, logRequest, baseSave);
 router.post("/base/updatesaved", verifyUserAuth, logRequest, updateSaved);
 router.post("/base/migrate", verifyUserAuth, logRequest, migrateBase);
+// Every few seconds during a web attack, so it is not echoed by logRequest (issue #138).
+router.post("/base/checkpoint", verifyUserAuth, attackCheckpoint);
 
 /**  ────────────────────────────────────────────────
 * 📦 Map Room 1 / Inferno

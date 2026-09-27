@@ -1,0 +1,261 @@
+import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+/**
+ * Finishing an attack its attacker left without a save (issue #138).
+ *
+ * The service runs for real — the replay, the handlers, the checkpoint store —
+ * against an in-memory Redis and stand-in rows, so what is asserted is exactly
+ * what would be written: the flung monsters gone from the attacker's cells, the
+ * bomb charged once, the loot credited, the defender's damage and report, the
+ * row freed, and nothing at all the second time.
+ */
+
+const SANDBOX = fileURLToPath(new URL("../../../../web/test/fixtures/baseload-sandbox-yard.json", import.meta.url));
+const sandbox = JSON.parse(readFileSync(SANDBOX, "utf8"));
+
+const ATTACKER = 2503;
+const DEFENDER_OWNER = 1;
+const BASESAVEID = 77;
+const ATTACK_ID = 4242;
+const HOME = "1000239208";
+const OUTPOST = "1000240208";
+
+/* ── Redis, in memory ───────────────────────────────────────────────────── */
+
+const store = new Map<string, string>();
+const sets = new Map<string, Set<string>>();
+const fakeRedis = {
+  get: async (key: string) => store.get(key) ?? null,
+  setex: async (key: string, _ttl: number, value: string) => {
+    store.set(key, value);
+    return "OK";
+  },
+  set: async (key: string, value: string, ...options: string[]) => {
+    if (options.includes("NX") && store.has(key)) return null;
+    store.set(key, value);
+    return "OK";
+  },
+  del: async (key: string) => (store.delete(key) ? 1 : 0),
+  sadd: async (key: string, member: string) => {
+    const set = sets.get(key) ?? new Set<string>();
+    set.add(member);
+    sets.set(key, set);
+    return 1;
+  },
+  srem: async (key: string, member: string) => (sets.get(key)?.delete(member) ? 1 : 0),
+  smembers: async (key: string) => [...(sets.get(key) ?? [])],
+};
+
+/* ── Rows ───────────────────────────────────────────────────────────────── */
+
+let defender: Record<string, any>;
+let userSave: Record<string, any>;
+let outpost: Record<string, any>;
+const flush = mock(async () => {});
+
+const reset = () => {
+  store.clear();
+  sets.clear();
+  flush.mockClear();
+  defender = {
+    basesaveid: BASESAVEID,
+    baseid: "2000241208",
+    saveuserid: DEFENDER_OWNER,
+    type: "tribe",
+    wmid: 0,
+    attackid: ATTACK_ID,
+    attacks: [],
+    protected: 0,
+    savetime: Math.floor(Date.now() / 1000) - 60,
+    damage: 0,
+    buildingdata: structuredClone(sandbox.buildingdata),
+    buildinghealthdata: {},
+    resources: { r1: 5_000_000, r2: 5_000_000, r3: 5_000_000, r4: 5_000_000 },
+  };
+  userSave = {
+    baseid: HOME,
+    catapult: 2,
+    buildingdata: {},
+    resources: { r1: 1_000_000, r2: 1_000_000, r3: 1_000_000, r4: 1_000_000 },
+    monsters: { housed: { C1: 200 }, space: 400 },
+    academy: { C1: { level: 3 } },
+    champion: [{ t: 5, l: 5, hp: 62000, status: 0 }],
+    siege: null,
+  };
+  outpost = { baseid: OUTPOST, saveuserid: ATTACKER, protected: 123, monsters: { housed: { C1: 150 } } };
+};
+reset();
+
+const attacker = () => ({ userid: ATTACKER, username: "yardtester", alliance_id: null, save: userSave });
+
+mock.module("../../server.js", () => ({
+  redis: fakeRedis,
+  postgres: {
+    orm: { em: {} },
+    em: {
+      findOne: async (entity: { name: string }, where: Record<string, unknown>) => {
+        if (entity.name === "User") return where.userid === ATTACKER ? attacker() : null;
+        return where.basesaveid === BASESAVEID || where.baseid === defender.baseid ? defender : null;
+      },
+      find: async (_entity: unknown, where: { baseid: { $in: string[] } }) =>
+        where.baseid.$in.includes(OUTPOST) ? [outpost] : [],
+      persist: () => {},
+      flush,
+    },
+  },
+}));
+
+const core = await import("@mikro-orm/core");
+mock.module("@mikro-orm/core", () => ({
+  ...core,
+  RequestContext: { ...core.RequestContext, create: (_em: unknown, next: () => unknown) => next() },
+}));
+
+mock.module("../../utils/logger.js", () => ({
+  logger: { warn: mock(() => {}), error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
+}));
+
+mock.module("../alliance/powerups.js", () => ({ runningPowerups: async () => [] }));
+
+const { finaliseAbandonedAttack, finaliseAttacksFor, finaliseExpiredOnBase } = await import("./finaliseAttack.js");
+const { storeCheckpoint, acquireFinalLock } = await import("./attackCheckpointStore.js");
+const { attackCheckpointKey } = await import("./attackCheckpoint.js");
+const { attackSessionKey } = await import("./attackSession.js");
+const { replayAbandonedAttack } = await import("./combat/abandonedAttack.js");
+
+const LOG = {
+  v: 1 as const,
+  seed: 1834027731,
+  events: [
+    { kind: "fling" as const, t: 480, x: -615, y: 115, r: 300, monsters: { C1: 300 }, champion: { t: 5, l: 5 } },
+    { kind: "bomb" as const, t: 800, x: 180, y: -480, id: "pb1" },
+  ],
+};
+const TICK = 2400;
+const now = () => Math.floor(Date.now() / 1000);
+
+const checkpoint = (overrides: Record<string, unknown> = {}) => ({
+  attackerid: ATTACKER,
+  defenderid: DEFENDER_OWNER,
+  attackid: ATTACK_ID,
+  startedat: now() - 30,
+  at: now() - 5,
+  tick: TICK,
+  flinglog: LOG,
+  sources: [HOME, OUTPOST],
+  ...overrides,
+});
+
+const arm = async (overrides: Record<string, unknown> = {}) => {
+  await storeCheckpoint(BASESAVEID, checkpoint(overrides) as never);
+  store.set(attackSessionKey(BASESAVEID), `${ATTACKER}:${ATTACK_ID}:${now() - 30}`);
+};
+
+beforeEach(reset);
+
+describe("finaliseAbandonedAttack", () => {
+  test("writes the attack as its save would have: monsters spent, bomb charged, damage kept", async () => {
+    await arm();
+    const expected = replayAbandonedAttack({
+      defender: {
+        type: "tribe",
+        buildingdata: sandbox.buildingdata,
+        buildinghealthdata: {},
+        resources: defender.resources,
+      },
+      attacker: { academy: userSave.academy, champion: userSave.champion, siege: null },
+      log: LOG,
+      tick: TICK,
+      declareWar: false,
+    });
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    // The attacker: 300 Pokeys out of 200 at home and 150 at the outpost.
+    expect(userSave.monsters).toEqual({ housed: { C1: 0 }, space: 400 });
+    expect(outpost.monsters).toEqual({ housed: { C1: 50 } });
+    expect(outpost.protected).toBe(0);
+    // Loot credited, then the pebble bomb's 100,000 charged.
+    expect(userSave.resources.r1).toBe(1_000_000 + expected.attackloot.r1);
+    expect(userSave.resources.r2).toBe(1_000_000 + expected.attackloot.r2 - 100_000);
+    expect(userSave.champion[0].hp).toBe(expected.attackerchampion![0]!.hp);
+
+    // The defender.
+    expect(defender.attackid).toBe(0);
+    expect(defender.damage).toBe(expected.damage);
+    expect(defender.damage).toBeGreaterThan(0);
+    expect(defender.destroyed).toBe(expected.destroyed!);
+    expect(defender.buildinghealthdata).toEqual(expected.buildinghealthdata);
+    expect(defender.resources.r1).toBe(5_000_000 + expected.defenderDelta.r1);
+    expect(defender.attackreport).toContain("Left the attack");
+    expect(flush).toHaveBeenCalledTimes(1);
+
+    // Nothing left to finish from, and the row is free.
+    expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(false);
+    expect(store.has(attackSessionKey(BASESAVEID))).toBe(false);
+  });
+
+  test("is idempotent: a second finalisation finds nothing and charges nothing", async () => {
+    await arm();
+    await finaliseAbandonedAttack(BASESAVEID, "test");
+    const after = structuredClone(userSave);
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("none");
+    expect(userSave).toEqual(after);
+    expect(flush).toHaveBeenCalledTimes(1);
+  });
+
+  test("waits out a save that holds the lock", async () => {
+    await arm();
+    await acquireFinalLock(BASESAVEID);
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("busy");
+    expect(defender.attackid).toBe(ATTACK_ID);
+    expect(userSave.monsters.housed.C1).toBe(200);
+  });
+
+  test("a row that moved on is left alone and the checkpoint dropped", async () => {
+    await arm();
+    defender.attackid = 999;
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("stale");
+    expect(userSave.monsters.housed.C1).toBe(200);
+    expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(false);
+  });
+});
+
+describe("when finalisation runs", () => {
+  test("the attacker's own load finishes their attack, window or not", async () => {
+    await arm();
+    expect(await finaliseAttacksFor(ATTACKER, "build")).toBe(1);
+    expect(defender.attackid).toBe(0);
+  });
+
+  test("the defender's load waits for the attacker's window to close", async () => {
+    await arm();
+    expect(await finaliseAttacksFor(DEFENDER_OWNER, "build")).toBe(0);
+    expect(defender.attackid).toBe(ATTACK_ID);
+
+    store.clear();
+    sets.clear();
+    await arm({ startedat: now() - 420 });
+    expect(await finaliseAttacksFor(DEFENDER_OWNER, "build")).toBe(1);
+  });
+
+  test("a stranger's load touches nothing", async () => {
+    await arm({ startedat: now() - 420 });
+    expect(await finaliseAttacksFor(31337, "build")).toBe(0);
+  });
+
+  test("a new attack on the row finishes the expired one first", async () => {
+    await arm();
+    await finaliseExpiredOnBase(defender.baseid);
+    expect(defender.attackid).toBe(ATTACK_ID);
+
+    await arm({ startedat: now() - 420 });
+    await finaliseExpiredOnBase(defender.baseid);
+    expect(defender.attackid).toBe(0);
+  });
+});

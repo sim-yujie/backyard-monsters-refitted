@@ -804,7 +804,28 @@ have fired — unaffordable against the attacker's stored pool, a second of one 
 the attacker's catapult, or an unknown id — is still charged, and `COMBAT_SAVE_VALIDATION` decides
 the rest: `off` says nothing, `log` (the default) writes an `attack-bomb-audit` warning, `reject`
 refuses the save with a 409 whose `reason` is `bombSpend` before anything is written. The charge is
-per save, which is exact while the client sends one save per attack.
+per save, which is exact while the client sends one save per attack; an attack its attacker left
+without a save is charged once by the server's finalisation instead (§5.6), never both.
+
+### 5.6 Leaving mid-battle ends the battle (issue #138)
+
+Owner, 2026-09-27: "reloading the page will end the battle immediately. It shouldnt reverse
+anything." Leaving the attack screen in any way — a reload, a closed tab, browser Back, a hidden
+tab, in-app navigation, a sign-out — ends the attack at that tick (`AttackSession.leave`, end
+reason `left`, no event logged) and sends the final save as a keepalive request with the token
+captured when the attack opened; the end panel reads "You left the attack, so it ended there." A
+save already in flight when the page goes is sent again the same way, and the server's final lock
+lands exactly one (`docs/server-api.md`, "Attack session binding"). An attack with nothing dropped
+still sends nothing (#79). The keepalive body is JSON rather than form-encoded and carries only the
+standing traps in `buildingdata`, which is all the server reads of it, to fit the browser's 64 KB.
+
+In case that save never arrives, the client checkpoints the attack to `/base/checkpoint` after
+every drop, bomb and siege weapon and every 5 seconds (`plugins/checkpoint.ts`), and the server
+finishes an attack left without a save from its last checkpoint, replaying the log with the shared
+engine to the checkpoint's tick (`server/src/services/base/finaliseAttack.ts`): on the attacker's
+next yard load or attack, on the defender's yard load or the next attack on the row once the
+window has closed, and from a minute sweep. The damage then stands as of the last checkpoint, at
+most 5 seconds (10 at 2x) before the player left.
 
 ### 5.4 New client-side state
 

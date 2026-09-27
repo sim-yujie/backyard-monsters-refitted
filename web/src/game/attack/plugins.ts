@@ -6,4 +6,5 @@
 import "./plugins/army";
 import "./plugins/drop";
 import "./plugins/battle";
+import "./plugins/checkpoint";
 import "./plugins/end";

@@ -3,11 +3,13 @@ import { getSession } from "./auth";
 import {
   BaseMode,
   type AttackData,
+  type ApiEnvelope,
   type AttackSavePayload,
   type BaseLoadRequest,
   type BaseLoadResponse,
   type BaseSaveResponse,
 } from "./types";
+import type { AttackCheckpoint } from "@/game/attack/attackCheckpoint";
 import type { AttackRoster, AttackTargetKind } from "@/game/attack/attackTarget";
 import { ATTACK_CHAMPION_PROPS, ATTACK_MONSTER_PROPS } from "@/game/attack/attackStats";
 
@@ -17,6 +19,7 @@ import { ATTACK_CHAMPION_PROPS, ATTACK_MONSTER_PROPS } from "@/game/attack/attac
  */
 const LOAD_PATH = "/base/load";
 const SAVE_PATH = "/base/save";
+const CHECKPOINT_PATH = "/base/checkpoint";
 
 /**
  * The Map Room this client is built for. The attack modes' range check throws
@@ -223,3 +226,20 @@ export const saveAttack = async (
   }
   return send<BaseSaveResponse>("POST", SAVE_PATH, { ...options, json: body });
 };
+
+/**
+ * Sends the attack's running record (issue #138, `attackCheckpoint.ts`), so
+ * that an attack whose save never arrives is finished by the server from it
+ * rather than undone. Bound like the save: only the attacker, inside the
+ * session window. `stored` is false for an attack with nothing dropped yet.
+ */
+export const sendAttackCheckpoint = (
+  checkpoint: AttackCheckpoint,
+): Promise<ApiEnvelope & { stored?: boolean }> =>
+  post(CHECKPOINT_PATH, {
+    basesaveid: String(checkpoint.basesaveid),
+    attackid: String(checkpoint.attackid),
+    tick: String(checkpoint.tick),
+    flinglog: JSON.stringify(checkpoint.flinglog),
+    sources: JSON.stringify(checkpoint.sources),
+  });

@@ -20,8 +20,10 @@ import { bombSpendOf, catapultLevelOf, type BombSpend } from "./bombSpend.js";
  * The log is resent in full on every save, and so is charged on every attack
  * save that carries one, the same as `attackloot` is credited on every save.
  * The web client sends exactly one save per attack
- * (`web/src/game/attack/plugins/end.ts`); a client that sent checkpoints would
- * need the charge made per bomb rather than per save. A Flash save carries no
+ * (`web/src/game/attack/plugins/end.ts`); its checkpoints (issue #138,
+ * `/base/checkpoint`) charge nothing, and the one save and the server's
+ * finalisation of an abandoned attack (`finaliseAttack.ts`) exclude each other
+ * through the final lock, so each attack's bombs are charged once. A Flash save carries no
  * log and is charged nothing here: its bomb spend is already netted into its
  * `attackloot` (`BASE.as:2859-2866`).
  *

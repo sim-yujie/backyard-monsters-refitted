@@ -186,7 +186,7 @@ and pass through the `apiVersion` middleware **except** where noted.
 ### Base / Yard
 
 Mounted at `/base/...` — **no** `/api/:apiVersion` prefix and **no** `apiVersion` middleware
-on any of these four routes.
+on any of these five routes.
 
 | Method | Path | Middleware | Request fields | Response (`ctx.body`) | Description |
 |---|---|---|---|---|---|
@@ -194,6 +194,7 @@ on any of these four routes.
 | POST | `/base/save` | verifyUserAuth, logRequest | `BaseSaveSchema` (`baseid`, `basesaveid`→number, plus a long list of optional JSON-string fields — `purchase`, `champion`/`attackerchampion`, `buildingdata`, `buildinghealthdata`, `monsterupdate`, `attackloot`, `resources`, `monsters`, `attackcreatures`, `attackersiege`, `over`→number, `destroyed`→number, `attackid`) **and** every raw body key matching `Save.saveKeys` (own base) or `Save.attackSaveKeys` (attack) is separately JSON-parsed onto the entity — see "Save write keys" below | `{ error: 0, basesaveid, ...filteredSave, ...(takeoverData && { takeover: takeoverData }) }` | **The main "close/checkpoint a base" call.** Throws `permissionErr()` (403) if the caller neither owns the base nor is saving a base that carries a non-zero `attackid`. **An owner save of the caller's `main` yard is refused** with `ownerSaveRetiredErr()` (409, `reason: "ownerSaveRetired"`) before anything else runs, unless `OWNER_SAVE_MODE=allow` — see "Owner saves retired" below; attack saves and outpost owner saves are unaffected, so in practice this route now carries attack results and outpost sessions only. An attack save must additionally be the result of *this caller's* attack, or it is refused with `attackNotBoundErr()` — see "Attack session binding" below. Runs `scripts/anticheat/anticheat.ts`'s `validateSave` before applying anything. On `over` (attack finished) with damage ≥ 90%, triggers MR3 structure takeover (`takeoverCellMR3`) or destroys an MR3 tribe cell, and grants the defender fresh damage protection. Advances building timers to "now" using the pre-save health snapshot. **Non-attack owner saves of an `outpost` yard (and of a `main` yard under `OWNER_SAVE_MODE=allow`) are also run through the economy audit** before any key is applied — see "Economy save validation" below; controlled by `ECONOMY_SAVE_VALIDATION` (`off`/`log`/`reject`, default `log`). |
 | POST | `/base/updatesaved` | verifyUserAuth, logRequest | inline schema: `type`, `version`, `lastupdate`, `baseid`, `mapversion`→number | `{ error: 0, flags, ...filteredSave, credits, ...(alliancedata && {alliancedata}), ...(powerups && {powerups}) }` | **Polling heartbeat**, called by the client roughly every 30 seconds while a base screen is open, to refresh timers/resources without a full `/base/load`. Does not accept any save data from the client — read-only refresh. |
 | POST | `/base/migrate` | verifyUserAuth, logRequest | `MigrateBaseSchema`: `type` (`BaseType`), `baseid`, `resources?` (JSON), `shiny?`→number | Three shapes depending on branch: cooldown active → `{ error: 0, cantMoveTill, currenttime }`; `type="random"` (empire overrun) → `{ error: 0 }`; normal migrate-to-outpost → `{ error: 0, coords: [x, y] }` | Relocates the player's home base. A 24-hour cooldown (`userSave.cantmovetill`) applies after any migration. `type="random"` leaves and rejoins a Map Room 2/3 world at a new random location (blocked if the player still owns outposts — `relocateOutpostErr()` 403). Otherwise it swaps the home cell onto a **captured outpost's** coordinates, deletes the old outpost cell/save, and charges the given `resources`/`shiny` (throws `shinyLockedErr()` 403 if shiny-locked and `shiny` is set). |
+| POST | `/base/checkpoint` | verifyUserAuth | `AttackCheckpointSchema` | `{ error: 0, stored, tick? }` | The web client's running record of an attack, so one left without a save is finished by the server rather than undone. See "Leaving an attack: checkpoints and finalisation" below (issue #138). |
 
 **Base load/save response envelope.** Both `/base/load` and `/base/save` (and `/base/updatesaved`)
 spread the full set of `@FrontendKey`-decorated fields from the `Save` entity (see Data
@@ -357,6 +358,49 @@ attacker and the reason.
 **Ending.** A save carrying `over` clears the row's `attackid` and deletes the session key, so
 the base is immediately free rather than carrying a key that authorises nothing until it times
 out.
+
+**Once.** A save carrying `over` first takes a Redis lock, `attack-final:<basesaveid>` (`SET NX`,
+30 seconds), and releases it when it is done (issue #138). The server finishing an abandoned attack
+takes the same lock (below), and each ends the session before letting go, so of two that race —
+the web client's final save and the copy of it sent as the page closes, or a save and the server's
+finalisation — exactly one lands. The loser is refused with `attackNotBoundErr("finalising")` if it
+arrives while the lock is held, or by the binding check / `permissionErr` once the row is free.
+
+### Leaving an attack: checkpoints and finalisation (issue #138)
+
+Leaving the web client's attack screen in any way ends the battle at that moment, with its results
+standing. The client sends its final save as a keepalive request as the page goes
+(`web/src/game/attack/plugins/end.ts`). So that an attack whose save never arrives (a killed
+browser, a lost connection) is not undone, the client also checkpoints it:
+
+| Method | Path | Middleware | Request fields | Response |
+|---|---|---|---|---|
+| POST | `/base/checkpoint` | verifyUserAuth | `AttackCheckpointSchema`: `basesaveid`, `attackid?`, `tick` (battle ticks reached), `flinglog` (JSON string, the §3.10 fling log so far), `sources` (JSON string array of the attacker's cell base ids, in the order a fling spends them) | `{ error: 0, stored: true, tick }`, or `{ error: 0, stored: false }` for a log with no events (#79) |
+
+Sent after every drop, bomb and siege weapon and every 5 seconds while the battle runs. Bound
+exactly like the attack save (same `checkAttackBinding`). A checkpoint may only extend the one
+held: same seed, every stored event unchanged and in place, a clock that has not gone back; else
+`attackCheckpointRefusedErr` (409, `reason`: `malformed`, `rewound` or `reseeded`). It writes no
+game state: the latest checkpoint is kept in Redis under `attack-checkpoint:<basesaveid>`, indexed
+by the set `attack-checkpoints` (`services/base/attackCheckpoint.ts`, `attackCheckpointStore.ts`).
+
+**Finalisation** (`services/base/finaliseAttack.ts`) finishes an attack from its checkpoint: the
+log is replayed with the shared engine to the checkpoint's tick (`combat/abandonedAttack.ts`) and
+the result written as an `over` save would write it — flung monsters taken out of the listed cells
+(stored housing, first cell first), bombs charged (`combat/bombSpend.ts`), loot credited, the
+attacker's champion health and siege stock, the defender's health, damage, `destroyed`, fired traps,
+resource loss and report, damage protection, `attackid` cleared, session ended. It runs, under the
+same final lock:
+
+- at the top of `/base/load` for `build` and every attack mode, for every attack the caller left
+  without a save, window or not, before any row is read;
+- at the top of an `attack`/`wmattack` load, for the target row's previous attack if its window has
+  closed; and at the top of a `build` load, for attacks on the caller's own yard whose window has
+  closed;
+- from a sweep every 60 seconds (`startAttackFinaliser`, `server.ts`), for every attack whose
+  window has closed.
+
+The final save and the finalisation discard the checkpoint, so each attack is written once.
 
 **Not yet covered.** The Inferno save endpoint (`/api/:apiVersion/bm/base/save` →
 `controllers/inferno/infernoSave.ts`) still has the original gate — a non-zero `attackid` on the

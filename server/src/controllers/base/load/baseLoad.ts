@@ -42,6 +42,7 @@ import { getAllianceData } from "../../../services/alliance/allianceData.js";
 import { runningPowerups } from "../../../services/alliance/powerups.js";
 import { cellRelationship, findRelationships } from "../../../services/alliance/relationships.js";
 import { INFERNO_CHAT_CHANNEL } from "../../../config/ChatConfig.js";
+import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
 
 type Stronghold = { level: number; cell?: { x: number; y: number } | null };
 
@@ -59,6 +60,15 @@ const INFERNO_SAVE_MODES = new Set<string>([BaseMode.IBUILD, BaseMode.IATTACK, B
 export const baseLoad: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   const { baseid, type, mapversion, attackData, attackcost } = BaseLoadSchema.parse(ctx.request.body);
+
+  // An attack the player left without saving is finished before anything
+  // below reads a row it writes — the player's own save above all — so their
+  // yard shows its monsters spent and its bombs paid for, and a new attack
+  // cannot fling them again (issue #138, `finaliseAttack.ts`).
+  const attacking = type === BaseMode.ATTACK || type === BaseMode.WMATTACK;
+  if (type === BaseMode.BUILD || ATTACK_MODES.has(type)) {
+    await finaliseBeforeLoad(user.userid, type, baseid, attacking);
+  }
 
   await postgres.em.populate(user, INFERNO_SAVE_MODES.has(type) ? ["save", "infernosave"] : ["save"]);
 
