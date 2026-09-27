@@ -67,7 +67,7 @@ export const SCENARIOS = [
   {
     name: "mixed-waves",
     description:
-      "Four flings over five minutes with a level 5 Korath and one pebble bomb; the bench case.",
+      "Four flings over five minutes with a level 5 Krallen and one pebble bomb; the bench case.",
     yard: "sandbox",
     kind: "main",
     levels: MAXED,

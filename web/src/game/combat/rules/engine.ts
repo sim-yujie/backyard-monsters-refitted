@@ -1,4 +1,5 @@
 import { buildPathGrid } from "./grid.js";
+import { KRALLEN_ID } from "./potential.js";
 import { mulberry32 } from "./rng.js";
 import {
   ATTACK_COUNTDOWN_SECONDS,
@@ -748,8 +749,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ignoreWalls: false,
       explode: false,
       // Krallen's looting, the largest in the client (`champions/Krallen.as:31-32`).
-      resourceLoot: id === "G2" ? KRALLEN_RESOURCE_LOOT_MULTIPLIER : 1,
-      storageLoot: id === "G2" ? KRALLEN_STORAGE_LOOT_MULTIPLIER : 1,
+      resourceLoot: id === KRALLEN_ID ? KRALLEN_RESOURCE_LOOT_MULTIPLIER : 1,
+      storageLoot: id === KRALLEN_ID ? KRALLEN_STORAGE_LOOT_MULTIPLIER : 1,
       flags: defenseFlags(false, false, false),
       targetable: true,
       behaviour: "attack",

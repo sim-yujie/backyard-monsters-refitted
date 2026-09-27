@@ -243,6 +243,59 @@ describe("loot", () => {
     expect(battle.state().defenderLoss.r1).toBe(400);
   });
 
+  /**
+   * One level 1 champion of `type` alone against one building, until it has
+   * landed three swings. The building is level 8, so it outlasts them: a fall
+   * would hand over the rest of its buffer at no multiplier.
+   */
+  const championLoot = (type: number, building: { t: number; st?: number }) => {
+    const yard = yardOf({ "1": { id: 1, l: 8, X: 0, Y: 0, ...building } });
+    const battle = createBattle(yard, { seed: 9, playerLevel: 20 });
+    battle.apply({
+      kind: "fling",
+      t: 0,
+      x: -150,
+      y: -150,
+      r: 100,
+      monsters: {},
+      champion: { t: type, l: 1 },
+    });
+    const amounts: number[] = [];
+    let seen = 0;
+    for (let step = 0; step < 8000 && amounts.length < 3; step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(seen)) {
+        if (event.kind === "hit" && event.amount > 0) amounts.push(event.amount);
+      }
+      seen = battle.tick;
+    }
+    return { amounts, standing: yard.buildings[0]!.hp > 0, loss: battle.state().defenderLoss.r1 };
+  };
+
+  it("gives Krallen (G5), and no other champion, its loot multipliers (issue #80)", () => {
+    // `champions/Krallen.as:31-32`: twice from a harvester, three times from storage.
+    for (const type of [1, 2, 3, 4, 5]) {
+      const krallen = type === 5;
+      const harvester = championLoot(type, { t: 1, st: 1_000_000 });
+      expect(harvester.amounts, `G${type}`).toHaveLength(3);
+      expect(harvester.standing, `G${type}`).toBe(true);
+      const fromHarvester = harvester.amounts.reduce(
+        (sum, amount) => sum + Math.floor(amount * (krallen ? 2 : 1)),
+        0,
+      );
+      expect(harvester.loss, `G${type} harvester`).toBe(fromHarvester);
+
+      const storage = championLoot(type, { t: 6 });
+      expect(storage.amounts, `G${type}`).toHaveLength(3);
+      expect(storage.standing, `G${type}`).toBe(true);
+      const fromStorage = storage.amounts.reduce(
+        (sum, amount) => sum + Math.ceil(amount * (krallen ? 3 : 1)),
+        0,
+      );
+      expect(storage.loss, `G${type} storage`).toBe(fromStorage);
+    }
+  });
+
   it("scales a main yard's storage draw by nine tenths", () => {
     const yard = yardOf({ "1": { id: 1, t: 6, X: 0, Y: 0 } });
     const battle = createBattle(yard, { seed: 11, playerLevel: 20 });
