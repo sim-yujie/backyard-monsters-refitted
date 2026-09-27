@@ -1,0 +1,4 @@
+# The shared combat rules are hashed and column-checked by tests in both copies;
+# keep them LF in every checkout regardless of core.autocrlf.
+web/src/game/combat/rules/** text eol=lf
+server/src/game-rules/combat/** text eol=lf
