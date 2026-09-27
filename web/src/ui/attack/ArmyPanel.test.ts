@@ -398,6 +398,28 @@ describe("ArmyPanel champion", () => {
     expect(label?.classList.contains("attack-army__champion--unavailable")).toBe(true);
   });
 
+  it("lays a champion's note out on its own line under the name (#81)", () => {
+    // jsdom does no layout, so the rule itself is what is pinned: the row is
+    // a grid whose second line is the note, under the label, not beside it.
+    const css = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../styles/attack.css"),
+      "utf8",
+    );
+    const rule = /\n\.attack-army__champion \{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(rule).toContain("display: grid");
+    expect(rule).toMatch(/"pick icon label"\s*"pick icon note"/);
+
+    const { panel } = mount();
+    const row = panel.element.querySelector(".attack-army__champion");
+    const children = [...(row?.children ?? [])].map((child) => child.className);
+    expect(children).toEqual([
+      "attack-army__champion-pick",
+      "attack-army__icon",
+      "attack-army__label",
+      "attack-army__note",
+    ]);
+  });
+
   it("hides the group when the attacker owns no champion", () => {
     const { panel } = mount({ ...sandboxRoster(), champions: [] });
     expect(panel.element.querySelector<HTMLElement>(".attack-army__champions")?.hidden).toBe(true);
