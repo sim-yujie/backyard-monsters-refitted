@@ -120,16 +120,25 @@ describe("golden replays", () => {
     expect(twice.checkpoints).toEqual(once.checkpoints);
   }, REPLAY_TIMEOUT_MS);
 
-  it("takes a checkpoint every 800 ticks", () => {
-    const fixture = read<Fixture>(`${FIXTURE_DIR}pokey-rush.json`);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const outcome = replayAttack(inputOf(fixture) as any);
-    expect(outcome.checkpoints.length).toBeGreaterThan(20);
-    outcome.checkpoints.forEach((checkpoint, at) => {
-      expect(checkpoint.tick).toBe((at + 1) * 800);
-      expect(checkpoint.digest).toMatch(/^[0-9a-f]{16}$/);
-    });
-  });
+  it(
+    "takes a checkpoint every 800 ticks",
+    () => {
+      const fixture = read<Fixture>(`${FIXTURE_DIR}pokey-rush.json`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const outcome = replayAttack(inputOf(fixture) as any);
+      expect(outcome.checkpoints.length).toBeGreaterThan(20);
+      outcome.checkpoints.forEach((checkpoint, at) => {
+        expect(checkpoint.tick).toBe((at + 1) * 800);
+        expect(checkpoint.digest).toMatch(/^[0-9a-f]{16}$/);
+      });
+    },
+    // This checks behaviour, not speed, but replaying pokey-rush still takes
+    // real work; the vitest default of 5 s is a wall-clock watchdog that a
+    // busy machine (several agents' suites running at once) blows through
+    // with no change in what the test is checking. Same generous budget as
+    // the golden replays above.
+    REPLAY_TIMEOUT_MS,
+  );
 
   it("does not mutate the yard it was handed", () => {
     const fixture = read<Fixture>(`${FIXTURE_DIR}empty-yard.json`);

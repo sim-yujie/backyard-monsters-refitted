@@ -14,9 +14,16 @@ import { replayAttack } from "./replay.js";
  * feature stops working rather than merely getting slow.
  *
  * It asserts the ceiling rather than the target, because a test that failed on
- * a loaded continuous-integration machine would be noise. `bun
- * tools/bench-combat.mjs` from `web/` reports the real numbers on the runtime
- * the budget is written against; this only guards the cliff.
+ * a loaded continuous-integration machine would be noise. It still needs to be
+ * tolerant of *this* machine being loaded (several agents' test suites running
+ * at once routinely pushed a wall-clock measurement from ~500 ms to 5.1-18.9 s
+ * with no change to the code under test), so it measures CPU time
+ * (`process.cpuUsage`) rather than wall-clock time: time the process spends
+ * preempted by other work is not time `replayAttack` spent computing, and only
+ * the latter is what the §3.5 budget is about. `bun tools/bench-combat.mjs`
+ * from `web/` reports the real wall-clock numbers on the runtime the budget is
+ * written against; this only guards the cliff, and does so on an idle or a
+ * busy machine alike.
  */
 
 const FIXTURE_DIR = fileURLToPath(new URL("../../../../test/fixtures/combat/", import.meta.url));
@@ -36,6 +43,7 @@ const read = (path: string): Record<string, unknown> =>
 describe("replay performance", () => {
   it(
     `replays ${SCENARIO} on the sandbox yard inside the ${CEILING_MS} ms ceiling`,
+    { timeout: 120000 },
     () => {
       const fixture = read(`${FIXTURE_DIR}${SCENARIO}.json`);
       const sandbox = read(SANDBOX);
@@ -50,23 +58,32 @@ describe("replay performance", () => {
         tailTicks: fixture.tailTicks,
       };
 
-      const runs: number[] = [];
+      const runs: { wallMs: number; cpuMs: number }[] = [];
       for (let run = 0; run < 3; run += 1) {
+        const startedCpu = process.cpuUsage();
         const started = process.hrtime.bigint();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const outcome = replayAttack(input as any);
-        runs.push(Number(process.hrtime.bigint() - started) / 1e6);
+        const wallMs = Number(process.hrtime.bigint() - started) / 1e6;
+        const cpu = process.cpuUsage(startedCpu);
+        runs.push({ wallMs, cpuMs: (cpu.user + cpu.system) / 1000 });
         expect(outcome.ticks).toBeGreaterThan(0);
       }
 
-      const median = [...runs].sort((one, other) => one - other)[1] as number;
-      // Reported rather than asserted: the target lives in the bench script.
+      const byWall = [...runs].sort((one, other) => one.wallMs - other.wallMs);
+      const byCpu = [...runs].sort((one, other) => one.cpuMs - other.cpuMs);
+      const medianWall = byWall[1]!.wallMs;
+      const medianCpu = byCpu[1]!.cpuMs;
+      // Wall time is reported rather than asserted: on a busy machine it also
+      // counts time this process spent preempted by unrelated work, which the
+      // §3.5 budget was never meant to cover. CPU time is not, and stays close
+      // to the wall-clock number on an idle machine.
       console.warn(
-        `combat replay ${SCENARIO}: median ${median.toFixed(1)} ms ` +
-          `over ${runs.length} runs (budget 500 ms, ceiling ${CEILING_MS} ms)`,
+        `combat replay ${SCENARIO}: median ${medianCpu.toFixed(1)} ms CPU ` +
+          `(${medianWall.toFixed(1)} ms wall) over ${runs.length} runs ` +
+          `(budget 500 ms, ceiling ${CEILING_MS} ms)`,
       );
-      expect(median).toBeLessThan(CEILING_MS);
+      expect(medianCpu).toBeLessThan(CEILING_MS);
     },
-    { timeout: 120000 },
   );
 });
