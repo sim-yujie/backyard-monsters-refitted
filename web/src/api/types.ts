@@ -368,6 +368,13 @@ export interface BuildingData {
   cR?: number;
   /** Seconds left on a fortification. */
   cF?: number;
+  /**
+   * Length in seconds of the running build or upgrade as the server started
+   * it, after Sharper Tools (#136). Absent on older jobs; the progress then
+   * falls back to the cost table's time (`countdownProgress`, `jobs.ts`).
+   * Not `cT`, which `BEXPIRABLE` uses for its create time.
+   */
+  cL?: number;
   /** Current health. Absent means full. 0 means destroyed. */
   hp?: number;
   /** 1 while a worker is repairing. */

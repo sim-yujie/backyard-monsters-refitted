@@ -67,6 +67,31 @@ describe("catchUpYard — building countdowns", () => {
     expect(save.savetime).toBe(SAVED + 40);
   });
 
+  test("a job's length rides along while it runs and is cleared when it ends (#136)", () => {
+    const save = saveOf({
+      buildingdata: {
+        "0": building(0, 14, { l: 3 }),
+        "1": building(1, 20, { l: 1, cU: 100, cL: 720 }),
+        "5": building(5, 20, { l: 0, cB: 300, cL: 300 }),
+        "6": building(6, 20, { l: 0, cB: 30, cL: 30 }),
+      },
+    });
+
+    catchUpYard(save, SAVED + 60);
+
+    // Still running: the countdown moves, the length it is measured against does not.
+    expect(save.buildingdata!["1"]).toMatchObject({ cU: 40, cL: 720 });
+    expect(save.buildingdata!["5"]).toMatchObject({ cB: 240, cL: 300 });
+    // Finished builds and upgrades leave no length behind.
+    expect(save.buildingdata!["6"]!.cB).toBeUndefined();
+    expect(save.buildingdata!["6"]!.cL).toBeUndefined();
+
+    catchUpYard(save, SAVED + 200);
+    expect(save.buildingdata!["1"]).toMatchObject({ l: 2 });
+    expect(save.buildingdata!["1"]!.cU).toBeUndefined();
+    expect(save.buildingdata!["1"]!.cL).toBeUndefined();
+  });
+
   test("a build finishes at level 1 with the build formula; a Town Hall earns 100 more", () => {
     const save = saveOf({
       buildingdata: {

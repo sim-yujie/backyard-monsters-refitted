@@ -2,6 +2,7 @@ import type { SpeedupItem } from "@/api/types";
 import type { YardRefusal } from "@/api/yard";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, WALL_TYPES } from "@/game/yard/buildingCosts";
+import { progressFraction } from "@/game/yard/jobs";
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import { typeName } from "@/game/yard/planner/summary";
 import {
@@ -580,7 +581,7 @@ export class BuildingPanel {
 
   private drawJobClock(job: JobOffer, refs: JobRefs): void {
     refs.countdown.textContent = job.paused ? "Paused" : formatCountdown(job.remaining);
-    const done = Math.max(0, Math.min(1, 1 - job.remaining / job.total));
+    const done = progressFraction(job.remaining, job.total);
     const percent = Math.round(done * 100);
     refs.fill.style.width = `${done * 100}%`;
     refs.bar.setAttribute("aria-valuenow", String(percent));

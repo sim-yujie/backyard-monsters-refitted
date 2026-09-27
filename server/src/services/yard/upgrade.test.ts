@@ -70,7 +70,15 @@ describe("upgrade", () => {
     });
     expect(outcome.debit).toEqual({ r1: 50000, r2: 37500, r3: 12500, r4: 0 });
     expect(outcome).not.toHaveProperty("points");
-    expect(outcome.slices.buildingdata["1"]).toEqual({ id: 1, t: CANNON, x: 0, y: 0, l: 2, cU: 2700 });
+    expect(outcome.slices.buildingdata["1"]).toEqual({
+      id: 1,
+      t: CANNON,
+      x: 0,
+      y: 0,
+      l: 2,
+      cU: 2700,
+      cL: 2700,
+    });
     // Every other building is carried over untouched, and the save itself is not written.
     expect(outcome.slices.buildingdata["2"]).toBe(save.buildingdata!["2"]);
     expect(save.buildingdata!["1"]!.cU).toBeUndefined();
@@ -81,6 +89,8 @@ describe("upgrade", () => {
 
     expect(outcome.report.seconds).toBe(2160);
     expect(outcome.slices.buildingdata["1"]!.cU).toBe(2160);
+    // The shortened length is the job's total, so a progress bar starts at 0 (#136).
+    expect(outcome.slices.buildingdata["1"]!.cL).toBe(2160);
   });
 
   test("Sharper Tools expired: the full time", () => {
@@ -101,7 +111,15 @@ describe("upgrade", () => {
       cost: { r1: 0, r2: 1575, r3: 0, r4: 0 },
     });
     // Level unchanged, cU set: the job holds the yard's worker until it ends or SP1 finishes it.
-    expect(outcome.slices.buildingdata["2"]).toEqual({ id: 2, t: SNAPPER, x: 0, y: 0, l: 1, cU: 300 });
+    expect(outcome.slices.buildingdata["2"]).toEqual({
+      id: 2,
+      t: SNAPPER,
+      x: 0,
+      y: 0,
+      l: 1,
+      cU: 300,
+      cL: 300,
+    });
     expect(outcome.debit).toEqual({ r1: 0, r2: 1575, r3: 0, r4: 0 });
     expect(outcome).not.toHaveProperty("points");
   });
@@ -230,17 +248,27 @@ describe("upgrade/cancel", () => {
   /** The yard with the Cannon Tower's 2 → 3 step running. */
   const upgrading = (overrides: Partial<UpgradeActionSave> = {}): UpgradeActionSave => {
     const save = yard(overrides);
-    save.buildingdata!["1"] = { ...save.buildingdata!["1"]!, cU: 1234 };
+    save.buildingdata!["1"] = { ...save.buildingdata!["1"]!, cU: 1234, cL: 2700 };
     return save;
   };
 
-  test("drops the countdown, keeps the level and refunds costs[level] in full", () => {
+  test("drops the countdown and its length, keeps the level and refunds costs[level] in full", () => {
     const save = upgrading({ resources: { r1: 0, r2: 0, r3: 0, r4: 0 } });
     const outcome = planCancelUpgrade(save, 1);
 
     expect(outcome.slices.buildingdata["1"]).toEqual({ id: 1, t: CANNON, x: 0, y: 0, l: 2 });
     expect(outcome.credit).toEqual({ r1: 50000, r2: 37500, r3: 12500, r4: 0 });
     expect(outcome.report).toEqual({ id: 1, refund: { r1: 50000, r2: 37500, r3: 12500, r4: 0 } });
+  });
+
+  test("an upgrade started before jobs kept their length (no cL) cancels the same (#136)", () => {
+    const save = yard({ resources: { r1: 0, r2: 0, r3: 0, r4: 0 } });
+    save.buildingdata!["1"] = { ...save.buildingdata!["1"]!, cU: 1234 };
+
+    const outcome = planCancelUpgrade(save, 1);
+
+    expect(outcome.slices.buildingdata["1"]).toEqual({ id: 1, t: CANNON, x: 0, y: 0, l: 2 });
+    expect(outcome.credit).toEqual({ r1: 50000, r2: 37500, r3: 12500, r4: 0 });
   });
 
   test("the report says what the storage cap let back in", () => {

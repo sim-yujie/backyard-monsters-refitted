@@ -73,7 +73,10 @@ import { busyWorkers, sharperToolsMultiplier, workerCount } from "./workers.js";
  * therefore written exactly as the audit's `startUpgrade` rule expects one:
  * charged `costs[from]`, level left where it was, and
  * `cU = floor(time * bst)`, which is the upper bound that rule checks against
- * (`services/base/economy/transitions.ts:258`). A finished step leaves no
+ * (`services/base/economy/transitions.ts:258`). Beside it goes `cL`, the same
+ * number kept as the job's total, which the countdown never touches: the save
+ * has no other record of how long a job runs once Sharper Tools has shortened
+ * it, and the client's progress bars need one (#136). A finished step leaves no
  * countdown to explain and its points are added by the controller, so they are
  * already inside `points` when the next save is measured
  * (`docs/design/planner-upgrades.md` §4).
@@ -249,7 +252,7 @@ export interface OneUpgradeStep {
   finished: boolean;
   /** Empire points awarded now: the step's points when finished, 0 when started. */
   points: number;
-  /** The building as the step leaves it: `cU` set, or `l` raised. */
+  /** The building as the step leaves it: `cU` and `cL` set, or `l` raised. */
   building: BuildingData;
 }
 
@@ -277,8 +280,9 @@ export const upgradeLadder = (type: number) => {
  * Town Hall; the building is below the top of its ladder; the step's `re`
  * prerequisites are met; the yard can pay for it; and, unless it is a wall or
  * trap step, a worker is free. A step is written as a countdown of
- * `floor(time × bst)`, however short; a wall or trap step straight to its new
- * level, with its points (see "Walls and traps finish at once" above).
+ * `floor(time × bst)`, however short, with the same figure as its total `cL`
+ * (#136); a wall or trap step straight to its new level, with its points (see
+ * "Walls and traps finish at once" above).
  *
  * `save.buildingdata` must already be advanced to `now`, as for the walk.
  * Nothing is charged or written here: the caller takes the returned `building`
@@ -344,7 +348,7 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
       cost,
       finished: false,
       points: 0,
-      building: { ...building, cU: seconds },
+      building: { ...building, cU: seconds, cL: seconds },
     };
   }
 

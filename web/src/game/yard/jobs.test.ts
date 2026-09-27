@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse, BuildingDataMap } from "@/api/types";
 import { maxHealth } from "./buildingArt";
+import { costOf } from "./buildingCosts";
+import { readYard } from "./yardModel";
 import {
   acceleratedEnd,
   buildingJobs,
   championJobs,
+  countdownProgress,
   hatcheryJobs,
   JobKind,
   LAB_TYPE,
@@ -13,6 +16,7 @@ import {
   MUSHROOM_RESPAWN_SECONDS,
   nextWorkerJob,
   predictCompletion,
+  progressFraction,
   repairEndsAt,
   researchJobs,
   savedAtOf,
@@ -89,6 +93,71 @@ describe("building countdowns", () => {
   it("lists a rebuild without a worker", () => {
     const [job] = buildingJobs({ "1": { X: 0, Y: 0, t: 20, id: 1, cR: 60 } }, SAVED);
     expect(job).toMatchObject({ kind: "rebuild", endsAt: SAVED + 60, holdsWorker: false });
+  });
+});
+
+describe("countdownProgress (#136)", () => {
+  // Cannon Tower L4 → L5 runs 24,300 s by the table; 19,440 s under Sharper Tools.
+  const CANNON = 20;
+  const TABLE = costOf(CANNON, 4)?.[4] ?? 0;
+
+  const progressAt = (row: Record<string, unknown>, now: number, extra: Partial<BaseLoadResponse> = {}) => {
+    const save = saveWith({
+      buildingdata: { "7": { id: 7, t: CANNON, X: 0, Y: 0, l: 4, ...row } },
+      ...extra,
+    });
+    const building = readYard(save).buildings.find((one) => one.id === 7);
+    if (!building) throw new Error("no building");
+    return countdownProgress(building, now);
+  };
+
+  it("a job with its length stored starts at 0 and runs to 1, Sharper Tools or not", () => {
+    expect(TABLE).toBe(24_300);
+    expect(progressAt({ cU: 19_440, cL: 19_440 }, SAVED)).toEqual({
+      remaining: 19_440,
+      total: 19_440,
+      fraction: 0,
+    });
+    expect(progressAt({ cU: 19_440, cL: 19_440 }, SAVED + 9_720)?.fraction).toBe(0.5);
+    expect(progressAt({ cU: 19_440, cL: 19_440 }, SAVED + 30_000)).toEqual({
+      remaining: 0,
+      total: 19_440,
+      fraction: 1,
+    });
+  });
+
+  it("an older job with no length falls back to the table's time", () => {
+    // The old behaviour, kept for saves from before #136: a Sharper Tools job opens at 20%.
+    const progress = progressAt({ cU: 19_440 }, SAVED);
+    expect(progress?.total).toBe(TABLE);
+    expect(progress?.fraction).toBeCloseTo(0.2, 5);
+  });
+
+  it("a speed-up leaves the length alone, so the bar jumps forward", () => {
+    // 19,440 − 3,600 left of a 19,440 s job.
+    expect(progressAt({ cU: 15_840, cL: 19_440 }, SAVED)?.fraction).toBeCloseTo(3_600 / 19_440, 5);
+  });
+
+  it("a build reads its length, or the table's build time", () => {
+    const build = costOf(CANNON, 0)?.[4] ?? 0;
+    expect(progressAt({ l: 0, cB: 20, cL: 24 }, SAVED)?.total).toBe(24);
+    expect(progressAt({ l: 0, cB: 20 }, SAVED)?.total).toBe(Math.max(build, 20));
+  });
+
+  it("a paused countdown holds its remaining time whatever the clock says", () => {
+    const progress = progressAt({ cU: 10_000, cL: 20_000, hp: 5 }, SAVED + 5_000);
+    expect(progress).toEqual({ remaining: 10_000, total: 20_000, fraction: 0.5 });
+  });
+
+  it("the total is never below what is left, and never 0", () => {
+    expect(progressAt({ cU: 50_000, cL: 1_000 }, SAVED)).toMatchObject({ total: 50_000, fraction: 0 });
+    expect(progressFraction(10, 0)).toBe(1);
+    expect(progressFraction(-5, 10)).toBe(1);
+    expect(progressFraction(20, 10)).toBe(0);
+  });
+
+  it("is null for a building with nothing running", () => {
+    expect(progressAt({}, SAVED)).toBeNull();
   });
 });
 
@@ -283,11 +352,11 @@ describe("yardJobs", () => {
 });
 
 describe("predictCompletion", () => {
-  it("finishes building countdowns the way advanceBuildingTimers does, copying what it touches", () => {
+  it("finishes building countdowns the way advanceBuildingTimers does (length too), copying what it touches", () => {
     const save = saveWith({
       buildingdata: {
-        "1": { X: 0, Y: 0, t: 20, id: 1, l: 2, cU: 5 },
-        "2": { X: 0, Y: 0, t: 20, id: 2, cB: 5, prefab: 3 },
+        "1": { X: 0, Y: 0, t: 20, id: 1, l: 2, cU: 5, cL: 720 },
+        "2": { X: 0, Y: 0, t: 20, id: 2, cB: 5, prefab: 3, cL: 30 },
         "3": { X: 0, Y: 0, t: 20, id: 3, cB: 5 },
         "4": { X: 0, Y: 0, t: 20, id: 4, fort: 1, cF: 5 },
         "5": { X: 0, Y: 0, t: 20, id: 5, cU: 99 },
@@ -303,7 +372,7 @@ describe("predictCompletion", () => {
     expect(rows["4"]).toEqual({ X: 0, Y: 0, t: 20, id: 4, fort: 2 });
     expect(rows["5"]).toBe(save.buildingdata!["5"]);
     // The original is untouched.
-    expect(save.buildingdata!["1"]).toEqual({ X: 0, Y: 0, t: 20, id: 1, l: 2, cU: 5 });
+    expect(save.buildingdata!["1"]).toEqual({ X: 0, Y: 0, t: 20, id: 1, l: 2, cU: 5, cL: 720 });
   });
 
   it("expires a buff, completes an unlock, a training and a research", () => {

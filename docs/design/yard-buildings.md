@@ -137,8 +137,8 @@ which clock it uses, and what completing it does. Completion is always done by t
 
 | Job | Stored in | Clock | On completion | Worker |
 | --- | --- | --- | --- | --- |
-| Build | `buildingdata[id].cB` (+ `prefab`) | seconds left at `savetime` | level 1 (or `prefab`); points `pointsForBuild` (`server/src/services/yardplanner/costs.ts:228`) | yes, except walls and traps (D13) |
-| Upgrade | `cU` | seconds left at `savetime` | level + 1, health full, points `pointsForUpgrade` (`costs.ts:215`) | yes |
+| Build | `buildingdata[id].cB` (+ `prefab`, + `cL` once a server route starts builds) | seconds left at `savetime` | level 1 (or `prefab`); points `pointsForBuild` (`server/src/services/yardplanner/costs.ts:228`) | yes, except walls and traps (D13) |
+| Upgrade | `cU` (+ `cL`, the job's length) | seconds left at `savetime` | level + 1, health full, points `pointsForUpgrade` (`costs.ts:215`); `cL` removed | yes |
 | Repair | `rE` flag, `hp`, `buildinghealthdata` | heal rate from `savetime` | full health, entries removed | no |
 | Harvester cycle | `st` buffer, `rCP` | seconds from `savetime` | buffer grows to `capacity` | no |
 | Locker unlock | `lockerdata[id] = {t:1, s, e}` | absolute `e` | `t: 2`, `s`/`e` deleted, `academy[id] ??= {level: 1}` | no |
@@ -151,6 +151,14 @@ which clock it uses, and what completing it does. Completion is always done by t
 
 Relative building countdowns stay (T2). Everything the server writes uses the same convention the
 old client read, so an old save and a new write are the same shape.
+
+A build or upgrade the server starts also stores its length, `cL` (seconds, after Sharper Tools),
+because the countdown alone cannot say how long the job was once Sharper Tools has shortened it
+(#136). The catch-up and speed-ups leave `cL` alone; completion (`advanceBuildingTimers`) and
+Cancel remove it. The client's progress (`countdownProgress`, `web/src/game/yard/jobs.ts`) is
+`1 − remaining / cL`, falling back to the cost table's step time when `cL` is absent. The name is
+not `cT` because `BEXPIRABLE` already stores its create time there
+(`client/scripts/BEXPIRABLE.as:32`).
 
 ### 2.3 Offline catch-up
 
@@ -220,6 +228,7 @@ Everything not listed keeps its current shape.
 | Radio (type 113) | Removed from `buildingdata`, its `costs[0]` refunded (capped). | Catch-up, once (§5.7). |
 | Map Room (type 11) | Capped at level 2. A save with `mr2upgraded` gets level 2. A level 3 Map Room is written back to 2 (nothing refunded; level 3 was free). | Catch-up, once (§5.7). |
 | Hatchery queue stacks | Unchanged `[id, count]`. | — |
+| `buildingdata[id].cL` | New: the running build or upgrade's length (§2.2, #136). | None: a job without it shows progress against the cost table's time, as before. |
 | `monsterbaiter` | Kept verbatim, no longer read (Musk is dropped, §8.1). | — |
 
 ### 2.6 Shiny prices

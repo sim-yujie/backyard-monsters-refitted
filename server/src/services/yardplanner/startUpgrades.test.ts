@@ -128,7 +128,7 @@ describe("walkUpgrades: workers", () => {
     expect(walk.started).toEqual([
       { id: 32, t: CANNON, from: 1, to: 2, seconds: 900, cost: priceOf(CANNON, 1, 2) },
     ]);
-    expect(walk.buildingdata["32"]).toMatchObject({ t: CANNON, cU: 900 });
+    expect(walk.buildingdata["32"]).toMatchObject({ t: CANNON, cU: 900, cL: 900 });
     // The level does not move: the countdown raises it when it finishes.
     expect(walk.buildingdata["32"]!.l).toBeUndefined();
   });
@@ -328,7 +328,8 @@ describe("walkUpgrades: Sharper Tools", () => {
     const walk = walkUpgrades(save, [planned(32, CANNON, 2)], NOW);
 
     expect(walk.started[0]!.seconds).toBe(720);
-    expect(walk.buildingdata["32"]).toMatchObject({ cU: 720 });
+    // Apply's job keeps its shortened length too, so its bar starts at 0 (#136).
+    expect(walk.buildingdata["32"]).toMatchObject({ cU: 720, cL: 720 });
     // The price is the cost table's, buff or no buff.
     expect(walk.cost).toEqual(priceOf(CANNON, 1, 2));
   });

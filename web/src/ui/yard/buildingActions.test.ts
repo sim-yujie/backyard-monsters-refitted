@@ -364,6 +364,12 @@ describe("jobOffer: speed-ups by time left", () => {
     expect(job.minusOne?.blocked).toBe("paused");
   });
 
+  it("measures progress against the job's stored length, else the table's time (#136)", () => {
+    // Cannon L4 → L5: 24,300 s by the table, 19,440 s under Sharper Tools.
+    expect(at(19_440, 1_000, { cL: 19_440 })).toMatchObject({ remaining: 19_440, total: 19_440 });
+    expect(at(19_440).total).toBe(24_300);
+  });
+
   it("counts the time left down with the clock", () => {
     const context = contextOf({
       buildings: [HALL(5), building(2, 20, 4, { cU: 5_400 })],

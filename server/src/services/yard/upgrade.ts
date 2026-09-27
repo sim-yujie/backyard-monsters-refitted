@@ -174,8 +174,8 @@ const creditedOf = (save: UpgradeActionSave, credit: ResourceAmounts): ResourceA
 };
 
 /**
- * Cancels a running upgrade: the countdown goes, the level stays, and the
- * step's full price comes back (`cancelRefund`, `client/scripts/BFOUNDATION.as:2401-2432`),
+ * Cancels a running upgrade: the countdown and its length `cL` go, the level
+ * stays, and the step's full price comes back (`cancelRefund`, `client/scripts/BFOUNDATION.as:2401-2432`),
  * clamped to the storage cap by the wrapper. Progress is lost; Shiny spent on
  * it is not refunded (BB §5 "Cancel and refund").
  *
@@ -193,7 +193,7 @@ export const planCancelUpgrade = (save: UpgradeActionSave, id: number) => {
     throw yardRefusedErr("notUpgrading", "That building is not being upgraded.");
   }
 
-  const { cU: _cancelled, ...rest } = building;
+  const { cU: _cancelled, cL: _length, ...rest } = building;
   const refund = cancelRefund(Number(building.t), levelOf(building));
   const report: CancelUpgradeReport = { id, refund: creditedOf(save, refund) };
 

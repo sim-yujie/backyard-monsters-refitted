@@ -8,8 +8,8 @@ import type {
   StoreData,
 } from "@/api/types";
 import { maxHealth } from "./buildingArt";
-import { rowOf } from "./buildingCosts";
-import { countdownOf } from "./yardModel";
+import { costOf, rowOf } from "./buildingCosts";
+import { countdownOf, type YardBuilding, type YardCountdown } from "./yardModel";
 
 /**
  * Every timer in the yard as one list of jobs with end times
@@ -241,6 +241,62 @@ export const buildingJobs = (
     }
   }
   return jobs;
+};
+
+/* ── Progress of a building job ───────────────────────────────────────── */
+
+/** How far along a building's countdown is at one moment. */
+export interface CountdownProgress {
+  /** Seconds left; the stored figure while the countdown is paused. */
+  readonly remaining: number;
+  /** Seconds the job runs in all: at least `remaining`, and never 0. */
+  readonly total: number;
+  /** 0 when the job has just started, 1 when it is done. */
+  readonly fraction: number;
+}
+
+/**
+ * How long a build or upgrade runs in all, in seconds.
+ *
+ * The server stores it as `cL` when it starts the job (#136): the countdown
+ * alone cannot say, because Sharper Tools shortens a job by a fifth and the
+ * cost table does not know that. A job started before `cL` existed, and any
+ * fortify or rebuild, falls back to the table's time for the step, which is
+ * exact whenever Sharper Tools was not running.
+ *
+ * @param level - The building's level now: 0 while it is being built.
+ */
+export const countdownLength = (
+  raw: BuildingData,
+  kind: YardCountdown["kind"],
+  level: number,
+): number => {
+  const stored = finite(raw.cL);
+  if (stored !== null && stored > 0 && (kind === JobKind.BUILD || kind === JobKind.UPGRADE)) {
+    return stored;
+  }
+  return costOf(raw.t, kind === JobKind.BUILD ? 0 : level)?.[4] ?? 0;
+};
+
+/** `1 − remaining / total`, held between 0 and 1. */
+export const progressFraction = (remaining: number, total: number): number =>
+  total > 0 ? Math.max(0, Math.min(1, 1 - remaining / total)) : 1;
+
+/**
+ * A building's running countdown at `now` (server clock): what is left, the
+ * whole, and the fraction done, or null when nothing is running. The one
+ * reading the building panel's bar and the bar drawn over the building in the
+ * yard both use (#136, #139).
+ */
+export const countdownProgress = (
+  building: Pick<YardBuilding, "level" | "countdown" | "raw">,
+  now: number,
+): CountdownProgress | null => {
+  const countdown = building.countdown;
+  if (!countdown) return null;
+  const remaining = countdown.paused ? countdown.seconds : Math.max(0, countdown.endsAt - now);
+  const total = Math.max(countdownLength(building.raw, countdown.kind, building.level), remaining, 1);
+  return { remaining, total, fraction: progressFraction(remaining, total) };
 };
 
 /** The first building of a type, for pointing a monster job at its building. */
@@ -540,6 +596,7 @@ export const predictCompletion = (
         const row = building(job.buildingId);
         if (!row) break;
         delete row.cU;
+        delete row.cL;
         row.l = (typeof row.l === "number" && row.l > 0 ? row.l : 1) + 1;
         break;
       }
@@ -547,6 +604,7 @@ export const predictCompletion = (
         const row = building(job.buildingId);
         if (!row) break;
         delete row.cB;
+        delete row.cL;
         if (typeof row["prefab"] === "number" && row["prefab"] > 0) row.l = row["prefab"];
         delete row["prefab"];
         break;

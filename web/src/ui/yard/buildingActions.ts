@@ -11,6 +11,7 @@ import {
 } from "@/game/yard/buildingCosts";
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import type { PlanNode } from "@/game/yard/planner/placement";
+import { countdownProgress } from "@/game/yard/jobs";
 import { ladderFor } from "@/game/yard/planner/upgrades";
 import { freeWorkers, holdsWorker, sharperToolsMultiplier } from "@/game/yard/workers";
 import type { Yard, YardBuilding, YardWorkers } from "@/game/yard/yardModel";
@@ -343,13 +344,11 @@ export const jobOffer = (building: YardBuilding, context: PanelContext): JobOffe
   if (!countdown) return null;
 
   const now = context.now();
-  const remaining = countdown.paused
-    ? countdown.seconds
-    : Math.max(0, countdown.endsAt - now);
+  // The same reading as the bar over the building in the yard (#136, #139).
+  const progress = countdownProgress(building, now);
+  if (!progress) return null;
+  const { remaining, total } = progress;
   const endsAt = countdown.paused ? now + remaining : countdown.endsAt;
-  const stepLevel = countdown.kind === "build" ? 0 : building.level;
-  const tableSeconds = costOf(building.type, stepLevel)?.[4] ?? 0;
-  const total = Math.max(tableSeconds, remaining, 1);
   const speedable = countdown.kind === "build" || countdown.kind === "upgrade";
   const { credits } = context;
   const finishItem: SpeedupItem = Math.trunc(remaining) <= FREE_FINISH_SECONDS ? "SP1" : "SP4";

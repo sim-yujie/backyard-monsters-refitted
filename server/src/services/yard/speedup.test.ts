@@ -69,6 +69,18 @@ describe("planSpeedup: SP rules per remaining time", () => {
     expect(plan.report).toMatchObject({ credits: 20, remaining: 1400, finished: null });
   });
 
+  test("a speed-up keeps the job's length and a finish clears it (#136)", () => {
+    // Part way: the countdown drops, the length it is measured against stays.
+    const partial = planSpeedup(yardOf({ cU: 5000, cL: 7200 }), 1, "SP2", NOW);
+    expect(partial.buildingdata["1"]).toMatchObject({ cU: 1400, cL: 7200 });
+
+    // Finished: the job is gone, so its length goes with it.
+    const done = planSpeedup(yardOf({ cU: 300, cL: 900 }), 1, "SP1", NOW);
+    expect(done.buildingdata["1"]).toMatchObject({ l: 2 });
+    expect(done.buildingdata["1"].cU).toBeUndefined();
+    expect(done.buildingdata["1"].cL).toBeUndefined();
+  });
+
   test("SP2 at exactly an hour finishes the job", () => {
     const plan = planSpeedup(yardOf({ cU: 3600 }), 1, "SP2", NOW);
 
