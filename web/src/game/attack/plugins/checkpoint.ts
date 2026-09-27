@@ -15,6 +15,11 @@ import { checkpointOf, type AttackCheckpoint } from "@/game/attack/attackCheckpo
  * seconds while the battle runs, which is how the server knows how far the
  * battle got. Nothing is sent before the first drop (#79) or after the end.
  *
+ * A hidden tab does not end the attack (owner, #138), but a hidden page is
+ * the one a browser or phone may later discard without a `pagehide`, so one
+ * more is sent the moment the page is hidden: the server then holds the
+ * attack as it stood when the player looked away.
+ *
  * One request at a time; a checkpoint that falls due while one is in flight
  * goes when it returns, carrying the newest state. Failures are silent — a
  * later checkpoint or the final save supersedes a lost one — except a refusal
@@ -81,11 +86,16 @@ export const createCheckpointPlugin = (deps: CheckpointPluginDeps = {}): AttackP
     const timer = window.setInterval(() => {
       if (session.state().phase === "running" && session.hasActed()) request();
     }, CHECKPOINT_INTERVAL_MS);
+    const onVisibility = (): void => {
+      if (document.visibilityState === "hidden" && session.hasActed()) request();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       stopped = true;
       unsubscribe();
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   };
 };

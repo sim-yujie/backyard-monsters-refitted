@@ -368,16 +368,19 @@ arrives while the lock is held, or by the binding check / `permissionErr` once t
 
 ### Leaving an attack: checkpoints and finalisation (issue #138)
 
-Leaving the web client's attack screen in any way ends the battle at that moment, with its results
-standing. The client sends its final save as a keepalive request as the page goes
-(`web/src/game/attack/plugins/end.ts`). So that an attack whose save never arrives (a killed
-browser, a lost connection) is not undone, the client also checkpoints it:
+Leaving the web client's attack screen (a reload, a closed tab, browser Back, in-app navigation, a
+sign-out) ends the battle at that moment, with its results standing. The client sends its final
+save as a keepalive request as the page goes (`web/src/game/attack/plugins/end.ts`). A hidden tab
+(another tab, a minimised browser, a locked phone) is not leaving and ends nothing. So that an
+attack whose save never arrives (a killed browser, a hidden page the browser or phone discards, a
+lost connection) is not undone, the client also checkpoints it:
 
 | Method | Path | Middleware | Request fields | Response |
 |---|---|---|---|---|
 | POST | `/base/checkpoint` | verifyUserAuth | `AttackCheckpointSchema`: `basesaveid`, `attackid?`, `tick` (battle ticks reached), `flinglog` (JSON string, the §3.10 fling log so far), `sources` (JSON string array of the attacker's cell base ids, in the order a fling spends them) | `{ error: 0, stored: true, tick }`, or `{ error: 0, stored: false }` for a log with no events (#79) |
 
-Sent after every drop, bomb and siege weapon and every 5 seconds while the battle runs. Bound
+Sent after every drop, bomb and siege weapon, every 5 seconds while the battle runs, and once
+more when the page is hidden. Bound
 exactly like the attack save (same `checkAttackBinding`). A checkpoint may only extend the one
 held: same seed, every stored event unchanged and in place, a clock that has not gone back; else
 `attackCheckpointRefusedErr` (409, `reason`: `malformed`, `rewound` or `reseeded`). It writes no

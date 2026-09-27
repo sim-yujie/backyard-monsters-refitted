@@ -160,6 +160,42 @@ describe("the checkpoint plugin", () => {
     expect(send).toHaveBeenCalledTimes(2);
   });
 
+  it("sends one more the moment the tab is hidden, after the first drop only", async () => {
+    const setVisibility = (state: DocumentVisibilityState): void => {
+      Object.defineProperty(document, "visibilityState", { value: state, configurable: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+    };
+    try {
+      mount();
+      setVisibility("hidden");
+      await flush();
+      expect(send).not.toHaveBeenCalled();
+
+      setVisibility("visible");
+      session.appendFling({ x: -200, y: -200, monsters: { C1: 1 } });
+      await flush();
+      session.advance(1);
+      setVisibility("hidden");
+      await flush();
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(sent[1]!.tick).toBe(80);
+      expect(session.state().phase).toBe("running");
+
+      // Nothing after the end, and nothing once torn down.
+      session.leave();
+      setVisibility("visible");
+      setVisibility("hidden");
+      teardown?.();
+      teardown = undefined;
+      setVisibility("visible");
+      setVisibility("hidden");
+      await flush();
+      expect(send).toHaveBeenCalledTimes(2);
+    } finally {
+      Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    }
+  });
+
   it("carries on past a network failure", async () => {
     send.mockRejectedValueOnce(new Error("offline"));
     mount();

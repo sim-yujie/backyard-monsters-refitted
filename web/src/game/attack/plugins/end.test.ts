@@ -297,7 +297,7 @@ describe("the end plugin", () => {
       expect(payload.attackreport).toContain("Left the attack");
       expect(modal.textContent).toContain("You left the attack");
 
-      // pagehide and visibilitychange both fire on the way out; still once.
+      // A second pagehide, the hidden state and the teardown that follow: still once.
       window.dispatchEvent(new Event("pagehide"));
       hide();
       teardown?.();
@@ -306,11 +306,24 @@ describe("the end plugin", () => {
       expect(save).not.toHaveBeenCalled();
     });
 
-    it("a hidden tab ends it the same way", async () => {
+    it("a hidden tab does not end the attack; pagehide still does", async () => {
+      const save = vi.fn(savedOk);
       const onLeave = vi.fn(savedOk);
-      mount(vi.fn(savedOk), onLeave);
+      mount(save, onLeave);
       act();
       hide();
+      expect(session.state().phase).toBe("running");
+      expect(onLeave).not.toHaveBeenCalled();
+      expect(save).not.toHaveBeenCalled();
+      expect(modal.children).toHaveLength(0);
+
+      // Back to the tab, the battle carries on; then the tab is closed.
+      Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+      session.advance(1);
+      expect(session.state().phase).toBe("running");
+      hide();
+      window.dispatchEvent(new Event("pagehide"));
       expect(session.state().endReason).toBe("left");
       expect(onLeave).toHaveBeenCalledTimes(1);
       await flush();

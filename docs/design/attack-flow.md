@@ -810,21 +810,29 @@ without a save is charged once by the server's finalisation instead (§5.6), nev
 ### 5.6 Leaving mid-battle ends the battle (issue #138)
 
 Owner, 2026-09-27: "reloading the page will end the battle immediately. It shouldnt reverse
-anything." Leaving the attack screen in any way — a reload, a closed tab, browser Back, a hidden
-tab, in-app navigation, a sign-out — ends the attack at that tick (`AttackSession.leave`, end
-reason `left`, no event logged) and sends the final save as a keepalive request with the token
-captured when the attack opened; the end panel reads "You left the attack, so it ended there." A
+anything." Leaving the attack screen — a reload, a closed tab or browser Back (`pagehide`),
+in-app navigation or a sign-out (the scene torn down) — ends the attack at that tick
+(`AttackSession.leave`, end reason `left`, no event logged) and sends the final save as a keepalive
+request with the token captured when the attack opened; the end panel reads "You left the attack, so it ended there." A
 save already in flight when the page goes is sent again the same way, and the server's final lock
 lands exactly one (`docs/server-api.md`, "Attack session binding"). An attack with nothing dropped
 still sends nothing (#79). The keepalive body is JSON rather than form-encoded and carries only the
 standing traps in `buildingdata`, which is all the server reads of it, to fit the browser's 64 KB.
 
+A hidden tab is not leaving (owner, 2026-09-27): switching to another tab, minimising the browser
+or locking the phone (`visibilitychange` to hidden) ends nothing, and the player can come back to
+the battle. The battle clock follows the page's frames, which the browser stops for a hidden page,
+so in practice the battle waits and carries on when the player returns; the server's 420-second
+save window is wall time and keeps running. If the browser or phone then discards the page without
+a `pagehide`, the server finishes the attack from its last checkpoint, as below.
+
 In case that save never arrives, the client checkpoints the attack to `/base/checkpoint` after
-every drop, bomb and siege weapon and every 5 seconds (`plugins/checkpoint.ts`), and the server
-finishes an attack left without a save from its last checkpoint, replaying the log with the shared
-engine to the checkpoint's tick (`server/src/services/base/finaliseAttack.ts`): on the attacker's
-next yard load or attack, on the defender's yard load or the next attack on the row once the
-window has closed, and from a minute sweep. The damage then stands as of the last checkpoint, at
+every drop, bomb and siege weapon, every 5 seconds, and once more the moment the page is hidden
+(`plugins/checkpoint.ts`), and the server finishes an attack left without a save from its last
+checkpoint, replaying the log with the shared engine to the checkpoint's tick
+(`server/src/services/base/finaliseAttack.ts`): on the attacker's next yard load or attack, on the
+defender's yard load or the next attack on the row once the window has closed, and from a minute
+sweep. The damage then stands as of the last checkpoint, at
 most 5 seconds (10 at 2x) before the player left.
 
 ### 5.4 New client-side state

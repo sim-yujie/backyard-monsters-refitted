@@ -25,8 +25,10 @@ import { EndAttackPanel, type SaveFailure } from "@/ui/attack/EndAttackPanel";
  * offered only after a failure.
  *
  * Leaving the attack screen ends the attack (issue #138): a reload, a closed
- * tab, browser Back or a hidden tab (`pagehide`, `visibilitychange`), or the
- * scene being torn down by in-app navigation. The session ends where it
+ * tab or browser Back (`pagehide`), or the scene being torn down by in-app
+ * navigation or a sign-out. A hidden tab — another tab, a minimised window, a
+ * locked phone — is not leaving and ends nothing (owner, #138); the page is
+ * still there and the player may come back to it. The session ends where it
  * stands (`AttackSession.leave`) and the save goes as a keepalive request,
  * which the browser lets finish after the page is gone, exactly once. If the
  * ordinary save was already on its way, the keepalive copy is sent too, since
@@ -51,8 +53,8 @@ export interface EndPluginDeps {
    * sign-out clears the live one before the scene is torn down.
    */
   readonly saveOnLeave?: (payload: AttackSavePayload, token: string | null) => Promise<BaseSaveResponse>;
-  /** Where `pagehide` and `visibilitychange` are heard; the page by default. */
-  readonly page?: { readonly window: Window; readonly document: Document };
+  /** Where `pagehide` is heard; the page by default. */
+  readonly page?: { readonly window: Window };
   /** Wall-clock milliseconds; `Date.now` by default. */
   readonly now?: () => number;
   /** Display names for the attack report; the army panel's table by default. */
@@ -124,7 +126,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
 
   return (mounts: AttackMounts) => {
     const { session, modal, notices, goToMap } = mounts;
-    const page = deps.page ?? { window, document };
+    const page = deps.page ?? { window };
     const mountedAt = now();
     const token = getAuthToken();
     let warned = false;
@@ -205,11 +207,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     };
 
     const onPageHide = (): void => leave(true);
-    const onVisibility = (): void => {
-      if (page.document.visibilityState === "hidden") leave(true);
-    };
     page.window.addEventListener("pagehide", onPageHide);
-    page.document.addEventListener("visibilitychange", onVisibility);
 
     const onEnded = (): void => {
       if (ended) return;
@@ -248,7 +246,6 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       // The scene is going (in-app navigation, a sign-out): that is leaving too.
       leave(false);
       page.window.removeEventListener("pagehide", onPageHide);
-      page.document.removeEventListener("visibilitychange", onVisibility);
       unsubscribe();
       window.clearInterval(timer);
       panel?.close();
