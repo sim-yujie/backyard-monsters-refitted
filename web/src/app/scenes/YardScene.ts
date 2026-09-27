@@ -725,6 +725,8 @@ export class YardScene implements Scene {
       if (!dock) return;
       this.panel = new BuildingPanel({
         ...(this.binding ? { yard: this.binding } : {}),
+        // The Map Room's door: on the own yard only, where the map is the player's.
+        ...(this.binding ? { openMap: () => this.context?.goTo(SceneName.MAP_ROOM_2) } : {}),
         onClose: () => {
           this.panel = null;
           this.selected = null;

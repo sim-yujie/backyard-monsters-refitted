@@ -1,0 +1,297 @@
+/*
+ * The yard's building panel (`web/src/ui/yard/BuildingPanel.ts`, design
+ * `docs/design/yard-buildings.md` §3.1).
+ *
+ * Same rule as ui.css: every value comes from tokens.css. The panel sits in
+ * the 300px right dock and uses the map panels' compact shell (`.map-panel`),
+ * so only what is new here is declared: the info arrows, the action block, the
+ * Shiny tap-again state, the job bar and the Cancel confirmation.
+ */
+
+.building-panel {
+  overflow-y: auto;
+}
+
+/* ── Info rows ──────────────────────────────────────────────────────────── */
+
+.building-panel__arrow {
+  color: var(--colour-text-muted);
+}
+
+/* What the next level brings: the one number the player is deciding on. */
+.building-panel__next {
+  color: var(--colour-success);
+  font-weight: 700;
+}
+
+/* A row the next level makes worse is shown plainly, not as a gain. */
+.building-panel__next--down {
+  color: var(--colour-text);
+  font-weight: 400;
+}
+
+.building-panel__icons {
+  display: inline-flex;
+  gap: var(--space-1);
+  vertical-align: middle;
+}
+
+.building-panel__label {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.building-panel__list {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-sm);
+  columns: 2;
+  column-gap: var(--space-4);
+}
+
+.building-panel__list li {
+  break-inside: avoid;
+}
+
+/* ── Action blocks ──────────────────────────────────────────────────────── */
+
+.building-panel__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.building-panel__block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.building-panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.building-panel__heading {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 800;
+}
+
+.building-panel__time {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text-muted);
+  white-space: nowrap;
+}
+
+.building-panel__cost {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
+}
+
+/* The costs wrap onto a second line in a 300px dock rather than overflow. */
+.building-panel__cost .res-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+.building-panel__cost .res-list > .res-amount + .res-amount {
+  margin-left: 0;
+}
+
+/* Why the button beside it is disabled: a state, not an error. */
+.building-panel__gate {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-accent);
+}
+
+.building-panel__note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.building-panel__buttons > .btn {
+  min-height: 34px;
+}
+
+.building-panel__planner {
+  align-self: stretch;
+}
+
+/* ── Shiny tap-again ────────────────────────────────────────────────────── */
+
+.shiny-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.shiny-button .res-icon {
+  height: 16px;
+}
+
+.shiny-button--armed,
+.shiny-button--armed:hover:not(:disabled) {
+  background: var(--colour-accent);
+  border-color: var(--colour-accent-hover);
+  color: var(--colour-accent-text);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--colour-accent) 30%, transparent);
+  animation: shiny-armed 3s linear forwards;
+}
+
+/* The ring shrinks over the three seconds the second tap is waited for. */
+@keyframes shiny-armed {
+  from {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--colour-accent) 45%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shiny-button--armed {
+    animation: none;
+  }
+}
+
+/* ── The running job ────────────────────────────────────────────────────── */
+
+/* Finish now leads on its own row; the two fixed-price steps share the next. */
+.building-job .building-panel__buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.building-job .building-panel__buttons > :first-child {
+  grid-column: 1 / -1;
+}
+
+.building-job__countdown {
+  color: var(--colour-info);
+  font-weight: 700;
+}
+
+.building-job__bar {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-overlay);
+  overflow: hidden;
+}
+
+.building-job__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--colour-info);
+  transition: width var(--motion-normal) var(--easing);
+}
+
+.building-job__bar--paused .building-job__fill {
+  background: var(--colour-text-muted);
+}
+
+/* ── Cancel ─────────────────────────────────────────────────────────────── */
+
+.building-cancel__open {
+  width: 100%;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-2);
+  color: var(--colour-danger);
+}
+
+.building-cancel--confirming {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-danger);
+  border-radius: var(--radius-sm);
+}
+
+.building-cancel--confirming .btn {
+  white-space: nowrap;
+}
+
+.building-cancel__question,
+.building-cancel__lost {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.building-cancel__lost {
+  color: var(--colour-accent);
+}
+
+.building-panel .btn--danger {
+  background: var(--colour-danger);
+  border-color: var(--colour-danger);
+  color: var(--colour-text-inverse);
+}
+
+.building-panel .btn--danger:hover:not(:disabled) {
+  background: var(--colour-danger);
+  filter: brightness(1.1);
+}
+
+/* ── Status and details ─────────────────────────────────────────────────── */
+
+.building-panel__status {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.building-panel__status--good {
+  color: var(--colour-success);
+}
+
+.building-panel__status--bad {
+  color: var(--colour-danger);
+}
+
+.building-panel__details {
+  border-top: 1px solid var(--colour-border);
+  padding-top: var(--space-2);
+}
+
+.building-panel__summary {
+  cursor: pointer;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  list-style: none;
+}
+
+.building-panel__summary::-webkit-details-marker {
+  display: none;
+}
+
+.building-panel__summary::before {
+  content: "▸ ";
+}
+
+.building-panel__details[open] .building-panel__summary::before {
+  content: "▾ ";
+}
+
+.building-panel__summary:hover,
+.building-panel__summary:focus-visible {
+  color: var(--colour-text);
+}
+
+.building-panel__details > .cell-facts {
+  margin-top: var(--space-2);
+}
