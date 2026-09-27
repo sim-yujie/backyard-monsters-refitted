@@ -135,7 +135,7 @@ describe("wallUpgradePanel", () => {
     const harness = open(yardOf(RICH, 10), [1, 2, 3, 4, 5, 7]);
     levelButton(harness, 5).click();
 
-    expect(text(harness, ".planner-walls__costs")).toContain("2.8M");
+    expect(text(harness, ".planner-walls__costs")).toContain("2,800,000");
     expect(harness.confirm.disabled).toBe(false);
 
     harness.confirm.click();

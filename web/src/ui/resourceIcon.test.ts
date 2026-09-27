@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
+import { formatCompact } from "./format";
 import {
   costAmounts,
   iconStyle,
@@ -55,13 +56,20 @@ describe("resource icons", () => {
     expect(spokenText(amount)).toBe("Goo 12.5K");
   });
 
+  it("spells a number in full unless the caller opts into short (#134)", () => {
+    expect(resourceAmount("r1", 15_000_000).textContent).toBe("15,000,000");
+    expect(resourceAmount("r1", 15_000_000, { compact: true }).textContent).toBe("15.0M");
+    expect(resourceAmount("r1", 999.9).textContent).toBe("999");
+  });
+
   it("spells a cost without the resources it does not need, or not at all", () => {
     const cost = costAmounts({ r1: 10_000, r2: 0, r3: 2_500, r4: 0 })!;
-    expect(spokenText(cost)).toBe("Twigs 10.0K Putty 2.5K");
+    expect(spokenText(cost)).toBe("Twigs 10,000 Putty 2,500");
     expect(cost.querySelectorAll(".res-icon")).toHaveLength(2);
     expect(costAmounts({ r1: 0, r2: 0, r3: 0, r4: 0 })).toBeNull();
     expect(costAmounts({})).toBeNull();
-    expect(spokenText(costAmounts({ r1: 1_234 }, (n) => n.toLocaleString("en-US"))!)).toBe("Twigs 1,234");
+    expect(spokenText(costAmounts({ r1: 1_234 })!)).toBe("Twigs 1,234");
+    expect(spokenText(costAmounts({ r1: 1_234_567 }, formatCompact)!)).toBe("Twigs 1.2M");
   });
 
   it("maps a bomb's resource number onto its key", () => {

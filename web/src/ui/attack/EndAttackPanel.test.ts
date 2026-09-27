@@ -53,11 +53,11 @@ describe("EndAttackPanel", () => {
     expect(text).toContain("9 of 45 sent");
     // Each amount is drawn with its resource's icon, which still says the name (#93).
     const items = [...panel.element.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
-    expect(items.map(spokenText)).toEqual(["Twigs 12.5K", "Pebbles 0", "Putty 800", "Goo 0"]);
+    expect(items.map(spokenText)).toEqual(["Twigs 12,500", "Pebbles 0", "Putty 800", "Goo 0"]);
     expect(items.map((item) => item.querySelector(".res-icon")?.getAttribute("role"))).toEqual([
       "img", "img", "img", "img",
     ]);
-    expect(items[0]?.textContent).toBe("12.5K");
+    expect(items[0]?.textContent).toBe("12,500");
     expect(items[0]?.title).toBe("Twigs: 12,500");
     expect(panel.panel.element.classList.contains("attack-end--win")).toBe(true);
     expect(panel.panel.element.getAttribute("aria-modal")).toBe("true");

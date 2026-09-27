@@ -1,6 +1,7 @@
 import { WATER_MAX_HEIGHT } from "@/config";
 import { CellType, isPlayerCell, isWaterCell, type MapCell, type Resources } from "@/api/types";
 import { HexGrid, type OffsetCell } from "@/game/HexGrid";
+import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, resourceIcon } from "@/ui/resourceIcon";
 import { TRIBE_COLOURS } from "@/game/maproom/cellVisuals";
@@ -298,8 +299,8 @@ export class CellPanel {
       this.add(
         resourceIcon(key),
         max === undefined
-          ? amount.toLocaleString()
-          : `${amount.toLocaleString()} / ${max.toLocaleString()}`,
+          ? formatAmount(amount)
+          : `${formatAmount(amount)} / ${formatAmount(max)}`,
       );
     }
   }

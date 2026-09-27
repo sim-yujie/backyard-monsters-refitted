@@ -296,6 +296,11 @@ body {
   white-space: nowrap;
 }
 
+/* The readouts in full come before the name (#134, `HudFit` in Hud.ts). */
+.hud:not([data-fit="full"]) .hud__brand {
+  display: none;
+}
+
 .hud__resources {
   display: flex;
   gap: var(--space-2);

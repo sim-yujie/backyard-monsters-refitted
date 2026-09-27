@@ -1,5 +1,5 @@
 /**
- * The two number spellings every panel shares.
+ * The number spellings every panel shares.
  *
  * Both used to live in whichever file first needed them — the amount in
  * `Hud.ts`, the countdown in `BuildingPanel.ts` — which was fine while one
@@ -7,21 +7,36 @@
  * HUD's holdings and a build time beside a building's countdown, and two
  * spellings of the same number on one screen read as two different numbers.
  *
- * Neither touches the DOM: they take a number and return a string, so they are
+ * None touches the DOM: they take a number and return a string, so they are
  * as testable as the rest of the yard's arithmetic.
  */
 
 /**
- * A resource amount, short enough for a readout that never wraps.
+ * A resource amount in full: "15,000,000".
  *
- * Under a thousand is exact; past that it is one decimal of K or M and two of
- * B, which is what the original's HUD does and what keeps 280,000,000 twigs
- * readable as "280.0M". `undefined` is a value the save did not send, and it
- * shows as an em dash rather than as a zero the player does not have.
+ * The default wherever a number of a resource is shown (issue #134): players
+ * should see what they actually hold and pay, and "15.0M" hides the last few
+ * hundred thousand. A fraction is dropped rather than rounded — a harvester's
+ * 999.6 twigs are 999 that can be spent — and the separator is the same in
+ * every locale. `undefined` is a value the save did not send, and it shows as
+ * an em dash rather than as a zero the player does not have.
  */
 export const formatAmount = (value: number | undefined): string => {
   if (value === undefined) return "—";
-  if (value < 1_000) return String(Math.round(value));
+  return Math.floor(value).toLocaleString("en-US");
+};
+
+/**
+ * A resource amount short enough for a control that cannot grow: "15.0M".
+ *
+ * The explicit opt-in to leave {@link formatAmount}'s full figure, for the few
+ * places with no room for it: the HUD's change float, the HUD on a phone, a
+ * size button. Under a thousand is exact; past that it is one decimal of K or
+ * M and two of B, which is what the original's HUD does.
+ */
+export const formatCompact = (value: number | undefined): string => {
+  if (value === undefined) return "—";
+  if (value < 1_000) return String(Math.floor(value));
   if (value < 1_000_000) return `${(value / 1_000).toFixed(1)}K`;
   if (value < 1_000_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   return `${(value / 1_000_000_000).toFixed(2)}B`;

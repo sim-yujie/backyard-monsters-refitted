@@ -102,10 +102,10 @@ describe("the Apply dialog", () => {
     const totals = box ? spokenText(box) : "";
     expect(totals).toContain("Total deducted now");
     // Icons stand in for the words and still name the resource (#93).
-    expect(totals).toContain("Twigs 10.0K");
-    expect(totals).toContain("Pebbles 17.5K");
+    expect(totals).toContain("Twigs 10,000");
+    expect(totals).toContain("Pebbles 17,500");
     expect(totals).toContain("You will have left");
-    expect(totals).toContain("Twigs 90.0K");
+    expect(totals).toContain("Twigs 90,000");
     expect(box?.textContent).not.toContain("twigs");
   });
 

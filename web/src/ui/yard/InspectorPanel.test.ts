@@ -165,9 +165,9 @@ describe("one building", () => {
     expect(rows["Health"]).toBe("6,000");
     expect(rows["Next level"]).toBe("Health 9,000");
     // Each amount is drawn with its resource's icon, named for a screen reader (#93).
-    expect(rows["Next step"]).toContain("Twigs 10.0K");
-    expect(rows["Next step"]).toContain("Pebbles 7.5K");
-    expect(rows["Next step"]).toContain("Putty 2.5K");
+    expect(rows["Next step"]).toContain("Twigs 10,000");
+    expect(rows["Next step"]).toContain("Pebbles 7,500");
+    expect(rows["Next step"]).toContain("Putty 2,500");
     expect(rows["Shiny"]).toBeDefined();
     expect(rows["Next step"]).toContain("15m 0s");
     expect(rows["Position"]).toBe("200, 0");
@@ -217,8 +217,8 @@ describe("one building", () => {
 
     // 1 → 3 is both steps: 10,000 + 50,000 twigs, 900 + 2,700 seconds.
     const title = levelButton(element, 3).title;
-    expect(title).toContain("60.0K twigs");
-    expect(title).toContain("45.0K pebbles");
+    expect(title).toContain("60,000 twigs");
+    expect(title).toContain("45,000 pebbles");
     expect(title).toContain("1h 0m");
   });
 
@@ -346,7 +346,7 @@ describe("a multi-selection", () => {
     expect(levels(element)).toHaveLength(0);
     // Two blocks from level 1 to 2: 10,000 pebbles each. The count is in the
     // title and the button is the point, so the four rows sit under Details.
-    expect(facts(element)["Pebbles"]).toContain("20.0K");
+    expect(facts(element)["Pebbles"]).toContain("20,000");
     expect(topFacts(element)).toEqual({});
     expect(detailsOf(element).open).toBe(false);
 

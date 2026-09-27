@@ -1,20 +1,39 @@
 import type { Resources } from "@/api/types";
 import type { YardUiBinding } from "@/game/yard/YardStore";
-import { formatAmount } from "./format";
+import { formatAmount, formatCompact } from "./format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
 
 /**
  * The persistent top bar: resource readouts on the left, a scene switcher on
  * the right.
  *
- * Each readout is the resource's icon and a short amount (issue #93). The
- * short amount hides small changes on a big pool — 11,163,050,000 and
- * 11,158,040,000 twigs both read "11.16B" — so every readout also carries the
- * exact figure (issue #92): as its tooltip and accessible name for a mouse or
- * a screen reader, and in a small bubble on a tap for a finger, which has no
+ * Each readout is the resource's icon (issue #93) and the amount in full,
+ * "11,158,040,000" (issue #134). When the bar is too narrow for every readout
+ * in full — a phone — it drops the brand, then falls back to short amounts
+ * ("11.16B") rather than wrap or scroll; see {@link HudFit}. A short amount
+ * hides small changes on a big pool, so every readout also carries the exact
+ * figure (issue #92): as its tooltip and accessible name for a mouse or a
+ * screen reader, and in a small bubble on a tap for a finger, which has no
  * hover. A change of amount floats its difference beside the readout for a
  * moment, so a 5M bomb out of 11B is still seen to cost something.
  */
+
+/**
+ * How much the bar shows, most first. {@link Hud} takes the first level at
+ * which the readouts fit beside the scene switcher, measured again whenever
+ * an amount or the window's width changes.
+ */
+export const HudFit = {
+  /** Brand and every amount in full. */
+  FULL: "full",
+  /** Amounts in full; the brand gives its room to them. */
+  NO_BRAND: "no-brand",
+  /** Short amounts ("15.0M"): the phone fallback. The tap bubble stays exact. */
+  COMPACT: "compact",
+} as const;
+export type HudFit = (typeof HudFit)[keyof typeof HudFit];
+
+const FIT_ORDER: readonly HudFit[] = [HudFit.FULL, HudFit.NO_BRAND, HudFit.COMPACT];
 
 export interface HudSceneOption {
   id: string;
@@ -36,12 +55,15 @@ const FLOAT_LIFETIME_MS = 1800;
 /** Gap between a readout and its bubble. */
 const OFFSET_PX = 8;
 
-/** "−5.0M" or "+120": a change as the float shows it. U+2212, not a hyphen. */
+/**
+ * "−5.0M" or "+120": a change as the float shows it. U+2212, not a hyphen.
+ * Short on purpose: it is on screen for a second and only says how big.
+ */
 export const formatDelta = (delta: number): string =>
-  `${delta < 0 ? "−" : "+"}${formatAmount(Math.abs(delta))}`;
+  `${delta < 0 ? "−" : "+"}${formatCompact(Math.abs(delta))}`;
 
-/** "11,158,040,000": an amount in full, the same in every locale. */
-export const formatExact = (amount: number): string => Math.floor(amount).toLocaleString("en-US");
+/** "11,158,040,000": an amount in full, the same in every locale (`formatAmount`). */
+export const formatExact = (amount: number): string => formatAmount(amount);
 
 /** "Twigs: 11,158,040,000", the readout's tooltip and accessible name. */
 export const exactLabel = (key: ResourceKey, amount: number | undefined): string =>
@@ -65,10 +87,12 @@ export class Hud {
   private bubbleTimer: number | undefined;
   private readonly floats = new Set<HTMLElement>();
   private yardBinding: YardUiBinding | null = null;
+  private fitted: HudFit = HudFit.FULL;
 
   constructor(options: HudOptions) {
     this.element = document.createElement("header");
     this.element.className = "hud";
+    this.element.dataset["fit"] = HudFit.FULL;
 
     const brand = document.createElement("span");
     brand.className = "hud__brand";
@@ -139,8 +163,31 @@ export class Hud {
    * that is the pool arriving rather than changing.
    */
   setResources(resources: Resources, shiny?: number): void {
-    for (const key of RESOURCE_KEYS) this.setAmount(key, resources[key]);
-    this.setAmount("shiny", shiny);
+    const changes: [Readout, number][] = [];
+    for (const key of [...RESOURCE_KEYS, "shiny"] as const) {
+      const change = this.setAmount(key, key === "shiny" ? shiny : resources[key]);
+      if (change) changes.push(change);
+    }
+    // Refit before floating, so each float starts where its readout now is.
+    this.fit();
+    for (const [readout, delta] of changes) this.float(readout, delta);
+  }
+
+  /** The level the bar is showing at (`HudFit`). */
+  get fitLevel(): HudFit {
+    return this.fitted;
+  }
+
+  /**
+   * Picks the fullest {@link HudFit} level at which the readouts fit, by
+   * trying each in turn. A bar that is not on the page measures zero wide
+   * and takes the fullest.
+   */
+  fit(): void {
+    for (const level of FIT_ORDER) {
+      this.applyFit(level);
+      if (this.list.scrollWidth <= this.list.clientWidth + 1) return;
+    }
   }
 
   /**
@@ -173,29 +220,49 @@ export class Hud {
 
   mount(container: HTMLElement): this {
     container.append(this.element);
+    window.addEventListener("resize", this.onResize);
+    this.fit();
     return this;
   }
 
   destroy(): void {
+    window.removeEventListener("resize", this.onResize);
     this.hideExact();
     for (const float of this.floats) float.remove();
     this.floats.clear();
     this.element.remove();
   }
 
-  private setAmount(key: ResourceKey, amount: number | undefined): void {
-    if (amount === undefined) return;
+  /** Sets one readout's amount; returns the change to float, if there is one. */
+  private setAmount(key: ResourceKey, amount: number | undefined): [Readout, number] | null {
+    if (amount === undefined) return null;
     const readout = this.readouts.get(key);
-    if (!readout) return;
+    if (!readout) return null;
     const before = readout.amount;
     readout.amount = amount;
-    readout.value.textContent = formatAmount(amount);
+    this.render(readout);
     this.label(readout);
     if (this.bubbleFor === key) this.fillExact(readout);
-    if (before !== undefined && Math.floor(before) !== Math.floor(amount)) {
-      this.float(readout, Math.floor(amount) - Math.floor(before));
-    }
+    return before !== undefined && Math.floor(before) !== Math.floor(amount)
+      ? [readout, Math.floor(amount) - Math.floor(before)]
+      : null;
   }
+
+  /** The readout's visible amount, spelled for the current fit. */
+  private render(readout: Readout): void {
+    if (readout.amount === undefined) return;
+    readout.value.textContent =
+      this.fitted === HudFit.COMPACT ? formatCompact(readout.amount) : formatAmount(readout.amount);
+  }
+
+  private applyFit(level: HudFit): void {
+    if (this.fitted === level) return;
+    this.fitted = level;
+    this.element.dataset["fit"] = level;
+    for (const readout of this.readouts.values()) this.render(readout);
+  }
+
+  private readonly onResize = (): void => this.fit();
 
   private label(readout: Readout): void {
     const text = exactLabel(readout.key, readout.amount);

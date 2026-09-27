@@ -1,11 +1,11 @@
-import { formatAmount } from "./format";
+import { formatAmount, formatCompact } from "./format";
 
 /**
  * The resource icons every amount on screen is drawn with (issue #93).
  *
  * The owner asked for the resource's picture where a number of it is shown,
  * rather than the word, so the HUD, the attack panels, the map's cell panel
- * and the planner all spell "12.5K twigs" the same way: a small pile of twigs
+ * and the planner all spell "12,500 twigs" the same way: a small pile of twigs
  * and the number. One helper, so a change of art or size lands everywhere.
  *
  * ## The art
@@ -27,7 +27,7 @@ import { formatAmount } from "./format";
  * ## The word is still there
  *
  * Every icon is `role="img"` with the resource's name as its `aria-label` and
- * `title`, so a screen reader says "Twigs 12.5K" and a mouse can hover the
+ * `title`, so a screen reader says "Twigs 12,500" and a mouse can hover the
  * picture to learn what it is. Plain-text surfaces — native tooltips, notices,
  * the attack report the server stores — cannot hold a picture and keep the
  * words.
@@ -124,23 +124,33 @@ export const resourceIcon = (key: ResourceKey, options: ResourceIconOptions = {}
   return icon;
 };
 
+export interface ResourceAmountOptions extends ResourceIconOptions {
+  readonly className?: string;
+  /**
+   * Spell a number short ("15.0M") instead of in full ("15,000,000", the
+   * default, issue #134). Only for a control with no room to grow.
+   */
+  readonly compact?: boolean;
+}
+
 /**
- * "icon 12.5K": the icon and an amount, kept together on one line.
+ * "icon 15,000,000": the icon and an amount, kept together on one line.
  *
- * `text` is already spelled, so a caller can pass `formatAmount(n)`, an exact
- * `n.toLocaleString()` or "12.5K of 40.0K" as the surface needs.
+ * A number is spelled in full unless `compact` asks otherwise. A string is
+ * taken as already spelled, for "12,500 of 40,000" or a placeholder dash.
  */
 export const resourceAmount = (
   key: ResourceKey,
-  text: string,
-  options: ResourceIconOptions & { className?: string } = {},
+  amount: number | string,
+  options: ResourceAmountOptions = {},
 ): HTMLElement => {
   const wrapper = document.createElement("span");
   wrapper.className = options.className ? `res-amount ${options.className}` : "res-amount";
   wrapper.dataset["resource"] = key;
   const value = document.createElement("span");
   value.className = "res-amount__value";
-  value.textContent = text;
+  value.textContent =
+    typeof amount === "string" ? amount : (options.compact ? formatCompact : formatAmount)(amount);
   wrapper.append(resourceIcon(key, options), value);
   return wrapper;
 };
@@ -156,6 +166,9 @@ export interface ResourceCost {
 /**
  * A cost as a row of "icon amount" pairs, leaving out whatever costs nothing,
  * or null when it all costs nothing so the caller can say so in its own words.
+ *
+ * Amounts are in full by default; pass `formatCompact` where the row has no
+ * room for them.
  */
 export const costAmounts = (
   cost: ResourceCost,

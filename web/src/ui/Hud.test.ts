@@ -27,11 +27,11 @@ describe("the HUD", () => {
   const floats = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>(".hud__delta")];
   const bubble = (): HTMLElement | null => document.querySelector(".hud__exact");
 
-  it("shows each resource as its icon and a short amount, with the word kept for hover and screen readers", () => {
+  it("shows each resource as its icon and the amount in full, with the word kept for hover and screen readers", () => {
     hud.setResources({ r1: 11_163_050_000, r2: 2_500, r3: 0, r4: 999 }, 42);
     expect(hud.element.textContent).not.toMatch(/twigs|pebbles|putty|goo|shiny/i);
     const readouts = [...hud.element.querySelectorAll<HTMLButtonElement>(".hud__resource-button")];
-    expect(readouts.map((one) => one.textContent)).toEqual(["11.16B", "2.5K", "0", "999", "42"]);
+    expect(readouts.map((one) => one.textContent)).toEqual(["11,163,050,000", "2,500", "0", "999", "42"]);
     expect(readouts.map((one) => one.querySelectorAll(".res-icon").length)).toEqual([1, 1, 1, 1, 1]);
     // The button's own name carries the word and the exact amount; the icon is
     // decorative inside it so the name is not read twice.
@@ -54,8 +54,7 @@ describe("the HUD", () => {
     expect(floats()).toHaveLength(0);
 
     hud.setResources({ r1: 11_158_050_000, r2: 100 });
-    // 11.16B both times: the float is what shows the 5M went.
-    expect(button("r1").textContent).toBe("11.16B");
+    expect(button("r1").textContent).toBe("11,158,050,000");
     expect(button("r1").title).toBe("Twigs: 11,158,050,000");
     const [float] = floats();
     expect(floats()).toHaveLength(1);
@@ -107,6 +106,51 @@ describe("the HUD", () => {
     expect(spokenText(bubble()!)).toBe("Pebbles 2");
     vi.advanceTimersByTime(6_000);
     expect(bubble()).toBeNull();
+  });
+
+  /**
+   * jsdom lays nothing out, so the list reports the widths a browser would:
+   * the brand gives the list 100 px when it goes, and short amounts need
+   * less room than full ones.
+   */
+  const lay = (widths: { room: number; full: number; compact: number }): void => {
+    const list = hud.element.querySelector<HTMLElement>(".hud__resources")!;
+    const fit = (): string | undefined => hud.element.dataset["fit"];
+    Object.defineProperty(list, "clientWidth", {
+      configurable: true,
+      get: () => widths.room + (fit() === "full" ? 0 : 100),
+    });
+    Object.defineProperty(list, "scrollWidth", {
+      configurable: true,
+      get: () => (fit() === "compact" ? widths.compact : widths.full),
+    });
+  };
+
+  it("drops the brand, then falls back to short amounts, rather than overflow (#134)", () => {
+    lay({ room: 600, full: 550, compact: 300 });
+    hud.setResources({ r1: 15_000_000 }, 5);
+    expect(hud.fitLevel).toBe("full");
+    expect(button("r1").textContent).toBe("15,000,000");
+
+    lay({ room: 500, full: 550, compact: 300 });
+    window.dispatchEvent(new Event("resize"));
+    expect(hud.fitLevel).toBe("no-brand");
+    expect(hud.element.dataset["fit"]).toBe("no-brand");
+    expect(button("r1").textContent).toBe("15,000,000");
+
+    lay({ room: 300, full: 550, compact: 300 });
+    window.dispatchEvent(new Event("resize"));
+    expect(hud.fitLevel).toBe("compact");
+    expect(button("r1").textContent).toBe("15.0M");
+    // The name and the tap bubble keep the exact figure.
+    expect(button("r1").title).toBe("Twigs: 15,000,000");
+    button("r1").click();
+    expect(spokenText(bubble()!)).toBe("Twigs 15,000,000");
+
+    lay({ room: 900, full: 550, compact: 300 });
+    hud.setResources({ r1: 15_000_001 });
+    expect(hud.fitLevel).toBe("full");
+    expect(button("r1").textContent).toBe("15,000,001");
   });
 
   it("closes the bubble on a press elsewhere", () => {

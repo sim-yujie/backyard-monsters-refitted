@@ -89,7 +89,7 @@ describe("CatapultPanel", () => {
     expect(tier(panel, "tw1").disabled).toBe(true);
     expect(tier(panel, "tw1").title).toContain("costs");
     // The row is headed by the twig icon and what the attacker holds (#93).
-    expect(spokenText(row(panel, 1))).toContain("Twigs 50.0K");
+    expect(spokenText(row(panel, 1))).toContain("Twigs 50,000");
     expect(row(panel, 1).querySelector(".attack-catapult__have")?.getAttribute("title")).toBe(
       "You have 50,000 twigs",
     );

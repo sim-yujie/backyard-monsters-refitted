@@ -191,7 +191,7 @@ describe("the plan cells", () => {
     const bar = mount();
     bar.setPlanSummary(totalsOf(), 5);
 
-    expect(resourceValues(bar)).toEqual(["20.0K / 50.0K", "15.0K / 1.0K", "5.0K / 5.0K", "0 / 0"]);
+    expect(resourceValues(bar)).toEqual(["20,000 / 50,000", "15,000 / 1,000", "5,000 / 5,000", "0 / 0"]);
 
     const short = bar.actionBar.querySelectorAll(".planner-cost__cell--short");
     expect(short).toHaveLength(1);
