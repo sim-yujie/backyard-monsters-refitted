@@ -4,6 +4,7 @@ import {
   bucketCost,
   createBattle,
   dropRadius,
+  flingCost,
   flingerPayload,
   scatterRadius,
   type BattleVisualEvent,
@@ -433,6 +434,18 @@ describe("the flinger", () => {
     expect(dropRadius(0)).toBe(100);
     expect(dropRadius(2000)).toBe(250);
   });
+
+  it("counts a champion's own bucket when it sizes the zone (issue #143)", () => {
+    // `ATTACK.BucketUpdate` adds the champion's `bucket` at its level
+    // (`ATTACK.as:645-653`): Gorgo 240, Fomor 200.
+    expect(flingCost({ monsters: { C1: 10 } }, {})).toBe(70);
+    expect(flingCost({ monsters: { C1: 10 }, champion: { t: 1, l: 1 } }, {})).toBe(310);
+    expect(flingCost({ monsters: {}, champion: { t: 3, l: 4 } }, {})).toBe(200);
+    // A type the table does not hold adds nothing.
+    expect(flingCost({ monsters: { C1: 10 }, champion: { t: 9, l: 1 } }, {})).toBe(70);
+    // Alone, no champion's bucket gets past the floor of 200 a zone.
+    expect(dropRadius(flingCost({ monsters: {}, champion: { t: 1, l: 6 } }, {}))).toBe(100);
+  });
 });
 
 describe("where a fling's creeps land (issue #91)", () => {
@@ -487,6 +500,22 @@ describe("where a fling's creeps land (issue #91)", () => {
   it("puts every creep of the same log in the same place", () => {
     expect(flung(12)).toEqual(flung(12));
   });
+
+  it("widens the scatter by a champion's bucket (issue #143)", () => {
+    // 2,100 for the Pokeys and 240 for a Gorgo: a zone of 585, a scatter of 146.25.
+    const drop = { monsters: PAYLOAD, champion: { t: 1, l: 1 } };
+    const reach = scatterRadius(flingCost(drop, {}));
+    expect(reach).toBe(146.25);
+    const battle = createBattle(yardOf({}), { seed: 9 });
+    battle.apply({ kind: "fling", t: 0, x: 40, y: -60, r: 0, ...drop });
+    const furthest = Math.max(
+      ...battle
+        .creeps()
+        .map((creep) => Math.sqrt(screenDistanceSquared(creep.ix, creep.iy, 40, -60))),
+    );
+    expect(furthest).toBeLessThanOrEqual(reach + 1e-9);
+    expect(furthest).toBeGreaterThan(scatterRadius(bucketCost(PAYLOAD, {})));
+  });
 });
 
 describe("a bunker's reach (issue #91)", () => {
@@ -527,6 +556,47 @@ describe("a bunker's reach (issue #91)", () => {
   it("still sends nothing at a creep out of range of the middle", () => {
     const { pokey, defenders } = battleOf(350);
     expect(Math.hypot(pokey.ix - 45, pokey.iy - 45)).toBeGreaterThan(300);
+    expect(defenders).toHaveLength(0);
+  });
+});
+
+describe("the Housing Bunker (issue #143)", () => {
+  /**
+   * A level 1 Housing Bunker, type 128 (range 500 and 4,000 health from
+   * `INFERNOYARDPROPS.as:6006`, `:6068`; 160 x 160, so it scans from (80, 80)),
+   * with a Pokey dropped on a harvester off to the south-east.
+   */
+  const battleOf = (harvesterAt: number) => {
+    const yard = yardOf({
+      "1": { id: 1, t: 128, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: harvesterAt, Y: harvesterAt },
+    });
+    const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 2 } } });
+    battle.apply({
+      kind: "fling",
+      t: 0,
+      x: harvesterAt - 20,
+      y: harvesterAt - 20,
+      r: 0,
+      monsters: { C1: 1 },
+    });
+    run(battle, 30);
+    const pokey = battle.creeps().find((creep) => !creep.friendly)!;
+    const defenders = battle.creeps().filter((creep) => creep.friendly);
+    return { yard, pokey, defenders };
+  };
+
+  it("stands with its health and sends a defender at a creep within 500", () => {
+    const { yard, pokey, defenders } = battleOf(400);
+    expect(yard.buildings[0]?.hp).toBe(4000);
+    expect(Math.hypot(pokey.ix - 80, pokey.iy - 80)).toBeLessThan(500);
+    expect(defenders).toHaveLength(1);
+    expect(defenders[0]?.targetCreep).toBe(pokey.id);
+  });
+
+  it("sends nothing at a creep beyond its range", () => {
+    const { pokey, defenders } = battleOf(500);
+    expect(Math.hypot(pokey.ix - 80, pokey.iy - 80)).toBeGreaterThan(500);
     expect(defenders).toHaveLength(0);
   });
 });

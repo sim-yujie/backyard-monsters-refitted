@@ -10,7 +10,7 @@ import {
   createBattle,
   damagePercent,
   dropRadius,
-  bucketCost,
+  flingCost,
   healthOf,
   toCombatYard,
   type BuildingClass,
@@ -425,7 +425,8 @@ export class AttackSession {
       throw new RangeError("AttackSession: an empty fling");
     }
 
-    const bucket = bucketCost(input.monsters, this.target.roster.levels);
+    // The champion's own bucket widens the zone too (`ATTACK.as:645-653`, #143).
+    const bucket = flingCost(input, this.target.roster.levels);
     const event: FlingDrop = {
       kind: "fling",
       t: battle.tick,

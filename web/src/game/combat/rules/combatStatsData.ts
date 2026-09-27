@@ -4,7 +4,8 @@
  * Regenerate with `bun tools/gen-combat-stats.mjs` from `web/`, then
  * `node tools/sync-combat-rules.mjs` to copy this directory to
  * `server/src/game-rules/combat/`. Sources are cited per row: the Flash
- * client's `client/scripts/YARD_PROPS.as` for everything a building carries,
+ * client's `client/scripts/YARD_PROPS.as` for everything a building carries
+ * (`INFERNOYARDPROPS.as` for the Housing Bunker's range and health),
  * `BTOWER.as` for the flyer table, each building class's `_gridCost` for the
  * pathing rectangles, the Map Room 2 overrides in `GLOBAL.as`, and the
  * server's own `game-data/stats/` for the monsters and champions.
@@ -23,8 +24,8 @@
 /**
  * One level of a tower's `stats` block.
  *
- * The thirteen entries that carry one do not agree on the keys: the Monster
- * Bunker has `range` alone, the Quake Tower and the Stronghold have no
+ * The fourteen entries that carry one do not agree on the keys: the two
+ * bunkers have `range` alone, the Quake Tower and the Stronghold have no
  * `speed` or `splash`, the two Spurtz Cannons add `shots`, and the Siege
  * Works has `duration` and `radius` rather than a weapon. Every key the props
  * file spells is kept, so the fields are
@@ -46,7 +47,13 @@ export interface TowerLevelStats {
   readonly shots?: number;
 }
 
-/** Per tower type, one entry per level (`YARD_PROPS.as`, `"stats"`). */
+/**
+ * Per tower type, one entry per level (`YARD_PROPS.as`, `"stats"`).
+ *
+ * The Housing Bunker, 128, is an Inferno building with only a stub in the main
+ * table; its ranges are `INFERNOYARDPROPS.as`'s, which is the table
+ * `HOUSINGBUNKER.as:156` reads from wherever one stands (issue #143).
+ */
 export const TOWER_STATS: Readonly<Record<number, readonly TowerLevelStats[]>> = {
   // 20 Cannon Tower (tower) — YARD_PROPS.as:1966, stats :1979
   20: [
@@ -122,6 +129,10 @@ export const TOWER_STATS: Readonly<Record<number, readonly TowerLevelStats[]>> =
     { range: 390, damage: 2200, rate: 160, speed: 20, splash: 0 },
     { range: 400, damage: 2500, rate: 160, speed: 20, splash: 0 },
   ],
+  // 128 b_housingbunker (tower) — YARD_PROPS.as:6857, stats INFERNOYARDPROPS.as:6006
+  128: [
+    { range: 500 }, { range: 530 }, { range: 560 }, { range: 590 }, { range: 620 }, { range: 650 },
+  ],
   // 129 Quake Tower (tower) — YARD_PROPS.as:6872, stats :6886
   129: [
     { range: 160, damage: 1100, rate: 15 }, { range: 170, damage: 1680, rate: 15 },
@@ -171,8 +182,9 @@ export const TOWER_STATS: Readonly<Record<number, readonly TowerLevelStats[]>> =
 /**
  * Every type's health ladder, `hp[level - 1]` (`YARD_PROPS.as`, `"hp"`).
  *
- * 137 of the 140 entries have one; the rest are
- * placeholders and decorations that never take damage.
+ * 138 of the 140 entries have one; the rest are
+ * placeholders and decorations that never take damage. The Housing Bunker's is
+ * `INFERNOYARDPROPS.as`'s, as its range is.
  */
 export const BUILDING_HP: Readonly<Record<number, readonly number[]>> = {
   // 1 Twig Snapper (resource) — YARD_PROPS.as:10
@@ -678,6 +690,10 @@ export const BUILDING_HP: Readonly<Record<number, readonly number[]>> = {
   // 127 Inferno Cavern (enemy) — YARD_PROPS.as:6779
   127: [
     1, 1, 1, 1, 1,
+  ],
+  // 128 b_housingbunker (tower) — YARD_PROPS.as:6857, hp INFERNOYARDPROPS.as:6068
+  128: [
+    4000, 14000, 25000, 43000, 75000, 130000,
   ],
   // 129 Quake Tower (tower) — YARD_PROPS.as:6872
   129: [

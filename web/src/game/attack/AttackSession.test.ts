@@ -141,6 +141,24 @@ describe("AttackSession events and the fling log", () => {
     ).toThrow(/\(flung\)/);
   });
 
+  it("logs a radius that counts the champion's bucket (#143)", () => {
+    const champion = { t: 1, hp: 100, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 };
+    const session = sessionOf({
+      roster: { monsters: { C1: 400 }, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0 },
+    });
+    session.start();
+    // 200 Pokeys are 1,400 bucket units: a zone of 350, radius 175.
+    expect(session.appendFling({ x: -100, y: -100, monsters: { C1: 200 } }).r).toBe(175);
+    // With Gorgo's 240 on top (`ATTACK.as:645-653`): a zone of 410, radius 205.
+    const withChampion = session.appendFling({
+      x: -100,
+      y: -100,
+      monsters: { C1: 200 },
+      champion: { t: 1, l: 1 },
+    });
+    expect(withChampion.r).toBe(205);
+  });
+
   describe("no automatic end before the first action (#79)", () => {
     /** A yard with nothing a creep could attack: one wall, already the whole camp. */
     const flatYard = (): BaseLoadResponse =>

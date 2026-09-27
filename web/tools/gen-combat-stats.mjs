@@ -17,8 +17,10 @@
  *
  * | Table          | Source                                                   |
  * |----------------|----------------------------------------------------------|
- * | `TOWER_STATS`  | `YARD_PROPS.as`, the `"stats": [` block of 13 entries     |
- * | `BUILDING_HP`  | `YARD_PROPS.as`, the `"hp"` array of 137 of 140 entries    |
+ * | `TOWER_STATS`  | `YARD_PROPS.as`, the `"stats": [` block of 13 entries,    |
+ * |                | and the Housing Bunker's from `INFERNOYARDPROPS.as`        |
+ * | `BUILDING_HP`  | `YARD_PROPS.as`, the `"hp"` array of 137 of 140 entries,   |
+ * |                | and the Housing Bunker's from `INFERNOYARDPROPS.as`        |
  * | `TRAP_STATS`   | `YARD_PROPS.as`, `damage[0]`, `size` and `hp[0]` of traps  |
  * | `MR2_CAPACITY` | `GLOBAL.as:682-683`, `:713`, the Map Room 2 overrides      |
  * | `FLYER_MODE`   | `client/scripts/BTOWER.as:25-35`                           |
@@ -41,6 +43,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../..");
 
 const PROPS = resolve(repo, "client/scripts/YARD_PROPS.as");
+const INFERNO_PROPS = resolve(repo, "client/scripts/INFERNOYARDPROPS.as");
 const GLOBAL = resolve(repo, "client/scripts/GLOBAL.as");
 const BTOWER = resolve(repo, "client/scripts/BTOWER.as");
 const STRINGS = resolve(repo, "server/public/gamestage/assets/archived/en.v612.txt");
@@ -65,7 +68,7 @@ const strings = JSON.parse(readFileSync(STRINGS, "utf8")).core;
  * As in the cost generator, an id that appears twice keeps its first entry,
  * matching the client's `_buildingProps[id - 1]` lookup.
  */
-const readEntries = () => {
+const readEntries = (source, lineOf) => {
   const hits = [...source.matchAll(/"id"\s*:\s*(\d+)/g)];
   const entries = [];
   const seen = new Set();
@@ -82,6 +85,7 @@ const readEntries = () => {
       start,
       text,
       line: lineOf(start),
+      lineOf,
       name: strings[nameKey] ?? nameKey.replaceAll("#", ""),
       kind: /"type"\s*:\s*"([^"]*)"/.exec(text)?.[1] ?? "",
       cls: /"cls"\s*:\s*([A-Za-z0-9_]+)/.exec(text)?.[1] ?? null,
@@ -91,30 +95,63 @@ const readEntries = () => {
   return entries;
 };
 
-const entries = readEntries();
+const entries = readEntries(source, lineOf);
 if (entries.length !== 140) {
   throw new Error(`YARD_PROPS.as holds ${entries.length} entries, not the 140 this table expects`);
 }
 
 const byId = new Map(entries.map((one) => [one.id, one]));
 
+/* ── Inferno-only entries ─────────────────────────────────────────────────── */
+
+/**
+ * Types whose numbers live in the Inferno props table, not the main one.
+ *
+ * The Housing Bunker, 128, is an Inferno building. `YARD_PROPS.as:6857` keeps
+ * only a stub for it, with `quantity: [0]` and no `stats` or `hp`, yet
+ * `HOUSINGBUNKER` reads its dispatch range from
+ * `GLOBAL._buildingProps[127].stats[level - 1].range` (`HOUSINGBUNKER.as:87`,
+ * `:156`) and takes damage like any building. The table in force wherever one
+ * stands is `INFERNOYARDPROPS.as`, whose entry carries both. Without them the
+ * engine saw a bunker with no range and no health, which never sent a defender
+ * (issue #143). Name, class and footprint still come from the main entry.
+ */
+const INFERNO_ONLY = [128];
+
+const inferno = readPropsSource(INFERNO_PROPS).source;
+const infernoById = new Map(
+  readEntries(inferno, lineCounter(inferno)).map((one) => [one.id, one]),
+);
+
+/** Where an entry's `stats` and `hp` are read: its Inferno twin for {@link INFERNO_ONLY}. */
+const numbersOf = (entry) => {
+  if (!INFERNO_ONLY.includes(entry.id)) return entry;
+  if (/"(stats|hp)"\s*:/.test(entry.text)) {
+    throw new Error(`YARD_PROPS.as:${entry.line}: ${entry.id} now carries its own stats or hp`);
+  }
+  const twin = infernoById.get(entry.id);
+  if (!twin) throw new Error(`INFERNOYARDPROPS.as has no entry ${entry.id}`);
+  return { ...twin, file: "INFERNOYARDPROPS.as" };
+};
+
 /* ── Tower stats ──────────────────────────────────────────────────────────── */
 
 /**
  * The `"stats": [ ... ]` block of one entry, one object per level.
  *
- * The keys are not the same across the thirteen entries that have one: the
- * Monster Bunker carries `range` alone, the Quake Tower and the Stronghold have
+ * The keys are not the same across the fourteen entries that have one: the
+ * two bunkers carry `range` alone, the Quake Tower and the Stronghold have
  * no `speed` or `splash`, the two Spurtz Cannons add `shots`, and the Siege
  * Works has `duration` and `radius` instead of a weapon at all. Rather than
  * fixing a shape, every numeric key present is emitted and the reader decides
  * what it needs, so a field the plan has not traced yet is still in the table.
  */
 const readTowerStats = (entry) => {
-  const hit = /"stats"\s*:\s*\[/.exec(entry.text);
+  const from = numbersOf(entry);
+  const hit = /"stats"\s*:\s*\[/.exec(from.text);
   if (!hit) return null;
   const open = hit.index + hit[0].length - 1;
-  const body = entry.text.slice(open, matchBrace(entry.text, open) + 1);
+  const body = from.text.slice(open, matchBrace(from.text, open) + 1);
   const levels = [];
   for (let i = 0; i < body.length; i++) {
     if (body[i] !== "{") continue;
@@ -128,7 +165,7 @@ const readTowerStats = (entry) => {
     levels.push(level);
   }
   if (levels.length === 0) throw new Error(`id ${entry.id}: empty "stats" block`);
-  return { levels, line: lineOf(entry.start + hit.index) };
+  return { levels, line: from.lineOf(from.start + hit.index), file: from.file ?? "" };
 };
 
 const towers = [];
@@ -141,8 +178,13 @@ for (const entry of entries) {
 
 const hp = [];
 for (const entry of entries) {
-  const values = readIntArray(entry.text, "hp");
-  if (values.length > 0) hp.push({ entry, values });
+  const from = numbersOf(entry);
+  const values = readIntArray(from.text, "hp");
+  if (values.length === 0) continue;
+  const cite = from.file
+    ? `, hp ${from.file}:${from.lineOf(from.start + /"hp"\s*:/.exec(from.text).index)}`
+    : "";
+  hp.push({ entry, values, cite });
 }
 
 /* ── Traps ────────────────────────────────────────────────────────────────── */
@@ -488,7 +530,7 @@ const comment = (entry, extra = "") =>
 const towerRows = towers
   .map(
     (one) =>
-      `${comment(one.entry, `, stats :${one.line}`)}\n` +
+      `${comment(one.entry, `, stats ${one.file}:${one.line}`)}\n` +
       `  ${one.entry.id}: [\n` +
       pack(
         one.levels.map((level) => `${object(level)},`),
@@ -501,7 +543,7 @@ const towerRows = towers
 const hpRows = hp
   .map(
     (one) =>
-      `${comment(one.entry)}\n` +
+      `${comment(one.entry, one.cite)}\n` +
       `  ${one.entry.id}: [\n` +
       pack(
         one.values.map((value) => `${value},`),
@@ -605,7 +647,8 @@ const body = `/**
  * Regenerate with \`bun tools/gen-combat-stats.mjs\` from \`web/\`, then
  * \`node tools/sync-combat-rules.mjs\` to copy this directory to
  * \`server/src/game-rules/combat/\`. Sources are cited per row: the Flash
- * client's \`client/scripts/YARD_PROPS.as\` for everything a building carries,
+ * client's \`client/scripts/YARD_PROPS.as\` for everything a building carries
+ * (\`INFERNOYARDPROPS.as\` for the Housing Bunker's range and health),
  * \`BTOWER.as\` for the flyer table, each building class's \`_gridCost\` for the
  * pathing rectangles, the Map Room 2 overrides in \`GLOBAL.as\`, and the
  * server's own \`game-data/stats/\` for the monsters and champions.
@@ -624,10 +667,8 @@ const body = `/**
 /**
  * One level of a tower's \`stats\` block.
  *
- * The thirteen entries that carry one do not agree on the keys${
-   ""
- }: the Monster
- * Bunker has \`range\` alone, the Quake Tower and the Stronghold have no
+ * The fourteen entries that carry one do not agree on the keys: the two
+ * bunkers have \`range\` alone, the Quake Tower and the Stronghold have no
  * \`speed\` or \`splash\`, the two Spurtz Cannons add \`shots\`, and the Siege
  * Works has \`duration\` and \`radius\` rather than a weapon. Every key the props
  * file spells is kept, so the fields are
@@ -642,7 +683,13 @@ export interface TowerLevelStats {
 ${towerKeys.map((key) => `  readonly ${key}?: number;`).join("\n")}
 }
 
-/** Per tower type, one entry per level (\`YARD_PROPS.as\`, \`"stats"\`). */
+/**
+ * Per tower type, one entry per level (\`YARD_PROPS.as\`, \`"stats"\`).
+ *
+ * The Housing Bunker, 128, is an Inferno building with only a stub in the main
+ * table; its ranges are \`INFERNOYARDPROPS.as\`'s, which is the table
+ * \`HOUSINGBUNKER.as:156\` reads from wherever one stands (issue #143).
+ */
 export const TOWER_STATS: Readonly<Record<number, readonly TowerLevelStats[]>> = {
 ${towerRows}
 };
@@ -651,7 +698,8 @@ ${towerRows}
  * Every type's health ladder, \`hp[level - 1]\` (\`YARD_PROPS.as\`, \`"hp"\`).
  *
  * ${hp.length} of the ${entries.length} entries have one; the rest are
- * placeholders and decorations that never take damage.
+ * placeholders and decorations that never take damage. The Housing Bunker's is
+ * \`INFERNOYARDPROPS.as\`'s, as its range is.
  */
 export const BUILDING_HP: Readonly<Record<number, readonly number[]>> = {
 ${hpRows}

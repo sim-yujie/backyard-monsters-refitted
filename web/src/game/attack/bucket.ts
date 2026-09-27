@@ -1,5 +1,11 @@
 import { getSession } from "@/api/auth";
-import { bucketCost, dropRadius, flingerPayload, type Roster } from "@/game/combat/rules";
+import {
+  bucketCost,
+  dropRadius,
+  flingCost,
+  flingerPayload,
+  type Roster,
+} from "@/game/combat/rules";
 import type { AttackSession, ChampionBlockReason } from "./AttackSession";
 
 /**
@@ -197,9 +203,13 @@ export class Bucket {
     return flingerPayload();
   }
 
-  /** The drop ring's radius for the composition as it stands. */
+  /**
+   * The drop ring's radius for the composition as it stands, sized from the
+   * monsters and the champion's own bucket, as `ATTACK.BucketUpdate` sizes it
+   * (`ATTACK.as:645-653`, #143).
+   */
   radius(): number {
-    return dropRadius(this.cost());
+    return dropRadius(flingCost(this.composition(), this.session.target.roster.levels));
   }
 
   /**

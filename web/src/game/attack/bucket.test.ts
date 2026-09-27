@@ -269,6 +269,21 @@ describe("Bucket champion", () => {
     expect(bucket.composition()).toEqual({ monsters: { C1: 4 } });
   });
 
+  it("widens the drop ring by the champion's bucket, as Flash sizes the zone (#143)", () => {
+    const bucket = new Bucket(
+      sessionWith({ monsters: { C1: 300 }, champions: [champion(1, 1)] }),
+      { storage: null },
+    );
+    // 200 Pokeys are 1,400 bucket units: a zone of 350, radius 175.
+    bucket.setCount("C1", 200);
+    expect(bucket.radius()).toBe(175);
+    // Gorgo's 240 on top (`ATTACK.as:645-653`): a zone of 410, radius 205. The
+    // payload the rows are clamped by is unchanged.
+    bucket.pickChampion(1);
+    expect(bucket.radius()).toBe(205);
+    expect(bucket.cost()).toBe(1400);
+  });
+
   it("lets Krallen go after Fomor has been dropped (#74), and names what blocks the rest", () => {
     const session = sessionWith({ monsters: { C1: 10 }, champions: [champion(3, 2), champion(5, 1)] });
     const bucket = new Bucket(session, { storage: null });

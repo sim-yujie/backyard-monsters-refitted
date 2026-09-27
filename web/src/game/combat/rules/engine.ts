@@ -447,6 +447,25 @@ export const bucketCost = (roster: Roster, levels: MonsterLevels | undefined): n
   return total;
 };
 
+/**
+ * The bucket units a fling fills for sizing its drop zone, champion included.
+ *
+ * `ATTACK.BucketUpdate` sums every entry in the flinger bucket, and a champion's
+ * entry adds its own `bucket` at its level (`ATTACK.as:645-653`), before the
+ * total is quartered and floored at 200 ({@link dropRadius}). Alone a champion
+ * never passes that floor (the largest `bucket` is Gorgo's 240); with monsters
+ * it widens the scatter (issue #143).
+ */
+export const flingCost = (
+  drop: Pick<FlingDrop, "monsters" | "champion">,
+  levels: MonsterLevels | undefined,
+): number => {
+  const monsters = bucketCost(drop.monsters, levels);
+  if (!drop.champion) return monsters;
+  const id = championByType(drop.champion.t);
+  return id ? monsters + championStat(id, "bucket", drop.champion.l) : monsters;
+};
+
 /** The Map Room 2 flinger payload, which is pinned to level 4 (`GLOBAL.as:863`). */
 export const flingerPayload = (): number => capacity(5, MR2_FLINGER_LEVEL);
 
@@ -801,7 +820,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const ids = Object.keys(event.monsters).sort();
     // The log's own `r` is ignored: §3.10 makes the radius a function of the
     // payload, so the server recomputes it and a mismatch is the client's bug.
-    const radius = scatterRadius(bucketCost(event.monsters, options.levels));
+    const radius = scatterRadius(flingCost(event, options.levels));
     for (const monsterId of ids) {
       const count = Math.max(0, Math.floor(event.monsters[monsterId] ?? 0));
       const level = clampLevel(options.levels, monsterId);

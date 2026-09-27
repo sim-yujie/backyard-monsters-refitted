@@ -766,7 +766,7 @@ full on every save (a save is a snapshot, and the server keeps no partial state 
 | `seed` | The `combatseed` the attack-mode `/base/load` returned (section 3.1, `baseModeAttack.ts`) | Must equal the session's; else `malformed` |
 | `t` | Fast ticks since attack start | Non-decreasing; `<= 33,600`; a fling with `t` past the countdown (`24,000`, or `33,600` under Declare War) is refused as the client refuses it (`DROPZONE.as:53`) |
 | `x`, `y` | Yard units, the same space as `buildingdata.X/Y` | Inside the map; a fling centre may not overlap a building footprint (`DROPZONE.as:64`) |
-| `r` | Drop radius: `max(200, bucketTotal / 4) / 2` | Recomputed by the server from `monsters`; a mismatch is `malformed` |
+| `r` | Drop radius: `max(200, bucketTotal / 4) / 2`, where `bucketTotal` includes the champion's own `bucket` at its level (`ATTACK.as:645-653`, #143) | Recomputed by the server from `monsters` and `champion`; a mismatch is `malformed` |
 | `monsters` | Counts per id | Sum of `bucket[L] * count` at most the flinger capacity plus the Declare-War bonus (`ATTACK.as:589-598`); cumulative counts at most the roster in range |
 | `champion` | At most one ordinary champion per attack, plus Krallen (type 5) alongside it, each flung once (`UI_TOP.as:336-347`, issue #74); `hp > 0` and normal status at attack start | — |
 | `bomb` | One per resource per attack, tier within `A.catapult`, cost within the attacker's pool at that tick | `ResourceBombs.as:301-315` |
