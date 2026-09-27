@@ -12,6 +12,7 @@ import {
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import { countdownProgress } from "@/game/yard/jobs";
+import { recycleOffer, type RecycleOffer } from "@/game/yard/recycle";
 import { ladderFor } from "@/game/yard/planner/upgrades";
 import { overCap as overCapOf } from "@/game/yard/storage";
 import { freeWorkers, holdsWorker, sharperToolsMultiplier } from "@/game/yard/workers";
@@ -174,6 +175,8 @@ export interface PanelModel {
   readonly openBlocked: string | null;
   /** A walls-and-traps pointer to where they are upgraded instead. */
   readonly batch: boolean;
+  /** Recycle, with what it gives back and why it cannot run; null for the Town Hall (§5.4). */
+  readonly recycle: RecycleOffer | null;
 }
 
 const ZERO: UpgradeCost = { r1: 0, r2: 0, r3: 0, r4: 0 };
@@ -412,6 +415,7 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
     monstersTab,
     openBlocked: open === "map" ? mapBlocked(context) : null,
     batch: isBatchType(building.type),
+    recycle: building.type === TOWN_HALL_TYPE ? null : recycleOfferFor(building, context),
   };
 };
 
@@ -433,3 +437,15 @@ const mapBlocked = (context: PanelContext): string | null => {
   }
   return `Upgrade the Map Room to level ${MAP_ROOM_2_LEVEL} to open Map Room 2.`;
 };
+
+/** The Town Hall is never recycled, so the panel does not offer it. */
+const TOWN_HALL_TYPE = 14;
+
+const recycleOfferFor = (building: YardBuilding, context: PanelContext): RecycleOffer =>
+  recycleOffer(
+    { ...building.raw, id: building.id },
+    context.save,
+    context.resources,
+    context.caps,
+    context.now(),
+  );

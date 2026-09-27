@@ -327,3 +327,46 @@ describe("BuildingPanel: a damaged building", () => {
     expect(element.querySelector(".building-repair")).toBeNull();
   });
 });
+
+describe("BuildingPanel: recycle", () => {
+  it("offers Recycle, and one confirmation that says what comes back", () => {
+    // Twig Snapper level 2 refunds half of 750 + 1,575 pebbles.
+    const { element } = setup([HALL, building(2, 1, 2)], 2);
+    buttonNamed(element, "Recycle")!.click();
+    const question = element.querySelector(".building-recycle__question")!;
+    expect(spokenText(question)).toContain("Recycle this Twig Snapper and get back");
+    expect(spokenText(question)).toContain("1,162");
+    expect(element.querySelector(".building-recycle__confirm")?.textContent).toBe("Yes, recycle");
+    buttonNamed(element, "Keep it")!.click();
+    expect(element.querySelector(".building-recycle--confirming")).toBeNull();
+  });
+
+  it("shows the Housing cull before confirming", () => {
+    const housing = [building(2, 15, 1), building(3, 15, 1)];
+    const { element } = setup([HALL, ...housing], 3, {
+      load: { monsters: { housed: { C1: 10_000 } } } as Partial<BaseLoadResponse>,
+    });
+    buttonNamed(element, "Recycle")!.click();
+    expect(element.querySelector(".building-recycle__cull")?.textContent).toMatch(
+      /^Your monsters will no longer fit\. These are lost: \d+ × /,
+    );
+  });
+
+  it("stores a decoration instead, and offers nothing on the Town Hall", () => {
+    const { element } = setup([HALL, building(2, 28, 1)], 2);
+    expect(buttonNamed(element, "Put in storage")).toBeDefined();
+    const hall = setup([HALL], 1);
+    expect(buttonNamed(hall.element, "Recycle")).toBeUndefined();
+  });
+
+  it("disables Recycle, with the reason, where the server would refuse", () => {
+    const { element } = setup([HALL, building(2, 13, 1)], 2, {
+      load: { monsters: { h: [["C1", 10, [], 1]], hid: [2], hstage: [1] } } as Partial<BaseLoadResponse>,
+    });
+    const recycle = buttonNamed(element, "Recycle")!;
+    expect(recycle.disabled).toBe(true);
+    expect(element.querySelector(".building-recycle .building-panel__gate")?.textContent).toBe(
+      "Take the monsters out of this hatchery first.",
+    );
+  });
+});

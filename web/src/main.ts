@@ -8,6 +8,7 @@ import "@/ui/styles/monsters.css";
 import "@/ui/styles/hatch.css";
 import "@/ui/styles/harvest.css";
 import "@/ui/styles/repair.css";
+import "@/ui/styles/recycle.css";
 
 import { App } from "@/app/App";
 

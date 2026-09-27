@@ -182,3 +182,6 @@ export const YardRepairSchema = z
 
 /** `POST /bm/yard/repair/instant` takes no fields: it repairs everything damaged. */
 export const YardRepairInstantSchema = z.object({});
+
+/** `POST /bm/yard/recycle`: the building to recycle. */
+export const YardRecycleSchema = z.object({ id: BuildingIdField });

@@ -1,10 +1,13 @@
 import type { SpeedupItem } from "@/api/types";
 import type { YardRefusal } from "@/api/yard";
 import { buildActions } from "@/api/yardBuild";
+import { recycleAction, recycleKey, type RecycleReport } from "@/api/yardRecycle";
 import { repairActions } from "@/api/yardRepair";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, WALL_TYPES } from "@/game/yard/buildingCosts";
+import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { harvesterNow } from "@/game/yard/harvest";
+import type { RecycleOffer } from "@/game/yard/recycle";
 import { NEED_MORE_SILOS } from "@/game/yard/storage";
 import { progressFraction } from "@/game/yard/jobs";
 import { repairOffer, type RepairOffer } from "@/game/yard/repair";
@@ -152,6 +155,8 @@ export class BuildingPanel {
   private pendingButtons: { key: string; button: HTMLButtonElement | ShinyButton }[] = [];
   /** The building whose Cancel confirmation is open. */
   private confirmingCancel: number | null = null;
+  /** The building whose Recycle confirmation is open. */
+  private confirmingRecycle: number | null = null;
 
   constructor(options: BuildingPanelOptions) {
     this.planner = options.planner;
@@ -221,6 +226,7 @@ export class BuildingPanel {
   show(building: YardBuilding): void {
     if (this.building?.id !== building.id) {
       this.confirmingCancel = null;
+      this.confirmingRecycle = null;
       this.setStatus(null);
       // A different building's Shiny buttons are no use and may be armed.
       for (const button of this.shiny.values()) button.destroy();
@@ -346,6 +352,7 @@ export class BuildingPanel {
       }
       const open = this.openButton(model);
       if (open) blocks.push(open);
+      if (model.recycle) blocks.push(this.recycleControl(building, model.recycle));
     } else {
       const open = this.openButton(null);
       if (open) blocks.push(open);
@@ -631,6 +638,91 @@ export class BuildingPanel {
     return wrap;
   }
 
+  /**
+   * Recycle, at the foot of the actions: one inline confirmation that says
+   * what comes back, what the storage cap turns away and, for Housing, which
+   * monsters the cull would remove (§5.4). Recycling cannot be undone.
+   */
+  private recycleControl(building: YardBuilding, offer: RecycleOffer): HTMLElement {
+    const wrap = document.createElement("div");
+    wrap.className = "building-recycle";
+    const key = recycleKey(building.id);
+    const label = offer.toStorage ? "Put in storage" : "Recycle";
+
+    if (this.confirmingRecycle !== building.id) {
+      const button = actionButton(label, () => {
+        this.confirmingRecycle = building.id;
+        this.render();
+        this.actions.querySelector<HTMLButtonElement>(".building-recycle__confirm")?.focus();
+      });
+      button.classList.add("btn--ghost", "building-recycle__open");
+      wrap.append(button);
+      if (offer.blocked) {
+        button.disabled = true;
+        button.title = offer.blocked.message;
+        // A running job already says so in its own block.
+        if (offer.blocked.reason !== "busy") wrap.append(gateText(offer.blocked.message));
+        return wrap;
+      }
+      this.pendingButtons.push({ key, button });
+      return wrap;
+    }
+
+    wrap.classList.add("building-recycle--confirming");
+    wrap.setAttribute("role", "group");
+    wrap.setAttribute("aria-label", offer.toStorage ? "Confirm put in storage" : "Confirm recycle");
+    const question = document.createElement("p");
+    question.className = "building-recycle__question";
+    if (offer.toStorage) {
+      question.append(`Put this ${building.name} in storage? You can place it again later.`);
+    } else {
+      const refund = costAmounts(offer.refund);
+      question.append(
+        `Recycle this ${building.name} and get back `,
+        refund ?? "nothing",
+        "? This cannot be undone.",
+      );
+    }
+    wrap.append(question);
+    const lost = costAmounts(offer.lost);
+    if (lost) {
+      const warning = document.createElement("p");
+      warning.className = "building-recycle__warning";
+      warning.append("Your storage is full: ", lost, " will not fit and is lost.");
+      wrap.append(warning);
+    }
+    const culled = cullText(offer.culled);
+    if (culled) {
+      const warning = document.createElement("p");
+      warning.className = "building-recycle__warning building-recycle__cull";
+      warning.textContent = `Your monsters will no longer fit. These are lost: ${culled}.`;
+      wrap.append(warning);
+    }
+
+    const row = document.createElement("div");
+    row.className = "map-row";
+    const confirm = actionButton(offer.toStorage ? "Yes, store it" : "Yes, recycle", () => {
+      this.confirmingRecycle = null;
+      void this.runRecycle(building.id);
+    });
+    confirm.classList.add("btn--danger", "building-recycle__confirm");
+    const keep = actionButton("Keep it", () => {
+      this.confirmingRecycle = null;
+      this.render();
+    });
+    keep.classList.add("building-recycle__keep");
+    row.append(confirm, keep);
+    wrap.append(row);
+    wrap.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      this.confirmingRecycle = null;
+      this.render();
+    });
+    this.pendingButtons.push({ key, button: confirm });
+    return wrap;
+  }
+
   private drawJobClock(job: JobOffer, refs: JobRefs): void {
     refs.countdown.textContent = job.paused ? "Paused" : formatCountdown(job.remaining);
     const done = progressFraction(job.remaining, job.total);
@@ -749,6 +841,26 @@ export class BuildingPanel {
         ? [`${what} for `, resourceAmount("shiny", formatAmount(report.credits)), "."]
         : [`${what}.`];
     });
+  }
+
+  /**
+   * Recycles, then says so in the notice dock: the building is gone, so the
+   * scene closes this panel as the answer lands. A refusal stays on the
+   * status line.
+   */
+  private async runRecycle(id: number): Promise<void> {
+    const yard = this.yard;
+    if (!yard) return;
+    const name = this.building?.name ?? "Building";
+    const result = await recycleAction(yard.store, id);
+    if (result.ok) {
+      yard.notices.show("yard-recycle", recycledMessage(name, result.report), {
+        level: "info",
+        timeoutMs: 6_000,
+      });
+      return;
+    }
+    this.report(id, result, () => []);
   }
 
   /** Puts an action's outcome on the status line, if its building is still shown. */
@@ -1015,6 +1127,31 @@ const infoValue = (value: InfoValue): Node => {
   return value.resource
     ? resourceAmount(value.resource, text)
     : document.createTextNode(text);
+};
+
+/** "3 × Pokey, 1 × Octo-ooze", or null for no cull. */
+const cullText = (culled: Readonly<Record<string, number>>): string | null => {
+  const entries = Object.entries(culled);
+  if (entries.length === 0) return null;
+  return entries.map(([id, count]) => `${count} × ${monsterEntry(id)?.name ?? id}`).join(", ");
+};
+
+/** What a recycle came to, for the notice: what came back, what was lost, what went to storage. */
+export const recycledMessage = (name: string, report: RecycleReport): HTMLElement => {
+  const line = document.createElement("span");
+  if (report.stored) {
+    line.append(`${name} put in storage.`);
+    return line;
+  }
+  const refund = costAmounts(report.refund);
+  line.append(`${name} recycled`);
+  if (refund) line.append(" for ", refund);
+  line.append(".");
+  const lost = costAmounts(report.lost);
+  if (lost) line.append(" ", lost, " did not fit in storage.");
+  const culled = cullText(report.culled);
+  if (culled) line.append(` Housing shrank: ${culled} lost.`);
+  return line;
 };
 
 /** A refusal for the status line: the server's own sentence. */

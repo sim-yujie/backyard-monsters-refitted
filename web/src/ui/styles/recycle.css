@@ -1,0 +1,43 @@
+/*
+ * Recycle (`docs/design/yard-buildings.md` §5.4): the building panel's
+ * Recycle control and its one confirmation (`ui/yard/BuildingPanel.ts`,
+ * `recycleControl`), styled as the Cancel confirmation beside it.
+ */
+
+.building-recycle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.building-recycle__open {
+  width: 100%;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-2);
+  color: var(--colour-danger);
+}
+
+.building-recycle__open:disabled {
+  color: var(--colour-text-muted);
+}
+
+.building-recycle--confirming {
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-danger);
+  border-radius: var(--radius-sm);
+}
+
+.building-recycle--confirming .btn {
+  white-space: nowrap;
+}
+
+.building-recycle__question,
+.building-recycle__warning {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.building-recycle__warning {
+  color: var(--colour-accent);
+}

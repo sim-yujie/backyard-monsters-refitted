@@ -811,6 +811,16 @@ Chamber holding frozen champions; a Lab researching; an Academy training; a Hatc
 or production (the player removes the queue first); a building with a running job. Recycling a
 Housing building shows the cull that will follow before confirming. One confirmation dialog.
 
+As built (#112): refusals are `isTownHall`, `mapRoom` (added: the Map Room's level is the map
+version, D16), `busy`, `championInCage`, `championsFrozen`, `researching`, `training`,
+`hatcheryBusy` (a Hatchery with production or a queue, or an HCC with a queue) and `unlocking`
+(added: the original cancelled a running unlock as part of the recycle; here the player cancels
+it first). The refund meets the storage cap the yard has without the building (the wrapper applies
+the slices before the credit), so a Storage Silo's own refund can meet a smaller cap than the
+original's `Fund` did. A Housing cull runs in the same request. The panel's Recycle button (Put in
+storage for a decoration) sits at the foot of the actions, disabled with the reason where the
+server would refuse, and opens one inline confirmation; the Town Hall offers none.
+
 ### 5.5 Repair and repair all
 
 `POST /bm/yard/repair` `ids` or `all=1` sets `rE` on each damaged building (free, no worker, heals at
