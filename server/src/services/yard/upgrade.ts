@@ -88,6 +88,7 @@ const refusalErr = (refusal: OneUpgradeRefusal) => {
     case "maxLevel":
       return yardRefusedErr("maxLevel", "That building is already at its highest level.", {
         level: refusal.from,
+        max: costOf(refusal.t)?.costs.length ?? refusal.from,
       });
     case "requirements":
       return yardRefusedErr("requirements", "That upgrade needs other buildings first.", {

@@ -136,7 +136,7 @@ describe("upgrade", () => {
     expect(refusal(upgrade).data).toEqual({ reason: "townHall", townHall: { have: 0, need: 1 } });
     buildings["0"] = { id: 0, t: HALL, x: 0, y: 0, l: 3 };
 
-    expect(refusal(upgrade).data).toEqual({ reason: "maxLevel", level: 6 });
+    expect(refusal(upgrade).data).toEqual({ reason: "maxLevel", level: 6, max: 6 });
     housing().l = 2;
 
     expect(refusal(upgrade).data).toEqual({ reason: "townHall", townHall: { have: 3, need: 4 } });
