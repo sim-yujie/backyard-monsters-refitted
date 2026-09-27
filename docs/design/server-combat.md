@@ -283,7 +283,7 @@ swings(delay)     = floor(elapsedSave * 80 / delay) + 1
 potential         = sum over flung monsters m at level L of
                       damage_m[L] * mult_m * swings(delay_m) * aoe_m
                   + champion:  damage_c[L] * swings(delay_c) * aoe_c
-                  + bombs:     sum of the largest unused building-bomb damage per resource tier
+                  + bombs:     per resource, the most one bomb's blast could take off this yard
                   + zombies:   potential of every flung monster once more, if a Rezghul was flung
 slack             = 1% of potential, at least 1000
 ```
@@ -299,7 +299,7 @@ slack             = 1% of potential, at least 1000
 | Healers (C15, C16) | Negative damage; contribute 0 | `combat.md:508-510` |
 | `damage_c`, `delay_c` | Champion damage at level from `championStats.ts`; delay 56, Fomor 8, Korath 72/72/80/80/80/80 | `ChampionBase.as:164`, `champions/Fomor.as:12`, `champions/Korath.as:25-46` |
 | `aoe_c` | 6 for Korath (stomp over `range * 2.5` at power 3), 1 otherwise | `Korath.as:167-200` |
-| bombs | The building bombs the attacker's catapult level unlocks, one per resource tier, taken at their maximum tier: 50,000 (twig), 75,000 (pebble); putty bombs deal 0 | `ResourceBombs.as:48-178`; `combat.md:415-427` |
+| bombs | The building bombs the attacker's catapult level unlocks, one per resource. A bomb deals its full damage (50,000 twig, 75,000 pebble at the top tiers) to **every** building its blast reaches, so its term is read off the defender's yard: taking each building in turn as one the blast hit, the sum over every building within the two buildings' reaches of it (`sqrt(blast.rx² + building.rx²)` each, on screen) of `min(health, particles × per-particle damage)`, and the largest such sum. That bounds every drop point, and is 0 on an empty yard; putty bombs deal 0 (issue #84, `potential.ts` `bombPotential`) | `ResourceBombs.as:48-178`; `ResourceBomb.as`; `combat.md:415-427` |
 
 Fortification and armour only lower real damage (`BFOUNDATION.as:508-512`), so they do not appear.
 Travel time, tower fire, walls in the way and monster deaths are all ignored: the bound is an

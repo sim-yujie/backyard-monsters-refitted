@@ -598,11 +598,14 @@ export const bombsFor = (catapultLevel: number): readonly BombStats[] =>
   BOMBS.filter((bomb) => bomb.catapultLevel <= catapultLevel);
 
 /**
- * The most damage bombs can add to one attack at `catapultLevel`.
+ * The bombs' face damage at `catapultLevel`: one bomb per resource, each at
+ * its largest tier. At catapult 2 that is 50,000 of twigs plus 75,000 of
+ * pebbles; putty adds nothing, having no damage at all.
  *
- * One bomb per resource, each taken at its largest tier
- * (`docs/design/server-combat.md` §2.3). At catapult 2 that is 50,000 of twigs
- * plus 75,000 of pebbles; putty adds nothing, having no damage at all.
+ * This is what the bombs deal to **one** ordinary building (a Storage Silo
+ * takes it times its level). A blast hits every building it reaches, so the
+ * damage budget does not use this figure: it weighs the defender's yard
+ * instead (`potential.ts` `bombsPotential`, issue #84).
  */
 export const maxBombDamage = (catapultLevel: number): number => {
   const best = new Map<number, number>();

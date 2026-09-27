@@ -1,16 +1,21 @@
 import {
+  bombBlast,
+  bombParticleDamage,
+  bombsFor,
   championAttackDelay,
   championStat,
   HARVESTER_TYPES,
   KRALLEN_STORAGE_LOOT_MULTIPLIER,
   lowLevelLootBonus,
-  maxBombDamage,
   maxBombSpend,
   monsterAttackDelay,
   monsterStat,
+  propsSizeOf,
   SPECIALIST_DAMAGE_MULTIPLIER,
+  squashedEllipse,
   TARGET_GROUP,
   TICKS_PER_SECOND,
+  type BombStats,
 } from "./stats.js";
 import {
   amountsOf,
@@ -25,6 +30,7 @@ import {
   type ResourceKey,
   type Roster,
 } from "./types.js";
+import { buildingClass, footprintOf, screenOf } from "./yard.js";
 
 /**
  * The damage budget and the loot bounds: Phase A's envelope (§2.3, §2.4).
@@ -187,6 +193,130 @@ export const championPotential = (id: string, level: number, elapsedSeconds: num
   return damage * swings(elapsedSeconds, championAttackDelay(id, level)) * area;
 };
 
+/* ── What one bomb can reach ──────────────────────────────────────────────── */
+
+/** A building a bomb could hurt, as {@link bombPotential} weighs it. */
+interface BombTarget {
+  /** The point `ResourceBomb` measures to, `_mc` plus `_middle`, on screen. */
+  readonly x: number;
+  readonly y: number;
+  /** How far from the blast's centre this building can be and still be hit. */
+  readonly reach: number;
+  /** The most the bomb can take off it: its whole health, at most. */
+  readonly most: number;
+}
+
+/**
+ * The most one damage bomb can take off the defender's yard, wherever it lands.
+ *
+ * A bomb hits every building its blast reaches, each for the full
+ * `particles * bombParticleDamage` (`ResourceBomb.as`), so over a dense corner
+ * it deals its `damage` many times over (issue #84). The figure here is
+ * derived from the yard, in the same screen space and with the same skips the
+ * engine's `bomb` uses, and it is an upper bound for every drop point:
+ *
+ * - {@link bombReaches} hits a building only when its distance from the
+ *   centre is under `sqrt(e1² + e2²)`, the blast's and the building's edge
+ *   distances along the line between them. Neither edge is longer than its
+ *   ellipse's horizontal semi-axis, so a building is hit only within `reach`,
+ *   `sqrt(blast.rx² + building.rx²)`, of the centre.
+ * - Any two buildings one blast reaches are therefore closer together than
+ *   their two reaches added up. Taking each building in turn as one of the hit
+ *   ones and adding up every building that close to it covers every set of
+ *   buildings one blast can hit.
+ * - Each building counts for what the bomb would deal it, and never more than
+ *   the health it has at the reference point, which is all it can lose.
+ *
+ * The neighbourhood is up to twice the blast's reach across, so on a crowded
+ * yard the bound can run to a few times what the best-placed bomb really
+ * deals. It trades that for being cheap (one sweep over the buildings sorted
+ * across the screen) and provably never short, which is what a budget that
+ * refuses saves must be. An empty yard gives 0: there is nothing to hit.
+ */
+export const bombPotential = (bomb: BombStats, yard: CombatYard): number => {
+  if (bomb.damage <= 0) return 0;
+  const blast = bombBlast(bomb).rx;
+  const targets: BombTarget[] = [];
+  for (const building of yard.buildings) {
+    if (building.hp <= 0 || building.spent) continue;
+    const kind = buildingClass(building.type);
+    if (kind === "trap" || kind === "decoration" || kind === "enemy" || kind === "immovable") {
+      continue;
+    }
+    const share = bombParticleDamage(bomb, { type: building.type, level: building.level, kind });
+    const most = Math.min(building.hp, share * bomb.particles);
+    if (most <= 0) continue;
+    const at = screenOf(building.x, building.y);
+    const edge = squashedEllipse(propsSizeOf(building.type)).rx;
+    targets.push({
+      x: at.x,
+      y: at.y + footprintOf(building.type).h * 0.5,
+      reach: Math.sqrt(blast * blast + edge * edge),
+      most,
+    });
+  }
+  if (targets.length === 0) return 0;
+
+  // Sorted across the screen, so each building's neighbours sit in one run of the list.
+  // The sort is stable, so equal columns keep the yard's id order.
+  targets.sort((a, b) => a.x - b.x);
+  let widest = 0;
+  for (const target of targets) widest = Math.max(widest, target.reach);
+  const span = widest * 2;
+
+  let best = 0;
+  let low = 0;
+  let high = 0;
+  for (const anchor of targets) {
+    while ((targets[low] as BombTarget).x <= anchor.x - span) low += 1;
+    while (high < targets.length && (targets[high] as BombTarget).x < anchor.x + span) high += 1;
+    let total = 0;
+    for (let index = low; index < high; index += 1) {
+      const other = targets[index] as BombTarget;
+      const apart = other.reach + anchor.reach;
+      const dx = other.x - anchor.x;
+      const dy = other.y - anchor.y;
+      if (dx * dx + dy * dy < apart * apart) total += other.most;
+    }
+    best = Math.max(best, total);
+  }
+  return best;
+};
+
+/**
+ * The most the bombs of one attack can take off the yard.
+ *
+ * One bomb per resource (§2.3), and of that resource's tiers the catapult
+ * unlocks, whichever could deal the most here. A tier another one outdoes on
+ * damage and on blast, with the same number of particles, can deal no more
+ * to any building nor reach any building the other misses, so it is skipped
+ * without being weighed; that leaves one tier per resource in today's table.
+ */
+export const bombsPotential = (catapultLevel: number, yard: CombatYard): number => {
+  const unlocked = bombsFor(catapultLevel).filter((bomb) => bomb.damage > 0);
+  const best = new Map<number, number>();
+  unlocked.forEach((bomb, at) => {
+    // Of two identical tiers, the first stands for both.
+    const outdone = unlocked.some(
+      (other, index) =>
+        index !== at &&
+        other.resource === bomb.resource &&
+        other.particles === bomb.particles &&
+        other.damage >= bomb.damage &&
+        other.radius >= bomb.radius &&
+        (other.damage > bomb.damage || other.radius > bomb.radius || index < at),
+    );
+    if (outdone) return;
+    const most = bombPotential(bomb, yard);
+    best.set(bomb.resource, Math.max(best.get(bomb.resource) ?? 0, most));
+  });
+  let total = 0;
+  for (const resource of [...best.keys()].sort((a, b) => a - b)) {
+    total += best.get(resource) as number;
+  }
+  return total;
+};
+
 /* ── The damage budget ────────────────────────────────────────────────────── */
 
 /** Where the bound's figure came from, for the log line and the Baiter. */
@@ -196,7 +326,7 @@ export interface PotentialBreakdown {
   /** The same figure again when a Rezghul is on the field, else 0. */
   readonly zombies: number;
   readonly champion: number;
-  /** One bomb per resource at its largest tier the catapult unlocks. */
+  /** One bomb per resource, at the most its blast could take off this yard. */
   readonly bombs: number;
 }
 
@@ -226,9 +356,12 @@ const anyFlung = (flung: Roster): boolean =>
  *
  * Reads only the context: the roster that has left the attacker's cells, the
  * academy levels those monsters fight at, the champion if one is on the field,
- * and the catapult level that decides which bombs exist. Nothing here looks at
- * the defender's yard, because the bound is what the attacker could deal and
- * not what the yard could absorb — a tighter figure would need positions.
+ * and the catapult level that decides which bombs exist. The monsters' terms do
+ * not look at the defender's yard, because they bound what the attacker could
+ * deal and not what the yard could absorb — a tighter figure would need
+ * positions. The bombs' term does, because a bomb deals its damage to every
+ * building under it and the yard is what says how many that can be
+ * ({@link bombPotential}).
  */
 export const damagePotential = (
   context: AttackContext,
@@ -248,7 +381,7 @@ export const damagePotential = (
     ? championPotential(context.champion.id, context.champion.level, elapsed)
     : 0;
 
-  const bombs = maxBombDamage(context.attacker.catapultLevel);
+  const bombs = bombsPotential(context.attacker.catapultLevel, context.yard);
   const potential = monsters + zombies + champion + bombs;
   const slack = Math.max(tolerances.damageSlackMin, potential * tolerances.damageSlackFraction);
 

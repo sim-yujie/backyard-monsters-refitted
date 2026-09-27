@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { createBattle } from "./engine";
 import {
   auditDamageBudget,
   auditLoot,
   bankedByResource,
+  bombPotential,
+  bombsPotential,
   championPotential,
   damagePotential,
   harvesterResource,
@@ -13,7 +18,7 @@ import {
   specialistBound,
   swings,
 } from "./potential";
-import { maxBombDamage, maxBombSpend } from "./stats";
+import { BOMBS, maxBombDamage, maxBombSpend } from "./stats";
 import {
   noAmounts,
   toCombatYard,
@@ -23,6 +28,11 @@ import {
   type ResourceAmounts,
   type Roster,
 } from "./types";
+import { buildEngineYard } from "./yard";
+
+const SANDBOX = fileURLToPath(
+  new URL("../../../../test/fixtures/baseload-sandbox-yard.json", import.meta.url),
+);
 
 /**
  * The damage budget and the loot bounds (§2.3, §2.4).
@@ -166,21 +176,24 @@ describe("damagePotential", () => {
       flung: { C1: 30 },
       champion: { id: "G1", level: 1, powerLevel: 0 },
       catapultLevel: 2,
+      // A level 1 Town Hall, 4,000 health: each bomb can take all of it.
+      yardBuildings: [[1, 14]],
     });
     const report = damagePotential(context);
     expect(report.breakdown.monsters).toBe(840 * 30);
     expect(report.breakdown.champion).toBe(1000 * 15);
-    expect(report.breakdown.bombs).toBe(125_000);
+    expect(report.breakdown.bombs).toBe(2 * 4000);
     expect(report.breakdown.zombies).toBe(0);
-    expect(report.potential).toBe(840 * 30 + 1000 * 15 + 125_000);
+    expect(report.potential).toBe(840 * 30 + 1000 * 15 + 2 * 4000);
   });
 
-  it("adds 125,000 of bombs at catapult 2 and nothing at catapult 0", () => {
-    // One bomb per resource at its largest tier: 50,000 of twigs and 75,000 of
-    // pebbles; putty deals no damage at all (`ResourceBombs.as:48-226`).
+  it("adds no bombs at catapult 0, and none at any level over an empty yard", () => {
+    // The face damage is still 125,000 at catapult 2 (`ResourceBombs.as:48-226`),
+    // but a bomb that lands on nothing takes nothing off (issue #84).
     expect(maxBombDamage(2)).toBe(125_000);
-    expect(maxBombDamage(0)).toBe(0);
-    expect(damagePotential(contextOf({ catapultLevel: 3 })).breakdown.bombs).toBe(125_000);
+    expect(damagePotential(contextOf({ catapultLevel: 3 })).breakdown.bombs).toBe(0);
+    const yardBuildings = [[1, 14]] as const;
+    expect(damagePotential(contextOf({ yardBuildings })).breakdown.bombs).toBe(0);
   });
 
   it("doubles the roster term when a Rezghul is on the field", () => {
@@ -260,9 +273,147 @@ describe("auditDamageBudget", () => {
   });
 
   it("allows a bomb-only drop when the attacker owns a catapult", () => {
-    const context = contextOf({ catapultLevel: 2 });
-    expect(auditDamageBudget(context, 120_000).violations).toEqual([]);
-    expect(auditDamageBudget(context, 200_000).violations).toHaveLength(1);
+    // Three 4,000-health Town Halls under both bombs: 24,000, slack 1,000.
+    const yardBuildings = [
+      [1, 14],
+      [2, 14],
+      [3, 14],
+    ] as const;
+    const context = contextOf({ catapultLevel: 2, yardBuildings });
+    expect(auditDamageBudget(context, 20_000).violations).toEqual([]);
+    expect(auditDamageBudget(context, 30_000).violations).toHaveLength(1);
+  });
+});
+
+describe("bombs (issue #84)", () => {
+  const twigs = BOMBS.find((bomb) => bomb.id === "tw2")!;
+  const pebbles = BOMBS.find((bomb) => bomb.id === "pb3")!;
+
+  /** Buildings by `[id, type, X, Y, level]`, all at full health. */
+  const placed = (rows: readonly (readonly [number, number, number, number, number?])[]) => {
+    const buildingdata: Record<string, CombatBuildingDataMap[string]> = {};
+    for (const [id, t, X, Y, l] of rows) buildingdata[String(id)] = { id, t, X, Y, l: l ?? 1 };
+    return toCombatYard({ buildingdata });
+  };
+
+  it("counts every building a blast can cover, each up to its health", () => {
+    // Five level 1 harvesters (500 health) side by side, and a sixth far off.
+    const yard = placed([
+      [1, 1, 0, 0],
+      [2, 1, 60, 0],
+      [3, 1, 0, 60],
+      [4, 1, 60, 60],
+      [5, 1, -60, 0],
+      [6, 1, 1200, -1200],
+    ]);
+    expect(bombPotential(twigs, yard)).toBe(5 * 500);
+    expect(bombPotential(pebbles, yard)).toBe(5 * 500);
+    expect(bombsPotential(2, yard)).toBe(2 * 5 * 500);
+  });
+
+  it("takes a building at what the bomb deals it when that is less than its health", () => {
+    // A level 3 wall has 5,750 health; a wall takes 6% of each particle's
+    // share, int(250 * 0.06) = 15 of twigs and int(375 * 0.06) = 22 of pebbles,
+    // two hundred times over.
+    const yard = placed([[1, 17, 0, 0, 3]]);
+    expect(bombPotential(twigs, yard)).toBe(15 * 200);
+    expect(bombPotential(pebbles, yard)).toBe(22 * 200);
+    expect(bombsPotential(2, yard)).toBe(3000 + 4400);
+  });
+
+  it("skips what a bomb cannot hurt and putty altogether", () => {
+    // A trap, a decoration and a destroyed Town Hall.
+    const yard = toCombatYard({
+      buildingdata: {
+        "1": { id: 1, t: 24, X: 0, Y: 0 },
+        "2": { id: 2, t: 28, X: 40, Y: 0 },
+        "3": { id: 3, t: 14, X: 0, Y: 40 },
+      },
+      buildinghealthdata: { "3": 0 },
+    });
+    expect(bombsPotential(3, yard)).toBe(0);
+    const putty = BOMBS.find((bomb) => bomb.id === "pu3")!;
+    expect(bombPotential(putty, placed([[1, 14, 0, 0]]))).toBe(0);
+  });
+
+  it("is never beaten by the engine, wherever the bomb lands", () => {
+    // Forty buildings of mixed sizes crowded into a small plot, and two hundred
+    // drop points over and around it, each bomb on its own.
+    let state = 7;
+    const next = (): number => {
+      state = (Math.imul(state, 1103515245) + 12345) >>> 0;
+      return state / 2 ** 32;
+    };
+    const types = [1, 2, 6, 14, 17, 20, 21];
+    const buildingdata: Record<string, CombatBuildingDataMap[string]> = {};
+    for (let id = 1; id <= 40; id += 1) {
+      const t = types[Math.floor(next() * types.length)]!;
+      const X = Math.round(next() * 500 - 250);
+      const Y = Math.round(next() * 500 - 250);
+      buildingdata[String(id)] = { id, t, X, Y, l: 1 + Math.floor(next() * 3) };
+    }
+    const input = { buildingdata, buildinghealthdata: {}, resources: {} };
+    const combat = toCombatYard({ buildingdata });
+    for (const bomb of [twigs, pebbles]) {
+      const bound = bombPotential(bomb, combat);
+      let worst = 0;
+      for (let drop = 0; drop < 200; drop += 1) {
+        const yard = buildEngineYard(input);
+        const before = yard.buildings.reduce((sum, building) => sum + building.hp, 0);
+        const battle = createBattle(yard, { seed: 1 });
+        const x = next() * 800 - 400;
+        const y = next() * 800 - 400;
+        battle.apply({ kind: "bomb", t: 0, x, y, id: bomb.id });
+        const after = yard.buildings.reduce((sum, building) => sum + building.hp, 0);
+        expect(before - after).toBeLessThanOrEqual(bound);
+        worst = Math.max(worst, before - after);
+      }
+      // Not a vacuous pass: some drops land in the thick of it.
+      expect(worst).toBeGreaterThan(bound / 4);
+    }
+  });
+
+  it("keeps a dense, honest bombing of the sandbox yard inside the budget", () => {
+    // The owner's yard: 575 buildings, silos and all. Drop both top bombs on
+    // every building's middle in turn, in the engine, and keep the worst.
+    const sandbox = JSON.parse(readFileSync(SANDBOX, "utf8")) as {
+      buildingdata: CombatBuildingDataMap;
+      buildinghealthdata: Record<string, number>;
+      resources: Record<string, number>;
+    };
+    const input = {
+      buildingdata: sandbox.buildingdata,
+      buildinghealthdata: sandbox.buildinghealthdata,
+      resources: sandbox.resources,
+    };
+    let worst = 0;
+    for (const target of buildEngineYard(input).buildings) {
+      const yard = buildEngineYard(input);
+      const before = yard.buildings.reduce((sum, building) => sum + building.hp, 0);
+      const battle = createBattle(yard, { seed: 1 });
+      const x = target.x + target.middle;
+      const y = target.y + target.middle;
+      battle.apply({ kind: "bomb", t: 0, x, y, id: "tw2" });
+      battle.apply({ kind: "bomb", t: 0, x, y, id: "pb3" });
+      const after = yard.buildings.reduce((sum, building) => sum + building.hp, 0);
+      worst = Math.max(worst, before - after);
+    }
+    // The face damage, one bomb's worth per bomb, is nowhere near it: this is
+    // the drop the old budget would have refused.
+    expect(worst).toBeGreaterThan(maxBombDamage(2) * 5);
+
+    const context: AttackContext = {
+      ...contextOf({ catapultLevel: 2 }),
+      yard: toCombatYard({
+        buildingdata: sandbox.buildingdata,
+        buildinghealthdata: sandbox.buildinghealthdata,
+      }),
+    };
+    const { report, violations } = auditDamageBudget(context, worst);
+    expect(violations).toEqual([]);
+    expect(report.breakdown.bombs).toBeGreaterThanOrEqual(worst);
+    // And it is still a bound, not a blank cheque: under three times the worst.
+    expect(report.breakdown.bombs).toBeLessThan(worst * 3);
   });
 });
 
