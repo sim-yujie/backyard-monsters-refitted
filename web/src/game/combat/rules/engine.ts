@@ -55,7 +55,10 @@ import {
   distanceSquared,
   isMainTarget,
   rangePointOf,
+  reachesBuilding,
+  screenDistanceSquared,
   screenOf,
+  screenPointOf,
   towerScanPoint,
 } from "./yard.js";
 import type { Cart, EngineBuilding, EngineYard } from "./yard.js";
@@ -857,7 +860,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.waypointIndex = 0;
     if (creep.flying) {
       creep.waypoints = [{ x: chosen.x, y: chosen.y }];
-      creep.atTarget = distanceSquared(creep.ix, creep.iy, chosen.x, chosen.y) < 170 * 170;
+      // Under 170 screen px from `_position` (`ChampionBase.as:662`).
+      const at = screenPointOf(creep.ix, creep.iy);
+      creep.atTarget = distanceSquared(at.x, at.y, chosen.sx, chosen.sy) < 170 * 170;
       return true;
     }
     const route = grid.path(
@@ -987,9 +992,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creep.targetCreep = found.id;
       target = found;
     }
-    // `DEFENSE_RANGE_SQUARED` is 2,500 in the client's own units (`:1543`).
+    // `DEFENSE_RANGE_SQUARED` is 2,500, measured on screen like the range
+    // `canShootCreep` also accepts (`CreepBase.as:1543`, `:723-727`).
     const reach = Math.max(creep.range * creep.range, 2500);
-    creep.atTarget = distanceSquared(creep.ix, creep.iy, target.ix, target.iy) < reach;
+    creep.atTarget = screenDistanceSquared(creep.ix, creep.iy, target.ix, target.iy) < reach;
     if (creep.atTarget) {
       creep.attacking = true;
       if (creep.attackCooldown <= 0) {
@@ -1034,13 +1040,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (hunting && creep.targetBuilding < 0) hunting = findTarget(creep);
     if (!hunting) return;
 
-    // A ranged creep stops as soon as its target is inside its range
-    // (`CreepBase.as:735-748`); line of sight is not modelled.
+    // A ranged creep stops as soon as its target is inside its range, a circle
+    // on screen around the building's anchor (`CreepBase.as:735-748`).
     if (!creep.atTarget && creep.range > 1) {
       const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
-      if (aim && distanceSquared(creep.ix, creep.iy, aim.x, aim.y) <= creep.range * creep.range) {
-        creep.atTarget = true;
-      }
+      if (aim && reachesBuilding(creep.ix, creep.iy, aim, creep.range)) creep.atTarget = true;
     }
 
     if (creep.atTarget) {

@@ -8,8 +8,8 @@ import {
   type BattleVisualEvent,
 } from "./engine.js";
 import { digestOf } from "./digest.js";
-import { BOMBS, bombBlast } from "./stats.js";
-import { buildEngineYard } from "./yard.js";
+import { BOMBS, bombBlast, championStat } from "./stats.js";
+import { buildEngineYard, reachesBuilding, screenDistanceSquared } from "./yard.js";
 import type { CombatBuildingDataMap } from "./types.js";
 
 /**
@@ -106,6 +106,70 @@ describe("traps", () => {
     battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C1: 3 } });
     run(battle, 4000);
     expect(battle.state().health["2"]).toBe(0);
+  });
+});
+
+describe("a creep's reach is a circle on screen (issue #85)", () => {
+  /** The screen directions a reach used to stretch or squash. */
+  const DIRECTIONS: ReadonlyArray<readonly [string, number, number]> = [
+    ["east", 1, 0],
+    ["west", -1, 0],
+    ["south", 0, 1],
+    ["north", 0, -1],
+    ["along yard X", 2 / Math.sqrt(5), 1 / Math.sqrt(5)],
+    ["along yard Y", -2 / Math.sqrt(5), 1 / Math.sqrt(5)],
+  ];
+
+  /** The yard point `away` screen pixels from a building's drawn anchor. */
+  const offAnchor = (sx: number, sy: number, ux: number, uy: number, away: number) => {
+    const screenX = sx + ux * away;
+    const screenY = sy + uy * away;
+    return { x: screenX * 0.5 + screenY, y: screenY - screenX * 0.5 };
+  };
+
+  it("reaches Krallen's range in screen pixels, the same in every direction", () => {
+    const yard = buildEngineYard({ buildingdata: { "1": { id: 1, t: 1, X: 100, Y: 60 } } });
+    const building = yard.buildings[0]!;
+    // Krallen's range by level, which `CHAMPIONCAGE.as:236` gives in screen pixels.
+    const ranges = [1, 2, 3, 4, 5].map((level) => championStat("G5", "range", level));
+    expect(ranges).toEqual([35, 45, 55, 60, 65]);
+    for (const range of ranges) {
+      for (const [name, ux, uy] of DIRECTIONS) {
+        const inside = offAnchor(building.sx, building.sy, ux, uy, range - 0.05);
+        const outside = offAnchor(building.sx, building.sy, ux, uy, range + 0.05);
+        expect(reachesBuilding(inside.x, inside.y, building, range), `${name} ${range}`).toBe(true);
+        expect(reachesBuilding(outside.x, outside.y, building, range), `${name} ${range}`).toBe(
+          false,
+        );
+      }
+    }
+  });
+
+  it("measures creep to creep on screen too", () => {
+    for (const [, ux, uy] of DIRECTIONS) {
+      const at = offAnchor(0, 0, ux, uy, 50);
+      expect(screenDistanceSquared(at.x, at.y, 0, 0)).toBeCloseTo(2500, 6);
+    }
+  });
+
+  it("stops a level 5 Krallen walking in from the north 65 px from the anchor", () => {
+    const yard = yardOf({ "1": { id: 1, t: 1, X: 100, Y: 100 } });
+    const building = yard.buildings[0]!;
+    const battle = createBattle(yard, { seed: 21 });
+    // 400 px straight up the screen from the building's top corner.
+    const drop = offAnchor(building.sx, building.sy, 0, -1, 400);
+    battle.apply({ kind: "fling", t: 0, ...drop, r: 100, monsters: {}, champion: { t: 5, l: 5 } });
+    const speed = championStat("G5", "speed", 5) / 4;
+    let stoppedAt = -1;
+    for (let step = 0; step < 4000 && stoppedAt < 0; step += 1) {
+      battle.step();
+      const krallen = battle.creeps()[0]!;
+      if (krallen.state !== "attacking") continue;
+      const at = { x: krallen.ix - krallen.iy, y: (krallen.ix + krallen.iy) / 2 };
+      stoppedAt = Math.hypot(at.x - building.sx, at.y - building.sy);
+    }
+    expect(stoppedAt).toBeLessThanOrEqual(65);
+    expect(stoppedAt).toBeGreaterThan(65 - 2 * speed);
   });
 });
 

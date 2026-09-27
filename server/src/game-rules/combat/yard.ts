@@ -42,6 +42,12 @@ import type {
  * {@link screenOf} of it. A tower's circle of range in yard units is therefore
  * a 2:1 ellipse on screen, which is what the Yard Planner's range rings draw.
  *
+ * A creep's own reach is the other way round. Flash measures how far a creep
+ * or champion can hit from, how close a flyer has to get and how close a
+ * defender closes in on screen, between `_tmpPoint` and the building's
+ * `_position` (`CreepBase.as:735-741`, `:1543`; `ChampionBase.as:428-429`,
+ * `:662`), so those are circles on screen: {@link screenDistanceSquared}.
+ *
  * Every building carries its stored `x`/`y` and `cx`/`cy`, the anchor as
  * `PATHING.FromISO(_mc)` sees it: the stored point after a round trip through
  * the screen, which can sit one unit off it because `GRID.ToISO` floors and
@@ -293,6 +299,57 @@ export const screenOf = (x: number, y: number): Cart => ({
   y: Math.floor((x + y) * 0.5) + 0,
 });
 
+/**
+ * A creep's `_tmpPoint`: the screen point of a yard position, exact.
+ *
+ * Unlike {@link screenOf} it does not floor: a creep's screen position is a
+ * float in Flash, and the engine's yard position is its exact counterpart.
+ */
+export const screenPointOf = (x: number, y: number): Cart => ({
+  x: x - y,
+  y: (x + y) * 0.5,
+});
+
+/**
+ * The squared distance on screen between two yard points.
+ *
+ * What Flash's creep-side tests measure (see the coordinate spaces above):
+ * `(dx - dy)² + ((dx + dy) / 2)²`, the length of the difference once it is
+ * drawn. A yard circle is not a screen circle, so the two are not
+ * interchangeable: along a yard axis a screen pixel is 0.89 yard units,
+ * straight across the screen 0.71 and straight down it 1.41.
+ */
+export const screenDistanceSquared = (
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): number => {
+  const dx = ax - bx;
+  const dy = ay - by;
+  const across = dx - dy;
+  const down = (dx + dy) * 0.5;
+  return across * across + down * down;
+};
+
+/**
+ * Whether a creep at a yard position can hit a building from there.
+ *
+ * `canShootBuilding` and `canHitBuilding`: the screen distance from the
+ * creep's `_tmpPoint` to the building's `_position`, its anchor as drawn, at
+ * most `range` (`CreepBase.as:735-741`, `ChampionBase.as:428-429`). Line of
+ * sight is not modelled.
+ */
+export const reachesBuilding = (
+  x: number,
+  y: number,
+  building: EngineBuilding,
+  range: number,
+): boolean => {
+  const at = screenPointOf(x, y);
+  return distanceSquared(at.x, at.y, building.sx, building.sy) <= range * range;
+};
+
 /** `GLOBAL.QuickDistance`: the plain euclidean distance (`GLOBAL.as:2022-2026`). */
 export const distance = (ax: number, ay: number, bx: number, by: number): number =>
   Math.sqrt(distanceSquared(ax, ay, bx, by));
@@ -318,6 +375,9 @@ export interface EngineBuilding {
   /** The anchor as the grid and range tests see it, `PATHING.FromISO(_mc)`. */
   readonly cx: number;
   readonly cy: number;
+  /** Where Flash drew the anchor, `_position`: {@link screenOf} the stored X/Y. */
+  readonly sx: number;
+  readonly sy: number;
   readonly w: number;
   readonly h: number;
   /** `_middle`, half the footprint height (`BFOUNDATION.as:678`). */
@@ -426,6 +486,8 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
       y: numberOf(data.Y),
       cx: anchor.x,
       cy: anchor.y,
+      sx: onScreen.x,
+      sy: onScreen.y,
       w: footprint.w,
       h: footprint.h,
       middle: footprint.h * 0.5,
