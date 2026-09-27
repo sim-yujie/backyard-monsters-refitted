@@ -66,8 +66,8 @@ const buildingOf = (save: UpgradeWalkSave, id: number): BuildingData => {
   return building;
 };
 
-/** The single-building refusal for a step {@link planOneUpgrade} would not take. */
-const refusalErr = (refusal: OneUpgradeRefusal) => {
+/** The single-building refusal for a step {@link planOneUpgrade} would not take (also `upgrade/instant`'s, `services/yard/instantUpgrade.ts`). */
+export const refusalErr = (refusal: OneUpgradeRefusal) => {
   switch (refusal.reason) {
     case "missing":
       return yardBadRequestErr("That building is not in your yard.", { id: refusal.id });

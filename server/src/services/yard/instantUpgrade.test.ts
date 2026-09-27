@@ -100,9 +100,8 @@ describe("planInstantUpgrade: gates, in order", () => {
     );
   });
 
-  test("damaged (hp, rE, or a health entry): 409 damaged", () => {
+  test("damaged (hp, or a health entry): 409 damaged, as the upgrade route reads it", () => {
     expect(refusal(() => planInstantUpgrade(yardOf(cannon({ hp: 5 })), 1, NOW)).reason).toBe("damaged");
-    expect(refusal(() => planInstantUpgrade(yardOf(cannon({ rE: 1 })), 1, NOW)).reason).toBe("damaged");
     const yard = { ...yardOf(cannon()), buildinghealthdata: { "1": 100 } };
     expect(refusal(() => planInstantUpgrade(yard, 1, NOW)).reason).toBe("damaged");
   });
@@ -146,5 +145,15 @@ describe("planInstantUpgrade: gates, in order", () => {
     };
     // One worker, already busy on building 5; no resources in the slice at all.
     expect(planInstantUpgrade(yard, 1, NOW).report.to).toBe(2);
+  });
+
+  test("with resources to spare, a busy worker still does not stop it", () => {
+    const yard: InstantUpgradeSave = {
+      ...yardOf({ ...cannon(), "5": { id: 5, t: 20, x: 0, y: 0, l: 1, cU: 999 } }),
+      resources: { r1: 1e9, r2: 1e9, r3: 1e9, r4: 1e9 },
+    };
+    const plan = planInstantUpgrade(yard, 1, NOW);
+    expect(plan.report).toMatchObject({ from: 1, to: 2, credits: 35 });
+    expect(plan.buildingdata["1"].cU).toBeUndefined();
   });
 });
