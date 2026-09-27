@@ -6,6 +6,7 @@ import {
   TICKS_PER_SECOND,
   buildEngineYard,
   buildingClass,
+  championByType,
   createBattle,
   damagePercent,
   dropRadius,
@@ -85,9 +86,27 @@ export interface FlingInput {
   readonly x: number;
   readonly y: number;
   readonly monsters: Roster;
-  /** The champion to send with this drop; at most one per attack. */
+  /**
+   * The champion to send with this drop. One per drop; across the attack, one
+   * ordinary champion plus Krallen (see `AttackSession.championBlock`).
+   */
   readonly champion?: { readonly t: number; readonly l: number };
 }
+
+/** Krallen's champion type, the one champion Flash let go alongside another. */
+export const KRALLEN_TYPE = 5;
+
+/**
+ * Why a champion cannot be sent right now, or null when it can.
+ *
+ * - `unknown`: the attacker does not own a champion of that type.
+ * - `hurt`: its health is zero.
+ * - `away`: frozen in the Champion Chamber, juiced, or otherwise not active.
+ * - `flung`: it has already been sent this attack.
+ * - `oneChampion`: another ordinary champion holds the attack's one ordinary
+ *   slot. Krallen never hits this.
+ */
+export type ChampionBlockReason = "unknown" | "hurt" | "away" | "flung" | "oneChampion";
 
 /** A resource bomb before the session stamps its tick. */
 export interface BombInput {
@@ -136,10 +155,10 @@ export interface AttackSessionState {
   readonly creepsKilled: number;
   /** Housed monsters still in range and not yet flung, by id. */
   readonly remaining: Roster;
-  /** True while a champion could still be sent: one exists, is healthy, and none was flung. */
+  /** True while any champion could still be sent (`AttackSession.championBlock`). */
   readonly championAvailable: boolean;
-  /** The champion's health on the field, or null when none was flung. */
-  readonly championHp: number | null;
+  /** Every flung champion's health by type, zero for a death; empty when none was flung. */
+  readonly championsHp: Readonly<Record<number, number>>;
   /** Bombs and siege weapons WP4 reports as still usable (see `setUnusedTools`). */
   readonly unusedTools: number;
   /** How many events the fling log holds. */
@@ -237,7 +256,8 @@ export class AttackSession {
   private targetTick = 0;
   private readonly events: FlingEvent[] = [];
   private flung: Record<string, number> = {};
-  private championFlung = false;
+  /** Champion types flung so far this attack. */
+  private readonly championsFlung = new Set<number>();
   private unusedTools = 0;
   private readonly listeners = new Set<AttackSessionListener>();
   /** The last quarter-second the listeners heard about, to rate-limit `advance`. */
@@ -348,8 +368,9 @@ export class AttackSession {
    * Appends a fling: stamps the tick and the drop radius, hands it to the
    * battle, and spends the roster. Returns the event as logged.
    *
-   * Refuses, by throwing, a count above what is still housed, a second
-   * champion, an empty drop, or a drop after the attack ended — each is a
+   * Refuses, by throwing, a count above what is still housed, a champion
+   * {@link championBlock} refuses, an empty drop, or a drop after the attack
+   * ended — each is a
    * caller's bug, not a player's, and the army panel clamps before it gets
    * here (§F2 "after a drop").
    */
@@ -367,8 +388,10 @@ export class AttackSession {
       total += count;
     }
     if (input.champion) {
-      if (this.championFlung) throw new Error("AttackSession: the champion was already flung");
-      if (!this.championAvailable()) throw new Error("AttackSession: no champion to fling");
+      const blocked = this.championBlock(input.champion.t);
+      if (blocked) {
+        throw new Error(`AttackSession: champion ${input.champion.t} cannot be flung (${blocked})`);
+      }
     } else if (total === 0) {
       throw new RangeError("AttackSession: an empty fling");
     }
@@ -388,7 +411,7 @@ export class AttackSession {
     for (const [id, count] of Object.entries(input.monsters)) {
       if (count > 0) this.flung[id] = (this.flung[id] ?? 0) + count;
     }
-    if (input.champion) this.championFlung = true;
+    if (input.champion) this.championsFlung.add(input.champion.t);
     this.afterEvent(battle);
     return event;
   }
@@ -472,24 +495,50 @@ export class AttackSession {
   }
 
   /**
-   * The flung champion's health as the save should report it, or null when
-   * none was flung.
+   * Each flung champion's health as the save should report it, by type; empty
+   * when none was flung.
    *
-   * The engine's `championHp` is 0 only for a death; a champion that retreated
-   * or walked home keeps the health it left with (`engine.ts` `step`), which
-   * is what `attackerchampion` writes back over the attacker's stored champion.
+   * The engine's figure is 0 only for a death; a champion that retreated or
+   * walked home keeps the health it left with (`engine.ts` `step`), which is
+   * what `attackerchampion` writes back over the attacker's stored champion.
    */
-  championHpAfter(): number | null {
-    if (!this.championFlung) return null;
-    return this.battle_?.state().championHp ?? 0;
+  championsHpAfter(): Readonly<Record<number, number>> {
+    return this.championsHpOf(this.battle_?.state() ?? null);
   }
 
-  /** Whether a champion could still be sent: healthy, active, and not yet flung. */
-  championAvailable(): boolean {
-    if (this.championFlung) return false;
-    return this.target.roster.champions.some(
-      (champion) => champion.hp > 0 && champion.status === 0,
+  /**
+   * Why the champion of type `t` cannot be sent now, or null when it can.
+   *
+   * Flash's rule (`client/scripts/UI_TOP.as:328-356`): the army list offers
+   * the first healthy, active ordinary champion in the save's order and skips
+   * any other ("User is initializing combat with more than one normal
+   * champ."), and offers Krallen, type 5, on top of it. Each offered champion
+   * has its own `Send`, disabled for good once it is flung
+   * (`CHAMPIONBUTTON.as:65-70`, `CREEPS._flungGuardian`, cleared only when the
+   * attack is torn down, `CREEPS.as:353-355`). So one ordinary champion and
+   * Krallen may both fight in one attack, each sent once, and a dead or
+   * retreated champion does not free its slot.
+   */
+  championBlock(t: number): ChampionBlockReason | null {
+    const champions = this.target.roster.champions;
+    const entry = champions.find((champion) => champion.t === t);
+    if (!entry) return "unknown";
+    if (entry.hp <= 0) return "hurt";
+    if (entry.status !== 0) return "away";
+    if (this.championsFlung.has(t)) return "flung";
+    if (t === KRALLEN_TYPE) return null;
+    for (const flung of this.championsFlung) {
+      if (flung !== KRALLEN_TYPE) return "oneChampion";
+    }
+    const offered = champions.find(
+      (champion) => champion.t !== KRALLEN_TYPE && champion.hp > 0 && champion.status === 0,
     );
+    return offered?.t === t ? null : "oneChampion";
+  }
+
+  /** Whether any champion could still be sent. */
+  championAvailable(): boolean {
+    return this.target.roster.champions.some((champion) => this.championBlock(champion.t) === null);
   }
 
   state(): AttackSessionState {
@@ -520,7 +569,7 @@ export class AttackSession {
       creepsKilled: battleState?.creepsKilled ?? 0,
       remaining: this.remaining(),
       championAvailable: this.championAvailable(),
-      championHp: battleState?.championHp ?? null,
+      championsHp: this.championsHpOf(battleState),
       unusedTools: this.unusedTools,
       eventCount: this.events.length,
     };
@@ -538,6 +587,17 @@ export class AttackSession {
   }
 
   /* ── Internals ──────────────────────────────────────────────────────── */
+
+  /** The engine's per-id champion health, re-keyed by type for the save. */
+  private championsHpOf(battleState: BattleState | null): Record<number, number> {
+    const byType: Record<number, number> = {};
+    for (const t of this.championsFlung) {
+      const id = championByType(t);
+      const hp = id === undefined ? undefined : battleState?.championsHp[id];
+      byType[t] = hp ?? 0;
+    }
+    return byType;
+  }
 
   private requireLive(what: string): Battle {
     const battle = this.battle_;

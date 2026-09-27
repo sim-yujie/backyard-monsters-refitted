@@ -125,7 +125,7 @@ describe("AttackSession events and the fling log", () => {
     expect(session.state().phase).toBe("running");
   });
 
-  it("refuses more than is housed, an empty drop, and a second champion", () => {
+  it("refuses more than is housed, an empty drop, and the same champion twice", () => {
     const champion = { t: 1, hp: 100, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 };
     const session = sessionOf({
       roster: { monsters: { C1: 3 }, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0 },
@@ -138,7 +138,75 @@ describe("AttackSession events and the fling log", () => {
     expect(session.state().championAvailable).toBe(false);
     expect(() =>
       session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 1, l: 1 } }),
-    ).toThrow(/already flung/);
+    ).toThrow(/\(flung\)/);
+  });
+
+  describe("champions (Flash: one ordinary champion plus Krallen, UI_TOP.as:336-347)", () => {
+    const entry = (t: number, hp = 1000, status = 0) => ({
+      t,
+      hp,
+      l: 1,
+      ft: 0,
+      fd: 0,
+      fb: 0,
+      pl: 0,
+      status,
+    });
+    const withChampions = (...champions: ReturnType<typeof entry>[]): AttackSession => {
+      const session = sessionOf({
+        roster: { monsters: { C1: 3 }, levels: {}, champions, flingerLevel: 4, catapultLevel: 0 },
+      });
+      session.start();
+      return session;
+    };
+
+    it("sends Krallen after Fomor, each once, and reports both", () => {
+      const session = withChampions(entry(3), entry(5));
+      session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 3, l: 1 } });
+      expect(session.championBlock(3)).toBe("flung");
+      expect(session.championBlock(5)).toBeNull();
+      expect(session.state().championAvailable).toBe(true);
+
+      session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 5, l: 1 } });
+      expect(session.championBlock(5)).toBe("flung");
+      expect(session.state().championAvailable).toBe(false);
+      const hp = session.championsHpAfter();
+      expect(Object.keys(hp).map(Number).sort()).toEqual([3, 5]);
+      expect(hp[3]).toBeGreaterThan(0);
+      expect(hp[5]).toBeGreaterThan(0);
+      expect(session.state().championsHp).toEqual(hp);
+    });
+
+    it("sends Fomor after Krallen", () => {
+      const session = withChampions(entry(5), entry(3));
+      session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 5, l: 1 } });
+      expect(session.championBlock(3)).toBeNull();
+      session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 3, l: 1 } });
+      expect(session.state().championAvailable).toBe(false);
+    });
+
+    it("offers only the first healthy, active ordinary champion, before and after it goes", () => {
+      const session = withChampions(entry(1, 0), entry(3), entry(4), entry(5));
+      expect(session.championBlock(1)).toBe("hurt");
+      expect(session.championBlock(3)).toBeNull();
+      expect(session.championBlock(4)).toBe("oneChampion");
+      expect(() =>
+        session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 4, l: 1 } }),
+      ).toThrow(/oneChampion/);
+
+      session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 3, l: 1 } });
+      expect(session.championBlock(4)).toBe("oneChampion");
+      expect(session.championBlock(5)).toBeNull();
+    });
+
+    it("says why a champion cannot go: unknown, hurt or away", () => {
+      const session = withChampions(entry(2, 0), entry(5, 1000, 1));
+      expect(session.championBlock(9)).toBe("unknown");
+      expect(session.championBlock(2)).toBe("hurt");
+      expect(session.championBlock(5)).toBe("away");
+      expect(session.state().championAvailable).toBe(false);
+      expect(session.championsHpAfter()).toEqual({});
+    });
   });
 
   it("logs bombs and siege weapons at the current tick", () => {

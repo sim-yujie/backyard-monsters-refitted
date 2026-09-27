@@ -122,7 +122,7 @@ describe("buildAttackSave", () => {
     expect(payload.champion).toEqual(load.champion);
     expect(payload.attackerchampion).toHaveLength(1);
     expect(payload.attackerchampion![0]!.t).toBe(5);
-    expect(payload.attackerchampion![0]!.hp).toBe(Math.floor(session.championHpAfter()!));
+    expect(payload.attackerchampion![0]!.hp).toBe(Math.floor(session.championsHpAfter()[5]!));
     expect(payload.attackerchampion![0]!.hp).toBeGreaterThan(0);
 
     // 40 Pokeys and 5 Finks spent, first cell first.
@@ -254,7 +254,7 @@ describe("buildAttackSave", () => {
 
     // A retreat mid-battle likewise keeps what the champion had.
     const retreated = scriptedSession();
-    expect(retreated.championHpAfter()).toBeGreaterThan(0);
+    expect(retreated.championsHpAfter()[5]).toBeGreaterThan(0);
 
     // The champion alone against a ring of Sniper Towers dies, and the save says so.
     const ring: Record<string, unknown> = {};
@@ -274,7 +274,7 @@ describe("buildAttackSave", () => {
     play(died, 100);
     expect(died.state().creepsKilled).toBe(1);
     expect(died.state().endReason).toBe("exhausted");
-    expect(died.championHpAfter()).toBe(0);
+    expect(died.championsHpAfter()).toEqual({ 5: 0 });
     expect(buildAttackSave(died).attackerchampion![0]!.hp).toBe(0);
     expect(buildAttackSave(died).attackerchampion![1]).toBeUndefined();
   });
@@ -353,6 +353,7 @@ describe("the pieces", () => {
       elapsedSeconds: 6,
     });
     expect(summary.loot).toEqual(state.loot);
-    expect(summary.championHp).not.toBeNull();
+    expect(summary.champions).toHaveLength(1);
+    expect(summary.champions[0]!.t).toBe(5);
   });
 });

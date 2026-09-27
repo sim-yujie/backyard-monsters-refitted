@@ -1,6 +1,6 @@
 import { getSession } from "@/api/auth";
 import { bucketCost, dropRadius, flingerPayload, type Roster } from "@/game/combat/rules";
-import type { AttackSession } from "./AttackSession";
+import type { AttackSession, ChampionBlockReason } from "./AttackSession";
 
 /**
  * The bucket: what the next tap on the enemy yard will send
@@ -35,9 +35,12 @@ import type { AttackSession } from "./AttackSession";
  *
  * ## The champion
  *
- * One at most, by type. The pick is dropped by {@link afterDrop} because the
- * champion is then on the field, and {@link champion} answers null whenever the
- * session says none can be sent, so a stale pick never reaches the log.
+ * One per drop, by type. Across the attack the session allows one ordinary
+ * champion plus Krallen, each once (`AttackSession.championBlock`), so after
+ * Fomor is flung Krallen can still be picked for a later drop. The pick is
+ * dropped by {@link afterDrop} because the champion is then on the field, and
+ * {@link champion} answers null whenever the session says that champion
+ * cannot be sent, so a stale pick never reaches the log.
  *
  * ## Last army
  *
@@ -60,8 +63,10 @@ export interface BucketChampion {
   readonly hp: number;
   /** 0 active, 1 frozen, 2 juiced. Only 0 may be flung. */
   readonly status: number;
-  /** Healthy, active, and no champion has been flung yet. */
+  /** The session would take it now: `blocked` is null. */
   readonly available: boolean;
+  /** Why the session would refuse it, or null (`AttackSession.championBlock`). */
+  readonly blocked: ChampionBlockReason | null;
 }
 
 export interface BucketOptions {
@@ -277,14 +282,17 @@ export class Bucket {
 
   /** Every champion the attacker owns, in the save's order, with whether it can go. */
   champions(): readonly BucketChampion[] {
-    const canSend = this.session.championAvailable();
-    return this.session.target.roster.champions.map((entry) => ({
-      t: entry.t,
-      l: entry.l,
-      hp: entry.hp,
-      status: entry.status,
-      available: canSend && entry.hp > 0 && entry.status === 0,
-    }));
+    return this.session.target.roster.champions.map((entry) => {
+      const blocked = this.session.championBlock(entry.t);
+      return {
+        t: entry.t,
+        l: entry.l,
+        hp: entry.hp,
+        status: entry.status,
+        available: blocked === null,
+        blocked,
+      };
+    });
   }
 
   /**
@@ -399,7 +407,10 @@ export class Bucket {
 
   private signature(): string {
     const state = this.session.state();
-    return `${state.phase}|${state.championAvailable}|${JSON.stringify(state.remaining)}`;
+    const champions = this.session.target.roster.champions
+      .map((entry) => this.session.championBlock(entry.t) ?? "ok")
+      .join(",");
+    return `${state.phase}|${champions}|${JSON.stringify(state.remaining)}`;
   }
 
   private notify(): void {

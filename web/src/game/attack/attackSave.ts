@@ -95,30 +95,23 @@ export const buildingDataAfter = (
 
 /* ── Champions ──────────────────────────────────────────────────────────── */
 
-/** The champion sent with a fling, if one was. */
-const flungChampion = (events: readonly FlingEvent[]): { t: number; l: number } | null => {
-  for (const event of events) {
-    if (event.kind === "fling" && event.champion) return event.champion;
-  }
-  return null;
-};
-
 /**
- * `attackerchampion`: the attacker's own champions with the flung one's
- * health as the battle left it. The server overwrites `userSave.champion`
- * with this verbatim (`baseSave.ts`), so it is the whole list, or nothing at
- * all when the attacker has none.
+ * `attackerchampion`: the attacker's own champions, each flung one with its
+ * health as the battle left it. An attack may field an ordinary champion and
+ * Krallen (`AttackSession.championBlock`), so every entry is matched by type.
+ * The server overwrites `userSave.champion` with this verbatim
+ * (`baseSave.ts`), so it is the whole list, or nothing at all when the
+ * attacker has none.
  */
 export const attackerChampionsAfter = (
   champions: readonly ChampionSaveEntry[],
-  events: readonly FlingEvent[],
-  championHp: number | null,
+  championsHp: Readonly<Record<number, number>>,
 ): ChampionSaveEntry[] | undefined => {
   if (champions.length === 0) return undefined;
-  const flung = flungChampion(events);
   return champions.map((champion) => {
-    if (!flung || champion.t !== flung.t || championHp === null) return { ...champion };
-    return { ...champion, hp: Math.max(0, Math.floor(championHp)) };
+    const hp = championsHp[champion.t];
+    if (hp === undefined) return { ...champion };
+    return { ...champion, hp: Math.max(0, Math.floor(hp)) };
   });
 };
 
@@ -279,7 +272,7 @@ export const buildAttackSave = (
   const damage = Math.round(state.damagePercent * 100) / 100;
   const destroyed = derivedDestroyed(damage, session.target.kind);
   const { roster } = session.target;
-  const attackerchampion = attackerChampionsAfter(roster.champions, log.events, session.championHpAfter());
+  const attackerchampion = attackerChampionsAfter(roster.champions, session.championsHpAfter());
   const attackersiege = attackerSiegeAfter(roster.siege, log.events);
 
   const payload: AttackSavePayload = {
@@ -325,8 +318,8 @@ export interface AttackSummary {
   readonly loot: ResourceAmounts;
   readonly monstersSent: number;
   readonly monstersLost: number;
-  /** The champion's health at the end, or null when none was sent. */
-  readonly championHp: number | null;
+  /** Each champion sent, by type, with its health at the end; empty when none was. */
+  readonly champions: readonly { readonly t: number; readonly hp: number }[];
   readonly elapsedSeconds: number;
 }
 
@@ -374,7 +367,7 @@ export const summariseAttack = (session: AttackSession): AttackSummary => {
     loot: { ...state.loot },
     monstersSent: state.creepsFlung,
     monstersLost: state.creepsKilled,
-    championHp: session.championHpAfter(),
+    champions: Object.entries(session.championsHpAfter()).map(([t, hp]) => ({ t: Number(t), hp })),
     elapsedSeconds: state.elapsedSeconds,
   };
 };

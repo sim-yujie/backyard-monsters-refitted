@@ -203,9 +203,18 @@ export interface BattleState {
   /**
    * The champion's remaining health, or null when none was flung. Zero only
    * when it died; a champion that retreated or walked home keeps the health
-   * it left the field with.
+   * it left the field with. With two champions on the field this is whichever
+   * one the last step touched; {@link championsHp} keeps them apart.
    */
   readonly championHp: number | null;
+  /**
+   * Every flung champion's health, keyed by champion id (`G1`..`G5`), empty
+   * when none was flung. The same rule as {@link championHp}: zero only for a
+   * death. An attack may field one ordinary champion and Krallen together
+   * (`client/scripts/UI_TOP.as:336-347`), and `championHp` alone cannot tell
+   * the two apart, so a caller that writes champions back reads this.
+   */
+  readonly championsHp: Readonly<Record<string, number>>;
   readonly towers: readonly TowerReport[];
   /** Draws taken from the battle's random stream, a cheap divergence tripwire. */
   readonly rngDraws: number;
@@ -449,6 +458,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   let creepsFlung = 0;
   let creepsKilled = 0;
   let championHp: number | null = null;
+  const championsHp: Record<string, number> = {};
   let finished = false;
   let retreated = false;
 
@@ -744,6 +754,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
     championHp = creep.hp;
+    championsHp[id] = creep.hp;
     return creep;
   };
 
@@ -1179,10 +1190,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
           // Only a death zeroes the champion's health: one that retreated or
           // walked home keeps the health it left with, which the attack save
           // writes back verbatim as the attacker's champion.
-          if (creep.champion && creep.hp <= 0) championHp = 0;
+          if (creep.champion && creep.hp <= 0) {
+            championHp = 0;
+            championsHp[creep.monsterId] = 0;
+          }
           continue;
         }
-        if (creep.champion) championHp = creep.hp;
+        if (creep.champion) {
+          championHp = creep.hp;
+          championsHp[creep.monsterId] = creep.hp;
+        }
         creeps[write] = creep;
         write += 1;
       }
@@ -1255,6 +1272,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creepsAlive: creeps.filter((creep) => !creep.friendly && creep.hp > 0).length,
     creepsKilled,
     championHp,
+    championsHp: { ...championsHp },
     towers: towers.map((tower) => ({ ...tower.report })),
     rngDraws: rng.count(),
     over: finished,

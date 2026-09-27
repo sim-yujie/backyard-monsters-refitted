@@ -269,6 +269,31 @@ describe("Bucket champion", () => {
     expect(bucket.composition()).toEqual({ monsters: { C1: 4 } });
   });
 
+  it("lets Krallen go after Fomor has been dropped (#74), and names what blocks the rest", () => {
+    const session = sessionWith({ monsters: { C1: 10 }, champions: [champion(3, 2), champion(5, 1)] });
+    const bucket = new Bucket(session, { storage: null });
+    bucket.pickChampion(3);
+    session.appendFling({ x: 100, y: 100, ...bucket.composition() });
+    bucket.afterDrop();
+
+    expect(bucket.champions().map((entry) => [entry.t, entry.available, entry.blocked])).toEqual([
+      [3, false, "flung"],
+      [5, true, null],
+    ]);
+    bucket.pickChampion(5);
+    expect(bucket.champion()).toEqual({ t: 5, l: 1 });
+    expect(bucket.isEmpty()).toBe(false);
+  });
+
+  it("marks a second ordinary champion as blocked by the one-champion rule", () => {
+    const bucket = new Bucket(sessionWith({ champions: [champion(3, 2), champion(1, 1)] }), {
+      storage: null,
+    });
+    expect(bucket.champions().map((entry) => entry.blocked)).toEqual([null, "oneChampion"]);
+    bucket.pickChampion(1);
+    expect(bucket.champion()).toBeNull();
+  });
+
   it("refuses a hurt, frozen or unknown champion", () => {
     const bucket = new Bucket(
       sessionWith({ champions: [champion(1, 1, 0), champion(2, 1, 100, 1)] }),

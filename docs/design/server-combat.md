@@ -768,7 +768,7 @@ full on every save (a save is a snapshot, and the server keeps no partial state 
 | `x`, `y` | Yard units, the same space as `buildingdata.X/Y` | Inside the map; a fling centre may not overlap a building footprint (`DROPZONE.as:64`) |
 | `r` | Drop radius: `max(200, bucketTotal / 4) / 2` | Recomputed by the server from `monsters`; a mismatch is `malformed` |
 | `monsters` | Counts per id | Sum of `bucket[L] * count` at most the flinger capacity plus the Declare-War bonus (`ATTACK.as:589-598`); cumulative counts at most the roster in range |
-| `champion` | At most one per attack, `hp > 0` and normal status at attack start | — |
+| `champion` | At most one ordinary champion per attack, plus Krallen (type 5) alongside it, each flung once (`UI_TOP.as:336-347`, issue #74); `hp > 0` and normal status at attack start | — |
 | `bomb` | One per resource per attack, tier within `A.catapult`, cost within the attacker's pool at that tick | `ResourceBombs.as:301-315` |
 | `siege` | Quantity within `A.siege` | — |
 

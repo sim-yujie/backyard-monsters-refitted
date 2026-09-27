@@ -1,3 +1,4 @@
+import type { ChampionBlockReason } from "@/game/attack/AttackSession";
 import type { Bucket } from "@/game/attack/bucket";
 import { CHAMPION_PROPS, championByType } from "@/game/combat/rules";
 import { formatAmount } from "@/ui/format";
@@ -80,6 +81,33 @@ export const MONSTER_NAMES: Readonly<Record<string, string>> = {
 
 /** A monster's display name, or its id when the table has none. */
 export const monsterName = (id: string): string => MONSTER_NAMES[id] ?? id;
+
+/**
+ * The short reason a champion row cannot be picked, or "" when it can.
+ *
+ * `oneChampion` is Flash's rule that an attack takes one ordinary champion,
+ * with Krallen the only one allowed alongside it (`UI_TOP.as:336-347`); the
+ * note says so rather than leaving a greyed row unexplained (issue #74).
+ */
+export const championNote = (blocked: ChampionBlockReason | null): string => {
+  switch (blocked) {
+    case "hurt":
+      return "Hurt";
+    case "away":
+      return "Away";
+    case "flung":
+      return "Already sent";
+    case "oneChampion":
+      return "One champion per attack";
+    case "unknown":
+    case null:
+      return "";
+  }
+};
+
+/** The row's hover text when the one-champion rule greys it out. */
+export const ONE_CHAMPION_TITLE =
+  "An attack takes one champion. Krallen is the exception and can join any other champion.";
 
 /** A champion's display name from the stat table, or `G<t>`. */
 export const championName = (t: number): string => {
@@ -405,15 +433,8 @@ export class ArmyPanel {
       champion.input.checked = picked === champion.t;
       champion.element.classList.toggle("attack-army__champion--picked", picked === champion.t);
       champion.element.classList.toggle("attack-army__champion--unavailable", !available);
-      champion.note.textContent = !entry
-        ? ""
-        : entry.hp <= 0
-          ? "Hurt"
-          : entry.status !== 0
-            ? "Away"
-            : !entry.available
-              ? "On the field"
-              : "";
+      champion.note.textContent = entry ? championNote(entry.blocked) : "";
+      champion.element.title = entry?.blocked === "oneChampion" ? ONE_CHAMPION_TITLE : "";
     }
 
     this.hint.textContent = !live

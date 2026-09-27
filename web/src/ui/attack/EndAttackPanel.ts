@@ -1,4 +1,5 @@
 import type { AttackSummary } from "@/game/attack/attackSave";
+import { championName } from "@/ui/attack/ArmyPanel";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 
@@ -129,9 +130,11 @@ export class EndAttackPanel {
     stat(
       "Monsters lost",
       `${summary.monstersLost} of ${summary.monstersSent} sent`,
-      summary.championHp === null
+      summary.champions.length === 0
         ? undefined
-        : `Champion health left: ${Math.max(0, Math.floor(summary.championHp))}`,
+        : summary.champions
+            .map(({ t, hp }) => `${championName(t)} health left: ${Math.max(0, Math.floor(hp))}`)
+            .join("; "),
     );
 
     const loot = document.createElement("ul");

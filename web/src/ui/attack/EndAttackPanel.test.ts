@@ -21,7 +21,7 @@ const summary = (over: Partial<AttackSummary> = {}): AttackSummary => ({
   loot: { r1: 12_500, r2: 0, r3: 800, r4: 0 },
   monstersSent: 45,
   monstersLost: 9,
-  championHp: 41_000,
+  champions: [{ t: 5, hp: 41_000 }],
   elapsedSeconds: 140,
   ...over,
 });
@@ -54,6 +54,12 @@ describe("EndAttackPanel", () => {
     expect(loot).toEqual(["Twigs 12.5K", "Pebbles 0", "Putty 800", "Goo 0"]);
     expect(panel.panel.element.classList.contains("attack-end--win")).toBe(true);
     expect(panel.panel.element.getAttribute("aria-modal")).toBe("true");
+  });
+
+  it("names each champion sent with the health it has left", () => {
+    const { panel } = mountPanel({ champions: [{ t: 3, hp: 1200.7 }, { t: 5, hp: 0 }] });
+    const titled = [...panel.element.querySelectorAll<HTMLElement>("dd[title]")].map((dd) => dd.title);
+    expect(titled).toContain("Fomor health left: 1200; Krallen health left: 0");
   });
 
   it("opens saving, with Return to map disabled and no way out yet", () => {

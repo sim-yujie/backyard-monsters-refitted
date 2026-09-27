@@ -434,5 +434,21 @@ describe("the champion's health after the field is left (issue #32)", () => {
     run(battle, 80 * 100);
     expect(battle.state().creepsKilled).toBe(1);
     expect(battle.state().championHp).toBe(0);
+    expect(battle.state().championsHp).toEqual({ G5: 0 });
+  });
+
+  it("keeps each champion's health apart when an ordinary champion and Krallen both fight (#74)", () => {
+    const yard = yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 1 });
+    expect(battle.state().championsHp).toEqual({});
+    battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 200, monsters: {}, champion: { t: 3, l: 1 } });
+    run(battle, 200);
+    battle.apply({ kind: "fling", t: battle.tick, x: -100, y: -100, r: 200, monsters: {}, champion: { t: 5, l: 1 } });
+    run(battle, 200);
+    const hp = battle.state().championsHp;
+    expect(Object.keys(hp).sort()).toEqual(["G3", "G5"]);
+    expect(hp["G3"]).toBeGreaterThan(0);
+    expect(hp["G5"]).toBeGreaterThan(0);
+    expect(battle.creeps().filter((creep) => creep.champion)).toHaveLength(2);
   });
 });

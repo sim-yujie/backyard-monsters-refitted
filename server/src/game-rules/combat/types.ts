@@ -215,8 +215,10 @@ export type MonsterLevels = Readonly<Record<string, number>>;
 /**
  * The attacker's champion while it is on the field.
  *
- * At most one per attack (`docs/design/server-combat.md` §3.10), matched to the
- * stored entry by `t` and read at its stored level, never the reported one.
+ * An attack may field one ordinary champion plus Krallen (`docs/design/server-combat.md`
+ * §3.10, issue #74); this context carries one, which the damage bound will need
+ * to widen to both once the audit reads champions. Matched to the stored entry
+ * by `t` and read at its stored level, never the reported one.
  */
 export interface ChampionOnField {
   /** `G1`..`G5`, the id the stat table is keyed by. */

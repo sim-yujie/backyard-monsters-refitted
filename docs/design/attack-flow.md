@@ -326,11 +326,32 @@ whose housed count reaches zero shows 0 and stays disabled until, if ever, more 
 back into range. This is the direct opposite of `BucketAdd`'s silent refusal past a wall
 (`combat.md:337-339`): the wall is explained, not just hit.
 
-**Champion.** At most one may be chosen — the panel enforces this as a single-select control (a
-radio group, not checkboxes), matching the rule that only one champion may ever be on the field
-(`combat.md:341-348`, `types.ts:221-227`'s `ChampionOnField` comment: "at most one per attack"). No
-`Send`/`Hold` toggle is needed; picking a different champion simply replaces the choice, and a
-picked champion can be un-picked with the same control.
+**Champion.** One champion goes per drop — the panel enforces this as a single-select control (a
+radio group, not checkboxes). No `Send`/`Hold` toggle is needed; picking a different champion simply
+replaces the choice, and a picked champion can be un-picked with the same control.
+
+**Owner decision (2026-09-27, issue #74):** Krallen may be flung in the same attack as one other
+(regular) champion, in either order; the other champions stay limited to one regular champion per
+attack. This matches Flash, as below.
+
+Across the whole attack Flash allowed **one ordinary champion plus Krallen** (issue #74). The army
+list offered the first healthy, active ordinary champion in the save's order and skipped any other,
+logging "User is initializing combat with more than one normal champ.", while Krallen (type 5) was
+exempt from that check and always offered too (`client/scripts/UI_TOP.as:328-356`, the same rule in
+Map Room 3's attack popup at `com/monsters/maproom_advanced/PopupAttackA.as:264-285`). Each offered
+champion had its own `Send`, and once flung that button was disabled for good
+(`CHAMPIONBUTTON.as:65-70`, `CREEPS._flungGuardian`); the flags are cleared only when the attack is
+torn down (`CREEPS.as:353-355`), so a champion that died or retreated does not free its slot for
+another. `ATTACK.BucketAdd` itself never refused a champion (`ATTACK.as:586-600`). The Champion
+Chamber keeps this true at home as well: saving freezes every ordinary champion after the first
+active one, but never Krallen (`BASE.as:1169-1176`, `BASE.as:2827-2832`).
+
+So Fomor then Krallen, or Krallen then Fomor, are both legal, each once. The session enforces it
+(`AttackSession.championBlock`), and a row that cannot be picked says why: "Already sent", "Hurt",
+"Away", or "One champion per attack" for a second ordinary champion, with a hover note that Krallen
+is the exception. Flash could put both champions into one bucket; here they take two drops, because a
+fling event carries one champion (§3.10's log shape). The save writes each flung champion's own
+health back (`attackerchampion`), read from the engine's per-champion `championsHp`.
 
 **Last army.** A "load last army" action recalls the most recent composition sent in a *previous*
 attack, stored in `localStorage` under a per-player key, read and written through try/catch exactly

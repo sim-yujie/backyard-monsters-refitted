@@ -16,6 +16,7 @@ import {
   holdInterval,
   monsterName,
   championName,
+  ONE_CHAMPION_TITLE,
 } from "./ArmyPanel";
 
 /**
@@ -370,6 +371,42 @@ describe("ArmyPanel champion", () => {
     expect(fine?.disabled).toBe(false);
   });
 
+  it("keeps Krallen pickable after Fomor is dropped (#74)", () => {
+    const { panel, bucket, session } = mount();
+    const [krallen, fomor] = radios(panel);
+    if (!krallen || !fomor) throw new Error("two champions expected");
+    fomor.click();
+    session.appendFling({ x: 100, y: 100, ...bucket.composition() });
+    bucket.afterDrop();
+
+    const note = (radio: HTMLInputElement) =>
+      radio.closest("label")?.querySelector(".attack-army__note")?.textContent;
+    expect(fomor.disabled).toBe(true);
+    expect(note(fomor)).toBe("Already sent");
+    expect(krallen.disabled).toBe(false);
+    expect(note(krallen)).toBe("");
+    krallen.click();
+    expect(bucket.champion()).toEqual({ t: 5, l: 5 });
+
+    session.appendFling({ x: 100, y: 100, ...bucket.composition() });
+    bucket.afterDrop();
+    expect(krallen.disabled).toBe(true);
+    expect(note(krallen)).toBe("Already sent");
+  });
+
+  it("greys a second ordinary champion with the one-champion reason", () => {
+    const roster = sandboxRoster();
+    const fomor = roster.champions.find((entry) => entry.t === 3)!;
+    const { panel } = mount({ ...roster, champions: [fomor, { ...fomor, t: 1, l: 1 }] });
+    const [first, second] = radios(panel);
+    expect(first?.disabled).toBe(false);
+    expect(second?.disabled).toBe(true);
+    const label = second?.closest("label");
+    expect(label?.querySelector(".attack-army__note")?.textContent).toBe("One champion per attack");
+    expect(label?.title).toBe(ONE_CHAMPION_TITLE);
+    expect(label?.classList.contains("attack-army__champion--unavailable")).toBe(true);
+  });
+
   it("hides the group when the attacker owns no champion", () => {
     const { panel } = mount({ ...sandboxRoster(), champions: [] });
     expect(panel.element.querySelector<HTMLElement>(".attack-army__champions")?.hidden).toBe(true);
@@ -401,14 +438,16 @@ describe("ArmyPanel after a drop", () => {
     expect(control<HTMLButtonElement>(zafreeti, ".attack-army__step--plus").disabled).toBe(true);
     expect(control(zafreeti, ".attack-army__note").textContent).toBe("None left");
 
-    // The champion is on the field: un-picked and no longer pickable.
-    for (const radio of radios(panel)) {
-      expect(radio.checked).toBe(false);
-      expect(radio.disabled).toBe(true);
-    }
+    // Krallen is on the field: un-picked and no longer pickable. Fomor may
+    // still go, since Krallen does not take the one ordinary slot (#74).
+    const [sentKrallen, fomor] = radios(panel);
+    expect(sentKrallen?.checked).toBe(false);
+    expect(sentKrallen?.disabled).toBe(true);
     expect(krallen?.closest("label")?.querySelector(".attack-army__note")?.textContent).toBe(
-      "On the field",
+      "Already sent",
     );
+    expect(fomor?.disabled).toBe(false);
+    expect(fomor?.checked).toBe(false);
   });
 
   it("disables everything once the attack ends", () => {
