@@ -72,6 +72,7 @@ import { applyLayout } from "./controllers/yardplanner/applyLayout.js";
 import { upgradeWalls } from "./controllers/yardplanner/upgradeWalls.js";
 import { rearmTraps } from "./controllers/yardplanner/rearmTraps.js";
 import { layoutRoute } from "./controllers/yardplanner/layoutRoute.js";
+import { yardRoutes } from "./controllers/yard/index.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
@@ -185,6 +186,13 @@ router.post("/api/:apiVersion/bm/yardplanner/traps/rearm", apiVersion, verifyUse
 router.get("/api/:apiVersion/bm/yardplanner/gettemplates", apiVersion, verifyUserAuth, logRequest, getTemplates);
 router.post("/api/:apiVersion/bm/yardplanner/savetemplate", apiVersion, verifyUserAuth, logRequest, layoutRoute(saveTemplate));
 router.post("/api/:apiVersion/bm/yardplanner/deletetemplate", apiVersion, verifyUserAuth, logRequest, layoutRoute(deleteLayout));
+
+/**  ────────────────────────────────────────────────
+* 📦 Yard actions (server-authoritative, `controllers/yard/index.ts`)
+* ──────────────────────────────────────────────── */
+for (const { path, controller } of yardRoutes) {
+  router.post(`/api/:apiVersion/bm/yard/${path}`, apiVersion, verifyUserAuth, logRequest, controller);
+}
 
 /**  ────────────────────────────────────────────────
 * 📦 Leaderboards & Attack Logs

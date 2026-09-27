@@ -35,6 +35,7 @@ import { RESOURCE_KEYS } from "../../../services/base/updateResources.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
 import { clearExpiredStoreItems } from "../../../services/base/clearExpiredStoreItems.js";
 import { syncDerivedLevels } from "../../../services/yard/derivedLevels.js";
+import { catchUpOwnerYard } from "../../yard/yardRoute.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
 import { getChatChannel, getOrCreateChatToken } from "../../../chat/chatChannels.js";
 import { getAllianceData } from "../../../services/alliance/allianceData.js";
@@ -128,6 +129,13 @@ export const baseLoad: KoaController = async (ctx) => {
   const isOwner = user.userid === baseSave.userid;
   const isInferno = baseSave.type === BaseType.INFERNO;
   const isAttack = ATTACK_MODES.has(type);
+
+  // The owner opening their own main yard: finish whatever ended while they
+  // were away and write it, before anything below reads the yard
+  // (docs/design/yard-buildings.md §2.3).
+  if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
+    baseSave = await catchUpOwnerYard(baseSave);
+  }
 
   if (type === BaseMode.BUILD && mapversion === MapRoomVersion.V1) {
     userSave.level = calculateBaseLevel(userSave.points, userSave.basevalue);
