@@ -21,6 +21,8 @@ import { resourcesHandler } from "../base/save/handlers/resourceHandler.js";
 import { damageProtection } from "../../services/maproom/v2/damageProtection.js";
 import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers.js";
 import { visibleCredits } from "../../services/user/shinyLock.js";
+import { ownerSaveConfig } from "../../config/OwnerSaveConfig.js";
+import { requireOwnerSaveAllowed } from "../../services/base/ownerSave.js";
 
 export const infernoSave: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
@@ -55,6 +57,11 @@ export const infernoSave: KoaController = async (ctx) => {
     const isAttack = !isOwner && baseSave.attackid !== 0;
 
     if (!isOwner && baseSave.attackid === 0) throw permissionErr();
+
+    // This route writes any row by `basesaveid`, the caller's main yard
+    // included, so the retired owner save (issue #101) is refused here too.
+    // Inferno yards are not `main` and are unaffected.
+    requireOwnerSaveAllowed(ctx, user, baseSave, ownerSaveConfig.mode);
 
     const storedHealthData = baseSave.buildinghealthdata;
 

@@ -617,3 +617,19 @@ export const monsterTransferRejectedErr = (
     data: { rule, ...detail },
     isClientFriendly: false,
   });
+
+/**
+ * An owner `/base/save` of a main yard, refused because owner saves are retired
+ * (issue #101, `docs/design/yard-buildings.md` T1, `OWNER_SAVE_MODE=refuse`).
+ *
+ * A real `409`: there is no Flash client left to need the HTTP 200 rewrite the
+ * older save refusals use (D1), and the web client never sends this save. The
+ * `reason` says a retry will not help.
+ */
+export const ownerSaveRetiredErr = () =>
+  new ClientSafeError({
+    message: "Your yard is saved by the server now; this save was not applied. Reload your yard.",
+    status: Status.CONFLICT,
+    data: { reason: "ownerSaveRetired" },
+    isClientFriendly: true,
+  });

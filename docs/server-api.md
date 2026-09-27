@@ -191,7 +191,7 @@ on any of these four routes.
 | Method | Path | Middleware | Request fields | Response (`ctx.body`) | Description |
 |---|---|---|---|---|---|
 | POST | `/base/load` | verifyUserAuth, logRequest | `BaseLoadSchema`: `type` (a `BaseMode` value — see below), `userid` (accepted but unused by the handler), `baseid`, `mapversion?` (coerced number), `attackData?` (JSON string → `{champions?, monsters?}`), `attackcost?` (JSON string → `{resources?: number[], shiny?: number}`) | See "Base load/save response envelope" below | **The main "open a base" call.** `type` selects a mode handler: `build` (own yard, editable), `view`/`wmview` (someone else's yard, read-only), `attack`/`wmattack` (start an attack — runs every refusal first: protection, an attack already running, the defender being online, a truce, then range; only once all of them pass does it mint an `attackid`, lock the defender and log the attack, so a refused attack writes nothing), and Inferno equivalents `ibuild`/`iview`/`iattack`/`iwmattack`/`iwmview`/`idescent`. `attack`/`wmattack`/`iattack`/`iwmattack` require `ctx.meetsDiscordAgeCheck` (else `discordAgeErr()` 401) unless the target is a scripted MR1 tribe. Also used for Map Room 1's `/api/:apiVersion/bm/base/load` (identical controller, different mount). |
-| POST | `/base/save` | verifyUserAuth, logRequest | `BaseSaveSchema` (`baseid`, `basesaveid`→number, plus a long list of optional JSON-string fields — `purchase`, `champion`/`attackerchampion`, `buildingdata`, `buildinghealthdata`, `monsterupdate`, `attackloot`, `resources`, `monsters`, `attackcreatures`, `attackersiege`, `over`→number, `destroyed`→number, `attackid`) **and** every raw body key matching `Save.saveKeys` (own base) or `Save.attackSaveKeys` (attack) is separately JSON-parsed onto the entity — see "Save write keys" below | `{ error: 0, basesaveid, ...filteredSave, ...(takeoverData && { takeover: takeoverData }) }` | **The main "close/checkpoint a base" call.** Throws `permissionErr()` (403) if the caller neither owns the base nor is saving a base that carries a non-zero `attackid`. An attack save must additionally be the result of *this caller's* attack, or it is refused with `attackNotBoundErr()` — see "Attack session binding" below. Runs `scripts/anticheat/anticheat.ts`'s `validateSave` before applying anything. On `over` (attack finished) with damage ≥ 90%, triggers MR3 structure takeover (`takeoverCellMR3`) or destroys an MR3 tribe cell, and grants the defender fresh damage protection. Advances building timers to "now" using the pre-save health snapshot. **Non-attack owner saves of a `main`/`outpost` yard are also run through the economy audit** before any key is applied — see "Economy save validation" below; controlled by `ECONOMY_SAVE_VALIDATION` (`off`/`log`/`reject`, default `log`). |
+| POST | `/base/save` | verifyUserAuth, logRequest | `BaseSaveSchema` (`baseid`, `basesaveid`→number, plus a long list of optional JSON-string fields — `purchase`, `champion`/`attackerchampion`, `buildingdata`, `buildinghealthdata`, `monsterupdate`, `attackloot`, `resources`, `monsters`, `attackcreatures`, `attackersiege`, `over`→number, `destroyed`→number, `attackid`) **and** every raw body key matching `Save.saveKeys` (own base) or `Save.attackSaveKeys` (attack) is separately JSON-parsed onto the entity — see "Save write keys" below | `{ error: 0, basesaveid, ...filteredSave, ...(takeoverData && { takeover: takeoverData }) }` | **The main "close/checkpoint a base" call.** Throws `permissionErr()` (403) if the caller neither owns the base nor is saving a base that carries a non-zero `attackid`. **An owner save of the caller's `main` yard is refused** with `ownerSaveRetiredErr()` (409, `reason: "ownerSaveRetired"`) before anything else runs, unless `OWNER_SAVE_MODE=allow` — see "Owner saves retired" below; attack saves and outpost owner saves are unaffected, so in practice this route now carries attack results and outpost sessions only. An attack save must additionally be the result of *this caller's* attack, or it is refused with `attackNotBoundErr()` — see "Attack session binding" below. Runs `scripts/anticheat/anticheat.ts`'s `validateSave` before applying anything. On `over` (attack finished) with damage ≥ 90%, triggers MR3 structure takeover (`takeoverCellMR3`) or destroys an MR3 tribe cell, and grants the defender fresh damage protection. Advances building timers to "now" using the pre-save health snapshot. **Non-attack owner saves of an `outpost` yard (and of a `main` yard under `OWNER_SAVE_MODE=allow`) are also run through the economy audit** before any key is applied — see "Economy save validation" below; controlled by `ECONOMY_SAVE_VALIDATION` (`off`/`log`/`reject`, default `log`). |
 | POST | `/base/updatesaved` | verifyUserAuth, logRequest | inline schema: `type`, `version`, `lastupdate`, `baseid`, `mapversion`→number | `{ error: 0, flags, ...filteredSave, credits, ...(alliancedata && {alliancedata}), ...(powerups && {powerups}) }` | **Polling heartbeat**, called by the client roughly every 30 seconds while a base screen is open, to refresh timers/resources without a full `/base/load`. Does not accept any save data from the client — read-only refresh. |
 | POST | `/base/migrate` | verifyUserAuth, logRequest | `MigrateBaseSchema`: `type` (`BaseType`), `baseid`, `resources?` (JSON), `shiny?`→number | Three shapes depending on branch: cooldown active → `{ error: 0, cantMoveTill, currenttime }`; `type="random"` (empire overrun) → `{ error: 0 }`; normal migrate-to-outpost → `{ error: 0, coords: [x, y] }` | Relocates the player's home base. A 24-hour cooldown (`userSave.cantmovetill`) applies after any migration. `type="random"` leaves and rejoins a Map Room 2/3 world at a new random location (blocked if the player still owns outposts — `relocateOutpostErr()` 403). Otherwise it swaps the home cell onto a **captured outpost's** coordinates, deletes the old outpost cell/save, and charges the given `resources`/`shiny` (throws `shinyLockedErr()` 403 if shiny-locked and `shiny` is set). |
 
@@ -262,6 +262,43 @@ purchased quantity onto `save.storedata[itemKey].q`, sets/refreshes an expiry
 shiny (throws `shinyLockedErr()` 403 if the account is shiny-locked and the item isn't a shiny
 *gain* per `game-data/store/purchaseKeys.ts`'s `isShinyGain`).
 
+### Owner saves retired
+
+An owner `/base/save` writes `Save.saveKeys` onto the row close to verbatim — `storedata`,
+`buildingdata`, `champion` and the rest — which is how the Flash client banked everything it did
+in its own yard. There is no Flash client any more, and the web client never sends an owner save:
+its yard changes go through the server-authoritative action routes (Yard Planner, and the yard
+action routes of `docs/design/yard-buildings.md`), and its only `/base/save` is the attack result
+(`web/src/api/base.ts`, `saveAttack`). So an owner save of a **main** yard is refused
+(issue #101, `docs/design/yard-buildings.md` T1), controlled by `OWNER_SAVE_MODE`:
+
+- **`refuse`** (default; also what an absent or unknown value means, with a startup warning) —
+  the save is refused right after the ownership check, before the attack binding, `validateSave`,
+  the economy audit and any write, so the stored row is untouched. One `owner-save-refused` line
+  is logged with the caller.
+- **`allow`** — the save is applied as before. For debugging only.
+
+The rule is `services/base/ownerSave.ts`'s `isRetiredOwnerSave`: the caller owns the row and the
+row's `type` is `main`. Not refused, in either mode: attack saves (the caller is not the owner,
+including the resource-bomb charge of issue #90), outpost owner saves (left as they are until
+outposts are designed), Inferno yards and Map Room 1 tribe saves. The Inferno save route
+(`/api/:apiVersion/bm/base/save`) applies the same check, because it writes whatever row
+`basesaveid` names — the caller's main yard included.
+
+**Refusal shape.** A real HTTP **409** (`isClientFriendly: true`; there is no Flash client left
+to need the 200 rewrite):
+
+```json
+{
+  "error": "Your yard is saved by the server now; this save was not applied. Reload your yard.",
+  "errorDetails": {
+    "status": 409,
+    "data": { "reason": "ownerSaveRetired" },
+    "message": "Your yard is saved by the server now; this save was not applied. Reload your yard."
+  }
+}
+```
+
 ### Attack session binding
 
 A non-zero `attackid` on a base says only that *somebody* is attacking it. On its own that is
@@ -329,7 +366,8 @@ together, so the Inferno twin is left for a follow-up.
 ### Economy save validation
 
 Every non-attack owner save of a `main` or `outpost` yard is audited against the building cost
-table before any key is applied, controlled by the `ECONOMY_SAVE_VALIDATION` environment
+table before any key is applied (a `main` one only reaches the audit under
+`OWNER_SAVE_MODE=allow` — see "Owner saves retired"), controlled by the `ECONOMY_SAVE_VALIDATION` environment
 variable (`off` | `log` | `reject`, default `log`). The rule set, the reference-yard method
 (advancing the stored countdowns to "now" before comparing, so a countdown that merely ticked is
 never a violation) and the rollout plan are in
@@ -408,7 +446,7 @@ rejects, in any mode:
 |---|---|---|---|---|---|
 | POST | `/api/:apiVersion/bm/getnewmap` | apiVersion, verifyUserAuth, logRequest | none | If the user's home cell is on Map Room 3: `{ newmap: true, mapheaderurl, width: 500, height: 500 }`; else `{ newmap: false }` | Tells the client at startup whether to use the legacy (non-grid) map UI or the MR3 grid UI. |
 | POST | `/api/:apiVersion/bm/base/load` | apiVersion, verifyUserAuth, logRequest | same as `/base/load` | same as `/base/load` | Identical controller to `/base/load`, mounted under the MR1 API prefix. |
-| POST | `/api/:apiVersion/bm/base/save` | apiVersion, verifyUserAuth, logRequest | `BaseSaveSchema`, same as `/base/save` | If no `Save` row matches `basesaveid`: `{ error: 0, ...freshlyScaledMolochTribeBase }` (see §5 Game data — Inferno tribe templates). Otherwise: `{ error: 0, ...filteredSave, champion: [], credits }` (`champion` forced empty; `credits` via `visibleCredits`) | The **Inferno** equivalent of `/base/save`. A first save against a not-yet-materialized attack target hands back a freshly level-scaled "Moloch tribe" base to attack. Runs the same damage-protection and building-timer-advance logic as `/base/save`. |
+| POST | `/api/:apiVersion/bm/base/save` | apiVersion, verifyUserAuth, logRequest | `BaseSaveSchema`, same as `/base/save` | If no `Save` row matches `basesaveid`: `{ error: 0, ...freshlyScaledMolochTribeBase }` (see §5 Game data — Inferno tribe templates). Otherwise: `{ error: 0, ...filteredSave, champion: [], credits }` (`champion` forced empty; `credits` via `visibleCredits`) | The **Inferno** equivalent of `/base/save`. A first save against a not-yet-materialized attack target hands back a freshly level-scaled "Moloch tribe" base to attack. Runs the same damage-protection and building-timer-advance logic as `/base/save`, and the same owner-save refusal: an owner save naming the caller's `main` yard is refused with `ownerSaveRetiredErr()` (409) under `OWNER_SAVE_MODE=refuse` (see "Owner saves retired"); Inferno yards are unaffected. |
 | POST | `/api/:apiVersion/bm/base/updatesaved` | verifyUserAuth, logRequest | same inline schema as `/base/updatesaved` | same shape as `/base/updatesaved` | Same controller as `/base/updatesaved`. |
 | POST | `/api/:apiVersion/bm/base/infernomonsters` | apiVersion, verifyUserAuth, logRequest | `{ type: "get" \| "set", imonsters?: JSON string, default {} }` | `{ error: 0, imonsters }` | Gets or sets the player's Inferno monster cage/roster (`Save.monsters` on the Inferno save). `get` ignores whatever the client sent and returns the DB value; `set` persists and echoes back the client's value unchanged. |
 | POST | `/api/:apiVersion/bm/neighbours/get` | apiVersion, verifyUserAuth, logRequest | `{ type?: string }` (`"inferno"` selects the Inferno pool, anything else the MR1 overworld pool) | `{ error: 0, wmbases: [], bases: NeighbourData[] }` (`wmbases` always empty, kept for legacy compatibility); if the caller has no `save` at all: `{ error: 0, bases: [] }` (no `wmbases` key) | Returns a cached PvP matchmaking list of opponents (`Maproom.neighbors` / `InfernoMaproom.neighbors`, re-rolled every ~2 weeks once ≥10 candidates are found, else retried every 30 min). MR1/Inferno has **no coordinate grid** at all — there is no per-cell or viewport endpoint; browsing opponents means picking from this cached list. |

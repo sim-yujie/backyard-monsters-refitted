@@ -57,7 +57,9 @@
 #   - `docker compose up -d db redis` (from `server/`), so `bymr-database` is
 #     running with the seeded sandbox account.
 #   - The server running with the mode under test:
-#       cd server && ECONOMY_SAVE_VALIDATION=<mode> DEV_SANDBOX=true bun run dev
+#       cd server && OWNER_SAVE_MODE=allow ECONOMY_SAVE_VALIDATION=<mode> DEV_SANDBOX=true bun run dev
+#     Every save here is an owner save of a main yard, which the default
+#     OWNER_SAVE_MODE=refuse answers with 409 ownerSaveRetired (issue #101).
 #     This script does not — cannot — change a running server's mode; it only
 #     asserts against whatever mode the server was started with. Pass the
 #     *same* mode as this script's argument so the assertions match.

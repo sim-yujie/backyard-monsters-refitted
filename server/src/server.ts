@@ -22,6 +22,7 @@ import { startChatServer } from "./chat/chatServer.js";
 import { exitOnRedisReconnect } from "./utils/redisReconnectGuard.js";
 import { economyConfig, economyModeWasUnrecognised } from "./config/EconomyConfig.js";
 import { combatConfig, combatModeWasUnrecognised } from "./config/CombatConfig.js";
+import { ownerSaveConfig, ownerSaveModeWasUnrecognised } from "./config/OwnerSaveConfig.js";
 
 export const app = new Koa();
 app.proxy = true;
@@ -111,6 +112,15 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   }
 
   logger.info(`Combat save validation: ${combatConfig.mode}`);
+
+  if (ownerSaveModeWasUnrecognised) {
+    logger.warn(
+      "OWNER_SAVE_MODE is set to {requested}, which is not a mode - falling back to {mode}",
+      { requested: process.env.OWNER_SAVE_MODE, mode: ownerSaveConfig.mode }
+    );
+  }
+
+  logger.info(`Owner main-yard saves: ${ownerSaveConfig.mode}`);
 
   app.listen(PORT, () => {
     console.log(`

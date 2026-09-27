@@ -46,6 +46,8 @@ import {
   endAttackSession,
   readAttackSession,
 } from "../../../services/base/attackSessionStore.js";
+import { ownerSaveConfig } from "../../../config/OwnerSaveConfig.js";
+import { requireOwnerSaveAllowed } from "../../../services/base/ownerSave.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -83,6 +85,12 @@ export const baseSave: KoaController = async (ctx) => {
 
   // Not the owner and not in an attack
   if (!isOwner && baseSave.attackid === 0) throw permissionErr();
+
+  // Owner saves of a main yard are retired (issue #101): the yard changes
+  // through the server's action routes now, and this path would let a request
+  // overwrite it wholesale. Refused before anything else runs; attack saves
+  // and outpost owner saves pass. `OWNER_SAVE_MODE=allow` turns it back on.
+  requireOwnerSaveAllowed(ctx, user, baseSave, ownerSaveConfig.mode);
 
   const now = getCurrentDateTime();
 
