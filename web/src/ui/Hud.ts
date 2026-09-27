@@ -1,12 +1,13 @@
 import type { Resources } from "@/api/types";
 import { formatAmount } from "./format";
+import { RESOURCE_KEYS, resourceAmount, type ResourceKey } from "./resourceIcon";
 
 /**
  * The persistent top bar: resource readouts on the left, a scene switcher on
  * the right.
  *
- * The resource numbers are placeholders until the base load and area responses
- * are wired up; the four names match the server's `r1`..`r4` fields.
+ * Each readout is the resource's icon and its amount (issue #93); the icon
+ * carries the resource's name as its accessible name and tooltip.
  */
 
 export interface HudSceneOption {
@@ -20,21 +21,10 @@ export interface HudOptions {
   onSignOut?: () => void;
 }
 
-/**
- * `r1`..`r4` in the order the game has always shown them
- * (`docs/specs/base-building.md:569-574`).
- */
-const RESOURCE_LABELS: [keyof Resources, string][] = [
-  ["r1", "Twigs"],
-  ["r2", "Pebbles"],
-  ["r3", "Putty"],
-  ["r4", "Goo"],
-];
-
 export class Hud {
   readonly element: HTMLElement;
 
-  private readonly values = new Map<string, HTMLElement>();
+  private readonly values = new Map<ResourceKey, HTMLElement>();
   private readonly sceneButtons = new Map<string, HTMLButtonElement>();
 
   constructor(options: HudOptions) {
@@ -49,21 +39,17 @@ export class Hud {
     resources.className = "hud__resources";
     resources.setAttribute("aria-label", "Resources");
 
-    for (const [key, label] of [...RESOURCE_LABELS, ["shiny", "Shiny"] as const]) {
+    for (const key of [...RESOURCE_KEYS, "shiny"] as const) {
       const item = document.createElement("li");
       item.className = "hud__resource";
 
-      const name = document.createElement("span");
-      name.className = "hud__resource-name";
-      name.textContent = label;
+      const amount = resourceAmount(key, "—");
+      const value = amount.querySelector<HTMLElement>(".res-amount__value")!;
+      value.classList.add("hud__resource-value");
 
-      const value = document.createElement("span");
-      value.className = "hud__resource-value";
-      value.textContent = "—";
-
-      item.append(name, value);
+      item.append(amount);
       resources.append(item);
-      this.values.set(String(key), value);
+      this.values.set(key, value);
     }
 
     const spacer = document.createElement("div");
@@ -97,10 +83,10 @@ export class Hud {
 
   /** Updates the resource readouts. Missing keys are left as they were. */
   setResources(resources: Resources, shiny?: number): void {
-    for (const [key] of RESOURCE_LABELS) {
+    for (const key of RESOURCE_KEYS) {
       const amount = resources[key];
       if (amount === undefined) continue;
-      const node = this.values.get(String(key));
+      const node = this.values.get(key);
       if (node) node.textContent = formatAmount(amount);
     }
     if (shiny !== undefined) {

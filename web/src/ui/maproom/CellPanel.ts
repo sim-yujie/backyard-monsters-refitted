@@ -2,6 +2,7 @@ import { WATER_MAX_HEIGHT } from "@/config";
 import { CellType, isPlayerCell, isWaterCell, type MapCell, type Resources } from "@/api/types";
 import { HexGrid, type OffsetCell } from "@/game/HexGrid";
 import { Panel } from "@/ui/Panel";
+import { RESOURCE_KEYS, resourceIcon } from "@/ui/resourceIcon";
 import { TRIBE_COLOURS } from "@/game/maproom/cellVisuals";
 
 /**
@@ -285,20 +286,17 @@ export class CellPanel {
     }
   }
 
-  /** `r1`..`r4` in the order the game has always shown them (`docs/specs/base-building.md:569-574`). */
+  /**
+   * `r1`..`r4` in the order the game has always shown them
+   * (`docs/specs/base-building.md:569-574`), each headed by its icon (#93).
+   */
   private addResources(resources: Resources): void {
-    const names: [string, string][] = [
-      ["r1", "Twigs"],
-      ["r2", "Pebbles"],
-      ["r3", "Putty"],
-      ["r4", "Goo"],
-    ];
-    for (const [key, label] of names) {
+    for (const key of RESOURCE_KEYS) {
       const amount = resources[key];
       if (amount === undefined) continue;
       const max = resources[`${key}max`];
       this.add(
-        label,
+        resourceIcon(key),
         max === undefined
           ? amount.toLocaleString()
           : `${amount.toLocaleString()} / ${max.toLocaleString()}`,
@@ -312,9 +310,9 @@ export class CellPanel {
     this.swatch.style.background = colour;
   }
 
-  private add(label: string, value: string, className?: string): void {
+  private add(label: string | Node, value: string, className?: string): void {
     const term = document.createElement("dt");
-    term.textContent = label;
+    term.append(label);
     const definition = document.createElement("dd");
     definition.textContent = value;
     if (className) definition.className = className;

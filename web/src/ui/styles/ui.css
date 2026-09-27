@@ -243,6 +243,34 @@ body {
   box-shadow: var(--shadow-popup);
 }
 
+/* ── Resource icons (#93) ──────────────────────────────────────────────────
+ * `resourceIcon.ts` sets the art, its crop and the aspect ratio inline; the
+ * size follows the text around it, so one icon works in a HUD readout, a
+ * panel row and a sentence.
+ */
+.res-icon {
+  display: inline-block;
+  height: 1.3em;
+  background-repeat: no-repeat;
+  /* Sits on the text's baseline like a capital letter with a descender. */
+  vertical-align: -0.3em;
+}
+
+/* Inline rather than flex, so the amount shares the baseline of the text it
+   sits in: "Next step [icons], 15m 0s" reads as one line. */
+.res-amount {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.res-amount > .res-icon {
+  margin-right: 0.3em;
+}
+
+.res-list > .res-amount + .res-amount {
+  margin-left: 0.8em;
+}
+
 /* ── HUD ────────────────────────────────────────────────────────────────── */
 
 .hud {
@@ -280,16 +308,12 @@ body {
 
 .hud__resource {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
+  align-items: center;
   white-space: nowrap;
 }
 
-.hud__resource-name {
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--colour-text-muted);
+.hud__resource .res-icon {
+  height: 20px;
 }
 
 .hud__resource-value {

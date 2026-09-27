@@ -15,6 +15,7 @@ import { formatAmount } from "@/ui/format";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
+import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
 import { confirmPanel } from "@/ui/yard/PlannerDialogs";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
@@ -91,6 +92,8 @@ export class AttackScene implements Scene {
   private clock: HTMLElement | null = null;
   private damage: HTMLElement | null = null;
   private loot: HTMLElement | null = null;
+  /** The loot readout's four amounts, twigs to goo. */
+  private lootValues: HTMLElement[] = [];
   private hudSlot: HTMLElement | null = null;
   private speedButtons = new Map<1 | 2, HTMLButtonElement>();
   private retreatButton: HTMLButtonElement | null = null;
@@ -196,6 +199,7 @@ export class AttackScene implements Scene {
     this.clock = null;
     this.damage = null;
     this.loot = null;
+    this.lootValues = [];
     this.hudSlot = null;
     this.speedButtons.clear();
     this.retreatButton = null;
@@ -414,9 +418,17 @@ export class AttackScene implements Scene {
     damage.className = "attack-strip__readout";
     damage.textContent = "0% damage";
 
+    // "Loot" and one icon-and-amount per resource (#93).
     const loot = document.createElement("span");
     loot.className = "attack-strip__readout attack-strip__loot";
-    loot.textContent = "Loot 0 · 0 · 0 · 0";
+    const amounts = document.createElement("span");
+    amounts.className = "res-list";
+    this.lootValues = RESOURCE_KEYS.map((key) => {
+      const amount = resourceAmount(key, "0");
+      amounts.append(amount);
+      return amount.querySelector<HTMLElement>(".res-amount__value")!;
+    });
+    loot.append("Loot ", amounts);
 
     const spacer = document.createElement("span");
     spacer.className = "attack-strip__spacer";
@@ -543,8 +555,10 @@ export class AttackScene implements Scene {
     if (this.damage) this.damage.textContent = `${Math.floor(state.damagePercent)}% damage`;
     if (this.loot) {
       const { r1, r2, r3, r4 } = state.loot;
-      this.loot.textContent =
-        `Loot ${formatAmount(r1)} · ${formatAmount(r2)} · ${formatAmount(r3)} · ${formatAmount(r4)}`;
+      RESOURCE_KEYS.forEach((key, index) => {
+        const value = this.lootValues[index];
+        if (value) value.textContent = formatAmount(state.loot[key]);
+      });
       this.loot.title = `Twigs ${r1}, pebbles ${r2}, putty ${r3}, goo ${r4}`;
     }
     for (const [value, button] of this.speedButtons) {

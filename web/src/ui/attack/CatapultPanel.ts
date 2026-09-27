@@ -1,6 +1,7 @@
 import { BOMBS, type BombStats } from "@/game/combat/rules";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
+import { resourceIcon, resourceKeyOf } from "@/ui/resourceIcon";
 
 /**
  * The Catapult: resource bombs (`docs/design/attack-flow.md` §F4, §4.4;
@@ -196,19 +197,22 @@ export class CatapultPanel {
 
     const head = document.createElement("div");
     head.className = "attack-catapult__head";
+    // The row is headed by what it spends: the resource's icon and how much
+    // of it the attacker holds (#93), where it used to be the word and the
+    // amount at opposite ends.
     const title = document.createElement("h3");
     title.className = "attack-catapult__resource";
-    title.textContent = name;
+    const have = document.createElement("span");
+    have.className = "attack-catapult__have";
+    title.append(resourceIcon(resourceKeyOf(resource)), have);
+    head.append(title);
     if (resource === 3) {
       const badge = document.createElement("span");
       badge.className = "attack-picker__badge";
       badge.textContent = "no effect yet";
       badge.title = "The battle engine does not apply putty bombs yet; the drop is still logged.";
-      title.append(" ", badge);
+      head.append(badge);
     }
-    const have = document.createElement("span");
-    have.className = "attack-catapult__have";
-    head.append(title, have);
 
     const group = document.createElement("div");
     group.className = "attack-catapult__tiers";
@@ -296,11 +300,13 @@ export class CatapultPanel {
       const payable = have !== null && have >= bomb.cost;
 
       row.element.classList.toggle("attack-catapult__row--locked", !unlocked);
-      row.have.textContent = !unlocked
-        ? "Locked"
-        : have === null
-          ? ""
-          : `${formatAmount(have)} ${RESOURCE_NAMES[row.resource]?.toLowerCase() ?? ""}`;
+      row.have.textContent = !unlocked ? "Locked" : have === null ? "" : formatAmount(have);
+      row.have.title =
+        unlocked && have !== null
+          ? `You have ${Math.floor(have).toLocaleString("en-US")} ${
+              RESOURCE_NAMES[row.resource]?.toLowerCase() ?? ""
+            }`
+          : "";
 
       for (const segment of row.segments) {
         const affordable = have !== null && have >= segment.bomb.cost;

@@ -18,6 +18,7 @@ import { ladderFor, type Ladder, type LadderGate } from "@/game/yard/planner/upg
 import type { Yard, YardBuilding } from "@/game/yard/yardModel";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
+import { costAmounts, resourceIcon } from "@/ui/resourceIcon";
 import { costRows } from "./costRows";
 import { describeCost } from "./upgradeText";
 
@@ -72,8 +73,8 @@ import { describeCost } from "./upgradeText";
 
 /** One `dt`/`dd` pair of the single-building view. */
 interface FactRow {
-  readonly term: string;
-  readonly value: string;
+  readonly term: string | Node;
+  readonly value: string | Node;
   readonly className?: string;
 }
 
@@ -176,9 +177,9 @@ export class InspectorPanel {
       rows.push({ term: "Next level", value: `Health ${ladder.healthNext.toLocaleString()}` });
       rows.push({
         term: "Next step",
-        value: `${describeCost(stepAmounts(step))}, ${formatCountdown(step[4])}`,
+        value: withCost(stepAmounts(step), `, ${formatCountdown(step[4])}`),
       });
-      rows.push({ term: "Shiny", value: formatAmount(instantCost(step)) });
+      rows.push({ term: resourceIcon("shiny"), value: formatAmount(instantCost(step)) });
     }
 
     rows.push({ term: "Position", value: `${node.x}, ${node.y}` });
@@ -272,7 +273,10 @@ export class InspectorPanel {
     const from = Math.max(node.level, 1);
     const run = upgradeSteps(node.type, from, plan.level);
     const total = sumCosts(run);
-    line.textContent = `Planned: L${from} → L${plan.level}, ${run.length} ${run.length === 1 ? "step" : "steps"}, ${formatCountdown(total.time)}, ${describeCost(amounts(total))}.`;
+    line.replaceChildren(
+      `Planned: L${from} → L${plan.level}, ${run.length} ${run.length === 1 ? "step" : "steps"}, ${formatCountdown(total.time)}, `,
+      withCost(amounts(total), "."),
+    );
 
     const clear = document.createElement("button");
     clear.type = "button";
@@ -445,13 +449,20 @@ const factList = (rows: readonly FactRow[], className = "cell-facts"): HTMLEleme
   list.className = className;
   for (const row of rows) {
     const term = document.createElement("dt");
-    term.textContent = row.term;
+    term.append(row.term);
     const value = document.createElement("dd");
-    value.textContent = row.value;
+    value.append(row.value);
     if (row.className) value.className = row.className;
     list.append(term, value);
   }
   return list;
+};
+
+/** A cost as icons and amounts (#93), then `tail`, kept on one wrapping line. */
+const withCost = (cost: UpgradeCost, tail: string): HTMLElement => {
+  const span = document.createElement("span");
+  span.append(costAmounts(cost) ?? "nothing", tail);
+  return span;
 };
 
 /** The collapsed disclosure everything descriptive lives in. */

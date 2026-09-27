@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
+import { spokenText } from "@/ui/resourceIcon";
 import { BOMBS, type BombStats } from "@/game/combat/rules";
 import { CatapultPanel, defaultTier } from "./CatapultPanel";
 import { SiegePanel } from "./SiegePanel";
@@ -87,7 +88,11 @@ describe("CatapultPanel", () => {
     expect(tier(panel, "tw0").disabled).toBe(false);
     expect(tier(panel, "tw1").disabled).toBe(true);
     expect(tier(panel, "tw1").title).toContain("costs");
-    expect(row(panel, 1).textContent).toContain("50.0K twigs");
+    // The row is headed by the twig icon and what the attacker holds (#93).
+    expect(spokenText(row(panel, 1))).toContain("Twigs 50.0K");
+    expect(row(panel, 1).querySelector(".attack-catapult__have")?.getAttribute("title")).toBe(
+      "You have 50,000 twigs",
+    );
     expect(arm(panel, 2).disabled).toBe(true);
     expect(row(panel, 2).textContent).toContain("Already fired");
     panel.update(view({ pool: { r1: 5_000, r2: 0, r3: 0 } }));

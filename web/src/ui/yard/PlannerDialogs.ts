@@ -6,10 +6,11 @@ import { PlaceBlock, type PlaceCheck } from "@/game/yard/planner/plan";
 import { heldResources, isShort, shortfallOf, typeName } from "@/game/yard/planner/summary";
 import type { ApplyPreview } from "@/game/yard/planner/upgrades";
 import type { Yard } from "@/game/yard/yardModel";
-import { formatAmount, formatCountdown } from "@/ui/format";
+import { formatCountdown } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
+import { costAmounts } from "@/ui/resourceIcon";
 import { costRows } from "./costRows";
-import { describeCost, describeSkip, describeStep } from "./upgradeText";
+import { describeSkip, describeStep } from "./upgradeText";
 
 /**
  * The planner's small overlays: the pre-Apply checklist, the Apply dialog, the
@@ -323,15 +324,14 @@ export const applyPanel = (options: ApplyPanelOptions): Panel => {
     lists.replaceChildren(
       ...upgradeList(
         `${preview.started.length} ${preview.started.length === 1 ? "upgrade starts" : "upgrades start"} now`,
-        preview.started.map(
-          (row) =>
-            `${describeStep(row)} — ${describeCost(row.cost)}, ${formatCountdown(row.seconds)}`,
+        preview.started.map((row) =>
+          costLine(`${describeStep(row)} — `, row.cost, `, ${formatCountdown(row.seconds)}`),
         ),
         "start",
       ),
       ...upgradeList(
         `${preview.finished.length} ${preview.finished.length === 1 ? "finishes" : "finish"} at once`,
-        preview.finished.map((row) => `${describeStep(row)} — ${describeCost(row.cost)}`),
+        preview.finished.map((row) => costLine(`${describeStep(row)} — `, row.cost, "")),
         "finish",
       ),
       ...upgradeList(
@@ -359,10 +359,17 @@ export const applyPanel = (options: ApplyPanelOptions): Panel => {
   return panel;
 };
 
+/** "Cannon Tower L1 → L2 — <icons and amounts>, 15m 0s" (#93). */
+const costLine = (head: string, cost: UpgradeCost, tail: string): HTMLElement => {
+  const line = document.createElement("span");
+  line.append(head, costAmounts(cost) ?? "nothing", tail);
+  return line;
+};
+
 /** One titled list of report rows, or nothing at all when it is empty. */
 const upgradeList = (
   title: string,
-  rows: readonly string[],
+  rows: readonly (string | Node)[],
   kind: string,
 ): HTMLElement[] => {
   if (rows.length === 0) return [];
@@ -375,25 +382,18 @@ const upgradeList = (
   list.className = "planner-apply__list";
   for (const row of rows) {
     const item = document.createElement("li");
-    item.textContent = row;
+    item.append(row);
     list.append(item);
   }
   return [heading, list];
 };
 
-/** "Total deducted now: 21.0M twigs, 15.8M pebbles", one `dt`/`dd` pair. */
+/** "Total deducted now: <twigs> 21.0M <pebbles> 15.8M", one `dt`/`dd` pair. */
 const amountRows = (label: string, cost: UpgradeCost): HTMLElement[] => {
   const term = document.createElement("dt");
   term.textContent = label;
   const value = document.createElement("dd");
-  value.textContent = [
-    cost.r1 > 0 ? `${formatAmount(cost.r1)} twigs` : "",
-    cost.r2 > 0 ? `${formatAmount(cost.r2)} pebbles` : "",
-    cost.r3 > 0 ? `${formatAmount(cost.r3)} putty` : "",
-    cost.r4 > 0 ? `${formatAmount(cost.r4)} goo` : "",
-  ]
-    .filter(Boolean)
-    .join(", ") || "nothing";
+  value.append(costAmounts(cost) ?? "nothing");
   return [term, value];
 };
 

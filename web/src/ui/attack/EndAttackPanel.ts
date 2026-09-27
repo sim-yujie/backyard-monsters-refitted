@@ -1,6 +1,7 @@
 import type { AttackSummary } from "@/game/attack/attackSave";
 import { championName } from "@/ui/attack/ArmyPanel";
 import { formatAmount } from "@/ui/format";
+import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
 import { Panel } from "@/ui/Panel";
 
 /**
@@ -56,13 +57,6 @@ export const formatSpan = (seconds: number): string => {
   if (hours === 0) return `${Math.max(1, minutes)} min`;
   return minutes === 0 ? `${hours} h` : `${hours} h ${minutes} min`;
 };
-
-const RESOURCE_LABELS = [
-  ["r1", "Twigs"],
-  ["r2", "Pebbles"],
-  ["r3", "Putty"],
-  ["r4", "Goo"],
-] as const;
 
 const endReasonText = (summary: AttackSummary): string => {
   switch (summary.endReason) {
@@ -141,12 +135,12 @@ export class EndAttackPanel {
     const loot = document.createElement("ul");
     loot.className = "attack-end__loot";
     loot.setAttribute("aria-label", "Loot taken");
-    for (const [key, label] of RESOURCE_LABELS) {
+    for (const key of RESOURCE_KEYS) {
       const item = document.createElement("li");
       const amount = summary.loot[key];
       item.className = `attack-end__loot-item${amount > 0 ? "" : " attack-end__loot-item--none"}`;
-      item.textContent = `${label} ${formatAmount(amount)}`;
-      item.title = `${label}: ${Math.floor(amount)}`;
+      item.append(resourceAmount(key, formatAmount(amount)));
+      item.title = `${RESOURCE_NAMES[key]}: ${Math.floor(amount).toLocaleString("en-US")}`;
       loot.append(item);
     }
 

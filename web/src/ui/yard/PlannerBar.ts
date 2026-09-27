@@ -10,6 +10,7 @@ import type { YardWorkers } from "@/game/yard/yardModel";
 import { YardView } from "@/game/yard/YardRenderer";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { attachPopover } from "@/ui/Popover";
+import { RESOURCE_KEYS, RESOURCE_NAMES, resourceIcon } from "@/ui/resourceIcon";
 import { demo, GROUP_OP_DEMOS, type DemoName } from "./demos";
 
 /**
@@ -108,14 +109,6 @@ export interface PlannerBarActions {
   onHelp: () => void;
   onExit: () => void;
 }
-
-/** `r1`..`r4` as the spec names them (docs/specs/base-building.md:573). */
-const RESOURCE_LABELS: readonly (readonly [keyof SelectionSummary["needed"], string])[] = [
-  ["r1", "Twigs"],
-  ["r2", "Pebbles"],
-  ["r3", "Putty"],
-  ["r4", "Goo"],
-];
 
 const ZERO = { r1: 0, r2: 0, r3: 0, r4: 0 } as const;
 
@@ -363,13 +356,13 @@ class CostCell {
 
   private readonly value: HTMLElement;
 
-  constructor(label: string, className = "planner-cost__cell") {
+  constructor(label: string | Node, className = "planner-cost__cell") {
     this.element = document.createElement("span");
     this.element.className = className;
 
     const name = document.createElement("span");
     name.className = "planner-cost__label";
-    name.textContent = label;
+    name.append(label);
 
     this.value = document.createElement("span");
     this.value.className = "planner-cost__value";
@@ -607,14 +600,20 @@ export class PlannerBar {
     costs.setAttribute("role", "group");
     costs.setAttribute("aria-label", "What the selection would cost");
 
-    for (const [key, label] of RESOURCE_LABELS) {
-      const cell = new CostCell(label);
+    // Each resource cell and the shiny cell are headed by the icon (#93).
+    for (const key of RESOURCE_KEYS) {
+      // The cell's own tooltip names the resource and says more, so the
+      // icon keeps its name for a screen reader but not a tooltip of its own.
+      const cell = new CostCell(resourceIcon(key, { tooltip: false }));
       this.resourceCells.set(key, cell);
       costs.append(cell.element);
     }
 
     this.timeCell = new CostCell("Time", "planner-cost__cell planner-cost__cell--time");
-    this.shinyCell = new CostCell("Shiny", "planner-cost__cell planner-cost__cell--shiny");
+    this.shinyCell = new CostCell(
+      resourceIcon("shiny", { tooltip: false }),
+      "planner-cost__cell planner-cost__cell--shiny",
+    );
     this.workersCell = new CostCell("Workers", "planner-cost__cell planner-cost__cell--workers");
     // Nothing can be unplaced yet (phase 1 §1.3), so the cell starts hidden and
     // the store tool turns it on rather than adding it.
@@ -900,7 +899,8 @@ export class PlannerBar {
     shortfall: SelectionSummary["shortfall"],
     breakdown: string,
   ): void {
-    for (const [key, label] of RESOURCE_LABELS) {
+    for (const key of RESOURCE_KEYS) {
+      const label = RESOURCE_NAMES[key];
       const cell = this.resourceCells.get(key);
       if (!cell) continue;
       const short = shortfall[key];

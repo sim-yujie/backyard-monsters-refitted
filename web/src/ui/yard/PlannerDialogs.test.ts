@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
+import { spokenText } from "@/ui/resourceIcon";
 import { MissReason } from "@/game/yard/planner/layout";
 import type { ApplyPreview } from "@/game/yard/planner/upgrades";
 import {
@@ -97,12 +98,15 @@ describe("the Apply dialog", () => {
 
   it("totals what is deducted and what is left", () => {
     const { element } = mount();
-    const totals = element.querySelector(".planner-apply__totals")?.textContent ?? "";
+    const box = element.querySelector(".planner-apply__totals");
+    const totals = box ? spokenText(box) : "";
     expect(totals).toContain("Total deducted now");
-    expect(totals).toContain("10.0K twigs");
-    expect(totals).toContain("17.5K pebbles");
+    // Icons stand in for the words and still name the resource (#93).
+    expect(totals).toContain("Twigs 10.0K");
+    expect(totals).toContain("Pebbles 17.5K");
     expect(totals).toContain("You will have left");
-    expect(totals).toContain("90.0K twigs");
+    expect(totals).toContain("Twigs 90.0K");
+    expect(box?.textContent).not.toContain("twigs");
   });
 
   it("starts the upgrades by default, and drops the itemisation when told not to", () => {

@@ -230,6 +230,12 @@
   letter-spacing: 0.04em;
 }
 
+/* A resource cell is headed by its icon rather than its name (#93). */
+.planner-cost__label .res-icon {
+  display: block;
+  height: 16px;
+}
+
 .planner-cost__value {
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;

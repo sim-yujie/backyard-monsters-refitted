@@ -857,24 +857,27 @@
 
 .attack-catapult__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
 }
 
+/* The resource's icon and what the attacker holds of it (#93). */
 .attack-catapult__resource {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   margin: 0;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--colour-text-muted);
+}
+
+.attack-catapult__resource .res-icon {
+  height: 18px;
 }
 
 .attack-catapult__have {
-  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
-  color: var(--colour-text-muted);
 }
 
 .attack-catapult__tiers {

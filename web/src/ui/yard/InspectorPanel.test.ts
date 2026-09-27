@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
+import { spokenText } from "@/ui/resourceIcon";
 import type { BaseLoadResponse, BuildingData } from "@/api/types";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import { Plan } from "@/game/yard/planner/plan";
@@ -92,7 +93,7 @@ const facts = (element: HTMLElement): Record<string, string> => {
   const terms = [...element.querySelectorAll("dt")];
   for (const term of terms) {
     const value = term.nextElementSibling;
-    rows[term.textContent ?? ""] = value?.textContent ?? "";
+    rows[spokenText(term)] = value ? spokenText(value) : "";
   }
   return rows;
 };
@@ -109,7 +110,8 @@ const topFacts = (element: HTMLElement): Record<string, string> => {
   const rows: Record<string, string> = {};
   for (const term of element.querySelectorAll("dt")) {
     if (term.closest(".planner-inspector__details")) continue;
-    rows[term.textContent ?? ""] = term.nextElementSibling?.textContent ?? "";
+    const value = term.nextElementSibling;
+    rows[spokenText(term)] = value ? spokenText(value) : "";
   }
   return rows;
 };
@@ -162,9 +164,11 @@ describe("one building", () => {
     expect(rows["Level"]).toBe("1 of 10");
     expect(rows["Health"]).toBe("6,000");
     expect(rows["Next level"]).toBe("Health 9,000");
-    expect(rows["Next step"]).toContain("10.0K twigs");
-    expect(rows["Next step"]).toContain("7.5K pebbles");
-    expect(rows["Next step"]).toContain("2.5K putty");
+    // Each amount is drawn with its resource's icon, named for a screen reader (#93).
+    expect(rows["Next step"]).toContain("Twigs 10.0K");
+    expect(rows["Next step"]).toContain("Pebbles 7.5K");
+    expect(rows["Next step"]).toContain("Putty 2.5K");
+    expect(rows["Shiny"]).toBeDefined();
     expect(rows["Next step"]).toContain("15m 0s");
     expect(rows["Position"]).toBe("200, 0");
     expect(rows["Type id"]).toBe("20");
