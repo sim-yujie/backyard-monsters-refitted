@@ -17,6 +17,7 @@ import { ladderFor } from "@/game/yard/planner/upgrades";
 import { overCap as overCapOf } from "@/game/yard/storage";
 import { freeWorkers, holdsWorker, sharperToolsMultiplier } from "@/game/yard/workers";
 import type { Yard, YardBuilding, YardWorkers } from "@/game/yard/yardModel";
+import { BUNKER_TYPE } from "@/game/monsters/bunker";
 import { monstersTabFor, type MonstersTabId } from "@/ui/monsters/monstersTab";
 
 /**
@@ -154,8 +155,8 @@ export interface CancelOffer {
   readonly lost: UpgradeCost;
 }
 
-/** Which door a building opens: the world map, the layout planner, or the Monsters screen. */
-export type OpenTarget = "map" | "planner" | "monsters";
+/** Which door a building opens: the world map, the layout planner, the Monsters screen, or a bunker's controls. */
+export type OpenTarget = "map" | "planner" | "monsters" | "bunker";
 
 /** Everything the panel shows for a building on the player's own yard. */
 export interface PanelModel {
@@ -406,7 +407,9 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
         ? "planner"
         : monstersTab
           ? "monsters"
-          : null;
+          : building.type === BUNKER_TYPE && building.level > 0
+            ? "bunker"
+            : null;
   return {
     upgrade: upgrade && upgrade.gate?.reason !== "maxLevel" ? upgrade : null,
     maxed: upgrade?.gate?.reason === "maxLevel",

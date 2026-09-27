@@ -272,6 +272,29 @@ describe("BuildingPanel: the monster buildings", () => {
   });
 });
 
+describe("BuildingPanel: the Monster Bunker (§7.1)", () => {
+  it("Open bunker shows the bunker's controls under the actions, and Close bunker hides them", () => {
+    const { element } = setup([HALL, building(2, 22, 1, { m: { C1: 3 } })], 2, {
+      load: { monsters: { housed: { C2: 4 } } } as Partial<BaseLoadResponse>,
+    });
+    expect(element.querySelector(".bunker")).toBeNull();
+    buttonNamed(element, "Open bunker")!.click();
+    const bunker = element.querySelector(".bunker")!;
+    expect(bunker.querySelector(".bunker__figures")!.textContent).toBe("30 / 380 space used");
+    expect(buttonNamed(element, "Close bunker")!.getAttribute("aria-expanded")).toBe("true");
+    buttonNamed(element, "Close bunker")!.click();
+    expect(element.querySelector(".bunker")).toBeNull();
+    expect(buttonNamed(element, "Open bunker")).toBeDefined();
+  });
+
+  it("closes the bunker's controls when another building is shown", () => {
+    const { element, panel, store } = setup([HALL, building(2, 22, 1)], 2);
+    buttonNamed(element, "Open bunker")!.click();
+    panel.show(store.building(1)!);
+    expect(element.querySelector(".bunker")).toBeNull();
+  });
+});
+
 describe("BuildingPanel: a building under construction (§5.3)", () => {
   it("offers Cancel build, which asks once and calls build/cancel", () => {
     const fetch = vi.fn(() => new Promise<Response>(() => undefined));

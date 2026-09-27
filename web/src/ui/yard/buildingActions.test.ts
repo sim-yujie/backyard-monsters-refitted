@@ -337,6 +337,14 @@ describe("panelModel: which blocks each building gets", () => {
     expect(tabs).toEqual(["unlock", "hatch", "hatch", "housing", "train", "lab"]);
   });
 
+  it("a built Monster Bunker opens its own controls; one still being built does not", () => {
+    const context = contextOf({
+      buildings: [HALL(6), building(2, 22, 1), building(3, 22, 0, { cB: 600 })],
+    });
+    expect(panelModel(pick(context, 2), context)).toMatchObject({ open: "bunker", monstersTab: null });
+    expect(panelModel(pick(context, 3), context).open).toBeNull();
+  });
+
   it("no other building names a Monsters tab", () => {
     const context = contextOf({ buildings: [HALL(6), building(2, 20, 4), building(3, 11, 1)] });
     for (const id of [2, 3]) expect(panelModel(pick(context, id), context).monstersTab).toBeNull();

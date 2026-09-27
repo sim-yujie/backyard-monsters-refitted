@@ -34,6 +34,7 @@ import {
   type UpgradeOffer,
 } from "./buildingActions";
 import { buildingInfo, type InfoValue } from "./buildingInfo";
+import { BunkerPanel } from "./BunkerPanel";
 import { RepairBlock } from "./RepairBlock";
 import { ShinyButton } from "./ShinyButton";
 import { describeSeconds } from "./upgradeText";
@@ -133,6 +134,9 @@ export class BuildingPanel {
   private readonly info: HTMLDListElement;
   private readonly unlocks: HTMLElement;
   private readonly actions: HTMLElement;
+  /** Holds a Monster Bunker's controls while they are open (`BunkerPanel.ts`). */
+  private readonly bunkerSlot: HTMLElement;
+  private bunker: BunkerPanel | null = null;
   private readonly status: HTMLElement;
   private readonly details: HTMLDetailsElement;
   private readonly facts: HTMLDListElement;
@@ -188,6 +192,10 @@ export class BuildingPanel {
     this.actions = document.createElement("div");
     this.actions.className = "building-panel__actions";
 
+    this.bunkerSlot = document.createElement("div");
+    this.bunkerSlot.className = "building-panel__bunker";
+    this.bunkerSlot.hidden = true;
+
     this.status = document.createElement("p");
     this.status.className = "building-panel__status";
     this.status.setAttribute("role", "status");
@@ -207,6 +215,7 @@ export class BuildingPanel {
       this.info,
       this.unlocks,
       this.actions,
+      this.bunkerSlot,
       this.status,
       this.details,
     );
@@ -231,6 +240,7 @@ export class BuildingPanel {
       // A different building's Shiny buttons are no use and may be armed.
       for (const button of this.shiny.values()) button.destroy();
       this.shiny.clear();
+      this.closeBunker();
     }
     this.building = building;
     this.panel.setTitle(
@@ -280,6 +290,7 @@ export class BuildingPanel {
     this.setKind(building);
     this.renderInfo(building);
     this.renderActions(building);
+    this.bunker?.show();
     this.renderDetails(building);
   }
 
@@ -386,6 +397,13 @@ export class BuildingPanel {
         wrap.append(button, gateText(model.openBlocked));
         return wrap;
       }
+      return button;
+    }
+    if (model?.open === "bunker" && this.yard) {
+      const open = this.bunker !== null;
+      const button = actionButton(open ? "Close bunker" : "Open bunker", () => this.toggleBunker(), "btn--primary");
+      button.classList.add("building-panel__planner");
+      button.setAttribute("aria-expanded", String(open));
       return button;
     }
     const scene = this.yard?.scene;
@@ -750,6 +768,7 @@ export class BuildingPanel {
   private syncPending(): void {
     const store = this.yard?.store;
     if (!store) return;
+    this.bunker?.syncPending();
     for (const { key, button } of this.pendingButtons) {
       const running = store.isRunning(key);
       if (button instanceof ShinyButton) {
@@ -891,7 +910,29 @@ export class BuildingPanel {
     this.status.replaceChildren(...status.content);
   }
 
+  /** Opens or closes the bunker's controls under the actions. */
+  private toggleBunker(): void {
+    const building = this.building;
+    const store = this.yard?.store;
+    if (this.bunker || !building || !store) {
+      this.closeBunker();
+    } else {
+      this.bunker = new BunkerPanel({ store, bunkerId: building.id });
+      this.bunkerSlot.append(this.bunker.element);
+      this.bunkerSlot.hidden = false;
+    }
+    this.render();
+    if (this.bunker) this.bunker.element.querySelector<HTMLElement>("[role=radio][aria-checked=true]")?.focus();
+  }
+
+  private closeBunker(): void {
+    this.bunker?.destroy();
+    this.bunker = null;
+    this.bunkerSlot.hidden = true;
+  }
+
   private dispose(): void {
+    this.closeBunker();
     this.unsubscribe?.();
     for (const button of this.shiny.values()) button.destroy();
     this.shiny.clear();
