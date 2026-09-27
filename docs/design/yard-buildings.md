@@ -470,6 +470,34 @@ server; `server/src/game-data/stats/monsterStats.ts:24-31`). The generator appli
 C16, C17 and C19 are written `blocked: false`; C18 stays hidden (spawned by C17, `fake: true`,
 `dependent: "C17"`, MH §2.1) and C200 stays excluded.
 
+**As built (WP2.1, issue #102).** `npm run gen:monster-catalogue` from `web/` writes the two files
+byte for byte identical; `--check` compares without writing, and a sync test in each suite fails
+if the copies differ. Exports (both copies): types `PaidStep`, `MonsterEntry`, `LabAbility`; data
+`MONSTER_CATALOGUE` (C1–C19), `LAB_ABILITIES` (ten, lab order), `LISTED_MONSTERS`; helpers
+`monsterEntry`, `labAbility`, `isListed`, `compareListOrder`, `atLevel`, `hatchCost`, `hatchTime`,
+`housingSpace`, `maxTrainingLevel`, `trainingStep`, `labStep`. What differed from the plan above:
+
+- **List order is `page` + `order`, not `page`/`index`.** The locker shows one page at a time
+  sorted by `order` (`client/scripts/CREATURELOCKERPOPUP.as:113-120`); `index` is the hatchery
+  and housing sort key (`CREATURELOCKER.as:1240`, `HOUSING.as:288`). The catalogue carries all
+  three.
+- **`index` is not unique:** C9 and C17 are both 10 (`CREATURELOCKER.as:301`, `:518`), which the
+  original never hit because C17 was blocked. `compareListOrder` breaks the tie by locker slot
+  (C9 first); `LISTED_MONSTERS` is already sorted that way.
+- **Rezghul has no locker slot in the source** (`page: 0`, `order: 0`, `CREATURELOCKER.as:571-573`),
+  so un-blocking alone would never show it in a paged locker. The generator places it at page 4,
+  order 4, the one free slot (after D.A.V.E.; pages 2 and 3 are full at five). New, not original.
+- **C18 is a row, not an omission:** `blocked: true`, `spawnedBy: "C17"`, so a lookup of the spawned
+  child still resolves; it is never listed. The string table has no blurb for it (description `""`).
+- **Names come from `server/public/gamestage/assets/english.json`**, the live string table; the
+  archived `en.v612.txt` other generators read has no C16–C19 names and no lab strings. The game's
+  own spellings are "Octo-ooze" and "Eye-ra" (MH §2.1 writes "Octo-Ooze", "Eye-Ra").
+  Descriptions keep the original `<br>`/`<b>` markup.
+- **Lab names:** each ability's `name` is its string-table title ("Teleportation", "Claws", …); the
+  Flash `ability` field ("Blink Range") is kept as `effectLabel`, the text printed after the value.
+- Every unlock, training and hatch number agrees with `server/src/game-data/stats/monsterStats.ts`
+  for all 19 monsters; the server test keeps that true.
+
 ### 4.3 Unlock tab (Monster Locker)
 
 ```
