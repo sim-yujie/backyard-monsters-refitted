@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { bucketCost, createBattle, dropRadius, flingerPayload } from "./engine.js";
+import {
+  bucketCost,
+  createBattle,
+  dropRadius,
+  flingerPayload,
+  type BattleVisualEvent,
+} from "./engine.js";
 import { digestOf } from "./digest.js";
 import { buildEngineYard } from "./yard.js";
 import type { CombatBuildingDataMap } from "./types.js";
@@ -273,7 +279,7 @@ describe("the renderer's view of the field (issue #32, WP5)", () => {
           shots += 1;
           expect(event.towerId).toBe(1);
           expect(event.creepId).toBe(1);
-        } else {
+        } else if (event.kind === "death") {
           deaths += 1;
           expect(event.creepId).toBe(1);
           expect(event.monsterId).toBe("C1");
@@ -285,6 +291,67 @@ describe("the renderer's view of the field (issue #32, WP5)", () => {
     expect(shots).toBe(battle.state().towers[0]?.shots);
     expect(shots).toBe(10);
     expect(deaths).toBe(1);
+  });
+
+  it("reports each swing that lands as a hit, and each wound as a hurt", () => {
+    const yard = yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 1 });
+    battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 200, monsters: { C1: 1 } });
+    const events: BattleVisualEvent[] = [];
+    let seen = 0;
+    for (let step = 0; step < 1200; step += 1) {
+      battle.step();
+      if (step % 5 !== 0) continue;
+      events.push(...battle.recentEvents(seen));
+      seen = battle.tick;
+    }
+    const hits = events.filter((event) => event.kind === "hit");
+    const hurts = events.filter((event) => event.kind === "hurt");
+    // The Pokey got eight swings in before it died, 60 a swing, on foot, at
+    // the tower it was standing on.
+    expect(hits).toHaveLength(8);
+    for (const hit of hits) {
+      if (hit.kind !== "hit") throw new Error("filtered");
+      expect(hit.creepId).toBe(1);
+      expect(hit.buildingId).toBe(1);
+      expect(hit.creepTargetId).toBe(-1);
+      expect(hit.ranged).toBe(false);
+      expect(hit.flying).toBe(false);
+      expect(hit.amount).toBe(60);
+      expect(hit.targetIx).toBe(0);
+      expect(hit.targetIy).toBe(0);
+    }
+    // Ten shots of 20, each one a wound with the Pokey's position that tick.
+    expect(hurts).toHaveLength(10);
+    for (const hurt of hurts) {
+      if (hurt.kind !== "hurt") throw new Error("filtered");
+      expect(hurt.creepId).toBe(1);
+      expect(hurt.friendly).toBe(false);
+      expect(hurt.amount).toBe(20);
+      expect(Number.isFinite(hurt.ix)).toBe(true);
+    }
+    // Hits and hurts come with a tick, in tick order, like every other event.
+    for (let index = 1; index < events.length; index += 1) {
+      expect(events[index]!.tick).toBeGreaterThanOrEqual(events[index - 1]!.tick);
+    }
+  });
+
+  it("keeps hits and hurts out of the checkpoint", () => {
+    const yard = yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 1 });
+    battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 200, monsters: { C1: 1 } });
+    run(battle, 400);
+    expect(battle.recentEvents(0).some((event) => event.kind === "hit")).toBe(true);
+    expect(battle.recentEvents(0).some((event) => event.kind === "hurt")).toBe(true);
+    // One tick, four numbers per building, five per creep, twelve totals: the
+    // checkpoint is exactly as long with a hundred visual events behind it as
+    // it would be with none, and the digest is over those numbers alone.
+    const creeps = battle.creeps().length;
+    expect(battle.checkpoint()).toHaveLength(1 + 4 * yard.buildings.length + 5 * creeps + 12);
+    const again = createBattle(yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } }), { seed: 1 });
+    again.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 200, monsters: { C1: 1 } });
+    run(again, 400);
+    expect(digestOf(battle.checkpoint())).toBe(digestOf(again.checkpoint()));
   });
 
   it("forgets events older than the memory window", () => {

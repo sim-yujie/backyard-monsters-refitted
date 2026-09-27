@@ -242,7 +242,8 @@ export interface CreepSnapshot {
 }
 
 /**
- * Something the renderer draws a moment for: a tower firing, a creep dying.
+ * Something the renderer draws a moment for: a tower firing, a creep
+ * swinging, a creep taking damage, a creep dying.
  *
  * Kept for {@link VISUAL_MEMORY_TICKS} ticks and read back through
  * {@link Battle.recentEvents}; never folded into the checkpoint.
@@ -256,6 +257,39 @@ export type BattleVisualEvent =
       /** Where the shot landed: the creep's isometric position that tick. */
       readonly ix: number;
       readonly iy: number;
+    }
+  | {
+      /** A creep landed a swing on a building or on another creep. */
+      readonly kind: "hit";
+      readonly tick: number;
+      readonly creepId: number;
+      /** The building struck, or -1 when the quarry was a creep. */
+      readonly buildingId: number;
+      /** The creep struck, or -1 when the target was a building. */
+      readonly creepTargetId: number;
+      /** The attacker's isometric position that tick. */
+      readonly ix: number;
+      readonly iy: number;
+      /** The target's isometric position: a creep's spot, or a building's anchor. */
+      readonly targetIx: number;
+      readonly targetIy: number;
+      /** True when the creep fights from range (`range > 1`): a projectile, not a bite. */
+      readonly ranged: boolean;
+      readonly flying: boolean;
+      /** Health the swing took off, after fortification; 0 when it hit nothing. */
+      readonly amount: number;
+    }
+  | {
+      /** A creep lost health: a tower shot, splash, a trap, or another creep. */
+      readonly kind: "hurt";
+      readonly tick: number;
+      readonly creepId: number;
+      readonly friendly: boolean;
+      /** The creep's isometric position that tick. */
+      readonly ix: number;
+      readonly iy: number;
+      /** Health actually taken, capped at what the creep had left. */
+      readonly amount: number;
     }
   | {
       readonly kind: "death";
@@ -293,7 +327,7 @@ export interface Battle {
    */
   creeps(): readonly CreepSnapshot[];
   /**
-   * The shots and deaths after `sinceTick`, oldest first. Only the last
+   * The shots, hits, hurts and deaths after `sinceTick`, oldest first. Only the last
    * {@link VISUAL_MEMORY_TICKS} ticks are kept, so a caller that reads every
    * frame sees everything and one that does not sees the recent past.
    */
@@ -404,7 +438,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const bunkers: Bunker[] = [];
   const firedTraps: number[] = [];
   const destroyedIds: number[] = [];
-  /** Shots and deaths for the renderer, pruned each step; not simulation state. */
+  /** Shots, hits, hurts and deaths for the renderer, pruned each step; not simulation state. */
   const visual: BattleVisualEvent[] = [];
 
   const loot: ResourceAmounts = { r1: 0, r2: 0, r3: 0, r4: 0 };
@@ -571,6 +605,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const damageCreep = (creep: Creep, raw: number): number => {
     if (creep.hp <= 0) return 0;
     const applied = Math.min(raw, creep.hp);
+    if (applied > 0) {
+      visual.push({
+        kind: "hurt",
+        tick,
+        creepId: creep.id,
+        friendly: creep.friendly,
+        ix: creep.ix,
+        iy: creep.iy,
+        amount: applied,
+      });
+    }
     creep.hp -= raw;
     if (creep.hp <= 0) {
       creep.hp = 0;
@@ -798,6 +843,27 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     return true;
   };
 
+  /**
+   * The renderer's note of a swing that connected: a lunge or a projectile at
+   * the attacker's end, a flash at the target's. Not simulation state.
+   */
+  const recordHit = (creep: Creep, targetIx: number, targetIy: number, amount: number): void => {
+    visual.push({
+      kind: "hit",
+      tick,
+      creepId: creep.id,
+      buildingId: creep.targetCreep >= 0 ? -1 : creep.targetBuilding,
+      creepTargetId: creep.targetCreep,
+      ix: creep.ix,
+      iy: creep.iy,
+      targetIx,
+      targetIy,
+      ranged: creep.range > 1,
+      flying: creep.flying,
+      amount,
+    });
+  };
+
   /** One swing, with the specialist multipliers of `CreepBase.as:884-894`. */
   const swing = (creep: Creep): void => {
     const target = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
@@ -807,12 +873,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     if (creep.targetCreep >= 0) {
       const other = byCreepId.get(creep.targetCreep);
-      if (other && other.hp > 0) damageCreep(other, creep.damage);
+      if (other && other.hp > 0) {
+        recordHit(creep, other.ix, other.iy, damageCreep(other, creep.damage));
+      }
       return;
     }
     if (!target || target.hp <= 0) return;
     const multiplier = specialistMultiplier(creep.targetGroup, target.kind);
-    damageBuilding(target, creep.damage * multiplier, creep);
+    recordHit(creep, target.x, target.y, damageBuilding(target, creep.damage * multiplier, creep));
   };
 
   /** Eye-ra's blast: radius 60 in cartesian, linear in the squared distance. */
