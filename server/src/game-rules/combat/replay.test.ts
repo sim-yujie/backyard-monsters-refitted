@@ -43,6 +43,15 @@ interface Fixture {
 
 const read = (path: string): any => JSON.parse(readFileSync(path, "utf8"));
 
+// The largest fixture replays in about a second on an idle machine; Bun's
+// 5 s default per test is a wall-clock watchdog a busy machine can blow
+// through with nothing wrong with the replay (issue #141).
+const REPLAY_TIMEOUT_MS = 30_000;
+
+// Three runs of the busiest fixture, measured on CPU time, under the same
+// generous watchdog `bench.test.ts` gives its three runs on the web side.
+const DEADLINE_TEST_TIMEOUT_MS = 120_000;
+
 const names = readdirSync(FIXTURE_DIR)
   .filter((file) => file.endsWith(".json"))
   .sort();
@@ -98,20 +107,51 @@ describe("golden replays under Bun", () => {
   });
 
   for (const file of names) {
-    test(`${file} reproduces its committed outcome`, () => {
-      const fixture = read(`${FIXTURE_DIR}${file}`) as Fixture;
-      const outcome = replayAttack(inputOf(fixture));
-      expect(actualOf(outcome)).toEqual(fixture.expected as any);
-    });
+    test(
+      `${file} reproduces its committed outcome`,
+      () => {
+        const fixture = read(`${FIXTURE_DIR}${file}`) as Fixture;
+        const outcome = replayAttack(inputOf(fixture));
+        expect(actualOf(outcome)).toEqual(fixture.expected as any);
+      },
+      REPLAY_TIMEOUT_MS,
+    );
   }
 
-  test("the busiest replay stays inside the 5 s deadline of §3.5", () => {
-    const fixture = read(`${FIXTURE_DIR}mixed-waves.json`) as Fixture;
-    const started = Bun.nanoseconds();
-    const outcome = replayAttack(inputOf(fixture));
-    const elapsed = (Bun.nanoseconds() - started) / 1e6;
-    expect(outcome.ticks).toBeGreaterThan(0);
-    // The budget is 500 ms median; this guards the cliff, not the target.
-    expect(elapsed).toBeLessThan(5000);
-  });
+  /**
+   * The deadline is on the replay's own work, so this measures CPU time.
+   *
+   * Wall-clock time also counts the time the process sits preempted by
+   * unrelated work: with several test suites, Vite servers and agents running
+   * at once, it went past 5 s with the replay itself unchanged (issue #141,
+   * as `web/src/game/combat/rules/bench.test.ts` found in #140). CPU time
+   * does not, and on an idle machine it is close to the wall-clock figure, so
+   * a replay that really slowed down past the deadline still fails. The median
+   * of three runs keeps one stall from deciding it.
+   */
+  test(
+    "the busiest replay stays inside the 5 s deadline of §3.5",
+    () => {
+      const fixture = read(`${FIXTURE_DIR}mixed-waves.json`) as Fixture;
+      const runs: { wallMs: number; cpuMs: number }[] = [];
+      for (let run = 0; run < 3; run += 1) {
+        const startedCpu = process.cpuUsage();
+        const started = Bun.nanoseconds();
+        const outcome = replayAttack(inputOf(fixture));
+        const wallMs = (Bun.nanoseconds() - started) / 1e6;
+        const cpu = process.cpuUsage(startedCpu);
+        runs.push({ wallMs, cpuMs: (cpu.user + cpu.system) / 1000 });
+        expect(outcome.ticks).toBeGreaterThan(0);
+      }
+      const medianCpu = [...runs].sort((one, other) => one.cpuMs - other.cpuMs)[1]!.cpuMs;
+      const medianWall = [...runs].sort((one, other) => one.wallMs - other.wallMs)[1]!.wallMs;
+      console.warn(
+        `combat replay mixed-waves under Bun: median ${medianCpu.toFixed(1)} ms CPU ` +
+          `(${medianWall.toFixed(1)} ms wall) over ${runs.length} runs (deadline 5000 ms)`,
+      );
+      // The budget is 500 ms median; this guards the cliff, not the target.
+      expect(medianCpu).toBeLessThan(5000);
+    },
+    DEADLINE_TEST_TIMEOUT_MS,
+  );
 });
