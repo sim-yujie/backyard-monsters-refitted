@@ -137,6 +137,26 @@ describe("CreepFx", () => {
     fx.destroy();
   });
 
+  it("tells the host once, on landing, how much a projectile took off its building (#77)", () => {
+    const landings: Array<{ id: number; amount: number }> = [];
+    const host: CreepFxHost = {
+      ...hostOf(),
+      landed: (id, amount) => landings.push({ id, amount }),
+    };
+    const fx = new CreepFx(host);
+    fx.projectile(10, { x: 0, y: 0 }, { x: 80, y: 40 }, 7, false, 45);
+    // A swing at a creep, or one that took nothing, carries nothing to a building.
+    fx.projectile(10, { x: 0, y: 0 }, { x: 80, y: 40 }, -1, false, 30);
+    fx.projectile(10, { x: 0, y: 0 }, { x: 80, y: 40 }, 8, false, 0);
+    fx.update(10 + PROJECTILE_TICKS - 1);
+    expect(landings).toEqual([]);
+    fx.update(10 + PROJECTILE_TICKS);
+    expect(landings).toEqual([{ id: 7, amount: 45 }]);
+    fx.update(10 + PROJECTILE_TICKS + 2);
+    expect(landings).toHaveLength(1);
+    fx.destroy();
+  });
+
   it("does not strobe a building hit by a mob: one flash per cooldown", () => {
     const host = hostOf();
     const fx = new CreepFx(host);

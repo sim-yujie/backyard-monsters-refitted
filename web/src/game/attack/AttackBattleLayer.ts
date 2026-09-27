@@ -22,6 +22,7 @@ import {
   lungeOffset,
 } from "./creepFx";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
+import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
 import { BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
 import { TrapReveal } from "./trapReveal";
 import {
@@ -71,6 +72,16 @@ import {
  * battle tick, so 2x speed doubles all of it and nothing runs on wall time.
  * Under `prefers-reduced-motion` there is no hop, no bob and no gibs; a death
  * is still a fading splat.
+ *
+ * ## Bullets land before they hurt
+ *
+ * The engine takes a tower's damage off on the tick it fires; Flash took it
+ * off when the bullet arrived (#77). A {@link ShotLedger} holds each bullet's
+ * wounds until `TowerFx` says it landed, and the health bar, the red number,
+ * the hurt tint and — for a wound that killed — the splat all wait for it. A
+ * creep the engine has already removed stays on screen where it was last
+ * seen, as a ghost, until then. A ranged creep's shot at a building holds the
+ * building's damage the same way until the fireball lands.
  *
  * ## Textures
  *
@@ -454,7 +465,13 @@ interface CreepView {
   lastHp: number;
   /** World y of the top of the body as last drawn, for the numbers over it. */
   top: number;
+  /** The engine's last word on the creep: what a ghost is drawn from (#77). */
+  snapshot: CreepSnapshot | null;
+  /** The body's tint when it is not hurt: white, or a marker's colour. */
+  baseTint: number;
 }
+
+type DeathEvent = Extract<BattleVisualEvent, { kind: "death" }>;
 
 /** A trap going off: a ring that grows and fades over a scorch that stays. */
 interface Burst {
@@ -525,8 +542,10 @@ export class AttackBattleLayer {
   private readonly traps = new TrapReveal();
   private readonly bursts: Burst[] = [];
   private readonly scorches: Graphics[] = [];
-  /** The creeps by id this frame, for the guns to aim at. */
-  private readonly creepIndex = new Map<number, CreepSnapshot>();
+  /** Tower wounds and deaths waiting for their bullet to land (#77). */
+  private readonly ledger = new ShotLedger<DeathEvent>();
+  /** Building health a ranged creep's projectile has taken but not yet landed. */
+  private readonly heldBuildingHp = new Map<number, number>();
 
   /** Projectiles, smoke and damage numbers (#63, #68); its root sits last in the overlay. */
   private readonly fx: CreepFx;
@@ -565,6 +584,7 @@ export class AttackBattleLayer {
         creepAnchor: (id) => this.creepAnchor(id),
         flashBuilding: (id, on) => this.host.flashBuilding?.(id, on),
         zoom: () => this.host.zoom ?? 1,
+        landed: (id, amount) => this.onFireballLanded(id, amount),
       },
       this.reducedMotion,
     );
@@ -573,7 +593,15 @@ export class AttackBattleLayer {
     // The building side (issues #64, #66, #67). The towers draw into the same
     // `fire` graphics the tracers used; the building bars go under the splats,
     // where the Flash overlay put them, below the projectiles.
-    this.towerFx = new TowerFx(this.fire, towersOf(options.yard), this.host, this.origin);
+    this.towerFx = new TowerFx(
+      this.fire,
+      towersOf(options.yard),
+      {
+        setAnimFrame: (id, layer, frame) => this.host.setAnimFrame(id, layer, frame),
+        landed: (key, tick) => this.showReleased(this.ledger.land(key), tick),
+      },
+      this.origin,
+    );
     const originOf = new Map<number, Point>();
     for (const building of options.yard.buildings) {
       originOf.set(building.id, { x: building.worldX, y: building.worldY });
@@ -607,12 +635,17 @@ export class AttackBattleLayer {
     if (!battle) return;
     const tick = battle.tick;
 
-    this.syncCreeps(battle.creeps(), tick);
-    this.indexCreeps(battle.creeps());
+    // Creeps the engine still has first, then this frame's events, and only
+    // then the ones it dropped: a creep a held bullet killed must still have
+    // its view when its death is read, to stay on screen until the bullet lands.
+    const seen = this.syncCreeps(battle.creeps(), tick);
     for (const event of battle.recentEvents(this.lastEventTick)) this.onEvent(event);
     this.lastEventTick = tick;
+    this.settleGone(seen, tick);
 
-    this.towerFx.update(tick, (id) => this.creepIndex.get(id));
+    this.towerFx.update(tick, (id) => this.views.get(id)?.snapshot ?? undefined);
+    this.showReleased(this.ledger.expire(tick), tick);
+    this.paintCreeps(tick);
     this.drawSplats(tick);
     this.drawBursts(tick);
     this.fx.update(tick);
@@ -621,9 +654,10 @@ export class AttackBattleLayer {
       this.damageDirty = false;
       const state = battle.state();
       this.revealTraps(state.firedTraps, tick);
-      this.syncDamage(state.health);
-      this.syncSmoke(state.health, tick);
-      this.buildingBars.sync(state.health);
+      const health = this.shownHealth(state.health);
+      this.syncDamage(health);
+      this.syncSmoke(health, tick);
+      this.buildingBars.sync(health);
     }
   }
 
@@ -635,6 +669,22 @@ export class AttackBattleLayer {
   /** The projectiles, smoke and damage numbers, for a test or the dev hook to read. */
   get creepEffects(): CreepFx {
     return this.fx;
+  }
+
+  /** The towers' guns and bullets, for a test or the dev hook to read. */
+  get towerEffects(): TowerFx {
+    return this.towerFx;
+  }
+
+  /** The health bar a creep shows right now, 0 to 1, or null with no sprite. */
+  shownHealthOf(id: number): number | null {
+    const view = this.views.get(id);
+    return view ? this.shownFraction(view) : null;
+  }
+
+  /** Tower shots whose wounds still wait for their bullets (#77). */
+  get heldShots(): number {
+    return this.ledger.heldShots;
   }
 
   destroy(): void {
@@ -661,7 +711,8 @@ export class AttackBattleLayer {
     this.bursts.length = 0;
     for (const scorch of this.scorches) scorch.destroy();
     this.scorches.length = 0;
-    this.creepIndex.clear();
+    this.ledger.clear();
+    this.heldBuildingHp.clear();
     this.fx.destroy();
 
     // Only what this added: the overlay and the sorted container are the
@@ -699,7 +750,8 @@ export class AttackBattleLayer {
 
   /* ── Creeps ─────────────────────────────────────────────────────────── */
 
-  private syncCreeps(creeps: readonly CreepSnapshot[], tick: number): void {
+  /** Places every creep the engine has; returns their ids. */
+  private syncCreeps(creeps: readonly CreepSnapshot[], tick: number): Set<number> {
     const seen = new Set<number>();
     for (const creep of creeps) {
       seen.add(creep.id);
@@ -710,11 +762,42 @@ export class AttackBattleLayer {
       }
       this.place(view, creep, tick);
     }
+    return seen;
+  }
+
+  /**
+   * The views of creeps the engine no longer has: kept standing where they
+   * were last seen while a bullet is still on its way to them (#77), let go
+   * otherwise.
+   */
+  private settleGone(seen: ReadonlySet<number>, tick: number): void {
     if (seen.size === this.views.size) return;
     for (const [id, view] of this.views) {
       if (seen.has(id)) continue;
+      if (view.snapshot && this.ledger.holds(id)) {
+        this.place(view, view.snapshot, tick);
+        continue;
+      }
       this.views.delete(id);
       this.release(view);
+    }
+  }
+
+  /** A creep's health bar, 0 to 1: the engine's health plus what is still held. */
+  private shownFraction(view: CreepView): number {
+    const creep = view.snapshot;
+    if (!creep || creep.maxHp <= 0) return 0;
+    const engineHp = this.ledger.holdsDeath(view.id) ? 0 : creep.hp;
+    const shown = Math.min(creep.maxHp, engineHp + this.ledger.heldAmount(view.id));
+    return Math.max(0, Math.min(1, shown / creep.maxHp));
+  }
+
+  /** Bars and hurt tints, once this frame's bullets have landed. */
+  private paintCreeps(tick: number): void {
+    for (const view of this.views.values()) {
+      const bar = view.snapshot?.champion ? CHAMPION_BAR : BAR;
+      view.barFront.width = Math.max(0, bar.width * this.shownFraction(view));
+      view.body.tint = tick - view.hurtTick < HURT_TICKS ? HURT_TINT : view.baseTint;
     }
   }
 
@@ -744,6 +827,8 @@ export class AttackBattleLayer {
     view.hurtTick = Number.NEGATIVE_INFINITY;
     view.lastHp = creep.hp;
     view.top = ground.y;
+    view.snapshot = creep;
+    view.baseTint = 0xffffff;
     view.body.visible = true;
     view.barBack.visible = true;
     view.barFront.visible = true;
@@ -787,6 +872,8 @@ export class AttackBattleLayer {
       hurtTick: Number.NEGATIVE_INFINITY,
       lastHp: 0,
       top: 0,
+      snapshot: null,
+      baseTint: 0xffffff,
     };
   }
 
@@ -796,6 +883,7 @@ export class AttackBattleLayer {
     view.barFront.visible = false;
     if (view.shadow) view.shadow.visible = false;
     view.id = -1;
+    view.snapshot = null;
     this.pool.push(view);
   }
 
@@ -811,6 +899,7 @@ export class AttackBattleLayer {
   }
 
   private place(view: CreepView, creep: CreepSnapshot, tick: number): void {
+    view.snapshot = creep;
     const ground = groundWorld(creep.ix, creep.iy, this.origin);
     // Heading and motion are read once per battle tick. A frame that saw no
     // tick — every other frame at 144 Hz, since the battle runs 80 ticks a
@@ -852,10 +941,10 @@ export class AttackBattleLayer {
     const pose: CreepPose = { heading: view.heading, moving: view.moving, age: tick - view.bornTick };
     const body = view.body;
 
-    // A melee hit nudges the body toward what it struck and back (#63); a
-    // wound tints it for a few ticks (#68). Neither moves the health bar.
+    // A melee hit nudges the body toward what it struck and back (#63). The
+    // wound's tint (#68) and the health bar wait for `paintCreeps`, after
+    // this frame's bullets have landed (#77).
     const lunge = this.reducedMotion ? 0 : lungeOffset(tick - view.lungeTick);
-    const hurt = tick - view.hurtTick < HURT_TICKS;
 
     let top: number;
     if (sheet) {
@@ -869,7 +958,7 @@ export class AttackBattleLayer {
           body.texture = cell;
         }
         body.scale.set(1);
-        body.tint = hurt ? HURT_TINT : 0xffffff;
+        view.baseTint = 0xffffff;
         // Whole pixels, as Flash drew them (`MonsterBase.as:613-616`): a cell
         // sampled at a fraction of a pixel shimmers as it moves.
         body.position.set(
@@ -878,36 +967,35 @@ export class AttackBattleLayer {
         );
         top = layout.y;
       } else {
-        this.placeMarker(body, ground, creep.champion);
+        view.baseTint = this.placeMarker(body, ground, creep.champion);
         top = body.y;
         view.cellKey = "";
       }
       body.zIndex = layout.zIndex;
       this.placeShadow(view, layout);
     } else {
-      this.placeMarker(body, ground, creep.champion);
-      if (hurt) body.tint = HURT_TINT;
+      view.baseTint = this.placeMarker(body, ground, creep.champion);
       top = body.y;
       body.zIndex = creepZIndex(ground.x, ground.y, creep.id);
     }
     view.top = top;
 
     const bar = creep.champion ? CHAMPION_BAR : BAR;
-    const fraction = creep.maxHp > 0 ? Math.max(0, Math.min(1, creep.hp / creep.maxHp)) : 0;
     const barX = Math.round(ground.x - bar.width / 2);
     const barY = Math.round(top - bar.gap);
     view.barBack.position.set(barX, barY);
     view.barFront.position.set(barX, barY);
-    view.barFront.width = Math.max(0, bar.width * fraction);
   }
 
-  /** A creep with no sheet yet: a small square at its feet, tinted by kind. */
-  private placeMarker(body: Sprite, ground: Point, champion: boolean): void {
+  /** A creep with no sheet yet: a small square at its feet, tinted by kind. Returns the tint. */
+  private placeMarker(body: Sprite, ground: Point, champion: boolean): number {
     const size = champion ? MARKER_SIZE * 2 : MARKER_SIZE;
     if (body.texture !== Texture.WHITE) body.texture = Texture.WHITE;
     body.scale.set(size / Texture.WHITE.width);
-    body.tint = champion ? BAR_CHAMPION_COLOUR : SPLAT_COLOUR;
+    const tint = champion ? BAR_CHAMPION_COLOUR : SPLAT_COLOUR;
+    body.tint = tint;
     body.position.set(ground.x - size / 2, ground.y - size);
+    return tint;
   }
 
   private placeShadow(view: CreepView, layout: CreepLayout): void {
@@ -967,7 +1055,14 @@ export class AttackBattleLayer {
       const altitude = event.flying ? flyerAltitude(monsterId) : 0;
       const from = { x: ground.x, y: ground.y - BODY_HEIGHT - altitude };
       const champion = view?.sheet ? view.sheet.family !== view.sheet.key : false;
-      // The number over the building lands with the shot.
+      // The number over the building lands with the shot, and so does the
+      // damage to the building's art, bar and smoke (#77).
+      if (event.buildingId >= 0 && event.amount > 0) {
+        this.heldBuildingHp.set(
+          event.buildingId,
+          (this.heldBuildingHp.get(event.buildingId) ?? 0) + event.amount,
+        );
+      }
       this.fx.projectile(event.tick, from, target, event.buildingId, champion, event.amount);
       return;
     }
@@ -987,14 +1082,67 @@ export class AttackBattleLayer {
     }
   }
 
-  /** A creep lost health: tint it and float the number over it. */
-  private onHurt(event: Extract<BattleVisualEvent, { kind: "hurt" }>): void {
-    const view = this.views.get(event.creepId);
+  /**
+   * A creep lost health, shown on `tick`: tint it and float the number over
+   * it. `tick` is the wound's own for one shown as it comes, and the landing's
+   * for one a bullet held (#77), by when the creep has moved on from the
+   * wound's `ix/iy` — so a creep still on screen is anchored where it is drawn.
+   */
+  private showWound(wound: WoundLike, tick: number): void {
+    const view = this.views.get(wound.creepId);
     // `place` has already read this tick's health, so `lastHp` needs nothing here.
-    if (view) view.hurtTick = event.tick;
-    const ground = groundWorld(event.ix, event.iy, this.origin);
+    if (view) view.hurtTick = tick;
+    const ground = view
+      ? { x: view.lastX, y: view.lastY }
+      : groundWorld(wound.ix, wound.iy, this.origin);
     const at = { x: ground.x, y: (view?.top ?? ground.y - BODY_HEIGHT) - 6 };
-    this.fx.number(event.tick, `creep:${event.creepId}`, event.creepId, event.amount, at, "damage");
+    this.fx.number(tick, `creep:${wound.creepId}`, wound.creepId, wound.amount, at, "damage");
+  }
+
+  /** What landed bullets let go of: their wounds, then the deaths those held. */
+  private showReleased(released: Released<DeathEvent>, tick: number): void {
+    for (const wound of released.wounds) this.showWound(wound, tick);
+    for (const death of released.deaths) {
+      const view = this.views.get(death.creepId);
+      const at = view
+        ? { x: view.lastX, y: view.lastY }
+        : groundWorld(death.ix, death.iy, this.origin);
+      this.spawnSplat(tick, at, death.champion ? 22 : 12);
+      // The engine let go of this creep a flight ago; its ghost goes with the splat.
+      if (view && !this.ledger.holds(death.creepId)) {
+        this.views.delete(death.creepId);
+        this.release(view);
+      }
+    }
+  }
+
+  /** A ranged creep's fireball reached its building: show the damage it carried. */
+  private onFireballLanded(buildingId: number, amount: number): void {
+    const held = (this.heldBuildingHp.get(buildingId) ?? 0) - amount;
+    if (held > 1e-6) this.heldBuildingHp.set(buildingId, held);
+    else this.heldBuildingHp.delete(buildingId);
+    this.damageDirty = true;
+  }
+
+  /**
+   * The engine's building health with what fireballs still in the air have
+   * taken added back, so a building darkens, smokes and loses its bar when the
+   * fireball lands rather than when it was thrown.
+   */
+  private shownHealth(
+    health: Readonly<Record<string, number>>,
+  ): Readonly<Record<string, number>> {
+    if (this.heldBuildingHp.size === 0) return health;
+    const shown: Record<string, number> = { ...health };
+    for (const [id, held] of this.heldBuildingHp) {
+      const hp = shown[String(id)];
+      if (hp === undefined) continue;
+      const maxHp = this.maxHpById.get(id) ?? Number.POSITIVE_INFINITY;
+      // The engine lets a building's health run below zero; the amount held is
+      // what it actually lost, counted from what it had.
+      shown[String(id)] = Math.min(maxHp, Math.max(0, hp) + held);
+    }
+    return shown;
   }
 
   /**
@@ -1025,17 +1173,32 @@ export class AttackBattleLayer {
 
   private onEvent(event: BattleVisualEvent): void {
     if (event.kind === "hit") {
+      this.ledger.interrupt();
       this.onHit(event);
       return;
     }
     if (event.kind === "hurt") {
-      this.onHurt(event);
+      if (!this.ledger.hurt(event)) this.showWound(event, event.tick);
       return;
     }
     if (event.kind === "shot") {
-      this.towerFx.onShot(event, this.creepIndex.get(event.creepId));
+      const key = this.towerFx.onShot(event, this.views.get(event.creepId)?.snapshot ?? undefined);
+      this.ledger.shot(
+        key === null
+          ? null
+          : {
+              key,
+              tick: event.tick,
+              creepId: event.creepId,
+              splash: this.towerFx.splashOf(event.towerId),
+              ix: event.ix,
+              iy: event.iy,
+            },
+      );
       return;
     }
+    // A death a held bullet dealt waits for it to land; the rest splat now.
+    if (this.ledger.death(event)) return;
     const at = groundWorld(event.ix, event.iy, this.origin);
     this.spawnSplat(event.tick, at, event.champion ? 22 : 12);
   }
@@ -1113,12 +1276,6 @@ export class AttackBattleLayer {
   }
 
   /* ── Buildings ──────────────────────────────────────────────────────── */
-
-  /** The creeps by id, for the towers to aim at and turn toward. */
-  private indexCreeps(creeps: readonly CreepSnapshot[]): void {
-    this.creepIndex.clear();
-    for (const creep of creeps) this.creepIndex.set(creep.id, creep);
-  }
 
   /**
    * Shows every trap that has just gone off (issue #66): the renderer lifts

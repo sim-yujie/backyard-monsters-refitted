@@ -36,6 +36,11 @@ import { flyerAltitude } from "./monsterSprites";
  * the Tesla forks a bolt (`EFFECTS.Lightning`); the Railgun lays a glowing
  * trail of gun-balls along its line of fire (`BUILDING118.as:145-185`).
  *
+ * A `PROJECTILE` dealt its damage when it arrived, not when it was fired
+ * (`PROJECTILE.as:31-50`), so each bullet reports its landing tick to the
+ * host (`landed`), which holds the wound back until then (#77). The beam, the
+ * bolt and the rail hurt at once in Flash and report nothing.
+ *
  * Every clock here is the battle tick, so 2x speed doubles it all.
  */
 
@@ -236,8 +241,12 @@ const SNIPER_ROUND = 0xfff1a8;
 const FLAK_ROUND = 0xdfe8ff;
 
 interface Bullet {
+  /** What `onShot` returned for it, and what `landed` reports. */
+  readonly key: number;
   readonly type: number;
   readonly creepId: number;
+  /** The shot tick: the bullet leaves the muzzle then and flies from the next. */
+  readonly bornTick: number;
   x: number;
   y: number;
   /** World px per tick. */
@@ -290,6 +299,11 @@ interface TowerState {
 /** What the effects ask of the yard renderer. */
 export interface TowerFxHost {
   setAnimFrame(id: number, layer: number, frame: number): void;
+  /**
+   * A bullet reached its target on `tick` (#77): the moment Flash's
+   * `PROJECTILE.Move` dealt its damage, so the moment the wound is shown.
+   */
+  landed?(key: number, tick: number): void;
 }
 
 export interface ShotLike {
@@ -314,6 +328,7 @@ export class TowerFx {
   private readonly rails: Rail[] = [];
   private readonly flashes: Flash[] = [];
   private lastTick = 0;
+  private nextKey = 1;
 
   /**
    * `graphics` is redrawn every frame; `origin` turns isometric yard px into
@@ -336,15 +351,28 @@ export class TowerFx {
     }
   }
 
+  /** A tower's splash radius in cartesian units: 0 for none, or a tower this does not know. */
+  splashOf(id: number): number {
+    const info = this.towers.get(id)?.info;
+    return info ? (towerStats(info.type, info.level)?.splash ?? 0) : 0;
+  }
+
   /** The cell a tower's gun was last set to, or null while it has never turned. */
   cellOf(id: number): number | null {
     return this.towers.get(id)?.cell ?? null;
   }
 
-  /** Records a shot and starts its projectile. `target` is the creep hit. */
-  onShot(event: ShotLike, target: CreepSnapshot | undefined): void {
+  /**
+   * Records a shot and starts its projectile. `target` is the creep hit.
+   *
+   * Returns the bullet's key when the shot is a travelling bullet, which the
+   * host hears again through `landed` when it arrives; null for a shot that
+   * reaches its target at once — the laser, the tesla, the railgun — or from
+   * a tower this does not know.
+   */
+  onShot(event: ShotLike, target: CreepSnapshot | undefined): number | null {
     const tower = this.towers.get(event.towerId);
-    if (!tower) return;
+    if (!tower) return null;
     tower.lastShotTick = event.tick;
     tower.targetCreep = event.creepId;
 
@@ -360,7 +388,7 @@ export class TowerFx {
       const kept = this.beams.filter((beam) => beam.towerId !== tower.info.id);
       this.beams.length = 0;
       this.beams.push(...kept, { towerId: tower.info.id, from, bornTick: event.tick, distance, angle });
-      return;
+      return null;
     }
     if (type === 25) {
       // `BUILDING25.as:150`: the bolt leaves from 50 px above the origin.
@@ -369,7 +397,7 @@ export class TowerFx {
         to: aim,
         tick: event.tick,
       });
-      return;
+      return null;
     }
     if (type === 118) {
       const dx = aim.x - from.x;
@@ -383,14 +411,18 @@ export class TowerFx {
         tick: event.tick,
       });
       this.flashes.push({ at: from, tick: event.tick });
-      return;
+      return null;
     }
 
     const stats = towerStats(type, tower.info.level);
     const speed = (stats?.speed ?? 10) * BULLET_SPEED_FACTOR;
+    const key = this.nextKey;
+    this.nextKey += 1;
     this.bullets.push({
+      key,
       type,
       creepId: event.creepId,
+      bornTick: event.tick,
       x: from.x,
       y: from.y,
       speed: Math.max(speed, 1),
@@ -402,6 +434,12 @@ export class TowerFx {
       landedTick: null,
     });
     this.flashes.push({ at: from, tick: event.tick });
+    return key;
+  }
+
+  /** Bullets still in the air. */
+  get flyingCount(): number {
+    return this.bullets.filter((bullet) => bullet.landedTick === null).length;
   }
 
   /**
@@ -528,6 +566,11 @@ export class TowerFx {
     creepAt: (id: number) => CreepSnapshot | undefined,
   ): void {
     for (let step = 0; step < elapsed; step += 1) {
+      // The tick this step moves the bullet into. A shot read in the middle
+      // of a long frame (2x, a slow device) flies only from its own tick, so
+      // it lands on the tick it would have at 1x.
+      const stepTick = tick - elapsed + step + 1;
+      if (stepTick <= bullet.bornTick) continue;
       if (bullet.ticks % BULLET_AIM_TICKS === 0) {
         const creep = creepAt(bullet.creepId);
         if (creep) bullet.aim = this.aimAt(creep, creep.ix, creep.iy);
@@ -547,7 +590,8 @@ export class TowerFx {
       if (left <= bullet.speed * 2) {
         bullet.x = bullet.aim.x;
         bullet.y = bullet.aim.y;
-        bullet.landedTick = tick - elapsed + step + 1;
+        bullet.landedTick = stepTick;
+        this.host.landed?.(bullet.key, stepTick);
         return;
       }
     }

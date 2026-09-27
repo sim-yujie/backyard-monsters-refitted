@@ -156,6 +156,11 @@ export interface CreepFxHost {
   flashBuilding(id: number, on: boolean): void;
   /** The camera's zoom, so a number keeps its size on screen. */
   zoom(): number;
+  /**
+   * A projectile carrying `amount` of a building's health has landed (#77):
+   * the host shows the building's loss from now, not from the swing.
+   */
+  landed?(buildingId: number, amount: number): void;
 }
 
 /** What a number says: health lost in red, health gained in green with a plus. */
@@ -389,6 +394,7 @@ export class CreepFx {
         shot.landed = true;
         this.flash(shot.buildingId, tick);
         if (shot.buildingId >= 0 && shot.amount > 0) {
+          this.host.landed?.(shot.buildingId, shot.amount);
           const over = { x: shot.to.x, y: shot.to.y - BUILDING_NUMBER_LIFT };
           this.number(tick, `building:${shot.buildingId}`, -1, shot.amount, over, "damage");
         }

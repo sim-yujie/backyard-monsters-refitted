@@ -254,3 +254,75 @@ describe("TowerFx", () => {
     fx.destroy();
   });
 });
+
+describe("TowerFx landings (#77)", () => {
+  const landingSetUp = (type: number) => {
+    const yard = readYard(yardOf(type));
+    const landings: Array<{ key: number; tick: number }> = [];
+    const fx = new TowerFx(
+      new Graphics(),
+      towersOf(yard),
+      { setAnimFrame: () => {}, landed: (key, tick) => landings.push({ key, tick }) },
+      { x: yard.bounds.originX, y: yard.bounds.originY },
+    );
+    return { fx, landings };
+  };
+
+  /** Fires at tick 5 and runs to tick 400 in frames of `ticksPerFrame`; the landings. */
+  const flight = (type: number, ticksPerFrame: number, firstFrameTick: number) => {
+    const { fx, landings } = landingSetUp(type);
+    const target = creepAt(35, 235);
+    fx.update(0, () => target);
+    const key = fx.onShot({ tick: 5, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
+    for (let tick = firstFrameTick; tick <= 400; tick += ticksPerFrame) fx.update(tick, () => target);
+    fx.destroy();
+    return { key, landings };
+  };
+
+  it("gives a sniper's, a cannon's and a flak tower's shot a key, reported once when it lands", () => {
+    for (const type of [20, 21, 115]) {
+      const { key, landings } = flight(type, 1, 5);
+      expect(key).not.toBeNull();
+      expect(landings).toHaveLength(1);
+      expect(landings[0]?.key).toBe(key);
+      // It flew: not on the shot tick, and well inside the run.
+      expect(landings[0]?.tick).toBeGreaterThan(5);
+      expect(landings[0]?.tick).toBeLessThan(400);
+    }
+  });
+
+  it("gives the laser, the tesla and the railgun no key: they hurt at once", () => {
+    for (const type of [23, 25, 118]) {
+      const { key, landings } = flight(type, 1, 5);
+      expect(key).toBeNull();
+      expect(landings).toHaveLength(0);
+    }
+  });
+
+  it("lands a bullet on the same tick whether the frames are one tick, two (2x), or seven long", () => {
+    const oneTick = flight(21, 1, 5).landings[0]?.tick;
+    expect(oneTick).toBeDefined();
+    // A frame that already runs past the shot tick flies it only from its own tick.
+    expect(flight(21, 2, 8).landings[0]?.tick).toBe(oneTick);
+    expect(flight(21, 7, 12).landings[0]?.tick).toBe(oneTick);
+  });
+
+  it("keys every bullet apart when a tower fires again before the first lands", () => {
+    const { fx, landings } = landingSetUp(21);
+    const target = creepAt(35, 235);
+    const first = fx.onShot({ tick: 1, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
+    const second = fx.onShot({ tick: 3, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
+    expect(first).not.toBe(second);
+    for (let tick = 1; tick <= 300; tick += 1) fx.update(tick, () => target);
+    expect(landings.map((landing) => landing.key)).toEqual([first, second]);
+    const [a, b] = landings;
+    expect((b?.tick ?? 0) - (a?.tick ?? 0)).toBe(2);
+    fx.destroy();
+  });
+
+  it("reads each tower's splash radius off its stats", () => {
+    expect(landingSetUp(21).fx.splashOf(1)).toBe(0);
+    expect(landingSetUp(20).fx.splashOf(1)).toBe(30);
+    expect(landingSetUp(20).fx.splashOf(77)).toBe(0);
+  });
+});
