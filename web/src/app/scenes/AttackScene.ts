@@ -3,6 +3,7 @@ import { logout } from "@/api/auth";
 import { loadAttack } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
 import type { BaseLoadResponse } from "@/api/types";
+import { clockReading, formatClock } from "@/game/attack/attackClock";
 import { ATTACK_TAP_CLAIMS } from "@/game/attack/AttackInput";
 import { AttackPresentation } from "@/game/attack/attackPresentation";
 import { AttackSession, type AttackSessionState } from "@/game/attack/AttackSession";
@@ -58,19 +59,10 @@ const OPENING_ZOOM = 0.9;
 const MAX_ZOOM = 2.5;
 const ZOOM_STEP = 1.5;
 
-/** Below this many seconds the countdown reads as a warning (§F7). */
-const WARNING_SECONDS = 60;
-
 /** Viewport width at or below which the dock is a bottom sheet (§4.3). */
 const PHONE_WIDTH = 620;
 
-/** `m:ss`, the countdown's spelling. */
-export const formatClock = (seconds: number): string => {
-  const whole = Math.max(0, Math.ceil(seconds));
-  const minutes = Math.floor(whole / 60);
-  const rest = whole % 60;
-  return `${minutes}:${rest < 10 ? "0" : ""}${rest}`;
-};
+export { formatClock };
 
 export class AttackScene implements Scene {
   private readonly renderer = new YardRenderer();
@@ -554,13 +546,13 @@ export class AttackScene implements Scene {
 
   private refreshStrip(state: AttackSessionState): void {
     if (this.clock) {
-      const over = state.phase === "ended";
-      this.clock.textContent = over ? "0:00" : formatClock(state.remainingSeconds);
-      this.clock.classList.toggle(
-        "attack-strip__clock--warning",
-        !over && state.remainingSeconds <= WARNING_SECONDS,
-      );
-      this.clock.setAttribute("aria-live", state.remainingSeconds <= WARNING_SECONDS ? "polite" : "off");
+      // The countdown, then the retreat grace, labelled and counted down (#149).
+      const reading = clockReading(state);
+      this.clock.textContent = reading.text;
+      this.clock.title = reading.title;
+      this.clock.classList.toggle("attack-strip__clock--warning", reading.warning);
+      this.clock.classList.toggle("attack-strip__clock--grace", reading.grace);
+      this.clock.setAttribute("aria-live", reading.warning ? "polite" : "off");
     }
     // What the screen has dealt, not what the engine has booked (#148).
     if (this.damage) {

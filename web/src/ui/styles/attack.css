@@ -50,6 +50,11 @@
   border-color: var(--colour-accent);
 }
 
+/* The retreat grace after the countdown (#149): a label and a second count. */
+.attack-strip__clock--grace {
+  font-size: var(--text-sm);
+}
+
 .attack-strip__readout {
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
