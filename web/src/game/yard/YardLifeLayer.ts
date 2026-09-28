@@ -12,22 +12,26 @@ import {
   shadowOffset,
   spriteFor,
 } from "@/game/attack/monsterSprites";
-import type { Rect, YardBounds } from "./YardGrid";
+import { fromIso, type Point, type Rect, type YardBounds } from "./YardGrid";
 import {
   CREATURE_TICK_HZ,
   EMPTY_LIFE,
   MAX_TICKS_PER_FRAME,
   reconcileWalkers,
+  reconcileWorkers,
   stepWalker,
+  stepWorker,
   walkerSpecs,
+  WORKER_TICK_HZ,
   type Random,
   type Walker,
+  type Worker,
   type YardLife,
 } from "./yardLifeModel";
 
 /**
  * Draws what lives on the player's own yard (issue #158): housed monsters in
- * their pens and the champion in its cage. The rules are in
+ * their pens, the champion in its cage, and the workers. The rules are in
  * `yardLifeModel.ts`; this owns the sprites.
  *
  * Bodies go into the buildings' own container, sorted by depth the way the
@@ -38,15 +42,22 @@ import {
  * places through a redraw rather than being born again.
  *
  * Cells are cut from the attack screen's sheets by the same helpers
- * (`MonsterSheetTextures`, `monsterSprites.ts`).
+ * (`MonsterSheetTextures`, `monsterSprites.ts`); the worker is the `worker`
+ * sheet in that table (`monsters/worker.png`, `SPRITES.as:20`).
  *
  * Off-screen creatures still walk, which is a few additions each, but touch no
  * sprite. Under `prefers-reduced-motion` nothing walks and no row cycles: every
- * creature stands where it was put.
+ * creature stands where it was put, and workers stand at their jobs.
  */
 
 /** World px of slack around the view before a creature counts as off screen. */
 const CULL_MARGIN = 120;
+
+/** The worker sheet (`SPRITES.as:20`). */
+const WORKER_SHEET: MonsterSheet | undefined = MONSTER_SPRITES["worker"];
+
+/** Workers' depth tie-break ids start here, past every walker's. */
+const WORKER_DEPTH_ID = 900;
 
 interface Body {
   readonly body: Sprite;
@@ -55,6 +66,13 @@ interface Body {
   readonly shadowSheet: MonsterSheet | null;
   cellKey: string;
 }
+
+const sameBounds = (a: YardBounds | null, b: YardBounds): boolean =>
+  a !== null &&
+  a.yardWidth === b.yardWidth &&
+  a.yardHeight === b.yardHeight &&
+  a.originX === b.originX &&
+  a.originY === b.originY;
 
 export interface YardLifeOptions {
   readonly reducedMotion?: boolean;
@@ -69,6 +87,9 @@ export class YardLifeLayer {
 
   private walkers = new Map<string, Walker>();
   private readonly walkerBodies = new Map<string, Body>();
+  private workers: Worker[] = [];
+  private readonly workerBodies: Body[] = [];
+  private life: YardLife = EMPTY_LIFE;
   private bounds: YardBounds | null = null;
 
   private tops: Container | null = null;
@@ -77,6 +98,7 @@ export class YardLifeLayer {
   private limitRead = false;
   /** Fractions of a tick carried between frames. */
   private creatureClock = 0;
+  private workerClock = 0;
 
   constructor(options: YardLifeOptions = {}) {
     this.textures = options.textures ?? new MonsterSheetTextures();
@@ -84,14 +106,19 @@ export class YardLifeLayer {
     this.reducedMotion = options.reducedMotion ?? false;
   }
 
-  /** How many creatures there are to draw. */
+  /** How many creatures and workers there are to draw. */
   get count(): number {
-    return this.walkers.size;
+    return this.walkers.size + this.workers.length;
   }
 
   /** The walkers, for tests. */
   get walkerList(): readonly Walker[] {
     return [...this.walkers.values()];
+  }
+
+  /** The workers, for tests. */
+  get workerList(): readonly Worker[] {
+    return this.workers;
   }
 
   /** Reads the GPU's texture limit once, so an oversized sheet is cut rather than bound. */
@@ -108,6 +135,10 @@ export class YardLifeLayer {
    */
   set(life: YardLife | null, bounds: YardBounds): void {
     const next = life ?? EMPTY_LIFE;
+    // A new yard, rather than the same yard read again after a change: its
+    // workers start at their jobs instead of walking there.
+    const first = this.life === EMPTY_LIFE || !sameBounds(this.bounds, bounds);
+    this.life = next;
     this.bounds = bounds;
 
     this.walkers = reconcileWalkers(this.walkers, walkerSpecs(next, this.random), this.random);
@@ -121,6 +152,34 @@ export class YardLifeLayer {
       const sheet = spriteFor(walker.monsterId, walker.sheetLevel) ?? null;
       if (sheet) this.textures.preload(sheet);
       this.walkerBodies.set(key, this.makeBody(sheet));
+    }
+
+    const toWorld = (x: number, y: number): Point => ({
+      x: x - y + bounds.originX,
+      y: (x + y) / 2 + bounds.originY,
+    });
+    const toYard = (x: number, y: number): Point => fromIso(x - bounds.originX, y - bounds.originY);
+    this.workers = reconcileWorkers(
+      this.workers,
+      next,
+      toWorld,
+      toYard,
+      this.random,
+      first || this.reducedMotion,
+    );
+    if (this.reducedMotion) {
+      for (const worker of this.workers) {
+        worker.x = worker.targetX;
+        worker.y = worker.targetY;
+      }
+    }
+    while (this.workerBodies.length > this.workers.length) {
+      const body = this.workerBodies.pop();
+      if (body) this.release(body);
+    }
+    while (this.workerBodies.length < this.workers.length) {
+      if (WORKER_SHEET) this.textures.preload(WORKER_SHEET);
+      this.workerBodies.push(this.makeBody(WORKER_SHEET ?? null));
     }
 
     this.mount();
@@ -168,6 +227,12 @@ export class YardLifeLayer {
         for (const walker of this.walkers.values()) stepWalker(walker, this.random);
       }
 
+      this.workerClock += deltaSeconds * WORKER_TICK_HZ;
+      const workerTicks = Math.min(MAX_TICKS_PER_FRAME, Math.floor(this.workerClock));
+      this.workerClock = Math.min(this.workerClock - workerTicks, 1);
+      for (let tick = 0; tick < workerTicks; tick++) {
+        for (const worker of this.workers) stepWorker(worker);
+      }
     }
 
     if (this.hidden) return;
@@ -194,6 +259,17 @@ export class YardLifeLayer {
       this.place(body, x, y, walker.heading, walker.moving ? "walk" : "idle", tick, depthId);
     }
 
+    this.workers.forEach((worker, index) => {
+      const body = this.workerBodies[index];
+      if (!body) return;
+      if (!onScreen(worker.x, worker.y)) {
+        this.show(body, false);
+        return;
+      }
+      const heading = (worker.rotation * Math.PI) / 180;
+      const row = this.life.hardHat ? "hardhat" : "walk";
+      this.place(body, worker.x, worker.y, heading, row, 0, WORKER_DEPTH_ID + index);
+    });
   }
 
   destroy(): void {
@@ -203,7 +279,9 @@ export class YardLifeLayer {
       body.shadow?.destroy();
     }
     this.walkerBodies.clear();
+    this.workerBodies.length = 0;
     this.walkers.clear();
+    this.workers = [];
     this.textures.destroy();
   }
 
@@ -211,6 +289,7 @@ export class YardLifeLayer {
 
   private *bodies(): Generator<Body> {
     yield* this.walkerBodies.values();
+    yield* this.workerBodies;
   }
 
   private makeBody(sheet: MonsterSheet | null): Body {
@@ -261,7 +340,7 @@ export class YardLifeLayer {
     x: number,
     y: number,
     heading: number,
-    animation: "walk" | "idle",
+    animation: "walk" | "idle" | "hardhat",
     tick: number,
     depthId: number,
   ): void {

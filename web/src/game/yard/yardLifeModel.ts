@@ -11,8 +11,8 @@ import type { Yard, YardBuilding } from "./yardModel";
 
 /**
  * What lives on the player's own yard besides its buildings (issue #158): the
- * housed monsters wandering their pens and a raised champion pacing its cage.
- * Arithmetic only, so it runs under node; `YardLifeLayer` draws it.
+ * housed monsters wandering their pens, a raised champion pacing its cage, and
+ * the workers. Arithmetic only, so it runs under node; `YardLifeLayer` draws it.
  *
  * Everything here is drawn and nothing is saved. The Flash client simulated
  * all of it as real creatures; this client has no creature to simulate on its
@@ -48,6 +48,20 @@ import type { Yard, YardBuilding } from "./yardModel";
  * new spot (`:1058`), at a quarter of its speed (`:1374-1378`, and the
  * engine's `speed / 4`), showing its idle row while it stands (`:1538-1540`).
  * Krallen picks its sheet by power level (`champions/Krallen.as:46-48`).
+ *
+ * ## Workers (`client/scripts/WORKERS.as`, `WORKER.as`)
+ *
+ * One `WORKER` per worker the yard has (`QUEUE.as:40-70`), each spawned at a
+ * random spot on the map (`WORKERS.as:37-51`). An idle worker stands: its
+ * `Wander` is empty (`WORKER.as:151-165`). A job takes the nearest free worker
+ * (`WORKERS.as:65-80`), who walks to the building, speeding up by 0.05 a frame
+ * to 2 px (1 px when it has no job), turning a third of the way toward its
+ * target each frame (a fifth without a job), and slowing by 0.1 a frame to a
+ * stop once within 20 px of it (`WORKER.as:211-316`). When the job ends it
+ * stays where it stood (`WORKERS.as:104-130`). A job already running when the
+ * yard loads has its worker standing at it already (`WORKERS.as:85-95`, the
+ * catch-up branch). While Sharper Tools runs every worker wears the hard hat
+ * row (`SPRITES.as:130-138`).
  */
 
 /* ── Clocks ─────────────────────────────────────────────────────────────── */
@@ -58,6 +72,9 @@ import type { Yard, YardBuilding } from "./yardModel";
  * the attack screen's animation rows count in.
  */
 export const CREATURE_TICK_HZ = 80;
+
+/** Workers tick once a frame at the stage's 40 (`GLOBAL.as:1297-1301`). */
+export const WORKER_TICK_HZ = 40;
 
 /**
  * The most ticks one frame may advance, so a tab that was hidden for a minute
@@ -93,6 +110,26 @@ const CHAMPION_SPEED_DIVISOR = 4;
 
 /** Krallen's champion type: its sheet goes by power level (`Krallen.as:46-48`). */
 const KRALLEN_TYPE = 5;
+
+/** Worker motion, in world px and degrees a frame (`WORKER.as:211-316`). */
+export const WORKER_MOTION = {
+  /** Top speed with a job, and without one. */
+  busySpeed: 2,
+  idleSpeed: 1,
+  accelerate: 0.05,
+  brake: 0.1,
+  /** Within this many px of its target a worker brakes to a stop. */
+  near: 20,
+  /** Fraction of the remaining turn taken each frame. */
+  busyTurn: 1 / 3,
+  idleTurn: 1 / 5,
+} as const;
+
+/** Yard units a working worker stands off the building's footprint. */
+const WORKER_STANDOFF = 6;
+
+/** The countdowns that hold a worker (`workers.ts`, `holdsWorker`). */
+const WORKER_JOBS: ReadonlySet<string> = new Set(["build", "upgrade", "fortify"]);
 
 /* ── What the save says ─────────────────────────────────────────────────── */
 
@@ -130,6 +167,16 @@ export interface LifeChampion {
   readonly sheetLevel: number;
 }
 
+/** A building a worker is on. */
+export interface LifeJob {
+  readonly id: number;
+  /** Yard units: footprint top corner and size. */
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 /** Everything alive on a yard, as read from its save. */
 export interface YardLife {
   readonly groups: readonly LifeGroup[];
@@ -137,6 +184,14 @@ export interface YardLife {
   readonly champions: readonly LifeChampion[];
   /** The cage's top corner in yard units, or null when the yard has none. */
   readonly cage: LifePen | null;
+  readonly workers: number;
+  readonly jobs: readonly LifeJob[];
+  /** Sharper Tools is running: every worker wears the hard hat. */
+  readonly hardHat: boolean;
+  /** The plot, `[-w/2, w/2) x [-h/2, h/2)` in yard units. */
+  readonly plot: { readonly width: number; readonly height: number };
+  /** Every footprint, so an idle worker is not put down inside a building. */
+  readonly footprints: readonly LifeArea[];
 }
 
 /** Nothing alive at all. */
@@ -145,6 +200,11 @@ export const EMPTY_LIFE: YardLife = {
   pens: [],
   champions: [],
   cage: null,
+  workers: 0,
+  jobs: [],
+  hardHat: false,
+  plot: { width: 0, height: 0 },
+  footprints: [],
 };
 
 const standing = (building: YardBuilding): boolean => building.hp === null || building.hp > 0;
@@ -166,15 +226,23 @@ export const yardLifeOf = (save: BaseLoadResponse, yard: Yard): YardLife => {
 
   const pens: LifePen[] = [];
   let cage: LifePen | null = null;
+  const jobs: LifeJob[] = [];
+  const footprints: LifeArea[] = [];
   for (const building of yard.buildings) {
+    const [width, height] = building.footprint;
+    footprints.push({ x: building.x, y: building.y, width, height });
     if (building.type === HOUSING_TYPE && standing(building)) {
       pens.push({ id: building.id, x: building.x, y: building.y });
     }
     if (building.type === CHAMPION_CAGE_TYPE && cage === null) {
       cage = { id: building.id, x: building.x, y: building.y };
     }
+    if (building.countdown && WORKER_JOBS.has(building.countdown.kind)) {
+      jobs.push({ id: building.id, x: building.x, y: building.y, width, height });
+    }
   }
   pens.sort((a, b) => a.id - b.id);
+  jobs.sort((a, b) => a.id - b.id);
 
   const champions: LifeChampion[] = [];
   for (const entry of save.champion ?? []) {
@@ -191,6 +259,11 @@ export const yardLifeOf = (save: BaseLoadResponse, yard: Yard): YardLife => {
     pens,
     champions,
     cage,
+    workers: yard.workers.total,
+    jobs,
+    hardHat: yard.buildTime < 1,
+    plot: { width: yard.bounds.yardWidth, height: yard.bounds.yardHeight },
+    footprints,
   };
 };
 
@@ -459,4 +532,178 @@ export const stepWalker = (walker: Walker, random: Random): void => {
   walker.x += (dx / distance) * step;
   walker.y += (dy / distance) * step;
   walker.heading = screenHeading(dx, dy);
+};
+
+/* ── Workers ────────────────────────────────────────────────────────────── */
+
+/** A worker, in world px and frames, as `WORKER.as` moves it. */
+export interface Worker {
+  readonly index: number;
+  x: number;
+  y: number;
+  targetX: number;
+  targetY: number;
+  /** Degrees, 0 facing right, clockwise on screen: `mcMarker.rotation`. */
+  rotation: number;
+  speed: number;
+  /** The building it is on, or null. */
+  job: number | null;
+}
+
+/** Yard units to world px, without `toIso`'s floor: a worker is drawn wherever it is. */
+export type ToWorld = (x: number, y: number) => { x: number; y: number };
+
+/**
+ * An idle worker's starting spot: somewhere on the plot, as `WORKERS.Spawn`
+ * scatters them (`WORKERS.as:43`), but not inside a building, which the
+ * Flash map never had to think about because its workers stood on top.
+ */
+export const idleSpot = (life: YardLife, random: Random): { x: number; y: number } => {
+  const { width, height } = life.plot;
+  let spot = { x: 0, y: 0 };
+  for (let attempt = 0; attempt < 30; attempt++) {
+    spot = { x: (random() - 0.5) * width * 0.9, y: (random() - 0.5) * height * 0.9 };
+    const blocked = life.footprints.some(
+      (box) =>
+        spot.x >= box.x - 4 &&
+        spot.x <= box.x + box.width + 4 &&
+        spot.y >= box.y - 4 &&
+        spot.y <= box.y + box.height + 4,
+    );
+    if (!blocked) break;
+  }
+  return spot;
+};
+
+/**
+ * Where a worker stands to work on a building: the point of the footprint's
+ * edge nearest to where it comes from, a step outside. Flash walked the path
+ * to the footprint's edge and stopped there (`WORKER.as:196-206`).
+ */
+export const jobSpot = (job: LifeJob, fromX: number, fromY: number): { x: number; y: number } => {
+  const left = job.x - WORKER_STANDOFF;
+  const top = job.y - WORKER_STANDOFF;
+  const right = job.x + job.width + WORKER_STANDOFF;
+  const bottom = job.y + job.height + WORKER_STANDOFF;
+  let x = Math.min(Math.max(fromX, left), right);
+  let y = Math.min(Math.max(fromY, top), bottom);
+  if (x > left && x < right && y > top && y < bottom) {
+    // Coming from inside the footprint: out through the nearest side.
+    const gaps = [x - left, right - x, y - top, bottom - y];
+    const nearest = gaps.indexOf(Math.min(...gaps));
+    if (nearest === 0) x = left;
+    else if (nearest === 1) x = right;
+    else if (nearest === 2) y = top;
+    else y = bottom;
+  }
+  return { x, y };
+};
+
+/**
+ * Brings the crew in line with a yard's jobs.
+ *
+ * A worker whose job is over keeps standing where it is. A new job takes the
+ * nearest free worker (`WORKERS.as:65-80`) and sets it walking; on the first
+ * read of a yard (`arrive`) the worker is put straight at the job, as Flash's
+ * catch-up did. Workers are added or dropped to match the count.
+ */
+export const reconcileWorkers = (
+  crew: readonly Worker[],
+  life: YardLife,
+  toWorld: ToWorld,
+  toYard: ToWorld,
+  random: Random,
+  arrive: boolean,
+): Worker[] => {
+  const next: Worker[] = crew.slice(0, life.workers);
+  while (next.length < life.workers) {
+    const spot = idleSpot(life, random);
+    const at = toWorld(spot.x, spot.y);
+    next.push({
+      index: next.length,
+      x: at.x,
+      y: at.y,
+      targetX: at.x,
+      targetY: at.y,
+      rotation: random() * 360,
+      speed: 0,
+      job: null,
+    });
+  }
+
+  const jobs = new Map(life.jobs.map((job) => [job.id, job]));
+  for (const worker of next) {
+    if (worker.job !== null && !jobs.has(worker.job)) worker.job = null;
+  }
+  const taken = new Set<number>();
+  for (const worker of next) if (worker.job !== null) taken.add(worker.job);
+
+  for (const job of life.jobs) {
+    if (taken.has(job.id)) continue;
+    let best: Worker | null = null;
+    let bestDistance = Infinity;
+    for (const worker of next) {
+      if (worker.job !== null) continue;
+      const centre = toWorld(job.x + job.width / 2, job.y + job.height / 2);
+      const distance = Math.hypot(centre.x - worker.x, centre.y - worker.y);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = worker;
+      }
+    }
+    if (!best) break;
+    best.job = job.id;
+    taken.add(job.id);
+    const from = toYard(best.x, best.y);
+    const spot = jobSpot(job, from.x, from.y);
+    const at = toWorld(spot.x, spot.y);
+    best.targetX = at.x;
+    best.targetY = at.y;
+    if (arrive) {
+      best.x = at.x;
+      best.y = at.y;
+      best.speed = 0;
+    }
+  }
+  return next;
+};
+
+/** Wraps a turn into `(-180, 180]` degrees. */
+const shortTurn = (degrees: number): number => {
+  let turn = degrees % 360;
+  if (turn > 180) turn -= 360;
+  if (turn <= -180) turn += 360;
+  return turn;
+};
+
+/**
+ * One frame of a worker's walk (`WORKER.as:211-316`): speed up toward its top
+ * speed until it is near, then brake; step along its facing; turn part of the
+ * way toward the target. Its facing only follows the target while it moves,
+ * so one standing still keeps the way it last faced.
+ */
+export const stepWorker = (worker: Worker): void => {
+  const busy = worker.job !== null;
+  const dx = worker.targetX - worker.x;
+  const dy = worker.targetY - worker.y;
+  const distance = Math.hypot(dx, dy);
+
+  if (distance < WORKER_MOTION.near) {
+    worker.speed = Math.max(0, worker.speed - WORKER_MOTION.brake);
+  } else {
+    const top = busy ? WORKER_MOTION.busySpeed : WORKER_MOTION.idleSpeed;
+    worker.speed += worker.speed < top ? WORKER_MOTION.accelerate : -WORKER_MOTION.accelerate;
+  }
+  if (worker.speed <= 0 && distance < WORKER_MOTION.near) return;
+
+  const radians = (worker.rotation * Math.PI) / 180;
+  worker.x += Math.cos(radians) * worker.speed;
+  worker.y += Math.sin(radians) * worker.speed;
+
+  if (distance > 0) {
+    const want = (Math.atan2(dy, dx) * 180) / Math.PI;
+    const turn = shortTurn(want - worker.rotation);
+    worker.rotation += turn * (busy ? WORKER_MOTION.busyTurn : WORKER_MOTION.idleTurn);
+    worker.rotation = ((worker.rotation % 360) + 360) % 360;
+  }
 };

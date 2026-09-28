@@ -8,17 +8,22 @@ import {
   CHAMPION_WANDER_ODDS,
   CREEP_WANDER_ODDS,
   EMPTY_LIFE,
+  jobSpot,
   MAX_HOUSED_DRAWN,
   PEN_SETTLE_TICKS,
   penArea,
   reconcileWalkers,
+  reconcileWorkers,
   sampleArmy,
   screenHeading,
   stepWalker,
+  stepWorker,
   walkerSpecs,
+  WORKER_MOTION,
   yardLifeOf,
   type LifeGroup,
   type Walker,
+  type Worker,
   type YardLife,
 } from "./yardLifeModel";
 
@@ -36,8 +41,11 @@ const seeded = (seed = 1) => {
 /** Always the same number: 0.5 lands mid-area and never rolls a wander. */
 const fixed = (value: number) => () => value;
 
+const identity = (x: number, y: number) => ({ x, y });
+
 const lifeWith = (overrides: Partial<YardLife>): YardLife => ({
   ...EMPTY_LIFE,
+  plot: { width: 1000, height: 1000 },
   ...overrides,
 });
 
@@ -64,6 +72,12 @@ describe("yardLifeOf", () => {
     ]);
   });
 
+  it("counts the yard's workers and its running jobs", () => {
+    expect(life.workers).toBe(5);
+    expect(life.jobs).toEqual([]);
+    expect(life.hardHat).toBe(false);
+  });
+
   it("leaves out a frozen or juiced champion, and a pen at zero health", () => {
     const other = {
       ...save,
@@ -78,6 +92,18 @@ describe("yardLifeOf", () => {
     expect(read.pens.map((pen) => pen.id)).toEqual([584, 585, 586]);
   });
 
+  it("lists a running upgrade as a job and Sharper Tools as the hard hat", () => {
+    const busy = {
+      ...save,
+      currenttime: 1_000,
+      savetime: 1_000,
+      buildingdata: { ...save.buildingdata, "0": { ...save.buildingdata?.["0"], cU: 600 } },
+      storedata: { ...save.storedata, BST: { q: 1, e: 5_000 } },
+    } as BaseLoadResponse;
+    const read = yardLifeOf(busy, readYard(busy));
+    expect(read.jobs).toEqual([{ id: 0, x: 5, y: -15, width: 130, height: 130 }]);
+    expect(read.hardHat).toBe(true);
+  });
 });
 
 describe("sampleArmy", () => {
@@ -215,5 +241,104 @@ describe("walkers", () => {
     expect(screenHeading(1, 0)).toBeCloseTo(Math.atan2(0.5, 1));
     expect(screenHeading(0, 1)).toBeCloseTo(Math.atan2(0.5, -1));
     expect(screenHeading(1, 1)).toBeCloseTo(Math.PI / 2);
+  });
+});
+
+describe("workers", () => {
+  const job = { id: 3, x: 100, y: 100, width: 40, height: 40 };
+
+  it("stands a worker at the edge of the footprint nearest its approach", () => {
+    expect(jobSpot(job, 0, 120)).toEqual({ x: 94, y: 120 });
+    expect(jobSpot(job, 300, 300)).toEqual({ x: 146, y: 146 });
+    // From inside, out through the nearest side.
+    expect(jobSpot(job, 138, 120)).toEqual({ x: 146, y: 120 });
+  });
+
+  it("makes one worker per worker the yard has, idle and off every footprint", () => {
+    const footprints = [{ x: -500, y: -500, width: 1000, height: 400 }];
+    const crew = reconcileWorkers(
+      [],
+      lifeWith({ workers: 3, footprints }),
+      identity,
+      identity,
+      seeded(4),
+      true,
+    );
+    expect(crew).toHaveLength(3);
+    for (const worker of crew) {
+      expect(worker.job).toBeNull();
+      expect(worker.y).toBeGreaterThan(-100 + 4);
+    }
+  });
+
+  it("sends the nearest free worker to a new job, and on a first read puts it there", () => {
+    const crew: Worker[] = [
+      { index: 0, x: 0, y: 0, targetX: 0, targetY: 0, rotation: 0, speed: 0, job: null },
+      { index: 1, x: 90, y: 120, targetX: 90, targetY: 120, rotation: 0, speed: 0, job: null },
+    ];
+    const life = lifeWith({ workers: 2, jobs: [job] });
+    const walking = reconcileWorkers(crew, life, identity, identity, seeded(), false);
+    expect(walking[1]?.job).toBe(3);
+    expect(walking[1]?.x).toBe(90);
+    expect(walking[1]?.targetX).toBe(94);
+    expect(walking[0]?.job).toBeNull();
+
+    const fresh = reconcileWorkers(
+      crew.map((worker) => ({ ...worker, job: null })),
+      life,
+      identity,
+      identity,
+      seeded(),
+      true,
+    );
+    expect(fresh[1]).toMatchObject({ job: 3, x: 94, y: 120 });
+  });
+
+  it("lets a worker go when its job ends, standing where it was", () => {
+    const crew: Worker[] = [
+      { index: 0, x: 94, y: 120, targetX: 94, targetY: 120, rotation: 0, speed: 0, job: 3 },
+    ];
+    const life = lifeWith({ workers: 1 });
+    const next = reconcileWorkers(crew, life, identity, identity, seeded(), false);
+    expect(next[0]).toMatchObject({ job: null, x: 94, y: 120 });
+  });
+
+  it("walks a busy worker up to 2 px a frame, turning toward the job, and stops there", () => {
+    const worker: Worker = {
+      index: 0,
+      x: 0,
+      y: 0,
+      targetX: 200,
+      targetY: 0,
+      rotation: 90,
+      speed: 0,
+      job: 3,
+    };
+    stepWorker(worker);
+    expect(worker.speed).toBeCloseTo(WORKER_MOTION.accelerate);
+    expect(worker.rotation).toBeCloseTo(90 - 90 / 3);
+    let top = 0;
+    for (let frame = 0; frame < 600; frame++) {
+      stepWorker(worker);
+      top = Math.max(top, worker.speed);
+    }
+    expect(top).toBeLessThanOrEqual(WORKER_MOTION.busySpeed + WORKER_MOTION.accelerate);
+    expect(worker.speed).toBe(0);
+    expect(Math.hypot(worker.x - 200, worker.y)).toBeLessThan(WORKER_MOTION.near + 25);
+  });
+
+  it("leaves a worker with nowhere to go standing", () => {
+    const worker: Worker = {
+      index: 0,
+      x: 5,
+      y: 5,
+      targetX: 5,
+      targetY: 5,
+      rotation: 30,
+      speed: 0,
+      job: null,
+    };
+    stepWorker(worker);
+    expect(worker).toMatchObject({ x: 5, y: 5, rotation: 30, speed: 0 });
   });
 });
