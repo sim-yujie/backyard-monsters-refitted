@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
-import { BEHAVIOUR_SPEED, monsterTickSpeed } from "@/game/combat/rules";
+import { BEHAVIOUR_SPEED, championStat, monsterTickSpeed } from "@/game/combat/rules";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import { readYard } from "./yardModel";
 import {
+  cageArea,
+  CHAMPION_WANDER_ODDS,
   CREEP_WANDER_ODDS,
   EMPTY_LIFE,
   MAX_HOUSED_DRAWN,
@@ -50,16 +52,29 @@ describe("yardLifeOf", () => {
     ]);
   });
 
-  it("takes every standing Housing building as a pen", () => {
+  it("takes every standing Housing building as a pen and the cage", () => {
     expect(life.pens.map((pen) => pen.id)).toEqual([82, 584, 585, 586]);
+    expect(life.cage).toEqual({ id: 51, x: 135, y: -25 });
   });
 
-  it("leaves out a pen at zero health", () => {
+  it("keeps the active champions, Krallen's sheet at its power level", () => {
+    expect(life.champions).toEqual([
+      { id: "G5", level: 5, sheetLevel: 2 },
+      { id: "G3", level: 6, sheetLevel: 6 },
+    ]);
+  });
+
+  it("leaves out a frozen or juiced champion, and a pen at zero health", () => {
     const other = {
       ...save,
+      champion: [
+        { t: 1, l: 2, hp: 100, fb: 0, fd: 0, ft: 0, pl: 0, status: 1 },
+        { t: 2, l: 2, hp: 100, fb: 0, fd: 0, ft: 0, pl: 0, status: 2 },
+      ],
       buildinghealthdata: { ...(save.buildinghealthdata ?? {}), "82": 0 },
     } as BaseLoadResponse;
     const read = yardLifeOf(other, readYard(other));
+    expect(read.champions).toEqual([]);
     expect(read.pens.map((pen) => pen.id)).toEqual([584, 585, 586]);
   });
 
@@ -99,12 +114,21 @@ describe("walkers", () => {
     expect(penArea(pen)).toEqual({ x: 140, y: 240, width: 80, height: 80 });
   });
 
+  it("puts a cage's area 40 to 80 in from a centre at most 30 units off the corner", () => {
+    for (const value of [0, 0.5, 0.999]) {
+      const area = cageArea(pen, fixed(value));
+      expect(area.width).toBe(40);
+      expect(Math.abs(area.x - 140)).toBeLessThanOrEqual(30);
+      expect(Math.abs(area.y - 240)).toBeLessThanOrEqual(30);
+    }
+  });
+
   it("deals the sample round the pens and paces them at a quarter speed", () => {
     const life = lifeWith({
       groups: [{ id: "C1", level: 2, count: 5 }],
       pens: [pen, { id: 9, x: 0, y: 0 }],
     });
-    const specs = walkerSpecs(life);
+    const specs = walkerSpecs(life, seeded());
     expect(specs.map((spec) => spec.key)).toEqual([
       "m:7:C1:0",
       "m:9:C1:0",
@@ -116,9 +140,22 @@ describe("walkers", () => {
     expect(specs[0]?.odds).toBe(CREEP_WANDER_ODDS);
   });
 
-  it("draws no monsters without a pen", () => {
-    const life = lifeWith({ groups: [{ id: "C1", level: 1, count: 5 }] });
-    expect(walkerSpecs(life)).toEqual([]);
+  it("draws no monsters without a pen, and no champion without a cage", () => {
+    const life = lifeWith({
+      groups: [{ id: "C1", level: 1, count: 5 }],
+      champions: [{ id: "G1", level: 2, sheetLevel: 2 }],
+    });
+    expect(walkerSpecs(life, seeded())).toEqual([]);
+  });
+
+  it("puts each champion in the cage at a quarter of its speed", () => {
+    const life = lifeWith({ cage: pen, champions: [{ id: "G1", level: 2, sheetLevel: 2 }] });
+    const [spec] = walkerSpecs(life, seeded());
+    expect(spec?.key).toBe("c:7:G1");
+    expect(spec?.champion).toBe(true);
+    expect(spec?.sheetLevel).toBe(2);
+    expect(spec?.odds).toBe(CHAMPION_WANDER_ODDS);
+    expect(spec?.speed).toBeCloseTo((championStat("G1", "speed", 2) / 4) * 0.5);
   });
 
   const walkerAt = (overrides: Partial<Walker> = {}): Walker => ({
@@ -162,12 +199,12 @@ describe("walkers", () => {
 
   it("keeps a walker that is still wanted where it stands", () => {
     const life = lifeWith({ groups: [{ id: "C1", level: 1, count: 2 }], pens: [pen] });
-    const first = reconcileWalkers(new Map(), walkerSpecs(life), seeded());
+    const first = reconcileWalkers(new Map(), walkerSpecs(life, seeded()), seeded());
     const walker = first.get("m:7:C1:0");
     if (!walker) throw new Error("no walker");
     walker.x = 155;
     const fewer = lifeWith({ groups: [{ id: "C1", level: 1, count: 1 }], pens: [pen] });
-    const second = reconcileWalkers(first, walkerSpecs(fewer), seeded());
+    const second = reconcileWalkers(first, walkerSpecs(fewer, seeded()), seeded());
     expect([...second.keys()]).toEqual(["m:7:C1:0"]);
     expect(second.get("m:7:C1:0")).toBe(walker);
     expect(walker.x).toBe(155);

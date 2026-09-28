@@ -27,7 +27,7 @@ import {
 
 /**
  * Draws what lives on the player's own yard (issue #158): housed monsters in
- * their pens. The rules are in
+ * their pens and the champion in its cage. The rules are in
  * `yardLifeModel.ts`; this owns the sprites.
  *
  * Bodies go into the buildings' own container, sorted by depth the way the
@@ -110,7 +110,7 @@ export class YardLifeLayer {
     const next = life ?? EMPTY_LIFE;
     this.bounds = bounds;
 
-    this.walkers = reconcileWalkers(this.walkers, walkerSpecs(next), this.random);
+    this.walkers = reconcileWalkers(this.walkers, walkerSpecs(next, this.random), this.random);
     for (const [key, body] of this.walkerBodies) {
       if (this.walkers.has(key)) continue;
       this.release(body);

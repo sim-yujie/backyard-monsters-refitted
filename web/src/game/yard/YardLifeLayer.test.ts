@@ -29,6 +29,8 @@ const life = (overrides: Partial<YardLife> = {}): YardLife => ({
     { id: "C14", level: 1, count: 1 },
   ],
   pens: [{ id: 5, x: 0, y: 0 }],
+  cage: { id: 6, x: -200, y: -200 },
+  champions: [{ id: "G1", level: 2, sheetLevel: 2 }],
   ...overrides,
 });
 
@@ -44,9 +46,9 @@ describe("YardLifeLayer", () => {
     const { layer, tops, shadows } = setUp();
     layer.set(life(), bounds);
     expect(layer.attach(tops, shadows)).toBe(true);
-    // 3 Pokeys and a Teratorn.
-    expect(layer.count).toBe(4);
-    expect(tops.children).toHaveLength(4);
+    // 3 Pokeys, a Teratorn, a Gorgo.
+    expect(layer.count).toBe(5);
+    expect(tops.children).toHaveLength(5);
     expect(shadows.children).toHaveLength(1);
 
     layer.update(everywhere, 0);
@@ -95,8 +97,8 @@ describe("YardLifeLayer", () => {
     layer.set(life(), bounds);
     layer.attach(tops, shadows);
     layer.set(life({ groups: [{ id: "C1", level: 1, count: 1 }] }), bounds);
-    expect(layer.count).toBe(1);
-    expect(tops.children).toHaveLength(1);
+    expect(layer.count).toBe(2);
+    expect(tops.children).toHaveLength(2);
     expect(shadows.children).toHaveLength(0);
     layer.set(null, bounds);
     expect(layer.count).toBe(0);
@@ -106,7 +108,7 @@ describe("YardLifeLayer", () => {
   it("walks the creatures on the clock, and under reduced motion does not", () => {
     for (const reduced of [false, true]) {
       const { layer, tops, shadows } = setUp(reduced);
-      layer.set(life({ groups: [{ id: "C1", level: 1, count: 1 }] }), bounds);
+      layer.set(life({ groups: [{ id: "C1", level: 1, count: 1 }], champions: [] }), bounds);
       layer.attach(tops, shadows);
       const [walker] = layer.walkerList;
       if (!walker) throw new Error("no walker");

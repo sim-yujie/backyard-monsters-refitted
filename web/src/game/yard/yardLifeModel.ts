@@ -1,12 +1,18 @@
 import type { BaseLoadResponse } from "@/api/types";
-import { BEHAVIOUR_SPEED, monsterMovement, monsterTickSpeed } from "@/game/combat/rules";
+import {
+  BEHAVIOUR_SPEED,
+  championStat,
+  monsterMovement,
+  monsterTickSpeed,
+} from "@/game/combat/rules";
 import { academyLevel } from "@/game/monsters/housing";
+import { fromIso } from "./YardGrid";
 import type { Yard, YardBuilding } from "./yardModel";
 
 /**
  * What lives on the player's own yard besides its buildings (issue #158): the
- * housed monsters wandering their pens. Arithmetic only, so it runs under
- * node; `YardLifeLayer` draws it.
+ * housed monsters wandering their pens and a raised champion pacing its cage.
+ * Arithmetic only, so it runs under node; `YardLifeLayer` draws it.
  *
  * Everything here is drawn and nothing is saved. The Flash client simulated
  * all of it as real creatures; this client has no creature to simulate on its
@@ -29,6 +35,19 @@ import type { Yard, YardBuilding } from "./yardModel";
  * {@link sampleArmy} keeps every type present and shares at most
  * {@link MAX_HOUSED_DRAWN} places between the types in proportion to their
  * counts, and the sample is dealt round the pens in turn.
+ *
+ * ## The champion (`client/scripts/CHAMPIONCAGE.as:589-660`)
+ *
+ * The cage's `Setup` spawns every champion whose `status` is 0, "normal", in
+ * behaviour `pen` at `PointInCage`: 40 to 80 yard units in from a centre that
+ * is the cage's corner shifted up to 20 px each way on screen (`:623`,
+ * `:280-283`). A frozen (1), juiced (2) or otherwise gone champion is not
+ * spawned, so the cage stands empty. There is no sleeping state: a hurt
+ * champion heals in its pen and paces like any other
+ * (`champions/ChampionBase.as:1044-1061`), with a 1 in 150 chance a tick of a
+ * new spot (`:1058`), at a quarter of its speed (`:1374-1378`, and the
+ * engine's `speed / 4`), showing its idle row while it stands (`:1538-1540`).
+ * Krallen picks its sheet by power level (`champions/Krallen.as:46-48`).
  */
 
 /* ── Clocks ─────────────────────────────────────────────────────────────── */
@@ -55,14 +74,25 @@ export const MAX_HOUSED_DRAWN = 150;
 export const HOUSING_TYPE = 15;
 const PEN = { inset: 40, size: 80 } as const;
 
+/** The Champion Cage's type id and its pen (`CHAMPIONCAGE.as:280-283`). */
+export const CHAMPION_CAGE_TYPE = 114;
+const CAGE = { inset: 40, size: 40, jitter: 20 } as const;
+
 /** Ticks a penned creature stands before it may first move (`CreepBase.as:1377`). */
 export const PEN_SETTLE_TICKS = 240;
 
 /** One chance in this many, each tick, of a penned creature picking a new spot. */
 export const CREEP_WANDER_ODDS = 200;
+export const CHAMPION_WANDER_ODDS = 150;
 
 /** Yard units from its target at which a walker counts as there (`CreepBase.as:1698`). */
 const ARRIVED = 5;
+
+/** A champion's speed prop to yard units a tick, before behaviour (`engine.ts` `speed / 4`). */
+const CHAMPION_SPEED_DIVISOR = 4;
+
+/** Krallen's champion type: its sheet goes by power level (`Krallen.as:46-48`). */
+const KRALLEN_TYPE = 5;
 
 /* ── What the save says ─────────────────────────────────────────────────── */
 
@@ -90,16 +120,31 @@ export interface LifePen {
   readonly y: number;
 }
 
+/** A champion on show in the cage. */
+export interface LifeChampion {
+  /** `G1`..`G5`. */
+  readonly id: string;
+  /** Evolution level: its speed. */
+  readonly level: number;
+  /** The level its sheet is picked at: the power level for Krallen. */
+  readonly sheetLevel: number;
+}
+
 /** Everything alive on a yard, as read from its save. */
 export interface YardLife {
   readonly groups: readonly LifeGroup[];
   readonly pens: readonly LifePen[];
+  readonly champions: readonly LifeChampion[];
+  /** The cage's top corner in yard units, or null when the yard has none. */
+  readonly cage: LifePen | null;
 }
 
 /** Nothing alive at all. */
 export const EMPTY_LIFE: YardLife = {
   groups: [],
   pens: [],
+  champions: [],
+  cage: null,
 };
 
 const standing = (building: YardBuilding): boolean => building.hp === null || building.hp > 0;
@@ -109,6 +154,7 @@ const standing = (building: YardBuilding): boolean => building.hp === null || bu
  *
  * Pens are the Housing buildings with health above zero, as `Populate` takes
  * them (`HOUSING.as:212-215`); one still being built counts, as it did there.
+ * The champion list keeps status 0 only (`CHAMPIONCAGE.as:593-594`).
  */
 export const yardLifeOf = (save: BaseLoadResponse, yard: Yard): YardLife => {
   const groups: LifeGroup[] = [];
@@ -119,16 +165,32 @@ export const yardLifeOf = (save: BaseLoadResponse, yard: Yard): YardLife => {
   }
 
   const pens: LifePen[] = [];
+  let cage: LifePen | null = null;
   for (const building of yard.buildings) {
     if (building.type === HOUSING_TYPE && standing(building)) {
       pens.push({ id: building.id, x: building.x, y: building.y });
     }
+    if (building.type === CHAMPION_CAGE_TYPE && cage === null) {
+      cage = { id: building.id, x: building.x, y: building.y };
+    }
   }
   pens.sort((a, b) => a.id - b.id);
+
+  const champions: LifeChampion[] = [];
+  for (const entry of save.champion ?? []) {
+    if (!entry || Number(entry.status ?? 0) !== 0) continue;
+    const t = Math.floor(Number(entry.t));
+    if (!(t >= 1)) continue;
+    const level = Math.max(1, Math.floor(Number(entry.l)) || 1);
+    const power = Math.max(1, Math.floor(Number(entry.pl)) || 1);
+    champions.push({ id: `G${t}`, level, sheetLevel: t === KRALLEN_TYPE ? power : level });
+  }
 
   return {
     groups,
     pens,
+    champions,
+    cage,
   };
 };
 
@@ -195,7 +257,7 @@ export const sampleArmy = (
   return drawn;
 };
 
-/* ── Walkers: monsters in their pens ─────────────────────────────────────────── */
+/* ── Walkers: monsters and champions in their pens ──────────────────────── */
 
 /** A creature pacing an area, in yard units and creature ticks. */
 export interface Walker {
@@ -241,6 +303,23 @@ export const penArea = (pen: LifePen): LifeArea => ({
   height: PEN.size,
 });
 
+/**
+ * The wander rectangle of a champion at a cage (`PointInCage` around the centre
+ * `SpawnGuardian` picks: the corner moved up to 20 px either way on screen).
+ */
+export const cageArea = (cage: LifePen, random: Random): LifeArea => {
+  const nudge = fromIso(
+    -CAGE.jitter + random() * CAGE.jitter * 2,
+    -CAGE.jitter + random() * CAGE.jitter * 2,
+  );
+  return {
+    x: cage.x + nudge.x + CAGE.inset,
+    y: cage.y + nudge.y + CAGE.inset,
+    width: CAGE.size,
+    height: CAGE.size,
+  };
+};
+
 interface WalkerSpec {
   readonly key: string;
   readonly monsterId: string;
@@ -268,8 +347,12 @@ const makeWalker = (spec: WalkerSpec, random: Random): Walker => {
   };
 };
 
-/** The walkers a yard's pens hold, by key. */
-export const walkerSpecs = (life: YardLife, cap = MAX_HOUSED_DRAWN): WalkerSpec[] => {
+/** The walkers a yard's pens and cage hold, by key. */
+export const walkerSpecs = (
+  life: YardLife,
+  random: Random,
+  cap = MAX_HOUSED_DRAWN,
+): WalkerSpec[] => {
   const specs: WalkerSpec[] = [];
 
   if (life.pens.length > 0) {
@@ -293,6 +376,23 @@ export const walkerSpecs = (life: YardLife, cap = MAX_HOUSED_DRAWN): WalkerSpec[
     });
   }
 
+  const cage = life.cage;
+  if (cage) {
+    for (const champion of life.champions) {
+      specs.push({
+        key: `c:${cage.id}:${champion.id}`,
+        monsterId: champion.id,
+        sheetLevel: champion.sheetLevel,
+        champion: true,
+        area: cageArea(cage, random),
+        speed:
+          (championStat(champion.id, "speed", champion.level) / CHAMPION_SPEED_DIVISOR) *
+          (BEHAVIOUR_SPEED["pen"] ?? 1),
+        odds: CHAMPION_WANDER_ODDS,
+      });
+    }
+  }
+
   return specs;
 };
 
@@ -301,7 +401,8 @@ export const walkerSpecs = (life: YardLife, cap = MAX_HOUSED_DRAWN): WalkerSpec[
  * still wanted where it stands, makes the new ones, drops the rest.
  *
  * A kept walker takes the new spec's area, so a pen that moved has its
- * creatures walk over to it rather than blink there.
+ * creatures walk over to it rather than blink there, and a kept champion keeps
+ * the cage spot it already chose.
  */
 export const reconcileWalkers = (
   current: ReadonlyMap<string, Walker>,
