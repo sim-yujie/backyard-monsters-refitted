@@ -9,6 +9,7 @@ import { RESOURCE_KEYS, type ResourceKey } from "../../services/base/economy/res
 import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { isShinyLocked } from "../../services/user/shinyLock.js";
 import { catchUpYard, type CompletedJob } from "../../services/yard/catchUp.js";
+import { catchUpDamage } from "../../services/yard/catchUpDamage.js";
 import { creditResources } from "../../services/yard/credit.js";
 import { syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import { joinMapRoom2 } from "../../services/yard/mapRoom.js";
@@ -280,6 +281,8 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
 
       const outcome = await action.run({ save, user, body: parsed.data, now, completed });
       applyOutcome(save, user, outcome);
+      // An instant or paid repair shows on the map now, not at the next catch-up (#182 B).
+      catchUpDamage(save);
       save.savetime = now;
 
       await tx.flush();

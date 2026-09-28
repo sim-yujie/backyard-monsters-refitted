@@ -31,18 +31,6 @@ import { isWildMonsterExpired } from "../wildMonsterExpiry.js";
 /** A yard is destroyed, and so up for takeover, at this damage (`userCell.ts` `d`). */
 export const TAKEOVER_DAMAGE = 90;
 
-/**
- * The damage the map reports for a player's yard (`userCell.ts` `dm`, and `d`
- * from it): the stored figure, except that a yard whose damage protection has
- * run out, and not yet been cleared, reads as undamaged.
- *
- * @param {object} save - The yard's `damage` and `protected`.
- * @param {number} now - Server seconds.
- * @returns {number} The damage the map shows.
- */
-export const reportedDamage = (save: { damage: number; protected: number }, now: number) =>
-  save.protected > 0 && save.protected <= now ? 0 : save.damage;
-
 /** `GLOBAL.k_MAX_NUMBER_OF_OUTPOSTS` (`GLOBAL.as:440`). */
 export const MAX_OUTPOSTS = 3500;
 

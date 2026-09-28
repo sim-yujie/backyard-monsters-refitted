@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { MAX_OUTPOSTS, reportedDamage, takeoverRefusal, type TakeoverTargetInput } from "./takeoverRules.js";
+import { MAX_OUTPOSTS, takeoverRefusal, type TakeoverTargetInput } from "./takeoverRules.js";
 
 const TAKER = 2505;
 const OWNER = 77;
@@ -109,10 +109,13 @@ describe("takeoverRefusal, never", () => {
   });
 });
 
-describe("reportedDamage", () => {
-  test("the stored damage, or 0 once protection has run out", () => {
-    expect(reportedDamage({ damage: 92, protected: 0 }, NOW)).toBe(92);
-    expect(reportedDamage({ damage: 92, protected: NOW + 1 }, NOW)).toBe(92);
-    expect(reportedDamage({ damage: 92, protected: NOW }, NOW)).toBe(0);
+describe("takeoverRefusal reads the real damage (issue #182 B)", () => {
+  test("a destroyed camp whose protection ran out is still destroyed", () => {
+    expect(camp(60, { protected: NOW - 1 })).toBeNull();
+  });
+
+  test("a grant holder's outpost is judged on its stored damage whatever its protection says", () => {
+    expect(outpost({ protected: NOW - 1 })).toBeNull();
+    expect(outpost({ protected: NOW - 1, damage: 50 })).toBe("notDestroyed");
   });
 });

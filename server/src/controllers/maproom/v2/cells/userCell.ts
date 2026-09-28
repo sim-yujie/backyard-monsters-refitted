@@ -6,7 +6,7 @@ import { calculateBaseLevel } from "../../../../services/base/calculateBaseLevel
 import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { MapRoomCell } from "../../../../enums/MapRoom.js";
 import { isAttackActive } from "../../../../services/base/isAttackActive.js";
-import { reportedDamage, TAKEOVER_DAMAGE } from "../../../../services/maproom/v2/takeoverRules.js";
+import { TAKEOVER_DAMAGE } from "../../../../services/maproom/v2/takeoverRules.js";
 import { loadArmyOwner, monstersForMap, type ArmyOwner } from "../../../../services/yard/armies.js";
 
 export type UserCellFields =
@@ -65,7 +65,10 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
 
   const isProtected = cellSave.protected > 0 && cellSave.protected > currentTime;
 
-  const damage = reportedDamage(cellSave, currentTime);
+  // The real damage until the owner repairs (`catchUpDamage.ts`), not 0 once
+  // damage protection ends: the owner's rule (issue #182 B). The takeover rules
+  // read the same stored figure.
+  const damage = cellSave.damage;
 
   const truceExpiry = mine ? undefined : truces.get(cellOwner.userid)?.expires_at;
 
