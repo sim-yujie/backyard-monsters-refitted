@@ -23,6 +23,7 @@ import { BuildPlacement } from "@/game/yard/BuildPlacement";
 import { harvesterNow, type HarvestKey } from "@/game/yard/harvest";
 import { MushroomPicker, type MushroomPickView } from "@/game/yard/mushroomPick";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
+import { yardLifeOf } from "@/game/yard/yardLifeModel";
 import {
   YardChangeReason,
   YardStore,
@@ -536,6 +537,9 @@ export class YardScene implements Scene {
       // store's server-corrected clock.
       this.renderer.setJobClock(store ? () => store.now() : null);
       this.renderer.show(yard);
+      // What lives on the yard is drawn on the own yard only (#158): a
+      // visit's save is somebody else's army.
+      this.renderer.setLife(store ? yardLifeOf(response, yard) : null);
       // A visitor never sees another yard's traps (`BTRAP.as:33-43`, #66);
       // the player's own yard shows them, as build mode always did.
       if (target) concealTraps(this.renderer, yard);
@@ -1088,6 +1092,7 @@ export class YardScene implements Scene {
       },
       onExit: () => this.closePlanner(),
     });
+    this.renderer.setLifeHidden(true);
     // The planner's constructor reports its own inset synchronously (via
     // `onInset` above), so `this.inset.top` is already the top bar's real
     // measured height here — that is what the notice dock tucks under
@@ -1130,6 +1135,7 @@ export class YardScene implements Scene {
   private closePlanner(): void {
     this.planner?.destroy();
     this.planner = null;
+    this.renderer.setLifeHidden(false);
     if (this.refreshAfterPlanner) {
       this.refreshAfterPlanner = false;
       void this.store?.refresh();
@@ -1277,6 +1283,7 @@ export class YardScene implements Scene {
     this.yard = yard;
     this.save = store.save;
     this.renderer.show(yard);
+    this.renderer.setLife(yardLifeOf(store.save, yard));
     this.minimap?.refreshBuildings();
     this.hud?.setResources(store.resources, store.credits);
     this.planner?.rebase(yard);

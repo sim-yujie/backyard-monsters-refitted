@@ -2,7 +2,10 @@ import { Container, Graphics, Sprite, type Renderer } from "pixi.js";
 import { YardBuildings } from "./YardBuildings";
 import { YardGround } from "./YardGround";
 import { YardJobBars } from "./YardJobBars";
+import { YardLifeLayer } from "./YardLifeLayer";
+import type { YardLife } from "./yardLifeModel";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
+import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
 import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
 import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
@@ -53,6 +56,10 @@ export class YardRenderer {
   private readonly planner = new PlannerOverlay();
   /** Progress bars over running builds and upgrades, own yard only (#139). */
   private readonly jobBars = new YardJobBars((id) => this.jobBarAnchor(id));
+  /** What lives on the own yard (#158); empty anywhere else. */
+  private readonly life = new YardLifeLayer({ reducedMotion: prefersReducedMotion() });
+  /** The planner is open: the creatures step out of the way until it closes. */
+  private lifeHidden = false;
 
   /**
    * Where the planner hangs its world-space decals: the tower range discs and
@@ -118,6 +125,7 @@ export class YardRenderer {
   /** Bakes the vector glyphs. Call once, before the first `show`. */
   attach(renderer: Renderer): void {
     this.atlas ??= yardArtAtlas(renderer);
+    this.life.useRenderer(renderer);
   }
 
   /** Buildings still waiting on, or missing, their picture. */
@@ -147,7 +155,11 @@ export class YardRenderer {
     this.ground.layout(yard.bounds, yard.savedAt || 1, yard.foreign ? "open" : "plot");
     void this.ground.loadTiles();
 
+    // The creatures outlive a redraw: out of the containers the yard is about
+    // to empty, and back in once it has refilled them.
+    this.life.detach();
     this.buildings.show(yard, atlas);
+    this.mountLife();
     this.jobBars.show(yard);
     this.blueprint.show(yard);
     this.blueprint.setActive(this.currentView === YardView.BLUEPRINT);
@@ -171,6 +183,7 @@ export class YardRenderer {
     // yard costs nothing per frame.
     if (this.currentView === YardView.ISO) {
       this.buildings.draw(visible, deltaSeconds);
+      this.life.update(visible, deltaSeconds);
       this.jobBars.update();
       this.shakeMushrooms();
     }
@@ -217,8 +230,48 @@ export class YardRenderer {
       layer.visible = iso;
     }
     this.blueprint.setActive(!iso);
+    this.life.setHidden(!iso || this.lifeHidden);
     this.chromeDirty = true;
     if (this.plannerVisuals) this.setPlannerVisuals(this.plannerVisuals);
+  }
+
+  /* ── Life ───────────────────────────────────────────────────────────── */
+
+  /**
+   * Shows what lives on the yard (#158), as `yardLifeModel` reads it off the
+   * save, or clears it when passed null. The own yard's scene
+   * calls this after every `show`; a visit and an attack never do.
+   */
+  setLife(life: YardLife | null): void {
+    const bounds = this.yard?.bounds;
+    if (!bounds) return;
+    this.life.set(life, bounds);
+    this.mountLife();
+  }
+
+  /**
+   * Hides the creatures while the planner is open, whose moves they would
+   * otherwise stand in the middle of, or shows them again.
+   */
+  setLifeHidden(hidden: boolean): void {
+    this.lifeHidden = hidden;
+    this.life.setHidden(hidden || this.currentView !== YardView.ISO);
+  }
+
+  /** How many living things are being drawn. */
+  get lifeCount(): number {
+    return this.life.count;
+  }
+
+  /**
+   * Puts the creatures into the yard's building containers and, when there are
+   * any, switches the depth sort on so they stand among the buildings. A yard
+   * with nothing alive keeps its unsorted draw list.
+   */
+  private mountLife(): void {
+    if (this.life.attach(this.buildings.tops, this.buildings.shadows)) {
+      this.buildings.resortByDepth();
+    }
   }
 
   /**
@@ -506,6 +559,7 @@ export class YardRenderer {
   }
 
   destroy(): void {
+    this.life.destroy();
     this.clearMushrooms();
     this.planner.destroy();
     this.jobBars.destroy();
