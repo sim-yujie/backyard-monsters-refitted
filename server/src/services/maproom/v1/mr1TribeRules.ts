@@ -4,7 +4,6 @@ import { legionnaire } from "../../../game-data/tribes/v1/legionnaire.js";
 import { kozu } from "../../../game-data/tribes/v1/kozu.js";
 import { abunaki } from "../../../game-data/tribes/v1/abunaki.js";
 import { dreadnaught } from "../../../game-data/tribes/v1/dreadnaught.js";
-import { tutorial } from "../../../game-data/tribes/v1/tutorial.js";
 import { LOOT_GAIN_RATIO, RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import type { TribeData } from "../../../types/TribeData.js";
 import type { SaveData } from "../../../types/EntityData.js";
@@ -45,21 +44,22 @@ export interface MR1TribeSlot {
 
 /**
  * The four tribe bases a player faces now: one per tribe, at the tier of their
- * Town Hall. Before tutorial stage 205 the Legionnaire spot is the tutorial camp.
+ * Town Hall.
+ *
+ * Flash put the one-monster tutorial camp (base 1) in the Legionnaire spot
+ * until tutorial stage 205. There is no tutorial any more (no Flash client,
+ * D1, and the web client has none), so web accounts never reach 205 and the
+ * spot would stay the tutorial camp for ever. Every account gets the Town Hall
+ * tier instead, whatever stage its save records (issue #132).
  */
-export const currentMR1Tribes = (
-  townHallLevel: number,
-  tutorialstage: number,
-  config: MR1TribeScaleConfig
-): MR1TribeSlot[] => {
+export const currentMR1Tribes = (townHallLevel: number, config: MR1TribeScaleConfig): MR1TribeSlot[] => {
   const scale = mr1TribeScale(townHallLevel, config);
-  const inTutorial = tutorialstage < 205;
 
   return MR1_TRIBE_TEMPLATES.map((tribe, index) => ({
     index,
     name: MR1_TRIBE_NAMES[index]!,
     scale,
-    template: index === 0 && inTutorial ? tutorial : tribe[scale],
+    template: tribe[scale],
   }));
 };
 

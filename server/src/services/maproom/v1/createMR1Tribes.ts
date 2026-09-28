@@ -23,7 +23,8 @@ export interface MR1TribeScaleConfig {
  * relative to the player's level so tribes always pass the client's
  * _baseLevel - 10 display filter.
  *
- * Destroyed tribes respawn after 10 minutes.
+ * Destroyed tribes respawn after 10 minutes. There is no tutorial camp any
+ * more: every account faces its Town Hall's tier (`currentMR1Tribes`).
  *
  * @param {Save} save - The player's main save
  * @param {MR1TribeScaleConfig} tribes - Town Hall level thresholds per scale (max TH level is 10)
@@ -41,7 +42,7 @@ export const createMR1Tribes = async (save: Save, tribes: MR1TribeScaleConfig) =
 
   let persist = false;
 
-  const scaledTribes = currentMR1Tribes(thLevel, save.tutorialstage, tribes).map((slot) => slot.template);
+  const scaledTribes = currentMR1Tribes(thLevel, tribes).map((slot) => slot.template);
   const scaledBaseIds = new Set(scaledTribes.map((tribe) => Number(tribe.baseid)));
 
   let maproom = await postgres.em.findOne(Maproom, { userid });

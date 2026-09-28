@@ -29,7 +29,7 @@ const userOn = (mapversion: number, townHall = 1) =>
     userid: 1,
     save: {
       mapversion,
-      tutorialstage: 205,
+      tutorialstage: 0,
       buildingdata: { 0: { t: 14, l: townHall } },
       wmstatus: [[2, 1, 1]],
     },
@@ -58,7 +58,7 @@ describe("requireAttackableMR1Tribe", () => {
     expect(await refusal(userOn(2), "2")).toBe("notMapRoom1");
   });
 
-  test("another tier's tribe or the tutorial camp is not on the player's map", async () => {
+  test("another tier's tribe or the tutorial camp is not on the player's map, at any tutorial stage", async () => {
     // Base 4 is the Legionnaire at a higher Town Hall tier than 1-2.
     expect(await refusal(userOn(1), "4")).toBe("notYourTribe");
     expect(await refusal(userOn(1), "1")).toBe("notYourTribe");

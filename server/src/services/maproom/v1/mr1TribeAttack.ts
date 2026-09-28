@@ -24,7 +24,7 @@ export const requireAttackableMR1Tribe = async (user: User, baseid: string, now:
   if (userSave.mapversion !== MapRoomVersion.V1) throw mr1TribeRefusedErr("notMapRoom1");
 
   const townHall = extractTownHall(userSave.buildingdata ?? {});
-  const tribes = currentMR1Tribes(townHall?.l ?? 1, userSave.tutorialstage, MR1_TRIBES);
+  const tribes = currentMR1Tribes(townHall?.l ?? 1, MR1_TRIBES);
 
   if (!tribes.some((tribe) => tribe.template.baseid === baseid)) throw mr1TribeRefusedErr("notYourTribe");
 

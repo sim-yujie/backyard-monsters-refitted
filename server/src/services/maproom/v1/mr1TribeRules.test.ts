@@ -27,10 +27,17 @@ describe("mr1TribeScale", () => {
 
 describe("currentMR1Tribes", () => {
   test("four tribes in Flash's order, all at the Town Hall's tier", () => {
-    const tribes = currentMR1Tribes(4, 205, MR1_TRIBES);
+    const tribes = currentMR1Tribes(4, MR1_TRIBES);
     expect(tribes.map((tribe) => tribe.name)).toEqual(["Legionnaire", "Kozu", "Abunakki", "Dreadnaut"]);
     expect(tribes.every((tribe) => tribe.scale === TribeScale.TH4)).toBe(true);
     expect(tribes[0]!.template).toBe(legionnaire[TribeScale.TH4]);
+  });
+
+  test("no tutorial camp: a Town Hall 1 account gets the Legionnaire's real tribe, whatever its tutorial stage (#132)", () => {
+    const tribes = currentMR1Tribes(1, MR1_TRIBES);
+    expect(tribes[0]!.template).toBe(legionnaire[TribeScale.NEW]);
+    expect(tribes.map((tribe) => tribe.template.baseid)).not.toContain("1");
+    expect(tribes[0]!.template.monsters).not.toEqual({ C2: 3 });
   });
 });
 

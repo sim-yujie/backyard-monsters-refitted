@@ -1,6 +1,8 @@
 import type { SaveData } from "../../../types/EntityData.js";
 
-// Baseid 1 (L_IDS) — shown to players with tutorialstage < 205
+// Baseid 1 (L_IDS) — Flash's tutorial camp, shown before tutorial stage 205.
+// No longer served (no tutorial exists, `mr1TribeRules.ts` `currentMR1Tribes`);
+// kept so the id is still recognised as a Map Room 1 tribe.
 export const tutorial: SaveData = {
   baseid: "1",
   type: "tribe",
