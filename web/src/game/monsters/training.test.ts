@@ -125,12 +125,50 @@ describe("slots", () => {
   });
 });
 
+describe("academyFor (#180)", () => {
+  const many = () =>
+    contextOf({
+      buildings: {
+        "1": building(1, 14, 7),
+        "3": building(3, 26, 3),
+        "5": building(5, 26, 3),
+        "6": building(6, 26, 1),
+        "9": building(9, 26, 1),
+        "12": building(12, 26, 2),
+      },
+    });
+
+  it("picks the lowest-level idle academy that can train it, the lower id on a tie", () => {
+    const context = many();
+    expect(academyFor(context, 1)?.id).toBe(6);
+    expect(academyFor(context, 2)?.id).toBe(12);
+    expect(academyFor(context, 3)?.id).toBe(3);
+    expect(academyFor(context, 4)).toBeNull();
+  });
+
+  it("passes over a busy academy", () => {
+    // Academy 6 is training C2, so C1 at level 1 goes to 9, the other level 1.
+    const busy = contextOf({
+      buildings: {
+        "1": building(1, 14, 7),
+        "5": building(5, 26, 3),
+        "6": building(6, 26, 1, { upg: "C2" }),
+        "9": building(9, 26, 1),
+      },
+      academy: { C1: { level: 1 }, C2: { level: 3, time: T0 + 60 } },
+    });
+    expect(academyFor(busy, 1)?.id).toBe(9);
+    expect(academyFor(busy, 1)?.number).toBe(3);
+  });
+});
+
 describe("trainGate", () => {
   it("passes when an idle academy is high enough and putty covers it", () => {
     const context = contextOf();
     expect(trainGate(monster("C2"), context)).toBeNull();
     expect(academyFor(context, 3)?.id).toBe(5);
-    expect(academyFor(context, 1)?.id).toBe(5);
+    // Level 1 fits both; the lower academy takes it and 5 stays free (#180).
+    expect(academyFor(context, 1)?.id).toBe(6);
   });
 
   it("refuses in the server's order", () => {

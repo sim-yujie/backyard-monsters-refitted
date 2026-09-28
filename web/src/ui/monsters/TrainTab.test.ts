@@ -114,6 +114,18 @@ describe("TrainTab: slots and list", () => {
     expect(buttonNamed(element, "Train to level")).toBeUndefined();
   });
 
+  it("names the lowest academy that can train it and says training covers every one (#180)", () => {
+    const { element } = setup({ resources: { r1: 0, r2: 0, r3: 10_000_000, r4: 5_000 } });
+    const card = element.querySelector<HTMLElement>(".locker__detail")!;
+    const notes = () => [...card.querySelectorAll(".locker-detail__note")].map((one) => spokenText(one));
+    // Octo-ooze at level 3 needs Academy 1 (level 3); Zafreeti at level 1 fits
+    // both, and Academy 2 (level 1) is the lower.
+    expect(notes()[1]).toBe("Training upgrades every Octo-ooze, now and in future.");
+    row(element, "C15").click();
+    expect(notes()[0]).toMatch(/ · at Academy 2$/);
+    expect(notes()[1]).toBe("Training upgrades every Zafreeti, now and in future.");
+  });
+
   it("says what to do when nothing is unlocked", () => {
     const { element } = setup({ lockerdata: {} });
     expect(element.querySelector(".train__empty")!.textContent).toMatch(/Unlock one in the Monster Locker/);

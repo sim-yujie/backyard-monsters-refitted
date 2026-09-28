@@ -68,9 +68,20 @@ describe("planAcademyTrain", () => {
     expect(plan.slices.buildingdata["6"]).not.toHaveProperty("upg");
   });
 
-  test("without an academy takes the first idle one high enough", () => {
-    expect(planAcademyTrain(saveOf(), "C1", undefined, NOW).report.academy).toBe(5);
-    // Academy 5 busy: C1 at level 1 fits academy 6 (level 1).
+  test("without an academy takes the lowest-level idle one that can train it (#180)", () => {
+    // C1 at level 1 fits both: academy 6 (level 1) is the lower, so academy 5
+    // (level 3) stays free.
+    expect(planAcademyTrain(saveOf(), "C1", undefined, NOW).report.academy).toBe(6);
+    // C2 at level 3 needs an academy at level 3: only 5 can.
+    expect(planAcademyTrain(saveOf(), "C2", undefined, NOW).report.academy).toBe(5);
+    // Academy 6 busy: C1 goes to 5, the one idle academy left.
+    const sixBusy = withBuilding(
+      saveOf({ academy: { C1: { level: 1 }, C2: { level: 3 }, C5: { level: 1, time: NOW + 10 } } }),
+      6,
+      { upg: "C5" }
+    );
+    expect(planAcademyTrain(sixBusy, "C1", undefined, NOW).report.academy).toBe(5);
+    // Academy 5 busy: C1 still fits 6…
     const busy = withBuilding(
       saveOf({ academy: { C1: { level: 1 }, C2: { level: 3 }, C5: { level: 1, time: NOW + 10 } } }),
       5,
@@ -84,6 +95,23 @@ describe("planAcademyTrain", () => {
       have: 1,
       need: 3,
     });
+  });
+
+  test("breaks a tie between equal academies by building id", () => {
+    const base = saveOf();
+    const many: AcademySave = {
+      ...base,
+      buildingdata: {
+        ...base.buildingdata,
+        "3": { id: 3, t: 26, x: 0, y: 0, l: 3 },
+        "9": { id: 9, t: 26, x: 0, y: 0, l: 1 },
+        "12": { id: 12, t: 26, x: 0, y: 0, l: 2 },
+      } as BuildingDataMap,
+    };
+    // Level 1 academies 6 and 9: 6. Level 3 academies 3 and 5: 3. C2 at level 3
+    // skips level 2 academy 12, which cannot train it.
+    expect(planAcademyTrain(many, "C1", undefined, NOW).report.academy).toBe(6);
+    expect(planAcademyTrain(many, "C2", undefined, NOW).report.academy).toBe(3);
   });
 
   test("a monster with no academy entry trains from level 1", () => {

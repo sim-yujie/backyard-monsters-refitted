@@ -31,9 +31,9 @@ import {
  * trained, no idle academy, the academy's level, then putty. The first that
  * fails is the one shown.
  *
- * Train sends no academy: the server takes the first idle academy whose level
- * is high enough, in building id order, and {@link academyFor} predicts which
- * one that will be so the card can say so.
+ * Train sends no academy: the server takes the lowest-level idle academy that
+ * can train the monster, the lower building id on a tie (issue #180), and
+ * {@link academyFor} predicts which one that will be so the card can say so.
  *
  * Prices are the server's formulas, recomputed here for the label only: the
  * route charges its own figure (`server/src/services/yard/shiny.ts`).
@@ -220,11 +220,16 @@ export const trainRows = (context: TrainingContext): TrainRow[] =>
   });
 
 /**
- * The academy the server will train `level` → `level + 1` at: the first idle
- * one whose level is at least `level`, in building id order. Null when none.
+ * The academy the server will train `level` → `level + 1` at: of the idle
+ * ones whose level is at least `level` (`ACADEMY.as:66`), the lowest, the
+ * lower building id on a tie, so a high academy stays free for a monster only
+ * it can train (issue #180; `trainGate`, `server/src/services/yard/academy.ts`).
+ * Null when none.
  */
 export const academyFor = (context: TrainingContext, level: number): AcademySlot | null =>
-  academySlots(context).find((slot) => slot.state.kind === "idle" && slot.level >= level) ?? null;
+  academySlots(context)
+    .filter((slot) => slot.state.kind === "idle" && slot.level >= level)
+    .reduce<AcademySlot | null>((low, slot) => (low && low.level <= slot.level ? low : slot), null);
 
 /** The gates Train and Instant share, in the server's order, or null. */
 const commonGate = (monster: MonsterEntry, context: TrainingContext): TrainGate | null => {

@@ -940,7 +940,7 @@ carousel: reaching Teratorn is one scroll, not 13 clicks of Next (MH §4.1 "Clic
   training, unlocked, not max, `level ≤ academyLevel`, putty.
 - Storage unchanged: `academy[id].time` (absolute), `.duration`, and the training academy's
   `buildingdata[id].upg = monsterId` (`client/scripts/BUILDING26.as:103-121`).
-- Routes: `POST /bm/yard/academy/train` `academy` (building id, optional: first idle), `monster`;
+- Routes: `POST /bm/yard/academy/train` `academy` (building id, optional: the lowest-level idle academy that can train it, #180), `monster`;
   `academy/cancel` `monster` (full refund, capped); `academy/finish` `monster` (SP4 price);
   `academy/instant` `academy`, `monster` (`timeCost(t) + ceil(sqrt(putty/2)^0.75)`, no putty,
   level raised at once, `ITR`).

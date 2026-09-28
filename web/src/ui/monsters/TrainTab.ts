@@ -435,6 +435,11 @@ export class TrainTab implements MonstersTab {
         ...(gate === null && at ? [` · at Academy ${at.number}`] : []),
       );
       action.append(facts);
+      // Training is a player-wide level, not one monster's (issue #180).
+      const scope = document.createElement("p");
+      scope.className = "locker-detail__note";
+      scope.textContent = `Training upgrades every ${monster.name}, now and in future.`;
+      action.append(scope);
       if (gate) action.append(gateLine(gate));
       const buttons = document.createElement("div");
       buttons.className = "map-row map-row--wrap locker-detail__buttons";

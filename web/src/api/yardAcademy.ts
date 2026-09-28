@@ -59,8 +59,8 @@ export interface AcademyShinyReport {
 }
 
 /**
- * Trains `monster` one level: the step's full putty price now, at the first
- * idle academy high enough. Refusals, in the server's order: 400 `badRequest`,
+ * Trains `monster` one level: the step's full putty price now, at the
+ * lowest-level idle academy that can train it. Refusals, in the server's order: 400 `badRequest`,
  * `noAcademy`, `training`, `locked`, `maxLevel`, `academyBusy {id, monster}`
  * (or `busy`/`damaged {id}`), `academyLevel {have, need}`, `shortfall`.
  */

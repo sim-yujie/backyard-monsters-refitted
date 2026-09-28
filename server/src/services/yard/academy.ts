@@ -188,9 +188,11 @@ const academyLevelErr = (have: number, need: number) =>
  * With `academyId` the named building is checked first (`ACADEMY.as:62`):
  * `400 badRequest` not in the yard or not a Monster Academy; `409 busy {id}`
  * being built, upgraded or fortified; `409 damaged {id}`; `409 academyBusy
- * {id, monster}`. Without it the first idle academy high enough is taken:
- * `409 noAcademy` when the yard has no finished one, then the monster's
- * checks, then the first academy's refusal when none is idle.
+ * {id, monster}`. Without it the lowest-level idle academy that can train
+ * the monster is taken, the lower id on a tie (issue #180), so a high
+ * academy stays free for a monster only it can train: `409 noAcademy` when
+ * the yard has no finished one, then the monster's checks, then the first
+ * academy's refusal when none is idle.
  *
  * Then the monster (`training`, `locked`, `maxLevel`) and finally
  * `409 academyLevel {have, need}`. Putty is the wrapper's (train only).
@@ -226,7 +228,15 @@ export const trainGate = (
     const first = academies.find((one) => one.level >= 1)!;
     throw academyRefusal(save, first)!;
   }
-  const academy = idle.find((one) => one.level >= level);
+  // Training level N to N+1 needs an academy at level N or above
+  // (`ACADEMY.as:66`); of those, the lowest. `idle` is in id order and a tie
+  // keeps the first.
+  const academy = idle
+    .filter((one) => one.level >= level)
+    .reduce<AcademyBuilding | undefined>(
+      (low, one) => (low && low.level <= one.level ? low : one),
+      undefined
+    );
   if (!academy) throw academyLevelErr(Math.max(...idle.map((one) => one.level)), level);
   return { academy, level, step };
 };
@@ -315,7 +325,7 @@ export interface AcademyShinyReport {
  * `academy[monster].time = now + seconds`, `.duration = seconds`, and the
  * academy's `upg = monster` (`ACADEMY.as:68-74`).
  *
- * @param academyId - The academy to use; absent takes the first idle one high enough.
+ * @param academyId - The academy to use; absent takes the lowest-level idle one that can train it.
  */
 export const planAcademyTrain = (
   save: AcademySave,
