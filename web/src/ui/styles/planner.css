@@ -55,6 +55,15 @@
   }
 }
 
+/* A phone: the toolbar is one row of fixed height, shared with the HUD's
+   Collect button (harvest.css), so the yard's notices can dock under it
+   rather than on top of it (#144, `.yard-notices` in maproom.css). */
+@media (width <= 620px) {
+  .yard-toolbar__layout {
+    min-height: var(--yard-toolbar-row);
+  }
+}
+
 /* ── The two bars ─────────────────────────────────────────────────────── */
 
 .planner-bar {
@@ -890,6 +899,92 @@
 
   .yard-zoom__slider {
     width: 96px;
+  }
+}
+
+/* A desktop lays the bottom bar's actions out in the bar itself. */
+.planner-bar__actions {
+  display: contents;
+}
+
+/*
+ * A phone (#151): the two bars wrapped onto five rows each and left a strip of
+ * yard a fifth of the screen tall, most of it under the minimap. Each bar is
+ * now as few rows as it can be: the tools are one row that scrolls sideways,
+ * the bottom bar is its cost cells (scrolling), the summary line and the
+ * actions (scrolling, Apply pinned at the end). The minimap steps aside while
+ * the planner is open; the zoom stays.
+ */
+@media (width <= 620px) {
+  .planner-bar {
+    gap: var(--space-1) var(--space-2);
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .planner-bar--top,
+  .planner-bar--bottom .planner-cost,
+  .planner-bar__actions {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .planner-bar--top > *,
+  .planner-bar--bottom .planner-cost > *,
+  .planner-bar__actions > * {
+    flex: none;
+  }
+
+  .planner-bar--top > .planner-bar__spacer,
+  .planner-bar--bottom > .planner-bar__spacer {
+    display: none;
+  }
+
+  .planner-bar--bottom .planner-cost,
+  .planner-bar__actions {
+    display: flex;
+    flex: 1 0 100%;
+    gap: var(--space-1);
+  }
+
+  .planner-cost__cell {
+    min-width: 64px;
+  }
+
+  .planner-bar__summary {
+    flex: 1 1 auto;
+  }
+
+  /* Apply stays in view however far the row is scrolled. */
+  .planner-bar__actions > .btn--primary {
+    position: sticky;
+    right: 0;
+    margin-left: auto;
+  }
+
+  /* The scrolling bar would clip a list hung under its trigger, so the list
+     is pinned to the viewport where the trigger is (`Menu.toggle`). */
+  .planner-menu__list {
+    position: fixed;
+    top: calc(var(--menu-top, 0px) + var(--space-1));
+    left: clamp(var(--space-2), var(--menu-left, 0px), calc(100vw - 14rem));
+    min-width: 0;
+    max-width: calc(100vw - 2 * var(--space-2));
+  }
+
+  .overlay__layer:has(> .planner-bar) > .yard-viewtools .yard-minimap {
+    display: none;
+  }
+
+  /* The yard's toolbar row stays mounted under the bars (it is measured again
+     when they go), but the one-row top bar no longer covers all of it, and
+     the HUD's Collect button sits in that row. */
+  .overlay__layer:has(> .planner-bar) > .yard-toolbar {
+    visibility: hidden;
+  }
+
+  .overlay__layer:has(> .planner-bar) .hud__collect {
+    display: none;
   }
 }
 

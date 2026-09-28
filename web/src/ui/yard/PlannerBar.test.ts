@@ -327,6 +327,23 @@ describe("the group operations", () => {
     expect(align?.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("notes where an opening list hangs, for the phone's scrolling bar (#151)", () => {
+    const bar = mount();
+    bar.update(stateOf({ selectionCount: 3 }));
+
+    const [align] = menuTriggers(bar);
+    const menu = align?.closest<HTMLElement>(".planner-menu");
+    vi.spyOn(menu!, "getBoundingClientRect").mockReturnValue({
+      bottom: 150,
+      left: 212,
+    } as DOMRect);
+    align?.click();
+
+    const list = menu?.querySelector<HTMLElement>(".planner-menu__list");
+    expect(list?.style.getPropertyValue("--menu-top")).toBe("150px");
+    expect(list?.style.getPropertyValue("--menu-left")).toBe("212px");
+  });
+
   it("fires a mirror straight from the toolbar", () => {
     const { bar, fired } = mountWith();
     bar.update(stateOf({ selectionCount: 2 }));

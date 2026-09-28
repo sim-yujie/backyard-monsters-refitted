@@ -165,6 +165,7 @@
 }
 
 .housing-table__show {
+  min-height: 32px;
   padding: var(--space-1) var(--space-2);
   font-size: var(--text-xs);
 }
@@ -357,5 +358,12 @@
   .housing-juice__count,
   .housing-juice__go {
     min-height: 44px;
+  }
+
+  /* A thumb's target, not a word's (#151). */
+  .housing-table__show {
+    min-width: 56px;
+    min-height: 44px;
+    font-size: var(--text-sm);
   }
 }

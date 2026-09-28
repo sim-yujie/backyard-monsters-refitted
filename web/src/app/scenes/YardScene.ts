@@ -278,6 +278,8 @@ export class YardScene implements Scene {
     this.hud.mount(context.overlay.content);
 
     this.notices.mount(context.overlay.content);
+    // On a phone they dock under the toolbar row instead of over it (maproom.css).
+    this.notices.element.classList.add("yard-notices");
 
     this.status = document.createElement("div");
     this.status.className = "cell-readout";

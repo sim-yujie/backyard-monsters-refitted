@@ -345,6 +345,13 @@ class Menu {
   }
 
   private toggle(open: boolean): void {
+    // Where the list would hang, for a phone: there the bar scrolls sideways
+    // and would clip it, so the stylesheet pins it to the viewport here.
+    if (open) {
+      const anchor = this.element.getBoundingClientRect();
+      this.list.style.setProperty("--menu-top", `${anchor.bottom}px`);
+      this.list.style.setProperty("--menu-left", `${anchor.left}px`);
+    }
     this.list.hidden = !open;
     this.trigger.setAttribute("aria-expanded", String(open));
   }
@@ -709,17 +716,18 @@ export class PlannerBar {
       }
       this.actionBar.append(costs, this.summary, spacer());
     } else {
+      // The actions share a wrapper that is `display: contents` on a desktop
+      // and its own scrolling row on a phone, with Apply pinned in view (#151).
+      const actionRow = document.createElement("div");
+      actionRow.className = "planner-bar__actions";
+      actionRow.append(this.upgradeWalls, this.rearm, this.checklist, layouts, this.apply);
       this.actionBar.append(
         costs,
         this.summary,
         this.storeChip,
         this.putBack,
         spacer(),
-        this.upgradeWalls,
-        this.rearm,
-        this.checklist,
-        layouts,
-        this.apply,
+        actionRow,
       );
     }
 

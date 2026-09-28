@@ -81,6 +81,8 @@
 
   /* ── Layout ──────────────────────────────────────────────────────── */
   --hud-height: 56px;
+  /* The yard's toolbar row on a phone: Layout, Build and Collect (#144). */
+  --yard-toolbar-row: 44px;
   --z-canvas: 0;
   --z-overlay: 10;
   --z-hud: 20;

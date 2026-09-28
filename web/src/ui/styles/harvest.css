@@ -10,27 +10,33 @@
   white-space: nowrap;
 }
 
-/* Something is waiting to be picked up: the one HUD control in the accent. */
+/* Something is waiting to be picked up: the one HUD control in the accent.
+   `pre` because the button is a flex container, which drops the spaces at the
+   edges of its " all ·" span and " 12.4K" text and read "Collectall ·12.4K"
+   (#144). */
 .hud__collect-button {
   background: var(--colour-accent);
   color: var(--colour-accent-text);
   font-weight: 700;
   font-size: var(--text-sm);
+  white-space: pre;
 }
 
 /* A phone: the HUD's top row is exactly full with Workers, Monsters, the
    screens and Sign out, and it has no third row to wrap into. So the button
-   leaves the bar and sits under the yard's Layout button (`.yard-toolbar`,
-   planner.css) as "Collect 152". */
+   leaves the bar and joins the yard's toolbar row (`.yard-toolbar`,
+   planner.css) at its right end as "Collect 152", the same height as Layout
+   and Build, so the notices can sit under that one row (#144). */
 @media (width <= 620px) {
   .hud__collect {
     position: fixed;
     z-index: var(--z-popup);
-    top: calc(var(--hud-height) + var(--space-4) + 48px);
-    left: var(--space-4);
+    top: calc(var(--hud-height) + var(--space-4));
+    right: var(--space-4);
   }
 
   .hud__collect-button {
+    min-height: var(--yard-toolbar-row);
     padding: var(--space-2) var(--space-3);
     box-shadow: 0 2px 6px rgb(0 0 0 / 35%);
   }

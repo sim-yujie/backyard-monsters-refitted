@@ -55,6 +55,60 @@
   align-items: stretch;
 }
 
+/*
+ * A phone (#151): one docked panel at a time, as a bottom sheet.
+ *
+ * The right dock (the map's cell panel, the yard's building panel) is 300 px
+ * wide, which on a 412 px screen covered the Navigate panel, the yard's
+ * toolbar and, at the bottom, sat under the minimap. So it becomes a sheet
+ * along the bottom edge, and while it holds a panel the other furniture it
+ * would collide with steps aside: the Navigate panel, the map's minimap and
+ * zoom, and the yard's zoom and minimap (planner.css `.yard-viewtools`). Pinch
+ * zoom still works while they are away; closing the panel brings them back.
+ */
+@media (width <= 620px) {
+  .map-dock--right {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: min(62vh, calc(100vh - var(--hud-height) - var(--space-4)));
+    gap: 0;
+  }
+
+  .map-dock--right > .panel {
+    min-width: 0;
+    min-height: 0;
+    max-width: none;
+    border-bottom: 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+
+  .map-dock--right .panel__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .overlay__layer:has(> .map-dock--right > *) > :is(.map-dock--left, .map-dock--bottom-right, .yard-viewtools) {
+    display: none;
+  }
+
+  /* The Monsters screen is a sheet of its own (monsters.css): a monster
+     building's panel waits under it and is back when the screen closes. */
+  .overlay__layer:has(> .monsters-screen:not([hidden])) > .map-dock--right {
+    display: none;
+  }
+
+  /* The yard's notices dock under its toolbar row (Layout, Build and the
+     HUD's Collect, planner.css and harvest.css), not over it (#144). The
+     planner's inline inset still wins while its own bar covers that band. */
+  .map-dock--top-centre.yard-notices {
+    --notice-top-inset: calc(var(--hud-height) + var(--space-4) + var(--yard-toolbar-row));
+  }
+}
+
 /* ── Notices ────────────────────────────────────────────────────────────── */
 
 .notice {
