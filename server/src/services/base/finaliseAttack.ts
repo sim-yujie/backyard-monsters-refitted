@@ -9,7 +9,7 @@ import { logger } from "../../utils/logger.js";
 import { buildingDataHandler } from "../../controllers/base/save/handlers/buildingDataHandler.js";
 import { defenderLootHandler } from "../../controllers/base/save/handlers/defenderLootHandler.js";
 import { runningPowerups } from "../alliance/powerups.js";
-import { damageProtection } from "../maproom/v2/damageProtection.js";
+import { protectAfterAttack } from "../maproom/v2/damageProtection.js";
 import { isMR3Structure } from "../maproom/v3/utils/isMR3Structure.js";
 import { advanceBuildingTimers } from "./advanceBuildingTimers.js";
 import { checkpointExpired, type AttackCheckpoint } from "./attackCheckpoint.js";
@@ -207,7 +207,9 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
   postgres.em.persist(lootTarget);
 
   const isProtectable = defender.type === BaseType.MAIN || defender.type === BaseType.OUTPOST;
-  if (isProtectable && !isMR3Structure(defender.wmid)) await damageProtection(defender);
+  // A destroyed player outpost gives the attacker their one chance at it even
+  // when the server finishes the attack (issue #182, `takeoverGrant.ts`).
+  if (isProtectable && !isMR3Structure(defender.wmid)) await protectAfterAttack(defender, attacker.userid);
 
   defender.attackid = 0;
   if (defender.buildingdata) {

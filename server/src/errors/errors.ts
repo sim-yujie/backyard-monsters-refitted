@@ -713,6 +713,7 @@ const TAKEOVER_REFUSAL_MESSAGES: Record<TakeoverRefusal, string> = {
   notFound: "that yard could not be found.",
   mainYard: "a main yard cannot be taken over.",
   ownYard: "that yard is already yours.",
+  noTakeoverChance: "only the player who destroyed an outpost may take it over, and only just after the attack.",
   notDestroyed: "that yard has not been destroyed.",
   regenerated: "the wild monsters have rebuilt that yard.",
   protected: "that yard is under damage protection.",

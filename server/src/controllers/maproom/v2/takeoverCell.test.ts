@@ -4,7 +4,8 @@ import type { Context } from "koa";
 /**
  * `POST /worldmapv2/takeoverCell` (issue #182). The route took any cell at 90%
  * damage whatever its protection, lock or wild-camp regeneration said. These
- * drive the controller over an in-memory stand-in for the rows it reads.
+ * drive the controller over an in-memory stand-in for the rows it reads, with
+ * Redis as a map so the takeover grants (`takeoverGrant.ts`) are real.
  */
 
 const TAKER = 2505;
@@ -22,7 +23,16 @@ let flushed: number;
 let sessions: Set<number>;
 let inRange: boolean;
 
+const store = new Map<string, string>();
+const GRANT_KEY = "takeover-grant:900";
+
 const now = () => Math.floor(Date.now() / 1000);
+
+/** The grant an attack by `attackerid` leaves on the outpost, and the protection that goes with it. */
+const grantTo = (attackerid: number, expiresAt = now() + 600) => {
+  store.set(GRANT_KEY, JSON.stringify({ attackerid, basesaveid: 900, baseid: OUTPOST, expiresAt }));
+  (cells[0]!.save as Row).protected = expiresAt + 8 * 3600;
+};
 
 const cellRow = (baseid: string, uid: number, base_type: number, save: Row): Row => ({
   baseid,
@@ -57,7 +67,14 @@ mock.module("../../../server.js", () => ({
       transactional: async (run: (em: typeof txEm) => Promise<unknown>) => run(txEm),
     },
   },
-  redis: { del: async () => 1 },
+  redis: {
+    get: async (key: string) => store.get(key) ?? null,
+    setex: async (key: string, _ttl: number, value: string) => {
+      store.set(key, value);
+      return "OK";
+    },
+    del: async (key: string) => (store.delete(key) ? 1 : 0),
+  },
 }));
 
 mock.module("../../../services/maproom/v2/validateRange.js", () => ({
@@ -125,12 +142,17 @@ beforeEach(() => {
   flushed = 0;
   sessions = new Set();
   inRange = true;
+  store.clear();
+  // By default the taker has just destroyed the outpost and holds its grant.
+  grantTo(TAKER);
 });
 
 describe("takeoverCell", () => {
-  test("a destroyed outpost is taken: priced by the server, moved to the taker, 12 hours protection", async () => {
+  test("the grant holder takes the outpost: priced by the server, 12 hours protection, grant spent", async () => {
     const result = await run({ baseid: OUTPOST, resources: JSON.stringify({ r1: 1, r2: 1, r3: 1, r4: 1 }) });
     expect(result.body).toEqual({ error: 0 });
+    expect(store.has(GRANT_KEY)).toBe(false);
+    expect(outpost().protected as number).toBeLessThanOrEqual(now() + 12 * 3600);
     // ln(10,000,000) prices at 28,000,000 of each (takeoverCost.test.ts).
     expect(takerResources()).toEqual({ r1: 72_000_000, r2: 72_000_000, r3: 72_000_000, r4: 72_000_000 });
     expect(outpost()).toMatchObject({ userid: TAKER, saveuserid: TAKER, name: "taker" });
@@ -159,9 +181,31 @@ describe("takeoverCell", () => {
     expect(camp().userid).toBe(0);
   };
 
-  test("an outpost under damage protection is refused", async () => {
-    outpost().protected = now() + 3600;
-    await refused({ baseid: OUTPOST }, "protected");
+  test("only once: a second takeover by the same player finds the outpost already theirs", async () => {
+    expect((await run({ baseid: OUTPOST })).ok).toBe(true);
+    flushed = 0;
+    const again = await run({ baseid: OUTPOST });
+    expect(again.reason).toBe("ownYard");
+    expect(flushed).toBe(0);
+  });
+
+  test("another player's grant gives this taker nothing", async () => {
+    grantTo(OWNER + 1);
+    await refused({ baseid: OUTPOST }, "noTakeoverChance");
+    expect(store.has(GRANT_KEY)).toBe(true);
+  });
+
+  test("no grant: a destroyed outpost cannot be taken, protected or not", async () => {
+    store.clear();
+    await refused({ baseid: OUTPOST }, "noTakeoverChance");
+    outpost().protected = 0;
+    await refused({ baseid: OUTPOST }, "noTakeoverChance");
+  });
+
+  test("a grant that has run out is no chance: the protection it left stands", async () => {
+    grantTo(TAKER, now() - 1);
+    await refused({ baseid: OUTPOST }, "noTakeoverChance");
+    expect(outpost().protected as number).toBeGreaterThan(now() + 7 * 3600);
   });
 
   test("an outpost locked by someone else is refused", async () => {

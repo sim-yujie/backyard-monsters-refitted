@@ -18,14 +18,10 @@ import { validateRange } from "../../../services/maproom/v2/validateRange.js";
 import { TakeoverCellSchema } from "../../../schemas/TakeoverCellSchema.js";
 import { shinyLockedErr, takeoverRefusedErr } from "../../../errors/errors.js";
 import { isShinyLocked } from "../../../services/user/shinyLock.js";
-import {
-  isAdjacentToMainYard,
-  takeoverResourceCost,
-  takeoverShinyCost,
-} from "../../../services/maproom/v2/takeoverCost.js";
+import { quoteTakeover } from "../../../services/maproom/v2/takeoverCost.js";
 import { takeoverRefusal } from "../../../services/maproom/v2/takeoverRules.js";
-import { calculateTribeLevel } from "../../../services/maproom/v2/calculateTribeLevel.js";
-import { Tribes } from "../../../enums/Tribes.js";
+import { holdsTakeoverGrant } from "../../../services/maproom/v2/takeoverGrant.js";
+import { endTakeoverGrant, readTakeoverGrant } from "../../../services/maproom/v2/takeoverGrantStore.js";
 import { runningPowerups } from "../../../services/alliance/powerups.js";
 import { AlliancePowerupType } from "../../../enums/Alliance.js";
 import { isAttackActive } from "../../../services/base/isAttackActive.js";
@@ -46,7 +42,9 @@ const lockSave = (em: EntityManager, where: { basesaveid: number } | { userid: n
  * client (issue #182): `takeoverRules.ts` refuses a main yard, the taker's own
  * yard, a yard that is not destroyed (a wild camp past its 12-hour regeneration
  * counts as rebuilt), one under damage protection, locked or under attack, and
- * a taker at the outpost cap. The checks and every write run in one transaction
+ * a taker at the outpost cap. A player outpost is taken only by the attacker
+ * holding its one-time grant (`takeoverGrant.ts`, the owner's rule), which the
+ * takeover consumes. The checks and every write run in one transaction
  * with the taker's main yard, the target and the previous owner's main yard
  * locked, so two takers cannot both pay for the same cell.
  *
@@ -94,6 +92,8 @@ export const takeoverCell: KoaController = async (ctx) => {
     const underAttack =
       isAttackActive(cellSave) || (await readAttackSession(cellSave.basesaveid)) !== null;
 
+    const grant = await readTakeoverGrant(cellSave.basesaveid);
+
     const refusal = takeoverRefusal({
       takerId: currentUser.userid,
       outpostCount: taker.outposts.length,
@@ -101,6 +101,7 @@ export const takeoverCell: KoaController = async (ctx) => {
       cell,
       save: cellSave,
       underAttack,
+      holdsGrant: holdsTakeoverGrant(grant, currentUser.userid, now),
     });
 
     if (refusal) throw takeoverRefusedErr(refusal);
@@ -112,26 +113,15 @@ export const takeoverCell: KoaController = async (ctx) => {
     // million - so a request that omits both fields is charged the resource cost rather
     // than taking the cell for nothing.
     // The client branches on the cell payload's `b` field, which is base_type, so match it.
-    const isWildMonster = cell.base_type === MapRoomCell.WM;
-
-    const [homeX, homeY] = (taker.homebase ?? []).map(Number);
-
-    const tribe = Tribes[(cell.x + cell.y) % Tribes.length];
-
-    const cost = takeoverResourceCost({
-      isWildMonster,
-      level: calculateTribeLevel(cell.x, cell.y, tribe),
+    const { resources: cost, shiny: shinyCost } = quoteTakeover({
+      cell,
+      isWildMonster: cell.base_type === MapRoomCell.WM,
       empireValue: cellSave.empirevalue,
-      adjacentToMainYard:
-        Number.isFinite(homeX) &&
-        Number.isFinite(homeY) &&
-        isAdjacentToMainYard(homeX, homeY, cell.x, cell.y),
+      takerHomebase: taker.homebase,
       conquestActive,
     });
 
     if (useShiny) {
-      const shinyCost = takeoverShinyCost(cost);
-
       if (taker.credits < shinyCost) throw takeoverRefusedErr("notEnoughShiny");
 
       taker.credits = taker.credits - shinyCost;
@@ -200,6 +190,9 @@ export const takeoverCell: KoaController = async (ctx) => {
 
     em.persist([cellSave, cell, taker]);
     await em.flush();
+
+    // Spent: the chance was one takeover.
+    if (grant) await endTakeoverGrant(cellSave.basesaveid);
 
     return originCell;
   });

@@ -1,3 +1,6 @@
+import { Tribes } from "../../../enums/Tribes.js";
+import { calculateTribeLevel } from "./calculateTribeLevel.js";
+
 /**
  * Server-side reconstruction of the Map Room 2 takeover price.
  *
@@ -120,3 +123,54 @@ export const takeoverResourceCost = ({
  */
 export const takeoverShinyCost = (resourceCost: number) =>
   Math.ceil(Math.pow(Math.sqrt(resourceCost / 2), 0.75) * 4);
+
+/** What a takeover would cost this taker. */
+export interface TakeoverQuote {
+  /** Of each of r1..r4. */
+  resources: number;
+  /** The Shiny alternative. */
+  shiny: number;
+  /** Whether the cell neighbours the taker's main yard, which halves the price. */
+  adjacent: boolean;
+}
+
+/**
+ * The takeover price for one taker and one cell, the way `PopupTakeover.as`
+ * works it out: the camp's coordinate-derived level or the outpost's empire
+ * value, the taker's main yard for the adjacency half, and Conquest.
+ *
+ * @param {object} input - The cell, what it is, and the taker's side.
+ * @returns {TakeoverQuote} The price.
+ */
+export const quoteTakeover = ({
+  cell,
+  isWildMonster,
+  empireValue,
+  takerHomebase,
+  conquestActive,
+}: {
+  cell: { x: number; y: number };
+  isWildMonster: boolean;
+  empireValue: number;
+  /** The taker's `Save.homebase`, `[x, y]` as strings. */
+  takerHomebase: readonly (string | number)[] | null | undefined;
+  conquestActive: boolean;
+}): TakeoverQuote => {
+  const [homeX, homeY] = (takerHomebase ?? []).map(Number);
+  const tribe = Tribes[(cell.x + cell.y) % Tribes.length]!;
+
+  const adjacent =
+    Number.isFinite(homeX) &&
+    Number.isFinite(homeY) &&
+    isAdjacentToMainYard(homeX!, homeY!, cell.x, cell.y);
+
+  const resources = takeoverResourceCost({
+    isWildMonster,
+    level: calculateTribeLevel(cell.x, cell.y, tribe),
+    empireValue,
+    adjacentToMainYard: adjacent,
+    conquestActive,
+  });
+
+  return { resources, shiny: takeoverShinyCost(resources), adjacent };
+};

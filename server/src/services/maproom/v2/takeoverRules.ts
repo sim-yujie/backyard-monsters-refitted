@@ -20,6 +20,12 @@ import { isWildMonsterExpired } from "../wildMonsterExpiry.js";
  * regeneration as untouched. These rules read the same rows the same way, so
  * the server refuses what the map would not have offered. Range is
  * `validateRange`, and the price `takeoverCost.ts`.
+ *
+ * A player outpost goes further than Flash, by the owner's rule (Q1,
+ * `takeoverGrant.ts`): it can be taken only by the attacker who just destroyed
+ * it, once, while that attacker's grant runs. The grant's own protection does
+ * not stand in its holder's way; everyone else meets it as protection. Wild
+ * camps keep Flash's rule: anyone in range, until the camp regenerates.
  */
 
 /** A yard is destroyed, and so up for takeover, at this damage (`userCell.ts` `d`). */
@@ -45,6 +51,7 @@ export type TakeoverRefusal =
   | "notFound"
   | "mainYard"
   | "ownYard"
+  | "noTakeoverChance"
   | "notDestroyed"
   | "regenerated"
   | "protected"
@@ -74,6 +81,8 @@ export interface TakeoverTargetInput {
   };
   /** Whether an attack on the target is running right now, by anyone. */
   underAttack: boolean;
+  /** Whether the taker holds a live takeover grant on this outpost (`takeoverGrant.ts`). */
+  holdsGrant: boolean;
 }
 
 /**
@@ -94,16 +103,23 @@ export const takeoverRefusal = ({
   cell,
   save,
   underAttack,
+  holdsGrant,
 }: TakeoverTargetInput): TakeoverRefusal | null => {
   if (cell.base_type === MapRoomCell.HOMECELL || save.type === BaseType.MAIN) return "mainYard";
 
   if (cell.uid === takerId || save.userid === takerId || save.saveuserid === takerId) return "ownYard";
 
-  if (isWildMonsterExpired(save, now)) return "regenerated";
+  const playerOutpost = cell.base_type === MapRoomCell.OUTPOST || save.type === BaseType.OUTPOST;
 
-  if (!(reportedDamage(save, now) >= TAKEOVER_DAMAGE)) return "notDestroyed";
+  if (playerOutpost) {
+    if (!holdsGrant) return "noTakeoverChance";
+  } else {
+    if (isWildMonsterExpired(save, now)) return "regenerated";
 
-  if (save.protected > now) return "protected";
+    if (save.protected > now) return "protected";
+  }
+
+  if (!(save.damage >= TAKEOVER_DAMAGE)) return "notDestroyed";
 
   if (save.locked && save.locked !== takerId) return "locked";
 

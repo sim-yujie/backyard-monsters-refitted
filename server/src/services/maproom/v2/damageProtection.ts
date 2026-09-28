@@ -2,7 +2,13 @@ import { BaseMode, BaseType } from "../../../enums/Base.js";
 import { Save } from "../../../database/models/save.model.js";
 import { postgres } from "../../../server.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
-import { TAKEOVER_DAMAGE } from "./takeoverRules.js";
+import {
+  earnsTakeoverGrant,
+  grantProtectedUntil,
+  newTakeoverGrant,
+  type TakeoverGrant,
+} from "./takeoverGrant.js";
+import { startTakeoverGrant } from "./takeoverGrantStore.js";
 
 /**
  * Handles the damage protection for the user's base.
@@ -83,12 +89,8 @@ export const damageProtection = async (save: Save, mode?: BaseMode) => {
             persist = true;
           }
 
-          // 25% or more damage = 8 HOURS, short of destroyed. A destroyed
-          // outpost is left open: Flash tells the attacker "You have destroyed
-          // this outpost and can now take it" (`newmap_des_pl1`,
-          // popup_attackend.as:21) and reopens the cell on its Take Over
-          // button (:92-97), which protection would refuse (issue #182).
-          if (damage >= 25 && damage < TAKEOVER_DAMAGE && attacksInLast8Hours.length !== 0) {
+          // 25% or more damage = 8 HOURS
+          if (damage >= 25 && attacksInLast8Hours.length !== 0) {
             setProtection(eightHours);
           }
         }
@@ -134,4 +136,35 @@ export const damageProtection = async (save: Save, mode?: BaseMode) => {
   }
 
   return persist;
+};
+
+/**
+ * The defender's protection when an attack on it ends (issue #182).
+ *
+ * A player outpost left at 90% or more earns its attacker a single chance to
+ * take it over (`takeoverGrant.ts`): the grant is recorded, and the outpost's
+ * protection is set to run from the grant's end, which keeps everyone else off
+ * it meanwhile and needs no one to apply it later. Anything else gets the
+ * usual {@link damageProtection}.
+ *
+ * @param {Save} defender - The defender as the attack left it.
+ * @param {number} attackerid - The attacker's userid.
+ * @returns {Promise<TakeoverGrant | null>} The grant made, if any.
+ */
+export const protectAfterAttack = async (
+  defender: Save,
+  attackerid: number
+): Promise<TakeoverGrant | null> => {
+  if (!earnsTakeoverGrant(defender)) {
+    await damageProtection(defender);
+    return null;
+  }
+
+  const grant = newTakeoverGrant(attackerid, defender, getCurrentDateTime());
+
+  defender.protected = grantProtectedUntil(grant);
+  postgres.em.persist(defender);
+  await startTakeoverGrant(grant);
+
+  return grant;
 };

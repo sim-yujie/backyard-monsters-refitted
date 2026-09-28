@@ -25,7 +25,8 @@ import { advanceBuildingTimers } from "../../../services/base/advanceBuildingTim
 import { championHandler } from "./handlers/championHandler.js";
 import { buildingDataHandler } from "./handlers/buildingDataHandler.js";
 import { takeoverCellMR3, type TakeoverData } from "../../../services/maproom/v3/takeoverCellMR3.js";
-import { damageProtection } from "../../../services/maproom/v2/damageProtection.js";
+import { protectAfterAttack } from "../../../services/maproom/v2/damageProtection.js";
+import { takeoverOffer, type TakeoverOffer } from "../../../services/maproom/v2/takeoverOffer.js";
 import { isMR3Structure } from "../../../services/maproom/v3/utils/isMR3Structure.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
@@ -317,6 +318,8 @@ const saveBase = async (
   }
 
   let takeoverData: TakeoverData | null = null;
+  /** The attacker's one chance at the outpost they just destroyed (issue #182). */
+  let takeoverGrant: TakeoverOffer | null = null;
   /** What the attacker's pool took of the loot (issue #166), for the response. */
   let banked: ResourceAmounts | null = null;
 
@@ -390,11 +393,14 @@ const saveBase = async (
         if (cell && !cell.destroyed_at) cell.destroyed_at = new Date();
       }
     }
-    // Grant damage protection to the defender main yard when the attack ends.
+    // Grant damage protection to the defender when the attack ends, or, for a
+    // player outpost left at 90% or more, the attacker's one chance to take it
+    // over, with the protection starting when that chance ends (`takeoverGrant.ts`).
     const isProtectable = baseSave.type === BaseType.MAIN || baseSave.type === BaseType.OUTPOST;
 
     if (saveData.over && isProtectable && !isMR3Structure(baseSave.wmid)) {
-      await damageProtection(baseSave);
+      const grant = await protectAfterAttack(baseSave, user.userid);
+      if (grant) takeoverGrant = await takeoverOffer(grant, user, userSave, baseSave);
     }
   }
 
@@ -433,6 +439,7 @@ const saveBase = async (
     basesaveid: baseSave.basesaveid,
     ...filteredSave,
     ...(takeoverData && { takeover: takeoverData }),
+    ...(takeoverGrant && { takeovergrant: takeoverGrant }),
     ...(banked && { lootcredited: banked }),
   };
 
