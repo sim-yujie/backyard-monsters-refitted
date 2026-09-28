@@ -232,3 +232,11 @@ export const YardBunkerRemoveSchema = z.object({
   monster: z.string().min(1).max(16),
   count: z.union([z.literal("all"), z.coerce.number().int().min(1).max(100_000)]).default(1),
 });
+
+/** `POST /bm/yard/lab/start` and `/lab/instant`: the monster whose next Lab rank to research. */
+export const YardLabMonsterSchema = z.object({
+  monster: z.string().min(1).max(16),
+});
+
+/** `POST /bm/yard/lab/cancel` and `/lab/finish` take no fields: one Lab, one research. */
+export const YardLabSchema = z.object({});

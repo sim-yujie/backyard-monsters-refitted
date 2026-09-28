@@ -7,6 +7,7 @@ import type {
 } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { requirementDetail } from "../base/economy/transitions.js";
+import { LAB_TYPE, labResearch } from "../yard/lab.js";
 import {
   FREE_FINISH_SECONDS,
   isShort,
@@ -183,9 +184,16 @@ const stepCost = (step: CostStep): ResourceAmounts => ({
   r4: step[3],
 });
 
-/** Whether a countdown of any kind is running on this building (spec `:774-782`). */
+/**
+ * Whether a countdown of any kind is running on this building (spec `:774-782`),
+ * or it is the Monster Lab with a research running: the original refuses to
+ * upgrade the Lab then (`client/scripts/MONSTERLAB.as:241-247`).
+ */
 const isBusy = (building: BuildingData): boolean =>
-  Boolean(building.cB) || Boolean(building.cU) || Boolean(building.cF);
+  Boolean(building.cB) ||
+  Boolean(building.cU) ||
+  Boolean(building.cF) ||
+  (Number(building.t) === LAB_TYPE && labResearch(building) !== null);
 
 /**
  * Whether the building has to be repaired before it can be upgraded (spec

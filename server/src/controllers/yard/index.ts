@@ -16,6 +16,12 @@ import {
 import { yardInstantUpgradeAction } from "./instantUpgrade.js";
 import { yardJuiceAction } from "./juice.js";
 import {
+  yardLabCancelAction,
+  yardLabFinishAction,
+  yardLabInstantAction,
+  yardLabStartAction,
+} from "./lab.js";
+import {
   yardLockerCancelAction,
   yardLockerFinishAction,
   yardLockerInstantAction,
@@ -73,4 +79,8 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "juice", controller: yardRoute(yardJuiceAction) },
   { path: "bunker/fill", controller: yardRoute(yardBunkerFillAction) },
   { path: "bunker/remove", controller: yardRoute(yardBunkerRemoveAction) },
+  { path: "lab/start", controller: yardRoute(yardLabStartAction) },
+  { path: "lab/cancel", controller: yardRoute(yardLabCancelAction) },
+  { path: "lab/finish", controller: yardRoute(yardLabFinishAction) },
+  { path: "lab/instant", controller: yardRoute(yardLabInstantAction) },
 ];

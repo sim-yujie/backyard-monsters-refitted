@@ -9,7 +9,13 @@ import { catchUpLocker, type CatchUpLockerSave, type UnlockJob } from "./catchUp
 import { catchUpMonsters, type CatchUpMonstersSave, type MonsterJob } from "./catchUpMonsters.js";
 import { catchUpMushrooms } from "./catchUpMushrooms.js";
 import { catchUpRepairs, type RepairJob } from "./catchUpRepairs.js";
-import { catchUpTraining, type CatchUpTrainingSave, type TrainJob } from "./catchUpTraining.js";
+import {
+  catchUpResearch,
+  catchUpTraining,
+  type CatchUpTrainingSave,
+  type ResearchJob,
+  type TrainJob,
+} from "./catchUpTraining.js";
 import {
   migrateYard,
   type MapRoomAddedJob,
@@ -40,7 +46,7 @@ import { addStarterBase, type StarterBaseJob, type StarterBaseSave } from "./sta
  * | 2 | `catchUpMonsters.ts` — HCC queue refund, hatchery production, housing cull (after the buildings) | 2 |
  * | 3 | `catchUpRepairs.ts` — repairs heal; runs before the buildings, whose paused countdowns it restarts at the repair's end | 3 |
  * | 3 | `catchUpHarvesters.ts` — harvester buffers fill (nothing is banked); `catchUpMushrooms.ts` | 3 |
- * | 4 | `catchUpTraining.ts` — academy training (legacy relative `time` made absolute once) | 4 |
+ * | 4 | `catchUpTraining.ts` — academy training (legacy relative `time` made absolute once); `catchUpResearch`, lab research | 4 |
  * | 5 | `catchUpChampions.ts` | 5 |
  *
  * Buildings go first (after the locker, which only reads a store buff step 1
@@ -69,6 +75,7 @@ export type CompletedJob =
   | RadioRemovedJob
   | MapRoomAddedJob
   | TrainJob
+  | ResearchJob
   | RepairJob
   | StarterBaseJob;
 
@@ -113,6 +120,7 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
   catchUpHarvesters(save, from, now, completed);
   catchUpMushrooms(save, now);
   completed.push(...catchUpTraining(save, from, now));
+  completed.push(...catchUpResearch(save, now));
 
   save.savetime = now;
 

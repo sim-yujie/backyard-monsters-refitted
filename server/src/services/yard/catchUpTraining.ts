@@ -8,6 +8,13 @@ import {
   trainedAcademy,
   trainingLevel,
 } from "./academy.js";
+import {
+  LAB_TYPE,
+  hasResearchFields,
+  labResearch,
+  researchedAcademy,
+  withoutResearch,
+} from "./lab.js";
 
 /**
  * Catch-up step 4: Monster Academy training (`docs/design/yard-buildings.md`
@@ -129,5 +136,60 @@ export const catchUpTraining = (save: CatchUpTrainingSave, from: number, now: nu
     save.buildingdata = { ...save.buildingdata, [key]: rest as BuildingData };
   }
 
+  return jobs;
+};
+
+/** A research the catch-up finished (`catchUpResearch`). */
+export interface ResearchJob {
+  kind: "research";
+  /** The monster, e.g. `C3`. */
+  id: string;
+  t: null;
+  /** Unix seconds at which the research ended: the Lab's `upt`. */
+  at: number;
+  detail: {
+    /** The rank the monster reached. */
+    rank: number;
+    /** The Lab that researched it. */
+    lab: number;
+  };
+}
+
+/**
+ * Catch-up step 4, the Lab part (`docs/design/yard-buildings.md` §6 "Lab
+ * tab", "Catch-up"): a research ends on wall-clock time (the Lab's `upt`,
+ * absolute), so it finishes while the player is away. The Flash client
+ * polled it each tick (`MONSTERLAB.Tick`, `client/scripts/MONSTERLAB.as:198-206`)
+ * and finished it (`FinishMonsterPowerup`, `:327-368`); this does the same
+ * for the whole window at once:
+ *
+ * - **Completion** once `upt` has passed: `academy[upg].powerup = upl`, the
+ *   Lab's `upg`, `upt` and `upl` removed, and a `completed` entry.
+ * - **Stale fields**: a Lab whose fields do not make a research (an `upg`
+ *   with no finish time, `MONSTERLAB.Click`, `:191-196`, or a rank outside
+ *   1..3) has them dropped; nothing is credited.
+ *
+ * Pure apart from mutating the save it is handed. Idempotent: a second run
+ * at the same moment finds nothing expired and nothing stale.
+ */
+export const catchUpResearch = (save: CatchUpTrainingSave, now: number): ResearchJob[] => {
+  const jobs: ResearchJob[] = [];
+  for (const [key, building] of Object.entries(save.buildingdata ?? {})) {
+    if (Number(building?.t) !== LAB_TYPE || !hasResearchFields(building)) continue;
+    const research = labResearch(building);
+    if (research && research.endsAt > now) continue;
+
+    save.buildingdata = { ...save.buildingdata, [key]: withoutResearch(building) };
+    if (!research) continue;
+    save.academy = researchedAcademy(save.academy, research.monster, research.rank);
+    const id = Number(building.id ?? key);
+    jobs.push({
+      kind: "research",
+      id: research.monster,
+      t: null,
+      at: research.endsAt,
+      detail: { rank: research.rank, lab: id },
+    });
+  }
   return jobs;
 };
