@@ -1,8 +1,10 @@
 import z from "zod";
+import { LockMode, type EntityManager } from "@mikro-orm/core";
 
 import type { KoaController } from "../../../utils/KoaController.js";
 import { postgres } from "../../../server.js";
 import { Save } from "../../../database/models/save.model.js";
+import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { User } from "../../../database/models/user.model.js";
 import { Status } from "../../../enums/StatusCodes.js";
 import { BaseType } from "../../../enums/Base.js";
@@ -17,6 +19,8 @@ import {
 import type { JsonObject } from "../../../types/JsonObject.js";
 import { catchUpTransferYards } from "../../../services/yard/armies.js";
 import { countsOf } from "../../../services/yard/attackRoster.js";
+import { isAttackActive } from "../../../services/base/isAttackActive.js";
+import { readAttackSession } from "../../../services/base/attackSessionStore.js";
 
 const TransferMonstersScema = z.object({
   frombaseid: z.string(),
@@ -86,6 +90,11 @@ const academyLevels = (
  * `services/monsters/transferRules.ts`. Both yards are caught up first, and an
  * accepted transfer writes only the two posted `housed` rosters onto them.
  *
+ * A transfer that involves an outpost needs both yards on the same world (the
+ * outposts plan, WP0), and nothing moves while either yard has an attack
+ * running: the attack's save would otherwise land on a garrison it did not
+ * fight. The rows are locked, main yard first, for the whole check and write.
+ *
  * @param {Object} ctx - The Koa context object.
  * @returns {Promise<void>}
  */
@@ -141,10 +150,62 @@ export const transferMonsters: KoaController = async (ctx) => {
     throw permissionErr();
   }
 
+  if (fromBase.type === BaseType.OUTPOST || toBase.type === BaseType.OUTPOST) {
+    const cells = await postgres.em.find(WorldMapCell, { baseid: { $in: [frombaseid, tobaseid] } });
+    const worldOf = (baseid: string) => cells.find((cell) => cell.baseid === baseid)?.world?.uuid;
+    const world = worldOf(frombaseid);
+
+    if (!world || world !== worldOf(tobaseid))
+      throw monsterTransferRejectedErr("world", "those yards are not on the same world.", {
+        frombaseid,
+        tobaseid,
+      });
+  }
+
   // The Academy levels and the Housing Expansion power-up both live on the main
   // yard, which an outpost transfer would otherwise never load.
   await postgres.em.populate(currentUser, ["save"]);
 
+  await postgres.em.transactional(async (em) => {
+    // The main yard's row first, then the two yards in id order, as every
+    // route that touches more than one of a player's yards locks them.
+    const mainId = currentUser.save?.basesaveid;
+    const yardIds = [...new Set([fromBase.basesaveid, toBase.basesaveid])].sort((a, b) => a - b);
+
+    for (const basesaveid of mainId ? [mainId, ...yardIds.filter((id) => id !== mainId)] : yardIds)
+      await em.findOne(Save, { basesaveid }, { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true });
+
+    if (fromBase.saveuserid !== currentUser.userid || toBase.saveuserid !== currentUser.userid)
+      throw permissionErr();
+
+    for (const yard of [fromBase, toBase]) {
+      if (isAttackActive(yard) || (await readAttackSession(yard.basesaveid)) !== null)
+        throw monsterTransferRejectedErr("underAttack", "one of those yards is under attack.", {
+          baseid: yard.baseid,
+        });
+    }
+
+    await transferBetween(em, currentUser, fromBase, toBase, fromBlob, toBlob);
+  });
+
+  ctx.status = Status.OK;
+  ctx.body = { error: 0 };
+};
+
+/**
+ * The transfer itself, once both yards are locked and quiet: catch up, check
+ * against the rules, and write the two rosters.
+ */
+const transferBetween = async (
+  em: EntityManager,
+  currentUser: User,
+  fromBase: Save,
+  toBase: Save,
+  fromBlob: unknown,
+  toBlob: unknown
+): Promise<void> => {
+  const { baseid: frombaseid } = fromBase;
+  const { baseid: tobaseid } = toBase;
   const mainSave = currentUser.save ?? null;
   const now = getCurrentDateTime();
 
@@ -190,9 +251,6 @@ export const transferMonsters: KoaController = async (ctx) => {
   fromBase.monsters = { ...(fromBase.monsters ?? {}), housed: countsOf((fromBlob as JsonObject | null)?.housed) };
   toBase.monsters = { ...(toBase.monsters ?? {}), housed: countsOf((toBlob as JsonObject | null)?.housed) };
 
-  postgres.em.persist([fromBase, toBase]);
-  await postgres.em.flush();
-
-  ctx.status = Status.OK;
-  ctx.body = { error: 0 };
+  em.persist([fromBase, toBase]);
+  await em.flush();
 };
