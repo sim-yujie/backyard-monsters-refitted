@@ -590,6 +590,19 @@ New: Locker building (opens Unlock), row, Start = 3; from the HUD, Monsters, Unl
 - **Overdrive** buys `HOD`/`HOD2`/`HOD3` (4x/6x/10x for 1 h; 30/50/100 Shiny; MH §5.5). One at a
   time; the active one shows its remaining time.
 
+**Redesigned (issue #156, owner decision 2026-09-28).** The tab now follows the original's hatchery
+popup (`HATCHERYPOPUP.as`, `HATCHERYCCPOPUP.as`) in style B, and the chips, the queue rows with
+`−1`/`×` and the side-by-side Add row above are replaced: each hatchery's **line** on top (the
+monster hatching now with its time and progress, a tap cancelling it after a confirm; one slot per
+waiting stack with ×N, a tap taking one out; empty slots up to `1 + level`; the next locked slot
+naming the upgrade), or with an HCC each hatchery's monster and the shared queue's seven slots; then
+a sentence and a housing bar (housed, on the way, the chosen batch); then all monsters nine across,
+where a **tap adds one** at once, beside an info panel (portrait, level, blurb, six numbers) holding
+the one improvement, the batch add: the shared stepper with **Max** (Fill's number) and "Add 4 Bolts
+· 1,400", previewed dashed in the slots it would fill. Finish now and the Overdrive sit behind one
+small "Finish now or speed up" link. The screen widens to 1,160 px for this tab; on a phone the
+same order, with the add controls in a bar fixed to the bottom of the sheet.
+
 | Route | Request | Rules | Report | Extra errors |
 | --- | --- | --- | --- | --- |
 | `POST /bm/yard/hatchery/add` | `hatchery` (building id, or `hcc`), `monster`, `count` (1..400) | monster unlocked (`lockerdata[id].t == 2`) and obtainable; target exists, finished building; with an HCC present only `hcc` is accepted, without one `hcc` is refused; adds one at a time with the original stack rule until `count`, the stack limit, or goo runs out; charges `cResource(academy level)` per monster | `{ added, requested, stoppedBy: null \| "queue" \| "goo", cost }` — partial by design | `locked`, `noHatchery`, `useHcc`, `noHcc` |

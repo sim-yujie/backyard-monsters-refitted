@@ -361,11 +361,15 @@ export interface AddPreview {
   readonly cost: number;
   /** How many go straight into production on idle hatcheries. */
   readonly started: number;
+  /** Which idle hatchery takes which monster at once, in the order they start. */
+  readonly starts: readonly { readonly hatchery: number; readonly monster: string }[];
   /** Monsters topping up stacks already in the queue: 1-based slot and how many. */
   readonly merged: readonly { readonly slot: number; readonly count: number }[];
   /** New stacks it opens, and the monsters in them. */
   readonly newStacks: number;
   readonly inNewStacks: number;
+  /** How many go into each new stack, in queue order (the Hatch tab's dashed slots). */
+  readonly fresh: readonly number[];
 }
 
 /** A deep copy of the parts an add changes, so a preview never touches the yard. */
@@ -391,14 +395,14 @@ const push = (queue: QueueStack[], id: string, level: number, limit: number, hcc
   return true;
 };
 
-/** Takes the head of a queue into an idle hatchery; false when the queue is empty. */
-const startNext = (hatchery: { monster: string | null }, queue: QueueStack[]): boolean => {
+/** Takes the head of a queue into an idle hatchery: the monster it took, or null when the queue is empty. */
+const startNext = (hatchery: { monster: string | null }, queue: QueueStack[]): string | null => {
   const head = queue[0];
-  if (!head) return false;
+  if (!head) return null;
   head[1] -= 1;
   if (head[1] <= 0) queue.shift();
   hatchery.monster = head[0];
-  return true;
+  return head[0];
 };
 
 /**
@@ -425,7 +429,7 @@ export const previewAdd = (
   const requested = Math.max(0, Math.min(MAX_ADD, Math.floor(count)));
 
   let added = 0;
-  let started = 0;
+  const starts: { hatchery: number; monster: string }[] = [];
   let stoppedBy: AddPreview["stoppedBy"] = null;
   while (added < requested) {
     if ((added + 1) * price > goo) {
@@ -440,14 +444,17 @@ export const previewAdd = (
     if (hcc) {
       if (!yard.hcc?.works) continue;
       for (const one of copy.hatcheries) {
-        if (one.monster === null && one.canTake && startNext(one, copy.shared)) started += 1;
+        const took = one.monster === null && one.canTake ? startNext(one, copy.shared) : null;
+        if (took) starts.push({ hatchery: one.id, monster: took });
       }
-    } else if (hatchery!.monster === null && startNext(hatchery!, queue)) {
-      started += 1;
+    } else {
+      const took = hatchery!.monster === null ? startNext(hatchery!, queue) : null;
+      if (took) starts.push({ hatchery: hatchery!.id, monster: took });
     }
   }
 
   const merged: { slot: number; count: number }[] = [];
+  const fresh: number[] = [];
   let newStacks = 0;
   let inNewStacks = 0;
   queue.forEach((stack, index) => {
@@ -455,12 +462,23 @@ export const previewAdd = (
     if (was === undefined) {
       newStacks += 1;
       inNewStacks += stack[1];
+      fresh.push(stack[1]);
     } else if (stack[1] > was) {
       merged.push({ slot: index + 1, count: stack[1] - was });
     }
   });
 
-  return { added, stoppedBy, cost: added * price, started, merged, newStacks, inNewStacks };
+  return {
+    added,
+    stoppedBy,
+    cost: added * price,
+    started: starts.length,
+    starts,
+    merged,
+    newStacks,
+    inNewStacks,
+    fresh,
+  };
 };
 
 /** How many of `monster` the target's queue can still take, goo aside (idle hatcheries included). */
@@ -635,6 +653,48 @@ export const previewFinish = (
     price: timeCost(Math.trunc(seconds), false) * 4,
     finishedAll,
   };
+};
+
+/* ── How long a line takes ─────────────────────────────────────────────── */
+
+/**
+ * Seconds from `now` until everything on `target`'s line has hatched, housing
+ * aside: a hatchery's monster in production, then its queue from the head.
+ * With the HCC, each working hatchery takes the next monster of the shared
+ * queue as it comes free, the first in service order on a tie (the order the
+ * catch-up hands them out). An Overdrive running at `now` counts. Null when
+ * the line is empty or nothing can work it (paused, damaged, being built).
+ */
+export const lineSeconds = (
+  yard: HatchYard,
+  target: HatchTarget,
+  storedata: StoreData | null | undefined,
+  now: number,
+): number | null => {
+  const overdrive = overdriveAt(storedata, now);
+  const seconds = (id: string) => secondsOf(id, levelIn(yard.levels, id));
+  /** When a working hatchery is next free: its monster's end, or now. */
+  const freeAt = (hatchery: HatcheryView) => Math.max(now, hatchery.endsAt ?? now);
+
+  let end: number;
+  if (target === "hcc") {
+    if (!yard.hcc?.works) return null;
+    const free = yard.hatcheries.filter((one) => one.works).map(freeAt);
+    if (free.length === 0) return null;
+    for (const [id, count] of yard.shared) {
+      for (let i = 0; i < count; i++) {
+        const next = free.indexOf(Math.min(...free));
+        free[next] = acceleratedEnd(free[next]!, seconds(id), overdrive);
+      }
+    }
+    end = Math.max(...free);
+  } else {
+    const hatchery = yard.hatcheries.find((one) => one.id === target);
+    if (!hatchery?.works) return null;
+    end = freeAt(hatchery);
+    for (const [id, count] of hatchery.queue) end = acceleratedEnd(end, seconds(id) * count, overdrive);
+  }
+  return end > now ? end - now : null;
 };
 
 /* ── Overdrive ─────────────────────────────────────────────────────────── */

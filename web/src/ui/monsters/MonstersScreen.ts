@@ -182,6 +182,8 @@ export class MonstersScreen {
     this.opened = true;
     this.element.hidden = false;
     this.active = tab;
+    // The Hatch tab is the original's wide hatchery popup (#156): hatch.css widens the frame for it.
+    this.element.dataset["tab"] = tab;
     for (const [id, button] of this.tabButtons) {
       const current = id === tab;
       button.setAttribute("aria-selected", String(current));

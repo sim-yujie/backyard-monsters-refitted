@@ -1,25 +1,51 @@
 /*
- * The Hatch tab (`web/src/ui/monsters/HatchTab.ts`, design
- * `docs/design/yard-buildings.md` §4.4): hatchery chips or the HCC strip, the
- * monster grid, the quantity control and Add, the queue, Finish now and the
- * Overdrive.
+ * The Hatch tab (`web/src/ui/monsters/HatchTab.ts`, issue #156): the
+ * original's hatchery popup in style B. The line of each hatchery (or the
+ * HCC's hatcheries and shared queue) on top, the message and housing bar,
+ * then the monster grid beside the info panel with the batch add. On a phone
+ * the same order, with the add controls in a bar fixed to the sheet's bottom.
  *
  * Same rule as ui.css: every value comes from tokens.css. The frame, the
  * header and `.monsters-status` / `.monsters-gate` are monsters.css; buttons
- * are `.btn`, Shiny spends `.shiny-button`, amounts `.res-amount`.
+ * are `.btn`, the count `.qty-stepper`, Shiny spends `.shiny-button`,
+ * amounts `.res-amount`.
+ *
+ * The tab lays itself out by its own width (a container query), not the
+ * window's: the frame is narrower beside a building panel than alone.
  */
 
+/* ── The frame: the original's popup was wide, so the tab is too ─────────── */
+
+@media (width > 620px) {
+  .monsters-screen[data-tab="hatch"] {
+    width: min(1160px, calc(100vw - 2 * var(--space-4)));
+  }
+
+  .monsters-screen--beside-panel[data-tab="hatch"] {
+    width: min(1160px, calc(100vw - 300px - 4 * var(--space-4)));
+  }
+}
+
+@media (620px < width <= 1080px) {
+  .monsters-screen--beside-panel[data-tab="hatch"] {
+    width: min(1160px, calc(100vw - 2 * var(--space-4)));
+  }
+}
+
 .hatch {
+  container: hatch / inline-size;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5) var(--space-4);
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
-/* ── Chips, or the HCC header and strip ──────────────────────────────────── */
-
-.hatch__targets {
-  padding: var(--space-3) var(--space-4) 0;
+.hatch > .monsters-status {
+  padding: 0;
 }
 
 .hatch__none {
@@ -27,350 +53,549 @@
   color: var(--colour-text-muted);
 }
 
-.hatch-chips {
+/* ── The line: hatching now, the waiting slots, the totals ─────────────── */
+
+.hatch-lines {
   display: flex;
-  gap: var(--space-2);
-  overflow-x: auto;
-  padding-bottom: var(--space-1);
-  scrollbar-width: thin;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
-.hatch-chip {
-  flex: none;
-  display: grid;
-  gap: 2px;
-  min-width: 132px;
-  padding: var(--space-2) var(--space-3);
+.hatch-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* With several hatcheries, the one a batch goes to. */
+.hatch-line--target {
+  margin: calc(-1 * var(--space-2));
+  padding: var(--space-2);
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 0 0 1px var(--colour-accent-line);
+}
+
+.hatch-line__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+}
+
+.hatch-line__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--display-tracking);
+}
+
+.hatch-line__pick {
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-3);
   border: 1px solid var(--colour-border);
-  border-radius: var(--radius-md);
-  background: var(--colour-surface-sunken);
-  color: inherit;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-control);
+  color: var(--colour-text-secondary);
   font: inherit;
   font-size: var(--text-sm);
-  text-align: left;
+  font-weight: 700;
   cursor: pointer;
 }
 
-.hatch-chip:hover {
-  background: var(--colour-surface-overlay);
+.hatch-line__pick:hover {
+  background: var(--colour-surface-control-hover);
+  color: var(--colour-text);
 }
 
-.hatch-chip[aria-pressed="true"] {
-  border-color: var(--colour-accent);
-  background: color-mix(in srgb, var(--colour-accent) 16%, var(--colour-surface-sunken));
+.hatch-line__pick[aria-pressed="true"] {
+  border-color: var(--colour-accent-line);
+  background: var(--colour-accent-soft);
+  color: var(--colour-text-strong);
 }
 
-.hatch-chip:focus-visible {
+.hatch-line__pick:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
 }
 
-.hatch-chip__title {
-  font-weight: 800;
-}
-
-.hatch-chip__state,
-.hatch-chip__queued {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.hatch-chip__queued {
-  color: var(--colour-text-muted);
-}
-
-/* The state colours, shared by the chips and the HCC strip. */
-.hatch-chip--producing .hatch-chip__state,
-.hatch-chip--producing .hatch-strip__label {
-  color: var(--colour-info);
-}
-
-.hatch-chip--stalled .hatch-chip__state,
-.hatch-chip--stalled .hatch-strip__label,
-.hatch-chip--upgrading .hatch-chip__state,
-.hatch-chip--upgrading .hatch-strip__label {
-  color: var(--colour-warning);
-}
-
-.hatch-chip--damaged .hatch-chip__state,
-.hatch-chip--damaged .hatch-strip__label {
-  color: var(--colour-danger);
-}
-
-.hatch-chip--building .hatch-chip__state,
-.hatch-chip--building .hatch-strip__label,
-.hatch-chip--idle .hatch-chip__state,
-.hatch-chip--idle .hatch-strip__label {
-  color: var(--colour-text-muted);
-}
-
-.hatch-clock {
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.hatch-hcc {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-1) var(--space-3);
-}
-
-.hatch-hcc__title {
-  margin: 0;
-  font-size: var(--text-md);
-  font-weight: 800;
-}
-
-.hatch-hcc__queued {
+.hatch-line__waiting {
   font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
   color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
-.hatch-hcc__note {
-  flex-basis: 100%;
-  font-size: var(--text-sm);
-  color: var(--colour-danger);
-}
-
-.hatch-strip {
+.hatch-line__slots,
+.hatch-line__now {
   display: flex;
+  align-items: stretch;
   gap: var(--space-2);
-  margin: var(--space-2) 0 0;
-  padding: 0 0 var(--space-1);
-  list-style: none;
+  min-width: 0;
   overflow-x: auto;
   scrollbar-width: thin;
+  padding-bottom: 2px;
 }
 
-.hatch-strip__item {
+.hatch-line__arrow {
+  flex: none;
+  align-self: center;
+  color: var(--colour-text-muted);
+  font-size: var(--text-xl);
+  line-height: 1;
+}
+
+/* The monster hatching now. A button when there is one: a tap asks to cancel it. */
+.hatch-now {
+  position: relative;
   flex: none;
   display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: 34px;
-  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2);
-  border: 1px solid var(--colour-border);
-  border-radius: var(--radius-md);
-  background: var(--colour-surface-sunken);
-  font-size: var(--text-sm);
-  white-space: nowrap;
-}
-
-.hatch-strip__label {
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── Grid and the add block, side by side ────────────────────────────────── */
-
-.hatch__split {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(0, 1.3fr);
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4) var(--space-4);
-}
-
-.hatch__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
-  align-content: start;
-  gap: var(--space-1);
-  margin: 0;
-  padding: var(--space-1);
-  list-style: none;
-  overflow-y: auto;
-  min-height: 0;
-  border: 1px solid var(--colour-border);
-  border-radius: var(--radius-md);
-  background: var(--colour-surface-sunken);
-}
-
-.hatch-monster {
-  display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  width: 100%;
-  padding: var(--space-1);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: inherit;
+  gap: var(--space-2);
+  width: 208px;
+  min-height: 128px;
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
   font: inherit;
+  text-align: left;
+}
+
+button.hatch-now {
+  border-color: var(--colour-accent-line);
+  background: var(--colour-accent-soft);
   cursor: pointer;
+  transition: border-color var(--motion-fast) var(--easing);
 }
 
-.hatch-monster:hover {
-  background: var(--colour-surface-overlay);
-}
-
-.hatch-monster[aria-pressed="true"] {
+button.hatch-now:hover:not(:disabled) {
   border-color: var(--colour-accent);
-  background: color-mix(in srgb, var(--colour-accent) 16%, var(--colour-surface-sunken));
 }
 
-.hatch-monster:focus-visible {
+button.hatch-now:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px var(--colour-accent);
+  box-shadow: var(--focus-ring);
 }
 
-.hatch-monster__picture {
-  width: 44px;
-  height: 44px;
+button.hatch-now:disabled {
+  cursor: progress;
+}
+
+.hatch-now__label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--colour-text-secondary);
+}
+
+.hatch-now__body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.hatch-now__picture {
+  flex: none;
+  width: 56px;
+  height: 56px;
   object-fit: contain;
 }
 
-.hatch-monster__name {
-  font-size: var(--text-sm);
-  font-weight: 700;
+.hatch-now__words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hatch-now__name {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
   line-height: var(--leading-tight);
+}
+
+.hatch-now__state {
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-now--stalled .hatch-now__state,
+.hatch-now--upgrading .hatch-now__state,
+.hatch-now--building .hatch-now__state {
+  color: var(--colour-warning);
+  font-weight: 700;
+}
+
+.hatch-now--damaged .hatch-now__state {
+  color: var(--colour-danger);
+  font-weight: 700;
+}
+
+.hatch-now--idle .hatch-now__state {
+  margin-block: auto;
+  color: var(--colour-text-muted);
+}
+
+.hatch-now__cancel {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-3);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+
+.hatch-now__bar {
+  display: block;
+  height: 6px;
+  margin-top: auto;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-overlay);
+  overflow: hidden;
+}
+
+.hatch-now__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--colour-accent);
+  transition: width var(--motion-normal) var(--easing);
+}
+
+/* "Cancel this Pokey?" in the card itself, with its refund. */
+.hatch-now--confirm {
+  justify-content: center;
+  border-color: var(--colour-danger);
+  background: var(--colour-danger-soft);
+}
+
+.hatch-now__question {
+  font-weight: 700;
+}
+
+.hatch-now__refund {
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.hatch-now__buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.hatch-now__buttons > .btn {
+  flex: 1;
+  padding-inline: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* Idle, with the chosen batch about to start in it. */
+.hatch-now--preview {
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed var(--colour-accent);
+  background: transparent;
+}
+
+.hatch-now--preview .hatch-now__picture {
+  opacity: 0.8;
+}
+
+/* The HCC's row: one small card per hatchery. */
+.hatch-now--compact {
+  width: 160px;
+  min-height: 112px;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+}
+
+.hatch-now--compact .hatch-now__picture {
+  width: 44px;
+  height: 44px;
+}
+
+.hatch-now--compact .hatch-now__name {
+  font-size: var(--text-md);
+}
+
+.hatch-now--more {
+  justify-content: center;
+  border-style: dashed;
+  background: transparent;
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
   text-align: center;
 }
 
-.hatch-monster__note {
+/* A waiting stack: ×N, the monster, a tap takes one out. */
+.hatch-slot {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 124px;
+  min-height: 128px;
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font: inherit;
+  text-align: center;
+}
+
+button.hatch-slot {
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--easing);
+}
+
+button.hatch-slot:hover:not(:disabled) {
+  background: var(--colour-surface-control-hover);
+}
+
+button.hatch-slot:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+button.hatch-slot:disabled {
+  cursor: progress;
+}
+
+.hatch-slot__count {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  min-width: 28px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-text);
+  color: var(--colour-text-inverse);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-slot__minus {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--colour-surface-control);
+  color: var(--colour-text-secondary);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.hatch-slot__picture {
+  width: 52px;
+  height: 52px;
+  margin-top: var(--space-3);
+  object-fit: contain;
+}
+
+.hatch-slot__name {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hatch-slot__note {
   font-size: var(--text-xs);
   color: var(--colour-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
-.hatch-monster--locked .hatch-monster__picture,
-.hatch-monster--unlocking .hatch-monster__picture {
-  filter: grayscale(1);
-  opacity: 0.5;
+/* The chosen batch, dashed where it would go: a new stack, or a top-up. */
+.hatch-slot--preview,
+.hatch-slot--topup {
+  border: 1.5px dashed var(--colour-accent);
 }
 
-.hatch-monster--locked .hatch-monster__name,
-.hatch-monster--unlocking .hatch-monster__name {
+.hatch-slot--preview {
+  background: transparent;
+}
+
+.hatch-slot--preview .hatch-slot__count,
+.hatch-slot__adding {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.hatch-slot--preview .hatch-slot__picture {
+  opacity: 0.8;
+}
+
+.hatch-slot--preview .hatch-slot__note {
+  color: var(--colour-text-secondary);
+  font-weight: 700;
+}
+
+.hatch-slot__adding {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.hatch-slot--empty {
+  border-style: dashed;
+  border-color: var(--colour-border-subtle);
+  background: transparent;
+}
+
+/* The slot the next Hatchery level opens. */
+.hatch-slot--locked {
+  gap: var(--space-2);
+  border-color: var(--colour-border-subtle);
+  background: transparent;
   color: var(--colour-text-muted);
 }
 
-.hatch__side {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-height: 0;
-  overflow-y: auto;
+.hatch-slot__why {
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
 }
 
-.hatch-add {
+.hatch-slot__upgrade {
+  padding-inline: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* A padlock drawn in the text colour: a body and a shackle. */
+.hatch-slot__lock,
+.hatch-pick__lock {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 10px;
+  margin-top: 7px;
+  border-radius: 2px;
+  background: currentcolor;
+}
+
+.hatch-slot__lock::before,
+.hatch-pick__lock::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  bottom: 9px;
+  width: 10px;
+  height: 8px;
+  border: 2px solid currentcolor;
+  border-bottom: 0;
+  border-radius: 5px 5px 0 0;
+}
+
+.hatch-line__totals {
+  flex: 1 0 168px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  justify-content: center;
+  gap: 2px;
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--colour-border-subtle);
+}
+
+.hatch-line__done-label {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.hatch-line__done {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-line__overdrive {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--colour-success);
+}
+
+/* The one small link to Finish now and the Overdrive: secondary on purpose. */
+.hatch-line__boost-link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--control-height);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--colour-text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hatch-line__boost-link::after {
+  content: "›";
+  font-size: var(--text-lg);
+  line-height: 1;
+  transition: transform var(--motion-fast) var(--easing);
+}
+
+.hatch-line__boost-link[aria-expanded="true"]::after {
+  transform: rotate(90deg);
+}
+
+.hatch-line__boost-link:hover {
+  color: var(--colour-text);
+}
+
+.hatch-line__boost-link:hover .hatch-line__boost-words {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.hatch-line__boost-link:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+.hatch-line__boost-link .res-icon {
+  height: 16px;
+}
+
+/* ── Finish now and the Overdrive, behind the link ─────────────────────── */
+
+.hatch-boosts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-5);
   padding: var(--space-3);
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-md);
   background: var(--colour-surface-sunken);
-}
-
-.hatch-add__selected,
-.hatch-add__preview,
-.hatch-add__warning {
-  margin: 0;
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
-}
-
-.hatch-add__preview {
-  color: var(--colour-text-muted);
-}
-
-.hatch-add__warning {
-  color: var(--colour-warning);
-  font-weight: 700;
-}
-
-.hatch-add__row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: var(--space-2);
-}
-
-/* The quantity control (ui.css `.qty-stepper`), placed. */
-.hatch-add__controls {
-  flex: 1 1 220px;
-}
-
-.hatch-add__add {
-  flex: 0 0 auto;
-  min-width: 96px;
-  min-height: 36px;
-}
-
-.hatch-add__unlock {
-  padding: 0 var(--space-2);
-  font-size: var(--text-sm);
-}
-
-/* ── Queue ───────────────────────────────────────────────────────────────── */
-
-.hatch-queue {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.hatch-queue__title {
-  margin: 0;
-  font-size: var(--text-sm);
-  font-weight: 800;
-  color: var(--colour-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.hatch-queue__list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.hatch-queue__row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 2px 2px 2px var(--space-2);
-  border: 1px solid var(--colour-border);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
-}
-
-.hatch-queue__row--producing {
-  border-color: color-mix(in srgb, var(--colour-info) 60%, var(--colour-border));
-}
-
-.hatch-queue__label {
-  flex: 1;
-  min-width: 0;
-}
-
-.hatch-queue__remove {
-  min-width: 34px;
-  min-height: 30px;
-  padding: 0 var(--space-2);
-  font-size: var(--text-sm);
-  font-weight: 700;
-}
-
-.hatch-queue__room {
-  margin: 0;
-  font-size: var(--text-xs);
-  color: var(--colour-text-muted);
-}
-
-/* ── Finish now and the Overdrive ────────────────────────────────────────── */
-
-.hatch-boosts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
 }
 
 .hatch-boosts__finish,
@@ -379,12 +604,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-}
-
-.hatch-boosts__finish > .btn,
-.hatch-boosts__overdrive > .btn {
-  flex: 0 1 auto;
-  min-height: 34px;
 }
 
 .hatch-boosts__label {
@@ -398,47 +617,706 @@
   color: var(--colour-success);
 }
 
-/* ── Narrow screens ──────────────────────────────────────────────────────── */
+/* ── The message and where they go ───────────────────────────────────── */
 
-@media (width <= 760px) {
+.hatch-message {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.hatch-message__icon.res-icon {
+  flex: none;
+  height: 24px;
+}
+
+.hatch-message__words {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hatch-message__title {
+  font-size: var(--text-md);
+  font-weight: 700;
+  text-wrap: pretty;
+}
+
+.hatch-message__title--warning {
+  color: var(--colour-warning);
+}
+
+.hatch-message__detail {
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+  text-wrap: pretty;
+}
+
+.hatch-housing {
+  flex: none;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hatch-housing__top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.hatch-housing__label {
+  color: var(--colour-text-secondary);
+}
+
+.hatch-housing__value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hatch-housing--over .hatch-housing__value {
+  color: var(--colour-warning);
+}
+
+.hatch-housing__bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-overlay);
+  overflow: hidden;
+}
+
+.hatch-housing__part {
+  flex: none;
+  height: 100%;
+}
+
+.hatch-housing__part--housed {
+  background: var(--colour-meter);
+}
+
+.hatch-housing__part--pending {
+  background: var(--colour-accent-line);
+}
+
+.hatch-housing__part--adding {
+  background: var(--colour-accent);
+}
+
+.hatch-housing--over .hatch-housing__part--adding {
+  background: var(--colour-warning);
+}
+
+/* ── The grid and the info panel, side by side ───────────────────────── */
+
+.hatch__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.hatch-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.hatch-pick__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.hatch-pick__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.hatch-pick__hint {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.hatch__grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hatch-monster {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  padding: 6px 2px var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--easing),
+    border-color var(--motion-fast) var(--easing);
+}
+
+.hatch-monster:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.hatch-monster:active {
+  transform: translateY(1px);
+}
+
+.hatch-monster[aria-pressed="true"] {
+  padding: 5px 1px 7px;
+  border: 2px solid var(--colour-accent);
+  background: var(--colour-accent-soft);
+  color: var(--colour-text-strong);
+}
+
+.hatch-monster:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.hatch-monster__picture {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+}
+
+.hatch-monster__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.hatch-monster__note {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--colour-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-monster--locked,
+.hatch-monster--unlocking {
+  border-color: var(--colour-border-subtle);
+  background: transparent;
+  color: var(--colour-text-secondary);
+}
+
+.hatch-monster--locked .hatch-monster__picture,
+.hatch-monster--unlocking .hatch-monster__picture {
+  filter: grayscale(1) brightness(0.65);
+}
+
+.hatch-monster--locked .hatch-monster__note,
+.hatch-monster--unlocking .hatch-monster__note {
+  color: var(--colour-text-muted);
+}
+
+.hatch-pick__locked {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-secondary);
+}
+
+.hatch-pick__lock {
+  margin-top: 5px;
+}
+
+.hatch-pick__locked-text {
+  flex: 1;
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  text-wrap: pretty;
+}
+
+.hatch-pick__go {
+  flex: none;
+  font-size: var(--text-sm);
+}
+
+/* The chosen monster: portrait, six numbers, and the batch add. */
+.hatch-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-sunken);
+}
+
+.hatch-info__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hatch-info__portrait {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border-radius: var(--radius-md);
+  background: radial-gradient(circle at 50% 42%, var(--colour-accent-soft), transparent 72%);
+}
+
+.hatch-info__picture {
+  width: 78px;
+  height: 78px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+}
+
+.hatch-info__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hatch-info__level {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--colour-text-muted);
+}
+
+.hatch-info__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  line-height: var(--leading-tight);
+}
+
+.hatch-info__blurb {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-secondary);
+}
+
+.hatch-info__blurb strong {
+  color: var(--colour-text);
+}
+
+/* The phone bar's one-line summary and its Details toggle. */
+.hatch-info__each,
+.hatch-info__details {
+  display: none;
+}
+
+.hatch-info__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+
+.hatch-info__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+}
+
+.hatch-info__stat dt {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.hatch-info__stat dd {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--colour-border-subtle);
+}
+
+.hatch-add__label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--colour-text-secondary);
+}
+
+.hatch-add__controls .qty-stepper__step,
+.hatch-add__count,
+.hatch-add__fill {
+  min-height: var(--control-height);
+}
+
+.hatch-add__count {
+  font-size: var(--text-lg);
+}
+
+.hatch-add__fill[aria-pressed="true"]:not(:disabled) {
+  border-color: var(--colour-accent-line);
+  background: var(--colour-accent-soft);
+  color: var(--colour-text-strong);
+}
+
+.hatch-add__add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2px var(--space-3);
+  min-height: 56px;
+}
+
+.hatch-add__words {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--display-weight);
+}
+
+.hatch-add__cost {
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.hatch-add__note,
+.hatch-add__warning {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-add__note {
+  color: var(--colour-text-secondary);
+}
+
+.hatch-add__warning {
+  color: var(--colour-warning);
+  font-weight: 700;
+}
+
+.hatch-add__unlock {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+/* ── Wide enough: the grid and the panel side by side, nine across ─────── */
+
+@container hatch (width >= 880px) {
   .hatch__split {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
-    overflow-y: auto;
-  }
-
-  .hatch__grid {
-    max-height: 30vh;
-  }
-
-  .hatch__side {
-    overflow: visible;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: var(--space-5);
+    align-items: stretch;
   }
 }
 
-@media (width <= 620px) {
-  .hatch__targets {
-    padding: var(--space-2) var(--space-3) 0;
+@container hatch (width >= 1040px) {
+  .hatch__grid {
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+  }
+}
+
+/* ── A phone: the same order, the add controls in a bar at the bottom ─── */
+
+@container hatch (width < 560px) {
+  .hatch-line__slots,
+  .hatch-line__now {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    overflow: visible;
   }
 
-  .hatch__split {
-    padding: var(--space-2) var(--space-3) var(--space-3);
+  .hatch-line__arrow,
+  .hatch-now__label,
+  .hatch-now__name,
+  .hatch-now__cancel,
+  .hatch-slot__note,
+  .hatch-slot__minus,
+  .hatch-slot__why {
+    display: none;
+  }
+
+  .hatch-line--hcc .hatch-now__label {
+    display: block;
+    font-size: var(--text-xs);
+    letter-spacing: 0;
+  }
+
+  .hatch-now,
+  .hatch-now--compact,
+  .hatch-slot {
+    width: auto;
+    min-height: 86px;
+    padding: var(--space-1);
+    border-radius: var(--radius-md);
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .hatch-now__body {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .hatch-now__picture,
+  .hatch-now--compact .hatch-now__picture,
+  .hatch-slot__picture {
+    width: 38px;
+    height: 38px;
+  }
+
+  .hatch-slot__picture {
+    margin-top: var(--space-3);
+  }
+
+  .hatch-now__state {
+    font-size: var(--text-xs);
+    font-weight: 700;
+  }
+
+  .hatch-now__bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4px;
+    border-radius: 0;
+  }
+
+  .hatch-now--confirm {
+    grid-column: span 3;
+  }
+
+  .hatch-now--more {
+    font-size: var(--text-xs);
+  }
+
+  .hatch-slot__count {
+    top: 5px;
+    left: 5px;
+    min-width: 0;
+    padding: 0 6px;
+    font-size: var(--text-xs);
+  }
+
+  .hatch-slot__name {
+    font-size: var(--text-xs);
+  }
+
+  .hatch-slot__upgrade {
+    min-height: 36px;
+    padding-inline: var(--space-1);
+    font-size: var(--text-xs);
+  }
+
+  .hatch-line__totals {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--space-2);
+    padding: 0;
+    border: 0;
+  }
+
+  .hatch-line__done {
+    font-size: var(--text-md);
+  }
+
+  .hatch-line__boost-link {
+    margin-left: auto;
+  }
+
+  .hatch-message {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  .hatch-message__icon.res-icon {
+    display: none;
+  }
+
+  .hatch-housing {
+    width: auto;
   }
 
   .hatch__grid {
-    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .hatch-monster__picture {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
   }
 
-  .hatch-add__step,
-  .hatch-add__fill,
-  .hatch-add__count,
-  .hatch-add__add,
-  .hatch-queue__remove {
-    min-height: 44px;
+  .hatch-pick__locked {
+    flex-wrap: wrap;
   }
+
+  /* The info panel becomes the bar fixed to the sheet's bottom. */
+  .hatch {
+    padding: var(--space-2) var(--space-3) 0;
+  }
+
+  .hatch-info {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    gap: var(--space-2);
+    margin: 0 calc(-1 * var(--space-3));
+    padding: var(--space-3) var(--space-4) var(--space-4);
+    border-width: 1px 0 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    background: var(--colour-surface-base);
+    box-shadow: var(--shadow-float);
+  }
+
+  .hatch-info__head {
+    padding-right: 76px;
+  }
+
+  .hatch-info__portrait {
+    width: 48px;
+    height: 48px;
+  }
+
+  .hatch-info__picture {
+    width: 44px;
+    height: 44px;
+  }
+
+  .hatch-info__name {
+    font-size: var(--text-md);
+  }
+
+  .hatch-info__blurb,
+  .hatch-info__stats {
+    display: none;
+  }
+
+  .hatch-info__each {
+    display: block;
+    margin-top: calc(-1 * var(--space-2));
+    padding-left: calc(48px + var(--space-3));
+    font-size: var(--text-xs);
+    color: var(--colour-text-muted);
+  }
+
+  .hatch-info__details {
+    display: inline-flex;
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  .hatch-info--details .hatch-info__blurb {
+    display: block;
+  }
+
+  .hatch-info--details .hatch-info__stats {
+    display: grid;
+  }
+
+  .hatch-add {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: end;
+    column-gap: var(--space-2);
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .hatch-add__label {
+    grid-column: 1 / -1;
+    font-size: var(--text-xs);
+  }
+
+  .hatch-add__controls {
+    gap: var(--space-1);
+  }
+
+  .hatch-add__count {
+    flex: none;
+    width: 44px;
+    padding-inline: 0;
+  }
+
+  .hatch-add__fill {
+    padding-inline: var(--space-2);
+  }
+
+  .hatch-add__add {
+    flex-direction: column;
+    gap: 0;
+    min-height: var(--control-height);
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .hatch-add__words {
+    font-size: var(--text-md);
+  }
+
+  .hatch-add__cost {
+    font-size: var(--text-xs);
+  }
+
+  .hatch-add__gate,
+  .hatch-add__warning,
+  .hatch-add__note {
+    grid-column: 1 / -1;
+    margin-top: var(--space-2);
+  }
+}
+
+/* `hidden` wins over the display each block sets above. */
+.hatch [hidden] {
+  display: none;
 }

@@ -7,6 +7,7 @@ import {
   freeHousing,
   hatchMonsters,
   housingWarning,
+  lineSeconds,
   previewAdd,
   previewFinish,
   queueRoom,
@@ -219,6 +220,10 @@ describe("previewAdd and queue room", () => {
     // A new stack (the last one is Bolt); hatcheries 10 and 11 take Pokeys off the head.
     expect(preview).toMatchObject({ added: 1, started: 2, newStacks: 1, inNewStacks: 1 });
     expect(preview.merged).toEqual([]);
+    expect(preview.starts).toEqual([
+      { hatchery: 10, monster: "C1" },
+      { hatchery: 11, monster: "C1" },
+    ]);
     // Empty shared queue: 7 stacks of 20, plus one each for the two idle working hatcheries.
     const empty = readHatchYard(
       saveOf({ monsters: monsters({ hid: [10, 11, 12] }), buildinghealthdata: { "12": 100 } }, [
@@ -230,6 +235,72 @@ describe("previewAdd and queue room", () => {
       T0,
     );
     expect(queueRoom(empty, "hcc", "C1")).toBe(142);
+  });
+
+  it("says how many go into each new stack, for the dashed slots", () => {
+    const yard = readHatchYard(saveOf({}, [building(10, 13, 3)]), T0);
+    expect(previewAdd(yard, 10, "C1", 58)!.fresh).toEqual([20, 20, 17]);
+    expect(previewAdd(yard, 10, "C1", 1)!.fresh).toEqual([]);
+  });
+});
+
+describe("lineSeconds", () => {
+  it("adds a hatchery's queue to the monster in production", () => {
+    const save = saveOf(
+      {
+        monsters: monsters({
+          hid: [10, 11],
+          h: [
+            ["C3", 12, [["C1", 20, 1], ["C1", 5, 1]], 1],
+            ["", 0, []],
+          ],
+          hstage: [1, 0],
+        }),
+      },
+      [building(10, 13, 3), building(11, 13, 2)],
+    );
+    const yard = readHatchYard(save, T0);
+    expect(lineSeconds(yard, 10, {}, T0)).toBe(12 + 25 * 15);
+    expect(lineSeconds(yard, 10, {}, T0 + 2)).toBe(10 + 25 * 15);
+    // Nothing on it.
+    expect(lineSeconds(yard, 11, {}, T0)).toBeNull();
+  });
+
+  it("runs the queue at the Overdrive's pace while it lasts", () => {
+    const save = saveOf(
+      { monsters: monsters({ hid: [10], h: [["", 0, [["C1", 20, 1]]]], hstage: [0] }) },
+      [building(10, 13, 3)],
+    );
+    const yard = readHatchYard(save, T0);
+    const storedata = { HOD: { q: 1, s: T0, e: T0 + 3600 } };
+    expect(lineSeconds(yard, 10, storedata, T0)).toBe(300 / 4);
+  });
+
+  it("is unknown for a hatchery that cannot work", () => {
+    const save = saveOf(
+      { monsters: monsters({ hid: [10], h: [["C1", 5, [["C1", 2, 1]]]], hstage: [1] }) },
+      [building(10, 13, 3, { cU: 100 })],
+    );
+    expect(lineSeconds(readHatchYard(save, T0), 10, {}, T0)).toBeNull();
+  });
+
+  it("hands the HCC's queue to whichever working hatchery is free first", () => {
+    const save = saveOf(
+      {
+        monsters: monsters({
+          hid: [10, 11],
+          h: [
+            ["C1", 9, []],
+            ["", 0, []],
+          ],
+          hstage: [1, 0],
+          hcc: [["C3", 4, 1]],
+        }),
+      },
+      [building(10, 13, 3), building(11, 13, 3), building(20, 16, 1)],
+    );
+    // Bolts take 23 s: 11 at 0 → 23, 10 at 9 → 32, 11 → 46, 10 → 55.
+    expect(lineSeconds(readHatchYard(save, T0), "hcc", {}, T0)).toBe(55);
   });
 });
 
