@@ -26,7 +26,11 @@ mock.module("../../../../server.js", () => ({
   },
 }));
 
-const { monsterUpdateHandler } = await import("./monsterUpdateHandler.js");
+mock.module("../../../../utils/logger.js", () => ({
+  logger: { warn: mock(() => {}), error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
+}));
+
+const { monsterUpdateHandler, monsterUpdateMode } = await import("./monsterUpdateHandler.js");
 
 const NOW = 1_800_000_000;
 
@@ -69,7 +73,7 @@ describe("monsterUpdateHandler — Map Room 2", () => {
     await monsterUpdateHandler(
       [{ baseid: Number(HOME), m: { housed: { C1: 90 }, h: [], saved: 1 } } as never],
       userSave as never,
-      { session: session({ [HOME]: { C1: 102 } }), finalises: true, flinglog: log(10), now: NOW }
+      { session: session({ [HOME]: { C1: 102 } }), finalises: true, flinglog: log(10), now: NOW, mapRoom3: false }
     );
 
     // 60 s of production: 15, 30, 45, 60 → 4 Pokeys; 100 + 4 − 10 flung.
@@ -83,7 +87,7 @@ describe("monsterUpdateHandler — Map Room 2", () => {
     await monsterUpdateHandler(
       [{ baseid: HOME, m: { housed: { C1: 5000 } } } as never],
       userSave as never,
-      { session: session({ [HOME]: { C1: 100 } }), finalises: true, flinglog: undefined, now: NOW }
+      { session: session({ [HOME]: { C1: 100 } }), finalises: true, flinglog: undefined, now: NOW, mapRoom3: false }
     );
 
     expect(userSave.monsters.housed).toEqual({ C1: 104 });
@@ -96,7 +100,7 @@ describe("monsterUpdateHandler — Map Room 2", () => {
         { baseid: OUTPOST, m: { housed: { C1: 25 } } } as never,
       ],
       userSave as never,
-      { session: session({ [HOME]: { C1: 100 }, [OUTPOST]: { C1: 30 } }), finalises: true, flinglog: undefined, now: NOW }
+      { session: session({ [HOME]: { C1: 100 }, [OUTPOST]: { C1: 30 } }), finalises: true, flinglog: undefined, now: NOW, mapRoom3: false }
     );
 
     expect(userSave.monsters.housed).toEqual({ C1: 97 });
@@ -110,7 +114,7 @@ describe("monsterUpdateHandler — Map Room 2", () => {
     await monsterUpdateHandler(
       [{ baseid: HOME, m: { housed: { C1: 0 } } } as never],
       userSave as never,
-      { session: session({ [HOME]: { C1: 100 } }), finalises: false, flinglog: log(100), now: NOW }
+      { session: session({ [HOME]: { C1: 100 } }), finalises: false, flinglog: log(100), now: NOW, mapRoom3: false }
     );
 
     expect(userSave).toEqual(before);
@@ -120,9 +124,70 @@ describe("monsterUpdateHandler — Map Room 2", () => {
     await monsterUpdateHandler(
       [{ baseid: "2000999999", m: { housed: { C1: 0 } } } as never],
       userSave as never,
-      { session: session({}), finalises: true, flinglog: log(5), now: NOW }
+      { session: session({}), finalises: true, flinglog: log(5), now: NOW, mapRoom3: false }
     );
 
     expect(persisted).toEqual([]);
+  });
+});
+
+describe("monsterUpdateHandler — the path the attack expects (issue #164)", () => {
+  /** Flash's Map Room 3 per-creep shape. */
+  const MR3_UPDATE = { C1: [{ health: 100, ownerID: 1, q: 0 }], Q: [] };
+
+  const settle = (monsters: unknown, extra: { finalises?: boolean; mapRoom3?: boolean; roster?: boolean } = {}) =>
+    monsterUpdateHandler(monsters, userSave as never, {
+      session: session(extra.roster === false ? undefined : { [HOME]: { C1: 100 } }),
+      finalises: extra.finalises ?? true,
+      flinglog: log(10),
+      now: NOW,
+      mapRoom3: extra.mapRoom3 ?? false,
+    });
+
+  test("a Map Room 2 attack cannot write an object over the army, finalising or not", async () => {
+    const before = structuredClone(userSave);
+    await settle({ housed: { C1: 5000, C20: 99 } });
+    await settle(MR3_UPDATE, { finalises: false });
+    await settle(MR3_UPDATE, { mapRoom3: true });
+    await settle("C1", {});
+    await settle(null, {});
+
+    expect(userSave).toEqual(before);
+    expect(persisted).toEqual([]);
+  });
+
+  test("junk entries in the array are dropped and the rest settles", async () => {
+    await monsterUpdateHandler(
+      [null, "x", [HOME], { baseid: {} }, { baseid: "../1" }, { baseid: HOME, m: { housed: { C1: 93 } } }],
+      userSave as never,
+      { session: session({ [HOME]: { C1: 100 } }), finalises: true, flinglog: undefined, now: NOW, mapRoom3: false }
+    );
+
+    // 104 caught up, 100 − 93 flung.
+    expect(userSave.monsters.housed).toEqual({ C1: 97 });
+  });
+
+  test("a Map Room 3 attack writes its per-creep object, and only that shape", async () => {
+    await settle({ C1: "lots" }, { roster: false, mapRoom3: true });
+    await settle([{ baseid: HOME, m: { housed: { C1: 0 } } }], { roster: false, mapRoom3: true });
+    expect(userSave.monsters.housed).toEqual({ C1: 100 });
+
+    await settle(MR3_UPDATE, { roster: false, mapRoom3: true });
+    expect(userSave.monsters).toEqual(MR3_UPDATE);
+  });
+
+  test("a session without a roster from a player not on Map Room 3 writes nothing", async () => {
+    const before = structuredClone(userSave);
+    await settle(MR3_UPDATE, { roster: false, mapRoom3: false });
+    await settle([{ baseid: HOME, m: { housed: { C1: 0 } } }], { roster: false, mapRoom3: false });
+
+    expect(userSave).toEqual(before);
+  });
+
+  test("the mode is the server's: roster from the session, Map Room 3 from the attacker's save", () => {
+    expect(monsterUpdateMode({ session: session({}), mapRoom3: true })).toBe("roster");
+    expect(monsterUpdateMode({ session: session(), mapRoom3: true })).toBe("mapRoom3");
+    expect(monsterUpdateMode({ session: session(), mapRoom3: false })).toBe("none");
+    expect(monsterUpdateMode({ session: null, mapRoom3: false })).toBe("none");
   });
 });

@@ -19,7 +19,7 @@ import { chargeBombSpend } from "../../../services/base/combat/bombSpend.js";
 import { recordBombSpend } from "../../../services/base/combat/recordBombSpend.js";
 import { attackLootHandler } from "./handlers/attackLootHandler.js";
 import { defenderLootHandler } from "./handlers/defenderLootHandler.js";
-import { monsterUpdateHandler } from "./handlers/monsterUpdateHandler.js";
+import { monsterUpdateHandler, monsterUpdateMode } from "./handlers/monsterUpdateHandler.js";
 import { validateSave } from "../../../scripts/anticheat/anticheat.js";
 import { getOutpostOwnerSave } from "../../../services/base/getOutpostOwnerSave.js";
 import { advanceBuildingTimers } from "../../../services/base/advanceBuildingTimers.js";
@@ -166,6 +166,10 @@ const saveBase = async (
 
   const outpostOwnerSave = await getOutpostOwnerSave(baseSave, user);
 
+  // Map Room 3 is the attacker's own save's say, never the attack load's
+  // `mapversion`, which the client picks (issues #163, #164).
+  const mapRoom3 = userSave.mapversion === MapRoomVersion.V3;
+
   // The loot on both sides (issue #163), worked out from the rows as they
   // stand before any key of this save is applied — the attacker's champions
   // above all. Only the save that ends the attack lands any: every save of an
@@ -184,7 +188,7 @@ const saveBase = async (
             resources: (outpostOwnerSave ?? baseSave).resources,
           },
           attacker: userSave,
-          mapRoom3: userSave.mapversion === MapRoomVersion.V3,
+          mapRoom3,
         })
       : null;
 
@@ -321,12 +325,18 @@ const saveBase = async (
         finalises: Boolean(saveData.over),
         flinglog: saveData.flinglog,
         now,
+        mapRoom3,
       });
     }
 
-    // Map Room 1's whole-army blob. A Map Room 2 attack (its session carries
-    // `entryHoused`) settles through `monsterupdate` and never writes one.
-    if (saveData.attackcreatures && !session?.entryHoused) {
+    // Flash's whole-army blob, kept for a Map Room 3 attack alone: Map Room 1
+    // and 2 attacks (their sessions carry `entryHoused`) settle through
+    // `monsterupdate` and never write one, and nobody else writes one at all
+    // (issue #164).
+    if (
+      monsterUpdateMode({ session, mapRoom3 }) === "mapRoom3" &&
+      isRecord(saveData.attackcreatures)
+    ) {
       userSave.monsters = saveData.attackcreatures;
     }
 
@@ -478,6 +488,9 @@ const requireAttackBinding = async (
 
   throw attackNotBoundErr(result.reason);
 };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
  * Logs an attack save whose loot the server did not credit in full (issue

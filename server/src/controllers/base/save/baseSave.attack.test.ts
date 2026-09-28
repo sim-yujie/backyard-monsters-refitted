@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
 
 /**
- * Attack loot through `/base/save` (issue #163): only the save that ends the
- * attack credits anything, and it credits no more than the server's replay of
- * the battle gives. The defender is a small wild monster camp so the replay is
- * quick; the rows are plain objects behind a stand-in ORM.
+ * Attack saves through `/base/save`. Loot (issue #163): only the save that
+ * ends the attack credits anything, and it credits no more than the server's
+ * replay of the battle gives. The army (issue #164): nothing the client sends
+ * is written over it. The defender is a small wild monster camp so the replay
+ * is quick; the rows are plain objects behind a stand-in ORM.
  */
 
 const DEFENDER_OWNER = 1;
@@ -165,5 +166,25 @@ describe("attack loot through the save", () => {
 
     expect(attackerSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
     expect(defender.resources.r1).toBe(5000);
+  });
+});
+
+describe("the attacker's army through the save (issue #164)", () => {
+  const ARMY = { housed: { C4: 12 }, saved: 0 };
+
+  test("a crafted monsterupdate or attackcreatures cannot overwrite the army", async () => {
+    attackerSave.monsters = structuredClone(ARMY);
+    const crafted = { housed: { C4: 5000, C20: 400 } };
+
+    await baseSave(
+      ctxFor({ monsterupdate: JSON.stringify(crafted), attackcreatures: JSON.stringify(crafted) }),
+      async () => {}
+    );
+    await baseSave(
+      ctxFor({ over: "1", monsterupdate: JSON.stringify(crafted), attackcreatures: JSON.stringify(crafted) }),
+      async () => {}
+    );
+
+    expect(attackerSave.monsters).toEqual(ARMY);
   });
 });

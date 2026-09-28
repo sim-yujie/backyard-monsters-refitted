@@ -112,7 +112,7 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
     await monsterUpdateHandler(
       entries.filter((entry: { baseid?: unknown }) => String(entry?.baseid) === String(userSave.baseid)),
       userSave,
-      { session, finalises: true, flinglog: saveData.flinglog, now }
+      { session, finalises: true, flinglog: saveData.flinglog, now, mapRoom3: false }
     );
 
     if (saveData.attackerchampion) userSave.champion = saveData.attackerchampion;
