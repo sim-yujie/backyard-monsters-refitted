@@ -1,6 +1,7 @@
 import { HatchTab } from "./HatchTab";
 import { LockerTab } from "./LockerTab";
 import { HousingTab } from "./HousingTab";
+import { LabTab } from "./LabTab";
 import { TrainTab } from "./TrainTab";
 import {
   MonsterBuilding,
@@ -63,7 +64,7 @@ export const MONSTERS_TABS: readonly MonstersTabDefinition[] = [
     id: MonstersTabId.LAB,
     label: "Lab",
     buildings: [MonsterBuilding.LAB],
-    // Phase 4.
-    create: () => placeholderTab("Monster Lab research comes in a later update."),
+    // WP4.4.
+    create: (context) => new LabTab(context),
   },
 ];

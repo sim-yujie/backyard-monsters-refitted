@@ -11,13 +11,14 @@ import {
 } from "@/game/yard/buildingCosts";
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import type { PlanNode } from "@/game/yard/planner/placement";
-import { countdownProgress } from "@/game/yard/jobs";
+import { LAB_TYPE, countdownProgress } from "@/game/yard/jobs";
 import { recycleOffer, type RecycleOffer } from "@/game/yard/recycle";
 import { ladderFor } from "@/game/yard/planner/upgrades";
 import { overCap as overCapOf } from "@/game/yard/storage";
 import { freeWorkers, holdsWorker, sharperToolsMultiplier } from "@/game/yard/workers";
 import type { Yard, YardBuilding, YardWorkers } from "@/game/yard/yardModel";
 import { BUNKER_TYPE } from "@/game/monsters/bunker";
+import { researchOn } from "@/game/monsters/lab";
 import { monstersTabFor, type MonstersTabId } from "@/ui/monsters/monstersTab";
 
 /**
@@ -266,7 +267,9 @@ export const upgradeOffer = (
   // The gates both buttons share, in the server's order.
   const hall = townHallLevel(context.yard);
   let common: UpgradeGate | null = null;
-  if (damaged) common = { reason: "damaged" };
+  // The Lab is not upgraded while it researches (`MONSTERLAB.as:241-247`; the server's `isBusy`).
+  if (building.type === LAB_TYPE && researchOn(building)) common = { reason: "busy" };
+  else if (damaged) common = { reason: "damaged" };
   else if (hall <= 0) common = { reason: "townHall", have: 0, need: 1 };
   else if (step.firstStepGated && step.gate) {
     common = step.gate.townHall

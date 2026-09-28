@@ -156,6 +156,14 @@ describe("groupCompletedJobs", () => {
     expect(groups[0]!.items.map((item) => item.buildingId)).toEqual([12, null]);
   });
 
+  it("names a researched ability with its rank, pointing at the Lab (#118)", () => {
+    const [group] = groupCompletedJobs([
+      { kind: "research", id: "C3", t: null, at: 1, detail: { rank: 2, lab: 9 } },
+    ]);
+    expect(noticeText(group!)).toBe("Research finished: Bolt: Teleportation 2");
+    expect(group!.items[0]!.buildingId).toBe(9);
+  });
+
   it("reads a kind a later phase adds through its common keys", () => {
     const [group] = groupCompletedJobs([{ kind: "hatch", id: "C5", t: null, at: 1, detail: {} }]);
     expect(noticeText(group!)).toBe("Hatch finished: C5");

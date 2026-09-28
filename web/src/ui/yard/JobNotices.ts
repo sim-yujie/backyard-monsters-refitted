@@ -1,5 +1,5 @@
 import type { CompletedJob } from "@/api/types";
-import { monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { labAbility, monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { typeName } from "@/game/yard/planner/summary";
 import { formatAmount } from "@/ui/format";
 import type { Notices } from "@/ui/maproom/Notices";
@@ -81,6 +81,7 @@ const NOUNS: Readonly<Record<string, readonly [string, string]>> = {
   fortify: ["fortification", "fortifications"],
   unlock: ["unlock", "unlocks"],
   train: ["training", "trainings"],
+  research: ["research", "researches"],
   repair: ["repair", "repairs"],
 };
 
@@ -180,6 +181,16 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
     return {
       label: typeof detail.level === "number" ? `${name} ${detail.level}` : name,
       buildingId: typeof detail.academy === "number" ? detail.academy : null,
+    };
+  }
+  if (job.kind === "research") {
+    // "Bolt: Teleportation 1", pointing at the Lab (`catchUpResearch`, `catchUpTraining.ts`).
+    const id = String(job.id);
+    const detail = job.detail as { rank?: unknown; lab?: unknown };
+    const what = `${monsterEntry(id)?.name ?? id}: ${labAbility(id)?.name ?? "ability"}`;
+    return {
+      label: typeof detail.rank === "number" ? `${what} ${detail.rank}` : what,
+      buildingId: typeof detail.lab === "number" ? detail.lab : null,
     };
   }
   const buildingId = typeof job.id === "number" ? job.id : null;

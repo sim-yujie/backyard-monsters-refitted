@@ -74,10 +74,10 @@ export interface YardJob {
  * (`server/src/services/yard/catchUpBuildings.ts`), Phase 2 unlocks
  * (`catchUpLocker.ts`), Phase 3 mushroom respawns (`catchUpMushrooms.ts`: the
  * display changes nothing, the `state` answer brings the new mushroom) and
- * repairs (`catchUpRepairs.ts`), Phase 4 trainings (`catchUpTraining.ts`);
- * each later work package adds its kinds here in the same change that adds
- * its catch-up step (`hatch` with `catchUpMonsters.ts`, `research` with
- * Phase 4, `hunger` with Phase 5).
+ * repairs (`catchUpRepairs.ts`), Phase 4 trainings and Lab research
+ * (`catchUpTraining.ts`); each later work package adds its kinds here in the
+ * same change that adds its catch-up step (`hatch` with `catchUpMonsters.ts`,
+ * `hunger` with Phase 5).
  *
  * `harvest` stays out on purpose (owner decision 2026-09-28): a buffer
  * filling is predicted on the client (`harvest.ts`) and never worth a
@@ -92,6 +92,7 @@ export const SERVER_COMPLETED_KINDS: ReadonlySet<JobKind> = new Set<JobKind>([
   JobKind.UNLOCK,
   JobKind.MUSHROOM,
   JobKind.TRAIN,
+  JobKind.RESEARCH,
   JobKind.REPAIR,
 ]);
 

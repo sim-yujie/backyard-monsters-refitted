@@ -94,6 +94,16 @@ describe("upgradeOffer: the next step", () => {
     expect(offer?.instantPrice).toBeGreaterThan(0);
   });
 
+  it("a Monster Lab is not upgraded while it researches (#118)", () => {
+    const researching = { upg: "C3", upt: T0 + 600, upl: 1 };
+    const context = contextOf({ buildings: [HALL(7), building(2, 116, 1, researching)] });
+    const offer = upgradeOffer(pick(context, 2), context);
+    expect(offer?.gate).toEqual({ reason: "busy" });
+    expect(offer?.instantGate).toEqual({ reason: "busy" });
+    const idle = contextOf({ buildings: [HALL(7), building(2, 116, 1)] });
+    expect(upgradeOffer(pick(idle, 2), idle)?.gate?.reason).not.toBe("busy");
+  });
+
   it("shortens the time under Sharper Tools, as the server writes it", () => {
     const context = contextOf({
       buildings: [HALL(5), building(2, 20, 4)],

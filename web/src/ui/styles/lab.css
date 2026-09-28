@@ -1,0 +1,28 @@
+/* ── Lab tab (`web/src/ui/monsters/LabTab.ts`) ─────────────────────────────
+   The Train tab's slot, list and card (`train.css`, `monsters.css`); this
+   file adds the two lines a Lab row carries under its cost: what the ability
+   does now → next, and why it cannot be researched yet. */
+
+.lab-row__effect,
+.lab-row__gate {
+  grid-column: 2;
+  font-size: var(--text-sm);
+}
+
+.lab-row__effect {
+  color: var(--colour-text);
+}
+
+.lab-row__gate {
+  font-weight: 700;
+  color: var(--colour-warning);
+}
+
+.lab-row.train-row--locked .lab-row__effect {
+  color: var(--colour-text-muted);
+}
+
+/* One Lab: its slot takes the full width. */
+.lab__slot {
+  grid-template-columns: minmax(0, 1fr);
+}
