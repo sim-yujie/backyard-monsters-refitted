@@ -246,32 +246,44 @@ const buildGates = (save: BuildSave, request: BuildRequest): CostStep => {
   return step;
 };
 
-/** Gate 6: inside the plot, clear of every building and mushroom. */
-const placementGate = (save: BuildSave, request: BuildRequest): void => {
+/** Why a footprint cannot go where it was asked: gate 6's `placement` detail. */
+export type PlacementProblem =
+  | { placement: "outOfBounds" }
+  | { placement: "overlap"; with: number }
+  | { placement: "mushroom" };
+
+/**
+ * Gate 6's rule, without the refusal: inside the plot, clear of every building
+ * and mushroom. Null when the spot is free. The Map Room migration checks the
+ * spot it picks with it too (`mapRoom.ts`).
+ */
+export const placementProblem = (save: BuildSave, request: BuildRequest): PlacementProblem | null => {
   const { type, x, y } = request;
   const rect = rectOf(type, x, y);
 
-  if (!withinBounds(rect, type, currentExpansion(save.storedata))) {
-    throw yardRefusedErr("placement", "That spot is outside your yard.", {
-      placement: "outOfBounds",
-    });
-  }
+  if (!withinBounds(rect, type, currentExpansion(save.storedata))) return { placement: "outOfBounds" };
 
   for (const [key, building] of Object.entries(save.buildingdata ?? {})) {
     const other = rectOf(Number(building.t), Number(building.X), Number(building.Y));
-    if (overlaps(rect, other)) {
-      throw yardRefusedErr("placement", "Something is already built there.", {
-        placement: "overlap",
-        with: Number(building.id ?? key),
-      });
-    }
+    if (overlaps(rect, other)) return { placement: "overlap", with: Number(building.id ?? key) };
   }
 
   if (mushroomRects(save.mushrooms).some((mushroom) => overlaps(rect, mushroom))) {
-    throw yardRefusedErr("placement", "A mushroom is in the way. Pick it or build somewhere else.", {
-      placement: "mushroom",
-    });
+    return { placement: "mushroom" };
   }
+  return null;
+};
+
+const PLACEMENT_MESSAGES: Readonly<Record<PlacementProblem["placement"], string>> = {
+  outOfBounds: "That spot is outside your yard.",
+  overlap: "Something is already built there.",
+  mushroom: "A mushroom is in the way. Pick it or build somewhere else.",
+};
+
+/** Gate 6: inside the plot, clear of every building and mushroom. */
+const placementGate = (save: BuildSave, request: BuildRequest): void => {
+  const problem = placementProblem(save, request);
+  if (problem) throw yardRefusedErr("placement", PLACEMENT_MESSAGES[problem.placement], problem);
 };
 
 /** The new building, still to be built: `cB` and `cL` set, no `l` (see the file comment). */

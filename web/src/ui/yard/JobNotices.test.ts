@@ -48,6 +48,23 @@ describe("groupCompletedJobs", () => {
     ).toBe("The Radio Tower is gone: nothing refunded (your storage is full)");
   });
 
+  it("says a Map Room the server added to a Map Room 2 yard that had none (owner 2026-09-28)", () => {
+    const added: CompletedJob = {
+      kind: "mapRoomAdded",
+      id: 601,
+      t: 11,
+      at: 100,
+      detail: { level: 2, x: -90, y: -50 },
+    };
+    const groups = groupCompletedJobs([added]);
+    expect(noticeText(groups[0]!)).toBe("A Map Room was added to your yard");
+    expect(groups[0]!.items[0]!.buildingId).toBe(601);
+    expect(awayNoticeText(groups)).toBe("While you were away: a Map Room was added to your yard");
+    expect(awayNoticeText(groupCompletedJobs([upgrade(1, CANNON, 5), added]))).toBe(
+      `While you were away: upgrade finished: ${typeName(CANNON)} 5; a Map Room was added to your yard`,
+    );
+  });
+
   it("groups the upgrades that land together into one line, in the order they finished", () => {
     const groups = groupCompletedJobs([upgrade(1, CANNON, 5), upgrade(2, SNIPER, 3), upgrade(3, SILO, 7)]);
     expect(groups).toHaveLength(1);
@@ -182,6 +199,14 @@ describe("JobNotices", () => {
     expect(buttons).toHaveLength(2);
     buttons[1]!.click();
     expect(select).toHaveBeenCalledWith(2);
+  });
+
+  it("says the added Map Room in the away toast, the Map Room a button that selects it", () => {
+    jobs.showAway([{ kind: "mapRoomAdded", id: 601, t: 11, at: 100, detail: { level: 2, x: -90, y: -50 } }]);
+    const text = toasts()[0]!.querySelector(".notice__text")!;
+    expect(text.textContent).toBe("While you were away: a Map Room was added to your yard");
+    text.querySelector<HTMLButtonElement>(".job-notice__building")!.click();
+    expect(select).toHaveBeenCalledWith(601);
   });
 
   it("keeps the away toast up longer than a job toast, then clears it", () => {

@@ -858,7 +858,11 @@ JSON), parsed by the route's zod schema in `server/src/schemas/YardSchemas.ts`.
    A Map Room 3 blob is left alone.
    Before all of that, a migration (`mapRoom.ts` `migrateYard`, §2.5 and §5.7 of the design):
    a Map Room above level 2 is written back to 2 (a running upgrade past 2 dropped); a save with
-   `mr2upgraded` gets a level 2 Map Room (one still being built is left until it stands); every
+   `mr2upgraded` gets a level 2 Map Room (one still being built is left until it stands); a save
+   on Map Room 2 (`mr2upgraded` or `mapversion` 2) with no Map Room at all gets one, level 2 and
+   finished, with the next building id, on the free spot nearest the middle of the plot (the build
+   route's placement rule: inside the plot, clear of buildings and mushrooms; nothing when the plot
+   has no room), reported as a `mapRoomAdded` job; every
    Radio Tower (type 113) is removed with its `buildinghealthdata` entry and its build cost
    (2,000 / 2,000 / 2,000) credited, clamped to the storage cap, and reported as a
    `radioRemoved` job.
@@ -942,6 +946,8 @@ is `{ kind, id, t, at, detail }`, `at` being the unix second the job ended:
   detail: { goo: number /* credited, after the cap */, monsters: { [id]: count } } }
 { kind: "radioRemoved", id: number /* building id it had */, t: 113, at: number /* now */,
   detail: { refund: { r1, r2, r3, r4 } /* credited, after the cap */ } }
+{ kind: "mapRoomAdded", id: number /* the new building's id */, t: 11, at: number /* now */,
+  detail: { level: 2, x: number, y: number /* its footprint origin */ } }
 { kind: "repair", id: number /* building id */, t: number /* type */, at: number /* full health */,
   detail: { from: number /* health at the start of the window */, max: number } }
 ```

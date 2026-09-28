@@ -203,6 +203,15 @@ describe("buildOffer", () => {
     expect(buildOffer(CANNON, capped)?.instantGate).toBeNull();
   });
 
+  it("counts the Map Room the server adds to a Map Room 2 yard: 1 of 1, no second (owner 2026-09-28)", () => {
+    // As `migrateYard` writes it: level 2, finished, placed by the server.
+    const mapRoom = building(601, 11, { l: 2, X: -90, Y: -50 });
+    const offer = buildOffer(11, contextOf({ buildings: [HALL(8), mapRoom] }));
+    expect(offer).toMatchObject({ owned: 1, allowed: 1 });
+    expect(offer?.gate).toEqual({ reason: "limit", have: 1, allowed: 1, next: null });
+    expect(buildOffer(11, contextOf({ buildings: [HALL(8)] }))).toMatchObject({ owned: 0, allowed: 1 });
+  });
+
   it("instant needs the Shiny", () => {
     const offer = buildOffer(CANNON, contextOf({ buildings: [HALL(3)], credits: 5 }));
     expect(offer?.gate).toBeNull();

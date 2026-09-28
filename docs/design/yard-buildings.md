@@ -232,7 +232,7 @@ Everything not listed keeps its current shape.
 | `academy[id].time` | Always absolute. The original accepted ≤ 583,200 as relative (`client/scripts/com/monsters/player/Player.as:170-177`). | Catch-up converts a relative value once (`time + savetime`). |
 | Legacy id `C100` | Rewritten to `C12` once in every monster field (MH §12.2 item 9). | Catch-up, once. |
 | Radio (type 113) | Removed from `buildingdata`, its `costs[0]` refunded (capped). | Catch-up, once (§5.7). |
-| Map Room (type 11) | Capped at level 2. A save with `mr2upgraded` gets level 2. A level 3 Map Room is written back to 2 (nothing refunded; level 3 was free). | Catch-up, once (§5.7). |
+| Map Room (type 11) | Capped at level 2. A save with `mr2upgraded` gets level 2. A level 3 Map Room is written back to 2 (nothing refunded; level 3 was free). **Owner decision 2026-09-28:** a save on Map Room 2 (`mr2upgraded` or `mapversion` 2) with no Map Room at all is given one, level 2 and finished, on a free spot the server picks, reported as a `mapRoomAdded` job ("A Map Room was added to your yard"). | Catch-up, once (§5.7). |
 | Hatchery queue stacks | Unchanged `[id, count]`. | — |
 | `buildingdata[id].cL` | New: the running build or upgrade's length (§2.2, #136). | None: a job without it shows progress against the cost table's time, as before. |
 | `monsterbaiter` | Kept verbatim, no longer read (Musk is dropped, §8.1). | — |
@@ -875,6 +875,15 @@ above the upgrade (Repair, free; Repair all N now, Shiny, free when every repair
   (`server/src/controllers/maproom/setMapVersion.ts:74-93`: join or create a world, set
   `mr2upgraded`, `mapversion = 2`). A save that already has `mr2upgraded` is set to level 2 by the
   §2.5 migration, so existing Map Room 2 players see no change.
+- **Owner decision 2026-09-28: every yard on Map Room 2 has a Map Room.** Yards on Map Room 2 that
+  hold no type-11 building at all (the owner's yard and agenttester are two) get one from the §2.5
+  migration: level 2, finished, with the next building id (one above every id in `buildingdata`
+  and `buildinghealthdata`), on the free spot nearest the middle of the plot, clear of every
+  building and mushroom by the build route's own placement rule (`placementProblem`,
+  `services/yard/build.ts`), tried on a 10-unit grid so the same yard always gets the same spot.
+  It is reported as a `mapRoomAdded` job, so the next load's away toast says "A Map Room was added
+  to your yard". A save not on Map Room 2 is given none (it builds one from the Build menu), a plot
+  with no 90 × 90 gap is left alone until one opens, and the build menu then counts it (1 of 1).
 - **Radio**: not in the build menu. Each existing Radio is removed by the §2.5 migration and its
   build cost refunded (capped); a notice on the next load says so.
 

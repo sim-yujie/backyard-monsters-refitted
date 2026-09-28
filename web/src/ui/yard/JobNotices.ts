@@ -46,6 +46,11 @@ export interface JobNoticeGroup {
   /** "3 upgrades finished" or "Upgrade finished". */
   readonly heading: string;
   readonly items: readonly JobNoticeItem[];
+  /**
+   * Set for a kind told as one sentence around its items, "A " + "Map Room"
+   * + " was added to your yard", rather than "heading: items".
+   */
+  readonly tail?: string;
 }
 
 /** The store buffs a Phase 1 yard can hold, by code (`server/src/game-data/store/storeItems.ts`). */
@@ -90,6 +95,13 @@ const headingOf = (kind: string, count: number): string => {
  */
 const RADIO_REMOVED = "radioRemoved";
 
+/**
+ * A Map Room 2 yard that had no Map Room is given one by the catch-up
+ * (`server/src/services/yard/mapRoom.ts`, owner decision 2026-09-28); the
+ * next load says "A Map Room was added to your yard" in its away toast.
+ */
+const MAP_ROOM_ADDED = "mapRoomAdded";
+
 /** "2,000 Twigs, 2,000 Pebbles, 2,000 Putty refunded", or "nothing refunded" (the storage was full). */
 const refundLabel = (detail: Record<string, unknown>): string => {
   const refund = (detail["refund"] ?? {}) as Record<string, unknown>;
@@ -102,6 +114,9 @@ const refundLabel = (detail: Record<string, unknown>): string => {
 
 const labelOf = (job: CompletedJob): JobNoticeItem => {
   if (job.kind === RADIO_REMOVED) return { label: refundLabel(job.detail), buildingId: null };
+  if (job.kind === MAP_ROOM_ADDED) {
+    return { label: "Map Room", buildingId: typeof job.id === "number" ? job.id : null };
+  }
   if (job.kind === "storeItem") {
     const code = String(job.id);
     return { label: STORE_ITEM_NAMES[code] ?? code, buildingId: null };
@@ -144,12 +159,18 @@ export const groupCompletedJobs = (completed: readonly CompletedJob[]): JobNotic
     items.push(labelOf(job));
     byKind.set(job.kind, items);
   }
-  return [...byKind].map(([kind, items]) => ({ kind, heading: headingOf(kind, items.length), items }));
+  return [...byKind].map(([kind, items]) =>
+    kind === MAP_ROOM_ADDED
+      ? { kind, heading: "A ", items, tail: " was added to your yard" }
+      : { kind, heading: headingOf(kind, items.length), items },
+  );
 };
 
 /** The toast's plain text, as a screen reader and the tests read it. */
-export const noticeText = (group: JobNoticeGroup): string =>
-  `${group.heading}: ${group.items.map((item) => item.label).join(", ")}`;
+export const noticeText = (group: JobNoticeGroup): string => {
+  const items = group.items.map((item) => item.label).join(", ");
+  return group.tail === undefined ? `${group.heading}: ${items}` : `${group.heading}${items}${group.tail}`;
+};
 
 /** A heading after the away lead-in, where it no longer starts the sentence. */
 const awayHeading = (group: JobNoticeGroup): JobNoticeGroup => ({
@@ -216,9 +237,9 @@ export class JobNotices {
     return line;
   }
 
-  /** "Heading: " then each item, a building as a button that selects it. */
+  /** "Heading: " then each item, a building as a button that selects it (or the group's sentence). */
   private appendGroup(line: HTMLElement, group: JobNoticeGroup): void {
-    line.append(`${group.heading}: `);
+    line.append(group.tail === undefined ? `${group.heading}: ` : group.heading);
     group.items.forEach((item, index) => {
       if (index > 0) line.append(", ");
       if (item.buildingId === null) {
@@ -234,5 +255,6 @@ export class JobNotices {
       button.addEventListener("click", () => this.select(buildingId));
       line.append(button);
     });
+    if (group.tail !== undefined) line.append(group.tail);
   }
 }

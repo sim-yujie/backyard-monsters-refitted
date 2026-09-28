@@ -10,7 +10,12 @@ import { catchUpMonsters, type CatchUpMonstersSave, type MonsterJob } from "./ca
 import { catchUpMushrooms } from "./catchUpMushrooms.js";
 import { catchUpRepairs, type RepairJob } from "./catchUpRepairs.js";
 import { catchUpTraining, type CatchUpTrainingSave, type TrainJob } from "./catchUpTraining.js";
-import { migrateYard, type MigrationSave, type RadioRemovedJob } from "./mapRoom.js";
+import {
+  migrateYard,
+  type MapRoomAddedJob,
+  type MigrationSave,
+  type RadioRemovedJob,
+} from "./mapRoom.js";
 import type { MushroomYardSave } from "./mushrooms.js";
 
 /**
@@ -28,7 +33,7 @@ import type { MushroomYardSave } from "./mushrooms.js";
  *
  * | Step | Module | Phase |
  * | --- | --- | --- |
- * | 0 | `mapRoom.ts` `migrateYard` — Map Room cap, `mr2upgraded`, Radio removal (§2.5) | 3 |
+ * | 0 | `mapRoom.ts` `migrateYard` — Map Room cap, `mr2upgraded`, Radio removal, a missing Map Room added (§2.5) | 3 |
  * | 1 | `catchUpBuildings.ts` — countdowns, points, `flinger`/`catapult`, store buffs | 1 |
  * | 2 | `catchUpLocker.ts` — unlocks and the Locker Overdrive (runs first, see there) | 2 |
  * | 2 | `catchUpMonsters.ts` — HCC queue refund, hatchery production, housing cull (after the buildings) | 2 |
@@ -61,6 +66,7 @@ export type CompletedJob =
   | UnlockJob
   | MonsterJob
   | RadioRemovedJob
+  | MapRoomAddedJob
   | TrainJob
   | RepairJob;
 
