@@ -357,7 +357,9 @@ const MAIN_PROTECTION_DAMAGE = 50;
  * The outcome in one line. A camp or an outpost is won at the takeover
  * threshold, which is what `destroyed` reports (`damagePercent.ts`); a main
  * yard has no win, only the damage dealt and whether it will earn the
- * defender protection (`damageProtection.ts`, ≥ 50% for 36 hours).
+ * defender protection (`damageProtection.ts`, ≥ 50% for 36 hours). A win
+ * short of 100% leaves buildings standing, so it is "defeated", not
+ * "destroyed" (#152).
  */
 export const describeOutcome = (
   kind: AttackTargetKind,
@@ -368,7 +370,10 @@ export const describeOutcome = (
   if (kind === "wild" || kind === "outpost") {
     const what = kind === "wild" ? "camp" : "outpost";
     return damagePercent >= VICTORY_THRESHOLD
-      ? { outcome: `Victory! ${name}'s ${what} is destroyed.`, tone: "win" }
+      ? {
+          outcome: `Victory! ${name}'s ${what} is ${damagePercent >= 100 ? "destroyed" : "defeated"}.`,
+          tone: "win",
+        }
       : {
           outcome: `${name}'s ${what} still stands at ${damage}% damage (${VICTORY_THRESHOLD}% wins).`,
           tone: "lose",

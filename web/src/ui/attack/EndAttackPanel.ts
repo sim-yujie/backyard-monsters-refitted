@@ -61,7 +61,11 @@ export const formatSpan = (seconds: number): string => {
 const endReasonText = (summary: AttackSummary): string => {
   switch (summary.endReason) {
     case "destroyed":
-      return "The yard was destroyed.";
+      // The session also ends here when only walls, traps and the like are
+      // left, which is short of 100% (#152).
+      return summary.damagePercent >= 100
+        ? "The yard was destroyed."
+        : "Nothing your monsters could attack was left standing.";
     case "exhausted":
       return "Nothing was left to send.";
     case "expired":

@@ -366,7 +366,10 @@ describe("the pieces", () => {
   });
 
   it("calls a camp won at the takeover threshold and a main yard by its damage", () => {
-    expect(describeOutcome("wild", "Kozu", 90)).toEqual({ outcome: "Victory! Kozu's camp is destroyed.", tone: "win" });
+    // Won with buildings still standing: defeated, not destroyed (#152).
+    expect(describeOutcome("wild", "Kozu", 90)).toEqual({ outcome: "Victory! Kozu's camp is defeated.", tone: "win" });
+    expect(describeOutcome("outpost", "Ann", 99.9).outcome).toBe("Victory! Ann's outpost is defeated.");
+    expect(describeOutcome("wild", "Kozu", 100)).toEqual({ outcome: "Victory! Kozu's camp is destroyed.", tone: "win" });
     expect(describeOutcome("outpost", "Ann", 89.9).tone).toBe("lose");
     expect(describeOutcome("outpost", "Ann", 89.9).outcome).toMatch(/still stands at 89% damage/);
     expect(describeOutcome("main", "Bob", 50).tone).toBe("win");

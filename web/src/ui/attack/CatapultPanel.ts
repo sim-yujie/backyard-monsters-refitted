@@ -330,7 +330,8 @@ export class CatapultPanel {
           ? block
           : bomb.damage > 0
             ? `${shortCost(bomb.damage)} damage per building`
-            : "Speeds up your monsters";
+            : // The engine gives putty no effect yet; say so rather than promise one (#152).
+              "No effect yet: the putty is spent but does nothing in battle.";
       row.detail.classList.toggle("attack-catapult__detail--blocked", block !== "");
 
       const isArmed = armed === bomb.id;

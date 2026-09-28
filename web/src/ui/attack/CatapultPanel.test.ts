@@ -46,8 +46,12 @@ describe("CatapultPanel", () => {
     expect(panel.element.querySelectorAll("[data-arm]")).toHaveLength(3);
     expect(tier(panel, "pb3").textContent).toBe("Massive10M");
     expect(tier(panel, "tw1").textContent).toBe("Big100K");
-    // The putty row carries the engine-gap badge once.
+    // The putty row carries the engine-gap badge once, and says so as its
+    // main text instead of promising an effect (#152).
     expect(panel.element.querySelectorAll(".attack-picker__badge")).toHaveLength(1);
+    panel.update(view({ creepsAlive: 3 }));
+    expect(row(panel, 3).querySelector(".attack-catapult__detail")!.textContent).toMatch(/^No effect yet: /);
+    expect(row(panel, 2).querySelector(".attack-catapult__detail")!.textContent).toMatch(/damage per building/);
     panel.destroy();
   });
 
@@ -180,7 +184,11 @@ describe("SiegePanel", () => {
     expect(buttons[0]!.textContent).toContain("1 left");
     expect(buttons[0]!.disabled).toBe(false);
     expect(buttons[1]!.disabled).toBe(true);
-    expect(panel.element.querySelectorAll(".attack-picker__badge")).toHaveLength(2);
+    // No promised effect: "no effect yet" is the tile's main text (#152).
+    for (const button of buttons) {
+      expect(button.querySelector(".attack-picker__effect")!.textContent).toMatch(/^No effect yet: /);
+    }
+    expect(buttons[1]!.textContent).toContain("Goes on a tower.");
     buttons[0]!.click();
     expect(onPick).toHaveBeenCalledWith({ spec: expect.objectContaining({ id: "decoy" }), level: 2 });
     panel.destroy();

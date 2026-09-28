@@ -64,6 +64,10 @@ const PHONE_WIDTH = 620;
 
 export { formatClock };
 
+/** A HUD destination as the retreat question names it (#152). */
+const destinationName = (scene: string): string =>
+  scene === SceneName.YARD ? "your yard" : scene === SceneName.LOGIN ? "your account" : "there";
+
 export class AttackScene implements Scene {
   private readonly renderer = new YardRenderer();
   private readonly notices = new Notices();
@@ -591,8 +595,11 @@ export class AttackScene implements Scene {
 
   /* ── Retreat ────────────────────────────────────────────────────────── */
 
-  /** One confirmation (§7, Q9), then the session's own retreat. */
-  private askRetreat(after?: () => void): void {
+  /**
+   * One confirmation (§7, Q9), then the session's own retreat. `goingTo`
+   * names where a HUD switch asked to go, when that is not the map (#152).
+   */
+  private askRetreat(after?: () => void, goingTo?: string): void {
     const context = this.context;
     const session = this.session;
     if (!context || !session || this.confirm) return;
@@ -604,7 +611,11 @@ export class AttackScene implements Scene {
     this.confirm = confirmPanel({
       title: "Retreat?",
       message: "Retreating ends the attack now and cannot be undone.",
-      note: `${Math.floor(state.damagePercent)}% damage dealt so far will be kept.`,
+      note:
+        `${Math.floor(state.damagePercent)}% damage dealt so far will be kept.` +
+        (goingTo
+          ? ` The result is saved on the end screen first, which leads back to the map, not straight to ${goingTo}.`
+          : ""),
       confirmLabel: "Retreat",
       onConfirm: () => {
         this.confirm?.close();
@@ -620,16 +631,23 @@ export class AttackScene implements Scene {
   }
 
   /**
-   * A HUD switch away from a running attack is a retreat, asked once. Once
-   * confirmed, the end-of-attack panel (WP6) saves the result and offers the
-   * map; the scene does not leave on its own, or the save would go unseen.
+   * A HUD switch away from the attack.
+   *
+   * With nothing dropped, bombed or sieged yet it leaves at once: such an
+   * attack saves nothing (#79), so there is nothing to confirm (#152). After
+   * the first action it is a retreat, asked once, because leaving ends and
+   * saves the attack (#138). Once confirmed, the end-of-attack panel (WP6)
+   * saves the result and offers the map, its one way out (§F6); the scene
+   * does not leave on its own, or the save would go unseen, so the question
+   * says so when the player asked for somewhere else.
    */
   private leaveFor(scene: string): void {
     const context = this.context;
     if (!context) return;
-    const phase = this.session?.state().phase;
-    if (phase === "running" || phase === "loaded") {
-      this.askRetreat();
+    const session = this.session;
+    const phase = session?.state().phase;
+    if (session?.hasActed() && (phase === "running" || phase === "loaded")) {
+      this.askRetreat(undefined, scene === SceneName.MAP_ROOM_2 ? undefined : destinationName(scene));
       return;
     }
     context.goTo(scene);

@@ -19,9 +19,9 @@ import { Panel } from "@/ui/Panel";
  * other, nor the monster bucket.
  *
  * The engine accepts a `siege` event and ignores it today (`engine.ts:147-148`);
- * every tile says so with the same "no effect yet" badge the putty bombs
- * carry, and the drop is logged exactly as §3.10 wants so a later engine
- * replays it.
+ * every tile says so as its main text, before where the weapon goes, rather
+ * than promising an effect the battle does not deliver (#152), and the drop
+ * is logged exactly as §3.10 wants so a later engine replays it.
  */
 
 /** What the panel needs to light or grey each weapon. */
@@ -125,12 +125,13 @@ export class SiegePanel {
 
     const effect = document.createElement("span");
     effect.className = "attack-picker__effect";
-    effect.textContent = `${spec.hint} Radius ${siegeRange(spec, stock.level)}.`;
-    const badge = document.createElement("span");
-    badge.className = "attack-picker__badge";
-    badge.textContent = "no effect yet";
-    badge.title = "The battle engine does not apply siege weapons yet; the drop is still logged.";
-    effect.append(" ", badge);
+    const none = document.createElement("strong");
+    none.textContent = "No effect yet:";
+    none.title = "The battle engine does not apply siege weapons yet; the drop is still logged.";
+    effect.append(
+      none,
+      ` it is used up but does nothing in battle. ${spec.hint} Radius ${siegeRange(spec, stock.level)}.`,
+    );
 
     const count = document.createElement("span");
     count.className = "attack-picker__cost";

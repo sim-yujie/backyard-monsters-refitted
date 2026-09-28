@@ -14,7 +14,7 @@ const summary = (over: Partial<AttackSummary> = {}): AttackSummary => ({
   targetName: "Kozu",
   kind: "wild",
   endReason: "exhausted",
-  outcome: "Victory! Kozu's camp is destroyed.",
+  outcome: "Victory! Kozu's camp is defeated.",
   tone: "win",
   damagePercent: 93.4,
   buildingsDestroyed: 12,
@@ -43,10 +43,21 @@ const mountPanel = (over: Partial<AttackSummary> = {}) => {
 };
 
 describe("EndAttackPanel", () => {
+  it("says the yard was destroyed only at 100%, and what ended it short of that (#152)", () => {
+    const flat = mountPanel({ endReason: "destroyed", damagePercent: 100 });
+    expect(flat.query(".attack-end__reason").textContent).toBe("The yard was destroyed.");
+    flat.panel.close();
+    const walls = mountPanel({ endReason: "destroyed", damagePercent: 96 });
+    expect(walls.query(".attack-end__reason").textContent).toBe(
+      "Nothing your monsters could attack was left standing.",
+    );
+    walls.panel.close();
+  });
+
   it("shows the outcome, damage, destroyed count, monsters lost and loot per resource", () => {
     const { panel, query } = mountPanel();
     const text = panel.element.textContent ?? "";
-    expect(query(".attack-end__outcome").textContent).toBe("Victory! Kozu's camp is destroyed.");
+    expect(query(".attack-end__outcome").textContent).toBe("Victory! Kozu's camp is defeated.");
     expect(query(".attack-end__reason").textContent).toBe("Nothing was left to send.");
     expect(text).toContain("93%");
     expect(text).toContain("12 of 14");

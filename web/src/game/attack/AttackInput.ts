@@ -187,6 +187,10 @@ export interface SiegeWeaponSpec {
   readonly range: readonly number[];
   /** What the drop has to satisfy (`docs/specs/combat.md` §3 siege table). */
   readonly target: "clear" | "clear-special" | "tower";
+  /**
+   * Where it goes. Only that: the engine gives siege weapons no effect yet,
+   * so the picker promises none (#152).
+   */
   readonly hint: string;
 }
 
@@ -196,21 +200,21 @@ export const SIEGE_WEAPONS: readonly SiegeWeaponSpec[] = [
     name: "Decoy",
     range: [250, 270, 290, 310, 320, 350, 380, 410, 440, 480],
     target: "clear-special",
-    hint: "Drop it on open ground; it draws bunker monsters out.",
+    hint: "Goes on open ground.",
   },
   {
     id: "vacuum",
     name: "Vacuum",
     range: [],
     target: "clear",
-    hint: "Drop it clear of buildings; it loots as the battle runs.",
+    hint: "Goes clear of buildings.",
   },
   {
     id: "jars",
     name: "Jars",
     range: [200, 210, 235, 335, 360, 370, 380, 390, 400, 410],
     target: "tower",
-    hint: "Drop it on a tower to jar it.",
+    hint: "Goes on a tower.",
   },
 ];
 
