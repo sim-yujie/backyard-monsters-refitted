@@ -1,0 +1,255 @@
+import { beforeEach, describe, expect, mock, test } from "bun:test";
+import type { Context } from "koa";
+
+/**
+ * `POST /base/migrate` with `type=outpost` (issue #181). The route used to move
+ * the caller's home onto whatever cell `baseid` named, deleting that cell and
+ * its save, and charged whatever `shiny`/`resources` the client posted. These
+ * drive the controller over an in-memory stand-in for the rows it reads.
+ */
+
+const ME = 2505;
+const THEM = 77;
+const WORLD = "world-a";
+const HOME_BASEID = "2000241207";
+const MY_OUTPOST = "2000241208";
+const THEIR_OUTPOST = "2000240208";
+const THEIR_HOME = "2000239208";
+const FAR_OUTPOST = "3000100100";
+const CAMP = "2000242208";
+const COST = 30_000_000;
+
+type Row = Record<string, unknown>;
+
+let mainSave: Row;
+let homeCell: Row;
+let cells: Row[];
+let removed: Row[];
+let flushed: number;
+let sessions: Set<number>;
+
+const outpostCell = (
+  baseid: string,
+  uid: number,
+  { world = WORLD, base_type = 3, type = "outpost", x = 241, y = 208, basesaveid = 900 } = {}
+): Row => ({
+  baseid,
+  uid,
+  x,
+  y,
+  terrainHeight: 120,
+  base_type,
+  map_version: 2,
+  world: { uuid: world },
+  save: { baseid, basesaveid, userid: uid, saveuserid: uid, type, attackid: 0, attacks: [] },
+});
+
+const matches = (row: Row, where: Row) =>
+  Object.entries(where).every(([key, value]) =>
+    key === "world" ? (row.world as Row).uuid === value : row[key] === value
+  );
+
+const txEm = {
+  findOne: async (_entity: unknown, where: Row) => {
+    if ("basesaveid" in where) return where.basesaveid === mainSave.basesaveid ? mainSave : null;
+    return matches(homeCell, where) ? homeCell : null;
+  },
+  find: async (_entity: unknown, where: Row) => cells.filter((cell) => cell.baseid === where.baseid),
+  persist: () => {},
+  remove: (rows: Row[]) => removed.push(...rows),
+  flush: async () => {
+    flushed += 1;
+  },
+};
+
+mock.module("../../../server.js", () => ({
+  postgres: {
+    em: {
+      populate: async (user: Row) => {
+        user.save = mainSave;
+      },
+      transactional: async (run: (em: typeof txEm) => Promise<unknown>) => run(txEm),
+    },
+  },
+  redis: {},
+}));
+
+mock.module("../../../services/base/attackSessionStore.js", () => ({
+  startAttackSession: async () => {},
+  readAttackSession: async (basesaveid: number) =>
+    sessions.has(basesaveid) ? { attackerid: THEM, attackid: 1, startedat: 0 } : null,
+  endAttackSession: async () => {},
+}));
+
+const { migrateBase } = await import("./migrateBase.js");
+
+const run = async (body: Row, user: Row = { userid: ME, shiny_locked: false }) => {
+  const ctx = { authUser: user, request: { body: { type: "outpost", ...body } } } as unknown as Context;
+  try {
+    await migrateBase(ctx, async () => {});
+    return { ok: true as const, body: ctx.body as Row, reason: undefined };
+  } catch (caught) {
+    return { ok: false as const, body: undefined, reason: (caught as { data?: { reason?: string } }).data?.reason };
+  }
+};
+
+const resources = () => mainSave.resources as Record<string, number>;
+
+beforeEach(() => {
+  mainSave = {
+    basesaveid: 2526,
+    baseid: HOME_BASEID,
+    userid: ME,
+    saveuserid: ME,
+    type: "main",
+    worldid: WORLD,
+    credits: 2000,
+    resources: { r1: 40_000_000, r2: 40_000_000, r3: 40_000_000, r4: 40_000_000 },
+    outposts: [[241, 208, MY_OUTPOST]],
+    buildingresources: { [`b${MY_OUTPOST}`]: {} },
+    homebase: ["241", "207"],
+    cantmovetill: 0,
+  };
+  homeCell = {
+    baseid: HOME_BASEID,
+    uid: ME,
+    x: 241,
+    y: 207,
+    terrainHeight: 100,
+    base_type: 2,
+    map_version: 2,
+    world: { uuid: WORLD },
+  };
+  cells = [
+    outpostCell(MY_OUTPOST, ME),
+    outpostCell(THEIR_OUTPOST, THEM, { x: 240, basesaveid: 901 }),
+    outpostCell(THEIR_HOME, THEM, { base_type: 2, type: "main", x: 239, basesaveid: 902 }),
+    outpostCell(FAR_OUTPOST, ME, { world: "world-b", x: 100, y: 100, basesaveid: 903 }),
+    outpostCell(CAMP, 0, { base_type: 1, type: "tribe", x: 242, basesaveid: 904 }),
+  ];
+  removed = [];
+  flushed = 0;
+  sessions = new Set();
+});
+
+const untouched = () => {
+  expect(flushed).toBe(0);
+  expect(removed).toEqual([]);
+  expect(mainSave.credits).toBe(2000);
+  expect(resources().r1).toBe(40_000_000);
+  expect(homeCell.x).toBe(241);
+  expect(homeCell.y).toBe(207);
+};
+
+describe("migrateBase, type=outpost", () => {
+  test("happy path: resources, 30M of each taken, the outpost row and cell removed, home moved", async () => {
+    const result = await run({ baseid: MY_OUTPOST, resources: JSON.stringify({ r1: 1, r2: 1, r3: 1, r4: 1 }) });
+    expect(result.body).toEqual({ error: 0, coords: [241, 208] });
+    expect(resources()).toEqual({ r1: 10_000_000, r2: 10_000_000, r3: 10_000_000, r4: 10_000_000 });
+    expect(mainSave.credits).toBe(2000);
+    expect(homeCell).toMatchObject({ x: 241, y: 208, terrainHeight: 120 });
+    expect(mainSave.homebase).toEqual(["241", "208"]);
+    expect(mainSave.outposts).toEqual([]);
+    expect(mainSave.buildingresources).toEqual({});
+    expect(mainSave.cantmovetill as number).toBeGreaterThan(Date.now() / 1000);
+    expect(removed.map((row) => row.baseid)).toEqual([MY_OUTPOST, MY_OUTPOST]);
+    expect(flushed).toBe(1);
+  });
+
+  test("happy path: Shiny, 1,500 taken whatever amount was posted", async () => {
+    const result = await run({ baseid: MY_OUTPOST, shiny: "1" });
+    expect(result.ok).toBe(true);
+    expect(mainSave.credits).toBe(500);
+    expect(resources().r1).toBe(40_000_000);
+  });
+
+  test("Shiny is refused on a shiny-locked account", async () => {
+    const result = await run({ baseid: MY_OUTPOST, shiny: "1500" }, { userid: ME, shiny_locked: true });
+    expect(result.ok).toBe(false);
+    untouched();
+  });
+
+  test("another player's outpost is refused and nothing is written", async () => {
+    const result = await run({ baseid: THEIR_OUTPOST, shiny: "1500" });
+    expect(result.reason).toBe("notYours");
+    untouched();
+  });
+
+  test("another player's main yard is refused and nothing is written", async () => {
+    const result = await run({ baseid: THEIR_HOME, shiny: "1500" });
+    expect(result.reason).toBe("notAnOutpost");
+    untouched();
+  });
+
+  test("a wild camp is refused", async () => {
+    const result = await run({ baseid: CAMP, shiny: "1500" });
+    expect(result.reason).toBe("notAnOutpost");
+    untouched();
+  });
+
+  test("an outpost of mine in another world is refused", async () => {
+    const result = await run({ baseid: FAR_OUTPOST, shiny: "1500" });
+    expect(result.reason).toBe("wrongWorld");
+    untouched();
+  });
+
+  test("an unknown base id is refused", async () => {
+    const result = await run({ baseid: "123", shiny: "1500" });
+    expect(result.reason).toBe("notFound");
+    untouched();
+  });
+
+  test("a zero price is not a free move: resources are charged in full", async () => {
+    const result = await run({
+      baseid: MY_OUTPOST,
+      shiny: "0",
+      resources: JSON.stringify({ r1: 0, r2: 0, r3: 0, r4: 0 }),
+    });
+    expect(result.ok).toBe(true);
+    expect(resources().r1).toBe(40_000_000 - COST);
+    expect(mainSave.credits).toBe(2000);
+  });
+
+  test("a negative price adds nothing: resources are charged in full", async () => {
+    const result = await run({
+      baseid: MY_OUTPOST,
+      shiny: "-5000",
+      resources: JSON.stringify({ r1: -1e9, r2: -1e9, r3: -1e9, r4: -1e9 }),
+    });
+    expect(result.ok).toBe(true);
+    expect(resources()).toEqual({ r1: 10_000_000, r2: 10_000_000, r3: 10_000_000, r4: 10_000_000 });
+    expect(mainSave.credits).toBe(2000);
+  });
+
+  test("cannot pay in resources: refused and nothing is written", async () => {
+    resources().r4 = COST - 1;
+    const result = await run({ baseid: MY_OUTPOST, resources: "{}" });
+    expect(result.reason).toBe("notEnoughResources");
+    expect(flushed).toBe(0);
+    expect(removed).toEqual([]);
+    expect(resources().r1).toBe(40_000_000);
+  });
+
+  test("cannot pay in Shiny: refused and nothing is written", async () => {
+    mainSave.credits = 1499;
+    const result = await run({ baseid: MY_OUTPOST, shiny: "1500" });
+    expect(result.reason).toBe("notEnoughShiny");
+    expect(flushed).toBe(0);
+    expect(mainSave.credits).toBe(1499);
+  });
+
+  test("an outpost with an attack running on it is refused", async () => {
+    sessions.add(900);
+    const result = await run({ baseid: MY_OUTPOST, shiny: "1500" });
+    expect(result.reason).toBe("underAttack");
+    untouched();
+  });
+
+  test("inside the cooldown the client is told when it may move, and nothing is charged", async () => {
+    const until = Math.floor(Date.now() / 1000) + 3600;
+    mainSave.cantmovetill = until;
+    const result = await run({ baseid: MY_OUTPOST, shiny: "1500" });
+    expect(result.body).toMatchObject({ error: 0, cantMoveTill: until });
+    untouched();
+  });
+});

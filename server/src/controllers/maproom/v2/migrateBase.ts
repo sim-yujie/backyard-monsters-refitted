@@ -1,47 +1,55 @@
+import { LockMode } from "@mikro-orm/core";
 import type { KoaController } from "../../../utils/KoaController.js";
 import { User } from "../../../database/models/user.model.js";
+import { Save } from "../../../database/models/save.model.js";
 import { postgres } from "../../../server.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { Status } from "../../../enums/StatusCodes.js";
 import { BaseType } from "../../../enums/Base.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
-import {
-  Operation,
-  updateResources,
-} from "../../../services/base/updateResources.js";
 import { joinOrCreateWorld } from "../../../services/maproom/v2/joinOrCreateWorld.js";
 import { leaveWorld } from "../../../services/maproom/v2/leaveWorld.js";
-import { MapRoomCell } from "../../../enums/MapRoom.js";
-import { relocateOutpostErr, shinyLockedErr } from "../../../errors/errors.js";
+import { MapRoomCell, MapRoomVersion } from "../../../enums/MapRoom.js";
+import { relocateOutpostErr, relocateRefusedErr, shinyLockedErr } from "../../../errors/errors.js";
 import { MigrateBaseSchema } from "../../../schemas/MigrateBaseSchema.js";
 import { isShinyLocked } from "../../../services/user/shinyLock.js";
-
-/**
- * Cooldown period for base migration.
- * @constant {number}
- */
-const COOLDOWN_PERIOD = 24 * 60 * 60;
+import { isAttackActive } from "../../../services/base/isAttackActive.js";
+import { readAttackSession } from "../../../services/base/attackSessionStore.js";
+import {
+  RELOCATE_COOLDOWN,
+  chargeRelocation,
+  relocateTargetRefusal,
+  type RelocatePayment,
+} from "../../../services/maproom/v2/relocateRules.js";
 
 /**
  * Handles user base migration.
  *
- * This controller allows a user to migrate their base to a new location.
- * It checks if the user is within the cooldown period, validates the base being migrated to
- * and relocates their home base. If the migration is successful, the user's cooldown is updated
- * and the new home base is saved.
+ * `type=random` is the Flash "your empire was overrun" move (`PopupLostMainBase.as`):
+ * the player leaves their world and is placed in a new one, free of charge.
+ *
+ * `type=outpost` moves the main yard onto one of the player's own Map Room 2
+ * outposts (`PopupRelocateMe.as`), destroying the outpost. Everything the
+ * client posts past the target `baseid` and which button was pressed is
+ * ignored (issue #181): the server checks the outpost is the caller's, in the
+ * caller's world, and not under attack, then charges its own price
+ * (`relocateRules.ts`). Every write lands in one transaction, under a lock on
+ * the main yard row, so a second copy of the request waits and then meets the
+ * cooldown the first one set.
+ *
+ * Flash's `RelocateSuccess` drops `GLOBAL._mapOutpost[0]` from its own list
+ * whichever outpost was used (`PopupRelocateMe.as:134`). That is the client's
+ * bookkeeping and is not copied: the server removes exactly the outpost named
+ * by `baseid` from `Save.outposts`, and the client's list is rebuilt from the
+ * server on the next load.
  *
  * @param {Object} ctx - The Koa context object
  * @returns {Promise<void>} A promise that resolves once the base migration is complete.
- *
- * @throws Will throw an error if the base type is invalid, no homebase is found or if it catches an exception.
  */
 export const migrateBase: KoaController = async (ctx) => {
-  const { baseid, resources, shiny, type } = MigrateBaseSchema.parse(ctx.request.body);
+  const { baseid, shiny, type } = MigrateBaseSchema.parse(ctx.request.body);
 
   const currentUser: User = ctx.authUser;
-  const shinyLocked = isShinyLocked(currentUser);
-
-  if (shiny && shinyLocked) throw shinyLockedErr();
 
   await postgres.em.populate(currentUser, ["save"]);
 
@@ -71,68 +79,93 @@ export const migrateBase: KoaController = async (ctx) => {
     return;
   }
 
-  // Otherwise, fetch the outpost cell (destination) and the user's homeCell (origin) for migration.
-  const cells = await postgres.em.find(
-    WorldMapCell,
-    {
-      baseid: { $in: [baseid, userSave.baseid] }
-    },
-    { populate: ["save"] }
-  );
+  // The posted `shiny`/`resources` only say which of the popup's two buttons was
+  // pressed (`PopupRelocateMe.as:176-197`); the amounts are the server's.
+  const payment: RelocatePayment = (shiny ?? 0) > 0 ? "shiny" : "resources";
 
-  const outpostCell = cells.find((cell) => cell.baseid === baseid);
+  if (payment === "shiny" && isShinyLocked(currentUser)) throw shinyLockedErr();
 
-  const homeCell = cells.find(
-    (cell) =>
-      cell.baseid === userSave.baseid &&
-      cell.base_type === MapRoomCell.HOMECELL
-  );
+  const outcome = await postgres.em.transactional(async (em) => {
+    const save = await em.findOne(
+      Save,
+      { basesaveid: userSave.basesaveid },
+      { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true }
+    );
 
-  if (!outpostCell || !outpostCell.save) {
-    throw new Error(`Invalid base or base type. Base ID: ${baseid}`);
-  }
+    if (!save || save.type !== BaseType.MAIN || save.userid !== currentUser.userid || !save.worldid)
+      throw relocateRefusedErr("noHomeCell");
 
-  if (!homeCell) throw new Error("Invalid home cell");
+    const now = getCurrentDateTime();
 
-  // Store outpost details before removing it
-  const [outpostX, outpostY] = [outpostCell.x, outpostCell.y];
-  const outpostHeight = outpostCell.terrainHeight;
-  const outpostBaseId = outpostCell.save.baseid;
+    if (save.cantmovetill && save.cantmovetill > now)
+      return { cantMoveTill: save.cantmovetill, currenttime: now };
 
-  // Update the user's homecell coordinates to the outpost cell
-  homeCell.x = outpostX;
-  homeCell.y = outpostY;
-  homeCell.terrainHeight = outpostHeight;
+    const homeCell = await em.findOne(WorldMapCell, {
+      baseid: save.baseid,
+      uid: currentUser.userid,
+      world: save.worldid,
+      map_version: MapRoomVersion.V2,
+      base_type: MapRoomCell.HOMECELL,
+    });
 
-  // Update user's homebase coordinates to the outpost cell
-  userSave.homebase = [outpostX.toString(), outpostY.toString()];
+    if (!homeCell) throw relocateRefusedErr("noHomeCell");
 
-  // Set the migration cooldown period before the user can move again
-  userSave.cantmovetill = currentTime + COOLDOWN_PERIOD;
+    // Every cell with this base id, preferring the caller's world, so a base id
+    // from another world is refused as such rather than as missing.
+    const candidates = await em.find(WorldMapCell, { baseid }, { populate: ["save"] });
+    const outpostCell =
+      candidates.find((cell) => cell.world.uuid === save.worldid) ?? candidates[0] ?? null;
+    const outpostSave = outpostCell?.save ?? null;
 
-  // Remove the outpost from the user's save, 3rd element in the array is the baseid
-  userSave.outposts = userSave.outposts.filter(
-    (outpost) => outpost[2] !== baseid
-  )
+    const underAttack =
+      outpostSave !== null &&
+      (isAttackActive(outpostSave) || (await readAttackSession(outpostSave.basesaveid)) !== null);
 
-  // Remove baseid from building resources object
-  if (userSave.buildingresources) {
-    delete userSave.buildingresources[`b${outpostBaseId}`];
-  }
+    const refusal = relocateTargetRefusal({
+      userid: currentUser.userid,
+      worldid: save.worldid,
+      outposts: save.outposts,
+      cell: outpostCell && {
+        uid: outpostCell.uid,
+        base_type: outpostCell.base_type,
+        map_version: outpostCell.map_version,
+        worldid: outpostCell.world.uuid,
+      },
+      save: outpostSave,
+      underAttack,
+    });
 
-  if (shiny) userSave.credits = userSave.credits - shiny;
-  if (resources)
-    userSave.resources = updateResources(resources, userSave.resources ?? {}, Operation.SUBTRACT);
+    if (refusal || !outpostCell || !outpostSave) throw relocateRefusedErr(refusal ?? "notFound");
 
-  await postgres.em.transactional(async (em) => {
-    em.persist([homeCell, userSave]);
-    em.remove([outpostCell.save, outpostCell]);
+    const charge = chargeRelocation({ credits: save.credits, resources: save.resources }, payment);
+
+    if (!charge.ok) throw relocateRefusedErr(charge.reason);
+
+    save.credits = charge.credits;
+    save.resources = charge.resources;
+
+    const [outpostX, outpostY] = [outpostCell.x, outpostCell.y];
+
+    // The home cell takes the outpost's place; its old spot is left to the wild monsters.
+    homeCell.x = outpostX;
+    homeCell.y = outpostY;
+    homeCell.terrainHeight = outpostCell.terrainHeight;
+
+    save.homebase = [outpostX.toString(), outpostY.toString()];
+    save.cantmovetill = now + RELOCATE_COOLDOWN;
+
+    // Exactly the outpost used, whatever Flash drops from its own list (see above).
+    save.outposts = save.outposts.filter(([, , id]) => String(id) !== String(outpostSave.baseid));
+
+    if (save.buildingresources) delete save.buildingresources[`b${outpostSave.baseid}`];
+
+    em.persist([homeCell, save]);
+    em.remove([outpostSave, outpostCell]);
     await em.flush();
+
+    return { coords: [outpostX, outpostY] };
   });
 
   ctx.status = Status.OK;
-  ctx.body = {
-    error: 0,
-    coords: [outpostX, outpostY],
-  };
+  ctx.body = { error: 0, ...outcome };
 };

@@ -2,6 +2,7 @@ import { Status } from "../enums/StatusCodes.js";
 import { ClientSafeError } from "../middleware/clientSafeError.js";
 import type { EconomyViolation } from "../services/base/economy/auditEconomySave.js";
 import type { CombatViolation } from "../game-rules/combat/index.js";
+import type { RelocateRefusal } from "../services/maproom/v2/relocateRules.js";
 
 /**
  * Creates a new instance of `ClientSafeError` with the specified properties.
@@ -674,4 +675,35 @@ export const mr1TribeRefusedErr = (reason: MR1TribeRefusal, detail: object = {})
     status: Status.CONFLICT,
     data: { reason, ...detail },
     isClientFriendly: true,
+  });
+
+const RELOCATE_REFUSAL_MESSAGES: Record<RelocateRefusal, string> = {
+  noHomeCell: "your main yard is not on this map.",
+  notFound: "that outpost could not be found.",
+  wrongWorld: "that outpost is not in your world.",
+  notAnOutpost: "you can only move your main yard onto one of your outposts.",
+  notYours: "that outpost is not yours.",
+  underAttack: "that outpost is under attack. Try again when the attack is over.",
+  notEnoughShiny: "you do not have enough Shiny.",
+  notEnoughResources: "you do not have enough resources.",
+};
+
+/**
+ * A Map Room 2 main-yard relocation refused (issue #181,
+ * `services/maproom/v2/relocateRules.ts`).
+ *
+ * `isClientFriendly: false` for the reason `monsterTransferRejectedErr` gives:
+ * Flash's `RelocateSuccess` prints `msg_err_relocate` — "There was a problem
+ * relocating your yard: " — with `error` appended (`PopupRelocateMe.as:168-170`),
+ * so the message is a fragment that continues that prefix. `reason` travels in
+ * `data` for the web client and the logs.
+ *
+ * @param {RelocateRefusal} reason - Which rule refused it.
+ */
+export const relocateRefusedErr = (reason: RelocateRefusal) =>
+  new ClientSafeError({
+    message: RELOCATE_REFUSAL_MESSAGES[reason],
+    status: Status.CONFLICT,
+    data: { reason },
+    isClientFriendly: false,
   });

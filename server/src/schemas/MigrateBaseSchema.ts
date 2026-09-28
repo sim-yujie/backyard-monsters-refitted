@@ -20,7 +20,7 @@ export const MigrateBaseSchema = z.object({
   baseid: z.string(),
 
   /**
-   * The resources to be used for the migration, transformed from a JSON string to an object.
+   * The resources the client offers for the migration. Ignored: without a positive `shiny` the server charges its own resource price (issue #181).
    * @type {object | undefined}
    */
   resources: z
@@ -29,7 +29,7 @@ export const MigrateBaseSchema = z.object({
     .optional(),
 
   /**
-   * The amount of shiny to be used for the migration, transformed from a string to a number.
+   * The Shiny the client offers for the migration. A positive value picks the Shiny price; the amount is the server's (issue #181).
    * @type {number | undefined}
    */
   shiny: z
