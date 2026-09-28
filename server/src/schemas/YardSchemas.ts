@@ -240,3 +240,20 @@ export const YardLabMonsterSchema = z.object({
 
 /** `POST /bm/yard/lab/cancel` and `/lab/finish` take no fields: one Lab, one research. */
 export const YardLabSchema = z.object({});
+/** `POST /bm/yard/champion/raise`: the champion type to hatch at the cage (1..5; only 1-3 are raisable). */
+export const YardChampionRaiseSchema = z.object({
+  type: z.coerce.number().int().min(1).max(5),
+});
+
+/** `POST /bm/yard/champion/feed`: feed the champion in the cage from housing or with Shiny. */
+export const YardChampionFeedSchema = z.object({
+  mode: z.enum(["monsters", "shiny"]),
+});
+
+/** `POST /bm/yard/champion/evolve`, `/heal` and `/juice` act on the champion in the cage. */
+export const YardChampionSchema = z.object({});
+
+/** `POST /bm/yard/champion/rename`: the new name, checked for length and language by the route. */
+export const YardChampionRenameSchema = z.object({
+  name: z.string().max(200),
+});

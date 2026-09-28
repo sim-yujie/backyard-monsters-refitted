@@ -884,7 +884,15 @@ JSON), parsed by the route's zod schema in `server/src/schemas/YardSchemas.ts`.
    and in an academy's `upg`; every training whose `time` has passed finishes — `level + 1` (never
    past the catalogue's top), `time`/`duration` removed, the Monster Academy's `upg` naming it
    removed — and is reported as a `train` job (`detail: { level, academy }`); an academy whose
-   `upg` names a monster that is not training loses the stale `upg`. `savetime` becomes `now`. Idempotent: a second
+   `upg` names a monster that is not training loses the stale `upg`. Phase 5, champions
+   (`catchUpChampions.ts`, issue #123): every champion with `status` 0 heals
+   `int(max × 5 / healtime)` per whole 5-second period of the clock, up to full (the food bonus
+   counts); past `ft + 24 h` it starves (D11): below level 6 one feed lost (not below 0), at
+   level 6 one food-bonus rank lost and health down to the new full; `ft` then restarts 23 h after
+   the moment it starved (the original restarted it whenever it next looked; a feed time older than
+   the window starves at the window's start), and it can starve again 47 h after that. Each starving
+   that cost something is reported as a `starve` job; frozen and juiced champions do nothing.
+   `savetime` becomes `now`. Idempotent: a second
    catch-up at the same `now` changes nothing.
    Then, outside the pure catch-up: a yard left with a level 2 Map Room that is not on Map Room 2
    yet (`mr2upgraded` false, `mapversion` not 3) joins a world as `setmapversion` version 2 does
@@ -912,7 +920,8 @@ lists its own (so far `notRunning`, `damaged`, `mapRoom`, `itemRefused`, `useBat
 `noHatchery`, `useHcc`, `noHcc`, `noSlot`, `nothingToFinish`, `housingFull`, `mapRoom3`,
 `moved`, `workers`, `noAcademy`, `academyBusy`, `academyLevel`, `training`, `notTraining`, `notDamaged`, `isTownHall`,
 `championInCage`, `championsFrozen`, `researching`, `hatcheryBusy`, `unlocking`, `noJuicer`, `inferno`, `notEnough`, `noBunker`,
-`notBunkerable`, `notBuyable`, `bunkerFull`, `notInBunker`). Anything that is not a refusal (a bug, a database error) still goes to the global
+`notBunkerable`, `notBuyable`, `bunkerFull`, `notInBunker`, `notRaisable`, `noCage`, `frozen`,
+`noChampion`, `notHungry`, `fullBuff`, `fullHealth`, `nameRefused`). Anything that is not a refusal (a bug, a database error) still goes to the global
 `ErrorInterceptor` as a `500`.
 
 **`YardState`** (`services/yard/yardState.ts`) — **frozen**: fields may be added by agreement,
@@ -953,6 +962,8 @@ is `{ kind, id, t, at, detail }`, `at` being the unix second the job ended:
             resources: { r1, r2, r3, r4 } /* credited, after the cap */ } }
 { kind: "repair", id: number /* building id */, t: number /* type */, at: number /* full health */,
   detail: { from: number /* health at the start of the window */, max: number } }
+{ kind: "starve", id: string /* "G1".."G5" */, t: null, at: number /* ft + 24 h */,
+  detail: { level: number, feeds: number, foodBonus: number /* after the loss */ } }
 ```
 
 Later phases add kinds (`train`, …) with the same five keys.
@@ -993,6 +1004,12 @@ Later phases add kinds (`train`, …) with the same five keys.
 | POST | `/api/:apiVersion/bm/yard/lab/cancel` | none | `{ monster, rank, refund: { r3 } }` — what actually came back after the cap | Cancels the research (`MONSTERLAB.CancelMonsterPowerupB`, `:379-388`): the Lab's `upg`/`upt`/`upl` removed, the rank's full putty price credited, clamped to the storage cap. `409 noLab`, `409 notResearching` (including one the request's own catch-up just finished). |
 | POST | `/api/:apiVersion/bm/yard/lab/finish` | none | `{ monster, rank, credits }` | Finishes the research now for `timeCost(upt − now)` (the generic `SP4` on the Lab, `MONSTERLABPOPUP.as:429-432`, `STORE.as:377-378`; free at ≤ 300 s): as the catch-up's completion. `409 noLab`, `409 notResearching`, then `shinyLocked`/`credits`. |
 | POST | `/api/:apiVersion/bm/yard/lab/instant` | `monster` | `{ monster, rank, credits }` | Researches the next rank at once for `timeCost(seconds, no free minutes) + ceil(sqrt(putty / 2)^0.75)` Shiny and **no putty** (`IPU`, `MONSTERLAB.GetShinyCost`, `:69-73`, `:390-431`); the Lab is not taken. The `start` refusals except putty (so not while the Lab researches), then `shinyLocked`/`credits`. |
+| POST | `/api/:apiVersion/bm/yard/champion/raise` | `type` (1..5; only 1 Gorgo, 2 Drull, 3 Fomor are raisable) | `{ champion }` — the new `champion` entry | Hatches a champion at the Champion Cage (type 114, §7.2, issue #123), free: level 1, full health, `ft` = now + 23 h, `status` 0 (`CHAMPIONSELECTPOPUP.as:72-90`). A juiced champion of the same type is replaced. Refusals, in order: `409 notRaisable { type }` (Korath, Krallen, D17); `409 noCage`; `409 busy` (cage still being built); `409 championInCage`; `409 frozen { type }` (that champion is in the Chamber). |
+| POST | `/api/:apiVersion/bm/yard/champion/feed` | `mode` = `monsters`\|`shiny` | `{ champion, mode, eaten: { id: n }, credits, evolved }` | Feeds the champion in the cage (`CHAMPIONCAGE.FeedGuardian`, `:682-877`). Below level 6: only once hungry (`ft` < now); eats the level's Map Room 2 recipe from `monsters.housed` (e.g. Gorgo L1 15 × C2, `CHAMPIONCAGE.as:539-565`) or costs the level's `feedShiny`; `fd` + 1 and, at the level's `feedCount` (3/6/9/12/15), evolves: next level, `fd` 0, full health. Level 6: raises the food bonus `fb` one rank (max 3) and adds its bonus health; Shiny price is the next rank's `bonusFeedShiny`, doubled while not hungry. Either way `ft` = now + 23 h. Refusals: `409 noCage` / `busy`; `409 noChampion`; `409 notHungry { feedTime }`; `409 fullBuff` (level 6, not hungry, rank 3, Shiny); `409 mapRoom3`; `409 notEnough { monster, have, need }`; then the wrapper's `shinyLocked` / `credits`. |
+| POST | `/api/:apiVersion/bm/yard/champion/evolve` | none | `{ champion, credits }` | Evolves the champion one level now for `feedShiny × 2 × (feedCount − fd)` Shiny (`CHAMPIONCAGEPOPUP.as:1208-1238`; the `evolveShiny` table is never read): `fd` 0, full health, `ft` = now + 23 h. Refusals: `409 noCage` / `busy`; `409 noChampion`; `409 maxLevel`; wrapper `shinyLocked` / `credits`. |
+| POST | `/api/:apiVersion/bm/yard/champion/heal` | none | `{ champion, credits }` | Heals to full now for `timeCost(missing / max × healtime, false)` (`ChampionBase.as:1237-1241`); full health counts the food bonus. Refusals: `409 noCage` / `busy`; `409 noChampion`; `409 fullHealth`; wrapper `shinyLocked` / `credits`. |
+| POST | `/api/:apiVersion/bm/yard/champion/rename` | `name` (trimmed, 1–20 characters) | `{ champion }` | Sets `nm`. Refusals: `400 badRequest` (empty or too long); `409 nameRefused` (profanity filter); `409 noChampion`. |
+| POST | `/api/:apiVersion/bm/yard/champion/juice` | none | `{ champion }` | Puts the champion into the Monster Juicer for good: `status` 2, no goo (`BUILDING9.as:70-73`, `ChampionBase.as:276`). A new one can then be raised. Refusals: `409 noChampion`; `409 noJuicer`; `409 busy` (Juicer being built or upgraded); `409 damaged` (Juicer at half health or below). |
 
 **Shiny prices** are all worked out on the server by `services/yard/shiny.ts`, never taken from
 the client (`docs/design/yard-buildings.md` §2.6). `timeCost(t)` is the original
