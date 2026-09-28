@@ -128,7 +128,7 @@ router.post("/api/:apiVersion/player/settings", apiVersion, verifyUserAuth, logR
 router.post("/base/load", verifyUserAuth, logRequest, baseLoad);
 router.post("/base/save", verifyUserAuth, logRequest, baseSave);
 router.post("/base/updatesaved", verifyUserAuth, logRequest, updateSaved);
-router.post("/base/migrate", verifyUserAuth, logRequest, migrateBase);
+router.post("/base/migrate", verifyUserAuth, verifyAccountStatus, logRequest, migrateBase);
 // Every few seconds during a web attack, so it is not echoed by logRequest (issue #138).
 router.post("/base/checkpoint", verifyUserAuth, attackCheckpoint);
 
