@@ -171,9 +171,11 @@ describe("the defender's loss", () => {
     () => {
       const one = fixture("pokey-rush");
       const loot = lootFor(one, {}, { reported: { r1: -1e9, r2: -1e9, r3: -1e9, r4: -1e9 } });
+      // The sandbox holds 11 billion of each; a battle takes the falls' shares
+      // (a Town Hall's at most 10 million, a silo's 4 million) and its hits.
       for (const key of ["r1", "r2", "r3", "r4"] as const) {
         expect(loot.defenderDelta[key]).toBeLessThan(0);
-        expect(loot.defenderDelta[key]).toBeGreaterThan(-1e7);
+        expect(loot.defenderDelta[key]).toBeGreaterThan(-1e8);
       }
     },
     REPLAY_TIMEOUT_MS
@@ -188,7 +190,7 @@ describe("a crafted save is not", () => {
       const loot = lootFor(one, { r1: 1e12, r2: 1e12, r3: 1e12, r4: 1e12 });
       expect(loot.credit).toEqual(loot.cap);
       expect(loot.cap.r1).toBeGreaterThan(0);
-      expect(loot.cap.r1).toBeLessThan(1e7);
+      expect(loot.cap.r1).toBeLessThan(1e8);
     },
     REPLAY_TIMEOUT_MS
   );

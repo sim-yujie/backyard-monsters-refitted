@@ -27,16 +27,16 @@
     "damage": 33.84726579824893,
     "destroyed": null,
     "attackloot": {
-      "r1": 132084,
-      "r2": 131544,
-      "r3": 132408,
-      "r4": 132354
+      "r1": 8132084,
+      "r2": 8131490,
+      "r3": 8132354,
+      "r4": 4132354
     },
     "defenderLoss": {
-      "r1": 146280,
-      "r2": 145680,
-      "r3": 146640,
-      "r4": 146580
+      "r1": 8146280,
+      "r2": 8145620,
+      "r3": 8146580,
+      "r4": 4146580
     },
     "firedTraps": 0,
     "destroyedBuildings": 68,
@@ -128,45 +128,45 @@
       },
       {
         "tick": 16800,
-        "digest": "c8cb7b34c9ed57aa"
+        "digest": "3645f6b4664529aa"
       },
       {
         "tick": 17600,
-        "digest": "064c268a5019afe8"
+        "digest": "2b547c1fbf06e86d"
       },
       {
         "tick": 18400,
-        "digest": "0808d8a0035dfe3e"
+        "digest": "fbdc8c2038a41f7e"
       },
       {
         "tick": 19200,
-        "digest": "a799cdd4502900d2"
+        "digest": "7a2983ab1d031a0d"
       },
       {
         "tick": 20000,
-        "digest": "4898a409ff64143b"
+        "digest": "9cbd0b5a8e239600"
       },
       {
         "tick": 20800,
-        "digest": "b5d97258b297754a"
+        "digest": "6e6834e901668717"
       },
       {
         "tick": 21600,
-        "digest": "f8380059a4dc4753"
+        "digest": "aab43c3d955cda73"
       },
       {
         "tick": 22400,
-        "digest": "a623a510b5982d4a"
+        "digest": "5dff8fadea1df337"
       },
       {
         "tick": 23200,
-        "digest": "822ac73dd548b0ef"
+        "digest": "9363f0b7d288cf65"
       },
       {
         "tick": 24000,
-        "digest": "636f690b68107dd1"
+        "digest": "721a93d8b3797596"
       }
     ],
-    "digest": "efb167f0a489db42"
+    "digest": "15c2f0d6cc544588"
   }
 }

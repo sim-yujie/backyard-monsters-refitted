@@ -1013,23 +1013,45 @@ resources** instead:
 
 1. Build the list of resource types with a positive pool balance.
 2. Pick one uniformly at random.
-3. `taken = min(ceil(amount), thatPool)`.
+3. `taken = min(ceil(amount), thatPool)`. `amount` is already an `int` (`Loot(param1:int)`), so the
+   `ceil` changes nothing: the damage times the multiplier is truncated.
 4. Subtract from `BASE._resources` and record the negative delta.
 5. Scale what the attacker actually receives:
    - × 0.5 when the target is a Map Room 2 outpost (`:77-79`);
    - × 0.9 otherwise (`:80-82`);
    - then ÷ 5 on top of that for a wild monster camp (`:83-85`).
-6. `ATTACK.Loot(type, scaledAmount, x, y, 9, this)`.
+6. `ATTACK.Loot(type, scaledAmount, x, y, 9, this)`. Each scaling lands on an `int`, so each
+   truncates.
 
 The random-type pick means storage loot is noisy per hit, not proportional to what the defender
 holds.
 
+**Destroying a storage building** (`BSTORAGE.Destroyed`, `client/scripts/BSTORAGE.as:91-155`) is
+where most storage loot comes from. When an attacker fells a Town Hall (14), a silo (6) or an
+outpost core (112), then for each resource 1 to 4 in turn:
+
+1. `share = int(pool * pct)`, with `pct` 0.10 for the Town Hall, 0.05 for an outpost core and 0.04
+   for a silo, read from the pool as it stands after the resources before it.
+2. Cap it: a silo at 4,000,000 (500,000 on a Map Room 2 outpost), a Town Hall at 10,000,000
+   (2,000,000 on a Map Room 2 outpost), an outpost core at 10,000,000.
+3. Goo is halved, rounded up, outside Map Room 3 (`_LOOT_GOO_LIMITER`).
+4. Subtract it from the pool and call `ATTACK.Loot(resource, share, ...)`.
+
+None of the per-hit scalars apply: no 0.9 or 0.5, no ÷ 5 for a wild monster camp, no looting
+multiplier. Only `ATTACK.Loot`'s low-level bonus does. The hit that fells the building loots
+nothing of its own: `modifyHealth` calls `Destroyed` first and loots only `if (!_destroyed)`
+(`BFOUNDATION.as:513-535`). A building felled by a resource bomb gives up nothing at all, neither
+the fall nor a harvester's store: the bomb names no attacker, so `Destroyed(false)`
+(`effects/ResourceBomb.as:172`, `BFOUNDATION.as:518`).
+
 The `amount` passed in is `damage * attacker.lootingMultiplier`
-(`BFOUNDATION.as:528-534`). `lootingMultiplier` starts at 1, is raised 1.5 for `targetGroup 3`
-creeps and for every champion (`CreepBase.as:224-226`, `ChampionBase.as:221`), and is further
-modified by the `LootingMultiplier`, `ProximityLootBuff` and Vacuum `lootBonus` components. Krallen
-bypasses the property entirely for her own hits, applying ×2 against resource buildings and ×3
-against storage (`champions/Krallen.as:31-32`).
+(`BFOUNDATION.as:528-534`). `lootingMultiplier` starts at **0.5** (the loot property is built as
+`CModifiableProperty(MAX_VALUE, 0, 0.5)`, `MonsterBase.as:260`), is raised by 1.5 to 2 for
+`targetGroup 3` creeps and for every champion (`CreepBase.as:224-226`, `ChampionBase.as:221`), and
+is further modified by the `LootingMultiplier`, `ProximityLootBuff` and Vacuum `lootBonus`
+components. Krallen's `_lootMults` (×2 against resource buildings, ×3 against storage,
+`champions/Krallen.as:31-32`) is set and never read, so she loots at the champion's 2. The web
+engine keeps 1 for every creep and Krallen's ×2/×3 for now (issue #167 left it to the owner).
 
 ### Loot caps
 
@@ -1037,8 +1059,10 @@ against storage (`champions/Krallen.as:31-32`).
 (`client/scripts/ATTACK.as:677-735`):
 
 1. **Low-level bonus.** If `LOGIN._playerLevel < 20`:
-   `amount += amount * max(0, (20 - level) * 0.03)`. A level-1 player gets +57%.
-   (`:678-680`.)
+   `amount += amount * max(0, (20 - level) * 0.03)`. A level-1 player gets +57%. `amount` is an
+   `int`, so each gain truncates on its own. (`:678-680`.) The level is the attacker's own, from
+   `BASE.BaseLevel()` in build mode (`BASE.as:4929`); the web client reads it off the attack load's
+   `attackerlevel`.
 2. The **full** amount is added to `ATTACK._loot` and `_hpLootN`, which is what the attack log and
    `lootreport` show (`:681-694`).
 3. The **capped** amount is added to the attacker's pool. The cap is `rNmax`, raised by Krallen's

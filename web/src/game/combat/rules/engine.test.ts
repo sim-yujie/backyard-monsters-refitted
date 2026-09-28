@@ -293,21 +293,103 @@ describe("loot", () => {
       expect(storage.amounts, `G${type}`).toHaveLength(3);
       expect(storage.standing, `G${type}`).toBe(true);
       const fromStorage = storage.amounts.reduce(
-        (sum, amount) => sum + Math.ceil(amount * (krallen ? 3 : 1)),
+        (sum, amount) => sum + Math.trunc(amount * (krallen ? 3 : 1)),
         0,
       );
       expect(storage.loss, `G${type} storage`).toBe(fromStorage);
     }
   });
 
-  it("scales a main yard's storage draw by nine tenths", () => {
-    const yard = yardOf({ "1": { id: 1, t: 6, X: 0, Y: 0 } });
+  /** Every hit's damage on one building, in order, until `steps` ticks have run. */
+  const hitsOn = (battle: ReturnType<typeof createBattle>, steps: number): number[] => {
+    const amounts: number[] = [];
+    let seen = 0;
+    for (let step = 0; step < steps && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(seen)) {
+        if (event.kind === "hit" && event.amount > 0) amounts.push(event.amount);
+      }
+      seen = battle.tick;
+    }
+    return amounts;
+  };
+
+  it("scales a main yard's storage draw by nine tenths, truncating each step", () => {
+    // Level 8, so the silo outlasts the swings and no fall is mixed in.
+    const yard = yardOf({ "1": { id: 1, t: 6, l: 8, X: 0, Y: 0 } });
     const battle = createBattle(yard, { seed: 11, playerLevel: 20 });
     battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C4: 6 } });
-    run(battle, 4000);
+    const hits = hitsOn(battle, 1200);
+    expect(yard.buildings[0]!.hp).toBeGreaterThan(0);
+    expect(hits.length).toBeGreaterThan(0);
     const state = battle.state();
-    expect(state.defenderLoss.r1).toBeGreaterThan(0);
-    expect(state.loot.r1).toBeCloseTo(state.defenderLoss.r1 * 0.9, 6);
+    // `Loot(param1:int)`, then `_loc2_ *= 0.9` on an int (`BSTORAGE.as:56-88`).
+    const lost = hits.reduce((sum, hit) => sum + Math.trunc(hit), 0);
+    const got = hits.reduce((sum, hit) => sum + Math.trunc(Math.trunc(hit) * 0.9), 0);
+    expect(state.defenderLoss.r1).toBe(lost);
+    expect(state.loot.r1).toBe(got);
+  });
+});
+
+/**
+ * `BSTORAGE.Destroyed` (issue #167). Each yard's storage building is on 1
+ * health, so the first swing fells it and every unit that moves is the fall's.
+ */
+describe("a storage building's fall", () => {
+  const fell = (
+    type: number,
+    options: {
+      kind?: "main" | "outpost" | "wild";
+      playerLevel?: number;
+      resources?: { r1: number; r2: number; r3: number; r4: number };
+    } = {},
+  ) => {
+    const yard = buildEngineYard({
+      buildingdata: { "1": { id: 1, t: type, l: 1, X: 0, Y: 0 } },
+      buildinghealthdata: { "1": 1 },
+      resources: options.resources ?? { r1: 100_000, r2: 0, r3: 0, r4: 0 },
+      kind: options.kind ?? "main",
+    });
+    const battle = createBattle(yard, { seed: 11, playerLevel: options.playerLevel ?? 20 });
+    battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C4: 1 } });
+    run(battle, 4000);
+    expect(yard.buildings[0]!.hp).toBe(0);
+    return battle.state();
+  };
+
+  it("hands over a tenth of the pool for a Town Hall, and the killing hit draws nothing of its own", () => {
+    const state = fell(14);
+    expect(state.defenderLoss).toEqual({ r1: 10_000, r2: 0, r3: 0, r4: 0 });
+    expect(state.loot).toEqual({ r1: 10_000, r2: 0, r3: 0, r4: 0 });
+  });
+
+  // An outpost's core (112) has no health on the main yard's props the engine
+  // reads, so it is never hit; `storageFallLoot` carries its share for when it is.
+  it("hands over a twenty-fifth for a silo", () => {
+    expect(fell(6).loot.r1).toBe(4_000);
+  });
+
+  it("takes every resource in turn, goo halved", () => {
+    const state = fell(14, { resources: { r1: 13_000_000, r2: 13_000_000, r3: 13_000_000, r4: 2_500_000 } });
+    expect(state.defenderLoss).toEqual({ r1: 1_300_000, r2: 1_300_000, r3: 1_300_000, r4: 125_000 });
+    expect(state.loot).toEqual(state.defenderLoss);
+  });
+
+  it("is not cut to a fifth on a wild monster camp, nor to nine tenths anywhere", () => {
+    expect(fell(14, { kind: "wild" }).loot.r1).toBe(10_000);
+    expect(fell(14, { kind: "outpost" }).loot.r1).toBe(10_000);
+  });
+
+  it("caps a silo on a Map Room 2 outpost at 500,000", () => {
+    const resources = { r1: 100_000_000, r2: 0, r3: 0, r4: 0 };
+    expect(fell(6, { resources }).loot.r1).toBe(4_000_000);
+    expect(fell(6, { kind: "outpost", resources }).loot.r1).toBe(500_000);
+  });
+
+  it("carries the low-level bonus, which the defender does not pay", () => {
+    const state = fell(14, { playerLevel: 1 });
+    expect(state.defenderLoss.r1).toBe(10_000);
+    expect(state.loot.r1).toBe(15_700);
   });
 });
 
@@ -336,6 +418,24 @@ describe("bombs", () => {
     const before = yard.buildings[0]!.hp;
     battle.apply({ kind: "bomb", t: 0, x: 40, y: 0, id: "pb1" });
     expect(before - yard.buildings[0]!.hp).toBe(9000);
+  });
+
+  it("loots nothing from what it fells: no attacker, no fall (`ResourceBomb.as:172`)", () => {
+    const yard = buildEngineYard({
+      buildingdata: {
+        "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: 20, Y: 0, st: 500 },
+      },
+      buildinghealthdata: { "1": 1, "2": 1 },
+      resources: { r1: 100_000, r2: 0, r3: 0, r4: 0 },
+    });
+    const battle = createBattle(yard, { seed: 2 });
+    battle.apply({ kind: "bomb", t: 0, x: 10, y: 0, id: "pb3" });
+    expect(yard.buildings.map((building) => building.hp)).toEqual([0, 0]);
+    expect(battle.state().loot).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    expect(battle.state().defenderLoss).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    expect(yard.resources.r1).toBe(100_000);
+    expect(yard.buildings[1]!.stored).toBe(500);
   });
 
   it("takes 6% off a wall and leaves a trap alone", () => {

@@ -34,6 +34,7 @@ import {
   monsterTickSpeed,
   MR2_FLINGER_LEVEL,
   specialistMultiplier,
+  storageFallLoot,
   TICKS_PER_SECOND,
   ticks,
   towerRearmTicks,
@@ -41,6 +42,7 @@ import {
   trapDamageAt,
   trapStats,
   VICTORY_THRESHOLD,
+  withLowLevelBonus,
 } from "./stats";
 
 /**
@@ -291,6 +293,47 @@ describe("loot", () => {
   it("names the harvesters and the three storage types", () => {
     for (const type of [1, 2, 3, 4, 6, 14, 112]) expect(isLootable(type)).toBe(true);
     for (const type of [17, 20, 24]) expect(isLootable(type)).toBe(false);
+  });
+
+  it("truncates each bonused gain on its own, as `param2 += param2 * bonus` on an int does", () => {
+    expect(withLowLevelBonus(400, 1)).toBe(628);
+    expect(withLowLevelBonus(10, 1)).toBe(15);
+    expect(withLowLevelBonus(10.9, 1)).toBe(15);
+    expect(withLowLevelBonus(3, 19)).toBe(3);
+    expect(withLowLevelBonus(1000, 20)).toBe(1000);
+    expect(withLowLevelBonus(1000, 45)).toBe(1000);
+  });
+});
+
+describe("storageFallLoot (`BSTORAGE.Destroyed`, issue #167)", () => {
+  it("takes a tenth for the Town Hall, a twentieth for an outpost, a twenty-fifth for a silo", () => {
+    expect(storageFallLoot(14, 1, 13_000_000, false)).toBe(1_300_000);
+    expect(storageFallLoot(112, 1, 1_000_000, false)).toBe(50_000);
+    expect(storageFallLoot(6, 1, 1_000_000, false)).toBe(40_000);
+  });
+
+  it("truncates the share", () => {
+    expect(storageFallLoot(14, 1, 1_009, false)).toBe(100);
+    expect(storageFallLoot(6, 2, 49, false)).toBe(1);
+  });
+
+  it("caps each share, lower for a silo or a Town Hall on a Map Room 2 outpost", () => {
+    expect(storageFallLoot(14, 1, 500_000_000, false)).toBe(10_000_000);
+    expect(storageFallLoot(14, 1, 500_000_000, true)).toBe(2_000_000);
+    expect(storageFallLoot(6, 1, 500_000_000, false)).toBe(4_000_000);
+    expect(storageFallLoot(6, 1, 500_000_000, true)).toBe(500_000);
+    expect(storageFallLoot(112, 1, 500_000_000, true)).toBe(10_000_000);
+  });
+
+  it("halves goo, rounding up, after the cap", () => {
+    expect(storageFallLoot(14, 4, 2_500_000, false)).toBe(125_000);
+    expect(storageFallLoot(14, 4, 1_010, false)).toBe(51);
+    expect(storageFallLoot(14, 4, 500_000_000, false)).toBe(5_000_000);
+  });
+
+  it("takes nothing from an empty or negative pool", () => {
+    expect(storageFallLoot(14, 1, 0, false)).toBe(0);
+    expect(storageFallLoot(14, 1, -50, false)).toBe(0);
   });
 });
 

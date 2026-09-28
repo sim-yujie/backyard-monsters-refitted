@@ -29,7 +29,8 @@ import {
   championStat,
   fortifiedDamage,
   isLootable,
-  lowLevelLootBonus,
+  storageFallLoot,
+  withLowLevelBonus,
   monsterAttackDelay,
   monsterMovement,
   monsterRange,
@@ -90,7 +91,8 @@ import type { FlingEvent, MonsterLevels, ResourceAmounts, Roster } from "./types
  * pathing grid and the wall that gets in the way; ranged and melee swings;
  * Eye-ra's blast; towers with their acquire delay, re-arm and splash; the two
  * traps; bunkers dispatching defenders; resource bombs; loot out of harvesters
- * and storage; the countdown and the retreat.
+ * and storage, hit by hit, and the share of the pool a fallen storage building
+ * gives up; the countdown and the retreat.
  *
  * ## Fidelity notes — every place this is not Flash
  *
@@ -151,6 +153,14 @@ import type { FlingEvent, MonsterLevels, ResourceAmounts, Roster } from "./types
  *    clamps a gain to the attacker's storage cap (`ATTACK.as:696-710`); the cap
  *    is a property of the attacker's row, not the battle, so the audit derives
  *    it (§2.4 `lootOverCap`) and the engine reports the uncapped gain.
+ * 11. **Every creep loots at 1.** The client's looting property starts at 0.5
+ *    and a resource specialist or a champion adds 1.5 to it
+ *    (`MonsterBase.as:260`, `CreepBase.as:224-226`, `ChampionBase.as:221`), so
+ *    an ordinary creep draws half a unit per point of damage and a specialist
+ *    or champion two; Krallen's `_lootMults` is never read. The engine keeps
+ *    1 for every creep and Krallen's `x2`/`x3` (issue #80) until the owner
+ *    decides (issue #167): the multiplier decides when a harvester is empty,
+ *    and an empty harvester is one a specialist stops targeting.
  */
 
 /* ── Inputs ───────────────────────────────────────────────────────────────── */
@@ -512,7 +522,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     options.declareWar === true ? DECLARE_WAR_COUNTDOWN_SECONDS : ATTACK_COUNTDOWN_SECONDS,
   );
   const retreatAt = countdown + ticks(RETREAT_GRACE_SECONDS);
-  const lootBonus = lowLevelLootBonus(options.playerLevel ?? 20);
+  const playerLevel = options.playerLevel ?? 20;
   const storageScalar =
     yard.kind === "outpost" ? STORAGE_SCALAR_OUTPOST : STORAGE_SCALAR_MAIN;
 
@@ -574,10 +584,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /* ── Damage and loot ───────────────────────────────────────────────────── */
 
+  /** `ATTACK.Loot`: the low-level bonus, one whole gain at a time. */
   const creditLoot = (resource: number, amount: number): void => {
     if (amount <= 0) return;
     const key = `r${resource}` as keyof ResourceAmounts;
-    loot[key] += amount * lootBonus;
+    loot[key] += withLowLevelBonus(amount, playerLevel);
   };
 
   /**
@@ -587,25 +598,33 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * A harvester hands over its own buffer of its own resource
    * (`BRESOURCE.as:93-134`). A storage building draws from the yard's pool, a
    * resource picked at random from the ones that are not empty, scaled by where
-   * the yard is (`BSTORAGE.as:56-88`).
+   * the yard is (`BSTORAGE.as:56-88`). `Loot(param1:int)` truncates the damage
+   * times the looting multiplier, and every scalar after it lands on an `int`,
+   * so each step truncates.
    */
+  /** The resource a storage hit draws: one of the pool's non-empty ones, at random. */
+  const pickStored = (): number | null => {
+    const available: number[] = [];
+    for (let resource = 1; resource <= 4; resource += 1) {
+      const key = `r${resource}` as keyof ResourceAmounts;
+      if (yard.resources[key] > 0) available.push(resource);
+    }
+    if (available.length === 0) return null;
+    return available[rng.int(available.length)] as number;
+  };
+
   const takeLoot = (building: EngineBuilding, amount: number, creep: Creep | null): void => {
     if (amount <= 0 || !isLootable(building.type)) return;
     if (STORAGE_TYPES.includes(building.type)) {
-      const available: number[] = [];
-      for (let resource = 1; resource <= 4; resource += 1) {
-        const key = `r${resource}` as keyof ResourceAmounts;
-        if (yard.resources[key] > 0) available.push(resource);
-      }
-      if (available.length === 0) return;
-      const picked = available[rng.int(available.length)] as number;
+      const picked = pickStored();
+      if (picked === null) return;
       const key = `r${picked}` as keyof ResourceAmounts;
-      const wanted = Math.ceil(amount * (creep ? creep.storageLoot : 1));
-      const taken = Math.min(yard.resources[key], wanted);
+      const wanted = Math.trunc(amount * (creep ? creep.storageLoot : 1));
+      const taken = Math.trunc(Math.min(yard.resources[key], wanted));
       if (taken <= 0) return;
       yard.resources[key] -= taken;
       defenderLoss[key] += taken;
-      let credited = taken * storageScalar;
+      let credited = Math.trunc(taken * storageScalar);
       if (yard.kind === "wild") credited = Math.trunc(credited / WILD_MONSTER_LOOT_DIVISOR);
       creditLoot(picked, credited);
       return;
@@ -621,15 +640,47 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creditLoot(building.type, taken);
   };
 
-  const destroy = (building: EngineBuilding): void => {
+  /**
+   * `BSTORAGE.Destroyed` (`BSTORAGE.as:91-155`): a fallen storage building
+   * hands over a share of the whole pool, each resource in turn, each share
+   * taken from what the pool holds by then ({@link storageFallLoot}).
+   */
+  const storageFall = (building: EngineBuilding): void => {
+    const onOutpost = yard.kind === "outpost";
+    for (let resource = 1; resource <= 4; resource += 1) {
+      const key = `r${resource}` as keyof ResourceAmounts;
+      const taken = storageFallLoot(building.type, resource, yard.resources[key], onOutpost);
+      if (taken <= 0) continue;
+      yard.resources[key] -= taken;
+      defenderLoss[key] += taken;
+      creditLoot(resource, taken);
+    }
+  };
+
+  /**
+   * `BFOUNDATION.Destroyed(param2 != null)`: only a building an attacker
+   * brought down gives anything up. A resource bomb's `modifyHealth` names no
+   * attacker (`effects/ResourceBomb.as:172`), so a building it fells keeps
+   * what it held.
+   */
+  const destroy = (building: EngineBuilding, byAttacker: boolean): void => {
     building.hp = 0;
     destroyedIds.push(building.id);
-    // The client empties a harvester when it falls (`BRESOURCE.as:132-137`).
-    if (building.stored > 0) takeLoot(building, building.stored, null);
+    if (byAttacker) {
+      // The client empties a harvester when it falls (`BRESOURCE.as:129-134`).
+      if (building.stored > 0) takeLoot(building, building.stored, null);
+      if (STORAGE_TYPES.includes(building.type)) storageFall(building);
+    }
     grid.removeBuilding(building);
   };
 
-  /** `BFOUNDATION.modifyHealth` (`:499-541`): fortification, then loot. */
+  /**
+   * `BFOUNDATION.modifyHealth` (`:499-541`): fortification, then loot.
+   *
+   * The hit that brings a building down loots nothing of its own: the client
+   * calls `Destroyed` first and loots only `if (!this._destroyed)`, so the
+   * fall's own rule is all that hit takes.
+   */
   const damageBuilding = (
     building: EngineBuilding,
     raw: number,
@@ -639,8 +690,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const dealt = fortifiedDamage(raw, building.fortification, 0);
     const applied = Math.min(dealt, building.hp);
     building.hp -= dealt;
-    if (creep) takeLoot(building, dealt, creep);
-    if (building.hp <= 0) destroy(building);
+    if (building.hp > 0) {
+      if (creep) takeLoot(building, dealt, creep);
+      return applied;
+    }
+    // The killing hit on storage still makes the pick it made before issue
+    // #167 and throws it away, so the random stream every later bunker pick
+    // reads is the one it was, and the fall changes the loot and nothing else.
+    if (creep && STORAGE_TYPES.includes(building.type)) pickStored();
+    destroy(building, creep !== null);
     return applied;
   };
 

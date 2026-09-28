@@ -491,11 +491,27 @@ export const WILD_MONSTER_LOOT_DIVISOR = 5;
 export const LOW_LEVEL_LOOT_CEILING = 20;
 export const LOW_LEVEL_LOOT_PER_LEVEL = 0.03;
 
+/** The share `ATTACK.Loot` adds to a gain at `playerLevel`: 0 from level 20 up. */
+export const lowLevelLootIncrement = (playerLevel: number): number =>
+  playerLevel >= LOW_LEVEL_LOOT_CEILING
+    ? 0
+    : Math.max(0, (LOW_LEVEL_LOOT_CEILING - playerLevel) * LOW_LEVEL_LOOT_PER_LEVEL);
+
 /** The multiplier `ATTACK.Loot` applies to a gain at `playerLevel`. */
 export const lowLevelLootBonus = (playerLevel: number): number =>
-  playerLevel >= LOW_LEVEL_LOOT_CEILING
-    ? 1
-    : 1 + Math.max(0, (LOW_LEVEL_LOOT_CEILING - playerLevel) * LOW_LEVEL_LOOT_PER_LEVEL);
+  1 + lowLevelLootIncrement(playerLevel);
+
+/**
+ * One gain after the low-level bonus, as `ATTACK.Loot` banks it.
+ *
+ * `param2 += param2 * bonus` on an `int` (`client/scripts/ATTACK.as:678-680`)
+ * truncates each gain on its own, so the bonus is applied per call, not to
+ * the battle's total.
+ */
+export const withLowLevelBonus = (amount: number, playerLevel: number): number => {
+  const whole = Math.trunc(amount);
+  return Math.trunc(whole + whole * lowLevelLootIncrement(playerLevel));
+};
 
 /**
  * What a resource specialist and a champion add to their looting property.
@@ -525,6 +541,61 @@ export const STORAGE_TYPES: readonly number[] = [6, 14, 112];
 /** Whether damage to this type takes resources with it. */
 export const isLootable = (type: number): boolean =>
   HARVESTER_TYPES.includes(type) || STORAGE_TYPES.includes(type);
+
+/**
+ * What a storage building gives up when a creep brings it down.
+ *
+ * `BSTORAGE.Destroyed` (`client/scripts/BSTORAGE.as:91-155`) takes a share of
+ * the yard's whole pool, each resource in turn, on top of what the hits drew
+ * on the way down: a tenth for the Town Hall, a twentieth for an outpost's
+ * core, a twenty-fifth for a silo. Each share has a ceiling, lower for a silo
+ * or a Town Hall on a Map Room 2 outpost, and goo is halved outside Map Room 3.
+ * None of the per-hit scalars apply: no nine tenths, no fifth for a wild
+ * monster camp, no creep's looting multiplier. Only the low-level bonus does,
+ * because the share goes through `ATTACK.Loot`.
+ */
+export const STORAGE_FALL_SHARE_TOWN_HALL = 0.1;
+export const STORAGE_FALL_SHARE_OUTPOST = 0.05;
+export const STORAGE_FALL_SHARE_SILO = 0.04;
+export const STORAGE_FALL_MAX_TOWN_HALL = 10_000_000;
+export const STORAGE_FALL_MAX_OUTPOST = 10_000_000;
+export const STORAGE_FALL_MAX_SILO = 4_000_000;
+/** The Town Hall's ceiling on a Map Room 2 outpost (`_LOOT_MAX_WM_TH`). */
+export const STORAGE_FALL_MAX_TOWN_HALL_ON_OUTPOST = 2_000_000;
+/** A silo's ceiling on a Map Room 2 outpost (`_LOOT_MAX_WM_SILO`). */
+export const STORAGE_FALL_MAX_SILO_ON_OUTPOST = 500_000;
+/** `_LOOT_GOO_LIMITER`: goo's share is halved, rounded up. */
+export const STORAGE_FALL_GOO_LIMITER = 0.5;
+
+/**
+ * The amount of `resource` (1 to 4) a fallen storage building of `type` takes
+ * out of a pool holding `held` of it, before the low-level bonus.
+ */
+export const storageFallLoot = (
+  type: number,
+  resource: number,
+  held: number,
+  onOutpost: boolean,
+): number => {
+  const share =
+    type === 14
+      ? STORAGE_FALL_SHARE_TOWN_HALL
+      : type === 112
+        ? STORAGE_FALL_SHARE_OUTPOST
+        : STORAGE_FALL_SHARE_SILO;
+  let amount = Math.trunc(Math.max(0, held) * share);
+  if (type === 6) {
+    amount = Math.min(amount, STORAGE_FALL_MAX_SILO);
+    if (onOutpost) amount = Math.min(amount, STORAGE_FALL_MAX_SILO_ON_OUTPOST);
+  }
+  if (type === 14) {
+    amount = Math.min(amount, STORAGE_FALL_MAX_TOWN_HALL);
+    if (onOutpost) amount = Math.min(amount, STORAGE_FALL_MAX_TOWN_HALL_ON_OUTPOST);
+  }
+  if (type === 112) amount = Math.min(amount, STORAGE_FALL_MAX_OUTPOST);
+  if (resource === 4) amount = Math.ceil(amount * STORAGE_FALL_GOO_LIMITER);
+  return amount;
+};
 
 /* ── Bombs ────────────────────────────────────────────────────────────────── */
 
