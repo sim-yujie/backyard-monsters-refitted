@@ -222,15 +222,17 @@ describe("BuildingPanel: buildings without an Upgrade here", () => {
     expect(openMap).toHaveBeenCalled();
   });
 
-  it("a level 1 Map Room offers Upgrade without Instant, and says the map waits for level 2", () => {
+  it("a level 1 Map Room offers Upgrade without Instant, and opens its map (Map Room 1, #162)", () => {
     const openMap = vi.fn();
     const { element } = setup([building(1, 14, 6), building(2, 11, 1)], 2, {
       panel: { openMap },
     });
     expect(buttonNamed(element, "Upgrade")).toBeDefined();
     expect(buttonNamed(element, "Instant")).toBeUndefined();
-    expect(buttonNamed(element, "Open map")!.disabled).toBe(true);
-    expect(element.textContent).toMatch(/Upgrade the Map Room to level 2 to open Map Room 2/);
+    const open = buttonNamed(element, "Open map")!;
+    expect(open.disabled).toBe(false);
+    open.click();
+    expect(openMap).toHaveBeenCalledTimes(1);
   });
 
   it("the Yard Planner opens the planner", () => {

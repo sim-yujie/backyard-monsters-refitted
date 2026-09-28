@@ -4,6 +4,7 @@ import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager } from "./SceneManager";
 import { BootScene } from "./scenes/BootScene";
 import { LoginScene } from "./scenes/LoginScene";
+import { MapGateScene } from "./scenes/MapGateScene";
 import { MapRoom1Scene } from "./scenes/MapRoom1Scene";
 import { MapRoom2Scene } from "./scenes/MapRoom2Scene";
 import { YardScene } from "./scenes/YardScene";
@@ -13,6 +14,11 @@ import { AttackScene } from "./scenes/AttackScene";
 export const SceneName = {
   BOOT: "boot",
   LOGIN: "login",
+  /**
+   * "The map", before anything knows which: loads the own yard and opens
+   * Map Room 1, Map Room 2 or, with no Map Room, the yard (issue #162).
+   */
+  MAP: "map",
   /** The neighbours and wild monster tribes, below Map Room 2 (issue #132). */
   MAP_ROOM_1: "maproom1",
   MAP_ROOM_2: "maproom2",
@@ -77,6 +83,7 @@ export class App {
     this.scenes
       .register(SceneName.BOOT, () => new BootScene())
       .register(SceneName.LOGIN, () => new LoginScene())
+      .register(SceneName.MAP, () => new MapGateScene())
       .register(SceneName.MAP_ROOM_1, () => new MapRoom1Scene())
       .register(SceneName.MAP_ROOM_2, () => new MapRoom2Scene())
       .register(SceneName.YARD, () => new YardScene())

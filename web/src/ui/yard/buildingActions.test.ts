@@ -278,14 +278,14 @@ describe("panelModel: which blocks each building gets", () => {
     }
   });
 
-  it("a level 1 Map Room at Town Hall 6 offers the move to Map Room 2: no Instant, map not open yet", () => {
+  it("a level 1 Map Room at Town Hall 6 offers the move to Map Room 2 (no Instant) and opens Map Room 1", () => {
     const context = contextOf({ buildings: [HALL(6), building(2, 11, 1)] });
     const model = panelModel(pick(context, 2), context);
     expect(model).toMatchObject({
       upgrade: { from: 1, to: 2, seconds: 345_600, gate: null, instant: false },
       maxed: false,
       open: "map",
-      openBlocked: "Upgrade the Map Room to level 2 to open Map Room 2.",
+      openBlocked: null,
     });
   });
 
@@ -305,11 +305,16 @@ describe("panelModel: which blocks each building gets", () => {
     expect(panelModel(pick(context, 2), moved).openBlocked).toBeNull();
   });
 
-  it("the Map Room below Town Hall 6: the map opens at Town Hall 6, and so does the upgrade", () => {
-    const context = contextOf({ buildings: [HALL(5), building(2, 11, 1)] });
+  it("the Map Room below Town Hall 6 opens Map Room 1 (#162); the move to Map Room 2 waits for Town Hall 6", () => {
+    const context = contextOf({ buildings: [HALL(1), building(2, 11, 1)] });
     const model = panelModel(pick(context, 2), context);
-    expect(model.openBlocked).toBe("Map Room 2 opens at Town Hall 6.");
-    expect(model.upgrade?.gate).toEqual({ reason: "townHall", have: 5, need: 6 });
+    expect(model.openBlocked).toBeNull();
+    expect(model.upgrade?.gate).toEqual({ reason: "townHall", have: 1, need: 6 });
+  });
+
+  it("a Map Room still on its first build has no map yet", () => {
+    const context = contextOf({ buildings: [HALL(1), building(2, 11, 1, { cB: 900 })] });
+    expect(panelModel(pick(context, 2), context).openBlocked).toBe("The map opens when the Map Room is built.");
   });
 
   it("a running Map Room upgrade has Cancel but no Shiny speed-ups", () => {

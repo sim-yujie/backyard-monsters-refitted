@@ -116,7 +116,7 @@ export class LoginScene implements Scene {
 
     try {
       await login(form.email, form.password);
-      context.goTo(SceneName.MAP_ROOM_2);
+      context.goTo(SceneName.MAP);
     } catch (caught) {
       form.error.textContent = describe(caught);
       form.submit.disabled = false;

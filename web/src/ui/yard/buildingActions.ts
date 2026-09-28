@@ -64,9 +64,6 @@ const NO_LADDER_KINDS: ReadonlySet<string> = new Set(["decoration", "mushroom", 
  */
 export const MAP_ROOM_TYPE = 11;
 
-/** The world map needs a level 6 Town Hall until Map Room 1 exists (D16, §10). */
-export const MAP_TOWN_HALL = 6;
-
 /** The Map Room level that is Map Room 2. */
 export const MAP_ROOM_2_LEVEL = 2;
 
@@ -427,7 +424,7 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
     job: jobOffer(building, context),
     open,
     monstersTab,
-    openBlocked: open === "map" ? mapBlocked(context) : null,
+    openBlocked: open === "map" ? mapBlocked(building, context) : null,
     batch: isBatchType(building.type),
     recycle: building.type === TOWN_HALL_TYPE ? null : recycleOfferFor(building, context),
   };
@@ -443,13 +440,14 @@ export const hasMapRoom2 = (context: Pick<PanelContext, "yard" | "save">): boole
   Boolean(Number(context.save.flags?.["mr2upgraded"])) ||
   context.yard.buildings.some((one) => one.type === MAP_ROOM_TYPE && one.level >= MAP_ROOM_2_LEVEL);
 
-/** Why Open map cannot be pressed: no Map Room 2 yet, and what gets it. */
-const mapBlocked = (context: PanelContext): string | null => {
-  if (hasMapRoom2(context)) return null;
-  if (townHallLevel(context.yard) < MAP_TOWN_HALL) {
-    return `Map Room 2 opens at Town Hall ${MAP_TOWN_HALL}.`;
-  }
-  return `Upgrade the Map Room to level ${MAP_ROOM_2_LEVEL} to open Map Room 2.`;
+/**
+ * Why Open map cannot be pressed, or null. A built Map Room opens its map:
+ * Map Room 2 once the player has moved, Map Room 1 before (issue #162). Only
+ * a Map Room still on its first build has no map yet.
+ */
+const mapBlocked = (building: YardBuilding, context: PanelContext): string | null => {
+  if (hasMapRoom2(context) || building.level >= 1) return null;
+  return "The map opens when the Map Room is built.";
 };
 
 /** The Town Hall is never recycled, so the panel does not offer it. */

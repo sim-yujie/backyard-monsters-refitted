@@ -13,6 +13,7 @@ import { buildActions } from "@/api/yardBuild";
 import { consumeViewTarget, setAttackTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
+import { MapRoomChoice, mapRoomOf, takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import {
   PlannerAccess,
   plannerAccess,
@@ -36,6 +37,7 @@ import { YardInput } from "@/game/yard/YardInput";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
+import { showBuildMapRoom } from "@/ui/maproom1/MapRoomPrompt";
 import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
 import {
   MONSTERS_TAB_ORDER,
@@ -45,6 +47,7 @@ import {
 } from "@/ui/monsters/monstersTab";
 import { resourceAmount } from "@/ui/resourceIcon";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
+import { MAP_ROOM_TYPE } from "@/ui/yard/buildingActions";
 import { BuildMenu, PlacementBar, spotSentence } from "@/ui/yard/BuildMenu";
 import { showBankResult } from "@/ui/yard/CollectAll";
 import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
@@ -52,6 +55,7 @@ import { describeUpgradeReport } from "@/ui/yard/upgradeText";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { ZoomControl } from "@/ui/ZoomControl";
 import { YardPlanner } from "./YardPlanner";
+import { sceneForMap } from "./MapGateScene";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
 
@@ -275,11 +279,11 @@ export class YardScene implements Scene {
 
     this.hud = new Hud({
       scenes: [
-        { id: SceneName.MAP_ROOM_2, label: "Map" },
+        { id: SceneName.MAP, label: "Map" },
         { id: SceneName.YARD, label: "Yard" },
         { id: SceneName.LOGIN, label: "Account" },
       ],
-      onSceneSelect: (id) => context.goTo(id),
+      onSceneSelect: (id) => (id === SceneName.MAP ? this.openMap() : context.goTo(id)),
       onSignOut: () => {
         logout();
         context.goTo(SceneName.LOGIN);
@@ -520,7 +524,9 @@ export class YardScene implements Scene {
     const whose = target ? `${target.name}'s yard` : "your yard";
 
     try {
-      const response = await loadYardFor(target);
+      // The own-yard load that sent a player with no Map Room here from the
+      // map door (issue #162), when there was one.
+      const response = (!target && takePrimedOwnYard()) || (await loadYardFor(target));
       // The scene may have been swapped out while the request was in flight.
       if (this.context !== context) return;
 
@@ -869,7 +875,7 @@ export class YardScene implements Scene {
       this.panel = new BuildingPanel({
         ...(this.binding ? { yard: this.binding } : {}),
         // The Map Room's door: on the own yard only, where the map is the player's.
-        ...(this.binding ? { openMap: () => this.context?.goTo(SceneName.MAP_ROOM_2) } : {}),
+        ...(this.binding ? { openMap: () => this.openMap() } : {}),
         onClose: () => {
           this.panel = null;
           this.selected = null;
@@ -962,6 +968,29 @@ export class YardScene implements Scene {
       this.buildMenu.open();
     }
     this.refreshBuildButton();
+  }
+
+  /**
+   * The HUD's Map and the Map Room's Open map (issue #162): Map Room 2 for a
+   * player who has moved, Map Room 1 for a built Map Room, and with none,
+   * the way to build one — never the Map Room 2 world, which is a dead end
+   * without a home cell in it. A visit (or a yard not loaded yet) asks the
+   * map door, which loads the own yard to decide.
+   */
+  private openMap(): void {
+    const context = this.context;
+    if (!context) return;
+    const store = this.store;
+    if (this.target || !store) {
+      context.goTo(SceneName.MAP);
+      return;
+    }
+    const choice = mapRoomOf(store.save);
+    if (choice !== MapRoomChoice.NONE) {
+      context.goTo(sceneForMap(choice));
+      return;
+    }
+    showBuildMapRoom(context.overlay.modal, () => this.openBuildMenu(MAP_ROOM_TYPE));
   }
 
   /** Carries out what another screen asked the own yard to open (`yardIntent.ts`). */

@@ -1,5 +1,6 @@
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
+import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { ApiError, NetworkError } from "@/api/http";
 import type { BaseLoadResponse, MapCell } from "@/api/types";
 import { DEFAULT_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
@@ -258,7 +259,8 @@ export class MapRoom2Scene implements Scene {
    */
   private async loadOwnCell(): Promise<void> {
     try {
-      const base = await loadOwnYard();
+      // The load that chose this map, when there was one (issue #162).
+      const base = takePrimedOwnYard() ?? (await loadOwnYard());
       this.ownSave = base;
 
       const home = base.homebase;

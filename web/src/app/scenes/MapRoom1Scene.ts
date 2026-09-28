@@ -9,6 +9,7 @@ import {
 } from "@/api/maproom1";
 import type { BaseLoadResponse } from "@/api/types";
 import { setViewTarget } from "@/game/attack/attackTarget";
+import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import {
   FLINGER_TYPE,
   readMapRoom1,
@@ -133,7 +134,8 @@ export class MapRoom1Scene implements Scene {
 
   private async loadOwn(): Promise<void> {
     try {
-      const save = await loadOwnYard();
+      // The load that chose this map, when there was one (issue #162).
+      const save = takePrimedOwnYard() ?? (await loadOwnYard());
       if (!this.context) return;
       this.ownSave = save;
       this.own = readOwn(save);
