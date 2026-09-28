@@ -23,6 +23,9 @@
  * |                | and the Housing Bunker's from `INFERNOYARDPROPS.as`        |
  * | `TRAP_STATS`   | `YARD_PROPS.as`, `damage[0]`, `size` and `hp[0]` of traps  |
  * | `MR2_CAPACITY` | `GLOBAL.as:682-683`, `:713`, the Map Room 2 overrides      |
+ * | `OUTPOST_*`    | `OUTPOST_YARD_PROPS.as`: hp and capacity through the cost |
+ * |                | generator's outpost rows (`server/src/game-data/          |
+ * |                | buildingCosts.ts`), tower stats read here                 |
  * | `FLYER_MODE`   | `client/scripts/BTOWER.as:25-35`                           |
  * | `GRID_COST`    | The `_gridCost = [...]` of each entry's `cls`, with        |
  * |                | `extends` followed until one is found                      |
@@ -38,12 +41,17 @@ import { fileURLToPath } from "node:url";
 import { lineCounter, matchBrace, readIntArray, readPropsSource } from "./lib/props.mjs";
 import { monsterStats } from "../../server/src/game-data/stats/monsterStats.ts";
 import { championStats } from "../../server/src/game-data/stats/championStats.ts";
+import {
+  OUTPOST_COST_ROWS,
+  OUTPOST_TRAIT_ROWS,
+} from "../../server/src/game-data/buildingCosts.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../..");
 
 const PROPS = resolve(repo, "client/scripts/YARD_PROPS.as");
 const INFERNO_PROPS = resolve(repo, "client/scripts/INFERNOYARDPROPS.as");
+const OUTPOST_PROPS = resolve(repo, "client/scripts/OUTPOST_YARD_PROPS.as");
 const GLOBAL = resolve(repo, "client/scripts/GLOBAL.as");
 const BTOWER = resolve(repo, "client/scripts/BTOWER.as");
 const STRINGS = resolve(repo, "server/public/gamestage/assets/archived/en.v612.txt");
@@ -146,8 +154,7 @@ const numbersOf = (entry) => {
  * fixing a shape, every numeric key present is emitted and the reader decides
  * what it needs, so a field the plan has not traced yet is still in the table.
  */
-const readTowerStats = (entry) => {
-  const from = numbersOf(entry);
+const readTowerStats = (entry, from = numbersOf(entry)) => {
   const hit = /"stats"\s*:\s*\[/.exec(from.text);
   if (!hit) return null;
   const open = hit.index + hit[0].length - 1;
@@ -244,6 +251,92 @@ for (const override of MR2_CAPACITY) {
       `GLOBAL.as:${override.line} no longer reads "${expected}" (id ${override.id}); ` +
         `re-read changeNotMaproom3SpecificBuildings().`,
     );
+  }
+}
+
+/* ── Outposts ────────────────────────────────────────────────────────────── */
+
+/**
+ * The numbers an attack on a player's Map Room 2 outpost reads instead.
+ *
+ * `GLOBAL.SetBuildingProps` swaps the whole props table for
+ * `OUTPOST_YARD_PROPS._outpostProps` whenever the yard is an outpost, for an
+ * attacker as much as for the owner (`client/scripts/GLOBAL.as:716-723`); a
+ * wild monster camp loads as a main yard (`MR2/PopupAttackA.as:122-123`) and
+ * keeps the main table. The Map Room 2 overrides above apply on the main
+ * branch only (`:724-747`).
+ *
+ * The health and capacity ladders are the cost generator's: `OUTPOST_TRAIT_ROWS`
+ * and `OUTPOST_COST_ROWS` in `server/src/game-data/buildingCosts.ts`, which
+ * `gen-building-costs.mjs` reads out of the same file, so the two tables cannot
+ * drift apart. The tower `stats` blocks are not in that table and are read here.
+ * Each ladder is re-read from the props file as well, and the build fails if
+ * the two readings disagree.
+ *
+ * Only what differs from the main table is emitted for health and stats: the
+ * core (200,000 health), and the laser, tesla, flak, railgun and bunker, whose
+ * ladders stop at level 6 (the bunker at 4) with outpost-only top levels. A
+ * type the outpost table leaves alone reads the main one. Capacity is emitted
+ * whole, because the harvesters' buffers are a combat number only on an
+ * outpost (`client/scripts/BRESOURCE.as:504-518`).
+ */
+const outpostSource = readPropsSource(OUTPOST_PROPS).source;
+const outpostEntries = new Map(
+  readEntries(outpostSource, lineCounter(outpostSource)).map((one) => [one.id, one]),
+);
+
+const mainHp = new Map(hp.map((one) => [one.entry.id, one.values]));
+const mainStats = new Map(towers.map((one) => [one.entry.id, one.levels]));
+const same = (one, other) => JSON.stringify(one ?? null) === JSON.stringify(other ?? null);
+
+const outpostHp = [];
+const outpostTowers = [];
+const outpostCapacity = [];
+for (const [type, , ladder, , room] of OUTPOST_TRAIT_ROWS) {
+  const entry = outpostEntries.get(type);
+  const main = byId.get(type);
+  if (!entry || !main) {
+    throw new Error(`OUTPOST_YARD_PROPS.as: no entry ${type} to match its trait row`);
+  }
+  const read = readIntArray(entry.text, "hp");
+  if (!same(read, ladder)) {
+    throw new Error(
+      `OUTPOST_YARD_PROPS.as:${entry.line}: hp reads [${read}] here, [${ladder}] in buildingCosts.ts`,
+    );
+  }
+  if (ladder.length > 0 && !same(ladder, mainHp.get(type))) {
+    outpostHp.push({ entry, main, values: ladder });
+  }
+  const stats = readTowerStats(entry, { ...entry, file: "OUTPOST_YARD_PROPS.as" });
+  if (stats && !same(stats.levels, mainStats.get(type))) {
+    outpostTowers.push({ entry, main, ...stats });
+  }
+  if (room.length > 0) outpostCapacity.push({ entry, main, values: room });
+}
+for (const [type, , , , , , stats] of OUTPOST_COST_ROWS) {
+  if (!stats) continue;
+  const entry = outpostEntries.get(type);
+  const main = byId.get(type);
+  if (!entry || !main) {
+    throw new Error(`OUTPOST_YARD_PROPS.as: no entry ${type} to match its cost row`);
+  }
+  const read = readIntArray(entry.text, "capacity");
+  if (!same(read, stats.capacity)) {
+    throw new Error(
+      `OUTPOST_YARD_PROPS.as:${entry.line}: capacity reads [${read}] here, ` +
+        `[${stats.capacity}] in buildingCosts.ts`,
+    );
+  }
+  outpostCapacity.push({ entry, main, values: stats.capacity });
+}
+outpostCapacity.sort((one, other) => one.entry.id - other.entry.id);
+
+if (!outpostHp.some((one) => one.entry.id === 112)) {
+  throw new Error("OUTPOST_YARD_PROPS.as: the outpost core (112) has no health ladder");
+}
+for (const type of [1, 2, 3, 4]) {
+  if (!outpostCapacity.some((one) => one.entry.id === type)) {
+    throw new Error(`OUTPOST_YARD_PROPS.as: harvester ${type} has no capacity ladder`);
   }
 }
 
@@ -569,6 +662,41 @@ const capacityRows = MR2_CAPACITY.sort((a, b) => a.id - b.id)
   )
   .join("\n");
 
+/** A row comment for an outpost ladder: the main entry's name and class, the outpost line. */
+const outpostComment = (one, extra = "") =>
+  `  // ${one.entry.id} ${one.main.name}${one.main.kind ? ` (${one.main.kind})` : ""} ` +
+  `— OUTPOST_YARD_PROPS.as:${one.entry.line}${extra}`;
+
+const outpostHpRows = outpostHp
+  .map(
+    (one) =>
+      `${outpostComment(one)}\n` +
+      `  ${one.entry.id}: [\n` +
+      pack(
+        one.values.map((value) => `${value},`),
+        "    ",
+      ) +
+      `\n  ],`,
+  )
+  .join("\n");
+
+const outpostTowerRows = outpostTowers
+  .map(
+    (one) =>
+      `${outpostComment(one, `, stats :${one.line}`)}\n` +
+      `  ${one.entry.id}: [\n` +
+      pack(
+        one.levels.map((level) => `${object(level)},`),
+        "    ",
+      ) +
+      `\n  ],`,
+  )
+  .join("\n");
+
+const outpostCapacityRows = outpostCapacity
+  .map((one) => `${outpostComment(one)}\n  ${one.entry.id}: [${one.values.join(", ")}],`)
+  .join("\n");
+
 const flyerRows = pack(
   flyerMode.map(([type, mode]) => `${type}: ${mode},`),
   "  ",
@@ -731,6 +859,45 @@ ${trapRows}
  */
 export const MR2_CAPACITY: Readonly<Record<number, readonly number[]>> = {
 ${capacityRows}
+};
+
+/**
+ * An outpost's own health ladders, \`hp[level - 1]\`, where they differ from
+ * {@link BUILDING_HP}.
+ *
+ * \`GLOBAL.SetBuildingProps\` reads \`OUTPOST_YARD_PROPS.as\` for a player's Map
+ * Room 2 outpost (\`client/scripts/GLOBAL.as:716-723\`), the attacker's view of
+ * it included. The core (112) has health only here: the main table gives it
+ * none, so without this row it could never be hit. The railgun's level 6 reads
+ * 13,200, below its level 5; that is what Flash ran. A type with no row reads
+ * the main ladder.
+ */
+export const OUTPOST_BUILDING_HP: Readonly<Record<number, readonly number[]>> = {
+${outpostHpRows}
+};
+
+/**
+ * An outpost's own tower \`stats\`, where they differ from {@link TOWER_STATS}.
+ *
+ * The laser, tesla, flak, railgun and bunker stop at level 6 (the bunker at 4),
+ * and each top level is the outpost's own. A type with no row reads the main
+ * block.
+ */
+export const OUTPOST_TOWER_STATS: Readonly<Record<number, readonly TowerLevelStats[]>> = {
+${outpostTowerRows}
+};
+
+/**
+ * Every \`capacity\` ladder of the outpost table a battle reads,
+ * \`capacity[level - 1]\`.
+ *
+ * The four harvesters, whose buffer an attack on an outpost is given half of,
+ * or a quarter when damaged (\`client/scripts/BRESOURCE.as:504-518\`), and the
+ * Flinger, Housing and Bunker, which carry their own ladders in the outpost
+ * table.
+ */
+export const OUTPOST_CAPACITY: Readonly<Record<number, readonly number[]>> = {
+${outpostCapacityRows}
 };
 
 /**
@@ -906,6 +1073,8 @@ console.log(
   `${towers.length} tower stat blocks, ${hp.length}/${entries.length} hp ladders, ` +
     `${traps.length} traps, ${MR2_CAPACITY.length} capacity overrides, ` +
     `${flyerMode.length} flyer modes, ${gridCosts.length} grid costs, ` +
+    `${outpostHp.length} outpost hp, ${outpostTowers.length} outpost stats, ` +
+    `${outpostCapacity.length} outpost capacities, ` +
     `${monsters.length} monsters, ${champions.length} champions`,
 );
 console.log(`-> ${OUT}`);

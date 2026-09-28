@@ -435,8 +435,6 @@ describe("a storage building's fall", () => {
     expect(state.loot).toEqual({ r1: 10_000, r2: 0, r3: 0, r4: 0 });
   });
 
-  // An outpost's core (112) has no health on the main yard's props the engine
-  // reads, so it is never hit; `storageFallLoot` carries its share for when it is.
   it("hands over a twenty-fifth for a silo", () => {
     expect(fell(6).loot.r1).toBe(4_000);
   });
@@ -474,6 +472,126 @@ describe("a storage building's fall", () => {
     const state = fell(14, { playerLevel: 1 });
     expect(state.defenderLoss.r1).toBe(10_000);
     expect(state.loot.r1).toBe(15_700);
+  });
+});
+
+/**
+ * A player's Map Room 2 outpost (issue #179): the outpost props table, the
+ * harvesters' attack buffer, the owner's pool and the terrain.
+ */
+describe("an outpost", () => {
+  const RICH = { r1: 300_000_000, r2: 13_000_000, r3: 0, r4: 2_500_000 };
+
+  it("gives the core 200,000 health, where a main yard gives it none", () => {
+    const core = { "1": { id: 1, t: 112, l: 1, X: 0, Y: 0 } };
+    expect(buildEngineYard({ buildingdata: core, kind: "outpost" }).buildings[0]?.maxHp).toBe(
+      200_000,
+    );
+    expect(buildEngineYard({ buildingdata: core }).buildings[0]?.maxHp).toBe(0);
+  });
+
+  it("lets the core be hit, each hit drawing from the pool at nine tenths", () => {
+    const yard = buildEngineYard({
+      buildingdata: { "1": { id: 1, t: 112, l: 1, X: 0, Y: 0 } },
+      resources: { r1: 1_000_000, r2: 0, r3: 0, r4: 0 },
+      kind: "outpost",
+    });
+    const battle = createBattle(yard, { seed: 11, playerLevel: 20 });
+    battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C4: 4 } });
+    run(battle, 2000);
+    const core = yard.buildings[0]!;
+    expect(core.hp).toBeGreaterThan(0);
+    expect(core.hp).toBeLessThan(200_000);
+    const state = battle.state();
+    expect(state.defenderLoss.r1).toBeGreaterThan(0);
+    // `BSTORAGE.Loot`: 0.9 of each draw, truncated (`BSTORAGE.as:77-85`).
+    expect(state.loot.r1).toBeLessThan(state.defenderLoss.r1);
+    expect(state.loot.r1).toBeGreaterThanOrEqual(Math.trunc(state.defenderLoss.r1 * 0.9) - 4);
+  });
+
+  it("drops the core at a twentieth of each resource, capped at 10,000,000, goo halved", () => {
+    const yard = buildEngineYard({
+      buildingdata: { "1": { id: 1, t: 112, l: 1, X: 0, Y: 0 } },
+      buildinghealthdata: { "1": 1 },
+      resources: RICH,
+      kind: "outpost",
+    });
+    const battle = createBattle(yard, { seed: 11, playerLevel: 20 });
+    battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C4: 1 } });
+    run(battle, 4000);
+    expect(yard.buildings[0]!.hp).toBe(0);
+    const state = battle.state();
+    expect(state.defenderLoss).toEqual({ r1: 10_000_000, r2: 650_000, r3: 0, r4: 62_500 });
+    expect(state.loot).toEqual(state.defenderLoss);
+  });
+
+  it("gives each harvester half its capacity above half health and a quarter below, ignoring st", () => {
+    const yard = buildEngineYard({
+      buildingdata: {
+        "1": { id: 1, t: 1, l: 10, X: 0, Y: 0, st: 5 },
+        "2": { id: 2, t: 2, l: 10, X: 200, Y: 0 },
+        "3": { id: 3, t: 3, l: 10, X: 400, Y: 0 },
+      },
+      // 60%, 40% and destroyed of 165,000.
+      buildinghealthdata: { "1": 99_000, "2": 66_000, "3": 0 },
+      kind: "outpost",
+    });
+    expect(yard.buildings.map((one) => one.stored)).toEqual([387_509, 193_754, 0]);
+    expect(yard.buildings.map((one) => one.looted)).toEqual([false, false, true]);
+    // A main yard's harvester keeps its own banked `st`.
+    const main = buildEngineYard({ buildingdata: { "1": { id: 1, t: 1, l: 10, X: 0, Y: 0, st: 5 } } });
+    expect(main.buildings[0]?.stored).toBe(5);
+  });
+
+  it("takes a harvester's loot out of the owner's pool too (`BRESOURCE.as:104-118`)", () => {
+    const loot = (kind: "main" | "outpost") => {
+      const yard = buildEngineYard({
+        buildingdata: { "1": { id: 1, t: 1, l: 1, X: 0, Y: 0, st: 360 } },
+        resources: { r1: 1_000, r2: 0, r3: 0, r4: 0 },
+        kind,
+      });
+      const battle = createBattle(yard, { seed: 11, playerLevel: 20 });
+      battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C4: 4 } });
+      run(battle, 4000);
+      return { pool: yard.resources.r1, state: battle.state() };
+    };
+    // Level 1 on an outpost: half of 720.
+    const outpost = loot("outpost");
+    expect(outpost.state.loot.r1).toBe(360);
+    expect(outpost.state.defenderLoss.r1).toBe(360);
+    expect(outpost.pool).toBe(640);
+    const main = loot("main");
+    expect(main.state.loot.r1).toBe(360);
+    expect(main.pool).toBe(1_000);
+  });
+
+  /**
+   * A level 1 Laser (range 160) and a Town Hall 260 away that three Pokeys
+   * attack: out of reach on flat ground, inside it at height 250, which doubles
+   * the range to 320. A wild monster camp loads as a main yard, so its towers
+   * never stretch (`BTOWER.as:80-85`).
+   */
+  it("stretches tower range with the cell's height, on an outpost only", () => {
+    const shots = (kind: "main" | "outpost" | "wild", height: number) => {
+      const yard = buildEngineYard({
+        buildingdata: {
+          "1": { id: 1, t: 23, l: 1, X: 0, Y: 0 },
+          "2": { id: 2, t: 14, l: 5, X: 260, Y: 0 },
+        },
+        kind,
+        height,
+      });
+      expect(yard.height).toBe(height);
+      const battle = createBattle(yard, { seed: 3, playerLevel: 20 });
+      battle.apply({ kind: "fling", t: 0, x: 420, y: 60, r: 40, monsters: { C1: 3 } });
+      run(battle, 1600);
+      return battle.state().towers[0]?.shots ?? 0;
+    };
+    expect(shots("outpost", 250)).toBeGreaterThan(0);
+    expect(shots("outpost", 125)).toBe(0);
+    expect(shots("outpost", 90)).toBe(0);
+    expect(shots("wild", 250)).toBe(0);
+    expect(shots("main", 250)).toBe(0);
   });
 });
 

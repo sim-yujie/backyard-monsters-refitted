@@ -44,6 +44,7 @@ import { runningPowerups } from "../../../services/alliance/powerups.js";
 import { cellRelationship, findRelationships } from "../../../services/alliance/relationships.js";
 import { INFERNO_CHAT_CHANNEL } from "../../../config/ChatConfig.js";
 import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
+import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 
 type Stronghold = { level: number; cell?: { x: number; y: number } | null };
 
@@ -145,6 +146,11 @@ export const baseLoad: KoaController = async (ctx) => {
   const isOwner = user.userid === baseSave.userid;
   const isInferno = baseSave.type === BaseType.INFERNO;
   const isAttack = ATTACK_MODES.has(type);
+
+  // The target cell's height, which stretches an outpost's tower range in the
+  // engine; the attack save's loot replay reads the same stored value, so both
+  // fight the same battle (issue #179, `cellHeight.ts`).
+  const cellHeight = attacking ? await combatCellHeight(baseSave) : undefined;
 
   // The owner opening their own main yard: finish whatever ended while they
   // were away and write it, before anything below reads the yard
@@ -352,6 +358,7 @@ export const baseLoad: KoaController = async (ctx) => {
     chatservers: [process.env.CHAT_WS_HOST!],
     ...(isAttack && { attpowerups }),
     ...(attackerLevel !== undefined && { attackerlevel: attackerLevel }),
+    ...(cellHeight !== undefined && { cellheight: cellHeight }),
     ...(completed && { completed }),
     ...(isOwner && {
       chatenabled: 1,

@@ -48,6 +48,8 @@ for (const scenario of chosen) {
     description: scenario.description,
     yard: scenario.yard,
     kind: scenario.kind,
+    ...(scenario.health ? { health: scenario.health } : {}),
+    ...(scenario.height === undefined ? {} : { height: scenario.height }),
     ...(scenario.resources ? { resources: scenario.resources } : {}),
     levels: scenario.levels,
     playerLevel: scenario.playerLevel,

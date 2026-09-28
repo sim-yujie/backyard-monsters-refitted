@@ -1,6 +1,7 @@
 import type { BaseLoadResponse, BuildingData, Resources } from "@/api/types";
 import { ArtState, buildingName, maxHealth, resolveArt } from "./buildingArt";
 import { OUTPOST_CORE_TYPE } from "./buildingCostData";
+import { outpostTraitsOf } from "./buildingCosts";
 import {
   depthKey,
   footprintBox,
@@ -277,6 +278,23 @@ export interface ReadYardOptions {
 /** The `type` a wild monster camp's save carries (`server/src/enums/Base.ts`). */
 const TRIBE_TYPE = "tribe";
 
+/** The `type` a player's outpost save carries (`server/src/enums/Base.ts`). */
+const OUTPOST_TYPE = "outpost";
+
+/**
+ * Maximum health at a level, from the outpost table on an outpost.
+ *
+ * Flash swaps in `OUTPOST_YARD_PROPS` for an outpost, the owner's view and an
+ * attacker's alike (`client/scripts/GLOBAL.as:716-723`): the core's 200,000
+ * and the six-level towers' own ladders. A type it has no ladder for reads the
+ * main one ({@link maxHealth}).
+ */
+const maxHealthOn = (outpost: boolean, type: number, level: number): number | null => {
+  const ladder = outpost ? outpostTraitsOf(type)?.[2] : undefined;
+  if (!ladder || ladder.length === 0) return maxHealth(type, level);
+  return ladder[Math.min(Math.max(level - 1, 0), ladder.length - 1)] ?? null;
+};
+
 /** Builds the draw list from a `/base/load` response. */
 export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = {}): Yard => {
   const expansionLevel = response.storedata?.["ENL"]?.q ?? 0;
@@ -285,6 +303,7 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
   // plot `WMBASE.Setup` grows it to. See `wildYardSize`.
   const wild = response.type === TRIBE_TYPE;
   const foreign = wild || options.foreign === true;
+  const outpost = response.type === OUTPOST_TYPE;
   const bounds = yardBounds(expansionLevel, {
     wild,
     margin: foreign ? FOREIGN_YARD_MARGIN : YARD_MARGIN,
@@ -313,7 +332,7 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
     const level = typeof raw.cB === "number" && raw.cB > 0 ? 0 : stored;
 
     const hp = raw.hp ?? health[String(id)] ?? null;
-    const maxHp = maxHealth(raw.t, level);
+    const maxHp = maxHealthOn(outpost, raw.t, level);
     const condition = conditionOf(hp, maxHp);
 
     const world = yardToWorld(bounds, x, y);

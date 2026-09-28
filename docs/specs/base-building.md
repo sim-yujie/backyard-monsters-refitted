@@ -640,8 +640,11 @@ of two buttons (`client/scripts/BUILDINGINFO.as:129-141`):
 resource packages, and awards empire points equal to the amount banked (halved after tutorial stage
 200) (`client/scripts/BRESOURCE.as:441-467`).
 
-**Outposts are different.** Outpost harvesters never buffer; they feed a continuous "gross income
-per second" figure that is credited to the main yard automatically. `AutoBankManager.autobank()`
+**Outposts are different.** Outpost harvesters never bank a buffer of their own; they feed a
+continuous "gross income per second" figure that is credited to the main yard automatically. Only
+when an attack loads is each given one, half its capacity above half health and a quarter at or
+below, which the attacker loots out of the owner's pool (`client/scripts/BRESOURCE.as:506-518`,
+`docs/specs/combat.md` "Loot", issue #179). `AutoBankManager.autobank()`
 runs every 10 seconds from the yard tick (`client/scripts/BASE.as:2539-2543`) and funds
 `GIP * overdrive * seconds / 10` into the pool, awarding `ceil(total * 0.375)` empire points
 (`client/scripts/com/monsters/autobanking/AutoBankManager.as:299-330`). On load, the whole offline

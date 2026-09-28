@@ -51,6 +51,55 @@ const input = (tick: number, overrides: Partial<AbandonedInput> = {}): Abandoned
   ...overrides,
 });
 
+/** An `academy` blob out of a fixture's levels. */
+const academyOf = (levels: Record<string, number>) =>
+  Object.fromEntries(Object.entries(levels).map(([id, level]) => [id, { level }]));
+
+describe("replayAbandonedAttack on an outpost (issue #179)", () => {
+  const FIXTURE = fileURLToPath(
+    new URL("../../../../../web/test/fixtures/combat/outpost-core.json", import.meta.url)
+  );
+  const one = JSON.parse(readFileSync(FIXTURE, "utf8"));
+  const outpost = (height: number | undefined) =>
+    replayAbandonedAttack(
+      input(8000, {
+        defender: {
+          type: "outpost",
+          buildingdata: one.yard,
+          buildinghealthdata: one.health,
+          resources: one.resources,
+          height,
+        },
+        attacker: { academy: academyOf(one.levels), champion: [], siege: null },
+        log: one.log,
+        playerLevel: one.playerLevel,
+      })
+    );
+
+  test("fights the battle the shared replay fights, on the cell's height", () => {
+    const replayed = replayAttack({
+      buildingdata: one.yard,
+      buildinghealthdata: one.health,
+      resources: one.resources,
+      kind: "outpost",
+      height: one.height,
+      log: one.log,
+      levels: one.levels,
+      playerLevel: one.playerLevel,
+      tailTicks: 8000 - one.log.events[0].t,
+    });
+    const left = outpost(one.height);
+    expect(left.buildinghealthdata).toEqual({ ...replayed.health });
+    expect(left.attackloot.r1).toBe(Math.floor(replayed.attackloot.r1));
+    expect(left.defenderDelta.r1).toBe(-Math.floor(replayed.defenderLoss.r1));
+    expect(left.destroyed).toBe(replayed.destroyed);
+  });
+
+  test("reads the height it is handed: flat ground is a different battle", () => {
+    expect(outpost(0).attackloot).not.toEqual(outpost(one.height).attackloot);
+  });
+});
+
 describe("replayAbandonedAttack", () => {
   const early = replayAbandonedAttack(input(1600));
   const later = replayAbandonedAttack(input(4000));

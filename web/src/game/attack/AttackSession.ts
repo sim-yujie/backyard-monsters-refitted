@@ -234,6 +234,13 @@ export const servedLevel = (raw: unknown): number | undefined =>
   typeof raw === "number" && Number.isSafeInteger(raw) && raw >= 1 ? raw : undefined;
 
 /**
+ * The load's `cellheight`, when it is a whole height of 0 or more; 0 otherwise,
+ * which leaves every tower at its table range (`towerRange`).
+ */
+export const servedHeight = (raw: unknown): number =>
+  typeof raw === "number" && Number.isSafeInteger(raw) && raw >= 0 ? raw : 0;
+
+/**
  * The target kind as the rules module spells it. The two agree by name, but a
  * Map Room 1 tribe, which the map hands over as `wild`, is the rules' `tribe`:
  * Flash's lower loot for a wild monster camp is Map Room 2's alone
@@ -331,6 +338,7 @@ export class AttackSession {
       buildinghealthdata: response.buildinghealthdata ?? null,
       resources: response.resources ?? null,
       kind,
+      height: servedHeight(response.cellheight),
     });
     this.combatYard = toCombatYard({
       kind,

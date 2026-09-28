@@ -1,0 +1,260 @@
+{
+  "name": "outpost-core",
+  "description": "A player outpost on a cell of height 250: the core, six-level outpost towers, four harvesters (two damaged), one wave that levels it (issue #179).",
+  "yard": {
+    "0": {
+      "id": 0,
+      "t": 112,
+      "l": 1,
+      "X": 0,
+      "Y": -50
+    },
+    "1": {
+      "id": 1,
+      "t": 23,
+      "l": 6,
+      "X": 200,
+      "Y": -50
+    },
+    "2": {
+      "id": 2,
+      "t": 25,
+      "l": 6,
+      "X": -200,
+      "Y": -50
+    },
+    "3": {
+      "id": 3,
+      "t": 118,
+      "l": 6,
+      "X": 0,
+      "Y": 150
+    },
+    "4": {
+      "id": 4,
+      "t": 20,
+      "l": 10,
+      "X": 0,
+      "Y": -250
+    },
+    "5": {
+      "id": 5,
+      "t": 1,
+      "l": 10,
+      "X": 300,
+      "Y": 200
+    },
+    "6": {
+      "id": 6,
+      "t": 2,
+      "l": 10,
+      "X": -300,
+      "Y": 200
+    },
+    "7": {
+      "id": 7,
+      "t": 3,
+      "l": 8,
+      "X": 300,
+      "Y": -300
+    },
+    "8": {
+      "id": 8,
+      "t": 4,
+      "l": 6,
+      "X": -300,
+      "Y": -300
+    }
+  },
+  "kind": "outpost",
+  "health": {
+    "6": 40000,
+    "8": 3000
+  },
+  "height": 250,
+  "resources": {
+    "r1": 30000000,
+    "r2": 30000000,
+    "r3": 30000000,
+    "r4": 8000000
+  },
+  "levels": {
+    "C1": 6,
+    "C2": 6,
+    "C3": 6,
+    "C4": 6,
+    "C5": 6,
+    "C6": 6,
+    "C7": 6,
+    "C8": 6,
+    "C13": 6,
+    "C14": 6
+  },
+  "playerLevel": 20,
+  "tailTicks": 24000,
+  "log": {
+    "v": 1,
+    "seed": 179,
+    "events": [
+      {
+        "kind": "fling",
+        "t": 80,
+        "x": 600,
+        "y": 0,
+        "r": 300,
+        "monsters": {
+          "C3": 150,
+          "C6": 80,
+          "C8": 40
+        }
+      }
+    ]
+  },
+  "expected": {
+    "ticks": 24000,
+    "damage": 100,
+    "destroyed": 1,
+    "attackloot": {
+      "r1": 1888533,
+      "r2": 1705486,
+      "r3": 1628842,
+      "r4": 237785
+    },
+    "defenderLoss": {
+      "r1": 1890933,
+      "r2": 1708006,
+      "r3": 1631282,
+      "r4": 240385
+    },
+    "firedTraps": 0,
+    "destroyedBuildings": 9,
+    "creepsFlung": 270,
+    "creepsKilled": 39,
+    "championHp": null,
+    "damagedBuildings": 9,
+    "rngDraws": 250167,
+    "checkpoints": [
+      {
+        "tick": 800,
+        "digest": "0c82466e55f659ac"
+      },
+      {
+        "tick": 1600,
+        "digest": "05820670f5698346"
+      },
+      {
+        "tick": 2400,
+        "digest": "0f1380ed91d9f88b"
+      },
+      {
+        "tick": 3200,
+        "digest": "5d46e512eb1ddba4"
+      },
+      {
+        "tick": 4000,
+        "digest": "491bc131ee6d6923"
+      },
+      {
+        "tick": 4800,
+        "digest": "5c7f5b1c69e3181e"
+      },
+      {
+        "tick": 5600,
+        "digest": "262a3cf3eb72089d"
+      },
+      {
+        "tick": 6400,
+        "digest": "021a0b6f8fa1ccb1"
+      },
+      {
+        "tick": 7200,
+        "digest": "57a70bda32bbeb5c"
+      },
+      {
+        "tick": 8000,
+        "digest": "23666ba1f89b6b13"
+      },
+      {
+        "tick": 8800,
+        "digest": "b0543e873b9b7ee9"
+      },
+      {
+        "tick": 9600,
+        "digest": "7ca8f68cd8662ece"
+      },
+      {
+        "tick": 10400,
+        "digest": "620e33d226cec394"
+      },
+      {
+        "tick": 11200,
+        "digest": "3d856063dbf2820d"
+      },
+      {
+        "tick": 12000,
+        "digest": "d82dd159ae069a4b"
+      },
+      {
+        "tick": 12800,
+        "digest": "3c3c7b9fc3533da1"
+      },
+      {
+        "tick": 13600,
+        "digest": "584cc7e48a41af86"
+      },
+      {
+        "tick": 14400,
+        "digest": "b339f24ad6082b8c"
+      },
+      {
+        "tick": 15200,
+        "digest": "18d13b3b3e3d1d05"
+      },
+      {
+        "tick": 16000,
+        "digest": "44efb0d1b98905c3"
+      },
+      {
+        "tick": 16800,
+        "digest": "c7d3864e73d88168"
+      },
+      {
+        "tick": 17600,
+        "digest": "03ab9117bc3781b9"
+      },
+      {
+        "tick": 18400,
+        "digest": "30c2b74ff097efe1"
+      },
+      {
+        "tick": 19200,
+        "digest": "ab2d5ebce071ddbe"
+      },
+      {
+        "tick": 20000,
+        "digest": "b60d1355820b7a2f"
+      },
+      {
+        "tick": 20800,
+        "digest": "7400b862b01dd524"
+      },
+      {
+        "tick": 21600,
+        "digest": "7a292cbba1417895"
+      },
+      {
+        "tick": 22400,
+        "digest": "79e78a53a0133a7d"
+      },
+      {
+        "tick": 23200,
+        "digest": "cbab0d60d16fd04a"
+      },
+      {
+        "tick": 24000,
+        "digest": "8ab588a90158711b"
+      }
+    ],
+    "digest": "8ab588a90158711b"
+  }
+}

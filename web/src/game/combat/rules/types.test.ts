@@ -9,6 +9,7 @@ import {
   RESOURCE_KEYS,
   toCombatYard,
 } from "./types";
+import { damagePercent } from "./damagePercent";
 
 /**
  * The readers the two trees build a context with.
@@ -120,5 +121,36 @@ describe("toCombatYard", () => {
     const yard = toCombatYard({ buildingdata: { "1": { id: 1, t: 130 } } });
     expect(yard.byId.get(1)?.maxHp).toBe(0);
     expect(yard.byId.get(1)?.hp).toBe(0);
+  });
+});
+
+/** A player's Map Room 2 outpost reads the outpost props table (issue #179). */
+describe("toCombatYard on an outpost", () => {
+  const buildingdata = {
+    "1": { id: 1, t: 112, l: 1, X: 0, Y: 0 },
+    "2": { id: 2, t: 23, l: 6, X: 200, Y: 0 },
+    "3": { id: 3, t: 1, l: 10, X: 400, Y: 0, st: 5 },
+  };
+
+  it("takes the outpost ladders, the core's 200,000 among them", () => {
+    const yard = toCombatYard({ kind: "outpost", buildingdata, buildinghealthdata: { "1": 50_000 } });
+    expect(yard.byId.get(1)?.maxHp).toBe(200_000);
+    expect(yard.byId.get(1)?.hp).toBe(50_000);
+    expect(yard.byId.get(2)?.maxHp).toBe(60_200);
+    const main = toCombatYard({ buildingdata });
+    expect(main.byId.get(1)?.maxHp).toBe(0);
+    expect(main.byId.get(2)?.maxHp).toBe(42_200);
+  });
+
+  it("banks each harvester the buffer an attack gives it, not its st", () => {
+    expect(toCombatYard({ kind: "outpost", buildingdata }).byId.get(3)?.banked).toBe(387_509);
+    expect(toCombatYard({ buildingdata }).byId.get(3)?.banked).toBe(5);
+  });
+
+  it("counts the core in the damage percentage, as `getBuildingSaveData` does", () => {
+    const health = { "1": 0 };
+    const yard = toCombatYard({ kind: "outpost", buildingdata, buildinghealthdata: health });
+    // 200,000 of 200,000 + 60,200 + 165,000 lost.
+    expect(damagePercent(yard, health)).toBeCloseTo((100 * 200_000) / 425_200, 10);
   });
 });

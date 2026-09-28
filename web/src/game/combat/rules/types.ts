@@ -1,4 +1,4 @@
-import { hpLadder, maxHp } from "./stats.js";
+import { hpLadder, maxHp, outpostHarvesterStock } from "./stats.js";
 
 /**
  * The shapes the Phase A bound model and the Phase B replay are written over.
@@ -113,11 +113,14 @@ export interface CombatBuilding {
   readonly x: number;
   readonly y: number;
   readonly fortification: number;
-  /** `maxHp(type, level)`, 0 for a type with no health ladder. */
+  /** `maxHp(type, level, kind)`, 0 for a type with no health ladder. */
   readonly maxHp: number;
   /** Health at the reference point: the stored map, or full when it has none. */
   readonly hp: number;
-  /** A harvester's banked buffer, `st`, which loot can also draw from. */
+  /**
+   * A harvester's banked buffer, which loot can also draw from: `st`, or on
+   * an outpost the buffer an attack gives it (`stats.ts` `outpostHarvesterStock`).
+   */
   readonly banked: number;
   /**
    * A trap that has already fired, or a type 53 past its expiry.
@@ -171,6 +174,7 @@ const levelOf = (data: CombatBuildingData): number => {
  */
 export const toCombatYard = (input: CombatYardInput): CombatYard => {
   const health = input.buildinghealthdata ?? {};
+  const kind = input.kind ?? "main";
   const spent = new Set(input.spent ?? []);
   const buildings: CombatBuilding[] = [];
 
@@ -180,9 +184,13 @@ export const toCombatYard = (input: CombatYardInput): CombatYard => {
     const id = Math.floor(numberOf(data.id ?? key));
     const type = Math.floor(numberOf(data.t));
     const level = levelOf(data);
-    const ceiling = maxHp(type, level);
+    const ceiling = maxHp(type, level, kind);
     const reported = health[String(id)];
     const stored = reported === undefined ? numberOf(data.hp ?? ceiling) : numberOf(reported);
+
+    // A type with no ladder reads 0 either way; clamping keeps a stored map
+    // that outran a downgrade from making a building healthier than it is.
+    const hp = hpLadder(type, kind).length === 0 ? 0 : Math.max(0, Math.min(ceiling, stored));
 
     buildings.push({
       id,
@@ -192,10 +200,11 @@ export const toCombatYard = (input: CombatYardInput): CombatYard => {
       y: numberOf(data.Y),
       fortification: Math.max(0, Math.floor(numberOf(data.fort))),
       maxHp: ceiling,
-      // A type with no ladder reads 0 either way; clamping keeps a stored map
-      // that outran a downgrade from making a building healthier than it is.
-      hp: hpLadder(type).length === 0 ? 0 : Math.max(0, Math.min(ceiling, stored)),
-      banked: Math.max(0, numberOf(data.st)),
+      hp,
+      banked:
+        kind === "outpost"
+          ? outpostHarvesterStock(type, level, hp, ceiling)
+          : Math.max(0, numberOf(data.st)),
       spent: spent.has(id),
     });
   }
@@ -203,7 +212,7 @@ export const toCombatYard = (input: CombatYardInput): CombatYard => {
   buildings.sort((one, other) => one.id - other.id);
 
   return {
-    kind: input.kind ?? "main",
+    kind,
     buildings,
     byId: new Map(buildings.map((building) => [building.id, building])),
   };

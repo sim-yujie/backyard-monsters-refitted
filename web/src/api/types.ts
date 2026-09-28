@@ -509,6 +509,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * server's loot replay runs at the same level (issue #167).
    */
   attackerlevel?: number;
+  /**
+   * Map Room 2 attack loads only: the target cell's height, `i`, which
+   * stretches an outpost's tower range (`BTOWER.as:80-85`). The server's loot
+   * replay reads the same stored value (`world_map_cell.terrainHeight`).
+   */
+  cellheight?: number;
   /** The base owner's running alliance powerups. */
   powerups?: unknown[];
   /**

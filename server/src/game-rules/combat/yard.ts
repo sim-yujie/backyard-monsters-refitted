@@ -1,5 +1,5 @@
 import { GRID_COST, TRAP_STATS } from "./combatStatsData.js";
-import { hpLadder, isTower, maxHp, trapStats } from "./stats.js";
+import { hpLadder, isTower, maxHp, outpostHarvesterStock, trapStats } from "./stats.js";
 import { numberOf } from "./types.js";
 import type {
   BuildingHealthMap,
@@ -410,6 +410,11 @@ export interface EngineYard {
   readonly resources: ResourceAmounts;
   /** What the yard is, which scales what storage gives up. */
   readonly kind: CombatTargetKind;
+  /**
+   * The map cell's height, `i`, which stretches tower range on an outpost
+   * (`stats.ts` `towerRange`); 0 when the load named none.
+   */
+  readonly height: number;
 }
 
 /** What {@link buildEngineYard} is handed. */
@@ -420,6 +425,8 @@ export interface EngineYardInput {
   readonly buildinghealthdata?: BuildingHealthMap | null;
   readonly resources?: Partial<ResourceAmounts> | null;
   readonly kind?: CombatTargetKind;
+  /** The map cell's height, as the attack load served it (`cellheight`). */
+  readonly height?: number | null;
 }
 
 /**
@@ -427,17 +434,22 @@ export interface EngineYardInput {
  *
  * A trap's `hp` is on its props entry like any other building's and `TRAP_STATS`
  * carries it too; the two agree, so this prefers the ladder and falls back to
- * the trap table for a type whose ladder the generator did not find.
+ * the trap table for a type whose ladder the generator did not find. On an
+ * outpost the outpost table's ladder is read (`stats.ts` `maxHp`).
  */
-export const buildingMaxHp = (type: number, level: number): number => {
-  const fromLadder = maxHp(type, level);
+export const buildingMaxHp = (
+  type: number,
+  level: number,
+  kind: CombatTargetKind = "main",
+): number => {
+  const fromLadder = maxHp(type, level, kind);
   if (fromLadder > 0) return fromLadder;
   return trapStats(type)?.hp ?? 0;
 };
 
 /** Whether a type has any health at all, which three of 140 props entries lack. */
-export const hasHealth = (type: number): boolean =>
-  hpLadder(type).length > 0 || TRAP_STATS[type] !== undefined;
+export const hasHealth = (type: number, kind: CombatTargetKind = "main"): boolean =>
+  hpLadder(type, kind).length > 0 || TRAP_STATS[type] !== undefined;
 
 /**
  * Turn stored `buildingdata` into the yard the engine simulates.
@@ -448,6 +460,10 @@ export const hasHealth = (type: number): boolean =>
  * with no `id` takes its map key, which is what the stored shape means. Levels
  * and health use the same two defaults `toCombatYard()` applies: an absent `l`
  * is level 1 and an absent health entry is full health.
+ *
+ * On an outpost every ladder is the outpost table's, and a harvester holds
+ * the buffer an attack gives it rather than its `st`
+ * ({@link outpostHarvesterStock}).
  */
 export const buildEngineYard = (input: EngineYardInput): EngineYard => {
   const raw = input.buildingdata;
@@ -463,6 +479,7 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
   list.sort((one, other) => one.id - other.id);
 
   const health = input.buildinghealthdata ?? {};
+  const yardKind = input.kind ?? "main";
   const buildings: EngineBuilding[] = [];
 
   for (const { id, data } of list) {
@@ -472,11 +489,16 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
     const footprint = footprintOf(type);
     const onScreen = screenOf(numberOf(data.X), numberOf(data.Y));
     const anchor = fromIso(onScreen.x, onScreen.y);
-    const ceiling = buildingMaxHp(type, level);
+    const ceiling = buildingMaxHp(type, level, yardKind);
     const reported = health[String(id)];
+    const hp =
+      reported === undefined ? ceiling : Math.max(0, Math.min(ceiling, numberOf(reported)));
     const kind = buildingClass(type);
     const trap = kind === "trap";
-    const banked = Math.max(0, numberOf(data.st));
+    const banked =
+      yardKind === "outpost"
+        ? outpostHarvesterStock(type, level, hp, ceiling)
+        : Math.max(0, numberOf(data.st));
     buildings.push({
       id,
       type,
@@ -495,7 +517,7 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
       fortification: Math.max(0, Math.floor(numberOf(data.fort))),
       tower: isTower(type),
       trap,
-      hp: reported === undefined ? ceiling : Math.max(0, Math.min(ceiling, numberOf(reported))),
+      hp,
       fired: trap && reported === 0,
       looted: banked <= 0,
       stored: banked,
@@ -516,7 +538,8 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
       r3: Math.max(0, numberOf(pool.r3)),
       r4: Math.max(0, numberOf(pool.r4)),
     },
-    kind: input.kind ?? "main",
+    kind: yardKind,
+    height: Math.max(0, Math.trunc(numberOf(input.height))),
   };
 };
 

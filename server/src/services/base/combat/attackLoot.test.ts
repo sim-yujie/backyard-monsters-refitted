@@ -42,6 +42,10 @@ interface Fixture {
   name: string;
   yard: "sandbox" | Record<string, Record<string, number>>;
   kind: "main" | "outpost" | "wild";
+  /** `buildinghealthdata`, when the yard opens damaged. */
+  health?: Record<string, number>;
+  /** The map cell's height, which stretches an outpost's tower range. */
+  height?: number;
   resources?: Record<string, number>;
   levels: Record<string, number>;
   log: FlingLog;
@@ -64,7 +68,13 @@ const defenderOf = (one: Fixture): LootDefender =>
         buildinghealthdata: sandbox.buildinghealthdata,
         resources: sandbox.resources,
       }
-    : { type: TYPE_OF[one.kind], buildingdata: one.yard as never, buildinghealthdata: {}, resources: one.resources ?? {} };
+    : {
+        type: TYPE_OF[one.kind],
+        buildingdata: one.yard as never,
+        buildinghealthdata: one.health ?? {},
+        resources: one.resources ?? {},
+        ...(one.height !== undefined && { height: one.height }),
+      };
 
 /** The attacker who fought the fixture: its academy, a Krallen, a level 5 catapult. */
 const attackerOf = (one: Fixture): LootAttacker => ({
@@ -99,7 +109,7 @@ const negative = (amounts: Record<string, number>) =>
  * `AttackSession`: the engine, each event at its tick, stopped at `end`, at
  * the level the attack load served; the loot it would report.
  */
-const honestClient = (one: Fixture, end: number, playerLevel?: number) => {
+const honestClient = (one: Fixture, end: number, playerLevel?: number, height = defenderOf(one).height) => {
   const defender = defenderOf(one);
   const battle = createBattle(
     buildEngineYard({
@@ -107,6 +117,8 @@ const honestClient = (one: Fixture, end: number, playerLevel?: number) => {
       buildinghealthdata: defender.buildinghealthdata ?? null,
       resources: defender.resources as never,
       kind: one.kind,
+      // What `AttackSession.load` reads off the load's `cellheight`.
+      height: height ?? null,
     }),
     { seed: one.log.seed, levels: one.levels, declareWar: false, ...(playerLevel !== undefined && { playerLevel }) }
   );
@@ -155,6 +167,48 @@ describe("an honest attack is credited in full", () => {
     );
   }
 
+});
+
+/**
+ * A player's outpost (issue #179): the core, the outpost ladders, the
+ * harvesters' attack buffer and the cell's height all reach the replay as
+ * they reach the client, so an honest attack is credited in full, and a
+ * client that ignored the height fights a battle the server does not.
+ */
+describe("an attack on an outpost", () => {
+  const one = fixture("outpost-core");
+
+  test(
+    "is credited in full, the core's fall and the harvesters' buffers included",
+    () => {
+      const client = honestClient(one, FULL);
+      const loot = lootFor(one, client.attackloot, { reported: negative(client.defenderLoss) });
+      expect(loot.basis).toBe("replay");
+      // The core fell: a twentieth of 30M twigs is 1.5M, far beyond what the hits drew.
+      expect(client.attackloot.r1).toBeGreaterThan(1_500_000);
+      expect(loot.credit).toEqual(client.attackloot);
+      expect(loot.defenderDelta).toEqual(negative(client.defenderLoss) as never);
+    },
+    REPLAY_TIMEOUT_MS
+  );
+
+  test(
+    "is replayed on the cell's height: a battle fought on flat ground is not the one credited",
+    () => {
+      expect(one.height).toBe(250);
+      const flat = honestClient(one, FULL, undefined, 0);
+      const real = honestClient(one, FULL);
+      expect(flat.attackloot).not.toEqual(real.attackloot);
+      const loot = lootFor(one, flat.attackloot, { reported: negative(flat.defenderLoss) });
+      const keys = ["r1", "r2", "r3", "r4"] as const;
+      for (const key of keys) {
+        expect(loot.credit[key]).toBe(Math.min(flat.attackloot[key], real.attackloot[key]));
+      }
+      // The towers reach further at height 250, so the flat battle claimed more than was there.
+      expect(keys.some((key) => loot.credit[key] < flat.attackloot[key])).toBe(true);
+    },
+    REPLAY_TIMEOUT_MS
+  );
 });
 
 describe("a low-level attacker (issue #167)", () => {

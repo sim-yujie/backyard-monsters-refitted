@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import { ATTACK_COUNTDOWN_SECONDS, DECLARE_WAR_COUNTDOWN_SECONDS, TICKS_PER_SECOND } from "@/game/combat/rules";
-import { AttackSession, combatKind, hasDeclareWar, mintSeed } from "./AttackSession";
+import { AttackSession, combatKind, hasDeclareWar, mintSeed, servedHeight } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 
 /**
@@ -139,6 +139,43 @@ describe("AttackSession loot level (#167)", () => {
   it("prefers a level it was handed, and ignores a served level that is not one", () => {
     expect(twigsTaken(hallYard(1), 20)).toBe(10_000);
     expect(twigsTaken({ ...hallYard(), attackerlevel: 0 } as BaseLoadResponse)).toBe(10_000);
+  });
+});
+
+describe("AttackSession on an outpost (#179)", () => {
+  /**
+   * A level 1 Laser (range 160) and a Town Hall 200 away that three Pokeys
+   * attack: out of the laser's reach on flat ground, inside it on a cell of
+   * height 250, which the load serves as `cellheight` (`BTOWER.as:80-85`).
+   */
+  const laserShots = (cellheight?: number): number => {
+    const session = new AttackSession({ target: targetOf({ kind: "outpost" }), seed: 1 });
+    session.load({
+      ...towerYard(),
+      buildingdata: {
+        "1": { id: 1, t: 23, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 14, l: 5, X: 200, Y: 0 },
+      },
+      ...(cellheight === undefined ? {} : { cellheight }),
+    } as unknown as BaseLoadResponse);
+    session.appendFling({ x: 400, y: 60, monsters: { C1: 3 } });
+    play(session, 20);
+    return session.battle()!.state().towers[0]?.shots ?? 0;
+  };
+
+  it("stretches tower range by the served cell height", () => {
+    expect(laserShots(250)).toBeGreaterThan(0);
+    expect(laserShots()).toBe(0);
+    expect(laserShots(90)).toBe(0);
+  });
+
+  it("reads a served height only when it is a whole number of 0 or more", () => {
+    expect(servedHeight(250)).toBe(250);
+    expect(servedHeight(0)).toBe(0);
+    expect(servedHeight(-5)).toBe(0);
+    expect(servedHeight(12.5)).toBe(0);
+    expect(servedHeight("250")).toBe(0);
+    expect(servedHeight(undefined)).toBe(0);
   });
 });
 

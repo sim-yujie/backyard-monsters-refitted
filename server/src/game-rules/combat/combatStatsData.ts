@@ -778,6 +778,176 @@ export const MR2_CAPACITY: Readonly<Record<number, readonly number[]>> = {
 };
 
 /**
+ * An outpost's own health ladders, `hp[level - 1]`, where they differ from
+ * {@link BUILDING_HP}.
+ *
+ * `GLOBAL.SetBuildingProps` reads `OUTPOST_YARD_PROPS.as` for a player's Map
+ * Room 2 outpost (`client/scripts/GLOBAL.as:716-723`), the attacker's view of
+ * it included. The core (112) has health only here: the main table gives it
+ * none, so without this row it could never be hit. The railgun's level 6 reads
+ * 13,200, below its level 5; that is what Flash ran. A type with no row reads
+ * the main ladder.
+ */
+export const OUTPOST_BUILDING_HP: Readonly<Record<number, readonly number[]>> = {
+  // 5 Flinger (special) — OUTPOST_YARD_PROPS.as:594
+  5: [
+    4000, 8000, 16000, 28000,
+  ],
+  // 14 Town Hall (special) — OUTPOST_YARD_PROPS.as:950
+  14: [
+    4000, 8800, 20000, 42000, 94000, 200000, 300000, 400000,
+  ],
+  // 15 Housing (special) — OUTPOST_YARD_PROPS.as:1114
+  15: [
+    4000, 14000, 25000, 43000, 75000, 130000,
+  ],
+  // 22 Monster Bunker (tower) — OUTPOST_YARD_PROPS.as:1827
+  22: [
+    10000, 24500, 52000, 130000,
+  ],
+  // 23 Laser Tower (tower) — OUTPOST_YARD_PROPS.as:1896
+  23: [
+    9000, 12600, 17640, 26460, 34400, 60200,
+  ],
+  // 25 Tesla Tower (tower) — OUTPOST_YARD_PROPS.as:2107
+  25: [
+    15000, 22000, 30000, 48000, 60000, 72000,
+  ],
+  // 112 b_outpost (special) — OUTPOST_YARD_PROPS.as:5152
+  112: [
+    200000,
+  ],
+  // 115 Aerial Defense Tower (tower) — OUTPOST_YARD_PROPS.as:5275
+  115: [
+    15000, 22000, 30000, 48000, 60000, 75000,
+  ],
+  // 118 Railgun (tower) — OUTPOST_YARD_PROPS.as:5492
+  118: [
+    17640, 34400, 45000, 58000, 75500, 13200,
+  ],
+  // 121 bdg_wmitotem1 (decoration) — OUTPOST_YARD_PROPS.as:5690
+  121: [
+    100,
+  ],
+  // 122 placeholder (placeholder) — OUTPOST_YARD_PROPS.as:5723
+  122: [
+    100,
+  ],
+  // 123 placeholder (placeholder) — OUTPOST_YARD_PROPS.as:5756
+  123: [
+    100,
+  ],
+  // 124 placeholder (placeholder) — OUTPOST_YARD_PROPS.as:5789
+  124: [
+    100,
+  ],
+  // 125 placeholder (placeholder) — OUTPOST_YARD_PROPS.as:5822
+  125: [
+    100,
+  ],
+  // 126 placeholder (placeholder) — OUTPOST_YARD_PROPS.as:5855
+  126: [
+    100,
+  ],
+  // 127 Inferno Cavern (enemy) — OUTPOST_YARD_PROPS.as:5888
+  127: [
+    1, 1, 1, 1,
+  ],
+  // 133 b_siegefactory (special) — OUTPOST_YARD_PROPS.as:6167
+  133: [
+    100, 100, 100, 100, 100, 100,
+  ],
+  // 134 b_siegeworks (special) — OUTPOST_YARD_PROPS.as:6244
+  134: [
+    100, 100, 100, 100, 100, 100,
+  ],
+};
+
+/**
+ * An outpost's own tower `stats`, where they differ from {@link TOWER_STATS}.
+ *
+ * The laser, tesla, flak, railgun and bunker stop at level 6 (the bunker at 4),
+ * and each top level is the outpost's own. A type with no row reads the main
+ * block.
+ */
+export const OUTPOST_TOWER_STATS: Readonly<Record<number, readonly TowerLevelStats[]>> = {
+  // 22 Monster Bunker (tower) — OUTPOST_YARD_PROPS.as:1827, stats :1839
+  22: [
+    { range: 300 }, { range: 350 }, { range: 400 }, { range: 450 },
+  ],
+  // 23 Laser Tower (tower) — OUTPOST_YARD_PROPS.as:1896, stats :1905
+  23: [
+    { range: 160, damage: 120, rate: 80, speed: 0, splash: 40 },
+    { range: 162, damage: 150, rate: 80, speed: 0, splash: 40 },
+    { range: 164, damage: 180, rate: 80, speed: 0, splash: 40 },
+    { range: 168, damage: 200, rate: 80, speed: 0, splash: 40 },
+    { range: 170, damage: 220, rate: 80, speed: 0, splash: 40 },
+    { range: 172, damage: 240, rate: 80, speed: 0, splash: 40 },
+  ],
+  // 25 Tesla Tower (tower) — OUTPOST_YARD_PROPS.as:2107, stats :2116
+  25: [
+    { range: 250, damage: 100, rate: 10, speed: 10, splash: 0 },
+    { range: 270, damage: 120, rate: 15, speed: 10, splash: 0 },
+    { range: 300, damage: 140, rate: 20, speed: 10, splash: 0 },
+    { range: 320, damage: 160, rate: 25, speed: 10, splash: 0 },
+    { range: 340, damage: 180, rate: 25, speed: 10, splash: 0 },
+    { range: 360, damage: 200, rate: 25, speed: 10, splash: 0 },
+  ],
+  // 115 Aerial Defense Tower (tower) — OUTPOST_YARD_PROPS.as:5275, stats :5285
+  115: [
+    { range: 300, damage: 200, rate: 60, speed: 20, splash: 180 },
+    { range: 320, damage: 250, rate: 60, speed: 24, splash: 185 },
+    { range: 340, damage: 250, rate: 60, speed: 28, splash: 190 },
+    { range: 360, damage: 250, rate: 60, speed: 32, splash: 195 },
+    { range: 380, damage: 300, rate: 60, speed: 36, splash: 200 },
+    { range: 400, damage: 350, rate: 60, speed: 40, splash: 205 },
+  ],
+  // 118 Railgun (tower) — OUTPOST_YARD_PROPS.as:5492, stats :5503
+  118: [
+    { range: 300, damage: 400, rate: 160, speed: 20, splash: 0 },
+    { range: 315, damage: 600, rate: 160, speed: 20, splash: 0 },
+    { range: 330, damage: 900, rate: 160, speed: 20, splash: 0 },
+    { range: 345, damage: 1200, rate: 160, speed: 20, splash: 0 },
+    { range: 360, damage: 1600, rate: 160, speed: 20, splash: 0 },
+    { range: 375, damage: 2000, rate: 160, speed: 20, splash: 0 },
+  ],
+  // 133 b_siegefactory (special) — OUTPOST_YARD_PROPS.as:6167, stats :6199
+  133: [
+    { range: 200, duration: 380, radius: 200 }, { range: 210, duration: 390, radius: 210 },
+    { range: 235, duration: 400, radius: 235 }, { range: 335, duration: 410, radius: 335 },
+    { range: 360, duration: 200, radius: 360 }, { range: 370, duration: 210, radius: 370 },
+    { range: 380, duration: 235, radius: 380 }, { range: 390, duration: 335, radius: 390 },
+    { range: 400, duration: 360, radius: 400 }, { range: 410, duration: 370, radius: 410 },
+  ],
+};
+
+/**
+ * Every `capacity` ladder of the outpost table a battle reads,
+ * `capacity[level - 1]`.
+ *
+ * The four harvesters, whose buffer an attack on an outpost is given half of,
+ * or a quarter when damaged (`client/scripts/BRESOURCE.as:504-518`), and the
+ * Flinger, Housing and Bunker, which carry their own ladders in the outpost
+ * table.
+ */
+export const OUTPOST_CAPACITY: Readonly<Record<number, readonly number[]>> = {
+  // 1 Twig Snapper (resource) — OUTPOST_YARD_PROPS.as:10
+  1: [720, 2160, 5670, 13365, 29160, 60142, 118918, 227584, 424414, 775018],
+  // 2 Pebble Shiner (resource) — OUTPOST_YARD_PROPS.as:156
+  2: [720, 2160, 5670, 13365, 29160, 60142, 118918, 227584, 424414, 775018],
+  // 3 Putty Squisher (resource) — OUTPOST_YARD_PROPS.as:302
+  3: [720, 2160, 5670, 13365, 29160, 60142, 118918, 227584, 424414, 775018],
+  // 4 Goo Factory (resource) — OUTPOST_YARD_PROPS.as:448
+  4: [720, 2160, 5670, 13365, 29160, 60142, 118918, 227584, 424414, 775018],
+  // 5 Flinger (special) — OUTPOST_YARD_PROPS.as:594
+  5: [500, 1000, 1750, 2250, 3000, 4000],
+  // 15 Housing (special) — OUTPOST_YARD_PROPS.as:1114
+  15: [200, 260, 320, 380, 450, 540],
+  // 22 Monster Bunker (tower) — OUTPOST_YARD_PROPS.as:1827
+  22: [380, 450, 540, 660],
+};
+
+/**
  * Which creeps a tower may shoot at: 0 ground only, 1 both, 2 air only.
  *
  * `BTOWER._targetFlyerMode` (`client/scripts/BTOWER.as:25-35`), read twice by

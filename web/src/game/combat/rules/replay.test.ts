@@ -29,6 +29,10 @@ interface Fixture {
   description: string;
   yard: "sandbox" | Record<string, Record<string, number>>;
   kind: "main" | "outpost" | "wild" | "tribe";
+  /** `buildinghealthdata`, when the yard opens damaged. */
+  health?: Record<string, number>;
+  /** The map cell's height, which stretches an outpost's tower range. */
+  height?: number;
   resources?: Record<string, number>;
   levels: Record<string, number>;
   playerLevel: number;
@@ -67,9 +71,10 @@ const inputOf = (fixture: Fixture) => {
   }
   return {
     buildingdata: fixture.yard,
-    buildinghealthdata: {},
+    buildinghealthdata: fixture.health ?? {},
     resources: fixture.resources ?? {},
     kind: fixture.kind,
+    ...(fixture.height === undefined ? {} : { height: fixture.height }),
     log: fixture.log,
     levels: fixture.levels,
     playerLevel: fixture.playerLevel,

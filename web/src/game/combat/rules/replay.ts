@@ -54,6 +54,8 @@ export interface ReplayInput {
   readonly buildinghealthdata?: BuildingHealthMap | null;
   readonly resources?: Partial<ResourceAmounts> | null;
   readonly kind?: CombatTargetKind;
+  /** The map cell's height, which stretches an outpost's tower range (`towerRange`). */
+  readonly height?: number | null;
   readonly log: FlingLog;
   /** The seed to run with; the log's `seed` when absent. */
   readonly seed?: number;
@@ -136,6 +138,7 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     buildinghealthdata: input.buildinghealthdata ?? null,
     resources: input.resources ?? null,
     kind: input.kind ?? "main",
+    height: input.height ?? null,
   });
 
   const options: BattleOptions = {

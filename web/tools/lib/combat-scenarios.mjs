@@ -49,6 +49,25 @@ const TINY_YARD = {
   1: { id: 1, t: 20, l: 1, X: 200, Y: 200 },
 };
 
+/**
+ * A player's Map Room 2 outpost: the core where an empty outpost places it
+ * (`client/scripts/BASE.as:1605-1614`), the six-level laser, tesla and railgun
+ * of the outpost table, a level 10 cannon, and one harvester of each resource.
+ * The pebble harvester (6) and the goo harvester (8) are below half health, so
+ * they hold a quarter of their capacity rather than half.
+ */
+const OUTPOST_YARD = {
+  0: { id: 0, t: 112, l: 1, X: 0, Y: -50 },
+  1: { id: 1, t: 23, l: 6, X: 200, Y: -50 },
+  2: { id: 2, t: 25, l: 6, X: -200, Y: -50 },
+  3: { id: 3, t: 118, l: 6, X: 0, Y: 150 },
+  4: { id: 4, t: 20, l: 10, X: 0, Y: -250 },
+  5: { id: 5, t: 1, l: 10, X: 300, Y: 200 },
+  6: { id: 6, t: 2, l: 10, X: -300, Y: 200 },
+  7: { id: 7, t: 3, l: 8, X: 300, Y: -300 },
+  8: { id: 8, t: 4, l: 6, X: -300, Y: -300 },
+};
+
 export const SCENARIOS = [
   {
     name: "pokey-rush",
@@ -139,9 +158,30 @@ export const SCENARIOS = [
       events: [{ kind: "fling", t: 80, x: 400, y: 400, r: 200, monsters: { C4: 12 } }],
     },
   },
+  {
+    name: "outpost-core",
+    description:
+      "A player outpost on a cell of height 250: the core, six-level outpost towers, four " +
+      "harvesters (two damaged), one wave that levels it (issue #179).",
+    yard: OUTPOST_YARD,
+    health: { 6: 40000, 8: 3000 },
+    height: 250,
+    kind: "outpost",
+    resources: { r1: 30_000_000, r2: 30_000_000, r3: 30_000_000, r4: 8_000_000 },
+    levels: MAXED,
+    playerLevel: 20,
+    tailTicks: 24000,
+    log: {
+      v: 1,
+      seed: 179,
+      events: [
+        { kind: "fling", t: 80, x: 600, y: 0, r: 300, monsters: { C3: 150, C6: 80, C8: 40 } },
+      ],
+    },
+  },
 ];
 
-/** The scenario the bench times, which is the busiest of the five. */
+/** The scenario the bench times, which is the busiest of them. */
 export const BENCH_SCENARIO = "mixed-waves";
 
 let sandbox = null;
@@ -163,9 +203,10 @@ export const scenarioInput = (scenario) => {
   }
   return {
     buildingdata: scenario.yard,
-    buildinghealthdata: {},
+    buildinghealthdata: scenario.health ?? {},
     resources: scenario.resources ?? {},
     kind: scenario.kind,
+    ...(scenario.height === undefined ? {} : { height: scenario.height }),
     log: scenario.log,
     levels: scenario.levels,
     playerLevel: scenario.playerLevel,

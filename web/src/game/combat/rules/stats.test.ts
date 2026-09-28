@@ -19,6 +19,7 @@ import {
   flyerMode,
   fortifiedDamage,
   gridCost,
+  hpLadder,
   hitsFlyers,
   hitsGround,
   isLootable,
@@ -27,6 +28,7 @@ import {
   maxBombDamage,
   maxBombSpend,
   maxHp,
+  outpostHarvesterStock,
   monsterAttackDelay,
   monsterIds,
   monsterRange,
@@ -40,6 +42,7 @@ import {
   TICKS_PER_SECOND,
   ticks,
   towerRearmTicks,
+  towerRange,
   towerStats,
   trapDamageAt,
   trapStats,
@@ -468,5 +471,90 @@ describe("the bomb blast (#75)", () => {
     expect(propsSizeOf(1)).toBe(100);
     // The Laser Tower's props entry has no `size`; `GameObject._size` is an int.
     expect(propsSizeOf(23)).toBe(0);
+  });
+});
+
+/**
+ * A player's Map Room 2 outpost reads `OUTPOST_YARD_PROPS.as`
+ * (`client/scripts/GLOBAL.as:716-723`), issue #179.
+ */
+describe("the outpost props table", () => {
+  it("gives the core 200,000 health on an outpost and none anywhere else", () => {
+    expect(maxHp(112, 1, "outpost")).toBe(200_000);
+    expect(maxHp(112, 1)).toBe(0);
+    expect(maxHp(112, 1, "wild")).toBe(0);
+    expect(hpLadder(112, "outpost")).toEqual([200_000]);
+  });
+
+  it("reads the outpost's own six-level tower ladders, and the main ones where it has none", () => {
+    // Laser 6: 60,200 health and range 172 on an outpost, 42,200 and 175 on a main yard.
+    expect(maxHp(23, 6, "outpost")).toBe(60_200);
+    expect(maxHp(23, 6)).toBe(42_200);
+    expect(towerStats(23, 6, "outpost")?.range).toBe(172);
+    expect(towerStats(23, 6)?.range).toBe(175);
+    // A level past the outpost ladder clamps to its sixth level, as `atLevel` does.
+    expect(towerStats(23, 8, "outpost")).toEqual(towerStats(23, 6, "outpost"));
+    // The railgun's level 6 is 13,200, below its level 5; Flash ran it that way.
+    expect(maxHp(118, 6, "outpost")).toBe(13_200);
+    // The cannon's ladders are the same in both tables.
+    expect(maxHp(20, 10, "outpost")).toBe(maxHp(20, 10));
+    expect(towerStats(20, 10, "outpost")).toEqual(towerStats(20, 10));
+  });
+
+  it("reads harvester capacity only on an outpost", () => {
+    expect(capacity(1, 10, "outpost")).toBe(775_018);
+    expect(capacity(1, 10)).toBe(0);
+    expect(capacity(15, 6, "outpost")).toBe(540);
+  });
+});
+
+describe("towerRange: the terrain (`BTOWER.as:80-85`, `:94-99`)", () => {
+  const laser = towerStats(23, 1, "outpost")?.range ?? 0;
+
+  it("doubles at height 250 what it is at 125", () => {
+    expect(laser).toBe(160);
+    expect(towerRange(23, 1, "outpost", 125)).toBe(160);
+    expect(towerRange(23, 1, "outpost", 250)).toBe(320);
+  });
+
+  it("scales as int(h * range / 125) from height 100 up", () => {
+    expect(towerRange(23, 1, "outpost", 100)).toBe(128);
+    expect(towerRange(23, 1, "outpost", 131)).toBe(Math.trunc((131 * 160) / 125));
+    expect(towerRange(23, 1, "outpost", 131)).toBe(167);
+  });
+
+  it("leaves the table range below height 100", () => {
+    expect(towerRange(23, 1, "outpost", 99)).toBe(160);
+    expect(towerRange(23, 1, "outpost", 0)).toBe(160);
+  });
+
+  it("leaves a wild monster camp and a main yard alone, whatever the height", () => {
+    expect(towerRange(23, 1, "wild", 250)).toBe(towerStats(23, 1)?.range);
+    expect(towerRange(23, 1, "main", 250)).toBe(towerStats(23, 1)?.range);
+    expect(towerRange(23, 1, "tribe", 250)).toBe(towerStats(23, 1)?.range);
+  });
+
+  it("is undefined for a type with no range", () => {
+    expect(towerRange(14, 1, "outpost", 250)).toBeUndefined();
+  });
+});
+
+describe("outpostHarvesterStock (`BRESOURCE.as:506-518`)", () => {
+  const ceiling = maxHp(1, 10, "outpost");
+  const room = capacity(1, 10, "outpost");
+
+  it("holds half its capacity above half health", () => {
+    expect(outpostHarvesterStock(1, 10, ceiling * 0.6, ceiling)).toBe(Math.trunc(room * 0.5));
+    expect(outpostHarvesterStock(1, 10, ceiling, ceiling)).toBe(387_509);
+  });
+
+  it("holds a quarter at half health or below", () => {
+    expect(outpostHarvesterStock(1, 10, ceiling * 0.4, ceiling)).toBe(Math.trunc(room * 0.25));
+    expect(outpostHarvesterStock(1, 10, ceiling * 0.5, ceiling)).toBe(193_754);
+  });
+
+  it("holds nothing once destroyed, and nothing for a building that is not a harvester", () => {
+    expect(outpostHarvesterStock(1, 10, 0, ceiling)).toBe(0);
+    expect(outpostHarvesterStock(20, 1, 6000, 6000)).toBe(0);
   });
 });

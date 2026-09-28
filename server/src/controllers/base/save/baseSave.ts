@@ -60,6 +60,7 @@ import {
   wholeAmounts,
   type AttackLoot,
 } from "../../../services/base/combat/attackLoot.js";
+import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 
 /**
@@ -187,6 +188,7 @@ const saveBase = async (
             buildingdata: baseSave.buildingdata,
             buildinghealthdata: baseSave.buildinghealthdata,
             resources: (outpostOwnerSave ?? baseSave).resources,
+            height: await combatCellHeight(baseSave),
           },
           attacker: userSave,
           mapRoom3,

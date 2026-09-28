@@ -197,6 +197,19 @@ describe("damage", () => {
     expect(hurt.buildings[0]!.condition).toBe(BuildingCondition.DAMAGED);
   });
 
+  // Flash swaps in `OUTPOST_YARD_PROPS` for an outpost (`GLOBAL.as:716-723`), issue #179.
+  it("reads an outpost's health from the outpost table, the core's 200,000 among it", () => {
+    const buildings = {
+      "1": { X: 0, Y: 0, t: 112, id: 1, l: 1 },
+      "2": { X: 200, Y: 0, t: 23, id: 2, l: 6 },
+      "3": { X: 400, Y: 0, t: 20, id: 3, l: 10 },
+    };
+    const outpost = yardWith(buildings, { type: "outpost" });
+    expect(outpost.buildings.map((one) => one.maxHp)).toEqual([200_000, 60_200, 98_200]);
+    const main = yardWith(buildings, { type: "main" });
+    expect(main.buildings[1]!.maxHp).toBe(42_200);
+  });
+
   it("maps a condition to the art state the Flash client would render", () => {
     expect(artStateFor(BuildingCondition.HEALTHY)).toBe(ArtState.DEFAULT);
     expect(artStateFor(BuildingCondition.DAMAGED)).toBe(ArtState.DAMAGED);

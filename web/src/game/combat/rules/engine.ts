@@ -37,6 +37,7 @@ import {
   propsSizeOf,
   specialistMultiplier,
   ticks,
+  towerRange,
   towerStats,
   trapDamageAt,
   trapStats,
@@ -412,6 +413,8 @@ interface Creep {
 interface Tower {
   readonly building: EngineBuilding;
   readonly report: TowerReport;
+  /** What it reaches, in yard units, the cell's height applied (`towerRange`). */
+  readonly range: number;
   fireTick: number;
   targets: number[];
 }
@@ -543,10 +546,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       bunkers.push({ building, pool, dispatched: 0, tickNumber: 0 });
       continue;
     }
-    const stats = towerStats(building.type, building.level);
+    const stats = towerStats(building.type, building.level, yard.kind);
     if (!stats || stats.damage === undefined) continue;
     towers.push({
       building,
+      range: towerRange(building.type, building.level, yard.kind, yard.height) ?? 0,
       report: {
         id: building.id,
         type: building.type,
@@ -634,6 +638,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     building.stored -= taken;
     if (building.stored <= 0) building.looted = true;
     const key = `r${building.type}` as keyof ResourceAmounts;
+    // An outpost's buffer is given, not banked, so what it hands over comes
+    // out of the owner's pool too (`BRESOURCE.as:104-118`), before any later
+    // storage hit or fall reads it.
+    if (yard.kind === "outpost") yard.resources[key] = Math.max(0, yard.resources[key] - taken);
     defenderLoss[key] += taken;
     creditLoot(building.type, taken);
   };
@@ -1174,10 +1182,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const tickTower = (tower: Tower): void => {
     const building = tower.building;
     if (building.hp <= 0) return;
-    const stats = towerStats(building.type, building.level);
-    const range = stats?.range;
+    const stats = towerStats(building.type, building.level, yard.kind);
     const damage = stats?.damage;
-    if (range === undefined || damage === undefined) return;
+    if (stats?.range === undefined || damage === undefined) return;
+    const range = tower.range;
     tower.fireTick -= 1;
     if (tower.fireTick > 0) return;
     tower.fireTick += (stats?.rate ?? 0) * TOWER_REARM_MULTIPLIER;
@@ -1267,7 +1275,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     for (const count of bunker.pool.values()) left += count;
     if (left === 0) return;
 
-    const stats = towerStats(building.type, building.level);
+    const stats = towerStats(building.type, building.level, yard.kind);
     const range = stats?.range ?? 0;
     if (range <= 0) return;
     // A bunker sends its defenders at anything attacking, air or ground

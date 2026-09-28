@@ -46,6 +46,8 @@ export interface AbandonedDefender {
   buildinghealthdata: BuildingHealthMap | null | undefined;
   /** The pool the attack load served: the owner's for an outpost, the row's own otherwise. */
   resources: Partial<ResourceAmounts> | null | undefined;
+  /** The map cell's height, which stretches an outpost's tower range (`cellHeight.ts`). */
+  height?: number;
 }
 
 /** What the replay needs of the attacker's main save. */
@@ -194,6 +196,7 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
       buildinghealthdata: defender.buildinghealthdata ?? null,
       resources: defender.resources ?? null,
       kind,
+      height: defender.height ?? null,
     }),
     {
       seed: log.seed,

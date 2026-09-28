@@ -47,6 +47,8 @@ import { catapultLevelOf } from "./bombSpend.js";
  *   one their catapult unlocks and only the first of its resource
  *   ({@link fightableLog});
  * - uses the attacker's academy levels, as the client's roster does;
+ * - stretches an outpost's tower range by its cell's height, the stored value
+ *   the attack load served as `cellheight` (`cellHeight.ts`, issue #179);
  * - runs at the attacker's player level as the attack load served it (the
  *   session's `attackerlevel`), which is the level the client's engine ran at,
  *   so the low-level loot bonus (`ATTACK.as:678-680`) is the same on both
@@ -128,6 +130,8 @@ export interface LootDefender {
   buildinghealthdata: BuildingHealthMap | null | undefined;
   /** The pool the loot is drawn from now: the row's own, or its owner's for an outpost. */
   resources: JsonObject | null | undefined;
+  /** The map cell's height, which stretches an outpost's tower range (`cellHeight.ts`). */
+  height?: number;
 }
 
 /** What the replay needs of the attacker's main save, as it stood before this save. */
@@ -249,6 +253,7 @@ export const replayedLoot = ({
     buildinghealthdata: defender.buildinghealthdata ?? null,
     resources: pool,
     kind: combatKindOf(defender.type),
+    ...(defender.height !== undefined && { height: defender.height }),
     log: fightableLog(log, attacker, entryHoused),
     levels: academyLevels(attacker.academy),
     ...(playerLevel !== undefined && { playerLevel }),

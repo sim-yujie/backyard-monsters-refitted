@@ -6,6 +6,9 @@ import {
   GRID_COST_FORMULA,
   MONSTER_PROPS,
   MR2_CAPACITY,
+  OUTPOST_BUILDING_HP,
+  OUTPOST_CAPACITY,
+  OUTPOST_TOWER_STATS,
   PROPS_SIZE,
   TOWER_STATS,
   TRAP_STATS,
@@ -320,22 +323,89 @@ export const CHAMPION_MAX_POWER_LEVEL = 3;
 /* ── Buildings ────────────────────────────────────────────────────────────── */
 
 /**
+ * Whether a yard of `kind` reads the outpost props table.
+ *
+ * `GLOBAL.SetBuildingProps` swaps in `OUTPOST_YARD_PROPS._outpostProps` when
+ * the yard type is `EnumYardType.OUTPOST` (`client/scripts/GLOBAL.as:716-723`),
+ * which is what an attack on a player's Map Room 2 outpost loads as
+ * (`MR2/PopupAttackA.as:125-127`). A wild monster camp loads as a main yard
+ * (`:122-123`), so it keeps the main table.
+ */
+const readsOutpostProps = (kind: CombatTargetKind): boolean => kind === "outpost";
+
+/**
  * A building's health at one level, 0 for a type with no ladder.
  *
- * Three of the 140 props entries have no `hp`; none of them is targetable.
+ * Three of the 140 props entries have no `hp`; none of them is targetable. On
+ * an outpost the outpost table's ladder wins where it has one: the core's
+ * 200,000 and the six-level towers (`OUTPOST_BUILDING_HP`).
  */
-export const maxHp = (type: number, level: number): number =>
-  atLevel(BUILDING_HP[type], level, 0);
+export const maxHp = (type: number, level: number, kind: CombatTargetKind = "main"): number =>
+  atLevel(hpLadder(type, kind), level, 0);
 
-/** The whole health ladder of a type, or an empty array. */
-export const hpLadder = (type: number): readonly number[] => BUILDING_HP[type] ?? [];
+/** The whole health ladder of a type in a yard of `kind`, or an empty array. */
+export const hpLadder = (type: number, kind: CombatTargetKind = "main"): readonly number[] =>
+  (readsOutpostProps(kind) ? OUTPOST_BUILDING_HP[type] : undefined) ?? BUILDING_HP[type] ?? [];
 
-/** One tower's stats at one level, undefined for a type with no stats block. */
-export const towerStats = (type: number, level: number): TowerLevelStats | undefined => {
-  const levels = TOWER_STATS[type];
+/**
+ * One tower's stats at one level, undefined for a type with no stats block.
+ *
+ * On an outpost the outpost table's block wins where it has one
+ * (`OUTPOST_TOWER_STATS`).
+ */
+export const towerStats = (
+  type: number,
+  level: number,
+  kind: CombatTargetKind = "main",
+): TowerLevelStats | undefined => {
+  const levels =
+    (readsOutpostProps(kind) ? OUTPOST_TOWER_STATS[type] : undefined) ?? TOWER_STATS[type];
   if (!levels || levels.length === 0) return undefined;
   const clamped = Math.max(1, Math.min(Math.floor(level), levels.length));
   return levels[clamped - 1];
+};
+
+/**
+ * `GLOBAL._averageAltitude`, the cell height at which the terrain changes
+ * nothing (`client/scripts/GLOBAL.as:398`, `:805`).
+ */
+export const AVERAGE_ALTITUDE = 125;
+
+/**
+ * The lowest cell height the terrain applies from: below it the tower keeps
+ * its table range (`client/scripts/BTOWER.as:81`).
+ */
+export const ALTITUDE_FLOOR = 100;
+
+/**
+ * The range a tower fires at, in yard units: its `stats` range, scaled by the
+ * cell's height on a player's Map Room 2 outpost.
+ *
+ * `BTOWER.Props` takes `int(range)` and hands it to `AdjustTowerRange`, which
+ * returns `int(cellHeight * range / 125)` when the yard is an outpost and the
+ * height is at least 100 (`client/scripts/BTOWER.as:80-85`, `:94-99`). So a
+ * tower on a cell of height 250 reaches twice as far, and one below 100 is
+ * unchanged. `Props` also takes that branch in a wild monster attack, but
+ * `AdjustTowerRange` tests the yard type, and a camp loads as a main yard
+ * (`MR2/PopupAttackA.as:122-123`), so a camp's towers keep their table range.
+ * `height` is the map cell's `i`, an `int` (`MR2/MapRoomCell.as:244-246`,
+ * `:322`).
+ *
+ * Undefined for a type with no range. A bunker reads its dispatch range from
+ * the props table directly (`client/scripts/BUILDING22.as:90`, `:124`) and
+ * does not come through here.
+ */
+export const towerRange = (
+  type: number,
+  level: number,
+  kind: CombatTargetKind = "main",
+  height = 0,
+): number | undefined => {
+  const range = towerStats(type, level, kind)?.range;
+  if (range === undefined) return undefined;
+  const cell = Math.trunc(height);
+  if (!readsOutpostProps(kind) || !(cell >= ALTITUDE_FLOOR)) return range;
+  return Math.trunc((cell * Math.trunc(range)) / AVERAGE_ALTITUDE);
 };
 
 /** Whether a type carries a stats block at all. */
@@ -397,11 +467,18 @@ export const gridCost = (type: number, level = 1): readonly GridCostRect[] => {
 /**
  * A Map Room 2 capacity at one level: Flinger payload, Housing room, Bunker room.
  *
- * 0 for any other type, because no other `capacity` in the props table is a
- * combat number (`web/tools/gen-building-costs.mjs:158-167`).
+ * 0 for any other type on a main yard, because no other `capacity` in the
+ * props table is a combat number there (`web/tools/gen-building-costs.mjs:158-167`).
+ * On an outpost the outpost table's ladders are read, the harvesters' included,
+ * since an attack gives each harvester a buffer out of it
+ * ({@link outpostHarvesterStock}).
  */
-export const capacity = (type: number, level: number): number =>
-  atLevel(MR2_CAPACITY[type], level, 0);
+export const capacity = (type: number, level: number, kind: CombatTargetKind = "main"): number =>
+  atLevel(
+    (readsOutpostProps(kind) ? OUTPOST_CAPACITY[type] : undefined) ?? MR2_CAPACITY[type],
+    level,
+    0,
+  );
 
 /** The Flinger, whose payload caps one fling. */
 export const FLINGER_TYPE = 5;
@@ -572,6 +649,36 @@ export const STORAGE_TYPES: readonly number[] = [6, 14, 112];
 /** Whether damage to this type takes resources with it. */
 export const isLootable = (type: number): boolean =>
   HARVESTER_TYPES.includes(type) || STORAGE_TYPES.includes(type);
+
+/**
+ * The share of its capacity an outpost harvester holds when an attack loads:
+ * half above half health, a quarter at half health or below.
+ */
+export const OUTPOST_HARVESTER_SHARE = 0.5;
+export const OUTPOST_HARVESTER_SHARE_DAMAGED = 0.25;
+
+/**
+ * What an outpost harvester holds for an attacker to take.
+ *
+ * An outpost harvester banks nothing of its own (`BRESOURCE.Export` writes no
+ * `st` on an outpost, `client/scripts/BRESOURCE.as:483-485`), so `Setup` gives
+ * it a buffer instead, whatever `st` says: `0.5 * capacity[level - 1]` when
+ * its health is above half, `0.25 *` it at half or below, and nothing once it
+ * is destroyed, stored in an `int` (`:506-518`). Looting it also takes the
+ * amount out of the owner's pool (`:93-126`), which the engine does.
+ */
+export const outpostHarvesterStock = (
+  type: number,
+  level: number,
+  hp: number,
+  ceiling: number,
+): number => {
+  if (!HARVESTER_TYPES.includes(type) || !(ceiling > 0)) return 0;
+  const health = hp / ceiling;
+  if (!(health > 0)) return 0;
+  const share = health <= 0.5 ? OUTPOST_HARVESTER_SHARE_DAMAGED : OUTPOST_HARVESTER_SHARE;
+  return Math.trunc(share * capacity(type, level, "outpost"));
+};
 
 /**
  * What a storage building gives up when a creep brings it down.

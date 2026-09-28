@@ -52,6 +52,8 @@ export const bombCandidatesOf = (load: BaseLoadResponse | null): BombCandidate[]
   const yard = buildEngineYard({
     buildingdata: load.buildingdata ?? {},
     buildinghealthdata: load.buildinghealthdata ?? null,
+    // An outpost's buildings have the outpost table's health.
+    ...(load.type === "outpost" ? { kind: "outpost" as const } : {}),
   });
   return yard.buildings.filter((building) => !SPARED.has(building.kind));
 };

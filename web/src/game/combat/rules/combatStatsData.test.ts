@@ -8,6 +8,9 @@ import {
   GRID_COST_FORMULA,
   MONSTER_PROPS,
   MR2_CAPACITY,
+  OUTPOST_BUILDING_HP,
+  OUTPOST_CAPACITY,
+  OUTPOST_TOWER_STATS,
   TOWER_STATS,
   TRAP_STATS,
 } from "./combatStatsData";
@@ -15,6 +18,10 @@ import { monsterMovement } from "./stats";
 import { isFlyingMovement } from "./targeting";
 import { monsterStats } from "../../../../../server/src/game-data/stats/monsterStats";
 import { championStats } from "../../../../../server/src/game-data/stats/championStats";
+import {
+  OUTPOST_COST_ROWS,
+  OUTPOST_TRAIT_ROWS,
+} from "../../../../../server/src/game-data/buildingCosts";
 
 /**
  * The generated combat stats table, checked against what the sources hold.
@@ -314,5 +321,42 @@ describe("CHAMPION_PROPS", () => {
         expect(stat.props[key], `${id}.${key}`).toHaveLength(3);
       }
     }
+  });
+});
+
+/**
+ * The outpost tables (issue #179), against the cost generator's reading of the
+ * same `OUTPOST_YARD_PROPS.as` (`server/src/game-data/buildingCosts.ts`).
+ */
+describe("the outpost tables", () => {
+  const traits = new Map(OUTPOST_TRAIT_ROWS.map((row) => [row[0], row]));
+
+  it("gives the core its 200,000 health", () => {
+    expect(OUTPOST_BUILDING_HP[112]).toEqual([200_000]);
+  });
+
+  it("carries only ladders that differ from the main table, each the cost table's", () => {
+    for (const [type, ladder] of Object.entries(OUTPOST_BUILDING_HP)) {
+      expect(ladder, `type ${type}`).toEqual(traits.get(Number(type))?.[2]);
+      expect(ladder, `type ${type}`).not.toEqual(BUILDING_HP[Number(type)]);
+    }
+    for (const [type, row] of traits) {
+      if (OUTPOST_BUILDING_HP[type] || row[2].length === 0) continue;
+      expect(row[2], `type ${type}`).toEqual(BUILDING_HP[type]);
+    }
+  });
+
+  it("gives the laser, tesla, flak and railgun six levels and the bunker four", () => {
+    for (const type of [23, 25, 115, 118]) expect(OUTPOST_TOWER_STATS[type]).toHaveLength(6);
+    expect(OUTPOST_TOWER_STATS[22]).toHaveLength(4);
+    expect(OUTPOST_TOWER_STATS[20]).toBeUndefined();
+  });
+
+  it("carries the harvesters' capacity as the cost table has it", () => {
+    for (const row of OUTPOST_COST_ROWS) {
+      if (!row[6]) continue;
+      expect(OUTPOST_CAPACITY[row[0]], `type ${row[0]}`).toEqual(row[6].capacity);
+    }
+    expect(Object.keys(OUTPOST_CAPACITY).map(Number)).toEqual([1, 2, 3, 4, 5, 15, 22]);
   });
 });

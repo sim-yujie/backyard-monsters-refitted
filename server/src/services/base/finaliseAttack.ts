@@ -30,6 +30,7 @@ import {
 } from "./combat/abandonedAttack.js";
 import { bankAttackLoot, krallenBuffOf } from "./combat/attackLoot.js";
 import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpend.js";
+import { combatCellHeight } from "./combat/cellHeight.js";
 import { getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
 import { storedDamage } from "./storedDamage.js";
 import { catchUpArmyRow } from "../yard/armies.js";
@@ -144,6 +145,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
       buildingdata: defender.buildingdata,
       buildinghealthdata: defender.buildinghealthdata,
       resources: (outpostOwnerSave ?? defender).resources as AbandonedDefender["resources"],
+      height: await combatCellHeight(defender),
     },
     attacker: { academy: userSave.academy, champion: userSave.champion, siege: userSave.siege },
     log: checkpoint.flinglog,

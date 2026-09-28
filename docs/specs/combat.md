@@ -835,9 +835,17 @@ Note that `rate` is used inconsistently. The fire loop re-arms with `_rate * 2`
   `creepCount / 15` (`:200-202`, `:220-222`).
 - A dead, untargetable or invisible target forces an immediate re-acquire (`:207-218`).
 
-**Range and terrain.** In Map Room 2, an outpost's or wild monster camp's tower range is scaled by
-cell altitude: `cellHeight * range / GLOBAL._averageAltitude` (125), applied only when
-`cellHeight >= 100` (`BTOWER.as:80-85`, `:94-99`). Main yards keep the flat value.
+**Range and terrain.** On a player's Map Room 2 outpost, tower range is scaled by the cell's
+height: `int(cellHeight * int(range) / GLOBAL._averageAltitude)` (125), applied only when
+`cellHeight >= 100` (`BTOWER.as:80-85`, `:94-99`), so a tower at height 250 reaches twice as far.
+`Props()` also takes this branch in `wmattack`, but `AdjustTowerRange` tests
+`BASE.isOutpostMapRoom2Only`, and a wild monster camp loads as `EnumYardType.MAIN_YARD`
+(`MR2/PopupAttackA.as:122-123`), so **a camp's towers keep the flat value**, as main yards do. The
+Monster Bunker reads its dispatch range from the props table directly and is never scaled
+(`BUILDING22.as:90`, `:124`). `cellHeight` is the map cell's `i` (`MR2/MapRoomCell.as:322`), the
+server's `world_map_cell.terrainHeight`. The engine applies it in `stats.ts` `towerRange`; the attack
+load serves it as `cellheight`, and both server replays read the same stored value
+(`server/src/services/base/combat/cellHeight.ts`, issue #179).
 
 **Jars.** A jarred tower has `targetableStatus` raised so monsters skip it, and its jar has its own
 health pool `Jars.durability` (`BTOWER.as:255-256`, `:280-281`).
@@ -1011,6 +1019,14 @@ unit of that resource out of it**, up to what the building is holding.
 
 Destroying a resource building loots its whole remaining store first
 (`BRESOURCE.as:129-134`).
+
+**An outpost harvester's store is given, not banked.** On an outpost `Export` writes no `st`
+(`BRESOURCE.as:483-485`), and `Setup` ignores whatever `st` says and gives the harvester
+`int(0.5 * capacity[l - 1])` above half health, `int(0.25 * capacity[l - 1])` at half health or
+below, and 0 once destroyed (`:506-518`), out of the outpost table's capacity. Step 3 above then
+takes every unit looted from it out of the owner's main pool as well, before any later storage hit
+or fall reads that pool. The engine does both (`stats.ts` `outpostHarvesterStock`, `engine.ts`
+`takeLoot`, issue #179).
 
 `BSTORAGE.Loot(amount)` (`client/scripts/BSTORAGE.as:30-90`) draws from the **yard's pooled
 resources** instead:
@@ -1469,9 +1485,13 @@ The active set depends on which side the player is on. `_powerups` is the defend
   `creeps/inferno/` holds four more subclasses. Neither set was read; whether they are live or dead
   code was not determined.
 - **Three parallel tower tables** exist: `YARD_PROPS.as` (main yard), `INFERNOYARDPROPS.as` and
-  `OUTPOST_YARD_PROPS.as`, selected at `GLOBAL.as:719-746`. Per-level values match where they
-  overlap, but maximum levels differ (main yard 10 for cannon and sniper, Inferno 7). Section 5's
-  table is the main-yard set only.
+  `OUTPOST_YARD_PROPS.as`, selected at `GLOBAL.as:719-746`. Maximum levels differ (main yard 10
+  for cannon and sniper, Inferno 7). The outpost table caps the laser, tesla, flak and railgun at
+  6 and the bunker at 4, and their top levels are its own: laser 6 has 60,200 health and range
+  172, flak 6 75,000 and splash 205, tesla 6 rate 25, railgun 6 range 375 and 13,200 health (below
+  its level 5, as Flash ran it), bunker 4 130,000 health; the core (112) has 200,000 health there
+  and none in the main table. The engine reads the outpost table on a player's outpost
+  (`combatStatsData.ts` `OUTPOST_*`, issue #179). Section 5's table is the main-yard set only.
 - **`speed` on a tower** versus the twice-halved `speed` on a monster are different quantities with
   the same field name; only the monster halving was traced to source.
 - **`targetMode`** on `BTOWER` versus the `_targetFlyerMode` lookup: `BUILDING118.as:44` and
