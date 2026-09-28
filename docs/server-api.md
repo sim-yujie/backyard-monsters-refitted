@@ -921,7 +921,8 @@ lists its own (so far `notRunning`, `damaged`, `mapRoom`, `itemRefused`, `useBat
 `moved`, `workers`, `noAcademy`, `academyBusy`, `academyLevel`, `training`, `notTraining`, `notDamaged`, `isTownHall`,
 `championInCage`, `championsFrozen`, `researching`, `hatcheryBusy`, `unlocking`, `noJuicer`, `inferno`, `notEnough`, `noBunker`,
 `notBunkerable`, `notBuyable`, `bunkerFull`, `notInBunker`, `notRaisable`, `noCage`, `frozen`,
-`noChampion`, `notHungry`, `fullBuff`, `fullHealth`, `nameRefused`). Anything that is not a refusal (a bug, a database error) still goes to the global
+`noChampion`, `notHungry`, `fullBuff`, `fullHealth`, `nameRefused`, `noChamber`, `injured`, `hungry`,
+`notFrozen`). Anything that is not a refusal (a bug, a database error) still goes to the global
 `ErrorInterceptor` as a `500`.
 
 **`YardState`** (`services/yard/yardState.ts`) — **frozen**: fields may be added by agreement,
@@ -1010,6 +1011,8 @@ Later phases add kinds (`train`, …) with the same five keys.
 | POST | `/api/:apiVersion/bm/yard/champion/heal` | none | `{ champion, credits }` | Heals to full now for `timeCost(missing / max × healtime, false)` (`ChampionBase.as:1237-1241`); full health counts the food bonus. Refusals: `409 noCage` / `busy`; `409 noChampion`; `409 fullHealth`; wrapper `shinyLocked` / `credits`. |
 | POST | `/api/:apiVersion/bm/yard/champion/rename` | `name` (trimmed, 1–20 characters) | `{ champion }` | Sets `nm`. Refusals: `400 badRequest` (empty or too long); `409 nameRefused` (profanity filter); `409 noChampion`. |
 | POST | `/api/:apiVersion/bm/yard/champion/juice` | none | `{ champion }` | Puts the champion into the Monster Juicer for good: `status` 2, no goo (`BUILDING9.as:70-73`, `ChampionBase.as:276`). A new one can then be raised. Refusals: `409 noChampion`; `409 noJuicer`; `409 busy` (Juicer being built or upgraded); `409 damaged` (Juicer at half health or below). |
+| POST | `/api/:apiVersion/bm/yard/champion/freeze` | none | `{ champion }` | Moves the champion in the cage into the Champion Chamber (type 119, §7.2, issue #125; `CHAMPIONCHAMBER.FreezeGuardian`, `:103-141`): `status` 1 and `ft` made relative (`ft − now`), so it neither heals nor starves while frozen; the chamber's `fz` is rewritten as the JSON string of every frozen entry. Free. Refusals, in order: `409 noChamber`; `409 busy` (chamber still being built); `409 noChampion`; `409 injured { hp, max }`; `409 hungry { feedTime }`. |
+| POST | `/api/:apiVersion/bm/yard/champion/thaw` | `type` (1..5) | `{ champion }` | Brings a frozen champion back to the cage (`ThawGuardian`, `:143-221`): `status` 0, `ft + now`; `fz` rewritten. Free. Refusals, in order: `409 noChamber` / `busy`; `409 damaged { id }` (the chamber); `409 noCage` / `busy`; `409 championInCage` (freeze that one first); `409 notFrozen { type }`. |
 
 **Shiny prices** are all worked out on the server by `services/yard/shiny.ts`, never taken from
 the client (`docs/design/yard-buildings.md` §2.6). `timeCost(t)` is the original

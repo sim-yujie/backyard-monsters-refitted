@@ -265,6 +265,96 @@ export const cageView = (save: BaseLoadResponse, now: number): CageView => {
   };
 };
 
+/** The Champion Chamber's state, and what it and the cage allow. */
+export type ChamberView =
+  | { readonly kind: "noChamber" }
+  | { readonly kind: "building" }
+  | {
+      readonly kind: "ready";
+      /** The chamber is damaged: nothing thaws until it is repaired. */
+      readonly damaged: boolean;
+      /** The cage a thawed champion goes to. */
+      readonly cage: "none" | "building" | "ready";
+      /** The champion in the cage, which could be frozen. */
+      readonly active: ChampionView | null;
+      readonly frozen: readonly FrozenView[];
+    };
+
+/** A champion asleep in the chamber. */
+export interface FrozenView {
+  readonly entry: ChampionEntry;
+  readonly champion: ChampionSaveEntry;
+  readonly name: string;
+  readonly level: number;
+  readonly health: number;
+  readonly maxHealth: number;
+  /** Seconds of feeding it has left once thawed (its relative `ft`); 0 or less is hungry at once. */
+  readonly fedFor: number;
+}
+
+/** Whether a building's save entry counts as damaged (the server's `isDamaged`). */
+const damagedEntry = (save: BaseLoadResponse, id: number): boolean => {
+  const building = save.buildingdata?.[String(id)];
+  if (!building) return false;
+  return (
+    building.hp != null ||
+    Number(building.rE) === 1 ||
+    (save.buildinghealthdata != null && String(id) in save.buildinghealthdata)
+  );
+};
+
+/** The chamber panel's state at `now`. */
+export const chamberView = (save: BaseLoadResponse, now: number): ChamberView => {
+  const chamber = buildingOfType(save, CHAMPION_CHAMBER_TYPE);
+  if (!chamber) return { kind: "noChamber" };
+  if (chamber.building) return { kind: "building" };
+  const cage = buildingOfType(save, CHAMPION_CAGE_TYPE);
+  const active = activeChampion(save);
+  return {
+    kind: "ready",
+    damaged: damagedEntry(save, chamber.id),
+    cage: !cage ? "none" : cage.building ? "building" : "ready",
+    active: active ? championView(save, active, now) : null,
+    frozen: frozenChampions(save).map((champion) => {
+      const entry = entryOfChampion(champion)!;
+      const level = levelOf(champion, entry);
+      const name = champion.nm?.trim() ? champion.nm.trim() : entry.name;
+      return {
+        entry,
+        champion,
+        name,
+        level,
+        health: numberOf(champion.hp),
+        maxHealth: championMaxHealth(entry, level, foodBonusOf(champion)),
+        fedFor: numberOf(champion.ft),
+      };
+    }),
+  };
+};
+
+/**
+ * Why the champion in the cage cannot be frozen now, or null
+ * (`CHAMPIONCHAMBER.FreezeGuardian`, `CHAMPIONCHAMBER.as:103-141`).
+ */
+export const freezeGate = (save: BaseLoadResponse, view: ChampionView): string | null => {
+  const chamber = buildingOfType(save, CHAMPION_CHAMBER_TYPE);
+  if (!chamber) return "Build a Champion Chamber to keep a champion on ice while you raise another.";
+  if (chamber.building) return "Your Champion Chamber is still being built.";
+  if (view.health < view.maxHealth) return `Heal ${view.name} to full health before you freeze it.`;
+  if (view.hunger !== "fed") return `Feed ${view.name} before you freeze it.`;
+  return null;
+};
+
+/** Why a frozen champion cannot be thawed now, or null (`ThawGuardian`, `:143-221`). */
+export const thawGate = (view: ChamberView): string | null => {
+  if (view.kind !== "ready") return view.kind === "building" ? "Your Champion Chamber is still being built." : "Build a Champion Chamber first.";
+  if (view.damaged) return "Your Champion Chamber is damaged. Repair it before you thaw a champion.";
+  if (view.cage === "none") return "Build a Champion Cage first.";
+  if (view.cage === "building") return "Your Champion Cage is still being built.";
+  if (view.active) return `Freeze ${view.active.name} first: the cage holds one champion at a time.`;
+  return null;
+};
+
 /** The portrait at a level, from the game server's art (`/assets/monsters/G1_L3-150.png`). */
 export const championPortraitUrl = (entry: ChampionEntry, level: number): string =>
   `/assets/monsters/${entry.id}_L${Math.min(Math.max(Math.trunc(level) || 1, 1), entry.levels)}-150.png`;

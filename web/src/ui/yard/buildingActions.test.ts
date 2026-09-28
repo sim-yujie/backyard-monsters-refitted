@@ -363,6 +363,12 @@ describe("panelModel: which blocks each building gets", () => {
     expect(panelModel(pick(context, 3), context).open).toBeNull();
   });
 
+  it("a built Champion Chamber opens its own controls (#125)", () => {
+    const context = contextOf({ buildings: [HALL(6), building(2, 119, 1), building(3, 119, 0, { cB: 600 })] });
+    expect(panelModel(pick(context, 2), context).open).toBe("chamber");
+    expect(panelModel(pick(context, 3), context).open).toBeNull();
+  });
+
   it("no other building names a Monsters tab", () => {
     const context = contextOf({ buildings: [HALL(6), building(2, 20, 4), building(3, 11, 1)] });
     for (const id of [2, 3]) expect(panelModel(pick(context, id), context).monstersTab).toBeNull();

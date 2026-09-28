@@ -69,6 +69,8 @@ const setup = (
     heal: vi.fn(actions.heal ?? (() => never())),
     rename: vi.fn(actions.rename ?? (() => never())),
     juice: vi.fn(actions.juice ?? (() => never())),
+    freeze: vi.fn(actions.freeze ?? (() => never())),
+    thaw: vi.fn(actions.thaw ?? (() => never())),
   };
   const panel = new ChampionPanel({ store, actions: spies as ChampionActions });
   document.body.replaceChildren(panel.element);
@@ -182,6 +184,25 @@ describe("ChampionPanel: rename and juice", () => {
     expect(element.textContent).toContain("gone for good and gives no goo");
     buttonNamed(element, "Yes, juice Gorgo")!.click();
     expect(spies.juice).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ChampionPanel: freeze (#125)", () => {
+  const CHAMBER: BuildingData = { id: 4, t: 119, l: 1, X: 400, Y: 0 };
+
+  it("freezes a fed, healthy champion in one tap when there is a chamber", () => {
+    const { element, spies } = setup([gorgo()], [CAGE, CHAMBER]);
+    const freeze = buttonNamed(element, "Freeze in the Chamber")!;
+    expect(freeze.disabled).toBe(false);
+    freeze.click();
+    expect(spies.freeze).toHaveBeenCalledTimes(1);
+  });
+
+  it("says what stands in the way", () => {
+    expect(setup([gorgo()]).element.textContent).toContain("Build a Champion Chamber");
+    const hurt = setup([gorgo({ hp: 10 })], [CAGE, CHAMBER]);
+    expect(buttonNamed(hurt.element, "Freeze in the Chamber")!.disabled).toBe(true);
+    expect(hurt.element.textContent).toContain("Heal Gorgo to full health before you freeze it.");
   });
 });
 

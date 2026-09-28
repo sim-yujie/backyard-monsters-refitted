@@ -257,3 +257,11 @@ export const YardChampionSchema = z.object({});
 export const YardChampionRenameSchema = z.object({
   name: z.string().max(200),
 });
+
+/** `POST /bm/yard/champion/freeze` moves the champion in the cage into the Champion Chamber. */
+export const YardChampionFreezeSchema = z.object({});
+
+/** `POST /bm/yard/champion/thaw`: the frozen champion type to bring back to the cage. */
+export const YardChampionThawSchema = z.object({
+  type: z.coerce.number().int().min(1).max(5),
+});

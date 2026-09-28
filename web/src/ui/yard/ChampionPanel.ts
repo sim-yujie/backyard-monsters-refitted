@@ -13,6 +13,7 @@ import {
   CHAMPION_NAME_MAX,
   cageView,
   championPortraitUrl,
+  freezeGate,
   type CageView,
   type ChampionView,
   type RaiseChoice,
@@ -35,8 +36,9 @@ import { ShinyButton } from "./ShinyButton";
  * time to full and **Heal** (Shiny), its evolution (feeds so far of the
  * level's count; the food bonus at the top level), its hunger in plain words
  * with the time to the next feeding or to starving, the feed recipe against
- * what housing holds, **Feed**, **Feed with Shiny**, **Evolve now**, and
- * **Juice** (confirmed inline: it cannot be undone and gives no goo).
+ * what housing holds, **Feed**, **Feed with Shiny**, **Evolve now**,
+ * **Freeze in the Chamber** (#125; one tap, it can be thawed), and **Juice**
+ * (confirmed inline: it cannot be undone and gives no goo).
  *
  * The original closed the whole popup after every feed
  * (`CHAMPIONCAGEPOPUP.as:175-178`); this stays open and redraws from the
@@ -80,6 +82,7 @@ export class ChampionPanel {
   private feedButton: HTMLButtonElement | null = null;
   private raiseButtons = new Map<number, HTMLButtonElement>();
   private juiceYes: HTMLButtonElement | null = null;
+  private freezeButton: HTMLButtonElement | null = null;
   private renameSave: HTMLButtonElement | null = null;
   private renaming = false;
   private nameDraft = "";
@@ -133,6 +136,7 @@ export class ChampionPanel {
     this.live = null;
     this.feedButton = null;
     this.juiceYes = null;
+    this.freezeButton = null;
     this.renameSave = null;
     this.raiseButtons.clear();
 
@@ -192,6 +196,9 @@ export class ChampionPanel {
     }
     for (const button of this.raiseButtons.values()) button.disabled = store.isRunning(ChampionKey.raise);
     if (this.juiceYes) this.juiceYes.disabled = store.isRunning(ChampionKey.juice);
+    if (this.freezeButton && view) {
+      this.freezeButton.disabled = freezeGate(store.save, view) !== null || store.isRunning(ChampionKey.freeze);
+    }
     if (this.renameSave) this.renameSave.disabled = store.isRunning(ChampionKey.rename);
   }
 
@@ -259,6 +266,7 @@ export class ChampionPanel {
       this.healthBlock(view, now),
       this.growthBlock(view),
       this.feedBlock(view),
+      this.freezeBlock(view),
       this.juiceBlock(view),
     ];
   }
@@ -516,6 +524,27 @@ export class ChampionPanel {
     return block;
   }
 
+  /** Freeze into the Champion Chamber (#125): reversible, so one tap. */
+  private freezeBlock(view: ChampionView): HTMLElement {
+    const block = document.createElement("div");
+    block.className = "champion__part champion__part--freeze";
+    const freeze = document.createElement("button");
+    freeze.type = "button";
+    freeze.className = "btn champion__freeze";
+    freeze.textContent = "Freeze in the Chamber";
+    const gate = freezeGate(this.store.save, view);
+    freeze.disabled = gate !== null || this.store.isRunning(ChampionKey.freeze);
+    freeze.addEventListener("click", () => void this.runFreeze(view));
+    this.freezeButton = freeze;
+    block.append(
+      freeze,
+      gate
+        ? gateLine(gate)
+        : note("Frozen champions keep their level and do not get hungry. Thaw it from the Champion Chamber."),
+    );
+    return block;
+  }
+
   private juiceBlock(view: ChampionView): HTMLElement {
     const block = document.createElement("div");
     block.className = "champion__part champion__part--juice";
@@ -635,6 +664,16 @@ export class ChampionPanel {
     this.show();
   }
 
+  private async runFreeze(view: ChampionView): Promise<void> {
+    const result = await this.actions.freeze();
+    this.setStatus(
+      result.ok
+        ? { tone: "good", content: [`${view.name} is frozen in the Champion Chamber. The cage is free to raise another.`] }
+        : bad(result.refusal),
+    );
+    this.show();
+  }
+
   private async runJuice(view: ChampionView): Promise<void> {
     const result = await this.actions.juice();
     this.confirmingJuice = false;
@@ -671,6 +710,7 @@ const shapeOf = (view: CageView): string => {
     champion.feedShiny,
     champion.evolveShiny,
     champion.canFeedMonsters,
+    champion.health >= champion.maxHealth,
   ].join(":");
 };
 
@@ -731,6 +771,13 @@ const refusalText = (refusal: YardRefusal): string =>
 const heading = (text: string): HTMLElement => {
   const element = document.createElement("h4");
   element.className = "champion__heading";
+  element.textContent = text;
+  return element;
+};
+
+const gateLine = (text: string): HTMLElement => {
+  const element = document.createElement("p");
+  element.className = "champion__gate";
   element.textContent = text;
   return element;
 };

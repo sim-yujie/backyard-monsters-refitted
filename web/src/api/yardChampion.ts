@@ -1,6 +1,15 @@
 import { juicerProblemText, juicerStatus } from "@/game/monsters/juice";
 import { championEntry } from "@/game/yard/championCatalogue";
-import { activeChampion, cageView, CHAMPION_NAME_MAX, championView, frozenChampions } from "@/game/yard/championModel";
+import {
+  activeChampion,
+  cageView,
+  chamberView,
+  CHAMPION_NAME_MAX,
+  championView,
+  freezeGate,
+  frozenChampions,
+  thawGate,
+} from "@/game/yard/championModel";
 import { actionKey, type YardActionResult, type YardStore, type YardStoreReader } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { ChampionSaveEntry, YardResponse } from "./types";
@@ -16,6 +25,8 @@ import type { YardRefusal } from "./yard";
  *   POST /api/:apiVersion/bm/yard/champion/heal
  *   POST /api/:apiVersion/bm/yard/champion/rename   name
  *   POST /api/:apiVersion/bm/yard/champion/juice
+ *   POST /api/:apiVersion/bm/yard/champion/freeze   (Champion Chamber, #125)
+ *   POST /api/:apiVersion/bm/yard/champion/thaw     type
  */
 
 const CHAMPION_PATH = "/api/:apiVersion/bm/yard/champion";
@@ -58,6 +69,12 @@ export const championRename = (name: string): Promise<YardResponse<ChampionRepor
 export const championJuice = (): Promise<YardResponse<ChampionReport>> =>
   post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/juice`, {});
 
+export const championFreeze = (): Promise<YardResponse<ChampionReport>> =>
+  post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/freeze`, {});
+
+export const championThaw = (type: number): Promise<YardResponse<ChampionReport>> =>
+  post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/thaw`, { type: String(type) });
+
 export interface ChampionApi {
   raise: typeof championRaise;
   feed: typeof championFeed;
@@ -65,6 +82,8 @@ export interface ChampionApi {
   heal: typeof championHeal;
   rename: typeof championRename;
   juice: typeof championJuice;
+  freeze: typeof championFreeze;
+  thaw: typeof championThaw;
 }
 
 export const championApi: ChampionApi = {
@@ -74,6 +93,8 @@ export const championApi: ChampionApi = {
   heal: championHeal,
   rename: championRename,
   juice: championJuice,
+  freeze: championFreeze,
+  thaw: championThaw,
 };
 
 /** The queue keys, for `store.isRunning`. */
@@ -84,6 +105,8 @@ export const ChampionKey = {
   heal: actionKey("champion", "heal"),
   rename: actionKey("champion", "rename"),
   juice: actionKey("champion", "juice"),
+  freeze: actionKey("champion", "freeze"),
+  thaw: (type: number): string => actionKey("championThaw", type),
 } as const;
 
 export interface ChampionActions {
@@ -93,6 +116,8 @@ export interface ChampionActions {
   heal(): Promise<YardActionResult<ChampionPaidReport>>;
   rename(name: string): Promise<YardActionResult<ChampionReport>>;
   juice(): Promise<YardActionResult<ChampionReport>>;
+  freeze(): Promise<YardActionResult<ChampionReport>>;
+  thaw(type: number): Promise<YardActionResult<ChampionReport>>;
 }
 
 const refuse = (reason: string, message: string, detail: Record<string, unknown> = {}): YardRefusal => ({
@@ -214,5 +239,30 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
         return null;
       },
       send: () => api.juice(),
+    }),
+  freeze: () =>
+    store.run({
+      key: ChampionKey.freeze,
+      check: (reader) => {
+        const view = activeOrRefuse(reader);
+        if ("reason" in view) return view;
+        const gate = freezeGate(reader.save, view);
+        return gate ? refuse("freezeRefused", gate) : null;
+      },
+      send: () => api.freeze(),
+    }),
+  thaw: (type) =>
+    store.run({
+      key: ChampionKey.thaw(type),
+      check: (reader) => {
+        const view = chamberView(reader.save, reader.now());
+        const gate = thawGate(view);
+        if (gate) return refuse("thawRefused", gate);
+        if (view.kind === "ready" && !view.frozen.some((one) => one.entry.t === type)) {
+          return refuse("notFrozen", "That champion is not in the chamber.");
+        }
+        return null;
+      },
+      send: () => api.thaw(type),
     }),
 });

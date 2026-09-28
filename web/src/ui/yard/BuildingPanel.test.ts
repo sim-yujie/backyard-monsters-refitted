@@ -308,6 +308,14 @@ describe("BuildingPanel: the Champion Cage (§7.2)", () => {
     panel.show(store.building(1)!);
     expect(element.querySelector(".champion")).toBeNull();
   });
+
+  it("Open chamber shows the chamber's controls (#125)", () => {
+    const { element } = setup([HALL, building(2, 119, 1)], 2);
+    buttonNamed(element, "Open chamber")!.click();
+    expect(element.querySelector(".chamber")).not.toBeNull();
+    buttonNamed(element, "Close chamber")!.click();
+    expect(element.querySelector(".chamber")).toBeNull();
+  });
 });
 
 describe("BuildingPanel: a building under construction (§5.3)", () => {

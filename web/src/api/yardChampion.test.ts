@@ -67,6 +67,8 @@ const setup = (champion: ChampionSaveEntry[], housed: Record<string, number> = {
     heal: vi.fn(() => Promise.resolve(answer)),
     rename: vi.fn(() => Promise.resolve(answer)),
     juice: vi.fn(() => Promise.resolve(answer)),
+    freeze: vi.fn(() => Promise.resolve(answer)),
+    thaw: vi.fn(() => Promise.resolve(answer)),
   } as unknown as ChampionApi;
   return { actions: championActions(store, api), api };
 };
@@ -111,6 +113,11 @@ describe("championActions: local checks", () => {
     expect(reasonOf(await setup([gorgo()]).actions.heal())).toBe("fullHealth");
     expect(reasonOf(await setup([gorgo()]).actions.rename("   "))).toBe("badRequest");
     expect(reasonOf(await setup([]).actions.evolve())).toBe("noChampion");
+  });
+
+  it("freeze and thaw: need a chamber, and thaw an empty cage", async () => {
+    expect(reasonOf(await setup([gorgo()]).actions.freeze())).toBe("freezeRefused");
+    expect(reasonOf(await setup([gorgo({ status: 1 })]).actions.thaw(1))).toBe("thawRefused");
   });
 
   it("juice: needs a working Juicer", async () => {

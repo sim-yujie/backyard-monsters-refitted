@@ -35,6 +35,7 @@ import {
 } from "./buildingActions";
 import { buildingInfo, type InfoValue } from "./buildingInfo";
 import { BunkerPanel } from "./BunkerPanel";
+import { ChamberPanel } from "./ChamberPanel";
 import { ChampionPanel } from "./ChampionPanel";
 import { RepairBlock } from "./RepairBlock";
 import { ShinyButton } from "./ShinyButton";
@@ -138,9 +139,9 @@ export class BuildingPanel {
   /** Holds a Monster Bunker's controls while they are open (`BunkerPanel.ts`). */
   private readonly bunkerSlot: HTMLElement;
   private bunker: BunkerPanel | null = null;
-  /** Holds the Champion Cage's controls while they are open (`ChampionPanel.ts`). */
+  /** Holds the Champion Cage's or Chamber's controls while they are open (`ChampionPanel.ts`, `ChamberPanel.ts`). */
   private readonly championSlot: HTMLElement;
-  private champion: ChampionPanel | null = null;
+  private champion: ChampionPanel | ChamberPanel | null = null;
   private readonly status: HTMLElement;
   private readonly details: HTMLDetailsElement;
   private readonly facts: HTMLDListElement;
@@ -418,9 +419,11 @@ export class BuildingPanel {
       button.setAttribute("aria-expanded", String(open));
       return button;
     }
-    if (model?.open === "cage" && this.yard) {
+    if ((model?.open === "cage" || model?.open === "chamber") && this.yard) {
+      const target = model.open;
       const open = this.champion !== null;
-      const button = actionButton(open ? "Close cage" : "Open cage", () => this.toggleChampion(), "btn--primary");
+      const word = target === "cage" ? "cage" : "chamber";
+      const button = actionButton(open ? `Close ${word}` : `Open ${word}`, () => this.toggleChampion(target), "btn--primary");
       button.classList.add("building-panel__planner");
       button.setAttribute("aria-expanded", String(open));
       return button;
@@ -958,13 +961,13 @@ export class BuildingPanel {
     this.bunkerSlot.hidden = true;
   }
 
-  /** Opens or closes the Champion Cage's controls under the actions. */
-  private toggleChampion(): void {
+  /** Opens or closes the Champion Cage's or Chamber's controls under the actions. */
+  private toggleChampion(target: "cage" | "chamber"): void {
     const store = this.yard?.store;
     if (this.champion || !this.building || !store) {
       this.closeChampion();
     } else {
-      this.champion = new ChampionPanel({ store });
+      this.champion = target === "cage" ? new ChampionPanel({ store }) : new ChamberPanel({ store });
       this.championSlot.append(this.champion.element);
       this.championSlot.hidden = false;
     }

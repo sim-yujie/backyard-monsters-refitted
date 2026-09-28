@@ -319,3 +319,56 @@
 .champion-card .champion__gate {
   grid-column: 1 / -1;
 }
+
+/* ── The Champion Chamber (ChamberPanel.ts, #125) ───────────────────────── */
+
+.chamber__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.chamber__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-base);
+}
+
+.chamber__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.chamber__picture {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  object-fit: contain;
+}
+
+.chamber__words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+.chamber__sub {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chamber__active {
+  padding-top: 0;
+  border-top: 0;
+}

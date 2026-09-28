@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse, ChampionSaveEntry } from "@/api/types";
-import { cageView, championPortraitUrl, predictedHealth } from "./championModel";
+import {
+  cageView,
+  chamberView,
+  championPortraitUrl,
+  freezeGate,
+  predictedHealth,
+  thawGate,
+} from "./championModel";
 import { championEntry } from "./championCatalogue";
 
 /**
@@ -122,5 +129,40 @@ describe("championPortraitUrl", () => {
   it("points at the game's own art for the level", () => {
     expect(championPortraitUrl(championEntry(2)!, 4)).toBe("/assets/monsters/G2_L4-150.png");
     expect(championPortraitUrl(championEntry(2)!, 9)).toBe("/assets/monsters/G2_L6-150.png");
+  });
+});
+
+describe("the Champion Chamber (#125)", () => {
+  const CHAMBER = { id: 4, t: 119, X: 0, Y: 0, l: 1 };
+  const withChamber = (champion: ChampionSaveEntry[], chamber: Record<string, unknown> = {}) =>
+    saveOf(champion, {
+      buildingdata: { "3": { id: 3, t: 114, X: 0, Y: 0, l: 1 }, "4": { ...CHAMBER, ...chamber } },
+    } as never);
+
+  it("lists the champion in the cage and the frozen ones, with their stopped clock", () => {
+    const view = chamberView(withChamber([gorgo(), gorgo({ t: 3, status: 1, ft: 2 * HOUR, hp: 20_000, l: 3 })]), NOW);
+    if (view.kind !== "ready") throw new Error(view.kind);
+    expect(view.active?.entry.id).toBe("G1");
+    expect(view.frozen.map((one) => [one.entry.id, one.level, one.fedFor, one.maxHealth])).toEqual([
+      ["G3", 3, 2 * HOUR, 20_000],
+    ]);
+    expect(thawGate(view)).toMatch(/^Freeze Gorgo first/);
+  });
+
+  it("freezes only a champion at full health and fed, with a chamber", () => {
+    const fed = active(withChamber([gorgo()]));
+    expect(freezeGate(withChamber([gorgo()]), fed)).toBeNull();
+    expect(freezeGate(saveOf([gorgo()]), fed)).toMatch(/Build a Champion Chamber/);
+    const hurt = active(withChamber([gorgo({ hp: 1 })]));
+    expect(freezeGate(withChamber([gorgo({ hp: 1 })]), hurt)).toMatch(/full health/);
+    const hungry = active(withChamber([gorgo({ ft: NOW - 1 })]));
+    expect(freezeGate(withChamber([gorgo({ ft: NOW - 1 })]), hungry)).toMatch(/^Feed Gorgo/);
+  });
+
+  it("thaws nothing while the chamber is damaged", () => {
+    const view = chamberView(withChamber([gorgo({ status: 1 })], { hp: 10 }), NOW);
+    expect(thawGate(view)).toMatch(/damaged/);
+    expect(thawGate(chamberView(withChamber([gorgo({ status: 1 })]), NOW))).toBeNull();
+    expect(chamberView(saveOf([]), NOW).kind).toBe("noChamber");
   });
 });

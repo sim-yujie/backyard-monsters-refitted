@@ -8,6 +8,7 @@ import {
 import { yardBankAction } from "./bank.js";
 import { yardBuildAction, yardCancelBuildAction, yardInstantBuildAction } from "./build.js";
 import { yardBunkerFillAction, yardBunkerRemoveAction } from "./bunker.js";
+import { yardChampionFreezeAction, yardChampionThawAction } from "./chamber.js";
 import {
   yardChampionEvolveAction,
   yardChampionFeedAction,
@@ -97,4 +98,6 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "champion/heal", controller: yardRoute(yardChampionHealAction) },
   { path: "champion/rename", controller: yardRoute(yardChampionRenameAction) },
   { path: "champion/juice", controller: yardRoute(yardChampionJuiceAction) },
+  { path: "champion/freeze", controller: yardRoute(yardChampionFreezeAction) },
+  { path: "champion/thaw", controller: yardRoute(yardChampionThawAction) },
 ];

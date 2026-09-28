@@ -10,6 +10,7 @@ import {
   yardChampionRaiseAction,
   yardChampionRenameAction,
 } from "./champion.js";
+import { yardChampionFreezeAction, yardChampionThawAction } from "./chamber.js";
 import { runYardAction, type YardAction, type YardAnswer } from "./yardAction.js";
 
 /**
@@ -143,5 +144,21 @@ describe("champion routes", () => {
     expect((await run(yardChampionRenameAction, {})).status).toBe(400);
     expect((await run(yardChampionRenameAction, { name: "Kong" })).status).toBe(200);
     expect(championOf(db.row)).toMatchObject({ nm: "Kong" });
+  });
+
+  test("freeze then thaw is a round trip through the chamber", async () => {
+    const now = getCurrentDateTime();
+    const buildings = { ...(rowOf().buildingdata as Row), "4": { id: 4, t: 119, x: 400, y: 0, l: 1 } };
+    const gorgo = { t: 1, hp: 80_000, l: 2, ft: now + 5 * HOUR, fd: 3, fb: 0, pl: 1, status: 0 };
+    db.row = rowOf({ buildingdata: buildings, champion: [gorgo] });
+
+    expect((await run(yardChampionFreezeAction)).status).toBe(200);
+    expect(championOf(db.row)).toMatchObject({ status: 1, fd: 3 });
+    expect(JSON.parse(String((db.row!.buildingdata as Record<string, Row>)["4"]!.fz))).toHaveLength(1);
+
+    const thaw = await run(yardChampionThawAction, { type: "1" });
+    expect(thaw.status).toBe(200);
+    expect(championOf(db.row)).toMatchObject({ status: 0, fd: 3, l: 2 });
+    expect(Number(championOf(db.row).ft)).toBeGreaterThanOrEqual(now + 5 * HOUR);
   });
 });

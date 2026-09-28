@@ -19,7 +19,7 @@ import { freeWorkers, holdsWorker, sharperToolsMultiplier } from "@/game/yard/wo
 import type { Yard, YardBuilding, YardWorkers } from "@/game/yard/yardModel";
 import { BUNKER_TYPE } from "@/game/monsters/bunker";
 import { researchOn } from "@/game/monsters/lab";
-import { CHAMPION_CAGE_TYPE } from "@/game/yard/championModel";
+import { CHAMPION_CAGE_TYPE, CHAMPION_CHAMBER_TYPE } from "@/game/yard/championModel";
 import { monstersTabFor, type MonstersTabId } from "@/ui/monsters/monstersTab";
 
 /**
@@ -159,9 +159,9 @@ export interface CancelOffer {
 
 /**
  * Which door a building opens: the world map, the layout planner, the
- * Monsters screen, a bunker's controls, or the Champion Cage's.
+ * Monsters screen, a bunker's controls, or the Champion Cage's or Chamber's.
  */
-export type OpenTarget = "map" | "planner" | "monsters" | "bunker" | "cage";
+export type OpenTarget = "map" | "planner" | "monsters" | "bunker" | "cage" | "chamber";
 
 /** Everything the panel shows for a building on the player's own yard. */
 export interface PanelModel {
@@ -418,7 +418,9 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
             ? "bunker"
             : building.type === CHAMPION_CAGE_TYPE && building.level > 0
               ? "cage"
-              : null;
+              : building.type === CHAMPION_CHAMBER_TYPE && building.level > 0
+                ? "chamber"
+                : null;
   return {
     upgrade: upgrade && upgrade.gate?.reason !== "maxLevel" ? upgrade : null,
     maxed: upgrade?.gate?.reason === "maxLevel",
