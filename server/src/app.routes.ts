@@ -18,6 +18,7 @@ import {
   snapshotLimiter,
   alliancesLimiter,
   terrainLimiter,
+  takeoverQuoteLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -51,6 +52,7 @@ import { getTerrain } from "./controllers/maproom/v2/bulk/getTerrain.js";
 import { getAlliances } from "./controllers/maproom/v2/bulk/getAlliances.js";
 import { takeoverCell } from "./controllers/maproom/v2/takeoverCell.js";
 import { declineTakeover } from "./controllers/maproom/v2/declineTakeover.js";
+import { takeoverQuote } from "./controllers/maproom/v2/takeoverQuote.js";
 import { transferMonsters } from "./controllers/maproom/v2/transferMonsters.js";
 import { saveBookmarks } from "./controllers/maproom/v2/saveBookmarks.js";
 
@@ -154,6 +156,7 @@ router.get("/worldmapv2/snapshot", verifyApiConsumer, snapshotLimiter, logReques
 router.get("/worldmapv2/alliances", verifyApiConsumer, alliancesLimiter, logRequest, getAlliances);
 router.post("/worldmapv2/setmapversion", verifyUserAuth, logRequest, setMapVersion);
 router.post("/worldmapv2/takeoverCell", verifyUserAuth, verifyAccountStatus, logRequest, takeoverCell);
+router.post("/worldmapv2/takeoverquote", verifyUserAuth, verifyAccountStatus, takeoverQuoteLimiter, logRequest, takeoverQuote);
 router.post("/worldmapv2/declinetakeover", verifyUserAuth, verifyAccountStatus, logRequest, declineTakeover);
 router.post("/worldmapv2/transferassets", verifyUserAuth, verifyAccountStatus, logRequest, transferMonsters);
 router.post("/api/:apiVersion/player/savebookmarks", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, saveBookmarks);

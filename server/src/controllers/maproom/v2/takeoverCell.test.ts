@@ -81,6 +81,10 @@ mock.module("../../../services/maproom/v2/validateRange.js", () => ({
   validateRange: async () => {
     if (!inRange) throw new Error("out of range");
   },
+  rangeCheckV2: async () => ({
+    cell: null,
+    verdict: inRange ? { ok: true, via: "main" } : { ok: false, reason: "out-of-range" },
+  }),
 }));
 
 mock.module("../../../services/base/attackSessionStore.js", () => ({

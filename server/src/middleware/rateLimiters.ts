@@ -122,6 +122,23 @@ export const getCellsLimiter = RateLimit.middleware({
 });
 
 /**
+ * Rate limit for the MR2 takeover quote - 60 requests per minute per user.
+ *
+ * The map asks once per camp or outpost the player selects, and again when
+ * the cell changes under the panel, so this is far above normal clicking.
+ */
+export const takeoverQuoteLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 60,
+  prefixKey: "takeoverquote",
+  keyGenerator: byUser("takeoverquote"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many takeover price requests. Please slow down." };
+  },
+});
+
+/**
  * Rate limit for the alliance browse/search - 30 requests per minute per user.
  */
 export const searchAlliancesLimiter = RateLimit.middleware({

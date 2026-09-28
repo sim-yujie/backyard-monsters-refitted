@@ -91,19 +91,7 @@ const validateRangeV3 = (save: Save) => save;
  * @returns {Promise<Save>} - The save object if the attack is valid
  */
 const validateRangeV2 = async (user: User, save: Save, options: RangeOptions) => {
-  const { homebase, outposts, flinger } = user.save!;
-
-  const cell = await resolveAttackCell(options);
-
-  const plan = planRangeCheck({ homebase, flinger, cell, outposts });
-
-  let verdict: RangeVerdict;
-
-  if ("pending" in plan) {
-    verdict = checkOutpostRange(plan.pending, await outpostFlingers(plan.pending));
-  } else {
-    verdict = plan;
-  }
+  const { cell, verdict } = await rangeCheckV2(user, options);
 
   if (verdict.ok) return save;
 
@@ -119,6 +107,32 @@ const validateRangeV2 = async (user: User, save: Save, options: RangeOptions) =>
   }
 
   throw rangeError(user, verdict.reason);
+};
+
+/**
+ * The Map Room 2 range rule's answer without the throw: whether the user's
+ * main yard or one of their outposts reaches the cell. `validateRange` turns a
+ * refusal into an error; the takeover quote (`takeoverQuote.ts`) reports it
+ * as a reason instead.
+ *
+ * @param {User} user - The user, with their main save populated.
+ * @param {RangeOptions} options - What the caller knows about the target.
+ * @returns {Promise<{ cell: CellCoords | null; verdict: RangeVerdict }>} The cell and the verdict.
+ */
+export const rangeCheckV2 = async (
+  user: User,
+  options: RangeOptions
+): Promise<{ cell: CellCoords | null; verdict: RangeVerdict }> => {
+  const { homebase, outposts, flinger } = user.save!;
+
+  const cell = await resolveAttackCell(options);
+
+  const plan = planRangeCheck({ homebase, flinger, cell, outposts });
+
+  const verdict =
+    "pending" in plan ? checkOutpostRange(plan.pending, await outpostFlingers(plan.pending)) : plan;
+
+  return { cell, verdict };
 };
 
 /**
