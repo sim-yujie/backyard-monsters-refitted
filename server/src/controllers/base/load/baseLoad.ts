@@ -30,7 +30,7 @@ import { canAttack } from "../../../services/base/canAttack.js";
 import { createMR1Tribes } from "../../../services/maproom/v1/createMR1Tribes.js";
 import { MR1_TRIBES } from "../../../enums/Tribes.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
-import { calculateBaseLevel } from "../../../services/base/calculateBaseLevel.js";
+import { calculateBaseLevel, playerLevelOf } from "../../../services/base/calculateBaseLevel.js";
 import { RESOURCE_KEYS } from "../../../services/base/updateResources.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
 import { clearExpiredStoreItems } from "../../../services/base/clearExpiredStoreItems.js";
@@ -75,6 +75,11 @@ export const baseLoad: KoaController = async (ctx) => {
 
   let baseSave: Save | null = null;
 
+  // The attacker's level for the engine's low-level loot bonus, served to the
+  // client and kept in the attack session for the loot replay, so both run
+  // the battle at the same level (issue #167).
+  const attackerLevel = attacking ? playerLevelOf(user.save!) : undefined;
+
   switch (type) {
     case BaseMode.BUILD:
       baseSave = await baseModeBuild(user, baseid);
@@ -90,7 +95,7 @@ export const baseLoad: KoaController = async (ctx) => {
       if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
 
       await validateAttack(user, attackData, mapversion);
-      baseSave = await baseModeAttack({ user, baseid, mapversion, attackCost: attackcost });
+      baseSave = await baseModeAttack({ user, baseid, mapversion, attackCost: attackcost, attackerLevel });
       break;
 
     case BaseMode.IDESCENT:
@@ -127,7 +132,7 @@ export const baseLoad: KoaController = async (ctx) => {
       if (!ctx.meetsDiscordAgeCheck && !MR1_TRIBE_IDS.has(baseid)) throw discordAgeErr();
       
       await validateAttack(user, attackData, mapversion);
-      baseSave = await baseModeAttack({ user, baseid, mapversion, attackCost: attackcost });
+      baseSave = await baseModeAttack({ user, baseid, mapversion, attackCost: attackcost, attackerLevel });
       break;
 
     default:
@@ -346,6 +351,7 @@ export const baseLoad: KoaController = async (ctx) => {
     pic_square: avatar,
     chatservers: [process.env.CHAT_WS_HOST!],
     ...(isAttack && { attpowerups }),
+    ...(attackerLevel !== undefined && { attackerlevel: attackerLevel }),
     ...(completed && { completed }),
     ...(isOwner && {
       chatenabled: 1,

@@ -95,8 +95,11 @@ const sessionOf = (log: FlingLog, extra: Partial<AttackSession> = {}): AttackSes
 const negative = (amounts: Record<string, number>) =>
   Object.fromEntries(Object.entries(amounts).map(([key, value]) => [key, value > 0 ? -value : 0]));
 
-/** `AttackSession`: the engine, each event at its tick, stopped at `end`; the loot it would report. */
-const honestClient = (one: Fixture, end: number) => {
+/**
+ * `AttackSession`: the engine, each event at its tick, stopped at `end`, at
+ * the level the attack load served; the loot it would report.
+ */
+const honestClient = (one: Fixture, end: number, playerLevel?: number) => {
   const defender = defenderOf(one);
   const battle = createBattle(
     buildEngineYard({
@@ -105,7 +108,7 @@ const honestClient = (one: Fixture, end: number) => {
       resources: defender.resources as never,
       kind: one.kind,
     }),
-    { seed: one.log.seed, levels: one.levels, declareWar: false }
+    { seed: one.log.seed, levels: one.levels, declareWar: false, ...(playerLevel !== undefined && { playerLevel }) }
   );
   for (const event of one.log.events) {
     if (event.t > end) break;
@@ -152,6 +155,59 @@ describe("an honest attack is credited in full", () => {
     );
   }
 
+});
+
+describe("a low-level attacker (issue #167)", () => {
+  for (const one of fixtures) {
+    test(
+      `${one.name}: a level 1 client, at the level its session kept, is credited in full`,
+      () => {
+        const first = one.log.events[0]!.t;
+        for (const end of [first + 1600, first + 8000, FULL]) {
+          const client = honestClient(one, end, 1);
+          const loot = lootFor(one, client.attackloot, {
+            reported: negative(client.defenderLoss),
+            session: sessionOf(one.log, { attackerlevel: 1 }),
+          });
+          expect(loot.credit).toEqual(client.attackloot);
+          expect(loot.defenderDelta).toEqual(negative(client.defenderLoss) as never);
+        }
+      },
+      REPLAY_TIMEOUT_MS
+    );
+  }
+
+  test(
+    "the bonus is the session's level, never the client's: without one, a level 1 claim is cut",
+    () => {
+      const one = fixture("pokey-rush");
+      const client = honestClient(one, FULL, 1);
+      const atTwenty = honestClient(one, FULL, 20);
+      const loot = lootFor(one, client.attackloot, { reported: negative(client.defenderLoss) });
+      expect(client.attackloot.r1).toBeGreaterThan(atTwenty.attackloot.r1);
+      for (const key of ["r1", "r2", "r3", "r4"] as const) {
+        expect(loot.credit[key]).toBeLessThan(client.attackloot[key]);
+      }
+    },
+    REPLAY_TIMEOUT_MS
+  );
+
+  test(
+    "the defender pays for the loot, not for the bonus on it",
+    () => {
+      const one = fixture("pokey-rush");
+      const client = honestClient(one, FULL, 1);
+      const loot = lootFor(one, client.attackloot, {
+        reported: {},
+        session: sessionOf(one.log, { attackerlevel: 1 }),
+      });
+      for (const key of ["r1", "r2", "r3", "r4"] as const) {
+        expect(-loot.defenderDelta[key]).toBe(Math.floor(client.attackloot[key] / 1.57));
+        expect(-loot.defenderDelta[key]).toBeLessThanOrEqual(client.defenderLoss[key]);
+      }
+    },
+    REPLAY_TIMEOUT_MS
+  );
 });
 
 describe("the defender's loss", () => {

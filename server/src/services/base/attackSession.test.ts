@@ -4,6 +4,7 @@ import {
   ATTACK_SESSION_WINDOW,
   attackSessionKey,
   checkAttackBinding,
+  newAttackSession,
   parseAttackSession,
   serialiseAttackSession,
   type AttackSession,
@@ -143,6 +144,21 @@ describe("the stored session", () => {
     });
     const broken = JSON.stringify({ ...session(), defenderResources: { r1: 5, r2: -1, r3: 0, r4: 0 } });
     expect(parseAttackSession(broken)?.defenderResources).toBeUndefined();
+  });
+
+  test("carries the attacker's level (#167), and drops one that is not a whole level", () => {
+    const stored = { ...session(), attackerlevel: 7 };
+
+    expect(parseAttackSession(serialiseAttackSession(stored))).toEqual(stored);
+    for (const attackerlevel of [0, -3, 2.5, "7", null]) {
+      const raw = JSON.stringify({ ...session(), attackerlevel });
+      expect(parseAttackSession(raw)).toEqual(session());
+    }
+  });
+
+  test("newAttackSession records the attacker's level only when it is given one", () => {
+    expect(newAttackSession(ATTACKER, DEFENDER_ATTACK_ID, undefined, undefined, 3).attackerlevel).toBe(3);
+    expect("attackerlevel" in newAttackSession(ATTACKER, DEFENDER_ATTACK_ID)).toBe(false);
   });
 
   test("a JSON session keeps only whole counts, and broken JSON is no session", () => {

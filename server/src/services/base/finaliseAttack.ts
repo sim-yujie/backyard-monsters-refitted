@@ -33,6 +33,7 @@ import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpen
 import { getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
 import { storedDamage } from "./storedDamage.js";
 import { catchUpArmyRow } from "../yard/armies.js";
+import { playerLevelOf } from "./calculateBaseLevel.js";
 
 /**
  * Finishes an attack its attacker left without saving (issue #138).
@@ -148,6 +149,8 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
     log: checkpoint.flinglog,
     tick: checkpoint.tick,
     declareWar: await hasDeclareWar(attacker.alliance_id),
+    // No client figure to agree with here, so the stored save's level now.
+    playerLevel: playerLevelOf(userSave),
   });
 
   // The attacker: what was flung leaves its cells for good, and the rest of

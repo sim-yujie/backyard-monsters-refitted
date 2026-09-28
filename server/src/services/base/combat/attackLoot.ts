@@ -2,8 +2,10 @@ import {
   BOMBS,
   KRALLEN_ID,
   LOOT_GAIN_RATIO,
+  LOW_LEVEL_LOOT_CEILING,
   RESOURCE_KEYS,
   championStat,
+  lowLevelLootBonus,
   replayAttack,
   type BombStats,
   type BuildingHealthMap,
@@ -45,6 +47,10 @@ import { catapultLevelOf } from "./bombSpend.js";
  *   one their catapult unlocks and only the first of its resource
  *   ({@link fightableLog});
  * - uses the attacker's academy levels, as the client's roster does;
+ * - runs at the attacker's player level as the attack load served it (the
+ *   session's `attackerlevel`), which is the level the client's engine ran at,
+ *   so the low-level loot bonus (`ATTACK.as:678-680`) is the same on both
+ *   sides and never the client's say (issue #167);
  * - runs the battle to its longest possible end, Declare War's countdown plus
  *   the retreat grace, whatever the client's own clock said.
  *
@@ -218,9 +224,10 @@ export interface ReplayedLoot {
 /**
  * Replays an attack to its longest possible end and says what it looted.
  *
- * `playerLevel` is left at the engine's default, as the web client leaves it
- * (`AttackSession.load`); if the client ever passes one, this must pass the
- * same.
+ * `playerLevel` must be the level the client's engine ran at: the one the
+ * attack load served and the session kept (`attackerlevel`). Absent, the
+ * engine's default gives no bonus, which is what a client that was served no
+ * level ran at.
  */
 export const replayedLoot = ({
   defender,
@@ -228,12 +235,14 @@ export const replayedLoot = ({
   attacker,
   log,
   entryHoused,
+  playerLevel,
 }: {
   defender: LootDefender;
   pool: ResourceAmounts;
   attacker: LootAttacker;
   log: FlingLog;
   entryHoused: EntryHoused;
+  playerLevel?: number;
 }): ReplayedLoot => {
   const outcome = replayAttack({
     buildingdata: defender.buildingdata ?? {},
@@ -242,6 +251,7 @@ export const replayedLoot = ({
     kind: combatKindOf(defender.type),
     log: fightableLog(log, attacker, entryHoused),
     levels: academyLevels(attacker.academy),
+    ...(playerLevel !== undefined && { playerLevel }),
     // The longer countdown only lets the creeps fight on, so this is the most
     // any client could have seen, with or without the power-up.
     declareWar: true,
@@ -277,7 +287,9 @@ export interface AttackLoot {
  * can drain a pool it did not reach. The replay itself cannot be the figure:
  * it runs to the longest possible end, and a player who stopped earlier took
  * less. An honest client's loss is its own engine's, which lies between the
- * two, so it lands unchanged.
+ * two, so it lands unchanged. A low-level attacker's gain carries the bonus
+ * the defender never paid (`ATTACK.as:678-680`), so for them the floor is the
+ * credit less that bonus.
  *
  * @param sent - The save's `attackloot`.
  * @param reported - The save's `resources`: the defender's delta as the client saw it.
@@ -308,12 +320,16 @@ export const attackLootOf = ({
   const reportedLoss = wholeAmounts(negatedRaw(reported));
   const krallenBuff = krallenBuffOf(parseFlingLog(flinglog), attacker.champion);
 
+  // Each gain is at most its loss times this (`withLowLevelBonus` truncates),
+  // so a credit divided by it is never more than the loss that paid for it.
+  const bonus = lowLevelLootBonus(session?.attackerlevel ?? LOW_LEVEL_LOOT_CEILING);
+
   const land = (cap: ResourceAmounts, maxLoss: ResourceAmounts | null, basis: AttackLoot["basis"]): AttackLoot => {
     const credit = { r1: 0, r2: 0, r3: 0, r4: 0 };
     const defenderDelta = { r1: 0, r2: 0, r3: 0, r4: 0 };
     for (const key of RESOURCE_KEYS) {
       credit[key] = Math.min(asked[key], cap[key]);
-      const loss = Math.max(reportedLoss[key], credit[key]);
+      const loss = Math.max(reportedLoss[key], Math.floor(credit[key] / bonus));
       const lost = maxLoss ? Math.min(loss, maxLoss[key]) : loss;
       defenderDelta[key] = lost > 0 ? -lost : 0;
     }
@@ -326,7 +342,14 @@ export const attackLootOf = ({
     const log = parseFlingLog(flinglog);
     if (!log) return land(none, none, "no-log");
     const pool = session.defenderResources ?? poolAmounts(defender.resources);
-    const replayed = replayedLoot({ defender, pool, attacker, log, entryHoused });
+    const replayed = replayedLoot({
+      defender,
+      pool,
+      attacker,
+      log,
+      entryHoused,
+      ...(session.attackerlevel !== undefined && { playerLevel: session.attackerlevel }),
+    });
     return land(replayed.attackloot, replayed.defenderLoss, "replay");
   }
 

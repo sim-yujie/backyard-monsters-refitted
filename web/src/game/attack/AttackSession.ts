@@ -191,7 +191,11 @@ export interface AttackSessionOptions {
    * and the field written to the log is the same one.
    */
   readonly seed?: number;
-  /** The attacker's player level, for the engine's low-level loot bonus. */
+  /**
+   * The attacker's player level, for the engine's low-level loot bonus. Read
+   * off the load's `attackerlevel` when absent, which is the level the
+   * server's loot replay runs at (issue #167).
+   */
   readonly playerLevel?: number;
   /**
    * Whether Declare War lengthens the countdown. Read off the load's
@@ -224,6 +228,10 @@ export const hasDeclareWar = (powerups: readonly unknown[] | undefined): boolean
       entry !== null &&
       (entry as { id?: unknown }).id === "ap_declarewar",
   );
+
+/** The load's `attackerlevel`, when it is a whole level of 1 or more. */
+export const servedLevel = (raw: unknown): number | undefined =>
+  typeof raw === "number" && Number.isSafeInteger(raw) && raw >= 1 ? raw : undefined;
 
 /** The target kind as the rules module spells it; the two agree by name. */
 const combatKind = (kind: AttackTarget["kind"]): CombatTargetKind => kind;
@@ -323,11 +331,12 @@ export class AttackSession {
       buildingdata,
       buildinghealthdata: response.buildinghealthdata ?? null,
     });
+    const playerLevel = this.playerLevel ?? servedLevel(response.attackerlevel);
     this.battle_ = createBattle(yard, {
       seed: this.seed,
       levels: this.target.roster.levels,
       declareWar: this.declareWar_,
-      ...(this.playerLevel === undefined ? {} : { playerLevel: this.playerLevel }),
+      ...(playerLevel === undefined ? {} : { playerLevel }),
     });
     this.phase = "loaded";
     this.notify();

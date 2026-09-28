@@ -107,6 +107,41 @@ describe("AttackSession lifecycle", () => {
   });
 });
 
+describe("AttackSession loot level (#167)", () => {
+  /** A Town Hall on 1 health: the first swing fells it for a tenth of 100,000 twigs. */
+  const hallYard = (attackerlevel?: number): BaseLoadResponse =>
+    ({
+      ...towerYard(),
+      buildingdata: { "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 } },
+      buildinghealthdata: { "1": 1 },
+      resources: { r1: 100_000, r2: 0, r3: 0, r4: 0 },
+      ...(attackerlevel === undefined ? {} : { attackerlevel }),
+    }) as unknown as BaseLoadResponse;
+
+  const twigsTaken = (load: BaseLoadResponse, playerLevel?: number): number => {
+    const session = new AttackSession({
+      target: targetOf(),
+      seed: 1,
+      ...(playerLevel === undefined ? {} : { playerLevel }),
+    });
+    session.load(load);
+    session.appendFling({ x: -60, y: -60, monsters: { C1: 3 } });
+    play(session, 20);
+    return session.battle()!.state().loot.r1;
+  };
+
+  it("runs at the level the attack load serves, for the low-level bonus", () => {
+    expect(twigsTaken(hallYard())).toBe(10_000);
+    expect(twigsTaken(hallYard(1))).toBe(15_700);
+    expect(twigsTaken(hallYard(20))).toBe(10_000);
+  });
+
+  it("prefers a level it was handed, and ignores a served level that is not one", () => {
+    expect(twigsTaken(hallYard(1), 20)).toBe(10_000);
+    expect(twigsTaken({ ...hallYard(), attackerlevel: 0 } as BaseLoadResponse)).toBe(10_000);
+  });
+});
+
 describe("AttackSession events and the fling log", () => {
   it("stamps the tick and radius on a fling, spends the roster and logs it", () => {
     const session = sessionOf();

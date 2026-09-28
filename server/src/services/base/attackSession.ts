@@ -65,6 +65,14 @@ export interface AttackSession {
    * Absent on a session minted before it existed.
    */
   defenderResources?: ResourceAmounts;
+  /**
+   * The attacker's player level at attack start, from their stored save
+   * (`calculateBaseLevel`), which the attack load also hands the client for
+   * the engine's low-level loot bonus (`ATTACK.as:678-680`, issue #167). The
+   * loot replay runs at this level, so an honest client and the replay agree.
+   * Absent on a session minted before it existed, whose client ran at no bonus.
+   */
+  attackerlevel?: number;
 }
 
 /** Why a save was not accepted as this attack's result. */
@@ -88,7 +96,7 @@ export const attackSessionKey = (basesaveid: number) => `attack-session:${basesa
  * JSON once it carries `entryHoused` or `defenderResources`.
  */
 export const serialiseAttackSession = (session: AttackSession): string =>
-  session.entryHoused || session.defenderResources
+  session.entryHoused || session.defenderResources || session.attackerlevel !== undefined
     ? JSON.stringify(session)
     : `${session.attackerid}:${session.attackid}:${session.startedat}`;
 
@@ -141,12 +149,15 @@ export const parseAttackSession = (raw: string | null | undefined): AttackSessio
       if (![attackerid, attackid, startedat].every(Number.isSafeInteger)) return null;
       const entryHoused = entryHousedOf(parsed.entryHoused);
       const defenderResources = defenderResourcesOf(parsed.defenderResources);
+      const { attackerlevel } = parsed;
       return {
         attackerid: attackerid as number,
         attackid: attackid as number,
         startedat: startedat as number,
         ...(entryHoused && { entryHoused }),
         ...(defenderResources && { defenderResources }),
+        ...(Number.isSafeInteger(attackerlevel) &&
+          (attackerlevel as number) >= 1 && { attackerlevel: attackerlevel as number }),
       };
     } catch {
       return null;
@@ -221,16 +232,19 @@ export const checkAttackBinding = ({
  * @param {number} attackid - The `attackid` minted onto the defender's row.
  * @param {EntryHoused} [entryHoused] - The attacker's yards' `housed` at entry.
  * @param {ResourceAmounts} [defenderResources] - The defender's pool as the attack load serves it.
+ * @param {number} [attackerlevel] - The attacker's player level, which the attack load serves too.
  */
 export const newAttackSession = (
   attackerid: number,
   attackid: number,
   entryHoused?: EntryHoused,
-  defenderResources?: ResourceAmounts
+  defenderResources?: ResourceAmounts,
+  attackerlevel?: number
 ): AttackSession => ({
   attackerid,
   attackid,
   startedat: getCurrentDateTime(),
   ...(entryHoused && { entryHoused }),
   ...(defenderResources && { defenderResources }),
+  ...(attackerlevel !== undefined && { attackerlevel }),
 });

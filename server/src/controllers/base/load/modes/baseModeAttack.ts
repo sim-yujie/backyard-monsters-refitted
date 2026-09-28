@@ -47,6 +47,11 @@ interface BaseModeAttack {
   baseid: string;
   mapversion?: MapRoomVersion;
   attackCost?: { resources?: number[]; shiny?: number };
+  /**
+   * The attacker's player level (`playerLevelOf`), which the load also serves
+   * as `attackerlevel`; kept in the attack session for the loot replay.
+   */
+  attackerLevel?: number;
 }
 
 /**
@@ -59,7 +64,7 @@ interface BaseModeAttack {
  * @param {BaseModeAttack} options - Attack options
  * @returns {Promise<Save>} The base being attacked
  */
-export const baseModeAttack = async ({ user, baseid, mapversion, attackCost }: BaseModeAttack) => {
+export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, attackerLevel }: BaseModeAttack) => {
   const userSave = user.save!;
   let save: Save | null = null;
 
@@ -207,7 +212,7 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost }: B
     await startMR1TribeSession(
       user.userid,
       baseid,
-      newAttackSession(user.userid, save.attackid, armies.entryHoused)
+      newAttackSession(user.userid, save.attackid, armies.entryHoused, undefined, attackerLevel)
     );
   } else if (save.basesaveid) {
     // The pool the load serves (`mapSaveData`): an outpost's is its owner's,
@@ -216,7 +221,13 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost }: B
     const served = (await getOutpostOwnerSave(save, user)) ?? save;
     await startAttackSession(
       save.basesaveid,
-      newAttackSession(user.userid, save.attackid, armies.entryHoused, poolAmounts(served.resources))
+      newAttackSession(
+        user.userid,
+        save.attackid,
+        armies.entryHoused,
+        poolAmounts(served.resources),
+        attackerLevel
+      )
     );
   }
 

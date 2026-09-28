@@ -77,6 +77,16 @@ describe("replayAbandonedAttack", () => {
     expect(later.defenderDelta.r2).toBe(-Math.floor(replayed.defenderLoss.r2));
   });
 
+  test("runs at the attacker's level, so a low-level attacker's bonus is kept (#167)", () => {
+    const plain = replayAbandonedAttack(input(24000));
+    const lowLevel = replayAbandonedAttack(input(24000, { playerLevel: 1 }));
+    expect(lowLevel.defenderDelta).toEqual(plain.defenderDelta);
+    const total = (loot: typeof plain.attackloot) => loot.r1 + loot.r2 + loot.r3 + loot.r4;
+    expect(total(plain.attackloot)).toBeGreaterThan(0);
+    expect(total(lowLevel.attackloot)).toBeGreaterThan(total(plain.attackloot));
+    expect(replayAbandonedAttack(input(24000, { playerLevel: 20 })).attackloot).toEqual(plain.attackloot);
+  });
+
   test("ends the battle there: nothing the creeps would have done afterwards counts", () => {
     expect(later.damage).toBeGreaterThan(early.damage);
     expect(Object.keys(later.buildinghealthdata).length).toBeGreaterThanOrEqual(

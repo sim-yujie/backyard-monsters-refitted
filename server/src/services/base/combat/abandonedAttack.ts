@@ -62,6 +62,8 @@ export interface AbandonedInput {
   /** The tick the attacker was last seen at: the checkpoint's. */
   tick: number;
   declareWar: boolean;
+  /** The attacker's player level, for the low-level loot bonus (issue #167). */
+  playerLevel?: number;
 }
 
 /** Everything the attack save would have carried, derived. */
@@ -193,7 +195,12 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
       resources: defender.resources ?? null,
       kind,
     }),
-    { seed: log.seed, levels: academyLevels(attacker.academy), declareWar }
+    {
+      seed: log.seed,
+      levels: academyLevels(attacker.academy),
+      declareWar,
+      ...(input.playerLevel !== undefined && { playerLevel: input.playerLevel }),
+    }
   );
 
   const championsFlung = new Set<number>();

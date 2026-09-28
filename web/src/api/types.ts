@@ -503,6 +503,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
   canattack?: boolean;
   /** Attack modes only: the attacker's running alliance powerups. */
   attpowerups?: unknown[];
+  /**
+   * Attack modes only: the attacker's player level from their stored save,
+   * which the engine's low-level loot bonus reads (`ATTACK.as:678-680`). The
+   * server's loot replay runs at the same level (issue #167).
+   */
+  attackerlevel?: number;
   /** The base owner's running alliance powerups. */
   powerups?: unknown[];
   /**
