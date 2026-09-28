@@ -1,0 +1,184 @@
+/* Take over (issue #82, outposts plan WP6) ──────────────────────────────────
+ * The map cell panel's Take over line, the confirm dialog, the first-open
+ * popup and the end-of-attack offer. Kept in its own file so a restyle of the
+ * cell panel or the end panel leaves it alone. Every value is a token. */
+
+/* The line under the cell panel's actions: the price, or why not. */
+.takeover-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-secondary);
+}
+
+.takeover-action[hidden],
+.takeover-action [hidden],
+.takeover-action__button[hidden] {
+  display: none;
+}
+
+.takeover-action__button {
+  white-space: nowrap;
+}
+
+.takeover-action--refused {
+  color: var(--colour-text-muted);
+}
+
+.takeover-action__countdown,
+.takeover-dialog__countdown,
+.end-takeover__countdown {
+  color: var(--colour-warning);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* The confirm dialog. */
+.takeover-dialog {
+  width: min(92vw, 420px);
+}
+
+.takeover-dialog .panel__body {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.takeover-dialog [hidden] {
+  display: none;
+}
+
+.takeover-dialog__lead {
+  margin: 0;
+  font-weight: 700;
+}
+
+.takeover-dialog__cost {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.takeover-dialog__cost li {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.takeover-dialog__adjacent,
+.takeover-dialog__countdown {
+  margin: 0;
+}
+
+.takeover-dialog__choice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.takeover-dialog__option {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+}
+
+.takeover-dialog__note {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.takeover-dialog__short {
+  color: var(--colour-danger);
+}
+
+.takeover-dialog__confirm-text {
+  margin: 0 0 var(--space-2);
+}
+
+.takeover-dialog__actions,
+.end-takeover__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.takeover-dialog__status {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  color: var(--colour-text-muted);
+}
+
+.takeover-dialog__status--failed {
+  border-color: var(--colour-danger);
+  color: var(--colour-danger);
+}
+
+@media (width <= 420px) {
+  .takeover-dialog__choice {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* "Veni, Vidi, Vici!" */
+.takeover-first-open .panel__body {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  max-width: 360px;
+  text-align: center;
+}
+
+.takeover-first-open__art {
+  max-width: 100%;
+  height: auto;
+}
+
+.takeover-first-open__text {
+  margin: 0;
+}
+
+/* The offer on the end-of-attack panel. */
+.end-takeover {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-accent-line, var(--colour-border));
+  border-radius: var(--radius-md);
+  background: var(--colour-accent-soft, var(--colour-surface-sunken));
+}
+
+.end-takeover p {
+  margin: 0;
+}
+
+.end-takeover__lead {
+  font-weight: 700;
+}
+
+.end-takeover__price {
+  font-variant-numeric: tabular-nums;
+}
+
+.end-takeover [hidden] {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .takeover-dialog .btn,
+  .end-takeover .btn,
+  .takeover-action__button {
+    min-height: 44px;
+  }
+}
+/* end take over */

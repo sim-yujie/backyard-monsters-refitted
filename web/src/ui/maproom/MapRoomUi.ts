@@ -1,15 +1,19 @@
 import type { Bookmark } from "@/api/bookmarks";
-import type { MapCell, Resources } from "@/api/types";
+import type { TakeoverPayment } from "@/api/maproom";
+import type { MapCell, Resources, TakeoverQuoteResponse } from "@/api/types";
 import { MAX_ZOOM, MIN_ZOOM } from "@/config";
 import type { OffsetCell } from "@/game/HexGrid";
 import type { ZoneRecord } from "@/game/maproom/ZoneStore";
 import type { CellRange } from "@/game/maproom/zones";
+import type { TakeoverCandidate, TakeoverKind } from "@/game/maproom/takeover";
 import { Hud } from "@/ui/Hud";
 import { ZoomControl } from "@/ui/ZoomControl";
 import { CellPanel } from "./CellPanel";
 import { Minimap } from "./Minimap";
 import { NavPanel } from "./NavPanel";
 import { Notices } from "./Notices";
+import { TakeoverControl } from "./TakeoverControl";
+import { showTakenOver } from "./TakeoverDialog";
 
 /**
  * The map's own shape of the shared zoom control: a fixed range taken once
@@ -59,6 +63,15 @@ export interface MapRoomUiHandlers {
   /** The cell inspector's Attack gate and button; see `CellPanelOptions`. */
   attackRefusal: (payload: MapCell | undefined) => string | null;
   onAttack: () => void;
+  /** The cell inspector's Take over action (issue #82); see `TakeoverControlOptions`. */
+  takeoverQuote: (baseid: string) => Promise<TakeoverQuoteResponse>;
+  takeOver: (baseid: string, payment: TakeoverPayment) => Promise<unknown>;
+  onTakenOver: (
+    cell: OffsetCell,
+    candidate: TakeoverCandidate,
+    quote: TakeoverQuoteResponse,
+    payment: TakeoverPayment,
+  ) => void;
   onZoom: (zoom: number) => void;
   onZoomStep: (direction: 1 | -1) => void;
   onZoomReset: () => void;
@@ -76,7 +89,10 @@ export class MapRoomUi {
   private readonly docks: HTMLElement[] = [];
 
   private cellPanel: CellPanel | null = null;
+  private takeover: TakeoverControl | null = null;
   private container: HTMLElement | null = null;
+  /** The overlay's modal layer, for the takeover dialogs. */
+  private modal: HTMLElement | null = null;
   private readonly handlers: MapRoomUiHandlers;
 
   constructor(handlers: MapRoomUiHandlers, activeScene: string, scenes: { id: string; label: string }[]) {
@@ -115,8 +131,9 @@ export class MapRoomUi {
     this.readout.textContent = "—";
   }
 
-  mount(container: HTMLElement): this {
+  mount(container: HTMLElement, modal?: HTMLElement): this {
     this.container = container;
+    this.modal = modal ?? null;
     container.append(this.hud.element);
     this.notices.mount(container);
 
@@ -135,6 +152,8 @@ export class MapRoomUi {
     this.navPanel.destroy();
     this.cellPanel?.close();
     this.cellPanel = null;
+    this.takeover?.destroy();
+    this.takeover = null;
     this.minimap.destroy();
     this.zoomControl.destroy();
     this.notices.destroy();
@@ -142,6 +161,7 @@ export class MapRoomUi {
     for (const dock of this.docks) dock.remove();
     this.docks.length = 0;
     this.container = null;
+    this.modal = null;
   }
 
   /* ── Display ────────────────────────────────────────────────────────── */
@@ -197,6 +217,12 @@ export class MapRoomUi {
 
     if (!this.cellPanel) {
       if (!this.container) return;
+      this.takeover = new TakeoverControl({
+        quote: this.handlers.takeoverQuote,
+        takeOver: this.handlers.takeOver,
+        onTaken: this.handlers.onTakenOver,
+        modal: () => this.modal ?? this.container,
+      });
       this.cellPanel = new CellPanel({
         onClose: this.handlers.onCellPanelClose,
         onBookmark: this.handlers.onBookmarkCell,
@@ -204,6 +230,7 @@ export class MapRoomUi {
         onViewYard: this.handlers.onViewYard,
         attackRefusal: this.handlers.attackRefusal,
         onAttack: this.handlers.onAttack,
+        extraAction: this.takeover,
       }).mount(this.dock("map-dock map-dock--right"));
     }
     this.cellPanel.show(cell, payload);
@@ -217,9 +244,22 @@ export class MapRoomUi {
     this.cellPanel?.tick(nowSeconds);
   }
 
+  /** Asks the server again whether the shown cell can be taken over. */
+  refreshTakeover(): void {
+    this.takeover?.refresh();
+  }
+
+  /** Flash's "Veni, Vidi, Vici!" for a yard just taken over. */
+  showTakenOver(kind: TakeoverKind, name: string): void {
+    const container = this.modal ?? this.container;
+    if (container) showTakenOver(container, kind, name);
+  }
+
   closeCell(): void {
     this.cellPanel?.close();
     this.cellPanel = null;
+    this.takeover?.destroy();
+    this.takeover = null;
     this.minimap.setSelected(null);
   }
 

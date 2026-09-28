@@ -321,6 +321,70 @@ export interface BaseSaveResponse extends ApiEnvelope {
   takeover?: unknown;
   /** What the attacker's pool banked of the loot, on the save that ends an attack (issue #166). */
   lootcredited?: Resources;
+  /**
+   * The attacker's one chance to take over the player outpost this attack
+   * destroyed (issue #182), on the save that ends the attack.
+   */
+  takeovergrant?: TakeoverGrantOffer;
+}
+
+/**
+ * A takeover grant as the final attack save reports it
+ * (`server/src/services/maproom/v2/takeoverOffer.ts`): when the chance ends,
+ * in server seconds, and the price `takeoverCell` will charge. The price is
+ * absent only when the server could not place the outpost's cell.
+ */
+export interface TakeoverGrantOffer {
+  baseid: string;
+  expiresAt: number;
+  /** Of each of r1..r4. */
+  resources?: number;
+  shiny?: number;
+  adjacent?: boolean;
+}
+
+/**
+ * Why a takeover quote says no (`POST /worldmapv2/takeoverquote`,
+ * `server/src/services/maproom/v2/takeoverRules.ts` plus `outOfRange`).
+ */
+export type TakeoverRefusalReason =
+  | "notFound"
+  | "mainYard"
+  | "ownYard"
+  | "noTakeoverChance"
+  | "notDestroyed"
+  | "regenerated"
+  | "protected"
+  | "locked"
+  | "underAttack"
+  | "maxOutposts"
+  | "outOfRange"
+  | "notEnoughShiny"
+  | "notEnoughResources";
+
+/**
+ * `POST /worldmapv2/takeoverquote` (issue #82): the price and the server's
+ * verdict for one cell. The only source of takeover eligibility on the web;
+ * the client copies neither the rules nor the price formula.
+ */
+export interface TakeoverQuoteResponse extends ApiEnvelope {
+  baseid: string;
+  /** Absent when the cell could not be found. */
+  kind?: "camp" | "outpost";
+  eligible: boolean;
+  reason: TakeoverRefusalReason | null;
+  /** Of each of r1..r4. Absent when the cell could not be found. */
+  resources?: number;
+  shiny?: number;
+  /** Next to the caller's main yard, which halves the price. */
+  adjacent?: boolean;
+  /** Server seconds when the caller's chance at this player outpost ends; only while it runs. */
+  grantExpiresAt?: number;
+  /** Whether the caller can pay each way right now. */
+  affordable?: { resources: boolean; shiny: boolean };
+  shinyLocked?: boolean;
+  /** Server seconds when the quote was made. */
+  now: number;
 }
 
 /** Resource counts and their caps, as carried on a save and on a map cell. */

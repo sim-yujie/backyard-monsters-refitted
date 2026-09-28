@@ -1,6 +1,12 @@
 import { AREA_ZONE_SIZE, WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
-import { post } from "./http";
-import type { GetAreaRequest, GetAreaResponse, MapCell } from "./types";
+import { post, type RequestOptions } from "./http";
+import type {
+  ApiEnvelope,
+  GetAreaRequest,
+  GetAreaResponse,
+  MapCell,
+  TakeoverQuoteResponse,
+} from "./types";
 
 /**
  * Map Room 2 routes. Mounted at /worldmapv2/... with no /api/:apiVersion
@@ -74,3 +80,40 @@ export function* iterateCells(
     }
   }
 }
+
+/* ── Takeover (issue #82) ─────────────────────────────────────────────── */
+
+/**
+ * What taking a cell over would cost the caller, and whether the server
+ * would allow it now (`POST /worldmapv2/takeoverquote`). Always a 200 with
+ * `eligible` and `reason`; a cell the server cannot find answers
+ * `reason: "notFound"` with no price.
+ */
+export const getTakeoverQuote = (baseid: string): Promise<TakeoverQuoteResponse> =>
+  post<TakeoverQuoteResponse>("/worldmapv2/takeoverquote", { baseid });
+
+/** How a takeover is paid: Flash's "Use resources" or "Use N Shiny". */
+export type TakeoverPayment = "resources" | "shiny";
+
+/**
+ * Takes the cell over (`POST /worldmapv2/takeoverCell`). The server charges
+ * its own price whatever is posted; a positive `shiny` only says which of the
+ * two payments was chosen. A refusal is an {@link ApiError} with the reason in
+ * `details.data.reason` and Flash's `err_takeoverproblem` suffix as the message.
+ */
+export const takeOverCell = (baseid: string, payment: TakeoverPayment): Promise<ApiEnvelope> =>
+  post<ApiEnvelope>("/worldmapv2/takeoverCell", {
+    baseid,
+    shiny: payment === "shiny" ? "1" : undefined,
+  });
+
+/**
+ * Turns down the one chance at a destroyed player outpost
+ * (`POST /worldmapv2/declinetakeover`, issue #182). Its 8 hours of damage
+ * protection start now. `keepalive` lets it go out with a closing page.
+ */
+export const declineTakeover = (
+  baseid: string,
+  options: RequestOptions = {},
+): Promise<ApiEnvelope & { protectedUntil?: number }> =>
+  post<ApiEnvelope & { protectedUntil?: number }>("/worldmapv2/declinetakeover", { baseid }, options);

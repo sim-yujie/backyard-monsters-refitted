@@ -54,9 +54,10 @@ export interface SavedInfo {
 
 /** `Nh Nm` for a span of seconds; the protection line's spelling. */
 export const formatSpan = (seconds: number): string => {
-  const whole = Math.max(0, Math.round(seconds));
-  const hours = Math.floor(whole / 3600);
-  const minutes = Math.round((whole % 3600) / 60);
+  // Rounded to the minute before splitting, so 7 h 59 min 59 s reads "8 h", not "7 h 60 min".
+  const totalMinutes = Math.round(Math.max(0, seconds) / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
   if (hours === 0) return `${Math.max(1, minutes)} min`;
   return minutes === 0 ? `${hours} h` : `${hours} h ${minutes} min`;
 };
@@ -95,6 +96,9 @@ export class EndAttackPanel {
   private readonly retryButton: HTMLButtonElement;
   private readonly leaveButton: HTMLButtonElement;
   private readonly leaveConfirm: HTMLElement;
+  private readonly actions: HTMLElement;
+  /** A section hosted above the actions: the takeover offer (issue #82). */
+  private extra: HTMLElement | null = null;
   private readonly options: EndAttackPanelOptions;
   private status_: EndAttackSaveStatus = "saving";
 
@@ -205,6 +209,7 @@ export class EndAttackPanel {
     const actions = document.createElement("div");
     actions.className = "attack-end__actions";
     actions.append(this.leaveButton, this.retryButton, this.returnButton);
+    this.actions = actions;
 
     this.panel.setContent(
       outcome,
@@ -234,6 +239,18 @@ export class EndAttackPanel {
   close(): void {
     this.panel.close();
     this.element.remove();
+  }
+
+  /**
+   * Shows a section of its own above the actions, or removes it with null:
+   * the takeover offer after a destroyed camp or outpost (issue #82). The
+   * panel does not look inside it.
+   */
+  setExtra(node: HTMLElement | null): void {
+    if (this.extra === node) return;
+    this.extra?.remove();
+    this.extra = node;
+    if (node) this.actions.before(node);
   }
 
   /** Back to "Saving…", for a retry. */

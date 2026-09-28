@@ -206,5 +206,6 @@ describe("formatSpan", () => {
     expect(formatSpan(8 * 3600 + 30 * 60)).toBe("8 h 30 min");
     expect(formatSpan(90)).toBe("2 min");
     expect(formatSpan(5)).toBe("1 min");
+    expect(formatSpan(8 * 3600 - 1)).toBe("8 h");
   });
 });

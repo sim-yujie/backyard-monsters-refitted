@@ -1,8 +1,9 @@
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
+import { getTakeoverQuote, takeOverCell, type TakeoverPayment } from "@/api/maproom";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { ApiError, NetworkError } from "@/api/http";
-import type { BaseLoadResponse, MapCell } from "@/api/types";
+import type { BaseLoadResponse, MapCell, Resources, TakeoverQuoteResponse } from "@/api/types";
 import { DEFAULT_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
 import {
   attackRefusal,
@@ -20,11 +21,14 @@ import {
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
 import { Bookmarks } from "@/game/maproom/Bookmarks";
+import { consumeMapFocus, type MapFocus } from "@/game/maproom/mapFocus";
+import { takenOverResources, type TakeoverCandidate } from "@/game/maproom/takeover";
 import { MapInput } from "@/game/maproom/MapInput";
 import { MapRenderer } from "@/game/maproom/MapRenderer";
 import { ZoneStore, type ZoneError } from "@/game/maproom/ZoneStore";
 import { inWorld, type CellRange } from "@/game/maproom/zones";
 import { MapRoomUi } from "@/ui/maproom/MapRoomUi";
+import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
 
@@ -60,7 +64,7 @@ export class MapRoom2Scene implements Scene {
 
   private readonly store = new ZoneStore({
     onZone: (zone) => this.renderer.applyZone(zone),
-    onResources: (resources, credits) => this.ui?.setResources(resources, credits),
+    onResources: (resources, credits) => this.showResources(resources, credits),
     onError: (error) => this.reportError(error),
     onAuthFailure: () => this.context?.goTo(SceneName.LOGIN),
   });
@@ -96,6 +100,14 @@ export class MapRoom2Scene implements Scene {
    * the catapult (`game/attack/attackEntry.ts`, `rosterInRange`).
    */
   private ownSave: BaseLoadResponse | null = null;
+  /** The pool the HUD shows, so a takeover can take its price off at once. */
+  private resources: Resources | null = null;
+  private credits: number | undefined;
+  /**
+   * Where the map should open instead of the home cell: the target of the
+   * attack just finished, or the outpost just taken over (`mapFocus.ts`).
+   */
+  private pendingFocus: MapFocus | null = null;
 
   /**
    * True once the home cell is known, or known to be unavailable.
@@ -116,6 +128,7 @@ export class MapRoom2Scene implements Scene {
 
   async enter(context: SceneContext): Promise<void> {
     this.context = context;
+    this.pendingFocus = consumeMapFocus();
     this.viewportWidth = context.width;
     this.viewportHeight = context.height;
     context.stage.addChild(this.renderer.root);
@@ -150,6 +163,9 @@ export class MapRoom2Scene implements Scene {
         onViewYard: () => this.viewYard(),
         attackRefusal: (payload) => this.attackRefusalFor(payload),
         onAttack: () => this.startAttack(),
+        takeoverQuote: (baseid) => getTakeoverQuote(baseid),
+        takeOver: (baseid, payment) => takeOverCell(baseid, payment),
+        onTakenOver: (cell, candidate, quote, payment) => this.tookOver(cell, candidate, quote, payment),
         onZoom: (zoom) => this.zoomTo(zoom),
         onZoomStep: (direction) => this.zoomTo(this.camera.zoom * Math.pow(ZOOM_STEP, direction)),
         onZoomReset: () => this.fitWorld(),
@@ -160,7 +176,7 @@ export class MapRoom2Scene implements Scene {
         { id: SceneName.MAP_ROOM_2, label: "Map" },
         { id: SceneName.YARD, label: "Yard" },
       ],
-    ).mount(context.overlay.content);
+    ).mount(context.overlay.content, context.overlay.modal);
 
     this.ui.setBookmarks(this.bookmarks.all);
     this.updateBookmarkTarget();
@@ -177,6 +193,13 @@ export class MapRoom2Scene implements Scene {
       onCancel: () => this.clearSelection(),
     });
     this.input.attach();
+
+    if (import.meta.env.DEV) {
+      // The end panel's takeover offer, without finishing a real attack (#82).
+      (globalThis as Record<string, unknown>)["__takeoverPreview"] = {
+        endPanel: (options: EndTakeoverPreviewOptions) => previewEndTakeover(context.overlay.modal, options),
+      };
+    }
 
     window.addEventListener("focus", this.handleFocus);
     document.addEventListener("visibilitychange", this.handleFocus);
@@ -197,6 +220,7 @@ export class MapRoom2Scene implements Scene {
     document.removeEventListener("visibilitychange", this.handleFocus);
     window.removeEventListener("online", this.handleOnline);
     window.removeEventListener("offline", this.handleOffline);
+    if (import.meta.env.DEV) delete (globalThis as Record<string, unknown>)["__takeoverPreview"];
 
     this.ui?.destroy();
     this.ui = null;
@@ -281,7 +305,7 @@ export class MapRoom2Scene implements Scene {
         );
       }
 
-      if (base.resources) this.ui?.setResources(base.resources, base.credits);
+      if (base.resources) this.showResources(base.resources, base.credits);
     } catch (caught) {
       if (caught instanceof ApiError && caught.isAuthFailure) {
         this.context?.goTo(SceneName.LOGIN);
@@ -295,11 +319,31 @@ export class MapRoom2Scene implements Scene {
         { level: "warning", actionLabel: "Retry", onAction: () => void this.loadOwnCell() },
       );
     } finally {
+      this.applyFocus();
       // Either the camera is on the home cell or it is on the world centre.
       // Whichever it is, that is now the right place to start fetching from.
       this.ready = true;
       this.camera.dirty = true;
     }
+  }
+
+  /**
+   * Opens on the cell handed over by the screen before (`mapFocus.ts`)
+   * instead of the home cell: the attack's target, or the outpost just
+   * taken over, which also gets its "Veni, Vidi, Vici!".
+   */
+  private applyFocus(): void {
+    const focus = this.pendingFocus;
+    this.pendingFocus = null;
+    if (!focus || !inWorld(focus.cell.col, focus.cell.row)) return;
+    this.jumpTo(focus.cell, DEFAULT_ZOOM);
+    if (focus.takenOver) this.ui?.showTakenOver(focus.takenOver.kind, focus.takenOver.name);
+  }
+
+  private showResources(resources: Resources, credits: number | undefined): void {
+    this.resources = resources;
+    this.credits = credits;
+    this.ui?.setResources(resources, credits);
   }
 
   /* ── Camera ─────────────────────────────────────────────────────────── */
@@ -521,12 +565,39 @@ export class MapRoom2Scene implements Scene {
     context.goTo(SceneName.YARD);
   }
 
+  /* ── Take over ──────────────────────────────────────────────────────── */
+
+  /**
+   * The server has made the cell the player's outpost (issue #82). Its zone
+   * is fetched again so the map redraws it as theirs; the HUD takes off the
+   * price and adds the outpost's 2,000,000 of storage at once, as Flash did
+   * (`PopupTakeover.as:140-159`), until the next resource sync replaces it
+   * with the server's figures. Until outposts open from the map (outposts
+   * plan WP5), the new outpost is selected on the map rather than opened.
+   */
+  private tookOver(
+    cell: OffsetCell,
+    candidate: TakeoverCandidate,
+    quote: TakeoverQuoteResponse,
+    payment: TakeoverPayment,
+  ): void {
+    this.store.invalidateCell(cell.col, cell.row);
+    void this.store.pump();
+    if (this.resources) {
+      const next = takenOverResources(this.resources, this.credits, quote, payment);
+      this.showResources(next.resources, next.credits);
+    }
+    this.selectCell(cell);
+    this.ui?.showTakenOver(candidate.kind, candidate.name);
+  }
+
   /* ── Refresh and status ─────────────────────────────────────────────── */
 
   private refreshNow(): void {
     this.store.resume();
     this.store.refreshVisible();
     void this.store.pump();
+    this.ui?.refreshTakeover();
     this.ui?.notices.show("refresh", "Refetching the visible map.", {
       level: "info",
       timeoutMs: 2_000,

@@ -1,11 +1,21 @@
 import { saveAttack } from "@/api/base";
 import { ApiError, NetworkError, getAuthToken } from "@/api/http";
-import type { AttackSavePayload, BaseSaveResponse } from "@/api/types";
+import { declineTakeover, getTakeoverQuote, takeOverCell, type TakeoverPayment } from "@/api/maproom";
+import type {
+  AttackSavePayload,
+  BaseSaveResponse,
+  TakeoverGrantOffer,
+  TakeoverQuoteResponse,
+} from "@/api/types";
 import { ATTACK_PLUGINS, type AttackMounts, type AttackPlugin } from "@/game/attack/attackPlugins";
 import { buildAttackSave, forKeepalive, summariseAttack } from "@/game/attack/attackSave";
+import type { AttackTarget } from "@/game/attack/attackTarget";
 import type { ResourceAmounts } from "@/game/combat/rules";
+import { setMapFocus } from "@/game/maproom/mapFocus";
+import { takeoverGrantOf, type TakeoverKind } from "@/game/maproom/takeover";
 import { monsterName } from "@/ui/attack/ArmyPanel";
 import { EndAttackPanel, type SaveFailure } from "@/ui/attack/EndAttackPanel";
+import { EndTakeoverOffer } from "@/ui/attack/EndTakeoverOffer";
 
 /**
  * Attack-scene plugin for the "end" work package (issue #32, WP6).
@@ -45,6 +55,16 @@ import { EndAttackPanel, type SaveFailure } from "@/ui/attack/EndAttackPanel";
  * battle layer says the rain is down (`AttackMounts.presentation`), or after
  * {@link END_PANEL_MAX_WAIT_MS} whatever it says, and shows the save's
  * progress as it stands by then.
+ *
+ * A saved attack that destroyed a Map Room 2 camp, or a player outpost whose
+ * save came back with a `takeovergrant`, gets a takeover offer on the panel
+ * (issue #82, {@link EndTakeoverOffer}). On an outpost the offer is the
+ * attacker's one chance: leaving the panel without choosing turns it down,
+ * best effort. Return to map and in-app navigation send the decline as an
+ * ordinary request, a closing page as a keepalive one (`pagehide`), and if
+ * neither arrives the server lets the chance expire. Return to map opens the
+ * map on the target's cell (`mapFocus.ts`); a takeover opens it on the new
+ * outpost with Flash's "Veni, Vidi, Vici!".
  */
 
 /** How long the server accepts this attack's save, from the attack load. */
@@ -64,6 +84,8 @@ type SaveShown =
       readonly protectedUntil: number | null;
       readonly now: number;
       readonly credited: ResourceAmounts | null;
+      /** The takeover the panel offers, when the attack earned one. */
+      readonly takeover: TakeoverChance | null;
     }
   | { readonly kind: "failed"; readonly failure: SaveFailure }
   | { readonly kind: "unsent" };
@@ -89,6 +111,49 @@ const showOn = (panel: EndAttackPanel, shown: SaveShown): void => {
   }
 };
 
+/** A takeover the saved attack made possible (issue #82). */
+export interface TakeoverChance {
+  readonly kind: TakeoverKind;
+  /** The save's grant; a player outpost's one chance. */
+  readonly grant: TakeoverGrantOffer | null;
+}
+
+/**
+ * Whether the saved attack offers a takeover: a Map Room 2 player outpost
+ * whose save came back with the attacker's grant, or a Map Room 2 camp left
+ * destroyed (`destroyed`, 90% or more). Map Room 1 has no takeover.
+ */
+export const takeoverChanceOf = (
+  target: AttackTarget,
+  response: BaseSaveResponse,
+  payload: AttackSavePayload | null,
+): TakeoverChance | null => {
+  if (!target.cell || (target.mapversion ?? 2) !== 2) return null;
+  if (target.kind === "outpost") {
+    const grant = takeoverGrantOf(response, target.baseid);
+    return grant ? { kind: "outpost", grant } : null;
+  }
+  if (target.kind !== "wild") return null;
+  const destroyed = typeof response.destroyed === "number" ? response.destroyed : payload?.destroyed;
+  return Number(destroyed) === 1 ? { kind: "camp", grant: null } : null;
+};
+
+/** The takeover routes the offer calls (issue #82). */
+export interface TakeoverCalls {
+  readonly quote: (baseid: string) => Promise<TakeoverQuoteResponse>;
+  readonly takeOver: (baseid: string, payment: TakeoverPayment) => Promise<unknown>;
+  readonly decline: (
+    baseid: string,
+    options: { keepalive?: boolean; token?: string | null },
+  ) => Promise<{ protectedUntil?: number }>;
+}
+
+const TAKEOVER_CALLS: TakeoverCalls = {
+  quote: getTakeoverQuote,
+  takeOver: takeOverCell,
+  decline: (baseid, options) => declineTakeover(baseid, options),
+};
+
 /** What the plugin needs that it would otherwise take from the app. */
 export interface EndPluginDeps {
   readonly save?: (payload: AttackSavePayload) => Promise<BaseSaveResponse>;
@@ -104,6 +169,8 @@ export interface EndPluginDeps {
   readonly now?: () => number;
   /** Display names for the attack report; the army panel's table by default. */
   readonly nameOf?: (id: string) => string;
+  /** The takeover routes; the real ones by default. */
+  readonly takeover?: TakeoverCalls;
 }
 
 /**
@@ -183,9 +250,10 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       saveAttack(forKeepalive(payload), { keepalive: true, token }));
   const now = deps.now ?? (() => Date.now());
   const nameOf = deps.nameOf ?? monsterName;
+  const takeoverCalls = deps.takeover ?? TAKEOVER_CALLS;
 
   return (mounts: AttackMounts) => {
-    const { session, modal, notices, goToMap, presentation } = mounts;
+    const { session, target, modal, notices, goToMap, presentation } = mounts;
     const page = deps.page ?? { window };
     const mountedAt = now();
     const token = getAuthToken();
@@ -204,10 +272,53 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     /** The wait for the screen to catch up before the panel opens. */
     let waiting: number | null = null;
     let tornDown = false;
+    /** The takeover offer, once a save has earned one. */
+    let offer: EndTakeoverOffer | null = null;
+
+    /** Opens the map on the target's cell, or on the outpost just taken over. */
+    const returnToMap = (takenOver?: TakeoverKind): void => {
+      if (target.cell && (target.mapversion ?? 2) === 2) {
+        setMapFocus({
+          cell: target.cell,
+          ...(takenOver ? { takenOver: { kind: takenOver, name: target.name } } : {}),
+        });
+      }
+      goToMap();
+    };
+
+    const offerTakeover = (chance: TakeoverChance): void => {
+      if (offer || tornDown || leaving) return;
+      offer = new EndTakeoverOffer({
+        kind: chance.kind,
+        baseid: target.baseid,
+        name: target.name,
+        grant: chance.grant,
+        quote: takeoverCalls.quote,
+        takeOver: takeoverCalls.takeOver,
+        decline: (baseid, options) => takeoverCalls.decline(baseid, { ...options, token }),
+        modal,
+        onTaken: () => returnToMap(chance.kind),
+        now: () => now() / 1000,
+      });
+      panel?.setExtra(offer.element);
+    };
 
     const show = (next: SaveShown): void => {
       shown = next;
       if (panel) showOn(panel, next);
+      if (next.kind === "saved" && next.takeover) offerTakeover(next.takeover);
+    };
+
+    /** The panel's saved state for a response. A grant's outpost is not protected yet. */
+    const savedFrom = (response: BaseSaveResponse): SaveShown => {
+      const takeover = takeoverChanceOf(target, response, payload);
+      return {
+        kind: "saved",
+        protectedUntil: takeover?.grant ? null : protectedUntilOf(response),
+        now: now() / 1000,
+        credited: creditedOf(response),
+        takeover,
+      };
     };
 
     const warnIfDue = (): void => {
@@ -232,12 +343,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       try {
         const response = await save(payload);
         saved = true;
-        show({
-          kind: "saved",
-          protectedUntil: protectedUntilOf(response),
-          now: now() / 1000,
-          credited: creditedOf(response),
-        });
+        show(savedFrom(response));
       } catch (caught) {
         // Refused because its keepalive copy landed first is not a failure.
         if (!saved) show({ kind: "failed", failure: describeSaveFailure(caught) });
@@ -254,12 +360,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       saveOnLeave(payload, token).then(
         (response) => {
           saved = true;
-          show({
-            kind: "saved",
-            protectedUntil: protectedUntilOf(response),
-            now: now() / 1000,
-            credited: creditedOf(response),
-          });
+          show(savedFrom(response));
         },
         (caught: unknown) => {
           // A duplicate of a save that already landed is refused; that is not a failure.
@@ -286,18 +387,25 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       if (phase === "ended" && unloading && !saved) sendOnLeave();
     };
 
-    const onPageHide = (): void => leave(true);
+    const onPageHide = (): void => {
+      leave(true);
+      offer?.declineOnLeave(true);
+    };
     page.window.addEventListener("pagehide", onPageHide);
 
     const openPanel = (): void => {
       if (panel || tornDown) return;
       panel = new EndAttackPanel({
         summary: summariseAttack(session),
-        onReturn: goToMap,
+        onReturn: () => {
+          offer?.declineOnLeave(false);
+          returnToMap();
+        },
         onRetry: () => void attempt(),
-        onLeave: goToMap,
+        onLeave: () => returnToMap(),
       }).mount(modal);
       if (shown) showOn(panel, shown);
+      if (offer) panel.setExtra(offer.element);
     };
 
     /** Opens the panel once nothing on screen is still playing out, or the wait runs out. */
@@ -346,6 +454,9 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     return () => {
       // The scene is going (in-app navigation, a sign-out): that is leaving too.
       leave(false);
+      offer?.declineOnLeave(false);
+      offer?.destroy();
+      offer = null;
       tornDown = true;
       page.window.removeEventListener("pagehide", onPageHide);
       unsubscribe();

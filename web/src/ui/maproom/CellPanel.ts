@@ -36,6 +36,22 @@ export interface CellPanelOptions {
   attackRefusal: (payload: MapCell | undefined) => string | null;
   /** Starts an attack on the shown cell. Only called while enabled. */
   onAttack: () => void;
+  /**
+   * An action that sits beside Attack and brings its own line under the
+   * actions: Take over (`TakeoverControl`, issue #82). It is told about
+   * every show and update and decides for itself what to show.
+   */
+  extraAction?: CellPanelAction;
+}
+
+/** An action the panel hosts without knowing what it does. */
+export interface CellPanelAction {
+  /** Placed after Attack in the actions row. */
+  readonly button: HTMLElement;
+  /** Placed under the actions row. */
+  readonly detail: HTMLElement;
+  setCell(cell: OffsetCell, payload: MapCell | undefined): void;
+  tick(nowSeconds: number): void;
 }
 
 const ATTACK_READY = "Open this yard and attack it.";
@@ -99,6 +115,7 @@ export class CellPanel {
     const actions = document.createElement("div");
     actions.className = "map-row map-row--wrap";
     actions.append(this.viewYardButton, this.attackButton);
+    if (options.extraAction) actions.append(options.extraAction.button);
 
     this.bookmarkButton = document.createElement("button");
     this.bookmarkButton.type = "button";
@@ -109,7 +126,12 @@ export class CellPanel {
     });
     actions.append(this.bookmarkButton);
 
-    this.panel.setContent(this.kind, this.facts, actions);
+    this.panel.setContent(
+      this.kind,
+      this.facts,
+      actions,
+      ...(options.extraAction ? [options.extraAction.detail] : []),
+    );
   }
 
   /** Shows a cell. `payload` is undefined while its zone is still loading. */
@@ -120,6 +142,7 @@ export class CellPanel {
     this.bookmarkButton.disabled = !this.options.canBookmark();
     this.setViewYard(payload);
     this.setAttackRefusal(this.options.attackRefusal(payload));
+    this.options.extraAction?.setCell(cell, payload);
     this.render();
   }
 
@@ -129,6 +152,7 @@ export class CellPanel {
     this.payload = payload;
     this.setViewYard(payload);
     this.setAttackRefusal(this.options.attackRefusal(payload));
+    this.options.extraAction?.setCell(this.cell, payload);
     this.render();
   }
 
@@ -175,6 +199,7 @@ export class CellPanel {
     for (const entry of this.countdowns) {
       entry.node.textContent = formatCountdown(entry.expiresAt - nowSeconds);
     }
+    this.options.extraAction?.tick(nowSeconds);
   }
 
   mount(container: HTMLElement): this {
@@ -223,7 +248,7 @@ export class CellPanel {
     this.add("Damage", `${payload.dm}%`, payload.dm > 0 ? "is-danger" : undefined);
     this.add(
       "Destroyed",
-      payload.d === 1 ? "Yes, takeover-eligible" : "No",
+      payload.d === 1 ? "Yes" : "No",
       payload.d === 1 ? "is-danger" : undefined,
     );
     this.add("Base id", payload.bid);
@@ -254,7 +279,7 @@ export class CellPanel {
     );
     this.add(
       "Destroyed",
-      payload.d === 1 ? "Yes, takeover-eligible" : "No",
+      payload.d === 1 ? "Yes" : "No",
       payload.d === 1 ? "is-danger" : undefined,
     );
 
