@@ -54,6 +54,12 @@ import {
 import { ownerSaveConfig } from "../../../config/OwnerSaveConfig.js";
 import { requireOwnerSaveAllowed } from "../../../services/base/ownerSave.js";
 import { storedDamage } from "../../../services/base/storedDamage.js";
+import {
+  attackLootOf,
+  wholeAmounts,
+  type AttackLoot,
+} from "../../../services/base/combat/attackLoot.js";
+import { RESOURCE_KEYS } from "../../../game-rules/combat/index.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -157,6 +163,32 @@ const saveBase = async (
   const bombs = isAttack
     ? recordBombSpend(ctx, user, userSave, baseSave, saveData.flinglog, combatConfig.mode)
     : null;
+
+  const outpostOwnerSave = await getOutpostOwnerSave(baseSave, user);
+
+  // The loot on both sides (issue #163), worked out from the rows as they
+  // stand before any key of this save is applied — the attacker's champions
+  // above all. Only the save that ends the attack lands any: every save of an
+  // attack repeats the whole log, and that one holds the final lock.
+  const loot =
+    isAttack && saveData.over
+      ? attackLootOf({
+          sent: saveData.attackloot,
+          reported: saveData.resources,
+          flinglog: saveData.flinglog,
+          session,
+          defender: {
+            type: baseSave.type,
+            buildingdata: baseSave.buildingdata,
+            buildinghealthdata: baseSave.buildinghealthdata,
+            resources: (outpostOwnerSave ?? baseSave).resources,
+          },
+          attacker: userSave,
+          mapRoom3: userSave.mapversion === MapRoomVersion.V3,
+        })
+      : null;
+
+  if (loot) logCappedLoot(ctx, user, baseSave, saveData.attackloot, loot);
 
   // The economy audit (docs/design/economy-save-validation.md §3.3). It runs
   // before any key is applied, so a refusal in `reject` mode leaves the stored
@@ -280,8 +312,6 @@ const saveBase = async (
     applyDerivedFields(baseSave, verdict.derived);
   }
 
-  const outpostOwnerSave = await getOutpostOwnerSave(baseSave, user);
-
   let takeoverData: TakeoverData | null = null;
 
   if (isAttack) {
@@ -300,22 +330,26 @@ const saveBase = async (
       userSave.monsters = saveData.attackcreatures;
     }
 
-    if (saveData.attackloot) {
-      attackLootHandler(saveData.attackloot, userSave);
+    if (loot) {
+      attackLootHandler(loot.credit, userSave);
     }
 
     if (bombs) {
       userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
     }
 
-    if (saveData.resources) {
+    // The defender's loss lands with the attacker's gain, held between what
+    // was credited and what the battle could take (`attackLootOf`).
+    const defenderDelta = loot?.defenderDelta;
+
+    if (defenderDelta) {
       const lootTarget = outpostOwnerSave ?? baseSave;
 
       if (baseSave.type === BaseType.OUTPOST && !outpostOwnerSave) {
         logger.error(`Outpost ${baseSave.baseid} has no owner main save - loot applied to a dead column`);
       }
 
-      defenderLootHandler(saveData.resources, lootTarget);
+      defenderLootHandler(defenderDelta, lootTarget);
       postgres.em.persist(lootTarget);
     }
 
@@ -443,6 +477,37 @@ const requireAttackBinding = async (
   );
 
   throw attackNotBoundErr(result.reason);
+};
+
+/**
+ * Logs an attack save whose loot the server did not credit in full (issue
+ * #163). An honest client reports what the server's replay derives, so a line
+ * here is either a modified client or the two runtimes disagreeing, and either
+ * is worth seeing.
+ */
+const logCappedLoot = (
+  ctx: Context,
+  user: User,
+  baseSave: Save,
+  sent: unknown,
+  loot: AttackLoot
+): void => {
+  const asked = wholeAmounts(sent);
+  const capped = RESOURCE_KEYS.some((key) => loot.credit[key] < asked[key]);
+  if (!capped && loot.basis !== "no-log" && loot.basis !== "no-roster") return;
+
+  logger.warn("Attack loot capped for {username} (userid {userid}) on base {baseid}", {
+    event: "attack-loot-capped",
+    basis: loot.basis,
+    userid: user.userid,
+    username: user.username,
+    baseid: baseSave.baseid,
+    basesaveid: baseSave.basesaveid,
+    sent,
+    cap: loot.cap,
+    credited: loot.credit,
+    ip: ctx.ip,
+  });
 };
 
 /**

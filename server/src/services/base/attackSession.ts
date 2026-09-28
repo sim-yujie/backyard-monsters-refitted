@@ -1,4 +1,5 @@
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import type { ResourceAmounts } from "../../game-rules/combat/index.js";
 import type { EntryHoused } from "../yard/attackRoster.js";
 import { ATTACK_TIMEOUT } from "./isAttackActive.js";
 
@@ -56,6 +57,14 @@ export interface AttackSession {
    * existed, and for a Map Room 3 attack.
    */
   entryHoused?: EntryHoused;
+  /**
+   * The defender's resource pool as the attack load served it: the row's own,
+   * or its owner's main pool for an outpost. The attack save replays the
+   * battle over this pool to cap the loot (`combat/attackLoot.ts`), since an
+   * outpost's pool is its owner's and can change while the attack runs.
+   * Absent on a session minted before it existed.
+   */
+  defenderResources?: ResourceAmounts;
 }
 
 /** Why a save was not accepted as this attack's result. */
@@ -76,10 +85,10 @@ export const attackSessionKey = (basesaveid: number) => `attack-session:${basesa
 
 /**
  * A session as stored: three integers, so a stray key is readable by eye, or
- * JSON once it carries `entryHoused`.
+ * JSON once it carries `entryHoused` or `defenderResources`.
  */
 export const serialiseAttackSession = (session: AttackSession): string =>
-  session.entryHoused
+  session.entryHoused || session.defenderResources
     ? JSON.stringify(session)
     : `${session.attackerid}:${session.attackid}:${session.startedat}`;
 
@@ -96,6 +105,19 @@ const entryHousedOf = (raw: unknown): EntryHoused | undefined => {
     out[baseid] = counts;
   }
   return out;
+};
+
+/** The `defenderResources` of a JSON session: `r1`..`r4`, each finite and at least 0. */
+const defenderResourcesOf = (raw: unknown): ResourceAmounts | undefined => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const pool = raw as Record<string, unknown>;
+  const amounts = { r1: 0, r2: 0, r3: 0, r4: 0 };
+  for (const key of ["r1", "r2", "r3", "r4"] as const) {
+    const value = pool[key];
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
+    amounts[key] = value;
+  }
+  return amounts;
 };
 
 /**
@@ -118,11 +140,13 @@ export const parseAttackSession = (raw: string | null | undefined): AttackSessio
       const { attackerid, attackid, startedat } = parsed;
       if (![attackerid, attackid, startedat].every(Number.isSafeInteger)) return null;
       const entryHoused = entryHousedOf(parsed.entryHoused);
+      const defenderResources = defenderResourcesOf(parsed.defenderResources);
       return {
         attackerid: attackerid as number,
         attackid: attackid as number,
         startedat: startedat as number,
         ...(entryHoused && { entryHoused }),
+        ...(defenderResources && { defenderResources }),
       };
     } catch {
       return null;
@@ -196,14 +220,17 @@ export const checkAttackBinding = ({
  * @param {number} attackerid - The account starting the attack.
  * @param {number} attackid - The `attackid` minted onto the defender's row.
  * @param {EntryHoused} [entryHoused] - The attacker's yards' `housed` at entry.
+ * @param {ResourceAmounts} [defenderResources] - The defender's pool as the attack load serves it.
  */
 export const newAttackSession = (
   attackerid: number,
   attackid: number,
-  entryHoused?: EntryHoused
+  entryHoused?: EntryHoused,
+  defenderResources?: ResourceAmounts
 ): AttackSession => ({
   attackerid,
   attackid,
   startedat: getCurrentDateTime(),
   ...(entryHoused && { entryHoused }),
+  ...(defenderResources && { defenderResources }),
 });

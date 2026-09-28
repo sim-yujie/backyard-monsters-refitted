@@ -118,6 +118,26 @@ const isEvent = (value: unknown): value is FlingEvent => {
 };
 
 /**
+ * Reads a fling log, checked for everything the replay reads: version 1, a
+ * whole seed, and at most {@link MAX_CHECKPOINT_EVENTS} well-formed events,
+ * each inside the longest attack. The attack save's loot is replayed from the
+ * same log (`combat/attackLoot.ts`), so both paths read it the same way.
+ *
+ * @param flinglog - The log, already JSON-parsed.
+ * @returns The log, or null when it is not one.
+ */
+export const parseFlingLog = (flinglog: unknown): FlingLog | null => {
+  if (!isRecord(flinglog) || flinglog.v !== 1 || !Number.isSafeInteger(flinglog.seed)) return null;
+
+  const events = flinglog.events;
+  if (!Array.isArray(events) || events.length > MAX_CHECKPOINT_EVENTS || !events.every(isEvent)) {
+    return null;
+  }
+
+  return { v: 1, seed: flinglog.seed as number, events: events as FlingEvent[] };
+};
+
+/**
  * Reads a checkpoint off a request body.
  *
  * @param body - `tick`, `flinglog` and `sources`, already JSON-parsed.
@@ -128,17 +148,12 @@ export const parseCheckpoint = (body: {
   flinglog: unknown;
   sources: unknown;
 }): CheckpointInput | { refused: CheckpointRefusal } => {
-  const { tick, flinglog, sources } = body;
+  const { tick, sources } = body;
 
   if (!isTick(tick)) return { refused: "malformed" };
-  if (!isRecord(flinglog) || flinglog.v !== 1 || !Number.isSafeInteger(flinglog.seed)) {
-    return { refused: "malformed" };
-  }
 
-  const events = flinglog.events;
-  if (!Array.isArray(events) || events.length > MAX_CHECKPOINT_EVENTS || !events.every(isEvent)) {
-    return { refused: "malformed" };
-  }
+  const log = parseFlingLog(body.flinglog);
+  if (!log) return { refused: "malformed" };
 
   if (
     !Array.isArray(sources) ||
@@ -149,9 +164,8 @@ export const parseCheckpoint = (body: {
   }
 
   // An attack with nothing dropped saves nothing (#79), so it has nothing to checkpoint.
-  if (events.length === 0) return { refused: "empty" };
+  if (log.events.length === 0) return { refused: "empty" };
 
-  const log: FlingLog = { v: 1, seed: flinglog.seed as number, events: events as FlingEvent[] };
   // A tick behind the log's own last event is the client's clock read too early.
   const last = Math.max(...log.events.map((event) => event.t));
 

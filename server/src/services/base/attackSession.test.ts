@@ -132,6 +132,19 @@ describe("the stored session", () => {
     expect(parseAttackSession(raw)).toEqual(stored);
   });
 
+  test("carries the defender's served pool, and drops one that is not four amounts", () => {
+    const pool = { r1: 1200.5, r2: 0, r3: 7, r4: 3 };
+    const stored = { ...session(), entryHoused: { a: { C1: 1 } }, defenderResources: pool };
+
+    expect(parseAttackSession(serialiseAttackSession(stored))).toEqual(stored);
+    expect(parseAttackSession(serialiseAttackSession({ ...session(), defenderResources: pool }))).toEqual({
+      ...session(),
+      defenderResources: pool,
+    });
+    const broken = JSON.stringify({ ...session(), defenderResources: { r1: 5, r2: -1, r3: 0, r4: 0 } });
+    expect(parseAttackSession(broken)?.defenderResources).toBeUndefined();
+  });
+
   test("a JSON session keeps only whole counts, and broken JSON is no session", () => {
     const raw = JSON.stringify({ ...session(), entryHoused: { a: { C1: 5, C2: -1, C3: 1.5, C4: "7" } } });
 

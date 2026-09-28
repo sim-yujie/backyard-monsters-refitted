@@ -25,6 +25,8 @@ import { isShinyLocked } from "../../../../services/user/shinyLock.js";
 import { newAttackSession } from "../../../../services/base/attackSession.js";
 import { startAttackSession } from "../../../../services/base/attackSessionStore.js";
 import { catchUpArmiesForAttack } from "../../../../services/yard/armies.js";
+import { getOutpostOwnerSave } from "../../../../services/base/getOutpostOwnerSave.js";
+import { poolAmounts } from "../../../../services/base/combat/attackLoot.js";
 import {
   generateNoise,
   getTerrainHeight,
@@ -208,9 +210,13 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost }: B
       newAttackSession(user.userid, save.attackid, armies.entryHoused)
     );
   } else if (save.basesaveid) {
+    // The pool the load serves (`mapSaveData`): an outpost's is its owner's,
+    // which is not frozen by the attack, so the loot replay keeps this copy
+    // (issue #163, `services/base/combat/attackLoot.ts`).
+    const served = (await getOutpostOwnerSave(save, user)) ?? save;
     await startAttackSession(
       save.basesaveid,
-      newAttackSession(user.userid, save.attackid, armies.entryHoused)
+      newAttackSession(user.userid, save.attackid, armies.entryHoused, poolAmounts(served.resources))
     );
   }
 
