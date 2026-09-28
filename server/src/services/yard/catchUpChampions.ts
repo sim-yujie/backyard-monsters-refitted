@@ -22,16 +22,14 @@ import {
  *   (`:1047-1053`). Counted here in whole 5-second periods of the clock
  *   (`floor(now / 5) − floor(from / 5)`), so frequent requests lose nothing to
  *   rounding and a second run at the same moment adds nothing.
- * - **Starving** (D11, "keep original"): a champion fed at `ft` is hungry
- *   from `ft` and starves at `ft + 24 h`. Below the top level it then loses
- *   one feed (not below 0, `:1062-1076`); at the top level one food-bonus rank
- *   (not below 0) and its health comes down to the new full health
- *   (`:1091-1109`). Either way the next feeding is due 23 hours after the
- *   starving, which can starve again 24 hours after that. The original
- *   restarted the timer from whenever the game next noticed; the server
- *   restarts it from the moment it starved, so the result does not depend on
- *   when the player looks. A feed time already older than the window (a save
- *   no catch-up has seen) starves once, at the window's start.
+ * - **Starving** (D11 and the owner's 2026-09-28 ruling: exactly as the
+ *   original): a champion fed at `ft` is hungry from `ft` and starving past
+ *   `ft + 24 h`. A catch-up that finds it starving takes away ONE feed below
+ *   the top level (not below 0, `:1062-1076`) or ONE food-bonus rank at the
+ *   top (not below 0, health down to the new full health, `:1091-1109`), and
+ *   restarts the feed timer from that moment, `now + 23 h`, as the original
+ *   did with `GLOBAL.Timestamp()`. At most one loss per catch-up, however long
+ *   the player was away: nothing is back-filled.
  *
  * Frozen (1), juiced (2) and other statuses do nothing: a frozen champion does
  * not heal or starve (`CHAMPIONCHAMBER.as:127`, MH §7.6). Krallen (status 0,
@@ -47,7 +45,7 @@ export interface StarveJob {
   /** The champion, `G1`..`G5`. */
   id: string;
   t: null;
-  /** Unix seconds it starved: its feed time plus 24 hours. */
+  /** Unix seconds the loss was taken: the catch-up's `now`. */
   at: number;
   detail: {
     /** The champion's level, which starving never changes. */
@@ -110,9 +108,7 @@ export const catchUpChampions = (
       champion.hp = Math.min(max, hp + rate * periods);
     }
 
-    let fedAt = numberOf(champion.ft);
-    while (now > fedAt + STARVE_SECONDS) {
-      const at = Math.max(fedAt + STARVE_SECONDS, start);
+    if (now > numberOf(champion.ft) + STARVE_SECONDS) {
       let lost = false;
       if (level >= entry.levels) {
         const rank = foodBonusOf(champion);
@@ -125,14 +121,13 @@ export const catchUpChampions = (
         champion.fd = feedsOf(champion) - 1;
         lost = true;
       }
-      fedAt = at + entry.feedTime;
-      champion.ft = fedAt;
+      champion.ft = now + entry.feedTime;
       if (lost) {
         jobs.push({
           kind: "starve",
           id: entry.id,
           t: null,
-          at,
+          at: now,
           detail: { level, feeds: feedsOf(champion), foodBonus: foodBonusOf(champion) },
         });
       }

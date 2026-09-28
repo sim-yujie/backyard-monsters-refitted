@@ -65,38 +65,37 @@ describe("catchUpChampions: starving (23 h + 24 h grace)", () => {
     expect((save.champion as ChampionData[])[0]).toMatchObject({ fd: 2, ft: NOW - 23 * HOUR });
   });
 
-  test("past the grace below level 6: one feed lost, next feeding 23 h after it starved", () => {
-    const ft = NOW - 25 * HOUR;
-    const save = { champion: [gorgo({ ft, fd: 2 })] };
+  test("past the grace below level 6: one feed lost, the feed timer restarts now", () => {
+    const save = { champion: [gorgo({ ft: NOW - 25 * HOUR, fd: 2 })] };
     const jobs = catchUpChampions(save, NOW - 2 * HOUR, NOW);
     expect(jobs).toEqual([
-      { kind: "starve", id: "G1", t: null, at: ft + 24 * HOUR, detail: { level: 1, feeds: 1, foodBonus: 0 } },
+      { kind: "starve", id: "G1", t: null, at: NOW, detail: { level: 1, feeds: 1, foodBonus: 0 } },
     ]);
-    expect((save.champion as ChampionData[])[0]).toMatchObject({ fd: 1, ft: ft + 47 * HOUR });
+    expect((save.champion as ChampionData[])[0]).toMatchObject({ fd: 1, ft: NOW + 23 * HOUR });
   });
 
-  test("starves again every 47 hours while away, never below 0 feeds", () => {
-    const ft = NOW - 24 * HOUR - 1 - 3 * 47 * HOUR;
-    const save = { champion: [gorgo({ ft, fd: 2, l: 3 })] };
+  test("at most one loss per catch-up, however long the player was away", () => {
+    const ft = NOW - 30 * 24 * HOUR;
+    const save = { champion: [gorgo({ ft, fd: 5, l: 3 })] };
     const jobs = catchUpChampions(save, ft, NOW);
-    expect(jobs.map((job) => job.detail.feeds)).toEqual([1, 0]);
-    expect((save.champion as ChampionData[])[0]).toMatchObject({ l: 3, fd: 0, ft: ft + 4 * 47 * HOUR });
+    expect(jobs.map((job) => job.detail.feeds)).toEqual([4]);
+    expect((save.champion as ChampionData[])[0]).toMatchObject({ l: 3, fd: 4, ft: NOW + 23 * HOUR });
+    // Idempotent: the restarted timer is not starving again at the same moment.
+    expect(catchUpChampions(save, NOW, NOW)).toEqual([]);
   });
 
-  test("at level 6 a food-bonus rank is lost and health comes down to the new full", () => {
-    const ft = NOW - 25 * HOUR;
-    const save = { champion: [gorgo({ l: 6, fb: 2, hp: 227_500, ft })] };
-    const jobs = catchUpChampions(save, NOW - HOUR, NOW);
-    expect(jobs[0]!.detail).toEqual({ level: 6, feeds: 0, foodBonus: 1 });
-    expect((save.champion as ChampionData[])[0]).toMatchObject({ l: 6, fb: 1, hp: 212_500 });
+  test("with no feeds to lose nothing is reported, but the timer still restarts", () => {
+    const save = { champion: [gorgo({ ft: NOW - 50 * HOUR, fd: 0 })] };
+    expect(catchUpChampions(save, NOW - HOUR, NOW)).toEqual([]);
+    expect((save.champion as ChampionData[])[0]).toMatchObject({ fd: 0, ft: NOW + 23 * HOUR });
   });
 
-  test("an old feed time no catch-up has seen starves once at the window's start", () => {
-    const save = { champion: [gorgo({ ft: 1_000, fd: 3, l: 2 })] };
-    const jobs = catchUpChampions(save, NOW - HOUR, NOW);
+  test("at level 6 one food-bonus rank is lost and health comes down to the new full", () => {
+    const save = { champion: [gorgo({ l: 6, fb: 3, hp: 250_000, ft: NOW - 100 * 24 * HOUR })] };
+    const jobs = catchUpChampions(save, NOW - 100 * 24 * HOUR, NOW);
     expect(jobs).toHaveLength(1);
-    expect(jobs[0]!.at).toBe(NOW - HOUR);
-    expect((save.champion as ChampionData[])[0]).toMatchObject({ fd: 2, ft: NOW - HOUR + 23 * HOUR });
+    expect(jobs[0]!.detail).toEqual({ level: 6, feeds: 0, foodBonus: 2 });
+    expect((save.champion as ChampionData[])[0]).toMatchObject({ l: 6, fb: 2, hp: 227_500, ft: NOW + 23 * HOUR });
   });
 });
 

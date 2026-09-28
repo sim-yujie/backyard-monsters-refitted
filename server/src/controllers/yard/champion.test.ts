@@ -101,9 +101,10 @@ describe("champion routes", () => {
     const answer = await run(yardChampionHealAction);
     expect(answer.status).toBe(200);
     expect((answer.body.completed as Row[]).map((job) => job.kind)).toContain("starve");
-    expect(championOf(db.row)).toMatchObject({ l: 1, fd: 1, hp: 40_000, ft: now - 60 + 23 * HOUR });
+    expect(championOf(db.row)).toMatchObject({ l: 1, fd: 1, hp: 40_000 });
+    expect(Number(championOf(db.row).ft)).toBeGreaterThanOrEqual(now + 23 * HOUR);
 
-    // Starving restarted the clock: it is not hungry again for 22 hours.
+    // Starving restarted the clock: it is not hungry again for 23 hours.
     const feed = await run(yardChampionFeedAction, { mode: "monsters" });
     expect(feed.body).toMatchObject({ reason: "notHungry" });
     expect((db.row!.monsters as Row).housed).toEqual({ C2: 20 });

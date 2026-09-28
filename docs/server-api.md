@@ -887,11 +887,12 @@ JSON), parsed by the route's zod schema in `server/src/schemas/YardSchemas.ts`.
    `upg` names a monster that is not training loses the stale `upg`. Phase 5, champions
    (`catchUpChampions.ts`, issue #123): every champion with `status` 0 heals
    `int(max × 5 / healtime)` per whole 5-second period of the clock, up to full (the food bonus
-   counts); past `ft + 24 h` it starves (D11): below level 6 one feed lost (not below 0), at
-   level 6 one food-bonus rank lost and health down to the new full; `ft` then restarts 23 h after
-   the moment it starved (the original restarted it whenever it next looked; a feed time older than
-   the window starves at the window's start), and it can starve again 47 h after that. Each starving
-   that cost something is reported as a `starve` job; frozen and juiced champions do nothing.
+   counts); found past `ft + 24 h` it starves, exactly as the original (D11, owner ruling
+   2026-09-28; `ChampionBase.as:1062-1109`): below level 6 one feed lost (not below 0), at level 6
+   one food-bonus rank lost (not below 0) and health down to the new full; either way `ft` restarts
+   at `now + 23 h`. At most one loss per catch-up, however long the player was away (no back-fill).
+   Each starving that cost something is reported as a `starve` job; frozen and juiced champions do
+   nothing.
    `savetime` becomes `now`. Idempotent: a second
    catch-up at the same `now` changes nothing.
    Then, outside the pure catch-up: a yard left with a level 2 Map Room that is not on Map Room 2
@@ -963,7 +964,7 @@ is `{ kind, id, t, at, detail }`, `at` being the unix second the job ended:
             resources: { r1, r2, r3, r4 } /* credited, after the cap */ } }
 { kind: "repair", id: number /* building id */, t: number /* type */, at: number /* full health */,
   detail: { from: number /* health at the start of the window */, max: number } }
-{ kind: "starve", id: string /* "G1".."G5" */, t: null, at: number /* ft + 24 h */,
+{ kind: "starve", id: string /* "G1".."G5" */, t: null, at: number /* now: when the loss was taken */,
   detail: { level: number, feeds: number, foodBonus: number /* after the loss */ } }
 ```
 
