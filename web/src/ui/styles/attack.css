@@ -160,6 +160,47 @@
   max-width: min(60vw, 520px);
 }
 
+/* The phone's overflow menu (`ui/attack/AttackMenu.ts`); the HUD does its job
+   on wider screens, so it only shows under the phone query below. */
+.attack-menu {
+  position: relative;
+  display: none;
+}
+
+.attack-menu__button {
+  min-width: 40px;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+
+.attack-menu__list {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: var(--z-popup);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 10rem;
+  padding: var(--space-1);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+}
+
+.attack-menu__list[hidden] {
+  display: none;
+}
+
+.attack-menu__item {
+  min-height: 44px;
+  justify-content: flex-start;
+  text-align: start;
+  color: var(--colour-text);
+}
+
 .attack-confirm {
   position: absolute;
   left: 50%;
@@ -191,14 +232,34 @@
     display: none;
   }
 
-  /* The dock is a bottom sheet: a handle, and a body that opens on tap. */
+  /* In its place, the overflow menu: Map, Yard, Sign out (§4.3, #151). */
+  .attack-menu {
+    display: flex;
+  }
+
+  .attack-strip__retreat,
+  .attack-menu__button {
+    min-height: 40px;
+  }
+
+  /* Tighter, so the menu still fits on the one row at 412 px. */
+  .attack-strip__retreat {
+    padding-inline: var(--space-3);
+  }
+
+  .attack-strip__speed-button {
+    padding-inline: var(--space-2);
+  }
+
+  /* The dock is a bottom sheet: a handle, and a body that opens on tap. Half
+     the screen at most, so the yard it is aimed at stays in sight (#151). */
   .attack-dock--sheet {
     left: 0;
     right: 0;
     top: auto;
     bottom: 0;
     width: auto;
-    max-height: 70vh;
+    max-height: 55vh;
     gap: 0;
     background: var(--colour-surface-raised);
     border-top: 1px solid var(--colour-border);
@@ -247,6 +308,12 @@
 
   .attack-dock--sheet .panel {
     box-shadow: none;
+  }
+
+  /* An open sheet has the bottom of the screen; the minimap steps aside and
+     the zoom sits on the sheet's edge (pinch zoom still works). */
+  .overlay__layer:has(> .attack-dock--sheet.attack-dock--open) > .attack-viewtools .yard-minimap {
+    display: none;
   }
 }
 
@@ -578,6 +645,40 @@
 
 .attack-end {
   width: min(92vw, 440px);
+}
+
+/* A phone: the result is the whole screen (§4.4 "Full-screen modal", #151),
+   with its actions at the bottom within a thumb's reach. */
+@media (width <= 620px) {
+  .attack-end__backdrop {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .attack-end {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .attack-end .panel__body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    max-height: none;
+  }
+
+  .attack-end__actions {
+    margin-top: auto;
+  }
+
+  .attack-end__actions .btn {
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
 }
 
 .attack-end__outcome {

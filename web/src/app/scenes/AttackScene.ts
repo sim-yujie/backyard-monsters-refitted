@@ -18,6 +18,7 @@ import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
+import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
 import { confirmPanel } from "@/ui/yard/PlannerDialogs";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
@@ -39,9 +40,10 @@ import { SceneName } from "../App";
  * battle layer (WP5) draws into, and the modal layer the end panel (WP6) opens
  * on. No tower range is drawn over the enemy yard (§F1, decided).
  *
- * On a phone (§4.3) the HUD gives way to the strip alone and the dock becomes a
- * bottom sheet with a handle; the sheet reports its height so the fit-to-plot
- * zoom leaves room for it, the way the planner's bars report theirs.
+ * On a phone (§4.3) the HUD gives way to the strip and its overflow menu, and
+ * the dock becomes a bottom sheet with a handle; the sheet reports its height
+ * so the fit-to-plot zoom leaves room for it, the way the planner's bars
+ * report theirs, and the camera keeps what was in view in view as it opens.
  */
 
 // The registry is a leaf module and the stubs run here, after it, so a stub's
@@ -95,12 +97,14 @@ export class AttackScene implements Scene {
   private hudSlot: HTMLElement | null = null;
   private speedButtons = new Map<1 | 2, HTMLButtonElement>();
   private retreatButton: HTMLButtonElement | null = null;
+  private menu: AttackMenu | null = null;
   private confirm: Panel | null = null;
 
   private dock: HTMLElement | null = null;
   private dockBody: HTMLElement | null = null;
   private dockHandle: HTMLButtonElement | null = null;
   private dockOpen = false;
+  private dockWatch: MutationObserver | null = null;
   private panel: BuildingPanel | null = null;
   private selected: YardBuilding | null = null;
   private status: HTMLElement | null = null;
@@ -138,10 +142,7 @@ export class AttackScene implements Scene {
         { id: SceneName.LOGIN, label: "Account" },
       ],
       onSceneSelect: (id) => this.leaveFor(id),
-      onSignOut: () => {
-        logout();
-        context.goTo(SceneName.LOGIN);
-      },
+      onSignOut: () => this.leaveFor(SceneName.LOGIN, logout),
     });
     this.hud.element.classList.add("hud--attack");
     this.hud.mount(context.overlay.content);
@@ -188,6 +189,8 @@ export class AttackScene implements Scene {
     this.viewTools = null;
     this.panel?.close();
     this.panel = null;
+    this.dockWatch?.disconnect();
+    this.dockWatch = null;
     this.dock?.remove();
     this.dock = null;
     this.dockBody = null;
@@ -201,6 +204,8 @@ export class AttackScene implements Scene {
     this.hudSlot = null;
     this.speedButtons.clear();
     this.retreatButton = null;
+    this.menu?.destroy();
+    this.menu = null;
     this.status?.remove();
     this.status = null;
     this.hud?.destroy();
@@ -466,7 +471,14 @@ export class AttackScene implements Scene {
     retreat.disabled = true;
     retreat.addEventListener("click", () => this.askRetreat());
 
-    strip.append(title, clock, damage, loot, spacer, hudSlot, speed, retreat);
+    // The HUD's way out, for a phone, where the HUD is hidden (§4.3, #151).
+    this.menu = new AttackMenu([
+      { label: "Map", run: () => this.leaveFor(SceneName.MAP_ROOM_2) },
+      { label: "Yard", run: () => this.leaveFor(SceneName.YARD) },
+      { label: "Sign out", run: () => this.leaveFor(SceneName.LOGIN, logout) },
+    ]);
+
+    strip.append(title, clock, damage, loot, spacer, hudSlot, speed, retreat, this.menu.element);
     context.overlay.content.append(strip);
 
     this.strip = strip;
@@ -498,7 +510,20 @@ export class AttackScene implements Scene {
     this.dock = dock;
     this.dockHandle = handle;
     this.dockBody = body;
+    // The handle names what the sheet holds (#151): the dock's mode classes
+    // and the panels mounted into it are what change that.
+    this.dockWatch = new MutationObserver(() => this.labelHandle());
+    this.dockWatch.observe(dock, { attributes: true, attributeFilter: ["class"] });
+    this.dockWatch.observe(body, { childList: true });
     this.measureDock();
+  }
+
+  private labelHandle(): void {
+    const dock = this.dock;
+    const handle = this.dockHandle;
+    if (!dock || !handle) return;
+    const label = sheetHandleLabel(dock);
+    if (handle.textContent !== label) handle.textContent = label;
   }
 
   private toggleDock(): void {
@@ -524,10 +549,26 @@ export class AttackScene implements Scene {
   }
 
   private setInset(inset: { top: number; bottom: number }): void {
+    const before = this.inset;
     this.inset = inset;
     this.notices.setTopInset(inset.top);
     this.applyZoomLimits(this.viewportWidth, this.viewportHeight);
     this.placeViewTools();
+    this.keepCentre(before, inset);
+  }
+
+  /**
+   * Pans so the point at the middle of the visible band stays there when the
+   * chrome around it changes size: opening the phone sheet over two thirds of
+   * the screen used to leave the view's centre under it (#151).
+   */
+  private keepCentre(before: { top: number; bottom: number }, after: { top: number; bottom: number }): void {
+    const camera = this.camera;
+    if (!camera) return;
+    const shift = (before.top - before.bottom - (after.top - after.bottom)) / 2;
+    if (shift === 0) return;
+    camera.setPosition(camera.position.x, camera.position.y + shift / camera.zoom);
+    camera.dirty = true;
   }
 
   private placeViewTools(): void {
@@ -641,7 +682,7 @@ export class AttackScene implements Scene {
    * does not leave on its own, or the save would go unseen, so the question
    * says so when the player asked for somewhere else.
    */
-  private leaveFor(scene: string): void {
+  private leaveFor(scene: string, before?: () => void): void {
     const context = this.context;
     if (!context) return;
     const session = this.session;
@@ -650,6 +691,7 @@ export class AttackScene implements Scene {
       this.askRetreat(undefined, scene === SceneName.MAP_ROOM_2 ? undefined : destinationName(scene));
       return;
     }
+    before?.();
     context.goTo(scene);
   }
 
@@ -719,6 +761,7 @@ export class AttackScene implements Scene {
       this.syncInfoMode();
     }
     this.panel.show(building);
+    this.labelHandle();
     if (this.session) this.refreshStatus(this.session.state());
   }
 
