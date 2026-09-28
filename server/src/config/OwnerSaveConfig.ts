@@ -1,5 +1,5 @@
 /**
- * Owner saves of a main yard: the retirement switch
+ * Owner saves of a main yard or an outpost: the retirement switch
  * (`docs/design/yard-buildings.md` §1 T1 and §3.3 "Owner saves").
  *
  * An owner `/base/save` writes `Save.saveKeys` onto the row more or less as
@@ -10,18 +10,19 @@
  * overwrite the yard wholesale. `refuse` closes it; `allow` puts it back for
  * debugging.
  *
- * - `refuse` — an owner save of a main yard is refused with `409` and
+ * - `refuse` — an owner save of a main yard or an outpost is refused with `409` and
  *              `reason: "ownerSaveRetired"` before anything is read or written.
  * - `allow`  — the save goes through as it always did.
  *
- * Attack saves and outpost owner saves are not affected by either mode.
+ * Attack saves are not affected by either mode. Outpost owner saves were left
+ * open until the outposts plan (WP0b); they are refused alongside main yards.
  *
  * Read once at import time, like `ECONOMY_SAVE_VALIDATION`
  * (`config/EconomyConfig.ts`). An absent or unknown value means `refuse`, and
  * {@link ownerSaveModeWasUnrecognised} lets the startup banner say so.
  */
 
-/** refuse: owner main-yard saves are refused. allow: they are applied. */
+/** refuse: owner main-yard and outpost saves are refused. allow: they are applied. */
 export type OwnerSaveMode = "refuse" | "allow";
 
 /** Every mode `OWNER_SAVE_MODE` may name. */

@@ -381,8 +381,8 @@ Walls and traps are refused by `upgrade` with 400 `useBatchRoute`; they already 
   each countdown it finishes.
 - **Owner saves** (T1): `server/src/controllers/base/save/baseSave.ts` refuses a non-attack save on
   a main yard with 409 `ownerSaveRetired`, behind a config switch (`OWNER_SAVE_MODE=refuse|allow`,
-  default `refuse`) so the owner can turn it back on for debugging. Outpost owner saves are left as
-  they are until outposts are designed.
+  default `refuse`) so the owner can turn it back on for debugging. Outpost owner saves are refused
+  the same way since the outposts plan (WP0b); outposts are edited through the action routes.
 
 ### 3.4 Work packages
 

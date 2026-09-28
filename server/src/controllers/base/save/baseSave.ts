@@ -103,10 +103,10 @@ export const baseSave: KoaController = async (ctx) => {
   // Not the owner and not in an attack
   if (!isOwner && baseSave.attackid === 0) throw permissionErr();
 
-  // Owner saves of a main yard are retired (issue #101): the yard changes
-  // through the server's action routes now, and this path would let a request
-  // overwrite it wholesale. Refused before anything else runs; attack saves
-  // and outpost owner saves pass. `OWNER_SAVE_MODE=allow` turns it back on.
+  // Owner saves of a main yard (issue #101) or an outpost (outposts plan WP0b)
+  // are retired: yards change through the server's action routes now, and this
+  // path would let a request overwrite one wholesale. Refused before anything
+  // else runs; attack saves pass. `OWNER_SAVE_MODE=allow` turns it back on.
   requireOwnerSaveAllowed(ctx, user, baseSave, ownerSaveConfig.mode);
 
   // An attack's result lands once (issue #138). The save that ends it, a copy

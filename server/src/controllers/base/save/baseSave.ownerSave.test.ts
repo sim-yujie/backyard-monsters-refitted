@@ -144,11 +144,34 @@ describe("baseSave owner-save gate", () => {
     expect(validateSave).toHaveBeenCalledTimes(1);
   });
 
-  test("refuse: an outpost owner save goes past the gate", async () => {
+  test("refuse: the owner's outpost save is refused with 409 before anything runs (WP0b)", async () => {
     setMode("refuse");
     row = rowOf("outpost");
 
+    const caught = await run(ctxFor(OWNER));
+
+    expect(caught).toBeInstanceOf(ClientSafeError);
+    expect((caught as InstanceType<typeof ClientSafeError>).data).toEqual({
+      reason: "ownerSaveRetired",
+    });
+    expect(validateSave).not.toHaveBeenCalled();
+    expect(persist).not.toHaveBeenCalled();
+    expect(flush).not.toHaveBeenCalled();
+  });
+
+  test("allow: the owner's outpost save goes past the gate", async () => {
+    setMode("allow");
+    row = rowOf("outpost");
+
     expect(((await run(ctxFor(OWNER))) as Error).message).toBe(REACHED);
+    expect(validateSave).toHaveBeenCalledTimes(1);
+  });
+
+  test("refuse: an attack save on an outpost goes past the gate", async () => {
+    setMode("refuse");
+    row = rowOf("outpost", ATTACK_ID);
+
+    expect(((await run(ctxFor(ATTACKER, ATTACK_ID))) as Error).message).toBe(REACHED);
     expect(validateSave).toHaveBeenCalledTimes(1);
   });
 });

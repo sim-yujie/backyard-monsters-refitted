@@ -67,8 +67,17 @@ describe("isRetiredOwnerSave", () => {
     expect(isRetiredOwnerSave(rowOf(BaseType.MAIN, 4242), ATTACKER, "refuse")).toBe(false);
   });
 
-  test("outpost, Inferno and tribe rows pass in refuse mode", () => {
-    for (const type of [BaseType.OUTPOST, BaseType.INFERNO, BaseType.TRIBE, BaseType.INFERNO_TRIBE]) {
+  test("an owner save of an outpost is retired too (WP0b), in refuse mode only", () => {
+    expect(isRetiredOwnerSave(rowOf(BaseType.OUTPOST), OWNER, "refuse")).toBe(true);
+    expect(isRetiredOwnerSave(rowOf(BaseType.OUTPOST), OWNER, "allow")).toBe(false);
+  });
+
+  test("an attack save on an outpost is not the owner's, so it passes", () => {
+    expect(isRetiredOwnerSave(rowOf(BaseType.OUTPOST, 4242), ATTACKER, "refuse")).toBe(false);
+  });
+
+  test("Inferno and tribe rows pass in refuse mode", () => {
+    for (const type of [BaseType.INFERNO, BaseType.TRIBE, BaseType.INFERNO_TRIBE]) {
       expect(isRetiredOwnerSave(rowOf(type), OWNER, "refuse")).toBe(false);
     }
   });
@@ -98,15 +107,27 @@ describe("requireOwnerSaveAllowed", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  test("refuse: an attack save and an outpost owner save go through silently", () => {
+  test("refuse: an attack save goes through silently", () => {
     expect(
       thrownBy(() =>
         requireOwnerSaveAllowed(ctx, userOf(ATTACKER), rowOf(BaseType.MAIN, 4242), "refuse")
       )
     ).toBeNull();
     expect(
-      thrownBy(() => requireOwnerSaveAllowed(ctx, userOf(OWNER), rowOf(BaseType.OUTPOST), "refuse"))
+      thrownBy(() =>
+        requireOwnerSaveAllowed(ctx, userOf(ATTACKER), rowOf(BaseType.OUTPOST, 4242), "refuse")
+      )
     ).toBeNull();
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  test("refuse: an outpost owner save throws 409 ownerSaveRetired and is logged with its type", () => {
+    const caught = thrownBy(() =>
+      requireOwnerSaveAllowed(ctx, userOf(OWNER), rowOf(BaseType.OUTPOST), "refuse")
+    );
+
+    expect(caught).toBeInstanceOf(ClientSafeError);
+    expect((caught as InstanceType<typeof ClientSafeError>).data).toEqual({ reason: "ownerSaveRetired" });
+    expect(warn.mock.calls[0][1]).toMatchObject({ event: "owner-save-refused", type: BaseType.OUTPOST });
   });
 });
