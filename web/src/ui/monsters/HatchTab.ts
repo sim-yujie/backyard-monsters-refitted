@@ -286,8 +286,9 @@ export class HatchTab implements MonstersTab {
     );
 
     this.info.append(this.infoHead, this.infoEach, this.detailsButton, this.stats, this.addBlock);
-    split.append(pick, this.info);
-    this.element.append(this.status, this.lines, this.boosts, this.message, split);
+    // The message sits in the split so the info panel can stand beside it on a wide screen.
+    split.append(this.message, pick, this.info);
+    this.element.append(this.status, this.lines, this.boosts, split);
   }
 
   private get store() {
@@ -444,6 +445,9 @@ export class HatchTab implements MonstersTab {
     this.plainButtons = [];
     this.clocks = [];
     this.totals = [];
+    // Several lines stack: each is drawn a little shorter so the grid stays near.
+    const several = !yard.hcc && yard.hatcheries.length > 1;
+    this.lines.classList.toggle("hatch-lines--several", several);
     if (yard.hatcheries.length === 0) {
       const note = document.createElement("p");
       note.className = "hatch__none";
@@ -455,7 +459,6 @@ export class HatchTab implements MonstersTab {
       this.lines.replaceChildren(this.hccLine(yard, preview));
       return;
     }
-    const several = yard.hatcheries.length > 1;
     this.lines.replaceChildren(
       ...yard.hatcheries.map((hatchery, index) =>
         this.hatcheryLine(yard, hatchery, index, several, hatchery.id === this.target ? preview : null),
@@ -947,6 +950,7 @@ export class HatchTab implements MonstersTab {
     const blurb = document.createElement("p");
     blurb.className = "hatch-info__blurb";
     blurb.append(...describe(monster.description));
+    blurb.title = blurb.textContent ?? "";
     heading.append(level, name, blurb);
     this.infoHead.replaceChildren(portrait, heading);
 
