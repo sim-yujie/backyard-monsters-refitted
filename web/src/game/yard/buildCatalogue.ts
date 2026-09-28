@@ -31,8 +31,10 @@ import type { Yard, YardWorkers } from "./yardModel";
 
 /**
  * The menu's tabs: the original's four (`BUILDINGSPOPUP.as:28-35`), with the
- * monster buildings under Buildings and the Champion buildings under
- * Defensive, where the props table's `group` files them (#157).
+ * monster buildings under Buildings, where the props table's `group` files
+ * them (#157). The Champion Cage and Chamber are `group` 3, Defensive, in the
+ * props table; the owner moved them to Buildings, beside the monster
+ * buildings (#159).
  */
 export const BuildCategory = {
   RESOURCES: "resources",
@@ -59,12 +61,12 @@ export const BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
   {
     id: BuildCategory.BUILDINGS,
     label: "Buildings",
-    types: [12, 8, 26, 15, 13, 16, 5, 51, 11, 19, 116, 10, 9],
+    types: [12, 8, 26, 15, 13, 16, 114, 119, 5, 51, 11, 19, 116, 10, 9],
   },
   {
     id: BuildCategory.DEFENSIVE,
     label: "Defensive",
-    types: [21, 20, 25, 23, 22, 115, 118, 24, 114, 17, 117, 119],
+    types: [21, 20, 25, 23, 22, 115, 118, 24, 17, 117],
   },
   { id: BuildCategory.DECORATIONS, label: "Decorations", types: [] },
 ];

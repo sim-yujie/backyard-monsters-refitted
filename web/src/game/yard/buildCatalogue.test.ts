@@ -102,9 +102,11 @@ describe("the catalogue", () => {
     const buildings = BUILD_CATALOGUE.find((category) => category.id === BuildCategory.BUILDINGS);
     // The monster buildings sit under Buildings…
     for (const type of [8, 13, 15, 26]) expect(buildings?.types).toContain(type);
-    // …and the Champion Cage and Chamber under Defensive.
+    // …and so do the Champion Cage and Chamber, beside them, not under
+    // Defensive where the props table's `group` files them (#159).
+    expect(buildings?.types.slice(5, 8)).toEqual([16, 114, 119]);
     const defensive = BUILD_CATALOGUE.find((category) => category.id === BuildCategory.DEFENSIVE);
-    for (const type of [114, 119]) expect(defensive?.types).toContain(type);
+    for (const type of [114, 119]) expect(defensive?.types).not.toContain(type);
   });
 
   it("every listed type has a build step", () => {

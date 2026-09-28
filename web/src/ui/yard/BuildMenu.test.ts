@@ -160,7 +160,7 @@ describe("BuildMenu", () => {
     expect(menu.element.querySelector(".build-menu__page")?.textContent).toBe("Page 2 of 2");
     expect(next.disabled).toBe(true);
     const second = tileTypes(menu);
-    expect(first.length + second.length).toBe(13);
+    expect(first.length + second.length).toBe(15);
     const ranks = [...firstRanks, ...tileRanks(menu)];
     expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
     // The General Store leads; the Monster Locker, all built, comes last.
@@ -257,11 +257,11 @@ describe("BuildMenu", () => {
 
   it("reopens on the tab and page it was left on", () => {
     const { menu } = setup([HALL]);
-    menu.open(BuildCategory.DEFENSIVE);
+    menu.open(BuildCategory.BUILDINGS);
     menu.turn(1);
     menu.close();
     menu.open();
-    expect(menu.activeTab).toBe(BuildCategory.DEFENSIVE);
+    expect(menu.activeTab).toBe(BuildCategory.BUILDINGS);
     expect(menu.element.querySelector(".build-menu__page")?.textContent).toBe("Page 2 of 2");
   });
 
