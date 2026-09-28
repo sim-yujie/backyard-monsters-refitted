@@ -24,8 +24,9 @@ import type { Yard } from "./yardModel";
  * here is a spot the build route accepts.
  *
  * The carry is the planner's too: click to drop, a refused drop stays in hand,
- * Escape cancels. On a touch screen there is no hover to follow, so a tap moves
- * the building to the spot and a second tap on it drops it. A wall or trap
+ * Escape cancels. On a touch screen there is no hover to follow, so a tap only
+ * moves the building to the spot, and the bar's Build here drops it
+ * ({@link BuildPlacement.dropHere}, #157). A wall or trap
  * stays in hand after it lands, so a line of walls is one click per block
  * (§5.3); anything else is done after one.
  *
@@ -351,18 +352,10 @@ export class BuildPlacement {
     if (Math.hypot(event.clientX - this.pressX, event.clientY - this.pressY) > DRAG_SLOP) return;
 
     const point = this.yardPoint(event);
-    // A touch that lands on the building drops it; anywhere else moves it there.
-    if (
-      event.pointerType === "touch" &&
-      !(this.spot && insideFootprint(this.options.type, this.spot, point))
-    ) {
-      const spot = this.grid.spotAt(this.options.type, point.x, point.y);
-      this.show(spot.x, spot.y);
-      return;
-    }
-
     const spot = this.grid.spotAt(this.options.type, point.x, point.y);
     this.show(spot.x, spot.y);
+    // A touch only moves it: the bar's Build here puts it down (#157).
+    if (event.pointerType === "touch") return;
     if (this.spot) void this.drop(this.spot);
   };
 

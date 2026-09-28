@@ -1,21 +1,24 @@
 /*
- * The build menu and the placing bar (`web/src/ui/yard/BuildMenu.ts`, design
- * `docs/design/yard-buildings.md` §5.3).
+ * The Build window and the placing bar (`web/src/ui/yard/BuildMenu.ts`, #157,
+ * design `docs/design/yard-buildings.md` §5.3).
  *
- * Same rule as ui.css: every value comes from tokens.css. The frame docks where
- * the Monsters screen docks (monsters.css) and borrows its tab strip
- * (`.monsters-tabs`); what is new is the tile grid and the bar along the bottom.
+ * Same rule as ui.css: every value comes from tokens.css, and the frame, tabs
+ * and buttons are the shared `.panel`, `.tabs` and `.btn`. What is new is the
+ * page of tiles, the info column beside it and the bar along the bottom.
  */
 
 .build-menu {
   position: absolute;
   top: calc(var(--hud-height) + var(--space-3));
-  right: var(--space-4);
-  bottom: var(--space-4);
+  left: 50%;
   z-index: var(--z-hud);
-  width: min(720px, calc(100vw - 2 * var(--space-4)));
+  display: flex;
+  flex-direction: column;
+  width: min(1200px, calc(100vw - 2 * var(--space-4)));
   max-width: none;
   min-width: 0;
+  max-height: calc(100% - var(--hud-height) - var(--space-3) - var(--space-4));
+  transform: translateX(-50%);
 }
 
 .build-menu[hidden] {
@@ -23,14 +26,27 @@
 }
 
 .build-menu .panel__titlebar {
-  flex-wrap: wrap;
-  row-gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-2) var(--space-5);
 }
 
 .build-menu .panel__title {
   flex: none;
   font-size: var(--text-xl);
+}
+
+.build-menu__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.build-menu__meta-icon {
+  flex: none;
 }
 
 .build-menu__close {
@@ -41,138 +57,446 @@
   flex: 1;
   min-height: 0;
   max-height: none;
-  padding: 0;
   display: flex;
   flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-5) var(--space-5);
   overflow: hidden;
 }
 
-.build-menu__summary {
-  margin: 0;
-  padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--colour-border-subtle);
-  background: var(--colour-surface-sunken);
-  color: var(--colour-text-muted);
-  font-size: var(--text-sm);
+/* The four tabs share the width, as the original's did. */
+.build-menu__tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: visible;
 }
 
-.build-menu__body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: var(--space-3);
-}
-
-.build-menu__empty {
-  margin: var(--space-4) 0;
-  color: var(--colour-text-muted);
+.build-menu__tabs .tabs__tab {
+  min-height: var(--control-height);
+  padding: 0 var(--space-2);
+  font-size: var(--text-md);
   text-align: center;
 }
 
-.build-menu__grid {
+.build-menu__main {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: var(--space-5);
+  overflow-y: auto;
+}
+
+.build-menu__browse {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* ── A page of tiles ───────────────────────────────────────────────────── */
+
+.build-menu__pager {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "previous grid next"
+    ". pages .";
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.build-menu__turn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  height: calc(2 * var(--control-height));
+  padding: 0;
+  border-radius: var(--radius-md);
+}
+
+.build-menu__turn:disabled {
+  opacity: 0.35;
+}
+
+.build-menu__turn--previous {
+  grid-area: previous;
+}
+
+.build-menu__turn--next {
+  grid-area: next;
+}
+
+.build-menu__grid {
+  grid-area: grid;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-/* ── A tile ─────────────────────────────────────────────────────────────── */
-
-.build-tile {
-  display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
-  grid-template-areas:
-    "icon head"
-    "icon cost"
-    "gate gate"
-    "buttons buttons";
-  align-content: start;
-  column-gap: var(--space-3);
-  row-gap: var(--space-1);
-  padding: var(--space-3);
-  border: 1px solid var(--colour-border);
-  border-radius: var(--radius-md);
-  background: var(--colour-surface-sunken);
-}
-
-.build-tile--blocked .build-tile__icon {
-  opacity: 0.55;
-}
-
-.build-tile__icon {
-  grid-area: icon;
-  position: relative;
-  display: inline-block;
-  width: 56px;
-  height: 56px;
-  overflow: hidden;
-  border-radius: var(--radius-sm);
-  background: var(--colour-surface-overlay);
-}
-
-.build-tile__image {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.build-tile__head {
-  grid-area: head;
+.build-menu__cell {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
   min-width: 0;
 }
 
-.build-tile__name {
+.build-menu__empty {
+  grid-column: 1 / -1;
+  padding: var(--space-7) var(--space-4);
+  color: var(--colour-text-muted);
+  text-align: center;
+}
+
+.build-menu__pages {
+  grid-area: pages;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   margin: 0;
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.build-menu__dots {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.build-menu__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-border-strong);
+}
+
+.build-menu__dot--current {
+  width: 20px;
+  background: var(--colour-accent);
+}
+
+.build-menu__page {
+  margin-left: var(--space-1);
+}
+
+.build-menu__legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-5);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.build-menu__key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.build-menu__hall {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  color: var(--colour-accent);
+}
+
+.build-menu__hall:hover:not(:disabled) {
+  color: var(--colour-accent-hover);
+}
+
+/* ── One tile ──────────────────────────────────────────────────────────── */
+
+.build-tile {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--easing),
+    border-color var(--motion-fast) var(--easing);
+}
+
+.build-tile:hover {
+  border-color: var(--colour-border-strong);
+  background: var(--colour-surface-overlay);
+}
+
+.build-tile:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.build-tile[aria-pressed="true"] {
+  border-color: var(--colour-accent);
+  box-shadow: inset 0 0 0 1px var(--colour-accent);
+  background: var(--colour-accent-soft);
+}
+
+/* The original's button art: 120 × 160, the building on a light ground. */
+.build-tile__picture,
+.build-info__picture {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: var(--colour-surface-overlay);
+}
+
+.build-tile__picture img,
+.build-info__picture img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A locked type with no silhouette on disk: its picture, drawn as one. */
+.build-tile__picture--shade img,
+.build-info__picture--shade img {
+  filter: grayscale(1) brightness(0.62) contrast(40) invert(0.3) brightness(1.43);
+}
+
+/* At the limit for now, or for good: the original's grey shroud. */
+.build-tile--limit .build-tile__picture img,
+.build-tile--maxed .build-tile__picture img {
+  opacity: 0.5;
+}
+
+.build-tile--locked,
+.build-tile--limit,
+.build-tile--maxed {
+  border-color: var(--colour-border-subtle);
+  color: var(--colour-text-secondary);
+}
+
+.build-tile__name {
   font-family: var(--font-display);
   font-size: var(--text-md);
   font-weight: 600;
   line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
 }
 
 .build-tile__count {
-  flex: none;
   color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+.build-tile--ready .build-tile__count {
+  color: var(--colour-text-secondary);
+}
+
+/* "Needs 3 Hatcheries at level 2": something the player can go and do. */
+.build-tile__count--needs {
+  color: var(--colour-warning);
+}
+
+/* The lock or the tick in the picture's corner. */
+.build-badge {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-base);
+  color: var(--colour-text);
+  box-shadow: 0 0 0 1px var(--colour-border-strong);
+}
+
+.build-badge--maxed {
+  background: var(--colour-success);
+  color: var(--colour-text-inverse);
+  box-shadow: none;
+}
+
+/* ── The info column ───────────────────────────────────────────────────── */
+
+.build-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-sunken);
+}
+
+.build-info__empty {
+  margin: auto 0;
+  color: var(--colour-text-muted);
+  text-align: center;
+}
+
+/* Back to the tiles: a phone's, where the info stands in their place. */
+.build-info__back {
+  display: none;
+  align-self: flex-start;
+  align-items: center;
+  gap: var(--space-1);
+  padding-left: var(--space-1);
+}
+
+.build-info__picture {
+  align-self: center;
+  width: min(120px, 40%);
+}
+
+.build-info__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.build-info__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+}
+
+.build-info__count {
+  flex: none;
+  color: var(--colour-text-secondary);
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
-.build-tile__cost {
-  grid-area: cost;
+.build-info__blurb {
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  text-wrap: pretty;
+}
+
+.build-info__needs {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-3);
-  font-size: var(--text-sm);
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
-.build-tile__time {
+.build-info__label {
+  margin: 0;
   color: var(--colour-text-muted);
-  white-space: nowrap;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 
-.build-tile__gate {
-  grid-area: gate;
-  margin: var(--space-1) 0 0;
-  color: var(--colour-danger);
-  font-size: var(--text-sm);
+.build-info__need-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.build-tile__buttons {
-  grid-area: buttons;
+.build-need {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-md);
+}
+
+.build-need__mark {
+  flex: none;
+}
+
+.build-need--met .build-need__mark {
+  color: var(--colour-success);
+}
+
+.build-need--unmet {
+  color: var(--colour-warning);
+}
+
+.build-info__facts {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin-top: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.build-tile__build {
-  flex: 1 1 auto;
+.build-info__fact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-control);
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* More than the yard holds: the amount says so in the warning colour. */
+.build-info__fact--short {
+  color: var(--colour-warning);
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.build-info__fact-icon {
+  flex: none;
+  color: var(--colour-text-secondary);
+}
+
+.build-info__gate {
+  margin: 0;
+  color: var(--colour-warning);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.build-info__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+
+.build-info__build {
+  min-height: 56px;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+
+.build-info__instant {
+  align-self: center;
+  font-size: var(--text-sm);
 }
 
 /* ── The toolbar's Build control ───────────────────────────────────────── */
@@ -199,11 +523,12 @@
   gap: var(--space-2) var(--space-4);
   width: max-content;
   max-width: calc(100vw - 2 * var(--space-4));
-  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border: 1px solid var(--colour-border-strong);
   border-radius: var(--radius-lg);
   background: var(--colour-surface-raised);
   box-shadow: var(--shadow-panel);
+  backdrop-filter: var(--blur-panel);
   pointer-events: auto;
 }
 
@@ -213,9 +538,24 @@
 
 .build-placing__what {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.build-placing__picture {
+  flex: none;
+  width: 36px;
+  height: 45px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.build-placing__words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .build-placing__price {
@@ -224,6 +564,10 @@
   align-items: center;
   gap: var(--space-1);
   font-size: var(--text-sm);
+}
+
+.build-placing__time {
+  color: var(--colour-text-muted);
 }
 
 .build-placing__hint,
@@ -252,14 +596,42 @@
   color: var(--colour-success);
 }
 
+.build-placing__buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Build here is the touch screen's click; a mouse clicks the spot itself. */
+@media (width > 620px) and (pointer: fine) {
+  .build-placing__here {
+    display: none;
+  }
+}
+
 @media (pointer: coarse) {
   .build-placing__cancel,
-  .build-tile__buttons .btn {
+  .build-tile {
     min-height: 44px;
   }
 }
 
-/* A phone: the menu is a bottom sheet over the lower part of the yard. */
+/* A laptop: the info column narrows before the tiles do. */
+@media (width <= 1100px) {
+  .build-menu__main {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+    gap: var(--space-4);
+  }
+
+  .build-menu__legend .build-menu__key {
+    display: none;
+  }
+}
+
+/*
+ * A phone: the window is a bottom sheet; the tiles go two across with the
+ * picture beside the name, and the info stands in their place once one is
+ * picked. The bar is a sheet of its own with Cancel and Build here.
+ */
 @media (width <= 620px) {
   .build-menu {
     top: auto;
@@ -268,34 +640,156 @@
     bottom: 0;
     width: auto;
     height: min(78vh, calc(100vh - var(--hud-height)));
+    max-height: none;
+    transform: none;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: 0;
   }
 
-  /* The title and the close button share the first row; the tabs take the
-     whole second one, as on the Monsters screen. */
-  .build-menu .monsters-tabs {
-    order: 1;
-    flex: 1 0 100%;
+  .build-menu .panel__titlebar {
+    flex-wrap: wrap;
+    row-gap: 0;
+    padding: var(--space-2) var(--space-2) 0 var(--space-4);
   }
 
-  .build-menu .tabs__tab {
-    padding-inline: var(--space-3);
+  .build-menu__meta {
+    order: 3;
+    flex-basis: 100%;
+    padding-bottom: var(--space-1);
   }
 
-  .build-menu__grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .build-menu__body {
+  .build-menu .panel__body {
+    gap: var(--space-3);
     padding: var(--space-2) var(--space-3) var(--space-3);
   }
 
+  .build-menu__tabs .tabs__tab {
+    padding: 0 var(--space-1);
+    font-size: var(--text-sm);
+  }
+
+  .build-menu__main {
+    display: block;
+    overflow-y: auto;
+  }
+
+  .build-menu--picked .build-menu__browse,
+  .build-menu:not(.build-menu--picked) .build-info {
+    display: none;
+  }
+
+  .build-menu__pager {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "grid grid grid"
+      "previous pages next";
+  }
+
+  .build-menu__turn {
+    height: var(--control-height);
+  }
+
+  .build-menu__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+
+  .build-tile {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    grid-template-areas:
+      "picture name"
+      "picture count";
+    align-content: center;
+    column-gap: var(--space-2);
+    row-gap: 2px;
+  }
+
+  .build-tile__picture {
+    grid-area: picture;
+    width: 48px;
+  }
+
+  .build-tile__name {
+    grid-area: name;
+    align-self: end;
+    font-size: var(--text-sm);
+  }
+
+  .build-tile__count {
+    grid-area: count;
+    align-self: start;
+    font-size: var(--text-xs);
+  }
+
+  .build-badge {
+    top: 2px;
+    right: 2px;
+    width: 18px;
+    height: 18px;
+  }
+
+  .build-menu__legend {
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  }
+
+  .build-menu__legend .build-menu__key {
+    display: none;
+  }
+
+  .build-info {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .build-info__back {
+    display: inline-flex;
+  }
+
+  .build-info__picture {
+    width: 96px;
+  }
+
   .build-placing {
-    left: var(--space-2);
-    right: var(--space-2);
-    transform: none;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
     width: auto;
     max-width: none;
+    padding: var(--space-3) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+    border-width: 1px 0 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    transform: none;
+  }
+
+  .build-placing__name {
+    font-size: var(--text-lg);
+  }
+
+  .build-placing__hint {
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--colour-surface-sunken);
+    color: var(--colour-success);
+    font-size: var(--text-md);
+    font-weight: 700;
+  }
+
+  .build-placing--blocked .build-placing__hint {
+    background: var(--colour-danger-soft);
+  }
+
+  .build-placing__buttons .btn {
+    flex: 1;
+    min-height: 52px;
+    font-size: var(--text-md);
+  }
+
+  .build-placing__buttons .build-placing__here {
+    flex: 2;
   }
 }

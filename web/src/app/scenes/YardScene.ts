@@ -32,7 +32,7 @@ import {
 } from "@/game/yard/YardStore";
 import { YardRenderer, YardView } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
-import { formatAmount } from "@/ui/format";
+import { formatAmount, formatCountdown } from "@/ui/format";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
 import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
@@ -930,10 +930,19 @@ export class YardScene implements Scene {
     this.buildMenu ??= new BuildMenu({
       binding,
       onPick: (type, instant) => this.startPlacement(type, instant),
+      onTownHall: () => this.showTownHall(),
       onClose: () => this.refreshBuildButton(),
     }).mount(context.overlay.content);
     this.buildMenu.open();
     this.refreshBuildButton();
+  }
+
+  /** The Build window's "Upgrade Town Hall": close it and open the hall's panel. */
+  private showTownHall(): void {
+    const hall = this.yard?.buildings.find((one) => one.type === 14);
+    if (!hall) return;
+    this.buildMenu?.close();
+    this.focusBuilding(hall.id);
   }
 
   /** Enabled on the own yard once it has loaded, and not over the planner. */
@@ -976,7 +985,9 @@ export class YardScene implements Scene {
       instant,
       instantPrice: offer.instantPrice,
       cost: offer.cost,
+      time: offer.atOnce ? "At once" : formatCountdown(offer.seconds),
       onCancel: () => this.endPlacement(),
+      onBuildHere: () => placement.dropHere(),
     }).mount(context.overlay.content);
     this.placementBar = bar;
 
@@ -1002,7 +1013,8 @@ export class YardScene implements Scene {
           return "refused";
         }
         placed = result.report.id;
-        bar.setMessage(repeat ? "Built. Click again for another." : null);
+        if (repeat) bar.setBuiltAgain();
+        else bar.setMessage(null);
         return "placed";
       },
       onCancel: () => this.endPlacement(),

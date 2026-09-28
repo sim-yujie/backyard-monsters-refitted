@@ -29,12 +29,15 @@ import type { Yard, YardWorkers } from "./yardModel";
  * `BUILDABLE_TYPES` is the same set; a test on each side pins it.
  */
 
-/** The menu's tabs. The original had four; monster buildings get their own here. */
+/**
+ * The menu's tabs: the original's four (`BUILDINGSPOPUP.as:28-35`), with the
+ * monster buildings under Buildings and the Champion buildings under
+ * Defensive, where the props table's `group` files them (#157).
+ */
 export const BuildCategory = {
   RESOURCES: "resources",
   BUILDINGS: "buildings",
-  MONSTERS: "monsters",
-  DEFENCES: "defences",
+  DEFENSIVE: "defensive",
   DECORATIONS: "decorations",
 } as const;
 export type BuildCategory = (typeof BuildCategory)[keyof typeof BuildCategory];
@@ -42,7 +45,7 @@ export type BuildCategory = (typeof BuildCategory)[keyof typeof BuildCategory];
 export interface BuildCategoryDefinition {
   readonly id: BuildCategory;
   readonly label: string;
-  /** Type ids, in the order the tab lists them. */
+  /** Type ids, in the props table's `order` within the tab. */
   readonly types: readonly number[];
 }
 
@@ -53,16 +56,15 @@ export interface BuildCategoryDefinition {
  */
 export const BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
   { id: BuildCategory.RESOURCES, label: "Resources", types: [1, 2, 3, 4, 6] },
-  { id: BuildCategory.BUILDINGS, label: "Buildings", types: [12, 5, 51, 11, 19, 10] },
   {
-    id: BuildCategory.MONSTERS,
-    label: "Monsters",
-    types: [8, 26, 15, 13, 16, 116, 9, 114, 119],
+    id: BuildCategory.BUILDINGS,
+    label: "Buildings",
+    types: [12, 8, 26, 15, 13, 16, 5, 51, 11, 19, 116, 10, 9],
   },
   {
-    id: BuildCategory.DEFENCES,
-    label: "Defences",
-    types: [21, 20, 25, 23, 22, 118, 115, 24, 117, 17],
+    id: BuildCategory.DEFENSIVE,
+    label: "Defensive",
+    types: [21, 20, 25, 23, 22, 115, 118, 24, 114, 17, 117, 119],
   },
   { id: BuildCategory.DECORATIONS, label: "Decorations", types: [] },
 ];
@@ -109,6 +111,36 @@ export type BuildGate =
   | { readonly reason: "workers"; readonly total: number; readonly busy: number }
   | { readonly reason: "credits"; readonly need: number };
 
+/**
+ * Where a tile stands, which is also how the tab sorts (`SortBuildings`,
+ * `BUILDINGSPOPUP.as:170-217`): what can be built first, then what is not
+ * unlocked yet, then what the yard has all of for now, then what it has all
+ * of for good.
+ */
+export type BuildStatus = "ready" | "locked" | "limit" | "maxed";
+
+const STATUS_ORDER: Readonly<Record<BuildStatus, number>> = {
+  ready: 0,
+  locked: 1,
+  limit: 2,
+  maxed: 3,
+};
+
+/**
+ * One line of the info panel's "Needs" list, ticked when the yard has it: the
+ * Town Hall level the next one of this type needs, then the build step's
+ * other prerequisites (`BUILDINGOPTIONSPOPUP.as:97-161`).
+ */
+export type BuildNeed =
+  | { readonly kind: "townHall"; readonly level: number; readonly met: boolean }
+  | {
+      readonly kind: "building";
+      readonly type: number;
+      readonly count: number;
+      readonly level: number;
+      readonly met: boolean;
+    };
+
 /** One tile. */
 export interface BuildOffer {
   readonly type: number;
@@ -122,6 +154,10 @@ export interface BuildOffer {
   readonly owned: number;
   /** How many the Town Hall allows now. */
   readonly allowed: number;
+  /** The most any Town Hall allows; owning this many earns the tick. */
+  readonly most: number;
+  readonly status: BuildStatus;
+  readonly needs: readonly BuildNeed[];
   /** Shiny to have it finished the moment it is placed. */
   readonly instantPrice: number;
   /** Why Build is disabled; null when it can be placed. */
@@ -214,6 +250,31 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
     }
   }
 
+  const most = quantity.reduce((top, one) => Math.max(top, one), 0);
+  // The hall the next one needs: the first that allows more than the yard
+  // holds, or the build step's own hall requirement if that is higher.
+  const stepHall = step[5].find(([required]) => required === 14)?.[2] ?? 1;
+  const hallNeed = Math.max(stepHall, nextHallAllowing(quantity, 0, owned) ?? stepHall);
+  const needs: BuildNeed[] = [
+    { kind: "townHall", level: hallNeed, met: hall >= hallNeed },
+    ...step[5]
+      .filter(([required]) => required !== 14)
+      .map(([required, count, level]): BuildNeed => ({
+        kind: "building",
+        type: required,
+        count,
+        level,
+        met: requirementsMet([[required, count, level]], yard),
+      })),
+  ];
+
+  let status: BuildStatus = "ready";
+  if (most > 0 && owned >= most) status = "maxed";
+  else if (owned > 0 && owned >= allowed) status = "limit";
+  else if (owned === 0 && (common?.reason === "townHall" || common?.reason === "requirements")) {
+    status = "locked";
+  }
+
   const instantPrice = instantCost(step);
   const instantGate: BuildGate | null =
     common ??
@@ -229,6 +290,9 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
     atOnce,
     owned,
     allowed,
+    most,
+    status,
+    needs,
     instantPrice,
     gate,
     instantGate,
@@ -240,3 +304,21 @@ export const buildOffers = (category: BuildCategory, context: BuildContext): Bui
   (BUILD_CATALOGUE.find((entry) => entry.id === category)?.types ?? [])
     .map((type) => buildOffer(type, context))
     .filter((offer): offer is BuildOffer => offer !== null);
+
+/** Tiles by {@link BuildStatus}, the tab's order within each (the sort is stable). */
+export const sortOffers = (offers: readonly BuildOffer[]): BuildOffer[] =>
+  [...offers].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
+
+/** Tiles on a page: the original's 5 across by 2 down (`BUILDINGSPOPUP.as:133-167`). */
+export const BUILD_PAGE_SIZE = 10;
+
+/** How many pages a tab of `count` tiles takes; an empty tab is still one page. */
+export const pageCount = (count: number): number =>
+  Math.max(1, Math.ceil(count / BUILD_PAGE_SIZE));
+
+/** The tiles on page `page` (from 0), the page clamped into range. */
+export const pageOf = <T>(items: readonly T[], page: number): T[] => {
+  const last = pageCount(items.length) - 1;
+  const index = Math.min(Math.max(page, 0), last);
+  return items.slice(index * BUILD_PAGE_SIZE, (index + 1) * BUILD_PAGE_SIZE);
+};

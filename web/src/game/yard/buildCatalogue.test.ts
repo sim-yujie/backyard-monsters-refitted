@@ -10,6 +10,9 @@ import {
   buildOffers,
   buildsAtOnce,
   nextHallAllowing,
+  pageCount,
+  pageOf,
+  sortOffers,
   type BuildContext,
 } from "./buildCatalogue";
 import { readYard } from "./yardModel";
@@ -88,6 +91,22 @@ describe("the catalogue", () => {
     }
   });
 
+  it("has the original's four tabs, filed by the props table's group (#157)", () => {
+    // `YARD_PROPS.as` `group` 1 to 4, in `order` within each.
+    expect(BUILD_CATALOGUE.map((category) => category.label)).toEqual([
+      "Resources",
+      "Buildings",
+      "Defensive",
+      "Decorations",
+    ]);
+    const buildings = BUILD_CATALOGUE.find((category) => category.id === BuildCategory.BUILDINGS);
+    // The monster buildings sit under Buildings…
+    for (const type of [8, 13, 15, 26]) expect(buildings?.types).toContain(type);
+    // …and the Champion Cage and Chamber under Defensive.
+    const defensive = BUILD_CATALOGUE.find((category) => category.id === BuildCategory.DEFENSIVE);
+    for (const type of [114, 119]) expect(defensive?.types).toContain(type);
+  });
+
   it("every listed type has a build step", () => {
     for (const type of BUILDABLE_TYPES) expect(rowOf(type)?.[4][0]).toBeDefined();
   });
@@ -113,7 +132,7 @@ describe("buildOffer", () => {
     const context = contextOf({ buildings: [HALL(3), building(2, CANNON)] });
     expect(buildOffer(CANNON, context)).toMatchObject({
       type: CANNON,
-      category: BuildCategory.DEFENCES,
+      category: BuildCategory.DEFENSIVE,
       cost: { r1: 2000, r2: 1500, r3: 500, r4: 0 },
       seconds: 30,
       atOnce: false,
@@ -233,5 +252,70 @@ describe("buildOffers", () => {
       1, 2, 3, 4, 6,
     ]);
     expect(buildOffers(BuildCategory.DECORATIONS, context)).toEqual([]);
+  });
+});
+
+describe("status and needs (#157)", () => {
+  it("ready: the count, and the hall and prerequisites ticked", () => {
+    const context = contextOf({ buildings: [HALL(3), building(2, 15)] });
+    const hatchery = buildOffer(13, context);
+    expect(hatchery).toMatchObject({ status: "ready", owned: 0, allowed: 3, most: 5 });
+    expect(hatchery?.needs).toEqual([
+      { kind: "townHall", level: 1, met: true },
+      { kind: "building", type: 15, count: 1, level: 1, met: true },
+    ]);
+  });
+
+  it("locked by the hall: the hall the first one needs, unticked", () => {
+    const lab = buildOffer(116, contextOf({ buildings: [HALL(3)] }));
+    expect(lab?.status).toBe("locked");
+    expect(lab?.needs[0]).toEqual({ kind: "townHall", level: 5, met: false });
+  });
+
+  it("locked by a prerequisite: the Control Centre wants three level 2 Hatcheries", () => {
+    const hatcheries = [2, 3].map((id) => building(id, 13, { l: 2 }));
+    const hcc = buildOffer(16, contextOf({ buildings: [HALL(3), ...hatcheries] }));
+    expect(hcc?.status).toBe("locked");
+    expect(hcc?.needs).toContainEqual({ kind: "building", type: 13, count: 3, level: 2, met: false });
+  });
+
+  it("at the limit for now: the next one needs the next hall", () => {
+    const cannons = [2, 3, 4, 5].map((id) => building(id, CANNON));
+    const offer = buildOffer(CANNON, contextOf({ buildings: [HALL(3), ...cannons] }));
+    expect(offer?.status).toBe("limit");
+    expect(offer?.needs[0]).toEqual({ kind: "townHall", level: 4, met: false });
+  });
+
+  it("all any hall allows: maxed, which earns the tick", () => {
+    const locker = buildOffer(8, contextOf({ buildings: [HALL(3), building(2, 8)] }));
+    expect(locker).toMatchObject({ status: "maxed", owned: 1, most: 1 });
+  });
+
+  it("sorts ready, locked, at the limit, all built; the tab's order within each", () => {
+    const context = contextOf({
+      buildings: [HALL(3), building(2, 8), building(3, 15), ...[4, 5, 6].map((id) => building(id, 13))],
+    });
+    const sorted = sortOffers(buildOffers(BuildCategory.BUILDINGS, context));
+    const statuses = sorted.map((offer) => offer.status);
+    expect(statuses).toEqual([...statuses].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b)));
+    expect(sorted.at(-1)?.type).toBe(8);
+    expect(sorted.find((offer) => offer.type === 13)?.status).toBe("limit");
+    // The General Store leads the tab and is ready, so it leads the sort too.
+    expect(sorted[0]?.type).toBe(12);
+  });
+});
+
+const ORDER = ["ready", "locked", "limit", "maxed"];
+
+describe("pages", () => {
+  it("ten to a page; an empty tab is one page; the page is clamped", () => {
+    const items = Array.from({ length: 13 }, (_, index) => index);
+    expect(pageCount(0)).toBe(1);
+    expect(pageCount(10)).toBe(1);
+    expect(pageCount(13)).toBe(2);
+    expect(pageOf(items, 0)).toHaveLength(10);
+    expect(pageOf(items, 1)).toEqual([10, 11, 12]);
+    expect(pageOf(items, 7)).toEqual([10, 11, 12]);
+    expect(pageOf([], 0)).toEqual([]);
   });
 });
