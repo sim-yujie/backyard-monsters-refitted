@@ -485,23 +485,25 @@ export const previewAdd = (
 export const queueRoom = (yard: HatchYard, target: HatchTarget, monster: string): number =>
   previewAdd(yard, target, monster, MAX_ADD, Number.POSITIVE_INFINITY)?.added ?? 0;
 
-/** The three limits Fill weighs, and the smallest. */
+/** The limits Fill weighs, and housing beside them. */
 export interface FillLimits {
   readonly queue: number;
   readonly goo: number;
+  /** How many more housing takes once everything on its way is in: shown, not a limit. */
   readonly housing: number;
-  /** `min(queue, goo, housing)`: what Fill puts in the box. */
+  /** `min(queue, goo)`: what Max puts in the box, and the most the box takes. */
   readonly fill: number;
-  /** Which limit Fill stopped at (the first of queue, goo, housing that is smallest). */
-  readonly limitedBy: "queue" | "goo" | "housing";
-  /** The most the box takes: `min(queue, goo)`, housing aside (the queue may outgrow housing). */
-  readonly max: number;
+  /** Which limit Fill stopped at (the queue on a tie). */
+  readonly limitedBy: "queue" | "goo";
 }
 
 /**
- * Fill for `monster` on `target`: `min(queue room, goo ÷ price, free housing ÷
- * space)`, where free housing counts what every hatchery already holds or
- * queues (§4.4).
+ * Fill for `monster` on `target`: `min(queue room, goo ÷ price)`. Housing is
+ * not a limit (issue #169): the original let a queue outgrow housing, and a
+ * monster that hatches with no room waits, finished, in its hatchery until
+ * there is some (`client/scripts/HATCHERYPOPUP.as:441-442`,
+ * `HATCHERYCCPOPUP.as:517-531`; the server's `production.ts` stage 2). What
+ * housing takes is still worked out, for the warning under the box.
  */
 export const fillLimits = (yard: HatchYard, target: HatchTarget, monster: string): FillLimits => {
   const level = levelIn(yard.levels, monster);
@@ -509,20 +511,19 @@ export const fillLimits = (yard: HatchYard, target: HatchTarget, monster: string
   const queue = queueRoom(yard, target, monster);
   const goo = price > 0 ? Math.min(MAX_ADD, Math.floor(yard.goo / price)) : MAX_ADD;
   const housing = Math.min(MAX_ADD, housingFits(yard, monster));
-  const fill = Math.max(0, Math.min(queue, goo, housing));
-  const limitedBy = fill === queue ? "queue" : fill === goo ? "goo" : "housing";
-  return { queue, goo, housing, fill, limitedBy, max: Math.max(0, Math.min(queue, goo)) };
+  const fill = Math.max(0, Math.min(queue, goo));
+  return { queue, goo, housing, fill, limitedBy: fill === queue ? "queue" : "goo" };
 };
 
 /**
  * The line under the box when the count is more than housing takes, or null:
- * "Housing fits 12 of these; the rest will wait".
+ * "Housing fits 12 of these; the rest will hatch and wait in the Hatchery".
  */
 export const housingWarning = (yard: HatchYard, monster: string, count: number): string | null => {
   const fits = housingFits(yard, monster);
   if (count <= fits) return null;
-  if (fits === 0) return "Housing is full; these will wait for space.";
-  return `Housing fits ${fits.toLocaleString("en-US")} of these; the rest will wait.`;
+  if (fits === 0) return "Housing is full: these will hatch and wait in the Hatchery until there is room.";
+  return `Housing fits ${fits.toLocaleString("en-US")} of these; the rest will hatch and wait in the Hatchery until there is room.`;
 };
 
 /* ── Finish now ────────────────────────────────────────────────────────── */

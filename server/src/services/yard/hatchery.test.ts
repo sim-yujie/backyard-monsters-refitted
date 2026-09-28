@@ -143,6 +143,16 @@ describe("hatchery/add — one hatchery's queue", () => {
     expect(plan.slices?.monsters?.saved).toBe(NOW);
   });
 
+  test("housing is no limit: a full Housing still takes a full queue, which waits to move in (#169)", () => {
+    // Housing 6 holds 540: 54 Pokeys fill it.
+    const full = yardOf({ monsters: monstersOf(undefined, undefined, [], { C1: 54 }) });
+    expect(freeHousing(full, { C1: 54 }, { C1: 1 }, NOW)).toBe(0);
+    const plan = planHatcheryAdd(full, 1, "C1", 81, NOW);
+
+    expect(plan.report).toMatchObject({ added: 81, requested: 81, stoppedBy: null });
+    expect(plan.debit).toEqual({ r4: 81 * 250 });
+  });
+
   test("more than the stacks hold stops at the queue and charges only what went in", () => {
     // Hatchery 2 is level 1: the one that starts, then two stacks of 20.
     const plan = planHatcheryAdd(yardOf(), 2, "C1", 100, NOW);

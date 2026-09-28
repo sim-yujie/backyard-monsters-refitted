@@ -38,7 +38,7 @@ Owner decisions, binding (2026-09-27). "Where" names the section that applies ea
 | D6 | Hatchery queue: keep the original per-hatchery queues, `(level + 1) × 20`. The Hatchery Control Centre replaces them with one shared queue as in the original. | §4.4 |
 | D7 | Locker: one unlock at a time, as original. Re-enable Vorg (C16), Slimeattikus (C17, with its split child C18) and Rezghul (C19). | §4.3, §4.8 |
 | D8 | Hatchery production continues while the player is away: the server catches up production on load (and before attacks and map reads that need the army), stopping when housing is full. | §2.3 |
-| D9 | Hatchery add control = the attack Army panel controls (tap a monster, number box, hold-to-repeat +/−, Fill to what housing/queue/goo allow); one server request per batch. | §4.4 |
+| D9 | Hatchery add control = the attack Army panel controls (tap a monster, number box, hold-to-repeat +/−, Fill to what housing/queue/goo allow; since #169 (owner, 2026-09-28) Fill ignores housing, as the original did); one server request per batch. | §4.4 |
 | D10 | Juicer: keep. The goo rate is looked up in the Flash code. | §7.3 |
 | D11 | Bunker: keep the Map Room 2 rule (monsters put in are consumed, cannot return). Champion hunger: keep original (23 h + 24 h grace, loses a feed). | §7 |
 | D12 | Harvesters: one "Collect all" HUD button; tapping a single harvester banks just that one. | §5.1 |
@@ -577,10 +577,13 @@ New: Locker building (opens Unlock), row, Start = 3; from the HUD, Monsters, Unl
   there is one control. The box's maximum is what the queue has room for:
   stack space in this hatchery (`(1 + level)` stacks of 20, merging into the first non-full stack
   of the same monster first, MH §5.2 step 4) and what the goo pays for.
-- **Fill** sets the box to `min(queue room, goo ÷ price, free housing ÷ space)`, where free housing
-  counts what every hatchery already holds or queues. Typing a larger number than housing is
-  allowed (the original let a queue exceed housing; the hatchery then stalls, MH §12.1 rule 7), and
-  the line under the box then reads "Housing fits 12 of these; the rest will wait".
+- **Fill** (Max) sets the box to `min(queue room, goo ÷ price)`. Housing is not a limit (issue
+  #169, owner 2026-09-28: "players can add more than the housing capacity, the monsters can hatch,
+  just that it cant enter the housing"): the original let a queue exceed housing, and a monster that
+  hatches with no room waits, finished, in its hatchery (stage 2) until there is some, MH §12.1
+  rule 7. When the count is more than free housing (counting what every hatchery already holds or
+  queues) the line under the box reads "Housing fits 12 of these; the rest will hatch and wait in
+  the Hatchery until there is room", and the housing bar says how far over it goes.
 - **Add** sends one request for the whole batch (D9, issue #31) and the queue redraws from the
   answer.
 - **Queue rows**: `−1` removes one, `×` removes the stack; the in-production slot has × (refund,
@@ -744,7 +747,7 @@ and `buildingActions.ts` in this phase.
 | WP2.2 | Production: single hatchery exact counts over a gap; stall when housing full and no refund; overdrive window partly overlapping; 50% health stops; HCC distributes in `hid` order; HCC completion refunds queues and keeps in-production; cull thins evenly; idempotence; attack save subtracts `flung` and ignores increases; map read equals the next write. |
 | WP2.3 | Every refusal; one unlock at a time; cancel full refund capped; instant charges no putty; CLOD 5x arithmetic; completion creates `academy[id].level = 1`. |
 | WP2.4 | Stack merge order identical to MH §5.2 for mixed batches; partial add reports `stoppedBy`; remove slot 0 starts the next; HCC-only mode; finish-now price and `finishedAll`; charges at the academy-level price. |
-| WP2.6 | `QuantityStepper` hold timings (moved from `ArmyPanel.test.ts`); Fill = min of the three limits; over-housing warning text. |
+| WP2.6 | `QuantityStepper` hold timings (moved from `ArmyPanel.test.ts`); Fill = min of queue and goo, housing aside (#169); over-housing warning text. |
 | WP2.7 | Used/total, per-building capacity, stalled count. |
 
 **Browser verification** (`yardtester`, same stack). Reversible first:

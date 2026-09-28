@@ -221,7 +221,9 @@ describe("HatchTab: each hatchery's line", () => {
     expect(spokenText(nowCard(element, 10))).toBe("Hatching now Pokey Waiting for housing");
     expect(spokenText(nowCard(element, 11))).toBe("Hatching now Damaged: repair it");
     expect(spokenText(nowCard(element, 12))).toBe("Hatching now Being built");
-    expect(text(element, ".hatch-message__title")).toBe("Housing is full: the finished Pokey waits for room.");
+    expect(text(element, ".hatch-message__title")).toBe(
+      "Housing is full: the hatched Pokey waits in this Hatchery for room.",
+    );
   });
 });
 
@@ -295,7 +297,8 @@ describe("HatchTab: the info panel and the batch add", () => {
   });
 
   it("offers Max, explains it, previews the batch dashed and adds it in one request", async () => {
-    // Four Housing L6 = 2,160; 1,500 housed, 65 on the way: room for 59 Pokeys.
+    // Four Housing L6 = 2,160; 1,500 housed, 65 on the way: room for 59 Pokeys,
+    // but Max is the queue's 61: housing is no limit (#169), only a warning.
     const { element, actions } = setup(
       loadOf(
         {
@@ -314,21 +317,25 @@ describe("HatchTab: the info panel and the batch add", () => {
       ),
       { buildingId: 11, monster: "C1" },
     );
-    expect(maxButton(element).textContent).toBe("Max 59");
+    expect(maxButton(element).textContent).toBe("Max 61");
     maxButton(element).click();
-    expect(box(element).value).toBe("59");
+    expect(box(element).value).toBe("61");
     expect(maxButton(element).getAttribute("aria-pressed")).toBe("true");
-    expect(text(element, ".hatch-add__note")).toBe(
-      "Max is 59 because Housing has room for 59 more Pokeys. They move in as they hatch.",
-    );
-    expect(text(element, ".hatch-add__add")).toBe("Add 59 Pokeys Goo 14,750");
-    // One starts at once in the idle hatchery, 58 fill three new stacks.
+    expect(text(element, ".hatch-add__note")).toBe("Max is 61: the queue has room for 61 more Pokeys.");
+    expect(text(element, ".hatch-add__add")).toBe("Add 61 Pokeys Goo 15,250");
+    // One starts at once in the idle hatchery, 60 fill three new stacks.
     expect(spokenText(nowCard(element, 11))).toBe("Hatching now Starts now");
-    expect(slotKinds(line(element, 11))).toEqual(["new ×20", "new ×20", "new ×18", "locked"]);
-    expect(element.querySelector<HTMLElement>(".hatch-add__warning")!.hidden).toBe(true);
+    expect(slotKinds(line(element, 11))).toEqual(["new ×20", "new ×20", "new ×20", "locked"]);
+    expect(text(element, ".hatch-add__warning")).toBe(
+      "Housing fits 59 of these; the rest will hatch and wait in the Hatchery until there is room.",
+    );
+    expect(text(element, ".hatch-housing__over")).toBe(
+      "Over by 15: the rest hatch and wait in the Hatchery for room.",
+    );
 
-    type(box(element), "61");
-    expect(text(element, ".hatch-add__warning")).toBe("Housing fits 59 of these; the rest will wait.");
+    type(box(element), "59");
+    expect(element.querySelector<HTMLElement>(".hatch-add__warning")!.hidden).toBe(true);
+    expect(element.querySelector(".hatch-housing__over")).toBeNull();
     // More than the queue takes is clamped to it.
     type(box(element), "500");
     expect(box(element).value).toBe("61");
@@ -340,20 +347,22 @@ describe("HatchTab: the info panel and the batch add", () => {
     expect(text(element, ".monsters-status")).toBe("Added 60 of 61 Pokeys — out of goo: Goo 15,000 spent.");
   });
 
-  it("says why Max came to nothing when housing is full, and still lets a typed count through", () => {
+  it("fills the queue even when housing is full, and says the monsters will wait (#169)", () => {
     const full = twoHatcheries({
       monsters: { saved: T0, housed: { C1: 108 }, hid: [10, 11], h: [["", 0, []], ["", 0, []]], hstage: [0, 0] },
     });
     const { element } = setup(full, { monster: "C1" });
-    expect(maxButton(element).textContent).toBe("Max 0");
+    expect(maxButton(element).textContent).toBe("Max 81");
     maxButton(element).click();
-    expect(box(element).value).toBe("0");
-    expect(addButton(element).disabled).toBe(true);
-    expect(text(element, ".hatch-add__note")).toBe(
-      "Housing is full, so Max adds none. Type a number to queue them anyway.",
+    expect(box(element).value).toBe("81");
+    expect(addButton(element).disabled).toBe(false);
+    expect(text(element, ".hatch-add__warning")).toBe(
+      "Housing is full: these will hatch and wait in the Hatchery until there is room.",
     );
     type(box(element), "4");
-    expect(text(element, ".hatch-add__warning")).toBe("Housing is full; these will wait for space.");
+    expect(text(element, ".hatch-add__warning")).toBe(
+      "Housing is full: these will hatch and wait in the Hatchery until there is room.",
+    );
     expect(addButton(element).disabled).toBe(false);
   });
 
@@ -461,6 +470,31 @@ describe("HatchTab: with a Hatchery Control Centre", () => {
     addButton(element).click();
     await flush();
     expect(actions.add).toHaveBeenLastCalledWith("hcc", "C3", 3);
+  });
+
+  it("says hatched monsters are waiting for housing even while another hatchery works (#169)", () => {
+    // Hatchery 10's Pokey is done and stalled; hatchery 11 is still hatching a Bolt.
+    const stalled = loadOf(
+      {
+        monsters: {
+          saved: T0,
+          housed: { C1: 108 },
+          hid: [10, 11],
+          h: [
+            ["C1", 0, []],
+            ["C3", 9, []],
+          ],
+          hstage: [2, 1],
+          hcc: [["C1", 6, 1]],
+        },
+      },
+      [building(10, 13, 3), building(11, 13, 3), building(20, 16, 1)],
+    );
+    const { element } = setup(stalled, { buildingId: 10, monster: "C1" });
+    expect(spokenText(nowCard(element, 10))).toBe("Hatchery 1 Pokey Waiting for housing");
+    expect(text(element, ".hatch-message__title")).toBe(
+      "Housing is full: a hatched monster waits in the Hatcheries for room.",
+    );
   });
 });
 

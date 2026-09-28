@@ -84,6 +84,22 @@ describe("catchUpMonsters — production over a gap", () => {
     expect(save.resources!.r4).toBe(1000);
   });
 
+  test("a stalled hatchery houses its monster as soon as monsters leave housing (#169)", () => {
+    const save = saveOf({ monsters: monstersOf([["", 0, [["C1", 30, 1]]]], { housed: { C1: 15 } }) });
+    catchUpYard(save, SAVED + 10_000);
+    expect(save.monsters!.hstage).toEqual([2, 0]);
+
+    // Three leave housing (juiced, say) while the hatchery waits.
+    save.monsters = { ...save.monsters, housed: { C1: 17 } };
+    catchUpYard(save, SAVED + 10_030);
+
+    // The waiting one moves in at once, two more hatch at +15 and +30, the next is under way.
+    expect(housed(save)).toEqual({ C1: 20 });
+    expect(save.monsters!.hstage).toEqual([1, 0]);
+    expect(save.monsters!.h).toEqual([["C1", 15, [["C1", 21, 1]], 1], ["", 0, []]]);
+    expect(save.resources!.r4).toBe(1000);
+  });
+
   test("a Housing upgrade finishing mid-window frees the stalled hatchery then", () => {
     // Housing 1 → 2 (200 → 260) finishes at SAVED + 1000.
     const save = saveOf({

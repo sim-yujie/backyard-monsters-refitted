@@ -305,7 +305,7 @@ describe("lineSeconds", () => {
 });
 
 describe("Fill", () => {
-  it("is the smallest of queue room, goo and free housing, counting everything on its way", () => {
+  it("is the smaller of queue room and goo; free housing, counting everything on its way, is no limit (#169)", () => {
     // 1,080 space; 100 Pokeys housed (1,000); Bolt producing (15) and 2 queued (30) elsewhere.
     const save = saveOf(
       {
@@ -327,15 +327,14 @@ describe("Fill", () => {
       queue: 81,
       goo: 400,
       housing: 3,
-      fill: 3,
-      limitedBy: "housing",
-      max: 81,
+      fill: 81,
+      limitedBy: "queue",
     });
   });
 
   it("stops at the goo, or the queue, when those are smaller", () => {
     const poor = readHatchYard(saveOf({ resources: { r4: 2_000 } }, [building(10, 13, 3)]), T0);
-    expect(fillLimits(poor, 10, "C1")).toMatchObject({ goo: 8, fill: 8, limitedBy: "goo", max: 8 });
+    expect(fillLimits(poor, 10, "C1")).toMatchObject({ goo: 8, fill: 8, limitedBy: "goo" });
     const rich = readHatchYard(saveOf({}, [building(10, 13, 1)]), T0);
     expect(fillLimits(rich, 10, "C1")).toMatchObject({ queue: 41, fill: 41, limitedBy: "queue" });
   });
@@ -344,12 +343,16 @@ describe("Fill", () => {
     const save = saveOf({ monsters: monsters({ housed: { C1: 100 } }) }, [building(10, 13, 3)]);
     const yard = readHatchYard(save, T0);
     expect(housingWarning(yard, "C1", 8)).toBeNull();
-    expect(housingWarning(yard, "C1", 9)).toBe("Housing fits 8 of these; the rest will wait.");
+    expect(housingWarning(yard, "C1", 9)).toBe(
+      "Housing fits 8 of these; the rest will hatch and wait in the Hatchery until there is room.",
+    );
     const full = readHatchYard(
       saveOf({ monsters: monsters({ housed: { C1: 108 } }) }, [building(10, 13, 3)]),
       T0,
     );
-    expect(housingWarning(full, "C1", 1)).toBe("Housing is full; these will wait for space.");
+    expect(housingWarning(full, "C1", 1)).toBe(
+      "Housing is full: these will hatch and wait in the Hatchery until there is room.",
+    );
   });
 });
 

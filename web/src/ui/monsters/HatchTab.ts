@@ -166,8 +166,6 @@ export class HatchTab implements MonstersTab {
   private target: HatchTarget | null = null;
   private selected: string | null = null;
   private count = DEFAULT_COUNT;
-  /** Why the last Max came to nothing, until the count changes. */
-  private fillNote: string | null = null;
   /** The hatchery whose monster in production is waiting on "Cancel it?". */
   private confirming: number | null = null;
   /** Finish now and the Overdrive, opened by the small link. */
@@ -259,7 +257,7 @@ export class HatchTab implements MonstersTab {
       inputLabel: "How many to add",
       fewerLabel: "One fewer",
       moreLabel: "One more",
-      fillTitle: "As many as the queue, your goo and your housing allow",
+      fillTitle: "As many as the queue and your goo allow",
       value: () => this.count,
       set: (value) => this.setCount(value),
       fill: () => this.fill(),
@@ -392,7 +390,7 @@ export class HatchTab implements MonstersTab {
     const target = this.target;
     const ready = row?.state.kind === "ready";
     const limits = yard && row && ready && target !== null ? fillLimits(yard, target, row.monster.id) : null;
-    const max = limits ? limits.max : 0;
+    const max = limits ? limits.fill : 0;
     if (this.count > max) this.count = max;
     this.stepper.sync({ value: this.count, max, disabled: !ready || target === null, rewrite });
     this.stepper.fill.textContent = limits ? `Max ${formatAmount(limits.fill)}` : "Max";
@@ -414,7 +412,7 @@ export class HatchTab implements MonstersTab {
       yard && row && ready && this.count > 0 ? housingWarning(yard, row.monster.id, this.count) : null;
     this.warningLine.textContent = warning ?? "";
     this.warningLine.hidden = warning === null;
-    const note = this.fillNote ?? (limits && row ? maxNote(limits, row, target) : null);
+    const note = limits && row ? maxNote(limits, row, target) : null;
     this.noteLine.textContent = note ?? "";
     this.noteLine.hidden = note === null || !ready;
 
@@ -829,7 +827,7 @@ export class HatchTab implements MonstersTab {
     const detail = document.createElement("span");
     detail.className = "hatch-message__detail";
     detail.textContent =
-      "Each monster moves into Housing the moment it hatches. If Housing is full, hatching waits for room.";
+      "Each monster moves into Housing the moment it hatches. With Housing full it still hatches, then waits in its Hatchery until there is room.";
     words.append(main, detail);
 
     const housed = housedSpace(yard);
@@ -846,6 +844,7 @@ export class HatchTab implements MonstersTab {
     const value = document.createElement("span");
     value.className = "hatch-housing__value";
     value.textContent = `${formatAmount(after)} / ${formatAmount(yard.capacity)}`;
+
     top.append(label, value);
     const bar = document.createElement("div");
     bar.className = "hatch-housing__bar";
@@ -870,6 +869,13 @@ export class HatchTab implements MonstersTab {
       bar.append(segment);
     }
     housing.append(top, bar);
+    // Past the capacity is allowed (#169); say what happens to the rest.
+    if (after > yard.capacity) {
+      const over = document.createElement("span");
+      over.className = "hatch-housing__over";
+      over.textContent = `Over by ${formatAmount(after - yard.capacity)}: the rest hatch and wait in the Hatchery for room.`;
+      housing.append(over);
+    }
 
     const icon = resourceIcon("r4", { decorative: true });
     icon.classList.add("hatch-message__icon");
@@ -1133,7 +1139,6 @@ export class HatchTab implements MonstersTab {
     if (this.selected === id) return;
     this.selected = id;
     this.count = DEFAULT_COUNT;
-    this.fillNote = null;
     if (redraw) this.render();
   }
 
@@ -1146,7 +1151,6 @@ export class HatchTab implements MonstersTab {
 
   private setCount(value: number): void {
     this.count = Math.max(0, Math.floor(value));
-    this.fillNote = null;
     this.renderCount(document.activeElement !== this.stepper.input);
   }
 
@@ -1156,10 +1160,6 @@ export class HatchTab implements MonstersTab {
     if (!yard || !row || this.target === null) return;
     const limits = fillLimits(yard, this.target, row.monster.id);
     this.count = limits.fill;
-    this.fillNote =
-      limits.fill === 0 && limits.limitedBy === "housing" && limits.max > 0
-        ? "Housing is full, so Max adds none. Type a number to queue them anyway."
-        : null;
     this.renderCount(true);
   }
 
@@ -1337,14 +1337,9 @@ const maxNote = (limits: FillLimits, row: HatchMonster, target: HatchTarget | nu
   const fill = limits.fill;
   if (fill === 0) return null;
   const many = `${formatAmount(fill)} more ${plural(row.monster.name, fill)}`;
-  switch (limits.limitedBy) {
-    case "housing":
-      return `Max is ${formatAmount(fill)} because Housing has room for ${many}. They move in as they hatch.`;
-    case "goo":
-      return `Max is ${formatAmount(fill)}: your goo pays for ${many}.`;
-    default:
-      return `Max is ${formatAmount(fill)}: ${target === "hcc" ? "the shared queue" : "the queue"} has room for ${many}.`;
-  }
+  return limits.limitedBy === "goo"
+    ? `Max is ${formatAmount(fill)}: your goo pays for ${many}.`
+    : `Max is ${formatAmount(fill)}: ${target === "hcc" ? "the shared queue" : "the queue"} has room for ${many}.`;
 };
 
 /**
@@ -1375,8 +1370,14 @@ export const lineSentence = (
     }
     const producing = yard.hatcheries.filter((one) => one.monster && one.stage === 1);
     const stalled = yard.hatcheries.filter((one) => one.stage === 2);
+    // Waiting monsters first: they are what a player cannot otherwise see (#169).
+    if (stalled.length > 0) {
+      return {
+        title: `Housing is full: ${stalled.length === 1 ? "a hatched monster waits" : `${formatAmount(stalled.length)} hatched monsters wait`} in the Hatcheries for room.`,
+        tone: "warning",
+      };
+    }
     if (producing.length > 0) return { title: `Hatching ${names(producing.map((one) => one.monster!))}.${tail}`, tone: "plain" };
-    if (stalled.length > 0) return { title: "Housing is full: finished monsters wait for room.", tone: "warning" };
     if (yard.shared.length > 0) return { title: `Waiting for a free Hatchery.${tail}`, tone: "plain" };
     return { title: `Nothing is hatching.${tip}`, tone: "plain" };
   }
@@ -1390,7 +1391,7 @@ export const lineSentence = (
       return { title: "This Hatchery is damaged: repair it to hatch again.", tone: "warning" };
     case "stalled":
       return {
-        title: `Housing is full: the finished ${nameOf(hatchery.monster ?? "")} waits for room.`,
+        title: `Housing is full: the hatched ${nameOf(hatchery.monster ?? "")} waits in this Hatchery for room.`,
         tone: "warning",
       };
     case "upgrading":

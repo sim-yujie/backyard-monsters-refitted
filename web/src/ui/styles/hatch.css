@@ -770,6 +770,12 @@ button.hatch-slot:disabled {
   background: var(--colour-warning);
 }
 
+.hatch-housing__over {
+  font-size: var(--text-xs);
+  color: var(--colour-warning);
+  text-wrap: pretty;
+}
+
 /* ── The grid and the info panel, side by side ───────────────────────── */
 
 .hatch__split {
