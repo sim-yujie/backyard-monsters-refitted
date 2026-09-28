@@ -11,7 +11,18 @@ import {
   type FlingLog,
 } from "../../../game-rules/combat/index.js";
 import type { AttackSession } from "../attackSession.js";
-import { attackLootOf, fightableLog, wholeAmounts, type LootAttacker, type LootDefender } from "./attackLoot.js";
+import { siloCapacity } from "../../../game-data/buildingCosts.js";
+import { BASE_STORAGE, OUTPOST_STORAGE } from "../economy/resourceBudget.js";
+import {
+  attackLootOf,
+  attackerLootCap,
+  bankAttackLoot,
+  fightableLog,
+  krallenBuffOf,
+  wholeAmounts,
+  type LootAttacker,
+  type LootDefender,
+} from "./attackLoot.js";
 
 /**
  * Attack loot is capped by the server's own replay (issue #163). The golden
@@ -362,4 +373,66 @@ describe("fightableLog", () => {
     };
     expect(fightableLog(log, attacker, {}).events.map((event) => (event as { id: string }).id)).toEqual(["pb0"]);
   });
+});
+
+describe("the attacker's storage (issue #166)", () => {
+  const log = (champion?: { t: number; l: number }): FlingLog => ({
+    v: 1,
+    seed: 7,
+    events: [
+      { kind: "fling", t: 10, x: 0, y: 0, r: 100, monsters: { C1: 1 } },
+      { kind: "fling", t: 20, x: 0, y: 0, r: 100, monsters: {}, ...(champion && { champion }) },
+    ],
+  });
+
+  test("Krallen raises the cap by her buffs at the level she was flung, capped at the one owned", () => {
+    // `buffs: [0.2, 0.22, 0.24, 0.27, 0.3]` (`CHAMPIONCAGE.as:249`).
+    expect(krallenBuffOf(log({ t: 5, l: 5 }), [{ t: 5, l: 5 }])).toBeCloseTo(0.3);
+    expect(krallenBuffOf(log({ t: 5, l: 2 }), [{ t: 5, l: 5 }])).toBeCloseTo(0.22);
+    expect(krallenBuffOf(log({ t: 5, l: 5 }), [{ t: 5, l: 1 }])).toBeCloseTo(0.2);
+  });
+
+  test("no Krallen flung, one not owned, or another champion raises nothing", () => {
+    expect(krallenBuffOf(log(), [{ t: 5, l: 5 }])).toBe(0);
+    expect(krallenBuffOf(log({ t: 5, l: 5 }), [])).toBe(0);
+    expect(krallenBuffOf(log({ t: 3, l: 6 }), [{ t: 3, l: 6 }])).toBe(0);
+    expect(krallenBuffOf(null, [{ t: 5, l: 5 }])).toBe(0);
+  });
+
+  test("the cap is the yard's silos and outposts, raised by Krallen", () => {
+    const save = {
+      buildingdata: { "1": { id: 1, t: 6, X: 0, Y: 0, l: 3 } } as never,
+      outposts: [[1, 2, "3"]],
+      resources: {},
+    };
+    const cap = BASE_STORAGE + siloCapacity(3) + OUTPOST_STORAGE;
+    expect(attackerLootCap(save, 0)).toBe(cap);
+    expect(attackerLootCap(save, 0.3)).toBe(Math.floor(cap * 1.3));
+  });
+
+  test("an attacker at or over the cap banks nothing and keeps what they hold", () => {
+    const save = { buildingdata: {}, resources: { r1: BASE_STORAGE, r2: BASE_STORAGE + 500 } };
+    const banked = bankAttackLoot(save, { r1: 4000, r2: 4000, r3: 0, r4: 0 }, 0);
+    expect(banked.credited).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    expect(banked.overflow).toEqual({ r1: 4000, r2: 4000, r3: 0, r4: 0 });
+    expect(save.resources).toEqual({ r1: BASE_STORAGE, r2: BASE_STORAGE + 500 });
+  });
+
+  test("an attacker near the cap banks the room left, and Krallen's raise adds to it", () => {
+    const near = () => ({ buildingdata: {}, resources: { r1: BASE_STORAGE - 300, r2: 0, r3: 0, r4: 0 } });
+    const credit = { r1: 4000, r2: 4000, r3: 0, r4: 0 };
+
+    const plain = near();
+    expect(bankAttackLoot(plain, credit, 0).credited).toEqual({ r1: 300, r2: 4000, r3: 0, r4: 0 });
+    expect(plain.resources).toEqual({ r1: BASE_STORAGE, r2: 4000, r3: 0, r4: 0 });
+
+    const withKrallen = near();
+    expect(bankAttackLoot(withKrallen, credit, 0.2).credited.r1).toBe(300 + BASE_STORAGE * 0.2);
+  });
+
+  test("attackLootOf says how far the battle's Krallen raises the cap", () => {
+    // The fixture flings a level 5 Krallen, and the attacker owns one.
+    expect(lootFor(fixture("mixed-waves"), {}).krallenBuff).toBeCloseTo(0.3);
+    expect(lootFor(fixture("mixed-waves"), {}, { log: "not a log" }).krallenBuff).toBe(0);
+  }, REPLAY_TIMEOUT_MS);
 });

@@ -17,7 +17,6 @@ import { attackNotBoundErr, permissionErr, saveFailureErr } from "../../../error
 import { combatConfig } from "../../../config/CombatConfig.js";
 import { chargeBombSpend } from "../../../services/base/combat/bombSpend.js";
 import { recordBombSpend } from "../../../services/base/combat/recordBombSpend.js";
-import { attackLootHandler } from "./handlers/attackLootHandler.js";
 import { defenderLootHandler } from "./handlers/defenderLootHandler.js";
 import { monsterUpdateHandler, monsterUpdateMode } from "./handlers/monsterUpdateHandler.js";
 import { validateSave } from "../../../scripts/anticheat/anticheat.js";
@@ -56,10 +55,11 @@ import { requireOwnerSaveAllowed } from "../../../services/base/ownerSave.js";
 import { storedDamage } from "../../../services/base/storedDamage.js";
 import {
   attackLootOf,
+  bankAttackLoot,
   wholeAmounts,
   type AttackLoot,
 } from "../../../services/base/combat/attackLoot.js";
-import { RESOURCE_KEYS } from "../../../game-rules/combat/index.js";
+import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -86,11 +86,11 @@ export const baseSave: KoaController = async (ctx) => {
   // A Map Room 1 tribe has no row of its own; its attack is bound to the
   // attacker and the tribe base instead (issue #161, `scaledMR1Tribes.ts`).
   if (!baseSave && MR1_TRIBE_IDS.has(saveData.baseid)) {
-    const tribeSave = await scaledMR1Tribes(ctx, user, saveData);
+    const { save: tribeSave, credited } = await scaledMR1Tribes(ctx, user, saveData);
     const filteredSave = await mapSaveData(tribeSave, user);
 
     ctx.status = Status.OK;
-    ctx.body = { error: 0, ...filteredSave };
+    ctx.body = { error: 0, ...filteredSave, ...(credited && { lootcredited: credited }) };
     return;
   }
 
@@ -159,7 +159,7 @@ const saveBase = async (
   // What the attack's resource bombs cost the attacker (issue #90), worked out
   // from the fling log and the bomb table before any key is applied, so a
   // refusal in `reject` mode leaves every row untouched. Charged further down,
-  // after the loot.
+  // before the loot is banked.
   const bombs = isAttack
     ? recordBombSpend(ctx, user, userSave, baseSave, saveData.flinglog, combatConfig.mode)
     : null;
@@ -317,6 +317,8 @@ const saveBase = async (
   }
 
   let takeoverData: TakeoverData | null = null;
+  /** What the attacker's pool took of the loot (issue #166), for the response. */
+  let banked: ResourceAmounts | null = null;
 
   if (isAttack) {
     if (saveData.monsterupdate) {
@@ -340,16 +342,20 @@ const saveBase = async (
       userSave.monsters = saveData.attackcreatures;
     }
 
-    if (loot) {
-      attackLootHandler(loot.credit, userSave);
-    }
-
+    // Bombs first: Flash takes a bomb's cost out of the pool as it is fired
+    // (`ResourceBombs.as:301-306`), and the loot after it fills the room that
+    // leaves, up to the attacker's cap (issue #166, `bankAttackLoot`).
     if (bombs) {
       userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
     }
 
+    if (loot) {
+      banked = bankAttackLoot(userSave, loot.credit, loot.krallenBuff).credited;
+    }
+
     // The defender's loss lands with the attacker's gain, held between what
-    // was credited and what the battle could take (`attackLootOf`).
+    // the battle credited and what it could take (`attackLootOf`). Loot that
+    // did not fit in the attacker's storage is still lost, as in Flash.
     const defenderDelta = loot?.defenderDelta;
 
     if (defenderDelta) {
@@ -427,6 +433,7 @@ const saveBase = async (
     basesaveid: baseSave.basesaveid,
     ...filteredSave,
     ...(takeoverData && { takeover: takeoverData }),
+    ...(banked && { lootcredited: banked }),
   };
 
   ctx.status = Status.OK;

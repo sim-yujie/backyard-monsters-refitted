@@ -10,6 +10,7 @@ import {
 } from "@/api/types";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import type { OffsetCell } from "@/game/HexGrid";
+import { storageCapOf } from "./attackerStorage";
 import type {
   AttackRoster,
   AttackTargetKind,
@@ -181,8 +182,8 @@ export const rosterInRange = (
 /** What of the own-yard load a roster reads. */
 export type RosterSave = Pick<
   BaseLoadResponse,
-  "champion" | "academy" | "catapult" | "buildingdata" | "resources" | "credits"
-> & { siege?: unknown };
+  "champion" | "academy" | "catapult" | "buildingdata" | "storedata" | "resources" | "credits"
+> & { siege?: unknown; outposts?: unknown };
 
 /**
  * What a Map Room 1 player can fling (issue #132): the main yard's housing
@@ -236,6 +237,7 @@ const rosterOf = (
     sources,
     siege: typeof siege === "object" && siege !== null ? (siege as SiegeInventory) : null,
     resources: ownSave?.resources ?? null,
+    storageCap: ownSave ? storageCapOf(ownSave) : null,
     ...(typeof ownSave?.credits === "number" ? { credits: ownSave.credits } : {}),
   };
 };

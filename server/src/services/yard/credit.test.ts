@@ -37,6 +37,13 @@ describe("fitCredit", () => {
     };
     expect(fitCredit(save, { r4: 100 }).credited.r4).toBe(100);
   });
+
+  test("a cap handed in replaces the yard's own (Krallen's raise on attack loot)", () => {
+    const save = yardOf({ r1: BASE_STORAGE });
+    expect(fitCredit(save, { r1: 5000 }, 12_000).credited.r1).toBe(2000);
+    expect(creditResources(save, { r1: 5000 }, 12_000).overflow.r1).toBe(3000);
+    expect(save.resources).toEqual({ r1: 12_000 });
+  });
 });
 
 describe("creditResources", () => {

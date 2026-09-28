@@ -89,11 +89,11 @@ const ctxFor = (body: Record<string, string>) =>
 const CLAIM = { r1: 1e9, r2: 1e9, r3: 1e9, r4: 1e9 };
 
 /** What the server's replay allows this attack, worked out the same way. */
-const replayCap = () =>
+const replayCap = (flinglog: unknown = LOG) =>
   attackLootOf({
     sent: CLAIM,
     reported: undefined,
-    flinglog: LOG,
+    flinglog,
     session: { attackerid: ATTACKER, attackid: ATTACK_ID, startedat: 0, entryHoused: ENTRY },
     defender: { type: "tribe", buildingdata: YARD as never, buildinghealthdata: {}, resources: defender.resources },
     attacker: attackerSave,
@@ -159,6 +159,58 @@ describe("attack loot through the save", () => {
     });
     // The defender lost at least what the attacker banked.
     expect(defender.resources.r1).toBeLessThanOrEqual(5000 - cap.r1);
+  });
+
+  test("the attacker keeps only what fits in their storage; the defender still loses it (#166)", async () => {
+    const cap = replayCap();
+    // No silos: a cap of 10,000. r1 has 200 of room, r2 none, r3 is over.
+    attackerSave.resources = { r1: 9_800, r2: 10_000, r3: 12_000, r4: 100 };
+    const ctx = ctxFor({
+      over: "1",
+      attackloot: JSON.stringify(cap),
+      resources: JSON.stringify({ r1: -cap.r1 }),
+      flinglog: JSON.stringify(LOG),
+    });
+
+    await baseSave(ctx, async () => {});
+
+    const kept = { r1: Math.min(200, cap.r1), r2: 0, r3: 0, r4: Math.min(9_900, cap.r4) };
+    expect(cap.r1).toBeGreaterThan(200);
+    expect(attackerSave.resources).toEqual({ r1: 9_800 + kept.r1, r2: 10_000, r3: 12_000, r4: 100 + kept.r4 });
+    expect((ctx.body as { lootcredited?: unknown }).lootcredited).toEqual(kept);
+    expect(defender.resources.r1).toBe(5000 - cap.r1);
+  });
+
+  test("a bomb's cost leaves the pool before the loot fills it", async () => {
+    const log = { ...LOG, events: [{ kind: "bomb", t: 40, x: 200, y: 200, id: "tw0" }, ...LOG.events] };
+    const cap = replayCap(log);
+    expect(cap.r1).toBeGreaterThan(0);
+    attackerSave.catapult = 1;
+    attackerSave.resources = { r1: 10_000, r2: 0, r3: 0, r4: 0 };
+
+    await baseSave(
+      ctxFor({ over: "1", attackloot: JSON.stringify(cap), flinglog: JSON.stringify(log) }),
+      async () => {}
+    );
+
+    // tw0 costs 10,000 twigs: the pool is emptied, then refilled by the loot.
+    expect(attackerSave.resources.r1).toBe(Math.min(10_000, cap.r1));
+  });
+
+  test("a Krallen flung in the attack raises the attacker's cap", async () => {
+    const log = { ...LOG, events: [...LOG.events, { kind: "fling", t: 90, x: 400, y: 400, r: 200, monsters: {}, champion: { t: 5, l: 1 } }] };
+    attackerSave.champion = [{ t: 5, l: 1 }];
+    const cap = replayCap(log);
+    expect(cap.r1).toBeGreaterThan(0);
+    attackerSave.resources = { r1: 10_000, r2: 0, r3: 0, r4: 0 };
+
+    await baseSave(
+      ctxFor({ over: "1", attackloot: JSON.stringify(cap), flinglog: JSON.stringify(log) }),
+      async () => {}
+    );
+
+    // Level 1 Krallen: `buffs` 0.2, so the cap is 12,000 rather than the 10,000 held.
+    expect(attackerSave.resources.r1).toBe(Math.min(12_000, 10_000 + cap.r1));
   });
 
   test("a claim with no fling log is credited nothing", async () => {

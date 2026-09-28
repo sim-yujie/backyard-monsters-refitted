@@ -6,7 +6,6 @@ import { AlliancePowerupType } from "../../enums/Alliance.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
-import { attackLootHandler } from "../../controllers/base/save/handlers/attackLootHandler.js";
 import { buildingDataHandler } from "../../controllers/base/save/handlers/buildingDataHandler.js";
 import { defenderLootHandler } from "../../controllers/base/save/handlers/defenderLootHandler.js";
 import { runningPowerups } from "../alliance/powerups.js";
@@ -29,6 +28,7 @@ import {
   spendFlung,
   type SourceCell,
 } from "./combat/abandonedAttack.js";
+import { bankAttackLoot, krallenBuffOf } from "./combat/attackLoot.js";
 import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpend.js";
 import { getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
 import { storedDamage } from "./storedDamage.js";
@@ -174,6 +174,9 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
     });
   }
 
+  // Read before the champions below are written, as `attackLootOf` reads them.
+  const krallenBuff = krallenBuffOf(checkpoint.flinglog, userSave.champion);
+
   if (outcome.attackerchampion) userSave.champion = outcome.attackerchampion;
   if (outcome.attackersiege) userSave.siege = outcome.attackersiege;
 
@@ -182,8 +185,9 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
     resources: userSave.resources,
     catapultLevel: catapultLevelOf(userSave),
   });
-  attackLootHandler(outcome.attackloot, userSave);
+  // Bombs, then loot up to the attacker's storage cap, as `baseSave.ts` lands them (issue #166).
   if (bombs.charges.length > 0) userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
+  bankAttackLoot(userSave, outcome.attackloot, krallenBuff);
   postgres.em.persist(userSave);
 
   // The defender.

@@ -3,6 +3,7 @@ import { ApiError, NetworkError, getAuthToken } from "@/api/http";
 import type { AttackSavePayload, BaseSaveResponse } from "@/api/types";
 import { ATTACK_PLUGINS, type AttackMounts, type AttackPlugin } from "@/game/attack/attackPlugins";
 import { buildAttackSave, forKeepalive, summariseAttack } from "@/game/attack/attackSave";
+import type { ResourceAmounts } from "@/game/combat/rules";
 import { monsterName } from "@/ui/attack/ArmyPanel";
 import { EndAttackPanel, type SaveFailure } from "@/ui/attack/EndAttackPanel";
 
@@ -58,7 +59,12 @@ const END_PANEL_POLL_MS = 100;
 /** Where the save stands, for a panel that opens after it started (#148). */
 type SaveShown =
   | { readonly kind: "saving" }
-  | { readonly kind: "saved"; readonly protectedUntil: number | null; readonly now: number }
+  | {
+      readonly kind: "saved";
+      readonly protectedUntil: number | null;
+      readonly now: number;
+      readonly credited: ResourceAmounts | null;
+    }
   | { readonly kind: "failed"; readonly failure: SaveFailure }
   | { readonly kind: "unsent" };
 
@@ -68,7 +74,11 @@ const showOn = (panel: EndAttackPanel, shown: SaveShown): void => {
       panel.setSaving();
       return;
     case "saved":
-      panel.setSaved({ protectedUntil: shown.protectedUntil, now: shown.now });
+      panel.setSaved({
+        protectedUntil: shown.protectedUntil,
+        now: shown.now,
+        credited: shown.credited,
+      });
       return;
     case "failed":
       panel.setFailed(shown.failure);
@@ -144,6 +154,21 @@ export const describeSaveFailure = (caught: unknown): SaveFailure => {
   };
 };
 
+/**
+ * What the server banked of the loot (`lootcredited`, issue #166): the
+ * battle's take cut to the room in the attacker's storage. Null when the
+ * response does not say.
+ */
+export const creditedOf = (response: BaseSaveResponse): ResourceAmounts | null => {
+  const value: unknown = response.lootcredited;
+  if (typeof value !== "object" || value === null) return null;
+  const read = (key: string): number => {
+    const amount = Number((value as Record<string, unknown>)[key]);
+    return Number.isFinite(amount) && amount > 0 ? amount : 0;
+  };
+  return { r1: read("r1"), r2: read("r2"), r3: read("r3"), r4: read("r4") };
+};
+
 /** The defender's protection expiry from the save's envelope, if it has one. */
 const protectedUntilOf = (response: BaseSaveResponse): number | null => {
   const value = (response as { protected?: unknown }).protected;
@@ -207,7 +232,12 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       try {
         const response = await save(payload);
         saved = true;
-        show({ kind: "saved", protectedUntil: protectedUntilOf(response), now: now() / 1000 });
+        show({
+          kind: "saved",
+          protectedUntil: protectedUntilOf(response),
+          now: now() / 1000,
+          credited: creditedOf(response),
+        });
       } catch (caught) {
         // Refused because its keepalive copy landed first is not a failure.
         if (!saved) show({ kind: "failed", failure: describeSaveFailure(caught) });
@@ -224,7 +254,12 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       saveOnLeave(payload, token).then(
         (response) => {
           saved = true;
-          show({ kind: "saved", protectedUntil: protectedUntilOf(response), now: now() / 1000 });
+          show({
+            kind: "saved",
+            protectedUntil: protectedUntilOf(response),
+            now: now() / 1000,
+            credited: creditedOf(response),
+          });
         },
         (caught: unknown) => {
           // A duplicate of a save that already landed is refused; that is not a failure.

@@ -524,7 +524,11 @@ nothing left standing is still an open owner question; the check would go in `at
 `web/src/ui/attack/EndAttackPanel.ts` replaces the Flash pair — the attack log
 popup and `popup_attackend` (`combat.md:1259-1268`) — with one modal: damage percentage, resources
 looted (from `battle.state().loot`), buildings destroyed, and one Return-to-map button. This is the
-one click at the end of the click table in §4.5, against Flash's two.
+one click at the end of the click table in §4.5, against Flash's two. The loot shown is what the
+attacker keeps: the take cut to the room left in their storage, as the server banks it (issue #166,
+`web/src/game/attack/attackerStorage.ts`), replaced by the server's own figure (`lootcredited`) once
+the save lands; when some did not fit, a line says "Your storage was full, so some loot was lost."
+Flash banked only what fit too but showed the whole take (`ATTACK.as:481-495`, `UI_TOP.as:955`).
 
 ### F7. Timer, retreat and damage protection display — Must, S
 
@@ -762,7 +766,7 @@ table at `docs/server-api.md:231-239`; the controller at `server/src/controllers
 | `attackerchampion` | Attacker's own champion hp after the battle | Overwrites `userSave.champion` verbatim (`baseSave.ts:162-166`) |
 | `attackcreatures` | **Not sent in Map Room 2** (`combat.md`'s own note, `server-combat.md:73` row) | — |
 | `monsterupdate` | `[{baseid, m}]` per attacker cell in range, housing minus what was flung | Written to attacker's own row and other bases, clears their `protected` (`baseSave.ts:214-215`, `updateMonsters.ts`) |
-| `attackloot` | `battle.state().loot`, the gain alone: unlike Flash, bomb spend is **not** netted in (#90) | Added to the attacker's pool, uncapped (`attackLootHandler.ts`, `baseSave.ts:222-224`); the bombs in `flinglog` are charged separately (§5.3) |
+| `attackloot` | `battle.state().loot`, the gain alone, before the attacker's storage cap: unlike Flash, bomb spend is **not** netted in (#90) | Capped by the server's replay (#163), then banked up to the attacker's storage cap, Krallen's buff included (#166, `attackLoot.ts` `bankAttackLoot`); the bombs in `flinglog` are charged separately, first (§5.3) |
 | `resources` | Defender's loss (negative of `battle.state().defenderLoss`) | Losses only, capped, floored at 0 (`defenderLootHandler.ts`, `baseSave.ts:226-235`) |
 | `attackreport` | A plain-text summary built from the fling log's own events | Written verbatim onto the defender (`docs/server-api.md`'s "Save write keys", default branch) |
 | `attackersiege` | Attacker's siege inventory after use | Overwrites `userSave.siege` (`baseSave.ts:178-182`) |
@@ -798,7 +802,8 @@ current schema does not reject the extra field.
 dropped it and netted the spend into `attackloot` (`ResourceBombs.as:292-329`, `BASE.as:2859-2866`);
 the web client sends `attackloot` as the gain alone, so the server works the cost out itself: each
 `bomb` event's id is looked up in the shared rules' `BOMBS` table and its cost is taken off the
-attacker's pool after the loot is credited, never below zero
+attacker's pool before the loot is banked (so the loot can fill the room the bomb left, #166), never
+below zero
 (`server/src/services/base/combat/bombSpend.ts`, applied in `baseSave.ts`). A bomb Flash would not
 have fired — unaffordable against the attacker's stored pool, a second of one resource, a tier above
 the attacker's catapult, or an unknown id — is still charged, and `COMBAT_SAVE_VALIDATION` decides

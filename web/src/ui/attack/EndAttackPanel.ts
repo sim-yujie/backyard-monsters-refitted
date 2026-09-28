@@ -1,4 +1,5 @@
 import type { AttackSummary } from "@/game/attack/attackSave";
+import type { ResourceAmounts } from "@/game/combat/rules";
 import { championName } from "@/ui/attack/ArmyPanel";
 import { formatAmount } from "@/ui/format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
@@ -43,6 +44,8 @@ export interface SaveFailure {
 }
 
 export interface SavedInfo {
+  /** What the server banked of the loot (`lootcredited`), when it said. */
+  readonly credited?: ResourceAmounts | null;
   /** Unix seconds until which the defender is now protected, if the server said so. */
   readonly protectedUntil?: number | null;
   /** Unix seconds now, for the protection line. */
@@ -83,6 +86,8 @@ export class EndAttackPanel {
   readonly element: HTMLElement;
   readonly panel: Panel;
 
+  private readonly loot: HTMLElement;
+  private readonly storageNote: HTMLElement;
   private readonly status: HTMLElement;
   private readonly statusText: HTMLElement;
   private readonly protection: HTMLElement;
@@ -138,17 +143,12 @@ export class EndAttackPanel {
             .join("; "),
     );
 
-    const loot = document.createElement("ul");
-    loot.className = "attack-end__loot";
-    loot.setAttribute("aria-label", "Loot taken");
-    for (const key of RESOURCE_KEYS) {
-      const item = document.createElement("li");
-      const amount = summary.loot[key];
-      item.className = `attack-end__loot-item${amount > 0 ? "" : " attack-end__loot-item--none"}`;
-      item.append(resourceAmount(key, formatAmount(amount)));
-      item.title = `${RESOURCE_NAMES[key]}: ${Math.floor(amount).toLocaleString("en-US")}`;
-      loot.append(item);
-    }
+    this.loot = document.createElement("ul");
+    this.loot.className = "attack-end__loot";
+    this.loot.setAttribute("aria-label", "Loot kept");
+    this.storageNote = document.createElement("p");
+    this.storageNote.className = "u-muted attack-end__storage";
+    this.showLoot(summary.loot);
 
     this.status = document.createElement("div");
     this.status.className = "attack-end__status attack-end__status--saving";
@@ -210,7 +210,8 @@ export class EndAttackPanel {
       outcome,
       reason,
       stats,
-      loot,
+      this.loot,
+      this.storageNote,
       this.status,
       this.protection,
       this.leaveConfirm,
@@ -247,6 +248,7 @@ export class EndAttackPanel {
 
   /** The server has the result; Return to map opens. */
   setSaved(info: SavedInfo = {}): void {
+    if (info.credited) this.showLoot(info.credited);
     this.status_ = "saved";
     this.setStatus("saved", "Result saved.");
     this.retryButton.hidden = true;
@@ -290,6 +292,35 @@ export class EndAttackPanel {
     this.leaveButton.hidden = false;
     this.returnButton.disabled = true;
     this.focusPrimary();
+  }
+
+  /**
+   * The loot the attacker keeps, per resource, and a note when some of what
+   * the battle took did not fit in their storage (issue #166). Flash banked
+   * only what fit without saying so (`ATTACK.as:703-710`); the note is the
+   * one line that explains a figure below the battle's.
+   */
+  private showLoot(kept: ResourceAmounts): void {
+    const whole = (value: number): string => Math.floor(value).toLocaleString("en-US");
+    const { lootTaken } = this.options.summary;
+    let spilled = false;
+    this.loot.replaceChildren();
+    for (const key of RESOURCE_KEYS) {
+      const item = document.createElement("li");
+      const amount = kept[key];
+      const taken = Math.max(amount, lootTaken[key]);
+      item.className = `attack-end__loot-item${amount > 0 ? "" : " attack-end__loot-item--none"}`;
+      item.append(resourceAmount(key, formatAmount(amount)));
+      const lost = Math.floor(taken) > Math.floor(amount);
+      item.title = lost
+        ? `${RESOURCE_NAMES[key]}: ${whole(amount)} of ${whole(taken)} taken; ` +
+          "the rest did not fit in your storage"
+        : `${RESOURCE_NAMES[key]}: ${whole(amount)}`;
+      if (lost) spilled = true;
+      this.loot.append(item);
+    }
+    this.storageNote.textContent = spilled ? "Your storage was full, so some loot was lost." : "";
+    this.storageNote.hidden = !spilled;
   }
 
   private setStatus(kind: EndAttackSaveStatus, text: string): void {

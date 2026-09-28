@@ -1,7 +1,9 @@
 import {
   BOMBS,
+  KRALLEN_ID,
   LOOT_GAIN_RATIO,
   RESOURCE_KEYS,
+  championStat,
   replayAttack,
   type BombStats,
   type BuildingHealthMap,
@@ -13,6 +15,8 @@ import {
 import type { JsonObject } from "../../../types/JsonObject.js";
 import { mr1TribePool } from "../../maproom/v1/mr1TribeRules.js";
 import type { EntryHoused } from "../../yard/attackRoster.js";
+import { creditResources, type CreditResult, type CreditSave } from "../../yard/credit.js";
+import { storageCap } from "../economy/resourceBudget.js";
 import { parseFlingLog } from "../attackCheckpoint.js";
 import type { AttackSession } from "../attackSession.js";
 import { academyLevels, combatKindOf } from "./abandonedAttack.js";
@@ -67,6 +71,19 @@ import { catapultLevelOf } from "./bombSpend.js";
  * tribes are (`mr1TribeRules.ts`, issue #161). A session without a roster
  * from anyone else is an attack load that named the wrong map room (the load
  * takes `mapversion` from the client), and is credited nothing.
+ *
+ * ## The attacker's storage (issue #166)
+ *
+ * What the battle credits then meets the attacker's own storage, as in Flash:
+ * `ATTACK.Loot` adds a gain to the attacker's pool only up to its cap, and
+ * Krallen on the field raises that cap by her `buffs`
+ * (`client/scripts/ATTACK.as:695-710`). The defender still loses the whole
+ * amount — storage and harvesters are emptied before `ATTACK.Loot` is called
+ * (`BSTORAGE.as:65-83`, `BRESOURCE.as:93-103`) — so the room cuts the
+ * attacker's side alone, and {@link bankAttackLoot} applies it at the moment
+ * the credit lands. Flash banked only what fit (`BASE.as:2859-2866` sends the
+ * clamped `_savedDeltaLoot`), while the attack log and the HUD showed the
+ * whole gain (`ATTACK.as:481-495`, `UI_TOP.as:955`).
  *
  * Pure: the caller reads the rows and writes the result.
  */
@@ -245,6 +262,8 @@ export interface AttackLoot {
   defenderDelta: ResourceAmounts;
   /** How the cap was reached. */
   basis: "replay" | "no-log" | "no-roster" | "pool";
+  /** Krallen's raise of the attacker's storage cap, as a fraction; 0 without her. */
+  krallenBuff: number;
 }
 
 /**
@@ -287,6 +306,7 @@ export const attackLootOf = ({
 }): AttackLoot => {
   const asked = wholeAmounts(sent);
   const reportedLoss = wholeAmounts(negatedRaw(reported));
+  const krallenBuff = krallenBuffOf(parseFlingLog(flinglog), attacker.champion);
 
   const land = (cap: ResourceAmounts, maxLoss: ResourceAmounts | null, basis: AttackLoot["basis"]): AttackLoot => {
     const credit = { r1: 0, r2: 0, r3: 0, r4: 0 };
@@ -297,7 +317,7 @@ export const attackLootOf = ({
       const lost = maxLoss ? Math.min(loss, maxLoss[key]) : loss;
       defenderDelta[key] = lost > 0 ? -lost : 0;
     }
-    return { credit, cap, defenderDelta, basis };
+    return { credit, cap, defenderDelta, basis, krallenBuff };
   };
 
   const none = { r1: 0, r2: 0, r3: 0, r4: 0 };
@@ -320,6 +340,60 @@ export const attackLootOf = ({
   for (const key of RESOURCE_KEYS) cap[key] = Math.floor(held[key] * LOOT_GAIN_RATIO);
   return land(cap, null, "pool");
 };
+
+/** Krallen's champion type, as a fling names it (`CHAMPIONCAGE.as:32`). */
+const KRALLEN_TYPE = 5;
+
+/**
+ * How far Krallen raises the attacker's storage cap in this battle: her
+ * `buffs` at the level she was flung at (`Krallen.as:33`), 0 when the log
+ * flings no Krallen the attacker owns.
+ *
+ * Flash raises the cap only while she is on the field (`ATTACK.as:698-702`,
+ * `CREEPS.krallen`); the log does not say which loot fell while she lived, so
+ * a Krallen flung at any point raises the cap for the whole battle.
+ *
+ * @param log - The save's fling log, as parsed.
+ * @param owned - The attacker's champions as they stood before the save.
+ */
+export const krallenBuffOf = (
+  log: FlingLog | null,
+  owned: readonly { t: number; l: number }[] | null | undefined
+): number => {
+  if (!log) return 0;
+  const krallen = (owned ?? []).find((champion) => champion?.t === KRALLEN_TYPE);
+  if (!krallen || !Number.isFinite(krallen.l)) return 0;
+  for (const event of log.events) {
+    if (event.kind !== "fling" || event.champion?.t !== KRALLEN_TYPE) continue;
+    const level = Math.min(event.champion.l, krallen.l);
+    return Math.max(0, championStat(KRALLEN_ID, "buffs", level));
+  }
+  return 0;
+};
+
+/**
+ * The attacker's storage cap for attack loot: `storageCap` (silos, packing,
+ * outposts, `BASE.as:4705-4826`) raised by Krallen's buff, `cap + cap * buff`
+ * as `ATTACK.Loot` has it (`ATTACK.as:699-702`).
+ */
+export const attackerLootCap = (save: CreditSave, krallenBuff: number): number =>
+  Math.floor(storageCap(save) * (1 + Math.max(0, krallenBuff)));
+
+/**
+ * Banks an attack's credit on the attacker's pool, each resource only up to
+ * the room left under {@link attackerLootCap} (`ATTACK.as:703-710`): a pool at
+ * or over the cap takes nothing and loses nothing.
+ *
+ * @param save - The attacker's main save; `resources` is replaced when anything lands.
+ * @param credit - What the battle credits ({@link attackLootOf}, `creditableMR1Loot`).
+ * @param krallenBuff - {@link krallenBuffOf}.
+ * @returns What landed, and what did not fit.
+ */
+export const bankAttackLoot = (
+  save: CreditSave,
+  credit: ResourceAmounts,
+  krallenBuff: number
+): CreditResult => creditResources(save, credit, attackerLootCap(save, krallenBuff));
 
 /** `r1`..`r4` of a delta with the sign turned, so its losses read as gains. */
 const negatedRaw = (raw: unknown): Record<string, number> => {

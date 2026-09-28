@@ -109,6 +109,12 @@ export interface AttackRoster {
    */
   readonly resources?: Resources | null;
   /**
+   * The attacker's storage cap from the same load (`attackerStorage.ts`,
+   * `storageCapOf`), which bounds the loot they keep (issue #166). Null when
+   * unknown; optional for the same reason as `sources`.
+   */
+  readonly storageCap?: number | null;
+  /**
    * The attacker's shiny from the same load, for the HUD during the attack.
    * Optional for the same reason as `sources`; absent reads as unknown.
    */

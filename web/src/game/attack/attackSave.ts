@@ -18,6 +18,7 @@ import {
 } from "@/game/combat/rules";
 import type { AttackEndReason, AttackSession, AttackSessionState } from "./AttackSession";
 import type { AttackTargetKind, RosterSource, SiegeInventory } from "./attackTarget";
+import { keptLoot } from "./attackerStorage";
 import { countedBuildings } from "./trapReveal";
 
 /**
@@ -66,7 +67,8 @@ const wholeAmounts = (amounts: ResourceAmounts, sign: 1 | -1): Resources => {
 };
 
 /**
- * `attackloot`: the gain, before the storage cap the server does not apply.
+ * `attackloot`: the gain, before the attacker's storage cap, which the server
+ * applies as the loot lands (issue #166, `bankAttackLoot`).
  *
  * The gain alone, unlike Flash, which netted its bomb spend into this key
  * (`BASE.as:2859-2866`). The server charges each bomb from the fling log and
@@ -342,7 +344,13 @@ export interface AttackSummary {
   readonly damagePercent: number;
   readonly buildingsDestroyed: number;
   readonly buildingsTotal: number;
+  /**
+   * What the attacker keeps: the loot up to the room in their storage
+   * (issue #166, `attackerStorage.ts`), as the server will bank it.
+   */
   readonly loot: ResourceAmounts;
+  /** What the battle took from the defender, before the attacker's storage cap. */
+  readonly lootTaken: ResourceAmounts;
   readonly monstersSent: number;
   readonly monstersLost: number;
   /** Each champion sent, by type, with its health at the end; empty when none was. */
@@ -397,7 +405,14 @@ export const summariseAttack = (session: AttackSession): AttackSummary => {
     buildingsDestroyed: state.buildingsDestroyed,
     // Traps left out, as on the status line (#72).
     buildingsTotal: countedBuildings(Object.values(load.buildingdata ?? {}).map((entry) => entry.t)),
-    loot: { ...state.loot },
+    loot: keptLoot(
+      state.loot,
+      session.target.roster.resources ?? null,
+      session.target.roster.storageCap ?? null,
+      session.flingLog(),
+      session.target.roster.champions,
+    ),
+    lootTaken: { ...state.loot },
     monstersSent: state.creepsFlung,
     monstersLost: state.creepsKilled,
     champions: Object.entries(session.championsHpAfter()).map(([t, hp]) => ({ t: Number(t), hp })),

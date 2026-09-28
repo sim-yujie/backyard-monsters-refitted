@@ -8,15 +8,16 @@ import { postgres } from "../../../server.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { logger } from "../../../utils/logger.js";
 import { BaseSaveSchema } from "../../../schemas/BaseSaveSchema.js";
-import { attackLootHandler } from "../../../controllers/base/save/handlers/attackLootHandler.js";
 import { monsterUpdateHandler } from "../../../controllers/base/save/handlers/monsterUpdateHandler.js";
 import { MR1_TRIBES_MAP } from "../../../game-data/tribes/v1/index.js";
 import { combatConfig } from "../../../config/CombatConfig.js";
+import { bankAttackLoot, krallenBuffOf } from "../../base/combat/attackLoot.js";
 import { chargeBombSpend } from "../../base/combat/bombSpend.js";
+import { parseFlingLog } from "../../base/attackCheckpoint.js";
 import { recordBombSpend } from "../../base/combat/recordBombSpend.js";
 import { checkAttackBinding, type AttackSession } from "../../base/attackSession.js";
 import { storedDamage } from "../../base/storedDamage.js";
-import { RESOURCE_KEYS } from "../../../game-rules/combat/index.js";
+import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
 import {
   acquireMR1TribeFinalLock,
@@ -45,7 +46,8 @@ type BaseSaveData = TypeOf<typeof BaseSaveSchema>;
  * @param {Context} ctx - The Koa context, for the caller's IP in the logs.
  * @param {User} user - The attacking user
  * @param {BaseSaveData} saveData - Parsed save payload from the client
- * @returns {Promise<Save>} Synthetic Save reflecting updated tribe state
+ * @returns Synthetic Save reflecting updated tribe state, and what the
+ *   attacker's pool took of the loot (null for a save without `over`)
  */
 export const scaledMR1Tribes = async (ctx: Context, user: User, saveData: BaseSaveData) => {
   const finalises = Boolean(saveData.over);
@@ -88,6 +90,8 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
     : null;
 
   const wasDestroyed = Boolean(existingTribe.destroyed);
+  /** What the attacker's pool took of the loot, for the response. */
+  let credited: ResourceAmounts | null = null;
 
   existingTribe.tribeHealthData = saveData.buildinghealthdata ?? existingTribe.tribeHealthData;
   existingTribe.monsters = saveData.monsters;
@@ -115,18 +119,23 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
       { session, finalises: true, flinglog: saveData.flinglog, now, mapRoom3: false }
     );
 
+    // Read before the champions below are written (`attackLootOf` reads them the same way).
+    const krallenBuff = krallenBuffOf(parseFlingLog(saveData.flinglog), userSave.champion);
+
     if (saveData.attackerchampion) userSave.champion = saveData.attackerchampion;
 
     if (saveData.attackersiege) userSave.siege = saveData.attackersiege;
 
+    if (bombs) userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
+
+    // The tribe gives up the whole credit; the attacker keeps what fits in
+    // their storage (issue #166, `bankAttackLoot`), as on Map Room 2.
     const credit = creditableMR1Loot(saveData.attackloot, mr1TribePool(tribeData), existingTribe.looted);
-    attackLootHandler(credit, userSave);
+    credited = bankAttackLoot(userSave, credit, krallenBuff).credited;
 
     const looted = { ...existingTribe.looted };
     for (const key of RESOURCE_KEYS) looted[key] = (looted[key] ?? 0) + credit[key];
     existingTribe.looted = looted;
-
-    if (bombs) userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
   }
 
   postgres.em.persist(maproom);
@@ -136,10 +145,11 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
   // Spent: the lock is still held, so a copy of this save finds nothing.
   if (finalises) await endMR1TribeSession(user.userid, saveData.baseid);
 
-  return Object.assign(tribeSave, {
+  const save = Object.assign(tribeSave, {
     buildinghealthdata: existingTribe.tribeHealthData,
     monsters: existingTribe.monsters ?? tribeData.monsters,
   });
+  return { save, credited };
 };
 
 /**

@@ -178,7 +178,7 @@ describe("finaliseAbandonedAttack", () => {
     expect(userSave.monsters).toMatchObject({ housed: { C1: 0 } });
     expect(outpost.monsters).toMatchObject({ housed: { C1: 50 } });
     expect(outpost.protected).toBe(0);
-    // Loot credited, then the pebble bomb's 100,000 charged.
+    // The pebble bomb's 100,000 charged; this early in the battle nothing is looted.
     expect(userSave.resources.r1).toBe(1_000_000 + expected.attackloot.r1);
     expect(userSave.resources.r2).toBe(1_000_000 + expected.attackloot.r2 - 100_000);
     expect(userSave.champion[0].hp).toBe(expected.attackerchampion![0]!.hp);
@@ -228,6 +228,29 @@ describe("finaliseAbandonedAttack", () => {
     expect(hatched).toBeGreaterThanOrEqual(9);
     expect(userSave.monsters.housed).toEqual({ C1: 0 });
     expect(outpost.monsters.housed).toEqual({ C1: 50 + hatched });
+  });
+
+  test("the attacker keeps only what fits in their storage, Krallen's raise included (#166)", async () => {
+    const tick = 20_000;
+    await arm({ tick });
+    // No silos: a cap of 10,000, raised to 13,000 by the level 5 Krallen the log flings.
+    userSave.resources = { r1: 0, r2: 1_000_000, r3: 12_000, r4: 13_000 };
+    const expected = replayAbandonedAttack({
+      defender: { type: "tribe", buildingdata: sandbox.buildingdata, buildinghealthdata: {}, resources: defender.resources },
+      attacker: { academy: userSave.academy, champion: userSave.champion, siege: null },
+      log: LOG,
+      tick,
+      declareWar: false,
+    });
+    expect(expected.attackloot.r1).toBeGreaterThan(13_000);
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    // r2 is charged the pebble bomb and stays over the cap, so takes nothing.
+    expect(userSave.resources).toEqual({ r1: 13_000, r2: 900_000, r3: 13_000, r4: 13_000 });
+    // The defender still loses the whole loot.
+    expect(defender.resources.r1).toBe(5_000_000 + expected.defenderDelta.r1);
+    expect(-expected.defenderDelta.r1).toBeGreaterThanOrEqual(expected.attackloot.r1);
   });
 
   test("is idempotent: a second finalisation finds nothing and charges nothing", async () => {

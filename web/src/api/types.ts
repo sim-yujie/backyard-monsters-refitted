@@ -319,6 +319,8 @@ export interface BaseSaveResponse extends ApiEnvelope {
   damage?: number;
   destroyed?: number;
   takeover?: unknown;
+  /** What the attacker's pool banked of the loot, on the save that ends an attack (issue #166). */
+  lootcredited?: Resources;
 }
 
 /** Resource counts and their caps, as carried on a save and on a map cell. */

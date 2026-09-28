@@ -12,6 +12,7 @@ import {
   SESSION_WINDOW_SECONDS,
   WINDOW_MARGIN_SECONDS,
   createEndPlugin,
+  creditedOf,
   describeSaveFailure,
 } from "./end";
 
@@ -132,6 +133,19 @@ describe("the end plugin", () => {
     teardown?.();
     teardown = undefined;
     expect(modal.children).toHaveLength(0);
+  });
+
+  it("shows the loot the server says it banked (#166)", async () => {
+    const save = vi.fn(
+      async (_payload: AttackSavePayload): Promise<BaseSaveResponse> =>
+        ({ error: 0, basesaveid: 1, lootcredited: { r1: 7, r2: 0, r3: 0, r4: 0 } }) as BaseSaveResponse,
+    );
+    act();
+    mount(save);
+    session.retreat();
+    await flush();
+    const items = [...modal.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
+    expect(items.map((item) => item.textContent)).toEqual(["7", "0", "0", "0"]);
   });
 
   it("saves as before once the player has dropped something (#79)", () => {
@@ -484,5 +498,18 @@ describe("describeSaveFailure", () => {
       canRetry: true,
     });
     expect(describeSaveFailure("?")).toEqual({ message: "The result was not saved.", canRetry: true });
+  });
+});
+
+describe("creditedOf", () => {
+  it("reads the banked loot off the save response, or null when it is not there", () => {
+    const response = (extra: object) => ({ error: 0, basesaveid: 1, ...extra }) as BaseSaveResponse;
+    expect(creditedOf(response({ lootcredited: { r1: 5, r2: "3", r3: -1 } }))).toEqual({
+      r1: 5,
+      r2: 3,
+      r3: 0,
+      r4: 0,
+    });
+    expect(creditedOf(response({}))).toBeNull();
   });
 });

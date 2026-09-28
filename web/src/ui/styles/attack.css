@@ -729,6 +729,11 @@
   color: var(--colour-text-muted);
 }
 
+/* Loot that did not fit in the attacker's storage (#166). */
+.attack-end__storage {
+  margin: calc(-1 * var(--space-1)) 0 var(--space-3);
+}
+
 .attack-end__status {
   margin: 0 0 var(--space-2);
   padding: var(--space-2) var(--space-3);

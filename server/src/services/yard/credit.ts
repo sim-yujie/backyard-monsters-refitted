@@ -54,9 +54,14 @@ const heldOf = (save: CreditSave, key: string): number => {
  *
  * @param save - The yard as it will stand when the credit lands (its silos set the cap).
  * @param amounts - Any of `r1`..`r4`; missing, negative or unreadable amounts are 0.
+ * @param cap - The cap to fill up to; `storageCap(save)` unless a credit raises
+ *   it (Krallen's buff on attack loot, `services/base/combat/attackLoot.ts`).
  */
-export const fitCredit = (save: CreditSave, amounts: Partial<ResourceAmounts>): CreditResult => {
-  const cap = storageCap(save);
+export const fitCredit = (
+  save: CreditSave,
+  amounts: Partial<ResourceAmounts>,
+  cap: number = storageCap(save)
+): CreditResult => {
   const credited = noAmounts();
   const overflow = noAmounts();
   for (const key of RESOURCE_KEYS) {
@@ -74,9 +79,14 @@ export const fitCredit = (save: CreditSave, amounts: Partial<ResourceAmounts>): 
  *
  * @param save - Mutated: `resources` is replaced when anything landed.
  * @param amounts - Any of `r1`..`r4`.
+ * @param cap - As {@link fitCredit}'s.
  */
-export const creditResources = (save: CreditSave, amounts: Partial<ResourceAmounts>): CreditResult => {
-  const result = fitCredit(save, amounts);
+export const creditResources = (
+  save: CreditSave,
+  amounts: Partial<ResourceAmounts>,
+  cap: number = storageCap(save)
+): CreditResult => {
+  const result = fitCredit(save, amounts, cap);
   if (RESOURCE_KEYS.some((key) => result.credited[key] > 0)) {
     const resources = { ...(save.resources ?? {}) };
     for (const key of RESOURCE_KEYS) {

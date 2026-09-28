@@ -150,10 +150,27 @@ describe("Map Room 1 tribe save of a started attack", () => {
 
   test("loot beyond what the tribe holds is cut to its pool", async () => {
     startSession();
+    // Storage enough for the whole pool, so only the tribe's cap applies.
+    userSave.outposts = [[0, 0, "1"]];
     await run(ctxFor({ over: "1", attackloot: loot({ r1: 1e12 }) }));
 
     const cap = Math.floor(mr1TribePool(MR1_TRIBES_MAP.get(TRIBE)!).r1 * LOOT_GAIN_RATIO);
     expect((userSave.resources as Record<string, number>).r1).toBe(100 + cap);
+  });
+
+  test("the attacker keeps only what fits in their storage; the tribe still loses it all (#166)", async () => {
+    startSession();
+    // No silos: a cap of 10,000, 9,900 of it free.
+    userSave.resources = { r1: 100, r2: 9_950, r3: 10_000, r4: 12_000 };
+    const ctx = ctxFor({ over: "1", attackloot: loot({ r1: 20_000, r2: 20_000, r3: 20_000, r4: 20_000 }) });
+
+    expect(await run(ctx)).toBeNull();
+    expect(userSave.resources).toEqual({ r1: 10_000, r2: 10_000, r3: 10_000, r4: 12_000 });
+    expect((ctx.body as { lootcredited?: unknown }).lootcredited).toEqual({ r1: 9_900, r2: 50, r3: 0, r4: 0 });
+
+    const pool = mr1TribePool(MR1_TRIBES_MAP.get(TRIBE)!);
+    const cap = (key: "r1" | "r2" | "r3" | "r4") => Math.min(20_000, Math.floor(pool[key] * LOOT_GAIN_RATIO));
+    expect(maproom.tribedata[0]!.looted).toEqual({ r1: cap("r1"), r2: cap("r2"), r3: cap("r3"), r4: cap("r4") });
   });
 
   test("a save that does not end the attack records the tribe's damage and credits nothing", async () => {
