@@ -650,3 +650,28 @@ export const ownerSaveRetiredErr = () =>
     data: { reason: "ownerSaveRetired" },
     isClientFriendly: true,
   });
+
+/** Why a Map Room 1 tribe cannot be attacked or read (issue #161, #132). */
+export type MR1TribeRefusal = "notMapRoom1" | "notYourTribe" | "tribeDestroyed";
+
+const MR1_TRIBE_REFUSAL_MESSAGES: Record<MR1TribeRefusal, string> = {
+  notMapRoom1: "Your yard has moved on to Map Room 2; Map Room 1 is closed to you.",
+  notYourTribe: "That tribe is not on your map. Reopen the map to see your tribes.",
+  tribeDestroyed: "That tribe has been wrecked and has not come back yet.",
+};
+
+/**
+ * A Map Room 1 tribe attack (or the Map Room 1 read) refused before anything
+ * is written: the player is not on Map Room 1, the tribe base is not one of
+ * the four they face now, or it is wrecked and has not respawned.
+ *
+ * @param {MR1TribeRefusal} reason - Which rule refused it.
+ * @param {object} detail - Figures for the client, e.g. `respawnAt`.
+ */
+export const mr1TribeRefusedErr = (reason: MR1TribeRefusal, detail: object = {}) =>
+  new ClientSafeError({
+    message: MR1_TRIBE_REFUSAL_MESSAGES[reason],
+    status: Status.CONFLICT,
+    data: { reason, ...detail },
+    isClientFriendly: true,
+  });

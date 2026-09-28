@@ -19,6 +19,8 @@ import { redis } from "../../../../server.js";
 import { isTruceActive } from "../../../../services/mail/isTruceActive.js";
 import { MR1_TRIBE_IDS } from "../../../../game-data/tribes/v1/index.js";
 import { registerAttacker } from "../../../../services/maproom/v1/registerAttacker.js";
+import { requireAttackableMR1Tribe } from "../../../../services/maproom/v1/mr1TribeAttack.js";
+import { startMR1TribeSession } from "../../../../services/maproom/v1/mr1TribeSession.js";
 import { isShinyLocked } from "../../../../services/user/shinyLock.js";
 import { newAttackSession } from "../../../../services/base/attackSession.js";
 import { startAttackSession } from "../../../../services/base/attackSessionStore.js";
@@ -60,6 +62,7 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost }: B
   let save: Save | null = null;
 
   if (mapversion === MapRoomVersion.V1 && MR1_TRIBE_IDS.has(baseid)) {
+    await requireAttackableMR1Tribe(user, baseid, getCurrentDateTime());
     save = await tribeSaveHandler(baseid, mapversion, null, user);
   } else {
     save = await postgres.em.findOne(Save, { baseid });
@@ -195,13 +198,21 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost }: B
   // Bind this attack to the player who started it (issue #25). Only the account
   // recorded here may post the result to `/base/save`, and only for as long as
   // `isAttackActive` would still call the attack live. The flush above is what
-  // gives a freshly created wild-monster row its `basesaveid`; a Map Room 1
-  // tribe never gets one, and its save never reaches the attack branch either.
-  if (save.basesaveid)
+  // gives a freshly created wild-monster row its `basesaveid`. A Map Room 1
+  // tribe never gets one: its session is keyed by the attacker and the tribe
+  // base instead, and its save is bound to that (issue #161).
+  if (isMR1Tribe) {
+    await startMR1TribeSession(
+      user.userid,
+      baseid,
+      newAttackSession(user.userid, save.attackid, armies.entryHoused)
+    );
+  } else if (save.basesaveid) {
     await startAttackSession(
       save.basesaveid,
       newAttackSession(user.userid, save.attackid, armies.entryHoused)
     );
+  }
 
   // Create an attack log and update neighbour attack counters
   if (save.type !== BaseType.TRIBE) {

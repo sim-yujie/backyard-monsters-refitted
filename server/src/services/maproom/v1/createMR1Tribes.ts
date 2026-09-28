@@ -1,15 +1,11 @@
 import { TribeScale } from "../../../enums/Tribes.js";
-import { legionnaire } from "../../../game-data/tribes/v1/legionnaire.js";
-import { kozu } from "../../../game-data/tribes/v1/kozu.js";
-import { abunaki } from "../../../game-data/tribes/v1/abunaki.js";
-import { dreadnaught } from "../../../game-data/tribes/v1/dreadnaught.js";
-import { tutorial } from "../../../game-data/tribes/v1/tutorial.js";
 import { Maproom } from "../../../database/models/maproom.model.js";
 import { Save } from "../../../database/models/save.model.js";
 import { User } from "../../../database/models/user.model.js";
 import { postgres } from "../../../server.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
+import { currentMR1Tribes, mr1TribeRespawned, respawnMR1Tribe } from "./mr1TribeRules.js";
 
 export interface MR1TribeScaleConfig {
   [TribeScale.NEW]: { maxLevel: number };     // Town Hall 1–2
@@ -18,8 +14,6 @@ export interface MR1TribeScaleConfig {
   [TribeScale.TH5]: { maxLevel: number };     // Town Hall 5
   [TribeScale.HIGH]: { maxLevel: number };    // Town Hall 6 >
 }
-
-const mr1TribeData = [legionnaire, kozu, abunaki, dreadnaught];
 
 /**
  * Returns an array of scaled MR1 tribes based on the player's Town Hall level.
@@ -43,27 +37,11 @@ export const createMR1Tribes = async (save: Save, tribes: MR1TribeScaleConfig) =
   const townHall = extractTownHall(save.buildingdata ?? {});
   const thLevel = townHall?.l ?? 1;
 
-  const tenMinutes = 10 * 60;
   const currentTime = getCurrentDateTime();
 
-  let scale: TribeScale;
   let persist = false;
 
-  if (thLevel <= tribes[TribeScale.NEW].maxLevel) {
-    scale = TribeScale.NEW;
-  } else if (thLevel <= tribes[TribeScale.TH3].maxLevel) {
-    scale = TribeScale.TH3;
-  } else if (thLevel <= tribes[TribeScale.TH4].maxLevel) {
-    scale = TribeScale.TH4;
-  } else if (thLevel <= tribes[TribeScale.TH5].maxLevel) {
-    scale = TribeScale.TH5;
-  } else {
-    scale = TribeScale.HIGH;
-  }
-
-  const inTutorial = save.tutorialstage < 205;
-
-  const scaledTribes = mr1TribeData.map((tribe, i) => i === 0 && inTutorial ? tutorial : tribe[scale]);
+  const scaledTribes = currentMR1Tribes(thLevel, save.tutorialstage, tribes).map((slot) => slot.template);
   const scaledBaseIds = new Set(scaledTribes.map((tribe) => Number(tribe.baseid)));
 
   let maproom = await postgres.em.findOne(Maproom, { userid });
@@ -81,22 +59,19 @@ export const createMR1Tribes = async (save: Save, tribes: MR1TribeScaleConfig) =
     scaledBaseIds.has(Number(tribe.baseid))
   );
 
-  // Respawn tribes destroyed more than 10 minutes ago
+  // Respawn tribes destroyed at least 10 minutes ago
   for (const tribe of maproom.tribedata) {
-    const canRespawn = tribe.destroyedAt && currentTime - tribe.destroyedAt > tenMinutes;
-
-    if (tribe.destroyed && canRespawn) {
+    if (mr1TribeRespawned(tribe, currentTime)) {
       const status = wmstatus?.findIndex((status) => status[0] === Number(tribe.baseid));
 
       if (status !== undefined && status !== -1) wmstatus![status][2] = 0;
 
-      tribe.destroyed = 0;
-      tribe.destroyedAt = undefined;
-      tribe.tribeHealthData = {};
-      tribe.monsters = undefined;
+      respawnMR1Tribe(tribe);
       persist = true;
     }
   }
+
+  if (currentTribes.length !== maproom.tribedata.length) persist = true;
 
   maproom.tribedata = currentTribes;
 

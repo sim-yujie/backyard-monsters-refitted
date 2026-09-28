@@ -334,8 +334,35 @@ range included, is decided before the first write, so an attack the server turns
 authorises is **420 seconds**, the same `ATTACK_TIMEOUT` `isAttackActive` uses, so a defender
 that is free to be attacked by somebody else can no longer be written to by the previous
 attacker. The extra 60 seconds of key lifetime exist only so a late save is logged as `expired`
-rather than as a base with no attack at all. A Map Room 1 tribe has no stored row and mints no
-session; its saves never reach the attack branch (they return early through `scaledMR1Tribes`).
+rather than as a base with no attack at all. A Map Room 1 tribe has no stored row, so its
+session is keyed by attacker and tribe instead — see "Map Room 1 tribe attacks" below.
+
+#### Map Room 1 tribe attacks
+
+Every player has their own copy of the four Map Room 1 tribes (their `Maproom.tribedata`), so a
+tribe attack has no defender row and no `basesaveid`. It is bound the same way all the same
+(issue #161; before, a `/base/save` naming a tribe base credited `attackloot` and overwrote the
+army with no attack behind it):
+
+- **Load** (`wmattack`, `mapversion: 1`, a tribe base id). Refused with 409
+  `mr1TribeRefusedErr` before anything is written (`services/maproom/v1/mr1TribeAttack.ts`) when
+  the caller's main save is not on map version 1 (`reason: "notMapRoom1"`), the base is not one
+  of the four tribes their map shows now (`"notYourTribe"`: another Town Hall tier's), or it is
+  wrecked and has not respawned (`"tribeDestroyed"`, with `respawnAt`). A wrecked tribe whose ten
+  minutes are up is stood back up there. A successful load mints the session under
+  `attack-session:mr1:<userid>:<tribe baseid>` (`mr1TribeSession.ts`), same format, TTL and
+  420-second window.
+- **Save** (`/base/save`, `baseid` = the tribe, `basesaveid` `"0"`). The session is checked with
+  `checkAttackBinding` (same reasons as below) before anything is written. A save without `over`
+  records only the tribe's damage (`buildinghealthdata`, `destroyed`, `damage`). The save carrying
+  `over` takes `attack-final:mr1:<userid>:<baseid>` (a copy racing it is refused with
+  `reason: "finalising"`), applies the attacker's side — `attackerchampion`, `attackersiege`,
+  the bombs in `flinglog` (issue #90), and the loot — then ends the session, so a copy sent again
+  as the page closes is refused with `"no-session"`. The loot credited is
+  `creditableMR1Loot` (`mr1TribeRules.ts`): each resource whole and non-negative, and everything
+  taken from that tribe since it last respawned (`tribedata[].looted`) at most its pool — its
+  `resources` plus its harvesters' `st` — times `LOOT_GAIN_RATIO` (1.6, the low-level bonus).
+  There is no `/base/checkpoint` for a tribe attack.
 
 **Checking.** On an attack save — the caller is not the owner and the row's `attackid` is
 non-zero — the session is read back and checked before `validateSave`, before the economy audit

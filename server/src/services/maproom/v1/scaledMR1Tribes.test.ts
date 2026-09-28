@@ -1,0 +1,162 @@
+import { beforeEach, describe, expect, mock, test } from "bun:test";
+import type { Context } from "koa";
+
+/**
+ * Issue #161: a `/base/save` naming a Map Room 1 tribe base used to credit
+ * `attackloot` (and overwrite the army) with no attack behind it. It is now
+ * bound to an attack session the attack load minted for this caller on this
+ * tribe, lands once, and its loot is capped by what the tribe holds.
+ */
+
+const ATTACKER = 2503;
+const OTHER = 77;
+const TRIBE = "2"; // Legionnaire, Town Hall 1-2 tier
+const ATTACK_ID = 4242;
+
+const store = new Map<string, string>();
+let maproom: { userid: number; tribedata: Record<string, unknown>[] };
+let userSave: Record<string, unknown>;
+const persisted: unknown[] = [];
+
+mock.module("../../../server.js", () => ({
+  postgres: {
+    em: {
+      populate: async (user: Record<string, unknown>) => {
+        user.save = userSave;
+      },
+      findOne: async () => maproom,
+      persist: (entity: unknown) => persisted.push(entity),
+      flush: async () => {},
+    },
+  },
+  redis: {
+    get: async (key: string) => store.get(key) ?? null,
+    setex: async (key: string, _ttl: number, value: string) => {
+      store.set(key, value);
+      return "OK";
+    },
+    set: async (key: string, value: string, ...options: string[]) => {
+      if (options.includes("NX") && store.has(key)) return null;
+      store.set(key, value);
+      return "OK";
+    },
+    del: async (key: string) => (store.delete(key) ? 1 : 0),
+  },
+}));
+
+mock.module("../../../utils/logger.js", () => ({
+  logger: { warn: mock(() => {}), error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
+}));
+
+const { baseSave } = await import("../../../controllers/base/save/baseSave.js");
+const { mr1TribeSessionKey } = await import("./mr1TribeSession.js");
+const { serialiseAttackSession } = await import("../../base/attackSession.js");
+const { mr1TribePool } = await import("./mr1TribeRules.js");
+const { MR1_TRIBES_MAP } = await import("../../../game-data/tribes/v1/index.js");
+const { LOOT_GAIN_RATIO } = await import("../../../game-rules/combat/index.js");
+
+const now = () => Math.floor(Date.now() / 1000);
+
+const startSession = (attackerid = ATTACKER, startedat = now()) =>
+  store.set(
+    mr1TribeSessionKey(ATTACKER, TRIBE),
+    serialiseAttackSession({ attackerid, attackid: ATTACK_ID, startedat })
+  );
+
+const ctxFor = (body: Record<string, string>, userid = ATTACKER) =>
+  ({
+    authUser: { userid, username: "attacker" },
+    request: { body: { baseid: TRIBE, basesaveid: "0", ...body } },
+    ip: "127.0.0.1",
+    path: "/base/save",
+  }) as unknown as Context;
+
+const run = async (ctx: Context): Promise<{ data?: { reason?: string } } | null> => {
+  try {
+    await baseSave(ctx, async () => {});
+    return null;
+  } catch (caught) {
+    return caught as { data?: { reason?: string } };
+  }
+};
+
+const loot = (amounts: Record<string, number>) => JSON.stringify(amounts);
+
+beforeEach(() => {
+  store.clear();
+  persisted.length = 0;
+  maproom = { userid: ATTACKER, tribedata: [{ baseid: TRIBE, tribeHealthData: {} }] };
+  userSave = {
+    userid: ATTACKER,
+    baseid: "5000",
+    resources: { r1: 100, r2: 100, r3: 100, r4: 100 },
+    monsters: { housed: { C1: 10 } },
+    wmstatus: [[2, 1, 0]],
+  };
+});
+
+describe("Map Room 1 tribe save without a started attack (#161)", () => {
+  test("credits nothing and writes nothing", async () => {
+    const caught = await run(
+      ctxFor({ over: "1", attackloot: loot({ r1: 1_000_000 }), attackcreatures: JSON.stringify({ C1: 999 }), destroyed: "1" })
+    );
+
+    expect(caught?.data?.reason).toBe("no-session");
+    expect(userSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
+    expect(userSave.monsters).toEqual({ housed: { C1: 10 } });
+    expect(maproom.tribedata[0]!.destroyed).toBeUndefined();
+    expect(persisted).toEqual([]);
+  });
+
+  test("another account's attack on the same tribe does not authorise the save", async () => {
+    startSession(OTHER);
+    const caught = await run(ctxFor({ over: "1", attackloot: loot({ r1: 50 }) }));
+    expect(caught?.data?.reason).toBe("wrong-attacker");
+    expect((userSave.resources as Record<string, number>).r1).toBe(100);
+  });
+
+  test("an attack started more than 420 seconds ago no longer authorises it", async () => {
+    startSession(ATTACKER, now() - 421);
+    const caught = await run(ctxFor({ over: "1", attackloot: loot({ r1: 50 }) }));
+    expect(caught?.data?.reason).toBe("expired");
+  });
+
+  test("a save naming another attack id is refused", async () => {
+    startSession();
+    const caught = await run(ctxFor({ over: "1", attackid: "1", attackloot: loot({ r1: 50 }) }));
+    expect(caught?.data?.reason).toBe("stale-attack");
+  });
+});
+
+describe("Map Room 1 tribe save of a started attack", () => {
+  test("the save that ends it credits the loot once and ends the session", async () => {
+    startSession();
+    const ctx = ctxFor({ over: "1", attackid: String(ATTACK_ID), attackloot: loot({ r1: 50, r2: 7 }), destroyed: "1", damage: "97.5" });
+
+    expect(await run(ctx)).toBeNull();
+    expect(userSave.resources).toEqual({ r1: 150, r2: 107, r3: 100, r4: 100 });
+    expect(maproom.tribedata[0]).toMatchObject({ destroyed: 1, damage: 97, looted: { r1: 50, r2: 7, r3: 0, r4: 0 } });
+    expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);
+
+    // The same save sent again as the page closes lands nothing.
+    const again = await run(ctxFor({ over: "1", attackid: String(ATTACK_ID), attackloot: loot({ r1: 50 }) }));
+    expect(again?.data?.reason).toBe("no-session");
+    expect((userSave.resources as Record<string, number>).r1).toBe(150);
+  });
+
+  test("loot beyond what the tribe holds is cut to its pool", async () => {
+    startSession();
+    await run(ctxFor({ over: "1", attackloot: loot({ r1: 1e12 }) }));
+
+    const cap = Math.floor(mr1TribePool(MR1_TRIBES_MAP.get(TRIBE)!).r1 * LOOT_GAIN_RATIO);
+    expect((userSave.resources as Record<string, number>).r1).toBe(100 + cap);
+  });
+
+  test("a save that does not end the attack records the tribe's damage and credits nothing", async () => {
+    startSession();
+    expect(await run(ctxFor({ attackloot: loot({ r1: 50 }), damage: "40" }))).toBeNull();
+    expect((userSave.resources as Record<string, number>).r1).toBe(100);
+    expect(maproom.tribedata[0]!.damage).toBe(40);
+    expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(true);
+  });
+});

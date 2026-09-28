@@ -72,10 +72,15 @@ export const baseSave: KoaController = async (ctx) => {
   const saveData = BaseSaveSchema.parse(body);
 
   const { basesaveid } = saveData;
-  const baseSave = await postgres.em.findOne(Save, { basesaveid });
+  const baseSave =
+    Number.isSafeInteger(basesaveid) && basesaveid > 0
+      ? await postgres.em.findOne(Save, { basesaveid })
+      : null;
 
+  // A Map Room 1 tribe has no row of its own; its attack is bound to the
+  // attacker and the tribe base instead (issue #161, `scaledMR1Tribes.ts`).
   if (!baseSave && MR1_TRIBE_IDS.has(saveData.baseid)) {
-    const tribeSave = await scaledMR1Tribes(user, saveData);
+    const tribeSave = await scaledMR1Tribes(ctx, user, saveData);
     const filteredSave = await mapSaveData(tribeSave, user);
 
     ctx.status = Status.OK;
