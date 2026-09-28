@@ -30,9 +30,14 @@ import {
 } from "./yardLifeModel";
 
 /**
- * Draws what lives on the player's own yard (issue #158): housed monsters in
- * their pens, the champion in its cage, and the workers. The rules are in
- * `yardLifeModel.ts`; this owns the sprites.
+ * Draws what lives on a yard (issues #158, #159): housed monsters in their
+ * pens, the champion in its cage, and the workers. The rules, and which of
+ * them a visited or attacked yard shows, are in `yardLifeModel.ts`; this owns
+ * the sprites.
+ *
+ * On the attack screen these are scenery, not combatants: they live in the
+ * yard renderer's containers, never in the battle layer, and the engine never
+ * hears of them, so nothing targets them and no count includes them.
  *
  * Bodies go into the buildings' own container, sorted by depth the way the
  * attack screen sorts its creeps (`creepZIndex`), so a monster behind a hut is

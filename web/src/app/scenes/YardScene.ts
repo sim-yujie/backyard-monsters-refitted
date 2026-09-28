@@ -537,9 +537,9 @@ export class YardScene implements Scene {
       // store's server-corrected clock.
       this.renderer.setJobClock(store ? () => store.now() : null);
       this.renderer.show(yard);
-      // What lives on the yard is drawn on the own yard only (#158): a
-      // visit's save is somebody else's army.
-      this.renderer.setLife(store ? yardLifeOf(response, yard) : null);
+      // What lives on the yard (#158). A visit's load carries the defender's
+      // monsters, champion and workers, which Flash drew there too (#159).
+      this.renderer.setLife(yardLifeOf(response, yard, store ? "own" : "visit"));
       // A visitor never sees another yard's traps (`BTRAP.as:33-43`, #66);
       // the player's own yard shows them, as build mode always did.
       if (target) concealTraps(this.renderer, yard);

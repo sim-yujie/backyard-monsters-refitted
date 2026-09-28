@@ -11,6 +11,7 @@ import { consumeAttackTarget, type AttackTarget } from "@/game/attack/attackTarg
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
+import { fellPens, yardLifeOf, type YardLife } from "@/game/yard/yardLifeModel";
 import { YardRenderer } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
 import { formatAmount } from "@/ui/format";
@@ -87,6 +88,10 @@ export class AttackScene implements Scene {
   private unsubscribe: (() => void) | null = null;
   private target: AttackTarget | null = null;
   private yard: Yard | null = null;
+  /** The defender's housed monsters and workers, drawn as scenery (#159). */
+  private life: YardLife | null = null;
+  /** Buildings destroyed when `life` was last checked for fallen pens. */
+  private lifeDestroyed = 0;
 
   private strip: HTMLElement | null = null;
   private clock: HTMLElement | null = null;
@@ -216,6 +221,8 @@ export class AttackScene implements Scene {
     this.session = null;
     this.presentation = new AttackPresentation();
     this.yard = null;
+    this.life = null;
+    this.lifeDestroyed = 0;
     this.target = null;
     this.context = null;
   }
@@ -301,6 +308,12 @@ export class AttackScene implements Scene {
     // An attacker never sees a trap until it fires (`BTRAP.as:33-43`, #66);
     // the battle layer reveals each one as the engine reports it going off.
     concealTraps(this.renderer, yard);
+    // The defender's pens, as Flash drew them on an attacked yard (#159):
+    // scenery in the yard's own containers, never in the battle layer, so no
+    // creep targets them and no count includes them. No caged champion: the
+    // engine has no defending champion, and one that never fights would lie.
+    this.life = yardLifeOf(response, yard, "attack");
+    this.renderer.setLife(this.life);
     this.buildingCount = countedBuildings(yard.buildings.map((building) => building.type));
     this.startCamera(yard, context);
 
@@ -581,12 +594,25 @@ export class AttackScene implements Scene {
   private onSessionChange(state: AttackSessionState): void {
     this.refreshStrip(state);
     this.refreshStatus(state);
+    this.fellPens(state);
     // The end plugin (WP6) takes over from here; a pending retreat question
     // is moot once the attack is over.
     if (state.phase === "ended") {
       this.confirm?.close();
       this.confirm = null;
     }
+  }
+
+  /** A Housing destroyed in the battle takes its monsters with it (`BUILDING15.as:93-104`). */
+  private fellPens(state: AttackSessionState): void {
+    const life = this.life;
+    if (!life || state.buildingsDestroyed === this.lifeDestroyed) return;
+    this.lifeDestroyed = state.buildingsDestroyed;
+    const destroyed = this.session?.battle()?.state().destroyedIds ?? [];
+    const next = fellPens(life, destroyed);
+    if (next === life) return;
+    this.life = next;
+    this.renderer.setLife(next);
   }
 
   private refreshStrip(state: AttackSessionState): void {

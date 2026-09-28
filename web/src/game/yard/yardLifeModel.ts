@@ -10,13 +10,36 @@ import { fromIso } from "./YardGrid";
 import type { Yard, YardBuilding } from "./yardModel";
 
 /**
- * What lives on the player's own yard besides its buildings (issue #158): the
- * housed monsters wandering their pens, a raised champion pacing its cage, and
- * the workers. Arithmetic only, so it runs under node; `YardLifeLayer` draws it.
+ * What lives on a yard besides its buildings (issues #158, #159): the housed
+ * monsters wandering their pens, a raised champion pacing its cage, and the
+ * workers. Arithmetic only, so it runs under node; `YardLifeLayer` draws it.
  *
  * Everything here is drawn and nothing is saved. The Flash client simulated
- * all of it as real creatures; this client has no creature to simulate on its
- * own yard, so it keeps the look and none of the state.
+ * all of it as real creatures; this client has no creature to simulate outside
+ * a battle, so it keeps the look and none of the state.
+ *
+ * ## Whose yard ({@link LifeView})
+ *
+ * Flash ran the same load on every yard it opened, so a visited or attacked
+ * yard showed its owner's life too: `HOUSING.Populate` (`BASE.as:2043-2044`)
+ * filled the pens from the loaded yard's monsters, the cage spawned its
+ * champion, and `QUEUE.Spawn` (`BASE.as:1498`) put out the workers. A
+ * `/base/load` of somebody else's yard carries that yard's `monsters`,
+ * `champion`, `academy` and `storedata`, never the viewer's, so the same
+ * reading works on it. Three exceptions:
+ *
+ * - **No workers on a wild monster camp.** `QUEUE.Spawn` skips the two world
+ *   map modes, `WMATTACK` and `WMVIEW` (`QUEUE.as:56`); a player's yard, visited
+ *   or attacked, has its workers, and a running job has one standing at it
+ *   (`BFOUNDATION.as:3154-3182` queues it on load, whoever is looking).
+ * - **No champion on an attacked yard.** Flash's cage champion was a guardian
+ *   that came out to fight the attacker. The combat engine does not simulate a
+ *   defending champion (only the attacker's flung ones,
+ *   `game/combat/rules/engine.ts`), so one drawn in its cage would be a
+ *   defender that never defends. A visit, where nobody fights, shows it pacing.
+ * - **A Housing destroyed in a battle loses its monsters.** `BUILDING15.Destroyed`
+ *   sets every creature in it to zero health in Map Room 2
+ *   (`BUILDING15.as:93-104`); {@link fellPens} takes the pen's walkers off.
  *
  * ## Housed monsters (`client/scripts/HOUSING.as:201-240`)
  *
@@ -177,10 +200,18 @@ export interface LifeJob {
   readonly height: number;
 }
 
+/**
+ * How a yard is being looked at: the player's own, somebody else's on a visit,
+ * or somebody else's under attack. See "Whose yard" above.
+ */
+export type LifeView = "own" | "visit" | "attack";
+
 /** Everything alive on a yard, as read from its save. */
 export interface YardLife {
   readonly groups: readonly LifeGroup[];
   readonly pens: readonly LifePen[];
+  /** Pens destroyed in a battle: their monsters are gone (`BUILDING15.as:93-104`). */
+  readonly fallen: ReadonlySet<number>;
   readonly champions: readonly LifeChampion[];
   /** The cage's top corner in yard units, or null when the yard has none. */
   readonly cage: LifePen | null;
@@ -198,6 +229,7 @@ export interface YardLife {
 export const EMPTY_LIFE: YardLife = {
   groups: [],
   pens: [],
+  fallen: new Set(),
   champions: [],
   cage: null,
   workers: 0,
@@ -209,14 +241,23 @@ export const EMPTY_LIFE: YardLife = {
 
 const standing = (building: YardBuilding): boolean => building.hp === null || building.hp > 0;
 
+/** A wild monster camp's save `type` (`server/src/enums/Base.ts`). */
+const TRIBE_TYPE = "tribe";
+
 /**
- * What lives on the player's own yard, from its save and the yard read from it.
+ * What lives on a yard, from its save and the yard read from it, as seen in
+ * `view`.
  *
  * Pens are the Housing buildings with health above zero, as `Populate` takes
  * them (`HOUSING.as:212-215`); one still being built counts, as it did there.
- * The champion list keeps status 0 only (`CHAMPIONCAGE.as:593-594`).
+ * The champion list keeps status 0 only (`CHAMPIONCAGE.as:593-594`), and is
+ * empty on an attacked yard; a wild monster camp has no workers.
  */
-export const yardLifeOf = (save: BaseLoadResponse, yard: Yard): YardLife => {
+export const yardLifeOf = (
+  save: BaseLoadResponse,
+  yard: Yard,
+  view: LifeView = "own",
+): YardLife => {
   const groups: LifeGroup[] = [];
   for (const [id, raw] of Object.entries(save.monsters?.housed ?? {})) {
     const count = Math.floor(Number(raw));
@@ -245,7 +286,7 @@ export const yardLifeOf = (save: BaseLoadResponse, yard: Yard): YardLife => {
   jobs.sort((a, b) => a.id - b.id);
 
   const champions: LifeChampion[] = [];
-  for (const entry of save.champion ?? []) {
+  for (const entry of view === "attack" ? [] : (save.champion ?? [])) {
     if (!entry || Number(entry.status ?? 0) !== 0) continue;
     const t = Math.floor(Number(entry.t));
     if (!(t >= 1)) continue;
@@ -254,17 +295,33 @@ export const yardLifeOf = (save: BaseLoadResponse, yard: Yard): YardLife => {
     champions.push({ id: `G${t}`, level, sheetLevel: t === KRALLEN_TYPE ? power : level });
   }
 
+  const workless = save.type === TRIBE_TYPE;
   return {
     groups,
     pens,
+    fallen: EMPTY_LIFE.fallen,
     champions,
     cage,
-    workers: yard.workers.total,
-    jobs,
+    workers: workless ? 0 : yard.workers.total,
+    jobs: workless ? [] : jobs,
     hardHat: yard.buildTime < 1,
     plot: { width: yard.bounds.yardWidth, height: yard.bounds.yardHeight },
     footprints,
   };
+};
+
+/**
+ * The life with every pen among `destroyed` fallen, or the same object when
+ * that fells no pen that was standing, so a caller can tell nothing changed.
+ */
+export const fellPens = (life: YardLife, destroyed: readonly number[]): YardLife => {
+  let fallen: Set<number> | null = null;
+  for (const id of destroyed) {
+    if (life.fallen.has(id) || !life.pens.some((pen) => pen.id === id)) continue;
+    fallen ??= new Set(life.fallen);
+    fallen.add(id);
+  }
+  return fallen ? { ...life, fallen } : life;
 };
 
 /* ── The sample ─────────────────────────────────────────────────────────── */
@@ -433,7 +490,8 @@ export const walkerSpecs = (
     const seen = new Map<string, number>();
     sampleArmy(life.groups, cap).forEach((monster, index) => {
       const pen = life.pens[index % life.pens.length];
-      if (!pen) return;
+      // Dealt round every pen first, so the ones left standing keep theirs.
+      if (!pen || life.fallen.has(pen.id)) return;
       const slot = `${pen.id}:${monster.id}`;
       const nth = seen.get(slot) ?? 0;
       seen.set(slot, nth + 1);

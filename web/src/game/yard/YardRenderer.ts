@@ -56,7 +56,7 @@ export class YardRenderer {
   private readonly planner = new PlannerOverlay();
   /** Progress bars over running builds and upgrades, own yard only (#139). */
   private readonly jobBars = new YardJobBars((id) => this.jobBarAnchor(id));
-  /** What lives on the own yard (#158); empty anywhere else. */
+  /** What lives on the yard (#158, #159): scenery, never in the battle. */
   private readonly life = new YardLifeLayer({ reducedMotion: prefersReducedMotion() });
   /** The planner is open: the creatures step out of the way until it closes. */
   private lifeHidden = false;
@@ -239,8 +239,9 @@ export class YardRenderer {
 
   /**
    * Shows what lives on the yard (#158), as `yardLifeModel` reads it off the
-   * save, or clears it when passed null. The own yard's scene
-   * calls this after every `show`; a visit and an attack never do.
+   * save, or clears it when passed null. The yard scene calls this after every
+   * `show`, the own yard's and a visit's (#159); the attack scene once, and
+   * again when a Housing falls.
    */
   setLife(life: YardLife | null): void {
     const bounds = this.yard?.bounds;

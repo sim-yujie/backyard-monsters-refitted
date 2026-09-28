@@ -8,6 +8,7 @@ import {
   CHAMPION_WANDER_ODDS,
   CREEP_WANDER_ODDS,
   EMPTY_LIFE,
+  fellPens,
   jobSpot,
   MAX_HOUSED_DRAWN,
   PEN_SETTLE_TICKS,
@@ -103,6 +104,87 @@ describe("yardLifeOf", () => {
     const read = yardLifeOf(busy, readYard(busy));
     expect(read.jobs).toEqual([{ id: 0, x: 5, y: -15, width: 130, height: 130 }]);
     expect(read.hardHat).toBe(true);
+  });
+});
+
+describe("yardLifeOf on somebody else's yard (#159)", () => {
+  const busy = {
+    ...save,
+    currenttime: 1_000,
+    savetime: 1_000,
+    buildingdata: { ...save.buildingdata, "0": { ...save.buildingdata?.["0"], cU: 600 } },
+  } as BaseLoadResponse;
+  const yard = readYard(busy, { foreign: true });
+
+  it("a visit shows the defender's pens, champions and workers, as its own yard would", () => {
+    const own = yardLifeOf(busy, readYard(busy));
+    const visit = yardLifeOf(busy, yard, "visit");
+    expect(visit.groups).toEqual(own.groups);
+    expect(visit.pens).toEqual(own.pens);
+    expect(visit.champions).toEqual(own.champions);
+    expect(visit.champions).toHaveLength(2);
+    expect(visit.workers).toBe(5);
+    expect(visit.jobs).toHaveLength(1);
+  });
+
+  it("an attack keeps the pens and workers but no caged champion: none defends", () => {
+    const attack = yardLifeOf(busy, yard, "attack");
+    expect(attack.groups).toEqual(yardLifeOf(busy, yard, "visit").groups);
+    expect(attack.pens.map((pen) => pen.id)).toEqual([82, 584, 585, 586]);
+    expect(attack.champions).toEqual([]);
+    expect(attack.cage).not.toBeNull();
+    expect(walkerSpecs(attack, seeded()).some((spec) => spec.champion)).toBe(false);
+    expect(attack.workers).toBe(5);
+  });
+
+  it("a wild monster camp has no workers, visited or attacked (`QUEUE.as:56`)", () => {
+    const camp = { ...busy, type: "tribe" } as BaseLoadResponse;
+    for (const view of ["visit", "attack"] as const) {
+      const read = yardLifeOf(camp, readYard(camp), view);
+      expect(read.workers).toBe(0);
+      expect(read.jobs).toEqual([]);
+      expect(read.pens).toHaveLength(4);
+    }
+  });
+
+  it("reads the defender's own academy for the walking speed", () => {
+    const slow = { ...busy, academy: {} } as BaseLoadResponse;
+    expect(yardLifeOf(slow, yard, "visit").groups.map((group) => group.level)).toEqual([1, 1]);
+  });
+});
+
+describe("fellPens", () => {
+  const life = lifeWith({
+    groups: [{ id: "C1", level: 1, count: 6 }],
+    pens: [
+      { id: 7, x: 0, y: 0 },
+      { id: 9, x: 200, y: 0 },
+      { id: 11, x: 400, y: 0 },
+    ],
+  });
+
+  it("is the same life when no standing pen is among the destroyed", () => {
+    expect(fellPens(life, [])).toBe(life);
+    expect(fellPens(life, [1, 2, 3])).toBe(life);
+    const once = fellPens(life, [9]);
+    expect(fellPens(once, [9, 1])).toBe(once);
+  });
+
+  it("takes a fallen pen's monsters off and leaves every other walker's key", () => {
+    const before = walkerSpecs(life, seeded()).map((spec) => spec.key);
+    const after = walkerSpecs(fellPens(life, [9, 40]), seeded()).map((spec) => spec.key);
+    expect(before).toHaveLength(6);
+    expect(after).toEqual(before.filter((key) => !key.startsWith("m:9:")));
+    expect(after).toHaveLength(4);
+  });
+
+  it("a kept walker stays where it stood", () => {
+    const random = seeded(3);
+    const walkers = reconcileWalkers(new Map(), walkerSpecs(life, random), random);
+    const kept = walkers.get("m:7:C1:0");
+    const next = reconcileWalkers(walkers, walkerSpecs(fellPens(life, [9]), random), random);
+    expect(next.get("m:7:C1:0")).toBe(kept);
+    expect(next.has("m:9:C1:0")).toBe(false);
   });
 });
 
