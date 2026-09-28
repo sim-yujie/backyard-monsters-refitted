@@ -24,6 +24,14 @@
  * table stores a `#b_key#` placeholder rather than a name — the same lookup
  * `gen-building-art.mjs` makes.
  *
+ * Outposts have a props table of their own, `client/scripts/OUTPOST_YARD_PROPS.as`,
+ * which `GLOBAL.SetBuildingProps` swaps in wholesale for an outpost yard, for the
+ * owner and an attacker alike (`client/scripts/GLOBAL.as:716-723`). It is read
+ * the same way into a second table, `OUTPOST_COST_ROWS`, with none of the Map
+ * Room 2 overrides below, which apply to the main table only (`:724-747`). Each
+ * outpost row also gets a trait row in `OUTPOST_TRAIT_ROWS`. See "Outposts"
+ * below.
+ *
  * Two files are written, with identical rows:
  *
  *   web/src/game/yard/buildingCostData.ts   -> web/src/game/yard/buildingCosts.ts
@@ -44,6 +52,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../..");
 
 const PROPS = resolve(repo, "client/scripts/YARD_PROPS.as");
+const OUTPOST_PROPS = resolve(repo, "client/scripts/OUTPOST_YARD_PROPS.as");
 const STRINGS = resolve(repo, "server/public/gamestage/assets/archived/en.v612.txt");
 const WEB_OUT = resolve(here, "../src/game/yard/buildingCostData.ts");
 const SERVER_OUT = resolve(repo, "server/src/game-data/buildingCosts.ts");
@@ -51,10 +60,7 @@ const SERVER_OUT = resolve(repo, "server/src/game-data/buildingCosts.ts");
 // The comment-stripped read, `matchBrace`, `readIntArray` and `lineCounter`
 // live in `lib/props.mjs`, shared with `gen-combat-stats.mjs`
 // (`docs/design/server-combat.md` §3.3). Their behaviour is unchanged.
-const { source } = readPropsSource(PROPS);
-const strings = JSON.parse(readFileSync(STRINGS, "utf8")).core;
-
-const lineOf = lineCounter(source);
+const language = JSON.parse(readFileSync(STRINGS, "utf8"));
 
 /**
  * One `"rN": new SecNum(1000)` or `"time": new SecNum(5)` field.
@@ -135,7 +141,7 @@ const STORAGE_SILO = 6;
  * short one would silently price a top-level harvester at zero, which is why
  * the length mismatch throws rather than warns.
  */
-const readStats = (entry, after) => {
+const readStats = (entry, after, file) => {
   const harvester = entry.kind === "resource";
   if (!harvester && entry.id !== STORAGE_SILO) return null;
 
@@ -149,7 +155,7 @@ const readStats = (entry, after) => {
   for (const key of harvester ? ["produce", "cycleTime", "capacity"] : ["capacity"]) {
     if (stats[key].length !== levels) {
       throw new Error(
-        `YARD_PROPS.as:${entry.line}: id ${entry.id} has ${stats[key].length} ` +
+        `${file}:${entry.line}: id ${entry.id} has ${stats[key].length} ` +
           `"${key}" entries for ${levels} cost steps; re-read the entry.`,
       );
     }
@@ -160,58 +166,94 @@ const readStats = (entry, after) => {
 
 /* ── Parse ────────────────────────────────────────────────────────────────── */
 
-const entries = [];
-const seen = new Set();
+/**
+ * Every entry of one props file that has a `costs` array, sorted by id.
+ *
+ * `file` is the name citations use and `names` turns a props `"name"` into a
+ * display name. Each entry also carries four fields only the outpost table
+ * emits (see "Outposts" below): `blocked`, `hp`, `fortify` and `capacity`.
+ */
+const readTable = (path, file, names) => {
+  const { source } = readPropsSource(path);
+  const lineOf = lineCounter(source);
+  const entries = [];
+  const seen = new Set();
 
-// `"fortify_costs"` is a different key and does not match: the pattern requires
-// a quote immediately before `costs`.
-const marker = /"costs"\s*:\s*\[/g;
-for (let hit = marker.exec(source); hit; hit = marker.exec(source)) {
-  const open = hit.index + hit[0].length - 1;
-  const close = matchBrace(source, open);
-  const costs = source.slice(open, close + 1);
-  marker.lastIndex = close;
+  // `"fortify_costs"` is a different key and does not match: the pattern requires
+  // a quote immediately before `costs`.
+  const marker = /"costs"\s*:\s*\[/g;
+  for (let hit = marker.exec(source); hit; hit = marker.exec(source)) {
+    const open = hit.index + hit[0].length - 1;
+    const close = matchBrace(source, open);
+    const costs = source.slice(open, close + 1);
+    marker.lastIndex = close;
 
-  // The owning entry's `id`, `group`, `type` and `name` all precede `costs`;
-  // the nearest earlier occurrence of each is therefore this entry's.
-  const before = source.slice(0, hit.index);
-  const idHit = [...before.matchAll(/"id"\s*:\s*(\d+)/g)].pop();
-  if (!idHit) continue;
+    // The owning entry's `id`, `group`, `type` and `name` all precede `costs`;
+    // the nearest earlier occurrence of each is therefore this entry's.
+    const before = source.slice(0, hit.index);
+    const idHit = [...before.matchAll(/"id"\s*:\s*(\d+)/g)].pop();
+    if (!idHit) continue;
 
-  const id = Number(idHit[1]);
+    const id = Number(idHit[1]);
 
-  // The first props table in the file is the main yard's. Outpost and Inferno
-  // tables live in their own files, but were an id to appear twice inside
-  // YARD_PROPS the first would win, matching `_buildingProps[id - 1]`.
-  if (seen.has(id)) continue;
-  seen.add(id);
+    // Each props table lives in its own file, but were an id to appear twice
+    // inside one the first would win, matching `_buildingProps[id - 1]`.
+    if (seen.has(id)) continue;
+    seen.add(id);
 
-  const nameHit = [...before.matchAll(/"name"\s*:\s*"([^"]*)"/g)].pop();
-  const kindHit = [...before.matchAll(/"type"\s*:\s*"([^"]*)"/g)].pop();
-  const groupHit = [...before.matchAll(/"group"\s*:\s*(\d+)/g)].pop();
+    const nameHit = [...before.matchAll(/"name"\s*:\s*"([^"]*)"/g)].pop();
+    const kindHit = [...before.matchAll(/"type"\s*:\s*"([^"]*)"/g)].pop();
+    const groupHit = [...before.matchAll(/"group"\s*:\s*(\d+)/g)].pop();
 
-  // `quantity` follows `costs` in every entry, so it is read forwards from
-  // here, stopping at the next entry's `"id":` so an entry without one cannot
-  // borrow the next building's cap. `produce`, `cycleTime` and `capacity` sit
-  // in the same span, beside `quantity`.
-  const nextId = source.indexOf('"id"', close);
-  const after = source.slice(close, nextId < 0 ? source.length : nextId);
+    // `"block": true` keeps a type out of the build menu
+    // (`client/scripts/BUILDINGSPOPUP.as:132`); it sits between the entry's
+    // `id` and its `costs`.
+    const head = source.slice(idHit.index, hit.index);
 
-  const key = nameHit?.[1] ?? "";
-  const entry = {
-    id,
-    name: strings[key] ?? key.replaceAll("#", ""),
-    kind: kindHit?.[1] ?? "",
-    group: groupHit ? Number(groupHit[1]) : 0,
-    steps: readSteps(costs),
-    quantity: readIntArray(after, "quantity"),
-    line: lineOf(hit.index),
-  };
-  entry.stats = readStats(entry, after);
-  entries.push(entry);
-}
+    // `quantity` follows `costs` in every entry, so it is read forwards from
+    // here, stopping at the next entry's `"id":` so an entry without one cannot
+    // borrow the next building's cap. `produce`, `cycleTime`, `capacity`, `hp`
+    // and `fortify_costs` sit in the same span, beside `quantity`.
+    const nextId = source.indexOf('"id"', close);
+    const after = source.slice(close, nextId < 0 ? source.length : nextId);
 
-entries.sort((a, b) => a.id - b.id);
+    const fortifyHit = /"fortify_costs"\s*:\s*\[/.exec(after);
+    const fortifyOpen = fortifyHit ? fortifyHit.index + fortifyHit[0].length - 1 : -1;
+
+    const key = nameHit?.[1] ?? "";
+    const entry = {
+      id,
+      name: names(key),
+      kind: kindHit?.[1] ?? "",
+      group: groupHit ? Number(groupHit[1]) : 0,
+      steps: readSteps(costs),
+      quantity: readIntArray(after, "quantity"),
+      line: lineOf(hit.index),
+      blocked: /"block"\s*:\s*true/.test(head),
+      hp: readIntArray(after, "hp"),
+      // `BASE.CanFortify` refuses an entry without `can_fortify`, whatever its
+      // `fortify_costs` say (`client/scripts/BASE.as:4015-4017`), so a ladder
+      // without the flag reads as none.
+      fortify:
+        fortifyHit && /"can_fortify"\s*:\s*true/.test(head + after)
+          ? readSteps(after.slice(fortifyOpen, matchBrace(after, fortifyOpen) + 1))
+          : [],
+      capacity: readIntArray(after, "capacity"),
+    };
+    entry.stats = readStats(entry, after, file);
+    entries.push(entry);
+  }
+
+  return entries.sort((a, b) => a.id - b.id);
+};
+
+// The main table has always named from the `core` section only; a type it
+// misses keeps its key, hashes stripped.
+const entries = readTable(
+  PROPS,
+  "YARD_PROPS.as",
+  (key) => language.core[key] ?? key.replaceAll("#", ""),
+);
 
 /* ── Map Room 2 overrides ─────────────────────────────────────────────────────
  *
@@ -356,6 +398,83 @@ const radio = entries.findIndex((one) => one.id === RADIO_TOWER);
 if (radio < 0) throw new Error(`YARD_PROPS.as: no Radio Tower (${RADIO_TOWER}) entry to drop`);
 entries.splice(radio, 1);
 
+/* ── Outposts ─────────────────────────────────────────────────────────────────
+ *
+ * An outpost yard runs on `OUTPOST_YARD_PROPS._outpostProps` in place of the
+ * main table (`client/scripts/GLOBAL.as:716-723`). The Map Room 2 overrides
+ * above are applied only on the `default:` branch of that switch (`:724-747`),
+ * so none of them reach this table, and neither project decision above has a
+ * row to act on: the outpost Map Room and Radio carry no `costs` at all.
+ *
+ * The core (112) stands in for the Town Hall: it registers itself as
+ * `GLOBAL.townHall` (`client/scripts/BUILDING112.as:66-74`) and is always level
+ * 1, so `quantity[1]` is every type's cap in an outpost. Every step requires
+ * `[112, 1, 1]`, and a few also name another outpost building: the Juicer,
+ * Hatchery and Bunker need a Housing (`OUTPOST_YARD_PROPS.as:751`, `:885`,
+ * `:1846`), and the Hatchery Control Center two Hatcheries (`:1212`).
+ *
+ * Beside the cost row, each outpost type gets a trait row:
+ *
+ * - `blocked`: the entry's `"block": true`, which keeps it out of the build
+ *   menu whatever its `quantity` says (`client/scripts/BUILDINGSPOPUP.as:132`).
+ *   The Catapult is the case that matters: `quantity[1]` is 1 but it is
+ *   blocked (`OUTPOST_YARD_PROPS.as:3118`, `:3190`).
+ * - `hp`: the entry's `hp` ladder, `hp[level - 1]`. The laser, tesla, flak,
+ *   railgun and bunker ladders are the outpost's own, and the core's is its
+ *   200,000. Read verbatim: the railgun's level 6 is 13,200 below a level 5 of
+ *   75,500, which looks like a typo for 132,000 but is what Flash ran.
+ * - `fortify`: the `fortify_costs` ladder, for entries with `can_fortify`.
+ *   `fortify[k]` is the step that takes fortification `k` to `k + 1`
+ *   (`client/scripts/BFOUNDATION.as:2099-2102`, `BASE.as:4018-4040`).
+ * - `capacity`: the entry's `capacity` ladder when it is not an economy one
+ *   (the harvesters' is in `stats`): the Flinger's payload, Housing's and the
+ *   Bunker's monster room.
+ */
+const OUTPOST_CORE = 112;
+
+/**
+ * Whether the outpost build menu can offer a type: filed under one of the four
+ * menu tabs (`group` 1 to 4, `client/scripts/BUILDINGSPOPUP.as:28-35`), not
+ * `block`ed (`:132`), and allowed at least one at core level 1.
+ */
+const inOutpostMenu = (entry) =>
+  entry.group >= 1 && entry.group <= 4 && !entry.blocked && (entry.quantity[1] ?? 0) > 0;
+
+const outposts = readTable(
+  OUTPOST_PROPS,
+  "OUTPOST_YARD_PROPS.as",
+  (key) => language.core[key] ?? language.game[key] ?? key.replaceAll("#", ""),
+);
+
+{
+  const core = outposts.find((one) => one.id === OUTPOST_CORE);
+  if (!core) throw new Error(`OUTPOST_YARD_PROPS.as: no outpost core (${OUTPOST_CORE}) entry`);
+  if (core.steps.length !== 1) {
+    throw new Error(`OUTPOST_YARD_PROPS.as:${core.line}: the core has ${core.steps.length} cost steps, not 1`);
+  }
+  if (core.fortify.length === 0 || core.hp.length === 0) {
+    throw new Error(`OUTPOST_YARD_PROPS.as:${core.line}: the core has lost its fortify or hp ladder`);
+  }
+  // A buildable type may only require the core or another buildable type;
+  // anything else could never be met in an outpost.
+  const buildable = new Set(
+    outposts.filter(inOutpostMenu).map((one) => one.id),
+  );
+  for (const entry of outposts) {
+    if (!buildable.has(entry.id)) continue;
+    for (const one of [...entry.steps, ...entry.fortify]) {
+      for (const [type] of one.re) {
+        if (type !== OUTPOST_CORE && !buildable.has(type)) {
+          throw new Error(
+            `OUTPOST_YARD_PROPS.as:${entry.line}: id ${entry.id} requires type ${type}, ` +
+              "which an outpost cannot hold",
+          );
+        }
+      }
+    }
+  }
+}
+
 /* ── Emit ─────────────────────────────────────────────────────────────────── */
 
 const re = (list) => `[${list.map((one) => `[${one.join(",")}]`).join(",")}]`;
@@ -372,18 +491,101 @@ const stats = (one) =>
       `  }`
     : "";
 
-const rows = entries
-  .map(
-    (entry) =>
-      `  // ${entry.id} ${entry.name}${entry.kind ? ` (${entry.kind})` : ""} ` +
-      `— YARD_PROPS.as:${entry.line}${entry.mr2 ? `, Map Room 2 override ${entry.mr2}` : ""}` +
-      `${entry.capped ? `, capped at level ${entry.capped} (D16)` : ""}\n` +
-      `  [${entry.id}, ${JSON.stringify(entry.name)}, ${JSON.stringify(entry.kind)}, ` +
-      `${entry.group}, [\n` +
-      entry.steps.map((one) => `    ${step(one)},`).join("\n") +
-      `\n  ], [${entry.quantity.join(",")}]${stats(entry.stats)}],`,
-  )
-  .join("\n");
+/** One cost row per entry, each under a comment citing `file`. */
+const costRows = (list, file) =>
+  list
+    .map(
+      (entry) =>
+        `  // ${entry.id} ${entry.name}${entry.kind ? ` (${entry.kind})` : ""} ` +
+        `— ${file}:${entry.line}${entry.mr2 ? `, Map Room 2 override ${entry.mr2}` : ""}` +
+        `${entry.capped ? `, capped at level ${entry.capped} (D16)` : ""}\n` +
+        `  [${entry.id}, ${JSON.stringify(entry.name)}, ${JSON.stringify(entry.kind)}, ` +
+        `${entry.group}, [\n` +
+        entry.steps.map((one) => `    ${step(one)},`).join("\n") +
+        `\n  ], [${entry.quantity.join(",")}]${stats(entry.stats)}],`,
+    )
+    .join("\n");
+
+const rows = costRows(entries, "YARD_PROPS.as");
+
+/** `[type, blocked, hp, fortify, capacity]`, one line unless it fortifies. */
+const traitRows = (list) =>
+  list
+    .map((entry) => {
+      const fortify =
+        entry.fortify.length === 0
+          ? "[]"
+          : `[\n${entry.fortify.map((one) => `    ${step(one)},`).join("\n")}\n  ]`;
+      const capacity = entry.stats ? [] : entry.capacity;
+      return (
+        `  [${entry.id}, ${entry.blocked}, [${entry.hp.join(",")}], ${fortify}, ` +
+        `[${capacity.join(",")}]],`
+      );
+    })
+    .join("\n");
+
+const OUTPOST_SECTION = `
+/* ── Outposts ───────────────────────────────────────────────────────────────── */
+
+/**
+ * Which props table a yard builds from: a player's main yard, or one of their
+ * Map Room 2 outposts, which swaps in \`OUTPOST_YARD_PROPS._outpostProps\` for the
+ * whole table (\`client/scripts/GLOBAL.as:716-723\`).
+ */
+export type YardKind = "main" | "outpost";
+
+/**
+ * The outpost core, the outpost's Town Hall.
+ *
+ * It registers itself as \`GLOBAL.townHall\` (\`client/scripts/BUILDING112.as:66-74\`)
+ * and never leaves level 1, so an outpost's caps are every row's \`quantity[1]\`.
+ * It cannot be built, upgraded or recycled; the server places it when an empty
+ * outpost loads (\`client/scripts/BASE.as:1605-1614\`).
+ */
+export const OUTPOST_CORE_TYPE = ${OUTPOST_CORE};
+
+/**
+ * The outpost yard's rows, in the same shape as {@link BUILDING_COST_ROWS}.
+ *
+ * Source: \`client/scripts/OUTPOST_YARD_PROPS.as\`, read exactly as the main
+ * table is, with none of the Map Room 2 overrides: \`GLOBAL.SetBuildingProps\`
+ * applies those to the main table only (\`client/scripts/GLOBAL.as:724-747\`).
+ * Types the outpost table has no \`costs\` for, such as the Storage Silo, the
+ * Map Room and the Radio, have no row.
+ *
+ * Not every row is buildable: see {@link OUTPOST_TRAIT_ROWS} for \`blocked\`.
+ */
+export const OUTPOST_COST_ROWS: readonly CostRow[] = [
+${costRows(outposts, "OUTPOST_YARD_PROPS.as")}
+];
+
+/**
+ * \`[type, blocked, hp, fortify, capacity]\`, one per outpost row.
+ *
+ * - \`blocked\` is the props \`"block": true\`, which keeps a type out of the build
+ *   menu whatever its \`quantity\` says (\`client/scripts/BUILDINGSPOPUP.as:132\`).
+ *   The Catapult has \`quantity[1]\` 1 and is blocked.
+ * - \`hp[level - 1]\` is the maximum health, the outpost's own ladder. The
+ *   railgun's level 6 reads 13,200, below its level 5's 75,500; it looks like a
+ *   typo for 132,000, and is kept as Flash ran it.
+ * - \`fortify[k]\` is the step that takes fortification \`k\` to \`k + 1\`
+ *   (\`client/scripts/BFOUNDATION.as:2099-2102\`), present only on entries with
+ *   \`can_fortify\` (\`client/scripts/BASE.as:4015-4017\`).
+ * - \`capacity[level - 1]\` is the Flinger's payload or the monster room of
+ *   Housing or a Bunker; empty on the harvesters, whose buffer is in \`stats\`.
+ */
+export type OutpostTraitRow = readonly [
+  type: number,
+  blocked: boolean,
+  hp: readonly number[],
+  fortify: readonly CostStep[],
+  capacity: readonly number[],
+];
+
+export const OUTPOST_TRAIT_ROWS: readonly OutpostTraitRow[] = [
+${traitRows(outposts)}
+];
+`;
 
 const header = `/**
  * Building costs, one row per building type. GENERATED — do not edit by hand.
@@ -501,8 +703,44 @@ export const COSTS: Record<number, BuildingCost> = Object.fromEntries(
   ])
 );
 
+/** Every row of {@link OUTPOST_COST_ROWS}, keyed by type id. */
+export const OUTPOST_COSTS: Record<number, BuildingCost> = Object.fromEntries(
+  OUTPOST_COST_ROWS.map(([type, name, kind, group, costs, quantity, stats]) => [
+    type,
+    { name, kind, group, costs, quantity, stats },
+  ])
+);
+
+/** One outpost type's {@link OutpostTraitRow}, keyed. */
+export interface OutpostTraits {
+  /** Kept out of the build menu whatever \`quantity\` says. */
+  readonly blocked: boolean;
+  /** Maximum health, \`hp[level - 1]\`. */
+  readonly hp: readonly number[];
+  /** \`fortify[k]\` takes fortification \`k\` to \`k + 1\`; empty when it cannot fortify. */
+  readonly fortify: readonly CostStep[];
+  /** Flinger payload or monster room, \`capacity[level - 1]\`; empty for everything else. */
+  readonly capacity: readonly number[];
+}
+
+/** Every row of {@link OUTPOST_TRAIT_ROWS}, keyed by type id. */
+export const OUTPOST_TRAITS: Record<number, OutpostTraits> = Object.fromEntries(
+  OUTPOST_TRAIT_ROWS.map(([type, blocked, hp, fortify, capacity]) => [
+    type,
+    { blocked, hp, fortify, capacity },
+  ])
+);
+
+/**
+ * The cost table a yard of \`kind\` builds from: the main yard's, or the
+ * outpost's, which replaces it wholesale (\`client/scripts/GLOBAL.as:716-723\`).
+ */
+export const propsFor = (kind: YardKind): Record<number, BuildingCost> =>
+  kind === "outpost" ? OUTPOST_COSTS : COSTS;
+
 /** The costs for a building type, or undefined for a type this table has no row for. */
-export const costOf = (type: number): BuildingCost | undefined => COSTS[type];
+export const costOf = (type: number, kind: YardKind = "main"): BuildingCost | undefined =>
+  propsFor(kind)[type];
 
 /** The Storage Silo, the only building that raises a resource pool's cap. */
 export const STORAGE_SILO_TYPE = 6;
@@ -513,10 +751,11 @@ export const STORAGE_SILO_TYPE = 6;
  * The four harvester types are the resource ids: type 1 banks \`r1\`, type 2
  * \`r2\`, and so on (spec \`docs/specs/base-building.md:578-590\`). The Storage
  * Silo carries a \`capacity\` ladder but produces nothing, so it reads as
- * undefined here and through {@link siloCapacity} instead.
+ * undefined here and through {@link siloCapacity} instead. An outpost's
+ * harvesters have their own ladder in the outpost table.
  */
-export const productionOf = (type: number): BuildingStats | undefined => {
-  const stats = COSTS[type]?.stats;
+export const productionOf = (type: number, kind: YardKind = "main"): BuildingStats | undefined => {
+  const stats = propsFor(kind)[type]?.stats;
   return stats && stats.produce.length > 0 ? stats : undefined;
 };
 
@@ -533,9 +772,24 @@ export const siloCapacity = (level: number): number =>
 
 /**
  * The highest level a type can reach, which is the number of cost steps it has
- * (spec \`docs/specs/base-building.md:412-413\`). 0 for an unknown type.
+ * (spec \`docs/specs/base-building.md:412-413\`). 0 for an unknown type. The
+ * outpost table caps several types lower: a Flinger at 4, a Hatchery at 3,
+ * Housing and the laser, tesla, flak and railgun at 6.
  */
-export const maxLevel = (type: number): number => COSTS[type]?.costs.length ?? 0;
+export const maxLevel = (type: number, kind: YardKind = "main"): number =>
+  propsFor(kind)[type]?.costs.length ?? 0;
+
+/**
+ * The fortify ladder of a type in a yard of \`kind\`, empty when it has none.
+ *
+ * Only the outpost table's is carried: fortifying a main-yard building is a Map
+ * Room 3 feature this project does not offer (\`services/yard/catchUpBuildings.ts\`).
+ */
+export const fortifyStepsOf = (type: number, kind: YardKind): readonly CostStep[] =>
+  kind === "outpost" ? (OUTPOST_TRAITS[type]?.fortify ?? []) : [];
+
+/** The hall type of a yard: the Town Hall, or the core on an outpost. */
+export const hallTypeOf = (kind: YardKind): number => (kind === "outpost" ? OUTPOST_CORE_TYPE : 14);
 
 /**
  * The wall types.
@@ -550,7 +804,7 @@ export const WALL_TYPES: readonly number[] = [17, 18];
 export const TRAP_TYPES: readonly number[] = [24, 117];
 `;
 
-const body = `${header}${rows}\n];\n`;
+const body = `${header}${rows}\n];\n${OUTPOST_SECTION}`;
 
 writeFileSync(WEB_OUT, body, "utf8");
 writeFileSync(SERVER_OUT, `${body}${SERVER_FOOTER}`, "utf8");
@@ -572,4 +826,15 @@ console.log(
         `${one.stats ? "\tstats" : ""}${one.mr2 ? `\tMR2 ${one.mr2}` : ""}`,
     )
     .join("\n"),
+);
+console.log(
+  `outposts: ${outposts.length} types, ` +
+    `buildable ${outposts
+      .filter(inOutpostMenu)
+      .map((one) => `${one.id}x${one.quantity[1]}/L${one.steps.length}`)
+      .join(" ")}, ` +
+    `fortify on ${outposts
+      .filter((one) => one.fortify.length > 0)
+      .map((one) => one.id)
+      .join(", ")}`,
 );

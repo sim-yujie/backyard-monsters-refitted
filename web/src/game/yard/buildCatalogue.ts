@@ -1,6 +1,14 @@
 import type { BaseLoadResponse, ResourceCaps, Resources, UpgradeCost } from "@/api/types";
 import type { CostRequirement } from "./buildingCostData";
-import { instantCost, kindOf, requirementsMet, rowOf, townHallLevel } from "./buildingCosts";
+import {
+  HALL_TYPES,
+  instantCost,
+  kindOf,
+  requirementsMet,
+  rowOf,
+  townHallLevel,
+  type YardKind,
+} from "./buildingCosts";
 import { overCap } from "./storage";
 import { freeWorkers, sharperToolsMultiplier } from "./workers";
 import type { Yard, YardWorkers } from "./yardModel";
@@ -27,6 +35,10 @@ import type { Yard, YardWorkers } from "./yardModel";
  * `block`) less the Radio (D15), the Inferno types (D19) and the Map Room 3
  * structures, in the original's `order` within each tab. The server's
  * `BUILDABLE_TYPES` is the same set; a test on each side pins it.
+ *
+ * An outpost's menu is {@link OUTPOST_BUILD_CATALOGUE}: the same tabs and order,
+ * read against the outpost props table (`client/scripts/OUTPOST_YARD_PROPS.as`),
+ * where the core (112) is the hall. Pass the yard's kind in the context.
  */
 
 /**
@@ -76,15 +88,50 @@ export const BUILDABLE_TYPES: ReadonlySet<number> = new Set(
   BUILD_CATALOGUE.flatMap((category) => category.types),
 );
 
+/**
+ * The outpost build menu: every type the outpost props table offers, which is
+ * each entry in a menu tab, not `block`ed and allowed at core level 1
+ * (`quantity[1]`, `client/scripts/OUTPOST_YARD_PROPS.as`; research §1.2).
+ * The props `order` within each tab is the main table's, so the lists are the
+ * main menu's with everything an outpost cannot hold taken out: the silo,
+ * General Store, locker, academy, cage, chamber, catapult, Map Room, baiter and
+ * lab, and every decoration.
+ */
+export const OUTPOST_BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
+  { id: BuildCategory.RESOURCES, label: "Resources", types: [1, 2, 3, 4] },
+  { id: BuildCategory.BUILDINGS, label: "Buildings", types: [15, 13, 16, 5, 10, 9] },
+  {
+    id: BuildCategory.DEFENSIVE,
+    label: "Defensive",
+    types: [21, 20, 25, 23, 22, 115, 118, 24, 17, 117],
+  },
+  { id: BuildCategory.DECORATIONS, label: "Decorations", types: [] },
+];
+
+/** Every type an outpost's menu offers. */
+export const OUTPOST_BUILDABLE_TYPES: ReadonlySet<number> = new Set(
+  OUTPOST_BUILD_CATALOGUE.flatMap((category) => category.types),
+);
+
+/** The menu of a yard of `kind`. */
+export const catalogueFor = (kind: YardKind = "main"): readonly BuildCategoryDefinition[] =>
+  kind === "outpost" ? OUTPOST_BUILD_CATALOGUE : BUILD_CATALOGUE;
+
+/** Every type the menu of a yard of `kind` offers. */
+export const buildableTypesFor = (kind: YardKind = "main"): ReadonlySet<number> =>
+  kind === "outpost" ? OUTPOST_BUILDABLE_TYPES : BUILDABLE_TYPES;
+
 /** Walls and traps are written finished and hold no worker (D13). */
-export const buildsAtOnce = (type: number): boolean => {
-  const kind = kindOf(type);
-  return kind === "wall" || kind === "trap";
+export const buildsAtOnce = (type: number, kind: YardKind = "main"): boolean => {
+  const props = kindOf(type, kind);
+  return props === "wall" || props === "trap";
 };
 
 /** What a tile reads: the store, or anything shaped like its read side. */
 export interface BuildContext {
   readonly yard: Yard;
+  /** Which props table the yard builds from; a main yard when absent. */
+  readonly kind?: YardKind;
   readonly save: BaseLoadResponse;
   readonly resources: Resources;
   readonly credits: number;
@@ -194,16 +241,17 @@ export const nextHallAllowing = (
 };
 
 /** The category a type is listed under, or null for a type the menu does not offer. */
-export const categoryOf = (type: number): BuildCategory | null =>
-  BUILD_CATALOGUE.find((category) => category.types.includes(type))?.id ?? null;
+export const categoryOf = (type: number, kind: YardKind = "main"): BuildCategory | null =>
+  catalogueFor(kind).find((category) => category.types.includes(type))?.id ?? null;
 
 /**
  * The tile for one type, or null for a type the menu does not offer or the
  * cost table cannot price.
  */
 export const buildOffer = (type: number, context: BuildContext): BuildOffer | null => {
-  const category = categoryOf(type);
-  const row = rowOf(type);
+  const kind = context.kind ?? "main";
+  const category = categoryOf(type, kind);
+  const row = rowOf(type, kind);
   const step = row?.[4][0];
   if (!category || !row || !step) return null;
 
@@ -212,7 +260,7 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
   const hall = townHallLevel(yard);
   const owned = yard.buildings.reduce((count, one) => count + (one.type === type ? 1 : 0), 0);
   const allowed = hall > 0 ? allowedAt(quantity, hall) : 0;
-  const atOnce = buildsAtOnce(type);
+  const atOnce = buildsAtOnce(type, kind);
   const cost: UpgradeCost = { r1: step[0], r2: step[1], r3: step[2], r4: step[3] };
 
   // The gates Build and Instant share, in the server's order.
@@ -227,7 +275,7 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
     common = { reason: "limit", have: owned, allowed, next: nextHallAllowing(quantity, hall, allowed) };
   } else if (!requirementsMet(step[5], yard)) {
     const unmet = step[5].filter((entry) => !requirementsMet([entry], yard));
-    const townHall = unmet.find(([required]) => required === 14);
+    const townHall = unmet.find(([required]) => HALL_TYPES.includes(required));
     common = townHall
       ? { reason: "townHall", have: hall, need: townHall[2] }
       : { reason: "requirements", requirements: unmet };
@@ -255,12 +303,12 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
   const most = quantity.reduce((top, one) => Math.max(top, one), 0);
   // The hall the next one needs: the first that allows more than the yard
   // holds, or the build step's own hall requirement if that is higher.
-  const stepHall = step[5].find(([required]) => required === 14)?.[2] ?? 1;
+  const stepHall = step[5].find(([required]) => HALL_TYPES.includes(required))?.[2] ?? 1;
   const hallNeed = Math.max(stepHall, nextHallAllowing(quantity, 0, owned) ?? stepHall);
   const needs: BuildNeed[] = [
     { kind: "townHall", level: hallNeed, met: hall >= hallNeed },
     ...step[5]
-      .filter(([required]) => required !== 14)
+      .filter(([required]) => !HALL_TYPES.includes(required))
       .map(([required, count, level]): BuildNeed => ({
         kind: "building",
         type: required,
@@ -303,7 +351,7 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
 
 /** Every tile of a tab, in the tab's order. */
 export const buildOffers = (category: BuildCategory, context: BuildContext): BuildOffer[] =>
-  (BUILD_CATALOGUE.find((entry) => entry.id === category)?.types ?? [])
+  (catalogueFor(context.kind).find((entry) => entry.id === category)?.types ?? [])
     .map((type) => buildOffer(type, context))
     .filter((offer): offer is BuildOffer => offer !== null);
 

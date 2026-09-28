@@ -1,5 +1,17 @@
-import { BUILDING_COST_ROWS, type CostRequirement, type CostRow, type CostStep } from "./buildingCostData";
+import {
+  BUILDING_COST_ROWS,
+  type CostRequirement,
+  type CostRow,
+  type CostStep,
+  OUTPOST_CORE_TYPE,
+  OUTPOST_COST_ROWS,
+  OUTPOST_TRAIT_ROWS,
+  type OutpostTraitRow,
+  type YardKind,
+} from "./buildingCostData";
 import type { Yard } from "./yardModel";
+
+export { OUTPOST_CORE_TYPE, type YardKind };
 
 /**
  * Reading the building cost table.
@@ -39,6 +51,14 @@ import type { Yard } from "./yardModel";
  * spec `:809-836`). Every wall and trap step is 5 seconds, which is what lets
  * the planner's batch actions complete in one step.
  *
+ * ## Outposts
+ *
+ * An outpost builds from a table of its own, `OUTPOST_COST_ROWS`, which the
+ * Flash client swaps in wholesale (`client/scripts/GLOBAL.as:716-723`): its own
+ * prices, lower level caps, and caps read at index 1, because the core (112)
+ * stands in for the Town Hall and never leaves level 1. Every lookup that reads
+ * a row takes a {@link YardKind}, defaulting to the main yard.
+ *
  * Nothing here touches the DOM or Pixi: it is arithmetic over a table, which is
  * what lets the bottom bar re-summarise a 400-wall selection on every pointer
  * move without a frame budget worth worrying about.
@@ -72,12 +92,31 @@ export const TRAP_TYPES: readonly number[] = [24, 117];
 /** Town hall type id, `client/scripts/YARD_PROPS.as:1299`. */
 const TOWN_HALL_TYPE = 14;
 
-const ROWS: ReadonlyMap<number, CostRow> = new Map(
-  BUILDING_COST_ROWS.map((row) => [row[0], row]),
-);
+/** The hall types: the Town Hall, and the outpost core that stands in for it. */
+export const HALL_TYPES: readonly number[] = [TOWN_HALL_TYPE, OUTPOST_CORE_TYPE];
+
+/** The hall of a yard of `kind`: the Town Hall, or the core on an outpost. */
+export const hallTypeOf = (kind: YardKind): number =>
+  kind === "outpost" ? OUTPOST_CORE_TYPE : TOWN_HALL_TYPE;
+
+const byType = <T extends readonly [number, ...unknown[]]>(rows: readonly T[]): ReadonlyMap<number, T> =>
+  new Map(rows.map((row) => [row[0], row]));
+
+const ROWS = byType(BUILDING_COST_ROWS);
+const OUTPOST_ROWS = byType(OUTPOST_COST_ROWS);
+const OUTPOST_TRAITS = byType(OUTPOST_TRAIT_ROWS);
+
+/**
+ * The cost table a yard of `kind` builds from, keyed by type: the main yard's,
+ * or the outpost's, which replaces it wholesale
+ * (`client/scripts/GLOBAL.as:716-723`).
+ */
+export const propsFor = (kind: YardKind = "main"): ReadonlyMap<number, CostRow> =>
+  kind === "outpost" ? OUTPOST_ROWS : ROWS;
 
 /** The whole row for a type, or null for a type the props table has no costs for. */
-export const rowOf = (type: number): CostRow | null => ROWS.get(type) ?? null;
+export const rowOf = (type: number, kind: YardKind = "main"): CostRow | null =>
+  propsFor(kind).get(type) ?? null;
 
 /**
  * The step that leaves `level`, or null past the end of the ladder.
@@ -85,29 +124,33 @@ export const rowOf = (type: number): CostRow | null => ROWS.get(type) ?? null;
  * `costOf(17, 0)` is the cost of building a wall, `costOf(17, 4)` the cost of
  * taking one from level 4 to level 5, and `costOf(17, 5)` is null.
  */
-export const costOf = (type: number, level: number): CostStep | null => {
-  const costs = ROWS.get(type)?.[4];
+export const costOf = (type: number, level: number, kind: YardKind = "main"): CostStep | null => {
+  const costs = propsFor(kind).get(type)?.[4];
   if (!costs || level < 0) return null;
   return costs[level] ?? null;
 };
 
 /** The highest level a type can reach. 0 for a type with no row. */
-export const maxLevel = (type: number): number => ROWS.get(type)?.[4].length ?? 0;
+export const maxLevel = (type: number, kind: YardKind = "main"): number =>
+  propsFor(kind).get(type)?.[4].length ?? 0;
 
 /** The props `type` string: `wall`, `trap`, `tower`, `decoration`, … Empty for an unknown type. */
-export const kindOf = (type: number): string => ROWS.get(type)?.[2] ?? "";
+export const kindOf = (type: number, kind: YardKind = "main"): string =>
+  propsFor(kind).get(type)?.[2] ?? "";
 
 /** The display name from the game's string table. Empty for a type with no row. */
-export const nameOf = (type: number): string => ROWS.get(type)?.[1] ?? "";
+export const nameOf = (type: number, kind: YardKind = "main"): string =>
+  propsFor(kind).get(type)?.[1] ?? "";
 
 /**
  * How many of `type` a yard may hold at Town Hall level `hall`.
  *
  * 0 when the type has no cap ladder or the hall is past its end, which is the
- * honest answer for a type the build menu never offers at that level.
+ * honest answer for a type the build menu never offers at that level. On an
+ * outpost `hall` is the core's level, which is always 1.
  */
-export const quantityOf = (type: number, hall: number): number => {
-  const quantity = ROWS.get(type)?.[5];
+export const quantityOf = (type: number, hall: number, kind: YardKind = "main"): number => {
+  const quantity = propsFor(kind).get(type)?.[5];
   if (!quantity || hall < 0) return 0;
   return quantity[hall] ?? 0;
 };
@@ -119,8 +162,13 @@ export const quantityOf = (type: number, hall: number): number => {
  * rather than throwing, so a caller asking for more than a type has gets what
  * it can have.
  */
-export const upgradeSteps = (type: number, from: number, to: number): readonly CostStep[] => {
-  const costs = ROWS.get(type)?.[4];
+export const upgradeSteps = (
+  type: number,
+  from: number,
+  to: number,
+  kind: YardKind = "main",
+): readonly CostStep[] => {
+  const costs = propsFor(kind).get(type)?.[4];
   if (!costs) return [];
   const first = Math.max(0, from);
   const last = Math.min(to, costs.length);
@@ -131,6 +179,24 @@ export const upgradeSteps = (type: number, from: number, to: number): readonly C
   }
   return steps;
 };
+
+/**
+ * An outpost type's `[type, blocked, hp, fortify, capacity]`, or null for a
+ * type the outpost table has no row for. See `OUTPOST_TRAIT_ROWS`.
+ */
+export const outpostTraitsOf = (type: number): OutpostTraitRow | null =>
+  OUTPOST_TRAITS.get(type) ?? null;
+
+/**
+ * The fortify ladder of a type in a yard of `kind`: `fortify[k]` takes
+ * fortification `k` to `k + 1` (`client/scripts/BFOUNDATION.as:2099-2102`).
+ *
+ * Empty on a main yard, where fortifying is a Map Room 3 feature this project
+ * does not offer; on an outpost, the core and the cannon, sniper, laser, tesla,
+ * flak and railgun towers have one.
+ */
+export const fortifyStepsOf = (type: number, kind: YardKind): readonly CostStep[] =>
+  kind === "outpost" ? (OUTPOST_TRAITS.get(type)?.[3] ?? []) : [];
 
 /** The four resource totals and the total time of a run of steps. */
 export const sumCosts = (steps: Iterable<CostStep>): CostTotals => {
@@ -195,7 +261,10 @@ export const requirementsMet = (re: readonly CostRequirement[], yard: Yard): boo
  * The yard's Town Hall level, or 0 when it has none.
  *
  * `readYard` picks the hall out once (`yardModel.ts:104-105`); a yard without
- * one cannot upgrade anything at all (`BASE.as:3863-3866`).
+ * one cannot upgrade anything at all (`BASE.as:3863-3866`). On an outpost the
+ * hall is the core (112), which registers itself as the Town Hall
+ * (`client/scripts/BUILDING112.as:66-74`) and is always level 1, so outpost
+ * caps read `quantity[1]`.
  */
 export const townHallLevel = (yard: Yard): number =>
-  yard.townHall?.type === TOWN_HALL_TYPE ? yard.townHall.level : 0;
+  yard.townHall && HALL_TYPES.includes(yard.townHall.type) ? yard.townHall.level : 0;

@@ -1,15 +1,21 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse, BuildingData, ResourceCaps, Resources } from "@/api/types";
-import { rowOf } from "./buildingCosts";
+import { outpostTraitsOf, quantityOf, rowOf } from "./buildingCosts";
+import { OUTPOST_COST_ROWS } from "./buildingCostData";
 import {
   allowedAt,
   BUILD_CATALOGUE,
   BUILDABLE_TYPES,
+  buildableTypesFor,
   BuildCategory,
   buildOffer,
   buildOffers,
   buildsAtOnce,
+  catalogueFor,
+  categoryOf,
   nextHallAllowing,
+  OUTPOST_BUILD_CATALOGUE,
+  OUTPOST_BUILDABLE_TYPES,
   pageCount,
   pageOf,
   sortOffers,
@@ -319,5 +325,72 @@ describe("pages", () => {
     expect(pageOf(items, 1)).toEqual([10, 11, 12]);
     expect(pageOf(items, 7)).toEqual([10, 11, 12]);
     expect(pageOf([], 0)).toEqual([]);
+  });
+});
+
+describe("the outpost catalogue", () => {
+  const CORE = building(1, 112, { l: 1 });
+  const outpost = (fixture: Fixture): BuildContext => ({ ...contextOf(fixture), kind: "outpost" });
+
+  it("lists every type the outpost table lets a menu offer, and nothing else", () => {
+    // In a menu tab, not `block`ed, and allowed at core level 1
+    // (`client/scripts/OUTPOST_YARD_PROPS.as`, research §1.2).
+    const offered = OUTPOST_COST_ROWS.filter(([type, , , group]) => {
+      const blocked = outpostTraitsOf(type)?.[1] ?? true;
+      return group >= 1 && group <= 4 && !blocked && quantityOf(type, 1, "outpost") > 0;
+    }).map(([type]) => type);
+    expect([...OUTPOST_BUILDABLE_TYPES].sort((a, b) => a - b)).toEqual(offered);
+    expect(offered).toEqual([
+      1, 2, 3, 4, 5, 9, 10, 13, 15, 16, 17, 20, 21, 22, 23, 24, 25, 115, 117, 118,
+    ]);
+  });
+
+  it("keeps the main menu's tabs and order", () => {
+    for (const [index, tab] of OUTPOST_BUILD_CATALOGUE.entries()) {
+      const main = BUILD_CATALOGUE[index];
+      expect(tab.id).toBe(main?.id);
+      expect(tab.types).toEqual(main?.types.filter((type) => OUTPOST_BUILDABLE_TYPES.has(type)));
+    }
+  });
+
+  it("is picked by yard kind, the main yard by default", () => {
+    expect(catalogueFor()).toBe(BUILD_CATALOGUE);
+    expect(catalogueFor("outpost")).toBe(OUTPOST_BUILD_CATALOGUE);
+    expect(buildableTypesFor("main")).toBe(BUILDABLE_TYPES);
+    expect(buildableTypesFor("outpost")).toBe(OUTPOST_BUILDABLE_TYPES);
+    expect(categoryOf(6)).toBe(BuildCategory.RESOURCES);
+    expect(categoryOf(6, "outpost")).toBeNull();
+    expect(categoryOf(51, "outpost")).toBeNull();
+  });
+
+  it("prices from the outpost table and caps at quantity[1] with the core as hall", () => {
+    const offer = buildOffer(5, outpost({ buildings: [CORE] }));
+    // Flinger, `OUTPOST_YARD_PROPS.as:605-611`.
+    expect(offer?.cost).toEqual({ r1: 10000, r2: 10000, r3: 5000, r4: 0 });
+    expect(offer?.allowed).toBe(1);
+    expect(offer?.gate).toBeNull();
+    const cannons = [2, 3, 4, 5].map((id) => building(id, CANNON, { l: 1 }));
+    const full = buildOffer(CANNON, outpost({ buildings: [CORE, ...cannons] }));
+    expect(full?.gate).toEqual({ reason: "limit", have: 4, allowed: 4, next: null });
+    expect(full?.status).toBe("maxed");
+  });
+
+  it("names a missing Housing, not the hall, as what a Hatchery needs", () => {
+    // `re: [[112, 1, 1], [15, 1, 1]]`, `OUTPOST_YARD_PROPS.as:885`.
+    const offer = buildOffer(13, outpost({ buildings: [CORE] }));
+    expect(offer?.gate).toEqual({ reason: "requirements", requirements: [[15, 1, 1]] });
+    expect(offer?.needs[0]).toEqual({ kind: "townHall", level: 1, met: true });
+  });
+
+  it("offers nothing without the core", () => {
+    const offer = buildOffer(CANNON, outpost({ buildings: [] }));
+    expect(offer?.gate).toEqual({ reason: "townHall", have: 0, need: 1 });
+  });
+
+  it("lists the outpost tabs through buildOffers", () => {
+    const types = buildOffers(BuildCategory.BUILDINGS, outpost({ buildings: [CORE] })).map(
+      (offer) => offer.type,
+    );
+    expect(types).toEqual([15, 13, 16, 5, 10, 9]);
   });
 });

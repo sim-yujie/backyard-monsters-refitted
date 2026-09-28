@@ -1,5 +1,6 @@
 import type { BaseLoadResponse, BuildingData, Resources } from "@/api/types";
 import { ArtState, buildingName, maxHealth, resolveArt } from "./buildingArt";
+import { OUTPOST_CORE_TYPE } from "./buildingCostData";
 import {
   depthKey,
   footprintBox,
@@ -139,7 +140,11 @@ export interface Yard {
   readonly credits: number;
   readonly baseName: string;
   readonly baseLevel: number;
-  /** The town hall, if this yard has one. The camera opens on it. */
+  /**
+   * The town hall, if this yard has one. The camera opens on it. On an outpost
+   * it is the core (112), which stands in for the hall
+   * (`client/scripts/BUILDING112.as:66-74`).
+   */
   readonly townHall: YardBuilding | null;
   /**
    * Workers, counted off the store purchases and the running countdowns. The
@@ -363,7 +368,10 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
     credits: response.credits ?? 0,
     baseName: response.basename ?? "Your yard",
     baseLevel: typeof response.level === "number" ? response.level : 0,
-    townHall: buildings.find((one) => one.type === TOWN_HALL_TYPE) ?? null,
+    townHall:
+      buildings.find((one) => one.type === TOWN_HALL_TYPE) ??
+      buildings.find((one) => one.type === OUTPOST_CORE_TYPE) ??
+      null,
     workers: {
       total: workerCount(response.storedata),
       busy: busyWorkers({ buildings }),

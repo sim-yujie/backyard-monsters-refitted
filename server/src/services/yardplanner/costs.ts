@@ -1,7 +1,9 @@
 import {
-  COSTS,
   type CostRequirement,
   type CostStep,
+  hallTypeOf,
+  propsFor,
+  type YardKind,
 } from "../../game-data/buildingCosts.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 
@@ -44,7 +46,17 @@ import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js"
  * seconds, which is what lets the batch routes write a finished building in one
  * step instead of starting a job. Any other building's step still starts a
  * job, however short; the free finish is the player's `SP1` (#137).
+ *
+ * ## Outposts
+ *
+ * An outpost builds from its own table, which the Flash client swaps in
+ * wholesale (`client/scripts/GLOBAL.as:716-723`): {@link propsFor} picks it by
+ * {@link YardKind}. Its hall is the core (112), always level 1, so outpost caps
+ * read `quantity[1]`. The rules that read a row take the kind, defaulting to the
+ * main yard.
  */
+
+export { propsFor, type YardKind };
 
 /** A countdown at or below this many seconds is free to finish. */
 export const FREE_FINISH_SECONDS = 300;
@@ -107,12 +119,18 @@ const buildingsOf = (buildingdata: BuildingDataMap | null | undefined): Building
  * A yard with no town hall cannot upgrade anything at all
  * (`client/scripts/BASE.as:3863-3866`). When a save somehow holds more than one
  * hall the highest wins, which is the most generous reading and matches the
- * `re` check counting every instance.
+ * `re` check counting every instance. On an outpost the hall is the core
+ * (112), which registers itself as the Town Hall
+ * (`client/scripts/BUILDING112.as:66-74`).
  */
-export const townHallLevel = (buildingdata: BuildingDataMap | null | undefined): number => {
+export const townHallLevel = (
+  buildingdata: BuildingDataMap | null | undefined,
+  kind: YardKind = "main"
+): number => {
+  const hall = hallTypeOf(kind);
   let best = 0;
   for (const building of buildingsOf(buildingdata)) {
-    if (Number(building.t) !== TOWN_HALL_TYPE) continue;
+    if (Number(building.t) !== hall) continue;
     best = Math.max(best, levelOf(building));
   }
   return best;
@@ -161,8 +179,13 @@ export const requirementsMet = (
  * rather than throwing, so a caller asking for more than a type has gets what
  * it can have and the target check reports the real problem.
  */
-export const upgradeSteps = (type: number, from: number, to: number): readonly CostStep[] => {
-  const costs = COSTS[type]?.costs;
+export const upgradeSteps = (
+  type: number,
+  from: number,
+  to: number,
+  kind: YardKind = "main"
+): readonly CostStep[] => {
+  const costs = propsFor(kind)[type]?.costs;
   if (!costs) return [];
   const first = Math.max(0, from);
   const last = Math.min(to, costs.length);
