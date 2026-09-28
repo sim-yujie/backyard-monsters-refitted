@@ -704,7 +704,7 @@ hands it to the attacker; once emptied the harvester is marked looted and stops 
 **Storage buildings** (Town Hall 14, Silo 6, Outpost core 112) drop a percentage of the whole pool
 when destroyed (`client/scripts/BSTORAGE.as:94-150`):
 
-| Building | Percentage of pool | Per-resource cap | Cap when hitting an outpost |
+| Building | Percentage of pool | Per-resource cap | Cap on a Map Room 2 wild monster camp |
 | --- | --- | --- | --- |
 | Town Hall (14) | 10% | 10,000,000 | 2,000,000 |
 | Storage Silo (6) | 4% | 4,000,000 | 500,000 |
@@ -714,8 +714,11 @@ when destroyed (`client/scripts/BSTORAGE.as:94-150`):
 Goo (`r4`) is additionally halved outside Map Room 3 (`_LOOT_GOO_LIMITER = 0.5`,
 `client/scripts/BSTORAGE.as:24`, `:124-126`). A storage building that is merely *damaged* rather
 than destroyed leaks a random one of the four resources per hit, at 90% efficiency for the attacker
-(50% when the target is an outpost, and one fifth of that in a wild-monster attack)
-(`client/scripts/BSTORAGE.as:30-92`).
+(50% on a Map Room 2 wild monster camp, and one fifth of that in any wild-monster attack, Map Room 1
+tribes included) (`client/scripts/BSTORAGE.as:30-92`). Flash's code names the lower caps and the
+50% "outpost" (`baseType == EnumYardType.OUTPOST`), but it compares the Map Room 2 cell's `_base`,
+whose 1 is a wild monster camp; a player's outpost (3) gets the full caps and 90%
+(`docs/specs/combat.md`, "Which yard is the outpost in `BSTORAGE`").
 
 Server side, the defender's reported loss is applied by `defenderLootHandler`, which **only ever
 subtracts**, caps each resource at 10,000,000 per save, and clamps to zero

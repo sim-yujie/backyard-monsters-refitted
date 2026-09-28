@@ -35,6 +35,8 @@ import {
   MR2_FLINGER_LEVEL,
   specialistMultiplier,
   storageFallLoot,
+  storageScalar,
+  isWildMonsterAttack,
   TICKS_PER_SECOND,
   ticks,
   towerRearmTicks,
@@ -305,6 +307,24 @@ describe("loot", () => {
   });
 });
 
+describe("storageScalar and isWildMonsterAttack (`BSTORAGE.Loot`)", () => {
+  // `BSTORAGE.as:77` compares the Map Room 2 cell's `_base` with
+  // `EnumYardType.OUTPOST` (1), and a cell's 1 is a wild monster camp.
+  it("halves a Map Room 2 camp's draw and takes nine tenths everywhere else", () => {
+    expect(storageScalar("wild")).toBe(0.5);
+    expect(storageScalar("outpost")).toBe(0.9);
+    expect(storageScalar("main")).toBe(0.9);
+    expect(storageScalar("tribe")).toBe(0.9);
+  });
+
+  it("gives a fifth in a wild monster attack, on either map room", () => {
+    expect(isWildMonsterAttack("wild")).toBe(true);
+    expect(isWildMonsterAttack("tribe")).toBe(true);
+    expect(isWildMonsterAttack("outpost")).toBe(false);
+    expect(isWildMonsterAttack("main")).toBe(false);
+  });
+});
+
 describe("storageFallLoot (`BSTORAGE.Destroyed`, issue #167)", () => {
   it("takes a tenth for the Town Hall, a twentieth for an outpost, a twenty-fifth for a silo", () => {
     expect(storageFallLoot(14, 1, 13_000_000, false)).toBe(1_300_000);
@@ -317,7 +337,7 @@ describe("storageFallLoot (`BSTORAGE.Destroyed`, issue #167)", () => {
     expect(storageFallLoot(6, 2, 49, false)).toBe(1);
   });
 
-  it("caps each share, lower for a silo or a Town Hall on a Map Room 2 outpost", () => {
+  it("caps each share, lower for a silo or a Town Hall on a Map Room 2 wild monster camp", () => {
     expect(storageFallLoot(14, 1, 500_000_000, false)).toBe(10_000_000);
     expect(storageFallLoot(14, 1, 500_000_000, true)).toBe(2_000_000);
     expect(storageFallLoot(6, 1, 500_000_000, false)).toBe(4_000_000);

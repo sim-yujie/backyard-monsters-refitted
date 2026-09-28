@@ -368,6 +368,39 @@ describe("loot", () => {
     expect(state.defenderLoss.r1).toBe(lost);
     expect(state.loot.r1).toBe(got);
   });
+
+  /**
+   * `BSTORAGE.as:77-85`: half on a Map Room 2 wild monster camp (Flash's
+   * `baseType == EnumYardType.OUTPOST` reads the cell's `_base`, whose 1 is a
+   * camp), nine tenths anywhere else, a player's outpost included, then a
+   * fifth in any wild monster attack, Map Room 1's tribes too.
+   */
+  it.each([
+    ["main", 0.9, 1],
+    ["outpost", 0.9, 1],
+    ["wild", 0.5, 5],
+    ["tribe", 0.9, 5],
+  ] as const)("scales a storage draw on a %s yard by %s, then divides by %s", (kind, scalar, divisor) => {
+    const yard = buildEngineYard({
+      buildingdata: { "1": { id: 1, t: 6, l: 8, X: 0, Y: 0 } },
+      buildinghealthdata: {},
+      resources: { r1: 100000, r2: 0, r3: 0, r4: 0 },
+      kind,
+    });
+    const battle = createBattle(yard, { seed: 11, playerLevel: 20 });
+    battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C4: 6 } });
+    const hits = hitsOn(battle, 1200);
+    expect(yard.buildings[0]!.hp).toBeGreaterThan(0);
+    expect(hits.length).toBeGreaterThan(0);
+    const state = battle.state();
+    expect(state.loot.r1).toBeGreaterThan(0);
+    const got = hits.reduce(
+      (sum, hit) => sum + Math.trunc(Math.trunc(Math.trunc(hit * 0.5) * scalar) / divisor),
+      0,
+    );
+    expect(state.defenderLoss.r1).toBe(hits.reduce((sum, hit) => sum + Math.trunc(hit * 0.5), 0));
+    expect(state.loot.r1).toBe(got);
+  });
 });
 
 /**
@@ -378,7 +411,7 @@ describe("a storage building's fall", () => {
   const fell = (
     type: number,
     options: {
-      kind?: "main" | "outpost" | "wild";
+      kind?: "main" | "outpost" | "wild" | "tribe";
       playerLevel?: number;
       resources?: { r1: number; r2: number; r3: number; r4: number };
     } = {},
@@ -415,14 +448,26 @@ describe("a storage building's fall", () => {
   });
 
   it("is not cut to a fifth on a wild monster camp, nor to nine tenths anywhere", () => {
-    expect(fell(14, { kind: "wild" }).loot.r1).toBe(10_000);
-    expect(fell(14, { kind: "outpost" }).loot.r1).toBe(10_000);
+    for (const kind of ["main", "outpost", "wild", "tribe"] as const) {
+      expect(fell(14, { kind }).loot.r1, kind).toBe(10_000);
+    }
   });
 
-  it("caps a silo on a Map Room 2 outpost at 500,000", () => {
+  /**
+   * `BSTORAGE.as:111`, `:117`: the lower caps test the cell's `_base` against
+   * `EnumYardType.OUTPOST`, which is 1, a Map Room 2 wild monster camp. A
+   * player's outpost (3) and a Map Room 1 tribe keep the full caps.
+   */
+  it("caps a silo at 500,000 and a Town Hall at 2,000,000 on a Map Room 2 wild monster camp only", () => {
     const resources = { r1: 100_000_000, r2: 0, r3: 0, r4: 0 };
     expect(fell(6, { resources }).loot.r1).toBe(4_000_000);
-    expect(fell(6, { kind: "outpost", resources }).loot.r1).toBe(500_000);
+    expect(fell(6, { kind: "outpost", resources }).loot.r1).toBe(4_000_000);
+    expect(fell(6, { kind: "tribe", resources }).loot.r1).toBe(4_000_000);
+    expect(fell(6, { kind: "wild", resources }).loot.r1).toBe(500_000);
+    expect(fell(14, { resources }).loot.r1).toBe(10_000_000);
+    expect(fell(14, { kind: "outpost", resources }).loot.r1).toBe(10_000_000);
+    expect(fell(14, { kind: "tribe", resources }).loot.r1).toBe(10_000_000);
+    expect(fell(14, { kind: "wild", resources }).loot.r1).toBe(2_000_000);
   });
 
   it("carries the low-level bonus, which the defender does not pay", () => {

@@ -17,6 +17,7 @@ import type {
   TowerLevelStats,
   TrapStats,
 } from "./combatStatsData.js";
+import type { CombatTargetKind } from "./types.js";
 
 /**
  * Reading the combat stats table, and the constants that live in code.
@@ -472,13 +473,29 @@ export const fortifiedDamage = (damage: number, fortification = 0, armor = 0): n
  * What a storage building hands over per point of damage.
  *
  * `BSTORAGE.Loot` scales the draw by where the yard is: half on a Map Room 2
- * outpost, nine tenths on a main yard, and a fifth of that again on a wild
- * monster camp (`client/scripts/BSTORAGE.as:77-85`). Every one of them shrinks
- * the gain, which is what makes the loot bound of §2.4 an upper bound.
+ * wild monster camp, nine tenths anywhere else, and a fifth of that again in a
+ * wild monster attack, Map Room 1's tribes included
+ * (`client/scripts/BSTORAGE.as:77-85`). Every one of them shrinks the gain,
+ * which is what makes the loot bound of §2.4 an upper bound.
+ *
+ * Flash's test for the half reads `GLOBAL._currentCell.baseType ==
+ * EnumYardType.OUTPOST`, but `baseType` is the Map Room 2 cell's `_base`
+ * (`MapRoomCell.as:220-222`), whose 1 is a wild monster camp (`MapRoomCell.as:
+ * 529`, `PopupAttackA.as:123-124`); a player's outpost is 3. `OUTPOST` is also
+ * 1, so the half and the lower fall caps below land on the camps, never on a
+ * player's outpost. The caps' own names, `_LOOT_MAX_WM_*`, say the same.
  */
-export const STORAGE_SCALAR_OUTPOST = 0.5;
+export const STORAGE_SCALAR_WILD_CAMP = 0.5;
 export const STORAGE_SCALAR_MAIN = 0.9;
 export const WILD_MONSTER_LOOT_DIVISOR = 5;
+
+/** `GLOBAL.mode == "wmattack"`: a Map Room 2 camp or a Map Room 1 tribe. */
+export const isWildMonsterAttack = (kind: CombatTargetKind): boolean =>
+  kind === "wild" || kind === "tribe";
+
+/** The scalar `BSTORAGE.Loot` puts on a storage hit's draw on a yard of `kind`. */
+export const storageScalar = (kind: CombatTargetKind): number =>
+  kind === "wild" ? STORAGE_SCALAR_WILD_CAMP : STORAGE_SCALAR_MAIN;
 
 /**
  * The bonus a low-level attacker's loot carries.
@@ -563,10 +580,12 @@ export const isLootable = (type: number): boolean =>
  * the yard's whole pool, each resource in turn, on top of what the hits drew
  * on the way down: a tenth for the Town Hall, a twentieth for an outpost's
  * core, a twenty-fifth for a silo. Each share has a ceiling, lower for a silo
- * or a Town Hall on a Map Room 2 outpost, and goo is halved outside Map Room 3.
- * None of the per-hit scalars apply: no nine tenths, no fifth for a wild
- * monster camp, no creep's looting multiplier. Only the low-level bonus does,
- * because the share goes through `ATTACK.Loot`.
+ * or a Town Hall on a Map Room 2 wild monster camp (see
+ * {@link STORAGE_SCALAR_WILD_CAMP} for why the camp and not a player's
+ * outpost), and goo is halved outside Map Room 3. None of the per-hit scalars
+ * apply: no half or nine tenths, no fifth for a wild monster attack, no
+ * creep's looting multiplier. Only the low-level bonus does, because the
+ * share goes through `ATTACK.Loot`.
  */
 export const STORAGE_FALL_SHARE_TOWN_HALL = 0.1;
 export const STORAGE_FALL_SHARE_OUTPOST = 0.05;
@@ -574,10 +593,10 @@ export const STORAGE_FALL_SHARE_SILO = 0.04;
 export const STORAGE_FALL_MAX_TOWN_HALL = 10_000_000;
 export const STORAGE_FALL_MAX_OUTPOST = 10_000_000;
 export const STORAGE_FALL_MAX_SILO = 4_000_000;
-/** The Town Hall's ceiling on a Map Room 2 outpost (`_LOOT_MAX_WM_TH`). */
-export const STORAGE_FALL_MAX_TOWN_HALL_ON_OUTPOST = 2_000_000;
-/** A silo's ceiling on a Map Room 2 outpost (`_LOOT_MAX_WM_SILO`). */
-export const STORAGE_FALL_MAX_SILO_ON_OUTPOST = 500_000;
+/** The Town Hall's ceiling on a Map Room 2 wild monster camp (`_LOOT_MAX_WM_TH`). */
+export const STORAGE_FALL_MAX_TOWN_HALL_ON_WILD_CAMP = 2_000_000;
+/** A silo's ceiling on a Map Room 2 wild monster camp (`_LOOT_MAX_WM_SILO`). */
+export const STORAGE_FALL_MAX_SILO_ON_WILD_CAMP = 500_000;
 /** `_LOOT_GOO_LIMITER`: goo's share is halved, rounded up. */
 export const STORAGE_FALL_GOO_LIMITER = 0.5;
 
@@ -589,7 +608,7 @@ export const storageFallLoot = (
   type: number,
   resource: number,
   held: number,
-  onOutpost: boolean,
+  onWildCamp: boolean,
 ): number => {
   const share =
     type === 14
@@ -600,11 +619,11 @@ export const storageFallLoot = (
   let amount = Math.trunc(Math.max(0, held) * share);
   if (type === 6) {
     amount = Math.min(amount, STORAGE_FALL_MAX_SILO);
-    if (onOutpost) amount = Math.min(amount, STORAGE_FALL_MAX_SILO_ON_OUTPOST);
+    if (onWildCamp) amount = Math.min(amount, STORAGE_FALL_MAX_SILO_ON_WILD_CAMP);
   }
   if (type === 14) {
     amount = Math.min(amount, STORAGE_FALL_MAX_TOWN_HALL);
-    if (onOutpost) amount = Math.min(amount, STORAGE_FALL_MAX_TOWN_HALL_ON_OUTPOST);
+    if (onWildCamp) amount = Math.min(amount, STORAGE_FALL_MAX_TOWN_HALL_ON_WILD_CAMP);
   }
   if (type === 112) amount = Math.min(amount, STORAGE_FALL_MAX_OUTPOST);
   if (resource === 4) amount = Math.ceil(amount * STORAGE_FALL_GOO_LIMITER);

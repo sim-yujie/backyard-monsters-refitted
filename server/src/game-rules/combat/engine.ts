@@ -10,8 +10,6 @@ import {
   MR2_FLINGER_LEVEL,
   RETARGET_TICKS,
   RETREAT_GRACE_SECONDS,
-  STORAGE_SCALAR_MAIN,
-  STORAGE_SCALAR_OUTPOST,
   STORAGE_TYPES,
   TARGET_GROUP,
   TOWER_ACQUIRE_TICKS,
@@ -27,7 +25,9 @@ import {
   fortifiedDamage,
   lootingMultiplier,
   isLootable,
+  isWildMonsterAttack,
   storageFallLoot,
+  storageScalar,
   withLowLevelBonus,
   monsterAttackDelay,
   monsterMovement,
@@ -521,8 +521,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   );
   const retreatAt = countdown + ticks(RETREAT_GRACE_SECONDS);
   const playerLevel = options.playerLevel ?? 20;
-  const storageScalar =
-    yard.kind === "outpost" ? STORAGE_SCALAR_OUTPOST : STORAGE_SCALAR_MAIN;
+  const storageHitScalar = storageScalar(yard.kind);
+  const wildMonsterAttack = isWildMonsterAttack(yard.kind);
 
   for (const building of yard.buildings) {
     if (building.hp <= 0) continue;
@@ -622,8 +622,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (taken <= 0) return;
       yard.resources[key] -= taken;
       defenderLoss[key] += taken;
-      let credited = Math.trunc(taken * storageScalar);
-      if (yard.kind === "wild") credited = Math.trunc(credited / WILD_MONSTER_LOOT_DIVISOR);
+      let credited = Math.trunc(taken * storageHitScalar);
+      if (wildMonsterAttack) credited = Math.trunc(credited / WILD_MONSTER_LOOT_DIVISOR);
       creditLoot(picked, credited);
       return;
     }
@@ -644,10 +644,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * taken from what the pool holds by then ({@link storageFallLoot}).
    */
   const storageFall = (building: EngineBuilding): void => {
-    const onOutpost = yard.kind === "outpost";
+    const onWildCamp = yard.kind === "wild";
     for (let resource = 1; resource <= 4; resource += 1) {
       const key = `r${resource}` as keyof ResourceAmounts;
-      const taken = storageFallLoot(building.type, resource, yard.resources[key], onOutpost);
+      const taken = storageFallLoot(building.type, resource, yard.resources[key], onWildCamp);
       if (taken <= 0) continue;
       yard.resources[key] -= taken;
       defenderLoss[key] += taken;

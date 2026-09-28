@@ -48,7 +48,7 @@
     "damage": 100,
     "destroyed": 1,
     "attackloot": {
-      "r1": 1999,
+      "r1": 3221,
       "r2": 0,
       "r3": 0,
       "r4": 0
@@ -73,41 +73,41 @@
       },
       {
         "tick": 1600,
-        "digest": "c525fbd29cdeb9dc"
+        "digest": "d14f6142840d36cc"
       },
       {
         "tick": 2400,
-        "digest": "c7d9c0a16f06ba73"
+        "digest": "a94482a52b7bdbc7"
       },
       {
         "tick": 3200,
-        "digest": "ab32f3a2e0720cec"
+        "digest": "0f55921222b278dc"
       },
       {
         "tick": 4000,
-        "digest": "77723d1094dc4ce2"
+        "digest": "f7ec72d0436f92e2"
       },
       {
         "tick": 4800,
-        "digest": "71f2b77157cdcc83"
+        "digest": "380a56f516fa6697"
       },
       {
         "tick": 5600,
-        "digest": "2df9f5c690419898"
+        "digest": "8a6904468fb732d8"
       },
       {
         "tick": 6400,
-        "digest": "5b9e9fb22bbb303c"
+        "digest": "5da81ae235c495ec"
       },
       {
         "tick": 7200,
-        "digest": "b2e88d8be01b53a5"
+        "digest": "026b983f41c5e579"
       },
       {
         "tick": 8000,
-        "digest": "b0305ea0085899b2"
+        "digest": "c40c44209d4eaff2"
       }
     ],
-    "digest": "c9dceb10cb191c62"
+    "digest": "4a5720d079ac6262"
   }
 }

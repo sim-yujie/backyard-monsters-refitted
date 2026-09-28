@@ -91,10 +91,15 @@ export type CombatBuildingDataMap = Readonly<Record<string, CombatBuildingData>>
 export type BuildingHealthMap = Readonly<Record<string, number>>;
 
 /**
- * What kind of yard is being attacked, which decides whether `destroyed` exists.
+ * What kind of yard is being attacked: a player's main yard, a player's Map
+ * Room 2 outpost (cell `b` 3), a Map Room 2 wild monster camp (cell `b` 1) or
+ * a Map Room 1 tribe.
  *
- * `BASE.SaveB` writes `destroyed` only for a wild monster camp or an outpost
- * (`client/scripts/BASE.as:3297-3308`); a main yard never carries one.
+ * It decides whether `destroyed` exists: `BASE.SaveB` writes it only for a
+ * wild monster camp or an outpost (`client/scripts/BASE.as:3297-3308`); a main
+ * yard never carries one. It also decides storage loot: a camp's hits draw
+ * half and its falls are capped lower, and a camp's or a tribe's hits give a
+ * fifth (`stats.ts`, `storageScalar`, `storageFallLoot`).
  */
 export type CombatTargetKind = "main" | "outpost" | "wild" | "tribe";
 

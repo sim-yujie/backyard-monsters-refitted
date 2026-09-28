@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import { ATTACK_COUNTDOWN_SECONDS, DECLARE_WAR_COUNTDOWN_SECONDS, TICKS_PER_SECOND } from "@/game/combat/rules";
-import { AttackSession, hasDeclareWar, mintSeed } from "./AttackSession";
+import { AttackSession, combatKind, hasDeclareWar, mintSeed } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 
 /**
@@ -481,6 +481,17 @@ describe("helpers", () => {
     expect(hasDeclareWar(undefined)).toBe(false);
     expect(hasDeclareWar([{ id: "ap_armament" }])).toBe(false);
     expect(hasDeclareWar([{ id: "ap_armament" }, { id: "ap_declarewar", endtime: 9 }])).toBe(true);
+  });
+
+  // `BSTORAGE.as:77-85`, `:111`, `:117`: a camp's half and lower fall caps
+  // are Map Room 2's; a Map Room 1 tribe gets only the wild monster fifth.
+  it("names a Map Room 1 tribe `tribe` and leaves every other kind as it is", () => {
+    expect(combatKind({ kind: "wild", mapversion: 1 })).toBe("tribe");
+    expect(combatKind({ kind: "wild" })).toBe("wild");
+    expect(combatKind({ kind: "wild", mapversion: 2 })).toBe("wild");
+    expect(combatKind({ kind: "main", mapversion: 1 })).toBe("main");
+    expect(combatKind({ kind: "outpost" })).toBe("outpost");
+    expect(combatKind({ kind: "main" })).toBe("main");
   });
 
   it("mints a 32-bit seed", () => {

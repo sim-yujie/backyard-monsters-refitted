@@ -233,8 +233,14 @@ export const hasDeclareWar = (powerups: readonly unknown[] | undefined): boolean
 export const servedLevel = (raw: unknown): number | undefined =>
   typeof raw === "number" && Number.isSafeInteger(raw) && raw >= 1 ? raw : undefined;
 
-/** The target kind as the rules module spells it; the two agree by name. */
-const combatKind = (kind: AttackTarget["kind"]): CombatTargetKind => kind;
+/**
+ * The target kind as the rules module spells it. The two agree by name, but a
+ * Map Room 1 tribe, which the map hands over as `wild`, is the rules' `tribe`:
+ * Flash's lower loot for a wild monster camp is Map Room 2's alone
+ * (`BSTORAGE.as:77`, `:111`, `:117`).
+ */
+export const combatKind = (target: Pick<AttackTarget, "kind" | "mapversion">): CombatTargetKind =>
+  target.kind === "wild" && target.mapversion === 1 ? "tribe" : target.kind;
 
 /** Housed monsters minus what has been flung, only the positive counts. */
 const subtractRoster = (housed: Roster, flung: Roster): Roster => {
@@ -318,7 +324,7 @@ export class AttackSession {
       ? DECLARE_WAR_COUNTDOWN_SECONDS
       : ATTACK_COUNTDOWN_SECONDS;
 
-    const kind = combatKind(this.target.kind);
+    const kind = combatKind(this.target);
     const buildingdata = response.buildingdata ?? {};
     const yard = buildEngineYard({
       buildingdata,

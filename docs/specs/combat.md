@@ -1021,9 +1021,10 @@ resources** instead:
    `ceil` changes nothing: the damage times the multiplier is truncated.
 4. Subtract from `BASE._resources` and record the negative delta.
 5. Scale what the attacker actually receives:
-   - × 0.5 when the target is a Map Room 2 outpost (`:77-79`);
-   - × 0.9 otherwise (`:80-82`);
-   - then ÷ 5 on top of that for a wild monster camp (`:83-85`).
+   - × 0.5 when the target is a Map Room 2 wild monster camp (`:77-79`, see below);
+   - × 0.9 otherwise, a player's outpost included (`:80-82`);
+   - then ÷ 5 on top of that in any wild monster attack (`GLOBAL.mode == "wmattack"`), a Map
+     Room 2 camp or a Map Room 1 tribe (`:83-85`).
 6. `ATTACK.Loot(type, scaledAmount, x, y, 9, this)`. Each scaling lands on an `int`, so each
    truncates.
 
@@ -1036,13 +1037,37 @@ outpost core (112), then for each resource 1 to 4 in turn:
 
 1. `share = int(pool * pct)`, with `pct` 0.10 for the Town Hall, 0.05 for an outpost core and 0.04
    for a silo, read from the pool as it stands after the resources before it.
-2. Cap it: a silo at 4,000,000 (500,000 on a Map Room 2 outpost), a Town Hall at 10,000,000
-   (2,000,000 on a Map Room 2 outpost), an outpost core at 10,000,000.
+2. Cap it: a silo at 4,000,000 (500,000 on a Map Room 2 wild monster camp), a Town Hall at
+   10,000,000 (2,000,000 on a Map Room 2 wild monster camp), an outpost core at 10,000,000.
 3. Goo is halved, rounded up, outside Map Room 3 (`_LOOT_GOO_LIMITER`).
 4. Subtract it from the pool and call `ATTACK.Loot(resource, share, ...)`.
 
-None of the per-hit scalars apply: no 0.9 or 0.5, no ÷ 5 for a wild monster camp, no looting
-multiplier. Only `ATTACK.Loot`'s low-level bonus does. The hit that fells the building loots
+**Which yard is "the outpost" in `BSTORAGE`.** The × 0.5 and the two lower caps all test
+`MapRoomManager.instance.isInMapRoom2 && GLOBAL._currentCell.baseType == EnumYardType.OUTPOST`
+(`BSTORAGE.as:77`, `:111`, `:117`). `EnumYardType.OUTPOST` is 1
+(`com/monsters/enums/EnumYardType.as`), but `baseType` on a Map Room 2 cell is its `_base`
+(`maproom_advanced/MapRoomCell.as:220-222`, set from the server's `b`, `:295`), where 1 is a wild
+monster camp, 2 a player's home cell and 3 a player's outpost (`MapRoomCell.as:529-567`;
+`PopupAttackA.as:121-128` opens a `_base` 1 cell in `wmattack` and maps a 3 to
+`EnumYardType.OUTPOST` only for `LoadBase`). `PopupAttackA`, `PopupInfoEnemy.View` and the
+takeover all set `GLOBAL._currentCell` to the map cell itself, so the test is true on a wild
+monster camp and false on a player's outpost. The caps' own names, `_LOOT_MAX_WM_TH` and
+`_LOOT_MAX_WM_SILO`, say the same. In Map Room 1 and Map Room 3 the test is false. So:
+
+| Target | Hit: scalar | Fall: Town Hall | Fall: silo | Fall: outpost core | Goo |
+| --- | --- | --- | --- | --- | --- |
+| Main yard (any map room) | × 0.9 | 10%, ≤ 10,000,000 | 4%, ≤ 4,000,000 | — | halved (not MR3) |
+| Map Room 2 player outpost | × 0.9 | — | 4%, ≤ 4,000,000 | 5%, ≤ 10,000,000 | halved |
+| Map Room 2 wild monster camp | × 0.5, ÷ 5 | 10%, ≤ 2,000,000 | 4%, ≤ 500,000 | 5%, ≤ 10,000,000 | halved |
+| Map Room 1 tribe | × 0.9, ÷ 5 | 10%, ≤ 10,000,000 | 4%, ≤ 4,000,000 | — | halved |
+
+The engine's `CombatTargetKind` names these `main`, `outpost`, `wild` and `tribe`; the attack
+screen passes a Map Room 1 tribe, which the map hands over as `wild`, as `tribe`. Issue #167 first
+put the half and the lower caps on the player's outpost, reading `OUTPOST` at its word; the fix
+moved them to the camp.
+
+None of the per-hit scalars apply to a fall: no 0.9 or 0.5, no ÷ 5 for a wild monster attack, no
+looting multiplier. Only `ATTACK.Loot`'s low-level bonus does. The hit that fells the building loots
 nothing of its own: `modifyHealth` calls `Destroyed` first and loots only `if (!_destroyed)`
 (`BFOUNDATION.as:513-535`). A building felled by a resource bomb gives up nothing at all, neither
 the fall nor a harvester's store: the bomb names no attacker, so `Destroyed(false)`
