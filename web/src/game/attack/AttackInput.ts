@@ -360,12 +360,22 @@ export interface DropVerdict {
   readonly touching: readonly DropObstacle[];
 }
 
-/** `DROPZONE.Drop`'s switch, one case per drop target. */
+/**
+ * Whether any of `creeps` stands within `reach` yard units of `point`,
+ * measured on the ground: the putty bomb's circle, the ring it shows.
+ */
+export const creepWithin = (point: Point, reach: number, creeps: readonly Point[]): boolean =>
+  creeps.some((creep) => Math.hypot(creep.x - point.x, creep.y - point.y) <= reach);
+
+/**
+ * `DROPZONE.Drop`'s switch, one case per drop target. `creeps` is where the
+ * attacker's live monsters stand, in yard units, for a putty bomb.
+ */
 export const judgeDrop = (
   zone: DropZone,
   point: Point,
   obstacles: readonly DropObstacle[],
-  creepsAlive: number,
+  creeps: readonly Point[],
 ): DropVerdict => {
   switch (zone.target) {
     case "ground": {
@@ -395,11 +405,16 @@ export const judgeDrop = (
         : { legal: false, reason: "Jars have to land on a tower.", touching };
     }
     case "monsters":
-      // `CREEPS.CreepOverlap` wants a creep under the zone; the engine keeps
-      // its creeps to itself, so the field only has to be non-empty.
-      return creepsAlive > 0
+      // `CREEPS.CreepOverlap` wants a creep under the zone (issue #147). The
+      // zone here is the putty's own reach, `radius / 2` on the ground
+      // (`puttyReach`), the ring the player aims with, rather than Flash's
+      // wider clip, so a bomb is taken only where it would land on someone.
+      if (creeps.length === 0) {
+        return { legal: false, reason: "A putty bomb lands on your own monsters; none are on the field.", touching: [] };
+      }
+      return creepWithin(point, zone.size / 2, creeps)
         ? { legal: true, reason: "", touching: [] }
-        : { legal: false, reason: "A putty bomb lands on your own monsters; none are on the field.", touching: [] };
+        : { legal: false, reason: "A putty bomb has to land on your own monsters. Aim at them.", touching: [] };
   }
 };
 
@@ -584,7 +599,16 @@ export class AttackInput {
       this.obstacles = obstaclesOf(this.options.yard, destroyed);
       this.obstaclesFor = destroyed.length;
     }
-    return judgeDrop(this.zone(), point, this.obstacles, battle?.creepsAlive ?? 0);
+    const zone = this.zone();
+    return judgeDrop(zone, point, this.obstacles, zone.target === "monsters" ? this.liveCreeps() : []);
+  }
+
+  /** Where the attacker's live monsters stand, for a putty bomb's check. */
+  private liveCreeps(): Point[] {
+    const creeps = this.options.session.battle()?.creeps() ?? [];
+    return creeps
+      .filter((creep) => !creep.friendly && creep.hp > 0)
+      .map((creep) => ({ x: creep.ix, y: creep.iy }));
   }
 
   private highlightFor(

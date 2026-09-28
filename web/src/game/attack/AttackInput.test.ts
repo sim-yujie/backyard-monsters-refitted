@@ -10,6 +10,7 @@ import {
   cellOf,
   createBattle,
   dropRadius,
+  puttyReach,
   scatterRadius,
   screenPointOf,
   TICKS_PER_SECOND,
@@ -128,8 +129,8 @@ describe("overlap rule", () => {
     expect(overlappingBuildings({ x: 0, y: 0 }, zone.size, obstacles).map((o) => o.id)).toEqual([1]);
     expect(overlappingBuildings(OPEN, zone.size, obstacles)).toEqual([]);
 
-    expect(judgeDrop(zone, { x: 0, y: 0 }, obstacles, 0).legal).toBe(false);
-    expect(judgeDrop(zone, OPEN, obstacles, 0).legal).toBe(true);
+    expect(judgeDrop(zone, { x: 0, y: 0 }, obstacles, []).legal).toBe(false);
+    expect(judgeDrop(zone, OPEN, obstacles, []).legal).toBe(true);
   });
 
   it("tests in isometric pixels with the 0.8 squash, so the edge is where Flash put it", () => {
@@ -170,15 +171,15 @@ describe("overlap rule", () => {
     const twig = BOMBS.find((bomb) => bomb.id === "tw0")!;
     const bombZone = dropZoneOf({ kind: "bomb", bomb: twig }, 100);
     expect(bombZone).toMatchObject({ size: 200, target: "buildings" });
-    expect(judgeDrop(bombZone, { x: 0, y: 0 }, obstacles, 0).legal).toBe(true);
-    expect(judgeDrop(bombZone, OPEN, obstacles, 0).legal).toBe(false);
+    expect(judgeDrop(bombZone, { x: 0, y: 0 }, obstacles, []).legal).toBe(true);
+    expect(judgeDrop(bombZone, OPEN, obstacles, []).legal).toBe(false);
 
     const jars = siegeWeapon("jars")!;
     const jarsZone = dropZoneOf({ kind: "siege", weapon: jars, level: 1 }, 100);
     expect(jarsZone).toMatchObject({ size: 200, target: "tower" });
-    expect(judgeDrop(jarsZone, { x: 0, y: 0 }, obstacles, 0).legal).toBe(true);
+    expect(judgeDrop(jarsZone, { x: 0, y: 0 }, obstacles, []).legal).toBe(true);
     // Over the Town Hall, which is not a tower.
-    expect(judgeDrop(jarsZone, { x: 300, y: 300 }, obstacles, 0).legal).toBe(false);
+    expect(judgeDrop(jarsZone, { x: 300, y: 300 }, obstacles, []).legal).toBe(false);
 
     const decoy = siegeWeapon("decoy")!;
     const decoyZone = dropZoneOf({ kind: "siege", weapon: decoy, level: 1 }, 100);
@@ -187,7 +188,7 @@ describe("overlap rule", () => {
     const near = { x: 120, y: 120 };
     expect(overlappingBuildings(near, 250, obstacles).length).toBeGreaterThan(0);
     expect(overlappingBuildings(near, DECOY_CLEARANCE, obstacles)).toEqual([]);
-    expect(judgeDrop(decoyZone, near, obstacles, 0).legal).toBe(true);
+    expect(judgeDrop(decoyZone, near, obstacles, []).legal).toBe(true);
   });
 
   it("draws a damage bomb's ring as the blast the engine applies (#75)", () => {
@@ -243,12 +244,24 @@ describe("overlap rule", () => {
     expect((edge.x / ring.rx) ** 2 + (edge.y / ring.ry) ** 2).toBeCloseTo(1, 6);
   });
 
-  it("lets a putty bomb go only while something is on the field", () => {
+  it("lets a putty bomb go only onto a live monster within its reach (#147)", () => {
     const putty = BOMBS.find((bomb) => bomb.id === "pu0")!;
     const zone = dropZoneOf({ kind: "bomb", bomb: putty }, 100);
+    const reach = puttyReach(putty);
     expect(zone.target).toBe("monsters");
-    expect(judgeDrop(zone, OPEN, [], 0).legal).toBe(false);
-    expect(judgeDrop(zone, OPEN, [], 3).legal).toBe(true);
+    // Nothing on the field.
+    const empty = judgeDrop(zone, OPEN, [], []);
+    expect(empty.legal).toBe(false);
+    expect(empty.reason).toMatch(/none are on the field/);
+    // A monster at the ring's edge counts; one just past it does not.
+    const edge = { x: OPEN.x + reach, y: OPEN.y };
+    expect(judgeDrop(zone, OPEN, [], [edge]).legal).toBe(true);
+    const far = { x: OPEN.x + reach + 1, y: OPEN.y };
+    const miss = judgeDrop(zone, OPEN, [], [far]);
+    expect(miss.legal).toBe(false);
+    expect(miss.reason).toMatch(/Aim at them/);
+    // Any one inside is enough.
+    expect(judgeDrop(zone, OPEN, [], [far, { x: OPEN.x, y: OPEN.y - reach / 2 }]).legal).toBe(true);
   });
 });
 
@@ -307,6 +320,25 @@ describe("AttackInput taps", () => {
     // The bucket is untouched by a bomb (§F4).
     expect(bucket.count("C1")).toBe(4);
     expect(session.state().creepsFlung).toBe(0);
+  });
+
+  it("takes a putty bomb only where it lands on a live monster (#147)", () => {
+    const { session, bucket, input, refusals } = rig();
+    bucket.setCount("C1", 2);
+    expect(input.tapAt(OPEN, null)).toBe(true);
+    session.battle()!.runTo(session.battle()!.tick + 1);
+    const putty = BOMBS.find((bomb) => bomb.id === "pu0")!;
+    input.setTool({ kind: "bomb", bomb: putty });
+    // Far from the flung monsters: refused, and the bomb stays armed.
+    expect(input.tapAt({ x: OPEN.x + 600, y: OPEN.y - 600 }, null)).toBe(true);
+    expect(refusals.at(-1)).toMatch(/Aim at them/);
+    expect(input.pendingTool()).not.toBeNull();
+    expect(session.flingLog().events.filter((event) => event.kind === "bomb")).toHaveLength(0);
+    // On them: taken.
+    const creep = session.battle()!.creeps().find((one) => !one.friendly)!;
+    expect(input.tapAt({ x: creep.ix, y: creep.iy }, null)).toBe(true);
+    expect(session.flingLog().events.filter((event) => event.kind === "bomb")).toHaveLength(1);
+    expect(input.pendingTool()).toBeNull();
   });
 
   it("logs a siege drop with the weapon's id and keeps the roster whole", () => {
