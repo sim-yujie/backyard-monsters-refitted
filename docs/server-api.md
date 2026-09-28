@@ -948,6 +948,9 @@ is `{ kind, id, t, at, detail }`, `at` being the unix second the job ended:
   detail: { refund: { r1, r2, r3, r4 } /* credited, after the cap */ } }
 { kind: "mapRoomAdded", id: number /* the new building's id */, t: 11, at: number /* now */,
   detail: { level: 2, x: number, y: number /* its footprint origin */ } }
+{ kind: "starterBase", id: number /* the Town Hall's id */, t: 14, at: number /* now */,
+  detail: { buildings: { id, t, x, y, level }[] /* Town Hall first */,
+            resources: { r1, r2, r3, r4 } /* credited, after the cap */ } }
 { kind: "repair", id: number /* building id */, t: number /* type */, at: number /* full health */,
   detail: { from: number /* health at the start of the window */, max: number } }
 ```

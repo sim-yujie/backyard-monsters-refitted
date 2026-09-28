@@ -13,10 +13,10 @@ import { catchUpTraining, type CatchUpTrainingSave, type TrainJob } from "./catc
 import {
   migrateYard,
   type MapRoomAddedJob,
-  type MigrationSave,
   type RadioRemovedJob,
 } from "./mapRoom.js";
 import type { MushroomYardSave } from "./mushrooms.js";
+import { addStarterBase, type StarterBaseJob, type StarterBaseSave } from "./starterBase.js";
 
 /**
  * `catchUpYard(save, now)`: advances a main yard from its `savetime` to `now`
@@ -33,6 +33,7 @@ import type { MushroomYardSave } from "./mushrooms.js";
  *
  * | Step | Module | Phase |
  * | --- | --- | --- |
+ * | 0 | `starterBase.ts` `addStarterBase` — an empty main yard gets the starter set once (#154) | 1 |
  * | 0 | `mapRoom.ts` `migrateYard` — Map Room cap, `mr2upgraded`, Radio removal, a missing Map Room added (§2.5) | 3 |
  * | 1 | `catchUpBuildings.ts` — countdowns, points, `flinger`/`catapult`, store buffs | 1 |
  * | 2 | `catchUpLocker.ts` — unlocks and the Locker Overdrive (runs first, see there) | 2 |
@@ -68,7 +69,8 @@ export type CompletedJob =
   | RadioRemovedJob
   | MapRoomAddedJob
   | TrainJob
-  | RepairJob;
+  | RepairJob
+  | StarterBaseJob;
 
 /** The slice of a save the catch-up reads and writes. */
 export interface CatchUpSave
@@ -76,7 +78,7 @@ export interface CatchUpSave
     CatchUpLockerSave,
     CatchUpMonstersSave,
     CatchUpHarvestersSave,
-    MigrationSave,
+    StarterBaseSave,
     MushroomYardSave,
     CatchUpTrainingSave {
   savetime?: number;
@@ -88,16 +90,20 @@ export interface CatchUpSave
  * A `savetime` of 0 or less means the yard has never been saved, so there is
  * no elapsed time to replay: the web client reads such a yard's countdowns from
  * the current time too (`web/src/game/yard/yardModel.ts:244-250`), and
- * replaying from 1970 would hand every countdown the full 30 days.
+ * replaying from 1970 would hand every countdown the full 30 days. A yard
+ * that was empty until the starter set went in now has nothing to replay
+ * either: its new Twig Snapper must not fill for the time it did not stand.
  *
  * @param save - The yard, mutated in place; `savetime` ends at `now`.
  * @param now - Unix seconds to advance to.
  */
 export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
+  const starter = addStarterBase(save, now);
   const stored = Number(save.savetime);
-  const from = Number.isFinite(stored) && stored > 0 ? stored : now;
+  const from = Number.isFinite(stored) && stored > 0 && starter.length === 0 ? stored : now;
 
   const completed: CompletedJob[] = [
+    ...starter,
     ...migrateYard(save, now),
     ...catchUpLocker(save, from, now),
     ...catchUpRepairs(save, from, now),

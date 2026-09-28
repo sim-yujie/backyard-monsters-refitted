@@ -17,7 +17,9 @@ import { RESOURCE_KEYS, RESOURCE_NAMES } from "@/ui/resourceIcon";
  *
  * What the owner's own `/base/load` finished while they were away comes as
  * one toast instead, every kind in it: "While you were away: 2 upgrades
- * finished: Cannon Tower 5, Silo 7" (issue #135).
+ * finished: Cannon Tower 5, Silo 7" (issue #135). The starter base an empty
+ * yard was given is told first, as a sentence of its own: "Your yard is
+ * ready: …" (issue #154).
  */
 
 /** How long a job toast stays up on its own. */
@@ -51,6 +53,11 @@ export interface JobNoticeGroup {
    * + " was added to your yard", rather than "heading: items".
    */
   readonly tail?: string;
+  /**
+   * Set for a kind told as a sentence of its own, ahead of the away toast's
+   * "While you were away" rather than under it: the starter base.
+   */
+  readonly standalone?: boolean;
 }
 
 /** The store buffs a Phase 1 yard can hold, by code (`server/src/game-data/store/storeItems.ts`). */
@@ -101,6 +108,46 @@ const RADIO_REMOVED = "radioRemoved";
  * next load says "A Map Room was added to your yard" in its away toast.
  */
 const MAP_ROOM_ADDED = "mapRoomAdded";
+
+/**
+ * An empty main yard is given the original's starter set once by the
+ * catch-up (`server/src/services/yard/starterBase.ts`, issue #154); the next
+ * load says "Your yard is ready: a Town Hall and three starter buildings were
+ * placed. You also got 1,600 Twigs and 1,600 Pebbles".
+ */
+const STARTER_BASE = "starterBase";
+
+const COUNT_WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+
+/** "1,600 Twigs and 1,600 Pebbles", or "" when nothing landed. */
+const amountsLabel = (amounts: Record<string, unknown>): string => {
+  const parts = RESOURCE_KEYS.flatMap((key) => {
+    const amount = Number(amounts[key]);
+    return amount > 0 ? [`${formatAmount(amount)} ${RESOURCE_NAMES[key]}`] : [];
+  });
+  if (parts.length <= 1) return parts.join("");
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+};
+
+/** The starter base's sentence around its Town Hall button. */
+const starterGroup = (job: CompletedJob): JobNoticeGroup => {
+  const detail = job.detail as { buildings?: unknown; resources?: unknown };
+  const placedCount = Array.isArray(detail.buildings) ? detail.buildings.length : 1;
+  const others = Math.max(0, placedCount - 1);
+  const count = COUNT_WORDS[others] ?? String(others);
+  const placed =
+    others === 0
+      ? " was placed"
+      : ` and ${count} starter building${others === 1 ? "" : "s"} were placed`;
+  const amounts = amountsLabel((detail.resources ?? {}) as Record<string, unknown>);
+  return {
+    kind: STARTER_BASE,
+    heading: "Your yard is ready: a ",
+    items: [{ label: "Town Hall", buildingId: typeof job.id === "number" ? job.id : null }],
+    tail: amounts === "" ? placed : `${placed}. You also got ${amounts}`,
+    standalone: true,
+  };
+};
 
 /** "2,000 Twigs, 2,000 Pebbles, 2,000 Putty refunded", or "nothing refunded" (the storage was full). */
 const refundLabel = (detail: Record<string, unknown>): string => {
@@ -153,17 +200,22 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
  * kind first appears, the jobs in each in the order they finished.
  */
 export const groupCompletedJobs = (completed: readonly CompletedJob[]): JobNoticeGroup[] => {
+  const starters = completed.filter((job) => job.kind === STARTER_BASE).map(starterGroup);
   const byKind = new Map<string, JobNoticeItem[]>();
   for (const job of completed) {
+    if (job.kind === STARTER_BASE) continue;
     const items = byKind.get(job.kind) ?? [];
     items.push(labelOf(job));
     byKind.set(job.kind, items);
   }
-  return [...byKind].map(([kind, items]) =>
-    kind === MAP_ROOM_ADDED
-      ? { kind, heading: "A ", items, tail: " was added to your yard" }
-      : { kind, heading: headingOf(kind, items.length), items },
-  );
+  return [
+    ...starters,
+    ...[...byKind].map(([kind, items]) =>
+      kind === MAP_ROOM_ADDED
+        ? { kind, heading: "A ", items, tail: " was added to your yard" }
+        : { kind, heading: headingOf(kind, items.length), items },
+    ),
+  ];
 };
 
 /** The toast's plain text, as a screen reader and the tests read it. */
@@ -180,10 +232,16 @@ const awayHeading = (group: JobNoticeGroup): JobNoticeGroup => ({
 
 /**
  * The away toast's plain text: "While you were away: 2 upgrades finished:
- * Cannon Tower 5, Silo 7; ran out: Sharper Tools". Empty for no groups.
+ * Cannon Tower 5, Silo 7; ran out: Sharper Tools", after any standalone
+ * sentence ("Your yard is ready: …. While you were away: …"). Empty for no
+ * groups.
  */
-export const awayNoticeText = (groups: readonly JobNoticeGroup[]): string =>
-  groups.length === 0 ? "" : AWAY_PREFIX + groups.map((group) => noticeText(awayHeading(group))).join("; ");
+export const awayNoticeText = (groups: readonly JobNoticeGroup[]): string => {
+  const standalone = groups.filter((group) => group.standalone).map(noticeText);
+  const away = groups.filter((group) => !group.standalone);
+  const rest = away.map((group) => noticeText(awayHeading(group))).join("; ");
+  return [...standalone, ...(away.length === 0 ? [] : [AWAY_PREFIX + rest])].join(". ");
+};
 
 export class JobNotices {
   private readonly notices: Notices;
@@ -218,11 +276,19 @@ export class JobNotices {
     if (groups.length === 0) return;
     const line = document.createElement("span");
     line.className = "job-notice job-notice--away";
-    line.append(AWAY_PREFIX);
-    groups.forEach((group, index) => {
-      if (index > 0) line.append("; ");
-      this.appendGroup(line, awayHeading(group));
+    const standalone = groups.filter((group) => group.standalone);
+    const away = groups.filter((group) => !group.standalone);
+    standalone.forEach((group, index) => {
+      if (index > 0) line.append(". ");
+      this.appendGroup(line, group);
     });
+    if (away.length > 0) {
+      line.append(standalone.length > 0 ? `. ${AWAY_PREFIX}` : AWAY_PREFIX);
+      away.forEach((group, index) => {
+        if (index > 0) line.append("; ");
+        this.appendGroup(line, awayHeading(group));
+      });
+    }
     this.count += 1;
     this.notices.show(`job:away:${this.count}`, line, {
       level: "info",

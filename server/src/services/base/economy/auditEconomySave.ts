@@ -307,9 +307,10 @@ const inventoryTypes = (researchdata: unknown): Set<number> => {
 /**
  * The tutorial bootstrap (§2.2, item 5).
  *
- * A brand new account's stored yard is empty and its pool is zero
- * (`game-data/getDefaultBaseData.ts:35-44`), and the first save it ever sends
- * places four buildings and credits 1,600 twigs and pebbles that nothing in the
+ * An account made before issue #154 stored an empty yard and a zero pool (a
+ * new one now starts with the starter base, `services/yard/starterBase.ts`,
+ * and the catch-up gives it to an old empty yard), and the first save it sent
+ * placed four buildings and credited 1,600 twigs and pebbles that nothing in the
  * yard produced. The shape is checked here; the grant it earns is handed to the
  * budget, which is what decides whether the delta fits.
  */

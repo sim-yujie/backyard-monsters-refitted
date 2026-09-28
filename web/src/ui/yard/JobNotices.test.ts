@@ -18,6 +18,26 @@ const CANNON = 20;
 const SNIPER = 21;
 const SILO = 6;
 
+/** The starter base the catch-up put in an empty main yard (issue #154). */
+const starter = (resources = { r1: 1600, r2: 1600, r3: 0, r4: 0 }): CompletedJob => ({
+  kind: "starterBase",
+  id: 1,
+  t: 14,
+  at: 100,
+  detail: {
+    buildings: [
+      { id: 1, t: 14, x: -70, y: 0, level: 1 },
+      { id: 2, t: 1, x: 60, y: 0, level: 1 },
+      { id: 3, t: 2, x: 60, y: 70, level: 1 },
+      { id: 4, t: 12, x: 60, y: -70, level: 1 },
+    ],
+    resources,
+  },
+});
+
+const READY = "Your yard is ready: a Town Hall and three starter buildings were placed";
+const READY_WITH_GRANT = `${READY}. You also got 1,600 Twigs and 1,600 Pebbles`;
+
 const upgrade = (id: number, t: number, level: number, at = 100): CompletedJob => ({
   kind: "upgrade",
   id,
@@ -63,6 +83,31 @@ describe("groupCompletedJobs", () => {
     expect(awayNoticeText(groupCompletedJobs([upgrade(1, CANNON, 5), added]))).toBe(
       `While you were away: upgrade finished: ${typeName(CANNON)} 5; a Map Room was added to your yard`,
     );
+  });
+
+  it("says the starter base as a sentence of its own, ahead of the away lead-in (#154)", () => {
+    const added: CompletedJob = {
+      kind: "mapRoomAdded",
+      id: 5,
+      t: 11,
+      at: 100,
+      detail: { level: 2, x: 0, y: 150 },
+    };
+    const groups = groupCompletedJobs([starter(), added]);
+    expect(groups.map((group) => group.kind)).toEqual(["starterBase", "mapRoomAdded"]);
+    expect(noticeText(groups[0]!)).toBe(READY_WITH_GRANT);
+    expect(groups[0]!.items[0]!.buildingId).toBe(1);
+    expect(awayNoticeText(groupCompletedJobs([starter()]))).toBe(READY_WITH_GRANT);
+    expect(awayNoticeText(groups)).toBe(
+      `${READY_WITH_GRANT}. While you were away: a Map Room was added to your yard`,
+    );
+  });
+
+  it("leaves the resources out of the starter sentence when the storage took none", () => {
+    const [group] = groupCompletedJobs([starter({ r1: 0, r2: 0, r3: 0, r4: 0 })]);
+    expect(noticeText(group!)).toBe(READY);
+    const [partial] = groupCompletedJobs([starter({ r1: 500, r2: 0, r3: 0, r4: 0 })]);
+    expect(noticeText(partial!)).toBe(`${READY}. You also got 500 Twigs`);
   });
 
   it("groups the upgrades that land together into one line, in the order they finished", () => {
@@ -207,6 +252,19 @@ describe("JobNotices", () => {
     expect(text.textContent).toBe("While you were away: a Map Room was added to your yard");
     text.querySelector<HTMLButtonElement>(".job-notice__building")!.click();
     expect(select).toHaveBeenCalledWith(601);
+  });
+
+  it("puts the starter base first in the away toast, its Town Hall a button that selects it", () => {
+    jobs.showAway([upgrade(7, CANNON, 2), starter()]);
+    expect(toasts()).toHaveLength(1);
+    const text = toasts()[0]!.querySelector(".notice__text")!;
+    expect(text.textContent).toBe(
+      `${READY_WITH_GRANT}. While you were away: upgrade finished: ${typeName(CANNON)} 2`,
+    );
+    const buttons = [...text.querySelectorAll<HTMLButtonElement>(".job-notice__building")];
+    expect(buttons.map((one) => one.textContent)).toEqual(["Town Hall", `${typeName(CANNON)} 2`]);
+    buttons[0]!.click();
+    expect(select).toHaveBeenCalledWith(1);
   });
 
   it("keeps the away toast up longer than a job toast, then clears it", () => {
