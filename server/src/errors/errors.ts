@@ -135,15 +135,6 @@ export const mailboxErr = () =>
     isClientFriendly: true,
   });
 
-export const relocateOutpostErr = () =>
-  new ClientSafeError({
-    message:
-      "You cannot relocate while owning outposts in this world.",
-    status: Status.FORBIDDEN,
-    data: {},
-    isClientFriendly: true,
-  });
-
 export const baseUnderAttackErr = () =>
   new ClientSafeError({
     message: "This base is currently under attack by another player. Please try again later.",
@@ -679,12 +670,15 @@ export const mr1TribeRefusedErr = (reason: MR1TribeRefusal, detail: object = {})
   });
 
 const RELOCATE_REFUSAL_MESSAGES: Record<RelocateRefusal, string> = {
+  inAlliance: "you cannot move to a new world while you are in an alliance.",
+  hasOutposts: "you cannot move to a new world while you own outposts.",
+  yardStanding: "you can only move to a new world once your main yard has been destroyed.",
   noHomeCell: "your main yard is not on this map.",
   notFound: "that outpost could not be found.",
   wrongWorld: "that outpost is not in your world.",
   notAnOutpost: "you can only move your main yard onto one of your outposts.",
   notYours: "that outpost is not yours.",
-  underAttack: "that outpost is under attack. Try again when the attack is over.",
+  underAttack: "that yard is under attack. Try again when the attack is over.",
   notEnoughShiny: "you do not have enough Shiny.",
   notEnoughResources: "you do not have enough resources.",
 };

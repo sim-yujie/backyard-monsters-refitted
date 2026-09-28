@@ -1,6 +1,9 @@
 import { BaseType } from "../../../enums/Base.js";
 import { MapRoomCell, MapRoomVersion } from "../../../enums/MapRoom.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
+import type { BuildingDataMap, BuildingHealthData } from "../../../types/BuildingData.js";
+import { isTrap, isWall } from "../../../game-rules/combat/damagePercent.js";
+import { toCombatYard, type BuildingHealthMap } from "../../../game-rules/combat/types.js";
 import { RESOURCE_KEYS } from "../../base/updateResources.js";
 
 /**
@@ -36,6 +39,9 @@ export const RELOCATE_COOLDOWN = 24 * 60 * 60;
 
 /** Why a relocation was refused. */
 export type RelocateRefusal =
+  | "inAlliance"
+  | "hasOutposts"
+  | "yardStanding"
   | "noHomeCell"
   | "notFound"
   | "wrongWorld"
@@ -149,4 +155,81 @@ export const chargeRelocation = (purse: RelocatePurse, payment: RelocatePayment)
   for (const key of RESOURCE_KEYS) resources[key] = Number(resources[key]) - RELOCATE_RESOURCE_COST;
 
   return { ok: true, credits: purse.credits, resources };
+};
+
+/* ── type=random: the "empire overrun" move ─────────────────────────────── */
+
+/**
+ * The main yard must be below this share of its health for the free random
+ * move (`BASE.as:2340-2341`, `hp < hpMax * 0.1`).
+ */
+export const RANDOM_RELOCATE_HEALTH_SHARE = 0.1;
+
+/**
+ * The main yard's health and its full health, summed the way Flash sums them
+ * for the lost-main-base popup: every building but traps and walls
+ * (`BASE.as:2333-2338`). Health is read the way the combat rules read it
+ * (`toCombatYard`): the health map first, then the building's `hp`, else full.
+ *
+ * @param save - The main yard's two building maps.
+ * @returns `{ hp, max }`.
+ */
+export const mainYardHealth = (save: {
+  buildingdata?: BuildingDataMap | null;
+  buildinghealthdata?: BuildingHealthData | null;
+}): { hp: number; max: number } => {
+  const yard = toCombatYard({
+    buildingdata: save.buildingdata as Parameters<typeof toCombatYard>[0]["buildingdata"],
+    buildinghealthdata: save.buildinghealthdata as BuildingHealthMap | null | undefined,
+  });
+
+  let hp = 0;
+  let max = 0;
+
+  for (const building of yard.buildings) {
+    if (isTrap(building.type) || isWall(building.type)) continue;
+    hp += building.hp;
+    max += building.maxHp;
+  }
+
+  return { hp, max };
+};
+
+export interface RandomRelocateInput {
+  /** The caller's `alliance_id`. */
+  allianceId: number | null | undefined;
+  /** How many outposts the caller holds. */
+  outpostCount: number;
+  /** {@link mainYardHealth} of the caller's main yard, caught up to now. */
+  health: { hp: number; max: number };
+  /** Whether an attack on the main yard is running right now. */
+  underAttack: boolean;
+}
+
+/**
+ * Whether the caller may take the free random move (`type=random`), which
+ * Flash offers only through PopupLostMainBase, on this gate
+ * (`BASE.as:2340-2341`): no alliance, no outposts (the server keeps no
+ * `empiredestroyed` override), and the main yard below 10% of its health. The
+ * server also refuses while an attack on the main yard is running: leaving
+ * the world deletes the rows that attack would save to.
+ *
+ * @param {RandomRelocateInput} input - The caller and their main yard.
+ * @returns {RelocateRefusal | null} Why not, or null when they may.
+ */
+export const randomRelocateRefusal = ({
+  allianceId,
+  outpostCount,
+  health,
+  underAttack,
+}: RandomRelocateInput): RelocateRefusal | null => {
+  if (allianceId) return "inAlliance";
+
+  if (outpostCount > 0) return "hasOutposts";
+
+  if (!(health.hp < health.max * RANDOM_RELOCATE_HEALTH_SHARE)) return "yardStanding";
+
+  if (underAttack) return "underAttack";
+
+  return null;
 };

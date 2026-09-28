@@ -3,9 +3,62 @@ import {
   RELOCATE_RESOURCE_COST,
   RELOCATE_SHINY_COST,
   chargeRelocation,
+  mainYardHealth,
+  randomRelocateRefusal,
   relocateTargetRefusal,
+  type RandomRelocateInput,
   type RelocateTargetInput,
 } from "./relocateRules.js";
+
+describe("mainYardHealth (BASE.as:2333-2338)", () => {
+  // Level 1 Twig Snappers (t 1) have 500 health; t 17 is a wall, t 24 a trap.
+  const yard = {
+    buildingdata: {
+      "1": { id: 1, t: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, X: 0, Y: 0, hp: 50 },
+      "3": { id: 3, t: 17, X: 0, Y: 0 },
+      "4": { id: 4, t: 24, X: 0, Y: 0 },
+    },
+    buildinghealthdata: { "1": 20 },
+  };
+
+  test("sums health and full health over everything but traps and walls", () => {
+    expect(mainYardHealth(yard as never)).toEqual({ hp: 70, max: 1000 });
+  });
+});
+
+describe("randomRelocateRefusal (BASE.as:2340-2341, owner's answer D)", () => {
+  const input = (over: Partial<RandomRelocateInput> = {}): RandomRelocateInput => ({
+    allianceId: null,
+    outpostCount: 0,
+    health: { hp: 99, max: 1000 },
+    underAttack: false,
+    ...over,
+  });
+
+  test("a destroyed main yard, no alliance, no outposts: may move", () => {
+    expect(randomRelocateRefusal(input())).toBeNull();
+    expect(randomRelocateRefusal(input({ health: { hp: 0, max: 1000 } }))).toBeNull();
+  });
+
+  test("in an alliance: refused", () => {
+    expect(randomRelocateRefusal(input({ allianceId: 12 }))).toBe("inAlliance");
+  });
+
+  test("owning outposts: refused", () => {
+    expect(randomRelocateRefusal(input({ outpostCount: 1 }))).toBe("hasOutposts");
+  });
+
+  test("10% health or more, or an empty yard: refused", () => {
+    expect(randomRelocateRefusal(input({ health: { hp: 100, max: 1000 } }))).toBe("yardStanding");
+    expect(randomRelocateRefusal(input({ health: { hp: 1000, max: 1000 } }))).toBe("yardStanding");
+    expect(randomRelocateRefusal(input({ health: { hp: 0, max: 0 } }))).toBe("yardStanding");
+  });
+
+  test("an attack running on the main yard: refused", () => {
+    expect(randomRelocateRefusal(input({ underAttack: true }))).toBe("underAttack");
+  });
+});
 
 const ME = 2505;
 const THEM = 77;

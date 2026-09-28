@@ -81,6 +81,20 @@ mock.module("../../../services/base/attackSessionStore.js", () => ({
   endAttackSession: async () => {},
 }));
 
+const moves: string[] = [];
+
+mock.module("../../../services/maproom/v2/leaveWorld.js", () => ({
+  leaveWorld: async () => {
+    moves.push("leave");
+  },
+}));
+
+mock.module("../../../services/maproom/v2/joinOrCreateWorld.js", () => ({
+  joinOrCreateWorld: async () => {
+    moves.push("join");
+  },
+}));
+
 const { migrateBase } = await import("./migrateBase.js");
 
 const run = async (body: Row, user: Row = { userid: ME, shiny_locked: false }) => {
@@ -251,5 +265,79 @@ describe("migrateBase, type=outpost", () => {
     const result = await run({ baseid: MY_OUTPOST, shiny: "1500" });
     expect(result.body).toMatchObject({ error: 0, cantMoveTill: until });
     untouched();
+  });
+});
+
+describe("migrateBase, type=random (Flash's lost-main-base gate, owner's answer D)", () => {
+  /**
+   * Two level 1 Twig Snappers (500 health each) and a whole wall, which does not
+   * count. Not flagged `mr2upgraded`, so the catch-up does not add a whole Map
+   * Room to the yard (`mapRoom.ts` `migrateYard`) and move the numbers.
+   */
+  const yardAt = (hp1: number, hp2: number, extra: Row = {}) => {
+    Object.assign(mainSave, {
+      outposts: [],
+      attackid: 0,
+      attacks: [],
+      mr2upgraded: false,
+      storedata: {},
+      savetime: Math.floor(Date.now() / 1000),
+      buildingdata: {
+        "1": { id: 1, t: 1, X: 0, Y: 0, hp: hp1 },
+        "2": { id: 2, t: 1, X: 0, Y: 0, hp: hp2 },
+        "3": { id: 3, t: 17, X: 0, Y: 0 },
+      },
+      buildinghealthdata: { "1": hp1, "2": hp2 },
+      ...extra,
+    });
+  };
+
+  const random = (user: Row = { userid: ME, alliance_id: null }) => run({ type: "random", baseid: "0", shiny: "0" }, user);
+
+  beforeEach(() => {
+    moves.length = 0;
+  });
+
+  test("a main yard below 10% health, no alliance, no outposts: moved to a new world", async () => {
+    yardAt(0, 99);
+    const result = await random();
+    expect(result.body).toEqual({ error: 0 });
+    expect(moves).toEqual(["leave", "join"]);
+  });
+
+  test("10% health or more is refused", async () => {
+    yardAt(0, 100);
+    expect((await random()).reason).toBe("yardStanding");
+    yardAt(500, 500);
+    expect((await random()).reason).toBe("yardStanding");
+    expect(moves).toEqual([]);
+  });
+
+  test("a member of an alliance is refused", async () => {
+    yardAt(0, 0);
+    expect((await random({ userid: ME, alliance_id: 12 })).reason).toBe("inAlliance");
+    expect(moves).toEqual([]);
+  });
+
+  test("a player with outposts is refused", async () => {
+    yardAt(0, 0);
+    mainSave.outposts = [[241, 208, MY_OUTPOST]];
+    expect((await random()).reason).toBe("hasOutposts");
+    expect(moves).toEqual([]);
+  });
+
+  test("an attack running on the main yard is refused", async () => {
+    yardAt(0, 0);
+    sessions.add(2526);
+    expect((await random()).reason).toBe("underAttack");
+    expect(moves).toEqual([]);
+  });
+
+  test("repairs that finished while away count: the yard is caught up first", async () => {
+    // Snapper 1 is repairing (rE) from an hour ago and is whole by now.
+    yardAt(0, 0, { savetime: Math.floor(Date.now() / 1000) - 3600 });
+    (mainSave.buildingdata as Record<string, Row>)["1"]!.rE = 1;
+    expect((await random()).reason).toBe("yardStanding");
+    expect(moves).toEqual([]);
   });
 });

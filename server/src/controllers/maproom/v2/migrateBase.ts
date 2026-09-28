@@ -10,7 +10,7 @@ import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { joinOrCreateWorld } from "../../../services/maproom/v2/joinOrCreateWorld.js";
 import { leaveWorld } from "../../../services/maproom/v2/leaveWorld.js";
 import { MapRoomCell, MapRoomVersion } from "../../../enums/MapRoom.js";
-import { relocateOutpostErr, relocateRefusedErr, shinyLockedErr } from "../../../errors/errors.js";
+import { relocateRefusedErr, shinyLockedErr } from "../../../errors/errors.js";
 import { MigrateBaseSchema } from "../../../schemas/MigrateBaseSchema.js";
 import { isShinyLocked } from "../../../services/user/shinyLock.js";
 import { isAttackActive } from "../../../services/base/isAttackActive.js";
@@ -18,15 +18,21 @@ import { readAttackSession } from "../../../services/base/attackSessionStore.js"
 import {
   RELOCATE_COOLDOWN,
   chargeRelocation,
+  mainYardHealth,
+  randomRelocateRefusal,
   relocateTargetRefusal,
   type RelocatePayment,
 } from "../../../services/maproom/v2/relocateRules.js";
+import { catchUpLockedYard } from "../../yard/yardAction.js";
 
 /**
  * Handles user base migration.
  *
  * `type=random` is the Flash "your empire was overrun" move (`PopupLostMainBase.as`):
- * the player leaves their world and is placed in a new one, free of charge.
+ * the player leaves their world and is placed in a new one, free of charge. It
+ * follows Flash's gate for that popup (`randomRelocateRefusal`, the owner's
+ * answer D): no alliance, no outposts, and the main yard, caught up to now as
+ * a load would, below 10% of its health.
  *
  * `type=outpost` moves the main yard onto one of the player's own Map Room 2
  * outposts (`PopupRelocateMe.as`), destroying the outpost. Everything the
@@ -69,7 +75,18 @@ export const migrateBase: KoaController = async (ctx) => {
 
   // User is relocating due to their empire being overrun.
   if (type === BaseType.RANDOM) {
-    if (userSave.outposts.length > 0) throw relocateOutpostErr();
+    // Repairs that finished while the player was away count, as on their load.
+    const { save: mainYard } = await catchUpLockedYard(postgres.em, userSave);
+
+    const refusal = randomRelocateRefusal({
+      allianceId: currentUser.alliance_id,
+      outpostCount: mainYard.outposts.length,
+      health: mainYardHealth(mainYard),
+      underAttack:
+        isAttackActive(mainYard) || (await readAttackSession(mainYard.basesaveid)) !== null,
+    });
+
+    if (refusal) throw relocateRefusedErr(refusal);
 
     await leaveWorld(currentUser, userSave);
     await joinOrCreateWorld(currentUser, userSave, postgres.em, true);
