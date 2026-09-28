@@ -795,6 +795,17 @@
         "top-unsolved.png"
       ]
     },
+    "buildings/outpost/": {
+      "exists": true,
+      "files": [
+        "shadow.1.damaged.jpg",
+        "shadow.1.destroyed.jpg",
+        "shadow.1.jpg",
+        "top.1.damaged.png",
+        "top.1.destroyed.png",
+        "top.1.png"
+      ]
+    },
     "buildings/radiotower/": {
       "exists": true,
       "files": [

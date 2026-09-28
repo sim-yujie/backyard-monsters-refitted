@@ -562,6 +562,10 @@ export const BUILDING_ART_ROWS: readonly ArtRow[] = [
   [111, "Mini-Pumpkin", "buildings/decorations/pumpkins/", [
     [1,["attended-small-top.png",-10,-4],null,null,["attended-small-shadow.jpg",-12,2],null,null],
   ], [100], 20],
+  // 112 Outpost (special) — OUTPOST_YARD_PROPS.as:5172
+  [112, "Outpost", "buildings/outpost/", [
+    [1,["top.1.png",-63,-72],["top.1.damaged.png",-63,-66],["top.1.destroyed.png",-96,1],["shadow.1.jpg",-77,22],["shadow.1.damaged.jpg",-90,14],["shadow.1.destroyed.jpg",-95,20]],
+  ], [200000], 190],
   // 113 Radio Tower (special) — YARD_PROPS.as:5971
   [113, "Radio Tower", "buildings/radiotower/", [
     [1,["top.1.png",-40,-80],["top.1.damaged.png",-40,-83],["top.1.destroyed.png",-41,11],["shadow.1.jpg",-44,7],["shadow.1.damaged.jpg",-44,7],["shadow.1.destroyed.jpg",-41,19]],

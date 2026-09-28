@@ -28,6 +28,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../..");
 
 const PROPS = resolve(repo, "client/scripts/YARD_PROPS.as");
+const OUTPOST_PROPS = resolve(repo, "client/scripts/OUTPOST_YARD_PROPS.as");
 const STRINGS = resolve(repo, "server/public/gamestage/assets/archived/en.v612.txt");
 const OUT = resolve(here, "../src/game/yard/buildingArtData.ts");
 const MANIFEST = resolve(here, "../test/fixtures/building-art-files.json");
@@ -114,47 +115,78 @@ const matchBrace = (text, open) => {
   throw new Error(`Unbalanced braces from ${open}`);
 };
 
-const lineOf = (index) => source.slice(0, index).split("\n").length;
+/**
+ * Every `"imageData": { ... }` block in a comment-stripped props text, with the
+ * id of the entry holding it. `file` is the name its citations use.
+ */
+const readBlocks = (source, file) => {
+  const lineOf = (index) => source.slice(0, index).split("\n").length;
+  const blocks = [];
+  const marker = /"imageData"\s*:\s*\{/g;
+  for (let hit = marker.exec(source); hit; hit = marker.exec(source)) {
+    const open = hit.index + hit[0].length - 1;
+    const close = matchBrace(source, open);
+    const body = source.slice(open, close + 1);
 
-/** Every `"imageData": { ... }` block, with the id of the entry holding it. */
-const blocks = [];
-const marker = /"imageData"\s*:\s*\{/g;
-for (let hit = marker.exec(source); hit; hit = marker.exec(source)) {
-  const open = hit.index + hit[0].length - 1;
-  const close = matchBrace(source, open);
-  const body = source.slice(open, close + 1);
+    // The owning entry's fields all precede `imageData`; the nearest earlier
+    // `"id":` is therefore this entry's.
+    const before = source.slice(0, hit.index);
+    const idHit = [...before.matchAll(/"id"\s*:\s*(\d+)/g)].pop();
+    if (!idHit) continue;
 
-  // The owning entry's fields all precede `imageData`; the nearest earlier
-  // `"id":` is therefore this entry's.
-  const before = source.slice(0, hit.index);
-  const idHit = [...before.matchAll(/"id"\s*:\s*(\d+)/g)].pop();
-  if (!idHit) continue;
+    const nameHit = [...before.matchAll(/"name"\s*:\s*"([^"]*)"/g)].pop();
+    const clsHit = [...before.matchAll(/"type"\s*:\s*"([^"]*)"/g)].pop();
+    const sizeHit = [...before.matchAll(/"size"\s*:\s*(\d+)/g)].pop();
 
-  const nameHit = [...before.matchAll(/"name"\s*:\s*"([^"]*)"/g)].pop();
-  const clsHit = [...before.matchAll(/"type"\s*:\s*"([^"]*)"/g)].pop();
-  const sizeHit = [...before.matchAll(/"size"\s*:\s*(\d+)/g)].pop();
+    // `hp` follows imageData in every entry, so it is read forwards from here,
+    // stopping at the next entry's `"id":` so a missing array cannot borrow the
+    // next building's.
+    const after = source.slice(close, source.indexOf('"id"', close));
+    const hpHit = /"hp"\s*:\s*\[([^\]]*)\]/.exec(after);
+    const hp = hpHit
+      ? hpHit[1]
+          .split(",")
+          .map((one) => Number(one.trim()))
+          .filter((one) => Number.isFinite(one))
+      : [];
 
-  // `hp` follows imageData in every entry, so it is read forwards from here,
-  // stopping at the next entry's `"id":` so a missing array cannot borrow the
-  // next building's.
-  const after = source.slice(close, source.indexOf('"id"', close));
-  const hpHit = /"hp"\s*:\s*\[([^\]]*)\]/.exec(after);
-  const hp = hpHit
-    ? hpHit[1]
-        .split(",")
-        .map((one) => Number(one.trim()))
-        .filter((one) => Number.isFinite(one))
-    : [];
+    blocks.push({
+      id: Number(idHit[1]),
+      name: nameHit?.[1] ?? "",
+      kind: clsHit?.[1] ?? "",
+      size: sizeHit ? Number(sizeHit[1]) : 0,
+      hp,
+      body,
+      line: lineOf(hit.index),
+      file,
+    });
+  }
+  return blocks;
+};
 
-  blocks.push({
-    id: Number(idHit[1]),
-    name: nameHit?.[1] ?? "",
-    kind: clsHit?.[1] ?? "",
-    size: sizeHit ? Number(sizeHit[1]) : 0,
-    hp,
-    body,
-    line: lineOf(hit.index),
-  });
+const blocks = readBlocks(source, "YARD_PROPS.as");
+
+/**
+ * The outpost core (112), which only the outpost props table draws.
+ *
+ * An outpost yard swaps in `OUTPOST_YARD_PROPS._outpostProps` wholesale
+ * (`client/scripts/GLOBAL.as:716-723`), but every other type an outpost can
+ * hold already has art in the main table, so only the types named here are
+ * read from it. The core's `hp` is its 200,000 (`OUTPOST_YARD_PROPS.as:5244`).
+ */
+const OUTPOST_ONLY_TYPES = new Set([112]);
+{
+  const outpost = readFileSync(OUTPOST_PROPS, "utf8").replace(/\/\/[^\n]*/g, "");
+  const extra = readBlocks(outpost, "OUTPOST_YARD_PROPS.as").filter((one) =>
+    OUTPOST_ONLY_TYPES.has(one.id),
+  );
+  if (extra.length !== OUTPOST_ONLY_TYPES.size) {
+    throw new Error("OUTPOST_YARD_PROPS.as: an outpost-only type has lost its imageData");
+  }
+  if (extra.some((one) => blocks.some((main) => main.id === one.id))) {
+    throw new Error("YARD_PROPS.as now draws an outpost-only type; drop it from OUTPOST_ONLY_TYPES");
+  }
+  blocks.push(...extra);
 }
 
 /** `["file.png", new Point(-30, -19)]` -> `{ file, x, y }`. */
@@ -289,6 +321,7 @@ for (const block of blocks) {
     hp: block.hp,
     levels,
     line: block.line,
+    file: block.file,
   });
 }
 
@@ -327,7 +360,7 @@ const body = entries
   .map(
     (entry) =>
       `  // ${entry.id} ${entry.name}${entry.kind ? ` (${entry.kind})` : ""} ` +
-      `— YARD_PROPS.as:${entry.line}\n` +
+      `— ${entry.file}:${entry.line}\n` +
       `  [${entry.id}, ${JSON.stringify(entry.name)}, ${JSON.stringify(entry.baseurl)}, [\n` +
       entry.levels.map((one) => `    ${level(one)},`).join("\n") +
       `\n  ], [${entry.hp.join(",")}], ${entry.size}],`,

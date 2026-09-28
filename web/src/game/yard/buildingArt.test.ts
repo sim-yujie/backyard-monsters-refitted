@@ -7,6 +7,7 @@ import {
   artTypes,
   ArtState,
   buildingName,
+  hasArt,
   maxHealth,
   prettifyArtKey,
   resolveArt,
@@ -39,9 +40,18 @@ const fixtureTypes = [
 const fileOf = (url: string): string => url.slice(url.lastIndexOf("/") + 1);
 
 describe("the art table", () => {
-  it("covers 131 building types with no duplicates", () => {
-    expect(BUILDING_ART_ROWS.length).toBe(131);
+  it("covers 132 building types with no duplicates", () => {
+    expect(BUILDING_ART_ROWS.length).toBe(132);
     expect(artTypes().length).toBe(BUILDING_ART_ROWS.length);
+  });
+
+  it("draws the outpost core from the outpost props table", () => {
+    // `client/scripts/OUTPOST_YARD_PROPS.as:5172-5182` and its `hp` at `:5244`.
+    expect(hasArt(112)).toBe(true);
+    expect(artFolder(112)).toBe("buildings/outpost/");
+    expect(buildingName(112)).toBe("Outpost");
+    expect(maxHealth(112, 1)).toBe(200000);
+    expect(fileOf(resolveArt(112, 1, ArtState.DEFAULT)?.top.url ?? "")).toBe("top.1.png");
   });
 
   it("names a folder that exists for every type", () => {
