@@ -281,7 +281,6 @@ export class YardScene implements Scene {
       scenes: [
         { id: SceneName.MAP, label: "Map" },
         { id: SceneName.YARD, label: "Yard" },
-        { id: SceneName.LOGIN, label: "Account" },
       ],
       onSceneSelect: (id) => (id === SceneName.MAP ? this.openMap() : context.goTo(id)),
       onSignOut: () => {

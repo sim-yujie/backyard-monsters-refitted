@@ -1,6 +1,8 @@
+import { getSession } from "@/api/auth";
 import type { ResourceCaps, Resources } from "@/api/types";
 import { nextWorkerJob } from "@/game/yard/jobs";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
+import { AccountMenu } from "./AccountMenu";
 import { MonstersTabId } from "./monsters/monstersTab";
 import { formatAmount, formatCompact } from "./format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
@@ -90,7 +92,13 @@ export interface HudSceneOption {
 export interface HudOptions {
   scenes: HudSceneOption[];
   onSceneSelect: (id: string) => void;
+  /**
+   * With it, the bar ends in the Account menu (who is signed in, and Log out;
+   * issue #173); Log out runs this.
+   */
   onSignOut?: () => void;
+  /** The name the Account menu shows; the signed-in session's by default. */
+  accountName?: string | null;
 }
 
 /** How long a tapped readout's exact-amount bubble stays up on its own. */
@@ -169,6 +177,7 @@ export class Hud {
   private readonly monstersName: HTMLElement;
   /** Collect all (design §5.1): only on the own yard, only while something waits. */
   private readonly collectAll = new CollectAll();
+  private accountMenu: AccountMenu | null = null;
   private fitted: HudFit = HudFit.FULL;
 
   constructor(options: HudOptions) {
@@ -293,12 +302,11 @@ export class Hud {
     );
 
     if (options.onSignOut) {
-      const signOut = document.createElement("button");
-      signOut.type = "button";
-      signOut.className = "btn btn--ghost";
-      signOut.textContent = "Sign out";
-      signOut.addEventListener("click", options.onSignOut);
-      this.element.append(signOut);
+      this.accountMenu = new AccountMenu({
+        name: options.accountName === undefined ? getSession()?.username : options.accountName,
+        onSignOut: options.onSignOut,
+      });
+      this.element.append(this.accountMenu.element);
     }
   }
 
@@ -392,6 +400,8 @@ export class Hud {
     this.bindYard(null);
     window.removeEventListener("resize", this.onResize);
     this.hideExact();
+    this.accountMenu?.destroy();
+    this.accountMenu = null;
     for (const float of this.floats) float.remove();
     this.floats.clear();
     this.element.remove();

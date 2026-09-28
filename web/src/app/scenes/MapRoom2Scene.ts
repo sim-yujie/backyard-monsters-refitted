@@ -159,7 +159,6 @@ export class MapRoom2Scene implements Scene {
       [
         { id: SceneName.MAP_ROOM_2, label: "Map" },
         { id: SceneName.YARD, label: "Yard" },
-        { id: SceneName.LOGIN, label: "Account" },
       ],
     ).mount(context.overlay.content);
 

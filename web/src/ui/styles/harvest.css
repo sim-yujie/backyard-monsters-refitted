@@ -24,7 +24,7 @@
 }
 
 /* A phone: the HUD's top row is exactly full with Workers, Monsters, the
-   screens and Sign out, and it has no third row to wrap into. So the button
+   screens and Account, and it has no third row to wrap into. So the button
    leaves the bar and joins the yard's toolbar row (`.yard-toolbar`,
    planner.css) at its right end as "Collect 152", the same height as Layout
    and Build, so the notices can sit under that one row (#144). */

@@ -165,6 +165,29 @@ describe("the HUD", () => {
   });
 });
 
+describe("the HUD's Account control (#173)", () => {
+  it("opens a menu with the player's name instead of leaving for the sign-in screen", () => {
+    const onSceneSelect = vi.fn();
+    const onSignOut = vi.fn();
+    const hud = new Hud({
+      scenes: [{ id: "yard", label: "Yard" }],
+      onSceneSelect,
+      onSignOut,
+      accountName: "Agent Tester",
+    }).mount(document.body);
+    const account = hud.element.querySelector<HTMLButtonElement>(".account-menu__button")!;
+    expect(account.textContent).toBe("Account");
+    expect(hud.element.querySelectorAll(".hud__scene-button").length).toBe(1);
+    account.click();
+    expect(onSceneSelect).not.toHaveBeenCalled();
+    expect(onSignOut).not.toHaveBeenCalled();
+    expect(hud.element.querySelector(".account-menu__name")?.textContent).toBe("Agent Tester");
+    hud.element.querySelector<HTMLButtonElement>(".account-menu__item")!.click();
+    expect(onSignOut).toHaveBeenCalledOnce();
+    hud.destroy();
+  });
+});
+
 describe("the HUD's spellings", () => {
   it("signs a change with a real minus", () => {
     expect(formatDelta(-5_000_000)).toBe("−5.0M");

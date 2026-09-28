@@ -69,7 +69,7 @@ export { formatClock };
 
 /** A HUD destination as the retreat question names it (#152). */
 const destinationName = (scene: string): string =>
-  scene === SceneName.YARD ? "your yard" : scene === SceneName.LOGIN ? "your account" : "there";
+  scene === SceneName.YARD ? "your yard" : scene === SceneName.LOGIN ? "the sign-in screen" : "there";
 
 export class AttackScene implements Scene {
   private readonly renderer = new YardRenderer();
@@ -144,7 +144,6 @@ export class AttackScene implements Scene {
       scenes: [
         { id: SceneName.MAP, label: "Map" },
         { id: SceneName.YARD, label: "Yard" },
-        { id: SceneName.LOGIN, label: "Account" },
       ],
       onSceneSelect: (id) => this.leaveFor(id),
       onSignOut: () => this.leaveFor(SceneName.LOGIN, logout),
@@ -488,7 +487,7 @@ export class AttackScene implements Scene {
     this.menu = new AttackMenu([
       { label: "Map", run: () => this.leaveFor(SceneName.MAP) },
       { label: "Yard", run: () => this.leaveFor(SceneName.YARD) },
-      { label: "Sign out", run: () => this.leaveFor(SceneName.LOGIN, logout) },
+      { label: "Log out", run: () => this.leaveFor(SceneName.LOGIN, logout) },
     ]);
 
     strip.append(title, clock, damage, loot, spacer, hudSlot, speed, retreat, this.menu.element);

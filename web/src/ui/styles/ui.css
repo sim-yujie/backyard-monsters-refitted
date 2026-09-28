@@ -728,6 +728,66 @@ body {
   box-shadow: inset 0 -2px 0 var(--colour-accent);
 }
 
+/* Account (#173): who is signed in and an explicit Log out, in a list that
+   hangs under the button rather than a screen of its own. */
+.account-menu {
+  position: relative;
+  display: flex;
+}
+
+.account-menu__button {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.account-menu__list {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: var(--z-popup);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 12rem;
+  padding: var(--space-1);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-popup);
+}
+
+.account-menu__list[hidden] {
+  display: none;
+}
+
+.account-menu__who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--colour-border-subtle);
+}
+
+.account-menu__label {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.account-menu__name {
+  color: var(--colour-text-strong);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.account-menu__item {
+  min-height: 44px;
+  justify-content: flex-start;
+  text-align: start;
+  color: var(--colour-text);
+}
+
 /* A phone: the screen buttons alone fill a 56 px row, which left the readouts
    no width at all. The bar takes two rows instead — Workers and the screens
    on top, the readouts underneath with the whole width — and everything placed under the

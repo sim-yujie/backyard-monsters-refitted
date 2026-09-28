@@ -1,7 +1,7 @@
 /**
  * The attack's overflow menu on a phone (`docs/design/attack-flow.md` §4.3,
  * #151): the HUD gives way to the strip there, and this is where its screen
- * buttons and Sign out went. A button in the strip opens a short list under
+ * buttons and Log out went. A button in the strip opens a short list under
  * it; the stylesheet hides the whole thing on wider screens, where the HUD is
  * still up.
  *
@@ -29,7 +29,7 @@ export class AttackMenu {
     this.button.type = "button";
     this.button.className = "btn attack-menu__button";
     this.button.textContent = "☰";
-    this.button.title = "Map, Yard and Sign out";
+    this.button.title = "Map, Yard and Log out";
     this.button.setAttribute("aria-label", "Menu");
     this.button.setAttribute("aria-haspopup", "true");
     this.button.setAttribute("aria-expanded", "false");

@@ -552,8 +552,8 @@
     height: 72px;
   }
 
-  /* The top row is already nearly full with Workers, the screens and Sign
-     out: the button goes icon-only and sits tight against Workers, and the
+  /* The top row is already nearly full with Workers, the screens and
+     Account: the button goes icon-only and sits tight against Workers, and the
      spacer's two gaps give way to an auto margin that does its job. */
   .hud:has(.hud__monsters:not([hidden])) .hud__spacer {
     display: none;
