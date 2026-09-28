@@ -68,6 +68,35 @@ describe("checkpointOf", () => {
       sources: ["1000239208", "1000240208"],
     });
   });
+
+  it("is never taken for a Map Room 1 tribe, which has no basesaveid (#132)", () => {
+    const tribeLoad = { ...load(), baseid: "11" } as Record<string, unknown>;
+    delete tribeLoad["basesaveid"];
+    const tribe: AttackTarget = {
+      ...target(),
+      baseid: "11",
+      mapversion: 1,
+      load: tribeLoad as unknown as BaseLoadResponse,
+    };
+    const session = new AttackSession({ target: tribe, seed: 3 });
+    session.start();
+    session.appendFling({ x: -200, y: -200, monsters: { C1: 2 } });
+    expect(checkpointOf(session)).toBeNull();
+  });
+
+  it("is taken for a Map Room 1 player, whose yard is a row like any other", () => {
+    const { cell: _cell, ...rest } = target();
+    const player: AttackTarget = {
+      ...rest,
+      kind: "main",
+      mapversion: 1,
+      roster: { ...rest.roster, sources: [{ baseid: "5001", m: { housed: { C1: 5 } } }] },
+    };
+    const session = new AttackSession({ target: player, seed: 3 });
+    session.start();
+    session.appendFling({ x: -200, y: -200, monsters: { C1: 2 } });
+    expect(checkpointOf(session)).toMatchObject({ basesaveid: 11, sources: ["5001"] });
+  });
 });
 
 describe("the checkpoint plugin", () => {

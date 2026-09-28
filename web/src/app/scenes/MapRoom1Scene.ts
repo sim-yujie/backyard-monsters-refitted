@@ -8,10 +8,12 @@ import {
   type MapRoom1Response,
 } from "@/api/maproom1";
 import type { BaseLoadResponse } from "@/api/types";
-import { setViewTarget } from "@/game/attack/attackTarget";
+import { setAttackTarget, setViewTarget, type AttackTarget } from "@/game/attack/attackTarget";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import {
+  attackGate,
   FLINGER_TYPE,
+  mr1AttackTarget,
   readMapRoom1,
   readOwn,
   type Mr1Own,
@@ -40,10 +42,6 @@ import { SceneName } from "../App";
 
 /** How often the neighbours and tribes are asked for again. */
 export const REFRESH_SECONDS = 18;
-
-/** Attack is not wired from this map yet (issue #132, work package 4). */
-const ATTACK_NOT_YET =
-  "Attacks from Map Room 1 are not open yet. They arrive with the next update.";
 
 /** DEV only: `?mr1fixture` draws the screen from a fixture instead of the route. */
 const useFixture = (): boolean =>
@@ -76,8 +74,7 @@ export class MapRoom1Scene implements Scene {
         },
         onClose: () => context.goTo(SceneName.YARD),
         onView: (target) => this.view(target),
-        onAttack: () =>
-          this.ui?.notices.show("attack", ATTACK_NOT_YET, { level: "info", timeoutMs: 5_000 }),
+        onAttack: (target) => this.attack(target),
         onAction: (action) => this.act(action),
       },
       SceneName.MAP_ROOM_1,
@@ -208,21 +205,60 @@ export class MapRoom1Scene implements Scene {
   }
 
   /**
+   * The attack on `target` as it stands now, or the reason there is none. The
+   * gate is asked again here rather than trusted from the card, because a
+   * refresh may have changed the target since the card was drawn.
+   */
+  private attackOn(target: Mr1Target): { attack: AttackTarget | null; refusal: string | null } {
+    const world = this.world ?? { protectedUntil: 0 };
+    const now = this.now();
+    const attack = mr1AttackTarget(target, this.ownSave, world, now);
+    if (attack) return { attack, refusal: null };
+    const reason = attackGate(target, this.own, world, now).reason;
+    return {
+      attack: null,
+      refusal: reason ? `${reason.title}. ${reason.detail}` : "This target cannot be attacked.",
+    };
+  }
+
+  /**
+   * Hands the target to the attack scene, which issues the attack load
+   * (`mapversion: 1`) and runs the fight. The server has the last word: a
+   * refusal it sends (protection, online, a wrecked tribe) is shown there.
+   */
+  private attack(target: Mr1Target): void {
+    const context = this.context;
+    if (!context) return;
+    const { attack, refusal } = this.attackOn(target);
+    if (!attack) {
+      this.ui?.notices.show("attack", refusal ?? "This target cannot be attacked.", {
+        level: "info",
+        timeoutMs: 5_000,
+      });
+      return;
+    }
+    setAttackTarget(attack);
+    context.goTo(SceneName.ATTACK);
+  }
+
+  /**
    * Opens the target's yard read-only in the yard scene, the same visit Map
    * Room 2 uses, with Map Room 1 named on the load so a tribe's `wmview`
-   * finds the Map Room 1 camp. No Attack rides along yet (issue #132, WP4).
+   * finds the Map Room 1 camp. The attack it could turn into rides along, so
+   * the visit's own Attack button needs nothing from this screen.
    */
   private view(target: Mr1Target): void {
     const context = this.context;
     if (!context) return;
     const save = this.ownSave;
+    const { attack, refusal } = this.attackOn(target);
     setViewTarget({
       baseid: target.baseid,
       kind: target.kind === "tribe" ? "wild" : "main",
       name: target.name,
       mapversion: 1,
-      attack: null,
-      refusal: ATTACK_NOT_YET,
+      attack,
+      refusal,
       own: save ? { resources: save.resources ?? null, credits: save.credits } : undefined,
     });
     context.goTo(SceneName.YARD);

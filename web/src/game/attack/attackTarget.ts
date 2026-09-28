@@ -120,11 +120,17 @@ export interface AttackTarget {
   /** The defender's base id, as the map cell carries it. */
   readonly baseid: string;
   readonly kind: AttackTargetKind;
-  /** Where on the map it is, for the attack scene's Back and the save's cell. */
-  readonly cell: OffsetCell;
+  /** Where on the Map Room 2 world it is; a Map Room 1 target has no cell. */
+  readonly cell?: OffsetCell;
   /** Owner username, or the tribe name of a wild monster camp. */
   readonly name: string;
   readonly roster: AttackRoster;
+  /**
+   * The Map Room the attack load names, when it is not the client's default
+   * (2). A Map Room 1 attack sends 1: it is what makes `wmattack` find a Map
+   * Room 1 tribe and bind its session (issue #161, `mr1TribeAttack.ts`).
+   */
+  readonly mapversion?: number;
   /**
    * The attack load's response, when the caller already issued it. Set by the
    * yard scene's Attack button (View yard → Attack), left out from the map, in

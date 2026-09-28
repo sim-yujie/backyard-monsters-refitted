@@ -9,6 +9,7 @@ import {
   formatRespawn,
   formatSpan,
   initials,
+  mr1AttackTarget,
   pageOf,
   pinTone,
   presenceText,
@@ -277,5 +278,40 @@ describe("the list", () => {
     expect(pageOf(sorted, 1).items).toHaveLength(2);
     expect(pageOf(sorted, 9).page).toBe(1);
     expect(pageOf([], 3)).toEqual({ items: [], page: 0, pages: 1 });
+  });
+});
+
+describe("mr1AttackTarget (#132)", () => {
+  it("hands a tribe over as a wild camp on Map Room 1 with the main yard's roster", () => {
+    const attack = mr1AttackTarget(world.tribes[1]!, yardLoad(), world, NOW);
+    expect(attack).toMatchObject({
+      baseid: "11",
+      kind: "wild",
+      name: "Kozu Tribe",
+      mapversion: 1,
+    });
+    expect(attack?.cell).toBeUndefined();
+    expect(attack?.roster.monsters).toEqual({ C1: 16, C3: 6 });
+    expect(attack?.roster.sources).toEqual([
+      { baseid: "5001", m: { housed: { C1: 16, C3: 6, C5: 0 } } },
+    ]);
+    expect(attack?.roster.flingerLevel).toBe(1);
+  });
+
+  it("hands a neighbour over as a main yard", () => {
+    expect(mr1AttackTarget(named("Mossbeard"), yardLoad(), world, NOW)).toMatchObject({
+      baseid: "90101",
+      kind: "main",
+      mapversion: 1,
+    });
+  });
+
+  it("gives nothing when the gate is shut or the own yard is not known", () => {
+    expect(mr1AttackTarget(world.tribes[2]!, yardLoad(), world, NOW)).toBeNull();
+    expect(mr1AttackTarget(named("Nettlejaw"), yardLoad(), world, NOW)).toBeNull();
+    expect(
+      mr1AttackTarget(world.tribes[1]!, yardLoad({ buildingdata: {} }), world, NOW),
+    ).toBeNull();
+    expect(mr1AttackTarget(world.tribes[1]!, null, world, NOW)).toBeNull();
   });
 });

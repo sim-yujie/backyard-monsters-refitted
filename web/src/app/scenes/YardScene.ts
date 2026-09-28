@@ -1,5 +1,5 @@
 import { logout } from "@/api/auth";
-import { loadAttack, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
+import { loadAttackOn, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
 import {
   BaseMode,
@@ -612,7 +612,7 @@ export class YardScene implements Scene {
     this.notices.show("attack", `Starting the attack on ${attack.name}…`, { level: "info" });
 
     try {
-      const load = await loadAttack(attack.baseid, attack.kind, attack.roster);
+      const load = await loadAttackOn(attack);
       if (this.context !== context) return;
       setAttackTarget({ ...attack, load });
       context.goTo(SceneName.ATTACK);

@@ -1,6 +1,6 @@
 import { Container } from "pixi.js";
 import { logout } from "@/api/auth";
-import { loadAttack } from "@/api/base";
+import { loadAttackOn } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
 import type { BaseLoadResponse } from "@/api/types";
 import { clockReading, formatClock } from "@/game/attack/attackClock";
@@ -142,7 +142,7 @@ export class AttackScene implements Scene {
 
     this.hud = new Hud({
       scenes: [
-        { id: SceneName.MAP_ROOM_2, label: "Map" },
+        { id: SceneName.MAP, label: "Map" },
         { id: SceneName.YARD, label: "Yard" },
         { id: SceneName.LOGIN, label: "Account" },
       ],
@@ -164,10 +164,10 @@ export class AttackScene implements Scene {
     const target = this.target;
     if (!target) {
       this.status.textContent = "No target was chosen.";
-      this.notices.show("attack-load", "Pick a cell on the map and press Attack.", {
+      this.notices.show("attack-load", "Pick a target on the map and press Attack.", {
         level: "info",
         actionLabel: "Back to the map",
-        onAction: () => context.goTo(SceneName.MAP_ROOM_2),
+        onAction: () => context.goTo(SceneName.MAP),
       });
       return;
     }
@@ -279,7 +279,7 @@ export class AttackScene implements Scene {
   private async load(target: AttackTarget, context: SceneContext): Promise<void> {
     let response: BaseLoadResponse;
     try {
-      response = target.load ?? (await loadAttack(target.baseid, target.kind, target.roster));
+      response = target.load ?? (await loadAttackOn(target));
       if (this.context !== context) return;
     } catch (caught) {
       if (this.context !== context) return;
@@ -294,7 +294,7 @@ export class AttackScene implements Scene {
           : caught instanceof Error
             ? `The attack could not start: ${caught.message}`
             : "The attack could not start.",
-        { level: "error", actionLabel: "Back to the map", onAction: () => context.goTo(SceneName.MAP_ROOM_2) },
+        { level: "error", actionLabel: "Back to the map", onAction: () => context.goTo(SceneName.MAP) },
       );
       if (this.status) this.status.textContent = "The attack did not start.";
       return;
@@ -352,7 +352,7 @@ export class AttackScene implements Scene {
       modal: context.overlay.modal,
       battleLayer: this.battleLayer,
       notices: this.notices,
-      goToMap: () => context.goTo(SceneName.MAP_ROOM_2),
+      goToMap: () => context.goTo(SceneName.MAP),
       setBottomInset: (px) => this.setInset({ ...this.inset, bottom: px }),
       showResources: (resources) => this.hud?.setResources(resources),
       closeBuildingInfo: () => this.select(null),
@@ -486,7 +486,7 @@ export class AttackScene implements Scene {
 
     // The HUD's way out, for a phone, where the HUD is hidden (§4.3, #151).
     this.menu = new AttackMenu([
-      { label: "Map", run: () => this.leaveFor(SceneName.MAP_ROOM_2) },
+      { label: "Map", run: () => this.leaveFor(SceneName.MAP) },
       { label: "Yard", run: () => this.leaveFor(SceneName.YARD) },
       { label: "Sign out", run: () => this.leaveFor(SceneName.LOGIN, logout) },
     ]);
@@ -714,7 +714,7 @@ export class AttackScene implements Scene {
     const session = this.session;
     const phase = session?.state().phase;
     if (session?.hasActed() && (phase === "running" || phase === "loaded")) {
-      this.askRetreat(undefined, scene === SceneName.MAP_ROOM_2 ? undefined : destinationName(scene));
+      this.askRetreat(undefined, scene === SceneName.MAP ? undefined : destinationName(scene));
       return;
     }
     before?.();

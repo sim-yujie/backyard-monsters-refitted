@@ -27,11 +27,17 @@ export interface AttackCheckpoint {
  * The checkpoint for the session as it stands, or null while there is
  * nothing to keep: before the load, or before the first drop, bomb or siege
  * weapon — an attack with nothing dropped saves nothing (#79).
+ *
+ * Never for a Map Room 1 tribe: it has no row and so no `basesaveid`, and the
+ * server keeps no checkpoint for it (`docs/server-api.md` "Map Room 1 tribe
+ * attacks"). Such an attack lands through its final save alone. A Map Room 1
+ * player's yard is a row like any other and takes checkpoints as Map Room 2's.
  */
 export const checkpointOf = (session: AttackSession): AttackCheckpoint | null => {
   const load = session.attackLoad();
   const log = session.flingLog();
   if (!load || log.events.length === 0) return null;
+  if (!Number.isSafeInteger(load.basesaveid) || load.basesaveid <= 0) return null;
   return {
     basesaveid: load.basesaveid,
     attackid: load.attackid ?? 0,

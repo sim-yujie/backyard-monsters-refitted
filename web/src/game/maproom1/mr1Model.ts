@@ -5,7 +5,8 @@ import {
   type MapRoom1TribeWire,
 } from "@/api/maproom1";
 import type { BaseLoadResponse } from "@/api/types";
-import { isHealthyChampion } from "@/game/attack/attackEntry";
+import { isHealthyChampion, mainYardRoster } from "@/game/attack/attackEntry";
+import type { AttackTarget } from "@/game/attack/attackTarget";
 import { readYard } from "@/game/yard/yardModel";
 import { tribeFromName, tribeInfo, tribeOfBaseId, type TribeId } from "./tribes";
 
@@ -474,6 +475,34 @@ export const attackGate = (
       : null;
 
   return { reason, warning, viewOff };
+};
+
+/* ── The attack ─────────────────────────────────────────────────────── */
+
+/**
+ * The attack Attack hands to the attack scene, or null when the gate is shut
+ * (the card then shows why). A tribe is a wild camp (`wmattack`), a
+ * neighbour a main yard (`attack`); both load with `mapversion: 1`, which is
+ * what binds a tribe attack to its session (issue #161). The roster is the
+ * main yard's housing alone, Map Room 1 having no outposts.
+ */
+export const mr1AttackTarget = (
+  target: Mr1Target,
+  ownSave: BaseLoadResponse | null,
+  world: { protectedUntil: number },
+  now: number,
+): AttackTarget | null => {
+  if (!ownSave) return null;
+  const own = readOwn(ownSave);
+  if (attackGate(target, own, world, now).reason) return null;
+  const flingerLevel = own.flinger.state === "ready" ? own.flinger.level : 0;
+  return {
+    baseid: target.baseid,
+    kind: target.kind === "tribe" ? "wild" : "main",
+    name: target.name,
+    roster: mainYardRoster(ownSave, flingerLevel),
+    mapversion: 1,
+  };
 };
 
 /* ── The list ───────────────────────────────────────────────────────── */

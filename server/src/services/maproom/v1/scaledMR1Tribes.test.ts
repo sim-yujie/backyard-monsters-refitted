@@ -192,4 +192,36 @@ describe("Map Room 1 army settlement (#132)", () => {
     await run(ctxFor({ monsterupdate: sent(7), flinglog: flinglog(3) }));
     expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 10 });
   });
+
+  // The web client's final save, field for field as `saveAttack` form-encodes
+  // it (`web/src/api/base.ts`; the payload is `buildAttackSave`'s): string
+  // ids, the main yard's entry keyed by its string base id, the fling log in
+  // its versioned shape, and keys the tribe path does not read at all.
+  test("the web client's final save lands: loot, army, damage, session ended", async () => {
+    startSession();
+    const ctx = ctxFor({
+      basesaveid: "0",
+      attackid: String(ATTACK_ID),
+      over: "1",
+      buildingdata: JSON.stringify({ "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 } }),
+      buildinghealthdata: JSON.stringify({ "1": 0 }),
+      damage: "92.5",
+      destroyed: "1",
+      monsterupdate: JSON.stringify([{ baseid: "5000", m: { housed: { C1: 6 }, space: 40 } }]),
+      attackloot: loot({ r1: 20, r2: 0, r3: 0, r4: 0 }),
+      resources: loot({ r1: -20, r2: 0, r3: 0, r4: 0 }),
+      attackreport: "0:01 Flung 4 Pokey\nResult: 92% damage",
+      flinglog: JSON.stringify({
+        v: 1,
+        seed: 7,
+        events: [{ kind: "fling", t: 40, x: -200, y: -200, monsters: { C1: 4 } }],
+      }),
+    });
+
+    expect(await run(ctx)).toBeNull();
+    expect(userSave.resources).toEqual({ r1: 120, r2: 100, r3: 100, r4: 100 });
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 6 });
+    expect(maproom.tribedata[0]).toMatchObject({ destroyed: 1, damage: 92 });
+    expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);
+  });
 });

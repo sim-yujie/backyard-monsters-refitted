@@ -8,6 +8,7 @@ import {
   cellReach,
   hasAnythingToSend,
   mainYardReach,
+  mainYardRoster,
   outpostReach,
   ownCellsIn,
   rosterInRange,
@@ -79,6 +80,38 @@ describe("cellDistance", () => {
 
   it("wraps around the toroidal world", () => {
     expect(cellDistance({ col: 1, row: 1 }, { col: 798, row: 799 })).toBe(3);
+  });
+});
+
+describe("mainYardRoster (Map Room 1, #132)", () => {
+  it("takes the main yard's housing as the one source, keyed by its base id", () => {
+    const m = { housed: { C1: 16, C3: 6, C5: 0 }, space: 40, hid: [7] };
+    const roster = mainYardRoster(
+      {
+        baseid: "5001",
+        monsters: m,
+        champion: [champion(100)],
+        academy: { C1: { level: 2 } },
+        catapult: 1,
+        resources: { r1: 5, r2: 6, r3: 7, r4: 8 },
+        credits: 9,
+      },
+      2,
+    );
+    expect(roster.monsters).toEqual({ C1: 16, C3: 6 });
+    expect(roster.sources).toEqual([{ baseid: "5001", m }]);
+    expect(roster.flingerLevel).toBe(2);
+    expect(roster.levels).toEqual({ C1: 2 });
+    expect(roster.champions).toEqual([champion(100)]);
+    expect(roster.catapultLevel).toBe(1);
+    expect(roster.resources).toEqual({ r1: 5, r2: 6, r3: 7, r4: 8 });
+    expect(roster.credits).toBe(9);
+  });
+
+  it("has no source and nothing to send when the load carries no housing", () => {
+    const roster = mainYardRoster({ baseid: "5001", monsters: null }, 1);
+    expect(roster.sources).toEqual([]);
+    expect(roster.monsters).toEqual({});
   });
 });
 

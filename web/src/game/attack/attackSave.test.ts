@@ -111,6 +111,38 @@ describe("the save sent as the page goes (#138)", () => {
   });
 });
 
+describe("a Map Room 1 tribe's save (#132, #161)", () => {
+  it("names the tribe, carries no basesaveid, and spends the flung monsters from the main yard", () => {
+    const tribeLoad = { ...towerLoad(), baseid: "11" } as Record<string, unknown>;
+    delete tribeLoad["basesaveid"];
+    const main = { baseid: "5001", m: { housed: { C1: 4, C3: 2 }, space: 40 } };
+    const { cell: _cell, ...rest } = targetOf();
+    const target: AttackTarget = {
+      ...rest,
+      baseid: "11",
+      mapversion: 1,
+      roster: { ...rest.roster, monsters: { C1: 4, C3: 2 }, sources: [main] },
+      load: tribeLoad as unknown as BaseLoadResponse,
+    };
+    const session = new AttackSession({ target, seed: 7 });
+    session.start();
+    session.appendFling({ x: -600, y: 120, monsters: { C1: 3 } });
+    play(session, 1);
+    session.retreat();
+
+    const payload = buildAttackSave(session);
+    expect(payload.baseid).toBe("11");
+    expect(payload.basesaveid).toBeUndefined();
+    expect(payload.attackid).toBe(77);
+    expect(payload.over).toBe(true);
+    expect(payload.destroyed).toBe(0);
+    expect(payload.monsterupdate).toEqual([
+      { baseid: "5001", m: { housed: { C1: 1, C3: 2 }, space: 40 } },
+    ]);
+    expect(payload.flinglog).toEqual(session.flingLog());
+  });
+});
+
 describe("buildAttackSave", () => {
   it("carries every §5.2 key, shaped from the session, the battle and the log", () => {
     const session = scriptedSession();

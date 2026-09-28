@@ -1,7 +1,14 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildAttackData, loadAttack, saveAttack, viewBase } from "./base";
+import {
+  basesaveidField,
+  buildAttackData,
+  loadAttack,
+  loadAttackOn,
+  saveAttack,
+  viewBase,
+} from "./base";
 import type { AttackData, BaseLoadResponse } from "./types";
 import type { AttackRoster } from "@/game/attack/attackTarget";
 import { ATTACK_CHAMPION_PROPS, ATTACK_MONSTER_PROPS } from "@/game/attack/attackStats";
@@ -135,6 +142,25 @@ describe("loadAttack", () => {
   });
 });
 
+describe("loadAttackOn (Map Room 1, #132)", () => {
+  it("names Map Room 1 on a Map Room 1 target and the default on a Map Room 2 one", async () => {
+    stubFetch();
+    await loadAttackOn({ baseid: "11", kind: "wild", roster: sandboxRoster(), mapversion: 1 });
+    await loadAttackOn({ baseid: "1000", kind: "main", roster: sandboxRoster(), mapversion: 1 });
+    await loadAttackOn({ baseid: "21970243208", kind: "wild", roster: sandboxRoster() });
+    const sentAs = sent.map((call) => [
+      call.body.get("type"),
+      call.body.get("baseid"),
+      call.body.get("mapversion"),
+    ]);
+    expect(sentAs).toEqual([
+      ["wmattack", "11", "1"],
+      ["attack", "1000", "1"],
+      ["wmattack", "21970243208", "2"],
+    ]);
+  });
+});
+
 describe("viewBase", () => {
   it("sends view for a player cell with no attackData", async () => {
     stubFetch();
@@ -185,6 +211,16 @@ describe("saveAttack", () => {
     expect(call.body.get("resources")).toBe('{"r1":-10,"r2":0,"r3":0,"r4":0}');
     expect(call.body.get("attackreport")).toBe("Flung 25 C14");
     expect(JSON.parse(String(call.body.get("flinglog")))).toEqual({ v: 1, seed: 7, events: [] });
+  });
+
+  it('sends basesaveid "0" for a Map Room 1 tribe, whose load carries none (#161)', async () => {
+    stubFetch();
+    const tribe = { baseid: "11", attackid: 5, over: true } as const;
+    await saveAttack({ ...tribe, basesaveid: undefined as unknown as number });
+    await saveAttack({ ...tribe, basesaveid: 0 });
+    await saveAttack({ ...tribe, basesaveid: 9 });
+    expect(sent.map((call) => call.body.get("basesaveid"))).toEqual(["0", "0", "9"]);
+    expect(basesaveidField(Number.NaN)).toBe("0");
   });
 
   it("sends nothing for a field that was not given", async () => {

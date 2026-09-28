@@ -11,7 +11,7 @@ import {
   type CompletedJob,
 } from "./types";
 import type { AttackCheckpoint } from "@/game/attack/attackCheckpoint";
-import type { AttackRoster, AttackTargetKind } from "@/game/attack/attackTarget";
+import type { AttackRoster, AttackTarget, AttackTargetKind } from "@/game/attack/attackTarget";
 import { ATTACK_CHAMPION_PROPS, ATTACK_MONSTER_PROPS } from "@/game/attack/attackStats";
 
 /**
@@ -207,6 +207,25 @@ export const loadAttack = async (
 };
 
 /**
+ * {@link loadAttack} for a target as the map handed it over: a Map Room 1
+ * target names its Map Room (1), a Map Room 2 one takes the default.
+ */
+export const loadAttackOn = (
+  target: Pick<AttackTarget, "baseid" | "kind" | "roster" | "mapversion">,
+): Promise<BaseLoadResponse> =>
+  target.mapversion === undefined
+    ? loadAttack(target.baseid, target.kind, target.roster)
+    : loadAttack(target.baseid, target.kind, target.roster, { mapversion: target.mapversion });
+
+/**
+ * A save's `basesaveid` as the form sends it. A Map Room 1 tribe has no row,
+ * so its attack load carries none, and the tribe save must say `"0"`: the
+ * server finds the tribe by `baseid` then (`baseSave.ts`, issue #161).
+ */
+export const basesaveidField = (basesaveid: number | undefined): string =>
+  Number.isSafeInteger(basesaveid) && (basesaveid ?? 0) > 0 ? String(basesaveid) : "0";
+
+/**
  * Posts an attack's outcome to `/base/save` (`docs/design/attack-flow.md`
  * §5.2, §5.3).
  *
@@ -237,7 +256,7 @@ export const saveAttack = async (
 
   const fields: FormBody = {
     baseid: payload.baseid,
-    basesaveid: String(payload.basesaveid),
+    basesaveid: basesaveidField(payload.basesaveid),
     attackid: String(payload.attackid),
     over: payload.over === undefined ? undefined : payload.over ? "1" : "0",
     buildingdata: json(payload.buildingdata),

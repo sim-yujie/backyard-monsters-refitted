@@ -159,13 +159,8 @@ export const ownCatapultLevel = (
 export const rosterInRange = (
   target: OffsetCell,
   ownCells: readonly OwnCell[],
-  ownSave:
-    | (Pick<BaseLoadResponse, "champion" | "academy" | "catapult" | "buildingdata" | "resources" | "credits"> & {
-        siege?: unknown;
-      })
-    | null,
+  ownSave: RosterSave | null,
 ): AttackRoster => {
-  const monsters: Record<string, number> = {};
   const sources: RosterSource[] = [];
   let flingerLevel = 0;
 
@@ -177,7 +172,46 @@ export const rosterInRange = (
     const m = own.cell.m;
     if (typeof m !== "object" || m === null) continue;
     sources.push({ baseid: own.cell.bid, m });
+  }
+  sources.sort((a, b) => (a.baseid < b.baseid ? -1 : a.baseid > b.baseid ? 1 : 0));
 
+  return rosterOf(sources, flingerLevel, ownSave);
+};
+
+/** What of the own-yard load a roster reads. */
+export type RosterSave = Pick<
+  BaseLoadResponse,
+  "champion" | "academy" | "catapult" | "buildingdata" | "resources" | "credits"
+> & { siege?: unknown };
+
+/**
+ * What a Map Room 1 player can fling (issue #132): the main yard's housing
+ * and nothing else, since Map Room 1 has no outposts, and the Flinger's
+ * level. The one source is the main yard itself, keyed by its base id, which
+ * is the only `monsterupdate` entry the server reads on a Map Room 1 save
+ * (`scaledMR1Tribes.ts`; a player target settles the same way,
+ * `monsterUpdateHandler.ts`).
+ */
+export const mainYardRoster = (
+  ownSave: RosterSave & Pick<BaseLoadResponse, "baseid" | "monsters">,
+  flingerLevel: number,
+): AttackRoster => {
+  const m = ownSave.monsters;
+  const sources: RosterSource[] =
+    typeof m === "object" && m !== null
+      ? [{ baseid: String(ownSave.baseid), m: m as RosterSource["m"] }]
+      : [];
+  return rosterOf(sources, flingerLevel, ownSave);
+};
+
+/** The monsters summed over `sources`, and what belongs to the player. */
+const rosterOf = (
+  sources: RosterSource[],
+  flingerLevel: number,
+  ownSave: RosterSave | null,
+): AttackRoster => {
+  const monsters: Record<string, number> = {};
+  for (const { m } of sources) {
     const housed = m["housed"];
     if (typeof housed !== "object" || housed === null) continue;
     for (const [id, count] of Object.entries(housed as Record<string, unknown>)) {
@@ -185,7 +219,6 @@ export const rosterInRange = (
       monsters[id] = (monsters[id] ?? 0) + count;
     }
   }
-  sources.sort((a, b) => (a.baseid < b.baseid ? -1 : a.baseid > b.baseid ? 1 : 0));
 
   const levels: Record<string, number> = {};
   for (const [id, entry] of Object.entries(ownSave?.academy ?? {})) {

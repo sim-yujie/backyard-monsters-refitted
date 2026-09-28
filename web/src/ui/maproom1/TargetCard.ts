@@ -14,6 +14,7 @@ import {
   type Mr1World,
 } from "@/game/maproom1/mr1Model";
 import { tribeInfo } from "@/game/maproom1/tribes";
+import { VICTORY_THRESHOLD } from "@/game/combat/rules";
 import { monsterName, portraitUrl } from "@/ui/attack/ArmyPanel";
 import { button, el, icon, type IconName } from "./icons";
 
@@ -203,7 +204,9 @@ export const targetCard = (
         fact(
           "respawn",
           left === null
-            ? "Wreck its Town Hall to win. The camp comes back 10 minutes later."
+            ? // The camp is wrecked at 90% damage (`VICTORY_THRESHOLD`,
+              // `derivedDestroyed`), not by its Town Hall alone.
+              `Deal ${VICTORY_THRESHOLD}% damage to wreck it. The camp comes back 10 minutes later.`
             : "You wrecked this camp. It is rebuilding.",
         ),
         fact("shield", "Attacking a tribe keeps your protection."),
