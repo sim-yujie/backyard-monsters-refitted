@@ -190,16 +190,19 @@ export class QuantityStepper {
     this.options = options;
     const { block } = options;
 
+    // The shared look is `qty-stepper` (ui.css); the block's own classes place it.
     this.element = document.createElement("span");
-    this.element.className = `${block}__controls`;
+    this.element.className = `qty-stepper ${block}__controls`;
 
-    this.minus = stepButton(`btn ${block}__step ${block}__step--minus`, "−", () => this.step(-1));
+    this.minus = stepButton(`btn qty-stepper__step ${block}__step ${block}__step--minus`, "−", () =>
+      this.step(-1),
+    );
     this.minus.setAttribute("aria-label", options.fewerLabel);
     this.cancelHolds.push(holdToRepeat(this.minus, () => this.step(-1)));
 
     const input = document.createElement("input");
     input.type = "number";
-    input.className = `field__input ${block}__count`;
+    input.className = `field__input qty-stepper__count ${block}__count`;
     input.min = "0";
     input.step = "1";
     input.inputMode = "numeric";
@@ -230,11 +233,13 @@ export class QuantityStepper {
     input.addEventListener("focus", () => input.select());
     this.input = input;
 
-    this.plus = stepButton(`btn ${block}__step ${block}__step--plus`, "+", () => this.step(1));
+    this.plus = stepButton(`btn qty-stepper__step ${block}__step ${block}__step--plus`, "+", () =>
+      this.step(1),
+    );
     this.plus.setAttribute("aria-label", options.moreLabel);
     this.cancelHolds.push(holdToRepeat(this.plus, () => this.step(1)));
 
-    this.fill = stepButton(`btn btn--ghost ${block}__fill`, "Fill", () => options.fill());
+    this.fill = stepButton(`btn btn--outline qty-stepper__fill ${block}__fill`, "Fill", () => options.fill());
     this.fill.title = options.fillTitle;
 
     this.element.append(this.minus, input, this.plus, this.fill);

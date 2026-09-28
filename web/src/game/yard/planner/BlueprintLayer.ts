@@ -69,7 +69,7 @@ const installFont = (): void => {
   BitmapFontManager.install({
     name: FONT,
     style: {
-      fontFamily: "Nunito",
+      fontFamily: "Figtree, sans-serif",
       fontSize: FONT_PX,
       fontWeight: "700",
       fill: 0xffffff,

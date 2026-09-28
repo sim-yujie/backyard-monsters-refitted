@@ -41,6 +41,7 @@
 
 .monsters-screen .panel__title {
   flex: none;
+  font-size: var(--text-xl);
 }
 
 .monsters-screen__close {
@@ -57,46 +58,11 @@
   overflow: hidden;
 }
 
-/* ── Tab strip: the HUD's scene switcher, one size down ─────────────────── */
+/* ── Tab strip: the shared tabs (ui.css `.tabs`), scrolling when narrow ── */
 
 .monsters-tabs {
-  display: flex;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  border-radius: var(--radius-pill);
-  background: var(--colour-surface-sunken);
   overflow-x: auto;
   scrollbar-width: none;
-}
-
-.monsters-tabs__tab {
-  flex: none;
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid transparent;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--colour-text-muted);
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: 700;
-  cursor: pointer;
-  transition: background var(--motion-fast) var(--easing), color var(--motion-fast) var(--easing);
-}
-
-.monsters-tabs__tab:hover {
-  color: var(--colour-text);
-  background: var(--colour-surface-overlay);
-}
-
-.monsters-tabs__tab[aria-selected="true"] {
-  background: var(--colour-accent);
-  border-color: var(--colour-accent);
-  color: var(--colour-accent-text);
-}
-
-.monsters-tabs__tab:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
 }
 
 /* ── Header: housing, goo, putty ─────────────────────────────────────────── */
@@ -107,8 +73,8 @@
   align-items: center;
   gap: var(--space-2) var(--space-5);
   padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--colour-border);
-  background: var(--colour-surface-raised);
+  border-bottom: 1px solid var(--colour-border-subtle);
+  background: var(--colour-surface-sunken);
   font-size: var(--text-sm);
 }
 
@@ -154,11 +120,11 @@
 }
 
 .monsters-header__meter .monsters-bar__fill {
-  background: var(--colour-success);
+  background: var(--colour-meter);
 }
 
 .monsters-bar--full .monsters-bar__fill {
-  background: var(--colour-accent);
+  background: var(--colour-warning);
 }
 
 /* ── Body ────────────────────────────────────────────────────────────────── */
@@ -190,7 +156,7 @@
   margin: 0;
   font-size: var(--text-sm);
   font-weight: 700;
-  color: var(--colour-accent);
+  color: var(--colour-warning);
 }
 
 /* A tab whose building the yard lacks: what to build, and the hall it needs. */
@@ -207,8 +173,10 @@
 
 .monsters-empty__title {
   margin: 0;
+  font-family: var(--font-display);
   font-size: var(--text-lg);
-  font-weight: 800;
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
 }
 
 .monsters-empty__text,
@@ -220,7 +188,7 @@
 }
 
 .monsters-empty__gate--short {
-  color: var(--colour-accent);
+  color: var(--colour-warning);
   font-weight: 700;
 }
 
@@ -262,8 +230,9 @@
 .locker-running__title {
   flex: 1;
   margin: 0;
+  font-family: var(--font-display);
   font-size: var(--text-md);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .locker-running__countdown {
@@ -281,7 +250,6 @@
 
 .locker-running__buttons > .btn {
   flex: 0 1 auto;
-  min-height: 34px;
 }
 
 .locker-cancel__open {
@@ -307,13 +275,7 @@
 }
 
 .locker-cancel__lost {
-  color: var(--colour-accent);
-}
-
-.locker .btn--danger {
-  background: var(--colour-danger);
-  border-color: var(--colour-danger);
-  color: var(--colour-text-inverse);
+  color: var(--colour-warning);
 }
 
 /* The list and the card side by side; each scrolls on its own. */
@@ -362,7 +324,7 @@
 }
 
 .locker-row[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--colour-accent) 16%, var(--colour-surface-sunken));
+  background: var(--colour-accent-soft);
   box-shadow: inset 0 0 0 1px var(--colour-accent);
 }
 
@@ -444,8 +406,9 @@
 .locker-detail__name {
   margin: 0;
   font-family: var(--font-display);
-  font-size: var(--text-lg);
-  font-weight: 400;
+  font-size: var(--text-xl);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
   line-height: var(--leading-tight);
 }
 
@@ -476,7 +439,6 @@
 
 .locker-detail__buttons > .btn {
   flex: 0 1 auto;
-  min-height: 34px;
 }
 
 .locker-detail__note {
@@ -554,6 +516,20 @@
     height: min(82vh, calc(100vh - var(--hud-height)));
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: 0;
+  }
+
+  /* The title and the close button share the first row; the tabs take the
+     whole second one, in equal columns. */
+  .monsters-screen .monsters-tabs {
+    order: 1;
+    flex: 1 0 100%;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+
+  .monsters-screen .tabs__tab {
+    padding-inline: var(--space-1);
   }
 
   .monsters-header {

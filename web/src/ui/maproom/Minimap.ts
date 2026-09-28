@@ -89,7 +89,7 @@ export class Minimap {
     const context = this.context;
 
     context.clearRect(0, 0, SIZE, SIZE);
-    context.fillStyle = palette.sunken;
+    context.fillStyle = palette.ground;
     context.fillRect(0, 0, SIZE, SIZE);
 
     // Loaded coverage, so it is obvious which parts of the world are known.
@@ -141,7 +141,7 @@ export class Minimap {
 
   /** Current token values, so a theme switch is picked up on the next repaint. */
   private palette(): {
-    sunken: string;
+    ground: string;
     border: string;
     accent: string;
     text: string;
@@ -152,14 +152,15 @@ export class Minimap {
       style.getPropertyValue(name).trim() || fallback;
 
     return {
-      sunken: token("--colour-surface-sunken", "#11141a"),
-      border: token("--colour-border", "#3a4256"),
-      accent: token("--colour-accent", "#f0a12e"),
-      text: token("--colour-text", "#eef1f7"),
-      // The strong border token rather than a surface one: against the sunken
-      // background the surface tokens are only a few levels lighter and the
-      // coverage patch was invisible at 2 px per zone.
-      loaded: token("--colour-border-strong", "#4d5875"),
+      // The opaque ground: the card and tray surfaces are see-through washes.
+      ground: token("--colour-surface-base", "#0f141c"),
+      border: token("--colour-border", "rgb(255 255 255 / 9%)"),
+      accent: token("--colour-accent", "#3dd6f5"),
+      text: token("--colour-text", "#edf1f5"),
+      // The strong border token rather than a surface one: against the ground
+      // the surface tokens are only a few levels lighter and the coverage
+      // patch was invisible at 2 px per zone.
+      loaded: token("--colour-border-strong", "rgb(255 255 255 / 16%)"),
     };
   }
 }

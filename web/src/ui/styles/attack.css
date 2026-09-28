@@ -9,18 +9,22 @@
 
 /* ── The strip ────────────────────────────────────────────────────────── */
 
+/* The HUD's glass, floating under it. */
 .attack-strip {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: var(--hud-height);
+  left: var(--hud-inset);
+  right: var(--hud-inset);
+  top: calc(var(--hud-height) + var(--hud-inset));
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
   background: var(--colour-surface-raised);
-  border-block: 1px solid var(--colour-border);
-  box-shadow: var(--shadow-panel);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
   pointer-events: auto;
   z-index: var(--z-hud);
   flex-wrap: wrap;
@@ -29,16 +33,18 @@
 .attack-strip__title {
   font-family: var(--font-display);
   font-size: var(--text-md);
-  letter-spacing: 0.02em;
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
   white-space: nowrap;
 }
 
 .attack-strip__clock {
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
   font-size: var(--text-lg);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   padding: 0 var(--space-2);
-  border: 1px solid var(--colour-border);
+  border: 1px solid var(--colour-border-strong);
   border-radius: var(--radius-sm);
   min-width: 4.5ch;
   text-align: center;
@@ -46,8 +52,8 @@
 
 /* Near the end the clock turns a warning colour rather than only ticking. */
 .attack-strip__clock--warning {
-  color: var(--colour-accent);
-  border-color: var(--colour-accent);
+  color: var(--colour-warning);
+  border-color: var(--colour-warning);
 }
 
 /* The retreat grace after the countdown (#149): a label and a second count. */
@@ -73,30 +79,36 @@
   display: contents;
 }
 
+/* A segmented switch: the chosen speed lit, not coloured (style B). */
 .attack-strip__speed {
   display: inline-flex;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  border-radius: var(--radius-pill);
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
   background: var(--colour-surface-sunken);
 }
 
 .attack-strip__speed-button {
-  border-radius: var(--radius-pill);
+  border-radius: calc(var(--radius-md) - 3px);
   padding: var(--space-1) var(--space-3);
+  background: transparent;
+  color: var(--colour-text-secondary);
+  font-family: var(--font-display);
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
 .attack-strip__speed-button[aria-pressed="true"] {
-  background: var(--colour-accent);
-  border-color: var(--colour-accent);
-  color: var(--colour-accent-text);
+  background: var(--colour-surface-selected);
+  border-color: transparent;
+  color: var(--colour-text-strong);
 }
 
 /* Retreat is destructive: danger on the border, never on the fill. */
 .attack-strip__retreat {
-  border-color: var(--colour-danger);
+  border: 1.5px solid var(--colour-danger);
+  background: var(--colour-danger-soft);
   color: var(--colour-danger);
 }
 
@@ -109,9 +121,9 @@
 .attack-dock {
   position: absolute;
   right: var(--space-4);
-  top: calc(var(--hud-height) + var(--space-7) + var(--space-3));
+  top: calc(var(--hud-height) + var(--hud-inset) + var(--space-7) + var(--space-4));
   width: 300px;
-  max-height: calc(100vh - var(--hud-height) - var(--space-7) - var(--space-6));
+  max-height: calc(100vh - var(--hud-height) - var(--hud-inset) - var(--space-7) - var(--space-6));
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -148,6 +160,8 @@
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-md);
   background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
   box-shadow: var(--shadow-panel);
   font-size: var(--text-md);
 }
@@ -187,6 +201,8 @@
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-md);
   background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
   box-shadow: var(--shadow-popup);
 }
 
@@ -221,6 +237,8 @@
     top: 0;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
+    border-width: 0 0 1px;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   }
 
   .attack-strip__title,
@@ -262,7 +280,10 @@
     max-height: 55vh;
     gap: 0;
     background: var(--colour-surface-raised);
+    -webkit-backdrop-filter: var(--blur-panel);
+    backdrop-filter: var(--blur-panel);
     border-top: 1px solid var(--colour-border);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     box-shadow: var(--shadow-panel);
     z-index: var(--z-hud);
   }
@@ -354,12 +375,12 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 0;
-  background: var(--colour-accent);
+  background: color-mix(in srgb, var(--colour-accent) 40%, transparent);
   transition: width var(--motion-fast) var(--easing);
 }
 
 .attack-army__meter--full .attack-army__meter-fill {
-  background: var(--colour-success);
+  background: color-mix(in srgb, var(--colour-success) 45%, transparent);
 }
 
 .attack-army__meter-text {
@@ -367,11 +388,11 @@
   display: block;
   line-height: 20px;
   text-align: center;
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  color: var(--colour-text);
+  font-weight: 600;
+  color: var(--colour-text-strong);
   text-shadow: 0 0 3px var(--colour-surface-base);
 }
 
@@ -483,41 +504,14 @@
   white-space: nowrap;
 }
 
+/* The quantity control (ui.css `.qty-stepper`), placed. */
 .attack-army__controls {
   grid-area: controls;
-  display: flex;
-  align-items: stretch;
-  gap: var(--space-1);
-}
-
-.attack-army__step {
-  min-width: 36px;
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--text-lg);
-  line-height: 1;
-  /* A held finger must not select text or open the context menu. */
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: manipulation;
 }
 
 .attack-army__count {
-  flex: 1 1 4ch;
-  min-width: 0;
+  flex-basis: 4ch;
   width: 4ch;
-  padding: var(--space-1) var(--space-2);
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: var(--text-md);
-  font-variant-numeric: tabular-nums;
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-
-.attack-army__count::-webkit-outer-spin-button,
-.attack-army__count::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
 }
 
 .attack-army__row--clamped .attack-army__count {
@@ -525,15 +519,10 @@
   border-style: dashed;
 }
 
-.attack-army__fill {
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--text-sm);
-}
-
 .attack-army__note {
   grid-area: note;
   font-size: var(--text-xs);
-  color: var(--colour-accent);
+  color: var(--colour-warning);
 }
 
 .attack-army__note:empty {
@@ -584,7 +573,7 @@
 }
 
 .attack-army__champion--picked {
-  background: color-mix(in srgb, var(--colour-accent) 18%, transparent);
+  background: var(--colour-accent-soft);
 }
 
 .attack-army__champion--unavailable {
@@ -805,13 +794,27 @@
   gap: var(--space-2);
 }
 
+/* Straight over the yard, so the panels' glass rather than a wash. */
 .attack-tools__button {
   flex: 1 1 0;
-  min-height: 36px;
+  min-height: var(--control-height-compact);
+  border-color: var(--colour-border);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
+}
+
+.attack-tools__button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--colour-surface-raised), var(--colour-text) 12%);
+}
+
+.attack-tools__button:disabled {
+  background: var(--colour-surface-raised);
 }
 
 .attack-tools__button[aria-expanded="true"] {
-  background: var(--colour-surface-overlay);
+  background: color-mix(in srgb, var(--colour-surface-raised), var(--colour-text) 12%);
   border-color: var(--colour-border-strong);
 }
 
@@ -911,7 +914,7 @@
 
 .attack-picker__tile-note {
   font-size: var(--text-xs);
-  color: var(--colour-accent);
+  color: var(--colour-warning);
 }
 
 .attack-picker__tile-note:empty {
@@ -998,16 +1001,17 @@
 }
 
 /*
- * The sizes, in the same idiom as the 1x/2x speed switch and the Planner's
- * level pickers (#89): a sunken pill track holding separate ghost pills, the
- * chosen one filled in accent. Each pill is a `.btn`, so it has the shared
- * hover, press and focus ring.
+ * The sizes, in the same idiom as the Planner's level pickers (#89): a
+ * sunken track holding separate ghost segments, the chosen one filled in
+ * accent. Each segment is a `.btn`, so it has the shared hover, press and
+ * focus ring.
  */
 .attack-catapult__tiers {
   display: flex;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  border-radius: var(--radius-pill);
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
   background: var(--colour-surface-sunken);
 }
 
@@ -1018,9 +1022,9 @@
   align-items: center;
   justify-content: center;
   min-width: 0;
-  min-height: 36px;
+  min-height: var(--control-height-compact);
   padding: 2px var(--space-1);
-  border-radius: var(--radius-pill);
+  border-radius: calc(var(--radius-md) - 3px);
   line-height: 1.15;
 }
 
@@ -1083,7 +1087,7 @@
 }
 
 .attack-catapult__detail--blocked {
-  color: var(--colour-accent);
+  color: var(--colour-warning);
 }
 
 @media (width <= 620px) {

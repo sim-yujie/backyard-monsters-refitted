@@ -291,15 +291,16 @@ export class YardScene implements Scene {
      *
      * It used to be a ghost button labelled "Plan", which is to say grey text
      * on a dark background beside a wall of grey text, and the owner's verdict
-     * on it was "I really don't see the Plan button". So: the accent fill the
-     * rest of the client keeps for its primary action, a floor-plan glyph
+     * on it was "I really don't see the Plan button". So: a solid control
+     * floating over the yard (dark glass since style B, #155, which keeps the
+     * cyan for Collect and for what is selected), a floor-plan glyph
      * beside the word, and "Layout" rather than "Plan" because a plan is a
      * thing and a layout is what the player is trying to do. The P shortcut and
      * the Q5 access rule are unchanged — only how loudly it asks to be clicked.
      */
     this.plannerButton = document.createElement("button");
     this.plannerButton.type = "button";
-    this.plannerButton.className = "btn btn--primary yard-toolbar__layout";
+    this.plannerButton.className = "btn btn--float yard-toolbar__layout";
     this.plannerLabel = document.createElement("span");
     this.plannerLabel.className = "yard-toolbar__layout-label";
     this.plannerLabel.textContent = "Layout";
@@ -321,7 +322,7 @@ export class YardScene implements Scene {
     if (!this.target) {
       this.buildButton = document.createElement("button");
       this.buildButton.type = "button";
-      this.buildButton.className = "btn btn--primary yard-toolbar__layout yard-toolbar__build";
+      this.buildButton.className = "btn btn--float yard-toolbar__layout yard-toolbar__build";
       this.buildButton.textContent = "Build";
       this.buildButton.title = "Build something new";
       this.buildButton.setAttribute("aria-expanded", "false");

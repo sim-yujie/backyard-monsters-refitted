@@ -16,7 +16,7 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: var(--colour-surface-sunken);
+  background: var(--colour-surface-base);
   color: var(--colour-text);
   font-family: var(--font-body);
   font-size: var(--text-md);
@@ -73,8 +73,8 @@ body {
 
 .u-display {
   font-family: var(--font-display);
-  font-weight: 400;
-  letter-spacing: 0.01em;
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
   line-height: var(--leading-tight);
 }
 
@@ -93,32 +93,46 @@ body {
   white-space: nowrap;
 }
 
-/* ── Buttons ────────────────────────────────────────────────────────────── */
+/* ── Buttons ──────────────────────────────────────────────────────────────
+ * Style B (#155): a filled secondary by default, the cyan primary for the one
+ * thing to do, a ghost for quiet actions, an outline for a second choice
+ * beside a primary, and danger for the step that cannot be taken back.
+ * Every kind is at least `--control-height-compact` tall, which is 44px on a
+ * phone or under a finger.
+ */
 
 .btn {
+  min-height: var(--control-height-compact);
   font: inherit;
   font-weight: 700;
   padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--colour-border-strong);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
-  background: var(--colour-surface-raised);
+  background: var(--colour-surface-control);
   color: var(--colour-text);
   cursor: pointer;
   transition:
     background var(--motion-fast) var(--easing),
+    border-color var(--motion-fast) var(--easing),
+    color var(--motion-fast) var(--easing),
     transform var(--motion-fast) var(--easing);
 }
 
 .btn:hover:not(:disabled) {
-  background: var(--colour-surface-overlay);
+  background: var(--colour-surface-control-hover);
 }
 
 .btn:active:not(:disabled) {
   transform: translateY(1px);
 }
 
+/* Disabled reads as off, not as faded: a flat wash and quieter words that
+   still pass 4.5:1, because a disabled button often carries its cost. */
 .btn:disabled {
-  opacity: 0.5;
+  border-color: transparent;
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-disabled);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
@@ -135,24 +149,64 @@ body {
 
 .btn--primary:hover:not(:disabled) {
   background: var(--colour-accent-hover);
+  border-color: var(--colour-accent-hover);
+}
+
+.btn--primary:active:not(:disabled) {
+  background: var(--colour-accent-pressed);
+  border-color: var(--colour-accent-pressed);
 }
 
 .btn--ghost {
   background: transparent;
   border-color: transparent;
-  color: var(--colour-text-muted);
+  color: var(--colour-text-secondary);
 }
 
 .btn--ghost:hover:not(:disabled) {
-  background: var(--colour-surface-overlay);
+  background: var(--colour-surface-control);
   color: var(--colour-text);
 }
 
+.btn--ghost:disabled {
+  background: transparent;
+}
+
+.btn--outline {
+  background: transparent;
+  border-color: var(--colour-border-strong);
+  color: var(--colour-text);
+}
+
+.btn--outline:hover:not(:disabled) {
+  background: var(--colour-surface-control);
+}
+
+.btn--danger {
+  background: var(--colour-danger);
+  border-color: var(--colour-danger);
+  color: var(--colour-text-inverse);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: var(--colour-danger);
+  filter: brightness(1.08);
+}
+
 .btn--icon {
+  min-width: var(--control-height-compact);
   padding: var(--space-1) var(--space-2);
-  min-width: 32px;
   font-size: var(--text-lg);
   line-height: 1;
+}
+
+/* A panel's close button: a small filled square, not a bare glyph. */
+.btn--ghost.btn--icon {
+  background: var(--colour-surface-sunken);
+}
+
+.btn--ghost.btn--icon:hover:not(:disabled) {
+  background: var(--colour-surface-control-hover);
 }
 
 /* ── Fields ─────────────────────────────────────────────────────────────── */
@@ -165,17 +219,18 @@ body {
 
 .field__label {
   font-size: var(--text-sm);
-  font-weight: 700;
-  color: var(--colour-text-muted);
+  font-weight: 600;
+  color: var(--colour-text-secondary);
 }
 
 .field__input {
+  min-height: var(--control-height-compact);
   font: inherit;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--colour-border);
+  border: 1px solid var(--colour-border-strong);
   border-radius: var(--radius-md);
-  background: var(--colour-surface-sunken);
-  color: var(--colour-text);
+  background: var(--colour-surface-input);
+  color: var(--colour-text-strong);
 }
 
 .field__input:focus-visible {
@@ -191,6 +246,7 @@ body {
 
 /* ── Panel ──────────────────────────────────────────────────────────────── */
 
+/* Dark slate glass over the game: translucent, blurred, softly lifted. */
 .panel {
   display: flex;
   flex-direction: column;
@@ -199,6 +255,8 @@ body {
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-lg);
   background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
   box-shadow: var(--shadow-panel);
   overflow: hidden;
 }
@@ -207,9 +265,8 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  background: var(--colour-surface-overlay);
-  border-bottom: 1px solid var(--colour-border);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--colour-border-subtle);
 }
 
 .panel__title {
@@ -217,7 +274,8 @@ body {
   margin: 0;
   font-family: var(--font-display);
   font-size: var(--text-lg);
-  font-weight: 400;
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
   line-height: var(--leading-tight);
 }
 
@@ -271,28 +329,158 @@ body {
   margin-left: 0.8em;
 }
 
+/* ── Quantity stepper (`QuantityStepper.ts`) ───────────────────────────────
+ * `−`, a number box, `+` and Fill, the same wherever it is used (the Army
+ * panel, Hatch, the bunker, juicing). A screen's own `<block>__controls`
+ * classes only place the row; the look is here.
+ */
+.qty-stepper {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+
+.qty-stepper__step {
+  min-width: var(--control-height-compact);
+  padding: 0 var(--space-2);
+  font-size: var(--text-lg);
+  line-height: 1;
+  /* A held finger must not select text or open the context menu. */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.qty-stepper__count {
+  flex: 1 1 5ch;
+  min-width: 0;
+  width: 5ch;
+  padding: var(--space-1) var(--space-2);
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.qty-stepper__count::-webkit-outer-spin-button,
+.qty-stepper__count::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.qty-stepper__fill {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* ── Chips ──────────────────────────────────────────────────────────────────
+ * A small rounded label: a level ("Lv 3"), a count ("3 waiting"), a state.
+ * `.chip--accent` is for the selected or the next thing to do only.
+ */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-control);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  white-space: nowrap;
+}
+
+.chip--accent {
+  background: var(--colour-accent-soft);
+  color: var(--colour-text-strong);
+}
+
+.chip--warning {
+  background: var(--colour-warning);
+  color: var(--colour-warning-text);
+  font-weight: 700;
+}
+
+/* ── Tabs and segments ──────────────────────────────────────────────────────
+ * One look for every row of tabs: a quiet tray, the chosen tab lit and
+ * underlined in the accent. The Monsters and Build screens' strips
+ * (monsters.css `.monsters-tabs`) and the HUD's screens share it.
+ */
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.tabs__tab {
+  flex: none;
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: calc(var(--radius-md) - 3px);
+  background: transparent;
+  color: var(--colour-text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--easing),
+    color var(--motion-fast) var(--easing);
+}
+
+.tabs__tab:hover {
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+}
+
+.tabs__tab[aria-selected="true"],
+.tabs__tab[aria-current="true"],
+.tabs__tab[aria-pressed="true"] {
+  background: var(--colour-surface-selected);
+  color: var(--colour-text-strong);
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 var(--colour-accent);
+}
+
+.tabs__tab:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 /* ── HUD ────────────────────────────────────────────────────────────────── */
 
+/* A floating bar of the panels' glass, `--hud-inset` in from the edges. */
 .hud {
   position: absolute;
-  inset: 0 0 auto 0;
+  inset: var(--hud-inset) var(--hud-inset) auto;
   z-index: var(--z-hud);
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  height: var(--hud-height);
-  padding: 0 var(--space-4);
-  background: linear-gradient(
-    to bottom,
-    var(--colour-surface-raised),
-    color-mix(in srgb, var(--colour-surface-raised) 88%, transparent)
-  );
-  border-bottom: 1px solid var(--colour-border);
+  gap: var(--space-3);
+  height: var(--hud-bar-height);
+  padding: 0 var(--space-2) 0 var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
 }
 
 .hud__brand {
   font-family: var(--font-display);
   font-size: var(--text-lg);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
   white-space: nowrap;
 }
 
@@ -321,9 +509,10 @@ body {
   position: relative;
   display: inline-flex;
   align-items: center;
+  min-height: var(--control-height);
   padding: var(--space-1) var(--space-2);
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -332,7 +521,7 @@ body {
 
 .hud__resource-button:hover,
 .hud__resource-button[aria-expanded="true"] {
-  background: var(--colour-surface-sunken);
+  background: var(--colour-surface-control);
 }
 
 .hud__resource-button:focus-visible {
@@ -344,9 +533,12 @@ body {
   height: 20px;
 }
 
+/* The amounts are Sora: figures read at a glance. */
 .hud__resource-value {
+  font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
+  font-weight: 600;
+  letter-spacing: var(--display-tracking);
 }
 
 .hud [hidden] {
@@ -367,10 +559,10 @@ body {
   position: absolute;
   left: var(--space-2);
   right: var(--space-2);
-  bottom: 1px;
+  bottom: 3px;
   height: 3px;
   border-radius: var(--radius-pill);
-  background: var(--colour-surface-sunken);
+  background: var(--colour-surface-overlay);
   overflow: hidden;
 }
 
@@ -378,15 +570,15 @@ body {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--colour-success);
+  background: var(--colour-meter);
 }
 
 .hud__resource-button--full .hud__cap-fill {
-  background: var(--colour-accent);
+  background: var(--colour-warning);
 }
 
 .hud__resource-button--full .hud__resource-value {
-  color: var(--colour-accent);
+  color: var(--colour-warning);
 }
 
 /* Workers, free / total; a press goes to the job that finishes soonest. */
@@ -419,7 +611,7 @@ body {
 .hud__exact-note {
   max-width: 24ch;
   margin: var(--space-1) 0 0;
-  color: var(--colour-accent);
+  color: var(--colour-warning);
   font-size: var(--text-sm);
   font-weight: 400;
 }
@@ -449,7 +641,7 @@ body {
   z-index: var(--z-popup);
   padding: 0 var(--space-1);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--colour-surface-sunken) 80%, transparent);
+  background: color-mix(in srgb, var(--colour-surface-base) 80%, transparent);
   font-size: var(--text-sm);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -511,24 +703,29 @@ body {
   flex: 1;
 }
 
+/* The screen switcher: a tray of tabs, the current one lit and underlined
+   in the accent (ui.css `.tabs`). */
 .hud__scenes {
   display: flex;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  border-radius: var(--radius-pill);
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
   background: var(--colour-surface-sunken);
 }
 
 .hud__scene-button {
-  border-radius: var(--radius-pill);
+  border-radius: calc(var(--radius-md) - 3px);
   padding: var(--space-1) var(--space-3);
   font-size: var(--text-sm);
+  font-weight: 600;
 }
 
 .hud__scene-button[aria-current="true"] {
-  background: var(--colour-accent);
-  border-color: var(--colour-accent);
-  color: var(--colour-accent-text);
+  background: var(--colour-surface-selected);
+  border-color: transparent;
+  color: var(--colour-text-strong);
+  box-shadow: inset 0 -2px 0 var(--colour-accent);
 }
 
 /* A phone: the screen buttons alone fill a 56 px row, which left the readouts
@@ -537,8 +734,10 @@ body {
    HUD follows through --hud-height. The readouts still fall back to short
    amounts when even that row is too narrow (`HudFit` in Hud.ts). */
 @media (width <= 620px) {
+  /* Edge to edge on a phone: the top row has no width to spare for an inset. */
   :root {
-    --hud-height: 92px;
+    --hud-inset: 0px;
+    --hud-bar-height: 92px;
   }
 
   .hud {
@@ -547,6 +746,8 @@ body {
     row-gap: var(--space-1);
     column-gap: var(--space-2);
     padding: var(--space-1) var(--space-2);
+    border-width: 0 0 1px;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   }
 
   .hud__brand {
@@ -564,6 +765,12 @@ body {
     padding: var(--space-1);
   }
 
+  /* Sora's figures are wider than the body face's: one step down so the
+     five short amounts still share the row at 412 px. */
+  .hud__resource-value {
+    font-size: var(--text-sm);
+  }
+
   .hud__cap-bar {
     left: var(--space-1);
     right: var(--space-1);
@@ -572,6 +779,21 @@ body {
   .hud__resource-button .res-icon,
   .hud__workers-icon {
     height: 18px;
+  }
+}
+
+/* The narrowest phones: smaller figures and tighter readouts again. */
+@media (width <= 390px) {
+  .hud__resource-button {
+    padding-inline: 2px;
+  }
+
+  .hud__resource-value {
+    font-size: var(--text-xs);
+  }
+
+  .hud__resource-button .res-icon {
+    height: 16px;
   }
 }
 
@@ -609,7 +831,9 @@ body {
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-md);
   background: var(--colour-surface-raised);
-  box-shadow: var(--shadow-panel);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
@@ -624,6 +848,8 @@ body {
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
   border: 1px solid var(--colour-border);
   color: var(--colour-text-muted);
   font-size: var(--text-sm);

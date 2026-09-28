@@ -106,12 +106,6 @@
   color: var(--colour-danger);
 }
 
-.train .btn--danger {
-  background: var(--colour-danger);
-  border-color: var(--colour-danger);
-  color: var(--colour-text-inverse);
-}
-
 .train-row__level {
   font-size: var(--text-sm);
   font-weight: 400;

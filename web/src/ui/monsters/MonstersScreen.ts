@@ -102,7 +102,7 @@ export class MonstersScreen {
     });
 
     const strip = document.createElement("div");
-    strip.className = "monsters-tabs";
+    strip.className = "tabs monsters-tabs";
     strip.setAttribute("role", "tablist");
     strip.setAttribute("aria-label", "Monster buildings");
     for (const id of MONSTERS_TAB_ORDER) {
@@ -110,7 +110,7 @@ export class MonstersScreen {
       if (!definition) continue;
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "monsters-tabs__tab";
+      button.className = "tabs__tab monsters-tabs__tab";
       button.id = `monsters-tab-${id}`;
       button.setAttribute("role", "tab");
       button.setAttribute("aria-controls", "monsters-body");

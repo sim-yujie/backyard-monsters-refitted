@@ -38,7 +38,7 @@
 }
 
 .bunker__bar .monsters-bar__fill {
-  background: var(--colour-success);
+  background: var(--colour-meter);
 }
 
 .bunker__status {
@@ -80,7 +80,7 @@
 .bunker__gate {
   margin: 0;
   font-size: var(--text-sm);
-  color: var(--colour-accent);
+  color: var(--colour-warning);
 }
 
 /* ── From housing / Buy ──────────────────────────────────────────────────── */
@@ -171,45 +171,6 @@
   font-size: var(--text-xs);
   color: var(--colour-text-muted);
   font-variant-numeric: tabular-nums;
-}
-
-.bunker__controls {
-  display: flex;
-  align-items: stretch;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.bunker__step {
-  min-width: 36px;
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--text-lg);
-  line-height: 1;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: manipulation;
-}
-
-.bunker__count {
-  flex: 1 1 5ch;
-  min-width: 0;
-  width: 5ch;
-  padding: var(--space-1) var(--space-2);
-  text-align: center;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  appearance: textfield;
-}
-
-.bunker__count::-webkit-outer-spin-button,
-.bunker__count::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.bunker__fill {
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--text-sm);
 }
 
 .bunker__out-controls {

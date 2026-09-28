@@ -494,7 +494,7 @@ export class CreepFx {
     const text = new Text({
       text: "",
       style: {
-        fontFamily: "Nunito, sans-serif",
+        fontFamily: "Figtree, sans-serif",
         fontSize: 13,
         fontWeight: "bold",
         fill: LABEL_COLOUR,

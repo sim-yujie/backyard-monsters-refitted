@@ -56,7 +56,7 @@ const installFont = (): void => {
   BitmapFontManager.install({
     name: MAP_FONT,
     style: {
-      fontFamily: "Nunito",
+      fontFamily: "Figtree, sans-serif",
       fontSize: ATLAS_FONT_PX,
       fill: 0xffffff,
       // Baked into the atlas, so it costs nothing per label and keeps white

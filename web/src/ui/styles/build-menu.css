@@ -30,6 +30,7 @@
 
 .build-menu .panel__title {
   flex: none;
+  font-size: var(--text-xl);
 }
 
 .build-menu__close {
@@ -49,8 +50,8 @@
 .build-menu__summary {
   margin: 0;
   padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--colour-border);
-  background: var(--colour-surface-raised);
+  border-bottom: 1px solid var(--colour-border-subtle);
+  background: var(--colour-surface-sunken);
   color: var(--colour-text-muted);
   font-size: var(--text-sm);
 }
@@ -128,7 +129,9 @@
 
 .build-tile__name {
   margin: 0;
+  font-family: var(--font-display);
   font-size: var(--text-md);
+  font-weight: 600;
   line-height: var(--leading-tight);
 }
 
@@ -175,9 +178,10 @@
 /* ── The toolbar's Build control ───────────────────────────────────────── */
 
 .yard-toolbar__build[aria-expanded="true"] {
-  background: var(--colour-surface-raised);
+  background: var(--colour-surface-selected);
   border-color: var(--colour-border-strong);
-  color: var(--colour-text);
+  color: var(--colour-text-strong);
+  box-shadow: inset 0 -2px 0 var(--colour-accent), var(--shadow-float);
 }
 
 /* ── Carrying a new building ───────────────────────────────────────────── */
@@ -266,6 +270,17 @@
     height: min(78vh, calc(100vh - var(--hud-height)));
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: 0;
+  }
+
+  /* The title and the close button share the first row; the tabs take the
+     whole second one, as on the Monsters screen. */
+  .build-menu .monsters-tabs {
+    order: 1;
+    flex: 1 0 100%;
+  }
+
+  .build-menu .tabs__tab {
+    padding-inline: var(--space-3);
   }
 
   .build-menu__grid {

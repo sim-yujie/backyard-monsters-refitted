@@ -194,7 +194,7 @@ export class YardJobBars {
       const label = new Text({
         text: state.label,
         style: {
-          fontFamily: "Nunito, sans-serif",
+          fontFamily: "Figtree, sans-serif",
           fontSize: 13,
           fontWeight: "800",
           fill: 0xffffff,

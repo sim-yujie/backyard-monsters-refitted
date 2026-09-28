@@ -288,15 +288,16 @@ chroma-key it to transparency, and save it as `<tribe>.png` at 1024 px with a
 
 ## Fonts
 
-**Display: [Titan One](https://fonts.google.com/specimen/Titan+One)** by Rodrigo
-Fuenzalida, under the SIL Open Font License 1.1. It is the closest free stand-in
-for Grobold, the original game's display face: heavy, rounded terminals, wide
-cartoon proportions. Luckiest Guy was the other strong candidate on shape but
-ships under Apache 2.0 rather than the OFL, and Lilita One is noticeably lighter
-and narrower than Grobold.
+The UI follows visual direction B, "Clean Command" (#155), which replaced the
+earlier Grobold look-alike (Titan One with Nunito).
 
-**Body: [Nunito](https://fonts.google.com/specimen/Nunito)** by Vernon Adams,
-Cyreal and Jacques Le Bailly, under the SIL Open Font License 1.1. A humanist
-sans with rounded terminals, so it sits beside Titan One without clashing.
+**Headings and figures: [Sora](https://fonts.google.com/specimen/Sora)** by
+Jonathan Barnbrook and Julián Moncada, under the SIL Open Font License 1.1. A
+geometric sans with open, even figures, used for titles and for the amounts the
+player reads at a glance (the HUD, costs on the big buttons).
+
+**Body: [Figtree](https://fonts.google.com/specimen/Figtree)** by Erik Kennedy,
+under the SIL Open Font License 1.1. A friendly, compact sans that stays clear
+at 12-13px, which is most of the panel text. The Pixi canvas labels use it too.
 
 Both load from Google Fonts through a `<link>` in `index.html`.

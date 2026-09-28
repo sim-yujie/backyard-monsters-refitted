@@ -30,9 +30,29 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  min-height: var(--control-height);
   padding: var(--space-2) var(--space-4);
   font-size: var(--text-md);
-  box-shadow: var(--shadow-panel);
+  box-shadow: var(--shadow-float);
+}
+
+/* Layout and Build float over the yard as dark glass rather than in the
+   accent, which is kept for Collect and for what is selected (style B, #155).
+   The yard's Attack button (a foreign yard) stays the one cyan action. */
+.yard-toolbar__layout.btn--float {
+  border-color: var(--colour-border);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  color: var(--colour-text);
+}
+
+.yard-toolbar__layout.btn--float:disabled {
+  background: var(--colour-surface-raised);
+}
+
+.yard-toolbar__layout.btn--float:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--colour-surface-raised), var(--colour-text) 12%);
 }
 
 .yard-toolbar__icon {
@@ -44,9 +64,10 @@
 
 /* Open: the control is now the way out, so it stops shouting. */
 .yard-toolbar__layout[aria-pressed="true"] {
-  background: var(--colour-surface-raised);
+  background: var(--colour-surface-selected);
   border-color: var(--colour-border-strong);
-  color: var(--colour-text);
+  color: var(--colour-text-strong);
+  box-shadow: inset 0 -2px 0 var(--colour-accent), var(--shadow-float);
 }
 
 @media (pointer: coarse) {
@@ -75,6 +96,8 @@
   gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
   background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
   border-block: 1px solid var(--colour-border);
   box-shadow: var(--shadow-panel);
   pointer-events: auto;
@@ -93,7 +116,8 @@
 .planner-bar__title {
   font-family: var(--font-display);
   font-size: var(--text-md);
-  letter-spacing: 0.02em;
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
 }
 
 .planner-bar__slot,
@@ -155,6 +179,8 @@
   padding: var(--space-1);
   gap: var(--space-1);
   background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-panel);
@@ -263,7 +289,7 @@
 }
 
 .planner-cost__cell--shiny .planner-cost__value {
-  color: var(--colour-accent);
+  color: var(--colour-warning);
 }
 
 /* The two plan cells (§5.3). Narrower: they carry a count, not an amount. */
@@ -600,7 +626,7 @@
 }
 
 .planner-apply__list-title--wait {
-  color: var(--colour-accent);
+  color: var(--colour-warning);
 }
 
 .planner-apply__list-title--skip {
@@ -691,7 +717,7 @@
 }
 
 .planner-banner--warning {
-  border-inline-start: 4px solid var(--colour-accent);
+  border-inline-start: 4px solid var(--colour-warning);
 }
 
 .planner-banner--error {
@@ -735,7 +761,7 @@
 
 /* A warning reports, it does not refuse: its own mark and its own colour. */
 .planner-checklist__row--warn .planner-checklist__heading {
-  color: var(--colour-accent);
+  color: var(--colour-warning);
 }
 
 .planner-checklist__faults {
@@ -828,7 +854,9 @@
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-md);
   background: var(--colour-surface-raised);
-  box-shadow: var(--shadow-panel);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
 }
 
 .yard-zoom__slider {
@@ -870,8 +898,8 @@
   display: block;
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-md);
-  background: var(--colour-surface-sunken);
-  box-shadow: var(--shadow-panel);
+  background: var(--colour-surface-base);
+  box-shadow: var(--shadow-float);
   cursor: crosshair;
   touch-action: none;
 }
@@ -1160,7 +1188,7 @@
 
 .planner-inventory__swatch[data-kind="tower"],
 .planner-inventory__swatch[data-kind="trap"] {
-  background: var(--colour-accent);
+  background: var(--colour-warning);
 }
 
 /* The level, as a chip: it is the second half of the row's identity. */
@@ -1249,7 +1277,9 @@
   padding: var(--space-2);
   border: 1px solid var(--colour-border-strong);
   border-radius: var(--radius-md);
-  background: var(--colour-surface-overlay);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
   box-shadow: var(--shadow-popup);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
@@ -1264,7 +1294,7 @@
 .popover__demo {
   display: block;
   border-radius: var(--radius-sm);
-  background: var(--colour-surface-sunken);
+  background: var(--colour-surface-base);
   overflow: hidden;
 }
 
@@ -1321,7 +1351,7 @@
 
 .planner-demo__cursor {
   fill: var(--colour-text);
-  stroke: var(--colour-surface-sunken);
+  stroke: var(--colour-surface-base);
   stroke-width: 1;
 }
 

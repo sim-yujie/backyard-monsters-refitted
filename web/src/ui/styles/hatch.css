@@ -89,7 +89,7 @@
 .hatch-chip--stalled .hatch-strip__label,
 .hatch-chip--upgrading .hatch-chip__state,
 .hatch-chip--upgrading .hatch-strip__label {
-  color: var(--colour-accent);
+  color: var(--colour-warning);
 }
 
 .hatch-chip--damaged .hatch-chip__state,
@@ -278,7 +278,7 @@
 }
 
 .hatch-add__warning {
-  color: var(--colour-accent);
+  color: var(--colour-warning);
   font-weight: 700;
 }
 
@@ -289,45 +289,9 @@
   gap: var(--space-2);
 }
 
-/* The quantity control: the Army panel's, in this block's names. */
+/* The quantity control (ui.css `.qty-stepper`), placed. */
 .hatch-add__controls {
-  display: flex;
   flex: 1 1 220px;
-  align-items: stretch;
-  gap: var(--space-1);
-}
-
-.hatch-add__step {
-  min-width: 40px;
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--text-lg);
-  line-height: 1;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: manipulation;
-}
-
-.hatch-add__count {
-  flex: 1 1 5ch;
-  min-width: 0;
-  width: 5ch;
-  padding: var(--space-1) var(--space-2);
-  text-align: center;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-
-.hatch-add__count::-webkit-outer-spin-button,
-.hatch-add__count::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.hatch-add__fill {
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--text-sm);
 }
 
 .hatch-add__add {

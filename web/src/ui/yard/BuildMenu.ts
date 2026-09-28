@@ -86,13 +86,13 @@ export class BuildMenu {
     });
 
     const strip = document.createElement("div");
-    strip.className = "monsters-tabs build-menu__tabs";
+    strip.className = "tabs monsters-tabs build-menu__tabs";
     strip.setAttribute("role", "tablist");
     strip.setAttribute("aria-label", "Building categories");
     for (const category of BUILD_CATALOGUE) {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "monsters-tabs__tab";
+      button.className = "tabs__tab monsters-tabs__tab";
       button.id = `build-tab-${category.id}`;
       button.setAttribute("role", "tab");
       button.setAttribute("aria-controls", "build-menu-body");

@@ -11,10 +11,10 @@
 .housing__stalled {
   margin: var(--space-3) var(--space-4) 0;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--colour-accent);
+  border: 1px solid var(--colour-warning);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--colour-accent) 12%, var(--colour-surface-sunken));
-  color: var(--colour-accent);
+  background: color-mix(in srgb, var(--colour-warning) 12%, var(--colour-surface-sunken));
+  color: var(--colour-warning);
   font-size: var(--text-sm);
   font-weight: 700;
 }
@@ -57,7 +57,7 @@
 }
 
 .housing__bar .monsters-bar__fill {
-  background: var(--colour-success);
+  background: var(--colour-meter);
 }
 
 .housing__empty {
@@ -151,7 +151,7 @@
 
 .housing-table__row--zero td:nth-child(3),
 .housing-table__row--zero .housing-table__note {
-  color: var(--colour-accent);
+  color: var(--colour-warning);
 }
 
 .housing-table__row--focus {
@@ -209,7 +209,7 @@
 }
 
 .housing-juice__note--bad {
-  color: var(--colour-accent);
+  color: var(--colour-warning);
 }
 
 .housing-juice__list {
@@ -263,42 +263,7 @@
 }
 
 .housing-juice__controls {
-  display: flex;
   flex: 0 1 220px;
-  align-items: stretch;
-  gap: var(--space-1);
-}
-
-.housing-juice__step {
-  min-width: 36px;
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--text-lg);
-  line-height: 1;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: manipulation;
-}
-
-.housing-juice__count {
-  flex: 1 1 5ch;
-  min-width: 0;
-  width: 5ch;
-  padding: var(--space-1) var(--space-2);
-  text-align: center;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  appearance: textfield;
-}
-
-.housing-juice__count::-webkit-outer-spin-button,
-.housing-juice__count::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.housing-juice__fill {
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--text-sm);
 }
 
 .housing-juice__footer {
@@ -331,7 +296,7 @@
 }
 
 .housing-juice__lost {
-  color: var(--colour-accent);
+  color: var(--colour-warning);
 }
 
 @media (width <= 620px) {

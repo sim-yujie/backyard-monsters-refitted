@@ -178,8 +178,11 @@ describe("QuantityStepper box and Fill", () => {
 
   it("names its parts and hangs its classes off the block", () => {
     const { stepper } = mount();
-    expect(stepper.element.className).toBe("qty__controls");
+    expect(stepper.element.className).toBe("qty-stepper qty__controls");
     expect(stepper.minus.className).toContain("qty__step--minus");
+    expect(stepper.minus.className).toContain("qty-stepper__step");
+    expect(stepper.input.className).toContain("qty-stepper__count");
+    expect(stepper.fill.className).toContain("qty-stepper__fill");
     expect(stepper.plus.getAttribute("aria-label")).toBe("More Pokey");
     expect(stepper.input.getAttribute("aria-label")).toBe("Pokey to hatch");
     expect(stepper.fill.title).toBe("As many as fit");

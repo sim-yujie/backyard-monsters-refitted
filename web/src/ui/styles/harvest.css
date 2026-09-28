@@ -15,6 +15,7 @@
    edges of its " all ·" span and " 12.4K" text and read "Collectall ·12.4K"
    (#144). */
 .hud__collect-button {
+  padding-inline: var(--space-3);
   background: var(--colour-accent);
   color: var(--colour-accent-text);
   font-weight: 700;
@@ -50,6 +51,10 @@
   background: var(--colour-accent-hover);
 }
 
+.hud__collect-button:active:not(:disabled) {
+  background: var(--colour-accent-pressed);
+}
+
 .hud__collect-button:disabled {
   opacity: 0.6;
   cursor: progress;
@@ -61,7 +66,7 @@
   z-index: var(--z-popup);
   padding: 0 var(--space-1);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--colour-surface-sunken) 80%, transparent);
+  background: color-mix(in srgb, var(--colour-surface-base) 80%, transparent);
   color: var(--colour-success);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
