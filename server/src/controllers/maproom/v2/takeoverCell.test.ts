@@ -1,0 +1,231 @@
+import { beforeEach, describe, expect, mock, test } from "bun:test";
+import type { Context } from "koa";
+
+/**
+ * `POST /worldmapv2/takeoverCell` (issue #182). The route took any cell at 90%
+ * damage whatever its protection, lock or wild-camp regeneration said. These
+ * drive the controller over an in-memory stand-in for the rows it reads.
+ */
+
+const TAKER = 2505;
+const OWNER = 77;
+const WORLD = "world-a";
+const OUTPOST = "2000240208";
+const CAMP = "2000242208";
+
+type Row = Record<string, unknown>;
+
+let takerSave: Row;
+let ownerSave: Row;
+let cells: Row[];
+let flushed: number;
+let sessions: Set<number>;
+let inRange: boolean;
+
+const now = () => Math.floor(Date.now() / 1000);
+
+const cellRow = (baseid: string, uid: number, base_type: number, save: Row): Row => ({
+  baseid,
+  uid,
+  x: 240,
+  y: 208,
+  base_type,
+  map_version: 2,
+  world: { uuid: WORLD, name: "World" },
+  save: { baseid, attackid: 0, attacks: [], protected: 0, locked: 0, wmid: 0, savetime: now() - 60, ...save },
+});
+
+const saves = () => [takerSave, ownerSave, ...cells.map((cell) => cell.save as Row)];
+
+const txEm = {
+  findOne: async (_entity: unknown, where: Row) =>
+    saves().find((save) => Object.entries(where).every(([key, value]) => save[key] === value)) ?? null,
+  persist: () => {},
+  flush: async () => {
+    flushed += 1;
+  },
+};
+
+mock.module("../../../server.js", () => ({
+  postgres: {
+    em: {
+      populate: async (user: Row) => {
+        user.save = takerSave;
+      },
+      findOne: async (_entity: unknown, where: Row) =>
+        cells.find((cell) => cell.baseid === where.baseid && where.world === WORLD) ?? null,
+      transactional: async (run: (em: typeof txEm) => Promise<unknown>) => run(txEm),
+    },
+  },
+  redis: { del: async () => 1 },
+}));
+
+mock.module("../../../services/maproom/v2/validateRange.js", () => ({
+  validateRange: async () => {
+    if (!inRange) throw new Error("out of range");
+  },
+}));
+
+mock.module("../../../services/base/attackSessionStore.js", () => ({
+  startAttackSession: async () => {},
+  readAttackSession: async (basesaveid: number) =>
+    sessions.has(basesaveid) ? { attackerid: OWNER, attackid: 1, startedat: 0 } : null,
+  endAttackSession: async () => {},
+}));
+
+const { takeoverCell } = await import("./takeoverCell.js");
+
+const run = async (body: Row) => {
+  const ctx = { authUser: { userid: TAKER, username: "taker", alliance_id: null }, request: { body } } as unknown as Context;
+  try {
+    await takeoverCell(ctx, async () => {});
+    return { ok: true as const, body: ctx.body as Row, reason: undefined };
+  } catch (caught) {
+    return { ok: false as const, body: undefined, reason: (caught as { data?: { reason?: string } }).data?.reason };
+  }
+};
+
+const outpost = () => cells[0]!.save as Row;
+const camp = () => cells[1]!.save as Row;
+const takerResources = () => takerSave.resources as Record<string, number>;
+
+beforeEach(() => {
+  takerSave = {
+    basesaveid: 2526,
+    userid: TAKER,
+    saveuserid: TAKER,
+    type: "main",
+    name: "taker",
+    homebaseid: 2000241207,
+    homebase: ["100", "100"],
+    worldid: WORLD,
+    credits: 5000,
+    resources: { r1: 100_000_000, r2: 100_000_000, r3: 100_000_000, r4: 100_000_000 },
+    outposts: [],
+  };
+  ownerSave = {
+    basesaveid: 700,
+    userid: OWNER,
+    saveuserid: OWNER,
+    type: "main",
+    outposts: [[240, 208, OUTPOST]],
+    buildingresources: { [`b${OUTPOST}`]: {} },
+  };
+  cells = [
+    cellRow(OUTPOST, OWNER, 3, {
+      basesaveid: 900,
+      userid: OWNER,
+      saveuserid: OWNER,
+      type: "outpost",
+      damage: 92,
+      empirevalue: 10_000_000,
+    }),
+    cellRow(CAMP, 0, 1, { basesaveid: 901, userid: 0, saveuserid: 0, type: "tribe", damage: 95, wmid: 41 }),
+  ];
+  flushed = 0;
+  sessions = new Set();
+  inRange = true;
+});
+
+describe("takeoverCell", () => {
+  test("a destroyed outpost is taken: priced by the server, moved to the taker, 12 hours protection", async () => {
+    const result = await run({ baseid: OUTPOST, resources: JSON.stringify({ r1: 1, r2: 1, r3: 1, r4: 1 }) });
+    expect(result.body).toEqual({ error: 0 });
+    // ln(10,000,000) prices at 28,000,000 of each (takeoverCost.test.ts).
+    expect(takerResources()).toEqual({ r1: 72_000_000, r2: 72_000_000, r3: 72_000_000, r4: 72_000_000 });
+    expect(outpost()).toMatchObject({ userid: TAKER, saveuserid: TAKER, name: "taker" });
+    expect(outpost().protected as number).toBeGreaterThan(now() + 11 * 3600);
+    expect(cells[0]).toMatchObject({ uid: TAKER, base_type: 3 });
+    expect(takerSave.outposts).toEqual([[240, 208, OUTPOST]]);
+    expect(ownerSave.outposts).toEqual([]);
+    expect(ownerSave.buildingresources).toEqual({});
+    expect(flushed).toBe(1);
+  });
+
+  test("a destroyed wild camp is taken for Shiny and becomes an outpost", async () => {
+    const result = await run({ baseid: CAMP, shiny: "1" });
+    expect(result.ok).toBe(true);
+    expect(takerSave.credits as number).toBeLessThan(5000);
+    expect(camp()).toMatchObject({ type: "outpost", wmid: 0, userid: TAKER });
+  });
+
+  const refused = async (body: Row, reason: string) => {
+    const result = await run(body);
+    expect(result.reason).toBe(reason);
+    expect(flushed).toBe(0);
+    expect(takerResources().r1).toBe(100_000_000);
+    expect(takerSave.credits).toBe(5000);
+    expect(outpost().userid).toBe(OWNER);
+    expect(camp().userid).toBe(0);
+  };
+
+  test("an outpost under damage protection is refused", async () => {
+    outpost().protected = now() + 3600;
+    await refused({ baseid: OUTPOST }, "protected");
+  });
+
+  test("an outpost locked by someone else is refused", async () => {
+    outpost().locked = 1;
+    await refused({ baseid: OUTPOST }, "locked");
+  });
+
+  test("an outpost under attack is refused", async () => {
+    sessions.add(900);
+    await refused({ baseid: OUTPOST }, "underAttack");
+  });
+
+  test("an outpost short of 90% damage is refused", async () => {
+    outpost().damage = 89;
+    await refused({ baseid: OUTPOST }, "notDestroyed");
+  });
+
+  test("a wild camp past its 12-hour regeneration is refused", async () => {
+    camp().savetime = now() - 12 * 3600 - 10;
+    await refused({ baseid: CAMP }, "regenerated");
+  });
+
+  test("the taker's own outpost is refused", async () => {
+    Object.assign(outpost(), { userid: TAKER, saveuserid: TAKER });
+    (cells[0] as Row).uid = TAKER;
+    const result = await run({ baseid: OUTPOST });
+    expect(result.reason).toBe("ownYard");
+    expect(flushed).toBe(0);
+  });
+
+  test("a main yard is refused", async () => {
+    Object.assign(outpost(), { type: "main" });
+    (cells[0] as Row).base_type = 2;
+    await refused({ baseid: OUTPOST }, "mainYard");
+  });
+
+  test("a cell outside the taker's world, or unknown, is refused", async () => {
+    await refused({ baseid: "999" }, "notFound");
+  });
+
+  test("out of range is refused before anything is written", async () => {
+    inRange = false;
+    const result = await run({ baseid: OUTPOST });
+    expect(result.ok).toBe(false);
+    expect(flushed).toBe(0);
+  });
+
+  test("a zero or negative price is not honoured: the server's price is charged", async () => {
+    const result = await run({ baseid: OUTPOST, shiny: "-99", resources: JSON.stringify({ r1: -1e9, r2: -1e9, r3: -1e9, r4: -1e9 }) });
+    expect(result.ok).toBe(true);
+    expect(takerResources().r1).toBe(72_000_000);
+    expect(takerSave.credits).toBe(5000);
+  });
+
+  test("a taker who cannot pay is refused", async () => {
+    takerResources().r2 = 27_999_999;
+    const result = await run({ baseid: OUTPOST });
+    expect(result.reason).toBe("notEnoughResources");
+    expect(flushed).toBe(0);
+    expect(outpost().userid).toBe(OWNER);
+
+    takerSave.credits = 10;
+    const shiny = await run({ baseid: OUTPOST, shiny: "1" });
+    expect(shiny.reason).toBe("notEnoughShiny");
+    expect(takerSave.credits).toBe(10);
+  });
+});

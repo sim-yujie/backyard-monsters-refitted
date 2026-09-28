@@ -6,6 +6,7 @@ import { calculateBaseLevel } from "../../../../services/base/calculateBaseLevel
 import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { MapRoomCell } from "../../../../enums/MapRoom.js";
 import { isAttackActive } from "../../../../services/base/isAttackActive.js";
+import { reportedDamage, TAKEOVER_DAMAGE } from "../../../../services/maproom/v2/takeoverRules.js";
 import { loadArmyOwner, monstersForMap, type ArmyOwner } from "../../../../services/yard/armies.js";
 
 export type UserCellFields =
@@ -63,9 +64,8 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
   const baseLevel = calculateBaseLevel(points, basevalue);
 
   const isProtected = cellSave.protected > 0 && cellSave.protected > currentTime;
-  const protectionExpired = cellSave.protected > 0 && cellSave.protected <= currentTime;
 
-  const damage = protectionExpired ? 0 : cellSave.damage;
+  const damage = reportedDamage(cellSave, currentTime);
 
   const truceExpiry = mine ? undefined : truces.get(cellOwner.userid)?.expires_at;
 
@@ -99,7 +99,7 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     // fall back to its zeroed defaults (MapRoomCell.as:375-395, :410-420).
     ...(mine && { r: cellSave.resources, m: monsters || {} }),
     l: baseLevel,
-    d: damage >= 90 ? 1 : 0,
+    d: damage >= TAKEOVER_DAMAGE ? 1 : 0,
     lo: locked,
     dm: damage,
     pic_square: cellOwner.pic_square,

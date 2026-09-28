@@ -2,6 +2,7 @@ import { BaseMode, BaseType } from "../../../enums/Base.js";
 import { Save } from "../../../database/models/save.model.js";
 import { postgres } from "../../../server.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
+import { TAKEOVER_DAMAGE } from "./takeoverRules.js";
 
 /**
  * Handles the damage protection for the user's base.
@@ -82,8 +83,12 @@ export const damageProtection = async (save: Save, mode?: BaseMode) => {
             persist = true;
           }
 
-          // 25% or more damage = 8 HOURS
-          if (damage >= 25 && attacksInLast8Hours.length !== 0) {
+          // 25% or more damage = 8 HOURS, short of destroyed. A destroyed
+          // outpost is left open: Flash tells the attacker "You have destroyed
+          // this outpost and can now take it" (`newmap_des_pl1`,
+          // popup_attackend.as:21) and reopens the cell on its Take Over
+          // button (:92-97), which protection would refuse (issue #182).
+          if (damage >= 25 && damage < TAKEOVER_DAMAGE && attacksInLast8Hours.length !== 0) {
             setProtection(eightHours);
           }
         }

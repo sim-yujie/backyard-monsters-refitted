@@ -3,6 +3,7 @@ import { ClientSafeError } from "../middleware/clientSafeError.js";
 import type { EconomyViolation } from "../services/base/economy/auditEconomySave.js";
 import type { CombatViolation } from "../game-rules/combat/index.js";
 import type { RelocateRefusal } from "../services/maproom/v2/relocateRules.js";
+import type { TakeoverRefusal } from "../services/maproom/v2/takeoverRules.js";
 
 /**
  * Creates a new instance of `ClientSafeError` with the specified properties.
@@ -703,6 +704,38 @@ const RELOCATE_REFUSAL_MESSAGES: Record<RelocateRefusal, string> = {
 export const relocateRefusedErr = (reason: RelocateRefusal) =>
   new ClientSafeError({
     message: RELOCATE_REFUSAL_MESSAGES[reason],
+    status: Status.CONFLICT,
+    data: { reason },
+    isClientFriendly: false,
+  });
+
+const TAKEOVER_REFUSAL_MESSAGES: Record<TakeoverRefusal, string> = {
+  notFound: "that yard could not be found.",
+  mainYard: "a main yard cannot be taken over.",
+  ownYard: "that yard is already yours.",
+  notDestroyed: "that yard has not been destroyed.",
+  regenerated: "the wild monsters have rebuilt that yard.",
+  protected: "that yard is under damage protection.",
+  locked: "that yard is being worked on by its owner or is under attack by another player.",
+  underAttack: "that yard is under attack by another player.",
+  maxOutposts: "you have too many outposts.",
+  notEnoughShiny: "you do not have enough Shiny.",
+  notEnoughResources: "you do not have enough resources.",
+};
+
+/**
+ * A Map Room 2 takeover refused (issue #182,
+ * `services/maproom/v2/takeoverRules.ts`).
+ *
+ * `isClientFriendly: false` for the same reason as `relocateRefusedErr`: Flash
+ * prints `err_takeoverproblem` — "There was a problem taking over this yard: "
+ * — with `error` appended (`PopupTakeover.as:160-162`).
+ *
+ * @param {TakeoverRefusal} reason - Which rule refused it.
+ */
+export const takeoverRefusedErr = (reason: TakeoverRefusal) =>
+  new ClientSafeError({
+    message: TAKEOVER_REFUSAL_MESSAGES[reason],
     status: Status.CONFLICT,
     data: { reason },
     isClientFriendly: false,

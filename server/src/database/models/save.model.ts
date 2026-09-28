@@ -452,7 +452,12 @@ export class Save {
   @Property({ columnType: "jsonb", nullable: true })
   fbpromos: Opt<any[]> = [];
 
-
+  /**
+   * The keys a `/base/save` may write. `protected` and `locked` are in neither
+   * list (issue #182): they decide whether a yard can be attacked or taken
+   * over, so only the server sets them (`damageProtection.ts`, the store's
+   * protection items, a takeover). Flash never sends either (`BASE.as` Save).
+   */
   public static saveKeys: Extract<keyof Save, string>[] = [
     "buildingdata",
     "buildingkeydata",
@@ -501,8 +506,6 @@ export class Save {
     "flinger",
     "destroyed",
     "damage",
-    "locked",
-    "protected",
     "champion",
     "over",
     "usemap",
@@ -515,8 +518,6 @@ export class Save {
   public static attackSaveKeys: Extract<keyof Save, string>[] = [
     "destroyed",
     "damage",
-    "locked",
-    "protected",
     "monsters",
     "champion",
     "over",
