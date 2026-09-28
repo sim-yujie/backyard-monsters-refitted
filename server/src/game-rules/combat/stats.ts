@@ -514,25 +514,39 @@ export const withLowLevelBonus = (amount: number, playerLevel: number): number =
 };
 
 /**
+ * Every creep's looting property before anything is added to it.
+ *
+ * `MonsterBase` builds it as `CModifiableProperty(MAX_VALUE, 0, 0.5)`
+ * (`MonsterBase.as:260`), and `lootingMultiplier` reads its value
+ * (`MonsterBase.as:353-356`), so an ordinary creep draws half a unit of
+ * resource for each point of damage it deals (`BFOUNDATION.as:528-534`).
+ */
+export const LOOT_PROPERTY_BASE = 0.5;
+
+/**
  * What a resource specialist and a champion add to their looting property.
  *
- * A `targetGroup` 3 creep and every champion add 1.5 to the loot property on
- * construction (`CreepBase.as:224-226`, `ChampionBase.as:221`), over a base of
- * 1. How `CModifiableProperty` composes the two was not traced
- * (`docs/specs/combat.md:1370-1372`), so the bound takes the larger reading.
+ * A `targetGroup` 3 creep and every champion add an
+ * `AdditionPropertyModifier(1.5)` on construction (`CreepBase.as:224-226`,
+ * `ChampionBase.as:221`), and a `CModifiableProperty` adds its modifiers to
+ * its base, so they loot at 2.
  */
 export const LOOT_PROPERTY_BONUS = 1.5;
 
 /**
- * Krallen's looting multipliers, the largest in the client.
+ * A creep's `lootingMultiplier`, which scales the damage it deals to a
+ * harvester or a storage building into the resource it draws.
  *
- * `x2` against a harvester and `x3` against a storage building
- * (`champions/Krallen.as:31-32`). She also raises the attacker's own storage
- * cap by her `buffs` ladder while she is on the field
- * (`client/scripts/ATTACK.as:696-702`).
+ * Krallen loots at the champion's 2 like every other champion: her
+ * `_lootMults` (`x2` against a harvester, `x3` against storage,
+ * `champions/Krallen.as:31-32`) is set and never read. Her one looting effect
+ * is the attacker's storage cap, which her `buffs` ladder raises while she is
+ * on the field (`client/scripts/ATTACK.as:696-702`).
  */
-export const KRALLEN_RESOURCE_LOOT_MULTIPLIER = 2;
-export const KRALLEN_STORAGE_LOOT_MULTIPLIER = 3;
+export const lootingMultiplier = (targetGroup: number, champion: boolean): number =>
+  champion || targetGroup === TARGET_GROUP.RESOURCES
+    ? LOOT_PROPERTY_BASE + LOOT_PROPERTY_BONUS
+    : LOOT_PROPERTY_BASE;
 
 /** The types a point of damage draws resources out of (`docs/specs/combat.md:1410-1416`). */
 export const HARVESTER_TYPES: readonly number[] = [1, 2, 3, 4];

@@ -612,7 +612,8 @@ tower gets jarred (`CreepBase.as:854-857`). A hunting creep re-runs it every 150
 (`CreepBase.as:851-853`).
 
 `targetGroup 3` creeps carry a permanent loot bonus: an `AdditionPropertyModifier(1.5)` is added to
-their loot property at construction (`CreepBase.as:224-226`).
+their loot property at construction (`CreepBase.as:224-226`), which lifts it from 0.5 to 2 (§6,
+"Loot").
 
 **Specialists also hit their preferred class harder.** The multiplier is applied per swing in
 `tickBAttack` (`CreepBase.as:884-894`):
@@ -747,9 +748,12 @@ Champions also carry the same permanent +1.5 loot modifier as `targetGroup 3` cr
 
 Two champions carry aura values. Fomor's `buffs` runs 0.1→0.6 and Krallen's 0.2→0.3 with a
 `buffRadius` of 250→350. Krallen's buff raises the attacker's resource **cap** during looting
-(`client/scripts/ATTACK.as:698-702`), and she additionally carries hard-coded per-building loot
-multipliers: **×2 against `BRESOURCE` and ×3 against `BSTORAGE`**
-(`champions/Krallen.as:31-32`). She overrides `findTarget` to sweep un-looted lootables first, then
+(`client/scripts/ATTACK.as:698-702`). She also builds a `_lootMults` table, ×2 against `BRESOURCE`
+and ×3 against `BSTORAGE` (`champions/Krallen.as:31-32`), but nothing reads it, so she loots at
+the champion's 2 like the others (issue #178). At power level 2 she gains `ProximityLootBuff`
+(`CHAMPIONCAGE.as:265`): every 50 frames each other creep within `buffRadius` gets a
+`LootingMultiplier(1 + buff)`, which adds `1 + buff` to its loot property until it leaves the
+radius (`abilities/ProximityLootBuff.as:31-75`, `abilities/LootingMultiplier.as:18-28`). She overrides `findTarget` to sweep un-looted lootables first, then
 non-jarred towers, then bunkers (`champions/Krallen.as:60-110`).
 
 Korath and Fomor have combat behaviour beyond their stat lines. Korath applies a burning damage-over-time
@@ -1049,9 +1053,19 @@ The `amount` passed in is `damage * attacker.lootingMultiplier`
 `CModifiableProperty(MAX_VALUE, 0, 0.5)`, `MonsterBase.as:260`), is raised by 1.5 to 2 for
 `targetGroup 3` creeps and for every champion (`CreepBase.as:224-226`, `ChampionBase.as:221`), and
 is further modified by the `LootingMultiplier`, `ProximityLootBuff` and Vacuum `lootBonus`
-components. Krallen's `_lootMults` (×2 against resource buildings, ×3 against storage,
-`champions/Krallen.as:31-32`) is set and never read, so she loots at the champion's 2. The web
-engine keeps 1 for every creep and Krallen's ×2/×3 for now (issue #167 left it to the owner).
+components. `CModifiableProperty.value` adds each `AdditionPropertyModifier` to the base in turn
+(`components/CModifiableProperty.as`), so the two readings a battle starts with are 0.5 for an
+ordinary creep and 2 for a resource specialist (C3, C9, IC3, IC6) or any champion. Krallen's
+`_lootMults` (×2 against resource buildings, ×3 against storage, `champions/Krallen.as:31-32`) is
+set and never read, so she loots at the champion's 2. A harvester that falls hands over what it
+still holds at no multiplier: `BRESOURCE.Destroyed` calls `Loot(_stored)` directly
+(`BRESOURCE.as:129-134`).
+
+The web engine matches this since issue #178: 0.5 for every creep, 2 for a `targetGroup 3` creep
+and every champion, Krallen included; the ×2/×3 that issue #80 had moved from Drull to Krallen is
+gone. It does not model `ProximityLootBuff` or the Vacuum (engine fidelity notes 8 and 11). The
+multiplier decides when a harvester runs dry, and a dry harvester is one a specialist stops
+targeting, so the change moved the golden replays as well as their loot.
 
 ### Loot caps
 
@@ -1406,9 +1420,6 @@ The active set depends on which side the player is on. `_powerups` is the defend
 - **`ATTACK.Damage`, `ATTACK.ProcessDamageGrid`, `ATTACK.Miss` and `ATTACK._damageGrid`** are empty
   stubs (`ATTACK.as:32`, `:770-806`). `BFOUNDATION.Destroyed` and `Targeting.DealLinearAEDamage`
   still call `ATTACK.Damage`. Whatever aggregate damage display they once drove is gone.
-- **`targetGroup 3` loot bonus.** `AdditionPropertyModifier(1.5)` is applied to the loot property
-  (`CreepBase.as:224-226`). Whether the resulting multiplier is 1.5 or 2.5 depends on
-  `CModifiableProperty`'s composition order, which was not traced.
 - **`targetMode`.** Eye-ra and D.A.V.E. set `targetMode = 1` when powered up
   (`creeps/Eyera.as:12`, `abilities/DAVERockets.as:14`). The semantics of `targetMode` were not
   traced. `DAVERockets.onRemoved` also sets `owner.range = 1`
@@ -1425,7 +1436,8 @@ The active set depends on which side the player is on. `_powerups` is the defend
   value of 3600. Whether stone blocks really have one level was not confirmed against the store.
 - **`ATTACK._flingValue`** accumulates `cResource` per monster flung and is never read.
 - **Champion `buffs` and `buffRadius`** are in the stats table, but only Krallen's `_buff` was
-  traced to a use (the loot cap at `ATTACK.as:700-702`). Fomor's 0.1→0.6 aura was not traced.
+  traced to a use (the loot cap at `ATTACK.as:700-702`, and her power level 2
+  `ProximityLootBuff`). Fomor's 0.1→0.6 aura was not traced.
 - **Map Room 1 and Inferno** paths are cited where they intersect Map Room 2 but were not specified.
   `IATTACK`, `IWMATTACK` and descent modes differ in several branches of `ATTACK.EndB`.
 - **`creeps/rebalance/`** holds twelve `*v2.as` variants plus `RebalancedCreatures.as`, and

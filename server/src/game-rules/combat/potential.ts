@@ -5,7 +5,8 @@ import {
   championAttackDelay,
   championStat,
   HARVESTER_TYPES,
-  KRALLEN_STORAGE_LOOT_MULTIPLIER,
+  LOOT_PROPERTY_BASE,
+  LOOT_PROPERTY_BONUS,
   lowLevelLootBonus,
   maxBombSpend,
   monsterAttackDelay,
@@ -448,12 +449,11 @@ export const LOOT_GAIN_RATIO = COMBAT_TOLERANCES.lootGainRatio;
 /**
  * The most the whole gain may exceed the damage that carried it.
  *
- * Krallen's `x3` against storage is the largest multiplier in the client
- * (`champions/Krallen.as:31-32`); a resource specialist and a champion each add
- * 1.5 to a looting property based at 1 (`CreepBase.as:224-226`,
- * `ChampionBase.as:221`), which is at most 2.5 whichever way
- * `CModifiableProperty` composes them (`combat.md:1370-1372`). 5 covers the
- * largest reading of both together plus the low-level bonus.
+ * The largest looting multiplier a creep carries is 2: a resource specialist
+ * and every champion, Krallen included, add 1.5 to a looting property based at
+ * 0.5 (`MonsterBase.as:260`, `CreepBase.as:224-226`, `ChampionBase.as:221`).
+ * With the low-level bonus that is 3.14 a point of damage; 5 leaves room for
+ * the `LootingMultiplier` Krallen's aura adds, which the engine does not model.
  */
 export const LOOT_MULT_MAX = COMBAT_TOLERANCES.lootMultMax;
 
@@ -615,7 +615,7 @@ export const auditLoot = (input: LootAuditInput): LootAudit => {
     }
   }
 
-  // Krallen's `x3` against a silo is the largest multiplier a battle can carry,
+  // A specialist's or a champion's 2 is the largest multiplier a creep carries,
   // and a Vacuum's per-level `lootBonus` was never traced (§6, item 4), so its
   // presence doubles the allowance rather than guessing the figure.
   const multiplier =
@@ -629,7 +629,7 @@ export const auditLoot = (input: LootAuditInput): LootAudit => {
         gain: gained,
         lootableDrop: input.lootableDrop,
         mult: multiplier,
-        krallen: KRALLEN_STORAGE_LOOT_MULTIPLIER,
+        creepMax: LOOT_PROPERTY_BASE + LOOT_PROPERTY_BONUS,
       },
       enforced: true,
     });

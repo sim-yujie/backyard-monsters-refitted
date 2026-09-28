@@ -10,7 +10,15 @@ import {
   type BattleVisualEvent,
 } from "./engine.js";
 import { digestOf } from "./digest.js";
-import { BOMBS, bombBlast, championStat, monsterTickSpeed } from "./stats.js";
+import {
+  BOMBS,
+  bombBlast,
+  championStat,
+  lootingMultiplier,
+  monsterStat,
+  monsterTickSpeed,
+  TARGET_GROUP,
+} from "./stats.js";
 import { buildEngineYard, reachesBuilding, screenDistanceSquared } from "./yard.js";
 import type { CombatBuildingDataMap } from "./types.js";
 
@@ -237,22 +245,28 @@ describe("loot", () => {
     expect(yard.buildings[0]?.looted).toBe(true);
   });
 
-  it("gives a low-level attacker the `ATTACK.Loot` bonus", () => {
-    const yard = yardOf({ "1": { id: 1, t: 1, X: 0, Y: 0, st: 400 } });
+  it("gives a low-level attacker the `ATTACK.Loot` bonus, gain by gain", () => {
+    // Level 8, so the buffer runs dry before the harvester falls.
+    const yard = yardOf({ "1": { id: 1, l: 8, t: 1, X: 0, Y: 0, st: 400 } });
     const battle = createBattle(yard, { seed: 11, playerLevel: 1 });
-    battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C4: 4 } });
+    battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C4: 1 } });
     run(battle, 4000);
-    // `+ (20 - 1) * 3%` is `+57%`, which is where `LOOT_GAIN_RATIO` comes from.
-    expect(battle.state().loot.r1).toBeCloseTo(400 * 1.57, 6);
+    // A Fink's 300 a swing draws 150, 150, then the last 100. `+ (20 - 1) * 3%`
+    // is `+57%`, which is where `LOOT_GAIN_RATIO` comes from, and each gain
+    // truncates on its own: 235, 235, 157.
     expect(battle.state().defenderLoss.r1).toBe(400);
+    expect(battle.state().loot.r1).toBe(235 + 235 + 157);
   });
 
   /**
-   * One level 1 champion of `type` alone against one building, until it has
-   * landed three swings. The building is level 8, so it outlasts them: a fall
-   * would hand over the rest of its buffer at no multiplier.
+   * One attacker alone against one level 8 building, until it has landed three
+   * swings. The building outlasts them: a fall would hand over the rest of its
+   * buffer at no multiplier.
    */
-  const championLoot = (type: number, building: { t: number; st?: number }) => {
+  const threeSwings = (
+    attacker: { monsters?: Record<string, number>; champion?: { t: number; l: number } },
+    building: { t: number; st?: number },
+  ) => {
     const yard = yardOf({ "1": { id: 1, l: 8, X: 0, Y: 0, ...building } });
     const battle = createBattle(yard, { seed: 9, playerLevel: 20 });
     battle.apply({
@@ -261,8 +275,8 @@ describe("loot", () => {
       x: -150,
       y: -150,
       r: 100,
-      monsters: {},
-      champion: { t: type, l: 1 },
+      monsters: attacker.monsters ?? {},
+      ...(attacker.champion ? { champion: attacker.champion } : {}),
     });
     const amounts: number[] = [];
     let seen = 0;
@@ -273,30 +287,54 @@ describe("loot", () => {
       }
       seen = battle.tick;
     }
-    return { amounts, standing: yard.buildings[0]!.hp > 0, loss: battle.state().defenderLoss.r1 };
+    const state = battle.state();
+    expect(amounts).toHaveLength(3);
+    expect(yard.buildings[0]!.hp).toBeGreaterThan(0);
+    return { amounts, loss: state.defenderLoss.r1, loot: state.loot.r1 };
   };
 
-  it("gives Krallen (G5), and no other champion, its loot multipliers (issue #80)", () => {
-    // `champions/Krallen.as:31-32`: twice from a harvester, three times from storage.
-    for (const type of [1, 2, 3, 4, 5]) {
-      const krallen = type === 5;
-      const harvester = championLoot(type, { t: 1, st: 1_000_000 });
-      expect(harvester.amounts, `G${type}`).toHaveLength(3);
-      expect(harvester.standing, `G${type}`).toBe(true);
-      const fromHarvester = harvester.amounts.reduce(
-        (sum, amount) => sum + Math.floor(amount * (krallen ? 2 : 1)),
-        0,
-      );
-      expect(harvester.loss, `G${type} harvester`).toBe(fromHarvester);
+  /**
+   * The looting multiplier (issue #178): `Loot(damage * lootingMultiplier)`
+   * (`BFOUNDATION.as:528-534`) on an `int`, then from a silo the main yard's
+   * nine tenths, truncated again (`BSTORAGE.as:56-88`).
+   */
+  const expectLootsAt = (
+    multiplier: number,
+    attacker: Parameters<typeof threeSwings>[0],
+    label: string,
+  ) => {
+    const harvester = threeSwings(attacker, { t: 1, st: 1_000_000 });
+    const drawn = harvester.amounts.map((amount) => Math.trunc(amount * multiplier));
+    const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+    expect(harvester.loss, `${label} harvester`).toBe(sum(drawn));
+    expect(harvester.loot, `${label} harvester`).toBe(sum(drawn));
 
-      const storage = championLoot(type, { t: 6 });
-      expect(storage.amounts, `G${type}`).toHaveLength(3);
-      expect(storage.standing, `G${type}`).toBe(true);
-      const fromStorage = storage.amounts.reduce(
-        (sum, amount) => sum + Math.trunc(amount * (krallen ? 3 : 1)),
-        0,
-      );
-      expect(storage.loss, `G${type} storage`).toBe(fromStorage);
+    const silo = threeSwings(attacker, { t: 6 });
+    const taken = silo.amounts.map((amount) => Math.trunc(amount * multiplier));
+    expect(silo.loss, `${label} silo`).toBe(sum(taken));
+    expect(silo.loot, `${label} silo`).toBe(sum(taken.map((one) => Math.trunc(one * 0.9))));
+  };
+
+  it("loots at 0.5 with an ordinary creep (`MonsterBase.as:260`)", () => {
+    expect(lootingMultiplier(TARGET_GROUP.ALL, false)).toBe(0.5);
+    // A Pokey (C1) and a Fink (C4), both group 1.
+    for (const id of ["C1", "C4"]) expectLootsAt(0.5, { monsters: { [id]: 1 } }, id);
+  });
+
+  it("loots at 2 with a resource specialist (`CreepBase.as:224-226`)", () => {
+    expect(lootingMultiplier(TARGET_GROUP.RESOURCES, false)).toBe(2);
+    for (const id of ["C3", "C9", "IC3", "IC6"]) {
+      expect(monsterStat(id, "targetGroup", 1), id).toBe(TARGET_GROUP.RESOURCES);
+    }
+    expectLootsAt(2, { monsters: { C3: 1 } }, "C3");
+    expectLootsAt(2, { monsters: { C9: 1 } }, "C9");
+  });
+
+  it("loots at 2 with every champion, Krallen too: her `_lootMults` is never read", () => {
+    // `ChampionBase.as:221`; `champions/Krallen.as:31-32` sets x2/x3 that no
+    // code reads, so the x2/x3 of issue #80 is gone (issue #178).
+    for (const type of [1, 2, 3, 4, 5]) {
+      expectLootsAt(2, { champion: { t: type, l: 1 } }, `G${type}`);
     }
   });
 
@@ -323,9 +361,10 @@ describe("loot", () => {
     expect(yard.buildings[0]!.hp).toBeGreaterThan(0);
     expect(hits.length).toBeGreaterThan(0);
     const state = battle.state();
-    // `Loot(param1:int)`, then `_loc2_ *= 0.9` on an int (`BSTORAGE.as:56-88`).
-    const lost = hits.reduce((sum, hit) => sum + Math.trunc(hit), 0);
-    const got = hits.reduce((sum, hit) => sum + Math.trunc(Math.trunc(hit) * 0.9), 0);
+    // `Loot(param1:int)` of a Fink's half, then `_loc2_ *= 0.9` on an int
+    // (`BSTORAGE.as:56-88`).
+    const lost = hits.reduce((sum, hit) => sum + Math.trunc(hit * 0.5), 0);
+    const got = hits.reduce((sum, hit) => sum + Math.trunc(Math.trunc(hit * 0.5) * 0.9), 0);
     expect(state.defenderLoss.r1).toBe(lost);
     expect(state.loot.r1).toBe(got);
   });

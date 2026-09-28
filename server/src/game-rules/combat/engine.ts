@@ -1,5 +1,4 @@
 import { buildPathGrid } from "./grid.js";
-import { KRALLEN_ID } from "./potential.js";
 import { mulberry32 } from "./rng.js";
 import {
   ATTACK_COUNTDOWN_SECONDS,
@@ -8,8 +7,6 @@ import {
   bombParticleDamage,
   bombReaches,
   DECLARE_WAR_COUNTDOWN_SECONDS,
-  KRALLEN_RESOURCE_LOOT_MULTIPLIER,
-  KRALLEN_STORAGE_LOOT_MULTIPLIER,
   MR2_FLINGER_LEVEL,
   RETARGET_TICKS,
   RETREAT_GRACE_SECONDS,
@@ -28,6 +25,7 @@ import {
   championMode,
   championStat,
   fortifiedDamage,
+  lootingMultiplier,
   isLootable,
   storageFallLoot,
   withLowLevelBonus,
@@ -139,7 +137,7 @@ import type { FlingEvent, MonsterLevels, ResourceAmounts, Roster } from "./types
  *    damage either way.
  * 8. **Not modelled at all**, each because its numbers were never traced
  *    (`docs/specs/combat.md:1362-1375`) or because it is out of Map Room 2's
- *    scope: champion abilities and buffs beyond damage and Krallen's looting,
+ *    scope: champion abilities and buffs beyond damage and looting,
  *    Rezghul's zombies, Slimeattikus' splits, the healers C15 and C16,
  *    invisibility, `Blink`, `PoisonOnAttack`, `GlavesOnAttack`, the Stronghold's
  *    four emitters, the Spurtz Cannon's burst, every siege weapon, and the
@@ -153,14 +151,14 @@ import type { FlingEvent, MonsterLevels, ResourceAmounts, Roster } from "./types
  *    clamps a gain to the attacker's storage cap (`ATTACK.as:696-710`); the cap
  *    is a property of the attacker's row, not the battle, so the audit derives
  *    it (§2.4 `lootOverCap`) and the engine reports the uncapped gain.
- * 11. **Every creep loots at 1.** The client's looting property starts at 0.5
- *    and a resource specialist or a champion adds 1.5 to it
- *    (`MonsterBase.as:260`, `CreepBase.as:224-226`, `ChampionBase.as:221`), so
- *    an ordinary creep draws half a unit per point of damage and a specialist
- *    or champion two; Krallen's `_lootMults` is never read. The engine keeps
- *    1 for every creep and Krallen's `x2`/`x3` (issue #80) until the owner
- *    decides (issue #167): the multiplier decides when a harvester is empty,
- *    and an empty harvester is one a specialist stops targeting.
+ * 11. **Only the looting property's construction is modelled.** A creep loots
+ *    at 0.5 and a resource specialist or a champion at 2
+ *    (`MonsterBase.as:260`, `CreepBase.as:224-226`, `ChampionBase.as:221`),
+ *    Krallen included, whose `_lootMults` is never read (issue #178). What
+ *    changes it during a battle is not: Krallen's `ProximityLootBuff` at
+ *    power level 2 (`CHAMPIONCAGE.as:265`) and the `LootingMultiplier` it
+ *    hands nearby creeps, both abilities under note 8, and the Vacuum's
+ *    `lootBonus`, a siege weapon.
  */
 
 /* ── Inputs ───────────────────────────────────────────────────────────────── */
@@ -395,8 +393,8 @@ interface Creep {
   flying: boolean;
   ignoreWalls: boolean;
   explode: boolean;
-  resourceLoot: number;
-  storageLoot: number;
+  /** `MonsterBase.lootingMultiplier`: resource drawn per point of damage. */
+  lootMultiplier: number;
   flags: number;
   targetable: boolean;
   behaviour: Behaviour;
@@ -619,7 +617,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const picked = pickStored();
       if (picked === null) return;
       const key = `r${picked}` as keyof ResourceAmounts;
-      const wanted = Math.trunc(amount * (creep ? creep.storageLoot : 1));
+      const wanted = Math.trunc(amount * (creep ? creep.lootMultiplier : 1));
       const taken = Math.trunc(Math.min(yard.resources[key], wanted));
       if (taken <= 0) return;
       yard.resources[key] -= taken;
@@ -630,7 +628,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return;
     }
     // A harvester: its own buffer, its own resource, no scalar.
-    const wanted = Math.floor(amount * (creep ? creep.resourceLoot : 1));
+    const wanted = Math.trunc(amount * (creep ? creep.lootMultiplier : 1));
     const taken = Math.min(building.stored, wanted);
     if (taken <= 0) return;
     building.stored -= taken;
@@ -800,8 +798,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       flying,
       ignoreWalls: movement === "burrow" || movement === "jump",
       explode: monsterStat(monsterId, "explode", level) > 0,
-      resourceLoot: 1,
-      storageLoot: 1,
+      lootMultiplier: lootingMultiplier(targetGroup, false),
       flags: defenseFlags(friendly, flying, false),
       targetable: true,
       behaviour,
@@ -850,9 +847,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       flying,
       ignoreWalls: false,
       explode: false,
-      // Krallen's looting, the largest in the client (`champions/Krallen.as:31-32`).
-      resourceLoot: id === KRALLEN_ID ? KRALLEN_RESOURCE_LOOT_MULTIPLIER : 1,
-      storageLoot: id === KRALLEN_ID ? KRALLEN_STORAGE_LOOT_MULTIPLIER : 1,
+      // Every champion, Krallen included, loots at 2 (`ChampionBase.as:221`).
+      lootMultiplier: lootingMultiplier(TARGET_GROUP.RESOURCES, true),
       flags: defenseFlags(false, flying, false),
       targetable: true,
       behaviour: "attack",
