@@ -19,6 +19,8 @@ export interface NeighbourData {
   friend?: number;
   saved?: number;
   attackpermitted?: number;
+  /** When the neighbour's damage protection ends (unix seconds); 0 without any. */
+  protectedUntil?: number;
   basename?: string;
   ownerName?: string;
   pic?: string;

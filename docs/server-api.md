@@ -549,6 +549,45 @@ rejects, in any mode:
 | POST | `/api/:apiVersion/bm/base/updatesaved` | verifyUserAuth, logRequest | same inline schema as `/base/updatesaved` | same shape as `/base/updatesaved` | Same controller as `/base/updatesaved`. |
 | POST | `/api/:apiVersion/bm/base/infernomonsters` | apiVersion, verifyUserAuth, logRequest | `{ type: "get" \| "set", imonsters?: JSON string, default {} }` | `{ error: 0, imonsters }` | Gets or sets the player's Inferno monster cage/roster (`Save.monsters` on the Inferno save). `get` ignores whatever the client sent and returns the DB value; `set` persists and echoes back the client's value unchanged. |
 | POST | `/api/:apiVersion/bm/neighbours/get` | apiVersion, verifyUserAuth, logRequest | `{ type?: string }` (`"inferno"` selects the Inferno pool, anything else the MR1 overworld pool) | `{ error: 0, wmbases: [], bases: NeighbourData[] }` (`wmbases` always empty, kept for legacy compatibility); if the caller has no `save` at all: `{ error: 0, bases: [] }` (no `wmbases` key) | Returns a cached PvP matchmaking list of opponents (`Maproom.neighbors` / `InfernoMaproom.neighbors`, re-rolled every ~2 weeks once ≥10 candidates are found, else retried every 30 min). MR1/Inferno has **no coordinate grid** at all — there is no per-cell or viewport endpoint; browsing opponents means picking from this cached list. |
+| GET | `/api/:apiVersion/bm/maproom1` | apiVersion, verifyUserAuth (no `logRequest`: re-read while the map is open) | none | `{ error: 0, now, level, protectedUntil, tribes: MapRoom1Tribe[4], neighbours: NeighbourData[] }` — see "Map Room 1 read" below | The web client's Map Room 1 screen in one read (issue #132). 409 `reason: "notMapRoom1"` once the player's main save is on Map Room 2. |
+
+
+#### Map Room 1 read
+
+`GET /api/:apiVersion/bm/maproom1` (`controllers/maproom/getMapRoom1.ts`, pure shape
+`services/maproom/v1/mapRoom1View.ts`) answers everything the web client's Map Room 1 screen
+shows. It does what Flash's map did on open — the build-mode load with `mapversion: 1` plus
+`bm/neighbours/get` — so it writes: tribes wrecked at least ten minutes ago are stood back up,
+the four current tribes are merged into the save's `wmstatus`, and the neighbour list is
+re-searched when its cache has run out (same cache rules as `bm/neighbours/get`).
+
+```jsonc
+{
+  "error": 0,
+  "now": 1790000000,          // server unix seconds, to count respawnAt / protection down
+  "level": 12,                // the player's base level
+  "protectedUntil": 0,        // when the player's own damage protection ends; 0 without any
+  "tribes": [                 // always 4: Legionnaire, Kozu, Abunakki, Dreadnaut
+    {
+      "baseid": "3",          // for wmview / wmattack with mapversion: 1
+      "tribe": "Legionnaire",
+      "tier": "TH3",          // NEW (Town Hall 1-2) | TH3 | TH4 | TH5 | HIGH (6+)
+      "level": 11,            // pin level: player level -1, 0, +1, +2 (min 1)
+      "destroyed": 1,
+      "damage": 95,           // last attack's damage % this tribe life; 0 when fresh
+      "respawnAt": 1790000420 // unix seconds a wrecked tribe is back; 0 when standing
+    }
+  ],
+  "neighbours": [ /* the `bases` of bm/neighbours/get, plus protectedUntil on each */ ]
+}
+```
+
+There is no tutorial camp: every account faces its Town Hall's tier (base 1, Flash's tutorial
+camp before tutorial stage 205, is no longer served, since no tutorial exists; issue #132).
+Every neighbour entry (here and in `bm/neighbours/get`) carries `protectedUntil`, the unix
+second its damage protection ends, 0 without any. Refused with a real 409
+`{ error, errorDetails: { data: { reason: "notMapRoom1" } } }` when the player's main save is
+not on map version 1.
 
 ### Map Room 2
 

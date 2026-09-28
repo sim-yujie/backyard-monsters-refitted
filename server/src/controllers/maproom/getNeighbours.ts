@@ -9,6 +9,8 @@ import { BaseType } from "../../enums/Base.js";
 import { findInfernoNeighbours } from "../../services/maproom/inferno/findInfernoNeighbours.js";
 import { findOverworldNeighbours } from "../../services/maproom/v1/findOverworldNeighbours.js";
 import { updateNeighbourData } from "../../services/maproom/updateNeighbourData.js";
+import type { Save } from "../../database/models/save.model.js";
+import type { NeighbourData } from "../../types/NeighbourData.js";
 
 type NeighbourCache = { neighborsLastCalculated?: Date; neighbors: unknown[] };
 
@@ -115,6 +117,22 @@ const getOverworldNeighbours: KoaController = async (ctx) => {
     return;
   }
 
+  const neighbours = await overworldNeighbours(user, save);
+
+  ctx.status = Status.OK;
+  ctx.body = { error: 0, wmbases: [], bases: neighbours };
+};
+
+/**
+ * The player's Map Room 1 neighbours, live fields refreshed: the cached list
+ * (re-searched when the cache has run out) run through `updateNeighbourData`.
+ * Shared by `bm/neighbours/get` and the Map Room 1 read (`getMapRoom1.ts`).
+ *
+ * @param {User} user - The player.
+ * @param {Save} save - Their main save, with at least `points` and `basevalue`.
+ * @returns {Promise<NeighbourData[]>} The neighbours.
+ */
+export const overworldNeighbours = async (user: User, save: Save): Promise<NeighbourData[]> => {
   let maproom = await postgres.em.findOne(Maproom, { userid: user.userid });
 
   // Initial Map Room 1 creation
@@ -134,10 +152,7 @@ const getOverworldNeighbours: KoaController = async (ctx) => {
     await postgres.em.flush();
   }
 
-  const neighbours = await updateNeighbourData(maproom.neighbors, BaseType.MAIN, user.userid);
-
-  ctx.status = Status.OK;
-  ctx.body = { error: 0, wmbases: [], bases: neighbours };
+  return updateNeighbourData(maproom.neighbors, BaseType.MAIN, user.userid);
 };
 
 /**

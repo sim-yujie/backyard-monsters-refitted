@@ -43,6 +43,7 @@ import { setMapVersion } from "./controllers/maproom/setMapVersion.js";
 import { infernoSave } from "./controllers/inferno/infernoSave.js";
 import { infernoMonsters } from "./controllers/inferno/infernoMonsters.js";
 import { getNeighbours } from "./controllers/maproom/getNeighbours.js";
+import { getMapRoom1 } from "./controllers/maproom/getMapRoom1.js";
 
 import { getArea } from "./controllers/maproom/v2/getArea.js";
 import { getSnapshot } from "./controllers/maproom/v2/bulk/getSnapshot.js";
@@ -140,6 +141,8 @@ router.post("/api/:apiVersion/bm/base/save", apiVersion, verifyUserAuth, logRequ
 router.post("/api/:apiVersion/bm/base/updatesaved", verifyUserAuth, logRequest, updateSaved);
 router.post("/api/:apiVersion/bm/base/infernomonsters", apiVersion, verifyUserAuth, logRequest, infernoMonsters);
 router.post("/api/:apiVersion/bm/neighbours/get", apiVersion, verifyUserAuth, logRequest, getNeighbours);
+// The web client's Map Room 1 screen (issue #132); re-read while the map is open, so not echoed by logRequest.
+router.get("/api/:apiVersion/bm/maproom1", apiVersion, verifyUserAuth, getMapRoom1);
 
 /**  ────────────────────────────────────────────────
 * 📦 Map Room 2

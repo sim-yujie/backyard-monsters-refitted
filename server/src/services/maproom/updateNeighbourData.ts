@@ -117,6 +117,7 @@ export const updateNeighbourData = async (cachedNeighbours: NeighbourData[], bas
       neighbour.attackpermitted = AttackPermission.ATTACKABLE;
     }
 
+    neighbour.protectedUntil = isProtected ? neighbourSave.protected : 0;
     neighbour.baseid = neighbourSave.baseid;
     neighbour.level = calculateBaseLevel(neighbourSave.points, neighbourSave.basevalue);
     neighbour.saved = lastSeens.get(neighbour.userid) ?? 0;
