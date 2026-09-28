@@ -60,7 +60,7 @@ const now = () => Math.floor(Date.now() / 1000);
 const startSession = (attackerid = ATTACKER, startedat = now()) =>
   store.set(
     mr1TribeSessionKey(ATTACKER, TRIBE),
-    serialiseAttackSession({ attackerid, attackid: ATTACK_ID, startedat })
+    serialiseAttackSession({ attackerid, attackid: ATTACK_ID, startedat, entryHoused: { "5000": { C1: 10 } } })
   );
 
 const ctxFor = (body: Record<string, string>, userid = ATTACKER) =>
@@ -90,6 +90,10 @@ beforeEach(() => {
     userid: ATTACKER,
     baseid: "5000",
     resources: { r1: 100, r2: 100, r3: 100, r4: 100 },
+    savetime: now(),
+    buildingdata: {},
+    storedata: {},
+    academy: {},
     monsters: { housed: { C1: 10 } },
     wmstatus: [[2, 1, 0]],
   };
@@ -103,7 +107,7 @@ describe("Map Room 1 tribe save without a started attack (#161)", () => {
 
     expect(caught?.data?.reason).toBe("no-session");
     expect(userSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
-    expect(userSave.monsters).toEqual({ housed: { C1: 10 } });
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 10 });
     expect(maproom.tribedata[0]!.destroyed).toBeUndefined();
     expect(persisted).toEqual([]);
   });
@@ -158,5 +162,34 @@ describe("Map Room 1 tribe save of a started attack", () => {
     expect((userSave.resources as Record<string, number>).r1).toBe(100);
     expect(maproom.tribedata[0]!.damage).toBe(40);
     expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(true);
+  });
+});
+
+describe("Map Room 1 army settlement (#132)", () => {
+  const flinglog = (C1: number) => JSON.stringify({ events: [{ kind: "fling", t: 10, monsters: { C1 } }] });
+  const sent = (C1: number) => JSON.stringify([{ baseid: 5000, m: { housed: { C1 } } }]);
+
+  test("the flung monsters leave the main yard's housing, from the fling log", async () => {
+    startSession();
+    expect(await run(ctxFor({ over: "1", monsterupdate: sent(7), flinglog: flinglog(3) }))).toBeNull();
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 7 });
+  });
+
+  test("Flash's attackcreatures blob is never written", async () => {
+    startSession();
+    await run(ctxFor({ over: "1", monsterupdate: sent(10), flinglog: flinglog(0), attackcreatures: JSON.stringify({ housed: { C1: 999 } }) }));
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 10 });
+  });
+
+  test("a fling log claiming more than was housed at entry takes only what was there, never adds", async () => {
+    startSession();
+    await run(ctxFor({ over: "1", monsterupdate: sent(99), flinglog: flinglog(50) }));
+    expect((userSave.monsters as { housed: Record<string, number> }).housed.C1 ?? 0).toBe(0);
+  });
+
+  test("a save that does not end the attack leaves the army alone", async () => {
+    startSession();
+    await run(ctxFor({ monsterupdate: sent(7), flinglog: flinglog(3) }));
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 10 });
   });
 });

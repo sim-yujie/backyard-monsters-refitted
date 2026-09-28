@@ -253,9 +253,10 @@ binding"). Without a log the count is `clamp(entryHoused − sent, 0, entryHouse
 sent count can never add a monster, and production during the attack is kept. An outpost
 that flung loses its protection, as before. An earlier save of the same attack does nothing
 with it: every save repeats the whole log, so the final one settles the attack once (the same
-rule `finaliseAttack.ts` uses). `attackcreatures` (Map Room 1's whole-army blob) overwrites the
-attacker's own `monsters` only when the attack session carries no `entryHoused`, which means
-never on an MR2 attack. `attackloot` →
+rule `finaliseAttack.ts` uses). `attackcreatures` (Flash Map Room 1's whole-army blob) overwrites
+the attacker's own `monsters` only when the attack session carries no `entryHoused`, which means
+never on an MR2 or MR1 attack (issue #132: an MR1 attack's `entryHoused` holds the main yard
+only, and its army settles through `monsterupdate` like an MR2 attack's). `attackloot` →
 `attackLootHandler.ts` credits the attacker's resource pool; the resource bombs in the web
 client's `flinglog` are then charged to the attacker at the shared rules' bomb costs, floored at 0
 (issue #90, `services/base/combat/bombSpend.ts`; a bomb the attacker could not have fired is logged
@@ -320,9 +321,10 @@ account the server recorded when the attack began (`services/base/attackSession.
 **Minting.** A successful `/base/load` with `type=attack` or `type=wmattack` mints the random
 `attackid` onto the defender's row and, in the same step, writes a session to Redis under
 `attack-session:<basesaveid>` holding `attackerid:attackid:startedat`
-(`controllers/base/load/modes/baseModeAttack.ts`). For a Map Room 2 attack the session is stored as
-JSON `{ attackerid, attackid, startedat, entryHoused }` instead. `entryHoused` is what each of
-the attacker's own yards housed at entry, keyed by base id. The parser reads both forms.
+(`controllers/base/load/modes/baseModeAttack.ts`). For a Map Room 2 or Map Room 1 attack the
+session is stored as JSON `{ attackerid, attackid, startedat, entryHoused }` instead. `entryHoused`
+is what each of the attacker's own yards housed at entry, keyed by base id (on Map Room 1, the
+main yard only: outposts do not fling there). The parser reads both forms.
 Before minting, once every refusal has passed, the load catches both armies up
 (`services/yard/armies.ts`, issue #103). The defender's main yard gets the full locked catch-up
 its owner's load would give it (a defending outpost: its monsters). The attacker's main yard
@@ -356,7 +358,10 @@ army with no attack behind it):
   `checkAttackBinding` (same reasons as below) before anything is written. A save without `over`
   records only the tribe's damage (`buildinghealthdata`, `destroyed`, `damage`). The save carrying
   `over` takes `attack-final:mr1:<userid>:<baseid>` (a copy racing it is refused with
-  `reason: "finalising"`), applies the attacker's side — `attackerchampion`, `attackersiege`,
+  `reason: "finalising"`), applies the attacker's side — the army (the flung monsters leave the
+  main yard's housing through `monsterupdate` and the fling log, capped by the session's
+  `entryHoused`, exactly as an MR2 attack settles; `attackcreatures` is ignored and only the
+  main yard's `monsterupdate` entry is read), `attackerchampion`, `attackersiege`,
   the bombs in `flinglog` (issue #90), and the loot — then ends the session, so a copy sent again
   as the page closes is refused with `"no-session"`. The loot credited is
   `creditableMR1Loot` (`mr1TribeRules.ts`): each resource whole and non-negative, and everything

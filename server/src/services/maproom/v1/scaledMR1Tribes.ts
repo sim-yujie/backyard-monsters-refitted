@@ -9,6 +9,7 @@ import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { logger } from "../../../utils/logger.js";
 import { BaseSaveSchema } from "../../../schemas/BaseSaveSchema.js";
 import { attackLootHandler } from "../../../controllers/base/save/handlers/attackLootHandler.js";
+import { monsterUpdateHandler } from "../../../controllers/base/save/handlers/monsterUpdateHandler.js";
 import { MR1_TRIBES_MAP } from "../../../game-data/tribes/v1/index.js";
 import { combatConfig } from "../../../config/CombatConfig.js";
 import { chargeBombSpend } from "../../base/combat/bombSpend.js";
@@ -38,7 +39,8 @@ type BaseSaveData = TypeOf<typeof BaseSaveSchema>;
  * records the tribe's damage.
  *
  * Loot is capped by what the tribe holds (`creditableMR1Loot`), counted over
- * the tribe's life until it respawns.
+ * the tribe's life until it respawns. The army leaves the main yard's housing
+ * through the fling log, as on Map Room 2.
  *
  * @param {Context} ctx - The Koa context, for the caller's IP in the logs.
  * @param {User} user - The attacking user
@@ -63,7 +65,7 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
   const userSave = user.save!;
   const now = getCurrentDateTime();
 
-  await requireTribeBinding(ctx, user, saveData, now);
+  const session = await requireTribeBinding(ctx, user, saveData, now);
 
   const maproom = await postgres.em.findOne(Maproom, { userid: user.userid });
 
@@ -102,7 +104,16 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
   });
 
   if (finalises) {
-    if (saveData.attackcreatures) userSave.monsters = saveData.attackcreatures;
+    // The army settles as a Map Room 2 attack's does (issue #132): the flung
+    // monsters leave the main yard's housing as caught up now, capped by what
+    // it housed at entry (the session's `entryHoused`). Only the main yard
+    // flings on Map Room 1, and Flash's `attackcreatures` blob is never written.
+    const entries = Array.isArray(saveData.monsterupdate) ? saveData.monsterupdate : [];
+    await monsterUpdateHandler(
+      entries.filter((entry: { baseid?: unknown }) => String(entry?.baseid) === String(userSave.baseid)),
+      userSave,
+      { session, finalises: true, flinglog: saveData.flinglog, now }
+    );
 
     if (saveData.attackerchampion) userSave.champion = saveData.attackerchampion;
 

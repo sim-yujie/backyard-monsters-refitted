@@ -124,7 +124,21 @@ describe("catchUpArmiesForAttack", () => {
     expect(entryHoused?.["2000241207"]).toEqual({ C1: 14 });
   });
 
-  test("outside Map Room 2 only the defender is caught up, and no entryHoused is kept", async () => {
+  test("a Map Room 1 attack records the main yard's housing only, even with an outpost in reach (#132)", async () => {
+    const { entryHoused } = await catchUpArmiesForAttack({
+      user: user(),
+      defender: defenderMain as never,
+      cell: { x: 241, y: 208 },
+      mapversion: MapRoomVersion.V1,
+    });
+
+    expect(entryHoused).toEqual({ "2000241207": { C1: 14 } });
+    expect(attackerMain.monsters.housed).toEqual({ C1: 14 });
+    expect(nearOutpost.monsters.housed).toEqual({ C1: 10 });
+    expect(persisted).not.toContain(nearOutpost);
+  });
+
+  test("a Map Room 3 attack catches up only the defender, and keeps no entryHoused", async () => {
     const { entryHoused } = await catchUpArmiesForAttack({
       user: user(),
       defender: defenderMain as never,

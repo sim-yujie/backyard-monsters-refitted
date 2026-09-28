@@ -85,7 +85,7 @@ const applyArmy = (row: Save, owner: ArmyOwner, now: number): void => {
  * changed yet: the locked catch-up re-reads the row.
  *
  * @returns The defender entity to carry on with (the locked read's), and
- *   `entryHoused` (Map Room 2 attacks only).
+ *   `entryHoused` (Map Room 2 attacks; Map Room 1 attacks, main yard only).
  */
 export const catchUpArmiesForAttack = async ({
   user,
@@ -113,10 +113,12 @@ export const catchUpArmiesForAttack = async ({
     applyArmy(defender, owner, now);
   }
 
-  // Only a Map Room 2 attack settles its roster through `entryHoused`: Map
-  // Room 3 monsters are per creep, and a Map Room 1 attack reports its
-  // attacker's army as `attackcreatures`.
-  if (mapversion !== MapRoomVersion.V2) return { defender: target, entryHoused: undefined };
+  // Map Room 2 and Map Room 1 attacks settle their roster through
+  // `entryHoused`; Map Room 3 monsters are per creep. A Map Room 1 attacker
+  // flings from their main yard's housing only (issue #132): the web client
+  // reports the army as `monsterupdate`, never Flash's `attackcreatures`.
+  const mapRoom1 = mapversion === MapRoomVersion.V1;
+  if (mapversion !== MapRoomVersion.V2 && !mapRoom1) return { defender: target, entryHoused: undefined };
 
   const entryHoused: EntryHoused = {};
 
@@ -127,7 +129,7 @@ export const catchUpArmiesForAttack = async ({
     entryHoused[userSave.baseid] = countsOf(locked.monsters?.housed);
   }
 
-  const near = cell ? outpostsNearCell(cell, userSave.outposts ?? []) : [];
+  const near = cell && !mapRoom1 ? outpostsNearCell(cell, userSave.outposts ?? []) : [];
   if (near.length > 0) {
     const outposts = await postgres.em.find(Save, {
       baseid: { $in: near.map((outpost) => outpost.baseid) },
