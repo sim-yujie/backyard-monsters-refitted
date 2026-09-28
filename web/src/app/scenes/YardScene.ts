@@ -18,11 +18,12 @@ import {
   plannerAccess,
   plannerEntryTooltip,
 } from "@/game/yard/planner/access";
-import { buildOffer, buildsAtOnce } from "@/game/yard/buildCatalogue";
+import { buildOffer, buildsAtOnce, categoryOf } from "@/game/yard/buildCatalogue";
 import { BuildPlacement } from "@/game/yard/BuildPlacement";
 import { harvesterNow, type HarvestKey } from "@/game/yard/harvest";
 import { MushroomPicker, type MushroomPickView } from "@/game/yard/mushroomPick";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
+import { consumeYardIntent, type YardIntent } from "@/game/yard/yardIntent";
 import { yardLifeOf } from "@/game/yard/yardLifeModel";
 import {
   YardChangeReason,
@@ -36,7 +37,12 @@ import { formatAmount, formatCountdown } from "@/ui/format";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
 import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
-import { monstersTabFor, type MonstersFocus, type MonstersTabId } from "@/ui/monsters/monstersTab";
+import {
+  MONSTERS_TAB_ORDER,
+  monstersTabFor,
+  type MonstersFocus,
+  type MonstersTabId,
+} from "@/ui/monsters/monstersTab";
 import { resourceAmount } from "@/ui/resourceIcon";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
 import { BuildMenu, PlacementBar, spotSentence } from "@/ui/yard/BuildMenu";
@@ -91,7 +97,11 @@ export const loadYardFor = (
   target: ViewTarget | null,
   api: YardLoaders = { loadOwnYard, viewBase },
 ): Promise<BaseLoadResponse> =>
-  target ? api.viewBase(target.baseid, target.kind) : api.loadOwnYard();
+  !target
+    ? api.loadOwnYard()
+    : target.mapversion === undefined
+      ? api.viewBase(target.baseid, target.kind)
+      : api.viewBase(target.baseid, target.kind, { mapversion: target.mapversion });
 
 /**
  * The pool the HUD shows over a yard: the yard's own when it is the player's,
@@ -554,6 +564,8 @@ export class YardScene implements Scene {
       this.refreshBuildButton();
       // Once the yard is drawn, because the first answer may redraw it.
       store?.start();
+      // What the screen the player came from asked for, on the own yard only.
+      if (store) this.applyIntent(consumeYardIntent());
     } catch (caught) {
       if (caught instanceof ApiError && caught.isAuthFailure) {
         context.goTo(SceneName.LOGIN);
@@ -920,21 +932,46 @@ export class YardScene implements Scene {
       this.buildMenu.close();
       return;
     }
+    this.openBuildMenu();
+  }
+
+  /**
+   * Opens the Build window, on one building's tile when `type` is given
+   * (the Map link's "Build Map Room", a Map Room 1 card's "Build Flinger").
+   */
+  private openBuildMenu(type?: number): void {
     const binding = this.binding;
     const context = this.context;
     if (!binding || !context || this.planner) return;
+    this.endPlacement();
 
     // The menu docks where the building panel and the Monsters screen do.
     this.select(null);
     this.monsters?.close();
     this.buildMenu ??= new BuildMenu({
       binding,
-      onPick: (type, instant) => this.startPlacement(type, instant),
+      onPick: (picked, instant) => this.startPlacement(picked, instant),
       onTownHall: () => this.showTownHall(),
       onClose: () => this.refreshBuildButton(),
     }).mount(context.overlay.content);
-    this.buildMenu.open();
+    const category = type === undefined ? null : categoryOf(type);
+    if (category) {
+      this.buildMenu.open(category);
+      this.buildMenu.pick(type!);
+    } else {
+      this.buildMenu.open();
+    }
     this.refreshBuildButton();
+  }
+
+  /** Carries out what another screen asked the own yard to open (`yardIntent.ts`). */
+  private applyIntent(intent: YardIntent | null): void {
+    if (!intent) return;
+    if (intent.kind === "build") this.openBuildMenu(intent.type);
+    else {
+      const tab = MONSTERS_TAB_ORDER.find((one) => one === intent.tab);
+      if (tab) this.openMonsters(tab);
+    }
   }
 
   /** The Build window's "Upgrade Town Hall": close it and open the hall's panel. */

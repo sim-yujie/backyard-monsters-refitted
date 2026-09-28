@@ -4,6 +4,7 @@ import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager } from "./SceneManager";
 import { BootScene } from "./scenes/BootScene";
 import { LoginScene } from "./scenes/LoginScene";
+import { MapRoom1Scene } from "./scenes/MapRoom1Scene";
 import { MapRoom2Scene } from "./scenes/MapRoom2Scene";
 import { YardScene } from "./scenes/YardScene";
 import { AttackScene } from "./scenes/AttackScene";
@@ -12,6 +13,8 @@ import { AttackScene } from "./scenes/AttackScene";
 export const SceneName = {
   BOOT: "boot",
   LOGIN: "login",
+  /** The neighbours and wild monster tribes, below Map Room 2 (issue #132). */
+  MAP_ROOM_1: "maproom1",
   MAP_ROOM_2: "maproom2",
   YARD: "yard",
   /** An attack on a foreign yard; opened through `game/attack/attackTarget`. */
@@ -74,6 +77,7 @@ export class App {
     this.scenes
       .register(SceneName.BOOT, () => new BootScene())
       .register(SceneName.LOGIN, () => new LoginScene())
+      .register(SceneName.MAP_ROOM_1, () => new MapRoom1Scene())
       .register(SceneName.MAP_ROOM_2, () => new MapRoom2Scene())
       .register(SceneName.YARD, () => new YardScene())
       .register(SceneName.ATTACK, () => new AttackScene());

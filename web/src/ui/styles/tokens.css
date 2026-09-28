@@ -76,6 +76,14 @@
   --colour-terrain-grass: #4b7b3c;
   --colour-terrain-rock: #6e6b63;
 
+  /* Map Room 1 pins (#132): a wild monster tribe's coral and its dark
+     ground, a protected player's grey, and the "playing now" dot. */
+  --colour-tribe: #ff8a6b;
+  --colour-tribe-ground: #2b1d1b;
+  --colour-tribe-text: #ffb8a3;
+  --colour-pin-protected: #7d8898;
+  --colour-online: #7ee0a0;
+
   /* ── Spacing ─────────────────────────────────────────────────────────
    * A 4px base step. Panels use 3 and 4; text uses 1 and 2.
    */
@@ -180,6 +188,10 @@
   --colour-success: #1f7a3a;
   --colour-info: #2a55c4;
   --colour-meter: #5b6778;
+  --colour-tribe: #c2410c;
+  --colour-tribe-text: #9a3412;
+  --colour-pin-protected: #6a7382;
+  --colour-online: #1f7a3a;
 
   --colour-scrim: rgb(20 24 32 / 45%);
 

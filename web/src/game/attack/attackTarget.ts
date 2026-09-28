@@ -137,8 +137,15 @@ export interface AttackTarget {
 export interface ViewTarget {
   readonly baseid: string;
   readonly kind: AttackTargetKind;
-  readonly cell: OffsetCell;
+  /** Where on the Map Room 2 world it is; Map Room 1 has no cells. */
+  readonly cell?: OffsetCell;
   readonly name: string;
+  /**
+   * The Map Room the view load names, when it is not the client's default
+   * (2): Map Room 1 sends 1, which is what makes `wmview` find a Map Room 1
+   * tribe (`baseModeView.ts:20-21`).
+   */
+  readonly mapversion?: number;
   /**
    * The attack this look could turn into, or null when the map's preconditions
    * refuse it — in which case the yard shows no Attack button at all (§4.1).

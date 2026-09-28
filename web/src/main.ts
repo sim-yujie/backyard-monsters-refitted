@@ -1,6 +1,7 @@
 import "@/ui/styles/tokens.css";
 import "@/ui/styles/ui.css";
 import "@/ui/styles/maproom.css";
+import "@/ui/styles/maproom1.css";
 import "@/ui/styles/planner.css";
 import "@/ui/styles/building-panel.css";
 import "@/ui/styles/attack.css";

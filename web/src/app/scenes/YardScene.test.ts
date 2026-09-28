@@ -38,6 +38,13 @@ describe("loadYardFor", () => {
       ["21970243208", "main"],
     ]);
   });
+
+  it("names Map Room 1 on a Map Room 1 visit, which has no cell", async () => {
+    const loaders = api();
+    const target: ViewTarget = { baseid: "11", kind: "wild", name: "Kozu Tribe", attack: null, refusal: null, mapversion: 1 };
+    await loadYardFor(target, loaders);
+    expect(loaders.viewBase.mock.calls).toEqual([["11", "wild", { mapversion: 1 }]]);
+  });
 });
 
 describe("hudPoolFor (#60)", () => {

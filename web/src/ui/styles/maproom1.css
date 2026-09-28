@@ -1,0 +1,1234 @@
+/*
+ * Map Room 1 (#132): the approved "MR1 · Map", "MR1 · Target" and
+ * "MR1 on a phone" mock-ups in style B.
+ *
+ * Every value comes from tokens.css; a pin's colours are three custom
+ * properties (`--pin`, `--pin-ground`, `--pin-text`) set by its tone class,
+ * so a pin, a list avatar, an overview dot and a legend swatch all agree.
+ */
+
+/* ── Pin tones ──────────────────────────────────────────────────────────── */
+
+.mr1-tone--neighbour {
+  --pin: var(--colour-meter);
+  --pin-ground: color-mix(in srgb, var(--colour-meter) 14%, var(--colour-surface-base));
+  --pin-text: var(--colour-text);
+}
+
+.mr1-tone--attacked {
+  --pin: var(--colour-warning);
+  --pin-ground: color-mix(in srgb, var(--colour-warning) 18%, var(--colour-surface-base));
+  --pin-text: color-mix(in srgb, var(--colour-warning) 45%, var(--colour-text-strong));
+}
+
+.mr1-tone--protected {
+  --pin: var(--colour-pin-protected);
+  --pin-ground: color-mix(in srgb, var(--colour-pin-protected) 14%, var(--colour-surface-base));
+  --pin-text: var(--colour-text-secondary);
+}
+
+.mr1-tone--tribe {
+  --pin: var(--colour-tribe);
+  --pin-ground: var(--colour-tribe-ground);
+  --pin-text: var(--colour-tribe-text);
+}
+
+.mr1-tone--wrecked {
+  --pin: var(--colour-pin-protected);
+  --pin-ground: var(--colour-tribe-ground);
+  --pin-text: var(--colour-text-secondary);
+}
+
+/* ── The window ─────────────────────────────────────────────────────────── */
+
+.mr1 {
+  position: absolute;
+  inset: calc(var(--hud-height) + var(--space-3)) var(--space-5) var(--space-4);
+  max-width: 1360px;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0 var(--space-5) var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-popup);
+  color: var(--colour-text);
+}
+
+.mr1__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+}
+
+.mr1__title {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+
+.mr1__hint {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.mr1__spacer {
+  flex: 1;
+}
+
+.mr1__close {
+  order: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--control-height);
+  min-height: var(--control-height);
+  color: var(--colour-text-secondary);
+}
+
+.mr1__shield {
+  display: none;
+}
+
+.mr1__toggle {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.mr1__toggle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--control-height);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--colour-text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mr1__toggle-button:hover {
+  background: var(--colour-surface-control);
+}
+
+.mr1__toggle-button[aria-pressed="true"] {
+  background: var(--colour-surface-selected);
+  color: var(--colour-text-strong);
+  font-weight: 700;
+}
+
+.mr1__toggle-button:focus-visible,
+.mr1-pin__button:focus-visible,
+.mr1-tile:focus-visible,
+.mr1-row:focus-visible,
+.mr1-map__viewport:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.mr1__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mr1__status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  color: var(--colour-text-muted);
+  pointer-events: none;
+}
+
+.mr1-icon {
+  flex: none;
+}
+
+.mr1-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.mr1-dot--online {
+  background: var(--colour-online);
+}
+
+.mr1-countdown {
+  color: var(--colour-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.mr1-countdown--plain {
+  font-weight: inherit;
+  color: inherit;
+}
+
+/* ── Avatars: a tribe's picture or a player's initials ──────────────────── */
+
+.mr1-avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 3px solid var(--pin);
+  border-radius: 50%;
+  background: var(--pin-ground);
+  color: var(--pin-text);
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mr1-avatar--sm {
+  width: 44px;
+  height: 44px;
+  font-size: var(--text-sm);
+}
+
+.mr1-avatar--md {
+  width: 48px;
+  height: 48px;
+  font-size: var(--text-md);
+}
+
+.mr1-avatar--lg {
+  width: 72px;
+  height: 72px;
+  font-size: var(--text-xl);
+}
+
+.mr1-avatar--tribe {
+  border-radius: var(--radius-md);
+}
+
+.mr1-avatar--tribe.mr1-avatar--sm {
+  width: 40px;
+  height: 40px;
+  border-width: 2.5px;
+}
+
+.mr1-avatar--tribe.mr1-avatar--md {
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+}
+
+.mr1-avatar--tribe.mr1-avatar--lg {
+  border-radius: 18px;
+}
+
+.mr1-avatar__art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mr1-tone--wrecked.mr1-avatar,
+.mr1-tone--wrecked .mr1-avatar {
+  border-style: dashed;
+}
+
+.mr1-tone--wrecked .mr1-avatar__art,
+.mr1-avatar.mr1-tone--wrecked .mr1-avatar__art {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+/* ── The map ────────────────────────────────────────────────────────────── */
+
+.mr1-map {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--colour-terrain-grass);
+}
+
+.mr1-map[hidden] {
+  display: none;
+}
+
+.mr1-map__viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.mr1-map__viewport--dragging {
+  cursor: grabbing;
+}
+
+.mr1-map__world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1760px;
+  height: 1760px;
+  will-change: transform;
+}
+
+.mr1-map__art {
+  display: block;
+  width: 1760px;
+  max-width: none;
+  height: 1760px;
+  pointer-events: none;
+}
+
+.mr1-map__pins {
+  position: absolute;
+  inset: 0;
+}
+
+.mr1-pin {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  transform: translate(-50%, -50%);
+}
+
+.mr1-pin__button {
+  position: relative;
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.mr1-pin--tribe .mr1-pin__button {
+  border-radius: 16px;
+}
+
+.mr1-pin__button .mr1-avatar {
+  box-shadow: var(--shadow-float);
+}
+
+.mr1-pin--selected {
+  z-index: 1;
+}
+
+.mr1-pin--selected .mr1-avatar {
+  box-shadow:
+    0 0 0 4px var(--colour-surface-base),
+    0 0 0 7px var(--colour-accent);
+}
+
+.mr1-pin__badge {
+  position: absolute;
+  right: -8px;
+  bottom: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--colour-border-strong);
+  border-radius: 10px;
+  background: var(--colour-surface-base);
+  color: var(--colour-text);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mr1-pin__tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-raised);
+  color: var(--colour-text);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.mr1-pin--tribe .mr1-pin__tag {
+  padding-right: var(--space-1);
+}
+
+.mr1-tone--wrecked .mr1-pin__tag,
+.mr1-tone--protected .mr1-pin__tag {
+  color: var(--colour-text-secondary);
+}
+
+.mr1-pin__level {
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-selected);
+  font-size: 11px;
+}
+
+.mr1-pin__you {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border: 3px solid var(--colour-accent);
+  border-radius: 50%;
+  background: var(--colour-surface-base);
+  color: var(--colour-accent);
+  box-shadow: 0 0 0 6px var(--colour-accent-soft);
+}
+
+.mr1-pin__tag--you {
+  padding: 3px 10px;
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.mr1-map__home {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  border-color: var(--colour-border-strong);
+  background: var(--colour-surface-raised);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* The overview map, in the corner Flash kept it in. */
+.mr1-mini {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 176px;
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+}
+
+.mr1-mini__map {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background-color: var(--colour-terrain-grass);
+  background-size: cover;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.mr1-mini__dots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.mr1-mini__dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pin);
+  box-shadow: 0 0 0 1px var(--colour-surface-base);
+  transform: translate(-50%, -50%);
+}
+
+.mr1-mini__dot--tribe {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+
+.mr1-mini__dot--you {
+  width: 8px;
+  height: 8px;
+  background: var(--colour-accent);
+}
+
+.mr1-mini__frame {
+  position: absolute;
+  border: 2px solid var(--colour-accent);
+  border-radius: 4px;
+  background: var(--colour-accent-soft);
+  pointer-events: none;
+}
+
+.mr1-mini__caption {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  text-align: center;
+}
+
+.mr1-legend {
+  position: absolute;
+  left: var(--space-4);
+  bottom: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  max-width: calc(100% - 2 * var(--space-4));
+  padding: var(--space-2) 14px;
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.mr1-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mr1-legend__swatch {
+  width: 12px;
+  height: 12px;
+  border: 2.5px solid var(--pin);
+  border-radius: 50%;
+}
+
+.mr1-legend__swatch--you {
+  --pin: var(--colour-accent);
+}
+
+.mr1-legend__swatch--tribe {
+  border-radius: 3px;
+}
+
+.mr1-legend__swatch--online {
+  width: 7px;
+  height: 7px;
+  border: 0;
+  background: var(--colour-online);
+}
+
+/* ── The target card ────────────────────────────────────────────────────── */
+
+.mr1-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-base);
+  box-shadow: var(--shadow-panel);
+  color: var(--colour-text);
+  cursor: auto;
+  user-select: text;
+}
+
+.mr1-card--float {
+  position: absolute;
+  z-index: 2;
+  width: 320px;
+  padding: var(--space-4);
+  border-color: var(--colour-border-strong);
+  box-shadow: var(--shadow-popup);
+}
+
+.mr1-card__grip {
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--colour-border-strong);
+}
+
+.mr1-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.mr1-card--float .mr1-card__head .mr1-avatar--lg {
+  width: 56px;
+  height: 56px;
+  font-size: var(--text-lg);
+}
+
+.mr1-card__titles {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mr1-card__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mr1-card__title {
+  margin: 0;
+  font-size: var(--text-xl);
+  overflow-wrap: anywhere;
+}
+
+.mr1-card--float .mr1-card__title,
+.mr1-card--sheet .mr1-card__title {
+  font-size: var(--text-lg);
+}
+
+.mr1-card__sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.mr1-card__sub--tribe {
+  color: var(--colour-tribe-text);
+  font-weight: 600;
+}
+
+.mr1-card__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--control-height);
+  min-height: var(--control-height);
+  color: var(--colour-text-secondary);
+}
+
+.mr1-card__blurb {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.5;
+  color: var(--colour-text-secondary);
+  text-wrap: pretty;
+}
+
+.mr1-card--float .mr1-card__blurb {
+  font-size: var(--text-sm);
+}
+
+.mr1-card__facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.mr1-card__fact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mr1-card__fact .mr1-icon {
+  color: var(--colour-text-muted);
+}
+
+.mr1-card__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mr1-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.mr1-stat__value {
+  font-size: 20px;
+}
+
+.mr1-stat__label {
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.mr1-stat--warn {
+  border-color: color-mix(in srgb, var(--colour-warning) 35%, transparent);
+  background: color-mix(in srgb, var(--colour-warning) 10%, transparent);
+}
+
+.mr1-stat--warn .mr1-stat__value,
+.mr1-stat--warn .mr1-stat__label {
+  color: var(--colour-warning);
+}
+
+.mr1-warning,
+.mr1-protection {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: var(--space-3) 14px;
+  border: 1px solid color-mix(in srgb, var(--colour-warning) 45%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--colour-warning) 12%, transparent);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-secondary);
+}
+
+.mr1-warning strong,
+.mr1-protection strong {
+  color: var(--colour-text-strong);
+}
+
+.mr1-warning__icon,
+.mr1-protection__icon {
+  margin-top: 1px;
+  color: var(--colour-warning);
+}
+
+.mr1-send {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.mr1-send__label {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.mr1-send__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.mr1-send__icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.mr1-card__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mr1-card__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 52px;
+  border-radius: 14px;
+  font-size: var(--text-md);
+}
+
+.mr1-card--float .mr1-card__button {
+  min-height: var(--control-height);
+  font-size: var(--text-sm);
+}
+
+.mr1-card__why {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.mr1-reason {
+  flex: 1 1 200px;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-secondary);
+}
+
+.mr1-reason strong {
+  color: var(--colour-text);
+}
+
+.mr1-reason__icon {
+  margin-top: 1px;
+  color: var(--colour-meter);
+}
+
+.mr1-reason .mr1-dot {
+  margin: 6px 4px 0;
+}
+
+.mr1-card__way {
+  min-height: var(--control-height);
+  font-size: var(--text-sm);
+}
+
+/* ── The list ───────────────────────────────────────────────────────────── */
+
+.mr1-listpane {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: var(--space-5);
+}
+
+.mr1-listpane[hidden] {
+  display: none;
+}
+
+.mr1-list {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  overflow-y: auto;
+  padding-right: var(--space-1);
+}
+
+.mr1-list__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.mr1-list__heading {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.mr1-list__tribes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.mr1-tile,
+.mr1-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 60px;
+  border: 1px solid var(--colour-border);
+  border-radius: 14px;
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mr1-tile {
+  gap: 10px;
+  padding: 0 10px;
+}
+
+.mr1-row {
+  gap: var(--space-3);
+  padding: var(--space-2) 10px;
+  border-color: transparent;
+}
+
+.mr1-tile:hover,
+.mr1-row:hover {
+  background: var(--colour-surface-control);
+}
+
+.mr1-tile[aria-pressed="true"],
+.mr1-row[aria-pressed="true"] {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent-soft);
+}
+
+.mr1-tile--wrecked {
+  border-color: var(--colour-border-subtle);
+  background: transparent;
+  color: var(--colour-text-secondary);
+}
+
+.mr1-tile__words,
+.mr1-row__words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mr1-row__words {
+  flex: 1;
+}
+
+.mr1-tile__name {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.mr1-tile__sub {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mr1-list__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--control-height);
+}
+
+.mr1-list__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.mr1-list__sort-select {
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font: inherit;
+  font-weight: 600;
+}
+
+.mr1-list__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mr1-row__top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mr1-row__name {
+  overflow: hidden;
+  font-size: var(--text-md);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mr1-chip--small {
+  padding: 1px 6px;
+  font-size: 11px;
+}
+
+.mr1-row__line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-xs);
+  color: var(--colour-text-secondary);
+}
+
+.mr1-row__line--warn {
+  color: var(--colour-warning);
+  font-weight: 600;
+}
+
+.mr1-row__chevron {
+  color: var(--colour-text-muted);
+}
+
+.mr1-list__empty {
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px dashed var(--colour-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--colour-text-muted);
+}
+
+/* Stays in reach at the bottom of the list when seven rows run past it. */
+.mr1-list__pager {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding-block: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-base);
+}
+
+.mr1-list__pager[hidden] {
+  display: none;
+}
+
+.mr1-list__page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--control-height);
+  min-height: var(--control-height);
+}
+
+.mr1-list__page-label {
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.mr1-side {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mr1-side__empty {
+  margin: 0;
+  padding: var(--space-5);
+  border: 1px dashed var(--colour-border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--colour-text-muted);
+  text-align: center;
+}
+
+/* ── The footer: what you can send, before you pick ─────────────────────── */
+
+.mr1__footer {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) 18px;
+  padding: 10px 14px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: 14px;
+  background: var(--colour-surface-sunken);
+}
+
+.mr1__footer-label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.mr1__footer-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.mr1__footer .mr1-send {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.mr1__footer .mr1-send__chip {
+  gap: 6px;
+  padding: var(--space-1) 10px var(--space-1) var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-control);
+}
+
+.mr1__footer .mr1-send__icon {
+  width: 28px;
+  height: 28px;
+}
+
+.mr1__footer .mr1-protection {
+  align-items: center;
+  padding: 6px var(--space-3);
+}
+
+.mr1-sheet[hidden] {
+  display: none;
+}
+
+/* ── A phone: the list first, the card as a bottom sheet ────────────────── */
+
+@media (width <= 620px) {
+  .overlay__layer:has(> .mr1) > .hud {
+    display: none;
+  }
+
+  .mr1 {
+    inset: 0;
+    max-width: none;
+    gap: 10px;
+    padding: var(--space-2) var(--space-4) 0;
+    border: 0;
+    border-radius: 0;
+    background: var(--colour-surface-base);
+    box-shadow: none;
+  }
+
+  .mr1__header {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding-top: 0;
+  }
+
+  .mr1__close {
+    order: 0;
+  }
+
+  .mr1__title {
+    font-size: 20px;
+  }
+
+  .mr1__hint {
+    display: none;
+  }
+
+  .mr1__shield {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid color-mix(in srgb, var(--colour-warning) 40%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--colour-warning) 12%, transparent);
+    color: var(--colour-text);
+    font-size: var(--text-xs);
+    font-weight: 700;
+  }
+
+  .mr1__shield[hidden] {
+    display: none;
+  }
+
+  .mr1__shield .mr1-icon {
+    color: var(--colour-warning);
+  }
+
+  .mr1__toggle {
+    order: 20;
+    flex: 1 0 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mr1__footer {
+    display: none;
+  }
+
+  .mr1-listpane {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mr1-side {
+    display: none;
+  }
+
+  .mr1-list {
+    padding-bottom: var(--space-4);
+  }
+
+  .mr1--sheet-open .mr1-list,
+  .mr1--sheet-open .mr1-map {
+    margin-bottom: min(46vh, 320px);
+  }
+
+  .mr1-list__tribes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mr1-map {
+    margin-bottom: var(--space-4);
+  }
+
+  .mr1-mini {
+    width: 104px;
+    padding: 6px;
+  }
+
+  .mr1-mini__caption,
+  .mr1-legend {
+    display: none;
+  }
+
+  .mr1-sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-hud);
+    max-height: 72vh;
+    overflow-y: auto;
+  }
+
+  .mr1-card--sheet {
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-4) var(--space-5);
+    border-width: 1px 0 0;
+    border-radius: 22px 22px 0 0;
+    box-shadow: var(--shadow-popup);
+  }
+
+  .mr1-card--sheet .mr1-card__blurb {
+    font-size: var(--text-sm);
+  }
+
+  .mr1-notices {
+    --notice-top-inset: var(--space-7);
+  }
+}
