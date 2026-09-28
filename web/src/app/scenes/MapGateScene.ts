@@ -7,7 +7,9 @@ import { SceneName } from "../App";
 
 /**
  * The door to "the map" when nothing on screen knows yet which one that is
- * (issue #162): after sign-in, on a resumed session, and from a visit. It
+ * (issue #162): from the yard's Map button, from a visit and from the end of
+ * an attack. Sign-in no longer comes through here: it lands in the yard
+ * (issue #172). It
  * loads the own yard, picks the map from it (`mapRoute.ts`) and hands the
  * load on, so the map it opens does not load the yard again.
  *

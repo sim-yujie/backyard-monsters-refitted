@@ -116,7 +116,8 @@ export class LoginScene implements Scene {
 
     try {
       await login(form.email, form.password);
-      context.goTo(SceneName.MAP);
+      // The yard first, for every player (issue #172); the map is one click on.
+      context.goTo(SceneName.YARD);
     } catch (caught) {
       form.error.textContent = describe(caught);
       form.submit.disabled = false;

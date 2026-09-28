@@ -7,8 +7,9 @@ import { SceneName } from "../App";
  * The first screen.
  *
  * Restores a stored session if there is one and revalidates it against the
- * server, then sends the player either to their map (`MapGateScene` picks
- * which) or to the login form. The
+ * server, then sends the player either to their yard or to the login form.
+ * The yard is where every session starts (issue #172); the Map button goes
+ * on from there through `MapGateScene`. The
  * token has to go back through the login route to be checked: the server keeps
  * one valid token per account and session type in Redis, so a JWT that still
  * parses may already have been superseded.
@@ -39,7 +40,7 @@ export class BootScene implements Scene {
 
     try {
       await loginWithToken(stored.token, stored.sessionType);
-      context.goTo(SceneName.MAP);
+      context.goTo(SceneName.YARD);
     } catch {
       // Expired, superseded or the server is down. Either way the player needs
       // the form; the specific reason is surfaced there when they retry.
