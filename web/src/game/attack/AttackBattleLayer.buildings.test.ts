@@ -84,7 +84,7 @@ const seeded = (): (() => number) => {
   };
 };
 
-const setUp = (buildings: BuildingRow[]) => {
+const setUp = (buildings: BuildingRow[], now: () => number = () => 0) => {
   const session = new AttackSession({ target: targetOf(), seed: 1 });
   const response = yardOf(buildings);
   session.load(response);
@@ -100,6 +100,7 @@ const setUp = (buildings: BuildingRow[]) => {
     textures: new MonsterSheetTextures(blankSheet),
     bombArt: { cell: () => Texture.WHITE, destroy() {} },
     random: seeded(),
+    now,
   });
   return { session, yard, host, overlay, layer };
 };
@@ -218,16 +219,49 @@ describe("bombs (#87)", () => {
     layer.destroy();
   });
 
-  it("lands the rest of the rain at once when the attack ends", () => {
-    const { session, layer } = setUp([{ id: 1, t: 20, l: 1, X: 0, Y: 0 }]);
+  it("keeps the rain falling on the wall clock after the attack ends, and says so (#148)", () => {
+    let ms = 0;
+    const { session, layer } = setUp([{ id: 1, t: 20, l: 1, X: 0, Y: 0 }], () => ms);
     session.start();
     session.appendBomb({ x: 0, y: 0, id: "tw0" });
+    // Fired, not yet drawn: already settling.
+    expect(layer.settling).toBe(true);
     play(session, 1.2, layer);
-    expect(layer.bombEffects.airborne).toBeGreaterThan(0);
+    const airborne = layer.bombEffects.airborne;
+    expect(airborne).toBeGreaterThan(0);
     session.retreat();
     layer.update();
+    // The battle clock has stopped, the rain has not.
+    expect(layer.bombEffects.airborne).toBe(airborne);
+    expect(layer.settling).toBe(true);
+    const tick = session.battle()!.tick;
+    for (let frame = 0; frame < 60 * 8; frame += 1) {
+      ms += 1000 / 60;
+      layer.update();
+    }
+    expect(session.battle()!.tick).toBe(tick);
     expect(layer.bombEffects.airborne).toBe(0);
     expect(layer.heldBombDamage(1)).toBe(0);
+    expect(layer.settling).toBe(false);
+    layer.destroy();
+  });
+
+  it("shows the damage the rain has brought down, not what the engine booked (#148)", () => {
+    const { session, layer } = setUp([{ id: 1, t: 20, l: 1, X: 0, Y: 0 }]);
+    session.start();
+    play(session, 0.1, layer);
+    expect(layer.shownDamage()).toBe(0);
+    session.appendBomb({ x: 20, y: 10, id: "pb0" });
+    const booked = session.state().damagePercent;
+    expect(booked).toBeGreaterThan(0);
+    // Read before the layer has drawn a frame: the bomb is held back already.
+    expect(layer.shownDamage()).toBe(0);
+    play(session, 2.5, layer);
+    const partway = layer.shownDamage();
+    expect(partway).toBeGreaterThan(0);
+    expect(partway).toBeLessThan(booked);
+    play(session, 4, layer);
+    expect(layer.shownDamage()).toBeCloseTo(session.state().damagePercent, 9);
     layer.destroy();
   });
 });

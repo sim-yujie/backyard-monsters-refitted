@@ -2,11 +2,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, NetworkError, setAuthToken } from "@/api/http";
 import type { AttackSavePayload, BaseLoadResponse, BaseSaveResponse } from "@/api/types";
+import { AttackPresentation } from "@/game/attack/attackPresentation";
 import { AttackSession } from "@/game/attack/AttackSession";
 import type { AttackMounts } from "@/game/attack/attackPlugins";
 import type { AttackTarget } from "@/game/attack/attackTarget";
 import { Notices } from "@/ui/maproom/Notices";
 import {
+  END_PANEL_MAX_WAIT_MS,
   SESSION_WINDOW_SECONDS,
   WINDOW_MARGIN_SECONDS,
   createEndPlugin,
@@ -44,8 +46,13 @@ const targetOf = (): AttackTarget => ({
 });
 
 /** Only what the end plugin reads; the rest of the mounts is never touched. */
-const mountsFor = (session: AttackSession, modal: HTMLElement, notices: Notices, goToMap: () => void) =>
-  ({ session, target: session.target, modal, notices, goToMap }) as unknown as AttackMounts;
+const mountsFor = (
+  session: AttackSession,
+  modal: HTMLElement,
+  notices: Notices,
+  goToMap: () => void,
+  presentation = new AttackPresentation(),
+) => ({ session, target: session.target, modal, notices, goToMap, presentation }) as unknown as AttackMounts;
 
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
@@ -93,9 +100,10 @@ describe("the end plugin", () => {
   const mount = (
     save: (payload: AttackSavePayload) => Promise<BaseSaveResponse>,
     saveOnLeave: (payload: AttackSavePayload, token: string | null) => Promise<BaseSaveResponse> = vi.fn(savedOk),
+    presentation = new AttackPresentation(),
   ) => {
     teardown = createEndPlugin({ save, saveOnLeave, now: () => clock })(
-      mountsFor(session, modal, notices, goToMap),
+      mountsFor(session, modal, notices, goToMap, presentation),
     );
   };
 
@@ -166,6 +174,53 @@ describe("the end plugin", () => {
     session.setSpeed(2);
     session.setUnusedTools(1);
     expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves at once but holds the panel while a bomb is still falling (#148)", async () => {
+    const save = vi.fn(savedOk);
+    const presentation = new AttackPresentation();
+    let falling = true;
+    presentation.hold(() => falling);
+    mount(save, undefined, presentation);
+    act();
+    session.retreat();
+    // The save does not wait for the screen.
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(modal.querySelector(".attack-end")).toBeNull();
+    await flush();
+    vi.advanceTimersByTime(500);
+    expect(modal.querySelector(".attack-end")).toBeNull();
+    // The rain is down: the panel opens on the save as it stands.
+    falling = false;
+    vi.advanceTimersByTime(100);
+    expect(modal.querySelector(".attack-end")).not.toBeNull();
+    expect(modal.querySelector(".attack-end__status")!.textContent).toBe("Result saved.");
+  });
+
+  it("opens the panel after the longest wait even if the screen never settles (#148)", () => {
+    const presentation = new AttackPresentation();
+    presentation.hold(() => true);
+    mount(vi.fn(savedOk), undefined, presentation);
+    act();
+    session.retreat();
+    expect(modal.querySelector(".attack-end")).toBeNull();
+    clock += END_PANEL_MAX_WAIT_MS;
+    vi.advanceTimersByTime(100);
+    expect(modal.querySelector(".attack-end")).not.toBeNull();
+    expect(modal.querySelector(".attack-end__status")!.textContent).toBe("Saving the result…");
+  });
+
+  it("never opens a held panel after the scene has gone (#148)", () => {
+    const presentation = new AttackPresentation();
+    presentation.hold(() => true);
+    mount(vi.fn(savedOk), undefined, presentation);
+    act();
+    session.retreat();
+    teardown?.();
+    teardown = undefined;
+    clock += END_PANEL_MAX_WAIT_MS;
+    vi.advanceTimersByTime(END_PANEL_MAX_WAIT_MS);
+    expect(modal.querySelector(".attack-end")).toBeNull();
   });
 
   it("names monsters in the attack report from the army panel's table", () => {

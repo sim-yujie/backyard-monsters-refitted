@@ -4,6 +4,7 @@ import type { Camera } from "@/game/Camera";
 import type { Yard } from "@/game/yard/yardModel";
 import type { YardRenderer } from "@/game/yard/YardRenderer";
 import type { Notices } from "@/ui/maproom/Notices";
+import type { AttackPresentation } from "./attackPresentation";
 import type { AttackSession } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 
@@ -66,6 +67,12 @@ export interface AttackMounts {
    * while it is open, and a picker opening closes the info.
    */
   readonly closeBuildingInfo: () => void;
+  /**
+   * What the screen still shows of a battle the engine has moved past: the
+   * battle layer holds the end panel while a bomb is falling and hands the
+   * HUD the damage it has visibly dealt (#148).
+   */
+  readonly presentation: AttackPresentation;
 }
 
 /** A package mounted on the scene; may return its teardown. */

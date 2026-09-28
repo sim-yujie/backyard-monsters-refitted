@@ -8,7 +8,12 @@ import {
   type Renderer,
   type TextureSource,
 } from "pixi.js";
-import { BOMBS, type BattleVisualEvent, type CreepSnapshot } from "@/game/combat/rules";
+import {
+  BOMBS,
+  TICKS_PER_SECOND,
+  type BattleVisualEvent,
+  type CreepSnapshot,
+} from "@/game/combat/rules";
 import { damageStep } from "@/game/yard/YardBuildings";
 import { depthKey, type Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
@@ -96,7 +101,10 @@ import {
  * it ({@link BombFx}, #87): the layer asks which buildings the bomb hit — the
  * engine's own reach test, through `bombTargets` — holds back what each lost,
  * and lets a share of it go with every particle that lands, so the bars, the
- * darkening, the smoke and the numbers follow the rain.
+ * darkening, the smoke and the numbers follow the rain. So does the HUD's
+ * damage readout ({@link shownDamage}, #148). When a bomb ends the attack the
+ * battle clock stops, but the rain does not: it carries on falling on the
+ * wall clock, and {@link settling} holds the end panel back until it is down.
  *
  * ## Textures
  *
@@ -461,6 +469,8 @@ export interface AttackBattleLayerOptions {
   readonly bombArt?: BombArt;
   /** The bomb rain's randomness; `Math.random` unless a test fixes it. */
   readonly random?: () => number;
+  /** Wall-clock milliseconds, for the rain after the end; `performance.now` unless a test fixes it. */
+  readonly now?: () => number;
 }
 
 interface CreepView {
@@ -609,6 +619,9 @@ export class AttackBattleLayer {
   private smokePrimed = false;
 
   private lastEventTick = 0;
+  /** The tick and wall-clock time the layer first saw the attack over, for the rain after it (#148). */
+  private endedAt: { tick: number; ms: number } | null = null;
+  private readonly now: () => number;
   private damageDirty = true;
   private limitRead = false;
   private readonly unsubscribe: () => void;
@@ -622,6 +635,7 @@ export class AttackBattleLayer {
     this.origin = { x: options.yard.bounds.originX, y: options.yard.bounds.originY };
     this.reducedMotion = options.reducedMotion ?? prefersReducedMotion();
     this.textures = options.textures ?? new MonsterSheetTextures();
+    this.now = options.now ?? (() => performance.now());
 
     for (const building of options.yard.buildings) {
       if (building.maxHp !== null && building.maxHp > 0) {
@@ -702,6 +716,8 @@ export class AttackBattleLayer {
     const battle = this.session.battle();
     if (!battle) return;
     const tick = battle.tick;
+    // The effects' clock: the battle's, and after the end the wall's.
+    const shown = this.shownTick(tick);
 
     // Creeps the engine still has first, then this frame's events, and only
     // then the ones it dropped: a creep a held bullet killed must still have
@@ -716,25 +732,74 @@ export class AttackBattleLayer {
     this.paintCreeps(tick);
     this.drawSplats(tick);
     this.drawBursts(tick);
-    this.fx.update(tick);
-    this.bombFx.update(tick);
-    // The clock stops when the attack ends; whatever is still falling lands now.
-    if (this.bombFx.airborne > 0 && this.session.state().phase === "ended") this.bombFx.settle();
-    this.showBombNumbers(tick);
+    this.fx.update(shown);
+    this.bombFx.update(shown);
+    this.showBombNumbers(shown);
 
     if (this.damageDirty) {
       this.damageDirty = false;
       const state = battle.state();
       // Before the health is shown, so a new bomb's damage is held from its first frame.
-      this.noticeBombs(state.health, tick);
+      this.noticeBombs(state.health, shown);
       this.lastHealth = state.health;
       this.lastDestroyed = state.destroyedIds;
       this.revealTraps(state.firedTraps, tick);
       const health = this.shownHealth(state.health);
       this.syncDamage(health);
-      this.syncSmoke(health, tick);
+      this.syncSmoke(health, shown);
       this.buildingBars.sync(health);
     }
+  }
+
+  /**
+   * The tick the effects are drawn at. While the attack runs it is the
+   * battle's own; once it has ended the battle clock stands still, and the
+   * effects — a bomb's rain above all — go on at the speed the attack ran at
+   * on the wall clock, so a winning bomb is seen to land (#148).
+   */
+  private shownTick(tick: number): number {
+    const state = this.session.state();
+    if (state.phase !== "ended") {
+      this.endedAt = null;
+      return tick;
+    }
+    const now = this.now();
+    this.endedAt ??= { tick, ms: now };
+    const since = Math.max(0, now - this.endedAt.ms) / 1000;
+    return this.endedAt.tick + Math.floor(since * TICKS_PER_SECOND * state.speed);
+  }
+
+  /**
+   * Whether a bomb is still coming down, or has been fired and not yet drawn:
+   * the end panel waits while this is true (#148).
+   */
+  get settling(): boolean {
+    if (this.destroyed) return false;
+    if (this.bombFx.airborne > 0) return true;
+    const events = this.session.flingLog().events;
+    for (let index = this.eventsSeen; index < events.length; index += 1) {
+      if (events[index]?.kind === "bomb") return true;
+    }
+    return false;
+  }
+
+  /**
+   * The damage percentage the screen shows for the battle as it stands: the
+   * engine's health with what the bombs' particles and the creeps' fireballs
+   * have not brought down yet put back (#148). Never above the engine's.
+   */
+  shownDamage(): number {
+    const battle = this.session.battle();
+    if (this.destroyed || !battle) return 0;
+    const state = battle.state();
+    // A bomb fired since the last frame is held back now, not a frame late:
+    // the scene reads this the moment the session says the bomb went in.
+    if (this.eventsSeen < this.session.flingLog().events.length) {
+      this.noticeBombs(state.health, this.shownTick(battle.tick));
+      this.lastHealth = state.health;
+      this.lastDestroyed = state.destroyedIds;
+    }
+    return this.session.damageFor(this.shownHealth(state.health), state.firedTraps);
   }
 
   /** How many creeps have a sprite right now. */

@@ -657,9 +657,18 @@ export class AttackSession {
   }
 
   private damageOf(battleState: BattleState): number {
+    return this.damageFor(battleState.health, battleState.firedTraps);
+  }
+
+  /**
+   * `damagePercent()` over the enemy yard for a health map other than the
+   * engine's: the battle layer's, which holds back what a bomb's particles
+   * have not brought down yet (#148). Changes nothing.
+   */
+  damageFor(health: Readonly<Record<string, number>>, firedTraps: readonly number[]): number {
     const yard = this.combatYard;
     if (!yard) return 0;
-    return damagePercent(yard, battleState.health, new Set(battleState.firedTraps));
+    return damagePercent(yard, health, new Set(firedTraps));
   }
 
   /**

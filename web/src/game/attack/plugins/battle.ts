@@ -70,6 +70,9 @@ const plugin: AttackPlugin = (mounts) => {
     host: mounts.renderer,
     overlay: mounts.battleLayer,
   });
+  // The HUD's damage and the end panel follow what the screen shows (#148).
+  const releaseHold = mounts.presentation.hold(() => layer.settling);
+  const releaseDamage = mounts.presentation.showDamageWith(() => layer.shownDamage());
 
   let hooked = false;
   if (import.meta.env.DEV) {
@@ -93,6 +96,8 @@ const plugin: AttackPlugin = (mounts) => {
   }
 
   return () => {
+    releaseHold();
+    releaseDamage();
     layer.destroy();
     if (hooked) delete (window as unknown as { __attackBattle?: DevHook }).__attackBattle;
   };

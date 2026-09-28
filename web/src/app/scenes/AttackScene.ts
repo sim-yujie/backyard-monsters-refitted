@@ -4,6 +4,7 @@ import { loadAttack } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
 import type { BaseLoadResponse } from "@/api/types";
 import { ATTACK_TAP_CLAIMS } from "@/game/attack/AttackInput";
+import { AttackPresentation } from "@/game/attack/attackPresentation";
 import { AttackSession, type AttackSessionState } from "@/game/attack/AttackSession";
 import { consumeAttackTarget, type AttackTarget } from "@/game/attack/attackTarget";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
@@ -75,6 +76,7 @@ export class AttackScene implements Scene {
   private readonly renderer = new YardRenderer();
   private readonly notices = new Notices();
   private readonly battleLayer = new Container();
+  private presentation = new AttackPresentation();
   private readonly plugins: readonly AttackPlugin[];
 
   private context: SceneContext | null = null;
@@ -211,6 +213,7 @@ export class AttackScene implements Scene {
     this.battleLayer.removeChildren();
     this.renderer.destroy();
     this.session = null;
+    this.presentation = new AttackPresentation();
     this.yard = null;
     this.target = null;
     this.context = null;
@@ -339,6 +342,7 @@ export class AttackScene implements Scene {
       setBottomInset: (px) => this.setInset({ ...this.inset, bottom: px }),
       showResources: (resources) => this.hud?.setResources(resources),
       closeBuildingInfo: () => this.select(null),
+      presentation: this.presentation,
     };
     for (const plugin of this.plugins) {
       const teardown = plugin(mounts);
@@ -558,7 +562,10 @@ export class AttackScene implements Scene {
       );
       this.clock.setAttribute("aria-live", state.remainingSeconds <= WARNING_SECONDS ? "polite" : "off");
     }
-    if (this.damage) this.damage.textContent = `${Math.floor(state.damagePercent)}% damage`;
+    // What the screen has dealt, not what the engine has booked (#148).
+    if (this.damage) {
+      this.damage.textContent = `${Math.floor(this.presentation.damageShown(state))}% damage`;
+    }
     if (this.loot) {
       const { r1, r2, r3, r4 } = state.loot;
       RESOURCE_KEYS.forEach((key, index) => {

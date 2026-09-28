@@ -37,12 +37,47 @@ import { EndAttackPanel, type SaveFailure } from "@/ui/attack/EndAttackPanel";
  * attack with nothing dropped still sends nothing (#79). A keepalive that
  * never arrives is covered by the server finishing the attack from its last
  * checkpoint (`server/src/services/base/finaliseAttack.ts`).
+ *
+ * The save goes the moment the attack ends; the panel waits until the screen
+ * has caught up (#148). A winning bomb ends the battle on the tick it is fired,
+ * while its particles take a few seconds to fall: the panel opens once the
+ * battle layer says the rain is down (`AttackMounts.presentation`), or after
+ * {@link END_PANEL_MAX_WAIT_MS} whatever it says, and shows the save's
+ * progress as it stands by then.
  */
 
 /** How long the server accepts this attack's save, from the attack load. */
 export const SESSION_WINDOW_SECONDS = 420;
 /** How early to warn (§7, Q2's "short margin"). */
 export const WINDOW_MARGIN_SECONDS = 30;
+/** The longest the end panel waits for the screen to catch up (#148). */
+export const END_PANEL_MAX_WAIT_MS = 6000;
+/** How often the wait looks again. */
+const END_PANEL_POLL_MS = 100;
+
+/** Where the save stands, for a panel that opens after it started (#148). */
+type SaveShown =
+  | { readonly kind: "saving" }
+  | { readonly kind: "saved"; readonly protectedUntil: number | null; readonly now: number }
+  | { readonly kind: "failed"; readonly failure: SaveFailure }
+  | { readonly kind: "unsent" };
+
+const showOn = (panel: EndAttackPanel, shown: SaveShown): void => {
+  switch (shown.kind) {
+    case "saving":
+      panel.setSaving();
+      return;
+    case "saved":
+      panel.setSaved({ protectedUntil: shown.protectedUntil, now: shown.now });
+      return;
+    case "failed":
+      panel.setFailed(shown.failure);
+      return;
+    case "unsent":
+      panel.setNothingSent();
+      return;
+  }
+};
 
 /** What the plugin needs that it would otherwise take from the app. */
 export interface EndPluginDeps {
@@ -125,7 +160,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
   const nameOf = deps.nameOf ?? monsterName;
 
   return (mounts: AttackMounts) => {
-    const { session, modal, notices, goToMap } = mounts;
+    const { session, modal, notices, goToMap, presentation } = mounts;
     const page = deps.page ?? { window };
     const mountedAt = now();
     const token = getAuthToken();
@@ -139,6 +174,16 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     let sentOnLeave = false;
     let panel: EndAttackPanel | null = null;
     let payload: AttackSavePayload | null = null;
+    /** The save's state, for the panel now or once it opens. */
+    let shown: SaveShown | null = null;
+    /** The wait for the screen to catch up before the panel opens. */
+    let waiting: number | null = null;
+    let tornDown = false;
+
+    const show = (next: SaveShown): void => {
+      shown = next;
+      if (panel) showOn(panel, next);
+    };
 
     const warnIfDue = (): void => {
       if (warned || session.state().phase === "ended") return;
@@ -156,16 +201,16 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     const timer = window.setInterval(warnIfDue, 1000);
 
     const attempt = async (): Promise<void> => {
-      if (saved || inFlight || !panel || !payload) return;
+      if (saved || inFlight || !payload) return;
       inFlight = true;
-      panel.setSaving();
+      show({ kind: "saving" });
       try {
         const response = await save(payload);
         saved = true;
-        if (panel) panel.setSaved({ protectedUntil: protectedUntilOf(response), now: now() / 1000 });
+        show({ kind: "saved", protectedUntil: protectedUntilOf(response), now: now() / 1000 });
       } catch (caught) {
         // Refused because its keepalive copy landed first is not a failure.
-        if (panel && !saved) panel.setFailed(describeSaveFailure(caught));
+        if (!saved) show({ kind: "failed", failure: describeSaveFailure(caught) });
       } finally {
         inFlight = false;
       }
@@ -175,15 +220,15 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     const sendOnLeave = (): void => {
       if (saved || sentOnLeave || !payload) return;
       sentOnLeave = true;
-      panel?.setSaving();
+      show({ kind: "saving" });
       saveOnLeave(payload, token).then(
         (response) => {
           saved = true;
-          panel?.setSaved({ protectedUntil: protectedUntilOf(response), now: now() / 1000 });
+          show({ kind: "saved", protectedUntil: protectedUntilOf(response), now: now() / 1000 });
         },
         (caught: unknown) => {
           // A duplicate of a save that already landed is refused; that is not a failure.
-          if (!saved) panel?.setFailed(describeSaveFailure(caught));
+          if (!saved) show({ kind: "failed", failure: describeSaveFailure(caught) });
         },
       );
     };
@@ -209,25 +254,46 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     const onPageHide = (): void => leave(true);
     page.window.addEventListener("pagehide", onPageHide);
 
-    const onEnded = (): void => {
-      if (ended) return;
-      ended = true;
-      notices.clear("attack-window");
+    const openPanel = (): void => {
+      if (panel || tornDown) return;
       panel = new EndAttackPanel({
         summary: summariseAttack(session),
         onReturn: goToMap,
         onRetry: () => void attempt(),
         onLeave: goToMap,
       }).mount(modal);
+      if (shown) showOn(panel, shown);
+    };
+
+    /** Opens the panel once nothing on screen is still playing out, or the wait runs out. */
+    const openWhenSettled = (): void => {
+      if (!presentation.playing()) {
+        openPanel();
+        return;
+      }
+      const since = now();
+      waiting = window.setInterval(() => {
+        if (presentation.playing() && now() - since < END_PANEL_MAX_WAIT_MS) return;
+        if (waiting !== null) window.clearInterval(waiting);
+        waiting = null;
+        openPanel();
+      }, END_PANEL_POLL_MS);
+    };
+
+    const onEnded = (): void => {
+      if (ended) return;
+      ended = true;
+      notices.clear("attack-window");
       // An attack the player never touched is not saved (#79): no drop, no
       // bomb, no siege means nothing happened to either yard.
       if (!session.hasActed()) {
-        panel.setNothingSent();
-        return;
+        show({ kind: "unsent" });
+      } else {
+        payload = buildAttackSave(session, { nameOf });
+        if (leaving) sendOnLeave();
+        else void attempt();
       }
-      payload = buildAttackSave(session, { nameOf });
-      if (leaving) sendOnLeave();
-      else void attempt();
+      openWhenSettled();
     };
 
     const unsubscribe = session.subscribe((state) => {
@@ -245,9 +311,12 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     return () => {
       // The scene is going (in-app navigation, a sign-out): that is leaving too.
       leave(false);
+      tornDown = true;
       page.window.removeEventListener("pagehide", onPageHide);
       unsubscribe();
       window.clearInterval(timer);
+      if (waiting !== null) window.clearInterval(waiting);
+      waiting = null;
       panel?.close();
       panel = null;
       if (import.meta.env.DEV) delete (globalThis as Record<string, unknown>)["__attackEnd"];
