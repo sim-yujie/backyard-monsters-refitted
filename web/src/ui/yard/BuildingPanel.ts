@@ -35,6 +35,7 @@ import {
 } from "./buildingActions";
 import { buildingInfo, type InfoValue } from "./buildingInfo";
 import { BunkerPanel } from "./BunkerPanel";
+import { ChampionPanel } from "./ChampionPanel";
 import { RepairBlock } from "./RepairBlock";
 import { ShinyButton } from "./ShinyButton";
 import { describeSeconds } from "./upgradeText";
@@ -137,6 +138,9 @@ export class BuildingPanel {
   /** Holds a Monster Bunker's controls while they are open (`BunkerPanel.ts`). */
   private readonly bunkerSlot: HTMLElement;
   private bunker: BunkerPanel | null = null;
+  /** Holds the Champion Cage's controls while they are open (`ChampionPanel.ts`). */
+  private readonly championSlot: HTMLElement;
+  private champion: ChampionPanel | null = null;
   private readonly status: HTMLElement;
   private readonly details: HTMLDetailsElement;
   private readonly facts: HTMLDListElement;
@@ -196,6 +200,10 @@ export class BuildingPanel {
     this.bunkerSlot.className = "building-panel__bunker";
     this.bunkerSlot.hidden = true;
 
+    this.championSlot = document.createElement("div");
+    this.championSlot.className = "building-panel__champion";
+    this.championSlot.hidden = true;
+
     this.status = document.createElement("p");
     this.status.className = "building-panel__status";
     this.status.setAttribute("role", "status");
@@ -216,6 +224,7 @@ export class BuildingPanel {
       this.unlocks,
       this.actions,
       this.bunkerSlot,
+      this.championSlot,
       this.status,
       this.details,
     );
@@ -241,6 +250,7 @@ export class BuildingPanel {
       for (const button of this.shiny.values()) button.destroy();
       this.shiny.clear();
       this.closeBunker();
+      this.closeChampion();
     }
     this.building = building;
     this.panel.setTitle(
@@ -255,6 +265,7 @@ export class BuildingPanel {
     for (const entry of this.countdowns) {
       entry.node.textContent = formatCountdown(entry.endsAt - now);
     }
+    this.champion?.tick();
     const building = this.building;
     if (building && this.yard && this.repairView) {
       const store = this.yard.store;
@@ -291,6 +302,7 @@ export class BuildingPanel {
     this.renderInfo(building);
     this.renderActions(building);
     this.bunker?.show();
+    this.champion?.show();
     this.renderDetails(building);
   }
 
@@ -402,6 +414,13 @@ export class BuildingPanel {
     if (model?.open === "bunker" && this.yard) {
       const open = this.bunker !== null;
       const button = actionButton(open ? "Close bunker" : "Open bunker", () => this.toggleBunker(), "btn--primary");
+      button.classList.add("building-panel__planner");
+      button.setAttribute("aria-expanded", String(open));
+      return button;
+    }
+    if (model?.open === "cage" && this.yard) {
+      const open = this.champion !== null;
+      const button = actionButton(open ? "Close cage" : "Open cage", () => this.toggleChampion(), "btn--primary");
       button.classList.add("building-panel__planner");
       button.setAttribute("aria-expanded", String(open));
       return button;
@@ -776,6 +795,7 @@ export class BuildingPanel {
     const store = this.yard?.store;
     if (!store) return;
     this.bunker?.syncPending();
+    this.champion?.syncPending();
     for (const { key, button } of this.pendingButtons) {
       const running = store.isRunning(key);
       if (button instanceof ShinyButton) {
@@ -938,8 +958,29 @@ export class BuildingPanel {
     this.bunkerSlot.hidden = true;
   }
 
+  /** Opens or closes the Champion Cage's controls under the actions. */
+  private toggleChampion(): void {
+    const store = this.yard?.store;
+    if (this.champion || !this.building || !store) {
+      this.closeChampion();
+    } else {
+      this.champion = new ChampionPanel({ store });
+      this.championSlot.append(this.champion.element);
+      this.championSlot.hidden = false;
+    }
+    this.render();
+    this.champion?.element.querySelector<HTMLElement>("button:not(:disabled)")?.focus();
+  }
+
+  private closeChampion(): void {
+    this.champion?.destroy();
+    this.champion = null;
+    this.championSlot.hidden = true;
+  }
+
   private dispose(): void {
     this.closeBunker();
+    this.closeChampion();
     this.unsubscribe?.();
     for (const button of this.shiny.values()) button.destroy();
     this.shiny.clear();

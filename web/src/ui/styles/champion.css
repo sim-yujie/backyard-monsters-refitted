@@ -1,0 +1,321 @@
+/*
+ * The Champion Cage's controls inside its building panel
+ * (`web/src/ui/yard/ChampionPanel.ts`, design `docs/design/yard-buildings.md` §7.2).
+ *
+ * The panel sits in the 300px right dock (a bottom sheet on a phone), so
+ * everything stacks: picture beside the name, then one part per concern.
+ * Every value comes from tokens.css; the bars are the shared `monsters-bar`.
+ */
+
+.champion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.champion__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.champion__status {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.champion__status--good {
+  color: var(--colour-success);
+}
+
+.champion__status--bad {
+  color: var(--colour-danger);
+}
+
+.champion__heading {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 800;
+}
+
+.champion__note {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.champion__gate {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-warning);
+}
+
+.champion__part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--colour-border);
+}
+
+.champion__line {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.champion__line strong {
+  color: var(--colour-text);
+}
+
+.champion__bar {
+  height: 8px;
+}
+
+.champion__bar .monsters-bar__fill {
+  background: var(--colour-meter);
+}
+
+.champion__bar--health .monsters-bar__fill {
+  background: var(--colour-success);
+}
+
+/* ── Who ─────────────────────────────────────────────────────────────────── */
+
+.champion__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.champion__picture {
+  width: 88px;
+  height: 88px;
+  flex: none;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-base);
+}
+
+.champion__who {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1;
+}
+
+.champion__name-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+
+.champion__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--display-weight);
+  line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
+}
+
+.champion__rename {
+  min-height: 32px;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.champion__level,
+.champion__stat {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.champion__rename-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.champion__name-input {
+  min-height: var(--control-height-compact);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-input);
+  color: var(--colour-text);
+  font: inherit;
+}
+
+.champion__name-input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ── Hunger ──────────────────────────────────────────────────────────────── */
+
+.champion__hunger {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  background: var(--colour-surface-base);
+  font-variant-numeric: tabular-nums;
+}
+
+.champion__hunger--hungry,
+.champion__hunger--starving {
+  background: var(--colour-danger-soft);
+  color: var(--colour-danger);
+}
+
+.champion__hunger--hungry strong,
+.champion__hunger--starving strong {
+  color: var(--colour-danger);
+}
+
+/* ── Feed ────────────────────────────────────────────────────────────────── */
+
+.champion__recipe {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-base);
+}
+
+.champion__recipe-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.champion__recipe-row + .champion__recipe-row {
+  border-top: 1px solid var(--colour-border);
+}
+
+.champion__recipe-picture {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  object-fit: contain;
+}
+
+.champion__recipe-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+.champion__recipe-have {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.champion__recipe-row--short .champion__recipe-have {
+  color: var(--colour-warning);
+}
+
+.champion__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.champion__buttons > * {
+  flex: 1 1 8rem;
+}
+
+.champion__heal {
+  align-self: flex-start;
+}
+
+/* The Shiny button's own display would otherwise beat the hidden attribute. */
+.champion__heal[hidden] {
+  display: none;
+}
+
+/* ── Juice ───────────────────────────────────────────────────────────────── */
+
+.champion__juice {
+  align-self: flex-start;
+}
+
+.champion__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.champion__question {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+/* ── Raise cards ─────────────────────────────────────────────────────────── */
+
+.champion__cards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.champion-card {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: start;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-base);
+}
+
+.champion-card__picture {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.champion-card__words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.champion-card__name {
+  font-size: var(--text-md);
+}
+
+.champion-card__role {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--colour-text-secondary);
+}
+
+.champion-card__blurb {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.champion-card__raise,
+.champion-card .champion__gate {
+  grid-column: 1 / -1;
+}

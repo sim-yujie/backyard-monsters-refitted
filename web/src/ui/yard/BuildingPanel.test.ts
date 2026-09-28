@@ -295,6 +295,21 @@ describe("BuildingPanel: the Monster Bunker (§7.1)", () => {
   });
 });
 
+describe("BuildingPanel: the Champion Cage (§7.2)", () => {
+  it("Open cage shows the cage's controls under the actions, and Close cage hides them", () => {
+    const { element, panel, store } = setup([HALL, building(2, 114, 1)], 2);
+    expect(element.querySelector(".champion")).toBeNull();
+    buttonNamed(element, "Open cage")!.click();
+    expect(element.querySelector(".champion .champion-card")).not.toBeNull();
+    expect(buttonNamed(element, "Close cage")!.getAttribute("aria-expanded")).toBe("true");
+    buttonNamed(element, "Close cage")!.click();
+    expect(element.querySelector(".champion")).toBeNull();
+    buttonNamed(element, "Open cage")!.click();
+    panel.show(store.building(1)!);
+    expect(element.querySelector(".champion")).toBeNull();
+  });
+});
+
 describe("BuildingPanel: a building under construction (§5.3)", () => {
   it("offers Cancel build, which asks once and calls build/cancel", () => {
     const fetch = vi.fn(() => new Promise<Response>(() => undefined));

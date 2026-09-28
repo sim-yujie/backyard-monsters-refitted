@@ -1,5 +1,6 @@
 import type { CompletedJob } from "@/api/types";
 import { labAbility, monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { championEntry } from "@/game/yard/championCatalogue";
 import { typeName } from "@/game/yard/planner/summary";
 import { formatAmount } from "@/ui/format";
 import type { Notices } from "@/ui/maproom/Notices";
@@ -92,6 +93,7 @@ const headingOf = (kind: string, count: number): string => {
   if (kind === RADIO_REMOVED) {
     return count === 1 ? "The Radio Tower is gone" : `${count} Radio Towers are gone`;
   }
+  if (kind === STARVED) return count === 1 ? "Your champion starved" : `Your champion starved ${count} times`;
   const [one, many] = NOUNS[kind] ?? [kind, kind];
   return count === 1 ? `${capitalise(one)} finished` : `${count} ${many} finished`;
 };
@@ -117,6 +119,13 @@ const MAP_ROOM_ADDED = "mapRoomAdded";
  * placed. You also got 1,600 Twigs and 1,600 Pebbles".
  */
 const STARTER_BASE = "starterBase";
+
+/**
+ * A champion left hungry 24 hours past its feeding time loses a feed, or a
+ * food bonus at the top level (`server/src/services/yard/catchUpChampions.ts`,
+ * design §7.2, D11).
+ */
+const STARVED = "starve";
 
 const COUNT_WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
 
@@ -164,6 +173,12 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
   if (job.kind === RADIO_REMOVED) return { label: refundLabel(job.detail), buildingId: null };
   if (job.kind === MAP_ROOM_ADDED) {
     return { label: "Map Room", buildingId: typeof job.id === "number" ? job.id : null };
+  }
+  if (job.kind === STARVED) {
+    const entry = championEntry(String(job.id));
+    const detail = job.detail as { level?: unknown };
+    const top = entry !== undefined && typeof detail.level === "number" && detail.level >= entry.levels;
+    return { label: `${entry?.name ?? String(job.id)} lost ${top ? "a food bonus" : "a feed"}`, buildingId: null };
   }
   if (job.kind === "storeItem") {
     const code = String(job.id);

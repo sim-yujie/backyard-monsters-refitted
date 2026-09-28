@@ -164,6 +164,18 @@ describe("groupCompletedJobs", () => {
     expect(group!.items[0]!.buildingId).toBe(9);
   });
 
+  it("says a champion starved and what it lost (#123)", () => {
+    const [one] = groupCompletedJobs([
+      { kind: "starve", id: "G2", t: null, at: 1, detail: { level: 3, feeds: 1, foodBonus: 0 } },
+    ]);
+    expect(noticeText(one!)).toBe("Your champion starved: Drull lost a feed");
+    const [two] = groupCompletedJobs([
+      { kind: "starve", id: "G1", t: null, at: 1, detail: { level: 6, feeds: 0, foodBonus: 2 } },
+      { kind: "starve", id: "G1", t: null, at: 2, detail: { level: 6, feeds: 0, foodBonus: 1 } },
+    ]);
+    expect(noticeText(two!)).toBe("Your champion starved 2 times: Gorgo lost a food bonus, Gorgo lost a food bonus");
+  });
+
   it("reads a kind a later phase adds through its common keys", () => {
     const [group] = groupCompletedJobs([{ kind: "hatch", id: "C5", t: null, at: 1, detail: {} }]);
     expect(noticeText(group!)).toBe("Hatch finished: C5");
