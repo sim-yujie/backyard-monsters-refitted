@@ -58,6 +58,7 @@ export const mapRoom1Fixture = (now: number): MapRoom1Response => ({
       baseseed: 7,
       username: "Mossbeard",
       level: 9,
+      pic: "/avatars/owl.webp",
       attacksfrom: 2,
       attacksto: 1,
       saved: now - 3 * 3_600,

@@ -45,6 +45,7 @@ const toSession = (response: LoginResponse, sessionType: SessionType): Session =
   token: response.token,
   userId: response.userId,
   username: response.username ?? null,
+  picSquare: response.pic_square ?? null,
   sessionType,
 });
 
@@ -79,6 +80,14 @@ export const loginWithToken = async (
   return remember(toSession(response, sessionType));
 };
 
+/**
+ * Records a new `pic_square` on the active session (issue #175), after the
+ * server has stored it, so what reads the session next sees the new avatar.
+ */
+export const setSessionPicSquare = (picSquare: string): void => {
+  if (current) remember({ ...current, picSquare });
+};
+
 /** Reads a session off localStorage without contacting the server. */
 export const restoreStoredSession = (): Session | null => {
   let raw: string | null = null;
@@ -97,6 +106,7 @@ export const restoreStoredSession = (): Session | null => {
       token: parsed.token,
       userId: parsed.userId,
       username: parsed.username ?? null,
+      picSquare: typeof parsed.picSquare === "string" ? parsed.picSquare : null,
       sessionType: parsed.sessionType ?? SessionType.GAME,
     };
     setAuthToken(current.token);

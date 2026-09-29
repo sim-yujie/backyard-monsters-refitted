@@ -1,6 +1,7 @@
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { logger } from "../../utils/logger.js";
+import { picSquareAfterDiscordRefresh } from "../../game-data/avatars.js";
 
 export const BYMR_CDN = "https://cdn.bymrefitted.com";
 export const DISCORD_CDN = "https://cdn.discordapp.com";
@@ -12,7 +13,8 @@ interface DiscordUser { avatar?: string | null; }
 /**
  * Fetches the latest avatar hash from Discord for a user and persists it if changed.
  * Skips the API call if the avatar was checked within the last 24 hours.
- * Also updates pic_square so all existing callers see the correct avatar automatically.
+ * Also updates pic_square so all existing callers see the correct avatar automatically,
+ * unless the player has picked one of the critter avatars (issue #175), which it keeps.
  * Uses a forked EntityManager so it is safe to call fire-and-forget after a response.
  *
  * @param {number} userid - The internal user ID to update.
@@ -41,7 +43,7 @@ export const fetchDiscordAvatar = async (userid: number, discordid: string) => {
 
     const { avatar } = await response.json() as DiscordUser;
 
-    const newPicSquare = fetchAvatarUrl(discordid, avatar);
+    const newPicSquare = picSquareAfterDiscordRefresh(user.pic_square, fetchAvatarUrl(discordid, avatar));
 
     user.discord_avatar_checked_at = new Date();
 

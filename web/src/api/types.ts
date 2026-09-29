@@ -60,7 +60,19 @@ export interface Session {
   token: string;
   userId: number;
   username: string | null;
+  /**
+   * `pic_square` as the login sent it: a picked avatar's path, or whatever the
+   * account had before (issue #175; read it with `game/avatars.ts`). Optional
+   * because a session saved before avatars existed has none.
+   */
+  picSquare?: string | null;
   sessionType: SessionType;
+}
+
+/** `POST /api/:apiVersion/player/avatar` (issue #175): the stored path, echoed. */
+export interface SetAvatarResponse extends ApiEnvelope {
+  error: number;
+  pic_square: string;
 }
 
 /* ── Base / yard ────────────────────────────────────────────────────────── */

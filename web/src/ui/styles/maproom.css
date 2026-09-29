@@ -232,6 +232,20 @@
   color: var(--colour-info);
 }
 
+/* The owner's critter (#175), beside its name. */
+.cell-facts dd.cell-facts__avatar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cell-facts__avatar img {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  flex: none;
+}
+
 .cell-kind {
   display: inline-flex;
   align-items: center;

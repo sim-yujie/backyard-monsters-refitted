@@ -6,6 +6,7 @@ import {
 } from "@/api/maproom1";
 import type { BaseLoadResponse } from "@/api/types";
 import { isHealthyChampion, mainYardRoster } from "@/game/attack/attackEntry";
+import { avatarOf, type AvatarId } from "@/game/avatars";
 import type { AttackTarget } from "@/game/attack/attackTarget";
 import { readYard } from "@/game/yard/yardModel";
 import { tribeFromName, tribeInfo, tribeOfBaseId, type TribeId } from "./tribes";
@@ -63,6 +64,8 @@ export interface Mr1Neighbour {
   readonly protectedUntil: number | null;
   /** Unix seconds an accepted truce ends; null for no truce. */
   readonly truceUntil: number | null;
+  /** Their critter (issue #175): the one they picked, or their default. */
+  readonly avatar: AvatarId;
 }
 
 export type Mr1Target = Mr1Tribe | Mr1Neighbour;
@@ -129,6 +132,7 @@ const readNeighbour = (wire: MapRoom1NeighbourWire, now: number): Mr1Neighbour =
     attacker: typeof wire.attacker === "string" && wire.attacker ? wire.attacker : null,
     protectedUntil: num(wire.protectedUntil) > 0 ? num(wire.protectedUntil) : null,
     truceUntil: truce ? (num(wire.truceexpire) > 0 ? now + num(wire.truceexpire) : now) : null,
+    avatar: avatarOf(wire.pic, wire.userid),
   };
 };
 

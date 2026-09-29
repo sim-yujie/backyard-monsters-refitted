@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
+import { defaultAvatar } from "@/game/avatars";
 import { mapRoom1Fixture } from "./mr1Fixture";
 import {
   attackGate,
@@ -85,6 +86,11 @@ describe("readMapRoom1", () => {
   it("reads a truce from the permission or the accepted state", () => {
     expect(named("Fernwick").truceUntil).toBe(NOW + 9 * 86_400);
     expect(named("Grimble").truceUntil).toBeNull();
+  });
+
+  it("reads a neighbour's picked critter, and gives the rest their default (#175)", () => {
+    expect(named("Mossbeard").avatar).toBe("owl");
+    expect(named("Grimble").avatar).toBe(defaultAvatar(903));
   });
 });
 

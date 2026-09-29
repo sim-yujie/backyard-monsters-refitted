@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { mapRoom1Fixture } from "@/game/maproom1/mr1Fixture";
 import { readMapRoom1, type Mr1Own } from "@/game/maproom1/mr1Model";
-import { targetCard, type CardHandlers } from "./TargetCard";
+import { avatar, targetCard, type CardHandlers } from "./TargetCard";
 
 const NOW = 1_800_000_000;
 const world = readMapRoom1(mapRoom1Fixture(NOW), NOW);
@@ -74,5 +74,16 @@ describe("targetCard", () => {
   it("turns View off on a yard under attack", () => {
     const card = targetCard(find("player-907"), { world, own, now: NOW }, handlers(), "panel");
     expect(buttonNamed(card, "View").disabled).toBe(true);
+  });
+
+  it("frames a player's critter, and falls back to initials if it will not load (#175)", () => {
+    const mossbeard = find("player-901");
+    const box = avatar(mossbeard, "lg");
+    const art = box.querySelector("img")!;
+    expect(art.getAttribute("src")).toMatch(/avatars\/owl\.webp$/);
+    expect(avatar(mossbeard, "sm").querySelector("img")!.getAttribute("src")).toMatch(/avatars\/owl-64\.webp$/);
+    art.dispatchEvent(new Event("error"));
+    expect(box.querySelector("img")).toBeNull();
+    expect(box.textContent).toBe("MO");
   });
 });

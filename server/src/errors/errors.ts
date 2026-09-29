@@ -59,6 +59,19 @@ export const usernameCooldownErr = (nextChangeAt: Date) =>
     isClientFriendly: true,
   });
 
+/**
+ * An avatar change naming a picture that is not one of the twelve critters
+ * (issue #175, `game-data/avatars.ts`). `reason` travels in `data` for the web
+ * client, as the yard routes' refusals do.
+ */
+export const unknownAvatarErr = () =>
+  new ClientSafeError({
+    message: "That avatar is not one you can pick.",
+    status: Status.BAD_REQUEST,
+    data: { reason: "unknownAvatar" },
+    isClientFriendly: true,
+  });
+
 export const debugClientErr = () =>
   new ClientSafeError({
     message: "Sorry, it appears this cannot be found.",

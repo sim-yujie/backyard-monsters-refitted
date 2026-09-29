@@ -84,6 +84,15 @@ export const UpdateSettingsSchema = z.object({
 });
 
 /**
+ * Schema to validate an avatar change (issue #175).
+ * - avatar is the picture's path; the controller holds it to the allow-list in
+ *   `game-data/avatars.ts`, so this only checks the shape.
+ */
+export const SetAvatarSchema = z.object({
+  avatar: z.string(),
+});
+
+/**
  * Schema to validate password reset data.
  * - Password must meet the password schema requirements.
  * - Token must be a string.

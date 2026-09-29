@@ -1,5 +1,6 @@
 import { WATER_MAX_HEIGHT } from "@/config";
 import { CellType, isPlayerCell, isWaterCell, type MapCell, type Resources } from "@/api/types";
+import { avatarName, avatarOf, avatarUrl, pickedAvatar } from "@/game/avatars";
 import { HexGrid, type OffsetCell } from "@/game/HexGrid";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
@@ -272,6 +273,7 @@ export class CellPanel {
     );
 
     this.add("Owner", `${payload.n} (user ${payload.uid})`);
+    this.addAvatar(payload.pic_square, payload.uid);
     this.add("Level", String(payload.l));
     this.add("Empire value", payload.v.toLocaleString());
     this.add("Alliance", payload.aid === null ? "None" : `#${payload.aid}`);
@@ -310,7 +312,6 @@ export class CellPanel {
       payload.lo === 0 ? undefined : "is-info",
     );
     this.add("Base id", payload.bid);
-    this.add("Avatar", payload.pic_square ?? "None");
 
     if (payload.r) this.addResources(payload.r);
     if (payload.m && Object.keys(payload.m).length > 0) {
@@ -334,6 +335,27 @@ export class CellPanel {
           : `${formatAmount(amount)} / ${formatAmount(max)}`,
       );
     }
+  }
+
+  /**
+   * The owner's critter (issue #175) and its name; "(default)" when they have
+   * not picked one and this is the one they are shown as.
+   */
+  private addAvatar(picSquare: string | null, userId: number): void {
+    const id = avatarOf(picSquare, userId);
+    const term = document.createElement("dt");
+    term.textContent = "Avatar";
+    const definition = document.createElement("dd");
+    definition.className = "cell-facts__avatar";
+    const picture = document.createElement("img");
+    picture.src = avatarUrl(id, "small");
+    picture.alt = "";
+    picture.decoding = "async";
+    definition.append(
+      picture,
+      pickedAvatar(picSquare) ? avatarName(id) : `${avatarName(id)} (default)`,
+    );
+    this.facts.append(term, definition);
   }
 
   private setKind(label: string, colour: string): void {

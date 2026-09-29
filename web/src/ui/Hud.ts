@@ -1,5 +1,7 @@
+import { setAvatar } from "@/api/account";
 import { getSession } from "@/api/auth";
 import type { ResourceCaps, Resources } from "@/api/types";
+import { avatarOf, pickedAvatar, type AvatarId } from "@/game/avatars";
 import { nextWorkerJob } from "@/game/yard/jobs";
 import type { OwnYardTarget } from "@/game/yard/ownYards";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
@@ -320,9 +322,19 @@ export class Hud {
     );
 
     if (options.onSignOut) {
+      const session = getSession();
       this.accountMenu = new AccountMenu({
-        name: options.accountName === undefined ? getSession()?.username : options.accountName,
+        name: options.accountName === undefined ? session?.username : options.accountName,
         onSignOut: options.onSignOut,
+        ...(session && {
+          avatar: {
+            current: avatarOf(session.picSquare, session.userId),
+            picked: pickedAvatar(session.picSquare) !== null,
+            onPick: async (id: AvatarId) => {
+              await setAvatar(id);
+            },
+          },
+        }),
       });
       this.element.append(this.accountMenu.element);
     }

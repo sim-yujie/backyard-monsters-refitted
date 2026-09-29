@@ -182,6 +182,7 @@ and pass through the `apiVersion` middleware **except** where noted.
 | GET | `/api/:apiVersion/player/account` | apiVersion, verifyUserAuth | none | `{ error: 0, userId, username, email, pic_square, discord_verified, canChangeUsername, nextChangeAt, settings: { shinyLocked } }` | Returns the caller's own account summary. `nextChangeAt` is `null` when the username-change cooldown has elapsed. |
 | POST | `/api/:apiVersion/player/changeusername` | apiVersion, verifyUserAuth, changeUsernameLimiter (5/hour), logRequest | `ChangeUsernameSchema`: `{ username }` (same rules as registration) | `{ error: 0, username, nextChangeAt }` | Renames the account, subject to a **6-month cooldown** (`services/user/renameUser.ts`, `USERNAME_CHANGE_COOLDOWN_MONTHS`). Throws `usernameCooldownErr(nextChangeAt)` (409) if still cooling down, `usernameUniqueErr()` (409) if taken. The rename is transactional and also updates `save.name` on every yard the user owns, `alliance.leader_name` if they lead one, and renames any `World` still labelled after their old username. A running game client keeps the old name cached until restarted. |
 | POST | `/api/:apiVersion/player/settings` | apiVersion, verifyUserAuth, logRequest | `UpdateSettingsSchema`: `{ shinyLocked: boolean }` | `{ error: 0, settings: { shinyLocked } }` | Sets the account-wide "no-shiny" toggle. When locked, `credits` (shiny) is reported as `0` everywhere (`visibleCredits`) and any purchase/attack cost that would spend shiny throws `shinyLockedErr()` (403) instead. |
+| POST | `/api/:apiVersion/player/avatar` | apiVersion, verifyUserAuth, logRequest | `SetAvatarSchema`: `{ avatar: string }` | `{ error: 0, pic_square }` | Sets the player's avatar (issue #175) to one of the twelve critters in `game-data/avatars.ts`, stored in `pic_square` as its web-client path (`/avatars/<id>.webp`). Anything off that allow-list throws `unknownAvatarErr()` (400, `data.reason: "unknownAvatar"`) and writes nothing. The login's daily Discord refresh (`fetchDiscordAvatar`) leaves a picked critter in place. |
 
 ### Base / Yard
 
@@ -1258,7 +1259,7 @@ sent over the wire as-is.
 | `discord_avatar_checked_at` | Date, nullable | — | Throttles avatar refresh. |
 | `last_name` | string, default "" | yes | Never set by any writer reviewed (no registration/settings field for it) but read by `/player/getmessagetargets`, which includes it alongside `username`/`pic_square` for each mail target — likely a Facebook-era display-name field the client can still render if populated by other means (e.g. a migration from the original game). |
 | `resetToken` | string, default "" | — | Current password-reset JWT (single-use). |
-| `pic_square` | string, nullable | yes | Avatar URL. |
+| `pic_square` | string, nullable | yes | Avatar: a picked critter's web-client path (`/avatars/<id>.webp`, set by `/player/avatar`, issue #175), or the older placeholder / Discord avatar URL. |
 | `timeplayed` | number, default 0 | yes | Cumulative play time. |
 | `stats` | jsonb, nullable | yes | Opaque per-account stats blob (also used for WMI wave progress — see `invasionUtils.ts`). |
 | `friendcount` / `sessioncount` / `addtime` / `sendgift` / `sendinvite` | number | yes | Legacy Flash/Facebook social counters; mostly unused server-side beyond being echoed back. |

@@ -13,6 +13,7 @@ import {
   type Mr1Target,
   type Mr1World,
 } from "@/game/maproom1/mr1Model";
+import { avatarUrl } from "@/game/avatars";
 import { tribeInfo } from "@/game/maproom1/tribes";
 import { VICTORY_THRESHOLD } from "@/game/combat/rules";
 import { monsterName, portraitUrl } from "@/ui/attack/ArmyPanel";
@@ -56,20 +57,25 @@ export const countdown = (
   return span;
 };
 
-/** A tribe's picture or a player's initials, framed in the pin's colour. */
+/**
+ * A tribe's picture or a player's critter (issue #175), framed in the pin's
+ * colour. A critter that fails to load falls back to the player's initials.
+ */
 export const avatar = (target: Mr1Target, size: "sm" | "md" | "lg"): HTMLElement => {
   const box = el("span", `mr1-avatar mr1-avatar--${size} mr1-tone--${pinTone(target)}`);
   box.setAttribute("aria-hidden", "true");
+  const art = el("img", "mr1-avatar__art");
+  art.alt = "";
+  art.decoding = "async";
   if (target.kind === "tribe") {
     box.classList.add("mr1-avatar--tribe");
-    const art = el("img", "mr1-avatar__art");
     art.src = tribeInfo(target.tribe).art;
-    art.alt = "";
-    art.decoding = "async";
-    box.append(art);
   } else {
-    box.textContent = initials(target.name);
+    box.classList.add("mr1-avatar--player");
+    art.src = avatarUrl(target.avatar, size === "lg" ? "full" : "small");
+    art.addEventListener("error", () => art.replaceWith(initials(target.name)), { once: true });
   }
+  box.append(art);
   return box;
 };
 
