@@ -56,6 +56,14 @@ export const holdsWorker = (building: Pick<YardBuilding, "countdown">): boolean 
   building.countdown !== null && WORKER_HELD_BY.has(building.countdown.kind);
 
 /**
+ * Whether a building is a Starter Kit prefab still building up: busy, but
+ * with no worker (outposts WP9; `client/scripts/BFOUNDATION.as:3155-3159`,
+ * `server/src/services/yardplanner/workers.ts`).
+ */
+export const isPrefabBuild = (building: Pick<YardBuilding, "countdown" | "raw">): boolean =>
+  building.countdown?.kind === "build" && Number(building.raw.prefab) > 0;
+
+/**
  * What to multiply an upgrade's `time` by before it is written as a countdown:
  * {@link SHARPER_TOOLS_MULTIPLIER} while Sharper Tools runs, 1 otherwise.
  *
@@ -98,7 +106,7 @@ export const workerCount = (
 export const busyWorkers = (yard: { readonly buildings: readonly YardBuilding[] }): number => {
   let busy = 0;
   for (const building of yard.buildings) {
-    if (holdsWorker(building)) busy++;
+    if (holdsWorker(building) && !isPrefabBuild(building)) busy++;
   }
   return busy;
 };

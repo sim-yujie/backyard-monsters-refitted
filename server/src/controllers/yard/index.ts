@@ -41,6 +41,7 @@ import { yardMushroomPickAction } from "./mushrooms.js";
 import { yardRecycleAction } from "./recycle.js";
 import { yardRepairAction, yardRepairInstantAction } from "./repair.js";
 import { yardShopBuyAction } from "./shopBuy.js";
+import { yardStarterKitAction } from "./starterKit.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { yardStateAction } from "./state.js";
 import { yardRoute } from "./yardRoute.js";
@@ -107,4 +108,5 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "champion/thaw", controller: yardRoute(yardChampionThawAction) },
   { path: "fortify", controller: yardRoute(yardFortifyAction) },
   { path: "fortify/cancel", controller: yardRoute(yardCancelFortifyAction) },
+  { path: "starterkit", controller: yardRoute(yardStarterKitAction) },
 ];

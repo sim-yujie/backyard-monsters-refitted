@@ -16,6 +16,7 @@
     "gen:monster-sprites": "node tools/gen-monster-sprites.mjs",
     "gen:monster-catalogue": "node tools/gen-monster-catalogue.mjs",
     "gen:champion-catalogue": "node tools/gen-champion-catalogue.mjs",
+    "gen:starter-kits": "node tools/gen-starter-kits.mjs",
     "sync:combat": "node tools/sync-combat-rules.mjs",
     "fixtures:combat": "bun tools/gen-combat-fixture.mjs",
     "bench:combat": "bun tools/bench-combat.mjs"

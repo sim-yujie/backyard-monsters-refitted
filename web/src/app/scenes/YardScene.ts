@@ -67,6 +67,7 @@ import { showBankResult } from "@/ui/yard/CollectAll";
 import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
 import { describeUpgradeReport } from "@/ui/yard/upgradeText";
 import { YardDock } from "@/ui/yard/YardDock";
+import { StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { icon } from "@/ui/icons";
 import { ZoomControl } from "@/ui/ZoomControl";
@@ -137,12 +138,12 @@ export const loadYardFor = (
       : api.viewBase(target.baseid, target.kind, { mapversion: target.mapversion });
 
 /**
- * What an outpost holding nothing but its core says, with a way to the Build
- * window. Flash offered its Starter Kits here (`client/scripts/BASE.as:2321-2324`);
- * the Kits button joins this notice with outposts WP9.
+ * What an outpost holding nothing but its core says, with a way to the
+ * Starter Kits, as Flash's help popup offered them there
+ * (`client/scripts/BASE.as:2321-2324`, `newmap_sk_hlp`; outposts WP9).
  */
 export const EMPTY_OUTPOST_HINT =
-  "This outpost has only its core. Open Build to add harvesters and defences; they are paid from your main yard's storage.";
+  "This outpost has only its core. Open Kits for a ready-made layout, or Build to add buildings one at a time; both are paid from your main yard's storage.";
 
 /**
  * The pool the HUD shows over a yard: the yard's own when it is the player's,
@@ -203,6 +204,8 @@ export class YardScene implements Scene {
   private panelDock: HTMLElement | null = null;
   /** The own yard's Monsters screen (§4.1), built the first time it opens. */
   private monsters: MonstersScreen | null = null;
+  /** The Starter Kit picker, while open (outposts WP9). */
+  private kitPicker: StarterKitPicker | null = null;
   /** Picks a tapped mushroom on the own yard (§5.6); null on a foreign one. */
   private mushroomPicker: MushroomPicker | null = null;
 
@@ -339,6 +342,7 @@ export class YardScene implements Scene {
         : {
             onBuild: () => this.toggleBuildMenu(),
             onYardSelect: (next: OwnYardTarget) => this.openOwnYard(next),
+            onKits: () => this.openKits(),
           }),
       ...(target?.attack ? { onAttack: () => void this.startAttack() } : {}),
     }).mount(context.overlay.content);
@@ -1372,9 +1376,41 @@ export class YardScene implements Scene {
     // Stays until dismissed, or until the first building goes up (`onStoreChange`).
     this.notices.show(OUTPOST_HINT_NOTICE, EMPTY_OUTPOST_HINT, {
       level: "info",
-      actionLabel: "Build",
-      onAction: () => this.openBuildMenu(),
+      actionLabel: "Kits",
+      onAction: () => this.openKits(),
     });
+  }
+
+  /**
+   * Opens the Starter Kit picker on an own outpost (outposts WP9). Not over
+   * the planner, and not while a building is in hand. A kit bought redraws
+   * the yard through the store, and says what it did.
+   */
+  private openKits(): void {
+    const binding = this.binding;
+    const context = this.context;
+    if (!binding || !context || binding.store.kind !== "outpost" || this.planner) return;
+    if (this.kitPicker?.isOpen) return;
+    this.endPlacement();
+    this.buildMenu?.close();
+    this.select(null);
+    this.kitPicker = new StarterKitPicker({
+      binding,
+      onBought: (report, kit) => {
+        if (this.binding !== binding) return;
+        this.notices.clear(OUTPOST_HINT_NOTICE);
+        this.notices.show(
+          "starter-kit",
+          report.pay === "shiny"
+            ? `${kit.name} built: ${report.placed} buildings are ready.`
+            : `${kit.name} placed: ${report.placed} buildings are building up, without your worker.`,
+          { level: "info", timeoutMs: 8_000 },
+        );
+      },
+      onClose: () => {
+        this.kitPicker = null;
+      },
+    }).mount(context.overlay.modal);
   }
 
   /** What a mushroom pick draws through: the renderer's shake, the notices, the popup. */
@@ -1397,6 +1433,8 @@ export class YardScene implements Scene {
     this.buildMenu = null;
     this.monsters?.destroy();
     this.monsters = null;
+    this.kitPicker?.close();
+    this.kitPicker = null;
     this.unsubscribeStore?.();
     this.unsubscribeStore = null;
     this.store?.destroy();

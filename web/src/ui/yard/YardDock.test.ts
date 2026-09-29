@@ -79,6 +79,7 @@ describe("dockButtonsFor", () => {
     expect(dockButtonsFor(own, binding)).toEqual({
       build: true,
       collect: true,
+      kits: false,
       monsters: true,
       switcher: true,
       home: false,
@@ -100,11 +101,20 @@ describe("dockButtonsFor", () => {
     expect(dockButtonsFor({ onHome: () => {}, onAttack: () => {} }, null)).toEqual({
       build: false,
       collect: false,
+      kits: false,
       monsters: false,
       switcher: false,
       home: true,
       attack: true,
     });
+  });
+
+  it("shows Kits on an own outpost only (#188)", () => {
+    const withKits = { ...own, onKits: () => {} };
+    expect(dockButtonsFor(withKits, fakeBinding(OUTPOST, vi.fn()).binding).kits).toBe(true);
+    expect(dockButtonsFor(withKits, fakeBinding(MAIN_YARD, vi.fn()).binding).kits).toBe(false);
+    expect(dockButtonsFor(withKits, null).kits).toBe(false);
+    expect(dockButtonsFor(own, fakeBinding(OUTPOST, vi.fn()).binding).kits).toBe(false);
   });
 
   it("waits for the own yard's binding before Collect all, Monsters and the switcher", () => {
@@ -136,6 +146,21 @@ describe("YardDock", () => {
   const button = (name: string): HTMLButtonElement =>
     dock!.element.querySelector<HTMLButtonElement>(`[data-dock="${name}"]`)!;
   const collect = (): HTMLElement => dock!.element.querySelector<HTMLElement>(".yard-collect")!;
+
+  it("draws Kits on an outpost, in Collect all's place, and reports its press (#188)", () => {
+    const onKits = vi.fn();
+    dock = new YardDock({ ...options, onKits }).mount(document.body);
+    expect(button("kits").hidden).toBe(true);
+
+    dock.bind(fakeBinding(OUTPOST, vi.fn()).binding);
+    expect(button("kits").hidden).toBe(false);
+    expect(button("kits").textContent).toBe("Kits");
+    button("kits").click();
+    expect(onKits).toHaveBeenCalledTimes(1);
+
+    dock.bind(fakeBinding(MAIN_YARD, vi.fn()).binding);
+    expect(button("kits").hidden).toBe(true);
+  });
 
   it("is real buttons with their words, reporting each press", () => {
     dock = new YardDock(options).mount(document.body);

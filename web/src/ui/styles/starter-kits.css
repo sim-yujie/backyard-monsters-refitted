@@ -1,0 +1,160 @@
+/* Outpost Starter Kits (outposts WP9, #188): the picker's three cards and the
+ * one confirmation under them. Every value is a token. */
+
+.kit-picker {
+  width: min(96vw, 980px);
+  max-height: min(92vh, 860px);
+}
+
+.kit-picker .panel__body {
+  display: grid;
+  gap: var(--space-3);
+  overflow-y: auto;
+}
+
+.kit-picker [hidden] {
+  display: none;
+}
+
+.kit-picker__help {
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.kit-picker__cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.kit-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-sunken);
+}
+
+.kit-card--chosen {
+  border-color: var(--colour-accent);
+  box-shadow: 0 0 0 1px var(--colour-accent-line);
+}
+
+.kit-card__picture {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-control);
+}
+
+.kit-card__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  letter-spacing: var(--display-tracking);
+}
+
+.kit-card__count {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.kit-card__contents {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px var(--space-2);
+  max-height: 11rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
+}
+
+.kit-card__price {
+  margin-top: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.kit-card__buttons {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.kit-card__buttons .btn {
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.kit-picker__confirm {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-accent-line);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+}
+
+.kit-picker__confirm-title {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.kit-picker__line {
+  margin: 0;
+  line-height: var(--leading-normal);
+}
+
+.kit-picker__warning {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--colour-warning-soft);
+  color: var(--colour-warning-text);
+  font-weight: 700;
+}
+
+.kit-picker__blocked {
+  color: var(--colour-danger);
+  font-weight: 700;
+}
+
+.kit-picker__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.kit-picker__status {
+  min-height: 1.2em;
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.kit-picker__status--error {
+  color: var(--colour-danger);
+  font-weight: 700;
+}
+
+/* A phone: one card to a row. */
+@media (width <= 720px) {
+  .kit-picker__cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kit-card__picture {
+    aspect-ratio: 16 / 9;
+  }
+}

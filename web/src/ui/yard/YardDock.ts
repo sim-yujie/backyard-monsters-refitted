@@ -26,6 +26,8 @@ import { YardSwitcher } from "./YardSwitcher";
  *
  * Which buttons show follows the yard (`dockButtonsFor`): Collect all only on
  * the main yard, since an outpost banks by itself (`BUILDINGINFO.as:130-131`);
+ * Kits only on an outpost, in Collect's place (the Starter Kits, #188; Flash
+ * showed Kits on Map Room 2 outposts only, `UI_MENU.as:39-41`, `:100-101`);
  * Monsters wherever the scene can open the Monsters screen; the switcher once
  * an own yard is bound.
  */
@@ -46,12 +48,15 @@ export interface YardDockOptions {
   readonly onHome?: () => void;
   /** The yard switcher's pick: the own yard only. */
   readonly onYardSelect?: (target: OwnYardTarget) => void;
+  /** Kits: the Starter Kit picker, on an own outpost only. */
+  readonly onKits?: () => void;
 }
 
 /** Which of the dock's optional buttons show. Map and Layout always do. */
 export interface DockButtons {
   readonly build: boolean;
   readonly collect: boolean;
+  readonly kits: boolean;
   readonly monsters: boolean;
   readonly switcher: boolean;
   readonly home: boolean;
@@ -63,11 +68,12 @@ export interface DockButtons {
  * binding (null on a visit and before the load) whether the own yard's show.
  */
 export const dockButtonsFor = (
-  options: Pick<YardDockOptions, "onBuild" | "onAttack" | "onHome" | "onYardSelect">,
+  options: Pick<YardDockOptions, "onBuild" | "onAttack" | "onHome" | "onYardSelect" | "onKits">,
   binding: Pick<YardUiBinding, "store" | "scene"> | null,
 ): DockButtons => ({
   build: options.onBuild !== undefined,
   collect: binding !== null && binding.store.kind !== "outpost",
+  kits: binding !== null && binding.store.kind === "outpost" && options.onKits !== undefined,
   monsters: binding?.scene.openMonsters !== undefined,
   switcher: binding !== null && options.onYardSelect !== undefined,
   home: options.onHome !== undefined,
@@ -143,6 +149,7 @@ export class YardDock {
   private readonly build: RoundButton | null;
   private readonly attack: RoundButton | null;
   private readonly monsters: RoundButton;
+  private readonly kits: RoundButton | null;
   private readonly monstersBadge: HTMLElement;
   private readonly collect = new CollectAll();
   private readonly switcher: YardSwitcher | null;
@@ -209,8 +216,17 @@ export class YardDock {
       this.attack.element.disabled = true;
     }
 
+    this.kits = options.onKits
+      ? iconButton("kits", "Kits", "kits", 29, () => options.onKits?.())
+      : null;
+    if (this.kits) {
+      this.kits.element.title = "Starter Kits: fill this outpost with a ready-made layout";
+      this.kits.element.hidden = true;
+    }
+
     right.append(
       this.collect.element,
+      ...(this.kits ? [this.kits.element] : []),
       this.layout.element,
       this.monsters.element,
       ...(this.build ? [this.build.element] : []),
@@ -243,6 +259,7 @@ export class YardDock {
     this.collect.bind(shown.collect ? binding : null);
     this.switcher?.bind(shown.switcher ? binding : null);
     this.monsters.element.hidden = !shown.monsters;
+    if (this.kits) this.kits.element.hidden = !shown.kits;
     if (binding) {
       this.unsubscribe = binding.store.subscribe((change) => {
         this.collect.refresh();

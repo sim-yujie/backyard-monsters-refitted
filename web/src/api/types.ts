@@ -469,6 +469,12 @@ export interface BuildingData {
   cP?: number;
   /** Older name this client read for {@link BuildingData.cP}; read as a fallback only. */
   rCP?: number;
+  /**
+   * A Starter Kit building still building up to this level: its `cB` runs
+   * without a worker and ends at `l = prefab` (outposts WP9,
+   * `client/scripts/BFOUNDATION.as:3054-3066`).
+   */
+  prefab?: number;
   [key: string]: unknown;
 }
 

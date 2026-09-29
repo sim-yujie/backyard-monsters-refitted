@@ -16,6 +16,7 @@ import { yardMushroomPickAction } from "./mushrooms.js";
 import { yardRecycleAction } from "./recycle.js";
 import { yardRepairInstantAction } from "./repair.js";
 import { yardShopBuyAction } from "./shopBuy.js";
+import { yardStarterKitAction } from "./starterKit.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { yardStateAction } from "./state.js";
 import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
@@ -647,5 +648,61 @@ describe("outpost income (outposts WP4, issue #185)", () => {
     db.rows.set(MAIN, { ...mainSave(), buildingresources: { t: now() - HOUR } });
     await onOutpost(yardStateAction);
     expect(pool().r1).toBe(1_000_000 + 4 * 46 * 360 + (56 + 3 * 46) * 360);
+  });
+});
+
+describe("Starter Kits (outposts WP9, issue #188)", () => {
+  const RICH = { r1: 20_000_000, r2: 20_000_000, r3: 20_000_000, r4: 7 };
+
+  test("a Regular kit paid with resources: the main pool pays, the outpost gets prefabs", async () => {
+    db.rows.set(MAIN, mainRow({ resources: RICH }));
+    const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources" });
+
+    expect(answer.status).toBe(200);
+    expect(pool()).toMatchObject({ r1: 8_000_000, r2: 8_000_000, r3: 14_000_000, r4: 7 });
+    expect(mainSave().credits).toBe(1000);
+    const after = Object.values(buildings(outpostSave()));
+    expect(after).toHaveLength(113);
+    expect(after.filter((b) => b.t !== 112).every((b) => Number(b.cB) > 0 && Number(b.prefab) > 0)).toBe(true);
+    // The kit's prefabs hold no worker: the answer says the one worker is free.
+    expect(answer.body.workers).toEqual({ total: 1, busy: 0 });
+  });
+
+  test("a normal build after the kit still takes the outpost's one worker", async () => {
+    db.rows.set(MAIN, mainRow({ resources: RICH }));
+    await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources" });
+
+    const build = await onOutpost(yardBuildAction, { type: 20, x: 300, y: 250 });
+    expect(build.status).toBe(200);
+    expect(build.body.workers).toEqual({ total: 1, busy: 1 });
+
+    const second = await onOutpost(yardBuildAction, { type: 21, x: -350, y: 250 });
+    expect(second.status).toBe(409);
+    expect(second.body.reason).toBe("workers");
+  });
+
+  test("paid with Shiny: the main yard's Shiny, the buildings finished", async () => {
+    const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+
+    expect(answer.status).toBe(200);
+    expect(mainSave().credits).toBe(1000 - 420);
+    expect(pool()).toMatchObject({ r1: 1_000_000, r2: 1_000_000, r3: 1_000_000 });
+    expect(Object.values(buildings(outpostSave())).some((b) => b.cB !== undefined)).toBe(false);
+  });
+
+  test("a short pool is refused with the top-up, and nothing is written", async () => {
+    const before = structuredClone([...db.rows.values()]);
+    const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources" });
+
+    expect(answer.status).toBe(409);
+    expect(answer.body.reason).toBe("shortfall");
+    expect(answer.body.topUp).toBeGreaterThan(0);
+    expect([...db.rows.values()]).toEqual(before);
+  });
+
+  test("the main yard has no kits", async () => {
+    const answer = await call(yardStarterKitAction, { kit: 1, pay: "shiny" });
+    expect(answer.status).toBe(409);
+    expect(answer.body.reason).toBe("notOutpost");
   });
 });

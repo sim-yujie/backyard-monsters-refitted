@@ -87,7 +87,10 @@ export const busyWorkers = (buildingdata: BuildingDataMap | null | undefined): n
   let busy = 0;
   for (const raw of Object.values(buildingdata ?? {})) {
     const building = raw as BuildingData;
-    if (running(building.cB) || running(building.cU) || running(building.cF)) busy++;
+    // A Starter Kit's prefab builds itself: no worker (outposts WP9,
+    // `client/scripts/BFOUNDATION.as:3155-3159`).
+    const prefab = running(building.cB) && running(building.prefab);
+    if ((running(building.cB) && !prefab) || running(building.cU) || running(building.cF)) busy++;
   }
   return busy;
 };

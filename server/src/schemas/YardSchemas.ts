@@ -284,3 +284,14 @@ export const YardFortifySchema = z.object({ id: BuildingIdField });
 
 /** `POST /bm/yard/fortify/cancel`: the building whose running fortification to cancel. */
 export const YardCancelFortifySchema = z.object({ id: BuildingIdField });
+
+/**
+ * `POST /bm/yard/starterkit` (outposts WP9): the kit (1 Regular, 2 Mega, 3
+ * Ultra), how it is paid for, and the Shiny top-up the player agreed to when
+ * the pool is short (`services/yard/starterKit.ts`).
+ */
+export const YardStarterKitSchema = z.object({
+  kit: z.coerce.number().int().min(1).max(3),
+  pay: z.enum(["resources", "shiny"]),
+  topUp: z.coerce.number().int().nonnegative().optional(),
+});

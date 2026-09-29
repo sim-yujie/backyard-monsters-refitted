@@ -201,7 +201,10 @@ export const buildingJobs = (
         id,
         buildingId: id,
         endsAt: countdown.paused ? null : countdown.endsAt,
-        holdsWorker: countdown.kind !== JobKind.REBUILD,
+        // A Starter Kit prefab builds up without the worker (outposts WP9).
+        holdsWorker:
+          countdown.kind !== JobKind.REBUILD &&
+          !(countdown.kind === JobKind.BUILD && Number(row.prefab) > 0),
       });
     }
 
