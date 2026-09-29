@@ -700,6 +700,21 @@ describe("Starter Kits (outposts WP9, issue #188)", () => {
     expect([...db.rows.values()]).toEqual(before);
   });
 
+  test("a damaged outpost's damage drops with the kit, so the map shows it at once", async () => {
+    db.rows.set(
+      OUTPOST,
+      outpostRow({
+        damage: 95,
+        buildinghealthdata: { "1": 10_000, "2": 0, "3": 0 },
+      })
+    );
+    const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+
+    expect(answer.status).toBe(200);
+    expect(outpostSave().damage).toBe(0);
+    expect(outpostSave().buildinghealthdata).toEqual({});
+  });
+
   test("the main yard has no kits", async () => {
     const answer = await call(yardStarterKitAction, { kit: 1, pay: "shiny" });
     expect(answer.status).toBe(409);
