@@ -111,11 +111,16 @@ const count = (raw: unknown): number => {
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 };
 
+/** The damage protection items: one entry in `storedata` stands for all of them. */
+const PROTECTION_ITEMS = ["PRO1", "PRO2", "PRO3"] as const;
+
 /**
  * A protection item: `save.protected` becomes `max(protected, now) + du`, and
  * `storedata[item]` records the purchase (`q` counts the ones bought while
  * the last still ran, `e` is the new end, so the catch-up clears it with the
- * protection).
+ * protection). Any other protection entry is dropped: its time is inside the
+ * new end, and left in place it would announce "Protection ended" while the
+ * yard is still protected.
  */
 const buyProtection = (
   { save, body, now }: YardActionInput<{ item: string }>,
@@ -126,13 +131,13 @@ const buyProtection = (
   const entry: JsonObject = save.storedata?.[item] ?? {};
   const endsAt = Math.max(count(save.protected), now) + seconds;
   const q = (count(entry.e) > now ? count(entry.q) : 0) + 1;
+  const storedata: JsonObject = { ...(save.storedata ?? {}) };
+  for (const other of PROTECTION_ITEMS) delete storedata[other];
+  storedata[item] = { q, s: now, e: endsAt };
   const report: ShopBuyReport = { item, credits: price, q, endsAt };
   return {
     report,
-    slices: {
-      storedata: { ...(save.storedata ?? {}), [item]: { q, s: now, e: endsAt } },
-      protected: endsAt,
-    },
+    slices: { storedata, protected: endsAt },
     shiny: price,
   };
 };

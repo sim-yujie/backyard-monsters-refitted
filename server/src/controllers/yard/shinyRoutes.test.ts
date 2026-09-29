@@ -305,7 +305,10 @@ describe("POST /bm/yard/shop/buy", () => {
     // Stacked: three days left + 7 + 7 + 28 days, whatever second the calls ran in.
     expect(end - (db.row!.protected as number)).toBe(0);
     expect(end - (now + 3 * 86400)).toBe(2 * 604800 + 2419200);
-    expect((db.row!.storedata as Row).PRO2).toMatchObject({ q: 2 });
+    // One entry stands for the stack, ending with it: PRO2's is gone into PRO3's.
+    expect((db.row!.storedata as Row).PRO2).toBeUndefined();
+    expect((db.row!.storedata as Row).PRO3).toMatchObject({ q: 1, e: end });
+    expect((second.body.storedata as Row).PRO2).toMatchObject({ q: 2 });
     expect(db.row).toMatchObject({ credits: 10000 - 250 - 250 - 1100 });
   });
 
