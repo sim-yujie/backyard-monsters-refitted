@@ -146,6 +146,15 @@ export const EMPTY_OUTPOST_HINT =
   "This outpost has only its core. Open Kits for a ready-made layout, or Build to add buildings one at a time; both are paid from your main yard's storage.";
 
 /**
+ * Why a visit has no Attack button, said as text when the yard opens (#153):
+ * the map's refusal was only its cell panel's tooltip, which a touch screen
+ * never shows, and the visit left the button out without a word. Null for the
+ * own yard and for a visit that can attack.
+ */
+export const refusalNotice = (target: ViewTarget | null): string | null =>
+  target && !target.attack && target.refusal ? `No attack from here: ${target.refusal}` : null;
+
+/**
  * The pool the HUD shows over a yard: the yard's own when it is the player's,
  * and the visitor's own, as the map read it, on a visit (#60). A visit's load
  * carries the defender's resources, which are never shown as the player's.
@@ -329,7 +338,7 @@ export class YardScene implements Scene {
      * rule is unchanged); Build (§5.3) is the own yard's only and is disabled
      * until the yard's store is up, because every tile reads it. A visit's way
      * into the attack (§4.1) is left out entirely, not disabled, when the
-     * map's gate refused — the cell panel already said why — and is disabled
+     * map's gate refused — the yard says why once it opens (#153) — and is disabled
      * until the yard has loaded, so an attack cannot start against a yard that
      * failed to open.
      */
@@ -550,6 +559,9 @@ export class YardScene implements Scene {
       if (pool) this.hud?.setResources(pool.resources, pool.credits);
       if (this.target?.attack) {
         this.dock?.setAttack({ disabled: false, title: `Attack ${this.target.name}'s yard` });
+      } else {
+        const refused = refusalNotice(this.target);
+        if (refused) this.notices.show("attack-refused", refused, { level: "info" });
       }
       this.refreshBuildButton();
       // Once the yard is drawn, because the first answer may redraw it.

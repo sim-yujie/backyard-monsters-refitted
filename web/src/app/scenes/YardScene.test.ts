@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import type { ViewTarget } from "@/game/attack/attackTarget";
 import { MAIN_YARD, outpostTarget } from "@/game/yard/ownYards";
-import { hudPoolFor, loadYardFor } from "./YardScene";
+import { hudPoolFor, loadYardFor, refusalNotice } from "./YardScene";
 
 const response = { error: 0, id: 1, baseid: "1000", basesaveid: 1 } as BaseLoadResponse;
 
@@ -81,5 +81,17 @@ describe("hudPoolFor (#60)", () => {
   it("leaves the placeholders when the map never read the own yard", () => {
     expect(hudPoolFor(visit("main"), defender)).toBeNull();
     expect(hudPoolFor({ ...visit("main"), own: { resources: null } }, defender)).toBeNull();
+  });
+});
+
+describe("refusalNotice (#153)", () => {
+  it("says why a visit has no Attack button, as text", () => {
+    expect(refusalNotice(visit("wild"))).toBe("No attack from here: None of your flingers can reach this cell.");
+  });
+
+  it("says nothing on the own yard, or when the visit can attack", () => {
+    const attack = { baseid: "21970243208", kind: "wild" } as unknown as NonNullable<ViewTarget["attack"]>;
+    expect(refusalNotice(null)).toBeNull();
+    expect(refusalNotice({ ...visit("wild"), attack, refusal: null })).toBeNull();
   });
 });

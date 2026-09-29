@@ -17,6 +17,17 @@ import type { CellRange } from "@/game/maproom/zones";
 
 const SIZE = 176;
 
+/** Cells the keyboard marker moves per arrow press, and with Shift held. */
+const KEY_STEP = 10;
+const KEY_STEP_BIG = 50;
+
+const ARROWS: Readonly<Record<string, readonly [number, number]>> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
+
 export interface MinimapOptions {
   /** Called with the cell the player clicked. */
   onJump: (cell: OffsetCell) => void;
@@ -32,6 +43,12 @@ export class Minimap {
   private selected: OffsetCell | null = null;
   private viewport: CellRange | null = null;
   private zones: Iterable<ZoneRecord> = [];
+  /**
+   * The keyboard's marker (issue #153): where Enter or Space jumps to. It
+   * starts on the viewport's centre each time the map takes focus, and the
+   * arrow keys move it.
+   */
+  private cursor: OffsetCell | null = null;
   private dirty = true;
 
   constructor(options: MinimapOptions) {
@@ -44,7 +61,7 @@ export class Minimap {
     this.element.tabIndex = 0;
     this.element.title = "Click to jump";
     this.element.setAttribute("role", "button");
-    this.element.setAttribute("aria-label", "World map. Click to jump to a location.");
+    this.element.setAttribute("aria-label", LABEL);
 
     const context = this.element.getContext("2d");
     if (!context) throw new Error("Could not get a 2D context for the minimap");
@@ -57,6 +74,29 @@ export class Minimap {
         row: clampInt((event.clientY - rect.top) / this.scale, WORLD_HEIGHT),
       };
       options.onJump(cell);
+    });
+
+    this.element.addEventListener("focus", () => {
+      this.cursor = this.viewportCentre();
+      this.dirty = true;
+      this.draw();
+    });
+    this.element.addEventListener("blur", () => {
+      this.cursor = null;
+      this.element.setAttribute("aria-label", LABEL);
+      this.dirty = true;
+      this.draw();
+    });
+    this.element.addEventListener("keydown", (event) => {
+      const arrow = ARROWS[event.key];
+      if (arrow) {
+        event.preventDefault();
+        this.moveCursor(arrow[0], arrow[1], event.shiftKey ? KEY_STEP_BIG : KEY_STEP);
+        return;
+      }
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      options.onJump(this.cursor ?? this.viewportCentre());
     });
   }
 
@@ -110,6 +150,7 @@ export class Minimap {
 
     if (this.home) this.dot(this.home, palette.accent, 3);
     if (this.selected) this.dot(this.selected, palette.text, 2.5);
+    if (this.cursor) this.marker(this.cursor, palette.accent);
 
     if (this.viewport) {
       const left = this.viewport.minCol * this.scale;
@@ -130,6 +171,43 @@ export class Minimap {
 
   destroy(): void {
     this.element.remove();
+  }
+
+  /** The keyboard marker: a ring with a cross, so it reads apart from the dots. */
+  private marker(cell: OffsetCell, colour: string): void {
+    const x = cell.col * this.scale;
+    const y = cell.row * this.scale;
+    const context = this.context;
+    context.strokeStyle = colour;
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.arc(x, y, 6, 0, Math.PI * 2);
+    context.moveTo(x - 9, y);
+    context.lineTo(x + 9, y);
+    context.moveTo(x, y - 9);
+    context.lineTo(x, y + 9);
+    context.stroke();
+  }
+
+  private moveCursor(dx: number, dy: number, step: number): void {
+    const from = this.cursor ?? this.viewportCentre();
+    this.cursor = {
+      col: clampInt(from.col + dx * step, WORLD_WIDTH),
+      row: clampInt(from.row + dy * step, WORLD_HEIGHT),
+    };
+    this.element.setAttribute("aria-label", `${LABEL} Marker at ${this.cursor.col}, ${this.cursor.row}.`);
+    this.dirty = true;
+    this.draw();
+  }
+
+  /** The middle of the viewport's rectangle, or the world's before there is one. */
+  private viewportCentre(): OffsetCell {
+    const view = this.viewport;
+    if (!view) return { col: Math.floor(WORLD_WIDTH / 2), row: Math.floor(WORLD_HEIGHT / 2) };
+    return {
+      col: Math.floor((view.minCol + view.maxCol) / 2),
+      row: Math.floor((view.minRow + view.maxRow) / 2),
+    };
   }
 
   private dot(cell: OffsetCell, colour: string, radius: number): void {
@@ -164,6 +242,9 @@ export class Minimap {
     };
   }
 }
+
+const LABEL =
+  "World map. Click to jump to a place, or move the marker with the arrow keys (Shift for bigger steps) and press Enter.";
 
 const clampInt = (value: number, size: number): number =>
   Math.min(Math.max(Math.floor(value), 0), size - 1);

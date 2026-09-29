@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { MapCell, PlayerCell } from "@/api/types";
-import { CellMarker, appearanceOf, plateName, terrainColour } from "./cellVisuals";
+import {
+  CellMarker,
+  LOADING_COLOUR,
+  UNEXPLORED_PERIOD,
+  UNEXPLORED_STRIPE,
+  UNEXPLORED_STRIPE_COLOUR,
+  appearanceOf,
+  plateName,
+  terrainColour,
+  unexploredColour,
+} from "./cellVisuals";
 
 /**
  * The calm map (#176): camps carry their level on a badge and no name;
@@ -77,4 +87,15 @@ it("keeps the server's height bands with the toned-down ground", () => {
   expect(terrainColour(100)).toBe(0xb9ad86);
   expect(terrainColour(150)).toBe(0x43623a);
   expect(terrainColour(200)).toBe(0x64625c);
+});
+
+describe("unexplored ground (#153)", () => {
+  it("is striped on the diagonal, so the world view reads as not loaded rather than blank", () => {
+    const row = Array.from({ length: UNEXPLORED_PERIOD }, (_, col) => unexploredColour(col, 0));
+    expect(row.filter((colour) => colour === UNEXPLORED_STRIPE_COLOUR)).toHaveLength(UNEXPLORED_STRIPE);
+    expect(row.filter((colour) => colour === LOADING_COLOUR)).toHaveLength(UNEXPLORED_PERIOD - UNEXPLORED_STRIPE);
+    // A step right and a step up land on the same stripe.
+    expect(unexploredColour(5, 3)).toBe(unexploredColour(6, 2));
+    expect(unexploredColour(0, 0)).not.toBe(unexploredColour(UNEXPLORED_STRIPE, 0));
+  });
 });

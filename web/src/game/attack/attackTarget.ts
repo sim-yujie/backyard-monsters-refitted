@@ -163,7 +163,7 @@ export interface ViewTarget {
    * refuse it — in which case the yard shows no Attack button at all (§4.1).
    */
   readonly attack: AttackTarget | null;
-  /** Why `attack` is null, for the status line; null when it is not. */
+  /** Why `attack` is null, said as text when the yard opens (#153); null when it is not. */
   readonly refusal: string | null;
   /**
    * The visitor's own pool and shiny, from the map's own-yard load, for the

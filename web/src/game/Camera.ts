@@ -135,6 +135,19 @@ export class Camera {
 
   /* ── Movement ───────────────────────────────────────────────────────── */
 
+  /**
+   * Ends a released drag's easing at once. A tap is a drag that went nowhere,
+   * and for a few frames after it the camera keeps easing to hold the tapped
+   * point under the finger, which would undo a move made in code on the tap
+   * (the map panning a cell clear of its panel, #153). Called from the tap's
+   * own pointerup, which may reach the map before the camera sees it, so it
+   * does not wait for the drag to be marked over.
+   */
+  settle(): void {
+    this.anchorWorld = null;
+    this.dragTarget = null;
+  }
+
   /** Moves the camera by a screen-space delta. */
   panByScreen(dx: number, dy: number): void {
     this.setPosition(this.position.x - dx / this.zoom, this.position.y - dy / this.zoom);

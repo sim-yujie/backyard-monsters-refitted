@@ -262,7 +262,9 @@ describes, as a genuine second request. What makes this feel like one continuous
 reload is that the View screen's already-rendered yard stays on screen while that second load
 resolves in the background — usually well under a second, since it is the same `buildingdata`
 fetched moments earlier, just with the attack's side effects now applied — and the scene then hands
-off into the attack (§F5) with no intervening map screen.
+off into the attack (§F5) with no intervening map screen. When the map's preconditions refused the
+attack, the visit has no Attack button, and says why as text when the yard opens ("No attack from
+here: …", issue #153), since the cell panel's reason was a tooltip a touch screen never shows.
 
 **Where the target goes.** `SceneManager.goTo` takes no parameters (`SceneManager.ts:70-75`), and
 extending it for one caller is more surface than a one-shot handoff needs. A small module,

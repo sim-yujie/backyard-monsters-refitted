@@ -1,7 +1,7 @@
 import { CanvasSource, Sprite, Texture } from "pixi.js";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { mapRoomGrid } from "@/game/HexGrid";
-import { LOADING_COLOUR, rasterColour } from "./cellVisuals";
+import { rasterColour, unexploredColour } from "./cellVisuals";
 import type { ZoneRecord } from "./ZoneStore";
 
 /**
@@ -15,7 +15,9 @@ import type { ZoneRecord } from "./ZoneStore";
  * so dropping it is invisible.
  *
  * Texels are written per zone as responses arrive, never by walking the world,
- * and the GPU upload happens at most once per frame.
+ * and the GPU upload happens at most once per frame. Until then a cell is
+ * striped as unexplored (`unexploredColour`, issue #153): zoomed right out,
+ * most of the world has never been loaded, and a flat fill read as blank.
  */
 export class TerrainRaster {
   readonly sprite: Sprite;
@@ -36,7 +38,7 @@ export class TerrainRaster {
     this.context = context;
 
     this.image = context.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
-    this.fill(LOADING_COLOUR);
+    this.fillUnexplored();
     context.putImageData(this.image, 0, 0);
 
     // Nearest neighbour: a cell is a cell, not a smear of its neighbours.
@@ -85,13 +87,9 @@ export class TerrainRaster {
     data[offset + 3] = 255;
   }
 
-  private fill(colour: number): void {
-    for (let index = 0; index < WORLD_WIDTH * WORLD_HEIGHT; index++) {
-      const offset = index * 4;
-      this.image.data[offset] = (colour >> 16) & 0xff;
-      this.image.data[offset + 1] = (colour >> 8) & 0xff;
-      this.image.data[offset + 2] = colour & 0xff;
-      this.image.data[offset + 3] = 255;
+  private fillUnexplored(): void {
+    for (let y = 0; y < WORLD_HEIGHT; y++) {
+      for (let x = 0; x < WORLD_WIDTH; x++) this.writeTexel(x, y, unexploredColour(x, y));
     }
   }
 }

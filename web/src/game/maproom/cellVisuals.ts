@@ -80,6 +80,20 @@ const TERRAIN_BANDS: { maxHeight: number; colour: number }[] = [
 export const LOADING_COLOUR = 0x272c38;
 
 /**
+ * The world view's unexplored ground (issue #153): diagonal stripes of this
+ * over {@link LOADING_COLOUR}, so ground nobody has loaded reads as "not
+ * loaded yet" rather than as a blank world. Every {@link UNEXPLORED_PERIOD}
+ * cells, {@link UNEXPLORED_STRIPE} of them wide.
+ */
+export const UNEXPLORED_STRIPE_COLOUR = 0x323848;
+export const UNEXPLORED_PERIOD = 8;
+export const UNEXPLORED_STRIPE = 3;
+
+/** The raster's colour for a cell nothing has loaded yet. */
+export const unexploredColour = (col: number, row: number): number =>
+  (col + row) % UNEXPLORED_PERIOD < UNEXPLORED_STRIPE ? UNEXPLORED_STRIPE_COLOUR : LOADING_COLOUR;
+
+/**
  * Marker colours, kept in step with the CSS tokens in ui/styles/tokens.css.
  * The player's own cells wear the accent (`--colour-accent`), as the range's
  * line does (#177): "You" is cyan.

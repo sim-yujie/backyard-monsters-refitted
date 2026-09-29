@@ -20,7 +20,7 @@ import {
   type Resources,
   type TakeoverQuoteResponse,
 } from "@/api/types";
-import { CELL_WIDTH, DEFAULT_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
+import { CELL_HEIGHT, CELL_WIDTH, DEFAULT_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
 import {
   attackRefusal,
   hasDeclareWar,
@@ -46,7 +46,14 @@ import {
 } from "@/game/maproom/attackRange";
 import { mainYardRange, outpostRange, withDeclareWar } from "@/game/maproom/rules/range";
 import { Bookmarks } from "@/game/maproom/Bookmarks";
-import { consumeMapFocus, type MapFocus } from "@/game/maproom/mapFocus";
+import {
+  consumeMapFocus,
+  recallMapView,
+  rememberMapView,
+  type MapFocus,
+  type MapView,
+} from "@/game/maproom/mapFocus";
+import { panClearOfPanel } from "@/game/maproom/keepClear";
 import {
   TRANSFER_TEXT,
   housedOf,
@@ -309,6 +316,16 @@ export class MapRoom2Scene implements Scene {
   }
 
   exit(): void {
+    // Where the map was left, for the next time it opens (#153).
+    if (this.ownSave) {
+      const view = this.camera.visibleWorldRect();
+      rememberMapView({
+        yard: this.ownSave.baseid,
+        centre: { x: (view.left + view.right) / 2, y: (view.top + view.bottom) / 2 },
+        zoom: this.camera.zoom,
+        selected: this.selected,
+      });
+    }
     this.input?.detach();
     this.input = null;
     this.camera.detach();
@@ -395,6 +412,9 @@ export class MapRoom2Scene implements Scene {
           this.jumpTo(cell, DEFAULT_ZOOM);
         }
       }
+      // Back from a yard: where the map was left, not home (#153).
+      const view = recallMapView(base.baseid);
+      if (view) this.restoreView(view);
 
       // worldsize is [height, width], the server's WORLD_SIZE order.
       const size = base.worldsize;
@@ -430,6 +450,15 @@ export class MapRoom2Scene implements Scene {
       this.ready = true;
       this.camera.dirty = true;
     }
+  }
+
+  /** Puts the camera and the selection back where the map was left. */
+  private restoreView(view: MapView): void {
+    this.camera.zoom = view.zoom;
+    this.camera.centreOn(view.centre);
+    this.camera.dirty = true;
+    if (view.selected && inWorld(view.selected.col, view.selected.row)) this.selectCell(view.selected);
+    else this.clearSelection();
   }
 
   /**
@@ -495,6 +524,13 @@ export class MapRoom2Scene implements Scene {
     this.camera.zoom = this.camera.minZoom;
     this.camera.centreOn(mapRoomGrid.cellToPixel(WORLD_WIDTH / 2, WORLD_HEIGHT / 2));
     this.camera.dirty = true;
+    // Most of the world has never been loaded, and it cannot all be: say what
+    // the striped ground is (#153).
+    this.ui?.notices.show(
+      "world-view",
+      "The whole world. Striped ground is not loaded yet: zoom in anywhere to see it.",
+      { level: "info", timeoutMs: 6_000 },
+    );
   }
 
   private jumpTo(cell: OffsetCell, zoom?: number): void {
@@ -550,6 +586,25 @@ export class MapRoom2Scene implements Scene {
     this.renderer.setSelected(cell);
     this.updateBookmarkTarget();
     this.ui?.showCell(cell, this.store.getCell(cell.col, cell.row));
+    this.keepClearOfPanel(cell);
+  }
+
+  /** Pans a selected cell out from under its own cell panel (`keepClear.ts`, #153). */
+  private keepClearOfPanel(cell: OffsetCell): void {
+    const ui = this.ui;
+    const panel = ui?.cellPanelRect();
+    if (!ui || !panel) return;
+    const pan = panClearOfPanel({
+      point: this.camera.worldToScreen(mapRoomGrid.cellToPixel(cell.col, cell.row)),
+      halfWidth: (CELL_WIDTH / 2) * this.camera.zoom,
+      halfHeight: (CELL_HEIGHT / 2) * this.camera.zoom,
+      panel,
+      viewportWidth: this.viewportWidth,
+      hudBottom: ui.hudBottom(),
+    });
+    if (!pan) return;
+    this.camera.settle();
+    this.camera.panByScreen(pan.dx, pan.dy);
   }
 
   private clearSelection(): void {

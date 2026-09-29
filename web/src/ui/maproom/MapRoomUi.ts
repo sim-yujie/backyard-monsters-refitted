@@ -329,6 +329,16 @@ export class MapRoomUi {
     if (container) showTakenOver(container, kind, name);
   }
 
+  /** Where the open cell panel sits on screen, or null when none is open. */
+  cellPanelRect(): DOMRect | null {
+    return this.cellPanel?.element.getBoundingClientRect() ?? null;
+  }
+
+  /** The bottom edge of the HUD: the map shows nothing above it. */
+  hudBottom(): number {
+    return this.hud.element.getBoundingClientRect().bottom;
+  }
+
   closeCell(): void {
     this.cellPanel?.close();
     this.cellPanel = null;
