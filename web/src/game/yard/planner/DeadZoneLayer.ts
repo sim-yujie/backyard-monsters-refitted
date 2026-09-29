@@ -25,15 +25,15 @@ const DEAD_RED = "rgba(224, 82, 82, ";
 
 /** A hatch tile: a faint wash and one diagonal, `/` for land and `\` for air. */
 const hatch = (rising: boolean): FillPattern => {
-  const size = 16;
+  const size = 24;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
   const context = canvas.getContext("2d");
   if (context) {
-    context.fillStyle = `${DEAD_RED}0.10)`;
+    context.fillStyle = `${DEAD_RED}0.05)`;
     context.fillRect(0, 0, size, size);
-    context.strokeStyle = `${DEAD_RED}0.75)`;
+    context.strokeStyle = `${DEAD_RED}0.6)`;
     context.lineWidth = 2;
     context.beginPath();
     // Three segments so the line runs on across the tile's seams.
