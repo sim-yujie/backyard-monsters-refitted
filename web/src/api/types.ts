@@ -548,6 +548,8 @@ export interface BaseLoadResponse extends ApiEnvelope {
   savetime?: number;
   resources?: Resources;
   credits?: number;
+  /** The player's unread messages, the server's own count (#193's Mail badge). */
+  unreadmessages?: number;
   homebase?: [number, number];
   /**
    * The player's Map Room 2 outposts. Served from the main yard on every load
