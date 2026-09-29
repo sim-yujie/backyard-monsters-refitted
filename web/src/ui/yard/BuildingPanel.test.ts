@@ -267,6 +267,20 @@ describe("BuildingPanel: buildings without an Upgrade here", () => {
   });
 });
 
+describe("BuildingPanel: the General Store (§8.2)", () => {
+  it("opens the Shop from Open Shop", () => {
+    const openShop = vi.fn();
+    const { element } = setup([HALL, building(2, 12, 1)], 2, { scene: { openShop } });
+    buttonNamed(element, "Open Shop")!.click();
+    expect(openShop).toHaveBeenCalledOnce();
+  });
+
+  it("offers no Open Shop where the scene has no Shop", () => {
+    const { element } = setup([HALL, building(2, 12, 1)], 2);
+    expect(buttonNamed(element, "Open Shop")).toBeUndefined();
+  });
+});
+
 describe("BuildingPanel: the monster buildings", () => {
   it("opens the Monster Locker's Unlock tab from Open, with the building named", () => {
     const openMonsters = vi.fn();

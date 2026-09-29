@@ -21,6 +21,7 @@ import { overCap as overCapOf } from "@/game/yard/storage";
 import { freeWorkers, holdsWorker, sharperToolsMultiplier } from "@/game/yard/workers";
 import type { Yard, YardBuilding, YardWorkers } from "@/game/yard/yardModel";
 import { BAITER_TYPE } from "@/game/baiter/baiterSession";
+import { GENERAL_STORE_TYPE } from "@/game/yard/shop";
 import { BUNKER_TYPE } from "@/game/monsters/bunker";
 import { researchOn } from "@/game/monsters/lab";
 import { CHAMPION_CAGE_TYPE, CHAMPION_CHAMBER_TYPE } from "@/game/yard/championModel";
@@ -191,9 +192,10 @@ export interface CancelOffer {
 
 /**
  * Which door a building opens: the world map, the layout planner, the
- * Monsters screen, a bunker's controls, or the Champion Cage's or Chamber's.
+ * Monsters screen, a bunker's controls, the Champion Cage's or Chamber's, the
+ * Baiter's, or the Shop (the General Store, §8.2).
  */
-export type OpenTarget = "map" | "planner" | "monsters" | "bunker" | "cage" | "chamber" | "baiter";
+export type OpenTarget = "map" | "planner" | "monsters" | "bunker" | "cage" | "chamber" | "baiter" | "shop";
 
 /** Everything the panel shows for a building on the player's own yard. */
 export interface PanelModel {
@@ -473,7 +475,9 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
                 ? "chamber"
                 : building.type === BAITER_TYPE && building.level > 0 && context.yard.kind !== "outpost"
                   ? "baiter"
-                  : null;
+                  : building.type === GENERAL_STORE_TYPE && building.level > 0
+                    ? "shop"
+                    : null;
   return {
     upgrade: upgrade && upgrade.gate?.reason !== "maxLevel" ? upgrade : null,
     maxed: upgrade?.gate?.reason === "maxLevel",

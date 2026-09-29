@@ -202,6 +202,11 @@ export interface YardSceneHooks {
   openMonsters?(tab: MonstersTabId, focus?: MonstersFocus): void;
   /** Starts a Wild Monster Baiter practice attack (#126). Absent where there is none. */
   runBaiter?(run: BaiterRun): void;
+  /**
+   * Opens the Shop (§8.2): the General Store's Open Shop button and the HUD's
+   * Shiny counter use it. Absent where there is no screen.
+   */
+  openShop?(): void;
 }
 
 /** Handed to the building panel (WP1.5) and the HUD (WP1.6) on the player's own yard. */

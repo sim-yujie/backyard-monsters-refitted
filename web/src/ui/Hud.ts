@@ -232,7 +232,17 @@ export class Hud {
       fill.className = "hud__cap-fill";
       bar.append(fill);
       button.append(amount, capText, bar);
-      button.addEventListener("click", () => this.toggleExact(key));
+      // On the own yard the Shiny counter is the Shop's door (§8.2); the
+      // Shop's header then shows the exact balance.
+      button.addEventListener("click", () => {
+        const openShop = key === "shiny" ? this.shopOpener() : null;
+        if (openShop) {
+          this.hideExact();
+          openShop();
+        } else {
+          this.toggleExact(key);
+        }
+      });
 
       item.append(button);
       resources.append(item);
@@ -471,6 +481,8 @@ export class Hud {
       this.label(readout);
       if (this.bubbleFor === key) this.fillExact(readout);
     }
+    const shiny = this.readouts.get("shiny");
+    if (shiny) this.label(shiny);
 
     this.workers.hidden = store === null;
     if (store) {
@@ -506,9 +518,20 @@ export class Hud {
 
   private label(readout: Readout): void {
     const text = exactLabel(readout.key, readout.amount, readout.cap);
+    if (readout.key === "shiny" && this.shopOpener()) {
+      readout.button.title = `${text}\nOpen the Shop`;
+      readout.button.setAttribute("aria-label", `${text}. Open the Shop`);
+      return;
+    }
     const full = capState(readout.amount, readout.cap)?.full === true;
     readout.button.title = full ? `${text}\n${FULL_NOTE}` : text;
     readout.button.setAttribute("aria-label", full ? `${text}. ${FULL_NOTE}` : text);
+  }
+
+  /** The own yard's Shop door, or null where there is no Shop (the map, an attack, a visit). */
+  private shopOpener(): (() => void) | null {
+    const scene = this.yardBinding?.scene;
+    return scene?.openShop ? () => scene.openShop?.() : null;
   }
 
   /**

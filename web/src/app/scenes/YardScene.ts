@@ -52,6 +52,7 @@ import { Notices } from "@/ui/maproom/Notices";
 import { showTakenOver } from "@/ui/maproom/TakeoverDialog";
 import { showBuildMapRoom } from "@/ui/maproom1/MapRoomPrompt";
 import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
+import { ShopScreen } from "@/ui/yard/ShopScreen";
 import {
   MONSTERS_TAB_ORDER,
   MonstersTabId,
@@ -215,6 +216,8 @@ export class YardScene implements Scene {
   private panelDock: HTMLElement | null = null;
   /** The own yard's Monsters screen (§4.1), built the first time it opens. */
   private monsters: MonstersScreen | null = null;
+  /** The Shop (§8.2), made on first open; own yard only. */
+  private shop: ShopScreen | null = null;
   /** The Starter Kit picker, while open (outposts WP9). */
   private kitPicker: StarterKitPicker | null = null;
   /** Picks a tapped mushroom on the own yard (§5.6); null on a foreign one. */
@@ -469,6 +472,7 @@ export class YardScene implements Scene {
       if (!this.planner) this.store?.tick();
       this.panel?.tick(Date.now() / 1000);
       this.monsters?.tick();
+      this.shop?.tick();
       this.refreshStatus();
     }
 
@@ -892,6 +896,7 @@ export class YardScene implements Scene {
       this.panel?.close();
       this.panel = null;
       this.monsters?.besidePanel(false);
+      this.shop?.besidePanel(false);
       return;
     }
 
@@ -910,6 +915,7 @@ export class YardScene implements Scene {
           this.selected = null;
           this.renderer.setSelected(null);
           this.monsters?.besidePanel(false);
+          this.shop?.besidePanel(false);
         },
         // Clicking the Yard Planner should open the yard planner. The offer is
         // left out entirely when there is none to open, which is also the only
@@ -930,6 +936,7 @@ export class YardScene implements Scene {
     }
     this.panel.show(building);
     this.monsters?.besidePanel(true);
+    this.shop?.besidePanel(true);
 
     // A monster building opens its tab of the Monsters screen (D4), beside
     // the panel, which keeps the building's own upgrade. A Housing's panel is
@@ -955,9 +962,27 @@ export class YardScene implements Scene {
     const shown = tabs.some((one) => one.id === tab) ? tab : tabs[0]?.id;
     if (!shown) return;
     this.buildMenu?.close();
+    this.shop?.close();
     this.monsters ??= new MonstersScreen({ binding, tabs }).mount(context.overlay.content);
     this.monsters.besidePanel(this.panel !== null);
     this.monsters.open(shown, focus);
+  }
+
+  /**
+   * Opens the Shop (§8.2): the HUD's Shiny counter and the General Store's
+   * Open Shop button come here. It docks where the Monsters screen does, so
+   * that one closes. Own yard only, and not over the planner.
+   */
+  private openShop(): void {
+    const binding = this.binding;
+    const context = this.context;
+    if (!binding || !context || this.planner) return;
+    this.endPlacement();
+    this.buildMenu?.close();
+    this.monsters?.close();
+    this.shop ??= new ShopScreen({ binding }).mount(context.overlay.content);
+    this.shop.besidePanel(this.panel !== null);
+    this.shop.open();
   }
 
   /* ── Build ──────────────────────────────────────────────────────────── */
@@ -991,6 +1016,7 @@ export class YardScene implements Scene {
     // The menu docks where the building panel and the Monsters screen do.
     this.select(null);
     this.monsters?.close();
+    this.shop?.close();
     this.buildMenu ??= new BuildMenu({
       binding,
       onPick: (picked, instant) => this.startPlacement(picked, instant),
@@ -1182,6 +1208,7 @@ export class YardScene implements Scene {
 
     this.select(null);
     this.monsters?.close();
+    this.shop?.close();
     this.endPlacement();
     this.buildMenu?.close();
     this.planner = new YardPlanner({
@@ -1348,6 +1375,7 @@ export class YardScene implements Scene {
           setBaiterRun(run);
           this.context?.goTo(SceneName.BAITER);
         },
+        openShop: () => this.openShop(),
       },
       notices: this.notices,
     };
@@ -1454,6 +1482,8 @@ export class YardScene implements Scene {
     this.buildMenu = null;
     this.monsters?.destroy();
     this.monsters = null;
+    this.shop?.destroy();
+    this.shop = null;
     this.kitPicker?.close();
     this.kitPicker = null;
     this.unsubscribeStore?.();
@@ -1503,6 +1533,7 @@ export class YardScene implements Scene {
       }
     }
   }
+
 
   /** Pans the camera to a building and opens its panel (the binding's `selectBuilding`). */
   private focusBuilding(id: number): void {

@@ -345,6 +345,23 @@ describe("the HUD on the player's own yard", () => {
     expect(hud.element.querySelector<HTMLElement>(".hud__workers")!.hidden).toBe(true);
   });
 
+  it("opens the Shop from the Shiny counter where the scene has one (§8.2)", () => {
+    const openShop = vi.fn();
+    hud.setResources({ r1: 15_000_000 }, 1_234);
+    hud.bindYard({ ...binding, scene: { selectBuilding, openShop } });
+
+    expect(button("shiny").getAttribute("aria-label")).toBe("Shiny: 1,234. Open the Shop");
+    button("shiny").click();
+    expect(openShop).toHaveBeenCalledOnce();
+    expect(document.querySelector(".hud__exact")).toBeNull();
+
+    // Without a Shop (an older binding, the map) the tap shows the exact amount again.
+    hud.bindYard(binding);
+    expect(button("shiny").getAttribute("aria-label")).toBe("Shiny: 1,234");
+    button("shiny").click();
+    expect(document.querySelector(".hud__exact")).not.toBeNull();
+  });
+
   it("shows amount / cap with a fill bar once bound, and takes them away on unbind", () => {
     hud.setResources({ r1: 15_000_000, r2: 23_050_000, r3: 0, r4: 30_000_000 }, 7);
     hud.bindYard(binding);

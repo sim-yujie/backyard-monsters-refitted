@@ -705,6 +705,13 @@ export class BuildingPanel {
       return button;
     }
     const scene = this.yard?.scene;
+    if (model?.open === "shop" && scene?.openShop) {
+      const openShop = scene.openShop.bind(scene);
+      const button = actionButton("Open Shop", () => openShop(), "btn--primary");
+      button.classList.add("building-panel__planner");
+      button.title = "Spend Shiny on workers, boosts and more";
+      return button;
+    }
     if (model?.open === "monsters" && model.monstersTab && scene?.openMonsters) {
       const tab = model.monstersTab;
       const button = actionButton(

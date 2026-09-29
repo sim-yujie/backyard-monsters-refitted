@@ -598,3 +598,17 @@ describe("panelModel: the Wild Monster Baiter (#126)", () => {
     expect(panelModel(pick(context, 2), context).open).toBeNull();
   });
 });
+
+describe("panelModel: the General Store (§8.2)", () => {
+  it("opens the Shop once built, in a main yard and an outpost", () => {
+    const main = contextOf({ buildings: [HALL(5), building(2, 12, 1)] });
+    expect(panelModel(pick(main, 2), main).open).toBe("shop");
+    const outpost = contextOf({ type: "outpost", buildings: [building(2, 12, 1)] });
+    expect(panelModel(pick(outpost, 2), outpost).open).toBe("shop");
+  });
+
+  it("is not offered for a foundation", () => {
+    const context = contextOf({ buildings: [HALL(5), building(2, 12, 0, { cB: 600 })] });
+    expect(panelModel(pick(context, 2), context).open).toBeNull();
+  });
+});

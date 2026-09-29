@@ -18,6 +18,9 @@ import type { YardStoreReader } from "./YardStore";
  * (`ui/yard/ShopScreen.ts`) draws them.
  */
 
+/** The General Store, whose panel opens the Shop (`client/scripts/YARD_PROPS.as:1181`). */
+export const GENERAL_STORE_TYPE = 12;
+
 /** The Shop's headings, in the order it shows them. */
 export const ShopSection = {
   BUILDING: "building",
