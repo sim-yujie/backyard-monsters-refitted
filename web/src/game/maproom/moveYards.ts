@@ -179,26 +179,6 @@ export const maxOf = (
   return Math.max(0, Math.min(from.housed[id] ?? 0, fits));
 };
 
-/**
- * The two rosters the server takes (`transferassets`, `monsters`): each yard's
- * whole `housed` after the move, source first (`MapRoom.as:856-888`).
- */
-export const transferBlobs = (
-  from: TransferYard,
-  to: TransferYard,
-  moved: Readonly<Record<string, number>>,
-): [{ housed: Record<string, number> }, { housed: Record<string, number> }] => {
-  const source: Record<string, number> = { ...from.housed };
-  const target: Record<string, number> = { ...to.housed };
-  for (const [id, count] of Object.entries(moved)) {
-    if (count <= 0) continue;
-    source[id] = (source[id] ?? 0) - count;
-    if (source[id] <= 0) delete source[id];
-    target[id] = (target[id] ?? 0) + count;
-  }
-  return [{ housed: source }, { housed: target }];
-};
-
 /** How many monsters a pick moves in all. */
 export const totalOf = (counts: Readonly<Record<string, number>>): number =>
   Object.values(counts).reduce((sum, count) => sum + Math.max(0, count), 0);

@@ -78,6 +78,13 @@ mock.module("../../../services/base/attackSessionStore.js", () => ({
 
 const { transferMonsters } = await import("./transferMonsters.js");
 
+/** Five C1 from the main yard to the outpost, as the web client posts it: the counts moved (#196). */
+const movedBody = (from = MAIN, to = OUTPOST, moved: Record<string, number> = { C1: 5 }) => ({
+  frombaseid: from,
+  tobaseid: to,
+  moved: JSON.stringify(moved),
+});
+
 /** Five C1 from the main yard to the outpost, as Flash posts it: both rosters in full. */
 const body = (from = MAIN, to = OUTPOST) => ({
   frombaseid: from,
@@ -140,5 +147,39 @@ describe("transferMonsters, world and attack checks", () => {
     expect(saves[0]!.monsters).toMatchObject({ housed: { C1: 15 } });
     expect(saves[1]!.monsters).toMatchObject({ housed: { C1: 5 } });
     expect(flushed).toBe(1);
+  });
+});
+
+describe("transferMonsters, the move as a delta (#196)", () => {
+  /** The main yard's hatchery finishes a Pokey a minute ago, after the player's map read. */
+  const hatchedSinceRead = (): void => {
+    const now = Math.floor(Date.now() / 1000);
+    Object.assign(saves[0]!, {
+      monsters: { housed: { C1: 10 }, h: [["C1", 1]], hid: [2], hstage: [1], saved: now - 60 },
+      buildingdata: { "1": { id: 1, t: 15, l: 6 }, "2": { id: 2, t: 13, l: 1 } },
+    });
+  };
+
+  test("moves the posted counts and keeps a monster hatched after the client's read", async () => {
+    hatchedSinceRead();
+    // The player saw 10 Pokeys and sent 5.
+    const result = await run(movedBody());
+    expect(result.ok).toBe(true);
+    expect((saves[0]!.monsters as { housed: unknown }).housed).toEqual({ C1: 6 });
+    expect((saves[1]!.monsters as { housed: unknown }).housed).toEqual({ C1: 15 });
+  });
+
+  test("Flash's replacement blobs move the same counts and lose nothing either", async () => {
+    hatchedSinceRead();
+    const result = await run(body());
+    expect(result.ok).toBe(true);
+    expect((saves[0]!.monsters as { housed: unknown }).housed).toEqual({ C1: 6 });
+    expect((saves[1]!.monsters as { housed: unknown }).housed).toEqual({ C1: 15 });
+  });
+
+  test("refuses sending more than the yard houses, and a request with nothing to move", async () => {
+    expect((await run(movedBody(MAIN, OUTPOST, { C1: 11 }))).rule).toBe("holdings");
+    expect((await run({ frombaseid: MAIN, tobaseid: OUTPOST })).rule).toBe("quantities");
+    expect(flushed).toBe(0);
   });
 });

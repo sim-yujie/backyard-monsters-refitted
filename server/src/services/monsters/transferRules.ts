@@ -6,18 +6,22 @@ import type { JsonObject } from "../../types/JsonObject.js";
 /**
  * Rules for `POST /worldmapv2/transferassets` (issue #27).
  *
- * The request is two **complete replacement** `monsters` blobs — one for the
- * source yard, one for the destination (`MapRoom.as:861-888`,
- * `docs/specs/monsters-and-hatchery.md` §9). Until now the server wrote both
- * verbatim, so a hand-made request could hand the destination a copy of the
- * source's army and leave the source untouched: monster duplication in one
- * request.
+ * A transfer is **the counts moved** (`moved`, #196), applied as a delta onto
+ * both yards' rosters as the server has them now: the source loses exactly
+ * those monsters and the destination gains them, and every other monster on
+ * either yard stays where it is. Flash posted two complete replacement
+ * `monsters` blobs instead (`MapRoom.as:861-888`,
+ * `docs/specs/monsters-and-hatchery.md` §9), and writing them — first verbatim,
+ * which let a hand-made request duplicate an army (#27), then as whole
+ * `housed` rosters — dropped any monster that hatched between the player's map
+ * read and the transfer. Such a request is still accepted and turned into the
+ * counts it moves ({@link movedFromBlobs}).
  *
  * Everything here is pure. The controller resolves the two saves, derives each
- * yard's housing capacity from its buildings, and asks {@link checkMonsterTransfer}
- * for a verdict.
+ * yard's housing capacity from its buildings, and asks {@link planMonsterTransfer}
+ * for the two rosters to write, or the rule that refuses.
  *
- * ## Strict conservation
+ * ## Against the rosters as they are now
  *
  * The Flash map ticked hatchery production locally (`MapRoomCell.Tick` added
  * finished monsters to `housed`, `client/scripts/com/monsters/maproom_advanced/MapRoomCell.as:800-811`),
@@ -28,8 +32,9 @@ import type { JsonObject } from "../../types/JsonObject.js";
  * before these rules read them, and the map shows rosters caught up the same way
  * (`monstersForMap`). Every monster the player can see is therefore in the
  * stored `housed`, a monster still in a hatchery is not housed anywhere, and
- * conservation is checked against the stored rosters alone (#131,
- * `docs/design/yard-buildings.md` §11).
+ * what may leave is checked against the stored rosters alone (#131,
+ * `docs/design/yard-buildings.md` §11). A delta cannot create a monster, so
+ * conservation holds by construction.
  */
 
 /** Monster Housing, `#b_housing#` (`client/scripts/YARD_PROPS.as:1553-1662`). */
@@ -79,12 +84,7 @@ export const HOUSING_EXPANSION_ITEMS = ["EXH", "EXHI"];
 export const HOUSING_MIN_HEALTH = 10;
 
 /** Which rule refused a transfer. Travels in `data.rule`, not in the message. */
-export type TransferRule =
-  | "endpoints"
-  | "quantities"
-  | "holdings"
-  | "conservation"
-  | "capacity";
+export type TransferRule = "endpoints" | "quantities" | "holdings" | "capacity";
 
 export interface TransferYard {
   /** `Save.baseid`, for the refusal detail only. */
@@ -102,10 +102,8 @@ export interface TransferInput {
   from: TransferYard;
   /** The yard named by `tobaseid`. Its housing has to fit the result. */
   to: TransferYard;
-  /** The replacement blob the client posted for `from`. */
-  fromBlob: unknown;
-  /** The replacement blob the client posted for `to`. */
-  toBlob: unknown;
+  /** The counts to move, `{ C1: 5 }`, as the client posted them. */
+  moved: unknown;
   /**
    * The caller's Monster Academy level per monster id. Only `C1`'s housing space
    * varies by level (10, 10, 10, 9, 8, 7), but it varies downwards, so reading
@@ -115,7 +113,13 @@ export interface TransferInput {
 }
 
 export type TransferVerdict =
-  | { ok: true }
+  | {
+      ok: true;
+      /** The source's `housed` after the move: its roster now, less what moved. */
+      fromHoused: Record<string, number>;
+      /** The destination's `housed` after the move: its roster now, plus what moved. */
+      toHoused: Record<string, number>;
+    }
   | { ok: false; rule: TransferRule; message: string; detail: Record<string, unknown> };
 
 /** Counts keyed by monster id. */
@@ -317,31 +321,50 @@ export const deriveHousingCapacity = ({
 const TRADEABLE_TYPES = new Set<string>([BaseType.MAIN, BaseType.OUTPOST]);
 
 /**
- * Every monster id mentioned by any of the four rosters, so each rule can walk
- * one list and miss nothing.
+ * The counts a pair of Flash-style replacement blobs moves, for a request that
+ * posts `monsters` rather than `moved`: what the destination's posted roster
+ * holds above its roster now. Where the destination hatched monsters after the
+ * player's read, the gain reads short by them, so such a request can move
+ * fewer than the player picked, never more, and loses nothing (#196).
  *
- * @param {Counts[]} rosters - Any number of count maps
- * @returns {string[]} The union of their keys
+ * @param {TransferYard} to - The destination, caught up to now
+ * @param {unknown} fromBlob - The posted source blob, checked for sound counts only
+ * @param {unknown} toBlob - The posted destination blob
+ * @returns {{ moved: Counts } | { bad: string[] }} The counts moved, or the ids whose counts are not sound
  */
-const allIds = (...rosters: Counts[]): string[] => [
-  ...new Set(rosters.flatMap((roster) => Object.keys(roster))),
-];
+export const movedFromBlobs = (
+  to: TransferYard,
+  fromBlob: unknown,
+  toBlob: unknown
+): { moved: Counts } | { bad: string[] } => {
+  const bad = [...new Set([...badQuantities(fromBlob), ...badQuantities(toBlob)])];
+  if (bad.length > 0) return { bad };
+
+  const now = housedCounts(to.stored);
+  const moved: Counts = {};
+  for (const [id, count] of Object.entries(housedCounts(toBlob))) {
+    const gain = count - (now[id] ?? 0);
+    if (gain > 0) moved[id] = gain;
+  }
+  return { moved };
+};
 
 /**
- * Decides whether a monster transfer may be written.
+ * Decides a monster transfer and works out what to write (#196).
  *
  * Ownership is checked by the controller before this runs — both yards already
- * belong to the caller. What is left is whether the two posted blobs describe a
- * move rather than a creation, and whether the destination can house the result.
+ * belong to the caller. The move is `moved`, applied onto the two caught-up
+ * rosters: the source must hold every monster it sends, and the destination
+ * must be able to house what it ends up with, counting any monster that
+ * reached it since the player looked.
  *
- * @param {TransferInput} input - The two yards, the two posted blobs and the caller's Academy levels
- * @returns {TransferVerdict} `{ ok: true }`, or the rule that refused with a player-readable message
+ * @param {TransferInput} input - The two yards, the counts to move and the caller's Academy levels
+ * @returns {TransferVerdict} The two rosters to write, or the rule that refused with a player-readable message
  */
-export const checkMonsterTransfer = ({
+export const planMonsterTransfer = ({
   from,
   to,
-  fromBlob,
-  toBlob,
+  moved,
   monsterLevels,
 }: TransferInput): TransferVerdict => {
   // 1. Endpoints. A yard cannot trade with itself, wild-monster and Inferno
@@ -372,55 +395,51 @@ export const checkMonsterTransfer = ({
       detail: { from: from.type, to: to.type },
     };
 
-  // 2. Quantities. Non-negative whole numbers only, on both blobs.
-  const bad = [...badQuantities(fromBlob), ...badQuantities(toBlob)];
+  // 2. Quantities. Non-negative whole numbers, and at least one monster.
+  const bad = badQuantities({ housed: moved });
 
   if (bad.length > 0)
     return {
       ok: false,
       rule: "quantities",
       message: "that transfer is asking for a number of monsters that cannot exist.",
-      detail: { monsters: [...new Set(bad)] },
+      detail: { monsters: bad },
     };
 
-  const storedFrom = housedCounts(from.stored);
-  const storedTo = housedCounts(to.stored);
-  const nextFrom = housedCounts(fromBlob);
-  const nextTo = housedCounts(toBlob);
+  const counts = housedCounts({ housed: moved });
 
-  const ids = allIds(storedFrom, storedTo, nextFrom, nextTo);
+  if (Object.keys(counts).length === 0)
+    return {
+      ok: false,
+      rule: "quantities",
+      message: "there are no monsters in that transfer.",
+      detail: { monsters: [] },
+    };
 
-  // 3. Holdings. Monsters only ever leave the source in this flow
-  //    (`MapRoom.as:839-841`), so the source may not end up holding more of a
-  //    type than it has.
-  for (const id of ids) {
-    const held = storedFrom[id] ?? 0;
+  // 3. Holdings. The source sends only what it houses now.
+  const fromHoused = housedCounts(from.stored);
+  const toHoused = housedCounts(to.stored);
 
-    if ((nextFrom[id] ?? 0) > held)
+  for (const [id, count] of Object.entries(counts)) {
+    const held = fromHoused[id] ?? 0;
+
+    if (count > held)
       return {
         ok: false,
         rule: "holdings",
         message: "that yard does not have those monsters to send.",
-        detail: { monster: id, claimed: nextFrom[id] ?? 0, held },
+        detail: { monster: id, claimed: count, held },
       };
   }
 
-  // 4. Conservation. A transfer moves monsters; it never makes them.
-  for (const id of ids) {
-    const before = (storedFrom[id] ?? 0) + (storedTo[id] ?? 0);
-    const after = (nextFrom[id] ?? 0) + (nextTo[id] ?? 0);
-
-    if (after > before)
-      return {
-        ok: false,
-        rule: "conservation",
-        message: "that transfer would create monsters out of nothing.",
-        detail: { monster: id, before, after },
-      };
+  for (const [id, count] of Object.entries(counts)) {
+    fromHoused[id] = (fromHoused[id] ?? 0) - count;
+    if (fromHoused[id] === 0) delete fromHoused[id];
+    toHoused[id] = (toHoused[id] ?? 0) + count;
   }
 
-  // 5. Housing. The destination has to be able to house what it ends up with.
-  const used = housingUsed(nextTo, monsterLevels);
+  // 4. Housing. The destination has to be able to house what it ends up with.
+  const used = housingUsed(toHoused, monsterLevels);
 
   if (used > to.capacity)
     return {
@@ -430,5 +449,5 @@ export const checkMonsterTransfer = ({
       detail: { used, capacity: to.capacity },
     };
 
-  return { ok: true };
+  return { ok: true, fromHoused, toHoused };
 };

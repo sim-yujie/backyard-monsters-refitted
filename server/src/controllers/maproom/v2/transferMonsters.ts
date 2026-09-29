@@ -12,27 +12,37 @@ import { monsterTransferRejectedErr, permissionErr } from "../../../errors/error
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import {
   HOUSING_EXPANSION_ITEMS,
-  checkMonsterTransfer,
   deriveHousingCapacity,
+  movedFromBlobs,
+  planMonsterTransfer,
   type TransferYard,
 } from "../../../services/monsters/transferRules.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
 import { catchUpTransferYards } from "../../../services/yard/armies.js";
-import { countsOf } from "../../../services/yard/attackRoster.js";
 import { isAttackActive } from "../../../services/base/isAttackActive.js";
 import { readAttackSession } from "../../../services/base/attackSessionStore.js";
 
+/** A JSON form field, parsed. */
+const jsonField = (name: string) =>
+  z.string().transform((raw, ctx) => {
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${name} is not valid JSON` });
+      return z.NEVER;
+    }
+  });
+
+/**
+ * `moved` is the counts to move (`{"C1": 5}`, the web client, #196);
+ * `monsters` is Flash's pair of replacement blobs, read as the counts they
+ * move (`movedFromBlobs`). One of the two is required.
+ */
 const TransferMonstersScema = z.object({
   frombaseid: z.string(),
   tobaseid: z.string(),
-  monsters: z.string().transform((monsters, ctx) => {
-    try {
-      return JSON.parse(monsters) as unknown;
-    } catch {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "monsters is not valid JSON" });
-      return z.NEVER;
-    }
-  }),
+  moved: jsonField("moved").optional(),
+  monsters: jsonField("monsters").optional(),
 });
 
 /**
@@ -82,13 +92,12 @@ const academyLevels = (
 /**
  * Controller to handle the transfer of monsters between outposts and main yards.
  *
- * The client posts two **complete replacement** `monsters` blobs, one per yard,
- * and the server used to write both verbatim — so a hand-made request could copy
- * an army into the destination without taking it out of the source. Everything
- * past the ownership check is issue #27: quantities, holdings, conservation and
- * the destination's housing capacity, decided by
- * `services/monsters/transferRules.ts`. Both yards are caught up first, and an
- * accepted transfer writes only the two posted `housed` rosters onto them.
+ * The web client posts the counts to move (`moved`); Flash posted two complete
+ * replacement `monsters` blobs, which are read as the counts they move. Both
+ * yards are caught up first, the rules (`services/monsters/transferRules.ts`,
+ * issues #27 and #196) check the endpoints, the counts, what the source houses
+ * and the destination's housing, and an accepted transfer applies the counts to
+ * the two caught-up rosters, so no monster on either yard is overwritten.
  *
  * A transfer that involves an outpost needs both yards on the same world (the
  * outposts plan, WP0), and nothing moves while either yard has an attack
@@ -99,7 +108,7 @@ const academyLevels = (
  * @returns {Promise<void>}
  */
 export const transferMonsters: KoaController = async (ctx) => {
-  const { frombaseid, tobaseid, monsters } = TransferMonstersScema.parse(
+  const { frombaseid, tobaseid, moved, monsters } = TransferMonstersScema.parse(
     ctx.request.body
   );
 
@@ -110,14 +119,19 @@ export const transferMonsters: KoaController = async (ctx) => {
       baseid: frombaseid,
     });
 
-  if (!Array.isArray(monsters) || monsters.length < 2)
+  const request: TransferRequest | null =
+    moved !== undefined
+      ? { moved }
+      : Array.isArray(monsters) && monsters.length >= 2
+        ? { blobs: [monsters[0], monsters[1]] }
+        : null;
+
+  if (!request)
     throw monsterTransferRejectedErr(
       "quantities",
       "that transfer was not sent in a shape the server understands.",
       {}
     );
-
-  const [fromBlob, toBlob] = monsters as [unknown, unknown];
 
   // Determine the order so the query always makes the source base the first result.
   const orderBy = frombaseid > tobaseid ? { baseid: 'DESC' as const } : { baseid: 'ASC' as const };
@@ -185,12 +199,15 @@ export const transferMonsters: KoaController = async (ctx) => {
         });
     }
 
-    await transferBetween(em, currentUser, fromBase, toBase, fromBlob, toBlob);
+    await transferBetween(em, currentUser, fromBase, toBase, request);
   });
 
   ctx.status = Status.OK;
   ctx.body = { error: 0 };
 };
+
+/** What the client asked to move: the counts, or Flash's two replacement blobs. */
+type TransferRequest = { moved: unknown } | { blobs: [unknown, unknown] };
 
 /**
  * The transfer itself, once both yards are locked and quiet: catch up, check
@@ -201,8 +218,7 @@ const transferBetween = async (
   currentUser: User,
   fromBase: Save,
   toBase: Save,
-  fromBlob: unknown,
-  toBlob: unknown
+  request: TransferRequest
 ): Promise<void> => {
   const { baseid: frombaseid } = fromBase;
   const { baseid: tobaseid } = toBase;
@@ -231,11 +247,26 @@ const transferBetween = async (
     capacity: capacityFor(save),
   });
 
-  const verdict = checkMonsterTransfer({
-    from: yardOf(fromBase),
-    to: yardOf(toBase),
-    fromBlob,
-    toBlob,
+  const from = yardOf(fromBase);
+  const to = yardOf(toBase);
+
+  let moved: unknown;
+  if ("moved" in request) moved = request.moved;
+  else {
+    const read = movedFromBlobs(to, ...request.blobs);
+    if ("bad" in read)
+      throw monsterTransferRejectedErr(
+        "quantities",
+        "that transfer is asking for a number of monsters that cannot exist.",
+        { monsters: read.bad, frombaseid, tobaseid }
+      );
+    moved = read.moved;
+  }
+
+  const verdict = planMonsterTransfer({
+    from,
+    to,
+    moved,
     monsterLevels: academyLevels([mainSave?.academy, fromBase.academy, toBase.academy]),
   });
 
@@ -246,10 +277,11 @@ const transferBetween = async (
       tobaseid,
     });
 
-  // Only the rosters move. The hatchery state stays the server's: the posted
-  // blobs are the client's copies, and their `h`/`hcc`/`saved` may be older.
-  fromBase.monsters = { ...(fromBase.monsters ?? {}), housed: countsOf((fromBlob as JsonObject | null)?.housed) };
-  toBase.monsters = { ...(toBase.monsters ?? {}), housed: countsOf((toBlob as JsonObject | null)?.housed) };
+  // The move lands on the caught-up rosters as a delta (#196): a monster that
+  // hatched on either yard since the player's map read stays where it is, and
+  // the hatchery state stays the server's.
+  fromBase.monsters = { ...(fromBase.monsters ?? {}), housed: verdict.fromHoused };
+  toBase.monsters = { ...(toBase.monsters ?? {}), housed: verdict.toHoused };
 
   em.persist([fromBase, toBase]);
   await em.flush();

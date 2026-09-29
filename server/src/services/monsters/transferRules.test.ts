@@ -3,11 +3,12 @@ import {
   HOUSING_BUNKER_BUILDING_TYPE,
   HOUSING_BUILDING_TYPE,
   badQuantities,
-  checkMonsterTransfer,
   deriveHousingCapacity,
   housedCounts,
   housingUsed,
   monsterStorage,
+  movedFromBlobs,
+  planMonsterTransfer,
   queuedProduction,
   type TransferInput,
   type TransferYard,
@@ -42,27 +43,24 @@ const yard = (overrides: Partial<TransferYard> = {}): TransferYard => ({
 });
 
 const transfer = (overrides: Partial<TransferInput> = {}): TransferInput => ({
-  from: yard({ baseid: "1001", type: BaseType.MAIN }),
+  from: yard({ baseid: "1001", type: BaseType.MAIN, stored: { housed: { C4: 10 } } }),
   to: yard({ baseid: "2002", type: BaseType.OUTPOST }),
-  fromBlob: { housed: {} },
-  toBlob: { housed: {} },
+  moved: { C4: 1 },
   ...overrides,
 });
 
-/** A main yard holding `housed`, and an empty outpost with `capacity` space. */
+/** Moves `moved` from a main yard holding `storedFrom` to an outpost holding `storedTo`. */
 const move = (
   storedFrom: Record<string, number>,
   storedTo: Record<string, number>,
-  nextFrom: Record<string, number>,
-  nextTo: Record<string, number>,
+  moved: unknown,
   overrides: Partial<TransferInput> = {}
 ) =>
-  checkMonsterTransfer(
+  planMonsterTransfer(
     transfer({
       from: yard({ baseid: "1001", type: BaseType.MAIN, stored: { housed: storedFrom } }),
       to: yard({ baseid: "2002", type: BaseType.OUTPOST, stored: { housed: storedTo } }),
-      fromBlob: { housed: nextFrom },
-      toBlob: { housed: nextTo },
+      moved,
       ...overrides,
     })
   );
@@ -210,30 +208,29 @@ describe("deriveHousingCapacity", () => {
   });
 });
 
-describe("checkMonsterTransfer — endpoints", () => {
+describe("planMonsterTransfer — endpoints", () => {
   test("accepts a main yard sending to an outpost", () => {
-    expect(move({ C4: 10 }, {}, { C4: 4 }, { C4: 6 }).ok).toBe(true);
+    expect(move({ C4: 10 }, {}, { C4: 6 })).toEqual({
+      ok: true,
+      fromHoused: { C4: 4 },
+      toHoused: { C4: 6 },
+    });
   });
 
   test("accepts an outpost sending back to the main yard", () => {
-    const verdict = move(
-      { C4: 10 },
-      {},
-      { C4: 4 },
-      { C4: 6 },
-      {
+    const verdict = planMonsterTransfer(
+      transfer({
         from: yard({ baseid: "2002", type: BaseType.OUTPOST, stored: { housed: { C4: 10 } } }),
         to: yard({ baseid: "1001", type: BaseType.MAIN, stored: { housed: {} } }),
-        fromBlob: { housed: { C4: 4 } },
-        toBlob: { housed: { C4: 6 } },
-      }
+        moved: { C4: 6 },
+      })
     );
 
-    expect(verdict.ok).toBe(true);
+    expect(verdict).toMatchObject({ ok: true, fromHoused: { C4: 4 }, toHoused: { C4: 6 } });
   });
 
   test("refuses a yard sending to itself", () => {
-    const verdict = checkMonsterTransfer(
+    const verdict = planMonsterTransfer(
       transfer({ to: yard({ baseid: "1001", type: BaseType.OUTPOST }) })
     );
 
@@ -241,7 +238,7 @@ describe("checkMonsterTransfer — endpoints", () => {
   });
 
   test("refuses main to main, since one end has to be an outpost", () => {
-    const verdict = checkMonsterTransfer(
+    const verdict = planMonsterTransfer(
       transfer({ to: yard({ baseid: "2002", type: BaseType.MAIN }) })
     );
 
@@ -249,7 +246,7 @@ describe("checkMonsterTransfer — endpoints", () => {
   });
 
   test("refuses a wild monster camp as an endpoint", () => {
-    const verdict = checkMonsterTransfer(
+    const verdict = planMonsterTransfer(
       transfer({ to: yard({ baseid: "2002", type: BaseType.TRIBE }) })
     );
 
@@ -257,101 +254,83 @@ describe("checkMonsterTransfer — endpoints", () => {
   });
 });
 
-describe("checkMonsterTransfer — quantities", () => {
+describe("planMonsterTransfer — quantities", () => {
   test("refuses a fractional count", () => {
-    expect(move({ C4: 10 }, {}, { C4: 4.5 }, { C4: 5.5 })).toMatchObject({
+    expect(move({ C4: 10 }, {}, { C4: 5.5 })).toMatchObject({ ok: false, rule: "quantities" });
+  });
+
+  test("refuses a negative count, which would move monsters the other way", () => {
+    expect(move({ C4: 10 }, { C4: 5 }, { C4: -5 })).toMatchObject({
       ok: false,
       rule: "quantities",
+      detail: { monsters: ["C4"] },
     });
   });
 
-  test("refuses a negative count", () => {
-    expect(move({ C4: 10 }, {}, { C4: -5 }, { C4: 15 })).toMatchObject({
-      ok: false,
-      rule: "quantities",
-    });
+  test("refuses a transfer of nothing, and one that is not a count map", () => {
+    expect(move({ C4: 10 }, {}, {})).toMatchObject({ ok: false, rule: "quantities" });
+    expect(move({ C4: 10 }, {}, { C4: 0 })).toMatchObject({ ok: false, rule: "quantities" });
+    expect(move({ C4: 10 }, {}, [5])).toMatchObject({ ok: false, rule: "quantities" });
   });
 });
 
-describe("checkMonsterTransfer — holdings", () => {
-  test("refuses sending more monsters than the source holds", () => {
-    expect(move({ C4: 3 }, {}, {}, { C4: 30 })).toMatchObject({
-      ok: false,
-      rule: "conservation",
-    });
-  });
-
-  test("refuses a source that ends up holding more than it could have", () => {
-    expect(move({ C4: 3 }, { C4: 20 }, { C4: 10 }, { C4: 13 })).toMatchObject({
+describe("planMonsterTransfer — holdings", () => {
+  test("refuses sending more monsters than the source houses now", () => {
+    expect(move({ C4: 3 }, {}, { C4: 30 })).toMatchObject({
       ok: false,
       rule: "holdings",
-      detail: { monster: "C4", claimed: 10, held: 3 },
+      detail: { monster: "C4", claimed: 30, held: 3 },
     });
   });
 
-  test("refuses a monster type the source never had", () => {
-    expect(move({ C4: 3 }, {}, { C4: 3 }, { C12: 1 })).toMatchObject({
+  test("refuses a monster type the source does not have", () => {
+    expect(move({ C4: 3 }, {}, { C12: 1 })).toMatchObject({
       ok: false,
-      rule: "conservation",
+      rule: "holdings",
+      detail: { monster: "C12", held: 0 },
     });
-  });
-});
-
-describe("checkMonsterTransfer — conservation", () => {
-  test("refuses totals that do not add up", () => {
-    expect(move({ C4: 10 }, { C4: 2 }, { C4: 10 }, { C4: 12 })).toMatchObject({
-      ok: false,
-      rule: "conservation",
-      detail: { monster: "C4", before: 12, after: 22 },
-    });
-  });
-
-  test("allows losing monsters, which is what a partial client blob looks like", () => {
-    expect(move({ C4: 10 }, {}, { C4: 4 }, { C4: 5 }).ok).toBe(true);
   });
 
   test("counts only what is housed: a monster still in a hatchery moves nowhere (#131)", () => {
     // The yard is caught up before the rules run, so its queue is work not yet done.
     const stored = { housed: { C1: 2 }, h: [["C1", 9, [["C1", 20]]]], hcc: [] };
+    const from = yard({ baseid: "1001", type: BaseType.MAIN, stored });
 
-    const verdict = checkMonsterTransfer(
-      transfer({
-        from: yard({ baseid: "1001", type: BaseType.MAIN, stored }),
-        fromBlob: { housed: { C1: 0 } },
-        toBlob: { housed: { C1: 3 } },
-      })
-    );
-
-    expect(verdict).toMatchObject({ ok: false, rule: "conservation", detail: { before: 2, after: 3 } });
-    expect(
-      checkMonsterTransfer(
-        transfer({
-          from: yard({ baseid: "1001", type: BaseType.MAIN, stored }),
-          fromBlob: { housed: { C1: 0 } },
-          toBlob: { housed: { C1: 2 } },
-        })
-      ).ok
-    ).toBe(true);
-  });
-
-  test("refuses a source keeping a queued monster it never housed (#131)", () => {
-    const stored = { housed: { C1: 2 }, h: [["C1", 9, []]], hcc: [] };
-
-    const verdict = checkMonsterTransfer(
-      transfer({
-        from: yard({ baseid: "1001", type: BaseType.MAIN, stored }),
-        fromBlob: { housed: { C1: 3 } },
-        toBlob: { housed: {} },
-      })
-    );
-
-    expect(verdict).toMatchObject({ ok: false, rule: "holdings", detail: { held: 2, claimed: 3 } });
+    expect(planMonsterTransfer(transfer({ from, moved: { C1: 3 } }))).toMatchObject({
+      ok: false,
+      rule: "holdings",
+      detail: { held: 2, claimed: 3 },
+    });
+    expect(planMonsterTransfer(transfer({ from, moved: { C1: 2 } })).ok).toBe(true);
   });
 });
 
-describe("checkMonsterTransfer — capacity", () => {
+describe("planMonsterTransfer — the move lands on the rosters as they are now (#196)", () => {
+  test("keeps a monster hatched at the source after the player's read", () => {
+    // The player saw 10 Pokeys and sent 5; an eleventh hatched before the transfer.
+    expect(move({ C1: 11 }, {}, { C1: 5 })).toMatchObject({
+      ok: true,
+      fromHoused: { C1: 6 },
+      toHoused: { C1: 5 },
+    });
+  });
+
+  test("keeps a monster hatched at the destination, and every type not moved", () => {
+    expect(move({ C1: 10, C4: 2 }, { C1: 1, C12: 3 }, { C1: 5 })).toMatchObject({
+      ok: true,
+      fromHoused: { C1: 5, C4: 2 },
+      toHoused: { C1: 6, C12: 3 },
+    });
+  });
+
+  test("drops a type the source sent all of from its roster", () => {
+    expect(move({ C4: 4 }, {}, { C4: 4 })).toMatchObject({ ok: true, fromHoused: {} });
+  });
+});
+
+describe("planMonsterTransfer — capacity", () => {
   test("refuses a destination that cannot house the result", () => {
-    const verdict = move({ C15: 20 }, {}, { C15: 9 }, { C15: 11 }, {
+    const verdict = move({ C15: 20 }, {}, { C15: 11 }, {
       to: yard({ baseid: "2002", type: BaseType.OUTPOST, stored: { housed: {} }, capacity: 2000 }),
     });
 
@@ -362,8 +341,16 @@ describe("checkMonsterTransfer — capacity", () => {
     });
   });
 
+  test("counts what reached the destination since the read (#196)", () => {
+    const verdict = move({ C15: 20 }, { C15: 1 }, { C15: 10 }, {
+      to: yard({ baseid: "2002", type: BaseType.OUTPOST, stored: { housed: { C15: 1 } }, capacity: 2000 }),
+    });
+
+    expect(verdict).toMatchObject({ ok: false, rule: "capacity", detail: { used: 2200 } });
+  });
+
   test("accepts a destination filled exactly to capacity", () => {
-    const verdict = move({ C15: 20 }, {}, { C15: 10 }, { C15: 10 }, {
+    const verdict = move({ C15: 20 }, {}, { C15: 10 }, {
       to: yard({ baseid: "2002", type: BaseType.OUTPOST, stored: { housed: {} }, capacity: 2000 }),
     });
 
@@ -371,7 +358,7 @@ describe("checkMonsterTransfer — capacity", () => {
   });
 
   test("refuses any transfer into an outpost with no housing built yet", () => {
-    const verdict = move({ C4: 10 }, {}, { C4: 9 }, { C4: 1 }, {
+    const verdict = move({ C4: 10 }, {}, { C4: 1 }, {
       to: yard({ baseid: "2002", type: BaseType.OUTPOST, stored: {}, capacity: 0 }),
     });
 
@@ -382,23 +369,32 @@ describe("checkMonsterTransfer — capacity", () => {
     const from = yard({ baseid: "1001", type: BaseType.MAIN, stored: { housed: { C1: 300 } } });
     const to = yard({ baseid: "2002", type: BaseType.OUTPOST, stored: { housed: {} }, capacity: 2160 });
 
-    const atLevelOne = checkMonsterTransfer({
-      from,
-      to,
-      fromBlob: { housed: { C1: 80 } },
-      toBlob: { housed: { C1: 220 } },
-    });
-
-    const atLevelSix = checkMonsterTransfer({
-      from,
-      to,
-      fromBlob: { housed: { C1: 80 } },
-      toBlob: { housed: { C1: 220 } },
-      monsterLevels: { C1: 6 },
-    });
+    const atLevelOne = planMonsterTransfer({ from, to, moved: { C1: 220 } });
+    const atLevelSix = planMonsterTransfer({ from, to, moved: { C1: 220 }, monsterLevels: { C1: 6 } });
 
     // 220 Pokeys cost 2,200 space at level 1 and 1,540 at level 6.
     expect(atLevelOne).toMatchObject({ ok: false, rule: "capacity" });
     expect(atLevelSix.ok).toBe(true);
+  });
+});
+
+describe("movedFromBlobs — Flash's replacement blobs", () => {
+  const to = yard({ baseid: "2002", type: BaseType.OUTPOST, stored: { housed: { C4: 2 } } });
+
+  test("reads the destination's gain over its roster now as the counts moved", () => {
+    expect(movedFromBlobs(to, { housed: { C4: 4 } }, { housed: { C4: 8, C1: 3 } })).toEqual({
+      moved: { C4: 6, C1: 3 },
+    });
+  });
+
+  test("moves fewer, never more, when the destination hatched since the read (#196)", () => {
+    // The player saw 1 Fink there and sent 5; a second hatched before the transfer.
+    expect(movedFromBlobs(to, { housed: {} }, { housed: { C4: 6 } })).toEqual({ moved: { C4: 4 } });
+  });
+
+  test("names unsound counts in either blob", () => {
+    expect(movedFromBlobs(to, { housed: { C4: 4.5 } }, { housed: { C1: -1 } })).toEqual({
+      bad: ["C4", "C1"],
+    });
   });
 });

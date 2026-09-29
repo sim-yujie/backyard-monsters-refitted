@@ -845,7 +845,7 @@ export class MapRoom2Scene implements Scene {
           return { baseid, housed: housedOf(payload), space: spaceOf(payload) };
         },
         sizeOf: (id) => housingSpace(id, academyLevel(save.academy, id)) ?? 1,
-        send: (fromId, toId, rosters) => transferMonsters(fromId, toId, rosters),
+        send: (fromId, toId, moved) => transferMonsters(fromId, toId, moved),
         onMoved: (fromId, toId, message) => {
           for (const id of [fromId, toId]) {
             const cell = cells.get(id);

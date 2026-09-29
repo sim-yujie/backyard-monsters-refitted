@@ -624,7 +624,7 @@ live from a noise function seeded by the world's uuid, and is not persisted.
 | POST | `/worldmapv2/takeoverCell` | verifyUserAuth, verifyAccountStatus, logRequest | `TakeoverCellSchema`: `{ baseid, resources?: JSON, shiny?→number }` | `{ error: 0 }` | Converts a ≥90%-damaged Map Room 2 cell in the caller's world into the caller's outpost: charges the server's price (`takeoverCost.ts`; a positive `shiny` picks Shiny, the posted amounts are ignored), evicts any previous owner, grants a 12h protection window. Eligibility is `services/maproom/v2/takeoverRules.ts` (issue #182): never a main yard or the caller's own cell; a **wild camp** follows Flash (anyone in range, destroyed, not regenerated 12 h after its last save, not protected, not locked by someone else, no attack running); a **player outpost** can be taken only by the attacker holding its one-time takeover grant (see "Takeover grants" below), which the takeover spends; and the caller must be under 3,500 outposts. Range is `validateRange`. Checks and writes run in one transaction with the caller's main yard, the target and the previous owner's main yard locked. Refused with `takeoverRefusedErr(reason)` (HTTP 200, `error` set, `reason` in `data`). |
 | POST | `/worldmapv2/takeoverquote` | verifyUserAuth, verifyAccountStatus, takeoverQuoteLimiter (60/min per user), logRequest | `{ baseid }` | `{ error: 0, baseid, kind?: "camp" \| "outpost", eligible, reason, resources?, shiny?, adjacent?, grantExpiresAt?, affordable?: { resources, shiny }, shinyLocked?, now }` | What taking a Map Room 2 cell over would cost the caller and whether `takeoverCell` would allow it now (issue #82). Runs `takeoverRules.ts` on the same rows, unlocked, then the range rule (`rangeCheckV2`, reported as `outOfRange` instead of thrown), and prices with `quoteTakeover`. `reason` is null when eligible, else a `TakeoverRefusal` or `outOfRange`; payment is answered per way in `affordable`, never as a reason. `grantExpiresAt` is set only on a player outpost while the caller holds its takeover grant; a player outpost without one answers `noTakeoverChance`. A wild camp never attacked has no cell row: it is priced from the coordinates in its id and answers `notDestroyed`. An id that is not a cell of the caller's world, or is water, answers `eligible: false, reason: "notFound"` with no price. Always HTTP 200. `now` is server seconds, for countdowns. |
 | POST | `/worldmapv2/declinetakeover` | verifyUserAuth, verifyAccountStatus, logRequest | `{ baseid }` | `{ error: 0, protectedUntil }` | The attacker turns down their one-time takeover grant on an outpost (issue #182): the grant ends and the outpost's 8 hours of damage protection start now. Only the grant's holder, and only while it runs; otherwise `takeoverRefusedErr("noTakeoverChance")`. |
-| POST | `/worldmapv2/transferassets` | verifyUserAuth, verifyAccountStatus, logRequest | `{ frombaseid, tobaseid, monsters: JSON [sourceMonsters, targetMonsters] }` — two **complete replacement** `monsters` blobs, not a delta | `{ error: 0 }`; `{ error: 1 }` with a 400/403 status if a `baseid` doesn't resolve or the two bases have different owners; `permissionErr()` (403) if either base isn't the caller's; `monsterTransferRejectedErr()` (200 + `error`) if a transfer rule refuses | Moves a monster garrison between two of the caller's own bases (main yard ↔ outpost). Both yards' monsters are first caught up to now (issue #103). Since issue #27 the two blobs are validated against those caught-up rows before anything is written (see "Monster transfer rules" below). An accepted transfer writes only the two posted `housed` rosters onto the caught-up blobs. The hatchery state (`h`, `hcc`, `saved`, …) stays the server's. A transfer involving an outpost is refused (`rule: "world"`) unless both yards' map cells are on the same world, and any transfer is refused (`rule: "underAttack"`) while either yard has an attack running; the check and the write run in one transaction with the main yard's row locked first, then the two yards (outposts plan WP0). |
+| POST | `/worldmapv2/transferassets` | verifyUserAuth, verifyAccountStatus, logRequest | `{ frombaseid, tobaseid, moved: JSON { id: count } }` — the counts moved (the web client, #196); or Flash's `monsters: JSON [sourceMonsters, targetMonsters]`, two complete replacement blobs, read as the counts they move | `{ error: 0 }`; `{ error: 1 }` with a 400/403 status if a `baseid` doesn't resolve or the two bases have different owners; `permissionErr()` (403) if either base isn't the caller's; `monsterTransferRejectedErr()` (200 + `error`) if a transfer rule refuses | Moves a monster garrison between two of the caller's own bases (main yard ↔ outpost). Both yards' monsters are first caught up to now (issue #103). Since issue #27 the two blobs are validated against those caught-up rows before anything is written (see "Monster transfer rules" below). An accepted transfer applies the counts to the two caught-up `housed` rosters as a delta (#196), so a monster that hatched on either yard since the player's map read stays where it is; the hatchery state (`h`, `hcc`, `saved`, …) stays the server's. A transfer involving an outpost is refused (`rule: "world"`) unless both yards' map cells are on the same world, and any transfer is refused (`rule: "underAttack"`) while either yard has an attack running; the check and the write run in one transaction with the main yard's row locked first, then the two yards (outposts plan WP0). |
 | POST | `/api/:apiVersion/player/savebookmarks` | apiVersion, verifyUserAuth, verifyAccountStatus, logRequest | `{ bookmarks: JSON string }` (no zod schema) | `{ error: 0 }` | Persists the player's map bookmark list onto `user.bookmarks`. |
 
 **MR2 cell payload.** `b` (base_type, `MapRoomCell`): `1`=wild monster camp, `2`=own/other
@@ -662,19 +662,22 @@ r1..r4) and `shiny` are the price `takeoverCell` will charge (`takeoverOffer.ts`
 is unchanged (8 h, no grant). Wild camps have no grant: anyone in range may take a destroyed camp
 until it regenerates, 12 h after its last save.
 
-**Monster transfer rules** (`services/monsters/transferRules.ts`, issue #27). `transferassets`
-posts a *replacement* `monsters` blob for each yard, so before the revamp branch a hand-made
-request could hand the destination a copy of the source's army and leave the source untouched —
-monster duplication in one request. Five rules now run after the ownership check, in this order,
-and the first one to refuse names itself in `data.rule`:
+**Monster transfer rules** (`services/monsters/transferRules.ts`, `planMonsterTransfer`, issues
+#27 and #196). Flash's `transferassets` posted a *replacement* `monsters` blob for each yard, so
+before the revamp branch a hand-made request could hand the destination a copy of the source's
+army and leave the source untouched — monster duplication in one request — and writing the posted
+rosters whole later dropped any monster that hatched between the map read and the transfer. A
+transfer is now the counts moved (`moved`; a Flash request's are the destination's gain over its
+roster now, `movedFromBlobs`, which can move fewer than picked, never more), applied onto both
+caught-up rosters, so it can neither create nor lose a monster. Four rules run after the ownership
+check, in this order, and the first one to refuse names itself in `data.rule`:
 
 | `rule` | What it refuses | Refusal `data` |
 |---|---|---|
 | `endpoints` | A yard sending to itself, an endpoint that is not a main yard or an outpost, or a main-to-main move — the client only offers the flow to a player holding at least one outpost | `baseid`, or `from`/`to` base types |
-| `quantities` | A `housed` count that is not a non-negative whole number, or a `housed` field that is not an object | `monsters` (the offending ids) |
-| `holdings` | The source ending up with more of a type than it could have held | `monster`, `claimed`, `held` |
-| `conservation` | The two yards' combined total for a type rising | `monster`, `before`, `after` |
-| `capacity` | The destination's resulting roster not fitting its Monster Housing | `used`, `capacity` |
+| `quantities` | A count that is not a non-negative whole number, counts that are not an object, or nothing to move | `monsters` (the offending ids) |
+| `holdings` | Sending more of a type than the source houses now | `monster`, `claimed`, `held` |
+| `capacity` | The destination's resulting roster, whatever it houses now plus what moved, not fitting its Monster Housing | `used`, `capacity` |
 
 Capacity is derived from the destination's own `buildingdata` — every type-15 Monster Housing that
 has finished building and is above 10 health, at its stored level, against the Map Room 2 capacity
@@ -683,13 +686,10 @@ in `storedata`. The client-written `space` field on the `monsters` blob is **not
 this. Monster Bunkers and champions are separate pools and add nothing. Housing space per monster
 (`cStorage`) is read at the caller's Monster Academy level, which only changes the answer for `C1`.
 
-`conservation` is checked against the stored totals **plus a production allowance**, because the
-map ticks hatchery production locally and adds finished monsters to `housed`
-(`MapRoomCell.as:800-811`) — a yard last saved long ago legitimately shows more monsters than the
-server stored. The allowance is the hatchery work the stored blob already carries (the monster in
-production, the per-hatchery queues and the shared HCC queue), capped by how many of that type the
-yard could house at all. It is deliberate, bounded slack; closing it entirely needs a
-server-authoritative production replay.
+Both yards are caught up before the rules read them (`catchUpTransferYards`), and the map shows
+own rosters caught up the same way, so `holdings` is checked against the caught-up `housed` alone:
+a monster still in a hatchery is not housed anywhere and cannot be moved (#131). The production
+allowance the rules used to add, for the Flash map's local hatchery ticks, is gone.
 
 Refusals use `monsterTransferRejectedErr()`, which is `isClientFriendly: false` — HTTP **200** with
 `error` set to a readable sentence fragment. That is the only shape the Flash client shows the

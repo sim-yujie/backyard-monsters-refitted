@@ -699,9 +699,9 @@ changes both ends:
   attacks.
 
 **Map and transfers.** `userCell.ts` publishes `m` for own cells from an in-memory catch-up (§2.3).
-`transferMonsters.ts` catches up both yards before `checkMonsterTransfer`, so the rules check
-strict conservation against the caught-up `housed` rosters; the old production allowance is gone
-(#131, §11 follow-ups).
+`transferMonsters.ts` catches up both yards before `planMonsterTransfer`, which checks the counts
+moved against the caught-up `housed` rosters (the old production allowance is gone, #131) and
+applies them to both as a delta, so a monster hatched since the map read is kept (#196).
 
 ### 4.7 Save format for Phase 2
 

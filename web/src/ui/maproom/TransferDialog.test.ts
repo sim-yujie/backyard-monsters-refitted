@@ -101,7 +101,7 @@ describe("TransferDialog", () => {
     expect(dialog.picks).toEqual({ C1: 12 });
   });
 
-  it("sends both whole rosters after the move, source first, and says it is done", async () => {
+  it("sends the counts moved, and says it is done (#196)", async () => {
     const { options } = await open();
     const c1 = host.querySelectorAll(".transfer-row")[0]!;
     const input = c1.querySelector<HTMLInputElement>("input")!;
@@ -110,10 +110,7 @@ describe("TransferDialog", () => {
     expect(go().textContent).toBe("Transfer 5");
     go().click();
     await flush();
-    expect(options.send).toHaveBeenCalledWith(MAIN, OUTPOST, [
-      { housed: { C1: 25, C2: 10 } },
-      { housed: { C1: 13 } },
-    ]);
+    expect(options.send).toHaveBeenCalledWith(MAIN, OUTPOST, { C1: 5 });
     expect(options.onMoved).toHaveBeenCalledWith(MAIN, OUTPOST, "All monsters successfully transferred.");
     expect(host.querySelector(".popup-backdrop")).toBeNull();
   });

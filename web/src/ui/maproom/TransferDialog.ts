@@ -6,7 +6,6 @@ import {
   maxOf,
   partlyMovedText,
   totalOf,
-  transferBlobs,
   type TransferYard,
 } from "@/game/maproom/moveYards";
 import { monsterName, portraitUrl } from "@/ui/attack/ArmyPanel";
@@ -44,12 +43,8 @@ export interface TransferDialogOptions {
   readonly load: (baseid: string) => Promise<TransferYard>;
   /** Housing space one monster of a type takes, at the player's academy level. */
   readonly sizeOf: (id: string) => number;
-  /** Sends the two rosters; rejects with the server's refusal. */
-  readonly send: (
-    from: string,
-    to: string,
-    rosters: readonly [{ housed: Record<string, number> }, { housed: Record<string, number> }],
-  ) => Promise<unknown>;
+  /** Sends the counts moved (#196); rejects with the server's refusal. */
+  readonly send: (from: string, to: string, moved: Readonly<Record<string, number>>) => Promise<unknown>;
   /** The move went through. The dialog has closed itself by then. */
   readonly onMoved: (from: string, to: string, message: string) => void;
 }
@@ -278,7 +273,7 @@ export class TransferDialog {
     this.showStatus(TRANSFER_TEXT.busy, false);
     this.render();
     try {
-      await this.options.send(from.baseid, to.baseid, transferBlobs(from, to, moved));
+      await this.options.send(from.baseid, to.baseid, moved);
     } catch (caught) {
       this.busy = false;
       this.showStatus(TRANSFER_TEXT.problem + messageOf(caught), true);

@@ -61,7 +61,7 @@ opaque JSON and re-serves it.
 | Bunker capacity and contents | **Client only** | `BUILDING22.as:294-320` |
 | Champion level, feeds, food bonus, power level | **Client**, except during an attack | `CHAMPIONCAGE.as:682-877`; attack-time clamp at `server/src/controllers/base/save/handlers/championHandler.ts:17-27` |
 | Shiny spend | **Server**, via the purchase handler | `server/src/controllers/base/save/baseSave.ts:148` |
-| Monster transfer between yards | **Server** checks ownership, endpoints, quantities, holdings, conservation and destination housing | `server/src/controllers/maproom/v2/transferMonsters.ts`, `server/src/services/monsters/transferRules.ts`; see [§9](#9-transfers-between-yards) |
+| Monster transfer between yards | **Server** checks ownership, endpoints, quantities, holdings and destination housing, and applies the counts moved to both caught-up rosters (#196) | `server/src/controllers/maproom/v2/transferMonsters.ts`, `server/src/services/monsters/transferRules.ts`; see [§9](#9-transfers-between-yards) |
 
 The only server-side monster logic outside combat is: the academy level clamp, the champion `hp`
 clamp during an attack, the transfer rules in [§9](#9-transfers-between-yards), and the post-attack
@@ -1136,23 +1136,25 @@ shared-`saveuserid` test alone would let any authenticated player rewrite anothe
 garrisons. The check was added on the revamp branch; `docs/specs/maproom2.md` (open question 8)
 records the original gap as resolved.
 
-#### The five rules (issue #27)
+#### The rules (issues #27, #196)
 
 Until issue #27 the server assigned `fromBase.monsters = fromMonsters` and
 `toBase.monsters = toMonsters` verbatim, checking neither quantities, nor `cStorage` totals against
 the target's housing capacity, nor whether the source ever had those monsters, nor that the two
 blobs conserved anything. Monster duplication across two owned yards was a one-request operation.
 
-`checkMonsterTransfer()` now decides the request. The rules run in this order and the first refusal
-names itself in `data.rule`:
+`planMonsterTransfer()` now decides the request, as the counts moved (#196: the web client posts
+them as `moved`; a Flash pair of blobs is read as the destination's gain over its roster now), and
+works out the two rosters to write: the caught-up source less the counts, the caught-up destination
+plus them. A delta can neither create a monster nor drop one that hatched since the player's map
+read. The rules run in this order and the first refusal names itself in `data.rule`:
 
 | `rule` | What it refuses |
 | --- | --- |
 | `endpoints` | A yard sending to itself, an endpoint that is not `main` or `outpost`, or a main-to-main move — `PopupInfoMine.as:80-84` only offers the flow to a player holding an outpost, so one end is always one |
-| `quantities` | A `housed` count that is not a non-negative whole number |
-| `holdings` | The source ending up holding more of a type than it could have had — the client only ever decrements the source (`MapRoom.as:839-841`) |
-| `conservation` | The two yards' combined total for a type rising |
-| `capacity` | The destination's resulting roster not fitting its Monster Housing |
+| `quantities` | A count that is not a non-negative whole number, or nothing to move |
+| `holdings` | Sending more of a type than the source houses now — the client only ever decrements the source (`MapRoom.as:839-841`) |
+| `capacity` | The destination's resulting roster, what it houses now plus what moved, not fitting its Monster Housing |
 
 **Capacity** is derived from the destination's own `buildingdata`, not from the client-written
 `space` field on its `monsters` blob. It mirrors `HOUSING.HousingSpace()` ([§6.1](#61-monster-housing)):
@@ -1163,13 +1165,13 @@ for completeness. Monster Bunkers ([§6.3](#63-monster-bunker)) and champions ar
 add nothing. `cStorage` is read at the caller's Academy level, which only changes the answer for
 `C1` (10, 10, 10, 9, 8, 7).
 
-**Conservation is strict.** The Flash map replayed a cell forward from the stored blob's `saved`
+**No allowance.** The Flash map replayed a cell forward from the stored blob's `saved`
 and **added finished monsters to `housed`** (`MapRoomCell.Tick`, `MapRoomCell.as:800-811`), so a
 yard last saved long ago showed more monsters than the server stored, and the rules used to allow
 the stored hatchery queues (capped at a yard-full per type) on top of `housed`. The server now
 replays production itself: `transferMonsters.ts` catches both yards up to the moment of the
 transfer (`catchUpTransferYards`) before the rules read them, and the map shows rosters caught up
-the same way. Totals are checked against the caught-up `housed` alone; a monster still in a
+the same way. Holdings are checked against the caught-up `housed` alone; a monster still in a
 hatchery is not housed anywhere and cannot be moved (#131).
 
 An accepted transfer is still written byte-for-byte as it was before — both blobs verbatim, so the

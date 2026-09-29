@@ -11,7 +11,6 @@ import {
   partlyMovedText,
   relocateAffordable,
   spaceOf,
-  transferBlobs,
   type TransferYard,
 } from "./moveYards";
 
@@ -73,19 +72,6 @@ describe("maxOf", () => {
     expect(maxOf("C1", { C2: 3 }, from, to, sizeOf)).toBe(6);
     expect(maxOf("C2", { C1: 12 }, from, to, sizeOf)).toBe(0);
     expect(maxOf("C2", {}, from, yard({}, 1_000), sizeOf)).toBe(10);
-  });
-});
-
-describe("transferBlobs", () => {
-  it("is both yards' whole rosters after the move, source first", () => {
-    const from = yard({ C1: 10, C2: 2 }, 100, "main");
-    const to = yard({ C1: 1, C3: 1 }, 100, "op");
-    expect(transferBlobs(from, to, { C1: 4, C2: 2 })).toEqual([
-      { housed: { C1: 6 } },
-      { housed: { C1: 5, C2: 2, C3: 1 } },
-    ]);
-    // The inputs are left alone.
-    expect(from.housed).toEqual({ C1: 10, C2: 2 });
   });
 });
 

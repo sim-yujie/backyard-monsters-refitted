@@ -149,17 +149,19 @@ export const moveMainYard = (baseid: string, payment: RelocatePayment): Promise<
 
 /**
  * Moves monsters between two of the player's yards
- * (`POST /worldmapv2/transferassets`): both yards' whole `housed` rosters
- * after the move, source first, as Flash posted them (`MapRoom.as:856-888`).
- * The server checks the move conserves monsters and fits the target's housing.
+ * (`POST /worldmapv2/transferassets`): the counts moved, `{ C1: 5 }` (#196).
+ * The server applies them to both yards' rosters as it has them now, so a
+ * monster that hatched since the map was read stays where it is; Flash posted
+ * both whole rosters instead (`MapRoom.as:856-888`), which dropped it. The
+ * server checks the source houses them and the target can house the result.
  */
 export const transferMonsters = (
   frombaseid: string,
   tobaseid: string,
-  rosters: readonly [{ housed: Record<string, number> }, { housed: Record<string, number> }],
+  moved: Readonly<Record<string, number>>,
 ): Promise<ApiEnvelope> =>
   post<ApiEnvelope>("/worldmapv2/transferassets", {
     frombaseid,
     tobaseid,
-    monsters: JSON.stringify(rosters),
+    moved: JSON.stringify(moved),
   });
