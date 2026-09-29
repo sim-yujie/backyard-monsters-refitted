@@ -44,6 +44,7 @@ import { yardShopBuyAction } from "./shopBuy.js";
 import { yardStarterKitAction } from "./starterKit.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { yardStateAction } from "./state.js";
+import { yardPlaceDecorationAction } from "./decor.js";
 import { yardRoute } from "./yardRoute.js";
 import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
 
@@ -109,4 +110,5 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "fortify", controller: yardRoute(yardFortifyAction) },
   { path: "fortify/cancel", controller: yardRoute(yardCancelFortifyAction) },
   { path: "starterkit", controller: yardRoute(yardStarterKitAction) },
+  { path: "decor/place", controller: yardRoute(yardPlaceDecorationAction) },
 ];

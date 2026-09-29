@@ -290,6 +290,13 @@ export const YardCancelFortifySchema = z.object({ id: BuildingIdField });
  * Ultra), how it is paid for, and the Shiny top-up the player agreed to when
  * the pool is short (`services/yard/starterKit.ts`).
  */
+/** `POST /bm/yard/decor/place`: a decoration out of storage, and where (#128). */
+export const YardPlaceDecorationSchema = z.object({
+  type: z.coerce.number().int().positive(),
+  x: YardCoordinateField,
+  y: YardCoordinateField,
+});
+
 export const YardStarterKitSchema = z.object({
   kit: z.coerce.number().int().min(1).max(3),
   pay: z.enum(["resources", "shiny"]),

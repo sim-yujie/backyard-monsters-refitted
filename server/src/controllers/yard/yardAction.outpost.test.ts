@@ -14,6 +14,7 @@ import { yardCancelFortifyAction, yardFortifyAction } from "./fortify.js";
 import { yardLockerStartAction } from "./locker.js";
 import { yardMushroomPickAction } from "./mushrooms.js";
 import { yardRecycleAction } from "./recycle.js";
+import { yardPlaceDecorationAction } from "./decor.js";
 import { yardRepairInstantAction } from "./repair.js";
 import { yardShopBuyAction } from "./shopBuy.js";
 import { yardStarterKitAction } from "./starterKit.js";
@@ -422,6 +423,7 @@ describe("routes Flash refuses in an outpost", () => {
     ["academy/train", yardAcademyTrainAction, { monster: "C1", academy: 3 }, "That cannot be done in an outpost."],
     ["locker/start", yardLockerStartAction, { monster: "C5" }, "That cannot be done in an outpost."],
     ["mushroom/pick", yardMushroomPickAction, { id: 0 }, "That cannot be done in an outpost."],
+    ["decor/place", yardPlaceDecorationAction, { type: 28, x: 0, y: 0 }, "Decorations go in your main yard."],
   ];
 
   for (const [name, action, body, message] of cases) {

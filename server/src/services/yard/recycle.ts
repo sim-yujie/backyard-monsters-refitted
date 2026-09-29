@@ -2,10 +2,11 @@ import { costOf } from "../../game-data/buildingCosts.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { pricingType, refundOf, type StorageCapSave } from "../base/economy/resourceBudget.js";
-import { levelOf, TOWN_HALL_TYPE, type ResourceAmounts } from "../yardplanner/costs.js";
+import { TOWN_HALL_TYPE, type ResourceAmounts } from "../yardplanner/costs.js";
 import { MAP_ROOM_TYPE } from "./buildingJobs.js";
 import { academyLevels, isMapRoom3Monsters } from "./catchUpMonsters.js";
 import { fitCredit } from "./credit.js";
+import { storeDecoration, storedCount } from "./decor.js";
 import { cullHousing, housingCapacity } from "./housing.js";
 import { runningUnlock, LOCKER_TYPE } from "./locker.js";
 import { readHoused, readProduction } from "./production.js";
@@ -66,8 +67,6 @@ const HATCHERY_TYPE = 13;
 const HOUSING_TYPE = 15;
 const HCC_TYPE = 16;
 
-/** The Wild Monster totems keep their level in storage (`BTOTEM.as:264-270`). */
-const TOTEM_TYPES: ReadonlySet<number> = new Set([121, 131]);
 
 /** Kinds that come off the yard for nothing (`BFOUNDATION.as:2521-2524`). */
 const NOTHING_BACK_KINDS: ReadonlySet<string> = new Set(["taunt", "gift"]);
@@ -237,10 +236,8 @@ export const planRecycle = (save: RecycleSave, id: number, now: number) => {
   let stored: RecycleReport["stored"] = null;
   let researchdata: JsonObject | undefined;
   if (kind === "decoration") {
-    const count = Math.max(0, Math.floor(Number(save.researchdata?.[`b${type}`]) || 0)) + 1;
-    researchdata = { ...(save.researchdata ?? {}), [`b${type}`]: count };
-    if (TOTEM_TYPES.has(type)) researchdata[`bl${type}`] = levelOf(building);
-    stored = { type, count };
+    researchdata = storeDecoration(save.researchdata, building);
+    stored = { type, count: storedCount(researchdata, type) };
   }
 
   const owed = kind === "decoration" || NOTHING_BACK_KINDS.has(kind) ? undefined : refundOf(building);
