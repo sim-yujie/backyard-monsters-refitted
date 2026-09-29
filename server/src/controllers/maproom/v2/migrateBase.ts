@@ -38,10 +38,11 @@ import { catchUpLockedYard } from "../../yard/yardAction.js";
  * outposts (`PopupRelocateMe.as`), destroying the outpost. Everything the
  * client posts past the target `baseid` and which button was pressed is
  * ignored (issue #181): the server checks the outpost is the caller's, in the
- * caller's world, and not under attack, then charges its own price
- * (`relocateRules.ts`). Every write lands in one transaction, under a lock on
- * the main yard row, so a second copy of the request waits and then meets the
- * cooldown the first one set.
+ * caller's world, and that neither it nor the main yard is under attack (WP7),
+ * then charges its own price (`relocateRules.ts`). Every write lands in one
+ * transaction, under locks on the main yard row and then the outpost's, so a
+ * second copy of the request waits and then meets the cooldown the first one
+ * set.
  *
  * Flash's `RelocateSuccess` drops `GLOBAL._mapOutpost[0]` from its own list
  * whichever outpost was used (`PopupRelocateMe.as:134`). That is the client's
@@ -52,6 +53,10 @@ import { catchUpLockedYard } from "../../yard/yardAction.js";
  * @param {Object} ctx - The Koa context object
  * @returns {Promise<void>} A promise that resolves once the base migration is complete.
  */
+/** Whether an attack is running on a yard: its own record, or a live attack session. */
+const yardUnderAttack = async (yard: Save): Promise<boolean> =>
+  isAttackActive(yard) || (await readAttackSession(yard.basesaveid)) !== null;
+
 export const migrateBase: KoaController = async (ctx) => {
   const { baseid, shiny, type } = MigrateBaseSchema.parse(ctx.request.body);
 
@@ -83,8 +88,7 @@ export const migrateBase: KoaController = async (ctx) => {
       allianceId: currentUser.alliance_id,
       outpostCount: mainYard.outposts.length,
       health: mainYardHealth(mainYard),
-      underAttack:
-        isAttackActive(mainYard) || (await readAttackSession(mainYard.basesaveid)) !== null,
+      underAttack: await yardUnderAttack(mainYard),
     });
 
     if (refusal) throw relocateRefusedErr(refusal);
@@ -135,9 +139,20 @@ export const migrateBase: KoaController = async (ctx) => {
       candidates.find((cell) => cell.world.uuid === save.worldid) ?? candidates[0] ?? null;
     const outpostSave = outpostCell?.save ?? null;
 
+    // The outpost's row is locked after the main yard's, the order every route
+    // that touches two of a player's yards takes (outposts plan, WP7).
+    const lockedOutpost = outpostSave
+      ? await em.findOne(
+          Save,
+          { basesaveid: outpostSave.basesaveid },
+          { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true }
+        )
+      : null;
+
+    // Either yard under attack: the attack's save would land on a yard that has
+    // moved or no longer exists.
     const underAttack =
-      outpostSave !== null &&
-      (isAttackActive(outpostSave) || (await readAttackSession(outpostSave.basesaveid)) !== null);
+      (await yardUnderAttack(save)) || (lockedOutpost !== null && (await yardUnderAttack(lockedOutpost)));
 
     const refusal = relocateTargetRefusal({
       userid: currentUser.userid,

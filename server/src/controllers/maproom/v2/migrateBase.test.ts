@@ -49,9 +49,16 @@ const matches = (row: Row, where: Row) =>
     key === "world" ? (row.world as Row).uuid === value : row[key] === value
   );
 
+let lockedRows: number[];
+
 const txEm = {
   findOne: async (_entity: unknown, where: Row) => {
-    if ("basesaveid" in where) return where.basesaveid === mainSave.basesaveid ? mainSave : null;
+    if ("basesaveid" in where) {
+      lockedRows.push(where.basesaveid as number);
+      if (where.basesaveid === mainSave.basesaveid) return mainSave;
+      return (cells.map((cell) => cell.save as Row).find((save) => save.basesaveid === where.basesaveid) ??
+        null);
+    }
     return matches(homeCell, where) ? homeCell : null;
   },
   find: async (_entity: unknown, where: Row) => cells.filter((cell) => cell.baseid === where.baseid),
@@ -123,6 +130,8 @@ beforeEach(() => {
     buildingresources: { [`b${MY_OUTPOST}`]: {} },
     homebase: ["241", "207"],
     cantmovetill: 0,
+    attackid: 0,
+    attacks: [],
   };
   homeCell = {
     baseid: HOME_BASEID,
@@ -144,6 +153,7 @@ beforeEach(() => {
   removed = [];
   flushed = 0;
   sessions = new Set();
+  lockedRows = [];
 });
 
 const untouched = () => {
@@ -257,6 +267,22 @@ describe("migrateBase, type=outpost", () => {
     const result = await run({ baseid: MY_OUTPOST, shiny: "1500" });
     expect(result.reason).toBe("underAttack");
     untouched();
+  });
+
+  test("an attack running on the main yard is refused too (WP7)", async () => {
+    sessions.add(2526);
+    expect((await run({ baseid: MY_OUTPOST, shiny: "1500" })).reason).toBe("underAttack");
+    untouched();
+
+    sessions.clear();
+    Object.assign(mainSave, { attackid: 7, attacks: [{ starttime: Math.floor(Date.now() / 1000) - 30 }] });
+    expect((await run({ baseid: MY_OUTPOST, shiny: "1500" })).reason).toBe("underAttack");
+    untouched();
+  });
+
+  test("the main yard's row is locked first, then the outpost's", async () => {
+    await run({ baseid: MY_OUTPOST, shiny: "1500" });
+    expect(lockedRows).toEqual([2526, 900]);
   });
 
   test("inside the cooldown the client is told when it may move, and nothing is charged", async () => {
