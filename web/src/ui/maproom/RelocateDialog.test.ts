@@ -35,6 +35,12 @@ const buttonNamed = (name: string): HTMLButtonElement =>
 
 afterEach(() => host.remove());
 
+/** Escape on the page, as after a click on the dialog's text left focus there (#191). */
+const escapeOnPage = (): void => {
+  (document.activeElement as HTMLElement | null)?.blur();
+  document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+};
+
 describe("RelocateDialog", () => {
   it("shows Flash's warning, the price and every monster that is lost", () => {
     open();
@@ -85,6 +91,14 @@ describe("RelocateDialog", () => {
     expect(options.move).toHaveBeenCalledWith("resources");
     expect(options.onMoved).toHaveBeenCalledWith([241, 208]);
     expect(host.querySelector(".popup-backdrop")).toBeNull();
+  });
+
+  it("closes on Escape even when focus has left it, without moving (#191)", () => {
+    const { options } = open();
+    buttonNamed("Use 1,500 Shiny").click();
+    escapeOnPage();
+    expect(host.querySelector("[role='dialog']")).toBeNull();
+    expect(options.move).not.toHaveBeenCalled();
   });
 
   it("goes back without moving", () => {

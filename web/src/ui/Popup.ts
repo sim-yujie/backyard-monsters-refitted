@@ -15,6 +15,26 @@ const FOCUSABLE = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
+/** Open popups, oldest first: the newest is the one Escape closes. */
+const openPopups: Popup[] = [];
+
+/**
+ * Escape with focus on the page itself closes the newest popup (#191). A click
+ * on a popup's text, or a button that disables itself once pressed, leaves
+ * focus on `<body>`, where the popup's own handler never hears the key: Escape
+ * then went to whatever the page behind does with it (the map closed its cell
+ * panel) and the dialog stayed. Heard in the capture phase so nothing behind
+ * the modal acts on the key first; focus anywhere else keeps its own Escape.
+ */
+const onPageEscape = (event: KeyboardEvent): void => {
+  if (event.key !== "Escape") return;
+  const newest = openPopups[openPopups.length - 1];
+  if (!newest) return;
+  if (event.target !== document.body && event.target !== document.documentElement) return;
+  event.stopPropagation();
+  newest.close();
+};
+
 /**
  * A modal dialog: a Panel on a scrim, with Escape to close and focus kept
  * inside while it is open.
@@ -58,6 +78,8 @@ export class Popup extends Panel {
   override mount(container: HTMLElement): this {
     this.previouslyFocused = document.activeElement as HTMLElement | null;
     container.append(this.backdrop);
+    if (openPopups.length === 0) window.addEventListener("keydown", onPageEscape, true);
+    openPopups.push(this);
     this.focusFirst();
     return this;
   }
@@ -67,6 +89,9 @@ export class Popup extends Panel {
     this.dismissed = true;
     this.backdrop.removeEventListener("keydown", this.handleModalKeydown);
     this.backdrop.remove();
+    const index = openPopups.indexOf(this);
+    if (index >= 0) openPopups.splice(index, 1);
+    if (openPopups.length === 0) window.removeEventListener("keydown", onPageEscape, true);
     super.close();
     this.previouslyFocused?.focus?.();
     this.previouslyFocused = null;

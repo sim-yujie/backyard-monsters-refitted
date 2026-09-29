@@ -56,6 +56,12 @@ const go = (): HTMLButtonElement => host.querySelector<HTMLButtonElement>(".tran
 
 afterEach(() => host.remove());
 
+/** Escape on the page, as after a click on the dialog's text left focus there (#191). */
+const escapeOnPage = (): void => {
+  (document.activeElement as HTMLElement | null)?.blur();
+  document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+};
+
 describe("TransferDialog", () => {
   it("offers only outposts as targets from the main yard, and every other yard from an outpost", async () => {
     await open();
@@ -110,6 +116,12 @@ describe("TransferDialog", () => {
     ]);
     expect(options.onMoved).toHaveBeenCalledWith(MAIN, OUTPOST, "All monsters successfully transferred.");
     expect(host.querySelector(".popup-backdrop")).toBeNull();
+  });
+
+  it("closes on Escape even when focus has left it (#191)", async () => {
+    await open();
+    escapeOnPage();
+    expect(host.querySelector(".transfer-dialog")).toBeNull();
   });
 
   it("says a target has no housing, in Flash's words", async () => {

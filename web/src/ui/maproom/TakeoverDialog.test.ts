@@ -13,6 +13,12 @@ const flush = async (): Promise<void> => {
   await Promise.resolve();
 };
 
+/** Escape on the page, as after a click on the dialog's text left focus there (#191). */
+const escapeOnPage = (): void => {
+  (document.activeElement as HTMLElement | null)?.blur();
+  document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+};
+
 describe("TakeoverDialog", () => {
   let modal: HTMLElement;
 
@@ -128,6 +134,25 @@ describe("TakeoverDialog", () => {
     expect(takeOver).toHaveBeenCalledWith("shiny");
     expect(onTaken).toHaveBeenCalledWith("shiny");
     expect(modal.querySelector(".takeover-dialog")).toBeNull();
+  });
+
+  it("closes on Escape even when focus has left it, and stops its clock (#191)", () => {
+    vi.useFakeTimers();
+    try {
+      const { takeOver } = open({
+        kind: "outpost",
+        name: "Ann",
+        price: { resources: 5_000_000, shiny: 900, grantExpiresAt: 2_000_000_000 },
+      });
+      const running = vi.getTimerCount();
+      escapeOnPage();
+      expect(modal.querySelector("[role='dialog']")).toBeNull();
+      // The countdown's once-a-second tick is the one timer gone.
+      expect(vi.getTimerCount()).toBe(running - 1);
+      expect(takeOver).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("Back returns to the choice without calling the server", () => {

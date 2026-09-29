@@ -79,7 +79,14 @@ export class TransferDialog {
 
   constructor(options: TransferDialogOptions) {
     this.options = options;
-    this.popup = new Popup({ title: TRANSFER_TEXT.title, className: "transfer-dialog" });
+    // Every way out (Cancel, the close button, Escape, the scrim) lets go of the steppers.
+    this.popup = new Popup({
+      title: TRANSFER_TEXT.title,
+      className: "transfer-dialog",
+      onClose: () => {
+        for (const row of this.rows) row.stepper.destroy();
+      },
+    });
 
     const lead = text("p", "transfer-dialog__lead", TRANSFER_TEXT.lead);
 
@@ -128,7 +135,6 @@ export class TransferDialog {
   }
 
   close(): void {
-    for (const row of this.rows) row.stepper.destroy();
     this.popup.close();
   }
 
