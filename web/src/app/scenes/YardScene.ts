@@ -1510,9 +1510,11 @@ export class YardScene implements Scene {
     if (change.reason === YardChangeReason.PENDING || change.reason === YardChangeReason.AWAY) return;
 
     const yard = store.yard;
+    const before = this.yard;
     this.yard = yard;
     this.save = store.save;
     this.renderer.show(yard);
+    if (before && before.expansionLevel !== yard.expansionLevel) this.onPlotResized(before, yard);
     this.renderer.setLife(yardLifeOf(store.save, yard));
     this.minimap?.refreshBuildings();
     this.hud?.setResources(store.resources, store.credits);
@@ -1534,6 +1536,23 @@ export class YardScene implements Scene {
     }
   }
 
+  /**
+   * More Yardage (`ENL`, §8.2) was bought: the plot, and the world around it,
+   * are bigger, and every world point moved with the plot's centre
+   * (`yardBounds`). The camera learns the new bounds and keeps what the
+   * player was looking at; the zoom floor follows the new fit.
+   */
+  private onPlotResized(before: Yard, after: Yard): void {
+    const camera = this.camera;
+    if (!camera) return;
+    camera.setBounds({ width: after.bounds.width, height: after.bounds.height });
+    camera.setPosition(
+      camera.position.x + after.bounds.originX - before.bounds.originX,
+      camera.position.y + after.bounds.originY - before.bounds.originY,
+    );
+    this.applyZoomLimits(this.viewportWidth, this.viewportHeight, camera);
+    this.minimap?.markDirty();
+  }
 
   /** Pans the camera to a building and opens its panel (the binding's `selectBuilding`). */
   private focusBuilding(id: number): void {
