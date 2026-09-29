@@ -5,6 +5,7 @@ import { Save } from "../../../database/models/save.model.js";
 import { BaseType } from "../../../enums/Base.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { cellCoordsFromBaseId } from "./rangeCheck.js";
+import { SYSTEM_SENDER } from "../../mail/systemSender.js";
 
 /**
  * Telling a player when one of their Map Room 2 outposts is attacked or taken
@@ -22,8 +23,7 @@ import { cellCoordsFromBaseId } from "./rangeCheck.js";
  * it is and the away notice shows it as it is.
  */
 
-/** The mailbox's sender for the game's own messages: no player. */
-export const SYSTEM_SENDER = 0;
+export { SYSTEM_SENDER } from "../../mail/systemSender.js";
 
 export const OUTPOST_ATTACKED = "outpostattacked";
 export const OUTPOST_TAKEN = "outposttaken";

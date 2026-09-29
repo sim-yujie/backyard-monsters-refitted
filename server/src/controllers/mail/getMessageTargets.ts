@@ -4,6 +4,7 @@ import { mailboxErr } from "../../errors/errors.js";
 import { Thread } from "../../database/models/thread.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
+import { SYSTEM_SENDER, SYSTEM_SENDER_NAME } from "../../services/mail/systemSender.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
 interface TargetUser {
@@ -74,6 +75,16 @@ export const getMessageTargets: KoaController = async (ctx) => {
         },
       ])
     );
+
+    // The game's own notices have no user row behind them: name them here.
+    if (conversationPartnerIds.includes(SYSTEM_SENDER)) {
+      targets[SYSTEM_SENDER] = {
+        friend: 0,
+        mapver: MapRoomVersion.V2,
+        first_name: SYSTEM_SENDER_NAME,
+        pic_square: null,
+      };
+    }
 
     ctx.status = Status.OK;
     ctx.body = { targets };
