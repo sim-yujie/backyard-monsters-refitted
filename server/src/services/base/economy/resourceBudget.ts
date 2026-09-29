@@ -207,7 +207,7 @@ export const harvestAllowance = (
 /* Outpost income                                                              */
 /* -------------------------------------------------------------------------- */
 
-/** The client credits at most two days of offline outpost income (`AutoBankManager.as:79-82`). */
+/** At most two days of offline outpost income are paid (`AutoBankManager.as:75-77`). */
 export const OUTPOST_INCOME_WINDOW = 60 * 60 * 24 * 2;
 
 /** `buildingresources` keys are `b<baseid>`; `t` is the last auto-bank timestamp. */
@@ -218,9 +218,10 @@ const OUTPOST_KEY = /^b\d+$/;
  *
  * `AutoBankManager.autobank` funds `gip.rN * overdrive * seconds / 10`
  * (`:266-268`), where `gip` is the per-outpost figure in `buildingresources`
- * and `overdrive` is 1 or the Production Overdrive power. The figure is
- * client-written, so the bound is taken over the **stored** copy and multiplied
- * by `overdriveMax` (§6, item 2): a save cannot raise its own allowance.
+ * and `overdrive` is 1 or the Production Overdrive power. The figure is the
+ * server's own (`services/maproom/v2/autobank.ts`, which also pays the income
+ * now); the bound is taken over the **stored** copy and multiplied by
+ * `overdriveMax` (§6, item 2): a save cannot raise its own allowance.
  */
 export const outpostAllowance = (
   buildingresources: JsonObject | null | undefined,

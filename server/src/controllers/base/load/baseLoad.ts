@@ -158,6 +158,8 @@ export const baseLoad: KoaController = async (ctx) => {
   // `completed`, for the client's "While you were away" notice (issue #135).
   // An own Map Room 2 outpost gets the same, on its own rows: timers, repairs,
   // hatcheries and damage, and the core when it is empty (outposts WP3).
+  // Both also pay the player's Map Room 2 outpost income into the main pool
+  // under the main row's lock (`autobankYard`, outposts WP4).
   let completed: CompletedJob[] | undefined;
   if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
     ({ save: baseSave, completed } = await catchUpOwnerYard(baseSave));

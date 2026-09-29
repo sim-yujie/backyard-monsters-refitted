@@ -27,6 +27,7 @@ import { startAttackSession } from "../../../../services/base/attackSessionStore
 import { catchUpArmiesForAttack } from "../../../../services/yard/armies.js";
 import { getOutpostOwnerSave } from "../../../../services/base/getOutpostOwnerSave.js";
 import { poolAmounts } from "../../../../services/base/combat/attackLoot.js";
+import { autobankOwner } from "../../../../services/maproom/v2/autobank.js";
 import {
   generateNoise,
   getTerrainHeight,
@@ -114,11 +115,16 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
 
   await validateRange(user, save, mapversion, { baseid, cell: cellCoords });
 
+  // The defender's pool takes in its outposts' income before the attack
+  // snapshots it for the loot (issue #179, outposts WP4): an outpost's owner
+  // is paid here; a main yard is paid inside the locked catch-up below.
+  if (save.type === BaseType.OUTPOST) await autobankOwner(postgres.em, save.saveuserid);
+
   // Both armies as they are now, before anything below changes either row
   // (docs/design/yard-buildings.md §4.6): the defender's yard and the
   // attacker's own yards are caught up and written, and what each of the
   // attacker's yards houses is kept in the attack session, which caps what
-  // the attack save can take from it.
+  // the attack save can take from it. A main yard's catch-up autobanks it.
   const armies = await catchUpArmiesForAttack({ user, defender: save, cell: cellCoords, mapversion });
   save = armies.defender;
 

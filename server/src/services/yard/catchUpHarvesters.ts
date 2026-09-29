@@ -102,7 +102,7 @@ export const withBuffer = (building: BuildingData, buffer: HarvesterBuffer): Bui
  * while it is still in `storedata`, or the moment step 1 said it ran out.
  * Undefined when there was none.
  */
-const overdriveEnd = (
+export const overdriveEnd = (
   save: CatchUpHarvestersSave,
   completed: readonly unknown[]
 ): number | undefined => {

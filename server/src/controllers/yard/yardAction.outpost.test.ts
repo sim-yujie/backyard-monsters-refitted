@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { LockMode, type EntityManager } from "@mikro-orm/core";
 import type z from "zod";
 import type { Save } from "../../database/models/save.model.js";
+import { WorldMapCell } from "../../database/models/worldmapcell.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { fortifyStepsOf, OUTPOST_COSTS } from "../../game-data/buildingCosts.js";
 import { storageCap } from "../../services/base/economy/resourceBudget.js";
@@ -20,6 +21,7 @@ import { yardStateAction } from "./state.js";
 import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
 import {
   catchUpLockedOutpost,
+  catchUpLockedYard,
   runYardAction,
   type YardAction,
   type YardAnswer,
@@ -32,12 +34,15 @@ import {
  * The stand-in behaves like Postgres where it matters: a `PESSIMISTIC_WRITE`
  * read waits for the previous holder of that row to commit or roll back and
  * then reads the committed row; writes land on commit only, all or nothing.
+ * A plain `find` reads committed rows and never writes them back.
  */
 
 type Row = Record<string, unknown>;
 
 const db = {
   rows: new Map<number, Row>(),
+  /** `world_map_cell` rows, for the outposts' heights. */
+  cells: [] as Row[],
   tails: new Map<number, Promise<void>>(),
   /** Every locked read, in order, by `basesaveid`. */
   locked: [] as number[],
@@ -54,7 +59,12 @@ const acquire = (id: number): Promise<() => void> => {
   return previous.then(() => release);
 };
 
-const matches = (row: Row, where: Row) => Object.entries(where).every(([key, value]) => row[key] === value);
+const matches = (row: Row, where: Row) =>
+  Object.entries(where).every(([key, value]) =>
+    value !== null && typeof value === "object" && "$in" in value
+      ? (value.$in as unknown[]).includes(row[key])
+      : row[key] === value
+  );
 
 const em = {
   async transactional<T>(cb: (fork: unknown) => Promise<T>): Promise<T> {
@@ -78,6 +88,10 @@ const em = {
           await hook();
         }
         return entity;
+      },
+      async find(entity: unknown, where: Row) {
+        const table = entity === WorldMapCell ? db.cells : [...db.rows.values()];
+        return table.filter((row) => matches(row, where)).map((row) => structuredClone(row));
       },
       async flush() {},
     };
@@ -194,6 +208,7 @@ beforeEach(() => {
     [MAIN, mainRow()],
     [OUTPOST, outpostRow()],
   ]);
+  db.cells = [{ baseid: OUTPOST_BASEID, map_version: 2, terrainHeight: 125 }];
   db.tails = new Map();
   db.locked = [];
   db.hold = new Map();
@@ -558,5 +573,79 @@ describe("outpost catch-up", () => {
     expect(save).toBe(row);
     expect(completed).toEqual([]);
     expect(buildings(outpostSave())).toEqual({});
+  });
+});
+
+describe("outpost income (outposts WP4, issue #185)", () => {
+  const HOUR = 3600;
+  /** Four level 10 Twig Snappers at height 125: 224 twigs a tick, 80,640 an hour. */
+  const HOURLY = 224 * 360;
+
+  const snappers = (level = 10) =>
+    Object.fromEntries(
+      [10, 11, 12, 13].map((id) => [String(id), { id, t: 1, X: -200 + id * 40, Y: -250, l: level }])
+    );
+
+  beforeEach(() => {
+    db.rows.set(MAIN, mainRow({ buildingresources: { t: now() - HOUR } }));
+    db.rows.set(OUTPOST, outpostRow({ buildingdata: { ...buildings(outpostRow()), ...snappers() } }));
+  });
+
+  const paidOnce = () => {
+    expect(pool().r1).toBe(1_000_000 + HOURLY);
+    expect(pool().r2).toBe(1_000_000);
+    expect(mainSave().points).toBe(String(Math.ceil(HOURLY * 0.375)));
+    expect(mainSave().buildingresources).toEqual({
+      t: expect.any(Number),
+      b900: { r1: 224, r2: 0, r3: 0, r4: 0 },
+    });
+    expect(now() - ((mainSave().buildingresources as Row).t as number)).toBeLessThan(10);
+  };
+
+  test("the yard state on an outpost pays the hour into the main pool", async () => {
+    const answer = await onOutpost(yardStateAction);
+    expect(answer.status).toBe(200);
+    paidOnce();
+    expect((answer.body.resources as Row).r1).toBe(1_000_000 + HOURLY);
+  });
+
+  test("the yard state on the main yard pays it too", async () => {
+    await call(yardStateAction);
+    paidOnce();
+  });
+
+  test("the owner's load of an outpost pays it", async () => {
+    await catchUpLockedOutpost(em as unknown as EntityManager, userOf(), outpostSave() as unknown as Save);
+    paidOnce();
+  });
+
+  test("the owner's load of the main yard pays it", async () => {
+    await catchUpLockedYard(em as unknown as EntityManager, mainSave() as unknown as Save);
+    paidOnce();
+  });
+
+  test("a load racing an action pays the hour once", async () => {
+    let load!: Promise<unknown>;
+    db.hold.set(MAIN, async () => {
+      load = catchUpLockedOutpost(em as unknown as EntityManager, userOf(), outpostSave() as unknown as Save);
+      await Promise.resolve();
+    });
+
+    await onOutpost(yardStateAction);
+    await load;
+
+    paidOnce();
+  });
+
+  test("income lands before the action decides: an upgrade pays the hour at the old level", async () => {
+    db.rows.set(OUTPOST, outpostRow({ buildingdata: { ...buildings(outpostRow()), ...snappers(9) } }));
+
+    expect((await onOutpost(yardUpgradeAction, { id: 10 })).status).toBe(200);
+    // Level 9 makes 46 a tick; the snapper being upgraded counts at 10 from here on.
+    expect(pool().r1).toBe(1_000_000 + 4 * 46 * 360);
+
+    db.rows.set(MAIN, { ...mainSave(), buildingresources: { t: now() - HOUR } });
+    await onOutpost(yardStateAction);
+    expect(pool().r1).toBe(1_000_000 + 4 * 46 * 360 + (56 + 3 * 46) * 360);
   });
 });

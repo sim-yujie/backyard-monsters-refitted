@@ -286,6 +286,12 @@ const saveBase = async (
         }
         break;
 
+      // The outpost income rates and the time they are paid up to are the
+      // server's (`services/maproom/v2/autobank.ts`, outposts WP4): a client
+      // copy, the owner's or an attacker's, is never written.
+      case SaveKeys.BUILDING_RESOURCES:
+        break;
+
       // A whole number, cut down, as Flash sent it: the column is an integer
       // and Postgres would round 99.95 up to 100 (#72).
       case SaveKeys.DAMAGE: {
@@ -565,11 +571,6 @@ const updateOutposts = (
   baseSave: Save,
   key: keyof Save
 ) => {
-  if (key === SaveKeys.BUILDING_RESOURCES && userSave.buildingresources) {
-    userSave.buildingresources[`b${baseSave.baseid}`] = baseSave.buildingresources?.[`b${baseSave.baseid}`];
-    userSave.buildingresources["t"] = getCurrentDateTime();
-  }
-
   if (key === SaveKeys.QUESTS) {
     userSave.quests = baseSave.quests;
   }

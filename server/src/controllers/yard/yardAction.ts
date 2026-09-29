@@ -9,6 +9,7 @@ import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { YardTargetSchema } from "../../schemas/YardSchemas.js";
 import { RESOURCE_KEYS, type ResourceKey } from "../../services/base/economy/resourceBudget.js";
 import { isAttackActive } from "../../services/base/isAttackActive.js";
+import { autobankYard } from "../../services/maproom/v2/autobank.js";
 import { isShinyLocked } from "../../services/user/shinyLock.js";
 import { catchUpYard, type CompletedJob } from "../../services/yard/catchUp.js";
 import { catchUpDamage } from "../../services/yard/catchUpDamage.js";
@@ -48,7 +49,9 @@ import { logger } from "../../utils/logger.js";
  *    caller's own main yard, `409 underAttack` while `isAttackActive`.
  * 3. `catchUpYard(save, now)`: finish every job that ended, award its points,
  *    move `savetime` to `now` (§2.3); then, if that left a level 2 Map Room
- *    on a yard not yet on Map Room 2, join a world (`joinMapRoom2`, §5.7).
+ *    on a yard not yet on Map Room 2, join a world (`joinMapRoom2`, §5.7);
+ *    then pay the player's outpost income into the main pool
+ *    (`autobankYard`, outposts WP4).
  * 4. `run({ save, user, body, now, completed })`.
  * 5. Check and apply its {@link YardOutcome}: Shiny (`409 shinyLocked`,
  *    `409 credits`), resources (`409 shortfall`), then the new slices, the
@@ -343,8 +346,10 @@ export const catchUpLockedYard = async (
     const locked = await lockRow(tx, save.basesaveid);
     if (!locked || isAttackActive(locked)) return { save: locked ?? save, completed: [] };
 
-    const completed = catchUpYard(locked, getCurrentDateTime());
+    const now = getCurrentDateTime();
+    const completed = catchUpYard(locked, now);
     await joinMapRoom2(tx, locked);
+    await autobankYard(tx, locked, now, completed);
     await tx.flush();
     return { save: locked, completed };
   });
@@ -353,8 +358,9 @@ export const catchUpLockedYard = async (
  * Catches an owner's outpost up under the row locks and writes it: the
  * build-mode `/base/load` of an own outpost, as {@link catchUpLockedYard} is
  * for the main yard. The main row is locked first (the order of
- * {@link lockOwnYard}), because the catch-up credits it: points, and the HCC's
- * goo refund. An empty outpost gets its core here. Skipped, and the row
+ * {@link lockOwnYard}), because the catch-up credits it: points, the HCC's
+ * goo refund, and the player's outpost income (`autobankYard`). An empty
+ * outpost gets its core here. Skipped, and the row
  * answered as it is, when {@link lockOwnYard} refuses (an attack is running,
  * or the row is not one of the caller's listed outposts).
  *
@@ -377,7 +383,9 @@ export const catchUpLockedOutpost = async (
 
     logOutpostProblems(yard.outpost);
     // The catch-up re-derives the outpost's own Flinger level (its reach) too.
-    const completed = catchUpYard(yard.save, getCurrentDateTime());
+    const now = getCurrentDateTime();
+    const completed = catchUpYard(yard.save, now);
+    await autobankYard(tx, yard.main, now, [], yard.outpost);
     await tx.flush();
     return { save: yard.outpost, completed };
   });
@@ -428,6 +436,10 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       const now = getCurrentDateTime();
       const completed = catchUpYard(save, now);
       if (!yard.outpost) await joinMapRoom2(tx, save, user);
+      // Outpost income up to now lands before the action decides (outposts
+      // WP4): it can pay for it, and a rate the action changes (a harvester
+      // upgrade on an outpost) only counts from here on.
+      await autobankYard(tx, yard.main, now, yard.outpost ? [] : completed, yard.outpost);
 
       const outcome = await action.run({ save, user, body: parsed.data, now, completed });
       applyOutcome(save, user, outcome);

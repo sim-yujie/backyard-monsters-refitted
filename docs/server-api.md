@@ -238,6 +238,7 @@ dedicated handler or falls back to `JSON.parse`-and-assign:
 | `buildingdata` | `buildingDataHandler.ts` (attack only; non-attack just assigns directly) | On an **attack** save, non-trap buildings are never modified by the client payload — they're always taken from the DB. The only legitimate change is removing a triggered trap (`t===24` TRAP or `t===117` HEAVY_TRAP): if the client's submission no longer includes that trap's key, it's dropped from the defender's `buildingdata`. |
 | `champion` | `championHandler.ts` (attack only) | Only `hp` can be lowered by an attack, and only if the reported `hp` is less than the stored value (`Math.min`) — every other champion field is server-authoritative. |
 | `points` / `basevalue` | inline | `baseSave.points = value.toString()` / `.basevalue = value.toString()` — stored as strings. |
+| `buildingresources` | ignored | Server-owned since outposts WP4 (`services/maproom/v2/autobank.ts`): never written from an owner or an attack save. |
 | everything else | inline | `JSON.parse(value)` if possible, else stored as the raw string. |
 
 On an **attack** save (`Save.attackSaveKeys`: `destroyed`, `damage`, `locked`, `protected`,
@@ -331,6 +332,9 @@ Before minting, once every refusal has passed, the load catches both armies up
 its owner's load would give it (a defending outpost: its monsters). The attacker's main yard
 gets the same, or is only measured while someone is attacking it. Every attacker outpost
 inside the range rule's sweep box around the target gets its monsters caught up and written.
+The defender's pool takes in its Map Room 2 outpost income first (outposts WP4, issue #179): a
+defending outpost's owner is autobanked under their main row's lock before the catch-up, a
+defending main yard inside its locked catch-up, so the `defenderResources` snapshot holds it.
 Only a successful one: every refusal,
 range included, is decided before the first write, so an attack the server turns down leaves no
 `attackid`, no lock, no attack log and no session key (issue #26). The key's TTL is 480 seconds; the window it
@@ -1199,6 +1203,19 @@ the core placed when it is empty, and `completed` sent; it is skipped (and the r
 is) while either yard is under attack or when the outpost is not listed in the main yard's
 `outposts`. No other load (another mode, somebody else's base, Inferno) sends `completed`.
 
+**Outpost income (autobank, outposts WP4, issue #185).** A Map Room 2 player's outposts pay into
+the main pool on the server (`services/maproom/v2/autobank.ts`, Flash's
+`AutoBankManager.as`): per outpost, per 10 s tick, `max(int(produce[l − 1] × 125 / h), 1)` summed
+over its harvesters (types 1-4) with health above 0, `h` the cell's `terrainHeight` (100 when
+missing), an upgrading harvester at its next level, one under construction at 1. Every whole tick
+since `buildingresources.t` is paid, at most two days' worth, doubled up to the end of the main
+yard's Production Overdrive (`POD`), credited under the main storage cap (overflow lost), plus
+`ceil(0.375 × credited)` points; `t` moves to the end of the last tick paid and the column is
+rewritten as `{ t, b<baseid>: { r1..r4 } }` for the current outposts. No `t` on record pays nothing
+and starts the clock. It runs under the main row's lock in the owner's build load (main yard or
+outpost), in every yard action before `run` (so `state` pays), and in an attack load before the
+loot snapshot (see the attack section); nothing is added to `completed`.
+
 ### Debug
 
 | Method | Path | Middleware | Request fields | Response | Description |
@@ -1295,7 +1312,7 @@ the DB schema):
 | `homebase` | `[x, y]` (as strings) — the player's home cell coordinates. |
 | `wmstatus` | `number[][]` — per-tribe status tuples (tribe id first element) for MR1 wild-monster tribes the player has interacted with. |
 | `champion` | see above. |
-| `quests`, `player`, `krallen`, `siege`, `rewards`, `researchdata`, `lockerdata`, `events`, `inventory`, `monsterbaiter`, `loot`, `attackloot`, `lootreport`, `attackersiege`, `buildingresources`, `mushrooms`, `frontpage`, `effects`, `achieved`, `gifts`, `sentinvites`, `sentgifts`, `fbpromos`, `updates`, `stats`, `aiattacks`, `monsters`, `coords`, `savetemplate` | Opaque JSON, format owned by the Flash client / specific handlers; not exhaustively typed server-side (`JsonObject`). Confirmed specific uses: `rewards` holds unlockable-event flags keyed by reward id (see `getDefaultBaseData.ts`); `buildingresources` holds a `t` (last auto-bank timestamp) plus per-outpost `b{baseid}` resource snapshots for MR3 resource-outpost income; `savetemplate` is the yard-planner template array (`/bm/yardplanner/*`); `monsters` is the owned-monster roster (shape branches by MR2 vs MR3 in `monsterUpdateHandler.ts`), and its MR2 `housed` counts are the one part of it the server reads rather than stores blindly — `/worldmapv2/transferassets` validates them against the other yard's and against derived housing capacity (see "Monster transfer rules" above), while `space`, `h`, `hid`, `hstage` and `hcc` stay opaque. Everything else in this row is passed through opaquely by the server (read, stored, and echoed back without validation) — a new client must reproduce the Flash client's exact shape for whichever of these it needs to write to, since the server does not document or enforce one. |
+| `quests`, `player`, `krallen`, `siege`, `rewards`, `researchdata`, `lockerdata`, `events`, `inventory`, `monsterbaiter`, `loot`, `attackloot`, `lootreport`, `attackersiege`, `buildingresources`, `mushrooms`, `frontpage`, `effects`, `achieved`, `gifts`, `sentinvites`, `sentgifts`, `fbpromos`, `updates`, `stats`, `aiattacks`, `monsters`, `coords`, `savetemplate` | Opaque JSON, format owned by the Flash client / specific handlers; not exhaustively typed server-side (`JsonObject`). Confirmed specific uses: `rewards` holds unlockable-event flags keyed by reward id (see `getDefaultBaseData.ts`); `buildingresources` holds a `t` (last auto-bank timestamp) plus per-outpost `b{baseid}` rates; on Map Room 2 it is the server's alone (`services/maproom/v2/autobank.ts`: `t` is when outpost income was paid up to, each `b{baseid}` is `{r1..r4}` per 10 s tick) and Map Room 3 uses only `t`; `savetemplate` is the yard-planner template array (`/bm/yardplanner/*`); `monsters` is the owned-monster roster (shape branches by MR2 vs MR3 in `monsterUpdateHandler.ts`), and its MR2 `housed` counts are the one part of it the server reads rather than stores blindly — `/worldmapv2/transferassets` validates them against the other yard's and against derived housing capacity (see "Monster transfer rules" above), while `space`, `h`, `hid`, `hstage` and `hcc` stay opaque. Everything else in this row is passed through opaquely by the server (read, stored, and echoed back without validation) — a new client must reproduce the Flash client's exact shape for whichever of these it needs to write to, since the server does not document or enforce one. |
 
 `Save.saveKeys` / `Save.attackSaveKeys` (static arrays on the entity) enumerate exactly which
 of the above the save endpoint will accept from the client in which context — see the Base
