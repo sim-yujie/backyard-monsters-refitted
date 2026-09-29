@@ -48,7 +48,7 @@ export const saveLayout: KoaController = async (ctx) => {
 
   checkNodesOwned(payload.nodes, save.buildingdata);
   checkPlans(payload.nodes, save.buildingdata, { refuseCaughtUp: true });
-  checkNodePlacement(payload.nodes, payload.expansion);
+  checkNodePlacement(payload.nodes, payload.expansion, [], save.buildingdata);
 
   const layout = makeLayout(slot, name, payload.expansion, payload.nodes);
   save.savetemplate = writeLayout(save.savetemplate, layout);

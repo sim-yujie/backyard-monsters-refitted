@@ -36,14 +36,6 @@ export const YARD_SIZES: readonly (readonly [width: number, height: number])[] =
   return sizes;
 })();
 
-/**
- * The planner's separate, much larger bound for decorations
- * (`client/scripts/com/monsters/baseplanner/PlannerDesignView.as:104`, applied
- * at `:576-579`). Decorations may be placed outside the plot in the live yard
- * too (`client/scripts/BASE.as:4635-4640`), so the Flash planner allowed this
- * and so do we.
- */
-export const MAX_YARD_DIMENSIONS: readonly [width: number, height: number] = [3240, 2600];
 
 /** Plot size in yard units for an expansion level, clamped to the ladder. */
 export const yardSize = (expansion: number): readonly [number, number] => {
@@ -88,13 +80,17 @@ export const overlaps = (a: FootprintRect, b: FootprintRect): boolean =>
  * The plot spans `[-width/2, width/2) x [-height/2, height/2)`
  * (`docs/specs/base-building.md` §2) and a footprint extends positively from its
  * origin (`client/scripts/GRID.as:86-98`), so the origin must be at least a
- * whole footprint short of the far edge. Decorations are measured against
- * {@link MAX_YARD_DIMENSIONS} instead.
+ * whole footprint short of the far edge.
+ *
+ * Decorations too (owner decision 2026-09-29, #128). The Flash planner let
+ * them go anywhere in a 3240 x 2600 area (`MAX_YARD_DIMENSIONS`,
+ * `client/scripts/com/monsters/baseplanner/PlannerDesignView.as:104`); one
+ * already outside the plot may stay exactly where it is, which the layout
+ * check allows ({@link checkNodePlacement}'s `saved`), but nothing moves or is
+ * placed outside.
  */
-export const withinBounds = (rect: FootprintRect, type: number, expansion: number): boolean => {
-  const [width, height] = footprintOf(type).decoration
-    ? MAX_YARD_DIMENSIONS
-    : yardSize(expansion);
+export const withinBounds = (rect: FootprintRect, expansion: number): boolean => {
+  const [width, height] = yardSize(expansion);
   const halfW = width / 2;
   const halfH = height / 2;
   return (

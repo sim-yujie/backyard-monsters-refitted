@@ -148,21 +148,40 @@ export const checkNodesOwned = (
 };
 
 /**
+ * Whether `node` is a decoration left exactly where the save has it. One of
+ * those may stay outside the plot (owner decision 2026-09-29, #128): the
+ * Flash planner's larger decoration area put some there, and nothing moves
+ * them on its own. Moving one, or placing a new one, must land inside.
+ */
+const decorationUnmoved = (node: LayoutNode, saved: BuildingDataMap | null | undefined): boolean => {
+  if (!footprintOf(node.t).decoration) return false;
+  const building = saved?.[String(node.id)] as BuildingData | undefined;
+  return (
+    building !== undefined &&
+    Number(building.t) === node.t &&
+    Number(building.X) === node.x &&
+    Number(building.Y) === node.y
+  );
+};
+
+/**
  * Checks positions: inside the plot for `expansion`, and no two footprints on
  * the same cells. `obstacles` are fixed rectangles nothing may overlap, which
- * is how Apply keeps buildings off mushrooms.
+ * is how Apply keeps buildings off mushrooms. With `saved` (the caller's
+ * `buildingdata`) a decoration at its saved spot is not held to the plot.
  */
 export const checkNodePlacement = (
   nodes: LayoutNode[],
   expansion: number,
-  obstacles: FootprintRect[] = []
+  obstacles: FootprintRect[] = [],
+  saved?: BuildingDataMap | null
 ): void => {
   const outside: number[] = [];
   const placed: { id: number; rect: FootprintRect }[] = [];
 
   for (const node of nodes) {
     const rect = rectOf(node.t, node.x, node.y);
-    if (!withinBounds(rect, node.t, expansion)) outside.push(node.id);
+    if (!withinBounds(rect, expansion) && !decorationUnmoved(node, saved)) outside.push(node.id);
     placed.push({ id: node.id, rect });
   }
 

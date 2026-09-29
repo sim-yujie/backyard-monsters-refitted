@@ -305,7 +305,7 @@ export const placementProblem = (save: BuildSave, request: BuildRequest): Placem
   const { type, x, y } = request;
   const rect = rectOf(type, x, y);
 
-  if (!withinBounds(rect, type, currentExpansion(save.storedata))) return { placement: "outOfBounds" };
+  if (!withinBounds(rect, currentExpansion(save.storedata))) return { placement: "outOfBounds" };
 
   for (const [key, building] of Object.entries(save.buildingdata ?? {})) {
     const other = rectOf(Number(building.t), Number(building.X), Number(building.Y));

@@ -221,7 +221,7 @@ export const planTrapRearm = (save: TrapRearmSave, traps: readonly TrapPlacement
 
   traps.forEach((trap, index) => {
     const rect = rectOf(trap.t, trap.x, trap.y);
-    if (!withinBounds(rect, trap.t, expansion)) outOfBounds.push(index);
+    if (!withinBounds(rect, expansion)) outOfBounds.push(index);
     placing.push({ key: index, rect });
   });
 

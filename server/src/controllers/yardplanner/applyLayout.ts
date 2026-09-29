@@ -94,7 +94,8 @@ const applyTo = (save: Save, raw: unknown, now: number) => {
   checkNodePlacement(
     payload.nodes,
     currentExpansion(save.storedata),
-    mushroomRects(save.mushrooms)
+    mushroomRects(save.mushrooms),
+    save.buildingdata
   );
 
   // Bring the countdowns forward before `savetime` moves, or every running job

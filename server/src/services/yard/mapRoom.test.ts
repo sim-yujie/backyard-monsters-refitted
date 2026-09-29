@@ -214,7 +214,7 @@ describe("migrateYard — a Map Room 2 yard without a Map Room (owner decision 2
     expect(job?.kind).toBe("mapRoomAdded");
     const mapRoom = save.buildingdata![String(job!.id)]!;
     const rect = rectOf(MAP_ROOM, Number(mapRoom.X), Number(mapRoom.Y));
-    expect(withinBounds(rect, MAP_ROOM, 0)).toBe(true);
+    expect(withinBounds(rect, 0)).toBe(true);
     expect(halls.some((one) => overlaps(rect, rectOf(HALL, Number(one.X), Number(one.Y))))).toBe(false);
   });
 

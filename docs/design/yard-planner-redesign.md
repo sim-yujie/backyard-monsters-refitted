@@ -468,7 +468,7 @@ row is a check with a status and, where relevant, a "show me" link that selects 
 | Every non-decoration building is placed | Blocking | `BasePlannerPopup.checkIfApplicable:132-143` |
 | No building overlaps another | Blocking | `PlannerDesignView.validateBuilding:558-582` |
 | Every building is inside the yard bounds for the current expansion | Blocking | `YARD_EXPANSIONS` by `STORE._storeData.ENL.q`, `PlannerDesignView.as:106,571-577` |
-| Decorations are inside the larger decoration bounds | Blocking | `MAX_YARD_DIMENSIONS` 3240 x 2600, `PlannerDesignView.as:104,578-580` |
+| Decorations are inside the yard bounds too, unless left at their saved spot | Blocking | Flash used `MAX_YARD_DIMENSIONS` 3240 x 2600, `PlannerDesignView.as:104,578-580`; owner decision 2026-09-29 (#128) |
 | Enough resources for the queued upgrades | Warning | Summary totals, F3 |
 | Enough free workers for the queued upgrades | Warning | `QUEUE.CanDo:76-113`, `WORKERS.Assign:65-102` |
 | No queued upgrade is blocked by a prerequisite | Warning | `BASE.CanUpgrade:3828+`, `costs[level].re` |
@@ -729,7 +729,10 @@ Expansion bounds, from `PlannerDesignView.as:106`:
 | 5 | 1620 x 1300 |
 | 6 | 1780 x 1420 |
 
-Decorations are bounded by `MAX_YARD_DIMENSIONS`, 3240 x 2600 (`PlannerDesignView.as:104,578-580`).
+Flash bounded decorations by `MAX_YARD_DIMENSIONS`, 3240 x 2600 (`PlannerDesignView.as:104,578-580`).
+Since #128 (owner decision 2026-09-29) they are bounded by the plot like every building; one that
+is already outside the plot may stay exactly where it is, but any move or new placement must land
+inside, and nothing is moved on its own.
 
 Validation must live in one shared module so that save and apply enforce identical rules, and so the
 client can import the same predicate for instant feedback.

@@ -40,8 +40,8 @@ const emptyYard = (extra: Partial<StarterBaseSave> = {}): StarterBaseSave => ({
 /** Every footprint in the yard is inside the plot and none touches another. */
 const expectPlaceable = (buildings: BuildingDataMap) => {
   const rects = Object.values(buildings).map((one) => rectOf(Number(one.t), Number(one.X), Number(one.Y)));
-  Object.values(buildings).forEach((one, index) => {
-    expect(withinBounds(rects[index]!, Number(one.t), 0)).toBe(true);
+  rects.forEach((rect) => {
+    expect(withinBounds(rect, 0)).toBe(true);
   });
   for (let a = 0; a < rects.length; a++) {
     for (let b = a + 1; b < rects.length; b++) expect(overlaps(rects[a]!, rects[b]!)).toBe(false);
