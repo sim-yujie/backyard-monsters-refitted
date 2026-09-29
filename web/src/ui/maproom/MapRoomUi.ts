@@ -94,6 +94,8 @@ export interface MapRoomUiHandlers {
   ownMoves: (cell: OffsetCell, payload: PlayerCell) => OwnMoves;
   onMoveMonsters: (cell: OffsetCell, payload: PlayerCell) => void;
   onRelocate: (cell: OffsetCell, payload: PlayerCell) => void;
+  /** The cell panel's Message on another player's yard (#193). */
+  onMessage?: (payload: PlayerCell) => void;
 }
 
 export class MapRoomUi {
@@ -107,6 +109,8 @@ export class MapRoomUi {
   private readonly zoomControl: ZoomControl;
   private readonly rangeControl: RangeControl;
   private readonly docks: HTMLElement[] = [];
+  /** The tool row, bottom right: Range and the zoom, and what `placeTool` puts first. */
+  private tools: HTMLElement | null = null;
 
   private cellPanel: CellPanel | null = null;
   private rangeOn = false;
@@ -180,7 +184,13 @@ export class MapRoomUi {
     tools.append(this.rangeControl.button);
     this.zoomControl.mount(tools);
     bottomRight.append(tools);
+    this.tools = tools;
     return this;
+  }
+
+  /** Puts a tool button at the head of the tool row: the Mail button (#193). */
+  placeTool(element: HTMLElement): void {
+    this.tools?.prepend(element);
   }
 
   destroy(): void {
@@ -296,6 +306,7 @@ export class MapRoomUi {
         ownMoves: this.handlers.ownMoves,
         onMoveMonsters: this.handlers.onMoveMonsters,
         onRelocate: this.handlers.onRelocate,
+        ...(this.handlers.onMessage ? { onMessage: this.handlers.onMessage } : {}),
         onRangeToggle: (on) => this.toggleRange(on),
         extraAction: this.takeover,
       }).mount(this.dock("map-dock map-dock--right mr2-cell-dock"));

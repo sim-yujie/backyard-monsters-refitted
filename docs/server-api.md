@@ -854,6 +854,16 @@ every route.
 | POST | `/requesttruce` | `{ baseid, message (1–580 chars) }` | `{ error: 0 }` | A **second, independent** way to start a truce, keyed by `baseid` (e.g. from the attack/map UI) rather than an existing thread. Resolves the target via `Save.baseid`. Always creates a **new** thread (never reuses an existing one, unlike the `sendmessage` path). Same duplicate-truce guard as above. |
 | POST | `/reportmessagethread` | `{ threadid: string→number, reason: string }` | `{ error: 0 }` | Adds the other thread participant's userid to the caller's `blockedUsers`. `reason` is accepted but **never stored anywhere** — no `Report` row is created despite the name. No check that the caller is actually a participant of the given thread. Idempotent (no-op if already blocked). Never blocks the game's sender, `userid` 0 (a no-op, `{ error: 0 }`). |
 
+**The web client's mailbox (#193)** calls these routes unchanged, through `web/src/api/mail.ts`:
+`getmessagethreads` and `getmessagetargets` when the mailbox opens and after each send or
+block, `getmessagethread` when a thread opens (which marks it read), `sendmessage` with
+`type: "message"` and `targetbaseid: "0"` (required, unused), and `reportmessagethread` for
+Block player (`reason: "block"`, as Flash sent). A `{ error: 1, message }` send is shown
+under the text box as it comes. It sends no truce types and never calls `requesttruce`; truce
+messages already in a thread are shown as plain text with a label. Its Mail badge reads
+`unreadmessages` from `/base/load` (a message count) until the mailbox has fetched the list,
+then counts unread threads. See `docs/design/mailbox.md`.
+
 ### Attack Logs
 
 | Method | Path | Middleware | Request fields | Response | Description |

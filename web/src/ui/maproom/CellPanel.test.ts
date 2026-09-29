@@ -303,3 +303,21 @@ describe("moving between the player's yards (#186)", () => {
     }
   });
 });
+
+describe("Message (#193)", () => {
+  const message = (host: HTMLElement) => host.querySelector<HTMLButtonElement>(".mr2-cell__message")!;
+
+  it("offers another player's yard a Message that names them", () => {
+    const onMessage = vi.fn();
+    const { host } = open(player(), { onMessage });
+    expect(message(host).hidden).toBe(false);
+    message(host).click();
+    expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({ uid: 77, n: "Bramblefoot" }));
+  });
+
+  it("offers none on the player's own yard, a camp, or without a way to write", () => {
+    expect(message(open(player({ mine: 1 }), { onMessage: vi.fn() }).host).hidden).toBe(true);
+    expect(message(open(camp(), { onMessage: vi.fn() }).host).hidden).toBe(true);
+    expect(message(open(player()).host).hidden).toBe(true);
+  });
+});

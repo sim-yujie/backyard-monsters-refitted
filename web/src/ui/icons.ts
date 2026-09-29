@@ -56,6 +56,8 @@ const ICONS = {
   collect: ["M12 3.5v11", "M7.5 10.5l4.5 4.5 4.5-4.5", "M3.5 14.5v3.5a2.5 2.5 0 0 0 2.5 2.5h12a2.5 2.5 0 0 0 2.5-2.5v-3.5"],
   // A crate: the outpost Starter Kits (#188).
   kits: ["M3.5 8L12 4l8.5 4v8.5L12 20.5l-8.5-4z", "M3.5 8l8.5 4 8.5-4", "M12 12v8.5", "M7.8 6l8.4 4"],
+  // An envelope: the mailbox (#193).
+  mail: [{ rect: [3.5, 5.5, 17, 13], rx: 2 }, "M4 7l8 6 8-6"],
 } as const satisfies Record<string, readonly Shape[]>;
 
 export type IconName = keyof typeof ICONS;

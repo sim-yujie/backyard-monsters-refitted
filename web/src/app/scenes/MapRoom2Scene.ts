@@ -1,5 +1,6 @@
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
+import { MailDoor } from "@/ui/mail/MailDoor";
 import {
   cellAt,
   declineTakeover,
@@ -163,6 +164,8 @@ export class MapRoom2Scene implements Scene {
    * the catapult (`game/attack/attackEntry.ts`, `rosterInRange`).
    */
   private ownSave: BaseLoadResponse | null = null;
+  /** The Mail button and the mailbox behind it (#193). */
+  private mail: MailDoor | null = null;
   /** The pool the HUD shows, so a takeover can take its price off at once. */
   private resources: Resources | null = null;
   private credits: number | undefined;
@@ -273,6 +276,7 @@ export class MapRoom2Scene implements Scene {
         }),
         onMoveMonsters: (_cell, payload) => this.openTransfer(payload.bid),
         onRelocate: (cell, payload) => this.openRelocate(cell, payload),
+        onMessage: (payload) => void this.mail?.openCompose({ userid: payload.uid, name: payload.n }),
       },
       SceneName.MAP_ROOM_2,
       [
@@ -280,6 +284,19 @@ export class MapRoom2Scene implements Scene {
         { id: SceneName.YARD, label: "Yard" },
       ],
     ).mount(context.overlay.content, context.overlay.modal);
+
+    // Mail (#193): the tool row's first button, and the mailbox behind it.
+    this.mail = new MailDoor({
+      style: "tool",
+      container: context.overlay.content,
+      // The mailbox docks where the cell panel does.
+      onOpen: () => this.clearSelection(),
+      onShowOnMap: (cell) => {
+        this.mail?.close();
+        this.jumpTo(cell);
+      },
+    });
+    this.ui.placeTool(this.mail.button.element);
 
     this.ui.setBookmarks(this.bookmarks.all);
     this.updateBookmarkTarget();
@@ -336,6 +353,8 @@ export class MapRoom2Scene implements Scene {
     window.removeEventListener("offline", this.handleOffline);
     if (import.meta.env.DEV) delete (globalThis as Record<string, unknown>)["__takeoverPreview"];
 
+    this.mail?.destroy();
+    this.mail = null;
     this.ui?.destroy();
     this.ui = null;
     this.renderer.destroy();
@@ -401,6 +420,7 @@ export class MapRoom2Scene implements Scene {
       // The load that chose this map, when there was one (issue #162).
       const base = takePrimedOwnYard() ?? (await loadOwnYard());
       this.ownSave = base;
+      this.mail?.setSaveUnread(base.unreadmessages);
 
       const home = base.homebase;
       if (home) {

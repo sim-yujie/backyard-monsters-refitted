@@ -302,6 +302,11 @@ export class YardDock {
     this.attack.element.title = state.title;
   }
 
+  /** Puts a button another part of the scene owns beside Monsters: the Mail button (#193). */
+  placeBesideMonsters(element: HTMLElement): void {
+    this.monsters.element.after(element);
+  }
+
   destroy(): void {
     this.bind(null);
     this.collect.destroy();

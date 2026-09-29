@@ -1,0 +1,500 @@
+/*
+ * The mailbox (#193): the Mail button (`web/src/ui/mail/MailButton.ts`) and
+ * the mailbox screen (`MailboxScreen.ts`).
+ *
+ * Same rule as ui.css: every value comes from tokens.css. The frame is the
+ * shared `.panel`, docked where the Shop and the Monsters screen dock; the
+ * yard's Mail button is one of the dock's round buttons (yard-hud.css), the
+ * map's one of its tool buttons (maproom.css). What is new here is the badge,
+ * the two panes and the message bubbles.
+ */
+
+/* ── The yard's Mail button: left of Monsters, at its height ────────────── */
+
+.yard-dock__right > .yard-dock__button--mail {
+  right: 240px;
+  bottom: 30px;
+}
+
+/* ── The Mail button's badge ──────────────────────────────────────────── */
+
+.mail-badge,
+.yard-dock__badge.mail-badge {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.mail-badge--tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.mail-badge[hidden] {
+  display: none;
+}
+
+/* ── The frame: docked right under the HUD, full height ─────────────────── */
+
+.mail-screen {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: var(--z-hud);
+  width: min(760px, calc(100vw - 2 * var(--space-4)));
+  max-width: none;
+  min-width: 0;
+}
+
+.mail-screen[hidden] {
+  display: none;
+}
+
+.mail-screen .panel__titlebar {
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+
+.mail-screen .panel__title {
+  font-size: var(--text-xl);
+}
+
+.mail-screen__close {
+  margin-left: auto;
+}
+
+.mail-screen .panel__body {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mail-status {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--colour-border-subtle);
+  font-size: var(--text-sm);
+}
+
+.mail-status--bad {
+  color: var(--colour-danger);
+}
+
+.mail-status--info {
+  color: var(--colour-success);
+}
+
+/* ── Two panes: the list, and the thread or new message ──────────────── */
+
+.mail-panes {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  /* minmax(0, …): a long nowrap preview must not widen its column. */
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+}
+
+.mail-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-right: 1px solid var(--colour-border-subtle);
+}
+
+.mail-list--loading .mail-list__rows {
+  opacity: 0.6;
+}
+
+.mail-list__head {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--colour-border-subtle);
+}
+
+.mail-list__new {
+  width: 100%;
+}
+
+.mail-list__rows {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.mail-list__empty {
+  padding: var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.mail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-5);
+  border: 0;
+  border-bottom: 1px solid var(--colour-border-subtle);
+  background: none;
+  color: var(--colour-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+}
+
+.mail-row:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.mail-row:focus-visible {
+  outline: none;
+  box-shadow: inset var(--focus-ring);
+}
+
+.mail-row[aria-current="true"] {
+  background: var(--colour-surface-selected);
+}
+
+/* The unread dot, left of the name. */
+.mail-row--unread::before {
+  content: "";
+  position: absolute;
+  left: var(--space-2);
+  top: calc(var(--space-3) + 6px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--colour-accent);
+}
+
+.mail-row__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.mail-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.mail-row--unread .mail-row__name,
+.mail-row--unread .mail-row__subject {
+  font-weight: 800;
+  color: var(--colour-text-strong);
+}
+
+.mail-row--notice .mail-row__name {
+  color: var(--colour-info);
+}
+
+.mail-row__time {
+  flex: none;
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.mail-row__subject,
+.mail-row__preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+}
+
+.mail-row__preview {
+  color: var(--colour-text-secondary);
+}
+
+.mail-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.mail-pane__empty {
+  margin: auto;
+  padding: var(--space-5);
+  max-width: 360px;
+  color: var(--colour-text-muted);
+  text-align: center;
+}
+
+.mail-pane__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--colour-border-subtle);
+}
+
+/* The way back to the list is the phone's alone. */
+.mail-pane__back {
+  display: none;
+}
+
+.mail-pane__titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.mail-pane__name {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.mail-pane__subject {
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.mail-pane__note {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--colour-border-subtle);
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.mail-block {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mail-block__confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  max-width: 320px;
+}
+
+.mail-block__confirm[hidden] {
+  display: none;
+}
+
+/* While it asks, the question takes a row of its own under the name. */
+.mail-block:has(> .mail-block__confirm:not([hidden])) {
+  flex-basis: 100%;
+}
+
+.mail-block:has(> .mail-block__confirm:not([hidden])) .mail-block__confirm {
+  justify-content: flex-start;
+  max-width: none;
+}
+
+.mail-block__question {
+  font-size: var(--text-sm);
+}
+
+/* ── The messages ─────────────────────────────────────────────────────── */
+
+.mail-messages {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--space-4);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  overflow-y: auto;
+}
+
+.mail-message {
+  max-width: 78%;
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-sunken);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.mail-message--mine {
+  align-self: flex-end;
+  background: var(--colour-accent-soft);
+}
+
+.mail-message--theirs {
+  align-self: flex-start;
+}
+
+.mail-message--notice {
+  align-self: stretch;
+  max-width: none;
+  border: 1px solid var(--colour-border);
+  background: var(--colour-surface-raised);
+}
+
+.mail-message__label {
+  font-size: var(--text-sm);
+}
+
+.mail-message__text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mail-message__time {
+  align-self: flex-end;
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.mail-message__map {
+  align-self: flex-start;
+}
+
+/* ── Writing: a reply, or a new message ───────────────────────────────── */
+
+.mail-compose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+.mail-compose__fixed {
+  margin: 0;
+  font-weight: 600;
+}
+
+.mail-compose__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.mail-compose__caption {
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.mail-compose__to,
+.mail-compose__subject,
+.mail-writer__text {
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-input);
+  color: var(--colour-text);
+  font: inherit;
+}
+
+.mail-writer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--colour-border-subtle);
+}
+
+.mail-compose .mail-writer {
+  padding: 0;
+  border-top: 0;
+}
+
+.mail-writer__text {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.mail-writer__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.mail-writer__counter {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.mail-writer__refusal {
+  margin: 0;
+  color: var(--colour-danger);
+  font-size: var(--text-sm);
+}
+
+.mail-writer__refusal[hidden] {
+  display: none;
+}
+
+/* ── A phone: a bottom sheet, one pane at a time ──────────────────────── */
+
+@media (width <= 620px) {
+  .mail-screen {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: min(82vh, calc(100vh - var(--hud-height)));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom: 0;
+  }
+
+  .yard-dock__right > .yard-dock__button--mail {
+    right: 192px;
+    bottom: 18px;
+  }
+
+  /* The sheet has the yard's round buttons' place, as the Monsters screen does. */
+  .overlay__layer:has(> .mail-screen:not([hidden])) > .yard-dock {
+    display: none;
+  }
+
+  .mail-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mail-list {
+    border-right: 0;
+  }
+
+  .mail-panes--open .mail-list,
+  .mail-panes:not(.mail-panes--open) .mail-pane {
+    display: none;
+  }
+
+  .mail-pane__back {
+    display: inline-flex;
+  }
+
+  .mail-message {
+    max-width: 90%;
+  }
+}

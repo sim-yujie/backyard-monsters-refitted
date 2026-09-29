@@ -6,6 +6,7 @@ import { cellsText } from "@/game/maproom/attackRange";
 import { TRIBE_COLOURS } from "@/game/maproom/cellVisuals";
 import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
 import { button, el, icon, type IconName } from "@/ui/maproom1/icons";
+import { icon as lineIcon } from "@/ui/icons";
 
 /**
  * The map's cell panel, slimmed to what a player decides with (issue #174,
@@ -60,6 +61,8 @@ export interface CellPanelOptions {
   ownMoves?: (cell: OffsetCell, payload: PlayerCell) => OwnMoves;
   onMoveMonsters?: (cell: OffsetCell, payload: PlayerCell) => void;
   onRelocate?: (cell: OffsetCell, payload: PlayerCell) => void;
+  /** Writes to another player's yard's owner (#193). Absent: no Message button. */
+  onMessage?: (payload: PlayerCell) => void;
   /**
    * An action that sits under Attack and brings its own line under the
    * actions: Take over (`TakeoverControl`, issue #82). It is told about
@@ -130,6 +133,8 @@ export class CellPanel {
   private readonly viewYardButton: HTMLButtonElement;
   private readonly viewYardLabel: HTMLElement;
   private readonly bookmarkButton: HTMLButtonElement;
+  /** Message, beside View yard on another player's yard (#193). */
+  private readonly messageButton: HTMLButtonElement;
   private readonly more: HTMLDetailsElement;
   private readonly facts: HTMLDListElement;
 
@@ -207,8 +212,16 @@ export class CellPanel {
       if (this.cell) options.onBookmark(this.cell);
     });
 
+    this.messageButton = button("btn btn--outline mr2-cell__secondary mr2-cell__message");
+    this.messageButton.append(lineIcon("mail", 18, "map-icon"), el("span", "", "Message"));
+    this.messageButton.title = "Write to this yard's owner";
+    this.messageButton.hidden = true;
+    this.messageButton.addEventListener("click", () => {
+      if (this.payload && isPlayerCell(this.payload)) options.onMessage?.(this.payload);
+    });
+
     this.secondary = el("div", "mr2-cell__row");
-    this.secondary.append(this.viewYardButton, this.bookmarkButton);
+    this.secondary.append(this.viewYardButton, this.messageButton, this.bookmarkButton);
 
     this.moveMonstersButton = button("btn btn--outline mr2-cell__secondary mr2-cell__move");
     this.moveMonstersButton.append(icon("swap", 18, "map-icon"), el("span", "", "Move monsters"));
@@ -366,6 +379,7 @@ export class CellPanel {
     } else {
       this.addReach(cell);
       this.setActions("attack", "View yard");
+      this.messageButton.hidden = this.options.onMessage === undefined;
     }
 
     this.addDamage(payload.dm, payload.d === 1);
@@ -453,6 +467,7 @@ export class CellPanel {
     this.moves.hidden = true;
     this.secondary.hidden = !(attack || kind === "bookmark");
     this.viewYardButton.hidden = !attack;
+    this.messageButton.hidden = true;
     this.viewYardLabel.textContent = viewLabel;
     this.viewYardButton.title = kind === "none" ? VIEW_LOADING : VIEW_OTHER;
     this.bookmarkButton.disabled = !this.options.canBookmark();
