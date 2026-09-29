@@ -11,6 +11,7 @@ import {
 import {
   BOMBS,
   TICKS_PER_SECOND,
+  parseDefenderForces,
   type BattleVisualEvent,
   type CreepSnapshot,
 } from "@/game/combat/rules";
@@ -919,6 +920,19 @@ export class AttackBattleLayer {
       const sheet = spriteFor(`G${champion.t}`, champion.l);
       if (sheet) this.textures.preload(sheet);
     }
+    // And the defence's, so a bunker's monsters and the caged champion come
+    // out drawn rather than as markers while their sheets arrive (#195).
+    const defence = parseDefenderForces(this.session.attackLoad()?.defenderforces);
+    if (!defence) return;
+    for (const garrison of Object.values(defence.bunkers)) {
+      for (const id of Object.keys(garrison)) {
+        const sheet = spriteFor(id, defence.defenderLevels[id] ?? 1);
+        if (sheet) this.textures.preload(sheet);
+      }
+    }
+    const caged = defence.defenderChampion;
+    const sheet = caged ? spriteFor(`G${caged.t}`, caged.l) : undefined;
+    if (sheet) this.textures.preload(sheet);
   }
 
   /* ── Creeps ─────────────────────────────────────────────────────────── */

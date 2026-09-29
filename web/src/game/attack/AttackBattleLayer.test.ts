@@ -503,6 +503,39 @@ const play = (session: AttackSession, seconds: number, layer: AttackBattleLayer)
   }
 };
 
+describe("AttackBattleLayer against a defence (#195)", () => {
+  it("starts the defence's sheets with the attacker's, so defenders come out drawn", () => {
+    const urls: string[] = [];
+    const session = new AttackSession({ target: targetOf(), seed: 1 });
+    const response = {
+      ...towerYard(),
+      defenderforces: {
+        bunkers: { 9: { C8: 2 } },
+        defenderLevels: { C8: 3 },
+        defenderChampion: { t: 1, l: 2, hp: 5000, pl: 0 },
+      },
+    } as unknown as BaseLoadResponse;
+    session.load(response);
+    const layer = new AttackBattleLayer({
+      session,
+      yard: readYard(response),
+      host: hostOf(),
+      overlay: new Container(),
+      reducedMotion: false,
+      textures: new MonsterSheetTextures((url) => {
+        urls.push(url);
+        return Promise.resolve(blankSheet(keyOf(url)));
+      }),
+    });
+    const wanted = [spriteFor("C8", 3), spriteFor("G1", 2)];
+    for (const sheet of wanted) {
+      expect(sheet).toBeDefined();
+      expect(urls.some((url) => url.endsWith(sheet!.file))).toBe(true);
+    }
+    layer.destroy();
+  });
+});
+
 describe("AttackBattleLayer over a session", () => {
   it("adds its own containers after what the overlay already holds", () => {
     const { overlay, marker, layer } = setUp();
