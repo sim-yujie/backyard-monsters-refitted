@@ -388,11 +388,17 @@
 
 /* ── Docked panels ────────────────────────────────────────────────────── */
 
+/*
+ * Between the two bars, as the planner measured them (`--planner-top` and
+ * `--planner-bottom`, set by `YardPlanner.reportPlannerInset`): a bar that
+ * wraps to a second row, as the top one does at 1440 px, no longer covers the
+ * top of a panel (#45).
+ */
 .planner-dock {
   position: absolute;
   left: var(--space-4);
-  top: calc(var(--hud-height) + 56px);
-  bottom: 64px;
+  top: calc(var(--planner-top, calc(var(--hud-height) + 56px)) + var(--space-2));
+  bottom: calc(var(--planner-bottom, 56px) + var(--space-2));
   width: min(420px, 38vw);
   display: flex;
   flex-direction: column;
@@ -849,6 +855,33 @@
 
   .yard-zoom__slider {
     width: 96px;
+  }
+
+  /*
+   * The inspector is a bottom sheet below 900 px (design §4, #45): full width
+   * along the bottom edge above the action bar, as tall as its content up to
+   * half the screen, rather than a column down the right that covers the
+   * yard's middle on a phone. The zoom and minimap, which share that corner,
+   * step aside while it is up; closing it brings them back.
+   */
+  .planner-dock--right {
+    top: auto;
+    left: var(--space-2);
+    right: var(--space-2);
+    width: auto;
+    max-height: min(
+      50vh,
+      calc(100vh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
+    );
+    justify-content: flex-end;
+  }
+
+  .planner-dock--right > .panel {
+    max-width: none;
+  }
+
+  .overlay__layer:has(> .planner-dock--right > *) > .yard-viewtools {
+    display: none;
   }
 }
 
@@ -1535,7 +1568,7 @@
  */
 .planner-help-dock {
   position: absolute;
-  inset: calc(var(--hud-height) + 56px) 0 64px;
+  inset: var(--planner-top, calc(var(--hud-height) + 56px)) 0 var(--planner-bottom, 64px);
   display: grid;
   place-items: center;
   padding: var(--space-3);

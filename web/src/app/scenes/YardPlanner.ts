@@ -583,6 +583,8 @@ export class YardPlanner {
     this.inspectorDock.remove();
     this.helpDock.remove();
     this.options.notices.clear(NOTICE);
+    this.options.overlay.style.removeProperty("--planner-top");
+    this.options.overlay.style.removeProperty("--planner-bottom");
     this.reportReadOnlyInset();
   }
 
@@ -1093,6 +1095,10 @@ export class YardPlanner {
   private reportPlannerInset(): void {
     const top = this.bar.toolbar.getBoundingClientRect().bottom;
     const bottom = window.innerHeight - this.bar.actionBar.getBoundingClientRect().top;
+    // The docks and the help card sit between the bars as they measure now,
+    // however many rows either wraps to (planner.css, #45).
+    this.options.overlay.style.setProperty("--planner-top", `${top}px`);
+    this.options.overlay.style.setProperty("--planner-bottom", `${bottom}px`);
     this.options.onInset({ top, bottom });
   }
 
