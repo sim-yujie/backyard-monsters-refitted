@@ -2,7 +2,7 @@ import { bunkerSpace, bunkerState, type BunkerSource } from "@/game/monsters/bun
 import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { YardResponse } from "./types";
-import type { YardRefusal } from "./yard";
+import { yardBody, type YardRefusal } from "./yard";
 
 /**
  * The Monster Bunker's yard routes (`docs/design/yard-buildings.md` §7.1; wire
@@ -52,24 +52,24 @@ export const bunkerFill = (
   bunker: number,
   monsters: Readonly<Record<string, number>>,
   source: BunkerSource,
+  baseid?: string,
 ): Promise<YardResponse<BunkerFillReport>> =>
-  post<YardResponse<BunkerFillReport>>(`${BUNKER_PATH}/fill`, {
-    bunker: String(bunker),
-    monsters: JSON.stringify(monsters),
-    source,
-  });
+  post<YardResponse<BunkerFillReport>>(
+    `${BUNKER_PATH}/fill`,
+    yardBody({ bunker: String(bunker), monsters: JSON.stringify(monsters), source }, baseid),
+  );
 
 /** Takes monsters out for good. Refusals: `noBunker`, `mapRoom3`, 400 `badRequest`, `notInBunker`. */
 export const bunkerRemove = (
   bunker: number,
   monster: string,
   count: number | "all",
+  baseid?: string,
 ): Promise<YardResponse<BunkerRemoveReport>> =>
-  post<YardResponse<BunkerRemoveReport>>(`${BUNKER_PATH}/remove`, {
-    bunker: String(bunker),
-    monster,
-    count: String(count),
-  });
+  post<YardResponse<BunkerRemoveReport>>(
+    `${BUNKER_PATH}/remove`,
+    yardBody({ bunker: String(bunker), monster, count: String(count) }, baseid),
+  );
 
 export interface BunkerApi {
   fill: typeof bunkerFill;
@@ -140,7 +140,7 @@ export const bunkerActions = (store: YardStore, api: BunkerApi = bunkerApi): Bun
         }
         return null;
       },
-      send: () => api.fill(bunker, monsters, source),
+      send: (_api, ...yard) => api.fill(bunker, monsters, source, ...yard),
     }),
   remove: (bunker, monster, count) =>
     store.run({
@@ -152,6 +152,6 @@ export const bunkerActions = (store: YardStore, api: BunkerApi = bunkerApi): Bun
           ? null
           : refuse("notInBunker", "That monster is not in this bunker.", { monster });
       },
-      send: () => api.remove(bunker, monster, count),
+      send: (_api, ...yard) => api.remove(bunker, monster, count, ...yard),
     }),
 });

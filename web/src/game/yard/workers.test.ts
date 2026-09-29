@@ -58,6 +58,12 @@ describe("workerCount", () => {
     expect(workerCount({ BEW: { q: 9 } })).toBe(WORKER_CAP);
   });
 
+  it("gives an outpost one worker, bought workers ignored (`QUEUE.as:31-52`)", () => {
+    expect(workerCount({ BEW: { q: 4 } }, "outpost")).toBe(1);
+    expect(workerCount(null, "outpost")).toBe(1);
+    expect(workerCount({ BEW: { q: 4 } }, "main")).toBe(WORKER_CAP);
+  });
+
   it("treats an unreadable or negative quantity as none", () => {
     expect(workerCount({ BEW: {} })).toBe(1);
     expect(workerCount({ BEW: { q: -3 } })).toBe(1);

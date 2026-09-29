@@ -1,6 +1,7 @@
 import { getSession } from "@/api/auth";
 import type { ResourceCaps, Resources } from "@/api/types";
 import { nextWorkerJob } from "@/game/yard/jobs";
+import type { OwnYardTarget } from "@/game/yard/ownYards";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { AccountMenu } from "./AccountMenu";
 import { MonstersTabId } from "./monsters/monstersTab";
@@ -9,6 +10,7 @@ import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from 
 import { CollectAll } from "./yard/CollectAll";
 import { DamageBanner } from "./yard/DamageBanner";
 import { JobNotices } from "./yard/JobNotices";
+import { YardSwitcher } from "./yard/YardSwitcher";
 
 /**
  * The persistent top bar: resource readouts on the left, a scene switcher on
@@ -35,6 +37,12 @@ import { JobNotices } from "./yard/JobNotices";
  * "N buildings damaged [Repair all]" line in the notice dock (`DamageBanner`,
  * design §5.5). The map, the attack screen and a
  * foreign yard have no binding and show the amounts alone.
+ *
+ * With `onYardSelect` the bar also carries the yard switcher (`YardSwitcher`,
+ * outposts WP5): the open yard's title, "Main yard" or "Outpost (x, y)", the
+ * outpost count, and a menu of every own yard. In an outpost the amounts and
+ * caps are the main yard's pool, as the server sends them, and Collect all
+ * is not offered: an outpost banks by itself.
  */
 
 /**
@@ -99,6 +107,11 @@ export interface HudOptions {
   onSignOut?: () => void;
   /** The name the Account menu shows; the signed-in session's by default. */
   accountName?: string | null;
+  /**
+   * With it, the bar carries the yard switcher while an own yard is bound,
+   * and this opens the yard picked in it.
+   */
+  onYardSelect?: (target: OwnYardTarget) => void;
 }
 
 /** How long a tapped readout's exact-amount bubble stays up on its own. */
@@ -177,6 +190,8 @@ export class Hud {
   private readonly monstersName: HTMLElement;
   /** Collect all (design §5.1): only on the own yard, only while something waits. */
   private readonly collectAll = new CollectAll();
+  /** Which own yard is open, and the way to the others; only with `onYardSelect`. */
+  private readonly switcher: YardSwitcher | null;
   private accountMenu: AccountMenu | null = null;
   private fitted: HudFit = HudFit.FULL;
 
@@ -274,6 +289,8 @@ export class Hud {
     );
     this.monsters.append(monstersButton);
 
+    this.switcher = options.onYardSelect ? new YardSwitcher({ onSelect: options.onYardSelect }) : null;
+
     const spacer = document.createElement("div");
     spacer.className = "hud__spacer";
 
@@ -297,6 +314,7 @@ export class Hud {
       this.workers,
       this.collectAll.element,
       this.monsters,
+      ...(this.switcher ? [this.switcher.element] : []),
       spacer,
       scenes,
     );
@@ -374,7 +392,9 @@ export class Hud {
       this.damageBanner = new DamageBanner(binding);
       this.unsubscribeYard = binding.store.subscribe((change) => this.onYardChange(change));
     }
-    this.collectAll.bind(binding);
+    // An outpost banks by itself (`BUILDINGINFO.as:130-131`): no Collect all.
+    this.collectAll.bind(binding?.store.kind === "outpost" ? null : binding);
+    this.switcher?.bind(binding);
     this.syncYard();
   }
 
@@ -402,6 +422,7 @@ export class Hud {
     this.hideExact();
     this.accountMenu?.destroy();
     this.accountMenu = null;
+    this.switcher?.destroy();
     for (const float of this.floats) float.remove();
     this.floats.clear();
     this.element.remove();

@@ -6,6 +6,7 @@ import {
   shopBuy,
   speedUp,
   startUpgrade,
+  yardBody,
   yardRefusal,
   yardState,
 } from "./yard";
@@ -54,6 +55,24 @@ describe("yard routes", () => {
     expect(sent[1]!.body.get("id")).toBe("12");
     expect(sent[4]!.body.get("item")).toBe("SP2");
     expect(sent[5]!.body.get("item")).toBe("BST");
+    // The main yard's calls name no yard (outposts WP5).
+    expect(sent.every((call) => !call.body.has("baseid"))).toBe(true);
+  });
+
+  it("names the outpost a call acts on (outposts WP5)", async () => {
+    stubFetch(200, { error: 0, savetime: 1, currenttime: 1, completed: [], report: null });
+    await yardState("2000242209");
+    await startUpgrade(12, "2000242209");
+    await speedUp(12, "SP2", "2000242209");
+
+    expect(sent.map((call) => call.body.get("baseid"))).toEqual([
+      "2000242209",
+      "2000242209",
+      "2000242209",
+    ]);
+    expect(sent[1]!.body.get("id")).toBe("12");
+    expect(yardBody({ id: 1 })).toEqual({ id: 1 });
+    expect(yardBody({ id: 1 }, "9")).toEqual({ id: 1, baseid: "9" });
   });
 
   it("throws a refusal that yardRefusal reads back into reason and detail", async () => {

@@ -494,6 +494,14 @@ export interface MushroomSave {
 }
 
 /**
+ * One of the player's Map Room 2 outposts, as the main yard lists it in
+ * `outposts`: its cell and its `baseid` (`server/src/database/models/save.model.ts`,
+ * written by `takeoverCell.ts`). Flash-era rows may hold the numbers as strings
+ * and the id as a number; `ownYards.ts` reads them either way.
+ */
+export type OutpostEntry = [x: number, y: number, baseid: string];
+
+/**
  * The /base/load envelope. The server spreads every @FrontendKey field of the
  * Save entity into the top level, so this lists the handful the client needs
  * now and leaves the rest to the index signature.
@@ -512,6 +520,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
   resources?: Resources;
   credits?: number;
   homebase?: [number, number];
+  /**
+   * The player's Map Room 2 outposts. Served from the main yard on every load
+   * of a yard the player owns, an outpost's included (`mapSaveData.ts`), so
+   * the yard switcher can list them from whichever yard is open.
+   */
+  outposts?: OutpostEntry[] | null;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   mushrooms?: MushroomSave | null;
@@ -582,7 +596,7 @@ export interface BaseLoadResponse extends ApiEnvelope {
   /** The base owner's running alliance powerups. */
   powerups?: unknown[];
   /**
-   * Only on the owner's build-mode load of their own main yard: what the
+   * Only on the owner's build-mode load of their own main yard or outpost: what the
    * load's catch-up finished while the player was away, oldest first, in the
    * yard routes' `completed` shape (issue #135). `[]` when nothing did.
    */

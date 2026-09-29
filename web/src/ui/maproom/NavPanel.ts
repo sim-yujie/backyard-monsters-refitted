@@ -1,9 +1,12 @@
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import type { Bookmark } from "@/api/bookmarks";
+import { outpostTitle, type OwnOutpost } from "@/game/yard/ownYards";
 import { Panel } from "@/ui/Panel";
 
 /**
  * Navigation: home, jump to a coordinate, bookmarks and a manual refresh.
+ * Beside Home, one button per own outpost centres on it (outposts WP5), so
+ * Home reaches any of the player's yards.
  *
  * A view only. It holds no bookmark state and does no network work — it reports
  * intent and is told what to display, so the save-and-roll-back rules live in
@@ -28,6 +31,8 @@ export class NavPanel {
   private readonly nameInput: HTMLInputElement;
   private readonly addButton: HTMLButtonElement;
   private readonly list: HTMLUListElement;
+  /** One button per own outpost; hidden while there are none. */
+  private readonly outposts: HTMLElement;
   private readonly status: HTMLElement;
   private readonly options: NavPanelOptions;
 
@@ -42,6 +47,12 @@ export class NavPanel {
       button("Home", "Centre on your main yard", options.onHome),
       button("Refresh", "Refetch every visible zone now", options.onRefresh),
     );
+
+    this.outposts = document.createElement("div");
+    this.outposts.className = "map-row map-row--wrap";
+    this.outposts.setAttribute("role", "group");
+    this.outposts.setAttribute("aria-label", "Your outposts");
+    this.outposts.hidden = true;
 
     const jump = document.createElement("form");
     jump.className = "map-row";
@@ -82,7 +93,7 @@ export class NavPanel {
     this.status = document.createElement("p");
     this.status.className = "map-status";
 
-    this.panel.setContent(actions, jump, this.list, add, this.status);
+    this.panel.setContent(actions, this.outposts, jump, this.list, add, this.status);
   }
 
   /** Enables the add button and names what it would bookmark. */
@@ -132,6 +143,18 @@ export class NavPanel {
       item.append(jump, remove);
       this.list.append(item);
     });
+  }
+
+  /** The player's outposts, each a button that centres on it. */
+  setOutposts(outposts: readonly OwnOutpost[]): void {
+    this.outposts.hidden = outposts.length === 0;
+    this.outposts.replaceChildren(
+      ...outposts.map(({ cell }) =>
+        button(outpostTitle(cell), `Centre on your outpost at ${cell.col}, ${cell.row}`, () =>
+          this.options.onJump(cell.col, cell.row),
+        ),
+      ),
+    );
   }
 
   setStatus(text: string): void {

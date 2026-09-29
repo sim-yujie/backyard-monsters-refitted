@@ -130,7 +130,7 @@ export const buildsAtOnce = (type: number, kind: YardKind = "main"): boolean => 
 /** What a tile reads: the store, or anything shaped like its read side. */
 export interface BuildContext {
   readonly yard: Yard;
-  /** Which props table the yard builds from; a main yard when absent. */
+  /** Which props table the yard builds from; the yard's own kind when absent. */
   readonly kind?: YardKind;
   readonly save: BaseLoadResponse;
   readonly resources: Resources;
@@ -249,7 +249,7 @@ export const categoryOf = (type: number, kind: YardKind = "main"): BuildCategory
  * cost table cannot price.
  */
 export const buildOffer = (type: number, context: BuildContext): BuildOffer | null => {
-  const kind = context.kind ?? "main";
+  const kind = context.kind ?? context.yard.kind;
   const category = categoryOf(type, kind);
   const row = rowOf(type, kind);
   const step = row?.[4][0];
@@ -350,10 +350,12 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
 };
 
 /** Every tile of a tab, in the tab's order. */
-export const buildOffers = (category: BuildCategory, context: BuildContext): BuildOffer[] =>
-  (catalogueFor(context.kind).find((entry) => entry.id === category)?.types ?? [])
+export const buildOffers = (category: BuildCategory, context: BuildContext): BuildOffer[] => {
+  const tab = catalogueFor(context.kind ?? context.yard.kind).find((entry) => entry.id === category);
+  return (tab?.types ?? [])
     .map((type) => buildOffer(type, context))
     .filter((offer): offer is BuildOffer => offer !== null);
+};
 
 /** Tiles by {@link BuildStatus}, the tab's order within each (the sort is stable). */
 export const sortOffers = (offers: readonly BuildOffer[]): BuildOffer[] =>

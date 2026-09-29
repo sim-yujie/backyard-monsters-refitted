@@ -1,0 +1,71 @@
+/* The HUD's yard switcher (outposts WP5, #146): "Main yard" or "Outpost (x, y)"
+   with the outpost count, and a menu of every own yard under it. Built on the
+   HUD's own button and the Account menu's list; nothing else in the bar moves. */
+
+.yard-switcher {
+  position: relative;
+  display: flex;
+  flex: none;
+  white-space: nowrap;
+}
+
+.yard-switcher__button {
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+/* The outpost count, as a small chip after the yard's name. */
+.yard-switcher__count {
+  min-width: 1.5em;
+  padding: 0 var(--space-1);
+  border-radius: 999px;
+  background: var(--colour-surface-control);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.yard-switcher__list {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  z-index: var(--z-popup);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 13rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--space-1);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-popup);
+}
+
+.yard-switcher__list[hidden] {
+  display: none;
+}
+
+.yard-switcher__heading {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--colour-border-subtle);
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.yard-switcher__item {
+  min-height: 44px;
+  justify-content: flex-start;
+  text-align: start;
+  color: var(--colour-text);
+}
+
+.yard-switcher__item[aria-current="true"] {
+  color: var(--colour-accent);
+  font-weight: 700;
+  cursor: default;
+}

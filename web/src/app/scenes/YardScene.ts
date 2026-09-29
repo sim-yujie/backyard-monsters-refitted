@@ -1,5 +1,5 @@
 import { logout } from "@/api/auth";
-import { loadAttackOn, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
+import { loadAttackOn, loadOwnBase, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
 import {
   BaseMode,
@@ -13,6 +13,7 @@ import { buildActions } from "@/api/yardBuild";
 import { consumeViewTarget, setAttackTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
+import { setMapFocus } from "@/game/maproom/mapFocus";
 import { MapRoomChoice, mapRoomOf, takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import {
   PlannerAccess,
@@ -23,6 +24,17 @@ import { buildOffer, buildsAtOnce, categoryOf } from "@/game/yard/buildCatalogue
 import { BuildPlacement } from "@/game/yard/BuildPlacement";
 import { harvesterNow, type HarvestKey } from "@/game/yard/harvest";
 import { MushroomPicker, type MushroomPickView } from "@/game/yard/mushroomPick";
+import {
+  consumeOwnYardTarget,
+  isEmptyOutpost,
+  MAIN_YARD,
+  outpostBaseid,
+  sameYard,
+  setOwnYardTarget,
+  withCell,
+  yardTitle,
+  type OwnYardTarget,
+} from "@/game/yard/ownYards";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
 import { consumeYardIntent, type YardIntent } from "@/game/yard/yardIntent";
 import { yardLifeOf } from "@/game/yard/yardLifeModel";
@@ -37,6 +49,7 @@ import { YardInput } from "@/game/yard/YardInput";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
+import { showTakenOver } from "@/ui/maproom/TakeoverDialog";
 import { showBuildMapRoom } from "@/ui/maproom1/MapRoomPrompt";
 import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
 import {
@@ -45,6 +58,7 @@ import {
   type MonstersFocus,
   type MonstersTabId,
 } from "@/ui/monsters/monstersTab";
+import { monstersTabsFor } from "@/ui/monsters/tabs";
 import { resourceAmount } from "@/ui/resourceIcon";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
 import { MAP_ROOM_TYPE } from "@/ui/yard/buildingActions";
@@ -84,28 +98,49 @@ import { SceneName } from "../App";
  * defender's. The one thing it gains is an Attack button, offered only when
  * the map's gate passed, which issues the attack load while this yard stays
  * on screen and hands the response straight to the attack scene.
+ *
+ * The player's own yard is the main yard or one of their outposts (outposts
+ * WP5, #146), named by an {@link OwnYardTarget} the map, the HUD's yard
+ * switcher or a takeover hands over (`ownYards.ts`). An outpost opens by its
+ * `baseid`, its store sends that `baseid` on every request, and the doors an
+ * outpost does not have are left shut: Collect and banking (it banks by
+ * itself), Recycle, Cancel on a construction, mushrooms, and the Unlock, Train
+ * and Lab tabs of the Monsters screen.
  */
 
-/** The two calls a yard can be loaded with, so the choice can be tested. */
+/** The calls a yard can be loaded with, so the choice can be tested. */
 export interface YardLoaders {
   loadOwnYard: typeof loadOwnYard;
+  loadOwnBase: typeof loadOwnBase;
   viewBase: typeof viewBase;
 }
 
 /**
  * Loads the yard a target names: the player's own in build mode when there
- * is no target, otherwise the foreign yard read-only. Pure in the sense that
- * matters — which call is made is decided by the target and nothing else.
+ * is no target (the main yard, or the outpost `own` names), otherwise the
+ * foreign yard read-only. Pure in the sense that matters — which call is made
+ * is decided by the targets and nothing else.
  */
 export const loadYardFor = (
   target: ViewTarget | null,
-  api: YardLoaders = { loadOwnYard, viewBase },
+  api: YardLoaders = { loadOwnYard, loadOwnBase, viewBase },
+  own: OwnYardTarget = MAIN_YARD,
 ): Promise<BaseLoadResponse> =>
   !target
-    ? api.loadOwnYard()
+    ? own.kind === "outpost"
+      ? api.loadOwnBase(own.baseid)
+      : api.loadOwnYard()
     : target.mapversion === undefined
       ? api.viewBase(target.baseid, target.kind)
       : api.viewBase(target.baseid, target.kind, { mapversion: target.mapversion });
+
+/**
+ * What an outpost holding nothing but its core says, with a way to the Build
+ * window. Flash offered its Starter Kits here (`client/scripts/BASE.as:2321-2324`);
+ * the Kits button joins this notice with outposts WP9.
+ */
+export const EMPTY_OUTPOST_HINT =
+  "This outpost has only its core. Open Build to add harvesters and defences; they are paid from your main yard's storage.";
 
 /**
  * The pool the HUD shows over a yard: the yard's own when it is the player's,
@@ -154,6 +189,9 @@ const layoutIcon = (): SVGSVGElement => {
 
 /** How often the open panel's countdowns are refreshed. */
 const UI_TICK_SECONDS = 1;
+
+/** The notice key of the empty-outpost hint. */
+const OUTPOST_HINT_NOTICE = "outpost-empty";
 
 /** Zoom the yard opens at, over the town hall. 1 is art at native size. */
 const OPENING_ZOOM = 0.9;
@@ -230,6 +268,14 @@ export class YardScene implements Scene {
    * yard. Taken from the map's handoff once, in `enter`, and never changed.
    */
   private target: ViewTarget | null = null;
+  /**
+   * Which own yard this is when there is no visit target: the main yard, or
+   * the outpost the map, the switcher or a takeover asked for. Taken once,
+   * in `enter`.
+   */
+  private own: OwnYardTarget = MAIN_YARD;
+  /** An outpost just taken over: "Veni, Vidi, Vici!" once it has loaded. */
+  private takenOver: OwnYardTarget["takenOver"] | null = null;
   /** The visit's Attack button; only built when the target can be attacked. */
   private attackButton: HTMLButtonElement | null = null;
   /** True while the attack load is in flight, so a second click does nothing. */
@@ -273,7 +319,11 @@ export class YardScene implements Scene {
     // Consumed, not read: a target left behind would turn the next plain
     // "Yard" click into a visit to somebody else's base.
     this.target = consumeViewTarget();
-    const whose = this.target ? `${this.target.name}'s yard` : "your yard";
+    // Taken whatever happens, so it cannot open an outpost on a later visit.
+    const own = consumeOwnYardTarget();
+    this.own = this.target ? MAIN_YARD : (own ?? MAIN_YARD);
+    this.takenOver = this.target ? null : (own?.takenOver ?? null);
+    const whose = this.whose();
     context.stage.addChild(this.renderer.root);
     this.renderer.attach(context.renderer);
 
@@ -287,6 +337,7 @@ export class YardScene implements Scene {
         logout();
         context.goTo(SceneName.LOGIN);
       },
+      onYardSelect: (target) => this.openOwnYard(target),
     });
     this.hud.setActiveScene(SceneName.YARD);
     this.hud.mount(context.overlay.content);
@@ -520,12 +571,14 @@ export class YardScene implements Scene {
     if (!context) return;
 
     const target = this.target;
-    const whose = target ? `${target.name}'s yard` : "your yard";
+    const own = this.own;
+    const whose = this.whose();
 
     try {
       // The own-yard load that sent a player with no Map Room here from the
-      // map door (issue #162), when there was one.
-      const response = (!target && takePrimedOwnYard()) || (await loadYardFor(target));
+      // map door (issue #162), when there was one: always the main yard's.
+      const primed = !target && own.kind === "main" ? takePrimedOwnYard() : null;
+      const response = primed ?? (await loadYardFor(target, undefined, own));
       // The scene may have been swapped out while the request was in flight.
       if (this.context !== context) return;
 
@@ -571,6 +624,7 @@ export class YardScene implements Scene {
       store?.start();
       // What the screen the player came from asked for, on the own yard only.
       if (store) this.applyIntent(consumeYardIntent());
+      if (store?.kind === "outpost") this.arriveAtOutpost(store, context);
     } catch (caught) {
       if (caught instanceof ApiError && caught.isAuthFailure) {
         context.goTo(SceneName.LOGIN);
@@ -585,7 +639,13 @@ export class YardScene implements Scene {
             : `Could not load ${whose}.`,
         { level: "error", actionLabel: "Retry", onAction: () => void this.load() },
       );
-      if (this.status) this.status.textContent = `${target ? "This" : "Your"} yard did not load.`;
+      if (this.status) {
+        this.status.textContent = target
+          ? "This yard did not load."
+          : own.kind === "outpost"
+            ? "Your outpost did not load."
+            : "Your yard did not load.";
+      }
     }
   }
 
@@ -815,7 +875,8 @@ export class YardScene implements Scene {
     this.select(building);
     const store = this.store;
     const binding = this.binding;
-    if (!building || !store || !binding || this.planner) return;
+    // An outpost banks by itself (`BUILDINGINFO.as:130-131`): a tap only selects.
+    if (!building || !store || !binding || this.planner || store.kind === "outpost") return;
     const waiting = harvesterNow(building.raw, store.save, store.now());
     if (!waiting?.bankable || waiting.offer <= 0) return;
 
@@ -916,10 +977,15 @@ export class YardScene implements Scene {
     const binding = this.binding;
     const context = this.context;
     if (!binding || !context || this.planner) return;
+    // An outpost's screen has Hatch and Housing only; the HUD's Monsters
+    // button, which asks for Unlock, opens its first tab there.
+    const tabs = monstersTabsFor(binding.store.kind);
+    const shown = tabs.some((one) => one.id === tab) ? tab : tabs[0]?.id;
+    if (!shown) return;
     this.buildMenu?.close();
-    this.monsters ??= new MonstersScreen({ binding }).mount(context.overlay.content);
+    this.monsters ??= new MonstersScreen({ binding, tabs }).mount(context.overlay.content);
     this.monsters.besidePanel(this.panel !== null);
-    this.monsters.open(tab, focus);
+    this.monsters.open(shown, focus);
   }
 
   /* ── Build ──────────────────────────────────────────────────────────── */
@@ -984,6 +1050,12 @@ export class YardScene implements Scene {
       context.goTo(SceneName.MAP);
       return;
     }
+    // An outpost is a Map Room 2 cell: its map is that world, opened on it.
+    if (store.kind === "outpost") {
+      if (store.target.cell) setMapFocus({ cell: store.target.cell });
+      context.goTo(sceneForMap(MapRoomChoice.MAP_ROOM_2));
+      return;
+    }
     const choice = mapRoomOf(store.save);
     if (choice !== MapRoomChoice.NONE) {
       context.goTo(sceneForMap(choice));
@@ -1004,7 +1076,7 @@ export class YardScene implements Scene {
 
   /** The Build window's "Upgrade Town Hall": close it and open the hall's panel. */
   private showTownHall(): void {
-    const hall = this.yard?.buildings.find((one) => one.type === 14);
+    const hall = this.yard?.townHall;
     if (!hall) return;
     this.buildMenu?.close();
     this.focusBuilding(hall.id);
@@ -1152,6 +1224,8 @@ export class YardScene implements Scene {
       readOnlyToolbar: toolbar,
       readOnly: this.access === PlannerAccess.READ_ONLY,
       ...(this.save?.firedtraps ? { firedtraps: this.save.firedtraps } : {}),
+      // An outpost's Apply and batch actions act on it (outposts WP3).
+      ...(this.store?.baseid !== undefined ? { baseid: this.store.baseid } : {}),
       onApplied: (buildingdata, moved, resources, upgrades) =>
         this.onApplied(buildingdata, moved, resources, upgrades),
       onYardChanged: (buildingdata, resources) => this.onYardChanged(buildingdata, resources),
@@ -1292,9 +1366,11 @@ export class YardScene implements Scene {
     this.dropStore();
     const store = new YardStore({
       save: response,
+      // The yard's title needs the outpost's cell, which the load lists.
+      target: withCell(this.own, response),
       // What this load, or the map's load before it, finished while the
       // player was away (#135); the store announces it once it starts.
-      away: takeAwayJobs(),
+      away: takeAwayJobs(outpostBaseid(this.own)),
       onAuthFailure: () => {
         if (this.context === context) context.goTo(SceneName.LOGIN);
       },
@@ -1310,8 +1386,53 @@ export class YardScene implements Scene {
       notices: this.notices,
     };
     this.hud?.bindYard(this.binding);
-    this.mushroomPicker = new MushroomPicker(store, this.mushroomView(context));
+    // Mushrooms are picked in the main yard only (the route refuses an outpost).
+    this.mushroomPicker =
+      store.kind === "main" ? new MushroomPicker(store, this.mushroomView(context)) : null;
     return store;
+  }
+
+  /* ── Own yards ──────────────────────────────────────────────────────── */
+
+  /** "your yard", "your outpost" or "Name's yard", for the loading lines. */
+  private whose(): string {
+    if (this.target) return `${this.target.name}'s yard`;
+    return this.own.kind === "outpost" ? "your outpost" : "your yard";
+  }
+
+  /**
+   * The yard switcher picked another own yard: the yard screen opens again
+   * on it. Not over the planner, whose unsaved plan the switch would drop.
+   */
+  private openOwnYard(target: OwnYardTarget): void {
+    const context = this.context;
+    if (!context || sameYard(target, this.own)) return;
+    if (this.planner) {
+      this.notices.show("yard-switch", "Close the layout planner before you switch yards.", {
+        level: "info",
+        timeoutMs: 4_000,
+      });
+      return;
+    }
+    setOwnYardTarget(target);
+    context.goTo(SceneName.YARD);
+  }
+
+  /**
+   * What an outpost says as it opens: Flash's "Veni, Vidi, Vici!" when it was
+   * just taken over, and the empty-outpost hint while it holds only its core.
+   */
+  private arriveAtOutpost(store: YardStore, context: SceneContext): void {
+    const takenOver = this.takenOver;
+    this.takenOver = null;
+    if (takenOver) showTakenOver(context.overlay.modal, takenOver.kind, takenOver.name);
+    if (!isEmptyOutpost(store.yard)) return;
+    // Stays until dismissed, or until the first building goes up (`onStoreChange`).
+    this.notices.show(OUTPOST_HINT_NOTICE, EMPTY_OUTPOST_HINT, {
+      level: "info",
+      actionLabel: "Build",
+      onAction: () => this.openBuildMenu(),
+    });
   }
 
   /** What a mushroom pick draws through: the renderer's shake, the notices, the popup. */
@@ -1365,6 +1486,7 @@ export class YardScene implements Scene {
     this.hud?.setResources(store.resources, store.credits);
     this.planner?.rebase(yard);
     this.placement?.rebase(yard);
+    if (!isEmptyOutpost(yard)) this.notices.clear(OUTPOST_HINT_NOTICE);
 
     // `show` drops the selection with the old sprites; put it back.
     const selected = this.selected;
@@ -1430,8 +1552,10 @@ export class YardScene implements Scene {
     const buildings = this.target
       ? countedBuildings(yard.buildings.map((building) => building.type))
       : yard.buildings.length;
+    const own = this.store?.target;
     status.textContent =
       (this.target ? `${this.target.name}'s yard, read-only · ` : "") +
+      (own?.kind === "outpost" ? `${yardTitle(own)} · ` : "") +
       `${buildings} buildings · ${yard.mushrooms.length} mushrooms · ` +
       `plot ${yard.bounds.yardWidth} x ${yard.bounds.yardHeight} (expansion ${yard.expansionLevel}) · ` +
       `${this.frameCostMs.toFixed(1)} ms/frame` +

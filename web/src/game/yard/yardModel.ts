@@ -1,6 +1,6 @@
 import type { BaseLoadResponse, BuildingData, Resources } from "@/api/types";
 import { ArtState, buildingName, maxHealth, resolveArt } from "./buildingArt";
-import { OUTPOST_CORE_TYPE } from "./buildingCostData";
+import { OUTPOST_CORE_TYPE, type YardKind } from "./buildingCostData";
 import { outpostTraitsOf } from "./buildingCosts";
 import {
   depthKey,
@@ -117,7 +117,7 @@ export interface YardMushroom {
  * server charges against are the same reading of the same save.
  */
 export interface YardWorkers {
-  /** `1 + storedata.BEW.q`, capped at five. */
+  /** `1 + storedata.BEW.q`, capped at five; one on an outpost. */
   readonly total: number;
   /** Buildings with a build, upgrade or fortify countdown running. */
   readonly busy: number;
@@ -134,6 +134,12 @@ export interface Yard {
    * around the plot. A wild monster camp is always foreign.
    */
   readonly foreign: boolean;
+  /**
+   * Which props table the yard reads: `outpost` for a player's outpost (its
+   * save's `type`), whose limits, prices and level caps are its own and whose
+   * core stands in for the Town Hall; `main` for everything else.
+   */
+  readonly kind: YardKind;
   /** Depth-sorted, so the renderer can draw straight down the list. */
   readonly buildings: readonly YardBuilding[];
   readonly mushrooms: readonly YardMushroom[];
@@ -304,6 +310,7 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
   const wild = response.type === TRIBE_TYPE;
   const foreign = wild || options.foreign === true;
   const outpost = response.type === OUTPOST_TYPE;
+  const kind: YardKind = outpost ? "outpost" : "main";
   const bounds = yardBounds(expansionLevel, {
     wild,
     margin: foreign ? FOREIGN_YARD_MARGIN : YARD_MARGIN,
@@ -381,6 +388,7 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
     bounds,
     expansionLevel,
     foreign,
+    kind,
     buildings,
     mushrooms,
     resources: response.resources ?? {},
@@ -392,7 +400,7 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
       buildings.find((one) => one.type === OUTPOST_CORE_TYPE) ??
       null,
     workers: {
-      total: workerCount(response.storedata),
+      total: workerCount(response.storedata, kind),
       busy: busyWorkers({ buildings }),
     },
     // Against the server's clock rather than the browser's: a buff that has

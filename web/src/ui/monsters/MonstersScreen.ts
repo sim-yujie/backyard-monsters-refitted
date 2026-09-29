@@ -301,7 +301,8 @@ export class MonstersScreen {
   private emptyNote(definition: MonstersTabDefinition): HTMLElement {
     const type = definition.buildings[0] ?? 0;
     const name = nameOf(type) || definition.label;
-    const need = townHallFor(type);
+    // An outpost's core allows everything its menu lists, so no hall line there.
+    const need = this.binding.store.kind === "outpost" ? 0 : townHallFor(type);
     const hall = townHallLevel(this.binding.store.yard);
 
     const note = document.createElement("div");

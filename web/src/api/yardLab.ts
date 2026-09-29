@@ -10,7 +10,7 @@ import {
 import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { YardResponse } from "./types";
-import type { YardRefusal } from "./yard";
+import { yardBody, type YardRefusal } from "./yard";
 
 /**
  * The Monster Lab's yard routes (`docs/design/yard-buildings.md` §6 "Lab
@@ -67,20 +67,26 @@ export interface LabShinyReport {
  * `labBusy {id, monster}`, `locked`, `maxRank`, `labLevel {have, need}`,
  * `monsterLevel {monster, have, need}`, `shortfall`.
  */
-export const labStart = (monster: string): Promise<YardResponse<LabStartReport>> =>
-  post<YardResponse<LabStartReport>>(`${LAB_PATH}/start`, { monster });
+export const labStart = (
+  monster: string,
+  baseid?: string,
+): Promise<YardResponse<LabStartReport>> =>
+  post<YardResponse<LabStartReport>>(`${LAB_PATH}/start`, yardBody({ monster }, baseid));
 
 /** Cancels the research for its full putty price back, capped. Refusals: `noLab`, `notResearching`. */
-export const labCancel = (): Promise<YardResponse<LabCancelReport>> =>
-  post<YardResponse<LabCancelReport>>(`${LAB_PATH}/cancel`, {});
+export const labCancel = (baseid?: string): Promise<YardResponse<LabCancelReport>> =>
+  post<YardResponse<LabCancelReport>>(`${LAB_PATH}/cancel`, yardBody({}, baseid));
 
 /** Finishes the research now for `timeCost(upt − now)` Shiny. Refusals: `notResearching`, `shinyLocked`, `credits`. */
-export const labFinish = (): Promise<YardResponse<LabShinyReport>> =>
-  post<YardResponse<LabShinyReport>>(`${LAB_PATH}/finish`, {});
+export const labFinish = (baseid?: string): Promise<YardResponse<LabShinyReport>> =>
+  post<YardResponse<LabShinyReport>>(`${LAB_PATH}/finish`, yardBody({}, baseid));
 
 /** Researches `monster`'s next rank at once for Shiny, no putty. Refusals: `start`'s short of `shortfall`, then `shinyLocked`, `credits`. */
-export const labInstant = (monster: string): Promise<YardResponse<LabShinyReport>> =>
-  post<YardResponse<LabShinyReport>>(`${LAB_PATH}/instant`, { monster });
+export const labInstant = (
+  monster: string,
+  baseid?: string,
+): Promise<YardResponse<LabShinyReport>> =>
+  post<YardResponse<LabShinyReport>>(`${LAB_PATH}/instant`, yardBody({ monster }, baseid));
 
 /** Every call above, so the actions can be handed a stand-in under test. */
 export interface LabApi {
@@ -156,10 +162,10 @@ export const labActions = (store: YardStore, api: LabApi = labApi): LabActions =
 
   return {
     start: (monster) =>
-      store.run({ key: LabKey.START, check: gated(monster, researchGate), send: () => api.start(monster) }),
-    cancel: () => store.run({ key: LabKey.CANCEL, check: running, send: () => api.cancel() }),
-    finish: () => store.run({ key: LabKey.FINISH, check: running, send: () => api.finish() }),
+      store.run({ key: LabKey.START, check: gated(monster, researchGate), send: (_api, ...yard) => api.start(monster, ...yard) }),
+    cancel: () => store.run({ key: LabKey.CANCEL, check: running, send: (_api, ...yard) => api.cancel(...yard) }),
+    finish: () => store.run({ key: LabKey.FINISH, check: running, send: (_api, ...yard) => api.finish(...yard) }),
     instant: (monster) =>
-      store.run({ key: LabKey.INSTANT, check: gated(monster, instantGate), send: () => api.instant(monster) }),
+      store.run({ key: LabKey.INSTANT, check: gated(monster, instantGate), send: (_api, ...yard) => api.instant(monster, ...yard) }),
   };
 };

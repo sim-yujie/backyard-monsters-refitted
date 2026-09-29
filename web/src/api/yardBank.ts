@@ -2,7 +2,7 @@ import { harvesterNow, harvestWaiting, type HarvestKey } from "@/game/yard/harve
 import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { UpgradeCost, YardResponse } from "./types";
-import type { YardRefusal } from "./yard";
+import { yardBody, type YardRefusal } from "./yard";
 
 /**
  * Banking harvesters (`docs/design/yard-buildings.md` §5.1, decision D12; wire
@@ -33,12 +33,15 @@ export interface BankReport {
 }
 
 /** Banks the named harvesters. Refusal: 400 `badRequest` for an id that is not a harvester. */
-export const bankHarvesters = (ids: readonly number[]): Promise<YardResponse<BankReport>> =>
-  post<YardResponse<BankReport>>(BANK_PATH, { ids: JSON.stringify(ids) });
+export const bankHarvesters = (
+  ids: readonly number[],
+  baseid?: string,
+): Promise<YardResponse<BankReport>> =>
+  post<YardResponse<BankReport>>(BANK_PATH, yardBody({ ids: JSON.stringify(ids) }, baseid));
 
 /** Banks every harvester that is built, idle, at full health and holding something. */
-export const bankAll = (): Promise<YardResponse<BankReport>> =>
-  post<YardResponse<BankReport>>(BANK_PATH, { all: 1 });
+export const bankAll = (baseid?: string): Promise<YardResponse<BankReport>> =>
+  post<YardResponse<BankReport>>(BANK_PATH, yardBody({ all: 1 }, baseid));
 
 /** Both calls, so the actions can be handed a stand-in under test. */
 export interface BankApi {
@@ -85,7 +88,7 @@ export const bankActions = (store: YardStore, api: BankApi = bankApi): BankActio
         if (!now.bankable) return refuse("busy", "That harvester is busy.");
         return now.offer > 0 ? null : refuse("empty", "That harvester has nothing to collect.");
       },
-      send: () => api.ids([id]),
+      send: (_api, ...yard) => api.ids([id], ...yard),
     }),
   all: () =>
     store.run({
@@ -94,6 +97,6 @@ export const bankActions = (store: YardStore, api: BankApi = bankApi): BankActio
         harvestWaiting(reader.save, reader.now()).total > 0
           ? null
           : refuse("empty", "Your harvesters have nothing to collect."),
-      send: () => api.all(),
+      send: (_api, ...yard) => api.all(...yard),
     }),
 });

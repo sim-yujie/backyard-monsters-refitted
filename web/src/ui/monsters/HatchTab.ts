@@ -515,7 +515,7 @@ export class HatchTab implements MonstersTab {
       free -= 1;
     }
     for (; free > 0; free -= 1) slots.append(emptySlot());
-    if (hatchery.level > 0 && hatchery.level < maxLevel(HATCHERY_TYPE)) {
+    if (hatchery.level > 0 && hatchery.level < maxLevel(HATCHERY_TYPE, this.store.kind)) {
       slots.append(this.lockedSlot(hatchery));
     }
     slots.append(this.lineTotals(yard, hatchery.id, isTarget));
@@ -543,7 +543,8 @@ export class HatchTab implements MonstersTab {
     now.setAttribute("role", "group");
     now.setAttribute("aria-label", "Hatching now");
     yard.hatcheries.forEach((hatchery, index) => now.append(this.nowCard(yard, hatchery, index, true, preview)));
-    const allowed = Math.min(MAX_HATCHERIES, quantityOf(HATCHERY_TYPE, townHallLevel(this.store.yard)));
+    const hall = townHallLevel(this.store.yard);
+    const allowed = Math.min(MAX_HATCHERIES, quantityOf(HATCHERY_TYPE, hall, this.store.kind));
     if (yard.hatcheries.length < allowed) {
       const more = document.createElement("div");
       more.className = "hatch-now hatch-now--more";

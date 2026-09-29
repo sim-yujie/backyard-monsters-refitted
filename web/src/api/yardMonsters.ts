@@ -15,7 +15,7 @@ import {
 } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { ShopBuyReport, YardResponse } from "./types";
-import type { YardRefusal } from "./yard";
+import { yardBody, type YardRefusal } from "./yard";
 
 /**
  * The Monster Locker's yard routes (`docs/design/yard-buildings.md` §4.3;
@@ -65,26 +65,35 @@ export interface LockerShinyReport {
  * `alreadyUnlocked`, `unlockRunning {monster}`, `noLocker`,
  * `lockerLevel {have, need}`, `shortfall`.
  */
-export const lockerStart = (monster: string): Promise<YardResponse<LockerStartReport>> =>
-  post<YardResponse<LockerStartReport>>(`${LOCKER_PATH}/start`, { monster });
+export const lockerStart = (
+  monster: string,
+  baseid?: string,
+): Promise<YardResponse<LockerStartReport>> =>
+  post<YardResponse<LockerStartReport>>(`${LOCKER_PATH}/start`, yardBody({ monster }, baseid));
 
 /** Cancels the running unlock for its full putty price back, capped. Refusal: `notUnlocking`. */
-export const lockerCancel = (): Promise<YardResponse<LockerCancelReport>> =>
-  post<YardResponse<LockerCancelReport>>(`${LOCKER_PATH}/cancel`);
+export const lockerCancel = (baseid?: string): Promise<YardResponse<LockerCancelReport>> =>
+  post<YardResponse<LockerCancelReport>>(`${LOCKER_PATH}/cancel`, yardBody({}, baseid));
 
 /**
  * Finishes the running unlock now for `timeCost(e − now)` Shiny. Refusals:
  * `notUnlocking`, `shinyLocked`, `credits`.
  */
-export const lockerFinish = (): Promise<YardResponse<LockerShinyReport>> =>
-  post<YardResponse<LockerShinyReport>>(`${LOCKER_PATH}/finish`);
+export const lockerFinish = (baseid?: string): Promise<YardResponse<LockerShinyReport>> =>
+  post<YardResponse<LockerShinyReport>>(`${LOCKER_PATH}/finish`, yardBody({}, baseid));
 
 /**
  * Unlocks `monster` at once for Shiny, no putty. Refusals: `start`'s short of
  * `shortfall`, then `shinyLocked`, `credits`.
  */
-export const lockerInstant = (monster: string): Promise<YardResponse<LockerShinyReport>> =>
-  post<YardResponse<LockerShinyReport>>(`${LOCKER_PATH}/instant`, { monster });
+export const lockerInstant = (
+  monster: string,
+  baseid?: string,
+): Promise<YardResponse<LockerShinyReport>> =>
+  post<YardResponse<LockerShinyReport>>(
+    `${LOCKER_PATH}/instant`,
+    yardBody({ monster }, baseid),
+  );
 
 /** Every call above, so the actions can be handed a stand-in under test. */
 export interface LockerApi {
@@ -171,12 +180,12 @@ export const lockerActions = (store: YardStore, api: LockerApi = lockerApi): Loc
         const gate = startGate(entry, reader);
         return gate ? gateRefusal(gate) : null;
       },
-      send: () => api.start(monster),
+      send: (_api, ...yard) => api.start(monster, ...yard),
     }),
   cancel: () =>
-    store.run({ key: LockerKey.CANCEL, check: notUnlocking, send: () => api.cancel() }),
+    store.run({ key: LockerKey.CANCEL, check: notUnlocking, send: (_api, ...yard) => api.cancel(...yard) }),
   finish: () =>
-    store.run({ key: LockerKey.FINISH, check: notUnlocking, send: () => api.finish() }),
+    store.run({ key: LockerKey.FINISH, check: notUnlocking, send: (_api, ...yard) => api.finish(...yard) }),
   instant: (monster) =>
     store.run({
       key: LockerKey.INSTANT,
@@ -186,7 +195,7 @@ export const lockerActions = (store: YardStore, api: LockerApi = lockerApi): Loc
         const gate = instantGate(entry, reader);
         return gate ? gateRefusal(gate) : null;
       },
-      send: () => api.instant(monster),
+      send: (_api, ...yard) => api.instant(monster, ...yard),
     }),
   overdrive: () => store.buy(LOCKER_OVERDRIVE.item),
 });

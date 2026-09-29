@@ -11,6 +11,7 @@ import type { CostRequirement, CostStep } from "../buildingCostData";
 import {
   costOf,
   FREE_FINISH_SECONDS,
+  HALL_TYPES,
   instantCost,
   kindOf,
   maxLevel,
@@ -117,9 +118,6 @@ export interface Ladder {
   readonly steps: readonly LadderStep[];
 }
 
-/** Town hall type id, `client/scripts/YARD_PROPS.as:1299`. */
-const TOWN_HALL_TYPE = 14;
-
 /** A building's type and the level the walk currently has it at. */
 interface LevelRow {
   readonly type: number;
@@ -140,11 +138,14 @@ const requirementsMetIn = (
     return have >= count;
   });
 
-/** The highest Town Hall level in a list of buildings, or 0 for none. */
+/**
+ * The highest Town Hall level in a list of buildings, or 0 for none. An
+ * outpost's core stands in for the hall (`buildingCosts.ts`, `HALL_TYPES`).
+ */
 const hallLevelIn = (rows: readonly LevelRow[]): number => {
   let best = 0;
   for (const row of rows) {
-    if (row.type === TOWN_HALL_TYPE && row.level > best) best = row.level;
+    if (HALL_TYPES.includes(row.type) && row.level > best) best = row.level;
   }
   return best;
 };
@@ -164,7 +165,7 @@ const gateFor = (
   if (requirementsMetIn(re, rows)) return null;
 
   const unmet = re.filter((entry) => !requirementsMetIn([entry], rows));
-  const townHall = unmet.find(([type]) => type === TOWN_HALL_TYPE);
+  const townHall = unmet.find(([type]) => HALL_TYPES.includes(type));
   if (townHall) return { townHall: { have: hall, need: townHall[2] } };
   return { requirements: unmet };
 };
@@ -213,10 +214,13 @@ const levelRows = (yard: Yard): { rows: LevelRow[]; byId: Map<number, LevelRow> 
  * The cost on each step is **cumulative from the current level**, because that
  * is the question the button answers — "what does getting to level 5 cost" —
  * and not what the last step alone costs.
+ *
+ * The ladder is the yard's own: on an outpost its prices and its lower level
+ * caps come from the outpost table (`yard.kind`).
  */
 export const ladderFor = (node: PlanNode, yard: Yard): Ladder => {
   const current = node.level;
-  const max = plannableType(node.type) ? maxLevel(node.type) : 0;
+  const max = plannableType(node.type) ? maxLevel(node.type, yard.kind) : 0;
   // A building still counting its initial build down reports level 0
   // (`yardModel.ts`), but its build is paid for: the honest first step is the
   // one that leaves level 1, not the one that pays for the building again.
@@ -229,7 +233,7 @@ export const ladderFor = (node: PlanNode, yard: Yard): Ladder => {
   let firstStepGated = false;
 
   for (let level = from + 1; level <= max; level++) {
-    const run = upgradeSteps(node.type, from, level);
+    const run = upgradeSteps(node.type, from, level, yard.kind);
     if (run.length === 0) break;
 
     const step = run[run.length - 1]!;
@@ -598,7 +602,7 @@ export const previewApply = (nodes: Iterable<PlanNode>, yard: Yard): ApplyPrevie
 
       level += 1;
       row.level = level;
-      if (node.type === TOWN_HALL_TYPE) hall = hallLevelIn(rows);
+      if (HALL_TYPES.includes(node.type)) hall = hallLevelIn(rows);
     }
   }
 

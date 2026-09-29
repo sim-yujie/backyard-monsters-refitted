@@ -1,4 +1,5 @@
 import type { BaseLoadResponse } from "@/api/types";
+import type { YardKind } from "./buildingCostData";
 import type { Yard, YardBuilding } from "./yardModel";
 
 /**
@@ -17,7 +18,8 @@ import type { Yard, YardBuilding } from "./yardModel";
  * `docs/specs/base-building.md:728-739`). The count is derived from the `BEW`
  * store purchase and never stored as its own field (spec `:741-743`), so this
  * reads the same blob `readYard` takes `ENL.q` out of. Outposts get one worker
- * whatever the purchase says (`QUEUE.as:45-49`); the planner is main-yard only.
+ * whatever the purchase says (`QUEUE.as:31-52`): {@link workerCount} takes the
+ * yard kind for that, as the server's does.
  *
  * ## Busy
  *
@@ -30,6 +32,9 @@ import type { Yard, YardBuilding } from "./yardModel";
 
 /** The most workers a main yard can ever have (`QUEUE.as:42-53`). */
 export const WORKER_CAP = 5;
+
+/** An outpost's workers: one, bought workers ignored (`QUEUE.as:31-52`). */
+export const OUTPOST_WORKERS = 1;
 
 /** The countdowns that hold a worker; a rebuild does not. */
 const WORKER_HELD_BY: ReadonlySet<string> = new Set(["build", "upgrade", "fortify"]);
@@ -69,12 +74,16 @@ export const sharperToolsMultiplier = (
 
 /**
  * How many workers this yard has: one, plus every extra worker bought, capped
- * at {@link WORKER_CAP}.
+ * at {@link WORKER_CAP}; an outpost has {@link OUTPOST_WORKERS}.
  *
  * A yard with no `storedata`, or none that reads as a number, has the one
  * worker every yard starts with.
  */
-export const workerCount = (storedata: BaseLoadResponse["storedata"]): number => {
+export const workerCount = (
+  storedata: BaseLoadResponse["storedata"],
+  kind: YardKind = "main",
+): number => {
+  if (kind === "outpost") return OUTPOST_WORKERS;
   const bought = Number(storedata?.["BEW"]?.q);
   const extra = Number.isFinite(bought) && bought > 0 ? Math.floor(bought) : 0;
   return Math.min(WORKER_CAP, 1 + extra);

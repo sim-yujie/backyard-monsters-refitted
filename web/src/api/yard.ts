@@ -1,4 +1,4 @@
-import { ApiError, NetworkError, post } from "./http";
+import { ApiError, NetworkError, post, type FormBody } from "./http";
 import type {
   MushroomPickReport,
   ShopBuyReport,
@@ -31,13 +31,27 @@ import type {
  * A refusal throws the usual `ApiError` with the real status (400 malformed,
  * 409 refused right now) and a flat body `{ error, reason, ...detail }`;
  * {@link yardRefusal} reads it.
+ *
+ * Every call here, and in the other `yard*.ts` files, takes the yard it acts
+ * on last: `baseid` for one of the player's outposts, nothing for the main
+ * yard (outposts WP3; {@link yardBody}).
  */
 
 const YARD_PATH = "/api/:apiVersion/bm/yard";
 
+/**
+ * A yard route's body for the yard it acts on: with `baseid` for one of the
+ * player's outposts, and as it always was for the main yard, which the server
+ * reads a missing `baseid` as (`YardTargetSchema`). Sending it on every call,
+ * the refused ones included, means a control the outpost screen forgot to
+ * hide is refused `notInOutpost` rather than run against the main yard.
+ */
+export const yardBody = (body: FormBody = {}, baseid?: string): FormBody =>
+  baseid === undefined ? body : { ...body, baseid };
+
 /** Catches the yard up on the server, writes it and answers with it. */
-export const yardState = (): Promise<YardResponse<null>> =>
-  post<YardResponse<null>>(`${YARD_PATH}/state`);
+export const yardState = (baseid?: string): Promise<YardResponse<null>> =>
+  post<YardResponse<null>>(`${YARD_PATH}/state`, yardBody({}, baseid));
 
 /**
  * Starts an upgrade: a countdown holding a worker, however short the step
@@ -47,34 +61,53 @@ export const yardState = (): Promise<YardResponse<null>> =>
  * `busy`, `damaged`, `townHall`, `maxLevel`, `requirements`, `shortfall`,
  * `workers` (`docs/server-api.md` "Yard actions").
  */
-export const startUpgrade = (id: number): Promise<YardResponse<UpgradeStartReport>> =>
-  post<YardResponse<UpgradeStartReport>>(`${YARD_PATH}/upgrade`, { id });
+export const startUpgrade = (
+  id: number,
+  baseid?: string,
+): Promise<YardResponse<UpgradeStartReport>> =>
+  post<YardResponse<UpgradeStartReport>>(`${YARD_PATH}/upgrade`, yardBody({ id }, baseid));
 
 /** Cancels a running upgrade for its full cost back, clamped to the cap. Refusal: `notUpgrading`. */
-export const cancelUpgrade = (id: number): Promise<YardResponse<UpgradeCancelReport>> =>
-  post<YardResponse<UpgradeCancelReport>>(`${YARD_PATH}/upgrade/cancel`, { id });
+export const cancelUpgrade = (
+  id: number,
+  baseid?: string,
+): Promise<YardResponse<UpgradeCancelReport>> =>
+  post<YardResponse<UpgradeCancelReport>>(
+    `${YARD_PATH}/upgrade/cancel`,
+    yardBody({ id }, baseid),
+  );
 
 /**
  * Buys the next level outright for Shiny. Refusals: the upgrade gates short of
  * `shortfall` and `workers`, then `shinyLocked`, `credits`.
  */
-export const instantUpgrade = (id: number): Promise<YardResponse<UpgradeInstantReport>> =>
-  post<YardResponse<UpgradeInstantReport>>(`${YARD_PATH}/upgrade/instant`, { id });
+export const instantUpgrade = (
+  id: number,
+  baseid?: string,
+): Promise<YardResponse<UpgradeInstantReport>> =>
+  post<YardResponse<UpgradeInstantReport>>(
+    `${YARD_PATH}/upgrade/instant`,
+    yardBody({ id }, baseid),
+  );
 
 /**
  * Speeds up a running build or upgrade. Refusals: `notRunning`, `damaged`
  * (the countdown is paused), `mapRoom`, `itemRefused` (the item does not fit
  * the time left), `shinyLocked`, `credits`.
  */
-export const speedUp = (id: number, item: SpeedupItem): Promise<YardResponse<SpeedupReport>> =>
-  post<YardResponse<SpeedupReport>>(`${YARD_PATH}/speedup`, { id, item });
+export const speedUp = (
+  id: number,
+  item: SpeedupItem,
+  baseid?: string,
+): Promise<YardResponse<SpeedupReport>> =>
+  post<YardResponse<SpeedupReport>>(`${YARD_PATH}/speedup`, yardBody({ id, item }, baseid));
 
 /**
  * Buys a store item for Shiny (`BST`, `BEW` in Phase 1). Refusals: 400
  * `notForSale`, `alreadyActive`, `soldOut`, `shinyLocked`, `credits`.
  */
-export const shopBuy = (item: string): Promise<YardResponse<ShopBuyReport>> =>
-  post<YardResponse<ShopBuyReport>>(`${YARD_PATH}/shop/buy`, { item });
+export const shopBuy = (item: string, baseid?: string): Promise<YardResponse<ShopBuyReport>> =>
+  post<YardResponse<ShopBuyReport>>(`${YARD_PATH}/shop/buy`, yardBody({ item }, baseid));
 
 /**
  * Picks a mushroom with a free worker: `id` is its place in `mushrooms.l`,
@@ -86,8 +119,12 @@ export const pickMushroom = (
   id: number,
   x: number,
   y: number,
+  baseid?: string,
 ): Promise<YardResponse<MushroomPickReport>> =>
-  post<YardResponse<MushroomPickReport>>(`${YARD_PATH}/mushroom/pick`, { id, x, y });
+  post<YardResponse<MushroomPickReport>>(
+    `${YARD_PATH}/mushroom/pick`,
+    yardBody({ id, x, y }, baseid),
+  );
 
 /** Every call above, so the store can be handed a stand-in under test. */
 export interface YardApi {

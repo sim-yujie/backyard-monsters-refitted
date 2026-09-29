@@ -243,8 +243,9 @@ export class TakeoverDialog {
 /**
  * Flash's first-open popup for a new outpost (`BASE.as:2292-2319`): "Veni,
  * Vidi, Vici!", the outpost art and `destroyedbase_takeover` or
- * `destroyedoutpost_takeover`. Flash showed it as the outpost opened; until
- * outposts open from the map (outposts plan WP5) the map shows it as it
+ * `destroyedoutpost_takeover`. Flash showed it as the outpost opened, and so
+ * does the yard when a takeover from the map opens the new outpost (outposts
+ * WP5); after a takeover from the end-of-attack panel the map shows it as it
  * selects the new outpost.
  */
 export const showTakenOver = (container: HTMLElement, kind: TakeoverKind, name: string): Popup => {

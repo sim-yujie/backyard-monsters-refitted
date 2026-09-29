@@ -109,7 +109,7 @@ export const mushroomPickAction = (spot: Spot): YardStoreAction<MushroomPickRepo
       index = indexOfMushroom(store.yard.mushrooms, spot);
       return pickRefusal(store, spot);
     },
-    send: (api) => api.pickMushroom(index, spot.x, spot.y),
+    send: (api, ...yard) => api.pickMushroom(index, spot.x, spot.y, ...yard),
   };
 };
 

@@ -2,12 +2,14 @@
 import { describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import type { ViewTarget } from "@/game/attack/attackTarget";
+import { MAIN_YARD, outpostTarget } from "@/game/yard/ownYards";
 import { hudPoolFor, loadYardFor } from "./YardScene";
 
 const response = { error: 0, id: 1, baseid: "1000", basesaveid: 1 } as BaseLoadResponse;
 
 const api = () => ({
   loadOwnYard: vi.fn(() => Promise.resolve(response)),
+  loadOwnBase: vi.fn(() => Promise.resolve(response)),
   viewBase: vi.fn(() => Promise.resolve(response)),
 });
 
@@ -26,6 +28,22 @@ describe("loadYardFor", () => {
     await loadYardFor(null, loaders);
     expect(loaders.loadOwnYard).toHaveBeenCalledTimes(1);
     expect(loaders.viewBase).not.toHaveBeenCalled();
+  });
+
+  it("opens an own outpost by its baseid, and the main yard as it always did (#146)", async () => {
+    const loaders = api();
+    await loadYardFor(null, loaders, outpostTarget("2000242209", { col: 242, row: 209 }));
+    await loadYardFor(null, loaders, MAIN_YARD);
+    expect(loaders.loadOwnBase.mock.calls).toEqual([["2000242209"]]);
+    expect(loaders.loadOwnYard).toHaveBeenCalledTimes(1);
+    expect(loaders.viewBase).not.toHaveBeenCalled();
+  });
+
+  it("views a foreign target even when an own outpost was asked for", async () => {
+    const loaders = api();
+    await loadYardFor(visit("main"), loaders, outpostTarget("2000242209"));
+    expect(loaders.loadOwnBase).not.toHaveBeenCalled();
+    expect(loaders.viewBase).toHaveBeenCalledTimes(1);
   });
 
   it("never loads the own yard for a foreign target, and views it by kind", async () => {

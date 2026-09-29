@@ -14,7 +14,7 @@ import {
 } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { ShopBuyReport, YardResponse } from "./types";
-import type { YardRefusal } from "./yard";
+import { yardBody, type YardRefusal } from "./yard";
 
 /**
  * The Hatchery and Hatchery Control Centre's yard routes
@@ -79,12 +79,12 @@ export const hatcheryAdd = (
   hatchery: HatchTarget,
   monster: string,
   count: number,
+  baseid?: string,
 ): Promise<YardResponse<HatcheryAddReport>> =>
-  post<YardResponse<HatcheryAddReport>>(`${HATCHERY_PATH}/add`, {
-    hatchery: String(hatchery),
-    monster,
-    count: String(count),
-  });
+  post<YardResponse<HatcheryAddReport>>(
+    `${HATCHERY_PATH}/add`,
+    yardBody({ hatchery: String(hatchery), monster, count: String(count) }, baseid),
+  );
 
 /**
  * Takes monsters out for the goo paid: `slot` 0 is the one in production,
@@ -95,12 +95,12 @@ export const hatcheryRemove = (
   hatchery: HatchTarget,
   slot: number,
   count: number | "all",
+  baseid?: string,
 ): Promise<YardResponse<HatcheryRemoveReport>> =>
-  post<YardResponse<HatcheryRemoveReport>>(`${HATCHERY_PATH}/remove`, {
-    hatchery: String(hatchery),
-    slot: String(slot),
-    count: String(count),
-  });
+  post<YardResponse<HatcheryRemoveReport>>(
+    `${HATCHERY_PATH}/remove`,
+    yardBody({ hatchery: String(hatchery), slot: String(slot), count: String(count) }, baseid),
+  );
 
 /**
  * Houses what fits now for Shiny. Refusals: the add's target ones, `busy`,
@@ -108,10 +108,12 @@ export const hatcheryRemove = (
  */
 export const hatcheryFinish = (
   hatchery: HatchTarget,
+  baseid?: string,
 ): Promise<YardResponse<HatcheryFinishReport>> =>
-  post<YardResponse<HatcheryFinishReport>>(`${HATCHERY_PATH}/finish`, {
-    hatchery: String(hatchery),
-  });
+  post<YardResponse<HatcheryFinishReport>>(
+    `${HATCHERY_PATH}/finish`,
+    yardBody({ hatchery: String(hatchery) }, baseid),
+  );
 
 /** Every call above, so the actions can be handed a stand-in under test. */
 export interface HatcheryApi {
@@ -184,11 +186,15 @@ export const hatcheryActions = (
     store.run({
       key: HatcheryKey.ADD,
       check: (reader) => addRefusal(reader, monster, count),
-      send: () => api.add(target, monster, count),
+      send: (_api, ...yard) => api.add(target, monster, count, ...yard),
     }),
   remove: (target, slot, count) =>
-    store.run({ key: HatcheryKey.REMOVE, send: () => api.remove(target, slot, count) }),
-  finish: (target) => store.run({ key: HatcheryKey.FINISH, send: () => api.finish(target) }),
+    store.run({
+      key: HatcheryKey.REMOVE,
+      send: (_api, ...yard) => api.remove(target, slot, count, ...yard),
+    }),
+  finish: (target) =>
+    store.run({ key: HatcheryKey.FINISH, send: (_api, ...yard) => api.finish(target, ...yard) }),
   overdrive: (item) => {
     const running = activeOverdrive(store.save.storedata, store.now());
     if (running) {

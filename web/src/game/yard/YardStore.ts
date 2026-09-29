@@ -15,14 +15,15 @@ import { YARD_STATE_KEYS } from "@/api/types";
 import { yardApi, yardRefusal, type YardApi, type YardRefusal } from "@/api/yard";
 import type { Notices } from "@/ui/maproom/Notices";
 import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
-import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES } from "./buildingCosts";
+import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES, type YardKind } from "./buildingCosts";
 import { predictCompletion, SERVER_COMPLETED_KINDS, yardJobs, type YardJob } from "./jobs";
+import { MAIN_YARD, outpostBaseid, type OwnYardTarget } from "./ownYards";
 import { freeWorkers, holdsWorker } from "./workers";
 import { readYard, type Yard, type YardBuilding, type YardWorkers } from "./yardModel";
 
 /**
- * The player's own main yard, as one source of truth
- * (`docs/design/yard-buildings.md` §2.1 "The client side", §2.4).
+ * One of the player's own yards, the main yard or an outpost, as one source
+ * of truth (`docs/design/yard-buildings.md` §2.1 "The client side", §2.4).
  *
  * The store holds the save the yard was loaded from, merges every yard-route
  * answer into it, and runs actions through a one-at-a-time queue (T4): a
@@ -79,6 +80,16 @@ import { readYard, type Yard, type YardBuilding, type YardWorkers } from "./yard
  * `/base/load`, calls `tick()` every second, `refresh()` when the tab becomes
  * visible again, `mergeWrite()` when a Yard Planner route answers, and
  * `destroy()` on exit.
+ *
+ * ## Outposts (outposts WP5, #146)
+ *
+ * The store is made for one {@link OwnYardTarget}: the main yard, or an
+ * outpost by its `baseid`. Every request it sends names that outpost
+ * ({@link YardStore.baseid}, handed to each action's `send`), its `state`
+ * included, so an outpost's store never asks for the main yard and never
+ * replaces the outpost with it. The pool it shows is the main yard's either
+ * way: the server serves the owner's pool and caps with an outpost
+ * (`services/yard/poolView.ts`).
  */
 
 /** Why the store announced a change. */
@@ -121,17 +132,31 @@ export type YardActionResult<Report> =
  *
  * `check` runs against the store just before the request is sent — after
  * every request queued ahead of it has answered — and refuses locally by
- * returning a refusal. `send` makes the call.
+ * returning a refusal. `send` makes the call, spreading `yard` last into
+ * whatever `yard*.ts` call it makes: {@link YardArgs}.
  */
 export interface YardStoreAction<Report> {
   /** Groups requests for {@link YardStoreReader.isRunning}; see {@link actionKey}. */
   readonly key: string;
   readonly check?: (store: YardStoreReader) => YardRefusal | null;
-  readonly send: (api: YardApi) => Promise<YardResponse<Report>>;
+  readonly send: (api: YardApi, ...yard: YardArgs) => Promise<YardResponse<Report>>;
 }
+
+/**
+ * The yard a request acts on, as the trailing argument of a `yard*.ts` call:
+ * `[baseid]` on an outpost, and nothing at all on the main yard, whose calls
+ * therefore go out exactly as they did before outposts.
+ */
+export type YardArgs = [] | [baseid: string];
 
 /** The read side, for everything that draws. */
 export interface YardStoreReader {
+  /** Which of the player's yards this is. */
+  readonly target: OwnYardTarget;
+  /** Which props table it builds from: the outpost's on an outpost. */
+  readonly kind: YardKind;
+  /** The outpost's `baseid`, which every request sends; undefined on the main yard. */
+  readonly baseid: string | undefined;
   /** The merged save: `/base/load`'s response with every later answer merged in. */
   readonly save: BaseLoadResponse;
   /** The draw list built from {@link save}. */
@@ -196,6 +221,8 @@ export interface YardStoreTimers {
 export interface YardStoreOptions {
   /** The own-yard `/base/load` response. */
   save: BaseLoadResponse;
+  /** The yard that load was for; the main yard when absent. */
+  target?: OwnYardTarget;
   /**
    * What that load's catch-up finished while the player was away (its
    * `completed`), announced once by {@link YardStore.start} (#135).
@@ -230,7 +257,7 @@ interface QueuedAction {
   readonly type: "action";
   readonly key: string;
   readonly check: ((store: YardStoreReader) => YardRefusal | null) | undefined;
-  readonly send: (api: YardApi) => Promise<YardResponse<unknown>>;
+  readonly send: (api: YardApi, ...yard: YardArgs) => Promise<YardResponse<unknown>>;
   readonly resolve: (result: YardActionResult<unknown>) => void;
 }
 
@@ -249,6 +276,10 @@ type QueueEntry = QueuedAction | QueuedRefresh;
 export const REFRESH_KEY = "state";
 
 export class YardStore implements YardStoreReader, YardStoreActions {
+  readonly target: OwnYardTarget;
+  readonly baseid: string | undefined;
+  /** What every request spreads last: `[baseid]` on an outpost, nothing on the main yard. */
+  private readonly yardArgs: YardArgs;
   private current: BaseLoadResponse;
   private cachedYard: Yard | null = null;
   private cachedJobs: YardJob[] | null = null;
@@ -286,6 +317,9 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     this.timers = options.timers ?? browserTimers;
     this.refreshDelayMs = options.refreshDelayMs ?? REFRESH_DELAY_MS;
     this.onAuthFailure = options.onAuthFailure;
+    this.target = options.target ?? MAIN_YARD;
+    this.baseid = outpostBaseid(this.target);
+    this.yardArgs = this.baseid === undefined ? [] : [this.baseid];
     this.current = options.save;
     this.away = options.away ?? [];
     this.syncClock(options.save.currenttime);
@@ -293,6 +327,10 @@ export class YardStore implements YardStoreReader, YardStoreActions {
   }
 
   /* ── Reading ────────────────────────────────────────────────────────── */
+
+  get kind(): YardKind {
+    return this.target.kind;
+  }
 
   get save(): BaseLoadResponse {
     return this.current;
@@ -476,7 +514,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     return this.run({
       key: actionKey("upgrade", id),
       check: (store) => upgradeRefusal(store, id),
-      send: (api) => api.upgrade(id),
+      send: (api, ...yard) => api.upgrade(id, ...yard),
     });
   }
 
@@ -490,7 +528,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
           ? null
           : refuse("notUpgrading", "That building is not upgrading.");
       },
-      send: (api) => api.cancelUpgrade(id),
+      send: (api, ...yard) => api.cancelUpgrade(id, ...yard),
     });
   }
 
@@ -498,7 +536,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     return this.run({
       key: actionKey("instant", id),
       check: (store) => upgradeRefusal(store, id, { instant: true }),
-      send: (api) => api.instantUpgrade(id),
+      send: (api, ...yard) => api.instantUpgrade(id, ...yard),
     });
   }
 
@@ -516,12 +554,15 @@ export class YardStore implements YardStoreReader, YardStoreActions {
         }
         return building?.type === MAP_ROOM_TYPE ? refuse("mapRoom", MAP_ROOM_MESSAGE) : null;
       },
-      send: (api) => api.speedUp(id, item),
+      send: (api, ...yard) => api.speedUp(id, item, ...yard),
     });
   }
 
   buy(item: string): Promise<YardActionResult<ShopBuyReport>> {
-    return this.run({ key: actionKey("buy", item), send: (api) => api.shopBuy(item) });
+    return this.run({
+      key: actionKey("buy", item),
+      send: (api, ...yard) => api.shopBuy(item, ...yard),
+    });
   }
 
   /* ── The queue ──────────────────────────────────────────────────────── */
@@ -559,7 +600,9 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     let result: YardActionResult<unknown>;
     try {
       const response =
-        entry.type === "refresh" ? await this.api.state() : await entry.send(this.api);
+        entry.type === "refresh"
+          ? await this.api.state(...this.yardArgs)
+          : await entry.send(this.api, ...this.yardArgs);
       if (this.destroyed) {
         result = { ok: false, refusal: refuse("error", "The yard was closed.") };
       } else {
@@ -684,12 +727,13 @@ const upgradeRefusal = (
   if (building.hp !== null || building.raw.rE) {
     return refuse("damaged", "Repair that building before upgrading it.");
   }
-  if (building.level >= maxLevel(building.type)) {
+  const kind = store.yard.kind;
+  if (building.level >= maxLevel(building.type, kind)) {
     return refuse("maxLevel", "That building is at its highest level.");
   }
   if (options.instant) return null;
 
-  const step = costOf(building.type, building.level);
+  const step = costOf(building.type, building.level, kind);
   if (!step) return refuse("maxLevel", "That building is at its highest level.");
   const [r1, r2, r3, r4] = step;
   const cost = { r1, r2, r3, r4 };

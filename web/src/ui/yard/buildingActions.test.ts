@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse, BuildingData, ResourceCaps, Resources } from "@/api/types";
+import { costOf } from "@/game/yard/buildingCosts";
 import { readYard, type YardBuilding } from "@/game/yard/yardModel";
 import {
   cancelOffer,
@@ -46,6 +47,8 @@ interface Fixture {
   readonly storedata?: BaseLoadResponse["storedata"];
   readonly health?: BaseLoadResponse["buildinghealthdata"];
   readonly now?: number;
+  /** The save's `type`: `outpost` reads the outpost table. */
+  readonly type?: string;
 }
 
 const contextOf = (fixture: Fixture): PanelContext => {
@@ -58,6 +61,7 @@ const contextOf = (fixture: Fixture): PanelContext => {
     buildingdata: Object.fromEntries(fixture.buildings.map((one) => [String(one.id), one])),
     buildinghealthdata: fixture.health ?? {},
     storedata: fixture.storedata ?? { BEW: { q: 4 } },
+    ...(fixture.type ? { type: fixture.type } : {}),
   } as unknown as BaseLoadResponse;
   const yard = readYard(save);
   return {
@@ -502,5 +506,32 @@ describe("cancelOffer: the refund", () => {
       caps: null,
     });
     expect(cancelOffer(pick(context, 2), context).lost).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
+  });
+});
+
+describe("on an outpost (outposts WP5)", () => {
+  const CORE = building(1, 112, 1);
+
+  it("prices the next level from the outpost table, the core standing in for the hall", () => {
+    const context = contextOf({ type: "outpost", buildings: [CORE, building(2, 20, 1)] });
+    const step = costOf(20, 1, "outpost");
+    expect(step).not.toEqual(costOf(20, 1));
+    const offer = upgradeOffer(pick(context, 2), context);
+    expect(offer?.gate).toBeNull();
+    expect(offer?.cost).toEqual({ r1: step?.[0], r2: step?.[1], r3: step?.[2], r4: step?.[3] });
+  });
+
+  it("offers no Recycle, and no Cancel on a building still under construction", () => {
+    const building2 = building(2, 20, 0, { cB: 600 });
+    const upgrading = building(3, 21, 1, { cU: 600 });
+    const outpost = contextOf({ type: "outpost", buildings: [CORE, building2, upgrading] });
+    expect(panelModel(pick(outpost, 3), outpost).recycle).toBeNull();
+    expect(jobOffer(pick(outpost, 2), outpost)?.cancel).toBeNull();
+    // Cancelling an upgrade stays, as in Flash.
+    expect(jobOffer(pick(outpost, 3), outpost)?.cancel).not.toBeNull();
+
+    const main = contextOf({ buildings: [HALL(5), building2, upgrading] });
+    expect(panelModel(pick(main, 3), main).recycle).not.toBeNull();
+    expect(jobOffer(pick(main, 2), main)?.cancel).not.toBeNull();
   });
 });

@@ -51,6 +51,14 @@ import { monstersTabFor, type MonstersTabId } from "@/ui/monsters/monstersTab";
  * `server/src/services/yard/shiny.ts`); the route charges its own figure.
  * Finish now is `timeCost(remaining)`, which only falls as the job runs, so
  * the price the server charges is never above the one on the button.
+ *
+ * ## Outposts
+ *
+ * On an outpost (`yard.kind`) prices and level caps are the outpost table's,
+ * and Flash's two refusals are left out rather than offered and refused: no
+ * Recycle, and no Cancel on a building still under construction
+ * (`client/scripts/BFOUNDATION.as:2511-2540`; the server's `notInOutpost`).
+ * Cancelling an upgrade stays, as it did in Flash.
  */
 
 /** The props kinds with no upgrade ladder the panel could offer. */
@@ -143,7 +151,10 @@ export interface JobOffer {
   /** −1 h and −2 h; null for a fortify or rebuild. */
   readonly minusOne: SpeedupOffer | null;
   readonly minusTwo: SpeedupOffer | null;
-  /** Upgrades and builds: the refund Cancel would give, capped as the server caps it. */
+  /**
+   * Upgrades and builds: the refund Cancel would give, capped as the server
+   * caps it. Null on an outpost's build, which cannot be stopped.
+   */
   readonly cancel: CancelOffer | null;
 }
 
@@ -178,7 +189,10 @@ export interface PanelModel {
   readonly openBlocked: string | null;
   /** A walls-and-traps pointer to where they are upgraded instead. */
   readonly batch: boolean;
-  /** Recycle, with what it gives back and why it cannot run; null for the Town Hall (§5.4). */
+  /**
+   * Recycle, with what it gives back and why it cannot run; null for the Town
+   * Hall (§5.4) and on an outpost, where nothing is recycled.
+   */
   readonly recycle: RecycleOffer | null;
 }
 
@@ -348,7 +362,7 @@ const speedup = (
  * pool already over its cap takes nothing and loses nothing.
  */
 export const cancelOffer = (building: YardBuilding, context: PanelContext): CancelOffer => {
-  const step = costOf(building.type, building.level);
+  const step = costOf(building.type, building.level, context.yard.kind);
   const cost: UpgradeCost = step
     ? { r1: step[0], r2: step[1], r3: step[2], r4: step[3] }
     : { ...ZERO };
@@ -394,7 +408,8 @@ export const jobOffer = (building: YardBuilding, context: PanelContext): JobOffe
     // A build still running is at level 0, so this is `costs[0]`: the build's
     // full price, which `build/cancel` gives back (§5.3).
     cancel:
-      countdown.kind === "upgrade" || countdown.kind === "build"
+      countdown.kind === "upgrade" ||
+      (countdown.kind === "build" && context.yard.kind !== "outpost")
         ? cancelOffer(building, context)
         : null,
   };
@@ -426,7 +441,10 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
     monstersTab,
     openBlocked: open === "map" ? mapBlocked(building, context) : null,
     batch: isBatchType(building.type),
-    recycle: building.type === TOWN_HALL_TYPE ? null : recycleOfferFor(building, context),
+    recycle:
+      building.type === TOWN_HALL_TYPE || context.yard.kind === "outpost"
+        ? null
+        : recycleOfferFor(building, context),
   };
 };
 

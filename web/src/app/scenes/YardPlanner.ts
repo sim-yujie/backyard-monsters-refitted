@@ -169,6 +169,12 @@ export interface YardPlannerOptions {
   onHint?: (note: string | null) => void;
   /** Called when the planner closes itself. */
   onExit: () => void;
+  /**
+   * The outpost this planner is over (outposts WP5): Apply, the wall upgrade
+   * and the trap re-arm act on it, charged to the main pool. Undefined on the
+   * main yard.
+   */
+  baseid?: string;
 }
 
 export class YardPlanner {
@@ -268,6 +274,7 @@ export class YardPlanner {
       session: this.session,
       dock: this.dock,
       readOnly: this.readOnly,
+      ...(options.baseid !== undefined ? { baseid: options.baseid } : {}),
       onLoad: (layout) => this.loadLayout(layout, false),
       onPreview: (layout) => this.loadLayout(layout, true),
       notify: (message, level) =>
@@ -796,9 +803,11 @@ export class YardPlanner {
         }
       }
 
-      const response = await applyLayout(this.session.payload(), {
-        startUpgrades: choice.startUpgrades,
-      });
+      const response = await applyLayout(
+        this.session.payload(),
+        { startUpgrades: choice.startUpgrades },
+        this.options.baseid,
+      );
       this.options.onApplied(
         response.buildingdata,
         response.moved,
@@ -836,7 +845,7 @@ export class YardPlanner {
     if (this.readOnly || this.batching) return;
     this.batching = true;
     try {
-      const response = await postWallUpgrade(ids, level);
+      const response = await postWallUpgrade(ids, level, this.options.baseid);
       this.options.notices.show(
         NOTICE,
         `Upgraded ${response.upgraded} ${plural(response.upgraded, "wall")} to level ${response.level} for ${describeCost(response.cost)}.`,
@@ -898,7 +907,7 @@ export class YardPlanner {
     if (this.readOnly || this.batching) return;
     this.batching = true;
     try {
-      const response = await postTrapRearm(traps);
+      const response = await postTrapRearm(traps, this.options.baseid);
 
       // The server's list is authoritative for what is still outstanding; the
       // layout-derived half is local, so the placed spots are struck off here.

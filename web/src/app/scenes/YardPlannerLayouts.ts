@@ -28,6 +28,12 @@ export interface LayoutsControllerOptions {
    * the signed-in player's own slots and this yard is not theirs to plan.
    */
   readOnly?: boolean;
+  /**
+   * The outpost the planner is over, sent with every slot call so the server
+   * refuses it (`notInOutpost`): Flash's planner could not save or load
+   * layouts in an outpost. Undefined on the main yard.
+   */
+  baseid?: string;
   onLoad: (layout: Layout) => void;
   onPreview: (layout: Layout) => void;
   notify: (message: string, level: "info" | "error") => void;
@@ -77,7 +83,7 @@ export class YardPlannerLayouts {
     const panel = this.panel;
     if (!panel) return;
     try {
-      const response = await listLayouts();
+      const response = await listLayouts(this.options.baseid);
       // The panel may have been closed while the request was in flight.
       if (this.panel !== panel) return;
       panel.show(
@@ -140,7 +146,12 @@ export class YardPlannerLayouts {
     if (this.refuseWhileStored()) return;
     this.panel?.setBusy(true);
     try {
-      const layout = await saveLayout(slot, name, this.options.session.payload());
+      const layout = await saveLayout(
+        slot,
+        name,
+        this.options.session.payload(),
+        this.options.baseid,
+      );
       this.options.session.markSaved(layout.slot, layout.name);
       this.options.notify(`Saved to slot ${layout.slot + 1}.`, "info");
     } catch (caught) {
@@ -154,7 +165,7 @@ export class YardPlannerLayouts {
   private async remove(slot: number): Promise<void> {
     this.panel?.setBusy(true);
     try {
-      await deleteLayout(slot);
+      await deleteLayout(slot, this.options.baseid);
     } catch (caught) {
       this.options.notify(describe(caught, "Could not delete the layout."), "error");
     } finally {

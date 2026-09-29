@@ -6,7 +6,7 @@ import { repairActions } from "@/api/yardRepair";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, WALL_TYPES } from "@/game/yard/buildingCosts";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
-import { harvesterNow } from "@/game/yard/harvest";
+import { harvesterNow, isHarvester } from "@/game/yard/harvest";
 import type { RecycleOffer } from "@/game/yard/recycle";
 import { NEED_MORE_SILOS } from "@/game/yard/storage";
 import { progressFraction } from "@/game/yard/jobs";
@@ -40,6 +40,9 @@ import { ChampionPanel } from "./ChampionPanel";
 import { RepairBlock } from "./RepairBlock";
 import { ShinyButton } from "./ShinyButton";
 import { describeSeconds } from "./upgradeText";
+
+/** What an outpost harvester's panel says in place of its stored amount. */
+export const AUTO_BANKING = "Auto-banking: what it makes goes straight to your main yard's storage";
 
 /**
  * One building, and what can be done with it
@@ -362,8 +365,13 @@ export class BuildingPanel {
       if (model.job) blocks.push(this.jobBlock(building, model.job, used));
       if (model.upgrade) blocks.push(this.upgradeBlock(building, model.upgrade, used));
       // A one-level building (Yard Planner, General Store) has no ladder to top out.
-      if (model.maxed && maxLevel(building.type) > 1) {
+      if (model.maxed && maxLevel(building.type, yard.store.kind) > 1) {
         blocks.push(note(`Level ${building.level} is the highest level.`));
+      }
+      // An outpost's harvesters bank by themselves: Flash's disabled
+      // "Auto-Banking" (`BUILDINGINFO.as:130-131`), said here in words.
+      if (yard.store.kind === "outpost" && isHarvester(building.type)) {
+        blocks.push(note(`${AUTO_BANKING}.`));
       }
       if (model.batch) {
         blocks.push(
@@ -1068,9 +1076,17 @@ export class BuildingPanel {
   /**
    * Harvester fields: what its buffer holds, predicted to now on the own yard
    * (`harvest.ts`) and as saved elsewhere, and whether it is being repaired.
+   * An own outpost's harvesters are never banked by hand: Flash showed a
+   * disabled "Auto-Banking" there (`client/scripts/BUILDINGINFO.as:130-131`,
+   * `:384-385`), and the server pays them into the main pool as they produce.
    */
   private addProduction(building: YardBuilding): void {
     const store = this.yard?.store;
+    if (store?.kind === "outpost") {
+      this.add("Banking", AUTO_BANKING, "is-info");
+      if (building.raw.rE === 1) this.add("Repairing", "Yes", "is-info");
+      return;
+    }
     const now = store ? harvesterNow(building.raw, store.save, store.now()) : null;
     if (now) {
       this.add("Stored", `${formatAmount(now.stored)} / ${formatAmount(now.capacity)}`);

@@ -13,7 +13,7 @@ import {
 import { actionKey, type YardActionResult, type YardStore, type YardStoreReader } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { ChampionSaveEntry, YardResponse } from "./types";
-import type { YardRefusal } from "./yard";
+import { yardBody, type YardRefusal } from "./yard";
 
 /**
  * The Champion Cage's yard routes (`docs/design/yard-buildings.md` §7.2; wire
@@ -51,29 +51,47 @@ export interface ChampionPaidReport extends ChampionReport {
   credits: number;
 }
 
-export const championRaise = (type: number): Promise<YardResponse<ChampionReport>> =>
-  post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/raise`, { type: String(type) });
+export const championRaise = (
+  type: number,
+  baseid?: string,
+): Promise<YardResponse<ChampionReport>> =>
+  post<YardResponse<ChampionReport>>(
+    `${CHAMPION_PATH}/raise`,
+    yardBody({ type: String(type) }, baseid),
+  );
 
-export const championFeed = (mode: FeedMode): Promise<YardResponse<ChampionFeedReport>> =>
-  post<YardResponse<ChampionFeedReport>>(`${CHAMPION_PATH}/feed`, { mode });
+export const championFeed = (
+  mode: FeedMode,
+  baseid?: string,
+): Promise<YardResponse<ChampionFeedReport>> =>
+  post<YardResponse<ChampionFeedReport>>(`${CHAMPION_PATH}/feed`, yardBody({ mode }, baseid));
 
-export const championEvolve = (): Promise<YardResponse<ChampionPaidReport>> =>
-  post<YardResponse<ChampionPaidReport>>(`${CHAMPION_PATH}/evolve`, {});
+export const championEvolve = (baseid?: string): Promise<YardResponse<ChampionPaidReport>> =>
+  post<YardResponse<ChampionPaidReport>>(`${CHAMPION_PATH}/evolve`, yardBody({}, baseid));
 
-export const championHeal = (): Promise<YardResponse<ChampionPaidReport>> =>
-  post<YardResponse<ChampionPaidReport>>(`${CHAMPION_PATH}/heal`, {});
+export const championHeal = (baseid?: string): Promise<YardResponse<ChampionPaidReport>> =>
+  post<YardResponse<ChampionPaidReport>>(`${CHAMPION_PATH}/heal`, yardBody({}, baseid));
 
-export const championRename = (name: string): Promise<YardResponse<ChampionReport>> =>
-  post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/rename`, { name });
+export const championRename = (
+  name: string,
+  baseid?: string,
+): Promise<YardResponse<ChampionReport>> =>
+  post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/rename`, yardBody({ name }, baseid));
 
-export const championJuice = (): Promise<YardResponse<ChampionReport>> =>
-  post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/juice`, {});
+export const championJuice = (baseid?: string): Promise<YardResponse<ChampionReport>> =>
+  post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/juice`, yardBody({}, baseid));
 
-export const championFreeze = (): Promise<YardResponse<ChampionReport>> =>
-  post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/freeze`, {});
+export const championFreeze = (baseid?: string): Promise<YardResponse<ChampionReport>> =>
+  post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/freeze`, yardBody({}, baseid));
 
-export const championThaw = (type: number): Promise<YardResponse<ChampionReport>> =>
-  post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/thaw`, { type: String(type) });
+export const championThaw = (
+  type: number,
+  baseid?: string,
+): Promise<YardResponse<ChampionReport>> =>
+  post<YardResponse<ChampionReport>>(
+    `${CHAMPION_PATH}/thaw`,
+    yardBody({ type: String(type) }, baseid),
+  );
 
 export interface ChampionApi {
   raise: typeof championRaise;
@@ -159,7 +177,7 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
         }
         return null;
       },
-      send: () => api.raise(type),
+      send: (_api, ...yard) => api.raise(type, ...yard),
     }),
   feed: (mode) =>
     store.run({
@@ -186,7 +204,7 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
             )
           : null;
       },
-      send: () => api.feed(mode),
+      send: (_api, ...yard) => api.feed(mode, ...yard),
     }),
   evolve: () =>
     store.run({
@@ -196,7 +214,7 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
         if ("reason" in view) return view;
         return view.top ? refuse("maxLevel", `Your ${view.entry.name} is fully evolved.`) : null;
       },
-      send: () => api.evolve(),
+      send: (_api, ...yard) => api.evolve(...yard),
     }),
   heal: () =>
     store.run({
@@ -208,7 +226,7 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
           ? refuse("fullHealth", `Your ${view.entry.name} is already at full health.`)
           : null;
       },
-      send: () => api.heal(),
+      send: (_api, ...yard) => api.heal(...yard),
     }),
   rename: (name) =>
     store.run({
@@ -220,7 +238,7 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
         }
         return activeChampion(reader.save) ? null : refuse("noChampion", "There is no champion in your cage.");
       },
-      send: () => api.rename(name.trim()),
+      send: (_api, ...yard) => api.rename(name.trim(), ...yard),
     }),
   juice: () =>
     store.run({
@@ -238,7 +256,7 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
         }
         return null;
       },
-      send: () => api.juice(),
+      send: (_api, ...yard) => api.juice(...yard),
     }),
   freeze: () =>
     store.run({
@@ -249,7 +267,7 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
         const gate = freezeGate(reader.save, view);
         return gate ? refuse("freezeRefused", gate) : null;
       },
-      send: () => api.freeze(),
+      send: (_api, ...yard) => api.freeze(...yard),
     }),
   thaw: (type) =>
     store.run({
@@ -263,6 +281,6 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
         }
         return null;
       },
-      send: () => api.thaw(type),
+      send: (_api, ...yard) => api.thaw(type, ...yard),
     }),
 });

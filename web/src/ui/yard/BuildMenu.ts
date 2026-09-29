@@ -12,6 +12,7 @@ import {
   type BuildOffer,
 } from "@/game/yard/buildCatalogue";
 import type { SpotCheck } from "@/game/yard/BuildPlacement";
+import { townHallLevel } from "@/game/yard/buildingCosts";
 import { NEED_MORE_SILOS } from "@/game/yard/storage";
 import { typeName } from "@/game/yard/planner/summary";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
@@ -124,9 +125,9 @@ const plural = (name: string): string => {
   return `${name}s`;
 };
 
-/** One line of the needs list, as words. */
-export const needText = (need: BuildNeed): string => {
-  if (need.kind === "townHall") return `Town Hall level ${need.level}`;
+/** One line of the needs list, as words. On an outpost the core is the hall. */
+export const needText = (need: BuildNeed, outpost = false): string => {
+  if (need.kind === "townHall") return outpost ? "an Outpost core" : `Town Hall level ${need.level}`;
   const name = typeName(need.type);
   const which =
     need.count === 1 ? `${/^[aeiou]/i.test(name) ? "an" : "a"} ${name}` : `${need.count} ${plural(name)}`;
@@ -374,12 +375,15 @@ export class BuildMenu {
 
     const store = this.binding.store;
     const workers = store.workers;
-    const hall = store.yard.townHall?.type === 14 ? store.yard.townHall.level : 0;
+    // On an outpost the core stands in for the hall and never levels up, so
+    // the line names the outpost's limits instead (`buildingCosts.ts`).
+    const outpost = store.kind === "outpost";
+    const hall = townHallLevel(store.yard);
     const free = workers.total - workers.busy;
     this.meta.replaceChildren(
       glyph(WORKER, "build-menu__meta-icon"),
       `${free} of ${workers.total} ${workers.total === 1 ? "worker" : "workers"} free`,
-      hall > 0 ? ` · Town Hall level ${hall}` : " · No Town Hall",
+      outpost ? " · Outpost limits" : hall > 0 ? ` · Town Hall level ${hall}` : " · No Town Hall",
     );
 
     const offers = this.sorted();
@@ -403,7 +407,7 @@ export class BuildMenu {
     this.previous.disabled = this.page === 0;
     this.next.disabled = this.page >= pages - 1;
     this.pages.replaceChildren(...this.pageDots(pages));
-    this.drawLegend(hall);
+    this.drawLegend(outpost ? 0 : hall);
 
     const offer = offers.find((one) => one.type === this.picked) ?? null;
     this.drawInfo(offer);
@@ -528,7 +532,7 @@ export class BuildMenu {
       const state = document.createElement("span");
       state.className = "u-visually-hidden";
       state.textContent = need.met ? "Done: " : "Not yet: ";
-      const words = needText(need);
+      const words = needText(need, this.binding.store.kind === "outpost");
       line.append(mark, state, words.charAt(0).toUpperCase() + words.slice(1));
       list.append(line);
     }

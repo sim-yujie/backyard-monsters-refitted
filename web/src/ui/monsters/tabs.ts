@@ -1,3 +1,4 @@
+import type { YardKind } from "@/game/yard/buildingCosts";
 import { HatchTab } from "./HatchTab";
 import { LockerTab } from "./LockerTab";
 import { HousingTab } from "./HousingTab";
@@ -68,3 +69,16 @@ export const MONSTERS_TABS: readonly MonstersTabDefinition[] = [
     create: (context) => new LabTab(context),
   },
 ];
+
+/**
+ * The tabs an outpost offers: Hatch and Housing. The Monster Locker, the
+ * Academy and the Lab cannot be built in an outpost (outpost props, research
+ * §1.2), and their routes refuse one (`notInOutpost`).
+ */
+export const OUTPOST_MONSTERS_TABS: readonly MonstersTabDefinition[] = MONSTERS_TABS.filter(
+  (tab) => tab.id === MonstersTabId.HATCH || tab.id === MonstersTabId.HOUSING,
+);
+
+/** The tabs of the Monsters screen over a yard of `kind`. */
+export const monstersTabsFor = (kind: YardKind): readonly MonstersTabDefinition[] =>
+  kind === "outpost" ? OUTPOST_MONSTERS_TABS : MONSTERS_TABS;

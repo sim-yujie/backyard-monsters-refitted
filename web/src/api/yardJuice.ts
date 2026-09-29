@@ -2,7 +2,7 @@ import { juicerProblemText, juicerStatus } from "@/game/monsters/juice";
 import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { YardResponse } from "./types";
-import type { YardRefusal } from "./yard";
+import { yardBody, type YardRefusal } from "./yard";
 
 /**
  * The Monster Juicer's yard route (`docs/design/yard-buildings.md` §7.3; wire
@@ -35,8 +35,12 @@ export interface JuiceReport {
  */
 export const juiceMonsters = (
   monsters: Readonly<Record<string, number>>,
+  baseid?: string,
 ): Promise<YardResponse<JuiceReport>> =>
-  post<YardResponse<JuiceReport>>(JUICE_PATH, { monsters: JSON.stringify(monsters) });
+  post<YardResponse<JuiceReport>>(
+    JUICE_PATH,
+    yardBody({ monsters: JSON.stringify(monsters) }, baseid),
+  );
 
 export interface JuiceApi {
   juice: typeof juiceMonsters;
@@ -89,6 +93,6 @@ export const juiceActions = (store: YardStore, api: JuiceApi = juiceApi): JuiceA
         }
         return null;
       },
-      send: () => api.juice(monsters),
+      send: (_api, ...yard) => api.juice(monsters, ...yard),
     }),
 });

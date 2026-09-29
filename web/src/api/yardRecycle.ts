@@ -2,6 +2,7 @@ import { recycleBlock } from "@/game/yard/recycle";
 import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { UpgradeCost, YardResponse } from "./types";
+import { yardBody } from "./yard";
 
 /**
  * Recycling (`docs/design/yard-buildings.md` §5.4; wire contract in
@@ -32,8 +33,14 @@ export interface RecycleReport {
  * `mapRoom`, `busy`, `championInCage`, `championsFrozen`, `researching`,
  * `training`, `hatcheryBusy`, `unlocking`.
  */
-export const recycleBuilding = (id: number): Promise<YardResponse<RecycleReport>> =>
-  post<YardResponse<RecycleReport>>("/api/:apiVersion/bm/yard/recycle", { id });
+export const recycleBuilding = (
+  id: number,
+  baseid?: string,
+): Promise<YardResponse<RecycleReport>> =>
+  post<YardResponse<RecycleReport>>(
+    "/api/:apiVersion/bm/yard/recycle",
+    yardBody({ id }, baseid),
+  );
 
 /** The queue key, for `store.isRunning`. */
 export const recycleKey = (id: number): string => actionKey("recycle", id);
@@ -57,5 +64,5 @@ export const recycleAction = (
       const block = recycleBlock(building, reader.save, reader.now());
       return block ? { reason: block.reason, message: block.message, detail: {}, local: true } : null;
     },
-    send: () => send(id),
+    send: (_api, ...yard) => send(id, ...yard),
   });

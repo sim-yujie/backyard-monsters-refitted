@@ -13,7 +13,7 @@ vi.mock("./auth", () => ({
   getSession: () => (session.userId === null ? null : { userId: session.userId }),
 }));
 
-const { loadOwnYard, takeAwayJobs } = await import("./base");
+const { loadOwnBase, loadOwnYard, takeAwayJobs } = await import("./base");
 
 const upgrade = (id: number, at: number): CompletedJob => ({
   kind: "upgrade",
@@ -56,6 +56,17 @@ describe("takeAwayJobs", () => {
 
     expect(takeAwayJobs().map((job) => job.id)).toEqual([2, 1]);
     expect(takeAwayJobs()).toEqual([]);
+  });
+
+  it("keeps an outpost's list apart from the main yard's (outposts WP5)", async () => {
+    answerWith([upgrade(1, 50)]);
+    await loadOwnYard();
+    answerWith([upgrade(7, 60)]);
+    await loadOwnBase("2000242209");
+
+    expect(takeAwayJobs("2000242209").map((job) => job.id)).toEqual([7]);
+    expect(takeAwayJobs("2000242209")).toEqual([]);
+    expect(takeAwayJobs().map((job) => job.id)).toEqual([1]);
   });
 
   it("keeps nothing from a load with no list, or an empty one", async () => {

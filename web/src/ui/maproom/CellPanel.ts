@@ -58,6 +58,7 @@ const ATTACK_READY = "Open this yard and attack it.";
 
 /** What "View yard" does on each kind of cell, or why it cannot. */
 const VIEW_OWN = "Open your yard";
+const VIEW_OWN_OUTPOST = "Open your outpost";
 const VIEW_OTHER = "Look around this yard. Nothing can be changed from here.";
 const VIEW_LOADING = "Waiting for this zone to load.";
 const VIEW_WATER = "There is no yard on water.";
@@ -170,7 +171,12 @@ export class CellPanel {
       title = VIEW_WATER;
     } else {
       enabled = true;
-      title = isPlayerCell(payload) && payload.mine === 1 ? VIEW_OWN : VIEW_OTHER;
+      title =
+        isPlayerCell(payload) && payload.mine === 1
+          ? payload.b === CellType.OUTPOST
+            ? VIEW_OWN_OUTPOST
+            : VIEW_OWN
+          : VIEW_OTHER;
     }
     button.disabled = !enabled;
     button.title = title;

@@ -3,7 +3,13 @@ import { loadOwnYard } from "@/api/base";
 import { getTakeoverQuote, takeOverCell, type TakeoverPayment } from "@/api/maproom";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { ApiError, NetworkError } from "@/api/http";
-import type { BaseLoadResponse, MapCell, Resources, TakeoverQuoteResponse } from "@/api/types";
+import {
+  CellType,
+  type BaseLoadResponse,
+  type MapCell,
+  type Resources,
+  type TakeoverQuoteResponse,
+} from "@/api/types";
 import { DEFAULT_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
 import {
   attackRefusal,
@@ -27,6 +33,7 @@ import { MapInput } from "@/game/maproom/MapInput";
 import { MapRenderer } from "@/game/maproom/MapRenderer";
 import { ZoneStore, type ZoneError } from "@/game/maproom/ZoneStore";
 import { inWorld, type CellRange } from "@/game/maproom/zones";
+import { outpostsOf, outpostTarget, setOwnYardTarget } from "@/game/yard/ownYards";
 import { MapRoomUi } from "@/ui/maproom/MapRoomUi";
 import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
 import type { Scene, SceneContext } from "../SceneManager";
@@ -306,6 +313,7 @@ export class MapRoom2Scene implements Scene {
       }
 
       if (base.resources) this.showResources(base.resources, base.credits);
+      this.ui?.setOutposts(outpostsOf(base));
     } catch (caught) {
       if (caught instanceof ApiError && caught.isAuthFailure) {
         this.context?.goTo(SceneName.LOGIN);
@@ -530,10 +538,12 @@ export class MapRoom2Scene implements Scene {
   /**
    * Opens the yard screen on the selected cell.
    *
-   * The player's own cell opens as it always has — no target, so the yard
-   * scene loads it editable. Any other cell with a yard becomes a read-only
-   * visit, carrying the attack it could turn into so the yard's own Attack
-   * button needs nothing from the map (`docs/design/attack-flow.md` §F1).
+   * The player's own cell opens editable: the home cell as it always has (no
+   * target, so the yard scene loads the main yard), an own outpost by its
+   * `baseid` (#146; Flash's "Open", `PopupInfoMine.as:220-234`). Any other
+   * cell with a yard becomes a read-only visit, carrying the attack it could
+   * turn into so the yard's own Attack button needs nothing from the map
+   * (`docs/design/attack-flow.md` §F1).
    */
   private viewYard(): void {
     const cell = this.selected;
@@ -543,6 +553,7 @@ export class MapRoom2Scene implements Scene {
     const payload = this.store.getCell(cell.col, cell.row);
     if (!payload || !("bid" in payload)) return;
     if ("mine" in payload && payload.mine === 1) {
+      if (payload.b === CellType.OUTPOST) setOwnYardTarget(outpostTarget(payload.bid, cell));
       context.goTo(SceneName.YARD);
       return;
     }
@@ -569,11 +580,11 @@ export class MapRoom2Scene implements Scene {
 
   /**
    * The server has made the cell the player's outpost (issue #82). Its zone
-   * is fetched again so the map redraws it as theirs; the HUD takes off the
-   * price and adds the outpost's 2,000,000 of storage at once, as Flash did
-   * (`PopupTakeover.as:140-159`), until the next resource sync replaces it
-   * with the server's figures. Until outposts open from the map (outposts
-   * plan WP5), the new outpost is selected on the map rather than opened.
+   * is fetched again so the map draws it as theirs next time; the HUD takes
+   * off the price at once (`PopupTakeover.as:140-159`) until the outpost's
+   * own load brings the server's figures; and the new outpost opens with
+   * Flash's "Veni, Vidi, Vici!", as Flash opened it (`BASE.as:2292-2319`;
+   * outposts WP5).
    */
   private tookOver(
     cell: OffsetCell,
@@ -587,8 +598,13 @@ export class MapRoom2Scene implements Scene {
       const next = takenOverResources(this.resources, this.credits, quote, payment);
       this.showResources(next.resources, next.credits);
     }
-    this.selectCell(cell);
-    this.ui?.showTakenOver(candidate.kind, candidate.name);
+    const context = this.context;
+    if (!context) return;
+    setOwnYardTarget({
+      ...outpostTarget(candidate.baseid, cell),
+      takenOver: { kind: candidate.kind, name: candidate.name },
+    });
+    context.goTo(SceneName.YARD);
   }
 
   /* ── Refresh and status ─────────────────────────────────────────────── */

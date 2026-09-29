@@ -6,6 +6,7 @@ import type { OffsetCell } from "@/game/HexGrid";
 import type { ZoneRecord } from "@/game/maproom/ZoneStore";
 import type { CellRange } from "@/game/maproom/zones";
 import type { TakeoverCandidate, TakeoverKind } from "@/game/maproom/takeover";
+import type { OwnOutpost } from "@/game/yard/ownYards";
 import { Hud } from "@/ui/Hud";
 import { ZoomControl } from "@/ui/ZoomControl";
 import { CellPanel } from "./CellPanel";
@@ -192,6 +193,11 @@ export class MapRoomUi {
 
   setHome(cell: OffsetCell): void {
     this.minimap.setHome(cell);
+  }
+
+  /** The player's outposts, for the Navigate panel's buttons beside Home. */
+  setOutposts(outposts: readonly OwnOutpost[]): void {
+    this.navPanel.setOutposts(outposts);
   }
 
   setZones(zones: Iterable<ZoneRecord>): void {

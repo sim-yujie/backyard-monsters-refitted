@@ -1,4 +1,5 @@
 import { ApiError, get, post, send } from "./http";
+import { yardBody } from "./yard";
 import type {
   ApplyLayoutResponse,
   Layout,
@@ -41,24 +42,34 @@ export const MAX_LAYOUT_NAME_LENGTH = 20;
 export const normaliseLayoutName = (name: string): string =>
   name.trim().slice(0, MAX_LAYOUT_NAME_LENGTH);
 
+/*
+ * Every call below takes the yard it acts on last, as the `yard*.ts` calls do
+ * (`yardBody`): an outpost's `baseid`, or nothing for the main yard. Apply,
+ * the wall upgrade and the trap re-arm then act on that outpost; the layout
+ * slots are refused there (`409 notInOutpost`, `plannerYard.ts`), as Flash's
+ * planner could not save or load layouts in an outpost.
+ */
+
 /** Every saved layout, with the number of slots the account has. */
-export const listLayouts = (): Promise<LayoutsResponse> => get<LayoutsResponse>(LAYOUTS_PATH);
+export const listLayouts = (baseid?: string): Promise<LayoutsResponse> =>
+  get<LayoutsResponse>(LAYOUTS_PATH, yardBody({}, baseid));
 
 /** Writes a layout into a slot, replacing whatever was there. */
 export const saveLayout = async (
   slot: number,
   name: string,
   payload: LayoutPayload,
+  baseid?: string,
 ): Promise<Layout> => {
   const response = await send<SaveLayoutResponse>("PUT", `${LAYOUTS_PATH}/${slot}`, {
-    form: { name: normaliseLayoutName(name), data: JSON.stringify(payload) },
+    form: yardBody({ name: normaliseLayoutName(name), data: JSON.stringify(payload) }, baseid),
   });
   return response.layout;
 };
 
 /** Empties a slot. */
-export const deleteLayout = async (slot: number): Promise<void> => {
-  await send("DELETE", `${LAYOUTS_PATH}/${slot}`);
+export const deleteLayout = async (slot: number, baseid?: string): Promise<void> => {
+  await send("DELETE", `${LAYOUTS_PATH}/${slot}`, { query: yardBody({}, baseid) });
 };
 
 /**
@@ -80,11 +91,18 @@ export const deleteLayout = async (slot: number): Promise<void> => {
 export const applyLayout = (
   payload: LayoutPayload,
   options: { startUpgrades?: boolean } = {},
+  baseid?: string,
 ): Promise<ApplyLayoutResponse> =>
-  post<ApplyLayoutResponse>(APPLY_PATH, {
-    data: JSON.stringify(payload),
-    ...(options.startUpgrades ? { startUpgrades: "1" } : {}),
-  });
+  post<ApplyLayoutResponse>(
+    APPLY_PATH,
+    yardBody(
+      {
+        data: JSON.stringify(payload),
+        ...(options.startUpgrades ? { startUpgrades: "1" } : {}),
+      },
+      baseid,
+    ),
+  );
 
 /** Every detail key a rejection can carry a list of building ids under. */
 const CONFLICT_KEYS = [
@@ -107,8 +125,15 @@ const CONFLICT_KEYS = [
  * `resources` and `buildingdata` afterwards, so the caller rebuilds its yard
  * from the server's answer rather than from its own preview.
  */
-export const upgradeWalls = (ids: number[], level: number): Promise<WallUpgradeResponse> =>
-  post<WallUpgradeResponse>(WALLS_UPGRADE_PATH, { ids: JSON.stringify(ids), level });
+export const upgradeWalls = (
+  ids: number[],
+  level: number,
+  baseid?: string,
+): Promise<WallUpgradeResponse> =>
+  post<WallUpgradeResponse>(
+    WALLS_UPGRADE_PATH,
+    yardBody({ ids: JSON.stringify(ids), level }, baseid),
+  );
 
 /**
  * Builds a trap at each position, which is what re-arming a fired trap is.
@@ -117,8 +142,11 @@ export const upgradeWalls = (ids: number[], level: number): Promise<WallUpgradeR
  * the server allocates fresh ids and charges the build cost, and the 5-second
  * countdown completes on the spot under the free-finish rule.
  */
-export const rearmTraps = (traps: readonly TrapPlacement[]): Promise<TrapRearmResponse> =>
-  post<TrapRearmResponse>(TRAPS_REARM_PATH, { traps: JSON.stringify(traps) });
+export const rearmTraps = (
+  traps: readonly TrapPlacement[],
+  baseid?: string,
+): Promise<TrapRearmResponse> =>
+  post<TrapRearmResponse>(TRAPS_REARM_PATH, yardBody({ traps: JSON.stringify(traps) }, baseid));
 
 /**
  * Building ids the server named as the reason a call failed.

@@ -33,31 +33,48 @@ const MAP_ROOM_VERSION = 2;
 
 /**
  * What the own-yard loads finished while the player was away and nobody has
- * shown yet, and whose account it was (issue #135).
+ * shown yet, per yard, and whose account it was (issue #135).
  *
  * The owner's build-mode load finishes and writes whatever ended while the
  * player was away, and its answer's `completed` is the only record of it: the
  * next load finds nothing. The map loads the own yard first, to find the home
  * cell, and it has no job notices, so every own-yard load keeps its list here
- * and the yard takes it when its store starts (`takeAwayJobs`).
+ * and the yard takes it when its store starts (`takeAwayJobs`). An outpost's
+ * load keeps its own list, under its `baseid`, so opening an outpost never
+ * shows what finished in the main yard, nor the other way round.
  */
-let awayJobs: { userId: number | null; jobs: CompletedJob[] } = { userId: null, jobs: [] };
+let awayJobs: { userId: number | null; jobs: Map<string, CompletedJob[]> } = {
+  userId: null,
+  jobs: new Map(),
+};
 
-const noteAwayJobs = (completed: readonly CompletedJob[] | undefined): void => {
+/** The key the main yard's list is kept under. */
+const MAIN_AWAY = "main";
+
+const noteAwayJobs = (
+  completed: readonly CompletedJob[] | undefined,
+  yard: string = MAIN_AWAY,
+): void => {
   const userId = getSession()?.userId ?? null;
-  if (awayJobs.userId !== userId) awayJobs = { userId, jobs: [] };
-  if (completed?.length) awayJobs.jobs.push(...completed);
+  if (awayJobs.userId !== userId) awayJobs = { userId, jobs: new Map() };
+  if (!completed?.length) return;
+  const list = awayJobs.jobs.get(yard) ?? [];
+  list.push(...completed);
+  awayJobs.jobs.set(yard, list);
 };
 
 /**
  * Hands over, once, every job an own-yard load finished while the player was
- * away that has not been shown yet, oldest first. Only the signed-in
- * account's: a list another account's load left behind is dropped.
+ * away that has not been shown yet, oldest first: the main yard's, or with a
+ * `baseid` that outpost's. Only the signed-in account's: a list another
+ * account's load left behind is dropped.
  */
-export const takeAwayJobs = (): CompletedJob[] => {
+export const takeAwayJobs = (baseid?: string): CompletedJob[] => {
   const userId = getSession()?.userId ?? null;
-  const jobs = awayJobs.userId === userId ? awayJobs.jobs : [];
-  awayJobs = { userId, jobs: [] };
+  if (awayJobs.userId !== userId) awayJobs = { userId, jobs: new Map() };
+  const yard = baseid ?? MAIN_AWAY;
+  const jobs = awayJobs.jobs.get(yard) ?? [];
+  awayJobs.jobs.delete(yard);
   return jobs.sort((a, b) => a.at - b.at);
 };
 
@@ -95,7 +112,10 @@ export const loadOwnYard = async (
 
 /**
  * Opens one of the caller's other yards (an outpost) by base id, still in
- * editable build mode.
+ * editable build mode (outposts WP5, #146). The server catches the outpost up
+ * as it loads it and serves it with the main yard's pool and `outposts`
+ * (`mapSaveData.ts`); the answer's `completed` is kept under the outpost's
+ * `baseid` for {@link takeAwayJobs}.
  */
 export const loadOwnBase = async (
   baseid: string,
@@ -110,7 +130,9 @@ export const loadOwnBase = async (
     ...(options.mapversion !== undefined ? { mapversion: options.mapversion } : {}),
   };
 
-  return post<BaseLoadResponse>(LOAD_PATH, { ...body });
+  const response = await post<BaseLoadResponse>(LOAD_PATH, { ...body });
+  noteAwayJobs(response.completed, baseid);
+  return response;
 };
 
 /* ── Foreign yards ──────────────────────────────────────────────────────── */

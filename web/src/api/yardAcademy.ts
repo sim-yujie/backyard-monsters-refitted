@@ -9,7 +9,7 @@ import {
 import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { YardResponse } from "./types";
-import type { YardRefusal } from "./yard";
+import { yardBody, type YardRefusal } from "./yard";
 
 /**
  * The Monster Academy's yard routes (`docs/design/yard-buildings.md` §6
@@ -64,20 +64,44 @@ export interface AcademyShinyReport {
  * `noAcademy`, `training`, `locked`, `maxLevel`, `academyBusy {id, monster}`
  * (or `busy`/`damaged {id}`), `academyLevel {have, need}`, `shortfall`.
  */
-export const academyTrain = (monster: string): Promise<YardResponse<AcademyTrainReport>> =>
-  post<YardResponse<AcademyTrainReport>>(`${ACADEMY_PATH}/train`, { monster });
+export const academyTrain = (
+  monster: string,
+  baseid?: string,
+): Promise<YardResponse<AcademyTrainReport>> =>
+  post<YardResponse<AcademyTrainReport>>(
+    `${ACADEMY_PATH}/train`,
+    yardBody({ monster }, baseid),
+  );
 
 /** Cancels `monster`'s training for its full putty price back, capped. Refusal: `notTraining`. */
-export const academyCancel = (monster: string): Promise<YardResponse<AcademyCancelReport>> =>
-  post<YardResponse<AcademyCancelReport>>(`${ACADEMY_PATH}/cancel`, { monster });
+export const academyCancel = (
+  monster: string,
+  baseid?: string,
+): Promise<YardResponse<AcademyCancelReport>> =>
+  post<YardResponse<AcademyCancelReport>>(
+    `${ACADEMY_PATH}/cancel`,
+    yardBody({ monster }, baseid),
+  );
 
 /** Finishes `monster`'s training now for `timeCost(time − now)` Shiny. Refusals: `notTraining`, `shinyLocked`, `credits`. */
-export const academyFinish = (monster: string): Promise<YardResponse<AcademyShinyReport>> =>
-  post<YardResponse<AcademyShinyReport>>(`${ACADEMY_PATH}/finish`, { monster });
+export const academyFinish = (
+  monster: string,
+  baseid?: string,
+): Promise<YardResponse<AcademyShinyReport>> =>
+  post<YardResponse<AcademyShinyReport>>(
+    `${ACADEMY_PATH}/finish`,
+    yardBody({ monster }, baseid),
+  );
 
 /** Trains `monster` one level at once for Shiny, no putty. Refusals: `train`'s short of `shortfall`, then `shinyLocked`, `credits`. */
-export const academyInstant = (monster: string): Promise<YardResponse<AcademyShinyReport>> =>
-  post<YardResponse<AcademyShinyReport>>(`${ACADEMY_PATH}/instant`, { monster });
+export const academyInstant = (
+  monster: string,
+  baseid?: string,
+): Promise<YardResponse<AcademyShinyReport>> =>
+  post<YardResponse<AcademyShinyReport>>(
+    `${ACADEMY_PATH}/instant`,
+    yardBody({ monster }, baseid),
+  );
 
 /** Every call above, so the actions can be handed a stand-in under test. */
 export interface AcademyApi {
@@ -159,16 +183,16 @@ export const academyActions = (store: YardStore, api: AcademyApi = academyApi): 
 
   return {
     train: (monster) =>
-      store.run({ key: AcademyKey.TRAIN, check: gated(monster, trainGate), send: () => api.train(monster) }),
+      store.run({ key: AcademyKey.TRAIN, check: gated(monster, trainGate), send: (_api, ...yard) => api.train(monster, ...yard) }),
     cancel: (monster) =>
-      store.run({ key: AcademyKey.CANCEL, check: training(monster), send: () => api.cancel(monster) }),
+      store.run({ key: AcademyKey.CANCEL, check: training(monster), send: (_api, ...yard) => api.cancel(monster, ...yard) }),
     finish: (monster) =>
-      store.run({ key: AcademyKey.FINISH, check: training(monster), send: () => api.finish(monster) }),
+      store.run({ key: AcademyKey.FINISH, check: training(monster), send: (_api, ...yard) => api.finish(monster, ...yard) }),
     instant: (monster) =>
       store.run({
         key: AcademyKey.INSTANT,
         check: gated(monster, instantGate),
-        send: () => api.instant(monster),
+        send: (_api, ...yard) => api.instant(monster, ...yard),
       }),
   };
 };

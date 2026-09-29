@@ -2,7 +2,7 @@ import { buildOffer, type BuildGate } from "@/game/yard/buildCatalogue";
 import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { UpgradeCost, YardResponse } from "./types";
-import type { YardRefusal } from "./yard";
+import { yardBody, type YardRefusal } from "./yard";
 
 /**
  * Building from the build menu (`docs/design/yard-buildings.md` §5.3; wire
@@ -59,20 +59,32 @@ export interface CancelBuildReport {
  * Places a new building. Refusals, in the server's order: 400 `notBuildable`,
  * `townHall`, `limit`, `requirements`, `shortfall`, `placement`, `workers`.
  */
-export const buildAt = (type: number, x: number, y: number): Promise<YardResponse<BuildReport>> =>
-  post<YardResponse<BuildReport>>(BUILD_PATH, { type, x, y });
+export const buildAt = (
+  type: number,
+  x: number,
+  y: number,
+  baseid?: string,
+): Promise<YardResponse<BuildReport>> =>
+  post<YardResponse<BuildReport>>(BUILD_PATH, yardBody({ type, x, y }, baseid));
 
 /** Places a new building finished, for Shiny. Refusals: `build`'s short of `shortfall` and `workers`, then `shinyLocked`, `credits`. */
 export const instantBuildAt = (
   type: number,
   x: number,
   y: number,
+  baseid?: string,
 ): Promise<YardResponse<InstantBuildReport>> =>
-  post<YardResponse<InstantBuildReport>>(`${BUILD_PATH}/instant`, { type, x, y });
+  post<YardResponse<InstantBuildReport>>(
+    `${BUILD_PATH}/instant`,
+    yardBody({ type, x, y }, baseid),
+  );
 
 /** Takes down a building still under construction for its full price back. Refusal: `notBuilding`. */
-export const cancelBuild = (id: number): Promise<YardResponse<CancelBuildReport>> =>
-  post<YardResponse<CancelBuildReport>>(`${BUILD_PATH}/cancel`, { id });
+export const cancelBuild = (
+  id: number,
+  baseid?: string,
+): Promise<YardResponse<CancelBuildReport>> =>
+  post<YardResponse<CancelBuildReport>>(`${BUILD_PATH}/cancel`, yardBody({ id }, baseid));
 
 /** The three calls, so the actions can be handed a stand-in under test. */
 export interface BuildApi {
@@ -140,7 +152,7 @@ export const buildActions = (store: YardStore, api: BuildApi = buildApi): BuildA
         if (!offer) return refuse("notBuildable", "That cannot be built here.");
         return offer.gate ? refuse(offer.gate.reason, gateMessage(offer.gate)) : null;
       },
-      send: () => api.build(type, x, y),
+      send: (_api, ...yard) => api.build(type, x, y, ...yard),
     }),
   instant: (type, x, y) =>
     store.run({
@@ -152,7 +164,7 @@ export const buildActions = (store: YardStore, api: BuildApi = buildApi): BuildA
           ? refuse(offer.instantGate.reason, gateMessage(offer.instantGate))
           : null;
       },
-      send: () => api.instant(type, x, y),
+      send: (_api, ...yard) => api.instant(type, x, y, ...yard),
     }),
   cancel: (id) =>
     store.run({
@@ -164,6 +176,6 @@ export const buildActions = (store: YardStore, api: BuildApi = buildApi): BuildA
           ? null
           : refuse("notBuilding", "That building is not under construction.");
       },
-      send: () => api.cancel(id),
+      send: (_api, ...yard) => api.cancel(id, ...yard),
     }),
 });
