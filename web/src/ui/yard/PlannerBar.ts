@@ -1,5 +1,6 @@
 import type { SelectionSummary, SelectionTypeCost } from "@/game/yard/planner/summary";
 import { GroupOp, GROUP_OPS } from "@/game/yard/planner/groupTools";
+import { percentText, type CoverageFigures } from "@/game/yard/planner/coverage";
 import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
 import {
   wallClockSeconds,
@@ -70,7 +71,7 @@ import { demo, GROUP_OP_DEMOS, type DemoName } from "./demos";
  */
 
 /** The switches in the View menu: what each one draws over the yard. */
-export type OverlayName = "ranges" | "land" | "air" | "centre";
+export type OverlayName = "ranges" | "land" | "air" | "centre" | "deadZones";
 
 export interface PlannerBarActions {
   onTool: (tool: PlannerTool) => void;
@@ -419,6 +420,8 @@ export class PlannerBar {
   private readonly shinyCell: CostCell;
   private readonly workersCell: CostCell;
   private readonly unplacedCell: CostCell;
+  /** Land and air coverage of the plan (#55). */
+  private readonly coverageCell: CostCell;
   private readonly readOnly: boolean;
 
   constructor(
@@ -488,6 +491,13 @@ export class PlannerBar {
         nested: true,
         key: "air",
         run: () => actions.onOverlay("air"),
+      },
+      {
+        label: "Dead zones",
+        title: "Hatch the parts of the yard no tower reaches, for the layers Land and Air tick",
+        checkable: true,
+        key: "deadZones",
+        run: () => actions.onOverlay("deadZones"),
       },
       {
         label: "Centre of yard",
@@ -640,11 +650,15 @@ export class PlannerBar {
       "planner-cost__cell planner-cost__cell--unplaced",
     );
     this.unplacedCell.element.hidden = true;
+    // Shown whatever the overlay says: a number to compare two arrangements by
+    // is wanted most when the hatching is off (#55).
+    this.coverageCell = new CostCell("Coverage", "planner-cost__cell planner-cost__cell--coverage");
     costs.append(
       this.timeCell.element,
       this.shinyCell.element,
       this.workersCell.element,
       this.unplacedCell.element,
+      this.coverageCell.element,
     );
 
     this.summary = document.createElement("span");
@@ -767,10 +781,13 @@ export class PlannerBar {
     readonly land: boolean;
     readonly air: boolean;
     readonly centre: boolean;
+    readonly deadZones: boolean;
   }): void {
     this.viewMenu.setChecked("ranges", toggles.ranges);
-    this.viewMenu.setChecked("land", toggles.land, !toggles.ranges);
-    this.viewMenu.setChecked("air", toggles.air, !toggles.ranges);
+    // Dimmed only while neither the discs nor the dead zones read them.
+    this.viewMenu.setChecked("land", toggles.land, !toggles.ranges && !toggles.deadZones);
+    this.viewMenu.setChecked("air", toggles.air, !toggles.ranges && !toggles.deadZones);
+    this.viewMenu.setChecked("deadZones", toggles.deadZones);
     this.viewMenu.setChecked("centre", toggles.centre);
   }
 
@@ -905,6 +922,26 @@ export class PlannerBar {
    * Apply is hard-blocked while it is not zero (§8, Q4), so the cell is the
    * bar's standing answer to "why is Apply refusing me".
    */
+  /**
+   * The share of the plot the towers reach, land and air (#55): "Land 87% ·
+   * Air 41%", or "No towers" when none is placed.
+   */
+  setCoverage(coverage: CoverageFigures): void {
+    if (coverage.towers === 0) {
+      this.coverageCell.set(
+        "No towers",
+        "No towers placed, so there is nothing to cover.",
+      );
+      return;
+    }
+    const land = percentText(coverage.land);
+    const air = percentText(coverage.air);
+    this.coverageCell.set(
+      `Land ${land} · Air ${air}`,
+      `How much of the yard is within reach of at least one defence tower: ${land} for creeps on the ground, ${air} for flyers. View › Dead zones shows the rest.`,
+    );
+  }
+
   setUnplaced(count: number): void {
     this.unplacedCell.element.hidden = count === 0;
     this.unplacedCell.set(

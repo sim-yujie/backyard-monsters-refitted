@@ -202,6 +202,22 @@ tower's reach, land and air on separate switches, and **View ▸ Centre of yard*
 What is left of F4 — the per-cell heat sampling, the dead-zone hatching and the coverage percentage
 — is issue #55 and the rest of this section still describes it.
 
+**Coverage and dead zones shipped 2026-09-29 (#55).** Decided by the lead (the owner may still
+override): **(1)** the percentage and the dead zones only — no heat map, no "dead zone touching a
+resource building" advisory, no coverage stored in layout metadata yet. **(2)** The base is every
+in-bounds plot cell on the 10-unit grid, occupied or not; a cell is covered when its centre is in
+range of a tower's footprint centre. **(3)** Land and air are separate figures and separate
+hatching. **(4)** The towers are the ones the range discs are drawn for, at the planned level,
+less the Monster Bunker and foundations; traps never count. **(5)** **View ▸ Dead zones** (off by
+default, remembered) hatches uncovered cells in the fault red — land one diagonal, air the other,
+so a cell dead to both is cross-hatched — for the layers Land and Air tick, under the buildings in
+both views. **(6)** With nothing selected and Dead zones on, the inspector is the coverage view:
+the figures and each hatched layer's three largest dead zones (4-connected uncovered runs) with
+Show, which pans to the zone; closed, it stays shut until Dead zones is turned on again. **(7)**
+The bottom bar's **Coverage** cell reads "Land 87% · Air 41%" (rounded down, so an open cell
+never reads 100%), or "No towers", after every edit, overlay on or off. Code:
+`web/src/game/yard/planner/coverage.ts`, `DeadZoneLayer.ts`.
+
 **For the player.** A heat overlay answering "where is my base weak?" instead of a tangle of range
 circles.
 

@@ -29,6 +29,8 @@ import {
   saveOverlays,
   type OverlayToggles,
 } from "@/game/yard/planner/RangeLayer";
+import { computeCoverage, coverageTowers, figuresOf, type Coverage } from "@/game/yard/planner/coverage";
+import { DeadZoneLayer } from "@/game/yard/planner/DeadZoneLayer";
 import { summariseSelection } from "@/game/yard/planner/summary";
 import { planTotals } from "@/game/yard/planner/upgrades";
 import { footprintCentre, footprintOf } from "@/game/yard/YardGrid";
@@ -39,7 +41,7 @@ import type { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { InspectorPanel } from "@/ui/yard/InspectorPanel";
 import { CENTRE_NOTE, onYardCentre } from "@/game/yard/planner/centreHover";
-import { PlannerBar } from "@/ui/yard/PlannerBar";
+import { PlannerBar, type OverlayName } from "@/ui/yard/PlannerBar";
 import { InventoryPanel } from "@/ui/yard/InventoryPanel";
 import {
   applyPanel,
@@ -236,6 +238,19 @@ export class YardPlanner {
 
   /** Every placed tower's reach, land and air kept apart. */
   private readonly ranges = new RangeLayer();
+  /** What no tower reaches, hatched (#55). */
+  private readonly deadZones = new DeadZoneLayer();
+  /**
+   * The plan's coverage (#55) and the towers it was sampled from, as a key:
+   * sampled again only when a tower moves, levels or goes, not on every
+   * refresh, which runs once per pointer move during a drag.
+   */
+  private coverage: Coverage | null = null;
+  private coverageKey = "";
+  /** The inspector is showing the coverage view rather than a selection. */
+  private inspectorCoverage = false;
+  /** The player closed the coverage view; it stays shut until Dead zones is turned on again. */
+  private coverageClosed = false;
   /** The crosshair and axes at yard (0, 0). */
   private readonly centreMark = new CentreMarker();
   /** Which of them are on, remembered across sessions. */
@@ -392,19 +407,30 @@ export class YardPlanner {
    * family off is read as turning the whole thing off, which is what the
    * player just asked for in as many words.
    */
-  private toggleOverlay(name: "ranges" | "land" | "air" | "centre"): void {
+  private toggleOverlay(name: OverlayName): void {
     const now = { ...this.overlays, [name]: !this.overlays[name] };
-    if (name === "ranges" && now.ranges && !now.land && !now.air) {
+    // Tower ranges and Dead zones both read Land and Air: turning either on
+    // with both families off would draw nothing and look broken.
+    if ((name === "ranges" || name === "deadZones") && now[name] && !now.land && !now.air) {
       now.land = true;
       now.air = true;
     }
-    if ((name === "land" || name === "air") && !now.land && !now.air) now.ranges = false;
-    if ((name === "land" || name === "air") && now[name] && !now.ranges) now.ranges = true;
+    if ((name === "land" || name === "air") && !now.land && !now.air) {
+      now.ranges = false;
+      now.deadZones = false;
+    }
+    if ((name === "land" || name === "air") && now[name] && !now.ranges && !now.deadZones) {
+      now.ranges = true;
+    }
 
+    if (name === "deadZones" && now.deadZones) this.coverageClosed = false;
     this.overlays = now;
     saveOverlays(now);
     this.bar.setOverlays(now);
     this.drawOverlays();
+    // With nothing selected the inspector is the coverage view while Dead
+    // zones is on, and closed otherwise.
+    this.refreshInspector(this.session.selectedNodes());
   }
 
   /** Hands both layers to whichever view is showing. */
@@ -412,7 +438,7 @@ export class YardPlanner {
     const renderer = this.options.renderer;
     const host =
       renderer.view === YardView.BLUEPRINT ? renderer.flatDecals : renderer.isoDecals;
-    host.addChild(this.centreMark.root, this.ranges.root);
+    host.addChild(this.centreMark.root, this.deadZones.root, this.ranges.root);
   }
 
   /**
@@ -437,6 +463,13 @@ export class YardPlanner {
       air: on.ranges && on.air,
     });
 
+    this.deadZones.draw({
+      coverage: on.deadZones ? this.currentCoverage() : null,
+      land: on.land,
+      air: on.air,
+      yardToWorld: (x, y) => renderer.yardToWorld(x, y),
+    });
+
     if (!on.centre) {
       this.centreMark.draw(null);
       return;
@@ -451,6 +484,31 @@ export class YardPlanner {
         [at(0, -halfHeight), at(0, halfHeight)],
       ],
     });
+  }
+
+  /**
+   * The plan's coverage, sampled again only when the towers changed: where
+   * one stands, its level (a planned one included) and what it reaches
+   * (#55). The plot is the plan's, which is the yard's expansion.
+   */
+  private currentCoverage(): Coverage {
+    const towers = coverageTowers(this.session.plan.buildings());
+    const plot = this.session.plan.plot;
+    const key = `${plot.halfWidth}x${plot.halfHeight};${towers
+      .map((tower) => `${tower.x},${tower.y},${tower.range},${tower.land ? 1 : 0}${tower.air ? 1 : 0}`)
+      .join(";")}`;
+    if (!this.coverage || key !== this.coverageKey) {
+      this.coverage = computeCoverage(towers, plot);
+      this.coverageKey = key;
+    }
+    return this.coverage;
+  }
+
+  /** Pans to a yard point: a dead zone's "Show" (#55). */
+  private showYardPoint(point: { readonly x: number; readonly y: number }): void {
+    const { camera, renderer } = this.options;
+    camera.centreOn(renderer.yardToWorld(point.x, point.y));
+    camera.dirty = true;
   }
 
   /**
@@ -589,6 +647,7 @@ export class YardPlanner {
     this.options.renderer.watchZoom(null);
     this.session.detach();
     this.ranges.destroy();
+    this.deadZones.destroy();
     this.centreMark.destroy();
     this.barObserver?.disconnect();
     this.barObserver = null;
@@ -1011,6 +1070,7 @@ export class YardPlanner {
     this.options.onPlanChanged?.();
     const state = this.session.state();
     this.bar.update(state);
+    this.bar.setCoverage(figuresOf(this.currentCoverage()));
     this.drawOverlays();
 
     const nodes = this.session.selectedNodes();
@@ -1054,7 +1114,10 @@ export class YardPlanner {
    * loses the scroll position and flickers.
    */
   private refreshInspector(nodes: readonly PlanNode[]): void {
-    if (nodes.length === 0) {
+    // Nothing selected: the coverage view while Dead zones is on (#55),
+    // otherwise no panel at all.
+    const coverage = nodes.length === 0 && this.overlays.deadZones && !this.coverageClosed;
+    if (nodes.length === 0 && !coverage) {
       this.inspector?.close();
       this.inspector = null;
       return;
@@ -1065,13 +1128,20 @@ export class YardPlanner {
       new InspectorPanel({
         onPlan: (ids, level) => this.plan(ids, level),
         onUpgradeWalls: () => this.showWallUpgrade(),
+        onShowPoint: (point) => this.showYardPoint(point),
         readOnly: this.readOnly,
         onClose: () => {
+          if (this.inspectorCoverage) this.coverageClosed = true;
           this.inspector = null;
         },
       }).mount(this.inspectorDock);
     this.inspector = panel;
-    panel.show(nodes, this.yard);
+    this.inspectorCoverage = coverage;
+    if (coverage) {
+      panel.showCoverage(this.currentCoverage(), { land: this.overlays.land, air: this.overlays.air });
+    } else {
+      panel.show(nodes, this.yard);
+    }
   }
 
   /**

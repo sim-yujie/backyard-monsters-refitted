@@ -135,14 +135,26 @@ describe("rangeRadii", () => {
 });
 
 describe("the remembered toggles", () => {
-  it("starts with ranges off and the centre mark on", () => {
-    expect(DEFAULT_OVERLAYS).toEqual({ ranges: false, land: true, air: true, centre: true });
+  it("starts with ranges and dead zones off and the centre mark on", () => {
+    expect(DEFAULT_OVERLAYS).toEqual({
+      ranges: false,
+      land: true,
+      air: true,
+      centre: true,
+      deadZones: false,
+    });
     expect(loadOverlays(fakeStorage())).toEqual(DEFAULT_OVERLAYS);
   });
 
   it("round-trips through a store", () => {
     const storage = fakeStorage();
-    const wanted: OverlayToggles = { ranges: true, land: true, air: false, centre: false };
+    const wanted: OverlayToggles = {
+      ranges: true,
+      land: true,
+      air: false,
+      centre: false,
+      deadZones: true,
+    };
     saveOverlays(wanted, storage);
     expect(loadOverlays(storage)).toEqual(wanted);
     expect(storage.getItem(OVERLAY_KEY)).toBeTruthy();
@@ -156,6 +168,8 @@ describe("the remembered toggles", () => {
       land: true,
       air: true,
       centre: true,
+      // A key from before #55 says nothing about dead zones: off.
+      deadZones: false,
     });
   });
 

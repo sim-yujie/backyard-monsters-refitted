@@ -7,6 +7,7 @@ import {
   upgradeSteps,
   WALL_TYPES,
 } from "@/game/yard/buildingCosts";
+import { percentText, type Coverage, type DeadZone } from "@/game/yard/planner/coverage";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import {
   heldResources,
@@ -91,7 +92,12 @@ export interface InspectorPanelOptions {
    * player's yard in the planner.
    */
   readOnly?: boolean;
+  /** Pans to a yard point: a dead zone's Show button (#55). */
+  onShowPoint?: (point: { readonly x: number; readonly y: number }) => void;
 }
+
+/** How many dead zones the coverage view lists per layer (#55). */
+export const DEAD_ZONES_LISTED = 3;
 
 export class InspectorPanel {
   readonly element: HTMLElement;
@@ -125,6 +131,71 @@ export class InspectorPanel {
 
   close(): void {
     this.panel.close();
+  }
+
+  /**
+   * Nothing selected while View › Dead zones is on (#55): the coverage
+   * figures and, for each layer the overlay hatches, the largest dead zones
+   * with a Show button that pans to each (design §4.4, "the three worst dead
+   * zones").
+   */
+  showCoverage(coverage: Coverage, layers: { readonly land: boolean; readonly air: boolean }): void {
+    this.panel.setTitle("Coverage");
+    if (coverage.towers === 0) {
+      this.panel.setContent(note("No towers placed, so there is nothing to cover."));
+      return;
+    }
+
+    const lead = document.createElement("p");
+    lead.className = "planner-inspector__heading";
+    lead.textContent = `Land ${percentText(coverage.land.share)} · Air ${percentText(coverage.air.share)} of the yard is within reach of a tower.`;
+
+    const sections: HTMLElement[] = [];
+    for (const [key, name, layer] of [
+      ["land", "Land", coverage.land],
+      ["air", "Air", coverage.air],
+    ] as const) {
+      if (!layers[key]) continue;
+      sections.push(this.deadZoneList(key, name, layer.deadZones));
+    }
+    this.panel.setContent(lead, ...sections);
+  }
+
+  private deadZoneList(key: string, name: string, zones: readonly DeadZone[]): HTMLElement {
+    const section = document.createElement("section");
+    section.className = `planner-inspector__dead planner-inspector__dead--${key}`;
+    const heading = document.createElement("h3");
+    heading.className = "planner-inspector__dead-title";
+    heading.textContent = `${name} dead zones`;
+    section.append(heading);
+
+    if (zones.length === 0) {
+      section.append(note("None: every part of the yard is in reach."));
+      return section;
+    }
+
+    const list = document.createElement("ol");
+    list.className = "planner-inspector__dead-list";
+    for (const zone of zones.slice(0, DEAD_ZONES_LISTED)) {
+      const item = document.createElement("li");
+      item.className = "planner-inspector__dead-zone";
+      const size = document.createElement("span");
+      // A sliver rounds down to 0%, which would read as nothing at all.
+      size.textContent = zone.share < 0.01 ? "Under 1% of the yard" : `${percentText(zone.share)} of the yard`;
+      const show = document.createElement("button");
+      show.type = "button";
+      show.className = "btn btn--ghost planner-inspector__show";
+      show.textContent = "Show";
+      show.setAttribute("aria-label", `Show this ${name.toLowerCase()} dead zone`);
+      show.addEventListener("click", () => this.options.onShowPoint?.(zone.at));
+      item.append(size, show);
+      list.append(item);
+    }
+    section.append(list);
+    if (zones.length > DEAD_ZONES_LISTED) {
+      section.append(note(`${zones.length - DEAD_ZONES_LISTED} smaller ones are hatched on the yard.`));
+    }
+    return section;
   }
 
   /* ── One building ───────────────────────────────────────────────────── */

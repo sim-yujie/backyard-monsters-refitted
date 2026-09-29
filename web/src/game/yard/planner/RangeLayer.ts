@@ -120,6 +120,11 @@ export interface OverlayToggles {
   readonly land: boolean;
   readonly air: boolean;
   readonly centre: boolean;
+  /**
+   * Hatch what no tower reaches (#55), in the layers Land and Air tick,
+   * whether or not the discs are drawn.
+   */
+  readonly deadZones: boolean;
 }
 
 /** Where the toggles are remembered, namespaced like the rest of the client. */
@@ -138,6 +143,7 @@ export const DEFAULT_OVERLAYS: OverlayToggles = {
   land: true,
   air: true,
   centre: true,
+  deadZones: false,
 };
 
 /** The store, or null where there is none. Reading the property can throw. */
@@ -172,6 +178,7 @@ export const loadOverlays = (storage: Storage | null = defaultStorage()): Overla
       land: pick("land"),
       air: pick("air"),
       centre: pick("centre"),
+      deadZones: pick("deadZones"),
     };
   } catch {
     return DEFAULT_OVERLAYS;

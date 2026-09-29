@@ -235,6 +235,11 @@
   display: none;
 }
 
+/* Coverage (#55): two figures in one cell, kept on one line. */
+.planner-cost__cell--coverage .planner-cost__value {
+  white-space: nowrap;
+}
+
 /* The same rule, for the cost rows inside the two batch panels. */
 .planner-cost__row--short {
   color: var(--colour-danger);
@@ -490,6 +495,33 @@
   margin: var(--space-2) 0 0;
   font-size: var(--text-xs);
   line-height: var(--leading-normal);
+}
+
+/* The coverage view's dead-zone lists (#55). */
+.planner-inspector__dead {
+  margin-top: var(--space-3);
+}
+
+.planner-inspector__dead-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.planner-inspector__dead-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.planner-inspector__dead-zone > * {
+  vertical-align: middle;
+}
+
+.planner-inspector__show {
+  margin-left: var(--space-2);
+  padding-block: 0;
 }
 
 .planner-inspector__actions {

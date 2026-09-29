@@ -456,10 +456,10 @@ describe("the read-only bar", () => {
       expect(shown).toContain(kept);
     }
     // The cost cells are the read-only planner's whole point alongside find:
-    // four resources, time, shiny and the worker count. Unplaced is in the DOM
-    // but hidden, because nothing can be unplaced yet.
-    expect(visibleCells(bar)).toHaveLength(7);
-    expect(bar.actionBar.querySelectorAll(".planner-cost__cell")).toHaveLength(8);
+    // four resources, time, shiny, the worker count and the coverage (#55).
+    // Unplaced is in the DOM but hidden, because nothing can be unplaced yet.
+    expect(visibleCells(bar)).toHaveLength(8);
+    expect(bar.actionBar.querySelectorAll(".planner-cost__cell")).toHaveLength(9);
   });
 
   it("says Read-only where the slot name goes, and why in the tooltip", () => {
@@ -727,12 +727,13 @@ describe("the View menu (issues #4 and #54)", () => {
       ?.querySelectorAll<HTMLButtonElement>(".planner-menu__item") ?? []),
   ];
 
-  it("offers the two range families under one switch, plus the centre mark", () => {
+  it("offers the two range families under one switch, the dead zones and the centre mark", () => {
     const bar = mount();
     expect(rows(bar).map((row) => row.textContent)).toEqual([
       "Tower ranges",
       "Land",
       "Air",
+      "Dead zones",
       "Centre of yard",
     ]);
   });
@@ -753,24 +754,45 @@ describe("the View menu (issues #4 and #54)", () => {
 
   it("ticks what is being drawn, and dims the families while their parent is off", () => {
     const bar = mount();
-    const [ranges, land, air, centre] = rows(bar);
+    const [ranges, land, air, deadZones, centre] = rows(bar);
 
-    bar.setOverlays({ ranges: false, land: true, air: false, centre: true });
+    bar.setOverlays({ ranges: false, land: true, air: false, centre: true, deadZones: false });
     expect(ranges?.getAttribute("aria-checked")).toBe("false");
     expect(land?.getAttribute("aria-checked")).toBe("true");
     expect(land?.classList.contains("planner-menu__item--dim")).toBe(true);
     expect(air?.getAttribute("aria-checked")).toBe("false");
     expect(centre?.getAttribute("aria-checked")).toBe("true");
 
-    bar.setOverlays({ ranges: true, land: true, air: true, centre: false });
+    bar.setOverlays({ ranges: true, land: true, air: true, centre: false, deadZones: false });
     expect(ranges?.getAttribute("aria-checked")).toBe("true");
     expect(land?.classList.contains("planner-menu__item--dim")).toBe(false);
     expect(centre?.getAttribute("aria-checked")).toBe("false");
+    expect(deadZones?.getAttribute("aria-checked")).toBe("false");
+
+    // Dead zones read Land and Air too (#55), so they are not dimmed then.
+    bar.setOverlays({ ranges: false, land: true, air: true, centre: false, deadZones: true });
+    expect(deadZones?.getAttribute("aria-checked")).toBe("true");
+    expect(land?.classList.contains("planner-menu__item--dim")).toBe(false);
   });
 
   it("stays in a read-only session, because it changes nothing in the yard", () => {
     const bar = mount({ readOnly: true });
     expect(viewMenu(bar)).not.toBeNull();
-    expect(rows(bar)).toHaveLength(4);
+    expect(rows(bar)).toHaveLength(5);
+  });
+});
+
+describe("the Coverage cell (#55)", () => {
+  it("shows land and air, or says there are no towers", () => {
+    const bar = mount();
+    bar.setCoverage({ towers: 0, land: 0, air: 0 });
+    expect(cell(bar, "coverage")?.querySelector(".planner-cost__value")?.textContent).toBe("No towers");
+
+    bar.setCoverage({ towers: 6, land: 0.8749, air: 0.41 });
+    expect(cell(bar, "coverage")?.hidden).toBe(false);
+    expect(cell(bar, "coverage")?.querySelector(".planner-cost__value")?.textContent).toBe(
+      "Land 87% · Air 41%",
+    );
+    expect(cell(bar, "coverage")?.title).toContain("Dead zones");
   });
 });
