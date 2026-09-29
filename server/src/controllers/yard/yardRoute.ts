@@ -4,7 +4,12 @@ import type { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import type { CompletedJob } from "../../services/yard/catchUp.js";
 import type { KoaController } from "../../utils/KoaController.js";
-import { catchUpLockedYard, runYardAction, type YardAction } from "./yardAction.js";
+import {
+  catchUpLockedOutpost,
+  catchUpLockedYard,
+  runYardAction,
+  type YardAction,
+} from "./yardAction.js";
 
 /**
  * `yardRoute(action)`: a yard action as a Koa controller, run against the
@@ -29,3 +34,14 @@ export const yardRoute =
  */
 export const catchUpOwnerYard = (save: Save): Promise<{ save: Save; completed: CompletedJob[] }> =>
   catchUpLockedYard(postgres.em, save);
+
+/**
+ * The catch-up on the owner's build-mode `/base/load` of one of their Map
+ * Room 2 outposts, locked (main row, then outpost) and written
+ * (`catchUpLockedOutpost`): the outpost, and what finished.
+ */
+export const catchUpOwnerOutpost = (
+  user: User,
+  outpost: Save
+): Promise<{ save: Save; completed: CompletedJob[] }> =>
+  catchUpLockedOutpost(postgres.em, user, outpost);

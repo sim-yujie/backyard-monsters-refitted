@@ -4,6 +4,7 @@ import { parseSlot } from "../../services/yardplanner/validateLayout.js";
 import { postgres } from "../../server.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
+import { refuseOutpostLayouts } from "./plannerYard.js";
 
 /**
  * `DELETE /bm/yardplanner/layouts/:slot`, and the legacy
@@ -24,6 +25,8 @@ export const deleteLayout: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   await postgres.em.populate(user, ["save"]);
   const save = user.save!;
+  // Flash's planner could not save layouts in an outpost (`BasePlanner.as:41`).
+  refuseOutpostLayouts(user, ctx.request.body);
 
   const body = (ctx.request.body ?? {}) as { slotid?: unknown };
   const slot = parseSlot(ctx.params.slot ?? body.slotid);

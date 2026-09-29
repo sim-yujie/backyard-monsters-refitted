@@ -22,4 +22,7 @@ export const yardBankAction = defineYardAction({
       body.ids ? { ids: body.ids } : { all: true },
       devConfig.skipTutorial ? 205 : Number(save.tutorialstage) || 0
     ),
+  // An outpost's harvesters show a disabled "Auto-Banking" button
+  // (`client/scripts/BUILDINGINFO.as:130-131`): their income is banked for them.
+  outposts: { refuse: "Outposts bank automatically (Auto-Banking)." },
 });

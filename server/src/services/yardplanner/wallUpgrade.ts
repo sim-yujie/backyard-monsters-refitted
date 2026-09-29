@@ -1,5 +1,11 @@
 import { batchBlockedErr, layoutInvalidErr } from "../../errors/errors.js";
-import { maxLevel, type CostRequirement, type CostStep } from "../../game-data/buildingCosts.js";
+import {
+  hallTypeOf,
+  maxLevel,
+  type CostRequirement,
+  type CostStep,
+  type YardKind,
+} from "../../game-data/buildingCosts.js";
 import {
   LAYOUT_NODE_MAX,
   WallIdListSchema,
@@ -12,7 +18,7 @@ import type {
 import type { JsonObject } from "../../types/JsonObject.js";
 import {
   FREE_FINISH_SECONDS,
-  TOWN_HALL_TYPE,
+  hallName,
   isShort,
   levelOf,
   pointsForUpgrade,
@@ -21,6 +27,7 @@ import {
   sumCosts,
   townHallLevel,
   upgradeSteps,
+  yardKindOf,
   type ResourceAmounts,
 } from "./costs.js";
 import { listIds, MAX_LISTED } from "./validateLayout.js";
@@ -45,8 +52,13 @@ import { listIds, MAX_LISTED } from "./validateLayout.js";
  * `validateLayout.ts` makes.
  */
 
-/** The parts of a `Save` this route reads. */
+/**
+ * The parts of a `Save` this route reads. An outpost (`type` `outpost`) walks
+ * the outpost table's wall ladder, which stops at level 5, with the core as
+ * its hall.
+ */
 export interface WallUpgradeSave {
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   resources?: JsonObject | null;
@@ -167,6 +179,7 @@ export const planWallUpgrade = (
 ): WallUpgradePlan => {
   const buildings = save.buildingdata ?? {};
   const health = save.buildinghealthdata;
+  const kind = yardKindOf(save);
 
   // 1. Ownership and type.
   const unknown: number[] = [];
@@ -203,7 +216,7 @@ export const planWallUpgrade = (
   }
 
   // 2. Target level.
-  const top = maxLevel(WALL_TYPE);
+  const top = maxLevel(WALL_TYPE, kind);
   if (!Number.isInteger(level) || level < MIN_TARGET_LEVEL || level > top) {
     throw layoutInvalidErr(`Walls go up to level ${top}. Pick a level from ${MIN_TARGET_LEVEL} to ${top}.`, {
       level,
@@ -246,23 +259,23 @@ export const planWallUpgrade = (
 
   // 4. Prerequisites. Every wall walks the same ladder, so each step index only
   //    needs checking once however many walls pass through it.
-  const hall = townHallLevel(buildings);
+  const hall = townHallLevel(buildings, kind);
   if (hall === 0) {
-    throw batchBlockedErr("You need a Town Hall before you can upgrade anything.", {
+    throw batchBlockedErr(`You need a ${hallName(kind)} before you can upgrade anything.`, {
       townHall: { have: 0, need: 1 },
     });
   }
 
   const lowest = Math.min(...walls.map((wall) => wall.level));
   for (let step = lowest; step < level; step++) {
-    const [requirement] = upgradeSteps(WALL_TYPE, step, step + 1);
+    const [requirement] = upgradeSteps(WALL_TYPE, step, step + 1, kind);
     if (!requirement) continue;
-    checkRequirements(requirement[5], buildings, hall);
+    checkRequirements(requirement[5], buildings, hall, kind);
   }
 
   // 5. Free-finish guard, then 6. cost.
   const steps: CostStep[] = [];
-  for (const wall of walls) steps.push(...upgradeSteps(WALL_TYPE, wall.level, level));
+  for (const wall of walls) steps.push(...upgradeSteps(WALL_TYPE, wall.level, level, kind));
 
   for (const step of steps) {
     if (step[4] > FREE_FINISH_SECONDS) {
@@ -307,19 +320,22 @@ export const planWallUpgrade = (
  *
  * The *failing* entry decides which error comes back, not merely the presence
  * of a Town Hall entry: a step gated on both a Town Hall the yard has and a
- * building it does not would otherwise blame the hall.
+ * building it does not would otherwise blame the hall. On an outpost (`kind`)
+ * the hall is the core.
  */
 export const checkRequirements = (
   re: readonly CostRequirement[],
   buildings: BuildingDataMap,
-  hall: number
+  hall: number,
+  kind: YardKind = "main"
 ): void => {
   if (requirementsMet(re, buildings)) return;
 
   const unmet = re.filter((entry) => !requirementsMet([entry], buildings));
-  const townHall = unmet.find(([type]) => type === TOWN_HALL_TYPE);
+  const townHall = unmet.find(([type]) => type === hallTypeOf(kind));
   if (townHall) {
-    throw batchBlockedErr(`That needs a level ${townHall[2]} Town Hall. Yours is level ${hall}.`, {
+    const name = hallName(kind);
+    throw batchBlockedErr(`That needs a level ${townHall[2]} ${name}. Yours is level ${hall}.`, {
       townHall: { have: hall, need: townHall[2] },
     });
   }

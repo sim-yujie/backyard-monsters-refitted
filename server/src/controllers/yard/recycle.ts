@@ -11,4 +11,6 @@ import { defineYardAction } from "./yardAction.js";
 export const yardRecycleAction = defineYardAction({
   schema: YardRecycleSchema,
   run: ({ save, body, now }) => planRecycle(save, body.id, now),
+  // `msg_recycleoutpostbuilding` (`client/scripts/BFOUNDATION.as:2536-2540`).
+  outposts: { refuse: "You cannot Recycle buildings in Outposts." },
 });

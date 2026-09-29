@@ -22,16 +22,19 @@ import { defineYardAction } from "./yardAction.js";
 export const yardHatcheryAddAction = defineYardAction({
   schema: YardHatcheryAddSchema,
   run: ({ save, body, now }) => planHatcheryAdd(save, body.hatchery, body.monster, body.count, now),
+  outposts: "allow",
 });
 
 /** `POST /bm/yard/hatchery/remove` — take monsters off a slot for the goo paid (capped). */
 export const yardHatcheryRemoveAction = defineYardAction({
   schema: YardHatcheryRemoveSchema,
   run: ({ save, body, now }) => planHatcheryRemove(save, body.hatchery, body.slot, body.count, now),
+  outposts: "allow",
 });
 
 /** `POST /bm/yard/hatchery/finish` — house what fits now for Shiny. */
 export const yardHatcheryFinishAction = defineYardAction({
   schema: YardHatcheryFinishSchema,
   run: ({ save, body, now }) => planHatcheryFinish(save, body.hatchery, now),
+  outposts: "allow",
 });

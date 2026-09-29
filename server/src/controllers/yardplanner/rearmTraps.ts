@@ -1,12 +1,12 @@
 import { Status } from "../../enums/StatusCodes.js";
-import { TrapRearmSchema } from "../../schemas/YardPlannerSchemas.js";
+import { TrapRearmSchema, type TrapPlacement } from "../../schemas/YardPlannerSchemas.js";
 import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers.js";
 import { Operation, updateResources } from "../../services/base/updateResources.js";
 import { parseTrapPlacements, planTrapRearm } from "../../services/yardplanner/trapRearm.js";
 import { syncDerivedLevels } from "../../services/yard/derivedLevels.js";
-import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
-import { postgres } from "../../server.js";
+import { onPlannerYard } from "./plannerYard.js";
 import { debitOf } from "./upgradeWalls.js";
+import type { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
@@ -25,18 +25,28 @@ import type { KoaController } from "../../utils/KoaController.js";
  * where they are: the Flash client keys health by the buildings it holds and
  * ignores the rest (decision Q9).
  *
+ * With a `baseid` naming one of the caller's Map Room 2 outposts the traps go
+ * into that outpost (25 Booby Traps and 5 Heavy Traps at most) and the charge
+ * is the main pool's, both rows in one transaction (`plannerYard.ts`).
+ *
  * @param {Context} ctx - The Koa context object, which includes the authenticated user.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
  */
 export const rearmTraps: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  await postgres.em.populate(user, ["save"]);
-  const save = user.save!;
-
   const body = TrapRearmSchema.parse(ctx.request.body ?? {});
   const traps = parseTrapPlacements(body.traps);
 
-  const now = getCurrentDateTime();
+  const answer = await onPlannerYard(user, ctx.request.body, (save, now) =>
+    rearmTrapsOn(save, traps, now)
+  );
+
+  ctx.status = Status.OK;
+  ctx.body = answer;
+};
+
+/** The re-arm on one yard (the controller comment); writes nothing but the save it is handed. */
+const rearmTrapsOn = (save: Save, traps: readonly TrapPlacement[], now: number) => {
   const elapsed = now - Number(save.savetime ?? now);
   save.buildingdata = advanceBuildingTimers(
     save.buildingdata ?? {},
@@ -57,11 +67,7 @@ export const rearmTraps: KoaController = async (ctx) => {
   syncDerivedLevels(save);
   save.savetime = now;
 
-  postgres.em.persist(save);
-  await postgres.em.flush();
-
-  ctx.status = Status.OK;
-  ctx.body = {
+  return {
     error: 0,
     placed: plan.placed,
     ids: plan.ids,

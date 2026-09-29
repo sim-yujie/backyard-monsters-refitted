@@ -16,6 +16,7 @@ import { parseSlot } from "../../services/yardplanner/validateLayout.js";
 import { postgres } from "../../server.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
+import { refuseOutpostLayouts } from "./plannerYard.js";
 
 /**
  * Controller to handle saving a Yard Planner slot/template for the authenticated user.
@@ -38,6 +39,8 @@ export const saveTemplate: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   await postgres.em.populate(user, ["save"]);
   const save = user.save!;
+  // Flash's planner could not save layouts in an outpost (`BasePlanner.as:41`).
+  refuseOutpostLayouts(user, ctx.request.body);
 
   const parsed = LegacySaveTemplateSchema.safeParse(ctx.request.body ?? {});
   if (!parsed.success) {

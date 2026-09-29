@@ -1,7 +1,7 @@
-import { costOf } from "../../game-data/buildingCosts.js";
+import { costOf, OUTPOST_CORE_TYPE, type YardKind } from "../../game-data/buildingCosts.js";
 import type { BuildingData } from "../../types/BuildingData.js";
 import { cancelRefund, type StorageCapSave } from "../base/economy/resourceBudget.js";
-import { levelOf, type ResourceAmounts } from "../yardplanner/costs.js";
+import { hallName, levelOf, yardKindOf, type ResourceAmounts } from "../yardplanner/costs.js";
 import {
   planOneUpgrade,
   type OneUpgradeRefusal,
@@ -24,6 +24,9 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * so the panel and the planner cannot disagree about what a yard may start.
  * What the panel adds is the refusal: where the walk reports a row and carries
  * on, a single-building action refuses with the reason (§2.1 "Errors").
+ *
+ * On an outpost both read the outpost table (`yardKindOf`); its core never
+ * levels up ("The outpost can not be upgraded.", `OUTPOST_YARD_PROPS.as`).
  */
 
 /** The parts of a `Save` the two actions read. */
@@ -59,8 +62,12 @@ const buildingOf = (save: UpgradeWalkSave, id: number): BuildingData => {
   return building;
 };
 
-/** The single-building refusal for a step {@link planOneUpgrade} would not take (also `upgrade/instant`'s, `services/yard/instantUpgrade.ts`). */
-export const refusalErr = (refusal: OneUpgradeRefusal) => {
+/**
+ * The single-building refusal for a step {@link planOneUpgrade} would not take
+ * (also `upgrade/instant`'s, `services/yard/instantUpgrade.ts`), worded for a
+ * yard of `kind`.
+ */
+export const refusalErr = (refusal: OneUpgradeRefusal, kind: YardKind = "main") => {
   switch (refusal.reason) {
     case "missing":
       return yardBadRequestErr("That building is not in your yard.", { id: refusal.id });
@@ -74,15 +81,21 @@ export const refusalErr = (refusal: OneUpgradeRefusal) => {
       return yardRefusedErr(
         "townHall",
         refusal.townHall!.have <= 0
-          ? "You need a Town Hall before you can upgrade anything."
-          : `That upgrade needs a level ${refusal.townHall!.need} Town Hall.`,
+          ? `You need a ${hallName(kind)} before you can upgrade anything.`
+          : `That upgrade needs a level ${refusal.townHall!.need} ${hallName(kind)}.`,
         { townHall: refusal.townHall }
       );
     case "maxLevel":
-      return yardRefusedErr("maxLevel", "That building is already at its highest level.", {
-        level: refusal.from,
-        max: costOf(refusal.t)?.costs.length ?? refusal.from,
-      });
+      return yardRefusedErr(
+        "maxLevel",
+        kind === "outpost" && refusal.t === OUTPOST_CORE_TYPE
+          ? "The outpost can not be upgraded."
+          : "That building is already at its highest level.",
+        {
+          level: refusal.from,
+          max: costOf(refusal.t, kind)?.costs.length ?? refusal.from,
+        }
+      );
     case "requirements":
       return yardRefusedErr("requirements", "That upgrade needs other buildings first.", {
         requirements: refusal.requirements,
@@ -121,8 +134,9 @@ export const refusalErr = (refusal: OneUpgradeRefusal) => {
  */
 export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: number) => {
   const building = buildingOf(save, id);
+  const yard = yardKindOf(save);
 
-  const kind = costOf(Number(building.t))?.kind;
+  const kind = costOf(Number(building.t), yard)?.kind;
   if (kind && BATCH_KINDS.has(kind)) {
     throw yardBadRequestErr(
       "Walls and traps are upgraded from the Yard Planner.",
@@ -131,7 +145,7 @@ export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: numb
     );
   }
   const step = planOneUpgrade(save, id, now);
-  if (!step.ok) throw refusalErr(step);
+  if (!step.ok) throw refusalErr(step, yard);
 
   const report: UpgradeReport = {
     id,
@@ -169,7 +183,7 @@ export const planCancelUpgrade = (save: UpgradeActionSave, id: number) => {
   }
 
   const { cU: _cancelled, cL: _length, ...rest } = building;
-  const refund = cancelRefund(Number(building.t), levelOf(building));
+  const refund = cancelRefund(Number(building.t), levelOf(building), yardKindOf(save));
   // What the wrapper's clamp will let through (`credit.ts`, T3), for the report.
   const report: CancelUpgradeReport = { id, refund: fitCredit(save, refund).credited };
 

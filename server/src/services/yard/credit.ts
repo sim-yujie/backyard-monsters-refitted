@@ -22,13 +22,25 @@ import type { ResourceAmounts } from "../yardplanner/costs.js";
  *
  * The cap is `storageCap` (silos, packing, outposts), one figure for all four
  * resources. A pool already at or over the cap (an old save, a cap that
- * shrank) takes nothing and loses nothing.
+ * shrank) takes nothing and loses nothing. An outpost has no pool of its own:
+ * the yard action wrapper hands its rules the outpost seen through the owner's
+ * main yard (`poolView.ts`), whose `poolCap` is the main yard's cap, and
+ * {@link capOf} reads that instead of the outpost's own buildings.
  */
 
 /** The slice of a save a credit reads and writes. */
 export interface CreditSave extends StorageCapSave {
   resources?: JsonObject | null;
+  /** The cap of the pool `resources` belongs to, when that is not this yard's own (an outpost's). */
+  poolCap?: number;
 }
+
+/**
+ * The storage cap a yard's credits are clamped to: its own `storageCap`, or,
+ * for an outpost, its owner's main-yard cap (`poolCap`).
+ */
+export const capOf = (save: CreditSave): number =>
+  typeof save.poolCap === "number" ? save.poolCap : storageCap(save);
 
 /** What a credit came to, per resource. */
 export interface CreditResult {
@@ -54,13 +66,13 @@ const heldOf = (save: CreditSave, key: string): number => {
  *
  * @param save - The yard as it will stand when the credit lands (its silos set the cap).
  * @param amounts - Any of `r1`..`r4`; missing, negative or unreadable amounts are 0.
- * @param cap - The cap to fill up to; `storageCap(save)` unless a credit raises
+ * @param cap - The cap to fill up to; `capOf(save)` unless a credit raises
  *   it (Krallen's buff on attack loot, `services/base/combat/attackLoot.ts`).
  */
 export const fitCredit = (
   save: CreditSave,
   amounts: Partial<ResourceAmounts>,
-  cap: number = storageCap(save)
+  cap: number = capOf(save)
 ): CreditResult => {
   const credited = noAmounts();
   const overflow = noAmounts();
@@ -84,7 +96,7 @@ export const fitCredit = (
 export const creditResources = (
   save: CreditSave,
   amounts: Partial<ResourceAmounts>,
-  cap: number = storageCap(save)
+  cap: number = capOf(save)
 ): CreditResult => {
   const result = fitCredit(save, amounts, cap);
   if (RESOURCE_KEYS.some((key) => result.credited[key] > 0)) {

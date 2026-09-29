@@ -24,7 +24,9 @@ import {
   type RadioRemovedJob,
 } from "./mapRoom.js";
 import type { MushroomYardSave } from "./mushrooms.js";
+import { placeOutpostCore } from "./outpostYard.js";
 import { addStarterBase, type StarterBaseJob, type StarterBaseSave } from "./starterBase.js";
+import { yardKindOf } from "../yardplanner/costs.js";
 
 /**
  * `catchUpYard(save, now)`: advances a main yard from its `savetime` to `now`
@@ -57,6 +59,17 @@ import { addStarterBase, type StarterBaseJob, type StarterBaseSave } from "./sta
  * advances): a finished Housing upgrade changes what the hatcheries may
  * fill. A later step that needs to split its window at a building completion
  * reads the `at` of the `build`/`upgrade` entries step 1 returned.
+ *
+ * **Outposts** (`type` `outpost`, outposts WP3) run their own, shorter list
+ * ({@link catchUpOutpost}): an empty outpost gets its core first
+ * (`outpostYard.ts`), then repairs, buildings, monsters and damage, as above.
+ * The rest is the player's or the main yard's alone: the starter base and the
+ * Map Room, the Locker, the Academy and the Lab (their data is the main
+ * yard's), mushrooms and champions (outposts have neither), and the harvester
+ * buffers (an outpost's harvesters hold nothing; their income is autobanked
+ * into the main pool, WP4). Run it on the outpost seen through its owner's
+ * main yard (`poolView.ts`), so points and the HCC's goo refund land in the
+ * main yard's pool.
  *
  * **Guarantees.** Idempotent: a second run at the same `now` changes nothing,
  * because `savetime` has moved to `now` and nothing is left at zero. It never
@@ -111,6 +124,8 @@ export interface CatchUpSave
  * @param now - Unix seconds to advance to.
  */
 export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
+  if (yardKindOf(save) === "outpost") return catchUpOutpost(save, now);
+
   const starter = addStarterBase(save, now);
   const stored = Number(save.savetime);
   const from = Number.isFinite(stored) && stored > 0 && starter.length === 0 ? stored : now;
@@ -128,6 +143,31 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
   completed.push(...catchUpTraining(save, from, now));
   completed.push(...catchUpResearch(save, now));
   completed.push(...catchUpChampions(save, from, now));
+  catchUpDamage(save);
+
+  save.savetime = now;
+
+  return completed.sort((a, b) => a.at - b.at);
+};
+
+/**
+ * An outpost's catch-up (the file comment): the core into an empty outpost,
+ * then repairs, buildings, monsters and damage, with the same guarantees.
+ *
+ * @param save - The outpost, mutated in place; `savetime` ends at `now`.
+ * @param now - Unix seconds to advance to.
+ */
+export const catchUpOutpost = (save: CatchUpSave, now: number): CompletedJob[] => {
+  const cored = placeOutpostCore(save);
+  const stored = Number(save.savetime);
+  // A core that has just gone in has stood for no time at all.
+  const from = Number.isFinite(stored) && stored > 0 && !cored ? stored : now;
+
+  const completed: CompletedJob[] = [
+    ...catchUpRepairs(save, from, now),
+    ...catchUpBuildings(save, from, now),
+  ];
+  completed.push(...catchUpMonsters(save, from, now, completed));
   catchUpDamage(save);
 
   save.savetime = now;

@@ -3,6 +3,7 @@ import { readLayouts, toLegacyEntry } from "../../services/yardplanner/layoutSto
 import { postgres } from "../../server.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
+import { refuseOutpostLayouts } from "./plannerYard.js";
 
 /**
  * Controller to handle the retrieval of Yard Planner slots/templates for the authenticated user.
@@ -22,7 +23,9 @@ import type { KoaController } from "../../utils/KoaController.js";
  */
 export const getTemplates: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  await postgres.em.populate(user, ["save"], { fields: ["save.savetemplate"] });
+  await postgres.em.populate(user, ["save"], { fields: ["save.savetemplate", "save.baseid"] });
+  // Flash's planner could not load layouts in an outpost (`BasePlanner.as:41`).
+  refuseOutpostLayouts(user, ctx.query);
 
   const templates = readLayouts(user.save?.savetemplate).map(toLegacyEntry);
 

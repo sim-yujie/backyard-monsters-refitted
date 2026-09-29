@@ -1,4 +1,4 @@
-import { costOf } from "../../game-data/buildingCosts.js";
+import { costOf, type YardKind } from "../../game-data/buildingCosts.js";
 import { storeItems } from "../../game-data/store/storeItems.js";
 import {
   instantCost,
@@ -107,14 +107,15 @@ export const finishNowPrice = (remaining: number): number => timeCost(remaining)
  * `int((ceil(sqrt((r1 + r2 + r3) / 2)^0.75) + timeCost(time)) × 0.95)` over
  * `costs[level]`, goo not counted (`BFOUNDATION.InstantUpgradeCost`,
  * `:2114-2128`). The time is the table's, before Sharper Tools. 0 past the top
- * of the ladder or for a type with no table.
+ * of the ladder or for a type with no table. An outpost prices from its own
+ * table (`kind`).
  */
-export const instantUpgradePrice = (type: number, level: number): number =>
-  instantCost(costOf(pricingType(type))?.costs[level]);
+export const instantUpgradePrice = (type: number, level: number, kind: YardKind = "main"): number =>
+  instantCost(costOf(pricingType(type), kind)?.costs[level]);
 
 /** The price of an instant build: the same formula over `costs[0]` (`BFOUNDATION.InstantBuildCost`, `:2085-2096`). */
-export const instantBuildPrice = (type: number): number =>
-  instantCost(costOf(pricingType(type))?.costs[0]);
+export const instantBuildPrice = (type: number, kind: YardKind = "main"): number =>
+  instantCost(costOf(pricingType(type), kind)?.costs[0]);
 
 /**
  * The price of buying a pile of resources outright, `ceil(sqrt(total / 2)^0.75)`

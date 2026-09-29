@@ -13,4 +13,5 @@ import { defineYardAction } from "./yardAction.js";
 export const yardJuiceAction = defineYardAction({
   schema: YardJuiceSchema,
   run: ({ save, body }) => planJuice(save, body.monsters),
+  outposts: "allow",
 });

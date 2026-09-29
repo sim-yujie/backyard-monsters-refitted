@@ -1,8 +1,9 @@
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
-import { storageCap } from "../base/economy/resourceBudget.js";
+import { yardKindOf } from "../yardplanner/costs.js";
 import { busyWorkers, workerCount } from "../yardplanner/workers.js";
+import { capOf } from "./credit.js";
 
 /**
  * The yard state every `/bm/yard/*` response carries
@@ -14,6 +15,11 @@ import { busyWorkers, workerCount } from "../yardplanner/workers.js";
  * merges an Apply answer. Everything else is derived here so the client never
  * has to repeat a server rule to draw the HUD: `caps` is the storage cap the
  * server clamps credits to, and `workers` counts the jobs as the server does.
+ *
+ * For an outpost (`baseid` on the request) the yard slices are the outpost's
+ * and `resources`, `credits`, `caps`, `lockerdata` and `academy` are the
+ * owner's main yard's, as `/base/load` serves an outpost (`poolView.ts`);
+ * `workers.total` is 1.
  *
  * FROZEN (2026-09-27): other work packages build against this shape. Add a
  * field only by agreement, never rename or remove one.
@@ -44,6 +50,10 @@ export interface YardState {
 
 /** The slice of a save {@link yardState} reads. */
 export interface YardStateSave {
+  /** `BaseType`: an outpost has one worker. */
+  type?: string;
+  /** The main yard's cap, on an outpost (`poolView.ts`). */
+  poolCap?: number;
   savetime?: number;
   credits: number;
   resources?: JsonObject | null;
@@ -70,7 +80,7 @@ export interface YardStateSave {
  * @param shinyLocked - Whether the account has Shiny locked (`user.shiny_locked`).
  */
 export const yardState = (save: YardStateSave, now: number, shinyLocked: boolean): YardState => {
-  const cap = storageCap(save);
+  const cap = capOf(save);
 
   return {
     savetime: Number(save.savetime ?? 0),
@@ -79,7 +89,7 @@ export const yardState = (save: YardStateSave, now: number, shinyLocked: boolean
     credits: shinyLocked ? 0 : save.credits,
     caps: { r1: cap, r2: cap, r3: cap, r4: cap },
     workers: {
-      total: workerCount(save.storedata),
+      total: workerCount(save.storedata, yardKindOf(save)),
       busy: busyWorkers(save.buildingdata),
     },
     buildingdata: save.buildingdata ?? {},

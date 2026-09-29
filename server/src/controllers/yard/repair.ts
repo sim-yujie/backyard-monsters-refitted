@@ -12,6 +12,7 @@ export const yardRepairAction = defineYardAction({
   schema: YardRepairSchema,
   run: ({ save, body, now }) =>
     planRepair(save, body.ids ? { ids: body.ids } : { all: true }, now),
+  outposts: "allow",
 });
 
 /**
@@ -21,4 +22,5 @@ export const yardRepairAction = defineYardAction({
 export const yardRepairInstantAction = defineYardAction({
   schema: YardRepairInstantSchema,
   run: ({ save }) => planRepairInstant(save),
+  outposts: "allow",
 });

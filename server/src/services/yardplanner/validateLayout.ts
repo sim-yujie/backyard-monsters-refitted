@@ -1,5 +1,5 @@
 import { layoutInvalidErr } from "../../errors/errors.js";
-import { costOf, maxLevel } from "../../game-data/buildingCosts.js";
+import { costOf, maxLevel, type YardKind } from "../../game-data/buildingCosts.js";
 import { footprintOf, MUSHROOM_TYPE } from "../../game-data/buildingFootprints.js";
 import {
   LAYOUT_NAME_MAX,
@@ -254,6 +254,8 @@ export interface CheckPlansOptions {
    * (`docs/design/planner-upgrades.md` §2.2).
    */
   readonly refuseCaughtUp?: boolean;
+  /** The yard's kind: an outpost's ladders are the outpost table's. Main when absent. */
+  readonly kind?: YardKind;
 }
 
 /**
@@ -283,8 +285,8 @@ export const checkPlans = (
     const plan = node.plan;
     if (!plan) continue;
 
-    const row = costOf(node.t);
-    if (!row || UNPLANNABLE_KINDS.has(row.kind) || plan.level > maxLevel(node.t)) {
+    const row = costOf(node.t, options.kind);
+    if (!row || UNPLANNABLE_KINDS.has(row.kind) || plan.level > maxLevel(node.t, options.kind)) {
       planLevel.push(node.id);
       continue;
     }

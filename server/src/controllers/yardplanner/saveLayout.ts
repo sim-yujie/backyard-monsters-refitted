@@ -12,6 +12,7 @@ import {
 import { postgres } from "../../server.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
+import { refuseOutpostLayouts } from "./plannerYard.js";
 
 /**
  * `PUT /bm/yardplanner/layouts/:slot` — store one layout, overwriting the slot.
@@ -37,6 +38,8 @@ export const saveLayout: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   await postgres.em.populate(user, ["save"]);
   const save = user.save!;
+  // Flash's planner could not save layouts in an outpost (`BasePlanner.as:41`).
+  refuseOutpostLayouts(user, ctx.request.body);
 
   const slot = parseSlot(ctx.params.slot);
   const body = SaveLayoutSchema.parse(ctx.request.body ?? {});

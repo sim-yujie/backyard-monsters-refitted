@@ -35,7 +35,7 @@ import { RESOURCE_KEYS } from "../../../services/base/updateResources.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
 import { clearExpiredStoreItems } from "../../../services/base/clearExpiredStoreItems.js";
 import { syncDerivedLevels } from "../../../services/yard/derivedLevels.js";
-import { catchUpOwnerYard } from "../../yard/yardRoute.js";
+import { catchUpOwnerOutpost, catchUpOwnerYard } from "../../yard/yardRoute.js";
 import type { CompletedJob } from "../../../services/yard/catchUp.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
 import { getChatChannel, getOrCreateChatToken } from "../../../chat/chatChannels.js";
@@ -156,9 +156,18 @@ export const baseLoad: KoaController = async (ctx) => {
   // were away and write it, before anything below reads the yard
   // (docs/design/yard-buildings.md §2.3). What finished goes back as
   // `completed`, for the client's "While you were away" notice (issue #135).
+  // An own Map Room 2 outpost gets the same, on its own rows: timers, repairs,
+  // hatcheries and damage, and the core when it is empty (outposts WP3).
   let completed: CompletedJob[] | undefined;
   if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
     ({ save: baseSave, completed } = await catchUpOwnerYard(baseSave));
+  } else if (
+    type === BaseMode.BUILD &&
+    isOwner &&
+    baseSave.type === BaseType.OUTPOST &&
+    baseSave.mapversion !== MapRoomVersion.V3
+  ) {
+    ({ save: baseSave, completed } = await catchUpOwnerOutpost(user, baseSave));
   }
 
   if (type === BaseMode.BUILD && mapversion === MapRoomVersion.V1) {

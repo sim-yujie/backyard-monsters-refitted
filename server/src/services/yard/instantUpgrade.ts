@@ -1,5 +1,6 @@
 import { costOf } from "../../game-data/buildingCosts.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
+import { yardKindOf } from "../yardplanner/costs.js";
 import { planOneUpgrade, type UpgradeWalkSave } from "../yardplanner/startUpgrades.js";
 import { MAP_ROOM_TYPE, buildingOrThrow, finishBuildingJob, mapRoomErr } from "./buildingJobs.js";
 import type { BuildingJob } from "./catchUpBuildings.js";
@@ -70,8 +71,9 @@ export const instantUpgradeGate = (
 ): { building: BuildingData; level: number } => {
   const building = buildingOrThrow(save.buildingdata, id);
   const type = Number(building.t);
+  const yard = yardKindOf(save);
 
-  const kind = costOf(type)?.kind;
+  const kind = costOf(type, yard)?.kind;
   if (kind && BATCH_KINDS.has(kind)) {
     throw yardBadRequestErr(
       "Walls and traps are upgraded from the Yard Planner.",
@@ -82,7 +84,7 @@ export const instantUpgradeGate = (
   if (type === MAP_ROOM_TYPE) throw mapRoomErr(id);
 
   const step = planOneUpgrade(save, id, now);
-  if (!step.ok && !SKIPPED.has(step.reason)) throw refusalErr(step);
+  if (!step.ok && !SKIPPED.has(step.reason)) throw refusalErr(step, yard);
 
   return { building, level: step.from };
 };
@@ -98,9 +100,10 @@ export const planInstantUpgrade = (
   now: number
 ): InstantUpgradePlan => {
   const { building, level } = instantUpgradeGate(save, id, now);
+  const yard = yardKindOf(save);
 
-  const shiny = instantUpgradePrice(Number(building.t), level);
-  const { building: next, job } = finishBuildingJob(building, "cU", now);
+  const shiny = instantUpgradePrice(Number(building.t), level, yard);
+  const { building: next, job } = finishBuildingJob(building, "cU", now, yard);
   const points = job.detail.points;
 
   return {

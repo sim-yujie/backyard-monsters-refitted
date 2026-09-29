@@ -20,4 +20,5 @@ export const yardInstantUpgradeAction = defineYardAction({
       points: plan.points,
     };
   },
+  outposts: "allow",
 });

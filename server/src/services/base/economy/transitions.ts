@@ -118,17 +118,19 @@ const isBusy = (building: BuildingData | undefined): boolean =>
  *
  * Mirrors `checkRequirements` (`services/yardplanner/wallUpgrade.ts:312-330`)
  * without throwing, and blames the Town Hall only when the Town Hall entry is
- * the one that actually failed.
+ * the one that actually failed. `hallType` is the yard's hall: the Town Hall,
+ * or the core (112) on an outpost, whose rows all require `[112, 1, 1]`.
  */
 export const requirementDetail = (
   re: readonly CostRequirement[],
   buildings: BuildingDataMap,
-  hall: number
+  hall: number,
+  hallType: number = TOWN_HALL_TYPE
 ): Record<string, unknown> | null => {
   if (requirementsMet(re, buildings)) return null;
 
   const unmet = re.filter((entry) => !requirementsMet([entry], buildings));
-  const townHall = unmet.find(([type]) => type === TOWN_HALL_TYPE);
+  const townHall = unmet.find(([type]) => type === hallType);
   if (townHall) return { townHall: { have: hall, need: townHall[2] } };
 
   return { requirements: unmet.map((entry) => [...entry]) };

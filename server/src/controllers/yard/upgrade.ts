@@ -11,6 +11,7 @@ import { defineYardAction } from "./yardAction.js";
 export const yardUpgradeAction = defineYardAction({
   schema: YardUpgradeSchema,
   run: ({ save, body, now }) => planUpgradeAction(save, body.id, now),
+  outposts: "allow",
 });
 
 /**
@@ -20,4 +21,5 @@ export const yardUpgradeAction = defineYardAction({
 export const yardCancelUpgradeAction = defineYardAction({
   schema: YardCancelUpgradeSchema,
   run: ({ save, body }) => planCancelUpgrade(save, body.id),
+  outposts: "allow",
 });

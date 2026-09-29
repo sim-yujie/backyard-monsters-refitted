@@ -10,11 +10,13 @@ import type { JsonObject } from "../../types/JsonObject.js";
 import {
   FREE_FINISH_SECONDS,
   countOfType,
+  hallName,
   isShort,
   pointsForBuild,
   shortfall,
   sumCosts,
   townHallLevel,
+  yardKindOf,
   type ResourceAmounts,
 } from "./costs.js";
 import {
@@ -49,8 +51,13 @@ import { listIds, MAX_LISTED } from "./validateLayout.js";
  * Nothing here touches the database.
  */
 
-/** The parts of a `Save` this route reads. */
+/**
+ * The parts of a `Save` this route reads. An outpost (`type` `outpost`)
+ * prices and caps its traps from the outpost table (25 Booby Traps, 5 Heavy
+ * Traps), with the core as its hall.
+ */
 export interface TrapRearmSave {
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   resources?: JsonObject | null;
   storedata?: JsonObject | null;
@@ -156,6 +163,7 @@ const highestId = (buildings: BuildingDataMap): number => {
  */
 export const planTrapRearm = (save: TrapRearmSave, traps: readonly TrapPlacement[]): TrapRearmPlan => {
   const buildings = save.buildingdata ?? {};
+  const kind = yardKindOf(save);
 
   // 1. Type.
   const notTraps = traps
@@ -171,9 +179,9 @@ export const planTrapRearm = (save: TrapRearmSave, traps: readonly TrapPlacement
   }
 
   // 2. Prerequisites.
-  const hall = townHallLevel(buildings);
+  const hall = townHallLevel(buildings, kind);
   if (hall === 0) {
-    throw batchBlockedErr("You need a Town Hall before you can build anything.", {
+    throw batchBlockedErr(`You need a ${hallName(kind)} before you can build anything.`, {
       townHall: { have: 0, need: 1 },
     });
   }
@@ -182,23 +190,25 @@ export const planTrapRearm = (save: TrapRearmSave, traps: readonly TrapPlacement
   for (const trap of traps) wanted.set(trap.t, (wanted.get(trap.t) ?? 0) + 1);
 
   for (const type of wanted.keys()) {
-    const build = costOf(type)?.costs[0];
+    const build = costOf(type, kind)?.costs[0];
     if (!build) {
       throw layoutInvalidErr(`This server has no price for building type ${type}.`, {
         notTraps: [traps.findIndex((trap) => trap.t === type)],
       });
     }
-    checkRequirements(build[5], buildings, hall);
+    checkRequirements(build[5], buildings, hall, kind);
   }
 
   // 3. Cap. `quantity[hall]` is how many of a type a yard may hold at that Town
   //    Hall level (`client/scripts/YARD_PROPS.as:2723`, `:6307`).
   for (const [type, count] of wanted) {
-    const max = costOf(type)?.quantity[hall] ?? 0;
+    const max = costOf(type, kind)?.quantity[hall] ?? 0;
     const have = countOfType(buildings, type);
     if (have + count > max) {
       throw batchBlockedErr(
-        `You can only have ${max} of those at Town Hall ${hall}, and you already have ${have}.`,
+        kind === "outpost"
+          ? `An outpost can only have ${max} of those, and you already have ${have}.`
+          : `You can only have ${max} of those at Town Hall ${hall}, and you already have ${have}.`,
         { capReached: { type, have, max } }
       );
     }
@@ -248,7 +258,7 @@ export const planTrapRearm = (save: TrapRearmSave, traps: readonly TrapPlacement
   }
 
   // 5. Free-finish guard, then 6. cost.
-  const steps = traps.map((trap) => costOf(trap.t)!.costs[0]!);
+  const steps = traps.map((trap) => costOf(trap.t, kind)!.costs[0]!);
   for (const step of steps) {
     if (step[4] > FREE_FINISH_SECONDS) {
       throw batchBlockedErr("That trap takes too long to build for free.", {

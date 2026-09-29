@@ -13,6 +13,7 @@ import {
   runningCountdown,
 } from "./buildingJobs.js";
 import type { BuildingJob } from "./catchUpBuildings.js";
+import { yardKindOf } from "../yardplanner/costs.js";
 import { SPEEDUP_SECONDS, speedupAllowed, speedupPrice, type SpeedupItem } from "./shiny.js";
 import { yardRefusedErr } from "./yardErrors.js";
 
@@ -31,12 +32,16 @@ import { yardRefusedErr } from "./yardErrors.js";
  * (`client/scripts/STORE.as:1071-1082`, `:2043-2090`.) A countdown taken to
  * zero, and every `SP1`/`SP4`, finishes the job on the spot through the
  * catch-up's own completion (`finishBuildingJob`): level, points, record.
+ * On an outpost a fortification's countdown can be sped up too (the building
+ * panel offers Speed up on it, `client/scripts/BUILDINGINFO.as:124-127`).
  *
  * Pure: no database, no clock. The route's wrapper charges the Shiny.
  */
 
 /** The slice of a save the speed-up reads. */
 export interface SpeedupSave {
+  /** `BaseType`: an outpost speeds up fortifications too. */
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
 }
@@ -81,8 +86,9 @@ export const planSpeedup = (
   now: number
 ): SpeedupPlan => {
   const building = buildingOrThrow(save.buildingdata, id);
+  const kind = yardKindOf(save);
 
-  const field = runningCountdown(building);
+  const field = runningCountdown(building, kind === "outpost");
   if (!field) {
     throw yardRefusedErr("notRunning", "This building is not building or upgrading.", { id });
   }
@@ -102,7 +108,7 @@ export const planSpeedup = (
   if (left > 0) {
     next = { ...building, [field]: left };
   } else {
-    const done = finishBuildingJob(building, field, now);
+    const done = finishBuildingJob(building, field, now, kind);
     next = done.building;
     finished = done.job;
   }

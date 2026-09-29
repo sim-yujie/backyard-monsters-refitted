@@ -3,8 +3,10 @@ import type z from "zod";
 import { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
+import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
+import { YardTargetSchema } from "../../schemas/YardSchemas.js";
 import { RESOURCE_KEYS, type ResourceKey } from "../../services/base/economy/resourceBudget.js";
 import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { isShinyLocked } from "../../services/user/shinyLock.js";
@@ -13,8 +15,12 @@ import { catchUpDamage } from "../../services/yard/catchUpDamage.js";
 import { creditResources } from "../../services/yard/credit.js";
 import { syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import { joinMapRoom2 } from "../../services/yard/mapRoom.js";
+import { outpostProblems } from "../../services/yard/outpostYard.js";
+import { poolView } from "../../services/yard/poolView.js";
 import {
+  notInOutpostErr,
   notMainYardErr,
+  notYourYardErr,
   yardBadRequestErr,
   yardRefusedErr,
   yardUnderAttackErr,
@@ -22,6 +28,7 @@ import {
 import { yardState } from "../../services/yard/yardState.js";
 import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { logger } from "../../utils/logger.js";
 
 /**
  * The yard action wrapper every `POST /bm/yard/<action>` runs
@@ -58,8 +65,24 @@ import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
  * This module never imports `server.ts`, so it runs under test with a stand-in
  * entity manager; `yardRoute.ts` binds it to Koa and `postgres.em`.
  *
+ * ## Outposts (outposts WP3, issue #184)
+ *
+ * A body with a `baseid` naming one of the caller's own Map Room 2 outposts
+ * acts on that outpost instead ({@link lockOwnYard}). Step 2 then locks the
+ * main row first and the outpost row second, the order every route that
+ * touches both keeps, so two requests for the same player (one on the main
+ * yard, one on an outpost, or two on outposts) run one after the other and
+ * cannot spend the one pool twice. `run` gets the outpost seen through the
+ * main yard (`services/yard/poolView.ts`): its own buildings, the main yard's
+ * pool, caps, Shiny and points, so every charge, credit and point lands on the
+ * main row. The catch-up is the outpost's (`catchUpOutpost`), Map Room 2 is
+ * never joined from one, and a route refuses unless its `outposts` says
+ * `"allow"` (Flash's list: recycle, cancelling a construction, banking and the
+ * player-level buildings are refused).
+ *
  * FROZEN (2026-09-27): later work packages build routes against
  * `defineYardAction` / `YardAction` / `YardOutcome` here and `yardRoute` there.
+ * WP3 added `YardAction.outposts` (optional) and {@link lockOwnYard}.
  */
 
 /** Save columns an action may replace wholesale. */
@@ -81,7 +104,11 @@ export type YardSlices = Partial<
 
 /** What `run` is handed. */
 export interface YardActionInput<Body> {
-  /** The caller's main yard: locked, caught up to `now`. Treat as read-only; return changes as `slices`. */
+  /**
+   * The caller's main yard, or the outpost the request names seen through it
+   * (`poolView`): locked, caught up to `now`. Treat as read-only; return
+   * changes as `slices`.
+   */
   save: Save;
   user: User;
   /** The body, as the route's schema parsed it. */
@@ -108,12 +135,20 @@ export interface YardOutcome<Report> {
   points?: number;
 }
 
+/**
+ * What a route does when the request names an outpost: `"allow"`, or refuse
+ * with this message (`409 notInOutpost`).
+ */
+export type OutpostPolicy = "allow" | { refuse: string };
+
 /** One yard route: a body schema and the decision. */
 export interface YardAction<Schema extends z.ZodType, Report> {
   schema: Schema;
   run: (
     input: YardActionInput<z.output<Schema>>
   ) => YardOutcome<Report> | Promise<YardOutcome<Report>>;
+  /** Whether the route works on an outpost; refused with a plain message when absent. */
+  outposts?: OutpostPolicy;
 }
 
 /** Identity helper so `run`'s `body` is typed from `schema`. */
@@ -210,6 +245,81 @@ const lockMainYard = async (em: EntityManager, user: User): Promise<Save> => {
 const lockRow = (em: EntityManager, basesaveid: number) =>
   em.findOne(Save, { basesaveid }, { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true });
 
+/** The yard a request acts on, locked. */
+export interface OwnYard {
+  /** What the rules get: the main yard, or the outpost seen through it (`poolView`). */
+  save: Save;
+  /** The main yard row, which holds the pool. */
+  main: Save;
+  /** The outpost row, or null when the request acts on the main yard. */
+  outpost: Save | null;
+}
+
+/**
+ * Locks the yard a request acts on: the caller's main yard, or, when `baseid`
+ * names another yard, the main yard first and then that outpost, which must
+ * be one of the caller's own Map Room 2 outposts: listed in the main yard's
+ * `outposts`, owned by the caller, in the main yard's world and not a Map
+ * Room 3 structure (`403 notYourYard` otherwise). `409 underAttack` while
+ * either row is being attacked: an attack on an outpost loots the main pool
+ * too.
+ *
+ * @param em - The transaction's entity manager.
+ * @param user - The caller.
+ * @param baseid - `baseid` from the request; absent for the main yard.
+ */
+export const lockOwnYard = async (
+  em: EntityManager,
+  user: User,
+  baseid?: string
+): Promise<OwnYard> => {
+  const main = await lockMainYard(em, user);
+  if (baseid === undefined || baseid === String(main.baseid)) return { save: main, main, outpost: null };
+
+  const listed = (main.outposts ?? []).some(([, , id]) => String(id) === baseid);
+  if (!listed) throw notYourYardErr();
+
+  const outpost = await em.findOne(
+    Save,
+    { baseid },
+    { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true }
+  );
+  if (
+    !outpost ||
+    outpost.type !== BaseType.OUTPOST ||
+    outpost.mapversion === MapRoomVersion.V3 ||
+    outpost.userid !== user.userid ||
+    outpost.saveuserid !== user.userid ||
+    !outpost.worldid ||
+    outpost.worldid !== main.worldid
+  ) {
+    throw notYourYardErr();
+  }
+  if (isAttackActive(outpost)) throw yardUnderAttackErr();
+
+  return { save: poolView(outpost, main), main, outpost };
+};
+
+/** Outposts whose old-data problems this process has logged already. */
+const checkedOutposts = new Set<number>();
+
+/**
+ * Logs, once per outpost per process, where an outpost row breaks the outpost
+ * props (`outpostProblems`): Flash-era owner saves wrote whatever the client
+ * sent. Nothing is changed.
+ */
+const logOutpostProblems = (outpost: Save): void => {
+  if (checkedOutposts.has(outpost.basesaveid)) return;
+  checkedOutposts.add(outpost.basesaveid);
+
+  const problems = outpostProblems(outpost.buildingdata);
+  if (problems.length === 0) return;
+  logger.warn("Outpost {basesaveid} does not match the outpost props: {problems}", {
+    basesaveid: outpost.basesaveid,
+    problems: JSON.stringify(problems),
+  });
+};
+
 /**
  * Catches a main yard up under the row lock and writes it: the owner's
  * build-mode `/base/load` (§2.3 "Where it runs"). The same locked read and the
@@ -237,6 +347,39 @@ export const catchUpLockedYard = async (
     await joinMapRoom2(tx, locked);
     await tx.flush();
     return { save: locked, completed };
+  });
+
+/**
+ * Catches an owner's outpost up under the row locks and writes it: the
+ * build-mode `/base/load` of an own outpost, as {@link catchUpLockedYard} is
+ * for the main yard. The main row is locked first (the order of
+ * {@link lockOwnYard}), because the catch-up credits it: points, and the HCC's
+ * goo refund. An empty outpost gets its core here. Skipped, and the row
+ * answered as it is, when {@link lockOwnYard} refuses (an attack is running,
+ * or the row is not one of the caller's listed outposts).
+ *
+ * @returns The outpost row and what the catch-up finished.
+ */
+export const catchUpLockedOutpost = async (
+  em: EntityManager,
+  user: User,
+  outpost: Save
+): Promise<{ save: Save; completed: CompletedJob[] }> =>
+  em.transactional(async (tx) => {
+    let yard: OwnYard;
+    try {
+      yard = await lockOwnYard(tx, user, String(outpost.baseid));
+    } catch (err) {
+      if (err instanceof ClientSafeError) return { save: outpost, completed: [] };
+      throw err;
+    }
+    if (!yard.outpost) return { save: yard.main, completed: [] };
+
+    logOutpostProblems(yard.outpost);
+    // The catch-up re-derives the outpost's own Flinger level (its reach) too.
+    const completed = catchUpYard(yard.save, getCurrentDateTime());
+    await tx.flush();
+    return { save: yard.outpost, completed };
   });
 
 /** What {@link runYardAction} answers: the HTTP status and the body. */
@@ -272,12 +415,19 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         })),
       });
     }
+    const target = YardTargetSchema.safeParse(rawBody ?? {});
+    if (!target.success) throw yardBadRequestErr("That yard could not be read.", { field: "baseid" });
 
     const answer = await em.transactional(async (tx) => {
-      const save = await lockMainYard(tx, user);
+      const yard = await lockOwnYard(tx, user, target.data.baseid);
+      if (yard.outpost && action.outposts !== "allow") {
+        throw notInOutpostErr(action.outposts?.refuse);
+      }
+
+      const save = yard.save;
       const now = getCurrentDateTime();
       const completed = catchUpYard(save, now);
-      await joinMapRoom2(tx, save, user);
+      if (!yard.outpost) await joinMapRoom2(tx, save, user);
 
       const outcome = await action.run({ save, user, body: parsed.data, now, completed });
       applyOutcome(save, user, outcome);

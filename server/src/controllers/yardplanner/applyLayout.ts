@@ -15,11 +15,11 @@ import {
   parsePayload,
   unplacedBuildings,
 } from "../../services/yardplanner/validateLayout.js";
-import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
-import { postgres } from "../../server.js";
 import type { BuildingData } from "../../types/BuildingData.js";
+import type { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
+import { onPlannerYard } from "./plannerYard.js";
 import { debitOf } from "./upgradeWalls.js";
 
 /**
@@ -57,6 +57,9 @@ import { debitOf } from "./upgradeWalls.js";
  * charge and the `savetime` move land together or not at all, and the player's
  * Apply stays one transaction rather than two.
  *
+ * With a `baseid` naming one of the caller's Map Room 2 outposts it applies
+ * the layout to that outpost, charging the main pool (`plannerYard.ts`).
+ *
  * The upgrade half is **partial by design**. Moves are still all or nothing —
  * any placement fault throws before a byte is written — but a planned upgrade
  * the yard cannot start now is a row in the report, never a refusal of the
@@ -69,10 +72,18 @@ import { debitOf } from "./upgradeWalls.js";
  */
 export const applyLayout: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  await postgres.em.populate(user, ["save"]);
-  const save = user.save!;
 
-  const body = ApplyLayoutSchema.parse(ctx.request.body ?? {});
+  const answer = await onPlannerYard(user, ctx.request.body, (save, now) =>
+    applyTo(save, ctx.request.body, now)
+  );
+
+  ctx.status = Status.OK;
+  ctx.body = answer;
+};
+
+/** Apply's work on one yard (the controller comment); writes nothing but the save it is handed. */
+const applyTo = (save: Save, raw: unknown, now: number) => {
+  const body = ApplyLayoutSchema.parse(raw ?? {});
   const payload = parsePayload(body.data);
 
   checkNodesOwned(payload.nodes, save.buildingdata);
@@ -89,7 +100,6 @@ export const applyLayout: KoaController = async (ctx) => {
   // Bring the countdowns forward before `savetime` moves, or every running job
   // is handed the elapsed time a second time when the base is next loaded. Same
   // sequence as the attack path (`controllers/base/save/baseSave.ts:213-218`).
-  const now = getCurrentDateTime();
   let buildingdata = advanceBuildingTimers(
     save.buildingdata ?? {},
     save.buildinghealthdata,
@@ -113,6 +123,7 @@ export const applyLayout: KoaController = async (ctx) => {
   if (body.startUpgrades === 1) {
     upgrades = walkUpgrades(
       {
+        type: save.type,
         buildingdata,
         buildinghealthdata: save.buildinghealthdata,
         resources: save.resources,
@@ -135,11 +146,7 @@ export const applyLayout: KoaController = async (ctx) => {
   syncDerivedLevels(save);
   save.savetime = now;
 
-  postgres.em.persist(save);
-  await postgres.em.flush();
-
-  ctx.status = Status.OK;
-  ctx.body = {
+  return {
     error: 0,
     moved,
     buildingdata,

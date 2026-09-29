@@ -5,6 +5,7 @@ import {
   propsFor,
   type YardKind,
 } from "../../game-data/buildingCosts.js";
+import { BaseType } from "../../enums/Base.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 
 /**
@@ -57,6 +58,19 @@ import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js"
  */
 
 export { propsFor, type YardKind };
+
+/**
+ * The kind of yard a save is: an outpost row builds from the outpost table,
+ * everything else from the main one. The yard rules read it off the save they
+ * are handed, so a route needs no extra argument: the yard action wrapper hands
+ * an outpost's rules a save whose `type` is `outpost`
+ * (`services/yard/poolView.ts`).
+ */
+export const yardKindOf = (save: { type?: string | null } | null | undefined): YardKind =>
+  save?.type === BaseType.OUTPOST ? "outpost" : "main";
+
+/** What the player calls a yard's hall in a message: the Town Hall, or the outpost core. */
+export const hallName = (kind: YardKind): string => (kind === "outpost" ? "core" : "Town Hall");
 
 /** A countdown at or below this many seconds is free to finish. */
 export const FREE_FINISH_SECONDS = 300;

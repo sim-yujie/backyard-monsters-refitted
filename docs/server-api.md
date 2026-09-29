@@ -206,8 +206,8 @@ adds: `relationship` (`EnumBaseRelationship`), `canattack` (bool, from `canAttac
 `tutorialstage`, `currenttime`, `pic_square` (base owner's avatar), `chatservers` (a 1-element
 array with `CHAT_WS_HOST`), and — only when the caller owns the base — `chatenabled: 1`,
 `chattoken`, `chatchannel`, `alliancedata`, `powerups` (see §Alliance and §Chat). Attack modes
-add `attpowerups`. A `build` load of the caller's own main yard adds `completed`: what its
-catch-up finished, in the yard routes' shape (see "The owner's `/base/load`" under "Yard actions"). Map Room 3 build/attack adds a `player.buffs` / `attackingplayer.buffs` /
+add `attpowerups`. A `build` load of the caller's own main yard, or of one of their Map Room 2
+outposts, adds `completed`: what its catch-up finished, in the yard routes' shape (see "The owner's `/base/load`" under "Yard actions"). Map Room 3 build/attack adds a `player.buffs` / `attackingplayer.buffs` /
 `defendingplayer.buffs` object keyed by small numeric buff-type ids (`2`=resource rate,
 `10`=resource capacity, `1`=defender damage reduction %, `5`/`6`=stronghold attacker/defender
 damage bonus %). `idescent` mode additionally overwrites `resources` with the player's
@@ -828,6 +828,19 @@ routes are all-or-nothing: `400` means the request names something wrong (`unkno
 `capReached`). Apply's upgrade walk is **partial by design** and reports the same conditions
 instead of refusing the request.
 
+**Outposts (issue #184).** `apply`, `walls/upgrade` and `traps/rearm` take an optional `baseid`:
+absent (or `0`, or the main yard's own) acts on the main yard exactly as before; the `baseid` of one
+of the caller's Map Room 2 outposts acts on that outpost the way the yard actions do (see
+"Outposts" under "Yard actions"): one transaction, the main row locked first and the outpost row
+second, the outpost caught up to now, its own buildings moved, upgraded or added, priced from the
+outpost table (walls stop at level 5; 25 Booby Traps and 5 Heavy Traps at most; one worker for
+Apply's walk; the core is the hall), and every charge and point taken from and given to the main
+yard. `resources` in the answer is the main pool. `403 { reason: "notYourYard" }` for a `baseid`
+that is not one of the caller's own outposts, `409 underAttack` while either yard is attacked.
+Saving, loading or deleting a layout (`layouts`, `gettemplates`, `savetemplate`, `deletetemplate`)
+with an outpost's `baseid` is refused `409 { reason: "notInOutpost" }`: Flash's planner could not
+save or load templates in an outpost (`BasePlanner.as:41`).
+
 | Method | Path | Middleware | Request fields | Response | Description |
 |---|---|---|---|---|---|
 | GET | `/api/:apiVersion/bm/yardplanner/layouts` | apiVersion, verifyUserAuth, logRequest | none | `{ error: 0, slots: 10, layouts: Layout[] }` | Every saved layout, ordered by slot, converted to version 2. Slots with nothing in them are simply absent from the array. |
@@ -903,7 +916,8 @@ JSON), parsed by the route's zod schema in `server/src/schemas/YardSchemas.ts`.
 2. Open a transaction and re-read the caller's `user.save` with `SELECT … FOR UPDATE`, so two
    requests for the same player run one after the other and the second sees what the first
    wrote. `409 notMainYard` if the caller has no save yet or it is not their own main yard;
-   `409 underAttack` while `isAttackActive` says an attack is running.
+   `409 underAttack` while `isAttackActive` says an attack is running. A `baseid` naming one of
+   the caller's outposts acts on that outpost instead (see "Outposts" below).
 3. **Catch-up** (`services/yard/catchUp.ts`, `catchUpYard(save, now)`): advance the yard from
    `savetime` to `now`, clamped to 30 days; a `savetime` of 0 (never saved) replays nothing.
    Phase 1 (`catchUpBuildings.ts`): every `cB`/`cU`/`cF` countdown is brought forward by
@@ -911,7 +925,8 @@ JSON), parsed by the route's zod schema in `server/src/schemas/YardSchemas.ts`.
    one that reaches zero completes and **awards its points once** — an upgrade
    `floor((time + r1 + r2 + r3 + r4) / 3)` of the step it finished, a build
    `floor(time / 2 + (r1 + r2 + r3 + r4) / 10)` of `costs[0]` (+100 for a Town Hall), a fortify
-   0; `flinger`/`catapult` are re-derived; `storedata` entries whose `e` has passed are removed.
+   0 on a main yard and `floor((time + r1 + r2 + r3 + r4) / 3)` of the step on an outpost
+   (`Fortified()`, `BFOUNDATION.as:2485-2503`); `flinger`/`catapult` are re-derived; `storedata` entries whose `e` has passed are removed.
    Phase 2, locker (`catchUpLocker.ts`, run before the buildings step so an Overdrive that ran
    out in the window is still counted): the running surface unlock (`lockerdata[id].t == 1`) has
    `e` reduced by 4 × the seconds of the window inside `storedata.CLOD`'s `s`..`e` (the countdown
@@ -1000,10 +1015,57 @@ JSON), parsed by the route's zod schema in `server/src/schemas/YardSchemas.ts`.
 
 A refused request rolls the whole transaction back, catch-up included, so it writes nothing.
 
+#### Outposts (`baseid`, issue #184)
+
+Every yard route takes an optional `baseid`. Absent, `0` or the main yard's own `baseid`, the
+request acts on the caller's main yard exactly as described above. The `baseid` of one of the
+caller's Map Room 2 outposts (the id `/base/load` and `Save.outposts` use) acts on that outpost:
+
+- **Who.** The outpost must be listed in the main yard's `outposts`, owned by the caller
+  (`userid` and `saveuserid`), in the main yard's world, and not a Map Room 3 structure, else
+  `403 { reason: "notYourYard" }`. A `baseid` that is not a whole number is `400 badRequest`.
+- **Locks.** The main row is locked first and the outpost row second (the order every route that
+  touches both keeps), so a request on an outpost and one on the main yard or another outpost run
+  one after the other and cannot spend the one pool twice. `409 underAttack` while either row is
+  being attacked.
+- **One pool.** The outpost has no resources of its own (`client/scripts/BASE.as:4776-4825`):
+  every charge, refund, Shiny spend and point lands on the main row, and credits are clamped to the
+  main yard's cap (`services/yard/poolView.ts`). The answer's `YardState` says so (above).
+- **Catch-up.** An outpost's catch-up (`catchUpOutpost`) runs, in order: the core (type 112,
+  level 1, at (0, -50), the next free id) into an outpost with no buildings at all
+  (`client/scripts/BASE.as:1605-1614`), then repairs, building countdowns (points priced from the
+  outpost table), hatcheries and housing, and `damage` following the repairs down. No starter
+  base, Map Room, Locker, Academy, Lab, mushrooms, champions or harvester buffers: those are the
+  main yard's or the player's, and an outpost's harvesters are autobanked. Map Room 2 is never
+  joined from an outpost. The owner's build-mode `/base/load` of an own outpost runs the same
+  catch-up, locked the same way, and answers with `completed`.
+- **Rules.** Everything is priced and capped from the outpost table
+  (`OUTPOST_YARD_PROPS.as`, `propsFor("outpost")`): limits are `quantity[1]` (the core never
+  leaves level 1: at most 4 of each harvester, cannon and sniper; 2 hatcheries, bunkers, lasers,
+  teslas and flaks; 1 flinger, housing, juicer, HCC, planner and railgun; 100 walls; 25 Booby
+  Traps and 5 Heavy Traps), the build menu is those 20 types, the Juicer, Hatchery and Bunker need
+  a Housing and the HCC two Hatcheries, the core is the hall (`409 townHall` says "core"), and the
+  core cannot be upgraded (`409 maxLevel`, "The outpost can not be upgraded."). **One worker**,
+  whatever `BEW` says (`client/scripts/QUEUE.as:31-52`).
+- **Routes.** Allowed: `state`, `build`, `build/instant`, `upgrade`, `upgrade/cancel`,
+  `upgrade/instant`, `speedup` (a fortification too), `fortify`, `fortify/cancel`, `repair`,
+  `repair/instant`, `hatchery/*`, `juice`, `bunker/*` and `shop/buy`, which sells an outpost only
+  `BST`, `HOD`, `HOD2`, `HOD3` and `EXH` (`client/scripts/STORE.as:198-199`; anything else is
+  `400 notForSale`), bought into the outpost's own `storedata`. Refused `409 { reason:
+  "notInOutpost" }`, before the catch-up, so nothing is written: `recycle` ("You cannot Recycle
+  buildings in Outposts."), `build/cancel` ("You cannot stop the construction of a building in
+  your Outposts."), `bank` ("Outposts bank automatically (Auto-Banking)."), and `locker/*`,
+  `academy/*`, `lab/*`, `champion/*` and `mushroom/pick` ("That cannot be done in an outpost.").
+  Cancelling an upgrade or a fortification is allowed, as in Flash.
+- **Old rows.** The first time a process catches an outpost up at load it logs (and changes
+  nothing) where the row breaks the outpost props: unknown or blocked types, more of a type than
+  allowed, levels above the outpost ladder, no core or more than one.
+
 **Errors** use the Yard Planner's flat shape, not the global `errorDetails` envelope: the real
 HTTP status and `{ error: "<message for the player>", reason: "<key>", ...detail }`. `400` means
 the client sent something malformed; `409` means the yard refuses right now. Reasons so far:
-`badRequest`, `notMainYard`, `underAttack`, `shinyLocked`, `credits`, `shortfall`; each route
+`badRequest`, `notMainYard`, `underAttack`, `shinyLocked`, `credits`, `shortfall`, and for
+outposts `notYourYard` (`403`) and `notInOutpost`; each route
 lists its own (so far `notRunning`, `damaged`, `mapRoom`, `itemRefused`, `useBatchRoute`, `busy`,
 `townHall`, `maxLevel`, `requirements`, `notForSale`, `alreadyActive`, `soldOut`,
 `alreadyUnlocked`, `unlockRunning`, `noLocker`, `lockerLevel`, `notUnlocking`, `locked`,
@@ -1012,7 +1074,7 @@ lists its own (so far `notRunning`, `damaged`, `mapRoom`, `itemRefused`, `useBat
 `championInCage`, `championsFrozen`, `researching`, `hatcheryBusy`, `unlocking`, `noJuicer`, `inferno`, `notEnough`, `noBunker`,
 `notBunkerable`, `notBuyable`, `bunkerFull`, `notInBunker`, `notRaisable`, `noCage`, `frozen`,
 `noChampion`, `notHungry`, `fullBuff`, `fullHealth`, `nameRefused`, `noChamber`, `injured`, `hungry`,
-`notFrozen`). Anything that is not a refusal (a bug, a database error) still goes to the global
+`notFrozen`, `notFortifiable`, `maxFortify`, `notFortifying`). Anything that is not a refusal (a bug, a database error) still goes to the global
 `ErrorInterceptor` as a `500`.
 
 **`YardState`** (`services/yard/yardState.ts`) — **frozen**: fields may be added by agreement,
@@ -1026,11 +1088,15 @@ merges them into the response it already holds.
   resources: { r1, r2, r3, r4 }, // save.resources as stored (legacy r*max keys pass through)
   credits: number,               // Shiny; 0 while the account has Shiny locked, as /base/load
   caps: { r1, r2, r3, r4 },      // storage cap (storageCap), one figure repeated per key
-  workers: { total, busy },      // total = min(5, 1 + storedata.BEW.q); busy = running cB/cU/cF
+  workers: { total, busy },      // total = min(5, 1 + storedata.BEW.q), 1 on an outpost; busy = running cB/cU/cF
   buildingdata, buildinghealthdata, storedata,
   monsters, lockerdata, academy, champion, mushrooms, researchdata,
 }                                // null columns come out as {} (champion as [])
 ```
+
+On an outpost `resources`, `credits`, `caps`, `lockerdata` and `academy` are the main yard's (the
+pool the outpost spends from, and the main yard's caps: its silos plus 2,000,000 per outpost), as
+`/base/load` serves an outpost; everything else is the outpost's own.
 
 **`completed`** lists what the catch-up finished during this request, oldest first. Every entry
 is `{ kind, id, t, at, detail }`, `at` being the unix second the job ended:
@@ -1063,7 +1129,7 @@ Later phases add kinds (`train`, …) with the same five keys.
 
 | Method | Path | Request fields | `report` | Description |
 |---|---|---|---|---|
-| POST | `/api/:apiVersion/bm/yard/state` | none | `null` | Catches the caller's main yard up, writes it, and returns it. The client calls it a second after one of its own countdowns reaches zero and when the tab becomes visible again (`docs/design/yard-buildings.md` §2.4). |
+| POST | `/api/:apiVersion/bm/yard/state` | none (every route also takes `baseid`, see "Outposts") | `null` | Catches the caller's main yard (or the outpost `baseid` names) up, writes it, and returns it. The client calls it a second after one of its own countdowns reaches zero and when the tab becomes visible again (`docs/design/yard-buildings.md` §2.4). |
 | POST | `/api/:apiVersion/bm/yard/upgrade` | `id` (building id, coerced non-negative int) | `{ id, from, to, seconds, cost: { r1..r4 } }` | Takes one building one level up (the building panel's **Upgrade**). Every step starts, however short (#137): `cU = floor(time × bst)` (`bst` 0.8 while Sharper Tools `storedata.BST.e` is in the future, else 1) and `cL` = the same figure (the job's length, for progress bars, #136), `costs[level]` charged, one worker held, `seconds` = that countdown, points awarded later by whatever completes it (the catch-up, or a speed-up). A step of 300 s or less (in practice the harvesters' level 1 → 2) is no exception: nothing finishes for free on its own; the player presses **Finish free**, `speedup` `SP1`, which is allowed while 300 s or less remain. Rules, checked in this order (the first failure answers): `400 badRequest` if the yard has no building with that id; `400 useBatchRoute { id }` for a wall or trap (types 17, 18, 24, 117 — they use `bm/yardplanner/walls/upgrade` and `traps/rearm`); `400 badRequest` for a building with no upgrade ladder (decorations, mushrooms); `409 busy` (a `cB`, `cU` or `cF` running); `409 damaged` (`hp` set or an entry in `buildinghealthdata`); `409 townHall { have: 0, need: 1 }` (no Town Hall); `409 maxLevel { level, max }`; the step's `re` prerequisites — `409 townHall { have, need }` when a Town Hall level is missing, else `409 requirements [[type, count, level]]` listing the unmet ones; `409 shortfall { r1..r4 }`; `409 workers { total, busy }` with every worker busy. The rules are `planOneUpgrade` (`server/src/services/yardplanner/startUpgrades.ts`), the same function the Yard Planner's Apply walk takes each step with (`services/yard/upgrade.ts` adds the refusals). The Map Room (type 11) is upgraded here too: its level is the map version, capped at 2 by the cost table, and its one step (L1 → L2, no resources, 345,600 s) needs Town Hall 6 (`409 townHall { have, need: 6 }` below it); once it reaches level 2 the server joins the yard to a Map Room 2 world (see step 3 above; decision D16). `upgrade/instant` and `speedup` refuse the Map Room with `409 mapRoom`. |
 | POST | `/api/:apiVersion/bm/yard/upgrade/cancel` | `id` (building id) | `{ id, refund: { r1..r4 } }` | Cancels a running upgrade (the panel's **Cancel upgrade**): `cU` and `cL` removed, level unchanged, progress lost, and the step's full price `costs[level]` credited (`cancelRefund`), each resource clamped to the storage cap; `refund` is what actually came back after that clamp. Shiny spent on the job is not refunded. `400 badRequest` if the yard has no building with that id; `409 notUpgrading` if no `cU` is running (including an upgrade the request's own catch-up just finished). |
 | POST | `/api/:apiVersion/bm/yard/speedup` | `id` (building id), `item` = `SP1`\|`SP2`\|`SP3`\|`SP4` | `{ id, item, credits, remaining, finished }` — `credits` is the Shiny charged, `remaining` the seconds left afterwards (0 when finished), `finished` the job as a `completed` entry or `null` | Takes time off a running build (`cB`) or upgrade (`cU`): `SP1` finishes, free, only at ≤ 300 s left; `SP2` −1 h for 20, only at ≥ 1 h; `SP3` −2 h for 40, only at ≥ 2 h; `SP4` finishes for `timeCost(remaining)`, only at > 300 s (`client/scripts/STORE.as:1071-1082`). A countdown taken to 0 finishes on the spot exactly as the catch-up would finish it: level (or `prefab`), points, `flinger`/`catapult`. Refusals in order: `400 badRequest` (unknown id), `409 notRunning` (no `cB`/`cU`; a fortify does not count), `409 damaged` (damaged or repairing: the countdown is paused, and the original spent a speed-up on the repair instead), `409 mapRoom` (its L1→L2 step joins a world on completion, §5.7), `409 itemRefused { item, remaining }`, then `shinyLocked`/`credits`. `SP1` spends nothing, so a Shiny-locked account may use it. |
@@ -1102,6 +1168,8 @@ Later phases add kinds (`train`, …) with the same five keys.
 | POST | `/api/:apiVersion/bm/yard/champion/rename` | `name` (trimmed, 1–20 characters) | `{ champion }` | Sets `nm`. Refusals: `400 badRequest` (empty or too long); `409 nameRefused` (profanity filter); `409 noChampion`. |
 | POST | `/api/:apiVersion/bm/yard/champion/juice` | none | `{ champion }` | Puts the champion into the Monster Juicer for good: `status` 2, no goo (`BUILDING9.as:70-73`, `ChampionBase.as:276`). A new one can then be raised. Refusals: `409 noChampion`; `409 noJuicer`; `409 busy` (Juicer being built or upgraded); `409 damaged` (Juicer at half health or below). |
 | POST | `/api/:apiVersion/bm/yard/champion/freeze` | none | `{ champion }` | Moves the champion in the cage into the Champion Chamber (type 119, §7.2, issue #125; `CHAMPIONCHAMBER.FreezeGuardian`, `:103-141`): `status` 1 and `ft` made relative (`ft − now`), so it neither heals nor starves while frozen; the chamber's `fz` is rewritten as the JSON string of every frozen entry. Free. Refusals, in order: `409 noChamber`; `409 busy` (chamber still being built); `409 noChampion`; `409 injured { hp, max }`; `409 hungry { feedTime }`. |
+| POST | `/api/:apiVersion/bm/yard/fortify` | `id` (building id) | `{ id, from, to, seconds, cost: { r1..r4 } }` — the fortification it was at and will reach, the countdown written | Outposts only (issue #184): starts the next step of the outpost table's fortify ladder on the core (112) or a cannon, sniper, laser, tesla, flak or railgun tower, F1 to F4 (`BFOUNDATION.Fortify`, `BASE.CanFortify`). Charges the step to the main pool up front and writes `cF = floor(time × bst)`, which holds the worker; the catch-up raises `fort` by one and awards `Fortified()`'s points. `400 notFortifiable` for a building with no ladder (every main-yard building), then `409` `busy`, `damaged`, `townHall`, `maxFortify { fort, max }` ("This building is fully fortified."), `requirements`, `shortfall`, `workers`. `speedup` works on a running fortification. |
+| POST | `/api/:apiVersion/bm/yard/fortify/cancel` | `id` (building id) | `{ id, refund: { r1..r4 } }` — what actually came back after the cap | Stops a running fortification and refunds the step's full price to the main pool, clamped to the storage cap (`FortifyCancelC`); the fortification stays where it was. `409 notFortifying` when no `cF` runs. |
 | POST | `/api/:apiVersion/bm/yard/champion/thaw` | `type` (1..5) | `{ champion }` | Brings a frozen champion back to the cage (`ThawGuardian`, `:143-221`): `status` 0, `ft + now`; `fz` rewritten. Free. Refusals, in order: `409 noChamber` / `busy`; `409 damaged { id }` (the chamber); `409 noCage` / `busy`; `409 championInCage` (freeze that one first); `409 notFrozen { type }`. |
 
 **Shiny prices** are all worked out on the server by `services/yard/shiny.ts`, never taken from
@@ -1125,7 +1193,11 @@ was skipped because the yard is under attack). Because the load wrote them, the 
 the player was away; the web client shows it as one "While you were away: …" notice (issue #135).
 Any such load counts, including the map screen's (it loads the own yard to find the home cell), so
 the client keeps each list until the yard screen shows it.
-No other load (another mode, somebody else's base, an outpost, Inferno) sends `completed`.
+A `build` load of one of the caller's own Map Room 2 outposts does the same for the outpost
+(outposts WP3, issue #184): the main row locked first, then the outpost's, its catch-up written,
+the core placed when it is empty, and `completed` sent; it is skipped (and the row answered as it
+is) while either yard is under attack or when the outpost is not listed in the main yard's
+`outposts`. No other load (another mode, somebody else's base, Inferno) sends `completed`.
 
 ### Debug
 

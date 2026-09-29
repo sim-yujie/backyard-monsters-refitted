@@ -1,4 +1,4 @@
-import { costOf, siloCapacity, type CostStep } from "../../../game-data/buildingCosts.js";
+import { costOf, siloCapacity, type CostStep, type YardKind } from "../../../game-data/buildingCosts.js";
 import type { BuildingData, BuildingDataMap } from "../../../types/BuildingData.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
 import {
@@ -289,10 +289,11 @@ export const refundOf = (building: BuildingData): ResourceAmounts => {
 /**
  * What cancelling an in-flight upgrade hands back: the whole step, because the
  * client charges on start and refunds in full on cancel
- * (`client/scripts/BFOUNDATION.as:2401-2432`).
+ * (`client/scripts/BFOUNDATION.as:2401-2432`). An outpost's step is priced from
+ * the outpost table (`kind`).
  */
-export const cancelRefund = (type: number, from: number): ResourceAmounts => {
-  const step = costOf(pricingType(type))?.costs[from];
+export const cancelRefund = (type: number, from: number, kind: YardKind = "main"): ResourceAmounts => {
+  const step = costOf(pricingType(type), kind)?.costs[from];
   return step ? stepAmounts(step) : noAmounts();
 };
 

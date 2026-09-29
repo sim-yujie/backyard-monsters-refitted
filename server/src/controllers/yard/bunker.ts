@@ -12,10 +12,12 @@ import { defineYardAction } from "./yardAction.js";
 export const yardBunkerFillAction = defineYardAction({
   schema: YardBunkerFillSchema,
   run: ({ save, body }) => planBunkerFill(save, body.bunker, body.monsters, body.source),
+  outposts: "allow",
 });
 
 /** `POST /bm/yard/bunker/remove` — take monsters out for good: juiced when a Juicer works, else deleted. */
 export const yardBunkerRemoveAction = defineYardAction({
   schema: YardBunkerRemoveSchema,
   run: ({ save, body }) => planBunkerRemove(save, body.bunker, body.monster, body.count),
+  outposts: "allow",
 });

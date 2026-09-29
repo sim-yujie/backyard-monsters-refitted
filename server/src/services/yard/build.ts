@@ -1,4 +1,12 @@
-import { costOf, type CostRequirement, type CostStep } from "../../game-data/buildingCosts.js";
+import {
+  costOf,
+  hallTypeOf,
+  OUTPOST_COSTS,
+  OUTPOST_TRAITS,
+  type CostRequirement,
+  type CostStep,
+  type YardKind,
+} from "../../game-data/buildingCosts.js";
 import type {
   BuildingData,
   BuildingDataMap,
@@ -13,10 +21,12 @@ import {
 import { requirementDetail } from "../base/economy/transitions.js";
 import {
   countOfType,
+  hallName,
   isShort,
   pointsForBuild,
   shortfall,
   townHallLevel,
+  yardKindOf,
   type ResourceAmounts,
 } from "../yardplanner/costs.js";
 import {
@@ -54,6 +64,14 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * Decorations come from the shop and the inventory (Phase 6, §8.3), not from
  * here. The web's build menu lists the same types
  * (`web/src/ui/yard/BuildMenu.ts`).
+ *
+ * An outpost builds {@link OUTPOST_BUILDABLE_TYPES} from the outpost table
+ * (`client/scripts/OUTPOST_YARD_PROPS.as`, swapped in wholesale,
+ * `client/scripts/GLOBAL.as:716-723`): its limits are `quantity[1]`, since its
+ * hall is the core (112), always level 1, and its prerequisites are the
+ * table's own (the Juicer, Hatchery and Bunker need a Housing, the HCC two
+ * Hatcheries). It has one worker (`workers.ts`). Every rule below reads the
+ * kind off the save (`yardKindOf`).
  *
  * ## The gates, in order
  *
@@ -110,11 +128,34 @@ export const BUILDABLE_TYPES: ReadonlySet<number> = new Set([
   17, 20, 21, 22, 23, 24, 25, 115, 117, 118,
 ]);
 
+/**
+ * Types an outpost's build menu offers: the main menu's, less what the outpost
+ * table blocks or allows none of (`quantity[1]` 0). Twenty types, the list the
+ * web's outpost catalogue shows (`web/src/game/yard/buildCatalogue.ts`).
+ */
+export const OUTPOST_BUILDABLE_TYPES: ReadonlySet<number> = new Set(
+  [...BUILDABLE_TYPES].filter((type) => {
+    const row = OUTPOST_COSTS[type];
+    return (
+      row !== undefined &&
+      row.costs.length > 0 &&
+      OUTPOST_TRAITS[type]?.blocked !== true &&
+      (row.quantity[1] ?? 0) > 0
+    );
+  })
+);
+
+/** The build menu of a yard of `kind`. */
+export const buildableTypesOf = (kind: YardKind): ReadonlySet<number> =>
+  kind === "outpost" ? OUTPOST_BUILDABLE_TYPES : BUILDABLE_TYPES;
+
 /** Walls and traps finish the moment they are placed and hold no worker (D13). */
 const AT_ONCE_KINDS: ReadonlySet<string> = new Set(["wall", "trap"]);
 
 /** The parts of a `Save` the build routes read. */
 export interface BuildSave extends StorageCapSave {
+  /** `BaseType`: an outpost builds from the outpost table. */
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   resources?: JsonObject | null;
@@ -198,43 +239,46 @@ export const nextBuildingId = (save: BuildSave): number => {
  */
 const buildGates = (save: BuildSave, request: BuildRequest): CostStep => {
   const { type } = request;
-  const row = costOf(type);
+  const kind = yardKindOf(save);
+  const row = costOf(type, kind);
   const step = row?.costs[0];
-  if (!row || !step || !BUILDABLE_TYPES.has(type)) {
+  if (!row || !step || !buildableTypesOf(kind).has(type)) {
     throw yardBadRequestErr("That cannot be built here.", { type }, "notBuildable");
   }
 
   const buildings = save.buildingdata ?? {};
-  const hall = townHallLevel(buildings);
+  const hall = townHallLevel(buildings, kind);
+  const hallLabel = hallName(kind);
   const allowed = allowedAt(row.quantity, hall);
   if (allowed <= 0) {
     const need = nextHallAllowing(row.quantity, Math.max(hall, 0), 0) ?? 1;
     throw yardRefusedErr(
       "townHall",
       hall <= 0
-        ? "You need a Town Hall before you can build anything."
-        : `That needs a level ${need} Town Hall.`,
+        ? `You need a ${hallLabel} before you can build anything.`
+        : `That needs a level ${need} ${hallLabel}.`,
       { townHall: { have: hall, need: hall <= 0 ? 1 : need } }
     );
   }
 
   const have = countOfType(buildings, type);
   if (have >= allowed) {
-    const next = nextHallAllowing(row.quantity, hall, allowed);
+    // The core never leaves level 1, so an outpost has no bigger hall to wait for.
+    const next = kind === "outpost" ? null : nextHallAllowing(row.quantity, hall, allowed);
     throw yardRefusedErr(
       "limit",
       next === null
         ? `You already have ${have}, the most a yard can hold.`
-        : `You already have ${have}. Upgrade your Town Hall to level ${next} to build more.`,
+        : `You already have ${have}. Upgrade your ${hallLabel} to level ${next} to build more.`,
       { limit: { have, allowed, next } }
     );
   }
 
-  const unmet = requirementDetail(step[5], buildings, hall);
+  const unmet = requirementDetail(step[5], buildings, hall, hallTypeOf(kind));
   if (unmet) {
     const gate = unmet.townHall as { have: number; need: number } | undefined;
     if (gate) {
-      throw yardRefusedErr("townHall", `That needs a level ${gate.need} Town Hall.`, {
+      throw yardRefusedErr("townHall", `That needs a level ${gate.need} ${hallLabel}.`, {
         townHall: gate,
       });
     }
@@ -305,6 +349,7 @@ const finishedBuilding = (id: number, request: BuildRequest): BuildingData =>
  * @returns The new `buildingdata`, the debit, the points and the report.
  */
 export const planBuild = (save: BuildSave, request: BuildRequest, now: number) => {
+  const kind = yardKindOf(save);
   const step = buildGates(save, request);
   const cost = stepAmounts(step);
 
@@ -318,7 +363,7 @@ export const planBuild = (save: BuildSave, request: BuildRequest, now: number) =
   placementGate(save, request);
 
   const id = nextBuildingId(save);
-  const atOnce = AT_ONCE_KINDS.has(costOf(request.type)?.kind ?? "");
+  const atOnce = AT_ONCE_KINDS.has(costOf(request.type, kind)?.kind ?? "");
 
   if (atOnce) {
     const points = pointsForBuild(step);
@@ -341,7 +386,7 @@ export const planBuild = (save: BuildSave, request: BuildRequest, now: number) =
   }
 
   const buildings = save.buildingdata ?? {};
-  const total = workerCount(save.storedata);
+  const total = workerCount(save.storedata, kind);
   const busy = busyWorkers(buildings);
   if (busy >= total) {
     throw yardRefusedErr("workers", "All your workers are busy.", { workers: { total, busy } });
@@ -376,12 +421,13 @@ export const planBuild = (save: BuildSave, request: BuildRequest, now: number) =
  * and the balance are the wrapper's.
  */
 export const planInstantBuild = (save: BuildSave, request: BuildRequest, now: number) => {
+  const kind = yardKindOf(save);
   buildGates(save, request);
   placementGate(save, request);
 
   const id = nextBuildingId(save);
-  const shiny = instantBuildPrice(request.type);
-  const { building, job } = finishBuildingJob(newBuilding(id, request, 1), "cB", now);
+  const shiny = instantBuildPrice(request.type, kind);
+  const { building, job } = finishBuildingJob(newBuilding(id, request, 1), "cB", now, kind);
   const points = job.detail.points;
 
   const report: InstantBuildReport = {
@@ -415,7 +461,7 @@ export const planCancelBuild = (save: BuildSave, id: number) => {
   }
 
   const type = Number(building.t);
-  const refund = cancelRefund(type, 0);
+  const refund = cancelRefund(type, 0, yardKindOf(save));
   const { [String(id)]: _gone, ...buildingdata } = save.buildingdata ?? {};
 
   const slices: { buildingdata: BuildingDataMap; buildinghealthdata?: BuildingHealthData } = {

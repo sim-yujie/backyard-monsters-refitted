@@ -1,4 +1,4 @@
-import { costOf } from "../../game-data/buildingCosts.js";
+import { costOf, fortifyStepsOf, type YardKind } from "../../game-data/buildingCosts.js";
 import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { advanceBuildingTimers } from "../base/advanceBuildingTimers.js";
@@ -9,6 +9,7 @@ import {
   pointsForBuild,
   pointsForUpgrade,
   upgradeSteps,
+  yardKindOf,
 } from "../yardplanner/costs.js";
 import { syncDerivedLevels, type DerivedLevelsSave } from "./derivedLevels.js";
 
@@ -39,9 +40,14 @@ import { syncDerivedLevels, type DerivedLevelsSave } from "./derivedLevels.js";
  *   `services/base/clearExpiredStoreItems.ts` applies on load, here run against
  *   the catch-up's own `now` so the step stays free of the clock.
  *
- * A fortification that completes is recorded with 0 points: the server has no
- * `fortify_costs` table (fortifying is a Map Room 3 feature), so the
- * `Fortified()` formula (`:2498-2503`) has nothing to read.
+ * A fortification that completes on an outpost earns `Fortified()`'s points, a
+ * third of the step's time and resources (`:2485-2503`), from the outpost
+ * table's fortify ladder. On a main yard it is recorded with 0 points: the
+ * main table has no `fortify_costs` (fortifying a main yard is a Map Room 3
+ * feature), so the formula has nothing to read.
+ *
+ * An outpost (`type` `outpost`) prices every job from the outpost table
+ * (`yardKindOf`), the table its building was charged from.
  *
  * The step is pure apart from mutating the save it is handed: no database, no
  * clock. Running it twice at the same moment changes nothing the second time,
@@ -83,6 +89,8 @@ export interface StoreItemJob {
 
 /** The slice of a save step 1 reads and writes. */
 export interface CatchUpBuildingsSave extends DerivedLevelsSave {
+  /** `BaseType`: an outpost's jobs are priced from the outpost table. */
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   storedata?: JsonObject | null;
@@ -96,17 +104,29 @@ const COUNTDOWNS = [
   ["cF", "fortify"],
 ] as const;
 
-/** Points for one finished job, from the step it finished. */
-const pointsFor = (kind: BuildingJob["kind"], type: number, from: number): number => {
-  if (kind === "fortify") return 0;
+/**
+ * Points for one finished job, from the step it finished. `fort` is the
+ * fortification a fortify job reached.
+ */
+const pointsFor = (
+  kind: BuildingJob["kind"],
+  type: number,
+  from: number,
+  yard: YardKind,
+  fort: number
+): number => {
+  if (kind === "fortify") {
+    const step = fortifyStepsOf(type, yard)[fort - 1];
+    return step ? pointsForUpgrade(step) : 0;
+  }
 
   if (kind === "build") {
-    const step = costOf(pricingType(type))?.costs[0];
+    const step = costOf(pricingType(type), yard)?.costs[0];
     if (!step) return 0;
     return pointsForBuild(step) + (type === TOWN_HALL_TYPE ? 100 : 0);
   }
 
-  const [step] = upgradeSteps(pricingType(type), from, from + 1);
+  const [step] = upgradeSteps(pricingType(type), from, from + 1, yard);
   return step ? pointsForUpgrade(step) : 0;
 };
 
@@ -121,7 +141,8 @@ const pointsFor = (kind: BuildingJob["kind"], type: number, from: number): numbe
 const finishedJobs = (
   before: BuildingDataMap,
   after: BuildingDataMap,
-  from: number
+  from: number,
+  yard: YardKind
 ): BuildingJob[] => {
   const jobs: BuildingJob[] = [];
 
@@ -139,6 +160,7 @@ const finishedJobs = (
       const type = Number(old.t);
       const level = levelOf(now);
       const startLevel = kind === "build" ? 0 : levelOf(old);
+      const fort = Number(now.fort ?? 0);
 
       jobs.push({
         kind,
@@ -148,8 +170,8 @@ const finishedJobs = (
         detail: {
           from: startLevel,
           level,
-          ...(kind === "fortify" && { fort: Number(now.fort ?? 0) }),
-          points: pointsFor(kind, type, startLevel),
+          ...(kind === "fortify" && { fort }),
+          points: pointsFor(kind, type, startLevel, yard, fort),
         },
       });
       break;
@@ -203,7 +225,7 @@ export const catchUpBuildings = (
 ): (BuildingJob | StoreItemJob)[] => {
   const before = save.buildingdata ?? {};
   const after = advanceBuildingTimers(before, save.buildinghealthdata, now - from);
-  const jobs = finishedJobs(before, after, from);
+  const jobs = finishedJobs(before, after, from, yardKindOf(save));
 
   if (save.buildingdata) save.buildingdata = after;
 

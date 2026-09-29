@@ -236,9 +236,10 @@ describe("catchUpYard — the starter base", () => {
     expectPlaceable(save.buildingdata!);
   });
 
-  test("an empty outpost is not given it", () => {
+  test("an empty outpost is not given it: it gets its core instead (outposts WP3)", () => {
     const save = catchUpSave({ type: BaseType.OUTPOST });
     expect(catchUpYard(save, NOW)).toEqual([]);
-    expect(save.buildingdata).toEqual({});
+    expect(Object.values(save.buildingdata!) as unknown[]).toEqual([{ id: 1, t: 112, X: 0, Y: -50, l: 1 }]);
+    expect(save.resources).toEqual(emptyYard().resources);
   });
 });

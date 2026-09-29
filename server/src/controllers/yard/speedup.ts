@@ -19,4 +19,5 @@ export const yardSpeedupAction = defineYardAction({
       points: plan.points,
     };
   },
+  outposts: "allow",
 });

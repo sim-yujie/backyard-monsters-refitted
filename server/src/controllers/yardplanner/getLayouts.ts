@@ -4,6 +4,7 @@ import { readLayouts } from "../../services/yardplanner/layoutStorage.js";
 import { postgres } from "../../server.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
+import { refuseOutpostLayouts } from "./plannerYard.js";
 
 /**
  * `GET /bm/yardplanner/layouts` — every saved layout, converted to version 2.
@@ -17,7 +18,9 @@ import type { KoaController } from "../../utils/KoaController.js";
  */
 export const getLayouts: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  await postgres.em.populate(user, ["save"], { fields: ["save.savetemplate"] });
+  await postgres.em.populate(user, ["save"], { fields: ["save.savetemplate", "save.baseid"] });
+  // Flash's planner could not load layouts in an outpost (`BasePlanner.as:41`).
+  refuseOutpostLayouts(user, ctx.query);
 
   ctx.status = Status.OK;
   ctx.body = {

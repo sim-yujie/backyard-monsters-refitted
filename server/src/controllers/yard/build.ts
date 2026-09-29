@@ -11,6 +11,7 @@ import { defineYardAction } from "./yardAction.js";
 export const yardBuildAction = defineYardAction({
   schema: YardBuildSchema,
   run: ({ save, body, now }) => planBuild(save, body, now),
+  outposts: "allow",
 });
 
 /**
@@ -21,6 +22,8 @@ export const yardBuildAction = defineYardAction({
 export const yardCancelBuildAction = defineYardAction({
   schema: YardCancelBuildSchema,
   run: ({ save, body }) => planCancelBuild(save, body.id),
+  // `msg_stopconstructionoutpostbuilding` (`client/scripts/BFOUNDATION.as:2511-2517`).
+  outposts: { refuse: "You cannot stop the construction of a building in your Outposts." },
 });
 
 /**
@@ -31,4 +34,5 @@ export const yardCancelBuildAction = defineYardAction({
 export const yardInstantBuildAction = defineYardAction({
   schema: YardBuildSchema,
   run: ({ save, body, now }) => planInstantBuild(save, body, now),
+  outposts: "allow",
 });

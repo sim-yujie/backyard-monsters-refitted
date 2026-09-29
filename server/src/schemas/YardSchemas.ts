@@ -19,6 +19,19 @@ import z from "zod";
  */
 export const BuildingIdField = z.coerce.number().int().nonnegative();
 
+/**
+ * The yard a request acts on, on every yard route: absent (or `0`) for the
+ * caller's main yard, else the `baseid` of one of their Map Room 2 outposts
+ * (the id `/base/load` and `Save.outposts` use). The wrapper reads it
+ * beside the route's own schema (`controllers/yard/yardAction.ts`).
+ */
+export const YardTargetSchema = z.object({
+  baseid: z
+    .union([z.string().regex(/^\d+$/), z.number().int().nonnegative()])
+    .optional()
+    .transform((raw) => (raw === undefined || String(raw) === "0" ? undefined : String(raw))),
+});
+
 /** `POST /bm/yard/state` takes no fields. */
 export const YardStateSchema = z.object({});
 
@@ -265,3 +278,9 @@ export const YardChampionFreezeSchema = z.object({});
 export const YardChampionThawSchema = z.object({
   type: z.coerce.number().int().min(1).max(5),
 });
+
+/** `POST /bm/yard/fortify`: the building to fortify one step (outposts). */
+export const YardFortifySchema = z.object({ id: BuildingIdField });
+
+/** `POST /bm/yard/fortify/cancel`: the building whose running fortification to cancel. */
+export const YardCancelFortifySchema = z.object({ id: BuildingIdField });

@@ -1,4 +1,10 @@
-import { costOf, type CostRequirement, type CostStep } from "../../game-data/buildingCosts.js";
+import {
+  costOf,
+  hallTypeOf,
+  type CostRequirement,
+  type CostStep,
+  type YardKind,
+} from "../../game-data/buildingCosts.js";
 import type { LayoutNode } from "../../schemas/YardPlannerSchemas.js";
 import type {
   BuildingData,
@@ -15,6 +21,7 @@ import {
   pointsForUpgrade,
   shortfall,
   townHallLevel,
+  yardKindOf,
   type ResourceAmounts,
 } from "./costs.js";
 import { UNPLANNABLE_KINDS, checkPlans } from "./validateLayout.js";
@@ -81,10 +88,17 @@ import { busyWorkers, sharperToolsMultiplier, workerCount } from "./workers.js";
  * countdown to explain and its points are added by the controller, so they are
  * already inside `points` when the next save is measured
  * (`docs/design/planner-upgrades.md` §4).
+ *
+ * ## Outposts
+ *
+ * An outpost (`type` `outpost`) walks the outpost table: its own ladders and
+ * level caps, the core (112) as its hall, one worker (`yardKindOf`).
  */
 
 /** The parts of a `Save` the walk reads. */
 export interface UpgradeWalkSave {
+  /** `BaseType`: an outpost walks the outpost table. */
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   resources?: JsonObject | null;
@@ -272,8 +286,8 @@ export type OneUpgrade = OneUpgradeStep | OneUpgradeRefusal;
  * that does not: an unknown type, a kind the planner cannot plan (decorations,
  * mushrooms, placeholders), or a row with no steps.
  */
-export const upgradeLadder = (type: number) => {
-  const row = costOf(type);
+export const upgradeLadder = (type: number, kind: YardKind = "main") => {
+  const row = costOf(type, kind);
   if (!row || UNPLANNABLE_KINDS.has(row.kind) || row.costs.length === 0) return null;
   return row;
 };
@@ -308,24 +322,25 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
 
   const t = Number(building.t);
   const from = levelOf(building);
+  const kind = yardKindOf(save);
   const refuse = (
     reason: OneUpgradeReason,
     scope: OneUpgradeRefusal["scope"],
     detail: Partial<OneUpgradeRefusal> = {}
   ): OneUpgradeRefusal => ({ ...detail, ok: false, reason, id, t, from, scope });
 
-  const row = upgradeLadder(t);
+  const row = upgradeLadder(t, kind);
   if (!row) return refuse("noLadder", "building");
   if (isBusy(building)) return refuse("busy", "building");
   if (isDamaged(building, save.buildinghealthdata)) return refuse("damaged", "building");
 
-  const hall = townHallLevel(buildings);
+  const hall = townHallLevel(buildings, kind);
   if (hall <= 0) return refuse("townHall", "building", { townHall: { have: 0, need: 1 } });
 
   const step = row.costs[from];
   if (!step) return refuse("maxLevel", "building");
 
-  const unmet = requirementDetail(step[5], buildings, hall);
+  const unmet = requirementDetail(step[5], buildings, hall, hallTypeOf(kind));
   if (unmet) {
     const gate = unmet.townHall as { have: number; need: number } | undefined;
     return gate
@@ -341,7 +356,7 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
 
   if (!finishesAtOnce(row.kind, step)) {
     // A job needs a worker of its own, and there is no queue.
-    const total = workerCount(save.storedata);
+    const total = workerCount(save.storedata, kind);
     const busy = busyWorkers(buildings);
     if (busy >= total) return refuse("workers", "step", { workers: { total, busy } });
 
@@ -395,7 +410,8 @@ export const walkUpgrades = (
   nodes: readonly LayoutNode[],
   now: number
 ): UpgradeWalk => {
-  checkPlans([...nodes], save.buildingdata);
+  const kind = yardKindOf(save);
+  checkPlans([...nodes], save.buildingdata, { kind });
 
   const buildings: BuildingDataMap = { ...(save.buildingdata ?? {}) };
 
@@ -406,7 +422,7 @@ export const walkUpgrades = (
   const cost: ResourceAmounts = { r1: 0, r2: 0, r3: 0, r4: 0 };
   let points = 0;
 
-  const total = workerCount(save.storedata);
+  const total = workerCount(save.storedata, kind);
   const busyBefore = busyWorkers(buildings);
 
   // The pool as the walk has spent it, so a later job sees what an earlier one
@@ -417,6 +433,7 @@ export const walkUpgrades = (
 
   // What every step is measured against: the walk's own buildings and pool.
   const yard: UpgradeWalkSave = {
+    type: save.type,
     buildingdata: buildings,
     buildinghealthdata: save.buildinghealthdata,
     resources: pool,
@@ -439,7 +456,7 @@ export const walkUpgrades = (
     const type = Number(building.t);
     const target = node.plan!.level;
 
-    if (!upgradeLadder(type)) {
+    if (!upgradeLadder(type, kind)) {
       skipped.push({ id: node.id, t: type, reason: "noLadder" });
       continue;
     }

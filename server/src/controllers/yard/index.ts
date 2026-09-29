@@ -8,6 +8,7 @@ import {
 import { yardBankAction } from "./bank.js";
 import { yardBuildAction, yardCancelBuildAction, yardInstantBuildAction } from "./build.js";
 import { yardBunkerFillAction, yardBunkerRemoveAction } from "./bunker.js";
+import { yardCancelFortifyAction, yardFortifyAction } from "./fortify.js";
 import { yardChampionFreezeAction, yardChampionThawAction } from "./chamber.js";
 import {
   yardChampionEvolveAction,
@@ -52,6 +53,10 @@ import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
  *
  * Append-only: each work package adds its own lines at the end, so parallel
  * branches merge without touching each other's entries.
+ *
+ * Every route also takes an optional `baseid`, one of the caller's Map Room 2
+ * outposts, and then acts on that outpost if the route allows it
+ * (`YardAction.outposts`, outposts WP3).
  */
 export interface YardRouteEntry {
   /** Path under `/bm/yard/`, e.g. `state` or `upgrade/cancel`. */
@@ -100,4 +105,6 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "champion/juice", controller: yardRoute(yardChampionJuiceAction) },
   { path: "champion/freeze", controller: yardRoute(yardChampionFreezeAction) },
   { path: "champion/thaw", controller: yardRoute(yardChampionThawAction) },
+  { path: "fortify", controller: yardRoute(yardFortifyAction) },
+  { path: "fortify/cancel", controller: yardRoute(yardCancelFortifyAction) },
 ];

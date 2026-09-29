@@ -1,3 +1,5 @@
+import { BaseType } from "../../enums/Base.js";
+import type { YardKind } from "../../game-data/buildingCosts.js";
 import type {
   BuildingData,
   BuildingDataMap,
@@ -55,10 +57,19 @@ export const damagedErr = (id: number) =>
 export const mapRoomErr = (id: number) =>
   yardRefusedErr("mapRoom", "The Map Room cannot be rushed with Shiny.", { id });
 
-/** The countdown that is running on a building, in the order the timers advance them. */
-export const runningCountdown = (building: BuildingData): "cU" | "cB" | null => {
+/**
+ * The countdown that is running on a building, in the order the timers advance
+ * them. A fortification counts only when `fortify` says so: an outpost's, which
+ * the server starts (`services/yard/fortify.ts`); a main yard has no fortify
+ * route, so its countdowns read as they always did.
+ */
+export const runningCountdown = (
+  building: BuildingData,
+  fortify = false
+): "cU" | "cB" | "cF" | null => {
   if (Number(building.cU) > 0) return "cU";
   if (Number(building.cB) > 0) return "cB";
+  if (fortify && Number(building.cF) > 0) return "cF";
   return null;
 };
 
@@ -73,6 +84,7 @@ export const runningCountdown = (building: BuildingData): "cU" | "cB" | null => 
  *
  * An idle building given `field` `cU` is upgraded one level: the instant
  * upgrade (`BFOUNDATION.DoInstantUpgrade`, `:2130-2140`, calls `Upgraded()`).
+ * `kind` is the yard's, so an outpost's job is priced from the outpost table.
  *
  * The caller must already have refused a damaged building: a paused countdown
  * would not advance.
@@ -81,11 +93,15 @@ export const runningCountdown = (building: BuildingData): "cU" | "cB" | null => 
  */
 export const finishBuildingJob = (
   building: BuildingData,
-  field: "cU" | "cB",
-  now: number
+  field: "cU" | "cB" | "cF",
+  now: number,
+  kind: YardKind = "main"
 ): { building: BuildingData; job: BuildingJob } => {
   const key = String(building.id);
-  const one = { buildingdata: { [key]: { ...building, [field]: 1 } as BuildingData } };
+  const one = {
+    ...(kind === "outpost" && { type: BaseType.OUTPOST }),
+    buildingdata: { [key]: { ...building, [field]: 1 } as BuildingData },
+  };
 
   const [job] = catchUpBuildings(one, now - 1, now) as BuildingJob[];
   return { building: one.buildingdata[key], job };

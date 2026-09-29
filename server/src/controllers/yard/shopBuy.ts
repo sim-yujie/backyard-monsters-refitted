@@ -3,6 +3,7 @@ import { YardShopBuySchema } from "../../schemas/YardSchemas.js";
 import { overdriveGate } from "../../services/yard/hatchery.js";
 import { runningOrThrow } from "../../services/yard/locker.js";
 import { storeItemPrice } from "../../services/yard/shiny.js";
+import { yardKindOf } from "../../services/yardplanner/costs.js";
 import { yardBadRequestErr, yardRefusedErr } from "../../services/yard/yardErrors.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { defineYardAction, type YardActionInput } from "./yardAction.js";
@@ -57,6 +58,16 @@ export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
   EXH: {},
 };
 
+/**
+ * What an outpost's store sells of {@link SHOP_ITEMS}: Map Room 2 outposts
+ * show a reduced list (`client/scripts/STORE.as:198-199`: `BST`, the block
+ * and resource packs, speed-ups, `POD`, `FIX`, `HOD*`, `PRO*`, `TOD`,
+ * `EXH`), so no extra worker (one per outpost) and no Locker Overdrive. A
+ * timed item bought in an outpost is the outpost's: it lands in the outpost's
+ * own `storedata`, as Flash kept store data per yard.
+ */
+export const OUTPOST_SHOP_ITEMS: ReadonlySet<string> = new Set(["BST", "HOD", "HOD2", "HOD3", "EXH"]);
+
 /** What the route sends back as `report`. */
 export interface ShopBuyReport {
   item: string;
@@ -84,6 +95,9 @@ export const yardShopBuyAction = defineYardAction({
     const storeItem = Object.hasOwn(storeItems, item) ? storeItems[item] : undefined;
     if (!rule || !storeItem) {
       throw yardBadRequestErr("That item is not for sale.", { item }, "notForSale");
+    }
+    if (yardKindOf(save) === "outpost" && !OUTPOST_SHOP_ITEMS.has(item)) {
+      throw yardBadRequestErr("That item is not sold in outposts.", { item }, "notForSale");
     }
 
     const entry: JsonObject = save.storedata?.[item] ?? {};
@@ -122,4 +136,5 @@ export const yardShopBuyAction = defineYardAction({
       shiny: price,
     };
   },
+  outposts: "allow",
 });

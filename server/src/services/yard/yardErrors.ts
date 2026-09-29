@@ -45,6 +45,27 @@ export const yardBadRequestErr = (message: string, detail: object = {}, reason =
 export const notMainYardErr = () =>
   yardRefusedErr("notMainYard", "Yard actions work on your own main yard only. Reload your yard.");
 
+/**
+ * The `baseid` a yard request names is not one of the caller's own Map Room 2
+ * outposts: another player's yard, a wild camp, a yard in another world, or
+ * none at all. A 403: no state of the caller's yard would make it allowed.
+ */
+export const notYourYardErr = () =>
+  new ClientSafeError({
+    message: "That yard is not one of your outposts.",
+    status: Status.FORBIDDEN,
+    data: { reason: "notYourYard" },
+    isClientFriendly: true,
+  });
+
+/**
+ * The route does not work in an outpost (outposts WP3): Flash's own message
+ * where it had one (`msg_recycleoutpostbuilding`,
+ * `msg_stopconstructionoutpostbuilding`), else a plain one.
+ */
+export const notInOutpostErr = (message = "That cannot be done in an outpost.") =>
+  yardRefusedErr("notInOutpost", message);
+
 /** The yard is being attacked right now (`services/base/isAttackActive.ts`). */
 export const yardUnderAttackErr = () =>
   yardRefusedErr(
