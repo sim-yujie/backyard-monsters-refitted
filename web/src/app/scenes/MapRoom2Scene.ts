@@ -797,7 +797,10 @@ export class MapRoom2Scene implements Scene {
             if (cell) this.store.invalidateCell(cell.col, cell.row);
           }
           void this.store.pump();
-          this.ui?.notices.show("transfer", message, { level: "info", timeoutMs: 5_000 });
+          // A fresh line for each move (#191): the same words written over the
+          // last move's line change nothing on screen and are not announced.
+          this.ui?.notices.clear("transfer");
+          this.ui?.notices.show("transfer", message, { level: "info", timeoutMs: 8_000 });
         },
       }),
     );
