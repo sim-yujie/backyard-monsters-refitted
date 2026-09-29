@@ -385,8 +385,9 @@ deadline lands nothing. `battle.test.ts` runs the golden fixtures' logs against 
 
 **Implemented (issue #23, C6):** the attack report is built by the shared `rules/report.ts`
 (`attackReport`, with the monster names moved there from the web's army panel), from the log and
-the replay: the save's replay writes it in place of the client's, and the finaliser's replay
-writes it the same way plus a "Left the attack" line. The golden fixtures check an honest
+the replay: the save's replay writes it in place of the client's, with a "Left the attack" line
+when the save's `left` says the player left the screen, and the finaliser's replay writes it the
+same way, always with that line. The golden fixtures check an honest
 client's report against the server's word for word.
 
 ---

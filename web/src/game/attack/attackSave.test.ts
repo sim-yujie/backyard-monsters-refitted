@@ -109,6 +109,18 @@ describe("the save sent as the page goes (#138)", () => {
     expect(slim.buildingdata).toEqual({ "7": { id: 7, t: 24, l: 1, X: 300, Y: 300 } });
     expect({ ...slim, buildingdata: undefined }).toEqual({ ...payload, buildingdata: undefined });
     expect(payload.attackreport).toContain("0:01 Left the attack");
+    // The server's report says it too, and the keepalive copy carries the word (#23, C6).
+    expect(payload.left).toBe(true);
+    expect(slim.left).toBe(true);
+  });
+
+  it("does not say the player left an attack they retreated from", () => {
+    const session = new AttackSession({ target: targetOf({ load: towerLoad() }), seed: 7 });
+    session.start();
+    session.appendFling({ x: -600, y: 120, monsters: { C1: 1 } });
+    play(session, 1);
+    session.retreat();
+    expect(buildAttackSave(session).left).toBeUndefined();
   });
 });
 

@@ -62,7 +62,7 @@ export interface BattleAttacker extends LootAttacker {
  * @param tick - The tick the battle ended at.
  * @param declareWar - Whether the attacker's alliance has Declare War running.
  * @param left - Whether the report says the attacker left (`AbandonedInput.left`):
- *   so for the finaliser, not for a save.
+ *   always for the finaliser; for a save, when its `left` says so.
  */
 export const battleReplayInput = ({
   flinglog,

@@ -264,6 +264,9 @@ export const buildAttackSave = (
     flinglog: log,
   };
   if (destroyed !== undefined) payload.destroyed = destroyed;
+  // So the server's report says it too (issue #23, C6); the keepalive copy
+  // (`forKeepalive`) carries it unchanged.
+  if (state.endReason === "left") payload.left = true;
   // The defender's housing and champions go back as loaded: the session does
   // not dispatch bunker monsters (it passes the engine no `bunkers`), and the
   // engine does not fight the defender's champion, so neither changed. The

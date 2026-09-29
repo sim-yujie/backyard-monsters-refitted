@@ -249,7 +249,7 @@ describe("saveAttack", () => {
       }),
     );
     await saveAttack(
-      { baseid: "1000", basesaveid: 9, attackid: 1, over: true, tick: 2400, attackloot: { r1: 5, r2: 0, r3: 0, r4: 0 } },
+      { baseid: "1000", basesaveid: 9, attackid: 1, over: true, tick: 2400, left: true, attackloot: { r1: 5, r2: 0, r3: 0, r4: 0 } },
       { keepalive: true, token: "t0k" },
     );
 
@@ -265,6 +265,7 @@ describe("saveAttack", () => {
       attackid: "1",
       over: "1",
       tick: "2400",
+      left: "1",
       attackloot: '{"r1":5,"r2":0,"r3":0,"r4":0}',
     });
   });

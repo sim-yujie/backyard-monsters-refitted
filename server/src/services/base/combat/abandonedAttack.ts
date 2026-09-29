@@ -74,8 +74,8 @@ export interface AbandonedInput {
   playerLevel?: number;
   /**
    * Whether the report says the attacker left the attack: true (the default)
-   * for an attack finished from its checkpoint, false for a save's own replay,
-   * whose client sent the result (issue #23, C6).
+   * for an attack finished from its checkpoint; for a save's own replay, what
+   * the save's `left` says (issue #23, C6).
    */
   left?: boolean;
 }

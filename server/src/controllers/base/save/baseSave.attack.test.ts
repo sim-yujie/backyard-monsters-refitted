@@ -427,7 +427,7 @@ describe("the battle is the server's (#23, C3)", () => {
   const TICK = 2_000;
 
   /** What the server's own replay of LOG to TICK does to the camp. */
-  const serverBattle = () =>
+  const serverBattle = (left = false) =>
     replayAbandonedAttack(
       battleReplayInput({
         flinglog: LOG,
@@ -436,7 +436,7 @@ describe("the battle is the server's (#23, C3)", () => {
         attacker: attackerSave,
         tick: battleTick(TICK),
         declareWar: false,
-        left: false,
+        left,
       })!
     );
 
@@ -492,6 +492,17 @@ describe("the battle is the server's (#23, C3)", () => {
     expect(defender.damage).toBe(Math.trunc(battle.damage));
     expect(defender.buildinghealthdata).toEqual(battle.buildinghealthdata);
     expect(attackerSave.resources.r1).toBe(100 + battle.attackloot.r1);
+  });
+
+  test("a save that says the player left gets the report's line for it, and nothing else changes", async () => {
+    const battle = serverBattle(true);
+    expect(battle.attackreport).toContain("Left the attack");
+
+    await baseSave(ctxFor({ over: "1", tick: String(TICK), left: "1", flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(defender.attackreport).toBe(battle.attackreport);
+    expect(defender.damage).toBe(Math.trunc(serverBattle().damage));
+    expect(defender.buildinghealthdata).toEqual(serverBattle().buildinghealthdata);
   });
 
   test("a save that does not end the attack writes nothing of the battle", async () => {

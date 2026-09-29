@@ -227,7 +227,8 @@ const saveBase = async (
           ...lootArgs,
           tick: battleTick(saveData.tick),
           declareWar: await isDeclareWarRunning(user.alliance_id),
-          left: false,
+          // Only the report reads it: "Left the attack" when the client says so.
+          left: saveData.left,
         })
       : null;
   const battle = battleInput

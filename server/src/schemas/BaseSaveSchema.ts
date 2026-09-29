@@ -178,6 +178,17 @@ export const BaseSaveSchema = z.object({
     }),
 
   /**
+   * "1" when the attacker left the attack screen and the battle stopped there
+   * (issue #138): the server's attack report then says so (issue #23, C6).
+   * A client's word, and it changes nothing but that one report line.
+   * @type {boolean}
+   */
+  left: z
+    .string()
+    .optional()
+    .transform((data) => data === "1"),
+
+  /**
    * The attack ID, transformed from a string to a number, or undefined.
    * This property is optional.
    * @type {number | undefined}

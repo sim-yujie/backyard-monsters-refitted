@@ -291,6 +291,11 @@ export interface AttackSavePayload {
    * figures below are only compared with it, except in Map Room 3.
    */
   tick?: number;
+  /**
+   * True when the player left the attack screen and the battle stopped there
+   * (issue #138). Only the server's attack report reads it (issue #23, C6).
+   */
+  left?: boolean;
   /** The enemy yard after the battle. Only a fired trap's absence is honoured. */
   buildingdata?: BuildingDataMap;
   /** The enemy yard's health after the battle. */

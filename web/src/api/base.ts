@@ -282,6 +282,7 @@ export const saveAttack = async (
     attackid: String(payload.attackid),
     over: payload.over === undefined ? undefined : payload.over ? "1" : "0",
     tick: payload.tick === undefined ? undefined : String(payload.tick),
+    left: payload.left ? "1" : undefined,
     buildingdata: json(payload.buildingdata),
     buildinghealthdata: json(payload.buildinghealthdata),
     damage: payload.damage === undefined ? undefined : String(payload.damage),
