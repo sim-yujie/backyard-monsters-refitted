@@ -97,8 +97,12 @@ describe("CollectAll", () => {
     expect(button().textContent).toBe("1.2KCollect all");
     expect(button().title).toBe("Collect everything your harvesters hold:\nTwigs 720\nGoo 500");
     expect(button().getAttribute("aria-label")).toBe("Collect all: 1,220 waiting in your harvesters.");
-    // One icon for each resource waiting, decorative inside the named button.
-    expect(collect.element.querySelectorAll(".yard-collect__icons .res-icon")).toHaveLength(2);
+    // The collect glyph (#198), decorative inside the named button.
+    const glyph = collect.element.querySelector<HTMLElement>(".yard-collect__icons")!;
+    expect(glyph.hidden).toBe(false);
+    expect(glyph.getAttribute("aria-hidden")).toBe("true");
+    expect(glyph.querySelectorAll("svg.yard-collect__glyph")).toHaveLength(1);
+    expect(glyph.querySelectorAll(".res-icon")).toHaveLength(0);
     collect.bind(null);
     expect(collect.element.hidden).toBe(true);
     expect(collect.state).toBeNull();
@@ -134,6 +138,8 @@ describe("CollectAll", () => {
     expect(collect.state).toBe(CollectState.EMPTY);
     expect(collect.element.dataset["state"]).toBe("empty");
     expect(amount()).toBe("");
+    // The small empty ring carries no glyph either.
+    expect(collect.element.querySelector<HTMLElement>(".yard-collect__icons")!.hidden).toBe(true);
     expect(button().disabled).toBe(true);
     expect(button().getAttribute("aria-label")).toBe(COLLECT_EMPTY_LABEL);
     expect(collect.element.classList.contains("yard-collect--wobble")).toBe(false);

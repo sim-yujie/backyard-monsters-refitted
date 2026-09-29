@@ -4,7 +4,8 @@ import { harvesterNow, harvestWaiting, type HarvestKey, type HarvestWaiting } fr
 import type { YardActionResult, YardUiBinding } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { formatAmount, formatCompact } from "@/ui/format";
-import { RESOURCE_NAMES, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
+import { icon } from "@/ui/icons";
+import { RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
 
 /**
  * The yard's Collect all button (`docs/design/yard-buildings.md` §5.1,
@@ -161,8 +162,6 @@ export class CollectAll {
   private timer: number | undefined;
   /** The look last drawn, so a change from empty to ready wobbles once. */
   private drawn: CollectState | null = null;
-  /** The resources whose icons the middle shows, as last drawn. */
-  private drawnKeys = "";
 
   constructor() {
     this.element = document.createElement("div");
@@ -176,9 +175,13 @@ export class CollectAll {
     ring.className = "yard-collect__ring";
     const core = document.createElement("span");
     core.className = "yard-collect__core";
+    // An arrow into a tray, in the dock's own line style (#198): it says
+    // "collect" at a glance, where the four resource icons it replaces read
+    // as a heap of stuff. The amount under it and the button's name are unchanged.
     this.icons = document.createElement("span");
     this.icons.className = "yard-collect__icons";
     this.icons.setAttribute("aria-hidden", "true");
+    this.icons.append(icon("collect", 26, "yard-collect__glyph"));
     this.amount = document.createElement("span");
     this.amount.className = "yard-collect__amount";
     core.append(this.icons, this.amount);
@@ -230,19 +233,14 @@ export class CollectAll {
 
     if (ring.state === CollectState.EMPTY) {
       this.amount.textContent = "";
-      this.icons.replaceChildren();
-      this.drawnKeys = "";
+      this.icons.hidden = true;
       this.button.title = COLLECT_EMPTY_LABEL;
       this.button.setAttribute("aria-label", COLLECT_EMPTY_LABEL);
       this.button.disabled = true;
       return;
     }
 
-    const keys = KEYS.filter((key) => ring.amounts[key] > 0);
-    if (keys.join() !== this.drawnKeys) {
-      this.drawnKeys = keys.join();
-      this.icons.replaceChildren(...keys.map((key) => resourceIcon(key, { decorative: true })));
-    }
+    this.icons.hidden = false;
     this.amount.textContent = formatCompact(ring.total);
     const full = ring.state === CollectState.FULL;
     this.button.title = collectAllTitle(ring.amounts) + (full ? `\n${COLLECT_FULL_NOTE}` : "");

@@ -443,14 +443,14 @@
   align-items: center;
 }
 
-.yard-collect__icons .res-icon {
-  height: 22px;
-  vertical-align: middle;
-  filter: drop-shadow(0 1px 2px var(--colour-art-shadow));
+.yard-collect__icons[hidden] {
+  display: none;
 }
 
-.yard-collect__icons .res-icon + .res-icon {
-  margin-left: -10px;
+/* The Collect all glyph (#198): the arrow into a tray, in the label's colour. */
+.yard-collect__glyph {
+  display: block;
+  color: var(--colour-text);
 }
 
 .yard-collect__amount {
