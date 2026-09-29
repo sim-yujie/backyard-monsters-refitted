@@ -43,9 +43,9 @@ const rejection = (run: () => unknown): ClientSafeError => {
 };
 
 describe("the outpost build menu", () => {
-  test("is Flash's twenty types", () => {
+  test("is Flash's twenty types less the Yard Planner (2026-09-30)", () => {
     expect([...OUTPOST_BUILDABLE_TYPES].sort((a, b) => a - b)).toEqual([
-      1, 2, 3, 4, 5, 9, 10, 13, 15, 16, 17, 20, 21, 22, 23, 24, 25, 115, 117, 118,
+      1, 2, 3, 4, 5, 9, 13, 15, 16, 17, 20, 21, 22, 23, 24, 25, 115, 117, 118,
     ]);
   });
 

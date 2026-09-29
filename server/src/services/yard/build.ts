@@ -128,15 +128,23 @@ export const BUILDABLE_TYPES: ReadonlySet<number> = new Set([
   17, 20, 21, 22, 23, 24, 25, 115, 117, 118,
 ]);
 
+/** The Yard Planner, which an outpost no longer builds (owner decision 2026-09-30). */
+const YARD_PLANNER_TYPE = 10;
+
 /**
  * Types an outpost's build menu offers: the main menu's, less what the outpost
- * table blocks or allows none of (`quantity[1]` 0). Twenty types, the list the
- * web's outpost catalogue shows (`web/src/game/yard/buildCatalogue.ts`).
+ * table blocks or allows none of (`quantity[1]` 0), and less the Yard Planner.
+ * Flash's outpost table allowed one (`OUTPOST_YARD_PROPS.as:805`), but its one
+ * use now is the planner's Blueprint view, which outposts do not get: layout
+ * mode itself needs no building (owner decision 2026-09-30). One an outpost
+ * already has stays and does nothing. Nineteen types, the list the web's
+ * outpost catalogue shows (`web/src/game/yard/buildCatalogue.ts`).
  */
 export const OUTPOST_BUILDABLE_TYPES: ReadonlySet<number> = new Set(
   [...BUILDABLE_TYPES].filter((type) => {
     const row = OUTPOST_COSTS[type];
     return (
+      type !== YARD_PLANNER_TYPE &&
       row !== undefined &&
       row.costs.length > 0 &&
       OUTPOST_TRAITS[type]?.blocked !== true &&

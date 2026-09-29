@@ -9,7 +9,7 @@ import { storageCap } from "../../services/base/economy/resourceBudget.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { yardAcademyTrainAction } from "./academy.js";
 import { yardBankAction } from "./bank.js";
-import { yardBuildAction, yardCancelBuildAction } from "./build.js";
+import { yardBuildAction, yardCancelBuildAction, yardInstantBuildAction } from "./build.js";
 import { yardCancelFortifyAction, yardFortifyAction } from "./fortify.js";
 import { yardLockerStartAction } from "./locker.js";
 import { yardMushroomPickAction } from "./mushrooms.js";
@@ -378,6 +378,17 @@ describe("outpost build rules", () => {
     const answer = await onOutpost(yardBuildAction, { type: 6, x: 250, y: -200 });
     expect(answer.status).toBe(400);
     expect(answer.body.reason).toBe("notBuildable");
+  });
+
+  test("the Yard Planner is not buildable in an outpost, for resources or Shiny (2026-09-30)", async () => {
+    const before = structuredClone([...db.rows.values()]);
+    const answer = await onOutpost(yardBuildAction, { type: 10, x: 250, y: -200 });
+    expect(answer.status).toBe(400);
+    expect(answer.body.reason).toBe("notBuildable");
+    const instant = await onOutpost(yardInstantBuildAction, { type: 10, x: 250, y: -200 });
+    expect(instant.status).toBe(400);
+    expect(instant.body.reason).toBe("notBuildable");
+    expect([...db.rows.values()]).toEqual(before);
   });
 
   test("the Juicer needs a Housing", async () => {
