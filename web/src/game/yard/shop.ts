@@ -26,6 +26,7 @@ export const ShopSection = {
   BUILDING: "building",
   STORAGE: "storage",
   MONSTERS: "monsters",
+  PROTECTION: "protection",
 } as const;
 export type ShopSection = (typeof ShopSection)[keyof typeof ShopSection];
 
@@ -33,6 +34,7 @@ export const SHOP_SECTION_TITLES: Readonly<Record<ShopSection, string>> = {
   building: "Building",
   storage: "Storage and production",
   monsters: "Monsters",
+  protection: "Protection",
 };
 
 /** One item the Shop sells through `shop/buy`. */
@@ -49,6 +51,11 @@ export interface ShopItem {
   readonly seconds: number;
   /** Sold in an outpost too (`client/scripts/STORE.as:198-199`). */
   readonly outposts: boolean;
+  /**
+   * Bought again while it runs, its time added on top (damage protection):
+   * never "running", always on sale.
+   */
+  readonly stacks?: true;
 }
 
 const HOUR = 3_600;
@@ -150,6 +157,64 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     seconds: DAY,
     outposts: true,
   },
+  // Damage protection: added on top of whatever protection is left, main yard
+  // only (owner decision 2026-09-29).
+  {
+    item: "PRO1",
+    name: "24 Hours Protection",
+    blurb: "Nobody can attack your yard for 24 more hours. Attacking anyone ends it.",
+    section: ShopSection.PROTECTION,
+    prices: [32],
+    seconds: DAY,
+    outposts: false,
+    stacks: true,
+  },
+  {
+    item: "PRO2",
+    name: "Holiday Protection",
+    blurb: "Nobody can attack your yard for 7 more days. Attacking anyone ends it.",
+    section: ShopSection.PROTECTION,
+    prices: [250],
+    seconds: 7 * DAY,
+    outposts: false,
+    stacks: true,
+  },
+  {
+    item: "PRO3",
+    name: "Ultimate Protection",
+    blurb: "Nobody can attack your yard for 28 more days. Attacking anyone ends it.",
+    section: ShopSection.PROTECTION,
+    prices: [1_100],
+    seconds: 28 * DAY,
+    outposts: false,
+    stacks: true,
+  },
+];
+
+/** An item shown as "coming later": this client does not model its effect yet (§8.2). */
+export interface ComingLaterItem {
+  /** The store codes it stands for. */
+  readonly items: readonly string[];
+  readonly name: string;
+  readonly blurb: string;
+}
+
+/**
+ * What the original sold that is held back until its effect is modelled
+ * (§8.2; Tower and Monster Overdrive by owner decision 2026-09-29). Listed,
+ * never sold: `shop/buy` refuses every one of them.
+ */
+export const COMING_LATER: readonly ComingLaterItem[] = [
+  { items: ["TOD"], name: "Tower Overdrive", blurb: "Towers do more damage for a while." },
+  { items: ["MOD"], name: "Monster Overdrive", blurb: "Your monsters do more damage for a while." },
+  { items: ["MDOD"], name: "Monster Defensive Buff", blurb: "Your monsters take less damage for a while." },
+  { items: ["MSOD"], name: "Monster Speed Buff", blurb: "Your monsters move faster for a while." },
+  {
+    items: ["BLK2", "BLK3", "BLK4", "BLK5"],
+    name: "Wall Upgrades",
+    blurb: "Every wall block to stone, metal, gold or black diamond at once.",
+  },
+  { items: ["BUILDING28"], name: "Shiny Decorations", blurb: "Decorations bought with Shiny." },
 ];
 
 /** The Hatchery Overdrives: one of the three at a time (§4.4). */
@@ -185,6 +250,8 @@ export interface ShopModel {
   readonly offers: readonly ShopOffer[];
   /** Null when nothing is damaged. */
   readonly repair: RepairAllOffer | null;
+  /** When the yard's damage protection ends (unix s), or null when it has none. */
+  readonly protectedUntil: number | null;
 }
 
 export const NOT_ENOUGH_SHINY = "Not enough Shiny.";
@@ -239,7 +306,7 @@ export const shopOffer = (item: ShopItem, reader: YardStoreReader): ShopOffer =>
   const now = reader.now();
   const storedata = reader.save.storedata;
 
-  if (item.seconds > 0) {
+  if (item.seconds > 0 && !item.stacks) {
     const endsAt = runningUntil(storedata, item.item, now);
     if (endsAt !== null) return { item, owned: null, state: { kind: "running", endsAt } };
   }
@@ -258,8 +325,15 @@ export const repairAllOffer = (reader: YardStoreReader): RepairAllOffer | null =
   return { count: damaged.length, price, blocked: reader.credits < price ? NOT_ENOUGH_SHINY : null };
 };
 
+/** When the yard's damage protection ends, or null when it has none now. */
+export const protectedUntil = (reader: YardStoreReader): number | null => {
+  const until = finite(reader.save.protected);
+  return until !== null && until > reader.now() ? until : null;
+};
+
 /** The whole Shop for a yard as it stands now. */
 export const shopModel = (reader: YardStoreReader): ShopModel => ({
   offers: shopItemsFor(reader.kind).map((item) => shopOffer(item, reader)),
   repair: repairAllOffer(reader),
+  protectedUntil: protectedUntil(reader),
 });

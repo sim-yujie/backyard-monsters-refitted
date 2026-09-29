@@ -1136,6 +1136,26 @@ upgrades; Shiny decorations `BUILDING28…`) are held back until WP6.2 confirms 
 price formula against `client/scripts/STORE.as`, and listed there as "coming later" rather than
 sold with no effect. Existing `storedata` entries of dropped items stay and do nothing.
 
+**Decisions (2026-09-29, WP6.2, #127).** Questions 1-4 answered by the owner, 5-6 by the lead:
+
+1. **Protection stacks.** `PRO1`–`PRO3` can always be bought; each adds its time on top of the
+   protection left, new-player and post-attack protection included (`save.protected =
+   max(protected, now) + du`), as the Flash save path did. One `storedata` entry stands for the
+   stack and ends with it.
+2. **Protection is main-yard only.** Sold in the main yard's Shop, protects only the main yard; an
+   outpost's Shop does not list it and `shop/buy` refuses it there.
+3. **Tower and Monster Overdrive come later.** `TOD` and `MOD` are "coming later" tiles, refused
+   `notForSale`, like the held-back items below.
+4. **No resource packs.** `BR11`–`BR43` are dropped; building panels already top up a shortfall.
+5. **The held-back items stay held back.** `MDOD`, `MSOD`, `BLK2`–`BLK5` and the Shiny decorations
+   are "coming later" tiles with no price; their effects and prices were not checked against
+   `STORE.as`.
+6. **Not in the Shop:** `SP1`–`SP4` and `IB` (used from building panels), `FQ` (no queue), `IBSW`,
+   `BRAU`, `BRAB` (siege), and the dropped items above.
+
+The yard state (§2) gains `protected`, the expiry `/base/load` already sends, so the Shop shows the
+protection left and a purchase updates it without a reload.
+
 ### 8.3 Decoration inventory
 
 Decorations recycled in Phase 3 go to `researchdata` inventory (BB §2 "Decorations",

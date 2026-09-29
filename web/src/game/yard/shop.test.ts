@@ -91,6 +91,18 @@ describe("shopModel", () => {
     expect(offer(store, "HOD3").state).toMatchObject({ blocked: "Another Hatchery Overdrive is running." });
   });
 
+  it("protection is always on sale, and the model says when the current protection ends", () => {
+    const store = storeOf({
+      protected: T0 + 3_600,
+      storedata: { PRO2: { q: 1, s: T0 - 60, e: T0 + 3_600 } },
+    });
+
+    expect(offer(store, "PRO2").state).toEqual({ kind: "buy", price: 250, blocked: null });
+    expect(shopModel(store).protectedUntil).toBe(T0 + 3_600);
+    expect(shopModel(storeOf({ protected: T0 })).protectedUntil).toBeNull();
+    expect(shopModel(storeOf()).protectedUntil).toBeNull();
+  });
+
   it("an outpost sells only its own list", () => {
     expect(shopItemsFor("outpost").map((one) => one.item)).toEqual(["BST", "POD", "HOD", "HOD2", "HOD3", "EXH"]);
     expect(shopModel(storeOf({}, "outpost")).offers.map((one) => one.item.item)).toEqual(

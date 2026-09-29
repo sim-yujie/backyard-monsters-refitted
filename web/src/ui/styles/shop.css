@@ -90,6 +90,12 @@
   color: var(--colour-text-muted);
 }
 
+.shop-section__note {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
 .shop-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -142,8 +148,13 @@
   color: var(--colour-success);
 }
 
-.shop-card[data-state="soldOut"] {
+.shop-card[data-state="soldOut"],
+.shop-card--later {
   background: var(--colour-surface-sunken);
+}
+
+.shop-card--later {
+  border-style: dashed;
 }
 
 .shop-card__buy {

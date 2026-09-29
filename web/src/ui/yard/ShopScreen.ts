@@ -1,6 +1,7 @@
 import { repairActions, RepairKey, type RepairActions } from "@/api/yardRepair";
 import type { YardRefusal } from "@/api/yard";
 import {
+  COMING_LATER,
   SHOP_SECTION_TITLES,
   ShopSection,
   shopModel,
@@ -68,8 +69,15 @@ export const offerMeta = (offer: ShopOffer, now: number): string => {
   if (state.kind === "running") return `Running: ${formatCountdown(state.endsAt - now)} left`;
   if (state.kind === "soldOut") return `All ${item.prices.length} bought`;
   if (owned !== null) return `${owned} of ${item.prices.length} bought`;
+  if (item.stacks) return `Adds ${durationText(item.seconds)}`;
   return `Lasts ${durationText(item.seconds)}`;
 };
+
+/** The line under the Protection heading: how long the yard is still protected. */
+export const protectionText = (until: number | null, now: number): string =>
+  until === null
+    ? "Your yard is not protected. Protection you buy starts now."
+    : `Your yard is protected for ${formatCountdown(until - now)}. Protection you buy is added on top.`;
 
 const refusalText = (refusal: YardRefusal): string =>
   refusal.reason === "network"
@@ -87,6 +95,8 @@ export class ShopScreen {
   private readonly status: HTMLElement;
   private readonly list: HTMLElement;
   private readonly cards = new Map<string, Card>();
+  /** The "Coming later" section never changes, so it is drawn once. */
+  private comingLater: HTMLElement | null = null;
   private readonly unsubscribe: () => void;
 
   private opened = false;
@@ -206,22 +216,43 @@ export class ShopScreen {
           section,
           SHOP_SECTION_TITLES[section],
           offers.map((offer) => this.offerCard(offer, now)),
+          section === ShopSection.PROTECTION ? protectionText(model.protectedUntil, now) : null,
         ),
       );
     }
     if (model.repair) sections.push(this.section("repairs", "Repairs", [this.repairCard(model.repair)]));
+    this.comingLater ??= this.section(
+      "later",
+      "Coming later",
+      COMING_LATER.map((one) => this.laterCard(one.items[0] ?? one.name, one.name, one.blurb)),
+      "Not sold yet: this game does not do what they did.",
+    );
+    sections.push(this.comingLater);
     this.list.replaceChildren(...sections);
     this.syncPending();
   }
 
-  private section(id: string, title: string, cards: readonly HTMLElement[]): HTMLElement {
+  private section(
+    id: string,
+    title: string,
+    cards: readonly HTMLElement[],
+    note: string | null = null,
+  ): HTMLElement {
     const section = document.createElement("section");
     section.className = "shop-section";
+    section.dataset["section"] = id;
     const heading = document.createElement("h3");
     heading.className = "shop-section__title";
     heading.id = `shop-section-${id}`;
     heading.textContent = title;
     section.setAttribute("aria-labelledby", heading.id);
+    section.append(heading);
+    if (note) {
+      const line = document.createElement("p");
+      line.className = "shop-section__note";
+      line.textContent = note;
+      section.append(line);
+    }
     const grid = document.createElement("ul");
     grid.className = "shop-grid";
     for (const card of cards) {
@@ -229,8 +260,27 @@ export class ShopScreen {
       item.append(card);
       grid.append(item);
     }
-    section.append(heading, grid);
+    section.append(grid);
     return section;
+  }
+
+  /** A held-back item: its name and what it will do, no price, no button. */
+  private laterCard(key: string, name: string, blurb: string): HTMLElement {
+    const element = document.createElement("article");
+    element.className = "shop-card shop-card--later";
+    element.dataset["item"] = key;
+    element.dataset["state"] = "later";
+    const title = document.createElement("h4");
+    title.className = "shop-card__name";
+    title.textContent = name;
+    const text = document.createElement("p");
+    text.className = "shop-card__blurb";
+    text.textContent = blurb;
+    const meta = document.createElement("p");
+    meta.className = "shop-card__meta";
+    meta.textContent = "Coming later";
+    element.append(title, text, meta);
+    return element;
   }
 
   private offerCard(offer: ShopOffer, now: number): HTMLElement {

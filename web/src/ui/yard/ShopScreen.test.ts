@@ -6,7 +6,7 @@ import type { RepairActions, RepairInstantReport } from "@/api/yardRepair";
 import { YardStore, type YardActionResult } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
-import { durationText, ShopScreen } from "./ShopScreen";
+import { durationText, protectionText, ShopScreen } from "./ShopScreen";
 
 /**
  * The Shop screen as a player meets it (§8.2): the headed cards, the next
@@ -74,10 +74,14 @@ describe("ShopScreen", () => {
       "Building",
       "Storage and production",
       "Monsters",
+      "Protection",
+      "Coming later",
     ]);
     expect(
-      [...element.querySelectorAll<HTMLElement>(".shop-card")].map((one) => one.dataset["item"]),
-    ).toEqual(["BEW", "BST", "BIP", "ENL", "POD", "CLOD", "HOD", "HOD2", "HOD3", "EXH"]);
+      [...element.querySelectorAll<HTMLElement>(".shop-card:not(.shop-card--later)")].map(
+        (one) => one.dataset["item"],
+      ),
+    ).toEqual(["BEW", "BST", "BIP", "ENL", "POD", "CLOD", "HOD", "HOD2", "HOD3", "EXH", "PRO1", "PRO2", "PRO3"]);
     expect(card("BEW")!.querySelector(".shop-card__meta")!.textContent).toBe("1 of 4 bought");
     expect(button("BEW").getAttribute("aria-label")).toBe("Buy Extra Worker, 500 Shiny");
     expect(card("BST")!.querySelector(".shop-card__meta")!.textContent).toBe("Lasts 7 days");
@@ -179,8 +183,45 @@ describe("ShopScreen", () => {
     const { element } = setup({}, "outpost");
 
     expect(
-      [...element.querySelectorAll<HTMLElement>(".shop-card")].map((one) => one.dataset["item"]),
+      [...element.querySelectorAll<HTMLElement>(".shop-card:not(.shop-card--later)")].map(
+        (one) => one.dataset["item"],
+      ),
     ).toEqual(["BST", "POD", "HOD", "HOD2", "HOD3", "EXH"]);
+    expect(element.querySelector('[data-section="protection"]')).toBeNull();
+  });
+
+  it("sells protection on top of what is left, and says how much is left", () => {
+    const { element, card, button } = setup({
+      credits: 2_000,
+      protected: T0 + 2 * 86_400 + 3 * 3_600,
+      storedata: { PRO1: { q: 1, s: T0 - 60, e: T0 + 2 * 86_400 + 3 * 3_600 } },
+    });
+
+    expect(element.querySelector(".shop-section__note")!.textContent).toBe(
+      "Your yard is protected for 2d 3h. Protection you buy is added on top.",
+    );
+    // A running PRO1 is still on sale: its time stacks.
+    expect(card("PRO1")!.dataset["state"]).toBe("buy");
+    expect(card("PRO1")!.querySelector(".shop-card__meta")!.textContent).toBe("Adds 24 hours");
+    expect(button("PRO3").getAttribute("aria-label")).toBe("Buy Ultimate Protection, 1,100 Shiny");
+  });
+
+  it("lists the held-back items as coming later, with no price and no button", () => {
+    const { element } = setup();
+    const later = [...element.querySelectorAll<HTMLElement>(".shop-card--later")];
+
+    expect(later.map((one) => one.querySelector(".shop-card__name")!.textContent)).toEqual([
+      "Tower Overdrive",
+      "Monster Overdrive",
+      "Monster Defensive Buff",
+      "Monster Speed Buff",
+      "Wall Upgrades",
+      "Shiny Decorations",
+    ]);
+    for (const one of later) {
+      expect(one.querySelector("button")).toBeNull();
+      expect(one.querySelector(".shop-card__meta")!.textContent).toBe("Coming later");
+    }
   });
 
   it("offers Repair everything now while something is damaged, through repair/instant", async () => {
@@ -217,6 +258,15 @@ describe("ShopScreen", () => {
     screen.open();
     element.querySelector<HTMLButtonElement>(".shop-screen__close")!.click();
     expect(screen.isOpen).toBe(false);
+  });
+});
+
+describe("protectionText", () => {
+  it("says whether the yard is protected", () => {
+    expect(protectionText(null, T0)).toBe("Your yard is not protected. Protection you buy starts now.");
+    expect(protectionText(T0 + 7 * 86_400, T0)).toBe(
+      "Your yard is protected for 7d 0h. Protection you buy is added on top.",
+    );
   });
 });
 
