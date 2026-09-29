@@ -923,3 +923,214 @@
     height: 40px;
   }
 }
+
+/* ── The calm map (#176, R-MR2-Map-A): Find, the tool row, the hover card ── */
+
+/* Find: bottom left, where the Navigate panel used to stand open. */
+.mr2-find-dock {
+  left: var(--space-4);
+  bottom: 20px;
+  width: auto;
+}
+
+.mr2-find {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.mr2-find__hint {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--colour-text-muted);
+}
+
+.mr2-find__phone-label {
+  display: none;
+}
+
+.mr2-find__sheet[hidden] {
+  display: none;
+}
+
+.mr2-find__sheet > .panel {
+  width: 300px;
+  max-width: calc(100vw - 2 * var(--space-4));
+}
+
+.mr2-find__sheet .panel__body {
+  max-height: calc(100vh - var(--hud-height) - 120px);
+}
+
+.mr2-find__world {
+  display: flex;
+  justify-content: center;
+}
+
+/* The zoom buttons alone, as on the board: no slider, readout or Fit (Fit
+   lives in Find as "World", and on the 0 key). */
+.mr2-toolrow .zoom-controls {
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: 16px;
+}
+
+.mr2-toolrow .zoom-controls__slider,
+.mr2-toolrow .zoom-controls__value,
+.mr2-toolrow .zoom-controls > .btn:last-child {
+  display: none;
+}
+
+.mr2-toolrow .zoom-controls .btn {
+  width: var(--control-height);
+  height: var(--control-height);
+  background: transparent;
+}
+
+/* The card that names the cell under the pointer. */
+.mr2-hover {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
+  border-radius: 14px;
+  background: var(--colour-surface-base);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.mr2-hover[hidden] {
+  display: none;
+}
+
+.mr2-hover__picture {
+  --ring: var(--colour-border-strong);
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 2px solid var(--ring);
+  border-radius: 11px;
+  background: radial-gradient(
+    circle at 50% 35%,
+    color-mix(in srgb, var(--ring) 22%, var(--colour-surface-base)),
+    var(--colour-surface-base)
+  );
+  overflow: hidden;
+}
+
+.mr2-hover__picture[hidden] {
+  display: none;
+}
+
+.mr2-hover__picture img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
+.mr2-hover__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mr2-hover__title {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--display-weight);
+}
+
+.mr2-hover__detail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.mr2-hover__icon {
+  display: none;
+}
+
+.mr2-hover__detail--warn {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-warning);
+}
+
+.mr2-hover__detail--warn .mr2-hover__icon {
+  display: block;
+}
+
+/*
+ * A phone (R-MR2-phone): Find becomes the wide "Find a place" bar under the
+ * HUD, My range sits under it on the right, and pinching replaces the zoom
+ * buttons. The cell panel is the bottom sheet (#174), and while it is open
+ * the phone rule above puts these away.
+ */
+@media (width <= 620px) {
+  .mr2-find-dock {
+    top: calc(var(--hud-height) + var(--space-2));
+    bottom: auto;
+    left: 12px;
+    right: 12px;
+  }
+
+  .mr2-find {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .mr2-find__button {
+    width: 100%;
+    color: var(--colour-text-secondary);
+  }
+
+  .mr2-find__button .mr2-tool__label,
+  .mr2-find__hint {
+    display: none;
+  }
+
+  .mr2-find__phone-label {
+    display: inline;
+  }
+
+  .mr2-find__sheet > .panel {
+    width: auto;
+    max-width: none;
+  }
+
+  .mr2-find__sheet .panel__body {
+    max-height: calc(100vh - var(--hud-height) - 160px);
+  }
+
+  .mr2-tools-dock {
+    top: calc(var(--hud-height) + var(--space-2) + var(--control-height) + var(--space-3));
+    bottom: auto;
+    right: 12px;
+  }
+
+  .mr2-toolrow .zoom-controls {
+    display: none;
+  }
+
+  /* Up here it does not collide with the cell panel's sheet, so it stays
+     while the sheet is open, as on the board; the open Find sheet covers its
+     corner, so then it steps aside. */
+  .overlay__layer:has(> .map-dock--right > *) > .mr2-tools-dock.map-dock--bottom-right {
+    display: flex;
+  }
+
+  .overlay__layer:has(.mr2-find--open) > .mr2-tools-dock.map-dock--bottom-right {
+    display: none;
+  }
+}

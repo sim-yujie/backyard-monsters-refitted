@@ -10,7 +10,7 @@ import {
   type Resources,
   type TakeoverQuoteResponse,
 } from "@/api/types";
-import { DEFAULT_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
+import { CELL_WIDTH, DEFAULT_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
 import {
   attackRefusal,
   hasDeclareWar,
@@ -42,6 +42,7 @@ import { MapRenderer } from "@/game/maproom/MapRenderer";
 import { ZoneStore, type ZoneError } from "@/game/maproom/ZoneStore";
 import { inWorld, type CellRange } from "@/game/maproom/zones";
 import { outpostsOf, outpostTarget, setOwnYardTarget } from "@/game/yard/ownYards";
+import { hoverContentFor } from "@/ui/maproom/HoverCard";
 import { MapRoomUi } from "@/ui/maproom/MapRoomUi";
 import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
 import type { Scene, SceneContext } from "../SceneManager";
@@ -111,6 +112,14 @@ export class MapRoom2Scene implements Scene {
 
   private home: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
+  /** The cell under the pointer, for the hover card (#176). */
+  private hovered: OffsetCell | null = null;
+  /**
+   * Whether this device has a real pointer to hover with. A touch screen gets
+   * no hover card: a tap opens the cell panel, which says the same and more.
+   */
+  private readonly canHover =
+    typeof matchMedia === "function" && matchMedia("(hover: hover) and (pointer: fine)").matches;
   private range: CellRange = { minCol: 0, maxCol: 0, minRow: 0, maxRow: 0 };
   /**
    * The own-yard load that found the home cell, kept for what an attack needs
@@ -156,10 +165,10 @@ export class MapRoom2Scene implements Scene {
     context.stage.addChild(this.renderer.root);
     // Bakes the sprite atlas the chunk renderer draws from.
     this.renderer.attach(context.renderer);
-    // The tribe portraits are a network fetch, so they are started here and
-    // not waited on: the map opens on tent glyphs and swaps them for the art
-    // the moment it lands.
-    void this.renderer.loadTribeAvatars();
+    // The tribe portraits and players' critters are a network fetch, so they
+    // are started here and not waited on: the map opens on tent glyphs and
+    // plain markers and swaps in the art the moment it lands.
+    void this.renderer.loadPictures();
 
     this.camera.resize(context.width, context.height);
     this.camera.attach(context.canvas);
@@ -282,6 +291,8 @@ export class MapRoom2Scene implements Scene {
       if (this.ready) this.store.ensureVisible(this.range);
       this.ui?.setViewport(this.range);
       this.ui?.setZoom(this.camera.zoom);
+      // The card follows its cell as the map moves under a still pointer.
+      this.showHoverCard();
     }
 
     this.renderer.draw(this.range, this.camera.zoom);
@@ -455,16 +466,29 @@ export class MapRoom2Scene implements Scene {
 
   private handleHover(cell: OffsetCell | null): void {
     this.renderer.setHovered(cell);
-    if (!cell) {
-      this.ui?.setReadout("—");
+    this.hovered = cell;
+    this.showHoverCard();
+  }
+
+  /**
+   * Names the hovered cell beside it: the map writes no names (#176), so this
+   * card is where a camp's tribe and a yard's owner are read.
+   */
+  private showHoverCard(): void {
+    const ui = this.ui;
+    const cell = this.hovered;
+    if (!ui) return;
+    const content =
+      cell && this.canHover && !this.camera.isInteracting
+        ? hoverContentFor(this.store.getCell(cell.col, cell.row), reachTo(cell, this.rangeSources))
+        : null;
+    if (!cell || !content) {
+      ui.hideHover();
       return;
     }
-    const payload = this.store.getCell(cell.col, cell.row);
-    this.ui?.setReadout(
-      `x ${cell.col}  y ${cell.row}` +
-        (payload ? `  h ${payload.i}` : "  loading") +
-        (payload && "n" in payload ? `  ${String(payload.n)}` : ""),
-    );
+    const centre = this.camera.worldToScreen(mapRoomGrid.cellToPixel(cell.col, cell.row));
+    const half = (CELL_WIDTH / 2) * this.camera.zoom;
+    ui.showHover(content, { left: centre.x - half, right: centre.x + half, middle: centre.y });
   }
 
   private selectCell(cell: OffsetCell): void {

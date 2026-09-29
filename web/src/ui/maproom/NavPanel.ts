@@ -6,7 +6,8 @@ import { Panel } from "@/ui/Panel";
 /**
  * Navigation: home, jump to a coordinate, bookmarks and a manual refresh.
  * Beside Home, one button per own outpost centres on it (outposts WP5), so
- * Home reaches any of the player's yards.
+ * Home reaches any of the player's yards. Since the calm map (#176) it opens
+ * from the Find button (`FindControl`) instead of sitting on the map.
  *
  * A view only. It holds no bookmark state and does no network work — it reports
  * intent and is told what to display, so the save-and-roll-back rules live in
@@ -17,6 +18,8 @@ export interface NavPanelOptions {
   onHome: () => void;
   onJump: (x: number, y: number) => void;
   onRefresh: () => void;
+  /** Pulls back until the whole world is on screen. */
+  onFit: () => void;
   onBookmarkJump: (bookmark: Bookmark) => void;
   onBookmarkAdd: (name: string) => void;
   onBookmarkRemove: (index: number) => void;
@@ -38,13 +41,14 @@ export class NavPanel {
 
   constructor(options: NavPanelOptions) {
     this.options = options;
-    this.panel = new Panel({ title: "Navigate", closable: false, className: "map-panel" });
+    this.panel = new Panel({ title: "Find a place", closable: false, className: "map-panel" });
     this.element = this.panel.element;
 
     const actions = document.createElement("div");
     actions.className = "map-row";
     actions.append(
       button("Home", "Centre on your main yard", options.onHome),
+      button("World", "Pull back to see the whole world", options.onFit),
       button("Refresh", "Refetch every visible zone now", options.onRefresh),
     );
 
@@ -92,8 +96,20 @@ export class NavPanel {
 
     this.status = document.createElement("p");
     this.status.className = "map-status";
+    // The frame and zone counts are for whoever is building the map (#176).
+    this.status.hidden = !import.meta.env.DEV;
 
     this.panel.setContent(actions, this.outposts, jump, this.list, add, this.status);
+  }
+
+  /** The title bar, for the Find panel's own close button. */
+  get titlebar(): HTMLElement {
+    return this.panel.titlebar;
+  }
+
+  /** Puts something at the top of the panel's body: the world map. */
+  prepend(node: Node): void {
+    this.panel.body.prepend(node);
   }
 
   /** Enables the add button and names what it would bookmark. */

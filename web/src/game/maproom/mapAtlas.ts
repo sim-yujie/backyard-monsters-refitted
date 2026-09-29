@@ -1,4 +1,4 @@
-import { Graphics, Rectangle, Texture, type Renderer } from "pixi.js";
+import { Graphics, Rectangle, type Renderer, type Texture } from "pixi.js";
 import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
 
 /**
@@ -45,6 +45,13 @@ const FILL_BLEED = 1;
 const OUTLINE_FINE = 1.5;
 const OUTLINE_BOLD = 4;
 
+/** Radius the disc and ring are baked at; a sprite scales them to its size. */
+export const MARKER_UNIT = 32;
+/** The ring's width at {@link MARKER_UNIT}. */
+const RING_WIDTH = 6;
+/** Half the height of a name plate, and the radius of its ends. */
+export const PLATE_HALF_HEIGHT = 16;
+
 const hexPoints = (scale: number): number[] => [
   -HALF_WIDTH * scale,
   0,
@@ -75,18 +82,20 @@ export class MapAtlas {
   readonly tent: Texture;
   /** A razed camp: the tent with its ridge caved in. */
   readonly tentDestroyed: Texture;
-  /** A player's main yard. */
-  readonly house: Texture;
-  /** A player's outpost, deliberately smaller than a yard. */
-  readonly outpost: Texture;
   /** The cross over a destroyed camp. */
   readonly cross: Texture;
-  /** Ring on the cell that belongs to the player. */
-  readonly ownRing: Texture;
-  /** Ring for damage protection or an active truce. */
-  readonly shieldRing: Texture;
-  /** One damage bar segment, stretched by the sprite. */
-  readonly bar: Texture;
+  /**
+   * A filled circle of radius {@link MARKER_UNIT}: a player's marker and a
+   * camp's level badge (#176), scaled and tinted dark.
+   */
+  readonly disc: Texture;
+  /** The ring round a disc, tinted white, cyan or the tribe's colour. */
+  readonly ring: Texture;
+  /**
+   * A rounded bar for a player's name plate, stretched sideways by a
+   * nine-slice sprite so its round ends keep their shape.
+   */
+  readonly plate: Texture;
 
   private readonly owned: Texture[];
 
@@ -125,34 +134,6 @@ export class MapAtlas {
         .fill(0xffffff),
     );
 
-    // A house: a square with a roof, the silhouette of a main yard.
-    const houseHalf = CELL_WIDTH * 0.14;
-    const eaves = CELL_HEIGHT * 0.1;
-    const ridge = CELL_HEIGHT * 0.32;
-    this.house = bake(renderer, frame(houseHalf + 1, ridge + 1), (g) =>
-      g
-        .poly([
-          -houseHalf,
-          ridge * 0.7,
-          -houseHalf,
-          -eaves,
-          0,
-          -ridge,
-          houseHalf,
-          -eaves,
-          houseHalf,
-          ridge * 0.7,
-        ])
-        .fill(0xffffff),
-    );
-
-    // A diamond, deliberately smaller than a main yard.
-    const postHalf = CELL_WIDTH * 0.11;
-    const postRise = CELL_HEIGHT * 0.24;
-    this.outpost = bake(renderer, frame(postHalf + 1, postRise + 1), (g) =>
-      g.poly([0, -postRise, postHalf, 0, 0, postRise, -postHalf, 0]).fill(0xffffff),
-    );
-
     const arm = CELL_WIDTH * 0.1;
     const crossWidth = CELL_HEIGHT * 0.05;
     this.cross = bake(renderer, frame(arm + crossWidth, arm + crossWidth), (g) =>
@@ -164,22 +145,25 @@ export class MapAtlas {
         .stroke({ width: crossWidth, color: 0xffffff, cap: "round" }),
     );
 
-    const ownWidth = CELL_HEIGHT * 0.05;
-    this.ownRing = bake(
-      renderer,
-      frame(HALF_WIDTH + ownWidth, HALF_HEIGHT + ownWidth),
-      (g) => g.poly(hexPoints(1)).stroke({ width: ownWidth, color: 0xffffff }),
+    this.disc = bake(renderer, frame(MARKER_UNIT + 1, MARKER_UNIT + 1), (g) =>
+      g.circle(0, 0, MARKER_UNIT).fill(0xffffff),
     );
-
-    const shieldWidth = CELL_HEIGHT * 0.028;
-    this.shieldRing = bake(
-      renderer,
-      frame(HALF_WIDTH * 0.72 + shieldWidth, HALF_HEIGHT * 0.72 + shieldWidth),
-      (g) => g.poly(hexPoints(0.72)).stroke({ width: shieldWidth, color: 0xffffff }),
+    this.ring = bake(renderer, frame(MARKER_UNIT + 1, MARKER_UNIT + 1), (g) =>
+      g
+        .circle(0, 0, MARKER_UNIT - RING_WIDTH / 2)
+        .stroke({ width: RING_WIDTH, color: 0xffffff, alignment: 0.5 }),
     );
-
-    // A plain white quad. The bar is two of these, scaled and tinted.
-    this.bar = Texture.WHITE;
+    this.plate = bake(renderer, frame(PLATE_HALF_HEIGHT * 2, PLATE_HALF_HEIGHT), (g) =>
+      g
+        .roundRect(
+          -PLATE_HALF_HEIGHT * 2,
+          -PLATE_HALF_HEIGHT,
+          PLATE_HALF_HEIGHT * 4,
+          PLATE_HALF_HEIGHT * 2,
+          PLATE_HALF_HEIGHT,
+        )
+        .fill(0xffffff),
+    );
 
     this.owned = [
       this.hex,
@@ -187,11 +171,10 @@ export class MapAtlas {
       this.outlineBold,
       this.tent,
       this.tentDestroyed,
-      this.house,
-      this.outpost,
       this.cross,
-      this.ownRing,
-      this.shieldRing,
+      this.disc,
+      this.ring,
+      this.plate,
     ];
   }
 

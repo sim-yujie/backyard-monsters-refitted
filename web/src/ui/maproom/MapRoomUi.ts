@@ -11,6 +11,8 @@ import type { OwnOutpost } from "@/game/yard/ownYards";
 import { Hud } from "@/ui/Hud";
 import { ZoomControl } from "@/ui/ZoomControl";
 import { CellPanel, type OwnFlinger } from "./CellPanel";
+import { FindControl } from "./FindControl";
+import { HoverCard, type HoverCardContent } from "./HoverCard";
 import { Minimap } from "./Minimap";
 import { NavPanel } from "./NavPanel";
 import { Notices } from "./Notices";
@@ -92,10 +94,11 @@ export class MapRoomUi {
 
   private readonly hud: Hud;
   private readonly navPanel: NavPanel;
+  private readonly find: FindControl;
+  private readonly hover = new HoverCard();
   private readonly minimap: Minimap;
   private readonly zoomControl: ZoomControl;
   private readonly rangeControl: RangeControl;
-  private readonly readout: HTMLElement;
   private readonly docks: HTMLElement[] = [];
 
   private cellPanel: CellPanel | null = null;
@@ -116,16 +119,30 @@ export class MapRoomUi {
     });
     this.hud.setActiveScene(activeScene);
 
+    // Going somewhere from Find closes it: the place found is what matters.
+    const went = (go: () => void): void => {
+      go();
+      this.find.setOpen(false);
+    };
     this.navPanel = new NavPanel({
-      onHome: handlers.onHome,
+      onHome: () => went(handlers.onHome),
       onRefresh: handlers.onRefresh,
-      onJump: (x, y) => handlers.onJump({ col: x, row: y }),
-      onBookmarkJump: (bookmark) => handlers.onJump({ col: bookmark.x, row: bookmark.y }),
+      onFit: () => went(handlers.onZoomReset),
+      onJump: (x, y) => went(() => handlers.onJump({ col: x, row: y })),
+      onBookmarkJump: (bookmark) => went(() => handlers.onJump({ col: bookmark.x, row: bookmark.y })),
       onBookmarkAdd: handlers.onBookmarkAdd,
       onBookmarkRemove: handlers.onBookmarkRemove,
     });
 
     this.minimap = new Minimap({ onJump: handlers.onJump });
+    // The Navigate panel and the world map sit behind one Find button (#176).
+    const world = document.createElement("div");
+    world.className = "mr2-find__world";
+    this.minimap.mount(world);
+    this.navPanel.prepend(world);
+    this.find = new FindControl(this.navPanel, (open) => {
+      if (open) this.minimap.draw();
+    });
     this.zoomControl = new ZoomControl({
       onZoom: handlers.onZoom,
       onStep: handlers.onZoomStep,
@@ -138,10 +155,6 @@ export class MapRoomUi {
     });
 
     this.rangeControl = new RangeControl({ onToggle: (on) => this.toggleRange(on) });
-
-    this.readout = document.createElement("div");
-    this.readout.className = "cell-readout";
-    this.readout.textContent = "—";
   }
 
   mount(container: HTMLElement, modal?: HTMLElement): this {
@@ -150,24 +163,23 @@ export class MapRoomUi {
     container.append(this.hud.element);
     this.notices.mount(container);
 
-    this.navPanel.mount(this.dock("map-dock map-dock--left"));
+    this.hover.mount(container);
+    this.find.mount(this.dock("map-dock mr2-find-dock"));
 
-    const bottomRight = this.dock("map-dock map-dock--bottom-right");
+    const bottomRight = this.dock("map-dock map-dock--bottom-right mr2-tools-dock");
     bottomRight.append(this.rangeControl.legend);
-    this.minimap.mount(bottomRight);
     const tools = document.createElement("div");
     tools.className = "mr2-toolrow";
     tools.append(this.rangeControl.button);
     this.zoomControl.mount(tools);
     bottomRight.append(tools);
-
-    container.append(this.readout);
     return this;
   }
 
   destroy(): void {
     this.hud.destroy();
-    this.navPanel.destroy();
+    this.find.destroy();
+    this.hover.destroy();
     this.cellPanel?.close();
     this.cellPanel = null;
     this.takeover?.destroy();
@@ -175,7 +187,6 @@ export class MapRoomUi {
     this.minimap.destroy();
     this.zoomControl.destroy();
     this.notices.destroy();
-    this.readout.remove();
     for (const dock of this.docks) dock.remove();
     this.docks.length = 0;
     this.container = null;
@@ -233,12 +244,18 @@ export class MapRoomUi {
     this.minimap.setZones(zones);
   }
 
+  /** Redraws the world map, while the Find panel that holds it is open. */
   drawMinimap(): void {
-    this.minimap.draw();
+    if (this.find.isOpen) this.minimap.draw();
   }
 
-  setReadout(text: string): void {
-    this.readout.textContent = text;
+  /** Names the cell under the pointer beside it (#176); see `HoverCard`. */
+  showHover(content: HoverCardContent, at: { left: number; right: number; middle: number }): void {
+    this.hover.show(content, at);
+  }
+
+  hideHover(): void {
+    this.hover.hide();
   }
 
   /* ── Cell inspector ─────────────────────────────────────────────────── */

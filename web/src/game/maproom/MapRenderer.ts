@@ -13,6 +13,7 @@ import { TextPool } from "./LabelLayer";
 import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
 import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
+import { PlayerAvatars } from "./playerAvatars";
 import { RangeOverlay } from "./RangeOverlay";
 import { TerrainRaster } from "./TerrainRaster";
 import { TribeAvatars } from "./tribeAvatars";
@@ -56,6 +57,8 @@ export class MapRenderer {
 
   private readonly raster = new TerrainRaster();
   private readonly world = new Container();
+  /** Every chunk's badges, markers and plates, over every chunk's ground. */
+  private readonly worldTop = new Container();
   private readonly highlight = new Graphics();
   /** The player's attack range (#177), over the cells and under the highlight. */
   private readonly range = new RangeOverlay();
@@ -69,6 +72,8 @@ export class MapRenderer {
    * arrives whenever it arrives, and the map has to look right in between.
    */
   private readonly avatars = new TribeAvatars();
+  /** The players' critters for their markers (#176), fetched the same way. */
+  private readonly players = new PlayerAvatars();
   private readonly chunks = new Map<number, MapChunk>();
   private readonly residency = new ChunkResidency({
     ttlMs: CHUNK_TTL_MS,
@@ -94,9 +99,16 @@ export class MapRenderer {
 
   constructor(private readonly store: ZoneStore) {
     this.world.interactiveChildren = false;
+    this.worldTop.interactiveChildren = false;
     // The raster stays under the chunks at every tier, so a chunk that has not
     // been built yet shows the world at one texel per cell instead of nothing.
-    this.root.addChild(this.raster.sprite, this.world, this.range.container, this.highlight);
+    this.root.addChild(
+      this.raster.sprite,
+      this.world,
+      this.range.container,
+      this.worldTop,
+      this.highlight,
+    );
   }
 
   /** How long the last chunk build took, in milliseconds. */
@@ -105,15 +117,23 @@ export class MapRenderer {
   }
 
   /**
-   * Fetches the tribe portraits and puts them on the map.
+   * Fetches the tribe portraits and the players' critters and puts them on
+   * the map.
    *
-   * Until this resolves the camps wear their tent glyphs, which is also where
-   * they stay if the art cannot be fetched. Chunks built in the meantime hold
-   * no portrait sprites, so they are marked dirty and rebuilt once; that is at
-   * most a screenful, and only ever on the first visit to the map.
+   * Until the portraits land the camps wear their tent glyphs, and the players'
+   * markers their plain ring, which is also where they stay if the art cannot
+   * be fetched. Chunks built in the meantime hold no picture sprites, so they
+   * are marked dirty and rebuilt as each set lands; that is at most a
+   * screenful, and only ever on the first visit to the map.
    */
-  async loadTribeAvatars(): Promise<void> {
-    if (!(await this.avatars.load())) return;
+  async loadPictures(): Promise<void> {
+    await Promise.all([
+      this.avatars.load().then((ok) => ok && this.rebuildAll()),
+      this.players.load().then((ok) => ok && this.rebuildAll()),
+    ]);
+  }
+
+  private rebuildAll(): void {
     for (const id of this.chunks.keys()) this.dirty.add(id);
   }
 
@@ -175,6 +195,7 @@ export class MapRenderer {
     if (tier === LodTier.RASTER) {
       const changed = this.lastTier !== tier;
       this.world.visible = false;
+      this.worldTop.visible = false;
       this.lastTier = tier;
       this.lastRange = null;
       this.visibleIds = [];
@@ -183,6 +204,7 @@ export class MapRenderer {
     }
 
     this.world.visible = true;
+    this.worldTop.visible = true;
     if (
       !this.backlog &&
       this.dirty.size === 0 &&
@@ -207,6 +229,7 @@ export class MapRenderer {
     this.dropAllChunks();
     this.pool.destroy();
     this.avatars.destroy();
+    this.players.destroy();
     this.atlas?.destroy();
     this.atlas = null;
     this.raster.destroy();
@@ -221,17 +244,13 @@ export class MapRenderer {
 
     for (const [id, chunk] of this.chunks) {
       if (visible.has(id)) continue;
-      chunk.container.visible = false;
+      chunk.visible = false;
       // Text is the scarce resource, so an off-screen chunk gives its share
       // back as soon as the on-screen ones might want it.
       if (this.pool.inUse > MAX_TEXT_OBJECTS) chunk.releaseText();
     }
 
-    const wanted = view.names
-      ? TextLevel.NAMES
-      : view.badges
-        ? TextLevel.BADGES
-        : TextLevel.NONE;
+    const wanted = view.badges ? TextLevel.BADGES : TextLevel.NONE;
 
     let budget = MAX_BUILDS_PER_FRAME;
     this.backlog = false;
@@ -248,9 +267,10 @@ export class MapRenderer {
         }
         budget -= 1;
         if (!chunk) {
-          chunk = new MapChunk(ref, atlas, this.avatars, this.pool);
+          chunk = new MapChunk(ref, atlas, this.avatars, this.players, this.pool);
           this.chunks.set(ref.id, chunk);
           this.world.addChild(chunk.container);
+          this.worldTop.addChild(chunk.top);
         }
         const started = performance.now();
         chunk.build(this.store, nowSeconds);
@@ -262,7 +282,7 @@ export class MapRenderer {
         chunk.ensureText(wanted);
       }
       chunk.applyView(view);
-      chunk.container.visible = true;
+      chunk.visible = true;
     }
 
     this.visibleIds = [...visible];

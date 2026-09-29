@@ -1,5 +1,6 @@
 import { WATER_MAX_HEIGHT } from "@/config";
 import { CellType, isPlayerCell, isWaterCell, type MapCell } from "@/api/types";
+import { avatarOf, type AvatarId } from "@/game/avatars";
 
 /**
  * What a cell looks like, as data.
@@ -29,20 +30,22 @@ export interface CellAppearance {
   /**
    * Which tribe's portrait a camp should wear. Empty for everything else.
    *
-   * Separate from `label` even though a camp's label is the same string: the
-   * label is text to draw, this is a key into the avatar set, and a player
-   * cell has a label but no tribe.
+   * A key into the tribe portraits, not text to draw: the map writes no names
+   * on camps (#176), only their level on a badge.
    */
   tribe: string;
-  /** Damage bar fraction, 0..1. Zero means no bar. */
-  damage: number;
-  /** Short badge text, usually the level. Empty means no badge. */
+  /** A player's critter (#175), drawn in the round marker. Null for everything else. */
+  avatar: AvatarId | null;
+  /** A camp's level on its badge. Empty means no badge. */
   badge: string;
-  /** Long label, the owner or tribe name. Empty means no label. */
-  label: string;
-  /** Gold ring: this cell belongs to the caller. */
+  /**
+   * A player's name plate (#176): "Bramblefoot  24", or "You" and "Outpost"
+   * on the player's own. Empty means no plate.
+   */
+  plate: string;
+  /** The cell belongs to the caller: a cyan ring and plate. */
   own: boolean;
-  /** Blue ring: damage protection or an active truce. */
+  /** Damage protection or an active truce. */
   shielded: boolean;
   /** The cell has not been fetched yet. */
   loading: boolean;
@@ -54,33 +57,46 @@ export interface CellAppearance {
  * The cut-offs are the server's, not a rounding of them: height <= 99 is water
  * and can never be occupied, 100..109 is sand, 110..169 is grass in four
  * shades, 170 and above is rock.
+ *
+ * The shades are the toned-down ground of the approved "one calm look"
+ * (#176, R-MR2-Map-A): quieter water, sand and grass, so the camps and the
+ * players carry the colour.
  */
 const TERRAIN_BANDS: { maxHeight: number; colour: number }[] = [
-  { maxHeight: 79, colour: 0x123253 },
-  { maxHeight: 89, colour: 0x17416b },
-  { maxHeight: WATER_MAX_HEIGHT, colour: 0x1d5183 },
-  { maxHeight: 104, colour: 0xd9c489 },
-  { maxHeight: 109, colour: 0xc9b070 },
-  { maxHeight: 119, colour: 0x5c8f47 },
-  { maxHeight: 139, colour: 0x4b7b3c },
-  { maxHeight: 159, colour: 0x3f6833 },
-  { maxHeight: 169, colour: 0x37592c },
-  { maxHeight: 174, colour: 0x7a776e },
-  { maxHeight: Number.POSITIVE_INFINITY, colour: 0x6e6b63 },
+  { maxHeight: 79, colour: 0x1a3048 },
+  { maxHeight: 89, colour: 0x1d3a57 },
+  { maxHeight: WATER_MAX_HEIGHT, colour: 0x234565 },
+  { maxHeight: 104, colour: 0xb9ad86 },
+  { maxHeight: 109, colour: 0xaa9d75 },
+  { maxHeight: 119, colour: 0x557a48 },
+  { maxHeight: 139, colour: 0x4b6d41 },
+  { maxHeight: 159, colour: 0x43623a },
+  { maxHeight: 169, colour: 0x3c5835 },
+  { maxHeight: 174, colour: 0x6d6b64 },
+  { maxHeight: Number.POSITIVE_INFINITY, colour: 0x64625c },
 ];
 
 /** Fill for a cell whose zone has not arrived yet. */
 export const LOADING_COLOUR = 0x272c38;
 
-/** Ring colours, kept in step with the CSS tokens in ui/styles/tokens.css. */
-export const OWN_COLOUR = 0xf0a12e;
-export const SHIELD_COLOUR = 0x4f9fe0;
+/**
+ * Marker colours, kept in step with the CSS tokens in ui/styles/tokens.css.
+ * The player's own cells wear the accent (`--colour-accent`), as the range's
+ * line does (#177): "You" is cyan.
+ */
+export const RANGE_COLOUR = 0x3dd6f5;
+export const OWN_COLOUR = RANGE_COLOUR;
+export const SHIELD_COLOUR = 0x9cb9ff;
 export const DAMAGE_COLOUR = 0xe05252;
 export const SELECT_COLOUR = 0xffffff;
-export const HOVER_COLOUR = 0xf0a12e;
+export const HOVER_COLOUR = 0xffffff;
 export const GRID_LINE_COLOUR = 0x0d1017;
-/** The attack range's line (#177): the accent, `--colour-accent`. */
-export const RANGE_COLOUR = 0x3dd6f5;
+/** Another player's marker ring and a plate's text, `--colour-text`. */
+export const PLAYER_RING_COLOUR = 0xedf1f5;
+/** The fill behind a marker, a badge and a plate: the panels' dark glass. */
+export const MARKER_FILL_COLOUR = 0x0c1016;
+/** Text on the player's own cyan plate, `--colour-accent-text`. */
+export const OWN_PLATE_TEXT_COLOUR = 0x04212a;
 
 /**
  * The four tribes, in the server's order.
@@ -113,9 +129,9 @@ export const loadingAppearance = (): CellAppearance => ({
   marker: CellMarker.NONE,
   markerColour: 0,
   tribe: "",
-  damage: 0,
+  avatar: null,
   badge: "",
-  label: "",
+  plate: "",
   own: false,
   shielded: false,
   loading: true,
@@ -128,9 +144,9 @@ export const appearanceOf = (cell: MapCell | undefined, nowSeconds: number): Cel
   const base = {
     terrain: terrainColour(cell.i),
     tribe: "",
-    damage: 0,
+    avatar: null,
     badge: "",
-    label: "",
+    plate: "",
     own: false,
     shielded: false,
     loading: false,
@@ -142,14 +158,15 @@ export const appearanceOf = (cell: MapCell | undefined, nowSeconds: number): Cel
 
   if (isPlayerCell(cell)) {
     const truceActive = cell.t !== undefined && cell.t > nowSeconds;
+    const outpost = cell.b === CellType.OUTPOST;
+    const own = cell.mine === 1;
     return {
       ...base,
-      marker: cell.b === CellType.OUTPOST ? CellMarker.OUTPOST : CellMarker.YARD,
-      markerColour: cell.b === CellType.OUTPOST ? OUTPOST_COLOUR : PLAYER_COLOUR,
-      damage: clamp01(cell.dm / 100),
-      badge: String(cell.l),
-      label: cell.n,
-      own: cell.mine === 1,
+      marker: outpost ? CellMarker.OUTPOST : CellMarker.YARD,
+      markerColour: outpost ? OUTPOST_COLOUR : PLAYER_COLOUR,
+      avatar: avatarOf(cell.pic_square, cell.uid),
+      plate: own ? (outpost ? "Outpost" : "You") : `${plateName(cell.n)}  ${cell.l}`,
+      own,
       shielded: cell.p === 1 || truceActive,
     };
   }
@@ -160,9 +177,7 @@ export const appearanceOf = (cell: MapCell | undefined, nowSeconds: number): Cel
     marker: cell.d === 1 ? CellMarker.CAMP_DESTROYED : CellMarker.CAMP,
     markerColour: TRIBE_COLOURS[cell.n] ?? TRIBE_FALLBACK,
     tribe: cell.n,
-    damage: clamp01(cell.dm / 100),
     badge: String(cell.l),
-    label: cell.n,
   };
 };
 
@@ -184,4 +199,12 @@ export const rasterColour = (cell: MapCell | undefined): number => {
   return cell.d === 1 ? 0x6b2b2b : terrainColour(cell.i);
 };
 
-const clamp01 = (value: number): number => Math.min(Math.max(value, 0), 1);
+/** Names longer than this are cut on a plate, because no plate would fit them. */
+const MAX_PLATE_NAME = 12;
+
+/**
+ * A name as a plate shows it: cut short with three dots, which the map's
+ * ASCII bitmap font can draw (it has no ellipsis).
+ */
+export const plateName = (name: string): string =>
+  name.length > MAX_PLATE_NAME ? `${name.slice(0, MAX_PLATE_NAME)}...` : name;

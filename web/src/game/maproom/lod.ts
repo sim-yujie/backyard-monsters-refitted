@@ -19,7 +19,10 @@ export const LodTier = {
   SHAPES: 1,
   /** Plus level badges. */
   BADGES: 2,
-  /** Plus owner and tribe names. */
+  /**
+   * Once owner and tribe names; since the calm map (#176) nothing is added
+   * here, and the tier only marks the closest zooms.
+   */
   LABELS: 3,
 } as const;
 export type LodTier = (typeof LodTier)[keyof typeof LodTier];
@@ -59,8 +62,8 @@ export const viewFor = (tier: LodTier, zoom: number, atlas: MapAtlas): ChunkView
   // portrait is finally big enough to tell one creature from another. Below
   // it the tent glyph reads better than a 20 pixel monster would.
   avatars: tier >= LodTier.BADGES,
+  // Camps' level badges and players' name plates (#176).
   badges: tier >= LodTier.BADGES,
-  names: tier >= LodTier.LABELS,
 });
 
 export const sameView = (a: ChunkView, b: ChunkView | null): boolean =>
@@ -68,5 +71,4 @@ export const sameView = (a: ChunkView, b: ChunkView | null): boolean =>
   a.outline === b.outline &&
   a.details === b.details &&
   a.avatars === b.avatars &&
-  a.badges === b.badges &&
-  a.names === b.names;
+  a.badges === b.badges;
