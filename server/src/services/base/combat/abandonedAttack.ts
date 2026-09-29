@@ -96,6 +96,8 @@ export interface AbandonedOutcome {
   flung: Record<string, number>;
   /** `attackerchampion`, or undefined when the attacker has none. */
   attackerchampion: ChampionData[] | undefined;
+  /** The champion types the log flung, whose health the battle decided. */
+  championsFlung: number[];
   /** `attackersiege`, or undefined when the attacker has none. */
   attackersiege: JsonObject | undefined;
   attackreport: string;
@@ -231,6 +233,7 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
     defenderDelta: whole(state.defenderLoss, -1),
     flung: flungOf(log.events),
     attackerchampion,
+    championsFlung: [...championsFlung].sort((one, other) => one - other),
     attackersiege: siegeAfter(attacker.siege, log.events),
     // In the web client's words (the shared `report.ts`), from this replay.
     attackreport: attackReport(log.events, {

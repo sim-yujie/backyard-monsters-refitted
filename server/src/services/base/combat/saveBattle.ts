@@ -1,8 +1,10 @@
 import type { Context } from "koa";
+import type { CombatValidationMode } from "../../../config/CombatConfig.js";
 import { User } from "../../../database/models/user.model.js";
-import { attackResultPendingErr } from "../../../errors/errors.js";
+import { attackReplayRejectedErr, attackResultPendingErr } from "../../../errors/errors.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
 import { logger } from "../../../utils/logger.js";
+import { logReport } from "../reportManager.js";
 import type { AbandonedInput, AbandonedOutcome } from "./abandonedAttack.js";
 import { battleMismatches, type ClientBattle } from "./battle.js";
 import { ReplayTimeoutError, SAVE_REPLAY_DEADLINE_MS, replayAbandonedInWorker } from "./replayRunner.js";
@@ -55,24 +57,41 @@ export const replayBattleForSave = async (
 };
 
 /**
- * Where the client's save and the server's battle disagree, recorded and
- * never written (issue #23, C3). An honest client fought the same battle with
- * the same engine, so any line here is a tampered save or a divergence to fix.
+ * Where the client's save and the server's battle disagree (issue #23, C3),
+ * under `COMBAT_SAVE_VALIDATION` (C7). The client's figures are never written
+ * whatever the mode; the mode decides what a disagreement costs:
+ *
+ * - `off`    — nothing.
+ * - `log`    — one `attack-replay-mismatch` warning and one `Report` row.
+ * - `reject` — the same, then the save is refused with `attackReplayRejectedErr`.
+ *
+ * An honest client fought the same battle with the same engine, so it never
+ * disagrees (`battle.test.ts`); any line here is a tampered save or a
+ * divergence to fix. Called before any save key is applied, so a refusal
+ * leaves every row as it was and the `Report` row's flush carries nothing but
+ * itself (as `recordVerdict.ts` relies on for the economy audit).
  *
  * @param storedBuildingdata - The defender's `buildingdata` before the save.
+ * @throws {ClientSafeError} `attackReplayRejectedErr` in `reject` mode.
  */
-export const logBattleMismatches = (
+export const recordBattleMismatches = async (
   ctx: Context,
   user: User,
   base: SavedBase,
   client: ClientBattle,
   battle: AbandonedOutcome,
-  storedBuildingdata: JsonObject | null | undefined
-): void => {
+  storedBuildingdata: JsonObject | null | undefined,
+  mode: CombatValidationMode
+): Promise<void> => {
+  if (mode === "off") return;
   const fields = battleMismatches(client, battle, storedBuildingdata);
   if (fields.length === 0) return;
-  logger.warn("Attack save for {username} on base {baseid} disagrees with the replay on {fields}", {
+  const rejected = mode === "reject";
+
+  logger.warn("Attack save {outcome} for {username} on base {baseid}: disagrees with the replay on {fields}", {
     event: "attack-replay-mismatch",
+    outcome: rejected ? "rejected" : "flagged",
+    mode,
     userid: user.userid,
     username: user.username,
     baseid: base.baseid,
@@ -82,4 +101,21 @@ export const logBattleMismatches = (
     derived: { damage: battle.damage, destroyed: battle.destroyed, tick: battle.tick },
     ip: ctx.ip,
   });
+
+  // The row can never be why a save fails: a database problem here is logged
+  // and swallowed (as `recordVerdict.ts` does).
+  try {
+    await logReport(
+      user,
+      `Attack save on base ${base.baseid} ${rejected ? "rejected" : "flagged"} (${mode}): ` +
+        `disagrees with the replay on ${fields.join(", ")}`
+    );
+  } catch (err) {
+    logger.error("Could not write the attack replay report row for userid {userid}: {error}", {
+      userid: user.userid,
+      error: err,
+    });
+  }
+
+  if (rejected) throw attackReplayRejectedErr(fields);
 };

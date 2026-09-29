@@ -458,11 +458,17 @@ report and the server's are the same text. Its "Left the attack" line is there w
 carries `left: "1"` (the web client sends it, on the final save and its keepalive copy, when the
 player left the attack screen; a client's word that changes nothing but that line); the
 finaliser's report always has it. The save's own copies
-of these are never written: where they differ from the replay they are logged as
-`attack-replay-mismatch` with the fields that differ (`damage`, `destroyed`,
-`buildinghealthdata`, `firedTraps`, `attackloot`), in every `COMBAT_SAVE_VALIDATION` mode. An
-honest web client fought the same battle with the same engine, so its save writes exactly the
-figures it showed (`battle.test.ts` checks this on the golden replay fixtures). The takeover grant
+of these are never written. Where they differ from the replay (by field: `damage`, `destroyed`,
+`buildinghealthdata`, `firedTraps`, `attackloot`, and the attacker's own row, `attackerchampion`
+for a flung champion's health and `attackersiege`), `COMBAT_SAVE_VALIDATION` decides what it
+costs (issue #23, C7, `services/base/combat/saveBattle.ts`): `off` nothing; `log` (the default)
+one `attack-replay-mismatch` warning and one `Report` row; `reject` the same, then the save is
+refused with `attackReplayRejectedErr` (409, `reason: "replayMismatch"`, `fields`) before anything
+is written, so a Map Room 2 attack is left to the finaliser, which lands the server's own result
+from the checkpoint, and a Map Room 1 tribe attack lands nothing. The defender's `monsters` is not
+compared (C2 ignores it). An honest web client fought the same battle with the same engine, so its
+save writes exactly the figures it showed and is never flagged (`battle.test.ts` checks both on
+the golden replay fixtures, at every point a client can stop, main yards and tribes). The takeover grant
 and damage protection read the replay's damage. A save that does not end the attack writes none
 of these keys, and a save with no usable log writes no battle at all. A Map Room 3 attack has no
 roster to replay and still writes the client's figures.

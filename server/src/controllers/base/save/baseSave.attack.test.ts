@@ -58,6 +58,16 @@ mock.module("../../../utils/logger.js", () => ({
   logger: { warn: mock(() => {}), error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
 }));
 
+// The audit trail (issue #23, C7), kept here rather than on the stand-in rows.
+const reports: string[] = [];
+mock.module("../../../services/base/reportManager.js", () => ({
+  logReport: async (_user: unknown, message: string) => {
+    reports.push(message);
+  },
+  logAttackViolation: async () => {},
+  logBanReport: async () => {},
+}));
+
 mock.module("../../../scripts/anticheat/anticheat.js", () => ({
   initAnticheat: async () => {},
   validateSave: async () => {},
@@ -89,6 +99,12 @@ mock.module("../../../services/base/combat/replayRunner.js", () => ({
 }));
 
 const { baseSave } = await import("./baseSave.js");
+const { combatConfig } = await import("../../../config/CombatConfig.js");
+/** The mode the suite runs in, put back after a test changes it (C7). */
+const MODE = combatConfig.mode;
+const setMode = (mode: typeof MODE) => {
+  (combatConfig as { mode: typeof MODE }).mode = mode;
+};
 const { attackLootOf } = await import("../../../services/base/combat/attackLoot.js");
 const { replayAbandonedAttack } = await import("../../../services/base/combat/abandonedAttack.js");
 const { battleReplayInput, battleTick } = await import("../../../services/base/combat/battle.js");
@@ -119,10 +135,13 @@ const replayCap = (flinglog: unknown = LOG) =>
 // left delegating to the real runner.
 afterEach(() => {
   replayTimesOut = false;
+  setMode(MODE);
 });
 
 beforeEach(() => {
   replayTimesOut = false;
+  setMode("log");
+  reports.length = 0;
   store.clear();
   defender = {
     basesaveid: 9,
@@ -492,6 +511,92 @@ describe("the battle is the server's (#23, C3)", () => {
     expect(defender.damage).toBe(Math.trunc(battle.damage));
     expect(defender.buildinghealthdata).toEqual(battle.buildinghealthdata);
     expect(attackerSave.resources.r1).toBe(100 + battle.attackloot.r1);
+  });
+
+  /** A save that claims the camp was wrecked and a fortune taken. */
+  const crafted = () =>
+    ctxFor({
+      over: "1",
+      tick: String(TICK),
+      flinglog: JSON.stringify(LOG),
+      damage: "100",
+      destroyed: "1",
+      buildinghealthdata: JSON.stringify({ "0": 0, "1": 0, "3": 0 }),
+      attackloot: JSON.stringify(CLAIM),
+    });
+
+  test("log: a crafted save is flagged with one Report row, and the server's figures land (C7)", async () => {
+    const battle = serverBattle();
+    await baseSave(crafted(), async () => {});
+
+    // The camp does fall (99%), so the claimed `destroyed` is the battle's own.
+    expect(reports).toEqual([
+      "Attack save on base 1234 flagged (log): disagrees with the replay on " +
+        "damage, buildinghealthdata, attackloot",
+    ]);
+    expect(defender.damage).toBe(Math.trunc(battle.damage));
+  });
+
+  test("reject: a crafted save is refused before anything is written, the attack left to the finaliser (C7)", async () => {
+    setMode("reject");
+    const caught = await baseSave(crafted(), async () => {}).catch(
+      (err: unknown) => err as { data?: { reason?: string; fields?: string[] } }
+    );
+
+    expect(caught?.data?.reason).toBe("replayMismatch");
+    expect(caught?.data?.fields).toEqual(["damage", "buildinghealthdata", "attackloot"]);
+    expect(reports).toHaveLength(1);
+    expect(defender.damage).toBe(0);
+    expect(defender.buildinghealthdata).toEqual({});
+    expect(defender.resources.r1).toBe(5000);
+    expect(attackerSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
+    // The row still carries the attack, for the finaliser to land from its checkpoint.
+    expect(defender.attackid).toBe(ATTACK_ID);
+  });
+
+  test("reject: an honest save lands as ever (C7)", async () => {
+    setMode("reject");
+    const battle = serverBattle();
+
+    await baseSave(
+      ctxFor({
+        over: "1",
+        tick: String(TICK),
+        flinglog: JSON.stringify(LOG),
+        damage: String(battle.damage),
+        ...(battle.destroyed !== undefined && { destroyed: String(battle.destroyed) }),
+        buildinghealthdata: JSON.stringify(battle.buildinghealthdata),
+        buildingdata: JSON.stringify(WITH_TRAP),
+        attackloot: JSON.stringify(battle.attackloot),
+      }),
+      async () => {}
+    );
+
+    expect(reports).toEqual([]);
+    expect(defender.damage).toBe(Math.trunc(battle.damage));
+    expect(attackerSave.resources.r1).toBe(100 + battle.attackloot.r1);
+  });
+
+  test("reject: a siege stock the log does not explain is refused too (C7)", async () => {
+    setMode("reject");
+    attackerSave.siege = { jars: { quantity: 2 } };
+    const battle = serverBattle();
+    const caught = await baseSave(
+      ctxFor({
+        over: "1",
+        tick: String(TICK),
+        flinglog: JSON.stringify(LOG),
+        damage: String(battle.damage),
+        ...(battle.destroyed !== undefined && { destroyed: String(battle.destroyed) }),
+        buildinghealthdata: JSON.stringify(battle.buildinghealthdata),
+        attackloot: JSON.stringify(battle.attackloot),
+        attackersiege: JSON.stringify({ jars: { quantity: 99 } }),
+      }),
+      async () => {}
+    ).catch((err: unknown) => err as { data?: { fields?: string[] } });
+
+    expect(caught?.data?.fields).toEqual(["attackersiege"]);
+    expect(attackerSave.siege).toEqual({ jars: { quantity: 2 } });
   });
 
   test("a save that says the player left gets the report's line for it, and nothing else changes", async () => {

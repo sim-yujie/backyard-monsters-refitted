@@ -67,7 +67,7 @@ import {
 } from "../../../services/base/combat/attackLoot.js";
 import { battleReplayInput, battleTick, foughtLoot } from "../../../services/base/combat/battle.js";
 import { buildingDataWithout } from "../../../services/base/combat/abandonedAttack.js";
-import { logBattleMismatches, replayBattleForSave } from "../../../services/base/combat/saveBattle.js";
+import { recordBattleMismatches, replayBattleForSave } from "../../../services/base/combat/saveBattle.js";
 import { isDeclareWarRunning } from "../../../services/alliance/powerups.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import { championsAfterAttack, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
@@ -234,8 +234,10 @@ const saveBase = async (
   const battle = battleInput
     ? await replayBattleForSave(ctx, user, baseSave, battleInput, "the finaliser will land it")
     : null;
+  // Where the save disagrees with it: logged, or refused under
+  // `COMBAT_SAVE_VALIDATION=reject` before anything is written (C7).
   if (battle) {
-    logBattleMismatches(
+    await recordBattleMismatches(
       ctx,
       user,
       baseSave,
@@ -245,9 +247,12 @@ const saveBase = async (
         buildinghealthdata: saveData.buildinghealthdata,
         buildingdata: saveData.buildingdata,
         attackloot: saveData.attackloot,
+        attackerchampion: saveData.attackerchampion,
+        attackersiege: saveData.attackersiege,
       },
       battle,
-      baseSave.buildingdata
+      baseSave.buildingdata,
+      combatConfig.mode
     );
   }
 

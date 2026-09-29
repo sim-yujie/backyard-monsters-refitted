@@ -49,6 +49,16 @@ mock.module("../../../utils/logger.js", () => ({
   logger: { warn, error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
 }));
 
+// The audit trail (issue #23, C7), kept here rather than on the stand-in rows.
+const reports: string[] = [];
+mock.module("../../base/reportManager.js", () => ({
+  logReport: async (_user: unknown, message: string) => {
+    reports.push(message);
+  },
+  logAttackViolation: async () => {},
+  logBanReport: async () => {},
+}));
+
 // The real replay runner, unless a test asks for a replay that times out
 // (issue #23, C5). The query makes the real module one no mock replaces.
 const REAL_RUNNER = "../../base/combat/replayRunner.ts?real";
@@ -63,6 +73,12 @@ mock.module("../../base/combat/replayRunner.js", () => ({
 }));
 
 const { baseSave } = await import("../../../controllers/base/save/baseSave.js");
+const { combatConfig } = await import("../../../config/CombatConfig.js");
+/** The mode the suite runs in, put back after a test changes it (C7). */
+const MODE = combatConfig.mode;
+const setMode = (mode: typeof MODE) => {
+  (combatConfig as { mode: typeof MODE }).mode = mode;
+};
 const { mr1TribeSessionKey } = await import("./mr1TribeSession.js");
 const { serialiseAttackSession } = await import("../../base/attackSession.js");
 const { mr1TribePool } = await import("./mr1TribeRules.js");
@@ -140,10 +156,13 @@ const loot = (amounts: Record<string, number>) => JSON.stringify(amounts);
 // left delegating to the real runner.
 afterEach(() => {
   replayTimesOut = false;
+  setMode(MODE);
 });
 
 beforeEach(() => {
   replayTimesOut = false;
+  setMode("log");
+  reports.length = 0;
   warn.mockClear();
   store.clear();
   persisted.length = 0;
@@ -487,6 +506,64 @@ describe("Map Room 1 tribe save: the battle is the server's (#23, C4)", () => {
     // The lock is free again, so the same save sent again lands.
     replayTimesOut = false;
     expect(await run(ctxFor(body))).toBeNull();
+    expect(maproom.tribedata[0]!.destroyed).toBe(1);
+  });
+});
+
+describe("Map Room 1 tribe save under COMBAT_SAVE_VALIDATION (#23, C7)", () => {
+  const craftedBody = {
+    over: "1",
+    attackid: String(ATTACK_ID),
+    tick: String(SCRATCH_TICK),
+    flinglog: JSON.stringify(SCRATCH),
+    damage: "100",
+    destroyed: "1",
+    attackloot: loot({ r1: 20_000, r2: 0, r3: 0, r4: 0 }),
+  };
+
+  test("log: a crafted save is flagged with one Report row, and the server's figures land", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    expect(await run(ctxFor(craftedBody))).toBeNull();
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toContain("flagged (log)");
+    expect(maproom.tribedata[0]!.destroyed).toBe(0);
+  });
+
+  test("reject: a crafted save is refused and lands nothing", async () => {
+    setMode("reject");
+    startSession(ATTACKER, now(), ARMY);
+    userSave.monsters = { housed: { ...ARMY } };
+
+    const caught = await run(ctxFor(craftedBody));
+    expect(caught?.data?.reason).toBe("replayMismatch");
+    expect(reports).toHaveLength(1);
+    expect(userSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual(ARMY);
+    expect(maproom.tribedata[0]!.damage).toBeUndefined();
+    expect(persisted).toEqual([]);
+  });
+
+  test("reject: the web client's honest final save lands", async () => {
+    setMode("reject");
+    startSession(ATTACKER, now(), ARMY);
+    const battle = serverBattle(WRECK, WRECK_TICK);
+
+    const caught = await run(
+      ctxFor({
+        over: "1",
+        attackid: String(ATTACK_ID),
+        tick: String(WRECK_TICK),
+        flinglog: JSON.stringify(WRECK),
+        buildingdata: JSON.stringify(MR1_TRIBES_MAP.get(TRIBE)!.buildingdata),
+        buildinghealthdata: JSON.stringify(battle.buildinghealthdata),
+        damage: String(battle.damage),
+        destroyed: "1",
+        attackloot: loot(battle.attackloot),
+      })
+    );
+
+    expect(caught).toBeNull();
+    expect(reports).toEqual([]);
     expect(maproom.tribedata[0]!.destroyed).toBe(1);
   });
 });

@@ -135,6 +135,10 @@ export interface ClientBattle {
   /** The traps the save still lists: every trap it leaves out fired. */
   readonly buildingdata: unknown;
   readonly attackloot: unknown;
+  /** The attacker's champions after the battle (issue #23, C1). */
+  readonly attackerchampion?: unknown;
+  /** The attacker's siege stock after the battle (issue #23, C1). */
+  readonly attackersiege?: unknown;
 }
 
 const TRAP_TYPES: ReadonlySet<number> = new Set([24, 117]);
@@ -152,6 +156,39 @@ const trapsLeftOut = (stored: JsonObject | null | undefined, sent: unknown): num
   return fired.sort((one, other) => one - other);
 };
 
+/** The health the save gives each champion type the battle flung. */
+const championHpOf = (sent: unknown, type: number): number | undefined => {
+  if (!Array.isArray(sent)) return undefined;
+  const entry = sent.find((champion) => Number((champion as { t?: unknown } | null)?.t) === type);
+  const hp = Number((entry as { hp?: unknown } | undefined)?.hp);
+  return Number.isFinite(hp) ? Math.floor(hp) : undefined;
+};
+
+/** Each flung champion's health, the save's against the battle's. */
+const sameChampions = (sent: unknown, server: AbandonedOutcome): boolean =>
+  server.championsFlung.every((type) => {
+    const derived = server.attackerchampion?.find((champion) => champion.t === type)?.hp;
+    return derived === undefined || championHpOf(sent, type) === Math.floor(derived);
+  });
+
+/** A siege stock as quantities by weapon, the only part the battle changes. */
+const siegeQuantities = (stock: unknown): Record<string, number> => {
+  const out: Record<string, number> = {};
+  if (!stock || typeof stock !== "object") return out;
+  for (const [weapon, entry] of Object.entries(stock as Record<string, unknown>)) {
+    const quantity = Number((entry as { quantity?: unknown } | null)?.quantity);
+    if (Number.isFinite(quantity)) out[weapon] = quantity;
+  }
+  return out;
+};
+
+const sameSiege = (sent: unknown, derived: unknown): boolean => {
+  const one = siegeQuantities(sent);
+  const other = siegeQuantities(derived);
+  const weapons = new Set([...Object.keys(one), ...Object.keys(other)]);
+  return [...weapons].every((weapon) => one[weapon] === other[weapon]);
+};
+
 const sameHealth = (sent: unknown, derived: Record<string, number>): boolean => {
   if (!sent || typeof sent !== "object") return Object.keys(derived).length === 0;
   const reported = sent as Record<string, unknown>;
@@ -164,9 +201,11 @@ const sameHealth = (sent: unknown, derived: Record<string, number>): boolean => 
 
 /**
  * Where the client's save and the server's battle part company, by field:
- * `damage`, `destroyed`, `buildinghealthdata`, `firedTraps`, `attackloot`.
- * Empty for an honest save, which fought the same battle with the same engine.
- * Recorded, never written.
+ * `damage`, `destroyed`, `buildinghealthdata`, `firedTraps`, `attackloot`, and
+ * the attacker's own row, `attackerchampion` (a flung champion's health) and
+ * `attackersiege` (issue #23, C7). Empty for an honest save, which fought the
+ * same battle with the same engine. Recorded, never written; refused under
+ * `COMBAT_SAVE_VALIDATION=reject` (`saveBattle.ts`).
  *
  * @param client - What the save sent.
  * @param server - The replay's outcome.
@@ -189,5 +228,7 @@ export const battleMismatches = (
   if ((["r1", "r2", "r3", "r4"] as const).some((key) => sent[key] !== server.attackloot[key])) {
     fields.push("attackloot");
   }
+  if (!sameChampions(client.attackerchampion, server)) fields.push("attackerchampion");
+  if (!sameSiege(client.attackersiege, server.attackersiege)) fields.push("attackersiege");
   return fields;
 };

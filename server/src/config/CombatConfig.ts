@@ -11,13 +11,14 @@ import {
  * `ECONOMY_SAVE_VALIDATION` and falls back to `log`
  * ({@link DEFAULT_COMBAT_VALIDATION_MODE}), because its rollout starts the way
  * the economy audit's did: read what honest play produces before refusing
- * anything. Only the bomb charge reads it today (issue #90,
- * `services/base/combat/bombSpend.ts`); the rest of #23's combat audit will
- * read the same switch when it lands.
+ * anything. It governs two checks: a bomb Flash would not have fired (issue
+ * #90, `services/base/combat/bombSpend.ts`), and a save the server's replay of
+ * the battle does not bear out (issue #23, C7, `services/base/combat/saveBattle.ts`).
+ * Bombs are charged and the replay's figures written whatever the mode.
  *
- * - `off`    — bombs are charged; nothing is checked or logged.
- * - `log`    — bombs are charged; a bomb Flash would not have fired is logged.
- * - `reject` — such a bomb refuses the whole save before anything is applied.
+ * - `off`    — nothing is checked or logged.
+ * - `log`    — each is logged; a replay mismatch also writes a `Report` row.
+ * - `reject` — the same, and either refuses the whole save before anything is applied.
  */
 
 /** off: charge only. log: charge and record. reject: refuse. */

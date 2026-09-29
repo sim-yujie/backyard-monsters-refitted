@@ -6,6 +6,7 @@ import {
   RETREAT_GRACE_SECONDS,
   attackReport,
   buildEngineYard,
+  championByType,
   createBattle,
   damagePercent,
   derivedDestroyed,
@@ -34,6 +35,8 @@ const SANDBOX = fileURLToPath(new URL("../../../../../web/test/fixtures/baseload
 const sandbox = JSON.parse(readFileSync(SANDBOX, "utf8"));
 
 const REPLAY_TIMEOUT_MS = 60_000;
+/** Every stopping point of every fixture, each replayed from the start on both sides. */
+const SWEEP_TIMEOUT_MS = 300_000;
 
 interface Fixture {
   name: string;
@@ -76,7 +79,7 @@ const attackerOf = (one: Fixture) => ({
   champion: [{ t: 5, l: 5, hp: 62000 }],
   catapult: 5,
   buildingdata: {},
-  siege: null,
+  siege: { jars: { quantity: 2 }, decoy: { quantity: 1 } },
 });
 
 const sessionOf = (log: FlingLog): AttackSession => {
@@ -132,7 +135,80 @@ const honestClient = (one: Fixture, end: number) => {
     firedTraps: [...state.firedTraps],
     attackloot: wholeAmounts(state.loot),
     defenderLoss: wholeAmounts(state.defenderLoss),
+    ...attackerRowAfter(one, logAt(one.log, end).events, state.championsHp),
   };
+};
+
+/**
+ * The attacker's own row as the web save sends it (issue #23, C1, C7):
+ * `attackerChampionsAfter` over the champions the log flung, and
+ * `attackerSiegeAfter`, one weapon less per siege event.
+ */
+const attackerRowAfter = (
+  one: Fixture,
+  events: FlingLog["events"],
+  championsHp: Readonly<Record<string, number>>
+) => {
+  const { champion, siege } = attackerOf(one);
+  const flung = new Set<number>();
+  for (const event of events) if (event.kind === "fling" && event.champion) flung.add(event.champion.t);
+  const attackerchampion = champion.map((entry) => {
+    if (!flung.has(entry.t)) return { ...entry };
+    const id = championByType(entry.t);
+    const hp = id === undefined ? undefined : championsHp[id];
+    return { ...entry, hp: Math.max(0, Math.floor(hp ?? 0)) };
+  });
+  const attackersiege: Record<string, { quantity: number }> = structuredClone(siege);
+  for (const event of events) {
+    const entry = event.kind === "siege" ? attackersiege[event.weapon] : undefined;
+    if (entry) entry.quantity = Math.max(0, entry.quantity - 1);
+  }
+  return { attackerchampion, attackersiege };
+};
+
+/**
+ * Where an honest client can stop (issue #23, C7): at each event and just
+ * after it, part way through, and at the attack's longest end.
+ */
+const stopsOf = (one: Fixture): number[] => {
+  const first = one.log.events[0]?.t ?? 0;
+  const stops = new Set<number>([first + 1600, first + 8000, FULL]);
+  for (const event of one.log.events) {
+    stops.add(event.t);
+    stops.add(event.t + 1);
+  }
+  return [...stops].filter((tick) => tick <= FULL).sort((one, other) => one - other);
+};
+
+/** What `baseSave.ts` hands `battleMismatches` for this honest save. */
+const honestSave = (one: Fixture, client: ReturnType<typeof honestClient>) => {
+  const stored = defenderOf(one).buildingdata ?? {};
+  return {
+    stored,
+    save: {
+      damage: client.damage,
+      destroyed: client.destroyed,
+      buildinghealthdata: client.health,
+      // `buildingDataAfter`: every building but the traps that fired.
+      buildingdata: Object.fromEntries(
+        Object.entries(stored).filter(([key, building]) => {
+          const id = Math.floor(Number((building as { id?: unknown }).id ?? key));
+          return !client.firedTraps.includes(id);
+        })
+      ),
+      attackloot: client.attackloot,
+      attackerchampion: client.attackerchampion,
+      attackersiege: client.attackersiege,
+    },
+  };
+};
+
+/** The golden fixtures, and one of them with a siege weapon used, so the stock moves. */
+const withSiege = (): Fixture => {
+  const one = fixtures.find((fixture) => fixture.name === "pokey-rush")!;
+  const first = one.log.events[0]!;
+  const events = [...one.log.events, { kind: "siege" as const, t: first.t + 200, x: 0, y: 0, weapon: "jars" }];
+  return { ...one, name: "pokey-rush with a jar", log: { ...one.log, events } as FlingLog };
 };
 
 /** The server's battle for the same save (`baseSave.ts`). */
@@ -151,13 +227,12 @@ const serverBattle = (one: Fixture, log: FlingLog, tick: unknown) =>
 
 const FULL = ticks(ATTACK_COUNTDOWN_SECONDS + RETREAT_GRACE_SECONDS);
 
-describe("an honest save writes what its client showed (#23, C3)", () => {
-  for (const one of fixtures) {
+describe("an honest save writes what its client showed, and never trips the check (#23, C3, C7)", () => {
+  for (const one of [...fixtures, withSiege()]) {
     test(
-      `${one.name}: health, damage, destroyed, traps and loot, wherever the client stops`,
+      `${one.name}: health, damage, destroyed, traps, loot and the attacker's row, wherever the client stops`,
       () => {
-        const first = one.log.events[0]?.t ?? 0;
-        for (const end of [first + 1600, first + 8000, FULL]) {
+        for (const end of stopsOf(one)) {
           const client = honestClient(one, end);
           const log = logAt(one.log, end);
           const server = serverBattle(one, log, client.tick);
@@ -173,30 +248,12 @@ describe("an honest save writes what its client showed (#23, C3)", () => {
             client.defenderLoss
           );
 
-          // Nothing for the save to be flagged over, either.
-          const stored = defenderOf(one).buildingdata ?? {};
-          const sentBuildings = Object.fromEntries(
-            Object.entries(stored).filter(([key, building]) => {
-              const id = Math.floor(Number((building as { id?: unknown }).id ?? key));
-              return !client.firedTraps.includes(id);
-            })
-          );
-          expect(
-            battleMismatches(
-              {
-                damage: client.damage,
-                destroyed: client.destroyed,
-                buildinghealthdata: client.health,
-                buildingdata: sentBuildings,
-                attackloot: client.attackloot,
-              },
-              server,
-              stored
-            )
-          ).toEqual([]);
+          // Nothing for the save to be flagged or refused over, either (C7).
+          const { save, stored } = honestSave(one, client);
+          expect(battleMismatches(save, server, stored), `${one.name} stopped at ${end}`).toEqual([]);
         }
       },
-      REPLAY_TIMEOUT_MS
+      SWEEP_TIMEOUT_MS
     );
   }
 });
@@ -219,10 +276,9 @@ describe("an honest Map Room 1 tribe save writes what its client showed (#23, C4
     delete tribe.health;
     delete tribe.height;
     test(
-      `${tribe.name}: health, damage, destroyed, traps and loot`,
+      `${tribe.name}: health, damage, destroyed, traps and loot, wherever the client stops`,
       () => {
-        const first = one.log.events[0]?.t ?? 0;
-        for (const end of [first + 1600, FULL]) {
+        for (const end of stopsOf(tribe)) {
           const client = honestClient(tribe, end);
           const server = serverBattle(tribe, logAt(one.log, end), client.tick);
 
@@ -231,9 +287,14 @@ describe("an honest Map Room 1 tribe save writes what its client showed (#23, C4
           expect(derivedDestroyed(server.damage, "wild")).toBe(client.destroyed);
           expect([...server.firedTraps].sort()).toEqual([...client.firedTraps].sort());
           expect(server.attackloot).toEqual(client.attackloot);
+
+          // As the tribe path compares it: `destroyed` by the camp threshold (C4, C7).
+          const { save, stored } = honestSave(tribe, client);
+          const tribeServer = { ...server, destroyed: derivedDestroyed(server.damage, "wild") ?? 0 };
+          expect(battleMismatches(save, tribeServer, stored), `${tribe.name} stopped at ${end}`).toEqual([]);
         }
       },
-      REPLAY_TIMEOUT_MS
+      SWEEP_TIMEOUT_MS
     );
   }
 });
@@ -280,6 +341,7 @@ describe("battleMismatches", () => {
       expect(fields).toContain("damage");
       expect(fields).toContain("buildinghealthdata");
       expect(fields).toContain("attackloot");
+      expect(fields).not.toContain("attackerchampion");
     },
     REPLAY_TIMEOUT_MS
   );
@@ -317,4 +379,32 @@ describe("the fightable log drops a bomb the attacker could not afford (#23, C3)
   test("and not checked when the session has no such pool", () => {
     expect(input().log.events.some((event) => event.kind === "bomb")).toBe(true);
   });
+});
+
+describe("battleMismatches: the attacker's own row (#23, C7)", () => {
+  const one = fixtures.find((fixture) => fixture.name === "mixed-waves")!;
+  const end = FULL;
+  const client = honestClient(one, end);
+  const server = serverBattle(one, logAt(one.log, end), client.tick);
+  const { save, stored } = honestSave(one, client);
+
+  test(
+    "flags a flung champion's health that is not the battle's",
+    () => {
+      expect(server.championsFlung).toEqual([5]);
+      const healed = client.attackerchampion.map((champion) => ({ ...champion, hp: champion.hp + 1000 }));
+      expect(battleMismatches({ ...save, attackerchampion: healed }, server, stored)).toEqual(["attackerchampion"]);
+      expect(battleMismatches({ ...save, attackerchampion: undefined }, server, stored)).toEqual(["attackerchampion"]);
+    },
+    REPLAY_TIMEOUT_MS
+  );
+
+  test(
+    "flags a siege stock the log does not explain",
+    () => {
+      const stocked = { jars: { quantity: 99 }, decoy: { quantity: 1 } };
+      expect(battleMismatches({ ...save, attackersiege: stocked }, server, stored)).toEqual(["attackersiege"]);
+    },
+    REPLAY_TIMEOUT_MS
+  );
 });

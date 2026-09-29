@@ -180,8 +180,10 @@ export interface EndPluginDeps {
 
 /**
  * The refusal reasons a retry cannot fix: the attack-binding ones
- * (`docs/server-api.md` "Attack session binding") and a bomb the attacker could
- * not have fired (`bombSpend`, issue #90), which the same payload would hit again.
+ * (`docs/server-api.md` "Attack session binding"), a bomb the attacker could
+ * not have fired (`bombSpend`, issue #90) and a result the server's replay does
+ * not bear out (`replayMismatch`, issue #23), which the same payload would hit
+ * again.
  */
 const FINAL_REASONS = new Set([
   "expired",
@@ -189,6 +191,7 @@ const FINAL_REASONS = new Set([
   "wrong-attacker",
   "stale-attack",
   "bombSpend",
+  "replayMismatch",
   "finalising",
 ]);
 

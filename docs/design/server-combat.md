@@ -390,6 +390,16 @@ when the save's `left` says the player left the screen, and the finaliser's repl
 same way, always with that line. The golden fixtures check an honest
 client's report against the server's word for word.
 
+**Implemented (issue #23, C7):** the replay's mismatches (section 2.8's `replayMismatch`, logged
+as `attack-replay-mismatch`) are under `COMBAT_SAVE_VALIDATION`, with the attacker's own row (a
+flung champion's health, the siege stock; the C1 fields) added to the compared fields and the
+defender's `monsters` left out. `off` is silent, `log` warns and writes one `Report` row per
+flagged save, `reject` also refuses the save (`attackReplayRejectedErr`, `reason:
+"replayMismatch"`) before anything is written. The default stays `log`, per section 5 of the #23
+plan: read what honest play produces before refusing. `battle.test.ts` shows an honest save never
+trips it: every golden fixture, main yard and tribe, stopped at every event, just after it, part way
+and at the longest end, plus a siege use, gives no mismatch.
+
 ---
 
 ## 3. Server design

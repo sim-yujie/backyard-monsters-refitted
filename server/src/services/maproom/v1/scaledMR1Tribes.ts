@@ -24,7 +24,7 @@ import type { SaveData } from "../../../types/EntityData.js";
 import type { TribeData } from "../../../types/TribeData.js";
 import { isDeclareWarRunning } from "../../alliance/powerups.js";
 import { battleReplayInput, battleTick } from "../../base/combat/battle.js";
-import { logBattleMismatches, replayBattleForSave } from "../../base/combat/saveBattle.js";
+import { recordBattleMismatches, replayBattleForSave } from "../../base/combat/saveBattle.js";
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
 import {
   acquireMR1TribeFinalLock,
@@ -219,7 +219,10 @@ const tribeBattle = async (
   const fought = await replayBattleForSave(ctx, user, base, input, "a tribe has no finaliser, so nothing lands");
   const battle = { ...fought, destroyed: derivedDestroyed(fought.damage, "wild") ?? 0 };
 
-  logBattleMismatches(
+  // Where the save disagrees with it: logged, or refused under
+  // `COMBAT_SAVE_VALIDATION=reject` before anything is written (C7). A refused
+  // tribe attack lands nothing: there is no finaliser to land it instead.
+  await recordBattleMismatches(
     ctx,
     user,
     base,
@@ -229,9 +232,12 @@ const tribeBattle = async (
       buildinghealthdata: saveData.buildinghealthdata,
       buildingdata: saveData.buildingdata,
       attackloot: saveData.attackloot,
+      attackerchampion: saveData.attackerchampion,
+      attackersiege: saveData.attackersiege,
     },
     battle,
-    tribeData.buildingdata as JsonObject | undefined
+    tribeData.buildingdata as JsonObject | undefined,
+    combatConfig.mode
   );
   return battle;
 };
