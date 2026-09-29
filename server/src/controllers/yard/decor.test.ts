@@ -58,7 +58,8 @@ const rowOf = (overrides: Row = {}): Row => ({
   lockerdata: {},
   academy: {},
   champion: [],
-  mushrooms: {},
+  // Spawned just now, so the catch-up grows none where a test places.
+  mushrooms: { l: [], s: getCurrentDateTime() },
   researchdata: { b28: 2, b121: 1, bl121: 3, other: 1 },
   outposts: [],
   ...overrides,
@@ -135,7 +136,7 @@ describe("POST /bm/yard/decor/place", () => {
   });
 
   test("a mushroom is in the way", async () => {
-    db.row = rowOf({ mushrooms: { l: [[1, 200, 200]], s: 0 } });
+    db.row = rowOf({ mushrooms: { l: [[1, 200, 200]], s: getCurrentDateTime() } });
     expect(await place({ type: 28, x: 200, y: 200 })).toMatchObject({
       status: 409,
       body: { reason: "placement", placement: "mushroom" },
