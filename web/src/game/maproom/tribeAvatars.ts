@@ -45,6 +45,12 @@ const ALPHA_FLOOR = 8;
 
 const urlFor = (file: string): string => `${import.meta.env.BASE_URL}tribes/${file}`;
 
+/** A tribe's portrait as a URL, for the DOM (the cell panel, the hover card), or null. */
+export const tribePictureUrl = (tribe: string): string | null => {
+  const file = AVATAR_FILES[tribe];
+  return file ? urlFor(file) : null;
+};
+
 export class TribeAvatars {
   private readonly textures = new Map<string, Texture>();
   private pending: Promise<boolean> | null = null;

@@ -225,20 +225,6 @@
   color: var(--colour-info);
 }
 
-/* The owner's critter (#175), beside its name. */
-.cell-facts dd.cell-facts__avatar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.cell-facts__avatar img {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  flex: none;
-}
-
 .cell-kind {
   display: inline-flex;
   align-items: center;
@@ -577,5 +563,363 @@
     min-height: var(--control-height);
     padding: 0 var(--space-3);
     font-size: var(--text-sm);
+  }
+}
+
+/* ── The slim cell panel (#174, R-MR2-Panel) ────────────────────────────── */
+
+.map-dock--right.mr2-cell-dock {
+  width: 372px;
+}
+
+.mr2-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  box-sizing: border-box;
+  max-width: none;
+  min-width: 0;
+  overflow-y: auto;
+  box-shadow: var(--shadow-panel);
+}
+
+/* Outranks the buttons' own `display: flex` below. */
+.mr2-cell [hidden][hidden] {
+  display: none;
+}
+
+/* The bottom sheet's handle, on a phone only. */
+.mr2-cell__grip {
+  display: none;
+}
+
+.mr2-cell__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.mr2-cell__picture {
+  --ring: var(--colour-border-strong);
+  flex: none;
+  width: 68px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 2px solid var(--ring);
+  border-radius: 18px;
+  background: radial-gradient(
+    circle at 50% 35%,
+    color-mix(in srgb, var(--ring) 28%, var(--colour-surface-base)),
+    var(--colour-surface-base)
+  );
+  overflow: hidden;
+}
+
+.mr2-cell__picture img {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+}
+
+.mr2-cell__picture--mine {
+  --ring: var(--colour-accent);
+}
+
+.mr2-cell__picture--faded img {
+  opacity: 0.45;
+  filter: grayscale(0.7);
+}
+
+.mr2-cell__picture--water {
+  background: var(--colour-terrain-water);
+}
+
+.mr2-cell__picture--loading {
+  background: var(--colour-surface-sunken);
+}
+
+.mr2-cell__titles {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* A long name ("Legionnaire camp") takes the line and the level wraps under it. */
+.mr2-cell__nameline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.mr2-cell__title {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  line-height: var(--leading-tight);
+}
+
+.mr2-cell__level {
+  flex: none;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-overlay);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mr2-cell__subtitle {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.mr2-cell__close {
+  flex: none;
+  width: var(--control-height);
+  height: var(--control-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-control);
+  color: var(--colour-text-secondary);
+  cursor: pointer;
+}
+
+.mr2-cell__close:hover {
+  background: var(--colour-surface-control-hover);
+  color: var(--colour-text);
+}
+
+.mr2-cell__close:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.mr2-cell__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mr2-cell__chips:empty {
+  display: none;
+}
+
+/* Only what is true, as a chip: in range, damaged, protected, a truce. */
+.mr2-chip {
+  --tone: var(--colour-accent);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: var(--space-1) 11px;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--tone) 50%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--tone) 14%, transparent);
+  color: var(--colour-text);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.mr2-chip .map-icon {
+  color: var(--tone);
+}
+
+.mr2-chip--warning {
+  --tone: var(--colour-warning);
+}
+
+.mr2-chip--danger {
+  --tone: var(--colour-tribe);
+}
+
+.mr2-chip--info {
+  --tone: var(--colour-info);
+}
+
+/* The own yard's Flinger reach, with the switch that draws it (#177). */
+.mr2-cell__flinger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 14px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: 14px;
+  background: var(--colour-surface-sunken);
+}
+
+.mr2-cell__flinger-icon {
+  color: var(--colour-accent);
+}
+
+.mr2-cell__flinger-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mr2-cell__flinger-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.mr2-cell__flinger-detail {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.mr2-cell__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.mr2-cell .mr2-cell__primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+/* Take over (#82) sits under Attack, a second choice rather than a second
+   primary: it is often only there to say why not yet. */
+.mr2-cell .takeover-action__button {
+  min-height: 48px;
+  border-radius: 14px;
+  font-size: 14px;
+}
+
+.mr2-cell .takeover-action__button:disabled {
+  min-height: 40px;
+}
+
+.mr2-cell__row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.mr2-cell__secondary {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  border-radius: 14px;
+  font-size: 14px;
+}
+
+.mr2-cell__bookmark {
+  flex: none;
+  width: 48px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 14px;
+}
+
+.mr2-cell__note {
+  margin: -6px 0 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.mr2-cell .takeover-action {
+  margin: -6px 0 0;
+}
+
+.mr2-cell__more-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  list-style: none;
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mr2-cell__more-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.mr2-cell__more-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+.mr2-cell__more[open] .mr2-cell__more-icon {
+  transform: rotate(90deg);
+}
+
+.mr2-cell__facts {
+  padding: var(--space-1) 0 0 20px;
+}
+
+@media (width <= 620px) {
+  .map-dock--right.mr2-cell-dock {
+    width: auto;
+  }
+
+  .mr2-cell {
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-4) 18px;
+    border-radius: 22px 22px 0 0;
+  }
+
+  .mr2-cell__grip {
+    display: block;
+    align-self: center;
+    width: 40px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--colour-border-strong);
+  }
+
+  .mr2-cell__picture {
+    width: 56px;
+    height: 56px;
+    border-radius: 15px;
+  }
+
+  .mr2-cell__picture img {
+    width: 46px;
+    height: 46px;
+  }
+
+  .mr2-cell__title {
+    font-size: 19px;
+  }
+
+  .mr2-cell__close {
+    width: 40px;
+    height: 40px;
   }
 }

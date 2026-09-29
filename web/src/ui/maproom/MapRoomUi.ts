@@ -1,6 +1,6 @@
 import type { Bookmark } from "@/api/bookmarks";
 import type { TakeoverPayment } from "@/api/maproom";
-import type { MapCell, Resources, TakeoverQuoteResponse } from "@/api/types";
+import type { MapCell, PlayerCell, Resources, TakeoverQuoteResponse } from "@/api/types";
 import { MAX_ZOOM, MIN_ZOOM } from "@/config";
 import type { OffsetCell } from "@/game/HexGrid";
 import type { RangeSource } from "@/game/maproom/attackRange";
@@ -10,7 +10,7 @@ import type { TakeoverCandidate, TakeoverKind } from "@/game/maproom/takeover";
 import type { OwnOutpost } from "@/game/yard/ownYards";
 import { Hud } from "@/ui/Hud";
 import { ZoomControl } from "@/ui/ZoomControl";
-import { CellPanel } from "./CellPanel";
+import { CellPanel, type OwnFlinger } from "./CellPanel";
 import { Minimap } from "./Minimap";
 import { NavPanel } from "./NavPanel";
 import { Notices } from "./Notices";
@@ -79,8 +79,12 @@ export interface MapRoomUiHandlers {
   onZoomStep: (direction: 1 | -1) => void;
   onZoomReset: () => void;
   onCellPanelClose: () => void;
-  /** "My range" turned on or off (#177). */
+  /** "My range" turned on or off (#177), from its button or the cell panel. */
   onRangeToggle: (on: boolean) => void;
+  /** The cell panel's range chip (#174); see `CellPanelOptions.reach`. */
+  reach: (cell: OffsetCell) => { text: string; inRange: boolean } | null;
+  /** The cell panel's own-yard Flinger line (#174). */
+  ownFlinger: (cell: OffsetCell, payload: PlayerCell) => OwnFlinger;
 }
 
 export class MapRoomUi {
@@ -95,6 +99,7 @@ export class MapRoomUi {
   private readonly docks: HTMLElement[] = [];
 
   private cellPanel: CellPanel | null = null;
+  private rangeOn = false;
   private takeover: TakeoverControl | null = null;
   private container: HTMLElement | null = null;
   /** The overlay's modal layer, for the takeover dialogs. */
@@ -132,7 +137,7 @@ export class MapRoomUi {
       labels: ZOOM_LABELS,
     });
 
-    this.rangeControl = new RangeControl({ onToggle: handlers.onRangeToggle });
+    this.rangeControl = new RangeControl({ onToggle: (on) => this.toggleRange(on) });
 
     this.readout = document.createElement("div");
     this.readout.className = "cell-readout";
@@ -214,7 +219,9 @@ export class MapRoomUi {
 
   /** "My range" as the player last left it. */
   setRangeOn(on: boolean): void {
+    this.rangeOn = on;
     this.rangeControl.setOn(on);
+    this.cellPanel?.setRangeOn(on);
   }
 
   /** The flingers the range is drawn from, for the legend (#177). */
@@ -258,8 +265,12 @@ export class MapRoomUi {
         onViewYard: this.handlers.onViewYard,
         attackRefusal: this.handlers.attackRefusal,
         onAttack: this.handlers.onAttack,
+        reach: this.handlers.reach,
+        ownFlinger: this.handlers.ownFlinger,
+        onRangeToggle: (on) => this.toggleRange(on),
         extraAction: this.takeover,
-      }).mount(this.dock("map-dock map-dock--right"));
+      }).mount(this.dock("map-dock map-dock--right mr2-cell-dock"));
+      this.cellPanel.setRangeOn(this.rangeOn);
     }
     this.cellPanel.show(cell, payload);
   }
@@ -289,6 +300,12 @@ export class MapRoomUi {
     this.takeover?.destroy();
     this.takeover = null;
     this.minimap.setSelected(null);
+  }
+
+  /** Either switch for "My range" moved: keep both in step and tell the scene. */
+  private toggleRange(on: boolean): void {
+    this.setRangeOn(on);
+    this.handlers.onRangeToggle(on);
   }
 
   private dock(className: string): HTMLElement {

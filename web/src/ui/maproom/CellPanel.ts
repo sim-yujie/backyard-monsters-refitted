@@ -1,20 +1,25 @@
-import { WATER_MAX_HEIGHT } from "@/config";
-import { CellType, isPlayerCell, isWaterCell, type MapCell, type Resources } from "@/api/types";
-import { avatarName, avatarOf, avatarUrl, pickedAvatar } from "@/game/avatars";
-import { HexGrid, type OffsetCell } from "@/game/HexGrid";
-import { formatAmount } from "@/ui/format";
-import { Panel } from "@/ui/Panel";
-import { RESOURCE_KEYS, resourceIcon } from "@/ui/resourceIcon";
+import { CellType, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
+import { avatarOf, avatarUrl } from "@/game/avatars";
+import type { OffsetCell } from "@/game/HexGrid";
+import { cellsText } from "@/game/maproom/attackRange";
 import { TRIBE_COLOURS } from "@/game/maproom/cellVisuals";
+import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
+import { button, el, icon, type IconName } from "@/ui/maproom1/icons";
 
 /**
- * Everything the payload says about one cell.
+ * The map's cell panel, slimmed to what a player decides with (issue #174,
+ * the approved R-MR2-Panel board).
  *
- * Deliberately exhaustive rather than curated: this screen is also how the rest
- * of the client gets checked against the server, so a field that arrives is a
- * field that shows. Where the wire is known to lie — `pi` and `fr` are always
- * 0, `dm` is zeroed once protection lapses — the panel says so instead of
- * presenting the value as fact.
+ * A picture, a name and level, what the cell is and where, whether it is in
+ * range, and the actions: Attack, then look inside and bookmark. Everything
+ * else that used to be a row is either a chip that appears only when it is
+ * true (damaged, destroyed, protected, a truce, busy) or sits behind "More
+ * about this yard" (empire value, alliance, Flinger and Catapult levels). The
+ * axial coordinates, terrain height, base id, the avatar's web address,
+ * hatchery data, the four resource lines and the user id are gone.
+ *
+ * On the player's own yard it shows how far its Flinger reaches, with the
+ * switch that draws that range on the map (#177), and Open yard.
  */
 
 export interface CellPanelOptions {
@@ -38,18 +43,37 @@ export interface CellPanelOptions {
   /** Starts an attack on the shown cell. Only called while enabled. */
   onAttack: () => void;
   /**
-   * An action that sits beside Attack and brings its own line under the
+   * "In range · 4 cells from your yard" or "Out of range · 2 cells too far"
+   * for a cell (`attackRange.ts`, `reachText`), or null to show no chip.
+   */
+  reach: (cell: OffsetCell) => { text: string; inRange: boolean } | null;
+  /** The Flinger of one of the player's own cells, for its range line. */
+  ownFlinger: (cell: OffsetCell, payload: PlayerCell) => OwnFlinger;
+  /** "My range" was switched from the panel (#177). */
+  onRangeToggle: (on: boolean) => void;
+  /**
+   * An action that sits under Attack and brings its own line under the
    * actions: Take over (`TakeoverControl`, issue #82). It is told about
    * every show and update and decides for itself what to show.
    */
   extraAction?: CellPanelAction;
 }
 
+/** How far one of the player's own cells flings. */
+export interface OwnFlinger {
+  /** The Flinger's level. */
+  readonly level: number;
+  /** Cells it reaches, Declare War included while it runs. */
+  readonly reach: number;
+  /** Cells of that from Declare War. */
+  readonly bonus: number;
+}
+
 /** An action the panel hosts without knowing what it does. */
 export interface CellPanelAction {
-  /** Placed after Attack in the actions row. */
+  /** Placed under Attack. */
   readonly button: HTMLElement;
-  /** Placed under the actions row. */
+  /** Placed under the actions. */
   readonly detail: HTMLElement;
   setCell(cell: OffsetCell, payload: MapCell | undefined): void;
   tick(nowSeconds: number): void;
@@ -62,139 +86,161 @@ const VIEW_OWN = "Open your yard";
 const VIEW_OWN_OUTPOST = "Open your outpost";
 const VIEW_OTHER = "Look around this yard. Nothing can be changed from here.";
 const VIEW_LOADING = "Waiting for this zone to load.";
-const VIEW_WATER = "There is no yard on water.";
+
+let panelIds = 0;
 
 export class CellPanel {
   readonly element: HTMLElement;
 
-  private readonly panel: Panel;
-  private readonly facts: HTMLDListElement;
-  private readonly kind: HTMLElement;
-  private readonly swatch: HTMLElement;
-  private readonly bookmarkButton: HTMLButtonElement;
-  private readonly viewYardButton: HTMLButtonElement;
-  private readonly attackButton: HTMLButtonElement;
   private readonly options: CellPanelOptions;
+  private readonly picture: HTMLElement;
+  private readonly title: HTMLElement;
+  private readonly level: HTMLElement;
+  private readonly subtitle: HTMLElement;
+  private readonly chips: HTMLElement;
+  private readonly flinger: HTMLElement;
+  private readonly flingerTitle: HTMLElement;
+  private readonly flingerDetail: HTMLElement;
+  private readonly rangeSwitch: HTMLButtonElement;
+  private readonly attackButton: HTMLButtonElement;
+  private readonly attackNote: HTMLElement;
+  private readonly openButton: HTMLButtonElement;
+  private readonly secondary: HTMLElement;
+  private readonly viewYardButton: HTMLButtonElement;
+  private readonly viewYardLabel: HTMLElement;
+  private readonly bookmarkButton: HTMLButtonElement;
+  private readonly more: HTMLDetailsElement;
+  private readonly facts: HTMLDListElement;
 
   private cell: OffsetCell | null = null;
   private payload: MapCell | undefined;
-  /** Countdown rows, refreshed once a second by `tick`. */
-  private countdowns: { node: HTMLElement; expiresAt: number }[] = [];
+  private rangeOn = false;
+  private closed = false;
+  /** Countdown chips, refreshed once a second by `tick`. */
+  private countdowns: { node: HTMLElement; label: string; expiresAt: number }[] = [];
 
   constructor(options: CellPanelOptions) {
     this.options = options;
-    this.panel = new Panel({
-      title: "Cell",
-      className: "map-panel",
-      onClose: options.onClose,
+
+    const titleId = `cell-panel-${++panelIds}`;
+    this.element = el("section", "panel mr2-cell");
+    this.element.setAttribute("aria-labelledby", titleId);
+
+    const grip = el("div", "mr2-cell__grip");
+    grip.setAttribute("aria-hidden", "true");
+
+    this.picture = el("span", "mr2-cell__picture");
+    this.title = el("h2", "mr2-cell__title");
+    this.title.id = titleId;
+    this.level = el("span", "mr2-cell__level");
+    this.subtitle = el("div", "mr2-cell__subtitle");
+    const nameLine = el("div", "mr2-cell__nameline");
+    nameLine.append(this.title, this.level);
+    const titles = el("div", "mr2-cell__titles");
+    titles.append(nameLine, this.subtitle);
+    const close = button("mr2-cell__close");
+    close.setAttribute("aria-label", "Close");
+    close.append(icon("close", 18, "map-icon"));
+    close.addEventListener("click", () => this.close());
+    const head = el("header", "mr2-cell__head");
+    head.append(this.picture, titles, close);
+
+    this.chips = el("div", "mr2-cell__chips");
+
+    this.flingerTitle = el("span", "mr2-cell__flinger-title");
+    this.flingerDetail = el("span", "mr2-cell__flinger-detail");
+    const flingerText = el("div", "mr2-cell__flinger-text");
+    flingerText.append(this.flingerTitle, this.flingerDetail);
+    this.rangeSwitch = button("mr2-switch");
+    this.rangeSwitch.setAttribute("role", "switch");
+    this.rangeSwitch.setAttribute("aria-label", "Show my attack range on the map");
+    this.rangeSwitch.append(el("span", "mr2-switch__track"), el("span", "mr2-switch__text", "Show"));
+    this.rangeSwitch.addEventListener("click", () => {
+      this.setRangeOn(!this.rangeOn);
+      options.onRangeToggle(this.rangeOn);
     });
-    this.element = this.panel.element;
+    this.flinger = el("div", "mr2-cell__flinger");
+    this.flinger.append(icon("range", 22, "map-icon mr2-cell__flinger-icon"), flingerText, this.rangeSwitch);
 
-    this.kind = document.createElement("span");
-    this.kind.className = "cell-kind";
-    this.swatch = document.createElement("span");
-    this.swatch.className = "cell-swatch";
-    const kindLabel = document.createElement("span");
-    this.kind.append(this.swatch, kindLabel);
-
-    this.facts = document.createElement("dl");
-    this.facts.className = "cell-facts";
-
-    this.viewYardButton = document.createElement("button");
-    this.viewYardButton.type = "button";
-    this.viewYardButton.className = "btn";
-    this.viewYardButton.textContent = "View yard";
-    this.viewYardButton.addEventListener("click", () => options.onViewYard());
-
-    this.attackButton = document.createElement("button");
-    this.attackButton.type = "button";
-    this.attackButton.className = "btn btn--primary";
-    this.attackButton.textContent = "Attack";
+    this.attackButton = button("btn btn--primary mr2-cell__primary");
+    this.attackButton.append(icon("attack", 20, "map-icon"), el("span", "", "Attack"));
     this.attackButton.addEventListener("click", () => {
       if (!this.attackButton.disabled) options.onAttack();
     });
+    this.attackNote = el("p", "mr2-cell__note");
 
-    const actions = document.createElement("div");
-    actions.className = "map-row map-row--wrap";
-    actions.append(this.viewYardButton, this.attackButton);
-    if (options.extraAction) actions.append(options.extraAction.button);
+    this.openButton = button("btn btn--primary mr2-cell__primary");
+    this.openButton.append(icon("home", 20, "map-icon"), el("span", "", "Open yard"));
+    this.openButton.addEventListener("click", () => options.onViewYard());
 
-    this.bookmarkButton = document.createElement("button");
-    this.bookmarkButton.type = "button";
-    this.bookmarkButton.className = "btn";
-    this.bookmarkButton.textContent = "Bookmark";
+    this.viewYardLabel = el("span", "", "View yard");
+    this.viewYardButton = button("btn btn--outline mr2-cell__secondary");
+    this.viewYardButton.append(icon("eye", 18, "map-icon"), this.viewYardLabel);
+    this.viewYardButton.addEventListener("click", () => options.onViewYard());
+
+    this.bookmarkButton = button("btn btn--outline mr2-cell__bookmark");
+    this.bookmarkButton.setAttribute("aria-label", "Bookmark");
+    this.bookmarkButton.title = "Bookmark this cell";
+    this.bookmarkButton.append(icon("bookmark", 18, "map-icon"));
     this.bookmarkButton.addEventListener("click", () => {
       if (this.cell) options.onBookmark(this.cell);
     });
-    actions.append(this.bookmarkButton);
 
-    this.panel.setContent(
-      this.kind,
-      this.facts,
+    this.secondary = el("div", "mr2-cell__row");
+    this.secondary.append(this.viewYardButton, this.bookmarkButton);
+
+    const actions = el("div", "mr2-cell__actions");
+    actions.append(this.attackButton, this.openButton);
+    if (options.extraAction) actions.append(options.extraAction.button);
+    actions.append(this.secondary);
+
+    this.facts = document.createElement("dl");
+    this.facts.className = "cell-facts mr2-cell__facts";
+    const summary = document.createElement("summary");
+    summary.className = "mr2-cell__more-toggle";
+    summary.append(icon("chevronRight", 14, "map-icon mr2-cell__more-icon"), "More about this yard");
+    this.more = document.createElement("details");
+    this.more.className = "mr2-cell__more";
+    this.more.append(summary, this.facts);
+
+    this.element.append(
+      grip,
+      head,
+      this.chips,
+      this.flinger,
       actions,
+      this.attackNote,
       ...(options.extraAction ? [options.extraAction.detail] : []),
+      this.more,
     );
+    this.element.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      this.close();
+    });
   }
 
   /** Shows a cell. `payload` is undefined while its zone is still loading. */
   show(cell: OffsetCell, payload: MapCell | undefined): void {
+    const moved = this.cell?.col !== cell.col || this.cell?.row !== cell.row;
     this.cell = cell;
-    this.payload = payload;
-    this.panel.setTitle(`Cell ${cell.col}, ${cell.row}`);
-    this.bookmarkButton.disabled = !this.options.canBookmark();
-    this.setViewYard(payload);
-    this.setAttackRefusal(this.options.attackRefusal(payload));
-    this.options.extraAction?.setCell(cell, payload);
-    this.render();
+    if (moved) this.more.open = false;
+    this.update(payload);
   }
 
   /** Re-renders with fresh payload, keeping the panel where it is. */
   update(payload: MapCell | undefined): void {
-    if (!this.cell) return;
+    const cell = this.cell;
+    if (!cell) return;
     this.payload = payload;
-    this.setViewYard(payload);
-    this.setAttackRefusal(this.options.attackRefusal(payload));
-    this.options.extraAction?.setCell(this.cell, payload);
-    this.render();
+    this.options.extraAction?.setCell(cell, payload);
+    this.render(cell, payload);
   }
 
-  /**
-   * Enabled on any cell with a yard to look at; the tooltip says whether the
-   * look is the player's own editable yard or a read-only visit.
-   */
-  private setViewYard(payload: MapCell | undefined): void {
-    const button = this.viewYardButton;
-    let title: string;
-    let enabled = false;
-    if (!payload) {
-      title = VIEW_LOADING;
-    } else if (isWaterCell(payload)) {
-      title = VIEW_WATER;
-    } else {
-      enabled = true;
-      title =
-        isPlayerCell(payload) && payload.mine === 1
-          ? payload.b === CellType.OUTPOST
-            ? VIEW_OWN_OUTPOST
-            : VIEW_OWN
-          : VIEW_OTHER;
-    }
-    button.disabled = !enabled;
-    button.title = title;
-    button.setAttribute("aria-label", `View yard. ${title}`);
-  }
-
-  /**
-   * Enabled when nothing refuses the attack, and explained when something
-   * does. The reason is on the control itself rather than in a notice because
-   * a disabled button with no reason attached is the worst version of this.
-   */
-  private setAttackRefusal(refusal: string | null): void {
-    const button = this.attackButton;
-    button.disabled = refusal !== null;
-    button.title = refusal ?? ATTACK_READY;
-    // `title` alone is not exposed on a disabled control in every browser.
-    button.setAttribute("aria-label", `Attack. ${refusal ?? ATTACK_READY}`);
+  /** Keeps the flinger line's switch in step with "My range" (#177). */
+  setRangeOn(on: boolean): void {
+    this.rangeOn = on;
+    this.rangeSwitch.setAttribute("aria-checked", String(on));
   }
 
   get shownCell(): OffsetCell | null {
@@ -204,7 +250,7 @@ export class CellPanel {
   /** Advances the countdowns. Called once a second by the scene. */
   tick(nowSeconds: number): void {
     for (const entry of this.countdowns) {
-      entry.node.textContent = formatCountdown(entry.expiresAt - nowSeconds);
+      entry.node.textContent = `${entry.label} ${formatCountdown(entry.expiresAt - nowSeconds)}`;
     }
     this.options.extraAction?.tick(nowSeconds);
   }
@@ -215,178 +261,215 @@ export class CellPanel {
   }
 
   close(): void {
-    this.panel.close();
+    if (this.closed) return;
+    this.closed = true;
+    this.element.remove();
+    this.options.onClose();
   }
 
-  private render(): void {
-    const cell = this.cell;
-    if (!cell) return;
-
+  private render(cell: OffsetCell, payload: MapCell | undefined): void {
+    const where = `${cell.col}, ${cell.row}`;
+    this.chips.replaceChildren();
     this.facts.replaceChildren();
     this.countdowns = [];
+    this.flinger.hidden = true;
+    this.more.hidden = true;
+    this.attackNote.hidden = true;
 
-    const axial = HexGrid.toAxial(cell.col, cell.row);
-    this.add("Coordinates", `${cell.col}, ${cell.row}`);
-    this.add("Axial", `q ${axial.q}, r ${axial.r}`);
-
-    const payload = this.payload;
     if (!payload) {
-      this.setKind("Loading", "var(--colour-text-muted)");
-      this.add("Status", "Waiting for this zone to load");
+      this.setHead({ kind: "loading" }, "Loading…", "", where);
+      this.setActions("none");
       return;
     }
 
-    this.add("Terrain height", String(payload.i));
-
     if (isWaterCell(payload)) {
-      this.setKind("Water", "var(--colour-terrain-water)");
-      this.add("Occupiable", `No, height is ${payload.i} (water is ${WATER_MAX_HEIGHT} or less)`);
+      this.setHead({ kind: "water" }, "Water", "", `No yard on water · ${where}`);
+      this.setActions("bookmark");
       return;
     }
 
     if (isPlayerCell(payload)) {
-      this.renderPlayer(payload);
+      this.renderPlayer(cell, payload, where);
       return;
     }
 
-    this.setKind("Wild monster camp", hexToCss(TRIBE_COLOURS[payload.n] ?? 0x9aa3b8));
-    this.add("Tribe", payload.n);
-    this.add("Level", String(payload.l));
-    this.add("Damage", `${payload.dm}%`, payload.dm > 0 ? "is-danger" : undefined);
-    this.add(
-      "Destroyed",
-      payload.d === 1 ? "Yes" : "No",
-      payload.d === 1 ? "is-danger" : undefined,
+    const tribe = payload.n;
+    this.setHead(
+      { kind: "tribe", tribe, faded: payload.d === 1 },
+      `${tribe} camp`,
+      `Level ${payload.l}`,
+      `Wild monsters · ${where}`,
     );
-    this.add("Base id", payload.bid);
+    this.addReach(cell);
+    this.addDamage(payload.dm, payload.d === 1);
+    this.setActions("attack", "Look inside");
   }
 
-  private renderPlayer(payload: Extract<MapCell, { uid: number; mine: 0 | 1 }>): void {
+  private renderPlayer(cell: OffsetCell, payload: PlayerCell, where: string): void {
     const outpost = payload.b === CellType.OUTPOST;
-    this.setKind(
-      payload.mine === 1
-        ? `Your ${outpost ? "outpost" : "main yard"}`
-        : outpost
-          ? "Outpost"
-          : "Main yard",
-      payload.mine === 1 ? "var(--colour-accent)" : "var(--colour-text)",
+    const mine = payload.mine === 1;
+    const kind = outpost ? "Outpost" : "Main yard";
+    this.setHead(
+      { kind: "player", picture: payload.pic_square, uid: payload.uid, mine },
+      mine ? (outpost ? "Your outpost" : "Your yard") : payload.n,
+      `Level ${payload.l}`,
+      `${kind} · ${where}`,
     );
 
-    this.add("Owner", `${payload.n} (user ${payload.uid})`);
-    this.addAvatar(payload.pic_square, payload.uid);
-    this.add("Level", String(payload.l));
-    this.add("Empire value", payload.v.toLocaleString());
-    this.add("Alliance", payload.aid === null ? "None" : `#${payload.aid}`);
-    this.add("Flinger", `Level ${payload.f}`);
-    this.add("Catapult", `Level ${payload.c}`);
-
-    this.add(
-      "Damage",
-      payload.p === 1 ? `${payload.dm}%` : `${payload.dm}% (reset once protection lapsed)`,
-      payload.dm > 0 ? "is-danger" : undefined,
-    );
-    this.add(
-      "Destroyed",
-      payload.d === 1 ? "Yes" : "No",
-      payload.d === 1 ? "is-danger" : undefined,
-    );
-
-    // The wire carries `p` as a boolean only. The expiry exists server-side as
-    // `save.protected` but is not sent (docs/specs/maproom2.md §10), so there
-    // is nothing honest to count down to here — unlike a truce.
-    this.add(
-      "Protection",
-      payload.p === 1 ? "Active (the server sends no expiry)" : "None",
-      payload.p === 1 ? "is-info" : undefined,
-    );
-
-    if (payload.t !== undefined) {
-      this.addCountdown("Truce", payload.t);
+    if (mine) {
+      this.renderFlinger(this.options.ownFlinger(cell, payload));
+      this.openButton.lastElementChild!.textContent = outpost ? "Open outpost" : "Open yard";
+      this.openButton.title = outpost ? VIEW_OWN_OUTPOST : VIEW_OWN;
+      this.setActions("open");
     } else {
-      this.add("Truce", payload.mine === 1 ? "Not sent for your own cells" : "None");
+      this.addReach(cell);
+      this.setActions("attack", "View yard");
     }
 
-    this.add(
-      "Busy",
-      payload.lo === 0 ? "No" : `Locked by user ${payload.lo} (online or under attack)`,
-      payload.lo === 0 ? undefined : "is-info",
-    );
-    this.add("Base id", payload.bid);
-
-    if (payload.r) this.addResources(payload.r);
-    if (payload.m && Object.keys(payload.m).length > 0) {
-      this.add("Hatchery data", `${Object.keys(payload.m).length} fields`);
+    this.addDamage(payload.dm, payload.d === 1);
+    if (payload.p === 1) this.addChip("shield", "Protected", "info", "Under damage protection.");
+    if (payload.t !== undefined && payload.t > Date.now() / 1000) {
+      this.addCountdown("truce", "Truce", payload.t);
     }
-  }
-
-  /**
-   * `r1`..`r4` in the order the game has always shown them
-   * (`docs/specs/base-building.md:569-574`), each headed by its icon (#93).
-   */
-  private addResources(resources: Resources): void {
-    for (const key of RESOURCE_KEYS) {
-      const amount = resources[key];
-      if (amount === undefined) continue;
-      const max = resources[`${key}max`];
-      this.add(
-        resourceIcon(key),
-        max === undefined
-          ? formatAmount(amount)
-          : `${formatAmount(amount)} / ${formatAmount(max)}`,
+    if (payload.lo !== 0) {
+      this.addChip(
+        "clock",
+        "Busy",
+        "info",
+        "Its owner is online, or someone is attacking it right now.",
       );
     }
+
+    this.more.hidden = false;
+    this.addFact("Empire value", payload.v.toLocaleString());
+    if (payload.aid !== null) this.addFact("Alliance", `#${payload.aid}`);
+    this.addFact("Flinger", `Level ${payload.f}`);
+    this.addFact("Catapult", `Level ${payload.c}`);
+  }
+
+  /** The own-yard line: how far the Flinger reaches, and the range switch. */
+  private renderFlinger(flinger: OwnFlinger): void {
+    this.flinger.hidden = false;
+    if (flinger.reach === 0) {
+      this.flingerTitle.textContent = "Your Flinger reaches nothing yet";
+      this.flingerDetail.textContent =
+        flinger.level > 0 ? `Flinger level ${flinger.level}` : "Build a Flinger here to attack from it";
+    } else {
+      this.flingerTitle.textContent = `Your Flinger reaches ${cellsText(flinger.reach)}`;
+      this.flingerDetail.textContent =
+        flinger.bonus > 0
+          ? `Flinger level ${flinger.level} (${flinger.reach - flinger.bonus}) + ${flinger.bonus} Declare War bonus`
+          : `Flinger level ${flinger.level}`;
+    }
+  }
+
+  private setHead(
+    picture:
+      | { kind: "loading" | "water" }
+      | { kind: "tribe"; tribe: string; faded: boolean }
+      | { kind: "player"; picture: string | null; uid: number; mine: boolean },
+    title: string,
+    level: string,
+    subtitle: string,
+  ): void {
+    this.title.textContent = title;
+    this.level.textContent = level;
+    this.level.hidden = level === "";
+    this.subtitle.textContent = subtitle;
+
+    this.picture.className = `mr2-cell__picture mr2-cell__picture--${picture.kind}`;
+    this.picture.style.removeProperty("--ring");
+    this.picture.replaceChildren();
+    if (picture.kind === "tribe") {
+      const colour = TRIBE_COLOURS[picture.tribe];
+      if (colour !== undefined) this.picture.style.setProperty("--ring", hexToCss(colour));
+      this.picture.classList.toggle("mr2-cell__picture--faded", picture.faded);
+      const url = tribePictureUrl(picture.tribe);
+      if (url) this.picture.append(image(url));
+    } else if (picture.kind === "player") {
+      this.picture.classList.toggle("mr2-cell__picture--mine", picture.mine);
+      this.picture.append(image(avatarUrl(avatarOf(picture.picture, picture.uid))));
+    }
   }
 
   /**
-   * The owner's critter (issue #175) and its name; "(default)" when they have
-   * not picked one and this is the one they are shown as.
+   * Which buttons show: Attack with a way to look inside and a bookmark, the
+   * player's own Open yard, a bookmark alone (water) or nothing (loading).
    */
-  private addAvatar(picSquare: string | null, userId: number): void {
-    const id = avatarOf(picSquare, userId);
-    const term = document.createElement("dt");
-    term.textContent = "Avatar";
-    const definition = document.createElement("dd");
-    definition.className = "cell-facts__avatar";
-    const picture = document.createElement("img");
-    picture.src = avatarUrl(id, "small");
-    picture.alt = "";
-    picture.decoding = "async";
-    definition.append(
-      picture,
-      pickedAvatar(picSquare) ? avatarName(id) : `${avatarName(id)} (default)`,
-    );
-    this.facts.append(term, definition);
+  private setActions(kind: "attack" | "open" | "bookmark" | "none", viewLabel = "View yard"): void {
+    const attack = kind === "attack";
+    this.attackButton.hidden = !attack;
+    this.openButton.hidden = kind !== "open";
+    this.secondary.hidden = !(attack || kind === "bookmark");
+    this.viewYardButton.hidden = !attack;
+    this.viewYardLabel.textContent = viewLabel;
+    this.viewYardButton.title = kind === "none" ? VIEW_LOADING : VIEW_OTHER;
+    this.bookmarkButton.disabled = !this.options.canBookmark();
+
+    if (attack) {
+      const refusal = this.options.attackRefusal(this.payload);
+      this.attackButton.disabled = refusal !== null;
+      this.attackButton.title = refusal ?? ATTACK_READY;
+      // `title` alone is not exposed on a disabled control in every browser.
+      this.attackButton.setAttribute("aria-label", `Attack. ${refusal ?? ATTACK_READY}`);
+      // Out of range already has its chip; anything else is said once, here.
+      const saidByChip = this.chips.querySelector(".mr2-chip--warning") !== null;
+      this.attackNote.hidden = refusal === null || saidByChip;
+      this.attackNote.textContent = refusal ?? "";
+    }
   }
 
-  private setKind(label: string, colour: string): void {
-    const text = this.kind.lastElementChild;
-    if (text) text.textContent = label;
-    this.swatch.style.background = colour;
+  private addReach(cell: OffsetCell): void {
+    const reach = this.options.reach(cell);
+    if (!reach) return;
+    this.addChip("range", reach.text, reach.inRange ? "accent" : "warning");
   }
 
-  private add(label: string | Node, value: string, className?: string): void {
-    const term = document.createElement("dt");
-    term.append(label);
-    const definition = document.createElement("dd");
-    definition.textContent = value;
-    if (className) definition.className = className;
-    this.facts.append(term, definition);
+  private addDamage(damage: number, destroyed: boolean): void {
+    if (destroyed) this.addChip("alert", "Destroyed", "danger");
+    else if (damage > 0) this.addChip("alert", `Damaged ${damage}%`, "danger");
   }
 
-  private addCountdown(label: string, expiresAtSeconds: number): void {
+  private addChip(
+    name: IconName,
+    text: string,
+    tone: "accent" | "warning" | "danger" | "info",
+    title?: string,
+  ): HTMLElement {
+    const chip = el("span", `mr2-chip mr2-chip--${tone}`);
+    const label = el("span", "", text);
+    chip.append(icon(name, 16, "map-icon"), label);
+    if (title) chip.title = title;
+    this.chips.append(chip);
+    return label;
+  }
+
+  private addCountdown(name: IconName, label: string, expiresAt: number): void {
+    const node = this.addChip(name, "", "info", "No attacks either way until it runs out.");
+    this.countdowns.push({ node, label, expiresAt });
+    node.textContent = `${label} ${formatCountdown(expiresAt - Date.now() / 1000)}`;
+  }
+
+  private addFact(label: string, value: string): void {
     const term = document.createElement("dt");
     term.textContent = label;
     const definition = document.createElement("dd");
-    definition.className = "is-info";
-    definition.textContent = formatCountdown(expiresAtSeconds - Date.now() / 1000);
+    definition.textContent = value;
     this.facts.append(term, definition);
-    this.countdowns.push({ node: definition, expiresAt: expiresAtSeconds });
   }
 }
 
+const image = (url: string): HTMLImageElement => {
+  const picture = document.createElement("img");
+  picture.src = url;
+  picture.alt = "";
+  picture.decoding = "async";
+  return picture;
+};
+
 /** Seconds remaining as a compact duration, or "Expired". */
 const formatCountdown = (seconds: number): string => {
-  if (seconds <= 0) return "Expired";
+  if (seconds <= 0) return "expired";
   const days = Math.floor(seconds / 86_400);
   const hours = Math.floor((seconds % 86_400) / 3_600);
   const minutes = Math.floor((seconds % 3_600) / 60);

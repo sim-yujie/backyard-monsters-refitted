@@ -27,7 +27,13 @@ import {
 } from "@/game/attack/attackTarget";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
-import { rangeSources } from "@/game/maproom/attackRange";
+import {
+  rangeSources,
+  reachText,
+  reachTo,
+  type RangeSource,
+} from "@/game/maproom/attackRange";
+import { mainYardRange, outpostRange, withDeclareWar } from "@/game/maproom/rules/range";
 import { Bookmarks } from "@/game/maproom/Bookmarks";
 import { consumeMapFocus, type MapFocus } from "@/game/maproom/mapFocus";
 import { takenOverResources, type TakeoverCandidate } from "@/game/maproom/takeover";
@@ -131,8 +137,9 @@ export class MapRoom2Scene implements Scene {
    */
   private ready = false;
 
-  /** "My range" is on (#177). */
+  /** "My range" is on (#177), and the flingers the range is drawn from. */
   private rangeOn = readRangeOn();
+  private rangeSources: RangeSource[] = [];
 
   // Starts at the interval so the first update after `ready` pumps at once.
   private sincePump = PUMP_INTERVAL_SECONDS;
@@ -189,6 +196,16 @@ export class MapRoom2Scene implements Scene {
           this.rangeOn = on;
           writeRangeOn(on);
           this.updateRange();
+        },
+        reach: (cell) => {
+          const answer = reachTo(cell, this.rangeSources);
+          const text = reachText(answer);
+          return text ? { text, inRange: answer.inRange } : null;
+        },
+        ownFlinger: (_cell, payload) => {
+          const own = payload.b === CellType.OUTPOST ? outpostRange(payload.f) : mainYardRange(payload.f);
+          const reach = withDeclareWar(own, this.declareWar);
+          return { level: payload.f, reach, bonus: reach - own };
         },
       },
       SceneName.MAP_ROOM_2,
@@ -518,6 +535,7 @@ export class MapRoom2Scene implements Scene {
       this.declareWar,
       this.home ? { cell: this.home, flinger: this.ownSave?.flinger } : null,
     );
+    this.rangeSources = sources;
     this.renderer.setRange(this.rangeOn ? sources : null);
     this.ui?.setRangeSources(sources, this.declareWar);
   }
