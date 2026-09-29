@@ -60,6 +60,15 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "node",
       include: ["src/**/*.test.ts"],
+      // Worker threads, not the default child processes (#192). The forks
+      // pool hands each worker its transformed modules as files in a temp
+      // directory, one file per module, rewritten by every worker that asks
+      // for it; on Windows a worker opening that file while another renames
+      // over it fails with EBUSY, and the test file importing it fails to
+      // load ("[ src/.../shotLedger.test.ts ]", once in a few full runs, most
+      // often when two suites run at once). Threads get the code over their
+      // message port and never touch the file.
+      pool: "threads",
     },
   };
 });

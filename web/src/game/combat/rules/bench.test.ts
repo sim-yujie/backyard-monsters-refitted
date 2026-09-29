@@ -24,6 +24,11 @@ import { replayAttack } from "./replay.js";
  * from `web/` reports the real wall-clock numbers on the runtime the budget is
  * written against; this only guards the cliff, and does so on an idle or a
  * busy machine alike.
+ *
+ * The suite runs in worker threads (`vite.config.ts`), where the process's
+ * CPU time is every test file's at once; the measure is this thread's
+ * (`process.threadCpuUsage`, Node 23.9+), and the process's only on a
+ * runtime without it.
  */
 
 const FIXTURE_DIR = fileURLToPath(new URL("../../../../test/fixtures/combat/", import.meta.url));
@@ -36,6 +41,13 @@ const SCENARIO = "mixed-waves";
 
 /** Where this test stops being a warning and starts being a failure. */
 const CEILING_MS = 5000;
+
+/** CPU time used so far by this thread, or by the process where the runtime cannot say. */
+const cpuUsage = (since?: NodeJS.CpuUsage): NodeJS.CpuUsage => {
+  const thread = (process as { threadCpuUsage?: (previous?: NodeJS.CpuUsage) => NodeJS.CpuUsage })
+    .threadCpuUsage;
+  return thread ? thread.call(process, since) : process.cpuUsage(since);
+};
 
 const read = (path: string): Record<string, unknown> =>
   JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
@@ -60,12 +72,12 @@ describe("replay performance", () => {
 
       const runs: { wallMs: number; cpuMs: number }[] = [];
       for (let run = 0; run < 3; run += 1) {
-        const startedCpu = process.cpuUsage();
+        const startedCpu = cpuUsage();
         const started = process.hrtime.bigint();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const outcome = replayAttack(input as any);
         const wallMs = Number(process.hrtime.bigint() - started) / 1e6;
-        const cpu = process.cpuUsage(startedCpu);
+        const cpu = cpuUsage(startedCpu);
         runs.push({ wallMs, cpuMs: (cpu.user + cpu.system) / 1000 });
         expect(outcome.ticks).toBeGreaterThan(0);
       }
