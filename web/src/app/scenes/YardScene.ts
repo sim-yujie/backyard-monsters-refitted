@@ -10,6 +10,7 @@ import {
 } from "@/api/types";
 import { bankActions } from "@/api/yardBank";
 import { buildActions } from "@/api/yardBuild";
+import { decorActions } from "@/api/yardDecor";
 import { consumeViewTarget, setAttackTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
@@ -1095,7 +1096,8 @@ export class YardScene implements Scene {
    * menu closes, the building appears in the middle of the screen and follows
    * the pointer, and a click builds it (`BuildPlacement.ts`). A wall or trap
    * stays in hand after each block; anything else is done after one, and its
-   * panel opens on the new building.
+   * panel opens on the new building. A decoration from the Decorations tab
+   * comes out of storage (`decor/place`, §8.3): free and finished.
    */
   private startPlacement(type: number, instant: boolean): void {
     const store = this.store;
@@ -1110,7 +1112,8 @@ export class YardScene implements Scene {
     this.select(null);
 
     const actions = buildActions(store);
-    const repeat = buildsAtOnce(type) && !instant;
+    const storage = offer.stored !== null ? decorActions(store) : null;
+    const repeat = buildsAtOnce(type) && !instant && !storage;
     let placed: number | null = null;
 
     const bar = new PlacementBar({
@@ -1137,9 +1140,11 @@ export class YardScene implements Scene {
           check?.problem ? spotSentence(check, (id) => placement.grid.nameOf(id)) : null,
         ),
       onDrop: async (x, y) => {
-        const result = instant
-          ? await actions.instant(type, x, y)
-          : await actions.build(type, x, y);
+        const result = storage
+          ? await storage.place(type, x, y)
+          : instant
+            ? await actions.instant(type, x, y)
+            : await actions.build(type, x, y);
         if (this.placement !== placement) return result.ok ? "placed" : "refused";
         if (!result.ok) {
           bar.setMessage(result.refusal.message, "bad");

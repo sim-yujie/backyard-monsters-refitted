@@ -51,6 +51,8 @@ interface Fixture {
   readonly caps?: ResourceCaps | null;
   readonly credits?: number;
   readonly storedata?: BaseLoadResponse["storedata"];
+  readonly researchdata?: BaseLoadResponse["researchdata"];
+  readonly outpost?: boolean;
 }
 
 const contextOf = (fixture: Fixture): BuildContext => {
@@ -63,10 +65,12 @@ const contextOf = (fixture: Fixture): BuildContext => {
     buildingdata: Object.fromEntries(fixture.buildings.map((one) => [String(one.id), one])),
     buildinghealthdata: {},
     storedata: fixture.storedata ?? {},
+    researchdata: fixture.researchdata ?? {},
   } as unknown as BaseLoadResponse;
   const yard = readYard(save);
   return {
     yard,
+    ...(fixture.outpost ? { kind: "outpost" as const } : {}),
     save,
     resources: save.resources ?? {},
     credits: save.credits ?? 0,
@@ -254,12 +258,42 @@ describe("buildOffer", () => {
 });
 
 describe("buildOffers", () => {
-  it("a tab's tiles in the tab's order; decorations are empty for now", () => {
+  it("a tab's tiles in the tab's order; decorations are what storage holds", () => {
     const context = contextOf({ buildings: [HALL(3)] });
     expect(buildOffers(BuildCategory.RESOURCES, context).map((offer) => offer.type)).toEqual([
       1, 2, 3, 4, 6,
     ]);
     expect(buildOffers(BuildCategory.DECORATIONS, context)).toEqual([]);
+  });
+
+  it("the Decorations tab lists every stored decoration, free and at once (#128)", () => {
+    const context = contextOf({
+      buildings: [HALL(3)],
+      researchdata: { b121: 1, bl121: 4, b28: 3, b20: 5, b30: 0, other: 1 },
+    });
+    const offers = buildOffers(BuildCategory.DECORATIONS, context);
+
+    expect(offers.map((offer) => [offer.type, offer.stored])).toEqual([
+      [28, 3],
+      [121, 1],
+    ]);
+    expect(offers[0]).toMatchObject({
+      category: BuildCategory.DECORATIONS,
+      cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
+      atOnce: true,
+      status: "ready",
+      gate: null,
+    });
+    expect(buildOffer(28, context)?.stored).toBe(3);
+    expect(buildOffer(30, context)).toBeNull();
+    // Not a decoration: a stored count means nothing, and it is built as ever.
+    expect(buildOffer(20, context)?.stored).toBeNull();
+  });
+
+  it("an outpost has no decoration storage", () => {
+    const context = contextOf({ buildings: [], researchdata: { b28: 3 }, outpost: true });
+    expect(buildOffers(BuildCategory.DECORATIONS, context)).toEqual([]);
+    expect(buildOffer(28, context)).toBeNull();
   });
 });
 

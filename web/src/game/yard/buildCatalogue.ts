@@ -9,6 +9,8 @@ import {
   townHallLevel,
   type YardKind,
 } from "./buildingCosts";
+import { storedCount, storedDecorations } from "./decorStorage";
+import { isDecoration } from "./planner/placement";
 import { overCap } from "./storage";
 import { freeWorkers, sharperToolsMultiplier } from "./workers";
 import type { Yard, YardWorkers } from "./yardModel";
@@ -64,9 +66,9 @@ export interface BuildCategoryDefinition {
 }
 
 /**
- * Every tab and what it lists. Decorations are empty until the decoration
- * inventory lands (§8.3, WP6.3): they came from the Shiny shop or as rewards,
- * never for resources.
+ * Every tab and what it lists. Decorations are never built for resources:
+ * the Decorations tab lists what is in storage instead (§8.3, #128;
+ * {@link buildOffers}).
  */
 export const BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
   { id: BuildCategory.RESOURCES, label: "Resources", types: [1, 2, 3, 4, 6] },
@@ -213,7 +215,39 @@ export interface BuildOffer {
   readonly gate: BuildGate | null;
   /** Why Instant is disabled: the same gates minus resources and workers, plus Shiny. */
   readonly instantGate: BuildGate | null;
+  /**
+   * A decoration placed from storage (§8.3, #128): how many are stored. It is
+   * free, finished at once and needs no worker; there is no instant, and
+   * `owned`, `allowed` and `most` count nothing. Null for anything built.
+   */
+  readonly stored: number | null;
 }
+
+/**
+ * The tile of a decoration in storage, or null when none is stored or the
+ * yard is an outpost (storage is the main yard's, owner decision 2026-09-29).
+ */
+export const storageOffer = (type: number, context: BuildContext): BuildOffer | null => {
+  if ((context.kind ?? context.yard.kind) === "outpost") return null;
+  const stored = storedCount(context.save.researchdata, type);
+  if (stored === 0) return null;
+  return {
+    type,
+    category: BuildCategory.DECORATIONS,
+    cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
+    seconds: 0,
+    atOnce: true,
+    owned: 0,
+    allowed: 0,
+    most: 0,
+    status: "ready",
+    needs: [],
+    instantPrice: 0,
+    gate: null,
+    instantGate: null,
+    stored,
+  };
+};
 
 const KEYS = ["r1", "r2", "r3", "r4"] as const;
 
@@ -249,6 +283,7 @@ export const categoryOf = (type: number, kind: YardKind = "main"): BuildCategory
  * cost table cannot price.
  */
 export const buildOffer = (type: number, context: BuildContext): BuildOffer | null => {
+  if (isDecoration(type)) return storageOffer(type, context);
   const kind = context.kind ?? context.yard.kind;
   const category = categoryOf(type, kind);
   const row = rowOf(type, kind);
@@ -346,11 +381,17 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
     instantPrice,
     gate,
     instantGate,
+    stored: null,
   };
 };
 
 /** Every tile of a tab, in the tab's order. */
 export const buildOffers = (category: BuildCategory, context: BuildContext): BuildOffer[] => {
+  if (category === BuildCategory.DECORATIONS) {
+    return storedDecorations(context.save.researchdata)
+      .map((one) => storageOffer(one.type, context))
+      .filter((offer): offer is BuildOffer => offer !== null);
+  }
   const tab = catalogueFor(context.kind ?? context.yard.kind).find((entry) => entry.id === category);
   return (tab?.types ?? [])
     .map((type) => buildOffer(type, context))

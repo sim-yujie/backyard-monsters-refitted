@@ -102,6 +102,7 @@ const WORKER = ["M12 4a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7z", "M5 20c0-3.5 3-6 7
 
 /** "2 of 3 built" and the like: what a tile says under its name. */
 export const tileLine = (offer: BuildOffer): string => {
+  if (offer.stored !== null) return `${offer.stored} in storage`;
   switch (offer.status) {
     case "locked": {
       const gate = offer.gate;
@@ -397,7 +398,7 @@ export class BuildMenu {
       empty.className = "build-menu__empty";
       empty.textContent =
         this.active === BuildCategory.DECORATIONS
-          ? "Decorations are coming later, with the decoration inventory."
+          ? "No decorations in storage. Recycle one to keep it here, then place it again from this tab."
           : "Nothing to build here yet.";
       this.grid.replaceChildren(empty);
     } else {
@@ -407,7 +408,7 @@ export class BuildMenu {
     this.previous.disabled = this.page === 0;
     this.next.disabled = this.page >= pages - 1;
     this.pages.replaceChildren(...this.pageDots(pages));
-    this.drawLegend(outpost ? 0 : hall);
+    this.drawLegend(outpost ? 0 : hall, this.active === BuildCategory.DECORATIONS);
 
     const offer = offers.find((one) => one.type === this.picked) ?? null;
     this.drawInfo(offer);
@@ -431,7 +432,7 @@ export class BuildMenu {
     return [dots, words];
   }
 
-  private drawLegend(hall: number): void {
+  private drawLegend(hall: number, storage: boolean): void {
     const key = (paths: readonly string[] | null, text: string): HTMLElement => {
       const item = document.createElement("span");
       item.className = "build-menu__key";
@@ -439,6 +440,12 @@ export class BuildMenu {
       item.append(text);
       return item;
     };
+    // Decorations come from storage: nothing is locked and nothing runs out
+    // but the count, so the build keys would only mislead.
+    if (storage) {
+      this.legend.replaceChildren(key(null, "Your stored decorations. Placing one is free."));
+      return;
+    }
     const parts: HTMLElement[] = [
       key(null, "Ready to build come first."),
       key(LOCK, "Dark shape: not yet"),
@@ -511,12 +518,20 @@ export class BuildMenu {
     const count = document.createElement("span");
     count.className = "build-info__count";
     count.textContent =
-      offer.status === "locked" ? tileLine(offer) : `${offer.owned} of ${offer.allowed} built`;
+      offer.stored !== null || offer.status === "locked"
+        ? tileLine(offer)
+        : `${offer.owned} of ${offer.allowed} built`;
     head.append(title, count);
 
     const blurb = document.createElement("p");
     blurb.className = "build-info__blurb";
-    blurb.textContent = BUILD_BLURBS[offer.type] ?? "";
+    blurb.textContent =
+      BUILD_BLURBS[offer.type] ??
+      (offer.stored !== null ? "A decoration from your storage. It goes anywhere inside your yard." : "");
+    if (offer.stored !== null) {
+      this.info.replaceChildren(back, picture(offer, "build-info__picture"), head, blurb, this.storageActions(offer, name));
+      return;
+    }
 
     const needs = document.createElement("div");
     needs.className = "build-info__needs";
@@ -596,6 +611,37 @@ export class BuildMenu {
     nodes.push(actions);
 
     this.info.replaceChildren(...nodes);
+  }
+
+  /** A stored decoration's facts and its Place button: free, at once, no worker (§8.3). */
+  private storageActions(offer: BuildOffer, name: string): HTMLElement {
+    const wrap = document.createElement("div");
+    const facts = document.createElement("ul");
+    facts.className = "build-info__facts";
+    facts.setAttribute("aria-label", "Cost");
+    for (const [icon, text] of [
+      [null, "Free"],
+      [CLOCK, "At once"],
+      [WORKER, "No worker"],
+    ] as const) {
+      const fact = document.createElement("li");
+      fact.className = "build-info__fact";
+      if (icon) fact.append(glyph(icon, "build-info__fact-icon"));
+      fact.append(text);
+      facts.append(fact);
+    }
+    const actions = document.createElement("div");
+    actions.className = "build-info__actions";
+    const place = document.createElement("button");
+    place.type = "button";
+    place.className = "btn btn--primary build-info__build";
+    place.dataset["focus"] = "build";
+    place.textContent = "Place · then pick a spot";
+    place.setAttribute("aria-label", `Place ${name} from storage`);
+    place.addEventListener("click", () => this.onPick(offer.type, false));
+    actions.append(place);
+    wrap.append(facts, actions);
+    return wrap;
   }
 
   private instantButton(type: number): ShinyButton {

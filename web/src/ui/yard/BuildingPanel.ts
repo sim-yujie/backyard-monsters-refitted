@@ -1660,7 +1660,8 @@ export const recycledMessage = (
 ): HTMLElement => {
   const line = document.createElement("span");
   if (report.stored) {
-    line.append(`${name} put in storage.`);
+    // Where to find it again (#128): the Build menu's Decorations tab.
+    line.append(`${name} put in storage. Place it again from Build, Decorations.`);
     return line;
   }
   const refund = costAmounts(report.refund);

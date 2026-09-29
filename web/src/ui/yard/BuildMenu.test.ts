@@ -248,11 +248,33 @@ describe("BuildMenu", () => {
     expect(onTownHall).toHaveBeenCalledTimes(1);
   });
 
-  it("decorations say they are coming later", () => {
+  it("with nothing stored, the Decorations tab says how to fill it", () => {
     const { menu } = setup([HALL]);
     menu.open(BuildCategory.DECORATIONS);
-    expect(menu.element.querySelector(".build-menu__empty")?.textContent).toMatch(/coming later/);
+    expect(menu.element.querySelector(".build-menu__empty")?.textContent).toBe(
+      "No decorations in storage. Recycle one to keep it here, then place it again from this tab.",
+    );
     expect(menu.element.querySelector(".build-menu__page")?.textContent).toBe("Page 1 of 1");
+  });
+
+  it("stored decorations: a tile each with the count, free, and Place hands the type over (#128)", () => {
+    const { menu, onPick } = setup([HALL], { researchdata: { b28: 3, b121: 1, bl121: 2 } });
+    menu.open(BuildCategory.DECORATIONS);
+
+    expect(tileTypes(menu)).toEqual(["28", "121"]);
+    expect(tile(menu, 28).querySelector(".build-tile__count")?.textContent).toBe("3 in storage");
+    expect(info(menu).querySelector(".build-info__count")?.textContent).toBe("3 in storage");
+    expect(facts(menu)).toEqual(["Free", "At once", "No worker"]);
+    expect(info(menu).querySelector(".build-info__needs")).toBeNull();
+    expect(info(menu).querySelector(".shiny-button")).toBeNull();
+    expect(menu.element.querySelector(".build-menu__legend")?.textContent).toBe(
+      "Your stored decorations. Placing one is free.",
+    );
+
+    const place = info(menu).querySelector<HTMLButtonElement>(".build-info__build")!;
+    expect(place.getAttribute("aria-label")).toMatch(/^Place .+ from storage$/);
+    place.click();
+    expect(onPick).toHaveBeenCalledWith(28, false);
   });
 
   it("reopens on the tab and page it was left on", () => {
