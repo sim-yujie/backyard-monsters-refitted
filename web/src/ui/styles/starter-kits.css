@@ -3,6 +3,8 @@
 
 .kit-picker {
   width: min(96vw, 980px);
+  /* Wider than a plain popup (ui.css caps those at 560px): three cards. */
+  max-width: min(96vw, 980px);
   max-height: min(92vh, 860px);
 }
 
@@ -85,6 +87,16 @@
   margin-top: auto;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
+}
+
+.kit-card__price .res-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+.kit-card__price .res-list > .res-amount + .res-amount {
+  margin-left: 0;
 }
 
 .kit-card__buttons {

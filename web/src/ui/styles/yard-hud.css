@@ -222,6 +222,12 @@
   bottom: 214px;
 }
 
+/* Kits (#188): an outpost's, in Collect all's corner above Monsters. */
+.yard-dock__right > .yard-dock__button--kits {
+  right: 150px;
+  bottom: 170px;
+}
+
 /* A visit has no Build: Layout takes the bottom corner and Attack, when
    there is one, keeps Build's place. */
 .yard-dock__right:not(:has(.yard-dock__button--big)) > .yard-dock__button--layout {
@@ -860,6 +866,11 @@
   .yard-dock__right:not(:has(.yard-dock__button--big)) > .yard-dock__button--layout {
     right: 26px;
     bottom: 18px;
+  }
+
+  .yard-dock__right > .yard-dock__button--kits {
+    right: 116px;
+    bottom: 136px;
   }
 
   .yard-dock__right > .yard-collect {
