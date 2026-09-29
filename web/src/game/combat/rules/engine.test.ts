@@ -887,6 +887,78 @@ describe("Slimeattikus splits as it dies (issue #129)", () => {
   });
 });
 
+describe("healers (issue #129)", () => {
+  type Hit = Extract<BattleVisualEvent, { kind: "hit" }>;
+
+  /** Every heal the battle threw: a hit on a creep with a negative amount. */
+  const healsIn = (battle: ReturnType<typeof createBattle>, ticks: number): Hit[] => {
+    const heals: Hit[] = [];
+    for (let step = 0; step < ticks && !battle.over(); step += 1) {
+      const before = battle.tick;
+      battle.step();
+      for (const event of battle.recentEvents(before)) {
+        if (event.kind === "hit" && event.creepTargetId >= 0 && event.amount < 0) heals.push(event);
+      }
+    }
+    return heals;
+  };
+
+  /** Three Pokeys and a level 1 Vorg dropped on a harvester a Cannon Tower covers. */
+  const battleOf = (monsters: Record<string, number>, champion?: { t: number; l: number }) => {
+    const yard = yardOf({
+      "1": { id: 1, t: 20, l: 2, X: 0, Y: 0 },
+      "4": { id: 4, t: 1, l: 1, X: 150, Y: 150 },
+    });
+    const battle = createBattle(yard, { seed: 3 });
+    battle.apply({
+      kind: "fling",
+      t: 0,
+      x: 120,
+      y: 120,
+      r: 0,
+      monsters,
+      ...(champion && { champion }),
+    });
+    return battle;
+  };
+
+  it("heals a wounded attacker by its damage's size, never past full health", () => {
+    const battle = battleOf({ C1: 3, C16: 1 });
+    const vorg = battle.creeps().find((creep) => creep.monsterId === "C16")!;
+    const heals = healsIn(battle, 1500);
+    expect(heals.length).toBeGreaterThan(0);
+    for (const heal of heals) {
+      expect(heal.creepId).toBe(vorg.id);
+      // Level 1 Vorg: damage -60.
+      expect(-heal.amount).toBeGreaterThan(0);
+      expect(-heal.amount).toBeLessThanOrEqual(60);
+    }
+    for (const creep of battle.creeps()) expect(creep.hp).toBeLessThanOrEqual(creep.maxHp);
+  });
+
+  it("heals a champion by a tenth (`FIREBALL.as:151-153`)", () => {
+    const battle = battleOf({ C16: 1 }, { t: 1, l: 1 });
+    const gorgo = battle.creeps().find((creep) => creep.champion)!;
+    const onGorgo = healsIn(battle, 3000).filter((heal) => heal.creepTargetId === gorgo.id);
+    expect(onGorgo.length).toBeGreaterThan(0);
+    for (const heal of onGorgo) expect(-heal.amount).toBeLessThanOrEqual(6);
+  });
+
+  it("never heals another healer, and leaves once its give-up timer runs out", () => {
+    const battle = battleOf({ C15: 1, C16: 1 });
+    const heals = healsIn(battle, 1000);
+    expect(heals).toHaveLength(0);
+    // Nobody to heal: a look a tick, 800 of them, then home.
+    expect(battle.creeps().filter((creep) => !creep.friendly)).toHaveLength(0);
+  });
+
+  it("never swings at a building", () => {
+    const battle = battleOf({ C16: 1 });
+    run(battle, 1500);
+    expect(battle.state().health).toEqual({});
+  });
+});
+
 describe("a bunker's reach (issue #91)", () => {
   /**
    * A level 1 Monster Bunker (range 300, 90 x 90) at the origin scans from the

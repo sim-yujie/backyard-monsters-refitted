@@ -98,8 +98,8 @@ import type {
  *
  * Creeps with their six target groups and their specialist multipliers; the
  * pathing grid and the wall that gets in the way; ranged and melee swings;
- * Eye-ra's blast; Slimeattikus splitting as it dies; towers with their
- * acquire delay, re-arm and splash; the two traps; bunkers dispatching
+ * Eye-ra's blast; Slimeattikus splitting as it dies; the healers; towers with
+ * their acquire delay, re-arm and splash; the two traps; bunkers dispatching
  * defenders; resource bombs; loot out of harvesters and storage, hit by hit,
  * and the share of the pool a fallen storage building gives up; the countdown
  * and the retreat.
@@ -150,7 +150,7 @@ import type {
  * 8. **Not modelled at all**, each because its numbers were never traced
  *    (`docs/specs/combat.md:1362-1375`) or because it is out of Map Room 2's
  *    scope: champion abilities and buffs beyond damage and looting,
- *    Rezghul's zombies, the healers C15 and C16,
+ *    Rezghul's zombies,
  *    invisibility, `Blink`, `PoisonOnAttack`, `GlavesOnAttack`, the Stronghold's
  *    four emitters, the Spurtz Cannon's burst, every siege weapon, and the
  *    per-creep `_hitLimit`. A yard holding one of those buildings fires it as
@@ -393,7 +393,7 @@ export interface Battle {
 
 /* ── Internals ────────────────────────────────────────────────────────────── */
 
-type Behaviour = "attack" | "defend" | "bunker" | "retreat";
+type Behaviour = "attack" | "defend" | "bunker" | "heal" | "retreat";
 
 interface Creep {
   id: number;
@@ -433,6 +433,10 @@ interface Creep {
   gone: boolean;
   /** The bunker that sent it out, by building id; -1 for any other creep. */
   homeBunker: number;
+  /** The tick it joined the field; its own `_frameNumber` counts from here. */
+  born: number;
+  /** A healer's `_healerGiveUpTimer`: looks left before it gives up (`CreepBase.as:41`). */
+  giveUp: number;
 }
 
 interface Tower {
@@ -504,6 +508,17 @@ export const flingCost = (
 
 /** The Map Room 2 flinger payload, which is pinned to level 4 (`GLOBAL.as:863`). */
 export const flingerPayload = (): number => capacity(5, MR2_FLINGER_LEVEL);
+
+/** How far a healer looks for someone to heal (`CreepBase.as:612`). */
+const HEAL_SEARCH = 600;
+
+/** A healer's `_healerGiveUpTimer` at spawn (`CreepBase.as:41`). */
+const HEALER_GIVE_UP = 800;
+
+/** Monsters no healer will touch: the two healers (`CREATURELOCKER.as:469`, `:500`). */
+const ANTI_HEAL: ReadonlySet<string> = new Set(["C15", "C16"]);
+
+const isAntiHeal = (id: string): boolean => ANTI_HEAL.has(id);
 
 const clampLevel = (levels: MonsterLevels | undefined, id: string): number => {
   const level = levels?.[id];
@@ -860,6 +875,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const health = monsterStat(monsterId, "health", level);
     const targetGroup = monsterStat(monsterId, "targetGroup", level) || TARGET_GROUP.ALL;
     const cart = rangePointOf(at.x, at.y);
+    // An attacker whose target group is monsters is a healer: it goes straight
+    // into `heal` (`CreepBase.as:195-196`, issue #129).
+    const mode =
+      behaviour === "attack" && targetGroup === TARGET_GROUP.MONSTERS ? "heal" : behaviour;
     const creep: Creep = {
       id: nextCreepId,
       monsterId,
@@ -883,7 +902,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       lootMultiplier: lootingMultiplier(targetGroup, false),
       flags: defenseFlags(friendly, flying, false),
       targetable: true,
-      behaviour,
+      behaviour: mode,
       attackCooldown: 0,
       atTarget: false,
       attacking: false,
@@ -894,6 +913,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       phase: nextCreepId % RETARGET_TICKS,
       gone: false,
       homeBunker,
+      born: tick,
+      giveUp: HEALER_GIVE_UP,
     };
     nextCreepId += 1;
     creeps.push(creep);
@@ -945,6 +966,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       phase: nextCreepId % RETARGET_TICKS,
       gone: false,
       homeBunker: -1,
+      born: tick,
+      giveUp: HEALER_GIVE_UP,
     };
     nextCreepId += 1;
     creeps.push(creep);
@@ -1204,6 +1227,112 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     moveCreep(creep);
   };
 
+  /**
+   * `findHealingTargets` (`CreepBase.as:606-657`): the nearest wounded ally
+   * within 600 that can be healed, else the one it is already on while that
+   * one is still wounded. Meanwhile it follows the nearest ally that can be
+   * healed at all (`:615-624`). With nobody wounded it waits out
+   * `_healerGiveUpTimer` a look at a time and then leaves (`:642-651`). A
+   * yard with nothing left standing sends it home at once (`:610-611`).
+   */
+  const findHealingTargets = (creep: Creep): void => {
+    if (!yard.buildings.some(isAttackableBuilding)) {
+      creep.behaviour = "retreat";
+      return;
+    }
+    const hits = index.inRange(HEAL_SEARCH, creep.x, creep.y, oldStyleTargets(1), creep.id);
+    const current = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
+    const wounded = (other: Creep | undefined): boolean =>
+      !!other && other.hp > 0 && other.hp < other.maxHp;
+    if (!wounded(current)) {
+      const follow = hits.find((hit) => !isAntiHeal(hit.creep.monsterId));
+      if (follow) creep.targetCreep = follow.creep.id;
+    }
+    const pick = hits.find(
+      ({ creep: other }) =>
+        other.behaviour !== "retreat" && !isAntiHeal(other.monsterId) && other.hp < other.maxHp,
+    );
+    if (pick) {
+      creep.targetCreep = pick.creep.id;
+    } else if (!wounded(current)) {
+      if (creep.giveUp > 0) creep.giveUp -= 1;
+      else creep.behaviour = "retreat";
+    }
+  };
+
+  /**
+   * A healer, `k_sBHVR_HEAL` (`CreepBase.as:1302-1370`): C15 Zafreeti and C16
+   * Vorg carry negative damage and spend it on their own side (issue #129).
+   *
+   * It re-looks when its patient dies, every 100 of its own frames while the
+   * patient is whole, and every 120 while it is not healing; it closes to its
+   * range and backs off to it again only past 1.25 of it squared (`:1317-1344`).
+   * In range, each swing heals the patient by the damage's size, a champion by
+   * a tenth, never past full health (`FIREBALL.as:150-159`), and only while
+   * the patient is still wounded (`:1351-1361`). The heal lands on the tick it
+   * is thrown, as every projectile does here (fidelity note 1).
+   */
+  const tickHealer = (creep: Creep): void => {
+    const frame = tick - creep.born;
+    let target = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
+    if (target && target.hp > 0) {
+      const squared = screenDistanceSquared(creep.ix, creep.iy, target.ix, target.iy);
+      const reach = creep.range * creep.range;
+      if (target.hp >= target.maxHp && frame % 100 === 0) {
+        creep.atTarget = false;
+        creep.attacking = false;
+        findHealingTargets(creep);
+      } else if (!creep.attacking && frame % 120 === 0) {
+        findHealingTargets(creep);
+      } else if (squared < reach) {
+        creep.atTarget = true;
+      } else if (creep.attacking && squared > reach * 1.25) {
+        creep.attacking = false;
+        creep.atTarget = false;
+      }
+    } else {
+      creep.targetCreep = -1;
+      creep.atTarget = false;
+      creep.attacking = false;
+      findHealingTargets(creep);
+    }
+    if (creep.behaviour !== "heal") return;
+    target = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
+    if (!target || target.hp <= 0) return;
+
+    if (creep.atTarget) {
+      if (creep.attackCooldown <= 0) {
+        creep.attackCooldown += Math.trunc(creep.attackDelay);
+        if (target.hp < target.maxHp) {
+          creep.attacking = true;
+          healCreep(creep, target);
+        } else {
+          creep.attacking = false;
+        }
+      } else {
+        creep.attackCooldown -= 1;
+      }
+      return;
+    }
+    creep.attacking = false;
+    creep.waypoints = [{ x: target.ix, y: target.iy }];
+    creep.waypointIndex = 0;
+    moveCreep(creep);
+  };
+
+  /** One heal: its damage's size, a tenth on a champion, up to full (`FIREBALL.as:150-159`). */
+  const healCreep = (healer: Creep, target: Creep): void => {
+    const size = Math.abs(healer.damage) * (target.champion ? 0.1 : 1);
+    const healed = Math.min(size, target.maxHp - target.hp);
+    if (healed <= 0) return;
+    target.hp += healed;
+    if (target.champion) {
+      championHp = target.hp;
+      championsHp[target.monsterId] = target.hp;
+    }
+    recordHit(healer, target.ix, target.iy, -healed);
+  };
+
   const tickCreep = (creep: Creep): void => {
     if (creep.hp <= 0 || creep.gone) return;
     if (creep.behaviour === "retreat") {
@@ -1212,6 +1341,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     if (creep.friendly) {
       tickDefender(creep);
+      return;
+    }
+    if (creep.behaviour === "heal") {
+      tickHealer(creep);
       return;
     }
 
