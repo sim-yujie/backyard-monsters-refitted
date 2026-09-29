@@ -13,7 +13,12 @@ import { resourcesHandler } from "./handlers/resourceHandler.js";
 import { purchaseHandler } from "./handlers/purchaseHandler.js";
 import { academyHandler } from "./handlers/academyHandler.js";
 import { BaseType } from "../../../enums/Base.js";
-import { attackNotBoundErr, permissionErr, saveFailureErr } from "../../../errors/errors.js";
+import {
+  attackNotBoundErr,
+  attackResultPendingErr,
+  permissionErr,
+  saveFailureErr,
+} from "../../../errors/errors.js";
 import { combatConfig } from "../../../config/CombatConfig.js";
 import { chargeBombSpend } from "../../../services/base/combat/bombSpend.js";
 import { recordBombSpend } from "../../../services/base/combat/recordBombSpend.js";
@@ -58,9 +63,13 @@ import { storedDamage } from "../../../services/base/storedDamage.js";
 import {
   attackLootOf,
   bankAttackLoot,
+  lootReplayInput,
   wholeAmounts,
   type AttackLoot,
+  type ReplayedLoot,
+  type ReplayedLootInput,
 } from "../../../services/base/combat/attackLoot.js";
+import { ReplayTimeoutError, replayLootInWorker } from "../../../services/base/combat/replayRunner.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import { championsAfterAttack, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
 import { fallenIn, withoutFallenGarrisons } from "../../../services/base/combat/bunkerGarrison.js";
@@ -179,11 +188,9 @@ const saveBase = async (
   // stand before any key of this save is applied — the attacker's champions
   // above all. Only the save that ends the attack lands any: every save of an
   // attack repeats the whole log, and that one holds the final lock.
-  const loot =
+  const lootArgs =
     isAttack && saveData.over
-      ? attackLootOf({
-          sent: saveData.attackloot,
-          reported: saveData.resources,
+      ? {
           flinglog: saveData.flinglog,
           session,
           defender: {
@@ -194,9 +201,22 @@ const saveBase = async (
             height: await combatCellHeight(baseSave),
           },
           attacker: userSave,
-          mapRoom3,
-        })
+        }
       : null;
+  // The battle itself runs in a worker, so the event loop stays free for
+  // everyone else (issue #23, C5); past its deadline the attack is left to
+  // the finaliser before anything here is written.
+  const replayInput = lootArgs ? lootReplayInput(lootArgs) : null;
+  const fought = replayInput ? await replayForSave(ctx, user, baseSave, replayInput) : undefined;
+  const loot = lootArgs
+    ? attackLootOf({
+        ...lootArgs,
+        sent: saveData.attackloot,
+        reported: saveData.resources,
+        mapRoom3,
+        ...(fought && { fought }),
+      })
+    : null;
 
   if (loot) logCappedLoot(ctx, user, baseSave, saveData.attackloot, loot);
 
@@ -591,6 +611,38 @@ const logCappedLoot = (
  * cannot price. Everything else — attacks, Map Room 1 tribes, anything that is
  * neither a main yard nor an outpost — is `none`.
  */
+/**
+ * The save's loot replay, in a worker (issue #23, C5). A replay past its
+ * deadline gives the attack to the finaliser: nothing has been written yet,
+ * the session and the checkpoint are left as they are, and the attacker's next
+ * load (or the sweep, once the window closes) lands the attack from the
+ * checkpoint (`finaliseAttack.ts`).
+ *
+ * @throws {ClientSafeError} `attackResultPendingErr` when the replay timed out.
+ */
+const replayForSave = async (
+  ctx: Context,
+  user: User,
+  baseSave: Save,
+  input: ReplayedLootInput
+): Promise<ReplayedLoot> => {
+  try {
+    return await replayLootInWorker(input);
+  } catch (err) {
+    if (!(err instanceof ReplayTimeoutError)) throw err;
+    logger.warn("Attack replay for {username} on base {baseid} timed out: the finaliser will land it", {
+      event: "attack-replay-timeout",
+      userid: user.userid,
+      username: user.username,
+      baseid: baseSave.baseid,
+      basesaveid: baseSave.basesaveid,
+      deadlineMs: err.deadlineMs,
+      ip: ctx.ip,
+    });
+    throw attackResultPendingErr();
+  }
+};
+
 const economyAuditKind = (
   isAttack: boolean,
   isOutpostOwner: boolean,

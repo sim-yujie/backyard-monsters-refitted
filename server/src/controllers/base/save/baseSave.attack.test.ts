@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
 
 /**
@@ -75,6 +75,19 @@ mock.module("../../../services/base/attackSessionStore.js", () => ({
   endAttackSession: async () => {},
 }));
 
+// The real replay runner, unless a test asks for a replay that times out
+// (issue #23, C5). The query makes the real module one no mock replaces.
+const REAL_RUNNER = "../../../services/base/combat/replayRunner.ts?real";
+const realRunner = (await import(REAL_RUNNER)) as typeof import("../../../services/base/combat/replayRunner.js");
+let replayTimesOut = false;
+mock.module("../../../services/base/combat/replayRunner.js", () => ({
+  ...realRunner,
+  replayLootInWorker: async (...args: Parameters<typeof realRunner.replayLootInWorker>) => {
+    if (replayTimesOut) throw new realRunner.ReplayTimeoutError(5_000);
+    return realRunner.replayLootInWorker(...args);
+  },
+}));
+
 const { baseSave } = await import("./baseSave.js");
 const { attackLootOf } = await import("../../../services/base/combat/attackLoot.js");
 
@@ -100,7 +113,14 @@ const replayCap = (flinglog: unknown = LOG) =>
     mapRoom3: false,
   }).cap;
 
+// The mock outlives this file (bun keeps module mocks across files), so it is
+// left delegating to the real runner.
+afterEach(() => {
+  replayTimesOut = false;
+});
+
 beforeEach(() => {
+  replayTimesOut = false;
   store.clear();
   defender = {
     basesaveid: 9,
@@ -378,5 +398,21 @@ describe("the defender's monsters through the save (#23, C2)", () => {
     await baseSave(ctxFor({ over: "1", monsters: wiped, flinglog: JSON.stringify(LOG) }), async () => {});
 
     expect(defender.monsters).toEqual(HOUSING);
+  });
+});
+
+describe("a replay past its deadline (#23, C5)", () => {
+  test("lands nothing and leaves the attack to the finaliser", async () => {
+    replayTimesOut = true;
+    const caught = await baseSave(
+      ctxFor({ over: "1", attackloot: JSON.stringify(CLAIM), flinglog: JSON.stringify(LOG) }),
+      async () => {}
+    ).catch((err: unknown) => err as { data?: { reason?: string } });
+
+    expect(caught?.data?.reason).toBe("replayTimeout");
+    expect(attackerSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
+    expect(defender.resources.r1).toBe(5000);
+    // The row still carries the attack, for the finaliser to finish.
+    expect(defender.attackid).toBe(ATTACK_ID);
   });
 });

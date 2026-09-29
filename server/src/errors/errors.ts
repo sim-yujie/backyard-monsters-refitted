@@ -578,6 +578,22 @@ export const attackNotBoundErr = (reason: string) =>
   });
 
 /**
+ * An attack save whose battle replay did not finish in time (issue #23, C5,
+ * `services/base/combat/replayRunner.ts`). Nothing of the save was written:
+ * the attack is left to the server's finaliser, which lands it from its last
+ * checkpoint on the attacker's next load, or once the attack's window closes
+ * (`finaliseAttack.ts`). `503` in `errorDetails.status`, where the web client
+ * reads it; `isClientFriendly: false` as `attackNotBoundErr` explains.
+ */
+export const attackResultPendingErr = () =>
+  new ClientSafeError({
+    message: "The attack's result is still being worked out. It will be in your yard shortly.",
+    status: Status.SERVICE_UNAVAILABLE,
+    data: { reason: "replayTimeout" },
+    isClientFriendly: false,
+  });
+
+/**
  * An attack checkpoint the server will not keep (issue #138,
  * `services/base/attackCheckpoint.ts`): one that does not parse, or one that
  * would take something back out of the record already held — a shorter log, a

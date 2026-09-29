@@ -426,6 +426,14 @@ the web client's final save and the copy of it sent as the page closes, or a sav
 finalisation — exactly one lands. The loser is refused with `attackNotBoundErr("finalising")` if it
 arrives while the lock is held, or by the binding check / `permissionErr` once the row is free.
 
+**Replays run in a worker** (issue #23, C5, `services/base/combat/replayRunner.ts`): the save's loot
+replay and the finaliser's replay each run in a Bun worker of their own, so the event loop stays
+free while the battle is worked out. The save waits 5 s: past that it answers
+`attackResultPendingErr` (503 in `errorDetails.status`, `reason: "replayTimeout"`) having written
+nothing, and the attack is left to the finaliser, which lands it from the checkpoint on the
+attacker's next load or once the window closes. The finaliser waits 20 s and, past that, leaves
+the checkpoint for its next pass.
+
 ### Leaving an attack: checkpoints and finalisation (issue #138)
 
 Leaving the web client's attack screen (a reload, a closed tab, browser Back, in-app navigation, a

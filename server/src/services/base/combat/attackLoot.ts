@@ -273,6 +273,58 @@ export const replayedLoot = ({
   };
 };
 
+/** What {@link replayedLoot} is handed. */
+export type ReplayedLootInput = Parameters<typeof replayedLoot>[0];
+
+/**
+ * What the loot replay of an attack save needs, as plain data, or null when
+ * the save gets no replay: a session without a roster, or a save without a
+ * usable fling log. It is `attackLootOf`'s own test, for a caller that runs the
+ * replay in a worker first (`replayRunner.ts`) and hands the result back as
+ * `fought`. Every field is copied off the rows, so nothing the worker is sent
+ * is an ORM entity.
+ *
+ * @param flinglog - The save's `flinglog`, as parsed from the body.
+ * @param session - The attack session the save was bound to.
+ * @param defender - The defender's row, with the pool it draws from now.
+ * @param attacker - The attacker's main save as it stood before this save.
+ */
+export const lootReplayInput = ({
+  flinglog,
+  session,
+  defender,
+  attacker,
+}: {
+  flinglog: unknown;
+  session: AttackSession | null;
+  defender: LootDefender;
+  attacker: LootAttacker;
+}): ReplayedLootInput | null => {
+  const entryHoused = session?.entryHoused;
+  if (!entryHoused) return null;
+  const log = parseFlingLog(flinglog);
+  if (!log) return null;
+  return {
+    defender: {
+      type: defender.type,
+      buildingdata: defender.buildingdata,
+      buildinghealthdata: defender.buildinghealthdata,
+      resources: defender.resources,
+      ...(defender.height !== undefined && { height: defender.height }),
+    },
+    pool: session.defenderResources ?? poolAmounts(defender.resources),
+    attacker: {
+      academy: attacker.academy ?? null,
+      champion: attacker.champion ?? null,
+      catapult: attacker.catapult ?? null,
+      buildingdata: attacker.buildingdata ?? null,
+    },
+    log,
+    entryHoused,
+    ...(session.attackerlevel !== undefined && { playerLevel: session.attackerlevel }),
+  };
+};
+
 /** What an attack's save lands on each side. */
 export interface AttackLoot {
   /** What the attacker is credited. */
@@ -316,10 +368,12 @@ export interface AttackLoot {
  * @param attacker - The attacker's main save as it stood before this save.
  * @param mapRoom3 - Whether the attacker's own save is on Map Room 3.
  * @param fought - The battle as the server already fought it, when the caller
- *   did (the finaliser, `finaliseAttack.ts`): over the fightable log, the
- *   served pool and level, and no further than the longest end, so it is its
- *   own bound (loot and loss only grow as a battle runs) and stands in for the
- *   replay here, which would cost a second run of the whole battle.
+ *   did: the finaliser's own replay (`finaliseAttack.ts`), over the fightable
+ *   log, the served pool and level, and no further than the longest end, so
+ *   its own bound (loot and loss only grow as a battle runs); or the save's
+ *   loot replay run in a worker (`replayRunner.ts`, {@link lootReplayInput}).
+ *   Either stands in for the replay here, which would run the battle again on
+ *   the request thread.
  */
 export const attackLootOf = ({
   sent,
@@ -366,21 +420,10 @@ export const attackLootOf = ({
   };
 
   const none = { r1: 0, r2: 0, r3: 0, r4: 0 };
-  const entryHoused = session?.entryHoused;
-  if (entryHoused) {
-    const log = parseFlingLog(flinglog);
-    if (!log) return land(none, none, "no-log");
-    const pool = session.defenderResources ?? poolAmounts(defender.resources);
-    const replayed =
-      fought ??
-      replayedLoot({
-        defender,
-        pool,
-        attacker,
-        log,
-        entryHoused,
-        ...(session.attackerlevel !== undefined && { playerLevel: session.attackerlevel }),
-      });
+  if (session?.entryHoused) {
+    const input = lootReplayInput({ flinglog, session, defender, attacker });
+    if (!input) return land(none, none, "no-log");
+    const replayed = fought ?? replayedLoot(input);
     return land(replayed.attackloot, replayed.defenderLoss, "replay", replayed.fallen ?? null);
   }
 

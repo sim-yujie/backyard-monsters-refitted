@@ -24,11 +24,11 @@ import {
 import { endAttackSession } from "./attackSessionStore.js";
 import {
   buildingDataWithout,
-  replayAbandonedAttack,
   type AbandonedDefender,
   spendFlung,
   type SourceCell,
 } from "./combat/abandonedAttack.js";
+import { replayAbandonedInWorker } from "./combat/replayRunner.js";
 import { attackLootOf, bankAttackLoot, fightableLog, wholeAmounts } from "./combat/attackLoot.js";
 import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpend.js";
 import { combatCellHeight } from "./combat/cellHeight.js";
@@ -161,7 +161,9 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
   const session = checkpointSession(checkpoint);
   const pool = (outpostOwnerSave ?? defender).resources;
 
-  const outcome = replayAbandonedAttack({
+  // In a worker, off the event loop (issue #23, C5). A replay past its
+  // deadline throws: the checkpoint stays for the next pass.
+  const outcome = await replayAbandonedInWorker({
     defender: {
       type: defender.type,
       buildingdata: defender.buildingdata,

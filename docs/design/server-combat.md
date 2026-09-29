@@ -538,6 +538,13 @@ grid changes, a few hundred per attack.
 Budget, to be measured by `bench.test.ts` in WP4 on the sandbox yard with a 300-Pokey, 4-fling,
 5-minute log: **under 500 ms median and under 2 s worst on Bun 1.4**; the test fails above 5 s.
 
+**Implemented (issue #23, C5):** `services/base/combat/replayRunner.ts` runs the save's loot replay
+and the finaliser's replay each in a worker of its own (5 s and 20 s deadlines), under the final
+lock that already makes them single-flight per base; a save whose replay times out answers
+`attackResultPendingErr` and leaves the attack to the finaliser. Measured: a 300-Pokey battle on
+the sandbox yard held the event loop for ~780 ms inline and for at most ~3 ms in a worker; a
+worker round trip costs ~40 ms on a trivial battle.
+
 Where it runs: **in a Bun `Worker` started by the save request, awaited with a deadline of 5 s**,
 single-flight per `basesaveid` (a Redis `SET NX` on `attack-replay:<basesaveid>`, released on
 completion). A Koa request that blocked the event loop for seconds would stall every other player,
