@@ -127,6 +127,27 @@ const STARTER_BASE = "starterBase";
  */
 const STARVED = "starve";
 
+/**
+ * One of the player's outposts was attacked or taken while they were away
+ * (outposts WP8, #187). The server writes the whole sentence
+ * (`server/src/services/maproom/v2/outpostNotices.ts`): "Bramble attacked your
+ * outpost at (243, 206). It was left 63% damaged, and 1,234 Twigs were
+ * looted." Told as a sentence of its own, ahead of what finished.
+ */
+const OUTPOST_NOTICES: ReadonlySet<string> = new Set(["outpostAttacked", "outpostTaken"]);
+
+/** An outpost notice as its own sentence, with no buttons. */
+const outpostNoticeGroup = (job: CompletedJob): JobNoticeGroup => {
+  const text = (job.detail as { text?: unknown }).text;
+  return {
+    kind: job.kind,
+    heading: typeof text === "string" && text !== "" ? text.replace(/\.$/, "") : "One of your outposts was attacked",
+    items: [],
+    tail: "",
+    standalone: true,
+  };
+};
+
 const COUNT_WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
 
 /** "1,600 Twigs and 1,600 Pebbles", or "" when nothing landed. */
@@ -227,15 +248,17 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
  */
 export const groupCompletedJobs = (completed: readonly CompletedJob[]): JobNoticeGroup[] => {
   const starters = completed.filter((job) => job.kind === STARTER_BASE).map(starterGroup);
+  const outposts = completed.filter((job) => OUTPOST_NOTICES.has(job.kind)).map(outpostNoticeGroup);
   const byKind = new Map<string, JobNoticeItem[]>();
   for (const job of completed) {
-    if (job.kind === STARTER_BASE) continue;
+    if (job.kind === STARTER_BASE || OUTPOST_NOTICES.has(job.kind)) continue;
     const items = byKind.get(job.kind) ?? [];
     items.push(labelOf(job));
     byKind.set(job.kind, items);
   }
   return [
     ...starters,
+    ...outposts,
     ...[...byKind].map(([kind, items]) =>
       kind === MAP_ROOM_ADDED
         ? { kind, heading: "A ", items, tail: " was added to your yard" }

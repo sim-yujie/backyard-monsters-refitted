@@ -15,6 +15,10 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { getDefenderCoords, isDefensiveStructure } from "../../../services/maproom/v3/getDefenderCoords.js";
 import { getHexDistance } from "../../../services/maproom/v3/getHexNeighborOffsets.js";
 import { Status } from "../../../enums/StatusCodes.js";
+import {
+  takeOutpostNotices,
+  type OutpostNoticeJob,
+} from "../../../services/maproom/v2/outpostNotices.js";
 import { baseModeView } from "./modes/baseModeView.js";
 import { baseModeBuild } from "./modes/baseModeBuild.js";
 import { baseModeAttack } from "./modes/baseModeAttack.js";
@@ -160,9 +164,13 @@ export const baseLoad: KoaController = async (ctx) => {
   // hatcheries and damage, and the core when it is empty (outposts WP3).
   // Both also pay the player's Map Room 2 outpost income into the main pool
   // under the main row's lock (`autobankYard`, outposts WP4).
-  let completed: CompletedJob[] | undefined;
+  let completed: (CompletedJob | OutpostNoticeJob)[] | undefined;
   if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
-    ({ save: baseSave, completed } = await catchUpOwnerYard(baseSave));
+    let jobs: CompletedJob[];
+    ({ save: baseSave, completed: jobs } = await catchUpOwnerYard(baseSave));
+    // Outpost attacks and takeovers since the player last looked, told once
+    // in the same notice and kept in the mailbox (outposts WP8, #187).
+    completed = [...jobs, ...(await takeOutpostNotices(postgres.em, user.userid))];
   } else if (
     type === BaseMode.BUILD &&
     isOwner &&

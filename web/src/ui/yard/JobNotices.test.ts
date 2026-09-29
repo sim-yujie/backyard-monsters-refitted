@@ -208,6 +208,45 @@ describe("awayNoticeText", () => {
   });
 });
 
+describe("outpost notices (#187)", () => {
+  const attacked: CompletedJob = {
+    kind: "outpostAttacked",
+    id: "22913802243206",
+    t: null,
+    at: 50,
+    detail: {
+      text: "Bramble attacked your outpost at (243, 206). It was left 63% damaged, and 1,234 Twigs were looted.",
+      x: 243,
+      y: 206,
+    },
+  };
+  const taken: CompletedJob = {
+    kind: "outpostTaken",
+    id: "22913802243206",
+    t: null,
+    at: 60,
+    detail: {
+      text: "Bramble took your outpost at (243, 206). It is theirs now, with every building on it.",
+      x: 243,
+      y: 206,
+    },
+  };
+
+  it("tells each as a sentence of its own, ahead of what finished", () => {
+    expect(awayNoticeText(groupCompletedJobs([upgrade(1, CANNON, 5), attacked, taken]))).toBe(
+      "Bramble attacked your outpost at (243, 206). It was left 63% damaged, and 1,234 Twigs were looted. " +
+        "Bramble took your outpost at (243, 206). It is theirs now, with every building on it. " +
+        `While you were away: upgrade finished: ${typeName(CANNON)} 5`,
+    );
+  });
+
+  it("stands alone when nothing else happened", () => {
+    expect(awayNoticeText(groupCompletedJobs([attacked]))).toBe(
+      "Bramble attacked your outpost at (243, 206). It was left 63% damaged, and 1,234 Twigs were looted",
+    );
+  });
+});
+
 describe("JobNotices", () => {
   let notices: Notices;
   let select: ReturnType<typeof vi.fn<(id: number) => void>>;

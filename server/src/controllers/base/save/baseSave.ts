@@ -26,6 +26,7 @@ import { championHandler } from "./handlers/championHandler.js";
 import { buildingDataHandler } from "./handlers/buildingDataHandler.js";
 import { takeoverCellMR3, type TakeoverData } from "../../../services/maproom/v3/takeoverCellMR3.js";
 import { protectAfterAttack } from "../../../services/maproom/v2/damageProtection.js";
+import { noticeOutpostAttack } from "../../../services/maproom/v2/outpostNotices.js";
 import { takeoverOffer, type TakeoverOffer } from "../../../services/maproom/v2/takeoverOffer.js";
 import { isMR3Structure } from "../../../services/maproom/v3/utils/isMR3Structure.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
@@ -409,6 +410,17 @@ const saveBase = async (
     if (saveData.over && isProtectable && !isMR3Structure(baseSave.wmid)) {
       const grant = await protectAfterAttack(baseSave, user.userid);
       if (grant) takeoverGrant = await takeoverOffer(grant, user, userSave, baseSave);
+    }
+
+    // The outpost's owner is told who attacked it, the damage and the loot
+    // (outposts WP8, #187).
+    if (saveData.over && !isMR3Structure(baseSave.wmid)) {
+      await noticeOutpostAttack(postgres.em, {
+        outpost: baseSave,
+        attacker: user,
+        defenderDelta,
+        now,
+      });
     }
   }
 

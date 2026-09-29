@@ -10,6 +10,7 @@ import { buildingDataHandler } from "../../controllers/base/save/handlers/buildi
 import { defenderLootHandler } from "../../controllers/base/save/handlers/defenderLootHandler.js";
 import { runningPowerups } from "../alliance/powerups.js";
 import { protectAfterAttack } from "../maproom/v2/damageProtection.js";
+import { noticeOutpostAttack } from "../maproom/v2/outpostNotices.js";
 import { isMR3Structure } from "../maproom/v3/utils/isMR3Structure.js";
 import { advanceBuildingTimers } from "./advanceBuildingTimers.js";
 import { checkpointExpired, type AttackCheckpoint } from "./attackCheckpoint.js";
@@ -212,6 +213,15 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
   // A destroyed player outpost gives the attacker their one chance at it even
   // when the server finishes the attack (issue #182, `takeoverGrant.ts`).
   if (isProtectable && !isMR3Structure(defender.wmid)) await protectAfterAttack(defender, attacker.userid);
+  // Its owner is told of an attack on an outpost however it ended (outposts WP8, #187).
+  if (!isMR3Structure(defender.wmid)) {
+    await noticeOutpostAttack(postgres.em, {
+      outpost: defender,
+      attacker,
+      defenderDelta: outcome.defenderDelta,
+      now,
+    });
+  }
 
   defender.attackid = 0;
   if (defender.buildingdata) {

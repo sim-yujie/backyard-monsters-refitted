@@ -22,6 +22,8 @@ let cells: Row[];
 let flushed: number;
 let sessions: Set<number>;
 let inRange: boolean;
+/** Rows the takeover created: the mailbox notice to the previous owner (#187). */
+let created: Row[];
 
 const store = new Map<string, string>();
 const GRANT_KEY = "takeover-grant:900";
@@ -50,6 +52,13 @@ const saves = () => [takerSave, ownerSave, ...cells.map((cell) => cell.save as R
 const txEm = {
   findOne: async (_entity: unknown, where: Row) =>
     saves().find((save) => Object.entries(where).every(([key, value]) => save[key] === value)) ?? null,
+  find: async () => [],
+  create: (_entity: unknown, data: Row) => {
+    created.push(data);
+    return data;
+  },
+  count: async () => 1,
+  nativeUpdate: async () => 1,
   persist: () => {},
   flush: async () => {
     flushed += 1;
@@ -144,6 +153,7 @@ beforeEach(() => {
     cellRow(CAMP, 0, 1, { basesaveid: 901, userid: 0, saveuserid: 0, type: "tribe", damage: 95, wmid: 41 }),
   ];
   flushed = 0;
+  created = [];
   sessions = new Set();
   inRange = true;
   store.clear();
@@ -165,7 +175,29 @@ describe("takeoverCell", () => {
     expect(takerSave.outposts).toEqual([[240, 208, OUTPOST]]);
     expect(ownerSave.outposts).toEqual([]);
     expect(ownerSave.buildingresources).toEqual({});
-    expect(flushed).toBe(1);
+    // The takeover's writes, and the previous owner's notice with them (#187).
+    expect(flushed).toBe(2);
+  });
+
+  test("the previous owner, and only they, is told who took the outpost (#187)", async () => {
+    await run({ baseid: OUTPOST, resources: "{}" });
+    expect(created).toEqual([
+      expect.objectContaining({
+        userid: 0,
+        targetid: OWNER,
+        messagetype: "outposttaken",
+        subject: "taker took your outpost at (240, 208)",
+        targetUnread: 1,
+        userUnread: 0,
+        coords: [240, 208],
+        baseid: OUTPOST,
+      }),
+    ]);
+  });
+
+  test("taking a wild camp tells nobody", async () => {
+    await run({ baseid: CAMP, shiny: "1" });
+    expect(created).toEqual([]);
   });
 
   test("a destroyed wild camp is taken for Shiny and becomes an outpost", async () => {

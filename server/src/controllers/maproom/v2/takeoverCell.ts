@@ -15,6 +15,11 @@ import {
 } from "../../../services/base/updateResources.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { validateRange } from "../../../services/maproom/v2/validateRange.js";
+import {
+  OUTPOST_TAKEN,
+  takenNoticeText,
+  writeOutpostNotice,
+} from "../../../services/maproom/v2/outpostNotices.js";
 import { TakeoverCellSchema } from "../../../schemas/TakeoverCellSchema.js";
 import { shinyLockedErr, takeoverRefusedErr } from "../../../errors/errors.js";
 import { isShinyLocked } from "../../../services/user/shinyLock.js";
@@ -152,6 +157,18 @@ export const takeoverCell: KoaController = async (ctx) => {
         delete previousOwner.buildingresources[`b${baseid}`];
 
       em.persist(previousOwner);
+
+      // The previous owner is told who took it (outposts WP8, #187), in the
+      // same transaction as the takeover.
+      await writeOutpostNotice(em, {
+        ownerId: previousOwner.userid,
+        byUserId: currentUser.userid,
+        type: OUTPOST_TAKEN,
+        text: takenNoticeText(currentUser.username, cell),
+        cell,
+        baseid,
+        now,
+      });
     }
 
     const twelveHours = 12 * 60 * 60;
