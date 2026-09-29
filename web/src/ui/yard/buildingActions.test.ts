@@ -579,3 +579,22 @@ describe("fortifying on an outpost (#191)", () => {
     expect(job?.cancel?.refund).toEqual({ r1: 500_000, r2: 500_000, r3: 500_000, r4: 0 });
   });
 });
+
+describe("panelModel: the Wild Monster Baiter (#126)", () => {
+  it("opens a practice attack from a built Baiter at full health and idle", () => {
+    const context = contextOf({ buildings: [HALL(5), building(2, 19, 3)] });
+    expect(panelModel(pick(context, 2), context)).toMatchObject({ open: "baiter", openBlocked: null });
+  });
+
+  it("says why not while it is damaged or on a job (BUILDINGINFO.as:97-127)", () => {
+    const damaged = contextOf({ buildings: [HALL(5), building(2, 19, 3)], health: { "2": 100 } });
+    expect(panelModel(pick(damaged, 2), damaged).openBlocked).toBe("Repair the Baiter to bring an attack.");
+    const busy = contextOf({ buildings: [HALL(5), building(2, 19, 3, { cU: 600 })] });
+    expect(panelModel(pick(busy, 2), busy).openBlocked).toBe("The Baiter brings an attack once its job is done.");
+  });
+
+  it("is not offered for a foundation", () => {
+    const context = contextOf({ buildings: [HALL(5), building(2, 19, 0, { cB: 600 })] });
+    expect(panelModel(pick(context, 2), context).open).toBeNull();
+  });
+});

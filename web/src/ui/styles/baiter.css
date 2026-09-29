@@ -1,0 +1,265 @@
+/*
+ * The Wild Monster Baiter's practice-attack controls inside its building panel
+ * (`web/src/ui/yard/BaiterPanel.ts`, design `docs/design/yard-buildings.md`
+ * §8.1, issue #126), and the practice attack's summary in the attack scene.
+ *
+ * The panel sits in the 300px right dock, so rows stack: the monster's name
+ * over its stepper. Every value comes from tokens.css.
+ */
+
+.baiter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.baiter__note {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.baiter__part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.baiter__heading {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 800;
+}
+
+.baiter__gate {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-warning);
+}
+
+/* ── Where from: a compass around the yard ────────────────────────────── */
+
+.baiter-compass {
+  display: grid;
+  grid-template-columns: repeat(3, 44px);
+  grid-template-rows: repeat(3, 44px);
+  gap: var(--space-1);
+  justify-content: center;
+}
+
+.baiter-compass__cell {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-base);
+  color: var(--colour-text);
+  font: inherit;
+  font-size: var(--text-lg);
+  cursor: pointer;
+}
+
+.baiter-compass__cell--off {
+  border-style: dashed;
+  background: transparent;
+  cursor: default;
+  opacity: 0.4;
+}
+
+.baiter-compass__cell--on {
+  background: var(--colour-accent);
+  border-color: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.baiter-compass__cell:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* The yard, in the middle of the compass. */
+.baiter-compass__yard {
+  margin: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--colour-success);
+  opacity: 0.35;
+  transform: rotate(45deg) scale(0.8);
+}
+
+/* ── Level 1 / academy ───────────────────────────────────────────────────── */
+
+.baiter-switch {
+  display: flex;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.baiter-switch__option {
+  flex: 1;
+  padding: var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--colour-text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.baiter-switch__option + .baiter-switch__option {
+  border-left: 1px solid var(--colour-border);
+}
+
+.baiter-switch__option--on {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.baiter-switch__option:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--colour-accent-hover);
+}
+
+/* ── Size and rows ──────────────────────────────────────────────────────── */
+
+.baiter__figures {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.baiter__figures strong {
+  color: var(--colour-text);
+}
+
+.baiter__bar {
+  height: 8px;
+}
+
+.baiter__bar .monsters-bar__fill {
+  background: var(--colour-meter);
+}
+
+.baiter__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 22rem;
+  overflow-y: auto;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-base);
+}
+
+.baiter__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.baiter__row + .baiter__row {
+  border-top: 1px solid var(--colour-border);
+}
+
+.baiter__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+.baiter__picture {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  object-fit: contain;
+}
+
+.baiter__monster {
+  font-weight: 700;
+}
+
+.baiter__each {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.baiter__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.baiter__run {
+  min-height: 36px;
+}
+
+/* ── The practice attack's summary (the attack scene's modal layer) ───── */
+
+.baiter-summary {
+  width: min(92vw, 420px);
+}
+
+.baiter-summary__lead {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.baiter-summary__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.baiter-summary__facts dt {
+  color: var(--colour-text-muted);
+}
+
+.baiter-summary__facts dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.baiter-summary__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+@media (width <= 620px) {
+  .baiter__step,
+  .baiter__fill,
+  .baiter__count,
+  .baiter__run,
+  .baiter-switch__option {
+    min-height: 44px;
+  }
+}
+
+/* ── The practice attack's dock panel ─────────────────────────────────── */
+
+.baiter-dock__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.baiter-dock__row + .baiter-dock__row {
+  border-top: 1px solid var(--colour-border);
+}

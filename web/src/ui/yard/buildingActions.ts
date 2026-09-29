@@ -20,6 +20,7 @@ import { ladderFor } from "@/game/yard/planner/upgrades";
 import { overCap as overCapOf } from "@/game/yard/storage";
 import { freeWorkers, holdsWorker, sharperToolsMultiplier } from "@/game/yard/workers";
 import type { Yard, YardBuilding, YardWorkers } from "@/game/yard/yardModel";
+import { BAITER_TYPE } from "@/game/baiter/baiterSession";
 import { BUNKER_TYPE } from "@/game/monsters/bunker";
 import { researchOn } from "@/game/monsters/lab";
 import { CHAMPION_CAGE_TYPE, CHAMPION_CHAMBER_TYPE } from "@/game/yard/championModel";
@@ -192,7 +193,7 @@ export interface CancelOffer {
  * Which door a building opens: the world map, the layout planner, the
  * Monsters screen, a bunker's controls, or the Champion Cage's or Chamber's.
  */
-export type OpenTarget = "map" | "planner" | "monsters" | "bunker" | "cage" | "chamber";
+export type OpenTarget = "map" | "planner" | "monsters" | "bunker" | "cage" | "chamber" | "baiter";
 
 /** Everything the panel shows for a building on the player's own yard. */
 export interface PanelModel {
@@ -470,14 +471,21 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
               ? "cage"
               : building.type === CHAMPION_CHAMBER_TYPE && building.level > 0
                 ? "chamber"
-                : null;
+                : building.type === BAITER_TYPE && building.level > 0 && context.yard.kind !== "outpost"
+                  ? "baiter"
+                  : null;
   return {
     upgrade: upgrade && upgrade.gate?.reason !== "maxLevel" ? upgrade : null,
     maxed: upgrade?.gate?.reason === "maxLevel",
     job: jobOffer(building, context),
     open,
     monstersTab,
-    openBlocked: open === "map" ? mapBlocked(building, context) : null,
+    openBlocked:
+      open === "map"
+        ? mapBlocked(building, context)
+        : open === "baiter"
+          ? baiterBlocked(building, context)
+          : null,
     batch: isBatchType(building.type),
     recycle:
       building.type === TOWN_HALL_TYPE || context.yard.kind === "outpost"
@@ -556,6 +564,17 @@ export const hasMapRoom2 = (context: Pick<PanelContext, "yard" | "save">): boole
 const mapBlocked = (building: YardBuilding, context: PanelContext): string | null => {
   if (hasMapRoom2(context) || building.level >= 1) return null;
   return "The map opens when the Map Room is built.";
+};
+
+/**
+ * Why the Baiter cannot bring a practice attack now: the original offered its
+ * Open only on a Baiter at full health with no build, upgrade or fortify
+ * running (`client/scripts/BUILDINGINFO.as:97-127`, `:210-211`; #126).
+ */
+const baiterBlocked = (building: YardBuilding, context: PanelContext): string | null => {
+  if (isDamaged(building, context.save)) return "Repair the Baiter to bring an attack.";
+  if (building.countdown) return "The Baiter brings an attack once its job is done.";
+  return null;
 };
 
 /** The Town Hall is never recycled, so the panel does not offer it. */

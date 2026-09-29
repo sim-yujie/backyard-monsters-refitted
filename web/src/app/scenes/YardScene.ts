@@ -75,6 +75,7 @@ import { YardPlanner } from "./YardPlanner";
 import { sceneForMap } from "./MapGateScene";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
+import { setBaiterRun } from "@/game/baiter/baiterSession";
 import { devDetails } from "../devDetails";
 
 /**
@@ -1343,6 +1344,10 @@ export class YardScene implements Scene {
       scene: {
         selectBuilding: (id) => this.focusBuilding(id),
         openMonsters: (tab, focus) => this.openMonsters(tab, focus),
+        runBaiter: (run) => {
+          setBaiterRun(run);
+          this.context?.goTo(SceneName.BAITER);
+        },
       },
       notices: this.notices,
     };

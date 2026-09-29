@@ -2,6 +2,7 @@ import type { Container } from "pixi.js";
 import type { Resources } from "@/api/types";
 import type { Camera } from "@/game/Camera";
 import type { ResourceAmounts } from "@/game/combat/rules";
+import type { BaiterRun } from "@/game/baiter/baiterSession";
 import type { Yard } from "@/game/yard/yardModel";
 import type { YardRenderer } from "@/game/yard/YardRenderer";
 import type { Notices } from "@/ui/maproom/Notices";
@@ -79,6 +80,15 @@ export interface AttackMounts {
    * HUD the damage it has visibly dealt (#148).
    */
   readonly presentation: AttackPresentation;
+  /**
+   * The Wild Monster Baiter's practice attack this scene is running (#126),
+   * or absent on a real attack. Only the Baiter scene's own package reads it.
+   */
+  readonly practice?: BaiterRun;
+  /** The Baiter scene: the same practice attack again, on a fresh scene. */
+  readonly runAgain?: (run: BaiterRun) => void;
+  /** The Baiter scene: back to the player's own yard. */
+  readonly goToYard?: () => void;
 }
 
 /** A package mounted on the scene; may return its teardown. */

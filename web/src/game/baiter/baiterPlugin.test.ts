@@ -1,0 +1,154 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { BaseLoadResponse } from "@/api/types";
+import { AttackPresentation } from "@/game/attack/attackPresentation";
+import { ATTACK_PLUGINS, type AttackMounts } from "@/game/attack/attackPlugins";
+import { AttackSession } from "@/game/attack/AttackSession";
+import { battlePlugin } from "@/game/attack/plugins/battle";
+import "@/game/attack/plugins";
+import { readYard } from "@/game/yard/yardModel";
+import { Notices } from "@/ui/maproom/Notices";
+import { BAITER_PLUGINS, baiterPlugin } from "./baiterPlugin";
+import { BAITER_DIRECTIONS, baiterTarget, type BaiterRun } from "./baiterSession";
+
+/**
+ * The Baiter's practice attack sends nothing (issue #126): the scene mounts
+ * only the battle layer and the Baiter's own package, and a whole practice
+ * attack run through that package, from the first fling to the summary,
+ * makes no request at all — no attack load, no checkpoint, no save.
+ */
+
+/** A level-1 Town Hall and a level-1 Cannon Tower: something to fire and something to fall. */
+const ownYard = (): BaseLoadResponse =>
+  ({
+    error: 0,
+    id: 1,
+    baseid: "3510",
+    basesaveid: 1,
+    worldsize: [800, 800],
+    currenttime: 1_700_000_000,
+    buildingdata: {
+      "1": { id: 1, t: 14, l: 1, X: -100, Y: -100 },
+      "2": { id: 2, t: 20, l: 1, X: 60, Y: 60 },
+    },
+    buildinghealthdata: {},
+    resources: { r1: 1000, r2: 0, r3: 0, r4: 0 },
+    academy: {},
+  }) as unknown as BaseLoadResponse;
+
+const runOf = (): BaiterRun => ({
+  save: ownYard(),
+  picks: { C1: 20, C4: 5 },
+  direction: BAITER_DIRECTIONS[2]!,
+  levels: "wild",
+  baiterLevel: 3,
+});
+
+describe("the Baiter scene's packages", () => {
+  it("are the battle layer and the Baiter's own, and none of the attack's save, checkpoint or drop packages", () => {
+    expect(BAITER_PLUGINS).toEqual([battlePlugin, baiterPlugin]);
+    // Every other package a real attack mounts stays off this screen.
+    const others = ATTACK_PLUGINS.filter((plugin) => plugin !== battlePlugin);
+    expect(others.length).toBeGreaterThanOrEqual(4);
+    for (const plugin of others) expect(BAITER_PLUGINS).not.toContain(plugin);
+  });
+});
+
+describe("a practice attack", () => {
+  let fetchSpy: ReturnType<typeof vi.fn>;
+  let modal: HTMLElement;
+  let dock: HTMLElement;
+  let notices: Notices;
+
+  beforeEach(() => {
+    fetchSpy = vi.fn(() => Promise.reject(new Error("a practice attack must not call the server")));
+    vi.stubGlobal("fetch", fetchSpy);
+    vi.stubGlobal("navigator", { ...globalThis.navigator, sendBeacon: vi.fn(() => true) });
+    modal = document.body.appendChild(document.createElement("div"));
+    dock = document.body.appendChild(document.createElement("div"));
+    notices = new Notices().mount(document.body);
+  });
+
+  afterEach(() => {
+    notices.destroy();
+    modal.remove();
+    dock.remove();
+    vi.unstubAllGlobals();
+  });
+
+  it("flings the army from its direction, plays out and summarises, and sends nothing (#126)", () => {
+    const run = runOf();
+    const target = baiterTarget(run);
+    const session = new AttackSession({ target, seed: 3 });
+    const runAgain = vi.fn();
+    const goToYard = vi.fn();
+    const mounts = {
+      session,
+      target,
+      yard: readYard(ownYard()),
+      dock,
+      modal,
+      notices,
+      presentation: new AttackPresentation(),
+      goToMap: vi.fn(),
+      practice: run,
+      runAgain,
+      goToYard,
+    } as unknown as AttackMounts;
+
+    const teardown = baiterPlugin(mounts);
+    session.start();
+    // The whole army went in at once, at the direction's point.
+    const fling = session.flingLog().events.find((event) => event.kind === "fling");
+    expect(fling).toMatchObject({ x: 1000, y: 0, monsters: { C1: 20, C4: 5 } });
+    expect(dock.textContent).toContain("Practice attack");
+
+    for (let frame = 0; frame < 4 * 60 * 8 && session.state().phase !== "ended"; frame += 1) {
+      session.advance(0.25);
+    }
+    expect(session.state().phase).toBe("ended");
+
+    const summary = modal.querySelector(".baiter-summary")!;
+    expect(summary.textContent).toContain("Practice over");
+    expect(summary.textContent).toContain("Nothing was saved");
+    modal.querySelector<HTMLButtonElement>(".baiter-summary__again")!.click();
+    expect(runAgain).toHaveBeenCalledWith(run);
+    modal.querySelector<HTMLButtonElement>(".baiter-summary__back")!.click();
+    expect(goToYard).toHaveBeenCalledTimes(1);
+
+    teardown?.();
+    // Not one request, from the first fling to the way out.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(navigator.sendBeacon).not.toHaveBeenCalled();
+  });
+
+  it("starts from the yard as it stands: a damaged building at its own health (owner, 2026-09-29)", () => {
+    const save = { ...ownYard(), buildinghealthdata: { "2": 1234 } } as unknown as BaseLoadResponse;
+    const session = new AttackSession({ target: baiterTarget({ ...runOf(), save }), seed: 3 });
+    expect(session.battle()?.state().health["2"]).toBe(1234);
+  });
+
+  it("stopping early sends nothing either", () => {
+    const run = runOf();
+    const target = baiterTarget(run);
+    const session = new AttackSession({ target, seed: 3 });
+    const mounts = {
+      session,
+      target,
+      yard: readYard(ownYard()),
+      dock,
+      modal,
+      notices,
+      presentation: new AttackPresentation(),
+      goToMap: vi.fn(),
+      practice: run,
+    } as unknown as AttackMounts;
+    const teardown = baiterPlugin(mounts);
+    session.start();
+    session.advance(1);
+    session.retreat();
+    expect(modal.querySelector(".baiter-summary")!.textContent).toContain("You stopped the practice");
+    teardown?.();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

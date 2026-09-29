@@ -9,6 +9,7 @@ import { MapRoom1Scene } from "./scenes/MapRoom1Scene";
 import { MapRoom2Scene } from "./scenes/MapRoom2Scene";
 import { YardScene } from "./scenes/YardScene";
 import { AttackScene } from "./scenes/AttackScene";
+import { BAITER_PLUGINS } from "@/game/baiter/baiterPlugin";
 
 /** Scene names, so nothing depends on a bare string in two places. */
 export const SceneName = {
@@ -25,6 +26,12 @@ export const SceneName = {
   YARD: "yard",
   /** An attack on a foreign yard; opened through `game/attack/attackTarget`. */
   ATTACK: "attack",
+  /**
+   * A Wild Monster Baiter practice attack on the own yard (#126): the attack
+   * scene with only the battle layer and the Baiter's package, opened through
+   * `game/baiter/baiterSession`. Nothing on it talks to the server.
+   */
+  BAITER: "baiter",
 } as const;
 export type SceneName = (typeof SceneName)[keyof typeof SceneName];
 
@@ -87,7 +94,8 @@ export class App {
       .register(SceneName.MAP_ROOM_1, () => new MapRoom1Scene())
       .register(SceneName.MAP_ROOM_2, () => new MapRoom2Scene())
       .register(SceneName.YARD, () => new YardScene())
-      .register(SceneName.ATTACK, () => new AttackScene());
+      .register(SceneName.ATTACK, () => new AttackScene())
+      .register(SceneName.BAITER, () => new AttackScene(BAITER_PLUGINS, { practice: true }));
 
     // Pixi's renderer resize fires on the window; mirror it to the scenes.
     this.pixi.renderer.on("resize", this.handleResize);

@@ -1,4 +1,6 @@
-import { ATTACK_PLUGINS, type AttackPlugin } from "@/app/scenes/AttackScene";
+// From the registry itself rather than the scene, so the Baiter scene (#126)
+// can import this plugin without going round the scene and the app.
+import { ATTACK_PLUGINS, type AttackPlugin } from "@/game/attack/attackPlugins";
 import type { Yard } from "@/game/yard/yardModel";
 import type { AttackSession, FlingInput } from "../AttackSession";
 import { AttackBattleLayer } from "../AttackBattleLayer";
@@ -104,3 +106,6 @@ const plugin: AttackPlugin = (mounts) => {
 };
 
 ATTACK_PLUGINS.push(plugin);
+
+/** The plugin itself, for the Baiter scene (#126), which mounts the battle layer without the rest. */
+export { plugin as battlePlugin };

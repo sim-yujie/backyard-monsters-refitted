@@ -42,6 +42,7 @@ import {
   type UpgradeOffer,
 } from "./buildingActions";
 import { buildingInfo, type InfoValue } from "./buildingInfo";
+import { BaiterPanel } from "./BaiterPanel";
 import { BunkerPanel } from "./BunkerPanel";
 import { ChamberPanel } from "./ChamberPanel";
 import { ChampionPanel } from "./ChampionPanel";
@@ -161,6 +162,8 @@ export class BuildingPanel {
   /** Holds a Monster Bunker's controls while they are open (`BunkerPanel.ts`). */
   private readonly bunkerSlot: HTMLElement;
   private bunker: BunkerPanel | null = null;
+  /** The Baiter's practice-attack controls, in the bunker's slot (#126). */
+  private baiter: BaiterPanel | null = null;
   /** Holds the Champion Cage's or Chamber's controls while they are open (`ChampionPanel.ts`, `ChamberPanel.ts`). */
   private readonly championSlot: HTMLElement;
   private champion: ChampionPanel | ChamberPanel | null = null;
@@ -338,6 +341,7 @@ export class BuildingPanel {
       for (const button of this.shiny.values()) button.destroy();
       this.shiny.clear();
       this.closeBunker();
+      this.closeBaiter();
       this.closeChampion();
       this.closeJuice();
       this.toggleMore(false);
@@ -662,6 +666,21 @@ export class BuildingPanel {
       if (model.openBlocked) {
         button.disabled = true;
         button.title = model.openBlocked;
+        const wrap = document.createElement("div");
+        wrap.className = "building-panel__block";
+        wrap.append(button, gateText(model.openBlocked));
+        return wrap;
+      }
+      return button;
+    }
+    if (model?.open === "baiter" && this.yard) {
+      const open = this.baiter !== null;
+      const button = actionButton(open ? "Close Baiter" : "Bring an attack", () => this.toggleBaiter(model.openBlocked), "btn--primary");
+      button.classList.add("building-panel__planner");
+      button.setAttribute("aria-expanded", String(open));
+      button.title = "A practice attack on your own yard. Nothing is saved.";
+      if (model.openBlocked && !open) {
+        button.disabled = true;
         const wrap = document.createElement("div");
         wrap.className = "building-panel__block";
         wrap.append(button, gateText(model.openBlocked));
@@ -1287,6 +1306,33 @@ export class BuildingPanel {
     if (this.bunker) this.bunker.element.querySelector<HTMLElement>("[role=radio][aria-checked=true]")?.focus();
   }
 
+  /** Opens or closes the Baiter's practice-attack controls under the actions (#126). */
+  private toggleBaiter(blocked: string | null): void {
+    const building = this.building;
+    const yard = this.yard;
+    if (this.baiter || !building || !yard) {
+      this.closeBaiter();
+    } else {
+      const store = yard.store;
+      this.baiter = new BaiterPanel({
+        level: building.level,
+        save: () => store.save,
+        blocked,
+        onRun: (run) => yard.scene.runBaiter?.(run),
+      });
+      this.bunkerSlot.append(this.baiter.element);
+      this.bunkerSlot.hidden = false;
+    }
+    this.render();
+    if (this.baiter) this.baiter.element.querySelector<HTMLElement>("[role=radio][aria-checked=true]")?.focus();
+  }
+
+  private closeBaiter(): void {
+    this.baiter?.destroy();
+    this.baiter = null;
+    this.bunkerSlot.hidden = this.bunker === null;
+  }
+
   private closeBunker(): void {
     this.bunker?.destroy();
     this.bunker = null;
@@ -1315,6 +1361,7 @@ export class BuildingPanel {
 
   private dispose(): void {
     this.closeBunker();
+    this.closeBaiter();
     this.closeChampion();
     this.closeJuice();
     this.toggleMore(false);

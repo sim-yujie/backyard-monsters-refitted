@@ -9,6 +9,7 @@ import { ATTACK_TAP_CLAIMS } from "@/game/attack/AttackInput";
 import { AttackPresentation } from "@/game/attack/attackPresentation";
 import { AttackSession, type AttackSessionState } from "@/game/attack/AttackSession";
 import { consumeAttackTarget, type AttackTarget, type AttackTargetKind } from "@/game/attack/attackTarget";
+import { baiterTarget, consumeBaiterRun, setBaiterRun, type BaiterRun } from "@/game/baiter/baiterSession";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
@@ -84,6 +85,14 @@ export class AttackScene implements Scene {
   private readonly battleLayer = new Container();
   private presentation = new AttackPresentation();
   private readonly plugins: readonly AttackPlugin[];
+  /**
+   * A Wild Monster Baiter practice attack on the player's own yard (#126):
+   * the Baiter scene is this scene with {@link BAITER_PLUGINS} and this set.
+   * The yard comes from the run, already loaded; Stop needs no confirmation
+   * and leaving needs none either, because nothing is saved.
+   */
+  private readonly practice: boolean;
+  private run: BaiterRun | null = null;
 
   private context: SceneContext | null = null;
   private viewportWidth = 0;
@@ -134,8 +143,9 @@ export class AttackScene implements Scene {
   private fitZoom = 0.05;
   private inset = { top: 0, bottom: 0 };
 
-  constructor(plugins: readonly AttackPlugin[] = ATTACK_PLUGINS) {
+  constructor(plugins: readonly AttackPlugin[] = ATTACK_PLUGINS, options: { practice?: boolean } = {}) {
     this.plugins = plugins;
+    this.practice = options.practice ?? false;
     this.battleLayer.eventMode = "none";
   }
 
@@ -143,7 +153,12 @@ export class AttackScene implements Scene {
     this.context = context;
     this.viewportWidth = context.width;
     this.viewportHeight = context.height;
-    this.target = consumeAttackTarget();
+    if (this.practice) {
+      this.run = consumeBaiterRun();
+      this.target = this.run ? baiterTarget(this.run) : null;
+    } else {
+      this.target = consumeAttackTarget();
+    }
 
     context.stage.addChild(this.renderer.root);
     this.renderer.attach(context.renderer);
@@ -170,6 +185,15 @@ export class AttackScene implements Scene {
     this.buildDock(context);
 
     const target = this.target;
+    if (!target && this.practice) {
+      this.status.textContent = "No practice attack was set up.";
+      this.notices.show("attack-load", "Open the Wild Monster Baiter in your yard to bring a practice attack.", {
+        level: "info",
+        actionLabel: "Back to the yard",
+        onAction: () => context.goTo(SceneName.YARD),
+      });
+      return;
+    }
     if (!target) {
       this.status.textContent = "No target was chosen.";
       this.notices.show("attack-load", "Pick a target on the map and press Attack.", {
@@ -180,7 +204,9 @@ export class AttackScene implements Scene {
       return;
     }
 
-    this.status.textContent = `Loading ${target.name}'s ${targetNoun(target.kind)}…`;
+    this.status.textContent = this.practice
+      ? "Setting up the practice attack…"
+      : `Loading ${target.name}'s ${targetNoun(target.kind)}…`;
     await this.load(target, context);
   }
 
@@ -309,13 +335,16 @@ export class AttackScene implements Scene {
     }
 
     // An attack target is always somebody else's yard: open grass, no plot
-    // edge, and room around the camp to drop on (issue #62).
+    // edge, and room around the camp to drop on (issue #62). A practice
+    // attack's wild monsters come from far outside the plot, so it is drawn
+    // the same way.
     const yard = readYard(response, { foreign: true });
     this.yard = yard;
     this.renderer.show(yard);
     // An attacker never sees a trap until it fires (`BTRAP.as:33-43`, #66);
     // the battle layer reveals each one as the engine reports it going off.
-    concealTraps(this.renderer, yard);
+    // The player's own traps are no secret to them.
+    if (!this.practice) concealTraps(this.renderer, yard);
     // The defender's pens, as Flash drew them on an attacked yard (#159):
     // scenery in the yard's own containers, never in the battle layer, so no
     // creep targets them and no count includes them. No caged champion: the
@@ -333,7 +362,10 @@ export class AttackScene implements Scene {
 
     // The attacker's own pool, not the defender's the load carries; the drop
     // package keeps it current as bombs go out (#92).
-    this.showResources(target.roster.resources ?? {}, target.roster.credits);
+    this.showResources(
+      this.practice ? (response.resources ?? {}) : (target.roster.resources ?? {}),
+      this.practice ? response.credits : target.roster.credits,
+    );
     this.mountPlugins(session, target, yard, context);
     session.start();
   }
@@ -361,6 +393,16 @@ export class AttackScene implements Scene {
       battleLayer: this.battleLayer,
       notices: this.notices,
       goToMap: () => context.goTo(SceneName.MAP),
+      ...(this.run
+        ? {
+            practice: this.run,
+            runAgain: (run: BaiterRun) => {
+              setBaiterRun(run);
+              context.goTo(SceneName.BAITER);
+            },
+            goToYard: () => context.goTo(SceneName.YARD),
+          }
+        : {}),
       setBottomInset: (px) => this.setInset({ ...this.inset, bottom: px }),
       showResources: (resources) => this.showResources(resources),
       creditLoot: (credited) => this.showResources(withLoot(this.shownResources, credited)),
@@ -445,7 +487,11 @@ export class AttackScene implements Scene {
 
     const title = document.createElement("span");
     title.className = "attack-strip__title";
-    title.textContent = this.target ? `Attacking ${this.target.name}` : "Attack";
+    title.textContent = this.practice
+      ? "Practice attack"
+      : this.target
+        ? `Attacking ${this.target.name}`
+        : "Attack";
 
     const clock = document.createElement("span");
     clock.className = "attack-strip__clock";
@@ -468,6 +514,8 @@ export class AttackScene implements Scene {
       return amount.querySelector<HTMLElement>(".res-amount__value")!;
     });
     loot.append("Loot ", amounts);
+    // Nothing is taken in practice.
+    loot.hidden = this.practice;
 
     const spacer = document.createElement("span");
     spacer.className = "attack-strip__spacer";
@@ -494,8 +542,8 @@ export class AttackScene implements Scene {
     const retreat = document.createElement("button");
     retreat.type = "button";
     retreat.className = "btn attack-strip__retreat";
-    retreat.textContent = "Retreat";
-    retreat.title = "End the attack now";
+    retreat.textContent = this.practice ? "Stop" : "Retreat";
+    retreat.title = this.practice ? "End the practice attack now" : "End the attack now";
     retreat.disabled = true;
     retreat.addEventListener("click", () => this.askRetreat());
 
@@ -667,6 +715,13 @@ export class AttackScene implements Scene {
     const target = this.target;
     if (!status || !yard || !target) return;
     const sent = Object.values(state.remaining).reduce((sum, count) => sum + count, 0);
+    if (this.practice) {
+      status.textContent =
+        `Practice on your yard · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
+        `${state.creepsAlive} attacking` +
+        (this.selected ? ` · ${typeName(this.selected.type)}` : "");
+      return;
+    }
     status.textContent =
       `${target.name}'s ${targetNoun(target.kind)} · ` +
       `${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
@@ -690,6 +745,12 @@ export class AttackScene implements Scene {
     if (!context || !session || this.confirm) return;
     const state = session.state();
     if (state.phase === "ended") {
+      after?.();
+      return;
+    }
+    // A practice attack keeps nothing, so stopping it asks nothing.
+    if (this.practice) {
+      session.retreat();
       after?.();
       return;
     }
@@ -731,6 +792,13 @@ export class AttackScene implements Scene {
     if (!context) return;
     const session = this.session;
     const phase = session?.state().phase;
+    // A practice attack is simply left: nothing was going to be saved.
+    if (this.practice) {
+      session?.retreat();
+      before?.();
+      context.goTo(scene);
+      return;
+    }
     if (session?.hasActed() && (phase === "running" || phase === "loaded")) {
       this.askRetreat(undefined, scene === SceneName.MAP ? undefined : destinationName(scene));
       return;

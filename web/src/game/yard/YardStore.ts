@@ -13,6 +13,7 @@ import type {
 } from "@/api/types";
 import { YARD_STATE_KEYS } from "@/api/types";
 import { yardApi, yardRefusal, type YardApi, type YardRefusal } from "@/api/yard";
+import type { BaiterRun } from "@/game/baiter/baiterSession";
 import type { Notices } from "@/ui/maproom/Notices";
 import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
 import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES, type YardKind } from "./buildingCosts";
@@ -199,6 +200,8 @@ export interface YardSceneHooks {
    * monster building's Open button use it. Absent where there is no screen.
    */
   openMonsters?(tab: MonstersTabId, focus?: MonstersFocus): void;
+  /** Starts a Wild Monster Baiter practice attack (#126). Absent where there is none. */
+  runBaiter?(run: BaiterRun): void;
 }
 
 /** Handed to the building panel (WP1.5) and the HUD (WP1.6) on the player's own yard. */

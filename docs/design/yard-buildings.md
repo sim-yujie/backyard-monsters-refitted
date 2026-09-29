@@ -1094,6 +1094,35 @@ Players may run it as often as they like. The attackers use level 1 stats, not t
 academy levels, because the original spawned them as a wild-monster custom attack
 (`client/scripts/MONSTERBAITER.as:55-60`).
 
+**Owner decisions (2026-09-29).** Three questions the Flash code left open, answered by the owner
+for WP6.1 (#126):
+
+1. **Strength: plain stats.** Flash multiplied every wild monster's health and damage by 0.4 to
+   0.9 by the yard's base points and value (`client/scripts/WMATTACK.as:729-752`, then
+   `CreepBase.as:88`, `:93`). The simulator does not: the attackers fight at level 1 or at the
+   player's academy levels (the Q5 toggle), at 100%, and the combat engine gets no multiplier.
+2. **Time limit: the attack's.** Flash's Baiter attack had no clock; it ran until the attackers died
+   or the player scared them away (`MONSTERBAITER.End`). The simulator keeps the attack scene's
+   5-minute countdown and its automatic ends (every attacker beaten, the yard flattened), and
+   **Stop** ends it early.
+3. **Starting yard: as it is now.** Damaged buildings start at their current health and traps that
+   already fired stay spent (a fired trap is gone from `buildingdata` until it is re-armed).
+   Nothing is saved either way.
+
+**As built (#126).** The Baiter's panel offers **Bring an attack** on a built Baiter at full health
+with no job running (`BUILDINGINFO.as:97-127`, `:210-211`), not on an outpost. Its controls
+(`web/src/ui/yard/BaiterPanel.ts`) are a compass of the level's directions, the Level 1 / My
+academy levels switch, "Attack size N / budget", C1–C14 steppers with Fill, Clear and **Run
+attack**; the army, direction and switch are kept for the session. Run opens the Baiter scene
+(`SceneName.BAITER`): the attack scene in practice mode with only the battle layer and the
+Baiter's package (`web/src/game/baiter/baiterPlugin.ts`, `BAITER_PLUGINS`), fighting on the own
+yard's load it was handed (`baiterSession.ts`, `baiterTarget`), so there is no attack load, no
+checkpoint and no save. Every monster lands in one fling 1,000 yard units out at the direction's
+angle (`WMATTACK.as:711`), the view turns to meet it, and the end shows damage, buildings
+destroyed, attackers beaten, which towers fired and how many traps went off, with Run again and
+Back to yard. `baiterPlugin.test.ts` runs a whole practice attack with every request stubbed to
+fail and checks none is made.
+
 ### 8.2 General Store as a Shiny shop (D15)
 
 A **Shop** screen from the General Store panel (and the HUD Shiny counter), server-priced through
@@ -1204,7 +1233,7 @@ issue for the bulk-add part.
 | WP5.4 | Champion server routes and hunger | raise, feed, evolve, heal, rename, juice, starvation catch-up | 5 | should |
 | WP5.5 | Champion Cage panel | Cards, feed recipe, timers, Shiny actions | 5 | should |
 | WP5.6 | Champion Chamber freeze and thaw | Server routes and panel | 5 | could |
-| WP6.1 | Wild Monster Baiter defence simulator | Client-only simulated attack on the own yard; 7 levels = size and directions | 6 | should |
+| WP6.1 | Wild Monster Baiter defence simulator | Client-only simulated attack on the own yard; 7 levels = size and directions; built in #126 | 6 | should |
 | WP6.2 | General Store Shiny shop | Shop screen, full server allowlist, dropped items | 6 | could |
 | WP6.3 | Decoration inventory | Place from inventory, recycle into it, planner drawer | 6 | could |
 
