@@ -1,6 +1,7 @@
 import type { Container } from "pixi.js";
 import type { Resources } from "@/api/types";
 import type { Camera } from "@/game/Camera";
+import type { ResourceAmounts } from "@/game/combat/rules";
 import type { Yard } from "@/game/yard/yardModel";
 import type { YardRenderer } from "@/game/yard/YardRenderer";
 import type { Notices } from "@/ui/maproom/Notices";
@@ -61,6 +62,11 @@ export interface AttackMounts {
    * and the Catapult panel read one number (issue #92).
    */
   readonly showResources: (resources: Resources) => void;
+  /**
+   * Adds what the final save banked of the loot (`lootcredited`) to the pool
+   * the HUD shows, so the end panel and the HUD agree (#168).
+   */
+  readonly creditLoot: (credited: ResourceAmounts) => void;
   /**
    * Closes the enemy building's info panel, if one is open. The dock shows
    * one panel at a time (#59): the info replaces the Army panel or a picker

@@ -1,5 +1,5 @@
 import type { Resources } from "@/api/types";
-import type { BombStats } from "@/game/combat/rules";
+import type { BombStats, ResourceAmounts } from "@/game/combat/rules";
 
 /**
  * The attacker's own resources during an attack: what Catapult bombs are
@@ -35,3 +35,18 @@ export const spendBomb = (pool: AttackerPool, bomb: Pick<BombStats, "resource" |
  * three bomb resources replaced by the pool's current numbers.
  */
 export const hudResources = (held: Resources, pool: AttackerPool): Resources => ({ ...held, ...pool });
+
+/**
+ * What the HUD shows once the save has landed (#168): the amounts it showed,
+ * bombs already out, plus what the server banked of the loot
+ * (`lootcredited`, already cut to the storage cap). A resource the HUD had
+ * no figure for stays without one.
+ */
+export const withLoot = (shown: Resources, credited: ResourceAmounts): Resources => {
+  const next: Resources = { ...shown };
+  for (const key of ["r1", "r2", "r3", "r4"] as const) {
+    const amount = shown[key];
+    if (typeof amount === "number" && Number.isFinite(amount)) next[key] = amount + credited[key];
+  }
+  return next;
+};

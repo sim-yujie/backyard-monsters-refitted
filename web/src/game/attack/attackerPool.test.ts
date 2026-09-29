@@ -1,10 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { BOMBS } from "@/game/combat/rules";
-import { hudResources, poolOf, spendBomb } from "./attackerPool";
+import { hudResources, poolOf, spendBomb, withLoot } from "./attackerPool";
 
 /** The attacker's pool: what a bomb costs, and what the HUD shows meanwhile (#92). */
 
 const bomb = (id: string) => BOMBS.find((one) => one.id === id)!;
+
+describe("the pool after the save lands (#168)", () => {
+  it("adds the banked loot to what the HUD showed, caps and missing figures untouched", () => {
+    const shown = { r1: 1_600, r2: 0, r3: 250, r1max: 9_000 };
+    expect(withLoot(shown, { r1: 400, r2: 50, r3: 0, r4: 70 })).toEqual({
+      r1: 2_000,
+      r2: 50,
+      r3: 250,
+      r1max: 9_000,
+    });
+    expect(shown.r1).toBe(1_600);
+  });
+});
 
 describe("the attacker's pool", () => {
   it("reads the three bomb resources, treating junk as 0 and no block as unknown", () => {

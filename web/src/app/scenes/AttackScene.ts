@@ -2,8 +2,9 @@ import { Container } from "pixi.js";
 import { logout } from "@/api/auth";
 import { loadAttackOn } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
-import type { BaseLoadResponse } from "@/api/types";
+import type { BaseLoadResponse, Resources } from "@/api/types";
 import { clockReading, formatClock } from "@/game/attack/attackClock";
+import { withLoot } from "@/game/attack/attackerPool";
 import { ATTACK_TAP_CLAIMS } from "@/game/attack/AttackInput";
 import { AttackPresentation } from "@/game/attack/attackPresentation";
 import { AttackSession, type AttackSessionState } from "@/game/attack/AttackSession";
@@ -87,6 +88,8 @@ export class AttackScene implements Scene {
   private viewportHeight = 0;
   private camera: Camera | null = null;
   private hud: Hud | null = null;
+  /** The attacker's pool as the HUD last showed it, for the banked loot to add to (#168). */
+  private shownResources: Resources = {};
   private input: YardInput | null = null;
   private session: AttackSession | null = null;
   private unsubscribe: (() => void) | null = null;
@@ -328,7 +331,7 @@ export class AttackScene implements Scene {
 
     // The attacker's own pool, not the defender's the load carries; the drop
     // package keeps it current as bombs go out (#92).
-    this.hud?.setResources(target.roster.resources ?? {}, target.roster.credits);
+    this.showResources(target.roster.resources ?? {}, target.roster.credits);
     this.mountPlugins(session, target, yard, context);
     session.start();
   }
@@ -357,7 +360,8 @@ export class AttackScene implements Scene {
       notices: this.notices,
       goToMap: () => context.goTo(SceneName.MAP),
       setBottomInset: (px) => this.setInset({ ...this.inset, bottom: px }),
-      showResources: (resources) => this.hud?.setResources(resources),
+      showResources: (resources) => this.showResources(resources),
+      creditLoot: (credited) => this.showResources(withLoot(this.shownResources, credited)),
       closeBuildingInfo: () => this.select(null),
       presentation: this.presentation,
     };
@@ -366,6 +370,12 @@ export class AttackScene implements Scene {
       if (teardown) this.teardowns.push(teardown);
     }
     this.measureDock();
+  }
+
+  /** Shows the attacker's own pool on the HUD, and keeps it for {@link withLoot}. */
+  private showResources(resources: Resources, credits?: number): void {
+    this.shownResources = resources;
+    this.hud?.setResources(resources, credits);
   }
 
   private startCamera(yard: Yard, context: SceneContext): void {

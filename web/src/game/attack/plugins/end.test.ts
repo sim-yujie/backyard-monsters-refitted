@@ -53,7 +53,9 @@ const mountsFor = (
   notices: Notices,
   goToMap: () => void,
   presentation = new AttackPresentation(),
-) => ({ session, target: session.target, modal, notices, goToMap, presentation }) as unknown as AttackMounts;
+  creditLoot: (credited: unknown) => void = () => {},
+) =>
+  ({ session, target: session.target, modal, notices, goToMap, presentation, creditLoot }) as unknown as AttackMounts;
 
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
@@ -75,6 +77,7 @@ describe("the end plugin", () => {
   let modal: HTMLElement;
   let notices: Notices;
   let goToMap: ReturnType<typeof vi.fn>;
+  let creditLoot: ReturnType<typeof vi.fn>;
   let session: AttackSession;
   let teardown: (() => void) | void;
 
@@ -85,6 +88,7 @@ describe("the end plugin", () => {
     document.body.append(modal);
     notices = new Notices().mount(document.body);
     goToMap = vi.fn();
+    creditLoot = vi.fn();
     session = new AttackSession({ target: targetOf(), seed: 1 });
     session.start();
   });
@@ -104,7 +108,7 @@ describe("the end plugin", () => {
     presentation = new AttackPresentation(),
   ) => {
     teardown = createEndPlugin({ save, saveOnLeave, now: () => clock })(
-      mountsFor(session, modal, notices, goToMap, presentation),
+      mountsFor(session, modal, notices, goToMap, presentation, creditLoot),
     );
   };
 
@@ -146,6 +150,38 @@ describe("the end plugin", () => {
     await flush();
     const items = [...modal.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
     expect(items.map((item) => item.textContent)).toEqual(["7", "0", "0", "0"]);
+  });
+
+  it("puts the banked loot on the HUD once, as the panel shows the landed save (#168)", async () => {
+    const banked = { r1: 1_200, r2: 0, r3: 300, r4: 0 };
+    const save = vi.fn(
+      async (_payload: AttackSavePayload): Promise<BaseSaveResponse> =>
+        ({ error: 0, basesaveid: 1, lootcredited: banked }) as BaseSaveResponse,
+    );
+    const presentation = new AttackPresentation();
+    let falling = true;
+    presentation.hold(() => falling);
+    act();
+    mount(save, undefined, presentation);
+    session.retreat();
+    await flush();
+    // Saved, but the bomb is still falling and the panel is not up: the HUD waits.
+    expect(creditLoot).not.toHaveBeenCalled();
+    falling = false;
+    vi.advanceTimersByTime(100);
+    expect(modal.querySelector(".attack-end")).not.toBeNull();
+    expect(creditLoot).toHaveBeenCalledExactlyOnceWith(banked);
+    session.setSpeed(2);
+    expect(creditLoot).toHaveBeenCalledOnce();
+  });
+
+  it("leaves the HUD alone when the save does not say what it banked, or fails (#168)", async () => {
+    act();
+    mount(vi.fn(savedOk));
+    session.retreat();
+    await flush();
+    expect(modal.querySelector(".attack-end__status")!.textContent).toBe("Result saved.");
+    expect(creditLoot).not.toHaveBeenCalled();
   });
 
   it("saves as before once the player has dropped something (#79)", () => {

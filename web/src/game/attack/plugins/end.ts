@@ -253,7 +253,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
   const takeoverCalls = deps.takeover ?? TAKEOVER_CALLS;
 
   return (mounts: AttackMounts) => {
-    const { session, target, modal, notices, goToMap, presentation } = mounts;
+    const { session, target, modal, notices, goToMap, presentation, creditLoot } = mounts;
     const page = deps.page ?? { window };
     const mountedAt = now();
     const token = getAuthToken();
@@ -274,6 +274,18 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     let tornDown = false;
     /** The takeover offer, once a save has earned one. */
     let offer: EndTakeoverOffer | null = null;
+    /** The banked loot has gone onto the HUD; it goes once. */
+    let credited = false;
+
+    /**
+     * The HUD takes the banked loot when the panel shows a landed save (#168),
+     * so both read the same amounts; before that it keeps the attack's pool.
+     */
+    const creditHud = (): void => {
+      if (credited || !panel || shown?.kind !== "saved" || !shown.credited) return;
+      credited = true;
+      creditLoot(shown.credited);
+    };
 
     /** Opens the map on the target's cell, or on the outpost just taken over. */
     const returnToMap = (takenOver?: TakeoverKind): void => {
@@ -306,6 +318,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     const show = (next: SaveShown): void => {
       shown = next;
       if (panel) showOn(panel, next);
+      creditHud();
       if (next.kind === "saved" && next.takeover) offerTakeover(next.takeover);
     };
 
@@ -406,6 +419,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       }).mount(modal);
       if (shown) showOn(panel, shown);
       if (offer) panel.setExtra(offer.element);
+      creditHud();
     };
 
     /** Opens the panel once nothing on screen is still playing out, or the wait runs out. */
