@@ -4,6 +4,7 @@ import { maxHp } from "../../game-rules/combat/stats.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import type { StorageCapSave } from "../base/economy/resourceBudget.js";
+import { yardKindOf } from "../yardplanner/costs.js";
 import { HOUSING_MIN_HEALTH } from "../monsters/transferRules.js";
 import {
   catchUpBuildings,
@@ -107,6 +108,8 @@ export type MonsterJob = HatchJob | CullJob | QueueRefundJob;
 
 /** The slice of a save step 2 reads and writes. */
 export interface CatchUpMonstersSave extends HousingYard, StorageCapSave {
+  /** `BaseType`: an outpost's hatcheries read the outpost health ladder. */
+  type?: string;
   monsters?: JsonObject | null;
   academy?: JsonObject | null;
   resources?: JsonObject | null;
@@ -294,7 +297,7 @@ export const catchUpMonsters = (
     const building = final[String(id)];
     if (!building || building.cB || building.cU) return { id, workingFrom: null };
     const health = healthOf(save, String(id), building);
-    const half = maxHp(HATCHERY_TYPE, levelOfBuilding(building)) * 0.5;
+    const half = maxHp(HATCHERY_TYPE, levelOfBuilding(building), yardKindOf(save)) * 0.5;
     if (health !== undefined && health < half) return { id, workingFrom: null };
     return { id, workingFrom: availableFrom(id, jobs, start) };
   });
@@ -446,6 +449,7 @@ export const catchUpArmy = (
   const from = Number.isFinite(stored) && stored > 0 ? stored : now;
 
   const buildings: CatchUpBuildingsSave = {
+    type: row.type,
     buildingdata: row.buildingdata ?? {},
     buildinghealthdata: row.buildinghealthdata,
     storedata: row.storedata ? { ...row.storedata } : row.storedata,
@@ -454,6 +458,7 @@ export const catchUpArmy = (
   const completed = catchUpBuildings(buildings, from, now);
 
   const copy: CatchUpMonstersSave = {
+    type: row.type,
     monsters: row.monsters,
     academy: row.academy,
     resources: row.resources,

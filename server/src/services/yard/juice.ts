@@ -6,7 +6,7 @@ import type {
   BuildingHealthData,
 } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
-import type { ResourceAmounts } from "../yardplanner/costs.js";
+import { yardKindOf, type ResourceAmounts } from "../yardplanner/costs.js";
 import type { StorageCapSave } from "../base/economy/resourceBudget.js";
 import { fitCredit } from "./credit.js";
 import { academyLevels, isMapRoom3Monsters } from "./hatchery.js";
@@ -48,6 +48,8 @@ export const MAX_JUICE = 100_000;
 
 /** The slice of a save the Juicer reads. */
 export interface JuiceSave extends StorageCapSave {
+  /** `BaseType`: an outpost's Juicer reads the outpost health ladder. */
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   resources?: JsonObject | null;
@@ -90,7 +92,8 @@ const problemOf = (save: JuiceSave, id: number, building: BuildingData): JuicerP
   if (numberOf(building.cU) > 0) return "upgrading";
   const level = Math.max(1, Math.floor(numberOf(building.l)) || 1);
   const raw = save.buildinghealthdata?.[String(id)] ?? building.hp;
-  if (raw !== undefined && raw !== null && Number(raw) <= maxHp(JUICER_TYPE, level) * 0.5) {
+  const half = maxHp(JUICER_TYPE, level, yardKindOf(save)) * 0.5;
+  if (raw !== undefined && raw !== null && Number(raw) <= half) {
     return "damaged";
   }
   return null;

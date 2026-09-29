@@ -7,6 +7,7 @@ import type {
 } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import type { StorageCapSave } from "../base/economy/resourceBudget.js";
+import { yardKindOf } from "../yardplanner/costs.js";
 import {
   deriveHousingCapacity,
   HOUSING_EXPANSION_ITEMS,
@@ -91,6 +92,8 @@ export type HatcheryTarget = number | "hcc";
 
 /** The slice of a save the hatchery routes read. */
 export interface HatcherySave extends StorageCapSave {
+  /** `BaseType`: an outpost's hatcheries read the outpost health ladder. */
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   resources?: JsonObject | null;
@@ -178,7 +181,9 @@ const hatcheryIdle = (save: HatcherySave, id: number): "busy" | "damaged" | null
   if (!building || underConstruction(building)) return "busy";
   const health = healthOf(save, id, building);
   const level = Math.max(1, Math.floor(numberOf(building.l)) || 1);
-  if (health !== undefined && health < maxHp(HATCHERY_TYPE, level) * 0.5) return "damaged";
+  if (health !== undefined && health < maxHp(HATCHERY_TYPE, level, yardKindOf(save)) * 0.5) {
+    return "damaged";
+  }
   return null;
 };
 

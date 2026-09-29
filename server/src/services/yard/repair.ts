@@ -1,7 +1,7 @@
 import { REPAIR_CAP_SECONDS, repairTimeOf } from "../../game-data/repairTimes.js";
 import { maxHp } from "../../game-rules/combat/stats.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
-import { levelOf } from "../yardplanner/costs.js";
+import { levelOf, yardKindOf } from "../yardplanner/costs.js";
 import { harvesterHealth } from "./catchUpHarvesters.js";
 import { repairAllPrice } from "./shiny.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
@@ -38,6 +38,8 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 
 /** The slice of a save repairs read and write. */
 export interface RepairSave {
+  /** `BaseType`: an outpost's buildings heal to the outpost table's health. */
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
 }
@@ -78,14 +80,15 @@ export const repairSecondsLeft = (damage: Pick<Damage, "health" | "max" | "rate"
  *
  * Health is `buildinghealthdata[id]` first, then `hp` (the reading the
  * harvesters and the planner walk take). A type with no health ladder cannot
- * be damaged.
+ * be damaged. Full health is the combat engine's for the yard's kind, so an
+ * outpost heals to the outpost ladder its attacks were fought on.
  */
 export const damageOf = (save: RepairSave, key: string, building: BuildingData): Damage | null => {
   const health = harvesterHealth(save, key, building);
   if (health === undefined) return null;
   const type = Number(building.t);
   const level = levelOf(building);
-  const max = maxHp(type, level);
+  const max = maxHp(type, level, yardKindOf(save));
   if (!(max > 0) || health >= max) return null;
   return {
     key,

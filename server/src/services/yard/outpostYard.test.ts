@@ -231,6 +231,17 @@ describe("the outpost catch-up", () => {
     expect(save.buildingdata!["2"]!.hp).toBeUndefined();
     expect(save.damage).toBe(0);
   });
+
+  test("the core heals to the outpost ladder's 200,000 (the main table has no core)", () => {
+    const save = outpost({
+      buildingdata: { "1": { ...CORE, hp: 199_000, rE: 1 } },
+      buildinghealthdata: { "1": 199_000 },
+    });
+    const [job] = catchUpYard(save, NOW);
+
+    expect(job).toMatchObject({ kind: "repair", id: 1, detail: { max: 200_000 } });
+    expect(save.buildingdata!["1"]).toEqual(CORE);
+  });
 });
 
 describe("the planner batches on an outpost", () => {
