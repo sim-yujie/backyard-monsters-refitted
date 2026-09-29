@@ -27,8 +27,19 @@
   flex-wrap: wrap;
 }
 
+/*
+ * The planner takes the top edge (#199): design §4.1 draws its top bar as the
+ * screen's first row, and its bottom bar already shows what the plan needs
+ * against what is held, so the yard's HUD (resources, Workers, the account)
+ * steps aside while it is open rather than stacking a second bar above it.
+ */
 .planner-bar--top {
-  top: var(--hud-height);
+  top: 0;
+  padding-top: calc(var(--space-2) + env(safe-area-inset-top, 0px));
+}
+
+.overlay__layer:has(> .planner-bar) > .hud {
+  display: none;
 }
 
 .planner-bar--bottom {
@@ -923,6 +934,10 @@
   .planner-bar {
     gap: var(--space-1) var(--space-2);
     padding: var(--space-1) var(--space-2);
+  }
+
+  .planner-bar--top {
+    padding-top: calc(var(--space-1) + env(safe-area-inset-top, 0px));
   }
 
   .planner-bar--top,
