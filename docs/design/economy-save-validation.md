@@ -110,7 +110,7 @@ outpost income), `outposts` (the `[x, y, baseid][]` list, `docs/server-api.md:51
 | Building rules | New buildings paid at `costs[0]`, capped and gated; level changes explained by a completed countdown, a free finish, or a purchase; countdown magnitudes from the cost table times the Sharper Tools multiplier. |
 | Resource rules | Positive deltas bounded by harvester production, outpost income, refunds and shiny top-ups; pools never negative; positive deltas never cross the storage cap. |
 | Derived fields | `rNmax` and `basevalue` computed by the server; in reject mode the client's values are ignored. |
-| Rollout | `ECONOMY_SAVE_VALIDATION=off\|log\|reject`, defaulting to `log`. Log mode writes nothing differently and records violations; reject mode refuses the save in the shape the Flash client can show. |
+| Rollout | `ECONOMY_SAVE_VALIDATION=off\|log\|reject`, defaulting to `reject` since issue #43 (`log` during the rollout). Log mode writes nothing differently and records violations; reject mode refuses the save in the shape the Flash client can show. |
 | Generator additions | `produce`, `cycleTime`, `capacity` rows for the harvesters and the silo, in both generated files. |
 | Tests and a curl script | `bun:test` over the sandbox fixture; a shell script that drives a real server through the accept and reject paths. |
 
@@ -407,7 +407,7 @@ Modified:
 | `web/tools/gen-building-costs.mjs` | Section 3.6: emit `produce`, `cycleTime`, `capacity` for types 1 to 4 and `capacity` for type 6. |
 | `server/src/game-data/buildingCosts.ts`, `web/src/game/yard/buildingCostData.ts` | Regenerated. |
 | `server/src/game-data/buildingCosts.test.ts`, `web/src/game/yard/buildingCosts.test.ts` | Assert the new arrays against the spec ladders (`docs/specs/base-building.md:484-526`). |
-| `server/example.env` | `ECONOMY_SAVE_VALIDATION=log` with a comment. |
+| `server/example.env` | `ECONOMY_SAVE_VALIDATION=reject` with a comment (it was `log` until issue #43). |
 | `docs/server-api.md` | Section 3.7. |
 | `docs/specs/base-building.md` §10 | A dated note under "What is not checked" pointing at this plan. |
 
@@ -419,7 +419,7 @@ export type EconomyValidationMode = "off" | "log" | "reject";
 
 export const economyConfig = {
   /** off: today's behaviour. log: audit, record, never refuse. reject: refuse. */
-  mode: (process.env.ECONOMY_SAVE_VALIDATION ?? "log") as EconomyValidationMode,
+  mode: (process.env.ECONOMY_SAVE_VALIDATION ?? "reject") as EconomyValidationMode, // "log" before #43
   /** Seconds of countdown slack: save delay, tick, clock skew. */
   timerTolerance: 10,
   /** Upper bound on the outpost income multiplier a POD buff can reach. */
@@ -449,6 +449,26 @@ The environment variable follows `DEV_SANDBOX` and `USE_VERSION_MANAGEMENT` in l
    back the server's copy. That is the intended outcome for a tampered client and the reason log
    mode comes first for an honest one.
 4. **`off`** exists as the emergency switch and is never the default.
+
+**Outcome (issue #43, 2026-09-29).** Step 2 never got its week of Flash play, and no longer can:
+there is no Flash client (decision D1), the web client never sends an owner save (its yard
+changes go through the action routes), and owner saves of a `main` yard or an `outpost` are
+refused before the audit runs unless `OWNER_SAVE_MODE=allow` (`config/OwnerSaveConfig.ts`,
+`docs/design/yard-buildings.md` §3.3). Every `Report` row the audit has written is from the
+section 4.2 expected-positive script against the sandbox account on 2026-09-23: `resourceBudget`
+(+1,000,000,000 twigs in one second), `levelJumped` (level 1 to 10 in one second), `capReached`
+(a 401st wall against a cap of 400) and `countdownJumped` (an upgrade countdown cut from 889 to
+600) are the cheats they were written to catch, and `capMismatch` and `basevalueMismatch` are the
+known recorded-only rules that fire on a `DEV_SANDBOX` yard's inflated caps. No enforced rule has
+fired on an unedited save, so step 3 is taken: the default is `reject`
+(`config/EconomyConfig.ts`). The combat audit, which shares the parser, keeps its own `log`
+default (`config/CombatConfig.ts`). A deployment's own `server/.env` still wins: the local one
+says `log`.
+
+Left as it is: the outpost-income allowance (§2.6, `outpostAllowance`) still lets an owner save
+bank two days of outpost income, which the server now pays itself (`services/maproom/v2/
+autobank.ts`). It only matters under `OWNER_SAVE_MODE=allow`, where it would let a hand-made
+save bank that income twice.
 
 **What `DEV_SANDBOX` means for this.** Nothing is exempted. `DEV_SANDBOX=true` only changes what
 a new account's first `Save` row holds (`getDefaultBaseData.ts:17-18`,

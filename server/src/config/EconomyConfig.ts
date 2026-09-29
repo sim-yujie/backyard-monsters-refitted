@@ -6,10 +6,10 @@
  * The variable lives in `server/.env` and is read once at import time, the same
  * bargain `DEV_SANDBOX` and `USE_VERSION_MANAGEMENT` make
  * (`config/GameConfig.ts:39-41`, `config/VersionManifestConfig.ts:17`). An
- * unknown value falls back to `log`, which is the safe mode: it audits every
- * owner save and records what it finds without changing a single byte the
- * player sees. {@link economyModeWasUnrecognised} is exported so the startup
- * banner can say the environment asked for something this server does not know.
+ * absent or unknown value means `reject` (issue #43): see
+ * {@link DEFAULT_ECONOMY_VALIDATION_MODE}. {@link economyModeWasUnrecognised}
+ * is exported so the startup banner can say the environment asked for
+ * something this server does not know.
  *
  * Nothing in this file touches the database or the logger; it is imported by
  * the pure audit services, which have to stay testable without a server.
@@ -22,21 +22,34 @@ export type EconomyValidationMode = "off" | "log" | "reject";
 export const ECONOMY_VALIDATION_MODES = ["off", "log", "reject"] as const;
 
 /**
- * The mode an absent or unrecognised environment variable means.
+ * The mode an absent or unrecognised environment variable means: `reject`
+ * (issue #43).
  *
- * `log` rather than `off` because the rollout in §3.2 starts by reading a week
- * of honest Flash play out of the logs, and a deployment that forgets the
- * variable should still produce that data.
+ * The rollout in §3.2 began in `log` to read honest Flash play first. That
+ * reading turned out to have nothing left to read: there is no Flash client
+ * any more, the web client never sends an owner save (its yard changes go
+ * through the action routes), and owner saves of a main yard or an outpost
+ * are refused before the audit runs (`OWNER_SAVE_MODE`, `config/
+ * OwnerSaveConfig.ts`). The audit now sees only the owner saves a debugging
+ * `OWNER_SAVE_MODE=allow` lets through, and those are exactly the hand-made
+ * requests it exists to refuse. The only rules that ever fired on an
+ * unedited yard, `capMismatch` and `basevalueMismatch` on a `DEV_SANDBOX`
+ * yard's inflated caps, are recorded and never refuse.
  */
-export const DEFAULT_ECONOMY_VALIDATION_MODE: EconomyValidationMode = "log";
+export const DEFAULT_ECONOMY_VALIDATION_MODE: EconomyValidationMode = "reject";
 
 /** Whether a string names a mode this server implements. */
 export const isEconomyValidationMode = (raw: unknown): raw is EconomyValidationMode =>
   typeof raw === "string" && (ECONOMY_VALIDATION_MODES as readonly string[]).includes(raw);
 
-/** The mode a raw environment value asks for, or {@link DEFAULT_ECONOMY_VALIDATION_MODE}. */
-export const parseEconomyValidationMode = (raw: string | undefined): EconomyValidationMode =>
-  isEconomyValidationMode(raw) ? raw : DEFAULT_ECONOMY_VALIDATION_MODE;
+/**
+ * The mode a raw environment value asks for, or `fallback` when it names none:
+ * {@link DEFAULT_ECONOMY_VALIDATION_MODE} unless the caller has its own.
+ */
+export const parseEconomyValidationMode = (
+  raw: string | undefined,
+  fallback: EconomyValidationMode = DEFAULT_ECONOMY_VALIDATION_MODE
+): EconomyValidationMode => (isEconomyValidationMode(raw) ? raw : fallback);
 
 /** What the audit services read out of the environment. */
 export interface EconomyConfig {
@@ -65,8 +78,8 @@ export const economyConfig: EconomyConfig = {
 
 /**
  * True when `ECONOMY_SAVE_VALIDATION` was set to something that is not a mode.
- * The value was treated as `log`; the startup banner says so out loud rather
- * than letting a typo silently turn the audit into something it is not.
+ * The value was treated as the default; the startup banner says so out loud
+ * rather than letting a typo silently turn the audit into something it is not.
  */
 export const economyModeWasUnrecognised =
   process.env.ECONOMY_SAVE_VALIDATION !== undefined &&

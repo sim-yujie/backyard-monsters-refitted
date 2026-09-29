@@ -1479,8 +1479,9 @@ against the building cost table, per `docs/design/economy-save-validation.md`: b
 costs, storage caps, countdowns and levels, building-count caps and the `points`/`basevalue`
 bullets above are checked or derived; placement and the shiny-item-key trust are not (that
 plan's §1.4 "Out of scope"). Controlled by `ECONOMY_SAVE_VALIDATION` (`off`/`log`/`reject`),
-defaulting to **`log`**: violations are recorded (a `logger.warn` line and a `Report` row) but
-nothing a player sees changes until the mode is switched to `reject`. See
+defaulting to **`reject`** since issue #43 (it was `log` while the rollout read honest play; owner
+saves are now retired, so the audit only ever sees a debugging `OWNER_SAVE_MODE=allow` request).
+Every violation is still recorded (a `logger.warn` line and a `Report` row). See
 `docs/server-api.md`'s "Economy save validation" for the wire shape and rule names.
 
 ### Rate limits
