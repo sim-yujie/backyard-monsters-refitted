@@ -260,13 +260,26 @@ export class Camera {
     return this.dragging || this.pointers.size > 1;
   }
 
+  /**
+   * Maps a pointer on the element into this camera's viewport, or null for
+   * none. Set while a second view shares the canvas (the planner's compare,
+   * #9): a pointer over the other pane stands for the same spot in this one,
+   * so a drag or a wheel there pans and zooms both alike.
+   */
+  setPointerMap(map: ((point: Point) => Point) | null): void {
+    this.pointerMap = map;
+  }
+
+  private pointerMap: ((point: Point) => Point) | null = null;
+
   /** Pointer position relative to the attached element, in CSS pixels. */
   private localPoint(event: PointerEvent | WheelEvent): Point {
     const rect = this.element?.getBoundingClientRect();
-    return {
+    const point = {
       x: event.clientX - (rect?.left ?? 0),
       y: event.clientY - (rect?.top ?? 0),
     };
+    return this.pointerMap ? this.pointerMap(point) : point;
   }
 
   private readonly onPointerDown = (event: PointerEvent): void => {

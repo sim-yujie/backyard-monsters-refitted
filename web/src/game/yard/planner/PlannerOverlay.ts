@@ -39,7 +39,26 @@ export interface PlannerVisuals {
   readonly marquee: Rect | null;
   /** The plot outline for the current expansion, in world pixels. */
   readonly plot: Corners | null;
+  /**
+   * While comparing with a saved layout (#9): buildings at another spot on
+   * the other side, and buildings this side has and the other does not.
+   */
+  readonly diff?: CompareDiff | null;
 }
+
+/** The compare highlights for one pane (#9). */
+export interface CompareDiff {
+  readonly moved: ReadonlySet<number>;
+  readonly only: ReadonlySet<number>;
+}
+
+/**
+ * Compare's two marks: moved in the moved blue, filled; on one side only in a
+ * violet no other chrome uses, filled and with a heavier edge, so the two
+ * differ in weight as well as hue.
+ */
+export const COMPARE_MOVED = 0x8fd0ff;
+export const COMPARE_ONLY = 0xc07bff;
 
 /**
  * Where a building is drawn right now — its footprint's corners in world
@@ -95,6 +114,27 @@ export class PlannerOverlay {
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
+
+    const diff = visuals.diff;
+    if (diff) {
+      let drewMoved = false;
+      for (const id of diff.moved) {
+        const shape = shapeOf(id);
+        if (!shape) continue;
+        g.poly(path(shape));
+        drewMoved = true;
+      }
+      if (drewMoved) g.fill({ color: COMPARE_MOVED, alpha: 0.28 }).stroke({ width: 2, color: COMPARE_MOVED, alpha: 0.9 });
+
+      let drewOnly = false;
+      for (const id of diff.only) {
+        const shape = shapeOf(id);
+        if (!shape) continue;
+        g.poly(path(shape));
+        drewOnly = true;
+      }
+      if (drewOnly) g.fill({ color: COMPARE_ONLY, alpha: 0.35 }).stroke({ width: 3.5, color: COMPARE_ONLY, alpha: 0.95 });
+    }
 
     // Moved but not selected, so a building that is both reads as selected
     // rather than as a stack of two outlines.

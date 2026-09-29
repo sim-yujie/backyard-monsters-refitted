@@ -36,6 +36,8 @@ export interface LayoutsControllerOptions {
   baseid?: string;
   onLoad: (layout: Layout) => void;
   onPreview: (layout: Layout) => void;
+  /** Compare the plan with a slot (#9). Absent, the rows have no Compare. */
+  onCompare?: (layout: Layout) => void;
   notify: (message: string, level: "info" | "error") => void;
 }
 
@@ -54,6 +56,12 @@ export class YardPlannerLayouts {
     this.panel = null;
   }
 
+  /** Closes the panel if it is up. */
+  close(): void {
+    this.panel?.close();
+    this.panel = null;
+  }
+
   /** Opens the panel, or closes it if it is already up. */
   async toggle(): Promise<void> {
     if (this.options.readOnly) return;
@@ -66,6 +74,7 @@ export class YardPlannerLayouts {
     const panel = new LayoutsPanel({
       onLoad: (layout) => this.options.onLoad(layout),
       onPreview: (layout) => this.options.onPreview(layout),
+      ...(this.options.onCompare ? { onCompare: this.options.onCompare } : {}),
       onSave: (slot, name) => void this.save(slot, name),
       onDelete: (slot) => void this.remove(slot),
       onClose: () => {

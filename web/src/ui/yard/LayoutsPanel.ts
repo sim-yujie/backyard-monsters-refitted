@@ -19,6 +19,8 @@ import { Panel } from "@/ui/Panel";
 export interface LayoutsPanelActions {
   onLoad: (layout: Layout) => void;
   onPreview: (layout: Layout) => void;
+  /** Compare the plan with this slot (#9). Absent, the rows have no Compare. */
+  onCompare?: (layout: Layout) => void;
   onSave: (slot: number, name: string) => void;
   onDelete: (slot: number) => void;
   onClose: () => void;
@@ -132,10 +134,16 @@ export class LayoutsPanel {
     load.disabled = !layout || this.busy;
     preview.disabled = !layout || this.busy;
     save.disabled = this.busy;
+    const onCompare = this.actions.onCompare;
+    const compare = onCompare ? action("Compare", () => layout && onCompare(layout)) : null;
+    if (compare) {
+      compare.disabled = !layout || this.busy;
+      compare.title = "See this layout beside your plan, with the two compared";
+    }
 
     const controls = document.createElement("div");
     controls.className = "planner-layouts__controls";
-    controls.append(save, load, preview, this.deleteControl(slot, layout));
+    controls.append(save, load, preview, ...(compare ? [compare] : []), this.deleteControl(slot, layout));
 
     const head = document.createElement("div");
     head.className = "planner-layouts__head";

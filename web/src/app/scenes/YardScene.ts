@@ -47,6 +47,7 @@ import {
   type YardUiBinding,
 } from "@/game/yard/YardStore";
 import { YardRenderer, YardView } from "@/game/yard/YardRenderer";
+import { CompareView, pointerInPlanPane } from "@/game/yard/CompareView";
 import { YardInput } from "@/game/yard/YardInput";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { Hud } from "@/ui/Hud";
@@ -74,7 +75,7 @@ import { StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { icon } from "@/ui/icons";
 import { ZoomControl } from "@/ui/ZoomControl";
-import { YardPlanner, type AppliedStorage } from "./YardPlanner";
+import { YardPlanner, type AppliedStorage, type CompareVisuals } from "./YardPlanner";
 import { sceneForMap } from "./MapGateScene";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
@@ -300,10 +301,23 @@ export class YardScene implements Scene {
   private zoomControl: ZoomControl | null = null;
   private minimap: YardMinimap | null = null;
 
+  /**
+   * The planner's compare (#9): a saved layout beside the plan, sharing the
+   * canvas and the camera (`CompareView`). While it lives, the camera's
+   * viewport — `viewportWidth` and `viewportHeight` — is the plan's pane, and
+   * these are the whole canvas.
+   */
+  private compare: CompareView | null = null;
+  private compareLabels: HTMLElement[] = [];
+  private canvasWidth = 0;
+  private canvasHeight = 0;
+
   async enter(context: SceneContext): Promise<void> {
     this.context = context;
     this.viewportWidth = context.width;
     this.viewportHeight = context.height;
+    this.canvasWidth = context.width;
+    this.canvasHeight = context.height;
     // Consumed, not read: a target left behind would turn the next plain
     // "Yard" click into a visit to somebody else's base.
     this.target = consumeViewTarget();
@@ -388,6 +402,7 @@ export class YardScene implements Scene {
     window.removeEventListener("keydown", this.onKeyDown);
     document.removeEventListener("visibilitychange", this.onVisibilityChange);
     this.dropStore();
+    this.endCompare();
     this.planner?.destroy();
     this.planner = null;
     this.dock?.destroy();
@@ -420,10 +435,15 @@ export class YardScene implements Scene {
   }
 
   resize(width: number, height: number): void {
-    this.viewportWidth = width;
-    this.viewportHeight = height;
-    this.camera?.resize(width, height);
-    if (this.yard) this.applyZoomLimits(width, height);
+    this.canvasWidth = width;
+    this.canvasHeight = height;
+    // In compare the camera sees the plan's pane, not the whole canvas.
+    const pane = this.compare ? this.compare.resize(width, height)[0] : { width, height };
+    this.viewportWidth = pane.width;
+    this.viewportHeight = pane.height;
+    this.camera?.resize(pane.width, pane.height);
+    if (this.yard) this.applyZoomLimits(pane.width, pane.height);
+    this.placeCompareLabels();
     // A different viewport is a different visible rectangle even when the
     // camera did not move.
     this.minimap?.markDirty();
@@ -442,6 +462,7 @@ export class YardScene implements Scene {
           -camera.position.y * camera.zoom,
         );
         this.renderer.setZoom(camera.zoom);
+        this.compare?.place(camera);
         // The camera is the only thing that knows a wheel or a pinch happened;
         // it goes straight through `Camera`'s own listeners without passing
         // through this scene, so this is where the slider and the minimap find
@@ -458,6 +479,14 @@ export class YardScene implements Scene {
           width: view.right - view.left,
           height: view.bottom - view.top,
         },
+        deltaSeconds,
+      );
+    }
+
+    if (camera && this.compare) {
+      const view = camera.visibleWorldRect();
+      this.compare.draw(
+        { x: view.left, y: view.top, width: view.right - view.left, height: view.bottom - view.top },
         deltaSeconds,
       );
     }
@@ -504,6 +533,7 @@ export class YardScene implements Scene {
     const focus = this.renderer.worldToYard(middle.x, middle.y);
 
     this.renderer.setView(view);
+    this.compare?.setView(view);
     camera.setBounds(this.renderer.worldSize());
     this.applyZoomLimits(this.viewportWidth, this.viewportHeight);
     camera.centreOn(this.renderer.yardToWorld(focus.x, focus.y));
@@ -1250,6 +1280,17 @@ export class YardScene implements Scene {
         this.refreshStatus();
       },
       onExit: () => this.closePlanner(),
+      // Compare (#9): the main yard's layouts beside the plan.
+      ...(this.store && this.store.kind === "main"
+        ? {
+            save: this.store.save,
+            compare: {
+              start: (slotYard, labels) => this.startCompare(slotYard, labels),
+              highlight: (visuals) => this.highlightCompare(visuals),
+              end: () => this.endCompare(),
+            },
+          }
+        : {}),
     });
     this.renderer.setLifeHidden(true);
     // The planner's constructor reports its own inset synchronously (via
@@ -1296,7 +1337,84 @@ export class YardScene implements Scene {
     return save === store.save ? store.yard : readYard(save);
   }
 
+  /* ── Compare (#9) ───────────────────────────────────────────────────── */
+
+  /**
+   * Draws a saved layout beside the plan: the canvas splits in two, the
+   * camera's viewport becomes the plan's pane, and a pointer over either pane
+   * pans and zooms both. `labels` name the panes, plan's first.
+   */
+  private startCompare(yard: Yard, labels: readonly [string, string]): void {
+    const context = this.context;
+    const camera = this.camera;
+    if (!context || !camera || this.compare) return;
+    const compare = new CompareView({
+      stage: context.stage,
+      pixi: context.renderer,
+      main: this.renderer,
+      yard,
+      view: this.renderer.view,
+    });
+    this.compare = compare;
+    // The middle of what the player was looking at stays in the middle.
+    const middle = camera.screenToWorld({ x: this.viewportWidth / 2, y: this.viewportHeight / 2 });
+    camera.setPointerMap((point) => pointerInPlanPane(point, compare.layout));
+    this.compareLabels = labels.map((text, index) => {
+      const label = document.createElement("div");
+      label.className = `compare-label compare-label--${index === 0 ? "plan" : "slot"}`;
+      label.textContent = text;
+      context.overlay.content.append(label);
+      return label;
+    });
+    this.resize(this.canvasWidth, this.canvasHeight);
+    camera.centreOn(middle);
+    camera.dirty = true;
+  }
+
+  /** The slot pane's highlights. */
+  private highlightCompare(visuals: CompareVisuals): void {
+    this.compare?.setVisuals({
+      selected: new Set(),
+      moved: new Set(),
+      invalid: new Set(),
+      marquee: null,
+      planned: visuals.planned,
+      diff: visuals.diff,
+    });
+  }
+
+  /** Back to one yard on the whole canvas. */
+  private endCompare(): void {
+    const compare = this.compare;
+    if (!compare) return;
+    const camera = this.camera;
+    const middle = camera?.screenToWorld({ x: this.viewportWidth / 2, y: this.viewportHeight / 2 });
+    this.compare = null;
+    compare.destroy();
+    for (const label of this.compareLabels) label.remove();
+    this.compareLabels = [];
+    camera?.setPointerMap(null);
+    this.resize(this.canvasWidth, this.canvasHeight);
+    if (camera && middle) {
+      camera.centreOn(middle);
+      camera.dirty = true;
+    }
+  }
+
+  /** Puts each pane's name at the top of its pane, under the planner's bar. */
+  private placeCompareLabels(): void {
+    const compare = this.compare;
+    if (!compare) return;
+    compare.layout.forEach((pane, index) => {
+      const label = this.compareLabels[index];
+      if (!label) return;
+      label.style.left = `${pane.x + 12}px`;
+      label.style.top = `${Math.max(pane.y, this.inset.top) + 8}px`;
+    });
+  }
+
   private closePlanner(): void {
+    this.endCompare();
     this.planner?.destroy();
     this.planner = null;
     this.renderer.setLifeHidden(false);

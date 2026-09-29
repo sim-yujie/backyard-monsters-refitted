@@ -4,6 +4,7 @@ import { blueprintDragToYard } from "./blueprint";
 import { polygonIntersectsRect } from "./marquee";
 import { dragToYard } from "./placement";
 import type { Plan } from "./plan";
+import type { CompareDiff } from "./PlannerOverlay";
 
 /**
  * Everything the planner asks of the renderer.
@@ -146,6 +147,8 @@ export class PlannerView {
     /** Planned target level by id, for the badge and the blueprint labels. */
     planned: ReadonlyMap<number, number> | null;
     marquee: Rect | null;
+    /** Compare's highlights (#9), or null outside compare. */
+    diff?: CompareDiff | null;
   }): void {
     this.renderer.setPlannerVisuals({ ...state, plot: this.renderer.plotCorners() });
   }

@@ -21,9 +21,13 @@ import { rectFromCorners } from "./marquee";
 import { snap, type PlanNode } from "./placement";
 import { Grab, PlannerInput } from "./PlannerInput";
 import { PlannerView } from "./PlannerView";
+import type { CompareDiff } from "./PlannerOverlay";
 import { Plan, type AbsorbResult } from "./plan";
 import { plannerAction } from "./shortcuts";
 import { previewApply, type ApplyPreview } from "./upgrades";
+
+/** Nothing selected, moved or faulted: what compare shows of the planner's own marks. */
+const EMPTY: ReadonlySet<number> = new Set();
 
 /**
  * Planner mode: the state a yard is in while it is being rearranged.
@@ -1172,11 +1176,28 @@ export class PlannerSession {
     this.refresh();
   }
 
+  /**
+   * Compare (#9): the pane's highlights in place of the planner's own moved
+   * marks, and the pointer handed to the camera alone, since compare is
+   * read-only. Null ends it.
+   */
+  setCompare(diff: CompareDiff | null): void {
+    const was = this.compare !== null;
+    this.compare = diff;
+    if (diff && !was) this.input.detach();
+    if (!diff && was) this.input.attach();
+    this.refresh();
+  }
+
+  private compare: CompareDiff | null = null;
+
   private refresh(): void {
+    const compare = this.compare;
     this.view.draw({
-      selected: this.selection,
-      moved: this.moved,
-      invalid: this.faulted,
+      selected: compare ? EMPTY : this.selection,
+      moved: compare ? EMPTY : this.moved,
+      invalid: compare ? EMPTY : this.faulted,
+      diff: compare,
       // Rebuilt rather than cached: a plan edit, an undo, a load and a rebase
       // can all change it, and it is one pass over the nodes — the same order
       // as `movedIds`, which this method already pays for.

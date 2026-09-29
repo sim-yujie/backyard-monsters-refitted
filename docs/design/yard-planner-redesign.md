@@ -410,6 +410,21 @@ levels, resources and time to realise, and inventory count. Differences are high
 green. A diff overlay draws every building that moved, with a line to its other position. Compare is
 read-only and changes no rules.
 
+**Shipped 2026-09-29 (#9).** Owner and lead decisions: the plan on screen (unsaved edits included)
+against one saved slot, opened by **Compare** on a slot row in the Layouts panel; main yard only.
+**Two views side by side**, pan and zoom in step: the canvas and the camera are shared, the plan's
+renderer masked to the first pane and a second, read-only `YardRenderer` of the slot masked to
+the second and drawn with the camera's transform shifted into it (`web/src/game/yard/
+CompareView.ts`); a pointer over either pane pans and zooms both. Below 700 px wide the panes
+**stack**, plan on top, rather than switching by tab, so both stay in view at once. Instead of
+lines, each pane highlights its own differences: moved (same id, other spot) in blue, on one side
+only in violet with a heavier edge. A card over the seam compares land and air coverage, dead
+zones, total levels, planned cost and time and unplaced buildings, the better side green with a
+▲ (the figures fold on a phone); a slot's levels are read as Load reads them. Compare is
+read-only — the planner's bars are set aside except the 3D/Blueprint switch, which changes both
+panes — with **Close** and **Load this layout** (the planner's own undoable Load). Code:
+`web/src/game/yard/planner/compare.ts`, `web/src/ui/yard/ComparePanel.ts`.
+
 ### F13. Keyboard shortcuts — Must, S
 
 Proposed map. All are single keys with no modifier except where shown, so they work while the mouse

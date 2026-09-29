@@ -1725,3 +1725,125 @@
     width: 80px;
   }
 }
+
+/* ── Compare (#9) ─────────────────────────────────────────────────────────
+ * The two panes are the canvas's; this is the chrome over them: a name at the
+ * top of each pane, the planner's bars set aside (compare is read-only), and
+ * the figures in a card over the seam, where it covers each pane equally.
+ */
+
+.planner--comparing .planner-bar {
+  pointer-events: none;
+  opacity: 0.45;
+}
+
+/* Except the view switch: 3D or blueprint, both panes change together. */
+.planner--comparing .planner-bar [data-compare="on"] {
+  pointer-events: auto;
+}
+
+.compare-label {
+  position: absolute;
+  z-index: var(--z-hud);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-overlay);
+  color: var(--colour-text-strong);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  pointer-events: none;
+  max-width: 45vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-compare {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--planner-bottom, 56px) + var(--space-3));
+  transform: translateX(-50%);
+  width: min(400px, calc(100vw - 2 * var(--space-4)));
+  max-height: 55vh;
+  overflow-y: auto;
+  z-index: var(--z-hud);
+}
+
+.planner-compare__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-compare__table th,
+.planner-compare__table td {
+  padding: var(--space-1) var(--space-2);
+  text-align: right;
+  border-bottom: 1px solid var(--colour-border-subtle);
+}
+
+.planner-compare__table th[scope="row"] {
+  text-align: left;
+  font-weight: 400;
+  color: var(--colour-text-secondary);
+}
+
+.planner-compare__figure--better {
+  color: var(--colour-success);
+  font-weight: 700;
+}
+
+.planner-compare__mark {
+  font-size: var(--text-xs);
+}
+
+.planner-compare__diff {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.planner-compare__legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+.planner-compare__key {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-inline-start: var(--space-2);
+}
+
+.planner-compare__key:first-child {
+  margin-inline-start: 0;
+}
+
+/* The pane highlights' colours (PlannerOverlay.ts, COMPARE_MOVED and COMPARE_ONLY). */
+.planner-compare__key--moved {
+  background: rgb(143 208 255 / 45%);
+  border: 2px solid #8fd0ff;
+}
+
+.planner-compare__key--only {
+  background: rgb(192 123 255 / 45%);
+  border: 3px solid #c07bff;
+}
+
+.planner-compare__figures > summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+}
+
+.planner-compare__actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  margin-top: var(--space-3);
+}

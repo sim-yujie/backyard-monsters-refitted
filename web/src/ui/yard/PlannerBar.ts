@@ -465,6 +465,9 @@ export class PlannerBar {
     blueprint.addEventListener("click", () => actions.onView(YardView.BLUEPRINT));
     this.views.set(YardView.ISO, iso);
     this.views.set(YardView.BLUEPRINT, blueprint);
+    // The one control that still works while comparing (#9): both panes switch.
+    iso.dataset["compare"] = "on";
+    blueprint.dataset["compare"] = "on";
 
     /* ── What is drawn over the yard (issues #4 and #54) ─────────────── */
 

@@ -1,4 +1,5 @@
 import type {
+  BaseLoadResponse,
   BuildingDataMap,
   BuildingHealthData,
   FiredTrap,
@@ -40,6 +41,9 @@ import { YardView, type YardRenderer } from "@/game/yard/YardRenderer";
 import type { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { InspectorPanel } from "@/ui/yard/InspectorPanel";
+import { ComparePanel } from "@/ui/yard/ComparePanel";
+import { diffLayouts, sideStats, slotUnplaced, slotView, statRows } from "@/game/yard/planner/compare";
+import type { CompareDiff } from "@/game/yard/planner/PlannerOverlay";
 import { CENTRE_NOTE, onYardCentre } from "@/game/yard/planner/centreHover";
 import { PlannerBar, type OverlayName } from "@/ui/yard/PlannerBar";
 import { InventoryPanel } from "@/ui/yard/InventoryPanel";
@@ -87,6 +91,24 @@ export interface AppliedStorage {
   readonly placed: readonly number[];
   readonly researchdata?: Record<string, unknown>;
   readonly buildinghealthdata?: BuildingHealthData;
+}
+
+/** The slot pane's highlights while comparing (#9). */
+export interface CompareVisuals {
+  readonly planned: ReadonlyMap<number, number> | null;
+  readonly diff: CompareDiff;
+}
+
+/**
+ * What the scene does for compare (#9): the planner builds the slot's yard
+ * and the figures; the scene owns the canvas, so it splits it and draws the
+ * second pane.
+ */
+export interface PlannerCompareHooks {
+  /** Splits the canvas and draws `yard` beside the plan; `labels` name the panes, plan's first. */
+  start(yard: Yard, labels: readonly [string, string]): void;
+  highlight(visuals: CompareVisuals): void;
+  end(): void;
 }
 
 export interface YardPlannerOptions {
@@ -178,6 +200,12 @@ export interface YardPlannerOptions {
   /** Called when the planner closes itself. */
   onExit: () => void;
   /**
+   * The save the yard was read from, and the scene's side of compare (#9).
+   * Both, or the Layouts panel offers no Compare.
+   */
+  save?: BaseLoadResponse;
+  compare?: PlannerCompareHooks;
+  /**
    * The outpost this planner is over (outposts WP5): Apply, the wall upgrade
    * and the trap re-arm act on it, charged to the main pool. Undefined on the
    * main yard.
@@ -214,6 +242,8 @@ export class YardPlanner {
   private readonly helpDock: HTMLElement;
 
   private openPanel: Panel | null = null;
+  /** The compare panel while comparing with a slot (#9). */
+  private comparePanel: ComparePanel | null = null;
   private helpPanel: Panel | null = null;
   private inspector: InspectorPanel | null = null;
   private search: SearchPanel | null = null;
@@ -301,6 +331,9 @@ export class YardPlanner {
       ...(options.baseid !== undefined ? { baseid: options.baseid } : {}),
       onLoad: (layout) => this.loadLayout(layout, false),
       onPreview: (layout) => this.loadLayout(layout, true),
+      ...(options.save && options.compare && options.baseid === undefined
+        ? { onCompare: (layout: Layout) => this.openCompare(layout) }
+        : {}),
       notify: (message, level) =>
         options.notices.show(NOTICE, message, {
           level,
@@ -632,6 +665,7 @@ export class YardPlanner {
   }
 
   destroy(): void {
+    this.closeCompare();
     this.closeDialog();
     this.helpPanel?.close();
     this.helpPanel = null;
@@ -671,6 +705,62 @@ export class YardPlanner {
    * yard can be sitting on the cells the layout wants, so guessing would hide a
    * collision rather than resolve one.
    */
+  /* ── Compare (#9) ───────────────────────────────────────────────────── */
+
+  /**
+   * Shows `layout` beside the plan: the scene splits the canvas and draws the
+   * slot as a yard of its own, both panes highlight what moved and what one
+   * side has alone, and the panel sets the two sides' figures against each
+   * other. Read-only until Close, or Load this layout.
+   */
+  private openCompare(layout: Layout): void {
+    const { save, compare } = this.options;
+    if (!save || !compare) return;
+    this.closeCompare();
+    this.layouts.close();
+
+    const plan = this.session.plan;
+    const slot = slotView(save, layout);
+    const diff = diffLayouts(plan.buildings(), layout);
+    const rows = statRows(
+      sideStats(plan.buildings(), this.yard, plan.plot, plan.unplacedIds().length),
+      sideStats(slot.plan.buildings(), slot.yard, slot.plan.plot, slotUnplaced(this.yard, layout)),
+    );
+    const slotName = `Slot ${layout.slot + 1}: ${layout.name}`;
+
+    compare.start(slot.yard, ["Your plan", slotName]);
+    compare.highlight({
+      planned: slot.plan.plannedLevels(),
+      diff: { moved: diff.moved, only: diff.onlySlot },
+    });
+    this.session.setCompare({ moved: diff.moved, only: diff.onlyPlan });
+    this.options.overlay.classList.add("planner--comparing");
+
+    const panel = new ComparePanel({
+      slotName,
+      rows,
+      diff,
+      onLoad: () => {
+        this.closeCompare();
+        this.loadLayout(layout, false);
+      },
+      onClose: () => this.closeCompare(),
+    }).mount(this.options.overlay);
+    this.comparePanel = panel;
+    panel.focus();
+  }
+
+  /** Back to the plan alone, as it was. */
+  private closeCompare(): void {
+    const panel = this.comparePanel;
+    if (!panel) return;
+    this.comparePanel = null;
+    panel.destroy();
+    this.options.overlay.classList.remove("planner--comparing");
+    this.session.setCompare(null);
+    this.options.compare?.end();
+  }
+
   private loadLayout(layout: Layout, preview: boolean): void {
     const result = this.session.load(layout, { preview });
     this.layouts.setCurrentSlot(this.session.state().slot);
