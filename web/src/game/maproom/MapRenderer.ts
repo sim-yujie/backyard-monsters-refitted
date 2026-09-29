@@ -8,10 +8,12 @@ import {
   ChunkResidency,
   chunksForRange,
 } from "./chunks";
+import type { RangeSource } from "./attackRange";
 import { TextPool } from "./LabelLayer";
 import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
 import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
+import { RangeOverlay } from "./RangeOverlay";
 import { TerrainRaster } from "./TerrainRaster";
 import { TribeAvatars } from "./tribeAvatars";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
@@ -55,6 +57,8 @@ export class MapRenderer {
   private readonly raster = new TerrainRaster();
   private readonly world = new Container();
   private readonly highlight = new Graphics();
+  /** The player's attack range (#177), over the cells and under the highlight. */
+  private readonly range = new RangeOverlay();
 
   private readonly pool = new TextPool();
   /**
@@ -92,7 +96,7 @@ export class MapRenderer {
     this.world.interactiveChildren = false;
     // The raster stays under the chunks at every tier, so a chunk that has not
     // been built yet shows the world at one texel per cell instead of nothing.
-    this.root.addChild(this.raster.sprite, this.world, this.highlight);
+    this.root.addChild(this.raster.sprite, this.world, this.range.container, this.highlight);
   }
 
   /** How long the last chunk build took, in milliseconds. */
@@ -136,6 +140,11 @@ export class MapRenderer {
     this.drawHighlight();
   }
 
+  /** Draws the range of these flingers, or hides it for null (#177). */
+  setRange(sources: readonly RangeSource[] | null): void {
+    this.range.show(sources);
+  }
+
   setSelected(cell: OffsetCell | null): void {
     if (same(this.selected, cell)) return;
     this.selected = cell;
@@ -153,9 +162,10 @@ export class MapRenderer {
 
     if (zoom !== this.lastZoom) {
       this.lastZoom = zoom;
-      // Highlight strokes are one screen pixel, so they are the one thing that
-      // still depends on the zoom rather than on the tier.
+      // Highlight strokes are one screen pixel, so they and the range's line
+      // are the things that still depend on the zoom rather than on the tier.
       this.drawHighlight();
+      this.range.setZoom(zoom);
     }
 
     const tier = tierForZoom(zoom);

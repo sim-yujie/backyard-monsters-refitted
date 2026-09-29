@@ -355,3 +355,227 @@
   font-variant-numeric: tabular-nums;
   color: var(--colour-text-muted);
 }
+
+/* ── Map Room 2 tools: My range (#177) ──────────────────────────────────── */
+
+/* The glass every floating Map Room 2 control and card shares. */
+.mr2-float {
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
+  color: var(--colour-text);
+}
+
+.map-icon {
+  flex: none;
+}
+
+.mr2-toolrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* A big glass button with an icon and a word: My range, Find. */
+.mr2-tool {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 52px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: 16px;
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
+  color: var(--colour-text);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mr2-tool:hover {
+  background: var(--colour-surface-base);
+}
+
+.mr2-tool:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.mr2-tool[aria-pressed="true"] {
+  border: 2px solid var(--colour-accent);
+  padding: 0 calc(var(--space-4) - 1px);
+  color: var(--colour-accent);
+}
+
+.mr2-range-legend {
+  width: 360px;
+  max-width: calc(100vw - 2 * var(--space-4));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: 18px;
+}
+
+.mr2-range-legend[hidden] {
+  display: none;
+}
+
+.mr2-range-legend__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.mr2-range-legend__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+}
+
+.mr2-range-legend__key,
+.mr2-range-legend__reaches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.mr2-range-legend__reaches {
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--colour-border-subtle);
+}
+
+.mr2-range-legend__row,
+.mr2-range-legend__source {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mr2-range-legend__sources {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mr2-range-legend__icon {
+  color: var(--colour-accent);
+}
+
+.mr2-range-legend__where {
+  flex: 1;
+}
+
+.mr2-range-legend__cells {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.mr2-range-legend__quiet {
+  color: var(--colour-text-secondary);
+}
+
+.mr2-range-legend__note {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-muted);
+}
+
+.mr2-range-swatch {
+  flex: none;
+  width: 26px;
+  height: 18px;
+  box-sizing: border-box;
+  border-radius: 4px;
+}
+
+.mr2-range-swatch--inside {
+  background: var(--colour-accent-soft);
+  border: 2.5px solid var(--colour-accent);
+}
+
+.mr2-range-swatch--outside {
+  background: var(--colour-scrim);
+  border: 1px solid var(--colour-border-strong);
+}
+
+/* An on/off switch: `role="switch"` on a button, `aria-checked` its state. */
+.mr2-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--colour-text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mr2-switch:focus-visible {
+  outline: none;
+}
+
+.mr2-switch:focus-visible .mr2-switch__track {
+  box-shadow: var(--focus-ring);
+}
+
+.mr2-switch__track {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  background: var(--colour-surface-control-hover);
+  transition: background var(--motion-fast) var(--easing);
+}
+
+.mr2-switch__track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--colour-text-secondary);
+  transition: transform var(--motion-fast) var(--easing);
+}
+
+.mr2-switch[aria-checked="true"] .mr2-switch__track {
+  background: var(--colour-accent);
+}
+
+.mr2-switch[aria-checked="true"] .mr2-switch__track::after {
+  transform: translateX(18px);
+  background: var(--colour-accent-text);
+}
+
+/* On a phone the legend would cover the map it explains: the button alone. */
+@media (width <= 620px) {
+  .mr2-range-legend {
+    display: none;
+  }
+
+  .mr2-tool {
+    min-height: var(--control-height);
+    padding: 0 var(--space-3);
+    font-size: var(--text-sm);
+  }
+}

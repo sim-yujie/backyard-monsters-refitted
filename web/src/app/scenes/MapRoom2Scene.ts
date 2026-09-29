@@ -13,6 +13,7 @@ import {
 import { DEFAULT_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
 import {
   attackRefusal,
+  hasDeclareWar,
   ownCellsIn,
   rosterInRange,
   targetKind,
@@ -26,6 +27,7 @@ import {
 } from "@/game/attack/attackTarget";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
+import { rangeSources } from "@/game/maproom/attackRange";
 import { Bookmarks } from "@/game/maproom/Bookmarks";
 import { consumeMapFocus, type MapFocus } from "@/game/maproom/mapFocus";
 import { takenOverResources, type TakeoverCandidate } from "@/game/maproom/takeover";
@@ -63,6 +65,9 @@ const PUMP_INTERVAL_SECONDS = 0.25;
 const STALE_CHECK_INTERVAL_SECONDS = 5;
 /** How often countdowns, the status line and the open cell panel are refreshed. */
 const UI_TICK_SECONDS = 1;
+
+/** Where "My range" remembers whether it was on (#177): this browser only. */
+const RANGE_ON_KEY = "bymr.map.showRange";
 
 export class MapRoom2Scene implements Scene {
   private readonly camera = new Camera({
@@ -126,6 +131,9 @@ export class MapRoom2Scene implements Scene {
    */
   private ready = false;
 
+  /** "My range" is on (#177). */
+  private rangeOn = readRangeOn();
+
   // Starts at the interval so the first update after `ready` pumps at once.
   private sincePump = PUMP_INTERVAL_SECONDS;
   private sinceStaleCheck = 0;
@@ -177,6 +185,11 @@ export class MapRoom2Scene implements Scene {
         onZoomStep: (direction) => this.zoomTo(this.camera.zoom * Math.pow(ZOOM_STEP, direction)),
         onZoomReset: () => this.fitWorld(),
         onCellPanelClose: () => this.clearSelection(),
+        onRangeToggle: (on) => {
+          this.rangeOn = on;
+          writeRangeOn(on);
+          this.updateRange();
+        },
       },
       SceneName.MAP_ROOM_2,
       [
@@ -188,6 +201,7 @@ export class MapRoom2Scene implements Scene {
     this.ui.setBookmarks(this.bookmarks.all);
     this.updateBookmarkTarget();
     this.ui.setZoom(this.camera.zoom);
+    this.ui.setRangeOn(this.rangeOn);
 
     this.input = new MapInput({
       camera: this.camera,
@@ -314,6 +328,7 @@ export class MapRoom2Scene implements Scene {
 
       if (base.resources) this.showResources(base.resources, base.credits);
       this.ui?.setOutposts(outpostsOf(base));
+      this.updateRange();
     } catch (caught) {
       if (caught instanceof ApiError && caught.isAuthFailure) {
         this.context?.goTo(SceneName.LOGIN);
@@ -486,6 +501,27 @@ export class MapRoom2Scene implements Scene {
     return rosterInRange(cell, ownCellsIn(this.store.loadedZoneRefs()), this.ownSave);
   }
 
+  /** Whether the player's alliance has Declare War running, from the own-yard load. */
+  private get declareWar(): boolean {
+    return hasDeclareWar(this.ownSave?.powerups);
+  }
+
+  /**
+   * The flingers the player's range is drawn from (#177): every own cell in
+   * the loaded zones, with the home cell stood in for from the own-yard load
+   * until its zone arrives. Cheap, and the overlay rebuilds only when they
+   * change, so it runs on the UI tick and picks up an outpost's zone arriving.
+   */
+  private updateRange(): void {
+    const sources = rangeSources(
+      ownCellsIn(this.store.loadedZoneRefs()),
+      this.declareWar,
+      this.home ? { cell: this.home, flinger: this.ownSave?.flinger } : null,
+    );
+    this.renderer.setRange(this.rangeOn ? sources : null);
+    this.ui?.setRangeSources(sources, this.declareWar);
+  }
+
   /** The cell panel's Attack gate, for the cell it is showing. */
   private attackRefusalFor(payload: MapCell | undefined): string | null {
     const cell = this.selected;
@@ -650,6 +686,7 @@ export class MapRoom2Scene implements Scene {
     const ui = this.ui;
     if (!ui) return;
 
+    this.updateRange();
     ui.tickCell(Date.now() / 1000);
     const shown = ui.shownCell;
     if (shown) ui.updateCell(this.store.getCell(shown.col, shown.row));
@@ -676,3 +713,20 @@ export class MapRoom2Scene implements Scene {
 
 const clamp = (value: number, size: number): number =>
   Math.min(Math.max(value, 0), size - 1);
+
+/** Whether "My range" was on when the player last left the map. Off at first. */
+const readRangeOn = (): boolean => {
+  try {
+    return globalThis.localStorage?.getItem(RANGE_ON_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
+const writeRangeOn = (on: boolean): void => {
+  try {
+    globalThis.localStorage?.setItem(RANGE_ON_KEY, on ? "1" : "0");
+  } catch {
+    // Private windows and full storage: the choice lasts this visit only.
+  }
+};

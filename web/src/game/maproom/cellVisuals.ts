@@ -79,6 +79,8 @@ export const DAMAGE_COLOUR = 0xe05252;
 export const SELECT_COLOUR = 0xffffff;
 export const HOVER_COLOUR = 0xf0a12e;
 export const GRID_LINE_COLOUR = 0x0d1017;
+/** The attack range's line (#177): the accent, `--colour-accent`. */
+export const RANGE_COLOUR = 0x3dd6f5;
 
 /**
  * The four tribes, in the server's order.

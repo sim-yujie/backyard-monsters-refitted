@@ -3,6 +3,7 @@ import type { TakeoverPayment } from "@/api/maproom";
 import type { MapCell, Resources, TakeoverQuoteResponse } from "@/api/types";
 import { MAX_ZOOM, MIN_ZOOM } from "@/config";
 import type { OffsetCell } from "@/game/HexGrid";
+import type { RangeSource } from "@/game/maproom/attackRange";
 import type { ZoneRecord } from "@/game/maproom/ZoneStore";
 import type { CellRange } from "@/game/maproom/zones";
 import type { TakeoverCandidate, TakeoverKind } from "@/game/maproom/takeover";
@@ -13,6 +14,7 @@ import { CellPanel } from "./CellPanel";
 import { Minimap } from "./Minimap";
 import { NavPanel } from "./NavPanel";
 import { Notices } from "./Notices";
+import { RangeControl } from "./RangeControl";
 import { TakeoverControl } from "./TakeoverControl";
 import { showTakenOver } from "./TakeoverDialog";
 
@@ -77,6 +79,8 @@ export interface MapRoomUiHandlers {
   onZoomStep: (direction: 1 | -1) => void;
   onZoomReset: () => void;
   onCellPanelClose: () => void;
+  /** "My range" turned on or off (#177). */
+  onRangeToggle: (on: boolean) => void;
 }
 
 export class MapRoomUi {
@@ -86,6 +90,7 @@ export class MapRoomUi {
   private readonly navPanel: NavPanel;
   private readonly minimap: Minimap;
   private readonly zoomControl: ZoomControl;
+  private readonly rangeControl: RangeControl;
   private readonly readout: HTMLElement;
   private readonly docks: HTMLElement[] = [];
 
@@ -127,6 +132,8 @@ export class MapRoomUi {
       labels: ZOOM_LABELS,
     });
 
+    this.rangeControl = new RangeControl({ onToggle: handlers.onRangeToggle });
+
     this.readout = document.createElement("div");
     this.readout.className = "cell-readout";
     this.readout.textContent = "—";
@@ -141,8 +148,13 @@ export class MapRoomUi {
     this.navPanel.mount(this.dock("map-dock map-dock--left"));
 
     const bottomRight = this.dock("map-dock map-dock--bottom-right");
+    bottomRight.append(this.rangeControl.legend);
     this.minimap.mount(bottomRight);
-    this.zoomControl.mount(bottomRight);
+    const tools = document.createElement("div");
+    tools.className = "mr2-toolrow";
+    tools.append(this.rangeControl.button);
+    this.zoomControl.mount(tools);
+    bottomRight.append(tools);
 
     container.append(this.readout);
     return this;
@@ -198,6 +210,16 @@ export class MapRoomUi {
   /** The player's outposts, for the Navigate panel's buttons beside Home. */
   setOutposts(outposts: readonly OwnOutpost[]): void {
     this.navPanel.setOutposts(outposts);
+  }
+
+  /** "My range" as the player last left it. */
+  setRangeOn(on: boolean): void {
+    this.rangeControl.setOn(on);
+  }
+
+  /** The flingers the range is drawn from, for the legend (#177). */
+  setRangeSources(sources: readonly RangeSource[], declareWar: boolean): void {
+    this.rangeControl.setSources(sources, declareWar);
   }
 
   setZones(zones: Iterable<ZoneRecord>): void {
