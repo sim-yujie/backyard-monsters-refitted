@@ -436,6 +436,7 @@ describe("the battle is the server's (#23, C3)", () => {
         attacker: attackerSave,
         tick: battleTick(TICK),
         declareWar: false,
+        left: false,
       })!
     );
 
@@ -456,11 +457,16 @@ describe("the battle is the server's (#23, C3)", () => {
         destroyed: "1",
         buildinghealthdata: JSON.stringify({ "0": 0, "1": 0, "3": 0 }),
         buildingdata: JSON.stringify({}),
+        attackreport: "0:01 Flung 9999 Pokey\nResult: 100% damage, all of it",
       }),
       async () => {}
     );
 
     expect(defender.damage).toBe(Math.trunc(battle.damage));
+    // The report is the replay's (C6), and says the battle as it went.
+    expect(defender.attackreport).toBe(battle.attackreport);
+    expect(String(defender.attackreport)).not.toContain("9999");
+    expect(String(defender.attackreport)).not.toContain("Left the attack");
     expect(defender.destroyed).toBe(battle.destroyed);
     expect(defender.buildinghealthdata).toEqual(battle.buildinghealthdata);
     // The trap the battle never reached is still there.
@@ -501,6 +507,7 @@ describe("the battle is the server's (#23, C3)", () => {
 
     expect(defender.damage).toBe(0);
     expect(defender.buildinghealthdata).toEqual({});
+    expect(defender.attackreport ?? null).toBeNull();
     expect(defender.buildingdata["3"]).toMatchObject({ t: 24 });
   });
 });

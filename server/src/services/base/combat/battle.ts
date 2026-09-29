@@ -61,6 +61,8 @@ export interface BattleAttacker extends LootAttacker {
  * @param attacker - The attacker's main save.
  * @param tick - The tick the battle ended at.
  * @param declareWar - Whether the attacker's alliance has Declare War running.
+ * @param left - Whether the report says the attacker left (`AbandonedInput.left`):
+ *   so for the finaliser, not for a save.
  */
 export const battleReplayInput = ({
   flinglog,
@@ -69,6 +71,7 @@ export const battleReplayInput = ({
   attacker,
   tick,
   declareWar,
+  left,
 }: {
   flinglog: unknown;
   session: AttackSession | null;
@@ -76,6 +79,7 @@ export const battleReplayInput = ({
   attacker: BattleAttacker;
   tick: number;
   declareWar: boolean;
+  left?: boolean;
 }): AbandonedInput | null => {
   const log = parseFlingLog(flinglog);
   if (!log) return null;
@@ -105,6 +109,7 @@ export const battleReplayInput = ({
     tick,
     declareWar,
     ...(session?.attackerlevel !== undefined && { playerLevel: session.attackerlevel }),
+    ...(left !== undefined && { left }),
   };
 };
 

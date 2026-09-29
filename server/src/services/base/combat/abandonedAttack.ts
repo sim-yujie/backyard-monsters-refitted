@@ -1,6 +1,6 @@
 import {
   RESOURCE_KEYS,
-  TICKS_PER_SECOND,
+  attackReport,
   buildEngineYard,
   championByType,
   createBattle,
@@ -72,6 +72,12 @@ export interface AbandonedInput {
   declareWar: boolean;
   /** The attacker's player level, for the low-level loot bonus (issue #167). */
   playerLevel?: number;
+  /**
+   * Whether the report says the attacker left the attack: true (the default)
+   * for an attack finished from its checkpoint, false for a save's own replay,
+   * whose client sent the result (issue #23, C6).
+   */
+  left?: boolean;
 }
 
 /** Everything the attack save would have carried, derived. */
@@ -153,35 +159,6 @@ export const siegeAfter = (
   return out;
 };
 
-/** `m:ss` of a tick, the attack clock's own spelling. */
-const clockOf = (tick: number): string => {
-  const seconds = Math.max(0, Math.floor(tick / TICKS_PER_SECOND));
-  const rest = seconds % 60;
-  return `${Math.floor(seconds / 60)}:${rest < 10 ? "0" : ""}${rest}`;
-};
-
-const at = (x: number, y: number) => `at (${Math.round(x)}, ${Math.round(y)})`;
-
-/** One report line per event, as the client's `reportLine` writes them, ids for names. */
-const reportLine = (event: FlingEvent): string => {
-  const when = clockOf(event.t);
-  switch (event.kind) {
-    case "fling": {
-      const parts = Object.entries(event.monsters)
-        .filter(([, count]) => count > 0)
-        .map(([id, count]) => `${count} ${id}`);
-      if (event.champion) parts.push(`the champion (G${event.champion.t})`);
-      return `${when} Flung ${parts.join(", ")} ${at(event.x, event.y)}`;
-    }
-    case "bomb":
-      return `${when} Fired a ${event.id} bomb ${at(event.x, event.y)}`;
-    case "siege":
-      return `${when} Deployed ${event.weapon} ${at(event.x, event.y)}`;
-    case "retreat":
-      return `${when} Retreated`;
-  }
-};
-
 /**
  * Replays an abandoned attack to the tick its attacker was last seen at.
  *
@@ -243,12 +220,6 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
         });
 
   const loot = whole(state.loot, 1);
-  const lines = log.events.map(reportLine);
-  lines.push(`${clockOf(state.tick)} Left the attack`);
-  lines.push(
-    `Result: ${Math.floor(percent)}% damage, ${state.destroyedIds.length} buildings destroyed, ` +
-      `looted ${loot.r1} twigs, ${loot.r2} pebbles, ${loot.r3} putty, ${loot.r4} goo.`
-  );
 
   return {
     tick: state.tick,
@@ -261,7 +232,14 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
     flung: flungOf(log.events),
     attackerchampion,
     attackersiege: siegeAfter(attacker.siege, log.events),
-    attackreport: lines.join("\n"),
+    // In the web client's words (the shared `report.ts`), from this replay.
+    attackreport: attackReport(log.events, {
+      tick: state.tick,
+      left: input.left ?? true,
+      damagePercent: percent,
+      buildingsDestroyed: state.destroyedIds.length,
+      loot,
+    }),
   };
 };
 

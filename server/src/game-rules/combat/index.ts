@@ -40,3 +40,4 @@ export * from "./targeting.js";
 export * from "./digest.js";
 export * from "./engine.js";
 export * from "./replay.js";
+export * from "./report.js";

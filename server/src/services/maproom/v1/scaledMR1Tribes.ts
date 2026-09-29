@@ -211,6 +211,7 @@ const tribeBattle = async (
     attacker: user.save!,
     tick: battleTick(saveData.tick),
     declareWar: await isDeclareWarRunning(user.alliance_id),
+    left: false,
   });
   if (!input) return null;
 

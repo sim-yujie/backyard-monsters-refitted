@@ -770,7 +770,7 @@ table at `docs/server-api.md:231-239`; the controller at `server/src/controllers
 | `monsterupdate` | `[{baseid, m}]` per attacker cell in range, housing minus what was flung | Written to attacker's own row and other bases, clears their `protected` (`baseSave.ts:214-215`, `updateMonsters.ts`) |
 | `attackloot` | `battle.state().loot`, the gain alone, before the attacker's storage cap: unlike Flash, bomb spend is **not** netted in (#90) | Capped by the server's replay (#163), then banked up to the attacker's storage cap, Krallen's buff included (#166, `attackLoot.ts` `bankAttackLoot`); the bombs in `flinglog` are charged separately, first (§5.3) |
 | `resources` | Defender's loss (negative of `battle.state().defenderLoss`) | Losses only, capped, floored at 0 (`defenderLootHandler.ts`, `baseSave.ts:226-235`) |
-| `attackreport` | A plain-text summary built from the fling log's own events | Written verbatim onto the defender (`docs/server-api.md`'s "Save write keys", default branch) |
+| `attackreport` | A plain-text summary built from the fling log's own events | Compared only: since issue #23, C6, the server writes its own, built by the same shared `rules/report.ts` from its replay (`docs/server-api.md` "The battle is the server's") |
 | `attackersiege` | Attacker's siege inventory after use | Overwrites `userSave.siege` (`baseSave.ts:178-182`) |
 
 ### 5.3 The one new field: `flinglog`

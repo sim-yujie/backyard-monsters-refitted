@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   ATTACK_COUNTDOWN_SECONDS,
   RETREAT_GRACE_SECONDS,
+  attackReport,
   buildEngineYard,
   createBattle,
   damagePercent,
@@ -111,8 +112,18 @@ const honestClient = (one: Fixture, end: number) => {
   battle.runTo(end);
   const state = battle.state();
   const yard = toCombatYard({ kind: one.kind, buildingdata, buildinghealthdata: (defender.buildinghealthdata ?? null) as never });
-  const damage = Math.round(damagePercent(yard, state.health, new Set(state.firedTraps)) * 100) / 100;
+  const percent = damagePercent(yard, state.health, new Set(state.firedTraps));
+  const damage = Math.round(percent * 100) / 100;
   return {
+    // `attackReportOf` with the end plugin's names (`monsterName`), for a
+    // battle the player ended in the attack screen.
+    report: attackReport(logAt(one.log, end).events, {
+      tick: state.tick,
+      left: false,
+      damagePercent: percent,
+      buildingsDestroyed: state.destroyedIds.length,
+      loot: state.loot,
+    }),
     tick: state.tick,
     health: { ...state.health },
     damage,
@@ -134,6 +145,7 @@ const serverBattle = (one: Fixture, log: FlingLog, tick: unknown) =>
       attacker: attackerOf(one),
       tick: battleTick(tick),
       declareWar: false,
+      left: false,
     })!
   );
 
@@ -155,6 +167,8 @@ describe("an honest save writes what its client showed (#23, C3)", () => {
           expect(server.destroyed).toBe(client.destroyed);
           expect([...server.firedTraps].sort()).toEqual([...client.firedTraps].sort());
           expect(server.attackloot).toEqual(client.attackloot);
+          // The report too, word for word (#23, C6).
+          expect(server.attackreport).toBe(client.report);
           expect(wholeAmounts(Object.fromEntries(Object.entries(server.defenderDelta).map(([k, v]) => [k, -v])))).toEqual(
             client.defenderLoss
           );

@@ -451,7 +451,11 @@ ends a Map Room 1 or 2 attack (its session carries a roster) replays the fightab
 the attacker housed at entry, and only the bombs its pool at attack start could pay for) to the
 client's `tick`, never past the attack's longest end (a save without one is replayed to that end).
 From that one run it writes the defender's `buildinghealthdata`, `damage` (whole, at most 100),
-`destroyed`, the traps that fired and the bunkers that fell, and the loot. The save's own copies
+`destroyed`, the traps that fired and the bunkers that fell, the loot, and the `attackreport`
+(issue #23, C6): built from the log and the replay by the shared rules' `report.ts`, in exactly
+the words the web client uses (monster names, bomb names, the result line), so an honest client's
+report and the server's are the same text, except that a save's report never says "Left the
+attack" (the save does not say how the client's battle ended); the finaliser's always does. The save's own copies
 of these are never written: where they differ from the replay they are logged as
 `attack-replay-mismatch` with the fields that differ (`damage`, `destroyed`,
 `buildinghealthdata`, `firedTraps`, `attackloot`), in every `COMBAT_SAVE_VALIDATION` mode. An

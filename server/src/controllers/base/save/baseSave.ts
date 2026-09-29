@@ -227,6 +227,7 @@ const saveBase = async (
           ...lootArgs,
           tick: battleTick(saveData.tick),
           declareWar: await isDeclareWarRunning(user.alliance_id),
+          left: false,
         })
       : null;
   const battle = battleInput
@@ -403,6 +404,8 @@ const saveBase = async (
     baseSave.buildinghealthdata = battle.buildinghealthdata;
     baseSave.damage = storedDamage(battle.damage) ?? baseSave.damage;
     if (battle.destroyed !== undefined) baseSave.destroyed = battle.destroyed;
+    // The report too is the replay's, in the web client's words (C6).
+    (baseSave as unknown as { attackreport: unknown }).attackreport = battle.attackreport;
   }
 
   // In `reject` mode the storage caps and the base value are the server's to
@@ -668,6 +671,7 @@ const logCappedLoot = (
  */
 /** What a replayed battle writes on the defender in the save's place (issue #23, C3). */
 const BATTLE_KEYS: ReadonlySet<string> = new Set([
+  "attackreport",
   "destroyed",
   SaveKeys.DAMAGE,
   SaveKeys.BUILDINGDATA,

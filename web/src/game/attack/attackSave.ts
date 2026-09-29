@@ -7,8 +7,8 @@ import type {
 } from "@/api/types";
 import {
   RESOURCE_KEYS,
-  TICKS_PER_SECOND,
   VICTORY_THRESHOLD,
+  attackReport,
   derivedDestroyed,
   type BattleState,
   type FlingEvent,
@@ -199,70 +199,32 @@ export const flungOf = (events: readonly FlingEvent[]): Roster => {
 
 /* ── The report ─────────────────────────────────────────────────────────── */
 
-/** `m:ss` of a tick, the clock's own spelling. */
-export const clockOf = (tick: number): string => {
-  const whole = Math.max(0, Math.floor(tick / TICKS_PER_SECOND));
-  const minutes = Math.floor(whole / 60);
-  const rest = whole % 60;
-  return `${minutes}:${rest < 10 ? "0" : ""}${rest}`;
-};
-
-const BOMB_RESOURCE: Readonly<Record<string, string>> = {
-  tw: "twig",
-  pb: "pebble",
-  pu: "putty",
-};
-
-/** `tw2` reads as "twig bomb (tier 3)"; an id the table lacks is shown as is. */
-const bombName = (id: string): string => {
-  const resource = BOMB_RESOURCE[id.slice(0, 2)];
-  const tier = Number(id.slice(2));
-  if (!resource || !Number.isInteger(tier)) return `${id} bomb`;
-  return `${resource} bomb (tier ${tier + 1})`;
-};
-
-const at = (x: number, y: number): string => `at (${Math.round(x)}, ${Math.round(y)})`;
-
-/** One line for one event (§7, Q5). */
-export const reportLine = (event: FlingEvent, nameOf: (id: string) => string): string => {
-  const when = clockOf(event.t);
-  switch (event.kind) {
-    case "fling": {
-      const parts = Object.entries(event.monsters)
-        .filter(([, count]) => count > 0)
-        .map(([id, count]) => `${count} ${nameOf(id)}`);
-      if (event.champion) parts.push(`the champion (G${event.champion.t})`);
-      return `${when} Flung ${parts.join(", ")} ${at(event.x, event.y)}`;
-    }
-    case "bomb":
-      return `${when} Fired a ${bombName(event.id)} ${at(event.x, event.y)}`;
-    case "siege":
-      return `${when} Deployed ${event.weapon} ${at(event.x, event.y)}`;
-    case "retreat":
-      return `${when} Retreated`;
-  }
-};
+// The report's words are the shared rules' (`rules/report.ts`), so the server
+// writes the same text from its own replay (issue #23, C6).
+export { clockOf, reportLine } from "@/game/combat/rules";
 
 /**
  * `attackreport`: plain text, one line per fling, bomb, siege and retreat in
- * the log, then one line with the result (§7, Q5). The server writes it
- * verbatim onto the defender's row; the web client renders it as text.
+ * the log, then one line with the result (§7, Q5). The server builds its own
+ * from its replay and writes that (issue #23, C6); this copy is what the save
+ * carries for comparison.
  */
 export const attackReportOf = (
   log: FlingLog,
   state: AttackSessionState,
   nameOf: (id: string) => string = (id) => id,
-): string => {
-  const lines = log.events.map((event) => reportLine(event, nameOf));
-  if (state.endReason === "left") lines.push(`${clockOf(state.tick)} Left the attack`);
-  const loot = RESOURCE_KEYS.map((key) => Math.floor(state.loot[key]));
-  lines.push(
-    `Result: ${Math.floor(state.damagePercent)}% damage, ` +
-      `${state.buildingsDestroyed} buildings destroyed, ` +
-      `looted ${loot[0]} twigs, ${loot[1]} pebbles, ${loot[2]} putty, ${loot[3]} goo.`,
+): string =>
+  attackReport(
+    log.events,
+    {
+      tick: state.tick,
+      left: state.endReason === "left",
+      damagePercent: state.damagePercent,
+      buildingsDestroyed: state.buildingsDestroyed,
+      loot: state.loot,
+    },
+    nameOf,
   );
-  return lines.join("\n");
-};
 
 /* ── The payload ────────────────────────────────────────────────────────── */
 

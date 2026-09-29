@@ -161,7 +161,7 @@ describe("replayAbandonedAttack", () => {
 
   test("a main yard has no `destroyed`; the report names the moment it ended", () => {
     expect(later.destroyed).toBeUndefined();
-    expect(later.attackreport).toContain("0:06 Flung 300 C1, the champion (G5)");
+    expect(later.attackreport).toContain("0:06 Flung 300 Pokey, the champion (G5)");
     expect(later.attackreport).toContain("0:50 Left the attack");
     expect(later.defenderDelta.r1).toBeLessThanOrEqual(0);
   }, REPLAY_TIMEOUT_MS);
