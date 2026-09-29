@@ -223,6 +223,11 @@ export interface ReplayedLoot {
   attackloot: ResourceAmounts;
   /** What the defender lost. */
   defenderLoss: ResourceAmounts;
+  /**
+   * The buildings the battle brought down, by engine id, when the caller has
+   * them: a fallen bunker loses its garrison (`bunkerGarrison.ts`, #130).
+   */
+  fallen?: readonly number[];
 }
 
 /**
@@ -264,6 +269,7 @@ export const replayedLoot = ({
   return {
     attackloot: wholeAmounts(outcome.attackloot),
     defenderLoss: wholeAmounts(outcome.defenderLoss),
+    fallen: outcome.destroyedIds,
   };
 };
 
@@ -279,6 +285,12 @@ export interface AttackLoot {
   basis: "replay" | "no-log" | "no-roster" | "pool";
   /** Krallen's raise of the attacker's storage cap, as a fraction; 0 without her. */
   krallenBuff: number;
+  /**
+   * What the server's battle brought down, to its longest end, by engine id;
+   * null when there was no replay. A bunker in it that the save also reports
+   * fallen loses its garrison (`bunkerGarrison.ts`, #130).
+   */
+  fallen: readonly number[] | null;
 }
 
 /**
@@ -336,7 +348,12 @@ export const attackLootOf = ({
   // so a credit divided by it is never more than the loss that paid for it.
   const bonus = lowLevelLootBonus(session?.attackerlevel ?? LOW_LEVEL_LOOT_CEILING);
 
-  const land = (cap: ResourceAmounts, maxLoss: ResourceAmounts | null, basis: AttackLoot["basis"]): AttackLoot => {
+  const land = (
+    cap: ResourceAmounts,
+    maxLoss: ResourceAmounts | null,
+    basis: AttackLoot["basis"],
+    fallen: readonly number[] | null = null
+  ): AttackLoot => {
     const credit = { r1: 0, r2: 0, r3: 0, r4: 0 };
     const defenderDelta = { r1: 0, r2: 0, r3: 0, r4: 0 };
     for (const key of RESOURCE_KEYS) {
@@ -345,7 +362,7 @@ export const attackLootOf = ({
       const lost = maxLoss ? Math.min(loss, maxLoss[key]) : loss;
       defenderDelta[key] = lost > 0 ? -lost : 0;
     }
-    return { credit, cap, defenderDelta, basis, krallenBuff };
+    return { credit, cap, defenderDelta, basis, krallenBuff, fallen };
   };
 
   const none = { r1: 0, r2: 0, r3: 0, r4: 0 };
@@ -364,7 +381,7 @@ export const attackLootOf = ({
         entryHoused,
         ...(session.attackerlevel !== undefined && { playerLevel: session.attackerlevel }),
       });
-    return land(replayed.attackloot, replayed.defenderLoss, "replay");
+    return land(replayed.attackloot, replayed.defenderLoss, "replay", replayed.fallen ?? null);
   }
 
   if (!mapRoom3) return land(none, none, "no-roster");

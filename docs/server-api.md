@@ -236,7 +236,7 @@ dedicated handler or falls back to `JSON.parse`-and-assign:
 | `resources` | `resourceHandler.ts` (`resourcesHandler`) | Adds the client's `{r1..r4, r1max..r4max}` delta onto the stored pool (`updateResources`). When the owner is saving from an **outpost** session, the `rNmax` fields are dropped (`skipCapacity`) — capacity is a property of the main yard's buildings, not the outpost's. |
 | `iresources` | same handler, `key: SaveKeys.IRESOURCES` | Same, but writes the Inferno resource pool. |
 | `academy` | `academyHandler.ts` | Parses `{[monsterKey]: {level}}`, clamps every `level` to a maximum of `6`. |
-| `buildingdata` | `buildingDataHandler.ts` (attack only; non-attack just assigns directly) | On an **attack** save, non-trap buildings are never modified by the client payload — they're always taken from the DB. The only legitimate change is removing a triggered trap (`t===24` TRAP or `t===117` HEAVY_TRAP): if the client's submission no longer includes that trap's key, it's dropped from the defender's `buildingdata`. |
+| `buildingdata` | `buildingDataHandler.ts` (attack only; non-attack just assigns directly) | On an **attack** save, non-trap buildings are never modified by the client payload — they're always taken from the DB. The only legitimate change is removing a triggered trap (`t===24` TRAP or `t===117` HEAVY_TRAP): if the client's submission no longer includes that trap's key, it's dropped from the defender's `buildingdata`. The save that ends the attack also empties a fallen Monster Bunker's garrison (`m`, issue #130, `services/base/combat/bunkerGarrison.ts`), as Flash's `Export` leaves a bunker at zero health empty (`BUILDING22.as:683-700`): only a bunker the save reports at zero **and** the server's own replay of the fightable log brings down (to the attack's longest end), so no client can empty one its battle never reached. |
 | `champion` | `championHandler.ts` (attack only) | Only `hp` can be lowered by an attack, and only if the reported `hp` is less than the stored value (`Math.min`) — every other champion field is server-authoritative. |
 | `points` / `basevalue` | inline | `baseSave.points = value.toString()` / `.basevalue = value.toString()` — stored as strings. |
 | `buildingresources` | ignored | Server-owned since outposts WP4 (`services/maproom/v2/autobank.ts`): never written from an owner or an attack save. |
@@ -473,7 +473,8 @@ honest client's save would. So leaving an attack credits exactly what finishing 
 would: never more than the served pool gives, and the same however the stored pool moved during
 the attack (an outpost owner's autobank, another attack). The defender's loss lands on the pool as
 it stands, never below zero. A checkpoint without that record (one written before it existed)
-credits nothing, as a save without a roster would not; its damage still lands.
+credits nothing, as a save without a roster would not; its damage still lands. A bunker the finaliser's replay brought down by the checkpoint's tick loses its garrison, as the final
+save's does (issue #130).
 
 **Not yet covered.** The Inferno save endpoint (`/api/:apiVersion/bm/base/save` →
 `controllers/inferno/infernoSave.ts`) still has the original gate — a non-zero `attackid` on the

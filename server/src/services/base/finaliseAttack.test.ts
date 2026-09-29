@@ -396,6 +396,43 @@ describe("finaliseAbandonedAttack", () => {
     expect(defender.damage).toBeGreaterThan(0);
   }, REPLAY_TIMEOUT_MS);
 
+  describe("a fallen bunker's garrison (issue #130)", () => {
+    // Three hundred Pokeys dropped among the sandbox's four Monster Bunkers.
+    const RAID = {
+      v: 1 as const,
+      seed: 1834027731,
+      events: [{ kind: "fling" as const, t: 480, x: 495, y: -425, r: 300, monsters: { C1: 300 } }],
+    };
+
+    const stock = () => {
+      defender.buildingdata["83"].m = { C1: 5 };
+      defender.buildingdata["84"].m = { C3: 2 };
+    };
+
+    test("goes with a bunker the server's replay brought down", async () => {
+      stock();
+      await arm({ tick: LATE, flinglog: RAID });
+
+      expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+      expect(defender.buildinghealthdata["83"]).toBe(0);
+      expect(defender.buildingdata["83"].m).toBeUndefined();
+      expect(defender.buildingdata["84"].m).toBeUndefined();
+      expect(defender.buildingdata["83"]).toMatchObject({ id: 83, t: 22 });
+    }, REPLAY_TIMEOUT_MS);
+
+    test("stays with a bunker still standing when the attacker left", async () => {
+      stock();
+      await arm({ tick: 500, flinglog: RAID });
+
+      expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+      expect(defender.buildinghealthdata["83"] ?? 1).toBeGreaterThan(0);
+      expect(defender.buildingdata["83"].m).toEqual({ C1: 5 });
+      expect(defender.buildingdata["84"].m).toEqual({ C3: 2 });
+    }, REPLAY_TIMEOUT_MS);
+  });
+
   test("is idempotent: a second finalisation finds nothing and charges nothing", async () => {
     await arm();
     await finaliseAbandonedAttack(BASESAVEID, "test");

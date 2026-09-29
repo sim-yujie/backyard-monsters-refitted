@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addBunkerLoss,
   bucketCost,
+  bunkerGarrisons,
+  bunkerLossRecord,
   createBattle,
   dropRadius,
   flingCost,
   flingerPayload,
   scatterRadius,
   type BattleVisualEvent,
+  type BunkerLossTally,
 } from "./engine.js";
 import { digestOf } from "./digest.js";
 import {
@@ -859,6 +863,82 @@ describe("a bunker's reach (issue #91)", () => {
     const { pokey, defenders } = battleOf(350);
     expect(Math.hypot(pokey.ix - 45, pokey.iy - 45)).toBeGreaterThan(300);
     expect(defenders).toHaveLength(0);
+  });
+});
+
+describe("a bunker's losses (issue #130)", () => {
+  it("tallies each dead defender against its bunker, and reports them in id order", () => {
+    const tally: BunkerLossTally = new Map();
+    addBunkerLoss(tally, 12, "C3");
+    addBunkerLoss(tally, 5, "C1");
+    addBunkerLoss(tally, 12, "C1");
+    addBunkerLoss(tally, 12, "C3");
+    const record = bunkerLossRecord(tally);
+    expect(record).toEqual({ 5: { C1: 1 }, 12: { C1: 1, C3: 2 } });
+    expect(Object.keys(record)).toEqual(["5", "12"]);
+    expect(Object.keys(record[12]!)).toEqual(["C1", "C3"]);
+  });
+
+  /**
+   * A level 1 Monster Bunker holding five Pokeys, and thirty Pokeys dropped
+   * beside a harvester in its range. The engine has no fight-back yet (the
+   * attackers never turn on a defender), so nobody from the bunker falls and
+   * the battle reports no losses.
+   */
+  const battleOf = () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 200, Y: 200 },
+    });
+    const battle = createBattle(yard, { seed: 7, bunkers: { 1: { C1: 5 } } });
+    battle.apply({ kind: "fling", t: 0, x: 180, y: 180, r: 100, monsters: { C1: 30 } });
+    return battle;
+  };
+
+  it("reports none when nobody from a bunker falls, and none for a yard without one", () => {
+    const battle = battleOf();
+    run(battle, 1200);
+    expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(5);
+    expect(battle.state().bunkerLosses).toEqual({});
+    const plain = createBattle(yardOf({ "2": { id: 2, t: 1, l: 1, X: 200, Y: 200 } }), { seed: 7 });
+    plain.apply({ kind: "fling", t: 0, x: 180, y: 180, r: 100, monsters: { C1: 30 } });
+    run(plain, 1200);
+    expect(plain.state().bunkerLosses).toEqual({});
+  });
+
+  it("stays out of the checkpoint, which the digests are built from", () => {
+    const battle = battleOf();
+    run(battle, 1200);
+    // Tick, four numbers a building, five a creep, twelve totals: nothing for losses.
+    expect(battle.checkpoint().length).toBe(1 + 4 * 2 + 5 * battle.creeps().length + 12);
+  });
+});
+
+describe("bunkerGarrisons (issue #130)", () => {
+  it("reads each bunker's `m` by its building id, the entry's `id` before its key", () => {
+    expect(
+      bunkerGarrisons({
+        "5": { id: 5, t: 22, l: 2, m: { C1: 4, C3: 2 } },
+        "9": { id: 12, t: 128, l: 1, m: { C5: 1 } },
+        "7": { t: 22, l: 1, m: { C2: 3 } },
+      }),
+    ).toEqual({ 5: { C1: 4, C3: 2 }, 12: { C5: 1 }, 7: { C2: 3 } });
+  });
+
+  it("merges the old id, counts a Map Room 3 list by its length, and drops the rest", () => {
+    expect(
+      bunkerGarrisons({
+        "1": { id: 1, t: 22, m: { C100: 2, C12: 1, C2: [{}, {}, {}], C9999: 5, C1: 0, C3: -2, C4: "x" } },
+        "2": { id: 2, t: 22, m: {} },
+        "3": { id: 3, t: 22 },
+        "4": { id: 4, t: 20, m: { C1: 9 } },
+      }),
+    ).toEqual({ 1: { C12: 3, C2: 3 } });
+  });
+
+  it("is empty for no buildingdata", () => {
+    expect(bunkerGarrisons(null)).toEqual({});
+    expect(bunkerGarrisons({})).toEqual({});
   });
 });
 

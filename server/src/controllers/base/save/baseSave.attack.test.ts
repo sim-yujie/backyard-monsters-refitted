@@ -23,7 +23,7 @@ const LOG = {
   seed: 5,
   events: [{ kind: "fling", t: 80, x: 400, y: 400, r: 200, monsters: { C4: 12 } }],
 };
-const ENTRY = { [HOME]: { C4: 12 } };
+const ENTRY = { [HOME]: { C4: 12, C1: 4 } };
 
 let defender: Record<string, any>;
 let attackerSave: Record<string, any>;
@@ -238,5 +238,81 @@ describe("the attacker's army through the save (issue #164)", () => {
     );
 
     expect(attackerSave.monsters).toEqual(ARMY);
+  });
+});
+
+describe("a fallen bunker's garrison through the save (issue #130)", () => {
+  // Four Pokeys dropped on a stocked Monster Bunker bring it down, and never
+  // reach the far one.
+  const RAID = {
+    v: 1,
+    seed: 5,
+    events: [{ kind: "fling", t: 80, x: 440, y: 440, r: 200, monsters: { C1: 4 } }],
+  };
+  const BUNKERS = {
+    "2": { id: 2, t: 22, l: 1, X: 420, Y: 420, m: { C1: 5 } },
+    "3": { id: 3, t: 22, l: 1, X: -600, Y: -600, m: { C2: 4 } },
+  };
+
+  const armed = () => {
+    defender.buildingdata = { ...structuredClone(YARD), ...structuredClone(BUNKERS) };
+  };
+
+  /** What the server's own battle brings down, as the save works it out. */
+  const serverFallen = () =>
+    attackLootOf({
+      sent: CLAIM,
+      reported: undefined,
+      flinglog: RAID,
+      session: { attackerid: ATTACKER, attackid: ATTACK_ID, startedat: 0, entryHoused: ENTRY },
+      defender: { type: "tribe", buildingdata: defender.buildingdata, buildinghealthdata: {}, resources: defender.resources },
+      attacker: attackerSave,
+      mapRoom3: false,
+    }).fallen;
+
+  const save = (health: Record<string, number>, over = true) =>
+    baseSave(
+      ctxFor({
+        ...(over && { over: "1" }),
+        flinglog: JSON.stringify(RAID),
+        buildinghealthdata: JSON.stringify(health),
+      }),
+      async () => {}
+    );
+
+  test("a bunker the save and the server's battle both bring down loses its garrison", async () => {
+    armed();
+    expect(serverFallen()).toContain(2);
+
+    await save({ "2": 0 });
+
+    expect(defender.buildingdata["2"].m).toBeUndefined();
+    expect(defender.buildingdata["2"]).toMatchObject({ id: 2, t: 22, l: 1 });
+    expect(defender.buildingdata["3"].m).toEqual({ C2: 4 });
+  });
+
+  test("a save that claims a bunker the battle never reached fell empties nothing", async () => {
+    armed();
+    expect(serverFallen()).not.toContain(3);
+
+    await save({ "2": 0, "3": 0 });
+
+    expect(defender.buildingdata["3"].m).toEqual({ C2: 4 });
+  });
+
+  test("a bunker the save reports standing keeps its garrison, whatever the server's longest battle does", async () => {
+    armed();
+
+    await save({ "2": 1500 });
+
+    expect(defender.buildingdata["2"].m).toEqual({ C1: 5 });
+  });
+
+  test("a save that does not end the attack empties nothing", async () => {
+    armed();
+
+    await save({ "2": 0 }, false);
+
+    expect(defender.buildingdata["2"].m).toEqual({ C1: 5 });
   });
 });

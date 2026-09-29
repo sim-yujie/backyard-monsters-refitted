@@ -41,6 +41,7 @@ import {
   towerStats,
   trapDamageAt,
   trapStats,
+  isKnownMonster,
 } from "./stats.js";
 import {
   canHit,
@@ -67,7 +68,15 @@ import type { Cart, EngineBuilding, EngineYard } from "./yard.js";
 import type { PathGrid } from "./grid.js";
 import type { Rng } from "./rng.js";
 import type { CreepIndex } from "./targeting.js";
-import type { FlingEvent, MonsterLevels, ResourceAmounts, Roster } from "./types.js";
+import { numberOf } from "./types.js";
+import type {
+  CombatBuildingData,
+  CombatBuildingDataMap,
+  FlingEvent,
+  MonsterLevels,
+  ResourceAmounts,
+  Roster,
+} from "./types.js";
 
 /**
  * The deterministic battle: one fixed-timestep simulation both trees run.
@@ -145,9 +154,13 @@ import type { FlingEvent, MonsterLevels, ResourceAmounts, Roster } from "./types
  *    per-creep `_hitLimit`. A yard holding one of those buildings fires it as
  *    an ordinary single-target tower.
  * 9. **Bunker contents must be supplied.** The defender's bunker blob is opaque
- *    to the server (§6 item 5), so {@link BattleOptions.bunkers} carries it. A
- *    bunker with no entry dispatches nothing and is not a valid group 4 or
- *    group 6 target, which is what an empty bunker is.
+ *    to the server (§6 item 5), so {@link BattleOptions.bunkers} carries it,
+ *    read off `buildingdata` by {@link bunkerGarrisons}. A bunker with no
+ *    entry dispatches nothing and is not a valid group 4 or group 6 target,
+ *    which is what an empty bunker is. Every dispatched defender that dies is
+ *    counted against its bunker ({@link BattleState.bunkerLosses}, issue
+ *    #130). No battle feeds bunkers in yet, and attackers never turn on a
+ *    defender, so none dies until the fight-back lands (issue #195).
  * 10. **Storage loot is not capped by the attacker's pool.** `ATTACK.Loot`
  *    clamps a gain to the attacker's storage cap (`ATTACK.as:696-710`); the cap
  *    is a property of the attacker's row, not the battle, so the audit derives
@@ -244,6 +257,14 @@ export interface BattleState {
   /** Draws taken from the battle's random stream, a cheap divergence tripwire. */
   readonly rngDraws: number;
   readonly over: boolean;
+  /**
+   * Each bunker's defenders that died, by building id and monster id; a bunker
+   * that lost none is absent (issue #130). A defender that dies is gone from
+   * its bunker for good, and one that lives is still counted in it
+   * (`CreepBase.as:1004-1030`), so this is what the attack takes off the
+   * garrison. Not a checkpoint value: the creeps it counts are already there.
+   */
+  readonly bunkerLosses: Readonly<Record<number, Readonly<Record<string, number>>>>;
 }
 
 /**
@@ -408,6 +429,8 @@ interface Creep {
   waypointIndex: number;
   phase: number;
   gone: boolean;
+  /** The bunker that sent it out, by building id; -1 for any other creep. */
+  homeBunker: number;
 }
 
 interface Tower {
@@ -502,6 +525,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const towers: Tower[] = [];
   const traps: Trap[] = [];
   const bunkers: Bunker[] = [];
+  const bunkerLosses: BunkerLossTally = new Map();
   const firedTraps: number[] = [];
   const destroyedIds: number[] = [];
   /** Shots, hits, hurts and deaths for the renderer, pruned each step; not simulation state. */
@@ -780,6 +804,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     at: Cart,
     friendly: boolean,
     behaviour: Behaviour,
+    homeBunker = -1,
   ): Creep => {
     const movement = monsterMovement(monsterId);
     const flying = isFlyingMovement(movement);
@@ -819,6 +844,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       waypointIndex: 0,
       phase: nextCreepId % RETARGET_TICKS,
       gone: false,
+      homeBunker,
     };
     nextCreepId += 1;
     creeps.push(creep);
@@ -869,6 +895,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       waypointIndex: 0,
       phase: nextCreepId % RETARGET_TICKS,
       gone: false,
+      homeBunker: -1,
     };
     nextCreepId += 1;
     creeps.push(creep);
@@ -1294,7 +1321,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     bunker.pool.set(monsterId, (bunker.pool.get(monsterId) ?? 0) - 1);
     bunker.dispatched += 1;
     const level = clampLevel(options.defenderLevels ?? options.levels, monsterId);
-    const defender = spawnCreep(monsterId, level, { x: building.x, y: building.y }, true, "defend");
+    const defender = spawnCreep(
+      monsterId,
+      level,
+      { x: building.x, y: building.y },
+      true,
+      "defend",
+      building.id,
+    );
     defender.targetCreep = (found[0] as { creep: Creep }).creep.id;
   };
 
@@ -1332,6 +1366,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         const creep = creeps[read] as Creep;
         if (creep.gone || creep.hp <= 0) {
           byCreepId.delete(creep.id);
+          if (creep.homeBunker >= 0 && creep.hp <= 0) {
+            addBunkerLoss(bunkerLosses, creep.homeBunker, creep.monsterId);
+          }
           // Only a death zeroes the champion's health: one that retreated or
           // walked home keeps the health it left with, which the attack save
           // writes back verbatim as the attacker's champion.
@@ -1421,6 +1458,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     towers: towers.map((tower) => ({ ...tower.report })),
     rngDraws: rng.count(),
     over: finished,
+    bunkerLosses: bunkerLossRecord(bunkerLosses),
   });
 
   /**
@@ -1475,3 +1513,77 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 /** Whether a building is one a creep could ever pick, for a caller's filter. */
 export const isAttackableBuilding = (building: EngineBuilding): boolean =>
   isMainTarget(building.kind) && building.hp > 0;
+
+/** Dead defenders per bunker id, then per monster id (issue #130). */
+export type BunkerLossTally = Map<number, Map<string, number>>;
+
+/**
+ * One of a bunker's defenders died: it is gone from the garrison for good
+ * (`CreepBase.as:1004-1030`, issue #130).
+ */
+export const addBunkerLoss = (
+  tally: BunkerLossTally,
+  bunkerId: number,
+  monsterId: string,
+): void => {
+  const lost = tally.get(bunkerId) ?? new Map<string, number>();
+  lost.set(monsterId, (lost.get(monsterId) ?? 0) + 1);
+  tally.set(bunkerId, lost);
+};
+
+/** {@link BattleState.bunkerLosses} from a tally, in id order so both runtimes agree. */
+export const bunkerLossRecord = (
+  tally: BunkerLossTally,
+): Record<number, Record<string, number>> => {
+  const record: Record<number, Record<string, number>> = {};
+  for (const id of [...tally.keys()].sort((one, other) => one - other)) {
+    const lost = tally.get(id) as Map<string, number>;
+    const byMonster: Record<string, number> = {};
+    for (const monsterId of [...lost.keys()].sort()) {
+      byMonster[monsterId] = lost.get(monsterId) as number;
+    }
+    record[id] = byMonster;
+  }
+  return record;
+};
+
+/** An id a stored bunker may still carry for a monster renamed since. */
+const LEGACY_MONSTER_IDS: Readonly<Record<string, string>> = { C100: "C12" };
+
+/**
+ * Every bunker's garrison as {@link BattleOptions.bunkers} takes it, read off
+ * the defender's stored `buildingdata` (issue #130).
+ *
+ * A bunker keeps what it holds on its own entry, `m = { monsterId: count }`
+ * (`client/scripts/BUILDING22.as:674-679`, `Setup`), and the engine knows the
+ * building by the id {@link buildEngineYard} gives it: the entry's `id`, else
+ * its key. Counts are whole and above zero, of monsters the rules know; a Map
+ * Room 3 main yard's per-creep lists count by their length, as the original
+ * exported them (`BUILDING22.as:688-692`). Both sides of an attack read the
+ * garrison here, so the client's battle and the server's replay dispatch the
+ * same defenders.
+ */
+export const bunkerGarrisons = (
+  buildingdata: CombatBuildingDataMap | readonly CombatBuildingData[] | null | undefined,
+): Record<number, Roster> => {
+  const garrisons: Record<number, Roster> = {};
+  if (!buildingdata || typeof buildingdata !== "object") return garrisons;
+  const entries: Array<[string, CombatBuildingData]> = Array.isArray(buildingdata)
+    ? (buildingdata as readonly CombatBuildingData[]).map((data, index) => [String(index), data])
+    : Object.entries(buildingdata as CombatBuildingDataMap);
+  for (const [key, data] of entries) {
+    if (!data || typeof data !== "object" || !isBunker(numberOf(data.t))) continue;
+    const held = data["m"];
+    if (!held || typeof held !== "object" || Array.isArray(held)) continue;
+    const roster: Record<string, number> = {};
+    for (const [raw, value] of Object.entries(held as Record<string, unknown>)) {
+      const id = LEGACY_MONSTER_IDS[raw] ?? raw;
+      const count = Array.isArray(value) ? value.length : Math.floor(numberOf(value));
+      if (!isKnownMonster(id) || !(count > 0)) continue;
+      roster[id] = (roster[id] ?? 0) + count;
+    }
+    if (Object.keys(roster).length === 0) continue;
+    garrisons[Math.floor(numberOf(data.id ?? key))] = roster;
+  }
+  return garrisons;
+};

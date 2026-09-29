@@ -99,6 +99,8 @@ export interface ReplayOutcome {
   readonly digest: string;
   /** Draws taken from the random stream; a divergence shows here first. */
   readonly rngDraws: number;
+  /** Each bunker's defenders that died, by monster id (`BattleState.bunkerLosses`, #130). */
+  readonly bunkerLosses: BattleState["bunkerLosses"];
 }
 
 /** The digest of one engine checkpoint. */
@@ -206,5 +208,6 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     checkpoints,
     digest: digestState(battle.checkpoint()),
     rngDraws: state.rngDraws,
+    bunkerLosses: state.bunkerLosses,
   };
 };

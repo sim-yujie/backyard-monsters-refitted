@@ -990,9 +990,12 @@ finish-now and instant only with a snapshot of `academy`, `buildingdata`, `resou
   unlocked); capacity checked against `cStorage` sum. `bunker/remove` `bunker`, `monster`, `count`
   → juiced (goo per §7.3) when a working Juicer exists, else deleted; never back to housing (D11).
 - Clicks: fill a bunker with 50 of one type 5 (bunker, Open, monster, type 50, Move) vs Flash 54.
-- Combat: the defender's bunker contents already feed the battle engine as an option
-  (`engine.ts` note 9); after an attack the stored counts are not reduced today, because the attack
-  save ignores non-trap `buildingdata` changes. Follow-up (§11), not this phase.
+- Combat: the engine takes a defender's bunker contents as an option (`engine.ts` note 9, read by
+  `bunkerGarrisons`), but no battle feeds them yet, and the engine has no fight-back, so a defender
+  never falls (issue #195). What lands today (issue #130): a bunker that falls in the attack loses
+  its garrison, on the final save and in the abandoned-attack finaliser, from the server's replay
+  (`services/base/combat/bunkerGarrison.ts`), as Flash's `Export` leaves a fallen bunker empty
+  (`BUILDING22.as:683-700`).
 
 ### 7.2 Champion Cage and Chamber (D11, D17)
 
@@ -1145,7 +1148,8 @@ From inventory §7.
   new player builds and hatches but cannot attack or see the world until Town Hall 6. The Map Room
   panel says so.
 - **Re-enabled monsters fight without their abilities** (§4.8).
-- **Defender bunker counts do not fall after an attack** (§7.1) until the follow-up lands.
+- **Bunker defenders do not fight yet** (§7.1): a fallen bunker loses its garrison (#130), but
+  defenders are neither dispatched nor killed until the engine's fight-back lands (#195).
 - **Outposts** keep their current behaviour; this plan is main-yard only (as the planner is).
 
 **Open questions** (each has a default the WPs build to):

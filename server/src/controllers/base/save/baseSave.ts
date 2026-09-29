@@ -62,6 +62,7 @@ import {
   type AttackLoot,
 } from "../../../services/base/combat/attackLoot.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
+import { fallenIn, withoutFallenGarrisons } from "../../../services/base/combat/bunkerGarrison.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 
 /**
@@ -379,6 +380,19 @@ const saveBase = async (
 
       defenderLootHandler(defenderDelta, lootTarget);
       postgres.em.persist(lootTarget);
+    }
+
+    // A bunker that fell takes its garrison with it, as Flash's Export leaves
+    // a fallen bunker empty (issue #130, `bunkerGarrison.ts`). Only where the
+    // save reports it fallen and the server's own battle brought it down too:
+    // an honest client's bunker fell in both, and no client can empty one its
+    // battle never reached.
+    if (saveData.over && loot?.fallen) {
+      const reported = fallenIn(saveData.buildinghealthdata);
+      const fallen = new Set(loot.fallen.filter((id) => reported.has(id)));
+      if (fallen.size > 0) {
+        baseSave.buildingdata = withoutFallenGarrisons(baseSave.buildingdata, fallen).buildingdata;
+      }
     }
 
     postgres.em.persist(userSave);
