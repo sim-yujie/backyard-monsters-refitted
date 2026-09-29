@@ -10,6 +10,7 @@ import { tribeSaveHandler } from "../../../../services/maproom/tribeSaveHandler.
 import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { validateRange } from "../../../../services/maproom/v2/validateRange.js";
 import { cellCoordsFromBaseId } from "../../../../services/maproom/v2/rangeCheck.js";
+import { generateBaseId } from "../../../../utils/generateBaseId.js";
 import { getGeneratedCells, cellKey } from "../../../../services/maproom/v3/generateCells.js";
 import { createAttackLog } from "../../../../services/base/createAttackLog.js";
 import { updateResources, Operation } from "../../../../services/base/updateResources.js";
@@ -69,17 +70,25 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
   const userSave = user.save!;
   let save: Save | null = null;
 
-  if (mapversion === MapRoomVersion.V1 && MR1_TRIBE_IDS.has(baseid)) {
-    await requireAttackableMR1Tribe(user, baseid, getCurrentDateTime());
-    save = await tribeSaveHandler(baseid, mapversion, null, user);
+  // `mapversion` is the attacker's own Map Room (`playerMapVersion`), and the
+  // target has to belong to it (issue #165).
+  if (mapversion === MapRoomVersion.V1) {
+    if (MR1_TRIBE_IDS.has(baseid)) {
+      await requireAttackableMR1Tribe(user, baseid, getCurrentDateTime());
+      save = await tribeSaveHandler(baseid, mapversion, null, user);
+    } else {
+      // Map Room 1 has main yards and its own tribes, nothing else: an outpost
+      // or another Map Room's camp is not a Map Room 1 target.
+      save = await postgres.em.findOne(Save, { baseid });
+      if (save?.type !== BaseType.MAIN) throw baseNotFoundErr();
+    }
   } else {
     save = await postgres.em.findOne(Save, { baseid });
-    if (!save) save = await tribeSaveHandler(baseid, mapversion, userSave.worldid, user);
+    // A base on another world is out of everyone's reach here.
+    if (save && save.worldid !== userSave.worldid) throw baseNotFoundErr();
   }
 
-  if (!save) throw baseNotFoundErr();
-
-  if (save.type !== BaseType.TRIBE) {
+  if (save && save.type !== BaseType.TRIBE) {
     if (save.protected > getCurrentDateTime()) throw baseProtectedErr();
 
     if (isAttackActive(save)) throw baseUnderAttackErr();
@@ -113,7 +122,22 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
 
   const cellCoords = cell ? { x: cell.x, y: cell.y } : cellCoordsFromBaseId(baseid);
 
-  await validateRange(user, save, mapversion, { baseid, cell: cellCoords });
+  // A Map Room 2 camp with no row yet is known only by its base id, which has
+  // to be this world's id for that cell (`generateBaseId`, as `getarea` hands
+  // it out), or the range below would be measured to a cell of another world.
+  if (!save && mapversion === MapRoomVersion.V2) {
+    const ownId = cellCoords && userSave.worldid && generateBaseId(userSave.worldid, cellCoords.x, cellCoords.y);
+    if (baseid !== ownId) throw baseNotFoundErr();
+  }
+
+  await validateRange(user, mapversion, { baseid, cell: cellCoords });
+
+  // Only an attack in range gives a camp attacked for the first time its save
+  // row (issue #165): `em.create` hands the row to the next flush, and the
+  // range refusal's report entry used to be that flush.
+  if (!save) save = await tribeSaveHandler(baseid, mapversion, userSave.worldid, user);
+
+  if (!save) throw baseNotFoundErr();
 
   // The defender's pool takes in its outposts' income before the attack
   // snapshots it for the loot (issue #179, outposts WP4): an outpost's owner

@@ -38,27 +38,29 @@ type RangeOptions = {
  * already handles — a raw `Error`, which the error interceptor renders as the
  * generic 500 the Flash client shows for an out-of-range attack.
  *
+ * `mapversion` is the attacker's own Map Room (`playerMapVersion`), never the
+ * request's: Map Rooms 1 and 3 check nothing here (issue #165).
+ *
  * @param {User} user - The user object containing the save data
- * @param {Save} save - The save object containing the user's base and outposts
- * @param {MapRoomVersion} mapversion - The map room version
+ * @param {MapRoomVersion} mapversion - The attacker's Map Room
  * @param {RangeOptions} options - The options object
- * @returns {Promise<Save>} - The save object if the attack is valid
+ * @returns {Promise<void>} - Resolves when the attack is in range
  */
 export const validateRange = async (
   user: User,
-  save: Save, mapversion: MapRoomVersion | undefined,
-  options: RangeOptions) => {
+  mapversion: MapRoomVersion | undefined,
+  options: RangeOptions): Promise<void> => {
   if (!mapversion) throw new Error("Map version is required for range validation.");
 
   switch (mapversion) {
     case MapRoomVersion.V1:
-      return save;
+      return;
 
     case MapRoomVersion.V2:
-      return validateRangeV2(user, save, options);
+      return validateRangeV2(user, options);
 
     case MapRoomVersion.V3:
-      return validateRangeV3(save);
+      return validateRangeV3();
 
     default:
       throw new Error(`validateRange: unhandled map version ${mapversion}`);
@@ -68,12 +70,9 @@ export const validateRange = async (
 /**
  * MR3 range validation.
  * Range is checked client-side before the attack request is sent.
- * TODO: Implement server-side validation for MR3 cost ranges. Right now we just return the save.
- *
- * @param {Save} save - The save being attacked
- * @returns {Save}
+ * TODO: Implement server-side validation for MR3 cost ranges. Right now nothing is checked.
  */
-const validateRangeV3 = (save: Save) => save;
+const validateRangeV3 = (): void => {};
 
 /**
  * Validates if the target is within the attack range of the user's main base or any of their outposts.
@@ -86,16 +85,15 @@ const validateRangeV3 = (save: Save) => save;
  * 4| No outposts are within attack range
  *
  * @param {User} user - The user object containing the save data
- * @param {Save} save - The save object containing the user's base and outposts
  * @param {RangeOptions} options - The options object
  *
  * @throws {Error} - attack invalidation error
- * @returns {Promise<Save>} - The save object if the attack is valid
+ * @returns {Promise<void>} - Resolves when the attack is in range
  */
-const validateRangeV2 = async (user: User, save: Save, options: RangeOptions) => {
+const validateRangeV2 = async (user: User, options: RangeOptions): Promise<void> => {
   const { cell, verdict } = await rangeCheckV2(user, options);
 
-  if (verdict.ok) return save;
+  if (verdict.ok) return;
 
   // Only a target that really is out of reach is worth a report; the other
   // refusals are missing data, not a player reaching too far.

@@ -80,7 +80,7 @@ export const takeoverCell: KoaController = async (ctx) => {
 
   if (!cell || !cell.save) throw takeoverRefusedErr("notFound");
 
-  await validateRange(currentUser, userSave, MapRoomVersion.V2, { attackCell: cell });
+  await validateRange(currentUser, MapRoomVersion.V2, { attackCell: cell });
 
   const powerups = await runningPowerups(currentUser.alliance_id);
 

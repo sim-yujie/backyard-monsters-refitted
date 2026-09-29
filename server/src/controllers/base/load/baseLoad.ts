@@ -27,6 +27,7 @@ import { infernoModeView } from "./modes/infernoModeView.js";
 import { infernoModeAttack } from "./modes/infernoModeAttack.js";
 import { infernoModeBuild } from "./modes/infernoModeBuild.js";
 import { validateAttack } from "../../../services/maproom/validateAttack.js";
+import { playerMapVersion } from "../../../services/maproom/playerMapVersion.js";
 import { BaseLoadSchema } from "../../../schemas/BaseLoadSchema.js";
 import { baseNotFoundErr, discordAgeErr } from "../../../errors/errors.js";
 import { EnumBaseRelationship } from "../../../enums/EnumBaseRelationship.js";
@@ -65,7 +66,7 @@ const INFERNO_SAVE_MODES = new Set<string>([BaseMode.IBUILD, BaseMode.IATTACK, B
  */
 export const baseLoad: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const { baseid, type, mapversion, attackData, attackcost } = BaseLoadSchema.parse(ctx.request.body);
+  const { baseid, type, mapversion: requestedVersion, attackData, attackcost } = BaseLoadSchema.parse(ctx.request.body);
 
   // An attack the player left without saving is finished before anything
   // below reads a row it writes — the player's own save above all — so their
@@ -77,6 +78,12 @@ export const baseLoad: KoaController = async (ctx) => {
   }
 
   await postgres.em.populate(user, INFERNO_SAVE_MODES.has(type) ? ["save", "infernosave"] : ["save"]);
+
+  // The player's Map Room comes from their own save and world, not from the
+  // request: every rule below follows it, the attack's range check above all,
+  // which a forged 3 or 1 used to skip (issue #165, `playerMapVersion.ts`).
+  // A player with no save yet is new, and so on Map Room 1.
+  const mapversion = user.save ? await playerMapVersion(postgres.em, user.save) : MapRoomVersion.V1;
 
   let baseSave: Save | null = null;
 
@@ -180,7 +187,8 @@ export const baseLoad: KoaController = async (ctx) => {
     ({ save: baseSave, completed } = await catchUpOwnerOutpost(user, baseSave));
   }
 
-  if (type === BaseMode.BUILD && mapversion === MapRoomVersion.V1) {
+  // Only a client on Map Room 1 asks for its tribes (the web never does).
+  if (type === BaseMode.BUILD && requestedVersion === MapRoomVersion.V1 && mapversion === MapRoomVersion.V1) {
     userSave.level = calculateBaseLevel(userSave.points, userSave.basevalue);
     
     const mr1Tribes = await createMR1Tribes(userSave, MR1_TRIBES);

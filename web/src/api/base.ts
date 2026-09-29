@@ -23,9 +23,9 @@ const SAVE_PATH = "/base/save";
 const CHECKPOINT_PATH = "/base/checkpoint";
 
 /**
- * The Map Room this client is built for. The attack modes' range check throws
- * without a `mapversion` (`validateRange.ts:49`), so every foreign load sends
- * it rather than leaving the server to guess.
+ * The Map Room this client is built for, sent on every foreign load as Flash
+ * sent it. The server no longer trusts it: every rule follows the player's own
+ * Map Room (`playerMapVersion.ts`, issue #165).
  */
 const MAP_ROOM_VERSION = 2;
 
