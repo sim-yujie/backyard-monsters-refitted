@@ -75,9 +75,11 @@ export interface YardJob {
  * (`catchUpLocker.ts`), Phase 3 mushroom respawns (`catchUpMushrooms.ts`: the
  * display changes nothing, the `state` answer brings the new mushroom) and
  * repairs (`catchUpRepairs.ts`), Phase 4 trainings and Lab research
- * (`catchUpTraining.ts`); each later work package adds its kinds here in the
- * same change that adds its catch-up step (`hatch` with `catchUpMonsters.ts`,
- * `hunger` with Phase 5).
+ * (`catchUpTraining.ts`), and hatches (`catchUpMonsters.ts`, #142: the
+ * housing, the Monsters screen and the dock see a new monster without a
+ * reload; the store batches hatch-only refreshes, and a live answer's hatches
+ * raise no toast); each later work package adds its kinds here in the same
+ * change that adds its catch-up step (`hunger` with Phase 5).
  *
  * `harvest` stays out on purpose (owner decision 2026-09-28): a buffer
  * filling is predicted on the client (`harvest.ts`) and never worth a
@@ -94,6 +96,7 @@ export const SERVER_COMPLETED_KINDS: ReadonlySet<JobKind> = new Set<JobKind>([
   JobKind.TRAIN,
   JobKind.RESEARCH,
   JobKind.REPAIR,
+  JobKind.HATCH,
 ]);
 
 /** Monster Academy and Monster Lab type ids (`client/scripts/YARD_PROPS.as:2933`, `:6236`). */

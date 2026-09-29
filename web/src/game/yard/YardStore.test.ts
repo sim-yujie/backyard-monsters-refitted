@@ -188,6 +188,47 @@ describe("finishing jobs", () => {
     expect(store.caps).toEqual({ r1: 5e9, r2: 5e9, r3: 5e9, r4: 5e9 });
   });
 
+  /** A hatchery (id 5) with a Pokey 5 s from housing, and whatever `buildings` adds. */
+  const hatching = (buildings: Record<string, unknown> = {}) =>
+    loadWith({
+      buildingdata: { ...baseBuildings(), "5": { X: 300, Y: 0, t: 13, id: 5, l: 1 }, ...buildings },
+      monsters: { h: [["C1", 5]], hid: [5], hstage: [1], saved: T0, housed: {} },
+    } as Partial<BaseLoadResponse>);
+
+  it("asks for a hatch's housing, batching hatches over 10 s (#142)", async () => {
+    const api = stubApi({ state: vi.fn(() => Promise.resolve(answer(T0 + 15))) });
+    const { store, changes, time } = storeWith(hatching(), api);
+
+    time.advance(5);
+    store.tick();
+    expect(changes.at(-1)).toMatchObject({ reason: YardChangeReason.PREDICTED });
+    time.advance(9);
+    await flush();
+    expect(api.state).not.toHaveBeenCalled();
+    time.advance(1);
+    await flush();
+    expect(api.state).toHaveBeenCalledTimes(1);
+  });
+
+  it("pulls a waiting hatch refresh in when an upgrade ends meanwhile (#142)", async () => {
+    const api = stubApi({ state: vi.fn(() => Promise.resolve(answer(T0 + 13))) });
+    const { store, time } = storeWith(
+      hatching({ "2": { X: 100, Y: 0, t: 20, id: 2, l: 2, cU: 8 } }),
+      api,
+    );
+
+    time.advance(5);
+    store.tick();
+    time.advance(3);
+    store.tick();
+    time.advance(1);
+    await flush();
+    expect(api.state).toHaveBeenCalledTimes(1);
+    time.advance(10);
+    await flush();
+    expect(api.state).toHaveBeenCalledTimes(1);
+  });
+
   it("never asks twice for a job the server left unfinished", async () => {
     // The answer still carries the countdown (a server that did not complete it).
     const running = { X: 100, Y: 0, t: 20, id: 2, l: 2, cU: 5 };

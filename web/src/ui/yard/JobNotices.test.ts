@@ -177,8 +177,16 @@ describe("groupCompletedJobs", () => {
   });
 
   it("reads a kind a later phase adds through its common keys", () => {
-    const [group] = groupCompletedJobs([{ kind: "hatch", id: "C5", t: null, at: 1, detail: {} }]);
-    expect(noticeText(group!)).toBe("Hatch finished: C5");
+    const [group] = groupCompletedJobs([{ kind: "hunger", id: "C5", t: null, at: 1, detail: {} }]);
+    expect(noticeText(group!)).toBe("Hunger finished: C5");
+  });
+
+  it("counts hatched monsters, not their types, by name (#142)", () => {
+    const hatch = (id: string, count: number) => ({ kind: "hatch", id, t: null, at: 1, detail: { count } });
+    const [group] = groupCompletedJobs([hatch("C1", 10), hatch("C5", 2)]);
+    expect(noticeText(group!)).toBe("12 monsters hatched: 10 Pokey, 2 Eye-ra");
+    const [one] = groupCompletedJobs([hatch("C1", 1)]);
+    expect(noticeText(one!)).toBe("A monster hatched: Pokey");
   });
 
   it("makes nothing of nothing", () => {
@@ -288,6 +296,18 @@ describe("JobNotices", () => {
   it("shows nothing for an answer where nothing finished", () => {
     jobs.show([]);
     expect(toasts()).toHaveLength(0);
+  });
+
+  it("raises no toast for a live answer's hatches, only for what else finished (#142)", () => {
+    const hatch = { kind: "hatch", id: "C1", t: null, at: 1, detail: { count: 1 } };
+    jobs.show([hatch]);
+    expect(toasts()).toHaveLength(0);
+    jobs.show([hatch, upgrade(1, CANNON, 5)]);
+    expect(toasts()).toHaveLength(1);
+    expect(toasts()[0]!.textContent).not.toContain("hatched");
+    // While away, they are part of the one toast.
+    jobs.showAway([hatch]);
+    expect(toasts().at(-1)!.textContent).toContain("While you were away: a monster hatched: Pokey");
   });
 
   it("shows what finished while the player was away as one toast, buildings still buttons", () => {

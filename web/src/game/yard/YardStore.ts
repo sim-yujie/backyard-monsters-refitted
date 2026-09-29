@@ -16,7 +16,7 @@ import { yardApi, yardRefusal, type YardApi, type YardRefusal } from "@/api/yard
 import type { Notices } from "@/ui/maproom/Notices";
 import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
 import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES, type YardKind } from "./buildingCosts";
-import { predictCompletion, SERVER_COMPLETED_KINDS, yardJobs, type YardJob } from "./jobs";
+import { JobKind, predictCompletion, SERVER_COMPLETED_KINDS, yardJobs, type YardJob } from "./jobs";
 import { MAIN_YARD, outpostBaseid, type OwnYardTarget } from "./ownYards";
 import { freeWorkers, holdsWorker } from "./workers";
 import { readYard, type Yard, type YardBuilding, type YardWorkers } from "./yardModel";
@@ -234,12 +234,21 @@ export interface YardStoreOptions {
   timers?: YardStoreTimers;
   /** How long after a job ends the `state` call goes out. 1 s (§2.4). */
   refreshDelayMs?: number;
+  /**
+   * The same when every job that ended is a hatch: 10 s, so a yard hatching a
+   * monster every few seconds asks for its housing now and then, not per
+   * monster (#142).
+   */
+  hatchRefreshDelayMs?: number;
   /** Called when a request comes back 401/403; the scene sends the player to log in. */
   onAuthFailure?: () => void;
 }
 
 /** One second, the coalescing window of §2.4. */
 const REFRESH_DELAY_MS = 1_000;
+
+/** The coalescing window when only hatches ended (#142). */
+const HATCH_REFRESH_DELAY_MS = 10_000;
 
 const browserTimers: YardStoreTimers = {
   set: (fn, ms) => window.setTimeout(fn, ms),
@@ -288,6 +297,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
   private readonly clock: () => number;
   private readonly timers: YardStoreTimers;
   private readonly refreshDelayMs: number;
+  private readonly hatchRefreshDelayMs: number;
   private readonly onAuthFailure: (() => void) | undefined;
   private readonly listeners = new Set<YardListener>();
 
@@ -300,6 +310,8 @@ export class YardStore implements YardStoreReader, YardStoreActions {
   /** The number of the latest request whose answer was applied. */
   private applied = 0;
   private refreshTimer: unknown = null;
+  /** When the scheduled `state` call goes out, browser clock seconds. */
+  private refreshDueAt = 0;
   /**
    * Jobs already acted on, as `key@endsAt`: predicted, or already overdue
    * when the server last answered — either way the server has had (or has
@@ -316,6 +328,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     this.clock = options.clock ?? (() => Date.now() / 1000);
     this.timers = options.timers ?? browserTimers;
     this.refreshDelayMs = options.refreshDelayMs ?? REFRESH_DELAY_MS;
+    this.hatchRefreshDelayMs = options.hatchRefreshDelayMs ?? HATCH_REFRESH_DELAY_MS;
     this.onAuthFailure = options.onAuthFailure;
     this.target = options.target ?? MAIN_YARD;
     this.baseid = outpostBaseid(this.target);
@@ -416,7 +429,8 @@ export class YardStore implements YardStoreReader, YardStoreActions {
   /**
    * The once-a-second check (§2.4). Every job the server completes that has
    * reached zero is flipped in the display now, and one `state` call is
-   * scheduled {@link YardStoreOptions.refreshDelayMs} later for all of them.
+   * scheduled {@link YardStoreOptions.refreshDelayMs} later for all of them
+   * ({@link YardStoreOptions.hatchRefreshDelayMs} when only hatches ended, #142).
    */
   tick(): void {
     if (this.destroyed) return;
@@ -433,7 +447,8 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     for (const job of due) this.handled.add(handledKey(job));
     this.setSave(predictCompletion(this.current, due));
     this.emit({ reason: YardChangeReason.PREDICTED, completed: [], predicted: due });
-    this.scheduleRefresh();
+    const hatchesOnly = due.every((job) => job.kind === JobKind.HATCH);
+    this.scheduleRefresh(hatchesOnly ? this.hatchRefreshDelayMs : this.refreshDelayMs);
   }
 
   /**
@@ -652,12 +667,23 @@ export class YardStore implements YardStoreReader, YardStoreActions {
 
   /* ── Internals ──────────────────────────────────────────────────────── */
 
-  private scheduleRefresh(): void {
-    if (this.refreshTimer !== null || this.destroyed) return;
+  /**
+   * One `state` call `delayMs` from now, or sooner if one is already due
+   * sooner: a batch of hatches waiting on its 10 s is pulled in by an upgrade
+   * ending in the meantime.
+   */
+  private scheduleRefresh(delayMs: number): void {
+    if (this.destroyed) return;
+    const dueAt = this.clock() + delayMs / 1000;
+    if (this.refreshTimer !== null) {
+      if (this.refreshDueAt <= dueAt) return;
+      this.timers.clear(this.refreshTimer);
+    }
+    this.refreshDueAt = dueAt;
     this.refreshTimer = this.timers.set(() => {
       this.refreshTimer = null;
       void this.refresh();
-    }, this.refreshDelayMs);
+    }, delayMs);
   }
 
   private setSave(save: BaseLoadResponse): void {

@@ -128,6 +128,21 @@ const STARTER_BASE = "starterBase";
 const STARVED = "starve";
 
 /**
+ * Monsters the catch-up moved from a hatchery into housing, one entry per
+ * type with its `count` (`server/src/services/yard/catchUpMonsters.ts`). A
+ * busy yard hatches one every few seconds, so a live answer's hatches raise
+ * no toast (the housing, the Monsters screen and the dock show them, #142);
+ * the away toast says them once: "12 monsters hatched: 10 Pokey, 2 Octo-ooze".
+ */
+const HATCH = "hatch";
+
+/** How many monsters a hatch entry moved into housing; 1 when it does not say. */
+const hatchCount = (job: CompletedJob): number => {
+  const count = Number((job.detail as { count?: unknown }).count);
+  return Number.isFinite(count) && count > 0 ? count : 1;
+};
+
+/**
  * One of the player's outposts was attacked or taken while they were away
  * (outposts WP8, #187). The server writes the whole sentence
  * (`server/src/services/maproom/v2/outpostNotices.ts`): "Bramble attacked your
@@ -209,6 +224,12 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
     const id = String(job.id);
     return { label: monsterEntry(id)?.name ?? id, buildingId: null };
   }
+  if (job.kind === HATCH) {
+    const id = String(job.id);
+    const count = hatchCount(job);
+    const name = monsterEntry(id)?.name ?? id;
+    return { label: count === 1 ? name : `${formatAmount(count)} ${name}`, buildingId: null };
+  }
   if (job.kind === "train") {
     // "Fang 4", pointing at the academy that trained it (`catchUpTraining.ts`).
     const id = String(job.id);
@@ -256,13 +277,16 @@ export const groupCompletedJobs = (completed: readonly CompletedJob[]): JobNotic
     items.push(labelOf(job));
     byKind.set(job.kind, items);
   }
+  const hatched = completed.reduce((sum, job) => (job.kind === HATCH ? sum + hatchCount(job) : sum), 0);
   return [
     ...starters,
     ...outposts,
     ...[...byKind].map(([kind, items]) =>
       kind === MAP_ROOM_ADDED
         ? { kind, heading: "A ", items, tail: " was added to your yard" }
-        : { kind, heading: headingOf(kind, items.length), items },
+        : kind === HATCH
+          ? { kind, heading: hatched === 1 ? "A monster hatched" : `${formatAmount(hatched)} monsters hatched`, items }
+          : { kind, heading: headingOf(kind, items.length), items },
     ),
   ];
 };
@@ -303,9 +327,9 @@ export class JobNotices {
     this.select = select;
   }
 
-  /** Shows one answer's completed jobs. Nothing for an empty list. */
+  /** Shows one answer's completed jobs, less its hatches (see `HATCH`). Nothing for an empty list. */
   show(completed: readonly CompletedJob[]): void {
-    for (const group of groupCompletedJobs(completed)) {
+    for (const group of groupCompletedJobs(completed.filter((job) => job.kind !== HATCH))) {
       // A key per toast: a second batch landing while the first is still up is
       // news of its own, not a correction of the first.
       this.count += 1;
