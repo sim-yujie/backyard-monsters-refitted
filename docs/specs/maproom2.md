@@ -262,6 +262,7 @@ Built by `server/src/controllers/maproom/v2/cells/userCell.ts:70-92`.
 | `n` | string | Owner username | `_name` |
 | `fr` | int | Friend flag. **Always `0`.** | `_friend` |
 | `p` | 0 or 1 | 1 while damage protection is active | `_protected` |
+| `pe` | unix seconds | When damage protection ends; sent only while `p` is 1 (#187, not Flash) | — |
 | `r` | object | Resources `{ r1..r4, r1max..r4max }` | `_resources`, `_hpResources` |
 | `m` | object | Monster/hatchery data (see below) | `_monsterData`, `_monsters` |
 | `l` | int | Owner's base level | `_level` |
@@ -457,7 +458,9 @@ to become a Takeover button:
 - `!_protected`.
 - `_locked == 0` or `_locked == own player id`.
 - `MapRoom._flingerInRange`.
-- Outpost count below `GLOBAL.k_MAX_NUMBER_OF_OUTPOSTS` = 3500 (`client/scripts/GLOBAL.as:440`).
+- Outpost count below `GLOBAL.k_MAX_NUMBER_OF_OUTPOSTS` = 3500 (`client/scripts/GLOBAL.as:440`). At
+  the cap the button is **disabled, not hidden** (`PopupInfoEnemy.as:162-163`, `doesHaveMaxOutposts` at
+  `:485-487`).
 
 Cost, computed client-side in `PopupTakeover`
 (`client/scripts/com/monsters/maproom_advanced/PopupTakeover.as:50-80`):
@@ -487,8 +490,10 @@ Server (`server/src/controllers/maproom/v2/takeoverCell.ts`):
 | Must be within flinger range of the caller's main yard or an outpost | `:57` |
 | Shiny-locked accounts cannot pay with shiny | `:33-35` |
 
-The cost is **not validated** — whatever `resources` / `shiny` the client sends is subtracted
-(`takeoverCell.ts:59-65`).
+The price is the **server's** (issue #182): `takeoverCost.ts` works it out from the rules above, the
+map quotes it through `POST /worldmapv2/takeoverquote`, and `takeoverCell` charges it whatever the
+client posts; a positive `shiny` only picks the Shiny price. (Before #182 the server subtracted
+whatever `resources` / `shiny` the client sent.)
 
 State changes on success:
 
@@ -563,15 +568,17 @@ alliance (`MapRoom.as:220-223`).
 
 ### Transfer monsters between own yards
 
-Three-step flow, all client-driven:
+Three steps, in the order **counts, then target, then confirm**, all client-driven:
 
-1. `TransferMonstersA` — from `PopupInfoMine` on a cell with monsters, with at least one outpost
-   owned. Snapshots the source cell and shows a "select target" bubble
-   (`MapRoom.as:661-692`, `PopupInfoMine.as:80-84`).
-2. `TransferMonstersB` — the next click on one of the player's own cells opens the quantity dialog
-   (`MapRoom.as:694-707`).
-3. `TransferMonstersC` — computes the actual transfer, clamped by the target's remaining housing
-   space (`space` minus the sum of `count * cStorage` for monsters already housed), and posts
+1. **Counts.** "Transfer Monsters From Here" in `PopupInfoMine`, on a cell with monsters and with at
+   least one outpost owned (`PopupInfoMine.as:80-84`), opens `PopupMonstersA`, where the player picks
+   how many of each (`popup_desc_monstertransfera`). Its Transfer calls `TransferMonstersA`, which
+   snapshots the source cell and shows the "select target" bubble (`MapRoom.as:661-692`).
+2. **Target.** `TransferMonstersB`: the next click on one of the player's own cells opens
+   `PopupMonstersB`, "Transfer monsters to this location?" (`MapRoom.as:694-707`).
+3. **Confirm.** Its Transfer runs `TransferMonstersC`, which computes the actual transfer, clamped by
+   the target's remaining housing space (`space` minus the sum of `count * cStorage` for monsters
+   already housed), and posts
    `POST /worldmapv2/transferassets` with `frombaseid`, `tobaseid`, and `monsters` (a JSON array
    `[sourceMonsterData, targetMonsterData]`) (`MapRoom.as:709-936`, endpoint at `:900`).
 
@@ -580,9 +587,16 @@ pending, and those zones are promoted to the front of the request queue
 (`MapRoom.as:889-920`). Conversely, `getarea` for a zone containing a cell in a pending transfer is
 deferred (`MapRoom.as:601-616`).
 
-Server (`server/src/controllers/maproom/v2/transferMonsters.ts`): loads both saves by `baseid`,
-requires `fromBase.saveuserid === toBase.saveuserid` (`:51-55`), and **overwrites `monsters` on both
-saves with whatever the client sent** (`:57-58`). No quantity, capacity or ownership-by-caller check.
+Server (`server/src/controllers/maproom/v2/transferMonsters.ts`): transfers are **validated**. Both
+saves must be the caller's (403 otherwise), on the same world when an outpost is involved, and with no
+attack running on either (outposts WP0); the rows are locked main yard first. The posted rosters are
+checked by `services/monsters/transferRules.ts` (issue #27): one end must be an outpost, counts must
+be whole and non-negative, the source cannot end up with more than it had, the total is conserved,
+and the target's housing capacity is not exceeded. Only the two `housed` rosters are written. (Before
+#27 the server wrote whatever the client sent.)
+
+The web client (outposts WP7, #186) folds the three steps into one dialog: source and target among
+the player's yards, then the counts, clamped to the target's free housing as Flash clamped them.
 
 On success the client patches both cells in memory and writes the new `housed` maps back into the
 cached zone data, avoiding a refetch (`MapRoom.as:750-788`).
@@ -862,8 +876,8 @@ protection** (`:34-36`).
 A newly taken-over cell receives a flat **12 hours** of protection
 (`server/src/controllers/maproom/v2/takeoverCell.ts:89`, `:99`).
 
-On the wire, protection appears as `p` (boolean 0/1). The expiry timestamp is never sent, so the map
-cannot show a countdown — only "protected" or not (`userCell.ts:63`, `:84`). `Update()` renders a
+On the wire, protection appears as `p` (boolean 0/1), and since #187 as `pe`, the unix second it ends,
+sent while it runs, so the map shows a countdown (`userCell.ts`). `Update()` renders a
 distinct `main-protected` / `outpost-protected` sprite state (`MapRoomCell.as:548-555`).
 
 ### Truce
@@ -957,15 +971,14 @@ sequentially.
 
 See [Take over a cell](#take-over-a-cell-build-an-outpost). Validation is: cell exists in the
 caller's world, has a save, is not a `MAIN` yard, `damage >= 90`, passes `validateRange`, and the
-caller is not shiny-locked when paying with shiny. **The price is not verified**, and there is no
-server-side outpost cap.
+caller is not shiny-locked when paying with shiny. The price is the server's own (`takeoverCost.ts`,
+issue #182), and there is no server-side outpost cap.
 
 ### `transferMonsters`
 
-See [Transfer monsters](#transfer-monsters-between-own-yards). The only check is that both saves have
-the same `saveuserid`. Note that it does **not** verify the caller is that user, so any authenticated
-player can rewrite the monster contents of any two yards belonging to one owner
-(`server/src/controllers/maproom/v2/transferMonsters.ts:51-58`).
+See [Transfer monsters](#transfer-monsters-between-own-yards). Validated since issue #27 and
+outposts WP0: both saves must be the caller's, on one world, with no attack running, and the rosters
+must conserve monsters and fit the target's housing (`services/monsters/transferRules.ts`).
 
 ### `migrateBase`
 
@@ -1050,9 +1063,10 @@ Note that the snapshot carries the same stale `damage` and `destroyed` for wild 
    (`getArea.ts:157`). The client wraps 800 to 0 (`MapRoomPopup.as:1062-1064`). UNVERIFIED whether
    the duplicated column is ever rendered or whether the zone alignment makes it unreachable in
    practice; it would need a live world to confirm.
-2. **`GLOBAL._outpostCapacity`.** The client raises and lowers the four resource caps by this value
-   on takeover and migration (`PopupTakeover.as:147-150`, `PopupRelocateMe.as:126-129`), but the
-   value's source was not traced. UNVERIFIED where it is set and whether the server agrees.
+2. **`GLOBAL._outpostCapacity`.** ANSWERED: 2,000,000 (`GLOBAL.as:806`). The client raises and lowers
+   the four resource caps by it on takeover and migration (`PopupTakeover.as:147-150`,
+   `PopupRelocateMe.as:126-129`), and the server's caps count it per owned outpost
+   (`resourceBudget.ts`).
 3. **`pi` (pending migration invite).** `userCell` hardcodes `pi: 0` (`userCell.ts:73`), yet the
    client maintains invite state through it and force-refreshes the cell after sending or revoking an
    invite (`PopupInfoMine.as:236-241`, `:256-261`). UNVERIFIED whether the invite marker can ever
@@ -1157,8 +1171,7 @@ These are load-bearing game rules. Changing them changes the game.
 - **Zoom.** Map Room 3 shows the pattern: scale a canvas, drop cell detail below scale 1
   (`MapRoom3Window.as:647-675`, `MapRoom3CellGraphic.as:679`). The zoom-out data need is already
   served whole by `/worldmapv2/terrain` and `/worldmapv2/snapshot`.
-- **A protection countdown.** The server knows `save.protected` as a timestamp but sends only a
-  boolean `p`. Sending the expiry would let the map show time remaining, as it already does for
-  truces via `t`.
+- **A protection countdown.** Done in #187: player cells carry `pe`, the protection's end, beside
+  `p`, and the cell panel counts it down as it does a truce's `t`.
 - **Push or targeted invalidation after an attack.** The attack result is known server-side; the
   client currently discovers it by refetching everything.

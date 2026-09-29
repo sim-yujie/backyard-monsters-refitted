@@ -45,6 +45,45 @@ describe("TakeoverDialog", () => {
     return { dialog, takeOver, onTaken, $ };
   };
 
+  describe("Not now, while a player outpost's chance is live (#187)", () => {
+    const grant = { resources: 5_000_000, shiny: 900, grantExpiresAt: 2_000_000_000 };
+
+    it("is offered only with a live grant and a way to decline", () => {
+      const { $ } = open({ kind: "outpost", name: "Ann", price: grant, decline: vi.fn() });
+      expect($(".takeover-dialog__not-now").hidden).toBe(false);
+      modal.replaceChildren();
+      const camp = open({ decline: vi.fn() });
+      expect(camp.$(".takeover-dialog__not-now").hidden).toBe(true);
+      modal.replaceChildren();
+      const noDecline = open({ kind: "outpost", name: "Ann", price: grant });
+      expect(noDecline.$(".takeover-dialog__not-now").hidden).toBe(true);
+    });
+
+    it("turns the chance down, closes and says when protection ends", async () => {
+      const decline = vi.fn(async () => ({ protectedUntil: 1_234 }));
+      const onDeclined = vi.fn();
+      const { $, takeOver } = open({ kind: "outpost", name: "Ann", price: grant, decline, onDeclined });
+      $<HTMLButtonElement>(".takeover-dialog__not-now").click();
+      await flush();
+      expect(decline).toHaveBeenCalledTimes(1);
+      expect(takeOver).not.toHaveBeenCalled();
+      expect(onDeclined).toHaveBeenCalledWith(1_234);
+      expect(modal.querySelector(".takeover-dialog")).toBeNull();
+    });
+
+    it("keeps the chance open when the server does not answer", async () => {
+      const decline = vi.fn(async () => Promise.reject(new Error("offline")));
+      const { $ } = open({ kind: "outpost", name: "Ann", price: grant, decline });
+      $<HTMLButtonElement>(".takeover-dialog__not-now").click();
+      await flush();
+      expect($(".takeover-dialog__status").textContent).toBe(
+        "Could not turn the offer down. The chance is still open.",
+      );
+      expect($<HTMLButtonElement>(".takeover-dialog__not-now").disabled).toBe(false);
+      expect($<HTMLButtonElement>(".takeover-dialog__resources").disabled).toBe(false);
+    });
+  });
+
   it("shows Flash's title and lead, and the quote's price for each resource", () => {
     const { $ } = open();
     expect($(".panel__title").textContent).toBe("Take over this Wild Monster Yard");

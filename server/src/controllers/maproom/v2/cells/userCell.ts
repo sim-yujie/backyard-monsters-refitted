@@ -93,6 +93,9 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     n: cellOwner.username,
     fr: 0,
     p: isProtected ? 1 : 0,
+    // When damage protection ends, unix seconds (#187): Flash sent only `p`,
+    // and the map could only say "protected" with no end. Sent while it runs.
+    ...(isProtected && { pe: cellSave.protected }),
     // Only the owner's own cells carry live resources and monsters. Every client read of
     // `r`/`m` is gated on the cell being the viewer's own - the 1 Hz production sim bails
     // at `if (!this._mine) return true` (MapRoomCell.as:706), the attack monster roll-up

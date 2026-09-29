@@ -9,6 +9,7 @@ import {
   hasAnythingToSend,
   hasDeclareWar,
   mainYardRoster,
+  outpostsToLoad,
   ownCellsIn,
   rosterInRange,
   targetKind,
@@ -342,6 +343,14 @@ describe("attackRefusal", () => {
     expect(attackRefusal(playerCell({ p: 1 }), armed, NOW)).toMatch(/protection/);
   });
 
+  it("calls an outpost an outpost (#187)", () => {
+    expect(attackRefusal(playerCell({ mine: 1, b: 3 }), armed, NOW)).toBe("This is your own outpost.");
+    expect(attackRefusal(playerCell({ mine: 1 }), armed, NOW)).toBe("This is your own yard.");
+    expect(attackRefusal(playerCell({ b: 3, p: 1 }), armed, NOW)).toBe(
+      "This outpost is under damage protection.",
+    );
+  });
+
   it("refuses an active truce and ignores an expired one", () => {
     expect(attackRefusal(playerCell({ t: NOW + 60 }), armed, NOW)).toMatch(/truce/);
     expect(attackRefusal(playerCell({ t: NOW - 60 }), armed, NOW)).toBeNull();
@@ -367,5 +376,31 @@ describe("ownCellsIn and targetKind", () => {
     expect(targetKind(playerCell())).toBe("main");
     expect(targetKind(playerCell({ b: 3 }))).toBe("outpost");
     expect(targetKind({ i: 10 })).toBeNull();
+  });
+});
+
+describe("a far outpost in the roster (#187)", () => {
+  const home = { col: 100, row: 100 };
+  const far = { col: 300, row: 300 };
+  const target = { col: 300, row: 302 };
+  const zone = (cells: { col: number; row: number; cell: PlayerCell }[]) => ({
+    data: Object.fromEntries(cells.map(({ col, row, cell }) => [String(col), { [String(row)]: cell }])),
+  });
+
+  it("names the outposts whose zones are not loaded yet", () => {
+    const loaded = new Set(["100,100"]);
+    expect(
+      outpostsToLoad([{ cell: far }, { cell: home }], (col, row) => loaded.has(`${col},${row}`)),
+    ).toEqual([far]);
+  });
+
+  it("counts the outpost once its zone has loaded", () => {
+    const main = ownCell(home.col, home.row);
+    const outpost = ownCell(far.col, far.row, { b: 3, f: 2, bid: "op", m: { housed: { C2: 4 } } });
+    const before = rosterInRange(target, ownCellsIn([zone([main])]), null);
+    expect(before.flingerLevel).toBe(0);
+    const after = rosterInRange(target, ownCellsIn([zone([main]), zone([outpost])]), null);
+    expect(after.monsters).toEqual({ C2: 4 });
+    expect(after.sources?.map((source) => source.baseid)).toEqual(["op"]);
   });
 });

@@ -95,6 +95,18 @@ export const ownCellsIn = (zones: Iterable<{ data: AreaCellGrid }>): OwnCell[] =
   return own;
 };
 
+/**
+ * The player's outposts whose zones the map has not loaded, so it can fetch
+ * them (#187). The roster is read off the loaded zones, and an outpost far
+ * from where the map opened would otherwise not count until the player
+ * panned past it, although its flinger may reach the target.
+ */
+export const outpostsToLoad = (
+  outposts: readonly { cell: OffsetCell }[],
+  loaded: (col: number, row: number) => boolean,
+): OffsetCell[] =>
+  outposts.map(({ cell }) => cell).filter((cell) => !loaded(cell.col, cell.row));
+
 /** Which load mode family a cell payload takes. */
 export const targetKind = (payload: MapCell): AttackTargetKind | null => {
   if (isWaterCell(payload)) return null;
@@ -275,8 +287,11 @@ export const attackRefusal = (
   if (!payload) return "Waiting for this zone to load.";
   if (isWaterCell(payload)) return "Water cannot be attacked.";
   if (isPlayerCell(payload)) {
-    if (payload.mine === 1) return "This is your own yard.";
-    if (payload.p === 1) return "This yard is under damage protection.";
+    const outpost = payload.b === CellType.OUTPOST;
+    if (payload.mine === 1) return outpost ? "This is your own outpost." : "This is your own yard.";
+    if (payload.p === 1) {
+      return outpost ? "This outpost is under damage protection." : "This yard is under damage protection.";
+    }
     if (payload.t !== undefined && payload.t > nowSeconds) return "You have a truce with this player.";
   }
   if (roster.flingerLevel === 0) return "None of your flingers can reach this cell.";

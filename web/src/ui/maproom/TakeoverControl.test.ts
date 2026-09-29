@@ -156,7 +156,9 @@ describe("TakeoverControl", () => {
     await flush();
     expect(control.button.hidden).toBe(false);
     // Server clock 10 s ahead: 1,300 - 1,010 = 290 s.
-    expect(control.detail.querySelector(".takeover-action__countdown")!.textContent).toBe("Offer ends in 4m 50s");
+    // On the cell panel's chips now, not only inside the dialog (#187).
+    expect(control.chip.hidden).toBe(false);
+    expect(control.chip.textContent).toBe("Offer ends in 4m 50s");
     clock = 1_289;
     control.tick();
     expect(quote).toHaveBeenCalledTimes(1);

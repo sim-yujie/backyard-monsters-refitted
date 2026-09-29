@@ -52,6 +52,15 @@ export interface TakeoverDialogOptions {
   readonly onTaken: (payment: TakeoverPayment) => void;
   /** Server seconds now, for the grant's countdown. */
   readonly serverNow?: () => number;
+  /**
+   * Turns a player outpost's single chance down (`declinetakeover`), offered
+   * as "Not now" while the grant is live (#187, from the #82 test): until now
+   * only the end-of-attack panel could. Resolves with when the outpost's
+   * damage protection ends.
+   */
+  readonly decline?: () => Promise<{ protectedUntil?: number }>;
+  /** The chance was turned down. The dialog has closed itself by then. */
+  readonly onDeclined?: (protectedUntil: number | undefined) => void;
 }
 
 type Step = "choose" | "confirm" | "busy";
@@ -69,6 +78,7 @@ export class TakeoverDialog {
   private readonly shinyButton: HTMLButtonElement;
   private readonly status: HTMLElement;
   private readonly countdown: HTMLElement;
+  private readonly notNowButton: HTMLButtonElement;
   private timer: number | null = null;
   private payment: TakeoverPayment = "resources";
   private step: Step = "choose";
@@ -139,6 +149,13 @@ export class TakeoverDialog {
       option(this.shinyButton, shinyNote),
     );
 
+    this.notNowButton = button("Not now", "btn btn--ghost takeover-dialog__not-now");
+    this.notNowButton.title =
+      "Turn the offer down. The outpost's damage protection starts now, and the chance is gone.";
+    this.notNowButton.hidden = !(options.decline && price.grantExpiresAt !== undefined);
+    this.notNowButton.addEventListener("click", () => void this.notNow());
+    this.choice.append(this.notNowButton);
+
     this.confirmText = document.createElement("p");
     this.confirmText.className = "takeover-dialog__confirm-text";
     this.backButton = button("Back", "btn btn--ghost takeover-dialog__back");
@@ -189,6 +206,26 @@ export class TakeoverDialog {
         : `Take this yard over for ${formatAmount(price.resources)} of each resource?`;
     this.status.hidden = true;
     this.setStep("confirm");
+  }
+
+  private async notNow(): Promise<void> {
+    const decline = this.options.decline;
+    if (!decline || this.step !== "choose") return;
+    // Everything in the choice is held still while the server answers.
+    const buttons = [this.resourcesButton, this.shinyButton, this.notNowButton];
+    const wasDisabled = buttons.map((one) => one.disabled);
+    for (const one of buttons) one.disabled = true;
+    this.showStatus("Turning the offer down…", false);
+    let protectedUntil: number | undefined;
+    try {
+      ({ protectedUntil } = await decline());
+    } catch {
+      buttons.forEach((one, i) => (one.disabled = wasDisabled[i] ?? false));
+      this.showStatus("Could not turn the offer down. The chance is still open.", true);
+      return;
+    }
+    this.close();
+    this.options.onDeclined?.(protectedUntil);
   }
 
   private async go(): Promise<void> {

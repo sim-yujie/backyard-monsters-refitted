@@ -687,6 +687,8 @@ export interface PlayerCell {
   lo: number;
   /** 1 while damage protection is active. */
   p: number;
+  /** When damage protection ends, unix seconds; sent while it runs (#187). */
+  pe?: number;
   /** Truce expiry, unix seconds. Absent on the caller's own cell. */
   t?: number;
   /** 1 when the cell belongs to the caller. */

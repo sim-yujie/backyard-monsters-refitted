@@ -7,7 +7,7 @@ import { clockReading, formatClock } from "@/game/attack/attackClock";
 import { ATTACK_TAP_CLAIMS } from "@/game/attack/AttackInput";
 import { AttackPresentation } from "@/game/attack/attackPresentation";
 import { AttackSession, type AttackSessionState } from "@/game/attack/AttackSession";
-import { consumeAttackTarget, type AttackTarget } from "@/game/attack/attackTarget";
+import { consumeAttackTarget, type AttackTarget, type AttackTargetKind } from "@/game/attack/attackTarget";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
@@ -68,6 +68,10 @@ const PHONE_WIDTH = 620;
 export { formatClock };
 
 /** A HUD destination as the retreat question names it (#152). */
+/** What the target is called in the status line: a camp, a yard, or an outpost (#187). */
+const targetNoun = (kind: AttackTargetKind): string =>
+  kind === "wild" ? "camp" : kind === "outpost" ? "outpost" : "yard";
+
 const destinationName = (scene: string): string =>
   scene === SceneName.YARD ? "your yard" : scene === SceneName.LOGIN ? "the sign-in screen" : "there";
 
@@ -171,7 +175,7 @@ export class AttackScene implements Scene {
       return;
     }
 
-    this.status.textContent = `Loading ${target.name}'s yard…`;
+    this.status.textContent = `Loading ${target.name}'s ${targetNoun(target.kind)}…`;
     await this.load(target, context);
   }
 
@@ -652,7 +656,7 @@ export class AttackScene implements Scene {
     if (!status || !yard || !target) return;
     const sent = Object.values(state.remaining).reduce((sum, count) => sum + count, 0);
     status.textContent =
-      `${target.name}'s ${target.kind === "wild" ? "camp" : "yard"} · ` +
+      `${target.name}'s ${targetNoun(target.kind)} · ` +
       `${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
       `${state.creepsAlive} on the field · ${sent} left to send` +
       (state.declareWar ? " · Declare War" : "") +

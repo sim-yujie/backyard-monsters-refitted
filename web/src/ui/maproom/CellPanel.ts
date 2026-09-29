@@ -89,6 +89,8 @@ export interface CellPanelAction {
   readonly button: HTMLElement;
   /** Placed under the actions. */
   readonly detail: HTMLElement;
+  /** Placed last among the chips, when present: a countdown, say. */
+  readonly chip?: HTMLElement;
   setCell(cell: OffsetCell, payload: MapCell | undefined): void;
   tick(nowSeconds: number): void;
 }
@@ -268,6 +270,8 @@ export class CellPanel {
     this.payload = payload;
     this.options.extraAction?.setCell(cell, payload);
     this.render(cell, payload);
+    const chip = this.options.extraAction?.chip;
+    if (chip) this.chips.append(chip);
   }
 
   /** Keeps the flinger line's switch in step with "My range" (#177). */
@@ -364,7 +368,14 @@ export class CellPanel {
     }
 
     this.addDamage(payload.dm, payload.d === 1);
-    if (payload.p === 1) this.addChip("shield", "Protected", "info", "Under damage protection.");
+    if (payload.p === 1) {
+      // The end, when the server sends it (#187); a bare "Protected" otherwise.
+      if (payload.pe !== undefined && payload.pe > Date.now() / 1000) {
+        this.addCountdown("shield", "Protected", payload.pe, "Under damage protection until it runs out.");
+      } else {
+        this.addChip("shield", "Protected", "info", "Under damage protection.");
+      }
+    }
     if (payload.t !== undefined && payload.t > Date.now() / 1000) {
       this.addCountdown("truce", "Truce", payload.t);
     }
@@ -482,8 +493,13 @@ export class CellPanel {
     return label;
   }
 
-  private addCountdown(name: IconName, label: string, expiresAt: number): void {
-    const node = this.addChip(name, "", "info", "No attacks either way until it runs out.");
+  private addCountdown(
+    name: IconName,
+    label: string,
+    expiresAt: number,
+    title = "No attacks either way until it runs out.",
+  ): void {
+    const node = this.addChip(name, "", "info", title);
     this.countdowns.push({ node, label, expiresAt });
     node.textContent = `${label} ${formatCountdown(expiresAt - Date.now() / 1000)}`;
   }

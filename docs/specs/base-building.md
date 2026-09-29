@@ -640,15 +640,15 @@ of two buttons (`client/scripts/BUILDINGINFO.as:129-141`):
 resource packages, and awards empire points equal to the amount banked (halved after tutorial stage
 200) (`client/scripts/BRESOURCE.as:441-467`).
 
-**Outposts are different.** Outpost harvesters never bank a buffer of their own; they feed a
+**Outposts are different.** In ordinary play outpost harvesters hold no buffer of their own; they feed a
 continuous "gross income per second" figure that is credited to the main yard automatically. Only
 when an attack loads is each given one, half its capacity above half health and a quarter at or
 below, which the attacker loots out of the owner's pool (`client/scripts/BRESOURCE.as:506-518`,
 `docs/specs/combat.md` "Loot", issue #179). `AutoBankManager.autobank()`
 runs every 10 seconds from the yard tick (`client/scripts/BASE.as:2539-2543`) and funds
 `GIP * overdrive * seconds / 10` into the pool, awarding `ceil(total * 0.375)` empire points
-(`client/scripts/com/monsters/autobanking/AutoBankManager.as:299-330`). On load, the whole offline
-gap is credited in one call, clamped to **2 days** (`AutoBankManager.as:79-82`,
+(`client/scripts/com/monsters/autobanking/AutoBankManager.as:238-289`, the 0.375 at `:278`). On load,
+the whole offline gap is credited in one call, clamped to **2 days** (`AutoBankManager.as:75-77`,
 `client/scripts/BASE.as:1845-1847`). Outpost income is stored in the `buildingresources` save key.
 
 Outpost production is scaled by terrain altitude:
@@ -1077,7 +1077,7 @@ rises (`client/scripts/BASE.as:4857-4859`).
 `_basePoints` accumulates from actions: banking resources, completing builds and upgrades, buying
 resources with shiny, and outpost auto-banking (`client/scripts/BASE.as:4863-4865`, called from
 `BFOUNDATION.as:2457`, `:2916`, `BRESOURCE.as:457-462`, `STORE.as:2029-2035`,
-`AutoBankManager.as:329`).
+`AutoBankManager.as:278`).
 
 The level thresholds are a 56-entry table, identical on both sides
 (`client/scripts/BASE.as:289`, `server/src/game-data/stats/experiencePoints.ts:7`):
@@ -1568,7 +1568,7 @@ These are load-bearing and a new client that changes them will diverge from exis
 9. **Outposts: one worker, no recycling, no cap recalculation, income auto-banks to the main yard**
    (`client/scripts/QUEUE.as:32-39`, `client/scripts/BFOUNDATION.as:2893-2895`,
    `client/scripts/BASE.as:4714-4718`,
-   `client/scripts/com/monsters/autobanking/AutoBankManager.as:299-330`).
+   `client/scripts/com/monsters/autobanking/AutoBankManager.as:238-289`).
 10. **The finish-now price curve.** `min(ceil(t*20/3600), int(sqrt(t*0.8)))` with a free window
     below 300 s (`client/scripts/STORE.as:162-171`). Players know this curve; changing it changes
     the economy.
@@ -1623,7 +1623,7 @@ With six harvesters per resource and four resources, a full manual round is **up
 `btn_bankall` cuts it to 2 but is only unlocked past tutorial stage 200
 (`client/scripts/BUILDINGINFO.as:137-139`) and only banks harvesters that are at full health with no
 countdown running (`client/scripts/BUILDINGINFO.as:461`). *Outposts already auto-bank
-(`AutoBankManager.as:299-330`) — the main yard should too, or at minimum default to bank-all with a
+(`AutoBankManager.as:238-289`) — the main yard should too, or at minimum default to bank-all with a
 single always-visible control.*
 
 **Build one building: 5 clicks plus a drag.**

@@ -717,7 +717,8 @@
   gap: 6px;
 }
 
-.mr2-cell__chips:empty {
+/* No chip showing: the row takes no room (a hidden countdown chip may sit in it). */
+.mr2-cell__chips:not(:has(> :not([hidden]))) {
   display: none;
 }
 

@@ -40,6 +40,19 @@ describe("userCell damage", () => {
   test("while protected, likewise", async () => {
     expect(await userCell(ctx, outpostWith(60, now() + 3600), owners)).toMatchObject({ dm: 60, d: 0, p: 1 });
   });
+});
+
+describe("userCell protection end (#187)", () => {
+  test("a protected yard says when its protection ends", async () => {
+    const until = now() + 3600;
+    expect(await userCell(ctx, outpostWith(30, until), owners)).toMatchObject({ p: 1, pe: until });
+  });
+
+  test("an unprotected yard sends no end", async () => {
+    const payload = await userCell(ctx, outpostWith(30, now() - 60), owners);
+    expect(payload).toMatchObject({ p: 0 });
+    expect(payload).not.toHaveProperty("pe");
+  });
 
   test("a repaired yard, whose stored damage the catch-up lowered, shows that", async () => {
     expect(await userCell(ctx, outpostWith(0, now() - 60), owners)).toMatchObject({ dm: 0, d: 0 });

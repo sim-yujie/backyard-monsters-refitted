@@ -158,6 +158,14 @@ describe("another player's yard", () => {
     expect(host.textContent).not.toContain("/avatars/");
   });
 
+  it("counts protection down when the server says when it ends (#187)", () => {
+    const now = Date.now() / 1000;
+    const { host, panel } = open(player({ p: 1, pe: now + 7_300 }));
+    expect(shown(host, ".mr2-chip").map((chip) => chip.textContent)).toContain("Protected 2h 1m");
+    panel.tick(now + 7_290);
+    expect(shown(host, ".mr2-chip").map((chip) => chip.textContent)).toContain("Protected 10s");
+  });
+
   it("counts a truce down", () => {
     const now = Date.now() / 1000;
     const { host, panel } = open(player({ t: now + 3_700 }));

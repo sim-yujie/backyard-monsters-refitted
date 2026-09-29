@@ -11,6 +11,7 @@ import {
   type TakeoverCandidate,
   type TakeoverQuoteState,
 } from "@/game/maproom/takeover";
+import { el, icon } from "@/ui/maproom1/icons";
 import { TakeoverDialog } from "./TakeoverDialog";
 
 /**
@@ -41,13 +42,26 @@ export interface TakeoverControlOptions {
   readonly modal: () => HTMLElement | null;
   /** Local seconds; `Date.now` by default. */
   readonly now?: () => number;
+  /**
+   * `declinetakeover`: "Not now" in the dialog while the caller holds a player
+   * outpost's single chance (#187). Absent: the dialog offers no Not now.
+   */
+  readonly decline?: (baseid: string) => Promise<{ protectedUntil?: number }>;
+  /** The chance was turned down; the control has asked the server again. */
+  readonly onDeclined?: (cell: OffsetCell, protectedUntil: number | undefined) => void;
 }
 
 export class TakeoverControl {
   /** Goes beside Attack. */
   readonly button: HTMLButtonElement;
-  /** Goes under the actions: the price or the reason, and the countdown. */
+  /** Goes under the actions: the price or the reason. */
   readonly detail: HTMLElement;
+  /**
+   * Goes with the cell panel's chips: the countdown on a player outpost's
+   * single chance, "Offer ends in 4m 50s" (#187, from the #82 test, where it
+   * showed only inside the dialog).
+   */
+  readonly chip: HTMLElement;
 
   private readonly options: TakeoverControlOptions;
   private readonly note: HTMLElement;
@@ -76,13 +90,15 @@ export class TakeoverControl {
 
     this.note = document.createElement("span");
     this.note.className = "takeover-action__note";
-    this.countdown = document.createElement("span");
-    this.countdown.className = "takeover-action__countdown";
+    this.countdown = el("span", "takeover-action__countdown");
     this.countdown.setAttribute("role", "timer");
+    this.chip = el("span", "mr2-chip mr2-chip--warning takeover-action__chip");
+    this.chip.title = "Your one chance to take this outpost over. After it, the outpost is protected.";
+    this.chip.append(icon("clock", 16, "map-icon"), this.countdown);
 
     this.detail = document.createElement("p");
     this.detail.className = "takeover-action";
-    this.detail.append(this.note, this.countdown);
+    this.detail.append(this.note);
 
     this.render();
   }
@@ -127,6 +143,7 @@ export class TakeoverControl {
     this.dialog = null;
     this.button.remove();
     this.detail.remove();
+    this.chip.remove();
   }
 
   /** What is shown, for the tests. */
@@ -158,13 +175,13 @@ export class TakeoverControl {
     const visible = view?.visible ?? false;
     this.button.hidden = !visible;
     this.detail.hidden = !visible;
+    this.chip.hidden = !visible || view?.expiresAt === undefined;
     if (!view || !visible) return;
     this.button.disabled = !view.enabled;
     this.button.title = view.note;
     this.button.setAttribute("aria-label", `${TAKEOVER_TEXT.button}. ${view.note}`);
     this.note.textContent = view.enabled ? `${TAKEOVER_TEXT.button}: ${view.note}` : view.note;
     this.detail.classList.toggle("takeover-action--refused", !view.enabled);
-    this.countdown.hidden = view.expiresAt === undefined;
     this.tick();
   }
 
@@ -178,6 +195,7 @@ export class TakeoverControl {
     if (!candidate || !cell || !modal || this.state.status !== "quoted" || !this.state.quote.eligible) return;
     const quote = this.state.quote;
     this.dialog?.close();
+    const decline = this.options.decline;
     this.dialog = new TakeoverDialog({
       kind: candidate.kind,
       name: candidate.name,
@@ -188,6 +206,16 @@ export class TakeoverControl {
         this.options.onTaken(cell, candidate, quote, payment);
       },
       serverNow: () => this.localNow() + this.skew,
+      ...(decline && quote.grantExpiresAt !== undefined
+        ? {
+            decline: () => decline(candidate.baseid),
+            onDeclined: (protectedUntil: number | undefined) => {
+              this.dialog = null;
+              this.refresh();
+              this.options.onDeclined?.(cell, protectedUntil);
+            },
+          }
+        : {}),
     }).mount(modal);
   }
 

@@ -71,6 +71,9 @@ export interface MapRoomUiHandlers {
   /** The cell inspector's Take over action (issue #82); see `TakeoverControlOptions`. */
   takeoverQuote: (baseid: string) => Promise<TakeoverQuoteResponse>;
   takeOver: (baseid: string, payment: TakeoverPayment) => Promise<unknown>;
+  /** Turns a player outpost's single chance down from the map (#187); see `TakeoverControlOptions`. */
+  declineTakeover: (baseid: string) => Promise<{ protectedUntil?: number }>;
+  onTakeoverDeclined: (cell: OffsetCell, protectedUntil: number | undefined) => void;
   onTakenOver: (
     cell: OffsetCell,
     candidate: TakeoverCandidate,
@@ -277,6 +280,8 @@ export class MapRoomUi {
         quote: this.handlers.takeoverQuote,
         takeOver: this.handlers.takeOver,
         onTaken: this.handlers.onTakenOver,
+        decline: this.handlers.declineTakeover,
+        onDeclined: this.handlers.onTakeoverDeclined,
         modal: () => this.modal ?? this.container,
       });
       this.cellPanel = new CellPanel({

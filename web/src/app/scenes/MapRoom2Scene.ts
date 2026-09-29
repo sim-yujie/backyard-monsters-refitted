@@ -2,6 +2,7 @@ import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
 import {
   cellAt,
+  declineTakeover,
   getArea,
   getTakeoverQuote,
   moveMainYard,
@@ -23,6 +24,7 @@ import { CELL_WIDTH, DEFAULT_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS
 import {
   attackRefusal,
   hasDeclareWar,
+  outpostsToLoad,
   ownCellsIn,
   rosterInRange,
   targetKind,
@@ -70,6 +72,7 @@ import { hoverContentFor } from "@/ui/maproom/HoverCard";
 import { MapRoomUi } from "@/ui/maproom/MapRoomUi";
 import { RelocateDialog } from "@/ui/maproom/RelocateDialog";
 import { TransferDialog, type TransferChoice } from "@/ui/maproom/TransferDialog";
+import { formatSpan } from "@/ui/attack/EndAttackPanel";
 import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
@@ -222,6 +225,19 @@ export class MapRoom2Scene implements Scene {
         onAttack: () => this.startAttack(),
         takeoverQuote: (baseid) => getTakeoverQuote(baseid),
         takeOver: (baseid, payment) => takeOverCell(baseid, payment),
+        declineTakeover: (baseid) => declineTakeover(baseid),
+        onTakeoverDeclined: (cell, protectedUntil) => {
+          this.store.invalidateCell(cell.col, cell.row);
+          void this.store.pump();
+          const left = (protectedUntil ?? 0) - Date.now() / 1000;
+          this.ui?.notices.show(
+            "takeover",
+            left > 0
+              ? `You turned the offer down. The outpost is now under damage protection for ${formatSpan(left)}.`
+              : "You turned the offer down.",
+            { level: "info", timeoutMs: 6_000 },
+          );
+        },
         onTakenOver: (cell, candidate, quote, payment) => this.tookOver(cell, candidate, quote, payment),
         onZoom: (zoom) => this.zoomTo(zoom),
         onZoomStep: (direction) => this.zoomTo(this.camera.zoom * Math.pow(ZOOM_STEP, direction)),
@@ -390,6 +406,10 @@ export class MapRoom2Scene implements Scene {
 
       if (base.resources) this.showResources(base.resources, base.credits);
       this.ui?.setOutposts(outpostsOf(base));
+      // Every outpost's zone, so the attack roster counts it wherever it is (#187).
+      for (const cell of outpostsToLoad(outpostsOf(base), (col, row) => !!this.store.getCell(col, row))) {
+        this.store.invalidateCell(cell.col, cell.row);
+      }
       this.updateRange();
     } catch (caught) {
       if (caught instanceof ApiError && caught.isAuthFailure) {

@@ -619,7 +619,7 @@ are plain water and carry only `{ i }`. A user cell additionally carries: `uid`,
 (baseid), `aid` (owner's alliance id), `n` (owner's username), `l` (calculated level), `v`
 (empirevalue), `f`/`c` (flinger/catapult level), `dm`/`d` (damage % / destroyed flag, `d=1` once
 `dm≥90`), `lo` (locked — forced `1` while the owner is online or under active attack, `0` on the
-viewer's own cell), `p` (protection active), `t` (truce **expiry unix timestamp** with that
+viewer's own cell), `p` (protection active), `pe` (when that protection ends, unix seconds; only while `p` is 1, #187), `t` (truce **expiry unix timestamp** with that
 owner, absent for the viewer's own cell), `mine` (1 for the caller's own cell), `pic_square`,
 `pi` (always `0` — UNVERIFIED: unused placeholder), `fr` (always `0` — UNVERIFIED: unused
 placeholder). `r` (the owner's live `resources` object) and `m` (the owner's `monsters`
