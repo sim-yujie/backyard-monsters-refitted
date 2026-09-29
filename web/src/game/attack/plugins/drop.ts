@@ -15,11 +15,8 @@
  * inventory (`AttackRoster.siege`) and the resource pool
  * (`AttackRoster.resources`). The Flash client read both off the player's
  * own state (`GLOBAL.as:819`, `_attackersResources = GLOBAL._resources`;
- * `SiegeWeapons.importWeapons` from the own save's `siege`). Only a roster
- * that predates either field makes this read the own-yard load once on
- * mount — the same call the map makes on entry and one the server treats as
- * a read of the caller's own base — and, if that fails, offers no bombs
- * rather than guessing.
+ * `SiegeWeapons.importWeapons` from the own save's `siege`). A roster whose
+ * save carried no resources offers no bombs rather than guessing.
  *
  * ## Coexistence
  *
@@ -38,7 +35,6 @@
  * Catapult panel's rows read. The server charges the same cost when the
  * attack is saved (#90); nothing here writes it.
  */
-import { loadOwnYard } from "@/api/base";
 import type { Resources } from "@/api/types";
 import { ATTACK_PLUGINS, type AttackPlugin } from "@/app/scenes/AttackScene";
 import {
@@ -107,9 +103,9 @@ const plugin: AttackPlugin = (mounts) => {
   /* ── The attacker's inventory ─────────────────────────────────────── */
 
   /** The own-yard resources the pool was read from, for goo and the caps. */
-  let held: Resources | null = target.roster.resources ?? null;
+  const held: Resources | null = target.roster.resources;
   let pool: AttackerPool | null = poolOf(held);
-  let stock: SiegeStock[] = parseSiegeStock(target.roster.siege ?? null);
+  const stock: SiegeStock[] = parseSiegeStock(target.roster.siege);
   const bombsUsed = new Set<number>();
   const siegeUsed: Partial<Record<SiegeWeaponId, number>> = {};
 
@@ -304,46 +300,11 @@ const plugin: AttackPlugin = (mounts) => {
   refreshPanels();
   showPool();
 
-  /* ── The own-yard read, only for a roster that predates the fields ──── */
-
-  let disposed = false;
-  const needsOwnYard =
-    target.roster.resources === undefined || target.roster.siege === undefined;
-  if (needsOwnYard) {
-    void loadOwnYard()
-      .then((own) => {
-        if (disposed) return;
-        if (target.roster.resources === undefined) {
-          held = own.resources ?? null;
-          pool = poolOf(held);
-          showPool();
-        }
-        if (target.roster.siege === undefined) {
-          stock = parseSiegeStock(own["siege"]);
-          // A siege panel built before the stock arrived has no tiles; rebuild it.
-          if (siege) {
-            siege.close();
-            toggleSiege();
-          }
-        }
-        refreshPanels();
-      })
-      .catch(() => {
-        if (disposed) return;
-        notices.show(
-          "attack-tools",
-          "Your resources could not be read; bombs are unavailable this attack.",
-          { level: "warning", timeoutMs: 6000 },
-        );
-      });
-  }
-
   if (import.meta.env.DEV) {
     (window as unknown as { __attack?: unknown }).__attack = { session, bucket, input };
   }
 
   return () => {
-    disposed = true;
     unsubscribe();
     input.detach();
     highlight.clear();

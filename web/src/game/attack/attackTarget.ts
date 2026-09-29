@@ -87,36 +87,27 @@ export interface AttackRoster {
    * The own cells whose housing `monsters` was summed from — every own cell
    * in flinger range that carries an `m` blob, main yard and outposts alike,
    * ordered by base id. What `monsterupdate` is built from.
-   *
-   * `rosterInRange` always sets it. Optional in the type only because rosters
-   * written before the field existed (test fixtures in other packages) must
-   * keep compiling; read it as `roster.sources ?? []`.
    */
-  readonly sources?: readonly RosterSource[];
-  /**
-   * The attacker's siege inventory, or null when the save carries none.
-   * Always set by `rosterInRange`; optional for the same reason as `sources`.
-   * Read it as `roster.siege ?? null`.
-   */
-  readonly siege?: SiegeInventory | null;
+  readonly sources: readonly RosterSource[];
+  /** The attacker's siege inventory, or null when the save carries none. */
+  readonly siege: SiegeInventory | null;
   /**
    * The attacker's own resource pool and caps (`r1`..`r4`, `r1max`..`r4max`)
    * from the own-yard load, which prices Catapult bombs
    * (`GLOBAL.as:819`, `_attackersResources = GLOBAL._resources`). The attack
    * load's `resources` is the defender's, so it cannot stand in. Null when
-   * the own save carries none. Always set by `rosterInRange`; optional for
-   * the same reason as `sources`. Read it as `roster.resources ?? null`.
+   * the own save carries none.
    */
-  readonly resources?: Resources | null;
+  readonly resources: Resources | null;
   /**
    * The attacker's storage cap from the same load (`attackerStorage.ts`,
-   * `storageCapOf`), which bounds the loot they keep (issue #166). Null when
-   * unknown; optional for the same reason as `sources`.
+   * `storageCapOf`), which bounds the loot they keep (issue #166). Null or
+   * absent when unknown.
    */
   readonly storageCap?: number | null;
   /**
    * The attacker's shiny from the same load, for the HUD during the attack.
-   * Optional for the same reason as `sources`; absent reads as unknown.
+   * Absent reads as unknown.
    */
   readonly credits?: number;
 }

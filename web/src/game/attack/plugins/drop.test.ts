@@ -40,6 +40,7 @@ const target = (): AttackTarget => ({
     champions: [],
     flingerLevel: 4,
     catapultLevel: 1,
+    sources: [],
     siege: null,
     resources: { r1: 50_000, r2: 50_000, r3: 50_000, r4: 50_000 },
     credits: 0,

@@ -43,6 +43,6 @@ export const checkpointOf = (session: AttackSession): AttackCheckpoint | null =>
     attackid: load.attackid ?? 0,
     tick: session.state().tick,
     flinglog: log,
-    sources: (session.target.roster.sources ?? []).map((source) => source.baseid),
+    sources: session.target.roster.sources.map((source) => source.baseid),
   };
 };

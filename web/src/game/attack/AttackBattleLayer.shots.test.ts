@@ -48,6 +48,9 @@ const targetOf = (monsters: Record<string, number> = { C1: 20 }): AttackTarget =
     champions: [],
     flingerLevel: 4,
     catapultLevel: 0,
+    sources: [],
+    siege: null,
+    resources: null,
   },
 });
 

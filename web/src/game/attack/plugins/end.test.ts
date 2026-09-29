@@ -6,6 +6,7 @@ import { AttackPresentation } from "@/game/attack/attackPresentation";
 import { AttackSession } from "@/game/attack/AttackSession";
 import type { AttackMounts } from "@/game/attack/attackPlugins";
 import type { AttackTarget } from "@/game/attack/attackTarget";
+import { DECLARE_WAR_COUNTDOWN_SECONDS } from "@/game/combat/rules";
 import { Notices } from "@/ui/maproom/Notices";
 import {
   END_PANEL_MAX_WAIT_MS,
@@ -42,7 +43,7 @@ const targetOf = (): AttackTarget => ({
   kind: "wild",
   cell: { col: 241, row: 208 },
   name: "Kozu",
-  roster: { monsters: { C1: 3 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0 },
+  roster: { monsters: { C1: 3 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
   load: towerYard(),
 });
 
@@ -364,6 +365,19 @@ describe("the end plugin", () => {
     clock += 5000;
     vi.advanceTimersByTime(1000);
     expect(shown()).toBe("");
+  });
+
+  it("warns a Declare War attack on the wall clock, though its own countdown runs past the window (#61)", () => {
+    // Declare War's 420 s countdown alone reaches the server's 420 s window, so
+    // the warning cannot wait for the session's clock.
+    session = new AttackSession({ target: targetOf(), seed: 1, declareWar: true });
+    session.start();
+    expect(session.state().countdownSeconds).toBe(DECLARE_WAR_COUNTDOWN_SECONDS);
+    mount(async () => ({ error: 0, basesaveid: 1 }) as BaseSaveResponse);
+    clock += (SESSION_WINDOW_SECONDS - WINDOW_MARGIN_SECONDS) * 1000;
+    vi.advanceTimersByTime(1000);
+    expect(session.state().phase).toBe("running");
+    expect(notices.element.textContent).toContain("stops accepting this attack's result in about 30 s");
   });
 
   it("does not warn after the attack is over, and clears the warning on the end", () => {

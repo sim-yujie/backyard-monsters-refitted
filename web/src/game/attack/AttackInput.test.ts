@@ -72,6 +72,9 @@ const targetOf = (overrides: Partial<AttackTarget> = {}): AttackTarget => ({
     champions: [],
     flingerLevel: 4,
     catapultLevel: 2,
+    sources: [],
+    siege: null,
+    resources: null,
   },
   ...overrides,
 });
@@ -597,7 +600,7 @@ describe("tool accounting", () => {
 
   it("keeps the session's exhausted rule honest: tools left, field empty, nothing housed", () => {
     const { session, bucket, input } = rig({
-      roster: { monsters: { C1: 1 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 1 },
+      roster: { monsters: { C1: 1 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 1, sources: [], siege: null, resources: null },
     });
     session.setUnusedTools(1);
     bucket.setCount("C1", 1);

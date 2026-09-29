@@ -18,6 +18,7 @@ const target: AttackTarget = {
     champions: [],
     flingerLevel: 4,
     catapultLevel: 0,
+    resources: null,
     sources: [{ baseid: "3502", m: { housed: { C1: 3 } } }],
     siege: null,
   },

@@ -42,6 +42,9 @@ const targetOf = (): AttackTarget => ({
     champions: [],
     flingerLevel: 4,
     catapultLevel: 0,
+    sources: [],
+    siege: null,
+    resources: null,
   },
 });
 

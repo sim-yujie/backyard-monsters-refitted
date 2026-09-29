@@ -294,7 +294,7 @@ export const buildAttackSave = (
     buildingdata: buildingDataAfter(load.buildingdata, battleState.firedTraps),
     buildinghealthdata: { ...battleState.health },
     damage,
-    monsterupdate: monsterUpdateOf(roster.sources ?? [], flungOf(log.events)),
+    monsterupdate: monsterUpdateOf(roster.sources, flungOf(log.events)),
     attackloot: attackLootOf(battleState),
     resources: defenderDeltaOf(battleState),
     attackreport: attackReportOf(log, state, options.nameOf),
@@ -407,7 +407,7 @@ export const summariseAttack = (session: AttackSession): AttackSummary => {
     buildingsTotal: countedBuildings(Object.values(load.buildingdata ?? {}).map((entry) => entry.t)),
     loot: keptLoot(
       state.loot,
-      session.target.roster.resources ?? null,
+      session.target.roster.resources,
       session.target.roster.storageCap ?? null,
       session.flingLog(),
       session.target.roster.champions,

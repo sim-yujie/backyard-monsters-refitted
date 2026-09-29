@@ -290,6 +290,7 @@ describe("hasAnythingToSend", () => {
     champions: [],
     flingerLevel: 4,
     catapultLevel: 0,
+    resources: null,
     sources: [],
     siege: null,
   };
@@ -312,6 +313,7 @@ describe("attackRefusal", () => {
     champions: [],
     flingerLevel: 4,
     catapultLevel: 0,
+    resources: null,
     sources: [],
     siege: null,
   };

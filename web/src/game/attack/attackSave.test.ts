@@ -65,6 +65,7 @@ const targetOf = (overrides: Partial<AttackTarget> = {}): AttackTarget => ({
     champions: [OWN_CHAMPION],
     flingerLevel: 4,
     catapultLevel: 0,
+    resources: null,
     sources: SOURCES,
     siege: SIEGE,
   },
@@ -272,7 +273,7 @@ describe("buildAttackSave", () => {
       target: targetOf({
         kind: "main",
         load: { ...towerLoad(), champion: null, monsters: null },
-        roster: { monsters: { C1: 3 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0 },
+        roster: { monsters: { C1: 3 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
       }),
       seed: 1,
     });
@@ -307,7 +308,7 @@ describe("buildAttackSave", () => {
     const walkedHome = new AttackSession({
       target: targetOf({
         load: towerLoad(),
-        roster: { monsters: { C1: 60 }, levels: {}, champions: [OWN_CHAMPION], flingerLevel: 4, catapultLevel: 0 },
+        roster: { monsters: { C1: 60 }, levels: {}, champions: [OWN_CHAMPION], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
       }),
       seed: 1,
     });
@@ -334,7 +335,7 @@ describe("buildAttackSave", () => {
     const died = new AttackSession({
       target: targetOf({
         load: { ...towerLoad(), buildingdata: ring } as BaseLoadResponse,
-        roster: { monsters: {}, levels: {}, champions: [OWN_CHAMPION], flingerLevel: 4, catapultLevel: 0 },
+        roster: { monsters: {}, levels: {}, champions: [OWN_CHAMPION], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
       }),
       seed: 1,
     });

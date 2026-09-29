@@ -38,6 +38,9 @@ const targetOf = (overrides: Partial<AttackTarget> = {}): AttackTarget => ({
     champions: [],
     flingerLevel: 4,
     catapultLevel: 0,
+    sources: [],
+    siege: null,
+    resources: null,
   },
   ...overrides,
 });
@@ -200,7 +203,7 @@ describe("AttackSession events and the fling log", () => {
   it("refuses more than is housed, an empty drop, and the same champion twice", () => {
     const champion = { t: 1, hp: 100, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 };
     const session = sessionOf({
-      roster: { monsters: { C1: 3 }, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0 },
+      roster: { monsters: { C1: 3 }, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
     });
     session.start();
     expect(() => session.appendFling({ x: 0, y: 0, monsters: { C1: 4 } })).toThrow(/exceeds/);
@@ -216,7 +219,7 @@ describe("AttackSession events and the fling log", () => {
   it("logs a radius that counts the champion's bucket (#143)", () => {
     const champion = { t: 1, hp: 100, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 };
     const session = sessionOf({
-      roster: { monsters: { C1: 400 }, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0 },
+      roster: { monsters: { C1: 400 }, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
     });
     session.start();
     // 200 Pokeys are 1,400 bucket units: a zone of 350, radius 175.
@@ -273,7 +276,7 @@ describe("AttackSession events and the fling log", () => {
 
     it("does not end as exhausted when the attacker opens with nothing to send", () => {
       const session = sessionOf({
-        roster: { monsters: {}, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0 },
+        roster: { monsters: {}, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
       });
       session.start();
       play(session, 5);
@@ -302,7 +305,7 @@ describe("AttackSession events and the fling log", () => {
     });
     const withChampions = (...champions: ReturnType<typeof entry>[]): AttackSession => {
       const session = sessionOf({
-        roster: { monsters: { C1: 3 }, levels: {}, champions, flingerLevel: 4, catapultLevel: 0 },
+        roster: { monsters: { C1: 3 }, levels: {}, champions, flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
       });
       session.start();
       return session;
@@ -460,7 +463,7 @@ describe("AttackSession ending", () => {
 
   it("ends as destroyed at 100% damage", () => {
     const session = sessionOf({
-      roster: { monsters: { C1: 60 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0 },
+      roster: { monsters: { C1: 60 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
     });
     session.start();
     session.appendFling({ x: -100, y: -100, monsters: { C1: 60 } });
@@ -483,7 +486,7 @@ describe("AttackSession ending", () => {
     } as never;
     const session = new AttackSession({
       target: targetOf({
-        roster: { monsters: { C1: 61 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0 },
+        roster: { monsters: { C1: 61 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
       }),
       seed: 1,
     });

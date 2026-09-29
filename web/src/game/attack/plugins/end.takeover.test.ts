@@ -34,7 +34,7 @@ const target = (over: Partial<AttackTarget> = {}): AttackTarget => ({
   kind: "outpost",
   cell: { col: 240, row: 208 },
   name: "Bramble",
-  roster: { monsters: { C1: 3 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0 },
+  roster: { monsters: { C1: 3 }, levels: {}, champions: [], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
   load: yard(),
   ...over,
 });
