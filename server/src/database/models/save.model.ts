@@ -515,10 +515,15 @@ export class Save {
     "tutorialstage",
   ];
 
+  /**
+   * The keys an attack save may write onto the defender's row. The defender's
+   * `monsters` is not one of them: an attack changes nobody's housing, and the
+   * client's copy used to be written as sent, so one save could wipe a yard's
+   * monsters and hatcheries (issue #23, C2).
+   */
   public static attackSaveKeys: Extract<keyof Save, string>[] = [
     "destroyed",
     "damage",
-    "monsters",
     "champion",
     "over",
     "buildingdata",

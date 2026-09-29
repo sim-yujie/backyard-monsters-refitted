@@ -366,3 +366,17 @@ describe("the attacker's own row through the save (#23, C1)", () => {
     expect(attackerSave.siege).toEqual({ jars: { quantity: 2 } });
   });
 });
+
+describe("the defender's monsters through the save (#23, C2)", () => {
+  const HOUSING = { housed: { C1: 40, C3: 6 }, h: [["", 0, [["C1", 5, 3]]]], hid: [9], space: 120 };
+
+  test("an attack save cannot touch them, final or not", async () => {
+    defender.monsters = structuredClone(HOUSING);
+    const wiped = JSON.stringify({ housed: {}, h: [], hid: [], space: 0 });
+
+    await baseSave(ctxFor({ monsters: wiped, flinglog: JSON.stringify(LOG) }), async () => {});
+    await baseSave(ctxFor({ over: "1", monsters: wiped, flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(defender.monsters).toEqual(HOUSING);
+  });
+});

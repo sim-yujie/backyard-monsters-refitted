@@ -95,7 +95,8 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
   let credited: ResourceAmounts | null = null;
 
   existingTribe.tribeHealthData = saveData.buildinghealthdata ?? existingTribe.tribeHealthData;
-  existingTribe.monsters = saveData.monsters;
+  // The tribe keeps its own monsters, the stored ones or its template's: the
+  // save's copy is never written (issue #23, C2).
   existingTribe.destroyed = saveData.destroyed;
   existingTribe.destroyedAt = saveData.destroyed
     ? wasDestroyed ? existingTribe.destroyedAt ?? now : now

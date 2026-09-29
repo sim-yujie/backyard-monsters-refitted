@@ -290,3 +290,30 @@ describe("Map Room 1 tribe save: the attacker's own row (#23, C1)", () => {
     expect(userSave.champion).toEqual([champion(120)]);
   });
 });
+
+describe("Map Room 1 tribe save: the tribe's monsters (#23, C2)", () => {
+  test("stay as stored whatever the save sends", async () => {
+    startSession();
+    const stored = { housed: { C1: 12 } };
+    maproom.tribedata[0]!.monsters = structuredClone(stored);
+
+    const caught = await run(
+      ctxFor({
+        over: "1",
+        attackid: String(ATTACK_ID),
+        monsters: JSON.stringify({ housed: { C1: 0 } }),
+      })
+    );
+
+    expect(caught).toBeNull();
+    expect(maproom.tribedata[0]!.monsters).toEqual(stored);
+  });
+
+  test("a tribe with none stored keeps none: its template's is what it is served", async () => {
+    startSession();
+
+    await run(ctxFor({ over: "1", attackid: String(ATTACK_ID), monsters: JSON.stringify({ housed: { C1: 999 } }) }));
+
+    expect(maproom.tribedata[0]!.monsters).toBeUndefined();
+  });
+});

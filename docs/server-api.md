@@ -243,9 +243,11 @@ dedicated handler or falls back to `JSON.parse`-and-assign:
 | `buildingresources` | ignored | Server-owned since outposts WP4 (`services/maproom/v2/autobank.ts`): never written from an owner or an attack save. |
 | everything else | inline | `JSON.parse(value)` if possible, else stored as the raw string. |
 
-On an **attack** save (`Save.attackSaveKeys`: `destroyed`, `damage`, `locked`, `protected`,
-`monsters`, `champion`, `over`, `buildingdata`, `buildinghealthdata`, `buildingresources`,
-`attackreport`, `attackersiege`), additional attacker-side effects run: `monsterupdate` →
+On an **attack** save (`Save.attackSaveKeys`: `destroyed`, `damage`, `champion`, `over`,
+`buildingdata`, `buildinghealthdata`, `buildingresources`, `attackreport`, `attackersiege`; the
+defender's `monsters` is not among them since issue #23, C2, so an attack save never writes a
+yard's housing, and a Map Room 1 tribe keeps its stored or template monsters the same way),
+additional attacker-side effects run: `monsterupdate` →
 `monsterUpdateHandler.ts`. An MR3 object keyed by creature id is written as sent. An MR2
 array of cells is **never written** (issue #103, `docs/design/yard-buildings.md` §4.6): only the
 save carrying `over` acts on it, holding the final lock. It catches each of the attacker's own
