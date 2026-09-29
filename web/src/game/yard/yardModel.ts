@@ -370,7 +370,10 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
 
   buildings.sort((a, b) => a.depth - b.depth);
 
-  const mushrooms: YardMushroom[] = (response.mushrooms?.l ?? []).map((entry, index) => {
+  // Mushrooms grow and show on a main yard only (`client/scripts/MUSHROOMS.as:159-161`);
+  // an outpost copied from a main save may still list some (#191).
+  const mushroomList = outpost ? [] : (response.mushrooms?.l ?? []);
+  const mushrooms: YardMushroom[] = mushroomList.map((entry, index) => {
     const { frame, x, y } = mushroomEntry(entry);
     const world = yardToWorld(bounds, x, y);
     return {

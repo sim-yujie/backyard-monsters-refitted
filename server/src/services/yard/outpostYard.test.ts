@@ -14,7 +14,12 @@ import { OUTPOST_WORKERS, workerCount } from "../yardplanner/workers.js";
 import { OUTPOST_BUILDABLE_TYPES } from "./build.js";
 import { catchUpYard, type CatchUpSave } from "./catchUp.js";
 import { capOf, creditResources } from "./credit.js";
-import { outpostProblems, placeOutpostCore } from "./outpostYard.js";
+import {
+  clearOutpostMushrooms,
+  outpostCarryover,
+  outpostProblems,
+  placeOutpostCore,
+} from "./outpostYard.js";
 import { poolView } from "./poolView.js";
 
 /**
@@ -294,5 +299,35 @@ describe("the planner batches on an outpost", () => {
       walkUpgrades(yard({ "1": CORE, "2": { id: 2, t: 23, X: 100, Y: 100, l: 1 } } as never), nodes, NOW)
     );
     expect(refusal.data).toMatchObject({ planLevel: [2] });
+  });
+});
+
+describe("main-yard data on an outpost (#191)", () => {
+  const copied = () =>
+    ({
+      type: BaseType.OUTPOST,
+      savetime: 1_000,
+      buildingdata: { "1": { ...CORE } },
+      buildinghealthdata: {},
+      mushrooms: { l: [[1, 10, 20], [2, 30, 40]], s: 900 },
+      storedata: { ENL: { q: 6 } },
+      monsters: {},
+      points: "0",
+    }) as unknown as CatchUpSave;
+
+  test("the catch-up drops an outpost's mushrooms and keeps its expansion", () => {
+    const save = copied();
+    expect(outpostCarryover(save as never)).toEqual({ mushrooms: 2, expansion: 6 });
+
+    catchUpYard(save, 2_000);
+
+    expect(outpostCarryover(save as never)).toEqual({ mushrooms: 0, expansion: 6 });
+    expect(save.storedata).toEqual({ ENL: { q: 6 } });
+  });
+
+  test("a main yard keeps its mushrooms", () => {
+    const main = { type: BaseType.MAIN, mushrooms: { l: [[1, 10, 20]] } };
+    expect(clearOutpostMushrooms(main)).toBe(0);
+    expect(main.mushrooms.l).toHaveLength(1);
   });
 });

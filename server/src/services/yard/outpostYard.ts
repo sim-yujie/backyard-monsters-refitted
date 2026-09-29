@@ -5,6 +5,7 @@ import {
   OUTPOST_TRAITS,
 } from "../../game-data/buildingCosts.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
+import type { JsonObject } from "../../types/JsonObject.js";
 import { pricingType } from "../base/economy/resourceBudget.js";
 import { countOfType, levelOf, yardKindOf } from "../yardplanner/costs.js";
 import { nextBuildingId } from "./build.js";
@@ -58,6 +59,58 @@ export const placeOutpostCore = (save: OutpostCoreSave): boolean => {
 
   save.buildingdata = { [String(id)]: core };
   return true;
+};
+
+/** The main-yard data an outpost row may carry (#191). */
+export interface OutpostCarryoverSave {
+  type?: string;
+  mushrooms?: JsonObject | null;
+  storedata?: JsonObject | null;
+}
+
+/** What an outpost row carries that belongs to a main yard: `{ mushrooms, expansion }`. */
+export interface OutpostCarryover {
+  /** Mushrooms in `mushrooms.l`. */
+  mushrooms: number;
+  /** `storedata.ENL.q`, the yard expansion; 0 without one. */
+  expansion: number;
+}
+
+/**
+ * The main-yard data an outpost row carries (#191): a row copied from a main
+ * save, by hand or by an old tool, can hold both.
+ *
+ * - **Mushrooms** grow and show on the main yard only: Flash's mushroom code
+ *   returns at once on any other yard, both the spawn and the draw
+ *   (`client/scripts/MUSHROOMS.as:40-42`, `:159-161`). An outpost's are data
+ *   nobody can see or pick (the pick route refuses an outpost), so
+ *   {@link clearOutpostMushrooms} drops them.
+ * - **The expansion** is kept. Flash sizes whichever yard it loads from that
+ *   yard's own `storedata.ENL` (`STORE.ProcessPurchases`,
+ *   `client/scripts/STORE.as:2345-2366`), an outpost's included, although the
+ *   outpost store never sells `ENL` (`STORE.as:198-199`). Shrinking the plot
+ *   under buildings laid out for it would strand them, so it is only logged.
+ */
+export const outpostCarryover = (save: OutpostCarryoverSave): OutpostCarryover => {
+  const list = save.mushrooms?.l;
+  const expansion = Number(save.storedata?.ENL?.q);
+  return {
+    mushrooms: Array.isArray(list) ? list.length : 0,
+    expansion: Number.isFinite(expansion) && expansion > 0 ? Math.floor(expansion) : 0,
+  };
+};
+
+/**
+ * Drops an outpost's mushrooms (see {@link outpostCarryover}); nothing on a
+ * main yard or an outpost without any.
+ *
+ * @returns How many were dropped.
+ */
+export const clearOutpostMushrooms = (save: OutpostCarryoverSave): number => {
+  if (yardKindOf(save) !== "outpost") return 0;
+  const { mushrooms } = outpostCarryover(save);
+  if (mushrooms > 0) save.mushrooms = { l: [] };
+  return mushrooms;
 };
 
 /** One way an outpost row breaks the outpost props. */

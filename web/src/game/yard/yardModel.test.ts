@@ -242,3 +242,22 @@ describe("mushrooms", () => {
     expect(yard.mushrooms[0]).not.toHaveProperty("golden");
   });
 });
+
+describe("mushrooms on an outpost (#191)", () => {
+  it("are never drawn: Flash shows mushrooms on the main yard only", () => {
+    const load = (type: string) =>
+      readYard({
+        error: 0,
+        id: 1,
+        baseid: "9",
+        basesaveid: 1,
+        worldsize: [800, 800],
+        currenttime: 1,
+        type,
+        buildingdata: {},
+        mushrooms: { l: [[1, 10, 20]] },
+      } as BaseLoadResponse);
+    expect(load("outpost").mushrooms).toEqual([]);
+    expect(load("main").mushrooms).toHaveLength(1);
+  });
+});

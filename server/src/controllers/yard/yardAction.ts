@@ -16,7 +16,7 @@ import { catchUpDamage } from "../../services/yard/catchUpDamage.js";
 import { creditResources } from "../../services/yard/credit.js";
 import { syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import { joinMapRoom2 } from "../../services/yard/mapRoom.js";
-import { outpostProblems } from "../../services/yard/outpostYard.js";
+import { outpostCarryover, outpostProblems } from "../../services/yard/outpostYard.js";
 import { poolView } from "../../services/yard/poolView.js";
 import {
   notInOutpostErr,
@@ -316,11 +316,22 @@ const logOutpostProblems = (outpost: Save): void => {
   checkedOutposts.add(outpost.basesaveid);
 
   const problems = outpostProblems(outpost.buildingdata);
-  if (problems.length === 0) return;
-  logger.warn("Outpost {basesaveid} does not match the outpost props: {problems}", {
-    basesaveid: outpost.basesaveid,
-    problems: JSON.stringify(problems),
-  });
+  if (problems.length > 0) {
+    logger.warn("Outpost {basesaveid} does not match the outpost props: {problems}", {
+      basesaveid: outpost.basesaveid,
+      problems: JSON.stringify(problems),
+    });
+  }
+
+  // Main-yard data a copied row carries (#191): the catch-up drops the
+  // mushrooms and keeps the expansion (`outpostCarryover`).
+  const carried = outpostCarryover(outpost);
+  if (carried.mushrooms > 0 || carried.expansion > 0) {
+    logger.warn(
+      "Outpost {basesaveid} carries main-yard data: {mushrooms} mushrooms (dropped), expansion {expansion} (kept)",
+      { basesaveid: outpost.basesaveid, ...carried }
+    );
+  }
 };
 
 /**

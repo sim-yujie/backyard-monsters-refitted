@@ -24,7 +24,7 @@ import {
   type RadioRemovedJob,
 } from "./mapRoom.js";
 import type { MushroomYardSave } from "./mushrooms.js";
-import { placeOutpostCore } from "./outpostYard.js";
+import { clearOutpostMushrooms, placeOutpostCore } from "./outpostYard.js";
 import { addStarterBase, type StarterBaseJob, type StarterBaseSave } from "./starterBase.js";
 import { yardKindOf } from "../yardplanner/costs.js";
 
@@ -159,6 +159,8 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
  */
 export const catchUpOutpost = (save: CatchUpSave, now: number): CompletedJob[] => {
   const cored = placeOutpostCore(save);
+  // Mushrooms copied from a main save: an outpost never has any (#191).
+  clearOutpostMushrooms(save);
   const stored = Number(save.savetime);
   // A core that has just gone in has stood for no time at all.
   const from = Number.isFinite(stored) && stored > 0 && !cored ? stored : now;
