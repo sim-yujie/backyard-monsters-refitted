@@ -1129,8 +1129,8 @@ From inventory §7.
 
 | # | Gap | Resolution |
 | --- | --- | --- |
-| 1 | Twig Snapper / Pebble Shiner resource labels swapped in BB §3 | BB §4 is right: type id = resource index (Twig Snapper fills r1). The generators already use the type id. Fix the BB §3 table text in WP3.1. |
-| 2 | Monster Locker "TH 3" vs quantity from TH 2 | Quantity rules: one from Town Hall 2 (`YARD_PROPS.as:998`); the generated `quantity` array is what the routes use. |
+| 1 | Twig Snapper / Pebble Shiner resource labels swapped in BB §3 | BB §4 is right: type id = resource index (Twig Snapper fills r1). The generators already use the type id. BB §3's table text is fixed (#133). |
+| 2 | Monster Locker "TH 3" vs quantity from TH 2 | Quantity rules: one from Town Hall 2 (`YARD_PROPS.as:998`); the generated `quantity` array is what the routes use. BB §3's TH column now says 2 (#133). |
 | 3 | Juicer TH and costs unverified; no goo rate | Rate resolved (§7.3). Costs and gates come from the generated cost table (Map Room 2 override for id 9 is already applied by the generator, `web/tools/gen-building-costs.mjs:237`). |
 | 4 | Where Lab in-progress research is saved | Lab building entry `upg`/`upt`/`upl` (`MONSTERLAB.as:432-460`), §6. |
 | 5 | Where Bunker contents are saved | Bunker building entry `m` (`BUILDING22.as:665-700`), §7.1. |
@@ -1216,4 +1216,4 @@ issue for the bulk-add part.
 | Combat: reduce defender bunker counts after an attack | Attack save writes bunker `m` from the battle's dispatch counts | should |
 | Transfers: drop the production allowance once catch-up runs first | Strict conservation in `transferRules.ts` | could |
 | Map Room 1 for players below Town Hall 6 | Separate project (D16) | backlog |
-| Fix BB §3 harvester labels and Locker TH text | Spec text only (§9 items 1–2) | could |
+| Fix BB §3 harvester labels and Locker TH text | Spec text only (§9 items 1–2); done in #133 | could |

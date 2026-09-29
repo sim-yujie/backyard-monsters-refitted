@@ -419,14 +419,14 @@ which `quantity` becomes non-zero. Full ladders for the core economy buildings f
 
 | Id | Name | Group | Type | Footprint | Max lvl | TH | r1 | r2 | r3 | Build time | Prereqs | What it does |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Twig Snapper | resource | resource | 70 | 10 | 1 | 0 | 750 | 0 | 15 s | TH 1 | Produces twigs (r2) |
-| 2 | Pebble Shiner | resource | resource | 70 | 10 | 1 | 750 | 0 | 0 | 15 s | TH 1 | Produces pebbles (r1) |
+| 1 | Twig Snapper | resource | resource | 70 | 10 | 1 | 0 | 750 | 0 | 15 s | TH 1 | Produces twigs (r1); costs pebbles |
+| 2 | Pebble Shiner | resource | resource | 70 | 10 | 1 | 750 | 0 | 0 | 15 s | TH 1 | Produces pebbles (r2); costs twigs |
 | 3 | Putty Squisher | resource | resource | 70 | 10 | 1 | 525 | 224 | 0 | 20 s | TH 1 | Produces putty (r3) |
 | 4 | Goo Factory | resource | resource | 70 | 10 | 1 | 247 | 577 | 0 | 20 s | TH 1 | Produces goo (r4) |
 | 5 | Flinger | buildings | special | 90 | 4 (MR2) | 1 | 1,000 | 1,000 | 500 | 15 min | TH 1 | Sets attack range and monster carry capacity on the world map |
 | 6 | Storage Silo | resource | special | 80 | 10 | 1 | 3,010 | 1,855 | 0 | 20 min | TH 1, one of each harvester | Raises all four storage caps |
 | 7 | Mushroom | — | mushroom | 30 | — | — | — | — | — | — | — | Yard obstacle, see §2 |
-| 8 | Monster Locker | buildings | special | 100 | 4 | 3 | 1,800 | 2,300 | 0 | 10 min | TH 2 | Unlocks new monster species |
+| 8 | Monster Locker | buildings | special | 100 | 4 | 2 | 1,800 | 2,300 | 0 | 10 min | TH 2 | Unlocks new monster species (one from Town Hall 2: `quantity` `[0, 0, 1, …]`, `YARD_PROPS.as:998`) |
 | 9 | Monster Juicer | buildings | special | 80 | 3 | 1 | 1,000,000 | 1,000,000 | 1,000,000 | 12 h | TH 3, Housing | Converts monsters back into goo |
 | 10 | Yard Planner | buildings | special | 100 | 1 | 3 | 250,000 | 250,000 | 0 | 12 h | TH 3 | Unlocks the Yard Planner, see §8 |
 | 11 | Map Room | buildings | special | 90 | 3 | 1 | 2,000 | 2,000 | 0 | 15 min | TH 1 | Opens the world map; level 2/3 are free but take 4 days each |
