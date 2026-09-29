@@ -102,7 +102,7 @@ describe("buildChecklist", () => {
     expect([...checklist.faulted].sort()).toEqual([1, 2]);
   });
 
-  it("says which area a building has left", () => {
+  it("says a building or a decoration is outside the yard", () => {
     const checklist = buildChecklist(
       index(node({ id: 1 }), node({ id: 2, type: 30, decoration: true })),
       {
@@ -116,7 +116,7 @@ describe("buildChecklist", () => {
 
     const labels = rowOf(checklist, "bounds")?.items.map((item) => item.label);
     expect(labels?.[0]).toContain("outside the yard");
-    expect(labels?.[1]).toContain("outside the decoration area");
+    expect(labels?.[1]).toBe("Australian Flag is outside the yard");
   });
 
   it("leaves the upgrade rows out when nothing is planned", () => {

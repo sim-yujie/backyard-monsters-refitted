@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  DECORATION_BOUNDS,
   GRID_STEP,
   InvalidReason,
   Occupancy,
@@ -96,16 +95,18 @@ describe("inBounds", () => {
     expect(inBounds(node({ id: 1 }), -500, 0, plot)).toBe(true);
   });
 
-  it("lets a decoration out of the plot and into the larger area", () => {
+  it("holds a decoration to the plot like any building (#128)", () => {
     const flag = node({ id: 2, type: 30, width: 40, height: 40, decoration: true });
-    expect(inBounds(flag, 900, 600, plot)).toBe(true);
-    expect(inBounds(flag, DECORATION_BOUNDS.halfWidth - 40, 0, plot)).toBe(true);
+    expect(inBounds(flag, 460, 0, plot)).toBe(true);
+    expect(inBounds(flag, 465, 0, plot)).toBe(false);
+    expect(inBounds(flag, 900, 600, plot)).toBe(false);
   });
 
-  it("still fences a decoration at MAX_YARD_DIMENSIONS", () => {
-    const flag = node({ id: 2, type: 30, width: 40, height: 40, decoration: true });
-    expect(inBounds(flag, DECORATION_BOUNDS.halfWidth - 35, 0, plot)).toBe(false);
-    expect(inBounds(flag, 0, -DECORATION_BOUNDS.halfHeight - 5, plot)).toBe(false);
+  it("lets a decoration stay at its saved spot outside the plot, and nowhere else outside", () => {
+    const flag = node({ id: 2, type: 30, width: 40, height: 40, decoration: true, home: { x: 900, y: 600 } });
+    expect(inBounds(flag, 900, 600, plot)).toBe(true);
+    expect(inBounds(flag, 905, 600, plot)).toBe(false);
+    expect(inBounds(flag, 0, 0, plot)).toBe(true);
   });
 });
 
@@ -187,10 +188,14 @@ describe("validateOffset", () => {
     expect(result.issues[0]?.reason).toBe(InvalidReason.BOUNDS);
   });
 
-  it("lets the same move through for a decoration", () => {
+  it("refuses it for a decoration too, unless it lands back on its saved spot (#128)", () => {
     const grid = new Occupancy();
     const flag = node({ id: 2, x: 400, y: 0, width: 40, height: 40, decoration: true });
-    expect(validateOffset([flag], 100, 0, grid, plot).valid).toBe(true);
+    expect(validateOffset([flag], 100, 0, grid, plot).valid).toBe(false);
+
+    const outside = node({ id: 3, x: 400, y: 0, width: 40, height: 40, decoration: true, home: { x: 500, y: 0 } });
+    expect(validateOffset([outside], 100, 0, grid, plot).valid).toBe(true);
+    expect(validateOffset([outside], 105, 0, grid, plot).valid).toBe(false);
   });
 
   it("treats a mushroom in the grid as an obstacle", () => {

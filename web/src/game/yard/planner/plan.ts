@@ -141,6 +141,7 @@ export class Plan {
 
     for (const building of yard.buildings) {
       const [width, height] = building.footprint;
+      const decoration = isDecoration(building.type);
       plan.add({
         id: building.id,
         type: building.type,
@@ -150,7 +151,8 @@ export class Plan {
         height,
         level: building.level,
         fort: building.fortification,
-        decoration: isDecoration(building.type),
+        decoration,
+        ...(decoration ? { home: { x: building.x, y: building.y } } : {}),
         fixed: false,
         stored: false,
         plan: null,
@@ -626,6 +628,7 @@ export class Plan {
 
       if (!node) {
         const [width, height] = building.footprint;
+        const decoration = isDecoration(building.type);
         this.add({
           id: building.id,
           type: building.type,
@@ -635,7 +638,8 @@ export class Plan {
           height,
           level: building.level,
           fort: building.fortification,
-          decoration: isDecoration(building.type),
+          decoration,
+          ...(decoration ? { home: { x: building.x, y: building.y } } : {}),
           fixed: false,
           stored: false,
           plan: null,
@@ -655,6 +659,8 @@ export class Plan {
       // answer too, and both decide whether its plan can still start.
       node.busy = holdsWorker(building);
       node.damaged = building.hp !== null;
+      // The save's spot is the one a decoration may keep outside the plot.
+      if (node.decoration) node.home = { x: building.x, y: building.y };
 
       // A plan the yard has reached is finished, not pending: a batch wall
       // upgrade that raised four hundred blocks to level 5 has done exactly

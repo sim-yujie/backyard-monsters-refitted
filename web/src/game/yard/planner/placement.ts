@@ -11,9 +11,11 @@ import { yardSize } from "../YardGrid";
  *   axes, so a node at `(x, y)` covers `[x, x + width) x [y, y + height)`
  *   (`GRID.as:86-98`).
  * - The plot spans `[-w/2, w/2) x [-h/2, h/2)` for the current expansion.
- * - **Decorations may sit outside the plot**, inside the planner's own larger
- *   `MAX_YARD_DIMENSIONS` of 3240 x 2600
- *   (`BASE.as:4635-4640`, `PlannerDesignView.as:104`).
+ * - Decorations are held to the plot too (owner decision 2026-09-29, #128).
+ *   The Flash planner let them anywhere in its larger `MAX_YARD_DIMENSIONS`
+ *   of 3240 x 2600 (`BASE.as:4635-4640`, `PlannerDesignView.as:104`), so a
+ *   save can hold one outside the plot: it may stay exactly at that spot
+ *   ({@link PlanNode.home}), and nothing moves it on its own.
  * - Mushrooms are 30 x 30 obstacles the planner cannot move
  *   (`BUILDING7.as:9-10`, `BASE.as:5097-5109`).
  *
@@ -35,12 +37,13 @@ import { yardSize } from "../YardGrid";
 export const GRID_STEP = 5;
 
 /**
- * The planner's decoration bounds, `MAX_YARD_DIMENSIONS`
+ * The area the occupancy grid and the blueprint cover: the Flash planner's
+ * decoration bounds, `MAX_YARD_DIMENSIONS`
  * (`client/scripts/com/monsters/baseplanner/PlannerDesignView.as:104`).
  *
- * Wider than any plot and wider than the live game's own 2600 x 2600 grid on
- * the X axis; the two disagree in the original and this follows the planner,
- * because this is the planner.
+ * Nothing new may be put outside the plot any more (#128), but a decoration
+ * a Flash save left out here still stands on cells, so the grid keeps the
+ * whole area.
  */
 export const DECORATION_WIDTH = 3240;
 export const DECORATION_HEIGHT = 2600;
@@ -82,8 +85,14 @@ export interface PlanNode {
   readonly height: number;
   level: number;
   fort: number;
-  /** Decorations get the larger bounds and are not required to be placed. */
+  /** Decorations are not required to be placed: Apply puts one left in the drawer into storage. */
   readonly decoration: boolean;
+  /**
+   * A decoration's spot as the save has it. One outside the plot may stay
+   * exactly here (owner decision 2026-09-29, #128); any other spot is held
+   * to the plot. Absent for everything else.
+   */
+  home?: Position;
   /** Mushrooms: obstacles the planner may not move. */
   readonly fixed: boolean;
   /**
@@ -146,11 +155,6 @@ export const plotBounds = (expansionLevel: number): PlotBounds => {
   return { halfWidth: width / 2, halfHeight: height / 2 };
 };
 
-/** The decoration area's half-extents, which never change. */
-export const DECORATION_BOUNDS: PlotBounds = {
-  halfWidth: GRID_ORIGIN_X,
-  halfHeight: GRID_ORIGIN_Y,
-};
 
 /** Rounds a yard coordinate onto the 5-unit grid. */
 export const snap = (value: number): number => Math.round(value / GRID_STEP) * GRID_STEP;
@@ -187,19 +191,17 @@ export interface PlacementResult {
 
 const VALID: PlacementResult = { valid: true, issues: [] };
 
-/** The bounds a node is measured against: its plot, or the decoration area. */
-export const boundsFor = (node: PlanNode, plot: PlotBounds): PlotBounds =>
-  node.decoration ? DECORATION_BOUNDS : plot;
-
 /**
- * Whether a node placed at `(x, y)` lies wholly inside its bounds.
+ * Whether a node placed at `(x, y)` lies wholly inside the plot, or is a
+ * decoration at its {@link PlanNode.home}.
  *
  * The far edge is inclusive because a footprint ending exactly at `w / 2`
  * occupies its last cell at `w / 2 - 5`, which is the last cell inside the
  * plot. Both are multiples of 5 in every yard, so the two readings never differ.
  */
 export const inBounds = (node: PlanNode, x: number, y: number, plot: PlotBounds): boolean => {
-  const { halfWidth, halfHeight } = boundsFor(node, plot);
+  if (node.home && node.home.x === x && node.home.y === y) return true;
+  const { halfWidth, halfHeight } = plot;
   return (
     x >= -halfWidth &&
     x + node.width <= halfWidth &&

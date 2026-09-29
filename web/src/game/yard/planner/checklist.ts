@@ -85,12 +85,7 @@ export const buildChecklist = (
       if (issue.otherId !== undefined) faulted.add(issue.otherId);
       overlaps.push({ id: issue.id, label: `${nameOf(node)} overlaps ${nameOf(other)}` });
     } else {
-      outside.push({
-        id: issue.id,
-        label: node?.decoration
-          ? `${nameOf(node)} is outside the decoration area`
-          : `${nameOf(node)} is outside the yard`,
-      });
+      outside.push({ id: issue.id, label: `${nameOf(node)} is outside the yard` });
     }
   }
 
