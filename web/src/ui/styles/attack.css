@@ -742,7 +742,8 @@
 }
 
 .attack-end__status--saving,
-.attack-end__status--unsent {
+.attack-end__status--unsent,
+.attack-end__status--pending {
   color: var(--colour-text-muted);
 }
 

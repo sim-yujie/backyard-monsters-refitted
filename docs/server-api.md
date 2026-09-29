@@ -378,8 +378,8 @@ army with no attack behind it):
   compared (`attack-replay-mismatch`). A final save with no usable log writes no battle and
   credits no loot. A replay past its 5 s deadline lands nothing: there is no checkpoint and no
   finaliser for a tribe, so the save is answered `attackResultPendingErr` (`reason:
-  "replayTimeout"`), the session is kept for a resent save while its window lasts, and the tribe
-  respawns in time anyway. It then applies the attacker's side — the army (the flung monsters leave the
+  "replayTimeout"`), the session is kept for a resent save while its window lasts (the web client
+  sends it once more after 4 seconds), and the tribe respawns in time anyway. It then applies the attacker's side — the army (the flung monsters leave the
   main yard's housing through `monsterupdate` and the fling log, capped by the session's
   `entryHoused`, exactly as an MR2 attack settles; `attackcreatures` is ignored and only the
   main yard's `monsterupdate` entry is read), `attackerchampion`, `attackersiege`,

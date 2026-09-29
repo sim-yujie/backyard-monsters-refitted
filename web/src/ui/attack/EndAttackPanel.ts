@@ -35,7 +35,7 @@ export interface EndAttackPanelOptions {
 
 /** Where the save stands, as the panel shows it. */
 /** `unsent`: the player never acted, so there is nothing to save (#79). */
-export type EndAttackSaveStatus = "saving" | "saved" | "failed" | "unsent";
+export type EndAttackSaveStatus = "saving" | "saved" | "failed" | "unsent" | "pending";
 
 export interface SaveFailure {
   readonly message: string;
@@ -293,6 +293,22 @@ export class EndAttackPanel {
   setNothingSent(): void {
     this.status_ = "unsent";
     this.setStatus("unsent", "Nothing was sent, so there was nothing to save.");
+    this.retryButton.hidden = true;
+    this.leaveButton.hidden = true;
+    this.hideLeave();
+    this.returnButton.disabled = false;
+    this.protection.hidden = true;
+    this.focusPrimary();
+  }
+
+  /**
+   * The server took the result but is still working it out (issue #23: its
+   * replay ran past the save's deadline). Not a failure: it lands without the
+   * player, so Return to map opens and there is nothing to retry.
+   */
+  setPending(message: string): void {
+    this.status_ = "pending";
+    this.setStatus("pending", message);
     this.retryButton.hidden = true;
     this.leaveButton.hidden = true;
     this.hideLeave();

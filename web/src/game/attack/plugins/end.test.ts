@@ -10,6 +10,10 @@ import { DECLARE_WAR_COUNTDOWN_SECONDS } from "@/game/combat/rules";
 import { Notices } from "@/ui/maproom/Notices";
 import {
   END_PANEL_MAX_WAIT_MS,
+  PENDING_GAVE_UP,
+  PENDING_MESSAGE,
+  PENDING_RESEND_MESSAGE,
+  REPLAY_RESEND_DELAY_MS,
   SESSION_WINDOW_SECONDS,
   WINDOW_MARGIN_SECONDS,
   createEndPlugin,
@@ -323,6 +327,84 @@ describe("the end plugin", () => {
     await flush();
     expect(status.textContent).toBe("Result saved.");
     retry.click();
+    expect(save).toHaveBeenCalledTimes(2);
+  });
+
+  /** `attackResultPendingErr`: the server's replay ran past its deadline (#23). */
+  const replayTimeout = (): ApiError =>
+    new ApiError("The attack's result is still being worked out. It will be in your yard shortly.", {
+      status: 200,
+      serverStatus: 503,
+      code: "The attack's result is still being worked out. It will be in your yard shortly.",
+      details: { status: 503, data: { reason: "replayTimeout" } },
+    });
+
+  /** The same attack on a Map Room 1 tribe, which has no checkpoint. */
+  const onTribe = (): void => {
+    session = new AttackSession({ target: { ...targetOf(), baseid: "2", mapversion: 1 }, seed: 1 });
+    session.start();
+  };
+
+  it("says a Map Room 2 result is still being worked out, lets the player go, and sends nothing more", async () => {
+    const save = vi.fn(async () => {
+      throw replayTimeout();
+    });
+    mount(save);
+    act();
+    session.retreat();
+    await flush();
+
+    expect(modal.querySelector(".attack-end__status")!.textContent).toBe(PENDING_MESSAGE);
+    expect(modal.querySelector(".attack-end__status--pending")).not.toBeNull();
+    expect(modal.querySelector<HTMLElement>(".attack-end__retry")!.hidden).toBe(true);
+    expect(modal.querySelector<HTMLButtonElement>(".attack-end__return")!.disabled).toBe(false);
+
+    vi.advanceTimersByTime(REPLAY_RESEND_DELAY_MS * 3);
+    await flush();
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a Map Room 1 tribe's timed-out save once more after a few seconds", async () => {
+    onTribe();
+    const save = vi
+      .fn()
+      .mockRejectedValueOnce(replayTimeout())
+      .mockResolvedValueOnce({ error: 0, basesaveid: 0 } as BaseSaveResponse);
+    mount(save);
+    act();
+    session.retreat();
+    await flush();
+
+    const status = modal.querySelector(".attack-end__status")!;
+    expect(status.textContent).toBe(PENDING_RESEND_MESSAGE);
+    vi.advanceTimersByTime(REPLAY_RESEND_DELAY_MS - 1);
+    expect(save).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(1);
+    await flush();
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save.mock.calls[1]![0]).toEqual(save.mock.calls[0]![0]);
+    expect(status.textContent).toBe("Result saved.");
+  });
+
+  it("gives a tribe save up after its one resend times out too, leaving Retry to the player", async () => {
+    onTribe();
+    const save = vi.fn(async () => {
+      throw replayTimeout();
+    });
+    mount(save);
+    act();
+    session.retreat();
+    await flush();
+    vi.advanceTimersByTime(REPLAY_RESEND_DELAY_MS);
+    await flush();
+
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(modal.querySelector(".attack-end__status")!.textContent).toBe(PENDING_GAVE_UP.message);
+    expect(modal.querySelector<HTMLElement>(".attack-end__retry")!.hidden).toBe(false);
+
+    vi.advanceTimersByTime(REPLAY_RESEND_DELAY_MS * 3);
+    await flush();
     expect(save).toHaveBeenCalledTimes(2);
   });
 

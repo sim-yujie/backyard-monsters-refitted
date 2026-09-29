@@ -9,6 +9,7 @@ import type {
 } from "@/api/types";
 import { ATTACK_PLUGINS, type AttackMounts, type AttackPlugin } from "@/game/attack/attackPlugins";
 import { buildAttackSave, forKeepalive, summariseAttack } from "@/game/attack/attackSave";
+import { combatKind } from "@/game/attack/AttackSession";
 import type { AttackTarget } from "@/game/attack/attackTarget";
 import type { ResourceAmounts } from "@/game/combat/rules";
 import { setMapFocus } from "@/game/maproom/mapFocus";
@@ -88,6 +89,7 @@ type SaveShown =
       readonly takeover: TakeoverChance | null;
     }
   | { readonly kind: "failed"; readonly failure: SaveFailure }
+  | { readonly kind: "pending"; readonly message: string }
   | { readonly kind: "unsent" };
 
 const showOn = (panel: EndAttackPanel, shown: SaveShown): void => {
@@ -104,6 +106,9 @@ const showOn = (panel: EndAttackPanel, shown: SaveShown): void => {
       return;
     case "failed":
       panel.setFailed(shown.failure);
+      return;
+    case "pending":
+      panel.setPending(shown.message);
       return;
     case "unsent":
       panel.setNothingSent();
@@ -195,6 +200,28 @@ const bindingReason = (error: ApiError): string | null => {
   return typeof reason === "string" ? reason : null;
 };
 
+/**
+ * How long a Map Room 1 tribe attack waits before sending its save again after
+ * the server's replay ran past its deadline (issue #23).
+ */
+export const REPLAY_RESEND_DELAY_MS = 4_000;
+
+/** The panel's words while the server works the result out. */
+export const PENDING_MESSAGE = "The server is still working out the result. It will reach your map shortly.";
+export const PENDING_RESEND_MESSAGE = "The server is still working out the result. Trying again in a few seconds…";
+export const PENDING_GAVE_UP: SaveFailure = {
+  message: "The server could not work out the result in time, so it was not saved.",
+  canRetry: true,
+};
+
+/**
+ * The server took the save but its replay ran past the deadline
+ * (`attackResultPendingErr`, reason `replayTimeout`, issue #23, C5): nothing
+ * was written yet.
+ */
+export const isReplayPending = (caught: unknown): boolean =>
+  caught instanceof ApiError && bindingReason(caught) === "replayTimeout";
+
 /** Turns a failed save into what the panel says (§4.7). */
 export const describeSaveFailure = (caught: unknown): SaveFailure => {
   if (caught instanceof NetworkError) {
@@ -276,6 +303,15 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     let offer: EndTakeoverOffer | null = null;
     /** The banked loot has gone onto the HUD; it goes once. */
     let credited = false;
+    /** A tribe attack's save has been sent again after a replay timeout; once. */
+    let resent = false;
+    /**
+     * A Map Room 1 tribe has no checkpoint and nothing lands its attack later
+     * (`docs/server-api.md` "Map Room 1 tribe attacks"), so a timed-out save
+     * is sent again once; a Map Room 2 attack is landed by the server's
+     * finaliser.
+     */
+    const isTribe = combatKind(target) === "tribe";
 
     /**
      * The HUD takes the banked loot when the panel shows a landed save (#168),
@@ -359,10 +395,35 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
         show(savedFrom(response));
       } catch (caught) {
         // Refused because its keepalive copy landed first is not a failure.
-        if (!saved) show({ kind: "failed", failure: describeSaveFailure(caught) });
+        if (!saved) showFailure(caught);
       } finally {
         inFlight = false;
       }
+    };
+
+    /**
+     * What a failed save shows. A replay past the server's deadline is not a
+     * failure on Map Room 2 (the finaliser lands it); a tribe attack sends its
+     * save again once after a few seconds, and only a second timeout fails.
+     * The resend is not cancelled if the player leaves the screen meanwhile:
+     * the result still lands.
+     */
+    const showFailure = (caught: unknown): void => {
+      if (!isReplayPending(caught)) {
+        show({ kind: "failed", failure: describeSaveFailure(caught) });
+        return;
+      }
+      if (!isTribe) {
+        show({ kind: "pending", message: PENDING_MESSAGE });
+        return;
+      }
+      if (resent) {
+        show({ kind: "failed", failure: PENDING_GAVE_UP });
+        return;
+      }
+      resent = true;
+      show({ kind: "pending", message: PENDING_RESEND_MESSAGE });
+      window.setTimeout(() => void attempt(), REPLAY_RESEND_DELAY_MS);
     };
 
     /** The save, as a request that outlives the page. Once. */
@@ -377,7 +438,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
         },
         (caught: unknown) => {
           // A duplicate of a save that already landed is refused; that is not a failure.
-          if (!saved) show({ kind: "failed", failure: describeSaveFailure(caught) });
+          if (!saved) showFailure(caught);
         },
       );
     };

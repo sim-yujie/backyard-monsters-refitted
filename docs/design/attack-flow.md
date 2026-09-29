@@ -726,6 +726,14 @@ it happens (a clear "this attack expired before it could be saved" notice, not a
 retrying blind is what the Flash client already does badly, `docs/server-api.md`'s `ApiError`
 comment at `web/src/api/http.ts:7-16`).
 
+A final save answered `attackResultPendingErr` (`reason: "replayTimeout"`, issue #23: the server's
+replay of the battle ran past its deadline and nothing was written) is not shown as a failure
+(`web/src/game/attack/plugins/end.ts`). On Map Room 2 the end panel says the result is still being
+worked out and will reach the map shortly, and Return to map opens: the server's finaliser lands
+the attack from its checkpoint. A Map Room 1 tribe has no checkpoint, so the panel says it is
+trying again and the same save is sent once more after 4 seconds; if that times out too, the save
+fails with Retry.
+
 ## 5. Data and server changes
 
 ### 5.1 View mode versus attack mode on `/base/load`
