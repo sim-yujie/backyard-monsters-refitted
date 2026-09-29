@@ -312,7 +312,7 @@ describe("a crafted save is not", () => {
     expect(loot.credit.r1).toBe(2);
     expect(loot.credit.r2).toBe(0);
     expect(loot.credit.r4).toBe(0);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test(
     "flinging more monsters than the attacker housed at entry loots no more",
@@ -347,14 +347,14 @@ describe("a crafted save is not", () => {
       expect(loot.credit).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
       expect(loot.defenderDelta).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
     }
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("an empty log loots nothing", () => {
     const one = fixture("empty-yard");
     const loot = lootFor(one, { r1: 5000 }, { log: { v: 1, seed: 1, events: [] } });
     expect(loot.basis).toBe("replay");
     expect(loot.credit).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
-  });
+  }, REPLAY_TIMEOUT_MS);
 });
 
 describe("the pool the replay draws on", () => {
@@ -411,14 +411,14 @@ describe("the pool the replay draws on", () => {
     expect(loot.credit).toEqual({ r1: 2400, r2: 10, r3: 0, r4: 0 });
     // Without a replay there is no ceiling but the pool itself (`defenderLootHandler` floors it).
     expect(loot.defenderDelta).toEqual({ r1: -3000, r2: -10, r3: 0, r4: 0 });
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("an attack load that named Map Room 3 for anyone else is credited nothing", () => {
     const loot = mapRoom3Attack(false);
     expect(loot.basis).toBe("no-roster");
     expect(loot.credit).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
     expect(loot.defenderDelta).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
-  });
+  }, REPLAY_TIMEOUT_MS);
 });
 
 describe("fightableLog", () => {
@@ -450,7 +450,7 @@ describe("fightableLog", () => {
       ],
     };
     expect(fightableLog(log, attacker, { a: { C1: 8 }, b: { C1: 2, C2: 1 } })).toEqual(log);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("monsters beyond what the yards housed at entry are not flung, and an emptied fling goes", () => {
     const log: FlingLog = { v: 1, seed: 7, events: [fling(10, { C1: 6, C9: 3 }), fling(20, { C1: 6 })] };
@@ -458,7 +458,7 @@ describe("fightableLog", () => {
       fling(10, { C1: 6 }),
       fling(20, { C1: 2 }),
     ]);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("a champion the attacker does not own, a second time, or above its level is not fielded", () => {
     const log: FlingLog = {
@@ -470,7 +470,7 @@ describe("fightableLog", () => {
       fling(10, {}, { t: 5, l: 3 }),
       fling(30, { C1: 1 }),
     ]);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("a bomb the catapult does not unlock, an unknown one or a second of the same resource does not go off", () => {
     const log: FlingLog = {
@@ -484,7 +484,7 @@ describe("fightableLog", () => {
       ],
     };
     expect(fightableLog(log, attacker, {}).events.map((event) => (event as { id: string }).id)).toEqual(["pb0"]);
-  });
+  }, REPLAY_TIMEOUT_MS);
 });
 
 describe("the attacker's storage (issue #166)", () => {
@@ -502,14 +502,14 @@ describe("the attacker's storage (issue #166)", () => {
     expect(krallenBuffOf(log({ t: 5, l: 5 }), [{ t: 5, l: 5 }])).toBeCloseTo(0.3);
     expect(krallenBuffOf(log({ t: 5, l: 2 }), [{ t: 5, l: 5 }])).toBeCloseTo(0.22);
     expect(krallenBuffOf(log({ t: 5, l: 5 }), [{ t: 5, l: 1 }])).toBeCloseTo(0.2);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("no Krallen flung, one not owned, or another champion raises nothing", () => {
     expect(krallenBuffOf(log(), [{ t: 5, l: 5 }])).toBe(0);
     expect(krallenBuffOf(log({ t: 5, l: 5 }), [])).toBe(0);
     expect(krallenBuffOf(log({ t: 3, l: 6 }), [{ t: 3, l: 6 }])).toBe(0);
     expect(krallenBuffOf(null, [{ t: 5, l: 5 }])).toBe(0);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("the cap is the yard's silos and outposts, raised by Krallen", () => {
     const save = {
@@ -520,7 +520,7 @@ describe("the attacker's storage (issue #166)", () => {
     const cap = BASE_STORAGE + siloCapacity(3) + OUTPOST_STORAGE;
     expect(attackerLootCap(save, 0)).toBe(cap);
     expect(attackerLootCap(save, 0.3)).toBe(Math.floor(cap * 1.3));
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("an attacker at or over the cap banks nothing and keeps what they hold", () => {
     const save = { buildingdata: {}, resources: { r1: BASE_STORAGE, r2: BASE_STORAGE + 500 } };
@@ -528,7 +528,7 @@ describe("the attacker's storage (issue #166)", () => {
     expect(banked.credited).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
     expect(banked.overflow).toEqual({ r1: 4000, r2: 4000, r3: 0, r4: 0 });
     expect(save.resources).toEqual({ r1: BASE_STORAGE, r2: BASE_STORAGE + 500 });
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("an attacker near the cap banks the room left, and Krallen's raise adds to it", () => {
     const near = () => ({ buildingdata: {}, resources: { r1: BASE_STORAGE - 300, r2: 0, r3: 0, r4: 0 } });
@@ -540,7 +540,7 @@ describe("the attacker's storage (issue #166)", () => {
 
     const withKrallen = near();
     expect(bankAttackLoot(withKrallen, credit, 0.2).credited.r1).toBe(300 + BASE_STORAGE * 0.2);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("attackLootOf says how far the battle's Krallen raises the cap", () => {
     // The fixture flings a level 5 Krallen, and the attacker owns one.

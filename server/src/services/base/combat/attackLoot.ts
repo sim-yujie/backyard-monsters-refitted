@@ -303,6 +303,11 @@ export interface AttackLoot {
  * @param defender - The defender's row, with the pool it draws from now.
  * @param attacker - The attacker's main save as it stood before this save.
  * @param mapRoom3 - Whether the attacker's own save is on Map Room 3.
+ * @param fought - The battle as the server already fought it, when the caller
+ *   did (the finaliser, `finaliseAttack.ts`): over the fightable log, the
+ *   served pool and level, and no further than the longest end, so it is its
+ *   own bound (loot and loss only grow as a battle runs) and stands in for the
+ *   replay here, which would cost a second run of the whole battle.
  */
 export const attackLootOf = ({
   sent,
@@ -312,6 +317,7 @@ export const attackLootOf = ({
   defender,
   attacker,
   mapRoom3,
+  fought,
 }: {
   sent: unknown;
   reported: unknown;
@@ -320,6 +326,7 @@ export const attackLootOf = ({
   defender: LootDefender;
   attacker: LootAttacker;
   mapRoom3: boolean;
+  fought?: ReplayedLoot;
 }): AttackLoot => {
   const asked = wholeAmounts(sent);
   const reportedLoss = wholeAmounts(negatedRaw(reported));
@@ -347,14 +354,16 @@ export const attackLootOf = ({
     const log = parseFlingLog(flinglog);
     if (!log) return land(none, none, "no-log");
     const pool = session.defenderResources ?? poolAmounts(defender.resources);
-    const replayed = replayedLoot({
-      defender,
-      pool,
-      attacker,
-      log,
-      entryHoused,
-      ...(session.attackerlevel !== undefined && { playerLevel: session.attackerlevel }),
-    });
+    const replayed =
+      fought ??
+      replayedLoot({
+        defender,
+        pool,
+        attacker,
+        log,
+        entryHoused,
+        ...(session.attackerlevel !== undefined && { playerLevel: session.attackerlevel }),
+      });
     return land(replayed.attackloot, replayed.defenderLoss, "replay");
   }
 

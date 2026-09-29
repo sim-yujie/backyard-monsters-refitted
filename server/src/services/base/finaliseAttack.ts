@@ -29,7 +29,7 @@ import {
   spendFlung,
   type SourceCell,
 } from "./combat/abandonedAttack.js";
-import { attackLootOf, bankAttackLoot, fightableLog } from "./combat/attackLoot.js";
+import { attackLootOf, bankAttackLoot, fightableLog, wholeAmounts } from "./combat/attackLoot.js";
 import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpend.js";
 import { combatCellHeight } from "./combat/cellHeight.js";
 import { getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
@@ -81,6 +81,10 @@ export type FinaliseOutcome = "finalised" | "none" | "busy" | "stale";
 
 /** How often the sweep looks for expired attacks. */
 export const FINALISE_SWEEP_MS = 60_000;
+
+/** A delta with its sign turned, so its losses read as amounts. */
+const negatedDelta = (delta: Record<string, number>): Record<string, number> =>
+  Object.fromEntries(Object.entries(delta).map(([key, value]) => [key, -value]));
 
 const hasDeclareWar = async (allianceId: User["alliance_id"]): Promise<boolean> =>
   (await runningPowerups(allianceId)).some(({ id }) => id === AlliancePowerupType.DECLARE_WAR);
@@ -174,7 +178,10 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
 
   // Both sides' loot by the final save's rule, the replay standing in for the
   // client's figures, against the rows before anything below is written (the
-  // attacker's champions above all), as `baseSave.ts` reads them.
+  // attacker's champions above all), as `baseSave.ts` reads them. The replay
+  // is also the rule's bound: it fought only the fightable log, over the
+  // served pool at the served level, and stopped no later than the longest
+  // end, so running the battle again to that end could only give as much.
   const loot = attackLootOf({
     sent: outcome.attackloot,
     reported: outcome.defenderDelta,
@@ -189,6 +196,10 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
     },
     attacker: userSave,
     mapRoom3: userSave.mapversion === MapRoomVersion.V3,
+    fought: {
+      attackloot: outcome.attackloot,
+      defenderLoss: wholeAmounts(negatedDelta(outcome.defenderDelta)),
+    },
   });
 
   // The attacker: what was flung leaves its cells for good, and the rest of

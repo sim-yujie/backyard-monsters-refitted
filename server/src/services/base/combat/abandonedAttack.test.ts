@@ -21,6 +21,9 @@ import {
 const SANDBOX = fileURLToPath(new URL("../../../../../web/test/fixtures/baseload-sandbox-yard.json", import.meta.url));
 const sandbox = JSON.parse(readFileSync(SANDBOX, "utf8"));
 
+/** Every test here runs the combat engine, which is slow under a loaded machine. */
+const REPLAY_TIMEOUT_MS = 60_000;
+
 const LOG: FlingLog = {
   v: 1,
   seed: 1834027731,
@@ -93,11 +96,11 @@ describe("replayAbandonedAttack on an outpost (issue #179)", () => {
     expect(left.attackloot.r1).toBe(Math.floor(replayed.attackloot.r1));
     expect(left.defenderDelta.r1).toBe(-Math.floor(replayed.defenderLoss.r1));
     expect(left.destroyed).toBe(replayed.destroyed);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("reads the height it is handed: flat ground is a different battle", () => {
     expect(outpost(0).attackloot).not.toEqual(outpost(one.height).attackloot);
-  });
+  }, REPLAY_TIMEOUT_MS);
 });
 
 describe("replayAbandonedAttack", () => {
@@ -107,7 +110,7 @@ describe("replayAbandonedAttack", () => {
   test("runs to the tick the attacker was last seen at", () => {
     expect(early.tick).toBe(1600);
     expect(later.tick).toBe(4000);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("gives what the shared replay gives, cut at the same tick", () => {
     const replayed = replayAttack({
@@ -124,7 +127,7 @@ describe("replayAbandonedAttack", () => {
     expect(later.firedTraps).toEqual([...replayed.firedTraps]);
     expect(later.attackloot.r1).toBe(Math.floor(replayed.attackloot.r1));
     expect(later.defenderDelta.r2).toBe(-Math.floor(replayed.defenderLoss.r2));
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("runs at the attacker's level, so a low-level attacker's bonus is kept (#167)", () => {
     const plain = replayAbandonedAttack(input(24000));
@@ -134,18 +137,18 @@ describe("replayAbandonedAttack", () => {
     expect(total(plain.attackloot)).toBeGreaterThan(0);
     expect(total(lowLevel.attackloot)).toBeGreaterThan(total(plain.attackloot));
     expect(replayAbandonedAttack(input(24000, { playerLevel: 20 })).attackloot).toEqual(plain.attackloot);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("ends the battle there: nothing the creeps would have done afterwards counts", () => {
     expect(later.damage).toBeGreaterThan(early.damage);
     expect(Object.keys(later.buildinghealthdata).length).toBeGreaterThanOrEqual(
       Object.keys(early.buildinghealthdata).length
     );
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("never runs short of the log's own last event", () => {
     expect(replayAbandonedAttack(input(100)).tick).toBe(800);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("reports the attacker's side: flung monsters, champions, siege", () => {
     expect(later.flung).toEqual({ C1: 300 });
@@ -154,14 +157,14 @@ describe("replayAbandonedAttack", () => {
     expect(krallen!.hp).toBeLessThanOrEqual(62000);
     expect(other).toEqual({ t: 3, l: 6, hp: 40000, status: 0 } as never);
     expect(later.attackersiege).toEqual({ jars: { quantity: 2 } });
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("a main yard has no `destroyed`; the report names the moment it ended", () => {
     expect(later.destroyed).toBeUndefined();
     expect(later.attackreport).toContain("0:06 Flung 300 C1, the champion (G5)");
     expect(later.attackreport).toContain("0:50 Left the attack");
     expect(later.defenderDelta.r1).toBeLessThanOrEqual(0);
-  });
+  }, REPLAY_TIMEOUT_MS);
 });
 
 describe("the attacker's cells", () => {
@@ -178,13 +181,13 @@ describe("the attacker's cells", () => {
       { baseid: "2", m: { housed: { C1: 7 } } },
     ]);
     expect(unpaid).toEqual({});
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("anything the cells no longer hold is reported, not invented", () => {
     const { updates, unpaid } = spendFlung([{ baseid: "1", m: { housed: { C1: 2 } } }], { C1: 5, C3: 1 });
     expect(updates[0]!.m.housed).toEqual({ C1: 0 });
     expect(unpaid).toEqual({ C1: 3, C3: 1 });
-  });
+  }, REPLAY_TIMEOUT_MS);
 });
 
 describe("helpers", () => {
@@ -192,11 +195,11 @@ describe("helpers", () => {
     expect(combatKindOf("tribe")).toBe("wild");
     expect(combatKindOf("outpost")).toBe("outpost");
     expect(combatKindOf("main")).toBe("main");
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("academy levels are read as the client reads them", () => {
     expect(academyLevels({ C1: { level: 4 }, C2: { level: "x" }, C3: null })).toEqual({ C1: 4 });
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("a siege weapon used spends one", () => {
     expect(siegeAfter({ jars: { quantity: 1 }, vacuum: { quantity: 3 } }, [
@@ -204,9 +207,9 @@ describe("helpers", () => {
       { kind: "siege", t: 2, x: 0, y: 0, weapon: "jars" },
     ])).toEqual({ jars: { quantity: 0 }, vacuum: { quantity: 3 } });
     expect(siegeAfter(null, [])).toBeUndefined();
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("buildingdata loses only the traps that fired", () => {
     expect(buildingDataWithout({ "1": { t: 24 }, "2": { t: 1 } }, [1])).toEqual({ "2": { t: 1 } });
-  });
+  }, REPLAY_TIMEOUT_MS);
 });

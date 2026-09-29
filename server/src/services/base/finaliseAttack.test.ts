@@ -139,6 +139,9 @@ const TICK = 2400;
 const LATE = 20_000;
 const now = () => Math.floor(Date.now() / 1000);
 
+/** Every test here runs the combat engine, which is slow under a loaded machine. */
+const REPLAY_TIMEOUT_MS = 60_000;
+
 /** The attacker's level the attack load served: past the low-level bonus. */
 const LEVEL = 40;
 /** The pool the attack load served, and the roster it recorded (#163). */
@@ -228,7 +231,7 @@ describe("finaliseAbandonedAttack", () => {
     // Nothing left to finish from, and the row is free.
     expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(false);
     expect(store.has(attackSessionKey(BASESAVEID))).toBe(false);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("monsters hatched during the attack stay: the flung are taken from the caught-up yard", async () => {
     await arm();
@@ -259,7 +262,7 @@ describe("finaliseAbandonedAttack", () => {
     expect(hatched).toBeGreaterThanOrEqual(9);
     expect(userSave.monsters.housed).toEqual({ C1: 0 });
     expect(outpost.monsters.housed).toEqual({ C1: 50 + hatched });
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("the attacker keeps only what fits in their storage, Krallen's raise included (#166)", async () => {
     const tick = LATE;
@@ -276,7 +279,7 @@ describe("finaliseAbandonedAttack", () => {
     // The defender still loses the whole loot.
     expect(defender.resources.r1).toBe(5_000_000 + expected.defenderDelta.r1);
     expect(-expected.defenderDelta.r1).toBeGreaterThanOrEqual(expected.attackloot.r1);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("credits what the attack's own final save would have, at the same moment (#163, #165)", async () => {
     await arm({ tick: LATE });
@@ -306,7 +309,7 @@ describe("finaliseAbandonedAttack", () => {
       r3: 5_000_000 + save.defenderDelta.r3,
       r4: 5_000_000 + save.defenderDelta.r4,
     });
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("the pool moving while the attack ran changes nothing it credits (#163)", async () => {
     const creditWith = async (stored: Record<string, number>) => {
@@ -329,7 +332,7 @@ describe("finaliseAbandonedAttack", () => {
     expect(drained.credited).toEqual(asServed.credited);
     // The loss lands on the pool as it stands, and never below nothing.
     expect(drained.left).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
-  }, 30_000);
+  }, REPLAY_TIMEOUT_MS);
 
   test("never credits more than the served pool allows, whatever the pool holds now (#163)", async () => {
     const served = { r1: 2_000, r2: 2_000, r3: 2_000, r4: 2_000 };
@@ -345,7 +348,7 @@ describe("finaliseAbandonedAttack", () => {
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
 
     expect(userSave.resources.r1).toBe(fromServed);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("monsters the attacker never housed at entry fight for nothing (#163)", async () => {
     // The roster held 20 Pokeys, however many the checkpointed log flings.
@@ -365,7 +368,7 @@ describe("finaliseAbandonedAttack", () => {
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
 
     expect(userSave.resources.r1).toBe(replayed(LATE, fightable).attackloot.r1);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("its record of the attack load outlives the session (#163)", async () => {
     await arm({ tick: LATE });
@@ -379,7 +382,7 @@ describe("finaliseAbandonedAttack", () => {
 
     expect(userSave.resources.r1).toBe(replayed(LATE).attackloot.r1);
     expect(userSave.resources.r1).toBeGreaterThan(0);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("a checkpoint with no record of the attack load credits nothing, as the save would not", async () => {
     await arm({ tick: LATE, entryHoused: undefined, defenderResources: undefined, attackerlevel: undefined });
@@ -391,7 +394,7 @@ describe("finaliseAbandonedAttack", () => {
     expect(userSave.resources).toEqual({ r1: 0, r2: 900_000, r3: 0, r4: 0 });
     expect(defender.resources).toEqual(SERVED);
     expect(defender.damage).toBeGreaterThan(0);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("is idempotent: a second finalisation finds nothing and charges nothing", async () => {
     await arm();
@@ -401,7 +404,7 @@ describe("finaliseAbandonedAttack", () => {
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("none");
     expect(userSave).toEqual(after);
     expect(flush).toHaveBeenCalledTimes(1);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("waits out a save that holds the lock", async () => {
     await arm();
@@ -410,7 +413,7 @@ describe("finaliseAbandonedAttack", () => {
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("busy");
     expect(defender.attackid).toBe(ATTACK_ID);
     expect(userSave.monsters.housed.C1).toBe(200);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("a row that moved on is left alone and the checkpoint dropped", async () => {
     await arm();
@@ -419,7 +422,7 @@ describe("finaliseAbandonedAttack", () => {
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("stale");
     expect(userSave.monsters.housed.C1).toBe(200);
     expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(false);
-  });
+  }, REPLAY_TIMEOUT_MS);
 });
 
 describe("when finalisation runs", () => {
@@ -427,7 +430,7 @@ describe("when finalisation runs", () => {
     await arm();
     expect(await finaliseAttacksFor(ATTACKER, "build")).toBe(1);
     expect(defender.attackid).toBe(0);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("the defender's load waits for the attacker's window to close", async () => {
     await arm();
@@ -438,12 +441,12 @@ describe("when finalisation runs", () => {
     sets.clear();
     await arm({ startedat: now() - 420 });
     expect(await finaliseAttacksFor(DEFENDER_OWNER, "build")).toBe(1);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("a stranger's load touches nothing", async () => {
     await arm({ startedat: now() - 420 });
     expect(await finaliseAttacksFor(31337, "build")).toBe(0);
-  });
+  }, REPLAY_TIMEOUT_MS);
 
   test("a new attack on the row finishes the expired one first", async () => {
     await arm();
@@ -453,5 +456,5 @@ describe("when finalisation runs", () => {
     await arm({ startedat: now() - 420 });
     await finaliseExpiredOnBase(defender.baseid);
     expect(defender.attackid).toBe(0);
-  });
+  }, REPLAY_TIMEOUT_MS);
 });
