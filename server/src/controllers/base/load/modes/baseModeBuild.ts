@@ -6,7 +6,7 @@ import { logger } from "../../../../utils/logger.js";
 import { balancedReward } from "../../../../services/base/balancedReward.js";
 import { resetInvasionWaves } from "../../../../services/events/wmi/invasionUtils.js";
 import { isAttackActive } from "../../../../services/base/isAttackActive.js";
-import { baseUnderAttackErr, permissionErr } from "../../../../errors/errors.js";
+import { baseNotFoundErr, baseUnderAttackErr, permissionErr } from "../../../../errors/errors.js";
 
 /**
  * Retrieves the save data for the user based on the provided `baseid`.
@@ -43,7 +43,7 @@ export const baseModeBuild = async (user: User, baseid: string) => {
   if (baseid !== userSave.baseid) {
     const baseSave = await postgres.em.findOne(Save, { baseid });
 
-    if (!baseSave) throw new Error(`Base save not found for baseid: ${baseid}`);
+    if (!baseSave) throw baseNotFoundErr();
     if (baseSave.userid !== user.userid) throw permissionErr();
     if (isAttackActive(baseSave)) throw baseUnderAttackErr();
 

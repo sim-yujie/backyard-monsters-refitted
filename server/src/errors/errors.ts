@@ -96,6 +96,18 @@ export const loadFailureErr = () =>
     isClientFriendly: true,
   });
 
+/**
+ * `/base/load` named a base id that has no save (#191): a clean 404 the client
+ * can show, where an unhandled `Error` used to answer 500.
+ */
+export const baseNotFoundErr = () =>
+  new ClientSafeError({
+    message: "That yard could not be found.",
+    status: Status.NOT_FOUND,
+    data: { reason: "baseNotFound" },
+    isClientFriendly: true,
+  });
+
 export const userPermaBannedErr = () =>
   new ClientSafeError({
     message:

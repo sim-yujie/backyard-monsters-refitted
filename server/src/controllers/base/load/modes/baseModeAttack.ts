@@ -14,7 +14,7 @@ import { getGeneratedCells, cellKey } from "../../../../services/maproom/v3/gene
 import { createAttackLog } from "../../../../services/base/createAttackLog.js";
 import { updateResources, Operation } from "../../../../services/base/updateResources.js";
 import { isAttackActive } from "../../../../services/base/isAttackActive.js";
-import { baseUnderAttackErr, baseProtectedErr, userOnlineErr, truceActiveErr, shinyLockedErr } from "../../../../errors/errors.js";
+import { baseNotFoundErr, baseUnderAttackErr, baseProtectedErr, userOnlineErr, truceActiveErr, shinyLockedErr } from "../../../../errors/errors.js";
 import { redis } from "../../../../server.js";
 import { isTruceActive } from "../../../../services/mail/isTruceActive.js";
 import { MR1_TRIBE_IDS } from "../../../../game-data/tribes/v1/index.js";
@@ -77,7 +77,7 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
     if (!save) save = await tribeSaveHandler(baseid, mapversion, userSave.worldid, user);
   }
 
-  if (!save) throw new Error(`Save not found for baseid: ${baseid}`);
+  if (!save) throw baseNotFoundErr();
 
   if (save.type !== BaseType.TRIBE) {
     if (save.protected > getCurrentDateTime()) throw baseProtectedErr();

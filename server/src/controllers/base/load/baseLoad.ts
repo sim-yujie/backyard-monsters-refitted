@@ -28,7 +28,7 @@ import { infernoModeAttack } from "./modes/infernoModeAttack.js";
 import { infernoModeBuild } from "./modes/infernoModeBuild.js";
 import { validateAttack } from "../../../services/maproom/validateAttack.js";
 import { BaseLoadSchema } from "../../../schemas/BaseLoadSchema.js";
-import { discordAgeErr } from "../../../errors/errors.js";
+import { baseNotFoundErr, discordAgeErr } from "../../../errors/errors.js";
 import { EnumBaseRelationship } from "../../../enums/EnumBaseRelationship.js";
 import { canAttack } from "../../../services/base/canAttack.js";
 import { createMR1Tribes } from "../../../services/maproom/v1/createMR1Tribes.js";
@@ -144,7 +144,7 @@ export const baseLoad: KoaController = async (ctx) => {
       throw new Error(`Base type not handled, type: ${type}.`);
   }
 
-  if (!baseSave) throw new Error("Base save not found.");
+  if (!baseSave) throw baseNotFoundErr();
 
   const userSave = user.save!;
   const isOwner = user.userid === baseSave.userid;
