@@ -12,6 +12,7 @@ import {
   toCombatYard,
   type FlingLog,
 } from "../../../game-rules/combat/index.js";
+import { MR1_TRIBES_MAP } from "../../../game-data/tribes/v1/index.js";
 import { MAX_CHECKPOINT_TICK } from "../attackCheckpoint.js";
 import type { AttackSession } from "../attackSession.js";
 import { replayAbandonedAttack } from "./abandonedAttack.js";
@@ -36,7 +37,8 @@ const REPLAY_TIMEOUT_MS = 60_000;
 interface Fixture {
   name: string;
   yard: "sandbox" | Record<string, Record<string, number>>;
-  kind: "main" | "outpost" | "wild";
+  /** `tribe`: a Map Room 1 tribe, a `tribe` row the engine fights as `"tribe"`. */
+  kind: "main" | "outpost" | "wild" | "tribe";
   health?: Record<string, number>;
   height?: number;
   resources?: Record<string, number>;
@@ -49,7 +51,7 @@ const fixtures: Fixture[] = readdirSync(FIXTURE_DIR)
   .sort()
   .map((file) => JSON.parse(readFileSync(`${FIXTURE_DIR}${file}`, "utf8")));
 
-const TYPE_OF = { main: "main", outpost: "outpost", wild: "tribe" } as const;
+const TYPE_OF = { main: "main", outpost: "outpost", wild: "tribe", tribe: "tribe" } as const;
 
 const defenderOf = (one: Fixture): BattleDefender =>
   one.yard === "sandbox"
@@ -65,6 +67,7 @@ const defenderOf = (one: Fixture): BattleDefender =>
         buildinghealthdata: one.health ?? {},
         resources: one.resources ?? {},
         ...(one.height !== undefined && { height: one.height }),
+        ...(one.kind === "tribe" && { kind: "tribe" as const }),
       };
 
 const attackerOf = (one: Fixture) => ({
@@ -113,7 +116,8 @@ const honestClient = (one: Fixture, end: number) => {
     tick: state.tick,
     health: { ...state.health },
     damage,
-    destroyed: derivedDestroyed(damage, one.kind),
+    // The web save names a Map Room 1 tribe `wild` for this (`session.target.kind`).
+    destroyed: derivedDestroyed(damage, one.kind === "tribe" ? "wild" : one.kind),
     firedTraps: [...state.firedTraps],
     attackloot: wholeAmounts(state.loot),
     defenderLoss: wholeAmounts(state.defenderLoss),
@@ -176,6 +180,43 @@ describe("an honest save writes what its client showed (#23, C3)", () => {
               stored
             )
           ).toEqual([]);
+        }
+      },
+      REPLAY_TIMEOUT_MS
+    );
+  }
+});
+
+/**
+ * The same fights on a Map Room 1 tribe (issue #23, C4): each fixture's log
+ * flung at the Legionnaire camp's top tier, the engine's `"tribe"` kind on
+ * both sides, and `destroyed` by the camp threshold the tribe path applies.
+ */
+describe("an honest Map Room 1 tribe save writes what its client showed (#23, C4)", () => {
+  const template = MR1_TRIBES_MAP.get("6")!;
+  for (const one of fixtures) {
+    const tribe: Fixture = {
+      ...one,
+      name: `${one.name} on a tribe`,
+      yard: template.buildingdata as never,
+      kind: "tribe",
+      resources: template.resources as Record<string, number>,
+    };
+    delete tribe.health;
+    delete tribe.height;
+    test(
+      `${tribe.name}: health, damage, destroyed, traps and loot`,
+      () => {
+        const first = one.log.events[0]?.t ?? 0;
+        for (const end of [first + 1600, FULL]) {
+          const client = honestClient(tribe, end);
+          const server = serverBattle(tribe, logAt(one.log, end), client.tick);
+
+          expect(server.buildinghealthdata).toEqual(client.health);
+          expect(server.damage).toBe(client.damage);
+          expect(derivedDestroyed(server.damage, "wild")).toBe(client.destroyed);
+          expect([...server.firedTraps].sort()).toEqual([...client.firedTraps].sort());
+          expect(server.attackloot).toEqual(client.attackloot);
         }
       },
       REPLAY_TIMEOUT_MS

@@ -367,14 +367,24 @@ army with no attack behind it):
   420-second window.
 - **Save** (`/base/save`, `baseid` = the tribe, `basesaveid` `"0"`). The session is checked with
   `checkAttackBinding` (same reasons as below) before anything is written. A save without `over`
-  records only the tribe's damage (`buildinghealthdata`, `destroyed`, `damage`). The save carrying
+  writes nothing. The save carrying
   `over` takes `attack-final:mr1:<userid>:<baseid>` (a copy racing it is refused with
-  `reason: "finalising"`), applies the attacker's side — the army (the flung monsters leave the
+  `reason: "finalising"`) and replays the battle as a Map Room 2 save does (issue #23, C4, see
+  "The battle is the server's" below): the fightable log to the save's `tick`, over the tribe as
+  the load served it (the template's buildings and pool, the health it has kept), fought as the
+  engine's `"tribe"` kind, in a worker. The tribe's `tribeHealthData`, `damage` and `destroyed`
+  (and the `wmstatus` flag) come from that replay, `destroyed` by the camp threshold the web
+  client applies to a tribe (90% damage), and so does the loot; the save's copies are only
+  compared (`attack-replay-mismatch`). A final save with no usable log writes no battle and
+  credits no loot. A replay past its 5 s deadline lands nothing: there is no checkpoint and no
+  finaliser for a tribe, so the save is answered `attackResultPendingErr` (`reason:
+  "replayTimeout"`), the session is kept for a resent save while its window lasts, and the tribe
+  respawns in time anyway. It then applies the attacker's side — the army (the flung monsters leave the
   main yard's housing through `monsterupdate` and the fling log, capped by the session's
   `entryHoused`, exactly as an MR2 attack settles; `attackcreatures` is ignored and only the
   main yard's `monsterupdate` entry is read), `attackerchampion`, `attackersiege`,
   the bombs in `flinglog` (issue #90), and the loot — then ends the session, so a copy sent again
-  as the page closes is refused with `"no-session"`. The loot credited is
+  as the page closes is refused with `"no-session"`. The loot credited is the replay's gain through
   `creditableMR1Loot` (`mr1TribeRules.ts`): each resource whole and non-negative, and everything
   taken from that tribe since it last respawned (`tribedata[].looted`) at most its pool — its
   `resources` plus its harvesters' `st` — times `LOOT_GAIN_RATIO` (1.6, the low-level bonus).

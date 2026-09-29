@@ -376,6 +376,13 @@ C7). Bombs are priced against the attacker's pool at attack start (the session's
 The defender's champion is left as stored, since the engine does not fight it. `battle.test.ts`
 checks that an honest client's save writes exactly what it showed, on the golden fixtures.
 
+**Implemented (issue #23, C4)** for Map Room 1 tribes (`scaledMR1Tribes.ts`): the tribe save that
+ends an attack runs the same replay over the tribe as its load served it, with the engine's
+`"tribe"` kind (a tribe row is otherwise read as a Map Room 2 camp), and writes the tribe's health,
+damage, `destroyed` (by the camp threshold, as the web client works it out for a tribe) and the
+loot from it, before the tribe's own loot cap. With no checkpoint for a tribe, a replay past its
+deadline lands nothing. `battle.test.ts` runs the golden fixtures' logs against a tribe too.
+
 ---
 
 ## 3. Server design

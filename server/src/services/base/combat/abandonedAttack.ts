@@ -48,6 +48,12 @@ export interface AbandonedDefender {
   resources: Partial<ResourceAmounts> | null | undefined;
   /** The map cell's height, which stretches an outpost's tower range (`cellHeight.ts`). */
   height?: number;
+  /**
+   * The engine's kind of yard, where the row's `type` does not say it: a Map
+   * Room 1 tribe is a `tribe` row fought as `"tribe"` (`AttackSession.combatKind`),
+   * not as a Map Room 2 camp (issue #23, C4).
+   */
+  kind?: CombatTargetKind;
 }
 
 /** What the replay needs of the attacker's main save. */
@@ -184,7 +190,7 @@ const reportLine = (event: FlingEvent): string => {
  */
 export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome => {
   const { defender, attacker, log, declareWar } = input;
-  const kind = combatKindOf(defender.type);
+  const kind = defender.kind ?? combatKindOf(defender.type);
   const buildingdata = defender.buildingdata ?? {};
   const events = ordered(log.events);
   const lastEvent = events.reduce((last, event) => Math.max(last, Math.floor(event.t)), 0);

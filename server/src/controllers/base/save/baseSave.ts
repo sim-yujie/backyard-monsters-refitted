@@ -15,7 +15,6 @@ import { academyHandler } from "./handlers/academyHandler.js";
 import { BaseType } from "../../../enums/Base.js";
 import {
   attackNotBoundErr,
-  attackResultPendingErr,
   permissionErr,
   saveFailureErr,
 } from "../../../errors/errors.js";
@@ -66,22 +65,9 @@ import {
   wholeAmounts,
   type AttackLoot,
 } from "../../../services/base/combat/attackLoot.js";
-import {
-  ReplayTimeoutError,
-  SAVE_REPLAY_DEADLINE_MS,
-  replayAbandonedInWorker,
-} from "../../../services/base/combat/replayRunner.js";
-import {
-  battleMismatches,
-  battleReplayInput,
-  battleTick,
-  foughtLoot,
-} from "../../../services/base/combat/battle.js";
-import {
-  buildingDataWithout,
-  type AbandonedInput,
-  type AbandonedOutcome,
-} from "../../../services/base/combat/abandonedAttack.js";
+import { battleReplayInput, battleTick, foughtLoot } from "../../../services/base/combat/battle.js";
+import { buildingDataWithout } from "../../../services/base/combat/abandonedAttack.js";
+import { logBattleMismatches, replayBattleForSave } from "../../../services/base/combat/saveBattle.js";
 import { isDeclareWarRunning } from "../../../services/alliance/powerups.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import { championsAfterAttack, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
@@ -243,8 +229,25 @@ const saveBase = async (
           declareWar: await isDeclareWarRunning(user.alliance_id),
         })
       : null;
-  const battle = battleInput ? await replayForSave(ctx, user, baseSave, battleInput) : null;
-  if (battle) logBattleMismatches(ctx, user, baseSave, saveData, body, battle);
+  const battle = battleInput
+    ? await replayBattleForSave(ctx, user, baseSave, battleInput, "the finaliser will land it")
+    : null;
+  if (battle) {
+    logBattleMismatches(
+      ctx,
+      user,
+      baseSave,
+      {
+        damage: body.damage,
+        destroyed: saveData.destroyed,
+        buildinghealthdata: saveData.buildinghealthdata,
+        buildingdata: saveData.buildingdata,
+        attackloot: saveData.attackloot,
+      },
+      battle,
+      baseSave.buildingdata
+    );
+  }
 
   const loot = lootArgs
     ? attackLootOf({
@@ -670,76 +673,6 @@ const BATTLE_KEYS: ReadonlySet<string> = new Set([
   SaveKeys.BUILDINGDATA,
   "buildinghealthdata",
 ]);
-
-/**
- * Where the client's save and the server's battle disagree, recorded and
- * never written (issue #23, C3). An honest client fought the same battle with
- * the same engine, so any line here is a tampered save or a divergence to fix.
- */
-const logBattleMismatches = (
-  ctx: Context,
-  user: User,
-  baseSave: Save,
-  saveData: { buildinghealthdata?: unknown; buildingdata?: unknown; destroyed?: unknown; attackloot?: unknown },
-  body: Record<string, unknown>,
-  battle: AbandonedOutcome
-): void => {
-  const fields = battleMismatches(
-    {
-      damage: body.damage,
-      destroyed: saveData.destroyed,
-      buildinghealthdata: saveData.buildinghealthdata,
-      buildingdata: saveData.buildingdata,
-      attackloot: saveData.attackloot,
-    },
-    battle,
-    baseSave.buildingdata
-  );
-  if (fields.length === 0) return;
-  logger.warn("Attack save for {username} on base {baseid} disagrees with the replay on {fields}", {
-    event: "attack-replay-mismatch",
-    userid: user.userid,
-    username: user.username,
-    baseid: baseSave.baseid,
-    basesaveid: baseSave.basesaveid,
-    fields,
-    sent: { damage: body.damage, destroyed: saveData.destroyed },
-    derived: { damage: battle.damage, destroyed: battle.destroyed, tick: battle.tick },
-    ip: ctx.ip,
-  });
-};
-
-/**
- * The save's battle replay, in a worker (issue #23, C5). A replay past its
- * deadline gives the attack to the finaliser: nothing has been written yet,
- * the session and the checkpoint are left as they are, and the attacker's next
- * load (or the sweep, once the window closes) lands the attack from the
- * checkpoint (`finaliseAttack.ts`).
- *
- * @throws {ClientSafeError} `attackResultPendingErr` when the replay timed out.
- */
-const replayForSave = async (
-  ctx: Context,
-  user: User,
-  baseSave: Save,
-  input: AbandonedInput
-): Promise<AbandonedOutcome> => {
-  try {
-    return await replayAbandonedInWorker(input, SAVE_REPLAY_DEADLINE_MS);
-  } catch (err) {
-    if (!(err instanceof ReplayTimeoutError)) throw err;
-    logger.warn("Attack replay for {username} on base {baseid} timed out: the finaliser will land it", {
-      event: "attack-replay-timeout",
-      userid: user.userid,
-      username: user.username,
-      baseid: baseSave.baseid,
-      basesaveid: baseSave.basesaveid,
-      deadlineMs: err.deadlineMs,
-      ip: ctx.ip,
-    });
-    throw attackResultPendingErr();
-  }
-};
 
 const economyAuditKind = (
   isAttack: boolean,

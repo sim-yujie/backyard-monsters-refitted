@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
 
 /**
@@ -44,8 +44,22 @@ mock.module("../../../server.js", () => ({
   },
 }));
 
+const warn = mock((..._args: unknown[]) => {});
 mock.module("../../../utils/logger.js", () => ({
-  logger: { warn: mock(() => {}), error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
+  logger: { warn, error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
+}));
+
+// The real replay runner, unless a test asks for a replay that times out
+// (issue #23, C5). The query makes the real module one no mock replaces.
+const REAL_RUNNER = "../../base/combat/replayRunner.ts?real";
+const realRunner = (await import(REAL_RUNNER)) as typeof import("../../base/combat/replayRunner.js");
+let replayTimesOut = false;
+mock.module("../../base/combat/replayRunner.js", () => ({
+  ...realRunner,
+  replayAbandonedInWorker: async (...args: Parameters<typeof realRunner.replayAbandonedInWorker>) => {
+    if (replayTimesOut) throw new realRunner.ReplayTimeoutError(5_000);
+    return realRunner.replayAbandonedInWorker(...args);
+  },
 }));
 
 const { baseSave } = await import("../../../controllers/base/save/baseSave.js");
@@ -54,14 +68,54 @@ const { serialiseAttackSession } = await import("../../base/attackSession.js");
 const { mr1TribePool } = await import("./mr1TribeRules.js");
 const { MR1_TRIBES_MAP } = await import("../../../game-data/tribes/v1/index.js");
 const { LOOT_GAIN_RATIO } = await import("../../../game-rules/combat/index.js");
+const { replayAbandonedAttack } = await import("../../base/combat/abandonedAttack.js");
+const { battleReplayInput, battleTick } = await import("../../base/combat/battle.js");
 
 const now = () => Math.floor(Date.now() / 1000);
 
-const startSession = (attackerid = ATTACKER, startedat = now()) =>
+const startSession = (attackerid = ATTACKER, startedat = now(), housed: Record<string, number> = { C1: 10 }) =>
   store.set(
     mr1TribeSessionKey(ATTACKER, TRIBE),
-    serialiseAttackSession({ attackerid, attackid: ATTACK_ID, startedat, entryHoused: { "5000": { C1: 10 } } })
+    serialiseAttackSession({ attackerid, attackid: ATTACK_ID, startedat, entryHoused: { "5000": housed } })
   );
+
+/**
+ * Real battles on the Legionnaire camp (issue #23, C4): sixty Pokeys by its
+ * harvesters wreck it by the end of the countdown; four barely scratch it.
+ */
+const WRECK = { v: 1, seed: 7, events: [{ kind: "fling", t: 40, x: 300, y: 150, r: 100, monsters: { C1: 60 } }] };
+const WRECK_TICK = 24_000;
+const SCRATCH = { v: 1, seed: 7, events: [{ kind: "fling", t: 40, x: 300, y: 150, r: 100, monsters: { C1: 4 } }] };
+const SCRATCH_TICK = 2_400;
+const ARMY = { C1: 64 };
+
+/** What the server's own replay of `log` to `tick` does to the tribe, as it stands. */
+const serverBattle = (log: unknown, tick: number) => {
+  const template = MR1_TRIBES_MAP.get(TRIBE)!;
+  return replayAbandonedAttack(
+    battleReplayInput({
+      flinglog: log,
+      session: { attackerid: ATTACKER, attackid: ATTACK_ID, startedat: 0, entryHoused: { "5000": ARMY } },
+      defender: {
+        type: "tribe",
+        kind: "tribe",
+        buildingdata: template.buildingdata as never,
+        buildinghealthdata: (maproom.tribedata[0]!.tribeHealthData ?? {}) as never,
+        resources: template.resources as never,
+      },
+      attacker: userSave as never,
+      tick: battleTick(tick),
+      declareWar: false,
+    })!
+  );
+};
+
+/** The mismatch lines logged so far, by their fields. */
+const mismatches = () =>
+  warn.mock.calls
+    .map((call) => call[1] as { event?: string; fields?: string[] } | undefined)
+    .filter((line) => line?.event === "attack-replay-mismatch")
+    .map((line) => line!.fields);
 
 const ctxFor = (body: Record<string, string>, userid = ATTACKER) =>
   ({
@@ -82,7 +136,15 @@ const run = async (ctx: Context): Promise<{ data?: { reason?: string } } | null>
 
 const loot = (amounts: Record<string, number>) => JSON.stringify(amounts);
 
+// The mock outlives this file (bun keeps module mocks across files), so it is
+// left delegating to the real runner.
+afterEach(() => {
+  replayTimesOut = false;
+});
+
 beforeEach(() => {
+  replayTimesOut = false;
+  warn.mockClear();
   store.clear();
   persisted.length = 0;
   maproom = { userid: ATTACKER, tribedata: [{ baseid: TRIBE, tribeHealthData: {} }] };
@@ -133,51 +195,76 @@ describe("Map Room 1 tribe save without a started attack (#161)", () => {
 });
 
 describe("Map Room 1 tribe save of a started attack", () => {
-  test("the save that ends it credits the loot once and ends the session", async () => {
-    startSession();
-    const ctx = ctxFor({ over: "1", attackid: String(ATTACK_ID), attackloot: loot({ r1: 50, r2: 7 }), destroyed: "1", damage: "97.5" });
+  test("the save that ends it credits the replay's loot once and ends the session", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    const battle = serverBattle(WRECK, WRECK_TICK);
+    expect(battle.damage).toBeGreaterThanOrEqual(90);
+    const ctx = ctxFor({
+      over: "1",
+      attackid: String(ATTACK_ID),
+      tick: String(WRECK_TICK),
+      flinglog: JSON.stringify(WRECK),
+      attackloot: loot({ r1: 50, r2: 7 }),
+      destroyed: "1",
+      damage: "97.5",
+    });
 
     expect(await run(ctx)).toBeNull();
-    expect(userSave.resources).toEqual({ r1: 150, r2: 107, r3: 100, r4: 100 });
-    expect(maproom.tribedata[0]).toMatchObject({ destroyed: 1, damage: 97, looted: { r1: 50, r2: 7, r3: 0, r4: 0 } });
+    const { r1, r2, r3, r4 } = battle.attackloot;
+    expect(userSave.resources).toEqual({ r1: 100 + r1, r2: 100 + r2, r3: 100 + r3, r4: 100 + r4 });
+    expect(maproom.tribedata[0]).toMatchObject({
+      destroyed: 1,
+      damage: Math.trunc(battle.damage),
+      looted: battle.attackloot,
+      tribeHealthData: battle.buildinghealthdata,
+    });
     expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);
 
     // The same save sent again as the page closes lands nothing.
-    const again = await run(ctxFor({ over: "1", attackid: String(ATTACK_ID), attackloot: loot({ r1: 50 }) }));
+    const again = await run(ctxFor({ over: "1", attackid: String(ATTACK_ID), flinglog: JSON.stringify(WRECK) }));
     expect(again?.data?.reason).toBe("no-session");
-    expect((userSave.resources as Record<string, number>).r1).toBe(150);
+    expect((userSave.resources as Record<string, number>).r1).toBe(100 + r1);
   });
 
-  test("loot beyond what the tribe holds is cut to its pool", async () => {
-    startSession();
-    // Storage enough for the whole pool, so only the tribe's cap applies.
-    userSave.outposts = [[0, 0, "1"]];
-    await run(ctxFor({ over: "1", attackloot: loot({ r1: 1e12 }) }));
-
+  test("loot beyond what the tribe has left is cut to it", async () => {
+    startSession(ATTACKER, now(), ARMY);
     const cap = Math.floor(mr1TribePool(MR1_TRIBES_MAP.get(TRIBE)!).r1 * LOOT_GAIN_RATIO);
-    expect((userSave.resources as Record<string, number>).r1).toBe(100 + cap);
+    // An earlier attack took all but 100 twigs of what the tribe can give.
+    maproom.tribedata[0]!.looted = { r1: cap - 100 };
+    await run(ctxFor({ over: "1", tick: String(WRECK_TICK), flinglog: JSON.stringify(WRECK), attackloot: loot({ r1: 1e12 }) }));
+
+    expect((userSave.resources as Record<string, number>).r1).toBe(200);
   });
 
   test("the attacker keeps only what fits in their storage; the tribe still loses it all (#166)", async () => {
-    startSession();
-    // No silos: a cap of 10,000, 9,900 of it free.
+    startSession(ATTACKER, now(), ARMY);
+    const battle = serverBattle(WRECK, WRECK_TICK);
+    // No silos: a cap of 10,000.
     userSave.resources = { r1: 100, r2: 9_950, r3: 10_000, r4: 12_000 };
-    const ctx = ctxFor({ over: "1", attackloot: loot({ r1: 20_000, r2: 20_000, r3: 20_000, r4: 20_000 }) });
+    const ctx = ctxFor({ over: "1", tick: String(WRECK_TICK), flinglog: JSON.stringify(WRECK) });
 
     expect(await run(ctx)).toBeNull();
-    expect(userSave.resources).toEqual({ r1: 10_000, r2: 10_000, r3: 10_000, r4: 12_000 });
-    expect((ctx.body as { lootcredited?: unknown }).lootcredited).toEqual({ r1: 9_900, r2: 50, r3: 0, r4: 0 });
-
-    const pool = mr1TribePool(MR1_TRIBES_MAP.get(TRIBE)!);
-    const cap = (key: "r1" | "r2" | "r3" | "r4") => Math.min(20_000, Math.floor(pool[key] * LOOT_GAIN_RATIO));
-    expect(maproom.tribedata[0]!.looted).toEqual({ r1: cap("r1"), r2: cap("r2"), r3: cap("r3"), r4: cap("r4") });
+    expect(userSave.resources).toEqual({ r1: 100 + battle.attackloot.r1, r2: 10_000, r3: 10_000, r4: 12_000 });
+    expect((ctx.body as { lootcredited?: unknown }).lootcredited).toEqual({ r1: battle.attackloot.r1, r2: 50, r3: 0, r4: 0 });
+    expect(maproom.tribedata[0]!.looted).toEqual(battle.attackloot);
   });
 
-  test("a save that does not end the attack records the tribe's damage and credits nothing", async () => {
-    startSession();
-    expect(await run(ctxFor({ attackloot: loot({ r1: 50 }), damage: "40" }))).toBeNull();
+  test("a save that does not end the attack writes nothing of the battle and credits nothing", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    expect(
+      await run(
+        ctxFor({
+          tick: String(WRECK_TICK),
+          flinglog: JSON.stringify(WRECK),
+          attackloot: loot({ r1: 50 }),
+          damage: "40",
+          buildinghealthdata: JSON.stringify({ "0": 0 }),
+        })
+      )
+    ).toBeNull();
     expect((userSave.resources as Record<string, number>).r1).toBe(100);
-    expect(maproom.tribedata[0]!.damage).toBe(40);
+    expect(maproom.tribedata[0]!.damage).toBeUndefined();
+    expect(maproom.tribedata[0]!.tribeHealthData).toEqual({});
     expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(true);
   });
 });
@@ -215,31 +302,33 @@ describe("Map Room 1 army settlement (#132)", () => {
   // ids, the main yard's entry keyed by its string base id, the fling log in
   // its versioned shape, and keys the tribe path does not read at all.
   test("the web client's final save lands: loot, army, damage, session ended", async () => {
-    startSession();
+    startSession(ATTACKER, now(), ARMY);
+    userSave.monsters = { housed: { ...ARMY } };
+    const battle = serverBattle(WRECK, WRECK_TICK);
     const ctx = ctxFor({
       basesaveid: "0",
       attackid: String(ATTACK_ID),
       over: "1",
-      buildingdata: JSON.stringify({ "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 } }),
-      buildinghealthdata: JSON.stringify({ "1": 0 }),
-      damage: "92.5",
+      tick: String(WRECK_TICK),
+      buildingdata: JSON.stringify(MR1_TRIBES_MAP.get(TRIBE)!.buildingdata),
+      buildinghealthdata: JSON.stringify(battle.buildinghealthdata),
+      damage: String(battle.damage),
       destroyed: "1",
-      monsterupdate: JSON.stringify([{ baseid: "5000", m: { housed: { C1: 6 }, space: 40 } }]),
-      attackloot: loot({ r1: 20, r2: 0, r3: 0, r4: 0 }),
-      resources: loot({ r1: -20, r2: 0, r3: 0, r4: 0 }),
-      attackreport: "0:01 Flung 4 Pokey\nResult: 92% damage",
-      flinglog: JSON.stringify({
-        v: 1,
-        seed: 7,
-        events: [{ kind: "fling", t: 40, x: -200, y: -200, monsters: { C1: 4 } }],
-      }),
+      monsterupdate: JSON.stringify([{ baseid: "5000", m: { housed: { C1: 4 }, space: 40 } }]),
+      attackloot: loot(battle.attackloot),
+      resources: loot(battle.defenderDelta),
+      attackreport: "0:01 Flung 60 Pokey\nResult: 100% damage",
+      flinglog: JSON.stringify(WRECK),
     });
 
     expect(await run(ctx)).toBeNull();
-    expect(userSave.resources).toEqual({ r1: 120, r2: 100, r3: 100, r4: 100 });
-    expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 6 });
-    expect(maproom.tribedata[0]).toMatchObject({ destroyed: 1, damage: 92 });
+    const { r1, r2, r3, r4 } = battle.attackloot;
+    expect(userSave.resources).toEqual({ r1: 100 + r1, r2: 100 + r2, r3: 100 + r3, r4: 100 + r4 });
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 4 });
+    expect(maproom.tribedata[0]).toMatchObject({ destroyed: 1, damage: Math.trunc(battle.damage) });
     expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);
+    // It fought the same battle, so nothing is flagged.
+    expect(mismatches()).toEqual([]);
   });
 });
 
@@ -315,5 +404,89 @@ describe("Map Room 1 tribe save: the tribe's monsters (#23, C2)", () => {
     await run(ctxFor({ over: "1", attackid: String(ATTACK_ID), monsters: JSON.stringify({ housed: { C1: 999 } }) }));
 
     expect(maproom.tribedata[0]!.monsters).toBeUndefined();
+  });
+});
+
+describe("Map Room 1 tribe save: the battle is the server's (#23, C4)", () => {
+  test("a crafted save's damage, health, destroyed and loot are never written", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    const battle = serverBattle(SCRATCH, SCRATCH_TICK);
+    expect(battle.damage).toBeLessThan(5);
+
+    const caught = await run(
+      ctxFor({
+        over: "1",
+        attackid: String(ATTACK_ID),
+        tick: String(SCRATCH_TICK),
+        flinglog: JSON.stringify(SCRATCH),
+        damage: "100",
+        destroyed: "1",
+        buildinghealthdata: JSON.stringify({ "0": 0, "1": 0, "2": 0 }),
+        attackloot: loot({ r1: 20_000, r2: 20_000, r3: 0, r4: 0 }),
+      })
+    );
+
+    expect(caught).toBeNull();
+    expect(maproom.tribedata[0]).toMatchObject({
+      destroyed: 0,
+      damage: Math.trunc(battle.damage),
+      tribeHealthData: battle.buildinghealthdata,
+    });
+    expect(maproom.tribedata[0]!.destroyedAt).toBeUndefined();
+    expect(userSave.wmstatus).toEqual([[2, 1, 0]]);
+    expect(userSave.resources).toEqual({
+      r1: 100 + battle.attackloot.r1,
+      r2: 100 + battle.attackloot.r2,
+      r3: 100 + battle.attackloot.r3,
+      r4: 100 + battle.attackloot.r4,
+    });
+    expect(mismatches()).toEqual([["damage", "destroyed", "buildinghealthdata", "attackloot"]]);
+  });
+
+  test("the tribe is marked destroyed past the camp's threshold, as the web client marks it", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    await run(ctxFor({ over: "1", tick: String(WRECK_TICK), flinglog: JSON.stringify(WRECK) }));
+
+    expect(maproom.tribedata[0]!.destroyed).toBe(1);
+    expect(maproom.tribedata[0]!.destroyedAt).toBeGreaterThan(0);
+    expect(userSave.wmstatus).toEqual([[2, 1, 1]]);
+  });
+
+  test("a final save without a usable fling log writes no battle and credits nothing", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    const caught = await run(
+      ctxFor({ over: "1", damage: "100", destroyed: "1", attackloot: loot({ r1: 5_000 }), flinglog: "not a log" })
+    );
+
+    expect(caught).toBeNull();
+    expect(userSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
+    expect(maproom.tribedata[0]!.destroyed).toBeUndefined();
+    expect(maproom.tribedata[0]!.damage).toBeUndefined();
+    expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);
+  });
+
+  test("a replay past its deadline lands nothing and keeps the session for a resent save", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    userSave.monsters = { housed: { ...ARMY } };
+    replayTimesOut = true;
+    const body = {
+      over: "1",
+      tick: String(WRECK_TICK),
+      flinglog: JSON.stringify(WRECK),
+      monsterupdate: JSON.stringify([{ baseid: "5000", m: { housed: { C1: 4 } } }]),
+    };
+
+    const caught = await run(ctxFor(body));
+    expect(caught?.data?.reason).toBe("replayTimeout");
+    expect(userSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual(ARMY);
+    expect(maproom.tribedata[0]!.damage).toBeUndefined();
+    expect(persisted).toEqual([]);
+    expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(true);
+
+    // The lock is free again, so the same save sent again lands.
+    replayTimesOut = false;
+    expect(await run(ctxFor(body))).toBeNull();
+    expect(maproom.tribedata[0]!.destroyed).toBe(1);
   });
 });

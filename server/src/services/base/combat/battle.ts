@@ -1,3 +1,4 @@
+import type { CombatTargetKind } from "../../../game-rules/combat/index.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
 import { MAX_CHECKPOINT_TICK, parseFlingLog } from "../attackCheckpoint.js";
 import type { AttackSession } from "../attackSession.js";
@@ -41,6 +42,8 @@ export interface BattleDefender {
   readonly buildinghealthdata: JsonObject | null | undefined;
   readonly resources: JsonObject | null | undefined;
   readonly height?: number;
+  /** The engine's kind of yard, when the row's `type` does not say it (`AbandonedDefender.kind`). */
+  readonly kind?: CombatTargetKind;
 }
 
 /** The attacker's main save as the replay reads it. */
@@ -90,6 +93,7 @@ export const battleReplayInput = ({
       buildinghealthdata: (defender.buildinghealthdata ?? null) as AbandonedDefender["buildinghealthdata"],
       resources: session?.defenderResources ?? (defender.resources as AbandonedDefender["resources"]),
       ...(defender.height !== undefined && { height: defender.height }),
+      ...(defender.kind !== undefined && { kind: defender.kind }),
     },
     attacker: {
       academy: attacker.academy ?? null,
