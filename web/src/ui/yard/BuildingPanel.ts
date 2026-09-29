@@ -5,6 +5,7 @@ import { recycleAction, recycleKey, type RecycleReport } from "@/api/yardRecycle
 import { repairActions } from "@/api/yardRepair";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, WALL_TYPES } from "@/game/yard/buildingCosts";
+import { HOUSING_TYPE, housingBuildings } from "@/game/monsters/housing";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { harvesterNow, isHarvester } from "@/game/yard/harvest";
 import type { RecycleOffer } from "@/game/yard/recycle";
@@ -22,6 +23,10 @@ import {
 import { artStateFor, BuildingCondition, type YardBuilding } from "@/game/yard/yardModel";
 import { Panel } from "@/ui/Panel";
 import { formatAmount, formatCountdown } from "@/ui/format";
+import { icon } from "@/ui/icons";
+import { HousingJuice } from "@/ui/monsters/HousingJuice";
+import { HousingView } from "@/ui/monsters/HousingView";
+import { MonstersTabId } from "@/ui/monsters/monstersTab";
 import { costAmounts, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
 import {
   jobOffer,
@@ -74,6 +79,17 @@ export const AUTO_BANKING = "Auto-banking: what it makes goes straight to your m
  * checked against the server — but closed by default. Where the wire is
  * silent by convention (an absent `l` means level 1, an absent `hp` full
  * health) it says what the absence means.
+ *
+ * ## Housing
+ *
+ * A Housing on the player's own yard is the Housing panel (#170, mock-up
+ * R-Housing): one panel in place of the small card and the Monsters screen's
+ * tables. Under "Housing" and its level, what lives there (`HousingView`):
+ * the space over one block per Housing, this one ringed; the monsters waiting
+ * for room, with "Juice some" (the Juicer as a sheet of this panel) and
+ * Housing Expansion; the army as pictures. Then the building's own job,
+ * upgrade or repair when it has one, and at the foot "Open Monsters" and a
+ * "···" menu with Recycle and the Details.
  *
  * ## The Yard Planner's own door
  *
@@ -146,6 +162,22 @@ export class BuildingPanel {
   private readonly championSlot: HTMLElement;
   private champion: ChampionPanel | ChamberPanel | null = null;
   private readonly status: HTMLElement;
+  /** A Housing's level chip beside the title ("Level 6 · max"). */
+  private readonly chip: HTMLElement;
+  /** A Housing's one-line purpose under the title. */
+  private readonly blurb: HTMLElement;
+  /** A Housing's space, waiting monsters and army (`HousingView`). */
+  private readonly housingSlot: HTMLElement;
+  private housing: HousingView | null = null;
+  /** The Juicer, while "Juice some" has it open as this panel's sheet. */
+  private readonly juiceSheet: HTMLElement;
+  private juice: HousingJuice | null = null;
+  /** A Housing's foot: Open Monsters and the "···" menu. */
+  private readonly footer: HTMLElement;
+  private readonly moreButton: HTMLButtonElement;
+  private readonly moreMenu: HTMLElement;
+  /** A Housing keeps its Details behind the "···" menu. */
+  private detailsShown = false;
   private readonly details: HTMLDetailsElement;
   private readonly facts: HTMLDListElement;
   private readonly planner: BuildingPanelOptions["planner"];
@@ -213,6 +245,51 @@ export class BuildingPanel {
     this.status.setAttribute("role", "status");
     this.status.hidden = true;
 
+    this.chip = document.createElement("span");
+    this.chip.className = "building-panel__chip";
+    this.chip.hidden = true;
+    this.panel.titlebar.querySelector(".panel__title")?.after(this.chip);
+
+    this.blurb = document.createElement("p");
+    this.blurb.className = "building-panel__blurb";
+    this.blurb.hidden = true;
+
+    this.housingSlot = document.createElement("div");
+    this.housingSlot.className = "building-panel__housing";
+    this.housingSlot.hidden = true;
+
+    this.juiceSheet = document.createElement("div");
+    this.juiceSheet.className = "building-panel__sheet";
+    this.juiceSheet.hidden = true;
+
+    this.footer = document.createElement("div");
+    this.footer.className = "building-panel__foot";
+    this.footer.hidden = true;
+    const openMonsters = document.createElement("button");
+    openMonsters.type = "button";
+    openMonsters.className = "btn building-panel__open-monsters";
+    openMonsters.append(icon("paw", 18), "Open Monsters");
+    openMonsters.title = "The Monsters screen: hatch, juice and house your monsters";
+    openMonsters.addEventListener("click", () => {
+      const building = this.building;
+      if (building) this.yard?.scene.openMonsters?.(MonstersTabId.HOUSING, { buildingId: building.id });
+    });
+    const more = document.createElement("div");
+    more.className = "building-panel__more";
+    this.moreButton = document.createElement("button");
+    this.moreButton.type = "button";
+    this.moreButton.className = "btn building-panel__more-button";
+    this.moreButton.setAttribute("aria-haspopup", "true");
+    this.moreButton.setAttribute("aria-expanded", "false");
+    this.moreButton.append(icon("more", 20));
+    this.moreButton.addEventListener("click", () => this.toggleMore(this.moreMenu.hidden));
+    this.moreMenu = document.createElement("div");
+    this.moreMenu.className = "building-panel__more-menu";
+    this.moreMenu.setAttribute("role", "menu");
+    this.moreMenu.hidden = true;
+    more.append(this.moreButton, this.moreMenu);
+    this.footer.append(openMonsters, more);
+
     this.details = document.createElement("details");
     this.details.className = "building-panel__details";
     const summary = document.createElement("summary");
@@ -223,12 +300,16 @@ export class BuildingPanel {
     this.details.append(summary, this.facts);
 
     this.panel.setContent(
+      this.blurb,
       this.kind,
       this.info,
       this.unlocks,
+      this.housingSlot,
+      this.juiceSheet,
       this.actions,
       this.bunkerSlot,
       this.championSlot,
+      this.footer,
       this.status,
       this.details,
     );
@@ -255,11 +336,20 @@ export class BuildingPanel {
       this.shiny.clear();
       this.closeBunker();
       this.closeChampion();
+      this.closeJuice();
+      this.toggleMore(false);
+      this.detailsShown = false;
     }
     this.building = building;
-    this.panel.setTitle(
-      building.level > 0 ? `${building.name} · Level ${building.level}` : building.name,
-    );
+    if (this.isHousing(building)) {
+      this.panel.setTitle(building.name);
+    } else {
+      this.housing?.destroy();
+      this.housing = null;
+      this.panel.setTitle(
+        building.level > 0 ? `${building.name} · Level ${building.level}` : building.name,
+      );
+    }
     this.render();
   }
 
@@ -270,6 +360,7 @@ export class BuildingPanel {
       entry.node.textContent = formatCountdown(entry.endsAt - now);
     }
     this.champion?.tick();
+    this.housing?.tick();
     const building = this.building;
     if (building && this.yard && this.repairView) {
       const store = this.yard.store;
@@ -304,11 +395,161 @@ export class BuildingPanel {
 
     this.setKind(building);
     this.renderInfo(building);
+    this.renderHousing(building);
     this.renderActions(building);
     this.bunker?.show();
     this.champion?.show();
     this.renderDetails(building);
   }
+
+  /** A Housing on the own yard: the Housing panel (#170), not the plain card. */
+  private isHousing(building: YardBuilding): boolean {
+    return building.type === HOUSING_TYPE && this.yard !== undefined;
+  }
+
+  /**
+   * The Housing panel's own parts, shown or hidden: the chip, the blurb, what
+   * lives there, the Juicer sheet and the foot. The plain card's kind line,
+   * numbers and Details step aside for it.
+   */
+  private renderHousing(building: YardBuilding): void {
+    const yard = this.yard;
+    const on = yard !== undefined && this.isHousing(building);
+    const juicing = on && this.juice !== null;
+    this.element.classList.toggle("building-panel--housing", on);
+    this.chip.hidden = !on;
+    this.blurb.hidden = !on || juicing;
+    this.housingSlot.hidden = !on || juicing;
+    this.juiceSheet.hidden = !juicing;
+    this.footer.hidden = !on || juicing;
+    this.details.hidden = on && (juicing || !this.detailsShown);
+    if (on) {
+      this.kind.hidden = true;
+      this.info.hidden = true;
+      this.unlocks.hidden = true;
+    } else {
+      this.kind.hidden = false;
+      return;
+    }
+
+    const store = yard.store;
+    const max = maxLevel(building.type, store.kind);
+    this.chip.textContent =
+      building.level <= 0
+        ? "Being built"
+        : building.level >= max
+          ? `Level ${building.level} · max`
+          : `Level ${building.level}`;
+    const count = housingBuildings(store.save, store.now()).length;
+    this.blurb.textContent =
+      count > 1
+        ? `Where your monsters live. Your ${count} Housings share one space: bigger space, bigger army.`
+        : "Where your monsters live. Its space is your army's: bigger space, bigger army.";
+
+    if (!this.housing) {
+      this.housing = new HousingView({
+        binding: yard,
+        onHatch: () => yard.scene.openMonsters?.(MonstersTabId.HATCH),
+        onJuice: () => this.openJuice(),
+        onStatus: (status) => this.setStatus(status),
+      });
+      this.housingSlot.replaceChildren(this.housing.element);
+    }
+    this.housing.setFocus(building.id);
+    this.housing.render();
+    this.juice?.render();
+    this.renderMore(building);
+  }
+
+  /** "Juice some": the Juicer as a sheet of this panel, with a way back. */
+  private openJuice(): void {
+    const yard = this.yard;
+    if (!yard || this.juice) return;
+    this.juice = new HousingJuice({ store: yard.store, onStatus: (status) => this.setStatus(status) });
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "btn btn--ghost building-panel__back";
+    back.append(icon("back", 18), "Back to Housing");
+    back.addEventListener("click", () => {
+      this.closeJuice();
+      this.render();
+      this.housingSlot.querySelector<HTMLElement>(".housing-waiting__juice")?.focus();
+    });
+    const title = document.createElement("h3");
+    title.className = "building-panel__sheet-title";
+    title.textContent = "Juice monsters";
+    this.juiceSheet.replaceChildren(back, title, this.juice.element);
+    this.render();
+    back.focus();
+  }
+
+  private closeJuice(): void {
+    this.juice?.destroy();
+    this.juice = null;
+    this.juiceSheet.replaceChildren();
+    this.juiceSheet.hidden = true;
+  }
+
+  /** The "···" menu: Recycle (or why not) and the Details. */
+  private renderMore(building: YardBuilding): void {
+    const yard = this.yard;
+    if (!yard) return;
+    const model = panelModel(building, yard.store);
+    const items: HTMLButtonElement[] = [];
+    const recycle = model.recycle;
+    if (recycle) {
+      const label = recycle.toStorage ? "Put this Housing in storage" : "Recycle this Housing";
+      const item = menuItem(label, () => {
+        this.toggleMore(false);
+        this.confirmingRecycle = building.id;
+        this.render();
+        this.actions.querySelector<HTMLButtonElement>(".building-recycle__confirm")?.focus();
+      });
+      if (recycle.blocked) {
+        item.disabled = true;
+        item.title = recycle.blocked.message;
+      }
+      items.push(item);
+    }
+    items.push(
+      menuItem(this.detailsShown ? "Hide details" : "Show details", () => {
+        this.toggleMore(false);
+        this.detailsShown = !this.detailsShown;
+        this.details.open = this.detailsShown;
+        this.render();
+      }),
+    );
+    this.moreMenu.replaceChildren(...items);
+    const first = recycle ? (recycle.toStorage ? "Put in storage" : "Recycle this Housing") : "Details";
+    this.moreButton.setAttribute("aria-label", `More: ${first}`);
+    this.moreButton.title = recycle ? `More: ${first}, details` : "More: details";
+  }
+
+  private toggleMore(open: boolean): void {
+    this.moreMenu.hidden = !open;
+    this.moreButton.setAttribute("aria-expanded", String(open));
+    if (open) {
+      document.addEventListener("pointerdown", this.dismissMore, true);
+      document.addEventListener("keydown", this.dismissMore, true);
+      this.moreMenu.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+    } else {
+      document.removeEventListener("pointerdown", this.dismissMore, true);
+      document.removeEventListener("keydown", this.dismissMore, true);
+    }
+  }
+
+  /** A press outside the "···" menu, or Escape, closes it. */
+  private readonly dismissMore = (event: Event): void => {
+    if (event instanceof KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      this.toggleMore(false);
+      this.moreButton.focus();
+      return;
+    }
+    if (event.target instanceof Node && this.moreMenu.parentElement?.contains(event.target)) return;
+    this.toggleMore(false);
+  };
 
   private renderInfo(building: YardBuilding): void {
     const { rows, list } = buildingInfo(building);
@@ -364,8 +605,10 @@ export class BuildingPanel {
       if (repair) blocks.push(this.repairBlock(building, repair, used));
       if (model.job) blocks.push(this.jobBlock(building, model.job, used));
       if (model.upgrade) blocks.push(this.upgradeBlock(building, model.upgrade, used));
-      // A one-level building (Yard Planner, General Store) has no ladder to top out.
-      if (model.maxed && maxLevel(building.type, yard.store.kind) > 1) {
+      const housing = this.isHousing(building);
+      // A one-level building (Yard Planner, General Store) has no ladder to
+      // top out; a Housing says "max" in its chip.
+      if (model.maxed && !housing && maxLevel(building.type, yard.store.kind) > 1) {
         blocks.push(note(`Level ${building.level} is the highest level.`));
       }
       // An outpost's harvesters bank by themselves: Flash's disabled
@@ -382,9 +625,11 @@ export class BuildingPanel {
           ),
         );
       }
-      const open = this.openButton(model);
+      const open = housing ? null : this.openButton(model);
       if (open) blocks.push(open);
-      if (model.recycle) blocks.push(this.recycleControl(building, model.recycle));
+      if (model.recycle && (!housing || this.confirmingRecycle === building.id)) {
+        blocks.push(this.recycleControl(building, model.recycle));
+      }
     } else {
       const open = this.openButton(null);
       if (open) blocks.push(open);
@@ -807,6 +1052,8 @@ export class BuildingPanel {
     if (!store) return;
     this.bunker?.syncPending();
     this.champion?.syncPending();
+    this.housing?.syncPending();
+    this.juice?.syncPending();
     for (const { key, button } of this.pendingButtons) {
       const running = store.isRunning(key);
       if (button instanceof ShinyButton) {
@@ -992,6 +1239,10 @@ export class BuildingPanel {
   private dispose(): void {
     this.closeBunker();
     this.closeChampion();
+    this.closeJuice();
+    this.toggleMore(false);
+    this.housing?.destroy();
+    this.housing = null;
     this.unsubscribe?.();
     for (const button of this.shiny.values()) button.destroy();
     this.shiny.clear();
@@ -1163,6 +1414,16 @@ const actionButton = (label: string, onClick: () => void, variant?: string): HTM
   button.textContent = label;
   button.addEventListener("click", onClick);
   return button;
+};
+
+const menuItem = (label: string, onClick: () => void): HTMLButtonElement => {
+  const item = document.createElement("button");
+  item.type = "button";
+  item.className = "btn btn--ghost building-panel__menu-item";
+  item.setAttribute("role", "menuitem");
+  item.textContent = label;
+  item.addEventListener("click", onClick);
+  return item;
 };
 
 const note = (text: string): HTMLElement => {

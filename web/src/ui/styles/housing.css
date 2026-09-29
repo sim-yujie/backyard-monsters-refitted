@@ -7,18 +7,6 @@
   flex-direction: column;
 }
 
-/* Hatcheries stalled on housing: a state the player should act on. */
-.housing__stalled {
-  margin: var(--space-3) var(--space-4) 0;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--colour-warning);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--colour-warning) 12%, var(--colour-surface-sunken));
-  color: var(--colour-warning);
-  font-size: var(--text-sm);
-  font-weight: 700;
-}
-
 .housing__scroll {
   flex: 1;
   min-height: 0;
@@ -41,133 +29,447 @@
   font-weight: 800;
 }
 
-.housing__figures {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--colour-text-muted);
+/* ── What lives in Housing (`HousingView.ts`, #170, mock-up R-Housing) ──── */
+
+.housing-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* The space: one big figure, a chip of what is free, the bar in blocks. */
+.housing-space {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.housing-space__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.housing-space__figures {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.housing-space__used {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.housing-space__total {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-md);
   font-variant-numeric: tabular-nums;
 }
 
-.housing__figures strong {
+.housing-space__free {
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-selected);
   color: var(--colour-text);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.housing__bar {
-  height: 8px;
+.housing-space__free--tight {
+  background: var(--colour-warning);
+  color: var(--colour-warning-text);
 }
 
-.housing__bar .monsters-bar__fill {
+.housing-space__bar {
+  display: flex;
+  gap: 3px;
+}
+
+/* One block per Housing, as wide as its room; a press shows it in the yard. */
+.housing-space__block {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: var(--colour-surface-overlay);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.housing-space__block:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.housing-space__block:focus-visible {
+  outline: 2px solid var(--colour-accent);
+  outline-offset: 2px;
+}
+
+.housing-space__fill {
+  display: block;
+  height: 100%;
   background: var(--colour-meter);
 }
 
-.housing__empty {
+.housing-space--tight .housing-space__fill {
+  background: var(--colour-warning);
+}
+
+/* Built or too damaged: it houses nothing, drawn as an empty hatched block. */
+.housing-space__block--zero {
+  flex: 0 0 14px;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--colour-surface-overlay) 0 3px,
+    transparent 3px 6px
+  );
+}
+
+.housing-space__block--this {
+  overflow: visible;
+  outline: 2px solid var(--colour-accent);
+  outline-offset: 1px;
+}
+
+.housing-space__block--this .housing-space__fill {
+  border-radius: 5px;
+}
+
+.housing-space__legend {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
+  justify-content: space-between;
+  gap: var(--space-3);
   color: var(--colour-text-muted);
+  font-size: var(--text-xs);
 }
 
-.housing__empty p {
+.housing-space__key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.housing-space__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  outline: 2px solid var(--colour-accent);
+}
+
+.housing-space__expansion {
   margin: 0;
-}
-
-/* ── Tables ──────────────────────────────────────────────────────────────── */
-
-.housing-table__box {
-  overflow-x: auto;
-  border: 1px solid var(--colour-border);
-  border-radius: var(--radius-md);
-  background: var(--colour-surface-sunken);
-}
-
-.housing-table {
-  width: 100%;
-  border-collapse: collapse;
+  color: var(--colour-accent);
   font-size: var(--text-sm);
 }
 
-.housing-table th,
-.housing-table td {
-  padding: var(--space-2) var(--space-3);
-  text-align: left;
-  vertical-align: middle;
+/* Waiting for room (#169): only while a hatched monster waits. */
+.housing-waiting {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--colour-warning-line);
+  border-radius: 14px;
+  background: var(--colour-warning-soft);
 }
 
-.housing-table thead th {
-  font-size: var(--text-xs);
-  font-weight: 700;
-  color: var(--colour-text-muted);
-  white-space: nowrap;
-  border-bottom: 1px solid var(--colour-border);
+.housing-waiting[hidden] {
+  display: none;
 }
 
-.housing-table tbody tr + tr {
-  border-top: 1px solid var(--colour-border);
-}
-
-.housing-table tfoot tr {
-  border-top: 1px solid var(--colour-border-strong);
-  font-weight: 800;
-}
-
-.housing-table .housing-table__num,
-.housing-table thead th:not(:first-child) {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-/* The name takes the slack; the figures sit tight on the right. */
-.housing-table tbody th,
-.housing-table tfoot th {
-  width: 100%;
-}
-
-.housing-table__monster {
+.housing-waiting__top {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  font-weight: 700;
+  gap: var(--space-3);
 }
 
-.housing-table__picture {
-  width: 28px;
-  height: 28px;
+.housing-waiting__faces {
+  display: flex;
   flex: none;
+}
+
+.housing-waiting__face {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-md);
+  background: var(--colour-shade);
+}
+
+.housing-waiting__face + .housing-waiting__face {
+  margin-left: -10px;
+  background: var(--colour-shade-strong);
+}
+
+.housing-waiting__picture {
+  width: 40px;
+  height: 40px;
   object-fit: contain;
 }
 
-.housing-table__name {
+.housing-waiting__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.housing-waiting__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--colour-warning-bright);
+  font-size: var(--text-md);
   font-weight: 700;
 }
 
-.housing-table__note {
-  display: block;
-  font-weight: 400;
-  font-size: var(--text-xs);
-  color: var(--colour-text-muted);
-}
-
-.housing-table__row--zero td:nth-child(3),
-.housing-table__row--zero .housing-table__note {
+.housing-waiting__icon {
+  flex: none;
   color: var(--colour-warning);
 }
 
-.housing-table__row--focus {
-  background: color-mix(in srgb, var(--colour-accent) 16%, var(--colour-surface-sunken));
-  box-shadow: inset 3px 0 0 var(--colour-accent);
+.housing-waiting__line {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  text-wrap: pretty;
 }
 
-.housing-table td:last-child:has(.housing-table__show) {
-  text-align: right;
-  width: 1%;
+.housing-waiting__buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
 }
 
-.housing-table__show {
-  min-height: 32px;
-  padding: var(--space-1) var(--space-2);
+.housing-waiting__buttons--one {
+  grid-template-columns: 1fr;
+}
+
+.housing-waiting__juice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  border: 1px solid var(--colour-border-strong);
+  background: var(--colour-shade);
+}
+
+.housing-waiting__expand.shiny-button {
+  justify-content: center;
+  min-height: 44px;
+  border: 0;
+  background: var(--colour-warning);
+  color: var(--colour-warning-text);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.housing-waiting__expand .shiny-button__price {
+  padding-left: var(--space-2);
+  border-left: 1px solid color-mix(in srgb, var(--colour-warning-text) 30%, transparent);
+}
+
+/* Living here: the army as pictures, biggest space first. */
+.housing-living {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.housing-living__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.housing-living__title {
+  margin: 0;
+  color: var(--colour-text-muted);
   font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.housing-living__count {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.housing-living__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.housing-living__tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: 10px 6px;
+  border: 1px solid var(--colour-surface-control);
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 30%, var(--colour-tile-glow), var(--colour-tile-ground));
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.housing-living__tile:hover {
+  border-color: var(--colour-border-strong);
+}
+
+.housing-living__tile:focus-visible,
+.housing-living__hatch:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.housing-living__picture {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 4px var(--colour-art-shadow));
+}
+
+.housing-living__badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 22px;
+  box-sizing: border-box;
+  padding: 0 6px;
+  border: 1px solid var(--colour-border-strong);
+  border-radius: 11px;
+  background: var(--colour-badge-ground);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.housing-living__name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.housing-living__space {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.housing-living__hatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 118px;
+  border: 1.5px dashed var(--colour-border-dashed);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--colour-text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.housing-living__hatch:hover {
+  border-color: var(--colour-accent-line);
+  color: var(--colour-text);
+}
+
+/* A phone (R-Housing-phone): the same, a size smaller. */
+@media (width <= 620px) {
+  .housing-view {
+    gap: 14px;
+  }
+
+  .housing-space__used {
+    font-size: 24px;
+  }
+
+  .housing-space__block {
+    height: 12px;
+  }
+
+  .housing-waiting {
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  .housing-waiting__face {
+    width: 40px;
+    height: 40px;
+  }
+
+  .housing-waiting__picture {
+    width: 34px;
+    height: 34px;
+  }
+
+  .housing-waiting__title {
+    font-size: 14px;
+  }
+
+  .housing-waiting__line {
+    font-size: var(--text-xs);
+  }
+
+  .housing-living__tile {
+    gap: 2px;
+    padding: var(--space-2) var(--space-1);
+  }
+
+  .housing-living__picture {
+    width: 46px;
+    height: 46px;
+  }
+
+  .housing-living__badge {
+    min-width: 26px;
+    height: 20px;
+    font-size: var(--text-xs);
+  }
+
+  .housing-living__name {
+    font-size: var(--text-xs);
+  }
+
+  .housing-living__space {
+    font-size: 11px;
+  }
+
+  .housing-living__hatch {
+    min-height: 96px;
+  }
 }
 
 /* ── Housing Expansion ───────────────────────────────────────────────────── */

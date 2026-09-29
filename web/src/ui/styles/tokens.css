@@ -61,6 +61,11 @@
 
   --colour-warning: #f5b94a;
   --colour-warning-text: #2a1a00;
+  /* A card that asks for attention (the Housing panel's "waiting for room"):
+     an amber wash, its rim, and its heading's warm light text. */
+  --colour-warning-soft: rgb(245 185 74 / 10%);
+  --colour-warning-line: rgb(245 185 74 / 45%);
+  --colour-warning-bright: #ffe2a8;
   --colour-danger: #ff8a8a;
   --colour-danger-soft: rgb(255 138 138 / 8%);
   --colour-success: #9fe0b0;
@@ -83,6 +88,15 @@
   /* The drop shadow of cut-out art (monsters, resource icons) floating over
      a button. */
   --colour-art-shadow: rgb(0 0 0 / 50%);
+  /* A count badge on a picture ("×10"). */
+  --colour-badge-ground: #0b1017;
+  /* Shade laid on a panel under a picture. */
+  --colour-shade: rgb(0 0 0 / 25%);
+  --colour-shade-strong: rgb(0 0 0 / 35%);
+  /* A picture tile's lit middle and its ground; an empty slot's dashed rim. */
+  --colour-tile-glow: rgb(255 255 255 / 9%);
+  --colour-tile-ground: rgb(255 255 255 / 2.5%);
+  --colour-border-dashed: rgb(255 255 255 / 22%);
 
   --colour-scrim: rgb(8 12 16 / 55%);
 

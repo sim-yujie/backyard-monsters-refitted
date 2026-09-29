@@ -54,9 +54,9 @@ import { showBuildMapRoom } from "@/ui/maproom1/MapRoomPrompt";
 import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
 import {
   MONSTERS_TAB_ORDER,
+  MonstersTabId,
   monstersTabFor,
   type MonstersFocus,
-  type MonstersTabId,
 } from "@/ui/monsters/monstersTab";
 import { monstersTabsFor } from "@/ui/monsters/tabs";
 import { resourceAmount } from "@/ui/resourceIcon";
@@ -911,9 +911,12 @@ export class YardScene implements Scene {
     this.monsters?.besidePanel(true);
 
     // A monster building opens its tab of the Monsters screen (D4), beside
-    // the panel, which keeps the building's own upgrade.
+    // the panel, which keeps the building's own upgrade. A Housing's panel is
+    // the Housing panel itself (#170), which has the tab's army in it, so the
+    // screen steps aside for it.
     const tab = monstersTabFor(building.type);
-    if (tab && this.binding) this.openMonsters(tab, { buildingId: building.id });
+    if (tab === MonstersTabId.HOUSING) this.monsters?.close();
+    else if (tab && this.binding) this.openMonsters(tab, { buildingId: building.id });
   }
 
   /**

@@ -9,10 +9,11 @@ import { spokenText } from "@/ui/resourceIcon";
 import { HousingTab } from "./HousingTab";
 
 /**
- * The Housing tab as a player meets it: the army table, the bar, the
- * buildings and why one counts zero, the stalled-hatchery line and the
- * expansion. The arithmetic is `housing.test.ts`'s; this checks the drawing
- * and the wiring.
+ * The Housing tab as a player meets it: the space over one block per Housing
+ * and why one counts zero, the monsters waiting for room, the army as
+ * pictures (the Housing panel's view, #170), the Juicer and the expansion.
+ * The arithmetic is `housing.test.ts`'s and `housingPanel.test.ts`'s; this
+ * checks the drawing and the wiring.
  */
 
 const T0 = 2_000_000;
@@ -62,9 +63,10 @@ const setup = (
   });
   const showTab = vi.fn();
   const selectBuilding = vi.fn();
+  const openMonsters = vi.fn();
   const tab = new HousingTab(
     {
-      binding: { store, scene: { selectBuilding }, notices: {} as Notices },
+      binding: { store, scene: { selectBuilding, openMonsters }, notices: {} as Notices },
       showTab,
     },
     juice,
@@ -76,6 +78,7 @@ const setup = (
     store,
     showTab,
     selectBuilding,
+    openMonsters,
     element: tab.element,
     setNow: (t: number) => (now = t),
   };
@@ -85,49 +88,57 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-const armyRows = (root: HTMLElement) =>
-  [...root.querySelectorAll<HTMLTableRowElement>(".housing-table--army tbody tr")].map((tr) =>
-    [...tr.children].map((cell) => spokenText(cell).trim()),
-  );
-const buildingRows = (root: HTMLElement) =>
-  [...root.querySelectorAll<HTMLTableRowElement>(".housing-table--buildings tbody tr")];
+const tiles = (root: HTMLElement) =>
+  [...root.querySelectorAll<HTMLButtonElement>(".housing-living__tile")].map((tile) => [
+    tile.querySelector(".housing-living__name")!.textContent,
+    tile.querySelector(".housing-living__badge")!.textContent,
+    tile.querySelector(".housing-living__space")!.textContent,
+  ]);
+const blocks = (root: HTMLElement) => [...root.querySelectorAll<HTMLButtonElement>(".housing-space__block")];
+const figures = (root: HTMLElement) =>
+  `${root.querySelector(".housing-space__figures")!.textContent} · ${root.querySelector(".housing-space__free")!.textContent}`;
 const buttonNamed = (root: HTMLElement, text: string) =>
   [...root.querySelectorAll<HTMLButtonElement>("button")].find((one) => one.textContent?.startsWith(text));
 
 describe("HousingTab: the army", () => {
-  it("lists each type in list order with count, space each and total, under the bar", () => {
+  it("shows each type as a picture with its count and space, biggest space first", () => {
     const { element } = setup();
-    expect(armyRows(element)).toEqual([
-      ["Zafreeti", "2", "200", "400"],
-      ["Teratorn", "25", "70", "1,750"],
+    expect(tiles(element)).toEqual([
+      ["Teratorn", "×25", "1,750 space"],
+      ["Zafreeti", "×2", "400 space"],
     ]);
-    const foot = element.querySelector(".housing-table--army tfoot tr")!;
-    expect([...foot.children].map((cell) => cell.textContent)).toEqual(["Total", "27", "", "2,150"]);
-    expect(element.querySelector(".housing__figures")!.textContent).toBe("2,150 / 2,160 housed · 10 free");
-    const bar = element.querySelector(".housing__bar")!;
-    expect(bar.getAttribute("aria-valuenow")).toBe("2150");
-    expect(bar.getAttribute("aria-valuemax")).toBe("2160");
-    expect(element.querySelector<HTMLImageElement>(".housing-table--army img")!.getAttribute("src")).toBe(
-      "/assets/monsters/C15-small.png",
-    );
+    expect(element.querySelector(".housing-living__count")!.textContent).toBe("27 monsters · 2 kinds");
+    const first = element.querySelector<HTMLButtonElement>(".housing-living__tile")!;
+    expect(first.getAttribute("aria-label")).toBe("Teratorn: 25 housed, 70 spaces each, 1,750 in total");
+    expect(first.querySelector("img")!.getAttribute("src")).toBe("/assets/monsters/C14-small.png");
+    expect(figures(element)).toBe("2,150/ 2,160 spaces · 10 free");
   });
 
-  it("says when there is no army and offers the Hatch tab", () => {
+  it("opens a monster's card from its picture, and the Hatch tab from Hatch more", () => {
+    const { element, openMonsters, showTab } = setup();
+    element.querySelector<HTMLButtonElement>(".housing-living__tile")!.click();
+    expect(openMonsters).toHaveBeenCalledWith("unlock", { monster: "C14" });
+    buttonNamed(element, "Hatch more")!.click();
+    expect(showTab).toHaveBeenCalledWith("hatch");
+  });
+
+  it("says when there is no army and still offers Hatch more", () => {
     const { element, showTab } = setup({ monsters: { housed: {} } });
-    expect(element.querySelector(".housing-table--army")).toBeNull();
-    expect(element.querySelector(".housing__empty")!.textContent).toContain("No monsters housed yet.");
-    buttonNamed(element, "Hatch some")!.click();
+    expect(tiles(element)).toEqual([]);
+    expect(element.querySelector(".housing-living__count")!.textContent).toBe("No monsters yet");
+    buttonNamed(element, "Hatch more")!.click();
     expect(showTab).toHaveBeenCalledWith("hatch");
   });
 
   it("names an army over capacity as over", () => {
     const { element } = setup({ buildingdata: { "1": housing(1, 1) } });
-    expect(element.querySelector(".housing__figures")!.textContent).toBe("2,150 / 200 housed · 1,950 over");
+    expect(figures(element)).toBe("2,150/ 200 spaces · 1,950 over");
+    expect(element.querySelector(".housing-space--tight")).not.toBeNull();
   });
 });
 
 describe("HousingTab: the buildings", () => {
-  it("gives each Housing its level and room, and says why one houses nothing", () => {
+  it("draws one block per Housing, filled in id order, and says why one houses nothing", () => {
     const { element } = setup({
       buildingdata: {
         "1": housing(1, 6),
@@ -137,40 +148,62 @@ describe("HousingTab: the buildings", () => {
       },
       buildinghealthdata: { "3": 8 },
     });
-    const rows = buildingRows(element).map((tr) => [...tr.children].slice(0, 3).map((cell) => cell.textContent));
-    expect(rows).toEqual([
-      ["Housing", "6", "540"],
-      ["HousingUpgrading: houses at level 4 until it finishes.", "4", "380"],
-      ["HousingToo damaged to house monsters: repair it.", "3", "0"],
-      ["HousingStill being built: houses nothing yet.", "1", "0"],
+    const drawn = blocks(element);
+    expect(drawn.map((block) => block.dataset["building"])).toEqual(["1", "2", "3", "4"]);
+    expect(drawn.map((block) => block.querySelector<HTMLElement>(".housing-space__fill")!.style.width)).toEqual([
+      "100%",
+      "100%",
+      "0%",
+      "0%",
     ]);
-    expect(buildingRows(element)[2]!.classList.contains("housing-table__row--zero")).toBe(true);
+    expect(drawn[0]!.getAttribute("aria-label")).toBe("Housing 1 of 4: 540 of 540 spaces used");
+    expect(drawn[1]!.getAttribute("aria-label")).toBe(
+      "Housing 2 of 4: 380 of 380 spaces used. Upgrading: houses at level 4 until it finishes.",
+    );
+    expect(drawn[2]!.getAttribute("aria-label")).toBe(
+      "Housing 3 of 4: 0 of 0 spaces used. Too damaged to house monsters: repair it.",
+    );
+    expect(drawn[3]!.classList.contains("housing-space__block--zero")).toBe(true);
+    expect(element.querySelector(".housing-space__legend")!.textContent).toBe("Each block is one Housing");
   });
 
-  it("marks the building the tab was opened from, and Show pans to a building", () => {
+  it("rings the building the tab was opened from, and a block pans to its Housing", () => {
     const { element, selectBuilding } = setup({}, { buildingId: 3 });
-    const marked = element.querySelectorAll(".housing-table__row--focus");
+    const marked = element.querySelectorAll(".housing-space__block--this");
     expect(marked).toHaveLength(1);
     expect((marked[0] as HTMLElement).dataset["building"]).toBe("3");
-    buildingRows(element)[1]!.querySelector<HTMLButtonElement>(".housing-table__show")!.click();
+    expect(element.querySelector(".housing-space__legend")!.textContent).toBe(
+      "Each block is one Housing, 540 spacesThis one",
+    );
+    blocks(element)[1]!.click();
     expect(selectBuilding).toHaveBeenCalledWith(2);
   });
 });
 
-describe("HousingTab: stalled hatcheries", () => {
-  it("names how many hatcheries wait for space, and hides the line when none do", () => {
-    const stalled = (hstage: number[]) =>
+describe("HousingTab: monsters waiting for room", () => {
+  it("names what waits and how much room it needs, and hides the card when nothing does", () => {
+    const card = (hstage: number[], h: string[] = hstage.map(() => "C14")) =>
       setup({
         monsters: {
           housed: { C14: 25, C15: 2 },
-          h: hstage.map(() => ["C14", 0, []] as const),
+          h: h.map((id) => [id, 0, []] as const),
           hid: hstage.map((_, i) => 100 + i),
           hstage,
         },
-      }).element.querySelector<HTMLElement>(".housing__stalled")!;
-    expect(stalled([2, 2, 1]).textContent).toBe("2 hatcheries are waiting for space.");
-    expect(stalled([2, 0]).textContent).toBe("1 hatchery is waiting for space.");
-    expect(stalled([1, 0]).hidden).toBe(true);
+      } as Partial<BaseLoadResponse>).element.querySelector<HTMLElement>(".housing-waiting")!;
+    const two = card([2, 2, 1], ["C14", "C3", "C1"]);
+    expect(two.hidden).toBe(false);
+    expect(two.querySelector(".housing-waiting__title")!.textContent).toBe("2 monsters are waiting for room");
+    expect(two.querySelector(".housing-waiting__line")!.textContent).toBe(
+      "A Teratorn (70) and a Bolt (15) have hatched. They move in by themselves once 85 spaces are free. Until then those 2 hatcheries are paused.",
+    );
+    expect(two.querySelectorAll(".housing-waiting__picture")).toHaveLength(2);
+    // The tab has its own expansion section; the card offers only the Juicer.
+    expect(two.querySelector(".housing-waiting__expand")).toBeNull();
+    expect(card([2, 0]).querySelector(".housing-waiting__title")!.textContent).toBe(
+      "1 monster is waiting for room",
+    );
+    expect(card([1, 0]).hidden).toBe(true);
   });
 });
 
@@ -210,14 +243,14 @@ describe("HousingTab: Housing Expansion", () => {
     expect(element.querySelector(".housing-expansion__text")!.textContent).toBe(
       "On: every building houses 25% more for 1h 0m.",
     );
-    expect(element.querySelector(".housing__figures")!.textContent).toBe("2,150 / 2,700 housed · 550 free");
+    expect(figures(element)).toBe("2,150/ 2,700 spaces · 550 free");
     setNow(T0 + 1_800);
     tab.tick();
     expect(element.querySelector(".housing-expansion__clock")!.textContent).toBe("30m 0s");
     setNow(T0 + 3_600);
     tab.tick();
     expect(element.querySelector(".housing-expansion__buy")).not.toBeNull();
-    expect(element.querySelector(".housing__figures")!.textContent).toBe("2,150 / 2,160 housed · 10 free");
+    expect(figures(element)).toBe("2,150/ 2,160 spaces · 10 free");
   });
 
   it("reports a refusal on the status line", async () => {

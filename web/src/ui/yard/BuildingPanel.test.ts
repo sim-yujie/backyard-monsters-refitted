@@ -394,7 +394,11 @@ describe("BuildingPanel: recycle", () => {
     const { element } = setup([HALL, ...housing], 3, {
       load: { monsters: { housed: { C1: 10_000 } } } as Partial<BaseLoadResponse>,
     });
-    buttonNamed(element, "Recycle")!.click();
+    // A Housing keeps Recycle in its "···" menu (#170).
+    element.querySelector<HTMLButtonElement>(".building-panel__more-button")!.click();
+    [...element.querySelectorAll<HTMLButtonElement>(".building-panel__menu-item")]
+      .find((item) => item.textContent === "Recycle this Housing")!
+      .click();
     expect(element.querySelector(".building-recycle__cull")?.textContent).toMatch(
       /^Your monsters will no longer fit\. These are lost: \d+ × /,
     );
@@ -437,5 +441,121 @@ describe("BuildingPanel: recycle", () => {
     expect(element.querySelector(".building-recycle .building-panel__gate")?.textContent).toBe(
       "Take the monsters out of this hatchery first.",
     );
+  });
+});
+
+describe("BuildingPanel: the Housing panel (#170)", () => {
+  const HOUSINGS = [building(2, 15, 6), building(3, 15, 6), building(4, 15, 6), building(5, 15, 6)];
+  const WAITING = {
+    monsters: {
+      housed: { C14: 10, C15: 2, C12: 2, C8: 8, C5: 3, C1: 16, C3: 10 },
+      h: [["C14", 0], ["C3", 0]],
+      hid: [20, 21],
+      hstage: [2, 2],
+    },
+  } as unknown as Partial<BaseLoadResponse>;
+
+  it("is one panel: Housing, its level as a chip, what lives there, and no plain card", () => {
+    const { element } = setup([HALL, ...HOUSINGS], 3, { load: WAITING });
+    expect(element.classList.contains("building-panel--housing")).toBe(true);
+    expect(element.querySelector(".panel__title")!.textContent).toBe("Housing");
+    const chip = element.querySelector<HTMLElement>(".building-panel__chip")!;
+    expect(chip.hidden).toBe(false);
+    expect(chip.textContent).toBe("Level 6 · max");
+    expect(element.querySelector(".building-panel__blurb")!.textContent).toBe(
+      "Where your monsters live. Your 4 Housings share one space: bigger space, bigger army.",
+    );
+    expect(element.querySelector<HTMLElement>(".building-panel__info")!.hidden).toBe(true);
+    expect(element.querySelector<HTMLElement>(".cell-kind")!.hidden).toBe(true);
+    expect(element.querySelector<HTMLElement>(".building-panel__details")!.hidden).toBe(true);
+    // The plain card's Open and Recycle and its "highest level" note are gone.
+    expect(buttonNamed(element, "Open")).toBeUndefined();
+    expect(buttonNamed(element, "Recycle")).toBeUndefined();
+    expect(element.querySelector(".building-panel__actions .building-panel__note")).toBeNull();
+
+    expect(element.querySelector(".housing-space__figures")!.textContent).toBe("2,150/ 2,160 spaces");
+    expect(element.querySelector(".housing-space__free")!.textContent).toBe("10 free");
+    expect(element.querySelector<HTMLElement>(".housing-space__block--this")!.dataset["building"]).toBe("3");
+    expect(element.querySelector(".housing-waiting__title")!.textContent).toBe("2 monsters are waiting for room");
+    expect(
+      [...element.querySelectorAll(".housing-living__name")].map((name) => name.textContent),
+    ).toEqual(["Teratorn", "Zafreeti", "D.A.V.E.", "Fang", "Eye-ra", "Pokey", "Bolt"]);
+    expect(element.querySelector(".housing-living__count")!.textContent).toBe("51 monsters · 7 kinds");
+  });
+
+  it("offers Housing Expansion in the waiting card, spent on the second tap", () => {
+    const { element, store } = setup([HALL, ...HOUSINGS], 3, { load: WAITING });
+    const buy = vi.spyOn(store, "buy").mockImplementation(() => new Promise(() => undefined));
+    const expand = element.querySelector<HTMLButtonElement>(".housing-waiting__expand")!;
+    expect(spokenText(expand)).toContain("+25% · 24 h");
+    expect(spokenText(expand)).toContain("375");
+    expand.click();
+    expect(buy).not.toHaveBeenCalled();
+    expand.click();
+    expect(buy).toHaveBeenCalledWith("EXH");
+  });
+
+  it("opens the Juicer as a sheet of the panel, and goes back", () => {
+    const { element } = setup([HALL, ...HOUSINGS], 3, { load: WAITING });
+    element.querySelector<HTMLButtonElement>(".housing-waiting__juice")!.click();
+    const sheet = element.querySelector<HTMLElement>(".building-panel__sheet")!;
+    expect(sheet.hidden).toBe(false);
+    expect(sheet.querySelector(".housing-juice")).not.toBeNull();
+    expect(element.querySelector<HTMLElement>(".building-panel__housing")!.hidden).toBe(true);
+    expect(element.querySelector<HTMLElement>(".building-panel__foot")!.hidden).toBe(true);
+    sheet.querySelector<HTMLButtonElement>(".building-panel__back")!.click();
+    expect(element.querySelector<HTMLElement>(".building-panel__sheet")!.hidden).toBe(true);
+    expect(element.querySelector<HTMLElement>(".building-panel__housing")!.hidden).toBe(false);
+  });
+
+  it("opens Monsters on Housing, Hatch more on Hatch, and a picture on its card", () => {
+    const openMonsters = vi.fn();
+    const selectBuilding = vi.fn();
+    const { element } = setup([HALL, ...HOUSINGS], 3, { load: WAITING, scene: { openMonsters, selectBuilding } });
+    element.querySelector<HTMLButtonElement>(".building-panel__open-monsters")!.click();
+    expect(openMonsters).toHaveBeenLastCalledWith("housing", { buildingId: 3 });
+    element.querySelector<HTMLButtonElement>(".housing-living__hatch")!.click();
+    expect(openMonsters).toHaveBeenLastCalledWith("hatch");
+    element.querySelector<HTMLButtonElement>(".housing-living__tile")!.click();
+    expect(openMonsters).toHaveBeenLastCalledWith("unlock", { monster: "C14" });
+    element.querySelectorAll<HTMLButtonElement>(".housing-space__block")[0]!.click();
+    expect(selectBuilding).toHaveBeenCalledWith(2);
+  });
+
+  it("keeps Recycle and the Details behind the ··· menu", () => {
+    const { element } = setup([HALL, ...HOUSINGS], 3);
+    const more = element.querySelector<HTMLButtonElement>(".building-panel__more-button")!;
+    expect(more.getAttribute("aria-label")).toBe("More: Recycle this Housing");
+    more.click();
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    const items = () => [...element.querySelectorAll<HTMLButtonElement>(".building-panel__menu-item")];
+    expect(items().map((item) => item.textContent)).toEqual(["Recycle this Housing", "Show details"]);
+    items()[1]!.click();
+    expect(element.querySelector<HTMLElement>(".building-panel__details")!.hidden).toBe(false);
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    more.click();
+    items()[0]!.click();
+    expect(element.querySelector(".building-recycle--confirming")).not.toBeNull();
+    buttonNamed(element, "Keep it")!.click();
+    expect(element.querySelector(".building-recycle")).toBeNull();
+  });
+
+  it("still offers the upgrade of a Housing that is not at the top", () => {
+    const { element } = setup([HALL, building(2, 15, 2)], 2);
+    expect(element.querySelector(".building-panel__chip")!.textContent).toBe("Level 2");
+    expect(element.querySelector(".building-upgrade")).not.toBeNull();
+    expect(element.querySelector(".building-panel__blurb")!.textContent).toMatch(/^Where your monsters live\./);
+  });
+
+  it("is the plain card on a foreign yard, and again for the next building", () => {
+    const foreign = setup([HALL, ...HOUSINGS], 3, { own: false });
+    expect(foreign.element.classList.contains("building-panel--housing")).toBe(false);
+    expect(foreign.element.querySelector(".housing-view")).toBeNull();
+
+    const { panel, store, element } = setup([HALL, ...HOUSINGS], 3);
+    panel.show(store.building(1)!);
+    expect(element.classList.contains("building-panel--housing")).toBe(false);
+    expect(element.querySelector<HTMLElement>(".building-panel__chip")!.hidden).toBe(true);
+    expect(element.querySelector(".panel__title")!.textContent).toBe("Town Hall · Level 5");
   });
 });
