@@ -1,10 +1,11 @@
 import type { SpeedupItem } from "@/api/types";
 import type { YardRefusal } from "@/api/yard";
 import { buildActions } from "@/api/yardBuild";
+import { fortifyActions, FortifyKey } from "@/api/yardFortify";
 import { recycleAction, recycleKey, type RecycleReport } from "@/api/yardRecycle";
 import { repairActions } from "@/api/yardRepair";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
-import { maxLevel, WALL_TYPES } from "@/game/yard/buildingCosts";
+import { maxLevel, OUTPOST_CORE_TYPE, WALL_TYPES } from "@/game/yard/buildingCosts";
 import { HOUSING_TYPE, housingBuildings } from "@/game/monsters/housing";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { harvesterNow, isHarvester } from "@/game/yard/harvest";
@@ -32,6 +33,7 @@ import {
   jobOffer,
   panelModel,
   type CancelOffer,
+  type FortifyOffer,
   type JobOffer,
   type PanelModel,
   type SpeedupOffer,
@@ -605,6 +607,7 @@ export class BuildingPanel {
       if (repair) blocks.push(this.repairBlock(building, repair, used));
       if (model.job) blocks.push(this.jobBlock(building, model.job, used));
       if (model.upgrade) blocks.push(this.upgradeBlock(building, model.upgrade, used));
+      if (model.fortify) blocks.push(this.fortifyBlock(building, model.fortify));
       const housing = this.isHousing(building);
       // A one-level building (Yard Planner, General Store) has no ladder to
       // top out; a Housing says "max" in its chip.
@@ -773,6 +776,59 @@ export class BuildingPanel {
     return block;
   }
 
+  /**
+   * Fortify, on an outpost's core and towers (#191): Flash's `btn_fortify`
+   * and its options popup (`client/scripts/BUILDINGINFO.as:263-265`,
+   * `:571-572`), with the step's price and time, the one reason it cannot
+   * start, and Flash's warning that a tower does not fire while it fortifies
+   * (`msg_inactivefortify`, `BFOUNDATION.as:2207-2210`). Fully fortified
+   * says so (`bdg_fullyfortified`).
+   */
+  private fortifyBlock(building: YardBuilding, offer: FortifyOffer): HTMLElement {
+    if (offer.maxed) return note(`Fully fortified: F${offer.max} of ${offer.max}.`);
+
+    const block = document.createElement("section");
+    block.className = "building-panel__block building-fortify";
+    block.setAttribute("aria-label", `Fortify to F${offer.to}`);
+
+    const head = document.createElement("div");
+    head.className = "building-panel__head";
+    const title = document.createElement("h3");
+    title.className = "building-panel__heading";
+    title.textContent = `Fortify to F${offer.to}`;
+    title.title = `Fortified F${offer.from} of ${offer.max}.`;
+    const time = document.createElement("span");
+    time.className = "building-panel__time";
+    time.textContent = describeSeconds(offer.seconds);
+    time.title = "How long the fortification takes. It holds the outpost's worker until it finishes.";
+    head.append(title, time);
+    block.append(head);
+
+    const costLine = document.createElement("p");
+    costLine.className = "building-panel__cost";
+    costLine.append(costAmounts(offer.cost) ?? "Free");
+    block.append(costLine);
+
+    const gateId = `${this.gateId(building)}-fortify`;
+    if (offer.gate) {
+      const line = gateLine(offer.gate);
+      line.id = gateId;
+      block.append(line);
+    } else if (building.type !== OUTPOST_CORE_TYPE) {
+      block.append(gateText("A tower does not fire while it fortifies."));
+    }
+
+    const row = document.createElement("div");
+    row.className = "map-row building-panel__buttons";
+    const fortify = actionButton("Fortify", () => void this.runFortify(building.id), "btn--primary");
+    fortify.disabled = offer.gate !== null;
+    if (offer.gate) fortify.setAttribute("aria-describedby", gateId);
+    row.append(fortify);
+    this.pendingButtons.push({ key: FortifyKey.start(building.id), button: fortify });
+    block.append(row);
+    return block;
+  }
+
   private jobBlock(building: YardBuilding, job: JobOffer, used: Set<string>): HTMLElement {
     const block = document.createElement("section");
     block.className = "building-panel__block building-job";
@@ -875,8 +931,12 @@ export class BuildingPanel {
     const key = actionKey("cancel", building.id);
 
     const underConstruction = building.countdown?.kind === "build";
+    // Stopping a fortification (#191): `btn_stopfortify` and its confirmation
+    // (`BUILDINGINFO.as:512-513`, `BFOUNDATION.FortifyCancel`, `:2218-2220`).
+    const fortifying = building.countdown?.kind === "fortify";
     if (this.confirmingCancel !== building.id) {
-      const button = actionButton(underConstruction ? "Cancel build" : "Cancel upgrade", () => {
+      const openLabel = fortifying ? "Stop fortifying" : underConstruction ? "Cancel build" : "Cancel upgrade";
+      const button = actionButton(openLabel, () => {
         this.confirmingCancel = building.id;
         this.render();
         this.actions.querySelector<HTMLButtonElement>(".building-cancel__confirm")?.focus();
@@ -894,7 +954,7 @@ export class BuildingPanel {
     question.className = "building-cancel__question";
     const refund = costAmounts(offer.refund);
     question.append(
-      "Cancel and get back ",
+      fortifying ? "Stop fortifying and get back " : "Cancel and get back ",
       refund ?? "nothing",
       "? Progress is lost.",
     );
@@ -909,12 +969,13 @@ export class BuildingPanel {
 
     const row = document.createElement("div");
     row.className = "map-row";
-    const confirm = actionButton("Yes, cancel", () => {
+    const confirm = actionButton(fortifying ? "Yes, stop" : "Yes, cancel", () => {
       this.confirmingCancel = null;
       void this.runCancel(building.id);
     });
     confirm.classList.add("btn--danger", "building-cancel__confirm");
-    const keep = actionButton(underConstruction ? "Keep building" : "Keep upgrading", () => {
+    const keepLabel = fortifying ? "Keep fortifying" : underConstruction ? "Keep building" : "Keep upgrading";
+    const keep = actionButton(keepLabel, () => {
       this.confirmingCancel = null;
       this.render();
     });
@@ -1100,9 +1161,24 @@ export class BuildingPanel {
     );
   }
 
+  private async runFortify(id: number): Promise<void> {
+    const store = this.yard?.store;
+    if (!store) return;
+    const result = await fortifyActions(store).start(id);
+    this.report(id, result, (report) => [`Fortifying to F${report.to}.`]);
+  }
+
   private async runCancel(id: number): Promise<void> {
     const store = this.yard?.store;
     if (!store) return;
+    if (store.building(id)?.countdown?.kind === "fortify") {
+      const result = await fortifyActions(store).cancel(id);
+      this.report(id, result, (report) => {
+        const refund = costAmounts(report.refund);
+        return refund ? ["Fortifying stopped. Got back ", refund, "."] : ["Fortifying stopped."];
+      });
+      return;
+    }
     // A building still under construction goes altogether (`build/cancel`, §5.3).
     if (store.building(id)?.countdown?.kind === "build") {
       const result = await buildActions(store).cancel(id);

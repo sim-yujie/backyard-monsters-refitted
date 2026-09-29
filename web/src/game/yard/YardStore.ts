@@ -546,7 +546,9 @@ export class YardStore implements YardStoreReader, YardStoreActions {
       check: (store) => {
         const building = store.building(id);
         const countdown = building?.countdown;
-        if (countdown?.kind !== "build" && countdown?.kind !== "upgrade") {
+        // An outpost's fortification speeds up too (#191; the server's `speedup` takes its `cF`).
+        const fortifying = countdown?.kind === "fortify" && store.kind === "outpost";
+        if (countdown?.kind !== "build" && countdown?.kind !== "upgrade" && !fortifying) {
           return refuse("notRunning", "That building has nothing to speed up.");
         }
         if (countdown.paused) {

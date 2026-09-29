@@ -4,6 +4,7 @@ import { costOf } from "@/game/yard/buildingCosts";
 import { readYard, type YardBuilding } from "@/game/yard/yardModel";
 import {
   cancelOffer,
+  fortifyOffer,
   jobOffer,
   panelModel,
   upgradeOffer,
@@ -533,5 +534,39 @@ describe("on an outpost (outposts WP5)", () => {
     const main = contextOf({ buildings: [HALL(5), building2, upgrading] });
     expect(panelModel(pick(main, 3), main).recycle).not.toBeNull();
     expect(jobOffer(pick(main, 2), main)?.cancel).not.toBeNull();
+  });
+});
+
+describe("fortifying on an outpost (#191)", () => {
+  const CORE = building(1, 112, 1);
+
+  it("offers the core's next step from the outpost's fortify ladder, and nothing on a main yard", () => {
+    const context = contextOf({ type: "outpost", buildings: [CORE] });
+    expect(fortifyOffer(pick(context, 1), context)).toMatchObject({
+      from: 0,
+      to: 1,
+      max: 4,
+      cost: { r1: 250_000, r2: 50_000, r3: 25_000, r4: 0 },
+      seconds: 4 * 3_600,
+      gate: null,
+      maxed: false,
+    });
+    const main = contextOf({ buildings: [HALL(5), building(2, 20, 4)] });
+    expect(fortifyOffer(pick(main, 2), main)).toBeNull();
+  });
+
+  it("waits for the one worker, and is fully fortified at F4", () => {
+    const busy = contextOf({ type: "outpost", buildings: [CORE, building(2, 20, 1, { cU: 600 })] });
+    expect(fortifyOffer(pick(busy, 1), busy)?.gate).toMatchObject({ reason: "workers", total: 1, busy: 1 });
+    const done = contextOf({ type: "outpost", buildings: [building(1, 112, 1, { fort: 4 })] });
+    expect(fortifyOffer(pick(done, 1), done)).toMatchObject({ maxed: true, max: 4 });
+  });
+
+  it("a running fortification can be sped up and stopped for the step's price", () => {
+    const context = contextOf({ type: "outpost", buildings: [building(1, 112, 1, { fort: 1, cF: 7_200 })] });
+    const job = jobOffer(pick(context, 1), context);
+    expect(job?.kind).toBe("fortify");
+    expect(job?.minusOne).not.toBeNull();
+    expect(job?.cancel?.refund).toEqual({ r1: 500_000, r2: 500_000, r3: 500_000, r4: 0 });
   });
 });

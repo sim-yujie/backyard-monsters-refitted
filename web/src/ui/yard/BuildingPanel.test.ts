@@ -559,3 +559,63 @@ describe("BuildingPanel: the Housing panel (#170)", () => {
     expect(element.querySelector(".panel__title")!.textContent).toBe("Town Hall · Level 5");
   });
 });
+
+describe("BuildingPanel: fortifying an outpost (#191)", () => {
+  const OUTPOST = "2000242209";
+  const CORE = building(1, 112, 1, { X: 0, Y: -50 });
+
+  const onOutpost = (buildings: BuildingData[], id: number) => {
+    const sent: { url: string; body: URLSearchParams }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init: RequestInit) => {
+        sent.push({ url, body: new URLSearchParams(String(init.body ?? "")) });
+        return new Promise(() => undefined);
+      }),
+    );
+    const store = new YardStore({
+      save: loadOf(buildings, { type: "outpost", storedata: {} } as Partial<BaseLoadResponse>),
+      target: { baseid: OUTPOST, kind: "outpost" },
+      api: fakeApi(),
+      clock: () => T0,
+      timers: { set: () => 0, clear: () => undefined },
+    });
+    const binding: YardUiBinding = { store, scene: { selectBuilding: vi.fn() }, notices: {} as Notices };
+    const panel = new BuildingPanel({ onClose: vi.fn(), yard: binding }).mount(document.body);
+    panel.show(store.building(id)!);
+    return { element: panel.element, sent, panel };
+  };
+
+  it("offers the core's next fortification with its price and time, and sends it for the outpost", async () => {
+    const { element, sent, panel } = onOutpost([CORE], 1);
+    const block = element.querySelector<HTMLElement>(".building-fortify")!;
+    expect(block.querySelector("h3")?.textContent).toBe("Fortify to F1");
+    expect(block.querySelector(".building-panel__time")?.textContent).toBe("4h 0m");
+
+    buttonNamed(element, "Fortify")!.click();
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.url).toMatch(/\/bm\/yard\/fortify$/);
+    expect(Object.fromEntries(sent[0]!.body)).toEqual({ id: "1", baseid: OUTPOST });
+    panel.close();
+    vi.unstubAllGlobals();
+  });
+
+  it("says so when fully fortified", () => {
+    const { element, panel } = onOutpost([{ ...CORE, fort: 4 }], 1);
+    expect(element.querySelector(".building-fortify")).toBeNull();
+    expect(element.textContent).toContain("Fully fortified: F4 of 4.");
+    panel.close();
+    vi.unstubAllGlobals();
+  });
+
+  it("stops a running fortification after one confirmation, for the step's price back", async () => {
+    const { element, sent, panel } = onOutpost([{ ...CORE, cF: 3_600 }], 1);
+    buttonNamed(element, "Stop fortifying")!.click();
+    expect(element.textContent).toContain("Stop fortifying and get back");
+    buttonNamed(element, "Yes, stop")!.click();
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.url).toMatch(/\/bm\/yard\/fortify\/cancel$/);
+    panel.close();
+    vi.unstubAllGlobals();
+  });
+});

@@ -2,8 +2,11 @@ import type { BaseLoadResponse, ResourceCaps, Resources, SpeedupItem, UpgradeCos
 import type { CostRequirement } from "@/game/yard/buildingCostData";
 import {
   costOf,
+  fortifyStepsOf,
   FREE_FINISH_SECONDS,
+  HALL_TYPES,
   kindOf,
+  requirementsMet,
   TRAP_TYPES,
   timeCost,
   townHallLevel,
@@ -134,6 +137,24 @@ export interface SpeedupOffer {
   readonly blocked: "paused" | "tooShort" | "credits" | null;
 }
 
+/**
+ * The next fortification of an outpost's core or tower (#191): `F{from}` to
+ * `F{to}` of `max`, its price and countdown, and the one reason it cannot
+ * start, in the server's order (`server/src/services/yard/fortify.ts`:
+ * damaged, no core, requirements, resources, the worker). `maxed` when the
+ * building is fully fortified (`bdg_fullyfortified`).
+ */
+export interface FortifyOffer {
+  readonly from: number;
+  readonly to: number;
+  readonly max: number;
+  readonly cost: UpgradeCost;
+  /** The countdown the server would write: the step's time × Sharper Tools. */
+  readonly seconds: number;
+  readonly gate: UpgradeGate | null;
+  readonly maxed: boolean;
+}
+
 /** A running build or upgrade countdown and what can be done about it. */
 export interface JobOffer {
   readonly kind: "build" | "upgrade" | "fortify" | "rebuild";
@@ -194,6 +215,8 @@ export interface PanelModel {
    * Hall (§5.4) and on an outpost, where nothing is recycled.
    */
   readonly recycle: RecycleOffer | null;
+  /** Fortify, on an outpost's core and towers only; null elsewhere and while a job runs. */
+  readonly fortify: FortifyOffer | null;
 }
 
 const ZERO: UpgradeCost = { r1: 0, r2: 0, r3: 0, r4: 0 };
@@ -362,7 +385,12 @@ const speedup = (
  * pool already over its cap takes nothing and loses nothing.
  */
 export const cancelOffer = (building: YardBuilding, context: PanelContext): CancelOffer => {
-  const step = costOf(building.type, building.level, context.yard.kind);
+  // A fortification gives back the step that leaves its tier (`FortifyCancelC`,
+  // `client/scripts/BFOUNDATION.as:2227-2246`); a build or upgrade its level's.
+  const step =
+    building.countdown?.kind === "fortify"
+      ? fortifyStepsOf(building.type, context.yard.kind)[building.fortification]
+      : costOf(building.type, building.level, context.yard.kind);
   const cost: UpgradeCost = step
     ? { r1: step[0], r2: step[1], r3: step[2], r4: step[3] }
     : { ...ZERO };
@@ -390,8 +418,13 @@ export const jobOffer = (building: YardBuilding, context: PanelContext): JobOffe
   if (!progress) return null;
   const { remaining, total } = progress;
   const endsAt = countdown.paused ? now + remaining : countdown.endsAt;
+  // An outpost's fortification speeds up as a build does (`ui_fortifying`,
+  // "Speed up to finish"; the server's `speedup` takes a `cF` on an outpost).
   const speedable =
-    (countdown.kind === "build" || countdown.kind === "upgrade") && building.type !== MAP_ROOM_TYPE;
+    (countdown.kind === "build" ||
+      countdown.kind === "upgrade" ||
+      (countdown.kind === "fortify" && context.yard.kind === "outpost")) &&
+    building.type !== MAP_ROOM_TYPE;
   const { credits } = context;
   const finishItem: SpeedupItem = Math.trunc(remaining) <= FREE_FINISH_SECONDS ? "SP1" : "SP4";
 
@@ -409,6 +442,7 @@ export const jobOffer = (building: YardBuilding, context: PanelContext): JobOffe
     // full price, which `build/cancel` gives back (§5.3).
     cancel:
       countdown.kind === "upgrade" ||
+      (countdown.kind === "fortify" && context.yard.kind === "outpost") ||
       (countdown.kind === "build" && context.yard.kind !== "outpost")
         ? cancelOffer(building, context)
         : null,
@@ -445,7 +479,59 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
       building.type === TOWN_HALL_TYPE || context.yard.kind === "outpost"
         ? null
         : recycleOfferFor(building, context),
+    fortify: fortifyOffer(building, context),
   };
+};
+
+/**
+ * The Fortify offer for a building (see {@link FortifyOffer}), or null: not an
+ * outpost, no fortify ladder for the type (`can_fortify`, `FortifyCost`,
+ * `client/scripts/BFOUNDATION.as:2702-2708`), or a job already running,
+ * which its own block shows.
+ */
+export const fortifyOffer = (building: YardBuilding, context: PanelContext): FortifyOffer | null => {
+  if (context.yard.kind !== "outpost" || building.countdown) return null;
+  const ladder = fortifyStepsOf(building.type, "outpost");
+  if (ladder.length === 0) return null;
+
+  const from = building.fortification;
+  const step = ladder[from];
+  if (!step) {
+    return { from, to: from, max: ladder.length, cost: ZERO, seconds: 0, gate: null, maxed: true };
+  }
+
+  const cost: UpgradeCost = { r1: step[0], r2: step[1], r3: step[2], r4: step[3] };
+  const seconds = Math.floor(step[4] * sharperToolsMultiplier(context.save.storedata, context.now()));
+  const hall = townHallLevel(context.yard);
+
+  let gate: UpgradeGate | null = null;
+  if (isDamaged(building, context.save)) gate = { reason: "damaged" };
+  else if (hall <= 0) gate = { reason: "townHall", have: 0, need: 1 };
+  else if (!requirementsMet(step[5], context.yard)) {
+    const unmet = step[5].filter((entry) => !requirementsMet([entry], context.yard));
+    const core = unmet.find(([type]) => HALL_TYPES.includes(type));
+    gate = core
+      ? { reason: "townHall", have: hall, need: core[2] }
+      : { reason: "requirements", requirements: unmet };
+  } else {
+    const shortfall = { ...ZERO };
+    let short = false;
+    let overCap = false;
+    for (const key of KEYS) {
+      const missing = cost[key] - held(context.resources, key);
+      if (missing > 0) {
+        shortfall[key] = missing;
+        short = true;
+        if (overCapOf(cost[key], context.caps?.[key])) overCap = true;
+      }
+    }
+    if (short) gate = { reason: "shortfall", shortfall, overCap };
+    else if (freeWorkers(context) === 0) {
+      gate = { reason: "workers", total: context.workers.total, busy: context.workers.busy };
+    }
+  }
+
+  return { from, to: from + 1, max: ladder.length, cost, seconds, gate, maxed: false };
 };
 
 /**
