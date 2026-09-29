@@ -1748,3 +1748,29 @@ describe("the champion's health after the field is left (issue #32)", () => {
     expect(battle.creeps().filter((creep) => creep.champion)).toHaveLength(2);
   });
 });
+
+describe("a flung champion's power level (issue #202)", () => {
+  const gorgo = (pl?: number) => {
+    const battle = createBattle(yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } }), { seed: 1 });
+    battle.apply({
+      kind: "fling",
+      t: 0,
+      x: -300,
+      y: -300,
+      r: 100,
+      monsters: {},
+      champion: { t: 1, l: 2, ...(pl === undefined ? {} : { pl }) },
+    });
+    return battle.creeps().find((creep) => creep.champion)!;
+  };
+
+  it("adds its bonus ladders to the level's figures", () => {
+    expect(gorgo(3).maxHp).toBe(championStatWithPower("G1", "health", 2, 3));
+    expect(gorgo(3).maxHp).toBeGreaterThan(championStat("G1", "health", 2));
+  });
+
+  it("fights at its level alone in a log written before power levels, as at power level 0", () => {
+    expect(gorgo().maxHp).toBe(championStat("G1", "health", 2));
+    expect(gorgo(0).maxHp).toBe(gorgo().maxHp);
+  });
+});

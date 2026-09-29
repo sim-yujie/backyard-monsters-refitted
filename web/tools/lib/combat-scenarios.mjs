@@ -86,7 +86,8 @@ export const SCENARIOS = [
   {
     name: "mixed-waves",
     description:
-      "Four flings over five minutes with a level 5 Krallen and one pebble bomb; the bench case.",
+      "Four flings over five minutes with a level 5, power level 2 Krallen and one pebble " +
+      "bomb; the bench case.",
     yard: "sandbox",
     kind: "main",
     levels: MAXED,
@@ -103,7 +104,8 @@ export const SCENARIOS = [
           y: 115,
           r: 300,
           monsters: { C1: 120, C2: 30 },
-          champion: { t: 5, l: 5 },
+          // At power level 2, so the bonus ladders are pinned too (issue #202).
+          champion: { t: 5, l: 5, pl: 2 },
         },
         { kind: "bomb", t: 2400, x: 180, y: -480, id: "pb1" },
         { kind: "fling", t: 4800, x: 180, y: -480, r: 300, monsters: { C4: 40, C8: 20 } },
@@ -176,6 +178,32 @@ export const SCENARIOS = [
       seed: 179,
       events: [
         { kind: "fling", t: 80, x: 600, y: 0, r: 300, monsters: { C3: 150, C6: 80, C8: 40 } },
+      ],
+    },
+  },
+  {
+    name: "champion-power",
+    description:
+      "A level 4 Gorgo at power level 3 with sixty Pokeys: the champion's bonus ladders add " +
+      "health, damage and speed to its level's (issue #202).",
+    yard: "sandbox",
+    kind: "main",
+    levels: MAXED,
+    playerLevel: 20,
+    tailTicks: 8000,
+    log: {
+      v: 1,
+      seed: 20202,
+      events: [
+        {
+          kind: "fling",
+          t: 200,
+          x: 180,
+          y: -480,
+          r: 300,
+          monsters: { C1: 60 },
+          champion: { t: 1, l: 4, pl: 3 },
+        },
       ],
     },
   },

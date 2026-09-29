@@ -137,7 +137,8 @@ export interface LootDefender {
 /** What the replay needs of the attacker's main save, as it stood before this save. */
 export interface LootAttacker {
   academy?: JsonObject | null;
-  champion?: readonly { t: number; l: number }[] | null;
+  /** The attacker's champions: type, level, and power level (issue #202). */
+  champion?: readonly { t: number; l: number; pl?: number }[] | null;
   catapult?: number | null;
   buildingdata?: JsonObject | null;
   /**
@@ -181,9 +182,11 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
     for (const [id, count] of Object.entries(housed)) left[id] = (left[id] ?? 0) + count;
   }
 
-  const owned = new Map<number, number>();
+  const owned = new Map<number, { l: number; pl: number }>();
   for (const champion of attacker.champion ?? []) {
-    if (Number.isInteger(champion?.t) && Number.isFinite(champion.l)) owned.set(champion.t, champion.l);
+    if (!Number.isInteger(champion?.t) || !Number.isFinite(champion.l)) continue;
+    const pl = Number(champion.pl);
+    owned.set(champion.t, { l: champion.l, pl: Number.isFinite(pl) ? Math.max(0, Math.floor(pl)) : 0 });
   }
   const championsFlung = new Set<number>();
 
@@ -217,11 +220,18 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
       left[id] = (left[id] ?? 0) - take;
     }
 
-    let champion: { t: number; l: number } | undefined;
-    const level = event.champion ? owned.get(event.champion.t) : undefined;
-    if (event.champion && level !== undefined && !championsFlung.has(event.champion.t)) {
+    // A champion the attacker owns, once, at no more than its stored level and
+    // power level (issue #202); a log with no `pl` fights at its level alone.
+    let champion: { t: number; l: number; pl?: number } | undefined;
+    const stored = event.champion ? owned.get(event.champion.t) : undefined;
+    if (event.champion && stored !== undefined && !championsFlung.has(event.champion.t)) {
       championsFlung.add(event.champion.t);
-      champion = { t: event.champion.t, l: Math.min(event.champion.l, level) };
+      const { pl } = event.champion;
+      champion = {
+        t: event.champion.t,
+        l: Math.min(event.champion.l, stored.l),
+        ...(pl !== undefined && { pl: Math.max(0, Math.min(pl, stored.pl)) }),
+      };
     }
 
     if (Object.keys(monsters).length === 0 && !champion) continue;

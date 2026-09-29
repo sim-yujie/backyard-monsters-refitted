@@ -125,7 +125,9 @@ const isEvent = (value: unknown): value is FlingEvent => {
   return (
     isRecord(value.champion) &&
     Number.isInteger(value.champion.t) &&
-    Number.isInteger(value.champion.l)
+    Number.isInteger(value.champion.l) &&
+    // Its power level (issue #202), absent from a log written before it.
+    (value.champion.pl === undefined || Number.isInteger(value.champion.pl))
   );
 };
 

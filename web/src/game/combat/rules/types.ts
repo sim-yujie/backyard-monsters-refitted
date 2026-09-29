@@ -464,7 +464,12 @@ export type FlingEvent =
       /** Drop radius, `max(200, bucketTotal / 4) / 2`; the server recomputes it. */
       readonly r: number;
       readonly monsters: Roster;
-      readonly champion?: { readonly t: number; readonly l: number };
+      /**
+       * The champion flung with the drop: its type, level and power level
+       * (`pl`, 0 to 3, issue #202). A log written before `pl` existed carries
+       * none, and that champion fights at its level alone.
+       */
+      readonly champion?: { readonly t: number; readonly l: number; readonly pl?: number };
     }
   | {
       readonly kind: "bomb";

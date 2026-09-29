@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
-import { ATTACK_COUNTDOWN_SECONDS, DECLARE_WAR_COUNTDOWN_SECONDS, TICKS_PER_SECOND } from "@/game/combat/rules";
+import {
+  ATTACK_COUNTDOWN_SECONDS,
+  DECLARE_WAR_COUNTDOWN_SECONDS,
+  TICKS_PER_SECOND,
+  championStatWithPower,
+} from "@/game/combat/rules";
 import { AttackSession, combatKind, hasDeclareWar, mintSeed, servedHeight } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 
@@ -250,6 +255,31 @@ describe("AttackSession events and the fling log", () => {
     expect(() =>
       session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 1, l: 1 } }),
     ).toThrow(/\(flung\)/);
+  });
+
+  it("logs a flung champion at the power level its roster entry holds (#202)", () => {
+    const champion = { t: 1, hp: 100, l: 2, ft: 0, fd: 0, fb: 0, pl: 3, status: 0 };
+    const session = sessionOf({
+      roster: { monsters: {}, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
+    });
+    session.start();
+    const event = session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 1, l: 2 } });
+    expect(event.champion).toEqual({ t: 1, l: 2, pl: 3 });
+    expect(session.battle()!.creeps().find((creep) => creep.champion)?.maxHp).toBe(
+      championStatWithPower("G1", "health", 2, 3),
+    );
+  });
+
+  it("logs no power level for a champion at power level 0, which fights at its level alone", () => {
+    const champion = { t: 1, hp: 100, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 };
+    const session = sessionOf({
+      roster: { monsters: {}, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
+    });
+    session.start();
+    expect(session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 1, l: 1 } }).champion).toEqual({
+      t: 1,
+      l: 1,
+    });
   });
 
   it("logs a radius that counts the champion's bucket (#143)", () => {

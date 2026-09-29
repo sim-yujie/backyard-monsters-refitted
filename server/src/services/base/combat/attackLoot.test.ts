@@ -76,10 +76,16 @@ const defenderOf = (one: Fixture): LootDefender =>
         ...(one.height !== undefined && { height: one.height }),
       };
 
-/** The attacker who fought the fixture: its academy, a Krallen, a level 5 catapult. */
+/**
+ * The attacker who fought the fixture: its academy, a Krallen and a Gorgo at
+ * the power levels the fixtures fling them at (issue #202), a level 5 catapult.
+ */
 const attackerOf = (one: Fixture): LootAttacker => ({
   academy: Object.fromEntries(Object.entries(one.levels).map(([id, level]) => [id, { level }])),
-  champion: [{ t: 5, l: 5 }],
+  champion: [
+    { t: 5, l: 5, pl: 2 },
+    { t: 1, l: 4, pl: 3 },
+  ],
   catapult: 5,
   buildingdata: {},
 });
@@ -470,6 +476,24 @@ describe("fightableLog", () => {
       fling(10, {}, { t: 5, l: 3 }),
       fling(30, { C1: 1 }),
     ]);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("a champion fights at no more than its stored power level; a log without one, at its level alone (#202)", () => {
+    const powered: LootAttacker = { ...attacker, champion: [{ t: 1, l: 6, pl: 2 }] };
+    const withPower = (pl?: number): FlingEvent =>
+      ({ ...fling(10, {}), champion: { t: 1, l: 6, ...(pl !== undefined && { pl }) } }) as FlingEvent;
+    const fought = (pl?: number) =>
+      fightableLog({ v: 1, seed: 7, events: [withPower(pl)] }, powered, {}).events[0] as FlingEvent;
+
+    expect(fought(2)).toEqual(withPower(2));
+    expect(fought(3)).toEqual(withPower(2));
+    expect(fought(-1)).toEqual(withPower(0));
+    // An old log, written before `pl` existed, keeps none: the engine reads that as 0.
+    expect(fought(undefined)).toEqual(withPower(undefined));
+    // A stored champion with no `pl` has none to give.
+    expect(
+      fightableLog({ v: 1, seed: 7, events: [withPower(3)] }, attacker, {}).events[0] as FlingEvent
+    ).toEqual(withPower(0));
   }, REPLAY_TIMEOUT_MS);
 
   test("a bomb the catapult does not unlock, an unknown one or a second of the same resource does not go off", () => {

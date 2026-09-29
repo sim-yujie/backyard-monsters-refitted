@@ -1166,10 +1166,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     return creep;
   };
 
-  const spawnChampion = (type: number, level: number, at: Cart): Creep | null => {
+  const spawnChampion = (type: number, level: number, at: Cart, power = 0): Creep | null => {
     const id = championByType(type);
     if (!id) return null;
-    const health = championStat(id, "health", level);
+    // At its level plus its power level's bonus, as the caged champion fights
+    // (issue #202); a log with no `pl` gives 0, which adds nothing.
+    const health = championStatWithPower(id, "health", level, power);
     // A `fly` rung puts the champion in the air exactly as it does a monster:
     // altitude 108 and the flying defence flag (`ChampionBase.as:181-188`), so
     // walls never stop it and only air-capable towers can shoot it.
@@ -1187,9 +1189,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       y: cart.y,
       hp: health,
       maxHp: health,
-      baseSpeed: championStat(id, "speed", level) / 4,
-      damage: championStat(id, "damage", level),
-      range: championStat(id, "range", level) || 1,
+      baseSpeed: championStatWithPower(id, "speed", level, power) / 4,
+      damage: championStatWithPower(id, "damage", level, power),
+      range: championStatWithPower(id, "range", level, power) || 1,
       attackDelay: championAttackDelay(id, level),
       targetGroup: championStat(id, "targetGroup", level) || TARGET_GROUP.ALL,
       flying,
@@ -1214,7 +1216,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       giveUp: HEALER_GIVE_UP,
       disposable: false,
       rechargeAt: 0,
-      hitFlags: fightFlags(false, flying, championStat(id, "range", level) || 1),
+      hitFlags: fightFlags(false, flying, championStatWithPower(id, "range", level, power) || 1),
       home: null,
       provokedBy: -1,
     };
@@ -1303,10 +1305,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
     }
     if (event.champion) {
-      // The power level a champion's `bonus*` ladders are indexed by is read but
-      // not applied: those ladders feed abilities the spec never traced
-      // (fidelity note 8), so a champion fights at its base damage.
-      spawnChampion(event.champion.t, event.champion.l, dropPoint(event.x, event.y, radius));
+      // Its level plus its power level's `bonus*` ladders (issue #202); the
+      // abilities those ladders also feed stay out (fidelity note 8).
+      spawnChampion(
+        event.champion.t,
+        event.champion.l,
+        dropPoint(event.x, event.y, radius),
+        event.champion.pl ?? 0,
+      );
     }
   };
 

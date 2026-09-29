@@ -1,6 +1,7 @@
 import type { BaseLoadResponse } from "@/api/types";
 import {
   ATTACK_COUNTDOWN_SECONDS,
+  CHAMPION_MAX_POWER_LEVEL,
   DECLARE_WAR_COUNTDOWN_SECONDS,
   RETREAT_GRACE_SECONDS,
   TICKS_PER_SECOND,
@@ -453,7 +454,7 @@ export class AttackSession {
       y: input.y,
       r: dropRadius(bucket),
       monsters: { ...input.monsters },
-      ...(input.champion ? { champion: { ...input.champion } } : {}),
+      ...(input.champion ? { champion: this.flungChampion(input.champion) } : {}),
     };
     battle.apply(event);
     this.events.push(event);
@@ -464,6 +465,25 @@ export class AttackSession {
     this.acted = true;
     this.afterEvent(battle);
     return event;
+  }
+
+  /**
+   * A flung champion as the log records it: its type and level, and the power
+   * level its roster entry holds (issue #202), which it fights at and the
+   * server checks against the attacker's stored champion.
+   */
+  private flungChampion(champion: { readonly t: number; readonly l: number }): {
+    t: number;
+    l: number;
+    pl?: number;
+  } {
+    const entry = this.target.roster.champions.find((owned) => owned.t === champion.t);
+    const pl = Number(entry?.pl);
+    return {
+      t: champion.t,
+      l: champion.l,
+      ...(Number.isInteger(pl) && pl > 0 ? { pl: Math.min(pl, CHAMPION_MAX_POWER_LEVEL) } : {}),
+    };
   }
 
   /** Appends a resource bomb at the current tick and hands it to the battle. */

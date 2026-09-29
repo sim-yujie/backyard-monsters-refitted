@@ -1,0 +1,108 @@
+{
+  "name": "champion-power",
+  "description": "A level 4 Gorgo at power level 3 with sixty Pokeys: the champion's bonus ladders add health, damage and speed to its level's (issue #202).",
+  "yard": "sandbox",
+  "kind": "main",
+  "levels": {
+    "C1": 6,
+    "C2": 6,
+    "C3": 6,
+    "C4": 6,
+    "C5": 6,
+    "C6": 6,
+    "C7": 6,
+    "C8": 6,
+    "C13": 6,
+    "C14": 6
+  },
+  "playerLevel": 20,
+  "tailTicks": 8000,
+  "log": {
+    "v": 1,
+    "seed": 20202,
+    "events": [
+      {
+        "kind": "fling",
+        "t": 200,
+        "x": 180,
+        "y": -480,
+        "r": 300,
+        "monsters": {
+          "C1": 60
+        },
+        "champion": {
+          "t": 1,
+          "l": 4,
+          "pl": 3
+        }
+      }
+    ]
+  },
+  "expected": {
+    "ticks": 8200,
+    "damage": 7.549649292836378,
+    "destroyed": null,
+    "attackloot": {
+      "r1": 0,
+      "r2": 0,
+      "r3": 0,
+      "r4": 0
+    },
+    "defenderLoss": {
+      "r1": 0,
+      "r2": 0,
+      "r3": 0,
+      "r4": 0
+    },
+    "firedTraps": 0,
+    "destroyedBuildings": 22,
+    "creepsFlung": 60,
+    "creepsKilled": 60,
+    "championHp": 125913.03812086332,
+    "damagedBuildings": 23,
+    "rngDraws": 3504,
+    "checkpoints": [
+      {
+        "tick": 800,
+        "digest": "89d28f171b76ef21"
+      },
+      {
+        "tick": 1600,
+        "digest": "bef409f84e78cea2"
+      },
+      {
+        "tick": 2400,
+        "digest": "4c7dc5be8efeb1a4"
+      },
+      {
+        "tick": 3200,
+        "digest": "ea70b1e04d9f796e"
+      },
+      {
+        "tick": 4000,
+        "digest": "9b1aad146c780c56"
+      },
+      {
+        "tick": 4800,
+        "digest": "927f82fc1ba8c032"
+      },
+      {
+        "tick": 5600,
+        "digest": "29077cd828456c6a"
+      },
+      {
+        "tick": 6400,
+        "digest": "ac7b41583a325702"
+      },
+      {
+        "tick": 7200,
+        "digest": "c4ba0bff3f0de109"
+      },
+      {
+        "tick": 8000,
+        "digest": "13ef7b0de405ee57"
+      }
+    ],
+    "digest": "1db68fdbf057e905"
+  }
+}

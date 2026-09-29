@@ -1,6 +1,6 @@
 {
   "name": "mixed-waves",
-  "description": "Four flings over five minutes with a level 5 Krallen and one pebble bomb; the bench case.",
+  "description": "Four flings over five minutes with a level 5, power level 2 Krallen and one pebble bomb; the bench case.",
   "yard": "sandbox",
   "kind": "main",
   "levels": {
@@ -33,7 +33,8 @@
         },
         "champion": {
           "t": 5,
-          "l": 5
+          "l": 5,
+          "pl": 2
         }
       },
       {

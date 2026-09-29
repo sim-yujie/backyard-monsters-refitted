@@ -60,6 +60,17 @@ describe("parseCheckpoint", () => {
     expect(accepted(parseCheckpoint(body({ flinglog: { v: 1, seed: 77, events } }))).flinglog.events).toHaveLength(4);
   });
 
+  test("reads a champion's power level, and refuses one that is not whole (#202)", () => {
+    const withPl = (pl: unknown) => ({
+      flinglog: { v: 1, seed: 77, events: [{ ...fling(400), champion: { t: 1, l: 4, pl } }] },
+    });
+    expect(accepted(parseCheckpoint(body(withPl(3)))).flinglog.events[0]).toMatchObject({
+      champion: { t: 1, l: 4, pl: 3 },
+    });
+    expect("refused" in parseCheckpoint(body(withPl(1.5)))).toBe(true);
+    expect("refused" in parseCheckpoint(body(withPl("3")))).toBe(true);
+  });
+
   test("an attack with nothing dropped has nothing to checkpoint (#79)", () => {
     expect(parseCheckpoint(body({ flinglog: { v: 1, seed: 77, events: [] } }))).toEqual({ refused: "empty" });
   });
