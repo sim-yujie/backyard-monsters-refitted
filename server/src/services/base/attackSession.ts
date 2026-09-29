@@ -1,5 +1,9 @@
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
-import type { ResourceAmounts } from "../../game-rules/combat/index.js";
+import {
+  parseDefenderForces,
+  type DefenderForces,
+  type ResourceAmounts,
+} from "../../game-rules/combat/index.js";
 import type { EntryHoused } from "../yard/attackRoster.js";
 import { ATTACK_TIMEOUT } from "./isAttackActive.js";
 
@@ -82,6 +86,14 @@ export interface AttackSession {
    * Absent on a session minted before it existed, whose client ran at no bonus.
    */
   attackerlevel?: number;
+  /**
+   * The defence the attack load served (issue #195): each bunker's garrison,
+   * the defender's academy levels, the champion in its cage. The attack save
+   * and the finaliser replay the battle against this, so they fight exactly
+   * what the client fought even if the defender's row moves meanwhile. Absent
+   * on a session minted before it existed; the replay then reads the row.
+   */
+  defenderForces?: DefenderForces;
 }
 
 /** Why a save was not accepted as this attack's result. */
@@ -108,6 +120,7 @@ export const serialiseAttackSession = (session: AttackSession): string =>
   session.entryHoused ||
   session.defenderResources ||
   session.attackerResources ||
+  session.defenderForces ||
   session.attackerlevel !== undefined
     ? JSON.stringify(session)
     : `${session.attackerid}:${session.attackid}:${session.startedat}`;
@@ -143,7 +156,7 @@ const defenderResourcesOf = (raw: unknown): ResourceAmounts | undefined => {
 /** What an attack load records of the battle beside its binding: see {@link AttackSession}. */
 export type AttackSessionFacts = Pick<
   AttackSession,
-  "entryHoused" | "defenderResources" | "attackerResources" | "attackerlevel"
+  "entryHoused" | "defenderResources" | "attackerResources" | "attackerlevel" | "defenderForces"
 >;
 
 /**
@@ -157,9 +170,11 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
   const entryHoused = entryHousedOf(parsed.entryHoused);
   const defenderResources = defenderResourcesOf(parsed.defenderResources);
   const attackerResources = defenderResourcesOf(parsed.attackerResources);
+  const defenderForces = parseDefenderForces(parsed.defenderForces);
   const { attackerlevel } = parsed;
   return {
     ...(entryHoused && { entryHoused }),
+    ...(defenderForces && { defenderForces }),
     ...(defenderResources && { defenderResources }),
     ...(attackerResources && { attackerResources }),
     ...(Number.isSafeInteger(attackerlevel) &&
@@ -267,6 +282,7 @@ export const checkAttackBinding = ({
  * @param {ResourceAmounts} [defenderResources] - The defender's pool as the attack load serves it.
  * @param {number} [attackerlevel] - The attacker's player level, which the attack load serves too.
  * @param {ResourceAmounts} [attackerResources] - The attacker's own pool at attack start.
+ * @param {DefenderForces} [defenderForces] - The defence the attack load serves (issue #195).
  */
 export const newAttackSession = (
   attackerid: number,
@@ -274,12 +290,14 @@ export const newAttackSession = (
   entryHoused?: EntryHoused,
   defenderResources?: ResourceAmounts,
   attackerlevel?: number,
-  attackerResources?: ResourceAmounts
+  attackerResources?: ResourceAmounts,
+  defenderForces?: DefenderForces
 ): AttackSession => ({
   attackerid,
   attackid,
   startedat: getCurrentDateTime(),
   ...(entryHoused && { entryHoused }),
+  ...(defenderForces && { defenderForces }),
   ...(defenderResources && { defenderResources }),
   ...(attackerResources && { attackerResources }),
   ...(attackerlevel !== undefined && { attackerlevel }),

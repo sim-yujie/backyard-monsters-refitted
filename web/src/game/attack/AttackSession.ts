@@ -10,8 +10,10 @@ import {
   createBattle,
   damagePercent,
   dropRadius,
+  battleDefence,
   flingCost,
   healthOf,
+  parseDefenderForces,
   toCombatYard,
   type BuildingClass,
   type Battle,
@@ -343,6 +345,8 @@ export class AttackSession {
       levels: this.target.roster.levels,
       declareWar: this.declareWar_,
       ...(playerLevel === undefined ? {} : { playerLevel }),
+      // The defence the server replays the battle against (issue #195).
+      ...battleDefence(parseDefenderForces(response.defenderforces)),
     });
     this.phase = "loaded";
     this.notify();

@@ -170,7 +170,7 @@ beforeEach(() => {
 const attack = async (baseid: string) => {
   const attackerSave = tables.get(Save)!.find((row) => row.basesaveid === 2526)!;
   const user = { userid: ATTACKER, username: "attacker", save: attackerSave } as unknown as User;
-  const save = await baseModeAttack({ user, baseid, mapversion: 2, attackerLevel: 40 });
+  const { save } = await baseModeAttack({ user, baseid, mapversion: 2, attackerLevel: 40 });
   return sessions.get(save.basesaveid);
 };
 
@@ -197,5 +197,38 @@ describe("the attack load autobanks the defender before the loot snapshot", () =
     const attacker = tables.get(Save)!.find((row) => row.basesaveid === 2526)!;
     expect(attacker.resources).toEqual({ r1: 1_000, r2: 1_000, r3: 1_000, r4: 1_000 });
     expect(attacker.buildingresources).toEqual({ t: expect.any(Number) });
+  });
+});
+
+describe("the attack load serves the defence and keeps it in the session (#195)", () => {
+  test("an outpost: its own garrisons, at its owner's main-yard academy levels", async () => {
+    const outpost = tables.get(Save)!.find((row) => row.basesaveid === 900)!;
+    (outpost.buildingdata as Row)["20"] = { id: 20, t: 22, X: 300, Y: 300, l: 1, m: { C1: 3 } };
+    defenderMain().academy = { C1: { level: 4 } };
+
+    const attackerSave = tables.get(Save)!.find((row) => row.basesaveid === 2526)!;
+    const user = { userid: ATTACKER, username: "attacker", save: attackerSave } as unknown as User;
+    const { save, defenderForces } = await baseModeAttack({
+      user,
+      baseid: OUTPOST_BASEID,
+      mapversion: 2,
+      attackerLevel: 40,
+    });
+
+    expect(defenderForces).toEqual({ bunkers: { 20: { C1: 3 } }, defenderLevels: { C1: 4 }, defenderChampion: null });
+    expect(sessions.get(save.basesaveid)?.defenderForces).toEqual(defenderForces);
+  });
+
+  test("a main yard: the champion at home in its cage, not one that is away", async () => {
+    defenderMain().champion = [
+      { t: 1, l: 2, hp: 500, pl: 0, status: 1 },
+      { t: 3, l: 4, hp: 900, pl: 1, status: 0 },
+    ];
+    const session = await attack(MAIN_BASEID);
+    // At its health as the load's catch-up healed it.
+    const champion = session?.defenderForces?.defenderChampion;
+    expect(champion).toMatchObject({ t: 3, l: 4, pl: 1 });
+    expect(champion?.hp).toBeGreaterThanOrEqual(900);
+    expect(champion?.hp).toBe(Math.floor((defenderMain().champion as { hp: number }[])[1]!.hp));
   });
 });

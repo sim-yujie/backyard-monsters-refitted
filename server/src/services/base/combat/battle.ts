@@ -110,6 +110,8 @@ export const battleReplayInput = ({
     declareWar,
     ...(session?.attackerlevel !== undefined && { playerLevel: session.attackerlevel }),
     ...(left !== undefined && { left }),
+    // The defence the attack load served (issue #195).
+    ...(session?.defenderForces && { defence: session.defenderForces }),
   };
 };
 

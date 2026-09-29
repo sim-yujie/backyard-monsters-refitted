@@ -182,6 +182,42 @@ describe("AttackSession on an outpost (#179)", () => {
   });
 });
 
+describe("AttackSession against a defence (#195)", () => {
+  /** A Monster Bunker holding two Fangs, and a Champion Cage with its Gorgo home. */
+  const defended = (defenderforces?: unknown): AttackSession => {
+    const session = new AttackSession({ target: targetOf({ kind: "main" }), seed: 1 });
+    session.load({
+      ...towerYard(),
+      buildingdata: {
+        "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 114, l: 1, X: 150, Y: -150 },
+        "3": { id: 3, t: 14, l: 1, X: 200, Y: 200 },
+      },
+      ...(defenderforces === undefined ? {} : { defenderforces }),
+    } as unknown as BaseLoadResponse);
+    session.appendFling({ x: 150, y: 150, monsters: { C1: 3 } });
+    play(session, 2);
+    return session;
+  };
+
+  it("fights the garrison and the champion the load served", () => {
+    const session = defended({
+      bunkers: { 1: { C8: 2 } },
+      defenderLevels: { C8: 3 },
+      defenderChampion: { t: 1, l: 2, hp: 5000, pl: 0 },
+    });
+    const friendly = session.battle()!.creeps().filter((creep) => creep.friendly);
+    expect(friendly.some((creep) => creep.monsterId === "C8" && creep.level === 3)).toBe(true);
+    expect(friendly.some((creep) => creep.champion && creep.monsterId === "G1")).toBe(true);
+  });
+
+  it("fights none when the load served none, as before", () => {
+    const session = defended();
+    expect(session.battle()!.creeps().filter((creep) => creep.friendly)).toHaveLength(0);
+    expect(session.battle()!.state().defenderChampionHp).toBeNull();
+  });
+});
+
 describe("AttackSession events and the fling log", () => {
   it("stamps the tick and radius on a fling, spends the roster and logs it", () => {
     const session = sessionOf();

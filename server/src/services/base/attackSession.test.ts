@@ -7,6 +7,7 @@ import {
   newAttackSession,
   parseAttackSession,
   serialiseAttackSession,
+  sessionFactsOf,
   type AttackSession,
 } from "./attackSession.js";
 
@@ -154,6 +155,20 @@ describe("the stored session", () => {
       const raw = JSON.stringify({ ...session(), attackerlevel });
       expect(parseAttackSession(raw)).toEqual(session());
     }
+  });
+
+  test("carries the defence the load served (#195), through its own checkpoint copy too", () => {
+    const defenderForces = {
+      bunkers: { 83: { C1: 10 } },
+      defenderLevels: { C1: 6 },
+      defenderChampion: { t: 1, l: 2, hp: 5000, pl: 1 },
+    };
+    const stored = newAttackSession(ATTACKER, DEFENDER_ATTACK_ID, undefined, undefined, undefined, undefined, defenderForces);
+    const read = parseAttackSession(serialiseAttackSession(stored));
+
+    expect(read?.defenderForces).toEqual(defenderForces);
+    expect(sessionFactsOf(JSON.parse(JSON.stringify({ defenderForces }))).defenderForces).toEqual(defenderForces);
+    expect(sessionFactsOf({ defenderForces: "nope" }).defenderForces).toBeUndefined();
   });
 
   test("newAttackSession records the attacker's level only when it is given one", () => {

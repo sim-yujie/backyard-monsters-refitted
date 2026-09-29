@@ -341,6 +341,14 @@ inside the range rule's sweep box around the target gets its monsters caught up 
 The defender's pool takes in its Map Room 2 outpost income first (outposts WP4, issue #179): a
 defending outpost's owner is autobanked under their main row's lock before the catch-up, a
 defending main yard inside its locked catch-up, so the `defenderResources` snapshot holds it.
+The session also keeps the defence the battle is fought against, `defenderForces` (issue #195,
+`services/base/combat/defenderForces.ts`, the shared rules' `defenderForcesOf`): each Monster
+Bunker's garrison off the caught-up `buildingdata`, the academy levels its monsters fight at
+(the row's own, or its owner's main yard's for an outpost), and the champion at home in its
+Champion Cage (the first with `status` 0 and health left). The load serves the same object to
+the client as `defenderforces`, and the save and the finaliser replay the battle against the
+session's copy, so all three fight one defence. A session minted before it existed replays with
+no defence, as its client fought none.
 Only a successful one: every refusal,
 range included, is decided before the first write, so an attack the server turns down leaves no
 `attackid`, no lock, no attack log and no session key (issue #26). The key's TTL is 480 seconds; the window it
@@ -494,7 +502,7 @@ held: same seed, every stored event unchanged and in place, a clock that has not
 game state: the latest checkpoint is kept in Redis under `attack-checkpoint:<basesaveid>`, indexed
 by the set `attack-checkpoints` (`services/base/attackCheckpoint.ts`, `attackCheckpointStore.ts`).
 Each checkpoint also keeps a copy of what the attack load recorded in the session (`entryHoused`,
-`defenderResources`, `attackerResources`, `attackerlevel`), because the session key is gone 60 seconds after the window
+`defenderResources`, `attackerResources`, `attackerlevel`, `defenderForces`), because the session key is gone 60 seconds after the window
 and an attack is often finalised later than that.
 
 **Finalisation** (`services/base/finaliseAttack.ts`) finishes an attack from its checkpoint: the

@@ -50,6 +50,7 @@ import { cellRelationship, findRelationships } from "../../../services/alliance/
 import { INFERNO_CHAT_CHANNEL } from "../../../config/ChatConfig.js";
 import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
+import type { DefenderForces } from "../../../game-rules/combat/index.js";
 
 type Stronghold = { level: number; cell?: { x: number; y: number } | null };
 
@@ -85,6 +86,8 @@ export const baseLoad: KoaController = async (ctx) => {
   const mapversion = playerMapVersion(user.save);
 
   let baseSave: Save | null = null;
+  /** The defence an attack is fought against (issue #195), served beside the yard. */
+  let defenderForces: DefenderForces | undefined;
 
   // The attacker's level for the engine's low-level loot bonus, served to the
   // client and kept in the attack session for the loot replay, so both run
@@ -106,7 +109,13 @@ export const baseLoad: KoaController = async (ctx) => {
       if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
 
       await validateAttack(user, attackData, mapversion);
-      baseSave = await baseModeAttack({ user, baseid, mapversion, attackCost: attackcost, attackerLevel });
+      ({ save: baseSave, defenderForces } = await baseModeAttack({
+        user,
+        baseid,
+        mapversion,
+        attackCost: attackcost,
+        attackerLevel,
+      }));
       break;
 
     case BaseMode.IDESCENT:
@@ -143,7 +152,13 @@ export const baseLoad: KoaController = async (ctx) => {
       if (!ctx.meetsDiscordAgeCheck && !MR1_TRIBE_IDS.has(baseid)) throw discordAgeErr();
       
       await validateAttack(user, attackData, mapversion);
-      baseSave = await baseModeAttack({ user, baseid, mapversion, attackCost: attackcost, attackerLevel });
+      ({ save: baseSave, defenderForces } = await baseModeAttack({
+        user,
+        baseid,
+        mapversion,
+        attackCost: attackcost,
+        attackerLevel,
+      }));
       break;
 
     default:
@@ -385,6 +400,7 @@ export const baseLoad: KoaController = async (ctx) => {
     ...(isAttack && { attpowerups }),
     ...(attackerLevel !== undefined && { attackerlevel: attackerLevel }),
     ...(cellHeight !== undefined && { cellheight: cellHeight }),
+    ...(defenderForces && { defenderforces: defenderForces }),
     ...(completed && { completed }),
     ...(isOwner && {
       chatenabled: 1,

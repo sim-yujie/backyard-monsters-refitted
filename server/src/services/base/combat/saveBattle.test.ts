@@ -46,6 +46,9 @@ const battle: AbandonedOutcome = {
   championsFlung: [],
   attackersiege: undefined,
   attackreport: "",
+  bunkerLosses: {},
+  bunkerGarrisons: {},
+  defenderChampionHp: null,
 };
 
 /** What an honest client sends for that battle. */

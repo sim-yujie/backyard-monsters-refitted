@@ -5,12 +5,14 @@ import {
   ATTACK_COUNTDOWN_SECONDS,
   RETREAT_GRACE_SECONDS,
   attackReport,
+  battleDefence,
   buildEngineYard,
   championByType,
   createBattle,
   damagePercent,
   derivedDestroyed,
   ticks,
+  parseDefenderForces,
   toCombatYard,
   type FlingLog,
 } from "../../../game-rules/combat/index.js";
@@ -47,6 +49,8 @@ interface Fixture {
   height?: number;
   resources?: Record<string, number>;
   levels: Record<string, number>;
+  /** The defender's garrisons, their levels and the caged champion (issue #195). */
+  defence?: Record<string, unknown>;
   log: FlingLog;
 }
 
@@ -82,13 +86,23 @@ const attackerOf = (one: Fixture) => ({
   siege: { jars: { quantity: 2 }, decoy: { quantity: 1 } },
 });
 
-const sessionOf = (log: FlingLog): AttackSession => {
+/** The defence a fixture fights against, as the attack load serves it (issue #195). */
+const defenceOf = (one: Fixture) => parseDefenderForces(one.defence);
+
+const sessionOf = (log: FlingLog, one?: Fixture): AttackSession => {
   const housed: Record<string, number> = {};
   for (const event of log.events) {
     if (event.kind !== "fling") continue;
     for (const [id, count] of Object.entries(event.monsters)) housed[id] = (housed[id] ?? 0) + count;
   }
-  return { attackerid: 2505, attackid: 1, startedat: 0, entryHoused: { "2000241207": housed } };
+  const defenderForces = one ? defenceOf(one) : undefined;
+  return {
+    attackerid: 2505,
+    attackid: 1,
+    startedat: 0,
+    entryHoused: { "2000241207": housed },
+    ...(defenderForces && { defenderForces }),
+  };
 };
 
 /** The log as the client held it at `end`: nothing it had not done yet. */
@@ -106,7 +120,8 @@ const honestClient = (one: Fixture, end: number) => {
       kind: one.kind,
       height: defender.height ?? null,
     }),
-    { seed: one.log.seed, levels: one.levels, declareWar: false }
+    // `AttackSession` fights the defence the load served (issue #195).
+    { seed: one.log.seed, levels: one.levels, declareWar: false, ...battleDefence(defenceOf(one)) }
   );
   for (const event of logAt(one.log, end).events) {
     battle.runTo(event.t);
@@ -135,6 +150,8 @@ const honestClient = (one: Fixture, end: number) => {
     firedTraps: [...state.firedTraps],
     attackloot: wholeAmounts(state.loot),
     defenderLoss: wholeAmounts(state.defenderLoss),
+    defenderChampionHp: state.defenderChampionHp,
+    bunkerGarrisons: state.bunkerGarrisons,
     ...attackerRowAfter(one, logAt(one.log, end).events, state.championsHp),
   };
 };
@@ -216,7 +233,7 @@ const serverBattle = (one: Fixture, log: FlingLog, tick: unknown) =>
   replayAbandonedAttack(
     battleReplayInput({
       flinglog: log,
-      session: sessionOf(one.log),
+      session: sessionOf(one.log, one),
       defender: defenderOf(one),
       attacker: attackerOf(one),
       tick: battleTick(tick),
@@ -244,6 +261,9 @@ describe("an honest save writes what its client showed, and never trips the chec
           expect(server.attackloot).toEqual(client.attackloot);
           // The report too, word for word (#23, C6).
           expect(server.attackreport).toBe(client.report);
+          // And the defence: the champion's health and what each bunker holds (#195).
+          expect(server.defenderChampionHp).toBe(client.defenderChampionHp);
+          expect(server.bunkerGarrisons).toEqual(client.bunkerGarrisons);
           expect(wholeAmounts(Object.fromEntries(Object.entries(server.defenderDelta).map(([k, v]) => [k, -v])))).toEqual(
             client.defenderLoss
           );
@@ -275,6 +295,8 @@ describe("an honest Map Room 1 tribe save writes what its client showed (#23, C4
     };
     delete tribe.health;
     delete tribe.height;
+    // A tribe has no garrisons and no champion (issue #195, Q15).
+    delete tribe.defence;
     test(
       `${tribe.name}: health, damage, destroyed, traps and loot, wherever the client stops`,
       () => {

@@ -239,6 +239,7 @@ export const newCheckpoint = (
   ...(session.defenderResources && { defenderResources: session.defenderResources }),
   ...(session.attackerResources && { attackerResources: session.attackerResources }),
   ...(session.attackerlevel !== undefined && { attackerlevel: session.attackerlevel }),
+  ...(session.defenderForces && { defenderForces: session.defenderForces }),
 });
 
 export const serialiseCheckpoint = (checkpoint: AttackCheckpoint): string =>
@@ -291,6 +292,7 @@ export const checkpointSession = (checkpoint: AttackCheckpoint): AttackSession =
   ...(checkpoint.defenderResources && { defenderResources: checkpoint.defenderResources }),
   ...(checkpoint.attackerResources && { attackerResources: checkpoint.attackerResources }),
   ...(checkpoint.attackerlevel !== undefined && { attackerlevel: checkpoint.attackerlevel }),
+  ...(checkpoint.defenderForces && { defenderForces: checkpoint.defenderForces }),
 });
 
 /**

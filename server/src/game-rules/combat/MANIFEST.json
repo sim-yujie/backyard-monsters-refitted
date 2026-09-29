@@ -2,10 +2,11 @@
   "files": {
     "combatStatsData.ts": "abfcedbfcac84e2ec6ea837c2f5310f34008cc10e3c277c6ebda5acc9236ec65",
     "damagePercent.ts": "524e0129a9dd84a1b4e171bcfce0826b969b0119bce891271b33bb1b3e8528bf",
+    "defence.ts": "85138b5fb5fdd62bc84fafe88e0fa357fc4f4aaf12d51a9bd6768db3ddfefa64",
     "digest.ts": "5b989c2765d079953fa20f07589fa378c11af5ab28885e2cfa7fba6e63e5b752",
     "engine.ts": "20c2a478c5af7a8aa2c3b5bb83750458d5ea1186b8f445e71b5432f58a5772bb",
     "grid.ts": "147f8bd0350c1c763e2605c2f3abd6c79da33a35276cfc7cbcdfdc13a686dd5e",
-    "index.ts": "3cc7868690c184d9e9fb895a9671fbe427e6952fd5855667bae749b48a580bd9",
+    "index.ts": "89fb1342aee29151dac4e9629938a34722e496a1171b76327acc9359dc46d8e6",
     "potential.ts": "15ffd9d907c6ffb41734b8a5e0f827ae36567cc829543d6ee3061792052e5288",
     "replay.ts": "fc117d8e92a69ef675d7cb13a6cf55229af321edb2e338336fbdbb0c6b6805fa",
     "report.ts": "09338a2ee79ba47794d8be7b3e28e604943a0ead29bf284ac4d93f228e51e303",
@@ -15,5 +16,5 @@
     "types.ts": "19d76d44cd582e012f710f31601e3ce4f3726b1596da986c96d40dc0635fb3db",
     "yard.ts": "20d1fb115d158426ab5ca4c6adec9c0da0b41916913782061a8f04fe55459bcd"
   },
-  "count": 14
+  "count": 15
 }

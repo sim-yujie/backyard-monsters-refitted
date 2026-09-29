@@ -622,6 +622,13 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * replay reads the same stored value (`world_map_cell.terrainHeight`).
    */
   cellheight?: number;
+  /**
+   * On an attack load: the defence the battle is fought against, as the
+   * server keeps it for its replay (issue #195): each bunker's garrison, the
+   * defender's academy levels and the champion in its cage. Read with
+   * `parseDefenderForces`.
+   */
+  defenderforces?: unknown;
   /** The base owner's running alliance powerups. */
   powerups?: unknown[];
   /**

@@ -1,6 +1,7 @@
 import {
   RESOURCE_KEYS,
   attackReport,
+  battleDefence,
   buildEngineYard,
   championByType,
   createBattle,
@@ -10,6 +11,7 @@ import {
   type BuildingHealthMap,
   type CombatBuildingDataMap,
   type CombatTargetKind,
+  type DefenderForces,
   type FlingEvent,
   type FlingLog,
   type ResourceAmounts,
@@ -78,6 +80,12 @@ export interface AbandonedInput {
    * the save's `left` says (issue #23, C6).
    */
   left?: boolean;
+  /**
+   * The defence the battle is fought against (issue #195): the one the attack
+   * load served, kept in the session. None for a session minted before it,
+   * whose client fought none either.
+   */
+  defence?: DefenderForces;
 }
 
 /** Everything the attack save would have carried, derived. */
@@ -101,6 +109,12 @@ export interface AbandonedOutcome {
   /** `attackersiege`, or undefined when the attacker has none. */
   attackersiege: JsonObject | undefined;
   attackreport: string;
+  /** Each bunker's defenders that died (`BattleState.bunkerLosses`, #130). */
+  bunkerLosses: Readonly<Record<number, Readonly<Record<string, number>>>>;
+  /** What each bunker holds afterwards (`BattleState.bunkerGarrisons`, #195). */
+  bunkerGarrisons: Readonly<Record<number, Readonly<Record<string, number>>>>;
+  /** The caged champion's health afterwards, or null for none (#195). */
+  defenderChampionHp: number | null;
 }
 
 /** The web client's name for the kind of yard (`AttackTargetKind`). */
@@ -188,6 +202,7 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
       levels: academyLevels(attacker.academy),
       declareWar,
       ...(input.playerLevel !== undefined && { playerLevel: input.playerLevel }),
+      ...battleDefence(input.defence),
     }
   );
 
@@ -243,6 +258,9 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
       buildingsDestroyed: state.destroyedIds.length,
       loot,
     }),
+    bunkerLosses: state.bunkerLosses,
+    bunkerGarrisons: state.bunkerGarrisons,
+    defenderChampionHp: state.defenderChampionHp,
   };
 };
 

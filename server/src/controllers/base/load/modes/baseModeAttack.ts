@@ -22,6 +22,7 @@ import { MR1_TRIBE_IDS } from "../../../../game-data/tribes/v1/index.js";
 import { registerAttacker } from "../../../../services/maproom/v1/registerAttacker.js";
 import { requireAttackableMR1Tribe } from "../../../../services/maproom/v1/mr1TribeAttack.js";
 import { startMR1TribeSession } from "../../../../services/maproom/v1/mr1TribeSession.js";
+import { servedDefenderForces } from "../../../../services/base/combat/defenderForces.js";
 import { isShinyLocked } from "../../../../services/user/shinyLock.js";
 import { newAttackSession } from "../../../../services/base/attackSession.js";
 import { startAttackSession } from "../../../../services/base/attackSessionStore.js";
@@ -64,7 +65,7 @@ interface BaseModeAttack {
  * refused attack leaves the defender exactly as it found them.
  *
  * @param {BaseModeAttack} options - Attack options
- * @returns {Promise<Save>} The base being attacked
+ * @returns The base being attacked, and the defence it fights with (issue #195)
  */
 export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, attackerLevel }: BaseModeAttack) => {
   const userSave = user.save!;
@@ -240,6 +241,10 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
   // gives a freshly created wild-monster row its `basesaveid`. A Map Room 1
   // tribe never gets one: its session is keyed by the attacker and the tribe
   // base instead, and its save is bound to that (issue #161).
+  // The defence the battle is fought against, served to the client and kept
+  // in the session for the server's replay (issue #195).
+  const defenderForces = await servedDefenderForces(save);
+
   if (isMR1Tribe) {
     await startMR1TribeSession(
       user.userid,
@@ -250,7 +255,8 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
         armies.entryHoused,
         undefined,
         attackerLevel,
-        poolAmounts(userSave.resources)
+        poolAmounts(userSave.resources),
+        defenderForces
       )
     );
   } else if (save.basesaveid) {
@@ -267,7 +273,8 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
         poolAmounts(served.resources),
         attackerLevel,
         // The attacker's own pool, which its bombs are priced against (#23, C3).
-        poolAmounts(userSave.resources)
+        poolAmounts(userSave.resources),
+        defenderForces
       )
     );
   }
@@ -284,5 +291,5 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
     await createAttackLog(user, defender, save)
   }
 
-  return save;
+  return { save, defenderForces };
 };
