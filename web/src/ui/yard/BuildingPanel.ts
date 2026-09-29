@@ -1,4 +1,5 @@
 import type { SpeedupItem } from "@/api/types";
+import { devDetails } from "@/app/devDetails";
 import type { YardRefusal } from "@/api/yard";
 import { buildActions } from "@/api/yardBuild";
 import { fortifyActions, FortifyKey } from "@/api/yardFortify";
@@ -1330,20 +1331,28 @@ export class BuildingPanel {
     this.facts.replaceChildren();
     this.countdowns = [];
 
-    this.add("Type id", String(building.type));
+    // The type id, the save's encoding, the footprint, position, id and art
+    // file are a developer's; a player's Details are level, fortification,
+    // health, the job and what it holds (#150).
+    const dev = devDetails();
+    if (dev) this.add("Type id", String(building.type));
     this.add(
       "Level",
       building.level === 0
-        ? "0 — foundation, still building"
-        : building.raw.l === undefined
+        ? dev
+          ? "0 — foundation, still building"
+          : "Still being built"
+        : dev && building.raw.l === undefined
           ? "1 (the save omits the level at 1)"
           : String(building.level),
     );
 
-    const [width, height] = building.footprint;
-    this.add("Footprint", `${width} x ${height} yard units`);
-    this.add("Position", `${building.x}, ${building.y}`);
-    this.add("Building id", String(building.id));
+    if (dev) {
+      const [width, height] = building.footprint;
+      this.add("Footprint", `${width} x ${height} yard units`);
+      this.add("Position", `${building.x}, ${building.y}`);
+      this.add("Building id", String(building.id));
+    }
 
     this.add(
       "Fortification",
@@ -1354,7 +1363,7 @@ export class BuildingPanel {
     this.addHealth(building);
     this.addCountdown(building);
     this.addProduction(building);
-    this.addArt(building);
+    if (dev) this.addArt(building);
   }
 
   private addHealth(building: YardBuilding): void {
@@ -1362,7 +1371,9 @@ export class BuildingPanel {
       this.add(
         "Health",
         building.maxHp === null
-          ? "Full (the save omits health above full)"
+          ? devDetails()
+            ? "Full (the save omits health above full)"
+            : "Full"
           : `${building.maxHp.toLocaleString()} / ${building.maxHp.toLocaleString()}`,
       );
       return;

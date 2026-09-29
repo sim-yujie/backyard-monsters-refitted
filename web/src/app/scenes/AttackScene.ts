@@ -27,6 +27,8 @@ import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { ZoomControl } from "@/ui/ZoomControl";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
+import { devDetails } from "../devDetails";
+import { typeName } from "@/game/yard/planner/summary";
 
 /**
  * The attack: an enemy yard, a clock, and the slots the rest of the flow
@@ -670,7 +672,10 @@ export class AttackScene implements Scene {
       `${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
       `${state.creepsAlive} on the field · ${sent} left to send` +
       (state.declareWar ? " · Declare War" : "") +
-      (this.selected ? ` · selected #${this.selected.id}` : "");
+      // The building a player picked, by name; its id is a developer's (#150).
+      (this.selected
+        ? ` · ${typeName(this.selected.type)}${devDetails() ? ` #${this.selected.id}` : ""}`
+        : "");
   }
 
   /* ── Retreat ────────────────────────────────────────────────────────── */

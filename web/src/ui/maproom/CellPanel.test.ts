@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import type { MapCell, PlayerCell, WildMonsterCell } from "@/api/types";
+import { setDevDetails } from "@/app/devDetails";
 import { CellPanel, type CellPanelOptions } from "./CellPanel";
 
 /**
@@ -156,6 +157,22 @@ describe("another player's yard", () => {
     ]);
     expect(host.textContent).not.toContain("user 77");
     expect(host.textContent).not.toContain("/avatars/");
+  });
+
+  it("shows a player no alliance id, which names nothing (#150)", () => {
+    setDevDetails(false);
+    try {
+      const { host } = open(player({ aid: 12 }));
+      const more = host.querySelector<HTMLDetailsElement>(".mr2-cell__more")!;
+      expect([...more.querySelectorAll("dt")].map((node) => node.textContent)).toEqual([
+        "Empire value",
+        "Flinger",
+        "Catapult",
+      ]);
+      expect(host.textContent).not.toContain("#12");
+    } finally {
+      setDevDetails(null);
+    }
   });
 
   it("counts protection down when the server says when it ends (#187)", () => {

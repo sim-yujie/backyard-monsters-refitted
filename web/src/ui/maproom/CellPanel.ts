@@ -1,4 +1,5 @@
 import { CellType, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
+import { devDetails } from "@/app/devDetails";
 import { avatarOf, avatarUrl } from "@/game/avatars";
 import type { OffsetCell } from "@/game/HexGrid";
 import { cellsText } from "@/game/maproom/attackRange";
@@ -390,7 +391,8 @@ export class CellPanel {
 
     this.more.hidden = false;
     this.addFact("Empire value", payload.v.toLocaleString());
-    if (payload.aid !== null) this.addFact("Alliance", `#${payload.aid}`);
+    // The cell names no alliance, only its id, which says nothing to a player (#150).
+    if (payload.aid !== null && devDetails()) this.addFact("Alliance", `#${payload.aid}`);
     this.addFact("Flinger", `Level ${payload.f}`);
     this.addFact("Catapult", `Level ${payload.c}`);
   }

@@ -75,6 +75,7 @@ import { YardPlanner } from "./YardPlanner";
 import { sceneForMap } from "./MapGateScene";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
+import { devDetails } from "../devDetails";
 
 /**
  * A yard: the player's own, or — handed a {@link ViewTarget} by the map —
@@ -584,6 +585,7 @@ export class YardScene implements Scene {
         { level: "error", actionLabel: "Retry", onAction: () => void this.load() },
       );
       if (this.status) {
+        this.status.hidden = false;
         this.status.textContent = target
           ? "This yard did not load."
           : own.kind === "outpost"
@@ -1546,14 +1548,23 @@ export class YardScene implements Scene {
       ? countedBuildings(yard.buildings.map((building) => building.type))
       : yard.buildings.length;
     const own = this.store?.target;
-    status.textContent =
-      (this.target ? `${this.target.name}'s yard, read-only · ` : "") +
-      (own?.kind === "outpost" ? `${yardTitle(own)} · ` : "") +
-      `${buildings} buildings · ${yard.mushrooms.length} mushrooms · ` +
-      `plot ${yard.bounds.yardWidth} x ${yard.bounds.yardHeight} (expansion ${yard.expansionLevel}) · ` +
-      `${this.frameCostMs.toFixed(1)} ms/frame` +
-      (waiting > 0 ? ` · ${waiting} awaiting art` : "") +
-      (this.selected ? ` · selected #${this.selected.id}` : "") +
-      (this.hint ? ` · ${this.hint}` : "");
+    // A player reads whose yard this is; the counts, the plot, the frame time,
+    // the selected id and the planner's pointer note are a developer's (#150).
+    const parts = [
+      ...(this.target ? [`${this.target.name}'s yard, read-only`] : []),
+      ...(devDetails()
+        ? [
+            ...(own?.kind === "outpost" ? [yardTitle(own)] : []),
+            `${buildings} buildings · ${yard.mushrooms.length} mushrooms`,
+            `plot ${yard.bounds.yardWidth} x ${yard.bounds.yardHeight} (expansion ${yard.expansionLevel})`,
+            `${this.frameCostMs.toFixed(1)} ms/frame`,
+            ...(waiting > 0 ? [`${waiting} awaiting art`] : []),
+            ...(this.selected ? [`selected #${this.selected.id}`] : []),
+            ...(this.hint ? [this.hint] : []),
+          ]
+        : []),
+    ];
+    status.textContent = parts.join(" · ");
+    status.hidden = parts.length === 0;
   }
 }

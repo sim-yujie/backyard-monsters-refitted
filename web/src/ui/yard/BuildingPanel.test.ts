@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
+import { setDevDetails } from "@/app/devDetails";
 import { YardStore, type YardUiBinding } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
@@ -159,6 +160,21 @@ describe("BuildingPanel: a tower at rest", () => {
     expect(details.open).toBe(false);
     expect(details.textContent).toContain("Type id");
     expect(details.textContent).toContain("Footprint");
+  });
+
+  it("shows a player's Details without the developer fields (#150)", () => {
+    setDevDetails(false);
+    try {
+      const { element } = setup([HALL, building(2, 20, 4)], 2);
+      const text = element.querySelector("details")!.textContent ?? "";
+      for (const field of ["Type id", "Footprint", "Position", "Building id", "Art", "save omits"]) {
+        expect(text).not.toContain(field);
+      }
+      expect(text).toContain("Level4");
+      expect(text).toContain("Health");
+    } finally {
+      setDevDetails(null);
+    }
   });
 });
 
