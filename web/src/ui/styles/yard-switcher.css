@@ -1,34 +1,28 @@
-/* The HUD's yard switcher (outposts WP5, #146): "Main yard" or "Outpost (x, y)"
-   with the outpost count, and a menu of every own yard under it. Built on the
-   HUD's own button and the Account menu's list; nothing else in the bar moves. */
+/* The yard switcher (outposts WP5, #146): one of the yard's round buttons
+   since the HUD redesign (#171, `yard-hud.css`), above Map. The disc wears the
+   outpost count as a badge and the label is the open yard's title; the menu of
+   every own yard opens upwards from it. */
 
 .yard-switcher {
   position: relative;
   display: flex;
   flex: none;
-  white-space: nowrap;
+  pointer-events: auto;
 }
 
-.yard-switcher__button {
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-  font-weight: 700;
+.yard-switcher[hidden] {
+  display: none;
 }
 
-/* The outpost count, as a small chip after the yard's name. */
-.yard-switcher__count {
-  min-width: 1.5em;
-  padding: 0 var(--space-1);
-  border-radius: 999px;
-  background: var(--colour-surface-control);
-  color: var(--colour-text-muted);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
+.yard-switcher__title {
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .yard-switcher__list {
   position: absolute;
-  top: calc(100% + var(--space-2));
+  bottom: calc(100% + var(--space-2));
   left: 0;
   z-index: var(--z-popup);
   display: flex;

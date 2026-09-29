@@ -5,9 +5,19 @@ import type { BankReport } from "@/api/yardBank";
 import type { YardActionResult, YardStore, YardUiBinding } from "@/game/yard/YardStore";
 import { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
-import { CollectAll, collectAllLabel, showBankResult } from "./CollectAll";
+import {
+  COLLECT_EMPTY_LABEL,
+  COLLECT_FULL_NOTE,
+  CollectAll,
+  collectRing,
+  CollectState,
+  showBankResult,
+} from "./CollectAll";
 
-/** The HUD's Collect all button: the total waiting, one press, and what the notice says. */
+/**
+ * The yard's Collect all bubble (#171): the total waiting, the ring that fills
+ * with the harvesters, one press, and what the notice says.
+ */
 
 const T0 = 1_800_000_000;
 
@@ -56,6 +66,8 @@ describe("CollectAll", () => {
       get save() {
         return save;
       },
+      resources: { r1: 100, r2: 100, r3: 100, r4: 100 },
+      caps: { r1: 1_000, r2: 1_000, r3: 1_000, r4: 1_000 },
       now: () => clock,
       isRunning: () => false,
       run,
@@ -73,22 +85,32 @@ describe("CollectAll", () => {
   });
 
   const button = (): HTMLButtonElement => collect.element.querySelector("button")!;
+  const amount = (): string => collect.element.querySelector(".yard-collect__amount")!.textContent ?? "";
+  const fill = (): string => collect.element.style.getPropertyValue("--collect-fill");
 
   it("is hidden until the own yard binds it, and again on unbind", () => {
     expect(collect.element.hidden).toBe(true);
     collect.bind(binding);
     expect(collect.element.hidden).toBe(false);
-    expect(button().textContent).toBe("Collect all · 1.2K");
+    expect(collect.state).toBe(CollectState.READY);
+    expect(amount()).toBe("1.2K");
+    expect(button().textContent).toBe("1.2KCollect all");
     expect(button().title).toBe("Collect everything your harvesters hold:\nTwigs 720\nGoo 500");
+    expect(button().getAttribute("aria-label")).toBe("Collect all: 1,220 waiting in your harvesters.");
+    // One icon for each resource waiting, decorative inside the named button.
+    expect(collect.element.querySelectorAll(".yard-collect__icons .res-icon")).toHaveLength(2);
     collect.bind(null);
     expect(collect.element.hidden).toBe(true);
+    expect(collect.state).toBeNull();
   });
 
-  it("counts up once a second as the buffers fill", () => {
+  it("fills its ring with the harvesters and counts up once a second", () => {
     collect.bind(binding);
+    expect(fill()).toBe("84.72%");
     clock = T0 + 3600;
     vi.advanceTimersByTime(1_000);
-    expect(button().textContent).toBe(collectAllLabel(1440));
+    expect(amount()).toBe("1.4K");
+    expect(fill()).toBe("100%");
   });
 
   it("asks the server nothing from its per-second refresh, however long the buffers fill", () => {
@@ -99,13 +121,43 @@ describe("CollectAll", () => {
     }
     expect(run).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
-    expect(button().textContent).toBe(collectAllLabel(1440));
+    expect(amount()).toBe("1.4K");
   });
 
-  it("is hidden when nothing waits", () => {
-    save = { ...save, buildingdata: { "1": harvester(1, 1, 0) } } as BaseLoadResponse;
+  it("shrinks to an empty ring that cannot be pressed when nothing waits, and wobbles once it fills", () => {
+    save = {
+      ...save,
+      buildingdata: { "1": { X: 0, Y: 0, id: 1, t: 1, st: 0, pr: 1 } },
+    } as unknown as BaseLoadResponse;
     collect.bind(binding);
-    expect(collect.element.hidden).toBe(true);
+    expect(collect.element.hidden).toBe(false);
+    expect(collect.state).toBe(CollectState.EMPTY);
+    expect(collect.element.dataset["state"]).toBe("empty");
+    expect(amount()).toBe("");
+    expect(button().disabled).toBe(true);
+    expect(button().getAttribute("aria-label")).toBe(COLLECT_EMPTY_LABEL);
+    expect(collect.element.classList.contains("yard-collect--wobble")).toBe(false);
+
+    clock = T0 + 3600;
+    vi.advanceTimersByTime(1_000);
+    expect(collect.state).toBe(CollectState.READY);
+    expect(button().disabled).toBe(false);
+    expect(collect.element.classList.contains("yard-collect--wobble")).toBe(true);
+    collect.element.dispatchEvent(new Event("animationend"));
+    expect(collect.element.classList.contains("yard-collect--wobble")).toBe(false);
+  });
+
+  it("turns amber and says so when a silo the bank would fill is full", () => {
+    (binding.store as unknown as { resources: Record<string, number> }).resources = {
+      r1: 1_000,
+      r2: 0,
+      r3: 0,
+      r4: 0,
+    };
+    collect.bind(binding);
+    expect(collect.state).toBe(CollectState.FULL);
+    expect(button().title).toContain(COLLECT_FULL_NOTE);
+    expect(button().getAttribute("aria-label")).toContain(COLLECT_FULL_NOTE);
   });
 
   it("banks everything in one request and says what was collected", async () => {
@@ -118,6 +170,43 @@ describe("CollectAll", () => {
     expect(run.mock.calls[0]![0].key).toBe("bank:all");
     const notice = document.querySelector(".notice")!;
     expect(spokenText(notice)).toContain("Collected Twigs 720 Goo 500.");
+  });
+});
+
+describe("collectRing", () => {
+  const save = (buildingdata: Record<string, BuildingData>): BaseLoadResponse =>
+    ({ savetime: T0, currenttime: T0, buildingdata, buildinghealthdata: {}, storedata: {} }) as unknown as BaseLoadResponse;
+
+  it("fills with what the harvesters hold of what they can hold", () => {
+    const one = collectRing(save({ "1": harvester(1, 1, 360), "2": harvester(2, 4, 0) }), T0);
+    expect(one.total).toBe(360);
+    expect(one.fraction).toBe(0.25);
+    expect(one.state).toBe(CollectState.READY);
+    expect(collectRing(save({ "1": harvester(1, 1, 720) }), T0).fraction).toBe(1);
+  });
+
+  it("is empty with nothing to collect, and with no harvesters at all", () => {
+    expect(collectRing(save({}), T0)).toMatchObject({ total: 0, fraction: 0, state: CollectState.EMPTY });
+    const idle = { X: 0, Y: 0, id: 1, t: 1, st: 0, pr: 1 } as BuildingData;
+    expect(collectRing(save({ "1": idle }), T0).state).toBe(CollectState.EMPTY);
+  });
+
+  it("leaves out a harvester whose upgrade is running: it neither fills nor banks", () => {
+    const upgrading = { ...harvester(2, 4, 720), cU: 600 } as BuildingData;
+    const ring = collectRing(save({ "1": harvester(1, 1, 360), "2": upgrading }), T0);
+    expect(ring.total).toBe(360);
+    expect(ring.fraction).toBe(0.5);
+  });
+
+  it("is full only when a silo for something waiting is at its cap", () => {
+    const yard = save({ "1": harvester(1, 1, 360) });
+    const caps = { r1: 1_000, r2: 1_000, r3: 1_000, r4: 1_000 };
+    expect(collectRing(yard, T0, { r1: 999 }, caps).state).toBe(CollectState.READY);
+    expect(collectRing(yard, T0, { r1: 1_000 }, caps).state).toBe(CollectState.FULL);
+    // A full goo silo does not matter while only twigs wait.
+    expect(collectRing(yard, T0, { r1: 0, r4: 5_000 }, caps).state).toBe(CollectState.READY);
+    // Without caps (before the first state answer) it cannot be full.
+    expect(collectRing(yard, T0, { r1: 5_000 }, null).state).toBe(CollectState.READY);
   });
 });
 

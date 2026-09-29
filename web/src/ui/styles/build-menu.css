@@ -499,15 +499,6 @@
   font-size: var(--text-sm);
 }
 
-/* ── The toolbar's Build control ───────────────────────────────────────── */
-
-.yard-toolbar__build[aria-expanded="true"] {
-  background: var(--colour-surface-selected);
-  border-color: var(--colour-border-strong);
-  color: var(--colour-text-strong);
-  box-shadow: inset 0 -2px 0 var(--colour-accent), var(--shadow-float);
-}
-
 /* ── Carrying a new building ───────────────────────────────────────────── */
 
 .build-placing {

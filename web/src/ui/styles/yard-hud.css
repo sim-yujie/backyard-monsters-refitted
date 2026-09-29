@@ -1,0 +1,889 @@
+/*
+ * The yard's HUD, option B "game corner" (#171; mock-up R-YardHUD-B): the
+ * Hud's `corner` layout at the top (`Hud.ts`), the round buttons along the
+ * bottom (`YardDock.ts`), the Collect all harvest bubble (`CollectAll.ts`)
+ * and the zoom rail on the right edge (`YardScene.startViewTools`).
+ *
+ * Same rule as ui.css: every value comes from tokens.css. The dock covers the
+ * whole canvas but lets every press through except on its buttons.
+ */
+
+/* ── The band the corner takes from the top ───────────────────────────── */
+
+:root:has(.hud--corner) {
+  --hud-inset: var(--space-4);
+  --hud-bar-height: 56px;
+}
+
+/* ── Top left: the readouts and Workers in one glass bar ──────────────── */
+
+.hud--corner {
+  inset: var(--hud-inset) var(--hud-inset) auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.hud--corner > * {
+  pointer-events: auto;
+}
+
+.hud--corner .hud__bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: 18px;
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
+}
+
+.hud--corner .hud__resources {
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Icon on the left, the amount over its fill bar on the right. */
+.hud--corner .hud__resource-button {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  column-gap: var(--space-2);
+  row-gap: 3px;
+  min-height: 36px;
+  padding: var(--space-1) 10px;
+}
+
+.hud--corner .hud__resource-button .res-amount {
+  display: contents;
+}
+
+.hud--corner .hud__resource-button .res-icon {
+  grid-row: 1 / 3;
+  height: 26px;
+  margin: 0;
+  vertical-align: middle;
+}
+
+.hud--corner .hud__resource-value {
+  font-size: var(--text-md);
+  line-height: 1.1;
+}
+
+.hud--corner .hud__cap-bar {
+  position: static;
+  grid-column: 2;
+  width: 84px;
+  height: 3px;
+  background: var(--colour-surface-overlay);
+}
+
+/* Shiny has no silo: its figure sits in the middle. */
+.hud--corner .hud__resource--shiny .res-icon {
+  height: 24px;
+}
+
+.hud--corner .hud__workers-button {
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: var(--space-1) 10px;
+}
+
+.hud--corner .hud__workers-icon {
+  height: 26px;
+}
+
+.hud--corner .hud__workers-button .hud__resource-value {
+  font-size: var(--text-md);
+}
+
+/* ── Top right: who you are ───────────────────────────────────────────── */
+
+.account-menu__button--pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 14px;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.account-menu__button--pill:hover {
+  background: color-mix(in srgb, var(--colour-surface-raised), var(--colour-text) 8%);
+}
+
+.account-menu__button--pill:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.account-menu__pill-name {
+  max-width: 16ch;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu__ring {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  box-sizing: border-box;
+  border: 2px solid var(--colour-accent);
+  border-radius: 50%;
+  background: var(--colour-avatar-ground);
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.account-menu__ring-face {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+/* ── The round buttons ────────────────────────────────────────────────── */
+
+.yard-dock {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.yard-dock__left {
+  position: absolute;
+  left: 24px;
+  bottom: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* A zero-sized box in the bottom-right corner the right-hand buttons hang
+   from, each at the mock-up's offsets. */
+.yard-dock__right {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 0;
+  height: 0;
+}
+
+.yard-dock__right > * {
+  position: absolute;
+}
+
+.yard-dock__right > .yard-dock__button--build,
+.yard-dock__right > .yard-dock__button--attack {
+  right: 28px;
+  bottom: 26px;
+}
+
+.yard-dock__right > .yard-dock__button--monsters {
+  right: 150px;
+  bottom: 30px;
+}
+
+.yard-dock__right > .yard-dock__button--layout {
+  right: 40px;
+  bottom: 170px;
+}
+
+.yard-dock__right > .yard-collect {
+  right: 150px;
+  bottom: 214px;
+}
+
+/* A visit has no Build: Layout takes the bottom corner and Attack, when
+   there is one, keeps Build's place. */
+.yard-dock__right:not(:has(.yard-dock__button--big)) > .yard-dock__button--layout {
+  right: 40px;
+  bottom: 26px;
+}
+
+.yard-dock__button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.yard-dock__button[hidden],
+.yard-collect[hidden] {
+  display: none;
+}
+
+.yard-dock__disc {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  box-sizing: border-box;
+  border: 3px solid var(--colour-dome-rim);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, var(--colour-dome-top), var(--colour-dome-bottom));
+  box-shadow: var(--shadow-dome-drop), var(--shadow-dome-edge);
+  transition:
+    transform var(--motion-fast) var(--easing),
+    border-color var(--motion-fast) var(--easing);
+}
+
+.yard-dock__button:hover:not(:disabled) .yard-dock__disc {
+  transform: translateY(-2px);
+  border-color: var(--colour-border-strong);
+}
+
+.yard-dock__button:active:not(:disabled) .yard-dock__disc {
+  transform: scale(0.95);
+}
+
+.yard-dock__button:focus-visible {
+  outline: none;
+}
+
+.yard-dock__button:focus-visible .yard-dock__disc {
+  box-shadow: var(--focus-ring), var(--shadow-dome-drop);
+}
+
+.yard-dock__button:disabled {
+  cursor: default;
+}
+
+.yard-dock__button:disabled .yard-dock__disc {
+  opacity: 0.55;
+}
+
+.yard-dock__label {
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-dome-label);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.yard-dock__picture {
+  width: 45px;
+  height: 45px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px var(--colour-art-shadow));
+}
+
+/* Build (and a visit's Attack): large, in the accent. */
+.yard-dock__button--big .yard-dock__disc {
+  width: 92px;
+  height: 92px;
+  border-color: var(--colour-accent);
+  background: radial-gradient(
+    circle at 50% 35%,
+    var(--colour-dome-build-top),
+    var(--colour-dome-build-bottom)
+  );
+  color: var(--colour-accent);
+}
+
+.yard-dock__button--big:hover:not(:disabled) .yard-dock__disc {
+  border-color: var(--colour-accent-hover);
+}
+
+/* The Build window is open, or a building is in hand. */
+.yard-dock__button--on .yard-dock__disc {
+  background: var(--colour-accent-soft);
+  box-shadow:
+    0 0 0 6px var(--colour-accent-soft),
+    var(--shadow-dome-drop);
+}
+
+/* The planner is open (it hides the dock on its own; this is for the tick
+   between). */
+.yard-dock__button[aria-pressed="true"] .yard-dock__disc {
+  border-color: var(--colour-accent);
+}
+
+.yard-dock__badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 6px;
+  border: 2px solid var(--colour-dome-bottom);
+  border-radius: 12px;
+  background: var(--colour-surface-base);
+  color: var(--colour-text);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.yard-dock__badge[hidden] {
+  display: none;
+}
+
+.yard-dock__badge--warning {
+  background: var(--colour-warning);
+  color: var(--colour-warning-text);
+}
+
+/* ── Collect all: the harvest bubble ──────────────────────────────────── */
+
+.yard-collect {
+  --collect-fill: 0%;
+  --collect-colour: var(--colour-accent);
+  display: flex;
+  pointer-events: auto;
+}
+
+.yard-collect[data-state="full"] {
+  --collect-colour: var(--colour-warning);
+}
+
+.yard-collect__button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The ring is a conic fill from twelve o'clock; the core sits 6px inside it. */
+.yard-collect__ring {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--collect-colour) 0 var(--collect-fill),
+    var(--colour-dome-ring-track) var(--collect-fill) 100%
+  );
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--collect-colour) 18%, transparent),
+    var(--shadow-bubble-drop);
+  transition:
+    width var(--motion-normal) var(--easing),
+    height var(--motion-normal) var(--easing);
+}
+
+.yard-collect__core {
+  position: absolute;
+  inset: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 35%,
+    var(--colour-dome-collect-top),
+    var(--colour-dome-collect-bottom)
+  );
+}
+
+.yard-collect__icons {
+  display: flex;
+  align-items: center;
+}
+
+.yard-collect__icons .res-icon {
+  height: 22px;
+  vertical-align: middle;
+  filter: drop-shadow(0 1px 2px var(--colour-art-shadow));
+}
+
+.yard-collect__icons .res-icon + .res-icon {
+  margin-left: -10px;
+}
+
+.yard-collect__amount {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.yard-collect__label {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--collect-colour);
+  color: var(--colour-accent-text);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.yard-collect[data-state="full"] .yard-collect__label {
+  color: var(--colour-warning-text);
+}
+
+.yard-collect__button:hover:not(:disabled) .yard-collect__ring {
+  transform: translateY(-2px);
+}
+
+.yard-collect__button:focus-visible {
+  outline: none;
+}
+
+.yard-collect__button:focus-visible .yard-collect__ring {
+  box-shadow: var(--focus-ring), var(--shadow-bubble-drop);
+}
+
+.yard-collect__button:disabled {
+  cursor: default;
+}
+
+/* Nothing ready: a small ring with no number that cannot be pressed. It
+   stays where the bubble is, so the corner does not jump when it fills. */
+.yard-collect[data-state="empty"] .yard-collect__ring {
+  width: 56px;
+  height: 56px;
+  margin-block: 20px;
+  box-shadow: var(--shadow-dome-drop);
+}
+
+.yard-collect[data-state="empty"] .yard-collect__core {
+  inset: 5px;
+}
+
+.yard-collect[data-state="empty"] .yard-collect__label {
+  background: var(--colour-dome-label);
+  color: var(--colour-text-muted);
+}
+
+/* Something came in: one wobble. */
+.yard-collect--wobble .yard-collect__ring {
+  animation: yard-collect-wobble 0.6s var(--easing);
+}
+
+@keyframes yard-collect-wobble {
+  0%,
+  100% {
+    transform: rotate(0) scale(1);
+  }
+  25% {
+    transform: rotate(-8deg) scale(1.06);
+  }
+  50% {
+    transform: rotate(6deg) scale(1.04);
+  }
+  75% {
+    transform: rotate(-3deg) scale(1.02);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yard-collect--wobble .yard-collect__ring {
+    animation: none;
+  }
+
+  .yard-collect__ring,
+  .yard-dock__disc {
+    transition: none;
+  }
+}
+
+/* ── Zoom: small, on the right edge ───────────────────────────────────── */
+
+.yard-viewtools--rail {
+  top: 50%;
+  right: var(--space-4);
+  bottom: auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--colour-border);
+  border-radius: 16px;
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
+  transform: translateY(-50%);
+}
+
+.yard-viewtools--rail .yard-zoom {
+  flex-direction: column-reverse;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.yard-viewtools--rail .yard-zoom__slider,
+.yard-viewtools--rail .yard-zoom__readout,
+.yard-viewtools--rail .yard-zoom__fit {
+  display: none;
+}
+
+.yard-viewtools--rail .yard-zoom__step,
+.yard-viewtools__overview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: var(--radius-md);
+  font-size: 22px;
+  font-weight: 400;
+}
+
+.yard-viewtools__overview {
+  border: 0;
+  background: transparent;
+  color: var(--colour-text);
+  cursor: pointer;
+}
+
+.yard-viewtools__overview:hover {
+  background: var(--colour-surface-control);
+}
+
+.yard-viewtools__overview:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.yard-viewtools__overview[aria-pressed="true"] {
+  background: var(--colour-surface-selected);
+  color: var(--colour-accent);
+}
+
+/* Outside the planner the overview is the rail's third button: the minimap
+   opens beside the rail rather than always sitting in the corner. */
+.yard-viewtools--rail .yard-minimap {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + var(--space-2));
+  transform: translateY(-50%);
+}
+
+.yard-viewtools--rail:not(.yard-viewtools--overview) .yard-minimap {
+  display: none;
+}
+
+.yard-viewtools:not(.yard-viewtools--rail) .yard-viewtools__overview {
+  display: none;
+}
+
+/* ── What the corner makes way for ────────────────────────────────────── */
+
+/* A building's panel docks on the right edge where the rail is. */
+.overlay__layer:has(> .map-dock--right > *) > .yard-viewtools--rail {
+  display: none;
+}
+
+/* The planner has its own bars and its own way out. */
+.overlay__layer:has(> .planner-bar) > .yard-dock {
+  display: none;
+}
+
+/* The yard's status line, beside Map rather than under it. */
+.overlay__layer:has(> .yard-dock) > .cell-readout {
+  left: calc(24px + 68px + var(--space-4));
+  bottom: 26px;
+}
+
+.overlay__layer:has(> .planner-bar) > .cell-readout {
+  left: var(--space-4);
+}
+
+/* ── A phone (mock-up R-YardHUD-B-phone) ──────────────────────────────── */
+
+@media (width <= 620px) {
+  :root:has(.hud--corner) {
+    --hud-inset: var(--space-2);
+    --hud-bar-height: 96px;
+  }
+
+  /* Row one: the name and critter, then Workers and Shiny. Row two: the four
+     resources in a glass strip of their own. */
+  .hud--corner {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: 40px auto;
+    align-items: center;
+    gap: 6px var(--space-1);
+    left: var(--space-3);
+    right: var(--space-3);
+  }
+
+  .hud--corner::before {
+    content: "";
+    grid-area: 2 / 1 / 3 / 5;
+    align-self: stretch;
+    border: 1px solid var(--colour-border);
+    border-radius: 14px;
+    background: var(--colour-surface-raised);
+    -webkit-backdrop-filter: var(--blur-panel);
+    backdrop-filter: var(--blur-panel);
+    box-shadow: var(--shadow-float);
+  }
+
+  .hud--corner .hud__bar,
+  .hud--corner .hud__resources {
+    display: contents;
+  }
+
+  .hud--corner .account-menu {
+    grid-area: 1 / 1 / 2 / 3;
+    justify-self: start;
+    min-width: 0;
+  }
+
+  .hud--corner .hud__workers {
+    grid-area: 1 / 3;
+    justify-self: end;
+  }
+
+  .hud--corner .hud__resource--shiny {
+    grid-area: 1 / 4;
+    justify-self: end;
+  }
+
+  /* Placed by hand: the strip's glass (::before) already fills row two, and
+     auto-placement would push them past it into new columns. */
+  .hud--corner .hud__resource:not(.hud__resource--shiny) {
+    position: relative;
+    grid-row: 2;
+    justify-content: center;
+    padding-block: 6px;
+  }
+
+  .hud--corner .hud__resource--r1 {
+    grid-column: 1;
+  }
+
+  .hud--corner .hud__resource--r2 {
+    grid-column: 2;
+  }
+
+  .hud--corner .hud__resource--r3 {
+    grid-column: 3;
+  }
+
+  .hud--corner .hud__resource--r4 {
+    grid-column: 4;
+  }
+
+  /* Workers and Shiny: small glass chips. */
+  .hud--corner .hud__workers-button,
+  .hud--corner .hud__resource--shiny .hud__resource-button {
+    height: 36px;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-md);
+    background: var(--colour-surface-raised);
+    -webkit-backdrop-filter: var(--blur-panel);
+    backdrop-filter: var(--blur-panel);
+  }
+
+  .hud--corner .hud__workers-button {
+    gap: 6px;
+  }
+
+  .hud--corner .hud__workers-icon {
+    height: 22px;
+  }
+
+  .hud--corner .hud__resource-value,
+  .hud--corner .hud__workers-button .hud__resource-value {
+    font-size: 14px;
+  }
+
+  /* Icon and amount on one line, the fill bar under both. */
+  .hud--corner .hud__resource:not(.hud__resource--shiny) .hud__resource-button {
+    grid-template-columns: auto auto;
+    justify-content: center;
+    column-gap: var(--space-1);
+    min-height: 0;
+    padding: 0 2px;
+  }
+
+  .hud--corner .hud__resource:not(.hud__resource--shiny) .res-icon {
+    grid-row: 1;
+    height: 20px;
+  }
+
+  .hud--corner .hud__resource:not(.hud__resource--shiny) .hud__resource-value {
+    font-size: var(--text-sm);
+  }
+
+  .hud--corner .hud__resource:not(.hud__resource--shiny) .hud__cap-bar {
+    grid-column: 1 / 3;
+    justify-self: center;
+    width: 64px;
+  }
+
+  .hud--corner .hud__resource--shiny .hud__resource-button {
+    column-gap: 6px;
+  }
+
+  .hud--corner .hud__resource--shiny .res-icon {
+    height: 20px;
+  }
+
+  /* The name and critter lead the top row, without a pill. */
+  .account-menu--pill .account-menu__button--pill {
+    flex-direction: row-reverse;
+    gap: var(--space-2);
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  .account-menu--pill .account-menu__ring {
+    width: 40px;
+    height: 40px;
+  }
+
+  .account-menu--pill .account-menu__ring-face {
+    width: 32px;
+    height: 32px;
+  }
+
+  .account-menu--pill .account-menu__list {
+    right: auto;
+    left: 0;
+  }
+
+  /* The buttons, smaller and closer to the edges. */
+  .yard-dock__left {
+    left: var(--space-4);
+    bottom: 18px;
+  }
+
+  .yard-dock__disc {
+    width: 60px;
+    height: 60px;
+  }
+
+  .yard-dock__disc > svg {
+    width: 25px;
+    height: 25px;
+  }
+
+  .yard-dock__picture {
+    width: 40px;
+    height: 40px;
+  }
+
+  .yard-dock__button--big .yard-dock__disc {
+    width: 80px;
+    height: 80px;
+  }
+
+  .yard-dock__button--big .yard-dock__disc > svg {
+    width: 34px;
+    height: 34px;
+  }
+
+  .yard-dock__right > .yard-dock__button--build,
+  .yard-dock__right > .yard-dock__button--attack {
+    right: var(--space-4);
+    bottom: var(--space-4);
+  }
+
+  .yard-dock__right > .yard-dock__button--monsters {
+    right: 116px;
+    bottom: 18px;
+  }
+
+  .yard-dock__right > .yard-dock__button--layout {
+    right: 26px;
+    bottom: 136px;
+  }
+
+  .yard-dock__right:not(:has(.yard-dock__button--big)) > .yard-dock__button--layout {
+    right: 26px;
+    bottom: 18px;
+  }
+
+  .yard-dock__right > .yard-collect {
+    right: 112px;
+    bottom: 150px;
+    transform: scale(0.84);
+    transform-origin: bottom right;
+  }
+
+  /* No zoom rail on a phone: fingers pinch. */
+  .yard-viewtools--rail {
+    display: none;
+  }
+
+  .overlay__layer:has(> .yard-dock) > .cell-readout {
+    display: none;
+  }
+
+  /* A sheet along the bottom (a building's panel, the Monsters screen, the
+     Build window, the building in hand) has the buttons' place. */
+  .overlay__layer:has(> .map-dock--right > *) > .yard-dock,
+  .overlay__layer:has(> .monsters-screen:not([hidden])) > .yard-dock,
+  .overlay__layer:has(> .build-menu:not([hidden])) > .yard-dock,
+  .overlay__layer:has(> .build-placing) > .yard-dock {
+    display: none;
+  }
+}

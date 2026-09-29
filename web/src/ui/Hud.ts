@@ -3,16 +3,12 @@ import { getSession } from "@/api/auth";
 import type { ResourceCaps, Resources } from "@/api/types";
 import { avatarOf, pickedAvatar, type AvatarId } from "@/game/avatars";
 import { nextWorkerJob } from "@/game/yard/jobs";
-import type { OwnYardTarget } from "@/game/yard/ownYards";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { AccountMenu } from "./AccountMenu";
-import { MonstersTabId } from "./monsters/monstersTab";
 import { formatAmount, formatCompact } from "./format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
-import { CollectAll } from "./yard/CollectAll";
 import { DamageBanner } from "./yard/DamageBanner";
 import { JobNotices } from "./yard/JobNotices";
-import { YardSwitcher } from "./yard/YardSwitcher";
 
 /**
  * The persistent top bar: resource readouts on the left, a scene switcher on
@@ -33,18 +29,20 @@ import { YardSwitcher } from "./yard/YardSwitcher";
  * resource's storage cap as "amount / cap" with a thin fill bar that turns
  * amber when the silo is full, a Workers control ("free / total") that goes
  * to the job finishing soonest, and a toast for every job the server says
- * finished (`JobNotices`), a Monsters button that opens the Monsters
- * screen on its Unlock tab (design §4.1), and a Collect all button while the
- * harvesters hold something (`CollectAll`, design §5.1), and the post-attack
- * "N buildings damaged [Repair all]" line in the notice dock (`DamageBanner`,
- * design §5.5). The map, the attack screen and a
- * foreign yard have no binding and show the amounts alone.
+ * finished (`JobNotices`), and the post-attack "N buildings damaged
+ * [Repair all]" line in the notice dock (`DamageBanner`, design §5.5). The
+ * map, the attack screen and a foreign yard have no binding and show the
+ * amounts alone. In an outpost the amounts and caps are the main yard's pool,
+ * as the server sends them.
  *
- * With `onYardSelect` the bar also carries the yard switcher (`YardSwitcher`,
- * outposts WP5): the open yard's title, "Main yard" or "Outpost (x, y)", the
- * outpost count, and a menu of every own yard. In an outpost the amounts and
- * caps are the main yard's pool, as the server sends them, and Collect all
- * is not offered: an outpost banks by itself.
+ * The yard lays it out as its `corner` (the HUD redesign, #171, option B:
+ * "a game, not a dashboard"): no brand and no screen tabs, the readouts and
+ * Workers in one glass bar at the top left, each amount over its thin fill
+ * bar, and the Account menu as a pill at the top right with the player's name
+ * and critter. On a phone the name and critter lead the top row with Workers
+ * and Shiny at its end, and the four resources share the row under it in
+ * short amounts. The yard's buttons (Build, Collect all, Monsters, Layout,
+ * Map, the yard switcher) are the yard's own round buttons (`YardDock`).
  */
 
 /**
@@ -71,9 +69,6 @@ export const FULL_NOTE = "Full: new income is lost. Build or upgrade Storage Sil
 
 /** The worker art: the orange builder with the hammer and the hard hat. */
 const WORKER_ICON_URL = "/assets/archived/worker.v1.png";
-
-/** The Monsters button's picture: a Pokey, the first monster every player has. */
-const MONSTERS_ICON_URL = "/assets/monsters/C1-small.png";
 
 /** How full a silo is: the fill bar's share, and whether new income is lost. */
 export interface CapState {
@@ -110,11 +105,14 @@ export interface HudOptions {
   /** The name the Account menu shows; the signed-in session's by default. */
   accountName?: string | null;
   /**
-   * With it, the bar carries the yard switcher while an own yard is bound,
-   * and this opens the yard picked in it.
+   * "bar" (default): one bar across the top with the brand and the screen
+   * tabs. "corner": the yard's (#171), see the class comment.
    */
-  onYardSelect?: (target: OwnYardTarget) => void;
+  layout?: "bar" | "corner";
 }
+
+/** At or under this width the corner layout is the phone's (`yard-hud.css`). */
+const PHONE_QUERY = "(width <= 620px)";
 
 /** How long a tapped readout's exact-amount bubble stays up on its own. */
 const EXACT_LIFETIME_MS = 5000;
@@ -188,18 +186,15 @@ export class Hud {
   private readonly workersButton: HTMLButtonElement;
   private readonly workersName: HTMLElement;
   private readonly workersValue: HTMLElement;
-  private readonly monsters: HTMLElement;
-  private readonly monstersName: HTMLElement;
-  /** Collect all (design §5.1): only on the own yard, only while something waits. */
-  private readonly collectAll = new CollectAll();
-  /** Which own yard is open, and the way to the others; only with `onYardSelect`. */
-  private readonly switcher: YardSwitcher | null;
+  /** The yard's corner layout (#171) rather than the bar. */
+  private readonly corner: boolean;
   private accountMenu: AccountMenu | null = null;
   private fitted: HudFit = HudFit.FULL;
 
   constructor(options: HudOptions) {
+    this.corner = options.layout === "corner";
     this.element = document.createElement("header");
-    this.element.className = "hud";
+    this.element.className = this.corner ? "hud hud--corner" : "hud";
     this.element.dataset["fit"] = HudFit.FULL;
     // Listened for from the start rather than on `mount`: the map places the
     // bar itself (`MapRoomUi`) and never calls `mount`.
@@ -216,7 +211,7 @@ export class Hud {
 
     for (const key of [...RESOURCE_KEYS, "shiny"] as const) {
       const item = document.createElement("li");
-      item.className = "hud__resource";
+      item.className = `hud__resource hud__resource--${key}`;
 
       // A button so a tap and the keyboard can ask for the exact amount; the
       // icon is decorative because the button's own label names the resource.
@@ -267,31 +262,8 @@ export class Hud {
     this.workersButton.append(workerIcon, this.workersName, this.workersValue);
     this.workersButton.addEventListener("click", () => this.goToNextJob());
     this.workers.append(this.workersButton);
-
-    // Monsters: the own yard's Monsters screen (§4.1), so hidden until a
-    // binding that can open it comes.
-    this.monsters = document.createElement("div");
-    this.monsters.className = "hud__monsters";
-    this.monsters.hidden = true;
-    const monstersButton = document.createElement("button");
-    monstersButton.type = "button";
-    monstersButton.className = "hud__resource-button hud__monsters-button";
-    monstersButton.title = "Monsters: unlock, hatch and house your monsters";
-    monstersButton.setAttribute("aria-label", "Monsters");
-    const monstersIcon = document.createElement("span");
-    monstersIcon.className = "hud__monsters-icon";
-    monstersIcon.setAttribute("aria-hidden", "true");
-    monstersIcon.style.backgroundImage = `url("${MONSTERS_ICON_URL}")`;
-    this.monstersName = document.createElement("span");
-    this.monstersName.className = "hud__monsters-name";
-    this.monstersName.textContent = "Monsters";
-    monstersButton.append(monstersIcon, this.monstersName);
-    monstersButton.addEventListener("click", () =>
-      this.yardBinding?.scene.openMonsters?.(MonstersTabId.UNLOCK),
-    );
-    this.monsters.append(monstersButton);
-
-    this.switcher = options.onYardSelect ? new YardSwitcher({ onSelect: options.onYardSelect }) : null;
+    // The corner's Workers is the icon and "5 / 5", as the mock-up draws it.
+    this.workersName.hidden = this.corner;
 
     const spacer = document.createElement("div");
     spacer.className = "hud__spacer";
@@ -310,22 +282,22 @@ export class Hud {
       this.sceneButtons.set(scene.id, button);
     }
 
-    this.element.append(
-      brand,
-      resources,
-      this.workers,
-      this.collectAll.element,
-      this.monsters,
-      ...(this.switcher ? [this.switcher.element] : []),
-      spacer,
-      scenes,
-    );
+    if (this.corner) {
+      // One glass bar holds the readouts and Workers (yard-hud.css).
+      const bar = document.createElement("div");
+      bar.className = "hud__bar";
+      bar.append(resources, this.workers);
+      this.element.append(bar);
+    } else {
+      this.element.append(brand, resources, this.workers, spacer, scenes);
+    }
 
     if (options.onSignOut) {
       const session = getSession();
       this.accountMenu = new AccountMenu({
         name: options.accountName === undefined ? session?.username : options.accountName,
         onSignOut: options.onSignOut,
+        variant: this.corner ? "pill" : "button",
         ...(session && {
           avatar: {
             current: avatarOf(session.picSquare, session.userId),
@@ -369,6 +341,12 @@ export class Hud {
    * and takes the fullest.
    */
   fit(): void {
+    // The corner on a phone lays the readouts in a grid of four, which never
+    // overflows and so cannot be measured: short amounts, as the mock-up has.
+    if (this.corner && window.matchMedia?.(PHONE_QUERY).matches) {
+      this.applyFit(HudFit.COMPACT);
+      return;
+    }
     for (const level of FIT_ORDER) {
       this.applyFit(level);
       if (this.list.scrollWidth <= this.list.clientWidth + 1) return;
@@ -404,9 +382,6 @@ export class Hud {
       this.damageBanner = new DamageBanner(binding);
       this.unsubscribeYard = binding.store.subscribe((change) => this.onYardChange(change));
     }
-    // An outpost banks by itself (`BUILDINGINFO.as:130-131`): no Collect all.
-    this.collectAll.bind(binding?.store.kind === "outpost" ? null : binding);
-    this.switcher?.bind(binding);
     this.syncYard();
   }
 
@@ -434,7 +409,6 @@ export class Hud {
     this.hideExact();
     this.accountMenu?.destroy();
     this.accountMenu = null;
-    this.switcher?.destroy();
     for (const float of this.floats) float.remove();
     this.floats.clear();
     this.element.remove();
@@ -460,8 +434,12 @@ export class Hud {
     if (readout.amount === undefined) return;
     readout.value.textContent =
       this.fitted === HudFit.COMPACT ? formatCompact(readout.amount) : formatAmount(readout.amount);
+    // The corner draws the cap as the fill bar alone; the figure is in the
+    // tooltip and the tap bubble.
     const showCap =
-      readout.cap !== undefined && (this.fitted === HudFit.FULL || this.fitted === HudFit.NO_BRAND);
+      !this.corner &&
+      readout.cap !== undefined &&
+      (this.fitted === HudFit.FULL || this.fitted === HudFit.NO_BRAND);
     readout.capText.textContent = showCap ? ` / ${formatAmount(readout.cap)}` : "";
     const state = capState(readout.amount, readout.cap);
     readout.bar.hidden = state === null;
@@ -476,7 +454,6 @@ export class Hud {
       this.jobNotices?.showAway(change.completed);
       return;
     }
-    this.collectAll.refresh();
     this.damageBanner?.refresh();
     if (change.completed.length > 0) this.jobNotices?.show(change.completed);
     if (change.reason !== YardChangeReason.PENDING) this.syncYard();
@@ -496,7 +473,6 @@ export class Hud {
     }
 
     this.workers.hidden = store === null;
-    this.monsters.hidden = !this.yardBinding?.scene.openMonsters;
     if (store) {
       const { total, busy } = store.workers;
       const free = Math.max(0, total - busy);
@@ -523,8 +499,7 @@ export class Hud {
     this.element.dataset["fit"] = level;
     for (const readout of this.readouts.values()) this.render(readout);
     // The icon says "workers" once the bar is short of room.
-    this.workersName.hidden = level !== HudFit.FULL;
-    this.monstersName.hidden = level === HudFit.COMPACT;
+    this.workersName.hidden = this.corner || level !== HudFit.FULL;
   }
 
   private readonly onResize = (): void => this.fit();

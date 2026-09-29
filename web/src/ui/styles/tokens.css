@@ -68,6 +68,22 @@
   /* A plain amount in a bar (storage, housing): neither good nor bad. */
   --colour-meter: #d6dee8;
 
+  /* The yard's round buttons (#171): a lit dome, top to bottom, and its rim.
+     Build's dome is tinted towards the accent; Collect's is the deepest. */
+  --colour-dome-top: #2b3644;
+  --colour-dome-bottom: #121821;
+  --colour-dome-build-top: #2a4a58;
+  --colour-dome-build-bottom: #12202a;
+  --colour-dome-collect-top: #1d3440;
+  --colour-dome-collect-bottom: #0e1820;
+  --colour-dome-rim: rgb(255 255 255 / 28%);
+  --colour-dome-label: rgb(12 16 22 / 88%);
+  --colour-dome-ring-track: rgb(255 255 255 / 14%);
+  --colour-avatar-ground: #1b2633;
+  /* The drop shadow of cut-out art (monsters, resource icons) floating over
+     a button. */
+  --colour-art-shadow: rgb(0 0 0 / 50%);
+
   --colour-scrim: rgb(8 12 16 / 55%);
 
   /* Map terrain, matching the server's height bands. */
@@ -123,6 +139,10 @@
   --shadow-float: 0 12px 40px rgb(0 0 0 / 35%);
   --shadow-panel: 0 16px 48px rgb(0 0 0 / 40%);
   --shadow-popup: 0 20px 60px rgb(0 0 0 / 45%);
+  /* The yard's round buttons (#171): a drop under the dome and a lit top edge. */
+  --shadow-dome-drop: 0 8px 22px rgb(0 0 0 / 45%);
+  --shadow-dome-edge: inset 0 2px 0 rgb(255 255 255 / 12%);
+  --shadow-bubble-drop: 0 10px 26px rgb(0 0 0 / 45%);
   --blur-panel: blur(16px);
 
   --focus-ring: 0 0 0 2px var(--colour-surface-base), 0 0 0 4px var(--colour-accent);
@@ -141,8 +161,6 @@
   --hud-inset: 8px;
   --hud-bar-height: 56px;
   --hud-height: calc(var(--hud-bar-height) + var(--hud-inset));
-  /* The yard's toolbar row on a phone: Layout, Build and Collect (#144). */
-  --yard-toolbar-row: 44px;
   --z-canvas: 0;
   --z-overlay: 10;
   --z-hud: 20;

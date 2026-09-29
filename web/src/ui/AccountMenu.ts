@@ -15,6 +15,9 @@
  * menu holds the picker: the twelve critters in a grid, the current one
  * marked. A pick is only marked once `onPick` has stored it; a failed save
  * leaves the old mark and says so.
+ *
+ * The yard's HUD (#171) shows it as a `pill`: the player's name beside their
+ * critter in a ring, rather than the word "Account".
  */
 
 import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
@@ -34,6 +37,11 @@ export interface AccountMenuOptions {
   readonly onSignOut: () => void;
   /** The avatar and its picker; without it the menu is name and Log out only. */
   readonly avatar?: AccountAvatar;
+  /**
+   * "button" (default): a small button with the face and the word "Account".
+   * "pill": the name and the face in a ring, the yard HUD's corner (#171).
+   */
+  readonly variant?: "button" | "pill";
 }
 
 /** What the picker's heading adds while the player still wears the default. */
@@ -66,10 +74,23 @@ export class AccountMenu {
     this.button = document.createElement("button");
     this.button.type = "button";
     this.button.className = "btn btn--ghost account-menu__button";
-    this.button.textContent = "Account";
-    if (options.avatar) {
-      this.current = options.avatar.current;
-      this.button.prepend(this.face("account-menu__face", "small"));
+    if (options.avatar) this.current = options.avatar.current;
+    if (options.variant === "pill") {
+      this.element.classList.add("account-menu--pill");
+      const name = document.createElement("span");
+      name.className = "account-menu__pill-name";
+      name.textContent = accountName(options.name);
+      const ring = document.createElement("span");
+      ring.className = "account-menu__ring";
+      if (options.avatar) ring.append(this.face("account-menu__ring-face", "full"));
+      else ring.textContent = accountName(options.name).charAt(0).toUpperCase();
+      this.button.className = "account-menu__button account-menu__button--pill";
+      this.button.append(name, ring);
+      this.button.setAttribute("aria-label", `Your account: ${accountName(options.name)}`);
+      this.button.title = "Your account: avatar and Log out";
+    } else {
+      this.button.textContent = "Account";
+      if (options.avatar) this.button.prepend(this.face("account-menu__face", "small"));
     }
     this.button.setAttribute("aria-haspopup", "true");
     this.button.setAttribute("aria-expanded", "false");

@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import { MAIN_YARD, outpostTarget, type OwnYardTarget } from "@/game/yard/ownYards";
 import type { YardStore, YardUiBinding } from "@/game/yard/YardStore";
-import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
+import { YardDock } from "./YardDock";
 import { YardSwitcher } from "./YardSwitcher";
 
 /**
@@ -69,7 +69,7 @@ describe("YardSwitcher", () => {
 
   it("lists the main yard and each outpost, the open one marked", () => {
     switcher.bind(bindingFor(TWO, outpostTarget("2000242209", { col: 242, row: 209 })));
-    expect(button().textContent).toBe("Outpost (242, 209)2");
+    expect(button().textContent).toBe("2Outpost (242, 209)");
     expect(button().getAttribute("aria-label")).toBe("Your yards: Outpost (242, 209), 2 outposts");
     expect(items().map((item) => item.textContent)).toEqual([
       "Main yard",
@@ -81,7 +81,9 @@ describe("YardSwitcher", () => {
 
   it("lists only the main yard for a player with no outposts", () => {
     switcher.bind(bindingFor([], MAIN_YARD));
-    expect(button().textContent).toBe("Main yard0");
+    // No badge for no outposts; the label is the yard's title.
+    expect(button().querySelector<HTMLElement>(".yard-switcher__count")!.hidden).toBe(true);
+    expect(button().querySelector(".yard-switcher__title")!.textContent).toBe("Main yard");
     expect(items().map((item) => item.textContent)).toEqual(["Main yard"]);
   });
 
@@ -113,17 +115,17 @@ describe("YardSwitcher", () => {
   });
 });
 
-describe("the HUD's switcher", () => {
-  it("rides in the bar only when the scene can switch yards", () => {
-    const plain = new Hud({ scenes: [], onSceneSelect: () => {} });
+describe("the dock's switcher", () => {
+  it("rides with the round buttons only when the scene can switch yards", () => {
+    const plain = new YardDock({ onMap: () => {}, onLayout: () => {} });
     expect(plain.element.querySelector(".yard-switcher")).toBeNull();
     plain.destroy();
 
-    const hud = new Hud({ scenes: [], onSceneSelect: () => {}, onYardSelect: () => {} });
-    const element = hud.element.querySelector<HTMLElement>(".yard-switcher")!;
+    const dock = new YardDock({ onMap: () => {}, onLayout: () => {}, onYardSelect: () => {} });
+    const element = dock.element.querySelector<HTMLElement>(".yard-switcher")!;
     expect(element.hidden).toBe(true);
-    hud.bindYard(bindingFor(TWO, MAIN_YARD));
+    dock.bind(bindingFor(TWO, MAIN_YARD));
     expect(element.hidden).toBe(false);
-    hud.destroy();
+    dock.destroy();
   });
 });

@@ -93,9 +93,9 @@ export interface YardPlannerOptions {
   overlay: HTMLElement;
   notices: Notices;
   /**
-   * The read-only mode's own top toolbar (the Plan button and status line),
-   * which stays mounted under the planner's bars and is measured again once
-   * they are gone (see `onInset`).
+   * What covers the top of the canvas outside the planner (the yard's HUD
+   * since #171), which stays mounted under the planner's bars and is
+   * measured again once they are gone (see `onInset`).
    */
   readOnlyToolbar: HTMLElement;
   /**

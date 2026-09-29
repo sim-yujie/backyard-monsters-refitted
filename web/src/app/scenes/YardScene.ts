@@ -66,7 +66,9 @@ import { BuildMenu, PlacementBar, spotSentence } from "@/ui/yard/BuildMenu";
 import { showBankResult } from "@/ui/yard/CollectAll";
 import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
 import { describeUpgradeReport } from "@/ui/yard/upgradeText";
+import { YardDock } from "@/ui/yard/YardDock";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
+import { icon } from "@/ui/icons";
 import { ZoomControl } from "@/ui/ZoomControl";
 import { YardPlanner } from "./YardPlanner";
 import { sceneForMap } from "./MapGateScene";
@@ -157,36 +159,6 @@ export const hudPoolFor = (
   return own?.resources ? { resources: own.resources, credits: own.credits } : null;
 };
 
-/**
- * The floor-plan glyph on the Layout control.
- *
- * Four rectangles rather than an icon font or a file: it is four elements, it
- * takes its colour from the button it sits in, and it cannot arrive late.
- */
-const layoutIcon = (): SVGSVGElement => {
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "0 0 16 16");
-  svg.setAttribute("class", "yard-toolbar__icon");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("focusable", "false");
-  for (const [x, y, width, height] of [
-    [1, 1, 6, 6],
-    [9, 1, 6, 4],
-    [1, 9, 6, 6],
-    [9, 7, 6, 8],
-  ]) {
-    const rect = document.createElementNS(ns, "rect");
-    rect.setAttribute("x", String(x));
-    rect.setAttribute("y", String(y));
-    rect.setAttribute("width", String(width));
-    rect.setAttribute("height", String(height));
-    rect.setAttribute("rx", "1.5");
-    svg.append(rect);
-  }
-  return svg;
-};
-
 /** How often the open panel's countdowns are refreshed. */
 const UI_TICK_SECONDS = 1;
 
@@ -245,9 +217,11 @@ export class YardScene implements Scene {
   /** The tab came back while the planner was open; refresh once it closes. */
   private refreshAfterPlanner = false;
   private planner: YardPlanner | null = null;
-  private plannerButton: HTMLButtonElement | null = null;
-  /** The word inside the Layout control, beside its glyph. */
-  private plannerLabel: HTMLElement | null = null;
+  /**
+   * The round buttons (#171): Build, Collect all, Monsters, Layout, Map and
+   * the yard switcher on the own yard; Layout, Map, Home and Attack on a visit.
+   */
+  private dock: YardDock | null = null;
   /**
    * What the player may do with the planner in the yard now open (§8, Q5).
    *
@@ -255,9 +229,6 @@ export class YardScene implements Scene {
    * buildings and there are none to read before then.
    */
   private access: PlannerAccess = PlannerAccess.LOCKED;
-  private toolbar: HTMLElement | null = null;
-  /** The own yard's Build control (§5.3); null on a visit. */
-  private buildButton: HTMLButtonElement | null = null;
   /** The build menu, made the first time it opens. */
   private buildMenu: BuildMenu | null = null;
   /** A new building in hand, and the bar that says what it is; null otherwise. */
@@ -276,8 +247,6 @@ export class YardScene implements Scene {
   private own: OwnYardTarget = MAIN_YARD;
   /** An outpost just taken over: "Veni, Vidi, Vici!" once it has loaded. */
   private takenOver: OwnYardTarget["takenOver"] | null = null;
-  /** The visit's Attack button; only built when the target can be attacked. */
-  private attackButton: HTMLButtonElement | null = null;
   /** True while the attack load is in flight, so a second click does nothing. */
   private attacking = false;
   private selected: YardBuilding | null = null;
@@ -327,23 +296,25 @@ export class YardScene implements Scene {
     context.stage.addChild(this.renderer.root);
     this.renderer.attach(context.renderer);
 
+    /*
+     * The HUD redesign (#171, option B, "a game, not a dashboard"): the
+     * amounts and the account along the top (`Hud`'s corner), and the yard's
+     * doors as round buttons along the bottom (`YardDock`). Map is the way to
+     * the world; on a visit, Home is the way back.
+     */
     this.hud = new Hud({
-      scenes: [
-        { id: SceneName.MAP, label: "Map" },
-        { id: SceneName.YARD, label: "Yard" },
-      ],
-      onSceneSelect: (id) => (id === SceneName.MAP ? this.openMap() : context.goTo(id)),
+      scenes: [],
+      layout: "corner",
+      onSceneSelect: (id) => context.goTo(id),
       onSignOut: () => {
         logout();
         context.goTo(SceneName.LOGIN);
       },
-      onYardSelect: (target) => this.openOwnYard(target),
     });
     this.hud.setActiveScene(SceneName.YARD);
     this.hud.mount(context.overlay.content);
 
     this.notices.mount(context.overlay.content);
-    // On a phone they dock under the toolbar row instead of over it (maproom.css).
     this.notices.element.classList.add("yard-notices");
 
     this.status = document.createElement("div");
@@ -351,79 +322,37 @@ export class YardScene implements Scene {
     this.status.textContent = `Loading ${whose}…`;
 
     /*
-     * The way into the planner, and the first thing on this screen anyone has
-     * to find.
-     *
-     * It used to be a ghost button labelled "Plan", which is to say grey text
-     * on a dark background beside a wall of grey text, and the owner's verdict
-     * on it was "I really don't see the Plan button". So: a solid control
-     * floating over the yard (dark glass since style B, #155, which keeps the
-     * cyan for Collect and for what is selected), a floor-plan glyph
-     * beside the word, and "Layout" rather than "Plan" because a plan is a
-     * thing and a layout is what the player is trying to do. The P shortcut and
-     * the Q5 access rule are unchanged — only how loudly it asks to be clicked.
+     * Layout is the way into the planner (P does the same, and the Q5 access
+     * rule is unchanged); Build (§5.3) is the own yard's only and is disabled
+     * until the yard's store is up, because every tile reads it. A visit's way
+     * into the attack (§4.1) is left out entirely, not disabled, when the
+     * map's gate refused — the cell panel already said why — and is disabled
+     * until the yard has loaded, so an attack cannot start against a yard that
+     * failed to open.
      */
-    this.plannerButton = document.createElement("button");
-    this.plannerButton.type = "button";
-    this.plannerButton.className = "btn btn--float yard-toolbar__layout";
-    this.plannerLabel = document.createElement("span");
-    this.plannerLabel.className = "yard-toolbar__layout-label";
-    this.plannerLabel.textContent = "Layout";
-    this.plannerButton.append(layoutIcon(), this.plannerLabel);
-    this.plannerButton.title = `Loading ${whose}…`;
-    this.plannerButton.setAttribute("aria-label", `Layout. Loading ${whose}…`);
-    this.plannerButton.setAttribute("aria-pressed", "false");
-    this.plannerButton.disabled = true;
-    this.plannerButton.addEventListener("click", () => this.togglePlanner());
-
-    this.toolbar = document.createElement("div");
-    this.toolbar.className = "yard-toolbar";
-    this.toolbar.append(this.plannerButton);
-
-    /*
-     * The way into the build menu (§5.3), on the player's own yard only.
-     * Disabled until the yard's store is up, because every tile reads it.
-     */
-    if (!this.target) {
-      this.buildButton = document.createElement("button");
-      this.buildButton.type = "button";
-      this.buildButton.className = "btn btn--float yard-toolbar__layout yard-toolbar__build";
-      this.buildButton.textContent = "Build";
-      this.buildButton.title = "Build something new";
-      this.buildButton.setAttribute("aria-expanded", "false");
-      this.buildButton.disabled = true;
-      this.buildButton.addEventListener("click", () => this.toggleBuildMenu());
-      this.toolbar.append(this.buildButton);
+    const target = this.target;
+    this.dock = new YardDock({
+      onMap: () => this.openMap(),
+      onLayout: () => this.togglePlanner(),
+      ...(target
+        ? { onHome: () => context.goTo(SceneName.YARD) }
+        : {
+            onBuild: () => this.toggleBuildMenu(),
+            onYardSelect: (next: OwnYardTarget) => this.openOwnYard(next),
+          }),
+      ...(target?.attack ? { onAttack: () => void this.startAttack() } : {}),
+    }).mount(context.overlay.content);
+    this.dock.setLayout({
+      disabled: true,
+      open: false,
+      label: "Layout",
+      title: `Loading ${whose}…`,
+    });
+    if (target?.attack) {
+      this.dock.setAttack({ disabled: true, title: `Attack ${target.name}'s yard` });
     }
-
-    /*
-     * A visit's way into the attack (§4.1). Omitted entirely, not disabled,
-     * when the map's gate refused — the cell panel already said why, and a
-     * greyed-out control with no reason attached is the worse version.
-     * Disabled until the yard has loaded, so an attack cannot start against
-     * a yard that failed to open.
-     */
-    if (this.target?.attack) {
-      this.attackButton = document.createElement("button");
-      this.attackButton.type = "button";
-      this.attackButton.className = "btn btn--primary yard-toolbar__layout";
-      this.attackButton.textContent = "Attack";
-      this.attackButton.title = `Attack ${this.target.name}'s yard`;
-      this.attackButton.disabled = true;
-      this.attackButton.addEventListener("click", () => void this.startAttack());
-      this.toolbar.append(this.attackButton);
-    }
-    /*
-     * The readout is docked to the overlay and not to the toolbar.
-     *
-     * `.cell-readout` pins itself to the bottom-left *of its positioned
-     * ancestor*, and the toolbar is one, so as a child of the toolbar it
-     * became a 102 x 213 box sitting squarely on top of the very control
-     * this task is about making visible. Out here it lands where the class
-     * always meant it to: the bottom-left of the screen.
-     */
-    context.overlay.content.append(this.toolbar, this.status);
-    this.inset = { top: this.toolbar.getBoundingClientRect().bottom, bottom: 0 };
+    context.overlay.content.append(this.status);
+    this.inset = { top: this.hud.element.getBoundingClientRect().bottom, bottom: 0 };
 
     window.addEventListener("keydown", this.onKeyDown);
     document.addEventListener("visibilitychange", this.onVisibilityChange);
@@ -439,13 +368,10 @@ export class YardScene implements Scene {
     window.removeEventListener("keydown", this.onKeyDown);
     document.removeEventListener("visibilitychange", this.onVisibilityChange);
     this.dropStore();
-    this.buildButton = null;
     this.planner?.destroy();
     this.planner = null;
-    this.plannerButton = null;
-    this.plannerLabel = null;
-    this.attackButton = null;
-    this.toolbar = null;
+    this.dock?.destroy();
+    this.dock = null;
     this.input?.detach();
     this.input = null;
     this.camera?.detach();
@@ -618,7 +544,9 @@ export class YardScene implements Scene {
       // somebody else's twigs as if they were the player's own.
       const pool = hudPoolFor(target, yard);
       if (pool) this.hud?.setResources(pool.resources, pool.credits);
-      if (this.attackButton) this.attackButton.disabled = false;
+      if (this.target?.attack) {
+        this.dock?.setAttack({ disabled: false, title: `Attack ${this.target.name}'s yard` });
+      }
       this.refreshBuildButton();
       // Once the yard is drawn, because the first answer may redraw it.
       store?.start();
@@ -663,11 +591,11 @@ export class YardScene implements Scene {
   private async startAttack(): Promise<void> {
     const attack = this.target?.attack;
     const context = this.context;
-    const button = this.attackButton;
     if (!attack || !context || this.attacking) return;
+    const title = `Attack ${attack.name}'s yard`;
 
     this.attacking = true;
-    if (button) button.disabled = true;
+    this.dock?.setAttack({ disabled: true, title });
     this.notices.show("attack", `Starting the attack on ${attack.name}…`, { level: "info" });
 
     try {
@@ -691,7 +619,7 @@ export class YardScene implements Scene {
         { level: "error", timeoutMs: 8_000 },
       );
       this.attacking = false;
-      if (button) button.disabled = false;
+      this.dock?.setAttack({ disabled: false, title });
     }
   }
 
@@ -749,7 +677,9 @@ export class YardScene implements Scene {
   }
 
   /**
-   * Builds the zoom slider and the minimap and docks them bottom-right.
+   * Builds the zoom control and the minimap: a rail on the right edge with a
+   * button for the minimap (#171), or, while the planner is open, the slider,
+   * Fit and the minimap in the bottom-right corner.
    *
    * Both are created once the camera exists and destroyed with the scene; the
    * planner never owns them, it only marks the minimap dirty when it moves
@@ -759,7 +689,7 @@ export class YardScene implements Scene {
    */
   private startViewTools(camera: Camera, context: SceneContext): void {
     const tools = document.createElement("div");
-    tools.className = "yard-viewtools";
+    tools.className = this.planner ? "yard-viewtools" : "yard-viewtools yard-viewtools--rail";
     context.overlay.content.append(tools);
     this.viewTools = tools;
 
@@ -782,19 +712,37 @@ export class YardScene implements Scene {
     }).mount(tools);
     this.minimap.refreshBuildings();
 
+    // On the rail the minimap waits behind a button of its own (#171).
+    const overview = document.createElement("button");
+    overview.type = "button";
+    overview.className = "yard-viewtools__overview";
+    overview.title = "Yard overview: click on it to move the view";
+    overview.setAttribute("aria-label", "Yard overview");
+    overview.setAttribute("aria-pressed", "false");
+    overview.append(icon("overview", 20));
+    overview.addEventListener("click", () => {
+      const on = tools.classList.toggle("yard-viewtools--overview");
+      overview.setAttribute("aria-pressed", String(on));
+      if (on) this.minimap?.markDirty();
+    });
+    tools.append(overview);
+
     this.placeViewTools();
   }
 
   /**
-   * Keeps the bottom-right furniture clear of whatever is along the bottom
-   * edge: nothing in read-only mode, the planner's action bar when it is open.
+   * Keeps the planner's bottom-right furniture clear of its action bar. Out
+   * of the planner the tools are the zoom rail on the right edge.
    *
    * The same number `applyZoomLimits` keeps the fit floor out from under, so
    * the two cannot disagree about where the bottom of the canvas is.
    */
   private placeViewTools(): void {
     if (!this.viewTools) return;
-    this.viewTools.style.bottom = `calc(${this.inset.bottom}px + var(--space-3))`;
+    // The rail is centred on the right edge by its stylesheet.
+    this.viewTools.style.bottom = this.planner
+      ? `calc(${this.inset.bottom}px + var(--space-3))`
+      : "";
   }
 
   /**
@@ -1084,14 +1032,12 @@ export class YardScene implements Scene {
 
   /** Enabled on the own yard once it has loaded, and not over the planner. */
   private refreshBuildButton(): void {
-    const button = this.buildButton;
-    if (!button) return;
     const carrying = this.placement !== null;
-    const open = carrying || this.buildMenu?.isOpen === true;
-    button.disabled = !this.store || this.planner !== null;
-    button.textContent = carrying ? "Stop building" : "Build";
-    button.title = carrying ? "Put the building down without building it (Esc)" : "Build something new";
-    button.setAttribute("aria-expanded", String(open));
+    this.dock?.setBuild({
+      disabled: !this.store || this.planner !== null,
+      carrying,
+      open: carrying || this.buildMenu?.isOpen === true,
+    });
   }
 
   /**
@@ -1207,8 +1153,8 @@ export class YardScene implements Scene {
     const yard = this.yard;
     const camera = this.camera;
     const context = this.context;
-    const toolbar = this.toolbar;
-    if (!yard || !camera || !context || !toolbar) return;
+    const hud = this.hud;
+    if (!yard || !camera || !context || !hud) return;
 
     this.select(null);
     this.monsters?.close();
@@ -1221,7 +1167,7 @@ export class YardScene implements Scene {
       canvas: context.canvas,
       overlay: context.overlay.content,
       notices: this.notices,
-      readOnlyToolbar: toolbar,
+      readOnlyToolbar: hud.element,
       readOnly: this.access === PlannerAccess.READ_ONLY,
       ...(this.save?.firedtraps ? { firedtraps: this.save.firedtraps } : {}),
       // An outpost's Apply and batch actions act on it (outposts WP3).
@@ -1261,25 +1207,17 @@ export class YardScene implements Scene {
    * while they were being set from three.
    */
   private refreshPlannerButton(): void {
-    const control = this.plannerButton;
-    const label = this.plannerLabel;
-    if (!control || !label) return;
-
     const open = this.planner !== null;
-    const text = open
-      ? "Close layout"
-      : this.access === PlannerAccess.READ_ONLY
-        ? "View layout"
-        : "Layout";
-    const title = open ? "Leave the layout planner (P)" : plannerEntryTooltip(this.access);
-
-    label.textContent = text;
-    control.disabled = this.access === PlannerAccess.LOCKED;
-    control.title = title;
-    // A disabled control's `title` is not announced by every screen reader, and
-    // the whole point of the locked state is that it says what would unlock it.
-    control.setAttribute("aria-label", text + ". " + title);
-    control.setAttribute("aria-pressed", String(open));
+    this.dock?.setLayout({
+      disabled: this.access === PlannerAccess.LOCKED,
+      open,
+      label: open ? "Close layout" : this.access === PlannerAccess.READ_ONLY ? "View layout" : "Layout",
+      title: open ? "Leave the layout planner (P)" : plannerEntryTooltip(this.access),
+    });
+    // Outside the planner the zoom is the rail on the right edge (#171); the
+    // planner keeps the slider, Fit and the minimap along its bottom bar.
+    this.viewTools?.classList.toggle("yard-viewtools--rail", !open);
+    this.placeViewTools();
     this.refreshBuildButton();
   }
 
@@ -1386,6 +1324,7 @@ export class YardScene implements Scene {
       notices: this.notices,
     };
     this.hud?.bindYard(this.binding);
+    this.dock?.bind(this.binding);
     // Mushrooms are picked in the main yard only (the route refuses an outpost).
     this.mushroomPicker =
       store.kind === "main" ? new MushroomPicker(store, this.mushroomView(context)) : null;
@@ -1461,6 +1400,7 @@ export class YardScene implements Scene {
     this.store = null;
     this.binding = null;
     this.hud?.bindYard(null);
+    this.dock?.bind(null);
   }
 
   /**

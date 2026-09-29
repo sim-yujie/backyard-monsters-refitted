@@ -7,6 +7,7 @@ import {
   type OwnYardTarget,
 } from "@/game/yard/ownYards";
 import type { YardUiBinding } from "@/game/yard/YardStore";
+import { icon } from "@/ui/icons";
 import "@/ui/styles/yard-switcher.css";
 
 /**
@@ -21,8 +22,9 @@ import "@/ui/styles/yard-switcher.css";
  *
  * Built like the Account menu (`AccountMenu.ts`): it only reports the yard
  * picked, and a press elsewhere or Escape closes it. It shows only while an
- * own yard is bound; the HUD is to be redesigned (#171), so this stays one
- * self-contained control.
+ * own yard is bound. Since the HUD redesign (#171) it is one of the yard's
+ * round buttons (`YardDock.ts`), above Map: a flag with the outpost count as
+ * a badge, the open yard's title under it, and the list opening upwards.
  */
 
 export interface YardSwitcherOptions {
@@ -50,14 +52,17 @@ export class YardSwitcher {
 
     this.button = document.createElement("button");
     this.button.type = "button";
-    this.button.className = "hud__resource-button yard-switcher__button";
+    this.button.className = "yard-dock__button yard-switcher__button";
     this.button.setAttribute("aria-haspopup", "true");
     this.button.setAttribute("aria-expanded", "false");
-    this.title = document.createElement("span");
-    this.title.className = "yard-switcher__title";
+    const disc = document.createElement("span");
+    disc.className = "yard-dock__disc";
     this.count = document.createElement("span");
-    this.count.className = "yard-switcher__count";
-    this.button.append(this.title, this.count);
+    this.count.className = "yard-dock__badge yard-switcher__count";
+    disc.append(icon("yards", 27), this.count);
+    this.title = document.createElement("span");
+    this.title.className = "yard-dock__label yard-switcher__title";
+    this.button.append(disc, this.title);
     this.button.addEventListener("click", () => this.toggle(this.list.hidden));
 
     this.list = document.createElement("div");
@@ -104,7 +109,7 @@ export class YardSwitcher {
     const countText = outpostCountText(outposts);
     this.title.textContent = title;
     this.count.textContent = String(outposts);
-    this.count.title = countText;
+    this.count.hidden = outposts <= 0;
     this.button.title = `${title}. ${countText}. Switch to another of your yards.`;
     this.button.setAttribute("aria-label", `Your yards: ${title}, ${countText}`);
 

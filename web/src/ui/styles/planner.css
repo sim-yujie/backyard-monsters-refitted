@@ -7,84 +7,6 @@
  * §4.1; the panels dock down the left so they never cover the action bar.
  */
 
-.yard-toolbar {
-  position: absolute;
-  left: var(--space-4);
-  top: calc(var(--hud-height) + var(--space-4));
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  pointer-events: auto;
-}
-
-/*
- * The Layout control (#46).
- *
- * Primary fill, a glyph and a word, and a shadow so it reads as a control
- * floating over the yard rather than as a label printed on it. Bigger than the
- * ghost button it replaced because the owner could not find that one, and
- * bigger again under a coarse pointer, where it is also the first thing a
- * thumb reaches for.
- */
-.yard-toolbar__layout {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: var(--control-height);
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--text-md);
-  box-shadow: var(--shadow-float);
-}
-
-/* Layout and Build float over the yard as dark glass rather than in the
-   accent, which is kept for Collect and for what is selected (style B, #155).
-   The yard's Attack button (a foreign yard) stays the one cyan action. */
-.yard-toolbar__layout.btn--float {
-  border-color: var(--colour-border);
-  background: var(--colour-surface-raised);
-  -webkit-backdrop-filter: var(--blur-panel);
-  backdrop-filter: var(--blur-panel);
-  color: var(--colour-text);
-}
-
-.yard-toolbar__layout.btn--float:disabled {
-  background: var(--colour-surface-raised);
-}
-
-.yard-toolbar__layout.btn--float:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--colour-surface-raised), var(--colour-text) 12%);
-}
-
-.yard-toolbar__icon {
-  width: 18px;
-  height: 18px;
-  flex: none;
-  fill: currentcolor;
-}
-
-/* Open: the control is now the way out, so it stops shouting. */
-.yard-toolbar__layout[aria-pressed="true"] {
-  background: var(--colour-surface-selected);
-  border-color: var(--colour-border-strong);
-  color: var(--colour-text-strong);
-  box-shadow: inset 0 -2px 0 var(--colour-accent), var(--shadow-float);
-}
-
-@media (pointer: coarse) {
-  .yard-toolbar__layout {
-    min-height: 44px;
-  }
-}
-
-/* A phone: the toolbar is one row of fixed height, shared with the HUD's
-   Collect button (harvest.css), so the yard's notices can dock under it
-   rather than on top of it (#144, `.yard-notices` in maproom.css). */
-@media (width <= 620px) {
-  .yard-toolbar__layout {
-    min-height: var(--yard-toolbar-row);
-  }
-}
-
 /* ── The two bars ─────────────────────────────────────────────────────── */
 
 .planner-bar {
@@ -1004,16 +926,6 @@
     display: none;
   }
 
-  /* The yard's toolbar row stays mounted under the bars (it is measured again
-     when they go), but the one-row top bar no longer covers all of it, and
-     the HUD's Collect button sits in that row. */
-  .overlay__layer:has(> .planner-bar) > .yard-toolbar {
-    visibility: hidden;
-  }
-
-  .overlay__layer:has(> .planner-bar) .hud__collect {
-    display: none;
-  }
 }
 
 /* ── F14: touch and mobile ────────────────────────────────────────────────

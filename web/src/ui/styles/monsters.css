@@ -458,30 +458,6 @@
   color: var(--colour-text);
 }
 
-/* ── HUD entry ───────────────────────────────────────────────────────────── */
-
-.hud__monsters {
-  display: flex;
-  flex: none;
-  white-space: nowrap;
-}
-
-.hud__monsters-button {
-  gap: var(--space-1);
-}
-
-.hud__monsters-icon {
-  display: inline-block;
-  height: 24px;
-  aspect-ratio: 1;
-  background: center / contain no-repeat;
-}
-
-.hud__monsters-name {
-  font-size: var(--text-sm);
-  font-weight: 700;
-}
-
 /* ── Narrow screens ──────────────────────────────────────────────────────── */
 
 /* No room beside the building panel: the screen takes the right side over it. */
@@ -550,32 +526,5 @@
   .locker-detail__portrait {
     width: 72px;
     height: 72px;
-  }
-
-  /* The top row is already nearly full with Workers, the screens and
-     Account: the button goes icon-only and sits tight against Workers, and the
-     spacer's two gaps give way to an auto margin that does its job. */
-  .hud:has(.hud__monsters:not([hidden])) .hud__spacer {
-    display: none;
-  }
-
-  .hud:has(.hud__monsters:not([hidden])) .hud__scenes {
-    margin-left: auto;
-  }
-
-  .hud__monsters {
-    margin-left: calc(var(--space-1) - var(--space-2));
-  }
-
-  .hud__monsters-button {
-    padding: 0;
-  }
-
-  .hud__monsters-icon {
-    height: 20px;
-  }
-
-  .hud__monsters-name {
-    display: none;
   }
 }

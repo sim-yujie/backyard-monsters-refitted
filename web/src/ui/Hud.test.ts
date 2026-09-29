@@ -188,6 +188,65 @@ describe("the HUD's Account control (#173)", () => {
   });
 });
 
+describe("the yard's corner layout (#171)", () => {
+  afterEach(() => document.body.replaceChildren());
+
+  it("drops the brand and the screen tabs and keeps the readouts and Workers in one bar", () => {
+    const hud = new Hud({
+      scenes: [],
+      layout: "corner",
+      onSceneSelect: () => {},
+      onSignOut: () => {},
+      accountName: "agenttester",
+    }).mount(document.body);
+    expect(hud.element.classList.contains("hud--corner")).toBe(true);
+    expect(hud.element.querySelector(".hud__brand")).toBeNull();
+    expect(hud.element.querySelector(".hud__scenes")).toBeNull();
+    const bar = hud.element.querySelector(".hud__bar")!;
+    expect(bar.querySelector(".hud__resources")).not.toBeNull();
+    expect(bar.querySelector(".hud__workers")).not.toBeNull();
+    // The Account menu is the pill with the name, not the word "Account".
+    const account = hud.element.querySelector<HTMLButtonElement>(".account-menu__button--pill")!;
+    expect(account.textContent).toContain("agenttester");
+    expect(account.getAttribute("aria-label")).toBe("Your account: agenttester");
+    hud.destroy();
+  });
+
+  it("draws a cap as the fill bar alone, with the figure kept for the tooltip", () => {
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    const store = {
+      caps: { r1: 20, r2: 20, r3: 20, r4: 20 },
+      workers: { total: 5, busy: 0 },
+      jobs: () => [],
+      save: {},
+      now: () => 0,
+      isRunning: () => false,
+      subscribe: () => () => undefined,
+    };
+    hud.setResources({ r1: 10 });
+    hud.bindYard({ store: store as unknown as YardStore, scene: { selectBuilding: () => {} }, notices: new Notices() });
+    const r1 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r1"]')!;
+    expect(r1.textContent).toBe("10");
+    expect(r1.title).toBe("Twigs: 10 of 20");
+    expect(r1.querySelector<HTMLElement>(".hud__cap-bar")!.hidden).toBe(false);
+    const workers = hud.element.querySelector<HTMLButtonElement>(".hud__workers-button")!;
+    expect(workers.textContent).toBe("Workers5 / 5");
+    expect(workers.querySelector<HTMLElement>(".hud__workers-name")!.hidden).toBe(true);
+    hud.destroy();
+  });
+
+  it("uses short amounts on a phone, where the readouts share a row of four", () => {
+    const matchMedia = vi.fn((query: string) => ({ matches: query === "(width <= 620px)" }));
+    vi.stubGlobal("matchMedia", matchMedia);
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    hud.setResources({ r1: 15_000_000 });
+    expect(hud.fitLevel).toBe("compact");
+    expect(hud.element.querySelector('.hud__resource-button[data-resource="r1"]')!.textContent).toBe("15.0M");
+    hud.destroy();
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("the HUD's spellings", () => {
   it("signs a change with a real minus", () => {
     expect(formatDelta(-5_000_000)).toBe("−5.0M");
@@ -365,25 +424,6 @@ describe("the HUD on the player's own yard", () => {
     expect(workers().getAttribute("aria-disabled")).toBe("true");
     workers().click();
     expect(selectBuilding).toHaveBeenCalledTimes(1);
-  });
-
-  it("offers Monsters on the own yard only, and opens the screen on Unlock (§4.1)", () => {
-    const monsters = (): HTMLElement => hud.element.querySelector<HTMLElement>(".hud__monsters")!;
-    expect(monsters().hidden).toBe(true);
-    // A binding whose scene has no Monsters screen shows no button either.
-    hud.bindYard(binding);
-    expect(monsters().hidden).toBe(true);
-
-    const openMonsters = vi.fn();
-    hud.bindYard({ ...binding, scene: { selectBuilding, openMonsters } });
-    expect(monsters().hidden).toBe(false);
-    const button = monsters().querySelector<HTMLButtonElement>("button")!;
-    expect(button.getAttribute("aria-label")).toBe("Monsters");
-    button.click();
-    expect(openMonsters).toHaveBeenCalledWith("unlock");
-
-    hud.bindYard(null);
-    expect(monsters().hidden).toBe(true);
   });
 
   it("toasts what the server says finished, and a click on a building selects it", () => {

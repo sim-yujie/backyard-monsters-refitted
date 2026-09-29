@@ -100,13 +100,6 @@
   .overlay__layer:has(> .monsters-screen:not([hidden])) > .map-dock--right {
     display: none;
   }
-
-  /* The yard's notices dock under its toolbar row (Layout, Build and the
-     HUD's Collect, planner.css and harvest.css), not over it (#144). The
-     planner's inline inset still wins while its own bar covers that band. */
-  .map-dock--top-centre.yard-notices {
-    --notice-top-inset: calc(var(--hud-height) + var(--space-4) + var(--yard-toolbar-row));
-  }
 }
 
 /* ── Notices ────────────────────────────────────────────────────────────── */
