@@ -71,7 +71,7 @@ export const jobBarStates = (yard: Yard, now: number): JobBarState[] => {
   const bars: JobBarState[] = [];
   for (const building of yard.buildings) {
     if (!hasBar(building)) continue;
-    const progress = countdownProgress(building, now);
+    const progress = countdownProgress(building, now, yard.kind);
     if (!progress) continue;
     const paused = building.countdown.paused;
     if (!paused && progress.remaining <= 0) continue;

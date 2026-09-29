@@ -8,7 +8,7 @@ import type {
   StoreData,
 } from "@/api/types";
 import { maxHealth } from "./buildingArt";
-import { costOf, rowOf } from "./buildingCosts";
+import { costOf, fortifyStepsOf, rowOf, upgradeSteps, type YardKind } from "./buildingCosts";
 import { damageOf } from "./repair";
 import { countdownOf, type YardBuilding, type YardCountdown } from "./yardModel";
 
@@ -257,18 +257,32 @@ export interface CountdownProgress {
  * fortify or rebuild, falls back to the table's time for the step, which is
  * exact whenever Sharper Tools was not running.
  *
+ * The table is the yard's own (#191): on an outpost its times, its fortify
+ * ladder for a fortification (`fortifyStepsOf`, the step that leaves the
+ * building's `fort`), and for a Starter Kit prefab every step up to its level
+ * (`client/scripts/BFOUNDATION.as:3057-3063`).
+ *
  * @param level - The building's level now: 0 while it is being built.
+ * @param yard - Which table the yard reads; a main yard when absent.
  */
 export const countdownLength = (
   raw: BuildingData,
   kind: YardCountdown["kind"],
   level: number,
+  yard: YardKind = "main",
 ): number => {
   const stored = finite(raw.cL);
   if (stored !== null && stored > 0 && (kind === JobKind.BUILD || kind === JobKind.UPGRADE)) {
     return stored;
   }
-  return costOf(raw.t, kind === JobKind.BUILD ? 0 : level)?.[4] ?? 0;
+  if (kind === JobKind.FORTIFY) {
+    return fortifyStepsOf(raw.t, yard)[Math.max(0, Math.floor(finite(raw.fort) ?? 0))]?.[4] ?? 0;
+  }
+  const prefab = finite(raw.prefab);
+  if (kind === JobKind.BUILD && prefab !== null && prefab > 0) {
+    return upgradeSteps(raw.t, 0, prefab, yard).reduce((total, step) => total + step[4], 0);
+  }
+  return costOf(raw.t, kind === JobKind.BUILD ? 0 : level, yard)?.[4] ?? 0;
 };
 
 /** `1 − remaining / total`, held between 0 and 1. */
@@ -284,11 +298,16 @@ export const progressFraction = (remaining: number, total: number): number =>
 export const countdownProgress = (
   building: Pick<YardBuilding, "level" | "countdown" | "raw">,
   now: number,
+  yard: YardKind = "main",
 ): CountdownProgress | null => {
   const countdown = building.countdown;
   if (!countdown) return null;
   const remaining = countdown.paused ? countdown.seconds : Math.max(0, countdown.endsAt - now);
-  const total = Math.max(countdownLength(building.raw, countdown.kind, building.level), remaining, 1);
+  const total = Math.max(
+    countdownLength(building.raw, countdown.kind, building.level, yard),
+    remaining,
+    1,
+  );
   return { remaining, total, fraction: progressFraction(remaining, total) };
 };
 

@@ -7,6 +7,7 @@ import {
   acceleratedEnd,
   buildingJobs,
   championJobs,
+  countdownLength,
   countdownProgress,
   hatcheryJobs,
   JobKind,
@@ -453,5 +454,24 @@ describe("predictCompletion", () => {
   it("returns the same save when nothing finished", () => {
     const save = saveWith();
     expect(predictCompletion(save, [])).toBe(save);
+  });
+});
+
+describe("countdownLength on an outpost (#191)", () => {
+  it("falls back to the outpost table's time for a job with no stored length", () => {
+    const raw = { id: 1, X: 0, Y: 0, t: 23, l: 3, cU: 100 };
+    expect(countdownLength(raw, "upgrade", 3, "outpost")).toBe(costOf(23, 3, "outpost")![4]);
+  });
+
+  it("times a fortification from the outpost's fortify ladder: the core's F1 is four hours", () => {
+    const core = { id: 1, X: 0, Y: -50, t: 112, l: 1, cF: 100 };
+    expect(countdownLength(core, "fortify", 1, "outpost")).toBe(4 * 3_600);
+    expect(countdownLength({ ...core, fort: 1 }, "fortify", 1, "outpost")).toBe(16 * 3_600);
+  });
+
+  it("times a Starter Kit prefab over every step up to its level", () => {
+    const prefab = { id: 2, X: 0, Y: 0, t: 21, l: 5, prefab: 5, cB: 100 };
+    const expected = [0, 1, 2, 3, 4].reduce((total, level) => total + costOf(21, level, "outpost")![4], 0);
+    expect(countdownLength(prefab, "build", 0, "outpost")).toBe(expected);
   });
 });

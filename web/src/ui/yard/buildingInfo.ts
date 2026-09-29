@@ -1,6 +1,7 @@
-import { BOMBS, MR2_CAPACITY, TOWER_STATS } from "@/game/combat/rules";
+import { BOMBS, capacity, TOWER_STATS, towerStats } from "@/game/combat/rules";
+import { outpostRange } from "@/game/maproom/rules/range";
 import { BUILDING_COST_ROWS } from "@/game/yard/buildingCostData";
-import { maxLevel, quantityOf, rowOf } from "@/game/yard/buildingCosts";
+import { maxLevel, quantityOf, rowOf, type YardKind } from "@/game/yard/buildingCosts";
 import type { YardBuilding } from "@/game/yard/yardModel";
 import { resourceKeyOf, type ResourceKey } from "@/ui/resourceIcon";
 
@@ -14,6 +15,15 @@ import { resourceKeyOf, type ResourceKey } from "@/ui/resourceIcon";
  * Town Hall unlocks from each type's `quantity`, Catapult bombs from the bomb
  * table. The one exception is the Flinger's reach in cells, which is a code
  * literal on the server and is mirrored in {@link FLINGER_REACH}.
+ *
+ * On an outpost (#191) every figure is the outpost table's, as Flash swaps
+ * the whole props table in for one (`client/scripts/GLOBAL.as:716-723`):
+ * its level caps, its health, tower and capacity ladders (`towerStats`,
+ * `capacity` with `kind` "outpost"), and a Flinger reach of one cell a level
+ * (`outpostRange`, `BUILDING5.as:16-18`). An outpost's harvesters bank as
+ * they make (autobank), so they show no buffer. Two figures stay the
+ * table's: a tower's range and a harvester's rate before the outpost cell's
+ * height stretches or shrinks them, since the yard does not know the height.
  *
  * A row carries its value now and, where the next level changes it, its value
  * after the upgrade, so the panel can draw "190 → 200". Nothing here touches
@@ -99,20 +109,19 @@ const row = (
 /** The level the info reads: a building still being built reads as the level 1 it will be. */
 const shownLevel = (building: YardBuilding): number => Math.max(building.level, 1);
 
-/** Whether a level one above exists for the type. */
-const nextLevelOf = (building: YardBuilding): number | null => {
+/** Whether a level one above exists for the type, in this yard's table. */
+const nextLevelOf = (building: YardBuilding, kind: YardKind = "main"): number | null => {
   const level = shownLevel(building);
-  return level < maxLevel(building.type) ? level + 1 : null;
+  return level < maxLevel(building.type, kind) ? level + 1 : null;
 };
 
 /** Range and damage per second, now and next. */
-const towerRows = (building: YardBuilding): InfoRow[] => {
-  const ladder = TOWER_STATS[building.type];
-  if (!ladder || ladder.length === 0) return [];
-  const level = Math.min(shownLevel(building), ladder.length);
-  const nextLevel = nextLevelOf(building);
-  const now = ladder[level - 1];
-  const next = nextLevel !== null && nextLevel <= ladder.length ? ladder[nextLevel - 1] : undefined;
+const towerRows = (building: YardBuilding, kind: YardKind): InfoRow[] => {
+  if (!TOWER_STATS[building.type]) return [];
+  const level = shownLevel(building);
+  const nextLevel = nextLevelOf(building, kind);
+  const now = towerStats(building.type, level, kind);
+  const next = nextLevel !== null ? towerStats(building.type, nextLevel, kind) : undefined;
   if (!now) return [];
 
   const rows: InfoRow[] = [];
@@ -148,32 +157,33 @@ const towerRows = (building: YardBuilding): InfoRow[] => {
   return rows;
 };
 
-/** Room in monster space, from the Map Room 2 capacity ladders (Flinger, Bunker). */
-const capacityRow = (building: YardBuilding, label: string): InfoRow | null => {
-  const ladder = MR2_CAPACITY[building.type];
-  if (!ladder) return null;
-  const level = Math.min(shownLevel(building), ladder.length);
-  const nextLevel = nextLevelOf(building);
-  const now = ladder[level - 1];
-  const next = nextLevel !== null ? ladder[nextLevel - 1] : undefined;
-  if (now === undefined) return null;
+/** Room in monster space, from the Map Room 2 (or outpost) capacity ladders (Flinger, Bunker). */
+const capacityRow = (building: YardBuilding, label: string, kind: YardKind): InfoRow | null => {
+  const level = shownLevel(building);
+  const nextLevel = nextLevelOf(building, kind);
+  const now = capacity(building.type, level, kind);
+  const next = nextLevel !== null ? capacity(building.type, nextLevel, kind) : 0;
+  if (!(now > 0)) return null;
   return row(
     label,
     text(now.toLocaleString("en-US")),
-    next !== undefined ? text(next.toLocaleString("en-US")) : null,
+    next > 0 ? text(next.toLocaleString("en-US")) : null,
   );
 };
 
-const flingerRows = (building: YardBuilding): InfoRow[] => {
+const flingerRows = (building: YardBuilding, kind: YardKind): InfoRow[] => {
   const level = shownLevel(building);
-  const nextLevel = nextLevelOf(building);
+  const nextLevel = nextLevelOf(building, kind);
   const reach = (at: number) => {
-    const cells = FLINGER_REACH[Math.min(at, FLINGER_REACH.length) - 1] ?? 0;
-    return text(`${cells} cells`);
+    const cells =
+      kind === "outpost"
+        ? outpostRange(at)
+        : (FLINGER_REACH[Math.min(at, FLINGER_REACH.length) - 1] ?? 0);
+    return text(`${cells} ${cells === 1 ? "cell" : "cells"}`);
   };
   const rows = [row("Attack range", reach(level), nextLevel !== null ? reach(nextLevel) : null)];
-  const capacity = capacityRow(building, "Fling capacity");
-  if (capacity) rows.push(capacity);
+  const room = capacityRow(building, "Fling capacity", kind);
+  if (room) rows.push(room);
   return rows;
 };
 
@@ -187,9 +197,9 @@ export const bombResources = (catapultLevel: number): ResourceKey[] => {
   return keys;
 };
 
-const catapultRows = (building: YardBuilding): InfoRow[] => {
+const catapultRows = (building: YardBuilding, kind: YardKind): InfoRow[] => {
   const level = shownLevel(building);
-  const nextLevel = nextLevelOf(building);
+  const nextLevel = nextLevelOf(building, kind);
   return [
     row(
       "Bombs",
@@ -200,11 +210,11 @@ const catapultRows = (building: YardBuilding): InfoRow[] => {
 };
 
 /** A harvester's rate per hour and buffer, or a silo's storage, now and next. */
-const economyRows = (building: YardBuilding): InfoRow[] => {
-  const stats = rowOf(building.type)?.[6];
+const economyRows = (building: YardBuilding, kind: YardKind): InfoRow[] => {
+  const stats = rowOf(building.type, kind)?.[6];
   if (!stats) return [];
   const level = shownLevel(building);
-  const nextLevel = nextLevelOf(building);
+  const nextLevel = nextLevelOf(building, kind);
   const at = (ladder: readonly number[], lvl: number | null) =>
     lvl === null ? undefined : ladder[lvl - 1];
 
@@ -232,7 +242,8 @@ const economyRows = (building: YardBuilding): InfoRow[] => {
   const rows: InfoRow[] = [];
   const rateNow = rate(level);
   if (rateNow) rows.push(row("Makes", rateNow, rate(nextLevel)));
-  const bufferNow = buffer(level);
+  // An outpost's harvester banks as it makes (autobank): no buffer to show.
+  const bufferNow = kind === "outpost" ? undefined : buffer(level);
   if (bufferNow) rows.push(row("Holds", bufferNow, buffer(nextLevel)));
   return rows;
 };
@@ -271,31 +282,31 @@ const healthRow = (building: YardBuilding): InfoRow | null => {
   return { label: "Health", now: text(`${current} / ${max}`) };
 };
 
-/** Every info row for one building. */
-export const buildingInfo = (building: YardBuilding): BuildingInfo => {
+/** Every info row for one building, read from its yard's table (`kind`). */
+export const buildingInfo = (building: YardBuilding, kind: YardKind = "main"): BuildingInfo => {
   const rows: InfoRow[] = [];
   const health = healthRow(building);
   if (health) rows.push(health);
 
   switch (building.type) {
     case FLINGER_TYPE:
-      rows.push(...flingerRows(building));
+      rows.push(...flingerRows(building, kind));
       break;
     case CATAPULT_TYPE:
-      rows.push(...catapultRows(building));
+      rows.push(...catapultRows(building, kind));
       break;
     default: {
-      rows.push(...towerRows(building));
+      rows.push(...towerRows(building, kind));
       if (TOWER_STATS[building.type]) {
-        const room = capacityRow(building, "Holds monsters");
+        const room = capacityRow(building, "Holds monsters", kind);
         if (room) rows.push(room);
       }
-      rows.push(...economyRows(building));
+      rows.push(...economyRows(building, kind));
     }
   }
 
   let list: InfoList | null = null;
-  if (building.type === TOWN_HALL_TYPE && nextLevelOf(building) !== null) {
+  if (building.type === TOWN_HALL_TYPE && nextLevelOf(building, kind) !== null) {
     const items = townHallUnlocks(shownLevel(building));
     list = {
       label: `Town Hall ${shownLevel(building) + 1} unlocks`,

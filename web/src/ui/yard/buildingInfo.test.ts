@@ -159,3 +159,41 @@ describe("Town Hall", () => {
     expect(buildingInfo(one({ t: 14, l: 10 })).list).toBeNull();
   });
 });
+
+describe("on an outpost (#191)", () => {
+  const onOutpost = (data: Partial<BuildingData> & { t: number }) => {
+    const save = {
+      error: 0,
+      currenttime: 1_000,
+      savetime: 1_000,
+      type: "outpost",
+      buildingdata: { "1": { id: 1, X: 0, Y: 0, ...data } },
+    } as unknown as BaseLoadResponse;
+    return buildingInfo(readYard(save).buildings[0]!, "outpost").rows;
+  };
+  const label = (rows: ReturnType<typeof onOutpost>, name: string) => rows.find((entry) => entry.label === name);
+
+  it("stops at the outpost's level cap: a level 6 Laser has no next level there", () => {
+    expect(label(onOutpost({ t: 23, l: 6 }), "Damage")?.next).toBeUndefined();
+    expect(row({ t: 23, l: 6 }, "Damage")?.next).toBeDefined();
+  });
+
+  it("reads the core's 200,000 health from the outpost table", () => {
+    expect(label(onOutpost({ t: 112, l: 1 }), "Health")?.now).toEqual({ text: "200,000 / 200,000" });
+  });
+
+  it("gives an outpost Flinger one cell a level", () => {
+    expect(label(onOutpost({ t: 5, l: 2 }), "Attack range")).toMatchObject({
+      now: { text: "2 cells" },
+      next: { text: "3 cells" },
+    });
+    expect(row({ t: 5, l: 2 }, "Attack range")?.now).toEqual({ text: "6 cells" });
+  });
+
+  it("shows an autobanking harvester's rate but no buffer", () => {
+    const rows = onOutpost({ t: 1, l: 3 });
+    expect(label(rows, "Makes")).toBeDefined();
+    expect(label(rows, "Holds")).toBeUndefined();
+    expect(row({ t: 1, l: 3 }, "Holds")).toBeDefined();
+  });
+});

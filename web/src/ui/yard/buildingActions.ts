@@ -386,7 +386,7 @@ export const jobOffer = (building: YardBuilding, context: PanelContext): JobOffe
 
   const now = context.now();
   // The same reading as the bar over the building in the yard (#136, #139).
-  const progress = countdownProgress(building, now);
+  const progress = countdownProgress(building, now, context.yard.kind);
   if (!progress) return null;
   const { remaining, total } = progress;
   const endsAt = countdown.paused ? now + remaining : countdown.endsAt;
