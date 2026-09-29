@@ -729,8 +729,9 @@ export class PlannerBar {
       }
       this.actionBar.append(costs, this.summary, spacer());
     } else {
-      // The actions share a wrapper that is `display: contents` on a desktop
-      // and its own scrolling row on a phone, with Apply pinned in view (#151).
+      // The actions share a wrapper: one group at the bar's right end on a
+      // desktop (#192), its own scrolling row on a phone with Apply pinned in
+      // view (#151).
       const actionRow = document.createElement("div");
       actionRow.className = "planner-bar__actions";
       actionRow.append(this.upgradeWalls, this.rearm, this.checklist, layouts, this.apply);
@@ -806,6 +807,8 @@ export class PlannerBar {
     this.slotLabel.classList.toggle("planner-bar__slot--read-only", state.readOnly);
 
     this.summary.textContent = summarise(state);
+    // A desktop cuts a long summary to an ellipsis when the bar is short of room (#192).
+    this.summary.title = this.summary.textContent;
     // A read-only session never mounts the chip; hiding it as well keeps the
     // two states from disagreeing if one ever slips through.
     this.putBack.hidden = this.readOnly || !state.carrying;

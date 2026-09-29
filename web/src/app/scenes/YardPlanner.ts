@@ -182,6 +182,8 @@ export class YardPlanner {
   private readonly session: PlannerSession;
   private readonly layouts: YardPlannerLayouts;
   private readonly bar: PlannerBar;
+  /** Re-measures the bars when they change height (#192). */
+  private barObserver: ResizeObserver | null = null;
   private readonly dock: HTMLElement;
   /**
    * The inspector's own dock, on the other side of the canvas.
@@ -309,6 +311,13 @@ export class YardPlanner {
     }, { readOnly: this.readOnly, layouts: options.baseid === undefined });
     this.bar.mount(options.overlay);
     this.reportPlannerInset();
+    // The bars grow a row when their contents wrap (a slot name, a selection,
+    // a narrower window): the zoom, minimap and fit follow them (#192).
+    if (typeof ResizeObserver !== "undefined") {
+      this.barObserver = new ResizeObserver(() => this.reportPlannerInset());
+      this.barObserver.observe(this.bar.toolbar);
+      this.barObserver.observe(this.bar.actionBar);
+    }
 
     this.session.attach();
     this.mountOverlays();
@@ -577,6 +586,8 @@ export class YardPlanner {
     this.session.detach();
     this.ranges.destroy();
     this.centreMark.destroy();
+    this.barObserver?.disconnect();
+    this.barObserver = null;
     this.bar.destroy();
     this.dock.remove();
     this.inspectorDock.remove();

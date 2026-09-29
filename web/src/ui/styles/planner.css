@@ -852,9 +852,30 @@
   }
 }
 
-/* A desktop lays the bottom bar's actions out in the bar itself. */
+/*
+ * A desktop keeps the bottom bar's actions together at its right end (#192).
+ * The summary gives way first: it is laid out at its narrowest, twelve
+ * characters, so the costs and the actions share one row wherever they fit
+ * (1440 px does), then it takes what is left and ends in an ellipsis. Where the row cannot hold
+ * the costs and the actions, the actions move down as one row rather than
+ * Apply alone, and the zoom and minimap follow the bar's height up.
+ */
 .planner-bar__actions {
-  display: contents;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  margin-inline-start: auto;
+}
+
+@media (width > 620px) {
+  .planner-bar--bottom > .planner-bar__summary {
+    flex: 1 1 0;
+    min-width: 12ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 /*
