@@ -2,8 +2,9 @@
  * What the Starter Kit picker shows (outposts WP9, issue #188). GENERATED — do not edit by hand.
  *
  * Source: `client/scripts/popup_prefab.as`, `GetBuildings` (:278-311): each
- * kit's building map and its price. Regenerate with
- * `node tools/gen-starter-kits.mjs` from `web/`.
+ * kit's building map and its price, less the Ultra Kit's Yard Planner, which
+ * an outpost no longer builds (owner decision 2026-09-30; prices unchanged).
+ * Regenerate with `node tools/gen-starter-kits.mjs` from `web/`.
  */
 
 export interface StarterKitSummary {
@@ -45,7 +46,7 @@ export const STARTER_KIT_SUMMARIES: readonly StarterKitSummary[] = [
     resources: { r1: 200000000, r2: 200000000, r3: 100000000 },
     shiny: 1500,
     thumbnail: "/assets/ui/prefab-4.v5.jpg",
-    buildingCount: 170,
-    contents: [[17, 5, 100], [115, 5, 2], [117, 1, 5], [23, 3, 2], [118, 3, 1], [24, 1, 25], [15, 6, 1], [22, 3, 2], [25, 3, 2], [21, 8, 4], [20, 8, 4], [9, 1, 1], [13, 3, 2], [1, 8, 4], [2, 8, 4], [3, 8, 4], [4, 8, 4], [5, 4, 1], [16, 1, 1], [10, 1, 1]],
+    buildingCount: 169,
+    contents: [[17, 5, 100], [115, 5, 2], [117, 1, 5], [23, 3, 2], [118, 3, 1], [24, 1, 25], [15, 6, 1], [22, 3, 2], [25, 3, 2], [21, 8, 4], [20, 8, 4], [9, 1, 1], [13, 3, 2], [1, 8, 4], [2, 8, 4], [3, 8, 4], [4, 8, 4], [5, 4, 1], [16, 1, 1]],
   },
 ];

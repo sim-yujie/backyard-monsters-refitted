@@ -55,17 +55,26 @@ const outpost = (overrides: Partial<StarterKitSave> = {}): StarterKitSave => ({
 const NOW = 1_800_000_000;
 
 describe("the kits are popup_prefab.as's", () => {
-  test("every building of every kit, field for field, and its price", () => {
+  test("every building of every kit, field for field, and its price, less the Yard Planner", () => {
     const flash = flashKits();
     for (const kit of STARTER_KITS) {
       const source = flash.find((one) => one.id === kit.id)!;
+      // An outpost no longer builds a Yard Planner (owner decision 2026-09-30).
       expect(kit.buildings).toEqual(
         Object.entries(source.layout)
+          .filter(([, row]) => row.t !== 10)
           .map(([key, row]) => ({ ...row, id: row.id ?? Number(key) }))
           .sort((a, b) => a.id - b.id) as never
       );
       expect([kit.resources.r1, kit.resources.r2, kit.resources.r3, kit.shiny]).toEqual(source.prices);
     }
+  });
+
+  test("only the Ultra Kit had a Yard Planner, and none has one now", () => {
+    const flash = flashKits();
+    const had = flash.filter((kit) => Object.values(kit.layout).some((row) => row.t === 10)).map((kit) => kit.id);
+    expect(had).toEqual([3]);
+    for (const kit of STARTER_KITS) expect(kit.buildings.some((row) => row.t === 10)).toBe(false);
   });
 
   test("prices: Regular 12M/12M/6M or 420, Mega 50M/50M/25M or 800, Ultra 200M/200M/100M or 1,500", () => {

@@ -2,8 +2,9 @@
  * The outpost Starter Kits (outposts WP9, issue #188). GENERATED — do not edit by hand.
  *
  * Source: `client/scripts/popup_prefab.as`, `GetBuildings` (:278-311): each
- * kit's building map and its price. Regenerate with
- * `node tools/gen-starter-kits.mjs` from `web/`.
+ * kit's building map and its price, less the Ultra Kit's Yard Planner, which
+ * an outpost no longer builds (owner decision 2026-09-30; prices unchanged).
+ * Regenerate with `node tools/gen-starter-kits.mjs` from `web/`.
  */
 
 /**
@@ -482,7 +483,6 @@ export const STARTER_KITS: readonly StarterKit[] = [
       { id: 163, t: 3, X: -90, Y: 300, prefab: 8, rCP: 9 },
       { id: 164, t: 4, X: -225, Y: 255, prefab: 8, rCP: 8 },
       { id: 165, t: 16, X: 355, Y: -125 },
-      { id: 167, t: 10, X: -400, Y: -110 },
       { id: 168, t: 1, X: -260, Y: -150, prefab: 8, rCP: 8 },
       { id: 169, t: 2, X: -190, Y: -190, prefab: 8, rCP: 16 },
       { id: 170, t: 3, X: -350, Y: -260, prefab: 8, rCP: 4 },

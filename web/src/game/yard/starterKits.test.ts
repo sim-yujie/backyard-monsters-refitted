@@ -26,7 +26,9 @@ describe("the kits", () => {
       [2, "Mega Kit", { r1: 50_000_000, r2: 50_000_000, r3: 25_000_000 }, 800, "/assets/ui/prefab-3.v5.jpg"],
       [3, "Ultra Kit", { r1: 200_000_000, r2: 200_000_000, r3: 100_000_000 }, 1500, "/assets/ui/prefab-4.v5.jpg"],
     ]);
-    expect(STARTER_KIT_SUMMARIES.map((kit) => kit.buildingCount)).toEqual([112, 147, 170]);
+    // Ultra is one short of Flash's 170: no Yard Planner in an outpost (2026-09-30).
+    expect(STARTER_KIT_SUMMARIES.map((kit) => kit.buildingCount)).toEqual([112, 147, 169]);
+    expect(STARTER_KIT_SUMMARIES.every((kit) => kit.contents.every(([type]) => type !== 10))).toBe(true);
     expect(kitSummary(2)?.name).toBe("Mega Kit");
     expect(kitSummary(4)).toBeNull();
   });

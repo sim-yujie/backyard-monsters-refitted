@@ -15,6 +15,12 @@
  * a kit's empty harvester does not use). The core (112) is in every layout:
  * the kit moves the outpost's core there (`GLOBAL.townHall.Setup`, `:251-257`).
  *
+ * One departure from the source: the Yard Planner (type 10) is left out of
+ * every kit — only the Ultra Kit has one — because an outpost no longer
+ * builds or uses one (owner decision 2026-09-30: the planner's layout mode
+ * needs no building, and outposts get no Blueprint view). The prices stay
+ * Flash's.
+ *
  * Kit `k` (1 Regular, 2 Mega, 3 Ultra) shows `ui/prefab-${k + 1}.v5.jpg`
  * (`:23`) under the names `str_regularkit`, `str_megakit` and `str_ultrakit`
  * (`:34-36`).
@@ -28,6 +34,9 @@
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
+
+/** Left out of every kit: an outpost no longer has a use for it. */
+const YARD_PLANNER_TYPE = 10;
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -74,6 +83,8 @@ const readKit = (kit) => {
   }
 
   const buildings = Object.entries(layout)
+    // No Yard Planner in an outpost (2026-09-30; see the file comment).
+    .filter(([, row]) => row.t !== YARD_PLANNER_TYPE)
     .map(([key, row]) => {
       const out = {};
       for (const field of FIELDS) if (row[field] !== undefined) out[field] = row[field];
@@ -119,8 +130,9 @@ const header = (what) => `/**
  * ${what} GENERATED — do not edit by hand.
  *
  * Source: \`client/scripts/popup_prefab.as\`, \`GetBuildings\` (:278-311): each
- * kit's building map and its price. Regenerate with
- * \`node tools/gen-starter-kits.mjs\` from \`web/\`.
+ * kit's building map and its price, less the Ultra Kit's Yard Planner, which
+ * an outpost no longer builds (owner decision 2026-09-30; prices unchanged).
+ * Regenerate with \`node tools/gen-starter-kits.mjs\` from \`web/\`.
  */`;
 
 const server = `${header("The outpost Starter Kits (outposts WP9, issue #188).")}
