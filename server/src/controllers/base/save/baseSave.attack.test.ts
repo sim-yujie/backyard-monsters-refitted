@@ -73,6 +73,9 @@ mock.module("../../../scripts/anticheat/anticheat.js", () => ({
   validateSave: async () => {},
 }));
 
+/** The defence the attack load served, when a test gives the session one (issue #195). */
+let sessionForces: unknown;
+
 mock.module("../../../services/base/attackSessionStore.js", () => ({
   startAttackSession: async () => {},
   readAttackSession: async () => ({
@@ -81,6 +84,7 @@ mock.module("../../../services/base/attackSessionStore.js", () => ({
     startedat: Math.floor(Date.now() / 1000),
     entryHoused: ENTRY,
     defenderResources: { r1: 5000, r2: 0, r3: 0, r4: 0 },
+    ...(sessionForces ? { defenderForces: sessionForces } : {}),
   }),
   endAttackSession: async () => {},
 }));
@@ -140,6 +144,7 @@ afterEach(() => {
 
 beforeEach(() => {
   replayTimesOut = false;
+  sessionForces = undefined;
   setMode("log");
   reports.length = 0;
   store.clear();
@@ -625,5 +630,81 @@ describe("the battle is the server's (#23, C3)", () => {
     expect(defender.buildinghealthdata).toEqual({});
     expect(defender.attackreport ?? null).toBeNull();
     expect(defender.buildingdata["3"]).toMatchObject({ t: 24 });
+  });
+});
+
+describe("the defence lands (#195)", () => {
+  // The camp with a Monster Bunker holding three Pokeys and a Champion Cage,
+  // both where the Finks land.
+  const DEFENDED = {
+    ...YARD,
+    "5": { id: 5, t: 22, l: 1, X: 360, Y: 360, m: { C1: 3 } },
+    "6": { id: 6, t: 114, l: 1, X: 440, Y: 440 },
+  };
+  const FORCES = {
+    bunkers: { 5: { C1: 3 } },
+    defenderLevels: { C1: 3 },
+    defenderChampion: { t: 1, l: 1, hp: 3000, pl: 0 },
+  };
+  const GORGO = { t: 1, l: 1, hp: 3000, pl: 0, status: 0, fd: 0, ft: 0, fb: 0 };
+  const TICK = 4_000;
+
+  const serverBattle = () =>
+    replayAbandonedAttack(
+      battleReplayInput({
+        flinglog: LOG,
+        session: {
+          attackerid: ATTACKER,
+          attackid: ATTACK_ID,
+          startedat: 0,
+          entryHoused: ENTRY,
+          defenderForces: FORCES,
+        },
+        defender: {
+          type: "tribe",
+          buildingdata: DEFENDED as never,
+          buildinghealthdata: {},
+          resources: { r1: 5000, r2: 0, r3: 0, r4: 0 },
+        },
+        attacker: attackerSave,
+        tick: battleTick(TICK),
+        declareWar: false,
+        left: false,
+      })!
+    );
+
+  beforeEach(() => {
+    sessionForces = FORCES;
+    defender.buildingdata = structuredClone(DEFENDED);
+    defender.champion = [{ ...GORGO }];
+  });
+
+  test("the caged champion keeps the health the battle left it, and the bunker what it left", async () => {
+    const battle = serverBattle();
+    expect(battle.defenderChampion?.hp).toBeLessThan(3000);
+    expect(Object.keys(battle.bunkerLosses).length).toBeGreaterThan(0);
+
+    await baseSave(ctxFor({ over: "1", tick: String(TICK), flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(defender.champion).toEqual([{ ...GORGO, hp: Math.floor(battle.defenderChampion!.hp) }]);
+    const garrison = battle.bunkerGarrisons[5]!;
+    const entry = defender.buildingdata["5"] as { m?: unknown };
+    if (Object.keys(garrison).length > 0) expect(entry.m).toEqual(garrison);
+    else expect("m" in entry).toBe(false);
+  });
+
+  test("a save that sends the champion back unhurt is flagged over it", async () => {
+    await baseSave(
+      ctxFor({
+        over: "1",
+        tick: String(TICK),
+        flinglog: JSON.stringify(LOG),
+        champion: JSON.stringify([GORGO]),
+      }),
+      async () => {}
+    );
+
+    expect(reports.some((line) => line.includes("champion"))).toBe(true);
+    expect((defender.champion as { hp: number }[])[0]!.hp).toBeLessThan(3000);
   });
 });

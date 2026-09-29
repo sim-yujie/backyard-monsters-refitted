@@ -10,6 +10,7 @@ import {
   VICTORY_THRESHOLD,
   attackReport,
   derivedDestroyed,
+  parseDefenderForces,
   type BattleState,
   type FlingEvent,
   type FlingLog,
@@ -125,6 +126,26 @@ export const attackerChampionsAfter = (
   });
 };
 
+/**
+ * `champion`: the defender's champions as loaded, the one that came out of
+ * its Champion Cage at the health the battle left it (issue #195). The server
+ * writes the replay's figure and only compares this one.
+ */
+export const defenderChampionsAfter = (
+  champions: readonly ChampionSaveEntry[],
+  cagedType: number | undefined,
+  hp: number | null,
+): ChampionSaveEntry[] => {
+  let done = false;
+  return champions.map((champion) => {
+    if (done || cagedType === undefined || hp === null || champion.t !== cagedType) {
+      return champion;
+    }
+    done = true;
+    return { ...champion, hp: Math.max(0, Math.floor(hp)) };
+  });
+};
+
 /* ── The attacker's housing ─────────────────────────────────────────────── */
 
 /**
@@ -213,6 +234,7 @@ export const attackReportOf = (
   log: FlingLog,
   state: AttackSessionState,
   nameOf: (id: string) => string = (id) => id,
+  defenderChampionFell = false,
 ): string =>
   attackReport(
     log.events,
@@ -222,6 +244,7 @@ export const attackReportOf = (
       damagePercent: state.damagePercent,
       buildingsDestroyed: state.buildingsDestroyed,
       loot: state.loot,
+      defenderChampionFell,
     },
     nameOf,
   );
@@ -260,7 +283,12 @@ export const buildAttackSave = (
     monsterupdate: monsterUpdateOf(roster.sources, flungOf(log.events)),
     attackloot: attackLootOf(battleState),
     resources: defenderDeltaOf(battleState),
-    attackreport: attackReportOf(log, state, options.nameOf),
+    attackreport: attackReportOf(
+      log,
+      state,
+      options.nameOf,
+      battleState.defenderChampionHp === 0,
+    ),
     flinglog: log,
   };
   if (destroyed !== undefined) payload.destroyed = destroyed;
@@ -272,7 +300,13 @@ export const buildAttackSave = (
   // engine does not fight the defender's champion, so neither changed. The
   // server honours only a lower champion hp anyway.
   if (load.monsters) payload.monsters = load.monsters;
-  if (load.champion && load.champion.length > 0) payload.champion = load.champion;
+  if (load.champion && load.champion.length > 0) {
+    payload.champion = defenderChampionsAfter(
+      load.champion,
+      parseDefenderForces(load.defenderforces)?.defenderChampion?.t,
+      battleState.defenderChampionHp,
+    );
+  }
   if (attackerchampion) payload.attackerchampion = attackerchampion;
   if (attackersiege) payload.attackersiege = attackersiege;
   return payload;

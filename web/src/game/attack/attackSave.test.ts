@@ -7,6 +7,7 @@ import { AttackSession } from "./AttackSession";
 import {
   attackReportOf,
   buildAttackSave,
+  defenderChampionsAfter,
   buildingDataAfter,
   clockOf,
   describeOutcome,
@@ -444,5 +445,31 @@ describe("the pieces", () => {
     expect(summary.loot).toEqual(state.loot);
     expect(summary.champions).toHaveLength(1);
     expect(summary.champions[0]!.t).toBe(5);
+  });
+});
+
+describe("the defence in the save (#195)", () => {
+  const gorgo: ChampionSaveEntry = { t: 1, l: 2, hp: 5000, pl: 0, status: 0, fd: 0, ft: 0, fb: 0 };
+  const drull: ChampionSaveEntry = { ...gorgo, t: 2, hp: 700 };
+
+  it("sends the caged champion at the health the battle left it, and every other as loaded", () => {
+    expect(defenderChampionsAfter([gorgo, drull], 1, 1234.9)).toEqual([{ ...gorgo, hp: 1234 }, drull]);
+    expect(defenderChampionsAfter([gorgo, drull], 1, 0)[0]!.hp).toBe(0);
+  });
+
+  it("sends them all as loaded when none defended", () => {
+    expect(defenderChampionsAfter([gorgo], undefined, 10)).toEqual([gorgo]);
+    expect(defenderChampionsAfter([gorgo], 1, null)).toEqual([gorgo]);
+  });
+
+  it("says in the report when the defending champion fell", () => {
+    const session = new AttackSession({ target: targetOf({ load: towerLoad() }), seed: 7 });
+    session.start();
+    session.appendFling({ x: -600, y: 120, monsters: { C1: 1 } });
+    play(session, 1);
+    session.retreat();
+    const state = session.state();
+    expect(attackReportOf(session.flingLog(), state, undefined, true)).toContain("The defending champion fell.");
+    expect(attackReportOf(session.flingLog(), state)).not.toContain("champion fell");
   });
 });

@@ -113,8 +113,8 @@ export interface AbandonedOutcome {
   bunkerLosses: Readonly<Record<number, Readonly<Record<string, number>>>>;
   /** What each bunker holds afterwards (`BattleState.bunkerGarrisons`, #195). */
   bunkerGarrisons: Readonly<Record<number, Readonly<Record<string, number>>>>;
-  /** The caged champion's health afterwards, or null for none (#195). */
-  defenderChampionHp: number | null;
+  /** The caged champion, by type, and its health afterwards: 0 if it died; null for none (#195). */
+  defenderChampion: { t: number; hp: number } | null;
 }
 
 /** The web client's name for the kind of yard (`AttackTargetKind`). */
@@ -257,10 +257,14 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
       damagePercent: percent,
       buildingsDestroyed: state.destroyedIds.length,
       loot,
+      defenderChampionFell: state.defenderChampionHp === 0,
     }),
     bunkerLosses: state.bunkerLosses,
     bunkerGarrisons: state.bunkerGarrisons,
-    defenderChampionHp: state.defenderChampionHp,
+    defenderChampion:
+      state.defenderChampionHp === null || !input.defence?.defenderChampion
+        ? null
+        : { t: input.defence.defenderChampion.t, hp: state.defenderChampionHp },
   };
 };
 

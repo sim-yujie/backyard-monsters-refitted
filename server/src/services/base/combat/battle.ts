@@ -141,6 +141,8 @@ export interface ClientBattle {
   readonly attackerchampion?: unknown;
   /** The attacker's siege stock after the battle (issue #23, C1). */
   readonly attackersiege?: unknown;
+  /** The defender's champions after the battle (issue #195). */
+  readonly champion?: unknown;
 }
 
 const TRAP_TYPES: ReadonlySet<number> = new Set([24, 117]);
@@ -205,7 +207,8 @@ const sameHealth = (sent: unknown, derived: Record<string, number>): boolean => 
  * Where the client's save and the server's battle part company, by field:
  * `damage`, `destroyed`, `buildinghealthdata`, `firedTraps`, `attackloot`, and
  * the attacker's own row, `attackerchampion` (a flung champion's health) and
- * `attackersiege` (issue #23, C7). Empty for an honest save, which fought the
+ * `attackersiege` (issue #23, C7), and the defender's caged champion,
+ * `champion` (issue #195). Empty for an honest save, which fought the
  * same battle with the same engine. Recorded, never written; refused under
  * `COMBAT_SAVE_VALIDATION=reject` (`saveBattle.ts`).
  *
@@ -232,5 +235,8 @@ export const battleMismatches = (
   }
   if (!sameChampions(client.attackerchampion, server)) fields.push("attackerchampion");
   if (!sameSiege(client.attackersiege, server.attackersiege)) fields.push("attackersiege");
+  // The caged champion's health, the save's against the battle's (issue #195).
+  const caged = server.defenderChampion;
+  if (caged && championHpOf(client.champion, caged.t) !== Math.floor(caged.hp)) fields.push("champion");
   return fields;
 };

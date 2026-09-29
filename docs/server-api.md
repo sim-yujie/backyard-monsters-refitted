@@ -236,8 +236,8 @@ dedicated handler or falls back to `JSON.parse`-and-assign:
 | `resources` | `resourceHandler.ts` (`resourcesHandler`) | Adds the client's `{r1..r4, r1max..r4max}` delta onto the stored pool (`updateResources`). When the owner is saving from an **outpost** session, the `rNmax` fields are dropped (`skipCapacity`) — capacity is a property of the main yard's buildings, not the outpost's. |
 | `iresources` | same handler, `key: SaveKeys.IRESOURCES` | Same, but writes the Inferno resource pool. |
 | `academy` | `academyHandler.ts` | Parses `{[monsterKey]: {level}}`, clamps every `level` to a maximum of `6`. |
-| `buildingdata` | `buildingDataHandler.ts` (attack only; non-attack just assigns directly) | On an **attack** save, non-trap buildings are never modified by the client payload — they're always taken from the DB. The only legitimate change is removing a triggered trap (`t===24` TRAP or `t===117` HEAVY_TRAP): if the client's submission no longer includes that trap's key, it's dropped from the defender's `buildingdata`. On a Map Room 1 or 2 attack the fired traps are the server's replay's, not the save's (issue #23, C3, see "The battle is the server's" below); only a Map Room 3 attack still reads them from the save. The save that ends the attack also empties a fallen Monster Bunker's garrison (`m`, issue #130, `services/base/combat/bunkerGarrison.ts`), as Flash's `Export` leaves a bunker at zero health empty (`BUILDING22.as:683-700`): the bunkers the server's replay brought down, whatever the save reports. |
-| `champion` | `championHandler.ts` (attack only) | Map Room 3 only: `hp` can be lowered by an attack, and only if the reported `hp` is less than the stored value (`Math.min`) — every other champion field is server-authoritative. On a Map Room 1 or 2 attack the defender's champion is left as stored (issue #23, C3): the shared engine does not fight it. On the save that ends an attack, the **attacker's** own champions come from `attackerchampion` the same way (issue #23, C1, `services/base/combat/attackerRow.ts`): only `hp`, only downwards, and only for a champion the fling log flung; level, feeding and status stay as stored. |
+| `buildingdata` | `buildingDataHandler.ts` (attack only; non-attack just assigns directly) | On an **attack** save, non-trap buildings are never modified by the client payload — they're always taken from the DB. The only legitimate change is removing a triggered trap (`t===24` TRAP or `t===117` HEAVY_TRAP): if the client's submission no longer includes that trap's key, it's dropped from the defender's `buildingdata`. On a Map Room 1 or 2 attack the fired traps are the server's replay's, not the save's (issue #23, C3, see "The battle is the server's" below); only a Map Room 3 attack still reads them from the save. The save that ends the attack also empties a fallen Monster Bunker's garrison (`m`, issue #130, `services/base/combat/bunkerGarrison.ts`), as Flash's `Export` leaves a bunker at zero health empty (`BUILDING22.as:683-700`): the bunkers the server's replay brought down, whatever the save reports. Each bunker the battle fought with (the session's `defenderForces`, issue #195) then holds what the replay left it: its survivors back in, its dead gone, a fallen bunker only the defenders that were out (`garrisonsAfterBattle`). |
+| `champion` | `championHandler.ts` (attack only) | Map Room 3 only: `hp` can be lowered by an attack, and only if the reported `hp` is less than the stored value (`Math.min`) — every other champion field is server-authoritative. On a Map Room 1 or 2 attack the defender's champion that came out of its Champion Cage takes the health the server's replay left it, never more than it had, 0 if it died, and heals from there (issue #195, `services/base/combat/defenderChampion.ts`); every other champion and field stays as stored. The save's `champion` is only compared (`attack-replay-mismatch` field `champion`). On the save that ends an attack, the **attacker's** own champions come from `attackerchampion` the same way (issue #23, C1, `services/base/combat/attackerRow.ts`): only `hp`, only downwards, and only for a champion the fling log flung; level, feeding and status stay as stored. |
 | `attackersiege` | `attackerRow.ts` `siegeAfterAttack` (attack only) | Never written as sent (issue #23, C1). On the save that ends the attack, the attacker's stored `siege` stock less one per `siege` event in the fling log; nothing without a usable log. |
 | `points` / `basevalue` | inline | `baseSave.points = value.toString()` / `.basevalue = value.toString()` — stored as strings. |
 | `buildingresources` | ignored | Server-owned since outposts WP4 (`services/maproom/v2/autobank.ts`): never written from an owner or an attack save. |
@@ -465,10 +465,11 @@ the words the web client uses (monster names, bomb names, the result line), so a
 report and the server's are the same text. Its "Left the attack" line is there when the save
 carries `left: "1"` (the web client sends it, on the final save and its keepalive copy, when the
 player left the attack screen; a client's word that changes nothing but that line); the
-finaliser's report always has it. The save's own copies
+finaliser's report always has it. A line says when the defending champion fell (issue #195). The save's own copies
 of these are never written. Where they differ from the replay (by field: `damage`, `destroyed`,
-`buildinghealthdata`, `firedTraps`, `attackloot`, and the attacker's own row, `attackerchampion`
-for a flung champion's health and `attackersiege`), `COMBAT_SAVE_VALIDATION` decides what it
+`buildinghealthdata`, `firedTraps`, `attackloot`, the attacker's own row, `attackerchampion`
+for a flung champion's health and `attackersiege`, and the defender's caged champion's health,
+`champion`, issue #195), `COMBAT_SAVE_VALIDATION` decides what it
 costs (issue #23, C7, `services/base/combat/saveBattle.ts`): `off` nothing; `log` (the default)
 one `attack-replay-mismatch` warning and one `Report` row; `reject` the same, then the save is
 refused with `attackReplayRejectedErr` (409, `reason: "replayMismatch"`, `fields`) before anything
@@ -533,7 +534,8 @@ would: never more than the served pool gives, and the same however the stored po
 the attack (an outpost owner's autobank, another attack). The defender's loss lands on the pool as
 it stands, never below zero. A checkpoint without that record (one written before it existed)
 credits nothing, as a save without a roster would not; its damage still lands. A bunker the finaliser's replay brought down by the checkpoint's tick loses its garrison, as the final
-save's does (issue #130).
+save's does (issue #130); each bunker it fought with holds what the replay left it, and the caged
+champion keeps the health the replay left it, as on the final save (issue #195).
 
 **Not yet covered.** The Inferno save endpoint (`/api/:apiVersion/bm/base/save` →
 `controllers/inferno/infernoSave.ts`) still has the original gate — a non-zero `attackid` on the

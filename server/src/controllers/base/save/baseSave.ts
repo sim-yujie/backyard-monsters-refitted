@@ -71,7 +71,8 @@ import { recordBattleMismatches, replayBattleForSave } from "../../../services/b
 import { isDeclareWarRunning } from "../../../services/alliance/powerups.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import { championsAfterAttack, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
-import { fallenIn, withoutFallenGarrisons } from "../../../services/base/combat/bunkerGarrison.js";
+import { garrisonsAfterBattle } from "../../../services/base/combat/bunkerGarrison.js";
+import { championsAfterDefence } from "../../../services/base/combat/defenderChampion.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 
 /**
@@ -249,6 +250,7 @@ const saveBase = async (
         attackloot: saveData.attackloot,
         attackerchampion: saveData.attackerchampion,
         attackersiege: saveData.attackersiege,
+        champion: saveData.champion,
       },
       battle,
       baseSave.buildingdata,
@@ -351,8 +353,8 @@ const saveBase = async (
             );
           }
 
-          // The engine never fights the defender's champion, so a replayed
-          // battle leaves it as it was.
+          // A replayed battle writes the defender's champion from the replay
+          // below (issue #195); only a Map Room 3 attack takes the save's.
           if (saveData.champion && clientBattle) {
             championHandler(saveData.champion, baseSave);
           }
@@ -412,6 +414,8 @@ const saveBase = async (
     if (battle.destroyed !== undefined) baseSave.destroyed = battle.destroyed;
     // The report too is the replay's, in the web client's words (C6).
     (baseSave as unknown as { attackreport: unknown }).attackreport = battle.attackreport;
+    // The caged champion keeps what health the battle left it (issue #195).
+    baseSave.champion = championsAfterDefence(baseSave.champion, battle.defenderChampion) ?? baseSave.champion;
   }
 
   // In `reject` mode the storage caps and the base value are the server's to
@@ -480,12 +484,10 @@ const saveBase = async (
 
     // A bunker that fell takes its garrison with it, as Flash's Export leaves
     // a fallen bunker empty (issue #130, `bunkerGarrison.ts`): the bunkers the
-    // server's own battle brought down (issue #23, C3).
+    // server's own battle brought down (issue #23, C3). Each bunker the battle
+    // fought with then holds what it left it (issue #195).
     if (battle) {
-      const fallen = fallenIn(battle.buildinghealthdata);
-      if (fallen.size > 0) {
-        baseSave.buildingdata = withoutFallenGarrisons(baseSave.buildingdata, fallen).buildingdata;
-      }
+      baseSave.buildingdata = garrisonsAfterBattle(baseSave.buildingdata, battle);
     }
 
     postgres.em.persist(userSave);

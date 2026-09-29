@@ -27,7 +27,8 @@ import { replayAbandonedInWorker } from "./combat/replayRunner.js";
 import { attackLootOf, bankAttackLoot } from "./combat/attackLoot.js";
 import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpend.js";
 import { combatCellHeight } from "./combat/cellHeight.js";
-import { fallenIn, withoutFallenGarrisons } from "./combat/bunkerGarrison.js";
+import { garrisonsAfterBattle } from "./combat/bunkerGarrison.js";
+import { championsAfterDefence } from "./combat/defenderChampion.js";
 import { getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
 import { storedDamage } from "./storedDamage.js";
 import { catchUpArmyRow } from "../yard/armies.js";
@@ -236,10 +237,11 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
   // The defender.
   const storedHealthData = defender.buildinghealthdata;
   buildingDataHandler(buildingDataWithout(defender.buildingdata, outcome.firedTraps), defender);
-  // A bunker the battle brought down loses its garrison, as the save's own
-  // would (issue #130, `bunkerGarrison.ts`).
-  const garrisons = withoutFallenGarrisons(defender.buildingdata, fallenIn(outcome.buildinghealthdata));
-  defender.buildingdata = garrisons.buildingdata;
+  // A bunker the battle brought down loses its garrison, and each the battle
+  // fought with holds what it left it, as the save's own would (issues #130,
+  // #195, `bunkerGarrison.ts`); the caged champion keeps what health it has.
+  defender.buildingdata = garrisonsAfterBattle(defender.buildingdata, outcome);
+  defender.champion = championsAfterDefence(defender.champion, outcome.defenderChampion) ?? defender.champion;
   defender.buildinghealthdata = outcome.buildinghealthdata;
   // Whole and cut down, as the attack's own save stores it (#72).
   defender.damage = storedDamage(outcome.damage) ?? defender.damage;
@@ -288,7 +290,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
     loot: loot.credit,
     lootBasis: loot.basis,
     flung: outcome.flung,
-    emptiedBunkers: garrisons.emptied,
+    bunkerLosses: outcome.bunkerLosses,
     bombs: bombs.charges.map(({ id }) => id),
   });
 
