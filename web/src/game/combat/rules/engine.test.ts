@@ -959,6 +959,77 @@ describe("healers (issue #129)", () => {
   });
 });
 
+describe("Rezghul raises the dead (issue #129)", () => {
+  /**
+   * Six Pokeys and a level 3 Rezghul dropped on a harvester between two level
+   * 6 Cannon Towers, which cut the Pokeys down. A level 3 Rezghul raises what
+   * lies within 300 of it every 6 seconds, as zombies with 1.2 times the
+   * health (`combatStatsData.ts` C19).
+   */
+  const battleOf = (monsters: Record<string, number>, levels: Record<string, number> = { C19: 3 }) => {
+    const yard = yardOf({
+      "1": { id: 1, t: 20, l: 6, X: 0, Y: 0 },
+      "2": { id: 2, t: 20, l: 6, X: 100, Y: 0 },
+      "4": { id: 4, t: 1, l: 1, X: 150, Y: 150 },
+    });
+    const battle = createBattle(yard, { seed: 3, levels });
+    battle.apply({ kind: "fling", t: 0, x: 150, y: 150, r: 0, monsters });
+    return battle;
+  };
+
+  /** Every creep that joined the field after the fling, with the tick it came. */
+  const risen = (battle: ReturnType<typeof createBattle>, ticks: number) => {
+    const seen = new Set(battle.creeps().map((creep) => creep.id));
+    const born: Array<{ tick: number; creep: ReturnType<typeof battle.creeps>[number] }> = [];
+    for (let step = 0; step < ticks && !battle.over(); step += 1) {
+      battle.step();
+      for (const creep of battle.creeps()) {
+        if (seen.has(creep.id)) continue;
+        seen.add(creep.id);
+        born.push({ tick: battle.tick, creep });
+      }
+    }
+    return born;
+  };
+
+  it("raises the fallen Pokeys as zombies with the Rezghul's health multiplier", () => {
+    const born = risen(battleOf({ C1: 6, C19: 1 }), 3000);
+    expect(born.length).toBeGreaterThan(0);
+    for (const { creep } of born) {
+      expect(creep.monsterId).toBe("C1");
+      expect(creep.friendly).toBe(false);
+      expect(creep.maxHp).toBe(240);
+      expect(creep.hp).toBe(240);
+    }
+  });
+
+  it("raises again only once its cooldown has run, 6 seconds at level 3", () => {
+    const ticksOf = [...new Set(risen(battleOf({ C1: 6, C19: 1 }), 3000).map(({ tick }) => tick))];
+    expect(ticksOf.length).toBeGreaterThan(1);
+    for (let at = 1; at < ticksOf.length; at += 1) {
+      expect(ticksOf[at]! - ticksOf[at - 1]!).toBeGreaterThanOrEqual(6 * 80);
+    }
+  });
+
+  it("raises each corpse once: a zombie leaves none", () => {
+    const battle = battleOf({ C1: 6, C19: 1 });
+    const born = risen(battle, 3000);
+    // Six Pokeys can come back six times at most, however many die twice.
+    expect(born.length).toBeLessThanOrEqual(6);
+  });
+
+  it("raises nothing without a Rezghul, and never a Mini", () => {
+    expect(risen(battleOf({ C1: 6 }), 3000)).toHaveLength(0);
+    // Slimeattikus falls and splits and its Minis fall too: every Mini that
+    // joins is a fresh split at 250, never a zombie at 1.2 times that.
+    const minis = risen(battleOf({ C17: 2, C19: 1 }, { C19: 3, C17: 1 }), 3000).filter(
+      ({ creep }) => creep.monsterId === "C18",
+    );
+    expect(minis.length).toBeGreaterThan(0);
+    for (const { creep } of minis) expect(creep.maxHp).toBe(250);
+  });
+});
+
 describe("a bunker's reach (issue #91)", () => {
   /**
    * A level 1 Monster Bunker (range 300, 90 x 90) at the origin scans from the

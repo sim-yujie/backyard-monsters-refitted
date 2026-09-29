@@ -717,7 +717,7 @@ the per-building copies are dropped (§2.5). `lockerdata` unchanged.
 | List pictures | `C16/C17/C19-portrait.jpg`, `-medium.jpg`, `-small.png` exist in `server/public/assets/monsters/`; no `-150.png` (the hatchery-size icon C1–C15 have) | Use `-medium.jpg` in the grid; no new art needed |
 | Battle sprite sheets | `vorg_anim.png`, `slimeattikus_anim.png`, `slimeattikusmini_anim.png`, `rezghul.png`, rows in `web/src/game/attack/monsterSpriteData.ts:470-560` | none |
 | Combat stats | `web/src/game/combat/rules/combatStatsData.ts` has C16–C19 | none |
-| **Combat abilities** | **Missing.** The engine does not model Rezghul's zombies, Slimeattikus' splits or Vorg's healing (`web/src/game/combat/rules/engine.ts:136-142`, note 8). They fight as plain creeps with their base stats. | Follow-up issue (§11) against the combat rules; not blocking Phase 2 |
+| **Combat abilities** | **Modelled (issue #129).** The shared engine splits a dead Slimeattikus into Minis, has Vorg and Zafreeti heal their own side, and has Rezghul raise the dead as zombies (`web/src/game/combat/rules/engine.ts`, `onDeath`, `tickHealer`, `tickRaise`). Projectiles still land instantly (note 1), and zombies are not drawn greyed. | none |
 | Bunker, Baiter | C17 is bunkerable (MH §6.3); the Baiter roster stays C1–C14 (§8.1) | none |
 | Lab abilities | none of the four has one (MH §4.2) | none |
 

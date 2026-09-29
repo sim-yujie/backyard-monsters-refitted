@@ -1,6 +1,6 @@
 import { buildPathGrid } from "./grid.js";
 import { mulberry32 } from "./rng.js";
-import { SPLIT_CHILD_ID } from "./potential.js";
+import { REZGHUL_ID, SPLIT_CHILD_ID } from "./potential.js";
 import {
   ATTACK_COUNTDOWN_SECONDS,
   BEHAVIOUR_SPEED,
@@ -46,6 +46,9 @@ import {
 } from "./stats.js";
 import {
   canHit,
+  TARGETS_ATTACKERS,
+  TARGETS_DEFENDERS,
+  TARGETS_GROUND,
   createCreepIndex,
   defenseFlags,
   findBuildingTarget,
@@ -98,7 +101,8 @@ import type {
  *
  * Creeps with their six target groups and their specialist multipliers; the
  * pathing grid and the wall that gets in the way; ranged and melee swings;
- * Eye-ra's blast; Slimeattikus splitting as it dies; the healers; towers with
+ * Eye-ra's blast; Slimeattikus splitting as it dies; the healers; Rezghul
+ * raising the dead; towers with
  * their acquire delay, re-arm and splash; the two traps; bunkers dispatching
  * defenders; resource bombs; loot out of harvesters and storage, hit by hit,
  * and the share of the pool a fallen storage building gives up; the countdown
@@ -150,7 +154,6 @@ import type {
  * 8. **Not modelled at all**, each because its numbers were never traced
  *    (`docs/specs/combat.md:1362-1375`) or because it is out of Map Room 2's
  *    scope: champion abilities and buffs beyond damage and looting,
- *    Rezghul's zombies,
  *    invisibility, `Blink`, `PoisonOnAttack`, `GlavesOnAttack`, the Stronghold's
  *    four emitters, the Spurtz Cannon's burst, every siege weapon, and the
  *    per-creep `_hitLimit`. A yard holding one of those buildings fires it as
@@ -437,6 +440,14 @@ interface Creep {
   born: number;
   /** A healer's `_healerGiveUpTimer`: looks left before it gives up (`CreepBase.as:41`). */
   giveUp: number;
+  /**
+   * Spawned mid-battle rather than flung or sent out: a Slimeattikus Mini or a
+   * zombie. It leaves no corpse (`MonsterBase.as:1214-1216`), so nothing
+   * raises it again.
+   */
+  disposable: boolean;
+  /** Rezghul: the tick its raise is ready again (`RangedAttack.as:45-51`). */
+  rechargeAt: number;
 }
 
 interface Tower {
@@ -509,6 +520,30 @@ export const flingCost = (
 /** The Map Room 2 flinger payload, which is pinned to level 4 (`GLOBAL.as:863`). */
 export const flingerPayload = (): number => capacity(5, MR2_FLINGER_LEVEL);
 
+/** A creep that died where Rezghul can find it (`Targeting.CreepCellAdd`). */
+interface Corpse {
+  readonly creepId: number;
+  readonly monsterId: string;
+  readonly friendly: boolean;
+  /** The flags it was hit by while it lived: its side and whether it flew. */
+  readonly flags: number;
+  readonly ix: number;
+  readonly iy: number;
+  readonly x: number;
+  readonly y: number;
+}
+
+/** How far Rezghul throws its raise, and how wide it lands (`creeps/Rezghul.as:52`). */
+const RAISE_RANGE = 300;
+const RAISE_AREA = 50;
+
+/** Nobody raises these (`RezghulResurrectAttack.as:13`). */
+const UNRAISABLE: ReadonlySet<string> = new Set(["C16", "C15", "C19", "C18"]);
+
+/** Its own side, on the ground: `getFriendlyFlag | k_TARGETS_GROUND` (`Rezghul.as:52`). */
+const raiseTargets = (creep: { friendly: boolean }): number =>
+  (creep.friendly ? TARGETS_DEFENDERS : TARGETS_ATTACKERS) | TARGETS_GROUND;
+
 /** How far a healer looks for someone to heal (`CreepBase.as:612`). */
 const HEAL_SEARCH = 600;
 
@@ -545,6 +580,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const bunkerLosses: BunkerLossTally = new Map();
   /** Dead Slimeattikus whose Minis are born at the end of the step (issue #129). */
   const pendingSplits: Array<{ readonly parent: Creep; readonly count: number }> = [];
+  /** Where the dead lie, for Rezghul to raise (`Targeting._deadCreepCells`). */
+  const corpses: Corpse[] = [];
+  /** Corpses Rezghul raised this step, back on their feet at its end. */
+  const pendingZombies: Array<{ readonly corpse: Corpse; readonly raiser: Creep }> = [];
   const firedTraps: number[] = [];
   const destroyedIds: number[] = [];
   /** Shots, hits, hurts and deaths for the renderer, pruned each step; not simulation state. */
@@ -796,6 +835,20 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * done, so none of them acts on the tick its parent fell.
    */
   const onDeath = (creep: Creep): void => {
+    // `dieFinish` files every dead creep but a champion or a disposable one as
+    // a corpse where it fell (`MonsterBase.as:1206-1217`).
+    if (!creep.champion && !creep.disposable) {
+      corpses.push({
+        creepId: creep.id,
+        monsterId: creep.monsterId,
+        friendly: creep.friendly,
+        flags: creep.flags,
+        ix: creep.ix,
+        iy: creep.iy,
+        x: creep.x,
+        y: creep.y,
+      });
+    }
     const splits = monsterStat(creep.monsterId, "splits", creep.level);
     if (splits > 0 && !creep.champion) {
       pendingSplits.push({ parent: creep, count: Math.floor(splits) });
@@ -818,13 +871,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const screenY = rng.float() * 120 - 60;
       // `screenPointOf` undone, as in {@link dropPoint}.
       const at = { x: parent.ix + screenY + screenX / 2, y: parent.iy + screenY - screenX / 2 };
-      spawnCreep(
+      const mini = spawnCreep(
         SPLIT_CHILD_ID,
         parent.level,
         at,
         parent.friendly,
         parent.friendly ? "defend" : "attack",
       );
+      // `CREEPS.Spawn(…, true)`, and `isDisposable` for a defender's (`:40-44`).
+      mini.disposable = true;
     }
   };
 
@@ -832,6 +887,73 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const bornAtStepEnd = (): void => {
     const waiting = pendingSplits.splice(0);
     for (const { parent, count } of waiting) splitOnDeath(parent, count);
+    const risen = pendingZombies.splice(0);
+    for (const { corpse, raiser } of risen) raise(corpse, raiser);
+  };
+
+  /**
+   * `RezghulResurrectAttack` (`creeps/Rezghul.as:48-53`,
+   * `components/abilities/RezghulResurrectAttack.as`): while it fights, a
+   * Rezghul whose raise is ready throws it at the nearest corpse of its own
+   * side within 300 that lay on the ground, and every such corpse within 50 of
+   * where it lands gets up (`:29-44`, `:58-71`). Healers, Minis and Rezghul
+   * never do (`:13`). The raise is then `resurrectCooldown` seconds away
+   * (`RangedAttack.as:45-51`), counted in ticks here rather than whole
+   * seconds of the clock. The throw lands at once (fidelity note 1), and the
+   * corpses rise when the step is done.
+   */
+  const tickRaise = (creep: Creep): void => {
+    if (tick < creep.rechargeAt) return;
+    const reach = (from: { x: number; y: number }, radius: number): Corpse[] =>
+      corpses
+        .filter(
+          (corpse) =>
+            !UNRAISABLE.has(corpse.monsterId) &&
+            canHit(raiseTargets(creep), corpse.flags) &&
+            Math.trunc(distanceSquared(from.x, from.y, corpse.x, corpse.y)) < radius * radius,
+        )
+        .sort(
+          (one, other) =>
+            distanceSquared(from.x, from.y, one.x, one.y) -
+              distanceSquared(from.x, from.y, other.x, other.y) || one.creepId - other.creepId,
+        );
+    const aim = reach(creep, RAISE_RANGE)[0];
+    if (!aim) return;
+    for (const corpse of reach(aim, RAISE_AREA)) {
+      corpses.splice(corpses.indexOf(corpse), 1);
+      pendingZombies.push({ corpse, raiser: creep });
+    }
+    creep.rechargeAt = tick + ticks(monsterStat(creep.monsterId, "resurrectCooldown", creep.level));
+  };
+
+  /**
+   * `resurrect` and `Zombiefy` (`RezghulResurrectAttack.as:73-89`,
+   * `Zombiefy.as:22-40`): the dead creep again, where it fell, at the
+   * attacker's level for it, as a zombie: slower by the Rezghul's speed
+   * multiplier, which also stretches its swing; harder and stronger by its
+   * health and damage multipliers; on full health (`MaxHealthProperty.as:
+   * 19-29` scales a fresh spawn's full health to the new maximum); and
+   * disposable, so it does not rise twice.
+   */
+  const raise = (corpse: Corpse, raiser: Creep): void => {
+    const levels = corpse.friendly ? options.defenderLevels ?? options.levels : options.levels;
+    const level = clampLevel(levels, corpse.monsterId);
+    const zombie = spawnCreep(
+      corpse.monsterId,
+      level,
+      { x: corpse.ix, y: corpse.iy },
+      corpse.friendly,
+      corpse.friendly ? "defend" : "attack",
+    );
+    const speed = monsterStat(raiser.monsterId, "zombieSpeedMultiplier", raiser.level) || 1;
+    const health = monsterStat(raiser.monsterId, "zombieHealthMultiplier", raiser.level) || 1;
+    const damage = monsterStat(raiser.monsterId, "zombieDamageMultiplier", raiser.level) || 1;
+    zombie.baseSpeed *= speed;
+    zombie.attackDelay /= speed;
+    zombie.damage *= damage;
+    zombie.maxHp *= health;
+    zombie.hp = zombie.maxHp;
+    zombie.disposable = true;
   };
 
   /* ── Flinging ──────────────────────────────────────────────────────────── */
@@ -915,6 +1037,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       homeBunker,
       born: tick,
       giveUp: HEALER_GIVE_UP,
+      disposable: false,
+      rechargeAt: 0,
     };
     nextCreepId += 1;
     creeps.push(creep);
@@ -968,6 +1092,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       homeBunker: -1,
       born: tick,
       giveUp: HEALER_GIVE_UP,
+      disposable: false,
+      rechargeAt: 0,
     };
     nextCreepId += 1;
     creeps.push(creep);
@@ -1145,6 +1271,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.hp = 0;
     creep.gone = true;
     recordDeath(creep);
+    onDeath(creep);
   };
 
   const moveCreep = (creep: Creep): void => {
@@ -1347,6 +1474,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       tickHealer(creep);
       return;
     }
+    if (creep.monsterId === REZGHUL_ID) tickRaise(creep);
 
     const target = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
     const stale =
