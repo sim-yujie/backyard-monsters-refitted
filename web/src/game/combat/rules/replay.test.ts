@@ -37,6 +37,8 @@ interface Fixture {
   levels: Record<string, number>;
   playerLevel: number;
   tailTicks: number;
+  /** The defender's garrisons, their levels and the caged champion (issue #195). */
+  defence?: Record<string, unknown>;
   log: { v: 1; seed: number; events: unknown[] };
   expected: Record<string, unknown>;
 }
@@ -67,6 +69,7 @@ const inputOf = (fixture: Fixture) => {
       levels: fixture.levels,
       playerLevel: fixture.playerLevel,
       tailTicks: fixture.tailTicks,
+      ...(fixture.defence ?? {}),
     };
   }
   return {
@@ -79,11 +82,24 @@ const inputOf = (fixture: Fixture) => {
     levels: fixture.levels,
     playerLevel: fixture.playerLevel,
     tailTicks: fixture.tailTicks,
+    ...(fixture.defence ?? {}),
   };
 };
 
 /** The committed shape: exactly the fields a fixture pins, and nothing more. */
-const actualOf = (outcome: ReturnType<typeof replayAttack>) => ({
+const actualOf = (outcome: ReturnType<typeof replayAttack>, defended: boolean) => ({
+  ...battleOf(outcome),
+  // A fixture with a defence also pins what became of it (issue #195).
+  ...(defended
+    ? {
+        bunkerLosses: outcome.bunkerLosses,
+        bunkerGarrisons: outcome.bunkerGarrisons,
+        defenderChampionHp: outcome.defenderChampionHp,
+      }
+    : {}),
+});
+
+const battleOf = (outcome: ReturnType<typeof replayAttack>) => ({
   ticks: outcome.ticks,
   damage: outcome.damage,
   destroyed: outcome.destroyed ?? null,
@@ -112,7 +128,7 @@ describe("golden replays", () => {
     const fixture = read<Fixture>(`${FIXTURE_DIR}${file}`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const outcome = replayAttack(inputOf(fixture) as any);
-    expect(actualOf(outcome)).toEqual(fixture.expected);
+    expect(actualOf(outcome, Boolean(fixture.defence))).toEqual(fixture.expected);
   }, REPLAY_TIMEOUT_MS);
 
   it.each(names)("%s is reproducible within this runtime", (file) => {

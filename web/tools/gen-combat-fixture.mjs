@@ -54,8 +54,9 @@ for (const scenario of chosen) {
     levels: scenario.levels,
     playerLevel: scenario.playerLevel,
     tailTicks: scenario.tailTicks,
+    ...(scenario.defence ? { defence: scenario.defence } : {}),
     log: scenario.log,
-    expected: expectedOf(outcome),
+    expected: expectedOf(outcome, Boolean(scenario.defence)),
   };
 
   const path = resolve(FIXTURE_DIR, `${scenario.name}.json`);

@@ -1,0 +1,201 @@
+{
+  "name": "champion-and-bunkers",
+  "description": "The cage and the bunkers together, attacked with Zafreeti healers and Rezghul raising the dead on both sides (issue #195).",
+  "yard": "sandbox",
+  "kind": "main",
+  "levels": {
+    "C1": 6,
+    "C2": 6,
+    "C3": 6,
+    "C4": 6,
+    "C5": 6,
+    "C6": 6,
+    "C7": 6,
+    "C8": 6,
+    "C13": 6,
+    "C14": 6
+  },
+  "playerLevel": 15,
+  "tailTicks": 12000,
+  "defence": {
+    "bunkers": {
+      "83": {
+        "C1": 8
+      },
+      "84": {
+        "C2": 6
+      },
+      "85": {
+        "C8": 4
+      },
+      "86": {
+        "C3": 6
+      }
+    },
+    "defenderLevels": {
+      "C1": 3,
+      "C2": 3,
+      "C3": 3,
+      "C8": 3
+    },
+    "defenderChampion": {
+      "t": 1,
+      "l": 3,
+      "hp": 120000,
+      "pl": 1
+    }
+  },
+  "log": {
+    "v": 1,
+    "seed": 19503,
+    "events": [
+      {
+        "kind": "fling",
+        "t": 200,
+        "x": 300,
+        "y": -300,
+        "r": 300,
+        "monsters": {
+          "C1": 90,
+          "C15": 6,
+          "C19": 4
+        }
+      },
+      {
+        "kind": "fling",
+        "t": 3600,
+        "x": 480,
+        "y": -420,
+        "r": 300,
+        "monsters": {
+          "C8": 30,
+          "C3": 20
+        }
+      }
+    ]
+  },
+  "expected": {
+    "ticks": 15600,
+    "damage": 62.05923419353779,
+    "destroyed": null,
+    "attackloot": {
+      "r1": 16227705,
+      "r2": 16231729,
+      "r3": 16232638,
+      "r4": 8192497
+    },
+    "defenderLoss": {
+      "r1": 14123652,
+      "r2": 14127588,
+      "r3": 14128504,
+      "r4": 7138044
+    },
+    "firedTraps": 0,
+    "destroyedBuildings": 64,
+    "creepsFlung": 150,
+    "creepsKilled": 95,
+    "championHp": null,
+    "damagedBuildings": 67,
+    "rngDraws": 236523,
+    "checkpoints": [
+      {
+        "tick": 800,
+        "digest": "8907686294324d38"
+      },
+      {
+        "tick": 1600,
+        "digest": "8efb88a0fc544ffe"
+      },
+      {
+        "tick": 2400,
+        "digest": "5df888c2b7a4fffc"
+      },
+      {
+        "tick": 3200,
+        "digest": "23adc5ea1ec07404"
+      },
+      {
+        "tick": 4000,
+        "digest": "1f32ca477a5b4e01"
+      },
+      {
+        "tick": 4800,
+        "digest": "cf80cea10452dbbb"
+      },
+      {
+        "tick": 5600,
+        "digest": "1a7fd8afd3aac191"
+      },
+      {
+        "tick": 6400,
+        "digest": "e0ff2de340cbc249"
+      },
+      {
+        "tick": 7200,
+        "digest": "3e33eaf5b911a4cb"
+      },
+      {
+        "tick": 8000,
+        "digest": "cf9cf4ac051f265e"
+      },
+      {
+        "tick": 8800,
+        "digest": "1a6f022f801c53c5"
+      },
+      {
+        "tick": 9600,
+        "digest": "e1e5b490f99899a2"
+      },
+      {
+        "tick": 10400,
+        "digest": "2a071d82e3e72494"
+      },
+      {
+        "tick": 11200,
+        "digest": "0c1653a1da968da3"
+      },
+      {
+        "tick": 12000,
+        "digest": "cc0cc2cc23ea62fe"
+      },
+      {
+        "tick": 12800,
+        "digest": "5e71edada3f80ebb"
+      },
+      {
+        "tick": 13600,
+        "digest": "8258d9de437e4098"
+      },
+      {
+        "tick": 14400,
+        "digest": "5576ea9cb18e09a2"
+      },
+      {
+        "tick": 15200,
+        "digest": "7731ca860082d128"
+      }
+    ],
+    "digest": "e6d2f0e42240cf56",
+    "bunkerLosses": {
+      "83": {
+        "C1": 8
+      },
+      "84": {
+        "C2": 6
+      },
+      "85": {
+        "C8": 4
+      },
+      "86": {
+        "C3": 6
+      }
+    },
+    "bunkerGarrisons": {
+      "83": {},
+      "84": {},
+      "85": {},
+      "86": {}
+    },
+    "defenderChampionHp": 0
+  }
+}

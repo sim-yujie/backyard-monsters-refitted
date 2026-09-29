@@ -18,6 +18,7 @@ import {
   BOMBS,
   bombBlast,
   championStat,
+  championStatWithPower,
   lootingMultiplier,
   monsterStat,
   monsterTickSpeed,
@@ -1087,9 +1088,8 @@ describe("a bunker's losses (issue #130)", () => {
 
   /**
    * A level 1 Monster Bunker holding five Pokeys, and thirty Pokeys dropped
-   * beside a harvester in its range. The engine has no fight-back yet (the
-   * attackers never turn on a defender), so nobody from the bunker falls and
-   * the battle reports no losses.
+   * beside a harvester in its range. The attackers fight back (issue #195):
+   * they kill all five, and then the bunker.
    */
   const battleOf = () => {
     const yard = yardOf({
@@ -1101,22 +1101,193 @@ describe("a bunker's losses (issue #130)", () => {
     return battle;
   };
 
-  it("reports none when nobody from a bunker falls, and none for a yard without one", () => {
+  it("counts each defender the attackers kill against its bunker, and none for a yard without one", () => {
     const battle = battleOf();
     run(battle, 1200);
-    expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(5);
-    expect(battle.state().bunkerLosses).toEqual({});
+    const state = battle.state();
+    expect(state.bunkerLosses).toEqual({ 1: { C1: 5 } });
+    expect(state.creepsKilled).toBeGreaterThan(0);
+    expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(0);
     const plain = createBattle(yardOf({ "2": { id: 2, t: 1, l: 1, X: 200, Y: 200 } }), { seed: 7 });
     plain.apply({ kind: "fling", t: 0, x: 180, y: 180, r: 100, monsters: { C1: 30 } });
     run(plain, 1200);
     expect(plain.state().bunkerLosses).toEqual({});
+    expect(plain.state().bunkerGarrisons).toEqual({});
+    expect(plain.state().defenderChampionHp).toBeNull();
   });
 
-  it("stays out of the checkpoint, which the digests are built from", () => {
+  it("folds the defence into the checkpoint only when there is one", () => {
+    const plain = createBattle(yardOf({ "2": { id: 2, t: 1, l: 1, X: 200, Y: 200 } }), { seed: 7 });
+    plain.apply({ kind: "fling", t: 0, x: 180, y: 180, r: 100, monsters: { C1: 30 } });
+    run(plain, 600);
+    // Tick, four numbers a building, five a creep, twelve totals: as before #195.
+    expect(plain.checkpoint().length).toBe(1 + 4 * 1 + 5 * plain.creeps().length + 12);
+
     const battle = battleOf();
     run(battle, 1200);
-    // Tick, four numbers a building, five a creep, twelve totals: nothing for losses.
-    expect(battle.checkpoint().length).toBe(1 + 4 * 2 + 5 * battle.creeps().length + 12);
+    const creeps = battle.creeps().length;
+    // The same, then two a creep, each bunker's id and pool, and the champion's health.
+    expect(battle.checkpoint().length).toBe(1 + 4 * 2 + 5 * creeps + 12 + 2 * creeps + 1 + 2 + 1);
+  });
+});
+
+describe("the fight-back (issue #195)", () => {
+  /**
+   * A level 1 Monster Bunker holding one level 6 Fang, a harvester beside it
+   * and another far off. One Pokey lands by the near harvester, one by the far.
+   */
+  const bunkerBattle = () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 150, Y: 150 },
+      "3": { id: 3, t: 1, l: 1, X: 1400, Y: 1400 },
+    });
+    const battle = createBattle(yard, {
+      seed: 3,
+      bunkers: { 1: { C8: 1 } },
+      defenderLevels: { C8: 6 },
+    });
+    battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 0, monsters: { C1: 1 } });
+    battle.apply({ kind: "fling", t: 0, x: 1380, y: 1380, r: 0, monsters: { C1: 1 } });
+    return battle;
+  };
+
+  it("sends a defender at the defender's own level, which kills the near attacker and never chases the far one", () => {
+    const battle = bunkerBattle();
+    const far = battle.creeps().find((creep) => creep.ix > 1000)!;
+    run(battle, 1);
+    run(battle, 29);
+    const [defender] = battle.creeps().filter((creep) => creep.friendly);
+    expect(defender).toMatchObject({ monsterId: "C8", level: 6 });
+    for (let step = 0; step < 300; step += 1) {
+      battle.step();
+      for (const creep of battle.creeps()) if (creep.friendly) expect(creep.targetCreep).not.toBe(far.id);
+    }
+    expect(battle.creeps().filter((creep) => !creep.friendly).map((creep) => creep.id)).toEqual([far.id]);
+  });
+
+  it("walks a defender with nothing left in reach back into its bunker, alive and counted", () => {
+    const battle = bunkerBattle();
+    run(battle, 600);
+    expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(0);
+    expect(battle.state().bunkerLosses).toEqual({});
+    expect(battle.state().bunkerGarrisons).toEqual({ 1: { C8: 1 } });
+  });
+
+  it("sends it out again at the next attacker to come near", () => {
+    const battle = bunkerBattle();
+    run(battle, 600);
+    battle.apply({ kind: "fling", t: 600, x: 140, y: 140, r: 0, monsters: { C1: 1 } });
+    run(battle, 60);
+    expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(1);
+  });
+
+  it("turns an attacker on the defender that hits it, and back to the buildings once it is dead", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 150, Y: 150 },
+    });
+    const battle = createBattle(yard, { seed: 5, bunkers: { 1: { C1: 1 } } });
+    battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 0, monsters: { C8: 1 } });
+    let foughtIt = false;
+    for (let step = 0; step < 900 && !battle.over(); step += 1) {
+      battle.step();
+      const attacker = battle.creeps().find((creep) => !creep.friendly);
+      const defender = battle.creeps().find((creep) => creep.friendly);
+      if (attacker && defender && attacker.targetCreep === defender.id) foughtIt = true;
+    }
+    expect(foughtIt).toBe(true);
+    expect(battle.state().bunkerLosses).toEqual({ 1: { C1: 1 } });
+    const attacker = battle.creeps().find((creep) => !creep.friendly)!;
+    expect(attacker.targetCreep).toBe(-1);
+    expect(attacker.targetBuilding).toBeGreaterThan(0);
+  });
+
+  it("keeps a bunker's healers in", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 150, Y: 150 },
+    });
+    const battle = createBattle(yard, { seed: 5, bunkers: { 1: { C15: 3 } } });
+    battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 0, monsters: { C1: 2 } });
+    run(battle, 300);
+    expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(0);
+  });
+});
+
+describe("the caged champion (issue #195)", () => {
+  /** A Champion Cage, a harvester by it, one far off, and a Cannon Tower in between. */
+  const yard = () =>
+    yardOf({
+      "1": { id: 1, t: 114, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 150, Y: 150 },
+      "3": { id: 3, t: 1, l: 1, X: 1400, Y: 1400 },
+      "4": { id: 4, t: 20, l: 1, X: 300, Y: -200 },
+    });
+  const gorgo = { t: 1, l: 2, hp: 5000, pl: 1 };
+  const champion = (battle: ReturnType<typeof createBattle>) =>
+    battle.creeps().find((creep) => creep.champion && creep.friendly);
+
+  it("stays in its cage while no attacker is near", () => {
+    const battle = createBattle(yard(), { seed: 3, defenderChampion: gorgo });
+    battle.apply({ kind: "fling", t: 0, x: 1380, y: 1380, r: 50, monsters: { C1: 5 } });
+    run(battle, 300);
+    expect(champion(battle)).toBeUndefined();
+    expect(battle.state().defenderChampionHp).toBe(5000);
+  });
+
+  it("comes out at its stored health, its level and power level, when an attacker nears the cage", () => {
+    const battle = createBattle(yard(), { seed: 3, defenderChampion: gorgo });
+    battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
+    run(battle, 1);
+    expect(champion(battle)).toMatchObject({
+      monsterId: "G1",
+      level: 2,
+      hp: 5000,
+      maxHp: championStatWithPower("G1", "health", 2, 1),
+    });
+    run(battle, 2000);
+    // It killed all five, towers never shot it, and it kept what health it had left.
+    expect(battle.state().creepsKilled).toBe(5);
+    const hp = battle.state().defenderChampionHp!;
+    expect(hp).toBeGreaterThan(0);
+    expect(hp).toBeLessThan(5000);
+  });
+
+  it("is never shot by a tower", () => {
+    const battle = createBattle(yard(), { seed: 3, defenderChampion: gorgo });
+    battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
+    for (let step = 0; step < 1500 && !battle.over(); step += 1) {
+      battle.step();
+      const friendly = new Set(battle.creeps().filter((creep) => creep.friendly).map((creep) => creep.id));
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "shot") expect(friendly.has(event.creepId)).toBe(false);
+      }
+    }
+  });
+
+  it("reports 0 when the attackers kill it", () => {
+    const battle = createBattle(yard(), { seed: 3, defenderChampion: gorgo });
+    battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 60 } });
+    run(battle, 4000);
+    expect(champion(battle)).toBeUndefined();
+    expect(battle.state().defenderChampionHp).toBe(0);
+  });
+
+  it("is not there without a cage, or with nothing left in it", () => {
+    const noCage = createBattle(yardOf({ "2": { id: 2, t: 1, l: 1, X: 150, Y: 150 } }), {
+      seed: 3,
+      defenderChampion: gorgo,
+    });
+    noCage.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
+    run(noCage, 60);
+    expect(champion(noCage)).toBeUndefined();
+    expect(noCage.state().defenderChampionHp).toBeNull();
+
+    const spent = createBattle(yard(), { seed: 3, defenderChampion: { ...gorgo, hp: 0 } });
+    spent.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
+    run(spent, 60);
+    expect(champion(spent)).toBeUndefined();
   });
 });
 

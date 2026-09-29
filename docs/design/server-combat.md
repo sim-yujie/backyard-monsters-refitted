@@ -400,6 +400,25 @@ plan: read what honest play produces before refusing. `battle.test.ts` shows an 
 trips it: every golden fixture, main yard and tribe, stopped at every event, just after it, part way
 and at the longest end, plus a siege use, gives no mismatch.
 
+**The defence fights (issue #195).** The shared engine now fights back, by the owner's rules of
+2026-09-29 (engine fidelity note 9):
+- An attacker turns on a defender that hits it or comes within its reach, fights it to the death,
+  then goes back to buildings. Healers and Eye-ras don't, and a ground melee attacker can't reach
+  a flying defender.
+- A bunker's defenders fight at the defender's academy levels (`BattleOptions.defenderLevels`),
+  chase only inside the bunker's range, and walk back in when nothing is left, to be sent again.
+  A bunker keeps its healers in. `BattleState.bunkerGarrisons` is what each bunker holds
+  afterwards; a fallen bunker keeps only the defenders that were out.
+- The champion in the Champion Cage (`BattleOptions.defenderChampion`) comes out when an
+  attacker first comes within 400 of the cage, at its stored health, its level and its power
+  level's `bonus*`, fights within 800 of the cage, and fights on if the cage falls.
+  `BattleState.defenderChampionHp` is its health afterwards: 0 if it died.
+- Towers, traps and bombs never hurt a defender.
+
+A battle with no defence runs and digests exactly as before: the six older golden fixtures are
+unchanged, and three new ones (`bunker-defence`, `caged-champion`, `champion-and-bunkers`) pin the
+defence.
+
 ---
 
 ## 3. Server design

@@ -4,7 +4,7 @@ import { createBattle } from "./engine.js";
 import { ATTACK_MAX_SECONDS, ticks } from "./stats.js";
 import { toCombatYard } from "./types.js";
 import { buildEngineYard } from "./yard.js";
-import type { BattleOptions, BattleState, TowerReport } from "./engine.js";
+import type { BattleOptions, BattleState, DefenderChampion, TowerReport } from "./engine.js";
 import type {
   BuildingHealthMap,
   CombatBuildingDataMap,
@@ -64,6 +64,8 @@ export interface ReplayInput {
   readonly declareWar?: boolean;
   readonly bunkers?: Readonly<Record<number, Roster>>;
   readonly defenderLevels?: MonsterLevels;
+  /** The champion in the defender's Champion Cage (issue #195). */
+  readonly defenderChampion?: DefenderChampion | null;
   /** Ticks to keep simulating after the last event; the default is the whole attack. */
   readonly tailTicks?: number;
 }
@@ -101,6 +103,10 @@ export interface ReplayOutcome {
   readonly rngDraws: number;
   /** Each bunker's defenders that died, by monster id (`BattleState.bunkerLosses`, #130). */
   readonly bunkerLosses: BattleState["bunkerLosses"];
+  /** What each supplied bunker holds afterwards (`BattleState.bunkerGarrisons`, #195). */
+  readonly bunkerGarrisons: BattleState["bunkerGarrisons"];
+  /** The caged champion's health afterwards (`BattleState.defenderChampionHp`, #195). */
+  readonly defenderChampionHp: number | null;
 }
 
 /** The digest of one engine checkpoint. */
@@ -150,6 +156,7 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     ...(input.declareWar === undefined ? {} : { declareWar: input.declareWar }),
     ...(input.bunkers ? { bunkers: input.bunkers } : {}),
     ...(input.defenderLevels ? { defenderLevels: input.defenderLevels } : {}),
+    ...(input.defenderChampion ? { defenderChampion: input.defenderChampion } : {}),
   };
 
   const battle = createBattle(yard, options);
@@ -209,5 +216,7 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     digest: digestState(battle.checkpoint()),
     rngDraws: state.rngDraws,
     bunkerLosses: state.bunkerLosses,
+    bunkerGarrisons: state.bunkerGarrisons,
+    defenderChampionHp: state.defenderChampionHp,
   };
 };

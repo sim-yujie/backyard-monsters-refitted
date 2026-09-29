@@ -23,6 +23,7 @@ import {
   championByType,
   championMode,
   championStat,
+  championStatWithPower,
   fortifiedDamage,
   lootingMultiplier,
   isLootable,
@@ -48,6 +49,7 @@ import {
   canHit,
   TARGETS_ATTACKERS,
   TARGETS_DEFENDERS,
+  TARGETS_FLYING,
   TARGETS_GROUND,
   createCreepIndex,
   defenseFlags,
@@ -158,14 +160,30 @@ import type {
  *    four emitters, the Spurtz Cannon's burst, every siege weapon, and the
  *    per-creep `_hitLimit`. A yard holding one of those buildings fires it as
  *    an ordinary single-target tower.
- * 9. **Bunker contents must be supplied.** The defender's bunker blob is opaque
- *    to the server (§6 item 5), so {@link BattleOptions.bunkers} carries it,
- *    read off `buildingdata` by {@link bunkerGarrisons}. A bunker with no
- *    entry dispatches nothing and is not a valid group 4 or group 6 target,
- *    which is what an empty bunker is. Every dispatched defender that dies is
- *    counted against its bunker ({@link BattleState.bunkerLosses}, issue
- *    #130). No battle feeds bunkers in yet, and attackers never turn on a
- *    defender, so none dies until the fight-back lands (issue #195).
+ * 9. **The defence is supplied, and its rules are the owner's.** The defender's
+ *    bunker blob is opaque to the server (§6 item 5), so
+ *    {@link BattleOptions.bunkers} carries it, read off `buildingdata` by
+ *    {@link bunkerGarrisons}; the caged champion comes in as
+ *    {@link BattleOptions.defenderChampion}. A bunker with no entry dispatches
+ *    nothing and is not a valid group 4 or group 6 target, which is what an
+ *    empty bunker is. The fight-back rules below are the owner's decisions of
+ *    2026-09-29 (issue #195), not traced Flash:
+ *    - An attacker turns on a defender that hits it or that comes within its
+ *      reach, fights it until one of them dies, then goes back to buildings.
+ *      Healers and Eye-ras do not. A ground attacker in melee cannot reach a
+ *      flying defender. It walks straight at its foe, walls or no walls.
+ *    - A bunker's defender chases attackers inside the bunker's range and no
+ *      further, walks back in when none is left, and can be sent out again.
+ *      A bunker keeps its healers in. Every defender that dies is counted
+ *      against its bunker ({@link BattleState.bunkerLosses}, issue #130), and
+ *      {@link BattleState.bunkerGarrisons} is what each holds afterwards: a
+ *      fallen bunker keeps only the defenders that were out.
+ *    - The champion comes out of its Champion Cage when an attacker first
+ *      comes within {@link CAGE_ALERT_RANGE} of it, at its stored health, at its
+ *      level plus its power level's bonus. It fights the nearest attacker it
+ *      can reach within {@link CAGE_LEASH} of the cage, walks back when none is
+ *      left, and fights on if the cage falls. Towers, traps and bombs never
+ *      hurt a defender.
  * 10. **Storage loot is not capped by the attacker's pool.** `ATTACK.Loot`
  *    clamps a gain to the attacker's storage cap (`ATTACK.as:696-710`); the cap
  *    is a property of the attacker's row, not the battle, so the audit derives
@@ -212,6 +230,20 @@ export interface BattleOptions {
   readonly bunkers?: Readonly<Record<number, Roster>>;
   /** Levels for the defenders a bunker sends out; defaults to the attacker's. */
   readonly defenderLevels?: MonsterLevels;
+  /** The defender's champion in its Champion Cage (issue #195), or none. */
+  readonly defenderChampion?: DefenderChampion | null;
+}
+
+/** The champion a Champion Cage holds, as the defender's save keeps it (issue #195). */
+export interface DefenderChampion {
+  /** The champion type, `t` in the save (`G{t}`). */
+  readonly t: number;
+  /** Its level, `l`. */
+  readonly l: number;
+  /** The health it has now, which is what it comes out with. */
+  readonly hp: number;
+  /** Its power level, `pl`, 0 to 3. */
+  readonly pl?: number;
 }
 
 /* ── Outputs ──────────────────────────────────────────────────────────────── */
@@ -270,6 +302,19 @@ export interface BattleState {
    * garrison. Not a checkpoint value: the creeps it counts are already there.
    */
   readonly bunkerLosses: Readonly<Record<number, Readonly<Record<string, number>>>>;
+  /**
+   * What each supplied bunker holds after the battle, by building id and
+   * monster id (issue #195): what it never sent, plus the defenders still out,
+   * who walk back in; a fallen bunker keeps only the ones that were out. Empty
+   * when no bunker was supplied.
+   */
+  readonly bunkerGarrisons: Readonly<Record<number, Readonly<Record<string, number>>>>;
+  /**
+   * The caged champion's health (issue #195): what it came out with less what
+   * it took, 0 when it died, its stored health when it never came out, null
+   * when there is none to defend.
+   */
+  readonly defenderChampionHp: number | null;
 }
 
 /**
@@ -448,6 +493,24 @@ interface Creep {
   disposable: boolean;
   /** Rezghul: the tick its raise is ready again (`RangedAttack.as:45-51`). */
   rechargeAt: number;
+  /** The flags of the creeps it can fight: its foes' side, and whether it reaches the air. */
+  hitFlags: number;
+  /**
+   * Where a defender belongs (issue #195): the point it walks back to, and the
+   * circle, around the cartesian `centre`, it will not chase outside. Null for
+   * an attacker and for a defender with nowhere to go back to.
+   */
+  home: DefenderHome | null;
+  /** The defender that last hit this attacker, or -1 (issue #195). */
+  provokedBy: number;
+}
+
+interface DefenderHome {
+  readonly ix: number;
+  readonly iy: number;
+  readonly centreX: number;
+  readonly centreY: number;
+  readonly leash: number;
 }
 
 interface Tower {
@@ -544,6 +607,31 @@ const UNRAISABLE: ReadonlySet<string> = new Set(["C16", "C15", "C19", "C18"]);
 const raiseTargets = (creep: { friendly: boolean }): number =>
   (creep.friendly ? TARGETS_DEFENDERS : TARGETS_ATTACKERS) | TARGETS_GROUND;
 
+/**
+ * How close an attacker must come to a Champion Cage for its champion to come
+ * out, and how far from the cage it will chase, in cartesian units (issue #195).
+ */
+export const CAGE_ALERT_RANGE = 400;
+export const CAGE_LEASH = 2 * CAGE_ALERT_RANGE;
+
+/** The Champion Cage's building type (`CHAMPIONCAGE`, `YARD_PROPS.as:5993`). */
+const CHAMPION_CAGE_TYPE = 114;
+
+/** How far a defender looks for an attacker to chase (`CreepBase.as:1531-1556`). */
+const DEFEND_SEARCH = 400;
+
+/** The reach a creep fights another at: its range, and never less than `DEFENSE_RANGE_SQUARED`. */
+const creepReach = (range: number): number => Math.max(range * range, 2500);
+
+/**
+ * The creeps one can fight (issue #195): the other side, on the ground, and in
+ * the air too unless it is a ground creep that swings in melee.
+ */
+const fightFlags = (friendly: boolean, flying: boolean, range: number): number =>
+  (friendly ? TARGETS_ATTACKERS : TARGETS_DEFENDERS) |
+  TARGETS_GROUND |
+  (flying || range > 1 ? TARGETS_FLYING : 0);
+
 /** How far a healer looks for someone to heal (`CreepBase.as:612`). */
 const HEAL_SEARCH = 600;
 
@@ -554,6 +642,9 @@ const HEALER_GIVE_UP = 800;
 const ANTI_HEAL: ReadonlySet<string> = new Set(["C15", "C16"]);
 
 const isAntiHeal = (id: string): boolean => ANTI_HEAL.has(id);
+
+/** What a caged champion comes out with: its stored health, whole and not negative. */
+const cagedHealth = (caged: DefenderChampion): number => Math.max(0, Math.floor(caged.hp));
 
 const clampLevel = (levels: MonsterLevels | undefined, id: string): number => {
   const level = levels?.[id];
@@ -598,6 +689,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   let creepsKilled = 0;
   let championHp: number | null = null;
   const championsHp: Record<string, number> = {};
+  /** Whether this battle has a defence at all; without one no fight-back code runs (issue #195). */
+  const defended =
+    (options.defenderChampion !== undefined && options.defenderChampion !== null) ||
+    Object.keys(options.bunkers ?? {}).length > 0;
   let finished = false;
   let retreated = false;
 
@@ -665,6 +760,23 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     return false;
   };
+
+  /**
+   * The Champion Cage and the champion it holds (issue #195): the first cage
+   * by id, and only when a champion was supplied for it.
+   */
+  const cage =
+    options.defenderChampion && options.defenderChampion.hp > 0
+      ? (yard.buildings
+          .filter((building) => building.type === CHAMPION_CAGE_TYPE)
+          .sort((one, other) => one.id - other.id)[0] ?? null)
+      : null;
+  /** The caged champion once it is out; its health while it lives. */
+  let cageChampion: Creep | null = null;
+  /** Defenders on the field as this step's creeps move; attackers skip the scan when none is. */
+  let defendersOut = 0;
+  let defenderChampionHp: number | null =
+    cage && options.defenderChampion ? cagedHealth(options.defenderChampion) : null;
 
   /* ── Damage and loot ───────────────────────────────────────────────────── */
 
@@ -804,8 +916,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     });
   };
 
-  const damageCreep = (creep: Creep, raw: number): number => {
+  const damageCreep = (creep: Creep, raw: number, by: Creep | null = null): number => {
     if (creep.hp <= 0) return 0;
+    // A defender's blow turns the attacker on it (issue #195).
+    if (by && by.friendly && !creep.friendly) creep.provokedBy = by.id;
     const applied = Math.min(raw, creep.hp);
     if (applied > 0) {
       visual.push({
@@ -1039,6 +1153,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       giveUp: HEALER_GIVE_UP,
       disposable: false,
       rechargeAt: 0,
+      // A bunker's defender chases anything attacking, air or ground (`HOUSINGBUNKER.as:269-300`).
+      hitFlags: friendly
+        ? oldStyleTargets(1)
+        : fightFlags(false, flying, monsterRange(monsterId, level)),
+      home: null,
+      provokedBy: -1,
     };
     nextCreepId += 1;
     creeps.push(creep);
@@ -1094,12 +1214,78 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       giveUp: HEALER_GIVE_UP,
       disposable: false,
       rechargeAt: 0,
+      hitFlags: fightFlags(false, flying, championStat(id, "range", level) || 1),
+      home: null,
+      provokedBy: -1,
     };
     nextCreepId += 1;
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
     championHp = creep.hp;
     championsHp[id] = creep.hp;
+    return creep;
+  };
+
+  /**
+   * The caged champion comes out (issue #195): at the cage, at its stored
+   * health, its stats at its level plus its power level's bonus. It defends
+   * like a bunker's monster, leashed to {@link CAGE_LEASH} around the cage.
+   */
+  const releaseChampion = (building: EngineBuilding, caged: DefenderChampion): Creep | null => {
+    const id = championByType(caged.t);
+    if (!id) return null;
+    const level = Math.max(1, Math.floor(caged.l));
+    const power = caged.pl ?? 0;
+    const maxHp = championStatWithPower(id, "health", level, power);
+    const flying = isFlyingMovement(championMode(id, "movement", level));
+    const range = championStatWithPower(id, "range", level, power) || 1;
+    const cart = rangePointOf(building.x, building.y);
+    const scan = towerScanPoint(building);
+    const creep: Creep = {
+      id: nextCreepId,
+      monsterId: id,
+      level,
+      champion: true,
+      friendly: true,
+      ix: building.x,
+      iy: building.y,
+      x: cart.x,
+      y: cart.y,
+      hp: Math.min(cagedHealth(caged), maxHp),
+      maxHp,
+      baseSpeed: championStatWithPower(id, "speed", level, power) / 4,
+      damage: championStatWithPower(id, "damage", level, power),
+      range,
+      attackDelay: championAttackDelay(id, level),
+      targetGroup: TARGET_GROUP.ALL,
+      flying,
+      ignoreWalls: false,
+      explode: false,
+      lootMultiplier: 0,
+      flags: defenseFlags(true, flying, false),
+      targetable: true,
+      behaviour: "defend",
+      attackCooldown: 0,
+      atTarget: false,
+      attacking: false,
+      targetBuilding: -1,
+      targetCreep: -1,
+      waypoints: [],
+      waypointIndex: 0,
+      phase: nextCreepId % RETARGET_TICKS,
+      gone: false,
+      homeBunker: -1,
+      born: tick,
+      giveUp: HEALER_GIVE_UP,
+      disposable: false,
+      rechargeAt: 0,
+      hitFlags: fightFlags(true, flying, range),
+      home: { ix: building.x, iy: building.y, centreX: scan.x, centreY: scan.y, leash: CAGE_LEASH },
+      provokedBy: -1,
+    };
+    nextCreepId += 1;
+    creeps.push(creep);
+    byCreepId.set(creep.id, creep);
     return creep;
   };
 
@@ -1322,36 +1508,120 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * group: a defender walks straight at whoever it is on.
    */
   const tickDefender = (creep: Creep): void => {
+    // A defender with a home chases nothing outside its leash (issue #195).
+    const home = creep.home;
+    const leashed = (other: Creep): boolean =>
+      !home ||
+      distanceSquared(home.centreX, home.centreY, other.x, other.y) < home.leash * home.leash;
     let target = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
-    if (!target || target.hp <= 0) {
-      const found = index.closest(400, creep.x, creep.y, oldStyleTargets(1));
+    if (!target || target.hp <= 0 || target.gone || !leashed(target)) {
+      const found = index
+        .inRange(DEFEND_SEARCH, creep.x, creep.y, creep.hitFlags)
+        .find((hit) => leashed(hit.creep))?.creep;
       if (!found) {
         creep.targetCreep = -1;
         creep.atTarget = false;
         creep.attacking = false;
+        goHome(creep);
         return;
       }
       creep.targetCreep = found.id;
       target = found;
     }
-    // `DEFENSE_RANGE_SQUARED` is 2,500, measured on screen like the range
-    // `canShootCreep` also accepts (`CreepBase.as:1543`, `:723-727`).
-    const reach = Math.max(creep.range * creep.range, 2500);
-    creep.atTarget = screenDistanceSquared(creep.ix, creep.iy, target.ix, target.iy) < reach;
+    fight(creep, target);
+  };
+
+  /**
+   * One tick of a fight between two creeps: a swing inside the reach, else a
+   * step straight at the foe. `DEFENSE_RANGE_SQUARED` is 2,500, measured on
+   * screen like the range `canShootCreep` also accepts (`CreepBase.as:1543`,
+   * `:723-727`).
+   */
+  const fight = (creep: Creep, foe: Creep): void => {
+    const squared = screenDistanceSquared(creep.ix, creep.iy, foe.ix, foe.iy);
+    creep.atTarget = squared < creepReach(creep.range);
     if (creep.atTarget) {
       creep.attacking = true;
       if (creep.attackCooldown <= 0) {
         creep.attackCooldown += Math.trunc(creep.attackDelay);
-        damageCreep(target, creep.damage);
+        const dealt = damageCreep(foe, creep.damage, creep);
+        if (defended) recordHit(creep, foe.ix, foe.iy, dealt);
       } else {
         creep.attackCooldown -= 1;
       }
       return;
     }
     creep.attacking = false;
-    creep.waypoints = [{ x: target.ix, y: target.iy }];
+    creep.waypoints = [{ x: foe.ix, y: foe.iy }];
     creep.waypointIndex = 0;
     moveCreep(creep);
+  };
+
+  /**
+   * A defender with nothing to fight walks home (issue #195). A bunker's
+   * monster goes back in, to be sent out again, while its bunker stands; the
+   * champion, and a monster whose bunker fell, waits there. A defender with no
+   * home (a Mini, a zombie) stands where it is.
+   */
+  const goHome = (creep: Creep): void => {
+    const home = creep.home;
+    if (!home) return;
+    if (screenDistanceSquared(creep.ix, creep.iy, home.ix, home.iy) <= 100) {
+      const bunker = creep.homeBunker >= 0 ? bunkerById.get(creep.homeBunker) : undefined;
+      if (bunker && bunker.building.hp > 0) {
+        bunker.pool.set(creep.monsterId, (bunker.pool.get(creep.monsterId) ?? 0) + 1);
+        creep.gone = true;
+      }
+      return;
+    }
+    creep.waypoints = [{ x: home.ix, y: home.iy }];
+    creep.waypointIndex = 0;
+    moveCreep(creep);
+  };
+
+  /** An attacker that can fight a defender at all (issue #195). */
+  const fightsBack = (creep: Creep): boolean =>
+    creep.behaviour === "attack" && !creep.explode && creep.damage > 0;
+
+  /**
+   * An attacker's fight with a defender (issue #195): the one it is on while
+   * it lives, else the one that last hit it, else the nearest in its reach.
+   * True when the tick went on the fight; false when there is none, and the
+   * attacker goes back to the buildings.
+   */
+  const engage = (creep: Creep): boolean => {
+    const usable = (other: Creep | undefined): other is Creep =>
+      !!other &&
+      other.friendly &&
+      other.hp > 0 &&
+      !other.gone &&
+      canHit(creep.hitFlags, other.flags);
+    let foe = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
+    if (!usable(foe)) {
+      const by = creep.provokedBy >= 0 ? byCreepId.get(creep.provokedBy) : undefined;
+      foe = usable(by) ? by : undefined;
+    }
+    creep.provokedBy = -1;
+    if (!usable(foe) && defendersOut > 0) {
+      const reach = creepReach(creep.range);
+      foe = index
+        .inRange(2 * Math.sqrt(reach), creep.x, creep.y, creep.hitFlags)
+        .find(({ creep: other }) => {
+          const squared = screenDistanceSquared(creep.ix, creep.iy, other.ix, other.iy);
+          return squared < reach;
+        })
+        ?.creep;
+    }
+    if (!usable(foe)) {
+      if (creep.targetCreep >= 0) loseTarget(creep);
+      return false;
+    }
+    if (creep.targetCreep !== foe.id) {
+      loseTarget(creep);
+      creep.targetCreep = foe.id;
+    }
+    fight(creep, foe);
+    return true;
   };
 
   /**
@@ -1474,6 +1744,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       tickHealer(creep);
       return;
     }
+    if (defended && fightsBack(creep) && engage(creep)) return;
     if (creep.monsterId === REZGHUL_ID) tickRaise(creep);
 
     const target = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
@@ -1624,7 +1895,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
     const ids: string[] = [];
     for (const [monsterId, count] of [...bunker.pool.entries()].sort()) {
-      if (count > 0) ids.push(monsterId);
+      // A healer has nothing to fight with, so it stays in (issue #195).
+      if (count > 0 && monsterStat(monsterId, "damage", 1) > 0) ids.push(monsterId);
     }
     if (ids.length === 0) return;
     const monsterId = ids[rng.int(ids.length)] as string;
@@ -1640,6 +1912,22 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       building.id,
     );
     defender.targetCreep = (found[0] as { creep: Creep }).creep.id;
+    // It chases nothing outside the bunker's own range, and walks back in (issue #195).
+    defender.home = {
+      ix: building.x,
+      iy: building.y,
+      centreX: scan.x,
+      centreY: scan.y,
+      leash: range,
+    };
+  };
+
+  /** The caged champion comes out when an attacker first comes near its cage (issue #195). */
+  const tickCage = (): void => {
+    if (!cage || cageChampion || !options.defenderChampion) return;
+    const scan = towerScanPoint(cage);
+    if (!index.closest(CAGE_ALERT_RANGE, scan.x, scan.y, oldStyleTargets(1))) return;
+    cageChampion = releaseChampion(cage, options.defenderChampion);
   };
 
   /* ── The tick ──────────────────────────────────────────────────────────── */
@@ -1668,6 +1956,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     for (const trap of traps) tickTrap(trap);
     for (const tower of towers) tickTower(tower);
     for (const bunker of bunkers) tickBunker(bunker);
+    if (defended) {
+      tickCage();
+      defendersOut = 0;
+      for (const creep of creeps) if (creep.friendly && creep.hp > 0) defendersOut += 1;
+    }
     for (const creep of creeps) tickCreep(creep);
 
     if (creeps.length > 0) {
@@ -1683,12 +1976,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
           // walked home keeps the health it left with, which the attack save
           // writes back verbatim as the attacker's champion.
           if (creep.champion && creep.hp <= 0) {
-            championHp = 0;
-            championsHp[creep.monsterId] = 0;
+            if (creep.friendly) {
+              defenderChampionHp = 0;
+            } else {
+              championHp = 0;
+              championsHp[creep.monsterId] = 0;
+            }
           }
           continue;
         }
-        if (creep.champion) {
+        if (creep.champion && creep.friendly) {
+          defenderChampionHp = creep.hp;
+        } else if (creep.champion) {
           championHp = creep.hp;
           championsHp[creep.monsterId] = creep.hp;
         }
@@ -1770,7 +2069,32 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     rngDraws: rng.count(),
     over: finished,
     bunkerLosses: bunkerLossRecord(bunkerLosses),
+    bunkerGarrisons: garrisonsAfter(),
+    defenderChampionHp,
   });
+
+  /** {@link BattleState.bunkerGarrisons}: each supplied bunker's pool, plus its defenders out. */
+  const garrisonsAfter = (): Record<number, Record<string, number>> => {
+    const out: Record<number, Record<string, number>> = {};
+    for (const bunker of bunkers) {
+      if (!options.bunkers?.[bunker.building.id]) continue;
+      const held = new Map<string, number>();
+      if (bunker.building.hp > 0) {
+        for (const [monsterId, count] of bunker.pool) held.set(monsterId, count);
+      }
+      for (const creep of creeps) {
+        if (creep.homeBunker !== bunker.building.id || creep.hp <= 0 || creep.gone) continue;
+        held.set(creep.monsterId, (held.get(creep.monsterId) ?? 0) + 1);
+      }
+      const garrison: Record<string, number> = {};
+      for (const monsterId of [...held.keys()].sort()) {
+        const count = held.get(monsterId) ?? 0;
+        if (count > 0) garrison[monsterId] = count;
+      }
+      out[bunker.building.id] = garrison;
+    }
+    return out;
+  };
 
   /**
    * The numbers a checkpoint folds in, in one fixed order (§3.4 rule 5).
@@ -1801,6 +2125,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       rng.state(),
       rng.count(),
     );
+    // A battle with a defence folds it in too (issue #195); one without folds
+    // exactly what it always did, so the digests of such battles are unchanged.
+    if (defended) {
+      for (const creep of creeps) values.push(creep.id, creep.targetCreep);
+      for (const bunker of bunkers) {
+        values.push(bunker.building.id);
+        for (const [monsterId, count] of [...bunker.pool.entries()].sort()) {
+          values.push(monsterId.length, count);
+        }
+      }
+      values.push(defenderChampionHp ?? -1);
+    }
     return values;
   };
 

@@ -1,0 +1,165 @@
+{
+  "name": "bunker-defence",
+  "description": "Pokeys and Finks into the sandbox yard's four bunkers, each holding a garrison at the defender's own levels: survivors walk back in, one bunker is wiped out, one keeps its healer in (issue #195).",
+  "yard": "sandbox",
+  "kind": "main",
+  "levels": {},
+  "playerLevel": 20,
+  "tailTicks": 12000,
+  "defence": {
+    "bunkers": {
+      "83": {
+        "C1": 10,
+        "C2": 4
+      },
+      "84": {
+        "C8": 6
+      },
+      "85": {
+        "C3": 8
+      },
+      "86": {
+        "C1": 6,
+        "C15": 2
+      }
+    },
+    "defenderLevels": {
+      "C1": 6,
+      "C2": 6,
+      "C3": 6,
+      "C8": 6,
+      "C15": 1
+    }
+  },
+  "log": {
+    "v": 1,
+    "seed": 19501,
+    "events": [
+      {
+        "kind": "fling",
+        "t": 240,
+        "x": 420,
+        "y": -560,
+        "r": 300,
+        "monsters": {
+          "C1": 60,
+          "C4": 10
+        }
+      }
+    ]
+  },
+  "expected": {
+    "ticks": 12240,
+    "damage": 0.15375264878362316,
+    "destroyed": null,
+    "attackloot": {
+      "r1": 0,
+      "r2": 0,
+      "r3": 0,
+      "r4": 0
+    },
+    "defenderLoss": {
+      "r1": 0,
+      "r2": 0,
+      "r3": 0,
+      "r4": 0
+    },
+    "firedTraps": 0,
+    "destroyedBuildings": 0,
+    "creepsFlung": 70,
+    "creepsKilled": 70,
+    "championHp": null,
+    "damagedBuildings": 1,
+    "rngDraws": 4418,
+    "checkpoints": [
+      {
+        "tick": 800,
+        "digest": "7c4ca74fd78eab25"
+      },
+      {
+        "tick": 1600,
+        "digest": "95e38b2ab22b6098"
+      },
+      {
+        "tick": 2400,
+        "digest": "3cb52b1548cbfb4b"
+      },
+      {
+        "tick": 3200,
+        "digest": "8ebf745a15409308"
+      },
+      {
+        "tick": 4000,
+        "digest": "a05083c8b09754c6"
+      },
+      {
+        "tick": 4800,
+        "digest": "be45ca458d282e3b"
+      },
+      {
+        "tick": 5600,
+        "digest": "4dbdb88e0f1f0214"
+      },
+      {
+        "tick": 6400,
+        "digest": "4632e74adad84a38"
+      },
+      {
+        "tick": 7200,
+        "digest": "b384b25fb96ff595"
+      },
+      {
+        "tick": 8000,
+        "digest": "17abc2b824ebd876"
+      },
+      {
+        "tick": 8800,
+        "digest": "93856552753237a0"
+      },
+      {
+        "tick": 9600,
+        "digest": "e958cdb54b8233eb"
+      },
+      {
+        "tick": 10400,
+        "digest": "92629767360ec0bd"
+      },
+      {
+        "tick": 11200,
+        "digest": "3dacb0be8f0037c4"
+      },
+      {
+        "tick": 12000,
+        "digest": "7b7b32c0f38bb97e"
+      }
+    ],
+    "digest": "ad294f38e6adcea6",
+    "bunkerLosses": {
+      "83": {
+        "C1": 3,
+        "C2": 2
+      },
+      "84": {
+        "C8": 2
+      },
+      "85": {
+        "C3": 8
+      }
+    },
+    "bunkerGarrisons": {
+      "83": {
+        "C1": 7,
+        "C2": 2
+      },
+      "84": {
+        "C8": 4
+      },
+      "85": {},
+      "86": {
+        "C1": 6,
+        "C15": 2
+      }
+    },
+    "defenderChampionHp": null
+  }
+}

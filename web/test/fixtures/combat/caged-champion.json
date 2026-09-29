@@ -1,0 +1,157 @@
+{
+  "name": "caged-champion",
+  "description": "An attack on the sandbox yard's Champion Cage: its level 4 Drull comes out at power level 2 and part health, against ground monsters and Teratorns (issue #195).",
+  "yard": "sandbox",
+  "kind": "main",
+  "levels": {
+    "C1": 6,
+    "C2": 6,
+    "C3": 6,
+    "C4": 6,
+    "C5": 6,
+    "C6": 6,
+    "C7": 6,
+    "C8": 6,
+    "C13": 6,
+    "C14": 6
+  },
+  "playerLevel": 20,
+  "tailTicks": 12000,
+  "defence": {
+    "defenderChampion": {
+      "t": 2,
+      "l": 4,
+      "hp": 60000,
+      "pl": 2
+    }
+  },
+  "log": {
+    "v": 1,
+    "seed": 19502,
+    "events": [
+      {
+        "kind": "fling",
+        "t": 160,
+        "x": 120,
+        "y": 120,
+        "r": 300,
+        "monsters": {
+          "C1": 80,
+          "C2": 20
+        }
+      },
+      {
+        "kind": "fling",
+        "t": 2400,
+        "x": 60,
+        "y": -180,
+        "r": 300,
+        "monsters": {
+          "C14": 12
+        }
+      }
+    ]
+  },
+  "expected": {
+    "ticks": 14400,
+    "damage": 8.142484025165501,
+    "destroyed": null,
+    "attackloot": {
+      "r1": 12876,
+      "r2": 14763,
+      "r3": 13431,
+      "r4": 13579
+    },
+    "defenderLoss": {
+      "r1": 14616,
+      "r2": 16758,
+      "r3": 15246,
+      "r4": 15414
+    },
+    "firedTraps": 0,
+    "destroyedBuildings": 6,
+    "creepsFlung": 112,
+    "creepsKilled": 112,
+    "championHp": null,
+    "damagedBuildings": 9,
+    "rngDraws": 5049,
+    "checkpoints": [
+      {
+        "tick": 800,
+        "digest": "483118ba5c933d10"
+      },
+      {
+        "tick": 1600,
+        "digest": "01a1f318ef72166e"
+      },
+      {
+        "tick": 2400,
+        "digest": "f9377c44d106551e"
+      },
+      {
+        "tick": 3200,
+        "digest": "f7b7136bab44c169"
+      },
+      {
+        "tick": 4000,
+        "digest": "703e201eb357c524"
+      },
+      {
+        "tick": 4800,
+        "digest": "b0a96dd92fa427b7"
+      },
+      {
+        "tick": 5600,
+        "digest": "cacb639243b3e480"
+      },
+      {
+        "tick": 6400,
+        "digest": "d21abbce4cd826a4"
+      },
+      {
+        "tick": 7200,
+        "digest": "b6a135a7226569e5"
+      },
+      {
+        "tick": 8000,
+        "digest": "e9390128dedd094e"
+      },
+      {
+        "tick": 8800,
+        "digest": "16894f66951094bc"
+      },
+      {
+        "tick": 9600,
+        "digest": "411907295a861f87"
+      },
+      {
+        "tick": 10400,
+        "digest": "4c7b909f8c11389d"
+      },
+      {
+        "tick": 11200,
+        "digest": "a8a554a2445fc510"
+      },
+      {
+        "tick": 12000,
+        "digest": "4a033be0724b7046"
+      },
+      {
+        "tick": 12800,
+        "digest": "66e3a69e5f2031b4"
+      },
+      {
+        "tick": 13600,
+        "digest": "433dab81c0a792bf"
+      },
+      {
+        "tick": 14400,
+        "digest": "e0196637ecb07335"
+      }
+    ],
+    "digest": "e0196637ecb07335",
+    "bunkerLosses": {},
+    "bunkerGarrisons": {},
+    "defenderChampionHp": 12780
+  }
+}

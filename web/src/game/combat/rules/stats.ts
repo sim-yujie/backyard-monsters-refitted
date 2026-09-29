@@ -320,6 +320,32 @@ export const championAttackDelay = (id: string, level: number): number =>
  */
 export const CHAMPION_MAX_POWER_LEVEL = 3;
 
+/** The `bonus*` ladder each base stat takes its power-level bonus from. */
+const CHAMPION_BONUS_KEY = {
+  speed: "bonusSpeed",
+  health: "bonusHealth",
+  damage: "bonusDamage",
+  range: "bonusRange",
+} as const;
+
+/**
+ * A champion stat at its level plus its power level's bonus, which the
+ * `bonus*` ladders add to the level figure, one entry per power level 1 to 3
+ * (issue #195). Power level 0 adds nothing.
+ */
+export const championStatWithPower = (
+  id: string,
+  key: keyof typeof CHAMPION_BONUS_KEY,
+  level: number,
+  powerLevel: number,
+): number => {
+  const base = championStat(id, key, level);
+  const power = Math.min(Math.max(Math.floor(powerLevel), 0), CHAMPION_MAX_POWER_LEVEL);
+  if (power === 0) return base;
+  const bonus = CHAMPION_PROPS[id]?.props[CHAMPION_BONUS_KEY[key]]?.[power - 1];
+  return base + (typeof bonus === "number" ? bonus : 0);
+};
+
 /* ── Buildings ────────────────────────────────────────────────────────────── */
 
 /**

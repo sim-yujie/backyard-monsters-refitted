@@ -179,6 +179,93 @@ export const SCENARIOS = [
       ],
     },
   },
+  // The defence (issue #195): the sandbox yard's four Monster Bunkers (83-86,
+  // in its east corner) and its Champion Cage (51), given garrisons and a
+  // champion here as a defender's save would hold them.
+  {
+    name: "bunker-defence",
+    description:
+      "Pokeys and Finks into the sandbox yard's four bunkers, each holding a garrison at the " +
+      "defender's own levels: survivors walk back in, one bunker is wiped out, one keeps its " +
+      "healer in (issue #195).",
+    yard: "sandbox",
+    kind: "main",
+    levels: LEVEL_ONE,
+    playerLevel: 20,
+    tailTicks: 12000,
+    defence: {
+      bunkers: {
+        83: { C1: 10, C2: 4 },
+        84: { C8: 6 },
+        85: { C3: 8 },
+        86: { C1: 6, C15: 2 },
+      },
+      defenderLevels: { C1: 6, C2: 6, C3: 6, C8: 6, C15: 1 },
+    },
+    log: {
+      v: 1,
+      seed: 19501,
+      events: [{ kind: "fling", t: 240, x: 420, y: -560, r: 300, monsters: { C1: 60, C4: 10 } }],
+    },
+  },
+  {
+    name: "caged-champion",
+    description:
+      "An attack on the sandbox yard's Champion Cage: its level 4 Drull comes out at power " +
+      "level 2 and part health, against ground monsters and Teratorns (issue #195).",
+    yard: "sandbox",
+    kind: "main",
+    levels: MAXED,
+    playerLevel: 20,
+    tailTicks: 12000,
+    defence: {
+      defenderChampion: { t: 2, l: 4, hp: 60000, pl: 2 },
+    },
+    log: {
+      v: 1,
+      seed: 19502,
+      events: [
+        { kind: "fling", t: 160, x: 120, y: 120, r: 300, monsters: { C1: 80, C2: 20 } },
+        { kind: "fling", t: 2400, x: 60, y: -180, r: 300, monsters: { C14: 12 } },
+      ],
+    },
+  },
+  {
+    name: "champion-and-bunkers",
+    description:
+      "The cage and the bunkers together, attacked with Zafreeti healers and Rezghul raising " +
+      "the dead on both sides (issue #195).",
+    yard: "sandbox",
+    kind: "main",
+    levels: MAXED,
+    playerLevel: 15,
+    tailTicks: 12000,
+    defence: {
+      bunkers: {
+        83: { C1: 8 },
+        84: { C2: 6 },
+        85: { C8: 4 },
+        86: { C3: 6 },
+      },
+      defenderLevels: { C1: 3, C2: 3, C3: 3, C8: 3 },
+      defenderChampion: { t: 1, l: 3, hp: 120000, pl: 1 },
+    },
+    log: {
+      v: 1,
+      seed: 19503,
+      events: [
+        {
+          kind: "fling",
+          t: 200,
+          x: 300,
+          y: -300,
+          r: 300,
+          monsters: { C1: 90, C15: 6, C19: 4 },
+        },
+        { kind: "fling", t: 3600, x: 480, y: -420, r: 300, monsters: { C8: 30, C3: 20 } },
+      ],
+    },
+  },
 ];
 
 /** The scenario the bench times, which is the busiest of them. */
@@ -199,6 +286,7 @@ export const scenarioInput = (scenario) => {
       levels: scenario.levels,
       playerLevel: scenario.playerLevel,
       tailTicks: scenario.tailTicks,
+      ...(scenario.defence ?? {}),
     };
   }
   return {
@@ -211,11 +299,27 @@ export const scenarioInput = (scenario) => {
     levels: scenario.levels,
     playerLevel: scenario.playerLevel,
     tailTicks: scenario.tailTicks,
+    ...(scenario.defence ?? {}),
   };
 };
 
-/** The committed shape of an outcome: what a fixture asserts, and nothing more. */
-export const expectedOf = (outcome) => ({
+/**
+ * The committed shape of an outcome: what a fixture asserts, and nothing more.
+ * A fixture with a defence (issue #195) also pins what became of it; one
+ * without keeps exactly the shape it always had.
+ */
+export const expectedOf = (outcome, defended = false) => ({
+  ...expectedBattleOf(outcome),
+  ...(defended
+    ? {
+        bunkerLosses: outcome.bunkerLosses,
+        bunkerGarrisons: outcome.bunkerGarrisons,
+        defenderChampionHp: outcome.defenderChampionHp,
+      }
+    : {}),
+});
+
+const expectedBattleOf = (outcome) => ({
   ticks: outcome.ticks,
   damage: outcome.damage,
   destroyed: outcome.destroyed ?? null,

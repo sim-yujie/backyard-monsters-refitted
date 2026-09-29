@@ -16,6 +16,7 @@ import {
   championIds,
   championMode,
   championStat,
+  championStatWithPower,
   flyerMode,
   fortifiedDamage,
   gridCost,
@@ -556,5 +557,20 @@ describe("outpostHarvesterStock (`BRESOURCE.as:506-518`)", () => {
   it("holds nothing once destroyed, and nothing for a building that is not a harvester", () => {
     expect(outpostHarvesterStock(1, 10, 0, ceiling)).toBe(0);
     expect(outpostHarvesterStock(20, 1, 6000, 6000)).toBe(0);
+  });
+});
+
+describe("championStatWithPower (issue #195)", () => {
+  it("adds the power level's bonus to the level figure, and nothing at power level 0", () => {
+    // Gorgo at level 2: 80,000 health and 1,200 damage; bonuses 12,500 / 27,500 / 50,000 and 150 / 330 / 600.
+    expect(championStatWithPower("G1", "health", 2, 0)).toBe(80000);
+    expect(championStatWithPower("G1", "health", 2, 1)).toBe(92500);
+    expect(championStatWithPower("G1", "health", 2, 3)).toBe(130000);
+    expect(championStatWithPower("G1", "damage", 2, 2)).toBe(1530);
+  });
+
+  it("clamps the power level to 0..3", () => {
+    expect(championStatWithPower("G1", "health", 2, 9)).toBe(130000);
+    expect(championStatWithPower("G1", "health", 2, -1)).toBe(80000);
   });
 });
