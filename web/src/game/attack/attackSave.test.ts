@@ -154,6 +154,9 @@ describe("buildAttackSave", () => {
     expect(payload.basesaveid).toBe(9001);
     expect(payload.attackid).toBe(4242);
     expect(payload.over).toBe(true);
+    // The battle clock the server replays the log to (#23, C3).
+    expect(payload.tick).toBe(session.battle()!.state().tick);
+    expect(payload.tick).toBeGreaterThan(0);
 
     // The enemy yard goes back as loaded; only a fired trap would be absent.
     expect(Object.keys(payload.buildingdata!)).toHaveLength(Object.keys(load.buildingdata!).length);

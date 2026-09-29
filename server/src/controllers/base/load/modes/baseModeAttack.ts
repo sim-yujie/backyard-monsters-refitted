@@ -244,7 +244,14 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
     await startMR1TribeSession(
       user.userid,
       baseid,
-      newAttackSession(user.userid, save.attackid, armies.entryHoused, undefined, attackerLevel)
+      newAttackSession(
+        user.userid,
+        save.attackid,
+        armies.entryHoused,
+        undefined,
+        attackerLevel,
+        poolAmounts(userSave.resources)
+      )
     );
   } else if (save.basesaveid) {
     // The pool the load serves (`mapSaveData`): an outpost's is its owner's,
@@ -258,7 +265,9 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
         save.attackid,
         armies.entryHoused,
         poolAmounts(served.resources),
-        attackerLevel
+        attackerLevel,
+        // The attacker's own pool, which its bombs are priced against (#23, C3).
+        poolAmounts(userSave.resources)
       )
     );
   }

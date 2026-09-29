@@ -82,14 +82,16 @@ const realRunner = (await import(REAL_RUNNER)) as typeof import("../../../servic
 let replayTimesOut = false;
 mock.module("../../../services/base/combat/replayRunner.js", () => ({
   ...realRunner,
-  replayLootInWorker: async (...args: Parameters<typeof realRunner.replayLootInWorker>) => {
+  replayAbandonedInWorker: async (...args: Parameters<typeof realRunner.replayAbandonedInWorker>) => {
     if (replayTimesOut) throw new realRunner.ReplayTimeoutError(5_000);
-    return realRunner.replayLootInWorker(...args);
+    return realRunner.replayAbandonedInWorker(...args);
   },
 }));
 
 const { baseSave } = await import("./baseSave.js");
 const { attackLootOf } = await import("../../../services/base/combat/attackLoot.js");
+const { replayAbandonedAttack } = await import("../../../services/base/combat/abandonedAttack.js");
+const { battleReplayInput, battleTick } = await import("../../../services/base/combat/battle.js");
 
 const ctxFor = (body: Record<string, string>) =>
   ({
@@ -320,12 +322,14 @@ describe("a fallen bunker's garrison through the save (issue #130)", () => {
     expect(defender.buildingdata["3"].m).toEqual({ C2: 4 });
   });
 
-  test("a bunker the save reports standing keeps its garrison, whatever the server's longest battle does", async () => {
+  test("the server's battle decides, whatever the save reports (#23, C3)", async () => {
     armed();
 
+    // The save says the bunker stands; the replay brought it down.
     await save({ "2": 1500 });
 
-    expect(defender.buildingdata["2"].m).toEqual({ C1: 5 });
+    expect(defender.buildingdata["2"].m).toBeUndefined();
+    expect(defender.buildinghealthdata["2"]).toBe(0);
   });
 
   test("a save that does not end the attack empties nothing", async () => {
@@ -414,5 +418,89 @@ describe("a replay past its deadline (#23, C5)", () => {
     expect(defender.resources.r1).toBe(5000);
     // The row still carries the attack, for the finaliser to finish.
     expect(defender.attackid).toBe(ATTACK_ID);
+  });
+});
+
+describe("the battle is the server's (#23, C3)", () => {
+  // The camp, and a Booby Trap far from where the Ogres land, which never fires.
+  const WITH_TRAP = { ...YARD, "3": { id: 3, t: 24, l: 1, X: -800, Y: -800 } };
+  const TICK = 2_000;
+
+  /** What the server's own replay of LOG to TICK does to the camp. */
+  const serverBattle = () =>
+    replayAbandonedAttack(
+      battleReplayInput({
+        flinglog: LOG,
+        session: { attackerid: ATTACKER, attackid: ATTACK_ID, startedat: 0, entryHoused: ENTRY },
+        defender: { type: "tribe", buildingdata: WITH_TRAP as never, buildinghealthdata: {}, resources: { r1: 5000, r2: 0, r3: 0, r4: 0 } },
+        attacker: attackerSave,
+        tick: battleTick(TICK),
+        declareWar: false,
+      })!
+    );
+
+  beforeEach(() => {
+    defender.buildingdata = structuredClone(WITH_TRAP);
+  });
+
+  test("a crafted save's damage, health, destroyed and traps are never written", async () => {
+    const battle = serverBattle();
+    expect(battle.damage).toBeLessThan(100);
+
+    await baseSave(
+      ctxFor({
+        over: "1",
+        tick: String(TICK),
+        flinglog: JSON.stringify(LOG),
+        damage: "100",
+        destroyed: "1",
+        buildinghealthdata: JSON.stringify({ "0": 0, "1": 0, "3": 0 }),
+        buildingdata: JSON.stringify({}),
+      }),
+      async () => {}
+    );
+
+    expect(defender.damage).toBe(Math.trunc(battle.damage));
+    expect(defender.destroyed).toBe(battle.destroyed);
+    expect(defender.buildinghealthdata).toEqual(battle.buildinghealthdata);
+    // The trap the battle never reached is still there.
+    expect(defender.buildingdata["3"]).toMatchObject({ t: 24 });
+  });
+
+  test("an honest save lands exactly the figures its client showed", async () => {
+    const battle = serverBattle();
+
+    await baseSave(
+      ctxFor({
+        over: "1",
+        tick: String(TICK),
+        flinglog: JSON.stringify(LOG),
+        damage: String(battle.damage),
+        ...(battle.destroyed !== undefined && { destroyed: String(battle.destroyed) }),
+        buildinghealthdata: JSON.stringify(battle.buildinghealthdata),
+        attackloot: JSON.stringify(battle.attackloot),
+      }),
+      async () => {}
+    );
+
+    expect(defender.damage).toBe(Math.trunc(battle.damage));
+    expect(defender.buildinghealthdata).toEqual(battle.buildinghealthdata);
+    expect(attackerSave.resources.r1).toBe(100 + battle.attackloot.r1);
+  });
+
+  test("a save that does not end the attack writes nothing of the battle", async () => {
+    await baseSave(
+      ctxFor({
+        flinglog: JSON.stringify(LOG),
+        damage: "100",
+        buildinghealthdata: JSON.stringify({ "0": 0 }),
+        buildingdata: JSON.stringify({}),
+      }),
+      async () => {}
+    );
+
+    expect(defender.damage).toBe(0);
+    expect(defender.buildinghealthdata).toEqual({});
+    expect(defender.buildingdata["3"]).toMatchObject({ t: 24 });
   });
 });

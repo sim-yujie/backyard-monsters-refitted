@@ -285,9 +285,15 @@ export interface AttackSavePayload {
   attackid: number;
   /** True on the final save: clears `attackid`, ends the session, grants protection. */
   over?: boolean;
+  /**
+   * The battle clock when the save was built. The server replays the fling log
+   * to it and writes the battle from that replay (issue #23, C3), so the
+   * figures below are only compared with it, except in Map Room 3.
+   */
+  tick?: number;
   /** The enemy yard after the battle. Only a fired trap's absence is honoured. */
   buildingdata?: BuildingDataMap;
-  /** Written verbatim onto the defender. */
+  /** The enemy yard's health after the battle. */
   buildinghealthdata?: BuildingHealthData;
   /** Damage percent, 0..100, walls excluded. */
   damage?: number;
@@ -313,9 +319,9 @@ export interface AttackSavePayload {
   /** The attacker's siege inventory after use; overwrites `userSave.siege`. */
   attackersiege?: unknown;
   /**
-   * The fling log, `docs/design/server-combat.md` §3.10. The server reads its
-   * bombs and charges their cost to the attacker (issue #90); the rest is
-   * inert until #23 WP5.
+   * The fling log, `docs/design/server-combat.md` §3.10. The server replays it
+   * to `tick` for the battle and the loot (issue #23), and charges its bombs'
+   * cost to the attacker (issue #90).
    */
   flinglog?: unknown;
 }

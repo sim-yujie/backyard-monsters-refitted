@@ -167,6 +167,15 @@ export const reducePowerupCharge = async ({ allianceId, author, userSave, poweru
  * @param {User["alliance_id"]} allianceId - The viewing player's alliance, if any.
  * @returns {Promise<RunningPowerup[]>} Rows for POWERUPS.Setup.
  */
+/**
+ * Whether an alliance has Declare War running now: the longer countdown an
+ * attack's battle runs to (`GLOBAL.as:839-842`), for the server's replays.
+ *
+ * @param allianceId - The attacker's alliance, if any.
+ */
+export const isDeclareWarRunning = async (allianceId: User["alliance_id"]): Promise<boolean> =>
+  (await runningPowerups(allianceId)).some(({ id }) => id === AlliancePowerupType.DECLARE_WAR);
+
 export const runningPowerups = async (allianceId: User["alliance_id"]): Promise<RunningPowerup[]> => {
   if (!allianceId) return [];
 

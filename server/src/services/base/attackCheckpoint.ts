@@ -237,6 +237,7 @@ export const newCheckpoint = (
   ...input,
   ...(session.entryHoused && { entryHoused: session.entryHoused }),
   ...(session.defenderResources && { defenderResources: session.defenderResources }),
+  ...(session.attackerResources && { attackerResources: session.attackerResources }),
   ...(session.attackerlevel !== undefined && { attackerlevel: session.attackerlevel }),
 });
 
@@ -288,6 +289,7 @@ export const checkpointSession = (checkpoint: AttackCheckpoint): AttackSession =
   startedat: checkpoint.startedat,
   ...(checkpoint.entryHoused && { entryHoused: checkpoint.entryHoused }),
   ...(checkpoint.defenderResources && { defenderResources: checkpoint.defenderResources }),
+  ...(checkpoint.attackerResources && { attackerResources: checkpoint.attackerResources }),
   ...(checkpoint.attackerlevel !== undefined && { attackerlevel: checkpoint.attackerlevel }),
 });
 

@@ -2,13 +2,12 @@ import { RequestContext } from "@mikro-orm/core";
 import { Save } from "../../database/models/save.model.js";
 import { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
-import { AlliancePowerupType } from "../../enums/Alliance.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 import { buildingDataHandler } from "../../controllers/base/save/handlers/buildingDataHandler.js";
 import { defenderLootHandler } from "../../controllers/base/save/handlers/defenderLootHandler.js";
-import { runningPowerups } from "../alliance/powerups.js";
+import { isDeclareWarRunning } from "../alliance/powerups.js";
 import { protectAfterAttack } from "../maproom/v2/damageProtection.js";
 import { noticeOutpostAttack } from "../maproom/v2/outpostNotices.js";
 import { isMR3Structure } from "../maproom/v3/utils/isMR3Structure.js";
@@ -22,14 +21,10 @@ import {
   releaseFinalLock,
 } from "./attackCheckpointStore.js";
 import { endAttackSession } from "./attackSessionStore.js";
-import {
-  buildingDataWithout,
-  type AbandonedDefender,
-  spendFlung,
-  type SourceCell,
-} from "./combat/abandonedAttack.js";
+import { buildingDataWithout, spendFlung, type SourceCell } from "./combat/abandonedAttack.js";
+import { battleReplayInput, foughtLoot } from "./combat/battle.js";
 import { replayAbandonedInWorker } from "./combat/replayRunner.js";
-import { attackLootOf, bankAttackLoot, fightableLog, wholeAmounts } from "./combat/attackLoot.js";
+import { attackLootOf, bankAttackLoot } from "./combat/attackLoot.js";
 import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpend.js";
 import { combatCellHeight } from "./combat/cellHeight.js";
 import { fallenIn, withoutFallenGarrisons } from "./combat/bunkerGarrison.js";
@@ -83,12 +78,6 @@ export type FinaliseOutcome = "finalised" | "none" | "busy" | "stale";
 /** How often the sweep looks for expired attacks. */
 export const FINALISE_SWEEP_MS = 60_000;
 
-/** A delta with its sign turned, so its losses read as amounts. */
-const negatedDelta = (delta: Record<string, number>): Record<string, number> =>
-  Object.fromEntries(Object.entries(delta).map(([key, value]) => [key, -value]));
-
-const hasDeclareWar = async (allianceId: User["alliance_id"]): Promise<boolean> =>
-  (await runningPowerups(allianceId)).some(({ id }) => id === AlliancePowerupType.DECLARE_WAR);
 
 /**
  * The attacker's source cells, each caught up to now (monsters only,
@@ -161,23 +150,28 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
   const session = checkpointSession(checkpoint);
   const pool = (outpostOwnerSave ?? defender).resources;
 
-  // In a worker, off the event loop (issue #23, C5). A replay past its
-  // deadline throws: the checkpoint stays for the next pass.
-  const outcome = await replayAbandonedInWorker({
+  // The same battle the attack save replays (`battle.ts`), to the moment the
+  // attacker was last seen. In a worker, off the event loop (issue #23, C5): a
+  // replay past its deadline throws and the checkpoint stays for the next pass.
+  const input = battleReplayInput({
+    flinglog: checkpoint.flinglog,
+    session,
     defender: {
       type: defender.type,
       buildingdata: defender.buildingdata,
       buildinghealthdata: defender.buildinghealthdata,
-      resources: session.defenderResources ?? (pool as AbandonedDefender["resources"]),
+      resources: pool,
       height,
     },
-    attacker: { academy: userSave.academy, champion: userSave.champion, siege: userSave.siege },
-    // Only what the attacker could have flung fights, as in the save's own replay.
-    log: session.entryHoused ? fightableLog(checkpoint.flinglog, userSave, session.entryHoused) : checkpoint.flinglog,
+    attacker: userSave,
     tick: checkpoint.tick,
-    declareWar: await hasDeclareWar(attacker.alliance_id),
-    ...(session.attackerlevel !== undefined && { playerLevel: session.attackerlevel }),
+    declareWar: await isDeclareWarRunning(attacker.alliance_id),
   });
+  if (!input) {
+    await discardCheckpoint(basesaveid);
+    return "stale";
+  }
+  const outcome = await replayAbandonedInWorker(input);
 
   // Both sides' loot by the final save's rule, the replay standing in for the
   // client's figures, against the rows before anything below is written (the
@@ -199,10 +193,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
     },
     attacker: userSave,
     mapRoom3: userSave.mapversion === MapRoomVersion.V3,
-    fought: {
-      attackloot: outcome.attackloot,
-      defenderLoss: wholeAmounts(negatedDelta(outcome.defenderDelta)),
-    },
+    fought: foughtLoot(outcome),
   });
 
   // The attacker: what was flung leaves its cells for good, and the rest of
@@ -232,9 +223,9 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
   if (outcome.attackerchampion) userSave.champion = outcome.attackerchampion;
   if (outcome.attackersiege) userSave.siege = outcome.attackersiege;
 
-  // Priced against the pool before the loot, as `recordBombSpend` prices a save's.
+  // Priced against the pool the attack began with, as `recordBombSpend` prices a save's.
   const bombs = bombSpendOf(checkpoint.flinglog, {
-    resources: userSave.resources,
+    resources: session.attackerResources ?? userSave.resources,
     catapultLevel: catapultLevelOf(userSave),
   });
   // Bombs, then loot up to the attacker's storage cap, as `baseSave.ts` lands them (issue #166).

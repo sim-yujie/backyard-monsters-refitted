@@ -63,13 +63,26 @@ import { storedDamage } from "../../../services/base/storedDamage.js";
 import {
   attackLootOf,
   bankAttackLoot,
-  lootReplayInput,
   wholeAmounts,
   type AttackLoot,
-  type ReplayedLoot,
-  type ReplayedLootInput,
 } from "../../../services/base/combat/attackLoot.js";
-import { ReplayTimeoutError, replayLootInWorker } from "../../../services/base/combat/replayRunner.js";
+import {
+  ReplayTimeoutError,
+  SAVE_REPLAY_DEADLINE_MS,
+  replayAbandonedInWorker,
+} from "../../../services/base/combat/replayRunner.js";
+import {
+  battleMismatches,
+  battleReplayInput,
+  battleTick,
+  foughtLoot,
+} from "../../../services/base/combat/battle.js";
+import {
+  buildingDataWithout,
+  type AbandonedInput,
+  type AbandonedOutcome,
+} from "../../../services/base/combat/abandonedAttack.js";
+import { isDeclareWarRunning } from "../../../services/alliance/powerups.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import { championsAfterAttack, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
 import { fallenIn, withoutFallenGarrisons } from "../../../services/base/combat/bunkerGarrison.js";
@@ -173,10 +186,20 @@ const saveBase = async (
   // What the attack's resource bombs cost the attacker (issue #90), worked out
   // from the fling log and the bomb table before any key is applied, so a
   // refusal in `reject` mode leaves every row untouched. Charged further down,
-  // before the loot is banked.
-  const bombs = isAttack
-    ? recordBombSpend(ctx, user, userSave, baseSave, saveData.flinglog, combatConfig.mode)
-    : null;
+  // before the loot is banked, on the save that ends the attack only, and
+  // priced against the pool the attack began with (issue #23, C3).
+  const bombs =
+    isAttack && saveData.over
+      ? recordBombSpend(
+          ctx,
+          user,
+          userSave,
+          baseSave,
+          saveData.flinglog,
+          combatConfig.mode,
+          session?.attackerResources
+        )
+      : null;
 
   const outpostOwnerSave = await getOutpostOwnerSave(baseSave, user);
 
@@ -203,18 +226,33 @@ const saveBase = async (
           attacker: userSave,
         }
       : null;
-  // The battle itself runs in a worker, so the event loop stays free for
-  // everyone else (issue #23, C5); past its deadline the attack is left to
-  // the finaliser before anything here is written.
-  const replayInput = lootArgs ? lootReplayInput(lootArgs) : null;
-  const fought = replayInput ? await replayForSave(ctx, user, baseSave, replayInput) : undefined;
+
+  // The battle is the server's (issue #23, C3): the save that ends a Map Room 1
+  // or 2 attack (its session carries a roster) replays the fightable log to the
+  // client's battle clock, and everything the battle did to the defender is
+  // written from that replay, never from the save. It runs in a worker, so the
+  // event loop stays free (C5); past its deadline the attack is left to the
+  // finaliser before anything here is written. A Map Room 3 attack has no
+  // replay and keeps the client's figures, as before.
+  const clientBattle = isAttack && !session?.entryHoused && mapRoom3;
+  const battleInput =
+    lootArgs && session?.entryHoused
+      ? battleReplayInput({
+          ...lootArgs,
+          tick: battleTick(saveData.tick),
+          declareWar: await isDeclareWarRunning(user.alliance_id),
+        })
+      : null;
+  const battle = battleInput ? await replayForSave(ctx, user, baseSave, battleInput) : null;
+  if (battle) logBattleMismatches(ctx, user, baseSave, saveData, body, battle);
+
   const loot = lootArgs
     ? attackLootOf({
         ...lootArgs,
         sent: saveData.attackloot,
         reported: saveData.resources,
         mapRoom3,
-        ...(fought && { fought }),
+        ...(battle && { fought: foughtLoot(battle) }),
       })
     : null;
 
@@ -251,6 +289,10 @@ const saveBase = async (
   // Standard save logic
   for (const key of isAttack ? Save.attackSaveKeys : Save.saveKeys) {
     const value = body[key] as string;
+
+    // What the battle did to the defender is written from the replay below,
+    // never from the save, unless there is no replay (Map Room 3).
+    if (isAttack && !clientBattle && BATTLE_KEYS.has(key)) continue;
 
     switch (key) {
       case SaveKeys.RESOURCES:
@@ -299,7 +341,9 @@ const saveBase = async (
             );
           }
 
-          if (saveData.champion) {
+          // The engine never fights the defender's champion, so a replayed
+          // battle leaves it as it was.
+          if (saveData.champion && clientBattle) {
             championHandler(saveData.champion, baseSave);
           }
         } else {
@@ -346,6 +390,17 @@ const saveBase = async (
   }
 
   if (!isAttack && saveData.purchase) purchaseHandler(ctx, saveData.purchase, userSave);
+
+  // The replay's battle, on the defender (issue #23, C3), as the finaliser
+  // writes an abandoned one: the traps that fired, the health, the damage
+  // (whole, cut down, #72) and `destroyed`. The takeover grant and damage
+  // protection below read this damage, not the client's.
+  if (battle) {
+    buildingDataHandler(buildingDataWithout(baseSave.buildingdata, battle.firedTraps), baseSave);
+    baseSave.buildinghealthdata = battle.buildinghealthdata;
+    baseSave.damage = storedDamage(battle.damage) ?? baseSave.damage;
+    if (battle.destroyed !== undefined) baseSave.destroyed = battle.destroyed;
+  }
 
   // In `reject` mode the storage caps and the base value are the server's to
   // work out, so the client's copies are overwritten once the purchase has been
@@ -412,13 +467,10 @@ const saveBase = async (
     }
 
     // A bunker that fell takes its garrison with it, as Flash's Export leaves
-    // a fallen bunker empty (issue #130, `bunkerGarrison.ts`). Only where the
-    // save reports it fallen and the server's own battle brought it down too:
-    // an honest client's bunker fell in both, and no client can empty one its
-    // battle never reached.
-    if (saveData.over && loot?.fallen) {
-      const reported = fallenIn(saveData.buildinghealthdata);
-      const fallen = new Set(loot.fallen.filter((id) => reported.has(id)));
+    // a fallen bunker empty (issue #130, `bunkerGarrison.ts`): the bunkers the
+    // server's own battle brought down (issue #23, C3).
+    if (battle) {
+      const fallen = fallenIn(battle.buildinghealthdata);
       if (fallen.size > 0) {
         baseSave.buildingdata = withoutFallenGarrisons(baseSave.buildingdata, fallen).buildingdata;
       }
@@ -611,8 +663,54 @@ const logCappedLoot = (
  * cannot price. Everything else — attacks, Map Room 1 tribes, anything that is
  * neither a main yard nor an outpost — is `none`.
  */
+/** What a replayed battle writes on the defender in the save's place (issue #23, C3). */
+const BATTLE_KEYS: ReadonlySet<string> = new Set([
+  "destroyed",
+  SaveKeys.DAMAGE,
+  SaveKeys.BUILDINGDATA,
+  "buildinghealthdata",
+]);
+
 /**
- * The save's loot replay, in a worker (issue #23, C5). A replay past its
+ * Where the client's save and the server's battle disagree, recorded and
+ * never written (issue #23, C3). An honest client fought the same battle with
+ * the same engine, so any line here is a tampered save or a divergence to fix.
+ */
+const logBattleMismatches = (
+  ctx: Context,
+  user: User,
+  baseSave: Save,
+  saveData: { buildinghealthdata?: unknown; buildingdata?: unknown; destroyed?: unknown; attackloot?: unknown },
+  body: Record<string, unknown>,
+  battle: AbandonedOutcome
+): void => {
+  const fields = battleMismatches(
+    {
+      damage: body.damage,
+      destroyed: saveData.destroyed,
+      buildinghealthdata: saveData.buildinghealthdata,
+      buildingdata: saveData.buildingdata,
+      attackloot: saveData.attackloot,
+    },
+    battle,
+    baseSave.buildingdata
+  );
+  if (fields.length === 0) return;
+  logger.warn("Attack save for {username} on base {baseid} disagrees with the replay on {fields}", {
+    event: "attack-replay-mismatch",
+    userid: user.userid,
+    username: user.username,
+    baseid: baseSave.baseid,
+    basesaveid: baseSave.basesaveid,
+    fields,
+    sent: { damage: body.damage, destroyed: saveData.destroyed },
+    derived: { damage: battle.damage, destroyed: battle.destroyed, tick: battle.tick },
+    ip: ctx.ip,
+  });
+};
+
+/**
+ * The save's battle replay, in a worker (issue #23, C5). A replay past its
  * deadline gives the attack to the finaliser: nothing has been written yet,
  * the session and the checkpoint are left as they are, and the attacker's next
  * load (or the sweep, once the window closes) lands the attack from the
@@ -624,10 +722,10 @@ const replayForSave = async (
   ctx: Context,
   user: User,
   baseSave: Save,
-  input: ReplayedLootInput
-): Promise<ReplayedLoot> => {
+  input: AbandonedInput
+): Promise<AbandonedOutcome> => {
   try {
-    return await replayLootInWorker(input);
+    return await replayAbandonedInWorker(input, SAVE_REPLAY_DEADLINE_MS);
   } catch (err) {
     if (!(err instanceof ReplayTimeoutError)) throw err;
     logger.warn("Attack replay for {username} on base {baseid} timed out: the finaliser will land it", {

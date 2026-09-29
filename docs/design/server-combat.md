@@ -366,6 +366,16 @@ fixed timestep, no load shedding, no `SecNum`, one coordinate space.
 
 The audit of section 2.3 stays on in Phase B as a sanity envelope around the replay itself.
 
+**Implemented (issue #23, C3)** for Map Room 1 and 2 attacks (`services/base/combat/battle.ts`,
+`baseSave.ts`): the save that ends the attack replays the fightable log to the client's `tick`
+(section 3.10) in a worker and writes the health map, `damage`, `destroyed`, the fired traps, the
+fallen bunkers and both resource deltas from that one run. The client's copies are never written;
+where they differ they are logged as `attack-replay-mismatch` in every mode (refusing on them is
+C7). Bombs are priced against the attacker's pool at attack start (the session's
+`attackerResources`), and one the attacker could not pay for is dropped from the fightable log.
+The defender's champion is left as stored, since the engine does not fight it. `battle.test.ts`
+checks that an honest client's save writes exactly what it showed, on the golden fixtures.
+
 ---
 
 ## 3. Server design
@@ -770,6 +780,7 @@ full on every save (a save is a snapshot, and the server keeps no partial state 
 
 | Field | Meaning | Rule |
 |---|---|---|
+| `tick` (a save field beside `flinglog`, issue #23, C3) | The client's battle clock when it built the save | The server replays the log to it, never past the attack's longest end |
 | `seed` | The `combatseed` the attack-mode `/base/load` returned (section 3.1, `baseModeAttack.ts`) | Must equal the session's; else `malformed` |
 | `t` | Fast ticks since attack start | Non-decreasing; `<= 33,600`; a fling with `t` past the countdown (`24,000`, or `33,600` under Declare War) is refused as the client refuses it (`DROPZONE.as:53`) |
 | `x`, `y` | Yard units, the same space as `buildingdata.X/Y` | Inside the map; a fling centre may not overlap a building footprint (`DROPZONE.as:64`) |

@@ -87,7 +87,7 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
   // Worked out before anything is written, so a refusal in `reject` mode
   // leaves every row as it was (issue #90, as `baseSave.ts` does).
   const bombs = finalises
-    ? recordBombSpend(ctx, user, userSave, tribeSave, saveData.flinglog, combatConfig.mode)
+    ? recordBombSpend(ctx, user, userSave, tribeSave, saveData.flinglog, combatConfig.mode, session?.attackerResources)
     : null;
 
   const wasDestroyed = Boolean(existingTribe.destroyed);

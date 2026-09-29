@@ -66,6 +66,15 @@ export interface AttackSession {
    */
   defenderResources?: ResourceAmounts;
   /**
+   * The attacker's own pool at attack start, after the load caught their
+   * yard up. The bombs the attack fires are priced against it, and one it
+   * could not afford does not fight in the server's replay (issue #23, C3):
+   * the client decided against the pool it was shown, not against whatever
+   * the pool holds by the time the save arrives. Absent on a session minted
+   * before it existed.
+   */
+  attackerResources?: ResourceAmounts;
+  /**
    * The attacker's player level at attack start, from their stored save
    * (`calculateBaseLevel`), which the attack load also hands the client for
    * the engine's low-level loot bonus (`ATTACK.as:678-680`, issue #167). The
@@ -96,7 +105,10 @@ export const attackSessionKey = (basesaveid: number) => `attack-session:${basesa
  * JSON once it carries `entryHoused` or `defenderResources`.
  */
 export const serialiseAttackSession = (session: AttackSession): string =>
-  session.entryHoused || session.defenderResources || session.attackerlevel !== undefined
+  session.entryHoused ||
+  session.defenderResources ||
+  session.attackerResources ||
+  session.attackerlevel !== undefined
     ? JSON.stringify(session)
     : `${session.attackerid}:${session.attackid}:${session.startedat}`;
 
@@ -129,7 +141,10 @@ const defenderResourcesOf = (raw: unknown): ResourceAmounts | undefined => {
 };
 
 /** What an attack load records of the battle beside its binding: see {@link AttackSession}. */
-export type AttackSessionFacts = Pick<AttackSession, "entryHoused" | "defenderResources" | "attackerlevel">;
+export type AttackSessionFacts = Pick<
+  AttackSession,
+  "entryHoused" | "defenderResources" | "attackerResources" | "attackerlevel"
+>;
 
 /**
  * The facts of a JSON record, each kept only when it reads cleanly: the
@@ -141,10 +156,12 @@ export type AttackSessionFacts = Pick<AttackSession, "entryHoused" | "defenderRe
 export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFacts => {
   const entryHoused = entryHousedOf(parsed.entryHoused);
   const defenderResources = defenderResourcesOf(parsed.defenderResources);
+  const attackerResources = defenderResourcesOf(parsed.attackerResources);
   const { attackerlevel } = parsed;
   return {
     ...(entryHoused && { entryHoused }),
     ...(defenderResources && { defenderResources }),
+    ...(attackerResources && { attackerResources }),
     ...(Number.isSafeInteger(attackerlevel) &&
       (attackerlevel as number) >= 1 && { attackerlevel: attackerlevel as number }),
   };
@@ -249,18 +266,21 @@ export const checkAttackBinding = ({
  * @param {EntryHoused} [entryHoused] - The attacker's yards' `housed` at entry.
  * @param {ResourceAmounts} [defenderResources] - The defender's pool as the attack load serves it.
  * @param {number} [attackerlevel] - The attacker's player level, which the attack load serves too.
+ * @param {ResourceAmounts} [attackerResources] - The attacker's own pool at attack start.
  */
 export const newAttackSession = (
   attackerid: number,
   attackid: number,
   entryHoused?: EntryHoused,
   defenderResources?: ResourceAmounts,
-  attackerlevel?: number
+  attackerlevel?: number,
+  attackerResources?: ResourceAmounts
 ): AttackSession => ({
   attackerid,
   attackid,
   startedat: getCurrentDateTime(),
   ...(entryHoused && { entryHoused }),
   ...(defenderResources && { defenderResources }),
+  ...(attackerResources && { attackerResources }),
   ...(attackerlevel !== undefined && { attackerlevel }),
 });

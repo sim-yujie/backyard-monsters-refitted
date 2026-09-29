@@ -291,6 +291,7 @@ export const buildAttackSave = (
     basesaveid: load.basesaveid,
     attackid: load.attackid ?? 0,
     over: state.phase === "ended",
+    tick: battleState.tick,
     buildingdata: buildingDataAfter(load.buildingdata, battleState.firedTraps),
     buildinghealthdata: { ...battleState.health },
     damage,

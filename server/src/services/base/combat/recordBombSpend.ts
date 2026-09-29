@@ -4,6 +4,7 @@ import type { Save } from "../../../database/models/save.model.js";
 import type { User } from "../../../database/models/user.model.js";
 import { attackBombRefusedErr } from "../../../errors/errors.js";
 import { logger } from "../../../utils/logger.js";
+import type { JsonObject } from "../../../types/JsonObject.js";
 import { bombSpendOf, catapultLevelOf, type BombSpend } from "./bombSpend.js";
 
 /**
@@ -33,6 +34,8 @@ import { bombSpendOf, catapultLevelOf, type BombSpend } from "./bombSpend.js";
  * @param baseSave The defender's row, for the log line.
  * @param flinglog The parsed `flinglog`, if one was sent.
  * @param mode The active `COMBAT_SAVE_VALIDATION` mode.
+ * @param pool The pool the attack began with (the session's `attackerResources`),
+ *   which the bombs are priced against when known (issue #23, C3); else the stored one.
  * @returns What to charge, or null when there is nothing to.
  * @throws {ClientSafeError} In `reject` mode, when a bomb could not have been fired.
  */
@@ -42,12 +45,13 @@ export const recordBombSpend = (
   userSave: Save,
   baseSave: Save,
   flinglog: unknown,
-  mode: CombatValidationMode
+  mode: CombatValidationMode,
+  pool?: Partial<Record<"r1" | "r2" | "r3" | "r4", number>> | null
 ): BombSpend | null => {
   if (flinglog === undefined) return null;
 
   const spend = bombSpendOf(flinglog, {
-    resources: userSave.resources,
+    resources: (pool as JsonObject | undefined) ?? userSave.resources,
     catapultLevel: catapultLevelOf(userSave),
   });
 

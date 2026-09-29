@@ -140,9 +140,21 @@ export interface LootAttacker {
   champion?: readonly { t: number; l: number }[] | null;
   catapult?: number | null;
   buildingdata?: JsonObject | null;
+  /**
+   * The attacker's pool when the attack began (the session's
+   * `attackerResources`): a bomb costing more than it held of its resource is
+   * not fought (issue #23, C3). Absent, affordability is not checked.
+   */
+  resources?: Partial<ResourceAmounts> | null;
 }
 
 const bombById: ReadonlyMap<string, BombStats> = new Map(BOMBS.map((bomb) => [bomb.id, bomb]));
+
+/** What a pool held of resource 1 to 4, 0 for anything unreadable. */
+const heldOf = (pool: Partial<ResourceAmounts>, resource: number): number => {
+  const value = Number(pool[`r${resource}` as keyof ResourceAmounts]);
+  return Number.isFinite(value) ? value : 0;
+};
 
 /** Events in tick order, ties in the order sent, as `replay.ts` orders them. */
 const ordered = (events: readonly FlingEvent[]): FlingEvent[] =>
@@ -156,7 +168,8 @@ const ordered = (events: readonly FlingEvent[]): FlingEvent[] =>
  *
  * The web client refuses every one of these before it logs an event
  * (`AttackSession.appendFling`, `championBlock`, the bomb picker), so an
- * honest log comes back unchanged.
+ * honest log comes back unchanged. A bomb the attacker could not afford at
+ * attack start is dropped too, when the caller knows that pool.
  *
  * @param log - The save's fling log.
  * @param attacker - The attacker's main save.
@@ -185,6 +198,8 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
     if (event.kind === "bomb") {
       const bomb = bombById.get(event.id);
       if (!bomb || bomb.catapultLevel > catapultLevel || bombed.has(bomb.resource)) continue;
+      // `ResourceBombs.as:301-305`: one it could not pay for is never dropped.
+      if (attacker.resources && bomb.cost > heldOf(attacker.resources, bomb.resource)) continue;
       bombed.add(bomb.resource);
       events.push(event);
       continue;
@@ -318,6 +333,8 @@ export const lootReplayInput = ({
       champion: attacker.champion ?? null,
       catapult: attacker.catapult ?? null,
       buildingdata: attacker.buildingdata ?? null,
+      // Only the pool the attack began with, never the one the save finds.
+      resources: session.attackerResources ?? null,
     },
     log,
     entryHoused,

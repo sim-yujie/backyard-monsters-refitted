@@ -164,6 +164,20 @@ export const BaseSaveSchema = z.object({
     .transform((data) => data !== undefined ? parseInt(data, 10) : undefined),
 
   /**
+   * The attacker's battle clock when the save was made, in engine ticks (issue
+   * #23, C3): the server replays the attack to here. Anything that is not a
+   * number reads as absent.
+   * @type {number | undefined}
+   */
+  tick: z
+    .string()
+    .optional()
+    .transform((data) => {
+      const tick = Number(data);
+      return data !== undefined && Number.isFinite(tick) ? tick : undefined;
+    }),
+
+  /**
    * The attack ID, transformed from a string to a number, or undefined.
    * This property is optional.
    * @type {number | undefined}

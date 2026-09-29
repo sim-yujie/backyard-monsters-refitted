@@ -117,7 +117,10 @@ mock.module("../../utils/logger.js", () => ({
   logger: { warn: mock(() => {}), error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
 }));
 
-mock.module("../alliance/powerups.js", () => ({ runningPowerups: async () => [] }));
+mock.module("../alliance/powerups.js", () => ({
+  runningPowerups: async () => [],
+  isDeclareWarRunning: async () => false,
+}));
 
 const { finaliseAbandonedAttack, finaliseAttacksFor, finaliseExpiredOnBase } = await import("./finaliseAttack.js");
 const { storeCheckpoint, acquireFinalLock } = await import("./attackCheckpointStore.js");
