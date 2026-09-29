@@ -3,8 +3,8 @@ import { noiseMask } from "./groundNoise";
 import type { YardBounds } from "./YardGrid";
 
 /**
- * The ground the yard sits on: a tiled grass texture clipped to the plot, with
- * the plot boundary drawn over it.
+ * The ground the yard sits on: a tiled grass texture over the whole world, with
+ * the plot boundary drawn over it on the player's own yard.
  *
  * ## How the original tiles it, and what this does instead
  *
@@ -40,8 +40,10 @@ import type { YardBounds } from "./YardGrid";
  * those, staged for this client.
  *
  * The composite is one canvas, built once when the yard opens. Everything after
- * that is a `TilingSprite` repeating it, clipped to the plot — or, on a
- * foreign yard, left to cover the whole world (see {@link GroundStyle}).
+ * that is a `TilingSprite` repeating it over the whole world, the plot and
+ * what lies around it alike, as Flash laid one grass field under every yard
+ * (`MAP.as:262-274`): one cohesive ground (#197), not a lawn on a dark
+ * backdrop. See {@link GroundStyle} for the edge.
  */
 
 /** Where the game server keeps the yard backgrounds. Proxied in development. */
@@ -74,18 +76,31 @@ const BLOCK_HEIGHT = TILE_HEIGHT * BLOCK_ROWS;
 
 /** Grass green, shown until the tiles arrive and behind them if they never do. */
 const GROUND_COLOUR = 0x4a7a3a;
-/** Outside the plot: darker, so the boundary reads without a hard line. */
-const SURROUND_COLOUR = 0x2a3a26;
+
+/**
+ * The plot edge on the own yard: a soft dark line with a faint light one just
+ * inside it, so the edge reads on any grass without changing the ground on
+ * either side of it (#197).
+ */
+const EDGE_SHADE = { width: 4, color: 0x1b2418, alpha: 0.5, alignment: 1 } as const;
+const EDGE_LIGHT = { width: 2, color: 0xf2f7d8, alpha: 0.3, alignment: 0 } as const;
+
+/**
+ * How far past the world's edge the grass runs, in world pixels, so a view
+ * zoomed out to fit a wide window, or panned to the margin, still stands on
+ * grass rather than on the page background.
+ */
+const GROUND_MARGIN = 2_000;
 
 /**
  * How the ground treats the plot edge.
  *
- * `plot` clips the grass to the plot diamond and strokes its edge, for the
- * player's own yard, where the edge is where building stops. `open` tiles
- * grass over the whole world with no edge at all: the Flash client drew the
- * edge only in BUILD mode (`client/scripts/MAP.as:362-365`) and laid a
- * 4000 x 2000 grass field under every yard (`MAP.as:262-274`), so an enemy
- * camp sat in open country rather than on a marked plot in the dark.
+ * Both lay grass over the whole world, as the Flash client laid a 4000 x 2000
+ * grass field under every yard (`MAP.as:262-274`). `plot` also marks the
+ * plot's edge, subtly, for the player's own yard, where the edge is where
+ * building stops: Flash drew the edge only in BUILD mode
+ * (`client/scripts/MAP.as:362-365`). `open` has no edge at all, so an enemy
+ * camp sits in open country rather than on a marked plot.
  */
 export type GroundStyle = "plot" | "open";
 
@@ -129,25 +144,25 @@ export class YardGround {
     const first = corners[0];
     if (!first) return;
 
-    // Open ground is the plot diamond grown to the whole world: the same
-    // fill, clip and (empty) edge code runs on a rectangle instead.
-    const path =
-      style === "open"
-        ? [0, 0, bounds.width, 0, bounds.width, bounds.height, 0, bounds.height]
-        : corners.flatMap((point) => [point.x, point.y]);
+    // The grass covers everything the camera can reach, plot or not, and a
+    // margin beyond it.
+    const [left, top] = [-GROUND_MARGIN, -GROUND_MARGIN];
+    const [right, bottom] = [bounds.width + GROUND_MARGIN, bounds.height + GROUND_MARGIN];
+    const world = [left, top, right, top, right, bottom, left, bottom];
 
-    // A wash over everything the camera can reach, so panning to the margin
-    // does not show the page background.
+    // A wash under the grass, so the ground is green before the tiles arrive.
     this.surround
       .clear()
-      .rect(0, 0, bounds.width, bounds.height)
-      .fill({ color: SURROUND_COLOUR });
+      .rect(left, top, right - left, bottom - top)
+      .fill({ color: GROUND_COLOUR });
 
-    this.plot.clear().poly(path).fill({ color: GROUND_COLOUR });
-    this.clip.clear().poly(path).fill({ color: 0xffffff });
+    this.plot.clear().poly(world).fill({ color: GROUND_COLOUR });
+    this.clip.clear().poly(world).fill({ color: 0xffffff });
     this.boundary.clear();
     if (style === "plot") {
-      this.boundary.poly(path).stroke({ width: 4, color: 0x1b2418, alignment: 1, alpha: 0.85 });
+      const edge = corners.flatMap((point) => [point.x, point.y]);
+      this.boundary.poly(edge).stroke(EDGE_SHADE);
+      this.boundary.poly(edge).stroke(EDGE_LIGHT);
     }
 
     if (this.tiles) this.sizeTiles(bounds);
@@ -197,9 +212,12 @@ export class YardGround {
 
   private sizeTiles(bounds: YardBounds): void {
     if (!this.tiles) return;
-    this.tiles.position.set(0, 0);
-    this.tiles.width = bounds.width;
-    this.tiles.height = bounds.height;
+    // Out to the margin, with the tile grid still anchored at the world's
+    // origin, where Flash's grass field started.
+    this.tiles.position.set(-GROUND_MARGIN, -GROUND_MARGIN);
+    this.tiles.tilePosition.set(GROUND_MARGIN % BLOCK_WIDTH, GROUND_MARGIN % BLOCK_HEIGHT);
+    this.tiles.width = bounds.width + 2 * GROUND_MARGIN;
+    this.tiles.height = bounds.height + 2 * GROUND_MARGIN;
   }
 
   /**
