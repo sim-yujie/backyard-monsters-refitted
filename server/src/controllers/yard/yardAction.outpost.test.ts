@@ -437,15 +437,25 @@ describe("routes Flash refuses in an outpost", () => {
   }
 
   test("the store sells an outpost only its own list: no extra worker", async () => {
-    const worker = await onOutpost(yardShopBuyAction, { item: "BEW" });
-    expect(worker.status).toBe(400);
-    expect(worker.body.reason).toBe("notForSale");
+    for (const item of ["BEW", "BIP", "ENL", "CLOD"]) {
+      const refused = await onOutpost(yardShopBuyAction, { item });
+      expect(refused.status).toBe(400);
+      expect(refused.body.reason).toBe("notForSale");
+    }
+
+    const production = await onOutpost(yardShopBuyAction, { item: "POD" });
+    expect(production.status).toBe(200);
+    expect((outpostSave().storedata as Row).POD).toBeDefined();
 
     const overdrive = await onOutpost(yardShopBuyAction, { item: "HOD" });
     expect(overdrive.status).toBe(200);
     expect((outpostSave().storedata as Row).HOD).toBeDefined();
     expect((mainSave().storedata as Row).HOD).toBeUndefined();
-    expect(mainSave().credits).toBe(1000 - (overdrive.body.report as { credits: number }).credits);
+    expect(mainSave().credits).toBe(
+      1000 -
+        (production.body.report as { credits: number }).credits -
+        (overdrive.body.report as { credits: number }).credits,
+    );
   });
 });
 

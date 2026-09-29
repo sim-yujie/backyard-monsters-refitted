@@ -222,6 +222,58 @@ describe("POST /bm/yard/shop/buy", () => {
     expect((db.row!.storedata as Row).BST).toMatchObject({ q: 1 });
   });
 
+  test("BIP climbs ten steps, each adding 10% to every storage cap, then sells out", async () => {
+    db.row = rowOf({ credits: 10000 });
+    const spent: number[] = [];
+    const caps: number[] = [];
+
+    for (let i = 0; i < 10; i++) {
+      const answer = await call(yardShopBuyAction, { item: "BIP" });
+      expect(answer.status).toBe(200);
+      spent.push((answer.body.report as { credits: number }).credits);
+      caps.push((answer.body.caps as { r1: number }).r1);
+    }
+
+    expect(spent).toEqual([50, 100, 150, 200, 250, 300, 350, 400, 450, 500]);
+    // No silos: the 10,000 base pool, 10% more per step.
+    expect(caps).toEqual([11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000, 20000]);
+    expect(db.row).toMatchObject({ credits: 10000 - 2750, storedata: { BIP: { q: 10 } } });
+
+    const eleventh = await call(yardShopBuyAction, { item: "BIP" });
+    expect(eleventh).toMatchObject({ status: 409, body: { reason: "soldOut", have: 10, max: 10 } });
+  });
+
+  test("ENL climbs six steps and sells out; it does not expire", async () => {
+    db.row = rowOf({ credits: 10000 });
+    const spent: number[] = [];
+
+    for (let i = 0; i < 6; i++) {
+      const answer = await call(yardShopBuyAction, { item: "ENL" });
+      expect(answer.status).toBe(200);
+      expect((answer.body.report as { endsAt: number | null }).endsAt).toBeNull();
+      spent.push((answer.body.report as { credits: number }).credits);
+    }
+
+    expect(spent).toEqual([50, 100, 150, 200, 250, 300]);
+    expect(db.row).toMatchObject({ credits: 10000 - 1050, storedata: { ENL: { q: 6 } } });
+    expect(await call(yardShopBuyAction, { item: "ENL" })).toMatchObject({
+      status: 409,
+      body: { reason: "soldOut", have: 6, max: 6 },
+    });
+  });
+
+  test("POD starts twelve hours of Production Overdrive and refuses a second buy while it runs", async () => {
+    const answer = await call(yardShopBuyAction, { item: "POD" });
+    const now = answer.body.currenttime as number;
+
+    expect(answer.body.report).toEqual({ item: "POD", credits: 200, q: 1, endsAt: now + 43200 });
+    expect(db.row).toMatchObject({ credits: 800, storedata: { POD: { q: 1, s: now, e: now + 43200 } } });
+
+    const again = await call(yardShopBuyAction, { item: "POD" });
+    expect(again).toMatchObject({ status: 409, body: { reason: "alreadyActive", endsAt: now + 43200 } });
+    expect(db.row).toMatchObject({ credits: 800 });
+  });
+
   test("items off the allowlist are 400 notForSale", async () => {
     for (const item of ["HODI", "PRO1", "MUSK", "toString", "__proto__"]) {
       const answer = await call(yardShopBuyAction, { item });

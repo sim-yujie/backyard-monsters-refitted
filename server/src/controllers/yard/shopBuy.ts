@@ -47,6 +47,13 @@ export interface ShopItemRule {
  * `HOD3` (Hatchery Overdrive 4x / 6x / 10x, 30 / 50 / 100, one hour; one at a
  * time, `409 alreadyActive` naming the running one) and `EXH` (Housing
  * Expansion, 375, 24 hours, housing counts 1.25x), §4.4, §4.5.
+ *
+ * Phase 6, the Shop screen (§8.2, WP6.2): `BIP` (Improved Packing Skills, 50
+ * to 500 in ten steps, each +10% on every storage cap, `packingMultiplier`),
+ * `ENL` (More Yardage, 50 to 300 in six steps, each 10% more plot,
+ * `layoutGeometry.ts` `YARD_SIZES`) and `POD` (Production Overdrive, 200, 12
+ * hours, harvesters produce twice as fast, `catchUpHarvesters.ts`). The
+ * effects were already read from `storedata`; buying them is all that is new.
  */
 export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
   BEW: {},
@@ -56,6 +63,9 @@ export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
   HOD2: { check: ({ save, now }) => overdriveGate(save.storedata, now) },
   HOD3: { check: ({ save, now }) => overdriveGate(save.storedata, now) },
   EXH: {},
+  BIP: {},
+  ENL: {},
+  POD: {},
 };
 
 /**
@@ -66,7 +76,7 @@ export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
  * timed item bought in an outpost is the outpost's: it lands in the outpost's
  * own `storedata`, as Flash kept store data per yard.
  */
-export const OUTPOST_SHOP_ITEMS: ReadonlySet<string> = new Set(["BST", "HOD", "HOD2", "HOD3", "EXH"]);
+export const OUTPOST_SHOP_ITEMS: ReadonlySet<string> = new Set(["BST", "HOD", "HOD2", "HOD3", "EXH", "POD"]);
 
 /** What the route sends back as `report`. */
 export interface ShopBuyReport {
