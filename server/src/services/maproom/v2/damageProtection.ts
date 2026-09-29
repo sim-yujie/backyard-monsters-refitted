@@ -2,6 +2,7 @@ import { BaseMode, BaseType } from "../../../enums/Base.js";
 import { Save } from "../../../database/models/save.model.js";
 import { postgres } from "../../../server.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
+import { PROTECTION_ITEMS } from "../../../game-data/store/storeItems.js";
 import {
   earnsTakeoverGrant,
   grantProtectedUntil,
@@ -41,6 +42,10 @@ export const damageProtection = async (save: Save, mode?: BaseMode) => {
   if (mode === BaseMode.ATTACK || mode === BaseMode.IATTACK || mode === BaseMode.WMATTACK || mode === BaseMode.IWMATTACK) {
     protection = 0;
     persist = true;
+    // Attacking ends bought protection outright ("Removed if you attack
+    // anyone", `storeItems.ts`), so its store entry goes with it; left in
+    // place, its old end would still announce "Protection ended" (#200).
+    save.storedata = withoutProtectionItems(save.storedata);
   } else {
     switch (type) {
       case BaseType.MAIN:
@@ -136,6 +141,14 @@ export const damageProtection = async (save: Save, mode?: BaseMode) => {
   }
 
   return persist;
+};
+
+/** A `storedata` with no bought protection in it; the same object when it had none. */
+const withoutProtectionItems = (storedata: Save["storedata"]): Save["storedata"] => {
+  if (!storedata || !PROTECTION_ITEMS.some((item) => Object.hasOwn(storedata, item))) return storedata;
+  const kept = { ...storedata };
+  for (const item of PROTECTION_ITEMS) delete kept[item];
+  return kept;
 };
 
 /**

@@ -1,4 +1,4 @@
-import { storeItems } from "../../game-data/store/storeItems.js";
+import { PROTECTION_ITEMS, storeItems } from "../../game-data/store/storeItems.js";
 import { YardShopBuySchema } from "../../schemas/YardSchemas.js";
 import { overdriveGate } from "../../services/yard/hatchery.js";
 import { runningOrThrow } from "../../services/yard/locker.js";
@@ -110,9 +110,6 @@ const count = (raw: unknown): number => {
   const value = Number(raw);
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 };
-
-/** The damage protection items: one entry in `storedata` stands for all of them. */
-const PROTECTION_ITEMS = ["PRO1", "PRO2", "PRO3"] as const;
 
 /**
  * A protection item: `save.protected` becomes `max(protected, now) + du`, and

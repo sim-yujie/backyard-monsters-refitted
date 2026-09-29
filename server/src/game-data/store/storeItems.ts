@@ -11,6 +11,14 @@ export interface StoreItem {
  * Collection of available store items for purchase.
  * @type {{ [key: string]: StoreItem }}
  */
+/**
+ * The damage protection items. Their `storedata` entry is the one record of a
+ * bought protection, and its `e` is when the "Protection ended" notice fires
+ * (`catchUpBuildings.ts`), so it must go wherever the protection itself does:
+ * a new purchase (`shopBuy.ts`) or an attack (`damageProtection.ts`, #200).
+ */
+export const PROTECTION_ITEMS = ["PRO1", "PRO2", "PRO3"] as const;
+
 export const storeItems: { [key: string]: StoreItem } = {
   BEW: {
     t: "1 Extra Worker",

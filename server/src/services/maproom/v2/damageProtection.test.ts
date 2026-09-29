@@ -18,6 +18,8 @@ mock.module("../../../server.js", () => ({
 }));
 
 const { damageProtection, protectAfterAttack } = await import("./damageProtection.js");
+const { catchUpBuildings } = await import("../../yard/catchUpBuildings.js");
+const { BaseMode } = await import("../../../enums/Base.js");
 const { readTakeoverGrant } = await import("./takeoverGrantStore.js");
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -81,5 +83,57 @@ describe("protectAfterAttack (issue #182, the owner's one-chance rule)", () => {
     expect(await protectAfterAttack(save, ATTACKER)).toBeNull();
     expect(save.protected).toBeGreaterThanOrEqual(now() + 36 * 60 * 60 - 1);
     expect(store.size).toBe(0);
+  });
+});
+
+describe("attacking ends bought protection, and its notice with it (#200)", () => {
+  const DAY = 24 * 60 * 60;
+
+  /** A main yard under Holiday Protection for another day, with a Production Overdrive running. */
+  const protectedYard = () =>
+    ({
+      type: "main",
+      damage: 0,
+      protected: now() + DAY,
+      attacks: [],
+      buildingdata: {},
+      buildinghealthdata: {},
+      storedata: {
+        PRO2: { q: 1, s: now() - DAY, e: now() + DAY },
+        POD: { q: 1, s: now(), e: now() + 3600 },
+      },
+    }) as unknown as Save;
+
+  /** The store notices the yard's catch-up raises by `at`: what "Protection ended" is made from. */
+  const noticesBy = (save: Save, at: number): string[] =>
+    catchUpBuildings(save as never, now(), at)
+      .filter((job) => job.kind === "storeItem")
+      .map((job) => (job as { id: string }).id);
+
+  test.each([BaseMode.ATTACK, BaseMode.WMATTACK, BaseMode.IATTACK, BaseMode.IWMATTACK])(
+    "an attack (%s) ends the protection and drops its entry: no \"Protection ended\" later",
+    async (mode) => {
+      const save = protectedYard();
+      await damageProtection(save, mode);
+
+      expect(save.protected).toBe(0);
+      expect(Object.keys(save.storedata ?? {})).toEqual(["POD"]);
+      expect(noticesBy(save, now() + 2 * DAY)).toEqual(["POD"]);
+    }
+  );
+
+  test("a player who did not attack still hears it when the protection runs out", async () => {
+    const save = protectedYard();
+    await damageProtection(save);
+
+    expect(save.protected).toBeGreaterThan(now());
+    expect(noticesBy(save, now() + 2 * DAY)).toContain("PRO2");
+  });
+
+  test("an attacker with no protection bought keeps its store as it was", async () => {
+    const save = { ...protectedYard(), storedata: { POD: { q: 1, e: now() + 3600 } } } as unknown as Save;
+    const before = save.storedata;
+    await damageProtection(save, BaseMode.ATTACK);
+    expect(save.storedata).toBe(before);
   });
 });

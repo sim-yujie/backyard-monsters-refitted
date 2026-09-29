@@ -232,3 +232,19 @@ describe("the attack load serves the defence and keeps it in the session (#195)"
     expect(champion?.hp).toBe(Math.floor((defenderMain().champion as { hp: number }[])[1]!.hp));
   });
 });
+
+describe("the attack load ends the attacker's bought protection, notice and all (#200)", () => {
+  test.each([
+    ["a player's main yard", MAIN_BASEID],
+    ["a player's outpost", OUTPOST_BASEID],
+  ])("attacking %s drops the attacker's PRO entry with its protection", async (_what, baseid) => {
+    const attackerSave = tables.get(Save)!.find((row) => row.basesaveid === 2526)!;
+    attackerSave.protected = now() + 86_400;
+    attackerSave.storedata = { PRO1: { q: 1, s: now(), e: now() + 86_400 }, BST: { q: 1, e: now() + 600 } };
+
+    await attack(baseid);
+
+    expect(attackerSave.protected).toBe(0);
+    expect(attackerSave.storedata).toEqual({ BST: { q: 1, e: expect.any(Number) } });
+  });
+});
