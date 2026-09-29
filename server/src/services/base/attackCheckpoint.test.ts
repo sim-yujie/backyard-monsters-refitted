@@ -3,6 +3,7 @@ import {
   MAX_CHECKPOINT_TICK,
   checkpointExpired,
   checkpointExtends,
+  checkpointSession,
   newCheckpoint,
   parseCheckpoint,
   parseStoredCheckpoint,
@@ -130,6 +131,24 @@ describe("stored checkpoints", () => {
     expect(parseStoredCheckpoint(null)).toBeNull();
     expect(parseStoredCheckpoint("not json")).toBeNull();
     expect(parseStoredCheckpoint(JSON.stringify({ ...checkpoint, attackid: "x" }))).toBeNull();
+  });
+
+  test("keeps a copy of what the attack load recorded, for a finaliser that outlives the session (#163)", () => {
+    const recorded = {
+      ...session,
+      entryHoused: { "1000239208": { C1: 200 } },
+      defenderResources: { r1: 5, r2: 6, r3: 7, r4: 8.5 },
+      attackerlevel: 12,
+    };
+    const kept = newCheckpoint(recorded, 9, accepted(parseCheckpoint(body())), 1_000_010);
+    const read = parseStoredCheckpoint(serialiseCheckpoint(kept))!;
+
+    expect(read).toEqual(kept);
+    expect(checkpointSession(read)).toEqual(recorded);
+  });
+
+  test("a checkpoint of a session without that record rebuilds just the binding", () => {
+    expect(checkpointSession(checkpoint)).toEqual(session);
   });
 
   test("expires with the attack session's window, not before", () => {

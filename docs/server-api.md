@@ -443,12 +443,15 @@ held: same seed, every stored event unchanged and in place, a clock that has not
 `attackCheckpointRefusedErr` (409, `reason`: `malformed`, `rewound` or `reseeded`). It writes no
 game state: the latest checkpoint is kept in Redis under `attack-checkpoint:<basesaveid>`, indexed
 by the set `attack-checkpoints` (`services/base/attackCheckpoint.ts`, `attackCheckpointStore.ts`).
+Each checkpoint also keeps a copy of what the attack load recorded in the session (`entryHoused`,
+`defenderResources`, `attackerlevel`), because the session key is gone 60 seconds after the window
+and an attack is often finalised later than that.
 
 **Finalisation** (`services/base/finaliseAttack.ts`) finishes an attack from its checkpoint: the
 log is replayed with the shared engine to the checkpoint's tick (`combat/abandonedAttack.ts`) and
 the result written as an `over` save would write it — flung monsters taken out of the listed cells
 (each caught up to now first, monsters only, so production during the attack stays; first cell
-first, the same subtraction the attack save uses, `services/yard/attackRoster.ts`), bombs charged (`combat/bombSpend.ts`), loot credited, the
+first, the same subtraction the attack save uses, `services/yard/attackRoster.ts`), bombs charged (`combat/bombSpend.ts`), loot credited (by the final save's own rule, below), the
 attacker's champion health and siege stock, the defender's health, damage, `destroyed`, fired traps,
 resource loss and report, damage protection, `attackid` cleared, session ended. It runs, under the
 same final lock:
@@ -462,6 +465,15 @@ same final lock:
   window has closed.
 
 The final save and the finalisation discard the checkpoint, so each attack is written once.
+
+The loot is the final save's (issues #163, #165). The replay fights over the pool the attack load
+served (`defenderResources`), at the level it served (`attackerlevel`), with only what the attacker
+housed at entry and could fling (`fightableLog`). Its result then goes through `attackLootOf` as an
+honest client's save would. So leaving an attack credits exactly what finishing it at the same tick
+would: never more than the served pool gives, and the same however the stored pool moved during
+the attack (an outpost owner's autobank, another attack). The defender's loss lands on the pool as
+it stands, never below zero. A checkpoint without that record (one written before it existed)
+credits nothing, as a save without a roster would not; its damage still lands.
 
 **Not yet covered.** The Inferno save endpoint (`/api/:apiVersion/bm/base/save` →
 `controllers/inferno/infernoSave.ts`) still has the original gate — a non-zero `attackid` on the

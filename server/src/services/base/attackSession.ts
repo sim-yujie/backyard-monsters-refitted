@@ -128,6 +128,28 @@ const defenderResourcesOf = (raw: unknown): ResourceAmounts | undefined => {
   return amounts;
 };
 
+/** What an attack load records of the battle beside its binding: see {@link AttackSession}. */
+export type AttackSessionFacts = Pick<AttackSession, "entryHoused" | "defenderResources" | "attackerlevel">;
+
+/**
+ * The facts of a JSON record, each kept only when it reads cleanly: the
+ * session's own, or the copy a checkpoint carries (`attackCheckpoint.ts`).
+ *
+ * @param {Record<string, unknown>} parsed - The record, JSON-parsed.
+ * @returns {AttackSessionFacts} The facts found.
+ */
+export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFacts => {
+  const entryHoused = entryHousedOf(parsed.entryHoused);
+  const defenderResources = defenderResourcesOf(parsed.defenderResources);
+  const { attackerlevel } = parsed;
+  return {
+    ...(entryHoused && { entryHoused }),
+    ...(defenderResources && { defenderResources }),
+    ...(Number.isSafeInteger(attackerlevel) &&
+      (attackerlevel as number) >= 1 && { attackerlevel: attackerlevel as number }),
+  };
+};
+
 /**
  * Reads a stored session back.
  *
@@ -147,17 +169,11 @@ export const parseAttackSession = (raw: string | null | undefined): AttackSessio
       const parsed = JSON.parse(raw) as Record<string, unknown>;
       const { attackerid, attackid, startedat } = parsed;
       if (![attackerid, attackid, startedat].every(Number.isSafeInteger)) return null;
-      const entryHoused = entryHousedOf(parsed.entryHoused);
-      const defenderResources = defenderResourcesOf(parsed.defenderResources);
-      const { attackerlevel } = parsed;
       return {
         attackerid: attackerid as number,
         attackid: attackid as number,
         startedat: startedat as number,
-        ...(entryHoused && { entryHoused }),
-        ...(defenderResources && { defenderResources }),
-        ...(Number.isSafeInteger(attackerlevel) &&
-          (attackerlevel as number) >= 1 && { attackerlevel: attackerlevel as number }),
+        ...sessionFactsOf(parsed),
       };
     } catch {
       return null;

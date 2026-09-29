@@ -77,8 +77,8 @@ import { catapultLevelOf } from "./bombSpend.js";
  * its gain is capped by what the defender holds — its pool plus its
  * harvesters' buffers — times the low-level bonus allowance, as Map Room 1
  * tribes are (`mr1TribeRules.ts`, issue #161). A session without a roster
- * from anyone else is an attack load that named the wrong map room (the load
- * takes `mapversion` from the client), and is credited nothing.
+ * from anyone else is credited nothing: every Map Room 1 and 2 attack load
+ * records one (the load takes the attacker's stored Map Room since #165).
  *
  * ## The attacker's storage (issue #166)
  *

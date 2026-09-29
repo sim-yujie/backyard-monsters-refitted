@@ -5,7 +5,12 @@ import {
   type FlingEvent,
   type FlingLog,
 } from "../../game-rules/combat/index.js";
-import { ATTACK_SESSION_WINDOW, type AttackSession } from "./attackSession.js";
+import {
+  ATTACK_SESSION_WINDOW,
+  sessionFactsOf,
+  type AttackSession,
+  type AttackSessionFacts,
+} from "./attackSession.js";
 
 /**
  * An attack cannot be undone by never sending its result (issue #138).
@@ -54,8 +59,15 @@ export interface CheckpointInput {
   sources: string[];
 }
 
-/** A checkpoint as stored: the input, and the attack it belongs to. */
-export interface AttackCheckpoint extends CheckpointInput {
+/**
+ * A checkpoint as stored: the input, the attack it belongs to, and what the
+ * attack load recorded of it (issues #163, #165): the roster at entry, the
+ * pool it served and the attacker's level. The session holding those expires
+ * a minute after the attack's window, and the attack is often finished later
+ * than that, so each checkpoint keeps its own copy: the finaliser caps and
+ * credits the loot from them as the final save does (`finaliseAttack.ts`).
+ */
+export interface AttackCheckpoint extends CheckpointInput, AttackSessionFacts {
   attackerid: number;
   /** `saveuserid` of the defender's row, so the defender's own load can finish it. */
   defenderid: number;
@@ -223,6 +235,9 @@ export const newCheckpoint = (
   startedat: session.startedat,
   at: now,
   ...input,
+  ...(session.entryHoused && { entryHoused: session.entryHoused }),
+  ...(session.defenderResources && { defenderResources: session.defenderResources }),
+  ...(session.attackerlevel !== undefined && { attackerlevel: session.attackerlevel }),
 });
 
 export const serialiseCheckpoint = (checkpoint: AttackCheckpoint): string =>
@@ -256,8 +271,25 @@ export const parseStoredCheckpoint = (raw: string | null | undefined): AttackChe
     startedat: startedat as number,
     at: at as number,
     ...input,
+    ...sessionFactsOf(value),
   };
 };
+
+/**
+ * The attack session a checkpoint was bound to, rebuilt from its copy: what
+ * the attack save's loot rule reads (`attackLootOf`), whether or not the
+ * session itself is still stored.
+ *
+ * @param checkpoint - The stored checkpoint.
+ */
+export const checkpointSession = (checkpoint: AttackCheckpoint): AttackSession => ({
+  attackerid: checkpoint.attackerid,
+  attackid: checkpoint.attackid,
+  startedat: checkpoint.startedat,
+  ...(checkpoint.entryHoused && { entryHoused: checkpoint.entryHoused }),
+  ...(checkpoint.defenderResources && { defenderResources: checkpoint.defenderResources }),
+  ...(checkpoint.attackerlevel !== undefined && { attackerlevel: checkpoint.attackerlevel }),
+});
 
 /**
  * Whether the attack a checkpoint belongs to can no longer be saved by its

@@ -13,7 +13,7 @@ import { protectAfterAttack } from "../maproom/v2/damageProtection.js";
 import { noticeOutpostAttack } from "../maproom/v2/outpostNotices.js";
 import { isMR3Structure } from "../maproom/v3/utils/isMR3Structure.js";
 import { advanceBuildingTimers } from "./advanceBuildingTimers.js";
-import { checkpointExpired, type AttackCheckpoint } from "./attackCheckpoint.js";
+import { checkpointExpired, checkpointSession, type AttackCheckpoint } from "./attackCheckpoint.js";
 import {
   acquireFinalLock,
   discardCheckpoint,
@@ -29,13 +29,13 @@ import {
   spendFlung,
   type SourceCell,
 } from "./combat/abandonedAttack.js";
-import { bankAttackLoot, krallenBuffOf } from "./combat/attackLoot.js";
+import { attackLootOf, bankAttackLoot, fightableLog } from "./combat/attackLoot.js";
 import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpend.js";
 import { combatCellHeight } from "./combat/cellHeight.js";
 import { getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
 import { storedDamage } from "./storedDamage.js";
 import { catchUpArmyRow } from "../yard/armies.js";
-import { playerLevelOf } from "./calculateBaseLevel.js";
+import { MapRoomVersion } from "../../enums/MapRoom.js";
 
 /**
  * Finishes an attack its attacker left without saving (issue #138).
@@ -52,6 +52,16 @@ import { playerLevelOf } from "./calculateBaseLevel.js";
  * (`combat/bombSpend.ts`), loot credited, the defender's damage, loss, fired
  * traps and report written, protection granted, the row's `attackid` cleared
  * and the session ended.
+ *
+ * The loot is the final save's own (issues #163, #165): the battle is fought
+ * over the pool the attack load served, at the level it served, with only
+ * what the attacker could have flung (`fightableLog`), and its result goes
+ * through the save's loot rule (`attackLootOf`) as an honest client's save
+ * would. So leaving an attack earns exactly what finishing it at the same
+ * moment would, however the stored pool moved meanwhile (an outpost's owner
+ * autobanking, say). The load's record of the battle comes from the
+ * checkpoint's copy, since the session itself is gone a minute after the
+ * attack's window.
  *
  * When it runs:
  *
@@ -139,21 +149,46 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
 
   const now = getCurrentDateTime();
   const outpostOwnerSave = await getOutpostOwnerSave(defender, attacker);
+  const height = await combatCellHeight(defender);
+
+  // The attack as its load recorded it: the roster, the pool and the level
+  // the client fought with (`checkpointSession`).
+  const session = checkpointSession(checkpoint);
+  const pool = (outpostOwnerSave ?? defender).resources;
 
   const outcome = replayAbandonedAttack({
     defender: {
       type: defender.type,
       buildingdata: defender.buildingdata,
       buildinghealthdata: defender.buildinghealthdata,
-      resources: (outpostOwnerSave ?? defender).resources as AbandonedDefender["resources"],
-      height: await combatCellHeight(defender),
+      resources: session.defenderResources ?? (pool as AbandonedDefender["resources"]),
+      height,
     },
     attacker: { academy: userSave.academy, champion: userSave.champion, siege: userSave.siege },
-    log: checkpoint.flinglog,
+    // Only what the attacker could have flung fights, as in the save's own replay.
+    log: session.entryHoused ? fightableLog(checkpoint.flinglog, userSave, session.entryHoused) : checkpoint.flinglog,
     tick: checkpoint.tick,
     declareWar: await hasDeclareWar(attacker.alliance_id),
-    // No client figure to agree with here, so the stored save's level now.
-    playerLevel: playerLevelOf(userSave),
+    ...(session.attackerlevel !== undefined && { playerLevel: session.attackerlevel }),
+  });
+
+  // Both sides' loot by the final save's rule, the replay standing in for the
+  // client's figures, against the rows before anything below is written (the
+  // attacker's champions above all), as `baseSave.ts` reads them.
+  const loot = attackLootOf({
+    sent: outcome.attackloot,
+    reported: outcome.defenderDelta,
+    flinglog: checkpoint.flinglog,
+    session,
+    defender: {
+      type: defender.type,
+      buildingdata: defender.buildingdata,
+      buildinghealthdata: defender.buildinghealthdata,
+      resources: pool,
+      height,
+    },
+    attacker: userSave,
+    mapRoom3: userSave.mapversion === MapRoomVersion.V3,
   });
 
   // The attacker: what was flung leaves its cells for good, and the rest of
@@ -180,9 +215,6 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
     });
   }
 
-  // Read before the champions below are written, as `attackLootOf` reads them.
-  const krallenBuff = krallenBuffOf(checkpoint.flinglog, userSave.champion);
-
   if (outcome.attackerchampion) userSave.champion = outcome.attackerchampion;
   if (outcome.attackersiege) userSave.siege = outcome.attackersiege;
 
@@ -193,7 +225,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
   });
   // Bombs, then loot up to the attacker's storage cap, as `baseSave.ts` lands them (issue #166).
   if (bombs.charges.length > 0) userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
-  bankAttackLoot(userSave, outcome.attackloot, krallenBuff);
+  bankAttackLoot(userSave, loot.credit, loot.krallenBuff);
   postgres.em.persist(userSave);
 
   // The defender.
@@ -206,7 +238,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
   (defender as unknown as { attackreport: unknown }).attackreport = outcome.attackreport;
 
   const lootTarget = outpostOwnerSave ?? defender;
-  defenderLootHandler(outcome.defenderDelta, lootTarget);
+  defenderLootHandler(loot.defenderDelta, lootTarget);
   postgres.em.persist(lootTarget);
 
   const isProtectable = defender.type === BaseType.MAIN || defender.type === BaseType.OUTPOST;
@@ -218,7 +250,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
     await noticeOutpostAttack(postgres.em, {
       outpost: defender,
       attacker,
-      defenderDelta: outcome.defenderDelta,
+      defenderDelta: loot.defenderDelta,
       now,
     });
   }
@@ -244,6 +276,8 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
     basesaveid,
     tick: outcome.tick,
     damage: outcome.damage,
+    loot: loot.credit,
+    lootBasis: loot.basis,
     flung: outcome.flung,
     bombs: bombs.charges.map(({ id }) => id),
   });
