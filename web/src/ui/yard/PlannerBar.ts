@@ -421,8 +421,19 @@ export class PlannerBar {
   private readonly unplacedCell: CostCell;
   private readonly readOnly: boolean;
 
-  constructor(actions: PlannerBarActions, options: { readOnly?: boolean } = {}) {
+  constructor(
+    actions: PlannerBarActions,
+    options: {
+      readOnly?: boolean;
+      /**
+       * Whether the yard has layout slots: false on an outpost, where Flash's
+       * planner could neither save nor load one (`BasePlanner.as:41`, #191).
+       */
+      layouts?: boolean;
+    } = {},
+  ) {
     this.readOnly = options.readOnly ?? false;
+    const hasLayouts = options.layouts ?? true;
 
     this.toolbar = document.createElement("div");
     this.toolbar.className = "planner-bar planner-bar--top";
@@ -672,6 +683,8 @@ export class PlannerBar {
 
     const layouts = button("Layouts", "Saved layouts (Ctrl+S saves to the current slot)");
     layouts.addEventListener("click", actions.onLayouts);
+    layouts.hidden = !hasLayouts;
+    layouts.disabled = !hasLayouts;
 
     this.checklist = button("Checklist", "What is blocking Apply");
     this.checklist.addEventListener("click", actions.onChecklist);

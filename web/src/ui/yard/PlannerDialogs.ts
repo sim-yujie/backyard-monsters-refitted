@@ -206,6 +206,11 @@ export interface ApplyPanelOptions {
   dirty: boolean;
   /** Opens the layouts panel, for a plan that belongs to no slot yet. */
   onSaveAs: () => void;
+  /**
+   * Whether the yard has layout slots to save the plan to: false on an
+   * outpost (`BasePlanner.as:41`, #191). Absent reads as true.
+   */
+  layouts?: boolean;
   onConfirm: (choice: { startUpgrades: boolean; saveFirst: boolean }) => void;
   onClose: () => void;
 }
@@ -277,8 +282,10 @@ export const applyPanel = (options: ApplyPanelOptions): Panel => {
   const saveNote = document.createElement("p");
   saveNote.className = "planner-apply__save-note u-muted";
   saveNote.hidden = canSave || planned === 0;
-  saveNote.textContent =
-    options.slotName === null
+  const hasLayouts = options.layouts ?? true;
+  saveNote.textContent = !hasLayouts
+    ? "An outpost keeps no saved layouts: upgrades that cannot start now are not kept."
+    : options.slotName === null
       ? "Waiting upgrades are kept only in a saved layout."
       : `“${options.slotName}” already matches this plan.`;
 
@@ -287,7 +294,7 @@ export const applyPanel = (options: ApplyPanelOptions): Panel => {
   saveAs.className = "btn btn--ghost planner-apply__save-as";
   saveAs.textContent = "Save as…";
   saveAs.title = "Open the layout slots and keep this plan in one.";
-  saveAs.hidden = options.slotName !== null || planned === 0;
+  saveAs.hidden = !hasLayouts || options.slotName !== null || planned === 0;
   saveAs.addEventListener("click", options.onSaveAs);
 
   const confirm = document.createElement("button");

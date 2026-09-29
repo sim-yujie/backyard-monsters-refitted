@@ -273,7 +273,8 @@ export class YardPlanner {
     this.layouts = new YardPlannerLayouts({
       session: this.session,
       dock: this.dock,
-      readOnly: this.readOnly,
+      // An outpost has no layout slots (`BasePlanner.as:41`, #191): no panel, no Ctrl+S.
+      readOnly: this.readOnly || options.baseid !== undefined,
       ...(options.baseid !== undefined ? { baseid: options.baseid } : {}),
       onLoad: (layout) => this.loadLayout(layout, false),
       onPreview: (layout) => this.loadLayout(layout, true),
@@ -305,7 +306,7 @@ export class YardPlanner {
       onInventory: () => this.toggleInventory(),
       onHelp: () => this.openHelp("basics", false),
       onExit: () => this.requestExit(),
-    }, { readOnly: this.readOnly });
+    }, { readOnly: this.readOnly, layouts: options.baseid === undefined });
     this.bar.mount(options.overlay);
     this.reportPlannerInset();
 
@@ -761,6 +762,7 @@ export class YardPlanner {
         preview: this.session.applyPreview(),
         slotName: state.slot === null ? null : state.slotName || `Slot ${state.slot + 1}`,
         dirty: state.dirty,
+        layouts: this.options.baseid === undefined,
         onSaveAs: () => {
           this.closeDialog();
           void this.layouts.toggle();

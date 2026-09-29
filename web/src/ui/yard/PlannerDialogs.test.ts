@@ -66,6 +66,14 @@ const mount = (over: Partial<ApplyPanelOptions> = {}): {
 
 const text = (element: HTMLElement): string => element.textContent ?? "";
 
+describe("the Apply dialog on an outpost (#191)", () => {
+  it("offers no Save as, and says waiting upgrades are not kept", () => {
+    const { element } = mount({ layouts: false });
+    expect(element.querySelector<HTMLButtonElement>(".planner-apply__save-as")!.hidden).toBe(true);
+    expect(text(element)).toContain("An outpost keeps no saved layouts");
+  });
+});
+
 const rows = (element: HTMLElement): string[] =>
   [...element.querySelectorAll(".planner-apply__list li")].map((row) => row.textContent ?? "");
 

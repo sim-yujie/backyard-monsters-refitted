@@ -65,11 +65,12 @@ const labels = (bar: PlannerBar): string[] =>
     (button) => button.textContent?.trim() ?? "",
   );
 
-const mount = (options: { readOnly?: boolean } = {}): PlannerBar => mountWith(options).bar;
+const mount = (options: { readOnly?: boolean; layouts?: boolean } = {}): PlannerBar =>
+  mountWith(options).bar;
 
 /** The same, keeping hold of the action callbacks so a click can be observed. */
 const mountWith = (
-  options: { readOnly?: boolean } = {},
+  options: { readOnly?: boolean; layouts?: boolean } = {},
 ): { bar: PlannerBar; fired: PlannerBarActions } => {
   const container = document.createElement("div");
   document.body.append(container);
@@ -177,6 +178,16 @@ describe("the editing bar", () => {
     expect(labels(bar)).toContain("Apply");
     expect(labels(bar)).toContain("Layouts");
     expect(labels(bar)).toContain("Undo");
+  });
+
+  it("has no Layouts on an outpost, which keeps no layout slots (#191)", () => {
+    const bar = mount({ layouts: false });
+    bar.update(stateOf());
+    const layouts = [...bar.actionBar.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Layouts",
+    );
+    expect(layouts?.hidden ?? true).toBe(true);
+    expect(labels(bar)).toContain("Apply");
   });
 
   it("names the loaded slot and marks it unsaved", () => {
