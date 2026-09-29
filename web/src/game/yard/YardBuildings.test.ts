@@ -69,6 +69,23 @@ describe("YardBuildings.setAnimFrame", () => {
   });
 });
 
+describe("YardBuildings.pick before the art arrives (#39)", () => {
+  it("takes a press on the footprint drawn meanwhile, and none where the picture will stand", () => {
+    const yard = readYard(yardResponse());
+    const sniper = yard.buildings.find((one) => one.id === 2)!;
+    const buildings = new YardBuildings();
+    buildings.show(yard, fakeAtlas());
+    // No art is fetched here, so every building is still its placeholder.
+    expect(buildings.placeholderCount).toBe(2);
+    const { x, y, width, height } = sniper.box;
+    expect(buildings.pick(x + width / 2, y + height / 2)?.id).toBe(2);
+    // Above the footprint is where the tower's picture rises once it loads;
+    // until then nothing is drawn there, so nothing is picked there.
+    expect(buildings.pick(x + width / 2, y - 60)).toBeNull();
+    buildings.destroy();
+  });
+});
+
 describe("YardBuildings.crownOf", () => {
   it("is the top of the building's picture, raised to its countdown badge, and moves with it (#139)", () => {
     const response = yardResponse();
