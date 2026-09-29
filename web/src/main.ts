@@ -11,6 +11,7 @@ import "@/ui/styles/harvest.css";
 import "@/ui/styles/repair.css";
 import "@/ui/styles/recycle.css";
 import "@/ui/styles/takeover.css";
+import "@/ui/styles/moveyards.css";
 
 import { App } from "@/app/App";
 

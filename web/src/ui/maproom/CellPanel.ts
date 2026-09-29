@@ -52,6 +52,14 @@ export interface CellPanelOptions {
   /** "My range" was switched from the panel (#177). */
   onRangeToggle: (on: boolean) => void;
   /**
+   * Which moves between yards an own cell offers (outposts WP7, #186): Move
+   * monsters needs an outpost to move them to or from; Move main yard here
+   * is an own outpost's alone. Absent: neither.
+   */
+  ownMoves?: (cell: OffsetCell, payload: PlayerCell) => OwnMoves;
+  onMoveMonsters?: (cell: OffsetCell, payload: PlayerCell) => void;
+  onRelocate?: (cell: OffsetCell, payload: PlayerCell) => void;
+  /**
    * An action that sits under Attack and brings its own line under the
    * actions: Take over (`TakeoverControl`, issue #82). It is told about
    * every show and update and decides for itself what to show.
@@ -67,6 +75,12 @@ export interface OwnFlinger {
   readonly reach: number;
   /** Cells of that from Declare War. */
   readonly bonus: number;
+}
+
+/** The moves between yards an own cell offers; see `CellPanelOptions.ownMoves`. */
+export interface OwnMoves {
+  readonly monsters: boolean;
+  readonly relocate: boolean;
 }
 
 /** An action the panel hosts without knowing what it does. */
@@ -105,6 +119,10 @@ export class CellPanel {
   private readonly attackButton: HTMLButtonElement;
   private readonly attackNote: HTMLElement;
   private readonly openButton: HTMLButtonElement;
+  /** Move monsters and Move main yard here, under Open yard (#186). */
+  private readonly moves: HTMLElement;
+  private readonly moveMonstersButton: HTMLButtonElement;
+  private readonly relocateButton: HTMLButtonElement;
   private readonly secondary: HTMLElement;
   private readonly viewYardButton: HTMLButtonElement;
   private readonly viewYardLabel: HTMLElement;
@@ -189,10 +207,25 @@ export class CellPanel {
     this.secondary = el("div", "mr2-cell__row");
     this.secondary.append(this.viewYardButton, this.bookmarkButton);
 
+    this.moveMonstersButton = button("btn btn--outline mr2-cell__secondary mr2-cell__move");
+    this.moveMonstersButton.append(icon("swap", 18, "map-icon"), el("span", "", "Move monsters"));
+    this.moveMonstersButton.title = "Move monsters between this yard and another of yours.";
+    this.moveMonstersButton.addEventListener("click", () => {
+      if (this.cell && this.payload && isPlayerCell(this.payload)) options.onMoveMonsters?.(this.cell, this.payload);
+    });
+    this.relocateButton = button("btn btn--outline mr2-cell__secondary mr2-cell__move");
+    this.relocateButton.append(icon("home", 18, "map-icon"), el("span", "", "Move main yard here"));
+    this.relocateButton.title = "Move your main yard onto this outpost.";
+    this.relocateButton.addEventListener("click", () => {
+      if (this.cell && this.payload && isPlayerCell(this.payload)) options.onRelocate?.(this.cell, this.payload);
+    });
+    this.moves = el("div", "mr2-cell__row mr2-cell__row--wrap");
+    this.moves.append(this.moveMonstersButton, this.relocateButton);
+
     const actions = el("div", "mr2-cell__actions");
     actions.append(this.attackButton, this.openButton);
     if (options.extraAction) actions.append(options.extraAction.button);
-    actions.append(this.secondary);
+    actions.append(this.secondary, this.moves);
 
     this.facts = document.createElement("dl");
     this.facts.className = "cell-facts mr2-cell__facts";
@@ -321,6 +354,10 @@ export class CellPanel {
       this.openButton.lastElementChild!.textContent = outpost ? "Open outpost" : "Open yard";
       this.openButton.title = outpost ? VIEW_OWN_OUTPOST : VIEW_OWN;
       this.setActions("open");
+      const moves = this.options.ownMoves?.(cell, payload) ?? { monsters: false, relocate: false };
+      this.moveMonstersButton.hidden = !moves.monsters;
+      this.relocateButton.hidden = !moves.relocate;
+      this.moves.hidden = !moves.monsters && !moves.relocate;
     } else {
       this.addReach(cell);
       this.setActions("attack", "View yard");
@@ -400,6 +437,7 @@ export class CellPanel {
     const attack = kind === "attack";
     this.attackButton.hidden = !attack;
     this.openButton.hidden = kind !== "open";
+    this.moves.hidden = true;
     this.secondary.hidden = !(attack || kind === "bookmark");
     this.viewYardButton.hidden = !attack;
     this.viewYardLabel.textContent = viewLabel;

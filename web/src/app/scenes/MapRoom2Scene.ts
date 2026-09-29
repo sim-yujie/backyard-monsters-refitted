@@ -1,6 +1,15 @@
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
-import { getTakeoverQuote, takeOverCell, type TakeoverPayment } from "@/api/maproom";
+import {
+  cellAt,
+  getArea,
+  getTakeoverQuote,
+  moveMainYard,
+  takeOverCell,
+  transferMonsters,
+  zoneOrigin,
+  type TakeoverPayment,
+} from "@/api/maproom";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { ApiError, NetworkError } from "@/api/http";
 import {
@@ -36,14 +45,31 @@ import {
 import { mainYardRange, outpostRange, withDeclareWar } from "@/game/maproom/rules/range";
 import { Bookmarks } from "@/game/maproom/Bookmarks";
 import { consumeMapFocus, type MapFocus } from "@/game/maproom/mapFocus";
+import {
+  TRANSFER_TEXT,
+  housedOf,
+  relocateAffordable,
+  spaceOf,
+  type TransferYard,
+} from "@/game/maproom/moveYards";
+import { academyLevel } from "@/game/monsters/housing";
+import { housingSpace } from "@/game/monsters/monsterCatalogue";
 import { takenOverResources, type TakeoverCandidate } from "@/game/maproom/takeover";
 import { MapInput } from "@/game/maproom/MapInput";
 import { MapRenderer } from "@/game/maproom/MapRenderer";
 import { ZoneStore, type ZoneError } from "@/game/maproom/ZoneStore";
 import { inWorld, type CellRange } from "@/game/maproom/zones";
-import { outpostsOf, outpostTarget, setOwnYardTarget } from "@/game/yard/ownYards";
+import {
+  MAIN_YARD_TITLE,
+  outpostTitle,
+  outpostsOf,
+  outpostTarget,
+  setOwnYardTarget,
+} from "@/game/yard/ownYards";
 import { hoverContentFor } from "@/ui/maproom/HoverCard";
 import { MapRoomUi } from "@/ui/maproom/MapRoomUi";
+import { RelocateDialog } from "@/ui/maproom/RelocateDialog";
+import { TransferDialog, type TransferChoice } from "@/ui/maproom/TransferDialog";
 import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
@@ -216,6 +242,14 @@ export class MapRoom2Scene implements Scene {
           const reach = withDeclareWar(own, this.declareWar);
           return { level: payload.f, reach, bonus: reach - own };
         },
+        ownMoves: (_cell, payload) => ({
+          // Flash offered the transfer only to a player with an outpost
+          // (`PopupInfoMine.as:80-84`); relocating is an own outpost's alone.
+          monsters: this.ownSave !== null && outpostsOf(this.ownSave).length > 0,
+          relocate: payload.b === CellType.OUTPOST,
+        }),
+        onMoveMonsters: (_cell, payload) => this.openTransfer(payload.bid),
+        onRelocate: (cell, payload) => this.openRelocate(cell, payload),
       },
       SceneName.MAP_ROOM_2,
       [
@@ -683,6 +717,96 @@ export class MapRoom2Scene implements Scene {
       takenOver: { kind: candidate.kind, name: candidate.name },
     });
     context.goTo(SceneName.YARD);
+  }
+
+  /* ── Moving between own yards (outposts WP7, #186) ──────────────────── */
+
+  /** The player's yards, main yard first, with where each is. */
+  private ownYards(): { choice: TransferChoice; cell: OffsetCell }[] {
+    const save = this.ownSave;
+    if (!save) return [];
+    const yards: { choice: TransferChoice; cell: OffsetCell }[] = [];
+    if (this.home) {
+      yards.push({
+        choice: { baseid: String(save.baseid), label: MAIN_YARD_TITLE, main: true },
+        cell: this.home,
+      });
+    }
+    for (const outpost of outpostsOf(save)) {
+      yards.push({
+        choice: { baseid: outpost.baseid, label: outpostTitle(outpost.cell), main: false },
+        cell: outpost.cell,
+      });
+    }
+    return yards;
+  }
+
+  /**
+   * One cell as the server has it now, fetched afresh rather than read from the
+   * zone cache: a transfer sends both yards' whole rosters, so they must be
+   * current (Flash waited for any pending zone request, `MapRoom.as:889-893`).
+   */
+  private async freshCell(cell: OffsetCell) {
+    const area = await getArea(zoneOrigin(cell.col), zoneOrigin(cell.row));
+    return cellAt(area, cell.col, cell.row);
+  }
+
+  /** "Move monsters" from one of the player's yards. */
+  private openTransfer(from: string): void {
+    const save = this.ownSave;
+    const yards = this.ownYards();
+    if (!save || yards.length < 2) {
+      this.ui?.notices.show("transfer", TRANSFER_TEXT.noOutposts, { level: "info", timeoutMs: 4_000 });
+      return;
+    }
+    const cells = new Map(yards.map(({ choice, cell }) => [choice.baseid, cell]));
+    this.ui?.openDialog(
+      new TransferDialog({
+        yards: yards.map(({ choice }) => choice),
+        from,
+        load: async (baseid): Promise<TransferYard> => {
+          const cell = cells.get(baseid);
+          const payload = cell ? await this.freshCell(cell) : undefined;
+          return { baseid, housed: housedOf(payload), space: spaceOf(payload) };
+        },
+        sizeOf: (id) => housingSpace(id, academyLevel(save.academy, id)) ?? 1,
+        send: (fromId, toId, rosters) => transferMonsters(fromId, toId, rosters),
+        onMoved: (fromId, toId, message) => {
+          for (const id of [fromId, toId]) {
+            const cell = cells.get(id);
+            if (cell) this.store.invalidateCell(cell.col, cell.row);
+          }
+          void this.store.pump();
+          this.ui?.notices.show("transfer", message, { level: "info", timeoutMs: 5_000 });
+        },
+      }),
+    );
+  }
+
+  /**
+   * "Move main yard here" on an own outpost. On success the map reloads the
+   * player's own yard, which moves home and drops the outpost from the list,
+   * and jumps there.
+   */
+  private openRelocate(cell: OffsetCell, payload: { bid: string } & MapCell): void {
+    const oldHome = this.home;
+    this.ui?.openDialog(
+      new RelocateDialog({
+        lost: housedOf(payload),
+        affordable: relocateAffordable(this.resources, this.credits),
+        move: (payment) => moveMainYard(payload.bid, payment),
+        onMoved: () => {
+          if (oldHome) this.store.invalidateCell(oldHome.col, oldHome.row);
+          this.store.invalidateCell(cell.col, cell.row);
+          void this.store.pump();
+          this.ui?.notices.show("relocate", "Your main yard has moved here.", {
+            level: "info",
+            timeoutMs: 5_000,
+          });
+          void this.loadOwnCell();
+        },
+      }),
+    );
   }
 
   /* ── Refresh and status ─────────────────────────────────────────────── */

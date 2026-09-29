@@ -10,7 +10,7 @@ import type { TakeoverCandidate, TakeoverKind } from "@/game/maproom/takeover";
 import type { OwnOutpost } from "@/game/yard/ownYards";
 import { Hud } from "@/ui/Hud";
 import { ZoomControl } from "@/ui/ZoomControl";
-import { CellPanel, type OwnFlinger } from "./CellPanel";
+import { CellPanel, type OwnFlinger, type OwnMoves } from "./CellPanel";
 import { FindControl } from "./FindControl";
 import { HoverCard, type HoverCardContent } from "./HoverCard";
 import { Minimap } from "./Minimap";
@@ -87,6 +87,10 @@ export interface MapRoomUiHandlers {
   reach: (cell: OffsetCell) => { text: string; inRange: boolean } | null;
   /** The cell panel's own-yard Flinger line (#174). */
   ownFlinger: (cell: OffsetCell, payload: PlayerCell) => OwnFlinger;
+  /** Moves between the player's yards on an own cell (#186); see `CellPanelOptions`. */
+  ownMoves: (cell: OffsetCell, payload: PlayerCell) => OwnMoves;
+  onMoveMonsters: (cell: OffsetCell, payload: PlayerCell) => void;
+  onRelocate: (cell: OffsetCell, payload: PlayerCell) => void;
 }
 
 export class MapRoomUi {
@@ -284,6 +288,9 @@ export class MapRoomUi {
         onAttack: this.handlers.onAttack,
         reach: this.handlers.reach,
         ownFlinger: this.handlers.ownFlinger,
+        ownMoves: this.handlers.ownMoves,
+        onMoveMonsters: this.handlers.onMoveMonsters,
+        onRelocate: this.handlers.onRelocate,
         onRangeToggle: (on) => this.toggleRange(on),
         extraAction: this.takeover,
       }).mount(this.dock("map-dock map-dock--right mr2-cell-dock"));
@@ -303,6 +310,12 @@ export class MapRoomUi {
   /** Asks the server again whether the shown cell can be taken over. */
   refreshTakeover(): void {
     this.takeover?.refresh();
+  }
+
+  /** Opens a dialog on the overlay's modal layer: Move monsters, Move main yard here (#186). */
+  openDialog(dialog: { mount: (container: HTMLElement) => unknown }): void {
+    const container = this.modal ?? this.container;
+    if (container) dialog.mount(container);
   }
 
   /** Flash's "Veni, Vidi, Vici!" for a yard just taken over. */

@@ -117,3 +117,49 @@ export const declineTakeover = (
   options: RequestOptions = {},
 ): Promise<ApiEnvelope & { protectedUntil?: number }> =>
   post<ApiEnvelope & { protectedUntil?: number }>("/worldmapv2/declinetakeover", { baseid }, options);
+
+/* ── Move between own yards (outposts WP7, #186) ───────────────────────── */
+
+/** How a move of the main yard is paid: Flash's "Use Resources" or "Use 1,500 Shiny". */
+export type RelocatePayment = "resources" | "shiny";
+
+/**
+ * `POST /base/migrate`'s answer: the new home cell, or, inside the day after
+ * the last move, when the next one may be made (and nothing was charged).
+ */
+export interface RelocateResponse extends ApiEnvelope {
+  coords?: [number, number];
+  cantMoveTill?: number;
+  currenttime?: number;
+}
+
+/**
+ * Moves the main yard onto one of the player's own outposts, destroying the
+ * outpost (`PopupRelocateMe.as`). The server charges its own price; a
+ * positive `shiny` only says the Shiny button was pressed (issue #181). A
+ * refusal is an {@link ApiError} whose message is the reason, for Flash's
+ * `msg_err_relocate` prefix.
+ */
+export const moveMainYard = (baseid: string, payment: RelocatePayment): Promise<RelocateResponse> =>
+  post<RelocateResponse>("/base/migrate", {
+    type: "outpost",
+    baseid,
+    shiny: payment === "shiny" ? "1" : "0",
+  });
+
+/**
+ * Moves monsters between two of the player's yards
+ * (`POST /worldmapv2/transferassets`): both yards' whole `housed` rosters
+ * after the move, source first, as Flash posted them (`MapRoom.as:856-888`).
+ * The server checks the move conserves monsters and fits the target's housing.
+ */
+export const transferMonsters = (
+  frombaseid: string,
+  tobaseid: string,
+  rosters: readonly [{ housed: Record<string, number> }, { housed: Record<string, number> }],
+): Promise<ApiEnvelope> =>
+  post<ApiEnvelope>("/worldmapv2/transferassets", {
+    frombaseid,
+    tobaseid,
+    monsters: JSON.stringify(rosters),
+  });

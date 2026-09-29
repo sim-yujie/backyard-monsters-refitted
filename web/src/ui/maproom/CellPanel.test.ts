@@ -235,3 +235,46 @@ it("hosts Take over under Attack, with its line under the actions (#82)", () => 
   expect(action.setCell).toHaveBeenCalledWith({ col: 241, row: 208 }, camp({ d: 1, dm: 100 }));
   expect(action.detail.parentElement).toBe(host.firstElementChild);
 });
+
+describe("moving between the player's yards (#186)", () => {
+  it("shows neither move without outposts", () => {
+    const { host } = open(player({ mine: 1 }), {
+      ownMoves: () => ({ monsters: false, relocate: false }),
+    });
+    expect(buttonNamed(host, "Move monsters")).toBeUndefined();
+    expect(buttonNamed(host, "Move main yard here")).toBeUndefined();
+  });
+
+  it("offers Move monsters on the main yard once there is an outpost", () => {
+    const onMoveMonsters = vi.fn();
+    const payload = player({ mine: 1 });
+    const { host } = open(payload, {
+      ownMoves: () => ({ monsters: true, relocate: false }),
+      onMoveMonsters,
+    });
+    buttonNamed(host, "Move monsters")!.click();
+    expect(onMoveMonsters).toHaveBeenCalledWith({ col: 241, row: 208 }, payload);
+    expect(buttonNamed(host, "Move main yard here")).toBeUndefined();
+  });
+
+  it("offers both on an own outpost", () => {
+    const onRelocate = vi.fn();
+    const payload = player({ mine: 1, b: 3 });
+    const { host } = open(payload, {
+      ownMoves: () => ({ monsters: true, relocate: true }),
+      onRelocate,
+    });
+    expect(buttonNamed(host, "Move monsters")).toBeDefined();
+    buttonNamed(host, "Move main yard here")!.click();
+    expect(onRelocate).toHaveBeenCalledWith({ col: 241, row: 208 }, payload);
+  });
+
+  it("never offers them on someone else's yard or a camp", () => {
+    const ownMoves = () => ({ monsters: true, relocate: true });
+    for (const payload of [player(), camp()]) {
+      const { host } = open(payload, { ownMoves });
+      expect(buttonNamed(host, "Move monsters")).toBeUndefined();
+      expect(buttonNamed(host, "Move main yard here")).toBeUndefined();
+    }
+  });
+});
