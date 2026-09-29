@@ -62,6 +62,7 @@ import {
   type AttackLoot,
 } from "../../../services/base/combat/attackLoot.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
+import { championsAfterAttack, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
 import { fallenIn, withoutFallenGarrisons } from "../../../services/base/combat/bunkerGarrison.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 
@@ -268,8 +269,14 @@ const saveBase = async (
 
       case SaveKeys.CHAMPION:
         if (isAttack) {
-          if (saveData.attackerchampion) {
-            userSave.champion = saveData.attackerchampion;
+          // The attacker's champion takes only its health from the save, only
+          // downwards, and only on the save that ends the attack (#23, C1).
+          if (saveData.over && saveData.attackerchampion) {
+            userSave.champion = championsAfterAttack(
+              userSave.champion,
+              saveData.attackerchampion,
+              saveData.flinglog
+            );
           }
 
           if (saveData.champion) {
@@ -282,9 +289,11 @@ const saveBase = async (
         }
         break;
 
+      // The stock less what the log used, on the save that ends the attack;
+      // the client's copy is never written (#23, C1).
       case SaveKeys.ATTACKERSIEGE:
-        if (isAttack) {
-          userSave.siege = saveData.attackersiege;
+        if (isAttack && saveData.over) {
+          userSave.siege = siegeAfterAttack(userSave.siege, saveData.flinglog);
         }
         break;
 

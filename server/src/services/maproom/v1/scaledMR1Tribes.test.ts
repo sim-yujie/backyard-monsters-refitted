@@ -242,3 +242,51 @@ describe("Map Room 1 army settlement (#132)", () => {
     expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);
   });
 });
+
+describe("Map Room 1 tribe save: the attacker's own row (#23, C1)", () => {
+  const champion = (hp: number, l = 2) => ({ t: 1, hp, l, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 });
+  const log = {
+    v: 1,
+    seed: 5,
+    events: [
+      { kind: "fling", t: 40, x: 0, y: 0, r: 100, monsters: { C1: 1 }, champion: { t: 1, l: 2 } },
+      { kind: "siege", t: 60, x: 0, y: 0, weapon: "jars" },
+    ],
+  };
+
+  test("takes the champion's health only downwards and spends only the siege the log used", async () => {
+    startSession();
+    userSave.champion = [champion(500)];
+    userSave.siege = { jars: { quantity: 2 } };
+
+    const caught = await run(
+      ctxFor({
+        over: "1",
+        attackid: String(ATTACK_ID),
+        flinglog: JSON.stringify(log),
+        attackerchampion: JSON.stringify([champion(99_999, 6)]),
+        attackersiege: JSON.stringify({ jars: { quantity: 99 }, rocket: { quantity: 5 } }),
+      })
+    );
+
+    expect(caught).toBeNull();
+    expect(userSave.champion).toEqual([champion(500)]);
+    expect(userSave.siege).toEqual({ jars: { quantity: 1 } });
+  });
+
+  test("an honest champion's damage lands", async () => {
+    startSession();
+    userSave.champion = [champion(500)];
+
+    await run(
+      ctxFor({
+        over: "1",
+        attackid: String(ATTACK_ID),
+        flinglog: JSON.stringify(log),
+        attackerchampion: JSON.stringify([champion(120)]),
+      })
+    );
+
+    expect(userSave.champion).toEqual([champion(120)]);
+  });
+});

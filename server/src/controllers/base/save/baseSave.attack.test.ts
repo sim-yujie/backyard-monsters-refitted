@@ -316,3 +316,53 @@ describe("a fallen bunker's garrison through the save (issue #130)", () => {
     expect(defender.buildingdata["2"].m).toEqual({ C1: 5 });
   });
 });
+
+describe("the attacker's own row through the save (#23, C1)", () => {
+  const champion = (hp: number, l = 2) => ({ t: 1, hp, l, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 });
+  const withGorgo = {
+    ...LOG,
+    events: [
+      ...LOG.events,
+      { kind: "fling", t: 90, x: 400, y: 400, r: 200, monsters: {}, champion: { t: 1, l: 2 } },
+      { kind: "siege", t: 100, x: 400, y: 400, weapon: "jars" },
+    ],
+  };
+
+  const save = (body: Record<string, string>) =>
+    baseSave(ctxFor({ flinglog: JSON.stringify(withGorgo), ...body }), async () => {});
+
+  beforeEach(() => {
+    attackerSave.champion = [champion(500)];
+    attackerSave.siege = { jars: { quantity: 2 } };
+  });
+
+  test("a crafted save cannot raise a champion's level or health, nor add siege", async () => {
+    await save({
+      over: "1",
+      attackerchampion: JSON.stringify([champion(99_999, 6), { ...champion(1), t: 3 }]),
+      attackersiege: JSON.stringify({ jars: { quantity: 99 }, rocket: { quantity: 5 } }),
+    });
+
+    expect(attackerSave.champion).toEqual([champion(500)]);
+    // The one jar the log used is spent, whatever the save said the stock was.
+    expect(attackerSave.siege).toEqual({ jars: { quantity: 1 } });
+  });
+
+  test("an honest save's champion damage and siege use still land", async () => {
+    await save({
+      over: "1",
+      attackerchampion: JSON.stringify([champion(180)]),
+      attackersiege: JSON.stringify({ jars: { quantity: 1 } }),
+    });
+
+    expect(attackerSave.champion).toEqual([champion(180)]);
+    expect(attackerSave.siege).toEqual({ jars: { quantity: 1 } });
+  });
+
+  test("a save that does not end the attack changes neither", async () => {
+    await save({ attackerchampion: JSON.stringify([champion(1)]) });
+
+    expect(attackerSave.champion).toEqual([champion(500)]);
+    expect(attackerSave.siege).toEqual({ jars: { quantity: 2 } });
+  });
+});

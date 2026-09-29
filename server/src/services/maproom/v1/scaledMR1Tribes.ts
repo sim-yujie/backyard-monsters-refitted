@@ -17,6 +17,7 @@ import { parseFlingLog } from "../../base/attackCheckpoint.js";
 import { recordBombSpend } from "../../base/combat/recordBombSpend.js";
 import { checkAttackBinding, type AttackSession } from "../../base/attackSession.js";
 import { storedDamage } from "../../base/storedDamage.js";
+import { championsAfterAttack, siegeAfterAttack } from "../../base/combat/attackerRow.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
 import {
@@ -122,9 +123,12 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
     // Read before the champions below are written (`attackLootOf` reads them the same way).
     const krallenBuff = krallenBuffOf(parseFlingLog(saveData.flinglog), userSave.champion);
 
-    if (saveData.attackerchampion) userSave.champion = saveData.attackerchampion;
-
-    if (saveData.attackersiege) userSave.siege = saveData.attackersiege;
+    // The attacker's own row as the log explains it, not as the save says it
+    // (#23, C1): siege less what was used, champion health only downwards.
+    if (saveData.attackerchampion) {
+      userSave.champion = championsAfterAttack(userSave.champion, saveData.attackerchampion, saveData.flinglog);
+    }
+    userSave.siege = siegeAfterAttack(userSave.siege, saveData.flinglog);
 
     if (bombs) userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
 
