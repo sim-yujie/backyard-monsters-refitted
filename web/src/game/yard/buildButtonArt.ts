@@ -4,7 +4,8 @@
  *
  * A tile shows `<type>.jpg`, or the props table's `buildingbuttons[0]` where it
  * names one — only the Block, whose button is `17.1`
- * (`BUILDINGBUTTON.as:86-93`). A type the yard holds none of and cannot build
+ * (`BUILDINGBUTTON.as:86-93`) — or, for the Victory Totem Pole, which has only
+ * a button per level on disk, its first (#128). A type the yard holds none of and cannot build
  * yet shows its dark silhouette instead, `upgradeImgData[first].silhouette_img`
  * (`BUILDINGBUTTON.as:74-84`). The props table names a silhouette for every
  * type, but only these are on disk; the rest are drawn dark by the menu's CSS
@@ -15,7 +16,7 @@
 const ROOT = "/assets/buildingbuttons/";
 
 /** Types whose button is not simply `<type>.jpg`. */
-const BUTTON_FILE: Readonly<Record<number, string>> = { 17: "17.1.jpg" };
+const BUTTON_FILE: Readonly<Record<number, string>> = { 17: "17.1.jpg", 121: "121.bb1.jpg" };
 
 /** The silhouettes that exist, by type (`YARD_PROPS.as` `silhouette_img`). */
 export const SILHOUETTE_FILE: Readonly<Record<number, string>> = {

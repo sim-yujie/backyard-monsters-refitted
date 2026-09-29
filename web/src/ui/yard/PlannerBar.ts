@@ -818,7 +818,7 @@ export class PlannerBar {
     // Nothing to store while something is already in hand, and the chip would
     // sit next to "Put back" saying the opposite thing.
     this.storeChip.hidden = state.selectionCount === 0 || state.carrying;
-    this.setStoredCount(state.storedCount);
+    this.setStoredCount(state.storedCount, state.unplacedCount);
     this.yardMenu.setEnabled(!state.previewing, state.previewing
       ? "Close the preview first"
       : "Actions on the whole yard");
@@ -1001,7 +1001,12 @@ export class PlannerBar {
    * number: the badge on the drawer button, whether that button can be opened
    * at all, and the Unplaced cost cell that says Apply is blocked.
    */
-  setStoredCount(count: number): void {
+  /**
+   * The drawer's count on its button, and in the Unplaced cell what of it
+   * blocks Apply: a decoration in the drawer does not (#128), so `unplaced`
+   * leaves those out. Absent, everything counts.
+   */
+  setStoredCount(count: number, unplaced = count): void {
     if (this.readOnly) return;
     this.inventoryBadge.hidden = count === 0;
     this.inventoryBadge.textContent = String(count);
@@ -1010,7 +1015,7 @@ export class PlannerBar {
       count === 0
         ? "Nothing is stored"
         : `${count} ${count === 1 ? "building is" : "buildings are"} in the drawer`;
-    this.setUnplaced(count);
+    this.setUnplaced(unplaced);
   }
 
   /** Shows the count of blocking problems on the checklist button. */

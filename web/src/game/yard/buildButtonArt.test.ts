@@ -24,6 +24,7 @@ describe("build button art", () => {
 
   it("the Block's button is the props table's 17.1; a type without a silhouette has none", () => {
     expect(buttonUrl(17)).toBe("/assets/buildingbuttons/17.1.jpg");
+    expect(buttonUrl(121)).toBe("/assets/buildingbuttons/121.bb1.jpg");
     expect(buttonUrl(20)).toBe("/assets/buildingbuttons/20.jpg");
     expect(silhouetteUrl(13)).toBe("/assets/buildingbuttons/13.2.silhouette.jpg");
     expect(silhouetteUrl(20)).toBeNull();

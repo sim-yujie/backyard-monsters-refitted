@@ -443,7 +443,11 @@ export class BuildMenu {
     // Decorations come from storage: nothing is locked and nothing runs out
     // but the count, so the build keys would only mislead.
     if (storage) {
-      this.legend.replaceChildren(key(null, "Your stored decorations. Placing one is free."));
+      // Not a key: a narrow window hides those, and this is the tab's one line.
+      const note = document.createElement("span");
+      note.className = "build-menu__note";
+      note.textContent = "Your stored decorations. Placing one is free.";
+      this.legend.replaceChildren(note);
       return;
     }
     const parts: HTMLElement[] = [
@@ -507,7 +511,10 @@ export class BuildMenu {
     back.type = "button";
     back.className = "btn btn--ghost build-info__back";
     back.dataset["focus"] = "back";
-    back.append(glyph(PREVIOUS, "build-info__back-icon"), "All buildings");
+    back.append(
+      glyph(PREVIOUS, "build-info__back-icon"),
+      offer.stored !== null ? "All decorations" : "All buildings",
+    );
     back.addEventListener("click", () => this.pick(null));
 
     const head = document.createElement("div");

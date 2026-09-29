@@ -673,12 +673,22 @@ describe("store, clear and the drawer (issue #50)", () => {
     bar.update(stateOf({ storedCount: 0 }));
     expect(cell(bar, "unplaced")?.hidden).toBe(true);
 
-    bar.update(stateOf({ storedCount: 3 }));
+    bar.update(stateOf({ storedCount: 3, unplacedCount: 3 }));
     const unplaced = cell(bar, "unplaced");
     expect(unplaced?.hidden).toBe(false);
     expect(unplaced?.querySelector(".planner-cost__value")?.textContent).toBe("3");
     expect(unplaced?.title).toContain("Apply is blocked");
     expect(unplaced?.classList.contains("planner-cost__cell--short")).toBe(true);
+  });
+
+  it("leaves decorations out of Unplaced: Apply puts them into storage (#128)", () => {
+    const bar = mount();
+    bar.update(stateOf({ storedCount: 5, unplacedCount: 0 }));
+    expect(drawer(bar)?.querySelector(".planner-bar__badge")?.textContent).toBe("5");
+    expect(cell(bar, "unplaced")?.hidden).toBe(true);
+
+    bar.update(stateOf({ storedCount: 5, unplacedCount: 2 }));
+    expect(cell(bar, "unplaced")?.querySelector(".planner-cost__value")?.textContent).toBe("2");
   });
 
   it("counts the drawer in the summary line, and words a placement its own way", () => {
