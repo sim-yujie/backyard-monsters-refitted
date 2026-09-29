@@ -37,6 +37,7 @@ import { YardView, type YardRenderer } from "@/game/yard/YardRenderer";
 import type { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { InspectorPanel } from "@/ui/yard/InspectorPanel";
+import { CENTRE_NOTE, onYardCentre } from "@/game/yard/planner/centreHover";
 import { PlannerBar } from "@/ui/yard/PlannerBar";
 import { InventoryPanel } from "@/ui/yard/InventoryPanel";
 import {
@@ -74,15 +75,6 @@ import { YardPlannerLayouts } from "./YardPlannerLayouts";
 
 const NOTICE = "yard-planner";
 
-/**
- * How wide the middle of the yard is, for the status line's "centre".
- *
- * The plot spans `[-w/2, w/2) x [-h/2, h/2)`, so its centre is yard (0, 0)
- * exactly and the mark is drawn on a cell corner. A point has no area to hover,
- * so the readout answers for the pathing grid's 10-unit cell around it — the
- * same cell F4 would sample.
- */
-const CENTRE_CELL = 10;
 
 export interface YardPlannerOptions {
   yard: Yard;
@@ -161,8 +153,8 @@ export interface YardPlannerOptions {
    * The pointer is over something worth naming in the yard's status line, or
    * over nothing.
    *
-   * Today that is one word, "centre", when the pointer is on the middle cell
-   * of the plot. The planner has no readout of its own — the bottom bar is the
+   * Today that is "Yard centre", when the pointer is on the middle of the
+   * plot (`centreHover.ts`). The planner has no readout of its own — the bottom bar is the
    * plan's arithmetic and the summary is the selection's — so the line the
    * scene already owns is where this belongs.
    */
@@ -456,15 +448,13 @@ export class YardPlanner {
    * numbers, so it costs nothing on a pointer that is dragging a wall run.
    */
   private readonly onHoverMove = (event: PointerEvent): void => {
-    const rect = this.options.canvas.getBoundingClientRect();
-    const world = this.options.camera.screenToWorld({
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    });
-    const yard = this.options.renderer.worldToYard(world.x, world.y);
-    const inside =
-      Math.abs(yard.x) <= CENTRE_CELL / 2 && Math.abs(yard.y) <= CENTRE_CELL / 2;
-    this.setHint(inside ? "centre" : null);
+    const { camera, canvas, renderer } = this.options;
+    const rect = canvas.getBoundingClientRect();
+    const pointer = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    const world = camera.screenToWorld(pointer);
+    const yard = renderer.worldToYard(world.x, world.y);
+    const centre = camera.worldToScreen(renderer.yardToWorld(0, 0));
+    this.setHint(onYardCentre(yard, pointer, centre) ? CENTRE_NOTE : null);
   };
 
   /** Reports a change of hint, and only a change. */

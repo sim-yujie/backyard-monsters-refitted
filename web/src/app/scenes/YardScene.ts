@@ -749,18 +749,20 @@ export class YardScene implements Scene {
   }
 
   /**
-   * Keeps the planner's bottom-right furniture clear of its action bar. Out
-   * of the planner the tools are the zoom rail on the right edge.
+   * Keeps the planner's bottom-right furniture clear of its action bar, and
+   * the status line above it on the left, where "Yard centre" is read (#56:
+   * it sat behind the bar). Out of the planner the tools are the zoom rail on
+   * the right edge and the line is back beside Map.
    *
    * The same number `applyZoomLimits` keeps the fit floor out from under, so
    * the two cannot disagree about where the bottom of the canvas is.
    */
   private placeViewTools(): void {
+    const above = this.planner ? `calc(${this.inset.bottom}px + var(--space-3))` : "";
+    if (this.status) this.status.style.bottom = above;
     if (!this.viewTools) return;
     // The rail is centred on the right edge by its stylesheet.
-    this.viewTools.style.bottom = this.planner
-      ? `calc(${this.inset.bottom}px + var(--space-3))`
-      : "";
+    this.viewTools.style.bottom = above;
   }
 
   /**
@@ -1548,10 +1550,12 @@ export class YardScene implements Scene {
       ? countedBuildings(yard.buildings.map((building) => building.type))
       : yard.buildings.length;
     const own = this.store?.target;
-    // A player reads whose yard this is; the counts, the plot, the frame time,
-    // the selected id and the planner's pointer note are a developer's (#150).
+    // A player reads whose yard this is and the planner's "Yard centre" (#54,
+    // #56); the counts, the plot, the frame time and the selected id are a
+    // developer's (#150).
     const parts = [
       ...(this.target ? [`${this.target.name}'s yard, read-only`] : []),
+      ...(this.hint ? [this.hint] : []),
       ...(devDetails()
         ? [
             ...(own?.kind === "outpost" ? [yardTitle(own)] : []),
@@ -1560,7 +1564,6 @@ export class YardScene implements Scene {
             `${this.frameCostMs.toFixed(1)} ms/frame`,
             ...(waiting > 0 ? [`${waiting} awaiting art`] : []),
             ...(this.selected ? [`selected #${this.selected.id}`] : []),
-            ...(this.hint ? [this.hint] : []),
           ]
         : []),
     ];
