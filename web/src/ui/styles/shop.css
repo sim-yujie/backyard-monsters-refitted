@@ -151,12 +151,18 @@
   align-self: stretch;
 }
 
+/* A running or sold-out item has no button (`.shiny-button` sets a display). */
+.shop-card__buy[hidden],
+.shop-card__gate[hidden] {
+  display: none;
+}
+
 /* Why the button above it is disabled: a state, not an error. */
 .shop-card__gate {
   margin: 0;
   font-size: var(--text-xs);
   font-weight: 700;
-  color: var(--colour-warning-text);
+  color: var(--colour-warning);
 }
 
 /* ── Narrow screens: a bottom sheet, as the Monsters screen ─────────────── */

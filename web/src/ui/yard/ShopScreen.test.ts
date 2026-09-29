@@ -79,7 +79,7 @@ describe("ShopScreen", () => {
       [...element.querySelectorAll<HTMLElement>(".shop-card")].map((one) => one.dataset["item"]),
     ).toEqual(["BEW", "BST", "BIP", "ENL", "POD", "CLOD", "HOD", "HOD2", "HOD3", "EXH"]);
     expect(card("BEW")!.querySelector(".shop-card__meta")!.textContent).toBe("1 of 4 bought");
-    expect(spokenText(button("BEW"))).toContain("500");
+    expect(button("BEW").getAttribute("aria-label")).toBe("Buy Extra Worker, 500 Shiny");
     expect(card("BST")!.querySelector(".shop-card__meta")!.textContent).toBe("Lasts 7 days");
     expect(spokenText(element.querySelector(".shop-screen__balance")!)).toContain("1,000");
   });
@@ -124,6 +124,40 @@ describe("ShopScreen", () => {
     expect(buy).toHaveBeenCalledWith("BIP");
     await settle();
     expect(spokenText(element.querySelector(".shop-status")!)).toBe("Improved Packing bought: Shiny 50 spent.");
+  });
+
+  it("moves focus to the close button when the last step's button goes", async () => {
+    const { store, element, button } = setup({ storedata: { ENL: { q: 5 } } });
+    vi.spyOn(store, "buy").mockImplementation(async () => {
+      store.mergeWrite({ storedata: { ENL: { q: 6 } } });
+      return { ok: true, report: { item: "ENL", credits: 300, q: 6, endsAt: null }, completed: [] };
+    });
+
+    button("ENL").focus();
+    button("ENL").click();
+    button("ENL").click();
+    // As a browser does when the button is disabled for the request.
+    button("ENL").blur();
+    await settle();
+    expect(button("ENL").hidden).toBe(true);
+    expect(document.activeElement).toBe(element.querySelector(".shop-screen__close"));
+  });
+
+  it("puts focus back on the button after a step that leaves more to buy", async () => {
+    const { store, button } = setup();
+    vi.spyOn(store, "buy").mockResolvedValue({
+      ok: true,
+      report: { item: "BIP", credits: 50, q: 1, endsAt: null },
+      completed: [],
+    });
+
+    button("BIP").focus();
+    button("BIP").click();
+    button("BIP").click();
+    button("BIP").blur();
+    expect(document.activeElement).toBe(document.body);
+    await settle();
+    expect(document.activeElement).toBe(button("BIP"));
   });
 
   it("shows the server's refusal", async () => {

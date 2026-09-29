@@ -118,4 +118,15 @@ describe("ShinyButton", () => {
     expect(button.armed).toBe(true);
     expect(button.element.textContent).toContain("57");
   });
+
+  it("names what it buys when a label is shared (the Shop's Buy)", () => {
+    const button = new ShinyButton({ label: "Buy", what: "More Yardage", spell: String, onSpend: vi.fn() });
+    button.setPrice(300);
+    expect(button.element.textContent).toContain("Buy");
+    expect(button.element.textContent).not.toContain("More Yardage");
+    expect(button.element.getAttribute("aria-label")).toBe("Buy More Yardage, 300 Shiny");
+    button.element.click();
+    expect(button.element.getAttribute("aria-label")).toBe("Tap again to spend 300 Shiny on More Yardage");
+    button.destroy();
+  });
 });

@@ -235,7 +235,7 @@ export class ShopScreen {
 
   private offerCard(offer: ShopOffer, now: number): HTMLElement {
     const { item, state } = offer;
-    const card = this.card(item.item, item.name, item.blurb, "Buy", () => void this.buy(item.item, item.name));
+    const card = this.card(item.item, item.name, item.blurb, "Buy", () => void this.buy(item.item, item.name), true);
     card.meta.textContent = offerMeta(offer, now);
     card.element.dataset["state"] = state.kind;
 
@@ -246,11 +246,30 @@ export class ShopScreen {
       card.gate.textContent = state.blocked ?? "";
       card.gate.hidden = state.blocked === null;
     } else {
-      card.button.setBlocked(state.kind === "running" ? "Already running." : "Sold out.");
       card.button.element.hidden = true;
+      card.button.setBlocked(state.kind === "running" ? "Already running." : "Sold out.");
       card.gate.hidden = true;
     }
     return card.element;
+  }
+
+  /**
+   * After a spend: the button was disabled while its request ran, which drops
+   * focus to the page. It goes back to the button, or to the close button
+   * when the item has none now (running, sold out, nothing left to repair),
+   * so Escape and the keyboard still reach the Shop.
+   */
+  private restoreFocus(key: string): void {
+    if (!this.opened) return;
+    // The player has already moved on.
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    const button = this.cards.get(key)?.button.element;
+    const target =
+      button && button.isConnected && !button.hidden && !button.disabled
+        ? button
+        : this.element.querySelector<HTMLElement>(".shop-screen__close");
+    target?.focus();
   }
 
   private repairCard(offer: RepairAllOffer): HTMLElement {
@@ -272,8 +291,19 @@ export class ShopScreen {
     return card.element;
   }
 
-  /** The card for `key`, made once and reused so its button keeps its armed state and focus. */
-  private card(key: string, name: string, blurb: string, label: string, onSpend: () => void): Card {
+  /**
+   * The card for `key`, made once and reused so its button keeps its armed
+   * state and focus. `named` puts the card's name in the button's accessible
+   * name, for a label ("Buy") every card shares.
+   */
+  private card(
+    key: string,
+    name: string,
+    blurb: string,
+    label: string,
+    onSpend: () => void,
+    named = false,
+  ): Card {
     const existing = this.cards.get(key);
     if (existing) return existing;
 
@@ -293,6 +323,7 @@ export class ShopScreen {
     gate.hidden = true;
     const button = new ShinyButton({
       label,
+      ...(named ? { what: name } : {}),
       spell: formatAmount,
       onSpend,
       className: "shop-card__buy",
@@ -322,6 +353,7 @@ export class ShopScreen {
       this.setStatus("bad", [refusalText(result.refusal)]);
     }
     if (this.opened) this.render();
+    this.restoreFocus(item);
   }
 
   private async repairNow(): Promise<void> {
@@ -338,6 +370,7 @@ export class ShopScreen {
       this.setStatus("bad", [refusalText(result.refusal)]);
     }
     if (this.opened) this.render();
+    this.restoreFocus(FIX_KEY);
   }
 
   private setStatus(tone: Tone | null, content: readonly (Node | string)[] = []): void {

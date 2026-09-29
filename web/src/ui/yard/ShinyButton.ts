@@ -33,6 +33,12 @@ const browserTimers: ShinyButtonTimers = {
 export interface ShinyButtonOptions {
   /** What the spend does: "Instant", "Finish now", "−1 h". */
   readonly label: string;
+  /**
+   * What it is spent on, for the accessible name where the label alone is
+   * not enough ("Buy" on every card of the Shop): "Buy More Yardage, 300
+   * Shiny", "Tap again to spend 300 Shiny on More Yardage".
+   */
+  readonly what?: string;
   /** Spells a Shiny price as the shared amount helper spells amounts. */
   readonly spell: (price: number) => string;
   /** Runs on the second tap. */
@@ -45,6 +51,7 @@ export class ShinyButton {
   readonly element: HTMLButtonElement;
 
   private readonly label: string;
+  private readonly what: string | undefined;
   private readonly spell: (price: number) => string;
   private readonly onSpend: () => void;
   private readonly timers: ShinyButtonTimers;
@@ -59,6 +66,7 @@ export class ShinyButton {
 
   constructor(options: ShinyButtonOptions) {
     this.label = options.label;
+    this.what = options.what;
     this.spell = options.spell;
     this.onSpend = options.onSpend;
     this.timers = options.timers ?? browserTimers;
@@ -154,8 +162,8 @@ export class ShinyButton {
     this.element.disabled = this.reason !== null || this.busy;
     this.element.setAttribute("aria-pressed", armed ? "true" : "false");
     const name = armed
-      ? `Tap again to spend ${priceText} Shiny on ${this.label}`
-      : `${this.label}, ${priceText} Shiny`;
+      ? `Tap again to spend ${priceText} Shiny on ${this.what ?? this.label}`
+      : `${this.what ? `${this.label} ${this.what}` : this.label}, ${priceText} Shiny`;
     this.element.setAttribute("aria-label", this.reason ? `${name}. ${this.reason}` : name);
     this.element.title = this.reason ?? (armed ? "Tap again within 3 seconds to spend" : "");
   }
