@@ -270,12 +270,16 @@ describe("migrateBase, type=outpost", () => {
 
 describe("migrateBase, type=random (Flash's lost-main-base gate, owner's answer D)", () => {
   /**
-   * Two level 1 Twig Snappers (500 health each) and a whole wall, which does not
-   * count. Not flagged `mr2upgraded`, so the catch-up does not add a whole Map
-   * Room to the yard (`mapRoom.ts` `migrateYard`) and move the numbers.
+   * Two level 1 Twig Snappers (500 health each), a whole wall, which does not
+   * count, and the level 2 Map Room a Map Room 2 yard has (10,000 health),
+   * battered down to 1,000 so the sums stay easy: 10% of the 11,000 total is
+   * 1,100, which the Map Room plus 100 from the Snappers reaches. A Map Room 2
+   * yard without one would have a whole one added by the catch-up
+   * (`mapRoom.ts` `migrateYard`) and move the numbers.
    */
   const yardAt = (hp1: number, hp2: number, extra: Row = {}) => {
     Object.assign(mainSave, {
+      mapversion: 2,
       outposts: [],
       attackid: 0,
       attacks: [],
@@ -286,8 +290,9 @@ describe("migrateBase, type=random (Flash's lost-main-base gate, owner's answer 
         "1": { id: 1, t: 1, X: 0, Y: 0, hp: hp1 },
         "2": { id: 2, t: 1, X: 0, Y: 0, hp: hp2 },
         "3": { id: 3, t: 17, X: 0, Y: 0 },
+        "4": { id: 4, t: 11, X: 0, Y: 0, l: 2, hp: 1000 },
       },
-      buildinghealthdata: { "1": hp1, "2": hp2 },
+      buildinghealthdata: { "1": hp1, "2": hp2, "4": 1000 },
       ...extra,
     });
   };
@@ -310,6 +315,17 @@ describe("migrateBase, type=random (Flash's lost-main-base gate, owner's answer 
     expect((await random()).reason).toBe("yardStanding");
     yardAt(500, 500);
     expect((await random()).reason).toBe("yardStanding");
+    expect(moves).toEqual([]);
+  });
+
+  test("a player not on Map Room 2 is refused and stays where they are", async () => {
+    // A Map Room 1 yard: its Map Room is level 1, or the catch-up would move it
+    // to Map Room 2 (`mapRoom.ts` `joinMapRoom2`).
+    yardAt(0, 0, { mapversion: 1 });
+    (mainSave.buildingdata as Record<string, Row>)["4"]!.l = 1;
+    expect((await random()).reason).toBe("notMapRoom2");
+    yardAt(0, 0, { mapversion: 3 });
+    expect((await random()).reason).toBe("notMapRoom2");
     expect(moves).toEqual([]);
   });
 

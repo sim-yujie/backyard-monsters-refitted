@@ -683,6 +683,7 @@ export const mr1TribeRefusedErr = (reason: MR1TribeRefusal, detail: object = {})
   });
 
 const RELOCATE_REFUSAL_MESSAGES: Record<RelocateRefusal, string> = {
+  notMapRoom2: "you can only move to a new world from Map Room 2.",
   inAlliance: "you cannot move to a new world while you are in an alliance.",
   hasOutposts: "you cannot move to a new world while you own outposts.",
   yardStanding: "you can only move to a new world once your main yard has been destroyed.",

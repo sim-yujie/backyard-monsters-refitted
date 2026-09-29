@@ -58,7 +58,7 @@ const CATAPULT_TYPE = 51;
 
 /**
  * A main yard's Flinger reach in map cells, by Flinger level 1 to 4
- * (`getMainYardRange`, `server/src/services/maproom/v2/rangeCheck.ts:87-101`).
+ * (`mainYardRange`, `web/src/game/maproom/rules/range.ts`).
  */
 export const FLINGER_REACH: readonly number[] = [4, 6, 8, 10];
 

@@ -29,6 +29,7 @@ describe("mainYardHealth (BASE.as:2333-2338)", () => {
 
 describe("randomRelocateRefusal (BASE.as:2340-2341, owner's answer D)", () => {
   const input = (over: Partial<RandomRelocateInput> = {}): RandomRelocateInput => ({
+    mapVersion: 2,
     allianceId: null,
     outpostCount: 0,
     health: { hp: 99, max: 1000 },
@@ -39,6 +40,13 @@ describe("randomRelocateRefusal (BASE.as:2340-2341, owner's answer D)", () => {
   test("a destroyed main yard, no alliance, no outposts: may move", () => {
     expect(randomRelocateRefusal(input())).toBeNull();
     expect(randomRelocateRefusal(input({ health: { hp: 0, max: 1000 } }))).toBeNull();
+  });
+
+  test("anyone not on Map Room 2: refused, before anything else", () => {
+    expect(randomRelocateRefusal(input({ mapVersion: 1 }))).toBe("notMapRoom2");
+    expect(randomRelocateRefusal(input({ mapVersion: 3 }))).toBe("notMapRoom2");
+    expect(randomRelocateRefusal(input({ mapVersion: undefined }))).toBe("notMapRoom2");
+    expect(randomRelocateRefusal(input({ mapVersion: 1, allianceId: 12 }))).toBe("notMapRoom2");
   });
 
   test("in an alliance: refused", () => {

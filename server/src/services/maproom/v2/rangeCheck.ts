@@ -1,4 +1,12 @@
 import { MapRoom2 } from "../../../enums/MapRoom.js";
+import {
+  DECLARE_WAR_RANGE,
+  MAX_OUTPOST_RANGE,
+  hexDistance,
+  mainYardRange,
+  outpostRange,
+  withDeclareWar,
+} from "../../../game-rules/maproom/range.js";
 
 /**
  * The Map Room 2 flinger range rule, as a decision (issue #26).
@@ -12,20 +20,24 @@ import { MapRoom2 } from "../../../enums/MapRoom.js";
  * `baseModeAttack`, after the defender's `attackid`, the appended attack
  * record, the attack log and the map cell had already been flushed. A refusal
  * therefore left the defender flagged as under attack for the full seven
- * minutes of `isAttackActive` with nobody actually attacking them. The rule
- * itself is unchanged; only the moment it runs is.
+ * minutes of `isAttackActive` with nobody actually attacking them. That move
+ * changed only the moment the rule runs; issue #190 later changed what it
+ * measures (below).
  *
  * `validateRange.ts` is the half that talks to the database and turns a
  * verdict into the error the client already handles.
+ *
+ * The measuring itself — the flinger ladders, Declare War, and the hex-ring
+ * distance on the wrapping world — is `game-rules/maproom/range.ts`, a
+ * byte-for-byte copy of the file the web client's range overlay and Attack
+ * button use (issue #190), so the three can never disagree.
  */
 
-/** Cells of extra reach the Declare War powerup buys (`POWERUPS.as:341-344`). */
-export const DECLARE_WAR_RANGE = 2;
-
-/** The longest reach any outpost flinger can have. */
-export const MAX_OUTPOST_RANGE = 4;
-
-/** Half-width of the box swept around the target when looking for outposts. */
+/**
+ * The longest reach any outpost flinger can have, Declare War included: the
+ * half-width of the box swept around the target when looking for outposts.
+ * The box is only a first cut; the hex rule decides.
+ */
 export const OUTPOST_SWEEP = MAX_OUTPOST_RANGE + DECLARE_WAR_RANGE;
 
 /** A cell on the Map Room 2 grid. */
@@ -37,9 +49,11 @@ export interface CellCoords {
 /** An owned outpost as the save stores it: `[x, y, baseid]`. */
 export type OutpostEntry = [number, number, string];
 
-/** An owned outpost sitting inside the sweep box, with its offset from the target. */
+/** An owned outpost sitting inside the sweep box: where it is, and its offset from the target. */
 export interface NearbyOutpost {
   baseid: string;
+  x: number;
+  y: number;
   dx: number;
   dy: number;
 }
@@ -66,66 +80,17 @@ export type RangePlan =
   | { ok: false; reason: Exclude<RangeRefusal, "out-of-range"> }
   | { pending: NearbyOutpost[] };
 
-/**
- * A base's flinger range, with the Declare War allowance always included.
- *
- * The server adds it unconditionally, whether or not the powerup is running;
- * the client only adds it when the powerup really is active. That asymmetry is
- * long-standing behaviour and is left alone here.
- *
- * @param {number} range - The base's own flinger range.
- * @returns {number} The range to validate against.
- */
-export const withDeclareWar = (range: number) => (range > 0 ? range + DECLARE_WAR_RANGE : 0);
+export { DECLARE_WAR_RANGE, MAX_OUTPOST_RANGE, withDeclareWar };
+
+/** Reach of a main yard's flinger, by flinger level (`range.ts`). */
+export const getMainYardRange = mainYardRange;
+
+/** Reach of an outpost's flinger, by flinger level (`range.ts`). */
+export const getOutpostRange = outpostRange;
 
 /**
- * Reach of a main yard's flinger, by flinger level.
- *
- * @param {number | undefined} flinger - The flinger's level.
- * @returns {number} Reach in cells.
- */
-export const getMainYardRange = (flinger: number | undefined) => {
-  switch (flinger) {
-    case 0:
-      return 0;
-    case 1:
-      return 4;
-    case 2:
-      return 6;
-    case 3:
-      return 8;
-    case 4:
-      return 10;
-    default:
-      return 10;
-  }
-};
-
-/**
- * Reach of an outpost's flinger, by flinger level.
- *
- * @param {number | undefined} flinger - The flinger's level.
- * @returns {number} Reach in cells.
- */
-export const getOutpostRange = (flinger: number | undefined) => {
-  switch (flinger) {
-    case 0:
-      return 0;
-    case 1:
-      return 1;
-    case 2:
-      return 2;
-    case 3:
-      return 3;
-    default:
-      return 4;
-  }
-};
-
-/**
- * Distance from the main yard to the target cell.
- *
- * Square (Chebyshev) distance on a toroidal grid, not a hex distance.
+ * Hex steps from the main yard to the target cell, on the wrapping world
+ * (`range.ts`; was the larger of the column and row differences before #190).
  *
  * @param {number} cellX - Target cell x.
  * @param {number} cellY - Target cell y.
@@ -133,23 +98,8 @@ export const getOutpostRange = (flinger: number | undefined) => {
  * @param {number} baseY - Main yard y.
  * @returns {number} Distance in cells.
  */
-export const getDistanceFromMain = (
-  cellX: number,
-  cellY: number,
-  baseX: number,
-  baseY: number
-) => {
-  // Calculate the straight-line distances
-  const deltaX = Math.abs(baseX - cellX);
-  const deltaY = Math.abs(baseY - cellY);
-
-  // Wrap-around distances (for toroidal map)
-  const wrappedDeltaX = Math.min(deltaX, MapRoom2.WIDTH - deltaX);
-  const wrappedDeltaY = Math.min(deltaY, MapRoom2.HEIGHT - deltaY);
-
-  // Use the maximum wrapped distance to calculate square range distance
-  return Math.max(wrappedDeltaX, wrappedDeltaY);
-};
+export const getDistanceFromMain = (cellX: number, cellY: number, baseX: number, baseY: number) =>
+  hexDistance({ x: baseX, y: baseY }, { x: cellX, y: cellY });
 
 /**
  * Cell coordinates carried by a Map Room 2 / 3 base id.
@@ -202,7 +152,7 @@ export const outpostsNearCell = (
       const neighborY = (cell.y + dy + MapRoom2.HEIGHT) % MapRoom2.HEIGHT;
 
       const outpostId = userOutposts.get(`${neighborX},${neighborY}`);
-      if (outpostId) nearby.push({ baseid: outpostId, dx, dy });
+      if (outpostId) nearby.push({ baseid: outpostId, x: neighborX, y: neighborY, dx, dy });
     }
   }
 
@@ -219,6 +169,11 @@ export interface RangePlanInput {
   cell: { x?: number | null; y?: number | null } | null | undefined;
   /** The attacker's owned outposts. */
   outposts: readonly OutpostEntry[] | undefined;
+  /**
+   * Whether the attacker's alliance has Declare War running: its two extra
+   * cells count only then, as in Flash (`POWERUPS.as:140-160`, `:341-344`).
+   */
+  declareWar: boolean;
 }
 
 /**
@@ -232,6 +187,7 @@ export const planRangeCheck = ({
   flinger,
   cell,
   outposts = [],
+  declareWar,
 }: RangePlanInput): RangePlan => {
   if (!homebase) return { ok: false, reason: "no-homebase" };
 
@@ -242,10 +198,10 @@ export const planRangeCheck = ({
   // An empty `homebase` array leaves these NaN, and the comparison below is
   // then false, which sends the check to the outposts. That is what the rule
   // has always done, so it is left as it is.
-  const totalRange = withDeclareWar(getMainYardRange(flinger));
+  const totalRange = withDeclareWar(mainYardRange(flinger), declareWar);
   const distanceFromMain = getDistanceFromMain(cell.x, cell.y, homeX!, homeY!);
 
-  if (distanceFromMain <= totalRange) return { ok: true, via: "main" };
+  if (totalRange > 0 && distanceFromMain <= totalRange) return { ok: true, via: "main" };
 
   if (outposts.length === 0) return { ok: false, reason: "no-outposts" };
 
@@ -257,30 +213,30 @@ export const planRangeCheck = ({
 };
 
 /**
- * The second half of the rule: do any of the nearby outposts actually reach?
+ * The second half of the rule: does any nearby outpost actually reach?
  *
- * The flinger level of one nearby outpost is tested against the offsets of
- * every other, so the strongest flinger in the box effectively decides for all
- * of them. That is how the rule has always run, and issue #26 is about when the
- * check happens, not what it decides, so it is preserved exactly.
+ * Each outpost is measured from its own cell with its own flinger (issue
+ * #190; the check used to test one outpost's reach against the offsets of
+ * every other, in a square).
  *
  * @param {NearbyOutpost[]} nearby - Outposts inside the sweep box.
  * @param {ReadonlyMap<string, number>} flingers - Flinger level per outpost baseid.
+ * @param {boolean} declareWar - Whether Declare War is running.
  * @returns {RangeVerdict} Whether the target is reachable from an outpost.
  */
 export const checkOutpostRange = (
   nearby: readonly NearbyOutpost[],
-  flingers: ReadonlyMap<string, number | undefined>
+  flingers: ReadonlyMap<string, number | undefined>,
+  declareWar: boolean
 ): RangeVerdict => {
-  for (const { baseid } of nearby) {
+  for (const { baseid, x, y, dx, dy } of nearby) {
     if (!flingers.has(baseid)) continue;
 
-    const totalRange = withDeclareWar(getOutpostRange(flingers.get(baseid)));
+    const totalRange = withDeclareWar(outpostRange(flingers.get(baseid)), declareWar);
+    const target = { x: x - dx, y: y - dy };
 
-    for (const { dx, dy } of nearby) {
-      if (Math.abs(dx) <= totalRange && Math.abs(dy) <= totalRange)
-        return { ok: true, via: "outpost" };
-    }
+    if (totalRange > 0 && hexDistance({ x, y }, target) <= totalRange)
+      return { ok: true, via: "outpost" };
   }
 
   return { ok: false, reason: "out-of-range" };
@@ -301,7 +257,8 @@ export interface RangeCheckInput extends RangePlanInput {
 export const checkRange = ({ outpostFlingers, ...plan }: RangeCheckInput): RangeVerdict => {
   const planned = planRangeCheck(plan);
 
-  if ("pending" in planned) return checkOutpostRange(planned.pending, outpostFlingers);
+  if ("pending" in planned)
+    return checkOutpostRange(planned.pending, outpostFlingers, plan.declareWar);
 
   return planned;
 };

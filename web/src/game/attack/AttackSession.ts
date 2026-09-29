@@ -25,6 +25,7 @@ import {
   type ResourceAmounts,
   type Roster,
 } from "@/game/combat/rules";
+import { hasDeclareWar } from "./attackEntry";
 import type { AttackTarget } from "./attackTarget";
 
 /**
@@ -215,19 +216,10 @@ export const mintSeed = (): number => {
 };
 
 /**
- * Whether the attacker's running alliance powerups include Declare War.
- *
- * `attpowerups` is `runningPowerups()`'s list, `{ id, endtime }` per active
- * powerup (`server/src/services/alliance/powerups.ts:170-179`), and Declare
- * War's id is `ap_declarewar` (`server/src/enums/Alliance.ts`).
+ * Whether the attacker's running alliance powerups include Declare War; the
+ * map's range gate reads the same list (`attackEntry.ts`).
  */
-export const hasDeclareWar = (powerups: readonly unknown[] | undefined): boolean =>
-  (powerups ?? []).some(
-    (entry) =>
-      typeof entry === "object" &&
-      entry !== null &&
-      (entry as { id?: unknown }).id === "ap_declarewar",
-  );
+export { hasDeclareWar };
 
 /** The load's `attackerlevel`, when it is a whole level of 1 or more. */
 export const servedLevel = (raw: unknown): number | undefined =>

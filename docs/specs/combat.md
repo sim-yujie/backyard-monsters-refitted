@@ -220,10 +220,16 @@ Side effects of a successful entry:
 The rule itself is pure and lives in `server/src/services/maproom/v2/rangeCheck.ts`: coordinates
 and flinger levels in, a verdict out, no database. `validateRange.ts` is the half that loads what
 the rule needs and turns a refusal into the error the client gets. That split is what let the check
-move ahead of the writes (issue #26); the rule's arithmetic is unchanged.
+move ahead of the writes (issue #26).
 
-Map Room 2 range is a **square** (Chebyshev) distance on the toroidal grid, not a hex distance —
-the code says so (`rangeCheck.ts:136-158`).
+The measuring is shared with the web client (issue #190): `web/src/game/maproom/rules/range.ts`,
+copied byte for byte to `server/src/game-rules/maproom/range.ts` by `npm run sync:combat`. The
+map's range overlay, its Attack button and the server's check all use it, so they cannot disagree.
+
+Map Room 2 range is a **hex ring** on the wrapping world, as Flash drew it
+(`MapRoomPopup.as:975-1016`, `ApplyRangeHighlighting`): the number of steps between touching hexes
+from the flinging cell to the target, the shortest way round either seam. (Before #190 the server
+measured a square: the larger of the column and row differences.)
 
 | Flinger level | Main-yard range | Outpost range |
 | --- | --- | --- |
@@ -233,18 +239,17 @@ the code says so (`rangeCheck.ts:136-158`).
 | 3 | 8 | 3 |
 | 4+ | 10 | 4 |
 
-(`rangeCheck.ts:87-128`.) `DECLARE_WAR_RANGE = 2` is added to any non-zero range
-unconditionally on the server, whether or not the powerup is active
-(`rangeCheck.ts:23`, `:79`). The client only adds it when `ALLIANCE_DECLAREWAR` is really
-running (`PowDeclareWar` returns `range + 2`, `client/scripts/POWERUPS.as:341-344`).
+(`range.ts`, `mainYardRange` / `outpostRange`; `BUILDING5.as:16-18`.) `DECLARE_WAR_RANGE = 2` is
+added to any non-zero range only while the alliance's Declare War powerup is running, as in Flash
+(`PowDeclareWar` returns `range + 2`, `client/scripts/POWERUPS.as:341-344`, applied only for a
+running powerup, `:140-160`). Before #190 the server added it unconditionally.
 
 The main yard is checked first; if it is out of range the server sweeps a
-`MAX_OUTPOST_RANGE + DECLARE_WAR_RANGE = 6` cell box around the target for owned outposts
-(`rangeCheck.ts:192`), looks up just those outposts' flinger levels, and tests them
-(`rangeCheck.ts:271`). One quirk survives the move, deliberately: the flinger level of one nearby
-outpost is tested against the *offsets of every other*, so in practice the strongest flinger inside
-the box decides for all of them. Issue #26 was about when the check runs, not what it decides, so
-it was preserved exactly rather than quietly tightened.
+`MAX_OUTPOST_RANGE + DECLARE_WAR_RANGE = 6` cell box around the target for owned outposts (a first
+cut that holds every cell the longest outpost ring reaches), looks up just those outposts' flinger
+levels, and tests each from its own cell with its own flinger (`checkOutpostRange`). Before #190
+one outpost's level was tested against the offsets of every other, so the strongest flinger in the
+box decided for all of them.
 
 A refusal is one of five reasons, each keeping the wording it threw before
 (`validateRange.ts:171-190`): no homebase, no attack cell, no outposts owned, no outposts near the

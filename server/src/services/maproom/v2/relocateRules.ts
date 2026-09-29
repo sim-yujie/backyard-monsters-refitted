@@ -39,6 +39,7 @@ export const RELOCATE_COOLDOWN = 24 * 60 * 60;
 
 /** Why a relocation was refused. */
 export type RelocateRefusal =
+  | "notMapRoom2"
   | "inAlliance"
   | "hasOutposts"
   | "yardStanding"
@@ -196,6 +197,8 @@ export const mainYardHealth = (save: {
 };
 
 export interface RandomRelocateInput {
+  /** The caller's main save's `mapversion`: the move is Map Room 2's alone. */
+  mapVersion: number | null | undefined;
   /** The caller's `alliance_id`. */
   allianceId: number | null | undefined;
   /** How many outposts the caller holds. */
@@ -212,17 +215,22 @@ export interface RandomRelocateInput {
  * (`BASE.as:2340-2341`): no alliance, no outposts (the server keeps no
  * `empiredestroyed` override), and the main yard below 10% of its health. The
  * server also refuses while an attack on the main yard is running: leaving
- * the world deletes the rows that attack would save to.
+ * the world deletes the rows that attack would save to, and to anyone not on
+ * Map Room 2: the move leaves one Map Room 2 world for another, and would
+ * otherwise drop a Map Room 1 or 3 player into Map Room 2.
  *
  * @param {RandomRelocateInput} input - The caller and their main yard.
  * @returns {RelocateRefusal | null} Why not, or null when they may.
  */
 export const randomRelocateRefusal = ({
+  mapVersion,
   allianceId,
   outpostCount,
   health,
   underAttack,
 }: RandomRelocateInput): RelocateRefusal | null => {
+  if (mapVersion !== MapRoomVersion.V2) return "notMapRoom2";
+
   if (allianceId) return "inAlliance";
 
   if (outpostCount > 0) return "hasOutposts";

@@ -32,7 +32,7 @@ import { catchUpLockedYard } from "../../yard/yardAction.js";
  * the player leaves their world and is placed in a new one, free of charge. It
  * follows Flash's gate for that popup (`randomRelocateRefusal`, the owner's
  * answer D): no alliance, no outposts, and the main yard, caught up to now as
- * a load would, below 10% of its health.
+ * a load would, below 10% of its health. Only a Map Room 2 player may take it.
  *
  * `type=outpost` moves the main yard onto one of the player's own Map Room 2
  * outposts (`PopupRelocateMe.as`), destroying the outpost. Everything the
@@ -79,6 +79,7 @@ export const migrateBase: KoaController = async (ctx) => {
     const { save: mainYard } = await catchUpLockedYard(postgres.em, userSave);
 
     const refusal = randomRelocateRefusal({
+      mapVersion: mainYard.mapversion,
       allianceId: currentUser.alliance_id,
       outpostCount: mainYard.outposts.length,
       health: mainYardHealth(mainYard),

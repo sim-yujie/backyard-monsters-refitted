@@ -978,21 +978,26 @@ looking it up by `baseid`. Cost is not verified.
 
 `server/src/services/maproom/v2/validateRange.ts:81-150`.
 
-1. Compute the distance from the caller's main yard to the target as a **Chebyshev distance with
-   toroidal wrap**: `max(min(|dx|, 800-|dx|), min(|dy|, 800-|dy|))` (`:155-171`). The code notes this
-   makes a square rather than a hex or diamond range.
-2. Main-yard flinger range by level: 0 -> 0, 1 -> 4, 2 -> 6, 3 -> 8, 4+ -> 10 (`:173-188`).
-3. Add `DECLARE_WAR_RANGE = 2` when the range is non-zero (`:11`, `:21`). The bonus is added
-   unconditionally, without checking the powerup is active.
-4. If in range, allow. Otherwise, if the caller owns no outposts, reject (`:106-107`).
-5. Sweep a square of `MAX_OUTPOST_RANGE + DECLARE_WAR_RANGE = 6` around the target for the caller's
-   outposts (`:113-123`), load their flinger levels, and allow if any covers the offset
-   (`:135-144`). Outpost flinger range by level: 0 -> 0, 1 -> 1, 2 -> 2, 3 -> 3, 4+ -> 4 (`:190-204`).
-6. Otherwise write a report (`logReport`) and throw (`:146-149`).
+Since issue #190 the rule measures a **hex ring** (`web/src/game/maproom/rules/range.ts`, shared
+with the web client and copied to `server/src/game-rules/maproom/range.ts`):
 
-The outpost lookup key is the string concatenation `` `${x}${y}` `` (`:109`, `:120`), which is
-ambiguous: cell (1, 23) and cell (12, 3) both key to `"123"`. On an 800 x 800 map this can grant or
-deny outpost range incorrectly.
+1. Compute the hex steps from the caller's main yard to the target on the wrapping world, as Flash's
+   `ApplyRangeHighlighting` does (`MapRoomPopup.as:975-1016`).
+2. Main-yard flinger range by level: 0 -> 0, 1 -> 4, 2 -> 6, 3 -> 8, 4+ -> 10.
+3. Add `DECLARE_WAR_RANGE = 2` to a non-zero range only while the alliance's Declare War powerup is
+   running (`runningPowerups`).
+4. If in range, allow. Otherwise, if the caller owns no outposts, reject.
+5. Sweep a square of `MAX_OUTPOST_RANGE + DECLARE_WAR_RANGE = 6` around the target for the caller's
+   outposts (a first cut that holds every cell the longest outpost ring reaches), load their flinger
+   levels, and allow if any outpost reaches the target from its own cell with its own flinger.
+   Outpost flinger range by level: 0 -> 0, 1 -> 1, 2 -> 2, 3 -> 3, 4+ -> 4.
+6. Otherwise write a report (`logReport`) and throw.
+
+Before #190 the distance was a Chebyshev square, `max(min(|dx|, 800-|dx|), min(|dy|, 800-|dy|))`,
+Declare War's two cells were added whether or not the powerup ran, and one outpost's reach was
+tested against every other outpost's offset. The outpost lookup key was once the string
+concatenation `` `${x}${y}` ``, which keyed cell (1, 23) and cell (12, 3) alike; it is now
+comma-separated.
 
 ### `getNewMap`
 
@@ -1101,8 +1106,8 @@ These are load-bearing game rules. Changing them changes the game.
 4. **Only occupied cells are stored.** Everything else is derived. This is what keeps a 640,000-cell
    world cheap, and the new client should keep it.
 5. **Flinger range determines what can be attacked.** Main yard 0/4/6/8/10 by level, outpost
-   0/1/2/3/4, plus 2 for Declare War, measured as wrapped Chebyshev distance. This is the core
-   constraint that makes outposts matter.
+   0/1/2/3/4, plus 2 while Declare War runs, measured as hex steps on the wrapping world (#190).
+   This is the core constraint that makes outposts matter.
 6. **Damage protection windows.** 1 h after 4 attacks in an hour; 36 h at 50% damage on a main yard;
    8 h at 25% damage on an outpost; 12 h on a freshly taken cell; attacking clears your own
    protection.

@@ -1,4 +1,6 @@
-# The shared combat rules are hashed and column-checked by tests in both copies;
-# keep them LF in every checkout regardless of core.autocrlf.
+# The shared rules modules (combat, Map Room 2 range) are hashed and column-checked
+# by tests in both copies; keep them LF in every checkout regardless of core.autocrlf.
 web/src/game/combat/rules/** text eol=lf
 server/src/game-rules/combat/** text eol=lf
+web/src/game/maproom/rules/** text eol=lf
+server/src/game-rules/maproom/** text eol=lf

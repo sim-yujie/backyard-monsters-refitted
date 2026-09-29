@@ -8,8 +8,13 @@ import {
   type MapCell,
   type PlayerCell,
 } from "@/api/types";
-import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import type { OffsetCell } from "@/game/HexGrid";
+import {
+  hexDistance,
+  mainYardRange,
+  outpostRange,
+  withDeclareWar,
+} from "@/game/maproom/rules/range";
 import { storageCapOf } from "./attackerStorage";
 import type {
   AttackRoster,
@@ -34,44 +39,39 @@ import type {
  */
 
 /**
- * Cells of extra reach the server always grants (`rangeCheck.ts:23`, `:79`).
- *
- * The server adds Declare War's two cells whether or not the powerup is
- * running; the Flash client added them only when it was
- * (`POWERUPS.as:341-344`). This gate mirrors the server, because the server is
- * what decides — offering a cell the server would then refuse is the worse
- * error, and no cell the server accepts is hidden.
+ * How far one of the player's own cells can fling: its flinger's reach, plus
+ * Declare War's two cells only while that powerup is running (issue #190;
+ * `game/maproom/rules/range.ts`, the rule the server measures with too).
  */
-export const DECLARE_WAR_RANGE = 2;
-
-/** Reach of a main yard's flinger by level (`rangeCheck.ts:87-104`). */
-export const mainYardReach = (flinger: number): number => {
-  if (flinger <= 0) return 0;
-  return [0, 4, 6, 8, 10][Math.min(flinger, 4)]!;
-};
-
-/** Reach of an outpost's flinger by level (`rangeCheck.ts:111-128`). */
-export const outpostReach = (flinger: number): number => {
-  if (flinger <= 0) return 0;
-  return Math.min(flinger, 4);
-};
-
-/** How far one of the player's own cells can fling, Declare War included. */
-export const cellReach = (cell: PlayerCell): number => {
-  const base = cell.b === CellType.OUTPOST ? outpostReach(cell.f) : mainYardReach(cell.f);
-  return base > 0 ? base + DECLARE_WAR_RANGE : 0;
-};
+export const cellReach = (cell: PlayerCell, declareWar: boolean): number =>
+  withDeclareWar(
+    cell.b === CellType.OUTPOST ? outpostRange(cell.f) : mainYardRange(cell.f),
+    declareWar,
+  );
 
 /**
- * Square (Chebyshev) distance on the toroidal grid, which is what the server's
- * range rule measures (`rangeCheck.ts:136-158`) — not the hex distance the map
- * is drawn with.
+ * Hex steps between two cells on the wrapping world: the distance the
+ * server's range check measures (`rangeCheck.ts`), and the one the map is
+ * drawn with.
  */
-export const cellDistance = (a: OffsetCell, b: OffsetCell): number => {
-  const dx = Math.abs(a.col - b.col);
-  const dy = Math.abs(a.row - b.row);
-  return Math.max(Math.min(dx, WORLD_WIDTH - dx), Math.min(dy, WORLD_HEIGHT - dy));
-};
+export const cellDistance = (a: OffsetCell, b: OffsetCell): number =>
+  hexDistance({ x: a.col, y: a.row }, { x: b.col, y: b.row });
+
+/**
+ * Whether the player's alliance has Declare War running.
+ *
+ * `powerups` is `runningPowerups()`'s list, `{ id, endtime }` per active
+ * powerup (`server/src/services/alliance/powerups.ts:170-179`): the own-yard
+ * load's `powerups`, or an attack load's `attpowerups`. Declare War's id is
+ * `ap_declarewar` (`server/src/enums/Alliance.ts`).
+ */
+export const hasDeclareWar = (powerups: readonly unknown[] | undefined): boolean =>
+  (powerups ?? []).some(
+    (entry) =>
+      typeof entry === "object" &&
+      entry !== null &&
+      (entry as { id?: unknown }).id === "ap_declarewar",
+  );
 
 /** One of the player's own cells, with where it is. */
 export interface OwnCell {
@@ -149,8 +149,9 @@ export const ownCatapultLevel = (
  * (`PopupAttackA.as:214-239`; `docs/specs/combat.md:278-286`).
  *
  * `ownSave` is the map's own-yard load, which carries the champions, the
- * academy levels, the Catapult building (see {@link ownCatapultLevel}) and
- * the siege inventory; all belong to the player, not to any one cell.
+ * academy levels, the Catapult building (see {@link ownCatapultLevel}), the
+ * siege inventory and the running alliance powerups (Declare War's extra
+ * reach); all belong to the player, not to any one cell.
  *
  * `sources` keeps each contributing cell's whole `m` blob, keyed by its base
  * id, because the attack save has to write the cell's housing back in full
@@ -164,9 +165,10 @@ export const rosterInRange = (
 ): AttackRoster => {
   const sources: RosterSource[] = [];
   let flingerLevel = 0;
+  const declareWar = hasDeclareWar(ownSave?.powerups);
 
   for (const own of ownCells) {
-    const reach = cellReach(own.cell);
+    const reach = cellReach(own.cell, declareWar);
     if (reach === 0 || cellDistance(own, target) > reach) continue;
     flingerLevel = Math.max(flingerLevel, own.cell.f);
 
@@ -182,7 +184,14 @@ export const rosterInRange = (
 /** What of the own-yard load a roster reads. */
 export type RosterSave = Pick<
   BaseLoadResponse,
-  "champion" | "academy" | "catapult" | "buildingdata" | "storedata" | "resources" | "credits"
+  | "champion"
+  | "academy"
+  | "catapult"
+  | "buildingdata"
+  | "storedata"
+  | "resources"
+  | "credits"
+  | "powerups"
 > & { siege?: unknown; outposts?: unknown };
 
 /**

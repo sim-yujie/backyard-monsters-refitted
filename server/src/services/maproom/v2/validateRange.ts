@@ -5,6 +5,8 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres } from "../../../server.js";
 import { logReport } from "../../base/reportManager.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
+import { AlliancePowerupType } from "../../../enums/Alliance.js";
+import { runningPowerups } from "../../alliance/powerups.js";
 import {
   checkOutpostRange,
   planRangeCheck,
@@ -127,13 +129,27 @@ export const rangeCheckV2 = async (
 
   const cell = await resolveAttackCell(options);
 
-  const plan = planRangeCheck({ homebase, flinger, cell, outposts });
+  const declareWar = await declareWarRunning(user.alliance_id);
+
+  const plan = planRangeCheck({ homebase, flinger, cell, outposts, declareWar });
 
   const verdict =
-    "pending" in plan ? checkOutpostRange(plan.pending, await outpostFlingers(plan.pending)) : plan;
+    "pending" in plan
+      ? checkOutpostRange(plan.pending, await outpostFlingers(plan.pending), declareWar)
+      : plan;
 
   return { cell, verdict };
 };
+
+/**
+ * Whether the user's alliance has Declare War running, the only time its two
+ * extra cells of reach count (issue #190, as in Flash: `POWERUPS.as:140-160`).
+ *
+ * @param {User["alliance_id"]} allianceId - The user's alliance, if any.
+ * @returns {Promise<boolean>} True while Declare War runs.
+ */
+const declareWarRunning = async (allianceId: User["alliance_id"]): Promise<boolean> =>
+  (await runningPowerups(allianceId)).some(({ id }) => id === AlliancePowerupType.DECLARE_WAR);
 
 /**
  * The cell under attack, from whichever the caller could supply.

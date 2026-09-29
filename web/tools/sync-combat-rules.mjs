@@ -1,5 +1,6 @@
 /**
- * Copies the shared combat rules module into the server tree.
+ * Copies the shared rules modules into the server tree: the combat rules and
+ * the Map Room 2 range rule (issue #190).
  *
  *   cd web && node tools/sync-combat-rules.mjs          # copy and write manifests
  *   cd web && node tools/sync-combat-rules.mjs --check  # exit 1 on any drift
@@ -8,12 +9,14 @@
  * workspace between them, so the combat rules — which the Wild Monster Baiter
  * and the server's attack audit must agree on to the byte — are kept as one
  * source and one checked copy rather than a third package with a build step
- * (`docs/design/server-combat.md` §3.2).
+ * (`docs/design/server-combat.md` §3.2). The Map Room 2 range rule is shared
+ * the same way, so the map's range overlay and Attack button measure exactly
+ * what the server's range check does.
  *
- * What it does:
+ * What it does, for each module in `MODULES`:
  *
- * 1. Copies every `*.ts` under `web/src/game/combat/rules/` that is not a test
- *    into `server/src/game-rules/combat/`, byte for byte.
+ * 1. Copies every `*.ts` under the source directory that is not a test into
+ *    its server directory, byte for byte.
  * 2. Deletes a copy whose source is gone, so a renamed file cannot leave a
  *    stale one behind for the server to import. The server's own
  *    `sync.test.ts` is not a copy and is never touched.
@@ -35,8 +38,19 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../..");
 
-const SOURCE = resolve(here, "../src/game/combat/rules");
-const TARGET = resolve(repo, "server/src/game-rules/combat");
+/** Each shared module: its source under `web/src/`, its copy under `server/src/`. */
+const MODULES = [
+  {
+    name: "combat",
+    source: resolve(here, "../src/game/combat/rules"),
+    target: resolve(repo, "server/src/game-rules/combat"),
+  },
+  {
+    name: "maproom",
+    source: resolve(here, "../src/game/maproom/rules"),
+    target: resolve(repo, "server/src/game-rules/maproom"),
+  },
+];
 const MANIFEST = "MANIFEST.json";
 
 const check = process.argv.includes("--check");
@@ -51,18 +65,18 @@ const check = process.argv.includes("--check");
  */
 const isMember = (name) => name.endsWith(".ts") && !name.endsWith(".test.ts");
 
-const members = () => readdirSync(SOURCE).filter(isMember).sort();
+const members = (source) => readdirSync(source).filter(isMember).sort();
 
 /**
  * Copied files in the server tree, which is not everything `.ts` there.
  *
- * `server/src/game-rules/combat/sync.test.ts` is the server's own drift test
- * and belongs to the server, not to the module; it must survive a sync that
- * would otherwise see a file with no source and delete it.
+ * Each server directory's `sync.test.ts` is the server's own drift test and
+ * belongs to the server, not to the module; it must survive a sync that would
+ * otherwise see a file with no source and delete it.
  */
-const copies = () => {
+const copies = (target) => {
   try {
-    return readdirSync(TARGET).filter(isMember).sort();
+    return readdirSync(target).filter(isMember).sort();
   } catch {
     return [];
   }
@@ -76,66 +90,77 @@ const manifestOf = (files) => ({
   count: files.length,
 });
 
-const files = members();
-if (files.length === 0) {
-  throw new Error(`${SOURCE} holds no module files; refusing to sync an empty module.`);
-}
-
-const read = files.map((name) => {
-  const bytes = readFileSync(resolve(SOURCE, name));
-  return { name, bytes, hash: sha256(bytes) };
-});
-
-const manifest = `${JSON.stringify(manifestOf(read), null, 2)}\n`;
-
-if (check) {
-  const problems = [];
-  for (const { name, bytes } of read) {
-    let copy;
-    try {
-      copy = readFileSync(resolve(TARGET, name));
-    } catch {
-      problems.push(`${name}: missing from the server copy`);
-      continue;
-    }
-    if (!copy.equals(bytes)) problems.push(`${name}: the server copy differs from the source`);
+/** Syncs or checks one module; returns its problems in `--check` mode. */
+const syncModule = ({ name: moduleName, source: SOURCE, target: TARGET }) => {
+  const files = members(SOURCE);
+  if (files.length === 0) {
+    throw new Error(`${SOURCE} holds no module files; refusing to sync an empty module.`);
   }
+
+  const read = files.map((name) => {
+    const bytes = readFileSync(resolve(SOURCE, name));
+    return { name, bytes, hash: sha256(bytes) };
+  });
+
+  const manifest = `${JSON.stringify(manifestOf(read), null, 2)}\n`;
+
+  if (check) {
+    const problems = [];
+    for (const { name, bytes } of read) {
+      let copy;
+      try {
+        copy = readFileSync(resolve(TARGET, name));
+      } catch {
+        problems.push(`${name}: missing from the server copy`);
+        continue;
+      }
+      if (!copy.equals(bytes))
+        problems.push(`${name}: the server copy differs from the source`);
+    }
+    const known = new Set(files);
+    for (const name of copies(TARGET)) {
+      if (!known.has(name)) problems.push(`${name}: in the server copy with no source`);
+    }
+    for (const directory of [SOURCE, TARGET]) {
+      const path = resolve(directory, MANIFEST);
+      let held;
+      try {
+        held = readFileSync(path, "utf8");
+      } catch {
+        problems.push(`${path}: missing`);
+        continue;
+      }
+      if (held !== manifest) problems.push(`${path}: does not match the source`);
+    }
+    if (problems.length === 0) console.log(`${moduleName}: ${files.length} file(s) in sync.`);
+    return problems.map((problem) => `${moduleName}/${problem}`);
+  }
+
+  mkdirSync(TARGET, { recursive: true });
+
+  // A copy whose source is gone would still compile on the server and would still
+  // be imported, so it goes before anything is written.
   const known = new Set(files);
-  for (const name of copies()) {
-    if (!known.has(name)) problems.push(`${name}: in the server copy with no source`);
-  }
-  for (const directory of [SOURCE, TARGET]) {
-    const path = resolve(directory, MANIFEST);
-    let held;
-    try {
-      held = readFileSync(path, "utf8");
-    } catch {
-      problems.push(`${path}: missing`);
-      continue;
-    }
-    if (held !== manifest) problems.push(`${path}: does not match the source`);
-  }
-  if (problems.length > 0) {
-    console.error(`Combat rules are out of sync; run \`node tools/sync-combat-rules.mjs\`:`);
-    for (const problem of problems) console.error(`  ${problem}`);
-    process.exit(1);
-  }
-  console.log(`${files.length} file(s) in sync.`);
-  process.exit(0);
+  const stale = copies(TARGET).filter((name) => !known.has(name));
+  for (const name of stale) rmSync(resolve(TARGET, name));
+
+  for (const { name, bytes } of read) writeFileSync(resolve(TARGET, name), bytes);
+
+  writeFileSync(resolve(SOURCE, MANIFEST), manifest, "utf8");
+  writeFileSync(resolve(TARGET, MANIFEST), manifest, "utf8");
+
+  console.log(
+    `${moduleName}: ${files.length} file(s) -> ${TARGET}` +
+      (stale.length > 0 ? `, ${stale.length} removed` : ""),
+  );
+  for (const { name, hash } of read) console.log(`  ${hash.slice(0, 12)}  ${name}`);
+  return [];
+};
+
+const problems = MODULES.flatMap(syncModule);
+
+if (problems.length > 0) {
+  console.error(`Shared rules are out of sync; run \`node tools/sync-combat-rules.mjs\`:`);
+  for (const problem of problems) console.error(`  ${problem}`);
+  process.exit(1);
 }
-
-mkdirSync(TARGET, { recursive: true });
-
-// A copy whose source is gone would still compile on the server and would still
-// be imported, so it goes before anything is written.
-const known = new Set(files);
-const stale = copies().filter((name) => !known.has(name));
-for (const name of stale) rmSync(resolve(TARGET, name));
-
-for (const { name, bytes } of read) writeFileSync(resolve(TARGET, name), bytes);
-
-writeFileSync(resolve(SOURCE, MANIFEST), manifest, "utf8");
-writeFileSync(resolve(TARGET, MANIFEST), manifest, "utf8");
-
-console.log(`${files.length} file(s) -> ${TARGET}${stale.length > 0 ? `, ${stale.length} removed` : ""}`);
-for (const { name, hash } of read) console.log(`  ${hash.slice(0, 12)}  ${name}`);

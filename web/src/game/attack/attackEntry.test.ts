@@ -7,9 +7,8 @@ import {
   cellDistance,
   cellReach,
   hasAnythingToSend,
-  mainYardReach,
+  hasDeclareWar,
   mainYardRoster,
-  outpostReach,
   ownCellsIn,
   rosterInRange,
   targetKind,
@@ -57,29 +56,41 @@ const camp: WildMonsterCell = { uid: 0, b: 1, i: 140, bid: "21970243208", n: "Ab
 
 const champion = (hp: number, status = 0) => ({ t: 5, hp, l: 5, ft: 0, fd: 0, fb: 0, pl: 2, status });
 
-describe("reach tables", () => {
-  it("match the server's main-yard ladder", () => {
-    expect([0, 1, 2, 3, 4, 5].map(mainYardReach)).toEqual([0, 4, 6, 8, 10, 10]);
+describe("cellReach", () => {
+  it("follows the shared ladders: a yard by its flinger, an outpost by its own", () => {
+    expect([0, 1, 2, 3, 4, 5].map((f) => cellReach(playerCell({ f }), false))).toEqual([
+      0, 4, 6, 8, 10, 10,
+    ]);
+    expect([0, 1, 2, 3, 4, 5].map((f) => cellReach(playerCell({ b: 3, f }), false))).toEqual([
+      0, 1, 2, 3, 4, 4,
+    ]);
   });
 
-  it("match the server's outpost ladder", () => {
-    expect([0, 1, 2, 3, 4, 5].map(outpostReach)).toEqual([0, 1, 2, 3, 4, 4]);
+  it("adds Declare War's two cells to a non-zero reach only while it runs (#190)", () => {
+    expect(cellReach(playerCell({ f: 1 }), false)).toBe(4);
+    expect(cellReach(playerCell({ f: 1 }), true)).toBe(6);
+    expect(cellReach(playerCell({ b: 3, f: 1 }), true)).toBe(3);
+    expect(cellReach(playerCell({ f: 0 }), true)).toBe(0);
   });
+});
 
-  it("add Declare War's two cells to any non-zero reach, as the server does", () => {
-    expect(cellReach(playerCell({ f: 1 }))).toBe(6);
-    expect(cellReach(playerCell({ b: 3, f: 1 }))).toBe(3);
-    expect(cellReach(playerCell({ f: 0 }))).toBe(0);
+describe("hasDeclareWar", () => {
+  it("reads Declare War off a running-powerups list", () => {
+    expect(hasDeclareWar(undefined)).toBe(false);
+    expect(hasDeclareWar([{ id: "ap_armament" }])).toBe(false);
+    expect(hasDeclareWar([{ id: "ap_declarewar", endtime: 9 }])).toBe(true);
   });
 });
 
 describe("cellDistance", () => {
-  it("is the larger of the two axis distances", () => {
-    expect(cellDistance({ col: 10, row: 10 }, { col: 13, row: 11 })).toBe(3);
+  it("counts hex steps, not the larger axis difference (#190)", () => {
+    expect(cellDistance({ col: 10, row: 10 }, { col: 13, row: 13 })).toBe(5);
+    expect(cellDistance({ col: 10, row: 10 }, { col: 13, row: 8 })).toBe(3);
   });
 
   it("wraps around the toroidal world", () => {
-    expect(cellDistance({ col: 1, row: 1 }, { col: 798, row: 799 })).toBe(3);
+    expect(cellDistance({ col: 1, row: 1 }, { col: 798, row: 799 })).toBe(4);
+    expect(cellDistance({ col: 0, row: 400 }, { col: 799, row: 400 })).toBe(1);
   });
 });
 
@@ -127,10 +138,20 @@ describe("rosterInRange", () => {
   });
 
   it("ignores an own cell whose flinger falls short", () => {
-    // Main yard at level 1 reaches 4 + 2 = 6; this one is 7 away.
+    // Main yard at level 1 reaches 4; this one is 7 away.
     const roster = rosterInRange({ col: 100, row: 100 }, [ownCell(107, 100, { f: 1 })], null);
     expect(roster.monsters).toEqual({});
     expect(roster.flingerLevel).toBe(0);
+  });
+
+  it("reaches two cells further only while Declare War runs (#190)", () => {
+    // Level 1 reaches 4; this one is 6 steps straight down the column.
+    const cells = [ownCell(100, 106, { f: 1 })];
+    expect(rosterInRange({ col: 100, row: 100 }, cells, {}).flingerLevel).toBe(0);
+    expect(
+      rosterInRange({ col: 100, row: 100 }, cells, { powerups: [{ id: "ap_declarewar" }] })
+        .flingerLevel,
+    ).toBe(1);
   });
 
   it("ignores a zero-level flinger even next door", () => {
@@ -210,7 +231,7 @@ describe("rosterInRange", () => {
     const roster = rosterInRange(
       { col: 100, row: 100 },
       [
-        ownCell(104, 96, { b: 3, bid: "9002", m: outpostHousing }),
+        ownCell(102, 98, { b: 3, bid: "9002", m: outpostHousing }),
         ownCell(95, 100, { bid: "3502", m: mainHousing }),
       ],
       null,
