@@ -79,11 +79,10 @@ export const baseLoad: KoaController = async (ctx) => {
 
   await postgres.em.populate(user, INFERNO_SAVE_MODES.has(type) ? ["save", "infernosave"] : ["save"]);
 
-  // The player's Map Room comes from their own save and world, not from the
-  // request: every rule below follows it, the attack's range check above all,
-  // which a forged 3 or 1 used to skip (issue #165, `playerMapVersion.ts`).
-  // A player with no save yet is new, and so on Map Room 1.
-  const mapversion = user.save ? await playerMapVersion(postgres.em, user.save) : MapRoomVersion.V1;
+  // The player's Map Room is the one their own save records, not the
+  // request's: every rule below follows it, the attack's range check above
+  // all, which a forged 3 or 1 used to skip (issue #165, `playerMapVersion.ts`).
+  const mapversion = playerMapVersion(user.save);
 
   let baseSave: Save | null = null;
 

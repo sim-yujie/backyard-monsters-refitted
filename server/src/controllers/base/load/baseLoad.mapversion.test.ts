@@ -3,6 +3,9 @@ import type { Context } from "koa";
 import { Save } from "../../../database/models/save.model.js";
 import { World } from "../../../database/models/world.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
+import { Maproom } from "../../../database/models/maproom.model.js";
+import { MR1_TRIBES } from "../../../enums/Tribes.js";
+import { currentMR1Tribes } from "../../../services/maproom/v1/mr1TribeRules.js";
 import { generateBaseId } from "../../../utils/generateBaseId.js";
 
 /**
@@ -24,6 +27,7 @@ let tables: Map<unknown, Row[]>;
 let created: Row[];
 let flushes: number;
 let reports: string[];
+let sessionKeys: string[];
 
 const matches = (row: Row, where: Row) =>
   Object.entries(where).every(([key, value]) =>
@@ -37,6 +41,7 @@ const em = {
     (tables.get(entity) ?? []).find((row) => matches(row, where)) ?? null,
   find: async (entity: unknown, where: Row) => (tables.get(entity) ?? []).filter((row) => matches(row, where)),
   populate: async () => {},
+  transactional: async (run: (tx: unknown) => Promise<unknown>) => run(em),
   create: (entity: unknown, data: Row) => {
     if (entity === Save) created.push(data);
     return data;
@@ -51,7 +56,10 @@ mock.module("../../../server.js", () => ({
   postgres: { em },
   redis: {
     get: async () => null,
-    setex: async () => "OK",
+    setex: async (key: string) => {
+      sessionKeys.push(key);
+      return "OK";
+    },
     del: async () => 0,
     smembers: async () => [],
   },
@@ -78,6 +86,7 @@ const realRange = (await import(REAL_RANGE)) as typeof import("../../../services
 mock.module("../../../services/maproom/v2/validateRange.js", () => realRange);
 
 const { baseLoad } = await import("./baseLoad.js");
+const { mr1TribeSessionKey } = await import("../../../services/maproom/v1/mr1TribeSession.js");
 const { playerMapVersion } = await import("../../../services/maproom/playerMapVersion.js");
 
 const campId = (x: number, y: number, world = WORLD) => generateBaseId(world, x, y);
@@ -94,6 +103,22 @@ const attackerRow = (extra: Row = {}): Row => ({
   homebase: ["241", "207"],
   flinger: 2,
   outposts: [],
+  attackid: 0,
+  attacks: [],
+  protected: 0,
+  savetime: Math.floor(Date.now() / 1000) - 10,
+  credits: 0,
+  points: "0",
+  catapult: 0,
+  resources: { r1: 1_000, r2: 1_000, r3: 1_000, r4: 1_000 },
+  buildingdata: { "0": { id: 0, t: 14, X: 0, Y: 0, l: 10 } },
+  buildinghealthdata: {},
+  storedata: {},
+  monsters: {},
+  lockerdata: {},
+  academy: {},
+  champion: [],
+  researchdata: {},
   ...extra,
 });
 
@@ -128,6 +153,7 @@ beforeEach(() => {
   created = [];
   flushes = 0;
   reports = [];
+  sessionKeys = [];
   tables = new Map<unknown, Row[]>([
     [Save, [attackerRow()]],
     [World, [{ uuid: WORLD, map_version: 2 }, { uuid: OTHER_WORLD, map_version: 3 }]],
@@ -202,14 +228,53 @@ describe("an attack refused for range leaves no camp row (#165)", () => {
   });
 });
 
-describe("playerMapVersion", () => {
-  test("a player on a world is in that world's Map Room, whatever their save says", async () => {
-    expect(await playerMapVersion(em as never, { worldid: WORLD, mapversion: 1 })).toBe(2);
-    expect(await playerMapVersion(em as never, { worldid: OTHER_WORLD, mapversion: 2 })).toBe(3);
+describe("a Map Room 1 account on a world keeps Map Room 1 (#165)", () => {
+  // Like the Town Hall 1 account userid 1: `mapversion` 1, `mr2upgraded`
+  // false, and a `worldid` all the same, as every seeded player has.
+  const mr1Attacker = () =>
+    attackerRow({ mapversion: 1, mr2upgraded: false, buildingdata: { "0": { id: 0, t: 14, X: 0, Y: 0, l: 1 } } });
+
+  test("its own Map Room 1 tribe attack loads", async () => {
+    const tribe = String(currentMR1Tribes(1, MR1_TRIBES)[0]!.template.baseid);
+    tables.set(Save, [mr1Attacker()]);
+    tables.set(Maproom, [{ userid: ATTACKER, tribedata: [] }]);
+
+    // The request says 2, as a client on the wrong screen would.
+    expect(await load(tribe, 2)).toBeNull();
+    expect(sessionKeys).toContain(mr1TribeSessionKey(ATTACKER, tribe));
   });
 
-  test("without a world, the save's own Map Room stands", async () => {
-    expect(await playerMapVersion(em as never, { worldid: null, mapversion: 1 })).toBe(1);
-    expect(await playerMapVersion(em as never, { worldid: "gone", mapversion: 2 })).toBe(2);
+  test("it cannot reach a Map Room 2 player's main yard, as a player who switched back to 1 would try", async () => {
+    const neighbour = campId(243, 207);
+    tables.set(Save, [
+      mr1Attacker(),
+      { basesaveid: 700, baseid: neighbour, userid: 77, saveuserid: 77, type: "main", mapversion: 2, worldid: WORLD, attacks: [] },
+    ]);
+
+    const refusal = (await load(neighbour, 1)) as Error & { data?: Row };
+
+    expect(refusal.data).toEqual({ reason: "baseNotFound" });
+    expect(flushes).toBe(0);
+  });
+
+  test("it cannot reach a Map Room 2 camp on its world, even next door", async () => {
+    tables.set(Save, [mr1Attacker()]);
+
+    const refusal = (await load(campId(242, 207), 2)) as Error & { data?: Row };
+
+    expect(refusal.data).toEqual({ reason: "baseNotFound" });
+    expect(created).toEqual([]);
+  });
+});
+
+describe("playerMapVersion", () => {
+  test("the save's own Map Room decides, not its world", () => {
+    expect(playerMapVersion({ mapversion: 1 })).toBe(1);
+    expect(playerMapVersion({ mapversion: 2 })).toBe(2);
+    expect(playerMapVersion({ mapversion: 3 })).toBe(3);
+  });
+
+  test("a player with no save yet is new, and on Map Room 1", () => {
+    expect(playerMapVersion(null)).toBe(1);
   });
 });

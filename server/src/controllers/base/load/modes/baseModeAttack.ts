@@ -77,10 +77,12 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
       await requireAttackableMR1Tribe(user, baseid, getCurrentDateTime());
       save = await tribeSaveHandler(baseid, mapversion, null, user);
     } else {
-      // Map Room 1 has main yards and its own tribes, nothing else: an outpost
-      // or another Map Room's camp is not a Map Room 1 target.
+      // Map Room 1 has its own players' main yards and its own tribes, nothing
+      // else (its neighbours are Map Room 1 main yards, `findOverworldNeighbours`):
+      // an outpost, a camp or a yard on another Map Room is not a Map Room 1
+      // target, and so no way round that Map Room's range.
       save = await postgres.em.findOne(Save, { baseid });
-      if (save?.type !== BaseType.MAIN) throw baseNotFoundErr();
+      if (save?.type !== BaseType.MAIN || save.mapversion !== MapRoomVersion.V1) throw baseNotFoundErr();
     }
   } else {
     save = await postgres.em.findOne(Save, { baseid });
