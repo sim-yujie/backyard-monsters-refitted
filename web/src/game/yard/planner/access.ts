@@ -8,13 +8,17 @@ import { BaseMode } from "@/api/types";
  * build, upgrade or fortify state never locks it. Entry is a toolbar button,
  * not the building's popup."
  *
- * Three rules, and nothing else:
+ * Owner decision 2026-09-30 replaced the first of Q5's rules: layout mode is
+ * every player's, and the Yard Planner building unlocks only the Blueprint
+ * view. The rules now:
  *
- * 1. A yard with no Yard Planner building has no planner at all. This is the
- *    only thing that closes the door.
- * 2. The player's own yard, loaded in build mode, is editable.
- * 3. Anything else that can be drawn — a visit, a world-map view, a replay of
- *    an attack — opens the planner to look at, never to change.
+ * 1. The player's own yard, loaded in build mode, is editable, main yard or
+ *    outpost, Yard Planner or not.
+ * 2. Anything else that can be drawn — a visit, a world-map view, a replay of
+ *    an attack — opens the planner to look at, never to change, and only if
+ *    that yard holds a Yard Planner (a visit keeps the rule it always had).
+ * 3. The Blueprint view needs a Yard Planner in the yard shown, and is never
+ *    offered in an outpost, even one that has one ({@link blueprintBlock}).
  *
  * What is deliberately *not* here is the Flash client's rule that a damaged or
  * counting-down Yard Planner removed the entry (`BUILDINGINFO.as:99,111,118,125`).
@@ -22,18 +26,15 @@ import { BaseMode } from "@/api/types";
  * fortification or countdown: `hasYardPlanner` asks whether the yard holds one,
  * full stop.
  *
- * Pure on purpose. The client cannot yet open another player's yard — every
- * `/base/load` it makes is `type: "build"` on its own main base
- * (`src/api/base.ts`) — so rule 3 has no caller today. Keeping the rule in a
- * function with its own tests means the visit flow only has to pass its load
- * type in, rather than rediscover what read-only should mean.
+ * Pure on purpose: the yard scene passes its load type and whose yard it is,
+ * and the rules keep their own tests.
  */
 
 /** Yard Planner type id, `client/scripts/YARD_PROPS.as:1084`. */
 export const YARD_PLANNER_TYPE = 10;
 
 export const PlannerAccess = {
-  /** No Yard Planner in this yard: the button is disabled. */
+  /** Someone else's yard with no Yard Planner: the button is disabled. */
   LOCKED: "locked",
   /** The planner opens, but nothing in it can be changed. */
   READ_ONLY: "read-only",
@@ -70,9 +71,26 @@ export const plannerAccess = (
   loadType: string,
   ownYard: boolean,
 ): PlannerAccess => {
-  if (!hasYardPlanner(yard)) return PlannerAccess.LOCKED;
   if (ownYard && loadType === BaseMode.BUILD) return PlannerAccess.EDIT;
+  if (!hasYardPlanner(yard)) return PlannerAccess.LOCKED;
   return PlannerAccess.READ_ONLY;
+};
+
+/** Why the Blueprint view is off in a yard with no Yard Planner. */
+export const BLUEPRINT_NEEDS_PLANNER = "Build a Yard Planner to unlock Blueprint view";
+/** Why it is off in an outpost, which cannot build one (2026-09-30). */
+export const BLUEPRINT_NOT_IN_OUTPOSTS = "Blueprint view isn't available in outposts";
+
+/**
+ * Why the planner's Blueprint view cannot be opened in this yard, or null
+ * when it can: never in an outpost, and elsewhere only with a Yard Planner
+ * (owner decision 2026-09-30).
+ */
+export const blueprintBlock = (
+  yard: PlannerAccessYard & { readonly kind?: string },
+): string | null => {
+  if (yard.kind === "outpost") return BLUEPRINT_NOT_IN_OUTPOSTS;
+  return hasYardPlanner(yard) ? null : BLUEPRINT_NEEDS_PLANNER;
 };
 
 /**
@@ -85,7 +103,7 @@ export const plannerAccess = (
 export const plannerEntryTooltip = (access: PlannerAccess): string => {
   switch (access) {
     case PlannerAccess.LOCKED:
-      return "Build the Yard Planner to plan your yard";
+      return "This yard has no Yard Planner to look at its layout with";
     case PlannerAccess.READ_ONLY:
       return "Open the Yard Planner to look around (P) — editing needs your own yard in build mode";
     case PlannerAccess.EDIT:

@@ -17,6 +17,7 @@ import { Camera } from "@/game/Camera";
 import { setMapFocus } from "@/game/maproom/mapFocus";
 import { MapRoomChoice, mapRoomOf, takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import {
+  blueprintBlock,
   PlannerAccess,
   plannerAccess,
   plannerEntryTooltip,
@@ -1295,6 +1296,8 @@ export class YardScene implements Scene {
       notices: this.notices,
       readOnlyToolbar: hud.element,
       readOnly: this.access === PlannerAccess.READ_ONLY,
+      // Blueprint needs a Yard Planner in this yard, and never in an outpost.
+      blueprintBlocked: blueprintBlock(yard),
       ...(this.save?.firedtraps ? { firedtraps: this.save.firedtraps } : {}),
       // An outpost's Apply and batch actions act on it (outposts WP3).
       ...(this.store?.baseid !== undefined ? { baseid: this.store.baseid } : {}),

@@ -101,7 +101,9 @@ export const BUILDABLE_TYPES: ReadonlySet<number> = new Set(
  */
 export const OUTPOST_BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
   { id: BuildCategory.RESOURCES, label: "Resources", types: [1, 2, 3, 4] },
-  { id: BuildCategory.BUILDINGS, label: "Buildings", types: [15, 13, 16, 5, 10, 9] },
+  // No Yard Planner (10): outposts get no Blueprint view, its one use now
+  // that layout mode needs no building (owner decision 2026-09-30).
+  { id: BuildCategory.BUILDINGS, label: "Buildings", types: [15, 13, 16, 5, 9] },
   {
     id: BuildCategory.DEFENSIVE,
     label: "Defensive",

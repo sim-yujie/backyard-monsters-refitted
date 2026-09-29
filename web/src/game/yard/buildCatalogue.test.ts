@@ -366,16 +366,18 @@ describe("the outpost catalogue", () => {
   const CORE = building(1, 112, { l: 1 });
   const outpost = (fixture: Fixture): BuildContext => ({ ...contextOf(fixture), kind: "outpost" });
 
-  it("lists every type the outpost table lets a menu offer, and nothing else", () => {
+  it("lists every type the outpost table lets a menu offer, less the Yard Planner", () => {
     // In a menu tab, not `block`ed, and allowed at core level 1
-    // (`client/scripts/OUTPOST_YARD_PROPS.as`, research §1.2).
+    // (`client/scripts/OUTPOST_YARD_PROPS.as`, research §1.2); the Yard
+    // Planner (10) left out by the owner's decision of 2026-09-30.
     const offered = OUTPOST_COST_ROWS.filter(([type, , , group]) => {
       const blocked = outpostTraitsOf(type)?.[1] ?? true;
       return group >= 1 && group <= 4 && !blocked && quantityOf(type, 1, "outpost") > 0;
     }).map(([type]) => type);
-    expect([...OUTPOST_BUILDABLE_TYPES].sort((a, b) => a - b)).toEqual(offered);
-    expect(offered).toEqual([
-      1, 2, 3, 4, 5, 9, 10, 13, 15, 16, 17, 20, 21, 22, 23, 24, 25, 115, 117, 118,
+    expect(offered).toContain(10);
+    expect([...OUTPOST_BUILDABLE_TYPES].sort((a, b) => a - b)).toEqual(offered.filter((type) => type !== 10));
+    expect([...OUTPOST_BUILDABLE_TYPES].sort((a, b) => a - b)).toEqual([
+      1, 2, 3, 4, 5, 9, 13, 15, 16, 17, 20, 21, 22, 23, 24, 25, 115, 117, 118,
     ]);
   });
 
@@ -425,6 +427,6 @@ describe("the outpost catalogue", () => {
     const types = buildOffers(BuildCategory.BUILDINGS, outpost({ buildings: [CORE] })).map(
       (offer) => offer.type,
     );
-    expect(types).toEqual([15, 13, 16, 5, 10, 9]);
+    expect(types).toEqual([15, 13, 16, 5, 9]);
   });
 });

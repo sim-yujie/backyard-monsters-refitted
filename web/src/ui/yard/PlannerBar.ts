@@ -794,6 +794,19 @@ export class PlannerBar {
     this.viewMenu.setChecked("centre", toggles.centre);
   }
 
+  /**
+   * Turns the Blueprint button off with the reason as its tooltip, or back
+   * on with null (owner decision 2026-09-30: it needs a Yard Planner, and an
+   * outpost never has it).
+   */
+  setBlueprintBlocked(reason: string | null): void {
+    const blueprint = this.views.get(YardView.BLUEPRINT);
+    if (!blueprint) return;
+    blueprint.disabled = reason !== null;
+    blueprint.title = reason ?? "Flat top-down view for planning (Tab switches)";
+    blueprint.setAttribute("aria-label", reason ? `Blueprint. ${reason}` : "Blueprint");
+  }
+
   /** Redraws from the session's state. */
   update(state: PlannerState): void {
     for (const [tool, element] of this.tools) {

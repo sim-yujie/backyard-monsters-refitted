@@ -206,6 +206,11 @@ export interface YardPlannerOptions {
   save?: BaseLoadResponse;
   compare?: PlannerCompareHooks;
   /**
+   * Why the Blueprint view cannot be opened in this yard, or null/absent
+   * when it can (`access.ts`, `blueprintBlock`).
+   */
+  blueprintBlocked?: string | null;
+  /**
    * The outpost this planner is over (outposts WP5): Apply, the wall upgrade
    * and the trap re-arm act on it, charged to the main pool. Undefined on the
    * main yard.
@@ -379,6 +384,7 @@ export class YardPlanner {
     // as well as about a plan edit.
     options.renderer.watchZoom((zoom) => this.centreMark.setZoom(zoom));
     this.bar.setOverlays(this.overlays);
+    this.bar.setBlueprintBlocked(options.blueprintBlocked ?? null);
     options.canvas.addEventListener("pointermove", this.onHoverMove, { passive: true });
     this.refreshBar();
     this.bar.setRearmCount(this.rearmTargets().length);
@@ -397,6 +403,13 @@ export class YardPlanner {
   /** Shows the yard flat or isometric. The plan is untouched either way. */
   setView(view: YardView): void {
     if (this.session.state().view === view) return;
+    // The Blueprint view needs a Yard Planner and is never offered in an
+    // outpost (2026-09-30); the Tab key says why rather than doing nothing.
+    const blocked = this.options.blueprintBlocked ?? null;
+    if (view === YardView.BLUEPRINT && blocked) {
+      this.options.notices.show(NOTICE, `${blocked}.`, { level: "info", timeoutMs: 4000 });
+      return;
+    }
     this.options.onView(view);
     // The overlays hang off whichever view is showing, and the two draw the
     // same circle differently, so they move before the redraw `viewChanged`

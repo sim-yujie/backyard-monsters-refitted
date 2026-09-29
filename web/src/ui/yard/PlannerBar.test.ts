@@ -796,3 +796,24 @@ describe("the Coverage cell (#55)", () => {
     expect(cell(bar, "coverage")?.title).toContain("Dead zones");
   });
 });
+
+describe("the Blueprint button (2026-09-30)", () => {
+  const blueprint = (bar: PlannerBar): HTMLButtonElement =>
+    [...bar.toolbar.querySelectorAll<HTMLButtonElement>("button")].find(
+      (one) => one.textContent === "Blueprint",
+    )!;
+
+  it("is off with the reason as its tooltip, and back on with null", () => {
+    const bar = mount();
+    bar.setBlueprintBlocked("Blueprint view isn't available in outposts");
+    expect(blueprint(bar).disabled).toBe(true);
+    expect(blueprint(bar).title).toBe("Blueprint view isn't available in outposts");
+    expect(blueprint(bar).getAttribute("aria-label")).toBe(
+      "Blueprint. Blueprint view isn't available in outposts",
+    );
+
+    bar.setBlueprintBlocked(null);
+    expect(blueprint(bar).disabled).toBe(false);
+    expect(blueprint(bar).title).toContain("Tab switches");
+  });
+});

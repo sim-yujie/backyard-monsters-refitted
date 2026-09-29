@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { BaseMode } from "@/api/types";
 import {
+  BLUEPRINT_NEEDS_PLANNER,
+  BLUEPRINT_NOT_IN_OUTPOSTS,
+  blueprintBlock,
   hasYardPlanner,
   PlannerAccess,
   plannerAccess,
@@ -35,10 +38,15 @@ describe("hasYardPlanner", () => {
 });
 
 describe("plannerAccess", () => {
-  it("locks a yard with no Yard Planner, own and in build mode or not", () => {
-    expect(plannerAccess(WITHOUT, BaseMode.BUILD, true)).toBe(PlannerAccess.LOCKED);
+  it("opens on the player's own yard with or without a Yard Planner (2026-09-30)", () => {
+    expect(plannerAccess(WITHOUT, BaseMode.BUILD, true)).toBe(PlannerAccess.EDIT);
+    expect(plannerAccess({ buildings: [] }, BaseMode.BUILD, true)).toBe(PlannerAccess.EDIT);
+  });
+
+  it("still locks someone else's yard with no Yard Planner", () => {
     expect(plannerAccess(WITHOUT, BaseMode.VIEW, false)).toBe(PlannerAccess.LOCKED);
-    expect(plannerAccess({ buildings: [] }, BaseMode.BUILD, true)).toBe(PlannerAccess.LOCKED);
+    expect(plannerAccess(WITHOUT, BaseMode.WORLD_MAP_VIEW, false)).toBe(PlannerAccess.LOCKED);
+    expect(plannerAccess(WITHOUT, BaseMode.VIEW, true)).toBe(PlannerAccess.LOCKED);
   });
 
   it("gives full editing on the player's own yard in build mode", () => {
@@ -84,14 +92,29 @@ describe("plannerAccess", () => {
 });
 
 describe("plannerEntryTooltip", () => {
-  it("names the building that unlocks the planner when it is locked", () => {
+  it("says why a visited yard's layout cannot be looked at", () => {
     expect(plannerEntryTooltip(PlannerAccess.LOCKED)).toBe(
-      "Build the Yard Planner to plan your yard",
+      "This yard has no Yard Planner to look at its layout with",
     );
   });
 
   it("offers the shortcut when the planner can be opened", () => {
     expect(plannerEntryTooltip(PlannerAccess.EDIT)).toContain("(P)");
     expect(plannerEntryTooltip(PlannerAccess.READ_ONLY)).toContain("(P)");
+  });
+});
+
+describe("blueprintBlock (2026-09-30)", () => {
+  it("needs a Yard Planner in the yard shown", () => {
+    expect(blueprintBlock(WITH)).toBeNull();
+    expect(blueprintBlock({ ...WITH, kind: "main" })).toBeNull();
+    expect(blueprintBlock(WITHOUT)).toBe(BLUEPRINT_NEEDS_PLANNER);
+    expect(BLUEPRINT_NEEDS_PLANNER).toBe("Build a Yard Planner to unlock Blueprint view");
+  });
+
+  it("is never offered in an outpost, even one that has a Yard Planner", () => {
+    expect(blueprintBlock({ ...WITH, kind: "outpost" })).toBe(BLUEPRINT_NOT_IN_OUTPOSTS);
+    expect(blueprintBlock({ ...WITHOUT, kind: "outpost" })).toBe(BLUEPRINT_NOT_IN_OUTPOSTS);
+    expect(BLUEPRINT_NOT_IN_OUTPOSTS).toBe("Blueprint view isn't available in outposts");
   });
 });
