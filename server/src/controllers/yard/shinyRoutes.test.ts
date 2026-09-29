@@ -274,8 +274,53 @@ describe("POST /bm/yard/shop/buy", () => {
     expect(db.row).toMatchObject({ credits: 800 });
   });
 
+  test("PRO1 protects the yard for 24 hours from now when it has none", async () => {
+    const answer = await call(yardShopBuyAction, { item: "PRO1" });
+    const now = answer.body.currenttime as number;
+
+    expect(answer.body.report).toEqual({ item: "PRO1", credits: 32, q: 1, endsAt: now + 86400 });
+    expect(answer.body.protected).toBe(now + 86400);
+    expect(db.row).toMatchObject({
+      credits: 968,
+      protected: now + 86400,
+      storedata: { PRO1: { q: 1, s: now, e: now + 86400 } },
+    });
+  });
+
+  test("protection adds on top of what is left, new-player protection included, and can always be bought", async () => {
+    const now = getCurrentDateTime();
+    db.row = rowOf({ credits: 10000, protected: now + 3 * 86400 });
+
+    const first = await call(yardShopBuyAction, { item: "PRO2" });
+    expect(first.status).toBe(200);
+    const afterFirst = now + 3 * 86400 + 604800;
+    expect((first.body.report as { endsAt: number }).endsAt).toBeGreaterThanOrEqual(afterFirst);
+
+    const second = await call(yardShopBuyAction, { item: "PRO2" });
+    expect(second.status).toBe(200);
+    const third = await call(yardShopBuyAction, { item: "PRO3" });
+    expect(third.status).toBe(200);
+
+    const end = (third.body.report as { endsAt: number }).endsAt;
+    // Stacked: three days left + 7 + 7 + 28 days, whatever second the calls ran in.
+    expect(end - (db.row!.protected as number)).toBe(0);
+    expect(end - (now + 3 * 86400)).toBe(2 * 604800 + 2419200);
+    expect((db.row!.storedata as Row).PRO2).toMatchObject({ q: 2 });
+    expect(db.row).toMatchObject({ credits: 10000 - 250 - 250 - 1100 });
+  });
+
+  test("expired protection is not added to: a new buy counts from now", async () => {
+    const now = getCurrentDateTime();
+    db.row = rowOf({ protected: now - 500 });
+    const answer = await call(yardShopBuyAction, { item: "PRO1" });
+    const at = answer.body.currenttime as number;
+    expect(db.row).toMatchObject({ protected: at + 86400 });
+  });
+
   test("items off the allowlist are 400 notForSale", async () => {
-    for (const item of ["HODI", "PRO1", "MUSK", "toString", "__proto__"]) {
+    const heldBack = ["TOD", "MOD", "MDOD", "MSOD", "BLK2", "BLK5", "BUILDING28"];
+    const dropped = ["HODI", "ENLI", "MUSK", "HAMS", "BR11", "BR43", "FQ", "FIX", "SP4"];
+    for (const item of [...heldBack, ...dropped, "toString", "__proto__"]) {
       const answer = await call(yardShopBuyAction, { item });
       expect(answer).toMatchObject({ status: 400, body: { reason: "notForSale" } });
     }

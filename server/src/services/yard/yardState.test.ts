@@ -37,6 +37,7 @@ const FROZEN_KEYS = [
   "credits",
   "caps",
   "workers",
+  "protected",
   "buildingdata",
   "buildinghealthdata",
   "storedata",

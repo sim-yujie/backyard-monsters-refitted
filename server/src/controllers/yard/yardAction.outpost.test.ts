@@ -437,7 +437,7 @@ describe("routes Flash refuses in an outpost", () => {
   }
 
   test("the store sells an outpost only its own list: no extra worker", async () => {
-    for (const item of ["BEW", "BIP", "ENL", "CLOD"]) {
+    for (const item of ["BEW", "BIP", "ENL", "CLOD", "PRO1", "PRO2", "PRO3"]) {
       const refused = await onOutpost(yardShopBuyAction, { item });
       expect(refused.status).toBe(400);
       expect(refused.body.reason).toBe("notForSale");

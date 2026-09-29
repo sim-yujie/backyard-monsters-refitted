@@ -102,6 +102,7 @@ export type YardSlices = Partial<
     | "mushrooms"
     | "researchdata"
     | "firedtraps"
+    | "protected"
   >
 >;
 

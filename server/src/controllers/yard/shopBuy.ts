@@ -33,6 +33,12 @@ import { defineYardAction, type YardActionInput } from "./yardAction.js";
 export interface ShopItemRule {
   /** Refusals beyond "already active" and "sold out", thrown as yard errors. */
   check?: (input: YardActionInput<{ item: string }>) => void;
+  /**
+   * Damage protection (`PRO1`..`PRO3`): never `alreadyActive`; its time is
+   * added on top of whatever protection the yard has left, new-player and
+   * post-attack protection included, and written to `save.protected`.
+   */
+  protection?: true;
 }
 
 /**
@@ -54,6 +60,11 @@ export interface ShopItemRule {
  * `layoutGeometry.ts` `YARD_SIZES`) and `POD` (Production Overdrive, 200, 12
  * hours, harvesters produce twice as fast, `catchUpHarvesters.ts`). The
  * effects were already read from `storedata`; buying them is all that is new.
+ * `PRO1` / `PRO2` / `PRO3` (damage protection, 32 / 250 / 1,100, 24 hours /
+ * 7 days / 28 days) can always be bought: each adds its time on top of the
+ * protection left, as the Flash save path did
+ * (`controllers/base/save/handlers/purchaseHandler.ts`), owner decision
+ * 2026-09-29. Attacking anyone still ends it (`finaliseAttack.ts`).
  */
 export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
   BEW: {},
@@ -66,13 +77,18 @@ export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
   BIP: {},
   ENL: {},
   POD: {},
+  PRO1: { protection: true },
+  PRO2: { protection: true },
+  PRO3: { protection: true },
 };
 
 /**
  * What an outpost's store sells of {@link SHOP_ITEMS}: Map Room 2 outposts
  * show a reduced list (`client/scripts/STORE.as:198-199`: `BST`, the block
  * and resource packs, speed-ups, `POD`, `FIX`, `HOD*`, `PRO*`, `TOD`,
- * `EXH`), so no extra worker (one per outpost) and no Locker Overdrive. A
+ * `EXH`), so no extra worker (one per outpost) and no Locker Overdrive, and
+ * no damage protection: it is sold for the main yard only and protects only
+ * that (owner decision 2026-09-29). A
  * timed item bought in an outpost is the outpost's: it lands in the outpost's
  * own `storedata`, as Flash kept store data per yard.
  */
@@ -95,6 +111,32 @@ const count = (raw: unknown): number => {
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 };
 
+/**
+ * A protection item: `save.protected` becomes `max(protected, now) + du`, and
+ * `storedata[item]` records the purchase (`q` counts the ones bought while
+ * the last still ran, `e` is the new end, so the catch-up clears it with the
+ * protection).
+ */
+const buyProtection = (
+  { save, body, now }: YardActionInput<{ item: string }>,
+  price: number,
+  seconds: number,
+) => {
+  const { item } = body;
+  const entry: JsonObject = save.storedata?.[item] ?? {};
+  const endsAt = Math.max(count(save.protected), now) + seconds;
+  const q = (count(entry.e) > now ? count(entry.q) : 0) + 1;
+  const report: ShopBuyReport = { item, credits: price, q, endsAt };
+  return {
+    report,
+    slices: {
+      storedata: { ...(save.storedata ?? {}), [item]: { q, s: now, e: endsAt } },
+      protected: endsAt,
+    },
+    shiny: price,
+  };
+};
+
 export const yardShopBuyAction = defineYardAction({
   schema: YardShopBuySchema,
   run: (input) => {
@@ -112,6 +154,8 @@ export const yardShopBuyAction = defineYardAction({
 
     const entry: JsonObject = save.storedata?.[item] ?? {};
     const timed = storeItem.du > 0;
+
+    if (rule.protection) return buyProtection(input, storeItem.c[0] ?? 0, storeItem.du);
 
     if (timed && count(entry.e) > now) {
       throw yardRefusedErr("alreadyActive", "That is already running.", {

@@ -37,6 +37,8 @@ export interface YardState {
   caps: { r1: number; r2: number; r3: number; r4: number };
   /** Worker slots and how many are on a build, upgrade or fortify countdown. */
   workers: { total: number; busy: number };
+  /** Damage protection expiry, unix seconds, as `/base/load` sends it; at or below now means none. */
+  protected: number;
   buildingdata: BuildingDataMap;
   buildinghealthdata: BuildingHealthData;
   storedata: JsonObject;
@@ -56,6 +58,7 @@ export interface YardStateSave {
   poolCap?: number;
   savetime?: number;
   credits: number;
+  protected?: number;
   resources?: JsonObject | null;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
@@ -92,6 +95,7 @@ export const yardState = (save: YardStateSave, now: number, shinyLocked: boolean
       total: workerCount(save.storedata, yardKindOf(save)),
       busy: busyWorkers(save.buildingdata),
     },
+    protected: Number(save.protected) || 0,
     buildingdata: save.buildingdata ?? {},
     buildinghealthdata: save.buildinghealthdata ?? {},
     storedata: save.storedata ?? {},

@@ -152,6 +152,7 @@ describe("POST /bm/yard/state", () => {
       "credits",
       "caps",
       "workers",
+      "protected",
       "buildingdata",
       "buildinghealthdata",
       "storedata",

@@ -1076,6 +1076,8 @@ export interface YardState {
   credits: number;
   caps: ResourceCaps;
   workers: WorkerCount;
+  /** Damage protection expiry, unix seconds, as `/base/load` sends it; at or below now means none. */
+  protected: number;
   buildingdata: BuildingDataMap;
   buildinghealthdata: BuildingHealthData;
   storedata: StoreData;
@@ -1095,6 +1097,7 @@ export const YARD_STATE_KEYS = [
   "credits",
   "caps",
   "workers",
+  "protected",
   "buildingdata",
   "buildinghealthdata",
   "storedata",
