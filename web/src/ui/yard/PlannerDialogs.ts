@@ -120,7 +120,7 @@ export const checklistPanel = (options: ChecklistPanelOptions): Panel => {
   verdict.textContent = !options.checklist.ok
     ? "Apply is blocked until the crossed rows are fixed."
     : warnings > 0
-      ? `Nothing is blocking Apply. ${warnings} ${warnings === 1 ? "warning" : "warnings"}: Apply will still run and report what it could not start.`
+      ? `Nothing is blocking Apply. ${warnings} ${warnings === 1 ? "warning" : "warnings"}: Apply will still run.`
       : "Nothing is blocking Apply.";
 
   panel.setContent(list, verdict);

@@ -18,13 +18,10 @@ import type { ApplyPreview } from "./upgrades";
  * auto-placing; the store tool made unplacing possible, so the set it reads is
  * the planner's drawer.
  *
- * Decorations are in that set too, although the server would accept a layout
- * that leaves one out (`services/yardplanner/validateLayout.ts`,
- * `unplacedBuildings`). The server does not *remove* a building it is not sent
- * — it simply leaves it where it stands — so a stored decoration would come
- * back at its old position, possibly under whatever the plan has since moved
- * onto those cells. Blocking on it is the only reading of "stored" that the
- * yard can keep its side of.
+ * Decorations are not in that set (#128). Apply puts a decoration the layout
+ * leaves out into storage, as the Flash planner did
+ * (`com/monsters/baseplanner/BasePlanner.as:113-122`), so one in the drawer is
+ * a warning row saying so rather than a block.
  */
 
 export interface ChecklistItem {
@@ -72,6 +69,7 @@ export const buildChecklist = (
   validation: PlacementResult,
   unplaced: readonly number[] = [],
   preview: ApplyPreview | null = null,
+  toStorage: readonly number[] = [],
 ): Checklist => {
   const overlaps: ChecklistItem[] = [];
   const outside: ChecklistItem[] = [];
@@ -115,6 +113,7 @@ export const buildChecklist = (
       items: outside,
     },
     ...upgradeRows(nodes, preview),
+    ...storageRows(nodes, toStorage),
   ];
 
   return {
@@ -123,6 +122,27 @@ export const buildChecklist = (
     faulted,
   };
 };
+
+/**
+ * The warning row for decorations left in the drawer (#128): Apply puts them
+ * into storage, which the player should see before pressing it. Left out when
+ * there are none.
+ */
+const storageRows = (
+  nodes: Map<number, PlanNode> | ReadonlyMap<number, PlanNode>,
+  toStorage: readonly number[],
+): ChecklistRow[] =>
+  toStorage.length === 0
+    ? []
+    : [
+        {
+          key: "toStorage",
+          label: "Decorations in the drawer go into storage",
+          ok: false,
+          items: toStorage.map((id) => ({ id, label: `${nameOf(nodes.get(id))} goes into storage` })),
+          warning: true,
+        },
+      ];
 
 /**
  * The three warning rows a plan with upgrades adds (design F17,

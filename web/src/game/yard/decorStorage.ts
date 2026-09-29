@@ -40,6 +40,20 @@ export const storedCount = (researchdata: Researchdata, type: number): number =>
 export const storedLevel = (researchdata: Researchdata, type: number): number =>
   TOTEM_TYPES.has(type) ? whole(researchdata?.[`bl${type}`]) || 1 : 1;
 
+/**
+ * The ids the planner gives stored decorations while it is open (#128): one
+ * per decoration, `base + type × 1000 + n`, above every building id and the
+ * planner's mushrooms (`planner/plan.ts`, `MUSHROOM_ID_BASE`), and stable
+ * across a rebase so a decoration the player has put down keeps its node.
+ */
+export const STORAGE_ID_BASE = 1_500_000;
+const STORAGE_ID_END = 2_000_000;
+/** Per type; a stock beyond this many shows this many. */
+const STORAGE_PER_TYPE = 1_000;
+
+/** Whether `id` is one of {@link STORAGE_ID_BASE}'s. */
+export const isStorageId = (id: number): boolean => id >= STORAGE_ID_BASE && id < STORAGE_ID_END;
+
 /** Every decoration type with at least one in storage, lowest type first. */
 export const storedDecorations = (researchdata: Researchdata): StoredDecoration[] => {
   const stored: StoredDecoration[] = [];
@@ -52,4 +66,24 @@ export const storedDecorations = (researchdata: Researchdata): StoredDecoration[
     stored.push({ type, count, level: storedLevel(researchdata, type) });
   }
   return stored.sort((a, b) => a.type - b.type);
+};
+
+/**
+ * The save with every stored decoration added as a building, for the
+ * planner's drawer (#128): the planner draws, carries and places buildings,
+ * so a decoration still in storage is handed to it as one, with a
+ * {@link STORAGE_ID_BASE} id, which the plan keeps in the drawer and Apply
+ * sends as `fromStorage` rather than as a node.
+ */
+export const withStoredDecorations = (save: BaseLoadResponse): BaseLoadResponse => {
+  const stored = storedDecorations(save.researchdata);
+  if (stored.length === 0) return save;
+  const buildingdata = { ...(save.buildingdata ?? {}) };
+  for (const { type, count, level } of stored) {
+    for (let n = 0; n < Math.min(count, STORAGE_PER_TYPE); n++) {
+      const id = STORAGE_ID_BASE + type * STORAGE_PER_TYPE + n;
+      buildingdata[String(id)] = { id, t: type, X: 0, Y: 0, ...(level > 1 ? { l: level } : {}) };
+    }
+  }
+  return { ...save, buildingdata };
 };

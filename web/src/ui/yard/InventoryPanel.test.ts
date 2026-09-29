@@ -312,6 +312,29 @@ describe("the inventory drawer", () => {
     expect(summary?.textContent).toContain("Apply is blocked");
   });
 
+  it("says what Apply does with decorations: lifted ones go into storage, stored ones are free (#128)", () => {
+    const panel = mount();
+    panel.setNodes([
+      node({ id: 1 }),
+      node({ id: 2, type: 28, decoration: true }),
+      node({ id: 1_528_000, type: 28, decoration: true, fromStorage: true }),
+      node({ id: 1_528_001, type: 28, decoration: true, fromStorage: true }),
+    ]);
+
+    expect(panel.element.querySelector(".planner-inventory__summary")?.textContent).toBe(
+      "1 building waiting. Apply is blocked until it is placed. " +
+        "1 decoration goes into storage when you Apply. 2 decorations from storage, free to place.",
+    );
+  });
+
+  it("with only decorations, nothing says Apply is blocked", () => {
+    const panel = mount();
+    panel.setNodes([node({ id: 2, type: 28, decoration: true })]);
+    expect(panel.element.querySelector(".planner-inventory__summary")?.textContent).toBe(
+      "1 decoration goes into storage when you Apply.",
+    );
+  });
+
   it("keeps the blocked count honest while the box is filtering", () => {
     const panel = mount();
     panel.setNodes([node({ id: 1, type: 17 }), node({ id: 2, type: 20 })]);

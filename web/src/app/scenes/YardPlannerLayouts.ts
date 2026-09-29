@@ -131,9 +131,13 @@ export class YardPlannerLayouts {
    * a `stored` flag on a layout node, taught to the schema, the validator and
    * Apply — is a server change for a layout that could never be applied
    * anyway: Apply is hard-blocked while anything is in the drawer (§8, Q4).
+   *
+   * Decorations do not count (#128): Apply puts one left out into storage, so
+   * a layout without it is one Apply can run, and a decoration still in
+   * storage was never in the yard at all.
    */
   private refuseWhileStored(): boolean {
-    const stored = this.options.session.state().storedCount;
+    const stored = this.options.session.state().unplacedCount;
     if (stored === 0) return false;
     this.options.notify(
       `Place the ${stored} stored ${stored === 1 ? "building" : "buildings"} before saving: a layout cannot hold them.`,

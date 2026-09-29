@@ -25,12 +25,23 @@ import { inBounds, Occupancy, snap, type PlanNode } from "./placement";
  * stands, Apply stays blocked on it, and the player decides.
  */
 
-/** The `data` field for a save or an apply. */
-export const payloadFor = (plan: Plan): LayoutPayload => ({
-  version: LAYOUT_VERSION,
-  expansion: plan.expansion,
-  nodes: plan.buildings().map(toLayoutNode),
-});
+/**
+ * The `data` field for a save or an apply. A decoration put down out of
+ * storage is no building yet, so it goes in `fromStorage` rather than
+ * `nodes` (#128); a slot save drops those.
+ */
+export const payloadFor = (plan: Plan): LayoutPayload => {
+  const fromStorage = plan.fromStorageNodes().map((node) => ({ t: node.type, x: node.x, y: node.y }));
+  return {
+    version: LAYOUT_VERSION,
+    expansion: plan.expansion,
+    nodes: plan
+      .buildings()
+      .filter((node) => !node.fromStorage)
+      .map(toLayoutNode),
+    ...(fromStorage.length > 0 ? { fromStorage } : {}),
+  };
+};
 
 const toLayoutNode = (node: PlanNode): LayoutNode => ({
   id: node.id,

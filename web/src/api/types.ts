@@ -824,6 +824,8 @@ export interface LayoutPayload {
   version: number;
   expansion: number;
   nodes: LayoutNode[];
+  /** Decorations Apply takes out of storage and puts down (#128); a slot save drops them. */
+  fromStorage?: { t: number; x: number; y: number }[];
 }
 
 export interface LayoutsResponse extends ApiEnvelope {
@@ -854,6 +856,14 @@ export interface ApplyLayoutResponse extends ApiEnvelope {
    * a server that predates planned upgrades.
    */
   upgrades?: UpgradeReport | null;
+  /** Decorations the layout left out, now in storage (#128). */
+  stored?: number[];
+  /** The ids of the decorations `fromStorage` put down (#128). */
+  placed?: number[];
+  /** Storage after Apply (#128): what it put in and took out. */
+  researchdata?: Record<string, unknown>;
+  /** Health readings after Apply: a stored decoration's is gone (#128). */
+  buildinghealthdata?: BuildingHealthData;
 }
 
 /* ── Planned upgrades ───────────────────────────────────────────────────── */

@@ -100,6 +100,8 @@ export interface PlannerState {
   readonly carrying: boolean;
   /** How many buildings are in the drawer rather than on the plot. */
   readonly storedCount: number;
+  /** How many of those are not decorations: what blocks Apply and a slot save (#128). */
+  readonly unplacedCount: number;
   /**
    * True while a building out of the drawer follows the pointer.
    *
@@ -290,6 +292,8 @@ export class PlannerSession {
 
   attach(): void {
     this.input.attach();
+    // Decorations still in storage (#128) start in the drawer: not drawn.
+    this.view.syncStored();
     this.view.resort();
     this.refresh();
   }
@@ -317,6 +321,7 @@ export class PlannerSession {
       dragInvalid: this.dragInvalid,
       carrying: this.input.isCarrying,
       storedCount: this.plan.storedCount,
+      unplacedCount: this.plan.unplacedIds().length,
       placing: this.placing !== null,
       previewing: this.preview !== null || this.readOnly,
       readOnly: this.readOnly,
@@ -885,8 +890,9 @@ export class PlannerSession {
     const checklist = buildChecklist(
       this.plan.index(),
       this.plan.validate(),
-      this.plan.storedIds(),
+      this.plan.unplacedIds(),
       planned,
+      this.plan.toStorageIds(),
     );
     this.faulted = checklist.faulted;
     this.refresh();

@@ -52,6 +52,7 @@ const stateOf = (overrides: Partial<PlannerState> = {}): PlannerState => ({
   dragInvalid: false,
   carrying: false,
   storedCount: 0,
+  unplacedCount: 0,
   placing: false,
   view: YardView.BLUEPRINT,
   previewing: false,

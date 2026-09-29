@@ -1,4 +1,5 @@
 import { kindOf, maxLevel } from "../buildingCosts";
+import { isStorageId } from "../decorStorage";
 import { holdsWorker } from "../workers";
 import { footprintOf } from "../YardGrid";
 import type { Yard } from "../yardModel";
@@ -139,27 +140,7 @@ export class Plan {
   static fromYard(yard: Yard): Plan {
     const plan = new Plan(yard.expansionLevel);
 
-    for (const building of yard.buildings) {
-      const [width, height] = building.footprint;
-      const decoration = isDecoration(building.type);
-      plan.add({
-        id: building.id,
-        type: building.type,
-        x: building.x,
-        y: building.y,
-        width,
-        height,
-        level: building.level,
-        fort: building.fortification,
-        decoration,
-        ...(decoration ? { home: { x: building.x, y: building.y } } : {}),
-        fixed: false,
-        stored: false,
-        plan: null,
-        busy: holdsWorker(building),
-        damaged: building.hp !== null,
-      });
-    }
+    for (const building of yard.buildings) plan.add(nodeOf(building));
 
     for (const mushroom of yard.mushrooms) {
       plan.add({
@@ -228,9 +209,31 @@ export class Plan {
       .sort((a, b) => a.id - b.id);
   }
 
-  /** Their ids, which is what the checklist and the bar count. */
+  /** Their ids, which is what the bar counts. */
   storedIds(): number[] {
     return this.storedNodes().map((node) => node.id);
+  }
+
+  /**
+   * The stored buildings Apply is blocked on: everything but decorations,
+   * which Apply puts into storage instead (#128, `BasePlanner.as:113-122`).
+   */
+  unplacedIds(): number[] {
+    return this.storedNodes()
+      .filter((node) => !node.decoration)
+      .map((node) => node.id);
+  }
+
+  /** Decorations lifted off the yard into the drawer: Apply puts them into storage (#128). */
+  toStorageIds(): number[] {
+    return this.storedNodes()
+      .filter((node) => node.decoration && !node.fromStorage)
+      .map((node) => node.id);
+  }
+
+  /** Decorations out of storage that stand on the plot: Apply takes them out (#128). */
+  fromStorageNodes(): PlanNode[] {
+    return this.buildings().filter((node) => node.fromStorage);
   }
 
   get storedCount(): number {
@@ -627,28 +630,13 @@ export class Plan {
       const node = this.nodes.get(building.id);
 
       if (!node) {
-        const [width, height] = building.footprint;
-        const decoration = isDecoration(building.type);
-        this.add({
-          id: building.id,
-          type: building.type,
-          x: building.x,
-          y: building.y,
-          width,
-          height,
-          level: building.level,
-          fort: building.fortification,
-          decoration,
-          ...(decoration ? { home: { x: building.x, y: building.y } } : {}),
-          fixed: false,
-          stored: false,
-          plan: null,
-          busy: holdsWorker(building),
-          damaged: building.hp !== null,
-        });
+        this.add(nodeOf(building));
         added.push(building.id);
         continue;
       }
+      // A decoration still in storage is the player's to place: the rebase
+      // leaves it where the plan has it.
+      if (node.fromStorage) continue;
 
       if (node.level !== building.level || node.fort !== building.fortification) {
         node.level = building.level;
@@ -741,9 +729,40 @@ export class Plan {
   private add(node: PlanNode): void {
     this.nodes.set(node.id, node);
     this.origin.set(node.id, [node.x, node.y]);
-    this.occupancy.stamp(node);
+    // A stored node holds no cells.
+    if (!node.stored) this.occupancy.stamp(node);
   }
 }
+
+/**
+ * A yard building as a plan node. A decoration carries its saved spot as
+ * `home`, where it may stay even outside the plot; one still in storage
+ * (#128) starts in the drawer, with no home, since it has never stood
+ * anywhere.
+ */
+const nodeOf = (building: Yard["buildings"][number]): PlanNode => {
+  const [width, height] = building.footprint;
+  const decoration = isDecoration(building.type);
+  const fromStorage = isStorageId(building.id);
+  return {
+    id: building.id,
+    type: building.type,
+    x: building.x,
+    y: building.y,
+    width,
+    height,
+    level: building.level,
+    fort: building.fortification,
+    decoration,
+    ...(decoration && !fromStorage ? { home: { x: building.x, y: building.y } } : {}),
+    ...(fromStorage ? { fromStorage: true as const } : {}),
+    fixed: false,
+    stored: fromStorage,
+    plan: null,
+    busy: holdsWorker(building),
+    damaged: building.hp !== null,
+  };
+};
 
 /** The nodes of `source` that are standing on the plot. */
 function* placed(source: Iterable<PlanNode>): IterableIterator<PlanNode> {

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import type { ViewTarget } from "@/game/attack/attackTarget";
 import { MAIN_YARD, outpostTarget } from "@/game/yard/ownYards";
-import { hudPoolFor, loadYardFor, refusalNotice } from "./YardScene";
+import { hudPoolFor, loadYardFor, refusalNotice, storageText } from "./YardScene";
 
 const response = { error: 0, id: 1, baseid: "1000", basesaveid: 1 } as BaseLoadResponse;
 
@@ -93,5 +93,15 @@ describe("refusalNotice (#153)", () => {
     const attack = { baseid: "21970243208", kind: "wild" } as unknown as NonNullable<ViewTarget["attack"]>;
     expect(refusalNotice(null)).toBeNull();
     expect(refusalNotice({ ...visit("wild"), attack, refusal: null })).toBeNull();
+  });
+});
+
+describe("storageText (#128)", () => {
+  it("says what Apply put into storage and took out", () => {
+    expect(storageText({ stored: [], placed: [] })).toBe("");
+    expect(storageText({ stored: [5], placed: [] })).toBe("1 decoration put in storage.");
+    expect(storageText({ stored: [5, 6], placed: [9] })).toBe(
+      "2 decorations put in storage. 1 decoration placed from storage.",
+    );
   });
 });

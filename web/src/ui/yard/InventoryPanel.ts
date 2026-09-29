@@ -220,14 +220,38 @@ export class InventoryPanel {
    * Apply is blocked by what is stored, not by what the box matches, so typing
    * in the box must not make the warning smaller than the truth.
    */
+  /**
+   * What the drawer holds, in the three kinds Apply treats differently
+   * (#128): buildings it is blocked on, decorations lifted off the yard that
+   * it puts into storage, and decorations still in storage, free to place.
+   */
   private renderSummary(): void {
-    const total = this.nodes.reduce((count, node) => count + (node.fixed ? 0 : 1), 0);
-    this.summary.textContent =
-      total === 0
-        ? ""
-        : `${total} ${total === 1 ? "building" : "buildings"} waiting. Apply is blocked until ${
-            total === 1 ? "it is" : "they are"
-          } placed.`;
+    let buildings = 0;
+    let lifted = 0;
+    let storage = 0;
+    for (const node of this.nodes) {
+      if (node.fixed) continue;
+      if (node.fromStorage) storage++;
+      else if (node.decoration) lifted++;
+      else buildings++;
+    }
+    const parts: string[] = [];
+    if (buildings > 0) {
+      parts.push(
+        `${buildings} ${buildings === 1 ? "building" : "buildings"} waiting. Apply is blocked until ${
+          buildings === 1 ? "it is" : "they are"
+        } placed.`,
+      );
+    }
+    if (lifted > 0) {
+      parts.push(
+        `${lifted} ${lifted === 1 ? "decoration goes" : "decorations go"} into storage when you Apply.`,
+      );
+    }
+    if (storage > 0) {
+      parts.push(`${storage} ${storage === 1 ? "decoration" : "decorations"} from storage, free to place.`);
+    }
+    this.summary.textContent = parts.join(" ");
   }
 
   /** One chip per kind the drawer holds, badged with how many it holds. */

@@ -1,5 +1,6 @@
 import type {
   BuildingDataMap,
+  BuildingHealthData,
   FiredTrap,
   Layout,
   Resources,
@@ -76,6 +77,16 @@ import { YardPlannerLayouts } from "./YardPlannerLayouts";
 const NOTICE = "yard-planner";
 
 
+/** What an Apply did with decorations (#128), for the scene to merge and say. */
+export interface AppliedStorage {
+  /** Decorations the layout left out, now in storage. */
+  readonly stored: readonly number[];
+  /** Decorations put down out of storage. */
+  readonly placed: readonly number[];
+  readonly researchdata?: Record<string, unknown>;
+  readonly buildinghealthdata?: BuildingHealthData;
+}
+
 export interface YardPlannerOptions {
   yard: Yard;
   renderer: YardRenderer;
@@ -113,13 +124,16 @@ export interface YardPlannerOptions {
    * planned upgrades (`docs/design/planner-upgrades.md` §5.5): the pool has
    * been charged server-side, so the HUD re-reads it rather than subtracting,
    * and the report is raised as a notice by the scene — the planner closes on
-   * Apply (§8, Q4) and takes its own notices with it.
+   * Apply (§8, Q4) and takes its own notices with it. `storage` is what Apply
+   * did with decorations (#128): the storage and health it left, and which
+   * went in and came out.
    */
   onApplied: (
     buildingdata: BuildingDataMap,
     moved: number,
     resources: Resources | undefined,
     upgrades: UpgradeReport | null,
+    storage: AppliedStorage,
   ) => void;
   /**
    * Called after a batch action the server completed, with the save as it now
@@ -818,6 +832,12 @@ export class YardPlanner {
         response.moved,
         response.resources,
         response.upgrades ?? null,
+        {
+          stored: response.stored ?? [],
+          placed: response.placed ?? [],
+          ...(response.researchdata ? { researchdata: response.researchdata } : {}),
+          ...(response.buildinghealthdata ? { buildinghealthdata: response.buildinghealthdata } : {}),
+        },
       );
     } catch (caught) {
       const ids = applyConflictIds(caught);

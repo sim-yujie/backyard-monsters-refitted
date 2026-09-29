@@ -1167,6 +1167,26 @@ first; placing from inventory is free and may be outside the plot. Routes: `deco
 `x`, `y` (decrement inventory); recycle already stores. The planner drawer
 (`web/src/ui/yard/InventoryPanel.ts`) starts showing real inventory items beside lifted buildings.
 
+**Decisions (2026-09-29, WP6.3, #128).** Questions 1–3 and 5 answered by the owner, 4 and 6 by
+the lead, and the plot question by the owner (option A):
+
+1. **Storage only.** Only what is in storage is placed, owned Shiny decorations included; no
+   decoration is bought (the Shop keeps them "coming later", §8.2).
+2. **Apply stores what the layout leaves out**, as the Flash planner did
+   (`BasePlanner.as:113-122`): every decoration not in the layout goes into storage as a recycle
+   puts it, and a decoration in the drawer is a warning row, not a block. The drawer lists storage
+   too; one put down is created by Apply (`fromStorage`).
+3. **Placing is free and instant**, no worker, no points, no Town Hall limit (the count is the
+   limit), **inside the plot only**, clear of buildings and mushrooms.
+4. **Totems** come back at their stored `bl` level, else 1; `bl` goes with the last one.
+5. **Main yard only**; `decor/place` is `notInOutpost` in an outpost.
+6. **The Decorations tab** lists the stored types with their counts and a Place button; empty, it
+   says how to fill it.
+7. **Decorations are held to the plot** in the planner and on Apply and slot save, like every
+   building, instead of Flash's 3240 x 2600 decoration area. One already outside the plot (a Flash
+   save, an earlier Apply) may stay exactly at its saved spot; any move or new placement must land
+   inside, and nothing is moved on its own.
+
 | WP | Scope | Owns | Depends on | Size |
 | --- | --- | --- | --- | --- |
 | WP6.1 | Baiter simulator | new `web/src/app/scenes/BaiterScene.ts` (or a mode of `AttackScene`), `web/src/ui/yard/BaiterPanel.ts`, `web/src/game/baiter/baiterSession.ts` (+ tests) | Phase 2 (`QuantityStepper`), attack scene | M/L |

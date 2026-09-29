@@ -93,6 +93,12 @@ export interface PlanNode {
    * to the plot. Absent for everything else.
    */
   home?: Position;
+  /**
+   * A decoration still in storage (#128), handed to the planner as a stored
+   * node (`decorStorage.ts`, `withStoredDecorations`). Put down, Apply takes
+   * it out of storage (`fromStorage`); left in the drawer, it stays there.
+   */
+  fromStorage?: true;
   /** Mushrooms: obstacles the planner may not move. */
   readonly fixed: boolean;
   /**

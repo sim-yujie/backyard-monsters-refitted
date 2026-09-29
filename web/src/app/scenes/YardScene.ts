@@ -37,6 +37,7 @@ import {
   type OwnYardTarget,
 } from "@/game/yard/ownYards";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
+import { withStoredDecorations } from "@/game/yard/decorStorage";
 import { consumeYardIntent, type YardIntent } from "@/game/yard/yardIntent";
 import { yardLifeOf } from "@/game/yard/yardLifeModel";
 import {
@@ -73,7 +74,7 @@ import { StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { icon } from "@/ui/icons";
 import { ZoomControl } from "@/ui/ZoomControl";
-import { YardPlanner } from "./YardPlanner";
+import { YardPlanner, type AppliedStorage } from "./YardPlanner";
 import { sceneForMap } from "./MapGateScene";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
@@ -1205,7 +1206,7 @@ export class YardScene implements Scene {
     // here as well as on the button because the P key does not go through it.
     if (this.access === PlannerAccess.LOCKED) return;
 
-    const yard = this.yard;
+    const yard = this.plannerYard();
     const camera = this.camera;
     const context = this.context;
     const hud = this.hud;
@@ -1216,6 +1217,11 @@ export class YardScene implements Scene {
     this.shop?.close();
     this.endPlacement();
     this.buildMenu?.close();
+    // Stored decorations need sprites to be carried out of the drawer.
+    if (yard !== this.renderer.shown) {
+      this.renderer.show(yard);
+      this.minimap?.refreshBuildings();
+    }
     this.planner = new YardPlanner({
       yard,
       renderer: this.renderer,
@@ -1228,8 +1234,8 @@ export class YardScene implements Scene {
       ...(this.save?.firedtraps ? { firedtraps: this.save.firedtraps } : {}),
       // An outpost's Apply and batch actions act on it (outposts WP3).
       ...(this.store?.baseid !== undefined ? { baseid: this.store.baseid } : {}),
-      onApplied: (buildingdata, moved, resources, upgrades) =>
-        this.onApplied(buildingdata, moved, resources, upgrades),
+      onApplied: (buildingdata, moved, resources, upgrades, storage) =>
+        this.onApplied(buildingdata, moved, resources, upgrades, storage),
       onYardChanged: (buildingdata, resources) => this.onYardChanged(buildingdata, resources),
       onView: (view) => this.setView(view),
       onInset: (inset) => this.setInset(inset),
@@ -1277,10 +1283,29 @@ export class YardScene implements Scene {
     this.refreshBuildButton();
   }
 
+  /**
+   * The yard the planner works on: the store's, plus every decoration in
+   * storage as a building its drawer holds (#128,
+   * `decorStorage.ts` `withStoredDecorations`). The store's own yard when
+   * nothing is stored, or in an outpost, which has no storage.
+   */
+  private plannerYard(): Yard | null {
+    const store = this.store;
+    if (!store || store.kind === "outpost") return this.yard;
+    const save = withStoredDecorations(store.save);
+    return save === store.save ? store.yard : readYard(save);
+  }
+
   private closePlanner(): void {
     this.planner?.destroy();
     this.planner = null;
     this.renderer.setLifeHidden(false);
+    // The drawer's stored decorations had sprites of their own; the yard has not.
+    const yard = this.store?.yard;
+    if (yard && this.renderer.shown !== yard) {
+      this.renderer.show(yard);
+      this.minimap?.refreshBuildings();
+    }
     if (this.refreshAfterPlanner) {
       this.refreshAfterPlanner = false;
       void this.store?.refresh();
@@ -1308,6 +1333,7 @@ export class YardScene implements Scene {
     moved: number,
     resources: Resources | undefined,
     upgrades: UpgradeReport | null,
+    storage: AppliedStorage,
   ): void {
     const store = this.store;
     if (!store || !this.context) return;
@@ -1318,11 +1344,22 @@ export class YardScene implements Scene {
     // taken from the response rather than subtracted here: the server owns
     // what an upgrade cost, and the walk it ran is partial by design
     // (`docs/design/planner-upgrades.md` §5.5).
-    store.mergeWrite({ buildingdata, ...(resources ? { resources } : {}) });
+    store.mergeWrite({
+      buildingdata,
+      ...(resources ? { resources } : {}),
+      // What Apply put into storage and took out of it (#128).
+      ...(storage.researchdata ? { researchdata: storage.researchdata } : {}),
+      ...(storage.buildinghealthdata ? { buildinghealthdata: storage.buildinghealthdata } : {}),
+    });
 
     // Raised here rather than by the planner because the planner has just been
     // closed and clears its own notices on the way out (§8, Q4).
-    const moveText = `Moved ${moved} building${moved === 1 ? "" : "s"}.`;
+    const moveText = [
+      `Moved ${moved} building${moved === 1 ? "" : "s"}.`,
+      storageText(storage),
+    ]
+      .filter(Boolean)
+      .join(" ");
     this.notices.show(
       "yard-applied",
       upgrades ? `${moveText} ${describeUpgradeReport(upgrades)}` : moveText,
@@ -1518,12 +1555,14 @@ export class YardScene implements Scene {
     const before = this.yard;
     this.yard = yard;
     this.save = store.save;
-    this.renderer.show(yard);
+    // While the planner is open its drawer's stored decorations are drawn too.
+    const shown = (this.planner && this.plannerYard()) || yard;
+    this.renderer.show(shown);
     if (before && before.expansionLevel !== yard.expansionLevel) this.onPlotResized(before, yard);
     this.renderer.setLife(yardLifeOf(store.save, yard));
     this.minimap?.refreshBuildings();
     this.hud?.setResources(store.resources, store.credits);
-    this.planner?.rebase(yard);
+    this.planner?.rebase(shown);
     this.placement?.rebase(yard);
     if (!isEmptyOutpost(yard)) this.notices.clear(OUTPOST_HINT_NOTICE);
 
@@ -1631,3 +1670,13 @@ export class YardScene implements Scene {
     status.hidden = parts.length === 0;
   }
 }
+
+/** What an Apply did with decorations, for its notice (#128); empty when nothing. */
+export const storageText = (storage: AppliedStorage): string => {
+  const parts: string[] = [];
+  const stored = storage.stored.length;
+  const placed = storage.placed.length;
+  if (stored > 0) parts.push(`${stored} decoration${stored === 1 ? "" : "s"} put in storage.`);
+  if (placed > 0) parts.push(`${placed} decoration${placed === 1 ? "" : "s"} placed from storage.`);
+  return parts.join(" ");
+};
