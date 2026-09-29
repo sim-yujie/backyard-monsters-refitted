@@ -17,26 +17,19 @@ import type { JsonObject } from "../../types/JsonObject.js";
  * yard's housing capacity from its buildings, and asks {@link checkMonsterTransfer}
  * for a verdict.
  *
- * ## Why this is not a plain equality check
+ * ## Strict conservation
  *
- * The map ticks hatchery production locally: `MapRoomCell.Tick` replays the cell
- * forward from the stored blob's `saved` and **adds finished monsters to
- * `housed`** (`client/scripts/com/monsters/maproom_advanced/MapRoomCell.as:800-811`).
- * A yard last saved a year ago therefore shows the player more monsters than the
- * server stored, and an honest transfer of those monsters would fail a strict
- * `before === after` test.
- *
- * What bounds that replay is the hatchery work the stored blob already carries:
- * the map cannot enqueue anything, so a cell can only ever finish the monster in
- * production plus whatever sits in the per-hatchery queues and the shared
- * Hatchery Control Center queue. That finite set is the production allowance
- * below, capped again by how many of that type the yard could physically house.
- * Conservation is then enforced against `stored + allowance` instead of `stored`.
- *
- * The allowance is deliberate slack: the stored blob is itself client-written, so
- * a forged queue inflates it. It is bounded (never more than one yard-full of a
- * type per request) where today's hole is unbounded. Closing it completely needs
- * a server-side production replay, which is a separate piece of work.
+ * The Flash map ticked hatchery production locally (`MapRoomCell.Tick` added
+ * finished monsters to `housed`, `client/scripts/com/monsters/maproom_advanced/MapRoomCell.as:800-811`),
+ * so a transfer could honestly claim monsters the server had not stored yet, and
+ * the rules used to allow the stored hatchery queues on top of `housed`. The
+ * server now replays production itself: the controller catches both yards up to
+ * the moment of the transfer (`catchUpTransferYards`, `services/yard/armies.ts`)
+ * before these rules read them, and the map shows rosters caught up the same way
+ * (`monstersForMap`). Every monster the player can see is therefore in the
+ * stored `housed`, a monster still in a hatchery is not housed anywhere, and
+ * conservation is checked against the stored rosters alone (#131,
+ * `docs/design/yard-buildings.md` §11).
  */
 
 /** Monster Housing, `#b_housing#` (`client/scripts/YARD_PROPS.as:1553-1662`). */
@@ -98,7 +91,7 @@ export interface TransferYard {
   baseid: string;
   /** `Save.type` — which endpoints may trade is decided from this. */
   type: string;
-  /** The `monsters` blob as currently stored on the save. */
+  /** The `monsters` blob as stored on the save, caught up to now. */
   stored: JsonObject | null | undefined;
   /** Housing capacity derived from this yard's own buildings. */
   capacity: number;
@@ -256,31 +249,6 @@ export const queuedProduction = (blob: unknown): Counts => {
 };
 
 /**
- * The production allowance for one yard: what its hatcheries can still finish,
- * capped by how many of that type its housing could hold at all. The cap is what
- * keeps a forged queue in a stored blob from becoming unlimited slack.
- *
- * @param {TransferYard} yard - The yard, with its stored blob and derived capacity
- * @param {Record<string, number> | undefined} levels - Academy level per monster id
- * @returns {Counts} Allowance per monster id
- */
-export const productionAllowance = (
-  yard: TransferYard,
-  levels?: Record<string, number>
-): Counts => {
-  const allowance: Counts = {};
-
-  for (const [id, queued] of Object.entries(queuedProduction(yard.stored))) {
-    const storage = monsterStorage(id, levels);
-    const housable = storage > 0 ? Math.floor(yard.capacity / storage) : 0;
-
-    allowance[id] = Math.min(queued, housable);
-  }
-
-  return allowance;
-};
-
-/**
  * Housing capacity for one yard, derived from its own buildings rather than from
  * the client-written `space` field on its `monsters` blob.
  *
@@ -420,16 +388,13 @@ export const checkMonsterTransfer = ({
   const nextFrom = housedCounts(fromBlob);
   const nextTo = housedCounts(toBlob);
 
-  const allowFrom = productionAllowance(from, monsterLevels);
-  const allowTo = productionAllowance(to, monsterLevels);
-
   const ids = allIds(storedFrom, storedTo, nextFrom, nextTo);
 
   // 3. Holdings. Monsters only ever leave the source in this flow
   //    (`MapRoom.as:839-841`), so the source may not end up holding more of a
-  //    type than it could have had.
+  //    type than it has.
   for (const id of ids) {
-    const held = (storedFrom[id] ?? 0) + (allowFrom[id] ?? 0);
+    const held = storedFrom[id] ?? 0;
 
     if ((nextFrom[id] ?? 0) > held)
       return {
@@ -442,8 +407,7 @@ export const checkMonsterTransfer = ({
 
   // 4. Conservation. A transfer moves monsters; it never makes them.
   for (const id of ids) {
-    const before =
-      (storedFrom[id] ?? 0) + (storedTo[id] ?? 0) + (allowFrom[id] ?? 0) + (allowTo[id] ?? 0);
+    const before = (storedFrom[id] ?? 0) + (storedTo[id] ?? 0);
     const after = (nextFrom[id] ?? 0) + (nextTo[id] ?? 0);
 
     if (after > before)

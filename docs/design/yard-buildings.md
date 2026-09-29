@@ -699,9 +699,9 @@ changes both ends:
   attacks.
 
 **Map and transfers.** `userCell.ts` publishes `m` for own cells from an in-memory catch-up (§2.3).
-`transferMonsters.ts` catches up both yards before `checkMonsterTransfer`, which lets the
-production allowance (`transferRules.ts:225-267`) shrink to zero in a later clean-up (§11
-follow-ups).
+`transferMonsters.ts` catches up both yards before `checkMonsterTransfer`, so the rules check
+strict conservation against the caught-up `housed` rosters; the old production allowance is gone
+(#131, §11 follow-ups).
 
 ### 4.7 Save format for Phase 2
 
@@ -1214,6 +1214,6 @@ issue for the bulk-add part.
 | --- | --- | --- |
 | Combat: Rezghul zombies, Slimeattikus splits, Vorg healing | Model the three abilities in the shared rules engine (`engine.ts` note 8) | should |
 | Combat: reduce defender bunker counts after an attack | Attack save writes bunker `m` from the battle's dispatch counts | should |
-| Transfers: drop the production allowance once catch-up runs first | Strict conservation in `transferRules.ts` | could |
+| Transfers: drop the production allowance once catch-up runs first | Strict conservation in `transferRules.ts`; done in #131 | could |
 | Map Room 1 for players below Town Hall 6 | Separate project (D16) | backlog |
 | Fix BB §3 harvester labels and Locker TH text | Spec text only (§9 items 1–2); done in #133 | could |

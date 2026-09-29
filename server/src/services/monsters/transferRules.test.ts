@@ -8,7 +8,6 @@ import {
   housedCounts,
   housingUsed,
   monsterStorage,
-  productionAllowance,
   queuedProduction,
   type TransferInput,
   type TransferYard,
@@ -147,21 +146,6 @@ describe("queuedProduction", () => {
 
   test("survives a blob with no hatchery fields", () => {
     expect(queuedProduction({ housed: { C1: 1 } })).toEqual({});
-  });
-});
-
-describe("productionAllowance", () => {
-  test("caps the queue at what the yard could house", () => {
-    const stored = { h: [["C15", 10, [["C15", 500]]]], hcc: [] };
-
-    // 2,160 space / 200 each is ten Zafreeti, however long the queue claims to be.
-    expect(productionAllowance(yard({ stored }))).toEqual({ C15: 10 });
-  });
-
-  test("is nothing when the yard has no housing at all", () => {
-    const stored = { h: [["C1", 5, [["C1", 3]]]], hcc: [] };
-
-    expect(productionAllowance(yard({ stored, capacity: 0 }))).toEqual({ C1: 0 });
   });
 });
 
@@ -326,32 +310,42 @@ describe("checkMonsterTransfer — conservation", () => {
     expect(move({ C4: 10 }, {}, { C4: 4 }, { C4: 5 }).ok).toBe(true);
   });
 
-  test("allows the monsters the map finished locally from the stored queue", () => {
+  test("counts only what is housed: a monster still in a hatchery moves nowhere (#131)", () => {
+    // The yard is caught up before the rules run, so its queue is work not yet done.
     const stored = { housed: { C1: 2 }, h: [["C1", 9, [["C1", 20]]]], hcc: [] };
 
     const verdict = checkMonsterTransfer(
       transfer({
         from: yard({ baseid: "1001", type: BaseType.MAIN, stored }),
         fromBlob: { housed: { C1: 0 } },
-        toBlob: { housed: { C1: 23 } },
+        toBlob: { housed: { C1: 3 } },
       })
     );
 
-    expect(verdict.ok).toBe(true);
+    expect(verdict).toMatchObject({ ok: false, rule: "conservation", detail: { before: 2, after: 3 } });
+    expect(
+      checkMonsterTransfer(
+        transfer({
+          from: yard({ baseid: "1001", type: BaseType.MAIN, stored }),
+          fromBlob: { housed: { C1: 0 } },
+          toBlob: { housed: { C1: 2 } },
+        })
+      ).ok
+    ).toBe(true);
   });
 
-  test("still refuses more than the stored queue could ever finish", () => {
-    const stored = { housed: { C1: 2 }, h: [["C1", 9, [["C1", 20]]]], hcc: [] };
+  test("refuses a source keeping a queued monster it never housed (#131)", () => {
+    const stored = { housed: { C1: 2 }, h: [["C1", 9, []]], hcc: [] };
 
     const verdict = checkMonsterTransfer(
       transfer({
         from: yard({ baseid: "1001", type: BaseType.MAIN, stored }),
-        fromBlob: { housed: { C1: 0 } },
-        toBlob: { housed: { C1: 24 } },
+        fromBlob: { housed: { C1: 3 } },
+        toBlob: { housed: {} },
       })
     );
 
-    expect(verdict).toMatchObject({ ok: false, rule: "conservation" });
+    expect(verdict).toMatchObject({ ok: false, rule: "holdings", detail: { held: 2, claimed: 3 } });
   });
 });
 

@@ -1163,16 +1163,14 @@ for completeness. Monster Bunkers ([§6.3](#63-monster-bunker)) and champions ar
 add nothing. `cStorage` is read at the caller's Academy level, which only changes the answer for
 `C1` (10, 10, 10, 9, 8, 7).
 
-**Conservation carries a production allowance.** A strict `before === after` test would refuse
-honest transfers, because `MapRoomCell.Tick` replays the cell forward from the stored blob's `saved`
-and **adds finished monsters to `housed`** (`MapRoomCell.as:800-811`). A yard last saved a year ago
-therefore shows the player more monsters than the server stored. What bounds that replay is the
-hatchery work the stored blob already carries — the map cannot enqueue anything — so the allowance
-is the monster in production on each hatchery plus the per-hatchery queues plus the shared `hcc`
-queue, capped by how many of that type the yard could house at all. Totals are then checked against
-`stored + allowance`. The allowance is deliberate slack: a stored blob is itself client-written, so
-a forged queue inflates it, but never by more than one yard-full of a type per request, where the
-old hole was unbounded. Closing it entirely needs a server-authoritative production replay.
+**Conservation is strict.** The Flash map replayed a cell forward from the stored blob's `saved`
+and **added finished monsters to `housed`** (`MapRoomCell.Tick`, `MapRoomCell.as:800-811`), so a
+yard last saved long ago showed more monsters than the server stored, and the rules used to allow
+the stored hatchery queues (capped at a yard-full per type) on top of `housed`. The server now
+replays production itself: `transferMonsters.ts` catches both yards up to the moment of the
+transfer (`catchUpTransferYards`) before the rules read them, and the map shows rosters caught up
+the same way. Totals are checked against the caught-up `housed` alone; a monster still in a
+hatchery is not housed anywhere and cannot be moved (#131).
 
 An accepted transfer is still written byte-for-byte as it was before — both blobs verbatim, so the
 hatchery countdowns the map ticked forward are preserved.
