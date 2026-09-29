@@ -109,6 +109,15 @@ describe("upgradeOffer: the next step", () => {
     expect(upgradeOffer(pick(idle, 2), idle)?.gate?.reason).not.toBe("busy");
   });
 
+  it("an Academy is not upgraded while it trains, in the original's words (#145)", () => {
+    const context = contextOf({ buildings: [HALL(7), building(2, 26, 1, { upg: "C5" })] });
+    const offer = upgradeOffer(pick(context, 2), context);
+    expect(offer?.gate).toEqual({ reason: "training" });
+    expect(offer?.instantGate).toEqual({ reason: "training" });
+    const idle = contextOf({ buildings: [HALL(7), building(2, 26, 1)] });
+    expect(upgradeOffer(pick(idle, 2), idle)?.gate?.reason).not.toBe("training");
+  });
+
   it("shortens the time under Sharper Tools, as the server writes it", () => {
     const context = contextOf({
       buildings: [HALL(5), building(2, 20, 4)],

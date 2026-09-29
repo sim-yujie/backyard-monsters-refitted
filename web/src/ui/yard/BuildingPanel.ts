@@ -1528,6 +1528,8 @@ export const gateSentence = (gate: UpgradeGate): string => {
   switch (gate.reason) {
     case "busy":
       return "Busy with another job.";
+    case "training":
+      return "Training a monster. Open it and cancel the training first.";
     case "damaged":
       return "Repair first.";
     case "townHall":

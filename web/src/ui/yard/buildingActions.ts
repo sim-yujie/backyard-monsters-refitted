@@ -14,7 +14,7 @@ import {
 } from "@/game/yard/buildingCosts";
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import type { PlanNode } from "@/game/yard/planner/placement";
-import { LAB_TYPE, countdownProgress } from "@/game/yard/jobs";
+import { ACADEMY_TYPE, LAB_TYPE, countdownProgress } from "@/game/yard/jobs";
 import { recycleOffer, type RecycleOffer } from "@/game/yard/recycle";
 import { ladderFor } from "@/game/yard/planner/upgrades";
 import { overCap as overCapOf } from "@/game/yard/storage";
@@ -96,6 +96,8 @@ export interface PanelContext {
 /** Why Upgrade (or Instant) cannot be pressed, in the server's terms. */
 export type UpgradeGate =
   | { readonly reason: "busy" }
+  /** An Academy training a monster (`acad_err_cantupgrade`, #145). */
+  | { readonly reason: "training" }
   | { readonly reason: "damaged" }
   | { readonly reason: "townHall"; readonly have: number; readonly need: number }
   | { readonly reason: "maxLevel"; readonly level: number }
@@ -307,6 +309,8 @@ export const upgradeOffer = (
   let common: UpgradeGate | null = null;
   // The Lab is not upgraded while it researches (`MONSTERLAB.as:241-247`; the server's `isBusy`).
   if (building.type === LAB_TYPE && researchOn(building)) common = { reason: "busy" };
+  // Nor the Academy while it trains (`BUILDING26.as:85-91`; the server's `409 training`, #145).
+  else if (building.type === ACADEMY_TYPE && building.raw["upg"]) common = { reason: "training" };
   else if (damaged) common = { reason: "damaged" };
   else if (hall <= 0) common = { reason: "townHall", have: 0, need: 1 };
   else if (step.firstStepGated && step.gate) {

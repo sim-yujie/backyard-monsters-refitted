@@ -74,7 +74,14 @@ export const refusalErr = (refusal: OneUpgradeRefusal, kind: YardKind = "main") 
     case "noLadder":
       return yardBadRequestErr("That building cannot be upgraded.", { id: refusal.id });
     case "busy":
-      return yardRefusedErr("busy", "That building is already busy. Wait for its job to finish.");
+      // The original's own words for an Academy that is training (`acad_err_cantupgrade`, #145).
+      return refusal.training
+        ? yardRefusedErr(
+            "training",
+            "You can not upgrade this Academy as it's currently training. First open it and cancel the training.",
+            { monster: refusal.training }
+          )
+        : yardRefusedErr("busy", "That building is already busy. Wait for its job to finish.");
     case "damaged":
       return yardRefusedErr("damaged", "Repair that building before upgrading it.");
     case "townHall":
@@ -118,7 +125,8 @@ export const refusalErr = (refusal: OneUpgradeRefusal, kind: YardKind = "main") 
  *
  * Refuses, in this order: `400 badRequest` (no such building, or one with no
  * ladder: decorations, mushrooms), `400 useBatchRoute` (walls and traps),
- * then `409` `busy`, `damaged`, `townHall`, `maxLevel`, `requirements`,
+ * then `409` `busy` (`training { monster }` for an Academy that is training,
+ * #145), `damaged`, `townHall`, `maxLevel`, `requirements`,
  * `shortfall`, `workers`.
  *
  * The Map Room is upgraded here like anything else: its level is the map

@@ -22,6 +22,7 @@ const HOUSING = 15;
 const LOCKER = 8;
 const SNAPPER = 1;
 const SILO = 6;
+const ACADEMY = 26;
 
 const RICH = { r1: 10_000_000, r2: 10_000_000, r3: 10_000_000, r4: 10_000_000 };
 
@@ -273,6 +274,24 @@ describe("upgrade", () => {
     save.buildingdata!["1"] = { ...save.buildingdata!["1"]!, cB: 100 };
 
     expect(reasonOf(() => planUpgradeAction(save, 1, NOW))).toEqual([409, "busy"]);
+  });
+
+  test("an Academy training a monster is refused in the original's words (#145)", () => {
+    // Academy (26) L1 to L2 needs Town Hall 4 and a level 3 Monster Locker.
+    const save = yard();
+    save.buildingdata!["0"] = { ...save.buildingdata!["0"]!, l: 4 };
+    save.buildingdata!["4"] = { id: 4, t: LOCKER, x: 0, y: 0, l: 3 };
+    save.buildingdata!["5"] = { id: 5, t: ACADEMY, x: 0, y: 0, l: 1, upg: "C5" };
+
+    const err = refusal(() => planUpgradeAction(save, 5, NOW));
+    expect(err.status).toBe(409);
+    expect(err.data).toEqual({ reason: "training", monster: "C5" });
+    expect(err.message).toContain("currently training");
+
+    // Idle, the same Academy upgrades.
+    const { upg: _training, ...idle } = save.buildingdata!["5"]!;
+    save.buildingdata!["5"] = idle;
+    expect(planUpgradeAction(save, 5, NOW).report).toMatchObject({ id: 5, from: 1, to: 2 });
   });
 });
 

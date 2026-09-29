@@ -60,7 +60,8 @@ const SKIPPED: ReadonlySet<string> = new Set(["shortfall", "workers"]);
  *
  * Refusals, in order: `400 badRequest` unknown id; `400 useBatchRoute` wall
  * or trap; `409 mapRoom`; then `planOneUpgrade`'s: `400 badRequest` no ladder
- * (decoration, mushroom, placeholder), `409 busy`, `409 damaged`,
+ * (decoration, mushroom, placeholder), `409 busy` (`409 training` for an
+ * Academy that is training, #145), `409 damaged`,
  * `409 townHall {have: 0, need: 1}`, `409 maxLevel {level, max}`,
  * `409 townHall {have, need}` / `409 requirements [[type, count, level]]`.
  */

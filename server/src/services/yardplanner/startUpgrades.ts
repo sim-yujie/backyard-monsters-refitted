@@ -13,6 +13,7 @@ import type {
 } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { requirementDetail } from "../base/economy/transitions.js";
+import { ACADEMY_TYPE } from "../yard/academy.js";
 import { LAB_TYPE, labResearch } from "../yard/lab.js";
 import {
   FREE_FINISH_SECONDS,
@@ -207,7 +208,22 @@ const isBusy = (building: BuildingData): boolean =>
   Boolean(building.cB) ||
   Boolean(building.cU) ||
   Boolean(building.cF) ||
-  (Number(building.t) === LAB_TYPE && labResearch(building) !== null);
+  (Number(building.t) === LAB_TYPE && labResearch(building) !== null) ||
+  academyTraining(building) !== null;
+
+/**
+ * The monster an Academy is training, or null: the original refuses to
+ * upgrade an Academy while its `_upgrading` is set (`BUILDING26.Upgrade`,
+ * `client/scripts/BUILDING26.as:85-91`, `acad_err_cantupgrade`, #145). That is
+ * the building's `upg`; the catch-up drops one that names no running training
+ * (`services/yard/catchUpTraining.ts`), so a caught-up save's `upg` is a
+ * training.
+ */
+const academyTraining = (building: BuildingData): string | null => {
+  if (Number(building.t) !== ACADEMY_TYPE) return null;
+  const upg = building["upg"];
+  return typeof upg === "string" && upg !== "" ? upg : null;
+};
 
 /**
  * Whether the building has to be repaired before it can be upgraded (spec
@@ -258,6 +274,8 @@ export interface OneUpgradeRefusal {
   requirements?: CostRequirement[];
   /** `workers`: the yard's workers, every one of them on a job. */
   workers?: { total: number; busy: number };
+  /** `busy` on an Academy that is training: the monster, for the panel's own words. */
+  training?: string;
 }
 
 /** The next step of one building, taken. */
@@ -331,7 +349,10 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
 
   const row = upgradeLadder(t, kind);
   if (!row) return refuse("noLadder", "building");
-  if (isBusy(building)) return refuse("busy", "building");
+  if (isBusy(building)) {
+    const training = academyTraining(building);
+    return refuse("busy", "building", training ? { training } : {});
+  }
   if (isDamaged(building, save.buildinghealthdata)) return refuse("damaged", "building");
 
   const hall = townHallLevel(buildings, kind);

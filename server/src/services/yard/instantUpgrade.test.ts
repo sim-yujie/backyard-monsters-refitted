@@ -100,6 +100,18 @@ describe("planInstantUpgrade: gates, in order", () => {
     );
   });
 
+  test("an Academy training a monster: 409 training, as the upgrade route reads it (#145)", () => {
+    const yard = yardOf({
+      "2": { id: 2, t: 8, x: 0, y: 0, l: 2 },
+      "3": { id: 3, t: 26, x: 0, y: 0, l: 1, upg: "C2" },
+    });
+    expect(refusal(() => planInstantUpgrade(yard, 3, NOW))).toMatchObject({
+      status: 409,
+      reason: "training",
+      data: { monster: "C2" },
+    });
+  });
+
   test("damaged (hp, or a health entry): 409 damaged, as the upgrade route reads it", () => {
     expect(refusal(() => planInstantUpgrade(yardOf(cannon({ hp: 5 })), 1, NOW)).reason).toBe("damaged");
     const yard = { ...yardOf(cannon()), buildinghealthdata: { "1": 100 } };
