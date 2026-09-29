@@ -1,5 +1,5 @@
 import { Status } from "../../enums/StatusCodes.js";
-import { layoutUnplacedErr } from "../../errors/errors.js";
+import { layoutInvalidErr, layoutUnplacedErr } from "../../errors/errors.js";
 import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers.js";
 import { Operation, updateResources } from "../../services/base/updateResources.js";
 import { ApplyLayoutSchema } from "../../schemas/YardPlannerSchemas.js";
@@ -9,13 +9,24 @@ import {
 } from "../../services/yardplanner/layoutGeometry.js";
 import { walkUpgrades, type UpgradeWalk } from "../../services/yardplanner/startUpgrades.js";
 import { syncDerivedLevels } from "../../services/yard/derivedLevels.js";
+import { nextBuildingId } from "../../services/yard/build.js";
+import {
+  isDecoration,
+  placedDecoration,
+  storeDecoration,
+  storedCount,
+  takeDecoration,
+} from "../../services/yard/decor.js";
+import { yardKindOf } from "../../services/yardplanner/costs.js";
 import {
   checkNodesOwned,
   checkNodePlacement,
+  checkStoragePlacements,
   parsePayload,
   unplacedBuildings,
 } from "../../services/yardplanner/validateLayout.js";
-import type { BuildingData } from "../../types/BuildingData.js";
+import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
+import type { JsonObject } from "../../types/JsonObject.js";
 import type { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
@@ -57,6 +68,13 @@ import { debitOf } from "./upgradeWalls.js";
  * charge and the `savetime` move land together or not at all, and the player's
  * Apply stays one transaction rather than two.
  *
+ * Decorations and storage (#128, as the Flash planner did it,
+ * `com/monsters/baseplanner/BasePlanner.as:113-122`): every decoration the
+ * layout leaves unplaced goes into storage, as a recycle would put it; and the
+ * layout's `fromStorage` entries come out of storage as new, finished
+ * decorations, inside the plot. The storing happens first, so one Apply can
+ * lift a flag into the drawer and put a stored flag down elsewhere.
+ *
  * With a `baseid` naming one of the caller's Map Room 2 outposts it applies
  * the layout to that outpost, charging the main pool (`plannerYard.ts`).
  *
@@ -91,12 +109,15 @@ const applyTo = (save: Save, raw: unknown, now: number) => {
   const unplaced = unplacedBuildings(payload.nodes, save.buildingdata);
   if (unplaced.length > 0) throw layoutUnplacedErr(unplaced);
 
-  checkNodePlacement(
-    payload.nodes,
-    currentExpansion(save.storedata),
-    mushroomRects(save.mushrooms),
-    save.buildingdata
-  );
+  const expansion = currentExpansion(save.storedata);
+  const mushrooms = mushroomRects(save.mushrooms);
+  checkNodePlacement(payload.nodes, expansion, mushrooms, save.buildingdata);
+
+  const fromStorage = payload.fromStorage ?? [];
+  if (fromStorage.length > 0 && yardKindOf(save) === "outpost") {
+    throw layoutInvalidErr("Decorations go in your main yard.", { fromStorage: fromStorage.length });
+  }
+  checkStoragePlacements(fromStorage, payload.nodes, expansion, mushrooms);
 
   // Bring the countdowns forward before `savetime` moves, or every running job
   // is handed the elapsed time a second time when the base is next loaded. Same
@@ -107,6 +128,8 @@ const applyTo = (save: Save, raw: unknown, now: number) => {
     now - Number(save.savetime ?? now)
   );
   let moved = 0;
+  const storage = storeAndPlace(save, buildingdata, payload.nodes, fromStorage);
+  buildingdata = storage.buildingdata;
 
   for (const node of payload.nodes) {
     const building = buildingdata[String(node.id)] as BuildingData | undefined;
@@ -144,16 +167,71 @@ const applyTo = (save: Save, raw: unknown, now: number) => {
   }
 
   save.buildingdata = buildingdata;
+  save.buildinghealthdata = storage.buildinghealthdata;
+  save.researchdata = storage.researchdata;
   syncDerivedLevels(save);
   save.savetime = now;
 
   return {
     error: 0,
     moved,
+    stored: storage.stored,
+    placed: storage.placed,
     buildingdata,
+    buildinghealthdata: storage.buildinghealthdata,
+    researchdata: storage.researchdata,
     resources: save.resources,
     upgrades: upgrades && report(upgrades),
   };
+};
+
+/**
+ * The storage half of Apply (#128): unplaced decorations in, `fromStorage`
+ * out. New ids start above every id the save had before, so a stored
+ * decoration's id is never handed to a new one in the same Apply.
+ */
+const storeAndPlace = (
+  save: Save,
+  buildingdata: BuildingDataMap,
+  nodes: readonly { id: number }[],
+  fromStorage: readonly { t: number; x: number; y: number }[]
+) => {
+  const listed = new Set(nodes.map((node) => node.id));
+  let nextId = nextBuildingId(save);
+  const next: BuildingDataMap = { ...buildingdata };
+  const health: BuildingHealthData = { ...(save.buildinghealthdata ?? {}) };
+  let researchdata: JsonObject = { ...(save.researchdata ?? {}) };
+  const stored: number[] = [];
+  const placed: number[] = [];
+
+  for (const [key, building] of Object.entries(buildingdata)) {
+    const id = Number((building as BuildingData).id ?? key);
+    if (listed.has(id) || !isDecoration(Number((building as BuildingData).t))) continue;
+    researchdata = storeDecoration(researchdata, building as BuildingData);
+    delete next[key];
+    delete health[key];
+    stored.push(id);
+  }
+
+  const short: number[] = [];
+  for (const [index, placement] of fromStorage.entries()) {
+    if (storedCount(researchdata, placement.t) < 1) {
+      short.push(index);
+      continue;
+    }
+    const taken = takeDecoration(researchdata, placement.t);
+    researchdata = taken.researchdata;
+    const id = nextId++;
+    next[String(id)] = placedDecoration(id, { type: placement.t, x: placement.x, y: placement.y }, taken.level);
+    placed.push(id);
+  }
+  if (short.length > 0) {
+    throw layoutInvalidErr("Some of those decorations are not in your storage any more.", {
+      fromStorageNotInStorage: short.slice(0, 5),
+    });
+  }
+
+  return { buildingdata: next, buildinghealthdata: health, researchdata, stored, placed };
 };
 
 /**

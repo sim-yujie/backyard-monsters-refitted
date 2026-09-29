@@ -76,12 +76,28 @@ export const LayoutNodeSchema = z.object({
 
 export type LayoutNode = z.infer<typeof LayoutNodeSchema>;
 
+/**
+ * A decoration the planner takes out of storage and puts down (#128). It is
+ * no building yet, so it has no id: Apply creates it. A slot save drops these.
+ */
+export const StoragePlacementSchema = z.object({
+  /** Decoration type id. */
+  t: z.number().int().positive(),
+  /** Origin in yard units. */
+  x: z.number().int(),
+  y: z.number().int(),
+});
+
+export type StoragePlacement = z.infer<typeof StoragePlacementSchema>;
+
 /** The `data` payload of a PUT or an apply, once the JSON string is parsed. */
 export const LayoutPayloadSchema = z.object({
   version: z.literal(LAYOUT_VERSION),
   /** The `ENL.q` the layout was designed for. */
   expansion: z.number().int().min(0).max(6),
   nodes: z.array(LayoutNodeSchema).max(LAYOUT_NODE_MAX),
+  /** Decorations out of storage, Apply only (#128). */
+  fromStorage: z.array(StoragePlacementSchema).max(LAYOUT_NODE_MAX).optional(),
 });
 
 export type LayoutPayload = z.infer<typeof LayoutPayloadSchema>;

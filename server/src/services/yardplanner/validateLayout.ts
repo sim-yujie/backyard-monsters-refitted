@@ -8,6 +8,7 @@ import {
   LayoutPayloadSchema,
   type LayoutNode,
   type LayoutPayload,
+  type StoragePlacement,
 } from "../../schemas/YardPlannerSchemas.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 import {
@@ -217,6 +218,58 @@ export const checkNodePlacement = (
       }.`,
       { blocked: ids.slice(0, MAX_LISTED) }
     );
+  }
+};
+
+/**
+ * Checks the decorations a layout takes out of storage (#128): each a
+ * decoration, inside the plot (no exception: none of them has a spot yet),
+ * clear of every node, of each other and of `obstacles`. Refusals name them
+ * by their place in `fromStorage`. Whether storage holds them is Apply's
+ * check, once it knows what the same Apply puts in.
+ */
+export const checkStoragePlacements = (
+  placements: readonly StoragePlacement[],
+  nodes: readonly LayoutNode[],
+  expansion: number,
+  obstacles: FootprintRect[] = []
+): void => {
+  const notDecorations = placements.flatMap((one, index) => (footprintOf(one.t).decoration ? [] : [index]));
+  if (notDecorations.length > 0) {
+    throw layoutInvalidErr("Only decorations come out of storage.", {
+      fromStorageNotDecoration: notDecorations.slice(0, MAX_LISTED),
+    });
+  }
+
+  const rects = placements.map((one) => rectOf(one.t, one.x, one.y));
+  const outside = rects.flatMap((rect, index) => (withinBounds(rect, expansion) ? [] : [index]));
+  if (outside.length > 0) {
+    throw layoutInvalidErr(
+      `${outside.length} decoration${outside.length === 1 ? " does" : "s do"} not fit inside your yard.`,
+      { fromStorageOutOfBounds: outside.slice(0, MAX_LISTED), expansion }
+    );
+  }
+
+  const others = nodes.map((node) => rectOf(node.t, node.x, node.y));
+  const overlapping = rects.flatMap((rect, index) =>
+    others.some((other) => overlaps(rect, other)) ||
+    rects.some((other, at) => at !== index && overlaps(rect, other))
+      ? [index]
+      : []
+  );
+  if (overlapping.length > 0) {
+    throw layoutInvalidErr("A decoration from storage is on top of something else.", {
+      fromStorageOverlapping: overlapping.slice(0, MAX_LISTED),
+    });
+  }
+
+  const blocked = rects.flatMap((rect, index) =>
+    obstacles.some((obstacle) => overlaps(rect, obstacle)) ? [index] : []
+  );
+  if (blocked.length > 0) {
+    throw layoutInvalidErr("A decoration from storage is sitting on a mushroom.", {
+      fromStorageBlocked: blocked.slice(0, MAX_LISTED),
+    });
   }
 };
 

@@ -8,7 +8,8 @@ import { OUTPOST_COSTS } from "../../game-data/buildingCosts.js";
  * The Yard Planner routes on a Map Room 2 outpost (outposts WP3, issue #184):
  * Apply and the wall and trap batches act on the outpost the `baseid` names
  * and charge the main pool; saving and loading layouts is refused there.
- * Driven over an in-memory stand-in for the two rows.
+ * Driven over an in-memory stand-in for the two rows. Also Apply's decoration
+ * storage on the main yard (#128).
  */
 
 type Row = Record<string, unknown>;
@@ -184,5 +185,118 @@ describe("layouts in an outpost", () => {
     expect(answer.status).toBe(409);
     expect(answer.body.reason).toBe("notInOutpost");
     expect(mainSave.savetemplate).toEqual({});
+  });
+});
+
+describe("Apply and decoration storage (#128)", () => {
+  const FLAG = 28;
+  const TOTEM = 121;
+  const main = () => mainSave.buildingdata as Record<string, Row>;
+  const HALL_NODE = { id: 0, t: 14, x: 0, y: 0 };
+
+  test("a decoration the layout leaves out goes into storage, a totem with its level", async () => {
+    mainSave.buildingdata = {
+      "0": { id: 0, t: 14, X: 0, Y: 0, l: 10 },
+      "5": { id: 5, t: FLAG, X: 900, Y: 0 },
+      "6": { id: 6, t: TOTEM, X: 200, Y: 200, l: 4 },
+    };
+    mainSave.buildinghealthdata = { "5": 3 };
+    mainSave.researchdata = { b28: 1 };
+
+    const answer = await run(applyLayout, { data: layout([HALL_NODE]) });
+
+    expect(answer.status).toBe(200);
+    expect(answer.body).toMatchObject({ stored: [5, 6], placed: [] });
+    expect(Object.keys(main())).toEqual(["0"]);
+    expect(mainSave.buildinghealthdata).toEqual({});
+    expect(mainSave.researchdata).toEqual({ b28: 2, b121: 1, bl121: 4 });
+    expect(answer.body.researchdata).toEqual(mainSave.researchdata);
+  });
+
+  test("a decoration left at its saved spot outside the plot stays there", async () => {
+    mainSave.buildingdata = {
+      "0": { id: 0, t: 14, X: 0, Y: 0, l: 10 },
+      "5": { id: 5, t: FLAG, X: 900, Y: 0 },
+    };
+    const answer = await run(applyLayout, { data: layout([HALL_NODE, { id: 5, t: FLAG, x: 900, y: 0 }]) });
+
+    expect(answer.status).toBe(200);
+    expect(main()["5"]).toMatchObject({ X: 900, Y: 0 });
+    expect(answer.body.stored).toEqual([]);
+  });
+
+  test("fromStorage puts stored decorations down, finished, with new ids", async () => {
+    mainSave.buildingdata = {
+      "0": { id: 0, t: 14, X: 0, Y: 0, l: 10 },
+      "5": { id: 5, t: FLAG, X: 300, Y: 0 },
+    };
+    mainSave.buildinghealthdata = { "9": 1 };
+    mainSave.researchdata = { b28: 2, b121: 1, bl121: 3 };
+    const data = JSON.stringify({
+      version: 2,
+      expansion: 0,
+      nodes: [HALL_NODE, { id: 5, t: FLAG, x: 300, y: 0 }],
+      fromStorage: [
+        { t: FLAG, x: 200, y: 200 },
+        { t: TOTEM, x: -300, y: 200 },
+      ],
+    });
+
+    const answer = await run(applyLayout, { data });
+
+    expect(answer.status).toBe(200);
+    expect(answer.body).toMatchObject({ stored: [], placed: [10, 11] });
+    expect(main()["10"]).toEqual({ id: 10, t: FLAG, X: 200, Y: 200 });
+    expect(main()["11"]).toEqual({ id: 11, t: TOTEM, X: -300, Y: 200, l: 3 });
+    expect(mainSave.researchdata).toEqual({ b28: 1 });
+  });
+
+  test("one Apply can store a flag and put a stored one down elsewhere", async () => {
+    mainSave.buildingdata = {
+      "0": { id: 0, t: 14, X: 0, Y: 0, l: 10 },
+      "5": { id: 5, t: FLAG, X: 300, Y: 0 },
+    };
+    mainSave.researchdata = {};
+    const data = JSON.stringify({ version: 2, expansion: 0, nodes: [HALL_NODE], fromStorage: [{ t: FLAG, x: -300, y: 0 }] });
+
+    const answer = await run(applyLayout, { data });
+
+    expect(answer.status).toBe(200);
+    expect(answer.body).toMatchObject({ stored: [5], placed: [6] });
+    expect(main()["6"]).toMatchObject({ t: FLAG, X: -300, Y: 0 });
+    expect(mainSave.researchdata).toEqual({});
+  });
+
+  test("refusals write nothing: not stored, outside the plot, on a building, not a decoration", async () => {
+    mainSave.researchdata = { b28: 1 };
+    const before = structuredClone(mainSave);
+    const attempt = (fromStorage: Row[]) =>
+      run(applyLayout, { data: JSON.stringify({ version: 2, expansion: 0, nodes: [HALL_NODE], fromStorage }) });
+
+    expect((await attempt([{ t: 29, x: 200, y: 200 }])).body).toMatchObject({ fromStorageNotInStorage: [0] });
+    expect(
+      (await attempt([{ t: FLAG, x: 200, y: 200 }, { t: FLAG, x: -200, y: 200 }])).body
+    ).toMatchObject({ fromStorageNotInStorage: [1] });
+    expect((await attempt([{ t: FLAG, x: 900, y: 0 }])).body).toMatchObject({ fromStorageOutOfBounds: [0] });
+    expect((await attempt([{ t: FLAG, x: 0, y: 0 }])).body).toMatchObject({ fromStorageOverlapping: [0] });
+    expect((await attempt([{ t: 20, x: 200, y: 200 }])).body).toMatchObject({ fromStorageNotDecoration: [0] });
+    expect(mainSave.buildingdata).toEqual(before.buildingdata);
+    expect(mainSave.researchdata).toEqual({ b28: 1 });
+  });
+
+  test("an outpost takes nothing out of storage", async () => {
+    const data = JSON.stringify({
+      version: 2,
+      expansion: 0,
+      nodes: [
+        { id: 1, t: 112, x: 0, y: -50 },
+        { id: 2, t: 20, x: 150, y: 150 },
+        { id: 3, t: 17, x: -200, y: 200 },
+      ],
+      fromStorage: [{ t: FLAG, x: 300, y: 300 }],
+    });
+    const answer = await run(applyLayout, { data, baseid: OUTPOST_BASEID });
+    expect(answer.status).toBe(400);
+    expect(answer.body.error).toBe("Decorations go in your main yard.");
   });
 });
