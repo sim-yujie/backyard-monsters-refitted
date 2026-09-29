@@ -824,6 +824,69 @@ describe("where a fling's creeps land (issue #91)", () => {
   });
 });
 
+describe("Slimeattikus splits as it dies (issue #129)", () => {
+  /**
+   * A Slimeattikus dropped among three level 6 towers, which bring it down in
+   * a couple of seconds. `DeathSplit` leaves `splits` Minis (`C18`) at the
+   * parent's level, each within 60 screen pixels of where it fell
+   * (`DeathSplit.as:28-46`).
+   */
+  const fightTo = (level: number) => {
+    const yard = yardOf({
+      "1": { id: 1, t: 20, l: 6, X: 0, Y: 0 },
+      "2": { id: 2, t: 20, l: 6, X: 100, Y: 0 },
+      "3": { id: 3, t: 21, l: 6, X: 0, Y: 100 },
+      "4": { id: 4, t: 1, l: 1, X: 200, Y: 200 },
+    });
+    const battle = createBattle(yard, { seed: 3, levels: { C17: level } });
+    battle.apply({ kind: "fling", t: 0, x: 150, y: 150, r: 0, monsters: { C17: 1 } });
+    let parent = battle.creeps()[0]!;
+    for (let step = 0; step < 4000; step += 1) {
+      battle.step();
+      const live = battle.creeps().find((creep) => creep.monsterId === "C17");
+      if (!live) break;
+      parent = live;
+    }
+    const minis = battle.creeps().filter((creep) => creep.monsterId === "C18");
+    return { battle, parent, minis };
+  };
+
+  it("leaves its level's number of Minis, at its level, near where it fell", () => {
+    const { battle, parent, minis } = fightTo(3);
+    // `splits` is 2, 2, 3, 3, 4, 5 by level.
+    expect(minis).toHaveLength(3);
+    for (const mini of minis) {
+      expect(mini.level).toBe(3);
+      expect(mini.friendly).toBe(false);
+      expect(mini.hp).toBe(250);
+      // Back to the screen offset the spawn drew: within 60 either way, plus
+      // the step the parent took as it died.
+      const dx = mini.ix - parent.ix;
+      const dy = mini.iy - parent.iy;
+      expect(Math.abs(dx - dy)).toBeLessThanOrEqual(60 + 5);
+      expect(Math.abs((dx + dy) / 2)).toBeLessThanOrEqual(60 + 5);
+    }
+    // Spawned, not flung.
+    expect(battle.state().creepsFlung).toBe(1);
+  });
+
+  it("splits in two at level 1", () => {
+    expect(fightTo(1).minis).toHaveLength(2);
+  });
+
+  it("leaves nothing behind from any other creep", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 20, l: 6, X: 0, Y: 0 },
+      "4": { id: 4, t: 1, l: 1, X: 200, Y: 200 },
+    });
+    const battle = createBattle(yard, { seed: 3 });
+    battle.apply({ kind: "fling", t: 0, x: 150, y: 150, r: 0, monsters: { C1: 3 } });
+    run(battle, 2000);
+    expect(battle.state().creepsKilled).toBeGreaterThan(0);
+    expect(battle.creeps().filter((creep) => creep.monsterId === "C18")).toHaveLength(0);
+  });
+});
+
 describe("a bunker's reach (issue #91)", () => {
   /**
    * A level 1 Monster Bunker (range 300, 90 x 90) at the origin scans from the

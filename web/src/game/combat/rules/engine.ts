@@ -1,5 +1,6 @@
 import { buildPathGrid } from "./grid.js";
 import { mulberry32 } from "./rng.js";
+import { SPLIT_CHILD_ID } from "./potential.js";
 import {
   ATTACK_COUNTDOWN_SECONDS,
   BEHAVIOUR_SPEED,
@@ -97,10 +98,11 @@ import type {
  *
  * Creeps with their six target groups and their specialist multipliers; the
  * pathing grid and the wall that gets in the way; ranged and melee swings;
- * Eye-ra's blast; towers with their acquire delay, re-arm and splash; the two
- * traps; bunkers dispatching defenders; resource bombs; loot out of harvesters
- * and storage, hit by hit, and the share of the pool a fallen storage building
- * gives up; the countdown and the retreat.
+ * Eye-ra's blast; Slimeattikus splitting as it dies; towers with their
+ * acquire delay, re-arm and splash; the two traps; bunkers dispatching
+ * defenders; resource bombs; loot out of harvesters and storage, hit by hit,
+ * and the share of the pool a fallen storage building gives up; the countdown
+ * and the retreat.
  *
  * ## Fidelity notes — every place this is not Flash
  *
@@ -148,7 +150,7 @@ import type {
  * 8. **Not modelled at all**, each because its numbers were never traced
  *    (`docs/specs/combat.md:1362-1375`) or because it is out of Map Room 2's
  *    scope: champion abilities and buffs beyond damage and looting,
- *    Rezghul's zombies, Slimeattikus' splits, the healers C15 and C16,
+ *    Rezghul's zombies, the healers C15 and C16,
  *    invisibility, `Blink`, `PoisonOnAttack`, `GlavesOnAttack`, the Stronghold's
  *    four emitters, the Spurtz Cannon's burst, every siege weapon, and the
  *    per-creep `_hitLimit`. A yard holding one of those buildings fires it as
@@ -526,6 +528,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const traps: Trap[] = [];
   const bunkers: Bunker[] = [];
   const bunkerLosses: BunkerLossTally = new Map();
+  /** Dead Slimeattikus whose Minis are born at the end of the step (issue #129). */
+  const pendingSplits: Array<{ readonly parent: Creep; readonly count: number }> = [];
   const firedTraps: number[] = [];
   const destroyedIds: number[] = [];
   /** Shots, hits, hurts and deaths for the renderer, pruned each step; not simulation state. */
@@ -766,8 +770,53 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creep.gone = true;
       if (!creep.friendly) creepsKilled += 1;
       recordDeath(creep);
+      onDeath(creep);
     }
     return applied;
+  };
+
+  /**
+   * What a creep's death sets off. A Slimeattikus splits into Slimeattikus
+   * Minis (issue #129, {@link splitOnDeath}); they are born when the step is
+   * done, so none of them acts on the tick its parent fell.
+   */
+  const onDeath = (creep: Creep): void => {
+    const splits = monsterStat(creep.monsterId, "splits", creep.level);
+    if (splits > 0 && !creep.champion) {
+      pendingSplits.push({ parent: creep, count: Math.floor(splits) });
+    }
+  };
+
+  /**
+   * `DeathSplit.split` (`creeps/Slimeattikus.as:11-13`,
+   * `components/abilities/DeathSplit.as:23-51`): a dead Slimeattikus leaves
+   * `splits` Slimeattikus Minis, `C18`, each at its own random point up to 60
+   * screen pixels either way of where it fell (`:30`, `:46`). An attacker's
+   * children attack and a defender's defend (`:35-38`, `:47-49`). They are
+   * spawned, not flung, so the fling count does not move (`CREEPS.as:246-248`),
+   * and a Mini fights at its parent's level, because `C18` is `dependent` on
+   * `C17` and takes that monster's upgrade (`CREATURES.as:53-55`).
+   */
+  const splitOnDeath = (parent: Creep, count: number): void => {
+    for (let child = 0; child < count; child += 1) {
+      const screenX = rng.float() * 120 - 60;
+      const screenY = rng.float() * 120 - 60;
+      // `screenPointOf` undone, as in {@link dropPoint}.
+      const at = { x: parent.ix + screenY + screenX / 2, y: parent.iy + screenY - screenX / 2 };
+      spawnCreep(
+        SPLIT_CHILD_ID,
+        parent.level,
+        at,
+        parent.friendly,
+        parent.friendly ? "defend" : "attack",
+      );
+    }
+  };
+
+  /** Splits waiting for the end of the step (issue #129). */
+  const bornAtStepEnd = (): void => {
+    const waiting = pendingSplits.splice(0);
+    for (const { parent, count } of waiting) splitOnDeath(parent, count);
   };
 
   /* ── Flinging ──────────────────────────────────────────────────────────── */
@@ -1387,6 +1436,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
       creeps.length = write;
     }
+    bornAtStepEnd();
 
     if (tick >= countdown && !retreated) retreated = true;
     if (creepsFlung > 0 && !anyAttackerLeft() && retreated) finished = true;
