@@ -10,6 +10,7 @@ import {
   DEPTH_BIAS,
   MonsterSheetTextures,
   animationFor,
+  creepColour,
   creepZIndex,
   groundWorld,
   headingBetween,
@@ -809,5 +810,19 @@ describe("hits, wounds and steady walking", () => {
     expect(fraction).toBeDefined();
     expect((fraction ?? 6000) / 6000).toBeLessThan(0.5);
     layer.destroy();
+  });
+});
+
+describe("creepColour (#195)", () => {
+  it("tells the two sides apart, and each side's champion from its monsters", () => {
+    const colours = [
+      creepColour({ champion: false, friendly: false }),
+      creepColour({ champion: true, friendly: false }),
+      creepColour({ champion: false, friendly: true }),
+      creepColour({ champion: true, friendly: true }),
+    ];
+    expect(new Set(colours).size).toBe(4);
+    expect(colours[0]).toBe(0x5ee06a);
+    expect(colours[1]).toBe(0xffd24a);
   });
 });

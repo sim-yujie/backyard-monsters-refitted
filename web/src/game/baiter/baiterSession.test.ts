@@ -83,8 +83,12 @@ describe("the practice attack's target", () => {
       baiterLevel: 4,
     };
     const target = baiterTarget(run);
-    // The scene fights on this load and asks the server for none.
-    expect(target.load).toBe(save);
+    // The scene fights on this load and asks the server for none, the yard
+    // defending itself with its own bunkers and champion (issue #195).
+    expect(target.load).toEqual({
+      ...save,
+      defenderforces: { bunkers: {}, defenderLevels: { C1: 6, C4: 3 }, defenderChampion: null },
+    });
     expect(target.roster).toEqual({
       monsters: { C1: 20, C4: 3 },
       levels: { C1: 6, C4: 3 },
@@ -96,6 +100,26 @@ describe("the practice attack's target", () => {
       resources: null,
     });
     expect(baiterTarget({ ...run, levels: "wild" }).roster.levels).toEqual({});
+  });
+
+  it("defends with the yard's garrisons and its caged champion (#195)", () => {
+    const defended = {
+      ...save,
+      buildingdata: { "5": { id: 5, t: 22, l: 1, X: 0, Y: 0, m: { C1: 4 } } },
+      champion: [{ t: 2, l: 3, hp: 800, pl: 1, status: 0, fd: 0, ft: 0, fb: 0 }],
+    } as unknown as typeof save;
+    const target = baiterTarget({
+      save: defended,
+      picks: { C1: 1 },
+      direction: BAITER_DIRECTIONS[0]!,
+      levels: "wild" as const,
+      baiterLevel: 1,
+    });
+    expect((target.load as { defenderforces?: unknown }).defenderforces).toEqual({
+      bunkers: { 5: { C1: 4 } },
+      defenderLevels: { C1: 6, C4: 3 },
+      defenderChampion: { t: 2, l: 3, hp: 800, pl: 1 },
+    });
   });
 
   it("is handed over once", () => {

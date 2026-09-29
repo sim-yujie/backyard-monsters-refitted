@@ -1122,6 +1122,9 @@ angle (`WMATTACK.as:711`), the view turns to meet it, and the end shows damage, 
 destroyed, attackers beaten, which towers fired and how many traps went off, with Run again and
 Back to yard. `baiterPlugin.test.ts` runs a whole practice attack with every request stubbed to
 fail and checks none is made.
+The yard defends itself as it would against a real attack (issue #195): the Baiter hands the
+scene the yard's own `defenderforces` (the shared `defenderForcesOf`), so its bunkers send their
+garrisons out at the player's academy levels and its caged champion comes out to fight.
 
 ### 8.2 General Store as a Shiny shop (D15)
 

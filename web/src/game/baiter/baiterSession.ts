@@ -1,5 +1,6 @@
 import type { BaseLoadResponse } from "@/api/types";
 import type { AttackTarget } from "@/game/attack/attackTarget";
+import { defenderForcesOf } from "@/game/combat/rules";
 import { academyLevels } from "@/game/monsters/hatchPlan";
 import { housingSpace } from "@/game/monsters/monsterCatalogue";
 
@@ -173,13 +174,22 @@ export const consumeBaiterRun = (): BaiterRun | null => {
  * The attack scene's target for a run: the own yard as the defender, handed
  * over already loaded so the scene asks the server for nothing, and the
  * picked army as the roster. No champion, no Catapult, no siege weapons, no
- * resources to buy bombs with: a Baiter attack is monsters only.
+ * resources to buy bombs with: a Baiter attack is monsters only. The yard
+ * defends itself as it would against a real attack (issue #195, Q16): its
+ * bunkers' garrisons at its own academy levels, and its caged champion.
  */
 export const baiterTarget = (run: BaiterRun): AttackTarget => ({
   baseid: String(run.save.baseid ?? ""),
   kind: "wild",
   name: "Wild monsters",
-  load: run.save,
+  load: {
+    ...run.save,
+    defenderforces: defenderForcesOf({
+      buildingdata: run.save.buildingdata,
+      academy: run.save.academy,
+      champion: run.save.champion,
+    }),
+  },
   roster: {
     monsters: { ...run.picks },
     levels: levelsFor(run.levels, run.save),

@@ -544,6 +544,20 @@ const GIB_COLOURS = [0x5da832, 0x3f7a1e, 0x8ad14a] as const;
 const BAR_BACK_COLOUR = 0x6b1616;
 const BAR_FRONT_COLOUR = 0x5ee06a;
 const BAR_CHAMPION_COLOUR = 0xffd24a;
+/** The defender's side (issue #195): a bunker's monsters and the caged champion. */
+const BAR_DEFENDER_COLOUR = 0x4f9dff;
+const BAR_DEFENDER_CHAMPION_COLOUR = 0x9fd4ff;
+
+/**
+ * The colour a creep's health bar, and its marker before its sheet arrives,
+ * are drawn in: green for the attacker's monsters and gold for its champion,
+ * blue for the defender's side (issue #195), paler for the defender's
+ * champion, so the player can tell who is fighting whom.
+ */
+export const creepColour = (creep: Pick<CreepSnapshot, "champion" | "friendly">): number => {
+  if (creep.friendly) return creep.champion ? BAR_DEFENDER_CHAMPION_COLOUR : BAR_DEFENDER_COLOUR;
+  return creep.champion ? BAR_CHAMPION_COLOUR : BAR_FRONT_COLOUR;
+};
 
 /** Ticks between the numbers a bomb's rain floats over a building: a quarter-second at 1x. */
 const BOMB_NUMBER_TICKS = 20;
@@ -995,7 +1009,7 @@ export class AttackBattleLayer {
     view.barBack.width = bar.width;
     view.barBack.height = bar.height;
     view.barFront.height = bar.height;
-    view.barFront.tint = creep.champion ? BAR_CHAMPION_COLOUR : BAR_FRONT_COLOUR;
+    view.barFront.tint = creepColour(creep);
     return view;
   }
 
@@ -1126,14 +1140,14 @@ export class AttackBattleLayer {
         );
         top = layout.y;
       } else {
-        view.baseTint = this.placeMarker(body, ground, creep.champion);
+        view.baseTint = this.placeMarker(body, ground, creep);
         top = body.y;
         view.cellKey = "";
       }
       body.zIndex = layout.zIndex;
       this.placeShadow(view, layout);
     } else {
-      view.baseTint = this.placeMarker(body, ground, creep.champion);
+      view.baseTint = this.placeMarker(body, ground, creep);
       top = body.y;
       body.zIndex = creepZIndex(ground.x, ground.y, creep.id);
     }
@@ -1147,11 +1161,15 @@ export class AttackBattleLayer {
   }
 
   /** A creep with no sheet yet: a small square at its feet, tinted by kind. Returns the tint. */
-  private placeMarker(body: Sprite, ground: Point, champion: boolean): number {
-    const size = champion ? MARKER_SIZE * 2 : MARKER_SIZE;
+  private placeMarker(
+    body: Sprite,
+    ground: Point,
+    creep: Pick<CreepSnapshot, "champion" | "friendly">,
+  ): number {
+    const size = creep.champion ? MARKER_SIZE * 2 : MARKER_SIZE;
     if (body.texture !== Texture.WHITE) body.texture = Texture.WHITE;
     body.scale.set(size / Texture.WHITE.width);
-    const tint = champion ? BAR_CHAMPION_COLOUR : SPLAT_COLOUR;
+    const tint = creep.champion || creep.friendly ? creepColour(creep) : SPLAT_COLOUR;
     body.tint = tint;
     body.position.set(ground.x - size / 2, ground.y - size);
     return tint;

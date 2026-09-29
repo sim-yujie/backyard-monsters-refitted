@@ -419,6 +419,12 @@ A battle with no defence runs and digests exactly as before: the six older golde
 unchanged, and three new ones (`bunker-defence`, `caged-champion`, `champion-and-bunkers`) pin the
 defence.
 
+The attack load serves the defence as `defenderforces` and keeps it in the session; the web client,
+the attack save's replay, the finaliser and the Wild Monster Baiter all fight that one defence. The
+save writes the caged champion's health and each bunker's garrison from the replay, compares the
+save's `champion` under C7, and reports the champion's fall. The web client draws the defender's
+side with blue health bars (`AttackBattleLayer.creepColour`), paler for its champion.
+
 ---
 
 ## 3. Server design
