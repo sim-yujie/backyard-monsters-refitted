@@ -63,13 +63,8 @@ describe("YardLifeLayer", () => {
     expect(tops.children.every((child) => child.zIndex > 0)).toBe(true);
   });
 
-  it("hovers Teratorn, Zafreeti, Vorg and Balthazar in their pens, over their shadows (#211)", async () => {
-    for (const [id, height] of [
-      ["C14", 144],
-      ["C15", 144],
-      ["C16", 144],
-      ["IC5", 108],
-    ] as const) {
+  it("keeps Teratorn, Zafreeti, Vorg and Balthazar on the ground in their pens, flapping (#211)", async () => {
+    for (const id of ["C14", "C15", "C16", "IC5", "C1"]) {
       const { layer, tops, shadows } = setUp();
       layer.set(life({ groups: [{ id, level: 1, count: 1 }], champions: [], workers: 0 }), bounds);
       layer.attach(tops, shadows);
@@ -77,35 +72,19 @@ describe("YardLifeLayer", () => {
       await flush();
       const [walker] = layer.walkerList;
       const body = tops.children[0] as Sprite | undefined;
-      const [shadow] = shadows.children;
-      if (!walker || !body || !shadow) throw new Error(`no ${id}`);
+      if (!walker || !body) throw new Error(`no ${id}`);
       const sheet = MONSTER_SPRITES[id]!;
-      const heights = new Set<number>();
       for (let frame = 0; frame < 40; frame++) {
         layer.update(everywhere, 1 / 10);
         const groundX = walker.x - walker.y + bounds.originX;
         const groundY = (walker.x + walker.y) / 2 + bounds.originY;
-        const bob = 2 * Math.sin(walker.age / 50) * 5;
-        expect(body.y).toBeCloseTo(groundY - sheet.anchorY - height + bob, 6);
-        heights.add(Math.round(body.y - groundY));
-        expect(shadow.y).toBeCloseTo(groundY + shadowOffset(sheet)!.y, 6);
-        expect(body.zIndex).toBe(creepZIndex(groundX, groundY + height, 1));
+        // On its ground point, with no altitude and no bob (`CreepBase.as:260`).
+        expect(body.y).toBeCloseTo(groundY - sheet.anchorY, 6);
+        expect(body.zIndex).toBe(creepZIndex(groundX, groundY, 1));
+        const [shadow] = shadows.children;
+        if (shadow) expect(shadow.y).toBeCloseTo(groundY + shadowOffset(sheet)!.y, 6);
       }
-      expect(heights.size).toBeGreaterThan(1);
     }
-
-    // Any other housed monster stays on its ground point.
-    const { layer, tops, shadows } = setUp(true);
-    layer.set(life({ groups: [{ id: "C1", level: 1, count: 1 }], champions: [], workers: 0 }), bounds);
-    layer.attach(tops, shadows);
-    layer.update(everywhere, 0);
-    await flush();
-    layer.update(everywhere, 0);
-    const [pokey] = layer.walkerList;
-    const body = tops.children[0];
-    if (!pokey || !body) throw new Error("no Pokey");
-    const groundY = (pokey.x + pokey.y) / 2 + bounds.originY;
-    expect(body.y).toBe(groundY - MONSTER_SPRITES["C1"]!.anchorY);
   });
 
   it("hides what is off screen and everything while hidden", async () => {

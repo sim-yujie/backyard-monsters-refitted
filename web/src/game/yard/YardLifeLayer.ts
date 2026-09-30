@@ -10,8 +10,6 @@ import {
   championFlightTop,
   flyerAltitude,
   frameRow,
-  HOVERS_IN_PEN,
-  hoverOffset,
   sheetColumn,
   shadowOffset,
   spriteFor,
@@ -79,17 +77,6 @@ const WORKER_DEPTH_ID = 900;
  */
 export const hoversInCage = (walker: Walker, sheet: MonsterSheet | null): boolean =>
   walker.champion && sheet?.movement === "fly";
-
-/**
- * Whether a housed monster hovers in its pen: Teratorn, Zafreeti, Vorg and
- * Balthazar, at their flight height with the creeps' bob (#211), where Flash
- * sat every penned flyer on the ground (`CreepBase.as:260`).
- */
-export const hoversInPen = (walker: Walker): boolean =>
-  !walker.champion && HOVERS_IN_PEN.has(walker.monsterId);
-
-/** How a body is held up: a champion's flight, a flyer's hover, or not at all. */
-type Hover = "champion" | "flyer" | null;
 
 interface Body {
   readonly body: Sprite;
@@ -288,13 +275,9 @@ export class YardLifeLayer {
         continue;
       }
       const tick = this.reducedMotion ? 0 : walker.age;
-      const hover: Hover = hoversInCage(walker, body.sheet)
-        ? "champion"
-        : hoversInPen(walker)
-          ? "flyer"
-          : null;
-      const animation = walker.moving || hover ? "walk" : "idle";
-      this.place(body, x, y, walker.heading, animation, tick, depthId, hover);
+      const hovers = hoversInCage(walker, body.sheet);
+      const animation = walker.moving || hovers ? "walk" : "idle";
+      this.place(body, x, y, walker.heading, animation, tick, depthId, hovers);
     }
 
     this.workers.forEach((worker, index) => {
@@ -381,7 +364,7 @@ export class YardLifeLayer {
     animation: "walk" | "idle" | "hardhat",
     tick: number,
     depthId: number,
-    hover: Hover = null,
+    hovers = false,
   ): void {
     const sheet = body.sheet;
     if (!sheet) return;
@@ -398,16 +381,10 @@ export class YardLifeLayer {
       body.cellKey = key;
     }
     const anchor = anchorOffset(sheet);
-    // Held up the way the attack screen holds it (`layoutCreep`).
-    const altitude = hover ? flyerAltitude(sheet.family) : 0;
-    const top =
-      hover === "champion"
-        ? championFlightTop(tick)
-        : anchor.y + (hover === "flyer" ? hoverOffset(tick, altitude) : 0);
-    body.body.position.set(x + anchor.x, y + top);
+    body.body.position.set(x + anchor.x, y + (hovers ? championFlightTop(tick) : anchor.y));
     // A hovering body sorts as if it stood its altitude further down the
     // screen, as a flyer does on the attack screen.
-    const zIndex = creepZIndex(x, y + altitude, depthId);
+    const zIndex = creepZIndex(x, hovers ? y + flyerAltitude(sheet.family) : y, depthId);
     if (body.body.zIndex !== zIndex) body.body.zIndex = zIndex;
     body.body.visible = true;
 

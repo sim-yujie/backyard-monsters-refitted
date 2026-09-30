@@ -76,8 +76,8 @@ const CHAMPION_SHADOW_CANVAS = { x: -21, y: -26 } as const;
  * The owner lifts four of them higher (#211; drawing only, the rules never
  * read this): Teratorn, Zafreeti and Vorg to 144, level with a flying
  * champion's cell top ({@link championFlightTop}), and Balthazar to the
- * ordinary 108, where at 40 it barely cleared its shadow. These four also
- * hover in their Housing pens ({@link HOVERS_IN_PEN}).
+ * ordinary 108, where at 40 it barely cleared its shadow. In a Housing pen
+ * they stay on the ground as Flash had them (`CreepBase.as:260`).
  */
 export const FLYER_ALTITUDE: Readonly<Record<string, number>> = {
   default: 108,
@@ -86,13 +86,6 @@ export const FLYER_ALTITUDE: Readonly<Record<string, number>> = {
   C16: 144,
   IC5: 108,
 };
-
-/**
- * The flyers that hover in a Housing pen rather than sit in it (#211). Flash
- * kept every penned flyer on the ground (`CreepBase.as:260`); the owner's rule
- * is that these four fly there too, at {@link FLYER_ALTITUDE} with the bob.
- */
-export const HOVERS_IN_PEN: ReadonlySet<string> = new Set(["C14", "C15", "C16", "IC5"]);
 
 export interface Offset {
   readonly x: number;
