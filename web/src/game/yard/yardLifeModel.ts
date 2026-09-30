@@ -52,7 +52,9 @@ import type { Yard, YardBuilding } from "./yardModel";
  * (`creeps/CreepBase.as:1373-1380`), at a quarter of its creature speed: half
  * for every creep and half again for `pen` (`CreepBase.as:1455-1458`). It is
  * "there" once within 5 (`CreepBase.as:1696-1703`). A flyer does not hover in
- * its pen (`CreepBase.as:260`), so it stands on the ground over its shadow.
+ * its pen (`CreepBase.as:260`), so it stands on the ground over its shadow;
+ * the owner's rule (#211) is that Teratorn, Zafreeti, Vorg and Balthazar do
+ * hover there, at their flight height (`YardLifeLayer`).
  *
  * Flash drew every one. A big army is thousands, so this draws a sample:
  * {@link sampleArmy} keeps every type present and shares at most

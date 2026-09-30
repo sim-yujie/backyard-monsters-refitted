@@ -236,9 +236,9 @@ describe("placement", () => {
       ORIGIN,
       STILL,
     );
-    // Around 108 px up (`CreepBase.as:144-150`), moving with the sine.
+    // Around 144 px up, the owner's height for Zafreeti (#211), moving with the sine.
     const groundY = groundWorld(flyer.ix, flyer.iy, ORIGIN).y;
-    expect(still.y).toBeCloseTo(groundY - zafreeti.anchorY - 108);
+    expect(still.y).toBeCloseTo(groundY - zafreeti.anchorY - 144);
     expect(later.y).not.toBe(still.y);
     expect(Math.abs(later.y - still.y)).toBeLessThanOrEqual(10);
     expect(still.shadow).not.toBeNull();
@@ -246,7 +246,7 @@ describe("placement", () => {
     const calm = layoutCreep(flyer, zafreeti, { heading: 0, moving: true, age: 78 }, ORIGIN, {
       reducedMotion: true,
     });
-    expect(calm.y).toBe(groundY - zafreeti.anchorY - 108);
+    expect(calm.y).toBe(groundY - zafreeti.anchorY - 144);
   });
 
   it("flies Fomor at Flash's fixed height with its bob, its big shadow on the ground (#69, #206)", () => {
@@ -299,6 +299,27 @@ describe("placement", () => {
     expect(inFront).toBeGreaterThan(building);
     // Never a tie with the building's own animation layers at +1..+3.
     expect(creepZIndex(500, 300 + DEPTH_BIAS, 1) % 8).toBe(4);
+  });
+
+  it("lifts Teratorn, Zafreeti and Vorg to 144 and Balthazar to 108, with the bob, shadows on the ground (#211)", () => {
+    for (const [id, height] of [
+      ["C14", 144],
+      ["IC5", 108],
+      ["C15", 144],
+      ["C16", 144],
+    ] as const) {
+      const sheet = sheetOf(id);
+      const flyer = creepOf({ monsterId: id, flying: true });
+      const ground = groundWorld(flyer.ix, flyer.iy, ORIGIN);
+      const at = (age: number, options: { reducedMotion: boolean } = STILL) =>
+        layoutCreep(flyer, sheet, { heading: 0, moving: true, age }, ORIGIN, options);
+      expect(at(0).y).toBe(ground.y - sheet.anchorY - height);
+      expect(at(25 * Math.PI).y).toBeCloseTo(ground.y - sheet.anchorY - height + 10, 6);
+      expect(at(78, { reducedMotion: true }).y).toBe(ground.y - sheet.anchorY - height);
+      // The shadow does not rise with the body.
+      expect(at(0).shadow).toEqual(at(0, { reducedMotion: true }).shadow);
+      expect(at(0).shadow!.y).toBeGreaterThan(ground.y - 20);
+    }
   });
 
   it("sorts a flyer its altitude further down the screen than its ground point (#78)", () => {

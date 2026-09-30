@@ -188,8 +188,16 @@ describe("placement", () => {
     expect(hoverOffset(25 * Math.PI, 108)).toBeCloseTo(-98, 6);
     expect(hoverOffset(75 * Math.PI, 108)).toBeCloseTo(-118, 6);
     expect(hoverOffset(0)).toBe(-108);
-    expect(flyerAltitude("IC5")).toBe(40);
-    expect(flyerAltitude("C14")).toBe(108);
+  });
+
+  it("flies Teratorn, Zafreeti and Vorg at 144 and Balthazar at 108, the owner's heights (#211)", () => {
+    expect(flyerAltitude("C14")).toBe(144);
+    expect(flyerAltitude("IC5")).toBe(108);
+    expect(flyerAltitude("C15")).toBe(144);
+    expect(flyerAltitude("C16")).toBe(144);
+    expect(flyerAltitude("G3")).toBe(108);
+    // A flying champion's height is its own, not the creeps' table.
+    expect(championFlightTop(0)).toBe(-144);
   });
 
   it("flies a champion's cell at a fixed -144 with twice the sine on it (ChampionBase.as:1317-1322, #206)", () => {
