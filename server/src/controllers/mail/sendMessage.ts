@@ -78,9 +78,16 @@ export const sendMessage: KoaController = async (ctx) => {
     }
 
     switch (message.type) {
-      case MessageType.TRUCE_REQUEST:
-        await handleTruceRequest(userid, messageTargetId, thread);
+      case MessageType.TRUCE_REQUEST: {
+        // Asked too soon after a rejection (#203): the soft refusal says when they may ask again.
+        const refusal = await handleTruceRequest(userid, messageTargetId, thread);
+        if (refusal) {
+          ctx.status = Status.OK;
+          ctx.body = refusal;
+          return;
+        }
         break;
+      }
 
       case MessageType.TRUCE_ACCEPT:
         await handleTruceResponse(userid, thread, TruceStatus.ACCEPTED);

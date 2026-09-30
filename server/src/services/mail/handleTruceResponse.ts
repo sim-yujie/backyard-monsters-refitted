@@ -4,7 +4,7 @@ import type { Thread } from "../../database/models/thread.model.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { mailboxErr, permissionErr, truceClosedErr } from "../../errors/errors.js";
-import { isRequestOpen, TRUCE_DURATION } from "./truceRules.js";
+import { isRequestOpen, TRUCE_DURATION, TRUCE_RETRY_AFTER_REJECTION } from "./truceRules.js";
 
 type TruceResponse = TruceStatus.ACCEPTED | TruceStatus.REJECTED;
 
@@ -16,7 +16,7 @@ type TruceResponse = TruceStatus.ACCEPTED | TruceStatus.REJECTED;
  * - Validates the request can still be answered: not answered yet, and not
  *   lapsed (`truceRules.ts`, 7 days)
  * - On accept: sets status to ACCEPTED and calculates expiry
- * - On reject: sets status to REJECTED
+ * - On reject: sets status to REJECTED, and when its proposer may ask again (2 days on)
  *
  * @param userid - The authenticated user's ID
  * @param thread - The mailbox thread linked to the truce
@@ -38,9 +38,7 @@ export const handleTruceResponse = async (userid: number, thread: Thread, status
   truce.status = status;
   thread.trucestate = status;
 
-  if (status === TruceStatus.ACCEPTED) {
-    truce.expires_at = now + TRUCE_DURATION;
-  }
+  truce.expires_at = now + (status === TruceStatus.ACCEPTED ? TRUCE_DURATION : TRUCE_RETRY_AFTER_REJECTION);
 
   postgres.em.persist(truce);
 };

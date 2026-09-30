@@ -57,8 +57,11 @@ The owner's decisions of 2026-09-30, and the defaults they accepted.
   shades the cell, puts a Truce countdown on the panel and disables Attack. A request waits 7
   days for its answer, then lapses: it can no longer be answered, and it no longer stands in
   the way of a new request. A pair has at most one live truce. The proposer cannot withdraw a
-  request; after a rejection a new request may follow at once; there are no truces in Inferno.
-  An attack already under way when a truce is accepted plays out.
+  request. After a rejection, the one who asked waits 2 days before asking that player again
+  (Flash Map Room 1's rule): the server refuses softly, `{ error: 1, message, retryat }`, the
+  message saying when; the web shows it under the box, hides "Propose truce" in that thread
+  and says on the card when they may ask. The other player may ask at once. There are no truces
+  in Inferno. An attack already under way when a truce is accepted plays out.
 - **After Accept** the Map Room 2 scene refetches its visible zones, so the new truce shows on
   the map without a reload.
 - **The server's part.** `getmessagethreads` gives `truceexpire`; `requesttruce` answers with

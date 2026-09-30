@@ -10,7 +10,7 @@ import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { countUnreadMessage } from "../../services/mail/countUnreadMessage.js";
 import { findOrCreateThread } from "../../services/mail/findOrCreateThread.js";
-import { findLiveTruce } from "../../services/mail/truceRules.js";
+import { findLiveTruce, rejectionWait } from "../../services/mail/truceRules.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { mailboxErr, permissionErr, truceExistsErr } from "../../errors/errors.js";
@@ -26,6 +26,8 @@ const TruceSchema = z.object({
  * - Resolves the target player from the provided baseid: a player's main yard or outpost
  * - Guards against self-truces, a block either way (the soft refusal `sendmessage` gives),
  *   and a request still waiting or a truce still running between the pair (`truceRules.ts`)
+ * - Refuses softly, saying when, while the target rejected this user's last request
+ *   under 2 days ago (`rejectionWait`)
  * - Creates a Truce record and a new mailbox thread with the request message, and
  *   answers with that thread's id (#203)
  *
@@ -60,7 +62,17 @@ export const requestTruce: KoaController = async (ctx) => {
     return;
   }
 
-  if (await findLiveTruce(user.userid, targetUserid, getCurrentDateTime())) throw truceExistsErr();
+  const now = getCurrentDateTime();
+
+  if (await findLiveTruce(user.userid, targetUserid, now)) throw truceExistsErr();
+
+  // Asked too soon after a rejection: the soft refusal says when they may ask again.
+  const wait = await rejectionWait(user.userid, targetUserid, now);
+  if (wait) {
+    ctx.status = Status.OK;
+    ctx.body = wait;
+    return;
+  }
 
   const { Filter } = await import("bad-words");
   const filteredMessage = new Filter().clean(message);

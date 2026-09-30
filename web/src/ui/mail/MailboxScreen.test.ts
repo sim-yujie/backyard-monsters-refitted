@@ -362,6 +362,16 @@ describe("truces in the mailbox (#203)", () => {
     expect(host.querySelector(".mail-pane__truce")).not.toBeNull();
   });
 
+  it("after they reject the player's request, no new proposal for 2 days, and the card says when", async () => {
+    const api = fakeApi([[listed("rejected", NOW + 2 * DAY)]], { 1: [request({ userid: ME, targetid: 77 })] });
+    const { host } = await openScreen(api);
+    await openFirst(host);
+
+    expect(stateOf(host)).toBe("Rejected");
+    expect(card(host)?.textContent).toContain("Bramblefoot rejected the truce. You can ask again in 2 days, on");
+    expect(host.querySelector(".mail-pane__truce")).toBeNull();
+  });
+
   it("proposes a truce in a thread, starting from Flash's words", async () => {
     const api = fakeApi([[message()]], { 1: [message()] });
     const { host } = await openScreen(api);

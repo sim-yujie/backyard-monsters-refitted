@@ -39,7 +39,21 @@ describe("truceState", () => {
 describe("the rules the screen follows", () => {
   it("a new truce may be proposed unless one waits or runs", () => {
     const states: (TruceState | null)[] = [null, "pending", "active", "expired", "lapsed", "rejected"];
-    expect(states.map(canPropose)).toEqual([true, false, false, true, true, true]);
+    expect(states.map((state) => canPropose(state))).toEqual([true, false, false, true, true, true]);
+  });
+
+  it("after a rejection, the one who asked waits until the rejection's end; the other does not", () => {
+    expect(canPropose("rejected", NOW + DAY, true, NOW)).toBe(false);
+    expect(canPropose("rejected", NOW - 1, true, NOW)).toBe(true);
+    expect(canPropose("rejected", NOW + DAY, false, NOW)).toBe(true);
+  });
+
+  it("the rejected request's card says when its proposer may ask again", () => {
+    expect(truceCard("rejected", NOW + 2 * DAY, true, "Bramble", NOW).detail).toMatch(
+      /^Bramble rejected the truce\. You can ask again in 2 days, on \d+ \w+\.$/,
+    );
+    expect(truceCard("rejected", NOW - 1, true, "Bramble", NOW).detail).toBe("Bramble rejected the truce.");
+    expect(truceCard("rejected", NOW + DAY, false, "Bramble", NOW).detail).toBe("You rejected the truce.");
   });
 
   it("the thread's truce belongs to its last request", () => {

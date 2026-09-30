@@ -8,7 +8,9 @@ import { dayText, type MailItem, type ThreadTruce } from "./mailbox";
  * rejected) and says when it ends (`truceexpire`); the clock decides the
  * rest. An accepted truce runs 14 days and stops attacks both ways on every
  * yard and outpost of the pair. A request waits 7 days for the recipient's
- * answer and then lapses (`server/src/services/mail/truceRules.ts`).
+ * answer and then lapses. After a rejection, the one who asked waits 2 days
+ * before asking that player again, until the rejected request's `truceexpire`
+ * (`server/src/services/mail/truceRules.ts`).
  */
 
 /** How long an accepted truce lasts, in days. */
@@ -55,8 +57,15 @@ export const truceState = (truce: ThreadTruce | null, now: number): TruceState |
   }
 };
 
-/** A truce may be proposed unless one already waits or runs: the server refuses a second. */
-export const canPropose = (state: TruceState | null): boolean => state !== "pending" && state !== "active";
+/**
+ * Whether the player may propose a truce in the thread: not while one waits or
+ * runs, and not in the 2 days after the other player rejected the player's own
+ * request (`until`, `mine`); the server refuses both.
+ */
+export const canPropose = (state: TruceState | null, until: number | null = null, mine = false, now = 0): boolean => {
+  if (state === "pending" || state === "active") return false;
+  return !(state === "rejected" && mine && until !== null && until > now);
+};
 
 /** The message the thread's truce belongs to: its last request, or -1. */
 export const requestIndex = (items: readonly MailItem[]): number => {
@@ -127,7 +136,11 @@ export const truceCard = (
       detail = `No answer came${until === null ? "" : ` by ${dayText(until)}`}, so the request lapsed.`;
       break;
     case "rejected":
-      detail = mine ? `${otherName} rejected the truce.` : "You rejected the truce.";
+      detail = !mine
+        ? "You rejected the truce."
+        : until !== null && until > now
+          ? `${otherName} rejected the truce. You can ask again in ${spanText(until - now)}, on ${dayText(until)}.`
+          : `${otherName} rejected the truce.`;
       break;
   }
   return { state, ...LABELS[state], detail, canAnswer: state === "pending" && !mine };

@@ -17,6 +17,11 @@ export class Truce {
   @Property({ type: "string" })
   status: TruceStatus = TruceStatus.REQUESTED;
 
+  /**
+   * Unix seconds. An accepted truce: when it ends. A rejected request: when its
+   * proposer may ask the same player again (2 days on, #203). Unset while a
+   * request waits.
+   */
   @Property({ type: "number", nullable: true })
   expires_at?: number;
 

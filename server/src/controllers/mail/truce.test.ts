@@ -50,13 +50,13 @@ const em = {
   populate: async () => {},
 };
 
-mock.module("../../server.js", () => ({ postgres: { em } }));
+mock.module("../../server.js", () => ({ postgres: { em }, redis: {} }));
 
 const { requestTruce } = await import("./requestTruce.js");
 const { sendMessage } = await import("./sendMessage.js");
 const { getMessageThreads } = await import("./getMessageThreads.js");
 const { getTruces } = await import("../../services/maproom/getTruces.js");
-const { TRUCE_DURATION, TRUCE_REQUEST_LIFETIME } = await import("../../services/mail/truceRules.js");
+const { TRUCE_DURATION, TRUCE_REQUEST_LIFETIME, TRUCE_RETRY_AFTER_REJECTION } = await import("../../services/mail/truceRules.js");
 
 const user = (userid: number) => table({ name: "User" } as Entity).find((row) => row.userid === userid)!;
 
@@ -154,13 +154,40 @@ describe("answering a truce request", () => {
     expect(threadOf(threadid).trucestate).toBe("accepted");
   });
 
-  test("the recipient rejects: no truce, and a new request may follow", async () => {
+  test("the recipient rejects: no truce, and the one who asked waits 2 days to ask again", async () => {
     const { threadid } = (await request(ALICE, BOB_MAIN)) as { threadid: number };
     await send(BOB, threadid, "trucereject");
 
-    expect(truces()[0]).toMatchObject({ status: "rejected" });
-    expect(truces()[0]!.expires_at as number).toBeUndefined();
+    const [rejected] = truces();
+    expect(rejected).toMatchObject({ status: "rejected" });
+    expect(rejected!.expires_at as number).toBeGreaterThanOrEqual(now() + TRUCE_RETRY_AFTER_REJECTION - 1);
+    expect(rejected!.expires_at as number).toBeLessThanOrEqual(now() + TRUCE_RETRY_AFTER_REJECTION);
+
+    // A soft refusal, from the map or in the thread, that says when; nothing is written.
+    const refusal = {
+      error: 1,
+      message: "They rejected your last truce request. You can ask them again in 2 days.",
+      retryat: rejected!.expires_at,
+    };
+    expect(await request(ALICE, BOB_OUTPOST)).toEqual(refusal);
+    expect(await send(ALICE, threadid, "trucerequest")).toEqual(refusal);
+    expect(truces()).toHaveLength(1);
+    expect(tables.get("Message")!.filter((one) => one.messagetype === "trucerequest")).toHaveLength(1);
+
+    rejected!.expires_at = now() + 5 * 3_600;
+    expect((await request(ALICE, BOB_MAIN)).message).toBe(
+      "They rejected your last truce request. You can ask them again in 5 h.",
+    );
+
+    rejected!.expires_at = now() - 1;
     expect(await request(ALICE, BOB_MAIN)).toMatchObject({ error: 0 });
+  });
+
+  test("after a rejection the other player may still ask at once", async () => {
+    const { threadid } = (await request(ALICE, BOB_MAIN)) as { threadid: number };
+    await send(BOB, threadid, "trucereject");
+
+    expect(await request(BOB, "2000241207")).toMatchObject({ error: 0 });
   });
 
   test("the one who asked cannot answer", async () => {
@@ -216,14 +243,13 @@ describe("what the thread list and the map say", () => {
     });
   });
 
-  test("a rejected truce, and a thread with none, give no end", async () => {
+  test("a rejected truce ends when its proposer may ask again; a thread with none gives no end", async () => {
     const plain = await plainThread();
     const { threadid } = (await request(ALICE, BOB_MAIN)) as { threadid: number };
     await send(BOB, threadid, "trucereject");
 
     const threads = await listed(ALICE);
-    expect(threads[threadid]).toMatchObject({ trucestate: "rejected" });
-    expect(threads[threadid]!.truceexpire).toBeUndefined();
+    expect(threads[threadid]).toMatchObject({ trucestate: "rejected", truceexpire: truces()[0]!.expires_at });
     expect(threads[plain]!.truceexpire).toBeUndefined();
   });
 

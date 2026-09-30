@@ -373,7 +373,10 @@ export class MailboxScreen {
     head.append(this.backButton(), titles);
     const now = this.now();
     const state = truceState(thread.truce, now);
-    if (!thread.notice && canPropose(state)) {
+    // The thread's truce belongs to its last request, which carries the card.
+    const request = state === null ? -1 : requestIndex(items);
+    const until = thread.truce?.until ?? null;
+    if (!thread.notice && canPropose(state, until, items[request]?.mine ?? false, now)) {
       head.append(
         buttonOf("btn btn--outline mail-pane__truce", "Propose truce", () =>
           this.showTruceForm({ userid: thread.otherId, name: thread.otherName }, thread),
@@ -382,8 +385,6 @@ export class MailboxScreen {
     }
     if (!thread.notice) head.append(this.blockControl(thread));
 
-    // The thread's truce belongs to its last request, which carries the card.
-    const request = state === null ? -1 : requestIndex(items);
     const messages = make("ol", "mail-messages");
     items.forEach((item, index) => {
       const side = item.notice ? "notice" : item.mine ? "mine" : "theirs";
@@ -391,7 +392,7 @@ export class MailboxScreen {
       if (item.label && index !== request) bubble.append(make("strong", "mail-message__label", item.label));
       bubble.append(make("p", "mail-message__text", item.text));
       if (index === request && state !== null) {
-        const card = truceCard(state, thread.truce?.until ?? null, item.mine, thread.otherName, now);
+        const card = truceCard(state, until, item.mine, thread.otherName, now);
         bubble.classList.add("mail-message--request");
         bubble.append(
           requestCard({
