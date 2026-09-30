@@ -1,11 +1,27 @@
 /**
  * For tests: whether an in-memory row passes a MikroORM filter. Covers what
- * the routes under test write: plain equality, `$and`, `$or`, `$in`, and the
- * comparisons `$gt`, `$gte`, `$lt`, `$lte` on numbers and dates. Anything
+ * the routes under test write: plain equality, `$and`, `$or`, `$in`, `$ne`,
+ * `$ilike` (with `%`, `_` and backslash escapes, as Postgres reads them), and
+ * the comparisons `$gt`, `$gte`, `$lt`, `$lte` on numbers and dates. Anything
  * else fails loudly rather than matching by accident.
  */
 
 type Row = Record<string, unknown>;
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** A Postgres ILIKE pattern as a regular expression. */
+const ilike = (pattern: string): RegExp => {
+  let source = "";
+  for (let i = 0; i < pattern.length; i += 1) {
+    const character = pattern[i];
+    if (character === "\\") source += escapeRegExp(pattern[++i] ?? "");
+    else if (character === "%") source += ".*";
+    else if (character === "_") source += ".";
+    else source += escapeRegExp(character);
+  }
+  return new RegExp(`^${source}$`, "is");
+};
 
 const comparable = (value: unknown) => (value instanceof Date ? value.getTime() : value);
 
@@ -18,6 +34,10 @@ const passes = (value: unknown, condition: unknown): boolean => {
     switch (operator) {
       case "$in":
         return (operand as unknown[]).includes(value);
+      case "$ne":
+        return comparable(value) !== comparable(operand);
+      case "$ilike":
+        return typeof value === "string" && ilike(operand as string).test(value);
       case "$gt":
         return value !== undefined && value !== null && left > right;
       case "$gte":

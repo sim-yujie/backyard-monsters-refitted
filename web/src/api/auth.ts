@@ -1,6 +1,13 @@
 import { SESSION_STORAGE_KEY } from "@/config";
 import { post, setAuthToken } from "./http";
-import { SessionType, type LoginRequest, type LoginResponse, type Session } from "./types";
+import {
+  SessionType,
+  type LoginRequest,
+  type LoginResponse,
+  type RegisterRequest,
+  type RegisterResponse,
+  type Session,
+} from "./types";
 
 /**
  * Login. Route and fields from docs/server-api.md §Auth:
@@ -11,6 +18,17 @@ import { SessionType, type LoginRequest, type LoginResponse, type Session } from
  * session. No field on this route is a JSON string.
  */
 const LOGIN_PATH = "/api/:apiVersion/player/getinfo";
+
+/**
+ * Sign-up (issue #213): POST /api/:apiVersion/player/register, validated by
+ * UserRegistrationSchema against the shared account rules
+ * (`game/account/rules/accountRules.ts`). It creates the account only; the
+ * yard is built on the first `/base/load`, and the route mints no token, so a
+ * sign-in follows. Refusals carry `errorDetails.data.reason`: "invalidAccount"
+ * (with `field`), "usernameTaken" or "emailTaken". The route is rate limited
+ * per IP and answers 429 with a plain `{ error }` body.
+ */
+const REGISTER_PATH = "/api/:apiVersion/player/register";
 
 let current: Session | null = null;
 
@@ -60,6 +78,10 @@ export const login = async (
   lastBookmarks = response.bookmarks;
   return remember(toSession(response, sessionType));
 };
+
+/** Creates an account. Sign in with {@link login} afterwards. */
+export const register = async (request: RegisterRequest): Promise<RegisterResponse> =>
+  post<RegisterResponse>(REGISTER_PATH, { ...request });
 
 /**
  * Re-authenticates with a stored token.

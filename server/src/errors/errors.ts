@@ -35,11 +35,15 @@ export const emailPasswordErr = () =>
     isClientFriendly: true,
   });
 
+/**
+ * The username is taken, compared without case (issue #213). `reason` travels
+ * in `data` so the sign-up form can mark the username field.
+ */
 export const usernameUniqueErr = () =>
   new ClientSafeError({
     message: "An account with this username already exists.",
     status: Status.CONFLICT,
-    data: {},
+    data: { reason: "usernameTaken" },
     isClientFriendly: true,
   });
 
@@ -47,7 +51,20 @@ export const emailUniqueErr = () =>
   new ClientSafeError({
     message: "An account with this email address already exists.",
     status: Status.CONFLICT,
-    data: {},
+    data: { reason: "emailTaken" },
+    isClientFriendly: true,
+  });
+
+/**
+ * A sign-up whose fields break the account rules (issue #213): a clean 400
+ * naming the first broken rule and its field, where a raw zod error used to
+ * answer 500. The message is one of the shared `AccountMessage`s.
+ */
+export const invalidAccountErr = (message: string, field: string) =>
+  new ClientSafeError({
+    message,
+    status: Status.BAD_REQUEST,
+    data: { reason: "invalidAccount", field },
     isClientFriendly: true,
   });
 

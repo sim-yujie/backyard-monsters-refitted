@@ -1,34 +1,49 @@
 import z from "zod";
 import { SessionType } from "../enums/SessionType.js";
 
-const emailError = "Invalid email address";
+import {
+  AccountMessage,
+  EMAIL_PATTERN,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_SYMBOL_PATTERN,
+  USERNAME_MAX_LENGTH,
+  USERNAME_MIN_LENGTH,
+  USERNAME_PATTERN,
+} from "../game-rules/account/accountRules.js";
 
-const passwordLengthError = "Password must be at least 8 characters long";
-const passwordSpecialError = "Password must contain at least one special character";
+// The limits, patterns and messages below are the shared account rules
+// (issue #213), which the web client's sign-up form checks against as well.
 
 /**
  * Schema to validate passwords.
  * - Must be at least 8 characters long.
  * - Must contain at least one special character (any non-alphanumeric character).
  */
+const newPasswordSchema = z
+  .string({ error: AccountMessage.passwordLength })
+  .trim()
+  .min(PASSWORD_MIN_LENGTH, AccountMessage.passwordLength)
+  .regex(PASSWORD_SYMBOL_PATTERN, AccountMessage.passwordSymbol);
+
+/**
+ * The same rules for a password that may be left out, as on login with a token:
+ * an empty string counts as left out.
+ */
 const passwordSchema = z.preprocess(
   (input) => (input === "" ? undefined : input),
-  z.string()
-    .trim()
-    .min(8, passwordLengthError)
-    .regex(/[^a-zA-Z0-9]/, passwordSpecialError)
-    .optional()
+  newPasswordSchema.optional()
 );
 
 /**
  * Schema to validate email addresses.
+ * - Trimmed and lowercased first, then checked, so a stray space is not a refusal.
  * - Must be a valid email format.
- * - Converts the email to lowercase.
  */
-const emailSchema = z.email(emailError).trim().toLowerCase();
-
-const usernameCharsetError = "Usernames can only contain letters, numbers and underscores";
-const usernameLengthError = "Usernames must be between 2 and 12 characters";
+const emailSchema = z
+  .string({ error: AccountMessage.email })
+  .trim()
+  .toLowerCase()
+  .pipe(z.email({ pattern: EMAIL_PATTERN, error: AccountMessage.email }));
 
 /**
  * Schema to validate usernames.
@@ -36,11 +51,11 @@ const usernameLengthError = "Usernames must be between 2 and 12 characters";
  * - Letters, numbers and underscores only.
  */
 const usernameSchema = z
-  .string()
+  .string({ error: AccountMessage.usernameLength })
   .trim()
-  .min(2, usernameLengthError)
-  .max(12, usernameLengthError)
-  .regex(/^[a-zA-Z0-9_]+$/, usernameCharsetError);
+  .min(USERNAME_MIN_LENGTH, AccountMessage.usernameLength)
+  .max(USERNAME_MAX_LENGTH, AccountMessage.usernameLength)
+  .regex(USERNAME_PATTERN, AccountMessage.usernameCharset);
 
 /**
  * Schema to validate user login data.
@@ -60,12 +75,12 @@ export const UserLoginSchema = z.object({
  * Schema to validate user registration data.
  * - Username must be between 2 and 12 characters.
  * - Email must meet the email schema requirements.
- * - Password must meet the password schema requirements.
+ * - Password must meet the password schema requirements, and cannot be left out.
  */
 export const UserRegistrationSchema = z.object({
   username: usernameSchema,
   email: emailSchema,
-  password: passwordSchema,
+  password: newPasswordSchema,
 });
 
 /**
@@ -94,11 +109,11 @@ export const SetAvatarSchema = z.object({
 
 /**
  * Schema to validate password reset data.
- * - Password must meet the password schema requirements.
+ * - Password must meet the password schema requirements, and cannot be left out.
  * - Token must be a string.
  */
 export const ResetPasswordSchema = z.object({
-  password: passwordSchema,
+  password: newPasswordSchema,
   token: z.string(),
 });
 

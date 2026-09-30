@@ -7,6 +7,7 @@ import { World } from "../../database/models/world.model.js";
 import { postgres } from "../../server.js";
 import { invalidateWorldsCache } from "../maproom/knownWorlds.js";
 import { usernameUniqueErr } from "../../errors/errors.js";
+import { usernameMatch } from "./usernameLookup.js";
 
 /** How long a player must wait between username changes. */
 export const USERNAME_CHANGE_COOLDOWN_MONTHS = 6;
@@ -60,7 +61,10 @@ export const renameUser = async (user: User, username: string): Promise<Date> =>
 
   try {
     await postgres.em.transactional(async (em) => {
-      const existing = await em.findOne(User, { username });
+      // Taken means by anyone else, without case; a player may change the case of their own name.
+      const existing = await em.findOne(User, {
+        $and: [usernameMatch(username), { userid: { $ne: user.userid } }],
+      });
 
       if (existing) throw usernameUniqueErr();
 

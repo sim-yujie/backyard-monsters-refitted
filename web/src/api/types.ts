@@ -55,6 +55,17 @@ export interface LoginResponse extends ApiEnvelope {
   bookmarks?: unknown;
 }
 
+/** `POST /api/:apiVersion/player/register` (issue #213). */
+export interface RegisterRequest {
+  username: string;
+  email: string;
+  password: string;
+}
+
+export interface RegisterResponse extends ApiEnvelope {
+  user: { userid: number; username: string; email: string };
+}
+
 /** What the client keeps once a login succeeds. */
 export interface Session {
   token: string;

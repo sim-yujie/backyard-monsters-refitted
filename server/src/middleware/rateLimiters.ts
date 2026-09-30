@@ -190,8 +190,7 @@ export const registerLimiter = RateLimit.middleware({
   handler: async (ctx: Context) => {
     ctx.status = Status.TOO_MANY_REQUESTS;
     ctx.body = {
-      error:
-        "Too many requests where sent from this IP while creating an account. Please try again in 1 hour.",
+      error: "Too many accounts were created from your network. Please try again later.",
     };
   },
 });

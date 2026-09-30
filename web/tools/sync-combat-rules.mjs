@@ -1,6 +1,6 @@
 /**
- * Copies the shared rules modules into the server tree: the combat rules and
- * the Map Room 2 range rule (issue #190).
+ * Copies the shared rules modules into the server tree: the combat rules, the
+ * Map Room 2 range rule (issue #190) and the account rules (issue #213).
  *
  *   cd web && node tools/sync-combat-rules.mjs          # copy and write manifests
  *   cd web && node tools/sync-combat-rules.mjs --check  # exit 1 on any drift
@@ -11,7 +11,8 @@
  * source and one checked copy rather than a third package with a build step
  * (`docs/design/server-combat.md` §3.2). The Map Room 2 range rule is shared
  * the same way, so the map's range overlay and Attack button measure exactly
- * what the server's range check does.
+ * what the server's range check does, and the account rules, so the sign-up
+ * form refuses exactly what the server's registration schema does.
  *
  * What it does, for each module in `MODULES`:
  *
@@ -49,6 +50,11 @@ const MODULES = [
     name: "maproom",
     source: resolve(here, "../src/game/maproom/rules"),
     target: resolve(repo, "server/src/game-rules/maproom"),
+  },
+  {
+    name: "account",
+    source: resolve(here, "../src/game/account/rules"),
+    target: resolve(repo, "server/src/game-rules/account"),
   },
 ];
 const MANIFEST = "MANIFEST.json";
