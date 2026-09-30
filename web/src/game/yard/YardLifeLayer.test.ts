@@ -2,9 +2,10 @@ import { Container, Texture, TextureSource } from "pixi.js";
 import { describe, expect, it } from "vitest";
 import { MonsterSheetTextures } from "@/game/attack/AttackBattleLayer";
 import { MONSTER_SPRITES } from "@/game/attack/monsterSpriteData";
+import { shadowOffset } from "@/game/attack/monsterSprites";
 import { yardBounds } from "./YardGrid";
 import { EMPTY_LIFE, type YardLife } from "./yardLifeModel";
-import { YardLifeLayer } from "./YardLifeLayer";
+import { PEN_GROUND_DROP, YardLifeLayer } from "./YardLifeLayer";
 
 /** Every sheet arrives at once as a blank of the right size. */
 const textures = () =>
@@ -105,6 +106,37 @@ describe("YardLifeLayer", () => {
     layer.set(null, bounds);
     expect(layer.count).toBe(0);
     expect(tops.children).toHaveLength(0);
+  });
+
+  it("stands a level 6 Fomor on the ground in its cage, not over its shadow (#206)", async () => {
+    const fomorAt = async (sheetLevel: number) => {
+      const { layer, tops, shadows } = setUp(true);
+      layer.set(
+        life({ groups: [], workers: 0, champions: [{ id: "G3", level: sheetLevel, sheetLevel }] }),
+        bounds,
+      );
+      layer.attach(tops, shadows);
+      layer.update(everywhere, 0);
+      await flush();
+      layer.update(everywhere, 0);
+      const [walker] = layer.walkerList;
+      const [body] = tops.children;
+      const [shadow] = shadows.children;
+      if (!walker || !body || !shadow) throw new Error("no Fomor");
+      const groundY = (walker.x + walker.y) / 2 + bounds.originY;
+      return { body, shadow, groundY };
+    };
+
+    const six = await fomorAt(6);
+    const sheet = MONSTER_SPRITES["G3_6"]!;
+    expect(PEN_GROUND_DROP["G3_6"]).toBe(32);
+    expect(six.body.y).toBe(six.groundY - sheet.anchorY + 32);
+    // The shadow stays on the ground point, where Flash put it.
+    expect(six.shadow.y).toBe(six.groundY + shadowOffset(sheet)!.y);
+
+    // Every other level stands where its Flash offset puts it.
+    const five = await fomorAt(5);
+    expect(five.body.y).toBe(five.groundY - MONSTER_SPRITES["G3_5"]!.anchorY);
   });
 
   it("walks the creatures on the clock, and under reduced motion does not", () => {

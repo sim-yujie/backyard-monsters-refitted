@@ -167,6 +167,26 @@ describe("headings and cells", () => {
     expect(animationFor(creepOf(), false)).toBe("idle");
   });
 
+  it("keeps a flyer that is standing still flapping, never in its folded-wing pose (#206)", () => {
+    const fomor = sheetOf("G3", 6);
+    const flyer = creepOf({ monsterId: "G3", level: 6, champion: true, friendly: true, flying: true });
+    expect(animationFor(flyer, false)).toBe("walk");
+    expect(animationFor({ ...flyer, state: "attacking" }, false)).toBe("attack");
+    const walk = fomor.animations.walk!;
+    const rows = new Set<number>();
+    for (let age = 0; age < walk.count * walk.ticksPerFrame; age++) {
+      const layout = layoutCreep(flyer, fomor, { heading: 0, moving: false, age }, ORIGIN, STILL);
+      // Up in the air...
+      expect(layout.y).toBe(groundWorld(flyer.ix, flyer.iy, ORIGIN).y - fomor.anchorY - 108);
+      // ...on a wing-beat row, not row 0, the folded-wing standing pose.
+      expect(layout.row).toBeGreaterThanOrEqual(walk.first);
+      rows.add(layout.row);
+    }
+    expect(rows.size).toBe(walk.count);
+    // On foot, at level 2, a Fomor standing still still stands.
+    expect(animationFor({ ...flyer, level: 2, flying: false }, false)).toBe("idle");
+  });
+
   it("measures a heading on screen, y down, and has none for a creep that did not move", () => {
     expect(headingBetween({ x: 0, y: 0 }, { x: 5, y: 0 })).toBe(0);
     expect(headingBetween({ x: 0, y: 0 }, { x: 0, y: 5 })).toBeCloseTo(Math.PI / 2);

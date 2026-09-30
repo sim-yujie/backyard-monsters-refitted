@@ -208,10 +208,19 @@ export const headingBetween = (from: Point, to: Point): number | null => {
   return Math.atan2(dy, dx);
 };
 
-/** Which row cycle a creep shows: attacking, walking, or standing. */
+/**
+ * Which row cycle a creep shows: attacking, walking, or standing.
+ *
+ * A flyer never stands: it is in the air, and the only flyer sheets with a
+ * standing row are Fomor's (`fly_3` to `fly_6`), whose row 0 has the wings
+ * folded, for the ground. Flash shows that row only to a champion standing in
+ * its pen and plays the walking cycle, the wing beat, in every other state
+ * (`ChampionBase.getNextSprite`, `ChampionBase.as:1537-1549`), so a Fomor
+ * waiting in the air keeps flapping (#206).
+ */
 export const animationFor = (creep: CreepSnapshot, moving: boolean): MonsterAnimation => {
   if (creep.state === "attacking") return "attack";
-  return moving ? "walk" : "idle";
+  return moving || creep.flying ? "walk" : "idle";
 };
 
 /** True when a sheet has no walk cycle to play: one pose per heading. */

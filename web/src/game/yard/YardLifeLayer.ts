@@ -64,6 +64,21 @@ const WORKER_SHEET: MonsterSheet | undefined = MONSTER_SPRITES["worker"];
 /** Workers' depth tie-break ids start here, past every walker's. */
 const WORKER_DEPTH_ID = 900;
 
+/**
+ * Px a sheet's body is drawn lower than its anchor says, in the yard only, so
+ * it stands on its ground point (#206).
+ *
+ * A caged Fomor stands in its pen with its wings folded
+ * (`ChampionBase.as:1537-1539`), at its level's `offset_y`. Level 6's is -98
+ * (`CHAMPIONCAGE.as:164`) in a cell as tall as level 5's, whose is -68, so Flash
+ * put its standing pose about 16 px above the ground point where levels 3 to 5
+ * have theirs about 16 px below: Fomor hung in the air over its shadow, wings
+ * still. 32 px brings it in line
+ * with the other levels, flapping or standing. On the attack screen it is in
+ * the air, with no ground to stand on, so the sheet keeps Flash's anchor.
+ */
+export const PEN_GROUND_DROP: Readonly<Record<string, number>> = { G3_6: 32 };
+
 interface Body {
   readonly body: Sprite;
   readonly shadow: Sprite | null;
@@ -364,7 +379,7 @@ export class YardLifeLayer {
       body.cellKey = key;
     }
     const anchor = anchorOffset(sheet);
-    body.body.position.set(x + anchor.x, y + anchor.y);
+    body.body.position.set(x + anchor.x, y + anchor.y + (PEN_GROUND_DROP[sheet.key] ?? 0));
     const zIndex = creepZIndex(x, y, depthId);
     if (body.body.zIndex !== zIndex) body.body.zIndex = zIndex;
     body.body.visible = true;
