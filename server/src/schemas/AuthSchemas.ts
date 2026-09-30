@@ -9,6 +9,7 @@ import {
   USERNAME_MAX_LENGTH,
   USERNAME_MIN_LENGTH,
   USERNAME_PATTERN,
+  isReservedUsername,
 } from "../game-rules/account/accountRules.js";
 
 // The limits, patterns and messages below are the shared account rules
@@ -49,13 +50,18 @@ const emailSchema = z
  * Schema to validate usernames.
  * - Must be 2 to 12 characters long.
  * - Letters, numbers and underscores only.
+ * - Not a name that reads as the game's own team (admin, moderator, bymr...).
+ *
+ * The word filter chat and alliance names use runs after this, in the
+ * register and rename paths (`services/user/usernameFilter.ts`).
  */
 const usernameSchema = z
   .string({ error: AccountMessage.usernameLength })
   .trim()
   .min(USERNAME_MIN_LENGTH, AccountMessage.usernameLength)
   .max(USERNAME_MAX_LENGTH, AccountMessage.usernameLength)
-  .regex(USERNAME_PATTERN, AccountMessage.usernameCharset);
+  .regex(USERNAME_PATTERN, AccountMessage.usernameCharset)
+  .refine((username) => !isReservedUsername(username), AccountMessage.usernameReserved);
 
 /**
  * Schema to validate user login data.
@@ -76,11 +82,21 @@ export const UserLoginSchema = z.object({
  * - Username must be between 2 and 12 characters.
  * - Email must meet the email schema requirements.
  * - Password must meet the password schema requirements, and cannot be left out.
+ * - turnstileToken is the sign-up form's bot-check token, checked with Cloudflare
+ *   by the controller (`services/auth/turnstile.ts`); optional here because the
+ *   check is off when the server has no secret key.
+ * - termsAccepted is sent by a form that shows the Terms and age line; the
+ *   server records when. A client that sends nothing records nothing.
  */
 export const UserRegistrationSchema = z.object({
   username: usernameSchema,
   email: emailSchema,
   password: newPasswordSchema,
+  turnstileToken: z.unknown().optional(),
+  termsAccepted: z.preprocess(
+    (input) => (input === "true" ? true : input === "false" ? false : input),
+    z.boolean().optional()
+  ),
 });
 
 /**

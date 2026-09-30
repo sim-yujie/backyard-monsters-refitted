@@ -68,6 +68,31 @@ export const invalidAccountErr = (message: string, field: string) =>
     isClientFriendly: true,
   });
 
+/**
+ * The sign-up's Turnstile token was missing, expired, already used or refused
+ * by Cloudflare (issue #213). The form fetches a fresh one and the player can
+ * try again.
+ */
+export const botCheckFailedErr = () =>
+  new ClientSafeError({
+    message: "We couldn't confirm you're a person. Please complete the check and try again.",
+    status: Status.BAD_REQUEST,
+    data: { reason: "botCheckFailed" },
+    isClientFriendly: true,
+  });
+
+/**
+ * Cloudflare could not be asked about the sign-up's Turnstile token, or the
+ * server's secret key is wrong (issue #213). No account is made.
+ */
+export const botCheckUnavailableErr = () =>
+  new ClientSafeError({
+    message: "We couldn't run the sign-up check just now. Please try again in a minute.",
+    status: Status.SERVICE_UNAVAILABLE,
+    data: { reason: "botCheckUnavailable" },
+    isClientFriendly: true,
+  });
+
 export const usernameCooldownErr = (nextChangeAt: Date) =>
   new ClientSafeError({
     message: `You can only change your username once every 6 months. You can change it again on ${nextChangeAt.toUTCString()}.`,

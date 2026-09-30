@@ -4,12 +4,20 @@ import type { KoaController } from "../../utils/KoaController.js";
 import { postgres } from "../../server.js";
 import { User } from "../../database/models/user.model.js";
 import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
-import { emailUniqueErr, invalidAccountErr, usernameUniqueErr } from "../../errors/errors.js";
+import {
+  botCheckFailedErr,
+  botCheckUnavailableErr,
+  emailUniqueErr,
+  invalidAccountErr,
+  usernameUniqueErr,
+} from "../../errors/errors.js";
 import { logger } from "../../utils/logger.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { UserRegistrationSchema } from "../../schemas/AuthSchemas.js";
 import { BYMR_CDN } from "../../services/discord/fetchDiscordAvatar.js";
 import { sameUsername, usernameMatch } from "../../services/user/usernameLookup.js";
+import { assertUsernameAllowed } from "../../services/user/usernameFilter.js";
+import { verifyTurnstileToken } from "../../services/auth/turnstile.js";
 
 /**
  * Controller to handle user registration.
@@ -19,6 +27,9 @@ import { sameUsername, usernameMatch } from "../../services/user/usernameLookup.
  * Every refusal is a ClientSafeError (issue #213): a field that breaks the shared account
  * rules is a 400 naming it, and a username (compared without case) or email that is
  * already taken is a 409, including when two sign-ups race for the same one.
+ * A username the chat word filter catches is a 400 on the username field, and
+ * when the server has a Turnstile secret key the sign-up's bot-check token must
+ * pass Cloudflare's check before anything is looked up or written.
  *
  * @param {Context} ctx - The Koa context object.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
@@ -32,7 +43,13 @@ export const register: KoaController = async (ctx) => {
     throw invalidAccountErr(issue.message, String(issue.path[0] ?? ""));
   }
 
-  const registeredUser = parsed.data;
+  const { turnstileToken, termsAccepted, ...registeredUser } = parsed.data;
+
+  assertUsernameAllowed(registeredUser.username);
+
+  const botCheck = await verifyTurnstileToken(turnstileToken, ctx.ip);
+  if (botCheck === "failed") throw botCheckFailedErr();
+  if (botCheck === "unavailable") throw botCheckUnavailableErr();
 
   // Find user by username (without case) or email
   const existingUser = await postgres.em.findOne(User, {
@@ -52,6 +69,7 @@ export const register: KoaController = async (ctx) => {
     ...registeredUser,
     pic_square: `${BYMR_CDN}/assets/bym-refitted-assets/placeholder.jpg`,
     password: hash,
+    terms_accepted_at: termsAccepted ? new Date() : null,
   });
 
   try {

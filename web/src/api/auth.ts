@@ -22,10 +22,13 @@ const LOGIN_PATH = "/api/:apiVersion/player/getinfo";
 /**
  * Sign-up (issue #213): POST /api/:apiVersion/player/register, validated by
  * UserRegistrationSchema against the shared account rules
- * (`game/account/rules/accountRules.ts`). It creates the account only; the
+ * (`game/account/rules/accountRules.ts`), plus the word filter on the username,
+ * the Turnstile bot check (`turnstileToken`, when the server has a secret key)
+ * and `termsAccepted`, which the server stamps. It creates the account only; the
  * yard is built on the first `/base/load`, and the route mints no token, so a
  * sign-in follows. Refusals carry `errorDetails.data.reason`: "invalidAccount"
- * (with `field`), "usernameTaken" or "emailTaken". The route is rate limited
+ * (with `field`), "usernameTaken", "emailTaken", "botCheckFailed" or
+ * "botCheckUnavailable". The route is rate limited
  * per IP and answers 429 with a plain `{ error }` body.
  */
 const REGISTER_PATH = "/api/:apiVersion/player/register";

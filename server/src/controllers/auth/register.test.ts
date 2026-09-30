@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import bcrypt from "bcrypt";
 import { UniqueConstraintViolationException } from "@mikro-orm/core";
 import type { Context } from "koa";
@@ -156,5 +156,122 @@ describe("register", () => {
       new Error('duplicate key value violates unique constraint "user_username_unique"')
     );
     expect(await run(VALID)).toMatchObject({ status: 409, reason: "usernameTaken" });
+  });
+});
+
+describe("register: launch checks", () => {
+  const realFetch = globalThis.fetch;
+  let savedSecret: string | undefined;
+  let siteverifyCalls: number;
+
+  /** Cloudflare's siteverify for its test secrets: 1x... passes, 2x... fails. */
+  const stubSiteverify = () => {
+    globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+      siteverifyCalls += 1;
+      const secret = (init?.body as URLSearchParams).get("secret");
+      const success = secret === "1x0000000000000000000000000000000AA";
+      return new Response(
+        JSON.stringify({ success, "error-codes": success ? [] : ["invalid-input-response"] })
+      );
+    }) as unknown as typeof fetch;
+  };
+
+  beforeEach(() => {
+    savedSecret = process.env.TURNSTILE_SECRET_KEY;
+    delete process.env.TURNSTILE_SECRET_KEY;
+    siteverifyCalls = 0;
+    stubSiteverify();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    if (savedSecret === undefined) delete process.env.TURNSTILE_SECRET_KEY;
+    else process.env.TURNSTILE_SECRET_KEY = savedSecret;
+  });
+
+  test("a reserved name is a 400 on the username field with the shared message", async () => {
+    for (const username of ["admin", "Mod_2", "bymr_help"]) {
+      expect(await run({ ...VALID, username })).toMatchObject({
+        status: 400,
+        field: "username",
+        message: AccountMessage.usernameReserved,
+      });
+    }
+    expect(users).toHaveLength(1);
+  });
+
+  test("a name the chat word filter catches is a 400 on the username field", async () => {
+    expect(await run({ ...VALID, username: "big_shit" })).toMatchObject({
+      status: 400,
+      reason: "invalidAccount",
+      field: "username",
+      message: AccountMessage.usernameBlocked,
+    });
+    expect(users).toHaveLength(1);
+  });
+
+  test("without a secret key there is no bot check, and no call to Cloudflare", async () => {
+    expect((await run(VALID)).status).toBe(200);
+    expect(siteverifyCalls).toBe(0);
+  });
+
+  test("with the always-pass test secret the account is made", async () => {
+    process.env.TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA";
+    expect((await run({ ...VALID, turnstileToken: "XXXX.DUMMY.TOKEN.XXXX" })).status).toBe(200);
+    expect(siteverifyCalls).toBe(1);
+    expect(users).toHaveLength(2);
+    expect(users.at(-1)).not.toHaveProperty("turnstileToken");
+  });
+
+  test("with the always-fail test secret nothing is made", async () => {
+    process.env.TURNSTILE_SECRET_KEY = "2x0000000000000000000000000000000AA";
+    expect(await run({ ...VALID, turnstileToken: "XXXX.DUMMY.TOKEN.XXXX" })).toMatchObject({
+      status: 400,
+      reason: "botCheckFailed",
+    });
+    expect(users).toHaveLength(1);
+  });
+
+  test("with a secret key, a sign-up with no token is refused without asking Cloudflare", async () => {
+    process.env.TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA";
+    expect(await run(VALID)).toMatchObject({ status: 400, reason: "botCheckFailed" });
+    expect(siteverifyCalls).toBe(0);
+    expect(users).toHaveLength(1);
+  });
+
+  test("when Cloudflare cannot be reached nothing is made, and the player is told to retry", async () => {
+    process.env.TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA";
+    globalThis.fetch = (async () => {
+      throw new TypeError("fetch failed");
+    }) as unknown as typeof fetch;
+    expect(await run({ ...VALID, turnstileToken: "XXXX.DUMMY.TOKEN.XXXX" })).toMatchObject({
+      status: 503,
+      reason: "botCheckUnavailable",
+    });
+    expect(users).toHaveLength(1);
+  });
+
+  test("a broken rule is refused before the bot check spends the token", async () => {
+    process.env.TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA";
+    await run({ ...VALID, username: "a", turnstileToken: "XXXX.DUMMY.TOKEN.XXXX" });
+    await run({ ...VALID, username: "big_shit", turnstileToken: "XXXX.DUMMY.TOKEN.XXXX" });
+    expect(siteverifyCalls).toBe(0);
+  });
+
+  test("records when the terms were accepted, and nothing when the client did not show them", async () => {
+    const before = Date.now();
+    expect((await run({ ...VALID, termsAccepted: true })).status).toBe(200);
+    const stamped = users.at(-1)!.terms_accepted_at as Date;
+    expect(stamped).toBeInstanceOf(Date);
+    expect(stamped.getTime()).toBeGreaterThanOrEqual(before);
+    expect(users.at(-1)).not.toHaveProperty("termsAccepted");
+
+    expect((await run({ ...VALID, username: "zz_other", email: "other@example.com" })).status).toBe(200);
+    expect(users.at(-1)!.terms_accepted_at).toBeNull();
+  });
+
+  test("takes termsAccepted as a form field's string too", async () => {
+    expect((await run({ ...VALID, termsAccepted: "true" })).status).toBe(200);
+    expect(users.at(-1)!.terms_accepted_at).toBeInstanceOf(Date);
   });
 });

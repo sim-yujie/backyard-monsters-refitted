@@ -22,7 +22,25 @@ const serverProblem = (field: keyof typeof VALID, value: string): string | null 
   return parsed.success ? null : parsed.error.issues[0].message;
 };
 
-const USERNAMES = ["ab", "a", "abcdefghijkl", "abcdefghijklm", "Bob_1", " padded ", "bad name", "émile", "x-y", ""];
+const USERNAMES = [
+  "ab",
+  "a",
+  "abcdefghijkl",
+  "abcdefghijklm",
+  "Bob_1",
+  " padded ",
+  "bad name",
+  "émile",
+  "x-y",
+  "",
+  "admin",
+  " Mod_2 ",
+  "the admin",
+  "administrator1",
+  "SupportBob",
+  "modern",
+  "badminton",
+];
 const EMAILS = [
   "player@example.com",
   " Player@Example.COM ",

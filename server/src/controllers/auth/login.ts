@@ -17,6 +17,7 @@ import { Status } from "../../enums/StatusCodes.js";
 import { UserLoginSchema } from "../../schemas/AuthSchemas.js";
 import { Env } from "../../enums/Env.js";
 import { fetchDiscordAvatar } from "../../services/discord/fetchDiscordAvatar.js";
+import { requiresDiscordVerification } from "../../config/AccountConfig.js";
 
 type SessionLifetime = NonNullable<SignOptions["expiresIn"]>;
 
@@ -48,7 +49,8 @@ const authenticateWithToken = async (token: string) => {
  *
  * This controller authenticates a user based on either their email & password, or token.
  * The token is stored in Redis for each login request, to later be validated in the middleware.
- * Additionally, the controller checks if the user is banned or has verified their Discord account.
+ * Additionally, the controller checks if the user is banned or, on a production server with
+ * REQUIRE_DISCORD_VERIFICATION set (`config/AccountConfig.ts`), has verified their Discord account.
  * The token signature is then constructed with the user's email and Discord ID, along with a flag
  * indicating if the user meets the Discord age check requirement.
  *
@@ -83,10 +85,11 @@ export const login: KoaController = async (ctx) => {
   const sessionLifeTime = process.env.SESSION_LIFETIME || "30d";
   let discordId: string | null | undefined;
 
-  // Check if the user has verified their Discord account
+  // Check if the user has verified their Discord account, when the server asks for it.
+  // Only a verified account's Discord ID goes into the token, as before the switch.
   if (process.env.ENV === Env.PROD) {
-    if (!user.discord_verified) throw discordVerifyErr();
-    discordId = user.discord_id;
+    if (requiresDiscordVerification() && !user.discord_verified) throw discordVerifyErr();
+    discordId = user.discord_verified ? user.discord_id : null;
 
     if (discordId) fetchDiscordAvatar(user.userid, discordId);
   }

@@ -34,6 +34,14 @@ export class User {
   @Property({ type: "Date", nullable: true })
   username_changed_at?: Date | null;
 
+  /**
+   * When the player agreed to the Terms and Privacy Policy and said they are
+   * 13 or older, on the sign-up form (issue #213). Null for accounts made
+   * before that line existed, or by a client that does not show it.
+   */
+  @Property({ type: "Date", nullable: true })
+  terms_accepted_at?: Date | null;
+
   @Property({ type: "boolean", default: false })
   banned: Opt<boolean> = false;
 

@@ -60,6 +60,10 @@ export interface RegisterRequest {
   username: string;
   email: string;
   password: string;
+  /** The sign-up form's Turnstile token; the server checks it when it has a secret key. */
+  turnstileToken?: string;
+  /** The form showed the Terms and age line; the server records when. */
+  termsAccepted?: boolean;
 }
 
 export interface RegisterResponse extends ApiEnvelope {

@@ -67,6 +67,13 @@ describe("isDefiniteProblem", () => {
     expect(isDefiniteProblem("confirm", { ...VALID, confirm: "hunx" })).toBe(true);
   });
 
+  it("says at once that a name belongs to the game's team", () => {
+    expect(isDefiniteProblem("username", { ...VALID, username: "admin" })).toBe(true);
+    expect(signUpProblems({ ...VALID, username: "Mod_1" }).username).toBe(
+      AccountMessage.usernameReserved,
+    );
+  });
+
   it("never rushes an email or a password", () => {
     expect(isDefiniteProblem("email", { ...VALID, email: "a" })).toBe(false);
     expect(isDefiniteProblem("password", { ...VALID, password: "a" })).toBe(false);
@@ -74,14 +81,22 @@ describe("isDefiniteProblem", () => {
 });
 
 describe("signUpRequest", () => {
-  it("sends the name trimmed and the email trimmed and lower case", () => {
+  it("sends the name trimmed and the email trimmed and lower case, agreeing to the terms", () => {
     expect(
       signUpRequest({ ...VALID, username: " zz_signup ", email: " Player@Example.com " }),
     ).toEqual({
       username: "zz_signup",
       email: "player@example.com",
       password: "hunter22!",
+      termsAccepted: true,
     });
+  });
+
+  it("sends the bot-check token when there is one", () => {
+    expect(signUpRequest(VALID, "XXXX.DUMMY.TOKEN.XXXX").turnstileToken).toBe(
+      "XXXX.DUMMY.TOKEN.XXXX",
+    );
+    expect(signUpRequest(VALID, "")).not.toHaveProperty("turnstileToken");
   });
 });
 
@@ -132,6 +147,25 @@ describe("describeSignUpFailure", () => {
     expect(describeSignUpFailure(new NetworkError("down", null)).message).toMatch(
       /reach the server/,
     );
+  });
+
+  it("shows a failed or unavailable bot check above the button, in the server's words", () => {
+    const message = "We couldn't confirm you're a person. Please complete the check and try again.";
+    expect(describeSignUpFailure(refusal(400, message, { reason: "botCheckFailed" }))).toEqual({
+      field: null,
+      message,
+    });
+    expect(
+      describeSignUpFailure(refusal(503, "Try again in a minute.", { reason: "botCheckUnavailable" }))
+        .field,
+    ).toBeNull();
+  });
+
+  it("puts a username the word filter caught on the username field", () => {
+    const failure = describeSignUpFailure(
+      refusal(400, AccountMessage.usernameBlocked, { reason: "invalidAccount", field: "username" }),
+    );
+    expect(failure).toEqual({ field: "username", message: AccountMessage.usernameBlocked });
   });
 
   it("falls back to the server's words for anything else", () => {

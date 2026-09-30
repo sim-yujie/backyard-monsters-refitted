@@ -1,6 +1,7 @@
 import type { Context, Next } from "koa";
 import { logger } from "../utils/logger.js";
 import { Status } from "../enums/StatusCodes.js";
+import { Env } from "../enums/Env.js";
 
 interface ConstructorParams {
   status: number;
@@ -37,13 +38,19 @@ export class ClientSafeError extends Error {
     this.isClientFriendly = isNiceError;
   }
 
-  // Create the json to return safely to client
+  /**
+   * Create the json to return safely to client.
+   *
+   * The internal error's stack (file paths, library versions) goes along only
+   * off production, to help debugging; a production server logs it and sends
+   * nothing (issue #213).
+   */
   toSafeJson() {
     const responseBody = {
       error: undefined as string | undefined,
       status: this.status,
       data: this.data,
-      internalInfo: this.internalInfo?.stack, // This should be removed from the codebase
+      internalInfo: process.env.ENV === Env.PROD ? undefined : this.internalInfo?.stack,
       message: this.message,
     };
 

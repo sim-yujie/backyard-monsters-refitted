@@ -21,8 +21,8 @@ const { LoginScene } = await import("./LoginScene");
 let root: HTMLElement;
 let goTo: ReturnType<typeof vi.fn>;
 
-const open = (): InstanceType<typeof LoginScene> => {
-  const scene = new LoginScene();
+const open = (turnstileSiteKey = ""): InstanceType<typeof LoginScene> => {
+  const scene = new LoginScene(turnstileSiteKey);
   scene.enter({ overlay: { content: root }, goTo } as unknown as SceneContext);
   return scene;
 };
@@ -64,8 +64,25 @@ const fillValid = (): void => {
 
 const hint = (id: string): HTMLElement => $(`#${id}-hint`);
 
+/** A stand-in for Cloudflare's `window.turnstile`, so no script is fetched. */
+const turnstile = {
+  render: vi.fn(),
+  reset: vi.fn(),
+  remove: vi.fn(),
+  /** The callback the form handed the widget, to play Cloudflare's part. */
+  solve: (token: string) => {
+    const options = turnstile.render.mock.calls.at(-1)?.[1] as { callback: (t: string) => void };
+    options.callback(token);
+  },
+};
+
 beforeEach(() => {
   document.body.replaceChildren();
+  document.head.replaceChildren();
+  delete (globalThis as { turnstile?: unknown }).turnstile;
+  turnstile.render.mockReset().mockReturnValue("widget-1");
+  turnstile.reset.mockReset();
+  turnstile.remove.mockReset();
   root = document.createElement("div");
   document.body.append(root);
   goTo = vi.fn();
@@ -151,6 +168,7 @@ describe("LoginScene sign-up", () => {
       username: "zz_signup",
       email: "zz@example.com",
       password: "hunter22!",
+      termsAccepted: true,
     });
     expect(auth.login).toHaveBeenCalledWith("zz@example.com", "hunter22!");
     expect(goTo).toHaveBeenCalledWith("yard");
@@ -215,5 +233,108 @@ describe("LoginScene sign-up", () => {
     expect($("h2").textContent).toBe("Sign in");
     expect($<HTMLInputElement>("#email").value).toBe("zz@example.com");
     expect(document.activeElement).toBe($("#password"));
+  });
+});
+
+describe("LoginScene sign-up launch extras", () => {
+  it("says under the button what creating an account agrees to, with both links", () => {
+    open();
+    button("Create account").click();
+
+    const terms = $(".login-form__terms");
+    expect(terms.textContent).toBe(
+      "By creating an account you agree to the Terms and Privacy Policy and confirm you are 13 or older.",
+    );
+    expect(terms.previousElementSibling).toBe(button("Create account"));
+    const links = [...terms.querySelectorAll("a")];
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(["/terms", "/privacy"]);
+    expect(links.every((link) => link.target === "_blank" && link.rel === "noopener")).toBe(true);
+  });
+
+  it("flags a reserved name as it is typed", () => {
+    open();
+    button("Create account").click();
+    type("#signup-username", "Admin");
+    expect(hint("signup-username").textContent).toBe(
+      "That name belongs to the game's own team. Please pick another one.",
+    );
+  });
+
+  it("shows no bot check and loads no script without a site key", async () => {
+    open();
+    button("Create account").click();
+    fillValid();
+    submit();
+    await settle();
+
+    expect(root.querySelector(".bot-check")).toBeNull();
+    expect(document.head.querySelector("script")).toBeNull();
+    expect(auth.register.mock.calls[0]?.[0]).not.toHaveProperty("turnstileToken");
+  });
+
+  it("draws the bot check only on the sign-up form, and removes it on the way back", async () => {
+    (globalThis as { turnstile?: unknown }).turnstile = turnstile;
+    open("1x00000000000000000000AA");
+    await settle();
+    expect(turnstile.render).not.toHaveBeenCalled();
+
+    button("Create account").click();
+    await settle();
+    expect(turnstile.render).toHaveBeenCalledTimes(1);
+    expect(turnstile.render.mock.calls[0]?.[0]).toBe($(".bot-check"));
+    expect(turnstile.render.mock.calls[0]?.[1]).toMatchObject({
+      sitekey: "1x00000000000000000000AA",
+      action: "signup",
+    });
+
+    button("I already have an account").click();
+    expect(turnstile.remove).toHaveBeenCalledWith("widget-1");
+  });
+
+  it("waits for the bot check, then sends its token", async () => {
+    (globalThis as { turnstile?: unknown }).turnstile = turnstile;
+    open("1x00000000000000000000AA");
+    button("Create account").click();
+    await settle();
+    fillValid();
+
+    submit();
+    await settle();
+    expect(auth.register).not.toHaveBeenCalled();
+    expect($(".form-error").textContent).toBe(
+      "Please wait for the check above to finish, then try again.",
+    );
+
+    turnstile.solve("XXXX.DUMMY.TOKEN.XXXX");
+    submit();
+    await settle();
+    expect(auth.register.mock.calls[0]?.[0]).toMatchObject({
+      turnstileToken: "XXXX.DUMMY.TOKEN.XXXX",
+      termsAccepted: true,
+    });
+  });
+
+  it("runs the bot check again after a refusal, since the token is spent", async () => {
+    auth.register.mockRejectedValue(
+      new ApiError("We couldn't confirm you're a person.", {
+        status: 400,
+        details: { status: 400, data: { reason: "botCheckFailed" } },
+      }),
+    );
+    (globalThis as { turnstile?: unknown }).turnstile = turnstile;
+    open("1x00000000000000000000AA");
+    button("Create account").click();
+    await settle();
+    fillValid();
+    turnstile.solve("XXXX.DUMMY.TOKEN.XXXX");
+    submit();
+    await settle();
+
+    expect($(".form-error").textContent).toBe("We couldn't confirm you're a person.");
+    expect(turnstile.reset).toHaveBeenCalledWith("widget-1");
+
+    submit();
+    await settle();
+    expect(auth.register).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,8 +1,10 @@
 import { ApiError, NetworkError } from "@/api/http";
+import type { RegisterRequest } from "@/api/types";
 import {
   USERNAME_MAX_LENGTH,
   USERNAME_PATTERN,
   emailProblem,
+  isReservedUsername,
   passwordProblem,
   usernameProblem,
 } from "@/game/account/rules/accountRules";
@@ -48,14 +50,17 @@ export const signUpProblems = (values: SignUpValues): Record<SignUpField, string
  * the player is still typing. "Too short" is not: more letters may fix it, and
  * saying so on the first keystroke only nags. A space in a username, a
  * thirteenth letter, or a confirmation that has stopped matching the password
- * so far cannot be fixed by typing on.
+ * so far cannot be fixed by typing on. A reserved name ("admin") is shown at
+ * once too, so the player knows before they finish the form.
  */
 export const isDefiniteProblem = (field: SignUpField, values: SignUpValues): boolean => {
   switch (field) {
     case "username": {
       const username = values.username.trim();
       if (username.length > USERNAME_MAX_LENGTH) return true;
-      return username.length > 0 && !USERNAME_PATTERN.test(username);
+      return (
+        username.length > 0 && (!USERNAME_PATTERN.test(username) || isReservedUsername(username))
+      );
     }
     case "confirm":
       return !values.password.startsWith(values.confirm);
@@ -64,14 +69,22 @@ export const isDefiniteProblem = (field: SignUpField, values: SignUpValues): boo
   }
 };
 
-/** The fields exactly as the register route wants them: trimmed, the email lower case. */
-export const signUpRequest = (
-  values: SignUpValues,
-): { username: string; email: string; password: string } => ({
+/**
+ * The fields exactly as the register route wants them: trimmed, the email
+ * lower case. The form shows the Terms and age line under its button, so
+ * sending it is agreeing to them; the Turnstile token goes along when the
+ * form has one.
+ */
+export const signUpRequest = (values: SignUpValues, turnstileToken?: string): RegisterRequest => ({
   username: values.username.trim(),
   email: values.email.trim().toLowerCase(),
   password: values.password,
+  termsAccepted: true,
+  ...(turnstileToken ? { turnstileToken } : {}),
 });
+
+/** Shown when the player presses Create account before the bot check has finished. */
+export const BOT_CHECK_PENDING = "Please wait for the check above to finish, then try again.";
 
 export interface SignUpFailure {
   /** The field to mark, or null for a message about the whole form. */

@@ -1019,6 +1019,39 @@ body {
   flex: 1 1 auto;
 }
 
+/* The Terms, Privacy and age line under Create account (issue #213). */
+.login-form__terms {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.login-form__terms a {
+  color: var(--colour-accent);
+}
+
+.login-form__terms a:hover {
+  color: var(--colour-accent-hover);
+}
+
+/* Cloudflare Turnstile's widget on the sign-up form: it draws its own box. */
+.bot-check {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.bot-check__status {
+  margin: 0;
+  color: var(--colour-danger);
+  font-size: var(--text-sm);
+}
+
+.bot-check__status:empty {
+  display: none;
+}
+
 .boot-status {
   display: flex;
   flex-direction: column;

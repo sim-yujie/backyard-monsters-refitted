@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { AccountMessage, emailProblem, passwordProblem, usernameProblem } from "./accountRules";
+import {
+  AccountMessage,
+  RESERVED_USERNAME_WORDS,
+  emailProblem,
+  isReservedUsername,
+  passwordProblem,
+  usernameProblem,
+} from "./accountRules";
 
 /**
  * The shared account rules (issue #213). The server's own test
@@ -26,6 +33,39 @@ describe("usernameProblem", () => {
   it("refuses spaces, dashes and letters outside a-z", () => {
     for (const name of ["bad name", "x-y", "émile"]) {
       expect(usernameProblem(name)).toBe(AccountMessage.usernameCharset);
+    }
+  });
+
+  it("refuses a name that reads as the game's own team", () => {
+    for (const name of ["admin", " Admin ", "MOD", "Admin_2", "the_mod", "SupportBob", "staff9"]) {
+      expect(usernameProblem(name)).toBe(AccountMessage.usernameReserved);
+    }
+  });
+});
+
+describe("isReservedUsername", () => {
+  it("refuses every reserved word on its own, in any case", () => {
+    for (const word of RESERVED_USERNAME_WORDS) {
+      expect(isReservedUsername(word)).toBe(true);
+      expect(isReservedUsername(word.toUpperCase())).toBe(true);
+    }
+  });
+
+  it("finds a reserved word between underscores, digits and a case change", () => {
+    for (const name of ["x_admin", "mod_bob", "bob2staff", "iAmSupport", "System_1"]) {
+      expect(isReservedUsername(name)).toBe(true);
+    }
+  });
+
+  it("finds the team's names run together with other letters", () => {
+    for (const name of ["bymrhelp", "TheModerator", "kixeyefan", "unofficial", "adminbob", "theadmin"]) {
+      expect(isReservedUsername(name)).toBe(true);
+    }
+  });
+
+  it("leaves ordinary words that only hold a reserved word's letters", () => {
+    for (const name of ["modern", "supporter", "badminton", "Devon", "systematic", "rooted", "MODERN"]) {
+      expect(isReservedUsername(name)).toBe(false);
     }
   });
 });

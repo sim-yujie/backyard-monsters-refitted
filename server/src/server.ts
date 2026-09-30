@@ -24,6 +24,8 @@ import { economyConfig, economyModeWasUnrecognised } from "./config/EconomyConfi
 import { combatConfig, combatModeWasUnrecognised } from "./config/CombatConfig.js";
 import { ownerSaveConfig, ownerSaveModeWasUnrecognised } from "./config/OwnerSaveConfig.js";
 import { startAttackFinaliser } from "./services/base/finaliseAttack.js";
+import { turnstileSecretKey } from "./services/auth/turnstile.js";
+import { requiresDiscordVerification } from "./config/AccountConfig.js";
 
 export const app = new Koa();
 app.proxy = true;
@@ -125,6 +127,23 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   }
 
   logger.info(`Owner main-yard saves: ${ownerSaveConfig.mode}`);
+
+  // The sign-up gates (issue #213), said once so a server missing its keys is obvious.
+  if (turnstileSecretKey()) {
+    logger.info("Sign-up bot check (Turnstile): on");
+  } else {
+    logger.warn(
+      "Sign-up bot check (Turnstile): OFF - TURNSTILE_SECRET_KEY is not set, so sign-ups are not checked for bots"
+    );
+  }
+
+  logger.info(
+    `Discord verification: ${
+      requiresDiscordVerification()
+        ? `required${process.env.ENV === Env.PROD ? "" : " (production only; not enforced here)"}`
+        : "not required"
+    }`
+  );
 
   app.listen(PORT, () => {
     console.log(`

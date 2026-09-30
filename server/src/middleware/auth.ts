@@ -9,6 +9,7 @@ import {
 import JWT from "jsonwebtoken";
 import { Env } from "../enums/Env.js";
 import { isDiscordAccountOldEnough } from "../services/discord/discordAccountStatus.js";
+import { requiresDiscordVerification } from "../config/AccountConfig.js";
 import type { SessionType } from "../enums/SessionType.js";
 import { logger } from "../utils/logger.js";
 
@@ -81,7 +82,9 @@ export const verifyAccountStatus = async (ctx: Context, next: Next) => {
  * Verifies a JWT token and returns the decoded payload.
  *
  * For local development, we return a basic payload with the user's email.
- * In production, we introduce discord authentication.
+ * In production, we introduce discord authentication. The Discord age check
+ * only applies with REQUIRE_DISCORD_VERIFICATION set (`config/AccountConfig.ts`);
+ * without it every account meets it.
  *
  * @param {string} token - The JWT token to verify.
  * @returns {AuthTokenPayload} The decoded JWT payload.
@@ -105,7 +108,8 @@ export const verifyJwtToken = (token: string): AuthTokenPayload => {
     const decoded = <AuthTokenPayload>JWT.verify(token, process.env.SECRET_KEY!);
     
     const { discordId } = decoded.user;
-    const meetsDiscordAgeCheck = discordId ? isDiscordAccountOldEnough(discordId) : false;
+    const meetsDiscordAgeCheck =
+      !requiresDiscordVerification() || (discordId ? isDiscordAccountOldEnough(discordId) : false);
 
     return {
       user: { ...decoded.user, meetsDiscordAgeCheck },

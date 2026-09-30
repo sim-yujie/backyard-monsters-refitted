@@ -42,6 +42,10 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    // The Turnstile site key keeps the name the server's docs use; naming it
+    // exactly (not "TURNSTILE_") keeps TURNSTILE_SECRET_KEY out of the bundle
+    // even if someone puts it in this .env.
+    envPrefix: ["VITE_", "TURNSTILE_SITE_KEY"],
     resolve: {
       alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
     },
@@ -56,6 +60,15 @@ export default defineConfig(({ mode }) => {
       assetsDir: "static",
       sourcemap: true,
       target: "es2022",
+      // The game, and the Terms and Privacy placeholder pages the sign-up form
+      // links to (issue #213), served at /terms and /privacy.
+      rollupOptions: {
+        input: {
+          index: fileURLToPath(new URL("./index.html", import.meta.url)),
+          terms: fileURLToPath(new URL("./terms.html", import.meta.url)),
+          privacy: fileURLToPath(new URL("./privacy.html", import.meta.url)),
+        },
+      },
     },
     test: {
       environment: "node",

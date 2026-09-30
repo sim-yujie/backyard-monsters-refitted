@@ -39,8 +39,22 @@ To talk to a remote server instead, set `VITE_SERVER_URL` to its origin with no
 trailing slash. The proxy is then skipped and requests go straight out, so that
 server has to allow the client's origin.
 
-You need an account on whichever server you point at. Against a local server,
-register one through `POST /api/<version>/player/register`.
+You need an account on whichever server you point at. The login screen's
+"Create account" makes one.
+
+### Going live: the sign-up form's settings
+
+- `TURNSTILE_SITE_KEY`: the Cloudflare Turnstile site key for the sign-up bot
+  check. The server needs the matching `TURNSTILE_SECRET_KEY`. Leave both empty
+  in development to skip the check. The widget's script loads only when the
+  sign-up form opens.
+- `VITE_TERMS_URL`, `VITE_PRIVACY_URL`: where the "Terms" and "Privacy Policy"
+  links under Create account go. They default to the placeholder pages
+  `terms.html` and `privacy.html`, served at `/terms` and `/privacy`. Point them
+  at the real documents once they exist. The host must serve `/terms` from
+  `terms.html`, as Vite's dev and preview servers and most static hosts do.
+- On the server, `REQUIRE_DISCORD_VERIFICATION` must stay unset for players
+  who sign up here to play on a production server (see `server/example.env`).
 
 ## Scripts
 

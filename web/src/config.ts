@@ -19,6 +19,21 @@ export const SERVER_URL: string = import.meta.env.VITE_SERVER_URL ?? "";
  */
 export const API_VERSION: string = import.meta.env.VITE_API_VERSION ?? "v1.6.1-beta";
 
+/**
+ * Cloudflare Turnstile site key for the sign-up form's bot check (issue #213).
+ * Empty means no check is shown; the server skips it too when it has no
+ * secret key, as in local development.
+ */
+export const TURNSTILE_SITE_KEY: string = import.meta.env.TURNSTILE_SITE_KEY?.trim() ?? "";
+
+/**
+ * Where the sign-up form's Terms and Privacy Policy links go (issue #213). By
+ * default the placeholder pages this client ships (`terms.html`,
+ * `privacy.html`), until the real documents exist.
+ */
+export const TERMS_URL: string = import.meta.env.VITE_TERMS_URL || "/terms";
+export const PRIVACY_URL: string = import.meta.env.VITE_PRIVACY_URL || "/privacy";
+
 /* ── Map Room 2 world ──────────────────────────────────────────────────────
  * Source: server/src/enums/MapRoom.ts (MapRoom2) via
  * server/src/config/MapRoom2Config.ts, where WORLD_SIZE = [HEIGHT, WIDTH].

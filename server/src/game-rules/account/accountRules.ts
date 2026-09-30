@@ -22,6 +22,62 @@ export const USERNAME_MAX_LENGTH = 12;
 /** Letters, digits and underscores only. */
 export const USERNAME_PATTERN = /^[a-zA-Z0-9_]+$/;
 
+/**
+ * Words a username may not be, or hold as a word of its own, because they
+ * would read as the game's own team speaking (issue #213): "admin",
+ * "Admin_2", "the_mod" and "SupportBob" are refused, "modern" and
+ * "supporter" are not. A username's words are the runs of letters between
+ * underscores, digits and a lower-to-upper case change.
+ */
+export const RESERVED_USERNAME_WORDS: readonly string[] = [
+  "admin",
+  "admins",
+  "administrator",
+  "mod",
+  "mods",
+  "moderator",
+  "moderators",
+  "support",
+  "system",
+  "staff",
+  "official",
+  "owner",
+  "dev",
+  "devs",
+  "developer",
+  "gm",
+  "gamemaster",
+  "helpdesk",
+  "root",
+  "sysop",
+  "bymr",
+  "refitted",
+  "kixeye",
+  "null",
+  "undefined",
+];
+
+/**
+ * Letters a username may not hold anywhere, even run together with other
+ * words ("bymrhelp", "TheModerator"): nobody but the game's own team has a
+ * reason to use them.
+ */
+export const RESERVED_USERNAME_FRAGMENTS: readonly string[] = [
+  "administrator",
+  "moderator",
+  "gamemaster",
+  "official",
+  "bymr",
+  "kixeye",
+];
+
+/**
+ * "admin" is refused at either end of a name run together ("adminbob",
+ * "theadmin") but not in the middle, where it is a real word's letters
+ * ("badminton").
+ */
+const RESERVED_USERNAME_ENDS = ["admin"];
+
 export const PASSWORD_MIN_LENGTH = 8;
 
 /** A password needs one character that is not a letter or a digit. */
@@ -44,7 +100,34 @@ export const AccountMessage = {
   email: "Enter a valid email address.",
   passwordLength: `Passwords need at least ${PASSWORD_MIN_LENGTH} characters.`,
   passwordSymbol: "Passwords need at least one symbol, such as ! or #.",
+  usernameReserved: "That name belongs to the game's own team. Please pick another one.",
+  /** The server's word filter (the one chat and alliance names use); the form cannot check it. */
+  usernameBlocked: "That username has a word we don't allow. Please pick another one.",
 } as const;
+
+/** The words of a username: its runs of letters, lower case. */
+const usernameWords = (username: string): string[] =>
+  username
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .filter((word) => word !== "");
+
+/**
+ * Whether a username would read as the game's own team, by
+ * {@link RESERVED_USERNAME_WORDS} and {@link RESERVED_USERNAME_FRAGMENTS}.
+ * Case, underscores and digits do not get a name past it.
+ */
+export const isReservedUsername = (raw: string): boolean => {
+  const username = raw.trim();
+  if (usernameWords(username).some((word) => RESERVED_USERNAME_WORDS.includes(word))) return true;
+
+  const letters = username.toLowerCase().replace(/[^a-z]/g, "");
+  return (
+    RESERVED_USERNAME_FRAGMENTS.some((fragment) => letters.includes(fragment)) ||
+    RESERVED_USERNAME_ENDS.some((end) => letters.startsWith(end) || letters.endsWith(end))
+  );
+};
 
 /** Why a username would be refused, or null when the server would take it. */
 export const usernameProblem = (raw: string): string | null => {
@@ -53,6 +136,7 @@ export const usernameProblem = (raw: string): string | null => {
     return AccountMessage.usernameLength;
   }
   if (!USERNAME_PATTERN.test(username)) return AccountMessage.usernameCharset;
+  if (isReservedUsername(username)) return AccountMessage.usernameReserved;
   return null;
 };
 

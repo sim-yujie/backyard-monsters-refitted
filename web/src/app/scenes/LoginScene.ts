@@ -1,9 +1,11 @@
 import { login, register } from "@/api/auth";
 import { ApiError, NetworkError } from "@/api/http";
+import { PRIVACY_URL, TERMS_URL, TURNSTILE_SITE_KEY } from "@/config";
 import { Panel } from "@/ui/Panel";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
 import {
+  BOT_CHECK_PENDING,
   SIGN_UP_FIELDS,
   SIGN_UP_HINTS,
   describeSignUpFailure,
@@ -13,6 +15,7 @@ import {
   type SignUpField,
   type SignUpValues,
 } from "./signUp";
+import { BotCheck } from "./turnstile";
 
 interface FieldOptions {
   id: string;
@@ -93,6 +96,30 @@ const switchRow = (question: string, action: string, onClick: () => void): HTMLE
   return row;
 };
 
+/** A link that opens in a new tab, so the half-filled form stays where it is. */
+const newTabLink = (href: string, words: string): HTMLAnchorElement => {
+  const link = document.createElement("a");
+  link.href = href;
+  link.target = "_blank";
+  link.rel = "noopener";
+  link.textContent = words;
+  return link;
+};
+
+/** The Terms, Privacy and age line under the Create account button (issue #213). */
+const termsLine = (): HTMLElement => {
+  const line = document.createElement("p");
+  line.className = "login-form__terms";
+  line.append(
+    "By creating an account you agree to the ",
+    newTabLink(TERMS_URL, "Terms"),
+    " and ",
+    newTabLink(PRIVACY_URL, "Privacy Policy"),
+    " and confirm you are 13 or older.",
+  );
+  return line;
+};
+
 const primaryButton = (label: string): HTMLButtonElement => {
   const submit = document.createElement("button");
   submit.type = "submit";
@@ -109,11 +136,16 @@ const primaryButton = (label: string): HTMLButtonElement => {
  * trip, but the server stays the authority. Sign-up (issue #213) checks every
  * field against the shared account rules as the player types, creates the
  * account, then signs in with it and goes straight to the yard, whose first
- * load builds it.
+ * load builds it. With a Turnstile site key it also runs Cloudflare's bot
+ * check, whose script loads only when the sign-up form opens.
  */
 export class LoginScene implements Scene {
   private panel: Panel | null = null;
   private wrapper: HTMLElement | null = null;
+  private botCheck: BotCheck | null = null;
+
+  /** @param turnstileSiteKey The build's site key by default; empty shows no bot check. */
+  constructor(private readonly turnstileSiteKey: string = TURNSTILE_SITE_KEY) {}
 
   enter(context: SceneContext): void {
     this.wrapper = document.createElement("div");
@@ -128,6 +160,7 @@ export class LoginScene implements Scene {
   }
 
   exit(): void {
+    this.dropBotCheck();
     this.panel?.close();
     this.panel = null;
     this.wrapper?.remove();
@@ -138,6 +171,7 @@ export class LoginScene implements Scene {
     context: SceneContext,
     carried: { email?: string; notice?: string } = {},
   ): void {
+    this.dropBotCheck();
     const form = document.createElement("form");
     form.className = "login-form";
     form.noValidate = true;
@@ -238,7 +272,18 @@ export class LoginScene implements Scene {
       this.showSignIn(context, { email: fields.email.input.value.trim() }),
     );
 
-    form.append(...SIGN_UP_FIELDS.map((name) => fields[name].wrapper), error, submit, toSignIn);
+    this.dropBotCheck();
+    const botCheck = this.turnstileSiteKey ? new BotCheck(this.turnstileSiteKey) : null;
+    this.botCheck = botCheck;
+
+    form.append(
+      ...SIGN_UP_FIELDS.map((name) => fields[name].wrapper),
+      ...(botCheck ? [botCheck.element] : []),
+      error,
+      submit,
+      termsLine(),
+      toSignIn,
+    );
 
     // A field shows its problem once the player has left it or tried to submit;
     // before that only a problem typing on cannot fix. A refusal from the server
@@ -296,10 +341,17 @@ export class LoginScene implements Scene {
         return;
       }
 
+      if (botCheck && !botCheck.token) {
+        error.textContent = BOT_CHECK_PENDING;
+        return;
+      }
+
       void this.createAccount(context, {
         values: values(),
+        turnstileToken: botCheck?.token ?? undefined,
         error,
         submit,
+        onFailed: () => botCheck?.reset(),
         onRefused: (name, message) => {
           refused.set(name, message);
           render();
@@ -311,6 +363,12 @@ export class LoginScene implements Scene {
     this.panel?.setTitle("Create account").setContent(form);
     fields.username.input.focus();
     render();
+    void botCheck?.mount();
+  }
+
+  private dropBotCheck(): void {
+    this.botCheck?.destroy();
+    this.botCheck = null;
   }
 
   private async submit(
@@ -356,12 +414,15 @@ export class LoginScene implements Scene {
     context: SceneContext,
     form: {
       values: SignUpValues;
+      turnstileToken: string | undefined;
       error: HTMLElement;
       submit: HTMLButtonElement;
       onRefused: (field: SignUpField, message: string) => void;
+      /** Any refusal: the bot-check token it carried is spent. */
+      onFailed: () => void;
     },
   ): Promise<void> {
-    const request = signUpRequest(form.values);
+    const request = signUpRequest(form.values, form.turnstileToken);
 
     form.submit.disabled = true;
     form.submit.textContent = "Creating account…";
@@ -369,6 +430,7 @@ export class LoginScene implements Scene {
     try {
       await register(request);
     } catch (caught) {
+      form.onFailed();
       const failure = describeSignUpFailure(caught);
       if (failure.field) form.onRefused(failure.field, failure.message);
       else form.error.textContent = failure.message;
