@@ -391,3 +391,43 @@ describe("the inventory drawer", () => {
     expect(closed).toHaveBeenCalled();
   });
 });
+
+describe("the placing strip, for a phone (#45)", () => {
+  it("names the armed stack with how many are left, and marks the panel armed", () => {
+    const panel = mount();
+    panel.setNodes([
+      node({ id: 1, type: 20, level: 1 }),
+      node({ id: 2, type: 20, level: 1 }),
+      node({ id: 3, type: 20, level: 2 }),
+    ]);
+    expect(panel.element.classList.contains("planner-inventory--armed")).toBe(false);
+
+    panel.setArmed({ type: 20, level: 1 });
+    expect(panel.element.classList.contains("planner-inventory--armed")).toBe(true);
+    expect(panel.element.querySelector(".planner-inventory__strip-name")?.textContent).toBe(
+      "Cannon Tower L1 × 2",
+    );
+
+    panel.setArmed(null);
+    expect(panel.element.classList.contains("planner-inventory--armed")).toBe(false);
+  });
+
+  it("counts the stack even when a search hides its row", () => {
+    const panel = mount();
+    panel.setNodes([node({ id: 1, type: 20, level: 1 }), node({ id: 2, type: 17, level: 1 })]);
+    type(panel, "block");
+    panel.setArmed({ type: 20, level: 1 });
+    expect(panel.element.querySelector(".planner-inventory__strip-name")?.textContent).toBe(
+      "Cannon Tower L1 × 1",
+    );
+  });
+
+  it("stops the run on Done, the way a second click on the row does", () => {
+    const onPutBack = vi.fn();
+    const panel = mount(() => true, onPutBack);
+    panel.setNodes([node({ id: 1 })]);
+    panel.setArmed({ type: 20, level: 1 });
+    panel.element.querySelector<HTMLButtonElement>(".planner-inventory__done")?.click();
+    expect(onPutBack).toHaveBeenCalledTimes(1);
+  });
+});

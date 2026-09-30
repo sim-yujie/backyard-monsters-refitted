@@ -129,6 +129,52 @@ const HINT_ROWS: readonly HintRow[] = [
 ];
 
 /**
+ * The same moves, for a finger (#45).
+ *
+ * A phone has no Shift, no second button, no Esc and no keyboard, and its
+ * controls are not where a desktop's are (Mirror and its kin are in the
+ * building sheet, Find and the overlays under More), so the card says how to do
+ * each thing there rather than leaving half its lines untrue.
+ */
+const TOUCH_HINT_ROWS: readonly HintRow[] = [
+  {
+    demo: "select",
+    text: "Tap a building to select it. Its panel has Select all, to take every one of that type.",
+  },
+  {
+    demo: "boxSelect",
+    text: "Turn Box on and drag a box with one finger to take several at once. Two fingers still move and zoom the yard.",
+  },
+  {
+    demo: "drag",
+    text: "Hold a building until it lifts, drag it, and let go to drop it. Near the edge of the screen the yard scrolls along.",
+  },
+  {
+    demo: "carry",
+    text: "If it does not fit where you let go, it stays in hand: tap the yard to drop it, or press Put back.",
+  },
+  {
+    demo: "mirrorH",
+    text: "Mirror, Align and Distribute are in the building panel when two or more are selected.",
+  },
+  {
+    demo: "store",
+    text:
+      "Store lifts the selection into the drawer, so there is room to move the rest. Tap a stack in the drawer, then tap the yard once per building; Done stops.",
+  },
+  {
+    demo: "find",
+    text: "Find, under More, searches the yard by name or type and puts the camera on what it finds.",
+  },
+];
+
+/** A phone's plain rows: the two gestures with no button, and the overlays. */
+const TOUCH_VIEW_ROWS: readonly string[] = [
+  "Tap with two fingers to undo. Pinch to zoom, and Fit shows the whole yard.",
+  "More ▸ Tower ranges draws how far every defence tower reaches — Land and Air separately, because an Aerial Defense Tower will not stop a creep walking under it.",
+];
+
+/**
  * The rows with no picture: the View menu's switches.
  *
  * They go under the demos rather than among them because Q13's card is about
@@ -175,6 +221,11 @@ export interface PlannerHelpOptions {
    * for by pressing `?` does not.
    */
   readonly firstOpen?: boolean;
+  /**
+   * The screen is touched (#45): the card describes fingers, and the
+   * Shortcuts tab, which is all keys, is left out.
+   */
+  readonly touch?: boolean;
   readonly onClose: () => void;
 }
 
@@ -203,7 +254,8 @@ export const plannerHelpPanel = (options: PlannerHelpOptions): Panel => {
   tablist.setAttribute("role", "tablist");
   tablist.setAttribute("aria-label", "Planner help");
 
-  const basics = hintList();
+  const touch = options.touch ?? false;
+  const basics = touch ? hintList(TOUCH_HINT_ROWS, TOUCH_VIEW_ROWS) : hintList(HINT_ROWS, VIEW_ROWS);
   basics.id = "planner-help-basics";
   const shortcuts = shortcutList();
   shortcuts.id = "planner-help-shortcuts";
@@ -262,17 +314,20 @@ export const plannerHelpPanel = (options: PlannerHelpOptions): Panel => {
   footer.className = "planner-help__footer";
   footer.append(done);
 
-  panel.setContent(intro, tablist, basics, shortcuts, footer);
-  select(options.tab ?? "basics");
+  // A touched screen gets the pictures alone: a tab of keys it has no
+  // keyboard for would be a tab of things it cannot do.
+  if (touch) panel.setContent(intro, basics, footer);
+  else panel.setContent(intro, tablist, basics, shortcuts, footer);
+  select(touch ? "basics" : (options.tab ?? "basics"));
   return panel;
 };
 
 /** The pictures tab. */
-const hintList = (): HTMLElement => {
+const hintList = (hints: readonly HintRow[], plain: readonly string[]): HTMLElement => {
   const list = document.createElement("ul");
   list.className = "planner-help__rows";
   list.setAttribute("role", "tabpanel");
-  for (const row of HINT_ROWS) {
+  for (const row of hints) {
     const item = document.createElement("li");
     item.className = "planner-help__row";
 
@@ -288,7 +343,7 @@ const hintList = (): HTMLElement => {
     list.append(item);
   }
 
-  for (const line of VIEW_ROWS) {
+  for (const line of plain) {
     const item = document.createElement("li");
     item.className = "planner-help__row planner-help__row--plain";
     const text = document.createElement("p");

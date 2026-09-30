@@ -32,7 +32,8 @@ import {
 } from "@/game/yard/planner/RangeLayer";
 import { computeCoverage, coverageTowers, figuresOf, type Coverage } from "@/game/yard/planner/coverage";
 import { DeadZoneLayer } from "@/game/yard/planner/DeadZoneLayer";
-import { summariseSelection } from "@/game/yard/planner/summary";
+import { sameTypeIds } from "@/game/yard/planner/selectType";
+import { summariseSelection, typeName } from "@/game/yard/planner/summary";
 import { planTotals } from "@/game/yard/planner/upgrades";
 import { footprintCentre, footprintOf } from "@/game/yard/YardGrid";
 import { freeWorkers } from "@/game/yard/workers";
@@ -46,6 +47,7 @@ import { diffLayouts, sideStats, slotUnplaced, slotView, statRows } from "@/game
 import type { CompareDiff } from "@/game/yard/planner/PlannerOverlay";
 import { CENTRE_NOTE, onYardCentre } from "@/game/yard/planner/centreHover";
 import { PlannerBar, type OverlayName } from "@/ui/yard/PlannerBar";
+import { isPhone, PlannerLayout, plannerLayout } from "@/ui/yard/plannerLayout";
 import { InventoryPanel } from "@/ui/yard/InventoryPanel";
 import {
   applyPanel,
@@ -81,6 +83,15 @@ import { YardPlannerLayouts } from "./YardPlannerLayouts";
  */
 
 const NOTICE = "yard-planner";
+
+/**
+ * The three things that can fill a phone's one sheet slot (#45): the building
+ * sheet, a docked panel (the drawer, the checklist, Find, Layouts, a dialog)
+ * and More. Whichever the player raised last is shown; the others stay open
+ * underneath, keeping their state, and come back when it closes.
+ */
+type Sheet = "inspector" | "dock" | "more";
+const SHEETS: readonly Sheet[] = ["inspector", "dock", "more"];
 
 
 /** What an Apply did with decorations (#128), for the scene to merge and say. */
@@ -293,6 +304,27 @@ export class YardPlanner {
   /** The last thing `onHint` was told, so a still pointer says nothing twice. */
   private hint: string | null = null;
 
+  /* ── Phones (#45) ───────────────────────────────────────────────────── */
+
+  private layout: PlannerLayout = PlannerLayout.DESKTOP;
+  /** The screen is touched: help and the bar speak of taps. */
+  private touch = false;
+  /** The sheet the player raised last. */
+  private sheet: Sheet = "inspector";
+  /** The sheet actually showing, or null off a phone. */
+  private shownSheet: Sheet | null = null;
+  /** The selection the building sheet was last raised for, as ids. */
+  private selectionKey = "";
+  /** How far the bars cut into the viewport, for the edge scroll. */
+  private insets = { top: 0, bottom: 0 };
+  private dockObserver: MutationObserver | null = null;
+  /** The building sheet's row on a phone: Select all, then the arrange tools. */
+  private readonly phoneTools: HTMLElement;
+  private readonly selectAll: HTMLButtonElement;
+  private selectAllIds: number[] = [];
+  /** Where the bar lends Mirror, Align and Distribute. */
+  private readonly arrangeHost: HTMLElement;
+
   constructor(options: YardPlannerOptions) {
     this.options = options;
     this.yard = options.yard;
@@ -311,6 +343,16 @@ export class YardPlanner {
     this.helpDock.className = "planner-help-dock";
     options.overlay.append(this.helpDock);
 
+    this.phoneTools = document.createElement("div");
+    this.phoneTools.className = "planner-inspector__tools";
+    this.selectAll = document.createElement("button");
+    this.selectAll.type = "button";
+    this.selectAll.className = "btn btn--ghost planner-inspector__select-all";
+    this.selectAll.addEventListener("click", () => this.session.selectOnly(this.selectAllIds));
+    this.arrangeHost = document.createElement("div");
+    this.arrangeHost.className = "planner-inspector__arrange";
+    this.phoneTools.append(this.selectAll, this.arrangeHost);
+
     this.session = new PlannerSession({
       yard: options.yard,
       renderer: options.renderer,
@@ -326,6 +368,7 @@ export class YardPlanner {
       onRanges: () => this.toggleOverlay("ranges"),
       onGroup: (outcome) => this.reportGroupTool(outcome),
       readOnly: this.readOnly,
+      insets: () => this.insets,
     });
 
     this.layouts = new YardPlannerLayouts({
@@ -356,7 +399,14 @@ export class YardPlanner {
       onUndo: () => this.session.undo(),
       onRedo: () => this.session.redo(),
       onFind: () => this.toggleSearch(),
-      onLayouts: () => void this.layouts.toggle(),
+      onLayouts: () => {
+        const panel = this.layouts.panelElement;
+        if (panel && this.hiddenOnPhone(panel)) {
+          this.reveal(panel);
+          return;
+        }
+        void this.layouts.toggle();
+      },
       onChecklist: () => this.showChecklist(),
       onUpgradeWalls: () => this.showWallUpgrade(),
       onRearmTraps: () => this.showRearm(),
@@ -367,8 +417,24 @@ export class YardPlanner {
       onInventory: () => this.toggleInventory(),
       onHelp: () => this.openHelp("basics", false),
       onExit: () => this.requestExit(),
+      onMore: () => this.applySheet(),
     }, { readOnly: this.readOnly, layouts: options.baseid === undefined });
     this.bar.mount(options.overlay);
+    this.applyLayout();
+    window.addEventListener("resize", this.onResize);
+    // A panel docked on a phone is raised over the other sheets; one closing
+    // lets whatever was under it show again.
+    if (typeof MutationObserver !== "undefined") {
+      this.dockObserver = new MutationObserver((records) => {
+        if (records.some((record) => record.target === this.dock && record.addedNodes.length > 0)) {
+          this.raise("dock");
+        } else {
+          this.applySheet();
+        }
+      });
+      this.dockObserver.observe(this.dock, { childList: true });
+      this.dockObserver.observe(this.inspectorDock, { childList: true });
+    }
     this.reportPlannerInset();
     // The bars grow a row when their contents wrap (a slot name, a selection,
     // a narrower window): the zoom, minimap and fit follow them (#192).
@@ -655,6 +721,7 @@ export class YardPlanner {
   /** Opens the drawer, or brings its contents up to date if it is already up. */
   private openInventory(): void {
     if (this.readOnly) return;
+    if (this.inventory && this.hiddenOnPhone(this.inventory.element)) this.reveal(this.inventory.element);
     const panel =
       this.inventory ??
       new InventoryPanel({
@@ -669,6 +736,10 @@ export class YardPlanner {
   }
 
   private toggleInventory(): void {
+    if (this.inventory && this.hiddenOnPhone(this.inventory.element)) {
+      this.reveal(this.inventory.element);
+      return;
+    }
     if (this.inventory) {
       this.inventory.close();
       this.inventory = null;
@@ -678,6 +749,12 @@ export class YardPlanner {
   }
 
   destroy(): void {
+    window.removeEventListener("resize", this.onResize);
+    this.dockObserver?.disconnect();
+    this.dockObserver = null;
+    const overlay = this.options.overlay;
+    overlay.classList.remove("planner-phone", "planner-phone--portrait", "planner-phone--landscape");
+    for (const name of SHEETS) overlay.classList.remove(`planner-sheet--${name}`);
     this.closeCompare();
     this.closeDialog();
     this.helpPanel?.close();
@@ -1135,6 +1212,7 @@ export class YardPlanner {
    */
   private openSearch(): void {
     if (this.search) {
+      if (this.hiddenOnPhone(this.search.element)) this.reveal(this.search.element);
       this.search.focus();
       return;
     }
@@ -1150,6 +1228,11 @@ export class YardPlanner {
   }
 
   private toggleSearch(): void {
+    if (this.search && this.hiddenOnPhone(this.search.element)) {
+      this.reveal(this.search.element);
+      this.search.focus();
+      return;
+    }
     if (this.search) {
       this.search.close();
       this.search = null;
@@ -1217,6 +1300,16 @@ export class YardPlanner {
    * loses the scroll position and flickers.
    */
   private refreshInspector(nodes: readonly PlanNode[]): void {
+    // A new selection raises the building sheet over a phone's other sheets,
+    // unless it is only the next building off a drawer stack, or the one in
+    // hand: then the drawer's strip is what the player is working in (#45).
+    const key = nodes.map((node) => node.id).join(",");
+    if (key !== this.selectionKey) {
+      this.selectionKey = key;
+      const state = this.session.state();
+      if (nodes.length > 0 && !state.placing && !state.carrying) this.raise("inspector");
+    }
+
     // Nothing selected: the coverage view while Dead zones is on (#55),
     // otherwise no panel at all.
     const coverage = nodes.length === 0 && this.overlays.deadZones && !this.coverageClosed;
@@ -1240,6 +1333,9 @@ export class YardPlanner {
       }).mount(this.inspectorDock);
     this.inspector = panel;
     this.inspectorCoverage = coverage;
+    const tools = isPhone(this.layout) && !coverage;
+    panel.setTools(tools ? this.phoneTools : null);
+    if (tools) this.refreshPhoneTools(nodes);
     if (coverage) {
       panel.showCoverage(this.currentCoverage(), { land: this.overlays.land, air: this.overlays.air });
     } else {
@@ -1292,7 +1388,98 @@ export class YardPlanner {
     // however many rows either wraps to (planner.css, #45).
     this.options.overlay.style.setProperty("--planner-top", `${top}px`);
     this.options.overlay.style.setProperty("--planner-bottom", `${bottom}px`);
+    this.insets = { top, bottom };
     this.options.onInset({ top, bottom });
+  }
+
+  /* ── Phones (#45) ───────────────────────────────────────────────────── */
+
+  private readonly onResize = (): void => {
+    this.applyLayout();
+  };
+
+  /**
+   * Works out the planner's shape from the window and the pointer, and lays
+   * the chrome out for it: the bars, the classes the stylesheet reads, and
+   * where Mirror, Align and Distribute live. Run on open and on every resize,
+   * which is also what turning a phone round sends.
+   */
+  private applyLayout(): void {
+    const coarse = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    const layout = plannerLayout(window.innerWidth, window.innerHeight, coarse);
+    const changed = layout !== this.layout;
+    this.layout = layout;
+    this.touch = coarse;
+    this.bar.setLayout(layout, coarse);
+
+    const overlay = this.options.overlay;
+    overlay.classList.toggle("planner-phone", isPhone(layout));
+    overlay.classList.toggle("planner-phone--portrait", layout === PlannerLayout.PORTRAIT);
+    overlay.classList.toggle("planner-phone--landscape", layout === PlannerLayout.LANDSCAPE);
+    if (!changed) return;
+
+    this.bar.lendArrange(isPhone(layout) ? this.arrangeHost : null);
+    this.refreshInspector(this.session.selectedNodes());
+    this.applySheet();
+    this.reportPlannerInset();
+  }
+
+  /** The building sheet's phone row, for the current selection. */
+  private refreshPhoneTools(nodes: readonly PlanNode[]): void {
+    const all = sameTypeIds(nodes, this.session.plan.buildings());
+    this.selectAllIds = all?.ids ?? [];
+    this.selectAll.hidden = all === null;
+    if (all) {
+      this.selectAll.textContent = `Select all ${all.ids.length}`;
+      this.selectAll.title = `Select every ${typeName(all.type)} on the yard`;
+    }
+    // Two or more to mirror or align: with fewer every one of them is off,
+    // and a row of dead buttons is worse than none.
+    this.arrangeHost.hidden = this.readOnly || nodes.length < 2;
+    this.phoneTools.hidden = this.selectAll.hidden && this.arrangeHost.hidden;
+  }
+
+  /** Raises one of a phone's sheets over the others. */
+  private raise(sheet: Sheet): void {
+    this.sheet = sheet;
+    if (sheet !== "more") this.bar.setMoreOpen(false);
+    this.applySheet();
+  }
+
+  /**
+   * Shows one sheet on a phone: More while it is open, else the one raised
+   * last if it has anything in it, else whichever does. The stylesheet hides
+   * the rest; nothing is closed, so a drawer under the building sheet keeps
+   * its search and its folds.
+   */
+  private applySheet(): void {
+    let shown: Sheet | null = null;
+    if (isPhone(this.layout)) {
+      if (this.bar.isMoreOpen) shown = "more";
+      else if (this.sheet === "dock" && this.dock.childElementCount > 0) shown = "dock";
+      else if (this.inspectorDock.childElementCount > 0) shown = "inspector";
+      else shown = "dock";
+    }
+    this.shownSheet = shown;
+    for (const name of SHEETS) {
+      this.options.overlay.classList.toggle(`planner-sheet--${name}`, shown === name);
+    }
+  }
+
+  /**
+   * True when a docked panel is up but out of sight on a phone: another sheet
+   * is showing, or another panel is in front of it (a phone shows the newest
+   * docked panel only). Its button then brings it back rather than closing it.
+   */
+  private hiddenOnPhone(element: HTMLElement): boolean {
+    if (!isPhone(this.layout)) return false;
+    return this.shownSheet !== "dock" || this.dock.lastElementChild !== element;
+  }
+
+  /** Brings a docked panel to the front of a phone's sheet slot. */
+  private reveal(element: HTMLElement): void {
+    if (this.dock.lastElementChild !== element) this.dock.append(element);
+    this.raise("dock");
   }
 
   /** Reports the read-only toolbar's inset, once the planner's own bars are gone. */
@@ -1326,6 +1513,7 @@ export class YardPlanner {
     this.helpPanel = plannerHelpPanel({
       tab,
       firstOpen,
+      touch: this.touch,
       onClose: () => {
         this.helpPanel = null;
         markPlannerHintSeen();

@@ -19,7 +19,7 @@ import { groupTargets, GroupOp, GROUP_OPS } from "./groupTools";
 import { planLoad, payloadFor, type LoadResult } from "./layout";
 import { rectFromCorners } from "./marquee";
 import { snap, type PlanNode } from "./placement";
-import { Grab, PlannerInput } from "./PlannerInput";
+import { Grab, PlannerInput, type ViewportInsets } from "./PlannerInput";
 import { PlannerView } from "./PlannerView";
 import type { CompareDiff } from "./PlannerOverlay";
 import { Plan, type AbsorbResult } from "./plan";
@@ -263,6 +263,11 @@ export class PlannerSession {
      * and redo, and a layout load, which is downgraded to a preview.
      */
     readOnly?: boolean;
+    /**
+     * How far the planner's bars cut into the viewport, for the edge scroll a
+     * held building sets off near them (#45). Absent, the whole canvas counts.
+     */
+    insets?: ViewportInsets;
   }) {
     this.onChange = options.onChange;
     this.onViewToggle = options.onViewToggle;
@@ -278,6 +283,7 @@ export class PlannerSession {
     this.input = new PlannerInput({
       camera: options.camera,
       canvas: options.canvas,
+      ...(options.insets ? { insets: options.insets } : {}),
       handlers: {
         claim: (world, shift) => this.claim(world, shift),
         wouldClaim: (world, shift) => this.wouldClaim(world, shift),
@@ -290,6 +296,8 @@ export class PlannerSession {
         cancel: () => this.cancel(),
         grabChanged: () => this.refresh(),
         key: (event) => this.onKey(event),
+        // F14: two fingers tapped together, the touch spelling of Ctrl+Z.
+        twoFingerTap: () => this.undo(),
       },
     });
   }

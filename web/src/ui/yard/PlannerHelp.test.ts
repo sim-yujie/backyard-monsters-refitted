@@ -141,3 +141,24 @@ describe("the help card", () => {
     expect(panel.element.isConnected).toBe(false);
   });
 });
+
+describe("the help card on a touched screen (#45)", () => {
+  it("describes fingers, not keys and buttons a phone does not have", () => {
+    const panel = plannerHelpPanel({ onClose: () => {}, touch: true });
+    const text = panel.element.textContent ?? "";
+    for (const gone of ["Shift", "Esc", "right-click", "Click a building", "arrow keys"]) {
+      expect(text).not.toContain(gone);
+    }
+    expect(text).toContain("Hold a building until it lifts");
+    expect(text).toContain("two fingers to undo");
+    // The same pictures, one per move.
+    expect(panel.element.querySelectorAll("svg.planner-demo").length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("leaves out the Shortcuts tab, which is all keys", () => {
+    const panel = plannerHelpPanel({ onClose: () => {}, touch: true, tab: "shortcuts" });
+    expect(panel.element.querySelector("[role='tablist']")).toBeNull();
+    expect(panel.element.querySelector("#planner-help-shortcuts")).toBeNull();
+    expect(panel.element.querySelector<HTMLElement>("#planner-help-basics")?.hidden).toBe(false);
+  });
+});

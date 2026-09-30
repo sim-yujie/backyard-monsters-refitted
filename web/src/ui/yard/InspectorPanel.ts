@@ -105,6 +105,12 @@ export class InspectorPanel {
   private readonly panel: Panel;
   private readonly options: InspectorPanelOptions;
   private readonly readOnly: boolean;
+  /**
+   * A row the scene puts above a selection's body, or null: on a phone (#45)
+   * the building sheet is where Store, Select all and Mirror, Align and
+   * Distribute live, because the bars have no room for them.
+   */
+  private tools: HTMLElement | null = null;
 
   constructor(options: InspectorPanelOptions) {
     this.options = options;
@@ -120,6 +126,15 @@ export class InspectorPanel {
   mount(container: HTMLElement): this {
     container.append(this.element);
     return this;
+  }
+
+  /**
+   * Sets the row shown above a selection's body, or takes it away with null.
+   * Kept across redraws, so the scene sets it once per layout rather than on
+   * every refresh; takes effect at the next `show`.
+   */
+  setTools(tools: HTMLElement | null): void {
+    this.tools = tools;
   }
 
   /** Redraws for the current selection. */
@@ -198,6 +213,11 @@ export class InspectorPanel {
     return section;
   }
 
+  /** A selection's body, under the scene's tools row when there is one. */
+  private setBody(...nodes: Node[]): void {
+    this.panel.setContent(...(this.tools ? [this.tools] : []), ...nodes);
+  }
+
   /* ── One building ───────────────────────────────────────────────────── */
 
   private showOne(node: PlanNode, yard: Yard): void {
@@ -207,7 +227,7 @@ export class InspectorPanel {
 
     const countdown = countdownRow(building);
 
-    this.panel.setContent(
+    this.setBody(
       ...(countdown ? [factList([countdown], "cell-facts planner-inspector__status")] : []),
       this.ladderRow(node, ladder),
       this.planRow(node, ladder),
@@ -459,7 +479,7 @@ export class InspectorPanel {
       const empty = document.createElement("p");
       empty.className = "planner-inspector__heading";
       empty.textContent = "Click a building to see its levels and plan an upgrade.";
-      this.panel.setContent(empty);
+      this.setBody(empty);
       return;
     }
 
@@ -477,7 +497,7 @@ export class InspectorPanel {
     // The count is in the title and the actions are the reason to keep a
     // multi-selection alive, so the four resource rows go under the same
     // disclosure the single-building view uses.
-    this.panel.setContent(
+    this.setBody(
       actions,
       ...(actions.childElementCount === 0
         ? [note("Select one building on its own to plan an upgrade on it.")]

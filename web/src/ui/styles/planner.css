@@ -1847,3 +1847,417 @@
   justify-content: flex-end;
   margin-top: var(--space-3);
 }
+
+/* ── Phones (#45): the owner's Option A ───────────────────────────────────
+ *
+ * `PlannerBar.setLayout` moves the controls and stamps `data-layout` on the
+ * bars and the More sheet; `YardPlanner` puts `planner-phone`, its shape and
+ * the sheet that is showing on the overlay. Everything here keys off those,
+ * so a desktop or a tablet, which get neither, is untouched. Upright is a top
+ * bar and a bottom bar of one row each with the sheets along the bottom;
+ * sideways is one bar along the bottom with the sheets down the right.
+ */
+
+/* A desktop lays the title and the slot out as two items of the bar. */
+.planner-bar__heading {
+  display: contents;
+}
+
+/* Upright: Leave, the layout's name, the view switch and undo/redo. The tool
+   groups that are left in the top bar are the desktop's, and hidden. */
+.planner-bar--top[data-layout="portrait"] > .planner-bar__group:not(.planner-bar__group--history),
+.planner-bar--top[data-layout="portrait"] > .planner-bar__spacer {
+  display: none;
+}
+
+.planner-bar--top[data-layout="portrait"] > .planner-bar__heading {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.planner-bar--top[data-layout="portrait"] > .planner-bar__heading > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-bar[data-layout] .planner-bar__group--history {
+  border-inline-start: 0;
+  padding-inline: 0;
+}
+
+.planner-bar[data-layout] .planner-bar__exit,
+.planner-bar[data-layout] .planner-bar__group--history > .btn,
+.planner-bar[data-layout] > .btn[aria-label="Undo"],
+.planner-bar[data-layout] > .btn[aria-label="Redo"] {
+  font-size: var(--text-lg);
+  line-height: 1;
+  padding-inline: var(--space-2);
+}
+
+/* Sideways: everything is in the bottom bar. */
+.planner-bar--top[data-layout="landscape"] {
+  display: none;
+}
+
+/* The full cost cells stay behind the one-line cost until it is tapped. */
+.planner-bar--bottom[data-layout] > .planner-cost {
+  display: none;
+}
+
+.planner-bar--bottom[data-layout].planner-bar--costs-open > .planner-cost {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/* The summary keeps room for a sentence; the cost line and the chips wrap
+   under it rather than squeezing it to a word a line. */
+.planner-bar--bottom[data-layout] > .planner-bar__summary {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.planner-bar__cost-line {
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline: var(--space-2);
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--colour-text);
+}
+
+.planner-bar__cost-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.planner-bar__cost-part .res-icon {
+  height: 14px;
+}
+
+.planner-bar__cost-part--short {
+  color: var(--colour-danger);
+}
+
+.planner-bar__cost-caret {
+  color: var(--colour-text-muted);
+}
+
+/* Upright: Box, the drawer and More on the left, Apply on the right. */
+.planner-bar--bottom[data-layout="portrait"] .planner-bar__actions > .btn--primary {
+  margin-inline-start: auto;
+}
+
+/* Sideways: one row, the summary giving way first. */
+.planner-bar--bottom[data-layout="landscape"] {
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3) calc(var(--space-1) + env(safe-area-inset-bottom, 0px));
+}
+
+.planner-bar--bottom[data-layout="landscape"] > .planner-bar__summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-bar--bottom[data-layout="landscape"] > .planner-bar__spacer {
+  display: none;
+}
+
+.planner-bar--bottom[data-layout="landscape"] > .planner-bar__actions {
+  flex: none;
+  flex-wrap: nowrap;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.planner-bar--bottom[data-layout="landscape"].planner-bar--costs-open {
+  flex-wrap: wrap;
+}
+
+.planner-bar--bottom[data-layout="landscape"].planner-bar--costs-open > .planner-cost {
+  order: -1;
+}
+
+/* No zoom slider or minimap on a phone: pinch zooms, and Fit stays (#45). */
+.planner-phone > .yard-viewtools .yard-minimap,
+.planner-phone > .yard-viewtools .yard-zoom__step,
+.planner-phone > .yard-viewtools .yard-zoom__slider,
+.planner-phone > .yard-viewtools .yard-zoom__readout {
+  display: none;
+}
+
+.planner-phone > .yard-viewtools .yard-zoom {
+  padding: var(--space-1);
+}
+
+.planner-phone > .yard-viewtools .yard-zoom__fit {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* A sheet sits where Fit is; Fit comes back when the sheet goes. */
+.planner-phone:has(> .planner-dock > *) > .yard-viewtools,
+.planner-phone:has(> .planner-more:not([hidden])) > .yard-viewtools {
+  display: none;
+}
+
+/* ── A phone's one sheet slot ───────────────────────────────────────────── */
+
+/* Upright: every docked panel is a bottom sheet above the action bar. */
+.planner-phone--portrait > .planner-dock {
+  top: auto;
+  left: var(--space-2);
+  right: var(--space-2);
+  width: auto;
+  max-height: min(
+    55vh,
+    calc(100vh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
+  );
+  justify-content: flex-end;
+}
+
+/* Sideways: a panel down the right, the yard's full height above the bar. */
+.planner-phone--landscape > .planner-dock,
+.planner-phone--landscape > .planner-more {
+  left: auto;
+  right: var(--space-2);
+  width: min(380px, 46vw);
+  top: calc(var(--planner-top, 0px) + var(--space-2));
+  bottom: calc(var(--planner-bottom, 56px) + var(--space-2));
+  max-height: none;
+  justify-content: flex-start;
+}
+
+/* The panel shrinks to the sheet and scrolls inside, keeping its title. */
+.planner-phone > .planner-dock > .panel {
+  flex: 0 1 auto;
+  min-height: 0;
+  min-width: 0;
+  max-width: none;
+}
+
+.planner-phone > .planner-dock > .panel > .panel__body {
+  max-height: none;
+  min-height: 0;
+}
+
+/* One docked panel at a time: the newest. Closing it shows the one under it. */
+.planner-phone > .planner-dock:not(.planner-dock--right) > :not(:last-child) {
+  display: none;
+}
+
+/* One sheet at a time: whichever was raised last (`YardPlanner.applySheet`). */
+.planner-sheet--more > .planner-dock,
+.planner-sheet--inspector > .planner-dock:not(.planner-dock--right),
+.planner-sheet--dock > .planner-dock--right {
+  display: none;
+}
+
+/* ── More ───────────────────────────────────────────────────────────────── */
+
+.planner-more {
+  position: absolute;
+  z-index: var(--z-hud);
+  left: var(--space-2);
+  right: var(--space-2);
+  bottom: calc(var(--planner-bottom, 56px) + var(--space-2));
+  max-height: min(
+    60vh,
+    calc(100vh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
+  );
+  min-width: 0;
+  max-width: none;
+  pointer-events: auto;
+}
+
+.planner-more[hidden],
+.planner-more__section[hidden] {
+  display: none;
+}
+
+.planner-more > .panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: none;
+  min-height: 0;
+}
+
+.planner-more__heading {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.planner-more__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.planner-more__list > .planner-menu--inline {
+  grid-column: 1 / -1;
+}
+
+.planner-more__list .btn {
+  min-height: 44px;
+  width: 100%;
+  justify-content: flex-start;
+  text-align: start;
+  font-size: var(--text-sm);
+  line-height: 1.2;
+  background: var(--colour-surface-control);
+}
+
+/* A menu shown as its rows (`Menu.setInline`): no trigger, no floating list. */
+.planner-menu--inline {
+  display: block;
+}
+
+.planner-menu--inline > :not(.planner-menu__list) {
+  display: none;
+}
+
+.planner-menu--inline > .planner-menu__list {
+  position: static;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* A dropped list on a phone is pinned to the screen, clear of a sheet's
+   scrolling, and opens upward when its button is low (`Menu.toggle`). */
+.planner-phone .planner-menu:not(.planner-menu--inline) > .planner-menu__list {
+  position: fixed;
+  top: calc(var(--menu-top, 0px) + var(--space-1));
+  left: clamp(var(--space-2), var(--menu-left, 0px), calc(100vw - 14rem));
+  min-width: 0;
+  max-width: calc(100vw - 2 * var(--space-2));
+}
+
+.planner-phone .planner-menu:not(.planner-menu--inline) > .planner-menu__list--up {
+  top: auto;
+  bottom: calc(var(--menu-bottom, 0px) + var(--space-1));
+}
+
+/* ── The building sheet's row: Select all, Mirror, Align, Distribute ─────── */
+
+.planner-inspector__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.planner-inspector__arrange {
+  display: contents;
+}
+
+.planner-inspector__tools[hidden],
+.planner-inspector__arrange[hidden],
+.planner-inspector__select-all[hidden] {
+  display: none;
+}
+
+.planner-inspector__arrange > .planner-bar__group {
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: 0;
+  border: 0;
+}
+
+/*
+ * Align and Distribute open in place, under their button and the sheet's full
+ * width, rather than as a floating list: the sheet's blur makes it the box a
+ * fixed list is placed in, and its scrolling body would clip one.
+ */
+.planner-inspector__arrange .planner-menu {
+  flex-direction: column;
+}
+
+.planner-inspector__arrange .planner-menu:has(> .planner-menu__list:not([hidden])) {
+  flex-basis: 100%;
+}
+
+.planner-phone .planner-inspector__arrange .planner-menu > .planner-menu__list {
+  position: static;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: var(--space-1);
+  max-width: none;
+}
+
+.planner-phone .planner-inspector__arrange .planner-menu > .planner-menu__list[hidden] {
+  display: none;
+}
+
+.planner-inspector__tools .btn {
+  min-height: 44px;
+  background: var(--colour-surface-control);
+}
+
+/* ── The drawer's placing strip ─────────────────────────────────────────── */
+
+/* A phone's alone: a desktop's drawer sits beside the yard, not over it. */
+.planner-inventory__strip {
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.planner-phone .planner-inventory--armed > .panel__titlebar,
+.planner-phone .planner-inventory--armed > .panel__body > :not(.planner-inventory__strip) {
+  display: none;
+}
+
+.planner-phone .planner-inventory--armed .planner-inventory__strip {
+  display: flex;
+}
+
+.planner-inventory__strip-words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.planner-inventory__strip-name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-inventory__strip-hint {
+  font-size: var(--text-sm);
+}
+
+.planner-inventory__done {
+  flex: none;
+  min-height: 44px;
+  background: var(--colour-surface-control);
+}

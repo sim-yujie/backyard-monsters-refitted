@@ -56,6 +56,11 @@ export class YardPlannerLayouts {
     this.panel = null;
   }
 
+  /** The panel while it is up, so a phone can bring it back to the front (#45). */
+  get panelElement(): HTMLElement | null {
+    return this.panel?.element ?? null;
+  }
+
   /** Closes the panel if it is up. */
   close(): void {
     this.panel?.close();

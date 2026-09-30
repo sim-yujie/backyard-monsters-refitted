@@ -1,5 +1,6 @@
 import type { Camera } from "@/game/Camera";
 import type { Point } from "../YardGrid";
+import { edgeScroll, TwoFingerTap, type ScreenArea } from "./touchGestures";
 
 /**
  * Pointer and keyboard for the planner.
@@ -48,6 +49,18 @@ import type { Point } from "../YardGrid";
  *
  * *A finger has no second button.* Putting a carried selection back is a chip
  * in the bar instead (`PlannerSession.putBack`).
+ *
+ * *The finger that lifted a building is the drag* (#45, the owner's call). A
+ * long press picks the building up under that finger, it follows the finger,
+ * and lifting the finger drops it there if it fits; if it does not, it stays in
+ * hand, outlined red, for a tap to drop or Put back. While that finger is down
+ * the yard scrolls when it nears an edge of the visible area
+ * ({@link edgeScroll}), so a building can be dragged further than the screen
+ * shows, and other fingers are ignored rather than read as drops.
+ *
+ * *Two fingers tapped together are undo* (F14), recognised beside everything
+ * else by {@link TwoFingerTap}; the pinch the camera starts from them is too
+ * small to notice.
  *
  * The box tool is the one press still claimed on the way down: it has nothing
  * to do with what is under the finger, and §4 asks for a one-finger box. A
@@ -108,7 +121,27 @@ export interface PlannerInputHandlers {
   grabChanged: () => void;
   /** Returns true when the planner consumed the key. */
   key: (event: KeyboardEvent) => boolean;
+  /** Two fingers tapped together (F14): undo. */
+  twoFingerTap?: () => void;
 }
+
+/**
+ * How far the planner's bars cut into the viewport from the top and the
+ * bottom, in CSS pixels, so the edge-scroll band sits along the yard that is
+ * actually visible rather than under a bar.
+ */
+export type ViewportInsets = () => { readonly top: number; readonly bottom: number };
+
+/**
+ * How long after a finger lifts off the canvas a `click` is still that finger's.
+ *
+ * A browser follows a tap with a `click` at the same spot, hit-tested *after*
+ * the tap has been handled. A tap that selects a building opens its sheet, and
+ * on a phone the sheet can open right under the finger (#45): the click then
+ * lands on whatever button is there — "Max" on the upgrade ladder, in the
+ * audit. So a click inside this window that is not on the canvas is dropped.
+ */
+const GHOST_CLICK_MS = 500;
 
 /** Pointer travel in CSS pixels below which a press counts as a click. */
 const CLICK_SLOP = 5;
@@ -162,15 +195,30 @@ export class PlannerInput {
   private touchPress = false;
   /** The pending long-press timer, or null when nothing is being held. */
   private longPress: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * The finger whose long press is carrying something, while it is still down
+   * (#45): its lift is the drop.
+   */
+  private heldCarry: number | null = null;
+  /** Where that finger last was, which is what the edge scroll reads. */
+  private heldAt: Point | null = null;
+  /** The edge scroll's animation frame, or null while it is not running. */
+  private edgeFrame: number | null = null;
+  private readonly insets: ViewportInsets;
+  private readonly twoFingers = new TwoFingerTap();
+  /** Until when a click off the canvas is a finger's ghost, in `performance.now()` time. */
+  private ghostUntil = Number.NEGATIVE_INFINITY;
 
   constructor(options: {
     camera: Camera;
     canvas: HTMLCanvasElement;
     handlers: PlannerInputHandlers;
+    insets?: ViewportInsets;
   }) {
     this.camera = options.camera;
     this.canvas = options.canvas;
     this.handlers = options.handlers;
+    this.insets = options.insets ?? (() => ({ top: 0, bottom: 0 }));
   }
 
   attach(): void {
@@ -178,8 +226,9 @@ export class PlannerInput {
     window.addEventListener("pointermove", this.onPointerMove, true);
     window.addEventListener("pointerrawupdate", this.onRawUpdate as EventListener, true);
     window.addEventListener("pointerup", this.onPointerUp, true);
-    window.addEventListener("pointercancel", this.onPointerUp, true);
+    window.addEventListener("pointercancel", this.onPointerCancel, true);
     window.addEventListener("keydown", this.onKeyDown, true);
+    window.addEventListener("click", this.onClick, true);
     this.canvas.addEventListener("contextmenu", this.onContextMenu);
   }
 
@@ -188,8 +237,9 @@ export class PlannerInput {
     window.removeEventListener("pointermove", this.onPointerMove, true);
     window.removeEventListener("pointerrawupdate", this.onRawUpdate as EventListener, true);
     window.removeEventListener("pointerup", this.onPointerUp, true);
-    window.removeEventListener("pointercancel", this.onPointerUp, true);
+    window.removeEventListener("pointercancel", this.onPointerCancel, true);
     window.removeEventListener("keydown", this.onKeyDown, true);
+    window.removeEventListener("click", this.onClick, true);
     this.canvas.removeEventListener("contextmenu", this.onContextMenu);
     this.cancel();
   }
@@ -221,6 +271,7 @@ export class PlannerInput {
   beginCarry(): void {
     if (this.grab === Grab.CARRY) return;
     this.cancelLongPress();
+    this.releaseHeld();
     this.grab = Grab.CARRY;
     this.pointerId = null;
     this.watchingClick = false;
@@ -232,6 +283,7 @@ export class PlannerInput {
   cancel(): void {
     const had = this.grab !== null;
     this.cancelLongPress();
+    this.releaseHeld();
     this.grab = null;
     this.pointerId = null;
     this.watchingClick = false;
@@ -251,6 +303,17 @@ export class PlannerInput {
   private readonly onPointerDown = (event: PointerEvent): void => {
     if (event.target !== this.canvas) return;
     this.suppressContextMenu = false;
+    if (event.pointerType === "touch") {
+      this.twoFingers.down(event.pointerId, event.clientX, event.clientY, event.timeStamp);
+    }
+
+    // A finger is dragging what it lifted: another finger is not a drop, and
+    // not a pinch either, since the view scrolls on its own at the edges.
+    if (this.heldCarry !== null) {
+      event.stopPropagation();
+      event.preventDefault();
+      return;
+    }
 
     if (this.grab === Grab.CARRY) {
       // Every press is a drop attempt; the secondary button puts it back.
@@ -322,6 +385,15 @@ export class PlannerInput {
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
+    if (event.pointerType === "touch") {
+      this.twoFingers.move(event.pointerId, event.clientX, event.clientY);
+    }
+    if (this.heldCarry !== null) {
+      if (event.pointerId !== this.heldCarry) return;
+      this.heldAt = { x: event.clientX, y: event.clientY };
+      this.startEdgeScroll();
+    }
+
     // A finger that has started travelling is panning, not pressing.
     if (this.longPress !== null && event.pointerId === this.pointerId && this.travelled(event)) {
       this.cancelLongPress();
@@ -337,7 +409,25 @@ export class PlannerInput {
   };
 
   private readonly onPointerUp = (event: PointerEvent): void => {
-    if (this.grab === Grab.CARRY) return;
+    // Whatever a finger lifting off the canvas is about to do to the panels,
+    // the click that follows it belongs to the canvas.
+    if (event.pointerType !== "mouse" && event.target === this.canvas) {
+      this.ghostUntil = performance.now() + GHOST_CLICK_MS;
+    }
+    if (event.pointerType === "touch" && this.twoFingers.up(event.pointerId, event.timeStamp)) {
+      this.handlers.twoFingerTap?.();
+    }
+
+    if (this.grab === Grab.CARRY) {
+      // The finger that lifted the building has come up: that is the drop
+      // (#45). A refused drop answers "carry", and the building stays in hand.
+      if (this.heldCarry === event.pointerId) {
+        this.releaseHeld();
+        event.stopPropagation();
+        this.finish(this.handlers.release(this.worldAt(event), Grab.CARRY, true));
+      }
+      return;
+    }
     if (this.pointerId !== event.pointerId) return;
     this.pointerId = null;
     this.cancelLongPress();
@@ -375,6 +465,62 @@ export class PlannerInput {
     event.stopPropagation();
   };
 
+  /**
+   * The browser took a pointer away: a system gesture, or a scroll it decided
+   * was its own. A held building is not dropped where the finger happened to
+   * be; it stays in hand, for a tap to drop or Put back.
+   */
+  private readonly onPointerCancel = (event: PointerEvent): void => {
+    if (event.pointerType === "touch") this.twoFingers.cancel(event.pointerId);
+    if (this.heldCarry === event.pointerId) {
+      this.releaseHeld();
+      return;
+    }
+    this.onPointerUp(event);
+  };
+
+  /** Stops treating any finger as the drag, and stops the edge scroll. */
+  private releaseHeld(): void {
+    this.heldCarry = null;
+    this.heldAt = null;
+    if (this.edgeFrame !== null && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(this.edgeFrame);
+    }
+    this.edgeFrame = null;
+  }
+
+  /** The yard's visible area in client pixels: the canvas, less the bars. */
+  private visibleArea(): ScreenArea {
+    const rect = this.canvas.getBoundingClientRect();
+    const insets = this.insets();
+    return {
+      left: rect.left,
+      right: rect.right,
+      top: Math.max(rect.top, insets.top),
+      bottom: Math.min(rect.bottom, window.innerHeight - insets.bottom),
+    };
+  }
+
+  /**
+   * Scrolls the yard, a frame at a time, while the held finger sits in an
+   * edge band, and walks the building along so it stays under the finger.
+   */
+  private startEdgeScroll(): void {
+    if (this.edgeFrame !== null || typeof requestAnimationFrame !== "function") return;
+    const step = (): void => {
+      this.edgeFrame = null;
+      const at = this.heldAt;
+      if (this.heldCarry === null || !at || this.grab !== Grab.CARRY) return;
+      const { dx, dy } = edgeScroll(at, this.visibleArea());
+      if (dx === 0 && dy === 0) return;
+      // The view travels towards the edge, so the yard moves the other way.
+      this.camera.panByScreen(-dx, -dy);
+      this.handlers.move(this.worldAt({ clientX: at.x, clientY: at.y }), Grab.CARRY);
+      this.edgeFrame = requestAnimationFrame(step);
+    };
+    this.edgeFrame = requestAnimationFrame(step);
+  }
+
   /** Whether a press has left the click slop. */
   private travelled(event: PointerEvent): boolean {
     return Math.hypot(event.clientX - this.pressX, event.clientY - this.pressY) > CLICK_SLOP;
@@ -399,7 +545,11 @@ export class PlannerInput {
       this.grab = grab;
       this.watchingClick = false;
       this.finish(this.handlers.release(world, grab, false));
-      if (this.grab === Grab.CARRY) buzz();
+      if (this.grab === Grab.CARRY) {
+        // The finger is still down: it drags the building, and its lift drops it.
+        this.heldCarry = pointerId;
+        buzz();
+      }
     }, LONG_PRESS_MS);
   }
 
@@ -417,6 +567,15 @@ export class PlannerInput {
     this.setCursor(this.grab === Grab.CARRY);
     if (this.grab !== before) this.handlers.grabChanged();
   }
+
+  /** Drops the click a finger's tap leaves behind, if it lands off the canvas. */
+  private readonly onClick = (event: MouseEvent): void => {
+    if (performance.now() > this.ghostUntil) return;
+    this.ghostUntil = Number.NEGATIVE_INFINITY;
+    if (event.target === this.canvas) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
 
   private readonly onContextMenu = (event: Event): void => {
     // The secondary button is a cancel while carrying, never a browser menu.

@@ -9,6 +9,7 @@ import {
   type SearchCategory,
   type SearchGroup,
 } from "@/game/yard/planner/search";
+import { typeName } from "@/game/yard/planner/summary";
 import { Panel } from "@/ui/Panel";
 
 /**
@@ -67,6 +68,15 @@ import { Panel } from "@/ui/Panel";
  * The panel stays docked while the player works and redraws from
  * {@link setNodes} after every edit, so the stack it just handed a building
  * from loses one from its count under the pointer.
+ *
+ * ## A strip while placing, on a phone (#45)
+ *
+ * A phone's drawer is a sheet over the bottom of the yard, and while a stack is
+ * armed the yard is what the player needs to see and tap. So the panel carries
+ * a one-row strip — the stack's name and count, "Tap the yard once per
+ * building", and Done — and a phone's stylesheet shows only that while the
+ * panel is `--armed`. A desktop never shows the strip: its drawer sits beside
+ * the yard, not over it.
  */
 
 export interface InventoryPanelActions {
@@ -111,6 +121,9 @@ export class InventoryPanel {
   private readonly list: HTMLElement;
   private readonly empty: HTMLElement;
   private readonly actions: InventoryPanelActions;
+  /** The phone's placing strip: what is armed, and Done. */
+  private readonly strip: HTMLElement;
+  private readonly stripName: HTMLElement;
 
   /** Folded categories, by kind. Survives the redraw after every edit. */
   private readonly collapsed = new Set<string>();
@@ -152,7 +165,26 @@ export class InventoryPanel {
     this.empty = document.createElement("p");
     this.empty.className = "planner-inventory__empty u-muted";
 
-    this.panel.setContent(this.summary, this.input, this.chipRow, this.list, this.empty);
+    this.strip = document.createElement("div");
+    this.strip.className = "planner-inventory__strip";
+    this.stripName = document.createElement("span");
+    this.stripName.className = "planner-inventory__strip-name";
+    const hint = document.createElement("span");
+    hint.className = "planner-inventory__strip-hint u-muted";
+    hint.textContent = "Tap the yard once per building";
+    const words = document.createElement("span");
+    words.className = "planner-inventory__strip-words";
+    words.append(this.stripName, hint);
+    const done = document.createElement("button");
+    done.type = "button";
+    done.className = "btn btn--ghost planner-inventory__done";
+    done.textContent = "Done";
+    done.title = "Stop placing, and put the one in hand back in the drawer";
+    // The same stop as clicking the armed row again: the one in hand goes back.
+    done.addEventListener("click", () => this.actions.onPutBack());
+    this.strip.append(words, done);
+
+    this.panel.setContent(this.strip, this.summary, this.input, this.chipRow, this.list, this.empty);
   }
 
   mount(container: HTMLElement): this {
@@ -206,6 +238,7 @@ export class InventoryPanel {
     const key = stack ? stackKey(stack) : null;
     if (key === this.armed) return;
     this.armed = key;
+    this.element.classList.toggle("planner-inventory--armed", stack !== null);
     this.render();
   }
 
@@ -297,8 +330,22 @@ export class InventoryPanel {
     this.chipRow.hidden = chips.length < 2;
   }
 
+  /**
+   * The strip's words for the armed stack: its name, level and how many are
+   * left in the drawer, the one in hand among them. Counted from every stored
+   * building rather than from the list, which a search or a folded category
+   * may have cut short.
+   */
+  private renderStrip(): void {
+    const [type, level] = (this.armed ?? "").split(":").map(Number);
+    const left = this.nodes.filter((node) => node.type === type && node.level === level).length;
+    this.stripName.textContent =
+      this.armed === null ? "" : `${typeName(type ?? -1)} L${level ?? 0} × ${left}`;
+  }
+
   /** The list: what the box and the chips leave, under its headers. */
   private render(): void {
+    this.renderStrip();
     // An empty drawer hides the box, and a hidden box must not go on filtering
     // from a query nobody can see or clear.
     const searchable = this.nodes.length > 0;

@@ -4,6 +4,7 @@ import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSessi
 import type { ApplyPreview, PlanTotals } from "@/game/yard/planner/upgrades";
 import { YardView } from "@/game/yard/YardRenderer";
 import { PlannerBar, type PlannerBarActions } from "./PlannerBar";
+import { PlannerLayout } from "./plannerLayout";
 
 /**
  * The planner's bars, and above all what a read-only session leaves out
@@ -815,5 +816,222 @@ describe("the Blueprint button (2026-09-30)", () => {
     bar.setBlueprintBlocked(null);
     expect(blueprint(bar).disabled).toBe(false);
     expect(blueprint(bar).title).toContain("Tab switches");
+  });
+});
+
+/* ── Phones (#45) ─────────────────────────────────────────────────────── */
+
+describe("the phone layout (#45)", () => {
+  const phone = (
+    layout: PlannerLayout,
+    options: { readOnly?: boolean } = {},
+  ): { bar: PlannerBar; fired: PlannerBarActions; container: HTMLElement } => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const fired = { ...actions(), onTool: vi.fn(), onView: vi.fn(), onFind: vi.fn(), onHelp: vi.fn(), onMore: vi.fn() };
+    const bar = new PlannerBar(fired, options).mount(container);
+    bar.update(stateOf({ view: YardView.ISO }));
+    bar.setLayout(layout, true);
+    return { bar, fired, container };
+  };
+
+  const texts = (root: Element, selector = "button"): string[] =>
+    [...root.querySelectorAll<HTMLElement>(selector)].map((element) => element.textContent?.trim() ?? "");
+
+  /** The top bar's buttons a phone shows: those not in a hidden tool group. */
+  const topShown = (bar: PlannerBar): string[] =>
+    [...bar.toolbar.children]
+      .filter((child) => !child.classList.contains("planner-bar__group") || child.classList.contains("planner-bar__group--history"))
+      .flatMap((child) => (child instanceof HTMLButtonElement ? [child] : [...child.querySelectorAll("button")]))
+      .map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "");
+
+  /** The bottom row's button labels, a count badge left out. */
+  const actionRow = (bar: PlannerBar): string[] =>
+    [...(bar.actionBar.querySelector(".planner-bar__actions") ?? bar.actionBar).querySelectorAll("button")].map(
+      (button) => button.firstChild?.textContent?.trim() ?? "",
+    );
+
+  it("puts none of the phone's controls on a desktop", () => {
+    const bar = mount();
+    expect(labels(bar)).not.toContain("More");
+    expect(bar.actionBar.querySelector(".planner-bar__cost-line")).toBeNull();
+    expect(bar.moreElement.isConnected).toBe(false);
+  });
+
+  it("upright: Leave, the name, the view switch and undo in the top bar", () => {
+    const { bar } = phone(PlannerLayout.PORTRAIT);
+    expect(topShown(bar)).toEqual([
+      "Leave planner",
+      "Showing the 3D yard. Switch to the blueprint",
+      "Undo",
+      "Redo",
+    ]);
+    // Glyphs on the buttons, names for anything that reads them.
+    const exit = bar.toolbar.querySelector(".planner-bar__exit");
+    expect(exit?.textContent).toBe("✕");
+    expect(bar.toolbar.querySelector(".planner-bar__heading .planner-bar__slot")).not.toBeNull();
+  });
+
+  it("upright: Box, the drawer, More and Apply along the bottom", () => {
+    const { bar } = phone(PlannerLayout.PORTRAIT);
+    expect(actionRow(bar)).toEqual(["Box", "Stored", "More", "Apply"]);
+    expect(bar.actionBar.querySelector(".planner-bar__cost-line")).not.toBeNull();
+  });
+
+  it("puts everything else in More", () => {
+    const { bar, container } = phone(PlannerLayout.PORTRAIT);
+    const more = container.querySelector(".planner-more");
+    expect(more).toBe(bar.moreElement);
+    expect(texts(more!, ".planner-more__list > .btn")).toEqual([
+      "Find",
+      "Checklist",
+      "Layouts",
+      "Upgrade walls",
+      "Re-arm traps",
+      "Help",
+    ]);
+    // The View switches and Clear yard, shown as their rows.
+    expect(texts(more!, ".planner-menu--inline .planner-menu__item")).toEqual([
+      "Tower ranges",
+      "Land",
+      "Air",
+      "Dead zones",
+      "Centre of yard",
+      "Clear yard",
+    ]);
+    expect(more!.querySelectorAll(".planner-menu__list[hidden]")).toHaveLength(0);
+  });
+
+  it("sideways: one bar, Leave and undo at its start", () => {
+    const { bar } = phone(PlannerLayout.LANDSCAPE);
+    expect(bar.toolbar.dataset["layout"]).toBe("landscape");
+    const buttons = [...bar.actionBar.querySelectorAll("button")].map(
+      (button) => button.getAttribute("aria-label") ?? button.textContent?.trim(),
+    );
+    expect(buttons.slice(0, 3)).toEqual(["Leave planner", "Undo", "Redo"]);
+    expect(actionRow(bar)).toEqual(["Box", "3D ⇄", "Stored", "More", "Apply"]);
+  });
+
+  it("puts every control back where it was when the window turns back into a desktop", () => {
+    const desk = mount();
+    desk.update(stateOf({ view: YardView.ISO }));
+    const before = labels(desk);
+    const { bar, container } = phone(PlannerLayout.PORTRAIT);
+    bar.setLayout(PlannerLayout.LANDSCAPE, true);
+    bar.setLayout(PlannerLayout.DESKTOP, false);
+    expect(labels(bar)).toEqual(before);
+    expect(container.querySelectorAll(".planner-more")).toHaveLength(0);
+    // The phone rules key off this, so a desktop must not keep it.
+    expect(bar.toolbar.dataset["layout"]).toBeUndefined();
+    expect(bar.actionBar.dataset["layout"]).toBeUndefined();
+    expect(bar.actionBar.querySelector(".planner-bar__cost-line")).toBeNull();
+  });
+
+  it("makes Box a switch, since Select has no button of its own", () => {
+    const { bar, fired } = phone(PlannerLayout.PORTRAIT);
+    const box = [...bar.actionBar.querySelectorAll("button")].find((one) => one.textContent === "Box")!;
+    box.click();
+    expect(fired.onTool).toHaveBeenLastCalledWith(PlannerTool.BOX);
+    bar.update(stateOf({ tool: PlannerTool.BOX }));
+    box.click();
+    expect(fired.onTool).toHaveBeenLastCalledWith(PlannerTool.SELECT);
+  });
+
+  it("switches the view with one button", () => {
+    const { bar, fired } = phone(PlannerLayout.PORTRAIT);
+    const swap = bar.toolbar.querySelector<HTMLButtonElement>(".planner-bar__view-switch")!;
+    expect(swap.textContent).toBe("3D ⇄");
+    swap.click();
+    expect(fired.onView).toHaveBeenLastCalledWith(YardView.BLUEPRINT);
+    bar.update(stateOf({ view: YardView.BLUEPRINT }));
+    expect(swap.textContent).toBe("Blueprint ⇄");
+  });
+
+  it("opens More, leaves it up for a switch and closes it on a choice", () => {
+    const { bar, fired } = phone(PlannerLayout.PORTRAIT);
+    const moreButton = [...bar.actionBar.querySelectorAll("button")].find((one) => one.textContent === "More")!;
+    moreButton.click();
+    expect(bar.isMoreOpen).toBe(true);
+    expect(bar.moreElement.hidden).toBe(false);
+    expect(fired.onMore).toHaveBeenLastCalledWith(true);
+
+    const ranges = [...bar.moreElement.querySelectorAll<HTMLButtonElement>(".planner-menu__item")].find(
+      (one) => one.textContent === "Tower ranges",
+    )!;
+    ranges.click();
+    expect(fired.onOverlay).toHaveBeenCalledWith("ranges");
+    expect(bar.isMoreOpen).toBe(true);
+
+    const find = [...bar.moreElement.querySelectorAll<HTMLButtonElement>("button")].find(
+      (one) => one.textContent === "Find",
+    )!;
+    find.click();
+    expect(fired.onFind).toHaveBeenCalledTimes(1);
+    expect(bar.isMoreOpen).toBe(false);
+    expect(fired.onMore).toHaveBeenLastCalledWith(false);
+  });
+
+  it("keeps Clear yard off while a preview is up, as the Yard menu does", () => {
+    const { bar } = phone(PlannerLayout.PORTRAIT);
+    bar.update(stateOf({ previewing: true }));
+    const clear = [...bar.moreElement.querySelectorAll<HTMLButtonElement>(".planner-menu__item")].find(
+      (one) => one.textContent === "Clear yard",
+    )!;
+    expect(clear.disabled).toBe(true);
+    bar.update(stateOf());
+    expect(clear.disabled).toBe(false);
+  });
+
+  it("gives the costs one line, or the coverage when nothing costs anything", () => {
+    const { bar } = phone(PlannerLayout.PORTRAIT);
+    const line = bar.actionBar.querySelector<HTMLButtonElement>(".planner-bar__cost-line")!;
+    bar.setCoverage({ towers: 6, land: 0.26, air: 0.2 });
+    expect(line.textContent).toBe("Land 26% · Air 20%▾");
+
+    bar.setPlanSummary(totalsOf(), 5);
+    expect([...line.querySelectorAll(".planner-bar__cost-part")].map((part) => part.textContent)).toEqual([
+      "20.0K",
+      "15.0K",
+      "5.0K",
+      "30m 0s",
+    ]);
+    // Pebbles are short, and say so.
+    expect(line.querySelectorAll(".planner-bar__cost-part--short")).toHaveLength(1);
+
+    line.click();
+    expect(bar.actionBar.classList.contains("planner-bar--costs-open")).toBe(true);
+    expect(line.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("lends Mirror, Align and Distribute to the building sheet and takes them back", () => {
+    const { bar } = phone(PlannerLayout.PORTRAIT);
+    const host = document.createElement("div");
+    bar.lendArrange(host);
+    expect(texts(host)).toEqual(expect.arrayContaining(["Mirror ↔", "Mirror ↕", "Align ▾", "Distribute ▾"]));
+    expect(mirrorButtons(bar)).toHaveLength(0);
+
+    bar.setLayout(PlannerLayout.DESKTOP, false);
+    expect(host.childElementCount).toBe(0);
+    expect(mirrorButtons(bar)).toHaveLength(2);
+  });
+
+  it("speaks of taps on a touched screen", () => {
+    const { bar } = phone(PlannerLayout.PORTRAIT);
+    bar.update(stateOf({ selectionCount: 1, carrying: true }));
+    const summary = bar.actionBar.querySelector(".planner-bar__summary")?.textContent ?? "";
+    expect(summary).toContain("tap to drop it, or Put back");
+    expect(summary).not.toContain("right-click");
+
+    bar.update(stateOf({ selectionCount: 1, carrying: true, placing: true }));
+    expect(bar.actionBar.querySelector(".planner-bar__summary")?.textContent).toContain(
+      "tap the yard once per building",
+    );
+  });
+
+  it("gives a read-only session the view switches, Find and Help, and nothing that edits", () => {
+    const { bar } = phone(PlannerLayout.PORTRAIT, { readOnly: true });
+    expect(texts(bar.moreElement, ".planner-more__list > .btn")).toEqual(["Find", "Help"]);
+    expect(texts(bar.moreElement, ".planner-menu__item")).not.toContain("Clear yard");
+    expect(texts(bar.actionBar)).not.toContain("Apply");
   });
 });

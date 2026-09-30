@@ -462,3 +462,35 @@ describe("InspectorPanel: coverage (#55)", () => {
     );
   });
 });
+
+describe("InspectorPanel: a phone's tools row (#45)", () => {
+  it("heads a selection's body with the row it is given, across redraws", () => {
+    const yard = yardOf([HALL, CANNON]);
+    const { nodes } = nodesOf(yard, [1]);
+    const { panel, element } = mount();
+    const tools = document.createElement("div");
+    tools.className = "phone-tools";
+    panel.setTools(tools);
+
+    panel.show(nodes, yard);
+    expect(element.querySelector(".panel__body")?.firstElementChild).toBe(tools);
+    panel.show(nodes, yard);
+    expect(element.querySelectorAll(".phone-tools")).toHaveLength(1);
+
+    panel.setTools(null);
+    panel.show(nodes, yard);
+    expect(element.querySelector(".phone-tools")).toBeNull();
+  });
+
+  it("leaves it out of the coverage view, which is about no selection", () => {
+    const { panel, element } = mount();
+    panel.setTools(document.createElement("div"));
+    panel.showCoverage(
+      { towers: 0, land: { share: 0, deadZones: [] }, air: { share: 0, deadZones: [] } } as unknown as Parameters<
+        InspectorPanel["showCoverage"]
+      >[0],
+      { land: true, air: true },
+    );
+    expect(element.querySelector(".panel__body")?.childElementCount).toBe(1);
+  });
+});

@@ -1237,7 +1237,7 @@ describe("touch gestures", () => {
     vi.useRealTimers();
   });
 
-  it("picks a building up when a finger is held still on it", () => {
+  it("picks a building up when a finger is held still on it, and drops it where the finger lifts", () => {
     const harness = planner();
     harness.press(ONE, finger(1));
 
@@ -1250,30 +1250,136 @@ describe("touch gestures", () => {
     expect(harness.session.state().carrying).toBe(true);
     expect(harness.session.selectedIds()).toEqual([1]);
 
-    // From here it is the state a click gives a mouse: the finger drags it,
-    // lifting leaves it in hand, and the next tap drops it.
+    // The finger drags it, and lifting the finger is the drop (#45, the
+    // owner's call): no second tap.
     harness.drag(by(ONE, 100, 0));
     expect(harness.placements.get(1)).toEqual({ x: 100, y: 0 });
 
     harness.release(by(ONE, 100, 0), finger(1));
-    expect(harness.session.state().carrying).toBe(true);
-
-    harness.press(by(ONE, 100, 0), finger(1));
     expect(harness.session.state().carrying).toBe(false);
     expect(at(harness, 1)).toEqual({ x: 100, y: 0 });
+    expect(harness.session.state().movedCount).toBe(1);
   });
 
-  it("drops where the tap lands, with no move between lifting and tapping", () => {
+  it("puts it down where it was when the finger lifts without moving", () => {
     const harness = planner();
     harness.press(ONE, finger(1));
     vi.advanceTimersByTime(400);
     harness.release(ONE, finger(1));
+
+    const state = harness.session.state();
+    expect(state.carrying).toBe(false);
+    expect(state.movedCount).toBe(0);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(harness.session.selectedIds()).toEqual([1]);
+  });
+
+  it("keeps it in hand when the finger lifts where it cannot go, for a tap to drop", () => {
+    const harness = planner();
+    harness.press(ONE, finger(1));
+    vi.advanceTimersByTime(400);
+    // Onto tower two.
+    harness.drag(TWO);
+    harness.release(TWO, finger(1));
+
+    expect(harness.session.state().carrying).toBe(true);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
 
     // Touch sends no `pointermove` before a press, so the drop has to read its
     // own position rather than the last drag's.
     harness.press(by(ONE, 100, 0), finger(1));
     expect(harness.session.state().carrying).toBe(false);
     expect(at(harness, 1)).toEqual({ x: 100, y: 0 });
+  });
+
+  it("ignores a second finger while the first is dragging a building", () => {
+    const harness = planner();
+    harness.press(ONE, finger(1));
+    vi.advanceTimersByTime(400);
+    harness.drag(by(ONE, 100, 0));
+    const seen = reachedCanvas(harness);
+
+    // Not a drop where it lands, and not the camera's either.
+    harness.press(by(ONE, 300, 0), finger(2));
+    expect(seen).toEqual([]);
+    expect(harness.session.state().carrying).toBe(true);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+
+    harness.release(by(ONE, 100, 0), finger(1));
+    expect(at(harness, 1)).toEqual({ x: 100, y: 0 });
+  });
+
+  it("keeps it in hand when the browser takes the finger away", () => {
+    const harness = planner();
+    harness.press(ONE, finger(1));
+    vi.advanceTimersByTime(400);
+    harness.drag(by(ONE, 100, 0));
+    harness.canvas.dispatchEvent(
+      new PointerEvent("pointercancel", { bubbles: true, ...finger(1), clientX: 100, clientY: 0 }),
+    );
+
+    // Nothing dropped where the finger happened to be: a tap drops it.
+    expect(harness.session.state().carrying).toBe(true);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    harness.press(by(ONE, 100, 0), finger(1));
+    expect(at(harness, 1)).toEqual({ x: 100, y: 0 });
+  });
+
+  it("undoes on a two-finger tap", () => {
+    const harness = planner();
+    harness.press(ONE);
+    harness.drag(by(ONE, 100, 0));
+    harness.release(by(ONE, 100, 0));
+    expect(at(harness, 1)).toEqual({ x: 100, y: 0 });
+
+    harness.press(GROUND, finger(1));
+    harness.press(by(GROUND, 60, 0), finger(2));
+    harness.release(by(GROUND, 60, 0), finger(2));
+    harness.release(GROUND, finger(1));
+
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    // Neither finger was a tap of its own: the selection is untouched.
+    expect(harness.session.selectedIds()).toEqual([1]);
+  });
+
+  it("does not undo on a pinch", () => {
+    const harness = planner();
+    harness.press(ONE);
+    harness.drag(by(ONE, 100, 0));
+    harness.release(by(ONE, 100, 0));
+
+    harness.press(GROUND, finger(1));
+    harness.press(by(GROUND, 60, 0), finger(2));
+    const spread = by(GROUND, -40, 0);
+    harness.canvas.dispatchEvent(
+      new PointerEvent("pointermove", { bubbles: true, ...finger(1), clientX: spread.x, clientY: spread.y }),
+    );
+    harness.release(by(GROUND, 60, 0), finger(2));
+    harness.release(by(GROUND, -40, 0), finger(1));
+
+    expect(at(harness, 1)).toEqual({ x: 100, y: 0 });
+  });
+
+  it("drops the click a tap leaves behind when a panel opened under the finger", () => {
+    const harness = planner();
+    // Stands in for the building sheet, opened by the tap under the finger.
+    const panel = document.createElement("button");
+    document.body.append(panel);
+    const pressed = vi.fn();
+    panel.addEventListener("click", pressed);
+
+    harness.press(ONE, finger(1));
+    harness.release(ONE, finger(1));
+    expect(harness.session.selectedIds()).toEqual([1]);
+    const ghost = new MouseEvent("click", { bubbles: true, cancelable: true });
+    panel.dispatchEvent(ghost);
+    expect(pressed).not.toHaveBeenCalled();
+    expect(ghost.defaultPrevented).toBe(true);
+
+    // Only that one: the next press on the panel is the player's.
+    panel.click();
+    expect(pressed).toHaveBeenCalledTimes(1);
+    panel.remove();
   });
 
   it("gives up the hold as soon as the finger travels", () => {

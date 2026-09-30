@@ -13,6 +13,7 @@ import { formatAmount, formatCountdown } from "@/ui/format";
 import { attachPopover } from "@/ui/Popover";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceIcon } from "@/ui/resourceIcon";
 import { demo, GROUP_OP_DEMOS, type DemoName } from "./demos";
+import { costLineParts, isPhone, PlannerLayout } from "./plannerLayout";
 
 /**
  * The planner's two bars: tools across the top, the plan summary and the
@@ -57,6 +58,19 @@ import { demo, GROUP_OP_DEMOS, type DemoName } from "./demos";
  * 44 px target under `@media (pointer: coarse)` in `planner.css` — the size the
  * spec asks for, applied by how the device is being touched rather than by how
  * wide the window is, so a small window on a laptop keeps its compact bar.
+ *
+ * ## Phones (#45)
+ *
+ * `setLayout` rearranges the same controls for a phone, the owner's Option A:
+ * upright, a top bar of Leave, the layout's name, a 3D ⇄ Blueprint switch and
+ * undo/redo, and a bottom bar of the summary, a one-line cost, Box, the
+ * drawer, More and Apply; sideways, all of that in one bar along the bottom.
+ * Everything else moves into the More sheet, and Mirror, Align and Distribute
+ * are lent to the building sheet (`lendArrange`). The controls are moved, not
+ * copied, so every state this class keeps (a disabled Mirror, a count on the
+ * drawer) is right in either place; and they are moved back exactly where
+ * they were when the window returns to a desktop's shape. A desktop never
+ * sees the phone-only controls at all: they are not in the document.
  *
  * ## Read-only
  *
@@ -109,6 +123,8 @@ export interface PlannerBarActions {
   onInventory: () => void;
   onHelp: () => void;
   onExit: () => void;
+  /** A phone's More sheet opened or closed (#45), so the scene can hide the other sheets. */
+  onMore?: (open: boolean) => void;
 }
 
 const ZERO = { r1: 0, r2: 0, r3: 0, r4: 0 } as const;
@@ -233,6 +249,10 @@ class Menu {
   private readonly popovers: (() => void)[] = [];
   /** The rows that carry a tick, by their key. */
   private readonly checks = new Map<string, HTMLButtonElement>();
+  /** Every row, for a menu shown inline, whose rows stand in for the trigger. */
+  private readonly rows: HTMLButtonElement[] = [];
+  /** Shown as a list in a sheet rather than dropped from a trigger (#45). */
+  private inline = false;
 
   constructor(
     label: string,
@@ -267,6 +287,7 @@ class Menu {
         if (row.key) this.checks.set(row.key, item);
       }
       if (row.nested) item.classList.add("planner-menu__item--nested");
+      this.rows.push(item);
       item.addEventListener("click", () => {
         // A switch leaves the list up: turning Land off and Air on is one
         // errand, and a menu that shut after each would make it two.
@@ -296,7 +317,7 @@ class Menu {
     }
 
     this.dismiss = (event: Event): void => {
-      if (this.list.hidden) return;
+      if (this.inline || this.list.hidden) return;
       if (event instanceof KeyboardEvent) {
         if (event.key !== "Escape") return;
         this.toggle(false);
@@ -314,7 +335,23 @@ class Menu {
   setEnabled(enabled: boolean, title: string): void {
     this.trigger.disabled = !enabled;
     setTitle(this.trigger, title);
+    // Inline, the rows are the control, so they take the trigger's state.
+    for (const row of this.rows) row.disabled = this.inline && !enabled;
     if (!enabled) this.toggle(false);
+  }
+
+  /**
+   * Shows the rows in place of the trigger, as a list inside a sheet, or puts
+   * the trigger back (#45): a phone's More sheet holds the View switches and
+   * Clear yard this way, with nothing to open first.
+   */
+  setInline(inline: boolean): void {
+    if (inline === this.inline) return;
+    this.inline = inline;
+    this.element.classList.toggle("planner-menu--inline", inline);
+    this.list.hidden = !inline;
+    this.trigger.setAttribute("aria-expanded", "false");
+    for (const row of this.rows) row.disabled = inline && this.trigger.disabled;
   }
 
   get open(): boolean {
@@ -346,15 +383,57 @@ class Menu {
   }
 
   private toggle(open: boolean): void {
+    if (this.inline) return;
     // Where the list would hang, for a phone: there the bar scrolls sideways
     // and would clip it, so the stylesheet pins it to the viewport here.
     if (open) {
       const anchor = this.element.getBoundingClientRect();
       this.list.style.setProperty("--menu-top", `${anchor.bottom}px`);
       this.list.style.setProperty("--menu-left", `${anchor.left}px`);
+      // Low on the screen (Align in a phone's building sheet, #45) it opens
+      // upward, or it would hang off the bottom of the screen.
+      this.list.style.setProperty("--menu-bottom", `${window.innerHeight - anchor.top}px`);
+      this.list.classList.toggle("planner-menu__list--up", anchor.bottom > window.innerHeight / 2);
     }
     this.list.hidden = !open;
     this.trigger.setAttribute("aria-expanded", String(open));
+  }
+}
+
+/**
+ * Moves controls between the bars and a phone's sheets, and puts them back
+ * (#45).
+ *
+ * Each node moved leaves a comment where it stood, so returning to the
+ * desktop layout restores the exact order without the bar having to remember
+ * it. A node that was never mounted (a read-only bar's edit controls) is left
+ * alone.
+ */
+class Relocator {
+  private readonly marks = new Map<Node, Comment>();
+
+  move(node: Node, into: Node, before: Node | null = null): void {
+    const parent = node.parentNode;
+    if (!parent) return;
+    if (!this.marks.has(node)) {
+      const mark = document.createComment("");
+      parent.insertBefore(mark, node);
+      this.marks.set(node, mark);
+    }
+    into.insertBefore(node, before);
+  }
+
+  /** Puts one node back, if it was moved. */
+  restoreOne(node: Node): void {
+    const mark = this.marks.get(node);
+    if (!mark) return;
+    mark.replaceWith(node);
+    this.marks.delete(node);
+  }
+
+  restore(): void {
+    for (const [node, mark] of this.marks) mark.replaceWith(node);
+    this.marks.clear();
   }
 }
 
@@ -423,6 +502,46 @@ export class PlannerBar {
   /** Land and air coverage of the plan (#55). */
   private readonly coverageCell: CostCell;
   private readonly readOnly: boolean;
+  private readonly actions: PlannerBarActions;
+
+  /* ── Phones (#45) ─────────────────────────────────────────────────── */
+
+  private layout: PlannerLayout = PlannerLayout.DESKTOP;
+  /** The screen is touched: the summary says "tap", not "click". */
+  private touch = false;
+  private readonly places = new Relocator();
+  private container: HTMLElement | null = null;
+  private lastState: PlannerState | null = null;
+  private readonly heading: HTMLElement;
+  private readonly box: HTMLButtonElement;
+  private readonly find: HTMLButtonElement;
+  private readonly layoutsButton: HTMLButtonElement;
+  private readonly help: HTMLButtonElement;
+  private readonly exit: HTMLButtonElement;
+  /** Mirror, Align and Distribute: lent to the building sheet on a phone. */
+  private readonly arrangeGroup: HTMLElement | null;
+  /** Upgrade walls, re-arm, Checklist, Layouts and Apply. Null when read-only. */
+  private readonly actionRow: HTMLElement | null;
+  /** One button for the two views, which a phone has no room to show side by side. */
+  private readonly viewSwitch: HTMLButtonElement;
+  private readonly moreButton: HTMLButtonElement;
+  /** The costs in one line; a tap shows the full cells. */
+  private readonly costLine: HTMLButtonElement;
+  private readonly moreSheet: HTMLElement;
+  private readonly moreView: HTMLElement;
+  private readonly morePlanSection: HTMLElement;
+  private readonly morePlan: HTMLElement;
+  private moreOpen = false;
+  private costsOpen = false;
+  private tool: PlannerTool = PlannerTool.SELECT;
+  private view: YardView = YardView.ISO;
+  /** What the cost line was last told, so it can be redrawn on its own. */
+  private line = {
+    needed: ZERO as SelectionSummary["needed"],
+    shortfall: ZERO as SelectionSummary["shortfall"],
+    seconds: 0,
+    coverage: "",
+  };
 
   constructor(
     actions: PlannerBarActions,
@@ -436,6 +555,7 @@ export class PlannerBar {
     } = {},
   ) {
     this.readOnly = options.readOnly ?? false;
+    this.actions = actions;
     const hasLayouts = options.layouts ?? true;
 
     this.toolbar = document.createElement("div");
@@ -449,15 +569,28 @@ export class PlannerBar {
     this.slotLabel = document.createElement("span");
     this.slotLabel.className = "planner-bar__slot u-muted";
 
+    // One box for the two, which a desktop lays out as if it were not there
+    // (`display: contents`) and a phone stacks, name over slot.
+    this.heading = document.createElement("div");
+    this.heading.className = "planner-bar__heading";
+    this.heading.append(title, this.slotLabel);
+
     const select = button("Select", "Select tool (V)");
     select.addEventListener("click", () => actions.onTool(PlannerTool.SELECT));
     const box = button("Box", "Box select (B)");
-    box.addEventListener("click", () => actions.onTool(PlannerTool.BOX));
+    // On a phone Select has no button of its own: Box is a switch, and off is Select.
+    box.addEventListener("click", () =>
+      actions.onTool(
+        isPhone(this.layout) && this.tool === PlannerTool.BOX ? PlannerTool.SELECT : PlannerTool.BOX,
+      ),
+    );
     this.tools.set(PlannerTool.SELECT, select);
     this.tools.set(PlannerTool.BOX, box);
+    this.box = box;
 
     const find = button("Find", "Find buildings by name or type (F)");
     find.addEventListener("click", actions.onFind);
+    this.find = find;
 
     const iso = button("3D", "The yard as it looks (Tab switches)");
     iso.addEventListener("click", () => actions.onView(YardView.ISO));
@@ -594,13 +727,24 @@ export class PlannerBar {
     // the accessible name rather than the glyph.
     help.setAttribute("aria-label", "How the planner works, and every shortcut");
     help.addEventListener("click", actions.onHelp);
+    this.help = help;
 
     const exit = button("Leave planner", "Leave planner (P)");
+    exit.classList.add("planner-bar__exit");
+    exit.setAttribute("aria-label", "Leave planner");
     exit.addEventListener("click", actions.onExit);
+    this.exit = exit;
+
+    this.undo.setAttribute("aria-label", "Undo");
+    this.redo.setAttribute("aria-label", "Redo");
+    const history = group(this.undo, this.redo);
+    history.classList.add("planner-bar__group--history");
+    this.arrangeGroup = this.readOnly
+      ? null
+      : group(...this.mirrorTips, this.align.element, this.distribute.element);
 
     this.toolbar.append(
-      title,
-      this.slotLabel,
+      this.heading,
       group(select, box, find),
       // The overlays live with the view switch and not with the edit tools:
       // they change what the yard looks like, never what it is, so they stay
@@ -612,8 +756,8 @@ export class PlannerBar {
         ? []
         : [
             group(storeTip.element, this.yardMenu.element, this.inventory),
-            group(...this.mirrorTips, this.align.element, this.distribute.element),
-            group(this.undo, this.redo),
+            ...(this.arrangeGroup ? [this.arrangeGroup] : []),
+            history,
           ]),
       spacer(),
       help,
@@ -699,6 +843,7 @@ export class PlannerBar {
     this.storeChip.addEventListener("click", actions.onStore);
 
     const layouts = button("Layouts", "Saved layouts (Ctrl+S saves to the current slot)");
+    this.layoutsButton = layouts;
     layouts.addEventListener("click", actions.onLayouts);
     layouts.hidden = !hasLayouts;
     layouts.disabled = !hasLayouts;
@@ -745,6 +890,7 @@ export class PlannerBar {
         control.disabled = true;
       }
       this.actionBar.append(costs, this.summary, spacer());
+      this.actionRow = null;
     } else {
       // The actions share a wrapper: one group at the bar's right end on a
       // desktop (#192), its own scrolling row on a phone with Apply pinned in
@@ -752,6 +898,7 @@ export class PlannerBar {
       const actionRow = document.createElement("div");
       actionRow.className = "planner-bar__actions";
       actionRow.append(this.upgradeWalls, this.rearm, this.checklist, layouts, this.apply);
+      this.actionRow = actionRow;
       this.actionBar.append(
         costs,
         this.summary,
@@ -762,12 +909,231 @@ export class PlannerBar {
       );
     }
 
+    /* ── The phone-only controls (#45), mounted by `setLayout` ────────── */
+
+    this.viewSwitch = button("3D ⇄", "Switch between the 3D yard and the blueprint (Tab)");
+    this.viewSwitch.classList.add("planner-bar__view-switch");
+    // Compare changes both panes' view, so this stays live through it (#9).
+    this.viewSwitch.dataset["compare"] = "on";
+    this.viewSwitch.addEventListener("click", () =>
+      actions.onView(this.view === YardView.ISO ? YardView.BLUEPRINT : YardView.ISO),
+    );
+
+    this.moreButton = button("More", "Everything else the planner does");
+    this.moreButton.classList.add("planner-bar__more");
+    this.moreButton.setAttribute("aria-haspopup", "true");
+    this.moreButton.setAttribute("aria-expanded", "false");
+    this.moreButton.addEventListener("click", () => this.setMoreOpen(!this.moreOpen));
+
+    this.costLine = button("", "Show every cost", "btn btn--ghost planner-bar__cost-line");
+    this.costLine.setAttribute("aria-expanded", "false");
+    this.costLine.addEventListener("click", () => this.setCostsOpen(!this.costsOpen));
+
+    this.moreSheet = document.createElement("section");
+    this.moreSheet.className = "panel map-panel planner-more";
+    this.moreSheet.setAttribute("aria-label", "More planner tools");
+    this.moreSheet.hidden = true;
+    const moreTitlebar = document.createElement("header");
+    moreTitlebar.className = "panel__titlebar";
+    const moreTitle = document.createElement("h2");
+    moreTitle.className = "panel__title";
+    moreTitle.textContent = "More";
+    const moreClose = button("×", "Close", "btn btn--ghost btn--icon");
+    moreClose.setAttribute("aria-label", "Close");
+    moreTitlebar.append(moreTitle, moreClose);
+    const moreBody = document.createElement("div");
+    moreBody.className = "panel__body";
+    const moreSection = (heading: string): [HTMLElement, HTMLElement] => {
+      const section = document.createElement("section");
+      section.className = "planner-more__section";
+      const title = document.createElement("h3");
+      title.className = "planner-more__heading";
+      title.textContent = heading;
+      const list = document.createElement("div");
+      list.className = "planner-more__list";
+      section.append(title, list);
+      moreBody.append(section);
+      return [section, list];
+    };
+    [, this.moreView] = moreSection("Show on the yard");
+    [this.morePlanSection, this.morePlan] = moreSection("Plan");
+    this.moreSheet.append(moreTitlebar, moreBody);
+    // A choice in the sheet closes it, as a menu does; a switch leaves it up,
+    // so two overlays can be flipped in one visit.
+    this.moreSheet.addEventListener("click", (event) => {
+      const pressed = event.target instanceof Element ? event.target.closest("button") : null;
+      if (!pressed || pressed.getAttribute("role") === "menuitemcheckbox") return;
+      this.setMoreOpen(false);
+    });
+
     this.setSummary(EMPTY_SUMMARY);
   }
 
   mount(container: HTMLElement): this {
+    this.container = container;
     container.append(this.toolbar, this.actionBar);
     return this;
+  }
+
+  /** Which shape the bars are in, for the tests and the scene. */
+  get currentLayout(): PlannerLayout {
+    return this.layout;
+  }
+
+  /** The More sheet, while it is mounted (a phone). */
+  get moreElement(): HTMLElement {
+    return this.moreSheet;
+  }
+
+  get isMoreOpen(): boolean {
+    return this.moreOpen;
+  }
+
+  /**
+   * Lays the bars out for a desktop or for a phone, upright or on its side
+   * (#45), and says whether the screen is touched, which is only a matter of
+   * wording ("tap" where a mouse reads "click").
+   */
+  setLayout(layout: PlannerLayout, touch: boolean): void {
+    this.touch = touch;
+    if (layout !== this.layout) {
+      this.layout = layout;
+      this.arrange(layout);
+    }
+    if (this.lastState) this.summary.textContent = summarise(this.lastState, this.touch);
+  }
+
+  /**
+   * Lends Mirror, Align and Distribute to `host` (a phone's building sheet),
+   * or takes them back into the top bar with null. A read-only bar has none.
+   */
+  lendArrange(host: HTMLElement | null): void {
+    const arrange = this.arrangeGroup;
+    if (!arrange) return;
+    if (host && isPhone(this.layout)) this.places.move(arrange, host);
+    else this.places.restoreOne(arrange);
+  }
+
+  /** Opens or closes a phone's More sheet. A desktop has none. */
+  setMoreOpen(open: boolean): void {
+    const next = open && isPhone(this.layout);
+    if (next === this.moreOpen) return;
+    this.moreOpen = next;
+    this.moreSheet.hidden = !next;
+    this.moreButton.setAttribute("aria-expanded", String(next));
+    this.moreButton.setAttribute("aria-pressed", String(next));
+    this.actions.onMore?.(next);
+  }
+
+  /** Shows or hides the full cost cells under a phone's one-line cost. */
+  private setCostsOpen(open: boolean): void {
+    this.costsOpen = open && isPhone(this.layout);
+    this.actionBar.classList.toggle("planner-bar--costs-open", this.costsOpen);
+    this.costLine.setAttribute("aria-expanded", String(this.costsOpen));
+    this.renderCostLine();
+  }
+
+  /**
+   * Moves every control to where `layout` wants it.
+   *
+   * Always from the desktop arrangement: everything goes home first, so the
+   * two phone shapes are each one list of moves rather than a list per pair.
+   */
+  private arrange(layout: PlannerLayout): void {
+    this.places.restore();
+    this.viewMenu.setInline(false);
+    this.yardMenu.setInline(false);
+    this.viewSwitch.remove();
+    this.moreButton.remove();
+    this.costLine.remove();
+    this.setMoreOpen(false);
+    this.setCostsOpen(false);
+    this.moreSheet.remove();
+
+    const phone = isPhone(layout);
+    // Stamped on a phone only: the stylesheet's phone rules key off it, so a
+    // window that goes back to a desktop's width must lose it, not keep "desktop".
+    for (const element of [this.toolbar, this.actionBar, this.moreSheet]) {
+      if (phone) element.dataset["layout"] = layout;
+      else delete element.dataset["layout"];
+    }
+    // Glyphs where a phone has no room for the words; the names stay the same.
+    this.exit.textContent = phone ? "✕" : "Leave planner";
+    this.undo.textContent = phone ? "↶" : "Undo";
+    this.redo.textContent = phone ? "↷" : "Redo";
+    this.help.textContent = phone ? "Help" : "?";
+    if (!phone) return;
+
+    // Top: Leave first, then the name, the view switch and undo/redo. The
+    // tool groups stay where they are and the stylesheet hides what is left.
+    this.places.move(this.exit, this.toolbar, this.heading);
+    this.heading.after(this.viewSwitch);
+
+    // Bottom: the one-line cost beside the summary, then Box, the drawer,
+    // More and Apply.
+    this.summary.after(this.costLine);
+    const row = this.actionRow ?? this.actionBar;
+    const end = this.actionRow ? this.apply : null;
+    this.places.move(this.box, row, row.firstChild);
+    this.places.move(this.inventory, row, end);
+    row.insertBefore(this.moreButton, end);
+
+    // Everything else, into More.
+    this.places.move(this.viewMenu.element, this.moreView);
+    this.viewMenu.setInline(true);
+    this.places.move(this.find, this.morePlan);
+    for (const control of [this.checklist, this.layoutsButton, this.upgradeWalls, this.rearm]) {
+      this.places.move(control, this.morePlan);
+    }
+    this.places.move(this.yardMenu.element, this.morePlan);
+    this.yardMenu.setInline(!this.readOnly);
+    this.places.move(this.help, this.morePlan);
+    this.morePlanSection.hidden = this.morePlan.childElementCount === 0;
+
+    if (layout === PlannerLayout.LANDSCAPE) {
+      // Sideways there is one bar: Leave, undo and redo open it, and the view
+      // switch joins the tools at its right end. The top bar is left empty.
+      const first = this.actionBar.firstChild;
+      this.places.move(this.exit, this.actionBar, first);
+      this.places.move(this.undo, this.actionBar, first);
+      this.places.move(this.redo, this.actionBar, first);
+      row.insertBefore(this.viewSwitch, this.inventory.parentNode === row ? this.inventory : this.moreButton);
+    }
+
+    this.container?.append(this.moreSheet);
+    this.renderCostLine();
+  }
+
+  /**
+   * A phone's cost line: what the selection or the plan would take, compact,
+   * and the worker time; or the coverage when nothing costs anything (#45).
+   */
+  private renderCostLine(): void {
+    const parts = costLineParts(this.line.needed, this.line.shortfall, this.line.seconds);
+    const children: Node[] = [];
+    if (parts.length === 0) {
+      children.push(document.createTextNode(this.line.coverage));
+    }
+    for (const part of parts) {
+      const figure = document.createElement("span");
+      figure.className = "planner-bar__cost-part";
+      figure.classList.toggle("planner-bar__cost-part--short", part.short);
+      if (part.key !== "time") figure.append(resourceIcon(part.key, { tooltip: false }));
+      figure.append(part.text);
+      children.push(figure);
+    }
+    const caret = document.createElement("span");
+    caret.className = "planner-bar__cost-caret";
+    caret.setAttribute("aria-hidden", "true");
+    caret.textContent = this.costsOpen ? "▴" : "▾";
+    children.push(caret);
+    this.costLine.replaceChildren(...children);
+    this.costLine.setAttribute(
+      "aria-label",
+      parts.length === 0
+        ? `${this.line.coverage}. Show every cost`
+        : `Costs ${parts.map((part) => part.text).join(", ")}. Show every cost`,
+    );
   }
 
   /**
@@ -809,6 +1175,14 @@ export class PlannerBar {
 
   /** Redraws from the session's state. */
   update(state: PlannerState): void {
+    this.lastState = state;
+    this.tool = state.tool;
+    this.view = state.view;
+    this.viewSwitch.textContent = state.view === YardView.ISO ? "3D ⇄" : "Blueprint ⇄";
+    this.viewSwitch.setAttribute(
+      "aria-label",
+      state.view === YardView.ISO ? "Showing the 3D yard. Switch to the blueprint" : "Showing the blueprint. Switch to the 3D yard",
+    );
     for (const [tool, element] of this.tools) {
       element.setAttribute("aria-pressed", String(state.tool === tool));
     }
@@ -839,7 +1213,7 @@ export class PlannerBar {
       : "";
     this.slotLabel.classList.toggle("planner-bar__slot--read-only", state.readOnly);
 
-    this.summary.textContent = summarise(state);
+    this.summary.textContent = summarise(state, this.touch);
     // A desktop cuts a long summary to an ellipsis when the bar is short of room (#192).
     this.summary.title = this.summary.textContent;
     // A read-only session never mounts the chip; hiding it as well keeps the
@@ -874,6 +1248,8 @@ export class PlannerBar {
     const breakdown = describeBreakdown(summary.byType, summary.maxed);
     this.setResourceCells(summary.needed, summary.held, summary.shortfall, breakdown);
 
+    this.line.seconds = summary.seconds;
+    this.renderCostLine();
     this.timeCell.set(
       summary.seconds === 0 ? "—" : formatCountdown(summary.seconds),
       summary.seconds === 0
@@ -900,6 +1276,8 @@ export class PlannerBar {
     this.setResourceCells(totals.needed, totals.held, totals.shortfall, breakdown);
 
     const clock = wallClockSeconds(totals, free);
+    this.line.seconds = totals.seconds;
+    this.renderCostLine();
     this.timeCell.set(
       totals.seconds === 0 ? "—" : formatCountdown(totals.seconds),
       totals.seconds === 0
@@ -943,6 +1321,11 @@ export class PlannerBar {
    * Air 41%", or "No towers" when none is placed.
    */
   setCoverage(coverage: CoverageFigures): void {
+    this.line.coverage =
+      coverage.towers === 0
+        ? "No towers"
+        : `Land ${percentText(coverage.land)} · Air ${percentText(coverage.air)}`;
+    this.renderCostLine();
     if (coverage.towers === 0) {
       this.coverageCell.set(
         "No towers",
@@ -976,6 +1359,8 @@ export class PlannerBar {
     shortfall: SelectionSummary["shortfall"],
     breakdown: string,
   ): void {
+    this.line.needed = needed;
+    this.line.shortfall = shortfall;
     for (const key of RESOURCE_KEYS) {
       const label = RESOURCE_NAMES[key];
       const cell = this.resourceCells.get(key);
@@ -1112,6 +1497,7 @@ export class PlannerBar {
     this.popovers.length = 0;
     this.toolbar.remove();
     this.actionBar.remove();
+    this.moreSheet.remove();
   }
 }
 
@@ -1143,7 +1529,7 @@ const describeBreakdown = (
   return lines.length > 0 ? lines.join("\n") : "Nothing selected has a next level.";
 };
 
-const summarise = (state: PlannerState): string => {
+const summarise = (state: PlannerState, touch = false): string => {
   const parts: string[] = [];
   parts.push(
     state.selectionCount === 0
@@ -1162,11 +1548,19 @@ const summarise = (state: PlannerState): string => {
   else if (state.placing) {
     // The next one off the stack follows each drop (#57), so this is worded
     // as a run rather than a single placement.
-    parts.push("out of the drawer · click the yard once per building, Esc to stop");
+    parts.push(
+      touch
+        ? "out of the drawer · tap the yard once per building"
+        : "out of the drawer · click the yard once per building, Esc to stop",
+    );
   } else if (state.carrying) {
-    // Both spellings of "put it back", because the bar is read on a phone too
-    // and a finger has no second button (F14).
-    parts.push("in hand · click to drop, right-click or Put back to cancel");
+    // Both spellings of "put it back" for a mouse, because a desktop can be
+    // touched too; a phone has no second button and no Esc (F14, #45).
+    parts.push(
+      touch
+        ? "in hand · tap to drop it, or Put back"
+        : "in hand · click to drop, right-click or Put back to cancel",
+    );
   }
   else if (state.readOnly) parts.push("read-only · nothing here can be moved");
   else if (state.previewing) parts.push("read-only preview");
