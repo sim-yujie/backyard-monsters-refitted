@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { costLineParts, isPhone, PlannerLayout, plannerLayout } from "./plannerLayout";
+import { costLineParts, isPhone, PlannerLayout, plannerLayout, undoName } from "./plannerLayout";
 
 describe("plannerLayout", () => {
   it("lays a phone held upright out as a phone", () => {
@@ -50,5 +50,12 @@ describe("costLineParts", () => {
 
   it("is empty when nothing costs anything", () => {
     expect(costLineParts(zero, zero, 0)).toEqual([]);
+  });
+});
+
+describe("undoName", () => {
+  it("names the key on a keyboard and the button on a touched screen", () => {
+    expect(undoName(false)).toBe("Ctrl+Z");
+    expect(undoName(true)).toBe("Undo");
   });
 });

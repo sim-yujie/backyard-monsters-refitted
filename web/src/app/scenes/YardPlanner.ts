@@ -47,7 +47,7 @@ import { diffLayouts, sideStats, slotUnplaced, slotView, statRows } from "@/game
 import type { CompareDiff } from "@/game/yard/planner/PlannerOverlay";
 import { CENTRE_NOTE, onYardCentre } from "@/game/yard/planner/centreHover";
 import { PlannerBar, type OverlayName } from "@/ui/yard/PlannerBar";
-import { isPhone, PlannerLayout, plannerLayout } from "@/ui/yard/plannerLayout";
+import { isPhone, PlannerLayout, plannerLayout, undoName } from "@/ui/yard/plannerLayout";
 import { InventoryPanel } from "@/ui/yard/InventoryPanel";
 import {
   applyPanel,
@@ -674,7 +674,7 @@ export class YardPlanner {
     this.openInventory();
     this.options.notices.show(
       NOTICE,
-      `Stored ${stored} ${plural(stored, "building")}. Ctrl+Z puts ${stored === 1 ? "it" : "them"} back.`,
+      `Stored ${stored} ${plural(stored, "building")}. ${undoName(this.touch)} puts ${stored === 1 ? "it" : "them"} back.`,
       { level: "info", timeoutMs: 4000 },
     );
   }
@@ -701,7 +701,7 @@ export class YardPlanner {
       confirmPanel({
         title: "Clear the yard?",
         message: `Store all ${count} ${plural(count, "building")}?`,
-        note: "Nothing changes in your yard until you press Apply, and Ctrl+Z puts them all back.",
+        note: `Nothing changes in your yard until you press Apply, and ${undoName(this.touch)} puts them all back.`,
         confirmLabel: "Clear yard",
         onConfirm: () => {
           this.closeDialog();
@@ -709,7 +709,7 @@ export class YardPlanner {
           this.openInventory();
           this.options.notices.show(
             NOTICE,
-            `Stored ${stored} ${plural(stored, "building")}. Ctrl+Z puts them all back.`,
+            `Stored ${stored} ${plural(stored, "building")}. ${undoName(this.touch)} puts them all back.`,
             { level: "info", timeoutMs: 6000 },
           );
         },
@@ -944,7 +944,7 @@ export class YardPlanner {
     if (outcome.ok) {
       this.options.notices.show(
         NOTICE,
-        `${name}: moved ${outcome.moved} ${plural(outcome.moved, "building")}. Ctrl+Z puts them back.`,
+        `${name}: moved ${outcome.moved} ${plural(outcome.moved, "building")}. ${undoName(this.touch)} puts them back.`,
         { level: "info", timeoutMs: 4000 },
       );
       return;

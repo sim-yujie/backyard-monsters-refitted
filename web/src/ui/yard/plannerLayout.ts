@@ -71,3 +71,9 @@ export const costLineParts = (
   if (seconds > 0) parts.push({ key: "time", text: formatCountdown(seconds), short: false });
   return parts;
 };
+
+/**
+ * What a notice calls undo: the key on a keyboard, the button on a touched
+ * screen, which has no Ctrl+Z to press (#45). "Ctrl+Z puts them back".
+ */
+export const undoName = (touch: boolean): string => (touch ? "Undo" : "Ctrl+Z");
