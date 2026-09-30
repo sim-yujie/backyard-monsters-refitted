@@ -99,8 +99,9 @@ const MARKER_Y = -CELL_HEIGHT * 0.14;
 const MARKER_RING_SHARE = 6 / MARKER_UNIT;
 
 /** The dot on the player's own outpost while an invitation to move onto it waits (#205). */
-const INVITE_DOT_RADIUS = CELL_HEIGHT * 0.1;
-const INVITE_DOT_OFFSET = Math.SQRT1_2;
+const INVITE_DOT_RADIUS = CELL_HEIGHT * 0.11;
+/** Where on the rim: to the right, a little above the middle, clear of the plate of the cell above. */
+const INVITE_DOT_ANGLE = -Math.PI / 10;
 
 /** A player's name plate, just overlapping the foot of the marker. */
 const PLATE_HEIGHT = PLATE_HALF_HEIGHT * 2;
@@ -394,10 +395,10 @@ export class MapChunk {
     this.bases.addChild(disc(this.atlas.ring, x, cy, radius, ring));
 
     if (appearance.invitePending) {
-      // On the marker's rim, upper right, with the badges: it tells at a distance, like them.
-      const dx = x + radius * INVITE_DOT_OFFSET;
-      const dy = cy - radius * INVITE_DOT_OFFSET;
-      this.badgeDiscs.addChild(
+      // On the marker's rim, drawn over it: it shows whenever the marker does.
+      const dx = x + radius * Math.cos(INVITE_DOT_ANGLE);
+      const dy = cy + radius * Math.sin(INVITE_DOT_ANGLE);
+      this.bases.addChild(
         disc(this.atlas.disc, dx, dy, INVITE_DOT_RADIUS, INVITE_COLOUR),
         disc(this.atlas.ring, dx, dy, INVITE_DOT_RADIUS, MARKER_FILL_COLOUR),
       );

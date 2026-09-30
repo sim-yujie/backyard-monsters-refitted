@@ -94,14 +94,21 @@ const em = {
   transactional: async <T>(run: (tx: object) => Promise<T>): Promise<T> => run(em),
 };
 
-mock.module("../../server.js", () => ({ postgres: { em }, redis: {} }));
+const { attackSessionKey, serialiseAttackSession } = await import("../../services/base/attackSession.js");
 
-mock.module("../../services/base/attackSessionStore.js", () => ({
-  startAttackSession: async () => {},
-  readAttackSession: async (basesaveid: number) =>
-    sessions.has(basesaveid) ? { attackerid: DAVE, attackid: 1, startedat: 0 } : null,
-  endAttackSession: async () => {},
-}));
+/**
+ * Redis as the attack session store reads it: a yard in `sessions` has an
+ * attack running. Stubbed here rather than the store itself, whose module
+ * mock would outlive this file.
+ */
+const redis = {
+  get: async (key: string) => {
+    const basesaveid = [...sessions].find((id) => attackSessionKey(id) === key);
+    return basesaveid === undefined ? null : serialiseAttackSession({ attackerid: DAVE, attackid: 1, startedat: 0 });
+  },
+};
+
+mock.module("../../server.js", () => ({ postgres: { em }, redis }));
 
 const { sendMessage } = await import("./sendMessage.js");
 const { getMessageThreads } = await import("./getMessageThreads.js");
