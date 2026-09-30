@@ -75,6 +75,13 @@ describe("appearanceOf", () => {
     expect(appearanceOf(player({ t: 100 }), 50).shielded).toBe(true);
     expect(appearanceOf(player({ t: 100 }), 150).shielded).toBe(false);
   });
+
+  it("dots the player's own outpost while an invitation to move onto it waits, and nothing else (#205)", () => {
+    expect(appearanceOf(player({ mine: 1, b: 3, pi: 12 }), 0).invitePending).toBe(true);
+    expect(appearanceOf(player({ mine: 1, b: 3, pi: 0 }), 0).invitePending).toBe(false);
+    expect(appearanceOf(player({ mine: 0, b: 3, pi: 12 }), 0).invitePending).toBe(false);
+    expect(appearanceOf(player({ mine: 1, b: 2, pi: 12 }), 0).invitePending).toBe(false);
+  });
 });
 
 it("cuts a long name on its plate with dots the map's font can draw", () => {

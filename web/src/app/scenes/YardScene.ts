@@ -401,6 +401,8 @@ export class YardScene implements Scene {
           setMapFocus({ cell });
           context.goTo(sceneForMap(MapRoomChoice.MAP_ROOM_2));
         },
+        // An invitation to move accepted here (#205): its price left the pool, which the server now holds.
+        onInviteAccepted: () => void this.store?.refresh(),
       });
       this.dock.placeBesideMonsters(this.mail.button.element);
     }

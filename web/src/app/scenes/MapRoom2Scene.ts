@@ -1,6 +1,8 @@
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
 import { MailDoor } from "@/ui/mail/MailDoor";
+import { mailApi } from "@/api/mail";
+import { INVITE_SUBJECT, INVITE_WITHDRAW_TEXT } from "@/game/mail/invite";
 import {
   cellAt,
   declineTakeover,
@@ -288,6 +290,17 @@ export class MapRoom2Scene implements Scene {
         onRelocate: (cell, payload) => this.openRelocate(cell, payload),
         onMessage: (payload) => void this.mail?.openCompose({ userid: payload.uid, name: payload.n }),
         onTruce: (payload) => void this.mail?.openTruce({ userid: payload.uid, name: payload.n, baseid: payload.bid }),
+        // Invitations to move (#205): from the player's own outpost, or to another player's yard.
+        onInvite: (cell, payload) => void this.mail?.openInvite({ to: null, outposts: [{ baseid: payload.bid, cell }] }),
+        onWithdrawInvite: (cell, payload) => void this.withdrawInvite(cell, payload.pi),
+        onInviteToOutpost: (payload) =>
+          void this.mail?.openInvite({
+            to: { userid: payload.uid, name: payload.n },
+            outposts: this.ownSave ? outpostsOf(this.ownSave) : [],
+          }),
+        // The server refuses a player in an alliance (`inviteRules.ts`); an outpost is needed to offer.
+        canInviteToOutpost: (payload) =>
+          !payload.aid && this.ownSave !== null && outpostsOf(this.ownSave).length > 0,
       },
       SceneName.MAP_ROOM_2,
       [
@@ -308,6 +321,9 @@ export class MapRoom2Scene implements Scene {
       },
       // A truce accepted in the mailbox: its mark and its Attack block come with fresh zones (#203).
       onTruceAccepted: () => this.store.refreshVisible(),
+      // An invitation sent or withdrawn: the outpost's pending mark comes with fresh zones (#205).
+      onInviteChanged: () => this.store.refreshVisible(),
+      onInviteAccepted: (coords) => this.movedByInvite(coords),
     });
     this.ui.placeTool(this.mail.button.element);
 
@@ -946,6 +962,41 @@ export class MapRoom2Scene implements Scene {
         },
       }),
     );
+  }
+
+  /**
+   * Withdraws the invitation waiting on one of the player's outposts (#205),
+   * from its cell panel: `sendmessage` "migraterevoke" into its thread, which
+   * the cell names (`pi`), with Flash's "Never mind.".
+   */
+  private async withdrawInvite(cell: OffsetCell, threadid: number): Promise<void> {
+    const result = await mailApi.send({
+      threadid,
+      targetid: 0,
+      subject: INVITE_SUBJECT,
+      message: INVITE_WITHDRAW_TEXT,
+      type: "migraterevoke",
+    });
+    this.store.invalidateCell(cell.col, cell.row);
+    void this.store.pump();
+    this.ui?.notices.show(
+      "invite",
+      result.ok ? "The invitation has been withdrawn." : `The invitation was not withdrawn: ${result.reason}`,
+      { level: result.ok ? "info" : "warning", timeoutMs: 5_000 },
+    );
+  }
+
+  /**
+   * An invitation accepted in the mailbox (#205): the main yard stands on the
+   * inviter's old outpost now, as after "Move main yard here".
+   */
+  private movedByInvite(coords: readonly [number, number] | null): void {
+    const oldHome = this.home;
+    if (oldHome) this.store.invalidateCell(oldHome.col, oldHome.row);
+    if (coords) this.store.invalidateCell(coords[0], coords[1]);
+    this.store.refreshVisible();
+    void this.store.pump();
+    void this.loadOwnCell();
   }
 
   /* ── Refresh and status ─────────────────────────────────────────────── */

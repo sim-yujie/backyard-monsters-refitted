@@ -84,4 +84,34 @@ describe("mailApi", () => {
     expect(calls[0]?.url).toMatch(/\/player\/reportmessagethread$/);
     expect(Object.fromEntries(calls[0]!.body)).toEqual({ threadid: "5", reason: "block" });
   });
+
+  it("sends an invitation to move with its outpost (#205)", async () => {
+    stubFetch({ error: 0, messageid: 0, threadid: 8 });
+    await mailApi.send({ threadid: 0, targetid: 77, subject: "s", message: "m", type: "migraterequest", baseid: "2000241208" });
+    expect(Object.fromEntries(calls[0]!.body)).toMatchObject({ type: "migraterequest", baseid: "2000241208" });
+  });
+
+  it("accepts an invitation with the price button pressed, and answers the new cell (#205)", async () => {
+    stubFetch({ error: 0, coords: [241, 208] });
+    expect(await mailApi.acceptInvite(8, "shiny")).toEqual({ ok: true, coords: [241, 208] });
+    expect(calls[0]?.url).toMatch(/\/base\/migratetofriend$/);
+    expect(Object.fromEntries(calls[0]!.body)).toEqual({ threadid: "8", shiny: "1" });
+
+    stubFetch({ error: 1, message: "You don't have enough resources to relocate.", reason: "notEnoughResources" });
+    expect(await mailApi.acceptInvite(8, "resources")).toEqual({
+      ok: false,
+      reason: "You don't have enough resources to relocate.",
+    });
+    expect(calls[1]?.body.get("shiny")).toBe("0");
+  });
+
+  it("declines an invitation, and reads a refusal the server words (#205)", async () => {
+    stubFetch({ error: 0 });
+    expect(await mailApi.declineInvite(8)).toEqual({ ok: true, coords: null });
+    expect(calls[0]?.url).toMatch(/\/base\/rejectmigratetofriend$/);
+
+    stubFetch({ error: "This invitation can no longer be answered." }, 409);
+    const refused = await mailApi.declineInvite(8);
+    expect(refused.ok).toBe(false);
+  });
 });

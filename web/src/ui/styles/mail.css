@@ -513,6 +513,7 @@
 }
 
 .mail-compose__to,
+.mail-invite__outpost,
 .mail-compose__subject,
 .mail-writer__text {
   box-sizing: border-box;
@@ -610,4 +611,29 @@
   .mail-message {
     max-width: 90%;
   }
+}
+
+/* ── Invitations to move (#205) ─────────────────────────────────────────── */
+
+/* The box the inviter ticks: the outpost is replaced if they accept. */
+.mail-invite__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-danger);
+  border-radius: var(--radius-md);
+  background: var(--colour-danger-soft);
+  color: var(--colour-danger);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  cursor: pointer;
+}
+
+.mail-invite__confirm {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--colour-danger);
 }

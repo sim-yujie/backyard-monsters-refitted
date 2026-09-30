@@ -1,7 +1,7 @@
 import type { MailApi } from "@/api/mail";
 import type { OffsetCell } from "@/game/HexGrid";
 import { MailButton, type MailButtonStyle } from "./MailButton";
-import { MailboxScreen, type ComposeTarget, type TruceTarget } from "./MailboxScreen";
+import { MailboxScreen, type ComposeTarget, type InviteTarget, type TruceTarget } from "./MailboxScreen";
 
 /**
  * A screen's way into the mailbox (#193): the Mail button, the mailbox screen
@@ -24,6 +24,10 @@ export interface MailDoorOptions {
   readonly onShowOnMap?: (cell: OffsetCell) => void;
   /** A truce was accepted in the mailbox (#203): the map's truce marks are out of date. */
   readonly onTruceAccepted?: () => void;
+  /** An invitation to move was accepted in the mailbox (#205): the main yard is at `coords` now. */
+  readonly onInviteAccepted?: (coords: readonly [number, number] | null) => void;
+  /** An invitation to move was sent or withdrawn (#205): the map's pending marks are out of date. */
+  readonly onInviteChanged?: () => void;
   /** The mail routes, for a test. */
   readonly api?: MailApi;
 }
@@ -71,6 +75,12 @@ export class MailDoor {
     await this.ensureScreen().openTruce(to);
   }
 
+  /** An invitation to move onto one of the player's outposts, from the map (#205). */
+  async openInvite(target: InviteTarget): Promise<void> {
+    this.options.onOpen?.();
+    await this.ensureScreen().openInvite(target);
+  }
+
   close(): void {
     this.screen?.close();
   }
@@ -86,6 +96,8 @@ export class MailDoor {
       ...(this.options.api ? { api: this.options.api } : {}),
       ...(this.options.onShowOnMap ? { onShowOnMap: this.options.onShowOnMap } : {}),
       ...(this.options.onTruceAccepted ? { onTruceAccepted: this.options.onTruceAccepted } : {}),
+      ...(this.options.onInviteAccepted ? { onInviteAccepted: this.options.onInviteAccepted } : {}),
+      ...(this.options.onInviteChanged ? { onInviteChanged: this.options.onInviteChanged } : {}),
       onUnreadChange: (count) => {
         this.mailboxCount = count;
         this.show();

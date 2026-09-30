@@ -98,6 +98,11 @@ export interface MapRoomUiHandlers {
   onMessage?: (payload: PlayerCell) => void;
   /** Proposes a truce to another player's yard's owner (#203). */
   onTruce?: (payload: PlayerCell) => void;
+  /** Invitations to move (#205): see `CellPanelOptions`. */
+  onInvite?: (cell: OffsetCell, payload: PlayerCell) => void;
+  onWithdrawInvite?: (cell: OffsetCell, payload: PlayerCell) => void;
+  onInviteToOutpost?: (payload: PlayerCell) => void;
+  canInviteToOutpost?: (payload: PlayerCell) => boolean;
 }
 
 export class MapRoomUi {
@@ -314,6 +319,10 @@ export class MapRoomUi {
         onRelocate: this.handlers.onRelocate,
         ...(this.handlers.onMessage ? { onMessage: this.handlers.onMessage } : {}),
         ...(this.handlers.onTruce ? { onTruce: this.handlers.onTruce } : {}),
+        ...(this.handlers.onInvite ? { onInvite: this.handlers.onInvite } : {}),
+        ...(this.handlers.onWithdrawInvite ? { onWithdrawInvite: this.handlers.onWithdrawInvite } : {}),
+        ...(this.handlers.onInviteToOutpost ? { onInviteToOutpost: this.handlers.onInviteToOutpost } : {}),
+        ...(this.handlers.canInviteToOutpost ? { canInviteToOutpost: this.handlers.canInviteToOutpost } : {}),
         onRangeToggle: (on) => this.toggleRange(on),
         extraAction: this.takeover,
       }).mount(this.dock("map-dock map-dock--right mr2-cell-dock"));

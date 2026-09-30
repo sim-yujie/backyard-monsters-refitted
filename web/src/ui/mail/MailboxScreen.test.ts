@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { MailApi, MailMessage, MailTarget, Outgoing, SendResult } from "@/api/mail";
+import type { InviteAnswer, InvitePayment, MailApi, MailMessage, MailTarget, Outgoing, SendResult } from "@/api/mail";
 import { MailboxScreen, type MailboxScreenOptions } from "./MailboxScreen";
 
 /**
@@ -29,7 +29,10 @@ interface FakeApi extends MailApi {
   sent: Outgoing[];
   blocked: number[];
   proposed: { baseid: string; message: string }[];
+  /** Invitations answered (#205): accepted with a payment, or declined. */
+  answered: { threadid: number; payment: InvitePayment | "declined" }[];
   sendResult: SendResult;
+  answerResult: InviteAnswer;
   lists: MailMessage[][];
 }
 
@@ -42,7 +45,9 @@ const fakeApi = (
     sent: [],
     blocked: [],
     proposed: [],
+    answered: [],
     sendResult: { ok: true, threadid: 1 },
+    answerResult: { ok: true, coords: [241, 208] },
     lists,
     // Each fetch answers the next list, the last one for ever after.
     threads: vi.fn(async () => (api.lists.length > 1 ? api.lists.shift()! : api.lists[0]!)),
@@ -58,6 +63,14 @@ const fakeApi = (
     }),
     block: vi.fn(async (threadid: number) => {
       api.blocked.push(threadid);
+    }),
+    acceptInvite: vi.fn(async (threadid: number, payment: InvitePayment) => {
+      api.answered.push({ threadid, payment });
+      return api.answerResult;
+    }),
+    declineInvite: vi.fn(async (threadid: number) => {
+      api.answered.push({ threadid, payment: "declined" });
+      return api.answerResult;
     }),
   };
   return api;
@@ -403,5 +416,201 @@ describe("truces in the mailbox (#203)", () => {
     expect(api.sent).toEqual([]);
     expect(host.querySelector(".mail-writer__refusal")?.textContent).toContain("already have a truce");
     expect(host.querySelector(".mail-truce__cancel")).toBeNull();
+  });
+});
+
+describe("invitations to move in the mailbox (#205)", () => {
+  const DAY = 86_400;
+  const invitation = (overrides: Partial<MailMessage> = {}) =>
+    message({
+      messagetype: "migraterequest",
+      subject: "Let's Join Forces",
+      message: "Move your main yard next to mine and we can work together to dominate the world map!",
+      coords: [241, 208],
+      baseid: "2000241208",
+      migratestate: "requested",
+      migrateexpire: NOW + 6 * DAY,
+      ...overrides,
+    });
+  const card = (host: HTMLElement) => host.querySelector<HTMLElement>(".mail-request");
+  const stateOf = (host: HTMLElement) => card(host)?.querySelector(".mail-request__state")?.textContent;
+  const actions = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>(".mail-request__action")];
+  const labels = (host: HTMLElement) => actions(host).map((one) => one.textContent);
+  const openFirst = async (host: HTMLElement) => {
+    click(rows(host)[0]);
+    await settle();
+  };
+
+  it("the one invited: tagged in the list, a card with Accept, Decline and View on map", async () => {
+    const onShowOnMap = vi.fn();
+    const api = fakeApi([[invitation()]], { 1: [invitation()] });
+    const { host } = await openScreen(api, { onShowOnMap });
+
+    expect(rows(host)[0]?.querySelector(".mail-row__truce")?.textContent).toBe("Move invitation");
+    await openFirst(host);
+    expect(stateOf(host)).toBe("Waiting");
+    expect(card(host)?.textContent).toContain("10,000,000 of each resource or 1,200 Shiny");
+    expect(labels(host)).toEqual(["Accept", "Decline", "View on map"]);
+    expect(host.querySelector(".mail-message__label")).toBeNull();
+
+    click(actions(host)[2]);
+    await settle();
+    expect(onShowOnMap).toHaveBeenCalledWith({ col: 241, row: 208 });
+  });
+
+  it("Accept asks how to pay; paying moves the yard, tells the map, and the card says it is done", async () => {
+    const onInviteAccepted = vi.fn();
+    const byThread = { 1: [invitation()] };
+    const api = fakeApi([[invitation()], [invitation({ migratestate: "accepted" })]], byThread);
+    const { host } = await openScreen(api, { onInviteAccepted });
+    await openFirst(host);
+    byThread[1] = [invitation({ migratestate: "accepted" })];
+
+    click(actions(host)[0]);
+    await settle();
+    expect(stateOf(host)).toBe("Choose how to pay");
+    expect(labels(host)).toEqual(["Pay 10,000,000 of each resource", "Pay 1,200 Shiny", "Back"]);
+    expect(api.answered).toEqual([]);
+
+    click(actions(host)[1]);
+    await settle();
+    await settle();
+
+    expect(api.answered).toEqual([{ threadid: 1, payment: "shiny" }]);
+    expect(onInviteAccepted).toHaveBeenCalledWith([241, 208]);
+    expect(stateOf(host)).toBe("Accepted");
+    expect(actions(host)).toHaveLength(0);
+    expect(host.querySelector(".mail-status")?.textContent).toBe("Your main yard has moved to (241, 208).");
+  });
+
+  it("a refusal shows on the price choice, which stays to be tried again; Back returns to the invitation", async () => {
+    const api = fakeApi([[invitation()]], { 1: [invitation()] });
+    api.answerResult = { ok: false, reason: "You must first leave your Alliance to accept this invitation." };
+    const { host } = await openScreen(api);
+    await openFirst(host);
+
+    click(actions(host)[0]);
+    await settle();
+    click(actions(host)[0]);
+    await settle();
+
+    expect(api.answered).toEqual([{ threadid: 1, payment: "resources" }]);
+    expect(host.querySelector(".mail-request__refusal")?.textContent).toBe(
+      "You must first leave your Alliance to accept this invitation.",
+    );
+    expect(actions(host).every((one) => !one.disabled)).toBe(true);
+
+    click(actions(host)[2]);
+    await settle();
+    expect(labels(host)).toEqual(["Accept", "Decline"]);
+  });
+
+  it("Decline declines, and the card then says so", async () => {
+    const byThread = { 1: [invitation()] };
+    const api = fakeApi([[invitation()], [invitation({ migratestate: "rejected" })]], byThread);
+    const { host } = await openScreen(api);
+    await openFirst(host);
+    byThread[1] = [invitation({ migratestate: "rejected" })];
+
+    click(actions(host)[1]);
+    await settle();
+    await settle();
+
+    expect(api.answered).toEqual([{ threadid: 1, payment: "declined" }]);
+    expect(stateOf(host)).toBe("Declined");
+    expect(host.querySelector(".mail-status")?.textContent).toBe("You declined Bramblefoot's invitation.");
+  });
+
+  it("the one who invited: Withdraw, with Flash's words unless the box holds some", async () => {
+    const onInviteChanged = vi.fn();
+    // The list names the other party; the thread, the sender.
+    const mine = invitation({ userid: ME, targetid: 77 });
+    const api = fakeApi([[invitation()]], { 1: [mine] });
+    const { host } = await openScreen(api, { onInviteChanged });
+    await openFirst(host);
+
+    expect(card(host)?.textContent).toContain("Waiting for Bramblefoot to answer.");
+    expect(labels(host)).toEqual(["Withdraw"]);
+    click(actions(host)[0]);
+    await settle();
+    await settle();
+
+    expect(api.sent).toEqual([
+      { threadid: 1, targetid: 77, subject: "Let's Join Forces", message: "Never mind.", type: "migraterevoke" },
+    ]);
+    expect(onInviteChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["revoked", "Withdrawn"],
+    ["expired", "Lapsed"],
+    ["void", "Void"],
+  ])("a %s invitation reads %s, with no buttons", async (migratestate, label) => {
+    const api = fakeApi([[invitation({ migratestate })]], { 1: [invitation({ migratestate })] });
+    const { host } = await openScreen(api);
+    await openFirst(host);
+
+    expect(stateOf(host)).toBe(label);
+    expect(actions(host)).toHaveLength(0);
+  });
+
+  it("invites from the player's own outpost: a past contact, the box ticked, then sent on that outpost", async () => {
+    const onInviteChanged = vi.fn();
+    const api = fakeApi([[message()]], {});
+    api.sendResult = { ok: true, threadid: 9 };
+    const { screen, host } = await openScreen(api, { onInviteChanged });
+    await screen.openInvite({ to: null, outposts: [{ baseid: "2000241208", cell: { col: 241, row: 208 } }] });
+
+    expect(host.querySelector(".mail-compose__fixed")?.textContent).toBe("Onto your outpost at (241, 208)");
+    const words = "Move your main yard next to mine and we can work together to dominate the world map!";
+    expect(host.querySelector<HTMLTextAreaElement>(".mail-writer__text")?.value).toBe(words);
+    host.querySelector<HTMLSelectElement>(".mail-compose__to")!.value = "88";
+
+    click(host.querySelector(".mail-writer__send"));
+    await settle();
+    expect(api.sent).toEqual([]);
+    expect(host.querySelector(".mail-writer__refusal")?.textContent).toContain("Tick the box first");
+
+    click(host.querySelector(".mail-invite__confirm"));
+    click(host.querySelector(".mail-writer__send"));
+    await settle();
+    await settle();
+
+    expect(api.sent).toEqual([
+      {
+        threadid: 0,
+        targetid: 88,
+        subject: "Let's Join Forces",
+        message: words,
+        type: "migraterequest",
+        baseid: "2000241208",
+      },
+    ]);
+    expect(onInviteChanged).toHaveBeenCalledTimes(1);
+    expect(host.querySelector(".mail-status")?.textContent).toBe("Invitation sent to Acorn.");
+  });
+
+  it("invites the player the map named onto the outpost picked, and shows the server's refusal", async () => {
+    const api = fakeApi([[message()]], {});
+    api.sendResult = { ok: false, reason: "They are in another world, so they cannot move to your outpost." };
+    const { screen, host } = await openScreen(api);
+    await screen.openInvite({
+      to: { userid: 77, name: "Bramblefoot" },
+      outposts: [
+        { baseid: "2000241208", cell: { col: 241, row: 208 } },
+        { baseid: "2000242208", cell: { col: 242, row: 208 } },
+      ],
+    });
+
+    expect(host.querySelector(".mail-pane__name")?.textContent).toBe("Invite Bramblefoot to move");
+    host.querySelector<HTMLSelectElement>(".mail-invite__outpost")!.value = "2000242208";
+    click(host.querySelector(".mail-invite__confirm"));
+    click(host.querySelector(".mail-writer__send"));
+    await settle();
+
+    expect(api.sent[0]).toMatchObject({ targetid: 77, baseid: "2000242208", type: "migraterequest" });
+    expect(host.querySelector(".mail-writer__refusal")?.textContent).toBe(
+      "They are in another world, so they cannot move to your outpost.",
+    );
   });
 });

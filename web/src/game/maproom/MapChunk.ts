@@ -6,6 +6,7 @@ import {
   CellMarker,
   DAMAGE_COLOUR,
   GRID_LINE_COLOUR,
+  INVITE_COLOUR,
   MARKER_FILL_COLOUR,
   OWN_COLOUR,
   OWN_PLATE_TEXT_COLOUR,
@@ -96,6 +97,10 @@ const OWN_MARKER_RADIUS = CELL_HEIGHT * 0.44;
 const MARKER_Y = -CELL_HEIGHT * 0.14;
 /** The ring's share of the radius; the picture fills the rest. */
 const MARKER_RING_SHARE = 6 / MARKER_UNIT;
+
+/** The dot on the player's own outpost while an invitation to move onto it waits (#205). */
+const INVITE_DOT_RADIUS = CELL_HEIGHT * 0.1;
+const INVITE_DOT_OFFSET = Math.SQRT1_2;
 
 /** A player's name plate, just overlapping the foot of the marker. */
 const PLATE_HEIGHT = PLATE_HALF_HEIGHT * 2;
@@ -362,7 +367,9 @@ export class MapChunk {
   /**
    * A player's yard or outpost: a round marker with their critter, ringed
    * white, cyan for the player's own and blue under protection or a truce, and
-   * a name plate under it ("Bramblefoot  24", or "You" and "Outpost").
+   * a name plate under it ("Bramblefoot  24", or "You" and "Outpost"). The
+   * player's own outpost wears an amber dot while an invitation to move onto
+   * it waits (#205).
    */
   private addPlayer(appearance: CellAppearance, x: number, y: number): void {
     const ownYard = appearance.own && appearance.marker === CellMarker.YARD;
@@ -385,6 +392,16 @@ export class MapChunk {
       this.bases.addChild(sprite);
     }
     this.bases.addChild(disc(this.atlas.ring, x, cy, radius, ring));
+
+    if (appearance.invitePending) {
+      // On the marker's rim, upper right, with the badges: it tells at a distance, like them.
+      const dx = x + radius * INVITE_DOT_OFFSET;
+      const dy = cy - radius * INVITE_DOT_OFFSET;
+      this.badgeDiscs.addChild(
+        disc(this.atlas.disc, dx, dy, INVITE_DOT_RADIUS, INVITE_COLOUR),
+        disc(this.atlas.ring, dx, dy, INVITE_DOT_RADIUS, MARKER_FILL_COLOUR),
+      );
+    }
 
     if (appearance.plate === "") return;
     const own = appearance.own;

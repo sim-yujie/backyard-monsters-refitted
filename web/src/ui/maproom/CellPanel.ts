@@ -69,6 +69,20 @@ export interface CellPanelOptions {
    */
   onTruce?: (payload: PlayerCell) => void;
   /**
+   * The player's own outpost: invites a player to move their main yard onto
+   * it (#205). Absent: no Invite button. Once an invitation waits there
+   * (`payload.pi`), the button withdraws it instead (`onWithdrawInvite`).
+   */
+  onInvite?: (cell: OffsetCell, payload: PlayerCell) => void;
+  onWithdrawInvite?: (cell: OffsetCell, payload: PlayerCell) => void;
+  /**
+   * Another player's yard: invites its owner to move onto one of the player's
+   * outposts (#205). Offered only when `canInviteToOutpost` says so (the
+   * player has an outpost, and the owner no alliance).
+   */
+  onInviteToOutpost?: (payload: PlayerCell) => void;
+  canInviteToOutpost?: (payload: PlayerCell) => boolean;
+  /**
    * An action that sits under Attack and brings its own line under the
    * actions: Take over (`TakeoverControl`, issue #82). It is told about
    * every show and update and decides for itself what to show.
@@ -144,6 +158,12 @@ export class CellPanel {
   private readonly messageButton: HTMLButtonElement;
   /** Truce, beside Message, while no truce with the owner runs (#203). */
   private readonly truceButton: HTMLButtonElement;
+  /** On the player's own outpost, with the moves: invite a player here, or withdraw the invitation (#205). */
+  private readonly inviteButton: HTMLButtonElement;
+  private readonly inviteLabel: HTMLElement;
+  /** On another player's yard, a row of its own: invite them to one of the player's outposts (#205). */
+  private readonly inviteRow: HTMLElement;
+  private readonly inviteToOutpostButton: HTMLButtonElement;
   private readonly more: HTMLDetailsElement;
   private readonly facts: HTMLDListElement;
 
@@ -254,13 +274,30 @@ export class CellPanel {
     this.relocateButton.addEventListener("click", () => {
       if (this.cell && this.payload && isPlayerCell(this.payload)) options.onRelocate?.(this.cell, this.payload);
     });
+    this.inviteLabel = el("span", "", "Invite to move here");
+    this.inviteButton = button("btn btn--outline mr2-cell__secondary mr2-cell__move mr2-cell__invite");
+    this.inviteButton.append(lineIcon("mail", 18, "map-icon"), this.inviteLabel);
+    this.inviteButton.addEventListener("click", () => {
+      if (!this.cell || !this.payload || !isPlayerCell(this.payload)) return;
+      if (this.payload.pi > 0) options.onWithdrawInvite?.(this.cell, this.payload);
+      else options.onInvite?.(this.cell, this.payload);
+    });
     this.moves = el("div", "mr2-cell__row mr2-cell__row--wrap");
-    this.moves.append(this.moveMonstersButton, this.relocateButton);
+    this.moves.append(this.moveMonstersButton, this.relocateButton, this.inviteButton);
+
+    this.inviteToOutpostButton = button("btn btn--outline mr2-cell__secondary mr2-cell__invite-other");
+    this.inviteToOutpostButton.append(lineIcon("mail", 18, "map-icon"), el("span", "", "Invite to my outpost"));
+    this.inviteToOutpostButton.title = "Invite this player to move their main yard onto one of your outposts";
+    this.inviteToOutpostButton.addEventListener("click", () => {
+      if (this.payload && isPlayerCell(this.payload)) options.onInviteToOutpost?.(this.payload);
+    });
+    this.inviteRow = el("div", "mr2-cell__row");
+    this.inviteRow.append(this.inviteToOutpostButton);
 
     const actions = el("div", "mr2-cell__actions");
     actions.append(this.attackButton, this.openButton);
     if (options.extraAction) actions.append(options.extraAction.button);
-    actions.append(this.secondary, this.social, this.moves);
+    actions.append(this.secondary, this.social, this.inviteRow, this.moves);
 
     this.facts = document.createElement("dl");
     this.facts.className = "cell-facts mr2-cell__facts";
@@ -394,7 +431,17 @@ export class CellPanel {
       const moves = this.options.ownMoves?.(cell, payload) ?? { monsters: false, relocate: false };
       this.moveMonstersButton.hidden = !moves.monsters;
       this.relocateButton.hidden = !moves.relocate;
-      this.moves.hidden = !moves.monsters && !moves.relocate;
+      // Invite is an own outpost's, as Flash's `bInviteMigrate` was (`PopupInfoMine.as:171`).
+      const pending = outpost && payload.pi > 0;
+      this.inviteButton.hidden = !outpost || this.options.onInvite === undefined;
+      this.inviteLabel.textContent = pending ? "Withdraw invite" : "Invite to move here";
+      this.inviteButton.title = pending
+        ? "Withdraw the invitation waiting on this outpost."
+        : "Invite a player to move their main yard here. It replaces this outpost.";
+      this.moves.hidden = !moves.monsters && !moves.relocate && this.inviteButton.hidden;
+      if (pending) {
+        this.addChip("clock", "Invite pending", "info", "A player is invited to move their main yard here.");
+      }
     } else {
       this.addReach(cell);
       this.setActions("attack", "View yard");
@@ -402,6 +449,8 @@ export class CellPanel {
       this.truceButton.hidden =
         this.options.onTruce === undefined || (payload.t !== undefined && payload.t > Date.now() / 1000);
       this.social.hidden = this.messageButton.hidden && this.truceButton.hidden;
+      this.inviteRow.hidden =
+        this.options.onInviteToOutpost === undefined || !(this.options.canInviteToOutpost?.(payload) ?? true);
     }
 
     this.addDamage(payload.dm, payload.d === 1);
@@ -492,6 +541,7 @@ export class CellPanel {
     this.messageButton.hidden = true;
     this.truceButton.hidden = true;
     this.social.hidden = true;
+    this.inviteRow.hidden = true;
     this.viewYardLabel.textContent = viewLabel;
     this.viewYardButton.title = kind === "none" ? VIEW_LOADING : VIEW_OTHER;
     this.bookmarkButton.disabled = !this.options.canBookmark();

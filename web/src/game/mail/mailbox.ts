@@ -40,14 +40,25 @@ export interface MailThread {
   readonly count: number;
   /** The thread's truce, as the server keeps it, or null for none (#203). */
   readonly truce: ThreadTruce | null;
+  /** The thread's latest invitation to move, as the server keeps it, or null for none (#205). */
+  readonly invite: ThreadTruce | null;
 }
 
-/** A thread's truce as the server keeps it: `trucestate` and `truceexpire` (#203). */
+/**
+ * A thread's truce as the server keeps it: `trucestate` and `truceexpire`
+ * (#203). An invitation to move has the same shape: `migratestate` and
+ * `migrateexpire` (#205).
+ */
 export interface ThreadTruce {
-  /** `requested`, `accepted` or `rejected`. */
+  /** `requested`, `accepted` or `rejected`; an invitation also `revoked`, `expired` or `void`. */
   readonly status: string;
   /** When it ends: an accepted truce's expiry, or when a waiting request lapses. */
   readonly until: number | null;
+}
+
+/** An invitation to move as its message carries it (#205): where it stands, when it lapses, and its outpost's cell. */
+export interface MessageInvite extends ThreadTruce {
+  readonly cell: OffsetCell | null;
 }
 
 /** One message of an open thread. */
@@ -63,6 +74,8 @@ export interface MailItem {
   readonly time: number;
   /** A notice's cell, for "Show on map". */
   readonly cell: OffsetCell | null;
+  /** On an invitation to move, the invitation (#205); null on anything else. */
+  readonly invite: MessageInvite | null;
 }
 
 /** A past contact, for a new message's recipient list. */
@@ -108,6 +121,7 @@ export const threadList = (
       truce: last.trucestate
         ? { status: last.trucestate, until: Number(last.truceexpire) > 0 ? Number(last.truceexpire) : null }
         : null,
+      invite: last.migratestate ? inviteOf(last) : null,
     }))
     .sort((one, other) => other.time - one.time || other.threadid - one.threadid);
 
@@ -119,8 +133,16 @@ const TRUCE_LABELS: Readonly<Record<string, string>> = {
   trucerequest: "Truce request",
   truceaccept: "Truce accepted",
   trucereject: "Truce turned down",
-  migraterequest: "Move request",
+  migraterequest: "Invitation to move",
+  migraterevoke: "Invitation withdrawn",
 };
+
+/** A message's invitation to move, as the server gives it (#205). */
+const inviteOf = (message: Pick<MailMessage, "migratestate" | "migrateexpire" | "coords">): MessageInvite => ({
+  status: message.migratestate ?? "requested",
+  until: Number(message.migrateexpire) > 0 ? Number(message.migrateexpire) : null,
+  cell: noticeCell(message),
+});
 
 /** A notice's cell from its `coords`, or null. */
 export const noticeCell = (message: Pick<MailMessage, "coords">): OffsetCell | null => {
@@ -140,6 +162,7 @@ export const threadItems = (messages: readonly MailMessage[], myId: number): Mai
       text: message.message ?? "",
       time: Number(message.updatetime) || 0,
       cell: notice ? noticeCell(message) : null,
+      invite: message.messagetype === "migraterequest" ? inviteOf(message) : null,
     };
   });
 

@@ -1,5 +1,5 @@
 import { getSession } from "@/api/auth";
-import { mailApi, type MailApi, type MailTarget } from "@/api/mail";
+import { mailApi, type InvitePayment, type MailApi, type MailTarget } from "@/api/mail";
 import type { OffsetCell } from "@/game/HexGrid";
 import {
   contactsOf,
@@ -26,9 +26,23 @@ import {
   truceCard,
   truceState,
   truceTag,
+  type TruceTone,
 } from "@/game/mail/truce";
+import {
+  INVITE_DAYS,
+  INVITE_SUBJECT,
+  INVITE_TEXT,
+  INVITE_WARNING,
+  INVITE_WITHDRAW_TEXT,
+  inviteCard,
+  inviteIndex,
+  invitePriceText,
+  inviteState,
+  inviteTag,
+} from "@/game/mail/invite";
+import type { OwnOutpost } from "@/game/yard/ownYards";
 import { Panel } from "@/ui/Panel";
-import { requestCard } from "./RequestCard";
+import { requestCard, type RequestAction } from "./RequestCard";
 import "@/ui/styles/mail.css";
 
 /**
@@ -50,6 +64,11 @@ import "@/ui/styles/mail.css";
  *   request carries a card with its state (waiting, active, ended, lapsed,
  *   rejected) and when it ends, and Accept and Reject for its recipient. The
  *   list tags a thread by its truce, as Flash's inbox did.
+ * - Invitations to move (#205): from the map, on the player's own outpost or
+ *   on another player's yard (`openInvite`), with a box to tick that says the
+ *   outpost is replaced. The thread's invitation carries a card: Accept (then
+ *   the price), Decline and View on map for the one invited, Withdraw for the
+ *   one who invited. The list tags a thread by its invitation.
  *
  * Docked like the Shop and the Monsters screen. The server marks a thread
  * read as it is opened; the screen tells the scene how many threads are still
@@ -71,6 +90,10 @@ export interface MailboxScreenOptions {
   readonly now?: () => number;
   /** A truce was accepted here: the map's truce marks are out of date (#203). */
   readonly onTruceAccepted?: () => void;
+  /** An invitation was accepted here: the main yard is now at `coords` (#205). */
+  readonly onInviteAccepted?: (coords: readonly [number, number] | null) => void;
+  /** An invitation was sent or withdrawn here: the map's pending marks are out of date (#205). */
+  readonly onInviteChanged?: () => void;
 }
 
 /** A new message's recipient when the map opened it: the player whose yard it was. */
@@ -84,8 +107,19 @@ export interface TruceTarget extends ComposeTarget {
   readonly baseid: string;
 }
 
+/**
+ * An invitation to move from the map (#205): to the player whose yard it was,
+ * or to a past contact the player picks; onto one of `outposts`, the one shown
+ * or one the player picks.
+ */
+export interface InviteTarget {
+  readonly to: ComposeTarget | null;
+  readonly outposts: readonly OwnOutpost[];
+}
+
 type View =
   | { readonly kind: "none" }
+  | { readonly kind: "invite"; readonly target: InviteTarget }
   | { readonly kind: "thread"; readonly thread: MailThread }
   | { readonly kind: "compose"; readonly to: ComposeTarget | null }
   /** A truce proposal: in `thread`, or from the map in a new one. */
@@ -234,6 +268,20 @@ export class MailboxScreen {
     this.showTruceForm({ userid: to.userid, name: to.name }, to);
   }
 
+  /** Invites a player to move onto one of the player's outposts (#205): a new thread. */
+  async openInvite(target: InviteTarget): Promise<void> {
+    if (this.destroyed) return;
+    if (!this.opened) {
+      this.opened = true;
+      this.element.hidden = false;
+      void this.refresh();
+    }
+    this.view = { kind: "invite", target };
+    this.renderList();
+    this.renderPane();
+    this.pane.querySelector<HTMLElement>(target.to ? ".mail-writer__text" : ".mail-compose__to")?.focus();
+  }
+
   close(): void {
     if (!this.opened) return;
     const hadFocus = this.element.contains(document.activeElement);
@@ -325,11 +373,15 @@ export class MailboxScreen {
           make("span", "mail-row__preview", thread.preview),
         );
         const state = truceState(thread.truce, now);
-        const tag = state ? truceTag(state) : null;
-        if (tag) row.append(make("span", `mail-row__truce mail-row__truce--${tag.tone}`, tag.label));
+        const invited = inviteState(thread.invite, now);
+        const tags = [state ? truceTag(state) : null, invited ? inviteTag(invited) : null].filter(
+          (one): one is { label: string; tone: TruceTone } => one !== null,
+        );
+        for (const tag of tags) row.append(make("span", `mail-row__truce mail-row__truce--${tag.tone}`, tag.label));
+        const said = tags.map((tag) => `${tag.label}. `).join("");
         row.setAttribute(
           "aria-label",
-          `${thread.unread ? "Unread. " : ""}${thread.otherName}: ${thread.subject}. ${tag ? `${tag.label}. ` : ""}${sentText(thread.time, now)}`,
+          `${thread.unread ? "Unread. " : ""}${thread.otherName}: ${thread.subject}. ${said}${sentText(thread.time, now)}`,
         );
         item.append(row);
         return item;
@@ -348,6 +400,11 @@ export class MailboxScreen {
     if (this.view.kind === "truce") {
       this.panes.classList.add("mail-panes--open");
       this.renderTruceForm(this.view.to, this.view.via);
+      return;
+    }
+    if (this.view.kind === "invite") {
+      this.panes.classList.add("mail-panes--open");
+      this.renderInviteForm(this.view.target);
       return;
     }
     if (this.view.kind === "none") {
@@ -385,11 +442,16 @@ export class MailboxScreen {
     }
     if (!thread.notice) head.append(this.blockControl(thread));
 
+    // Likewise the thread's latest invitation to move (#205).
+    const invitation = inviteIndex(items);
+
     const messages = make("ol", "mail-messages");
     items.forEach((item, index) => {
       const side = item.notice ? "notice" : item.mine ? "mine" : "theirs";
       const bubble = make("li", `mail-message mail-message--${side}`);
-      if (item.label && index !== request) bubble.append(make("strong", "mail-message__label", item.label));
+      if (item.label && index !== request && index !== invitation) {
+        bubble.append(make("strong", "mail-message__label", item.label));
+      }
       bubble.append(make("p", "mail-message__text", item.text));
       if (index === request && state !== null) {
         const card = truceCard(state, until, item.mine, thread.otherName, now);
@@ -408,6 +470,11 @@ export class MailboxScreen {
             }),
           }),
         );
+      }
+      const invite = index === invitation ? this.inviteCardFor(thread, item, now) : null;
+      if (invite) {
+        bubble.classList.add("mail-message--request");
+        bubble.append(invite);
       }
       bubble.append(make("span", "mail-message__time", sentText(item.time, now)));
       const cell = item.cell;
@@ -512,6 +579,264 @@ export class MailboxScreen {
         : `You rejected ${thread.otherName}'s truce.`,
     );
     return null;
+  }
+
+  /* ── Invitations to move (#205) ─────────────────────────────────────── */
+
+  /**
+   * The card on a thread's invitation: its state and what it means; Accept,
+   * Decline and View on map for the one invited while it waits, Withdraw for
+   * the one who invited.
+   */
+  private inviteCardFor(thread: MailThread, item: MailItem, now: number): HTMLElement | null {
+    const invite = item.invite;
+    const state = inviteState(invite, now);
+    if (!invite || !state) return null;
+    const card = inviteCard(state, invite.until, item.mine, thread.otherName, invite.cell, now);
+    const cell = invite.cell;
+    const onShowOnMap = this.options.onShowOnMap;
+    const view: RequestAction[] =
+      cell && onShowOnMap
+        ? [
+            {
+              label: "View on map",
+              style: "outline",
+              run: async () => {
+                onShowOnMap(cell);
+                return null;
+              },
+            },
+          ]
+        : [];
+    let actions: RequestAction[] = [];
+    if (card.canAnswer) {
+      actions = [
+        {
+          label: "Accept",
+          style: "primary",
+          run: async () => {
+            node.replaceWith(this.priceChoice(thread, cell));
+            return null;
+          },
+        },
+        { label: "Decline", style: "outline", run: () => this.declineInvite(thread) },
+        ...view,
+      ];
+    } else if (card.canWithdraw) {
+      actions = [{ label: "Withdraw", style: "outline", run: () => this.withdrawInvite(thread) }];
+    }
+    const node = requestCard({
+      title: "Invitation to move",
+      state: card.label,
+      tone: card.tone,
+      detail: card.detail,
+      ...(actions.length > 0 && { actions }),
+    });
+    return node;
+  }
+
+  /**
+   * Accept's second step: how to pay. One press pays and moves; there is no
+   * further confirm (the owner's rule). Back draws the thread again, with the
+   * invitation's own card.
+   */
+  private priceChoice(thread: MailThread, cell: OffsetCell | null): HTMLElement {
+    const pay = (payment: InvitePayment): RequestAction => ({
+      label: `Pay ${invitePriceText(payment)}`,
+      style: "primary",
+      run: () => this.acceptInvite(thread, payment),
+    });
+    const choice = requestCard({
+      title: "Invitation to move",
+      state: "Choose how to pay",
+      tone: "info",
+      detail:
+        `Your main yard moves${cell ? ` to (${cell.col}, ${cell.row})` : ""} at once. ` +
+        "Your outposts stay yours, and wild monsters claim your old spot. It cannot be undone.",
+      actions: [
+        pay("resources"),
+        pay("shiny"),
+        {
+          label: "Back",
+          style: "outline",
+          run: async () => {
+            await this.openThread(thread);
+            return null;
+          },
+        },
+      ],
+    });
+    choice.classList.add("mail-request--price");
+    return choice;
+  }
+
+  private async acceptInvite(thread: MailThread, payment: InvitePayment): Promise<string | null> {
+    const result = await this.api.acceptInvite(thread.threadid, payment);
+    if (!result.ok) return result.reason;
+    if (this.destroyed) return null;
+    this.options.onInviteAccepted?.(result.coords);
+    await this.reopen(thread);
+    const where = result.coords ? ` to (${result.coords[0]}, ${result.coords[1]})` : "";
+    this.setStatus("info", `Your main yard has moved${where}.`);
+    return null;
+  }
+
+  private async declineInvite(thread: MailThread): Promise<string | null> {
+    const result = await this.api.declineInvite(thread.threadid);
+    if (!result.ok) return result.reason;
+    if (this.destroyed) return null;
+    await this.reopen(thread);
+    this.setStatus("info", `You declined ${thread.otherName}'s invitation.`);
+    return null;
+  }
+
+  /** Withdraw: its message is what the reply box holds, else Flash's "Never mind.". */
+  private async withdrawInvite(thread: MailThread): Promise<string | null> {
+    const box = this.pane.querySelector<HTMLTextAreaElement>(".mail-writer__text");
+    const written = box ? sendable(box.value) : null;
+    const result = await this.api.send({
+      threadid: thread.threadid,
+      targetid: thread.otherId,
+      subject: thread.subject,
+      message: written ?? INVITE_WITHDRAW_TEXT,
+      type: "migraterevoke",
+    });
+    if (!result.ok) return result.reason;
+    if (this.destroyed) return null;
+    this.options.onInviteChanged?.();
+    await this.reopen(thread);
+    this.setStatus("info", `You withdrew your invitation to ${thread.otherName}.`);
+    return null;
+  }
+
+  /** The list fetched again, and the thread drawn again from it. */
+  private async reopen(thread: MailThread): Promise<void> {
+    await this.refresh();
+    const fresh = this.threads.find((one) => one.threadid === thread.threadid) ?? thread;
+    await this.openThread(fresh);
+  }
+
+  /**
+   * An invitation: to whom, onto which outpost, what it means, the box to tick
+   * that says the outpost is replaced, and the message, Flash's own to start
+   * from. It starts a new thread.
+   */
+  private renderInviteForm(target: InviteTarget): void {
+    const to = target.to;
+    const head = make("header", "mail-pane__head");
+    const titles = make("div", "mail-pane__titles");
+    titles.append(make("h3", "mail-pane__name", to ? `Invite ${to.name} to move` : "Invite a player to move"));
+    head.append(this.backButton(), titles);
+
+    if (target.outposts.length === 0) {
+      this.pane.replaceChildren(head, make("p", "mail-pane__empty", "You have no outpost to invite anyone to."));
+      return;
+    }
+
+    const form = make("div", "mail-compose mail-invite");
+
+    let recipient: () => MailContact | null;
+    if (to) {
+      form.append(make("p", "mail-compose__fixed", `To ${to.name}`));
+      recipient = () => ({ userid: to.userid, name: to.name });
+    } else {
+      const contacts = contactsOf(this.targets);
+      if (contacts.length === 0) {
+        this.pane.replaceChildren(
+          head,
+          make(
+            "p",
+            "mail-pane__empty",
+            "You have no one to invite yet. Invite a player from their yard's panel on the map, or write to them first.",
+          ),
+        );
+        return;
+      }
+      const select = make("select", "mail-compose__to");
+      select.setAttribute("aria-label", "To");
+      for (const contact of contacts) {
+        const option = document.createElement("option");
+        option.value = String(contact.userid);
+        option.textContent = contact.name;
+        select.append(option);
+      }
+      const label = make("label", "mail-compose__field");
+      label.append(make("span", "mail-compose__caption", "To"), select);
+      form.append(label);
+      recipient = () => contacts.find((contact) => String(contact.userid) === select.value) ?? null;
+    }
+
+    const outpostName = (one: OwnOutpost): string => `your outpost at (${one.cell.col}, ${one.cell.row})`;
+    let outpost: () => OwnOutpost | null;
+    const only = target.outposts.length === 1 ? target.outposts[0]! : null;
+    if (only) {
+      form.append(make("p", "mail-compose__fixed", `Onto ${outpostName(only)}`));
+      outpost = () => only;
+    } else {
+      const select = make("select", "mail-invite__outpost");
+      select.setAttribute("aria-label", "Outpost");
+      for (const one of target.outposts) {
+        const option = document.createElement("option");
+        option.value = one.baseid;
+        option.textContent = `Outpost at (${one.cell.col}, ${one.cell.row})`;
+        select.append(option);
+      }
+      const label = make("label", "mail-compose__field");
+      label.append(make("span", "mail-compose__caption", "Onto"), select);
+      form.append(label);
+      outpost = () => target.outposts.find((one) => one.baseid === select.value) ?? null;
+    }
+
+    form.append(
+      make(
+        "p",
+        "mail-truce__about",
+        `If they accept, their main yard moves onto the outpost, for ${invitePriceText("resources")} or ` +
+          `${invitePriceText("shiny")}, which they pay. They must not be in an alliance. ` +
+          `They have ${INVITE_DAYS} days to answer, and you can withdraw it until then.`,
+      ),
+    );
+
+    const confirm = make("input", "mail-invite__confirm");
+    confirm.type = "checkbox";
+    const confirmLabel = make("label", "mail-invite__warning");
+    confirmLabel.append(confirm, make("span", "", INVITE_WARNING));
+    form.append(confirmLabel);
+
+    form.append(
+      this.writer({
+        label: "Send invitation",
+        initial: INVITE_TEXT,
+        send: async (text) => {
+          const who = recipient();
+          const where = outpost();
+          if (!who) return "Pick who to invite.";
+          if (!where) return "Pick the outpost.";
+          if (!confirm.checked) return "Tick the box first: the outpost is replaced if they accept.";
+          const result = await this.api.send({
+            threadid: 0,
+            targetid: who.userid,
+            subject: INVITE_SUBJECT,
+            message: text,
+            type: "migraterequest",
+            baseid: where.baseid,
+          });
+          if (!result.ok) return result.reason;
+          this.options.onInviteChanged?.();
+          await this.refresh();
+          const sent = this.threads.find((one) => one.threadid === result.threadid);
+          if (sent) {
+            await this.openThread(sent);
+          } else {
+            this.view = { kind: "none" };
+            this.renderPane();
+          }
+          this.setStatus("info", `Invitation sent to ${who.name}.`);
+          return null;
+        },
+      }),
+    );
+    this.pane.replaceChildren(head, form);
   }
 
   private showTruceForm(to: ComposeTarget, via: MailThread | TruceTarget): void {

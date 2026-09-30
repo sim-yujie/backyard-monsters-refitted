@@ -56,6 +56,8 @@ describe("MailDoor", () => {
     send: vi.fn(),
     requestTruce: vi.fn(),
     block: vi.fn(),
+    acceptInvite: vi.fn(),
+    declineInvite: vi.fn(),
   });
 
   const settle = async (): Promise<void> => {

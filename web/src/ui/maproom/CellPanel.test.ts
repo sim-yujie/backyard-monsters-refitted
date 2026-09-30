@@ -350,3 +350,48 @@ describe("Truce (#203)", () => {
     expect(truce(open(player()).host).hidden).toBe(true);
   });
 });
+
+describe("Invitations to move (#205)", () => {
+  const invite = (host: HTMLElement) => host.querySelector<HTMLButtonElement>(".mr2-cell__invite")!;
+  const inviteRow = (host: HTMLElement) =>
+    host.querySelector<HTMLElement>(".mr2-cell__invite-other")!.closest<HTMLElement>(".mr2-cell__row")!;
+  const ownOutpost = (overrides: Partial<PlayerCell> = {}) => player({ mine: 1, b: 3, bid: "2000241208", ...overrides });
+
+  it("offers the player's own outpost Invite to move here", () => {
+    const onInvite = vi.fn();
+    const { host } = open(ownOutpost(), { onInvite, onWithdrawInvite: vi.fn() });
+    expect(invite(host).hidden).toBe(false);
+    expect(invite(host).textContent).toBe("Invite to move here");
+    invite(host).click();
+    expect(onInvite).toHaveBeenCalledWith({ col: 241, row: 208 }, expect.objectContaining({ bid: "2000241208" }));
+  });
+
+  it("with an invitation waiting: a chip, and the button withdraws it", () => {
+    const onInvite = vi.fn();
+    const onWithdrawInvite = vi.fn();
+    const { host } = open(ownOutpost({ pi: 41 }), { onInvite, onWithdrawInvite });
+    expect(host.querySelector(".mr2-cell__chips")?.textContent).toContain("Invite pending");
+    expect(invite(host).textContent).toBe("Withdraw invite");
+    invite(host).click();
+    expect(onWithdrawInvite).toHaveBeenCalledWith({ col: 241, row: 208 }, expect.objectContaining({ pi: 41 }));
+    expect(onInvite).not.toHaveBeenCalled();
+  });
+
+  it("offers none on the player's main yard, or without a way to invite", () => {
+    expect(invite(open(player({ mine: 1 }), { onInvite: vi.fn() }).host).hidden).toBe(true);
+    expect(invite(open(ownOutpost()).host).hidden).toBe(true);
+  });
+
+  it("offers another player's yard Invite to my outpost, when the scene says the player may", () => {
+    const onInviteToOutpost = vi.fn();
+    const { host } = open(player(), { onInviteToOutpost, canInviteToOutpost: () => true });
+    expect(inviteRow(host).hidden).toBe(false);
+    host.querySelector<HTMLButtonElement>(".mr2-cell__invite-other")!.click();
+    expect(onInviteToOutpost).toHaveBeenCalledWith(expect.objectContaining({ uid: 77 }));
+
+    expect(inviteRow(open(player(), { onInviteToOutpost, canInviteToOutpost: () => false }).host).hidden).toBe(true);
+    expect(inviteRow(open(camp(), { onInviteToOutpost }).host).hidden).toBe(true);
+    expect(inviteRow(open(ownOutpost(), { onInviteToOutpost }).host).hidden).toBe(true);
+    expect(inviteRow(open(player()).host).hidden).toBe(true);
+  });
+});

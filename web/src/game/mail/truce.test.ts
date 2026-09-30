@@ -16,6 +16,7 @@ const item = (type: string, mine = false): MailItem => ({
   text: "",
   time: 0,
   cell: null,
+  invite: null,
 });
 
 describe("truceState", () => {
