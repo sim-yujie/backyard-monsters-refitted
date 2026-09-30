@@ -619,6 +619,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   attackerlevel?: number;
   /**
+   * The own yard's loads (not Inferno): the player's level from their main
+   * save's empire points, the level the map shows (#192). The yard routes
+   * send it too, read after the action.
+   */
+  playerlevel?: number;
+  /**
    * Map Room 2 attack loads only: the target cell's height, `i`, which
    * stretches an outpost's tower range (`BTOWER.as:80-85`). The server's loot
    * replay reads the same stored value (`world_map_cell.terrainHeight`).
@@ -1184,6 +1190,8 @@ export type YardResponse<Report> = ApiEnvelope &
     error: 0;
     completed: CompletedJob[];
     report: Report;
+    /** The player's level after the action, as `/base/load` sends it (#192). */
+    playerlevel?: number;
   };
 
 /**

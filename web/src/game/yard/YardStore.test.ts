@@ -567,6 +567,26 @@ describe("the action queue", () => {
   });
 });
 
+describe("the player level (#192)", () => {
+  it("reads the load's level and takes each answer's, keeping it when an answer has none", async () => {
+    let next: number | undefined = 5;
+    const api = stubApi({
+      state: vi.fn(() => Promise.resolve({ ...answer(T0), ...(next !== undefined && { playerlevel: next }) })),
+    });
+    const { store } = storeWith(loadWith({ playerlevel: 4 }), api);
+    expect(store.playerLevel).toBe(4);
+    await store.refresh();
+    expect(store.playerLevel).toBe(5);
+    next = undefined;
+    await store.refresh();
+    expect(store.playerLevel).toBe(5);
+  });
+
+  it("is null when the server sent none", () => {
+    expect(storeWith(loadWith(), stubApi()).store.playerLevel).toBeNull();
+  });
+});
+
 describe("lifecycle", () => {
   it("fetches the state once at start when the load carried no caps", async () => {
     const api = stubApi();

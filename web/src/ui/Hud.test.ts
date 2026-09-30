@@ -212,6 +212,34 @@ describe("the yard's corner layout (#171)", () => {
     hud.destroy();
   });
 
+  it("shows the bound yard's player level under the name, and drops it when unbound (#192)", () => {
+    const hud = new Hud({
+      scenes: [],
+      layout: "corner",
+      onSceneSelect: () => {},
+      onSignOut: () => {},
+      accountName: "agenttester",
+    }).mount(document.body);
+    const line = hud.element.querySelector<HTMLElement>(".account-menu__pill-level")!;
+    expect(line.hidden).toBe(true);
+    const store = {
+      caps: null,
+      workers: { total: 5, busy: 0 },
+      playerLevel: 42,
+      jobs: () => [],
+      save: {},
+      now: () => 0,
+      isRunning: () => false,
+      subscribe: () => () => undefined,
+    };
+    hud.bindYard({ store: store as unknown as YardStore, scene: { selectBuilding: () => {} }, notices: new Notices() });
+    expect(line.hidden).toBe(false);
+    expect(line.textContent).toBe("Level 42");
+    hud.bindYard(null);
+    expect(line.hidden).toBe(true);
+    hud.destroy();
+  });
+
   it("draws a cap as the fill bar alone, with the figure kept for the tooltip", () => {
     const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
     const store = {

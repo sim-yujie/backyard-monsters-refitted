@@ -39,7 +39,8 @@ import { JobNotices } from "./yard/JobNotices";
  * "a game, not a dashboard"): no brand and no screen tabs, the readouts and
  * Workers in one glass bar at the top left, each amount over its thin fill
  * bar, and the Account menu as a pill at the top right with the player's name
- * and critter. On a phone the name and critter lead the top row with Workers
+ * and critter, and their level under the name while an own yard is bound
+ * (#192). On a phone the name and critter lead the top row with Workers
  * and Shiny at its end, and the four resources share the row under it in
  * short amounts. The yard's buttons (Build, Collect all, Monsters, Layout,
  * Map, the yard switcher) are the yard's own round buttons (`YardDock`).
@@ -483,6 +484,7 @@ export class Hud {
     }
     const shiny = this.readouts.get("shiny");
     if (shiny) this.label(shiny);
+    this.accountMenu?.setLevel(store?.playerLevel ?? null);
 
     this.workers.hidden = store === null;
     if (store) {

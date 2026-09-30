@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AvatarId } from "@/game/avatars";
-import { AccountMenu, DEFAULT_NOTE, PICK_FAILED, accountName } from "./AccountMenu";
+import { AccountMenu, DEFAULT_NOTE, PICK_FAILED, accountName, levelText } from "./AccountMenu";
 
 describe("AccountMenu", () => {
   let menu: AccountMenu | null = null;
@@ -148,6 +148,41 @@ describe("AccountMenu", () => {
       expect(menu!.element.querySelector(".account-menu__avatars")).toBeNull();
       expect(menu!.element.querySelector(".account-menu__face")).toBeNull();
       expect(menu!.avatar).toBeNull();
+    });
+  });
+
+  describe("the pill's level (#192)", () => {
+    const pill = () => {
+      menu = new AccountMenu({ name: "agenttester", onSignOut: () => {}, variant: "pill" });
+      document.body.append(menu.element);
+      const button = menu.element.querySelector<HTMLButtonElement>(".account-menu__button--pill")!;
+      const line = menu.element.querySelector<HTMLElement>(".account-menu__pill-level")!;
+      return { menu, button, line };
+    };
+
+    it("shows no level line until one is set", () => {
+      const { button, line } = pill();
+      expect(line.hidden).toBe(true);
+      expect(button.getAttribute("aria-label")).toBe("Your account: agenttester");
+    });
+
+    it("puts \"Level N\" under the name and in the button's name, and takes it away with null", () => {
+      const { menu, button, line } = pill();
+      menu.setLevel(12);
+      expect(levelText(12)).toBe("Level 12");
+      expect(line.hidden).toBe(false);
+      expect(line.textContent).toBe("Level 12");
+      expect(button.getAttribute("aria-label")).toBe("Your account: agenttester, Level 12");
+      menu.setLevel(null);
+      expect(line.hidden).toBe(true);
+      expect(button.getAttribute("aria-label")).toBe("Your account: agenttester");
+    });
+
+    it("the plain button ignores it", () => {
+      const { menu, button } = build();
+      menu.setLevel(3);
+      expect(button.textContent).toBe("Account");
+      expect(menu.element.querySelector(".account-menu__pill-level")).toBeNull();
     });
   });
 });

@@ -374,6 +374,12 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     return this.current.caps ?? null;
   }
 
+  /** The player's level (#192), or null from a server that does not send it. */
+  get playerLevel(): number | null {
+    const level = this.current.playerlevel;
+    return typeof level === "number" && level > 0 ? level : null;
+  }
+
   /**
    * Derived from the buildings rather than read off the last answer's
    * `workers`, so a predicted finish frees its worker at once. The rule is
@@ -662,6 +668,8 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     for (const key of YARD_STATE_KEYS) {
       if (key in source) (slices as Record<string, unknown>)[key] = source[key];
     }
+    // Not a YardState field (that shape is frozen), but it rides every answer.
+    if (typeof response.playerlevel === "number") slices.playerlevel = response.playerlevel;
     this.applied = Math.max(this.applied, number);
     this.syncClock(response.currenttime);
     this.setSave({ ...this.current, ...slices });

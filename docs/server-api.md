@@ -206,7 +206,8 @@ adds: `relationship` (`EnumBaseRelationship`), `canattack` (bool, from `canAttac
 `id` (= `basesaveid`), `storeitems` (the **entire** store catalog, verbatim — see §5),
 `tutorialstage`, `currenttime`, `pic_square` (base owner's avatar), `chatservers` (a 1-element
 array with `CHAT_WS_HOST`), and — only when the caller owns the base — `chatenabled: 1`,
-`chattoken`, `chatchannel`, `alliancedata`, `powerups` (see §Alliance and §Chat). Attack modes
+`chattoken`, `chatchannel`, `alliancedata`, `powerups` (see §Alliance and §Chat), and, outside
+Inferno, `playerlevel` (the player's level from their main save, as the yard routes send it; #192). Attack modes
 add `attpowerups`. A `build` load of the caller's own main yard, or of one of their Map Room 2
 outposts, adds `completed`: what its catch-up finished, in the yard routes' shape (see "The owner's `/base/load`" under "Yard actions"). Map Room 3 build/attack adds a `player.buffs` / `attackingplayer.buffs` /
 `defendingplayer.buffs` object keyed by small numeric buff-type ids (`2`=resource rate,
@@ -1125,7 +1126,12 @@ JSON), parsed by the route's zod schema in `server/src/schemas/YardSchemas.ts`.
    the debit, any credit clamped to the storage cap (a pool already over the cap is never
    reduced; `services/yard/credit.ts`, `creditResources`, the one clamp every server credit takes —
    the route refunds, banking and the catch-up's HCC queue refund, issue #110), points, and `flinger`/`catapult` again. One flush, commit.
-6. Answer `200 { error: 0, ...YardState, completed, report }`.
+6. Answer `200 { error: 0, ...YardState, completed, report, playerlevel }`. `playerlevel` is the
+   player's level (`calculateBaseLevel(points, basevalue)` of the main save, the level the map shows;
+   #192), read after the action, on an outpost too. Caveat: only the Flash client's saves ever
+   wrote `basevalue` (Flash's `CalcBaseValue`, the building value it saved as a high-water mark);
+   nothing in the revamp recomputes it, so today the level rises only with the `points` finished
+   jobs award.
 
 A refused request rolls the whole transaction back, catch-up included, so it writes nothing.
 

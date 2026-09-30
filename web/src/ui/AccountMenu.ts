@@ -17,7 +17,8 @@
  * leaves the old mark and says so.
  *
  * The yard's HUD (#171) shows it as a `pill`: the player's name beside their
- * critter in a ring, rather than the word "Account".
+ * critter in a ring, rather than the word "Account", and under the name the
+ * player's level once the yard has sent it (`setLevel`, #192).
  */
 
 import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
@@ -53,6 +54,9 @@ export const PICK_FAILED = "Could not save that avatar. Try again.";
 /** What the menu's heading says: the name, or a plain stand-in without one. */
 export const accountName = (name: string | null | undefined): string => name?.trim() || "Signed in";
 
+/** "Level 12", the pill's line under the name. */
+export const levelText = (level: number): string => `Level ${level}`;
+
 export class AccountMenu {
   /** The button and the list, in one wrapper the list hangs from. */
   readonly element: HTMLElement;
@@ -64,6 +68,9 @@ export class AccountMenu {
   private readonly tiles = new Map<AvatarId, HTMLButtonElement>();
   private readonly note: HTMLElement | null = null;
   private readonly status: HTMLElement | null = null;
+  /** The pill's level line; null on the plain button. */
+  private readonly level: HTMLElement | null = null;
+  private readonly name: string;
   private current: AvatarId | null = null;
   private saving = false;
 
@@ -74,12 +81,19 @@ export class AccountMenu {
     this.button = document.createElement("button");
     this.button.type = "button";
     this.button.className = "btn btn--ghost account-menu__button";
+    this.name = accountName(options.name);
     if (options.avatar) this.current = options.avatar.current;
     if (options.variant === "pill") {
       this.element.classList.add("account-menu--pill");
       const name = document.createElement("span");
-      name.className = "account-menu__pill-name";
-      name.textContent = accountName(options.name);
+      name.className = "account-menu__pill-text";
+      const nameLine = document.createElement("span");
+      nameLine.className = "account-menu__pill-name";
+      nameLine.textContent = this.name;
+      this.level = document.createElement("span");
+      this.level.className = "account-menu__pill-level";
+      this.level.hidden = true;
+      name.append(nameLine, this.level);
       const ring = document.createElement("span");
       ring.className = "account-menu__ring";
       if (options.avatar) ring.append(this.face("account-menu__ring-face", "full"));
@@ -189,6 +203,23 @@ export class AccountMenu {
   /** The critter the menu shows as the player's; null without an avatar. */
   get avatar(): AvatarId | null {
     return this.current;
+  }
+
+  /**
+   * The pill's "Level N" under the name, or none with null (a yard that has
+   * not sent it, or no yard). The plain button has no room for it.
+   */
+  setLevel(level: number | null): void {
+    const line = this.level;
+    if (!line) return;
+    const text = level === null ? "" : levelText(level);
+    if (line.textContent === text && line.hidden === (level === null)) return;
+    line.textContent = text;
+    line.hidden = level === null;
+    this.button.setAttribute(
+      "aria-label",
+      level === null ? `Your account: ${this.name}` : `Your account: ${this.name}, ${text}`,
+    );
   }
 
   destroy(): void {

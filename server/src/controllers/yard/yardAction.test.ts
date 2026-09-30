@@ -164,12 +164,15 @@ describe("POST /bm/yard/state", () => {
       "researchdata",
       "completed",
       "report",
+      "playerlevel",
     ]);
     expect(ctx.body).toMatchObject({
       error: 0,
       report: null,
       workers: { total: 1, busy: 0 },
       completed: [{ kind: "upgrade", id: 1, t: 20, detail: { from: 1, level: 2, points: 6966 } }],
+      // Level 4 (5,000 to 7,499 points) from the points this answer's catch-up awarded (#192).
+      playerlevel: 4,
     });
     expect(ctx.body!.savetime).toBe(ctx.body!.currenttime);
 

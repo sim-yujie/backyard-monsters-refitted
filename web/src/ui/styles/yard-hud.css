@@ -137,6 +137,27 @@
   box-shadow: var(--focus-ring);
 }
 
+/* The name, and the player's level under it (#192). */
+.account-menu__pill-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.account-menu__pill-level {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.account-menu__pill-level[hidden] {
+  display: none;
+}
+
 .account-menu__pill-name {
   max-width: 16ch;
   overflow: hidden;
@@ -799,6 +820,10 @@
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     box-shadow: none;
+  }
+
+  .account-menu--pill .account-menu__pill-text {
+    align-items: flex-start;
   }
 
   .account-menu--pill .account-menu__ring {

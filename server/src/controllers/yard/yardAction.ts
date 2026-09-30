@@ -8,6 +8,7 @@ import { Status } from "../../enums/StatusCodes.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { YardTargetSchema } from "../../schemas/YardSchemas.js";
 import { RESOURCE_KEYS, type ResourceKey } from "../../services/base/economy/resourceBudget.js";
+import { playerLevelOf } from "../../services/base/calculateBaseLevel.js";
 import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { autobankYard } from "../../services/maproom/v2/autobank.js";
 import { isShinyLocked } from "../../services/user/shinyLock.js";
@@ -57,7 +58,8 @@ import { logger } from "../../utils/logger.js";
  *    `409 credits`), resources (`409 shortfall`), then the new slices, the
  *    debit, the credit clamped to the cap (T3), the points; re-derive
  *    `flinger`/`catapult`; one flush; commit.
- * 6. Answer `{ error: 0, ...yardState, completed, report }`.
+ * 6. Answer `{ error: 0, ...yardState, completed, report, playerlevel }`, the last
+ *    the player's level from their main save (the yard HUD's, #192).
  *
  * Any `ClientSafeError` thrown along the way rolls the transaction back — the
  * catch-up included, so a refused action writes nothing — and answers in the
@@ -460,7 +462,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       save.savetime = now;
 
       await tx.flush();
-      return { save, now, completed, report: outcome.report };
+      return { save, now, completed, report: outcome.report, playerlevel: playerLevelOf(yard.main) };
     });
 
     return {
@@ -470,6 +472,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         ...yardState(answer.save, answer.now, isShinyLocked(user)),
         completed: answer.completed,
         report: answer.report,
+        playerlevel: answer.playerlevel,
       },
     };
   } catch (err) {

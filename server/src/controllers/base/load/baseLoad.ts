@@ -399,6 +399,9 @@ export const baseLoad: KoaController = async (ctx) => {
     chatservers: [process.env.CHAT_WS_HOST!],
     ...(isAttack && { attpowerups }),
     ...(attackerLevel !== undefined && { attackerlevel: attackerLevel }),
+    // The player's own level for the yard HUD (#192): their main save's, on
+    // an outpost too, as the map shows it (`userCell.ts`).
+    ...(isOwner && !isInferno && { playerlevel: playerLevelOf(user.save!) }),
     ...(cellHeight !== undefined && { cellheight: cellHeight }),
     ...(defenderForces && { defenderforces: defenderForces }),
     ...(completed && { completed }),

@@ -310,6 +310,13 @@ describe("the one pool", () => {
     expect(answer.body.workers).toEqual({ total: 1, busy: 0 });
   });
 
+  test("the player level is the main yard's, not the outpost's (#192)", async () => {
+    db.rows.set(MAIN, mainRow({ points: "3500", basevalue: "0" }));
+    db.rows.set(OUTPOST, outpostRow({ points: "900000" }));
+
+    expect((await onOutpost(yardStateAction)).body.playerlevel).toBe(3);
+  });
+
   test("a refund lands in the main pool under the main cap", async () => {
     await onOutpost(yardUpgradeAction, { id: 3 });
     const step = stepOf(20, 1);
