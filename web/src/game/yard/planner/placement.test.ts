@@ -113,7 +113,7 @@ describe("inBounds", () => {
 describe("Occupancy", () => {
   it("reports an empty grid as free", () => {
     const grid = new Occupancy();
-    expect(grid.blockedBy(node({ id: 1 }), 0, 0)).toBe(0);
+    expect(grid.blockedBy(node({ id: 1 }), 0, 0)).toBeNull();
   });
 
   it("finds the building holding the cells", () => {
@@ -126,7 +126,7 @@ describe("Occupancy", () => {
     const grid = new Occupancy();
     grid.stamp(wall(1, 0, 0));
     // The walls are 20 wide, so 20 clears and 15 shares one column of cells.
-    expect(grid.blockedBy(wall(2, 20, 0), 20, 0)).toBe(0);
+    expect(grid.blockedBy(wall(2, 20, 0), 20, 0)).toBeNull();
     expect(grid.blockedBy(wall(2, 15, 0), 15, 0)).toBe(1);
   });
 
@@ -135,7 +135,7 @@ describe("Occupancy", () => {
     const tower = node({ id: 5 });
     grid.stamp(tower);
     grid.erase(tower);
-    expect(grid.blockedBy(node({ id: 6 }), 0, 0)).toBe(0);
+    expect(grid.blockedBy(node({ id: 6 }), 0, 0)).toBeNull();
   });
 
   it("holds a decoration sitting outside the plot", () => {
@@ -149,7 +149,23 @@ describe("Occupancy", () => {
     const grid = new Occupancy();
     const far = node({ id: 3, x: 20_000, y: 20_000 });
     expect(() => grid.stamp(far)).not.toThrow();
-    expect(grid.blockedBy(node({ id: 4 }), 0, 0)).toBe(0);
+    expect(grid.blockedBy(node({ id: 4 }), 0, 0)).toBeNull();
+  });
+
+  // #212: the owner's Town Hall is building 0, and "blocked by 0" used to
+  // read the same as "free".
+  it("names building 0 as the blocker, not as free ground", () => {
+    const grid = new Occupancy();
+    grid.stamp(node({ id: 0, type: 14, x: -65, y: -65, width: 130, height: 130 }));
+    expect(grid.blockedBy(node({ id: 1, type: 115 }), -30, -30)).toBe(0);
+    expect(grid.blockedBy(node({ id: 1, type: 115 }), 65, -30)).toBeNull();
+  });
+
+  it("reports building 0 as the one a stamp landed on", () => {
+    const grid = new Occupancy();
+    grid.stamp(node({ id: 0 }));
+    expect(grid.stamp(node({ id: 1 }))).toBe(0);
+    expect(grid.stamp(node({ id: 2, x: 200 }))).toBeNull();
   });
 
   it("covers every cell of a footprint, not just its corners", () => {
@@ -237,6 +253,17 @@ describe("validatePlan", () => {
     const result = validatePlan(nodes, plot);
     expect(result.valid).toBe(false);
     expect(result.issues).toContainEqual({ id: 2, reason: InvalidReason.OVERLAP, otherId: 1 });
+  });
+
+  it("finds an overlap with building 0 whichever of the pair comes first (#212)", () => {
+    const hall = node({ id: 0, type: 14, x: -65, y: -65, width: 130, height: 130 });
+    const tower = node({ id: 1, type: 115, x: -35, y: -35 });
+    expect(validatePlan([hall, tower], plot).issues).toEqual([
+      { id: 1, reason: InvalidReason.OVERLAP, otherId: 0 },
+    ]);
+    expect(validatePlan([tower, hall], plot).issues).toEqual([
+      { id: 0, reason: InvalidReason.OVERLAP, otherId: 1 },
+    ]);
   });
 
   it("finds a building outside the plot", () => {

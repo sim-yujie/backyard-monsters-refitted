@@ -275,7 +275,7 @@ export class Plan {
     const node = this.nodes.get(id);
     if (!node || !node.stored) return null;
     if (!inBounds(node, x, y, this.plot)) return null;
-    if (this.occupancy.blockedBy(node, x, y)) return null;
+    if (this.occupancy.blockedBy(node, x, y) !== null) return null;
 
     const entry: StoreEntry = { id, x, y, store: false };
     this.setStored([entry], false);
@@ -712,7 +712,7 @@ export class Plan {
       return { reason: PlaceBlock.BOUNDS, blockedBy: null };
     }
     const other = this.occupancy.blockedBy(probe, x, y);
-    if (other) return { reason: PlaceBlock.OCCUPIED, blockedBy: other };
+    if (other !== null) return { reason: PlaceBlock.OCCUPIED, blockedBy: other };
     return FREE;
   }
 

@@ -190,7 +190,7 @@ export const planLoad = (plan: Plan, layout: Layout): LoadResult => {
       grid.stamp(node);
       continue;
     }
-    if (grid.blockedBy(node, x, y)) {
+    if (grid.blockedBy(node, x, y) !== null) {
       didNotFit.push({ id: node.id, type: node.type, reason: MissReason.BLOCKED });
       grid.stamp(node);
       continue;

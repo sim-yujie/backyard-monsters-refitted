@@ -544,9 +544,7 @@ export class PlannerSession {
     this.placing = { id: node.id, x, y, ok: check.reason === null };
     this.dragInvalid = check.reason !== null;
     this.faulted =
-      check.blockedBy === null || check.blockedBy === 0
-        ? new Set<number>()
-        : new Set<number>([check.blockedBy]);
+      check.blockedBy === null ? new Set<number>() : new Set<number>([check.blockedBy]);
     this.view.ghost(node.id, x, y);
   }
 

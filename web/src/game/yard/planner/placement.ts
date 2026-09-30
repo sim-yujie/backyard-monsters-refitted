@@ -219,6 +219,11 @@ export const inBounds = (node: PlanNode, x: number, y: number, plot: PlotBounds)
 /**
  * The 5-unit occupancy bitmap, holding `id + 1` per cell so 0 reads as empty.
  *
+ * Its answers are ids or `null`, never "0 for none": a save can hold a
+ * building 0 — the owner's Town Hall is one — and an answer of 0 read as
+ * "nothing there" let anything be dropped onto it (#212). The Flash grid kept a
+ * bare blocked bit per cell (`GRID.as:25-49`), so it never had the question.
+ *
  * Cells are addressed from the decoration area's top-left corner rather than
  * the plot's, so the same array serves a building and a decoration that has
  * wandered outside the fence, and expanding the yard does not reallocate it.
@@ -231,8 +236,8 @@ export class Occupancy {
     this.cells.fill(0);
   }
 
-  /** Writes a node's footprint in. Returns an id already there, or 0. */
-  stamp(node: PlanNode, x = node.x, y = node.y): number {
+  /** Writes a node's footprint in. Returns an id already there, or null. */
+  stamp(node: PlanNode, x = node.x, y = node.y): number | null {
     return this.walk(node, x, y, node.id + 1);
   }
 
@@ -241,8 +246,8 @@ export class Occupancy {
     this.walk(node, x, y, 0);
   }
 
-  /** The id of the first node blocking this placement, or 0 for none. */
-  blockedBy(node: PlanNode, x: number, y: number): number {
+  /** The id of the first node blocking this placement, or null for none. */
+  blockedBy(node: PlanNode, x: number, y: number): number | null {
     const first = this.firstCell(x, y);
     const columns = Math.ceil(node.width / GRID_STEP);
     const rows = Math.ceil(node.height / GRID_STEP);
@@ -260,11 +265,11 @@ export class Occupancy {
         if (occupant) return occupant - 1;
       }
     }
-    return 0;
+    return null;
   }
 
   /** Writes `value` over a footprint; returns the first occupant displaced. */
-  private walk(node: PlanNode, x: number, y: number, value: number): number {
+  private walk(node: PlanNode, x: number, y: number, value: number): number | null {
     const first = this.firstCell(x, y);
     const columns = Math.ceil(node.width / GRID_STEP);
     const rows = Math.ceil(node.height / GRID_STEP);
@@ -283,7 +288,7 @@ export class Occupancy {
         this.cells[slot] = value;
       }
     }
-    return displaced === 0 ? 0 : displaced - 1;
+    return displaced === 0 ? null : displaced - 1;
   }
 
   private firstCell(x: number, y: number): { cx: number; cy: number } {
@@ -321,7 +326,7 @@ export const validateOffset = (
       continue;
     }
     const other = occupancy.blockedBy(node, x, y);
-    if (other) issues.push({ id: node.id, reason: InvalidReason.OVERLAP, otherId: other });
+    if (other !== null) issues.push({ id: node.id, reason: InvalidReason.OVERLAP, otherId: other });
   }
 
   return issues.length === 0 ? VALID : { valid: false, issues };
@@ -362,7 +367,7 @@ export const validateTargets = (
       continue;
     }
     const other = occupancy.blockedBy(node, to.x, to.y);
-    if (other) {
+    if (other !== null) {
       issues.push({ id: node.id, reason: InvalidReason.OVERLAP, otherId: other });
       continue;
     }
@@ -396,7 +401,7 @@ export const validatePlan = (
       // of one that is not, and the player needs to see both problems.
     }
     const other = into.stamp(node);
-    if (other) issues.push({ id: node.id, reason: InvalidReason.OVERLAP, otherId: other });
+    if (other !== null) issues.push({ id: node.id, reason: InvalidReason.OVERLAP, otherId: other });
   }
 
   return issues.length === 0 ? VALID : { valid: false, issues };

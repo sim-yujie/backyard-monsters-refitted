@@ -38,12 +38,10 @@ import type { Yard } from "./yardModel";
 const DRAG_SLOP = 6;
 
 /**
- * The grid's own ids. The occupancy bitmap reads 0 as empty, so a building is
- * stamped one above its id (a save may hold a building 0); mushrooms and drops
- * still waiting for an answer get ranges no building reaches, so a collision
- * can say which it was.
+ * The grid's own ids. A building is stamped under its own id; mushrooms and
+ * drops still waiting for an answer get ranges no building reaches, so a
+ * collision can say which it was.
  */
-const BUILDING_ID_SHIFT = 1;
 const MUSHROOM_ID_BASE = 1_000_000_000;
 const PENDING_ID_BASE = 1_500_000_000;
 
@@ -102,9 +100,7 @@ export class PlacementGrid {
     this.plot = plotBounds(yard.expansionLevel);
     this.occupancy.clear();
     for (const building of yard.buildings) {
-      this.occupancy.stamp(
-        nodeOf(building.id + BUILDING_ID_SHIFT, building.type, building.x, building.y),
-      );
+      this.occupancy.stamp(nodeOf(building.id, building.type, building.x, building.y));
     }
     yard.mushrooms.forEach((mushroom, index) => {
       this.occupancy.stamp(nodeOf(MUSHROOM_ID_BASE + index, 7, mushroom.x, mushroom.y));
@@ -128,10 +124,10 @@ export class PlacementGrid {
       return { x, y, problem: "outOfBounds", blockedBy: null };
     }
     const other = this.occupancy.blockedBy(node, x, y);
-    if (!other) return { x, y, problem: null, blockedBy: null };
+    if (other === null) return { x, y, problem: null, blockedBy: null };
     if (other >= PENDING_ID_BASE) return { x, y, problem: "overlap", blockedBy: null };
     if (other >= MUSHROOM_ID_BASE) return { x, y, problem: "mushroom", blockedBy: null };
-    return { x, y, problem: "overlap", blockedBy: other - BUILDING_ID_SHIFT };
+    return { x, y, problem: "overlap", blockedBy: other };
   }
 
   /** The name of the building a spot collides with, for the hint. */
