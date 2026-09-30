@@ -151,7 +151,7 @@ export class LoginScene implements Scene {
     this.wrapper = document.createElement("div");
     this.wrapper.className = "scene-centre";
 
-    this.panel = new Panel({ title: "Sign in", closable: false });
+    this.panel = new Panel({ title: "Sign in", closable: false, className: "panel--login" });
 
     this.wrapper.append(this.panel.element);
     context.overlay.content.append(this.wrapper);

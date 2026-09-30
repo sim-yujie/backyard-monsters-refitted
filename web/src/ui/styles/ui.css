@@ -238,10 +238,16 @@ body {
   box-shadow: var(--focus-ring);
 }
 
+/* Takes no room until there is something to say, so an empty one leaves no
+   gap above the button (issue #213). */
 .form-error {
-  min-height: var(--space-5);
+  margin: 0;
   color: var(--colour-danger);
   font-size: var(--text-sm);
+}
+
+.form-error:empty {
+  display: none;
 }
 
 /* The line under a field: what it asks for, then what is wrong with it or
@@ -1017,6 +1023,13 @@ body {
 
 .login-form__switch-button {
   flex: 1 1 auto;
+}
+
+/* The sign-in and sign-up panel may use nearly the whole screen height, so
+   the sign-up form (four fields, the bot check, the terms line) fits without
+   scrolling inside the panel on an 800 px tall screen (issue #213). */
+.panel--login .panel__body {
+  max-height: min(88vh, 760px);
 }
 
 /* The Terms, Privacy and age line under Create account (issue #213). */
