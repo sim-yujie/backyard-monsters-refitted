@@ -186,7 +186,8 @@ describe("an accepted truce, while it runs, refuses an attack either way", () =>
 describe("a truce that does not bind refuses nothing", () => {
   test.each([
     ["a request still waiting", truce("requested")],
-    ["a rejected request", truce("rejected")],
+    // A rejection keeps the proposer's 2-day wait in expires_at, which is no truce.
+    ["a rejected request, its proposer's wait still running", truce("rejected", { expires_at: now() + 2 * DAY })],
   ])("%s", async (_what, row) => {
     tables.get(Truce)!.push(row);
 

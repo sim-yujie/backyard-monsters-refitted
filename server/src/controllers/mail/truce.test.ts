@@ -56,6 +56,7 @@ const { requestTruce } = await import("./requestTruce.js");
 const { sendMessage } = await import("./sendMessage.js");
 const { getMessageThreads } = await import("./getMessageThreads.js");
 const { getTruces } = await import("../../services/maproom/getTruces.js");
+const { isTruceActive } = await import("../../services/mail/isTruceActive.js");
 const { TRUCE_DURATION, TRUCE_REQUEST_LIFETIME, TRUCE_RETRY_AFTER_REJECTION } = await import("../../services/mail/truceRules.js");
 
 const user = (userid: number) => table({ name: "User" } as Entity).find((row) => row.userid === userid)!;
@@ -272,5 +273,25 @@ describe("what the thread list and the map say", () => {
     await send(ALICE, threadid, "truceaccept");
 
     expect((await getTruces(ALICE, [BOB])).get(BOB)?.expires_at).toBe(truces()[1]!.expires_at as number);
+  });
+
+  test("a rejection's future expires_at (the proposer's wait) is no truce, on the map or anywhere", async () => {
+    const { threadid } = (await request(ALICE, BOB_MAIN)) as { threadid: number };
+    await send(BOB, threadid, "trucereject");
+    expect(truces()[0]!.expires_at as number).toBeGreaterThan(now());
+
+    // No cell `t` either way.
+    expect((await getTruces(ALICE, [BOB])).has(BOB)).toBe(false);
+    expect((await getTruces(BOB, [ALICE])).has(ALICE)).toBe(false);
+    // Not the attack load's active truce.
+    expect(await isTruceActive(ALICE, BOB)).toBe(false);
+    expect(await isTruceActive(BOB, ALICE)).toBe(false);
+    // The thread list gives it as rejected, with the wait's end, not as a running truce.
+    const listedForAlice = (await run(getMessageThreads, ALICE, {})).threads as Record<string, Row>;
+    expect(listedForAlice[threadid]).toMatchObject({ trucestate: "rejected", truceexpire: truces()[0]!.expires_at });
+    // Not a live truce for the pair: the other player may ask at once, and that request can be accepted.
+    const { threadid: again } = (await request(BOB, "2000241207")) as { threadid: number };
+    await send(ALICE, again, "truceaccept");
+    expect(truces()[1]).toMatchObject({ status: "accepted" });
   });
 });
