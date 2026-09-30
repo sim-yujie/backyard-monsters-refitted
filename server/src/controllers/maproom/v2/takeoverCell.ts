@@ -23,6 +23,7 @@ import {
 import { TakeoverCellSchema } from "../../../schemas/TakeoverCellSchema.js";
 import { shinyLockedErr, takeoverRefusedErr } from "../../../errors/errors.js";
 import { isShinyLocked } from "../../../services/user/shinyLock.js";
+import { voidOutpostInvites } from "../../../services/mail/inviteRules.js";
 import { quoteTakeover } from "../../../services/maproom/v2/takeoverCost.js";
 import { takeoverRefusal } from "../../../services/maproom/v2/takeoverRules.js";
 import { holdsTakeoverGrant } from "../../../services/maproom/v2/takeoverGrant.js";
@@ -155,6 +156,9 @@ export const takeoverCell: KoaController = async (ctx) => {
 
       if (previousOwner.buildingresources)
         delete previousOwner.buildingresources[`b${baseid}`];
+
+      // Its previous owner's invitation to move onto it (#205) is void.
+      await voidOutpostInvites(em, baseid);
 
       em.persist(previousOwner);
 

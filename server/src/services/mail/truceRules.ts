@@ -69,7 +69,7 @@ export const findLiveTruce = (userId: number, otherId: number, now: number) =>
   postgres.em.findOne(Truce, { $and: [betweenFilter(userId, otherId), liveTruceFilter(now)] });
 
 /** A span of time, rounded up, roughly: "1 day 23 h", "5 h", "12 min". */
-const spanText = (seconds: number) => {
+export const spanText = (seconds: number) => {
   const totalHours = Math.ceil(seconds / 3_600);
   const days = Math.floor(totalHours / 24);
   const hours = totalHours % 24;

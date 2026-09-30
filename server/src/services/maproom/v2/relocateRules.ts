@@ -134,26 +134,41 @@ export type RelocateCharge =
   | { ok: true; credits: number; resources: JsonObject }
   | { ok: false; reason: "notEnoughShiny" | "notEnoughResources" };
 
+/** What a move costs: this much Shiny, or this much of each resource. */
+export interface RelocatePrice {
+  shiny: number;
+  resources: number;
+}
+
+/** Moving onto one's own outpost (`PopupRelocateMe.as:65-66`). */
+export const RELOCATE_PRICE: RelocatePrice = { shiny: RELOCATE_SHINY_COST, resources: RELOCATE_RESOURCE_COST };
+
 /**
  * Charges the relocation at the server's price, whatever the client posted.
  *
  * @param {RelocatePurse} purse - The caller's credits and main resource pool.
  * @param {RelocatePayment} payment - Shiny or resources.
+ * @param {RelocatePrice} price - Moving onto one's own outpost unless given; an
+ *   invitation to move has its own (`inviteRules.ts`, #205).
  * @returns {RelocateCharge} The purse after paying, or why it cannot pay.
  */
-export const chargeRelocation = (purse: RelocatePurse, payment: RelocatePayment): RelocateCharge => {
+export const chargeRelocation = (
+  purse: RelocatePurse,
+  payment: RelocatePayment,
+  price: RelocatePrice = RELOCATE_PRICE
+): RelocateCharge => {
   const resources: JsonObject = { ...(purse.resources ?? {}) };
 
   if (payment === "shiny") {
-    if (!(purse.credits >= RELOCATE_SHINY_COST)) return { ok: false, reason: "notEnoughShiny" };
+    if (!(purse.credits >= price.shiny)) return { ok: false, reason: "notEnoughShiny" };
 
-    return { ok: true, credits: purse.credits - RELOCATE_SHINY_COST, resources };
+    return { ok: true, credits: purse.credits - price.shiny, resources };
   }
 
-  if (RESOURCE_KEYS.some((key) => !(Number(resources[key] ?? 0) >= RELOCATE_RESOURCE_COST)))
+  if (RESOURCE_KEYS.some((key) => !(Number(resources[key] ?? 0) >= price.resources)))
     return { ok: false, reason: "notEnoughResources" };
 
-  for (const key of RESOURCE_KEYS) resources[key] = Number(resources[key]) - RELOCATE_RESOURCE_COST;
+  for (const key of RESOURCE_KEYS) resources[key] = Number(resources[key]) - price.resources;
 
   return { ok: true, credits: purse.credits, resources };
 };

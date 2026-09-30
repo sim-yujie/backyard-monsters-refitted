@@ -13,8 +13,8 @@ import { MapRoomCell, MapRoomVersion } from "../../../enums/MapRoom.js";
 import { relocateRefusedErr, shinyLockedErr } from "../../../errors/errors.js";
 import { MigrateBaseSchema } from "../../../schemas/MigrateBaseSchema.js";
 import { isShinyLocked } from "../../../services/user/shinyLock.js";
-import { isAttackActive } from "../../../services/base/isAttackActive.js";
-import { readAttackSession } from "../../../services/base/attackSessionStore.js";
+import { yardUnderAttack } from "../../../services/base/yardUnderAttack.js";
+import { voidOutpostInvites } from "../../../services/mail/inviteRules.js";
 import {
   RELOCATE_COOLDOWN,
   chargeRelocation,
@@ -53,9 +53,6 @@ import { catchUpLockedYard } from "../../yard/yardAction.js";
  * @param {Object} ctx - The Koa context object
  * @returns {Promise<void>} A promise that resolves once the base migration is complete.
  */
-/** Whether an attack is running on a yard: its own record, or a live attack session. */
-const yardUnderAttack = async (yard: Save): Promise<boolean> =>
-  isAttackActive(yard) || (await readAttackSession(yard.basesaveid)) !== null;
 
 export const migrateBase: KoaController = async (ctx) => {
   const { baseid, shiny, type } = MigrateBaseSchema.parse(ctx.request.body);
@@ -191,6 +188,9 @@ export const migrateBase: KoaController = async (ctx) => {
     save.outposts = save.outposts.filter(([, , id]) => String(id) !== String(outpostSave.baseid));
 
     if (save.buildingresources) delete save.buildingresources[`b${outpostSave.baseid}`];
+
+    // An invitation to move onto this outpost (#205) is void with it.
+    await voidOutpostInvites(em, outpostSave.baseid);
 
     em.persist([homeCell, save]);
     em.remove([outpostSave, outpostCell]);

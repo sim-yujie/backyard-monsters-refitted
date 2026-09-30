@@ -39,6 +39,7 @@ import { baseSave } from "./controllers/base/save/baseSave.js";
 import { updateSaved } from "./controllers/base/save/updateSaved.js";
 import { attackCheckpoint } from "./controllers/base/attackCheckpoint.js";
 import { migrateBase } from "./controllers/maproom/v2/migrateBase.js";
+import { migrateToFriend, rejectMigrateToFriend } from "./controllers/maproom/v2/migrateToFriend.js";
 
 import { getNewMap } from "./controllers/maproom/getNewMap.js";
 import { setMapVersion } from "./controllers/maproom/setMapVersion.js";
@@ -134,6 +135,9 @@ router.post("/base/load", verifyUserAuth, logRequest, baseLoad);
 router.post("/base/save", verifyUserAuth, logRequest, baseSave);
 router.post("/base/updatesaved", verifyUserAuth, logRequest, updateSaved);
 router.post("/base/migrate", verifyUserAuth, verifyAccountStatus, logRequest, migrateBase);
+// An invitation to move onto another player's outpost, answered (#205; Flash's `MapRoom.as:263`, `:337`).
+router.post("/base/migratetofriend", verifyUserAuth, verifyAccountStatus, logRequest, migrateToFriend);
+router.post("/base/rejectmigratetofriend", verifyUserAuth, verifyAccountStatus, logRequest, rejectMigrateToFriend);
 // Every few seconds during a web attack, so it is not echoed by logRequest (issue #138).
 router.post("/base/checkpoint", verifyUserAuth, attackCheckpoint);
 

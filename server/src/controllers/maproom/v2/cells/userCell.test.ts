@@ -58,3 +58,27 @@ describe("userCell protection end (#187)", () => {
     expect(await userCell(ctx, outpostWith(0, now() - 60), owners)).toMatchObject({ dm: 0, d: 0 });
   });
 });
+
+describe("userCell invitation pending (#205)", () => {
+  const OUTPOST = "2000240208";
+  const withInvite = {
+    authUser: { userid: OWNER, save: { basesaveid: 1 } },
+    state: { lastSeen: new Map(), truces: new Map(), pendingInvites: new Map([[OUTPOST, 41]]) },
+  } as unknown as Context;
+  const own = new Map() as unknown as Parameters<typeof userCell>[2];
+  // No basesaveid on the save: the owner's own monsters are then the stored ones, with no database read.
+  const cellOwnedBy = (base_type: number) =>
+    ({ ...outpostWith(0, 0), base_type }) as unknown as Parameters<typeof userCell>[1];
+
+  test("the owner's own outpost carries the thread of its invitation still waiting", async () => {
+    (withInvite.authUser as unknown as { save: object }).save = { basesaveid: 1, points: "0", basevalue: "0" };
+    expect(await userCell(withInvite, cellOwnedBy(3), own)).toMatchObject({ pi: 41 });
+  });
+
+  test("nobody else sees it, and a main yard never has one", async () => {
+    expect(await userCell({ ...ctx, state: withInvite.state } as unknown as Context, outpostWith(0, 0), owners)).toMatchObject({
+      pi: 0,
+    });
+    expect(await userCell(withInvite, cellOwnedBy(2), own)).toMatchObject({ pi: 0 });
+  });
+});

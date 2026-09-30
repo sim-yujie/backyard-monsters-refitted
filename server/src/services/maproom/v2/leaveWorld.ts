@@ -9,6 +9,7 @@ import { World } from "../../../database/models/world.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres } from "../../../server.js";
 import { getDefenderCoords } from "../v3/getDefenderCoords.js";
+import { voidInvitesFrom } from "../../mail/inviteRules.js";
 
 /**
  * Removes a user from their current Map Room world, cleaning up all associated data atomically.
@@ -90,6 +91,8 @@ export const leaveWorld = async (user: User, save: Save) => {
       });
     }
 
+    // Invitations to move onto these outposts (#205) are void with them.
+    await voidInvitesFrom(em, userid);
     await em.nativeDelete(Save, { userid, type: BaseType.OUTPOST });
     await em.nativeDelete(WorldMapCell, { uid: userid });
 

@@ -9,6 +9,10 @@ import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
 import { logger } from "../../utils/logger.js";
 import { Truce } from "../../database/models/truce.model.js";
 import { truceEndsAt } from "../../services/mail/truceRules.js";
+import { Message } from "../../database/models/message.model.js";
+import { MessageType } from "../../enums/MessageType.js";
+import { findInviteOutposts, inviteFields } from "../../services/mail/inviteRules.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 
 /**
  * Controller to get threads for mailbox.
@@ -16,7 +20,9 @@ import { truceEndsAt } from "../../services/mail/truceRules.js";
  * Retrieves message threads for the authenticated user.
  * Populates the last message in each thread and formats the response.
  * A thread with a truce says when it ends (`truceexpire`, #203): the accepted
- * truce's expiry, or when a waiting request lapses.
+ * truce's expiry, or when a waiting request lapses. A thread with an
+ * invitation to move says where its latest stands and when it lapses
+ * (`migratestate`, `migrateexpire`, #205), lapse and void included.
  *
  * @param {Context} ctx - The Koa context object, which includes the request body.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
@@ -46,6 +52,22 @@ export const getMessageThreads: KoaController = async (ctx) => {
     const truces = truceIds.length ? await postgres.em.find(Truce, { id: { $in: truceIds } }) : [];
     const trucesById = new Map(truces.map((truce) => [truce.id, truce]));
 
+    // Each thread's latest invitation to move (#205), and its outpost as it is now.
+    const threadIds = filteredThreads.map((thread) => thread.threadid);
+    const invites = threadIds.length
+      ? await postgres.em.find(
+          Message,
+          { threadid: { $in: threadIds }, messagetype: MessageType.MIGRATE_REQUEST },
+          { orderBy: { updatetime: "ASC", createdAt: "ASC" } }
+        )
+      : [];
+    const inviteOutposts = await findInviteOutposts(postgres.em, invites.map((invite) => invite.baseid));
+    const now = getCurrentDateTime();
+    // Read before the last messages' `userid` is rewritten below: an invitation may be one of them.
+    const inviteByThread = new Map(
+      invites.map((invite) => [invite.threadid, inviteFields(invite, inviteOutposts, now)])
+    );
+
     const threadMessages = filteredThreads.flatMap((thread, index) => {
       if (!thread.lastMessage) return [];
 
@@ -67,10 +89,13 @@ export const getMessageThreads: KoaController = async (ctx) => {
     });
 
     const threadsList = Object.fromEntries(
-      threadMessages.map((message) => [
-        message.threadid,
-        FilterFrontendKeys(message),
-      ])
+      threadMessages.map((message) => {
+        const invite = inviteByThread.get(message.threadid);
+        return [
+          message.threadid,
+          { ...FilterFrontendKeys(message), ...invite },
+        ];
+      })
     );
 
     ctx.status = Status.OK;

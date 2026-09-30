@@ -25,6 +25,8 @@ let mainSave: Row;
 let homeCell: Row;
 let cells: Row[];
 let removed: Row[];
+/** Outposts whose invitations to move were voided (#205). */
+let voided: string[];
 let flushed: number;
 let sessions: Set<number>;
 
@@ -64,6 +66,10 @@ const txEm = {
   find: async (_entity: unknown, where: Row) => cells.filter((cell) => cell.baseid === where.baseid),
   persist: () => {},
   remove: (rows: Row[]) => removed.push(...rows),
+  nativeUpdate: async (_entity: unknown, where: Row) => {
+    voided.push(where.baseid as string);
+    return 0;
+  },
   flush: async () => {
     flushed += 1;
   },
@@ -151,6 +157,7 @@ beforeEach(() => {
     outpostCell(CAMP, 0, { base_type: 1, type: "tribe", x: 242, basesaveid: 904 }),
   ];
   removed = [];
+  voided = [];
   flushed = 0;
   sessions = new Set();
   lockedRows = [];
@@ -159,6 +166,7 @@ beforeEach(() => {
 const untouched = () => {
   expect(flushed).toBe(0);
   expect(removed).toEqual([]);
+  expect(voided).toEqual([]);
   expect(mainSave.credits).toBe(2000);
   expect(resources().r1).toBe(40_000_000);
   expect(homeCell.x).toBe(241);
@@ -178,6 +186,8 @@ describe("migrateBase, type=outpost", () => {
     expect(mainSave.cantmovetill as number).toBeGreaterThan(Date.now() / 1000);
     expect(removed.map((row) => row.baseid)).toEqual([MY_OUTPOST, MY_OUTPOST]);
     expect(flushed).toBe(1);
+    // An invitation to move onto it is void with it (#205).
+    expect(voided).toEqual([MY_OUTPOST]);
   });
 
   test("happy path: Shiny, 1,500 taken whatever amount was posted", async () => {

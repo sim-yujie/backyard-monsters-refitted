@@ -95,9 +95,10 @@ export const takenNoticeText = (taker: string, cell: OutpostCell): { subject: st
 export interface OutpostNoticeInput {
   /** The outpost's owner, who is told. */
   readonly ownerId: number;
-  /** The attacker or taker: never told, and never the owner. */
+  /** The attacker, the taker, or the player who answered an invitation: never told, and never the owner. */
   readonly byUserId: number;
-  readonly type: typeof OUTPOST_ATTACKED | typeof OUTPOST_TAKEN;
+  /** `outpostattacked`, `outposttaken`, or an invitation's answer (`inviteaccepted`, `invitedeclined`, #205). */
+  readonly type: string;
   readonly text: { subject: string; message: string };
   readonly cell: OutpostCell;
   readonly baseid: string;

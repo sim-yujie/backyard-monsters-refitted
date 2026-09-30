@@ -12,6 +12,8 @@ import { findOrCreateThread } from "../../services/mail/findOrCreateThread.js";
 import { countUnreadMessage } from "../../services/mail/countUnreadMessage.js";
 import { handleTruceRequest } from "../../services/mail/handleTruceRequest.js";
 import { handleTruceResponse } from "../../services/mail/handleTruceResponse.js";
+import { handleInviteRequest, type InviteMessageFields } from "../../services/mail/handleInviteRequest.js";
+import { handleInviteRevoke } from "../../services/mail/handleInviteRevoke.js";
 import { mailboxErr } from "../../errors/errors.js";
 import { logger } from "../../utils/logger.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
@@ -26,7 +28,10 @@ import { ClientSafeError } from "../../middleware/clientSafeError.js";
  *
  * For trucerequest: creates a Truce record and links it to the thread.
  * For truceaccept/trucereject: updates the Truce record and thread state.
- * A truce refusal (a truce already waiting or running, a request no longer open)
+ * For migraterequest: an invitation to move onto the sender's outpost `baseid`
+ * (#205), checked (`handleInviteRequest`) and stored on the message itself.
+ * For migraterevoke: withdraws the thread's invitation, and says so in it.
+ * A truce or invitation refusal (one already waiting, a request no longer open)
  * keeps its own error rather than the generic mailbox one.
  *
  * @param {Context} ctx - The Koa context object, which includes the request body.
@@ -77,6 +82,9 @@ export const sendMessage: KoaController = async (ctx) => {
       return;
     }
 
+    // An invitation's outpost and where it is (#205), stored on its message.
+    let invite: InviteMessageFields | null = null;
+
     switch (message.type) {
       case MessageType.TRUCE_REQUEST: {
         // Asked too soon after a rejection (#203): the soft refusal says when they may ask again.
@@ -96,6 +104,21 @@ export const sendMessage: KoaController = async (ctx) => {
       case MessageType.TRUCE_REJECT:
         await handleTruceResponse(userid, thread, TruceStatus.REJECTED);
         break;
+
+      case MessageType.MIGRATE_REQUEST: {
+        const outcome = await handleInviteRequest(userid, messageTargetId, message.baseid, getCurrentDateTime());
+        if ("refusal" in outcome) {
+          ctx.status = Status.OK;
+          ctx.body = outcome.refusal;
+          return;
+        }
+        invite = outcome.fields;
+        break;
+      }
+
+      case MessageType.MIGRATE_REVOKE:
+        await handleInviteRevoke(userid, thread, getCurrentDateTime());
+        break;
     }
 
     const newMessage = postgres.em.create(Message, {
@@ -108,6 +131,7 @@ export const sendMessage: KoaController = async (ctx) => {
       subject: filteredSubject,
       message: filteredMessage,
       updatetime: getCurrentDateTime(),
+      ...invite,
     });
 
     thread.messagecount++;

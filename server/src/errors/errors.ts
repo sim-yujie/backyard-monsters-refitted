@@ -234,6 +234,24 @@ export const truceClosedErr = () =>
     isClientFriendly: true,
   });
 
+/** A second invitation to move onto an outpost while one waits (#205; Flash's `mailbox_invitepending`). */
+export const inviteExistsErr = () =>
+  new ClientSafeError({
+    message: "Invitation already pending. An outpost can have one invitation waiting at a time.",
+    status: Status.CONFLICT,
+    data: {},
+    isClientFriendly: true,
+  });
+
+/** An answer to an invitation to move that was answered, withdrawn, has lapsed, or is void (#205). */
+export const inviteClosedErr = () =>
+  new ClientSafeError({
+    message: "This invitation can no longer be answered.",
+    status: Status.CONFLICT,
+    data: {},
+    isClientFriendly: true,
+  });
+
 export const shinyLockedErr = () =>
   new ClientSafeError({
     message: "Shiny is turned off on your account, so it cannot be spent. You can turn it back on from your account page in the launcher.",
