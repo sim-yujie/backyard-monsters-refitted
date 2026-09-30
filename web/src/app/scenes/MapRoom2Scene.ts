@@ -37,6 +37,7 @@ import {
   type AttackRoster,
   type AttackTarget,
 } from "@/game/attack/attackTarget";
+import { storageCapOf } from "@/game/attack/attackerStorage";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
 import {
@@ -69,6 +70,7 @@ import { MapInput } from "@/game/maproom/MapInput";
 import { MapRenderer } from "@/game/maproom/MapRenderer";
 import { ZoneStore, type ZoneError } from "@/game/maproom/ZoneStore";
 import { inWorld, type CellRange } from "@/game/maproom/zones";
+import { IncomePrediction, overdriveEndOf } from "@/game/yard/outpostIncome";
 import {
   MAIN_YARD_TITLE,
   outpostTitle,
@@ -120,7 +122,7 @@ export class MapRoom2Scene implements Scene {
 
   private readonly store = new ZoneStore({
     onZone: (zone) => this.renderer.applyZone(zone),
-    onResources: (resources, credits) => this.showResources(resources, credits),
+    onResources: (resources, credits) => this.syncPool(resources, credits),
     onError: (error) => this.reportError(error),
     onAuthFailure: () => this.context?.goTo(SceneName.LOGIN),
   });
@@ -169,6 +171,14 @@ export class MapRoom2Scene implements Scene {
   /** The pool the HUD shows, so a takeover can take its price off at once. */
   private resources: Resources | null = null;
   private credits: number | undefined;
+  /**
+   * The outpost income the HUD adds between the load and the map's resource
+   * syncs, neither of which pays it (#207), with the cap it fills to and the
+   * server's clock less the browser's.
+   */
+  private income: IncomePrediction | null = null;
+  private incomeCap = 0;
+  private clockOffset = 0;
   /**
    * Where the map should open instead of the home cell: the target of the
    * attack just finished, or the outpost just taken over (`mapFocus.ts`).
@@ -402,6 +412,7 @@ export class MapRoom2Scene implements Scene {
     if (this.sinceUiTick >= UI_TICK_SECONDS) {
       this.sinceUiTick = 0;
       this.refreshUi();
+      this.tickIncome();
     }
 
     // Exponential moving average: one slow frame should show, but not dominate.
@@ -420,6 +431,9 @@ export class MapRoom2Scene implements Scene {
       // The load that chose this map, when there was one (issue #162).
       const base = takePrimedOwnYard() ?? (await loadOwnYard());
       this.ownSave = base;
+      this.income = new IncomePrediction(base.buildingresources, base.resources);
+      this.incomeCap = storageCapOf(base);
+      this.clockOffset = base.currenttime - Date.now() / 1000;
       this.mail?.setSaveUnread(base.unreadmessages);
 
       const home = base.homebase;
@@ -492,6 +506,26 @@ export class MapRoom2Scene implements Scene {
     if (!focus || !inWorld(focus.cell.col, focus.cell.row)) return;
     this.jumpTo(focus.cell, DEFAULT_ZOOM);
     if (focus.takenOver) this.ui?.showTakenOver(focus.takenOver.kind, focus.takenOver.name);
+  }
+
+  /**
+   * A pool the server reported without paying the outpost income (the map's
+   * resource sync): shown with the ticks since the load's `t` on top.
+   */
+  private syncPool(resources: Resources, credits: number | undefined): void {
+    this.income?.rebase(resources);
+    this.showResources(this.predictedPool() ?? resources, credits);
+  }
+
+  /** Once a second: the pool with the next whole tick of outpost income, when one passed (#207). */
+  private tickIncome(): void {
+    const pool = this.predictedPool();
+    if (pool) this.showResources(pool, this.credits);
+  }
+
+  private predictedPool(): Resources | null {
+    if (!this.income || !this.ownSave) return null;
+    return this.income.next(Date.now() / 1000 + this.clockOffset, this.incomeCap, overdriveEndOf(this.ownSave));
   }
 
   private showResources(resources: Resources, credits: number | undefined): void {

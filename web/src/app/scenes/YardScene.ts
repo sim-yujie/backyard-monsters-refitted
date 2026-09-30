@@ -1720,7 +1720,8 @@ export class YardScene implements Scene {
    *
    * `pending` only says which requests are running, which is the panel's and
    * the HUD's business through their own subscriptions, and `away` is the
-   * HUD's notice about a yard already drawn; nothing here changes.
+   * HUD's notice about a yard already drawn; nothing here changes. `income`
+   * moves only the pool (#207), so only the HUD's readouts follow it.
    */
   private onStoreChange(change: YardChange): void {
     const store = this.store;
@@ -1729,6 +1730,11 @@ export class YardScene implements Scene {
     // button's cyan count (#192); one that ends with the screen open is seen.
     if (!this.monsters?.isOpen) finishedMonstersJobs.add(change.completed);
     if (change.reason === YardChangeReason.PENDING || change.reason === YardChangeReason.AWAY) return;
+    if (change.reason === YardChangeReason.INCOME) {
+      this.save = store.save;
+      this.hud?.setResources(store.resources, store.credits);
+      return;
+    }
 
     const yard = store.yard;
     const before = this.yard;

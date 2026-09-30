@@ -251,6 +251,15 @@ export interface StoreEntry {
 /** `storedata`, keyed by store item code (`BEW`, `BST`, `ENL`, …). */
 export type StoreData = Record<string, StoreEntry | undefined>;
 
+/**
+ * The main yard's `buildingresources` on Map Room 2: `t`, the unix second the
+ * player's outpost income is paid up to, and one `b<baseid>` rate per outpost,
+ * what it adds to each resource per 10 s tick. The server writes it at every
+ * payout (`server/src/services/maproom/v2/autobank.ts`); `game/yard/outpostIncome.ts`
+ * reads it.
+ */
+export type BuildingResources = { t?: number } & Record<string, unknown>;
+
 /** The storage cap per resource, as the server clamps credits to it. */
 export interface ResourceCaps {
   r1: number;
@@ -566,6 +575,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * is when Sharper Tools runs out (`client/scripts/STORE.as:2513-2519`).
    */
   storedata?: StoreData | null;
+  /**
+   * The player's outpost income (`BuildingResources`). Served from the main
+   * yard on every load of a yard the player owns (`mapSaveData.ts`); not part
+   * of the yard routes' answers.
+   */
+  buildingresources?: BuildingResources | null;
   basename?: string;
   level?: number;
   tutorialstage?: unknown;

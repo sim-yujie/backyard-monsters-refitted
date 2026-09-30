@@ -19,6 +19,7 @@ import type { HarvestKey } from "./harvest";
 import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
 import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES, type YardKind } from "./buildingCosts";
 import { JobKind, predictCompletion, SERVER_COMPLETED_KINDS, yardJobs, type YardJob } from "./jobs";
+import { IncomePrediction, overdriveEndOf } from "./outpostIncome";
 import { MAIN_YARD, outpostBaseid, type OwnYardTarget } from "./ownYards";
 import { freeWorkers, holdsWorker } from "./workers";
 import { readYard, type Yard, type YardBuilding, type YardWorkers } from "./yardModel";
@@ -92,6 +93,16 @@ import { readYard, type Yard, type YardBuilding, type YardWorkers } from "./yard
  * replaces the outpost with it. The pool it shows is the main yard's either
  * way: the server serves the owner's pool and caps with an outpost
  * (`services/yard/poolView.ts`).
+ *
+ * ## Outpost income (#207)
+ *
+ * The server pays the player's Map Room 2 outpost income into that pool at
+ * every answer; Flash paid it every 10 s. Between answers the store predicts
+ * it (`outpostIncome.ts`): on each whole 10 s tick of the server's clock,
+ * counted from the `buildingresources.t` the load carried, `resources` becomes
+ * the last answer's pool plus what the ticks since then earned, up to the cap,
+ * and the store announces an `income` change. Every answer replaces the
+ * prediction and moves `t` on to where the server paid it.
  */
 
 /** Why the store announced a change. */
@@ -111,6 +122,11 @@ export const YardChangeReason = {
    * at start. The load's save already holds the result, so the yard did not change.
    */
   AWAY: "away",
+  /**
+   * A 10 s tick of outpost income was predicted (#207): only `resources`
+   * changed; the yard did not.
+   */
+  INCOME: "income",
 } as const;
 export type YardChangeReason = (typeof YardChangeReason)[keyof typeof YardChangeReason];
 
@@ -338,6 +354,8 @@ export class YardStore implements YardStoreReader, YardStoreActions {
   /** The load's `completed`, until {@link start} announces it. */
   private away: readonly CompletedJob[];
   private destroyed = false;
+  /** The outpost income between answers (#207). */
+  private readonly income: IncomePrediction;
 
   constructor(options: YardStoreOptions) {
     this.api = options.api ?? yardApi;
@@ -351,6 +369,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     this.yardArgs = this.baseid === undefined ? [] : [this.baseid];
     this.current = options.save;
     this.away = options.away ?? [];
+    this.income = new IncomePrediction(options.save.buildingresources, options.save.resources);
     this.syncClock(options.save.currenttime);
     this.markOverdue(options.save.currenttime);
   }
@@ -456,6 +475,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
    */
   tick(): void {
     if (this.destroyed) return;
+    this.tickIncome();
     const now = this.now();
     const due = this.jobs().filter(
       (job) =>
@@ -487,6 +507,12 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     if (this.destroyed) return;
     const now = Math.floor(this.now());
     this.setSave({ ...this.current, ...slices, savetime: now, currenttime: now });
+    // Those routes pay no outpost income, so what they report is the pool
+    // before the ticks already predicted: put them back on top.
+    if (slices.resources) {
+      this.income.rebase(slices.resources);
+      this.predictIncome();
+    }
     this.markOverdue(now);
     this.emit({ reason: YardChangeReason.MERGE, completed: [], predicted: [] });
     void this.refresh();
@@ -681,6 +707,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     this.applied = Math.max(this.applied, number);
     this.syncClock(response.currenttime);
     this.setSave({ ...this.current, ...slices });
+    this.income.settle(this.current.resources, response.currenttime);
     this.markOverdue(response.currenttime);
     this.emit({
       reason: refresh ? YardChangeReason.REFRESH : YardChangeReason.ACTION,
@@ -708,6 +735,33 @@ export class YardStore implements YardStoreReader, YardStoreActions {
       this.refreshTimer = null;
       void this.refresh();
     }, delayMs);
+  }
+
+  /**
+   * The once-a-second check for a new tick of outpost income (#207): when the
+   * server's clock has passed another whole tick, `resources` is predicted
+   * afresh and an `income` change announced.
+   */
+  private tickIncome(): void {
+    if (this.predictIncome()) {
+      this.emit({ reason: YardChangeReason.INCOME, completed: [], predicted: [] });
+    }
+  }
+
+  /**
+   * Sets `resources` to the last reported pool plus every whole tick of
+   * outpost income since, up to the cap, when the tick count moved. Nothing
+   * before the first answer brings the caps.
+   *
+   * @returns Whether `resources` was set.
+   */
+  private predictIncome(): boolean {
+    const cap = this.caps?.r1;
+    if (cap === undefined) return false;
+    const resources = this.income.next(this.now(), cap, overdriveEndOf(this.current));
+    if (!resources) return false;
+    this.setSave({ ...this.current, resources });
+    return true;
   }
 
   private setSave(save: BaseLoadResponse): void {
