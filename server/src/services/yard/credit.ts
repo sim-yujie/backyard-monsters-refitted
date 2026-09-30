@@ -1,3 +1,4 @@
+import { fillToCap } from "../../game-rules/maproom/autobank.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import {
   RESOURCE_KEYS,
@@ -79,7 +80,7 @@ export const fitCredit = (
   for (const key of RESOURCE_KEYS) {
     const amount = wholeOf(amounts[key]);
     const held = heldOf(save, key);
-    credited[key] = Math.max(held, Math.min(held + amount, cap)) - held;
+    credited[key] = fillToCap(held, amount, cap) - held;
     overflow[key] = amount - credited[key];
   }
   return { credited, overflow };

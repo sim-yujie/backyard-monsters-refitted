@@ -2,17 +2,13 @@ import { LockMode, type EntityManager } from "@mikro-orm/core";
 import { Save } from "../../../database/models/save.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { BaseType } from "../../../enums/Base.js";
+import { AUTOBANK_TICK, autobankTicks } from "../../../game-rules/maproom/autobank.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { productionOf } from "../../../game-data/buildingCosts.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../../types/BuildingData.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
-import {
-  OUTPOST_INCOME_WINDOW,
-  RESOURCE_KEYS,
-  noAmounts,
-  type ResourceKey,
-} from "../../base/economy/resourceBudget.js";
+import { RESOURCE_KEYS, noAmounts, type ResourceKey } from "../../base/economy/resourceBudget.js";
 import { isAttackActive } from "../../base/isAttackActive.js";
 import { creditResources, type CreditSave } from "../../yard/credit.js";
 import { harvesterHealth, overdriveEnd } from "../../yard/catchUpHarvesters.js";
@@ -74,21 +70,26 @@ import { levelOf, type ResourceAmounts } from "../../yardplanner/costs.js";
  * row it writes, so two payouts for one player run one after the other and
  * the second finds `t` already moved: an interval is paid once.
  *
+ * The tick count, the two-day window, the overdrive and the cap clamp are the
+ * shared rule in `game-rules/maproom/autobank.ts` (issue #207), which the web
+ * client runs too to predict these payouts between answers.
+ *
  * This module never imports `server.ts`, so it runs under test with a
  * stand-in entity manager.
  */
+
+export {
+  AUTOBANK_OVERDRIVE,
+  AUTOBANK_TICK,
+  autobankTicks,
+  type AutobankTicks,
+} from "../../../game-rules/maproom/autobank.js";
 
 /** `GLOBAL._averageAltitude` (`client/scripts/GLOBAL.as:398`). */
 export const AVERAGE_ALTITUDE = 125;
 
 /** The height a cell with none reads as (`AutoBankManager.as:97-103`). */
 export const DEFAULT_CELL_HEIGHT = 100;
-
-/** One autobank tick, in seconds (`client/scripts/BASE.as:2539-2543`). */
-export const AUTOBANK_TICK = 10;
-
-/** Production Overdrive's power (`client/scripts/STORE.as:2413-2418`). */
-export const AUTOBANK_OVERDRIVE = 2;
 
 /** Points per resource banked (`AutoBankManager.as:278`). */
 export const AUTOBANK_POINTS = 0.375;
@@ -150,50 +151,6 @@ export const outpostIncome = (outpost: OutpostIncomeSave, height: number): Resou
     );
   }
   return rate;
-};
-
-/** What {@link autobankTicks} works out: what is owed, and where `t` moves to. */
-export interface AutobankTicks {
-  /** Per resource, before the storage cap. */
-  owed: ResourceAmounts;
-  /** Whole ticks paid. */
-  ticks: number;
-  /** The new `t`: the end of the last tick paid. */
-  t: number;
-}
-
-/**
- * The whole ticks owed since `last`, and what they come to at `rate`.
- *
- * At most two days are paid (`AutoBankManager.as:75-77`); the part of a tick
- * not reached yet stays for next time. Each tick at or before `overdriveUntil`
- * is paid twice over (`:258-263`; Flash's tick checks `overdrive >= now`).
- *
- * @param rate - The player's income per tick, all outposts together.
- * @param last - `buildingresources.t`; undefined when there is none.
- * @param now - Unix seconds.
- * @param overdriveUntil - When Production Overdrive ends, if it runs.
- */
-export const autobankTicks = (
-  rate: Readonly<ResourceAmounts>,
-  last: number | undefined,
-  now: number,
-  overdriveUntil?: number
-): AutobankTicks => {
-  if (last === undefined || !Number.isFinite(last)) return { owed: noAmounts(), ticks: 0, t: now };
-
-  const from = Math.max(Math.min(last, now), now - OUTPOST_INCOME_WINDOW);
-  const ticks = Math.floor((now - from) / AUTOBANK_TICK);
-  const overdriven =
-    overdriveUntil === undefined
-      ? 0
-      : Math.min(ticks, Math.max(0, Math.floor((overdriveUntil - from) / AUTOBANK_TICK)));
-  const paidTicks = ticks + overdriven * (AUTOBANK_OVERDRIVE - 1);
-
-  const owed = noAmounts();
-  for (const key of RESOURCE_KEYS) owed[key] = Math.max(0, Math.trunc(rate[key])) * paidTicks;
-
-  return { owed, ticks, t: from + ticks * AUTOBANK_TICK };
 };
 
 /** The slice of the main yard a payout reads and writes. */

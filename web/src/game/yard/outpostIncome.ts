@@ -1,5 +1,6 @@
 import type { BaseLoadResponse, BuildingResources, Resources } from "@/api/types";
 import { noAmounts, RESOURCE_KEYS, type ResourceAmounts } from "@/game/combat/rules";
+import { autobankTicks, fillToCap } from "@/game/maproom/rules/autobank";
 
 /**
  * The player's Map Room 2 outpost income, predicted between server answers
@@ -10,34 +11,22 @@ import { noAmounts, RESOURCE_KEYS, type ResourceAmounts } from "@/game/combat/ru
  * (`server/src/services/maproom/v2/autobank.ts`). Flash paid it every 10 s
  * while the player was home (`client/scripts/BASE.as:2539-2543` calls
  * `AutoBankManager.autobank()`), so its resource bar climbed on its own; this
- * runs the server's arithmetic forward so the HUD does the same without a
- * request every 10 s. It mirrors `autobankTicks` and the credit clamp rule for
- * rule:
+ * runs the server's payout forward so the HUD does the same without a
+ * request every 10 s.
  *
- * - `buildingresources` holds `t`, the moment income is paid up to, and one
- *   `b<baseid>: {r1..r4}` rate per outpost: what it adds per 10 s tick;
- * - whole ticks only, counted from `t`, so the display moves on the same
- *   moments the server pays; at most two days of them
- *   (`AutoBankManager.as:75-77`);
- * - each tick up to the Production Overdrive's end (`storedata.POD.e`) counts
- *   twice (`AutoBankManager.as:258-263`);
- * - every credit fills up to the storage cap and no further, and a pool
- *   already over the cap keeps what it has (`BASE.Fund`, `credit.ts`).
+ * `buildingresources` holds `t`, the moment income is paid up to, and one
+ * `b<baseid>: {r1..r4}` rate per outpost: what it adds per 10 s tick. The
+ * ticks, the two-day window, the Production Overdrive and the cap clamp are
+ * the shared rule the server pays with (`game/maproom/rules/autobank.ts`), so
+ * the display moves on the same moments, by the same amounts.
  *
  * The rates are the ones the load carried; the server works them out afresh
  * at each payout, so an outpost harvester upgraded or wrecked since shows
  * from the next answer on, which replaces the prediction.
  */
 
-/** One autobank tick, in seconds (`client/scripts/BASE.as:2539-2543`). */
-export const AUTOBANK_TICK = 10;
-
-/** At most two days of income are paid (`AutoBankManager.as:75-77`). */
-export const OUTPOST_INCOME_WINDOW = 60 * 60 * 24 * 2;
-
-/** The Production Overdrive's store code and power (`client/scripts/STORE.as:2413-2418`). */
+/** The Production Overdrive's store code (`client/scripts/STORE.as:2413-2418`). */
 const OVERDRIVE_ITEM = "POD";
-const OVERDRIVE_POWER = 2;
 
 /** The outpost rate keys the server writes: `b` and a `baseid`. */
 const RATE_KEY = /^b\d+$/;
@@ -80,45 +69,9 @@ export const outpostIncomeOf = (
 export const overdriveEndOf = (save: Pick<BaseLoadResponse, "storedata">): number | undefined =>
   finite(save.storedata?.[OVERDRIVE_ITEM]?.e);
 
-/** What {@link incomeTicks} works out. */
-export interface IncomeTicks {
-  /** Per resource, before the storage cap. */
-  readonly owed: ResourceAmounts;
-  /** Whole ticks since `t`. */
-  readonly ticks: number;
-  /** Where `t` stands once they are paid: the end of the last whole tick. */
-  readonly t: number;
-}
-
 /**
- * The whole ticks owed between `income.t` and `now`, and what they come to:
- * the server's `autobankTicks`.
- *
- * @param now - Unix seconds, on the server's clock.
- * @param overdriveUntil - When Production Overdrive ends, if it runs.
- */
-export const incomeTicks = (
-  income: OutpostIncome,
-  now: number,
-  overdriveUntil?: number,
-): IncomeTicks => {
-  const from = Math.max(Math.min(income.t, now), now - OUTPOST_INCOME_WINDOW);
-  const ticks = Math.floor((now - from) / AUTOBANK_TICK);
-  const overdriven =
-    overdriveUntil === undefined
-      ? 0
-      : Math.min(ticks, Math.max(0, Math.floor((overdriveUntil - from) / AUTOBANK_TICK)));
-  const paid = ticks + overdriven * (OVERDRIVE_POWER - 1);
-
-  const owed = noAmounts();
-  for (const key of RESOURCE_KEYS) owed[key] = income.rate[key] * paid;
-  return { owed, ticks, t: from + ticks * AUTOBANK_TICK };
-};
-
-/**
- * `resources` with `owed` credited, each up to `cap` and no further; a
- * resource already over the cap keeps what it holds (`fitCredit`). The other
- * keys (`r1max` and the like) come through as they are.
+ * `resources` with `owed` credited, each through the shared cap clamp
+ * (`fillToCap`). The other keys (`r1max` and the like) come through as they are.
  */
 export const creditUpTo = (
   resources: Resources,
@@ -128,8 +81,7 @@ export const creditUpTo = (
   const out: Resources = { ...resources };
   for (const key of RESOURCE_KEYS) {
     if (!(owed[key] > 0)) continue;
-    const held = finite(resources[key]) ?? 0;
-    out[key] = Math.max(held, Math.min(held + owed[key], cap));
+    out[key] = fillToCap(finite(resources[key]) ?? 0, owed[key], cap);
   }
   return out;
 };
@@ -168,7 +120,7 @@ export class IncomePrediction {
     this.base = resources ?? {};
     this.shown = 0;
     if (!this.income || typeof serverNow !== "number" || !Number.isFinite(serverNow)) return;
-    this.income = { ...this.income, t: incomeTicks(this.income, serverNow).t };
+    this.income = { ...this.income, t: autobankTicks(this.income.rate, this.income.t, serverNow).t };
   }
 
   /** A pool from a route that pays no income; the next {@link next} adds the ticks since `t` to it. */
@@ -188,7 +140,7 @@ export class IncomePrediction {
    */
   next(now: number, cap: number, overdriveUntil?: number): Resources | null {
     if (!this.income) return null;
-    const { owed, ticks } = incomeTicks(this.income, now, overdriveUntil);
+    const { owed, ticks } = autobankTicks(this.income.rate, this.income.t, now, overdriveUntil);
     if (ticks === this.shown) return null;
     this.shown = ticks;
     return creditUpTo(this.base, owed, cap);

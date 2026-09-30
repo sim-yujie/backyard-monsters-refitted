@@ -1,5 +1,6 @@
 import { costOf, siloCapacity, type CostStep, type YardKind } from "../../../game-data/buildingCosts.js";
 import type { BuildingData, BuildingDataMap } from "../../../types/BuildingData.js";
+import { OUTPOST_INCOME_WINDOW } from "../../../game-rules/maproom/autobank.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
 import {
   levelOf,
@@ -207,8 +208,11 @@ export const harvestAllowance = (
 /* Outpost income                                                              */
 /* -------------------------------------------------------------------------- */
 
-/** At most two days of offline outpost income are paid (`AutoBankManager.as:75-77`). */
-export const OUTPOST_INCOME_WINDOW = 60 * 60 * 24 * 2;
+/**
+ * At most two days of offline outpost income are paid (`AutoBankManager.as:75-77`):
+ * the shared rule's figure (`game-rules/maproom/autobank.ts`).
+ */
+export { OUTPOST_INCOME_WINDOW };
 
 /** `buildingresources` keys are `b<baseid>`; `t` is the last auto-bank timestamp. */
 const OUTPOST_KEY = /^b\d+$/;

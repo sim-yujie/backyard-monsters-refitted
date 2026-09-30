@@ -1732,7 +1732,7 @@ export class YardScene implements Scene {
     if (change.reason === YardChangeReason.PENDING || change.reason === YardChangeReason.AWAY) return;
     if (change.reason === YardChangeReason.INCOME) {
       this.save = store.save;
-      this.hud?.setResources(store.resources, store.credits);
+      this.hud?.setResources(store.resources, store.credits, { float: false });
       return;
     }
 

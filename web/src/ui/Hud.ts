@@ -361,9 +361,11 @@ export class Hud {
    *
    * A readout that already showed a number and now shows a different one
    * floats the difference; the first number a readout gets does not, because
-   * that is the pool arriving rather than changing.
+   * that is the pool arriving rather than changing. `float: false` sets the
+   * amounts without floating: the outpost income's 10 s ticks just climb, as
+   * Flash's bar did (#207).
    */
-  setResources(resources: Resources, shiny?: number): void {
+  setResources(resources: Resources, shiny?: number, options: { float?: boolean } = {}): void {
     const changes: [Readout, number][] = [];
     for (const key of [...RESOURCE_KEYS, "shiny"] as const) {
       const change = this.setAmount(key, key === "shiny" ? shiny : resources[key]);
@@ -371,6 +373,7 @@ export class Hud {
     }
     // Refit before floating, so each float starts where its readout now is.
     this.fit();
+    if (options.float === false) return;
     for (const [readout, delta] of changes) this.float(readout, delta);
   }
 

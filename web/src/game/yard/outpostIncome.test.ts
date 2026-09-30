@@ -1,18 +1,10 @@
 import { describe, expect, it } from "vitest";
-import {
-  AUTOBANK_TICK,
-  IncomePrediction,
-  OUTPOST_INCOME_WINDOW,
-  creditUpTo,
-  incomeTicks,
-  outpostIncomeOf,
-  overdriveEndOf,
-} from "./outpostIncome";
+import { IncomePrediction, creditUpTo, outpostIncomeOf, overdriveEndOf } from "./outpostIncome";
 
 /**
- * The outpost income prediction (#207) runs the server's `autobankTicks` and
- * credit clamp forward (`server/src/services/maproom/v2/autobank.ts`,
- * `credit.ts`), so its figures must be the ones the next answer brings.
+ * The outpost income prediction (#207) runs the server's payout forward with
+ * the shared rule (`game/maproom/rules/autobank.ts`, tested beside it), so its
+ * figures must be the ones the next answer brings.
  */
 
 const T = 1_000_000;
@@ -37,32 +29,6 @@ describe("outpostIncomeOf", () => {
     expect(outpostIncomeOf({ b1: { r1: 3 } })).toBeNull();
     expect(outpostIncomeOf({ t: T })).toBeNull();
     expect(outpostIncomeOf({ t: T, b1: { r1: 0, r2: 0, r3: 0, r4: 0 } })).toBeNull();
-  });
-});
-
-describe("incomeTicks", () => {
-  const income = { t: T, rate: { r1: 10, r2: 0, r3: 2, r4: 0 } };
-
-  it("pays whole ticks only and moves t by exactly those", () => {
-    expect(incomeTicks(income, T + 9)).toMatchObject({ ticks: 0, t: T });
-    expect(incomeTicks(income, T + 10)).toMatchObject({ ticks: 1, t: T + 10 });
-    const later = incomeTicks(income, T + 35);
-    expect(later).toMatchObject({ ticks: 3, t: T + 30 });
-    expect(later.owed).toEqual({ r1: 30, r2: 0, r3: 6, r4: 0 });
-  });
-
-  it("pays at most two days", () => {
-    const now = T + OUTPOST_INCOME_WINDOW * 3;
-    const { ticks, t } = incomeTicks(income, now);
-    expect(ticks).toBe(OUTPOST_INCOME_WINDOW / AUTOBANK_TICK);
-    expect(t).toBe(now);
-  });
-
-  it("doubles the ticks up to the Production Overdrive's end", () => {
-    // Five ticks, the first two inside the overdrive: 5 + 2 paid twice.
-    expect(incomeTicks(income, T + 50, T + 25).owed.r1).toBe(70);
-    // An overdrive that ended before `t` adds nothing.
-    expect(incomeTicks(income, T + 50, T - 100).owed.r1).toBe(50);
   });
 });
 

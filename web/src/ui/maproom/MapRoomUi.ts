@@ -212,8 +212,12 @@ export class MapRoomUi {
 
   /* ── Display ────────────────────────────────────────────────────────── */
 
-  setResources(resources: Resources, credits: number | undefined): void {
-    this.hud.setResources(resources, credits);
+  setResources(
+    resources: Resources,
+    credits: number | undefined,
+    options: { float?: boolean } = {},
+  ): void {
+    this.hud.setResources(resources, credits, options);
   }
 
   setBookmarks(bookmarks: readonly Bookmark[]): void {

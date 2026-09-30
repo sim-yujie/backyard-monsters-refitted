@@ -118,6 +118,13 @@ describe("the HUD", () => {
     expect(button("r1").textContent).toBe("1,700");
   });
 
+  it("climbs without a float when asked, as outpost income ticks do (#207)", () => {
+    hud.setResources({ r1: 1_000 });
+    hud.setResources({ r1: 1_010 }, undefined, { float: false });
+    expect(button("r1").textContent).toBe("1,010");
+    expect(floats()).toHaveLength(0);
+  });
+
   it("replaces a readout's float rather than stacking them, and takes them away with the bar", () => {
     hud.setResources({ r1: 1_000, r2: 10 });
     hud.setResources({ r1: 900, r2: 20 });

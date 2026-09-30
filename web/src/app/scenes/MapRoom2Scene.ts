@@ -520,7 +520,7 @@ export class MapRoom2Scene implements Scene {
   /** Once a second: the pool with the next whole tick of outpost income, when one passed (#207). */
   private tickIncome(): void {
     const pool = this.predictedPool();
-    if (pool) this.showResources(pool, this.credits);
+    if (pool) this.showResources(pool, this.credits, { float: false });
   }
 
   private predictedPool(): Resources | null {
@@ -528,10 +528,14 @@ export class MapRoom2Scene implements Scene {
     return this.income.next(Date.now() / 1000 + this.clockOffset, this.incomeCap, overdriveEndOf(this.ownSave));
   }
 
-  private showResources(resources: Resources, credits: number | undefined): void {
+  private showResources(
+    resources: Resources,
+    credits: number | undefined,
+    options: { float?: boolean } = {},
+  ): void {
     this.resources = resources;
     this.credits = credits;
-    this.ui?.setResources(resources, credits);
+    this.ui?.setResources(resources, credits, options);
   }
 
   /* ── Camera ─────────────────────────────────────────────────────────── */
