@@ -15,6 +15,7 @@ import { YARD_STATE_KEYS } from "@/api/types";
 import { yardApi, yardRefusal, type YardApi, type YardRefusal } from "@/api/yard";
 import type { BaiterRun } from "@/game/baiter/baiterSession";
 import type { Notices } from "@/ui/maproom/Notices";
+import type { HarvestKey } from "./harvest";
 import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
 import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES, type YardKind } from "./buildingCosts";
 import { JobKind, predictCompletion, SERVER_COMPLETED_KINDS, yardJobs, type YardJob } from "./jobs";
@@ -207,6 +208,13 @@ export interface YardSceneHooks {
    * Shiny counter use it. Absent where there is no screen.
    */
   openShop?(): void;
+  /**
+   * Plays a bank (#208): each harvester that banked throws its resource balls
+   * at the Town Hall, and the HUD counts up as they land. `banked` is the
+   * bank report's `byBuilding`. Called straight after the answer, so the HUD
+   * never shows the whole amount first. Absent where there is no yard drawn.
+   */
+  playBank?(banked: Readonly<Record<string, { resource: HarvestKey; amount: number }>>): void;
 }
 
 /** Handed to the building panel (WP1.5) and the HUD (WP1.6) on the player's own yard. */

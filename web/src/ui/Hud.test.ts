@@ -75,6 +75,49 @@ describe("the HUD", () => {
     expect(floats()[0]?.classList.contains("hud__delta--up")).toBe(true);
   });
 
+  it("holds back what a bank's balls carry and counts it up as they land (#208)", () => {
+    hud.setResources({ r1: 1_000, r4: 50 });
+    // The answer credits 1,200 twigs; the balls are thrown straight after.
+    hud.setResources({ r1: 2_200, r4: 50 });
+    hud.withhold({ r1: 1_200 });
+    expect(button("r1").textContent).toBe("1,000");
+    expect(floats()).toHaveLength(0);
+    // The tooltip and the tap bubble keep the whole, exact amount.
+    expect(button("r1").title).toBe("Twigs: 2,200");
+    expect(hud.amountOf("r1")).toBe(2_200);
+
+    // The first ball floats the whole bank and starts the count.
+    hud.deliver("r1", 400);
+    expect(floats().map((one) => one.textContent)).toEqual(["+1.2K"]);
+    vi.advanceTimersByTime(250);
+    expect(hud.shownOf("r1")).toBeGreaterThan(1_000);
+    expect(hud.shownOf("r1")).toBeLessThan(1_400);
+    vi.advanceTimersByTime(300);
+    expect(button("r1").textContent).toBe("1,400");
+
+    // Later balls count on from where the bar is, without floating again.
+    hud.deliver("r1", 400);
+    hud.deliver("r1", 400);
+    expect(floats()).toHaveLength(1);
+    vi.advanceTimersByTime(600);
+    expect(button("r1").textContent).toBe("2,200");
+    expect(hud.shownOf("r1")).toBe(2_200);
+  });
+
+  it("counts toward a pool that changed while the balls flew, and lets go of all of it on unbind", () => {
+    hud.setResources({ r1: 1_000 });
+    hud.setResources({ r1: 2_000 });
+    hud.withhold({ r1: 1_000 });
+    hud.deliver("r1", 500);
+    // Something was spent mid-flight.
+    hud.setResources({ r1: 1_700 });
+    vi.advanceTimersByTime(600);
+    expect(button("r1").textContent).toBe("1,200");
+
+    hud.bindYard(null);
+    expect(button("r1").textContent).toBe("1,700");
+  });
+
   it("replaces a readout's float rather than stacking them, and takes them away with the bar", () => {
     hud.setResources({ r1: 1_000, r2: 10 });
     hud.setResources({ r1: 900, r2: 20 });

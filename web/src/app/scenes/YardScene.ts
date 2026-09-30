@@ -13,6 +13,7 @@ import { buildActions } from "@/api/yardBuild";
 import { decorActions } from "@/api/yardDecor";
 import { consumeViewTarget, setAttackTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
+import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { Camera } from "@/game/Camera";
 import { setMapFocus } from "@/game/maproom/mapFocus";
 import { MapRoomChoice, mapRoomOf, takePrimedOwnYard } from "@/game/maproom/mapRoute";
@@ -908,10 +909,24 @@ export class YardScene implements Scene {
       .one(building.id)
       .then((result) => {
         if (this.binding !== binding) return;
+        if (result.ok) this.playBank(result.report.byBuilding);
         showBankResult(binding.notices, result);
         const amount = result.ok ? (result.report.byBuilding[String(building.id)]?.amount ?? 0) : 0;
         if (amount > 0) this.floatBanked(building.id, waiting.resource, amount);
       });
+  }
+
+  /**
+   * A bank's resource balls fly from each harvester that banked to the Town
+   * Hall (#208), and the HUD holds back what they carry and counts it up as
+   * they land. Under `prefers-reduced-motion` nothing flies and the HUD
+   * shows the new amounts at once, as the answer left them.
+   */
+  private playBank(banked: Readonly<Record<string, { resource: HarvestKey; amount: number }>>): void {
+    const hud = this.hud;
+    if (!hud || prefersReducedMotion()) return;
+    const held = this.renderer.throwBank(banked, (resource, share) => this.hud?.deliver(resource, share));
+    hud.withhold(held);
   }
 
   /** "+720" with the resource's icon, rising off a building and fading (`harvest.css`). */
@@ -1576,6 +1591,7 @@ export class YardScene implements Scene {
           this.context?.goTo(SceneName.BAITER);
         },
         openShop: () => this.openShop(),
+        playBank: (banked) => this.playBank(banked),
       },
       notices: this.notices,
     };
@@ -1692,6 +1708,7 @@ export class YardScene implements Scene {
     this.store?.destroy();
     this.store = null;
     this.binding = null;
+    this.renderer.finishBank();
     this.hud?.bindYard(null);
     this.dock?.bind(null);
   }

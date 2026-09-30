@@ -121,6 +121,13 @@ const EXACT_LIFETIME_MS = 5000;
 /** How long a change float lives; the animation is a little shorter. */
 const FLOAT_LIFETIME_MS = 1800;
 
+/**
+ * How long a readout takes to count up to what a landing resource ball
+ * brought: the Flash bar's tween to a new amount, linear
+ * (`client/scripts/UI_TOP.as:798-826`).
+ */
+export const COUNT_MS = 500;
+
 /** Gap between a readout and its bubble. */
 const OFFSET_PX = 8;
 
@@ -166,6 +173,17 @@ interface Readout {
   readonly fill: HTMLElement;
   amount: number | undefined;
   cap: number | undefined;
+  /**
+   * What is still flying to the Town Hall (#208): part of `amount` the
+   * readout does not show yet. It counts up as the balls land.
+   */
+  held: number;
+  /** The whole of what was held back, floated once when the first ball lands. */
+  landing: number;
+  /** The amount on show while counting, or null to show the target. */
+  shown: number | null;
+  /** The count in progress: from, to, and its start (`performance.now()`). */
+  count: { from: number; to: number; start: number } | null;
 }
 
 export class Hud {
@@ -191,6 +209,8 @@ export class Hud {
   private readonly corner: boolean;
   private accountMenu: AccountMenu | null = null;
   private fitted: HudFit = HudFit.FULL;
+  /** The animation frame counting a readout up, or 0. */
+  private frame = 0;
 
   constructor(options: HudOptions) {
     this.corner = options.layout === "corner";
@@ -247,7 +267,20 @@ export class Hud {
 
       item.append(button);
       resources.append(item);
-      const readout: Readout = { key, button, value, capText, bar, fill, amount: undefined, cap: undefined };
+      const readout: Readout = {
+        key,
+        button,
+        value,
+        capText,
+        bar,
+        fill,
+        amount: undefined,
+        cap: undefined,
+        held: 0,
+        landing: 0,
+        shown: null,
+        count: null,
+      };
       this.readouts.set(key, readout);
       this.label(readout);
     }
@@ -341,6 +374,55 @@ export class Hud {
     for (const [readout, delta] of changes) this.float(readout, delta);
   }
 
+  /**
+   * Holds back what a bank's resource balls carry (#208): the readouts keep
+   * showing the pool as it was until {@link deliver} hands the amounts over,
+   * ball by ball. Called straight after the answer that credited them, so the
+   * float that answer made is dropped: the first landing floats the whole.
+   */
+  withhold(amounts: Partial<Record<ResourceKey, number>>): void {
+    for (const [key, amount] of Object.entries(amounts) as [ResourceKey, number][]) {
+      const readout = this.readouts.get(key);
+      if (!readout || !(amount > 0)) continue;
+      readout.held += amount;
+      readout.landing += amount;
+      this.dropFloat(key);
+      if (readout.count) readout.count.to = this.target(readout) ?? readout.count.to;
+      else this.render(readout);
+    }
+  }
+
+  /** A ball landed: the readout counts up by its share. */
+  deliver(key: ResourceKey, amount: number): void {
+    const readout = this.readouts.get(key);
+    if (!readout || !(amount > 0)) return;
+    const from = readout.shown ?? this.target(readout);
+    readout.held = Math.max(0, readout.held - amount);
+    if (readout.landing > 0) {
+      this.float(readout, readout.landing);
+      readout.landing = 0;
+    }
+    if (from !== undefined) this.countTo(readout, from);
+  }
+
+  /** Shows every readout's whole amount at once: nothing is flying any more. */
+  releaseHeld(): void {
+    for (const readout of this.readouts.values()) {
+      if (readout.held === 0 && !readout.count) continue;
+      readout.held = 0;
+      readout.landing = 0;
+      readout.count = null;
+      readout.shown = null;
+      this.render(readout);
+    }
+  }
+
+  /** What a readout is showing right now, counting included; undefined before the first. */
+  shownOf(key: ResourceKey): number | undefined {
+    const readout = this.readouts.get(key);
+    return readout ? (readout.shown ?? this.target(readout)) : undefined;
+  }
+
   /** The level the bar is showing at (`HudFit`). */
   get fitLevel(): HudFit {
     return this.fitted;
@@ -382,6 +464,7 @@ export class Hud {
    * the store has — caps, workers, the `completed` list — after it.
    */
   bindYard(binding: YardUiBinding | null): void {
+    if (!binding) this.releaseHeld();
     this.unsubscribeYard?.();
     this.unsubscribeYard = null;
     this.jobNotices = null;
@@ -416,6 +499,8 @@ export class Hud {
 
   destroy(): void {
     this.bindYard(null);
+    if (this.frame) window.cancelAnimationFrame(this.frame);
+    this.frame = 0;
     window.removeEventListener("resize", this.onResize);
     this.hideExact();
     this.accountMenu?.destroy();
@@ -432,6 +517,7 @@ export class Hud {
     if (!readout) return null;
     const before = readout.amount;
     readout.amount = amount;
+    if (readout.count) readout.count.to = this.target(readout) ?? readout.count.to;
     this.render(readout);
     this.label(readout);
     if (this.bubbleFor === key) this.fillExact(readout);
@@ -442,9 +528,10 @@ export class Hud {
 
   /** The readout's visible amount, cap and fill bar, spelled for the current fit. */
   private render(readout: Readout): void {
-    if (readout.amount === undefined) return;
+    const shown = readout.shown ?? this.target(readout);
+    if (shown === undefined) return;
     readout.value.textContent =
-      this.fitted === HudFit.COMPACT ? formatCompact(readout.amount) : formatAmount(readout.amount);
+      this.fitted === HudFit.COMPACT ? formatCompact(shown) : formatAmount(shown);
     // The corner draws the cap as the fill bar alone; the figure is in the
     // tooltip and the tap bubble.
     const showCap =
@@ -452,10 +539,56 @@ export class Hud {
       readout.cap !== undefined &&
       (this.fitted === HudFit.FULL || this.fitted === HudFit.NO_BRAND);
     readout.capText.textContent = showCap ? ` / ${formatAmount(readout.cap)}` : "";
-    const state = capState(readout.amount, readout.cap);
+    const state = capState(shown, readout.cap);
     readout.bar.hidden = state === null;
     readout.fill.style.width = state === null ? "" : `${+(state.fraction * 100).toFixed(2)}%`;
     readout.button.classList.toggle("hud__resource-button--full", state?.full === true);
+  }
+
+  /** The amount a readout counts toward: the pool less what is still flying. */
+  private target(readout: Readout): number | undefined {
+    return readout.amount === undefined ? undefined : Math.max(0, readout.amount - readout.held);
+  }
+
+  /** Starts a readout counting from `from`, what it shows, to its target over {@link COUNT_MS}. */
+  private countTo(readout: Readout, from: number): void {
+    const to = this.target(readout);
+    if (to === undefined || from === to) return;
+    readout.count = { from, to, start: performance.now() };
+    readout.shown = from;
+    if (!this.frame) this.frame = window.requestAnimationFrame(this.step);
+  }
+
+  private readonly step = (now: number): void => {
+    this.frame = 0;
+    let counting = false;
+    let finished = false;
+    for (const readout of this.readouts.values()) {
+      const count = readout.count;
+      if (!count) continue;
+      const progress = (now - count.start) / COUNT_MS;
+      if (progress >= 1) {
+        readout.count = null;
+        readout.shown = null;
+        finished = true;
+      } else {
+        readout.shown = Math.round(count.from + (count.to - count.from) * Math.max(0, progress));
+        counting = true;
+      }
+      this.render(readout);
+    }
+    if (counting) this.frame = window.requestAnimationFrame(this.step);
+    // A longer number may no longer fit; measured once a count settles, not every frame.
+    if (finished) this.fit();
+  };
+
+  /** Takes a readout's change float off the page. */
+  private dropFloat(key: ResourceKey): void {
+    for (const float of this.floats) {
+      if (float.dataset["resource"] !== key) continue;
+      float.remove();
+      this.floats.delete(float);
+    }
   }
 
   /* ── The own yard: caps, workers, job notices ──────────────────────── */
@@ -544,9 +677,7 @@ export class Hud {
    * fade under `prefers-reduced-motion`.
    */
   private float(readout: Readout, delta: number): void {
-    for (const old of this.floats) {
-      if (old.dataset["resource"] === readout.key) old.remove();
-    }
+    this.dropFloat(readout.key);
     const float = document.createElement("span");
     float.className = `hud__delta hud__delta--${delta < 0 ? "down" : "up"}`;
     float.dataset["resource"] = readout.key;

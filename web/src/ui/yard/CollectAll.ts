@@ -264,6 +264,7 @@ export class CollectAll {
     this.button.disabled = true;
     const result = await actions.all();
     if (this.binding === binding) {
+      if (result.ok) binding.scene.playBank?.(result.report.byBuilding);
       showBankResult(binding.notices, result);
       this.refresh();
     }

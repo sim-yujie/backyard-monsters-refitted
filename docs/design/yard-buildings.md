@@ -791,6 +791,15 @@ rest).
   (kept), but filling asks the server nothing: the total is the client's prediction (`harvest.ts`),
   a buffer reaching full is not a server job (`harvest` is not in `SERVER_COMPLETED_KINDS`), and
   the only harvester requests are a Collect all press and a tap on a harvester.
+- **The bank animation** (issue #208), for a tap and for Collect all alike: each harvester that
+  banked throws Flash's resource balls (`packagedot`) in an arc to the Town Hall, 1 to 12 by
+  amount, a sixth of a second apart, `(distance + 0..50) / 150` s each (at least 0.8 s), with a
+  shadow on the ground (`ResourcePackages.as`, `ResourcePackage.as`; numbers in
+  `web/src/game/yard/collectFx.ts`). The HUD holds back what they carry and counts up over 0.5 s
+  as each lands (Flash's bar tween, `UI_TOP.as:798-826`), floating the whole amount at the first
+  landing. No Town Hall: nothing flies and the amounts change at once. Under
+  `prefers-reduced-motion` nothing flies either. Flash played `bankfire` / `bankland` per ball;
+  the web client has no sound.
 - Banking moves `min(st, capacity)` into the pool clamped to the cap; what does not fit **stays in
   the buffer** (the original lost it, BB §4 "What happens when full"; keeping it is a deliberate
   kindness because a full buffer also stops production, so nothing is gained by losing it — listed

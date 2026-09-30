@@ -177,6 +177,29 @@ describe("CollectAll", () => {
     const notice = document.querySelector(".notice")!;
     expect(spokenText(notice)).toContain("Collected Twigs 720 Goo 500.");
   });
+
+  it("has the scene play the bank's balls with what each harvester banked (#208)", async () => {
+    const playBank = vi.fn();
+    const report = {
+      ...reportOf({ r1: 720 }),
+      byBuilding: { "1": { resource: "r1" as const, amount: 720 } },
+    };
+    run.mockResolvedValue({ ok: true, report, completed: [] });
+    collect.bind({ ...binding, scene: { selectBuilding: () => {}, playBank } });
+    button().click();
+    await vi.runAllTicks();
+    await Promise.resolve();
+    expect(playBank).toHaveBeenCalledWith(report.byBuilding);
+
+    playBank.mockClear();
+    run.mockResolvedValue({ ok: false, refusal: { reason: "error", message: "No.", detail: {} } });
+    collect.refresh();
+    button().click();
+    await vi.runAllTicks();
+    await Promise.resolve();
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(playBank).not.toHaveBeenCalled();
+  });
 });
 
 describe("collectRing", () => {

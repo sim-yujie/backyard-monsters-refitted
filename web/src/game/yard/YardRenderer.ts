@@ -1,5 +1,8 @@
 import { Container, Graphics, Sprite, type Renderer } from "pixi.js";
 import { YardBuildings } from "./YardBuildings";
+import { planFlights, flightTotals, TOWN_HALL_TYPE, type BankSource } from "./collectFx";
+import { CollectFxLayer, type LandListener } from "./CollectFxLayer";
+import type { HarvestKey } from "./harvest";
 import { YardGround } from "./YardGround";
 import { YardJobBars } from "./YardJobBars";
 import { YardLifeLayer } from "./YardLifeLayer";
@@ -60,6 +63,8 @@ export class YardRenderer {
   private readonly life = new YardLifeLayer({ reducedMotion: prefersReducedMotion() });
   /** The planner is open: the creatures step out of the way until it closes. */
   private lifeHidden = false;
+  /** The resource balls a bank throws at the Town Hall (#208), over every building. */
+  private readonly collect = new CollectFxLayer();
 
   /**
    * Where the planner hangs its world-space decals: the tower range discs and
@@ -113,6 +118,7 @@ export class YardRenderer {
       this.buildings.shadows,
       this.mushroomLayer,
       this.buildings.tops,
+      this.collect.root,
       this.blueprint.root,
       this.chrome,
       this.planner.root,
@@ -179,6 +185,8 @@ export class YardRenderer {
    * animations run on.
    */
   draw(visible: Rect, deltaSeconds = 0): void {
+    // Balls fly on in the blueprint, hidden, so the bar still counts up.
+    this.collect.update(deltaSeconds);
     // The blueprint has no culling and no animation, so a hidden isometric
     // yard costs nothing per frame.
     if (this.currentView === YardView.ISO) {
@@ -223,6 +231,7 @@ export class YardRenderer {
       this.buildings.shadows,
       this.mushroomLayer,
       this.buildings.tops,
+      this.collect.root,
       this.buildings.markers,
       this.jobBars.root,
       this.buildings.labels,
@@ -450,6 +459,49 @@ export class YardRenderer {
     this.buildings.resortByDepth();
   }
 
+  /* ── A bank's balls ─────────────────────────────────────────────────── */
+
+  /**
+   * Throws a bank's resource balls from each harvester that banked to the
+   * Town Hall (#208, `collectFx.ts`), and returns what they carry per
+   * resource, which `onLand` hears again share by share as they arrive.
+   * Nothing is thrown, and nothing returned, with no Town Hall on the yard
+   * or for a harvester that is not drawn (stored in the planner's drawer).
+   */
+  throwBank(
+    banked: Readonly<Record<string, { resource: HarvestKey; amount: number }>>,
+    onLand: LandListener,
+  ): Partial<Record<HarvestKey, number>> {
+    const drawn = (id: number): boolean => !this.stored.has(id) && !this.concealed.has(id);
+    const at = (building: YardBuilding): { x: number; y: number } => {
+      const offset = this.buildings.offsetOf(building.id);
+      return { x: building.worldX + offset.x, y: building.worldY + offset.y };
+    };
+    const hall = this.yard?.buildings.find(
+      (building) => building.type === TOWN_HALL_TYPE && drawn(building.id),
+    );
+    if (!hall) return {};
+    const sources: BankSource[] = [];
+    for (const [id, { resource, amount }] of Object.entries(banked)) {
+      const building = this.byId.get(Number(id));
+      if (!building || !drawn(building.id)) continue;
+      sources.push({ type: building.type, ...at(building), resource, amount });
+    }
+    const flights = planFlights(sources, at(hall));
+    this.collect.launch(flights, onLand);
+    return flightTotals(flights);
+  }
+
+  /** Lands every ball still in the air at once, handing over what they carry. */
+  finishBank(): void {
+    this.collect.finish();
+  }
+
+  /** Balls in the air. */
+  get bankBallsFlying(): number {
+    return this.collect.flying;
+  }
+
   /* ── A live battle ──────────────────────────────────────────────────── */
 
   /**
@@ -560,6 +612,7 @@ export class YardRenderer {
   }
 
   destroy(): void {
+    this.collect.destroy();
     this.life.destroy();
     this.clearMushrooms();
     this.planner.destroy();
