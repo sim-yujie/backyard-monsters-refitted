@@ -122,9 +122,9 @@ const EXACT_LIFETIME_MS = 5000;
 const FLOAT_LIFETIME_MS = 1800;
 
 /**
- * How long a readout takes to count up to what a landing resource ball
- * brought: the Flash bar's tween to a new amount, linear
- * (`client/scripts/UI_TOP.as:798-826`).
+ * How long a readout takes to count to a new amount unless told otherwise:
+ * the Flash bar's tween, linear (`client/scripts/UI_TOP.as:798-826`). A
+ * bank's count runs across its whole flight instead (#208).
  */
 export const COUNT_MS = 500;
 
@@ -183,8 +183,8 @@ interface Readout {
   expecting: number;
   /** The amount on show while counting, or null to show the target. */
   shown: number | null;
-  /** The count in progress: from, to, and its start (`performance.now()`). */
-  count: { from: number; to: number; start: number } | null;
+  /** The count in progress: from, to, its start (`performance.now()`) and length. */
+  count: { from: number; to: number; start: number; ms: number } | null;
 }
 
 export class Hud {
@@ -402,13 +402,16 @@ export class Hud {
     else this.render(readout);
   }
 
-  /** Counts a readout up by `amount` (down, when negative) over {@link COUNT_MS}. */
-  deliver(key: ResourceKey, amount: number): void {
+  /**
+   * Counts a readout up by `amount` (down, when negative) from what it shows
+   * now, over `ms`.
+   */
+  deliver(key: ResourceKey, amount: number, ms: number = COUNT_MS): void {
     const readout = this.readouts.get(key);
     if (!readout || amount === 0) return;
     const from = readout.shown ?? this.target(readout);
     readout.held -= amount;
-    if (from !== undefined) this.countTo(readout, from);
+    if (from !== undefined) this.countTo(readout, from, ms);
   }
 
   /** Floats a bank's whole amount beside a readout, as a change of amount floats. */
@@ -563,11 +566,11 @@ export class Hud {
     return readout.amount === undefined ? undefined : Math.max(0, readout.amount - readout.held);
   }
 
-  /** Starts a readout counting from `from`, what it shows, to its target over {@link COUNT_MS}. */
-  private countTo(readout: Readout, from: number): void {
+  /** Starts a readout counting from `from`, what it shows, to its target over `ms`. */
+  private countTo(readout: Readout, from: number, ms: number): void {
     const to = this.target(readout);
     if (to === undefined || from === to) return;
-    readout.count = { from, to, start: performance.now() };
+    readout.count = { from, to, start: performance.now(), ms: Math.max(1, ms) };
     readout.shown = from;
     if (!this.frame) this.frame = window.requestAnimationFrame(this.step);
   }
@@ -579,7 +582,7 @@ export class Hud {
     for (const readout of this.readouts.values()) {
       const count = readout.count;
       if (!count) continue;
-      const progress = (now - count.start) / COUNT_MS;
+      const progress = (now - count.start) / count.ms;
       if (progress >= 1) {
         readout.count = null;
         readout.shown = null;

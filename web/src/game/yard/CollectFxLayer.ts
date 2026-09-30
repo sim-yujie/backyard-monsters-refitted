@@ -12,9 +12,9 @@ import type { HarvestKey } from "./harvest";
  * Sprites are pooled: Collect all on a yard of forty harvesters throws some
  * five hundred balls, and they come and go every bank.
  *
- * A landing calls the thrower's `onLand` with the ball's share, which is what
- * lets the top bar count up as they arrive. {@link finish} lands every ball
- * still in the air at once, so nothing held back is lost when the yard goes;
+ * A landing calls the thrower's `onLand` with the ball's share, so the thrower
+ * knows when the last is down. {@link finish} lands every ball still in the
+ * air at once, so a bank still settles when the yard goes;
  * {@link cancel} takes one throw's balls away without landing them, for a
  * bank the server refused after its balls were already thrown (#208).
  */

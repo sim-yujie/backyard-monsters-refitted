@@ -226,7 +226,16 @@ export const flightPose = (flight: Flight, elapsed: number): FlightPose => {
 export const flightsEnd = (flights: readonly Flight[]): number =>
   flights.reduce((end, flight) => Math.max(end, flight.delay + flight.duration), 0);
 
-/** What a bank's balls carry, per resource: what the top bar holds back until they land. */
+/** When each resource's last ball lands, seconds from the throw. */
+export const flightEnds = (flights: readonly Flight[]): Partial<Record<HarvestKey, number>> => {
+  const ends: Partial<Record<HarvestKey, number>> = {};
+  for (const flight of flights) {
+    ends[flight.resource] = Math.max(ends[flight.resource] ?? 0, flight.delay + flight.duration);
+  }
+  return ends;
+};
+
+/** What a bank's balls carry, per resource. */
 export const flightTotals = (flights: readonly Flight[]): Partial<Record<HarvestKey, number>> => {
   const totals: Partial<Record<HarvestKey, number>> = {};
   for (const flight of flights) totals[flight.resource] = (totals[flight.resource] ?? 0) + flight.share;

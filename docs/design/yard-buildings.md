@@ -800,11 +800,14 @@ rest).
   least 0.8 s, no cap, a sixth of a second apart; five seconds and more on a spread-out yard).
   **The balls leave on the press**, not on the server's answer (owner, 2026-09-30: waiting for
   the answer felt laggy): the client predicts what each harvester gives (`predictBank`, the
-  server's rules including the storage cap), the bar counts up as they land, and the answer only
-  corrects the totals once the last ball is down (`web/src/game/yard/bankShow.ts`). A refusal
-  takes the balls still in the air away and puts the numbers back. Each landing counts its
-  readout up over 0.5 s (Flash's bar tween, `UI_TOP.as:798-826`), the first floating the whole
-  amount. No Town Hall: nothing flies and the amounts change at once. Under
+  server's rules including the storage cap; `bankAgreement.test.ts` holds it to the server's
+  `planBank`), and the answer only corrects the totals once the last ball is down
+  (`web/src/game/yard/bankShow.ts`). The server answers in about 0.1 s; what made the bar feel
+  slow was the flight, so **the bar starts counting on the press too** (owner's choice, same
+  day): each readout counts up by its resource's amount, linearly, from the press to the moment
+  that resource's last ball lands, and floats the amount at once. A refusal takes the balls still
+  in the air away and counts the readouts back down to the pool over 0.5 s (Flash's bar tween,
+  `UI_TOP.as:798-826`, as are the end-of-bank corrections). No Town Hall: nothing flies and the amounts change at once. Under
   `prefers-reduced-motion` nothing flies either. Flash played `bankfire` / `bankland` per ball;
   the web client has no sound.
 - Banking moves `min(st, capacity)` into the pool clamped to the cap; what does not fit **stays in

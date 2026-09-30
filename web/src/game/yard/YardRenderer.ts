@@ -1,6 +1,6 @@
 import { Container, Graphics, Sprite, type Renderer } from "pixi.js";
 import { YardBuildings } from "./YardBuildings";
-import { planFlights, flightTotals, TOWN_HALL_TYPE, type BankSource } from "./collectFx";
+import { flightEnds, flightTotals, planFlights, TOWN_HALL_TYPE, type BankSource } from "./collectFx";
 import { CollectFxLayer, type LandListener } from "./CollectFxLayer";
 import type { HarvestKey } from "./harvest";
 import { YardGround } from "./YardGround";
@@ -47,6 +47,8 @@ export type YardView = (typeof YardView)[keyof typeof YardView];
 /** What {@link YardRenderer.throwBank} threw. */
 export interface BankThrown {
   readonly totals: Partial<Record<HarvestKey, number>>;
+  /** When each resource's last ball lands, seconds from the throw. */
+  readonly ends: Partial<Record<HarvestKey, number>>;
   readonly balls: number;
   /** For `cancelBank`; 0 when nothing was thrown. */
   readonly group: number;
@@ -489,7 +491,7 @@ export class YardRenderer {
     const hall = this.yard?.buildings.find(
       (building) => building.type === TOWN_HALL_TYPE && drawn(building.id),
     );
-    if (!hall) return { totals: {}, balls: 0, group: 0 };
+    if (!hall) return { totals: {}, ends: {}, balls: 0, group: 0 };
     const sources: BankSource[] = [];
     for (const [id, { resource, amount }] of Object.entries(banked)) {
       const building = this.byId.get(Number(id));
@@ -497,9 +499,9 @@ export class YardRenderer {
       sources.push({ type: building.type, ...at(building), resource, amount });
     }
     const flights = planFlights(sources, at(hall));
-    if (flights.length === 0) return { totals: {}, balls: 0, group: 0 };
+    if (flights.length === 0) return { totals: {}, ends: {}, balls: 0, group: 0 };
     const group = this.collect.launch(flights, onLand);
-    return { totals: flightTotals(flights), balls: flights.length, group };
+    return { totals: flightTotals(flights), ends: flightEnds(flights), balls: flights.length, group };
   }
 
   /** Takes a throw's balls out of the air without landing them. */

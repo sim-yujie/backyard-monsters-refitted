@@ -923,7 +923,7 @@ export class YardScene implements Scene {
 
   /**
    * A bank's resource balls fly from each harvester in `predicted` to the
-   * Town Hall as it is pressed, and the HUD counts up as they land; the
+   * Town Hall as it is pressed, and the HUD counts up across their flight; the
    * returned function takes the server's answer (#208, `bankShow.ts`). Under
    * `prefers-reduced-motion` nothing flies and the HUD shows the new amounts
    * at once, as the answer leaves them.

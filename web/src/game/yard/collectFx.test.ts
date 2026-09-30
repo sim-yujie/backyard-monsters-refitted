@@ -3,6 +3,7 @@ import {
   ballCount,
   DEFAULT_SPOUT,
   flightPose,
+  flightEnds,
   flightsEnd,
   flightTotals,
   MAX_FLIGHT_S,
@@ -155,5 +156,19 @@ describe("flightsEnd", () => {
     const flights = planFlights([snapper()], hall, () => 0);
     expect(flightsEnd(flights)).toBeCloseTo(11 / 12 + flights[11]!.duration, 10);
     expect(flightsEnd([])).toBe(0);
+  });
+});
+
+describe("flightEnds", () => {
+  it("is when each resource's last ball lands", () => {
+    const flights = planFlights(
+      [snapper({ amount: 50 }), snapper({ type: 4, resource: "r4", x: 900, y: 450, amount: 30_000 })],
+      hall,
+      () => 0,
+    );
+    const ends = flightEnds(flights);
+    expect(ends.r1).toBeCloseTo(flights[0]!.duration, 10);
+    expect(ends.r4).toBeCloseTo(11 / 12 + flights[12]!.duration, 10);
+    expect(ends.r2).toBeUndefined();
   });
 });

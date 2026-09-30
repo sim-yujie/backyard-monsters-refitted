@@ -105,6 +105,44 @@ describe("the HUD", () => {
     expect(hud.shownOf("r1")).toBe(2_200);
   });
 
+  it("counts a bank across its whole flight, through the answer, without a jump (#208)", () => {
+    hud.setResources({ r1: 1_000 });
+    hud.expectBank("r1", 1);
+    hud.deliver("r1", 1_000, 2_000);
+    vi.advanceTimersByTime(500);
+    const quarter = hud.shownOf("r1")!;
+    expect(quarter).toBeGreaterThan(1_150);
+    expect(quarter).toBeLessThan(1_350);
+    // The answer lands mid-count: pool up, credit held, same task.
+    hud.setResources({ r1: 2_000 });
+    hud.hold("r1", 1_000);
+    hud.expectBank("r1", -1);
+    expect(hud.shownOf("r1")).toBe(quarter);
+    vi.advanceTimersByTime(1_000);
+    expect(hud.shownOf("r1")).toBeGreaterThan(1_650);
+    expect(hud.shownOf("r1")).toBeLessThan(1_850);
+    vi.advanceTimersByTime(600);
+    expect(button("r1").textContent).toBe("2,000");
+  });
+
+  it("counts back down from mid-count when a bank is refused", () => {
+    hud.setResources({ r1: 1_000 });
+    hud.expectBank("r1", 1);
+    hud.deliver("r1", 1_000, 2_000);
+    vi.advanceTimersByTime(1_000);
+    const reached = hud.shownOf("r1")!;
+    expect(reached).toBeGreaterThan(1_300);
+    hud.expectBank("r1", -1);
+    hud.deliver("r1", -1_000);
+    // No jump: it starts from where it was and heads back down.
+    expect(hud.shownOf("r1")).toBe(reached);
+    vi.advanceTimersByTime(250);
+    expect(hud.shownOf("r1")).toBeLessThan(reached);
+    expect(hud.shownOf("r1")).toBeGreaterThan(1_000);
+    vi.advanceTimersByTime(300);
+    expect(button("r1").textContent).toBe("1,000");
+  });
+
   it("still floats a spend while a bank is in flight", () => {
     hud.setResources({ r1: 1_000 });
     hud.expectBank("r1", 1);

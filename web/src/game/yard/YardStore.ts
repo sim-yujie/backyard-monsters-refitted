@@ -228,7 +228,7 @@ export interface YardSceneHooks {
   /**
    * Plays a bank on the press (#208, `bankShow.ts`): each harvester in
    * `predicted` (`predictBank`) throws its resource balls at the Town Hall
-   * now, and the HUD counts up as they land. Returns what to hand the
+   * now, and the HUD counts up across their flight. Returns what to hand the
    * server's answer to, straight after it (a refusal takes the balls back),
    * or null when nothing flies. Absent where there is no yard drawn.
    */
