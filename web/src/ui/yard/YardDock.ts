@@ -1,3 +1,8 @@
+import {
+  finishedMonstersJobs,
+  finishedText,
+  type FinishedMonstersJobs,
+} from "@/game/monsters/finishedJobs";
 import { stalledHatcheries } from "@/game/monsters/housing";
 import type { OwnYardTarget } from "@/game/yard/ownYards";
 import { YardChangeReason, type YardUiBinding } from "@/game/yard/YardStore";
@@ -14,7 +19,9 @@ import { YardSwitcher } from "./YardSwitcher";
  *
  * Bottom right, under the right thumb: Build, large, in the accent; the
  * Collect all harvest bubble (`CollectAll`) above and left of it; Monsters
- * beside Build, with a badge for monsters waiting for room; Layout above
+ * beside Build, with an amber badge for monsters waiting for room, or else a
+ * cyan one for monster jobs finished since the player last looked
+ * (`finishedJobs.ts`, #192); Layout above
  * Build. Bottom left, the ways out: Map, and above it the yard switcher
  * (`YardSwitcher`, #146) on the own yard or Home on a visit. A visit whose
  * gate passed has Attack in Build's place.
@@ -50,6 +57,8 @@ export interface YardDockOptions {
   readonly onYardSelect?: (target: OwnYardTarget) => void;
   /** Kits: the Starter Kit picker, on an own outpost only. */
   readonly onKits?: () => void;
+  /** The finished monster jobs to count; the tab's own by default. */
+  readonly finished?: FinishedMonstersJobs;
 }
 
 /** Which of the dock's optional buttons show. Map and Layout always do. */
@@ -155,9 +164,12 @@ export class YardDock {
   private readonly switcher: YardSwitcher | null;
   private binding: YardUiBinding | null = null;
   private unsubscribe: (() => void) | null = null;
+  private readonly finished: FinishedMonstersJobs;
+  private readonly unsubscribeFinished: () => void;
 
   constructor(options: YardDockOptions) {
     this.options = options;
+    this.finished = options.finished ?? finishedMonstersJobs;
     this.element = document.createElement("div");
     this.element.className = "yard-dock";
 
@@ -233,6 +245,7 @@ export class YardDock {
       ...(this.attack ? [this.attack.element] : []),
     );
     this.element.append(left, right);
+    this.unsubscribeFinished = this.finished.subscribe(() => this.refreshBadge());
     this.bind(null);
   }
 
@@ -308,23 +321,30 @@ export class YardDock {
   }
 
   destroy(): void {
+    this.unsubscribeFinished();
     this.bind(null);
     this.collect.destroy();
     this.switcher?.destroy();
     this.element.remove();
   }
 
-  /** The Monsters badge: hatched monsters waiting for room (amber, #169). */
+  /**
+   * The Monsters badge: hatched monsters waiting for room (amber, #169), or,
+   * when none are, the monster jobs finished since the player last opened
+   * the screen (cyan, #192). The amber one is the one to act on, so it wins.
+   */
   private refreshBadge(): void {
     const store = this.binding?.store;
     const waiting = store ? stalledHatcheries(store.save) : 0;
-    this.monstersBadge.hidden = waiting <= 0;
-    this.monstersBadge.textContent = waiting > 0 ? formatAmount(waiting) : "";
+    const finished = store && waiting <= 0 ? this.finished.value : 0;
+    const count = waiting > 0 ? waiting : finished;
+    const text = waiting > 0 ? waitingText(waiting) : finished > 0 ? finishedText(finished) : null;
+    this.monstersBadge.hidden = count <= 0;
+    this.monstersBadge.textContent = count > 0 ? formatAmount(count) : "";
+    this.monstersBadge.classList.toggle("yard-dock__badge--warning", waiting > 0);
+    this.monstersBadge.classList.toggle("yard-dock__badge--finished", waiting <= 0 && finished > 0);
     const monsters = this.monsters.element;
-    monsters.title =
-      waiting > 0
-        ? `Monsters: ${waitingText(waiting)}`
-        : "Monsters: unlock, hatch and house your monsters";
-    monsters.setAttribute("aria-label", waiting > 0 ? `Monsters. ${waitingText(waiting)}` : "Monsters");
+    monsters.title = text ? `Monsters: ${text}` : "Monsters: unlock, hatch and house your monsters";
+    monsters.setAttribute("aria-label", text ? `Monsters. ${text}` : "Monsters");
   }
 }

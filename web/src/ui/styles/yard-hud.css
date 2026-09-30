@@ -395,6 +395,12 @@
   color: var(--colour-warning-text);
 }
 
+/* Monster jobs finished since the player last looked (#192). */
+.yard-dock__badge--finished {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
 /* ── Collect all: the harvest bubble ──────────────────────────────────── */
 
 .yard-collect {

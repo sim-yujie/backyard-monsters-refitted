@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BaseLoadResponse } from "@/api/types";
+import type { BaseLoadResponse, CompletedJob } from "@/api/types";
+import { FinishedMonstersJobs } from "@/game/monsters/finishedJobs";
 import { MAIN_YARD, outpostTarget, type OwnYardTarget } from "@/game/yard/ownYards";
 import type { YardChange, YardListener, YardStore, YardUiBinding } from "@/game/yard/YardStore";
 import { Notices } from "@/ui/maproom/Notices";
@@ -269,6 +270,51 @@ describe("YardDock", () => {
     expect(badge().textContent).toBe("2");
     expect(button("monsters").getAttribute("aria-label")).toBe(`Monsters. ${waitingText(2)}`);
     expect(button("monsters").title).toBe("Monsters: 2 monsters are waiting for room");
+  });
+
+  it("badges Monsters cyan with the monster jobs finished since last looked (#192)", () => {
+    const { binding, fake } = fakeBinding(MAIN_YARD, vi.fn());
+    const finished = new FinishedMonstersJobs();
+    dock = new YardDock({ ...options, finished }).mount(document.body);
+    const badge = (): HTMLElement => button("monsters").querySelector<HTMLElement>(".yard-dock__badge")!;
+    const job = (kind: string): CompletedJob => ({ kind, id: 1, t: null, at: T0, detail: {} });
+
+    // Not on a visit, or before the own yard is bound.
+    finished.add([job("unlock")]);
+    expect(badge().hidden).toBe(true);
+
+    dock.bind(binding);
+    expect(badge().hidden).toBe(false);
+    expect(badge().textContent).toBe("1");
+    expect(badge().classList.contains("yard-dock__badge--finished")).toBe(true);
+    expect(badge().classList.contains("yard-dock__badge--warning")).toBe(false);
+    expect(button("monsters").title).toBe("Monsters: 1 monster job finished");
+
+    finished.add([job("train"), job("research"), job("hatch"), job("upgrade")]);
+    expect(badge().textContent).toBe("3");
+    expect(button("monsters").getAttribute("aria-label")).toBe("Monsters. 3 monster jobs finished");
+
+    // Monsters waiting for room take the corner in amber.
+    fake.save = {
+      ...fake.save,
+      monsters: { hstage: [2], h: [["C14", 0]] },
+    } as unknown as BaseLoadResponse;
+    fake.emit();
+    expect(badge().textContent).toBe("1");
+    expect(badge().classList.contains("yard-dock__badge--warning")).toBe(true);
+    expect(badge().classList.contains("yard-dock__badge--finished")).toBe(false);
+
+    fake.save = { ...fake.save, monsters: {} } as unknown as BaseLoadResponse;
+    fake.emit();
+    expect(badge().textContent).toBe("3");
+
+    finished.clear();
+    expect(badge().hidden).toBe(true);
+    expect(button("monsters").getAttribute("aria-label")).toBe("Monsters");
+
+    dock.destroy();
+    dock = null;
+    finished.add([job("unlock")]);
   });
 
   it("stops listening to the store when unbound or destroyed", () => {

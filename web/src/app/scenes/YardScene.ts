@@ -16,6 +16,7 @@ import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
 import { setMapFocus } from "@/game/maproom/mapFocus";
 import { MapRoomChoice, mapRoomOf, takePrimedOwnYard } from "@/game/maproom/mapRoute";
+import { finishedMonstersJobs } from "@/game/monsters/finishedJobs";
 import {
   blueprintBlock,
   PlannerAccess,
@@ -1017,6 +1018,8 @@ export class YardScene implements Scene {
     this.monsters ??= new MonstersScreen({ binding, tabs }).mount(context.overlay.content);
     this.monsters.besidePanel(this.panel !== null);
     this.monsters.open(shown, focus);
+    // The player is looking: the Monsters button's cyan count starts again (#192).
+    finishedMonstersJobs.clear();
   }
 
   /**
@@ -1705,6 +1708,9 @@ export class YardScene implements Scene {
   private onStoreChange(change: YardChange): void {
     const store = this.store;
     if (!store || !this.camera) return;
+    // Monster jobs that finished out of the player's sight, for the Monsters
+    // button's cyan count (#192); one that ends with the screen open is seen.
+    if (!this.monsters?.isOpen) finishedMonstersJobs.add(change.completed);
     if (change.reason === YardChangeReason.PENDING || change.reason === YardChangeReason.AWAY) return;
 
     const yard = store.yard;
