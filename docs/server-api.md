@@ -545,13 +545,16 @@ lands (the final save, or the finaliser), on a Map Room 1 or 2 main yard or a Ma
 (each its own `monsters.housed`; Map Room 3 and Inferno are unchanged), the server does it without
 the dice: each Housing the replay brought down takes its share of every stack, `fallen ÷ standing`
 rounded per type to the nearest, halves up (4 Housings, 1 fallen: 10 Pokeys lose 3, 1 Octo-ooze
-loses 0). A Housing counts when built (one under construction counts on neither side) and standing
-as the battle began. What is left is then culled one of every type per pass (`cullHousing`) until
+loses 0). A Housing counts when built and standing as the battle began: one under construction,
+or one already at 0 health when the attack began (it held nothing, as Flash housed monsters only in
+living Housings; possible on an outpost, whose buildings are not caught up at attack entry), counts
+on neither side. What is left is then culled one of every type per pass (`cullHousing`) until
 it fits the Housings still standing (health above 0) at their current level (a Housing mid-upgrade
 at its old one), Housing Expansion included while it runs; academy levels and the expansion are
 the outpost owner's main yard's. Nothing else is touched (bunker garrisons, the champion, hatchery
-queues, monsters away) and nothing is refunded. With no Housing fallen nothing happens here; the
-load's own cull still handles other drops in capacity. The defender's stored `attackreport` gets
+queues, monsters away) and nothing is refunded. With no Housing fallen nothing at all is applied
+at landing, not even the overflow cull; the defender's next load's own cull (`catchUpMonsters.ts`
+step 3) still handles every other drop in capacity. The defender's stored `attackreport` gets
 one line before its result, e.g. "A Housing fell: 3 Pokeys and 1 Octo-ooze were lost." (the share
 and the overflow together, in `report.ts`'s monster names; left out when nothing was lost), and an
 outpost owner's attack notice ends ", and N housed monsters were lost." The attacker's end panel is
