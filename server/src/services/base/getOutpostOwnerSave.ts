@@ -29,3 +29,25 @@ export const getOutpostOwnerSave = async (save: Save, user: User): Promise<Outpo
     { fields: ["resources"] },
   );
 };
+
+/** Where a yard's academy levels and Housing Expansion live. */
+export type HousingOwner = Pick<Save, "academy" | "storedata">;
+
+/**
+ * The save whose academy levels and buffs measure a yard's housing (issue
+ * #160): a main yard's own, an outpost's owner's main save. Read in a fork
+ * of its own, so the owner's row that `getOutpostOwnerSave` loaded with only
+ * `resources` is neither refreshed nor written by it.
+ *
+ * @param {Save} save - The yard
+ * @returns {Promise<HousingOwner | null>} Its housing's owner, or null if an outpost's has gone
+ */
+export const getHousingOwner = async (save: Save): Promise<HousingOwner | null> => {
+  if (save.type !== BaseType.OUTPOST) return save;
+
+  return await postgres.em.fork().findOne(
+    Save,
+    { saveuserid: save.saveuserid, type: BaseType.MAIN },
+    { fields: ["academy", "storedata"] },
+  );
+};

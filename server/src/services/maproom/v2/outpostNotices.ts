@@ -63,20 +63,26 @@ export interface OutpostCell {
 
 /**
  * "Bramble attacked your outpost at (243, 206)" and what it cost: the damage
- * it was left at and the loot taken from the owner's pool.
+ * it was left at, the loot taken from the owner's pool and, when a Housing
+ * fell, how many housed monsters went with it (issue #160).
  */
 export const attackNoticeText = (
   attacker: string,
   cell: OutpostCell,
   damage: number,
   loot: ResourceAmounts,
+  housedLost = 0,
 ): { subject: string; message: string } => {
   const taken = amountsText(loot);
+  const looted = taken === "" ? "nothing was looted" : `${taken} were looted`;
+  const lost = Math.max(0, Math.floor(housedLost));
   return {
     subject: `${attacker} attacked your outpost at (${cell.x}, ${cell.y})`,
     message:
       `It was left ${Math.max(0, Math.round(damage))}% damaged` +
-      (taken === "" ? ", and nothing was looted." : `, and ${taken} were looted.`),
+      (lost === 0
+        ? `, and ${looted}.`
+        : `, ${looted}, and ${lost} housed ${lost === 1 ? "monster was" : "monsters were"} lost.`),
   };
 };
 
@@ -208,10 +214,12 @@ export const noticeOutpostAttack = async (
     outpost: Pick<Save, "baseid" | "saveuserid" | "type" | "damage" | "mapversion">;
     attacker: { userid: number; username: string };
     defenderDelta: ResourceAmounts | null | undefined;
+    /** Housed monsters lost with the outpost's fallen Housings (issue #160). */
+    housedLost?: number;
     now: number;
   },
 ): Promise<void> => {
-  const { outpost, attacker, defenderDelta, now } = input;
+  const { outpost, attacker, defenderDelta, housedLost, now } = input;
   if (outpost.type !== BaseType.OUTPOST || outpost.mapversion === MapRoomVersion.V3) return;
   // Its base id carries its cell, as every outpost began as a camp (`rangeCheck.ts`).
   const cell = cellCoordsFromBaseId(outpost.baseid);
@@ -227,7 +235,7 @@ export const noticeOutpostAttack = async (
     ownerId: outpost.saveuserid,
     byUserId: attacker.userid,
     type: OUTPOST_ATTACKED,
-    text: attackNoticeText(attacker.username, cell, Number(outpost.damage) || 0, loot),
+    text: attackNoticeText(attacker.username, cell, Number(outpost.damage) || 0, loot, housedLost),
     cell,
     baseid: outpost.baseid,
     now,

@@ -24,7 +24,7 @@ import { recordBombSpend } from "../../../services/base/combat/recordBombSpend.j
 import { defenderLootHandler } from "./handlers/defenderLootHandler.js";
 import { monsterUpdateHandler, monsterUpdateMode } from "./handlers/monsterUpdateHandler.js";
 import { validateSave } from "../../../scripts/anticheat/anticheat.js";
-import { getOutpostOwnerSave } from "../../../services/base/getOutpostOwnerSave.js";
+import { getHousingOwner, getOutpostOwnerSave } from "../../../services/base/getOutpostOwnerSave.js";
 import { advanceBuildingTimers } from "../../../services/base/advanceBuildingTimers.js";
 import { championHandler } from "./handlers/championHandler.js";
 import { buildingDataHandler } from "./handlers/buildingDataHandler.js";
@@ -72,6 +72,12 @@ import { isDeclareWarRunning } from "../../../services/alliance/powerups.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import { championsAfterAttack, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
 import { garrisonsAfterBattle } from "../../../services/base/combat/bunkerGarrison.js";
+import {
+  landHousingLoss,
+  lostCount,
+  reportWithHousingLoss,
+  type HousingLoss,
+} from "../../../services/base/combat/housingLoss.js";
 import { championsAfterDefence } from "../../../services/base/combat/defenderChampion.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 
@@ -490,6 +496,23 @@ const saveBase = async (
       baseSave.buildingdata = garrisonsAfterBattle(baseSave.buildingdata, battle);
     }
 
+    // A Housing that fell takes its share of the housed monsters, and what no
+    // longer fits the Housings left standing is culled (issue #160,
+    // `housingLoss.ts`); the stored report says what was lost.
+    let housingLoss: HousingLoss | null = null;
+    if (battle) {
+      housingLoss = landHousingLoss(
+        baseSave,
+        { before: storedHealthData, after: battle.buildinghealthdata },
+        await getHousingOwner(baseSave),
+        now
+      );
+      (baseSave as unknown as { attackreport: unknown }).attackreport = reportWithHousingLoss(
+        baseSave.attackreport,
+        housingLoss
+      );
+    }
+
     postgres.em.persist(userSave);
     await postgres.em.flush();
 
@@ -528,6 +551,7 @@ const saveBase = async (
         outpost: baseSave,
         attacker: user,
         defenderDelta,
+        housedLost: lostCount(housingLoss),
         now,
       });
     }

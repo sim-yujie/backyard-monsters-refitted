@@ -75,6 +75,18 @@ describe("the words", () => {
     );
   });
 
+  test("an attack whose fallen Housings cost housed monsters says how many (#160)", () => {
+    expect(attackNoticeText("Bramble", { x: 1, y: 2 }, 40, { r4: 500 }, 4).message).toBe(
+      "It was left 40% damaged, 500 Goo were looted, and 4 housed monsters were lost.",
+    );
+    expect(attackNoticeText("Bramble", { x: 1, y: 2 }, 40, {}, 1).message).toBe(
+      "It was left 40% damaged, nothing was looted, and 1 housed monster was lost.",
+    );
+    expect(attackNoticeText("Bramble", { x: 1, y: 2 }, 40, {}, 0).message).toBe(
+      "It was left 40% damaged, and nothing was looted.",
+    );
+  });
+
   test("a takeover: who and where", () => {
     expect(takenNoticeText("Bramble", { x: 243, y: 206 })).toEqual({
       subject: "Bramble took your outpost at (243, 206)",

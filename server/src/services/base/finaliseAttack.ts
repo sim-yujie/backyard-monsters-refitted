@@ -29,7 +29,8 @@ import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpen
 import { combatCellHeight } from "./combat/cellHeight.js";
 import { garrisonsAfterBattle } from "./combat/bunkerGarrison.js";
 import { championsAfterDefence } from "./combat/defenderChampion.js";
-import { getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
+import { landHousingLoss, lostCount, reportWithHousingLoss } from "./combat/housingLoss.js";
+import { getHousingOwner, getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
 import { storedDamage } from "./storedDamage.js";
 import { catchUpArmyRow } from "../yard/armies.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
@@ -246,7 +247,19 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
   // Whole and cut down, as the attack's own save stores it (#72).
   defender.damage = storedDamage(outcome.damage) ?? defender.damage;
   if (outcome.destroyed !== undefined) defender.destroyed = outcome.destroyed;
-  (defender as unknown as { attackreport: unknown }).attackreport = outcome.attackreport;
+  // A Housing that fell takes its share of the housed monsters, the overflow
+  // is culled, and the report says so, as the save lands it (issue #160,
+  // `housingLoss.ts`).
+  const housingLoss = landHousingLoss(
+    defender,
+    { before: storedHealthData, after: outcome.buildinghealthdata },
+    await getHousingOwner(defender),
+    now
+  );
+  (defender as unknown as { attackreport: unknown }).attackreport = reportWithHousingLoss(
+    outcome.attackreport,
+    housingLoss
+  );
 
   const lootTarget = outpostOwnerSave ?? defender;
   defenderLootHandler(loot.defenderDelta, lootTarget);
@@ -262,6 +275,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
       outpost: defender,
       attacker,
       defenderDelta: loot.defenderDelta,
+      housedLost: lostCount(housingLoss),
       now,
     });
   }
@@ -291,6 +305,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
     lootBasis: loot.basis,
     flung: outcome.flung,
     bunkerLosses: outcome.bunkerLosses,
+    housingLosses: housingLoss?.lost ?? {},
     bombs: bombs.charges.map(({ id }) => id),
   });
 

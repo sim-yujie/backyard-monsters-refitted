@@ -236,7 +236,7 @@ dedicated handler or falls back to `JSON.parse`-and-assign:
 | `resources` | `resourceHandler.ts` (`resourcesHandler`) | Adds the client's `{r1..r4, r1max..r4max}` delta onto the stored pool (`updateResources`). When the owner is saving from an **outpost** session, the `rNmax` fields are dropped (`skipCapacity`) — capacity is a property of the main yard's buildings, not the outpost's. |
 | `iresources` | same handler, `key: SaveKeys.IRESOURCES` | Same, but writes the Inferno resource pool. |
 | `academy` | `academyHandler.ts` | Parses `{[monsterKey]: {level}}`, clamps every `level` to a maximum of `6`. |
-| `buildingdata` | `buildingDataHandler.ts` (attack only; non-attack just assigns directly) | On an **attack** save, non-trap buildings are never modified by the client payload — they're always taken from the DB. The only legitimate change is removing a triggered trap (`t===24` TRAP or `t===117` HEAVY_TRAP): if the client's submission no longer includes that trap's key, it's dropped from the defender's `buildingdata`. On a Map Room 1 or 2 attack the fired traps are the server's replay's, not the save's (issue #23, C3, see "The battle is the server's" below); only a Map Room 3 attack still reads them from the save. The save that ends the attack also empties a fallen Monster Bunker's garrison (`m`, issue #130, `services/base/combat/bunkerGarrison.ts`), as Flash's `Export` leaves a bunker at zero health empty (`BUILDING22.as:683-700`): the bunkers the server's replay brought down, whatever the save reports. Each bunker the battle fought with (the session's `defenderForces`, issue #195) then holds what the replay left it: its survivors back in, its dead gone, a fallen bunker only the defenders that were out (`garrisonsAfterBattle`). |
+| `buildingdata` | `buildingDataHandler.ts` (attack only; non-attack just assigns directly) | On an **attack** save, non-trap buildings are never modified by the client payload — they're always taken from the DB. The only legitimate change is removing a triggered trap (`t===24` TRAP or `t===117` HEAVY_TRAP): if the client's submission no longer includes that trap's key, it's dropped from the defender's `buildingdata`. On a Map Room 1 or 2 attack the fired traps are the server's replay's, not the save's (issue #23, C3, see "The battle is the server's" below); only a Map Room 3 attack still reads them from the save. The save that ends the attack also empties a fallen Monster Bunker's garrison (`m`, issue #130, `services/base/combat/bunkerGarrison.ts`), as Flash's `Export` leaves a bunker at zero health empty (`BUILDING22.as:683-700`): the bunkers the server's replay brought down, whatever the save reports. Each bunker the battle fought with (the session's `defenderForces`, issue #195) then holds what the replay left it: its survivors back in, its dead gone, a fallen bunker only the defenders that were out (`garrisonsAfterBattle`). A Housing the replay brought down takes its housed monsters with it (issue #160), see "A fallen Housing's monsters" below. |
 | `champion` | `championHandler.ts` (attack only) | Map Room 3 only: `hp` can be lowered by an attack, and only if the reported `hp` is less than the stored value (`Math.min`) — every other champion field is server-authoritative. On a Map Room 1 or 2 attack the defender's champion that came out of its Champion Cage takes the health the server's replay left it, never more than it had, 0 if it died, and heals from there (issue #195, `services/base/combat/defenderChampion.ts`); every other champion and field stays as stored. The save's `champion` is only compared (`attack-replay-mismatch` field `champion`). On the save that ends an attack, the **attacker's** own champions come from `attackerchampion` the same way (issue #23, C1, `services/base/combat/attackerRow.ts`): only `hp`, only downwards, and only for a champion the fling log flung; level, feeding and status stay as stored. |
 | `attackersiege` | `attackerRow.ts` `siegeAfterAttack` (attack only) | Never written as sent (issue #23, C1). On the save that ends the attack, the attacker's stored `siege` stock less one per `siege` event in the fling log; nothing without a usable log. |
 | `points` / `basevalue` | inline | `baseSave.points = value.toString()` / `.basevalue = value.toString()` — stored as strings. |
@@ -535,7 +535,27 @@ the attack (an outpost owner's autobank, another attack). The defender's loss la
 it stands, never below zero. A checkpoint without that record (one written before it existed)
 credits nothing, as a save without a roster would not; its damage still lands. A bunker the finaliser's replay brought down by the checkpoint's tick loses its garrison, as the final
 save's does (issue #130); each bunker it fought with holds what the replay left it, and the caged
-champion keeps the health the replay left it, as on the final save (issue #195).
+champion keeps the health the replay left it, as on the final save (issue #195). A Housing it
+brought down takes its housed monsters with it, as on the final save (issue #160).
+
+**A fallen Housing's monsters** (issue #160, `services/base/combat/housingLoss.ts`). Flash put each
+housed monster in a random living Housing and killed those in a Housing that was destroyed
+(`BUILDING15.as:93-104`), then culled what no longer fit (`HOUSING.as:161-199`). When an attack
+lands (the final save, or the finaliser), on a Map Room 1 or 2 main yard or a Map Room 2 outpost
+(each its own `monsters.housed`; Map Room 3 and Inferno are unchanged), the server does it without
+the dice: each Housing the replay brought down takes its share of every stack, `fallen ÷ standing`
+rounded per type to the nearest, halves up (4 Housings, 1 fallen: 10 Pokeys lose 3, 1 Octo-ooze
+loses 0). A Housing counts when built (one under construction counts on neither side) and standing
+as the battle began. What is left is then culled one of every type per pass (`cullHousing`) until
+it fits the Housings still standing (health above 0) at their current level (a Housing mid-upgrade
+at its old one), Housing Expansion included while it runs; academy levels and the expansion are
+the outpost owner's main yard's. Nothing else is touched (bunker garrisons, the champion, hatchery
+queues, monsters away) and nothing is refunded. With no Housing fallen nothing happens here; the
+load's own cull still handles other drops in capacity. The defender's stored `attackreport` gets
+one line before its result, e.g. "A Housing fell: 3 Pokeys and 1 Octo-ooze were lost." (the share
+and the overflow together, in `report.ts`'s monster names; left out when nothing was lost), and an
+outpost owner's attack notice ends ", and N housed monsters were lost." The attacker's end panel is
+unchanged.
 
 **Not yet covered.** The Inferno save endpoint (`/api/:apiVersion/bm/base/save` →
 `controllers/inferno/infernoSave.ts`) still has the original gate — a non-zero `attackid` on the
@@ -1307,7 +1327,9 @@ the player was away; the web client shows it as one "While you were away: …" n
 The owner's **main** yard load also appends, after the jobs, any unshown **outpost notices**
 (outposts WP8, #187): `{ kind: "outpostAttacked" | "outpostTaken", id: <outpost baseid>, t: null,
 at, detail: { text, x, y } }`, where `text` is the whole sentence ("Bramble attacked your outpost
-at (243, 206). It was left 63% damaged, and 1,234 Twigs were looted."). They are mailbox messages
+at (243, 206). It was left 63% damaged, and 1,234 Twigs were looted."; when a fallen Housing cost
+the outpost housed monsters, "It was left 63% damaged, 1,234 Twigs were looted, and 4 housed
+monsters were lost.", issue #160). They are mailbox messages
 (below) handed back once and marked read as they are (`services/maproom/v2/outpostNotices.ts`).
 Any such load counts, including the map screen's (it loads the own yard to find the home cell), so
 the client keeps each list until the yard screen shows it.

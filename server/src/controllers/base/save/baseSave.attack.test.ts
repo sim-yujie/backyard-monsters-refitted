@@ -26,6 +26,8 @@ const LOG = {
 const ENTRY = { [HOME]: { C4: 12, C1: 4 } };
 
 let defender: Record<string, any>;
+/** Messages the save leaves in a mailbox. */
+const notices: Record<string, unknown>[] = [];
 let attackerSave: Record<string, any>;
 const store = new Map<string, string>();
 
@@ -37,6 +39,17 @@ mock.module("../../../server.js", () => ({
       },
       findOne: async () => defender,
       find: async () => [],
+      // The outpost owner's academy and buffs are read in a fork (issue #160).
+      fork() {
+        return this;
+      },
+      // The outpost owner's mail (outposts WP8, #187; issue #160).
+      create: (_entity: unknown, data: Record<string, unknown>) => {
+        notices.push(data);
+        return data;
+      },
+      count: async () => 0,
+      nativeUpdate: async () => 0,
       persist: () => {},
       flush: async () => {},
     },
@@ -362,6 +375,107 @@ describe("a fallen bunker's garrison through the save (issue #130)", () => {
     await save({ "2": 0 }, false);
 
     expect(defender.buildingdata["2"].m).toEqual({ C1: 5 });
+  });
+});
+
+describe("a fallen Housing's monsters through the save (issue #160)", () => {
+  // Four Pokeys dropped on a Housing bring it down, and never reach the far one.
+  const RAID = {
+    v: 1,
+    seed: 5,
+    events: [{ kind: "fling", t: 80, x: 440, y: 440, r: 200, monsters: { C1: 4 } }],
+  };
+  const HOUSINGS = {
+    "2": { id: 2, t: 15, l: 1, X: 420, Y: 420 },
+    "3": { id: 3, t: 15, l: 1, X: -600, Y: -600 },
+  };
+
+  const armed = (type = "main", housings: Record<string, unknown> = HOUSINGS) => {
+    Object.assign(defender, { type, mapversion: 2, wmid: 0, attacks: [], attackid: ATTACK_ID });
+    defender.buildingdata = { ...structuredClone(YARD), ...structuredClone(housings) };
+    defender.buildinghealthdata = {};
+    defender.monsters = { housed: { C1: 10, C2: 1 }, space: 400 };
+  };
+
+  const save = (over = true, tick?: number) =>
+    baseSave(
+      ctxFor({
+        ...(over && { over: "1" }),
+        ...(tick !== undefined && { tick: String(tick) }),
+        flinglog: JSON.stringify(RAID),
+      }),
+      async () => {}
+    );
+
+  test("the fallen Housing's share goes when the attack lands, and the report says so", async () => {
+    armed();
+
+    await save();
+
+    expect(defender.buildinghealthdata["2"]).toBe(0);
+    expect(defender.buildinghealthdata["3"] ?? 1).toBeGreaterThan(0);
+    // One of two: half of each stack, halves up.
+    expect(defender.monsters).toEqual({ housed: { C1: 5 }, space: 400 });
+    const lines = String(defender.attackreport).split("\n");
+    expect(lines.at(-2)).toBe("A Housing fell: 5 Pokeys and 1 Octo-ooze were lost.");
+    expect(lines.at(-1)).toStartWith("Result:");
+  });
+
+  test("a Map Room 2 outpost loses its own housed monsters, and its owner is told", async () => {
+    armed("outpost");
+    // The outpost's base id carries its cell (`rangeCheck.ts`).
+    defender.baseid = "1000243206";
+    notices.length = 0;
+
+    await save();
+
+    expect(defender.monsters.housed).toEqual({ C1: 5 });
+    expect(notices).toHaveLength(1);
+    expect(String(notices[0]!.message)).toEndWith(", and 6 housed monsters were lost.");
+  });
+
+  test("a Housing repaired before its owner's next load still lost them", async () => {
+    armed();
+    await save();
+
+    // Repaired in full, then the owner's load catches the army up.
+    const { catchUpMonsters } = await import("../../../services/yard/catchUpMonsters.js");
+    const now = Math.floor(Date.now() / 1000);
+    const yard: Record<string, any> = { ...structuredClone(defender), buildinghealthdata: {} };
+    catchUpMonsters(yard, now, now, []);
+
+    expect(yard.monsters.housed).toEqual({ C1: 5 });
+  });
+
+  test("with no Housing fallen, or nothing lost, the roster and the report are as they were", async () => {
+    // Stopped before the Pokeys bring anything down.
+    armed();
+    await save(true, 100);
+    expect(defender.buildinghealthdata["2"] ?? 1).toBeGreaterThan(0);
+    expect(defender.monsters.housed).toEqual({ C1: 10, C2: 1 });
+    expect(String(defender.attackreport)).not.toContain("Housing");
+
+    armed();
+    defender.monsters = { housed: {} };
+    await save();
+    expect(defender.buildinghealthdata["2"]).toBe(0);
+    expect(String(defender.attackreport)).not.toContain("Housing");
+  });
+
+  test("a save that does not end the attack costs nothing", async () => {
+    armed();
+
+    await save(false);
+
+    expect(defender.monsters.housed).toEqual({ C1: 10, C2: 1 });
+  });
+
+  test("a wild monster camp has no housing to lose", async () => {
+    armed("tribe");
+
+    await save();
+
+    expect(defender.monsters.housed).toEqual({ C1: 10, C2: 1 });
   });
 });
 

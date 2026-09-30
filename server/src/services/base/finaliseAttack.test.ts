@@ -128,6 +128,7 @@ const { attackCheckpointKey } = await import("./attackCheckpoint.js");
 const { attackSessionKey } = await import("./attackSession.js");
 const { replayAbandonedAttack } = await import("./combat/abandonedAttack.js");
 const { attackLootOf } = await import("./combat/attackLoot.js");
+const { housingLossOf, housingLossLine } = await import("./combat/housingLoss.js");
 
 const LOG = {
   v: 1 as const,
@@ -433,6 +434,53 @@ describe("finaliseAbandonedAttack", () => {
       expect(defender.buildinghealthdata["83"] ?? 1).toBeGreaterThan(0);
       expect(defender.buildingdata["83"].m).toEqual({ C1: 5 });
       expect(defender.buildingdata["84"].m).toEqual({ C3: 2 });
+    }, REPLAY_TIMEOUT_MS);
+  });
+
+  describe("a fallen Housing's monsters (issue #160)", () => {
+    // Three hundred Pokeys dropped among the sandbox's four level 6 Housings.
+    const RAID = {
+      v: 1 as const,
+      seed: 1834027731,
+      events: [{ kind: "fling" as const, t: 480, x: 555, y: -55, r: 300, monsters: { C1: 300 } }],
+    };
+    const HOUSINGS = ["82", "584", "585", "586"];
+
+    const asMainYard = () => {
+      Object.assign(defender, { type: "main", mapversion: 2, attacks: [] });
+      defender.monsters = { housed: { C1: 40, C3: 8, C5: 1 }, space: 2160 };
+    };
+
+    test("go with it when the server finishes the attack, and the report says so", async () => {
+      asMainYard();
+      await arm({ tick: LATE, flinglog: RAID });
+
+      expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+      const fallen = HOUSINGS.filter((id) => defender.buildinghealthdata[id] === 0).length;
+      expect(fallen).toBeGreaterThan(0);
+      const expected = housingLossOf({
+        buildingdata: sandbox.buildingdata,
+        before: {},
+        after: defender.buildinghealthdata,
+        housed: { C1: 40, C3: 8, C5: 1 },
+        levels: {},
+        expansion: false,
+      })!;
+      expect(expected.fallen).toBe(fallen);
+      expect(defender.monsters).toEqual({ housed: expected.housed, space: 2160 });
+      expect(defender.attackreport).toContain(housingLossLine(expected)!);
+    }, REPLAY_TIMEOUT_MS);
+
+    test("stay when every Housing still stands as the attacker left", async () => {
+      asMainYard();
+      await arm({ tick: 500, flinglog: RAID });
+
+      expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+      expect(HOUSINGS.every((id) => (defender.buildinghealthdata[id] ?? 1) > 0)).toBe(true);
+      expect(defender.monsters.housed).toEqual({ C1: 40, C3: 8, C5: 1 });
+      expect(defender.attackreport).not.toContain("Housing");
     }, REPLAY_TIMEOUT_MS);
   });
 

@@ -422,7 +422,11 @@ defence.
 The attack load serves the defence as `defenderforces` and keeps it in the session; the web client,
 the attack save's replay, the finaliser and the Wild Monster Baiter all fight that one defence. The
 save writes the caged champion's health and each bunker's garrison from the replay, compares the
-save's `champion` under C7, and reports the champion's fall. The web client draws the defender's
+save's `champion` under C7, and reports the champion's fall. Housed monsters never fight, so the
+engine knows nothing of them; when the attack lands, the save and the finaliser take a fallen
+Housing's share of `monsters.housed` from the replay's health map, cull what no longer fits, and add
+a line to the stored report (issue #160, `services/base/combat/housingLoss.ts`, outside the shared
+rules; no digest changes). The web client draws the defender's
 side with blue health bars (`AttackBattleLayer.creepColour`), paler for its champion.
 
 ---
