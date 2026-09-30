@@ -20,7 +20,7 @@ import {
 import { AttackSession } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
-import { flyerAltitude, spriteFor } from "./monsterSprites";
+import { championFlightTop, flyerAltitude, spriteFor } from "./monsterSprites";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 
 /**
@@ -177,7 +177,7 @@ describe("headings and cells", () => {
     for (let age = 0; age < walk.count * walk.ticksPerFrame; age++) {
       const layout = layoutCreep(flyer, fomor, { heading: 0, moving: false, age }, ORIGIN, STILL);
       // Up in the air...
-      expect(layout.y).toBe(groundWorld(flyer.ix, flyer.iy, ORIGIN).y - fomor.anchorY - 108);
+      expect(layout.y).toBe(groundWorld(flyer.ix, flyer.iy, ORIGIN).y + championFlightTop(age));
       // ...on a wing-beat row, not row 0, the folded-wing standing pose.
       expect(layout.row).toBeGreaterThanOrEqual(walk.first);
       rows.add(layout.row);
@@ -249,20 +249,33 @@ describe("placement", () => {
     expect(calm.y).toBe(groundY - zafreeti.anchorY - 108);
   });
 
-  it("flies a level 3 Fomor at a steady 108 with its big shadow on the ground (#69)", () => {
-    const fomor = sheetOf("G3", 3);
-    expect(fomor.shadow).toBe("bigshadow");
-    const flyer = creepOf({ monsterId: "G3", level: 3, champion: true, flying: true });
-    const ground = groundWorld(flyer.ix, flyer.iy, ORIGIN);
-    for (const age of [0, 40, 78, 160]) {
-      const layout = layoutCreep(flyer, fomor, { heading: 0, moving: true, age }, ORIGIN, STILL);
-      // `ChampionBase.as:181-200`: lifted by `_altitude` once, no bob.
-      expect(layout.y).toBe(ground.y - fomor.anchorY - 108);
-      // `MonsterBase.as:726`: the depth includes the altitude.
-      expect(layout.zIndex).toBe(creepZIndex(ground.x, ground.y + 108, flyer.id));
-      expect(layout.shadow).not.toBeNull();
-      expect(layout.shadow!.y).toBeGreaterThan(layout.y);
+  it("flies Fomor at Flash's fixed height with its bob, its big shadow on the ground (#69, #206)", () => {
+    const ground = groundWorld(100, 100, ORIGIN);
+    for (const level of [3, 6]) {
+      const fomor = sheetOf("G3", level);
+      expect(fomor.shadow).toBe("bigshadow");
+      const flyer = creepOf({ monsterId: "G3", level, champion: true, flying: true });
+      const heights = new Set<number>();
+      for (const age of [0, 40, 78, 160]) {
+        const layout = layoutCreep(flyer, fomor, { heading: 0, moving: true, age }, ORIGIN, STILL);
+        // `ChampionBase.as:1317-1322`: -144 plus twice the sine, whatever the
+        // level's offset; the x keeps the offset.
+        expect(layout.y).toBeCloseTo(ground.y - 144 + 2 * Math.sin(age / 50) * 5, 6);
+        expect(layout.x).toBe(ground.x - fomor.anchorX);
+        heights.add(layout.y);
+        // `MonsterBase.as:726`: the depth includes the altitude.
+        expect(layout.zIndex).toBe(creepZIndex(ground.x, ground.y + 108, flyer.id));
+        expect(layout.shadow).not.toBeNull();
+        expect(layout.shadow!.y).toBeGreaterThan(layout.y);
+      }
+      expect(heights.size).toBeGreaterThan(1);
+      // Under reduced motion it holds still at -144.
+      const calm = layoutCreep(flyer, fomor, { heading: 0, moving: true, age: 78 }, ORIGIN, {
+        reducedMotion: true,
+      });
+      expect(calm.y).toBe(ground.y - 144);
     }
+    const flyer = creepOf({ monsterId: "G3", level: 3, champion: true, flying: true });
     // On foot, at level 2, it stands on its ground point with no shadow.
     const walker = layoutCreep(
       { ...flyer, level: 2, flying: false },

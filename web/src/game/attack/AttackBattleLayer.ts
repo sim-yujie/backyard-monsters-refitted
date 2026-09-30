@@ -35,6 +35,7 @@ import { BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
 import { TrapReveal } from "./trapReveal";
 import {
   anchorOffset,
+  championFlightTop,
   flyerAltitude,
   frameRect,
   frameRow,
@@ -78,7 +79,8 @@ import {
  *
  * Classic creeps have one pose per heading, so they glide as Flash drew them,
  * with a two-pixel hop while walking so a marching line does not read as a
- * slide. Flyers hover with the sine bob from `CreepBase.as:262-264` and cast
+ * slide. Flyers hover with the sine bob from `CreepBase.as:262-264` (a flying
+ * champion at its own fixed height, `ChampionBase.as:1317-1322`) and cast
  * the shadow sheet. Champions and the later creeps play their walk and attack
  * rows at eight ticks a frame (`SPRITES.as:235`). Every clock here is the
  * battle tick, so 2x speed doubles all of it and nothing runs on wall time.
@@ -250,17 +252,18 @@ export const layoutCreep = (
   const row = frameRow(sheet, animation, pose.age);
   const anchor = anchorOffset(sheet);
 
-  let lift = 0;
+  let y = ground.y + anchor.y;
   let altitude = 0;
-  if (creep.flying) {
+  if (creep.flying && creep.champion) {
     altitude = flyerAltitude(creep.monsterId);
-    // A flying champion holds its 108 without the creeps' bob: `ChampionBase`
-    // lifts its body by `_altitude` once (`ChampionBase.as:181-200`) and has no
-    // sine of its own (#69).
-    lift =
-      options.reducedMotion || creep.champion ? -altitude : hoverOffset(pose.age, altitude);
+    // A flying champion's cell goes to Flash's fixed height with its bob,
+    // whatever its level's offset (#206).
+    y = ground.y + championFlightTop(options.reducedMotion ? 0 : pose.age);
+  } else if (creep.flying) {
+    altitude = flyerAltitude(creep.monsterId);
+    y += options.reducedMotion ? -altitude : hoverOffset(pose.age, altitude);
   } else if (pose.moving && !options.reducedMotion && singlePose(sheet)) {
-    lift = -Math.abs(Math.sin((pose.age / HOP_PERIOD_TICKS) * Math.PI)) * HOP_HEIGHT;
+    y -= Math.abs(Math.sin((pose.age / HOP_PERIOD_TICKS) * Math.PI)) * HOP_HEIGHT;
   }
 
   const shadowAt = creep.flying ? shadowOffset(sheet) : null;
@@ -272,7 +275,7 @@ export const layoutCreep = (
     animation,
     key: `${sheet.key}:${column}:${row}`,
     x: ground.x + anchor.x,
-    y: ground.y + anchor.y + lift,
+    y,
     // A flyer sorts as if it stood its altitude further down the screen
     // (`MonsterBase.as:726` adds `_altitude` to the depth), so its body is not
     // hidden behind a building whose top corner is just below its ground point.

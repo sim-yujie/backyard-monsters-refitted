@@ -7,6 +7,7 @@ import {
   flyerAltitude,
   frameRect,
   frameRow,
+  championFlightTop,
   hoverOffset,
   shadowOffset,
   sheetColumn,
@@ -189,6 +190,12 @@ describe("placement", () => {
     expect(hoverOffset(0)).toBe(-108);
     expect(flyerAltitude("IC5")).toBe(40);
     expect(flyerAltitude("C14")).toBe(108);
+  });
+
+  it("flies a champion's cell at a fixed -144 with twice the sine on it (ChampionBase.as:1317-1322, #206)", () => {
+    expect(championFlightTop(0)).toBe(-144);
+    expect(championFlightTop(25 * Math.PI)).toBeCloseTo(-134, 6);
+    expect(championFlightTop(75 * Math.PI)).toBeCloseTo(-154, 6);
   });
 });
 

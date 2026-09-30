@@ -250,6 +250,20 @@ export function hoverOffset(tick: number, altitudeMax: number = FLYER_ALTITUDE["
   return -(altitudeMax - bob) + bob;
 }
 
+/**
+ * Where a flying champion's cell top sits relative to its ground point,
+ * negative meaning up the screen (#206).
+ *
+ * `ChampionBase.as:1317-1322`: in the air, `bob = sin(frame / 50) * 5`, the
+ * altitude is `108 - bob`, and the body goes to `-altitude - 36 + bob`, which
+ * replaces the level's `offset_y`: -144 plus twice the sine, ten pixels peak to
+ * peak, the same height whatever the level. The cell's x keeps the offset.
+ */
+export function championFlightTop(tick: number): number {
+  const bob = Math.sin(tick / 50) * 5;
+  return -((FLYER_ALTITUDE["default"] ?? 108) - bob) - 36 + bob;
+}
+
 /** How high a creature hovers when it flies (`CreepBase.as:144-150`). */
 export function flyerAltitude(creatureId: string): number {
   return FLYER_ALTITUDE[creatureId] ?? FLYER_ALTITUDE["default"] ?? 108;

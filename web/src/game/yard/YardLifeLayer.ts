@@ -7,6 +7,8 @@ import {
 import { MONSTER_SPRITES, type MonsterSheet } from "@/game/attack/monsterSpriteData";
 import {
   anchorOffset,
+  championFlightTop,
+  flyerAltitude,
   frameRow,
   sheetColumn,
   shadowOffset,
@@ -65,19 +67,16 @@ const WORKER_SHEET: MonsterSheet | undefined = MONSTER_SPRITES["worker"];
 const WORKER_DEPTH_ID = 900;
 
 /**
- * Px a sheet's body is drawn lower than its anchor says, in the yard only, so
- * it stands on its ground point (#206).
+ * Whether a walker hovers: a champion at a flying level, Fomor from 3.
  *
- * A caged Fomor stands in its pen with its wings folded
- * (`ChampionBase.as:1537-1539`), at its level's `offset_y`. Level 6's is -98
- * (`CHAMPIONCAGE.as:164`) in a cell as tall as level 5's, whose is -68, so Flash
- * put its standing pose about 16 px above the ground point where levels 3 to 5
- * have theirs about 16 px below: Fomor hung in the air over its shadow, wings
- * still. 32 px brings it in line
- * with the other levels, flapping or standing. On the attack screen it is in
- * the air, with no ground to stand on, so the sheet keeps Flash's anchor.
+ * Flash landed it in its pen and stood it on the ground with its wings folded
+ * (`ChampionBase.as:1113-1131`, `:1537-1539`). The owner's rule (#206) is that
+ * it never lands: it flaps at all times, standing or pacing, at its flight
+ * height with the bob it flies with on the attack screen
+ * (`championFlightTop`), over its shadow on the ground.
  */
-export const PEN_GROUND_DROP: Readonly<Record<string, number>> = { G3_6: 32 };
+export const hoversInCage = (walker: Walker, sheet: MonsterSheet | null): boolean =>
+  walker.champion && sheet?.movement === "fly";
 
 interface Body {
   readonly body: Sprite;
@@ -276,7 +275,9 @@ export class YardLifeLayer {
         continue;
       }
       const tick = this.reducedMotion ? 0 : walker.age;
-      this.place(body, x, y, walker.heading, walker.moving ? "walk" : "idle", tick, depthId);
+      const hovers = hoversInCage(walker, body.sheet);
+      const animation = walker.moving || hovers ? "walk" : "idle";
+      this.place(body, x, y, walker.heading, animation, tick, depthId, hovers);
     }
 
     this.workers.forEach((worker, index) => {
@@ -363,6 +364,7 @@ export class YardLifeLayer {
     animation: "walk" | "idle" | "hardhat",
     tick: number,
     depthId: number,
+    hovers = false,
   ): void {
     const sheet = body.sheet;
     if (!sheet) return;
@@ -379,8 +381,10 @@ export class YardLifeLayer {
       body.cellKey = key;
     }
     const anchor = anchorOffset(sheet);
-    body.body.position.set(x + anchor.x, y + anchor.y + (PEN_GROUND_DROP[sheet.key] ?? 0));
-    const zIndex = creepZIndex(x, y, depthId);
+    body.body.position.set(x + anchor.x, y + (hovers ? championFlightTop(tick) : anchor.y));
+    // A hovering body sorts as if it stood its altitude further down the
+    // screen, as a flyer does on the attack screen.
+    const zIndex = creepZIndex(x, hovers ? y + flyerAltitude(sheet.family) : y, depthId);
     if (body.body.zIndex !== zIndex) body.body.zIndex = zIndex;
     body.body.visible = true;
 

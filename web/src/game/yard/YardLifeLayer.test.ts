@@ -1,11 +1,11 @@
-import { Container, Texture, TextureSource } from "pixi.js";
+import { Container, Texture, TextureSource, type Sprite } from "pixi.js";
 import { describe, expect, it } from "vitest";
-import { MonsterSheetTextures } from "@/game/attack/AttackBattleLayer";
+import { creepZIndex, MonsterSheetTextures } from "@/game/attack/AttackBattleLayer";
 import { MONSTER_SPRITES } from "@/game/attack/monsterSpriteData";
-import { shadowOffset } from "@/game/attack/monsterSprites";
+import { championFlightTop, shadowOffset } from "@/game/attack/monsterSprites";
 import { yardBounds } from "./YardGrid";
 import { EMPTY_LIFE, type YardLife } from "./yardLifeModel";
-import { PEN_GROUND_DROP, YardLifeLayer } from "./YardLifeLayer";
+import { YardLifeLayer } from "./YardLifeLayer";
 
 /** Every sheet arrives at once as a blank of the right size. */
 const textures = () =>
@@ -108,9 +108,9 @@ describe("YardLifeLayer", () => {
     expect(tops.children).toHaveLength(0);
   });
 
-  it("stands a level 6 Fomor on the ground in its cage, not over its shadow (#206)", async () => {
-    const fomorAt = async (sheetLevel: number) => {
-      const { layer, tops, shadows } = setUp(true);
+  it("keeps a flying Fomor hovering and flapping in its cage, standing or pacing (#206)", async () => {
+    const fomorAt = async (sheetLevel: number, reduced = false) => {
+      const { layer, tops, shadows } = setUp(reduced);
       layer.set(
         life({ groups: [], workers: 0, champions: [{ id: "G3", level: sheetLevel, sheetLevel }] }),
         bounds,
@@ -120,23 +120,49 @@ describe("YardLifeLayer", () => {
       await flush();
       layer.update(everywhere, 0);
       const [walker] = layer.walkerList;
-      const [body] = tops.children;
+      const body = tops.children[0] as Sprite | undefined;
       const [shadow] = shadows.children;
-      if (!walker || !body || !shadow) throw new Error("no Fomor");
+      if (!walker || !body) throw new Error("no Fomor");
+      const groundX = walker.x - walker.y + bounds.originX;
       const groundY = (walker.x + walker.y) / 2 + bounds.originY;
-      return { body, shadow, groundY };
+      return { layer, walker, body, shadow, groundX, groundY };
     };
 
-    const six = await fomorAt(6);
-    const sheet = MONSTER_SPRITES["G3_6"]!;
-    expect(PEN_GROUND_DROP["G3_6"]).toBe(32);
-    expect(six.body.y).toBe(six.groundY - sheet.anchorY + 32);
-    // The shadow stays on the ground point, where Flash put it.
-    expect(six.shadow.y).toBe(six.groundY + shadowOffset(sheet)!.y);
+    for (const level of [3, 6]) {
+      const sheet = MONSTER_SPRITES[`G3_${level}`]!;
+      const walk = sheet.animations.walk!;
+      const fomor = await fomorAt(level);
+      const { layer, walker, body, shadow } = fomor;
+      expect(walker.moving).toBe(false);
+      const rows = new Set<number>();
+      const heights = new Set<number>();
+      for (let frame = 0; frame < 60; frame++) {
+        layer.update(everywhere, 1 / 40);
+        const groundY = (walker.x + walker.y) / 2 + bounds.originY;
+        // At its flight height with the bob, not on its level's offset.
+        expect(body.y).toBeCloseTo(groundY + championFlightTop(walker.age), 6);
+        expect(body.x).toBeCloseTo(walker.x - walker.y + bounds.originX - sheet.anchorX, 6);
+        // On a wing-beat row, never row 0, the folded-wing standing pose.
+        const row = Math.round(body.texture.frame.y / sheet.frameHeight);
+        expect(row).toBeGreaterThanOrEqual(walk.first);
+        rows.add(row);
+        heights.add(Math.round(body.y - groundY));
+        // Its shadow stays on the ground.
+        expect(shadow?.y).toBeCloseTo(groundY + shadowOffset(sheet)!.y, 6);
+      }
+      expect(rows.size).toBeGreaterThan(1);
+      expect(heights.size).toBeGreaterThan(1);
+      // It sorts at its altitude, as on the attack screen.
+      expect(body.zIndex).toBeGreaterThan(creepZIndex(fomor.groundX, fomor.groundY, 1));
+    }
 
-    // Every other level stands where its Flash offset puts it.
-    const five = await fomorAt(5);
-    expect(five.body.y).toBe(five.groundY - MONSTER_SPRITES["G3_5"]!.anchorY);
+    // Under reduced motion it holds still at -144, still in the air.
+    const calm = await fomorAt(6, true);
+    expect(calm.body.y).toBe(calm.groundY - 144);
+
+    // A Fomor on foot, at level 2, stands on its offset.
+    const two = await fomorAt(2, true);
+    expect(two.body.y).toBe(two.groundY - MONSTER_SPRITES["G3_2"]!.anchorY);
   });
 
   it("walks the creatures on the clock, and under reduced motion does not", () => {

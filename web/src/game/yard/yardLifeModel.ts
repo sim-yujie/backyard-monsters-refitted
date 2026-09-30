@@ -70,7 +70,9 @@ import type { Yard, YardBuilding } from "./yardModel";
  * (`champions/ChampionBase.as:1044-1061`), with a 1 in 150 chance a tick of a
  * new spot (`:1058`), at a quarter of its speed (`:1374-1378`, and the
  * engine's `speed / 4`), showing its idle row while it stands (`:1538-1540`).
- * Krallen picks its sheet by power level (`champions/Krallen.as:46-48`).
+ * One owner rule departs from that (#206): a champion at a flying level, Fomor
+ * from 3, never lands in its cage but hovers at its flight height and flaps,
+ * standing or pacing (`YardLifeLayer`). Krallen picks its sheet by power level (`champions/Krallen.as:46-48`).
  *
  * ## Workers (`client/scripts/WORKERS.as`, `WORKER.as`)
  *
