@@ -183,7 +183,7 @@ describe("placement", () => {
     expect(frameRect(sheet("IC2"), 5, 0).x).toBeCloseTo(322, 6);
   });
 
-  it("bobs a flyer ten pixels peak to peak about its altitude (CreepBase.as:262-264)", () => {
+  it("bobs a flyer twenty pixels peak to peak about its altitude (CreepBase.as:262-264)", () => {
     expect(hoverOffset(0, 108)).toBe(-108);
     expect(hoverOffset(25 * Math.PI, 108)).toBeCloseTo(-98, 6);
     expect(hoverOffset(75 * Math.PI, 108)).toBeCloseTo(-118, 6);

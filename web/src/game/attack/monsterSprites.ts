@@ -242,7 +242,7 @@ export function shadowOffset(sheet: MonsterSheet): Offset | null {
  *
  * `CreepBase.as:262-264`: `bob = sin(tick / 50) * 5`, the altitude is
  * `altitudeMax - bob`, and the body is drawn at `-altitude + bob`, so the
- * visible bob is twice the sine, ten pixels peak to peak, one cycle every
+ * visible bob is twice the sine, twenty pixels peak to peak, one cycle every
  * `100 * PI` ticks.
  */
 export function hoverOffset(tick: number, altitudeMax: number = FLYER_ALTITUDE["default"] ?? 108): number {
@@ -256,7 +256,7 @@ export function hoverOffset(tick: number, altitudeMax: number = FLYER_ALTITUDE["
  *
  * `ChampionBase.as:1317-1322`: in the air, `bob = sin(frame / 50) * 5`, the
  * altitude is `108 - bob`, and the body goes to `-altitude - 36 + bob`, which
- * replaces the level's `offset_y`: -144 plus twice the sine, ten pixels peak to
+ * replaces the level's `offset_y`: -144 plus twice the sine, twenty pixels peak to
  * peak, the same height whatever the level. The cell's x keeps the offset.
  */
 export function championFlightTop(tick: number): number {
