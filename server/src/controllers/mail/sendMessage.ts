@@ -14,6 +14,7 @@ import { handleTruceRequest } from "../../services/mail/handleTruceRequest.js";
 import { handleTruceResponse } from "../../services/mail/handleTruceResponse.js";
 import { mailboxErr } from "../../errors/errors.js";
 import { logger } from "../../utils/logger.js";
+import { ClientSafeError } from "../../middleware/clientSafeError.js";
 
 /**
  * Controller to send message
@@ -25,6 +26,8 @@ import { logger } from "../../utils/logger.js";
  *
  * For trucerequest: creates a Truce record and links it to the thread.
  * For truceaccept/trucereject: updates the Truce record and thread state.
+ * A truce refusal (a truce already waiting or running, a request no longer open)
+ * keeps its own error rather than the generic mailbox one.
  *
  * @param {Context} ctx - The Koa context object, which includes the request body.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
@@ -118,6 +121,8 @@ export const sendMessage: KoaController = async (ctx) => {
       threadid: thread.threadid,
     };
   } catch (err) {
+    // A refusal that already says why (a truce already waiting, #203) goes out as it is.
+    if (err instanceof ClientSafeError) throw err;
     logger.error(`Error sending message: ${err}`);
     throw mailboxErr();
   }

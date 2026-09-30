@@ -70,6 +70,15 @@ export class Message {
   @FrontendKey
   trucestate: string | null = null;
 
+  /**
+   * Thread list only (#203): when the thread's truce ends, unix seconds. An
+   * accepted truce's expiry, or the last moment a waiting request can be
+   * answered (`truceRules.ts`). Absent when the thread has no truce.
+   */
+  @Property({ type: 'number', persist: false, nullable: true })
+  @FrontendKey
+  truceexpire?: Opt<number>;
+
   @Property({ type: 'string', nullable: true })
   @FrontendKey
   migratestate: string | null = null;

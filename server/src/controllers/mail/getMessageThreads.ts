@@ -7,12 +7,16 @@ import { postgres } from "../../server.js";
 import { Thread } from "../../database/models/thread.model.js";
 import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
 import { logger } from "../../utils/logger.js";
+import { Truce } from "../../database/models/truce.model.js";
+import { truceEndsAt } from "../../services/mail/truceRules.js";
 
 /**
  * Controller to get threads for mailbox.
  *
  * Retrieves message threads for the authenticated user.
  * Populates the last message in each thread and formats the response.
+ * A thread with a truce says when it ends (`truceexpire`, #203): the accepted
+ * truce's expiry, or when a waiting request lapses.
  *
  * @param {Context} ctx - The Koa context object, which includes the request body.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
@@ -38,6 +42,10 @@ export const getMessageThreads: KoaController = async (ctx) => {
       return thread.lastMessage && !blockedUsers.has(targetUser);
     });
 
+    const truceIds = filteredThreads.flatMap((thread) => (thread.truce_id ? [thread.truce_id] : []));
+    const truces = truceIds.length ? await postgres.em.find(Truce, { id: { $in: truceIds } }) : [];
+    const trucesById = new Map(truces.map((truce) => [truce.id, truce]));
+
     const threadMessages = filteredThreads.flatMap((thread, index) => {
       if (!thread.lastMessage) return [];
 
@@ -49,6 +57,9 @@ export const getMessageThreads: KoaController = async (ctx) => {
       lastMessage.messageid = index.toString();
       lastMessage.messagecount = thread.messagecount;
       lastMessage.trucestate = thread.trucestate ?? null;
+      const truce = thread.truce_id ? trucesById.get(thread.truce_id) : undefined;
+      const truceEnd = truce ? truceEndsAt(truce) : null;
+      if (truceEnd !== null) lastMessage.truceexpire = truceEnd;
       lastMessage.userid = isSender ? lastMessage.targetid : lastMessage.userid;
       lastMessage.reportid = "0";
 

@@ -216,6 +216,24 @@ export const truceActiveErr = () =>
     isClientFriendly: false,
   });
 
+/** A truce request between two players who already have a request waiting or a truce running (#203). */
+export const truceExistsErr = () =>
+  new ClientSafeError({
+    message: "You already have a truce, or a truce request waiting, with this player.",
+    status: Status.CONFLICT,
+    data: {},
+    isClientFriendly: true,
+  });
+
+/** An answer to a truce request that was already answered, or has lapsed (#203). */
+export const truceClosedErr = () =>
+  new ClientSafeError({
+    message: "This truce request can no longer be answered.",
+    status: Status.CONFLICT,
+    data: {},
+    isClientFriendly: true,
+  });
+
 export const shinyLockedErr = () =>
   new ClientSafeError({
     message: "Shiny is turned off on your account, so it cannot be spent. You can turn it back on from your account page in the launcher.",

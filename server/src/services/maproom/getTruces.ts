@@ -2,6 +2,7 @@ import { TruceStatus } from "../../enums/TruceStatus.js";
 import { Truce } from "../../database/models/truce.model.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { liveTruceFilter } from "../mail/truceRules.js";
 
 export interface TruceInfo {
   trucestate: TruceStatus;
@@ -12,6 +13,7 @@ export type Truces = Map<number, TruceInfo>;
 
 /**
  * Batch-loads active or pending truces between the current user and a list of cell owners.
+ * A request that has lapsed unanswered is neither (`truceRules.ts`).
  *
  * Returns a map keyed by the other party's userid for O(1) lookup per cell.
  *
@@ -33,12 +35,7 @@ export const getTruces = async (currentUserId: number | undefined, ownerIds: num
           { recipient_userid: currentUserId, initiator_userid: { $in: ownerIds } },
         ],
       },
-      {
-        $or: [
-          { status: TruceStatus.REQUESTED },
-          { status: TruceStatus.ACCEPTED, expires_at: { $gt: now } },
-        ],
-      },
+      liveTruceFilter(now),
     ],
   });
 
