@@ -793,9 +793,11 @@ rest).
   the only harvester requests are a Collect all press and a tap on a harvester.
 - **The bank animation** (issue #208), for a tap and for Collect all alike: each harvester that
   banked throws Flash's resource balls (`packagedot`) in an arc to the Town Hall, 1 to 12 by
-  amount, a sixth of a second apart, `(distance + 0..50) / 150` s each (at least 0.8 s), with a
-  shadow on the ground (`ResourcePackages.as`, `ResourcePackage.as`; numbers in
-  `web/src/game/yard/collectFx.ts`). The HUD holds back what they carry and counts up over 0.5 s
+  amount, with a shadow on the ground (`ResourcePackages.as`, `ResourcePackage.as`; numbers in
+  `web/src/game/yard/collectFx.ts`). **Faster than Flash on purpose** (owner, 2026-09-30):
+  `(distance + 0..50) / 300` s a flight, clamped to 0.5-1.5 s, a twelfth of a second apart, the
+  arc scaled to match, so the last ball lands within about 2.5 s of the press (Flash: `/ 150`, at
+  least 0.8 s, no cap, a sixth of a second apart; five seconds and more on a spread-out yard). The HUD holds back what they carry and counts up over 0.5 s
   as each lands (Flash's bar tween, `UI_TOP.as:798-826`), floating the whole amount at the first
   landing. No Town Hall: nothing flies and the amounts change at once. Under
   `prefers-reduced-motion` nothing flies either. Flash played `bankfire` / `bankland` per ball;

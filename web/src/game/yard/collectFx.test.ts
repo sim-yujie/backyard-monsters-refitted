@@ -5,6 +5,7 @@ import {
   flightPose,
   flightsEnd,
   flightTotals,
+  MAX_FLIGHT_S,
   MIN_FLIGHT_S,
   planFlights,
   SHADOW_START_ALPHA,
@@ -60,23 +61,33 @@ describe("planFlights", () => {
     expect(planFlights([snapper({ amount: 0 })], hall)).toEqual([]);
   });
 
-  it("flies from the harvester's spout to the Town Hall's, a sixth of a second apart", () => {
+  it("flies from the harvester's spout to the Town Hall's, a twelfth of a second apart", () => {
     const flights = planFlights([snapper()], hall, () => 0);
     expect(flights).toHaveLength(12);
-    expect(flights.map((flight) => flight.delay)).toEqual(flights.map((_, index) => index / 6));
+    expect(flights.map((flight) => flight.delay)).toEqual(flights.map((_, index) => index / 12));
     for (const flight of flights) {
       expect([flight.fromX, flight.fromY, flight.fromHeight]).toEqual([400 - 23, 300 - 20, 45]);
       expect([flight.toX, flight.toY, flight.toHeight]).toEqual([1000 + 1, 500 - 67, 135]);
     }
   });
 
-  it("takes (distance + 0..50) / 150 seconds, never under 0.8", () => {
-    const far = planFlights([snapper({ amount: 50 })], hall, () => 1)[0]!;
-    const distance = Math.hypot(1001 - 377, 433 - 280);
-    expect(far.duration).toBeCloseTo((distance + 50) / 150, 10);
+  it("takes (distance + 0..50) / 300 seconds, twice Flash's speed, between 0.5 and 1.5", () => {
+    const mid = planFlights([snapper({ x: 800, y: 400, amount: 50 })], hall, () => 1)[0]!;
+    const distance = Math.hypot(1001 - 777, 433 - 380);
+    expect(mid.duration).toBeCloseTo((distance + 50) / 300, 10);
 
     const near = planFlights([snapper({ x: 1020, y: 450, amount: 50 })], hall, () => 0)[0]!;
     expect(near.duration).toBe(MIN_FLIGHT_S);
+    expect(MIN_FLIGHT_S).toBe(0.5);
+
+    const far = planFlights([snapper({ x: -2000, y: 1500, amount: 50 })], hall, () => 1)[0]!;
+    expect(far.duration).toBe(MAX_FLIGHT_S);
+    expect(MAX_FLIGHT_S).toBe(1.5);
+  });
+
+  it("lands the last ball of the biggest bank within 2.5 s, however far the harvester", () => {
+    const flights = planFlights([snapper({ x: -3000, y: 2000 })], hall);
+    expect(flightsEnd(flights)).toBeLessThanOrEqual(2.5);
   });
 
   it("splits the amount so the balls add up to it exactly", () => {
@@ -101,8 +112,8 @@ describe("flightPose", () => {
 
   it("is hidden until its delay is up", () => {
     const late = planFlights([snapper({ amount: 1_000 })], hall, () => 0)[3]!;
-    expect(flightPose(late, 0.49).visible).toBe(false);
-    expect(flightPose(late, 0.51).visible).toBe(true);
+    expect(flightPose(late, 0.24).visible).toBe(false);
+    expect(flightPose(late, 0.26).visible).toBe(true);
   });
 
   it("starts at the spout with its shadow on the ground below and to the right", () => {
@@ -113,11 +124,11 @@ describe("flightPose", () => {
     expect(pose.landed).toBe(false);
   });
 
-  it("is highest at half-time, 120 px per second of flight, its shadow slid away and gone", () => {
+  it("is highest at half-time, 240 px per second of flight, its shadow slid away and gone", () => {
     const pose = flightPose(flight, duration / 2);
-    expect(pose.lift).toBeCloseTo(duration * 120, 6);
+    expect(pose.lift).toBeCloseTo(duration * 240, 6);
     expect(pose.x).toBeCloseTo((377 + 1001) / 2, 6);
-    expect(pose.shadowX).toBeCloseTo(22.5 + duration * 100, 6);
+    expect(pose.shadowX).toBeCloseTo(22.5 + duration * 200, 6);
     expect(pose.shadowAlpha).toBeCloseTo(0, 10);
   });
 
@@ -142,7 +153,7 @@ describe("flightPose", () => {
 describe("flightsEnd", () => {
   it("is the last ball's delay plus its flight", () => {
     const flights = planFlights([snapper()], hall, () => 0);
-    expect(flightsEnd(flights)).toBeCloseTo(11 / 6 + flights[11]!.duration, 10);
+    expect(flightsEnd(flights)).toBeCloseTo(11 / 12 + flights[11]!.duration, 10);
     expect(flightsEnd([])).toBe(0);
   });
 });

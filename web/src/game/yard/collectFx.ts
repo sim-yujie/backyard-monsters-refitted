@@ -12,7 +12,7 @@ import type { HarvestKey } from "./harvest";
  *   resource at the Town Hall; Bank all calls every harvester's `Bank` in
  *   the same frame (`BUILDINGINFO.as:458-466`), so they all go at once. With
  *   no Town Hall nothing is thrown.
- * - Ball `i` (0-based) leaves `i / 6` s late ({@link BALLS_PER_S}).
+ * - Ball `i` (0-based) leaves `i / 6` s late.
  * - A flight takes `(distance + random 0..50) / 150` s, at least 0.8 s, and
  *   eases along the straight line from spout to spout with Sine.easeInOut.
  * - On top of that the ball rises `time × 120` px by half-time (Sine.easeOut)
@@ -22,6 +22,14 @@ import type { HarvestKey } from "./harvest";
  *   left), slides `time × 100` px right as it fades out by half-time, and
  *   comes back in under the Town Hall's spout as the ball lands.
  * - The ball is hidden until its delay is up.
+ *
+ * **Faster than Flash, on purpose** (owner, 2026-09-30): on a spread-out yard
+ * Flash's balls took five seconds and more to arrive. Here they fly twice as
+ * fast (300 px/s), no flight is shorter than 0.5 s or longer than 1.5 s, and
+ * the stagger is halved (`i / 12` s), so the last ball lands within about
+ * 2.5 s of the press. The arc and the shadow's slide scale with the flight
+ * time at twice Flash's rates, so an arc keeps Flash's shape for its
+ * distance rather than flattening.
  *
  * Each ball carries its share of the amount, so the top bar can count up as
  * they land; the shares add up to the amount banked exactly.
@@ -50,18 +58,20 @@ export const TOWN_HALL_TYPE = 14;
 
 export const spoutOf = (type: number): Spout => SPOUTS[type] ?? DEFAULT_SPOUT;
 
-/** Balls a harvester lets go of per second: ball `i` waits `i / 6` s (`param4 / 6`). */
-export const BALLS_PER_S = 6;
-/** World px per second of flight (`time /= 150`). */
-export const SPEED_PX_S = 150;
+/** Balls a harvester lets go of per second: ball `i` waits `i / 12` s (Flash: `param4 / 6`). */
+export const BALLS_PER_S = 12;
+/** World px per second of flight (Flash: `time /= 150`). */
+export const SPEED_PX_S = 300;
 /** Up to this many px of random extra distance per ball (`Math.random() * 50`). */
 export const JITTER_PX = 50;
-/** The shortest flight (`if (time < 0.8)`). */
-export const MIN_FLIGHT_S = 0.8;
-/** Px of lift at half-time per second of flight (`-(time * 120)`). */
-export const LIFT_PX_PER_S = 120;
-/** Px the shadow slides right by half-time per second of flight (`time * 100`). */
-export const SHADOW_SLIDE_PX_PER_S = 100;
+/** The shortest flight (Flash: `if (time < 0.8)`). */
+export const MIN_FLIGHT_S = 0.5;
+/** The longest flight; Flash had no cap. */
+export const MAX_FLIGHT_S = 1.5;
+/** Px of lift at half-time per second of flight (Flash: `-(time * 120)`). */
+export const LIFT_PX_PER_S = 240;
+/** Px the shadow slides right by half-time per second of flight (Flash: `time * 100`). */
+export const SHADOW_SLIDE_PX_PER_S = 200;
 /**
  * The shadow's opacity at the start: `ResourcePackage_CLIP` places `mcShadow`
  * with an alpha multiplier of 205/256, and the tween back ends at 1.
@@ -135,7 +145,10 @@ export const planFlights = (
     const count = ballCount(amount);
     const share = Math.floor(amount / count);
     for (let index = 0; index < count; index++) {
-      const duration = Math.max(MIN_FLIGHT_S, (distance + random() * JITTER_PX) / SPEED_PX_S);
+      const duration = Math.min(
+        MAX_FLIGHT_S,
+        Math.max(MIN_FLIGHT_S, (distance + random() * JITTER_PX) / SPEED_PX_S),
+      );
       flights.push({
         resource: source.resource,
         // The last ball takes what the even split leaves over.

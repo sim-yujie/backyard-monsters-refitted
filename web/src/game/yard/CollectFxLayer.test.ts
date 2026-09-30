@@ -22,7 +22,7 @@ describe("CollectFxLayer", () => {
     const layer = new CollectFxLayer({ art: art() });
     layer.launch(flights(300), () => {});
     expect(layer.flying).toBe(3);
-    layer.update(0.1);
+    layer.update(0.05);
     const visible = dotsOf(layer).filter((dot) => dot.visible);
     expect(visible).toHaveLength(1);
     // Lifted off the line: drawn above where the ball is on the ground.
