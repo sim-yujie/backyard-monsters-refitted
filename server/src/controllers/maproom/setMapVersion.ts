@@ -12,6 +12,7 @@ import { Env } from "../../enums/Env.js";
 import { joinNewWorldMap } from "../../services/maproom/v3/joinNewWorldMap.js";
 import { extractTownHall } from "../../utils/extractTownHall.js";
 import {
+  cannotLeaveMapRoom2Err,
   discordAgeErr,
   mustLeaveAllianceToChangeWorldErr,
   townHallLevelErr,
@@ -33,6 +34,11 @@ const SetMapVersionSchema = z.object({
  *
  * - NONE: Leaves the current MR2 world and resets mapversion to V1.
  * - V1:   Sets mapversion to 1, no world ops.
+ *
+ * A save on Map Room 2 cannot go back: NONE and V1 are refused for it
+ * (`cannotLeaveMapRoom2Err`, owner decision 2026-09-30) before anything is
+ * touched. The Flash client sent NONE when an upgraded Map Room was recycled
+ * (`client/scripts/BUILDING11.as:216-226`); the revamp refuses that recycle too.
  * - V2:   Requires Town Hall level 6. Joins or creates an MR2 world and marks mr2upgraded.
  * - V3:   Requires Town Hall level 6. Joins the MR3 world map.
  *
@@ -48,6 +54,9 @@ export const setMapVersion: KoaController = async (ctx) => {
   const { version } = SetMapVersionSchema.parse(ctx.request.body);
 
   if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
+
+  const backToMapRoom1 = version === MapRoomVersion.NONE || version === MapRoomVersion.V1;
+  if (backToMapRoom1 && save.mapversion === MapRoomVersion.V2) throw cannotLeaveMapRoom2Err();
 
   switch (version) {
     case MapRoomVersion.NONE: {

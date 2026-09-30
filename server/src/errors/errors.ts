@@ -350,6 +350,19 @@ export const mustLeaveAllianceToChangeWorldErr = () =>
     isClientFriendly: true,
   });
 
+/**
+ * A Map Room 2 player asked to go back to Map Room 1 (`setmapversion` with
+ * version 0 or 1). The owner's rule (2026-09-30): the move to Map Room 2 is
+ * one way. A soft refusal; nothing is written.
+ */
+export const cannotLeaveMapRoom2Err = () =>
+  new ClientSafeError({
+    message: "Your yard is on Map Room 2 and cannot go back to Map Room 1.",
+    status: Status.CONFLICT,
+    data: { reason: "mapRoom2Final" },
+    isClientFriendly: true,
+  });
+
 export const mustLeaveAllianceToAcceptErr = () =>
   new ClientSafeError({
     message: "You must leave your current alliance before accepting the invite.",
