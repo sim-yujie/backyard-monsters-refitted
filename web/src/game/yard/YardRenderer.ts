@@ -44,6 +44,14 @@ export const YardView = {
 } as const;
 export type YardView = (typeof YardView)[keyof typeof YardView];
 
+/** What {@link YardRenderer.throwBank} threw. */
+export interface BankThrown {
+  readonly totals: Partial<Record<HarvestKey, number>>;
+  readonly balls: number;
+  /** For `cancelBank`; 0 when nothing was thrown. */
+  readonly group: number;
+}
+
 export class YardRenderer {
   readonly root = new Container();
 
@@ -462,16 +470,17 @@ export class YardRenderer {
   /* ── A bank's balls ─────────────────────────────────────────────────── */
 
   /**
-   * Throws a bank's resource balls from each harvester that banked to the
-   * Town Hall (#208, `collectFx.ts`), and returns what they carry per
-   * resource, which `onLand` hears again share by share as they arrive.
-   * Nothing is thrown, and nothing returned, with no Town Hall on the yard
-   * or for a harvester that is not drawn (stored in the planner's drawer).
+   * Throws a bank's resource balls from each harvester in `banked` to the
+   * Town Hall (#208, `collectFx.ts`) and says what they carry per resource,
+   * which `onLand` hears again share by share as they arrive, how many there
+   * are, and the throw's number for {@link cancelBank}. Nothing is thrown with
+   * no Town Hall on the yard, or for a harvester that is not drawn (stored in
+   * the planner's drawer).
    */
   throwBank(
     banked: Readonly<Record<string, { resource: HarvestKey; amount: number }>>,
     onLand: LandListener,
-  ): Partial<Record<HarvestKey, number>> {
+  ): BankThrown {
     const drawn = (id: number): boolean => !this.stored.has(id) && !this.concealed.has(id);
     const at = (building: YardBuilding): { x: number; y: number } => {
       const offset = this.buildings.offsetOf(building.id);
@@ -480,7 +489,7 @@ export class YardRenderer {
     const hall = this.yard?.buildings.find(
       (building) => building.type === TOWN_HALL_TYPE && drawn(building.id),
     );
-    if (!hall) return {};
+    if (!hall) return { totals: {}, balls: 0, group: 0 };
     const sources: BankSource[] = [];
     for (const [id, { resource, amount }] of Object.entries(banked)) {
       const building = this.byId.get(Number(id));
@@ -488,8 +497,14 @@ export class YardRenderer {
       sources.push({ type: building.type, ...at(building), resource, amount });
     }
     const flights = planFlights(sources, at(hall));
-    this.collect.launch(flights, onLand);
-    return flightTotals(flights);
+    if (flights.length === 0) return { totals: {}, balls: 0, group: 0 };
+    const group = this.collect.launch(flights, onLand);
+    return { totals: flightTotals(flights), balls: flights.length, group };
+  }
+
+  /** Takes a throw's balls out of the air without landing them. */
+  cancelBank(group: number): void {
+    this.collect.cancel(group);
   }
 
   /** Lands every ball still in the air at once, handing over what they carry. */

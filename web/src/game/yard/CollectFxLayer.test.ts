@@ -51,6 +51,21 @@ describe("CollectFxLayer", () => {
     expect(shadowsOf(layer)).toHaveLength(12);
   });
 
+  it("takes one throw's balls away without landing them, leaving the others", () => {
+    const layer = new CollectFxLayer({ art: art() });
+    const kept = vi.fn();
+    const dropped = vi.fn();
+    layer.launch(flights(50), kept);
+    const group = layer.launch(flights(500), dropped);
+    layer.update(0.1);
+    layer.cancel(group);
+    expect(layer.flying).toBe(1);
+    expect(dotsOf(layer).filter((dot) => dot.visible)).toHaveLength(1);
+    layer.update(10);
+    expect(kept).toHaveBeenCalledTimes(1);
+    expect(dropped).not.toHaveBeenCalled();
+  });
+
   it("lands every ball at once on finish, and on destroy", () => {
     const layer = new CollectFxLayer({ art: art() });
     const onLand = vi.fn();

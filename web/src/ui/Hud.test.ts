@@ -75,47 +75,56 @@ describe("the HUD", () => {
     expect(floats()[0]?.classList.contains("hud__delta--up")).toBe(true);
   });
 
-  it("holds back what a bank's balls carry and counts it up as they land (#208)", () => {
+  it("counts a bank up as its balls land, ahead of the server's credit (#208)", () => {
     hud.setResources({ r1: 1_000, r4: 50 });
-    // The answer credits 1,200 twigs; the balls are thrown straight after.
-    hud.setResources({ r1: 2_200, r4: 50 });
-    hud.withhold({ r1: 1_200 });
-    expect(button("r1").textContent).toBe("1,000");
-    expect(floats()).toHaveLength(0);
-    // The tooltip and the tap bubble keep the whole, exact amount.
-    expect(button("r1").title).toBe("Twigs: 2,200");
-    expect(hud.amountOf("r1")).toBe(2_200);
-
-    // The first ball floats the whole bank and starts the count.
-    hud.deliver("r1", 400);
+    // The press: balls fly, the pool has not moved.
+    hud.expectBank("r1", 1);
+    hud.showChange("r1", 1_200);
     expect(floats().map((one) => one.textContent)).toEqual(["+1.2K"]);
+    hud.deliver("r1", 400);
     vi.advanceTimersByTime(250);
     expect(hud.shownOf("r1")).toBeGreaterThan(1_000);
     expect(hud.shownOf("r1")).toBeLessThan(1_400);
     vi.advanceTimersByTime(300);
     expect(button("r1").textContent).toBe("1,400");
 
-    // Later balls count on from where the bar is, without floating again.
-    hud.deliver("r1", 400);
-    hud.deliver("r1", 400);
+    // The answer credits 1,200 and the store raises the pool: held back in
+    // the same task, it neither jumps the readout nor floats again.
+    hud.setResources({ r1: 2_200, r4: 50 });
+    hud.hold("r1", 1_200);
+    hud.expectBank("r1", -1);
+    expect(button("r1").textContent).toBe("1,400");
     expect(floats()).toHaveLength(1);
+    // The tooltip and the tap bubble keep the whole, exact pool.
+    expect(button("r1").title).toBe("Twigs: 2,200");
+
+    hud.deliver("r1", 400);
+    hud.deliver("r1", 400);
     vi.advanceTimersByTime(600);
     expect(button("r1").textContent).toBe("2,200");
     expect(hud.shownOf("r1")).toBe(2_200);
   });
 
-  it("counts toward a pool that changed while the balls flew, and lets go of all of it on unbind", () => {
+  it("still floats a spend while a bank is in flight", () => {
     hud.setResources({ r1: 1_000 });
-    hud.setResources({ r1: 2_000 });
-    hud.withhold({ r1: 1_000 });
-    hud.deliver("r1", 500);
-    // Something was spent mid-flight.
-    hud.setResources({ r1: 1_700 });
-    vi.advanceTimersByTime(600);
-    expect(button("r1").textContent).toBe("1,200");
+    hud.expectBank("r1", 1);
+    hud.setResources({ r1: 700 });
+    expect(floats().map((one) => one.textContent)).toEqual(["−300"]);
+  });
 
+  it("puts landed balls back at once, and lets go of everything on unbind", () => {
+    hud.setResources({ r1: 1_000 });
+    hud.expectBank("r1", 1);
+    hud.deliver("r1", 500);
+    vi.advanceTimersByTime(600);
+    expect(button("r1").textContent).toBe("1,500");
+    // Refused: the pool never moved, and the readout goes straight back to it.
+    hud.hold("r1", 500);
+    expect(button("r1").textContent).toBe("1,000");
+
+    hud.deliver("r1", 300);
     hud.bindYard(null);
-    expect(button("r1").textContent).toBe("1,700");
+    expect(button("r1").textContent).toBe("1,000");
   });
 
   it("climbs without a float when asked, as outpost income ticks do (#207)", () => {

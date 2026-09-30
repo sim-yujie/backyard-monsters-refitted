@@ -507,6 +507,11 @@
   transform: translateY(-2px);
 }
 
+/* A press answers at once, as the dock's buttons do; the balls leave with it (#208). */
+.yard-collect__button:active:not(:disabled) .yard-collect__ring {
+  transform: scale(0.94);
+}
+
 .yard-collect__button:focus-visible {
   outline: none;
 }

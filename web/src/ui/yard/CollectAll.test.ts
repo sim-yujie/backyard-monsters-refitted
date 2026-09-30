@@ -178,27 +178,34 @@ describe("CollectAll", () => {
     expect(spokenText(notice)).toContain("Collected Twigs 720 Goo 500.");
   });
 
-  it("has the scene play the bank's balls with what each harvester banked (#208)", async () => {
-    const playBank = vi.fn();
-    const report = {
-      ...reportOf({ r1: 720 }),
-      byBuilding: { "1": { resource: "r1" as const, amount: 720 } },
-    };
-    run.mockResolvedValue({ ok: true, report, completed: [] });
-    collect.bind({ ...binding, scene: { selectBuilding: () => {}, playBank } });
+  it("throws the balls on the press and hands the answer over after (#208)", async () => {
+    const answer = vi.fn();
+    const startBank = vi.fn(() => answer);
+    let resolve!: (result: YardActionResult<BankReport>) => void;
+    run.mockReturnValue(new Promise((done) => (resolve = done)));
+    collect.bind({ ...binding, scene: { selectBuilding: () => {}, startBank } });
     button().click();
-    await vi.runAllTicks();
-    await Promise.resolve();
-    expect(playBank).toHaveBeenCalledWith(report.byBuilding);
+    // Before the server says anything: what the two harvesters hold.
+    expect(startBank).toHaveBeenCalledWith({
+      "1": { resource: "r1", amount: 720 },
+      "2": { resource: "r4", amount: 500 },
+    });
+    expect(answer).not.toHaveBeenCalled();
 
-    playBank.mockClear();
+    resolve({ ok: true, report: reportOf({ r1: 720, r4: 450 }), completed: [] });
+    await vi.runAllTicks();
+    await Promise.resolve();
+    expect(answer).toHaveBeenCalledWith({ banked: { r1: 720, r2: 0, r3: 0, r4: 450 } });
+  });
+
+  it("hands a refusal over as nothing banked", async () => {
+    const answer = vi.fn();
     run.mockResolvedValue({ ok: false, refusal: { reason: "error", message: "No.", detail: {} } });
-    collect.refresh();
+    collect.bind({ ...binding, scene: { selectBuilding: () => {}, startBank: () => answer } });
     button().click();
     await vi.runAllTicks();
     await Promise.resolve();
-    expect(run).toHaveBeenCalledTimes(2);
-    expect(playBank).not.toHaveBeenCalled();
+    expect(answer).toHaveBeenCalledWith(null);
   });
 });
 

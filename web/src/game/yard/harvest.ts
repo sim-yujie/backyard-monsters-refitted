@@ -1,4 +1,4 @@
-import type { BaseLoadResponse, BuildingData } from "@/api/types";
+import type { BaseLoadResponse, BuildingData, ResourceCaps, Resources } from "@/api/types";
 import { maxHealth } from "./buildingArt";
 import { rowOf } from "./buildingCosts";
 import { savedAtOf } from "./jobs";
@@ -191,4 +191,48 @@ export const harvestWaiting = (
   }
   ids.sort((a, b) => a - b);
   return { amounts, total: amounts.r1 + amounts.r2 + amounts.r3 + amounts.r4, ids };
+};
+
+/** Per harvester id: its resource and an amount, the shape of a bank report's `byBuilding`. */
+export type BankedByBuilding = Record<string, { resource: HarvestKey; amount: number }>;
+
+/**
+ * What a bank will credit, per harvester, before the server says (#208): the
+ * balls leave on the press rather than on the answer. `ids` are the
+ * harvesters a tap names, or "all" for Collect all's. Each offers what
+ * {@link harvesterNow} says it holds, and the pool takes it up to the
+ * storage cap in id order, as the server's `bank` hands it out
+ * (`server/src/services/yard/bank.ts`, `credit.ts` `fitCredit`). The
+ * server's answer corrects whatever this gets wrong.
+ */
+export const predictBank = (
+  save: Pick<
+    BaseLoadResponse,
+    "savetime" | "currenttime" | "buildingdata" | "buildinghealthdata" | "storedata"
+  >,
+  now: number,
+  ids: readonly number[] | "all",
+  resources?: Partial<Resources>,
+  caps?: ResourceCaps | null,
+): BankedByBuilding => {
+  const chosen: HarvesterNow[] = [];
+  const named = ids === "all" ? null : new Set(ids);
+  for (const building of Object.values(save.buildingdata ?? {})) {
+    const one = building && harvesterNow(building, save, now);
+    if (!one || one.offer <= 0) continue;
+    if (named ? named.has(one.id) && one.bankable : one.collectable) chosen.push(one);
+  }
+  chosen.sort((a, b) => a.id - b.id);
+
+  const room: Partial<Record<HarvestKey, number>> = {};
+  const banked: BankedByBuilding = {};
+  for (const one of chosen) {
+    const cap = caps?.[one.resource];
+    const held = Math.floor(Number(resources?.[one.resource]) || 0);
+    const left = room[one.resource] ?? (cap !== undefined && cap > 0 ? Math.max(0, cap - held) : Infinity);
+    const amount = Math.min(one.offer, left);
+    room[one.resource] = left - amount;
+    if (amount > 0) banked[String(one.id)] = { resource: one.resource, amount };
+  }
+  return banked;
 };

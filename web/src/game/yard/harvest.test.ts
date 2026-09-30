@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse, BuildingData } from "@/api/types";
 import { maxHealth } from "./buildingArt";
-import { harvesterNow, harvestWaiting, runBuffer } from "./harvest";
+import { harvesterNow, harvestWaiting, predictBank, runBuffer } from "./harvest";
 
 /** The client's prediction of harvester buffers, rule for rule the server's catch-up. */
 
@@ -90,5 +90,39 @@ describe("harvestWaiting", () => {
     expect(waiting.amounts).toEqual({ r1: 720, r2: 0, r3: 0, r4: 500 });
     expect(waiting.total).toBe(1220);
     expect(waiting.ids).toEqual([1, 2]);
+  });
+});
+
+describe("predictBank", () => {
+  const goo = (overrides: Record<string, unknown> = {}) => snapper({ t: 4, ...overrides });
+
+  it("takes what Collect all would: every collectable harvester's offer", () => {
+    const max = maxHealth(1, 1)!;
+    const save = saveOf([
+      snapper({ id: 1, st: 300 }),
+      goo({ id: 2, st: 50 }),
+      snapper({ id: 3, st: 200, cU: 100 }),
+      snapper({ id: 4, st: 90, hp: max / 2 }),
+      snapper({ id: 5, st: 0 }),
+    ]);
+    expect(predictBank(save, T0, "all")).toEqual({
+      "1": { resource: "r1", amount: 300 },
+      "2": { resource: "r4", amount: 50 },
+    });
+  });
+
+  it("takes a tapped harvester even when damaged, but not one counting down", () => {
+    const max = maxHealth(1, 1)!;
+    const save = saveOf([snapper({ id: 4, st: 90, hp: max / 2 }), snapper({ id: 3, st: 200, cU: 100 })]);
+    expect(predictBank(save, T0, [4, 3])).toEqual({ "4": { resource: "r1", amount: 90 } });
+  });
+
+  it("fills the pool up to its cap in id order, as the server hands it out", () => {
+    const save = saveOf([snapper({ id: 2, st: 300 }), snapper({ id: 1, st: 300 }), goo({ id: 3, st: 40 })]);
+    const caps = { r1: 1_000, r2: 1_000, r3: 1_000, r4: 1_000 };
+    expect(predictBank(save, T0, "all", { r1: 600, r4: 1_000 }, caps)).toEqual({
+      "1": { resource: "r1", amount: 300 },
+      "2": { resource: "r1", amount: 100 },
+    });
   });
 });

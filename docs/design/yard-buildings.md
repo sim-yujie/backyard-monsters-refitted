@@ -797,9 +797,14 @@ rest).
   `web/src/game/yard/collectFx.ts`). **Faster than Flash on purpose** (owner, 2026-09-30):
   `(distance + 0..50) / 300` s a flight, clamped to 0.5-1.5 s, a twelfth of a second apart, the
   arc scaled to match, so the last ball lands within about 2.5 s of the press (Flash: `/ 150`, at
-  least 0.8 s, no cap, a sixth of a second apart; five seconds and more on a spread-out yard). The HUD holds back what they carry and counts up over 0.5 s
-  as each lands (Flash's bar tween, `UI_TOP.as:798-826`), floating the whole amount at the first
-  landing. No Town Hall: nothing flies and the amounts change at once. Under
+  least 0.8 s, no cap, a sixth of a second apart; five seconds and more on a spread-out yard).
+  **The balls leave on the press**, not on the server's answer (owner, 2026-09-30: waiting for
+  the answer felt laggy): the client predicts what each harvester gives (`predictBank`, the
+  server's rules including the storage cap), the bar counts up as they land, and the answer only
+  corrects the totals once the last ball is down (`web/src/game/yard/bankShow.ts`). A refusal
+  takes the balls still in the air away and puts the numbers back. Each landing counts its
+  readout up over 0.5 s (Flash's bar tween, `UI_TOP.as:798-826`), the first floating the whole
+  amount. No Town Hall: nothing flies and the amounts change at once. Under
   `prefers-reduced-motion` nothing flies either. Flash played `bankfire` / `bankland` per ball;
   the web client has no sound.
 - Banking moves `min(st, capacity)` into the pool clamped to the cap; what does not fit **stays in

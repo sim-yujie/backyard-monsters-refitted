@@ -1,6 +1,12 @@
 import type { BaseLoadResponse, ResourceCaps, Resources } from "@/api/types";
 import { bankActions, BankKey, type BankActions, type BankReport } from "@/api/yardBank";
-import { harvesterNow, harvestWaiting, type HarvestKey, type HarvestWaiting } from "@/game/yard/harvest";
+import {
+  harvesterNow,
+  harvestWaiting,
+  predictBank,
+  type HarvestKey,
+  type HarvestWaiting,
+} from "@/game/yard/harvest";
 import type { YardActionResult, YardUiBinding } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { formatAmount, formatCompact } from "@/ui/format";
@@ -262,9 +268,15 @@ export class CollectAll {
     const actions = this.actions;
     if (!binding || !actions) return;
     this.button.disabled = true;
+    // The balls leave now; the answer only corrects the totals (#208).
+    const store = binding.store;
+    const answer =
+      binding.scene.startBank?.(
+        predictBank(store.save, store.now(), "all", store.resources, store.caps),
+      ) ?? null;
     const result = await actions.all();
+    answer?.(result.ok ? { banked: result.report.banked } : null);
     if (this.binding === binding) {
-      if (result.ok) binding.scene.playBank?.(result.report.byBuilding);
       showBankResult(binding.notices, result);
       this.refresh();
     }

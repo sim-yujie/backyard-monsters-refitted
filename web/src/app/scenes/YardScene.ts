@@ -26,7 +26,8 @@ import {
 } from "@/game/yard/planner/access";
 import { buildOffer, buildsAtOnce, categoryOf } from "@/game/yard/buildCatalogue";
 import { BuildPlacement } from "@/game/yard/BuildPlacement";
-import { harvesterNow, type HarvestKey } from "@/game/yard/harvest";
+import { startBank, type AnswerBank } from "@/game/yard/bankShow";
+import { harvesterNow, predictBank, type BankedByBuilding, type HarvestKey } from "@/game/yard/harvest";
 import { MushroomPicker, type MushroomPickView } from "@/game/yard/mushroomPick";
 import {
   consumeOwnYardTarget,
@@ -905,11 +906,15 @@ export class YardScene implements Scene {
     const waiting = harvesterNow(building.raw, store.save, store.now());
     if (!waiting?.bankable || waiting.offer <= 0) return;
 
+    // The balls leave on the tap; the answer only corrects the totals (#208).
+    const answer = this.startBank(
+      predictBank(store.save, store.now(), [building.id], store.resources, store.caps),
+    );
     void bankActions(store)
       .one(building.id)
       .then((result) => {
+        answer?.(result.ok ? { banked: result.report.banked } : null);
         if (this.binding !== binding) return;
-        if (result.ok) this.playBank(result.report.byBuilding);
         showBankResult(binding.notices, result);
         const amount = result.ok ? (result.report.byBuilding[String(building.id)]?.amount ?? 0) : 0;
         if (amount > 0) this.floatBanked(building.id, waiting.resource, amount);
@@ -917,16 +922,16 @@ export class YardScene implements Scene {
   }
 
   /**
-   * A bank's resource balls fly from each harvester that banked to the Town
-   * Hall (#208), and the HUD holds back what they carry and counts it up as
-   * they land. Under `prefers-reduced-motion` nothing flies and the HUD
-   * shows the new amounts at once, as the answer left them.
+   * A bank's resource balls fly from each harvester in `predicted` to the
+   * Town Hall as it is pressed, and the HUD counts up as they land; the
+   * returned function takes the server's answer (#208, `bankShow.ts`). Under
+   * `prefers-reduced-motion` nothing flies and the HUD shows the new amounts
+   * at once, as the answer leaves them.
    */
-  private playBank(banked: Readonly<Record<string, { resource: HarvestKey; amount: number }>>): void {
+  private startBank(predicted: BankedByBuilding): AnswerBank | null {
     const hud = this.hud;
-    if (!hud || prefersReducedMotion()) return;
-    const held = this.renderer.throwBank(banked, (resource, share) => this.hud?.deliver(resource, share));
-    hud.withhold(held);
+    if (!hud || prefersReducedMotion()) return null;
+    return startBank(predicted, this.renderer, hud);
   }
 
   /** "+720" with the resource's icon, rising off a building and fading (`harvest.css`). */
@@ -1591,7 +1596,7 @@ export class YardScene implements Scene {
           this.context?.goTo(SceneName.BAITER);
         },
         openShop: () => this.openShop(),
-        playBank: (banked) => this.playBank(banked),
+        startBank: (predicted) => this.startBank(predicted),
       },
       notices: this.notices,
     };

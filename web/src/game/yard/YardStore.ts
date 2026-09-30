@@ -15,7 +15,8 @@ import { YARD_STATE_KEYS } from "@/api/types";
 import { yardApi, yardRefusal, type YardApi, type YardRefusal } from "@/api/yard";
 import type { BaiterRun } from "@/game/baiter/baiterSession";
 import type { Notices } from "@/ui/maproom/Notices";
-import type { HarvestKey } from "./harvest";
+import type { AnswerBank } from "./bankShow";
+import type { BankedByBuilding } from "./harvest";
 import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
 import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES, type YardKind } from "./buildingCosts";
 import { JobKind, predictCompletion, SERVER_COMPLETED_KINDS, yardJobs, type YardJob } from "./jobs";
@@ -225,12 +226,13 @@ export interface YardSceneHooks {
    */
   openShop?(): void;
   /**
-   * Plays a bank (#208): each harvester that banked throws its resource balls
-   * at the Town Hall, and the HUD counts up as they land. `banked` is the
-   * bank report's `byBuilding`. Called straight after the answer, so the HUD
-   * never shows the whole amount first. Absent where there is no yard drawn.
+   * Plays a bank on the press (#208, `bankShow.ts`): each harvester in
+   * `predicted` (`predictBank`) throws its resource balls at the Town Hall
+   * now, and the HUD counts up as they land. Returns what to hand the
+   * server's answer to, straight after it (a refusal takes the balls back),
+   * or null when nothing flies. Absent where there is no yard drawn.
    */
-  playBank?(banked: Readonly<Record<string, { resource: HarvestKey; amount: number }>>): void;
+  startBank?(predicted: BankedByBuilding): AnswerBank | null;
 }
 
 /** Handed to the building panel (WP1.5) and the HUD (WP1.6) on the player's own yard. */

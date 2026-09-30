@@ -14,7 +14,9 @@ import type { HarvestKey } from "./harvest";
  *
  * A landing calls the thrower's `onLand` with the ball's share, which is what
  * lets the top bar count up as they arrive. {@link finish} lands every ball
- * still in the air at once, so nothing held back is lost when the yard goes.
+ * still in the air at once, so nothing held back is lost when the yard goes;
+ * {@link cancel} takes one throw's balls away without landing them, for a
+ * bank the server refused after its balls were already thrown (#208).
  */
 
 /** The ball of each resource, and the shadow they share. */
@@ -151,6 +153,7 @@ export const packageArt = (): CollectFxArt => {
 export type LandListener = (resource: HarvestKey, share: number) => void;
 
 interface Ball {
+  readonly group: number;
   readonly flight: Flight;
   readonly onLand: LandListener;
   readonly dot: Sprite;
@@ -171,6 +174,7 @@ export class CollectFxLayer {
   private readonly balls: Ball[] = [];
   private readonly freeDots: Sprite[] = [];
   private readonly freeShadows: Sprite[] = [];
+  private groups = 0;
 
   constructor(options: CollectFxOptions = {}) {
     this.art = options.art ?? packageArt();
@@ -183,8 +187,12 @@ export class CollectFxLayer {
     return this.balls.length;
   }
 
-  /** Throws a bank's balls; `onLand` hears each one land. */
-  launch(flights: readonly Flight[], onLand: LandListener): void {
+  /**
+   * Throws a bank's balls; `onLand` hears each one land. Returns the throw's
+   * number, for {@link cancel}.
+   */
+  launch(flights: readonly Flight[], onLand: LandListener): number {
+    const group = ++this.groups;
     for (const flight of flights) {
       const dot = this.freeDots.pop() ?? this.makeSprite(this.dots);
       const shadow = this.freeShadows.pop() ?? this.makeSprite(this.shadows);
@@ -192,7 +200,20 @@ export class CollectFxLayer {
       shadow.texture = this.art.shadow;
       dot.visible = false;
       shadow.visible = false;
-      this.balls.push({ flight, onLand, dot, shadow, elapsed: 0 });
+      this.balls.push({ group, flight, onLand, dot, shadow, elapsed: 0 });
+    }
+    return group;
+  }
+
+  /** Takes one throw's balls out of the air without landing them. */
+  cancel(group: number): void {
+    const balls = this.balls;
+    for (let index = balls.length - 1; index >= 0; index--) {
+      const ball = balls[index]!;
+      if (ball.group !== group) continue;
+      this.release(ball);
+      balls[index] = balls[balls.length - 1]!;
+      balls.pop();
     }
   }
 

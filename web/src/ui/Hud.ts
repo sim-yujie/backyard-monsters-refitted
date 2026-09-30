@@ -174,12 +174,13 @@ interface Readout {
   amount: number | undefined;
   cap: number | undefined;
   /**
-   * What is still flying to the Town Hall (#208): part of `amount` the
-   * readout does not show yet. It counts up as the balls land.
+   * How far the readout is behind `amount` while a bank's balls fly (#208):
+   * credited but not landed yet. Below zero while balls thrown on the press
+   * land before the server has credited them.
    */
   held: number;
-  /** The whole of what was held back, floated once when the first ball lands. */
-  landing: number;
+  /** Banks thrown but not answered yet: a rise meanwhile is theirs and floats nothing. */
+  expecting: number;
   /** The amount on show while counting, or null to show the target. */
   shown: number | null;
   /** The count in progress: from, to, and its start (`performance.now()`). */
@@ -277,7 +278,7 @@ export class Hud {
         amount: undefined,
         cap: undefined,
         held: 0,
-        landing: 0,
+        expecting: 0,
         shown: null,
         count: null,
       };
@@ -377,43 +378,51 @@ export class Hud {
     for (const [readout, delta] of changes) this.float(readout, delta);
   }
 
-  /**
-   * Holds back what a bank's resource balls carry (#208): the readouts keep
-   * showing the pool as it was until {@link deliver} hands the amounts over,
-   * ball by ball. Called straight after the answer that credited them, so the
-   * float that answer made is dropped: the first landing floats the whole.
+  /*
+   * A bank's balls (#208, `game/yard/bankShow.ts`). The balls leave on the
+   * press; each landing counts its readout up ({@link deliver}); the server's
+   * credit, when it comes, is held back so the readout does not jump
+   * ({@link hold}); and what the prediction got wrong is counted in, or out,
+   * once the last ball is down. Every amount a bank holds it also delivers,
+   * so the readouts end on the pool.
    */
-  withhold(amounts: Partial<Record<ResourceKey, number>>): void {
-    for (const [key, amount] of Object.entries(amounts) as [ResourceKey, number][]) {
-      const readout = this.readouts.get(key);
-      if (!readout || !(amount > 0)) continue;
-      readout.held += amount;
-      readout.landing += amount;
-      this.dropFloat(key);
-      if (readout.count) readout.count.to = this.target(readout) ?? readout.count.to;
-      else this.render(readout);
-    }
+
+  /** A bank was thrown (+1) or answered (−1): while one waits, a rise floats nothing. */
+  expectBank(key: ResourceKey, change: 1 | -1): void {
+    const readout = this.readouts.get(key);
+    if (readout) readout.expecting = Math.max(0, readout.expecting + change);
   }
 
-  /** A ball landed: the readout counts up by its share. */
+  /** Puts `amount` between the pool and the readout, at once; negative gives it back at once. */
+  hold(key: ResourceKey, amount: number): void {
+    const readout = this.readouts.get(key);
+    if (!readout || amount === 0) return;
+    readout.held += amount;
+    if (readout.count) readout.count.to = this.target(readout) ?? readout.count.to;
+    else this.render(readout);
+  }
+
+  /** Counts a readout up by `amount` (down, when negative) over {@link COUNT_MS}. */
   deliver(key: ResourceKey, amount: number): void {
     const readout = this.readouts.get(key);
-    if (!readout || !(amount > 0)) return;
+    if (!readout || amount === 0) return;
     const from = readout.shown ?? this.target(readout);
-    readout.held = Math.max(0, readout.held - amount);
-    if (readout.landing > 0) {
-      this.float(readout, readout.landing);
-      readout.landing = 0;
-    }
+    readout.held -= amount;
     if (from !== undefined) this.countTo(readout, from);
+  }
+
+  /** Floats a bank's whole amount beside a readout, as a change of amount floats. */
+  showChange(key: ResourceKey, delta: number): void {
+    const readout = this.readouts.get(key);
+    if (readout && delta !== 0) this.float(readout, delta);
   }
 
   /** Shows every readout's whole amount at once: nothing is flying any more. */
   releaseHeld(): void {
     for (const readout of this.readouts.values()) {
+      readout.expecting = 0;
       if (readout.held === 0 && !readout.count) continue;
       readout.held = 0;
-      readout.landing = 0;
       readout.count = null;
       readout.shown = null;
       this.render(readout);
@@ -524,9 +533,10 @@ export class Hud {
     this.render(readout);
     this.label(readout);
     if (this.bubbleFor === key) this.fillExact(readout);
-    return before !== undefined && Math.floor(before) !== Math.floor(amount)
-      ? [readout, Math.floor(amount) - Math.floor(before)]
-      : null;
+    if (before === undefined || Math.floor(before) === Math.floor(amount)) return null;
+    const change = Math.floor(amount) - Math.floor(before);
+    // A bank in flight floats its own amount when its first ball lands.
+    return change > 0 && readout.expecting > 0 ? null : [readout, change];
   }
 
   /** The readout's visible amount, cap and fill bar, spelled for the current fit. */
