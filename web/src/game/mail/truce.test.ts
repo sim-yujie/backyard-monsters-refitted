@@ -71,7 +71,7 @@ describe("the rules the screen follows", () => {
     const card = truceCard("active", NOW + 6 * DAY + 3_600, true, "Bramble", NOW);
     expect(card).toMatchObject({ label: "Active", tone: "good" });
     expect(card.detail).toMatch(
-      /^Neither of you can attack the other's yards or outposts until \d+ \w+ \(6 days left\)\.$/,
+      /^Neither of you can attack the other's yards or outposts until \d+ \w+ \(6 days 1 h left\)\.$/,
     );
   });
 
@@ -80,8 +80,16 @@ describe("the rules the screen follows", () => {
     expect(truceTag("rejected")).toEqual({ label: "Truce rejected", tone: "bad" });
   });
 
-  it("spans read in days, hours or minutes", () => {
-    expect([2 * DAY, DAY, 5 * 3_600, 600, 5].map(spanText)).toEqual(["2 days", "1 day", "5 h", "10 min", "1 min"]);
+  it("spans read in days, hours or minutes, rounded up as the server words them", () => {
+    expect([2 * DAY, DAY, 2 * DAY - 3_600, 5 * 3_600, 5 * 3_600 + 30, 600, 5].map(spanText)).toEqual([
+      "2 days",
+      "1 day",
+      "1 day 23 h",
+      "5 h",
+      "6 h",
+      "10 min",
+      "1 min",
+    ]);
   });
 });
 

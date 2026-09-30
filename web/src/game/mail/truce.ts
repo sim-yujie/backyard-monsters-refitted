@@ -75,14 +75,17 @@ export const requestIndex = (items: readonly MailItem[]): number => {
   return -1;
 };
 
-/** A span of time, roughly: "13 days", "1 day", "5 h", "20 min". */
+/**
+ * A span of time, rounded up, as the server words it (`truceRules.ts`):
+ * "6 days", "1 day 23 h", "5 h", "20 min".
+ */
 export const spanText = (seconds: number): string => {
-  if (seconds >= 86_400) {
-    const days = Math.floor(seconds / 86_400);
-    return `${days} ${days === 1 ? "day" : "days"}`;
-  }
-  if (seconds >= 3_600) return `${Math.floor(seconds / 3_600)} h`;
-  return `${Math.max(1, Math.floor(seconds / 60))} min`;
+  const totalHours = Math.ceil(seconds / 3_600);
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  if (days > 0) return `${days} ${days === 1 ? "day" : "days"}${hours > 0 ? ` ${hours} h` : ""}`;
+  if (seconds > 3_600) return `${hours} h`;
+  return `${Math.max(1, Math.ceil(seconds / 60))} min`;
 };
 
 const LABELS: Readonly<Record<TruceState, { label: string; tone: TruceTone }>> = {

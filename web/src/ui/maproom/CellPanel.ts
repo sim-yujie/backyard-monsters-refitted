@@ -135,10 +135,12 @@ export class CellPanel {
   private readonly moveMonstersButton: HTMLButtonElement;
   private readonly relocateButton: HTMLButtonElement;
   private readonly secondary: HTMLElement;
+  /** Message and Truce, a row of their own under View yard (#203): four buttons do not fit one. */
+  private readonly social: HTMLElement;
   private readonly viewYardButton: HTMLButtonElement;
   private readonly viewYardLabel: HTMLElement;
   private readonly bookmarkButton: HTMLButtonElement;
-  /** Message, beside View yard on another player's yard (#193). */
+  /** Message, on another player's yard (#193), in a row with Truce. */
   private readonly messageButton: HTMLButtonElement;
   /** Truce, beside Message, while no truce with the owner runs (#203). */
   private readonly truceButton: HTMLButtonElement;
@@ -236,7 +238,9 @@ export class CellPanel {
     });
 
     this.secondary = el("div", "mr2-cell__row");
-    this.secondary.append(this.viewYardButton, this.messageButton, this.truceButton, this.bookmarkButton);
+    this.secondary.append(this.viewYardButton, this.bookmarkButton);
+    this.social = el("div", "mr2-cell__row");
+    this.social.append(this.messageButton, this.truceButton);
 
     this.moveMonstersButton = button("btn btn--outline mr2-cell__secondary mr2-cell__move");
     this.moveMonstersButton.append(icon("swap", 18, "map-icon"), el("span", "", "Move monsters"));
@@ -256,7 +260,7 @@ export class CellPanel {
     const actions = el("div", "mr2-cell__actions");
     actions.append(this.attackButton, this.openButton);
     if (options.extraAction) actions.append(options.extraAction.button);
-    actions.append(this.secondary, this.moves);
+    actions.append(this.secondary, this.social, this.moves);
 
     this.facts = document.createElement("dl");
     this.facts.className = "cell-facts mr2-cell__facts";
@@ -397,6 +401,7 @@ export class CellPanel {
       this.messageButton.hidden = this.options.onMessage === undefined;
       this.truceButton.hidden =
         this.options.onTruce === undefined || (payload.t !== undefined && payload.t > Date.now() / 1000);
+      this.social.hidden = this.messageButton.hidden && this.truceButton.hidden;
     }
 
     this.addDamage(payload.dm, payload.d === 1);
@@ -486,6 +491,7 @@ export class CellPanel {
     this.viewYardButton.hidden = !attack;
     this.messageButton.hidden = true;
     this.truceButton.hidden = true;
+    this.social.hidden = true;
     this.viewYardLabel.textContent = viewLabel;
     this.viewYardButton.title = kind === "none" ? VIEW_LOADING : VIEW_OTHER;
     this.bookmarkButton.disabled = !this.options.canBookmark();
