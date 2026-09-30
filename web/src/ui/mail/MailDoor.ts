@@ -1,7 +1,7 @@
 import type { MailApi } from "@/api/mail";
 import type { OffsetCell } from "@/game/HexGrid";
 import { MailButton, type MailButtonStyle } from "./MailButton";
-import { MailboxScreen, type ComposeTarget } from "./MailboxScreen";
+import { MailboxScreen, type ComposeTarget, type TruceTarget } from "./MailboxScreen";
 
 /**
  * A screen's way into the mailbox (#193): the Mail button, the mailbox screen
@@ -22,6 +22,8 @@ export interface MailDoorOptions {
   readonly onOpen?: () => void;
   /** A notice's "Show on map". */
   readonly onShowOnMap?: (cell: OffsetCell) => void;
+  /** A truce was accepted in the mailbox (#203): the map's truce marks are out of date. */
+  readonly onTruceAccepted?: () => void;
   /** The mail routes, for a test. */
   readonly api?: MailApi;
 }
@@ -63,6 +65,12 @@ export class MailDoor {
     await this.ensureScreen().openCompose(to);
   }
 
+  /** A truce proposed to the owner of a yard the map showed (#203). */
+  async openTruce(to: TruceTarget): Promise<void> {
+    this.options.onOpen?.();
+    await this.ensureScreen().openTruce(to);
+  }
+
   close(): void {
     this.screen?.close();
   }
@@ -77,6 +85,7 @@ export class MailDoor {
     this.screen ??= new MailboxScreen({
       ...(this.options.api ? { api: this.options.api } : {}),
       ...(this.options.onShowOnMap ? { onShowOnMap: this.options.onShowOnMap } : {}),
+      ...(this.options.onTruceAccepted ? { onTruceAccepted: this.options.onTruceAccepted } : {}),
       onUnreadChange: (count) => {
         this.mailboxCount = count;
         this.show();

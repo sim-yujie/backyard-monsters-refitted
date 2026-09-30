@@ -28,6 +28,7 @@ const message = (overrides: Partial<MailMessage> = {}): MailMessage => ({
 interface FakeApi extends MailApi {
   sent: Outgoing[];
   blocked: number[];
+  proposed: { baseid: string; message: string }[];
   sendResult: SendResult;
   lists: MailMessage[][];
 }
@@ -40,6 +41,7 @@ const fakeApi = (
   const api: FakeApi = {
     sent: [],
     blocked: [],
+    proposed: [],
     sendResult: { ok: true, threadid: 1 },
     lists,
     // Each fetch answers the next list, the last one for ever after.
@@ -48,6 +50,10 @@ const fakeApi = (
     thread: vi.fn(async (threadid: number) => threads[threadid] ?? []),
     send: vi.fn(async (outgoing: Outgoing) => {
       api.sent.push(outgoing);
+      return api.sendResult;
+    }),
+    requestTruce: vi.fn(async (baseid: string, text: string) => {
+      api.proposed.push({ baseid, message: text });
       return api.sendResult;
     }),
     block: vi.fn(async (threadid: number) => {
@@ -255,5 +261,137 @@ describe("the mailbox screen", () => {
     expect(screen.isOpen).toBe(false);
     expect(screen.element.hidden).toBe(true);
     expect(onClose).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("truces in the mailbox (#203)", () => {
+  const DAY = 86_400;
+  const request = (overrides: Partial<MailMessage> = {}) =>
+    message({ messagetype: "trucerequest", subject: "Truce Request from Bramblefoot", message: "Peace?", ...overrides });
+  const listed = (trucestate: string, truceexpire: number | null) => request({ trucestate, truceexpire });
+  const card = (host: HTMLElement) => host.querySelector<HTMLElement>(".mail-request");
+  const stateOf = (host: HTMLElement) => card(host)?.querySelector(".mail-request__state")?.textContent;
+  const actions = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>(".mail-request__action")];
+  const openFirst = async (host: HTMLElement) => {
+    click(rows(host)[0]);
+    await settle();
+  };
+
+  it("an incoming request: tagged in the list, a card with Accept and Reject, and no second proposal", async () => {
+    const api = fakeApi([[listed("requested", NOW + 6 * DAY)]], { 1: [request()] });
+    const { host } = await openScreen(api);
+
+    expect(rows(host)[0]?.querySelector(".mail-row__truce")?.textContent).toBe("Truce requested");
+    await openFirst(host);
+    expect(stateOf(host)).toBe("Waiting");
+    expect(card(host)?.textContent).toContain("Answer by");
+    expect(card(host)?.textContent).toContain("(6 days left)");
+    expect(actions(host).map((one) => one.textContent)).toEqual(["Accept", "Reject"]);
+    expect(host.querySelector(".mail-message__label")).toBeNull();
+    expect(host.querySelector(".mail-pane__truce")).toBeNull();
+  });
+
+  it("Accept sends the acceptance, tells the map, and the card then says the truce is on", async () => {
+    const onTruceAccepted = vi.fn();
+    const answer = message({ userid: ME, targetid: 77, messagetype: "truceaccept", message: "I accept your truce." });
+    const api = fakeApi([[listed("requested", NOW + 6 * DAY)], [listed("accepted", NOW + 14 * DAY)]], {
+      1: [request(), answer],
+    });
+    const { host } = await openScreen(api, { onTruceAccepted });
+    await openFirst(host);
+
+    click(actions(host)[0]);
+    await settle();
+    await settle();
+
+    expect(api.sent).toEqual([
+      {
+        threadid: 1,
+        targetid: 77,
+        subject: "Truce Request from Bramblefoot",
+        message: "I accept your truce.",
+        type: "truceaccept",
+      },
+    ]);
+    expect(onTruceAccepted).toHaveBeenCalledTimes(1);
+    expect(stateOf(host)).toBe("Active");
+    expect(card(host)?.classList.contains("mail-request--good")).toBe(true);
+    expect(actions(host)).toHaveLength(0);
+    expect(host.querySelector(".mail-status")?.textContent).toContain("You have a truce with Bramblefoot");
+    expect(rows(host)[0]?.querySelector(".mail-row__truce")?.textContent).toBe("Truce active");
+  });
+
+  it("Reject sends what the reply box holds, and a refusal shows on the card with the buttons back", async () => {
+    const api = fakeApi([[listed("requested", NOW + DAY)]], { 1: [request()] });
+    api.sendResult = { ok: false, reason: "This truce request can no longer be answered." };
+    const { host } = await openScreen(api);
+    await openFirst(host);
+
+    type(host.querySelector<HTMLTextAreaElement>(".mail-writer__text")!, "Not today.");
+    click(actions(host)[1]);
+    await settle();
+
+    expect(api.sent[0]).toMatchObject({ type: "trucereject", message: "Not today." });
+    const refusal = host.querySelector<HTMLElement>(".mail-request__refusal")!;
+    expect(refusal.hidden).toBe(false);
+    expect(refusal.textContent).toBe("This truce request can no longer be answered.");
+    expect(actions(host).every((one) => !one.disabled)).toBe(true);
+  });
+
+  it("the player's own request waits, with no buttons", async () => {
+    const api = fakeApi([[listed("requested", NOW + 5 * DAY)]], { 1: [request({ userid: ME, targetid: 77 })] });
+    const { host } = await openScreen(api);
+    await openFirst(host);
+
+    expect(card(host)?.textContent).toContain("Waiting for Bramblefoot to answer.");
+    expect(actions(host)).toHaveLength(0);
+  });
+
+  it.each([
+    ["requested", NOW - 60, "Lapsed", "so the request lapsed"],
+    ["accepted", NOW - 60, "Ended", "The truce ended on"],
+    ["rejected", null, "Rejected", "You rejected the truce."],
+  ])("a %s truce that is over reads as %s, and a new one may be proposed", async (state, until, label, words) => {
+    const api = fakeApi([[listed(state, until)]], { 1: [request()] });
+    const { host } = await openScreen(api);
+    await openFirst(host);
+
+    expect(stateOf(host)).toBe(label);
+    expect(card(host)?.textContent).toContain(words);
+    expect(actions(host)).toHaveLength(0);
+    expect(host.querySelector(".mail-pane__truce")).not.toBeNull();
+  });
+
+  it("proposes a truce in a thread, starting from Flash's words", async () => {
+    const api = fakeApi([[message()]], { 1: [message()] });
+    const { host } = await openScreen(api);
+    await openFirst(host);
+
+    click(host.querySelector(".mail-pane__truce"));
+    expect(host.querySelector(".mail-pane__name")?.textContent).toBe("Propose a truce to Bramblefoot");
+    const words = "Accept my truce and we can end all this needless bloodshed.";
+    expect(host.querySelector<HTMLTextAreaElement>(".mail-writer__text")?.value).toBe(words);
+    click(host.querySelector(".mail-writer__send"));
+    await settle();
+    await settle();
+
+    expect(api.sent).toEqual([{ threadid: 1, targetid: 77, subject: "Hello", message: words, type: "trucerequest" }]);
+    expect(host.querySelector(".mail-status")?.textContent).toBe("Truce request sent to Bramblefoot.");
+  });
+
+  it("proposes a truce from the map on the yard's base, and shows a refusal under the box", async () => {
+    const api = fakeApi([[message()]], {});
+    api.sendResult = { ok: false, reason: "You already have a truce, or a truce request waiting, with this player." };
+    const { screen, host } = await openScreen(api);
+    await screen.openTruce({ userid: 77, name: "Bramblefoot", baseid: "2000245210" });
+
+    type(host.querySelector<HTMLTextAreaElement>(".mail-writer__text")!, "Let us be friends.");
+    click(host.querySelector(".mail-writer__send"));
+    await settle();
+
+    expect(api.proposed).toEqual([{ baseid: "2000245210", message: "Let us be friends." }]);
+    expect(api.sent).toEqual([]);
+    expect(host.querySelector(".mail-writer__refusal")?.textContent).toContain("already have a truce");
+    expect(host.querySelector(".mail-truce__cancel")).toBeNull();
   });
 });

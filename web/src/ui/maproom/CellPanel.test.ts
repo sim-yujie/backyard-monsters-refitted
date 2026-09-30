@@ -321,3 +321,32 @@ describe("Message (#193)", () => {
     expect(message(open(player()).host).hidden).toBe(true);
   });
 });
+
+describe("Truce (#203)", () => {
+  const truce = (host: HTMLElement) => host.querySelector<HTMLButtonElement>(".mr2-cell__truce")!;
+
+  it("offers another player's yard a Truce that names them", () => {
+    const onTruce = vi.fn();
+    const { host } = open(player(), { onTruce });
+    expect(truce(host).hidden).toBe(false);
+    truce(host).click();
+    expect(onTruce).toHaveBeenCalledWith(expect.objectContaining({ uid: 77, n: "Bramblefoot" }));
+  });
+
+  it("offers none while a truce with them runs, and says so instead", () => {
+    const { host } = open(player({ t: Math.floor(Date.now() / 1000) + 3_600 }), { onTruce: vi.fn() });
+    expect(truce(host).hidden).toBe(true);
+    expect(host.querySelector(".mr2-cell__chips")?.textContent).toContain("Truce");
+  });
+
+  it("offers one again once the truce has run out", () => {
+    const { host } = open(player({ t: Math.floor(Date.now() / 1000) - 60 }), { onTruce: vi.fn() });
+    expect(truce(host).hidden).toBe(false);
+  });
+
+  it("offers none on the player's own yard, a camp, or without a way to propose", () => {
+    expect(truce(open(player({ mine: 1 }), { onTruce: vi.fn() }).host).hidden).toBe(true);
+    expect(truce(open(camp(), { onTruce: vi.fn() }).host).hidden).toBe(true);
+    expect(truce(open(player()).host).hidden).toBe(true);
+  });
+});

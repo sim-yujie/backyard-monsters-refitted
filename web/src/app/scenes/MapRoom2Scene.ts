@@ -287,6 +287,7 @@ export class MapRoom2Scene implements Scene {
         onMoveMonsters: (_cell, payload) => this.openTransfer(payload.bid),
         onRelocate: (cell, payload) => this.openRelocate(cell, payload),
         onMessage: (payload) => void this.mail?.openCompose({ userid: payload.uid, name: payload.n }),
+        onTruce: (payload) => void this.mail?.openTruce({ userid: payload.uid, name: payload.n, baseid: payload.bid }),
       },
       SceneName.MAP_ROOM_2,
       [
@@ -305,6 +306,8 @@ export class MapRoom2Scene implements Scene {
         this.mail?.close();
         this.jumpTo(cell);
       },
+      // A truce accepted in the mailbox: its mark and its Attack block come with fresh zones (#203).
+      onTruceAccepted: () => this.store.refreshVisible(),
     });
     this.ui.placeTool(this.mail.button.element);
 

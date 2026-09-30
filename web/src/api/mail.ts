@@ -13,6 +13,9 @@ import type { ApiEnvelope } from "./types";
  * - `POST /api/:apiVersion/player/getmessagethread { threadid }`: a thread's
  *   messages, oldest first. Reading it marks it read on the server.
  * - `POST /api/:apiVersion/player/sendmessage`: `threadid` 0 starts a thread.
+ *   Its `type` also proposes, accepts or rejects a truce in a thread (#203).
+ * - `POST /api/:apiVersion/player/requesttruce { baseid, message }`: proposes a
+ *   truce to a base's owner, from the map, in a new thread (#203).
  * - `POST /api/:apiVersion/player/reportmessagethread { threadid, reason }`: blocks
  *   the thread's other player; their threads disappear from the list.
  */
@@ -22,6 +25,7 @@ const TARGETS_PATH = "/api/:apiVersion/player/getmessagetargets";
 const THREAD_PATH = "/api/:apiVersion/player/getmessagethread";
 const SEND_PATH = "/api/:apiVersion/player/sendmessage";
 const BLOCK_PATH = "/api/:apiVersion/player/reportmessagethread";
+const TRUCE_PATH = "/api/:apiVersion/player/requesttruce";
 
 /** One message as the server sends it (`message.model.ts`'s `@FrontendKey` fields). */
 export interface MailMessage {
@@ -40,6 +44,11 @@ export interface MailMessage {
   /** In the thread list only: how many messages the thread holds. */
   readonly messagecount?: number;
   readonly trucestate?: string | null;
+  /**
+   * In the thread list only (#203): when the thread's truce ends, unix
+   * seconds. An accepted truce's expiry, or when a waiting request lapses.
+   */
+  readonly truceexpire?: number | null;
   /** A notice's cell, `[x, y]` (#187). */
   readonly coords?: readonly number[] | null;
   readonly baseid?: string | null;
@@ -73,6 +82,9 @@ export type SendResult =
   | { readonly ok: true; readonly threadid: number }
   | { readonly ok: false; readonly reason: string };
 
+/** What a send is: a message, or a truce proposed or answered in a thread (#203). */
+export type MailSendType = "message" | "trucerequest" | "truceaccept" | "trucereject";
+
 /** A new message or a reply. */
 export interface Outgoing {
   /** 0 starts a new thread. */
@@ -81,6 +93,8 @@ export interface Outgoing {
   readonly targetid: number;
   readonly subject: string;
   readonly message: string;
+  /** "message" unless it is a truce's (#203). */
+  readonly type?: MailSendType;
 }
 
 /** Everything the mailbox asks the server, as one object a test can replace. */
@@ -89,6 +103,8 @@ export interface MailApi {
   targets(): Promise<Record<string, MailTarget>>;
   thread(threadid: number): Promise<MailMessage[]>;
   send(outgoing: Outgoing): Promise<SendResult>;
+  /** Proposes a truce to a base's owner, in a new thread (#203). */
+  requestTruce(baseid: string, message: string): Promise<SendResult>;
   block(threadid: number): Promise<void>;
 }
 
@@ -108,6 +124,8 @@ export const sendRefusal = (caught: unknown): string => {
   if (caught instanceof ApiError) {
     const body = caught.body as { message?: unknown } | undefined;
     if (typeof body?.message === "string" && body.message) return body.message;
+    // A truce refused for a reason the server words (#203): one already waiting, say.
+    if (caught.serverStatus === 409 && caught.message) return caught.message;
     return "The message was not sent. That player cannot be written to.";
   }
   return "The message was not sent.";
@@ -125,11 +143,19 @@ export const mailApi: MailApi = {
         targetid: String(outgoing.targetid),
         subject: outgoing.subject,
         message: outgoing.message,
-        type: "message",
+        type: outgoing.type ?? "message",
         // Required by the route's schema and never read (`docs/server-api.md`).
         targetbaseid: "0",
       });
       return { ok: true, threadid: Number(response.threadid ?? outgoing.threadid) };
+    } catch (caught) {
+      return { ok: false, reason: sendRefusal(caught) };
+    }
+  },
+  requestTruce: async (baseid, message) => {
+    try {
+      const response = await post<SendResponse>(TRUCE_PATH, { baseid, message });
+      return { ok: true, threadid: Number(response.threadid ?? 0) };
     } catch (caught) {
       return { ok: false, reason: sendRefusal(caught) };
     }

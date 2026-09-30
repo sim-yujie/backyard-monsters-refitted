@@ -15,7 +15,20 @@ import {
   type MailItem,
   type MailThread,
 } from "@/game/mail/mailbox";
+import {
+  canPropose,
+  REQUEST_DAYS,
+  requestIndex,
+  TRUCE_ACCEPT_TEXT,
+  TRUCE_DAYS,
+  TRUCE_REJECT_TEXT,
+  TRUCE_REQUEST_TEXT,
+  truceCard,
+  truceState,
+  truceTag,
+} from "@/game/mail/truce";
 import { Panel } from "@/ui/Panel";
+import { requestCard } from "./RequestCard";
 import "@/ui/styles/mail.css";
 
 /**
@@ -32,6 +45,11 @@ import "@/ui/styles/mail.css";
  * - New message writes to a past contact, or to the player whose yard the map
  *   opened it from (`openCompose`). There is no player search: the server has
  *   no route for one.
+ * - Truces (#203): "Propose truce" in a player thread, or from the map on the
+ *   player's yard (`openTruce`, the server's `requesttruce`). The thread's
+ *   request carries a card with its state (waiting, active, ended, lapsed,
+ *   rejected) and when it ends, and Accept and Reject for its recipient. The
+ *   list tags a thread by its truce, as Flash's inbox did.
  *
  * Docked like the Shop and the Monsters screen. The server marks a thread
  * read as it is opened; the screen tells the scene how many threads are still
@@ -51,6 +69,8 @@ export interface MailboxScreenOptions {
   readonly onShowOnMap?: (cell: OffsetCell) => void;
   /** Unix seconds; the clock's own unless a test sets it. */
   readonly now?: () => number;
+  /** A truce was accepted here: the map's truce marks are out of date (#203). */
+  readonly onTruceAccepted?: () => void;
 }
 
 /** A new message's recipient when the map opened it: the player whose yard it was. */
@@ -59,10 +79,17 @@ export interface ComposeTarget {
   readonly name: string;
 }
 
+/** A truce proposed from the map: the player, and the yard it was proposed on (#203). */
+export interface TruceTarget extends ComposeTarget {
+  readonly baseid: string;
+}
+
 type View =
   | { readonly kind: "none" }
   | { readonly kind: "thread"; readonly thread: MailThread }
-  | { readonly kind: "compose"; readonly to: ComposeTarget | null };
+  | { readonly kind: "compose"; readonly to: ComposeTarget | null }
+  /** A truce proposal: in `thread`, or from the map in a new one. */
+  | { readonly kind: "truce"; readonly to: ComposeTarget; readonly via: MailThread | TruceTarget };
 
 type Tone = "info" | "bad";
 
@@ -196,6 +223,17 @@ export class MailboxScreen {
     this.pane.querySelector<HTMLElement>(to ? ".mail-compose__subject" : ".mail-compose__to")?.focus();
   }
 
+  /** Proposes a truce to the owner of a yard the map showed (#203): a new thread. */
+  async openTruce(to: TruceTarget): Promise<void> {
+    if (this.destroyed) return;
+    if (!this.opened) {
+      this.opened = true;
+      this.element.hidden = false;
+      void this.refresh();
+    }
+    this.showTruceForm({ userid: to.userid, name: to.name }, to);
+  }
+
   close(): void {
     if (!this.opened) return;
     const hadFocus = this.element.contains(document.activeElement);
@@ -286,9 +324,12 @@ export class MailboxScreen {
           make("span", "mail-row__subject", thread.subject),
           make("span", "mail-row__preview", thread.preview),
         );
+        const state = truceState(thread.truce, now);
+        const tag = state ? truceTag(state) : null;
+        if (tag) row.append(make("span", `mail-row__truce mail-row__truce--${tag.tone}`, tag.label));
         row.setAttribute(
           "aria-label",
-          `${thread.unread ? "Unread. " : ""}${thread.otherName}: ${thread.subject}. ${sentText(thread.time, now)}`,
+          `${thread.unread ? "Unread. " : ""}${thread.otherName}: ${thread.subject}. ${tag ? `${tag.label}. ` : ""}${sentText(thread.time, now)}`,
         );
         item.append(row);
         return item;
@@ -302,6 +343,11 @@ export class MailboxScreen {
     if (this.view.kind === "compose") {
       this.panes.classList.add("mail-panes--open");
       this.renderCompose(this.view.to);
+      return;
+    }
+    if (this.view.kind === "truce") {
+      this.panes.classList.add("mail-panes--open");
+      this.renderTruceForm(this.view.to, this.view.via);
       return;
     }
     if (this.view.kind === "none") {
@@ -325,15 +371,44 @@ export class MailboxScreen {
     const titles = make("div", "mail-pane__titles");
     titles.append(make("h3", "mail-pane__name", thread.otherName), make("p", "mail-pane__subject", thread.subject));
     head.append(this.backButton(), titles);
+    const now = this.now();
+    const state = truceState(thread.truce, now);
+    if (!thread.notice && canPropose(state)) {
+      head.append(
+        buttonOf("btn btn--outline mail-pane__truce", "Propose truce", () =>
+          this.showTruceForm({ userid: thread.otherId, name: thread.otherName }, thread),
+        ),
+      );
+    }
     if (!thread.notice) head.append(this.blockControl(thread));
 
-    const now = this.now();
+    // The thread's truce belongs to its last request, which carries the card.
+    const request = state === null ? -1 : requestIndex(items);
     const messages = make("ol", "mail-messages");
-    for (const item of items) {
+    items.forEach((item, index) => {
       const side = item.notice ? "notice" : item.mine ? "mine" : "theirs";
       const bubble = make("li", `mail-message mail-message--${side}`);
-      if (item.label) bubble.append(make("strong", "mail-message__label", item.label));
-      bubble.append(make("p", "mail-message__text", item.text), make("span", "mail-message__time", sentText(item.time, now)));
+      if (item.label && index !== request) bubble.append(make("strong", "mail-message__label", item.label));
+      bubble.append(make("p", "mail-message__text", item.text));
+      if (index === request && state !== null) {
+        const card = truceCard(state, thread.truce?.until ?? null, item.mine, thread.otherName, now);
+        bubble.classList.add("mail-message--request");
+        bubble.append(
+          requestCard({
+            title: "Truce request",
+            state: card.label,
+            tone: card.tone,
+            detail: card.detail,
+            ...(card.canAnswer && {
+              actions: [
+                { label: "Accept", style: "primary", run: () => this.answerTruce(thread, true) },
+                { label: "Reject", style: "outline", run: () => this.answerTruce(thread, false) },
+              ],
+            }),
+          }),
+        );
+      }
+      bubble.append(make("span", "mail-message__time", sentText(item.time, now)));
       const cell = item.cell;
       if (cell && this.options.onShowOnMap) {
         bubble.append(
@@ -343,7 +418,7 @@ export class MailboxScreen {
         );
       }
       messages.append(bubble);
-    }
+    });
 
     this.pane.replaceChildren(head, messages);
     if (thread.notice) {
@@ -404,6 +479,103 @@ export class MailboxScreen {
     this.view = { kind: "none" };
     this.renderPane();
     await this.refresh();
+  }
+
+  /* ── Truces (#203) ──────────────────────────────────────────────────── */
+
+  /**
+   * Accept or Reject on a thread's request. Its message is what the reply box
+   * holds, else Flash's own words; the thread is then drawn again with the
+   * truce's new state. Answers the refusal, if any, for the card to show.
+   */
+  private async answerTruce(thread: MailThread, accept: boolean): Promise<string | null> {
+    const box = this.pane.querySelector<HTMLTextAreaElement>(".mail-writer__text");
+    const written = box ? sendable(box.value) : null;
+    const result = await this.api.send({
+      threadid: thread.threadid,
+      targetid: thread.otherId,
+      subject: thread.subject,
+      message: written ?? (accept ? TRUCE_ACCEPT_TEXT : TRUCE_REJECT_TEXT),
+      type: accept ? "truceaccept" : "trucereject",
+    });
+    if (!result.ok) return result.reason;
+    if (this.destroyed) return null;
+    if (accept) this.options.onTruceAccepted?.();
+    await this.refresh();
+    const fresh = this.threads.find((one) => one.threadid === thread.threadid) ?? thread;
+    await this.openThread(fresh);
+    this.setStatus(
+      "info",
+      accept
+        ? `You have a truce with ${thread.otherName}. Neither of you can attack the other for ${TRUCE_DAYS} days.`
+        : `You rejected ${thread.otherName}'s truce.`,
+    );
+    return null;
+  }
+
+  private showTruceForm(to: ComposeTarget, via: MailThread | TruceTarget): void {
+    this.view = { kind: "truce", to, via };
+    this.renderList();
+    this.renderPane();
+    this.pane.querySelector<HTMLElement>(".mail-writer__text")?.focus();
+  }
+
+  /**
+   * A truce proposal: what it means, and the message that goes with it, Flash's
+   * own words to start from. In a thread it goes into the thread; from the map
+   * it starts a new one (`requesttruce`).
+   */
+  private renderTruceForm(to: ComposeTarget, via: MailThread | TruceTarget): void {
+    const inThread = "threadid" in via;
+    const head = make("header", "mail-pane__head");
+    const titles = make("div", "mail-pane__titles");
+    titles.append(make("h3", "mail-pane__name", `Propose a truce to ${to.name}`));
+    head.append(this.backButton(), titles);
+
+    const form = make("div", "mail-compose mail-truce");
+    form.append(
+      make(
+        "p",
+        "mail-truce__about",
+        `If ${to.name} accepts, neither of you can attack the other's yards or outposts for ${TRUCE_DAYS} days. ` +
+          `They have ${REQUEST_DAYS} days to answer.`,
+      ),
+    );
+    form.append(
+      this.writer({
+        label: "Send request",
+        initial: TRUCE_REQUEST_TEXT,
+        send: async (text) => {
+          const result = inThread
+            ? await this.api.send({
+                threadid: via.threadid,
+                targetid: to.userid,
+                subject: via.subject,
+                message: text,
+                type: "trucerequest",
+              })
+            : await this.api.requestTruce(via.baseid, text);
+          if (!result.ok) return result.reason;
+          await this.refresh();
+          // An older server answers `requesttruce` with no thread id: the newest thread with them is it.
+          const sent =
+            this.threads.find((one) => one.threadid === (inThread ? via.threadid : result.threadid)) ??
+            this.threads.find((one) => one.otherId === to.userid);
+          if (sent) {
+            await this.openThread(sent);
+          } else {
+            this.view = { kind: "none" };
+            this.renderPane();
+          }
+          this.setStatus("info", `Truce request sent to ${to.name}.`);
+          return null;
+        },
+      }),
+    );
+    if (inThread) {
+      form.append(buttonOf("btn btn--ghost mail-truce__cancel", "Cancel", () => void this.openThread(via)));
+    }
+    this.pane.replaceChildren(head, form);
   }
 
   /** A new message: to whom, a subject, the text. */
@@ -484,9 +656,13 @@ export class MailboxScreen {
 
   /**
    * A message box with its counter and send button. `send` answers null once
-   * the message went, or what to say when it did not.
+   * the message went, or what to say when it did not. `initial` fills the box to start with.
    */
-  private writer(options: { label: string; send: (text: string) => Promise<string | null> }): HTMLElement {
+  private writer(options: {
+    label: string;
+    initial?: string;
+    send: (text: string) => Promise<string | null>;
+  }): HTMLElement {
     const box = make("div", "mail-writer");
     const text = make("textarea", "mail-writer__text");
     text.maxLength = MESSAGE_LIMIT;
@@ -504,6 +680,8 @@ export class MailboxScreen {
       send.disabled = sendable(text.value) === null;
     };
     text.addEventListener("input", sync);
+    text.value = options.initial ?? "";
+    sync();
 
     const submit = async (): Promise<void> => {
       const message = sendable(text.value);

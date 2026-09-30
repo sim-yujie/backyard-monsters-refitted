@@ -38,6 +38,16 @@ export interface MailThread {
   /** From the game: read-only, not blockable. */
   readonly notice: boolean;
   readonly count: number;
+  /** The thread's truce, as the server keeps it, or null for none (#203). */
+  readonly truce: ThreadTruce | null;
+}
+
+/** A thread's truce as the server keeps it: `trucestate` and `truceexpire` (#203). */
+export interface ThreadTruce {
+  /** `requested`, `accepted` or `rejected`. */
+  readonly status: string;
+  /** When it ends: an accepted truce's expiry, or when a waiting request lapses. */
+  readonly until: number | null;
 }
 
 /** One message of an open thread. */
@@ -47,6 +57,8 @@ export interface MailItem {
   readonly notice: boolean;
   /** "Truce request", "Truce accepted", …, or null for a plain message. */
   readonly label: string | null;
+  /** The server's `messagetype`: `message`, `trucerequest`, a notice's kind, … */
+  readonly type: string;
   readonly text: string;
   readonly time: number;
   /** A notice's cell, for "Show on map". */
@@ -93,6 +105,9 @@ export const threadList = (
       unread: Number(last.unread) === 1,
       notice: Number(last.userid) === SYSTEM_SENDER,
       count: Number(last.messagecount) || 1,
+      truce: last.trucestate
+        ? { status: last.trucestate, until: Number(last.truceexpire) > 0 ? Number(last.truceexpire) : null }
+        : null,
     }))
     .sort((one, other) => other.time - one.time || other.threadid - one.threadid);
 
@@ -121,6 +136,7 @@ export const threadItems = (messages: readonly MailMessage[], myId: number): Mai
       mine: Number(message.userid) === myId,
       notice,
       label: TRUCE_LABELS[message.messagetype] ?? null,
+      type: message.messagetype,
       text: message.message ?? "",
       time: Number(message.updatetime) || 0,
       cell: notice ? noticeCell(message) : null,
@@ -142,6 +158,11 @@ export const sentText = (time: number, now: number): string => {
   if (ago < 60) return "just now";
   if (ago < 3_600) return `${Math.floor(ago / 60)} min ago`;
   if (ago < 86_400) return `${Math.floor(ago / 3_600)} h ago`;
+  return dayText(time);
+};
+
+/** A day, as the mailbox says it: "12 Sep". */
+export const dayText = (time: number): string => {
   const date = new Date(time * 1000);
   return `${date.getDate()} ${MONTHS[date.getMonth()]}`;
 };

@@ -373,6 +373,119 @@
   align-self: flex-start;
 }
 
+/* ── A request to answer in a bubble: a truce (#203), later a move (#205) ── */
+
+.mail-message--request {
+  min-width: min(100%, 320px);
+}
+
+.mail-request {
+  --request-tone: var(--colour-info);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--request-tone) 45%, transparent);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--request-tone) 10%, var(--colour-surface-raised));
+}
+
+.mail-request--good {
+  --request-tone: var(--colour-success);
+}
+
+.mail-request--bad {
+  --request-tone: var(--colour-danger);
+}
+
+.mail-request--muted {
+  --request-tone: var(--colour-text-muted);
+}
+
+.mail-request__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.mail-request__title {
+  font-size: var(--text-sm);
+}
+
+.mail-request__state {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--request-tone);
+  color: var(--colour-text-inverse);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.mail-request__detail {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.mail-request__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.mail-request__action {
+  flex: 1 1 110px;
+}
+
+.mail-request__refusal {
+  margin: 0;
+  color: var(--colour-danger);
+  font-size: var(--text-sm);
+}
+
+.mail-request__refusal[hidden] {
+  display: none;
+}
+
+/* The thread list's truce tag, as Flash's inbox coloured it. */
+.mail-row__truce {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--colour-info);
+  background: color-mix(in srgb, var(--colour-info) 14%, transparent);
+}
+
+.mail-row__truce--good {
+  color: var(--colour-success);
+  background: color-mix(in srgb, var(--colour-success) 14%, transparent);
+}
+
+.mail-row__truce--bad {
+  color: var(--colour-danger);
+  background: color-mix(in srgb, var(--colour-danger) 14%, transparent);
+}
+
+.mail-row__truce--muted {
+  color: var(--colour-text-muted);
+  background: var(--colour-surface-sunken);
+}
+
+.mail-truce__about {
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.mail-truce__cancel {
+  align-self: flex-start;
+}
+
 /* ── Writing: a reply, or a new message ───────────────────────────────── */
 
 .mail-compose {

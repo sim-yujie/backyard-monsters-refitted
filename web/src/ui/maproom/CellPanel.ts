@@ -64,6 +64,11 @@ export interface CellPanelOptions {
   /** Writes to another player's yard's owner (#193). Absent: no Message button. */
   onMessage?: (payload: PlayerCell) => void;
   /**
+   * Proposes a truce to another player's yard's owner (#203). Absent: no
+   * Truce button. Not offered while a truce with them runs.
+   */
+  onTruce?: (payload: PlayerCell) => void;
+  /**
    * An action that sits under Attack and brings its own line under the
    * actions: Take over (`TakeoverControl`, issue #82). It is told about
    * every show and update and decides for itself what to show.
@@ -135,6 +140,8 @@ export class CellPanel {
   private readonly bookmarkButton: HTMLButtonElement;
   /** Message, beside View yard on another player's yard (#193). */
   private readonly messageButton: HTMLButtonElement;
+  /** Truce, beside Message, while no truce with the owner runs (#203). */
+  private readonly truceButton: HTMLButtonElement;
   private readonly more: HTMLDetailsElement;
   private readonly facts: HTMLDListElement;
 
@@ -220,8 +227,16 @@ export class CellPanel {
       if (this.payload && isPlayerCell(this.payload)) options.onMessage?.(this.payload);
     });
 
+    this.truceButton = button("btn btn--outline mr2-cell__secondary mr2-cell__truce");
+    this.truceButton.append(icon("truce", 18, "map-icon"), el("span", "", "Truce"));
+    this.truceButton.title = "Propose a truce to this yard's owner";
+    this.truceButton.hidden = true;
+    this.truceButton.addEventListener("click", () => {
+      if (this.payload && isPlayerCell(this.payload)) options.onTruce?.(this.payload);
+    });
+
     this.secondary = el("div", "mr2-cell__row");
-    this.secondary.append(this.viewYardButton, this.messageButton, this.bookmarkButton);
+    this.secondary.append(this.viewYardButton, this.messageButton, this.truceButton, this.bookmarkButton);
 
     this.moveMonstersButton = button("btn btn--outline mr2-cell__secondary mr2-cell__move");
     this.moveMonstersButton.append(icon("swap", 18, "map-icon"), el("span", "", "Move monsters"));
@@ -380,6 +395,8 @@ export class CellPanel {
       this.addReach(cell);
       this.setActions("attack", "View yard");
       this.messageButton.hidden = this.options.onMessage === undefined;
+      this.truceButton.hidden =
+        this.options.onTruce === undefined || (payload.t !== undefined && payload.t > Date.now() / 1000);
     }
 
     this.addDamage(payload.dm, payload.d === 1);
@@ -468,6 +485,7 @@ export class CellPanel {
     this.secondary.hidden = !(attack || kind === "bookmark");
     this.viewYardButton.hidden = !attack;
     this.messageButton.hidden = true;
+    this.truceButton.hidden = true;
     this.viewYardLabel.textContent = viewLabel;
     this.viewYardButton.title = kind === "none" ? VIEW_LOADING : VIEW_OTHER;
     this.bookmarkButton.disabled = !this.options.canBookmark();

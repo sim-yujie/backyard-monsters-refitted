@@ -54,6 +54,7 @@ describe("MailDoor", () => {
     targets: vi.fn(async () => ({})),
     thread: vi.fn(async () => []),
     send: vi.fn(),
+    requestTruce: vi.fn(),
     block: vi.fn(),
   });
 

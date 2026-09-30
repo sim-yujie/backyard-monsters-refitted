@@ -96,6 +96,8 @@ export interface MapRoomUiHandlers {
   onRelocate: (cell: OffsetCell, payload: PlayerCell) => void;
   /** The cell panel's Message on another player's yard (#193). */
   onMessage?: (payload: PlayerCell) => void;
+  /** Proposes a truce to another player's yard's owner (#203). */
+  onTruce?: (payload: PlayerCell) => void;
 }
 
 export class MapRoomUi {
@@ -311,6 +313,7 @@ export class MapRoomUi {
         onMoveMonsters: this.handlers.onMoveMonsters,
         onRelocate: this.handlers.onRelocate,
         ...(this.handlers.onMessage ? { onMessage: this.handlers.onMessage } : {}),
+        ...(this.handlers.onTruce ? { onTruce: this.handlers.onTruce } : {}),
         onRangeToggle: (on) => this.toggleRange(on),
         extraAction: this.takeover,
       }).mount(this.dock("map-dock map-dock--right mr2-cell-dock"));
