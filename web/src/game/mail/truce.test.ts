@@ -68,10 +68,10 @@ describe("the rules the screen follows", () => {
   });
 
   it("says when a running truce ends, and how long is left", () => {
-    const card = truceCard("active", NOW + 13 * DAY + 3_600, true, "Bramble", NOW);
+    const card = truceCard("active", NOW + 6 * DAY + 3_600, true, "Bramble", NOW);
     expect(card).toMatchObject({ label: "Active", tone: "good" });
     expect(card.detail).toMatch(
-      /^Neither of you can attack the other's yards or outposts until \d+ \w+ \(13 days left\)\.$/,
+      /^Neither of you can attack the other's yards or outposts until \d+ \w+ \(6 days left\)\.$/,
     );
   });
 

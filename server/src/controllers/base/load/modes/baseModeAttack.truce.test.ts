@@ -152,7 +152,7 @@ const attack = (from: number, baseid: string) => {
 
 describe("an accepted truce, while it runs, refuses an attack either way", () => {
   beforeEach(() => {
-    tables.get(Truce)!.push(truce("accepted", { expires_at: now() + 14 * DAY }));
+    tables.get(Truce)!.push(truce("accepted", { expires_at: now() + 7 * DAY }));
   });
 
   test.each([

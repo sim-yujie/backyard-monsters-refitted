@@ -5,7 +5,7 @@ import { matchesWhere } from "../../testing/matchesWhere.js";
 /**
  * Truces through the mail routes (#203): proposed from the map
  * (`requesttruce`) or in a thread (`sendmessage` "trucerequest"), then
- * accepted or rejected by the recipient. An accepted truce runs 14 days; a
+ * accepted or rejected by the recipient. An accepted truce runs 7 days; a
  * request waits 7 days for its answer and then lapses. The thread list says
  * when either ends. Driven over an in-memory stand-in for the rows.
  */
@@ -144,7 +144,7 @@ describe("proposing a truce", () => {
 });
 
 describe("answering a truce request", () => {
-  test("the recipient accepts: a truce of 14 days, on the truce and the thread", async () => {
+  test("the recipient accepts: a truce of 7 days, on the truce and the thread", async () => {
     const { threadid } = (await request(ALICE, BOB_MAIN)) as { threadid: number };
     await send(BOB, threadid, "truceaccept");
 

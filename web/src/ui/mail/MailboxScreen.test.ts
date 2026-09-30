@@ -294,7 +294,7 @@ describe("truces in the mailbox (#203)", () => {
   it("Accept sends the acceptance, tells the map, and the card then says the truce is on", async () => {
     const onTruceAccepted = vi.fn();
     const answer = message({ userid: ME, targetid: 77, messagetype: "truceaccept", message: "I accept your truce." });
-    const api = fakeApi([[listed("requested", NOW + 6 * DAY)], [listed("accepted", NOW + 14 * DAY)]], {
+    const api = fakeApi([[listed("requested", NOW + 6 * DAY)], [listed("accepted", NOW + 7 * DAY)]], {
       1: [request(), answer],
     });
     const { host } = await openScreen(api, { onTruceAccepted });

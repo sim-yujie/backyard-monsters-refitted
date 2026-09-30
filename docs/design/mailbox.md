@@ -48,13 +48,14 @@ The owner's decisions of 2026-09-30, and the defaults they accepted.
   request", its state and what it means. The recipient gets Accept and Reject while it waits.
   They send what the reply box holds, else Flash's "I accept your truce." / "I reject your
   truce.". The thread list tags the thread by its truce, as Flash's inbox did.
-- **States.** Waiting (blue), Active (green, "until 14 Oct (13 days left)"), Rejected (red),
+- **States.** Waiting (blue), Active (green, "until 7 Oct (6 days left)"), Rejected (red),
   Ended and Lapsed (grey). They come from the thread list's `trucestate` and `truceexpire`,
   and the clock.
-- **Rules** (`server/src/services/mail/truceRules.ts`). An accepted truce lasts 14 days, and
-  while it does neither player can attack any base of the other's, main yard or outpost. The
-  attack load refuses it (`truceActiveErr`), and the map already showed it: the cell's `t`
-  shades the cell, puts a Truce countdown on the panel and disables Attack. A request waits 7
+- **Rules** (`server/src/services/mail/truceRules.ts`). An accepted truce lasts 7 days (the owner's
+  rule; Flash had 14), and while it does neither player can attack any base of the other's,
+  main yard or outpost. The attack load refuses it (`truceActiveErr`), and the map already
+  showed it: the cell's `t` shades the cell, puts a Truce countdown on the panel and disables
+  Attack. A request waits 7
   days for its answer, then lapses: it can no longer be answered, and it no longer stands in
   the way of a new request. A pair has at most one live truce. The proposer cannot withdraw a
   request. After a rejection, the one who asked waits 2 days before asking that player again

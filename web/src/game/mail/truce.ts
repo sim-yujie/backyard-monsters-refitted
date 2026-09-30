@@ -6,7 +6,7 @@ import { dayText, type MailItem, type ThreadTruce } from "./mailbox";
  *
  * The server keeps a thread's truce as `trucestate` (requested, accepted,
  * rejected) and says when it ends (`truceexpire`); the clock decides the
- * rest. An accepted truce runs 14 days and stops attacks both ways on every
+ * rest. An accepted truce runs 7 days and stops attacks both ways on every
  * yard and outpost of the pair. A request waits 7 days for the recipient's
  * answer and then lapses. After a rejection, the one who asked waits 2 days
  * before asking that player again, until the rejected request's `truceexpire`
@@ -14,7 +14,7 @@ import { dayText, type MailItem, type ThreadTruce } from "./mailbox";
  */
 
 /** How long an accepted truce lasts, in days. */
-export const TRUCE_DAYS = 14;
+export const TRUCE_DAYS = 7;
 
 /** How long a request waits for its answer, in days. */
 export const REQUEST_DAYS = 7;

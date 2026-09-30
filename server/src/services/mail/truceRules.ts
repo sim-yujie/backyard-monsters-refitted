@@ -19,8 +19,8 @@ import { postgres } from "../../server.js";
  *   player may ask at once. The rejected row's `expires_at` holds the moment.
  */
 
-/** How long an accepted truce lasts, in seconds: 14 days. */
-export const TRUCE_DURATION = 14 * 24 * 60 * 60;
+/** How long an accepted truce lasts, in seconds: 7 days (the owner's rule, #203; Flash asked for 14). */
+export const TRUCE_DURATION = 7 * 24 * 60 * 60;
 
 /** How long a request waits for an answer before it lapses, in seconds: 7 days. */
 export const TRUCE_REQUEST_LIFETIME = 7 * 24 * 60 * 60;
