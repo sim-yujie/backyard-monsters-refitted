@@ -382,6 +382,26 @@ describe("the end, and skipping", () => {
     expect(db.row!.tutorialstage).toBe(205);
   });
 
+  test("tutorialstage 205 is persisted through the yard action wrapper, at the end and at a skip", async () => {
+    // `tutorialstage` is not one of the wrapper's `YardSlices`: the guide's
+    // routes hand it over with a cast and the wrapper's `Object.assign` lands
+    // it. This pins that, so a wrapper that started filtering slices fails here.
+    at("protection");
+    await advance("protection");
+    expect(db.row!.tutorialstage).toBe(205);
+
+    db.row = rowOf();
+    at("collect");
+    await skip();
+    expect(db.row!.tutorialstage).toBe(205);
+
+    // A refused end writes nothing, stage included.
+    db.row = rowOf();
+    at("collect");
+    await advance("protection");
+    expect(db.row!.tutorialstage).toBe(0);
+  });
+
   test("protection already longer is kept", async () => {
     at("protection");
     const far = getCurrentDateTime() + 30 * 24 * 3600;
