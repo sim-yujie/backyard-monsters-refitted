@@ -7,6 +7,7 @@ import { infernoYardSandbox } from "../utils/sandbox/infernoYard.js";
 import { overworldYardSandbox } from "../utils/sandbox/overworldYard.js";
 import { STARTER_MONSTER } from "../services/yard/locker.js";
 import { STARTER_RESOURCES, starterBuildingData } from "../services/yard/starterBase.js";
+import { NEW_ONBOARDING_JSON } from "../services/onboarding/state.js";
 
 /**
  * Generates the default base data object for a new save.
@@ -17,6 +18,8 @@ import { STARTER_RESOURCES, starterBuildingData } from "../services/yard/starter
  * and the Pokey unlocked (`services/yard/locker.ts` `STARTER_MONSTER`, #218).
  * An account that ticked "Start with the test yard (dev)" at sign-up gets the
  * maxed sandbox yard instead, when the server has DEV_SANDBOX on (issue #217).
+ * A main yard starts the guided start (`onboarding`, issue #227) while the
+ * `guidedStart` switch is on; the sandbox yard never does.
  *
  * @param {User} [user] - The user for whom the base data is being generated.
  * @returns {object} - The default base data object.
@@ -46,6 +49,8 @@ export const getDefaultBaseData = (user: User, baseType: BaseType) => {
     ...(isMain && { buildingdata: starterBuildingData() }),
     // The Pokey is always unlocked, as in Flash (issue #218).
     ...(isMain && { lockerdata: { [STARTER_MONSTER]: { t: 2 } } }),
+    // The new-player tutorial's record (`services/onboarding/state.ts`).
+    ...(isMain && devConfig.guidedStart && { onboarding: structuredClone(NEW_ONBOARDING_JSON) }),
     resources: {
       r1: isMain ? STARTER_RESOURCES.r1 : 0,
       r2: isMain ? STARTER_RESOURCES.r2 : 0,

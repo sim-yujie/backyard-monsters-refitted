@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import {
   attackGate,
   battlesText,
@@ -277,6 +278,7 @@ export const targetCard = (
     gate.reason ? "lock" : "attack",
     "btn btn--primary mr1-card__button",
   );
+  tutTarget(attack, TutTarget.TARGET_ATTACK);
   if (gate.reason) {
     attack.disabled = true;
     attack.setAttribute("aria-describedby", `mr1-why-${serial}`);

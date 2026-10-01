@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import type { SelectionSummary, SelectionTypeCost } from "@/game/yard/planner/summary";
 import { GroupOp, GROUP_OPS } from "@/game/yard/planner/groupTools";
 import { percentText, type CoverageFigures } from "@/game/yard/planner/coverage";
@@ -726,6 +727,7 @@ export class PlannerBar {
     // "?" is not a name, so the button gets a real one for anything that reads
     // the accessible name rather than the glyph.
     help.setAttribute("aria-label", "How the planner works, and every shortcut");
+    tutTarget(help, TutTarget.PLANNER_HELP);
     help.addEventListener("click", actions.onHelp);
     this.help = help;
 

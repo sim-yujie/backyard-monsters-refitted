@@ -1,0 +1,232 @@
+/*
+ * The tutorial guide, Bob (issue #227, docs/design/tutorial.md §2.1, §3):
+ * his bubble, his pointing hand and the blocker. Everything sits on the
+ * overlay's `guide` layer, above the modals.
+ *
+ * The bubble keeps the game's own look for its buttons, but the bubble itself
+ * is the cream speech balloon the owner approved with Bob's art: cream fill,
+ * dark outline, dark words, a tail towards Bob. It reads the same on the dark
+ * and the light theme, so it has colours of its own.
+ */
+
+/* ── The blocker ──────────────────────────────────────────────────────── */
+
+.guide-spotlight {
+  position: absolute;
+  inset: 0;
+  /* Only the panes take the pointer; the hole is empty. */
+  pointer-events: none !important;
+}
+
+.guide-spotlight__pane {
+  position: fixed;
+  background: rgb(4 8 12 / 55%);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.guide-spotlight__ring {
+  position: fixed;
+  border: 3px solid var(--guide-ring);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 3px rgb(0 0 0 / 35%), 0 0 22px var(--guide-ring);
+  pointer-events: none;
+  animation: guide-ring-pulse 1.4s var(--easing) infinite;
+}
+
+@keyframes guide-ring-pulse {
+  50% {
+    box-shadow: 0 0 0 3px rgb(0 0 0 / 35%), 0 0 4px var(--guide-ring);
+  }
+}
+
+/* ── The hand ─────────────────────────────────────────────────────────── */
+
+.guide-arrow {
+  position: fixed;
+  width: 100px;
+  height: 47px;
+  transform-origin: 50% 50%;
+  pointer-events: none !important;
+  filter: drop-shadow(0 4px 6px rgb(0 0 0 / 45%));
+}
+
+/* The art points right; the wrapper turns it, so a nudge along x is always
+   towards the target. */
+.guide-arrow__hand {
+  display: block;
+  width: 100px;
+  height: 47px;
+  animation: guide-hand-bounce 0.9s ease-in-out infinite;
+}
+
+@keyframes guide-hand-bounce {
+  50% {
+    transform: translateX(10px);
+  }
+}
+
+/* ── The bubble ───────────────────────────────────────────────────────── */
+
+.guide-bob {
+  --guide-bob-size: 120px;
+  position: fixed;
+  left: 24px;
+  /* Above the yard dock's round buttons. */
+  bottom: 118px;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  max-width: min(480px, calc(100vw - 48px));
+  pointer-events: none !important;
+}
+
+/* Moved up when the target sits where the bubble would. */
+.guide-bob--alt {
+  bottom: auto;
+  top: 96px;
+}
+
+.guide-bob__portrait {
+  flex: none;
+  width: var(--guide-bob-size);
+  height: var(--guide-bob-size);
+  object-fit: contain;
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 40%));
+}
+
+.guide-bob--tip {
+  --guide-bob-size: 48px;
+}
+
+.guide-bob--tip .guide-bob__portrait {
+  align-self: center;
+}
+
+.guide-bob__speech {
+  position: relative;
+  margin-bottom: calc(var(--guide-bob-size) * 0.45);
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--guide-bubble-line);
+  border-radius: var(--radius-md);
+  background: var(--guide-bubble);
+  color: var(--guide-bubble-text);
+  box-shadow: var(--shadow-bubble-drop);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  line-height: 1.4;
+  pointer-events: auto;
+}
+
+.guide-bob--tip .guide-bob__speech {
+  margin-bottom: 0;
+}
+
+/* The tail, towards Bob at the bottom left. */
+.guide-bob__speech::before,
+.guide-bob__speech::after {
+  content: "";
+  position: absolute;
+  bottom: 14px;
+  border-style: solid;
+}
+
+.guide-bob__speech::before {
+  left: -14px;
+  border-width: 9px 14px 9px 0;
+  border-color: transparent var(--guide-bubble-line) transparent transparent;
+}
+
+.guide-bob__speech::after {
+  left: -10px;
+  border-width: 7px 11px 7px 0;
+  border-color: transparent var(--guide-bubble) transparent transparent;
+}
+
+.guide-bob__text {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.guide-bob__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.guide-bob__action {
+  min-height: 36px;
+  padding: var(--space-1) var(--space-4);
+}
+
+/* A plain button on the cream bubble needs dark words. */
+.guide-bob__action:not(.btn--primary) {
+  background: rgb(15 20 28 / 8%);
+  color: var(--guide-bubble-text);
+}
+
+.guide-bob__skip {
+  margin-right: auto;
+  padding: var(--space-1) 0;
+  border: 0;
+  background: none;
+  color: var(--guide-bubble-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.guide-bob__skip:focus-visible,
+.guide-bob__action:focus-visible {
+  outline: 2px solid var(--guide-bubble-line);
+  outline-offset: 2px;
+}
+
+.guide-bob__dots {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.guide-bob__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgb(15 20 28 / 22%);
+}
+
+.guide-bob__dot--on {
+  background: var(--guide-bubble-text);
+}
+
+/* A phone: a strip above the dock, Bob smaller (the attack scene's PHONE_WIDTH). */
+@media (width <= 620px) {
+  .guide-bob {
+    --guide-bob-size: 80px;
+    left: var(--space-2);
+    right: var(--space-2);
+    bottom: 96px;
+    max-width: none;
+  }
+
+  .guide-bob--alt {
+    bottom: auto;
+    top: 72px;
+  }
+
+  .guide-bob__speech {
+    flex: 1;
+    font-size: var(--text-sm);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-arrow__hand,
+  .guide-spotlight__ring {
+    animation: none;
+  }
+}

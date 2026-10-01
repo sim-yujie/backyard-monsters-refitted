@@ -1,3 +1,5 @@
+import { guideBus } from "@/game/guide/guideBus";
+import { VICTORY_THRESHOLD } from "@/game/combat/rules";
 import { saveAttack } from "@/api/base";
 import { ApiError, NetworkError, getAuthToken } from "@/api/http";
 import { declineTakeover, getTakeoverQuote, takeOverCell, type TakeoverPayment } from "@/api/maproom";
@@ -512,6 +514,11 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       }).mount(modal);
       if (shown) showOn(panel, shown);
       if (offer) panel.setExtra(offer.element);
+      // The result is on screen (issue #227): the server's own copy decides what it counts for.
+      guideBus.emit("attackEnded", {
+        baseid: target.baseid,
+        destroyed: session.state().damagePercent >= VICTORY_THRESHOLD,
+      });
       creditHud();
       offerAgain();
     };

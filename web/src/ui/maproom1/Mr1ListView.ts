@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import {
   LIST_SORT_LABELS,
   ListSort,
@@ -46,6 +47,7 @@ export class Mr1ListView {
 
     const tribeSection = el("section", "mr1-list__section");
     tribeSection.setAttribute("aria-labelledby", "mr1-tribes-heading");
+    tutTarget(tribeSection, TutTarget.MR1_TRIBES);
     const tribeHeading = el("h2", "mr1-list__heading", "Wild monster tribes");
     tribeHeading.id = "mr1-tribes-heading";
     this.tribes = el("div", "mr1-list__tribes");
@@ -53,6 +55,7 @@ export class Mr1ListView {
 
     const neighbourSection = el("section", "mr1-list__section");
     neighbourSection.setAttribute("aria-labelledby", "mr1-neighbours-heading");
+    tutTarget(neighbourSection, TutTarget.MR1_NEIGHBOURS);
     const head = el("div", "mr1-list__head");
     this.count = el("h2", "mr1-list__heading", "Neighbours");
     this.count.id = "mr1-neighbours-heading";

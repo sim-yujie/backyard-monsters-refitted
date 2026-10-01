@@ -179,6 +179,16 @@
   --z-overlay: 10;
   --z-hud: 20;
   --z-popup: 30;
+  /* The tutorial guide (Bob), above every popup (issue #227). */
+  --z-guide: 40;
+
+  /* Bob's speech bubble: the cream balloon of his approved art, the same on
+     either theme (guide.css), and the ring round what he points at. */
+  --guide-bubble: #fbf3dc;
+  --guide-bubble-line: #3a2f1c;
+  --guide-bubble-text: #241c10;
+  --guide-bubble-muted: #5e5240;
+  --guide-ring: #b6f36a;
 
   --motion-fast: 120ms;
   --motion-normal: 200ms;

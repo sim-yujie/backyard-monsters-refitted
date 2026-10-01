@@ -377,6 +377,20 @@ export class Save {
   @Property({ columnType: "jsonb", nullable: true })
   frontpage?: JsonObject | null = {};
 
+  /**
+   * The new-player tutorial's record: the guided start's step and grant
+   * ledger, the practice camp, Goals, counters and tips seen
+   * (`services/onboarding/state.ts`, `docs/design/tutorial.md` §8.1). Main
+   * saves only; `NULL` reads as a legacy save.
+   *
+   * Server-only. Not a `@FrontendKey`, so no load carries it as it is (the
+   * owner's own load sends a summary instead), and in neither
+   * {@link Save.saveKeys} nor {@link Save.attackSaveKeys}, so `/base/save`
+   * can never write it: it holds what the tutorial has granted.
+   */
+  @Property({ columnType: "jsonb", nullable: true })
+  onboarding?: JsonObject | null = null;
+
   @Property({ type: Date })
   takeoverDate: Opt<Date> = new Date();
 

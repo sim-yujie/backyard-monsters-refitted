@@ -1,6 +1,7 @@
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
+import type { OnboardingSummary } from "../onboarding/summary.js";
 import { yardKindOf } from "../yardplanner/costs.js";
 import { busyWorkers, workerCount } from "../yardplanner/workers.js";
 import { capOf } from "./credit.js";
@@ -22,7 +23,8 @@ import { capOf } from "./credit.js";
  * `workers.total` is 1.
  *
  * FROZEN (2026-09-27): other work packages build against this shape. Add a
- * field only by agreement, never rename or remove one.
+ * field only by agreement, never rename or remove one. Added by agreement:
+ * `onboarding` (the tutorial's WP0, issue #227).
  */
 export interface YardState {
   /** Unix seconds the stored countdowns are measured from; equals `currenttime` after a catch-up. */
@@ -48,6 +50,13 @@ export interface YardState {
   champion: ChampionData[];
   mushrooms: JsonObject;
   researchdata: JsonObject;
+  /**
+   * The account's new-player tutorial summary: the guide's state and step,
+   * the practice camp, the Goals badge count and the tips seen
+   * (`services/onboarding/summary.ts`, `docs/design/tutorial.md` §8.1). The
+   * main yard's, on an outpost's answer too.
+   */
+  onboarding: OnboardingSummary;
 }
 
 /** The slice of a save {@link yardState} reads. */
@@ -81,8 +90,14 @@ export interface YardStateSave {
  * @param save - The caller's main yard, already caught up.
  * @param now - The request's `now`, reported as `currenttime`.
  * @param shinyLocked - Whether the account has Shiny locked (`user.shiny_locked`).
+ * @param onboarding - The account's tutorial summary (`onboardingSummary` of the main save).
  */
-export const yardState = (save: YardStateSave, now: number, shinyLocked: boolean): YardState => {
+export const yardState = (
+  save: YardStateSave,
+  now: number,
+  shinyLocked: boolean,
+  onboarding: OnboardingSummary
+): YardState => {
   const cap = capOf(save);
 
   return {
@@ -105,5 +120,6 @@ export const yardState = (save: YardStateSave, now: number, shinyLocked: boolean
     champion: save.champion ?? [],
     mushrooms: save.mushrooms ?? {},
     researchdata: save.researchdata ?? {},
+    onboarding,
   };
 };

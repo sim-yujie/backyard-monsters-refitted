@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, YardResponse } from "./types";
 import type { YardApi } from "./yard";
+import { guideBus } from "@/game/guide/guideBus";
 import { YardStore } from "@/game/yard/YardStore";
 import { bankActions, bankAll, bankHarvesters, type BankApi, type BankReport } from "./yardBank";
 
@@ -100,6 +101,17 @@ describe("bankActions", () => {
     expect(api.ids).toHaveBeenCalledWith([1]);
     expect(result).toMatchObject({ ok: true, report: { banked: { r1: 720 } } });
     expect(store.resources.r1).toBe(720);
+  });
+
+  it("tells the tutorial what a bank banked, and nothing for a refusal (#227)", async () => {
+    const heard = vi.fn();
+    const off = guideBus.on("banked", heard);
+    const { actions } = setup([harvester(1, 720)]);
+    await actions.one(1);
+    await actions.one(99);
+    off();
+    expect(heard).toHaveBeenCalledOnce();
+    expect(heard).toHaveBeenCalledWith({ banked: expect.objectContaining({ r1: 720 }) });
   });
 
   it("refuses locally a harvester with nothing, a busy one, and a stranger", async () => {

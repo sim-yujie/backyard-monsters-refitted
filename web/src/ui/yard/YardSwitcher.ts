@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import {
   outpostCountText,
   outpostsOf,
@@ -53,6 +54,7 @@ export class YardSwitcher {
     this.button = document.createElement("button");
     this.button.type = "button";
     this.button.className = "yard-dock__button yard-switcher__button";
+    tutTarget(this.button, TutTarget.YARD_SWITCHER);
     this.button.setAttribute("aria-haspopup", "true");
     this.button.setAttribute("aria-expanded", "false");
     const disc = document.createElement("span");

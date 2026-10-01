@@ -5,7 +5,7 @@ import { FinishedMonstersJobs } from "@/game/monsters/finishedJobs";
 import { MAIN_YARD, outpostTarget, type OwnYardTarget } from "@/game/yard/ownYards";
 import type { YardChange, YardListener, YardStore, YardUiBinding } from "@/game/yard/YardStore";
 import { Notices } from "@/ui/maproom/Notices";
-import { dockButtonsFor, waitingText, YardDock, type YardDockOptions } from "./YardDock";
+import { dockButton, dockButtonsFor, waitingText, YardDock, type YardDockOptions } from "./YardDock";
 
 /**
  * The yard's round buttons (#171, option B): which show on the main yard, an
@@ -230,6 +230,22 @@ describe("YardDock", () => {
     expect(button("attack").title).toBe("Attack Kozu's yard");
     button("attack").click();
     expect(onAttack).toHaveBeenCalledOnce();
+  });
+
+  it("tags every button for Bob's pointer, and makes a matching one for a package (#227)", () => {
+    dock = new YardDock(options).mount(document.body);
+    for (const name of ["build", "map", "monsters", "layout"]) {
+      expect(button(name).getAttribute("data-tut")).toBe(`dock-${name}`);
+    }
+    expect(dock.element.querySelector(".yard-collect__button")?.getAttribute("data-tut")).toBe("collect-all");
+
+    const onClick = vi.fn();
+    const goals = dockButton("goals", "Goals", document.createElement("span"), onClick);
+    dock.placeBesideMonsters(goals.element);
+    expect(goals.element.getAttribute("data-tut")).toBe("dock-goals");
+    expect(goals.element.dataset["dock"]).toBe("goals");
+    goals.element.click();
+    expect(onClick).toHaveBeenCalledOnce();
   });
 
   it("turns Build into Stop while a building is in hand", () => {

@@ -1,7 +1,10 @@
 # New-player tutorial: guided start, Goals and screen tips
 
-A design for the owner to approve before anything is built. It turns the owner's decisions of
-2026-10-01 into steps, data, routes and work packages. Nothing here is built yet.
+The design for the new-player tutorial (issue #227). It turns the owner's decisions of
+2026-10-01 into steps, data, routes and work packages. The owner answered the open questions in a
+second round the same day; every section those answers changed is marked "Decided 2026-10-01"
+and §10 lists them. The foundation package (WP0) is built; §9.5 says how the three packages build
+on it.
 
 Binding inputs: the owner's decisions (13 points and the confirmed step order) and the research
 report on Flash's tutorial and the web client today. Citations are `path:line` from the repository
@@ -17,20 +20,23 @@ Contents:
 6. [Goals](#6-goals)
 7. [Screen tips](#7-screen-tips)
 8. [Server data, routes and anti-cheat](#8-server-data-routes-and-anti-cheat)
-9. [Build plan](#9-build-plan)
-10. [Open questions](#10-open-questions)
+9. [Build plan](#9-build-plan) (9.5: how to build on WP0)
+10. [Open questions (all decided)](#10-open-questions-all-decided)
 
 ## 1. Summary
 
-- **Guided start** (about 8 minutes, new accounts only). Bob, a speech bubble with a bouncing
-  pointer, walks the player through: collect, a Sniper Tower, a staged raid the tower wins, Housing
+- **Guided start** (about 8 minutes, new accounts only). Bob, a painted green monster whose
+  pointing hand is the pointer, talks in a speech bubble and walks the player through: collect, a
+  Sniper Tower, a staged raid by a named wild-monster tribe that the tower wins, Housing
   and 15 free Pokeys, a Map Room and a Flinger, a forced first attack on a private practice camp,
   then Goals, cheap Shiny finishes and 7 days of protection. The server tops up every tutorial
-  building to its exact cost and finishes it for free. Nothing waits on a timer. Skippable, with a
-  warning; skipping forfeits the gifts.
+  building to its exact cost and finishes it for free. Nothing waits on a timer. The rest of the UI
+  is locked while Bob waits for a tap. Skippable, with a warning; skipping forfeits the gifts.
 - **Goals.** Flash's quest list with Flash's exact rewards, minus quests for missing features, plus
   three new ones. Every condition is checked on the server from save data or from server-side
   counters. A Goals button on the dock carries a badge; Claim plays the Collect all ball animation.
+  Rewards are capped at storage, and the Claim button shows what will actually arrive. Existing
+  saves get a baseline: goals they already meet are marked claimed with no reward.
 - **Screen tips.** One to three Bob tips the first time each screen opens, stored per account on the
   server, re-shown by a "?" button.
 - **Server.** One new server-only column, `save.onboarding`, holds the guide's step, a ledger of
@@ -45,9 +51,9 @@ Contents:
 
 ### 2.1 How it runs
 
-- **Who gets it.** Accounts created after this ships. A new main save starts with
-  `onboarding.guide.state = "pending"`; the first own-yard load shows step 1. Existing accounts get
-  `"legacy"` from the migration and never see it (§8.2).
+- **Who gets it.** Accounts created after this ships, while the `guidedStart` switch is on. A new
+  main save starts with `onboarding.guide.state = "pending"`; the first own-yard load shows step 1.
+  Existing accounts get `"legacy"` from the migration and never see it (§8.2).
 - **Macro steps and micro steps.** The server knows only the macro step (`guide.step`, e.g.
   `build-sniper`). The client splits a macro step into micro steps (open Build, pick the tab, pick
   the card, Build, place) and derives which one applies from what is on screen. A reload resumes at
@@ -57,20 +63,21 @@ Contents:
   step are written in one transaction). Steps that grant nothing advance with `guide/advance`,
   which only moves forward along the fixed order and checks the step's own condition where the
   server can see it (§8.3).
-- **The blocker.** As Flash did (`TUTORIAL.as:1175-1180`), the rest of the screen is dimmed and
-  does not take input while Bob waits for a tap; only the pointed-at control and Bob's bubble are
-  live (a spotlight cut-out). Panning and zooming the yard stay on during placement so the player
-  can find space. Skip is always in the bubble.
+- **The blocker.** **Decided 2026-10-01.** (Q16) While the guided start runs, the rest of the UI is
+  locked: as Flash did (`TUTORIAL.as:1175-1180`), the screen is dimmed and does not take input while
+  Bob waits for a tap; only the pointed-at control and Bob's bubble are live (a spotlight cut-out,
+  `web/src/ui/guide/Spotlight.ts`). Panning and zooming the yard stay on during placement so the
+  player can find space (that step shows without the blocker). Skip is always visible in the bubble.
 - **Rewind.** If the player backs out of a micro step (closes the Build menu, cancels carrying the
   building, closes the building panel), the pointer goes back to the first micro step of that macro
   step. This replaces Flash's `_rewindCondition`. Macro steps never rewind.
 - **Skip.** "Skip" in the bubble asks, in the bubble: "Skip the guided start? You'll miss Bob's free
   army and the gifts." [Keep going] [Skip]. Skip calls `guide/skip` (§8.3). Anything already
   granted stays (buildings, Pokeys); nothing more is granted; Goals still work.
-- **Replay from Help.** Account menu > Help > "Replay the guided start" runs Bob's lines and
-  pointers as a tour: each step advances on Next instead of on the action, no route is called, no
-  grant is made, and the practice camp is not recreated. The staged raid can replay (it touches no
-  data). See Q5.
+- **Replay from Help.** **Decided 2026-10-01.** (Q5) Account menu > Help > "Replay the guided start" is a
+  walkthrough tour: Bob's lines and pointers with a Next button on every step, instead of waiting
+  for the action. No route is called, no grant is made, nothing is built, and the practice camp is
+  not recreated. The staged raid can replay (it touches no data).
 - **Phone layout.** Bob's bubble sits bottom-left on desktop (Flash's `BOBBOTTOMLEFTLOW`) and as a
   strip above the dock on a phone (at or below 620 px, the attack scene's `PHONE_WIDTH`,
   `web/src/app/scenes/AttackScene.ts:70`). The pointer flips to point from below when the target is
@@ -78,17 +85,20 @@ Contents:
 
 ### 2.2 Targets
 
-The pointer resolves a target name to a screen rectangle. DOM targets are `[data-tut="…"]`
-attributes added in the foundation package; a few existing selectors are used as they are. Canvas
-targets are registered by the scene that draws them (`registerCanvasTarget(name, () => rect)`).
+The pointer resolves a target name to a screen rectangle (`findTarget`,
+`web/src/game/guide/targets.ts`). Every DOM target carries a `data-tut="<name>"` attribute, added
+in the foundation package (built; the names are the `TutTarget` constants). A name may carry a
+parameter after a colon (`build-card:21`, `building:7`). Canvas targets are registered by the scene
+that draws them (`registerCanvasTarget(name, (param) => rect)`, a prefix such as `"building:"`
+answering every id).
 
 | Target name | What it is | Rendered | Hook (where it is created) |
 |---|---|---|---|
 | `collect-all` | Collect all button | DOM | add `data-tut` to `.yard-collect__button`, `web/src/ui/yard/CollectAll.ts:179` |
-| `dock-build`, `dock-map` | Dock buttons | DOM | existing `[data-dock="build"]`, `[data-dock="map"]`, `web/src/ui/yard/YardDock.ts:130-131` |
-| `dock-goals` | Goals button (new) | DOM | created by package (a) in `YardDock.ts` with `data-dock="goals"` |
-| `build-tab-defensive`, `build-tab-buildings` | Build menu tabs | DOM | existing ids `#build-tab-<id>`, `web/src/ui/yard/BuildMenu.ts:202` |
-| `build-card:<type>` | A building card | DOM | existing `.build-menu__cell [data-type="<type>"]`, `BuildMenu.ts:473-478`. If the card is on another page, the pointer shows the next-page button first |
+| `dock-build`, `dock-map`, `dock-monsters`, `dock-layout`, `dock-mail`, `yard-switcher` | Dock buttons | DOM | every round button is `dock-<name>` (`web/src/ui/yard/YardDock.ts`, `roundButton`) |
+| `dock-goals` | Goals button (new) | DOM | package (a) makes it with `dockButton("goals", …)` (tagged `dock-goals`) and adds it with `YardDock.placeBesideMonsters`, so `YardDock.ts` is not edited |
+| `build-tab:defensive`, `build-tab:buildings` | Build menu tabs | DOM | `BuildMenu.ts`, the tab strip |
+| `build-card:<type>` | A building card | DOM | `BuildMenu.ts`, `tile`. If the card is on another page, the pointer shows `build-next-page` first |
 | `build-go` | Build in the info panel | DOM | add `data-tut` to `.build-info__build`, `BuildMenu.ts:601` |
 | `build-here` | Build here while carrying | DOM | add `data-tut` to `.build-placing__here`, `BuildMenu.ts:830` |
 | `carry-ghost` | The building being placed | canvas | registered by `YardScene` from the carried ghost's position |
@@ -102,6 +112,11 @@ targets are registered by the scene that draws them (`registerCanvasTarget(name,
 | `practice-box` | The highlighted drop box | canvas | registered by the practice attack plugin (§5.4) |
 | `attack-home` | The end panel's way home | DOM | add `data-tut` in `web/src/ui/attack/EndAttackPanel.ts` |
 
+Built in WP0 beyond this table, for the tips: `build-instant`, `build-cancel-carry`, `repair`,
+`repair-all`, `shop-workers`, `shop-<section>` (`shop-protection`), `mail-threads`, `mail-new`,
+`monsters-tab:<tab>`, `mr1-tribes`, `mr1-neighbours`, `mr2-range`, `mr2-takeover`, `mr2-find`,
+`attack-speed`, `attack-retreat`, `baiter-run`, `champion-feed`, `starter-kits`, `planner-help`.
+
 ### 2.3 The steps
 
 Lines are adapted from Flash's `tut_*` strings (`server/public/gamestage/assets/english.json`); the
@@ -113,12 +128,12 @@ Flash key is in brackets. "On me" means the server pays the shortfall (§2.4).
 | 2 | `collect` | "Harvesters work until they're full, so empty them often. Tap Collect all to bank what your Twig Snapper has made." [`tut_3`, `tut_4`] then "Nice! Twigs build and upgrade your buildings." [`tut_5`] | `collect-all` | the bank answers (the starting Snapper holds 200 twigs) | none (no grant) | none |
 | 3 | `build-sniper` | a) "Wild monsters are gathering nearby. Let's build a Sniper Tower. Tap Build." [`tut_31`] b) "Open the Defensive tab." [`tut_32`] c) "Pick the Sniper Tower." [`tut_33`] d) "Here's what it does and what it costs. This one's on me: tap Build." [`tut_34`] e) "Drag it onto the grass, then tap Build here." [`tut_35`] | a `dock-build`, b `build-tab-defensive`, c `build-card:21`, d `build-go`, e `build-here` (with `carry-ghost` highlighted) | placement accepted | `guide/build {type: 21, x, y}`: tops up to the cost (1,500 / 2,000 / 500), places it, records `grants["fund:21"]`, step becomes `finish-sniper` | menu closed or carry cancelled: back to a |
 | 4 | `finish-sniper` | "Tap your Sniper Tower, then Finish now. Building usually takes time, but not today." [`tut_36`, `tut_37`] | `building:<id>`, then `finish` | the job finishes | `guide/finish {id}`: finishes the recorded building's construction for free, records `grants["finish:21"]`, step becomes `raid` | panel closed: back to the building |
-| 5 | `raid` | "WHOA! Just in time, here come some wild monsters! Your Sniper Tower will make short work of them. Sit back and watch." [`tut_40`] At the end: "That's defence: towers fire on anything that comes into range. That raid came from the Legionnaire tribe. Let's strike back before they come back bigger!" [`tut_42`, `tut_44`] | the tower (`building:<id>`) | the raid ends (about 22 s; Skip appears after 3 s) | `guide/advance {from: "raid"}`: sets `onboarding.raidSeen` (Goal D1), step `build-housing`. Nothing else changes (§4) | reload: the raid plays again |
+| 5 | `raid` | A banner first: "Legionnaire scouts are attacking!" Then: "WHOA! Just in time, here come some wild monsters! Your Sniper Tower will make short work of them. Sit back and watch." [`tut_40`] At the end: "That's defence: towers fire on anything that comes into range. Those were Legionnaire scouts. Let's strike back before they come back bigger!" [`tut_42`, `tut_44`] | the tower (`building:<id>`) | the raid ends (about 22 s; Skip appears after 3 s) | `guide/advance {from: "raid"}`: sets `onboarding.raidSeen` (Goal D1), step `build-housing`. Nothing else changes (§4) | reload: the raid plays again |
 | 6 | `build-housing` | a) "First, your army needs somewhere to live. Tap Build." [`tut_50`] b) "Open the Buildings tab." [`tut_51`] c) "Pick Monster Housing." [`tut_52`] d) "On me again: tap Build." [`tut_53`] e) "Place it on the grass, then tap Build here. You can drag the yard to find space." [`tut_54`] | as step 3, tab `build-tab-buildings`, card `build-card:15` | placement accepted | `guide/build {type: 15}`: top-up to 2,160 / 2,160, `grants["fund:15"]`, step `finish-housing` | as step 3 |
 | 7 | `finish-housing` | "Tap your Housing, then Finish now." [`tut_55`] | `building:<id>`, `finish` | the job finishes | `guide/finish {id}`: `grants["finish:15"]`, step `pokeys` | as step 4 |
 | 8 | `pokeys` | "I've recruited some Pokeys to help. They're slow and small, but what they lack in strength they make up for in numbers!" [`tut_57`] | the Housing while 15 Pokeys walk in from the yard edge | Next | `guide/army`: housed Pokeys topped up to 15, entry in `grants["army"]`, step `build-maproom` | reload: Pokeys already housed, Next only |
 | 9 | `build-maproom` | a) "Now a Map Room, so we can find those Legionnaires. Tap Build." [`tut_90_b`] b) "Buildings tab." c) "Pick the Map Room." d) "On me: tap Build." e) "Place it, then tap Build here." [`tut_91`-`tut_94`] | as step 6, card `build-card:11` | placement accepted | `guide/build {type: 11}`: top-up to 2,000 / 2,000, `grants["fund:11"]`, step `finish-maproom` | as step 3 |
-| 10 | `finish-maproom` | "Tap your Map Room, then Finish now. Free again." [`tut_97`] | `building:<id>`, `finish` | the job finishes | `guide/finish {id}`: free finish of the level 1 construction only (an exception to D16, Q3), `grants["finish:11"]`, step `build-flinger` | as step 4 |
+| 10 | `finish-maproom` | "Tap your Map Room, then Finish now. Free again." [`tut_97`] | `building:<id>`, `finish` | the job finishes | `guide/finish {id}`: free finish of the level 1 construction only, `grants["finish:11"]`, step `build-flinger`. **Decided 2026-10-01.** (Q3) A one-off exception to D16, server-checked: only `guide/finish`, only at this step, only the building recorded in `grants["fund:11"]` | as step 4 |
 | 11 | `build-flinger` | a) "Last piece: a Flinger, so we can fling our Pokeys into the enemy's yard. Tap Build." [`tut_65`] b-e as before [`tut_66`-`tut_69`] | as step 6, card `build-card:5` | placement accepted | `guide/build {type: 5}`: top-up to 1,000 / 1,000 / 500, `grants["fund:5"]`, step `finish-flinger` | as step 3 |
 | 12 | `finish-flinger` | "A Flinger takes 15 minutes, which would normally cost a few Shiny to skip. Today it's free: tap Finish now." [`tut_96`] | `building:<id>`, `finish` | the job finishes | `guide/finish {id}`: `grants["finish:5"]`, opens the practice camp (§5.5), step `open-map` | as step 4 |
 | 13 | `open-map` | "Let's find the tribe that attacked you. Tap Map." [`tut_101`] | `dock-map` | Map Room 1 opens | `guide/advance {from: "open-map"}` (no grant) | map closed: back here |
@@ -187,7 +202,14 @@ extracted hand are in the session scratchpad, not committed.
   stand-in, not as the final asset.
 - Bob himself: there is nothing to reuse.
 
-**Proposal.** Paint the guide with the pipeline that made the approved portraits
+****Decided 2026-10-01.**** (Q4) The owner picked design A, "Round buddy": a painted green monster whose
+hand is the pointer. The four files below are made and published (`web/public/guide/`, written by
+`web/tools/gen-guide-art.py` from the approved cut-outs `bob-A-bust-cut.png`,
+`bob-A-worried-cut.png`, `bob-A-icon-cut.png` and `bob-A-hand-cut.png`). The hand is 200x93 (drawn
+100x47). The bubble ships with the bust from the start; the original Flash hand is no longer
+needed.
+
+**Proposal (as made).** Paint the guide with the pipeline that made the approved portraits
 (`docs/art/portraits.md`: Google Gemini through Antigravity's image tool, original art as the
 reference, owner review before anything is committed):
 
@@ -196,7 +218,7 @@ reference, owner review before anything is committed):
 | `bob.webp` | Bob, bust, cheerful, transparent background | 240x240, drawn at 120 px (80 px on a phone) |
 | `bob-worried.webp` | the same, worried (the lost-attack retry) | 240x240 |
 | `bob-icon.webp` | head only, for tips | 96x96, drawn at 48 px |
-| `hand.webp` | the pointing hand, repainted from bitmap 1168 at 4x and reduced | 200x98, drawn at 100x49 |
+| `hand.webp` | Bob's pointing hand, repainted from bitmap 1168 | 200x93, drawn at 100x47 |
 
 Concept for Bob (Q4): a friendly green monster whose hand **is** Flash's pointer, so the one piece of
 Flash guide art carries into the new guide. Prompt references: the extracted hand plus two approved
@@ -208,6 +230,11 @@ the bubble ships with the original hand scaled up and no portrait.
 - **What it is.** A scripted animation on the player's own yard, drawn by the client only. No route
   is called during it, no save data changes, and no combat engine runs. When it ends the client
   calls `guide/advance {from: "raid"}`, which sets `raidSeen`.
+- **Presented as a tribe attack.** **Decided 2026-10-01.** The raid is shown as a NAMED wild-monster tribe
+  attack: a banner "Legionnaire scouts are attacking!" before the monsters walk in, and Bob names
+  the tribe after. It stays client-only and harmless: nothing is lost. Real periodic tribe raids
+  are a separate feature (#226), not part of this build; when #226 lands, the later defence goal
+  becomes "survive a tribe attack" (§6.1, N1).
 - **Monsters.** 8 Octo-oozes (C2), from the original sprite sheets, as Flash's
   `CUSTOMATTACKS.TutorialAttack` sent (`client/scripts/CUSTOMATTACKS.as:75-103`). Six die, one per
   shot; the last two turn and run away (`TUTORIAL.as:1490-1497`).
@@ -425,7 +452,7 @@ refers to §6.2; "B" is a building check.
 | 70 | FAN | Become a fan | Facebook | 50 Shiny | — | drop | — |
 | 71, 74, 76 | INVITE1, INVITE5, INVITE10 | Invite friends | Facebook invites | 25 / 45 / 65 Shiny | chain | drop | — |
 | 72-73 | GA1-GA3 | Gifts accepted | Facebook gifts | 1,000 to 20,000 each | chain | drop | — |
-| 80 | N1 | Test Your Defences | build a Wild Monster Baiter (needs Town Hall 4 and a Monster Locker) | 5,000 / 5,000 / 2,500 / 2,500 [PLACEHOLDER] | CR1 | **new** | B: type 19 |
+| 80 | N1 | Test Your Defences | finish a practice run with the Wild Monster Baiter (needs Town Hall 4 and a Monster Locker) | 5,000 / 5,000 / 2,500 / 2,500 [PLACEHOLDER] | CR1 | **new** | counter `baiterRuns >= 1` (Decided 2026-10-01: a real recorded run, not just the building; see §6.2). Becomes "survive a tribe attack" when #226 lands |
 | 81 | N2 | Master Planner | save a layout in the Yard Planner | 2,000 / 2,000 / 0 / 0 [PLACEHOLDER] | — | **new** | `save.savetemplate` holds a layout |
 | 82 | N3 | Into the Wild | move to Map Room 2 (Map Room level 2) | 10,000 each [PLACEHOLDER] | C14 | **new** | B: type 11 `l >= 2` |
 
@@ -462,6 +489,7 @@ trusted for them: `/base/save` lets the Flash client write it (`saveKeys` in
 | `bestBank` | `POST /bm/yard/bank` (`controllers/yard/bank.ts`) | `max(bestBank, total banked by this request)`; Collect all counts as one tap |
 | `juiced` | `POST /bm/yard/juice` (`controllers/yard/juice.ts`) | monsters juiced by the request |
 | `tribes.<name>` | the Map Room 1 tribe save, when the replay marks the tribe destroyed (`services/maproom/v1/scaledMR1Tribes.ts`) | +1 to the tribe whose template holds that base id; base `"1"` counts as Legionnaire |
+| `baiterRuns` | a new yard action from package (a), `goals/baiter-run`, sent by the Baiter scene when a practice run reaches its end screen | +1, only when the yard has a finished Wild Monster Baiter (type 19). **Decided 2026-10-01.** A Baiter run is a client simulation, so this is the "tiny server-side record of finished Baiter runs" the owner asked for: the server cannot replay it, but it records only runs from a yard that can make one |
 
 **Done is sticky.** When a condition is first seen met (in `goals/state`, `goals/claim` or the guided
 start), `goals[id].done` is written with the time, so recycling a building later does not take a
@@ -482,9 +510,13 @@ finished goal back. Flash's `_global` stats only ever went up, to the same effec
   new method, `YardRenderer.throwGrant(amounts, from)`, beside `throwBank`
   (`web/src/game/yard/YardRenderer.ts:482`). Monster rewards walk in to Housing instead (the guided
   start's Pokey walk-in, shared).
-- **Over the cap.** Flash paid quest resources over the storage cap (`BASE.Fund(..., true)`,
-  `QUESTS.as:1787`). The default is the same here: the reward lands in full even above the cap (Q2).
-  This needs an uncapped `grant` on the yard action outcome (§9.2).
+- **Over the cap.** **Decided 2026-10-01.** (Q2) Rewards are CAPPED at the storage cap, and the excess is
+  lost (unlike Flash's `BASE.Fund(..., true)`, `QUESTS.as:1787`). The claim pays through the yard
+  action's ordinary `credit`, which clamps every credit to the cap (`services/yard/credit.ts`); no
+  uncapped grant is needed. The Claim button shows what will actually be received, worked out with
+  the same rule (the client from the yard state's `resources` and `caps`; the server's
+  `goals/state` may send it as `fitCredit`'s `credited`), for example "+1,000 (storage full)" when
+  only 1,000 of a 2,000 reward fits.
 - **Monster rewards** need room for the whole reward in Housing; otherwise Claim is disabled with,
   for example, "Make room in Housing for 10 Octo-oozes" (Q10).
 - **Refusals.** A claim the server refuses (not met, already claimed, no room) answers 409 with the
@@ -492,16 +524,18 @@ finished goal back. Flash's `_global` stats only ever went up, to the same effec
 
 ### 6.4 Existing accounts
 
-Per the decisions, the guided start is for new accounts only. For Goals the stated default is:
-existing accounts get the full list, and goals they already meet are ready to claim.
+Per the decisions, the guided start is for new accounts only.
 
-- **What the default costs:** an established account could claim most of 373,300 / 343,900 /
-  1,398,000 / 3,816,500 at once, plus the monster rewards. The big items are the champion goals
-  (800,000 goo each) and the juice goals.
-- **The alternative** (my recommendation, Q1): mark the goals an existing account already meets as
-  claimed with no reward (`claimed: "baseline"`); only goals met after launch pay.
-- Either way: counters start at 0 for everyone (Flash's `stats.mp` and its kin were written by the
-  client), D1 is met for legacy accounts, and WM1-WM4 are shown only to accounts on Map Room 1 (Q9).
+**Decided 2026-10-01.** (Q1; there are no real players yet) Existing saves get a baseline: the goals an
+existing save already meets are marked claimed with NO reward (`claimed: "baseline"`); only goals
+met after that pay. The migration marks every existing main save `goalsBaseline: "pending"`; the
+Goals package applies the baseline the first time it reads such a save (the goal rules are
+TypeScript, not SQL), in the same locked write, and sets `goalsBaseline` to the time. A `NULL`
+column (a sandbox yard, or a yard made while `guidedStart` is off) reads the same way.
+
+- Counters start at 0 for everyone (Flash's `stats.mp` and its kin were written by the client), D1
+  is met for legacy accounts (`raidSeen: 1`), and WM1-WM4 are shown only to accounts on Map Room 1
+  (Q9).
 - The owner's own account is deleted and recreated before launch, so it takes the new-player path.
 
 ## 7. Screen tips
@@ -584,9 +618,10 @@ of someone's yard never carries it), and it is in neither `saveKeys` nor `attack
   },
   "raidSeen": 1790000110,
   "camp": { "state": "open", "openedAt": 1790000400 },
-  "goals": { "T1": { "done": 1790000075, "claimed": 1790000700 } },
+  "goals": { "T1": { "done": 1790000075, "claimed": 1790000700 }, "U1": { "claimed": "baseline" } },
+  "goalsBaseline": 1790000000,
   "counters": {
-    "mushrooms": 0, "goldMushrooms": 0, "bestBank": 200, "juiced": 0,
+    "mushrooms": 0, "goldMushrooms": 0, "bestBank": 200, "juiced": 0, "baiterRuns": 0,
     "tribes": { "legionnaire": 1, "kozu": 0, "abunakki": 0, "dreadnaut": 0 }
   },
   "tips": { "mail": 1790003000 }
@@ -599,15 +634,24 @@ of someone's yard never carries it), and it is in neither `saveKeys` nor `attack
   or `skipped`. Banking keeps paying full points below 200 (`server/src/services/yard/bank.ts:72-77`),
   as it did during Flash's tutorial. The web client never reads `tutorialstage`;
   `devConfig.skipTutorial` keeps applying to the Flash client only.
-- A new config switch, `guidedStart` (on by default in every environment; `GUIDED_START=0` turns it
-  off), so local development and tests see the guide, which `skipTutorial` would otherwise hide
-  (`server/src/config/GameConfig.ts:92`).
+- A new config switch, `devConfig.guidedStart` (`guidedStartOn`, `server/src/config/GameConfig.ts`):
+  `GUIDED_START=1` on, `GUIDED_START=0` off; unset, on everywhere but production, where it stays off
+  until (a), (b) and (c) are merged and the owner has played it through (§9.1). Local development
+  and tests see the guide, which `skipTutorial` would otherwise hide. Off, a new main save gets no
+  record at all, which reads as `legacy`: no guided start, Goals with the baseline.
 
 What the client receives:
 
-- `/base/load` (own yard, build mode) adds `onboarding` plus `goalsReady` (a count).
-- Every `/bm/yard/*` answer adds `onboarding: { guide, camp, goalsReady }` to `YardState`
-  (`server/src/services/yard/yardState.ts`, frozen: an agreed addition, §9.2).
+- `/base/load` (the owner's build-mode load of the main yard or an outpost, not Inferno) adds
+  `onboarding`, the summary below.
+- Every `/bm/yard/*` answer adds the same `onboarding` to `YardState`
+  (`server/src/services/yard/yardState.ts`, frozen: an agreed addition, §9.2), read from the main
+  row after the action.
+- The summary (`services/onboarding/summary.ts`, built):
+  `{ guide: { state, step?, building? }, camp: "none" | "open" | "removed", goalsReady, tips }`.
+  `building` is the building the guide paid for and has not finished yet (the newest `fund:<type>`
+  grant without its `finish:<type>`), so the pointer finds it after a reload. The grant ledger and
+  the counters are never sent.
 - `goals/state` returns the full list with status, for the panel.
 
 ### 8.2 Migration
@@ -615,17 +659,20 @@ What the client receives:
 `server/src/database/migrations/20261002_AddOnboardingToSave.ts`:
 
 1. `ALTER TABLE "bym"."save" ADD COLUMN IF NOT EXISTS "onboarding" jsonb NULL;`
-2. `UPDATE "bym"."save" SET "onboarding" = '{"v":1,"guide":{"state":"legacy"},"raidSeen":1}' WHERE "type" = 'main' AND "onboarding" IS NULL;`
-3. If the owner picks the baseline option (Q1), the goals a legacy save already meets are marked
-   `claimed: "baseline"` the first time it loads, in TypeScript (the rules are not SQL).
+2. `UPDATE "bym"."save" SET "onboarding" = '{"v":1,"guide":{"state":"legacy"},"raidSeen":1,"goalsBaseline":"pending"}' WHERE "type" = 'main' AND "onboarding" IS NULL;`
+3. **Decided 2026-10-01.** (Q1) The goals a legacy save already meets are marked `claimed: "baseline"`, with
+   no reward, the first time the Goals package reads it (`goalsBaseline: "pending"`), in TypeScript
+   (the rules are not SQL).
 
 New main saves get `{ "v": 1, "guide": { "state": "pending" } }` from
-`server/src/game-data/getDefaultBaseData.ts`. A `NULL` read anywhere counts as `legacy`.
+`server/src/game-data/getDefaultBaseData.ts` while `guidedStart` is on. A `NULL` read anywhere
+counts as `legacy` with the baseline pending (`readOnboarding`, `services/onboarding/state.ts`).
 
 ### 8.3 Routes
 
-All are yard actions, `POST /api/:apiVersion/bm/yard/<path>`, appended to `yardRoutes`
-(`server/src/controllers/yard/index.ts`). Each runs under the save row lock, catches the yard up
+All are yard actions, `POST /api/:apiVersion/bm/yard/<path>`, listed in each package's own route
+file (`controllers/yard/goals.ts`, `guide.ts`, `tips.ts`), which `yardRoutes`
+(`server/src/controllers/yard/index.ts`) spreads in. Each runs under the save row lock, catches the yard up
 first and answers with the yard state (`server/src/controllers/yard/yardAction.ts`). All refuse on an
 outpost (`notInOutpost`).
 
@@ -637,7 +684,8 @@ outpost (`notInOutpost`).
 | `guide/army` | `{}` | step `pokeys`, or step `attack-result` with the camp not destroyed | tops housed C1 up to 15 (`monsters.housed`, `server/src/services/yard/production.ts:183`); on a retry also resets the camp's health; appends to `grants.army` |
 | `guide/skip` | `{}` | state `pending` or `active` | state `skipped`, `tutorialstage` 205, protection `max(protected, now + 7 days)`, camp removed |
 | `goals/state` | `{}` | any | marks newly met goals done; returns the list |
-| `goals/claim` | `{ id }` | goal met or done, not claimed, prereq claimed, Housing room for monster rewards | pays the reward (uncapped), adds monsters to `housed`, writes `claimed` |
+| `goals/claim` | `{ id }` | goal met or done, not claimed, prereq claimed, Housing room for monster rewards | pays the reward capped at storage (`credit`, Decided 2026-10-01), adds monsters to `housed`, writes `claimed` |
+| `goals/baiter-run` | `{}` | a finished Wild Monster Baiter stands | `counters.baiterRuns + 1` (goal N1) |
 | `tips/seen` | `{ screen }` | `screen` is a known screen id | writes `tips[screen]` |
 
 `guide/advance` checks, by step:
@@ -706,25 +754,25 @@ owner has played it through once.
 | Area | Files |
 |---|---|
 | Column and state | `server/src/database/migrations/20261002_AddOnboardingToSave.ts` (new); `server/src/database/models/save.model.ts` (`onboarding`, not a frontend key, in neither save key list); `server/src/services/onboarding/state.ts` (new: types, read with defaults, `legacy` for null); `server/src/game-data/getDefaultBaseData.ts` (pending guide on new main saves); `server/src/config/GameConfig.ts` (`guidedStart`) |
-| Yard action contract (agreed changes to frozen files) | `server/src/controllers/yard/yardAction.ts`: `onboarding` in `YardSlices`; an uncapped `grant` on `YardOutcome`. `server/src/services/yard/yardState.ts`: the `onboarding` summary, calling a stub `server/src/services/goals/summary.ts` that returns 0 until (a) fills it |
+| Yard action contract (agreed changes to frozen files) | `server/src/controllers/yard/yardAction.ts`: `onboarding` in `YardSlices`; `em` (the request's transaction) on `YardActionInput`, for the practice camp's `Maproom` row; no `grant` (rewards are capped, Decided 2026-10-01, so the ordinary `credit` serves). `server/src/services/yard/yardState.ts`: the `onboarding` summary (`services/onboarding/summary.ts`), calling a stub `server/src/services/goals/summary.ts` that returns 0 until (a) fills it. `services/yard/poolView.ts`: `onboarding` lives on the main row |
 | Load | `server/src/controllers/base/load/baseLoad.ts`: `onboarding` on the own-yard build load |
 | Docs | `docs/server-api.md`: the column, the summary field and the planned routes |
 | Web types | `web/src/api/types.ts`: `Onboarding` |
-| Bob kit (shared, built once) | `web/src/ui/guide/BobBubble.ts` (text, mood, Next / Finish / Got it, Skip, step dots, bottom-left or phone strip); `GuideArrow.ts` (bouncing hand, auto-flip); `Spotlight.ts` (blocker with a cut-out); `guide.css`; `web/src/game/guide/targets.ts` (`data-tut` lookup and `registerCanvasTarget`); `web/src/game/guide/guideBus.ts` (events: `screen`, `buildMenu`, `carry`, `placed`, `panel`, `jobFinished`, `banked`, `mapOpened`, `targetPicked`, `attackEnded`); `web/src/ui/overlay.ts` (a `guide` layer above `modal`) |
+| Bob kit (shared, built once) | `web/src/ui/guide/BobBubble.ts` (text, mood, Next / Finish / Got it, Skip, step dots, bottom-left or phone strip); `GuideArrow.ts` (bouncing hand, auto-flip); `Spotlight.ts` (blocker with a cut-out); `GuideOverlay.ts` (the three together, following a target); `guideArt.ts`; `web/src/ui/styles/guide.css`; `web/src/game/guide/targets.ts` (`data-tut` lookup and `registerCanvasTarget`); `web/src/game/guide/guideBus.ts` (events: `screen`, `buildMenu`, `carry`, `placed`, `panel`, `jobFinished`, `banked`, `mapOpened`, `targetPicked`, `attackEnded`); `web/src/ui/overlay.ts` (a `guide` layer above `modal`); the attack scene's `AttackMounts.guide` |
 | Hooks sweep | `data-tut` attributes and one `guideBus.emit` per screen in `CollectAll.ts`, `YardDock.ts`, `BuildMenu.ts`, `BuildingPanel.ts`, `Hud.ts`, `ShopScreen.ts`, `MonstersScreen.ts`, `MailboxScreen.ts`, `PlannerBar.ts`, `MapRoom1Ui.ts`, `TargetCard.ts`, `MapRoomUi.ts`, `AttackScene.ts`, `ArmyPanel.ts`, `EndAttackPanel.ts`, `BaiterPanel.ts`, `ChampionPanel.ts`, `YardSwitcher.ts`, `StarterKitPicker.ts`, `DamageBanner.ts`; canvas targets in `YardRenderer.ts` |
-| Yard plugin registry | `web/src/game/yard/yardPlugins.ts` (new): `YARD_PLUGINS`, like `ATTACK_PLUGINS`, with mounts (renderer, camera, store, overlay, dock, notices, open panel); `web/src/app/scenes/YardScene.ts` mounts them. This keeps (a), (b) and (c) out of `YardScene.ts` |
-| Art | the original hand, scaled, as `web/public/guide/hand.webp` until the painted set is approved |
+| Yard plugin registry | `web/src/game/yard/yardPlugins.ts` (new): `YARD_PLUGINS`, like `ATTACK_PLUGINS`, with mounts (renderer, camera, store, overlay, dock, notices, scene controls); `web/src/game/yard/plugins.ts` imports one stub per package (`plugins/goals.ts`, `guidedStart.ts`, `tips.ts`); `web/src/app/scenes/YardScene.ts` mounts them. This keeps (a), (b) and (c) out of `YardScene.ts`. The server's twin: one stub route file per package, spread into `yardRoutes` |
+| Art | Bob A, approved: `web/public/guide/{bob,bob-worried,bob-icon,hand}.webp` from `web/tools/gen-guide-art.py` |
 
 ### 9.3 The three packages
 
 | | (a) Goals | (b) Guided start, raid, camp | (c) Screen tips |
 |---|---|---|---|
 | Server, new | `server/src/game-data/goals.ts` (the §6.1 table); `server/src/services/goals/goalRules.ts`, `claim.ts`; fills `summary.ts`; `server/src/controllers/yard/goals.ts` | `server/src/services/onboarding/guidedStart.ts` (steps and checks); `server/src/controllers/yard/guide.ts`; `server/src/services/maproom/v1/practiceCamp.ts`; `server/src/game-data/tribes/v1/practiceCamp.test.ts` | `server/src/services/onboarding/tips.ts` (screen ids); `server/src/controllers/yard/tips.ts` |
-| Server, changed | `controllers/yard/mushrooms.ts`, `bank.ts`, `juice.ts` (counters); `services/maproom/v1/scaledMR1Tribes.ts` (tribe counter); `controllers/yard/index.ts` (append) | `game-data/tribes/v1/tutorial.ts` (camp layout); `services/maproom/v1/mr1TribeAttack.ts`, `createMR1Tribes.ts`, `mapRoom1View.ts`; `controllers/maproom/getMapRoom1.ts`; `controllers/yard/build.ts` (cancel refusal); `controllers/yard/index.ts` (append) | `controllers/yard/index.ts` (append) |
+| Server, changed | `controllers/yard/mushrooms.ts`, `bank.ts`, `juice.ts` (counters); `services/maproom/v1/scaledMR1Tribes.ts` (tribe counter) | `game-data/tribes/v1/tutorial.ts` (camp layout); `services/maproom/v1/mr1TribeAttack.ts`, `createMR1Tribes.ts`, `mapRoom1View.ts`; `controllers/maproom/getMapRoom1.ts`; `controllers/yard/build.ts` (cancel refusal) | none (its route file is a WP0 stub) |
 | Web, new | `web/src/ui/goals/GoalsPanel.ts`, `goals.css`; `web/src/api/goals.ts`; `web/src/game/yard/plugins/goals.ts` | `web/src/game/guide/steps.ts` (§2.3 as data); `web/src/game/yard/plugins/guidedStart.ts` (the runner); `web/src/game/guide/stagedRaid.ts`, `StagedRaidLayer.ts`; `web/src/game/attack/plugins/practice.ts`; `web/src/game/attack/practiceBox.test.ts`; `web/src/api/guide.ts` | `web/src/game/guide/tipsCatalogue.ts`; `web/src/game/guide/TipRunner.ts`; `web/src/ui/guide/HelpButton.ts`; `web/src/game/yard/plugins/tips.ts`; `web/src/api/tips.ts` |
-| Web, changed | `web/src/ui/yard/YardDock.ts` (Goals button and badge); `web/src/game/yard/YardRenderer.ts` (`throwGrant` only) | `web/src/ui/attack/ArmyPanel.ts` (lock API); `web/src/game/attack/AttackInput.ts` (drop filter API); `web/src/game/attack/plugins/index.ts` (append); `web/src/ui/maproom1/Mr1ListView.ts`, `Mr1MapView.ts`, `TargetCard.ts`; `web/src/game/maproom1/mr1Model.ts`; `web/src/app/scenes/MapRoom1Scene.ts`; `web/src/ui/AccountMenu.ts` (Help, replay) | `web/src/ui/yard/PlannerHelp.ts` (the seen flag moves to the server) |
+| Web, changed | none for the Goals button (`dockButton` and `placeBesideMonsters`, §9.5); `web/src/game/yard/YardRenderer.ts` (`throwGrant` only); the Baiter scene's end (`goals/baiter-run`) | `web/src/ui/attack/ArmyPanel.ts` (lock API); `web/src/game/attack/AttackInput.ts` (drop filter API); `web/src/game/attack/plugins.ts` (one import line); `web/src/ui/maproom1/Mr1ListView.ts`, `Mr1MapView.ts`, `TargetCard.ts`; `web/src/game/maproom1/mr1Model.ts`; `web/src/app/scenes/MapRoom1Scene.ts`; `web/src/ui/AccountMenu.ts` (Help, replay) | `web/src/ui/yard/PlannerHelp.ts` (the seen flag moves to the server) |
 | Uses from WP0 | collect-fx (existing); the badge needs nothing else | Bob kit, Spotlight, targets, guideBus; `dock-goals` from (a) (step 17 shows Bob without a pointer if that button is not there yet) | Bob kit, guideBus `screen` events |
-| Tests | goal rules per kind; claim refusals (not met, claimed, prereq, no room); counters; the uncapped grant | every guide route's refusals (wrong step, twice, after skip); top-up arithmetic; cancel refused; camp listed and attackable only for its owner; the §5.3 proofs | `tips/seen` validation; the runner skips missing targets |
+| Tests | goal rules per kind; claim refusals (not met, claimed, prereq, no room); counters; the reward capped at storage and the Claim button's figure; `goals/baiter-run` | every guide route's refusals (wrong step, twice, after skip); top-up arithmetic; cancel refused; camp listed and attackable only for its owner; the §5.3 proofs | `tips/seen` validation; the runner skips missing targets |
 
 Shared pieces, built once in WP0 and never re-implemented: the Bob bubble, the pointer, the
 spotlight, the target resolver, the guide bus, the `onboarding` types and the yard plugin registry.
@@ -741,24 +789,107 @@ The Pokey walk-in animation is built by (b) and exported for (a)'s monster rewar
 4. Before `guidedStart` is turned on: a live run on a fresh test account (not the owner's), a skip,
    a lose-and-retry, and a reload at every step.
 
-## 10. Open questions
+### 9.5 How to build on WP0
 
-| # | Question | Proposed default |
-|---|---|---|
-| Q1 | Existing accounts and Goals: claimable for everything already met (up to about 373K twigs / 344K pebbles / 1.4M putty / 3.8M goo plus monsters), or a baseline? | The stated default is claimable. My recommendation: baseline (goals already met are marked claimed, no reward), so only progress after launch pays |
-| Q2 | Goal rewards above the storage cap? | Yes, uncapped, as Flash (`BASE.Fund(..., true)`) |
-| Q3 | The free finish of the Map Room's level 1 construction is an exception to D16 ("the Map Room cannot be rushed with Shiny") | Allow it for that one construction only |
-| Q4 | Bob's look. Flash had no character art, only a bubble and a green pointing hand | Paint a green monster Bob whose hand is the pointer, with the portraits pipeline; the owner approves the paintings |
-| Q5 | Replay from Help: a tour with Next buttons (no grants, no camp; the raid replays), rather than doing the steps again | Tour |
-| Q6 | D1 "First Blood" is met by watching the staged raid. A skipper can earn it by replaying the raid from Help | Allow it: D1 is a Goal, not a guided-start gift |
-| Q7 | New goals: Baiter, Yard Planner layout, Map Room 2. Their rewards are placeholders | These three, with the placeholder rewards in §6.1 |
-| Q8 | The Baiter goal can only check that a Baiter is built: its runs never reach the server | Building only |
-| Q9 | WM1-WM4 need Map Room 1 tribes. Hide them on Map Room 2, or also count Map Room 2 wild camps of the same tribe? | Hide on Map Room 2 for now |
-| Q10 | Monster rewards when Housing is short: wait for room, or take what fits (Flash offered to take what fits and lose the rest) | Wait for room |
-| Q11 | Does skipping also restart the 7 days of protection? | Yes: `max(protected, now + 7 days)` at skip, as at finish |
-| Q12 | Retreat during the practice attack | Allowed; it leads to the free retry |
-| Q13 | Map Room before Flinger (the decisions' order) or Flinger before Map Room (Flash's) | Map Room, then Flinger |
-| Q14 | Skippers get the tips for the yard, Build menu and building panel | Yes |
-| Q15 | Flash had a protection counter on the HUD (`tut_190`); the web has none | No new HUD element: Bob says it, and the Shop's Protection section shows the time left |
-| Q16 | The guided start dims and blocks the rest of the UI while it waits for a tap | Yes, as Flash's blocker; Skip always available |
-| Q17 | The camp's loot (3,000 / 3,000 / 1,000 / 1,000) | Placeholder; tune after the first playtest |
+WP0 is built (branch `feat/tutorial-wp0`). It holds no Goals logic, no guided-start steps and no
+tips content: only the pieces below. Each package owns the files in its column and touches nothing
+else; anything outside them that a package needs is a question for the team lead, not an edit.
+
+**Files each package owns.** "New" files do not exist yet; "stub" files exist, empty, for the
+package to fill; "edit" files are shared and listed against one package only.
+
+| | (a) Goals | (b) Guided start, raid, camp | (c) Screen tips |
+|---|---|---|---|
+| Server, stub | `controllers/yard/goals.ts` (`goalsRoutes`), `services/goals/summary.ts` (`goalsReady`) | `controllers/yard/guide.ts` (`guideRoutes`) | `controllers/yard/tips.ts` (`tipsRoutes`) |
+| Server, new | `game-data/goals.ts`, `services/goals/*` | `services/onboarding/guidedStart.ts`, `services/maproom/v1/practiceCamp.ts`, `game-data/tribes/v1/practiceCamp.test.ts` | `services/onboarding/tips.ts` |
+| Server, edit | `controllers/yard/mushrooms.ts`, `bank.ts`, `juice.ts`; `services/maproom/v1/scaledMR1Tribes.ts` (counters) | `game-data/tribes/v1/tutorial.ts`; `services/maproom/v1/mr1TribeAttack.ts`, `createMR1Tribes.ts`, `mapRoom1View.ts`; `controllers/maproom/getMapRoom1.ts`; `controllers/yard/build.ts` (cancel refusal) | none |
+| Web, stub | `game/yard/plugins/goals.ts` | `game/yard/plugins/guidedStart.ts` | `game/yard/plugins/tips.ts` |
+| Web, new | `ui/goals/*`, `api/goals.ts` | `game/guide/steps.ts`, `stagedRaid.ts`, `StagedRaidLayer.ts`; `game/attack/plugins/practice.ts` (and its import line in `game/attack/plugins.ts`); `game/attack/practiceBox.test.ts`; `api/guide.ts` | `game/guide/tipsCatalogue.ts`, `TipRunner.ts`; `ui/guide/HelpButton.ts`; `api/tips.ts` |
+| Web, edit | `game/yard/YardRenderer.ts` (`throwGrant` only); the Baiter scene's end, to post `goals/baiter-run` | `ui/attack/ArmyPanel.ts` (lock API), `game/attack/AttackInput.ts` (drop filter); `ui/maproom1/Mr1ListView.ts`, `Mr1MapView.ts` (`mr1-practice`); `game/maproom1/mr1Model.ts`; `app/scenes/MapRoom1Scene.ts`; `ui/AccountMenu.ts` (Help, the tour) | `ui/yard/PlannerHelp.ts` (the seen flag moves to the server) |
+
+Not to be edited by any package: `YardScene.ts`, `YardDock.ts`, `yardAction.ts`, `yardState.ts`,
+`controllers/yard/index.ts`, the WP0 kit under `web/src/ui/guide/` and `web/src/game/guide/`
+(`guideBus.ts`, `targets.ts`), `yardPlugins.ts`, `web/src/api/types.ts`'s `Onboarding`, and the
+screens WP0 swept for `data-tut` and `guideBus` (§9.2). A missing hook is added by the team lead's
+call, not by a package.
+
+**Shared server APIs.**
+
+- `services/onboarding/state.ts`: the `Onboarding` type and its parts; `readOnboarding(save)` (every
+  field with its default; `NULL` is legacy with `goalsBaseline: "pending"`);
+  `updateOnboarding(save, change)`, the only way to write the column: return its result as
+  `slices: { onboarding }` from a yard action, or assign it outside one (the Map Room 1 tribe save);
+  `guideOpen(onboarding)`; `emptyCounters()`. Grant keys are `fund:<type>`, `finish:<type>` and
+  `army` (a list).
+- `services/onboarding/summary.ts`: `onboardingSummary(save)`, sent on every yard answer and the
+  own-yard load. (a) fills `goalsReady` in `services/goals/summary.ts` (pure: it must not write);
+  `tips` and `guide` are already there.
+- Yard actions (`controllers/yard/yardAction.ts`): `slices.onboarding`; `em` on the input, the
+  request's transaction, for the camp's `Maproom` row (persist through it; the wrapper flushes);
+  rewards through the ordinary `credit` (capped). `fitCredit` (`services/yard/credit.ts`) says what
+  a credit will come to, for the Claim button's figure.
+- Routes go in the package's own route file as `{ path, controller: yardRoute(action) }`; every
+  tutorial route refuses on an outpost (leave `outposts` unset).
+- `devConfig.guidedStart`: new main saves start `pending` only while it is on.
+
+**Shared web APIs.**
+
+- Types (`web/src/api/types.ts`): `Onboarding` (the summary), `GuideState`, `CampState`. The own
+  yard's `YardStore.save.onboarding` holds the latest: the load's, then every answer's (it is a
+  `YARD_STATE_KEYS` field, merged like the rest).
+- Yard plugins (`web/src/game/yard/yardPlugins.ts`): push a `YardPlugin` onto `YARD_PLUGINS` in the
+  package's own `game/yard/plugins/<name>.ts`. It is mounted on the player's own yard (main or
+  outpost) once the store is up and the yard drawn, and its teardown runs when the yard closes or
+  reloads. `YardMounts` gives `store`, `binding`, `renderer`, `camera`, `canvas`, `overlay`
+  (`content`, `modal`, `guide`), `dock`, `hud`, `notices`, and `scene` (`YardSceneControls`:
+  `openBuildMenu`, `closeBuildMenu`, `focusBuilding`, `closePanel`, `selectedBuilding`, `openMap`,
+  `openMonsters`, `openShop`, `centreOn`, `plannerOpen`, `carrying`).
+- The dock: `dockButton(name, label, art, onClick)` makes a round button like the dock's own,
+  tagged `dock-<name>`; `YardDock.placeBesideMonsters(element)` puts it in. (a)'s Goals button is
+  `dockButton("goals", …)`.
+- Bob (`web/src/ui/guide/`): `GuideOverlay` (on `overlay.guide`) is the one to use:
+  `show({ text, mood?, icon?, actions?, dots?, skip?, target?, side?, block?, onTargetFound? })`,
+  `hide()`, `destroy()`. It re-finds the target every frame, points Bob's hand at it, and, unless
+  `block: false`, dims and blocks everything but the target and the bubble. `BobBubble`,
+  `GuideArrow` (`placeArrow`) and `Spotlight` are its parts, usable alone. Art: `guideArt.ts`
+  (`bobBust(mood)`, `BOB_ICON`, `BOB_HAND`). Styles: `ui/styles/guide.css`.
+- Targets (`web/src/game/guide/targets.ts`): `findTarget(name)`; `registerCanvasTarget(name or
+  "prefix:", resolve)` for a canvas thing (b registers `practice-box`); `tutTarget(element, name)`
+  for a new DOM control (a tags nothing by hand: `dockButton` does it; b tags `mr1-practice`);
+  `TutTarget` lists every name. The own yard registers `building:<id>` and `carry-ghost`.
+- Events (`web/src/game/guide/guideBus.ts`): `guideBus.on(name, listener)` returns its
+  unsubscribe. `screen { id, root, header }` from every screen in `GuideScreen` as it opens (a
+  Monsters tab each time it is switched to), `buildMenu { open, tab? }`, `carry { type | null }`,
+  `placed { type, id }`, `panel { building | null }`, `jobFinished { jobs }`, `banked { banked }`,
+  `mapOpened { map }`, `targetPicked { baseid, kind }`, `attackEnded { baseid, destroyed }`. (c)'s
+  "?" goes in `header` when there is one.
+- The attack scene's plugins get `mounts.guide` (the guide layer) for Bob in the practice attack.
+
+**Order of work and merging.** The three packages branch from WP0's commit and can merge in any
+order: their stub files are the only shared files they fill, each owned by one package. (b)'s
+step 17 points at `dock-goals` and shows Bob without a pointer while (a) has not landed.
+
+## 10. Open questions (all decided)
+
+**Decided 2026-10-01.** The owner answered every question in a second round; the answers override the
+proposed defaults and are written into the sections above.
+
+| # | Question | Proposed default | Decided 2026-10-01 |
+|---|---|---|---|
+| Q1 | Existing accounts and Goals: claimable for everything already met (up to about 373K twigs / 344K pebbles / 1.4M putty / 3.8M goo plus monsters), or a baseline? | The stated default is claimable. My recommendation: baseline (goals already met are marked claimed, no reward), so only progress after launch pays | Baseline: goals already met are marked claimed with no reward (§6.4) |
+| Q2 | Goal rewards above the storage cap? | Yes, uncapped, as Flash (`BASE.Fund(..., true)`) | Capped at the cap; the excess is lost. The Claim button shows what will actually be received, e.g. "+1,000 (storage full)" (§6.3) |
+| Q3 | The free finish of the Map Room's level 1 construction is an exception to D16 ("the Map Room cannot be rushed with Shiny") | Allow it for that one construction only | A one-off exception for the tutorial's L1 Map Room, server-checked and tied to the step (§2.3, step 10) |
+| Q4 | Bob's look. Flash had no character art, only a bubble and a green pointing hand | Paint a green monster Bob whose hand is the pointer, with the portraits pipeline; the owner approves the paintings | Design A, "Round buddy"; its hand is the pointer (§3) |
+| Q5 | Replay from Help: a tour with Next buttons (no grants, no camp; the raid replays), rather than doing the steps again | Tour | A tour with Next buttons; no grants, no camp, no builds (§2.1) |
+| Q6 | D1 "First Blood" is met by watching the staged raid. A skipper can earn it by replaying the raid from Help | Allow it: D1 is a Goal, not a guided-start gift | Yes |
+| Q7 | New goals: Baiter, Yard Planner layout, Map Room 2. Their rewards are placeholders | These three, with the placeholder rewards in §6.1 | Yes, with the placeholder rewards |
+| Q8 | The Baiter goal can only check that a Baiter is built: its runs never reach the server | Building only | Overridden: the Baiter goal needs an actual finished practice run, recorded on the server (`baiterRuns`, §6.1, §6.2); it becomes "survive a tribe attack" when #226 lands |
+| Q9 | WM1-WM4 need Map Room 1 tribes. Hide them on Map Room 2, or also count Map Room 2 wild camps of the same tribe? | Hide on Map Room 2 for now | Yes, hidden |
+| Q10 | Monster rewards when Housing is short: wait for room, or take what fits (Flash offered to take what fits and lose the rest) | Wait for room | Yes, wait for room |
+| Q11 | Does skipping also restart the 7 days of protection? | Yes: `max(protected, now + 7 days)` at skip, as at finish | Yes |
+| Q12 | Retreat during the practice attack | Allowed; it leads to the free retry | Yes |
+| Q13 | Map Room before Flinger (the decisions' order) or Flinger before Map Room (Flash's) | Map Room, then Flinger | Yes, Map Room then Flinger |
+| Q14 | Skippers get the tips for the yard, Build menu and building panel | Yes | Yes |
+| Q15 | Flash had a protection counter on the HUD (`tut_190`); the web has none | No new HUD element: Bob says it, and the Shop's Protection section shows the time left | Yes, no new HUD element |
+| Q16 | The guided start dims and blocks the rest of the UI while it waits for a tap | Yes, as Flash's blocker; Skip always available | Yes: the UI is locked except the target Bob points at; Skip always visible (§2.1) |
+| Q17 | The camp's loot (3,000 / 3,000 / 1,000 / 1,000) | Placeholder; tune after the first playtest | Yes, placeholders |

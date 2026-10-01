@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import type { YardRefusal } from "@/api/yard";
 import {
   ChampionKey,
@@ -485,6 +486,7 @@ export class ChampionPanel {
     const feed = document.createElement("button");
     feed.type = "button";
     feed.className = "btn btn--primary champion__feed";
+    tutTarget(feed, TutTarget.CHAMPION_FEED);
     feed.textContent = "Feed now";
     feed.addEventListener("click", () => void this.runFeed("monsters"));
     this.feedButton = feed;

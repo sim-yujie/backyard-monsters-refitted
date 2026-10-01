@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import type { ChampionBlockReason } from "@/game/attack/AttackSession";
 import type { Bucket } from "@/game/attack/bucket";
 import {
@@ -184,6 +185,7 @@ export class ArmyPanel {
       this.bucket.fillAll(),
     );
     this.fillAllButton.title = "Top every row up, in order, until the flinger is full";
+    tutTarget(this.fillAllButton, TutTarget.FILL_ALL);
     this.clearButton = button("btn btn--ghost attack-army__clear", "Clear", () => this.bucket.clear());
     this.clearButton.title = "Empty every row and un-pick the champion";
     this.loadLastButton = button("btn btn--ghost attack-army__load-last", "Load last army", () => {

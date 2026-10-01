@@ -1,3 +1,5 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
+import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { repairActions, RepairKey, type RepairActions } from "@/api/yardRepair";
 import type { YardRefusal } from "@/api/yard";
 import {
@@ -158,6 +160,7 @@ export class ShopScreen {
     this.element.hidden = false;
     this.render();
     if (!wasOpen) this.element.querySelector<HTMLElement>(".shop-screen__close")?.focus();
+    if (!wasOpen) guideBus.emit("screen", { id: GuideScreen.SHOP, root: this.element, header: this.panel.titlebar });
   }
 
   close(): void {
@@ -241,6 +244,8 @@ export class ShopScreen {
     const section = document.createElement("section");
     section.className = "shop-section";
     section.dataset["section"] = id;
+    // `shop-protection`, … for Bob's tips (issue #227).
+    tutTarget(section, `shop-${id}`);
     const heading = document.createElement("h3");
     heading.className = "shop-section__title";
     heading.id = `shop-section-${id}`;
@@ -288,6 +293,7 @@ export class ShopScreen {
     const card = this.card(item.item, item.name, item.blurb, "Buy", () => void this.buy(item.item, item.name), true);
     card.meta.textContent = offerMeta(offer, now);
     card.element.dataset["state"] = state.kind;
+    if (item.item === "BEW") tutTarget(card.element, TutTarget.SHOP_WORKERS);
 
     if (state.kind === "buy") {
       card.button.element.hidden = false;

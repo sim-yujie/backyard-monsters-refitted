@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import type { BuildingData } from "../../types/BuildingData.js";
 import { BASE_STORAGE, OUTPOST_STORAGE } from "../base/economy/resourceBudget.js";
+import type { OnboardingSummary } from "../onboarding/summary.js";
 import { yardState, type YardStateSave } from "./yardState.js";
 
 const NOW = 1_800_000_000;
+
+/** A tutorial summary, passed through as it is (issue #227). */
+const ONBOARDING: OnboardingSummary = { guide: { state: "legacy" }, camp: "none", goalsReady: 0, tips: {} };
 
 const building = (id: number, t: number, extra: Partial<BuildingData> = {}): BuildingData =>
   ({ id, t, X: 0, Y: 0, ...extra }) as unknown as BuildingData;
@@ -47,16 +51,17 @@ const FROZEN_KEYS = [
   "champion",
   "mushrooms",
   "researchdata",
+  "onboarding",
 ];
 
 describe("yardState", () => {
   test("carries exactly the frozen keys", () => {
-    expect(Object.keys(yardState(saveOf(), NOW, false))).toEqual(FROZEN_KEYS);
+    expect(Object.keys(yardState(saveOf(), NOW, false, ONBOARDING))).toEqual(FROZEN_KEYS);
   });
 
   test("passes the save slices through under their /base/load names", () => {
     const save = saveOf();
-    const state = yardState(save, NOW + 5, false);
+    const state = yardState(save, NOW + 5, false, ONBOARDING);
 
     expect(state.savetime).toBe(NOW);
     expect(state.currenttime).toBe(NOW + 5);
@@ -68,12 +73,12 @@ describe("yardState", () => {
 
   test("counts workers the way the server does: bought ones, and every running countdown", () => {
     // BEW q 2: one worker plus two bought. Busy: the upgrade and the build.
-    expect(yardState(saveOf(), NOW, false).workers).toEqual({ total: 3, busy: 2 });
+    expect(yardState(saveOf(), NOW, false, ONBOARDING).workers).toEqual({ total: 3, busy: 2 });
   });
 
   test("caps are the storage cap, repeated per resource", () => {
     const cap = BASE_STORAGE + 2 * OUTPOST_STORAGE;
-    expect(yardState(saveOf({ outposts: [[1, 1, "a"], [2, 2, "b"]] }), NOW, false).caps).toEqual({
+    expect(yardState(saveOf({ outposts: [[1, 1, "a"], [2, 2, "b"]] }), NOW, false, ONBOARDING).caps).toEqual({
       r1: cap,
       r2: cap,
       r3: cap,
@@ -82,7 +87,7 @@ describe("yardState", () => {
   });
 
   test("a Shiny-locked account sees 0 credits, as /base/load reports it", () => {
-    expect(yardState(saveOf(), NOW, true).credits).toBe(0);
+    expect(yardState(saveOf(), NOW, true, ONBOARDING).credits).toBe(0);
   });
 
   test("null columns come out empty so the client can merge without checks", () => {
@@ -100,7 +105,8 @@ describe("yardState", () => {
         researchdata: null,
       }),
       NOW,
-      false
+      false,
+      ONBOARDING
     );
 
     expect(state).toMatchObject({

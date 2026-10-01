@@ -1,3 +1,5 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
+import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import type { SpeedupItem } from "@/api/types";
 import { devDetails } from "@/app/devDetails";
 import type { YardRefusal } from "@/api/yard";
@@ -333,6 +335,7 @@ export class BuildingPanel {
   }
 
   show(building: YardBuilding): void {
+    const opened = this.building?.id !== building.id;
     if (this.building?.id !== building.id) {
       this.confirmingCancel = null;
       this.confirmingRecycle = null;
@@ -358,6 +361,13 @@ export class BuildingPanel {
       );
     }
     this.render();
+    // A new building's panel is a screen for the tutorial (issue #227); a damaged one is its repair screen too.
+    if (opened) {
+      guideBus.emit("screen", { id: GuideScreen.BUILDING, root: this.element, header: this.panel.titlebar });
+      if (this.repairView) {
+        guideBus.emit("screen", { id: GuideScreen.REPAIR, root: this.element, header: this.panel.titlebar });
+      }
+    }
   }
 
   /** Advances the countdowns, the progress bar and the time-priced Shiny. Called once a second by the scene. */
@@ -781,6 +791,7 @@ export class BuildingPanel {
     const row = document.createElement("div");
     row.className = "map-row building-panel__buttons";
     const upgrade = actionButton("Upgrade", () => void this.runUpgrade(building.id), "btn--primary");
+    tutTarget(upgrade, TutTarget.UPGRADE);
     upgrade.disabled = offer.gate !== null;
     if (offer.gate) upgrade.setAttribute("aria-describedby", this.gateId(building));
     row.append(upgrade);
@@ -793,6 +804,7 @@ export class BuildingPanel {
       const instant = this.shinyButton(instantKey, "Instant", () =>
         void this.runInstant(building.id),
       );
+      tutTarget(instant.element, TutTarget.INSTANT);
       instant.setPrice(offer.instantPrice);
       instant.setBlocked(offer.instantGate ? gateSentence(offer.instantGate) : null);
       row.append(instant.element);
@@ -911,6 +923,7 @@ export class BuildingPanel {
     const key = actionKey("speedup", building.id);
     if (offer.item === "SP1") {
       const button = actionButton("Finish free", () => void this.runSpeedup(building.id, "SP1"));
+      tutTarget(button, TutTarget.FINISH);
       button.title = "Five minutes or less left: finishing costs nothing.";
       button.disabled = offer.blocked !== null;
       this.pendingButtons.push({ key, button });
@@ -924,6 +937,7 @@ export class BuildingPanel {
       if (item) void this.runSpeedup(building.id, item);
     });
     applySpeedup(button, offer);
+    if (slot === "finish") tutTarget(button.element, TutTarget.FINISH);
     this.pendingButtons.push({ key, button });
     return button.element;
   }
@@ -1329,6 +1343,7 @@ export class BuildingPanel {
       });
       this.bunkerSlot.append(this.baiter.element);
       this.bunkerSlot.hidden = false;
+      guideBus.emit("screen", { id: GuideScreen.BAITER, root: this.baiter.element, header: null });
     }
     this.render();
     if (this.baiter) this.baiter.element.querySelector<HTMLElement>("[role=radio][aria-checked=true]")?.focus();
@@ -1355,6 +1370,9 @@ export class BuildingPanel {
       this.champion = target === "cage" ? new ChampionPanel({ store }) : new ChamberPanel({ store });
       this.championSlot.append(this.champion.element);
       this.championSlot.hidden = false;
+      if (target === "cage") {
+        guideBus.emit("screen", { id: GuideScreen.CHAMPION, root: this.champion.element, header: null });
+      }
     }
     this.render();
     this.champion?.element.querySelector<HTMLElement>("button:not(:disabled)")?.focus();

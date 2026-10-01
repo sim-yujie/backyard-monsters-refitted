@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { setAvatar } from "@/api/account";
 import { getSession } from "@/api/auth";
 import type { ResourceCaps, Resources } from "@/api/types";
@@ -241,6 +242,7 @@ export class Hud {
       button.type = "button";
       button.className = "hud__resource-button";
       button.dataset["resource"] = key;
+      if (key === "shiny") tutTarget(button, TutTarget.HUD_SHINY);
       const amount = resourceAmount(key, "—", { decorative: true });
       const value = amount.querySelector<HTMLElement>(".res-amount__value")!;
       value.classList.add("hud__resource-value");

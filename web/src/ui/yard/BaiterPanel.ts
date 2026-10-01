@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import type { BaseLoadResponse } from "@/api/types";
 import {
   BAITER_ROSTER,
@@ -190,6 +191,7 @@ export class BaiterPanel {
       this.render();
     });
     this.runButton = button("Run attack", "btn btn--primary baiter__run");
+    tutTarget(this.runButton, TutTarget.BAITER_RUN);
     this.runButton.addEventListener("click", () => this.run());
     const actions = document.createElement("div");
     actions.className = "baiter__actions";

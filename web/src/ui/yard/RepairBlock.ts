@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { RepairKey } from "@/api/yardRepair";
 import type { RepairOffer } from "@/game/yard/repair";
 import { formatAmount, formatCountdown } from "@/ui/format";
@@ -90,6 +91,7 @@ export class RepairBlock {
     row.className = "map-row map-row--wrap building-panel__buttons";
     if (!damage.repairing) {
       const repair = button("Repair", hooks.repair, "btn--primary");
+      tutTarget(repair, TutTarget.REPAIR);
       repair.title = "Free, and needs no worker. The building heals over time.";
       hooks.pending(RepairKey.one(id), repair);
       row.append(repair);

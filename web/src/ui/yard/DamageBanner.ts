@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { repairActions, type RepairActions } from "@/api/yardRepair";
 import { unrepairedCount } from "@/game/yard/repair";
 import type { YardUiBinding } from "@/game/yard/YardStore";
@@ -59,6 +60,9 @@ export class DamageBanner {
       actionLabel: "Repair all",
       onAction: () => void this.repairAll(),
     });
+    // Repair all is the notice's own action button (`Notices`), the one that is not Dismiss.
+    const repairAll = this.text.closest(".notice")?.querySelector<HTMLElement>("button:not(.btn--icon)");
+    if (repairAll) tutTarget(repairAll, TutTarget.REPAIR_ALL);
     this.shown = true;
   }
 

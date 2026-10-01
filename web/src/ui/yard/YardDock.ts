@@ -1,3 +1,4 @@
+import { tutTarget } from "@/game/guide/targets";
 import {
   finishedMonstersJobs,
   finishedText,
@@ -129,6 +130,8 @@ const roundButton = (
   element.type = "button";
   element.className = `yard-dock__button yard-dock__button--${name}`;
   element.dataset["dock"] = name;
+  // `dock-build`, `dock-map`, … for Bob's pointer (issue #227).
+  tutTarget(element, `dock-${name}`);
   const disc = document.createElement("span");
   disc.className = "yard-dock__disc";
   disc.append(art);
@@ -138,6 +141,22 @@ const roundButton = (
   element.append(disc, text);
   element.addEventListener("click", onClick);
   return { element, disc, label: text };
+};
+
+/**
+ * A round dock button like the dock's own, for a package that adds one
+ * (the tutorial's Goals button, issue #227): put it in with
+ * `YardDock.placeBesideMonsters`. Tagged `dock-<name>` for Bob's pointer;
+ * `disc` takes a badge.
+ */
+export const dockButton = (
+  name: string,
+  label: string,
+  art: SVGSVGElement | HTMLElement,
+  onClick: () => void,
+): { element: HTMLButtonElement; disc: HTMLElement } => {
+  const { element, disc } = roundButton(name, label, art, onClick);
+  return { element, disc };
 };
 
 const iconButton = (

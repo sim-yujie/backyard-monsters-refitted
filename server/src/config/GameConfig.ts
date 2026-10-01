@@ -6,6 +6,18 @@ import { MessageType } from "../enums/MessageType.js";
  * sandbox yard to new accounts that ask for it (issue #217): DEV_SANDBOX=true,
  * and never on ENV=production.
  */
+/**
+ * Whether new main yards start the web client's guided start (issue #227,
+ * `docs/design/tutorial.md` §8.1): GUIDED_START=1 turns it on and
+ * GUIDED_START=0 off; unset, it is on everywhere but production, where it
+ * stays off until the Goals, guided start and tips packages have all landed
+ * and the owner has played it through (§9.1).
+ */
+export const guidedStartOn = (env: Record<string, string | undefined>): boolean =>
+  env.GUIDED_START === undefined || env.GUIDED_START === ""
+    ? env.ENV !== Env.PROD
+    : env.GUIDED_START !== "0";
+
 export const sandboxStartAvailable = (env: Record<string, string | undefined>): boolean =>
   env.ENV !== Env.PROD && env.DEV_SANDBOX === "true";
 
@@ -88,8 +100,16 @@ export const devConfig = {
 
   /*
    * Sets whether the tutorial phase of the game is enabled or disabled.
+   * The Flash client's tutorial only; the web client's guided start is `guidedStart`.
    */
   skipTutorial: process.env.ENV !== Env.PROD,
+
+  /*
+   * Whether a new main yard starts the web client's guided start (issue #227).
+   * Off, new yards get no onboarding record and read as legacy: no guided
+   * start, Goals with the no-reward baseline. See `guidedStartOn`.
+   */
+  guidedStart: guidedStartOn(process.env),
 
   /**
    * Sets the type of messages that are allowed to be sent by the client.

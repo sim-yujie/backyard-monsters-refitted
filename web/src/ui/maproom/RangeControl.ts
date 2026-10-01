@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { cellsText, type RangeSource } from "@/game/maproom/attackRange";
 import { DECLARE_WAR_RANGE } from "@/game/maproom/rules/range";
 import { button, el, icon } from "@/ui/maproom1/icons";
@@ -29,6 +30,7 @@ export class RangeControl {
 
   constructor(private readonly options: RangeControlOptions) {
     this.button = button("mr2-tool mr2-range-button");
+    tutTarget(this.button, TutTarget.MR2_RANGE);
     this.button.append(icon("range", 20, "map-icon"), el("span", "mr2-tool__label", "My range"));
     this.button.title = "Show which cells your Flingers reach";
     this.button.addEventListener("click", () => this.set(!this.on));

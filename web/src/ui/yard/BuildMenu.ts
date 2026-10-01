@@ -1,3 +1,5 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
+import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { buttonUrl, silhouetteUrl } from "@/game/yard/buildButtonArt";
 import {
   BUILD_CATALOGUE,
@@ -190,6 +192,7 @@ export class BuildMenu {
     close.textContent = "×";
     close.addEventListener("click", () => this.close());
     panel.titlebar.append(this.meta, close);
+    this.header = panel.titlebar;
 
     const strip = document.createElement("div");
     strip.className = "tabs monsters-tabs build-menu__tabs";
@@ -200,6 +203,7 @@ export class BuildMenu {
       button.type = "button";
       button.className = "tabs__tab monsters-tabs__tab";
       button.id = `build-tab-${category.id}`;
+      tutTarget(button, `${TutTarget.BUILD_TAB}${category.id}`);
       button.setAttribute("role", "tab");
       button.setAttribute("aria-controls", "build-menu-main");
       button.textContent = category.label;
@@ -211,6 +215,7 @@ export class BuildMenu {
 
     this.previous = this.pageButton("Previous page", PREVIOUS, -1);
     this.next = this.pageButton("Next page", NEXT, 1);
+    tutTarget(this.next, TutTarget.BUILD_NEXT_PAGE);
     this.grid = document.createElement("ul");
     this.grid.className = "build-menu__grid";
     this.pages = document.createElement("p");
@@ -238,6 +243,9 @@ export class BuildMenu {
     panel.setContent(strip, main);
     this.unsubscribe = this.binding.store.subscribe((change) => this.onChange(change));
   }
+
+  /** The window's title row, for the tutorial's "?" (issue #227). */
+  private header: HTMLElement | null = null;
 
   get isOpen(): boolean {
     return this.opened;
@@ -281,6 +289,7 @@ export class BuildMenu {
     if (this.picked === null && !isPhone()) this.picked = this.sorted()[0]?.type ?? null;
     this.render();
     if (!wasOpen) this.tabButtons.get(category)?.focus();
+    if (!wasOpen) guideBus.emit("screen", { id: GuideScreen.BUILD, root: this.element, header: this.header });
   }
 
   close(): void {
@@ -477,6 +486,7 @@ export class BuildMenu {
     button.className = `build-tile build-tile--${offer.status}`;
     button.dataset["type"] = String(offer.type);
     button.dataset["focus"] = `tile-${offer.type}`;
+    tutTarget(button, `${TutTarget.BUILD_CARD}${offer.type}`);
     button.setAttribute("aria-pressed", String(offer.type === this.picked));
     button.addEventListener("click", () => this.pick(offer.type));
 
@@ -600,6 +610,7 @@ export class BuildMenu {
     // Only a building that can be built wears the primary colour.
     build.className = gate ? "btn build-info__build" : "btn btn--primary build-info__build";
     build.dataset["focus"] = "build";
+    tutTarget(build, TutTarget.BUILD_GO);
     build.textContent = "Build · then pick a spot";
     build.disabled = gate !== null;
     build.setAttribute("aria-label", `Build ${name}` + (gate ? `. ${gateSentence(gate)}` : ""));
@@ -665,6 +676,7 @@ export class BuildMenu {
         },
       });
       button.element.dataset["focus"] = "instant";
+      tutTarget(button.element, TutTarget.BUILD_INSTANT);
       this.shiny.set(type, button);
     }
     return button;
@@ -821,6 +833,7 @@ export class PlacementBar {
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "btn build-placing__cancel";
+    tutTarget(cancel, TutTarget.BUILD_CANCEL_CARRY);
     cancel.textContent = "Cancel";
     cancel.addEventListener("click", () => options.onCancel());
     buttons.append(cancel);
@@ -828,6 +841,7 @@ export class PlacementBar {
       const here = document.createElement("button");
       here.type = "button";
       here.className = "btn btn--primary build-placing__here";
+      tutTarget(here, TutTarget.BUILD_HERE);
       here.textContent = "Build here";
       const onBuildHere = options.onBuildHere;
       here.addEventListener("click", () => onBuildHere());

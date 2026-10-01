@@ -38,6 +38,7 @@ import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
 import { calculateBaseLevel, playerLevelOf } from "../../../services/base/calculateBaseLevel.js";
 import { RESOURCE_KEYS } from "../../../services/base/updateResources.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
+import { onboardingSummary } from "../../../services/onboarding/summary.js";
 import { clearExpiredStoreItems } from "../../../services/base/clearExpiredStoreItems.js";
 import { syncDerivedLevels } from "../../../services/yard/derivedLevels.js";
 import { catchUpOwnerOutpost, catchUpOwnerYard } from "../../yard/yardRoute.js";
@@ -402,6 +403,10 @@ export const baseLoad: KoaController = async (ctx) => {
     // The player's own level for the yard HUD (#192): their main save's, on
     // an outpost too, as the map shows it (`userCell.ts`).
     ...(isOwner && !isInferno && { playerlevel: playerLevelOf(user.save!) }),
+    // The account's new-player tutorial summary on the owner's build-mode
+    // load, main yard or outpost (issue #227, `services/onboarding/summary.ts`).
+    // The column itself is server-only and never sent.
+    ...(isOwner && !isInferno && type === BaseMode.BUILD && { onboarding: onboardingSummary(user.save!) }),
     ...(cellHeight !== undefined && { cellheight: cellHeight }),
     ...(defenderForces && { defenderforces: defenderForces }),
     ...(completed && { completed }),

@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import type { AttackSummary } from "@/game/attack/attackSave";
 import type { ResourceAmounts } from "@/game/combat/rules";
 import { championName } from "@/ui/attack/ArmyPanel";
@@ -172,6 +173,7 @@ export class EndAttackPanel {
     this.returnButton = document.createElement("button");
     this.returnButton.type = "button";
     this.returnButton.className = "btn btn--primary attack-end__return";
+    tutTarget(this.returnButton, TutTarget.ATTACK_HOME);
     this.returnButton.textContent = "Return to map";
     this.returnButton.disabled = true;
     this.returnButton.addEventListener("click", () => {

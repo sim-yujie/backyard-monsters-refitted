@@ -17,7 +17,12 @@ export interface Overlay {
   readonly content: HTMLElement;
   /** Modal popups, stacked above `content`. */
   readonly modal: HTMLElement;
-  /** Removes everything from both layers. */
+  /**
+   * The tutorial guide (Bob's bubble, his pointer and the blocker), above
+   * the modals so he can point into one (issue #227, `ui/guide/`).
+   */
+  readonly guide: HTMLElement;
+  /** Removes everything from every layer. */
   clear(): void;
   /** Removes the overlay from the document. */
   destroy(): void;
@@ -35,17 +40,20 @@ export const createOverlay = (parent: HTMLElement): Overlay => {
 
   const content = div("overlay__layer");
   const modal = div("overlay__layer overlay__layer--modal");
+  const guide = div("overlay__layer overlay__layer--guide");
 
-  root.append(content, modal);
+  root.append(content, modal, guide);
   parent.append(root);
 
   return {
     root,
     content,
     modal,
+    guide,
     clear() {
       content.replaceChildren();
       modal.replaceChildren();
+      guide.replaceChildren();
     },
     destroy() {
       root.remove();

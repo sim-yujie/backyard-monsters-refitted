@@ -1264,8 +1264,32 @@ merges them into the response it already holds.
   protected,                     // damage protection expiry, unix s, as /base/load sends it (0 or past: none)
   buildingdata, buildinghealthdata, storedata,
   monsters, lockerdata, academy, champion, mushrooms, researchdata,
+  onboarding,                    // the account's tutorial summary, see below (issue #227)
 }                                // null columns come out as {} (champion as [])
 ```
+
+**`onboarding`** (added by agreement, issue #227; `services/onboarding/summary.ts`) is the
+new-player tutorial's summary of the account's `save.onboarding`, read from the **main** row after
+the action (an outpost's answer carries the main yard's). The own yard's build-mode `/base/load`
+(main yard or outpost, not Inferno) carries the same object as `onboarding`. The column itself
+never leaves the server.
+
+```ts
+{
+  guide: {
+    state: "pending" | "active" | "done" | "skipped" | "legacy",
+    step?: string,                 // the macro step while pending or active
+    building?: number,             // the building the guide paid for and has not finished yet
+  },
+  camp: "none" | "open" | "removed", // the private practice camp
+  goalsReady: number,              // goals ready to claim (0 until the Goals package lands)
+  tips: { [screen: string]: number }, // screens whose tips were seen, unix s
+}
+```
+
+Every yard route's `run` also gets `em`, the request's transaction, for a route that must change
+another table in the same commit (the practice camp's `Maproom` row); `YardSlices` takes
+`onboarding`, written whole through `updateOnboarding` (`services/onboarding/state.ts`).
 
 On an outpost `resources`, `credits`, `caps`, `lockerdata` and `academy` are the main yard's (the
 pool the outpost spends from, and the main yard's caps: its silos plus 2,000,000 per outpost), as
@@ -1492,6 +1516,7 @@ the DB schema):
 | `homebase` | `[x, y]` (as strings) — the player's home cell coordinates. |
 | `wmstatus` | `number[][]` — per-tribe status tuples (tribe id first element) for MR1 wild-monster tribes the player has interacted with. |
 | `champion` | see above. |
+| `onboarding` | The new-player tutorial's record (issue #227, `services/onboarding/state.ts`, `docs/design/tutorial.md` §8): `{ v: 1, guide: { state, step?, startedAt?, endedAt? }, grants: { "fund:<type>": { r1..r4, id, at }, "finish:<type>": { id, at }, army: [{ added, at }] }, raidSeen?, camp: { state, openedAt?, removedAt? }, goals: { [id]: { done?, claimed?: number \| "baseline" } }, goalsBaseline?: "pending" \| number, counters: { mushrooms, goldMushrooms, bestBank, juiced, baiterRuns, tribes: { legionnaire, kozu, abunakki, dreadnaut } }, tips: { [screen]: unixSeconds } }`. Main saves only; `NULL` reads as `legacy`. **Server-only**: not a `@FrontendKey` and in neither `saveKeys` nor `attackSaveKeys`, so no load sends it as stored (the owner gets the summary above) and `/base/save` can never write it. Migration `20261002_AddOnboardingToSave` gives every existing main save `{"v":1,"guide":{"state":"legacy"},"raidSeen":1,"goalsBaseline":"pending"}`; a new main save starts `{"v":1,"guide":{"state":"pending"}}` while `GUIDED_START` is on (default: on everywhere but production). Planned yard routes, each owned by one tutorial package: `guide/advance`, `guide/build`, `guide/finish`, `guide/army`, `guide/skip` (`controllers/yard/guide.ts`), `goals/state`, `goals/claim` and the Baiter-run record (`goals.ts`), `tips/seen` (`tips.ts`); see the design doc §8.3. |
 | `quests`, `player`, `krallen`, `siege`, `rewards`, `researchdata`, `lockerdata`, `events`, `inventory`, `monsterbaiter`, `loot`, `attackloot`, `lootreport`, `attackersiege`, `buildingresources`, `mushrooms`, `frontpage`, `effects`, `achieved`, `gifts`, `sentinvites`, `sentgifts`, `fbpromos`, `updates`, `stats`, `aiattacks`, `monsters`, `coords`, `savetemplate` | Opaque JSON, format owned by the Flash client / specific handlers; not exhaustively typed server-side (`JsonObject`). Confirmed specific uses: `rewards` holds unlockable-event flags keyed by reward id (see `getDefaultBaseData.ts`); `buildingresources` holds a `t` (last auto-bank timestamp) plus per-outpost `b{baseid}` rates; on Map Room 2 it is the server's alone (`services/maproom/v2/autobank.ts`: `t` is when outpost income was paid up to, each `b{baseid}` is `{r1..r4}` per 10 s tick) and Map Room 3 uses only `t`; `savetemplate` is the yard-planner template array (`/bm/yardplanner/*`); `monsters` is the owned-monster roster (shape branches by MR2 vs MR3 in `monsterUpdateHandler.ts`), and its MR2 `housed` counts are the one part of it the server reads rather than stores blindly — `/worldmapv2/transferassets` validates them against the other yard's and against derived housing capacity (see "Monster transfer rules" above), while `space`, `h`, `hid`, `hstage` and `hcc` stay opaque. Everything else in this row is passed through opaquely by the server (read, stored, and echoed back without validation) — a new client must reproduce the Flash client's exact shape for whichever of these it needs to write to, since the server does not document or enforce one. |
 
 `Save.saveKeys` / `Save.attackSaveKeys` (static arrays on the entity) enumerate exactly which

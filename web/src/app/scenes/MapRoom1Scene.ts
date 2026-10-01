@@ -87,6 +87,7 @@ export class MapRoom1Scene implements Scene {
     document.addEventListener("visibilitychange", this.onVisibility);
     await this.loadOwn();
     await this.refresh();
+    if (this.context === context) this.ui?.announce();
   }
 
   exit(): void {

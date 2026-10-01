@@ -1,3 +1,4 @@
+import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import type { Resources } from "@/api/types";
 import {
   formatRespawn,
@@ -134,8 +135,18 @@ export class MapRoom1Ui {
     this.sheet.hidden = true;
 
     this.root.append(header, body, this.footer);
+    this.header = header;
     this.applyView();
     this.renderFooter();
+  }
+
+  /** The map's title row, for the tutorial's "?" (issue #227). */
+  private header: HTMLElement | null = null;
+
+  /** Tells the tutorial the map is on screen (issue #227): its scene calls it once the first answer is drawn. */
+  announce(): void {
+    guideBus.emit("mapOpened", { map: "mr1" });
+    guideBus.emit("screen", { id: GuideScreen.MR1, root: this.root, header: this.header });
   }
 
   mount(container: HTMLElement): this {
@@ -232,6 +243,10 @@ export class MapRoom1Ui {
     this.selected = key;
     this.renderSelection();
     if (key && fromList && this.view === "map") this.mapView.reveal(key);
+    const target = key ? this.find(key) : null;
+    if (target) {
+      guideBus.emit("targetPicked", { baseid: target.baseid, kind: target.kind === "tribe" ? "tribe" : "player" });
+    }
   }
 
   /** Puts the selected target's card where this layout wants it. */

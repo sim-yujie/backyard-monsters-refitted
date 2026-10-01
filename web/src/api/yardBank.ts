@@ -1,5 +1,6 @@
 import { harvesterNow, harvestWaiting, type HarvestKey } from "@/game/yard/harvest";
 import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
+import { guideBus } from "@/game/guide/guideBus";
 import { post } from "./http";
 import type { UpgradeCost, YardResponse } from "./types";
 import { yardBody, type YardRefusal } from "./yard";
@@ -79,7 +80,7 @@ export interface BankActions {
  */
 export const bankActions = (store: YardStore, api: BankApi = bankApi): BankActions => ({
   one: (id) =>
-    store.run({
+    told(store.run({
       key: BankKey.one(id),
       check: (reader) => {
         const building = reader.building(id)?.raw;
@@ -89,14 +90,23 @@ export const bankActions = (store: YardStore, api: BankApi = bankApi): BankActio
         return now.offer > 0 ? null : refuse("empty", "That harvester has nothing to collect.");
       },
       send: (_api, ...yard) => api.ids([id], ...yard),
-    }),
+    })),
   all: () =>
-    store.run({
+    told(store.run({
       key: BankKey.ALL,
       check: (reader) =>
         harvestWaiting(reader.save, reader.now()).total > 0
           ? null
           : refuse("empty", "Your harvesters have nothing to collect."),
       send: (_api, ...yard) => api.all(...yard),
-    }),
+    })),
 });
+
+/** Tells the tutorial a bank landed (`guideBus` "banked", issue #227), and passes the result on. */
+const told = async (
+  pending: Promise<YardActionResult<BankReport>>,
+): Promise<YardActionResult<BankReport>> => {
+  const result = await pending;
+  if (result.ok) guideBus.emit("banked", { banked: { ...result.report.banked } });
+  return result;
+};

@@ -69,6 +69,11 @@ body {
   z-index: var(--z-popup);
 }
 
+/* The tutorial guide, Bob, above every popup (guide.css). */
+.overlay__layer--guide {
+  z-index: var(--z-guide);
+}
+
 /* ── Typography helpers ─────────────────────────────────────────────────── */
 
 .u-display {

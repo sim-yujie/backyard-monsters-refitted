@@ -28,6 +28,7 @@ import {
   yardUnderAttackErr,
 } from "../../services/yard/yardErrors.js";
 import { yardState } from "../../services/yard/yardState.js";
+import { onboardingSummary } from "../../services/onboarding/summary.js";
 import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
@@ -59,7 +60,9 @@ import { logger } from "../../utils/logger.js";
  *    debit, the credit clamped to the cap (T3), the points; re-derive
  *    `flinger`/`catapult`; one flush; commit.
  * 6. Answer `{ error: 0, ...yardState, completed, report, playerlevel }`, the last
- *    the player's level from their main save (the yard HUD's, #192).
+ *    the player's level from their main save (the yard HUD's, #192). The yard
+ *    state's `onboarding` is the account's tutorial summary, read from the
+ *    main row after the action (issue #227).
  *
  * Any `ClientSafeError` thrown along the way rolls the transaction back — the
  * catch-up included, so a refused action writes nothing — and answers in the
@@ -88,6 +91,9 @@ import { logger } from "../../utils/logger.js";
  * FROZEN (2026-09-27): later work packages build routes against
  * `defineYardAction` / `YardAction` / `YardOutcome` here and `yardRoute` there.
  * WP3 added `YardAction.outposts` (optional) and {@link lockOwnYard}.
+ * The tutorial's WP0 (issue #227, `docs/design/tutorial.md` §9.2) added
+ * `onboarding` to {@link YardSlices}, `em` to {@link YardActionInput}, and the
+ * `onboarding` summary to the answer.
  */
 
 /** Save columns an action may replace wholesale. */
@@ -105,6 +111,9 @@ export type YardSlices = Partial<
     | "researchdata"
     | "firedtraps"
     | "protected"
+    // The tutorial's record (`services/onboarding/state.ts`); always written
+    // whole, through `updateOnboarding`. On an outpost it lands on the main row.
+    | "onboarding"
   >
 >;
 
@@ -123,6 +132,14 @@ export interface YardActionInput<Body> {
   now: number;
   /** Jobs the catch-up finished in this request, before `run`. */
   completed: readonly CompletedJob[];
+  /**
+   * The request's transaction, for the rare route that must change another
+   * table in the same commit as the yard (the tutorial's practice camp lives
+   * in the player's `Maproom` row, `docs/design/tutorial.md` §5.5). Anything
+   * persisted through it is flushed with the yard, and rolled back with it on
+   * a refusal. Never use it to write the save itself: return `slices`.
+   */
+  em: EntityManager;
 }
 
 /** What `run` returns. Every field but `report` is optional. */
@@ -455,21 +472,29 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       // upgrade on an outpost) only counts from here on.
       await autobankYard(tx, yard.main, now, yard.outpost ? [] : completed, yard.outpost);
 
-      const outcome = await action.run({ save, user, body: parsed.data, now, completed });
+      const outcome = await action.run({ save, user, body: parsed.data, now, completed, em: tx });
       applyOutcome(save, user, outcome);
       // An instant or paid repair shows on the map now, not at the next catch-up (#182 B).
       catchUpDamage(save);
       save.savetime = now;
 
       await tx.flush();
-      return { save, now, completed, report: outcome.report, playerlevel: playerLevelOf(yard.main) };
+      return {
+        save,
+        now,
+        completed,
+        report: outcome.report,
+        playerlevel: playerLevelOf(yard.main),
+        // The account's, so from the main row on an outpost's answer too.
+        onboarding: onboardingSummary(yard.main),
+      };
     });
 
     return {
       status: Status.OK,
       body: {
         error: 0,
-        ...yardState(answer.save, answer.now, isShinyLocked(user)),
+        ...yardState(answer.save, answer.now, isShinyLocked(user), answer.onboarding),
         completed: answer.completed,
         report: answer.report,
         playerlevel: answer.playerlevel,

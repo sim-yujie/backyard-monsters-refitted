@@ -1,3 +1,4 @@
+import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
 import { MailDoor } from "@/ui/mail/MailDoor";
@@ -365,6 +366,11 @@ export class MapRoom2Scene implements Scene {
     // A sensible view before the network answers, replaced by the home cell.
     this.camera.centreOn(mapRoomGrid.cellToPixel(WORLD_WIDTH / 2, WORLD_HEIGHT / 2));
     await this.loadOwnCell();
+    // The tutorial's tips (issue #227).
+    if (this.context === context) {
+      guideBus.emit("mapOpened", { map: "mr2" });
+      guideBus.emit("screen", { id: GuideScreen.MR2, root: context.overlay.content, header: null });
+    }
   }
 
   exit(): void {

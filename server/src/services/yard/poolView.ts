@@ -34,6 +34,8 @@ export const POOL_FIELDS: ReadonlySet<PropertyKey> = new Set([
   "outposts",
   "lockerdata",
   "academy",
+  // The account's tutorial record lives on the main row (issue #227).
+  "onboarding",
 ]);
 
 /** The extra key the view adds: the main yard's storage cap. */

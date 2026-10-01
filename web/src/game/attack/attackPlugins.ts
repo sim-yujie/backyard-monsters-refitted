@@ -41,6 +41,8 @@ export interface AttackMounts {
   readonly hudSlot: HTMLElement;
   /** The overlay's modal layer, for the end-of-attack panel. */
   readonly modal: HTMLElement;
+  /** The overlay's guide layer, for Bob (the tutorial's practice attack, issue #227). */
+  readonly guide: HTMLElement;
   /**
    * World-space container above the enemy yard's buildings, under the same
    * camera transform.

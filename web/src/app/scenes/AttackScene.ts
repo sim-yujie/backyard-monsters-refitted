@@ -1,3 +1,5 @@
+import { guideBus, GuideScreen } from "@/game/guide/guideBus";
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { Container } from "pixi.js";
 import { logout } from "@/api/auth";
 import { loadAttackOn } from "@/api/base";
@@ -421,6 +423,7 @@ export class AttackScene implements Scene {
       dock,
       hudSlot,
       modal: context.overlay.modal,
+      guide: context.overlay.guide,
       battleLayer: this.battleLayer,
       notices: this.notices,
       goToMap: () => context.goTo(SceneName.MAP),
@@ -450,6 +453,12 @@ export class AttackScene implements Scene {
       if (teardown) this.teardowns.push(teardown);
     }
     this.measureDock();
+    // The tutorial's tips (issue #227); the attack strip is the screen's header.
+    guideBus.emit("screen", {
+      id: GuideScreen.ATTACK,
+      root: context.overlay.content,
+      header: context.overlay.content.querySelector<HTMLElement>(".attack-strip"),
+    });
   }
 
   /** Shows the attacker's own pool on the HUD, and keeps it for {@link withLoot}. */
@@ -565,6 +574,7 @@ export class AttackScene implements Scene {
     speed.className = "attack-strip__speed";
     speed.setAttribute("role", "group");
     speed.setAttribute("aria-label", "Battle speed");
+    tutTarget(speed, TutTarget.ATTACK_SPEED);
     for (const value of [1, 2] as const) {
       const button = document.createElement("button");
       button.type = "button";
@@ -580,6 +590,7 @@ export class AttackScene implements Scene {
     const retreat = document.createElement("button");
     retreat.type = "button";
     retreat.className = "btn attack-strip__retreat";
+    tutTarget(retreat, TutTarget.ATTACK_RETREAT);
     retreat.textContent = this.practice ? "Stop" : this.watching ? "End replay" : "Retreat";
     retreat.title = this.practice
       ? "End the practice attack now"

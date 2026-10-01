@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import type { TakeoverPayment } from "@/api/maproom";
 import type { MapCell, TakeoverQuoteResponse } from "@/api/types";
 import type { OffsetCell } from "@/game/HexGrid";
@@ -85,6 +86,7 @@ export class TakeoverControl {
     this.button = document.createElement("button");
     this.button.type = "button";
     this.button.className = "btn btn--primary takeover-action__button";
+    tutTarget(this.button, TutTarget.MR2_TAKEOVER);
     this.button.textContent = TAKEOVER_TEXT.button;
     this.button.addEventListener("click", () => this.open());
 

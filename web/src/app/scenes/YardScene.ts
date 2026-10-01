@@ -85,6 +85,11 @@ import { sceneForMap } from "./MapGateScene";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
 import { setBaiterRun } from "@/game/baiter/baiterSession";
+import { guideBus, GuideScreen } from "@/game/guide/guideBus";
+import { registerCanvasTarget, tutTarget, TutTarget, type TargetRect } from "@/game/guide/targets";
+import { footprintBox } from "@/game/yard/YardGrid";
+import { mountYardPlugins, type YardSceneControls } from "@/game/yard/yardPlugins";
+import "@/game/yard/plugins";
 import { devDetails } from "../devDetails";
 
 /**
@@ -316,6 +321,13 @@ export class YardScene implements Scene {
    */
   private compare: CompareView | null = null;
   private compareLabels: HTMLElement[] = [];
+  /**
+   * The new-player tutorial's packages on the own yard (`yardPlugins.ts`,
+   * issue #227): their teardown while mounted, and the canvas targets this
+   * scene registers for Bob to point at.
+   */
+  private unmountPlugins: (() => void) | null = null;
+  private readonly unregisterTargets: (() => void)[] = [];
   private canvasWidth = 0;
   private canvasHeight = 0;
 
@@ -404,7 +416,7 @@ export class YardScene implements Scene {
         // An invitation to move accepted here (#205): its price left the pool, which the server now holds.
         onInviteAccepted: () => void this.store?.refresh(),
       });
-      this.dock.placeBesideMonsters(this.mail.button.element);
+      this.dock.placeBesideMonsters(tutTarget(this.mail.button.element, TutTarget.DOCK_MAIL));
     }
     context.overlay.content.append(this.status);
     this.inset = { top: this.hud.element.getBoundingClientRect().bottom, bottom: 0 };
@@ -420,6 +432,7 @@ export class YardScene implements Scene {
   }
 
   exit(): void {
+    for (const unregister of this.unregisterTargets.splice(0)) unregister();
     window.removeEventListener("keydown", this.onKeyDown);
     document.removeEventListener("visibilitychange", this.onVisibilityChange);
     this.dropStore();
@@ -627,6 +640,8 @@ export class YardScene implements Scene {
       this.refreshBuildButton();
       // Once the yard is drawn, because the first answer may redraw it.
       store?.start();
+      // The tutorial's packages (issue #227), then the screen event they listen for.
+      if (store) this.mountPlugins(store, context);
       // What the screen the player came from asked for, on the own yard only.
       if (store) this.applyIntent(consumeYardIntent());
       if (store?.kind === "outpost") this.arriveAtOutpost(store, context);
@@ -728,6 +743,7 @@ export class YardScene implements Scene {
 
     camera.attach(context.canvas);
     this.camera = camera;
+    this.registerTargets(camera, context);
 
     this.input = new YardInput({
       camera,
@@ -966,10 +982,12 @@ export class YardScene implements Scene {
     this.renderer.setSelected(building);
 
     if (!building) {
+      const open = this.panel !== null;
       this.panel?.close();
       this.panel = null;
       this.monsters?.besidePanel(false);
       this.shop?.besidePanel(false);
+      if (open) guideBus.emit("panel", { building: null });
       return;
     }
 
@@ -989,6 +1007,7 @@ export class YardScene implements Scene {
           this.renderer.setSelected(null);
           this.monsters?.besidePanel(false);
           this.shop?.besidePanel(false);
+          guideBus.emit("panel", { building: null });
         },
         // Clicking the Yard Planner should open the yard planner. The offer is
         // left out entirely when there is none to open, which is also the only
@@ -1010,6 +1029,7 @@ export class YardScene implements Scene {
     this.panel.show(building);
     this.monsters?.besidePanel(true);
     this.shop?.besidePanel(true);
+    guideBus.emit("panel", { building: { id: building.id, type: building.type } });
 
     // A monster building opens its tab of the Monsters screen (D4), beside
     // the panel, which keeps the building's own upgrade. A Housing's panel is
@@ -1112,7 +1132,10 @@ export class YardScene implements Scene {
       binding,
       onPick: (picked, instant) => this.startPlacement(picked, instant),
       onTownHall: () => this.showTownHall(),
-      onClose: () => this.refreshBuildButton(),
+      onClose: () => {
+        this.refreshBuildButton();
+        guideBus.emit("buildMenu", { open: false });
+      },
     }).mount(context.overlay.content);
     const category = type === undefined ? null : categoryOf(type);
     if (category) {
@@ -1122,6 +1145,7 @@ export class YardScene implements Scene {
       this.buildMenu.open();
     }
     this.refreshBuildButton();
+    guideBus.emit("buildMenu", { open: true, ...(category ? { tab: category } : {}) });
   }
 
   /**
@@ -1241,6 +1265,7 @@ export class YardScene implements Scene {
           return "refused";
         }
         placed = result.report.id;
+        guideBus.emit("placed", { type, id: result.report.id });
         if (repeat) bar.setBuiltAgain();
         else bar.setMessage(null);
         return "placed";
@@ -1264,10 +1289,12 @@ export class YardScene implements Scene {
     placement.moveTo(spot.x, spot.y);
     this.renderer.setHovered(null);
     this.refreshBuildButton();
+    guideBus.emit("carry", { type });
   }
 
   /** Puts down whatever is in hand, without building it. */
   private endPlacement(): void {
+    if (this.placement) guideBus.emit("carry", { type: null });
     this.placement?.destroy();
     this.placement = null;
     this.placementBar?.destroy();
@@ -1361,6 +1388,11 @@ export class YardScene implements Scene {
     // instead of the HUD, so it stops sitting partly behind the bar (#44).
     this.notices.setTopInset(this.inset.top);
     this.refreshPlannerButton();
+    guideBus.emit("screen", {
+      id: GuideScreen.PLANNER,
+      root: context.overlay.content,
+      header: context.overlay.content.querySelector<HTMLElement>(".planner-bar"),
+    });
   }
 
   /**
@@ -1611,6 +1643,94 @@ export class YardScene implements Scene {
     return store;
   }
 
+  /* ── The tutorial (issue #227) ─────────────────────────────────────── */
+
+  /**
+   * Mounts the tutorial's packages on the own yard (`yardPlugins.ts`) once
+   * its store is up and the yard drawn, then says the yard screen opened.
+   * Torn down with the store (`dropStore`).
+   */
+  private mountPlugins(store: YardStore, context: SceneContext): void {
+    const binding = this.binding;
+    const camera = this.camera;
+    const dock = this.dock;
+    const hud = this.hud;
+    if (!binding || !camera || !dock || !hud) return;
+    this.unmountPlugins?.();
+    this.unmountPlugins = mountYardPlugins({
+      store,
+      binding,
+      renderer: this.renderer,
+      camera,
+      canvas: context.canvas,
+      overlay: context.overlay,
+      dock,
+      hud,
+      notices: this.notices,
+      scene: this.sceneControls(),
+    });
+    guideBus.emit("screen", { id: GuideScreen.YARD, root: context.overlay.content, header: null });
+  }
+
+  /** What a yard package may ask of this scene (`YardSceneControls`). */
+  private sceneControls(): YardSceneControls {
+    return {
+      openBuildMenu: (type) => this.openBuildMenu(type),
+      closeBuildMenu: () => {
+        this.endPlacement();
+        this.buildMenu?.close();
+      },
+      focusBuilding: (id) => this.focusBuilding(id),
+      closePanel: () => this.select(null),
+      selectedBuilding: () => this.selected?.id ?? null,
+      openMap: () => this.openMap(),
+      openMonsters: (tab, focus) => this.openMonsters(tab, focus),
+      openShop: () => this.openShop(),
+      centreOn: (x, y) => {
+        const camera = this.camera;
+        if (!camera) return;
+        camera.centreOn(this.renderer.yardToWorld(x, y));
+        camera.dirty = true;
+      },
+      plannerOpen: () => this.planner !== null,
+      carrying: () => this.placement !== null,
+    };
+  }
+
+  /**
+   * The canvas things Bob can point at (`targets.ts`): any building by id
+   * (`building:<id>`), and the building in hand (`carry-ghost`), each as its
+   * footprint's box on screen with room above for the art.
+   */
+  private registerTargets(camera: Camera, context: SceneContext): void {
+    for (const unregister of this.unregisterTargets.splice(0)) unregister();
+    const onScreen = (box: { x: number; y: number; width: number; height: number }): TargetRect => {
+      const canvas = context.canvas.getBoundingClientRect();
+      // The art stands up off its footprint: half as high again.
+      const lift = box.height * 0.5;
+      const topLeft = camera.worldToScreen({ x: box.x, y: box.y - lift });
+      return {
+        left: canvas.left + topLeft.x,
+        top: canvas.top + topLeft.y,
+        width: box.width * camera.zoom,
+        height: (box.height + lift) * camera.zoom,
+      };
+    };
+    this.unregisterTargets.push(
+      registerCanvasTarget(TutTarget.BUILDING, (param) => {
+        const id = Number(param);
+        const building = this.yard?.buildings.find((one) => one.id === id);
+        return building && !this.planner ? onScreen(building.box) : null;
+      }),
+      registerCanvasTarget(TutTarget.CARRY_GHOST, () => {
+        const spot = this.placement?.current;
+        const yard = this.yard;
+        if (!spot || !yard || !this.placement) return null;
+        return onScreen(footprintBox(yard.bounds, this.placement.type, spot.x, spot.y));
+      }),
+    );
+  }
+
   /* ── Own yards ──────────────────────────────────────────────────────── */
 
   /** "your yard", "your outpost" or "Name's yard", for the loading lines. */
@@ -1645,6 +1765,7 @@ export class YardScene implements Scene {
     const takenOver = this.takenOver;
     this.takenOver = null;
     if (takenOver) showTakenOver(context.overlay.modal, takenOver.kind, takenOver.name);
+    guideBus.emit("screen", { id: GuideScreen.OUTPOSTS, root: context.overlay.content, header: null });
     if (!isEmptyOutpost(store.yard)) return;
     // Stays until dismissed, or until the first building goes up (`onStoreChange`).
     this.notices.show(OUTPOST_HINT_NOTICE, EMPTY_OUTPOST_HINT, {
@@ -1699,6 +1820,8 @@ export class YardScene implements Scene {
   }
 
   private dropStore(): void {
+    this.unmountPlugins?.();
+    this.unmountPlugins = null;
     this.mushroomPicker = null;
     // The menu and the placement read the store they were made with.
     this.endPlacement();
@@ -1736,6 +1859,7 @@ export class YardScene implements Scene {
     // Monster jobs that finished out of the player's sight, for the Monsters
     // button's cyan count (#192); one that ends with the screen open is seen.
     if (!this.monsters?.isOpen) finishedMonstersJobs.add(change.completed);
+    if (change.completed.length > 0) guideBus.emit("jobFinished", { jobs: change.completed });
     if (change.reason === YardChangeReason.PENDING || change.reason === YardChangeReason.AWAY) return;
     if (change.reason === YardChangeReason.INCOME) {
       this.save = store.save;

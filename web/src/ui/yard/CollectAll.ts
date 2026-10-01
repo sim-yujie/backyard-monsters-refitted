@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import type { BaseLoadResponse, ResourceCaps, Resources } from "@/api/types";
 import { bankActions, BankKey, type BankActions, type BankReport } from "@/api/yardBank";
 import {
@@ -177,6 +178,7 @@ export class CollectAll {
     this.button = document.createElement("button");
     this.button.type = "button";
     this.button.className = "yard-collect__button";
+    tutTarget(this.button, TutTarget.COLLECT_ALL);
     const ring = document.createElement("span");
     ring.className = "yard-collect__ring";
     const core = document.createElement("span");

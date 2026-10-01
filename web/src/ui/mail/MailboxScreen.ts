@@ -1,3 +1,5 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
+import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { getSession } from "@/api/auth";
 import { mailApi, type InvitePayment, type MailApi, type MailTarget } from "@/api/mail";
 import type { OffsetCell } from "@/game/HexGrid";
@@ -192,6 +194,7 @@ export class MailboxScreen {
     const close = buttonOf("btn btn--ghost btn--icon mail-screen__close", "×", () => this.close());
     close.setAttribute("aria-label", "Close Mail");
     panel.titlebar.append(close);
+    this.header = panel.titlebar;
 
     this.status = make("p", "mail-status");
     this.status.setAttribute("role", "status");
@@ -199,8 +202,14 @@ export class MailboxScreen {
 
     this.list = make("nav", "mail-list");
     this.list.setAttribute("aria-label", "Your threads");
+    tutTarget(this.list, TutTarget.MAIL_THREADS);
     const listHead = make("div", "mail-list__head");
-    listHead.append(buttonOf("btn btn--primary mail-list__new", "New message", () => this.openCompose()));
+    listHead.append(
+      tutTarget(
+        buttonOf("btn btn--primary mail-list__new", "New message", () => this.openCompose()),
+        TutTarget.MAIL_NEW,
+      ),
+    );
     this.rows = make("ul", "mail-list__rows");
     this.list.append(listHead, this.rows);
 
@@ -211,6 +220,9 @@ export class MailboxScreen {
     this.panes.append(this.list, this.pane);
     panel.setContent(this.status, this.panes);
   }
+
+  /** The screen's title row, for the tutorial's "?" (issue #227). */
+  private header: HTMLElement | null = null;
 
   get isOpen(): boolean {
     return this.opened;
@@ -236,6 +248,7 @@ export class MailboxScreen {
       this.view = { kind: "none" };
       this.renderPane();
       this.element.querySelector<HTMLElement>(".mail-screen__close")?.focus();
+      guideBus.emit("screen", { id: GuideScreen.MAIL, root: this.element, header: this.header });
     }
     await this.refresh();
   }

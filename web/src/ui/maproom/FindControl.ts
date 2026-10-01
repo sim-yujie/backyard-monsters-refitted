@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { button, el, icon } from "@/ui/maproom1/icons";
 import type { NavPanel } from "./NavPanel";
 
@@ -20,6 +21,7 @@ export class FindControl {
     private readonly onOpenChange: (open: boolean) => void = () => {},
   ) {
     this.element = el("div", "mr2-find");
+    tutTarget(this.element, TutTarget.MR2_FIND);
 
     this.toggle = button("mr2-tool mr2-find__button");
     this.toggle.setAttribute("aria-expanded", "false");

@@ -1,3 +1,4 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import {
   STARTER_KIT_KEY,
   starterKitActions,
@@ -120,6 +121,7 @@ export class StarterKitPicker {
 
     this.cards = document.createElement("div");
     this.cards.className = "kit-picker__cards";
+    tutTarget(this.cards, TutTarget.STARTER_KITS);
     this.cards.setAttribute("role", "list");
 
     this.confirm = document.createElement("section");

@@ -48,6 +48,9 @@ import { yardStateAction } from "./state.js";
 import { yardPlaceDecorationAction } from "./decor.js";
 import { yardRoute } from "./yardRoute.js";
 import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
+import { goalsRoutes } from "./goals.js";
+import { guideRoutes } from "./guide.js";
+import { tipsRoutes } from "./tips.js";
 
 /**
  * Every yard action route, mounted by `app.routes.ts` as
@@ -113,4 +116,8 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "fortify/cancel", controller: yardRoute(yardCancelFortifyAction) },
   { path: "starterkit", controller: yardRoute(yardStarterKitAction) },
   { path: "decor/place", controller: yardRoute(yardPlaceDecorationAction) },
+  // The new-player tutorial (issue #227): each package fills its own file.
+  ...goalsRoutes,
+  ...guideRoutes,
+  ...tipsRoutes,
 ];

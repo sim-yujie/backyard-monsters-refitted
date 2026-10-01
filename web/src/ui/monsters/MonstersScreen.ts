@@ -1,3 +1,5 @@
+import { tutTarget, TutTarget } from "@/game/guide/targets";
+import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { housingSummary } from "@/game/monsters/housingSummary";
 import { nameOf, quantityOf, townHallLevel } from "@/game/yard/buildingCosts";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
@@ -58,6 +60,15 @@ export const townHallFor = (type: number): number => {
   return 0;
 };
 
+/** The tutorial's screen id for each tab (issue #227, `guideBus.ts`). */
+const MONSTERS_SCREENS: Record<MonstersTabId, GuideScreen> = {
+  [MonstersTabId.UNLOCK]: GuideScreen.MONSTERS_UNLOCK,
+  [MonstersTabId.HATCH]: GuideScreen.MONSTERS_HATCH,
+  [MonstersTabId.HOUSING]: GuideScreen.MONSTERS_HOUSING,
+  [MonstersTabId.TRAIN]: GuideScreen.MONSTERS_TRAIN,
+  [MonstersTabId.LAB]: GuideScreen.MONSTERS_LAB,
+};
+
 export class MonstersScreen {
   readonly element: HTMLElement;
 
@@ -112,6 +123,7 @@ export class MonstersScreen {
       button.type = "button";
       button.className = "tabs__tab monsters-tabs__tab";
       button.id = `monsters-tab-${id}`;
+      tutTarget(button, `${TutTarget.MONSTERS_TAB}${id}`);
       button.setAttribute("role", "tab");
       button.setAttribute("aria-controls", "monsters-body");
       button.textContent = definition.label;
@@ -190,15 +202,22 @@ export class MonstersScreen {
       button.tabIndex = current ? 0 : -1;
     }
     this.body.setAttribute("aria-labelledby", `monsters-tab-${tab}`);
+    const switched = !wasOpen || this.element.dataset["shown"] !== tab;
+    this.element.dataset["shown"] = tab;
     this.renderHeader();
     this.renderBody(focus, true);
     if (!wasOpen) this.tabButtons.get(tab)?.focus();
+    // Each tab is its own screen for the tutorial's tips (issue #227).
+    if (switched) {
+      guideBus.emit("screen", { id: MONSTERS_SCREENS[tab], root: this.element, header: this.panel.titlebar });
+    }
   }
 
   close(): void {
     if (!this.opened) return;
     this.opened = false;
     this.element.hidden = true;
+    delete this.element.dataset["shown"];
     this.onClose?.();
   }
 

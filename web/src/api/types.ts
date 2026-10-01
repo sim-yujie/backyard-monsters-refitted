@@ -688,6 +688,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * yard routes' `completed` shape (issue #135). `[]` when nothing did.
    */
   completed?: CompletedJob[];
+  /**
+   * Only on the owner's build-mode load of their own main yard or outpost:
+   * the account's new-player tutorial summary (issue #227). Every yard action
+   * answer refreshes it.
+   */
+  onboarding?: Onboarding;
 }
 
 /* ── Map Room 2 ─────────────────────────────────────────────────────────── */
@@ -1163,6 +1169,38 @@ export interface YardState {
   champion: ChampionSaveEntry[];
   mushrooms: MushroomSave;
   researchdata: Record<string, unknown>;
+  /** The account's new-player tutorial summary (issue #227); the main yard's on an outpost too. */
+  onboarding: Onboarding;
+}
+
+/* ── New-player tutorial (issue #227) ───────────────────────────────────── */
+
+/** Where the guided start stands (`server/src/services/onboarding/state.ts`). */
+export type GuideState = "pending" | "active" | "done" | "skipped" | "legacy";
+
+/** The practice camp's state (`docs/design/tutorial.md` §5.5). */
+export type CampState = "none" | "open" | "removed";
+
+/**
+ * What the server tells the client about its tutorial record, `save.onboarding`
+ * (`server/src/services/onboarding/summary.ts`, `docs/design/tutorial.md` §8.1).
+ * Carried by every yard action's answer and by the own yard's build-mode
+ * `/base/load`. The record itself (the grant ledger, the counters) never
+ * leaves the server.
+ */
+export interface Onboarding {
+  guide: {
+    state: GuideState;
+    /** The macro step while `pending` or `active`, e.g. `"build-sniper"`. */
+    step?: string;
+    /** The building the guide paid for and has not finished yet, by id. */
+    building?: number;
+  };
+  camp: CampState;
+  /** Goals ready to claim: the Goals button's badge. */
+  goalsReady: number;
+  /** Screen id to the unix second its tips were seen. */
+  tips: Record<string, number>;
 }
 
 /** The names of every {@link YardState} field, for merging and tests. */
@@ -1183,6 +1221,7 @@ export const YARD_STATE_KEYS = [
   "champion",
   "mushrooms",
   "researchdata",
+  "onboarding",
 ] as const satisfies readonly (keyof YardState)[];
 
 /**

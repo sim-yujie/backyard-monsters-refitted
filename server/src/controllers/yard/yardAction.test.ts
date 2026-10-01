@@ -6,6 +6,7 @@ import type { User } from "../../database/models/user.model.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { BuildingIdField } from "../../schemas/YardSchemas.js";
 import { yardRefusedErr } from "../../services/yard/yardErrors.js";
+import { updateOnboarding } from "../../services/onboarding/state.js";
 import { yardStateAction } from "./state.js";
 import {
   applyOutcome,
@@ -162,6 +163,7 @@ describe("POST /bm/yard/state", () => {
       "champion",
       "mushrooms",
       "researchdata",
+      "onboarding",
       "completed",
       "report",
       "playerlevel",
@@ -354,6 +356,43 @@ describe("runYardAction refusals", () => {
 
     expect(seen).toEqual({ level: 2, id: 1, completed: 1, savetime: true });
     expect(ctx.body!.report).toEqual({ ok: true });
+  });
+
+  test("an onboarding slice is written, the answer carries its summary, and run gets the transaction", async () => {
+    db.row = rowOf({ onboarding: { v: 1, guide: { state: "active", step: "raid" }, tips: { mail: 5 } } });
+    let gotEm = false;
+    const route = defineYardAction({
+      schema: z.object({}),
+      run: ({ save, em: tx }) => {
+        gotEm = typeof (tx as unknown as { flush?: unknown }).flush === "function";
+        return {
+          report: null,
+          slices: {
+            onboarding: updateOnboarding(save, (onboarding) => {
+              onboarding.raidSeen = 123;
+              onboarding.guide.step = "build-housing";
+            }),
+          },
+        };
+      },
+    });
+
+    const ctx = await call(route);
+
+    expect(gotEm).toBe(true);
+    expect(db.row!.onboarding).toMatchObject({ raidSeen: 123, guide: { state: "active", step: "build-housing" }, tips: { mail: 5 } });
+    expect(ctx.body!.onboarding).toEqual({
+      guide: { state: "active", step: "build-housing" },
+      camp: "none",
+      goalsReady: 0,
+      tips: { mail: 5 },
+    });
+  });
+
+  test("a save with no onboarding answers as legacy", async () => {
+    const ctx = await call(state);
+
+    expect(ctx.body!.onboarding).toEqual({ guide: { state: "legacy" }, camp: "none", goalsReady: 0, tips: {} });
   });
 });
 
