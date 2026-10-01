@@ -65,7 +65,8 @@ export class Mr1Guide {
     // A win removes the camp from the map: Bob keeps cheering until home.
     if (step === null && this.outcome !== "won") this.step = null;
     if (step !== null) this.step = step;
-    this.shownKey = null;
+    // Not forced: a map refresh that changes nothing must not rebuild Bob's
+    // buttons under a press (a click on Home was lost that way).
     this.render();
     if (step === "open-map") void this.move("open-map");
     if ((step === "attack" || step === "attack-result") && this.outcome === null) void this.resolve(step);

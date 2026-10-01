@@ -3,6 +3,7 @@ import type { Onboarding } from "@/api/types";
 import { guideBus } from "@/game/guide/guideBus";
 import { MonsterWalkIn } from "@/game/guide/MonsterWalkIn";
 import { StagedRaidLayer } from "@/game/guide/StagedRaidLayer";
+import { SPAWN_DISTANCE } from "@/game/guide/stagedRaid";
 import {
   buildMicroStep,
   dotsFor,
@@ -14,7 +15,7 @@ import {
   TOUR,
   type GuideStepName,
 } from "@/game/guide/steps";
-import { findTarget, tutTarget, TutTarget } from "@/game/guide/targets";
+import { findTarget, registerCanvasTarget, tutTarget, TutTarget, type TargetRect } from "@/game/guide/targets";
 import { offerGuideTour } from "@/game/guide/tour";
 import type { YardBuilding } from "@/game/yard/yardModel";
 import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "@/game/yard/yardPlugins";
@@ -39,6 +40,9 @@ import "@/ui/styles/guide-start.css";
  * (`game/attack/plugins/practice.ts`). Main yard only. While the guided start
  * is not running, the plugin offers Help's tour instead (Q5).
  */
+
+/** The place line where the building follows the pointer and a click builds it. */
+const PLACE_BY_CLICK = "Move it onto open grass, then click to build it there. You can drag the yard to find space.";
 
 /** How often the screen is looked at again for the micro step, ms. */
 const POLL_MS = 250;
@@ -67,6 +71,12 @@ interface View {
 
 /** The target name the bubble's own Finish now button is tagged with. */
 const GUIDE_FINISH = "guide-finish";
+
+/**
+ * The ground the raid or the Pokeys' walk-in plays on, as a canvas target:
+ * Bob's spotlight leaves it undimmed so the player can watch them.
+ */
+const GUIDE_SCENE = "guide-scene";
 
 export class GuidedStartRunner {
   private readonly overlay: GuideOverlay;
@@ -107,6 +117,7 @@ export class GuidedStartRunner {
   start(): void {
     const { store } = this.mounts;
     this.unsubscribe.push(
+      registerCanvasTarget(GUIDE_SCENE, () => this.sceneRect()),
       store.subscribe(() => this.render()),
       guideBus.on("buildMenu", ({ open }) => {
         this.menuOpen = open;
@@ -150,6 +161,22 @@ export class GuidedStartRunner {
     this.withdrawTour?.();
     this.withdrawTour = null;
     this.overlay.destroy();
+  }
+
+  /** Where the raid or the walk-in plays, on screen; null while neither does. */
+  private sceneRect(): TargetRect | null {
+    const box = this.raid?.worldBox() ?? this.tourRaid?.worldBox() ?? this.walkIn?.worldBox() ?? null;
+    if (!box) return null;
+    const { camera, canvas } = this.mounts;
+    const bounds = canvas.getBoundingClientRect();
+    const topLeft = camera.worldToScreen({ x: box.x, y: box.y });
+    const bottomRight = camera.worldToScreen({ x: box.x + box.width, y: box.y + box.height });
+    return {
+      left: bounds.left + topLeft.x,
+      top: bounds.top + topLeft.y,
+      width: bottomRight.x - topLeft.x,
+      height: bottomRight.y - topLeft.y,
+    };
   }
 
   /* ── Reading the server's step ───────────────────────────────────────── */
@@ -311,11 +338,13 @@ export class GuidedStartRunner {
       picked,
       cardShown: findTarget(`${TutTarget.BUILD_CARD}${build.type}`) !== null,
     });
+    // A desktop places with a click and shows no Build here: point at the building in hand.
+    const here = micro.key !== "place" || findTarget(TutTarget.BUILD_HERE) !== null;
     return {
-      key: `${step}:${micro.key}`,
+      key: `${step}:${micro.key}:${here}`,
       step: this.line(step, {
-        text: micro.text,
-        target: micro.key === "place" ? TutTarget.BUILD_HERE : micro.target,
+        text: here ? micro.text : PLACE_BY_CLICK,
+        target: here ? micro.target : TutTarget.CARRY_GHOST,
         block: micro.block,
       }),
     };
@@ -349,6 +378,8 @@ export class GuidedStartRunner {
       step: this.line(step, {
         text: build.lines.finishNow,
         target: GUIDE_FINISH,
+        // From the right, so the hand does not cover Bob's own words.
+        side: "right",
         actions: this.next("Finish now (free)", () => void this.finish(id)),
       }),
       after: () => this.tagFinishButton(),
@@ -383,7 +414,7 @@ export class GuidedStartRunner {
       key: `raid:play:${this.raidSkippable}`,
       step: this.line("raid", {
         text,
-        target: `${TutTarget.BUILDING}${tower.id}`,
+        target: GUIDE_SCENE,
         ...(this.raidSkippable && {
           actions: [{ label: "Skip the raid", onClick: () => this.raid?.skip() }],
         }),
@@ -394,7 +425,7 @@ export class GuidedStartRunner {
   private startRaid(tower: YardBuilding): void {
     const hall = this.firstOfType(TOWN_HALL);
     const centre = centreOf(tower);
-    this.mounts.scene.centreOn(centre.x, centre.y);
+    this.centreOnRaid(centre, hall);
     this.raid = new StagedRaidLayer(this.mounts.renderer, centre, hall ? centreOf(hall) : null, () => {
       this.raidOver = true;
       this.shownKey = null;
@@ -407,13 +438,23 @@ export class GuidedStartRunner {
     }, RAID_SKIP_MS);
   }
 
+  /** The camera between the tower and where the oozes come from, so the whole walk is in view. */
+  private centreOnRaid(tower: { x: number; y: number }, hall: YardBuilding | null): void {
+    const from = hall ? centreOf(hall) : { x: tower.x - 1, y: tower.y };
+    const dx = tower.x - from.x;
+    const dy = tower.y - from.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const ahead = SPAWN_DISTANCE / 2;
+    this.mounts.scene.centreOn(tower.x + (dx / length) * ahead, tower.y + (dy / length) * ahead);
+  }
+
   private pokeysView(): View {
     if (this.pokeysLine) {
       return {
         key: "pokeys:line",
         step: this.line("pokeys", {
           text: LINES.pokeys,
-          target: this.walkInTarget(),
+          target: this.walkIn?.worldBox() ? GUIDE_SCENE : this.walkInTarget(),
           actions: this.next("Next", () => {
             this.pokeysLine = false;
             this.shownKey = null;
@@ -579,7 +620,7 @@ export class GuidedStartRunner {
       if (tower && !this.tourRaid) {
         const hall = this.firstOfType(TOWN_HALL);
         const centre = centreOf(tower);
-        this.mounts.scene.centreOn(centre.x, centre.y);
+        this.centreOnRaid(centre, hall);
         this.tourRaid = new StagedRaidLayer(this.mounts.renderer, centre, hall ? centreOf(hall) : null, () => {
           this.tourRaid?.destroy();
           this.tourRaid = null;

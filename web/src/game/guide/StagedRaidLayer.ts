@@ -34,6 +34,20 @@ const TRACER = 0xfff2a8;
 const PUFF = 0xe8e2d0;
 /** Animation ticks a second (the engine's 80, as the sheets are timed). */
 const TICKS_PER_SECOND = 80;
+/** World px around the raid's points, for the sprites and the tower's top. */
+const BOX_MARGIN = 70;
+
+/** The smallest rectangle round some world points, grown by `margin`. */
+export const boxAround = (
+  points: readonly { x: number; y: number }[],
+  margin: number,
+): { x: number; y: number; width: number; height: number } => {
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const x = Math.min(...xs) - margin;
+  const y = Math.min(...ys) - margin;
+  return { x, y, width: Math.max(...xs) + margin - x, height: Math.max(...ys) + margin - y };
+};
 
 export class StagedRaidLayer {
   private readonly root = new Container();
@@ -83,6 +97,18 @@ export class StagedRaidLayer {
       this.frame = requestAnimationFrame(step);
     };
     this.frame = requestAnimationFrame(step);
+  }
+
+  /**
+   * The world rectangle the raid plays in (the tower and every spawn point,
+   * with room for the sprites), fixed for the raid, so Bob's spotlight can
+   * leave it undimmed and still while the oozes cross it.
+   */
+  worldBox(): { x: number; y: number; width: number; height: number } {
+    const points = [this.plan.tower, ...this.plan.monsters.map((monster) => monster.spawn)].map((point) =>
+      this.host.yardToWorld(point.x, point.y),
+    );
+    return boxAround(points, BOX_MARGIN);
   }
 
   /** Ends it now (Skip): it still counts as watched. */

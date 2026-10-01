@@ -1,7 +1,7 @@
 import { Container, Sprite } from "pixi.js";
 import { MonsterSheetTextures } from "@/game/attack/AttackBattleLayer";
 import { anchorOffset, frameRow, sheetColumn, spriteFor } from "@/game/attack/monsterSprites";
-import type { RaidHost } from "./StagedRaidLayer";
+import { boxAround, type RaidHost } from "./StagedRaidLayer";
 import type { YardPoint } from "./stagedRaid";
 
 /**
@@ -83,6 +83,13 @@ export class MonsterWalkIn {
     host.root.addChild(this.root);
     const sheet = spriteFor(options.monster);
     if (sheet) this.textures.preload(sheet);
+  }
+
+  /** The world rectangle the walk crosses, for Bob's spotlight (fixed for the walk). */
+  worldBox(): { x: number; y: number; width: number; height: number } | null {
+    if (this.ended) return null;
+    const { from, to } = this.options;
+    return boxAround([this.host.yardToWorld(from.x, from.y), this.host.yardToWorld(to.x, to.y)], 60);
   }
 
   start(): void {
