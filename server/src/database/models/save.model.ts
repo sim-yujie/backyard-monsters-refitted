@@ -388,7 +388,7 @@ export class Save {
    * {@link Save.saveKeys} nor {@link Save.attackSaveKeys}, so `/base/save`
    * can never write it: it holds what the tutorial has granted.
    */
-  @Property({ columnType: "jsonb", nullable: true })
+  @Property({ type: "json", columnType: "jsonb", nullable: true })
   onboarding?: JsonObject | null = null;
 
   @Property({ type: Date })
