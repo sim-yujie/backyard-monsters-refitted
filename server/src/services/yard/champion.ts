@@ -10,6 +10,7 @@ import {
   type ChampionEntry,
   type FeedRecipe,
 } from "../../game-data/championCatalogue.js";
+import type { ChampionStance } from "../../game-rules/combat/index.js";
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
@@ -406,6 +407,27 @@ export const planChampionRename = (save: ChampionSave, raw: string) => {
   champions[index] = renamed;
 
   const report: ChampionReport = { champion: renamed };
+  return { report, slices: { champion: champions } };
+};
+
+/**
+ * `POST /bm/yard/champion/stance`: remember the Mode a champion attacks in
+ * (issue #220), any champion the player keeps, caged, frozen or Krallen. The
+ * army panel opens on it next time; the attack itself carries its own Mode in
+ * the fling log, so this is a preference and nothing more.
+ *
+ * Refusals: `409 noChampion` when no champion of that type is kept.
+ */
+export const planChampionStance = (save: ChampionSave, type: number, stance: ChampionStance) => {
+  const champions = readChampions(save.champion);
+  const index = champions.findIndex(
+    (one) => Math.trunc(numberOf(one.t)) === type && statusOf(one) !== CHAMPION_STATUS.JUICED,
+  );
+  if (index < 0) throw yardRefusedErr("noChampion", "You have no champion of that type.");
+  const changed = { ...champions[index]!, s: stance };
+  champions[index] = changed;
+
+  const report: ChampionReport = { champion: changed };
   return { report, slices: { champion: champions } };
 };
 

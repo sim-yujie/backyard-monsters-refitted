@@ -17,6 +17,7 @@ import {
   yardChampionJuiceAction,
   yardChampionRaiseAction,
   yardChampionRenameAction,
+  yardChampionStanceAction,
 } from "./champion.js";
 import {
   yardHatcheryAddAction,
@@ -104,6 +105,7 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "champion/evolve", controller: yardRoute(yardChampionEvolveAction) },
   { path: "champion/heal", controller: yardRoute(yardChampionHealAction) },
   { path: "champion/rename", controller: yardRoute(yardChampionRenameAction) },
+  { path: "champion/stance", controller: yardRoute(yardChampionStanceAction) },
   { path: "champion/juice", controller: yardRoute(yardChampionJuiceAction) },
   { path: "champion/freeze", controller: yardRoute(yardChampionFreezeAction) },
   { path: "champion/thaw", controller: yardRoute(yardChampionThawAction) },

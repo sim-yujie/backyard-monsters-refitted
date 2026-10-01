@@ -14,6 +14,7 @@ import {
   battleDefence,
   flingCost,
   healthOf,
+  isChampionStance,
   parseDefenderForces,
   toCombatYard,
   type BuildingClass,
@@ -27,6 +28,7 @@ import {
   type FlingLog,
   type ResourceAmounts,
   type Roster,
+  type ChampionStance,
 } from "@/game/combat/rules";
 import { hasDeclareWar } from "./attackEntry";
 import type { AttackTarget } from "./attackTarget";
@@ -107,7 +109,12 @@ export interface FlingInput {
    * The champion to send with this drop. One per drop; across the attack, one
    * ordinary champion plus Krallen (see `AttackSession.championBlock`).
    */
-  readonly champion?: { readonly t: number; readonly l: number };
+  readonly champion?: {
+    readonly t: number;
+    readonly l: number;
+    /** The Mode it is flung in (issue #220); the log carries it, and none is Hybrid. */
+    readonly s?: ChampionStance;
+  };
 }
 
 /** Krallen's champion type, the one champion Flash let go alongside another. */
@@ -555,14 +562,16 @@ export class AttackSession {
   }
 
   /**
-   * A flung champion as the log records it: its type and level, and the power
+   * A flung champion as the log records it: its type and level, the power
    * level its roster entry holds (issue #202), which it fights at and the
-   * server checks against the attacker's stored champion.
+   * server checks against the attacker's stored champion, and the Mode the
+   * player picked (issue #220), which the server replays it in.
    */
-  private flungChampion(champion: { readonly t: number; readonly l: number }): {
+  private flungChampion(champion: NonNullable<FlingInput["champion"]>): {
     t: number;
     l: number;
     pl?: number;
+    s?: ChampionStance;
   } {
     const entry = this.target.roster.champions.find((owned) => owned.t === champion.t);
     const pl = Number(entry?.pl);
@@ -570,6 +579,7 @@ export class AttackSession {
       t: champion.t,
       l: champion.l,
       ...(Number.isInteger(pl) && pl > 0 ? { pl: Math.min(pl, CHAMPION_MAX_POWER_LEVEL) } : {}),
+      ...(isChampionStance(champion.s) ? { s: champion.s } : {}),
     };
   }
 

@@ -344,10 +344,10 @@ describe("ArmyPanel champion", () => {
     );
 
     krallen.click();
-    expect(bucket.champion()).toEqual({ t: 5, l: 5 });
+    expect(bucket.champion()).toEqual({ t: 5, l: 5, s: "hybrid" });
     expect(krallen.checked).toBe(true);
     fomor.click();
-    expect(bucket.champion()).toEqual({ t: 3, l: 6 });
+    expect(bucket.champion()).toEqual({ t: 3, l: 6, s: "hybrid" });
     expect(fomor.checked).toBe(true);
     expect(krallen.checked).toBe(false);
   });
@@ -405,6 +405,63 @@ describe("ArmyPanel champion", () => {
     expect(retreat?.hidden).toBe(true);
   });
 
+  it("offers each champion a Mode: the one its save remembers, else Hybrid (#220)", () => {
+    const roster = sandboxRoster();
+    const remembered = rosterOf({
+      ...roster,
+      champions: roster.champions.map((entry) =>
+        entry.t === 3 ? { ...entry, s: "defensive" } : { ...entry, s: "berserk" },
+      ),
+    });
+    const session = sessionWith(remembered);
+    const bucket = new Bucket(session, { storage: null, playerKey: "test" });
+    const picked: Array<[number, string]> = [];
+    const panel = new ArmyPanel(bucket, {
+      onStanceChange: (t, stance) => picked.push([t, stance]),
+    }).mount(document.body);
+    panels.push(panel);
+
+    const fomor = panel.stanceFor(3);
+    const krallen = panel.stanceFor(5);
+    if (!fomor || !krallen) throw new Error("two Mode pickers expected");
+    expect([...fomor.options].map((option) => option.textContent)).toEqual([
+      "Offensive",
+      "Hybrid",
+      "Defensive",
+    ]);
+    expect(fomor.getAttribute("aria-label")).toBe(`${championName(3)}'s Mode`);
+    expect(fomor.closest(".attack-army__champion")?.querySelector(".attack-army__mode-label")?.textContent).toBe(
+      "Mode",
+    );
+    expect(fomor.value).toBe("defensive");
+    // A Mode the panel does not know is read as Hybrid.
+    expect(krallen.value).toBe("hybrid");
+
+    krallen.value = "offensive";
+    krallen.dispatchEvent(new Event("change"));
+    krallen.click();
+    expect(picked).toEqual([[5, "offensive"]]);
+    expect(bucket.stance(5)).toBe("offensive");
+    // Using the picker does not pick the champion for the next drop.
+    expect(bucket.champion()).toBeNull();
+
+    // The pick rides with the champion into the fling.
+    bucket.pickChampion(5);
+    const event = session.appendFling({ x: 100, y: 100, ...bucket.composition() });
+    expect(event.champion).toMatchObject({ t: 5, s: "offensive" });
+  });
+
+  it("locks a champion's Mode while it is on the field (#220)", () => {
+    const { panel } = mount();
+    const fomor = panel.stanceFor(3);
+    expect(fomor?.disabled).toBe(false);
+    panel.setChampionsOnField([3]);
+    expect(fomor?.disabled).toBe(true);
+    expect(panel.stanceFor(5)?.disabled).toBe(false);
+    panel.setChampionsOnField([]);
+    expect(fomor?.disabled).toBe(false);
+  });
+
   it("has no Retreat button without a way to call a champion back", () => {
     const { panel } = mount();
     expect(panel.retreatFor(3)).toBeNull();
@@ -425,7 +482,7 @@ describe("ArmyPanel champion", () => {
     expect(krallen.disabled).toBe(false);
     expect(note(krallen)).toBe("");
     krallen.click();
-    expect(bucket.champion()).toEqual({ t: 5, l: 5 });
+    expect(bucket.champion()).toEqual({ t: 5, l: 5, s: "hybrid" });
 
     session.appendFling({ x: 100, y: 100, ...bucket.composition() });
     bucket.afterDrop();
@@ -455,7 +512,7 @@ describe("ArmyPanel champion", () => {
     );
     const rule = /\n\.attack-army__champion \{([^}]*)\}/.exec(css)?.[1] ?? "";
     expect(rule).toContain("display: grid");
-    expect(rule).toMatch(/"pick icon label"\s*"pick icon note"/);
+    expect(rule).toMatch(/"pick icon label"\s*"pick icon note"\s*"pick icon mode"/);
 
     const { panel } = mount();
     const row = panel.element.querySelector(".attack-army__champion");
@@ -465,6 +522,7 @@ describe("ArmyPanel champion", () => {
       "attack-army__icon",
       "attack-army__label",
       "attack-army__note",
+      "attack-army__mode",
     ]);
   });
 

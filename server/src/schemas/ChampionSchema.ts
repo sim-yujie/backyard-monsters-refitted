@@ -1,4 +1,5 @@
 import z from "zod";
+import { CHAMPION_STANCES, type ChampionStance } from "../game-rules/combat/index.js";
 
 /**
  * A single champion as the Flash client serialises it.
@@ -13,6 +14,9 @@ export const ChampionSchema = z.object({
   pl: z.number().catch(0),                                            // power level
   status: z.number().catch(0),                                        // 0 = active, 1 = frozen, 2 = juiced
   nm: z.string().optional().catch(undefined),                          // name
+  s: z.enum(CHAMPION_STANCES as [ChampionStance, ...ChampionStance[]])  // Mode it last attacked in (#220)
+    .optional()
+    .catch(undefined),
 });
 
 export type ChampionData = z.infer<typeof ChampionSchema>;

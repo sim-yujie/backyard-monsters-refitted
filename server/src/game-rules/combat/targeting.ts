@@ -310,6 +310,15 @@ export const findBuildingTarget = (
 
 /* ── A champion's building (`ChampionBase.findTarget`, issue #222) ────────── */
 
+/**
+ * A champion's Mode as {@link findChampionTarget} reads it (issue #220): the
+ * distance units a building's score loses, and whether to leave it out.
+ */
+export interface ChampionScoring {
+  bonus(building: EngineBuilding): number;
+  skip(building: EngineBuilding): boolean;
+}
+
 /** The Storage Silo, the Town Hall and the outpost core (`ChampionBase.as:573`). */
 const CHAMPION_CORE_TYPES: readonly number[] = [6, 14, 112];
 
@@ -338,6 +347,12 @@ export const unlootedForKrallen = (building: EngineBuilding): boolean =>
  * in an `int` (`:575`), so they truncate, which is why ties are common. The
  * list is sorted on that; ties keep the order the lists were built in, which
  * is id order within each list.
+ *
+ * With `scoring` (a champion's Mode, issue #220, `stance.ts`), each distance
+ * has the building's bonus taken off before the comparison, and a building
+ * `skip` names is left out. A stage left with nothing because of `skip` falls
+ * through to the next as an empty one would; if nothing is left at all, the
+ * pick is made again without `skip`, so the champion never stands still.
  */
 export const findChampionTarget = (
   yard: EngineYard,
@@ -345,21 +360,28 @@ export const findChampionTarget = (
   fromY: number,
   context: TargetContext,
   krallen: boolean,
+  scoring?: ChampionScoring,
 ): EngineBuilding | null => {
   let best: EngineBuilding | null = null;
-  let bestAway = 0;
+  let bestScore = 0;
   let found = false;
+  let skipped = false;
 
   const consider = (building: EngineBuilding): void => {
+    if (scoring && scoring.skip(building)) {
+      skipped = true;
+      return;
+    }
     found = true;
     const away = Math.trunc(
       Math.sqrt(
         distanceSquared(fromX, fromY, building.cx + building.middle, building.cy + building.middle),
       ) - building.middle,
     );
-    if (best === null || away < bestAway) {
+    const score = scoring ? away - scoring.bonus(building) : away;
+    if (best === null || score < bestScore) {
       best = building;
-      bestAway = away;
+      bestScore = score;
     }
   };
 
@@ -399,6 +421,12 @@ export const findChampionTarget = (
       if (building.kind === "tower" && !isBunker(building.type) && building.jarred) continue;
       consider(building);
     }
+  }
+  if (best === null && skipped && scoring) {
+    return findChampionTarget(yard, fromX, fromY, context, krallen, {
+      bonus: scoring.bonus,
+      skip: () => false,
+    });
   }
   return best;
 };

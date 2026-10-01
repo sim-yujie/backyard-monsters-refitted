@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, ChampionSaveEntry, YardResponse } from "./types";
 import type { YardApi } from "./yard";
 import { YardStore } from "@/game/yard/YardStore";
-import { championActions, championFeed, championRaise, type ChampionApi } from "./yardChampion";
+import {
+  championActions,
+  championFeed,
+  championRaise,
+  championStance,
+  type ChampionApi,
+} from "./yardChampion";
 
 /** The champion routes on the wire, and their local checks in the store's queue. */
 
@@ -36,6 +42,14 @@ describe("champion routes", () => {
     expect(sent[0]!.body.get("type")).toBe("3");
     expect(sent[1]!.url).toMatch(/\/bm\/yard\/champion\/feed$/);
     expect(sent[1]!.body.get("mode")).toBe("shiny");
+  });
+
+  it("stance sends the champion type and its Mode (#220)", async () => {
+    stubFetch();
+    await championStance(5, "defensive");
+    expect(sent[0]!.url).toMatch(/\/bm\/yard\/champion\/stance$/);
+    expect(sent[0]!.body.get("type")).toBe("5");
+    expect(sent[0]!.body.get("stance")).toBe("defensive");
   });
 });
 

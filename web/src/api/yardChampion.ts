@@ -1,3 +1,4 @@
+import type { ChampionStance } from "@/game/combat/rules";
 import { juicerProblemText, juicerStatus } from "@/game/monsters/juice";
 import { championEntry } from "@/game/yard/championCatalogue";
 import {
@@ -24,6 +25,7 @@ import { yardBody, type YardRefusal } from "./yard";
  *   POST /api/:apiVersion/bm/yard/champion/evolve
  *   POST /api/:apiVersion/bm/yard/champion/heal
  *   POST /api/:apiVersion/bm/yard/champion/rename   name
+ *   POST /api/:apiVersion/bm/yard/champion/stance   type, stance (Mode, #220)
  *   POST /api/:apiVersion/bm/yard/champion/juice
  *   POST /api/:apiVersion/bm/yard/champion/freeze   (Champion Chamber, #125)
  *   POST /api/:apiVersion/bm/yard/champion/thaw     type
@@ -77,6 +79,19 @@ export const championRename = (
   baseid?: string,
 ): Promise<YardResponse<ChampionReport>> =>
   post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/rename`, yardBody({ name }, baseid));
+
+/**
+ * Remembers the Mode a champion attacks in (issue #220), any champion the
+ * player keeps, so the army panel opens on it next time.
+ */
+export const championStance = (
+  type: number,
+  stance: ChampionStance,
+): Promise<YardResponse<ChampionReport>> =>
+  post<YardResponse<ChampionReport>>(
+    `${CHAMPION_PATH}/stance`,
+    yardBody({ type: String(type), stance }),
+  );
 
 export const championJuice = (baseid?: string): Promise<YardResponse<ChampionReport>> =>
   post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/juice`, yardBody({}, baseid));

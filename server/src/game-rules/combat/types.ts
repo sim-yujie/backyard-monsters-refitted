@@ -1,4 +1,5 @@
 import { hpLadder, maxHp, outpostHarvesterStock } from "./stats.js";
+import type { ChampionStance } from "./stance.js";
 
 /**
  * The shapes the Phase A bound model and the Phase B replay are written over.
@@ -473,9 +474,16 @@ export type FlingEvent =
       /**
        * The champion flung with the drop: its type, level and power level
        * (`pl`, 0 to 3, issue #202). A log written before `pl` existed carries
-       * none, and that champion fights at its level alone.
+       * none, and that champion fights at its level alone. `s` is the Mode it
+       * was flung in (issue #220, `stance.ts`); a log with none fights it as
+       * Hybrid, which is the Flash champion.
        */
-      readonly champion?: { readonly t: number; readonly l: number; readonly pl?: number };
+      readonly champion?: {
+        readonly t: number;
+        readonly l: number;
+        readonly pl?: number;
+        readonly s?: ChampionStance;
+      };
     }
   | {
       readonly kind: "bomb";

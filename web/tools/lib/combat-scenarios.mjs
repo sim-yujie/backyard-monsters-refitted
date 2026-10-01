@@ -388,6 +388,34 @@ export const SCENARIOS = [
       ],
     },
   },
+  // Issue #220: the same attack in each scored Mode. A log with no Mode is
+  // Hybrid, the Flash champion, which every champion fixture above already is.
+  ...["offensive", "defensive"].map((stance) => ({
+    name: `champion-${stance}`,
+    description:
+      `A level 4 Gorgo at power level 3 flung in the ${stance} Mode with forty Pokeys: ` +
+      "the Mode scores Flash's own target lists (issue #220).",
+    yard: "sandbox",
+    kind: "main",
+    levels: MAXED,
+    playerLevel: 20,
+    tailTicks: 9600,
+    log: {
+      v: 1,
+      seed: 22020,
+      events: [
+        {
+          kind: "fling",
+          t: 200,
+          x: 180,
+          y: -480,
+          r: 300,
+          monsters: { C1: 40 },
+          champion: { t: 1, l: 4, pl: 3, s: stance },
+        },
+      ],
+    },
+  })),
 ];
 
 /** The scenario the bench times, which is the busiest of them. */

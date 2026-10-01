@@ -823,7 +823,7 @@ full on every save (a save is a snapshot, and the server keeps no partial state 
   "seed": 1834027731,
   "events": [
     { "t": 480,  "kind": "fling",  "x": -615, "y": 115, "r": 100,
-      "monsters": { "C1": 30, "C4": 5 }, "champion": { "t": 5, "l": 5, "pl": 2 } },
+      "monsters": { "C1": 30, "C4": 5 }, "champion": { "t": 5, "l": 5, "pl": 2, "s": "hybrid" } },
     { "t": 2400, "kind": "bomb",   "id": "pb1", "x": 180, "y": -480 },
     { "t": 3100, "kind": "siege",  "weapon": "jars", "x": 180, "y": -480 },
     { "t": 6000, "kind": "championRetreat", "c": 5 },
@@ -840,7 +840,7 @@ full on every save (a save is a snapshot, and the server keeps no partial state 
 | `x`, `y` | Yard units, the same space as `buildingdata.X/Y` | Inside the map; a fling centre may not overlap a building footprint (`DROPZONE.as:64`) |
 | `r` | Drop radius: `max(200, bucketTotal / 4) / 2`, where `bucketTotal` includes the champion's own `bucket` at its level (`ATTACK.as:645-653`, #143) | Recomputed by the server from `monsters` and `champion`; a mismatch is `malformed` |
 | `monsters` | Counts per id | Sum of `bucket[L] * count` at most the flinger capacity plus the Declare-War bonus (`ATTACK.as:589-598`); cumulative counts at most the roster in range |
-| `champion` | At most one ordinary champion per attack, plus Krallen (type 5) alongside it, each flung once (`UI_TOP.as:336-347`, issue #74); `hp > 0` and normal status at attack start. `pl` is its power level (issue #202): the engine adds the `bonus*` ladders at it (`championStatWithPower`), the web client stamps it from the roster's champion entry, and the server's fightable log keeps it only up to the stored `pl`. A log without `pl` (written before it existed) fights at the level alone | `l` and `pl` never above the stored champion's |
+| `champion` | At most one ordinary champion per attack, plus Krallen (type 5) alongside it, each flung once (`UI_TOP.as:336-347`, issue #74); `hp > 0` and normal status at attack start. `pl` is its power level (issue #202): the engine adds the `bonus*` ladders at it (`championStatWithPower`), the web client stamps it from the roster's champion entry, and the server's fightable log keeps it only up to the stored `pl`. A log without `pl` (written before it existed) fights at the level alone. `s` is the Mode it was flung in (issue #220): `offensive`, `hybrid` or `defensive`, a behaviour-only choice of targets (`stance.ts`); a log without `s` fights it as Hybrid, which is the Flash champion | `l` and `pl` never above the stored champion's; `s` one of the three, or the log is `malformed`; `s` is the attacker's choice for that attack, so it is not matched to the save |
 | `bomb` | One per resource per attack, tier within `A.catapult`, cost within the attacker's pool at that tick | `ResourceBombs.as:301-315` |
 | `siege` | Quantity within `A.siege` | — |
 | `championRetreat` | One champion called back by its type, `c`: Flash's "Retreat" on the champion's own button (`CHAMPIONBUTTON.as:98-103`, issue #222). It leaves the field with the health it has; the attack goes on | `c` a whole number; a champion that is not on the field is not touched |

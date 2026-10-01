@@ -499,6 +499,17 @@ describe("fightableLog", () => {
     ).toEqual(withPower(0));
   }, REPLAY_TIMEOUT_MS);
 
+  test("a champion keeps the Mode it was flung in; a log without one keeps none (#220)", () => {
+    const withMode = (s?: string): FlingEvent =>
+      ({ ...fling(10, {}), champion: { t: 5, l: 3, ...(s !== undefined && { s }) } }) as FlingEvent;
+    const fought = (s?: string) =>
+      fightableLog({ v: 1, seed: 7, events: [withMode(s)] }, attacker, {}).events[0] as FlingEvent;
+
+    expect(fought("defensive")).toEqual(withMode("defensive"));
+    expect(fought("offensive")).toMatchObject({ champion: { s: "offensive" } });
+    expect((fought(undefined) as { champion: { s?: string } }).champion.s).toBeUndefined();
+  }, REPLAY_TIMEOUT_MS);
+
   test("a bomb the catapult does not unlock, an unknown one or a second of the same resource does not go off", () => {
     const log: FlingLog = {
       v: 1,

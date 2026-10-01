@@ -1,0 +1,117 @@
+{
+  "name": "champion-defensive",
+  "description": "A level 4 Gorgo at power level 3 flung in the defensive Mode with forty Pokeys: the Mode scores Flash's own target lists (issue #220).",
+  "yard": "sandbox",
+  "kind": "main",
+  "levels": {
+    "C1": 6,
+    "C2": 6,
+    "C3": 6,
+    "C4": 6,
+    "C5": 6,
+    "C6": 6,
+    "C7": 6,
+    "C8": 6,
+    "C13": 6,
+    "C14": 6
+  },
+  "playerLevel": 20,
+  "tailTicks": 9600,
+  "log": {
+    "v": 1,
+    "seed": 22020,
+    "events": [
+      {
+        "kind": "fling",
+        "t": 200,
+        "x": 180,
+        "y": -480,
+        "r": 300,
+        "monsters": {
+          "C1": 40
+        },
+        "champion": {
+          "t": 1,
+          "l": 4,
+          "pl": 3,
+          "s": "defensive"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "ticks": 9800,
+    "damage": 8.539185570905275,
+    "destroyed": null,
+    "attackloot": {
+      "r1": 0,
+      "r2": 0,
+      "r3": 0,
+      "r4": 0
+    },
+    "defenderLoss": {
+      "r1": 0,
+      "r2": 0,
+      "r3": 0,
+      "r4": 0
+    },
+    "firedTraps": 0,
+    "destroyedBuildings": 25,
+    "creepsFlung": 40,
+    "creepsKilled": 40,
+    "championHp": 91408.05551275465,
+    "damagedBuildings": 25,
+    "rngDraws": 2352,
+    "checkpoints": [
+      {
+        "tick": 800,
+        "digest": "d1d748de443ca068"
+      },
+      {
+        "tick": 1600,
+        "digest": "0821bb1f2e284ff5"
+      },
+      {
+        "tick": 2400,
+        "digest": "b0da0f900b8f567a"
+      },
+      {
+        "tick": 3200,
+        "digest": "62a57ab2466900f4"
+      },
+      {
+        "tick": 4000,
+        "digest": "5fbba0ccb56c4716"
+      },
+      {
+        "tick": 4800,
+        "digest": "a2b486bc330f1326"
+      },
+      {
+        "tick": 5600,
+        "digest": "355b0ad894033df6"
+      },
+      {
+        "tick": 6400,
+        "digest": "3fd0cb4480a4c112"
+      },
+      {
+        "tick": 7200,
+        "digest": "f116fd73c363f599"
+      },
+      {
+        "tick": 8000,
+        "digest": "29355438382e2566"
+      },
+      {
+        "tick": 8800,
+        "digest": "1f380962b4a3a914"
+      },
+      {
+        "tick": 9600,
+        "digest": "896970a8f2bd0c9a"
+      }
+    ],
+    "digest": "c460ac854e88bb13"
+  }
+}

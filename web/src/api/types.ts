@@ -197,6 +197,8 @@ export interface ChampionSaveEntry {
   /** 0 active, 1 frozen, 2 juiced. Only 0 may be flung (`combat.md:750-751`). */
   status: number;
   nm?: string;
+  /** The Mode it last attacked in (issue #220); absent is Hybrid. Anything else is ignored. */
+  s?: unknown;
   [key: string]: unknown;
 }
 

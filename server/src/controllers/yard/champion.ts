@@ -3,6 +3,7 @@ import {
   YardChampionRaiseSchema,
   YardChampionRenameSchema,
   YardChampionSchema,
+  YardChampionStanceSchema,
 } from "../../schemas/YardSchemas.js";
 import {
   planChampionEvolve,
@@ -11,6 +12,7 @@ import {
   planChampionJuice,
   planChampionRaise,
   planChampionRename,
+  planChampionStance,
 } from "../../services/yard/champion.js";
 import { defineYardAction } from "./yardAction.js";
 
@@ -55,4 +57,10 @@ export const yardChampionRenameAction = defineYardAction({
 export const yardChampionJuiceAction = defineYardAction({
   schema: YardChampionSchema,
   run: ({ save }) => planChampionJuice(save),
+});
+
+/** `POST /bm/yard/champion/stance` — remember the Mode a champion attacks in (issue #220). */
+export const yardChampionStanceAction = defineYardAction({
+  schema: YardChampionStanceSchema,
+  run: ({ save, body }) => planChampionStance(save, body.type, body.stance),
 });

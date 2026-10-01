@@ -1,4 +1,5 @@
 import z from "zod";
+import { CHAMPION_STANCES, type ChampionStance } from "../game-rules/combat/index.js";
 
 /**
  * Body schemas for the yard action routes, `POST /api/:apiVersion/bm/yard/*`
@@ -269,6 +270,15 @@ export const YardChampionSchema = z.object({});
 /** `POST /bm/yard/champion/rename`: the new name, checked for length and language by the route. */
 export const YardChampionRenameSchema = z.object({
   name: z.string().max(200),
+});
+
+/**
+ * `POST /bm/yard/champion/stance`: the Mode a champion attacks in (issue #220),
+ * remembered on its save entry as the army panel's next default.
+ */
+export const YardChampionStanceSchema = z.object({
+  type: z.coerce.number().int().min(1).max(5),
+  stance: z.enum(CHAMPION_STANCES as [ChampionStance, ...ChampionStance[]]),
 });
 
 /** `POST /bm/yard/champion/freeze` moves the champion in the cage into the Champion Chamber. */

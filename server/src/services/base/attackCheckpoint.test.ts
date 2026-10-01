@@ -72,6 +72,24 @@ describe("parseCheckpoint", () => {
     expect("refused" in parseCheckpoint(body(withPl("3")))).toBe(true);
   });
 
+  test("reads a champion's Mode, and refuses one that is not a Mode (#220)", () => {
+    const withMode = (s: unknown) => ({
+      flinglog: { v: 1, seed: 77, events: [{ ...fling(400), champion: { t: 1, l: 4, s } }] },
+    });
+    for (const s of ["offensive", "hybrid", "defensive"]) {
+      expect(accepted(parseCheckpoint(body(withMode(s)))).flinglog.events[0]).toMatchObject({
+        champion: { t: 1, l: 4, s },
+      });
+    }
+    // A log written before Modes carries none.
+    expect(accepted(parseCheckpoint(body(withMode(undefined)))).flinglog.events[0]).toMatchObject({
+      champion: { t: 1, l: 4 },
+    });
+    expect("refused" in parseCheckpoint(body(withMode("berserk")))).toBe(true);
+    expect("refused" in parseCheckpoint(body(withMode(1)))).toBe(true);
+    expect("refused" in parseCheckpoint(body(withMode(null)))).toBe(true);
+  });
+
   test("an attack with nothing dropped has nothing to checkpoint (#79)", () => {
     expect(parseCheckpoint(body({ flinglog: { v: 1, seed: 77, events: [] } }))).toEqual({ refused: "empty" });
   });

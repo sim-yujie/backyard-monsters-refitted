@@ -306,6 +306,22 @@ describe("AttackSession events and the fling log", () => {
     });
   });
 
+  it("logs the Mode a champion is flung in, which the battle fights it in (#220)", () => {
+    const champion = { t: 1, hp: 100, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 };
+    const session = sessionOf({
+      roster: { monsters: {}, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
+    });
+    session.start();
+    const event = session.appendFling({
+      x: -100,
+      y: -100,
+      monsters: {},
+      champion: { t: 1, l: 1, s: "defensive" },
+    });
+    expect(event.champion).toEqual({ t: 1, l: 1, s: "defensive" });
+    expect(session.flingLog().events[0]).toMatchObject({ champion: { s: "defensive" } });
+  });
+
   it("logs a radius that counts the champion's bucket (#143)", () => {
     const champion = { t: 1, hp: 100, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 };
     const session = sessionOf({

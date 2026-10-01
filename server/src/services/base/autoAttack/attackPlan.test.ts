@@ -139,6 +139,17 @@ describe("planLog", () => {
     expect(log.events.slice(1)).toEqual(plan.events.slice(1));
   });
 
+  test("repeats the Mode the champion was flung in, through storage and back (#220)", () => {
+    const fling = FOUGHT.events[0] as Extract<FlingLog["events"][number], { kind: "fling" }>;
+    const fought: FlingLog = {
+      ...FOUGHT,
+      events: [{ ...fling, champion: { ...fling.champion!, s: "defensive" } }, ...FOUGHT.events.slice(1)],
+    };
+    const stored = parseStoredPlan(JSON.parse(JSON.stringify(planFromFought(fought, 6_400))))!;
+    const log = planLog(stored, 1, [{ t: 3, l: 6, pl: 2, hp: 100, status: 0 }]);
+    expect(log.events[0]).toMatchObject({ champion: { t: 3, l: 6, pl: 2, s: "defensive" } });
+  });
+
   test("a champion with no power level fights at its level alone", () => {
     const plan = planFromFought(FOUGHT, 6_400)!;
     const log = planLog(plan, 1, [{ t: 3, l: 2, hp: 100 }]);

@@ -9,6 +9,7 @@ import {
   replayAttack,
   type BombStats,
   type BuildingHealthMap,
+  type ChampionStance,
   type CombatBuildingDataMap,
   type FlingEvent,
   type FlingLog,
@@ -222,15 +223,18 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
 
     // A champion the attacker owns, once, at no more than its stored level and
     // power level (issue #202); a log with no `pl` fights at its level alone.
-    let champion: { t: number; l: number; pl?: number } | undefined;
+    // Its Mode (issue #220) is the attacker's choice for this attack and rides
+    // along as sent; a log with none fights it as Hybrid.
+    let champion: { t: number; l: number; pl?: number; s?: ChampionStance } | undefined;
     const stored = event.champion ? owned.get(event.champion.t) : undefined;
     if (event.champion && stored !== undefined && !championsFlung.has(event.champion.t)) {
       championsFlung.add(event.champion.t);
-      const { pl } = event.champion;
+      const { pl, s } = event.champion;
       champion = {
         t: event.champion.t,
         l: Math.min(event.champion.l, stored.l),
         ...(pl !== undefined && { pl: Math.max(0, Math.min(pl, stored.pl)) }),
+        ...(s !== undefined && { s }),
       };
     }
 

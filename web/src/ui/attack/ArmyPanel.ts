@@ -1,6 +1,13 @@
 import type { ChampionBlockReason } from "@/game/attack/AttackSession";
 import type { Bucket } from "@/game/attack/bucket";
-import { CHAMPION_PROPS, championByType, monsterName } from "@/game/combat/rules";
+import {
+  CHAMPION_PROPS,
+  CHAMPION_STANCES,
+  championByType,
+  isChampionStance,
+  monsterName,
+  type ChampionStance,
+} from "@/game/combat/rules";
 import { championPortrait, monsterPortrait, showPortrait, type Portrait } from "@/game/portraits";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
@@ -69,6 +76,22 @@ export const championNote = (blocked: ChampionBlockReason | null): string => {
 export const ONE_CHAMPION_TITLE =
   "An attack takes one champion. Krallen is the exception and can join any other champion.";
 
+/** What each Mode is called, and what it does, for the Mode picker (issue #220). */
+export const STANCE_TEXT: Readonly<Record<ChampionStance, { label: string; title: string }>> = {
+  offensive: {
+    label: "Offensive",
+    title: "Goes for the towers first and finishes off damaged buildings. Ignores danger.",
+  },
+  hybrid: {
+    label: "Hybrid",
+    title: "Picks the nearest loot, core building or tower, as champions always have.",
+  },
+  defensive: {
+    label: "Defensive",
+    title: "Keeps out of tower fire, stays with its monsters and skips fights it can't win.",
+  },
+};
+
 /** A champion's display name from the stat table, or `G<t>`. */
 export const championName = (t: number): string => {
   const id = championByType(t);
@@ -82,6 +105,11 @@ export interface ArmyPanelOptions {
    * No button is shown without it.
    */
   readonly onRetreatChampion?: (t: number) => void;
+  /**
+   * Called when the player picks a champion's Mode (issue #220), after the
+   * bucket has taken it: the place to remember it for next time.
+   */
+  readonly onStanceChange?: (t: number, stance: ChampionStance) => void;
   /**
    * Called whenever the panel's box changes size, for the bottom-sheet inset
    * (§4.3). Not called in a browser without `ResizeObserver`.
@@ -105,6 +133,8 @@ interface ChampionRow {
   readonly note: HTMLElement;
   /** Shown only while this champion is on the field (issue #222). */
   readonly retreat: HTMLButtonElement | null;
+  /** Its Mode (issue #220); locked once it is on the field. */
+  readonly stance: HTMLSelectElement;
 }
 
 export class ArmyPanel {
@@ -125,11 +155,13 @@ export class ArmyPanel {
   private readonly observer: ResizeObserver | null;
   private readonly radioName = `attack-champion-${Math.random().toString(36).slice(2, 9)}`;
   private readonly onRetreatChampion: ((t: number) => void) | null;
+  private readonly onStanceChange: ((t: number, stance: ChampionStance) => void) | null;
   private onField: readonly number[] = [];
 
   constructor(bucket: Bucket, options: ArmyPanelOptions = {}) {
     this.bucket = bucket;
     this.onRetreatChampion = options.onRetreatChampion ?? null;
+    this.onStanceChange = options.onStanceChange ?? null;
     this.panel = new Panel({ title: "Army", closable: false, className: "map-panel attack-army" });
     this.element = this.panel.element;
 
@@ -233,6 +265,11 @@ export class ArmyPanel {
     this.refreshRetreat();
   }
 
+  /** The Mode picker of a champion's row, for the tests. */
+  stanceFor(t: number): HTMLSelectElement | null {
+    return this.champions.find((row) => row.t === t)?.stance ?? null;
+  }
+
   /** The Retreat button of a champion's row, for the tests. */
   retreatFor(t: number): HTMLButtonElement | null {
     return this.champions.find((row) => row.t === t)?.retreat ?? null;
@@ -322,7 +359,34 @@ export class ArmyPanel {
     const note = document.createElement("span");
     note.className = "attack-army__note";
 
-    item.append(input, icon, label, note);
+    // Its Mode (issue #220). The row is the radio's label, so a click on the
+    // picker must not reach it and pick or un-pick the champion.
+    const mode = document.createElement("span");
+    mode.className = "attack-army__mode";
+    const modeLabel = document.createElement("span");
+    modeLabel.className = "attack-army__mode-label";
+    modeLabel.textContent = "Mode";
+    const stance = document.createElement("select");
+    stance.className = "attack-army__mode-select";
+    stance.setAttribute("aria-label", `${championName(t)}'s Mode`);
+    for (const one of CHAMPION_STANCES) {
+      const option = document.createElement("option");
+      option.value = one;
+      option.textContent = STANCE_TEXT[one].label;
+      option.title = STANCE_TEXT[one].title;
+      stance.append(option);
+    }
+    stance.value = this.bucket.stance(t);
+    stance.title = STANCE_TEXT[this.bucket.stance(t)].title;
+    stance.addEventListener("click", (event) => event.stopPropagation());
+    stance.addEventListener("change", () => {
+      if (!isChampionStance(stance.value)) return;
+      this.bucket.setStance(t, stance.value);
+      this.onStanceChange?.(t, stance.value);
+    });
+    mode.append(modeLabel, stance);
+
+    item.append(input, icon, label, note, mode);
 
     // Flash's per-champion Retreat (issue #222): it calls this champion back
     // with the health it has, and the attack goes on.
@@ -343,11 +407,13 @@ export class ArmyPanel {
       });
       item.append(retreat);
     }
-    return { t, element: item, input, note, retreat };
+    return { t, element: item, input, note, retreat, stance };
   }
 
   private refreshRetreat(): void {
+    const live = this.bucket.live();
     for (const row of this.champions) {
+      row.stance.disabled = !live || this.onField.includes(row.t);
       if (!row.retreat) continue;
       const out = this.onField.includes(row.t);
       row.retreat.hidden = !out;
@@ -397,6 +463,11 @@ export class ArmyPanel {
           ? championNote(entry.blocked)
           : "";
       champion.element.title = entry?.blocked === "oneChampion" ? ONE_CHAMPION_TITLE : "";
+      // A champion on the field fights in the Mode it was flung in.
+      const stance = bucket.stance(champion.t);
+      champion.stance.value = stance;
+      champion.stance.title = STANCE_TEXT[stance].title;
+      champion.stance.disabled = !live || this.onField.includes(champion.t);
     }
 
     this.hint.textContent = !live

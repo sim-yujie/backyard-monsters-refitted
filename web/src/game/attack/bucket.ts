@@ -1,9 +1,12 @@
 import { getSession } from "@/api/auth";
 import {
+  DEFAULT_STANCE,
   bucketCost,
   dropRadius,
   flingCost,
   flingerPayload,
+  isChampionStance,
+  type ChampionStance,
   type Roster,
 } from "@/game/combat/rules";
 import type { AttackSession, ChampionBlockReason } from "./AttackSession";
@@ -48,6 +51,10 @@ import type { AttackSession, ChampionBlockReason } from "./AttackSession";
  * {@link champion} answers null whenever the session says that champion
  * cannot be sent, so a stale pick never reaches the log.
  *
+ * Each champion also has a Mode (issue #220, {@link stance}): the one its save
+ * entry remembers, Hybrid when it remembers none, until the player picks
+ * another. The pick travels with the champion into the fling.
+ *
  * ## Last army
  *
  * {@link saveLast} writes the requested rows and the champion pick under a
@@ -59,7 +66,7 @@ import type { AttackSession, ChampionBlockReason } from "./AttackSession";
 /** What one tap sends: the rows above zero, and the champion if picked. */
 export interface FlingComposition {
   readonly monsters: Roster;
-  readonly champion?: { readonly t: number; readonly l: number };
+  readonly champion?: { readonly t: number; readonly l: number; readonly s: ChampionStance };
 }
 
 /** A champion as the panel lists it. */
@@ -120,6 +127,8 @@ export class Bucket {
   private readonly order: readonly string[];
   private readonly requested: Record<string, number> = {};
   private championType: number | null = null;
+  /** Modes picked this attack, by champion type; the rest read their save entry. */
+  private readonly stances = new Map<number, ChampionStance>();
   private readonly listeners = new Set<(bucket: Bucket) => void>();
   private readonly storage: Storage | null;
   private readonly playerKey: string;
@@ -319,12 +328,30 @@ export class Bucket {
     this.notify();
   }
 
-  /** The picked champion as the fling wants it, or null. */
-  champion(): { t: number; l: number } | null {
+  /** The picked champion as the fling wants it, Mode and all, or null. */
+  champion(): { t: number; l: number; s: ChampionStance } | null {
     if (this.championType === null) return null;
     const entry = this.champions().find((champion) => champion.t === this.championType);
     if (!entry || !entry.available) return null;
-    return { t: entry.t, l: entry.l };
+    return { t: entry.t, l: entry.l, s: this.stance(entry.t) };
+  }
+
+  /**
+   * A champion's Mode (issue #220): the one picked this attack, else the one
+   * its save entry remembers, else Hybrid.
+   */
+  stance(t: number): ChampionStance {
+    const picked = this.stances.get(t);
+    if (picked) return picked;
+    const saved = this.session.target.roster.champions.find((entry) => entry.t === t)?.s;
+    return isChampionStance(saved) ? saved : DEFAULT_STANCE;
+  }
+
+  /** Picks a champion's Mode for its next fling. */
+  setStance(t: number, stance: ChampionStance): void {
+    if (this.stance(t) === stance) return;
+    this.stances.set(t, stance);
+    this.notify();
   }
 
   /* ── After a drop ───────────────────────────────────────────────────── */

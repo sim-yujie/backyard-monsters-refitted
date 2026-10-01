@@ -1,5 +1,6 @@
 import {
   DECLARE_WAR_COUNTDOWN_SECONDS,
+  isChampionStance,
   RETREAT_GRACE_SECONDS,
   TICKS_PER_SECOND,
   type FlingEvent,
@@ -129,7 +130,9 @@ const isEvent = (value: unknown): value is FlingEvent => {
     Number.isInteger(value.champion.t) &&
     Number.isInteger(value.champion.l) &&
     // Its power level (issue #202), absent from a log written before it.
-    (value.champion.pl === undefined || Number.isInteger(value.champion.pl))
+    (value.champion.pl === undefined || Number.isInteger(value.champion.pl)) &&
+    // Its Mode (issue #220), absent from a log written before it.
+    (value.champion.s === undefined || isChampionStance(value.champion.s))
   );
 };
 

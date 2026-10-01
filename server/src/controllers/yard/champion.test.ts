@@ -9,6 +9,7 @@ import {
   yardChampionHealAction,
   yardChampionRaiseAction,
   yardChampionRenameAction,
+  yardChampionStanceAction,
 } from "./champion.js";
 import { yardChampionFreezeAction, yardChampionThawAction } from "./chamber.js";
 import { runYardAction, type YardAction, type YardAnswer } from "./yardAction.js";
@@ -145,6 +146,32 @@ describe("champion routes", () => {
     expect((await run(yardChampionRenameAction, {})).status).toBe(400);
     expect((await run(yardChampionRenameAction, { name: "Kong" })).status).toBe(200);
     expect(championOf(db.row)).toMatchObject({ nm: "Kong" });
+  });
+
+  test("stance remembers a champion's Mode on its own entry, Krallen's too (#220)", async () => {
+    const now = getCurrentDateTime();
+    const gorgo = { t: 1, hp: 40_000, l: 1, ft: now + HOUR, fd: 0, fb: 0, pl: 1, status: 0 };
+    const krallen = { t: 5, hp: 50_000, l: 1, ft: now + HOUR, fd: 0, fb: 0, pl: 0, status: 0 };
+    db.row = rowOf({ champion: [gorgo, krallen] });
+
+    const answer = await run(yardChampionStanceAction, { type: "5", stance: "defensive" });
+    expect(answer.status).toBe(200);
+    const champions = db.row!.champion as Row[];
+    expect(champions[1]).toMatchObject({ t: 5, s: "defensive" });
+    expect(champions[0]!.s).toBeUndefined();
+
+    expect((await run(yardChampionStanceAction, { type: "1", stance: "offensive" })).status).toBe(200);
+    expect((db.row!.champion as Row[])[0]).toMatchObject({ t: 1, s: "offensive" });
+  });
+
+  test("stance refuses a Mode it does not know, and a champion the player does not keep", async () => {
+    db.row = rowOf({ champion: [{ t: 1, hp: 40_000, l: 1, ft: 0, fd: 0, fb: 0, pl: 1, status: 2 }] });
+    expect((await run(yardChampionStanceAction, { type: "1", stance: "berserk" })).status).toBe(400);
+    const juiced = await run(yardChampionStanceAction, { type: "1", stance: "hybrid" });
+    expect(juiced.body).toMatchObject({ reason: "noChampion" });
+    expect((await run(yardChampionStanceAction, { type: "3", stance: "hybrid" })).body).toMatchObject({
+      reason: "noChampion",
+    });
   });
 
   test("freeze then thaw is a round trip through the chamber", async () => {

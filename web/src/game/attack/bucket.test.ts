@@ -249,6 +249,23 @@ describe("Bucket fill order", () => {
 });
 
 describe("Bucket champion", () => {
+  it("gives each champion the Mode its save remembers, else Hybrid, until one is picked (#220)", () => {
+    const bucket = new Bucket(
+      sessionWith({
+        champions: [{ ...champion(5, 5), s: "defensive" }, { ...champion(3, 6), s: 7 }, champion(1, 2)],
+      }),
+      { storage: null },
+    );
+    expect([5, 3, 1].map((t) => bucket.stance(t))).toEqual(["defensive", "hybrid", "hybrid"]);
+    let heard = 0;
+    bucket.subscribe(() => (heard += 1));
+    bucket.setStance(3, "offensive");
+    bucket.setStance(3, "offensive");
+    expect(heard).toBe(1);
+    bucket.pickChampion(3);
+    expect(bucket.champion()).toEqual({ t: 3, l: 6, s: "offensive" });
+  });
+
   it("picks one by type with its level, replaces it, and un-picks with null", () => {
     const bucket = new Bucket(
       sessionWith({ champions: [champion(5, 5), champion(3, 6)] }),
@@ -259,11 +276,11 @@ describe("Bucket champion", () => {
       [3, true],
     ]);
     bucket.pickChampion(5);
-    expect(bucket.champion()).toEqual({ t: 5, l: 5 });
+    expect(bucket.champion()).toEqual({ t: 5, l: 5, s: "hybrid" });
     bucket.pickChampion(3);
-    expect(bucket.champion()).toEqual({ t: 3, l: 6 });
+    expect(bucket.champion()).toEqual({ t: 3, l: 6, s: "hybrid" });
     bucket.setCount("C1", 4);
-    expect(bucket.composition()).toEqual({ monsters: { C1: 4 }, champion: { t: 3, l: 6 } });
+    expect(bucket.composition()).toEqual({ monsters: { C1: 4 }, champion: { t: 3, l: 6, s: "hybrid" } });
     bucket.pickChampion(null);
     expect(bucket.champion()).toBeNull();
     expect(bucket.composition()).toEqual({ monsters: { C1: 4 } });
@@ -296,7 +313,7 @@ describe("Bucket champion", () => {
       [5, true, null],
     ]);
     bucket.pickChampion(5);
-    expect(bucket.champion()).toEqual({ t: 5, l: 1 });
+    expect(bucket.champion()).toEqual({ t: 5, l: 1, s: "hybrid" });
     expect(bucket.isEmpty()).toBe(false);
   });
 
@@ -420,7 +437,7 @@ describe("Bucket last army", () => {
       { storage, playerKey: "2503" },
     );
     expect(second.loadLast()).toBe(true);
-    expect(second.composition()).toEqual({ monsters: { C1: 12, C4: 2 }, champion: { t: 3, l: 2 } });
+    expect(second.composition()).toEqual({ monsters: { C1: 12, C4: 2 }, champion: { t: 3, l: 2, s: "hybrid" } });
 
     // Another player on the same browser starts from nothing.
     const other = new Bucket(sessionWith({ monsters: { C1: 30 } }), { storage, playerKey: "1" });

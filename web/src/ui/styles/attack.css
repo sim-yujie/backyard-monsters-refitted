@@ -559,7 +559,8 @@
   grid-template-columns: auto auto minmax(0, 1fr);
   grid-template-areas:
     "pick icon label"
-    "pick icon note";
+    "pick icon note"
+    "pick icon mode";
   align-items: center;
   column-gap: var(--space-2);
   row-gap: 0;
@@ -589,7 +590,8 @@
   grid-template-columns: auto auto minmax(0, 1fr) auto;
   grid-template-areas:
     "pick icon label retreat"
-    "pick icon note retreat";
+    "pick icon note retreat"
+    "pick icon mode retreat";
 }
 
 .attack-army__champion-retreat {
@@ -600,6 +602,35 @@
 
 .attack-army__champion-retreat[hidden] {
   display: none;
+}
+
+/* Its Mode (issue #220), under its name. */
+.attack-army__mode {
+  grid-area: mode;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+  cursor: default;
+}
+
+.attack-army__mode-select {
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.attack-army__mode-select:disabled {
+  color: var(--colour-text-muted);
+  cursor: not-allowed;
 }
 
 .attack-army__champion--fighting .attack-army__note {

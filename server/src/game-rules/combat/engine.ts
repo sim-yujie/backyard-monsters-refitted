@@ -37,6 +37,16 @@ import {
   lootAuraBonus,
 } from "./champions.js";
 import { buildPathGrid } from "./grid.js";
+import {
+  cannotBeat,
+  exposure,
+  focusFeature,
+  stanceBonus,
+  stanceWeights,
+  threatFeature,
+  towerPerTick,
+} from "./stance.js";
+import type { ChampionStance, StanceWeights } from "./stance.js";
 import { mulberry32 } from "./rng.js";
 import { REZGHUL_ID, SPLIT_CHILD_ID } from "./potential.js";
 import {
@@ -114,7 +124,7 @@ import {
 import type { Cart, EngineBuilding, EngineYard } from "./yard.js";
 import type { PathGrid } from "./grid.js";
 import type { Rng } from "./rng.js";
-import type { CreepHit, CreepIndex } from "./targeting.js";
+import type { ChampionScoring, CreepHit, CreepIndex } from "./targeting.js";
 import { numberOf } from "./types.js";
 import type {
   CombatBuildingData,
@@ -247,6 +257,10 @@ import type {
  *    (otherwise note 7 holds); the flung Fomor's render-only first look on
  *    landing (`Fomor.as:13-16`) is not taken. Defenders still choose their
  *    quarry by the owner's rules of note 9.
+ * 13. **Modes (issue #220) are not Flash.** An attacking champion flung in
+ *    Offensive or Defensive scores Flash's candidate lists rather than taking
+ *    the closest (`stance.ts`); Hybrid, and a log that names no Mode, is the
+ *    Flash champion. A defending champion has no Mode.
  *
  * ## The random stream's order
  *
@@ -625,6 +639,11 @@ interface Creep {
    * so its own 100-frame look never runs (`:804`).
    */
   looking: boolean;
+  /**
+   * An attacking champion's Mode as weights (issue #220, `stance.ts`); null
+   * for every other creep and for a Hybrid champion, which picks as Flash's.
+   */
+  weights: StanceWeights | null;
 }
 
 /** An aura's own state: `AOEEnrage`'s counter and list, or `ProximityLootBuff`'s list. */
@@ -657,6 +676,7 @@ const NO_ABILITIES = {
   spawnY: 0,
   homing: false,
   looking: false,
+  weights: null,
 } as const;
 
 interface DefenderHome {
@@ -1366,7 +1386,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (hasFireball(id, creep.level, creep.power)) creep.hitFlags |= TARGETS_FLYING;
   };
 
-  const spawnChampion = (type: number, level: number, at: Cart, power = 0): Creep | null => {
+  const spawnChampion = (
+    type: number,
+    level: number,
+    at: Cart,
+    power = 0,
+    stance?: ChampionStance,
+  ): Creep | null => {
     const id = championByType(type);
     if (!id) return null;
     // At its level plus its power level's bonus, as the caged champion fights
@@ -1425,6 +1451,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
     equipChampion(creep, power, at);
+    creep.weights = stanceWeights(stance);
     championHp = creep.hp;
     championsHp[id] = creep.hp;
     return creep;
@@ -1516,6 +1543,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         event.champion.l,
         dropPoint(event.x, event.y, radius),
         event.champion.pl ?? 0,
+        event.champion.s,
       );
     }
   };
@@ -1578,12 +1606,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     let chosen: EngineBuilding | null;
     if (creep.champion) {
       // A champion's own lists (`ChampionBase.findTarget`, `Krallen.findTarget`, issue #222).
+      // Scored by its Mode when it has one (issue #220).
       chosen = findChampionTarget(
         yard,
         creep.x,
         creep.y,
         targetContext,
         creep.monsterId === KRALLEN_ID,
+        creep.weights ? stanceScoring(creep, creep.weights) : undefined,
       );
     } else {
       const result = findBuildingTarget(yard, creep.x, creep.y, creep.targetGroup, targetContext);
@@ -1599,6 +1629,68 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     routeTo(creep, chosen);
     return true;
+  };
+
+  /**
+   * What a champion's Mode makes of each candidate (issue #220, `stance.ts`),
+   * read off the field as it looks. The allies on each building and the
+   * towers' fire at it are summed in id order, and only when a weight reads
+   * them.
+   */
+  const stanceScoring = (champion: Creep, weights: StanceWeights): ChampionScoring => {
+    const allies = new Map<number, number>();
+    if (weights.focus !== 0) {
+      for (const other of creeps) {
+        if (other === champion || other.friendly || other.gone || other.hp <= 0) continue;
+        if (other.targetBuilding < 0) continue;
+        allies.set(other.targetBuilding, (allies.get(other.targetBuilding) ?? 0) + 1);
+      }
+    }
+    const readsFire = weights.threat !== 0 || weights.margin > 0;
+    const fire = new Map<number, number>();
+    /** The damage per tick of every live tower that covers `building` and can hit the champion. */
+    const fireAt = (building: EngineBuilding): number => {
+      if (!readsFire) return 0;
+      const known = fire.get(building.id);
+      if (known !== undefined) return known;
+      const at = towerScanPoint(building);
+      let perTick = 0;
+      for (const tower of towers) {
+        const gun = tower.building;
+        if (gun.hp <= 0 || gun.jarred) continue;
+        if (!canHit(towerTargets(gun.type), champion.flags)) continue;
+        const scan = towerScanPoint(gun);
+        if (distanceSquared(scan.x, scan.y, at.x, at.y) >= tower.range * tower.range) continue;
+        const stats = towerStats(gun.type, gun.level, yard.kind);
+        perTick += towerPerTick(stats?.damage ?? 0, stats?.rate ?? 0, TOWER_REARM_MULTIPLIER);
+      }
+      fire.set(building.id, perTick);
+      return perTick;
+    };
+    const liveTower = (building: EngineBuilding): boolean =>
+      building.hp > 0 && building.kind === "tower" && !isBunker(building.type) && !building.jarred;
+    const delay = Math.max(1, swingDelay(champion));
+    /** The share of its health taking `building` down would cost it. */
+    const shareAt = (building: EngineBuilding): number =>
+      exposure(
+        fireAt(building),
+        building.hp,
+        fortifiedDamage(champion.damage, building.fortification, 0) / delay,
+        champion.hp,
+      );
+    return {
+      bonus: (building) =>
+        stanceBonus(weights, {
+          tower: liveTower(building) ? 1 : 0,
+          loot: unlootedForKrallen(building) ? 1 : 0,
+          finish: building.maxHp > 0 ? 1 - building.hp / building.maxHp : 0,
+          focus: focusFeature(allies.get(building.id) ?? 0),
+          threat: weights.threat !== 0 ? threatFeature(shareAt(building)) : 0,
+          stay: building.id === champion.targetBuilding ? 1 : 0,
+        }),
+      skip: (building) =>
+        weights.margin > 0 && liveTower(building) && cannotBeat(shareAt(building), weights.margin),
+    };
   };
 
   /** Sets a creep on its way to a building: straight for a flyer, by the grid on foot. */
