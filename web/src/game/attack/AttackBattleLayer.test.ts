@@ -9,6 +9,7 @@ import {
   AttackBattleLayer,
   DEPTH_BIAS,
   MonsterSheetTextures,
+  abilityTint,
   animationFor,
   creepColour,
   creepZIndex,
@@ -56,6 +57,16 @@ const sheetOf = (id: string, level = 1) => {
   if (!sheet) throw new Error(`no sheet for ${id}`);
   return sheet;
 };
+
+describe("ability tints (issue #222)", () => {
+  it("colours the flame over the enrage over the loot aura, and leaves the rest white", () => {
+    expect(abilityTint(null)).toBe(0xffffff);
+    expect(abilityTint(creepOf())).toBe(0xffffff);
+    expect(abilityTint(creepOf({ lootBoosted: true }))).toBe(0xa8ff80);
+    expect(abilityTint(creepOf({ lootBoosted: true, enraged: true }))).toBe(0xff9cff);
+    expect(abilityTint(creepOf({ enraged: true, burning: true }))).toBe(0xffb070);
+  });
+});
 
 describe("headings and cells", () => {
   it("picks column 0 for a creep heading right, and walks the columns clockwise", () => {

@@ -1,0 +1,156 @@
+{
+  "name": "korath-and-krallen",
+  "description": "A level 6 Korath at power level 3 (fireball, flame and quake) and a level 5 Krallen at power level 2 (loot first, loot aura) with Pokeys; Krallen is called back with the Retreat champion button and her aura lasts until she has walked off (issue #222).",
+  "yard": "sandbox",
+  "kind": "main",
+  "levels": {
+    "C1": 6,
+    "C2": 6,
+    "C3": 6,
+    "C4": 6,
+    "C5": 6,
+    "C6": 6,
+    "C7": 6,
+    "C8": 6,
+    "C13": 6,
+    "C14": 6
+  },
+  "playerLevel": 20,
+  "tailTicks": 10000,
+  "log": {
+    "v": 1,
+    "seed": 22201,
+    "events": [
+      {
+        "kind": "fling",
+        "t": 200,
+        "x": 180,
+        "y": -480,
+        "r": 300,
+        "monsters": {
+          "C1": 60
+        },
+        "champion": {
+          "t": 4,
+          "l": 6,
+          "pl": 3
+        }
+      },
+      {
+        "kind": "fling",
+        "t": 400,
+        "x": 120,
+        "y": -360,
+        "r": 300,
+        "monsters": {
+          "C1": 40
+        },
+        "champion": {
+          "t": 5,
+          "l": 5,
+          "pl": 2
+        }
+      },
+      {
+        "kind": "championRetreat",
+        "t": 4000,
+        "c": 5
+      }
+    ]
+  },
+  "expected": {
+    "ticks": 14000,
+    "damage": 31.038815973191845,
+    "destroyed": null,
+    "attackloot": {
+      "r1": 10250830,
+      "r2": 10232740,
+      "r3": 10259740,
+      "r4": 5248130
+    },
+    "defenderLoss": {
+      "r1": 10278220,
+      "r2": 10258120,
+      "r3": 10288120,
+      "r4": 5275220
+    },
+    "firedTraps": 0,
+    "destroyedBuildings": 52,
+    "creepsFlung": 100,
+    "creepsKilled": 97,
+    "championHp": 175025.66340535082,
+    "damagedBuildings": 55,
+    "rngDraws": 23527,
+    "checkpoints": [
+      {
+        "tick": 800,
+        "digest": "388146abbb77439d"
+      },
+      {
+        "tick": 1600,
+        "digest": "729329b8290eb962"
+      },
+      {
+        "tick": 2400,
+        "digest": "b051ed8f1aa73545"
+      },
+      {
+        "tick": 3200,
+        "digest": "bfc48aa7ebab6a4d"
+      },
+      {
+        "tick": 4000,
+        "digest": "b9c7619dde7c03fb"
+      },
+      {
+        "tick": 4800,
+        "digest": "b745616b9f53ac31"
+      },
+      {
+        "tick": 5600,
+        "digest": "59939f9e364a3944"
+      },
+      {
+        "tick": 6400,
+        "digest": "4a28e31dd16b1707"
+      },
+      {
+        "tick": 7200,
+        "digest": "329dcea20a6326a8"
+      },
+      {
+        "tick": 8000,
+        "digest": "402233f85c841f2e"
+      },
+      {
+        "tick": 8800,
+        "digest": "05d5400c1ae81876"
+      },
+      {
+        "tick": 9600,
+        "digest": "17eeec1d1726efa7"
+      },
+      {
+        "tick": 10400,
+        "digest": "6416ac379ff1e109"
+      },
+      {
+        "tick": 11200,
+        "digest": "b5bd63682037640e"
+      },
+      {
+        "tick": 12000,
+        "digest": "b9d280d8fbdf005a"
+      },
+      {
+        "tick": 12800,
+        "digest": "d9427093e831bbcd"
+      },
+      {
+        "tick": 13600,
+        "digest": "b81c52e09688aed2"
+      }
+    ],
+    "digest": "bea904c6b4b661b4"
+  }
+}

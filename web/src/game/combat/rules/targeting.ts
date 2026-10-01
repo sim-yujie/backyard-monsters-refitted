@@ -1,4 +1,4 @@
-import { TARGET_GROUP, flyerMode, isLootable } from "./stats.js";
+import { STORAGE_TYPES, TARGET_GROUP, flyerMode, isLootable } from "./stats.js";
 import { distanceSquared, isMainTarget } from "./yard.js";
 import type { EngineBuilding, EngineYard } from "./yard.js";
 
@@ -306,4 +306,99 @@ export const findBuildingTarget = (
     second: secondIndex < 0 ? null : (buildings[secondIndex] as EngineBuilding),
     fellThrough,
   };
+};
+
+/* ── A champion's building (`ChampionBase.findTarget`, issue #222) ────────── */
+
+/** The Storage Silo, the Town Hall and the outpost core (`ChampionBase.as:573`). */
+const CHAMPION_CORE_TYPES: readonly number[] = [6, 14, 112];
+
+/**
+ * Whether a lootable building is still worth looting to Krallen. Storage is a
+ * `BSTORAGE`, which never sets `_looted` (only `BRESOURCE.Loot` does,
+ * `BRESOURCE.as:121-125`), so only a harvester runs dry.
+ */
+export const unlootedForKrallen = (building: EngineBuilding): boolean =>
+  isLootable(building.type) && (STORAGE_TYPES.includes(building.type) || !building.looted);
+
+/**
+ * The building a champion attacks (issue #222).
+ *
+ * `ChampionBase.findTarget` (`:547-626`) pools three lists and takes the
+ * closest of all of them: every harvester, the Storage Silo, the Town Hall and
+ * the outpost core; every tower not under a jar; and every bunker in use. Only
+ * when all three are empty does it take any main building.
+ *
+ * Krallen's own (`Krallen.as:60-228`) goes by stages instead: lootables she has
+ * not drained; else towers; else the bunkers in use together with the
+ * harvesters she has drained (the bunkers alone do not close the stage, so the
+ * drained ones always join them); and only then anything.
+ *
+ * Distances are `GLOBAL.QuickDistance` less the building's `_middle`, stored
+ * in an `int` (`:575`), so they truncate, which is why ties are common. The
+ * list is sorted on that; ties keep the order the lists were built in, which
+ * is id order within each list.
+ */
+export const findChampionTarget = (
+  yard: EngineYard,
+  fromX: number,
+  fromY: number,
+  context: TargetContext,
+  krallen: boolean,
+): EngineBuilding | null => {
+  let best: EngineBuilding | null = null;
+  let bestAway = 0;
+  let found = false;
+
+  const consider = (building: EngineBuilding): void => {
+    found = true;
+    const away = Math.trunc(
+      Math.sqrt(
+        distanceSquared(fromX, fromY, building.cx + building.middle, building.cy + building.middle),
+      ) - building.middle,
+    );
+    if (best === null || away < bestAway) {
+      best = building;
+      bestAway = away;
+    }
+  };
+
+  const buildings = yard.buildings;
+  const towerUp = (building: EngineBuilding): boolean =>
+    building.hp > 0 && building.kind === "tower" && !isBunker(building.type) && !building.jarred;
+  const bunkerUp = (building: EngineBuilding): boolean =>
+    building.hp > 0 && isBunker(building.type) && context.bunkerInUse(building);
+
+  if (krallen) {
+    for (const building of buildings) {
+      if (building.hp > 0 && unlootedForKrallen(building)) consider(building);
+    }
+    if (!found) for (const building of buildings) if (towerUp(building)) consider(building);
+    if (!found) {
+      for (const building of buildings) if (bunkerUp(building)) consider(building);
+      for (const building of buildings) {
+        if (building.hp > 0 && isLootable(building.type) && !unlootedForKrallen(building)) {
+          consider(building);
+        }
+      }
+    }
+  } else {
+    for (const building of buildings) {
+      if (building.hp <= 0) continue;
+      if (building.kind === "resource" || CHAMPION_CORE_TYPES.includes(building.type)) {
+        consider(building);
+      }
+    }
+    for (const building of buildings) if (towerUp(building)) consider(building);
+    for (const building of buildings) if (bunkerUp(building)) consider(building);
+  }
+
+  if (!found) {
+    for (const building of buildings) {
+      if (building.hp <= 0 || !isMainTarget(building.kind)) continue;
+      if (building.kind === "tower" && !isBunker(building.type) && building.jarred) continue;
+      consider(building);
+    }
+  }
+  return best;
 };

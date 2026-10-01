@@ -1,6 +1,6 @@
 {
-  "name": "caged-champion",
-  "description": "An attack on the sandbox yard's Champion Cage: its level 4 Drull comes out at power level 2 and part health, against ground monsters and Teratorns (issue #195).",
+  "name": "caged-korath",
+  "description": "The sandbox yard's Champion Cage holding a level 6 Korath at power level 3: he fireballs the Teratorns, burns what he hits and quakes the ground monsters (issue #222).",
   "yard": "sandbox",
   "kind": "main",
   "levels": {
@@ -19,15 +19,15 @@
   "tailTicks": 12000,
   "defence": {
     "defenderChampion": {
-      "t": 2,
-      "l": 4,
-      "hp": 60000,
-      "pl": 2
+      "t": 4,
+      "l": 6,
+      "hp": 175000,
+      "pl": 3
     }
   },
   "log": {
     "v": 1,
-    "seed": 19502,
+    "seed": 22202,
     "events": [
       {
         "kind": "fling",
@@ -37,7 +37,7 @@
         "r": 300,
         "monsters": {
           "C1": 80,
-          "C2": 20
+          "C6": 20
         }
       },
       {
@@ -54,104 +54,104 @@
   },
   "expected": {
     "ticks": 14400,
-    "damage": 15.312022602953505,
+    "damage": 0.7638352744057784,
     "destroyed": null,
     "attackloot": {
-      "r1": 27518,
-      "r2": 31630,
-      "r3": 25627,
-      "r4": 26869
+      "r1": 1221,
+      "r2": 1591,
+      "r3": 1443,
+      "r4": 1295
     },
     "defenderLoss": {
-      "r1": 30828,
-      "r2": 35420,
-      "r3": 28742,
-      "r4": 30114
+      "r1": 1386,
+      "r2": 1806,
+      "r3": 1638,
+      "r4": 1470
     },
     "firedTraps": 0,
-    "destroyedBuildings": 18,
+    "destroyedBuildings": 0,
     "creepsFlung": 112,
-    "creepsKilled": 110,
+    "creepsKilled": 112,
     "championHp": null,
-    "damagedBuildings": 21,
-    "rngDraws": 4991,
+    "damagedBuildings": 3,
+    "rngDraws": 4108,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "b94a34ebabddb1a5"
+        "digest": "93215638c01ec3c6"
       },
       {
         "tick": 1600,
-        "digest": "f42aee780c97c092"
+        "digest": "268c9de860a081b6"
       },
       {
         "tick": 2400,
-        "digest": "9741443f17979789"
+        "digest": "c33413a302e1d4b1"
       },
       {
         "tick": 3200,
-        "digest": "8de829bd0e8333e7"
+        "digest": "0bbb04cf256c243d"
       },
       {
         "tick": 4000,
-        "digest": "8a5ed82a726e2c04"
+        "digest": "fd0009740be44fa2"
       },
       {
         "tick": 4800,
-        "digest": "77dbb14e3b583870"
+        "digest": "db3244b9df2e015f"
       },
       {
         "tick": 5600,
-        "digest": "9d6aca38e8c68e2e"
+        "digest": "9fc434bac50acc58"
       },
       {
         "tick": 6400,
-        "digest": "3cc31291550e3dff"
+        "digest": "f07dac9611995d0c"
       },
       {
         "tick": 7200,
-        "digest": "ed9b21657a5382b3"
+        "digest": "89b0716b9c2b7609"
       },
       {
         "tick": 8000,
-        "digest": "3c1ef1756efffe17"
+        "digest": "1fd99b64809ad512"
       },
       {
         "tick": 8800,
-        "digest": "2965d9e74cfc4efd"
+        "digest": "5a9877ee2b965aa4"
       },
       {
         "tick": 9600,
-        "digest": "62e1e533b15f8859"
+        "digest": "2504242923e6068f"
       },
       {
         "tick": 10400,
-        "digest": "13965ead96ad9003"
+        "digest": "0025106337598f81"
       },
       {
         "tick": 11200,
-        "digest": "93f66d6ab70a76cc"
+        "digest": "e1484aaaefca5ec8"
       },
       {
         "tick": 12000,
-        "digest": "2b75a0d44dcb672e"
+        "digest": "5f38de7ce74d6fca"
       },
       {
         "tick": 12800,
-        "digest": "4ede69a49d59964a"
+        "digest": "9d6afc4646a407bc"
       },
       {
         "tick": 13600,
-        "digest": "9bc3ef40a4ff1cda"
+        "digest": "fb3d0741372cdb87"
       },
       {
         "tick": 14400,
-        "digest": "b375a63719b65da5"
+        "digest": "62f5f35b89635779"
       }
     ],
-    "digest": "b375a63719b65da5",
+    "digest": "62f5f35b89635779",
     "bunkerLosses": {},
     "bunkerGarrisons": {},
-    "defenderChampionHp": 0
+    "defenderChampionHp": 129040
   }
 }

@@ -97,7 +97,7 @@ export const attackFinalLockKey = (basesaveid: number) => `attack-final:${basesa
 /** Held for no longer than a save or a finalisation can take. */
 export const ATTACK_FINAL_LOCK_SECONDS = 30;
 
-const EVENT_KINDS = new Set(["fling", "bomb", "siege", "retreat"]);
+const EVENT_KINDS = new Set(["fling", "bomb", "siege", "retreat", "championRetreat"]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -113,6 +113,8 @@ const isEvent = (value: unknown): value is FlingEvent => {
   if (!isRecord(value) || typeof value.kind !== "string" || !EVENT_KINDS.has(value.kind)) return false;
   if (!isTick(value.t)) return false;
   if (value.kind === "retreat") return true;
+  // One champion called back by its type (issue #222).
+  if (value.kind === "championRetreat") return Number.isInteger(value.c);
   if (!isCoordinate(value.x) || !isCoordinate(value.y)) return false;
   if (value.kind === "bomb") return typeof value.id === "string";
   if (value.kind === "siege") return typeof value.weapon === "string";

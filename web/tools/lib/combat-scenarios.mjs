@@ -294,6 +294,100 @@ export const SCENARIOS = [
       ],
     },
   },
+  // Issue #222: the Flash champions' abilities, on both sides.
+  {
+    name: "korath-and-krallen",
+    description:
+      "A level 6 Korath at power level 3 (fireball, flame and quake) and a level 5 Krallen at " +
+      "power level 2 (loot first, loot aura) with Pokeys; Krallen is called back with the " +
+      "Retreat champion button and her aura lasts until she has walked off (issue #222).",
+    yard: "sandbox",
+    kind: "main",
+    levels: MAXED,
+    playerLevel: 20,
+    tailTicks: 10000,
+    log: {
+      v: 1,
+      seed: 22201,
+      events: [
+        {
+          kind: "fling",
+          t: 200,
+          x: 180,
+          y: -480,
+          r: 300,
+          monsters: { C1: 60 },
+          champion: { t: 4, l: 6, pl: 3 },
+        },
+        {
+          kind: "fling",
+          t: 400,
+          x: 120,
+          y: -360,
+          r: 300,
+          monsters: { C1: 40 },
+          champion: { t: 5, l: 5, pl: 2 },
+        },
+        { kind: "championRetreat", t: 4000, c: 5 },
+      ],
+    },
+  },
+  {
+    name: "caged-korath",
+    description:
+      "The sandbox yard's Champion Cage holding a level 6 Korath at power level 3: he " +
+      "fireballs the Teratorns, burns what he hits and quakes the ground monsters (issue #222).",
+    yard: "sandbox",
+    kind: "main",
+    levels: MAXED,
+    playerLevel: 20,
+    tailTicks: 12000,
+    defence: {
+      defenderChampion: { t: 4, l: 6, hp: 175000, pl: 3 },
+    },
+    log: {
+      v: 1,
+      seed: 22202,
+      events: [
+        { kind: "fling", t: 160, x: 120, y: 120, r: 300, monsters: { C1: 80, C6: 20 } },
+        { kind: "fling", t: 2400, x: 60, y: -180, r: 300, monsters: { C14: 12 } },
+      ],
+    },
+  },
+  {
+    name: "fomor-both-sides",
+    description:
+      "A level 6 Fomor at power level 3 enraging and following its wounded Pokeys, against a " +
+      "caged level 5 Fomor enraging the bunkers' garrisons (issue #222).",
+    yard: "sandbox",
+    kind: "main",
+    levels: MAXED,
+    playerLevel: 20,
+    tailTicks: 12000,
+    defence: {
+      bunkers: {
+        83: { C1: 8 },
+        84: { C2: 6 },
+      },
+      defenderLevels: { C1: 4, C2: 4 },
+      defenderChampion: { t: 3, l: 5, hp: 25000, pl: 2 },
+    },
+    log: {
+      v: 1,
+      seed: 22203,
+      events: [
+        {
+          kind: "fling",
+          t: 200,
+          x: 300,
+          y: -300,
+          r: 300,
+          monsters: { C1: 80, C8: 10 },
+          champion: { t: 3, l: 6, pl: 3 },
+        },
+      ],
+    },
+  },
 ];
 
 /** The scenario the bench times, which is the busiest of them. */

@@ -826,6 +826,7 @@ full on every save (a save is a snapshot, and the server keeps no partial state 
       "monsters": { "C1": 30, "C4": 5 }, "champion": { "t": 5, "l": 5, "pl": 2 } },
     { "t": 2400, "kind": "bomb",   "id": "pb1", "x": 180, "y": -480 },
     { "t": 3100, "kind": "siege",  "weapon": "jars", "x": 180, "y": -480 },
+    { "t": 6000, "kind": "championRetreat", "c": 5 },
     { "t": 9000, "kind": "retreat" }
   ]
 }
@@ -842,6 +843,7 @@ full on every save (a save is a snapshot, and the server keeps no partial state 
 | `champion` | At most one ordinary champion per attack, plus Krallen (type 5) alongside it, each flung once (`UI_TOP.as:336-347`, issue #74); `hp > 0` and normal status at attack start. `pl` is its power level (issue #202): the engine adds the `bonus*` ladders at it (`championStatWithPower`), the web client stamps it from the roster's champion entry, and the server's fightable log keeps it only up to the stored `pl`. A log without `pl` (written before it existed) fights at the level alone | `l` and `pl` never above the stored champion's |
 | `bomb` | One per resource per attack, tier within `A.catapult`, cost within the attacker's pool at that tick | `ResourceBombs.as:301-315` |
 | `siege` | Quantity within `A.siege` | — |
+| `championRetreat` | One champion called back by its type, `c`: Flash's "Retreat" on the champion's own button (`CHAMPIONBUTTON.as:98-103`, issue #222). It leaves the field with the health it has; the attack goes on | `c` a whole number; a champion that is not on the field is not touched |
 
 The server runs `replayAttack` over the log and derives the outcome. The web client runs the same
 engine with the same seed to render, so what the player watched is what the server wrote. This

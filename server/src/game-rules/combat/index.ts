@@ -30,6 +30,7 @@
 
 export * from "./combatStatsData.js";
 export * from "./stats.js";
+export * from "./champions.js";
 export * from "./types.js";
 export * from "./damagePercent.js";
 export * from "./potential.js";

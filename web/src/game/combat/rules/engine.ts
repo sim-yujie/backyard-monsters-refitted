@@ -1,3 +1,41 @@
+import {
+  CHAMPION_RETARGET_FRAMES,
+  ENRAGE_INTERVAL,
+  ENRAGE_RADIUS,
+  FLAME_INTERVAL,
+  FLAME_SHARE,
+  FLYING_START_FRAME_SPREAD,
+  FOMOR_BUFF_SEARCH,
+  FOMOR_DRIFT,
+  FOMOR_HEALED_FRAMES,
+  FOMOR_ID,
+  FOMOR_IDLE_FRAMES,
+  FOMOR_LOOK_FRAMES,
+  KORATH_DEFEND_FLYER_REACH,
+  KORATH_FIREBALL_DIVISOR,
+  KORATH_ID,
+  KRALLEN_ID,
+  LOOT_AURA_FRAMES,
+  QUAKE_END_FRAME,
+  QUAKE_FRAME_CYCLE,
+  QUAKE_INNER_RANGES,
+  QUAKE_RADIUS_RANGES,
+  QUAKE_STRIKE_FRAME,
+  QUAKE_SWINGS,
+  START_FRAME_SPREAD,
+  UNTARGETABLE_TYPES,
+  championPower,
+  enrageArmour,
+  enrageMultiplier,
+  fomorBuff,
+  hasFireball,
+  hasLootAura,
+  hasQuake,
+  krallenAuraRadius,
+  krallenBuff,
+  linearAreaDamage,
+  lootAuraBonus,
+} from "./champions.js";
 import { buildPathGrid } from "./grid.js";
 import { mulberry32 } from "./rng.js";
 import { REZGHUL_ID, SPLIT_CHILD_ID } from "./potential.js";
@@ -51,9 +89,12 @@ import {
   TARGETS_DEFENDERS,
   TARGETS_FLYING,
   TARGETS_GROUND,
+  TARGETS_INVISIBLE,
   createCreepIndex,
   defenseFlags,
   findBuildingTarget,
+  findChampionTarget,
+  unlootedForKrallen,
   isBunker,
   isFlyingMovement,
   oldStyleTargets,
@@ -73,7 +114,7 @@ import {
 import type { Cart, EngineBuilding, EngineYard } from "./yard.js";
 import type { PathGrid } from "./grid.js";
 import type { Rng } from "./rng.js";
-import type { CreepIndex } from "./targeting.js";
+import type { CreepHit, CreepIndex } from "./targeting.js";
 import { numberOf } from "./types.js";
 import type {
   CombatBuildingData,
@@ -155,8 +196,7 @@ import type {
  *    damage either way.
  * 8. **Not modelled at all**, each because its numbers were never traced
  *    (`docs/specs/combat.md:1362-1375`) or because it is out of Map Room 2's
- *    scope: champion abilities and buffs beyond damage and looting,
- *    invisibility, `Blink`, `PoisonOnAttack`, `GlavesOnAttack`, the Stronghold's
+ *    scope: invisibility, `Blink`, `PoisonOnAttack`, `GlavesOnAttack`, the Stronghold's
  *    four emitters, the Spurtz Cannon's burst, every siege weapon, and the
  *    per-creep `_hitLimit`. A yard holding one of those buildings fires it as
  *    an ordinary single-target tower.
@@ -188,14 +228,35 @@ import type {
  *    clamps a gain to the attacker's storage cap (`ATTACK.as:696-710`); the cap
  *    is a property of the attacker's row, not the battle, so the audit derives
  *    it (§2.4 `lootOverCap`) and the engine reports the uncapped gain.
- * 11. **Only the looting property's construction is modelled.** A creep loots
- *    at 0.5 and a resource specialist or a champion at 2
- *    (`MonsterBase.as:260`, `CreepBase.as:224-226`, `ChampionBase.as:221`),
- *    Krallen included, whose `_lootMults` is never read (issue #178). What
- *    changes it during a battle is not: Krallen's `ProximityLootBuff` at
- *    power level 2 (`CHAMPIONCAGE.as:265`) and the `LootingMultiplier` it
- *    hands nearby creeps, both abilities under note 8, and the Vacuum's
- *    `lootBonus`, a siege weapon.
+ * 11. **The looting property.** A creep loots at 0.5 and a resource
+ *    specialist or a champion at 2 (`MonsterBase.as:260`, `CreepBase.as:224-226`,
+ *    `ChampionBase.as:221`), Krallen included, whose `_lootMults` is never read
+ *    (issue #178). Krallen's aura adds to it (note 12); the Vacuum's
+ *    `lootBonus`, a siege weapon, is not modelled.
+ * 12. **The champions' own behaviour (issue #222)**, from
+ *    `com/monsters/monsters/champions/*.as` and the numbers in `champions.ts`:
+ *    their target lists (`ChampionBase.findTarget`, Krallen's loot first) and
+ *    100-frame look; Korath's fireball at flyers, his flame and his quake;
+ *    Fomor's enrage aura, its following of wounded allies and its fireball's
+ *    loot of 1; Krallen's loot aura; and the "Retreat" on a champion's own
+ *    button, the `championRetreat` event. Only a ranged champion, or Korath
+ *    with his fireball, can hit a flyer. Where the engine still parts from
+ *    Flash: a ground Fomor walks straight to the ally it follows (the grid
+ *    routes to buildings only); a champion that leaves walks straight back to
+ *    its spawn point, and only so its aura lasts until it is off the field
+ *    (otherwise note 7 holds); the flung Fomor's render-only first look on
+ *    landing (`Fomor.as:13-16`) is not taken. Defenders still choose their
+ *    quarry by the owner's rules of note 9.
+ *
+ * ## The random stream's order
+ *
+ * One stream, drawn in the order the step runs: the bunkers' interceptor picks
+ * (towers and traps draw nothing), then the cage's champion's start frame when
+ * it comes out, then each creep in id order (its route's scatter, a storage
+ * hit's resource pick), then the Slimeattikus Minis born at the step's end.
+ * An event draws when it is applied, before the next step: a fling draws each
+ * creep's landing point in monster id order and then the champion's, followed
+ * by the champion's start frame (one draw, and a second for a flyer).
  */
 
 /* ── Inputs ───────────────────────────────────────────────────────────────── */
@@ -344,6 +405,14 @@ export interface CreepSnapshot {
   readonly targetBuilding: number;
   /** The creep it is on — a defender's quarry — or -1. */
   readonly targetCreep: number;
+  /** Korath's flame is on it (issue #222). */
+  readonly burning?: boolean;
+  /** Inside Fomor's enrage aura: faster, and harder to hurt. */
+  readonly enraged?: boolean;
+  /** Inside Krallen's loot aura. */
+  readonly lootBoosted?: boolean;
+  /** Korath standing in his quake. */
+  readonly quaking?: boolean;
 }
 
 /**
@@ -395,6 +464,15 @@ export type BattleVisualEvent =
       readonly iy: number;
       /** Health actually taken, capped at what the creep had left. */
       readonly amount: number;
+    }
+  | {
+      /** Korath's quake landed (issue #222): a ring on the ground, `radius` screen px. */
+      readonly kind: "quake";
+      readonly tick: number;
+      readonly creepId: number;
+      readonly ix: number;
+      readonly iy: number;
+      readonly radius: number;
     }
   | {
       readonly kind: "death";
@@ -503,7 +581,83 @@ interface Creep {
   home: DefenderHome | null;
   /** The defender that last hit this attacker, or -1 (issue #195). */
   provokedBy: number;
+  /* What issue #222's champion abilities need; every other creep keeps the defaults. */
+  /** A champion's power level as its class reads it (`championPower`), else 0. */
+  power: number;
+  /** A champion's `_frameNumber`: drawn at spawn, one up per tick, 0 again when Korath quakes. */
+  frame: number;
+  /** Korath's `_attackNum`: swings since his last quake. */
+  hits: number;
+  /** Korath standing in his quake. */
+  quaking: boolean;
+  /** The flame on this creep, per {@link FLAME_INTERVAL} ticks; 0 when it is not burning. */
+  burnDps: number;
+  /** The flame's `_curTick`. */
+  burnTick: number;
+  /** An enraged creep's speed and swing-rate multiplier; 1 when it is not enraged. */
+  enrage: number;
+  /** Its armour: what share of each hit it shrugs off; 0 for all but the enraged. */
+  armour: number;
+  /** The Fomor whose aura enraged it, by creep id, or -1. */
+  enragedBy: number;
+  /** What Krallen's aura adds to its looting property; 0 when it is not in it. */
+  lootBonus: number;
+  /** The Krallen whose aura it is in, by creep id, or -1. */
+  lootBuffedBy: number;
+  /** A Fomor's or a Krallen's aura, with the creeps it is holding; null for the rest. */
+  aura: Aura | null;
+  /** Fomor following a wounded ally (`k_sBHVR_BUFF`) rather than attacking. */
+  support: boolean;
+  /** The ally it follows (`_helpCreep`), by creep id, or -1. */
+  helpCreep: number;
+  /** `_hasTarget` while it follows one. */
+  hasHelpTarget: boolean;
+  /** A flying Fomor's waypoint is its ally's own point, which moves with it. */
+  followHelper: boolean;
+  /** Where a champion walks back to when it leaves (`_spawnPoint`, `ChampionBase.as:115`). */
+  spawnX: number;
+  spawnY: number;
+  /** A defender with nobody to fight, walking home or waiting there (Flash's `cage`). */
+  homing: boolean;
+  /**
+   * A flying champion's `_looking`: `findTarget` sets it and, for a flyer,
+   * nothing but a defender's aggro clears it (`ChampionBase.as:569`, `:903`),
+   * so its own 100-frame look never runs (`:804`).
+   */
+  looking: boolean;
 }
+
+/** An aura's own state: `AOEEnrage`'s counter and list, or `ProximityLootBuff`'s list. */
+interface Aura {
+  /** `m_rangeCheckCounter`; Krallen's aura goes by her frame instead. */
+  counter: number;
+  /** The creeps it holds, in the order it took them. */
+  members: Creep[];
+}
+
+/** What every creep starts with for issue #222's abilities. */
+const NO_ABILITIES = {
+  power: 0,
+  frame: 0,
+  hits: 0,
+  quaking: false,
+  burnDps: 0,
+  burnTick: 0,
+  enrage: 1,
+  armour: 0,
+  enragedBy: -1,
+  lootBonus: 0,
+  lootBuffedBy: -1,
+  aura: null,
+  support: false,
+  helpCreep: -1,
+  hasHelpTarget: false,
+  followHelper: false,
+  spawnX: 0,
+  spawnY: 0,
+  homing: false,
+  looking: false,
+} as const;
 
 interface DefenderHome {
   readonly ix: number;
@@ -809,13 +963,25 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     return available[rng.int(available.length)] as number;
   };
 
-  const takeLoot = (building: EngineBuilding, amount: number, creep: Creep | null): void => {
+  /**
+   * `MonsterBase.lootingMultiplier`: the looting property with Krallen's aura
+   * on it (`LootingMultiplier`, issue #222), which adds rather than multiplies.
+   */
+  const lootOf = (creep: Creep): number =>
+    creep.lootBonus > 0 ? creep.lootMultiplier + creep.lootBonus : creep.lootMultiplier;
+
+  /**
+   * `multiplier` is the hitter's looting property, or 1 when the hit came from
+   * something that is not a monster: a fallen building's own fall, and a
+   * projectile or a blast that lands as a `DummyTarget` (issue #222).
+   */
+  const takeLoot = (building: EngineBuilding, amount: number, multiplier: number): void => {
     if (amount <= 0 || !isLootable(building.type)) return;
     if (STORAGE_TYPES.includes(building.type)) {
       const picked = pickStored();
       if (picked === null) return;
       const key = `r${picked}` as keyof ResourceAmounts;
-      const wanted = Math.trunc(amount * (creep ? creep.lootMultiplier : 1));
+      const wanted = Math.trunc(amount * multiplier);
       const taken = Math.trunc(Math.min(yard.resources[key], wanted));
       if (taken <= 0) return;
       yard.resources[key] -= taken;
@@ -826,7 +992,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return;
     }
     // A harvester: its own buffer, its own resource, no scalar.
-    const wanted = Math.trunc(amount * (creep ? creep.lootMultiplier : 1));
+    const wanted = Math.trunc(amount * multiplier);
     const taken = Math.min(building.stored, wanted);
     if (taken <= 0) return;
     building.stored -= taken;
@@ -868,7 +1034,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     destroyedIds.push(building.id);
     if (byAttacker) {
       // The client empties a harvester when it falls (`BRESOURCE.as:129-134`).
-      if (building.stored > 0) takeLoot(building, building.stored, null);
+      if (building.stored > 0) takeLoot(building, building.stored, 1);
       if (STORAGE_TYPES.includes(building.type)) storageFall(building);
     }
     grid.removeBuilding(building);
@@ -885,13 +1051,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     building: EngineBuilding,
     raw: number,
     creep: Creep | null,
+    lootMultiplier = creep ? lootOf(creep) : 1,
   ): number => {
     if (building.hp <= 0 || raw <= 0) return 0;
     const dealt = fortifiedDamage(raw, building.fortification, 0);
     const applied = Math.min(dealt, building.hp);
     building.hp -= dealt;
     if (building.hp > 0) {
-      if (creep) takeLoot(building, dealt, creep);
+      if (creep) takeLoot(building, dealt, lootMultiplier);
       return applied;
     }
     // The killing hit on storage still makes the pick it made before issue
@@ -918,8 +1085,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   const damageCreep = (creep: Creep, raw: number, by: Creep | null = null): number => {
     if (creep.hp <= 0) return 0;
-    // A defender's blow turns the attacker on it (issue #195).
-    if (by && by.friendly && !creep.friendly) creep.provokedBy = by.id;
+    // A defender's blow turns the attacker on it (issue #195), and its aggro
+    // ends a flying champion's look (`ChampionBase.as:903`, issue #222).
+    if (by && by.friendly && !creep.friendly) {
+      creep.provokedBy = by.id;
+      creep.looking = false;
+    }
+    // An enraged creep's armour, `1 - armor` off every hit (issue #222).
+    if (creep.armour > 0) raw *= 1 - creep.armour;
     const applied = Math.min(raw, creep.hp);
     if (applied > 0) {
       visual.push({
@@ -1159,11 +1332,38 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         : fightFlags(false, flying, monsterRange(monsterId, level)),
       home: null,
       provokedBy: -1,
+      ...NO_ABILITIES,
     };
     nextCreepId += 1;
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
     return creep;
+  };
+
+  /**
+   * What a champion brings onto the field beyond its stats (issue #222): its
+   * power level as its class reads it, its `_frameNumber` drawn from the
+   * battle's stream (one draw below 7, and a flying champion's second below
+   * 1,000, `ChampionBase.as:228`, `:237`), the point it walks back to when it
+   * leaves (`_spawnPoint`, the landing point rounded down to hundreds on
+   * screen, `ChampionBase.as:115`), its aura, and Korath's reach into the air.
+   */
+  const equipChampion = (creep: Creep, power: number, at: Cart): void => {
+    const id = creep.monsterId;
+    creep.power = championPower(id, power);
+    creep.frame = Math.trunc(rng.float() * START_FRAME_SPREAD);
+    if (creep.flying) creep.frame = Math.trunc(rng.float() * FLYING_START_FRAME_SPREAD);
+    const screen = screenPointOf(at.x, at.y);
+    const spawnSx = Math.trunc(screen.x / 100) * 100;
+    const spawnSy = Math.trunc(screen.y / 100) * 100;
+    // `screenPointOf` undone, as in {@link dropPoint}.
+    creep.spawnX = spawnSy + spawnSx / 2;
+    creep.spawnY = spawnSy - spawnSx / 2;
+    if (id === FOMOR_ID || hasLootAura(id, creep.power)) creep.aura = { counter: 0, members: [] };
+    // Only a ranged champion can hit a flyer (`ChampionBase.canShootCreep`, `:404-409`;
+    // `Fomor.as:19`), and Korath once he has his fireball (`Korath.as:126-133`).
+    if (championMode(id, "attack", creep.level) !== "ranged") creep.hitFlags &= ~TARGETS_FLYING;
+    if (hasFireball(id, creep.level, creep.power)) creep.hitFlags |= TARGETS_FLYING;
   };
 
   const spawnChampion = (type: number, level: number, at: Cart, power = 0): Creep | null => {
@@ -1219,10 +1419,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       hitFlags: fightFlags(false, flying, championStatWithPower(id, "range", level, power) || 1),
       home: null,
       provokedBy: -1,
+      ...NO_ABILITIES,
     };
     nextCreepId += 1;
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
+    equipChampion(creep, power, at);
     championHp = creep.hp;
     championsHp[id] = creep.hp;
     return creep;
@@ -1284,10 +1486,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       hitFlags: fightFlags(true, flying, range),
       home: { ix: building.x, iy: building.y, centreX: scan.x, centreY: scan.y, leash: CAGE_LEASH },
       provokedBy: -1,
+      ...NO_ABILITIES,
     };
     nextCreepId += 1;
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
+    equipChampion(creep, power, { x: building.x, y: building.y });
     return creep;
   };
 
@@ -1371,24 +1575,43 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /** Returns false when the creep found nothing and turned for home. */
   const findTarget = (creep: Creep): boolean => {
-    const result = findBuildingTarget(yard, creep.x, creep.y, creep.targetGroup, targetContext);
-    if (result.fellThrough && creep.targetGroup !== TARGET_GROUP.TOWERS) {
-      creep.targetGroup = TARGET_GROUP.ALL;
+    let chosen: EngineBuilding | null;
+    if (creep.champion) {
+      // A champion's own lists (`ChampionBase.findTarget`, `Krallen.findTarget`, issue #222).
+      chosen = findChampionTarget(
+        yard,
+        creep.x,
+        creep.y,
+        targetContext,
+        creep.monsterId === KRALLEN_ID,
+      );
+    } else {
+      const result = findBuildingTarget(yard, creep.x, creep.y, creep.targetGroup, targetContext);
+      if (result.fellThrough && creep.targetGroup !== TARGET_GROUP.TOWERS) {
+        creep.targetGroup = TARGET_GROUP.ALL;
+      }
+      chosen = result.closest;
     }
-    const chosen = result.closest;
     if (!chosen) {
       // Nothing left to attack: `changeModeRetreat` (`MonsterBase.as:1089`).
       creep.behaviour = "retreat";
       return false;
     }
+    routeTo(creep, chosen);
+    return true;
+  };
+
+  /** Sets a creep on its way to a building: straight for a flyer, by the grid on foot. */
+  const routeTo = (creep: Creep, chosen: EngineBuilding): void => {
     creep.targetBuilding = chosen.id;
+    if (creep.champion && creep.flying) creep.looking = true;
     creep.waypointIndex = 0;
     if (creep.flying) {
       creep.waypoints = [{ x: chosen.x, y: chosen.y }];
       // Under 170 screen px from `_position` (`ChampionBase.as:662`).
       const at = screenPointOf(creep.ix, creep.iy);
       creep.atTarget = distanceSquared(at.x, at.y, chosen.sx, chosen.sy) < 170 * 170;
-      return true;
+      return;
     }
     const route = grid.path(
       { fromX: creep.ix, fromY: creep.iy, target: chosen, ignoreWalls: creep.ignoreWalls },
@@ -1405,7 +1628,6 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creep.waypoints = [{ x: chosen.x, y: chosen.y }];
     }
     creep.atTarget = false;
-    return true;
   };
 
   /**
@@ -1429,6 +1651,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     });
   };
 
+  /**
+   * The ticks to the next swing: `int(attackDelay)`, with an enraged creep's
+   * delay divided by its multiplier (`Enrage.as:23`, `DivisionModifier`).
+   */
+  const swingDelay = (creep: Creep): number =>
+    Math.trunc(creep.enrage === 1 ? creep.attackDelay : creep.attackDelay / creep.enrage);
+
   /** One swing, with the specialist multipliers of `CreepBase.as:884-894`. */
   const swing = (creep: Creep): void => {
     const target = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
@@ -1439,13 +1668,73 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.targetCreep >= 0) {
       const other = byCreepId.get(creep.targetCreep);
       if (other && other.hp > 0) {
-        recordHit(creep, other.ix, other.iy, damageCreep(other, creep.damage));
+        recordHit(creep, other.ix, other.iy, strikeCreep(creep, other, null));
       }
       return;
     }
     if (!target || target.hp <= 0) return;
+    // Korath counts every swing towards his quake (`Korath.as:78`).
+    if (creep.monsterId === KORATH_ID && creep.champion) creep.hits += 1;
     const multiplier = specialistMultiplier(creep.targetGroup, target.kind);
-    recordHit(creep, target.x, target.y, damageBuilding(target, creep.damage * multiplier, creep));
+    // Fomor's fireball lands as a `DummyTarget`, which loots at 1 (`FIREBALL.as:165`,
+    // `BFOUNDATION.as:528-533`), not at its own 2 (issue #222).
+    const looting = creep.champion && creep.monsterId === FOMOR_ID ? 1 : lootOf(creep);
+    recordHit(
+      creep,
+      target.x,
+      target.y,
+      damageBuilding(target, creep.damage * multiplier, creep, looting),
+    );
+    // Krallen moves on from a harvester she has drained (`ChampionBase.as:836-840`).
+    if (
+      creep.champion &&
+      creep.monsterId === KRALLEN_ID &&
+      isLootable(target.type) &&
+      !unlootedForKrallen(target)
+    ) {
+      findTarget(creep);
+    }
+  };
+
+  /**
+   * One blow at another creep. Korath's at a flyer is his fireball, a quarter
+   * of his damage (`Korath.as:72-75`, `:110-115`); his others are blows that
+   * count towards his quake (`:78`); both leave his flame on what they hit
+   * (`:87`, `:155-160`). `by` is who the blow turns, for issue #195.
+   */
+  const strikeCreep = (creep: Creep, foe: Creep, by: Creep | null): number => {
+    if (!(creep.champion && creep.monsterId === KORATH_ID)) {
+      return damageCreep(foe, creep.damage, by);
+    }
+    if (foe.flying && hasFireball(KORATH_ID, creep.level, creep.power)) {
+      // The flame catches as the fireball lands, before its damage (`FIREBALL.as:138-149`).
+      burn(foe, creep);
+      return damageCreep(foe, Math.trunc(creep.damage / KORATH_FIREBALL_DIVISOR), by);
+    }
+    creep.hits += 1;
+    const dealt = damageCreep(foe, creep.damage, by);
+    burn(foe, creep);
+    return dealt;
+  };
+
+  /** `addFlameDOT`: a flame of a tenth of Korath's damage, unless one burns already. */
+  const burn = (foe: Creep, korath: Creep): void => {
+    if (foe.hp <= 0 || foe.burnDps > 0) return;
+    foe.burnDps = korath.damage * FLAME_SHARE;
+    foe.burnTick = 0;
+  };
+
+  /**
+   * The flame's tick, `CStatusEffect.tick`, which runs before its creep acts
+   * (`MonsterBase.as:516-536`). Every {@link FLAME_INTERVAL} ticks it takes its
+   * damage, through the creep's armour, from no one. True when it killed.
+   */
+  const tickBurn = (creep: Creep): boolean => {
+    creep.burnTick += 1;
+    if (creep.burnTick < FLAME_INTERVAL) return false;
+    creep.burnTick -= FLAME_INTERVAL;
+    damageCreep(creep, creep.burnDps);
+    return creep.hp <= 0;
   };
 
   /** Eye-ra's blast: radius 60 in cartesian, linear in the squared distance. */
@@ -1468,6 +1757,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   const moveCreep = (creep: Creep): void => {
     let speed = creep.baseSpeed;
+    // Enraged: `MultiplicationPropertyModifier` on its speed (`Enrage.as:22`, issue #222).
+    if (creep.enrage !== 1) speed *= creep.enrage;
     const factor = BEHAVIOUR_SPEED[creep.behaviour];
     if (factor !== undefined) speed *= factor;
     if (creep.attacking) return;
@@ -1528,12 +1819,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         creep.targetCreep = -1;
         creep.atTarget = false;
         creep.attacking = false;
+        creep.homing = true;
         goHome(creep);
         return;
       }
       creep.targetCreep = found.id;
       target = found;
     }
+    creep.homing = false;
     fight(creep, target);
   };
 
@@ -1545,12 +1838,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   const fight = (creep: Creep, foe: Creep): void => {
     const squared = screenDistanceSquared(creep.ix, creep.iy, foe.ix, foe.iy);
-    creep.atTarget = squared < creepReach(creep.range);
+    // A defending Korath reaches a flyer from twice his range (`ChampionBase.as:876`).
+    const range =
+      creep.friendly && foe.flying && creep.champion && creep.monsterId === KORATH_ID
+        ? creep.range * KORATH_DEFEND_FLYER_REACH
+        : creep.range;
+    creep.atTarget = squared < creepReach(range);
     if (creep.atTarget) {
       creep.attacking = true;
       if (creep.attackCooldown <= 0) {
-        creep.attackCooldown += Math.trunc(creep.attackDelay);
-        const dealt = damageCreep(foe, creep.damage, creep);
+        creep.attackCooldown += swingDelay(creep);
+        const dealt = strikeCreep(creep, foe, creep);
         if (defended) recordHit(creep, foe.ix, foe.iy, dealt);
       } else {
         creep.attackCooldown -= 1;
@@ -1705,7 +2003,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
     if (creep.atTarget) {
       if (creep.attackCooldown <= 0) {
-        creep.attackCooldown += Math.trunc(creep.attackDelay);
+        creep.attackCooldown += swingDelay(creep);
         if (target.hp < target.maxHp) {
           creep.attacking = true;
           healCreep(creep, target);
@@ -1736,11 +2034,416 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     recordHit(healer, target.ix, target.iy, -healed);
   };
 
+  /* ── Champion abilities (issue #222) ───────────────────────────────────── */
+
+  /** `_tmpPoint` to `_tmpPoint`, on screen, squared: `GLOBAL.QuickDistance`'s space for creeps. */
+  const apartSquared = (one: Creep, other: Creep): number =>
+    screenDistanceSquared(one.ix, one.iy, other.ix, other.iy);
+
+  /** A creep's `_tmpPoint` to a building's `_position`, on screen, squared. */
+  const toBuildingSquared = (creep: Creep, building: EngineBuilding): number => {
+    const at = screenPointOf(creep.ix, creep.iy);
+    return distanceSquared(at.x, at.y, building.sx, building.sy);
+  };
+
+  /** Whether a champion's aura is live: `inBattleState` (`MonsterBase.as:350-352`). */
+  const inBattle = (creep: Creep): boolean =>
+    !creep.gone && creep.hp > 0 && (creep.friendly ? !creep.homing : creep.behaviour === "attack");
+
+  /**
+   * `AOEEnrage.tick` (`components/abilities/AOEEnrage.as:56-73`): every
+   * {@link ENRAGE_INTERVAL} ticks, while Fomor fights, every creep of its side
+   * within {@link ENRAGE_RADIUS} but itself is enraged, and every one it
+   * enraged that is no longer there calms down. Out of battle it lets every
+   * one go. One enrage at a time: a creep already enraged is left as it is.
+   */
+  const tickEnrage = (fomor: Creep, aura: Aura): void => {
+    aura.counter += 1;
+    if (aura.counter < ENRAGE_INTERVAL) return;
+    aura.counter = 0;
+    const kept = new Set<Creep>();
+    if (inBattle(fomor)) {
+      const side = fomor.friendly ? TARGETS_DEFENDERS : TARGETS_ATTACKERS;
+      const flags = side | TARGETS_GROUND | TARGETS_FLYING | TARGETS_INVISIBLE;
+      const buff = fomorBuff(fomor.level, fomor.power);
+      const near = index.inRange(ENRAGE_RADIUS, fomor.x, fomor.y, flags, fomor.id);
+      for (const { creep: other } of near) {
+        if (other.gone) continue;
+        kept.add(other);
+        if (other.enragedBy >= 0) continue;
+        other.enrage = enrageMultiplier(buff);
+        other.armour = enrageArmour(buff);
+        other.enragedBy = fomor.id;
+        aura.members.push(other);
+      }
+    }
+    letGo(fomor, aura, kept);
+  };
+
+  /** Lets go of every creep an aura holds that `kept` does not name. */
+  const letGo = (owner: Creep, aura: Aura, kept: ReadonlySet<Creep>): void => {
+    aura.members = aura.members.filter((member) => {
+      if (kept.has(member)) return true;
+      if (member.enragedBy === owner.id) {
+        member.enrage = 1;
+        member.armour = 0;
+        member.enragedBy = -1;
+      }
+      if (member.lootBuffedBy === owner.id) {
+        member.lootBonus = 0;
+        member.lootBuffedBy = -1;
+      }
+      return false;
+    });
+  };
+
+  /**
+   * `ProximityLootBuff.tick` (`components/abilities/ProximityLootBuff.as:33-58`):
+   * while Krallen attacks, on every {@link LOOT_AURA_FRAMES}th of her frames,
+   * every other attacker within her `buffRadius` on screen gains `1 + _buff`
+   * on its looting property, and every one she gave it to that has strayed out
+   * loses it.
+   */
+  const tickLootAura = (krallen: Creep, aura: Aura): void => {
+    if (krallen.behaviour !== "attack" || krallen.frame % LOOT_AURA_FRAMES !== 0) return;
+    const radius = krallenAuraRadius(krallen.level);
+    const reach = radius * radius;
+    const near = (other: Creep): boolean => apartSquared(krallen, other) < reach;
+    for (const other of creeps) {
+      if (other === krallen || other.friendly || other.gone || other.hp <= 0) continue;
+      if (!near(other) || other.lootBuffedBy >= 0) continue;
+      other.lootBonus = lootAuraBonus(krallenBuff(krallen.level));
+      other.lootBuffedBy = krallen.id;
+      aura.members.push(other);
+    }
+    letGo(krallen, aura, new Set(aura.members.filter(near)));
+  };
+
+  /** A champion's components, which tick before it acts (`MonsterBase.as:516-536`). */
+  const tickAura = (creep: Creep): void => {
+    const aura = creep.aura;
+    if (!aura) return;
+    if (creep.monsterId === FOMOR_ID) tickEnrage(creep, aura);
+    else tickLootAura(creep, aura);
+  };
+
+  /**
+   * `Korath.doQuakeCheck` (`Korath.as:167-190`): three swings in and with his
+   * swing ready, he stands for his quake instead of swinging; it lands on frame
+   * 48 and he is done on frame 72. True while he stands.
+   */
+  const quakeCheck = (creep: Creep): boolean => {
+    if (creep.quaking) {
+      const frame = creep.frame % QUAKE_FRAME_CYCLE;
+      if (frame === QUAKE_STRIKE_FRAME) {
+        creep.hits = 0;
+        quake(creep);
+      } else if (frame === QUAKE_END_FRAME) {
+        creep.quaking = false;
+      }
+    } else if (
+      creep.attackCooldown <= 0 &&
+      creep.hits >= QUAKE_SWINGS &&
+      hasQuake(creep.monsterId, creep.level, creep.power)
+    ) {
+      creep.quaking = true;
+      creep.frame = 0;
+    }
+    return creep.quaking;
+  };
+
+  /**
+   * `Korath.quake` (`Korath.as:192-209`): `DealLinearAEDamage` over two and a
+   * half of his ranges, full inside one and a half. It reaches the other
+   * side's creeps on the ground, measured as creeps are, and when he attacks
+   * every building but the untargetable, measured on screen to its anchor as
+   * `getBuildingsInRange` does (`Targeting.as:151-173`). A building takes it
+   * from a `DummyTarget`, so it loots at 1.
+   */
+  const quake = (creep: Creep): void => {
+    const radius = creep.range * QUAKE_RADIUS_RANGES;
+    const inner = creep.range * QUAKE_INNER_RANGES;
+    const side = creep.friendly ? TARGETS_ATTACKERS : TARGETS_DEFENDERS;
+    const flags = side | TARGETS_GROUND | TARGETS_INVISIBLE;
+    for (const hit of index.inRange(radius, creep.x, creep.y, flags)) {
+      const dealt = linearAreaDamage(creep.damage, radius, inner, hit.dist);
+      if (dealt !== undefined && !hit.creep.gone) damageCreep(hit.creep, dealt);
+    }
+    if (!creep.friendly) {
+      for (const building of yard.buildings) {
+        if (building.hp <= 0 || UNTARGETABLE_TYPES.includes(building.type)) continue;
+        const squared = Math.trunc(toBuildingSquared(creep, building));
+        if (squared >= radius * radius) continue;
+        const dealt = linearAreaDamage(creep.damage, radius, inner, Math.sqrt(squared));
+        if (dealt !== undefined) damageBuilding(building, dealt, creep, 1);
+      }
+    }
+    visual.push({ kind: "quake", tick, creepId: creep.id, ix: creep.ix, iy: creep.iy, radius });
+  };
+
+  /** A building `findBuffTargets` counts as still standing (`Fomor.as:53-57`). */
+  const standsForFomor = (building: EngineBuilding): boolean =>
+    building.hp > 0 &&
+    building.kind !== "decoration" &&
+    building.kind !== "immovable" &&
+    building.kind !== "enemy";
+
+  /**
+   * `Fomor.findBuffTargets` (`Fomor.as:48-115`): the nearest ally within 1,500
+   * that is wounded and not a healer, else the one it already follows while
+   * that one is still wounded. It follows that ally; with none, it goes back
+   * to attacking buildings, and with no building left it leaves.
+   *
+   * The ally is looked for among the attackers only: a fight with a defender
+   * is issue #195's, which comes first, so `_targetCreep` is never live here.
+   */
+  const findBuffTargets = (creep: Creep): void => {
+    if (!yard.buildings.some(standsForFomor)) {
+      creep.behaviour = "retreat";
+      return;
+    }
+    const hits = index.inRange(FOMOR_BUFF_SEARCH, creep.x, creep.y, oldStyleTargets(1), creep.id);
+    let first = 0;
+    while (first < hits.length) {
+      const other = (hits[first] as CreepHit<Creep>).creep;
+      if (!other.gone && other.behaviour !== "heal" && other.hp !== other.maxHp) break;
+      first += 1;
+    }
+    const ally = hits[first]?.creep;
+    const helper = creep.helpCreep >= 0 ? byCreepId.get(creep.helpCreep) : undefined;
+    if (ally) {
+      creep.helpCreep = ally.id;
+      followAlly(creep, ally);
+    } else if (helper && helper.hp > 0 && helper.hp < helper.maxHp) {
+      followAlly(creep, helper);
+    } else {
+      backToBuildings(creep);
+      return;
+    }
+    creep.support = true;
+    creep.hasHelpTarget = true;
+  };
+
+  /**
+   * Fomor heads for its ally. Flying, its waypoint is the ally's own
+   * `_tmpPoint`, which moves with it (`Fomor.as:74-76`); on foot it walks
+   * straight to where the ally was, because the grid routes to buildings only
+   * (Flash asks it for a route to the point, `:79`).
+   */
+  const followAlly = (creep: Creep, ally: Creep): void => {
+    creep.waypoints = [{ x: ally.ix, y: ally.iy }];
+    creep.waypointIndex = 0;
+    creep.followHelper = creep.flying;
+  };
+
+  /** `ChampionBase.changeModeAttack` (`:288-293`): back to buildings. */
+  const backToBuildings = (creep: Creep): void => {
+    creep.support = false;
+    creep.hasHelpTarget = false;
+    creep.followHelper = false;
+    creep.atTarget = false;
+    creep.targetCreep = -1;
+    findTarget(creep);
+  };
+
+  /** Fomor drops its ally and its building (`Fomor.as:262-268`, `:314-320`). */
+  const dropSupport = (creep: Creep): void => {
+    creep.attacking = false;
+    creep.atTarget = false;
+    creep.targetCreep = -1;
+    creep.helpCreep = -1;
+    creep.targetBuilding = -1;
+    creep.followHelper = false;
+  };
+
+  /** Fomor heads for a building: straight in the air, by the grid on foot. */
+  const headFor = (creep: Creep, building: EngineBuilding): void => {
+    creep.followHelper = false;
+    if (creep.flying) {
+      creep.waypoints = [{ x: building.x, y: building.y }];
+      creep.waypointIndex = 0;
+      creep.targetBuilding = building.id;
+      return;
+    }
+    routeTo(creep, building);
+  };
+
+  /**
+   * `ChampionBase.move` for a following Fomor (`:1399-1416`): a building in
+   * reach stops it where it is; else it walks its waypoints, the moving one
+   * included.
+   */
+  const supportMove = (creep: Creep): void => {
+    const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
+    if (
+      !creep.atTarget &&
+      aim &&
+      aim.hp > 0 &&
+      reachesBuilding(creep.ix, creep.iy, aim, creep.range)
+    ) {
+      creep.atTarget = true;
+      return;
+    }
+    if (creep.followHelper && creep.waypointIndex < creep.waypoints.length) {
+      const ally = byCreepId.get(creep.helpCreep);
+      if (ally) creep.waypoints[creep.waypointIndex] = { x: ally.ix, y: ally.iy };
+    }
+    moveCreep(creep);
+  };
+
+  /**
+   * `Fomor.tickBBuff` (`Fomor.as:159-341`): stay with the ally, take on the
+   * building it is on, and shoot that building whenever both are in range.
+   * It looks again when the ally dies, when the ally is whole on a frame
+   * divisible by 20, every 100 frames and every 120 while idle.
+   */
+  const supportThink = (creep: Creep): void => {
+    const frame = creep.frame;
+    const range = creep.range;
+    const reach = range * range;
+    const stillSupporting = (): boolean => creep.support && creep.behaviour === "attack";
+    if (frame % FOMOR_LOOK_FRAMES === 0 && !creep.attacking) {
+      findBuffTargets(creep);
+      if (!stillSupporting()) return;
+    }
+    if (creep.hasHelpTarget && creep.helpCreep >= 0) {
+      const ally = byCreepId.get(creep.helpCreep);
+      if (ally && ally.targetBuilding >= 0) creep.targetBuilding = ally.targetBuilding;
+      const allyAim = ally && ally.targetBuilding >= 0 ? buildingOf(ally.targetBuilding) : null;
+      if (!ally || ally.hp <= 0 || (ally.hp === ally.maxHp && frame % FOMOR_HEALED_FRAMES === 0)) {
+        creep.hasHelpTarget = false;
+        creep.attacking = false;
+        creep.atTarget = false;
+        if (!ally || ally.hp <= 0) creep.helpCreep = -1;
+        findBuffTargets(creep);
+        if (!stillSupporting()) return;
+      } else if (
+        apartSquared(creep, ally) < reach &&
+        allyAim &&
+        toBuildingSquared(creep, allyAim) < reach
+      ) {
+        creep.atTarget = true;
+      } else if (!creep.attacking && frame % FOMOR_IDLE_FRAMES === 0) {
+        findBuffTargets(creep);
+        if (!stillSupporting()) return;
+      } else if (creep.attacking && apartSquared(creep, ally) > reach * FOMOR_DRIFT * FOMOR_DRIFT) {
+        creep.attacking = false;
+        creep.atTarget = false;
+      } else if (creep.waypointIndex >= creep.waypoints.length && !creep.atTarget) {
+        const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
+        if (aim && reachesBuilding(creep.ix, creep.iy, aim, range)) creep.atTarget = true;
+        else if (aim) headFor(creep, aim);
+      }
+    } else if (creep.hasHelpTarget) {
+      const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
+      if (aim && aim.hp > 0) {
+        if (reachesBuilding(creep.ix, creep.iy, aim, range)) {
+          creep.atTarget = true;
+        } else {
+          creep.atTarget = false;
+          creep.attacking = false;
+        }
+      } else {
+        dropSupport(creep);
+        findBuffTargets(creep);
+        if (!stillSupporting()) return;
+      }
+    } else {
+      dropSupport(creep);
+      findBuffTargets(creep);
+      if (!stillSupporting()) return;
+    }
+
+    if (!creep.atTarget) {
+      creep.attacking = false;
+      return;
+    }
+    if (creep.attackCooldown > 0) {
+      creep.attackCooldown -= 1;
+      return;
+    }
+    creep.attackCooldown += swingDelay(creep);
+    const ally = creep.helpCreep >= 0 ? byCreepId.get(creep.helpCreep) : undefined;
+    const allyAim = ally && ally.targetBuilding >= 0 ? buildingOf(ally.targetBuilding) : null;
+    const ownAim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
+    if ((allyAim && allyAim.hp > 0) || (ownAim && ownAim.hp > 0)) {
+      if (ally) creep.targetBuilding = ally.targetBuilding;
+      const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
+      if (aim && toBuildingSquared(creep, aim) < reach) {
+        creep.attacking = true;
+        swing(creep);
+      } else if (aim) {
+        creep.attacking = false;
+        creep.atTarget = false;
+        headFor(creep, aim);
+      } else {
+        dropSupport(creep);
+        findBuffTargets(creep);
+      }
+    } else {
+      dropSupport(creep);
+      creep.hasHelpTarget = false;
+      findBuffTargets(creep);
+    }
+  };
+
+  /**
+   * Champions that left the field with an aura still holding creeps
+   * (issue #222). Flash walks a champion back to its `_spawnPoint` and only
+   * drops it when it gets there (`ChampionBase.as:1139-1144`); until then its
+   * components still tick. Krallen's aura only works while she attacks, so
+   * what it gave stays given until she is off the field; Fomor's lets every
+   * creep go at its next look. Nothing else about it is simulated: it has left
+   * the fight with the health it had (fidelity note 7).
+   */
+  const leaving: Creep[] = [];
+
+  const startLeaving = (creep: Creep): void => {
+    const aura = creep.aura;
+    if (!aura || aura.members.length === 0) return;
+    creep.behaviour = "retreat";
+    creep.attacking = false;
+    creep.atTarget = false;
+    creep.waypoints = [{ x: creep.spawnX, y: creep.spawnY }];
+    creep.waypointIndex = 0;
+    leaving.push(creep);
+  };
+
+  /** Each leaving champion: its components, then `tickBRetreat`, then `move()`. */
+  const tickLeaving = (): void => {
+    if (leaving.length === 0) return;
+    let write = 0;
+    for (let read = 0; read < leaving.length; read += 1) {
+      const creep = leaving[read] as Creep;
+      const aura = creep.aura as Aura;
+      tickAura(creep);
+      if (creep.atTarget || aura.members.length === 0) {
+        letGo(creep, aura, new Set());
+        continue;
+      }
+      moveCreep(creep);
+      leaving[write] = creep;
+      write += 1;
+    }
+    leaving.length = write;
+  };
+
   const tickCreep = (creep: Creep): void => {
     if (creep.hp <= 0 || creep.gone) return;
     if (creep.behaviour === "retreat") {
       creep.gone = true;
       return;
+    }
+    // The flame and the auras tick before their creep acts, and a champion's
+    // frame counts up in `tickState` before its behaviour reads it (issue #222).
+    if (creep.burnDps > 0 && tickBurn(creep)) return;
+    if (creep.champion) {
+      tickAura(creep);
+      creep.frame += 1;
+      if (creep.monsterId === KORATH_ID && quakeCheck(creep)) {
+        moveCreep(creep);
+        return;
+      }
     }
     if (creep.friendly) {
       tickDefender(creep);
@@ -1751,6 +2454,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return;
     }
     if (defended && fightsBack(creep) && engage(creep)) return;
+    if (creep.support) {
+      // `move()`, then `tickBBuff` (`MonsterBase.tick`, `Fomor.as:22-32`).
+      supportMove(creep);
+      supportThink(creep);
+      return;
+    }
     if (creep.monsterId === REZGHUL_ID) tickRaise(creep);
 
     const target = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
@@ -1764,7 +2473,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       loseTarget(creep);
       hunting = findTarget(creep);
     }
-    if (hunting && !creep.attacking && (tick + creep.phase) % RETARGET_TICKS === 0) {
+    // A champion looks again every 100 of its frames, a flyer never once it has
+    // looked (`ChampionBase.as:804`, issue #222); a monster every 150 ticks.
+    const lookAgain = creep.champion
+      ? !creep.looking && creep.frame % CHAMPION_RETARGET_FRAMES === 0
+      : (tick + creep.phase) % RETARGET_TICKS === 0;
+    if (hunting && !creep.attacking && lookAgain) {
       hunting = findTarget(creep);
     }
     if (hunting && creep.targetBuilding < 0) hunting = findTarget(creep);
@@ -1780,13 +2494,27 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.atTarget) {
       creep.attacking = true;
       if (creep.attackCooldown <= 0) {
-        creep.attackCooldown += Math.trunc(creep.attackDelay);
+        creep.attackCooldown += swingDelay(creep);
         swing(creep);
       } else {
         creep.attackCooldown -= 1;
       }
     } else {
       creep.attacking = false;
+    }
+    // Fomor looks for a wounded ally every 100 frames (`Fomor.as:117-126`).
+    if (
+      creep.champion &&
+      creep.monsterId === FOMOR_ID &&
+      creep.behaviour === "attack" &&
+      creep.frame % FOMOR_LOOK_FRAMES === 0
+    ) {
+      findBuffTargets(creep);
+      if (creep.support && creep.behaviour === "attack") {
+        supportThink(creep);
+        supportMove(creep);
+        return;
+      }
     }
     moveCreep(creep);
   };
@@ -1968,6 +2696,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       for (const creep of creeps) if (creep.friendly && creep.hp > 0) defendersOut += 1;
     }
     for (const creep of creeps) tickCreep(creep);
+    tickLeaving();
 
     if (creeps.length > 0) {
       let write = 0;
@@ -1975,6 +2704,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         const creep = creeps[read] as Creep;
         if (creep.gone || creep.hp <= 0) {
           byCreepId.delete(creep.id);
+          // A champion whose aura still holds creeps walks off first (issue #222).
+          if (creep.champion) startLeaving(creep);
           if (creep.homeBunker >= 0 && creep.hp <= 0) {
             addBunkerLoss(bunkerLosses, creep.homeBunker, creep.monsterId);
           }
@@ -2017,6 +2748,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       for (const creep of creeps) {
         if (!creep.friendly) creep.gone = true;
       }
+    } else if (event.kind === "championRetreat") {
+      // Flash's "Retreat" on the champion's own button (`CHAMPIONBUTTON.as:98-103`,
+      // issue #222): that champion leaves with the health it has, the attack goes on.
+      const id = championByType(event.c);
+      for (const creep of creeps) {
+        if (creep.champion && !creep.friendly && creep.monsterId === id) creep.gone = true;
+      }
     }
   };
 
@@ -2049,6 +2787,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       state: creep.attacking ? "attacking" : "walking",
       targetBuilding: creep.targetBuilding,
       targetCreep: creep.targetCreep,
+      burning: creep.burnDps > 0,
+      enraged: creep.enragedBy >= 0,
+      lootBoosted: creep.lootBuffedBy >= 0,
+      quaking: creep.quaking,
     }));
 
   const recentEvents = (sinceTick: number): BattleVisualEvent[] => {

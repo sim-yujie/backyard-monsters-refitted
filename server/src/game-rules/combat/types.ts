@@ -302,6 +302,12 @@ export interface AttackContext {
   readonly flung: Roster;
   /** The attacker's champion on the field, or null. */
   readonly champion: ChampionOnField | null;
+  /**
+   * Every champion the attacker has on the field, when there may be two (an
+   * ordinary one and Krallen, issue #74); read instead of {@link champion}
+   * when present.
+   */
+  readonly champions?: readonly ChampionOnField[];
   /** The defender's yard, countdowns advanced to `now` by `referenceYard`. */
   readonly yard: CombatYard;
   readonly attacker: AttackerStanding;
@@ -486,7 +492,17 @@ export type FlingEvent =
       readonly y: number;
       readonly weapon: string;
     }
-  | { readonly kind: "retreat"; readonly t: number };
+  | { readonly kind: "retreat"; readonly t: number }
+  | {
+      /**
+       * One champion called back (issue #222), Flash's "Retreat" on its own
+       * button (`CHAMPIONBUTTON.as:98-103`): `c` is its type, `t` in a save's
+       * champion entry. It leaves with the health it has; the attack goes on.
+       */
+      readonly kind: "championRetreat";
+      readonly t: number;
+      readonly c: number;
+    };
 
 /** The complete record of an attack, resent in full on every save (§3.10). */
 export interface FlingLog {

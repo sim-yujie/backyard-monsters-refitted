@@ -584,6 +584,28 @@
   color: var(--colour-text-muted);
 }
 
+/* A champion on the field offers Retreat beside its row (issue #222). */
+.attack-army__champion:has(.attack-army__champion-retreat:not([hidden])) {
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "pick icon label retreat"
+    "pick icon note retreat";
+}
+
+.attack-army__champion-retreat {
+  grid-area: retreat;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.attack-army__champion-retreat[hidden] {
+  display: none;
+}
+
+.attack-army__champion--fighting .attack-army__note {
+  color: var(--colour-text);
+}
+
 .attack-army__champion-pick {
   grid-area: pick;
   accent-color: var(--colour-accent);

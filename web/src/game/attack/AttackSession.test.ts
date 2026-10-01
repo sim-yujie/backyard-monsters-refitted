@@ -270,6 +270,30 @@ describe("AttackSession events and the fling log", () => {
     );
   });
 
+  it("calls a flung champion back with the Retreat champion button, and logs it (#222)", () => {
+    const champion = { t: 1, hp: 40_000, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 };
+    const session = sessionOf({
+      roster: { monsters: { C1: 3 }, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
+    });
+    session.start();
+    expect(session.state().championsOnField).toEqual([]);
+    expect(session.retreatChampion(1)).toBe(false);
+    session.appendFling({ x: -100, y: -100, monsters: { C1: 3 }, champion: { t: 1, l: 1 } });
+    play(session, 1);
+    expect(session.state().championsOnField).toEqual([1]);
+    const hp = session.battle()!.creeps().find((creep) => creep.champion)!.hp;
+    expect(session.retreatChampion(1)).toBe(true);
+    expect(session.state().championsOnField).toEqual([]);
+    // Once only: it is off the field.
+    expect(session.retreatChampion(1)).toBe(false);
+    const log = session.flingLog().events;
+    expect(log[log.length - 1]).toMatchObject({ kind: "championRetreat", c: 1 });
+    play(session, 1);
+    expect(session.battle()!.creeps().some((creep) => creep.champion)).toBe(false);
+    expect(session.championsHpAfter()[1]).toBe(hp);
+    expect(session.state().phase).toBe("running");
+  });
+
   it("logs no power level for a champion at power level 0, which fights at its level alone", () => {
     const champion = { t: 1, hp: 100, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 };
     const session = sessionOf({

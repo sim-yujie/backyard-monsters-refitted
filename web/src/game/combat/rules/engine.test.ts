@@ -338,9 +338,14 @@ describe("loot", () => {
   it("loots at 2 with every champion, Krallen too: her `_lootMults` is never read", () => {
     // `ChampionBase.as:221`; `champions/Krallen.as:31-32` sets x2/x3 that no
     // code reads, so the x2/x3 of issue #80 is gone (issue #178).
-    for (const type of [1, 2, 3, 4, 5]) {
+    for (const type of [1, 2, 4, 5]) {
       expectLootsAt(2, { champion: { t: type, l: 1 } }, `G${type}`);
     }
+  });
+
+  it("loots at 1 with Fomor, whose fireball lands as a DummyTarget (issue #222)", () => {
+    // `Fomor.as:149`, `FIREBALL.as:165`, `BFOUNDATION.as:528-533`.
+    expectLootsAt(1, { champion: { t: 3, l: 1 } }, "G3");
   });
 
   /** Every hit's damage on one building, in order, until `steps` ticks have run. */

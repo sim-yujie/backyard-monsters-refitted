@@ -1,0 +1,162 @@
+{
+  "name": "fomor-both-sides",
+  "description": "A level 6 Fomor at power level 3 enraging and following its wounded Pokeys, against a caged level 5 Fomor enraging the bunkers' garrisons (issue #222).",
+  "yard": "sandbox",
+  "kind": "main",
+  "levels": {
+    "C1": 6,
+    "C2": 6,
+    "C3": 6,
+    "C4": 6,
+    "C5": 6,
+    "C6": 6,
+    "C7": 6,
+    "C8": 6,
+    "C13": 6,
+    "C14": 6
+  },
+  "playerLevel": 20,
+  "tailTicks": 12000,
+  "defence": {
+    "bunkers": {
+      "83": {
+        "C1": 8
+      },
+      "84": {
+        "C2": 6
+      }
+    },
+    "defenderLevels": {
+      "C1": 4,
+      "C2": 4
+    },
+    "defenderChampion": {
+      "t": 3,
+      "l": 5,
+      "hp": 25000,
+      "pl": 2
+    }
+  },
+  "log": {
+    "v": 1,
+    "seed": 22203,
+    "events": [
+      {
+        "kind": "fling",
+        "t": 200,
+        "x": 300,
+        "y": -300,
+        "r": 300,
+        "monsters": {
+          "C1": 80,
+          "C8": 10
+        },
+        "champion": {
+          "t": 3,
+          "l": 6,
+          "pl": 3
+        }
+      }
+    ]
+  },
+  "expected": {
+    "ticks": 12200,
+    "damage": 6.314535867404771,
+    "destroyed": null,
+    "attackloot": {
+      "r1": 0,
+      "r2": 0,
+      "r3": 0,
+      "r4": 0
+    },
+    "defenderLoss": {
+      "r1": 0,
+      "r2": 0,
+      "r3": 0,
+      "r4": 0
+    },
+    "firedTraps": 0,
+    "destroyedBuildings": 20,
+    "creepsFlung": 90,
+    "creepsKilled": 91,
+    "championHp": 0,
+    "damagedBuildings": 24,
+    "rngDraws": 12402,
+    "checkpoints": [
+      {
+        "tick": 800,
+        "digest": "0ea7089d66cc88cf"
+      },
+      {
+        "tick": 1600,
+        "digest": "e8c81b83d4c39741"
+      },
+      {
+        "tick": 2400,
+        "digest": "fe513290e22b7c6e"
+      },
+      {
+        "tick": 3200,
+        "digest": "0a006873e5c23659"
+      },
+      {
+        "tick": 4000,
+        "digest": "f2014ed76525be9d"
+      },
+      {
+        "tick": 4800,
+        "digest": "5b6a974cdfe3cb0e"
+      },
+      {
+        "tick": 5600,
+        "digest": "0ad82435c99ca0a7"
+      },
+      {
+        "tick": 6400,
+        "digest": "99207863671121a1"
+      },
+      {
+        "tick": 7200,
+        "digest": "702218dabe098a58"
+      },
+      {
+        "tick": 8000,
+        "digest": "16066579f8e79b4f"
+      },
+      {
+        "tick": 8800,
+        "digest": "1e553c4b963ee5a9"
+      },
+      {
+        "tick": 9600,
+        "digest": "282cd7409bce21f6"
+      },
+      {
+        "tick": 10400,
+        "digest": "6128cae23b982340"
+      },
+      {
+        "tick": 11200,
+        "digest": "054cd3b7997819ed"
+      },
+      {
+        "tick": 12000,
+        "digest": "5684c9218b326537"
+      }
+    ],
+    "digest": "7b7d57dd7780c87b",
+    "bunkerLosses": {
+      "83": {
+        "C1": 8
+      },
+      "84": {
+        "C2": 6
+      }
+    },
+    "bunkerGarrisons": {
+      "83": {},
+      "84": {}
+    },
+    "defenderChampionHp": 0
+  }
+}

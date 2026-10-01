@@ -384,6 +384,32 @@ describe("ArmyPanel champion", () => {
     expect(fine?.disabled).toBe(false);
   });
 
+  it("offers Retreat on a champion's row while it is on the field (#222)", () => {
+    const session = sessionWith(sandboxRoster());
+    const bucket = new Bucket(session, { storage: null, playerKey: "test" });
+    const recalled: number[] = [];
+    const panel = new ArmyPanel(bucket, { onRetreatChampion: (t) => recalled.push(t) }).mount(
+      document.body,
+    );
+    panels.push(panel);
+    const retreat = panel.retreatFor(3);
+    expect(retreat?.hidden).toBe(true);
+    panel.setChampionsOnField([3]);
+    expect(retreat?.hidden).toBe(false);
+    expect(panel.retreatFor(5)?.hidden).toBe(true);
+    retreat?.click();
+    expect(recalled).toEqual([3]);
+    // The click calls it back; it does not pick the champion for the next drop.
+    expect(bucket.champion()).toBeNull();
+    panel.setChampionsOnField([]);
+    expect(retreat?.hidden).toBe(true);
+  });
+
+  it("has no Retreat button without a way to call a champion back", () => {
+    const { panel } = mount();
+    expect(panel.retreatFor(3)).toBeNull();
+  });
+
   it("keeps Krallen pickable after Fomor is dropped (#74)", () => {
     const { panel, bucket, session } = mount();
     const [krallen, fomor] = radios(panel);

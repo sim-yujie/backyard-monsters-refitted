@@ -221,8 +221,10 @@ describe("finaliseAbandonedAttack", () => {
     expect(userSave.monsters).toMatchObject({ housed: { C1: 0 } });
     expect(outpost.monsters).toMatchObject({ housed: { C1: 50 } });
     expect(outpost.protected).toBe(0);
-    // The pebble bomb's 100,000 charged; this early in the battle nothing is looted.
-    expect(userSave.resources.r1).toBe(1_000_000 + expected.attackloot.r1);
+    // The pebble bomb's 100,000 charged. With no silo the attacker's cap is
+    // 13,000 (Krallen's raise included), so a million already holds more than
+    // it may take: whatever Krallen loots first (issue #222) is not credited.
+    expect(userSave.resources.r1).toBe(1_000_000);
     expect(userSave.resources.r2).toBe(1_000_000 + expected.attackloot.r2 - 100_000);
     expect(userSave.champion[0].hp).toBe(expected.attackerchampion![0]!.hp);
 
@@ -372,7 +374,11 @@ describe("finaliseAbandonedAttack", () => {
         LOG.events[1]!,
       ],
     };
-    expect(replayed(LATE).attackloot.r1).toBeGreaterThan(replayed(LATE, fightable).attackloot.r1);
+    const total = (log?: Log) => {
+      const loot = replayed(LATE, log).attackloot;
+      return loot.r1 + loot.r2 + loot.r3 + loot.r4;
+    };
+    expect(total()).toBeGreaterThan(total(fightable));
 
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
 

@@ -176,6 +176,8 @@ export interface AttackSessionState {
   readonly championAvailable: boolean;
   /** Every flung champion's health by type, zero for a death; empty when none was flung. */
   readonly championsHp: Readonly<Record<number, number>>;
+  /** The types of the player's champions on the field now, which can be called back (#222). */
+  readonly championsOnField: readonly number[];
   /** Bombs and siege weapons WP4 reports as still usable (see `setUnusedTools`). */
   readonly unusedTools: number;
   /** Whether the player has dropped, bombed or sieged yet (issue #79). */
@@ -289,6 +291,8 @@ export class AttackSession {
   private flung: Record<string, number> = {};
   /** Champion types flung so far this attack. */
   private readonly championsFlung = new Set<number>();
+  /** Champion types called back with the Retreat champion button (#222). */
+  private readonly championsRecalled = new Set<number>();
   private unusedTools = 0;
   /** Set by the first drop, bomb or siege; until then no automatic end applies (#79). */
   private acted = false;
@@ -421,6 +425,25 @@ export class AttackSession {
     this.end("left");
   }
 
+  /**
+   * Calls one champion back (issue #222): Flash's "Retreat" on the
+   * champion's own button (`CHAMPIONBUTTON.as:98-103`). Appends the
+   * `championRetreat` event, which the engine turns into that champion
+   * leaving the field with the health it has; the attack goes on. Returns
+   * whether there was a champion of type `t` on the field to call back.
+   */
+  retreatChampion(t: number): boolean {
+    const battle = this.battle_;
+    if (!battle || this.phase === "ended" || this.phase === "idle") return false;
+    if (!this.championsOnField(battle).includes(t)) return false;
+    const event: FlingEvent = { kind: "championRetreat", t: battle.tick, c: t };
+    battle.apply(event);
+    this.events.push(event);
+    this.championsRecalled.add(t);
+    this.afterEvent(battle);
+    return true;
+  }
+
   /* ── Playback ───────────────────────────────────────────────────────── */
 
   /**
@@ -469,6 +492,7 @@ export class AttackSession {
         }
         if (event.champion) this.championsFlung.add(event.champion.t);
       }
+      if (event.kind === "championRetreat") this.championsRecalled.add(event.c);
       this.checkEnd(battle);
       if (this.phase !== "running") return;
     }
@@ -714,6 +738,7 @@ export class AttackSession {
       remaining: this.remaining(),
       championAvailable: this.championAvailable(),
       championsHp: this.championsHpOf(battleState),
+      championsOnField: battle ? this.championsOnField(battle) : [],
       unusedTools: this.unusedTools,
       acted: this.acted,
       eventCount: this.events.length,
@@ -732,6 +757,19 @@ export class AttackSession {
   }
 
   /* ── Internals ──────────────────────────────────────────────────────── */
+
+  /** The player's champions still fighting, by type, in the order they were flung. */
+  private championsOnField(battle: Battle): number[] {
+    if (this.championsFlung.size === 0) return [];
+    const ids = new Set<string>();
+    for (const creep of battle.creeps()) {
+      if (creep.champion && !creep.friendly && creep.hp > 0) ids.add(creep.monsterId);
+    }
+    return [...this.championsFlung].filter((t) => {
+      const id = championByType(t);
+      return id !== undefined && ids.has(id) && !this.championsRecalled.has(t);
+    });
+  }
 
   /** The engine's per-id champion health, re-keyed by type for the save. */
   private championsHpOf(battleState: BattleState | null): Record<number, number> {

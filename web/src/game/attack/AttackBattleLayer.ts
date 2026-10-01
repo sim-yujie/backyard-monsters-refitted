@@ -202,6 +202,21 @@ export const groundWorld = (ix: number, iy: number, origin: Point): Point => ({
   y: (ix + iy) / 2 + origin.y,
 });
 
+/**
+ * The colour a champion's ability leaves on a creep's body (issue #222), in
+ * place of Flash's glow filters: Korath's flame orange, Fomor's enrage the
+ * pink of `Enrage`'s `GlowFilter(16724735)`, Krallen's loot aura the green of
+ * `LootingMultiplier`'s `GlowFilter(5635873)`. White when none touches it.
+ * Drawing only; nothing here reaches the battle.
+ */
+export const abilityTint = (creep: CreepSnapshot | null): number => {
+  if (!creep) return 0xffffff;
+  if (creep.burning) return 0xffb070;
+  if (creep.enraged) return 0xff9cff;
+  if (creep.lootBoosted) return 0xa8ff80;
+  return 0xffffff;
+};
+
 /** Screen-space heading from one point to another, or null when they coincide. */
 export const headingBetween = (from: Point, to: Point): number | null => {
   const dx = to.x - from.x;
@@ -553,6 +568,8 @@ interface Gib {
 const MARKER_SIZE = 8;
 
 const SPLAT_COLOUR = 0x5da832;
+/** `G4QuakeGraphic`'s line colour, 15893760 (`champions/Korath.as:233`). */
+const QUAKE_COLOUR = 0xf28500;
 const GIB_COLOURS = [0x5da832, 0x3f7a1e, 0x8ad14a] as const;
 const BAR_BACK_COLOUR = 0x6b1616;
 const BAR_FRONT_COLOUR = 0x5ee06a;
@@ -996,7 +1013,12 @@ export class AttackBattleLayer {
     for (const view of this.views.values()) {
       const bar = view.snapshot?.champion ? CHAMPION_BAR : BAR;
       view.barFront.width = Math.max(0, bar.width * this.shownFraction(view));
-      view.body.tint = tick - view.hurtTick < HURT_TICKS ? HURT_TINT : view.baseTint;
+      view.body.tint =
+        tick - view.hurtTick < HURT_TICKS
+          ? HURT_TINT
+          : view.baseTint === 0xffffff
+            ? abilityTint(view.snapshot)
+            : view.baseTint;
     }
   }
 
@@ -1507,6 +1529,10 @@ export class AttackBattleLayer {
       );
       return;
     }
+    if (event.kind === "quake") {
+      this.spawnQuake(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius);
+      return;
+    }
     // A death a held bullet dealt waits for it to land; the rest splat now.
     if (this.ledger.death(event)) return;
     const at = groundWorld(event.ix, event.iy, this.origin);
@@ -1540,6 +1566,22 @@ export class AttackBattleLayer {
       }
     }
     this.splats.push({ tick, at, radius, disc, gibs });
+  }
+
+  /**
+   * Korath's quake (issue #222): three orange rings on the ground, as
+   * `G4QuakeGraphic` draws them (`champions/Korath.as:221-244`), the outer one
+   * the quake's reach, fading like a splat. Drawing only.
+   */
+  private spawnQuake(tick: number, at: Point, radius: number): void {
+    const rings = new Graphics();
+    for (const share of [1, 0.8, 0.6]) {
+      rings.ellipse(0, 0, radius * share, (radius * share) / 2);
+    }
+    rings.stroke({ color: QUAKE_COLOUR, width: 2, alpha: 0.9 });
+    rings.position.set(at.x, at.y);
+    this.effects.addChild(rings);
+    this.splats.push({ tick, at, radius, disc: rings, gibs: [] });
   }
 
   private makeGib(): Sprite {

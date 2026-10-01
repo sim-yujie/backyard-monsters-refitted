@@ -18,8 +18,18 @@ const plugin: AttackPlugin = (mounts) => {
     if (!sheet || !sheet.classList.contains("attack-dock--sheet")) return;
     mounts.setBottomInset(sheet.getBoundingClientRect().height);
   };
-  const panel = new ArmyPanel(bucket, { onResize: report }).mount(mounts.dock);
+  const session = mounts.session;
+  const panel = new ArmyPanel(bucket, {
+    onResize: report,
+    // The champion row's Retreat (issue #222).
+    onRetreatChampion: (t) => {
+      session.retreatChampion(t);
+    },
+  }).mount(mounts.dock);
+  panel.setChampionsOnField(session.state().championsOnField);
+  const unsubscribe = session.subscribe((state) => panel.setChampionsOnField(state.championsOnField));
   return () => {
+    unsubscribe();
     panel.destroy();
   };
 };

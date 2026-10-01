@@ -77,6 +77,12 @@ export const championName = (t: number): string => {
 
 export interface ArmyPanelOptions {
   /**
+   * Calls a champion back off the field: the champion row's Retreat button,
+   * Flash's per-champion "Retreat" (`CHAMPIONBUTTON.as:98-103`, issue #222).
+   * No button is shown without it.
+   */
+  readonly onRetreatChampion?: (t: number) => void;
+  /**
    * Called whenever the panel's box changes size, for the bottom-sheet inset
    * (§4.3). Not called in a browser without `ResizeObserver`.
    */
@@ -97,6 +103,8 @@ interface ChampionRow {
   readonly element: HTMLElement;
   readonly input: HTMLInputElement;
   readonly note: HTMLElement;
+  /** Shown only while this champion is on the field (issue #222). */
+  readonly retreat: HTMLButtonElement | null;
 }
 
 export class ArmyPanel {
@@ -116,9 +124,12 @@ export class ArmyPanel {
   private readonly unsubscribe: () => void;
   private readonly observer: ResizeObserver | null;
   private readonly radioName = `attack-champion-${Math.random().toString(36).slice(2, 9)}`;
+  private readonly onRetreatChampion: ((t: number) => void) | null;
+  private onField: readonly number[] = [];
 
   constructor(bucket: Bucket, options: ArmyPanelOptions = {}) {
     this.bucket = bucket;
+    this.onRetreatChampion = options.onRetreatChampion ?? null;
     this.panel = new Panel({ title: "Army", closable: false, className: "map-panel attack-army" });
     this.element = this.panel.element;
 
@@ -210,6 +221,23 @@ export class ArmyPanel {
     return this.rows.find((row) => row.id === id)?.input ?? null;
   }
 
+  /**
+   * Which of the player's champions are on the field, by type, so their rows
+   * offer Retreat (issue #222). The session's `championsOnField`.
+   */
+  setChampionsOnField(types: readonly number[]): void {
+    const same =
+      types.length === this.onField.length && types.every((t, at) => this.onField[at] === t);
+    if (same) return;
+    this.onField = [...types];
+    this.refreshRetreat();
+  }
+
+  /** The Retreat button of a champion's row, for the tests. */
+  retreatFor(t: number): HTMLButtonElement | null {
+    return this.champions.find((row) => row.t === t)?.retreat ?? null;
+  }
+
   /** The capacity bar's text, for the tests. */
   get capacityText(): string {
     return this.meterText.textContent ?? "";
@@ -295,7 +323,36 @@ export class ArmyPanel {
     note.className = "attack-army__note";
 
     item.append(input, icon, label, note);
-    return { t, element: item, input, note };
+
+    // Flash's per-champion Retreat (issue #222): it calls this champion back
+    // with the health it has, and the attack goes on.
+    let retreat: HTMLButtonElement | null = null;
+    const onRetreat = this.onRetreatChampion;
+    if (onRetreat) {
+      retreat = document.createElement("button");
+      retreat.type = "button";
+      retreat.className = "btn btn--ghost attack-army__champion-retreat";
+      retreat.textContent = "Retreat";
+      retreat.title = `Call ${championName(t)} back off the field, keeping the health it has`;
+      retreat.hidden = true;
+      retreat.addEventListener("click", (event) => {
+        // The row is the radio's label; the button must not pick the champion.
+        event.preventDefault();
+        event.stopPropagation();
+        onRetreat(t);
+      });
+      item.append(retreat);
+    }
+    return { t, element: item, input, note, retreat };
+  }
+
+  private refreshRetreat(): void {
+    for (const row of this.champions) {
+      if (!row.retreat) continue;
+      const out = this.onField.includes(row.t);
+      row.retreat.hidden = !out;
+      row.element.classList.toggle("attack-army__champion--fighting", out);
+    }
   }
 
   /* ── Refreshing ─────────────────────────────────────────────────────── */
@@ -334,7 +391,11 @@ export class ArmyPanel {
       champion.input.checked = picked === champion.t;
       champion.element.classList.toggle("attack-army__champion--picked", picked === champion.t);
       champion.element.classList.toggle("attack-army__champion--unavailable", !available);
-      champion.note.textContent = entry ? championNote(entry.blocked) : "";
+      champion.note.textContent = this.onField.includes(champion.t)
+        ? "On the field"
+        : entry
+          ? championNote(entry.blocked)
+          : "";
       champion.element.title = entry?.blocked === "oneChampion" ? ONE_CHAMPION_TITLE : "";
     }
 

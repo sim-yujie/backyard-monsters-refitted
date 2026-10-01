@@ -55,9 +55,10 @@ describe("parseCheckpoint", () => {
       { ...fling(400), champion: { t: 5, l: 5 } },
       { kind: "bomb", t: 500, x: 1, y: 2, id: "pb1" },
       { kind: "siege", t: 600, x: 1, y: 2, weapon: "jars" },
+      { kind: "championRetreat", t: 650, c: 5 },
       { kind: "retreat", t: 700 },
     ];
-    expect(accepted(parseCheckpoint(body({ flinglog: { v: 1, seed: 77, events } }))).flinglog.events).toHaveLength(4);
+    expect(accepted(parseCheckpoint(body({ flinglog: { v: 1, seed: 77, events } }))).flinglog.events).toHaveLength(5);
   });
 
   test("reads a champion's power level, and refuses one that is not whole (#202)", () => {
@@ -88,6 +89,8 @@ describe("parseCheckpoint", () => {
     ["an unknown event", { flinglog: { v: 1, seed: 77, events: [{ kind: "nuke", t: 1 }] } }],
     ["a negative count", { flinglog: { v: 1, seed: 77, events: [fling(1, { C1: -5 })] } }],
     ["a bomb with no id", { flinglog: { v: 1, seed: 77, events: [{ kind: "bomb", t: 1, x: 0, y: 0 }] } }],
+    ["a champion called back by no type (#222)", { flinglog: { v: 1, seed: 77, events: [{ kind: "championRetreat", t: 1 }] } }],
+    ["a champion called back by a fractional type", { flinglog: { v: 1, seed: 77, events: [{ kind: "championRetreat", t: 1, c: 1.5 }] } }],
     ["no sources", { sources: undefined }],
     ["a source that is not a base id", { sources: ["drop table"] }],
   ])("refuses %s", (_, overrides) => {

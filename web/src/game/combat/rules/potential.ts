@@ -1,9 +1,24 @@
 import {
+  FOMOR_ID,
+  KRALLEN_ID,
+  QUAKE_RADIUS_RANGES,
+  QUAKE_SWINGS,
+  UNTARGETABLE_TYPES,
+  championPower,
+  enrageMultiplier,
+  fomorBuff,
+  hasLootAura,
+  hasQuake,
+  krallenBuff,
+  lootAuraBonus,
+} from "./champions.js";
+import {
   bombBlast,
   bombParticleDamage,
   bombsFor,
   championAttackDelay,
   championStat,
+  championStatWithPower,
   HARVESTER_TYPES,
   LOOT_PROPERTY_BASE,
   LOOT_PROPERTY_BONUS,
@@ -24,6 +39,7 @@ import {
   noAmounts,
   RESOURCE_KEYS,
   type AttackContext,
+  type ChampionOnField,
   type CombatTolerances,
   type CombatViolation,
   type CombatYard,
@@ -108,11 +124,17 @@ export const MONSTER_AOE: Readonly<Record<string, number>> = {
 /**
  * The area multiplier a champion's swing carries, keyed by champion id.
  *
- * Korath (G4) stomps over `range * 2.5` at power level 3
- * (`com/monsters/monsters/champions/Korath.as:167-200`). The other four hit one
- * target, so they default to 1.
+ * Every champion's swing hits one target. Korath's quake is not a swing: it
+ * is bounded on its own, from the yard ({@link quakePotential}, issue #222).
  */
-export const CHAMPION_AOE: Readonly<Record<string, number>> = { G4: AOE_FOOTPRINTS };
+export const CHAMPION_AOE: Readonly<Record<string, number>> = {};
+
+/**
+ * The swing interval an enraged creep fights at: `int(attackDelay / m)`
+ * (`Enrage.as:23`, issue #222), never below one tick.
+ */
+const enragedDelay = (delay: number, enrage: number): number =>
+  enrage === 1 ? delay : Math.max(1, Math.trunc(delay / enrage));
 
 /** Slimeattikus, whose death leaves `splits[L]` children (`creeps/Slimeattikus.as:11-13`). */
 export const SPLIT_CHILD_ID = "C18";
@@ -161,6 +183,7 @@ export const monsterPotential = (
   level: number,
   count: number,
   elapsedSeconds: number,
+  enrage = 1,
 ): number => {
   if (count <= 0) return 0;
 
@@ -173,25 +196,117 @@ export const monsterPotential = (
       total = damage * multiplier * count;
     } else {
       const area = MONSTER_AOE[id] ?? 1;
-      const hits = swings(elapsedSeconds, monsterAttackDelay(id, level));
+      const hits = swings(elapsedSeconds, enragedDelay(monsterAttackDelay(id, level), enrage));
       total = damage * multiplier * hits * area * count;
     }
   }
 
   const splits = monsterStat(id, "splits", level);
   if (splits > 0) {
-    total += monsterPotential(SPLIT_CHILD_ID, level, count * splits, elapsedSeconds);
+    total += monsterPotential(SPLIT_CHILD_ID, level, count * splits, elapsedSeconds, enrage);
   }
 
   return total;
 };
 
-/** The most a champion on the field can deal in the interval. */
-export const championPotential = (id: string, level: number, elapsedSeconds: number): number => {
-  const damage = championStat(id, "damage", level);
+/**
+ * The most a champion on the field can deal in the interval: its swings at
+ * its level plus its power level's bonus (issue #202), swinging faster when
+ * Fomor has enraged it, and Korath's quakes on top (issue #222).
+ *
+ * A quake comes after three swings (`Korath.as:184`), so the interval holds
+ * at most one for every three swings, and one more for the swings the last
+ * save left counted. Each takes off no more than {@link quakePotential} reads
+ * off the yard; with no yard the quake is not bounded and adds nothing.
+ */
+export const championPotential = (
+  id: string,
+  level: number,
+  elapsedSeconds: number,
+  powerLevel = 0,
+  yard: CombatYard | null = null,
+  enrage = 1,
+): number => {
+  const damage = championStatWithPower(id, "damage", level, powerLevel);
   if (damage <= 0) return 0;
   const area = CHAMPION_AOE[id] ?? 1;
-  return damage * swings(elapsedSeconds, championAttackDelay(id, level)) * area;
+  const hits = swings(elapsedSeconds, enragedDelay(championAttackDelay(id, level), enrage));
+  let total = damage * hits * area;
+  if (yard && hasQuake(id, level, championPower(id, powerLevel))) {
+    const range = championStatWithPower(id, "range", level, powerLevel);
+    const quakes = Math.floor(hits / QUAKE_SWINGS) + 1;
+    total += quakes * quakePotential(yard, range * QUAKE_RADIUS_RANGES, damage);
+  }
+  return total;
+};
+
+/** A building a quake could reach, as {@link quakePotential} weighs it. */
+interface QuakeTarget {
+  /** Its anchor on screen, which `getBuildingsInRange` measures to. */
+  readonly x: number;
+  readonly y: number;
+  /** The most one quake takes off it: its damage, never past its health. */
+  readonly most: number;
+}
+
+/**
+ * The most one of Korath's quakes can take off the yard, wherever he stands
+ * (issue #222).
+ *
+ * The quake reaches every building but the untargetable whose anchor is
+ * closer than `radius` on screen (`Korath.as:192-209`, `Targeting.as:151-173`),
+ * and none for more than Korath's damage (`DealLinearAEDamage`'s figure falls
+ * off from it). Any two buildings one quake reaches are therefore closer than
+ * two radii apart, so taking each building in turn and adding up every
+ * building that close to it covers every set one quake can reach, as
+ * {@link bombPotential} does for a bomb.
+ */
+export const quakePotential = (yard: CombatYard, radius: number, damage: number): number => {
+  const targets: QuakeTarget[] = [];
+  for (const building of yard.buildings) {
+    if (building.hp <= 0 || building.spent || UNTARGETABLE_TYPES.includes(building.type)) continue;
+    const at = screenOf(building.x, building.y);
+    targets.push({ x: at.x, y: at.y, most: Math.min(building.hp, damage) });
+  }
+  if (targets.length === 0) return 0;
+  // The sort is stable, so equal columns keep the yard's id order.
+  targets.sort((a, b) => a.x - b.x);
+  const span = radius * 2;
+  let best = 0;
+  let low = 0;
+  let high = 0;
+  for (const anchor of targets) {
+    while ((targets[low] as QuakeTarget).x <= anchor.x - span) low += 1;
+    while (high < targets.length && (targets[high] as QuakeTarget).x < anchor.x + span) high += 1;
+    let total = 0;
+    for (let index = low; index < high; index += 1) {
+      const other = targets[index] as QuakeTarget;
+      const dx = other.x - anchor.x;
+      const dy = other.y - anchor.y;
+      if (dx * dx + dy * dy < span * span) total += other.most;
+    }
+    best = Math.max(best, total);
+  }
+  return best;
+};
+
+/**
+ * Every attacking champion the context names: the list when it carries one,
+ * else its single champion (an attack may field an ordinary champion and
+ * Krallen together, issue #74).
+ */
+export const championsOnField = (context: AttackContext): readonly ChampionOnField[] =>
+  context.champions ?? (context.champion ? [context.champion] : []);
+
+/**
+ * How much Fomor's enrage aura speeds its allies up, 1 without a Fomor on the
+ * attacker's side (`AOEEnrage`, `Fomor.as:18`, issue #222). The bound takes
+ * every ally as enraged for the whole interval.
+ */
+export const enrageBound = (champions: readonly ChampionOnField[]): number => {
+  const fomor = champions.find((champion) => champion.id === FOMOR_ID);
+  if (!fomor) return 1;
+  return enrageMultiplier(fomorBuff(fomor.level, championPower(FOMOR_ID, fomor.powerLevel)));
 };
 
 /* ── What one bomb can reach ──────────────────────────────────────────────── */
@@ -369,18 +484,23 @@ export const damagePotential = (
   tolerances: CombatTolerances = COMBAT_TOLERANCES,
 ): PotentialReport => {
   const elapsed = context.elapsedSave;
+  const champions = championsOnField(context);
+  const enrage = enrageBound(champions);
   let monsters = 0;
 
   for (const [id, count] of Object.entries(context.flung)) {
     const level = context.levels[id] ?? 1;
-    monsters += monsterPotential(id, level, count, elapsed);
+    monsters += monsterPotential(id, level, count, elapsed, enrage);
   }
 
   const zombies = (context.flung[REZGHUL_ID] ?? 0) > 0 ? monsters : 0;
 
-  const champion = context.champion
-    ? championPotential(context.champion.id, context.champion.level, elapsed)
-    : 0;
+  let champion = 0;
+  for (const one of champions) {
+    // Fomor does not enrage itself (`AOEEnrage.as:45`).
+    const sped = one.id === FOMOR_ID ? 1 : enrage;
+    champion += championPotential(one.id, one.level, elapsed, one.powerLevel, context.yard, sped);
+  }
 
   const bombs = bombsPotential(context.attacker.catapultLevel, context.yard);
   const potential = monsters + zombies + champion + bombs;
@@ -392,9 +512,7 @@ export const damagePotential = (
     limit: potential + slack,
     breakdown: { monsters, zombies, champion, bombs },
     empty:
-      !anyFlung(context.flung) &&
-      context.champion === null &&
-      context.attacker.catapultLevel <= 0,
+      !anyFlung(context.flung) && champions.length === 0 && context.attacker.catapultLevel <= 0,
   };
 };
 
@@ -452,8 +570,9 @@ export const LOOT_GAIN_RATIO = COMBAT_TOLERANCES.lootGainRatio;
  * The largest looting multiplier a creep carries is 2: a resource specialist
  * and every champion, Krallen included, add 1.5 to a looting property based at
  * 0.5 (`MonsterBase.as:260`, `CreepBase.as:224-226`, `ChampionBase.as:221`).
- * With the low-level bonus that is 3.14 a point of damage; 5 leaves room for
- * the `LootingMultiplier` Krallen's aura adds, which the engine does not model.
+ * With the low-level bonus that is 3.14 a point of damage, and 5 leaves room
+ * for the rounding. Krallen's aura, `LootingMultiplier`, can add up to 1.3 on
+ * top, which {@link lootAuraBound} widens the allowance by (issue #222).
  */
 export const LOOT_MULT_MAX = COMBAT_TOLERANCES.lootMultMax;
 
@@ -480,13 +599,13 @@ export const bankedByResource = (yard: CombatYard): ResourceAmounts => {
 };
 
 /**
- * Krallen, the only champion whose buff reaches the attacker's storage cap.
+ * Krallen is the only champion whose buff reaches the attacker's storage cap.
  *
  * `ATTACK.Loot` reads `CREEPS.krallen` by name (`ATTACK.as:696-702`), so
  * Fomor's `buffs` ladder — which is an enrage aura, not a cap — must not be
- * read here even though the stat table spells it the same way.
+ * read here even though the stat table spells it the same way. Her id,
+ * `KRALLEN_ID`, lives in `champions.ts`.
  */
-export const KRALLEN_ID = "G5";
 
 /**
  * The attacker's storage cap with Krallen's buff applied, per resource.
@@ -498,14 +617,28 @@ export const KRALLEN_ID = "G5";
  */
 export const lootCaps = (context: AttackContext): ResourceAmounts => {
   const caps = { ...context.attacker.caps };
-  const champion = context.champion;
-  if (!champion || champion.id !== KRALLEN_ID) return caps;
+  const champion = championsOnField(context).find((one) => one.id === KRALLEN_ID);
+  if (!champion) return caps;
 
   const buff = championStat(KRALLEN_ID, "buffs", champion.level);
   if (buff <= 0) return caps;
 
   for (const key of RESOURCE_KEYS) caps[key] *= 1 + buff;
   return caps;
+};
+
+/**
+ * How far Krallen's loot aura can raise the largest looting property, as a
+ * ratio of it: `(2 + 1 + buff) / 2` while she has it, else 1
+ * (`ProximityLootBuff`, `LootingMultiplier`, issue #222).
+ */
+export const lootAuraBound = (champions: readonly ChampionOnField[]): number => {
+  const krallen = champions.find((champion) => champion.id === KRALLEN_ID);
+  if (!krallen || !hasLootAura(KRALLEN_ID, championPower(KRALLEN_ID, krallen.powerLevel))) {
+    return 1;
+  }
+  const most = LOOT_PROPERTY_BASE + LOOT_PROPERTY_BONUS;
+  return (most + lootAuraBonus(krallenBuff(krallen.level))) / most;
 };
 
 /** What {@link auditLoot} is handed. */
@@ -617,9 +750,12 @@ export const auditLoot = (input: LootAuditInput): LootAudit => {
 
   // A specialist's or a champion's 2 is the largest multiplier a creep carries,
   // and a Vacuum's per-level `lootBonus` was never traced (§6, item 4), so its
-  // presence doubles the allowance rather than guessing the figure.
+  // presence doubles the allowance rather than guessing the figure. Krallen's
+  // aura raises the 2 by `1 + buff` (issue #222).
   const multiplier =
-    tolerances.lootMultMax * (context.attacker.hasVacuum ? tolerances.vacuumLootSlack : 1);
+    tolerances.lootMultMax *
+    (context.attacker.hasVacuum ? tolerances.vacuumLootSlack : 1) *
+    lootAuraBound(championsOnField(context));
   const allowance = input.lootableDrop * multiplier;
 
   if (gained > allowance) {

@@ -89,6 +89,8 @@ export const reportLine = (
       return `${when} Deployed ${event.weapon} ${at(event.x, event.y)}`;
     case "retreat":
       return `${when} Retreated`;
+    case "championRetreat":
+      return `${when} Called back the champion (G${event.c})`;
   }
 };
 
