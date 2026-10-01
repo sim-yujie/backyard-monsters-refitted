@@ -487,9 +487,9 @@ trusted for them: `/base/save` lets the Flash client write it (`saveKeys` in
 |---|---|---|
 | `mushrooms`, `goldMushrooms` | `POST /bm/yard/mushroom/pick` (`server/src/controllers/yard/mushrooms.ts`) | 1 per pick; golden is the server's own roll (`services/yard/mushrooms.ts`) |
 | `bestBank` | `POST /bm/yard/bank` (`controllers/yard/bank.ts`) | `max(bestBank, total banked by this request)`; Collect all counts as one tap |
-| `juiced` | `POST /bm/yard/juice` (`controllers/yard/juice.ts`) | monsters juiced by the request |
+| `juiced` | `POST /bm/yard/juice` (`controllers/yard/juice.ts`) and `POST /bm/yard/bunker/remove` when a Juicer works (`bunker.ts`) | monsters juiced by the request. As Flash (`BUILDING9.Prep`, called from `CreepBase.changeModeJuice`), from Housing and from a bunker alike; a champion's juicing never counted. Left out (accepted 2026-10-01): Flash also counted monsters a "juice"-behaviour Map Room 1 tribe juiced during an attack (`HOUSING.as:104-114`) |
 | `tribes.<name>` | the Map Room 1 tribe save, when the replay marks the tribe destroyed (`services/maproom/v1/scaledMR1Tribes.ts`) | +1 to the tribe whose template holds that base id; base `"1"` counts as Legionnaire |
-| `baiterRuns` | a new yard action from package (a), `goals/baiter-run`, sent by the Baiter scene when a practice run reaches its end screen | +1, only when the yard has a finished Wild Monster Baiter (type 19). **Decided 2026-10-01.** A Baiter run is a client simulation, so this is the "tiny server-side record of finished Baiter runs" the owner asked for: the server cannot replay it, but it records only runs from a yard that can make one |
+| `baiterRuns` | `goals/baiter-run`, sent by the Baiter scene when a practice run really ends (not a stop), spending the one-use token `goals/baiter-start` issued as the run began (Redis, 15 min) | +1, only with that token, at least 5 s after it was issued, and with a finished Wild Monster Baiter (type 19) standing. **Decided 2026-10-01.** A Baiter run is a client simulation, so this is the "tiny server-side record of finished Baiter runs" the owner asked for: the server cannot replay it, but a run counts only from a token it issued |
 
 **Done is sticky.** When a condition is first seen met (in `goals/state`, `goals/claim` or the guided
 start), `goals[id].done` is written with the time, so recycling a building later does not take a
@@ -685,7 +685,8 @@ outpost (`notInOutpost`).
 | `guide/skip` | `{}` | state `pending` or `active` | state `skipped`, `tutorialstage` 205, protection `max(protected, now + 7 days)`, camp removed |
 | `goals/state` | `{}` | any | marks newly met goals done; returns the list |
 | `goals/claim` | `{ id }` | goal met or done, not claimed, prereq claimed, Housing room for monster rewards | pays the reward capped at storage (`credit`, Decided 2026-10-01), adds monsters to `housed`, writes `claimed` |
-| `goals/baiter-run` | `{}` | a finished Wild Monster Baiter stands | `counters.baiterRuns + 1` (goal N1) |
+| `goals/baiter-start` | `{}` | a finished Wild Monster Baiter stands | issues a one-use run token (Redis, 15 min) |
+| `goals/baiter-run` | `{ token }` | the token this player was issued, unspent, at least 5 s old; a finished Baiter stands | `counters.baiterRuns + 1` (goal N1) |
 | `tips/seen` | `{ screen }` | `screen` is a known screen id | writes `tips[screen]` |
 
 `guide/advance` checks, by step:

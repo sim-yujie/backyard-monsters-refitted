@@ -1301,10 +1301,17 @@ never leaves the server.
     building?: number,             // the building the guide paid for and has not finished yet
   },
   camp: "none" | "open" | "removed", // the private practice camp
-  goalsReady: number,              // goals ready to claim (0 until the Goals package lands)
+  goalsReady: number,              // goals ready to claim (0 while a Goals baseline is pending)
   tips: { [screen: string]: number }, // screens whose tips were seen, unix s
 }
 ```
+
+**Goals counters** (issue #227) move only on server events, inside the routes that perform them:
+`mushroom/pick` (`mushrooms`, and `goldMushrooms` on a golden roll), `bank` (`bestBank`, the most
+one request banked, all resources together), `juice` and `bunker/remove` when juiced (`juiced`),
+`goals/baiter-run` (`baiterRuns`), and the Map Room 1 tribe save when the server's replay first
+destroys a tribe (`tribes.<name>`; base `"1"` counts as Legionnaire), written in its own short
+transaction under the attacker's row lock.
 
 Every yard route's `run` also gets `em`, the request's transaction, for a route that must change
 another table in the same commit (the practice camp's `Maproom` row); `YardSlices` takes
@@ -1389,6 +1396,10 @@ Later phases add kinds (`train`, …) with the same five keys.
 | POST | `/api/:apiVersion/bm/yard/fortify` | `id` (building id) | `{ id, from, to, seconds, cost: { r1..r4 } }` — the fortification it was at and will reach, the countdown written | Outposts only (issue #184): starts the next step of the outpost table's fortify ladder on the core (112) or a cannon, sniper, laser, tesla, flak or railgun tower, F1 to F4 (`BFOUNDATION.Fortify`, `BASE.CanFortify`). Charges the step to the main pool up front and writes `cF = floor(time × bst)`, which holds the worker; the catch-up raises `fort` by one and awards `Fortified()`'s points. `400 notFortifiable` for a building with no ladder (every main-yard building), then `409` `busy`, `damaged`, `townHall`, `maxFortify { fort, max }` ("This building is fully fortified."), `requirements`, `shortfall`, `workers`. `speedup` works on a running fortification. |
 | POST | `/api/:apiVersion/bm/yard/fortify/cancel` | `id` (building id) | `{ id, refund: { r1..r4 } }` — what actually came back after the cap | Stops a running fortification and refunds the step's full price to the main pool, clamped to the storage cap (`FortifyCancelC`); the fortification stays where it was. `409 notFortifying` when no `cF` runs. |
 | POST | `/api/:apiVersion/bm/yard/champion/thaw` | `type` (1..5) | `{ champion }` | Brings a frozen champion back to the cage (`ThawGuardian`, `:143-221`): `status` 0, `ft + now`; `fz` rewritten. Free. Refusals, in order: `409 noChamber` / `busy`; `409 damaged { id }` (the chamber); `409 noCage` / `busy`; `409 championInCage` (freeze that one first); `409 notFrozen { type }`. |
+| POST | `/api/:apiVersion/bm/yard/goals/state` | none | `{ goals: [{ id, order, name, description, reward: { r1..r4 }, monsters?: { id, name, count }, status: "open" \| "ready" \| "claimed", baseline?: true, progress?: { have, need }, room?: boolean }] }` — every goal the player can see, in Flash's order; `progress` on an open counting goal, `room` on a ready goal with monsters | The Goals list (issue #227, `docs/design/tutorial.md` §6; `services/goals/`). A save whose `onboarding.goalsBaseline` is `"pending"` (every save from before Goals) first gets its baseline: each goal it already meets is marked `claimed: "baseline"`, no reward. Then every goal met now is marked `done` (sticky: a recycled building keeps its goal). A goal is hidden until its prereq is claimed; WM1-WM4 are hidden on Map Room 2 and 3. Main yard only (`409 notInOutpost`). |
+| POST | `/api/:apiVersion/bm/yard/goals/claim` | `id` (a goal id, e.g. `T1`) | `{ id, credited: { r1..r4 }, overflow: { r1..r4 }, monsters?: { id, count }, points }` — `credited` is what landed after the storage cap, `overflow` what was lost | Pays one goal under the row lock: the condition is re-checked from save data and server counters, the reward goes through the capped credit (the excess is lost, decision Q2), monster rewards go into `monsters.housed`, empire points `ceil(value / 50)` as Flash (`QUESTS.as:1816`; `value` the listed reward plus each monster's hatch cost), and `claimed` is written in the same transaction. Refusals: `400 unknownGoal`; `409 alreadyClaimed` (the baseline's too); `409 goalHidden`; `409 notMet`; `409 mapRoom3` (monster rewards); `409 housing { monster, count, need, free }` (Housing must take every monster). Main yard only. |
+| POST | `/api/:apiVersion/bm/yard/goals/baiter-start` | none | `{ token }` | Issues a one-use token for a Wild Monster Baiter practice run, kept in Redis for 15 minutes (`goals:baiter-run:<userid>`, one per player). The Baiter scene asks for it as a run starts. Refusal: `409 noBaiter` (no finished Baiter, type 19). Main yard only. |
+| POST | `/api/:apiVersion/bm/yard/goals/baiter-run` | `token` | `{ baiterRuns }` | Records a finished Baiter run for goal N1: spends the token (once), at least 5 s after it was issued, with a finished Baiter standing; then `onboarding.counters.baiterRuns + 1`. The run itself is never sent; the scene calls this only when the run really ends (yard flattened, army spent or clock out; not a stop). Refusals: `409 noRun` (no such token for this player, or spent); `409 tooSoon`; `409 noBaiter`. Main yard only. |
 
 **Shiny prices** are all worked out on the server by `services/yard/shiny.ts`, never taken from
 the client (`docs/design/yard-buildings.md` §2.6). `timeCost(t)` is the original
