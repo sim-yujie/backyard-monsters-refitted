@@ -343,6 +343,43 @@ describe("seen when the player moves on", () => {
     expect(view()!.destroyed).toBe(true);
   });
 
+  it("a screen that says it closed takes its tips with it at once, marking them seen", async () => {
+    const { bus, view, send, runner: tips } = setup();
+    tips.setOnboarding(onboarding("skipped"));
+    const mail = box();
+    control(TutTarget.MAIL_THREADS, mail);
+    bus.emit("screen", { id: GuideScreen.MAIL, root: mail, header: null });
+    await settle();
+    expect(view()!.shown).not.toBeNull();
+
+    // Still in the document (a panel closing on its way out): the event is enough.
+    bus.emit("screenClosed", { id: GuideScreen.MAIL });
+    expect(view()!.destroyed).toBe(true);
+    expect(send).toHaveBeenCalledWith(GuideScreen.MAIL);
+  });
+
+  it("a screen still loading is looked at again, and its tips show once there is something to point at", async () => {
+    const { bus, view, runner: tips } = setup();
+    tips.setOnboarding(onboarding("skipped"));
+    const mail = box();
+    bus.emit("screen", { id: GuideScreen.MAIL, root: mail, header: null });
+    await settle();
+    // Only the tip with no target would show; the one with a target is still loading.
+    expect(view()!.shown).toMatchObject({ text: "Nothing to point at." });
+    view()!.press("Skip tips");
+
+    const { bus: bus2, view: view2, runner: tips2 } = setup();
+    tips2.setOnboarding(onboarding("skipped"));
+    const panelRoot = box();
+    bus2.emit("screen", { id: GuideScreen.BUILDING, root: panelRoot, header: null });
+    await settle();
+    expect(view2()).toBeUndefined();
+    control(TutTarget.UPGRADE, panelRoot);
+    await settle(700);
+    expect(view2()!.shown).toMatchObject({ text: "Upgrade." });
+    tips2.destroy();
+  });
+
   it("a new scene (the overlay cleared under the tips) ends them, marking what showed", async () => {
     const { bus, view, send, runner: tips } = setup();
     tips.setOnboarding(onboarding("skipped"));

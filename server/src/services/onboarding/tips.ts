@@ -38,6 +38,7 @@ export const TIP_SCREENS = [
   "baiter",
   "champion",
   "outposts",
+  "goals",
 ] as const;
 
 export type TipScreen = (typeof TIP_SCREENS)[number];

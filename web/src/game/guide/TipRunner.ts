@@ -78,6 +78,8 @@ export interface TipRunnerOptions {
   startDelayMs?: number;
   /** How often the runner checks that the screen is still open. */
   watchMs?: number;
+  /** How long before a screen with nothing to point at yet is looked at again. */
+  retryMs?: number;
 }
 
 /** A screen's element, as a `screen` event handed it. */
@@ -91,6 +93,8 @@ interface Pending extends ScreenRef {
   readonly replay: boolean;
   /** Screens announced in the same moment share a batch, and take turns. */
   readonly batch: number;
+  /** How many times it already found nothing to point at (a screen still loading). */
+  readonly attempts: number;
 }
 
 interface Sequence extends ScreenRef {
@@ -128,6 +132,9 @@ const groupOf = (screen: GuideScreen): string => (screen.startsWith("monsters-")
 const SELECTOR_TARGET = "tip:";
 
 const START_DELAY_MS = 400;
+/** How long, and how often, a screen with nothing to point at yet is looked at again. */
+const RETRY_MS = 600;
+const RETRIES = 3;
 const WATCH_MS = 250;
 /** How many recent screens are remembered, to start their tips when the guided start ends. */
 const RECENT = 8;
@@ -169,7 +176,7 @@ export class TipRunner {
   private readonly options: TipRunnerOptions;
   private readonly timers: TipTimers;
   private readonly tips: (screen: GuideScreen) => readonly Tip[];
-  private readonly unsubscribe: () => void;
+  private readonly unsubscribe: (() => void)[];
   private readonly unregisterTarget: () => void;
 
   private onboarding: Onboarding | null = null;
@@ -197,7 +204,10 @@ export class TipRunner {
     this.timers = options.timers ?? browserTimers;
     this.tips = options.tips ?? tipsFor;
     const bus = options.bus ?? appBus;
-    this.unsubscribe = bus.on("screen", (event) => this.onScreen(event));
+    this.unsubscribe = [
+      bus.on("screen", (event) => this.onScreen(event)),
+      bus.on("screenClosed", ({ id }) => this.onScreenClosed(id)),
+    ];
     this.unregisterTarget = registerCanvasTarget(SELECTOR_TARGET, () => {
       const target = this.selectorTarget;
       const element = target ? findIn(target.root, target.selector) : null;
@@ -247,7 +257,7 @@ export class TipRunner {
 
   /** Stops listening and takes everything down. */
   destroy(): void {
-    this.unsubscribe();
+    for (const unsubscribe of this.unsubscribe) unsubscribe();
     this.unregisterTarget();
     this.stopAll(false);
     for (const host of this.helpHosts.values()) host.button.remove();
@@ -262,6 +272,20 @@ export class TipRunner {
     this.recent = [ref, ...this.recent.filter((one) => one.screen !== id)].slice(0, RECENT);
     this.attachHelp(ref, header);
     this.offer(ref);
+  }
+
+  /**
+   * A screen said it closed (the Goals panel does): its tips go at once,
+   * counting as seen if they were up, rather than at the next check.
+   */
+  private onScreenClosed(id: GuideScreen): void {
+    this.pending = this.pending.filter((one) => one.screen !== id);
+    this.paused = this.paused.filter((sequence) => {
+      if (sequence.screen !== id) return true;
+      this.retire(sequence);
+      return false;
+    });
+    if (this.current?.screen === id) this.finish();
   }
 
   /** Whether a screen's tips show by themselves now. */
@@ -281,7 +305,7 @@ export class TipRunner {
       this.pending.some((one) => one.screen === ref.screen) ||
       this.paused.some((one) => one.screen === ref.screen);
     if (busy) return;
-    this.enqueue(ref, false, this.options.startDelayMs ?? START_DELAY_MS);
+    this.enqueue(ref, false, this.options.startDelayMs ?? START_DELAY_MS, 0);
   }
 
   /** Replays screens' tips (a "?"), first one first, now. */
@@ -296,11 +320,11 @@ export class TipRunner {
         continue;
       }
       this.pending = this.pending.filter((one) => one.screen !== ref.screen);
-      this.enqueue(ref, true, 0);
+      this.enqueue(ref, true, 0, 0);
     }
   }
 
-  private enqueue(ref: ScreenRef, replay: boolean, delay: number): void {
+  private enqueue(ref: ScreenRef, replay: boolean, delay: number, attempts: number): void {
     if (!this.batchOpen) {
       this.batch += 1;
       this.batchOpen = true;
@@ -308,7 +332,7 @@ export class TipRunner {
         this.batchOpen = false;
       });
     }
-    this.pending.push({ ...ref, replay, batch: this.batch });
+    this.pending.push({ ...ref, replay, batch: this.batch, attempts });
     if (this.startTimer !== null) this.timers.clear(this.startTimer);
     this.startTimer = this.timers.set(() => {
       this.startTimer = null;
@@ -339,6 +363,11 @@ export class TipRunner {
       ? all
       : all.filter((tip) => targetsOf(tip).length === 0 || this.resolve(tip, entry.root) !== null);
     if (tips.length === 0) {
+      // A screen still loading (the Goals list, the mail threads) has nothing
+      // to point at yet: look again in a moment, a few times.
+      if (!entry.replay && entry.attempts < RETRIES) {
+        this.enqueue(entry, false, this.options.retryMs ?? RETRY_MS, entry.attempts + 1);
+      }
       this.next();
       return;
     }

@@ -1,3 +1,4 @@
+import { GOALS_CLAIM_TARGET } from "@/ui/goals/GoalsPanel";
 import { GuideScreen } from "./guideBus";
 import { TutTarget } from "./targets";
 
@@ -178,6 +179,16 @@ export const TIPS: Readonly<Partial<Record<GuideScreen, readonly Tip[]>>> = {
   ],
   [GuideScreen.CHAMPION]: [
     { text: "Feed your champion every day to keep it growing.", target: TutTarget.CHAMPION_FEED },
+  ],
+  [GuideScreen.GOALS]: [
+    {
+      text: "A finished goal shows Claim. {Tap} it to collect the reward.",
+      target: GOALS_CLAIM_TARGET,
+    },
+    {
+      text: "New goals appear as you claim earlier ones. Up next shows what to do now.",
+      target: { selector: ".goals-row:not(.goals-row--ready)" },
+    },
   ],
   [GuideScreen.OUTPOSTS]: [
     {

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { GOALS_CLAIM_TARGET } from "@/ui/goals/GoalsPanel";
 import { GuideScreen } from "./guideBus";
 import { TutTarget } from "./targets";
 import { GUIDED_SCREENS, targetsOf, TIPS, tipsFor, tipWording } from "./tipsCatalogue";
@@ -20,7 +21,8 @@ describe("the tips catalogue", () => {
   });
 
   it("points only at target names the foundation put in place, or at selectors", () => {
-    const names = new Set<string>(Object.values(TutTarget));
+    // The Goals panel names its own Claim buttons (package a).
+    const names = new Set<string>([...Object.values(TutTarget), GOALS_CLAIM_TARGET]);
     for (const screen of SCREENS) {
       for (const tip of tipsFor(screen)) {
         for (const target of targetsOf(tip)) {
