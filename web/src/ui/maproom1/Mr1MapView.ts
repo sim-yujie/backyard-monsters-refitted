@@ -17,6 +17,7 @@ import {
 } from "@/game/maproom1/mr1Model";
 import { tribeInfo } from "@/game/maproom1/tribes";
 import { avatar, countdown } from "./TargetCard";
+import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { button, el, icon } from "./icons";
 
 /**
@@ -46,6 +47,18 @@ interface PlacedPin {
   readonly button: HTMLButtonElement;
   readonly dot: HTMLElement;
 }
+
+/**
+ * Where the guided start's practice camp is drawn (issue #227): to the right
+ * of your own pin and a little below, inside the map; the middle of the map
+ * before your pin is placed.
+ */
+export const practiceSpot = (own: PinSpot | null): PinSpot => {
+  const base = own ?? { x: MAP_SIZE / 2, y: MAP_SIZE / 2 };
+  const margin = 90;
+  const x = base.x + 170 > MAP_SIZE - margin ? base.x - 170 : base.x + 170;
+  return { x, y: Math.min(MAP_SIZE - margin, base.y + 60) };
+};
 
 export class Mr1MapView {
   readonly element: HTMLElement;
@@ -140,7 +153,11 @@ export class Mr1MapView {
     this.miniDots.replaceChildren();
     this.pins.clear();
 
-    for (const tribe of world.tribes) this.addPin(tribe, tribeSpot(tribe), now);
+    for (const tribe of world.tribes) {
+      // The practice camp (#227) sits beside your own pin, where the first screen looks.
+      const spot = tribe.practice ? practiceSpot(this.ownSpot) : tribeSpot(tribe);
+      this.addPin(tribe, spot, now);
+    }
     for (const neighbour of world.neighbours) {
       const spot = placed.neighbours.get(neighbour.key);
       if (spot) this.addPin(neighbour, spot, now);
@@ -184,6 +201,8 @@ export class Mr1MapView {
   private addPin(target: Mr1Target, spot: PinSpot, now: number): void {
     const tone = pinTone(target);
     const pin = el("div", `mr1-pin mr1-pin--${target.kind} mr1-tone--${tone}`);
+    const practice = target.kind === "tribe" && target.practice === true;
+    if (practice) pin.classList.add("mr1-pin--practice");
     pin.style.left = `${spot.x}px`;
     pin.style.top = `${spot.y}px`;
 
@@ -224,6 +243,7 @@ export class Mr1MapView {
       tag.append(target.name);
     }
 
+    if (practice) tutTarget(control, TutTarget.MR1_PRACTICE);
     control.addEventListener("click", () =>
       this.handlers.onSelect(this.selected === target.key ? null : target.key),
     );

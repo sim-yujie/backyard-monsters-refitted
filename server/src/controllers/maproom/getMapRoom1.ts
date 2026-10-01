@@ -10,6 +10,12 @@ import { calculateBaseLevel } from "../../services/base/calculateBaseLevel.js";
 import { createMR1Tribes } from "../../services/maproom/v1/createMR1Tribes.js";
 import { currentMR1Tribes } from "../../services/maproom/v1/mr1TribeRules.js";
 import { mapRoom1View } from "../../services/maproom/v1/mapRoom1View.js";
+import {
+  PRACTICE_CAMP_BASEID,
+  PRACTICE_CAMP_NAME,
+  practiceCampOpen,
+} from "../../services/maproom/v1/practiceCamp.js";
+import { readOnboarding } from "../../services/onboarding/state.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { extractTownHall } from "../../utils/extractTownHall.js";
 import { overworldNeighbours } from "./getNeighbours.js";
@@ -26,6 +32,9 @@ import { overworldNeighbours } from "./getNeighbours.js";
  * stood back up, the four current tribes are written into `wmstatus`, and the
  * neighbour list is re-searched when its cache has run out. Refused with
  * `notMapRoom1` once the player has moved to Map Room 2.
+ *
+ * While the guided start's practice camp is open for this player (issue #227),
+ * the answer carries it as `practice`, with the guide's step.
  */
 export const getMapRoom1: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
@@ -60,6 +69,13 @@ export const getMapRoom1: KoaController = async (ctx) => {
       statuses,
       tribedata: maproom?.tribedata ?? [],
       neighbours,
+      practice: practiceCampOpen(save)
+        ? {
+            baseid: PRACTICE_CAMP_BASEID,
+            name: PRACTICE_CAMP_NAME,
+            step: readOnboarding(save).guide.step ?? null,
+          }
+        : null,
     }),
   };
 };

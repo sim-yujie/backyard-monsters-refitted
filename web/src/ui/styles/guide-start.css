@@ -1,0 +1,55 @@
+/*
+ * The guided start's own pieces (issue #227, `docs/design/tutorial.md` §2, §5):
+ * the practice camp's glow on Map Room 1, the raid's banner in Bob's bubble,
+ * and Help's replay item in the account menu. Bob's kit itself is `guide.css`.
+ */
+
+/* The practice camp glows in Bob's green: the one camp that is yours alone. */
+.mr1-pin--practice .mr1-avatar,
+.mr1-tile--practice .mr1-avatar {
+  box-shadow:
+    0 0 0 3px var(--guide-ring),
+    0 0 18px var(--guide-ring);
+  animation: guide-camp-glow 1.6s var(--easing) infinite;
+}
+
+.mr1-tile--practice {
+  border-color: var(--guide-ring);
+}
+
+.mr1-pin--practice {
+  z-index: 2;
+}
+
+@keyframes guide-camp-glow {
+  50% {
+    box-shadow:
+      0 0 0 3px var(--guide-ring),
+      0 0 4px var(--guide-ring);
+  }
+}
+
+/* "Legionnaire scouts are attacking!" over Bob's line. */
+.guide-raid__banner {
+  display: inline-block;
+  margin-bottom: 2px;
+  color: #a32b1b;
+  font-size: 1.05em;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+/* Help's "replay the guided start" in the account menu, laid out as Log out is. */
+.account-menu__help {
+  min-height: 44px;
+  justify-content: flex-start;
+  text-align: start;
+  color: var(--colour-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mr1-pin--practice .mr1-avatar,
+  .mr1-tile--practice .mr1-avatar {
+    animation: none;
+  }
+}

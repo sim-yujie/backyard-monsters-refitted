@@ -118,6 +118,26 @@ export interface ArmyPanelOptions {
   readonly onResize?: () => void;
 }
 
+/**
+ * What a caller can lock in the panel (issue #227): the guided start's
+ * practice attack leaves only Fill all live, then nothing, so all 15 Pokeys
+ * go in one drop (`game/attack/plugins/practice.ts`, §5.4). A locked control
+ * stays disabled whatever the bucket says.
+ */
+export interface ArmyLock {
+  /** Every row's stepper and the champion picks. */
+  readonly steppers?: boolean;
+  readonly fillAll?: boolean;
+  /** Clear and Load last army. */
+  readonly clear?: boolean;
+}
+
+/** The panel showing each bucket, so a plugin mounted after the army can lock it. */
+const panels = new WeakMap<Bucket, ArmyPanel>();
+
+/** The army panel over a bucket, or null when none is mounted. */
+export const armyPanelFor = (bucket: Bucket): ArmyPanel | null => panels.get(bucket) ?? null;
+
 interface Row {
   readonly id: string;
   readonly element: HTMLElement;
@@ -158,9 +178,13 @@ export class ArmyPanel {
   private readonly onRetreatChampion: ((t: number) => void) | null;
   private readonly onStanceChange: ((t: number, stance: ChampionStance) => void) | null;
   private onField: readonly number[] = [];
+  private locked: ArmyLock = {};
+  /** Load last army found nothing saved: it stays off. */
+  private noLastArmy = false;
 
   constructor(bucket: Bucket, options: ArmyPanelOptions = {}) {
     this.bucket = bucket;
+    panels.set(bucket, this);
     this.onRetreatChampion = options.onRetreatChampion ?? null;
     this.onStanceChange = options.onStanceChange ?? null;
     this.panel = new Panel({ title: "Army", closable: false, className: "map-panel attack-army" });
@@ -191,6 +215,7 @@ export class ArmyPanel {
     this.loadLastButton = button("btn btn--ghost attack-army__load-last", "Load last army", () => {
       if (!this.bucket.loadLast()) {
         this.loadLastButton.title = "No army from a previous attack was saved on this browser";
+        this.noLastArmy = true;
         this.loadLastButton.disabled = true;
       }
     });
@@ -242,8 +267,15 @@ export class ArmyPanel {
     return this;
   }
 
+  /** Locks controls (issue #227); `null` unlocks them all. */
+  lock(lock: ArmyLock | null): void {
+    this.locked = lock ?? {};
+    this.refresh();
+  }
+
   /** Stops listening and removes the panel. */
   destroy(): void {
+    if (panels.get(this.bucket) === this) panels.delete(this.bucket);
     for (const row of this.rows) row.stepper.destroy();
     this.observer?.disconnect();
     this.unsubscribe();
@@ -450,16 +482,16 @@ export class ArmyPanel {
     this.meterText.textContent = `${units(cost)} / ${units(capacity)}`;
 
     const anyRoom = bucket.ids().some((id) => bucket.max(id) > bucket.requestedCount(id));
-    this.fillAllButton.disabled = !live || !anyRoom;
-    this.clearButton.disabled = !live || bucket.isEmpty();
-    this.loadLastButton.disabled = !live || this.loadLastButton.disabled;
+    this.fillAllButton.disabled = !live || !anyRoom || this.locked.fillAll === true;
+    this.clearButton.disabled = !live || bucket.isEmpty() || this.locked.clear === true;
+    this.loadLastButton.disabled = !live || this.noLastArmy || this.locked.clear === true;
 
     for (const row of this.rows) this.refreshRow(row, document.activeElement !== row.input);
 
     const picked = bucket.champion()?.t ?? null;
     for (const champion of this.champions) {
       const entry = bucket.champions().find((candidate) => candidate.t === champion.t);
-      const available = live && (entry?.available ?? false);
+      const available = live && (entry?.available ?? false) && this.locked.steppers !== true;
       champion.input.disabled = !available;
       champion.input.checked = picked === champion.t;
       champion.element.classList.toggle("attack-army__champion--picked", picked === champion.t);
@@ -502,7 +534,7 @@ export class ArmyPanel {
     row.stepper.sync({
       value: shown,
       max: Math.max(max, requested),
-      disabled: !live || exhausted,
+      disabled: !live || exhausted || this.locked.steppers === true,
       rewrite: rewrite || exhausted,
     });
     row.count.textContent = `${remaining} housed`;

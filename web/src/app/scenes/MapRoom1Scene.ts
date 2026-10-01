@@ -9,6 +9,7 @@ import {
 } from "@/api/maproom1";
 import type { BaseLoadResponse } from "@/api/types";
 import { setAttackTarget, setViewTarget, type AttackTarget } from "@/game/attack/attackTarget";
+import { Mr1Guide } from "@/game/guide/mr1Guide";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import {
   attackGate,
@@ -52,6 +53,8 @@ const useFixture = (): boolean =>
 export class MapRoom1Scene implements Scene {
   private context: SceneContext | null = null;
   private ui: MapRoom1Ui | null = null;
+  /** Bob, while the guided start's practice camp is open (issue #227). */
+  private guide: Mr1Guide | null = null;
   private ownSave: BaseLoadResponse | null = null;
   private own: Mr1Own | null = null;
   private world: Mr1World | null = null;
@@ -83,6 +86,10 @@ export class MapRoom1Scene implements Scene {
         { id: SceneName.YARD, label: "Yard" },
       ],
     ).mount(context.overlay.content);
+    this.guide = new Mr1Guide(context.overlay.guide, {
+      goHome: () => context.goTo(SceneName.YARD),
+      refresh: () => void this.refresh(),
+    });
 
     document.addEventListener("visibilitychange", this.onVisibility);
     await this.loadOwn();
@@ -92,6 +99,8 @@ export class MapRoom1Scene implements Scene {
 
   exit(): void {
     document.removeEventListener("visibilitychange", this.onVisibility);
+    this.guide?.destroy();
+    this.guide = null;
     this.ui?.destroy();
     this.ui = null;
     this.context = null;
@@ -165,6 +174,7 @@ export class MapRoom1Scene implements Scene {
       this.ui?.notices.clear("mr1-load");
       this.ui?.setStatus(null);
       this.ui?.setData(world, this.own, this.now());
+      this.guide?.update(world);
     } catch (caught) {
       // The server says this player is on Map Room 2 now: that is their map.
       if (mapRoom1Refusal(caught) === NOT_MAP_ROOM_1) {

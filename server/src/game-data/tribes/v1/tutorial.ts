@@ -1,8 +1,18 @@
 import type { SaveData } from "../../../types/EntityData.js";
 
-// Baseid 1 (L_IDS) — Flash's tutorial camp, shown before tutorial stage 205.
-// No longer served (no tutorial exists, `mr1TribeRules.ts` `currentMR1Tribes`);
-// kept so the id is still recognised as a Map Room 1 tribe.
+// Baseid 1 (L_IDS): Flash's tutorial camp id, now the guided start's private
+// practice camp (`docs/design/tutorial.md` §5.1, issue #227). Served only to
+// the one player whose `onboarding.camp` is open (`practiceCamp.ts`), and
+// removed when they win or skip.
+//
+// Tuned so 15 level 1 Pokeys flung anywhere in the drop box (X 300 to 420,
+// Y -60 to 60, east of the tower) always win: one level 1 Sniper Tower, the
+// loot buildings, and eight level 1 walls behind the Town Hall on the far
+// side, seen but never in the way. No monsters. `practiceCamp.test.ts`
+// replays the real engine over every box point and seed to prove it; if it
+// fails after a combat change, retune the camp, not the test.
+//
+// Loot (3,000 / 3,000 / 1,000 / 1,000) is a placeholder (Q17).
 export const tutorial: SaveData = {
   baseid: "1",
   type: "tribe",
@@ -23,7 +33,7 @@ export const tutorial: SaveData = {
   baseid_inferno: 0,
   fbid: "",
   fortifycellid: 0,
-  name: "",
+  name: "Practice camp",
   level: 1,
   catapult: 0,
   flinger: 0,
@@ -39,145 +49,30 @@ export const tutorial: SaveData = {
   worldid: "0",
   event_score: 0,
   resources: {
-    r1: 2000,
-    r2: 12500,
-    r3: 7000,
-    r4: 3700,
+    r1: 3000,
+    r2: 3000,
+    r3: 1000,
+    r4: 1000,
     r1max: 10000,
     r2max: 10000,
     r3max: 10000,
     r4max: 10000,
   },
-  monsters: { C2: 3 },
-  storedata: {
-    ENL: {
-      q: 6,
-    },
-  },
+  monsters: {},
+  storedata: {},
   buildingdata: {
-    "0": {
-      X: -60,
-      Y: 0,
-      t: 14,
-      id: 0,
-    },
-    "1": {
-      X: 90,
-      Y: 80,
-      t: 1,
-      id: 1,
-      pr: 0,
-      st: 720,
-    },
-    "2": {
-      X: 160,
-      Y: 80,
-      t: 2,
-      id: 2,
-      pr: 0,
-      st: 720,
-    },
-    "26": {
-      X: -35,
-      Y: -165,
-      t: 15,
-      id: 26,
-    },
-    "97": {
-      X: 90,
-      Y: 0,
-      t: 6,
-      id: 97,
-    },
-    "124": {
-      X: 10,
-      Y: 130,
-      t: 17,
-      id: 124,
-    },
-    "125": {
-      X: -30,
-      Y: 130,
-      t: 17,
-      id: 125,
-    },
-    "126": {
-      X: -50,
-      Y: 130,
-      t: 17,
-      id: 126,
-    },
-    "127": {
-      X: -70,
-      Y: 130,
-      t: 17,
-      id: 127,
-    },
-    "128": {
-      X: -90,
-      Y: 130,
-      t: 17,
-      id: 128,
-    },
-    "129": {
-      X: -90,
-      Y: 110,
-      t: 17,
-      id: 129,
-    },
-    "130": {
-      X: -10,
-      Y: 130,
-      t: 17,
-      id: 130,
-    },
-    "131": {
-      X: 30,
-      Y: 130,
-      t: 17,
-      id: 131,
-    },
-    "132": {
-      X: 50,
-      Y: 130,
-      t: 17,
-      id: 132,
-    },
-    "133": {
-      X: 70,
-      Y: 130,
-      t: 17,
-      id: 133,
-    },
-    "134": {
-      X: -90,
-      Y: 90,
-      t: 17,
-      id: 134,
-    },
-    "135": {
-      X: -90,
-      Y: 70,
-      t: 17,
-      id: 135,
-    },
-    "136": {
-      X: -90,
-      Y: 50,
-      t: 17,
-      id: 136,
-    },
-    "137": {
-      X: -90,
-      Y: 30,
-      t: 17,
-      id: 137,
-    },
-    "138": {
-      X: -90,
-      Y: 10,
-      t: 17,
-      id: 138,
-    },
+    "0": { X: -65, Y: -65, t: 14, id: 0 },
+    "1": { X: 110, Y: -35, t: 21, id: 1 },
+    "2": { X: -35, Y: 95, t: 1, id: 2 },
+    "3": { X: -35, Y: -165, t: 2, id: 3 },
+    "4": { X: -195, Y: -40, t: 6, id: 4 },
+    "5": { X: -105, Y: -80, t: 17, id: 5 },
+    "6": { X: -105, Y: -60, t: 17, id: 6 },
+    "7": { X: -105, Y: -40, t: 17, id: 7 },
+    "8": { X: -105, Y: -20, t: 17, id: 8 },
+    "9": { X: -105, Y: 0, t: 17, id: 9 },
+    "10": { X: -105, Y: 20, t: 17, id: 10 },
+    "11": { X: -105, Y: 40, t: 17, id: 11 },
+    "12": { X: -105, Y: 60, t: 17, id: 12 },
   },
 };

@@ -6,6 +6,7 @@ import { postgres } from "../../../server.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
 import { currentMR1Tribes, mr1TribeRespawned, respawnMR1Tribe } from "./mr1TribeRules.js";
+import { PRACTICE_CAMP_BASEID, practiceCampOpen } from "./practiceCamp.js";
 
 export interface MR1TribeScaleConfig {
   [TribeScale.NEW]: { maxLevel: number };     // Town Hall 1–2
@@ -23,8 +24,10 @@ export interface MR1TribeScaleConfig {
  * relative to the player's level so tribes always pass the client's
  * _baseLevel - 10 display filter.
  *
- * Destroyed tribes respawn after 10 minutes. There is no tutorial camp any
- * more: every account faces its Town Hall's tier (`currentMR1Tribes`).
+ * Destroyed tribes respawn after 10 minutes. Every account faces its Town
+ * Hall's tier (`currentMR1Tribes`). The guided start's practice camp (base
+ * `"1"`, issue #227) is kept in `tribedata` while the player's camp is open and
+ * never respawns; it is not one of the four and gets no `wmstatus` entry.
  *
  * @param {Save} save - The player's main save
  * @param {MR1TribeScaleConfig} tribes - Town Hall level thresholds per scale (max TH level is 10)
@@ -44,6 +47,7 @@ export const createMR1Tribes = async (save: Save, tribes: MR1TribeScaleConfig) =
 
   const scaledTribes = currentMR1Tribes(thLevel, tribes).map((slot) => slot.template);
   const scaledBaseIds = new Set(scaledTribes.map((tribe) => Number(tribe.baseid)));
+  if (practiceCampOpen(save)) scaledBaseIds.add(Number(PRACTICE_CAMP_BASEID));
 
   let maproom = await postgres.em.findOne(Maproom, { userid });
 
@@ -62,6 +66,7 @@ export const createMR1Tribes = async (save: Save, tribes: MR1TribeScaleConfig) =
 
   // Respawn tribes destroyed at least 10 minutes ago
   for (const tribe of maproom.tribedata) {
+    if (tribe.baseid === PRACTICE_CAMP_BASEID) continue;
     if (mr1TribeRespawned(tribe, currentTime)) {
       const status = wmstatus?.findIndex((status) => status[0] === Number(tribe.baseid));
 

@@ -6,12 +6,15 @@ import { mr1TribeRefusedErr } from "../../../errors/errors.js";
 import { postgres } from "../../../server.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
 import { currentMR1Tribes, mr1TribeRespawnAt, mr1TribeRespawned, respawnMR1Tribe } from "./mr1TribeRules.js";
+import { PRACTICE_CAMP_BASEID, practiceCampOpen } from "./practiceCamp.js";
 
 /**
  * Refuses a Map Room 1 tribe attack the player could not have started from
  * their map (issue #161), before anything is written: a player no longer on
  * Map Room 1, a tribe base that is not one of the four they face now (another
- * tier's, or the tutorial camp's), or a tribe still wrecked. A wrecked tribe
+ * tier's), or a tribe still wrecked. The guided start's practice camp (base
+ * `"1"`, issue #227) is attackable only by the player whose own camp is open,
+ * and never respawns: it is reset only by the guide's free retry. A wrecked tribe
  * whose time is up is stood back up here, as the map would on its next read.
  *
  * @param {User} user - The attacker, with `save` populated.
@@ -22,6 +25,11 @@ export const requireAttackableMR1Tribe = async (user: User, baseid: string, now:
   const userSave = user.save!;
 
   if (userSave.mapversion !== MapRoomVersion.V1) throw mr1TribeRefusedErr("notMapRoom1");
+
+  if (baseid === PRACTICE_CAMP_BASEID) {
+    if (!practiceCampOpen(userSave)) throw mr1TribeRefusedErr("notYourTribe");
+    return;
+  }
 
   const townHall = extractTownHall(userSave.buildingdata ?? {});
   const tribes = currentMR1Tribes(townHall?.l ?? 1, MR1_TRIBES);

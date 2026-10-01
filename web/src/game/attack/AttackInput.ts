@@ -498,6 +498,16 @@ export interface DropPreview {
  */
 export const ATTACK_TAP_CLAIMS: Array<(building: YardBuilding | null) => boolean> = [];
 
+/**
+ * Rules a drop must also pass, asked before the yard's own (issue #227): each
+ * gets the landing point and the tool, and answers a refusal in the player's
+ * words, or null. The guided start's practice attack allows a fling only
+ * inside its glowing box (`plugins/practice.ts`, `docs/design/tutorial.md`
+ * §5.4). A refused point shows the red ring and says why on a tap, as any
+ * illegal drop does.
+ */
+export const ATTACK_DROP_FILTERS: Array<(point: Point, tool: DropTool) => string | null> = [];
+
 export interface AttackInputOptions {
   readonly canvas: HTMLCanvasElement;
   readonly camera: Camera;
@@ -602,6 +612,11 @@ export class AttackInput {
     if (!this.obstacles || this.obstaclesFor !== destroyed.length) {
       this.obstacles = obstaclesOf(this.options.yard, destroyed);
       this.obstaclesFor = destroyed.length;
+    }
+    const tool = this.tool();
+    for (const filter of ATTACK_DROP_FILTERS) {
+      const reason = filter(point, tool);
+      if (reason) return { legal: false, reason, touching: [] };
     }
     const zone = this.zone();
     return judgeDrop(zone, point, this.obstacles, zone.target === "monsters" ? this.liveCreeps() : []);

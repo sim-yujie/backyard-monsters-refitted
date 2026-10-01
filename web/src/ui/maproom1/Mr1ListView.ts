@@ -122,10 +122,15 @@ export class Mr1ListView {
       ...world.tribes.map((tribe) => {
         const tile = button("mr1-tile");
         tile.dataset["key"] = tribe.key;
+        // The guided start's practice camp (#227): its own name, glowing, Bob's target.
+        if (tribe.practice) {
+          tile.classList.add("mr1-tile--practice");
+          tutTarget(tile, TutTarget.MR1_PRACTICE);
+        }
         const left = respawnIn(tribe, now);
         if (left !== null) tile.classList.add("mr1-tile--wrecked");
         const words = el("span", "mr1-tile__words");
-        words.append(el("span", "mr1-tile__name", tribeInfo(tribe.tribe).name));
+        words.append(el("span", "mr1-tile__name", tribe.practice ? tribe.name : tribeInfo(tribe.tribe).name));
         const sub = el("span", "mr1-tile__sub");
         if (left !== null && tribe.respawnAt !== null) {
           sub.append(

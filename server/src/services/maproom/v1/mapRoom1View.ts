@@ -26,6 +26,23 @@ export interface MapRoom1Tribe {
   respawnAt: number;
 }
 
+/**
+ * The guided start's private practice camp (issue #227,
+ * `docs/design/tutorial.md` §5.5), while it is open for this player: one
+ * more tribe target, base `"1"`, with the guide's step so the map can carry
+ * on where Bob left off.
+ */
+export interface MapRoom1Practice {
+  baseid: string;
+  name: string;
+  level: number;
+  destroyed: 0 | 1;
+  /** The last attack's damage percentage, 0 when fresh. */
+  damage: number;
+  /** The guide's macro step (`open-map`, `pick-camp`, `attack`, `attack-result`, …). */
+  step: string | null;
+}
+
 export interface MapRoom1View {
   /** Server seconds, so the client can count down `respawnAt` and protection. */
   now: number;
@@ -35,6 +52,8 @@ export interface MapRoom1View {
   protectedUntil: number;
   tribes: MapRoom1Tribe[];
   neighbours: NeighbourData[];
+  /** Present only while this player's practice camp is open. */
+  practice?: MapRoom1Practice;
 }
 
 interface ViewInput {
@@ -46,7 +65,25 @@ interface ViewInput {
   statuses: readonly number[][];
   tribedata: readonly TribeData[];
   neighbours: NeighbourData[];
+  /** The practice camp, when open: its base id, name and the guide's step. */
+  practice?: { baseid: string; name: string; step: string | null } | null;
 }
+
+/** The practice camp's entry, from its `tribedata` record. */
+const practiceView = (
+  practice: NonNullable<ViewInput["practice"]>,
+  tribedata: readonly TribeData[]
+): MapRoom1Practice => {
+  const record = tribedata.find((tribe) => tribe.baseid === practice.baseid);
+  return {
+    baseid: practice.baseid,
+    name: practice.name,
+    level: 1,
+    destroyed: record?.destroyed ? 1 : 0,
+    damage: record?.damage ?? 0,
+    step: practice.step,
+  };
+};
 
 export const mapRoom1View = ({
   now,
@@ -56,6 +93,7 @@ export const mapRoom1View = ({
   statuses,
   tribedata,
   neighbours,
+  practice,
 }: ViewInput): MapRoom1View => ({
   now,
   level,
@@ -76,4 +114,5 @@ export const mapRoom1View = ({
     };
   }),
   neighbours,
+  ...(practice && { practice: practiceView(practice, tribedata) }),
 });

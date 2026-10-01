@@ -41,6 +41,11 @@ export interface Mr1Tribe {
   readonly respawnAt: number | null;
   /** Building damage done so far, 0-100, when the route sends it. */
   readonly damage: number | null;
+  /**
+   * The guided start's private practice camp (issue #227): a Legionnaire
+   * outpost only this player sees, drawn beside their own pin and glowing.
+   */
+  readonly practice?: true;
 }
 
 /** A neighbouring player. */
@@ -80,6 +85,11 @@ export interface Mr1World {
   readonly protectedUntil: number;
   /** Your base level as the route counts it; null when it did not say. */
   readonly level?: number | null;
+  /**
+   * The guided start's step while the practice camp is open (issue #227),
+   * for Bob on this screen (`game/guide/mr1Guide.ts`); absent otherwise.
+   */
+  readonly guideStep?: string | null;
 }
 
 const num = (value: unknown, fallback = 0): number => {
@@ -106,6 +116,34 @@ const readTribe = (wire: MapRoom1TribeWire): Mr1Tribe | null => {
     wrecked,
     respawnAt,
     damage: typeof wire.damage === "number" ? wire.damage : null,
+  };
+};
+
+/** The practice camp as the route sends it (`server/src/services/maproom/v1/mapRoom1View.ts`). */
+interface PracticeWire {
+  baseid?: unknown;
+  name?: unknown;
+  level?: unknown;
+  destroyed?: unknown;
+  damage?: unknown;
+  step?: unknown;
+}
+
+/** The practice camp's tribe entry: Legionnaire art, its own name, never wrecked on the map. */
+const readPractice = (wire: PracticeWire): Mr1Tribe => {
+  const baseid = String(wire.baseid ?? "1");
+  return {
+    kind: "tribe",
+    key: `practice-${baseid}`,
+    baseid,
+    tribe: "legionnaire",
+    name: typeof wire.name === "string" && wire.name ? wire.name : "Practice camp",
+    level: Math.max(1, num(wire.level, 1)),
+    // It never respawns on a clock: the guide's free retry stands it up again.
+    wrecked: false,
+    respawnAt: null,
+    damage: typeof wire.damage === "number" ? wire.damage : null,
+    practice: true,
   };
 };
 
@@ -150,9 +188,15 @@ export const readMapRoom1 = (response: MapRoom1Response, fallbackNow: number): M
     seen.add(tribe.tribe);
     tribes.push(tribe);
   }
+  // The guided start's practice camp, while open: first, so it is the first tile (#227).
+  const practice = (response as { practice?: PracticeWire | null }).practice;
+  if (practice && typeof practice === "object") tribes.unshift(readPractice(practice));
   return {
     now,
     tribes,
+    ...(practice && typeof practice === "object"
+      ? { guideStep: typeof practice.step === "string" ? practice.step : null }
+      : {}),
     neighbours: (response.neighbours ?? []).map((wire) => readNeighbour(wire, now)),
     protectedUntil: Math.max(0, num(response.protectedUntil)),
     level: num(response.level) > 0 ? num(response.level) : null,

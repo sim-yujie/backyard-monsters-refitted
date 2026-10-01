@@ -22,6 +22,8 @@
  */
 
 import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
+import { guideTourAvailable, startGuideTour } from "@/game/guide/tour";
+import "@/ui/styles/guide-start.css";
 
 export interface AccountAvatar {
   /** The critter the player is shown as: their pick, or their default. */
@@ -70,6 +72,8 @@ export class AccountMenu {
   private readonly status: HTMLElement | null = null;
   /** The pill's level line; null on the plain button. */
   private readonly level: HTMLElement | null = null;
+  /** Help's replay of the guided start; shown only while one is on offer. */
+  private readonly replay: HTMLButtonElement;
   private readonly name: string;
   private current: AvatarId | null = null;
   private saving = false;
@@ -190,7 +194,20 @@ export class AccountMenu {
       this.list.append(picker);
       this.mark();
     }
-    this.list.append(signOut);
+    // Help: Bob's guided start again, as a tour with Next buttons (issue #227,
+    // Q5). Offered only where it can run (the own yard, the guide not running).
+    this.replay = document.createElement("button");
+    this.replay.type = "button";
+    // Not `account-menu__item`: Log out stays the menu's one item of that name.
+    this.replay.className = "btn btn--ghost account-menu__help";
+    this.replay.setAttribute("role", "menuitem");
+    this.replay.textContent = "Help: replay the guided start";
+    this.replay.hidden = true;
+    this.replay.addEventListener("click", () => {
+      this.toggle(false);
+      startGuideTour();
+    });
+    this.list.append(this.replay, signOut);
     this.element.append(this.button, this.list);
     document.addEventListener("pointerdown", this.dismiss, true);
     document.addEventListener("keydown", this.dismiss, true);
@@ -276,6 +293,7 @@ export class AccountMenu {
   }
 
   private toggle(open: boolean): void {
+    if (open) this.replay.hidden = !guideTourAvailable();
     this.list.hidden = !open;
     this.button.setAttribute("aria-expanded", String(open));
   }

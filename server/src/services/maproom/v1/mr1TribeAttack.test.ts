@@ -79,4 +79,21 @@ describe("requireAttackableMR1Tribe", () => {
     expect(tribe).toMatchObject({ destroyed: 0, tribeHealthData: {}, looted: undefined });
     expect((user as { save: { wmstatus: number[][] } }).save.wmstatus[0]).toEqual([2, 1, 0]);
   });
+
+  test("the practice camp (base 1) is attackable only by the player whose own camp is open (#227)", async () => {
+    const withCamp = (state: string) => {
+      const user = userOn(1) as { save: Record<string, unknown> };
+      user.save.onboarding = { v: 1, guide: { state: "active", step: "attack" }, camp: { state } };
+      return user as never;
+    };
+    expect(await refusal(withCamp("open"), "1")).toBeUndefined();
+    expect(await refusal(withCamp("removed"), "1")).toBe("notYourTribe");
+    expect(await refusal(withCamp("none"), "1")).toBe("notYourTribe");
+    // A legacy account (no record) never has one.
+    expect(await refusal(userOn(1), "1")).toBe("notYourTribe");
+    // It never respawns on its own: the guide's retry resets it.
+    maproom!.tribedata = [{ baseid: "1", tribeHealthData: {}, destroyed: 1, destroyedAt: NOW - 60 }];
+    expect(await refusal(withCamp("open"), "1")).toBeUndefined();
+    expect(persisted).toEqual([]);
+  });
 });

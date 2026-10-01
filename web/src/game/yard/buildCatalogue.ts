@@ -1,3 +1,4 @@
+import { guidePays } from "@/game/guide/steps";
 import type { BaseLoadResponse, ResourceCaps, Resources, UpgradeCost } from "@/api/types";
 import type { CostRequirement } from "./buildingCostData";
 import {
@@ -318,13 +319,17 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
       : { reason: "requirements", requirements: unmet };
   }
 
+  // The guided start pays for its building at that building's build step: the
+  // server tops the build up and checks the same rule (issue #227, §2.4).
+  const guidePaid = guidePays(type, context.save.onboarding, kind);
+
   let gate: BuildGate | null = common;
   if (!gate) {
     const shortfall: UpgradeCost = { r1: 0, r2: 0, r3: 0, r4: 0 };
     let short = false;
     let over = false;
     for (const key of KEYS) {
-      const missing = cost[key] - held(context.resources, key);
+      const missing = guidePaid ? 0 : cost[key] - held(context.resources, key);
       if (missing > 0) {
         shortfall[key] = missing;
         short = true;
