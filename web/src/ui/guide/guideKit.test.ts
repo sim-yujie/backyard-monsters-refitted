@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearCanvasTargets, registerCanvasTarget } from "@/game/guide/targets";
 import { BobBubble } from "./BobBubble";
-import { autoSide, HAND_WIDTH, placeArrow } from "./GuideArrow";
+import { autoSide, HAND_HEIGHT, HAND_WIDTH, handBox, placeArrow } from "./GuideArrow";
 import { GuideOverlay, type FrameClock } from "./GuideOverlay";
 import { HOLE_PADDING, panesAround } from "./Spotlight";
 
@@ -26,6 +26,19 @@ describe("placeArrow", () => {
   it("flips to come from below when the target is near the top of the screen", () => {
     expect(autoSide({ ...rect, top: 40 })).toBe("below");
     expect(placeArrow({ ...rect, top: 40 })).toMatchObject({ side: "below", rotate: -90 });
+  });
+
+  it("the box the hand covers is tall when it points up or down, wide otherwise", () => {
+    const above = placeArrow(rect, "above");
+    expect(handBox(above)).toEqual({
+      left: above.x - HAND_HEIGHT / 2,
+      top: above.y - HAND_WIDTH / 2,
+      width: HAND_HEIGHT,
+      height: HAND_WIDTH,
+    });
+    // It ends just short of the target it points at.
+    expect(handBox(above).top + HAND_WIDTH).toBe(rect.top - 6);
+    expect(handBox(placeArrow(rect, "left")).width).toBe(HAND_WIDTH);
   });
 
   it("from the right it is mirrored, not turned upside down", () => {

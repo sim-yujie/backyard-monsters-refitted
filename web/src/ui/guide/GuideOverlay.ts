@@ -1,6 +1,6 @@
 import { findTarget, type TargetRect } from "@/game/guide/targets";
 import { BobBubble, type BobLine } from "./BobBubble";
-import { GuideArrow, type ArrowSide } from "./GuideArrow";
+import { GuideArrow, handBox, type ArrowSide } from "./GuideArrow";
 import { Spotlight } from "./Spotlight";
 
 /**
@@ -61,10 +61,10 @@ export class GuideOverlay {
    */
   constructor(layer: HTMLElement, clock: FrameClock = browserClock) {
     this.clock = clock;
-    // Bottom to top: the blocker, the hand, the bubble.
+    // Bottom to top: the blocker, the bubble, the hand (which never takes the pointer).
     this.spotlight.mount(layer);
-    this.arrow.mount(layer);
     this.bubble.mount(layer);
+    this.arrow.mount(layer);
   }
 
   /** The step on screen, or null. */
@@ -106,12 +106,18 @@ export class GuideOverlay {
     const found = step.target ? findTarget(step.target) : null;
     const rect = found?.rect ?? null;
 
-    this.arrow.pointAt(rect, step.side);
+    const place = this.arrow.pointAt(rect, step.side);
     if (step.block === false) this.spotlight.hide();
     else this.spotlight.show(rect);
 
-    // The bubble moves up out of the way when it would sit on the target.
-    if (rect && !this.alternate && overlaps(rect, this.bubble.element.getBoundingClientRect())) {
+    // The bubble moves up out of the way when it would sit on the target or the hand.
+    const box = rect ? this.bubble.element.getBoundingClientRect() : null;
+    if (
+      rect &&
+      box &&
+      !this.alternate &&
+      (overlaps(rect, box) || (place !== null && overlaps(handBox(place), box)))
+    ) {
       this.alternate = true;
       this.bubble.setAlternate(true);
     }

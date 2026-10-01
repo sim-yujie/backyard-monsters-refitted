@@ -58,6 +58,14 @@ export const placeArrow = (rect: TargetRect, side: ArrowSide = autoSide(rect)): 
   }
 };
 
+/** The screen box the hand covers at a placement (turned a quarter, it is tall rather than wide). */
+export const handBox = (place: ArrowPlacement): TargetRect => {
+  const upright = place.rotate === 90 || place.rotate === -90;
+  const width = upright ? HAND_HEIGHT : HAND_WIDTH;
+  const height = upright ? HAND_WIDTH : HAND_HEIGHT;
+  return { left: place.x - width / 2, top: place.y - height / 2, width, height };
+};
+
 export class GuideArrow {
   readonly element: HTMLElement;
 
@@ -80,11 +88,11 @@ export class GuideArrow {
     return this;
   }
 
-  /** Points at `rect`; null hides the hand. */
-  pointAt(rect: TargetRect | null, side?: ArrowSide): void {
+  /** Points at `rect` and says where the hand went; null hides the hand. */
+  pointAt(rect: TargetRect | null, side?: ArrowSide): ArrowPlacement | null {
     if (!rect) {
       this.element.hidden = true;
-      return;
+      return null;
     }
     const place = placeArrow(rect, side);
     const style = this.element.style;
@@ -93,6 +101,7 @@ export class GuideArrow {
     style.transform = place.mirror ? "scaleX(-1)" : `rotate(${place.rotate}deg)`;
     this.element.dataset.side = place.side;
     this.element.hidden = false;
+    return place;
   }
 
   hide(): void {
