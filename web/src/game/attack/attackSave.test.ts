@@ -425,6 +425,19 @@ describe("the pieces", () => {
     expect(describeOutcome("main", "Bob", 12.5)).toEqual({ outcome: "12% damage dealt to Bob's yard.", tone: "neutral" });
   });
 
+  it("names the guided start's practice camp as itself, not \"Practice camp's camp\" (#227)", () => {
+    expect(describeOutcome("wild", "Practice camp", 100, true)).toEqual({
+      outcome: "Victory! The practice camp is destroyed.",
+      tone: "win",
+    });
+    expect(describeOutcome("wild", "Practice camp", 40, true)).toEqual({
+      outcome: "The practice camp still stands at 40% damage (90% wins).",
+      tone: "lose",
+    });
+    // Every other wild camp keeps its wording.
+    expect(describeOutcome("wild", "Legionnaire Tribe", 100).outcome).toBe("Victory! Legionnaire Tribe's camp is destroyed.");
+  });
+
   it("summarises the ended session for the panel", () => {
     const session = scriptedSession();
     const summary = summariseAttack(session);

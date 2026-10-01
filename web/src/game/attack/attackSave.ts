@@ -1,3 +1,4 @@
+import { isPracticeCamp } from "@/game/guide/practiceBox";
 import type {
   AttackSavePayload,
   BuildingDataMap,
@@ -368,22 +369,27 @@ const MAIN_PROTECTION_DAMAGE = 50;
  * defender protection (`damageProtection.ts`, ≥ 50% for 36 hours). A win
  * short of 100% leaves buildings standing, so it is "defeated", not
  * "destroyed" (#152).
+ *
+ * The guided start's practice camp (issue #227) is a camp by name already,
+ * so it is "The practice camp", not "Practice camp's camp".
  */
 export const describeOutcome = (
   kind: AttackTargetKind,
   name: string,
   damagePercent: number,
+  practice = false,
 ): { outcome: string; tone: OutcomeTone } => {
   const damage = Math.floor(damagePercent);
   if (kind === "wild" || kind === "outpost") {
     const what = kind === "wild" ? "camp" : "outpost";
+    const subject = practice ? "The practice camp" : `${name}'s ${what}`;
     return damagePercent >= VICTORY_THRESHOLD
       ? {
-          outcome: `Victory! ${name}'s ${what} is ${damagePercent >= 100 ? "destroyed" : "defeated"}.`,
+          outcome: `Victory! ${subject} is ${damagePercent >= 100 ? "destroyed" : "defeated"}.`,
           tone: "win",
         }
       : {
-          outcome: `${name}'s ${what} still stands at ${damage}% damage (${VICTORY_THRESHOLD}% wins).`,
+          outcome: `${subject} still stands at ${damage}% damage (${VICTORY_THRESHOLD}% wins).`,
           tone: "lose",
         };
   }
@@ -400,7 +406,7 @@ export const summariseAttack = (session: AttackSession): AttackSummary => {
     targetName: name,
     kind,
     endReason: state.endReason,
-    ...describeOutcome(kind, name, state.damagePercent),
+    ...describeOutcome(kind, name, state.damagePercent, isPracticeCamp(session.target)),
     damagePercent: state.damagePercent,
     buildingsDestroyed: state.buildingsDestroyed,
     // Traps left out, as on the status line (#72).

@@ -31,6 +31,21 @@ const buttonNamed = (card: HTMLElement, text: string): HTMLButtonElement =>
   [...card.querySelectorAll("button")].find((one) => one.textContent?.trim() === text)!;
 
 describe("targetCard", () => {
+  it("tells the truth about the guided start's practice camp: it does not come back (#227)", () => {
+    const practice = readMapRoom1(
+      { ...mapRoom1Fixture(NOW), practice: { baseid: "1", name: "Practice camp", level: 1, step: "pick-camp" } } as never,
+      NOW,
+    ).tribes.find((tribe) => tribe.practice)!;
+    const card = targetCard(practice, { world, own, now: NOW }, handlers(), "panel");
+    expect(card.querySelector("h2")?.textContent).toBe("Practice camp");
+    expect(card.textContent).not.toContain("comes back");
+    expect(card.textContent).toContain("it is gone once you win");
+    // An ordinary tribe still says when it comes back.
+    expect(targetCard(find("tribe-11"), { world, own, now: NOW }, handlers(), "panel").textContent).toContain(
+      "The camp comes back 10 minutes later.",
+    );
+  });
+
   it("offers View and Attack on a standing tribe, with its blurb and what you can send", () => {
     const on = handlers();
     const card = targetCard(find("tribe-11"), { world, own, now: NOW }, on, "panel");

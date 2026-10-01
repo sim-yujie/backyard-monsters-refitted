@@ -10,6 +10,13 @@
 /** The camp's tribe base id: Flash's tutorial camp id. */
 export const PRACTICE_CAMP_BASEID = "1";
 
+/**
+ * Whether an attack target is the practice camp: Map Room 1's base 1, which
+ * exists only as a player's own camp during the guided start.
+ */
+export const isPracticeCamp = (target: { readonly baseid: string; readonly mapversion?: number }): boolean =>
+  target.baseid === PRACTICE_CAMP_BASEID && (target.mapversion ?? 2) === 1;
+
 /** Drop centres allowed, yard units: east of the tower. */
 export const PRACTICE_BOX = { minX: 300, maxX: 420, minY: -60, maxY: 60 } as const;
 

@@ -26,6 +26,12 @@ export interface Mr1GuideHooks {
   readonly goHome: () => void;
   /** Reads the map again. */
   readonly refresh: () => void;
+  /**
+   * Reads the own yard again, then the map: the free retry puts 15 Pokeys
+   * back in housing, which the map's "what you can send" and its Attack gate
+   * read from the own-yard load.
+   */
+  readonly refreshOwn: () => void;
 }
 
 /** How often the screen is looked at again (the card opening and closing), ms. */
@@ -185,7 +191,7 @@ export class Mr1Guide {
     } finally {
       this.busy = false;
       this.shownKey = null;
-      this.hooks.refresh();
+      this.hooks.refreshOwn();
       this.render();
     }
   }

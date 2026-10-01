@@ -89,6 +89,7 @@ export class MapRoom1Scene implements Scene {
     this.guide = new Mr1Guide(context.overlay.guide, {
       goHome: () => context.goTo(SceneName.YARD),
       refresh: () => void this.refresh(),
+      refreshOwn: () => void this.loadOwn().then(() => this.refresh()),
     });
 
     document.addEventListener("visibilitychange", this.onVisibility);

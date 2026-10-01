@@ -211,11 +211,14 @@ export const targetCard = (
       facts.append(
         fact(
           "respawn",
-          left === null
-            ? // The camp is wrecked at 90% damage (`VICTORY_THRESHOLD`,
-              // `derivedDestroyed`), not by its Town Hall alone.
-              `Deal ${VICTORY_THRESHOLD}% damage to wreck it. The camp comes back 10 minutes later.`
-            : "You wrecked this camp. It is rebuilding.",
+          target.practice
+            ? // The guided start's practice camp (#227) never respawns: a win removes it.
+              `Deal ${VICTORY_THRESHOLD}% damage to win. It is yours alone to practise on, and it is gone once you win.`
+            : left === null
+              ? // The camp is wrecked at 90% damage (`VICTORY_THRESHOLD`,
+                // `derivedDestroyed`), not by its Town Hall alone.
+                `Deal ${VICTORY_THRESHOLD}% damage to wreck it. The camp comes back 10 minutes later.`
+              : "You wrecked this camp. It is rebuilding.",
         ),
         fact("shield", "Attacking a tribe keeps your protection."),
       );

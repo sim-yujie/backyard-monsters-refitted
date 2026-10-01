@@ -78,6 +78,9 @@ const GUIDE_FINISH = "guide-finish";
  */
 const GUIDE_SCENE = "guide-scene";
 
+/** The yard's controls the raid's hole stays clear of: the dock, Collect all, the yard switcher. */
+const SCENE_CLEAR_OF = '[data-tut^="dock-"], [data-tut="collect-all"], [data-tut="yard-switcher"]';
+
 export class GuidedStartRunner {
   private readonly overlay: GuideOverlay;
   private readonly actions: GuideActions;
@@ -171,12 +174,22 @@ export class GuidedStartRunner {
     const bounds = canvas.getBoundingClientRect();
     const topLeft = camera.worldToScreen({ x: box.x, y: box.y });
     const bottomRight = camera.worldToScreen({ x: box.x + box.width, y: box.y + box.height });
-    return {
-      left: bounds.left + topLeft.x,
-      top: bounds.top + topLeft.y,
-      width: bottomRight.x - topLeft.x,
-      height: bottomRight.y - topLeft.y,
+    const hole = {
+      left: Math.max(bounds.left, bounds.left + topLeft.x),
+      top: Math.max(bounds.top, bounds.top + topLeft.y),
+      right: Math.min(bounds.right, bounds.left + bottomRight.x),
+      bottom: Math.min(bounds.bottom, bounds.top + bottomRight.y),
     };
+    // The yard's own controls stay locked under the dim (Q16): the hole stops short of them.
+    for (const control of document.querySelectorAll<HTMLElement>(SCENE_CLEAR_OF)) {
+      const rect = control.getBoundingClientRect();
+      if (rect.width === 0 || rect.right <= hole.left || rect.left >= hole.right) continue;
+      if (rect.bottom <= hole.top || rect.top >= hole.bottom) continue;
+      if (rect.left > (hole.left + hole.right) / 2) hole.right = Math.min(hole.right, rect.left - 6);
+      else hole.bottom = Math.min(hole.bottom, rect.top - 6);
+    }
+    if (hole.right <= hole.left || hole.bottom <= hole.top) return null;
+    return { left: hole.left, top: hole.top, width: hole.right - hole.left, height: hole.bottom - hole.top };
   }
 
   /* ── Reading the server's step ───────────────────────────────────────── */

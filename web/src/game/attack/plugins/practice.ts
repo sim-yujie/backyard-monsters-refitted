@@ -6,6 +6,7 @@ import { bucketFor } from "@/game/attack/bucket";
 import { guideBus } from "@/game/guide/guideBus";
 import {
   inPracticeBox,
+  isPracticeCamp,
   PRACTICE_CAMP_BASEID,
   practiceBoxCorners,
 } from "@/game/guide/practiceBox";
@@ -40,8 +41,7 @@ const BOX_COLOUR = 0xb6f36a;
 
 /** Whether this attack is the practice attack. */
 export const isPracticeAttack = (mounts: Pick<AttackMounts, "target" | "practice" | "watch">): boolean =>
-  mounts.target.baseid === PRACTICE_CAMP_BASEID &&
-  (mounts.target.mapversion ?? 2) === 1 &&
+  isPracticeCamp(mounts.target) &&
   !mounts.practice &&
   !mounts.watch;
 

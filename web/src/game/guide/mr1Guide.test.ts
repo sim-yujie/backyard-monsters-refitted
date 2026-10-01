@@ -68,7 +68,7 @@ describe("the Map Room 1 model", () => {
 describe("Mr1Guide", () => {
   it("moves on from open-map once and points at the camp", async () => {
     const api = fakeApi();
-    guide = new Mr1Guide(layer, { goHome: vi.fn(), refresh: vi.fn() }, api as unknown as GuideApi);
+    guide = new Mr1Guide(layer, { goHome: vi.fn(), refresh: vi.fn(), refreshOwn: vi.fn() }, api as unknown as GuideApi);
     guide.update(worldAt("open-map"));
     guide.update(worldAt("open-map"));
     await settle();
@@ -80,7 +80,7 @@ describe("Mr1Guide", () => {
   it("asks the server after the attack: a win sends Bob home with the player", async () => {
     const api = fakeApi();
     const goHome = vi.fn();
-    guide = new Mr1Guide(layer, { goHome, refresh: vi.fn() }, api as unknown as GuideApi);
+    guide = new Mr1Guide(layer, { goHome, refresh: vi.fn(), refreshOwn: vi.fn() }, api as unknown as GuideApi);
     guide.update(worldAt("attack"));
     await settle();
     expect(api.advance).toHaveBeenCalledWith("attack");
@@ -96,7 +96,8 @@ describe("Mr1Guide", () => {
     const api = fakeApi();
     api.advance.mockImplementation(async () => answer("attack-result"));
     const refresh = vi.fn();
-    guide = new Mr1Guide(layer, { goHome: vi.fn(), refresh }, api as unknown as GuideApi);
+    const refreshOwn = vi.fn();
+    guide = new Mr1Guide(layer, { goHome: vi.fn(), refresh, refreshOwn }, api as unknown as GuideApi);
     guide.update(worldAt("attack"));
     await settle();
     expect(text()).toBe(LINES.lost);
@@ -104,13 +105,14 @@ describe("Mr1Guide", () => {
     layer.querySelector<HTMLButtonElement>(".guide-bob__action.btn--primary")!.click();
     await settle();
     expect(api.army).toHaveBeenCalledOnce();
-    expect(refresh).toHaveBeenCalled();
+    // The Pokeys are back in housing: the own yard is read again, so the card's Attack opens.
+    expect(refreshOwn).toHaveBeenCalledOnce();
     expect(text()).toBe(LINES.pickCamp);
   });
 
   it("points at Attack once the camp's card is open", async () => {
     const api = fakeApi();
-    guide = new Mr1Guide(layer, { goHome: vi.fn(), refresh: vi.fn() }, api as unknown as GuideApi);
+    guide = new Mr1Guide(layer, { goHome: vi.fn(), refresh: vi.fn(), refreshOwn: vi.fn() }, api as unknown as GuideApi);
     guide.update(worldAt("pick-camp"));
     const attack = document.createElement("button");
     attack.setAttribute("data-tut", "target-attack");
@@ -122,7 +124,7 @@ describe("Mr1Guide", () => {
 
   it("skips from the bubble after a warning", async () => {
     const api = fakeApi();
-    guide = new Mr1Guide(layer, { goHome: vi.fn(), refresh: vi.fn() }, api as unknown as GuideApi);
+    guide = new Mr1Guide(layer, { goHome: vi.fn(), refresh: vi.fn(), refreshOwn: vi.fn() }, api as unknown as GuideApi);
     guide.update(worldAt("pick-camp"));
     layer.querySelector<HTMLButtonElement>(".guide-bob__skip")!.click();
     expect(text()).toBe(LINES.skipAsk);
