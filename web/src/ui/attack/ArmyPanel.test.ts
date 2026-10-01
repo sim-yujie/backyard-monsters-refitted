@@ -434,6 +434,11 @@ describe("ArmyPanel champion", () => {
       "Mode",
     );
     expect(fomor.value).toBe("defensive");
+    // The radio is named by the champion, not by the picker inside its row.
+    const radio = fomor.closest(".attack-army__champion")?.querySelector("input[type=radio]");
+    const by = (radio?.getAttribute("aria-labelledby") ?? "").split(" ")[0] ?? "";
+    expect(document.getElementById(by)?.textContent).toContain(championName(3));
+    expect(document.getElementById(by)?.textContent).not.toContain("Mode");
     // A Mode the panel does not know is read as Hybrid.
     expect(krallen.value).toBe("hybrid");
 

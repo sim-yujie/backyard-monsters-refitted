@@ -358,6 +358,11 @@ export class ArmyPanel {
 
     const note = document.createElement("span");
     note.className = "attack-army__note";
+    // The row is the radio's label and holds the Mode picker too; name the
+    // radio by the champion and its note alone, not "… Mode Hybrid".
+    label.id = `${this.radioName}-${t}`;
+    note.id = `${this.radioName}-${t}-note`;
+    input.setAttribute("aria-labelledby", `${label.id} ${note.id}`);
 
     // Its Mode (issue #220). The row is the radio's label, so a click on the
     // picker must not reach it and pick or un-pick the champion.
