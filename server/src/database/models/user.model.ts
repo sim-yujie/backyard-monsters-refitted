@@ -42,6 +42,14 @@ export class User {
   @Property({ type: "Date", nullable: true })
   terms_accepted_at?: Date | null;
 
+  /**
+   * The player ticked "Start with the test yard (dev)" on the sign-up form
+   * (issue #217): their first main yard is the maxed sandbox yard, if the server
+   * has DEV_SANDBOX on when it is built. Only ever true on a dev server.
+   */
+  @Property({ type: "boolean", default: false })
+  sandbox_start: Opt<boolean> = false;
+
   @Property({ type: "boolean", default: false })
   banned: Opt<boolean> = false;
 

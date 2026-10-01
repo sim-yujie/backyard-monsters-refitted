@@ -1,5 +1,5 @@
 import { SESSION_STORAGE_KEY } from "@/config";
-import { post, setAuthToken } from "./http";
+import { get, post, setAuthToken } from "./http";
 import {
   SessionType,
   type LoginRequest,
@@ -7,6 +7,7 @@ import {
   type RegisterRequest,
   type RegisterResponse,
   type Session,
+  type SignUpOptionsResponse,
 } from "./types";
 
 /**
@@ -32,6 +33,13 @@ const LOGIN_PATH = "/api/:apiVersion/player/getinfo";
  * per IP and answers 429 with a plain `{ error }` body.
  */
 const REGISTER_PATH = "/api/:apiVersion/player/register";
+
+/**
+ * What the sign-up form may offer (issue #217): GET
+ * /api/:apiVersion/player/signupoptions, no sign-in needed. `sandboxStart` is
+ * true when the server has DEV_SANDBOX on, never in production.
+ */
+const SIGN_UP_OPTIONS_PATH = "/api/:apiVersion/player/signupoptions";
 
 let current: Session | null = null;
 
@@ -85,6 +93,19 @@ export const login = async (
 /** Creates an account. Sign in with {@link login} afterwards. */
 export const register = async (request: RegisterRequest): Promise<RegisterResponse> =>
   post<RegisterResponse>(REGISTER_PATH, { ...request });
+
+/**
+ * Whether the server offers the dev-only test yard at sign-up (issue #217).
+ * Any failure, an older server without the route included, counts as no.
+ */
+export const fetchSignUpOptions = async (): Promise<{ sandboxStart: boolean }> => {
+  try {
+    const response = await get<SignUpOptionsResponse>(SIGN_UP_OPTIONS_PATH);
+    return { sandboxStart: response.sandboxStart === true };
+  } catch {
+    return { sandboxStart: false };
+  }
+};
 
 /**
  * Re-authenticates with a stored token.

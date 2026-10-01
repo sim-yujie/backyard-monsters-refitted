@@ -4,6 +4,7 @@ import ormConfig from "../../mikro-orm.config.js";
 import { v4 as uuidv4 } from "uuid";
 import { MikroORM } from "@mikro-orm/core";
 import { getDefaultBaseData } from "../../game-data/getDefaultBaseData.js";
+import { devConfig } from "../../config/GameConfig.js";
 import { AllianceRole } from "../../enums/Alliance.js";
 import { BaseType } from "../../enums/Base.js";
 import { Alliance } from "../models/alliance.model.js";
@@ -71,6 +72,8 @@ const createSeedUser = async (em: EntityManager<PostgreSqlDriver>, passwordHash:
     username: uniqueId,
     email: `${uniqueId}@test.com`,
     password: passwordHash,
+    // Seeded accounts keep the old DEV_SANDBOX behaviour: the sandbox yard when it is on (issue #217).
+    sandbox_start: devConfig.devSandbox,
   });
 
   em.persist(user);

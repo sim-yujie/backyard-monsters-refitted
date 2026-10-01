@@ -18,6 +18,7 @@ import { BYMR_CDN } from "../../services/discord/fetchDiscordAvatar.js";
 import { sameUsername, usernameMatch } from "../../services/user/usernameLookup.js";
 import { assertUsernameAllowed } from "../../services/user/usernameFilter.js";
 import { verifyTurnstileToken } from "../../services/auth/turnstile.js";
+import { devConfig } from "../../config/GameConfig.js";
 
 /**
  * Controller to handle user registration.
@@ -30,6 +31,8 @@ import { verifyTurnstileToken } from "../../services/auth/turnstile.js";
  * A username the chat word filter catches is a 400 on the username field, and
  * when the server has a Turnstile secret key the sign-up's bot-check token must
  * pass Cloudflare's check before anything is looked up or written.
+ * `sandboxStart` (the dev-only "Start with the test yard" box, issue #217) is
+ * kept only while DEV_SANDBOX is on, so a production server ignores it.
  *
  * @param {Context} ctx - The Koa context object.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
@@ -43,7 +46,7 @@ export const register: KoaController = async (ctx) => {
     throw invalidAccountErr(issue.message, String(issue.path[0] ?? ""));
   }
 
-  const { turnstileToken, termsAccepted, ...registeredUser } = parsed.data;
+  const { turnstileToken, termsAccepted, sandboxStart, ...registeredUser } = parsed.data;
 
   assertUsernameAllowed(registeredUser.username);
 
@@ -70,6 +73,7 @@ export const register: KoaController = async (ctx) => {
     pic_square: `${BYMR_CDN}/assets/bym-refitted-assets/placeholder.jpg`,
     password: hash,
     terms_accepted_at: termsAccepted ? new Date() : null,
+    sandbox_start: sandboxStart === true && devConfig.devSandbox,
   });
 
   try {

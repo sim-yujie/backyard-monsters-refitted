@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { devConfig } from "../../config/GameConfig.js";
+import { devConfig, sandboxStartAvailable } from "../../config/GameConfig.js";
 import type { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { getDefaultBaseData } from "../../game-data/getDefaultBaseData.js";
@@ -89,10 +89,38 @@ describe("getDefaultBaseData — the starter base on a new main save", () => {
     expect(data.resources).toMatchObject({ r1: 0, r2: 0, r3: 0, r4: 0 });
   });
 
-  test("DEV_SANDBOX still gives the sandbox yard", () => {
+  const buildings = (account: User) =>
+    Object.keys((getDefaultBaseData(account, BaseType.MAIN) as { buildingdata?: BuildingDataMap }).buildingdata ?? {});
+
+  test("an account that asked for the test yard gets the sandbox yard while DEV_SANDBOX is on (#217)", () => {
     devConfig.devSandbox = true;
-    const data = getDefaultBaseData(user, BaseType.MAIN) as { buildingdata?: BuildingDataMap };
-    expect(Object.keys(data.buildingdata ?? {}).length).toBeGreaterThan(STARTER_BUILDINGS.length);
+    expect(buildings({ ...user, sandbox_start: true } as User).length).toBeGreaterThan(STARTER_BUILDINGS.length);
+  });
+
+  test("with DEV_SANDBOX on, an account that did not ask gets the normal starter base (#217)", () => {
+    devConfig.devSandbox = true;
+    expect(buildings({ ...user, sandbox_start: false } as User)).toEqual(Object.keys(starterBuildingData()));
+    expect(buildings(user)).toEqual(Object.keys(starterBuildingData()));
+  });
+
+  test("with DEV_SANDBOX off, asking for the test yard gives the normal starter base (#217)", () => {
+    devConfig.devSandbox = false;
+    expect(buildings({ ...user, sandbox_start: true } as User)).toEqual(Object.keys(starterBuildingData()));
+  });
+});
+
+describe("sandboxStartAvailable — when the server offers the test yard (#217)", () => {
+  test("DEV_SANDBOX=true on a local server offers it", () => {
+    expect(sandboxStartAvailable({ ENV: "local", DEV_SANDBOX: "true" })).toBe(true);
+  });
+
+  test("production never offers it, whatever DEV_SANDBOX says", () => {
+    expect(sandboxStartAvailable({ ENV: "production", DEV_SANDBOX: "true" })).toBe(false);
+  });
+
+  test("DEV_SANDBOX unset or anything but true does not offer it", () => {
+    expect(sandboxStartAvailable({ ENV: "local" })).toBe(false);
+    expect(sandboxStartAvailable({ ENV: "local", DEV_SANDBOX: "1" })).toBe(false);
   });
 });
 

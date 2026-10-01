@@ -64,6 +64,17 @@ export interface RegisterRequest {
   turnstileToken?: string;
   /** The form showed the Terms and age line; the server records when. */
   termsAccepted?: boolean;
+  /**
+   * The dev-only "Start with the test yard" box was ticked (issue #217): the
+   * first yard is the maxed sandbox yard. A server without DEV_SANDBOX ignores it.
+   */
+  sandboxStart?: boolean;
+}
+
+/** What the sign-up form may offer, from GET /api/:apiVersion/player/signupoptions (issue #217). */
+export interface SignUpOptionsResponse extends ApiEnvelope {
+  /** The server has DEV_SANDBOX on (never in production), so the test yard box is shown. */
+  sandboxStart: boolean;
 }
 
 export interface RegisterResponse extends ApiEnvelope {

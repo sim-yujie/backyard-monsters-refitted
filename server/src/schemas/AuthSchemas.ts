@@ -77,6 +77,12 @@ export const UserLoginSchema = z.object({
   sessionType: z.enum([SessionType.GAME, SessionType.LAUNCHER]).default(SessionType.GAME),
 });
 
+/** An optional true/false that a form-encoded body sends as "true" or "false". */
+const formBoolean = z.preprocess(
+  (input) => (input === "true" ? true : input === "false" ? false : input),
+  z.boolean().optional()
+);
+
 /**
  * Schema to validate user registration data.
  * - Username must be between 2 and 12 characters.
@@ -87,16 +93,16 @@ export const UserLoginSchema = z.object({
  *   check is off when the server has no secret key.
  * - termsAccepted is sent by a form that shows the Terms and age line; the
  *   server records when. A client that sends nothing records nothing.
+ * - sandboxStart asks for the maxed sandbox yard as the first main yard; the
+ *   controller keeps it only while DEV_SANDBOX is on (issue #217).
  */
 export const UserRegistrationSchema = z.object({
   username: usernameSchema,
   email: emailSchema,
   password: newPasswordSchema,
   turnstileToken: z.unknown().optional(),
-  termsAccepted: z.preprocess(
-    (input) => (input === "true" ? true : input === "false" ? false : input),
-    z.boolean().optional()
-  ),
+  termsAccepted: formBoolean,
+  sandboxStart: formBoolean,
 });
 
 /**

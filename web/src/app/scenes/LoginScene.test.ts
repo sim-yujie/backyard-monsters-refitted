@@ -11,6 +11,7 @@ import type { SceneContext } from "../SceneManager";
 const auth = vi.hoisted(() => ({
   login: vi.fn(),
   register: vi.fn(),
+  fetchSignUpOptions: vi.fn(),
 }));
 
 vi.mock("@/api/auth", () => auth);
@@ -88,6 +89,7 @@ beforeEach(() => {
   goTo = vi.fn();
   auth.login.mockReset().mockResolvedValue({});
   auth.register.mockReset().mockResolvedValue({ user: { userid: 1 } });
+  auth.fetchSignUpOptions.mockReset().mockResolvedValue({ sandboxStart: false });
 });
 
 describe("LoginScene sign-up", () => {
@@ -115,7 +117,7 @@ describe("LoginScene sign-up", () => {
     open();
     button("Create account").click();
     const order = [...root.querySelectorAll("input, button")]
-      .filter((element) => !element.closest(".panel__titlebar"))
+      .filter((element) => !element.closest(".panel__titlebar, [hidden]"))
       .map((element) => element.id || element.textContent);
     expect(order).toEqual([
       "signup-username",
@@ -336,5 +338,67 @@ describe("LoginScene sign-up launch extras", () => {
     submit();
     await settle();
     expect(auth.register).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("LoginScene sign-up — the dev-only test yard box (#217)", () => {
+  const box = (): HTMLInputElement => $<HTMLInputElement>("#signup-sandbox-start");
+  const row = (): HTMLElement => box().closest("label")!;
+
+  it("is not shown when the server does not offer the test yard", async () => {
+    open();
+    button("Create account").click();
+    await settle();
+
+    expect(auth.fetchSignUpOptions).toHaveBeenCalled();
+    expect(row().hidden).toBe(true);
+  });
+
+  it("is shown, unticked, after the confirm field when the server offers it", async () => {
+    auth.fetchSignUpOptions.mockResolvedValue({ sandboxStart: true });
+    open();
+    button("Create account").click();
+    await settle();
+
+    expect(row().hidden).toBe(false);
+    expect(row().textContent).toBe("Start with the test yard (dev)");
+    expect(box().checked).toBe(false);
+    const order = [...root.querySelectorAll("input, button")]
+      .filter((element) => !element.closest(".panel__titlebar, [hidden]"))
+      .map((element) => element.id || element.textContent);
+    expect(order.slice(3, 5)).toEqual(["signup-confirm", "signup-sandbox-start"]);
+  });
+
+  it("left unticked, the sign-up does not ask for the test yard", async () => {
+    auth.fetchSignUpOptions.mockResolvedValue({ sandboxStart: true });
+    open();
+    button("Create account").click();
+    await settle();
+    fillValid();
+    submit();
+    await settle();
+
+    expect(auth.register).toHaveBeenCalledWith(
+      expect.not.objectContaining({ sandboxStart: expect.anything() }),
+    );
+  });
+
+  it("ticked, the sign-up asks for the test yard", async () => {
+    auth.fetchSignUpOptions.mockResolvedValue({ sandboxStart: true });
+    open();
+    button("Create account").click();
+    await settle();
+    fillValid();
+    box().click();
+    submit();
+    await settle();
+
+    expect(auth.register).toHaveBeenCalledWith({
+      username: "zz_signup",
+      email: "zz@example.com",
+      password: "hunter22!",
+      termsAccepted: true,
+      sandboxStart: true,
+    });
   });
 });

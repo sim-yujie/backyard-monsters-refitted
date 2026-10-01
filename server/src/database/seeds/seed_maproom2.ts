@@ -4,6 +4,7 @@ import ormConfig from "../../mikro-orm.config.js";
 import { v4 as uuidv4 } from "uuid";
 import { MikroORM } from "@mikro-orm/core";
 import { getDefaultBaseData } from "../../game-data/getDefaultBaseData.js";
+import { devConfig } from "../../config/GameConfig.js";
 import { BaseType } from "../../enums/Base.js";
 import { MapRoom2 } from "../../enums/MapRoom.js";
 import { Save } from "../models/save.model.js";
@@ -51,7 +52,9 @@ const NEXT_USER_BASEID = `SELECT nextval('bym.user_baseid_seq') AS baseid`;
       const user = em.create(User,
         { 
           ...userData, 
-          password: hashedPassword 
+          password: hashedPassword,
+          // Seeded accounts keep the old DEV_SANDBOX behaviour: the sandbox yard when it is on (issue #217).
+          sandbox_start: devConfig.devSandbox,
         }
       );
 

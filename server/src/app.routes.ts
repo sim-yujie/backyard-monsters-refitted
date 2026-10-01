@@ -27,6 +27,7 @@ import { supportedLangs } from "./controllers/supportedLangs.js";
 
 import { login } from "./controllers/auth/login.js";
 import { register } from "./controllers/auth/register.js";
+import { signUpOptions } from "./controllers/auth/signUpOptions.js";
 import { forgotPassword } from "./controllers/auth/forgotPassword.js";
 import { resetPassword } from "./controllers/auth/resetPassword.js";
 import { changeUsername } from "./controllers/auth/changeUsername.js";
@@ -120,6 +121,7 @@ router.get("/connection", (ctx) => (ctx.status = Status.OK));
 * ──────────────────────────────────────────────── */
 router.post("/api/:apiVersion/player/getinfo", apiVersion, loginLimiter, logRequest, login);
 router.post("/api/:apiVersion/player/register", apiVersion, registerLimiter, logRequest, register);
+router.get("/api/:apiVersion/player/signupoptions", apiVersion, signUpOptions);
 router.post("/api/:apiVersion/player/forgotPassword", apiVersion, forgotPassword);
 router.post("/api/:apiVersion/player/reset-password", resetPassword);
 router.get("/api/:apiVersion/supportedLangs", apiVersion, logRequest, supportedLangs);

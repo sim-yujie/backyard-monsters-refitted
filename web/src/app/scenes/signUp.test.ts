@@ -98,6 +98,12 @@ describe("signUpRequest", () => {
     );
     expect(signUpRequest(VALID, "")).not.toHaveProperty("turnstileToken");
   });
+
+  it("asks for the test yard only when the dev box was ticked (#217)", () => {
+    expect(signUpRequest(VALID, undefined, true).sandboxStart).toBe(true);
+    expect(signUpRequest(VALID, undefined, false)).not.toHaveProperty("sandboxStart");
+    expect(signUpRequest(VALID)).not.toHaveProperty("sandboxStart");
+  });
 });
 
 describe("describeSignUpFailure", () => {

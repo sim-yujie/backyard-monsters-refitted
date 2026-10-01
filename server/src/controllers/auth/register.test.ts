@@ -4,6 +4,7 @@ import { UniqueConstraintViolationException } from "@mikro-orm/core";
 import type { Context } from "koa";
 import { matchesWhere } from "../../testing/matchesWhere.js";
 import { AccountMessage } from "../../game-rules/account/accountRules.js";
+import { devConfig } from "../../config/GameConfig.js";
 
 /**
  * `POST /player/register` from the web client's sign-up form (issue #213),
@@ -273,5 +274,44 @@ describe("register: launch checks", () => {
   test("takes termsAccepted as a form field's string too", async () => {
     expect((await run({ ...VALID, termsAccepted: "true" })).status).toBe(200);
     expect(users.at(-1)!.terms_accepted_at).toBeInstanceOf(Date);
+  });
+});
+
+describe("register — the dev-only test yard choice (#217)", () => {
+  const sandbox = devConfig.devSandbox;
+  afterEach(() => {
+    devConfig.devSandbox = sandbox;
+  });
+
+  test("with DEV_SANDBOX on, an account that asks for the test yard is marked for it", async () => {
+    devConfig.devSandbox = true;
+    expect((await run({ ...VALID, sandboxStart: true })).status).toBe(200);
+    expect(users.at(-1)!.sandbox_start).toBe(true);
+    expect(users.at(-1)).not.toHaveProperty("sandboxStart");
+  });
+
+  test("an account that does not ask is not, even with DEV_SANDBOX on", async () => {
+    devConfig.devSandbox = true;
+    await run(VALID);
+    expect(users.at(-1)!.sandbox_start).toBe(false);
+    await run({ ...VALID, username: "zz_other", email: "other@example.com", sandboxStart: "false" });
+    expect(users.at(-1)!.sandbox_start).toBe(false);
+  });
+
+  test("takes sandboxStart as a form field's string too", async () => {
+    devConfig.devSandbox = true;
+    await run({ ...VALID, sandboxStart: "true" });
+    expect(users.at(-1)!.sandbox_start).toBe(true);
+  });
+
+  test("a server without DEV_SANDBOX (production included) ignores the request", async () => {
+    devConfig.devSandbox = false;
+    expect((await run({ ...VALID, sandboxStart: true })).status).toBe(200);
+    expect(users.at(-1)!.sandbox_start).toBe(false);
+  });
+
+  test("anything but true or false is refused as a broken field", async () => {
+    expect(await run({ ...VALID, sandboxStart: "yes" })).toMatchObject({ status: 400, field: "sandboxStart" });
+    expect(users).toHaveLength(1);
   });
 });

@@ -1033,6 +1033,20 @@ body {
 }
 
 /* The Terms, Privacy and age line under Create account (issue #213). */
+/* The dev-only "Start with the test yard" box (issue #217). */
+.login-form__dev-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+  cursor: pointer;
+}
+
+.login-form__dev-option[hidden] {
+  display: none;
+}
+
 .login-form__terms {
   margin: 0;
   color: var(--colour-text-muted);

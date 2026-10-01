@@ -13,13 +13,16 @@ import { STARTER_RESOURCES, starterBuildingData } from "../services/yard/starter
  * A main yard starts with the original's starter base: a level 1 Town Hall,
  * Twig Snapper (holding 200 twigs), Pebble Shiner and General Store, and
  * 1,600 twigs and 1,600 pebbles (`services/yard/starterBase.ts`, issue #154).
+ * An account that ticked "Start with the test yard (dev)" at sign-up gets the
+ * maxed sandbox yard instead, when the server has DEV_SANDBOX on (issue #217).
  *
  * @param {User} [user] - The user for whom the base data is being generated.
  * @returns {object} - The default base data object.
  */
 export const getDefaultBaseData = (user: User, baseType: BaseType) => {
-  // Inserts a sandbox test base into the database if enabled.
-  if (baseType === BaseType.MAIN && devConfig.devSandbox)
+  // The sandbox test base, for an account that asked for it at sign-up while
+  // DEV_SANDBOX is on (issue #217). Never in production: devSandbox is off there.
+  if (baseType === BaseType.MAIN && devConfig.devSandbox && user.sandbox_start)
     return overworldYardSandbox(user);
 
   if (baseType === BaseType.INFERNO && devConfig.infernoSandbox)

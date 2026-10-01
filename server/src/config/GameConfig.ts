@@ -1,6 +1,14 @@
 import { Env } from "../enums/Env.js";
 import { MessageType } from "../enums/MessageType.js";
 
+/**
+ * Whether a server started with these environment variables offers the maxed
+ * sandbox yard to new accounts that ask for it (issue #217): DEV_SANDBOX=true,
+ * and never on ENV=production.
+ */
+export const sandboxStartAvailable = (env: Record<string, string | undefined>): boolean =>
+  env.ENV !== Env.PROD && env.DEV_SANDBOX === "true";
+
 /** Visit our Wiki to get more information on each flag.
  * Wiki: https://github.com/bym-refitted/backyard-monsters-refitted/wiki/Dev-Settings-%E2%80%90-Configuration
  */
@@ -36,9 +44,11 @@ export const devConfig = {
    * Inserts a sandbox test base into the database, with all buildings placed.
    * Must be set before creating a new record.
    */
-  // Local development only: DEV_SANDBOX=true gives every new main yard the
-  // fully built sandbox base (utils/sandbox/overworldYard.ts). Never in production.
-  devSandbox: process.env.ENV !== Env.PROD && process.env.DEV_SANDBOX === "true",
+  // Local development only: DEV_SANDBOX=true makes the fully built sandbox base
+  // (utils/sandbox/overworldYard.ts) AVAILABLE. A new main yard gets it only when
+  // its account opted in at sign-up (user.sandbox_start, issue #217); everyone
+  // else gets the normal starter base. Never in production.
+  devSandbox: sandboxStartAvailable(process.env),
 
   /*
    * Inserts an Inferno sandbox test base into the database, with all buildings placed.

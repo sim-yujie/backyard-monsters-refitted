@@ -1,4 +1,4 @@
-import { login, register } from "@/api/auth";
+import { fetchSignUpOptions, login, register } from "@/api/auth";
 import { ApiError, NetworkError } from "@/api/http";
 import { PRIVACY_URL, TERMS_URL, TURNSTILE_SITE_KEY } from "@/config";
 import { Panel } from "@/ui/Panel";
@@ -6,6 +6,8 @@ import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
 import {
   BOT_CHECK_PENDING,
+  SANDBOX_START_LABEL,
+  SANDBOX_START_TITLE,
   SIGN_UP_FIELDS,
   SIGN_UP_HINTS,
   describeSignUpFailure,
@@ -120,6 +122,28 @@ const termsLine = (): HTMLElement => {
   return line;
 };
 
+/**
+ * The dev-only "Start with the test yard" box (issue #217), unticked. It starts
+ * hidden; the form shows it once the server says it offers the test yard.
+ */
+const sandboxStartBox = (): { row: HTMLLabelElement; input: HTMLInputElement } => {
+  const row = document.createElement("label");
+  row.className = "login-form__dev-option";
+  row.title = SANDBOX_START_TITLE;
+  row.hidden = true;
+
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.id = "signup-sandbox-start";
+  input.name = "sandbox-start";
+
+  const words = document.createElement("span");
+  words.textContent = SANDBOX_START_LABEL;
+
+  row.append(input, words);
+  return { row, input };
+};
+
 const primaryButton = (label: string): HTMLButtonElement => {
   const submit = document.createElement("button");
   submit.type = "submit";
@@ -137,7 +161,9 @@ const primaryButton = (label: string): HTMLButtonElement => {
  * field against the shared account rules as the player types, creates the
  * account, then signs in with it and goes straight to the yard, whose first
  * load builds it. With a Turnstile site key it also runs Cloudflare's bot
- * check, whose script loads only when the sign-up form opens.
+ * check, whose script loads only when the sign-up form opens. A dev server
+ * (DEV_SANDBOX on) also gets an unticked "Start with the test yard (dev)" box
+ * (issue #217).
  */
 export class LoginScene implements Scene {
   private panel: Panel | null = null;
@@ -267,6 +293,7 @@ export class LoginScene implements Scene {
     error.setAttribute("role", "alert");
 
     const submit = primaryButton("Create account");
+    const sandboxStart = sandboxStartBox();
 
     const toSignIn = switchRow("", "I already have an account", () =>
       this.showSignIn(context, { email: fields.email.input.value.trim() }),
@@ -278,6 +305,7 @@ export class LoginScene implements Scene {
 
     form.append(
       ...SIGN_UP_FIELDS.map((name) => fields[name].wrapper),
+      sandboxStart.row,
       ...(botCheck ? [botCheck.element] : []),
       error,
       submit,
@@ -349,6 +377,7 @@ export class LoginScene implements Scene {
       void this.createAccount(context, {
         values: values(),
         turnstileToken: botCheck?.token ?? undefined,
+        sandboxStart: !sandboxStart.row.hidden && sandboxStart.input.checked,
         error,
         submit,
         onFailed: () => botCheck?.reset(),
@@ -364,6 +393,9 @@ export class LoginScene implements Scene {
     fields.username.input.focus();
     render();
     void botCheck?.mount();
+    void fetchSignUpOptions().then((options) => {
+      sandboxStart.row.hidden = !options.sandboxStart;
+    });
   }
 
   private dropBotCheck(): void {
@@ -415,6 +447,8 @@ export class LoginScene implements Scene {
     form: {
       values: SignUpValues;
       turnstileToken: string | undefined;
+      /** The dev-only test yard box was shown and ticked (issue #217). */
+      sandboxStart: boolean;
       error: HTMLElement;
       submit: HTMLButtonElement;
       onRefused: (field: SignUpField, message: string) => void;
@@ -422,7 +456,7 @@ export class LoginScene implements Scene {
       onFailed: () => void;
     },
   ): Promise<void> {
-    const request = signUpRequest(form.values, form.turnstileToken);
+    const request = signUpRequest(form.values, form.turnstileToken, form.sandboxStart);
 
     form.submit.disabled = true;
     form.submit.textContent = "Creating account…";

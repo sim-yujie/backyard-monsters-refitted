@@ -18,7 +18,9 @@ import { freeSpotFor, type MigrationSave } from "./mapRoom.js";
  * The server writes the same set in two places:
  *
  * - A new main save starts with it (`game-data/getDefaultBaseData.ts`,
- *   {@link starterBuildingData}); `DEV_SANDBOX` still gives the sandbox yard.
+ *   {@link starterBuildingData}); an account that ticked the dev-only test
+ *   yard box at sign-up gets the sandbox yard instead while `DEV_SANDBOX` is on
+ *   (issue #217).
  * - The catch-up gives it once to an existing main yard with no buildings
  *   ({@link addStarterBase}, run first by `catchUpYard`), and reports it as a
  *   `starterBase` job so the next load says "Your yard is ready". Outposts,

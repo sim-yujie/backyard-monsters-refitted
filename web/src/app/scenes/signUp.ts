@@ -73,15 +73,26 @@ export const isDefiniteProblem = (field: SignUpField, values: SignUpValues): boo
  * The fields exactly as the register route wants them: trimmed, the email
  * lower case. The form shows the Terms and age line under its button, so
  * sending it is agreeing to them; the Turnstile token goes along when the
- * form has one.
+ * form has one, and `sandboxStart` only when the dev-only test yard box was
+ * ticked (issue #217).
  */
-export const signUpRequest = (values: SignUpValues, turnstileToken?: string): RegisterRequest => ({
+export const signUpRequest = (
+  values: SignUpValues,
+  turnstileToken?: string,
+  sandboxStart = false,
+): RegisterRequest => ({
   username: values.username.trim(),
   email: values.email.trim().toLowerCase(),
   password: values.password,
   termsAccepted: true,
   ...(turnstileToken ? { turnstileToken } : {}),
+  ...(sandboxStart ? { sandboxStart: true } : {}),
 });
+
+/** The dev-only sign-up box's words (issue #217). */
+export const SANDBOX_START_LABEL = "Start with the test yard (dev)";
+export const SANDBOX_START_TITLE =
+  "Your first yard is the maxed test yard instead of the normal new-player start. Only a dev server offers it.";
 
 /** Shown when the player presses Create account before the bot check has finished. */
 export const BOT_CHECK_PENDING = "Please wait for the check above to finish, then try again.";
