@@ -89,6 +89,7 @@ export class GuidedStartRunner {
   private shownKey: string | null = null;
   private busy = false;
   private asking = false;
+  private destroyed = false;
 
   // What the screen is doing, from the guide bus.
   private menuOpen = false;
@@ -154,6 +155,7 @@ export class GuidedStartRunner {
   }
 
   destroy(): void {
+    this.destroyed = true;
     for (const off of this.unsubscribe) off();
     this.unsubscribe.length = 0;
     if (this.timer !== null) clearInterval(this.timer);
@@ -173,8 +175,9 @@ export class GuidedStartRunner {
   /** Where the raid or the walk-in plays, on screen; null while neither does. */
   private sceneRect(): TargetRect | null {
     const box = this.raid?.worldBox() ?? this.tourRaid?.worldBox() ?? this.walkIn?.worldBox() ?? null;
-    if (!box) return null;
-    const { camera, canvas } = this.mounts;
+    // No canvas or camera (a yard not drawn yet, or a test's stand-in): nothing on screen to find.
+    const { camera, canvas } = this.mounts as Partial<YardMounts>;
+    if (!box || !camera || !canvas) return null;
     const bounds = canvas.getBoundingClientRect();
     const topLeft = camera.worldToScreen({ x: box.x, y: box.y });
     const bottomRight = camera.worldToScreen({ x: box.x + box.width, y: box.y + box.height });
@@ -222,7 +225,8 @@ export class GuidedStartRunner {
   /* ── Drawing ─────────────────────────────────────────────────────────── */
 
   private render(): void {
-    if (this.tour !== null) return;
+    // A route answering after the yard closed must not bring Bob back on a torn-down overlay.
+    if (this.destroyed || this.tour !== null) return;
     const step = this.step();
     this.offerTour(step === null);
     if (step === null || this.mounts.scene.plannerOpen()) {

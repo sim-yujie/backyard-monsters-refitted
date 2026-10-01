@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Container } from "pixi.js";
+import { Camera } from "@/game/Camera";
 import type { Onboarding } from "@/api/types";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { GUIDE_BUILDS, LINES } from "@/game/guide/steps";
@@ -63,6 +64,8 @@ const harness = (onboarding: Onboarding, buildings: Building[] = []) => {
     overlay: { guide },
     scene,
     renderer: { root: new Container(), yardToWorld: (x: number, y: number) => ({ x, y }) },
+    canvas: document.createElement("canvas"),
+    camera: new Camera({ zoom: 1 }),
   } as unknown as YardMounts;
   const runner = new GuidedStartRunner(mounts);
   runner.start();
