@@ -7,7 +7,12 @@ import {
 import { catchUpChampions, type CatchUpChampionsSave, type StarveJob } from "./catchUpChampions.js";
 import { catchUpDamage, type CatchUpDamageSave } from "./catchUpDamage.js";
 import { catchUpHarvesters, type CatchUpHarvestersSave } from "./catchUpHarvesters.js";
-import { catchUpLocker, type CatchUpLockerSave, type UnlockJob } from "./catchUpLocker.js";
+import {
+  catchUpLocker,
+  unlockStarterMonster,
+  type CatchUpLockerSave,
+  type UnlockJob,
+} from "./catchUpLocker.js";
 import { catchUpMonsters, type CatchUpMonstersSave, type MonsterJob } from "./catchUpMonsters.js";
 import { catchUpMushrooms } from "./catchUpMushrooms.js";
 import { catchUpRepairs, type RepairJob } from "./catchUpRepairs.js";
@@ -46,7 +51,7 @@ import { yardKindOf } from "../yardplanner/costs.js";
  * | 0 | `starterBase.ts` `addStarterBase` — an empty main yard gets the starter set once (#154) | 1 |
  * | 0 | `mapRoom.ts` `migrateYard` — Map Room cap, `mr2upgraded`, Radio removal, a missing Map Room added (§2.5) | 3 |
  * | 1 | `catchUpBuildings.ts` — countdowns, points, `flinger`/`catapult`, store buffs | 1 |
- * | 2 | `catchUpLocker.ts` — unlocks and the Locker Overdrive (runs first, see there) | 2 |
+ * | 2 | `catchUpLocker.ts` — `unlockStarterMonster`, the Pokey always unlocked (#218); unlocks and the Locker Overdrive (runs first, see there) | 2 |
  * | 2 | `catchUpMonsters.ts` — HCC queue refund, hatchery production, housing cull (after the buildings) | 2 |
  * | 3 | `catchUpRepairs.ts` — repairs heal; runs before the buildings, whose paused countdowns it restarts at the repair's end | 3 |
  * | 3 | `catchUpHarvesters.ts` — harvester buffers fill (nothing is banked); `catchUpMushrooms.ts` | 3 |
@@ -127,6 +132,7 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
   if (yardKindOf(save) === "outpost") return catchUpOutpost(save, now);
 
   const starter = addStarterBase(save, now);
+  unlockStarterMonster(save);
   const stored = Number(save.savetime);
   const from = Number.isFinite(stored) && stored > 0 && starter.length === 0 ? stored : now;
 
@@ -159,6 +165,9 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
  */
 export const catchUpOutpost = (save: CatchUpSave, now: number): CompletedJob[] => {
   const cored = placeOutpostCore(save);
+  // The Locker is the main yard's, seen through the pool view: a player who
+  // opens an outpost before their main yard still gets the Pokey (#218).
+  unlockStarterMonster(save);
   // Mushrooms copied from a main save: an outpost never has any (#191).
   clearOutpostMushrooms(save);
   const stored = Number(save.savetime);

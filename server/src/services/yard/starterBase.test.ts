@@ -83,9 +83,21 @@ describe("getDefaultBaseData — the starter base on a new main save", () => {
     expect(data.resources).toMatchObject({ r1: 1600, r2: 1600, r3: 0, r4: 0 });
   });
 
+  test("a new main yard starts with the Pokey unlocked and nothing else (#218)", () => {
+    devConfig.devSandbox = false;
+    expect((getDefaultBaseData(user, BaseType.MAIN) as { lockerdata?: object }).lockerdata).toEqual({
+      C1: { t: 2 },
+    });
+  });
+
   test("an Inferno yard gets neither", () => {
-    const data = getDefaultBaseData(user, BaseType.INFERNO) as { buildingdata?: BuildingDataMap; resources: object };
+    const data = getDefaultBaseData(user, BaseType.INFERNO) as {
+      buildingdata?: BuildingDataMap;
+      resources: object;
+      lockerdata?: object;
+    };
     expect(data.buildingdata).toBeUndefined();
+    expect(data.lockerdata).toBeUndefined();
     expect(data.resources).toMatchObject({ r1: 0, r2: 0, r3: 0, r4: 0 });
   });
 

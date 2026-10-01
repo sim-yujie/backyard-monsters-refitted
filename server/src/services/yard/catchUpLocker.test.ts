@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { catchUpYard, type CatchUpSave } from "./catchUp.js";
-import { catchUpLocker } from "./catchUpLocker.js";
+import { catchUpLocker, unlockStarterMonster } from "./catchUpLocker.js";
+import { withStarterUnlocked } from "./locker.js";
 
 /**
  * The locker catch-up step (`docs/design/yard-buildings.md` §4.3, §4.6 item 1),
@@ -57,7 +58,8 @@ describe("catchUpLocker", () => {
   test("an Inferno unlock is left alone", () => {
     const save = saveOf(HOUR, { lockerdata: { IC1: { t: 1, s: SAVED, e: SAVED + 10 } } });
     expect(catchUpYard(save, SAVED + 2 * HOUR)).toEqual([]);
-    expect(save.lockerdata).toEqual({ IC1: { t: 1, s: SAVED, e: SAVED + 10 } });
+    // Only the Pokey goes in (#218); the Inferno entry is untouched.
+    expect(save.lockerdata).toEqual({ C1: { t: 2 }, IC1: { t: 1, s: SAVED, e: SAVED + 10 } });
   });
 
   test("idempotent: a second run at the same moment changes nothing", () => {
@@ -122,5 +124,57 @@ describe("catchUpLocker", () => {
       catchUpYard(save, SAVED + HOUR);
       expect(save.lockerdata!.C5).toMatchObject({ e: SAVED + 32 * HOUR });
     });
+  });
+});
+
+describe("the Pokey is always unlocked (#218)", () => {
+  test("withStarterUnlocked adds C1 and leaves every other entry alone", () => {
+    const running = { t: 1, s: SAVED, e: SAVED + HOUR };
+    expect(withStarterUnlocked(undefined)).toEqual({ C1: { t: 2 } });
+    expect(withStarterUnlocked(null)).toEqual({ C1: { t: 2 } });
+    expect(withStarterUnlocked({ C2: { t: 2 }, C5: running })).toEqual({
+      C1: { t: 2 },
+      C2: { t: 2 },
+      C5: running,
+    });
+  });
+
+  test("withStarterUnlocked hands back the same object when the Pokey is already unlocked", () => {
+    const lockerdata = { C1: { t: 2 }, C2: { t: 2 } };
+    expect(withStarterUnlocked(lockerdata)).toBe(lockerdata);
+  });
+
+  test("a running Pokey unlock (a save from before #218) becomes unlocked, as Flash's load made it", () => {
+    expect(withStarterUnlocked({ C1: { t: 1, s: SAVED, e: SAVED + 600 } })).toEqual({ C1: { t: 2 } });
+  });
+
+  test("unlockStarterMonster writes only when the Pokey was missing", () => {
+    const save = saveOf();
+    const lockerdata = save.lockerdata;
+    unlockStarterMonster(save);
+    expect(save.lockerdata).toBe(lockerdata);
+
+    const empty = saveOf(HOUR, { lockerdata: {} });
+    unlockStarterMonster(empty);
+    expect(empty.lockerdata).toEqual({ C1: { t: 2 } });
+  });
+
+  test("catchUpYard gives an old save with an empty locker the Pokey, and nothing else", () => {
+    const save = saveOf(HOUR, { lockerdata: {}, academy: {} });
+    expect(catchUpYard(save, SAVED + 60)).toEqual([]);
+    expect(save.lockerdata).toEqual({ C1: { t: 2 } });
+    expect(save.academy).toEqual({});
+  });
+
+  test("catchUpYard on an outpost gives the Pokey too", () => {
+    const save = saveOf(HOUR, { type: "outpost", lockerdata: null } as Partial<CatchUpSave>);
+    catchUpYard(save, SAVED + 60);
+    expect(save.lockerdata).toEqual({ C1: { t: 2 } });
+  });
+
+  test("an unlock running alongside still completes as before", () => {
+    const save = saveOf(HOUR, { lockerdata: { C5: { t: 1, s: SAVED, e: SAVED + HOUR } } });
+    catchUpYard(save, SAVED + 2 * HOUR);
+    expect(save.lockerdata).toEqual({ C1: { t: 2 }, C5: { t: 2 } });
   });
 });

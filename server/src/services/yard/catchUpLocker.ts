@@ -6,6 +6,7 @@ import {
   runningUnlock,
   unlockFinishAt,
   unlockedSlices,
+  withStarterUnlocked,
 } from "./locker.js";
 
 /**
@@ -81,4 +82,17 @@ export const catchUpLocker = (save: CatchUpLockerSave, from: number, now: number
     };
   }
   return [];
+};
+
+/**
+ * Catch-up step: the Pokey is always unlocked (issue #218), as Flash's load
+ * made it (`CREATURELOCKER.as:63-65`). A save from before new saves started
+ * with it gets it here, on its next owner load or yard action, so no migration
+ * is needed. Writes only when it was missing.
+ *
+ * @param save - The yard, mutated in place: `lockerdata` may change.
+ */
+export const unlockStarterMonster = (save: CatchUpLockerSave): void => {
+  const lockerdata = withStarterUnlocked(save.lockerdata);
+  if (lockerdata !== save.lockerdata) save.lockerdata = lockerdata;
 };

@@ -5,6 +5,7 @@ import { Reward } from "../enums/Rewards.js";
 import { BaseType } from "../enums/Base.js";
 import { infernoYardSandbox } from "../utils/sandbox/infernoYard.js";
 import { overworldYardSandbox } from "../utils/sandbox/overworldYard.js";
+import { STARTER_MONSTER } from "../services/yard/locker.js";
 import { STARTER_RESOURCES, starterBuildingData } from "../services/yard/starterBase.js";
 
 /**
@@ -12,7 +13,8 @@ import { STARTER_RESOURCES, starterBuildingData } from "../services/yard/starter
  *
  * A main yard starts with the original's starter base: a level 1 Town Hall,
  * Twig Snapper (holding 200 twigs), Pebble Shiner and General Store, and
- * 1,600 twigs and 1,600 pebbles (`services/yard/starterBase.ts`, issue #154).
+ * 1,600 twigs and 1,600 pebbles (`services/yard/starterBase.ts`, issue #154),
+ * and the Pokey unlocked (`services/yard/locker.ts` `STARTER_MONSTER`, #218).
  * An account that ticked "Start with the test yard (dev)" at sign-up gets the
  * maxed sandbox yard instead, when the server has DEV_SANDBOX on (issue #217).
  *
@@ -42,6 +44,8 @@ export const getDefaultBaseData = (user: User, baseType: BaseType) => {
 
     // Pre-populated Objects
     ...(isMain && { buildingdata: starterBuildingData() }),
+    // The Pokey is always unlocked, as in Flash (issue #218).
+    ...(isMain && { lockerdata: { [STARTER_MONSTER]: { t: 2 } } }),
     resources: {
       r1: isMain ? STARTER_RESOURCES.r1 : 0,
       r2: isMain ? STARTER_RESOURCES.r2 : 0,

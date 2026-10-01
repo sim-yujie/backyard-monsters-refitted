@@ -39,6 +39,26 @@ export const CLOD_ITEM = "CLOD";
  */
 export const CLOD_EXTRA_SECONDS = 4;
 
+/**
+ * The monster every player has from the start: the Pokey. Flash set
+ * `_lockerData.C1 = { t: 2 }` on every load (`CREATURELOCKER.as:63-65`), so a
+ * new player could hatch Pokeys from their first Hatchery, long before a
+ * Monster Locker (issue #218).
+ */
+export const STARTER_MONSTER = "C1";
+
+/**
+ * `lockerdata` with the Pokey unlocked, as Flash's load made it: the same
+ * object when it already is, otherwise a copy with `C1: { t: 2 }`. Like Flash
+ * it replaces a running Pokey unlock, which a save from before #218 may hold.
+ */
+export const withStarterUnlocked = (lockerdata: JsonObject | null | undefined): JsonObject => {
+  if (lockerdata && Number((lockerdata[STARTER_MONSTER] as JsonObject | undefined)?.t) === 2) {
+    return lockerdata;
+  }
+  return { ...(lockerdata ?? {}), [STARTER_MONSTER]: { t: 2 } };
+};
+
 /** One `lockerdata` entry: `t` 1 unlocking (with `s`/`e`), 2 unlocked. */
 export interface LockerEntry {
   t: number;

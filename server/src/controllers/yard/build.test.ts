@@ -59,7 +59,8 @@ const rowOf = (overrides: Row = {}): Row => ({
   buildinghealthdata: {},
   storedata: {},
   monsters: {},
-  lockerdata: {},
+  // Every save has the Pokey unlocked (#218); the first catch-up would add it.
+  lockerdata: { C1: { t: 2 } },
   academy: {},
   champion: [],
   mushrooms: { l: [], s: getCurrentDateTime() },

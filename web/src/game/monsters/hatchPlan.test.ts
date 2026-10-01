@@ -455,4 +455,10 @@ describe("overdrive and the monster grid", () => {
     expect(rows.find((row) => row.monster.id === "C4")!.state.kind).toBe("unlocking");
     expect(rows.find((row) => row.monster.id === "C5")!.state.kind).toBe("locked");
   });
+
+  it("a new player's yard (the server unlocks the Pokey, #218) can hatch the Pokey and nothing else", () => {
+    const rows = hatchMonsters(saveOf({ lockerdata: { C1: { t: 2 } } }));
+    expect(rows.filter((row) => row.state.kind === "ready").map((row) => row.monster.id)).toEqual(["C1"]);
+    expect(rows.filter((row) => row.state.kind === "locked")).toHaveLength(rows.length - 1);
+  });
 });
