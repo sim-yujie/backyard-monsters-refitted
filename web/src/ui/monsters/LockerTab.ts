@@ -2,6 +2,7 @@ import { LOCKER_KEYS, lockerActions, type LockerActions } from "@/api/yardMonste
 import type { YardRefusal } from "@/api/yard";
 import { monsterStat } from "@/game/combat/rules";
 import { academyLevel } from "@/game/monsters/housingSummary";
+import { monsterPortrait, showPortrait } from "@/game/portraits";
 import {
   cancelRefund,
   finishPrice,
@@ -538,8 +539,8 @@ const defaultSelection = (rows: readonly LockerRow[], running: RunningUnlock | n
   null;
 
 /**
- * A monster's picture: `-portrait.jpg` for the card, `-small.png` for a row
- * (`server/public/assets/monsters/`; both exist for every listed monster).
+ * A monster's picture: the painted card for the card, the painted icon for a
+ * row, or the game server's art where there is no painting (`game/portraits.ts`).
  * Decorative: the name is always beside it.
  */
 export const monsterPicture = (
@@ -548,8 +549,8 @@ export const monsterPicture = (
   className: string,
 ): HTMLImageElement => {
   const image = document.createElement("img");
-  image.className = className;
-  image.src = `/assets/monsters/${monster.id}-${size === "portrait" ? "portrait.jpg" : "small.png"}`;
+  image.className = `monster-picture ${className}`;
+  showPortrait(image, monsterPortrait(monster.id, size === "portrait" ? "card" : "icon"));
   image.alt = "";
   image.loading = "lazy";
   image.decoding = "async";

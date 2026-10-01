@@ -3,7 +3,7 @@ import type { BaseLoadResponse, ChampionSaveEntry } from "@/api/types";
 import {
   cageView,
   chamberView,
-  championPortraitUrl,
+  championPicture,
   freezeGate,
   predictedHealth,
   thawGate,
@@ -125,10 +125,17 @@ describe("health", () => {
   });
 });
 
-describe("championPortraitUrl", () => {
-  it("points at the game's own art for the level", () => {
-    expect(championPortraitUrl(championEntry(2)!, 4)).toBe("/assets/monsters/G2_L4-150.png");
-    expect(championPortraitUrl(championEntry(2)!, 9)).toBe("/assets/monsters/G2_L6-150.png");
+describe("championPicture", () => {
+  it("shows the painting for the level, clamped to the champion's levels, the original behind it", () => {
+    expect(championPicture(championEntry(2)!, 4)).toEqual({
+      src: "/portraits/G2-L4.webp",
+      fallback: "/assets/monsters/G2_L4-150.png",
+    });
+    expect(championPicture(championEntry(2)!, 9)).toEqual({
+      src: "/portraits/G2-L6.webp",
+      fallback: "/assets/monsters/G2_L6-150.png",
+    });
+    expect(championPicture(championEntry(2)!, 0).src).toBe("/portraits/G2-L1.webp");
   });
 });
 

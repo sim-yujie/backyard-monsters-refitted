@@ -8,6 +8,13 @@
  * docked frame, the tab strip, the header, the list and the card.
  */
 
+/* ── Monster pictures, wherever they are drawn (`monsterPicture`) ─────── */
+
+/* The painted icons keep their painted ground, so soften the tile's corners. */
+.monster-picture {
+  border-radius: var(--radius-sm);
+}
+
 /* ── The frame: docked right under the HUD, full height ─────────────────── */
 
 .monsters-screen {

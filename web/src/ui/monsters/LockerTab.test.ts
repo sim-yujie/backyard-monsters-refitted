@@ -88,7 +88,7 @@ describe("LockerTab: the list", () => {
     expect(spokenText(row(element, "C19"))).toMatch(/^Rezghul Needs Locker 3$/);
     expect(spokenText(row(element, "C1"))).toBe("Pokey Unlocked");
     expect(row(element, "C16").querySelector("img")!.getAttribute("src")).toBe(
-      "/assets/monsters/C16-small.png",
+      "/portraits/C16-icon.webp",
     );
   });
 
@@ -99,7 +99,7 @@ describe("LockerTab: the list", () => {
     expect(row(element, "C16").getAttribute("aria-pressed")).toBe("true");
     const card = element.querySelector<HTMLElement>(".locker__detail")!;
     expect(card.querySelector(".locker-detail__name")!.textContent).toBe("Vorg");
-    expect(card.querySelector("img")!.getAttribute("src")).toBe("/assets/monsters/C16-portrait.jpg");
+    expect(card.querySelector("img")!.getAttribute("src")).toBe("/portraits/C16.webp");
     expect(spokenText(card.querySelector(".locker-detail__facts")!)).toBe(
       "Locker level 2 · Putty 384,000 · 1d 12h",
     );

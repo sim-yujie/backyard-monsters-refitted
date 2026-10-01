@@ -91,7 +91,7 @@ describe("ChampionPanel: no champion", () => {
     const { element, spies } = setup([]);
     const cards = [...element.querySelectorAll<HTMLElement>(".champion-card")];
     expect(cards.map((card) => card.dataset["champion"])).toEqual(["G1", "G2", "G3"]);
-    expect(cards[1]!.querySelector("img")!.getAttribute("src")).toBe("/assets/monsters/G2_L1-150.png");
+    expect(cards[1]!.querySelector("img")!.getAttribute("src")).toBe("/portraits/G2-L1.webp");
     buttonNamed(element, "Raise Drull")!.click();
     expect(spies.raise).toHaveBeenCalledWith(2);
   });
@@ -113,7 +113,7 @@ describe("ChampionPanel: a fed champion", () => {
     const { element } = setup([gorgo({ hp: 20_000 })]);
     expect(textOf(element, ".champion__name")).toBe("Gorgo");
     expect(textOf(element, ".champion__level")).toBe("Level 1 of 6 · High Defense");
-    expect(element.querySelector(".champion__picture")!.getAttribute("src")).toBe("/assets/monsters/G1_L1-150.png");
+    expect(element.querySelector(".champion__picture")!.getAttribute("src")).toBe("/portraits/G1-L1.webp");
     expect(element.textContent).toContain("Health 20,000 / 40,000");
     expect(element.textContent).toContain("Feeds 1 / 3 to level 2");
     expect(textOf(element, ".champion__hunger")).toBe("Fed. Hungry in 14h 0m.");

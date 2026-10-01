@@ -88,7 +88,7 @@ describe("ChamberPanel", () => {
     const row = element.querySelector<HTMLElement>(".chamber__row")!;
     expect(row.dataset["champion"]).toBe("G2");
     expect(row.textContent).toContain("fed for 5h 0m after thawing");
-    expect(row.querySelector("img")!.getAttribute("src")).toBe("/assets/monsters/G2_L1-150.png");
+    expect(row.querySelector("img")!.getAttribute("src")).toBe("/portraits/G2-L1.webp");
     buttonNamed(element, "Thaw Rex")!.click();
     expect(thaw).toHaveBeenCalledWith(2);
   });

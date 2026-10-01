@@ -754,6 +754,7 @@
   width: 24px;
   height: 24px;
   object-fit: contain;
+  border-radius: var(--radius-sm);
 }
 
 .mr1-card__actions {

@@ -156,9 +156,22 @@ describe("ArmyPanel rows", () => {
     expect(control(teratorn, ".attack-army__housed").textContent).toBe("25 housed");
     expect(control<HTMLInputElement>(teratorn, ".attack-army__count").value).toBe("0");
     expect(control<HTMLImageElement>(teratorn, ".attack-army__icon img").getAttribute("src")).toBe(
-      "/assets/monsters/C14-small.png",
+      "/portraits/C14-icon.webp",
     );
     expect(control(rowFor(panel, "C15"), ".attack-army__name").textContent).toBe("Zafreeti");
+  });
+
+  it("falls back from the painting to the server's icon, then to a letter", () => {
+    const { panel } = mount();
+    const box = control(rowFor(panel, "C14"), ".attack-army__icon");
+    const image = control<HTMLImageElement>(box, "img");
+    image.dispatchEvent(new Event("error"));
+    expect(image.getAttribute("src")).toBe("/assets/monsters/C14-small.png");
+    expect(box.classList.contains("attack-army__icon--missing")).toBe(false);
+    image.dispatchEvent(new Event("error"));
+    expect(box.querySelector("img")).toBeNull();
+    expect(box.classList.contains("attack-army__icon--missing")).toBe(true);
+    expect(box.textContent).toBe("T");
   });
 
   it("knows the names, and falls back to the id", () => {
@@ -337,6 +350,15 @@ describe("ArmyPanel champion", () => {
     expect(bucket.champion()).toEqual({ t: 3, l: 6 });
     expect(fomor.checked).toBe(true);
     expect(krallen.checked).toBe(false);
+  });
+
+  it("shows each champion's painting at its level: Krallen's one, Fomor's level 6", () => {
+    const { panel } = mount();
+    const [krallen, fomor] = radios(panel);
+    const icon = (radio: HTMLInputElement | undefined): string | null | undefined =>
+      radio?.closest("label")?.querySelector(".attack-army__icon img")?.getAttribute("src");
+    expect(icon(krallen)).toBe("/portraits/G5-icon.webp");
+    expect(icon(fomor)).toBe("/portraits/G3-L6-icon.webp");
   });
 
   it("un-picks with a second click on the picked one", () => {

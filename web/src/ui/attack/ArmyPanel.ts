@@ -1,6 +1,7 @@
 import type { ChampionBlockReason } from "@/game/attack/AttackSession";
 import type { Bucket } from "@/game/attack/bucket";
 import { CHAMPION_PROPS, championByType, monsterName } from "@/game/combat/rules";
+import { championPortrait, monsterPortrait, showPortrait, type Portrait } from "@/game/portraits";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 import { QuantityStepper } from "@/ui/QuantityStepper";
@@ -73,12 +74,6 @@ export const championName = (t: number): string => {
   const id = championByType(t);
   return (id && CHAMPION_PROPS[id]?.name) || `G${t}`;
 };
-
-/** The small portrait the game server ships for a monster or a champion level. */
-export const portraitUrl = (id: string, championLevel?: number): string =>
-  championLevel === undefined
-    ? `/assets/monsters/${id}-small.png`
-    : `/assets/monsters/${id}_L${Math.max(1, Math.floor(championLevel))}-small.png`;
 
 export interface ArmyPanelOptions {
   /**
@@ -227,7 +222,7 @@ export class ArmyPanel {
     item.className = "attack-army__row";
     item.dataset["id"] = id;
 
-    const icon = portrait(portraitUrl(id), monsterName(id));
+    const icon = portrait(monsterPortrait(id, "icon"), monsterName(id));
 
     const label = document.createElement("span");
     label.className = "attack-army__label";
@@ -281,7 +276,7 @@ export class ArmyPanel {
     });
 
     const id = championByType(t) ?? `G${t}`;
-    const icon = portrait(portraitUrl(id, l), championName(t));
+    const icon = portrait(championPortrait(id, l, "icon"), championName(t));
 
     const label = document.createElement("span");
     label.className = "attack-army__label";
@@ -405,15 +400,15 @@ const button = (className: string, text: string, onClick: () => void): HTMLButto
 };
 
 /**
- * A row's picture: the small portrait the server ships, or the name's first
- * letter in a box when the file is missing, rather than a broken image.
+ * A row's picture: the painted icon, else the server's own small portrait,
+ * else the name's first letter in a box rather than a broken image.
  */
-const portrait = (url: string, name: string): HTMLElement => {
+const portrait = (picture: Portrait, name: string): HTMLElement => {
   const box = document.createElement("span");
   box.className = "attack-army__icon";
   box.setAttribute("aria-hidden", "true");
   const image = document.createElement("img");
-  image.src = url;
+  showPortrait(image, picture);
   image.alt = "";
   image.setAttribute("loading", "lazy");
   image.setAttribute("decoding", "async");

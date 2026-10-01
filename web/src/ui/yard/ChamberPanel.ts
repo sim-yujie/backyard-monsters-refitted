@@ -2,13 +2,14 @@ import type { YardRefusal } from "@/api/yard";
 import { ChampionKey, championActions, type ChampionActions } from "@/api/yardChampion";
 import {
   chamberView,
-  championPortraitUrl,
+  championPicture,
   freezeGate,
   thawGate,
   type ChamberView,
   type ChampionView,
   type FrozenView,
 } from "@/game/yard/championModel";
+import { showPortrait } from "@/game/portraits";
 import type { ChampionEntry } from "@/game/yard/championCatalogue";
 import type { YardStore } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
@@ -198,7 +199,7 @@ const champRow = (entry: ChampionEntry, level: number, name: string, sub: string
   block.className = "chamber__name";
   const image = document.createElement("img");
   image.className = "chamber__picture";
-  image.src = championPortraitUrl(entry, level);
+  showPortrait(image, championPicture(entry, level));
   image.alt = "";
   image.decoding = "async";
   const words = document.createElement("span");

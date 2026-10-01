@@ -1,5 +1,6 @@
 import type { BaseLoadResponse, ChampionSaveEntry } from "@/api/types";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { championPortrait, type Portrait } from "@/game/portraits";
 import { timeCost } from "./buildingCosts";
 import {
   atChampionLevel,
@@ -355,6 +356,6 @@ export const thawGate = (view: ChamberView): string | null => {
   return null;
 };
 
-/** The portrait at a level, from the game server's art (`/assets/monsters/G1_L3-150.png`). */
-export const championPortraitUrl = (entry: ChampionEntry, level: number): string =>
-  `/assets/monsters/${entry.id}_L${Math.min(Math.max(Math.trunc(level) || 1, 1), entry.levels)}-150.png`;
+/** The portrait at a level, clamped to the champion's levels: painted, else the original (`game/portraits.ts`). */
+export const championPicture = (entry: ChampionEntry, level: number): Portrait =>
+  championPortrait(entry.id, Math.min(Math.max(Math.trunc(level) || 1, 1), entry.levels), "card");

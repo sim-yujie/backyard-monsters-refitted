@@ -8,7 +8,8 @@ import {
   totalOf,
   type TransferYard,
 } from "@/game/maproom/moveYards";
-import { monsterName, portraitUrl } from "@/ui/attack/ArmyPanel";
+import { monsterPortrait, showPortrait } from "@/game/portraits";
+import { monsterName } from "@/ui/attack/ArmyPanel";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { QuantityStepper } from "@/ui/QuantityStepper";
@@ -195,7 +196,7 @@ export class TransferDialog {
       item.className = "transfer-row";
       const picture = document.createElement("img");
       picture.className = "transfer-row__picture";
-      picture.src = portraitUrl(id);
+      showPortrait(picture, monsterPortrait(id, "icon"));
       picture.alt = "";
       picture.decoding = "async";
       const have = text("span", "transfer-row__have", `${formatAmount(count)} here`);

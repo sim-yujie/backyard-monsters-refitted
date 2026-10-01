@@ -16,7 +16,8 @@ import {
 import { avatarUrl } from "@/game/avatars";
 import { tribeInfo } from "@/game/maproom1/tribes";
 import { VICTORY_THRESHOLD } from "@/game/combat/rules";
-import { monsterName, portraitUrl } from "@/ui/attack/ArmyPanel";
+import { monsterPortrait, showPortrait } from "@/game/portraits";
+import { monsterName } from "@/ui/attack/ArmyPanel";
 import { button, el, icon, type IconName } from "./icons";
 
 /**
@@ -87,7 +88,7 @@ export const armyChips = (own: Mr1Own | null, label = "You can send"): HTMLEleme
   for (const line of own.army) {
     const chip = el("span", "mr1-send__chip");
     const picture = el("img", "mr1-send__icon");
-    picture.src = portraitUrl(line.id);
+    showPortrait(picture, monsterPortrait(line.id, "icon"));
     picture.alt = "";
     picture.decoding = "async";
     picture.addEventListener("error", () => picture.remove(), { once: true });

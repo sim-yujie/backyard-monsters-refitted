@@ -7,7 +7,8 @@ import {
   useShinyText,
   type MonsterCount,
 } from "@/game/maproom/moveYards";
-import { monsterName, portraitUrl } from "@/ui/attack/ArmyPanel";
+import { monsterPortrait, showPortrait } from "@/game/portraits";
+import { monsterName } from "@/ui/attack/ArmyPanel";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
@@ -228,7 +229,7 @@ const lostList = (rows: readonly MonsterCount[]): HTMLElement => {
     const item = document.createElement("li");
     item.className = "relocate-dialog__lost-item";
     const picture = document.createElement("img");
-    picture.src = portraitUrl(id);
+    showPortrait(picture, monsterPortrait(id, "icon"));
     picture.alt = "";
     picture.decoding = "async";
     item.append(

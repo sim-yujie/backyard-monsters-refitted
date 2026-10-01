@@ -8,11 +8,12 @@ import {
 } from "@/api/yardChampion";
 import { juicerProblemText, juicerStatus } from "@/game/monsters/juice";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { showPortrait } from "@/game/portraits";
 import type { ChampionEntry } from "@/game/yard/championCatalogue";
 import {
   CHAMPION_NAME_MAX,
   cageView,
-  championPortraitUrl,
+  championPicture,
   freezeGate,
   type CageView,
   type ChampionView,
@@ -799,7 +800,7 @@ const strong = (text: string): HTMLElement => {
 const portrait = (entry: ChampionEntry, level: number, className: string): HTMLImageElement => {
   const image = document.createElement("img");
   image.className = className;
-  image.src = championPortraitUrl(entry, level);
+  showPortrait(image, championPicture(entry, level));
   image.alt = "";
   image.width = 150;
   image.height = 150;

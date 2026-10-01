@@ -110,7 +110,7 @@ describe("HousingTab: the army", () => {
     expect(element.querySelector(".housing-living__count")!.textContent).toBe("27 monsters · 2 kinds");
     const first = element.querySelector<HTMLButtonElement>(".housing-living__tile")!;
     expect(first.getAttribute("aria-label")).toBe("Teratorn: 25 housed, 70 spaces each, 1,750 in total");
-    expect(first.querySelector("img")!.getAttribute("src")).toBe("/assets/monsters/C14-small.png");
+    expect(first.querySelector("img")!.getAttribute("src")).toBe("/portraits/C14-icon.webp");
     expect(figures(element)).toBe("2,150/ 2,160 spaces · 10 free");
   });
 
