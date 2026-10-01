@@ -141,6 +141,15 @@ describe("golden replays", () => {
     expect(twice.checkpoints).toEqual(once.checkpoints);
   }, REPLAY_TIMEOUT_MS);
 
+  // The server's landing replay records the champions' lessons (issue #219);
+  // that must read the battle, never change it.
+  it.each(names)("%s reproduces it with the lessons recorded too", (file) => {
+    const fixture = read<Fixture>(`${FIXTURE_DIR}${file}`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const outcome = replayAttack({ ...(inputOf(fixture) as any), learn: true });
+    expect(actualOf(outcome, Boolean(fixture.defence))).toEqual(fixture.expected);
+  }, REPLAY_TIMEOUT_MS);
+
   it(
     "takes a checkpoint every 800 ticks",
     () => {
@@ -161,6 +170,12 @@ describe("golden replays", () => {
     REPLAY_TIMEOUT_MS,
   );
 
+  it("records no lessons unless asked", () => {
+    const fixture = read<Fixture>(`${FIXTURE_DIR}champion-brain.json`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(replayAttack(inputOf(fixture) as any).lessons).toBeUndefined();
+  }, REPLAY_TIMEOUT_MS);
+
   it("does not mutate the yard it was handed", () => {
     const fixture = read<Fixture>(`${FIXTURE_DIR}empty-yard.json`);
     const input = inputOf(fixture);
@@ -169,4 +184,64 @@ describe("golden replays", () => {
     replayAttack(input as any);
     expect(JSON.stringify(input.buildingdata)).toBe(before);
   });
+});
+
+describe("a champion's lesson and brain (issue #219)", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const learned = (file: string, change: (input: any) => any = (input) => input) => {
+    const fixture = read<Fixture>(`${FIXTURE_DIR}${file}`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return replayAttack({ ...change(structuredClone(inputOf(fixture)) as any), learn: true });
+  };
+
+  it("gives the attacking champion one lesson, from its own picks and fight", () => {
+    const outcome = learned("champion-brain.json");
+    expect(outcome.lessons).toHaveLength(1);
+    const [lesson] = outcome.lessons!;
+    expect(lesson).toMatchObject({ t: 1, startHp: 190_000 });
+    expect(lesson!.picks).toBeGreaterThan(10);
+    expect(lesson!.dealt).toBeGreaterThan(0);
+    expect(lesson!.dealt).toBeLessThanOrEqual(lesson!.potential);
+    expect(lesson!.endHp).toBe(outcome.championHp);
+    for (const value of Object.values(lesson!.credit)) expect(Number.isFinite(value)).toBe(true);
+  }, REPLAY_TIMEOUT_MS);
+
+  it("gives a defending champion none: only the attacker's champions learn", () => {
+    // A caged Drull fights; the attacker flings no champion.
+    expect(learned("caged-champion.json").lessons).toEqual([]);
+    // Fomor on both sides: only the flung one learns.
+    const both = learned("fomor-both-sides.json");
+    expect(both.lessons?.map((lesson) => lesson.t)).toEqual([3]);
+  }, REPLAY_TIMEOUT_MS);
+
+  it("fights with the brain the log carries, and a log without one is a zero brain", () => {
+    const withBrain = learned("champion-brain.json");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const strip = (input: any) => {
+      delete input.log.events[0].champion.b;
+      return input;
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const zero = (input: any) => {
+      input.log.events[0].champion.b = { tower: 0, loot: 0, finish: 0, focus: 0, threat: 0 };
+      return input;
+    };
+    const without = learned("champion-brain.json", strip);
+    expect(without.digest).not.toBe(withBrain.digest);
+    expect(learned("champion-brain.json", zero).digest).toBe(without.digest);
+  }, REPLAY_TIMEOUT_MS);
+
+  it("clamps a brain past its bounds to them", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wild = (input: any) => {
+      input.log.events[0].champion.b = { tower: 9e9, loot: -9e9, finish: 200, focus: 200, threat: 200 };
+      return input;
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bound = (input: any) => {
+      input.log.events[0].champion.b = { tower: 200, loot: -200, finish: 200, focus: 200, threat: 200 };
+      return input;
+    };
+    expect(learned("champion-brain.json", wild).digest).toBe(learned("champion-brain.json", bound).digest);
+  }, REPLAY_TIMEOUT_MS);
 });

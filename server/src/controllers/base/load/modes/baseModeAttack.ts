@@ -24,7 +24,7 @@ import { requireAttackableMR1Tribe } from "../../../../services/maproom/v1/mr1Tr
 import { startMR1TribeSession } from "../../../../services/maproom/v1/mr1TribeSession.js";
 import { servedDefenderForces } from "../../../../services/base/combat/defenderForces.js";
 import { isShinyLocked } from "../../../../services/user/shinyLock.js";
-import { newAttackSession } from "../../../../services/base/attackSession.js";
+import { brainsOf, newAttackSession } from "../../../../services/base/attackSession.js";
 import { startAttackSession } from "../../../../services/base/attackSessionStore.js";
 import { catchUpArmiesForAttack } from "../../../../services/yard/armies.js";
 import { getOutpostOwnerSave } from "../../../../services/base/getOutpostOwnerSave.js";
@@ -65,7 +65,8 @@ interface BaseModeAttack {
  * refused attack leaves the defender exactly as it found them.
  *
  * @param {BaseModeAttack} options - Attack options
- * @returns The base being attacked, and the defence it fights with (issue #195)
+ * @returns The base being attacked, the defence it fights with (issue #195),
+ *   and the attacker's champions' brains the battle is frozen with (issue #219)
  */
 export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, attackerLevel }: BaseModeAttack) => {
   const userSave = user.save!;
@@ -244,6 +245,10 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
   // The defence the battle is fought against, served to the client and kept
   // in the session for the server's replay (issue #195).
   const defenderForces = await servedDefenderForces(save);
+  // The attacker's champions' brains as they stand now, after the load has
+  // landed any attack they left (issue #219): frozen into the session, served
+  // to the client, and the only brains this battle is ever fought with.
+  const championBrains = brainsOf(userSave.champion);
 
   if (isMR1Tribe) {
     await startMR1TribeSession(
@@ -256,7 +261,8 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
         undefined,
         attackerLevel,
         poolAmounts(userSave.resources),
-        defenderForces
+        defenderForces,
+        championBrains
       )
     );
   } else if (save.basesaveid) {
@@ -274,7 +280,8 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
         attackerLevel,
         // The attacker's own pool, which its bombs are priced against (#23, C3).
         poolAmounts(userSave.resources),
-        defenderForces
+        defenderForces,
+        championBrains
       )
     );
   }
@@ -291,5 +298,5 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
     await createAttackLog(user, defender, save)
   }
 
-  return { save, defenderForces };
+  return { save, defenderForces, championBrains };
 };

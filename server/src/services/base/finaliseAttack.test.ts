@@ -592,3 +592,71 @@ describe("when finalisation runs", () => {
     expect(defender.attackid).toBe(0);
   }, REPLAY_TIMEOUT_MS);
 });
+
+
+describe("the champion's learning brain (issue #219)", () => {
+  // A Gorgo with twenty Pokeys: Krallen's loot-first stage leaves a brain little to choose.
+  const FROZEN = { "1": { tower: 0, loot: 120, finish: 0, focus: 60, threat: 0 } };
+  const FORGED = { tower: 200, loot: -200, finish: 200, focus: -200, threat: -200 };
+  const gorgoLog = (b?: Record<string, number>): Log => ({
+    v: 1,
+    seed: LOG.seed,
+    events: [
+      {
+        kind: "fling",
+        t: 480,
+        x: -615,
+        y: 115,
+        r: 300,
+        monsters: { C1: 20 },
+        champion: { t: 1, l: 5, ...(b && { b }) },
+      },
+    ],
+  });
+  const gorgo = (extra: Record<string, unknown> = {}) => ({ t: 1, l: 5, hp: 150_000, status: 0, ...extra });
+
+  test("the champion that fought learns from the server's battle, once", async () => {
+    const { learnFromLesson } = await import("../../game-rules/combat/index.js");
+    userSave.champion = [gorgo({ b: FROZEN["1"], bs: { n: 4, hyb: 0.2 } })];
+    await arm({ tick: LATE, championBrains: FROZEN, flinglog: gorgoLog() });
+    const expected = replayed(LATE, gorgoLog(FROZEN["1"]));
+    const lesson = expected.lessons!.find((one) => one.t === 1)!;
+    expect(lesson.picks).toBeGreaterThan(0);
+    const learned = learnFromLesson(FROZEN["1"], { n: 4, hyb: 0.2 }, lesson, "hybrid");
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+    expect(userSave.champion[0]).toMatchObject({ t: 1, l: 5, b: learned.brain, bs: learned.stats });
+    expect(userSave.champion[0].bs.n).toBe(5);
+    expect(userSave.champion[0].b).not.toEqual(FROZEN["1"]);
+
+    // A second landing finds nothing, so nothing is learned twice.
+    const after = structuredClone(userSave.champion);
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("none");
+    expect(userSave.champion).toEqual(after);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("the battle is fought with the brain frozen at launch, never the log's or the live one", async () => {
+    // The live brain moved on since launch, and the log claims another.
+    userSave.champion = [gorgo({ b: { tower: -200, loot: -200, finish: 0, focus: 0, threat: 0 } })];
+    await arm({ tick: LATE, championBrains: FROZEN, flinglog: gorgoLog(FORGED) });
+    const frozen = replayed(LATE, gorgoLog(FROZEN["1"]));
+    const forged = replayed(LATE, gorgoLog(FORGED));
+    // The test means something only if the brains fight differently.
+    expect(forged.buildinghealthdata).not.toEqual(frozen.buildinghealthdata);
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+    expect(defender.buildinghealthdata).toEqual(frozen.buildinghealthdata);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("an attack launched before brains existed replays with none and still counts", async () => {
+    userSave.champion = [gorgo()];
+    await arm({ tick: LATE, flinglog: gorgoLog(FORGED) });
+    const plain = replayed(LATE, gorgoLog());
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+    expect(defender.buildinghealthdata).toEqual(plain.buildinghealthdata);
+    // Its first attack in a Mode only sets the baseline.
+    expect(userSave.champion[0].b).toEqual({ tower: 0, loot: 0, finish: 0, focus: 0, threat: 0 });
+    expect(userSave.champion[0].bs).toMatchObject({ n: 1 });
+  }, REPLAY_TIMEOUT_MS);
+});

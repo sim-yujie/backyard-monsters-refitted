@@ -356,6 +356,14 @@ Champion Cage (the first with `status` 0 and health left). The load serves the s
 the client as `defenderforces`, and the save and the finaliser replay the battle against the
 session's copy, so all three fight one defence. A session minted before it existed replays with
 no defence, as its client fought none.
+It also freezes the attacker's champions' learned brains, `championBrains` (issue #219,
+`brainsOf` in `services/base/attackSession.ts`; the rule is the shared `brain.ts`): each kept
+champion's `b` that is not all zeros, made safe and keyed by type, read after the load has landed
+any attack the attacker left. The load serves them as `attackerbrains`; the client stamps each
+flung champion's log entry with its type's (`champion.b`), and every replay (`fightableLog`, or
+`withFrozenBrains` when there is no roster) replaces whatever `b` the log carries with the
+session's copy, or removes it when there is none. So the battle is fought with the brains as they
+were at launch, whatever the log or the live save says by the time it is replayed.
 Only a successful one: every refusal,
 range included, is decided before the first write, so an attack the server turns down leaves no
 `attackid`, no lock, no attack log and no session key (issue #26). The key's TTL is 480 seconds; the window it
@@ -510,7 +518,7 @@ held: same seed, every stored event unchanged and in place, a clock that has not
 game state: the latest checkpoint is kept in Redis under `attack-checkpoint:<basesaveid>`, indexed
 by the set `attack-checkpoints` (`services/base/attackCheckpoint.ts`, `attackCheckpointStore.ts`).
 Each checkpoint also keeps a copy of what the attack load recorded in the session (`entryHoused`,
-`defenderResources`, `attackerResources`, `attackerlevel`, `defenderForces`), because the session key is gone 60 seconds after the window
+`defenderResources`, `attackerResources`, `attackerlevel`, `defenderForces`, `championBrains`), because the session key is gone 60 seconds after the window
 and an attack is often finalised later than that.
 
 **Finalisation** (`services/base/finaliseAttack.ts`) finishes an attack from its checkpoint: the
@@ -531,6 +539,17 @@ same final lock:
   window has closed.
 
 The final save and the finalisation discard the checkpoint, so each attack is written once.
+
+**Champion brains** (issue #219, `services/base/combat/championBrain.ts`). Whatever lands an
+attack (the `over` save, a Map Room 1 tribe's `over` save, or the finaliser, which also lands
+auto-attacks) runs its replay with the engine's `learn` option. That records a lesson for each
+champion the attacker flung: what set its picks apart from the alternatives it had, the damage it
+dealt against what it could have dealt, and the health it kept. `championsAfterLessons` then
+updates each one's `b` (weights) and `bs` (attack count and each Mode's running baseline) by the
+Mode the log flung it in, under the final lock, so once per attack. A defending champion has no
+lesson. `b` and `bs` are the server's alone: `ChampionSchema` drops both from every champion list
+a client sends, and the paths that write a sent list wholesale (owner saves, the Inferno) keep the
+stored brains (`withStoredBrains`).
 
 The loot is the final save's (issues #163, #165), and so is the replay: the same `battleReplayInput`
 (issue #23, C3), to the checkpoint's tick. The replay fights over the pool the attack load

@@ -378,7 +378,8 @@ describe("Map Room 1 tribe save: the attacker's own row (#23, C1)", () => {
     );
 
     expect(caught).toBeNull();
-    expect(userSave.champion).toEqual([champion(500)]);
+    // It fought, so it learned from the battle (issue #219); nothing else moved.
+    expect(userSave.champion).toEqual([{ ...champion(500), b: expect.any(Object), bs: expect.objectContaining({ n: 1 }) }]);
     expect(userSave.siege).toEqual({ jars: { quantity: 1 } });
   });
 
@@ -395,7 +396,7 @@ describe("Map Room 1 tribe save: the attacker's own row (#23, C1)", () => {
       })
     );
 
-    expect(userSave.champion).toEqual([champion(120)]);
+    expect(userSave.champion).toEqual([{ ...champion(120), b: expect.any(Object), bs: expect.objectContaining({ n: 1 }) }]);
   });
 });
 

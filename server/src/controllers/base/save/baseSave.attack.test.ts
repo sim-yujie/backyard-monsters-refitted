@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
+import type { BrainWeights } from "../../../game-rules/combat/index.js";
 
 /**
  * Attack saves through `/base/save`. Loot (issue #163): only the save that
@@ -91,6 +92,8 @@ mock.module("../../../scripts/anticheat/anticheat.js", () => ({
 
 /** The defence the attack load served, when a test gives the session one (issue #195). */
 let sessionForces: unknown;
+/** The champions' brains the attack froze at launch, when a test gives the session some (issue #219). */
+let sessionBrains: Record<string, BrainWeights> | undefined;
 
 mock.module("../../../services/base/attackSessionStore.js", () => ({
   startAttackSession: async () => {},
@@ -101,6 +104,7 @@ mock.module("../../../services/base/attackSessionStore.js", () => ({
     entryHoused: ENTRY,
     defenderResources: { r1: 5000, r2: 0, r3: 0, r4: 0 },
     ...(sessionForces ? { defenderForces: sessionForces } : {}),
+    ...(sessionBrains ? { championBrains: sessionBrains } : {}),
   }),
   endAttackSession: async () => {},
 }));
@@ -161,6 +165,7 @@ afterEach(() => {
 beforeEach(() => {
   replayTimesOut = false;
   sessionForces = undefined;
+  sessionBrains = undefined;
   setMode("log");
   reports.length = 0;
   store.clear();
@@ -216,6 +221,58 @@ describe("the plan a hand-played camp attack leaves (issue #221)", () => {
     attackerSave.mapversion = 1;
     await baseSave(ctxFor({ over: "1", flinglog: JSON.stringify(LOG) }), async () => {});
     expect(upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("the champion's learning brain through the save (issue #219)", () => {
+  const BRAIN = { tower: 60, loot: -40, finish: 0, focus: 0, threat: 0 };
+  const FORGED = { tower: -200, loot: 200, finish: 200, focus: 200, threat: 200 };
+  const GORGO_LOG = {
+    v: 1,
+    seed: 5,
+    events: [{ kind: "fling", t: 80, x: 400, y: 400, r: 200, monsters: { C4: 12 }, champion: { t: 1, l: 4, b: FORGED } }],
+  };
+
+  test("the save that ends the attack teaches the champion from the server's battle, once", async () => {
+    const { learnFromLesson } = await import("../../../game-rules/combat/index.js");
+    sessionBrains = { "1": BRAIN };
+    attackerSave.champion = [{ t: 1, l: 4, hp: 100_000, status: 0, b: BRAIN, bs: { n: 2, hyb: 0 } }];
+    // The battle the server fights: the frozen brain, never the log's forged one.
+    const input = battleReplayInput({
+      flinglog: GORGO_LOG,
+      session: { attackerid: ATTACKER, attackid: ATTACK_ID, startedat: 0, entryHoused: ENTRY, championBrains: sessionBrains },
+      defender: { type: "tribe", buildingdata: YARD as never, buildinghealthdata: {}, resources: defender.resources },
+      attacker: structuredClone(attackerSave),
+      tick: battleTick("3200"),
+      declareWar: false,
+    })!;
+    expect(input.log.events[0]).toMatchObject({ champion: { b: BRAIN } });
+    const lesson = replayAbandonedAttack(input).lessons!.find((one) => one.t === 1)!;
+    const learned = learnFromLesson(BRAIN, { n: 2, hyb: 0 }, lesson, "hybrid");
+
+    // A save that does not end it teaches nothing.
+    await baseSave(ctxFor({ tick: "3200", flinglog: JSON.stringify(GORGO_LOG) }), async () => {});
+    expect(attackerSave.champion[0].bs).toEqual({ n: 2, hyb: 0 });
+
+    await baseSave(
+      ctxFor({
+        over: "1",
+        tick: "3200",
+        flinglog: JSON.stringify(GORGO_LOG),
+        // A forged brain on the reported champion is dropped like any other key.
+        attackerchampion: JSON.stringify([{ t: 1, l: 4, hp: 1, status: 0, b: FORGED, bs: { n: 999 } }]),
+      }),
+      async () => {}
+    );
+    expect(attackerSave.champion[0]).toMatchObject({ b: learned.brain, bs: learned.stats });
+    expect(attackerSave.champion[0].bs.n).toBe(3);
+
+    // The attack is over: a copy of the save is refused and teaches nothing more.
+    const after = structuredClone(attackerSave.champion);
+    await baseSave(ctxFor({ over: "1", tick: "3200", flinglog: JSON.stringify(GORGO_LOG) }), async () => {}).catch(
+      () => {}
+    );
+    expect(attackerSave.champion).toEqual(after);
   });
 });
 
@@ -538,7 +595,8 @@ describe("the attacker's own row through the save (#23, C1)", () => {
       attackersiege: JSON.stringify({ jars: { quantity: 99 }, rocket: { quantity: 5 } }),
     });
 
-    expect(attackerSave.champion).toEqual([champion(500)]);
+    // It fought, so it learned from the battle (issue #219); nothing else moved.
+    expect(attackerSave.champion).toEqual([{ ...champion(500), b: expect.any(Object), bs: expect.objectContaining({ n: 1 }) }]);
     // The one jar the log used is spent, whatever the save said the stock was.
     expect(attackerSave.siege).toEqual({ jars: { quantity: 1 } });
   });
@@ -550,7 +608,7 @@ describe("the attacker's own row through the save (#23, C1)", () => {
       attackersiege: JSON.stringify({ jars: { quantity: 1 } }),
     });
 
-    expect(attackerSave.champion).toEqual([champion(180)]);
+    expect(attackerSave.champion).toEqual([{ ...champion(180), b: expect.any(Object), bs: expect.objectContaining({ n: 1 }) }]);
     expect(attackerSave.siege).toEqual({ jars: { quantity: 1 } });
   });
 

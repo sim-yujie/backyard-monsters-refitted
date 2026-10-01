@@ -416,6 +416,40 @@ export const SCENARIOS = [
       ],
     },
   })),
+  // Issue #219: the same attack in Hybrid with a learned brain, frozen into
+  // the log as the server stamps it, so its tilt-free weights are the brain's.
+  {
+    name: "champion-brain",
+    description:
+      "A level 4 Gorgo at power level 3 flung in Hybrid with forty Pokeys and a learned brain " +
+      "that likes towers and the pack and shuns loot (issue #219).",
+    yard: "sandbox",
+    kind: "main",
+    levels: MAXED,
+    playerLevel: 20,
+    tailTicks: 9600,
+    log: {
+      v: 1,
+      seed: 22020,
+      events: [
+        {
+          kind: "fling",
+          t: 200,
+          x: 180,
+          y: -480,
+          r: 300,
+          monsters: { C1: 40 },
+          champion: {
+            t: 1,
+            l: 4,
+            pl: 3,
+            s: "hybrid",
+            b: { tower: 150, loot: -120, finish: 40, focus: 90, threat: 60 },
+          },
+        },
+      ],
+    },
+  },
 ];
 
 /** The scenario the bench times, which is the busiest of them. */

@@ -52,6 +52,7 @@ import { INFERNO_CHAT_CHANNEL } from "../../../config/ChatConfig.js";
 import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import type { DefenderForces } from "../../../game-rules/combat/index.js";
+import type { ChampionBrains } from "../../../services/base/attackSession.js";
 
 type Stronghold = { level: number; cell?: { x: number; y: number } | null };
 
@@ -89,6 +90,8 @@ export const baseLoad: KoaController = async (ctx) => {
   let baseSave: Save | null = null;
   /** The defence an attack is fought against (issue #195), served beside the yard. */
   let defenderForces: DefenderForces | undefined;
+  /** The attacker's champions' brains, as the attack froze them (issue #219), served to the client. */
+  let championBrains: ChampionBrains | undefined;
 
   // The attacker's level for the engine's low-level loot bonus, served to the
   // client and kept in the attack session for the loot replay, so both run
@@ -110,7 +113,7 @@ export const baseLoad: KoaController = async (ctx) => {
       if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
 
       await validateAttack(user, attackData, mapversion);
-      ({ save: baseSave, defenderForces } = await baseModeAttack({
+      ({ save: baseSave, defenderForces, championBrains } = await baseModeAttack({
         user,
         baseid,
         mapversion,
@@ -153,7 +156,7 @@ export const baseLoad: KoaController = async (ctx) => {
       if (!ctx.meetsDiscordAgeCheck && !MR1_TRIBE_IDS.has(baseid)) throw discordAgeErr();
       
       await validateAttack(user, attackData, mapversion);
-      ({ save: baseSave, defenderForces } = await baseModeAttack({
+      ({ save: baseSave, defenderForces, championBrains } = await baseModeAttack({
         user,
         baseid,
         mapversion,
@@ -409,6 +412,7 @@ export const baseLoad: KoaController = async (ctx) => {
     ...(isOwner && !isInferno && type === BaseMode.BUILD && { onboarding: onboardingSummary(user.save!) }),
     ...(cellHeight !== undefined && { cellheight: cellHeight }),
     ...(defenderForces && { defenderforces: defenderForces }),
+    ...(championBrains && { attackerbrains: championBrains }),
     ...(completed && { completed }),
     ...(isOwner && {
       chatenabled: 1,

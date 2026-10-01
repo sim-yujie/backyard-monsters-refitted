@@ -10,6 +10,7 @@ import {
 import { juicerProblemText, juicerStatus } from "@/game/monsters/juice";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { showPortrait } from "@/game/portraits";
+import { brainSummary, learnedFromText, tendenciesText } from "@/game/yard/championBrain";
 import type { ChampionEntry } from "@/game/yard/championCatalogue";
 import {
   CHAMPION_NAME_MAX,
@@ -34,7 +35,8 @@ import { ShinyButton } from "./ShinyButton";
  * Opened by the panel's **Open cage**. With no champion in the cage: one card
  * each for Gorgo, Drull and Fomor (Korath and Krallen are not offered), each
  * with **Raise** (free), or a note when that one is frozen in the Chamber.
- * With a champion: its picture, name (**Rename**), level, health with the
+ * With a champion: its picture, name (**Rename**), level, how it fights (the
+ * tendencies its learning brain picked up, #219), health with the
  * time to full and **Heal** (Shiny), its evolution (feeds so far of the
  * level's count; the food bonus at the top level), its hunger in plain words
  * with the time to the next feeding or to starving, the feed recipe against
@@ -265,6 +267,7 @@ export class ChampionPanel {
     const now = this.store.now();
     return [
       this.header(view),
+      brainBlock(view),
       this.healthBlock(view, now),
       this.growthBlock(view),
       this.feedBlock(view),
@@ -693,6 +696,34 @@ export class ChampionPanel {
   }
 }
 
+/**
+ * How it fights (issue #219): the tendencies its own attacks taught it, in
+ * plain words, strongest first, or that it is still learning. There is no
+ * reset: the owner wants what it learned to stay with it.
+ */
+export const brainBlock = (view: ChampionView): HTMLElement => {
+  const block = document.createElement("div");
+  block.className = "champion__part champion__part--brain";
+  const summary = brainSummary(view.champion);
+  const list = document.createElement("ul");
+  list.className = "champion__tendencies";
+  list.setAttribute("aria-label", "What it has learned");
+  const words = summary.tendencies.length > 0 ? summary.tendencies : [tendenciesText(summary)];
+  for (const text of words) {
+    const item = document.createElement("li");
+    item.className = "champion__tendency";
+    item.classList.toggle("champion__tendency--learning", summary.tendencies.length === 0);
+    item.textContent = text;
+    list.append(item);
+  }
+  block.append(
+    heading("How it fights"),
+    list,
+    note(`${learnedFromText(summary)} Each attack teaches it by its Mode's goal.`),
+  );
+  return block;
+};
+
 /* ── Words ──────────────────────────────────────────────────────────── */
 
 /** What the tick compares to decide whether the body must be rebuilt. */
@@ -714,6 +745,8 @@ const shapeOf = (view: CageView): string => {
     champion.evolveShiny,
     champion.canFeedMonsters,
     champion.health >= champion.maxHealth,
+    tendenciesText(brainSummary(champion.champion)),
+    brainSummary(champion.champion).attacks,
   ].join(":");
 };
 

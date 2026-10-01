@@ -9,6 +9,7 @@ import { postgres } from "../../../server.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { BaseSaveSchema } from "../../../schemas/BaseSaveSchema.js";
 import { molochTribes } from "../../../game-data/tribes/inferno/molochTribes.js";
+import { withStoredBrains } from "../../base/combat/championBrain.js";
 
 type BaseSaveData = TypeOf<typeof BaseSaveSchema>;
 
@@ -69,7 +70,10 @@ export const scaledInfernoTribes = async (user: User, saveData: BaseSaveData) =>
         break;
 
       case SaveKeys.ATTACKERCHAMPION:
-        if (saveData.attackerchampion) userSave.champion = saveData.attackerchampion;
+        // Brains are the server's alone (issue #219): kept, never sent.
+        if (saveData.attackerchampion) {
+          userSave.champion = withStoredBrains(userSave.champion, saveData.attackerchampion);
+        }
         break;
 
       case SaveKeys.ATTACKLOOT:

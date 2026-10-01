@@ -62,6 +62,30 @@
   border-top: 1px solid var(--colour-border);
 }
 
+/* How it fights: the learned brain's tendencies (issue #219). */
+.champion__tendencies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.champion__tendency {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-base);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.champion__tendency--learning {
+  font-weight: 400;
+  color: var(--colour-text-muted);
+}
+
 .champion__line {
   margin: 0;
   font-size: var(--text-sm);

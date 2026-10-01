@@ -79,6 +79,7 @@ import {
   type HousingLoss,
 } from "../../../services/base/combat/housingLoss.js";
 import { championsAfterDefence } from "../../../services/base/combat/defenderChampion.js";
+import { championsAfterLessons, withStoredBrains } from "../../../services/base/combat/championBrain.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
 
@@ -367,7 +368,8 @@ const saveBase = async (
           }
         } else {
           if (saveData.champion) {
-            baseSave.champion = saveData.champion;
+            // The brains are the server's alone (issue #219): kept, never sent.
+            baseSave.champion = withStoredBrains(baseSave.champion, saveData.champion);
           }
         }
         break;
@@ -471,6 +473,13 @@ const saveBase = async (
 
     if (loot) {
       banked = bankAttackLoot(userSave, loot.credit, loot.krallenBuff).credited;
+    }
+
+    // Each champion that fought learns from the server's battle, once: this
+    // save holds the final lock and ends the attack (issue #219).
+    if (battle && battleInput && saveData.over) {
+      userSave.champion =
+        championsAfterLessons(userSave.champion, battle.lessons, battleInput.log) ?? userSave.champion;
     }
 
     // The defender's loss lands with the attacker's gain, held between what

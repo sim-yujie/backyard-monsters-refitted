@@ -15,8 +15,11 @@ import {
   flingCost,
   healthOf,
   isChampionStance,
+  isZeroBrain,
+  parseBrain,
   parseDefenderForces,
   toCombatYard,
+  type BrainWeights,
   type BuildingClass,
   type Battle,
   type BattleState,
@@ -232,6 +235,19 @@ export const mintSeed = (): number => {
  * map's range gate reads the same list (`attackEntry.ts`).
  */
 export { hasDeclareWar };
+
+/**
+ * A champion's brain from the load's `attackerbrains` (issue #219): the one
+ * the server froze into this attack at launch, made safe as the server makes
+ * it, or null when it has none (a zero brain, which the log leaves out). The
+ * own-yard load's copy is not read: a brain can learn between that load and
+ * this attack's launch, and the server replays with the frozen one.
+ */
+export const servedBrain = (raw: unknown, t: number): BrainWeights | null => {
+  if (typeof raw !== "object" || raw === null) return null;
+  const brain = parseBrain((raw as Record<string, unknown>)[String(t)]);
+  return isZeroBrain(brain) ? null : brain;
+};
 
 /** The load's `attackerlevel`, when it is a whole level of 1 or more. */
 export const servedLevel = (raw: unknown): number | undefined =>
@@ -565,21 +581,25 @@ export class AttackSession {
    * A flung champion as the log records it: its type and level, the power
    * level its roster entry holds (issue #202), which it fights at and the
    * server checks against the attacker's stored champion, and the Mode the
-   * player picked (issue #220), which the server replays it in.
+   * player picked (issue #220), which the server replays it in, and its
+   * learned brain as the attack load froze it (issue #219, {@link servedBrain}).
    */
   private flungChampion(champion: NonNullable<FlingInput["champion"]>): {
     t: number;
     l: number;
     pl?: number;
     s?: ChampionStance;
+    b?: BrainWeights;
   } {
     const entry = this.target.roster.champions.find((owned) => owned.t === champion.t);
     const pl = Number(entry?.pl);
+    const brain = servedBrain(this.response?.attackerbrains, champion.t);
     return {
       t: champion.t,
       l: champion.l,
       ...(Number.isInteger(pl) && pl > 0 ? { pl: Math.min(pl, CHAMPION_MAX_POWER_LEVEL) } : {}),
       ...(isChampionStance(champion.s) ? { s: champion.s } : {}),
+      ...(brain ? { b: brain } : {}),
     };
   }
 

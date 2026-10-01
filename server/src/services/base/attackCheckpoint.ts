@@ -132,9 +132,18 @@ const isEvent = (value: unknown): value is FlingEvent => {
     // Its power level (issue #202), absent from a log written before it.
     (value.champion.pl === undefined || Number.isInteger(value.champion.pl)) &&
     // Its Mode (issue #220), absent from a log written before it.
-    (value.champion.s === undefined || isChampionStance(value.champion.s))
+    (value.champion.s === undefined || isChampionStance(value.champion.s)) &&
+    // Its brain (issue #219): read only to be replaced by the session's frozen
+    // copy (`fightableLog`), but a client's log carries it, so it must parse.
+    (value.champion.b === undefined || isBrainRecord(value.champion.b))
   );
 };
+
+/** A brain as a log carries it: named numbers, each finite; `parseBrain` makes it safe. */
+const isBrainRecord = (value: unknown): boolean =>
+  isRecord(value) &&
+  Object.keys(value).length <= 8 &&
+  Object.values(value).every((weight) => typeof weight === "number" && Number.isFinite(weight));
 
 /**
  * Reads a fling log, checked for everything the replay reads: version 1, a
@@ -247,6 +256,7 @@ export const newCheckpoint = (
   ...(session.attackerResources && { attackerResources: session.attackerResources }),
   ...(session.attackerlevel !== undefined && { attackerlevel: session.attackerlevel }),
   ...(session.defenderForces && { defenderForces: session.defenderForces }),
+  ...(session.championBrains && { championBrains: session.championBrains }),
 });
 
 export const serialiseCheckpoint = (checkpoint: AttackCheckpoint): string =>
@@ -300,6 +310,7 @@ export const checkpointSession = (checkpoint: AttackCheckpoint): AttackSession =
   ...(checkpoint.attackerResources && { attackerResources: checkpoint.attackerResources }),
   ...(checkpoint.attackerlevel !== undefined && { attackerlevel: checkpoint.attackerlevel }),
   ...(checkpoint.defenderForces && { defenderForces: checkpoint.defenderForces }),
+  ...(checkpoint.championBrains && { championBrains: checkpoint.championBrains }),
 });
 
 /**

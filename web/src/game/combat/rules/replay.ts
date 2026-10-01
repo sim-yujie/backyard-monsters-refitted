@@ -68,6 +68,8 @@ export interface ReplayInput {
   readonly defenderChampion?: DefenderChampion | null;
   /** Ticks to keep simulating after the last event; the default is the whole attack. */
   readonly tailTicks?: number;
+  /** Record the attacking champions' lessons (`BattleOptions.learn`, issue #219). */
+  readonly learn?: boolean;
 }
 
 /** One checkpoint: the tick it was taken at and the digest of the state. */
@@ -107,6 +109,8 @@ export interface ReplayOutcome {
   readonly bunkerGarrisons: BattleState["bunkerGarrisons"];
   /** The caged champion's health afterwards (`BattleState.defenderChampionHp`, #195). */
   readonly defenderChampionHp: number | null;
+  /** Each attacking champion's lesson, with `learn` only (`BattleState.lessons`, #219). */
+  readonly lessons?: BattleState["lessons"];
 }
 
 /** The digest of one engine checkpoint. */
@@ -157,6 +161,7 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     ...(input.bunkers ? { bunkers: input.bunkers } : {}),
     ...(input.defenderLevels ? { defenderLevels: input.defenderLevels } : {}),
     ...(input.defenderChampion ? { defenderChampion: input.defenderChampion } : {}),
+    ...(input.learn ? { learn: true } : {}),
   };
 
   const battle = createBattle(yard, options);
@@ -218,5 +223,6 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     bunkerLosses: state.bunkerLosses,
     bunkerGarrisons: state.bunkerGarrisons,
     defenderChampionHp: state.defenderChampionHp,
+    ...(state.lessons ? { lessons: state.lessons } : {}),
   };
 };

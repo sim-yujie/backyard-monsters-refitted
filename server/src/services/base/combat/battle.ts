@@ -3,7 +3,13 @@ import type { JsonObject } from "../../../types/JsonObject.js";
 import { MAX_CHECKPOINT_TICK, parseFlingLog } from "../attackCheckpoint.js";
 import type { AttackSession } from "../attackSession.js";
 import type { AbandonedDefender, AbandonedInput, AbandonedOutcome } from "./abandonedAttack.js";
-import { fightableLog, wholeAmounts, type LootAttacker, type ReplayedLoot } from "./attackLoot.js";
+import {
+  fightableLog,
+  wholeAmounts,
+  withFrozenBrains,
+  type LootAttacker,
+  type ReplayedLoot,
+} from "./attackLoot.js";
 import { fallenIn } from "./bunkerGarrison.js";
 
 /**
@@ -89,6 +95,7 @@ export const battleReplayInput = ({
     catapult: attacker.catapult ?? null,
     buildingdata: attacker.buildingdata ?? null,
     resources: session?.attackerResources ?? null,
+    brains: session?.championBrains ?? null,
   };
   return {
     defender: {
@@ -104,8 +111,11 @@ export const battleReplayInput = ({
       champion: (attacker.champion ?? null) as AbandonedInput["attacker"]["champion"],
       siege: attacker.siege ?? null,
     },
-    // Only what the attacker could have flung fights, as in the loot's own rule.
-    log: session?.entryHoused ? fightableLog(log, fighter, session.entryHoused) : log,
+    // Only what the attacker could have flung fights, as in the loot's own rule,
+    // and each champion with the brain the attack froze, never the log's (#219).
+    log: session?.entryHoused
+      ? fightableLog(log, fighter, session.entryHoused)
+      : withFrozenBrains(log, session?.championBrains),
     tick,
     declareWar,
     ...(session?.attackerlevel !== undefined && { playerLevel: session.attackerlevel }),

@@ -1,4 +1,5 @@
 import { hpLadder, maxHp, outpostHarvesterStock } from "./stats.js";
+import type { BrainWeights } from "./brain.js";
 import type { ChampionStance } from "./stance.js";
 
 /**
@@ -476,13 +477,15 @@ export type FlingEvent =
        * (`pl`, 0 to 3, issue #202). A log written before `pl` existed carries
        * none, and that champion fights at its level alone. `s` is the Mode it
        * was flung in (issue #220, `stance.ts`); a log with none fights it as
-       * Hybrid, which is the Flash champion.
+       * Hybrid, which is the Flash champion. `b` is its learned brain as the
+       * attack froze it at launch (issue #219, `brain.ts`); none is a zero brain.
        */
       readonly champion?: {
         readonly t: number;
         readonly l: number;
         readonly pl?: number;
         readonly s?: ChampionStance;
+        readonly b?: Partial<BrainWeights>;
       };
     }
   | {

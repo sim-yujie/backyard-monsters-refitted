@@ -9,7 +9,6 @@ import {
   replayAttack,
   type BombStats,
   type BuildingHealthMap,
-  type ChampionStance,
   type CombatBuildingDataMap,
   type FlingEvent,
   type FlingLog,
@@ -21,7 +20,7 @@ import type { EntryHoused } from "../../yard/attackRoster.js";
 import { creditResources, type CreditResult, type CreditSave } from "../../yard/credit.js";
 import { storageCap } from "../economy/resourceBudget.js";
 import { parseFlingLog } from "../attackCheckpoint.js";
-import type { AttackSession } from "../attackSession.js";
+import type { AttackSession, ChampionBrains } from "../attackSession.js";
 import { academyLevels, combatKindOf } from "./abandonedAttack.js";
 import { catapultLevelOf } from "./bombSpend.js";
 
@@ -148,6 +147,12 @@ export interface LootAttacker {
    * not fought (issue #23, C3). Absent, affordability is not checked.
    */
   resources?: Partial<ResourceAmounts> | null;
+  /**
+   * The attacker's champions' brains as the attack froze them at launch (the
+   * session's `championBrains`, issue #219): the only brains the replay
+   * fights with. Absent, every champion fights with none.
+   */
+  brains?: ChampionBrains | null;
 }
 
 const bombById: ReadonlyMap<string, BombStats> = new Map(BOMBS.map((bomb) => [bomb.id, bomb]));
@@ -225,17 +230,22 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
     // power level (issue #202); a log with no `pl` fights at its level alone.
     // Its Mode (issue #220) is the attacker's choice for this attack and rides
     // along as sent; a log with none fights it as Hybrid.
-    let champion: { t: number; l: number; pl?: number; s?: ChampionStance } | undefined;
+    // Its brain (issue #219) is never the log's: the session's frozen copy is
+    // stamped on, or none.
+    let champion: FlungChampion | undefined;
     const stored = event.champion ? owned.get(event.champion.t) : undefined;
     if (event.champion && stored !== undefined && !championsFlung.has(event.champion.t)) {
       championsFlung.add(event.champion.t);
       const { pl, s } = event.champion;
-      champion = {
-        t: event.champion.t,
-        l: Math.min(event.champion.l, stored.l),
-        ...(pl !== undefined && { pl: Math.max(0, Math.min(pl, stored.pl)) }),
-        ...(s !== undefined && { s }),
-      };
+      champion = withFrozenBrain(
+        {
+          t: event.champion.t,
+          l: Math.min(event.champion.l, stored.l),
+          ...(pl !== undefined && { pl: Math.max(0, Math.min(pl, stored.pl)) }),
+          ...(s !== undefined && { s }),
+        },
+        attacker.brains
+      );
     }
 
     if (Object.keys(monsters).length === 0 && !champion) continue;
@@ -245,6 +255,36 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
 
   return { v: 1, seed: log.seed, events };
 };
+
+/** A fling event's champion, as the replay fights it. */
+type FlungChampion = NonNullable<Extract<FlingEvent, { kind: "fling" }>["champion"]>;
+
+/**
+ * A flung champion with the brain the attack froze at launch (issue #219):
+ * the session's copy for its type, or none, whatever the log said.
+ *
+ * @param champion - The champion as the log flings it.
+ * @param brains - The session's `championBrains`, if any.
+ */
+export const withFrozenBrain = (champion: FlungChampion, brains: ChampionBrains | null | undefined): FlungChampion => {
+  const { b: _sent, ...rest } = champion;
+  const brain = brains?.[String(champion.t)];
+  return brain ? { ...rest, b: brain } : rest;
+};
+
+/**
+ * A log whose every flung champion carries the frozen brain and nothing else
+ * (`withFrozenBrain`), for a replay that does not cut the log down first.
+ *
+ * @param log - The log as sent.
+ * @param brains - The session's `championBrains`, if any.
+ */
+export const withFrozenBrains = (log: FlingLog, brains: ChampionBrains | null | undefined): FlingLog => ({
+  ...log,
+  events: log.events.map((event) =>
+    event.kind === "fling" && event.champion ? { ...event, champion: withFrozenBrain(event.champion, brains) } : event
+  ),
+});
 
 /** What the server's replay of an attack gives each side, whole units. */
 export interface ReplayedLoot {
@@ -349,6 +389,8 @@ export const lootReplayInput = ({
       buildingdata: attacker.buildingdata ?? null,
       // Only the pool the attack began with, never the one the save finds.
       resources: session.attackerResources ?? null,
+      // Only the brains the attack froze (issue #219).
+      brains: session.championBrains ?? null,
     },
     log,
     entryHoused,

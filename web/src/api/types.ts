@@ -199,6 +199,10 @@ export interface ChampionSaveEntry {
   nm?: string;
   /** The Mode it last attacked in (issue #220); absent is Hybrid. Anything else is ignored. */
   s?: unknown;
+  /** Its learned brain's weights (issue #219, `brain.ts`); the server's alone to write. */
+  b?: unknown;
+  /** What its brain has learned from: `n` attacks, and each Mode's usual score. */
+  bs?: unknown;
   [key: string]: unknown;
 }
 
@@ -661,6 +665,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * server's loot replay runs at the same level (issue #167).
    */
   attackerlevel?: number;
+  /**
+   * Attack modes only: the attacker's champions' learned brains, by type, as
+   * the server froze them into this attack at launch (issue #219). Each flung
+   * champion's log entry carries its own, which is what the server replays.
+   */
+  attackerbrains?: unknown;
   /**
    * The own yard's loads (not Inferno): the player's level from their main
    * save's empire points, the level the map shows (#192). The yard routes

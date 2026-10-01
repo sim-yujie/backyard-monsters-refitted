@@ -1,6 +1,9 @@
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import {
+  isZeroBrain,
+  parseBrain,
   parseDefenderForces,
+  type BrainWeights,
   type DefenderForces,
   type ResourceAmounts,
 } from "../../game-rules/combat/index.js";
@@ -94,7 +97,38 @@ export interface AttackSession {
    * on a session minted before it existed; the replay then reads the row.
    */
   defenderForces?: DefenderForces;
+  /**
+   * Each of the attacker's champions' learned brain at attack start, by type
+   * (issue #219), only those that have learned anything. The battle fights
+   * with these and nothing else: the attack load serves them to the client as
+   * `attackerbrains`, and every replay stamps them on the log's champions
+   * (`fightableLog`), so a brain that changes meanwhile, or one a client
+   * makes up, changes nothing. Absent on a session minted before it, whose
+   * battle fought with none.
+   */
+  championBrains?: ChampionBrains;
 }
+
+/** Champion type → brain, as {@link AttackSession.championBrains} keeps it. */
+export type ChampionBrains = Readonly<Record<string, BrainWeights>>;
+
+/**
+ * The brains to freeze from the attacker's stored champions: each non-zero
+ * one, made safe (`parseBrain`), by type; undefined when there are none.
+ *
+ * @param champions - The attacker's `champion` list as stored.
+ */
+export const brainsOf = (champions: unknown): ChampionBrains | undefined => {
+  if (!Array.isArray(champions)) return undefined;
+  const out: Record<string, BrainWeights> = {};
+  for (const champion of champions) {
+    const t = (champion as { t?: unknown } | null)?.t;
+    if (typeof t !== "number" || !Number.isInteger(t) || t < 1 || t > 5) continue;
+    const brain = parseBrain((champion as { b?: unknown }).b);
+    if (!isZeroBrain(brain)) out[String(t)] = brain;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+};
 
 /** Why a save was not accepted as this attack's result. */
 export type AttackBindingReason =
@@ -121,6 +155,7 @@ export const serialiseAttackSession = (session: AttackSession): string =>
   session.defenderResources ||
   session.attackerResources ||
   session.defenderForces ||
+  session.championBrains ||
   session.attackerlevel !== undefined
     ? JSON.stringify(session)
     : `${session.attackerid}:${session.attackid}:${session.startedat}`;
@@ -140,6 +175,9 @@ const entryHousedOf = (raw: unknown): EntryHoused | undefined => {
   return out;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 /** The `defenderResources` of a JSON session: `r1`..`r4`, each finite and at least 0. */
 const defenderResourcesOf = (raw: unknown): ResourceAmounts | undefined => {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
@@ -156,7 +194,12 @@ const defenderResourcesOf = (raw: unknown): ResourceAmounts | undefined => {
 /** What an attack load records of the battle beside its binding: see {@link AttackSession}. */
 export type AttackSessionFacts = Pick<
   AttackSession,
-  "entryHoused" | "defenderResources" | "attackerResources" | "attackerlevel" | "defenderForces"
+  | "entryHoused"
+  | "defenderResources"
+  | "attackerResources"
+  | "attackerlevel"
+  | "defenderForces"
+  | "championBrains"
 >;
 
 /**
@@ -171,12 +214,16 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
   const defenderResources = defenderResourcesOf(parsed.defenderResources);
   const attackerResources = defenderResourcesOf(parsed.attackerResources);
   const defenderForces = parseDefenderForces(parsed.defenderForces);
+  const championBrains = isRecord(parsed.championBrains)
+    ? brainsOf(Object.entries(parsed.championBrains).map(([t, b]) => ({ t: Number(t), b })))
+    : undefined;
   const { attackerlevel } = parsed;
   return {
     ...(entryHoused && { entryHoused }),
     ...(defenderForces && { defenderForces }),
     ...(defenderResources && { defenderResources }),
     ...(attackerResources && { attackerResources }),
+    ...(championBrains && { championBrains }),
     ...(Number.isSafeInteger(attackerlevel) &&
       (attackerlevel as number) >= 1 && { attackerlevel: attackerlevel as number }),
   };
@@ -283,6 +330,7 @@ export const checkAttackBinding = ({
  * @param {number} [attackerlevel] - The attacker's player level, which the attack load serves too.
  * @param {ResourceAmounts} [attackerResources] - The attacker's own pool at attack start.
  * @param {DefenderForces} [defenderForces] - The defence the attack load serves (issue #195).
+ * @param {ChampionBrains} [championBrains] - The attacker's champions' brains, frozen (#219).
  */
 export const newAttackSession = (
   attackerid: number,
@@ -291,7 +339,8 @@ export const newAttackSession = (
   defenderResources?: ResourceAmounts,
   attackerlevel?: number,
   attackerResources?: ResourceAmounts,
-  defenderForces?: DefenderForces
+  defenderForces?: DefenderForces,
+  championBrains?: ChampionBrains
 ): AttackSession => ({
   attackerid,
   attackid,
@@ -301,4 +350,5 @@ export const newAttackSession = (
   ...(defenderResources && { defenderResources }),
   ...(attackerResources && { attackerResources }),
   ...(attackerlevel !== undefined && { attackerlevel }),
+  ...(championBrains && { championBrains }),
 });

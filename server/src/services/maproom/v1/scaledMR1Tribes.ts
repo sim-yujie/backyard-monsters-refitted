@@ -18,6 +18,7 @@ import { recordBombSpend } from "../../base/combat/recordBombSpend.js";
 import { checkAttackBinding, type AttackSession } from "../../base/attackSession.js";
 import { storedDamage } from "../../base/storedDamage.js";
 import { championsAfterAttack, siegeAfterAttack } from "../../base/combat/attackerRow.js";
+import { championsAfterLessons } from "../../base/combat/championBrain.js";
 import { RESOURCE_KEYS, derivedDestroyed, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
 import type { SaveData } from "../../../types/EntityData.js";
@@ -146,6 +147,9 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
     if (saveData.attackerchampion) {
       userSave.champion = championsAfterAttack(userSave.champion, saveData.attackerchampion, saveData.flinglog);
     }
+    // Each champion that fought learns from the server's battle, once, under
+    // the tribe's final lock (issue #219).
+    if (battle) userSave.champion = championsAfterLessons(userSave.champion, battle.lessons, battle.log) ?? userSave.champion;
     userSave.siege = siegeAfterAttack(userSave.siege, saveData.flinglog);
 
     if (bombs) userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
@@ -217,7 +221,8 @@ const tribeBattle = async (
 
   const base = { baseid: saveData.baseid };
   const fought = await replayBattleForSave(ctx, user, base, input, "a tribe has no finaliser, so nothing lands");
-  const battle = { ...fought, destroyed: derivedDestroyed(fought.damage, "wild") ?? 0 };
+  // The log it fought rides along for the champions' lessons (issue #219).
+  const battle = { ...fought, destroyed: derivedDestroyed(fought.damage, "wild") ?? 0, log: input.log };
 
   // Where the save disagrees with it: logged, or refused under
   // `COMBAT_SAVE_VALIDATION=reject` before anything is written (C7). A refused

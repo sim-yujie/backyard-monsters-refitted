@@ -36,6 +36,8 @@ import {
   linearAreaDamage,
   lootAuraBonus,
 } from "./champions.js";
+import { BRAIN_KEYS, brainBase } from "./brain.js";
+import type { BrainKey, BrainWeights, ChampionLesson } from "./brain.js";
 import { buildPathGrid } from "./grid.js";
 import {
   cannotBeat,
@@ -46,7 +48,7 @@ import {
   threatFeature,
   towerPerTick,
 } from "./stance.js";
-import type { ChampionStance, StanceWeights } from "./stance.js";
+import type { ChampionStance, StanceWeights, TargetFeatures } from "./stance.js";
 import { mulberry32 } from "./rng.js";
 import { REZGHUL_ID, SPLIT_CHILD_ID } from "./potential.js";
 import {
@@ -260,7 +262,10 @@ import type {
  * 13. **Modes (issue #220) are not Flash.** An attacking champion flung in
  *    Offensive or Defensive scores Flash's candidate lists rather than taking
  *    the closest (`stance.ts`); Hybrid, and a log that names no Mode, is the
- *    Flash champion. A defending champion has no Mode.
+ *    Flash champion. A defending champion has no Mode. The Mode's weights sit
+ *    on the champion's learned brain (issue #219, `brain.ts`), which the log
+ *    carries as the attack froze it; with `learn`, the battle also records
+ *    each attacking champion's lesson, reading the field and changing nothing.
  *
  * ## The random stream's order
  *
@@ -307,6 +312,13 @@ export interface BattleOptions {
   readonly defenderLevels?: MonsterLevels;
   /** The defender's champion in its Champion Cage (issue #195), or none. */
   readonly defenderChampion?: DefenderChampion | null;
+  /**
+   * Record each attacking champion's lesson for its learning brain (issue
+   * #219, {@link BattleState.lessons}). Reads only: the battle, its random
+   * stream and its checkpoints are the same with it or without it. The
+   * server's landing replay sets it; nothing else needs to pay for it.
+   */
+  readonly learn?: boolean;
 }
 
 /** The champion a Champion Cage holds, as the defender's save keeps it (issue #195). */
@@ -390,6 +402,12 @@ export interface BattleState {
    * when there is none to defend.
    */
   readonly defenderChampionHp: number | null;
+  /**
+   * What each attacking champion learned (issue #219, `brain.ts`), in the
+   * order they were flung; present only for a battle run with
+   * {@link BattleOptions.learn}. Not a checkpoint value.
+   */
+  readonly lessons?: readonly ChampionLesson[];
 }
 
 /**
@@ -646,6 +664,21 @@ interface Creep {
   weights: StanceWeights | null;
 }
 
+/** A {@link ChampionLesson} as the battle builds it (issue #219). */
+interface LessonRecord {
+  readonly t: number;
+  readonly monsterId: string;
+  picks: number;
+  readonly credit: Record<BrainKey, number>;
+  dealt: number;
+  /** Its damage per tick at full swing, as flung. */
+  readonly perTick: number;
+  readonly flungAt: number;
+  /** When it left the field alive (called back, walked home), or null. */
+  leftAt: number | null;
+  readonly startHp: number;
+}
+
 /** An aura's own state: `AOEEnrage`'s counter and list, or `ProximityLootBuff`'s list. */
 interface Aura {
   /** `m_rangeCheckCounter`; Krallen's aura goes by her frame instead. */
@@ -863,6 +896,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   let creepsKilled = 0;
   let championHp: number | null = null;
   const championsHp: Record<string, number> = {};
+  /** Each attacking champion's lesson as it builds, by creep id; empty unless `learn`. */
+  const lessons = new Map<number, LessonRecord>();
   /** Whether this battle has a defence at all; without one no fight-back code runs (issue #195). */
   const defended =
     (options.defenderChampion !== undefined && options.defenderChampion !== null) ||
@@ -1076,6 +1111,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (building.hp <= 0 || raw <= 0) return 0;
     const dealt = fortifiedDamage(raw, building.fortification, 0);
     const applied = Math.min(dealt, building.hp);
+    if (creep && lessons.size > 0) {
+      const lesson = lessons.get(creep.id);
+      if (lesson) lesson.dealt += applied;
+    }
     building.hp -= dealt;
     if (building.hp > 0) {
       if (creep) takeLoot(building, dealt, lootMultiplier);
@@ -1392,6 +1431,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     at: Cart,
     power = 0,
     stance?: ChampionStance,
+    brain?: Partial<BrainWeights>,
   ): Creep | null => {
     const id = championByType(type);
     if (!id) return null;
@@ -1451,7 +1491,21 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
     equipChampion(creep, power, at);
-    creep.weights = stanceWeights(stance);
+    // Its Mode's tilt on its learned brain, as the log froze it (issues #220, #219).
+    creep.weights = stanceWeights(stance, brainBase(brain));
+    if (options.learn) {
+      lessons.set(creep.id, {
+        t: type,
+        monsterId: id,
+        picks: 0,
+        credit: { tower: 0, loot: 0, finish: 0, focus: 0, threat: 0 },
+        dealt: 0,
+        perTick: creep.damage / Math.max(1, swingDelay(creep)),
+        flungAt: tick,
+        leftAt: null,
+        startHp: creep.hp,
+      });
+    }
     championHp = creep.hp;
     championsHp[id] = creep.hp;
     return creep;
@@ -1544,6 +1598,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         dropPoint(event.x, event.y, radius),
         event.champion.pl ?? 0,
         event.champion.s,
+        event.champion.b,
       );
     }
   };
@@ -1607,14 +1662,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.champion) {
       // A champion's own lists (`ChampionBase.findTarget`, `Krallen.findTarget`, issue #222).
       // Scored by its Mode when it has one (issue #220).
-      chosen = findChampionTarget(
-        yard,
-        creep.x,
-        creep.y,
-        targetContext,
-        creep.monsterId === KRALLEN_ID,
-        creep.weights ? stanceScoring(creep, creep.weights) : undefined,
-      );
+      const scoring = creep.weights ? stanceScoring(creep, creep.weights) : undefined;
+      const lesson = lessons.size > 0 ? lessons.get(creep.id) : undefined;
+      chosen = lesson
+        ? findAndLearn(creep, lesson, scoring)
+        : findChampionTarget(
+            yard,
+            creep.x,
+            creep.y,
+            targetContext,
+            creep.monsterId === KRALLEN_ID,
+            scoring,
+          );
     } else {
       const result = findBuildingTarget(yard, creep.x, creep.y, creep.targetGroup, targetContext);
       if (result.fellThrough && creep.targetGroup !== TARGET_GROUP.TOWERS) {
@@ -1638,15 +1697,76 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * them.
    */
   const stanceScoring = (champion: Creep, weights: StanceWeights): ChampionScoring => {
+    const readsFire = weights.threat !== 0 || weights.margin > 0;
+    const field = fieldFor(champion, weights.focus !== 0, readsFire);
+    return {
+      bonus: (building) => stanceBonus(weights, field.features(building, weights.threat !== 0)),
+      skip: (building) =>
+        weights.margin > 0 &&
+        field.liveTower(building) &&
+        cannotBeat(field.shareAt(building), weights.margin),
+    };
+  };
+
+  /** A champion with no Mode weights picks as Flash's: nothing added, nothing left out. */
+  const FLASH_SCORING: ChampionScoring = { bonus: () => 0, skip: () => false };
+
+  /**
+   * A champion's pick, as {@link findTarget} makes it, while its lesson
+   * watches (issue #219): every candidate the pick weighs is read, and when
+   * there were two or more, the chosen one's features less their mean go on
+   * the lesson's credit. The pick itself is the one made without the lesson: a
+   * champion with no weights is scored at no bonus, which takes the closest as
+   * the plain path does, ties in the same order.
+   */
+  const findAndLearn = (
+    creep: Creep,
+    lesson: LessonRecord,
+    scoring: ChampionScoring | undefined,
+  ): EngineBuilding | null => {
+    const field = fieldFor(creep, true, true);
+    const sums: Record<BrainKey, number> = { tower: 0, loot: 0, finish: 0, focus: 0, threat: 0 };
+    let count = 0;
+    const base = scoring ?? FLASH_SCORING;
+    const chosen = findChampionTarget(
+      yard,
+      creep.x,
+      creep.y,
+      targetContext,
+      creep.monsterId === KRALLEN_ID,
+      {
+        bonus: base.bonus,
+        skip: base.skip,
+        seen: (building) => {
+          const features = field.features(building, true);
+          for (const key of BRAIN_KEYS) sums[key] += features[key];
+          count += 1;
+        },
+      },
+    );
+    if (chosen && count >= 2) {
+      const features = field.features(chosen, true);
+      for (const key of BRAIN_KEYS) lesson.credit[key] += features[key] - sums[key] / count;
+      lesson.picks += 1;
+    }
+    return chosen;
+  };
+
+  /**
+   * The field as a champion reads it when it looks: the features of each
+   * candidate (`stance.ts`), and the share of its health a building would cost
+   * it. The allies on each building and the towers' fire at it are summed in
+   * id order, and only when asked for.
+   */
+  const fieldFor = (champion: Creep, readsAllies: boolean, readsFire: boolean) => {
     const allies = new Map<number, number>();
-    if (weights.focus !== 0) {
+    if (readsAllies) {
       for (const other of creeps) {
         if (other === champion || other.friendly || other.gone || other.hp <= 0) continue;
         if (other.targetBuilding < 0) continue;
         allies.set(other.targetBuilding, (allies.get(other.targetBuilding) ?? 0) + 1);
       }
     }
-    const readsFire = weights.threat !== 0 || weights.margin > 0;
     const fire = new Map<number, number>();
     /** The damage per tick of every live tower that covers `building` and can hit the champion. */
     const fireAt = (building: EngineBuilding): number => {
@@ -1678,19 +1798,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         fortifiedDamage(champion.damage, building.fortification, 0) / delay,
         champion.hp,
       );
-    return {
-      bonus: (building) =>
-        stanceBonus(weights, {
-          tower: liveTower(building) ? 1 : 0,
-          loot: unlootedForKrallen(building) ? 1 : 0,
-          finish: building.maxHp > 0 ? 1 - building.hp / building.maxHp : 0,
-          focus: focusFeature(allies.get(building.id) ?? 0),
-          threat: weights.threat !== 0 ? threatFeature(shareAt(building)) : 0,
-          stay: building.id === champion.targetBuilding ? 1 : 0,
-        }),
-      skip: (building) =>
-        weights.margin > 0 && liveTower(building) && cannotBeat(shareAt(building), weights.margin),
-    };
+    /** A candidate's features; its threat only when asked, being the costly one. */
+    const features = (building: EngineBuilding, withThreat: boolean): TargetFeatures => ({
+      tower: liveTower(building) ? 1 : 0,
+      loot: unlootedForKrallen(building) ? 1 : 0,
+      finish: building.maxHp > 0 ? 1 - building.hp / building.maxHp : 0,
+      focus: focusFeature(allies.get(building.id) ?? 0),
+      threat: withThreat ? threatFeature(shareAt(building)) : 0,
+      stay: building.id === champion.targetBuilding ? 1 : 0,
+    });
+    return { features, liveTower, shareAt };
   };
 
   /** Sets a creep on its way to a building: straight for a flyer, by the grid on foot. */
@@ -2804,6 +2921,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
           // Only a death zeroes the champion's health: one that retreated or
           // walked home keeps the health it left with, which the attack save
           // writes back verbatim as the attacker's champion.
+          // A lesson's span ends when its champion leaves alive (issue #219).
+          const lesson = lessons.size > 0 ? lessons.get(creep.id) : undefined;
+          if (lesson && creep.hp > 0 && lesson.leftAt === null) lesson.leftAt = tick;
           if (creep.champion && creep.hp <= 0) {
             if (creep.friendly) {
               defenderChampionHp = 0;
@@ -2911,7 +3031,20 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     bunkerLosses: bunkerLossRecord(bunkerLosses),
     bunkerGarrisons: garrisonsAfter(),
     defenderChampionHp,
+    ...(options.learn ? { lessons: lessonsNow() } : {}),
   });
+
+  /** {@link BattleState.lessons}: each lesson as it stands, its span cut at now. */
+  const lessonsNow = (): ChampionLesson[] =>
+    [...lessons.values()].map((lesson) => ({
+      t: lesson.t,
+      picks: lesson.picks,
+      credit: { ...lesson.credit },
+      dealt: lesson.dealt,
+      potential: lesson.perTick * Math.max(0, (lesson.leftAt ?? tick) - lesson.flungAt),
+      startHp: lesson.startHp,
+      endHp: Math.max(0, championsHp[lesson.monsterId] ?? 0),
+    }));
 
   /** {@link BattleState.bunkerGarrisons}: each supplied bunker's pool, plus its defenders out. */
   const garrisonsAfter = (): Record<number, Record<string, number>> => {

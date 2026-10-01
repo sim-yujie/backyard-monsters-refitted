@@ -1,5 +1,10 @@
 import z from "zod";
-import { CHAMPION_STANCES, type ChampionStance } from "../game-rules/combat/index.js";
+import {
+  CHAMPION_STANCES,
+  type BrainStats,
+  type BrainWeights,
+  type ChampionStance,
+} from "../game-rules/combat/index.js";
 
 /**
  * A single champion as the Flash client serialises it.
@@ -19,7 +24,18 @@ export const ChampionSchema = z.object({
     .catch(undefined),
 });
 
-export type ChampionData = z.infer<typeof ChampionSchema>;
+/**
+ * A champion as the save stores it: what the client may send, plus its
+ * learned brain (issue #219, `game-rules/combat/brain.ts`), `b` its weights
+ * and `bs` what it has learned from. Only the server writes those two, after
+ * an attack lands (`services/base/combat/championBrain.ts`): they are kept
+ * off {@link ChampionSchema} on purpose, so zod drops them from every list a
+ * client sends and no save can forge a brain.
+ */
+export type ChampionData = z.infer<typeof ChampionSchema> & {
+  b?: BrainWeights;
+  bs?: BrainStats;
+};
 
 /**
  * Reads the stringified champion payload without throwing, so a malformed

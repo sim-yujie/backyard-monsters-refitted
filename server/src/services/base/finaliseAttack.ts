@@ -29,6 +29,7 @@ import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpen
 import { combatCellHeight } from "./combat/cellHeight.js";
 import { garrisonsAfterBattle } from "./combat/bunkerGarrison.js";
 import { championsAfterDefence } from "./combat/defenderChampion.js";
+import { championsAfterLessons } from "./combat/championBrain.js";
 import { landHousingLoss, lostCount, reportWithHousingLoss } from "./combat/housingLoss.js";
 import { getHousingOwner, getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
 import { storedDamage } from "./storedDamage.js";
@@ -267,6 +268,8 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   }
 
   if (outcome.attackerchampion) userSave.champion = outcome.attackerchampion;
+  // Each champion that fought learns from it, once, under the final lock (issue #219).
+  userSave.champion = championsAfterLessons(userSave.champion, outcome.lessons, input.log) ?? userSave.champion;
   if (outcome.attackersiege) userSave.siege = outcome.attackersiege;
 
   // Priced against the pool the attack began with, as `recordBombSpend` prices a save's.

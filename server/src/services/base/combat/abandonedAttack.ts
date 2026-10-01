@@ -9,6 +9,7 @@ import {
   derivedDestroyed,
   toCombatYard,
   type BuildingHealthMap,
+  type ChampionLesson,
   type CombatBuildingDataMap,
   type CombatTargetKind,
   type DefenderForces,
@@ -115,6 +116,8 @@ export interface AbandonedOutcome {
   bunkerGarrisons: Readonly<Record<number, Readonly<Record<string, number>>>>;
   /** The caged champion, by type, and its health afterwards: 0 if it died; null for none (#195). */
   defenderChampion: { t: number; hp: number } | null;
+  /** What each attacking champion learned, for its brain (`championBrain.ts`, issue #219). */
+  lessons?: readonly ChampionLesson[];
 }
 
 /** The web client's name for the kind of yard (`AttackTargetKind`). */
@@ -203,6 +206,8 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
       declareWar,
       ...(input.playerLevel !== undefined && { playerLevel: input.playerLevel }),
       ...battleDefence(input.defence),
+      // Each attacking champion's lesson for its brain (issue #219); reads only.
+      learn: true,
     }
   );
 
@@ -265,6 +270,7 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
       state.defenderChampionHp === null || !input.defence?.defenderChampion
         ? null
         : { t: input.defence.defenderChampion.t, hp: state.defenderChampionHp },
+    lessons: state.lessons ?? [],
   };
 };
 

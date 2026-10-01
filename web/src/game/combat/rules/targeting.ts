@@ -317,6 +317,12 @@ export const findBuildingTarget = (
 export interface ChampionScoring {
   bonus(building: EngineBuilding): number;
   skip(building: EngineBuilding): boolean;
+  /**
+   * Told of every candidate the pick weighs, in the order it weighs them: what
+   * the learning brain's lesson compares the chosen one against (issue #219).
+   * Reads only; it never changes the pick.
+   */
+  seen?(building: EngineBuilding): void;
 }
 
 /** The Storage Silo, the Town Hall and the outpost core (`ChampionBase.as:573`). */
@@ -373,6 +379,7 @@ export const findChampionTarget = (
       return;
     }
     found = true;
+    scoring?.seen?.(building);
     const away = Math.trunc(
       Math.sqrt(
         distanceSquared(fromX, fromY, building.cx + building.middle, building.cy + building.middle),
@@ -426,6 +433,7 @@ export const findChampionTarget = (
     return findChampionTarget(yard, fromX, fromY, context, krallen, {
       bonus: scoring.bonus,
       skip: () => false,
+      ...(scoring.seen ? { seen: scoring.seen } : {}),
     });
   }
   return best;

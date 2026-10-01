@@ -28,9 +28,9 @@
  * ## Weights, tilts and the brain
  *
  * The weights a champion fights with are its **base** weights plus its
- * stance's **tilt**, each clamped to {@link WEIGHT_BOUNDS}. The base is all
- * zeros today; the learning brain (issue #220's later package) will supply a
- * base per champion, frozen into the attack, and this file stays as it is.
+ * stance's **tilt**, each clamped to {@link WEIGHT_BOUNDS}. The base is the
+ * champion's learned brain (issue #219, `brain.ts`), frozen into the attack's
+ * log at launch; a log without one is a zero base.
  * Hybrid's tilt is zero, so with a zero base a Hybrid champion is exactly the
  * Flash champion, and so is one flung by a log that names no stance: every
  * fixture recorded before stances replays unchanged.

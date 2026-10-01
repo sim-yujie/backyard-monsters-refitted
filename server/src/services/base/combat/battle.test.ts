@@ -18,7 +18,7 @@ import {
 } from "../../../game-rules/combat/index.js";
 import { MR1_TRIBES_MAP } from "../../../game-data/tribes/v1/index.js";
 import { MAX_CHECKPOINT_TICK } from "../attackCheckpoint.js";
-import type { AttackSession } from "../attackSession.js";
+import { brainsOf, type AttackSession } from "../attackSession.js";
 import { replayAbandonedAttack } from "./abandonedAttack.js";
 import { wholeAmounts } from "./attackLoot.js";
 import { battleMismatches, battleReplayInput, battleTick, type BattleDefender } from "./battle.js";
@@ -103,12 +103,17 @@ const sessionOf = (log: FlingLog, one?: Fixture): AttackSession => {
     for (const [id, count] of Object.entries(event.monsters)) housed[id] = (housed[id] ?? 0) + count;
   }
   const defenderForces = one ? defenceOf(one) : undefined;
+  // The brains the launch froze are the ones the honest client's log carries (issue #219).
+  const championBrains = brainsOf(
+    log.events.flatMap((event) => (event.kind === "fling" && event.champion ? [event.champion] : []))
+  );
   return {
     attackerid: 2505,
     attackid: 1,
     startedat: 0,
     entryHoused: { "2000241207": housed },
     ...(defenderForces && { defenderForces }),
+    ...(championBrains && { championBrains }),
   };
 };
 

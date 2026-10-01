@@ -137,6 +137,17 @@ describe("golden replays under Bun", () => {
       },
       REPLAY_TIMEOUT_MS,
     );
+    // The landing replay records the champions' lessons (issue #219), which
+    // must read the battle and never change it.
+    test(
+      `${file} reproduces it with the lessons recorded too`,
+      () => {
+        const fixture = read(`${FIXTURE_DIR}${file}`) as Fixture;
+        const outcome = replayAttack({ ...inputOf(fixture), learn: true });
+        expect(actualOf(outcome, Boolean(fixture.defence))).toEqual(fixture.expected as any);
+      },
+      REPLAY_TIMEOUT_MS,
+    );
   }
 
   /**

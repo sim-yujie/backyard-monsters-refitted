@@ -6,7 +6,14 @@ import {
   TICKS_PER_SECOND,
   championStatWithPower,
 } from "@/game/combat/rules";
-import { AttackSession, combatKind, hasDeclareWar, mintSeed, servedHeight } from "./AttackSession";
+import {
+  AttackSession,
+  combatKind,
+  hasDeclareWar,
+  mintSeed,
+  servedBrain,
+  servedHeight,
+} from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 
 /**
@@ -320,6 +327,37 @@ describe("AttackSession events and the fling log", () => {
     });
     expect(event.champion).toEqual({ t: 1, l: 1, s: "defensive" });
     expect(session.flingLog().events[0]).toMatchObject({ champion: { s: "defensive" } });
+  });
+
+  it("logs the brain the attack load froze, never the own-yard copy (#219)", () => {
+    // The roster's copy is stale on purpose: the load's is what the server replays.
+    const champion = {
+      t: 1, hp: 100, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0,
+      b: { tower: 5, loot: 5, finish: 5, focus: 5, threat: 5 },
+    };
+    const roster = { monsters: {}, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null };
+    const session = new AttackSession({ target: targetOf({ roster }), seed: 1 });
+    session.load({
+      ...towerYard(),
+      attackerbrains: { "1": { tower: 120.4, loot: -60, finish: 0, focus: 999, threat: 0 } },
+    } as BaseLoadResponse);
+    session.start();
+    const event = session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 1, l: 1, s: "hybrid" } });
+    // Made safe as the server makes it: rounded, and clamped to the bound.
+    expect(event.champion?.b).toEqual({ tower: 120, loot: -60, finish: 0, focus: 200, threat: 0 });
+  });
+
+  it("logs no brain for a champion the load froze none for (#219)", () => {
+    expect(servedBrain(undefined, 1)).toBeNull();
+    expect(servedBrain({ "1": { tower: 0 } }, 1)).toBeNull();
+    expect(servedBrain({ "2": { tower: 80 } }, 1)).toBeNull();
+    const champion = { t: 1, hp: 100, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 };
+    const session = sessionOf({
+      roster: { monsters: {}, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
+    });
+    session.start();
+    const event = session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 1, l: 1 } });
+    expect(event.champion).toEqual({ t: 1, l: 1 });
   });
 
   it("logs a radius that counts the champion's bucket (#143)", () => {

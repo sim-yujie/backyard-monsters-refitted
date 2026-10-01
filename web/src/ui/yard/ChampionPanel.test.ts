@@ -140,6 +140,36 @@ describe("ChampionPanel: a fed champion", () => {
   });
 });
 
+describe("ChampionPanel: how it fights (#219)", () => {
+  const tendencies = (root: HTMLElement) =>
+    [...root.querySelectorAll(".champion__tendency")].map((one) => one.textContent);
+
+  it("says a champion with no brain yet is still learning", () => {
+    const { element } = setup([gorgo()]);
+    expect(textOf(element, ".champion__part--brain .champion__heading")).toBe("How it fights");
+    expect(tendencies(element)).toEqual(["Still learning"]);
+    expect(element.querySelector(".champion__tendency--learning")).not.toBeNull();
+    expect(textOf(element, ".champion__part--brain .champion__note")).toContain(
+      "It learns from every attack it fights in.",
+    );
+  });
+
+  it("names what its attacks taught it, strongest first, and how many it learned from", () => {
+    const { element } = setup([
+      gorgo({ b: { tower: 0, loot: 140, finish: 0, focus: 70, threat: 95 }, bs: { n: 18, hyb: 0.6 } }),
+    ]);
+    expect(tendencies(element)).toEqual(["Loves loot", "Cautious near towers", "Sticks with the pack"]);
+    expect(element.querySelector(".champion__tendency--learning")).toBeNull();
+    expect(textOf(element, ".champion__part--brain .champion__note")).toContain("Learned from 18 attacks.");
+  });
+
+  it("has no reset", () => {
+    const { element } = setup([gorgo({ b: { loot: 140 }, bs: { n: 3 } })]);
+    const block = element.querySelector<HTMLElement>(".champion__part--brain")!;
+    expect(block.querySelector("button")).toBeNull();
+  });
+});
+
 describe("ChampionPanel: a hungry champion", () => {
   it("says it is hungry and when it starves, and feeds from housing", () => {
     const { element, spies } = setup([gorgo({ ft: T0 - HOUR })]);

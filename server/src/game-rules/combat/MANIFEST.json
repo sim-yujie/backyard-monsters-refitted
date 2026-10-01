@@ -1,22 +1,23 @@
 {
   "files": {
+    "brain.ts": "99f9aef8da2ce475ed0002cb9b971f42047a45584b58e678e7f3a25464ecd733",
     "champions.ts": "54a831945f8e65ef3a733b70e64d16d6f63ae75b4a2b3d6139b071d4b4f16834",
     "combatStatsData.ts": "abfcedbfcac84e2ec6ea837c2f5310f34008cc10e3c277c6ebda5acc9236ec65",
     "damagePercent.ts": "524e0129a9dd84a1b4e171bcfce0826b969b0119bce891271b33bb1b3e8528bf",
     "defence.ts": "85138b5fb5fdd62bc84fafe88e0fa357fc4f4aaf12d51a9bd6768db3ddfefa64",
     "digest.ts": "5b989c2765d079953fa20f07589fa378c11af5ab28885e2cfa7fba6e63e5b752",
-    "engine.ts": "359539bd615ca1da2b5564e60ed31f643c72c69f8ba3e34d8c28b900b5043b9b",
+    "engine.ts": "54683adc270c8ab77be6f6f5db4657d00560897121e3d0f564b263f96e561cf3",
     "grid.ts": "147f8bd0350c1c763e2605c2f3abd6c79da33a35276cfc7cbcdfdc13a686dd5e",
-    "index.ts": "733dc4e378db7b23bfaa37db77c08d5d3dfbbaf228c1a714b33923c51590db68",
+    "index.ts": "c306b33295cbef3aa54b81043ddcf02031d9cd411f65cf46520cdd6186c115fa",
     "potential.ts": "6ba884da1553e98f3ffe2026849b2fa3908e76efcf7858a910d0b66c78e374f9",
-    "replay.ts": "fc117d8e92a69ef675d7cb13a6cf55229af321edb2e338336fbdbb0c6b6805fa",
+    "replay.ts": "63f54d3c085ce0ca386ded79e847caafbc81082e71a28b7cebbe0c6297e9ab73",
     "report.ts": "82d4d67fd0e1357ee70729ed314057f666ac4027bb4747053a4bc5069b0e0784",
     "rng.ts": "f9e813c674fd46b30904fca04d9a77005e0b3ed8286f91b8732aaa405d641f1d",
-    "stance.ts": "1ef1165a37c665dea748baba84234aea6e3a42e28a5095f7aeef852d85fe703a",
+    "stance.ts": "21624d574c4b8467f6a8c498943e0d7ad028a10fc211359993aa155a2e28487d",
     "stats.ts": "a74af030947f521c8a2d4db46b58adb28255f72fe3cf546cbfdd62b444a94444",
-    "targeting.ts": "c1cb6ae8b0cd177034c990ba0572ce2b7c1a945493cee493e3318a4a80f7c2bb",
-    "types.ts": "90d41b72389ea1319121a740c7ef9884af78f562c96e11bf02bc13b2b6948d2d",
+    "targeting.ts": "ef4dfdb46c6906427360e9c035d30f0831ccabc7987dcad65a736d455fdb11ab",
+    "types.ts": "89507bcc743dc6d26af36f19e1894c7ec72eb5552c189981b5f5eff2a7217265",
     "yard.ts": "20d1fb115d158426ab5ca4c6adec9c0da0b41916913782061a8f04fe55459bcd"
   },
-  "count": 17
+  "count": 18
 }
