@@ -64,3 +64,11 @@
     height: 40px;
   }
 }
+
+/* The attack strip is full on a phone: its "?" becomes the "Bob's tips"
+   item of the strip's menu (shown only there), so nothing wraps. */
+@media (width <= 620px) {
+  .attack-strip > .guide-help {
+    display: none;
+  }
+}

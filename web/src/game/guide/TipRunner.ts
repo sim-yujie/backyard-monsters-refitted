@@ -106,9 +106,13 @@ interface Sequence extends ScreenRef {
 }
 
 interface HelpHost {
-  readonly button: HelpButton;
+  /** The "?" itself first; then, in a row with an overflow menu, its twin in the menu. */
+  readonly buttons: readonly HelpButton[];
   entries: ScreenRef[];
 }
+
+/** A title row's overflow menu (the attack strip's on a phone), where a "?" that will not fit goes too. */
+const OVERFLOW_MENU = ".attack-menu__list";
 
 /**
  * The scenes' own screens: one of them arriving means a new scene, so a "?"
@@ -223,7 +227,7 @@ export class TipRunner {
     const known = this.onboarding !== null;
     this.onboarding = onboarding;
     const open = guideOpen(onboarding);
-    for (const host of this.helpHosts.values()) host.button.setHidden(open);
+    for (const host of this.helpHosts.values()) for (const button of host.buttons) button.setHidden(open);
     if (open) {
       this.dropAutomatic();
     } else if (onboarding && (wasOpen || !known)) {
@@ -260,7 +264,7 @@ export class TipRunner {
     for (const unsubscribe of this.unsubscribe) unsubscribe();
     this.unregisterTarget();
     this.stopAll(false);
-    for (const host of this.helpHosts.values()) host.button.remove();
+    for (const host of this.helpHosts.values()) for (const button of host.buttons) button.remove();
     this.helpHosts.clear();
   }
 
@@ -430,6 +434,7 @@ export class TipRunner {
       icon: true,
       block: false,
       target: found?.name ?? null,
+      ...(tip.side && { side: tip.side }),
       ...(count > 1 && { dots: { index: sequence.index, count } }),
       actions: [{ label: last ? "Got it" : "Next", primary: true, onClick: () => this.advance() }],
       skip: { label: sequence.replay ? "Close" : "Skip tips", onClick: () => this.finish() },
@@ -562,12 +567,14 @@ export class TipRunner {
 
   /**
    * Gives a screen with tips its "?": in its title row, in the title row of
-   * the panel it sits in, or floating over the scene.
+   * the panel it sits in, or floating over the scene. A row with an overflow
+   * menu gets a "Bob's tips" item there too, which stands in for the "?" on a
+   * phone, where the row has no room for it (`tips.css`).
    */
   private attachHelp(ref: ScreenRef, header: HTMLElement | null): void {
     if (this.tips(ref.screen).length === 0) return;
     for (const [host, entry] of this.helpHosts) {
-      if (!entry.button.attached) this.helpHosts.delete(host);
+      if (!entry.buttons[0]?.attached) this.helpHosts.delete(host);
     }
 
     const titlebar =
@@ -575,14 +582,17 @@ export class TipRunner {
     const host = titlebar ?? ref.root;
     let entry = this.helpHosts.get(host);
     if (!entry) {
-      const button = new HelpButton(titlebar ? "header" : "float", () => {
+      const replay = (): void => {
         const current = this.helpHosts.get(host);
         if (current) this.replay(current.entries.filter((one) => shown(one.root)));
-      }).attach(host);
-      entry = { button, entries: [] };
+      };
+      const buttons = [new HelpButton(titlebar ? "header" : "float", replay).attach(host)];
+      const menu = titlebar?.querySelector<HTMLElement>(OVERFLOW_MENU);
+      if (menu) buttons.push(new HelpButton("menu", replay).attach(menu));
+      entry = { buttons, entries: [] };
       this.helpHosts.set(host, entry);
     }
-    entry.button.setHidden(guideOpen(this.onboarding));
+    for (const button of entry.buttons) button.setHidden(guideOpen(this.onboarding));
     // A new scene, or the building panel on another building, starts the list
     // again; a Monsters tab replaces the tab before it.
     if (RESET_SCREENS.has(ref.screen)) entry.entries = [];

@@ -1,4 +1,5 @@
 import { GOALS_CLAIM_TARGET } from "@/ui/goals/GoalsPanel";
+import type { ArrowSide } from "@/ui/guide/GuideArrow";
 import { GuideScreen } from "./guideBus";
 import { TutTarget } from "./targets";
 
@@ -28,6 +29,8 @@ export interface Tip {
    * screen as the tips start; a tip with none shows without the hand.
    */
   readonly target?: TipTarget | readonly TipTarget[];
+  /** Which side the hand comes from; chosen from the target's place when absent. */
+  readonly side?: ArrowSide;
 }
 
 /**
@@ -89,8 +92,11 @@ export const TIPS: Readonly<Partial<Record<GuideScreen, readonly Tip[]>>> = {
   ],
   [GuideScreen.MAIL]: [
     {
+      // The first thread (or "No messages yet"), pointed at from below: from
+      // above, the hand would sit on New message, the next tip's control.
       text: "Attack reports, notices and messages from other players land here.",
-      target: TutTarget.MAIL_THREADS,
+      target: [{ selector: ".mail-list__rows > li" }, TutTarget.MAIL_THREADS],
+      side: "below",
     },
     { text: "Write to any player you've met.", target: TutTarget.MAIL_NEW },
     {

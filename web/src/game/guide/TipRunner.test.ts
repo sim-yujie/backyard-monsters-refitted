@@ -77,6 +77,7 @@ const TEST_TIPS: Partial<Record<GuideScreen, readonly Tip[]>> = {
     { text: "Nothing to point at." },
   ],
   [GuideScreen.MR2]: [{ text: "Range.", target: TutTarget.MR2_RANGE }],
+  [GuideScreen.SHOP]: [{ text: "Workers.", target: TutTarget.SHOP_WORKERS, side: "below" }],
 };
 
 const setup = (options: { touch?: boolean; send?: (screen: GuideScreen) => Promise<unknown> } = {}) => {
@@ -310,6 +311,16 @@ describe("selector targets", () => {
     expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
   });
 
+  it("passes a tip's side for the hand on to Bob", async () => {
+    const { bus, view, runner: tips } = setup();
+    tips.setOnboarding(onboarding("skipped"));
+    const shop = box();
+    control(TutTarget.SHOP_WORKERS, shop);
+    bus.emit("screen", { id: GuideScreen.SHOP, root: shop, header: null });
+    await settle();
+    expect(view()!.shown).toMatchObject({ text: "Workers.", side: "below" });
+  });
+
   it("tries a tip's targets in order", async () => {
     const { bus, view, runner: tips } = setup();
     tips.setOnboarding(onboarding("skipped"));
@@ -531,6 +542,32 @@ describe('the "?" button', () => {
     expect(view()!.shown).toMatchObject({ text: "Upgrade." });
     view()!.press("Got it");
     expect(view()!.shown).toMatchObject({ text: "Repair." });
+  });
+
+  it("a row with an overflow menu (the attack strip) also gets a \"Bob's tips\" item there", async () => {
+    const { bus, view, runner: tips } = setup();
+    tips.setOnboarding(onboarding("done", { mr2: 1 }));
+    const strip = box(document.body, "attack-strip");
+    const menu = box(strip, "attack-menu");
+    const toggle = document.createElement("button");
+    toggle.className = "attack-menu__button";
+    const closeMenu = vi.fn();
+    toggle.addEventListener("click", closeMenu);
+    const list = box(menu, "attack-menu__list");
+    menu.prepend(toggle);
+    control(TutTarget.MR2_RANGE);
+    bus.emit("screen", { id: GuideScreen.MR2, root: box(), header: strip });
+
+    const item = list.querySelector<HTMLButtonElement>(".guide-help--menu")!;
+    expect(item.textContent).toBe("Bob's tips");
+    expect(strip.querySelectorAll(":scope > .guide-help")).toHaveLength(1);
+    item.click();
+    expect(closeMenu).toHaveBeenCalledOnce();
+    await settle(0);
+    expect(view()!.shown).toMatchObject({ text: "Range." });
+
+    tips.setOnboarding(onboarding("active"));
+    expect(item.hidden).toBe(true);
   });
 
   it("no button for a screen with no tips", () => {
