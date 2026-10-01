@@ -81,6 +81,12 @@
   pointer-events: none !important;
 }
 
+/* `display: flex` above would beat the hidden attribute: hidden means gone. */
+.guide-bob[hidden],
+.guide-bob__controls[hidden] {
+  display: none;
+}
+
 /* Moved up when the target sits where the bubble would. */
 .guide-bob--alt {
   bottom: auto;
