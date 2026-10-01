@@ -4,8 +4,8 @@ import "./plugins";
 
 /** The own yard's plugin registry for the tutorial's packages (issue #227). */
 
-// An outpost's store: the real packages (`./plugins`) mount on the main yard
-// only, so they step aside cleanly here instead of throwing on a bare stub.
+// A bare stub. Every test hands the registry its own plugins, so no real
+// package (`./plugins`, imported so the registry holds them) mounts on it.
 const mounts = { store: { kind: "outpost" } } as unknown as YardMounts;
 
 describe("mountYardPlugins", () => {
@@ -42,13 +42,22 @@ describe("mountYardPlugins", () => {
   });
 
   it("mounts the registry by default", () => {
+    // The real packages (`./plugins`) are swapped out for a stub while this
+    // runs: it tests the default argument only, and a bare `mounts` must never
+    // reach a real package, whose mount would throw on it.
+    const real = YARD_PLUGINS.splice(0);
     const plugin = vi.fn();
     YARD_PLUGINS.push(plugin);
+    const error = vi.spyOn(console, "error");
     try {
       mountYardPlugins(mounts)();
       expect(plugin).toHaveBeenCalledWith(mounts);
+      expect(error).not.toHaveBeenCalled();
     } finally {
-      YARD_PLUGINS.splice(YARD_PLUGINS.indexOf(plugin), 1);
+      error.mockRestore();
+      YARD_PLUGINS.splice(0, YARD_PLUGINS.length, ...real);
     }
+    expect(real.length).toBeGreaterThan(0);
+    expect(YARD_PLUGINS).toEqual(real);
   });
 });
