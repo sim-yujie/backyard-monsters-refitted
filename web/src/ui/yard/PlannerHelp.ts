@@ -28,6 +28,15 @@ import { demo, type DemoName } from "./demos";
  * the card": a player who sees the card twice has lost four seconds, where one
  * who never sees it has lost the feature. The key is namespaced like the
  * session's, so clearing the site's data clears it with everything else.
+ *
+ * Since the screen tips (issue #227, `docs/design/tutorial.md` §7.1) the flag
+ * also lives on the server, per account, as the planner's entry in
+ * `onboarding.tips`, so it carries across devices. The tips package hands
+ * this file a {@link PlannerHintRemote} while the own yard is up: "seen" is
+ * then the server's word or the local key, and marking it writes both. A
+ * local key the server has not heard of yet is sent up on the yard's first
+ * load (the move). With no remote (tests, a yard that never loaded) it is the
+ * local key alone, as before.
  */
 
 /** Where "the player has seen the hint card" is remembered. */
@@ -47,14 +56,23 @@ const defaultStorage = (): Storage | null => {
   }
 };
 
-/**
- * Whether the hint card has already been shown and dismissed.
- *
- * False whenever the answer cannot be read, which is the safe way round: the
- * cost of showing it again is a card, and the cost of not showing it is a
- * player who never learns the tools exist.
- */
-export const hasSeenPlannerHint = (storage: Storage | null = defaultStorage()): boolean => {
+/** The server's side of the flag (issue #227): the screen tips' record for the planner. */
+export interface PlannerHintRemote {
+  /** Whether the account has seen the card, on any device. */
+  seen(): boolean;
+  /** Remembers it for the account. */
+  mark(): void;
+}
+
+let remote: PlannerHintRemote | null = null;
+
+/** Hands over the server's side of the flag while the own yard is up; null takes it back. */
+export const setPlannerHintRemote = (next: PlannerHintRemote | null): void => {
+  remote = next;
+};
+
+/** Whether this browser's own key says the card was seen (the server's aside). */
+export const hasLocalPlannerHint = (storage: Storage | null = defaultStorage()): boolean => {
   try {
     return storage?.getItem(PLANNER_HINT_KEY) === "1";
   } catch {
@@ -62,8 +80,19 @@ export const hasSeenPlannerHint = (storage: Storage | null = defaultStorage()): 
   }
 };
 
-/** Remembers that it has been shown. Silently does nothing if it cannot. */
+/**
+ * Whether the hint card has already been shown and dismissed.
+ *
+ * False whenever the answer cannot be read, which is the safe way round: the
+ * cost of showing it again is a card, and the cost of not showing it is a
+ * player who never learns the tools exist.
+ */
+export const hasSeenPlannerHint = (storage: Storage | null = defaultStorage()): boolean =>
+  (remote?.seen() ?? false) || hasLocalPlannerHint(storage);
+
+/** Remembers that it has been shown, here and for the account. Silently does nothing if it cannot. */
 export const markPlannerHintSeen = (storage: Storage | null = defaultStorage()): void => {
+  remote?.mark();
   try {
     storage?.setItem(PLANNER_HINT_KEY, "1");
   } catch {

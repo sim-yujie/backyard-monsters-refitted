@@ -1,0 +1,50 @@
+/*
+ * The screen tips' "?" button (issue #227, docs/design/tutorial.md §7.1).
+ * Bob's bubble itself is the guide kit's (guide.css).
+ */
+
+/* In a title row: the close button's twin, a little quieter. */
+.guide-help {
+  font-family: var(--font-body);
+  font-weight: 700;
+}
+
+.btn--icon.guide-help {
+  font-size: var(--text-md);
+}
+
+/* Floating, for a screen with no title row: under the HUD at the top right. */
+.guide-help--float {
+  position: fixed;
+  top: calc(var(--hud-height) + var(--space-2));
+  right: calc(var(--hud-inset) + var(--space-2));
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid var(--guide-bubble-line);
+  border-radius: 50%;
+  background: var(--guide-bubble);
+  color: var(--guide-bubble-text);
+  box-shadow: var(--shadow-bubble-drop);
+  font-size: var(--text-md);
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.guide-help--float:hover {
+  filter: brightness(1.06);
+}
+
+.guide-help--float:focus-visible {
+  outline: 2px solid var(--guide-ring);
+  outline-offset: 2px;
+}
+
+/* A finger needs a bigger target. */
+@media (pointer: coarse) {
+  .guide-help--float {
+    width: 40px;
+    height: 40px;
+  }
+}

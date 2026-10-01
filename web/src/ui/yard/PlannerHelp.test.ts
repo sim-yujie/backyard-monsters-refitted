@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   PLANNER_HINT_KEY,
   forgetPlannerHint,
+  hasLocalPlannerHint,
   hasSeenPlannerHint,
   markPlannerHintSeen,
   plannerHelpPanel,
+  setPlannerHintRemote,
 } from "./PlannerHelp";
 
 /**
@@ -68,6 +70,42 @@ describe("the hint flag", () => {
     expect(hasSeenPlannerHint(storage)).toBe(false);
     expect(() => markPlannerHintSeen(storage)).not.toThrow();
     expect(() => forgetPlannerHint(storage)).not.toThrow();
+  });
+});
+
+describe("the hint flag on the server (issue #227)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    setPlannerHintRemote(null);
+  });
+
+  it("is seen when the account says so, though this browser never saw it", () => {
+    setPlannerHintRemote({ seen: () => true, mark: () => {} });
+    expect(hasSeenPlannerHint(window.localStorage)).toBe(true);
+    expect(hasLocalPlannerHint(window.localStorage)).toBe(false);
+  });
+
+  it("is still seen by this browser's own key while the server has not heard", () => {
+    setPlannerHintRemote({ seen: () => false, mark: () => {} });
+    window.localStorage.setItem(PLANNER_HINT_KEY, "1");
+    expect(hasSeenPlannerHint(window.localStorage)).toBe(true);
+  });
+
+  it("marking it tells the account and this browser", () => {
+    const mark = vi.fn();
+    setPlannerHintRemote({ seen: () => false, mark });
+    markPlannerHintSeen(window.localStorage);
+    expect(mark).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem(PLANNER_HINT_KEY)).toBe("1");
+  });
+
+  it("with the remote taken back, it is the local key alone again", () => {
+    setPlannerHintRemote({ seen: () => true, mark: () => {} });
+    setPlannerHintRemote(null);
+    expect(hasSeenPlannerHint(window.localStorage)).toBe(false);
   });
 });
 
