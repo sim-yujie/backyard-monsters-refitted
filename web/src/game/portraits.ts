@@ -34,8 +34,7 @@ export const PAINTED_CHAMPION_LEVELS: Readonly<Record<string, readonly number[] 
   G1: [1, 2, 3, 4, 5, 6],
   G2: [1, 2, 3, 4, 5, 6],
   G3: [1, 2, 3, 4, 5, 6],
-  // Level 6 is still being painted.
-  G4: [1, 2, 3, 4, 5],
+  G4: [1, 2, 3, 4, 5, 6],
   G5: "all",
 };
 

@@ -48,10 +48,15 @@ describe("championPortrait", () => {
     });
   });
 
-  it("falls back to the original art for a level not painted yet (G4 level 6)", () => {
-    expect(championPortrait("G4", 5, "card").src).toBe("/portraits/G4-L5.webp");
-    expect(championPortrait("G4", 6, "card")).toEqual({ src: "/assets/monsters/G4_L6-150.png", fallback: null });
-    expect(championPortrait("G4", 6, "icon")).toEqual({ src: "/assets/monsters/G4_L6-small.png", fallback: null });
+  it("shows Korath's level 6 painting, with the original behind it", () => {
+    expect(championPortrait("G4", 6, "card")).toEqual({
+      src: "/portraits/G4-L6.webp",
+      fallback: "/assets/monsters/G4_L6-150.png",
+    });
+    expect(championPortrait("G4", 6, "icon")).toEqual({
+      src: "/portraits/G4-L6-icon.webp",
+      fallback: "/assets/monsters/G4_L6-small.png",
+    });
   });
 
   it("gives Krallen her one painting at every level", () => {
@@ -82,7 +87,7 @@ describe("the painted files", () => {
       const names = levels === "all" ? [id] : levels.map((level) => `${id}-L${level}`);
       for (const name of names) files.push(name, `${name}-icon`);
     }
-    expect(files).toHaveLength(100);
+    expect(files).toHaveLength(102);
     const missing = files.filter((name) => !existsSync(publicFile(`/portraits/${name}.webp`)));
     expect(missing).toEqual([]);
   });

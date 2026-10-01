@@ -12,9 +12,7 @@ The web client shows painted portraits for monsters and champions wherever a por
 | Champions G1-G4, levels 1-6 | 1024 square, background cut out | `G<n>-L<l>.webp`, 176 px, whole frame; `G<n>-L<l>-icon.webp`, 72 px, trimmed to the creature |
 | Krallen (G5) | one painting | `G5.webp` and `G5-icon.webp`, used at every level |
 
-Sizes are twice what the UI draws, for sharp displays. A monster card is drawn up to 96 px tall, icons at 24-56 px, a champion at 56-88 px and its icon at 36 px. The champion files keep the whole frame, so the creature grows with its level as it does in the original `G<n>_L<l>-150.png` art. The set is 100 WebP files, about 630 KB.
-
-Korath (G4) level 6 is not painted yet, so that level shows the original art.
+Sizes are twice what the UI draws, for sharp displays. A monster card is drawn up to 96 px tall, icons at 24-56 px, a champion at 56-88 px and its icon at 36 px. The champion files keep the whole frame, so the creature grows with its level as it does in the original `G<n>_L<l>-150.png` art. The set is 102 WebP files, about 645 KB.
 
 ## How the game picks one
 
