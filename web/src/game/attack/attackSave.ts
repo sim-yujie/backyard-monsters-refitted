@@ -398,6 +398,21 @@ export const describeOutcome = (
     : { outcome: `${damage}% damage dealt to ${name}'s yard.`, tone: "neutral" };
 };
 
+/**
+ * What the attack screen calls its target: "Kozu Tribe's camp", "Ann's
+ * outpost", "Bob's yard" (#187). The guided start's practice camp (issue
+ * #227) is a camp by name already: "The practice camp", or "the practice
+ * camp" inside a sentence.
+ */
+export const targetLabel = (
+  target: { readonly baseid: string; readonly kind: AttackTargetKind; readonly name: string; readonly mapversion?: number },
+  sentenceStart = true,
+): string => {
+  if (isPracticeCamp(target)) return sentenceStart ? "The practice camp" : "the practice camp";
+  const noun = target.kind === "wild" ? "camp" : target.kind === "outpost" ? "outpost" : "yard";
+  return `${target.name}'s ${noun}`;
+};
+
 export const summariseAttack = (session: AttackSession): AttackSummary => {
   const { load } = requireLoaded(session);
   const state = session.state();

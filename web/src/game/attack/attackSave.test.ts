@@ -16,6 +16,7 @@ import {
   monsterUpdateOf,
   reportLine,
   summariseAttack,
+  targetLabel,
 } from "./attackSave";
 import type { AttackTarget } from "./attackTarget";
 
@@ -436,6 +437,19 @@ describe("the pieces", () => {
     });
     // Every other wild camp keeps its wording.
     expect(describeOutcome("wild", "Legionnaire Tribe", 100).outcome).toBe("Victory! Legionnaire Tribe's camp is destroyed.");
+  });
+
+  it("labels the target for the battle strip, the practice camp as itself (#227)", () => {
+    const practice = { baseid: "1", kind: "wild" as const, name: "Practice camp", mapversion: 1 };
+    expect(targetLabel(practice)).toBe("The practice camp");
+    expect(targetLabel(practice, false)).toBe("the practice camp");
+    // Every other target keeps its wording, Map Room 2's base 1 included.
+    expect(targetLabel({ baseid: "3", kind: "wild", name: "Legionnaire Tribe", mapversion: 1 })).toBe(
+      "Legionnaire Tribe's camp",
+    );
+    expect(targetLabel({ ...practice, mapversion: 2 })).toBe("Practice camp's camp");
+    expect(targetLabel({ baseid: "9", kind: "outpost", name: "Ann" })).toBe("Ann's outpost");
+    expect(targetLabel({ baseid: "8", kind: "main", name: "Bob" })).toBe("Bob's yard");
   });
 
   it("summarises the ended session for the panel", () => {

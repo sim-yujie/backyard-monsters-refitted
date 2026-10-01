@@ -10,7 +10,8 @@ import { withLoot } from "@/game/attack/attackerPool";
 import { ATTACK_TAP_CLAIMS } from "@/game/attack/AttackInput";
 import { AttackPresentation } from "@/game/attack/attackPresentation";
 import { AttackSession, type AttackSessionState } from "@/game/attack/AttackSession";
-import { consumeAttackTarget, type AttackTarget, type AttackTargetKind } from "@/game/attack/attackTarget";
+import { consumeAttackTarget, type AttackTarget } from "@/game/attack/attackTarget";
+import { targetLabel } from "@/game/attack/attackSave";
 import { baiterTarget, consumeBaiterRun, setBaiterRun, type BaiterRun } from "@/game/baiter/baiterSession";
 import { consumeWatchRun, setWatchRun, watchTarget, type WatchRun } from "@/game/autoAttack/watchRun";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
@@ -75,10 +76,6 @@ const PHONE_WIDTH = 620;
 export { formatClock };
 
 /** A HUD destination as the retreat question names it (#152). */
-/** What the target is called in the status line: a camp, a yard, or an outpost (#187). */
-const targetNoun = (kind: AttackTargetKind): string =>
-  kind === "wild" ? "camp" : kind === "outpost" ? "outpost" : "yard";
-
 const destinationName = (scene: string): string =>
   scene === SceneName.YARD ? "your yard" : scene === SceneName.LOGIN ? "the sign-in screen" : "there";
 
@@ -234,7 +231,7 @@ export class AttackScene implements Scene {
       ? "Setting up the practice attack…"
       : this.watching
         ? "Setting up the replay…"
-        : `Loading ${target.name}'s ${targetNoun(target.kind)}…`;
+        : `Loading ${targetLabel(target, false)}…`;
     await this.load(target, context);
   }
 
@@ -776,7 +773,7 @@ export class AttackScene implements Scene {
       return;
     }
     status.textContent =
-      `${target.name}'s ${targetNoun(target.kind)} · ` +
+      `${targetLabel(target)} · ` +
       `${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
       `${state.creepsAlive} on the field · ${sent} left to send` +
       (state.declareWar ? " · Declare War" : "") +
