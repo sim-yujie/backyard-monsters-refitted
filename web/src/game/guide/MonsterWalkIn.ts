@@ -66,6 +66,39 @@ export const walkerAt = (
   };
 };
 
+/** Monster Housing (`YARD_PROPS.as`). */
+const HOUSING_TYPE = 15;
+
+/** The yard as the walk-in reads it: where Housing stands and how wide the plot is. */
+export interface WalkInYard {
+  readonly buildings: readonly {
+    readonly type: number;
+    readonly x: number;
+    readonly y: number;
+    readonly footprint: readonly [number, number];
+  }[];
+  readonly bounds: { readonly yardWidth: number };
+}
+
+/**
+ * New monsters walking into the yard's first Housing from the plot's east
+ * edge, started at once: the guided start's Pokeys and Goals' monster
+ * rewards. Null when there is no Housing to walk to.
+ */
+export const walkIntoHousing = (
+  host: RaidHost,
+  yard: WalkInYard,
+  monster: string,
+  count: number,
+): MonsterWalkIn | null => {
+  const housing = yard.buildings.find((building) => building.type === HOUSING_TYPE);
+  if (!housing || count <= 0) return null;
+  const to = { x: housing.x + housing.footprint[0] / 2, y: housing.y + housing.footprint[1] / 2 };
+  const walk = new MonsterWalkIn(host, { monster, count, from: { x: yard.bounds.yardWidth / 2, y: to.y }, to });
+  walk.start();
+  return walk;
+};
+
 export class MonsterWalkIn {
   private readonly root = new Container();
   private readonly sprites: Sprite[] = [];

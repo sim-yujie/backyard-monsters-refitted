@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Container } from "pixi.js";
 import type { Onboarding } from "@/api/types";
-import { guideBus } from "@/game/guide/guideBus";
+import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { GUIDE_BUILDS, LINES } from "@/game/guide/steps";
 import { clearCanvasTargets } from "@/game/guide/targets";
 import { guideTourAvailable } from "@/game/guide/tour";
@@ -181,7 +181,27 @@ describe("the guided start runner", () => {
     expect(text(guide)).toBe(LINES.finishNow);
     const root = document.createElement("div");
     document.body.append(root);
-    guideBus.emit("screen", { id: "goals" as never, root, header: null });
+    guideBus.emit("screen", { id: GuideScreen.GOALS, root, header: null });
+    expect(guide.querySelector<HTMLElement>(".guide-bob")?.hidden).toBe(true);
+    // Back when the panel says it closed.
+    guideBus.emit("screenClosed", { id: GuideScreen.GOALS });
+    expect(guide.querySelector<HTMLElement>(".guide-bob")?.hidden).toBe(false);
+    expect(text(guide)).toBe(LINES.finishNow);
+  });
+
+  it("opening Goals at its step moves the guide on, once", async () => {
+    const { sent, guide } = harness(at("home-goals"));
+    // Package (a)'s Goals button stands in the dock.
+    const button = document.createElement("button");
+    button.setAttribute("data-tut", "dock-goals");
+    button.getBoundingClientRect = () => ({ left: 0, top: 0, width: 50, height: 50 }) as DOMRect;
+    document.body.append(button);
+    const root = document.createElement("div");
+    document.body.append(root);
+    guideBus.emit("screen", { id: GuideScreen.GOALS, root, header: null });
+    guideBus.emit("screen", { id: GuideScreen.GOALS, root, header: null });
+    await settle();
+    expect(sent).toEqual(["guide:home-goals"]);
     expect(guide.querySelector<HTMLElement>(".guide-bob")?.hidden).toBe(true);
   });
 });

@@ -1,6 +1,7 @@
 import { goalsActions, type GoalsActions, type GoalView } from "@/api/goals";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
+import { walkIntoHousing, type MonsterWalkIn } from "@/game/guide/MonsterWalkIn";
 import { startBank, type AnswerBank, type BankShowFx, type BankShowHud } from "@/game/yard/bankShow";
 import type { HarvestKey } from "@/game/yard/harvest";
 import { claimFigure, REWARD_KEYS, type ClaimFigure } from "@/ui/goals/claimFigure";
@@ -24,7 +25,8 @@ import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
  *   Goals button to the Town Hall and the HUD counts up across their flight,
  *   as Collect all's do (`bankShow.ts`); the server's answer corrects the
  *   totals, and a refusal takes the balls back. Monster rewards show a notice
- *   (the guided start's walk-in will play for them once it lands).
+ *   and walk into Housing from the yard's edge (`walkIntoHousing`, the
+ *   guided start's walk-in).
  * - **Guide.** Opening the panel emits `screen` ("goals") and closing it
  *   `screenClosed`, for the guided start's last step and the tips.
  *
@@ -82,6 +84,8 @@ export class GoalsDoor {
   private loadFailed: string | null = null;
   private readonly unsubscribe: () => void;
   private destroyed = false;
+  /** A monster reward walking into Housing. */
+  private walkIn: MonsterWalkIn | null = null;
 
   constructor(mounts: YardMounts, actions: GoalsActions = goalsActions(mounts.store)) {
     this.mounts = mounts;
@@ -207,6 +211,11 @@ export class GoalsDoor {
           level: "info",
           timeoutMs: 5_000,
         });
+        // They walk in from the yard's edge, as Bob's Pokeys do (the guided start's walk-in).
+        if (!prefersReducedMotion()) {
+          this.walkIn?.destroy();
+          this.walkIn = walkIntoHousing(this.mounts.renderer, store.yard, monsters.id, monsters.count);
+        }
       }
       // The claimed goal leaves the list now; the next read reveals what its claim opened.
       this.goals = (this.goals ?? []).map((one) => (one.id === goal.id ? { ...one, status: "claimed" } : one));
@@ -219,6 +228,8 @@ export class GoalsDoor {
 
   destroy(): void {
     this.destroyed = true;
+    this.walkIn?.destroy();
+    this.walkIn = null;
     this.unsubscribe();
     this.panel?.close();
     this.button.remove();

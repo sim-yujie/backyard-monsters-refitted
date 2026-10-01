@@ -4,7 +4,9 @@ import "./plugins";
 
 /** The own yard's plugin registry for the tutorial's packages (issue #227). */
 
-const mounts = {} as YardMounts;
+// An outpost's store: the real packages (`./plugins`) mount on the main yard
+// only, so they step aside cleanly here instead of throwing on a bare stub.
+const mounts = { store: { kind: "outpost" } } as unknown as YardMounts;
 
 describe("mountYardPlugins", () => {
   it("mounts in order and tears down in reverse", () => {

@@ -1,7 +1,7 @@
 import { guideActions, type GuideActions } from "@/api/guide";
 import type { Onboarding } from "@/api/types";
-import { guideBus } from "@/game/guide/guideBus";
-import { MonsterWalkIn } from "@/game/guide/MonsterWalkIn";
+import { guideBus, GuideScreen } from "@/game/guide/guideBus";
+import { walkIntoHousing, type MonsterWalkIn } from "@/game/guide/MonsterWalkIn";
 import { StagedRaidLayer } from "@/game/guide/StagedRaidLayer";
 import { SPAWN_DISTANCE } from "@/game/guide/stagedRaid";
 import {
@@ -106,7 +106,8 @@ export class GuidedStartRunner {
   private pokeysLine = false;
   /** The gift was asked for at this step already (a refusal is not asked again). */
   private armyTried = false;
-  private goalsRoot: HTMLElement | null = null;
+  /** The Goals panel is open (`screen` / `screenClosed` "goals"). */
+  private goalsOpen = false;
   private goalsSeen = false;
   private tour: number | null = null;
   private tourRaid: StagedRaidLayer | null = null;
@@ -135,13 +136,16 @@ export class GuidedStartRunner {
         if (this.step() === "collect") this.collected = true;
         this.render();
       }),
-      guideBus.on("screen", ({ id, root }) => {
-        if ((id as string) === "goals") {
-          this.goalsRoot = root;
-          void this.goalsOpened();
-        } else if (this.goalsRoot) {
-          this.goalsRoot = null;
-        }
+      // The Goals panel (package a) says when it opens and closes.
+      guideBus.on("screen", ({ id }) => {
+        if (id !== GuideScreen.GOALS) return;
+        this.goalsOpen = true;
+        void this.goalsOpened();
+        this.render();
+      }),
+      guideBus.on("screenClosed", ({ id }) => {
+        if (id !== GuideScreen.GOALS) return;
+        this.goalsOpen = false;
         this.render();
       }),
     );
@@ -227,7 +231,7 @@ export class GuidedStartRunner {
     }
     if (this.asking) return;
     // A screen Bob does not run (the Goals panel) is open: he waits out of its way.
-    if (this.goalsRoot?.isConnected) {
+    if (this.goalsOpen) {
       this.show({ key: "aside", step: null });
       return;
     }
@@ -585,17 +589,9 @@ export class GuidedStartRunner {
   private playWalkIn(count: number): void {
     const housing = this.firstOfType(HOUSING);
     if (!housing) return;
-    const to = centreOf(housing);
-    const bounds = this.mounts.store.yard.bounds;
-    const from = { x: bounds.yardWidth / 2, y: to.y };
     this.walkIn?.destroy();
-    this.walkIn = new MonsterWalkIn(this.mounts.renderer, {
-      monster: "C1",
-      count: Math.min(count, FREE_POKEYS),
-      from,
-      to,
-    });
-    this.walkIn.start();
+    this.walkIn = walkIntoHousing(this.mounts.renderer, this.mounts.store.yard, "C1", Math.min(count, FREE_POKEYS));
+    const to = centreOf(housing);
     this.mounts.scene.centreOn(to.x, to.y);
   }
 
