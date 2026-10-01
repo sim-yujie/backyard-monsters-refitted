@@ -74,6 +74,20 @@ describe("the guide's CSS and the hidden attribute", () => {
     expect(hasHiddenRule(css("../styles/tips.css"), "guide-help")).toBe(true);
   });
 
+  it("the floating \"?\" steps aside while a panel shows its own (one \"?\" at a time)", () => {
+    const text = css("../styles/tips.css");
+    const rule = [...text.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(([, selector]) =>
+      selector!.trim().endsWith(".guide-help--float") && selector!.includes(":has("),
+    );
+    expect(rule).toBeDefined();
+    const selector = rule![1]!.trim();
+    // Only a shown "?" in a panel's title row counts: not a hidden one, nor one inside a hidden panel.
+    expect(selector).toBe(
+      ".overlay:has(.panel__titlebar > .guide-help:not([hidden]):not([hidden] *)) .guide-help--float",
+    );
+    expect(rule![2]).toMatch(/display\s*:\s*none/);
+  });
+
   it("adds no global [hidden] rule", () => {
     for (const file of Object.keys(TOGGLED)) expect(css(file)).not.toMatch(/(^|[\s,}])\[hidden\]\s*[,{]/);
   });

@@ -48,6 +48,13 @@
   pointer-events: auto;
 }
 
+/* One "?" at a time: while a panel with its own "?" in its title row is
+   open (not hidden, nor inside anything hidden), the scene's floating one
+   steps aside, and comes back when the panel closes. */
+.overlay:has(.panel__titlebar > .guide-help:not([hidden]):not([hidden] *)) .guide-help--float {
+  display: none;
+}
+
 .guide-help--float:hover {
   filter: brightness(1.06);
 }
