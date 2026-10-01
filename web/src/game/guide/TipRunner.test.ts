@@ -115,7 +115,7 @@ const panel = (): { root: HTMLElement; header: HTMLElement } => {
   const header = document.createElement("header");
   header.className = "panel__titlebar";
   const close = document.createElement("button");
-  close.setAttribute("aria-label", "Close");
+  close.setAttribute("aria-label", "Close Build");
   header.append(close);
   root.append(header);
   return { root, header };
@@ -293,6 +293,23 @@ describe("selector targets", () => {
     expect(findTarget(target)).toBeNull();
   });
 
+  it("brings a control scrolled out of view into it", async () => {
+    const { bus, view, runner: tips } = setup();
+    tips.setOnboarding(onboarding("skipped"));
+    const mail = box();
+    const threads = control(TutTarget.MAIL_THREADS, mail);
+    const scroll = vi.fn();
+    threads.scrollIntoView = scroll;
+    bus.emit("screen", { id: GuideScreen.MAIL, root: mail, header: null });
+    await settle();
+
+    const found = view()!.shown!.onTargetFound!;
+    found({ left: 10, top: 300, width: 40, height: 40 });
+    expect(scroll).not.toHaveBeenCalled();
+    found({ left: 10, top: window.innerHeight + 100, width: 40, height: 40 });
+    expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
+  });
+
   it("tries a tip's targets in order", async () => {
     const { bus, view, runner: tips } = setup();
     tips.setOnboarding(onboarding("skipped"));
@@ -348,6 +365,7 @@ describe("seen when the player moves on", () => {
     tips.replay([{ screen: GuideScreen.YARD, root }]);
     await settle(0);
     expect(view()!.shown).toMatchObject({ skip: { label: "Close" } });
+    view()!.press("Next");
     view()!.press("Next");
     view()!.press("Got it");
     root.remove();
@@ -421,13 +439,23 @@ describe('the "?" button', () => {
     expect(view()).toBeUndefined();
 
     const help = header.querySelector<HTMLButtonElement>(".guide-help")!;
-    expect(help.nextElementSibling?.getAttribute("aria-label")).toBe("Close");
+    expect(help.nextElementSibling?.getAttribute("aria-label")).toBe("Close Build");
     expect(help.textContent).toBe("?");
     help.click();
     await settle(0);
     expect(view()!.shown).toMatchObject({ text: "Threads." });
     view()!.press("Close");
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it("replays every tip, the ones whose control is not on screen without the hand", async () => {
+    const { view, runner: tips } = setup();
+    tips.setOnboarding(onboarding("done"));
+    const root = box();
+    tips.replay([{ screen: GuideScreen.BUILD, root }]);
+    await settle(0);
+    expect(view()!.shown).toMatchObject({ text: "Locked ones say why.", target: "tip:" });
+    expect(findTarget("tip:")).toBeNull();
   });
 
   it("floats over a screen with no title row, and is only added once", async () => {

@@ -13,11 +13,22 @@
   font-size: var(--text-md);
 }
 
-/* Floating, for a screen with no title row: under the HUD at the top right. */
+/* Screens push their close button right with an auto margin; the "?" takes
+   that margin so the two sit together at the end of the row. */
+.panel__titlebar > .guide-help {
+  margin-left: auto;
+}
+
+.panel__titlebar > .guide-help ~ button[aria-label^="Close"] {
+  margin-left: 0;
+}
+
+/* Floating, for a screen with no title row: under the HUD at the top left,
+   where neither the yard nor Map Room 2 docks a panel. */
 .guide-help--float {
   position: fixed;
   top: calc(var(--hud-height) + var(--space-2));
-  right: calc(var(--hud-inset) + var(--space-2));
+  left: calc(var(--hud-inset) + var(--space-2));
   width: 32px;
   height: 32px;
   padding: 0;

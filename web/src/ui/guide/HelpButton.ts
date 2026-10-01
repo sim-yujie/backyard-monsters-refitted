@@ -6,7 +6,7 @@ import "@/ui/styles/tips.css";
  *
  * In a screen's title row it sits just before the close button, sized like
  * it. A screen with no title row (the yard, Map Room 2) gets a small round one
- * floating at the top right, under the HUD. Either way it only calls back:
+ * floating at the top left, under the HUD. Either way it only calls back:
  * the tip runner decides what to replay, and replaying never marks anything
  * seen.
  */
@@ -35,12 +35,13 @@ export class HelpButton {
   }
 
   /**
-   * Puts the button in `host`: before the close button of a title row (its
-   * last button), or at the end of anything else.
+   * Puts the button in `host`: before the close button of a title row, or at
+   * the end of anything else.
    */
   attach(host: HTMLElement): this {
     if (this.place === "header") {
-      const close = host.querySelector<HTMLElement>(":scope > button[aria-label='Close']");
+      // "Close", "Close Build", …: the last such button in the row.
+      const close = [...host.querySelectorAll<HTMLElement>(":scope > button[aria-label^='Close']")].at(-1);
       if (close) host.insertBefore(this.element, close);
       else host.append(this.element);
     } else {

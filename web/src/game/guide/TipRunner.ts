@@ -45,7 +45,8 @@ import { GUIDED_SCREENS, targetsOf, tipsFor, tipWording, type Tip, type TipTarge
  *
  * Every screen with tips gets a "?" in its title row (or, with none, a round
  * one floating under the HUD) that replays its tips at any time and never
- * marks anything seen. A panel inside another panel (the Baiter, the
+ * marks anything seen. A replay shows every tip, the ones whose control is
+ * not on screen without the hand. A panel inside another panel (the Baiter, the
  * Champion Cage) shares the outer panel's "?", which replays both.
  */
 
@@ -155,6 +156,10 @@ const findIn = (root: HTMLElement, selector: string): HTMLElement | null => {
   }
   return null;
 };
+
+/** Whether a rectangle is not wholly inside the window. */
+const offScreen = (rect: TargetRect): boolean =>
+  rect.top < 0 || rect.left < 0 || rect.top + rect.height > window.innerHeight || rect.left + rect.width > window.innerWidth;
 
 /** Whether the guided start is still to run or running: no tips then. */
 const guideOpen = (onboarding: Onboarding | null): boolean =>
@@ -327,10 +332,12 @@ export class TipRunner {
       this.next();
       return;
     }
-    // A tip whose target is not on screen as the tips start is left out.
-    const tips = this.tips(entry.screen).filter(
-      (tip) => targetsOf(tip).length === 0 || this.resolve(tip, entry.root) !== null,
-    );
+    // A tip whose target is not on screen as the tips start is left out; a
+    // replay asked for them all, so it shows them, without the hand.
+    const all = this.tips(entry.screen);
+    const tips = entry.replay
+      ? all
+      : all.filter((tip) => targetsOf(tip).length === 0 || this.resolve(tip, entry.root) !== null);
     if (tips.length === 0) {
       this.next();
       return;
@@ -386,6 +393,7 @@ export class TipRunner {
           : { name: SELECTOR_TARGET, selector: first.selector });
     this.selectorTarget = found?.selector ? { root: sequence.root, selector: found.selector } : null;
 
+    const root = sequence.root;
     const last = sequence.index === sequence.tips.length - 1;
     const count = sequence.tips.length;
     view.show({
@@ -396,6 +404,12 @@ export class TipRunner {
       ...(count > 1 && { dots: { index: sequence.index, count } }),
       actions: [{ label: last ? "Got it" : "Next", primary: true, onClick: () => this.advance() }],
       skip: { label: sequence.replay ? "Close" : "Skip tips", onClick: () => this.finish() },
+      // A control scrolled out of its panel (the Shop's Protection) is brought into view.
+      onTargetFound: (rect) => {
+        if (!found || !offScreen(rect)) return;
+        const element = found.selector ? findIn(root, found.selector) : findTarget(found.name)?.element;
+        element?.scrollIntoView?.({ block: "nearest" });
+      },
     });
     sequence.displayed = true;
   }
