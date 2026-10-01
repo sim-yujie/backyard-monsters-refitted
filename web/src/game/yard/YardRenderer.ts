@@ -504,6 +504,34 @@ export class YardRenderer {
     return { totals: flightTotals(flights), ends: flightEnds(flights), balls: flights.length, group };
   }
 
+  /**
+   * Throws a grant's resource balls (a claimed goal's reward, issue #227)
+   * from `from`, a world point (under the Goals button), to the Town Hall:
+   * the bank's balls (`throwBank`), each resource from the same point. Same
+   * answer and same `cancelBank`; nothing is thrown with no Town Hall drawn.
+   */
+  throwGrant(
+    amounts: Readonly<Partial<Record<HarvestKey, number>>>,
+    from: { readonly x: number; readonly y: number },
+    onLand: LandListener,
+  ): BankThrown {
+    const hall = this.yard?.buildings.find(
+      (building) =>
+        building.type === TOWN_HALL_TYPE && !this.stored.has(building.id) && !this.concealed.has(building.id),
+    );
+    if (!hall) return { totals: {}, ends: {}, balls: 0, group: 0 };
+    const offset = this.buildings.offsetOf(hall.id);
+    const sources: BankSource[] = [];
+    for (const [resource, amount] of Object.entries(amounts) as [HarvestKey, number | undefined][]) {
+      // A type no building has: the default spout, a little above the point.
+      if (amount && amount > 0) sources.push({ type: 0, x: from.x, y: from.y, resource, amount });
+    }
+    const flights = planFlights(sources, { x: hall.worldX + offset.x, y: hall.worldY + offset.y });
+    if (flights.length === 0) return { totals: {}, ends: {}, balls: 0, group: 0 };
+    const group = this.collect.launch(flights, onLand);
+    return { totals: flightTotals(flights), ends: flightEnds(flights), balls: flights.length, group };
+  }
+
   /** Takes a throw's balls out of the air without landing them. */
   cancelBank(group: number): void {
     this.collect.cancel(group);

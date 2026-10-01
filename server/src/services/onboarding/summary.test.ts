@@ -36,7 +36,8 @@ describe("onboardingSummary", () => {
     expect(summary).toEqual({
       guide: { state: "active", step: "finish-housing", building: 9 },
       camp: "none",
-      goalsReady: 0,
+      // Goal M1 (5 mushrooms): the 99 picked make it ready (Goals package, #227).
+      goalsReady: 1,
       tips: { mail: 5 },
     });
   });

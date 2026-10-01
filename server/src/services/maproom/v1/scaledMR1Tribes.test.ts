@@ -27,6 +27,9 @@ mock.module("../../../server.js", () => ({
       findOne: async () => maproom,
       persist: (entity: unknown) => persisted.push(entity),
       flush: async () => {},
+      // The Goals tribe counter's own locked write reads the attacker's row (#227).
+      transactional: async <T>(cb: (tx: unknown) => Promise<T>) =>
+        cb({ findOne: async () => userSave, flush: async () => {} }),
     },
   },
   redis: {
@@ -86,6 +89,7 @@ const { MR1_TRIBES_MAP } = await import("../../../game-data/tribes/v1/index.js")
 const { LOOT_GAIN_RATIO } = await import("../../../game-rules/combat/index.js");
 const { replayAbandonedAttack } = await import("../../base/combat/abandonedAttack.js");
 const { battleReplayInput, battleTick } = await import("../../base/combat/battle.js");
+const { readOnboarding } = await import("../../onboarding/state.js");
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -238,6 +242,8 @@ describe("Map Room 1 tribe save of a started attack", () => {
       tribeHealthData: battle.buildinghealthdata,
     });
     expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);
+    // Goal WM1 (#227): a Legionnaire tribe destroyed, counted on the attacker's row.
+    expect(readOnboarding(userSave).counters.tribes).toMatchObject({ legionnaire: 1, kozu: 0 });
 
     // The same save sent again as the page closes lands nothing.
     const again = await run(ctxFor({ over: "1", attackid: String(ATTACK_ID), flinglog: JSON.stringify(WRECK) }));

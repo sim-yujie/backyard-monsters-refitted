@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { readOnboarding } from "../../services/onboarding/state.js";
 import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
 import { juiceGoo, juicerRate, juicerStatus } from "../../services/yard/juice.js";
@@ -114,6 +115,8 @@ describe("POST /bm/yard/juice", () => {
     const row = db.row!;
     expect(row.resources).toMatchObject({ r4: 4000 });
     expect((row.monsters as Row).housed).toEqual({ C1: 20 });
+    // Goals BL1-BL4 (#227) count every monster juiced.
+    expect(readOnboarding({ onboarding: row.onboarding }).counters.juiced).toBe(15);
   });
 
   test("a level 3 Juicer returns the whole hatch cost", async () => {

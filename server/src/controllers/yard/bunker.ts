@@ -1,4 +1,5 @@
 import { YardBunkerFillSchema, YardBunkerRemoveSchema } from "../../schemas/YardSchemas.js";
+import { countJuiced } from "../../services/goals/counters.js";
 import { planBunkerFill, planBunkerRemove } from "../../services/yard/bunker.js";
 import { defineYardAction } from "./yardAction.js";
 
@@ -18,6 +19,11 @@ export const yardBunkerFillAction = defineYardAction({
 /** `POST /bm/yard/bunker/remove` — take monsters out for good: juiced when a Juicer works, else deleted. */
 export const yardBunkerRemoveAction = defineYardAction({
   schema: YardBunkerRemoveSchema,
-  run: ({ save, body }) => planBunkerRemove(save, body.bunker, body.monster, body.count),
+  run: ({ save, body }) => {
+    const plan = planBunkerRemove(save, body.bunker, body.monster, body.count);
+    // Goals BL1-BL4: Flash counted a bunker's monsters juiced as well (#227).
+    const onboarding = plan.report.juiced ? countJuiced(save, plan.report.removed) : null;
+    return onboarding ? { ...plan, slices: { ...plan.slices, onboarding } } : plan;
+  },
   outposts: "allow",
 });

@@ -1,4 +1,5 @@
 import { YardJuiceSchema } from "../../schemas/YardSchemas.js";
+import { countJuiced } from "../../services/goals/counters.js";
 import { planJuice } from "../../services/yard/juice.js";
 import { defineYardAction } from "./yardAction.js";
 
@@ -12,6 +13,14 @@ import { defineYardAction } from "./yardAction.js";
 /** `POST /bm/yard/juice` — juice housed monsters for goo (capped). */
 export const yardJuiceAction = defineYardAction({
   schema: YardJuiceSchema,
-  run: ({ save, body }) => planJuice(save, body.monsters),
+  run: ({ save, body }) => {
+    const plan = planJuice(save, body.monsters);
+    // Goals BL1-BL4 count every monster juiced (#227); on an outpost it lands on the main row.
+    const onboarding = countJuiced(
+      save,
+      Object.values(plan.report.juiced).reduce((sum, count) => sum + count, 0)
+    );
+    return onboarding ? { ...plan, slices: { ...plan.slices, onboarding } } : plan;
+  },
   outposts: "allow",
 });

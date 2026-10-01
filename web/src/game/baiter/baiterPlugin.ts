@@ -3,6 +3,7 @@ import { summariseAttack } from "@/game/attack/attackSave";
 import { battlePlugin } from "@/game/attack/plugins/battle";
 import { typeName } from "@/game/yard/planner/summary";
 import { BaiterDock, BaiterSummaryPanel, type BaiterOutcome } from "@/ui/attack/BaiterSummary";
+import { baiterRecorder, type BaiterRecorder } from "./baiterRecord";
 import { spawnPointOf } from "./baiterSession";
 
 /**
@@ -18,6 +19,10 @@ import { spawnPointOf } from "./baiterSession";
  * The army lands where the original's did: every monster at the direction's
  * point 1,000 yard units out (`client/scripts/WMATTACK.as:711`), in one
  * fling, which scatters them as a fling of that size scatters.
+ *
+ * Nothing of the run is sent. The one exception is the Goals record of a
+ * finished run (issue #227, `baiterRecord.ts`): a token asked for as the run
+ * starts and handed back when it really finishes.
  */
 
 /** "Cannon Tower × 3, Sniper Tower": the towers that fired, by type, most first. */
@@ -32,10 +37,13 @@ const towerNames = (ids: Iterable<number>, mounts: AttackMounts): string[] => {
     .map(([type, count]) => (count > 1 ? `${typeName(type)} × ${count}` : typeName(type)));
 };
 
-export const baiterPlugin: AttackPlugin = (mounts) => {
+/** The Baiter package, with the Goals run record as a parameter so tests can watch it. */
+export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin => (mounts) => {
   const run = mounts.practice;
   if (!run) return;
   const { session } = mounts;
+  const record = recorder();
+  record.start();
 
   const dock = new BaiterDock(run).mount(mounts.dock);
 
@@ -65,6 +73,7 @@ export const baiterPlugin: AttackPlugin = (mounts) => {
     if (summary) return;
     collect();
     const state = session.state();
+    record.finish(state.endReason);
     const facts = summariseAttack(session);
     const traps = session.battle()?.state().firedTraps ?? [];
     const outcome: BaiterOutcome = {
@@ -97,6 +106,8 @@ export const baiterPlugin: AttackPlugin = (mounts) => {
     summary?.close();
   };
 };
+
+export const baiterPlugin: AttackPlugin = createBaiterPlugin(() => baiterRecorder());
 
 /** What the Baiter scene mounts, and nothing else: no save, no checkpoint, no drop controls. */
 export const BAITER_PLUGINS: readonly AttackPlugin[] = [battlePlugin, baiterPlugin];

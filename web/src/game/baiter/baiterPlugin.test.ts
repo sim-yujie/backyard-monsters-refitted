@@ -8,15 +8,24 @@ import { battlePlugin } from "@/game/attack/plugins/battle";
 import "@/game/attack/plugins";
 import { readYard } from "@/game/yard/yardModel";
 import { Notices } from "@/ui/maproom/Notices";
-import { BAITER_PLUGINS, baiterPlugin } from "./baiterPlugin";
+import { BAITER_PLUGINS, baiterPlugin, createBaiterPlugin } from "./baiterPlugin";
+import type { BaiterRecorder } from "./baiterRecord";
 import { BAITER_DIRECTIONS, baiterTarget, type BaiterRun } from "./baiterSession";
 
 /**
  * The Baiter's practice attack sends nothing (issue #126): the scene mounts
  * only the battle layer and the Baiter's own package, and a whole practice
  * attack run through that package, from the first fling to the summary,
- * makes no request at all — no attack load, no checkpoint, no save.
+ * makes no request at all — no attack load, no checkpoint, no save. The
+ * Goals record of a finished run (#227) goes through its recorder, stood in
+ * for here and tested in `baiterRecord.test.ts`.
  */
+
+/** A recorder that only remembers what it was told. */
+const spyRecorder = (): BaiterRecorder & { start: ReturnType<typeof vi.fn>; finish: ReturnType<typeof vi.fn> } => ({
+  start: vi.fn(),
+  finish: vi.fn(),
+});
 
 /** A level-1 Town Hall and a level-1 Cannon Tower: something to fire and something to fall. */
 const ownYard = (): BaseLoadResponse =>
@@ -96,7 +105,9 @@ describe("a practice attack", () => {
       goToYard,
     } as unknown as AttackMounts;
 
-    const teardown = baiterPlugin(mounts);
+    const recorder = spyRecorder();
+    const teardown = createBaiterPlugin(() => recorder)(mounts);
+    expect(recorder.start).toHaveBeenCalledTimes(1);
     session.start();
     // The whole army went in at once, at the direction's point.
     const fling = session.flingLog().events.find((event) => event.kind === "fling");
@@ -111,6 +122,9 @@ describe("a practice attack", () => {
     const summary = modal.querySelector(".baiter-summary")!;
     expect(summary.textContent).toContain("Practice over");
     expect(summary.textContent).toContain("Nothing was saved");
+    // The run reached its end: the Goals record hears how (#227).
+    expect(recorder.finish).toHaveBeenCalledTimes(1);
+    expect(recorder.finish.mock.calls[0]![0]).not.toBe("retreat");
     modal.querySelector<HTMLButtonElement>(".baiter-summary__again")!.click();
     expect(runAgain).toHaveBeenCalledWith(run);
     modal.querySelector<HTMLButtonElement>(".baiter-summary__back")!.click();
@@ -143,10 +157,12 @@ describe("a practice attack", () => {
       goToMap: vi.fn(),
       practice: run,
     } as unknown as AttackMounts;
-    const teardown = baiterPlugin(mounts);
+    const recorder = spyRecorder();
+    const teardown = createBaiterPlugin(() => recorder)(mounts);
     session.start();
     session.advance(1);
     session.retreat();
+    expect(recorder.finish).toHaveBeenCalledWith("retreat");
     expect(modal.querySelector(".baiter-summary")!.textContent).toContain("You stopped the practice");
     teardown?.();
     expect(fetchSpy).not.toHaveBeenCalled();

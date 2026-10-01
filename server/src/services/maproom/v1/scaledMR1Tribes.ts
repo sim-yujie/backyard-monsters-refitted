@@ -27,6 +27,7 @@ import { isDeclareWarRunning } from "../../alliance/powerups.js";
 import { battleReplayInput, battleTick } from "../../base/combat/battle.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../base/combat/saveBattle.js";
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
+import { recordTribeDestroyed } from "../../goals/tribeCounter.js";
 import {
   acquireMR1TribeFinalLock,
   endMR1TribeSession,
@@ -168,6 +169,12 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
   postgres.em.persist(maproom);
   postgres.em.persist(userSave);
   await postgres.em.flush();
+
+  // Goals WM1-WM4 (#227): a tribe this replay destroyed, counted on the
+  // attacker's main row under its own lock.
+  if (battle?.destroyed && !wasDestroyed) {
+    await recordTribeDestroyed(postgres.em, userSave.basesaveid, String(saveData.baseid));
+  }
 
   // Spent: the lock is still held, so a copy of this save finds nothing.
   if (finalises) await endMR1TribeSession(user.userid, saveData.baseid);

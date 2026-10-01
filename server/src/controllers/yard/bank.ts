@@ -1,5 +1,6 @@
 import { devConfig } from "../../config/GameConfig.js";
 import { YardBankSchema } from "../../schemas/YardSchemas.js";
+import { countBank } from "../../services/goals/counters.js";
 import { planBank } from "../../services/yard/bank.js";
 import { defineYardAction } from "./yardAction.js";
 
@@ -16,12 +17,16 @@ import { defineYardAction } from "./yardAction.js";
  */
 export const yardBankAction = defineYardAction({
   schema: YardBankSchema,
-  run: ({ save, body }) =>
-    planBank(
+  run: ({ save, body }) => {
+    const plan = planBank(
       save,
       body.ids ? { ids: body.ids } : { all: true },
       devConfig.skipTutorial ? 205 : Number(save.tutorialstage) || 0
-    ),
+    );
+    // Goals BK1-BK4: the most one tap has banked (#227).
+    const onboarding = countBank(save, plan.report.banked);
+    return onboarding ? { ...plan, slices: { ...plan.slices, onboarding } } : plan;
+  },
   // An outpost's harvesters show a disabled "Auto-Banking" button
   // (`client/scripts/BUILDINGINFO.as:130-131`): their income is banked for them.
   outposts: { refuse: "Outposts bank automatically (Auto-Banking)." },

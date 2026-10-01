@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { readOnboarding } from "../../services/onboarding/state.js";
 import { yardBankAction } from "./bank.js";
 import { runYardAction, type YardAnswer } from "./yardAction.js";
 
@@ -89,6 +90,8 @@ describe("POST /bm/yard/bank", () => {
     expect(Number(buildings["3"]!.cP)).toBeGreaterThan(590);
     // skipTutorial is on outside production: stage 205, half points rounded up.
     expect(row.points).toBe(String(100 + 250 + 15 + 360));
+    // Goals BK1-BK4 (#227): the most one tap banked, all resources together.
+    expect(readOnboarding({ onboarding: db.row!.onboarding }).counters.bestBank).toBe(1250);
   });
 
   test("ids banks only the named harvester, sent as a JSON string", async () => {

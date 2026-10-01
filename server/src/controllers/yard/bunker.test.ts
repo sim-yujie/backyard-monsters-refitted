@@ -3,6 +3,7 @@ import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
 import { bunkerCapacity, bunkerPutty, readBunker } from "../../services/yard/bunker.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { readOnboarding } from "../../services/onboarding/state.js";
 import { yardBunkerFillAction, yardBunkerRemoveAction } from "./bunker.js";
 import { runYardAction, type YardAnswer } from "./yardAction.js";
 
@@ -230,6 +231,8 @@ describe("POST /bm/yard/bunker/remove", () => {
     expect(db.row!.resources).toMatchObject({ r4: 1_450 });
     // Never back to housing (D11).
     expect((db.row!.monsters as Row).housed).toEqual({ C1: 30, C2: 5 });
+    // Goals BL1-BL4 (#227): Flash counted a bunker's juiced monsters too.
+    expect(readOnboarding({ onboarding: db.row!.onboarding }).counters.juiced).toBe(3);
   });
 
   test("all takes the whole stack; more than the bunker holds takes what it holds", async () => {
@@ -251,6 +254,8 @@ describe("POST /bm/yard/bunker/remove", () => {
       expect(answer.body.report).toMatchObject({ removed: 2, juiced: false, goo: 0, lost: 0 });
       expect(contentsOf(db.row!)).toEqual({ C1: 8 });
       expect(db.row!.resources).toMatchObject({ r4: 1_000 });
+      // Deleted, not juiced: Goals count nothing.
+      expect(readOnboarding({ onboarding: db.row!.onboarding }).counters.juiced).toBe(0);
     }
   });
 

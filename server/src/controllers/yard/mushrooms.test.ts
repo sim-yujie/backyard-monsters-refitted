@@ -3,6 +3,7 @@ import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
 import type { Random } from "../../services/yard/mushrooms.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { readOnboarding } from "../../services/onboarding/state.js";
 import { mushroomPickAction } from "./mushrooms.js";
 import { runYardAction, type YardAnswer } from "./yardAction.js";
 
@@ -93,6 +94,8 @@ describe("POST /bm/yard/mushroom/pick", () => {
       report: { id: 1, x: -300, y: 40, golden: true, shiny: 8 },
     });
     expect(db.row).toMatchObject({ credits: 18, mushrooms: { l: [[2, 200, 100]] } });
+    // Goals M1-M6 (#227) count the pick and the server's golden roll.
+    expect(readOnboarding({ onboarding: db.row!.onboarding }).counters).toMatchObject({ mushrooms: 1, goldMushrooms: 1 });
   });
 
   test("an ordinary mushroom goes and gives nothing", async () => {
@@ -100,6 +103,7 @@ describe("POST /bm/yard/mushroom/pick", () => {
 
     expect(answer.body).toMatchObject({ credits: 10, report: { golden: false, shiny: 0 } });
     expect(db.row).toMatchObject({ credits: 10, mushrooms: { l: [[5, -300, 40]] } });
+    expect(readOnboarding({ onboarding: db.row!.onboarding }).counters).toMatchObject({ mushrooms: 1, goldMushrooms: 0 });
   });
 
   test("a Shiny-locked account still gets the reward", async () => {

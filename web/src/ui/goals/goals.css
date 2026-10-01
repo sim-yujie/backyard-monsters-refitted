@@ -1,0 +1,232 @@
+/*
+ * The Goals panel (`web/src/ui/goals/GoalsPanel.ts`, design
+ * `docs/design/tutorial.md` §6.3, issue #227).
+ *
+ * Same rule as ui.css: every value comes from tokens.css. The frame is the
+ * shared `.panel`, docked on the left under the HUD so the yard and its Town
+ * Hall stay in view while a claim's balls fly; on a phone it is a bottom
+ * sheet, as the Shop is. Amounts are `.res-amount` (ui.css).
+ */
+
+.goals-panel {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  left: var(--space-4);
+  z-index: var(--z-hud);
+  width: min(380px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100vh - var(--hud-height) - 150px);
+  min-width: 0;
+}
+
+.goals-panel .panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ── Sections and rows ──────────────────────────────────────────────────── */
+
+.goals-section__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.goals-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.goals-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.goals-row--ready {
+  border-color: var(--colour-accent-line);
+  background: var(--colour-accent-soft);
+}
+
+.goals-row__name {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--colour-text-strong);
+}
+
+.goals-row__description {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+  line-height: var(--leading-normal);
+}
+
+.goals-row__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.goals-row__progress {
+  flex: none;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text-muted);
+}
+
+.goals-row__note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-warning-text);
+}
+
+.goals-row__note--refused {
+  color: var(--colour-danger);
+}
+
+/* ── Rewards ────────────────────────────────────────────────────────────── */
+
+.goals-reward {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.goals-monsters {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.goals-monsters__image {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+/* ── Claim ──────────────────────────────────────────────────────────────── */
+
+.goals-claim {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-2);
+  min-height: var(--control-height);
+}
+
+.goals-claim__label {
+  font-weight: 700;
+}
+
+.goals-claim__amounts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+.goals-claim__amount--capped .res-amount__value {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.goals-claim__full {
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.goals-claim--busy {
+  cursor: progress;
+}
+
+/* ── Claimed, folded ────────────────────────────────────────────────────── */
+
+.goals-claimed__summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-muted);
+}
+
+.goals-claimed__list {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+  columns: 2;
+  column-gap: var(--space-4);
+}
+
+.goals-claimed__item {
+  break-inside: avoid;
+}
+
+/* ── Loading, errors, done ──────────────────────────────────────────────── */
+
+.goals-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--colour-text-muted);
+}
+
+.goals-status__text {
+  margin: 0;
+}
+
+/* ── The dock button's badge ───────────────────────────────────────────── */
+
+.yard-dock__badge.goals-badge {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.goals-dock-art {
+  color: inherit;
+}
+
+@media (width <= 620px) {
+  .goals-panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: min(82vh, calc(100vh - var(--hud-height)));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom: 0;
+  }
+
+  .goals-panel .panel__body {
+    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .goals-claim {
+    min-height: 44px;
+  }
+}

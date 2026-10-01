@@ -1,4 +1,5 @@
 import z from "zod";
+import { countMushroom } from "../../services/goals/counters.js";
 import type { Random } from "../../services/yard/mushrooms.js";
 import { planMushroomPick } from "../../services/yard/mushrooms.js";
 import { defineYardAction } from "./yardAction.js";
@@ -31,7 +32,11 @@ export const mushroomPickAction = (random: Random) =>
     run: ({ save, body }) => {
       const pick = planMushroomPick(save, body.id, { x: body.x, y: body.y }, random);
       if (pick.shiny > 0) save.credits = Number(save.credits ?? 0) + pick.shiny;
-      return { report: pick.report, slices: { mushrooms: { ...pick.mushrooms } } };
+      return {
+        report: pick.report,
+        // Goals M1-M6 count the pick, golden by the server's own roll (#227).
+        slices: { mushrooms: { ...pick.mushrooms }, onboarding: countMushroom(save, pick.report.golden) },
+      };
     },
   });
 

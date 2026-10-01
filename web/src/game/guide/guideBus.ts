@@ -37,6 +37,8 @@ export const GuideScreen = {
   BAITER: "baiter",
   CHAMPION: "champion",
   OUTPOSTS: "outposts",
+  /** The Goals panel (package a, issue #227). */
+  GOALS: "goals",
 } as const;
 export type GuideScreen = (typeof GuideScreen)[keyof typeof GuideScreen];
 
@@ -47,6 +49,8 @@ export interface GuideEvents {
    * screen's element; `header` its title row, where a "?" button can go.
    */
   screen: { id: GuideScreen; root: HTMLElement; header: HTMLElement | null };
+  /** A screen that emitted `screen` closed (the Goals panel emits it). */
+  screenClosed: { id: GuideScreen };
   /** The Build menu opened (on `tab`, its category id) or closed. */
   buildMenu: { open: boolean; tab?: string };
   /** A new building is in hand (`type`), or was put down without building (`type` null). */
