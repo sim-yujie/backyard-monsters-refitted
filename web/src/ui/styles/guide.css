@@ -71,13 +71,14 @@
 .guide-bob {
   --guide-bob-size: 120px;
   position: fixed;
-  left: 24px;
+  /* Right of the yard dock's left column (the yard switcher, Map). */
+  left: 112px;
   /* Clear of the yard dock's round buttons and their labels (Map, bottom left). */
   bottom: 134px;
   display: flex;
   align-items: flex-end;
   gap: var(--space-2);
-  max-width: min(480px, calc(100vw - 48px));
+  max-width: min(480px, calc(100vw - 136px));
   pointer-events: none !important;
 }
 
@@ -87,10 +88,11 @@
   display: none;
 }
 
-/* Moved up when the target sits where the bubble would. */
+/* Moved up when the target sits where the bubble would; below an open
+   panel's title row (--guide-bob-clear-top, set by the overlay). */
 .guide-bob--alt {
   bottom: auto;
-  top: 96px;
+  top: max(96px, var(--guide-bob-clear-top, 0px));
 }
 
 .guide-bob__portrait {
@@ -222,7 +224,7 @@
 
   .guide-bob--alt {
     bottom: auto;
-    top: 72px;
+    top: max(72px, var(--guide-bob-clear-top, 0px));
   }
 
   .guide-bob__speech {

@@ -34,6 +34,27 @@ export interface GuideStep extends BobLine {
 const overlaps = (a: TargetRect, b: DOMRect): boolean =>
   a.left < b.right && a.left + a.width > b.left && a.top < b.bottom && a.top + a.height > b.top;
 
+/** Room left under a title row before the bubble starts, in px. */
+const TITLE_GAP = 8;
+
+/**
+ * The lowest bottom edge of the title rows open in the top part of the
+ * screen and under the bubble's width, so the bubble at the top can start
+ * below them; null when there are none.
+ */
+export const clearOfTitleRows = (bubble: DOMRect, root: ParentNode = document): number | null => {
+  let bottom: number | null = null;
+  for (const row of root.querySelectorAll<HTMLElement>(".panel__titlebar")) {
+    if (!row.isConnected || row.closest("[hidden]")) continue;
+    const box = row.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) continue;
+    if (box.top > window.innerHeight * 0.4) continue;
+    if (box.right <= bubble.left || box.left >= bubble.right) continue;
+    bottom = Math.max(bottom ?? 0, box.bottom + TITLE_GAP);
+  }
+  return bottom;
+};
+
 /** What drives the per-frame follow; replaced in tests. */
 export interface FrameClock {
   request(callback: () => void): number;
@@ -110,16 +131,17 @@ export class GuideOverlay {
     if (step.block === false) this.spotlight.hide();
     else this.spotlight.show(rect);
 
-    // The bubble moves up out of the way when it would sit on the target or the hand.
-    const box = rect ? this.bubble.element.getBoundingClientRect() : null;
-    if (
-      rect &&
-      box &&
-      !this.alternate &&
-      (overlaps(rect, box) || (place !== null && overlaps(handBox(place), box)))
-    ) {
-      this.alternate = true;
-      this.bubble.setAlternate(true);
+    // The bubble moves up out of the way when it would sit on the target or
+    // the hand: below the title row of a panel open at the top, so its "?"
+    // and close stay in reach. When the top would cover them just as much (a
+    // target as tall as the screen), it stays where it was.
+    const covers = (box: DOMRect): boolean =>
+      rect !== null && (overlaps(rect, box) || (place !== null && overlaps(handBox(place), box)));
+    if (rect && !this.alternate && covers(this.bubble.element.getBoundingClientRect())) {
+      const box = this.bubble.element.getBoundingClientRect();
+      this.bubble.setAlternate(true, clearOfTitleRows(box));
+      if (covers(this.bubble.element.getBoundingClientRect())) this.bubble.setAlternate(false);
+      else this.alternate = true;
     }
 
     if (rect && !this.found) step.onTargetFound?.(rect);

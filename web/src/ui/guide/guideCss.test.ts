@@ -25,6 +25,8 @@ const TOGGLED: Record<string, readonly string[]> = {
   ],
   // AccountMenu's Help item (`account-menu__help`), shown only while the tour is on offer.
   "../styles/guide-start.css": ["account-menu__help"],
+  // The screen tips' "?" (HelpButton), hidden while the guided start runs.
+  "../styles/tips.css": ["guide-help", "guide-help--float"],
 };
 
 /** A stylesheet's text with its comments taken out, so a comment never reads as part of a selector. */
@@ -66,6 +68,10 @@ describe("the guide's CSS and the hidden attribute", () => {
     const text = css("../styles/guide.css");
     expect(hasHiddenRule(text, "guide-bob")).toBe(true);
     expect(hasHiddenRule(text, "guide-bob__controls")).toBe(true);
+  });
+
+  it("the tips' \"?\" has its own guard", () => {
+    expect(hasHiddenRule(css("../styles/tips.css"), "guide-help")).toBe(true);
   });
 
   it("adds no global [hidden] rule", () => {

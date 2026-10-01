@@ -202,7 +202,6 @@ export class MailboxScreen {
 
     this.list = make("nav", "mail-list");
     this.list.setAttribute("aria-label", "Your threads");
-    tutTarget(this.list, TutTarget.MAIL_THREADS);
     const listHead = make("div", "mail-list__head");
     listHead.append(
       tutTarget(
@@ -210,7 +209,9 @@ export class MailboxScreen {
         TutTarget.MAIL_NEW,
       ),
     );
-    this.rows = make("ul", "mail-list__rows");
+    // The threads themselves, not the list with New message on top: a tip
+    // pointing at each must point at two different places (issue #227).
+    this.rows = tutTarget(make("ul", "mail-list__rows"), TutTarget.MAIL_THREADS);
     this.list.append(listHead, this.rows);
 
     this.pane = make("section", "mail-pane");

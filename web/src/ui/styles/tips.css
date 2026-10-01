@@ -9,6 +9,11 @@
   font-weight: 700;
 }
 
+/* Hidden while the guided start runs; no rule here may bring it back. */
+.guide-help[hidden] {
+  display: none;
+}
+
 .btn--icon.guide-help {
   font-size: var(--text-md);
 }

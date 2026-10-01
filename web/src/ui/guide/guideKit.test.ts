@@ -156,6 +156,49 @@ describe("GuideOverlay", () => {
     expect(layer.querySelector<HTMLElement>(".guide-bob")?.hidden).toBe(true);
   });
 
+  /** Bob's bubble laid out as the stylesheet would: bottom left, or at the top when moved. */
+  const layOutBubble = (layer: HTMLElement): HTMLElement => {
+    const bubble = layer.querySelector<HTMLElement>(".guide-bob")!;
+    vi.spyOn(bubble, "getBoundingClientRect").mockImplementation(() => {
+      const top = bubble.classList.contains("guide-bob--alt") ? 200 : 600;
+      return { left: 100, top, width: 400, height: 120, right: 500, bottom: top + 120, x: 100, y: top, toJSON: () => ({}) };
+    });
+    return bubble;
+  };
+
+  it("moves the bubble up off its target, starting under an open panel's title row", () => {
+    const clock = manualClock();
+    const layer = document.createElement("div");
+    document.body.append(layer);
+    const row = document.createElement("header");
+    row.className = "panel__titlebar";
+    vi.spyOn(row, "getBoundingClientRect").mockReturnValue({
+      left: 0, top: 120, width: 800, height: 50, right: 800, bottom: 170, x: 0, y: 120, toJSON: () => ({}),
+    });
+    document.body.append(row);
+    const overlay = new GuideOverlay(layer, clock);
+    const bubble = layOutBubble(layer);
+    registerCanvasTarget("collect-all", () => ({ left: 200, top: 640, width: 60, height: 60 }));
+
+    overlay.show({ text: "Collect.", target: "collect-all", block: false });
+    expect(bubble.classList.contains("guide-bob--alt")).toBe(true);
+    expect(bubble.style.getPropertyValue("--guide-bob-clear-top")).toBe("178px");
+    overlay.destroy();
+  });
+
+  it("keeps the bubble where it is when the top would cover the target too", () => {
+    const layer = document.createElement("div");
+    document.body.append(layer);
+    const overlay = new GuideOverlay(layer, manualClock());
+    const bubble = layOutBubble(layer);
+    registerCanvasTarget("mail-threads", () => ({ left: 0, top: 150, width: 800, height: 700 }));
+
+    overlay.show({ text: "Threads.", target: "mail-threads", block: false });
+    expect(bubble.classList.contains("guide-bob--alt")).toBe(false);
+    expect(bubble.style.getPropertyValue("--guide-bob-clear-top")).toBe("");
+    overlay.destroy();
+  });
+
   it("a step that does not block leaves the screen live", () => {
     const layer = document.createElement("div");
     const overlay = new GuideOverlay(layer, manualClock());

@@ -117,10 +117,17 @@ export class BobBubble {
 
   /**
    * Moves the bubble out of the way of what it points at: to the top of the
-   * screen when the target sits where the bubble would (bottom left).
+   * screen when the target sits where the bubble would (bottom left), and no
+   * higher than `clearTop` (px from the top) when given, so it starts under
+   * an open panel's title row.
    */
-  setAlternate(alternate: boolean): void {
+  setAlternate(alternate: boolean, clearTop: number | null = null): void {
     this.element.classList.toggle("guide-bob--alt", alternate);
+    if (alternate && clearTop !== null) {
+      this.element.style.setProperty("--guide-bob-clear-top", `${Math.round(clearTop)}px`);
+    } else {
+      this.element.style.removeProperty("--guide-bob-clear-top");
+    }
   }
 
   hide(): void {
