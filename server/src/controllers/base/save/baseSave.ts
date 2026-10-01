@@ -80,6 +80,7 @@ import {
 } from "../../../services/base/combat/housingLoss.js";
 import { championsAfterDefence } from "../../../services/base/combat/defenderChampion.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
+import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -583,6 +584,13 @@ const saveBase = async (
 
   postgres.em.persist(baseSave);
   await postgres.em.flush();
+
+  // A Map Room 2 camp attack played by hand is the player's plan for the
+  // camp's tribe and level from now on (issue #221): the log the server fought,
+  // to the tick it fought it to.
+  if (battle && battleInput && saveData.over && userSave.mapversion === MapRoomVersion.V2) {
+    await recordAttackPlan(user.userid, baseSave, battleInput.log, battleInput.tick);
+  }
 
   const filteredSave = buildSaveData(baseSave, user, outpostOwnerSave);
   logger.info(`Saving ${user.username}'s base | IP: ${ctx.ip}`);

@@ -292,6 +292,13 @@ export class AttackSession {
   private unusedTools = 0;
   /** Set by the first drop, bomb or siege; until then no automatic end applies (#79). */
   private acted = false;
+  /**
+   * A battle the server already fought, played back (issue #221's Watch):
+   * the events still to apply, each at its own tick, and the tick the server
+   * ran the battle to. Null for a battle the player fights.
+   */
+  private script: FlingEvent[] | null = null;
+  private scriptEnd = 0;
   private readonly listeners = new Set<AttackSessionListener>();
   /** The last quarter-second the listeners heard about, to rate-limit `advance`. */
   private lastNotifiedQuarter = -1;
@@ -374,7 +381,10 @@ export class AttackSession {
     this.targetTick += Math.max(0, deltaSeconds) * TICKS_PER_SECOND * this.speed_;
     // Sixty frames of 1/60 s sum to 79.999…, not 80; the nudge keeps a whole
     // second of frames worth a whole second of ticks.
-    battle.runTo(Math.floor(this.targetTick + 1e-6));
+    const target = Math.floor(this.targetTick + 1e-6);
+    this.playScriptTo(battle, target);
+    if (this.phase !== "running") return;
+    battle.runTo(target);
     this.checkEnd(battle);
 
     if (this.phase !== "running") return;
@@ -409,6 +419,59 @@ export class AttackSession {
   leave(): void {
     if (this.phase === "ended" || this.phase === "idle" || !this.battle_) return;
     this.end("left");
+  }
+
+  /* ── Playback ───────────────────────────────────────────────────────── */
+
+  /**
+   * Plays back a battle the server already fought instead of taking the
+   * player's drops (issue #221, Watch on an auto-attack). Each event is
+   * applied at its own tick, exactly as the server's replay applied it
+   * (`server/src/services/base/combat/abandonedAttack.ts`: run to the event,
+   * apply it), so with the same seed, yard and levels the battle on screen is
+   * the one the server landed. A retreat ends the playback as a Retreat ends
+   * an attack; otherwise it ends where the server stopped, or earlier on the
+   * session's own ends once nothing is left to play.
+   *
+   * @param events - The fought log's events, in its order.
+   * @param endTick - The tick the server ran the battle to.
+   */
+  playScript(events: readonly FlingEvent[], endTick: number): void {
+    this.script = events
+      .map((event, at) => ({ event, at }))
+      .sort((one, other) => one.event.t - other.event.t || one.at - other.at)
+      .map(({ event }) => event);
+    this.scriptEnd = Math.max(0, Math.floor(endTick));
+  }
+
+  /** Whether this session plays a battle back rather than fighting one. */
+  get playback(): boolean {
+    return this.script !== null;
+  }
+
+  /** Applies every scripted event due by `target`, each at its own tick. */
+  private playScriptTo(battle: Battle, target: number): void {
+    const script = this.script;
+    if (!script) return;
+    while (script.length > 0 && script[0]!.t <= target) {
+      const event = script.shift()!;
+      battle.runTo(Math.max(0, Math.floor(event.t)));
+      battle.apply(event);
+      this.events.push(event);
+      this.acted = true;
+      if (event.kind === "retreat") {
+        this.end("retreat");
+        return;
+      }
+      if (event.kind === "fling") {
+        for (const [id, count] of Object.entries(event.monsters)) {
+          if (count > 0) this.flung[id] = (this.flung[id] ?? 0) + count;
+        }
+        if (event.champion) this.championsFlung.add(event.champion.t);
+      }
+      this.checkEnd(battle);
+      if (this.phase !== "running") return;
+    }
   }
 
   /* ── Events ─────────────────────────────────────────────────────────── */
@@ -747,13 +810,18 @@ export class AttackSession {
       this.end("destroyed");
       return;
     }
-    const nothingToSend =
-      rosterEmpty(this.remaining()) && !this.championAvailable() && this.unusedTools === 0;
+    // A playback has nothing to send but what is still to come in its script.
+    const nothingToSend = this.script
+      ? this.script.length === 0
+      : rosterEmpty(this.remaining()) && !this.championAvailable() && this.unusedTools === 0;
     if (battleState.creepsAlive === 0 && nothingToSend) {
       this.end("exhausted");
       return;
     }
-    if (battleState.over) this.end("expired");
+    // A playback stops where the server stopped the battle.
+    if (battleState.over || (this.script && this.script.length === 0 && battleState.tick >= this.scriptEnd)) {
+      this.end("expired");
+    }
   }
 
   private end(reason: AttackEndReason): void {

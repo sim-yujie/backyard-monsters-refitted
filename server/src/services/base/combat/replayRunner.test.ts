@@ -3,7 +3,13 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { lootReplayInput, replayedLoot } from "./attackLoot.js";
 import { replayAbandonedAttack } from "./abandonedAttack.js";
-import { ReplayTimeoutError, replayAbandonedInWorker, replayLootInWorker } from "./replayRunner.js";
+import {
+  ReplayTimeoutError,
+  replayAbandonedInWorker,
+  replayLoad,
+  replayLootInWorker,
+  reserveReplaySlot,
+} from "./replayRunner.js";
 
 /**
  * The replay runs in a worker (issue #23, C5): the same answer as inline, a
@@ -117,4 +123,38 @@ describe("replays in a worker (#23, C5)", () => {
     },
     REPLAY_TIMEOUT_MS
   );
+});
+
+describe("the auto-attack slots (issue #221)", () => {
+  test("are taken up to the cap, then turn the next one away once it has waited", async () => {
+    const one = await reserveReplaySlot(0, 2);
+    const two = await reserveReplaySlot(0, 2);
+    expect(one).not.toBeNull();
+    expect(two).not.toBeNull();
+    expect(replayLoad().reserved).toBe(2);
+
+    const started = performance.now();
+    expect(await reserveReplaySlot(120, 2)).toBeNull();
+    expect(performance.now() - started).toBeGreaterThanOrEqual(100);
+
+    one!();
+    one!();
+    expect(replayLoad().reserved).toBe(1);
+    const three = await reserveReplaySlot(0, 2);
+    expect(three).not.toBeNull();
+    two!();
+    three!();
+    expect(replayLoad().reserved).toBe(0);
+  });
+
+  test("count the replays already running: a slot waits for a worker to finish", async () => {
+    const replay = replayLootInWorker(lootInput());
+    expect(replayLoad().running).toBe(1);
+    const waiting = reserveReplaySlot(REPLAY_TIMEOUT_MS, 1);
+    await replay;
+    const slot = await waiting;
+    expect(slot).not.toBeNull();
+    expect(replayLoad().running).toBe(0);
+    slot!();
+  }, REPLAY_TIMEOUT_MS);
 });

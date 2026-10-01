@@ -1,3 +1,4 @@
+import type { AutoAttackPlanResponse } from "@/api/autoAttack";
 import type { Bookmark } from "@/api/bookmarks";
 import type { TakeoverPayment } from "@/api/maproom";
 import type { MapCell, PlayerCell, Resources, TakeoverQuoteResponse } from "@/api/types";
@@ -17,6 +18,7 @@ import { Minimap } from "./Minimap";
 import { NavPanel } from "./NavPanel";
 import { Notices } from "./Notices";
 import { RangeControl } from "./RangeControl";
+import { AutoAttackControl } from "./AutoAttackControl";
 import { TakeoverControl } from "./TakeoverControl";
 import { showTakenOver } from "./TakeoverDialog";
 
@@ -103,6 +105,12 @@ export interface MapRoomUiHandlers {
   onWithdrawInvite?: (cell: OffsetCell, payload: PlayerCell) => void;
   onInviteToOutpost?: (payload: PlayerCell) => void;
   canInviteToOutpost?: (payload: PlayerCell) => boolean;
+  /**
+   * The cell inspector's Repeat attack on a wild camp (issue #221); see
+   * `AutoAttackControlOptions`. Absent: no Repeat attack.
+   */
+  autoAttackPlan?: (baseid: string) => Promise<AutoAttackPlanResponse>;
+  onRepeatAttack?: (cell: OffsetCell, baseid: string, answer: AutoAttackPlanResponse) => void;
 }
 
 export class MapRoomUi {
@@ -122,6 +130,7 @@ export class MapRoomUi {
   private cellPanel: CellPanel | null = null;
   private rangeOn = false;
   private takeover: TakeoverControl | null = null;
+  private autoAttack: AutoAttackControl | null = null;
   private container: HTMLElement | null = null;
   /** The overlay's modal layer, for the takeover dialogs. */
   private modal: HTMLElement | null = null;
@@ -208,6 +217,8 @@ export class MapRoomUi {
     this.cellPanel = null;
     this.takeover?.destroy();
     this.takeover = null;
+    this.autoAttack?.destroy();
+    this.autoAttack = null;
     this.minimap.destroy();
     this.zoomControl.destroy();
     this.notices.destroy();
@@ -305,6 +316,11 @@ export class MapRoomUi {
         onDeclined: this.handlers.onTakeoverDeclined,
         modal: () => this.modal ?? this.container,
       });
+      const { autoAttackPlan, onRepeatAttack } = this.handlers;
+      this.autoAttack =
+        autoAttackPlan && onRepeatAttack
+          ? new AutoAttackControl({ plan: autoAttackPlan, onRepeat: onRepeatAttack })
+          : null;
       this.cellPanel = new CellPanel({
         onClose: this.handlers.onCellPanelClose,
         onBookmark: this.handlers.onBookmarkCell,
@@ -324,7 +340,7 @@ export class MapRoomUi {
         ...(this.handlers.onInviteToOutpost ? { onInviteToOutpost: this.handlers.onInviteToOutpost } : {}),
         ...(this.handlers.canInviteToOutpost ? { canInviteToOutpost: this.handlers.canInviteToOutpost } : {}),
         onRangeToggle: (on) => this.toggleRange(on),
-        extraAction: this.takeover,
+        extraAction: this.autoAttack ? [this.autoAttack, this.takeover] : this.takeover,
       }).mount(this.dock("map-dock map-dock--right mr2-cell-dock"));
       this.cellPanel.setRangeOn(this.rangeOn);
     }
@@ -342,6 +358,16 @@ export class MapRoomUi {
   /** Asks the server again whether the shown cell can be taken over. */
   refreshTakeover(): void {
     this.takeover?.refresh();
+  }
+
+  /** Asks the server again what the shown camp's Repeat attack would do (#221). */
+  refreshAutoAttack(): void {
+    this.autoAttack?.refresh();
+  }
+
+  /** The overlay's modal layer, where the auto-attack sheets open (#221). */
+  modalLayer(): HTMLElement | null {
+    return this.modal ?? this.container;
   }
 
   /** Opens a dialog on the overlay's modal layer: Move monsters, Move main yard here (#186). */
@@ -371,6 +397,8 @@ export class MapRoomUi {
     this.cellPanel = null;
     this.takeover?.destroy();
     this.takeover = null;
+    this.autoAttack?.destroy();
+    this.autoAttack = null;
     this.minimap.setSelected(null);
   }
 

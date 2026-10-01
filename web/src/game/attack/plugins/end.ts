@@ -17,6 +17,7 @@ import { takeoverGrantOf, type TakeoverKind } from "@/game/maproom/takeover";
 import { monsterName } from "@/ui/attack/ArmyPanel";
 import { EndAttackPanel, type SaveFailure } from "@/ui/attack/EndAttackPanel";
 import { EndTakeoverOffer } from "@/ui/attack/EndTakeoverOffer";
+import { AutoAttackFlow } from "@/ui/attack/AutoAttackFlow";
 
 /**
  * Attack-scene plugin for the "end" work package (issue #32, WP6).
@@ -308,6 +309,13 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     let credited = false;
     /** A tribe attack's save has been sent again after a replay timeout; once. */
     let resent = false;
+    /** Attack again's sheets, once opened (issue #221). */
+    let repeat: AutoAttackFlow | null = null;
+    /**
+     * A Map Room 2 wild camp attack, once saved, is the plan the server repeats
+     * for the camp's tribe and level, so the panel offers it again (owner, #221).
+     */
+    const repeatable = target.kind === "wild" && (target.mapversion ?? 2) === 2 && target.cell !== undefined;
     /**
      * A Map Room 1 tribe has no checkpoint and nothing lands its attack later
      * (`docs/server-api.md` "Map Room 1 tribe attacks"), so a timed-out save
@@ -354,10 +362,31 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       panel?.setExtra(offer.element);
     };
 
+    /** Opens Attack again's confirm sheet over the panel. */
+    const attackAgain = (): void => {
+      if (tornDown) return;
+      repeat?.close();
+      repeat = new AutoAttackFlow({
+        baseid: target.baseid,
+        ...(target.cell ? { cell: target.cell } : {}),
+        modal,
+        onWatch: (run) => mounts.openWatch?.(run),
+        // The loot it banked joins the pool the HUD shows, as this attack's did (#168).
+        onAttacked: (result) => creditLoot(result.loot),
+        onTaken: () => returnToMap("camp"),
+      });
+      void repeat.start();
+    };
+
+    const offerAgain = (): void => {
+      if (repeatable && panel && shown?.kind === "saved") panel.setAttackAgain(attackAgain);
+    };
+
     const show = (next: SaveShown): void => {
       shown = next;
       if (panel) showOn(panel, next);
       creditHud();
+      offerAgain();
       if (next.kind === "saved" && next.takeover) offerTakeover(next.takeover);
     };
 
@@ -484,6 +513,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       if (shown) showOn(panel, shown);
       if (offer) panel.setExtra(offer.element);
       creditHud();
+      offerAgain();
     };
 
     /** Opens the panel once nothing on screen is still playing out, or the wait runs out. */
@@ -535,6 +565,8 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       offer?.declineOnLeave(false);
       offer?.destroy();
       offer = null;
+      repeat?.close();
+      repeat = null;
       tornDown = true;
       page.window.removeEventListener("pagehide", onPageHide);
       unsubscribe();

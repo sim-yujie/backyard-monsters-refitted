@@ -1,3 +1,4 @@
+import { availableParallelism } from "node:os";
 import type { AbandonedInput, AbandonedOutcome } from "./abandonedAttack.js";
 import type { ReplayedLoot, ReplayedLootInput } from "./attackLoot.js";
 
@@ -24,6 +25,13 @@ import type { ReplayedLoot, ReplayedLootInput } from "./attackLoot.js";
  *   it answers or times out, so a stuck replay cannot hold up the next one and
  *   a crashed one takes nothing else down. Starting one costs its module load,
  *   a few tens of milliseconds next to the replay itself.
+ * - **A cap for auto-attacks (issue #221).** An auto-attack is a replay a
+ *   player can ask for every few seconds, so it first takes one of
+ *   {@link REPLAY_WORKER_CAP} slots, which it shares with every replay running
+ *   ({@link reserveReplaySlot}), and is turned away when none frees up in
+ *   time. Saves and the finaliser never wait: a player watching their own
+ *   attack end comes before anyone's repeat. A slot covers the auto-attack's
+ *   own worker too, so the cap errs on the side of fewer.
  */
 
 /** How long an attack save waits for its replay. */
@@ -56,13 +64,55 @@ export class ReplayTimeoutError extends Error {
 
 const WORKER_URL = new URL("./replayWorker.ts", import.meta.url);
 
+/** How many replays may run at once before an auto-attack has to wait: a core is left for the server. */
+export const REPLAY_WORKER_CAP = Math.max(1, availableParallelism() - 1);
+
+/** How long an auto-attack waits for a slot before it is turned away. */
+export const AUTO_ATTACK_SLOT_WAIT_MS = 5_000;
+
+const SLOT_POLL_MS = 50;
+
+/** Replay workers alive now, and auto-attack slots held. */
+let running = 0;
+let reserved = 0;
+
+/** What the cap counts, for the tests and the log line. */
+export const replayLoad = (): { running: number; reserved: number } => ({ running, reserved });
+
+/**
+ * Takes an auto-attack slot: waits while the replays running and the slots
+ * held fill the cap, up to `waitMs`.
+ *
+ * @returns The release, to call once the auto-attack has landed (idempotent),
+ *   or null when no slot freed up in time.
+ */
+export const reserveReplaySlot = async (
+  waitMs = AUTO_ATTACK_SLOT_WAIT_MS,
+  cap = REPLAY_WORKER_CAP
+): Promise<(() => void) | null> => {
+  const deadline = Date.now() + waitMs;
+  while (running + reserved >= cap) {
+    if (Date.now() >= deadline) return null;
+    await new Promise((resolve) => setTimeout(resolve, SLOT_POLL_MS));
+  }
+  reserved++;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    reserved--;
+  };
+};
+
 const run = (job: ReplayJob, deadlineMs: number): Promise<ReplayReply & { ok: true }> =>
   new Promise((resolve, reject) => {
     const worker = new Worker(WORKER_URL);
+    running++;
     let settled = false;
     const finish = (settle: () => void): void => {
       if (settled) return;
       settled = true;
+      running--;
       clearTimeout(timer);
       worker.terminate();
       settle();

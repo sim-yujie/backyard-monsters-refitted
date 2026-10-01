@@ -223,3 +223,34 @@ export const loginLimiter = RateLimit.middleware({
     ctx.body = { error: "Too many login attempts. Please try again later." };
   },
 });
+
+/**
+ * Rate limit for auto-attacks (issue #221) - 10 a minute per user, the owner's
+ * figure. Each runs a battle replay, and one is in progress at a time besides
+ * (`services/base/autoAttack/autoAttack.ts`).
+ */
+export const autoAttackLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 10,
+  prefixKey: "autoattack",
+  keyGenerator: byUser("autoattack"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many auto-attacks. Please wait a minute.", data: { reason: "rateLimited" } };
+  },
+});
+
+/**
+ * Rate limit for the auto-attack plan and its replay - 120 a minute per user:
+ * the map asks for a camp's plan each time its panel opens.
+ */
+export const autoAttackPlanLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 120,
+  prefixKey: "autoattackplan",
+  keyGenerator: byUser("autoattackplan"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down." };
+  },
+});

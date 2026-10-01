@@ -1,0 +1,57 @@
+/*
+ * Auto-attack (issue #221): the confirm sheet and the result, which reuse the
+ * end-of-attack panel's frame (`attack.css`, `.attack-end`), and the camp
+ * panel's Repeat attack line on the map. Every value comes from tokens.css.
+ */
+
+.auto-attack__army {
+  margin: 0 0 var(--space-1);
+  font-weight: 700;
+}
+
+.auto-attack__includes,
+.auto-attack__siege {
+  margin: 0 0 var(--space-2);
+}
+
+.auto-attack__refusal {
+  margin: var(--space-2) 0 var(--space-1);
+  color: var(--colour-warning);
+  font-weight: 700;
+}
+
+.auto-attack__missing {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-4);
+  color: var(--colour-text-secondary);
+}
+
+.auto-attack__conquered {
+  color: var(--colour-success, var(--colour-text));
+}
+
+.auto-attack__added {
+  color: var(--colour-accent);
+}
+
+.auto-attack__stalled {
+  margin: 0 0 var(--space-3);
+  color: var(--colour-warning);
+}
+
+/* The map's camp panel: the Repeat attack button sits under Attack, and its
+   line under the actions says which attack it repeats or what is missing. */
+.auto-attack-action {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.auto-attack-action--refused {
+  color: var(--colour-warning);
+}
+
+.auto-attack-action__missing {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+}

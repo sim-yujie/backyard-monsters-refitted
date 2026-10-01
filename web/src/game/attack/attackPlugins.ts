@@ -3,6 +3,7 @@ import type { Resources } from "@/api/types";
 import type { Camera } from "@/game/Camera";
 import type { ResourceAmounts } from "@/game/combat/rules";
 import type { BaiterRun } from "@/game/baiter/baiterSession";
+import type { WatchRun } from "@/game/autoAttack/watchRun";
 import type { Yard } from "@/game/yard/yardModel";
 import type { YardRenderer } from "@/game/yard/YardRenderer";
 import type { Notices } from "@/ui/maproom/Notices";
@@ -89,6 +90,13 @@ export interface AttackMounts {
   readonly runAgain?: (run: BaiterRun) => void;
   /** The Baiter scene: back to the player's own yard. */
   readonly goToYard?: () => void;
+  /**
+   * The auto-attack battle the watch scene plays back (issue #221), or
+   * absent on any other attack. Only the watch package reads it.
+   */
+  readonly watch?: WatchRun;
+  /** Opens the watch scene on an auto-attack's battle (issue #221). */
+  readonly openWatch?: (run: WatchRun) => void;
 }
 
 /** A package mounted on the scene; may return its teardown. */

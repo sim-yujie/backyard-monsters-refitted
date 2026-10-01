@@ -34,6 +34,9 @@ import { getHousingOwner, getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
 import { storedDamage } from "./storedDamage.js";
 import { catchUpArmyRow } from "../yard/armies.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
+import type { FlingLog, ResourceAmounts } from "../../game-rules/combat/index.js";
+import type { AbandonedOutcome } from "./combat/abandonedAttack.js";
+import { recordAttackPlan } from "./autoAttack/attackPlanStore.js";
 
 /**
  * Finishes an attack its attacker left without saving (issue #138).
@@ -77,6 +80,46 @@ import { MapRoomVersion } from "../../enums/MapRoom.js";
 
 export type FinaliseOutcome = "finalised" | "none" | "busy" | "stale";
 
+/** How an attack is landed from its checkpoint. */
+export interface LandOptions {
+  /**
+   * Whether the report says the attacker left: true (the default) for an
+   * attack its attacker abandoned; false for an auto-attack, which nobody left.
+   */
+  readonly left?: boolean;
+  /**
+   * Whether the landed attack becomes the attacker's plan for the camp's tribe
+   * and level (issue #221): true (the default) for an attack played by hand,
+   * false for an auto-attack, which only ever repeats one.
+   */
+  readonly recordPlan?: boolean;
+}
+
+/** What landing an attack wrote, for an auto-attack's result (issue #221). */
+export interface LandedAttack {
+  /** The replay's outcome: damage, health, flung, champions, report. */
+  readonly outcome: AbandonedOutcome;
+  /** The defender's stored damage before and after, whole (#72). */
+  readonly damageBefore: number;
+  readonly damageAfter: number;
+  /** What the loot rule credited the attacker, before the storage cap. */
+  readonly credit: ResourceAmounts;
+  /** What landed in the attacker's pool, and what did not fit. */
+  readonly credited: ResourceAmounts;
+  readonly overflow: ResourceAmounts;
+  /** The bombs charged, by id. */
+  readonly bombs: readonly string[];
+  /** The log the replay fought (`fightableLog`), and the tick it ran to. */
+  readonly fought: FlingLog;
+  readonly tick: number;
+}
+
+/** A finalisation's answer, with what it landed when it landed anything. */
+export interface Finalised {
+  readonly status: FinaliseOutcome;
+  readonly landed?: LandedAttack;
+}
+
 /** How often the sweep looks for expired attacks. */
 export const FINALISE_SWEEP_MS = 60_000;
 
@@ -116,9 +159,9 @@ const sourceCells = async (
  * Writes an abandoned attack's result. Runs inside its own ORM context and
  * holding the final lock.
  */
-const finaliseLocked = async (basesaveid: number, trigger: string): Promise<FinaliseOutcome> => {
+const finaliseLocked = async (basesaveid: number, trigger: string, options: LandOptions): Promise<Finalised> => {
   const checkpoint = await readCheckpoint(basesaveid);
-  if (!checkpoint) return "none";
+  if (!checkpoint) return { status: "none" };
 
   const defender = await postgres.em.findOne(Save, { basesaveid });
 
@@ -133,14 +176,14 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
       attackid: checkpoint.attackid,
       storedAttackId: defender?.attackid ?? null,
     });
-    return "stale";
+    return { status: "stale" };
   }
 
   const attacker = await postgres.em.findOne(User, { userid: checkpoint.attackerid }, { populate: ["save"] });
   const userSave = attacker?.save;
   if (!attacker || !userSave) {
     await discardCheckpoint(basesaveid);
-    return "stale";
+    return { status: "stale" };
   }
 
   const now = getCurrentDateTime();
@@ -168,10 +211,11 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
     attacker: userSave,
     tick: checkpoint.tick,
     declareWar: await isDeclareWarRunning(attacker.alliance_id),
+    left: options.left ?? true,
   });
   if (!input) {
     await discardCheckpoint(basesaveid);
-    return "stale";
+    return { status: "stale" };
   }
   const outcome = await replayAbandonedInWorker(input);
 
@@ -232,10 +276,11 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
   });
   // Bombs, then loot up to the attacker's storage cap, as `baseSave.ts` lands them (issue #166).
   if (bombs.charges.length > 0) userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
-  bankAttackLoot(userSave, loot.credit, loot.krallenBuff);
+  const banked = bankAttackLoot(userSave, loot.credit, loot.krallenBuff);
   postgres.em.persist(userSave);
 
   // The defender.
+  const damageBefore = defender.damage ?? 0;
   const storedHealthData = defender.buildinghealthdata;
   buildingDataHandler(buildingDataWithout(defender.buildingdata, outcome.firedTraps), defender);
   // A bunker the battle brought down loses its garrison, and each the battle
@@ -292,6 +337,10 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
   await endAttackSession(basesaveid);
   await discardCheckpoint(basesaveid);
 
+  // An attack played by hand on a Map Room 2 camp is the attacker's plan for
+  // its tribe and level from now on (issue #221); an auto-attack never is.
+  if (options.recordPlan ?? true) await recordAttackPlan(attacker.userid, defender, input.log, input.tick);
+
   logger.info("Finalised {username}'s abandoned attack on base {baseid} at tick {tick}", {
     event: "attack-finalised",
     trigger,
@@ -309,7 +358,20 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
     bombs: bombs.charges.map(({ id }) => id),
   });
 
-  return "finalised";
+  return {
+    status: "finalised",
+    landed: {
+      outcome,
+      damageBefore,
+      damageAfter: defender.damage ?? 0,
+      credit: loot.credit,
+      credited: banked.credited,
+      overflow: banked.overflow,
+      bombs: bombs.charges.map(({ id }) => id),
+      fought: input.log,
+      tick: input.tick,
+    },
+  };
 };
 
 /**
@@ -323,11 +385,27 @@ const finaliseLocked = async (basesaveid: number, trigger: string): Promise<Fina
  * @param basesaveid - The defender row.
  * @param trigger - What asked, for the log line.
  */
-export const finaliseAbandonedAttack = (basesaveid: number, trigger: string): Promise<FinaliseOutcome> =>
+export const finaliseAbandonedAttack = async (basesaveid: number, trigger: string): Promise<FinaliseOutcome> =>
+  (await landCheckpointedAttack(basesaveid, trigger)).status;
+
+/**
+ * Lands one defender row's checkpointed attack now, as the finaliser does,
+ * and says what it wrote: the finaliser's own path, which an auto-attack
+ * lands through too (issue #221), with its checkpoint written by the server.
+ *
+ * @param basesaveid - The defender row.
+ * @param trigger - What asked, for the log line.
+ * @param options - How to land it ({@link LandOptions}).
+ */
+export const landCheckpointedAttack = (
+  basesaveid: number,
+  trigger: string,
+  options: LandOptions = {}
+): Promise<Finalised> =>
   RequestContext.create(postgres.orm.em, async () => {
-    if (!(await acquireFinalLock(basesaveid))) return "busy";
+    if (!(await acquireFinalLock(basesaveid))) return { status: "busy" as const };
     try {
-      return await finaliseLocked(basesaveid, trigger);
+      return await finaliseLocked(basesaveid, trigger, options);
     } finally {
       await releaseFinalLock(basesaveid);
     }

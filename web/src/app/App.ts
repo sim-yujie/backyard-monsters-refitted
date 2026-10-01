@@ -10,6 +10,7 @@ import { MapRoom2Scene } from "./scenes/MapRoom2Scene";
 import { YardScene } from "./scenes/YardScene";
 import { AttackScene } from "./scenes/AttackScene";
 import { BAITER_PLUGINS } from "@/game/baiter/baiterPlugin";
+import { WATCH_PLUGINS } from "@/game/autoAttack/watchPlugin";
 
 /** Scene names, so nothing depends on a bare string in two places. */
 export const SceneName = {
@@ -32,6 +33,12 @@ export const SceneName = {
    * `game/baiter/baiterSession`. Nothing on it talks to the server.
    */
   BAITER: "baiter",
+  /**
+   * An auto-attack's battle played back (issue #221): the attack scene with
+   * only the battle layer and the watch package, opened through
+   * `game/autoAttack/watchRun`. Nothing on it talks to the server.
+   */
+  WATCH: "watch",
 } as const;
 export type SceneName = (typeof SceneName)[keyof typeof SceneName];
 
@@ -95,7 +102,8 @@ export class App {
       .register(SceneName.MAP_ROOM_2, () => new MapRoom2Scene())
       .register(SceneName.YARD, () => new YardScene())
       .register(SceneName.ATTACK, () => new AttackScene())
-      .register(SceneName.BAITER, () => new AttackScene(BAITER_PLUGINS, { practice: true }));
+      .register(SceneName.BAITER, () => new AttackScene(BAITER_PLUGINS, { practice: true }))
+      .register(SceneName.WATCH, () => new AttackScene(WATCH_PLUGINS, { watch: true }));
 
     // Pixi's renderer resize fires on the window; mirror it to the scenes.
     this.pixi.renderer.on("resize", this.handleResize);

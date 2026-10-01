@@ -30,6 +30,8 @@ let defender: Record<string, any>;
 const notices: Record<string, unknown>[] = [];
 let attackerSave: Record<string, any>;
 const store = new Map<string, string>();
+/** Plans written (issue #221). */
+const upsert = mock(async (_entity: unknown, _row: Record<string, any>) => {});
 
 mock.module("../../../server.js", () => ({
   postgres: {
@@ -50,6 +52,7 @@ mock.module("../../../server.js", () => ({
       },
       count: async () => 0,
       nativeUpdate: async () => 0,
+      upsert,
       persist: () => {},
       flush: async () => {},
     },
@@ -184,6 +187,36 @@ beforeEach(() => {
     buildingdata: {},
     resources: { r1: 100, r2: 100, r3: 100, r4: 100 },
   };
+});
+
+describe("the plan a hand-played camp attack leaves (issue #221)", () => {
+  test("the save that ends a Map Room 2 camp attack keeps the log the server fought, to its tick", async () => {
+    upsert.mockClear();
+    Object.assign(defender, { wmid: 11, level: 35 });
+    attackerSave.mapversion = 2;
+
+    await baseSave(ctxFor({ over: "1", tick: "3200", flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert.mock.calls[0]![1]).toMatchObject({
+      userid: ATTACKER,
+      wmid: 11,
+      level: 35,
+      slot: "last",
+      baseid: "1234",
+      plan: { v: 1, tick: 3200, events: LOG.events },
+    });
+  });
+
+  test("a save that does not end it, or one off Map Room 2, keeps none", async () => {
+    upsert.mockClear();
+    Object.assign(defender, { wmid: 11, level: 35 });
+    attackerSave.mapversion = 2;
+    await baseSave(ctxFor({ flinglog: JSON.stringify(LOG) }), async () => {});
+    attackerSave.mapversion = 1;
+    await baseSave(ctxFor({ over: "1", flinglog: JSON.stringify(LOG) }), async () => {});
+    expect(upsert).not.toHaveBeenCalled();
+  });
 });
 
 describe("attack loot through the save", () => {

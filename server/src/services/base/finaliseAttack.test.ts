@@ -54,11 +54,13 @@ let defender: Record<string, any>;
 let userSave: Record<string, any>;
 let outpost: Record<string, any>;
 const flush = mock(async () => {});
+const upsert = mock(async (_entity: unknown, _row: Record<string, any>) => {});
 
 const reset = () => {
   store.clear();
   sets.clear();
   flush.mockClear();
+  upsert.mockClear();
   defender = {
     basesaveid: BASESAVEID,
     baseid: "2000241208",
@@ -102,6 +104,7 @@ mock.module("../../server.js", () => ({
       find: async (_entity: unknown, where: { baseid: { $in: string[] } }) =>
         where.baseid.$in.includes(OUTPOST) ? [outpost] : [],
       persist: () => {},
+      upsert,
       flush,
     },
   },
@@ -122,7 +125,9 @@ mock.module("../alliance/powerups.js", () => ({
   isDeclareWarRunning: async () => false,
 }));
 
-const { finaliseAbandonedAttack, finaliseAttacksFor, finaliseExpiredOnBase } = await import("./finaliseAttack.js");
+const { finaliseAbandonedAttack, finaliseAttacksFor, finaliseExpiredOnBase, landCheckpointedAttack } = await import(
+  "./finaliseAttack.js"
+);
 const { storeCheckpoint, acquireFinalLock } = await import("./attackCheckpointStore.js");
 const { attackCheckpointKey } = await import("./attackCheckpoint.js");
 const { attackSessionKey } = await import("./attackSession.js");
@@ -510,6 +515,41 @@ describe("finaliseAbandonedAttack", () => {
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("stale");
     expect(userSave.monsters.housed.C1).toBe(200);
     expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(false);
+  }, REPLAY_TIMEOUT_MS);
+});
+
+describe("the plan an abandoned camp attack leaves (issue #221)", () => {
+  const asKozuCamp = () => Object.assign(defender, { wmid: 11, level: 35 });
+
+  test("an attack played by hand on a Map Room 2 camp becomes the plan, to the tick it was left at", async () => {
+    asKozuCamp();
+    await arm();
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    expect(upsert).toHaveBeenCalledTimes(1);
+    const row = upsert.mock.calls[0]![1];
+    expect(row).toMatchObject({ userid: ATTACKER, wmid: 11, level: 35, slot: "last", baseid: defender.baseid });
+    expect(row.plan).toEqual({ v: 1, tick: TICK, events: LOG.events });
+  }, REPLAY_TIMEOUT_MS);
+
+  test("an auto-attack's landing never does, and its report does not say the attacker left", async () => {
+    asKozuCamp();
+    await arm();
+
+    const landed = await landCheckpointedAttack(BASESAVEID, "auto-attack", { left: false, recordPlan: false });
+
+    expect(landed.status).toBe("finalised");
+    expect(landed.landed?.damageAfter).toBe(defender.damage);
+    expect(landed.landed?.fought.events).toEqual(LOG.events);
+    expect(defender.attackreport).not.toContain("Left the attack");
+    expect(upsert).not.toHaveBeenCalled();
+  }, REPLAY_TIMEOUT_MS);
+
+  test("an attack on anything but a camp leaves no plan", async () => {
+    await arm();
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+    expect(upsert).not.toHaveBeenCalled();
   }, REPLAY_TIMEOUT_MS);
 });
 

@@ -96,7 +96,9 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   await initAnticheat();
 
   // Finishes attacks whose window closed without a save (issue #138).
-  startAttackFinaliser();
+  // `ATTACK_FINALISER_SWEEP=off` leaves the sweep to another server sharing
+  // the same database, such as a second development server.
+  if (process.env.ATTACK_FINALISER_SWEEP !== "off") startAttackFinaliser();
 
   // Say which economy audit mode is live, once, at boot: `log` and `reject`
   // behave very differently for a player and the variable is read only here

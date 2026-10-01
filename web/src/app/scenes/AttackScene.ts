@@ -10,6 +10,7 @@ import { AttackPresentation } from "@/game/attack/attackPresentation";
 import { AttackSession, type AttackSessionState } from "@/game/attack/AttackSession";
 import { consumeAttackTarget, type AttackTarget, type AttackTargetKind } from "@/game/attack/attackTarget";
 import { baiterTarget, consumeBaiterRun, setBaiterRun, type BaiterRun } from "@/game/baiter/baiterSession";
+import { consumeWatchRun, setWatchRun, watchTarget, type WatchRun } from "@/game/autoAttack/watchRun";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
@@ -93,6 +94,13 @@ export class AttackScene implements Scene {
    */
   private readonly practice: boolean;
   private run: BaiterRun | null = null;
+  /**
+   * An auto-attack's battle played back (issue #221): the watch scene is this
+   * scene with `WATCH_PLUGINS` and this set. Like practice, nothing is saved,
+   * so stopping or leaving asks nothing.
+   */
+  private readonly watching: boolean;
+  private watchRun: WatchRun | null = null;
 
   private context: SceneContext | null = null;
   private viewportWidth = 0;
@@ -143,9 +151,13 @@ export class AttackScene implements Scene {
   private fitZoom = 0.05;
   private inset = { top: 0, bottom: 0 };
 
-  constructor(plugins: readonly AttackPlugin[] = ATTACK_PLUGINS, options: { practice?: boolean } = {}) {
+  constructor(
+    plugins: readonly AttackPlugin[] = ATTACK_PLUGINS,
+    options: { practice?: boolean; watch?: boolean } = {},
+  ) {
     this.plugins = plugins;
     this.practice = options.practice ?? false;
+    this.watching = options.watch ?? false;
     this.battleLayer.eventMode = "none";
   }
 
@@ -156,6 +168,9 @@ export class AttackScene implements Scene {
     if (this.practice) {
       this.run = consumeBaiterRun();
       this.target = this.run ? baiterTarget(this.run) : null;
+    } else if (this.watching) {
+      this.watchRun = consumeWatchRun();
+      this.target = this.watchRun ? watchTarget(this.watchRun) : null;
     } else {
       this.target = consumeAttackTarget();
     }
@@ -194,6 +209,15 @@ export class AttackScene implements Scene {
       });
       return;
     }
+    if (!target && this.watching) {
+      this.status.textContent = "No replay was chosen.";
+      this.notices.show("attack-load", "Run an auto-attack from the map, then press Watch.", {
+        level: "info",
+        actionLabel: "Back to the map",
+        onAction: () => context.goTo(SceneName.MAP),
+      });
+      return;
+    }
     if (!target) {
       this.status.textContent = "No target was chosen.";
       this.notices.show("attack-load", "Pick a target on the map and press Attack.", {
@@ -206,7 +230,9 @@ export class AttackScene implements Scene {
 
     this.status.textContent = this.practice
       ? "Setting up the practice attack…"
-      : `Loading ${target.name}'s ${targetNoun(target.kind)}…`;
+      : this.watching
+        ? "Setting up the replay…"
+        : `Loading ${target.name}'s ${targetNoun(target.kind)}…`;
     await this.load(target, context);
   }
 
@@ -354,7 +380,12 @@ export class AttackScene implements Scene {
     this.buildingCount = countedBuildings(yard.buildings.map((building) => building.type));
     this.startCamera(yard, context);
 
-    const session = new AttackSession({ target: { ...target, load: response } });
+    // A replay fights with the server's own seed and Declare War (issue #221).
+    const replay = this.watchRun?.replay;
+    const session = new AttackSession({
+      target: { ...target, load: response },
+      ...(replay ? { seed: replay.seed, declareWar: replay.declareWar } : {}),
+    });
     this.session = session;
     this.unsubscribe = session.subscribe((state) => this.onSessionChange(state));
     this.refreshStrip(session.state());
@@ -403,6 +434,11 @@ export class AttackScene implements Scene {
             goToYard: () => context.goTo(SceneName.YARD),
           }
         : {}),
+      ...(this.watchRun ? { watch: this.watchRun } : {}),
+      openWatch: (run: WatchRun) => {
+        setWatchRun(run);
+        context.goTo(SceneName.WATCH);
+      },
       setBottomInset: (px) => this.setInset({ ...this.inset, bottom: px }),
       showResources: (resources) => this.showResources(resources),
       creditLoot: (credited) => this.showResources(withLoot(this.shownResources, credited)),
@@ -489,7 +525,9 @@ export class AttackScene implements Scene {
     title.className = "attack-strip__title";
     title.textContent = this.practice
       ? "Practice attack"
-      : this.target
+      : this.watching && this.target
+        ? `Replay: ${this.target.name} camp`
+        : this.target
         ? `Attacking ${this.target.name}`
         : "Attack";
 
@@ -542,8 +580,12 @@ export class AttackScene implements Scene {
     const retreat = document.createElement("button");
     retreat.type = "button";
     retreat.className = "btn attack-strip__retreat";
-    retreat.textContent = this.practice ? "Stop" : "Retreat";
-    retreat.title = this.practice ? "End the practice attack now" : "End the attack now";
+    retreat.textContent = this.practice ? "Stop" : this.watching ? "End replay" : "Retreat";
+    retreat.title = this.practice
+      ? "End the practice attack now"
+      : this.watching
+        ? "Stop watching"
+        : "End the attack now";
     retreat.disabled = true;
     retreat.addEventListener("click", () => this.askRetreat());
 
@@ -748,8 +790,8 @@ export class AttackScene implements Scene {
       after?.();
       return;
     }
-    // A practice attack keeps nothing, so stopping it asks nothing.
-    if (this.practice) {
+    // A practice attack or a replay keeps nothing, so stopping it asks nothing.
+    if (this.practice || this.watching) {
       session.retreat();
       after?.();
       return;
@@ -792,8 +834,8 @@ export class AttackScene implements Scene {
     if (!context) return;
     const session = this.session;
     const phase = session?.state().phase;
-    // A practice attack is simply left: nothing was going to be saved.
-    if (this.practice) {
+    // A practice attack or a replay is simply left: nothing was going to be saved.
+    if (this.practice || this.watching) {
       session?.retreat();
       before?.();
       context.goTo(scene);

@@ -19,6 +19,8 @@ import {
   alliancesLimiter,
   terrainLimiter,
   takeoverQuoteLimiter,
+  autoAttackLimiter,
+  autoAttackPlanLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -56,6 +58,7 @@ import { getAlliances } from "./controllers/maproom/v2/bulk/getAlliances.js";
 import { takeoverCell } from "./controllers/maproom/v2/takeoverCell.js";
 import { declineTakeover } from "./controllers/maproom/v2/declineTakeover.js";
 import { takeoverQuote } from "./controllers/maproom/v2/takeoverQuote.js";
+import { autoAttack, autoAttackPlan, autoAttackReplay } from "./controllers/maproom/v2/autoAttack.js";
 import { transferMonsters } from "./controllers/maproom/v2/transferMonsters.js";
 import { saveBookmarks } from "./controllers/maproom/v2/saveBookmarks.js";
 
@@ -166,6 +169,10 @@ router.post("/worldmapv2/setmapversion", verifyUserAuth, logRequest, setMapVersi
 router.post("/worldmapv2/takeoverCell", verifyUserAuth, verifyAccountStatus, logRequest, takeoverCell);
 router.post("/worldmapv2/takeoverquote", verifyUserAuth, verifyAccountStatus, takeoverQuoteLimiter, logRequest, takeoverQuote);
 router.post("/worldmapv2/declinetakeover", verifyUserAuth, verifyAccountStatus, logRequest, declineTakeover);
+// Auto-attack on a wild monster camp (#221): the plan, the attack, and its replay for Watch.
+router.post("/worldmapv2/autoattackplan", verifyUserAuth, verifyAccountStatus, autoAttackPlanLimiter, logRequest, autoAttackPlan);
+router.post("/worldmapv2/autoattack", verifyUserAuth, verifyAccountStatus, autoAttackLimiter, logRequest, autoAttack);
+router.get("/worldmapv2/autoattackreplay", verifyUserAuth, verifyAccountStatus, autoAttackPlanLimiter, autoAttackReplay);
 router.post("/worldmapv2/transferassets", verifyUserAuth, verifyAccountStatus, logRequest, transferMonsters);
 router.post("/api/:apiVersion/player/savebookmarks", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, saveBookmarks);
 

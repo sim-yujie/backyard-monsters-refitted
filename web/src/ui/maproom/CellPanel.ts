@@ -83,11 +83,12 @@ export interface CellPanelOptions {
   onInviteToOutpost?: (payload: PlayerCell) => void;
   canInviteToOutpost?: (payload: PlayerCell) => boolean;
   /**
-   * An action that sits under Attack and brings its own line under the
-   * actions: Take over (`TakeoverControl`, issue #82). It is told about
+   * Actions that sit under Attack, each bringing its own line under the
+   * actions: Repeat attack (`AutoAttackControl`, issue #221) and Take over
+   * (`TakeoverControl`, issue #82), in the order given. Each is told about
    * every show and update and decides for itself what to show.
    */
-  extraAction?: CellPanelAction;
+  extraAction?: CellPanelAction | readonly CellPanelAction[];
 }
 
 /** How far one of the player's own cells flings. */
@@ -132,6 +133,8 @@ export class CellPanel {
   readonly element: HTMLElement;
 
   private readonly options: CellPanelOptions;
+  /** {@link CellPanelOptions.extraAction}, as a list. */
+  private readonly extras: readonly CellPanelAction[];
   private readonly picture: HTMLElement;
   private readonly title: HTMLElement;
   private readonly level: HTMLElement;
@@ -176,6 +179,8 @@ export class CellPanel {
 
   constructor(options: CellPanelOptions) {
     this.options = options;
+    const extra = options.extraAction;
+    this.extras = extra === undefined ? [] : "button" in extra ? [extra] : [...extra];
 
     const titleId = `cell-panel-${++panelIds}`;
     this.element = el("section", "panel mr2-cell");
@@ -296,7 +301,7 @@ export class CellPanel {
 
     const actions = el("div", "mr2-cell__actions");
     actions.append(this.attackButton, this.openButton);
-    if (options.extraAction) actions.append(options.extraAction.button);
+    for (const action of this.extras) actions.append(action.button);
     actions.append(this.secondary, this.social, this.inviteRow, this.moves);
 
     this.facts = document.createElement("dl");
@@ -315,7 +320,7 @@ export class CellPanel {
       this.flinger,
       actions,
       this.attackNote,
-      ...(options.extraAction ? [options.extraAction.detail] : []),
+      ...this.extras.map((action) => action.detail),
       this.more,
     );
     this.element.addEventListener("keydown", (event) => {
@@ -338,10 +343,9 @@ export class CellPanel {
     const cell = this.cell;
     if (!cell) return;
     this.payload = payload;
-    this.options.extraAction?.setCell(cell, payload);
+    for (const action of this.extras) action.setCell(cell, payload);
     this.render(cell, payload);
-    const chip = this.options.extraAction?.chip;
-    if (chip) this.chips.append(chip);
+    for (const action of this.extras) if (action.chip) this.chips.append(action.chip);
   }
 
   /** Keeps the flinger line's switch in step with "My range" (#177). */
@@ -359,7 +363,7 @@ export class CellPanel {
     for (const entry of this.countdowns) {
       entry.node.textContent = `${entry.label} ${formatCountdown(entry.expiresAt - nowSeconds)}`;
     }
-    this.options.extraAction?.tick(nowSeconds);
+    for (const action of this.extras) action.tick(nowSeconds);
   }
 
   mount(container: HTMLElement): this {

@@ -15,6 +15,9 @@ import {
   type TakeoverPayment,
 } from "@/api/maproom";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
+import { getAutoAttackPlan, type AutoAttackPlanResponse } from "@/api/autoAttack";
+import { setWatchRun } from "@/game/autoAttack/watchRun";
+import { AutoAttackFlow } from "@/ui/attack/AutoAttackFlow";
 import { ApiError, NetworkError } from "@/api/http";
 import {
   CellType,
@@ -301,6 +304,9 @@ export class MapRoom2Scene implements Scene {
         // The server refuses a player in an alliance (`inviteRules.ts`); an outpost is needed to offer.
         canInviteToOutpost: (payload) =>
           !payload.aid && this.ownSave !== null && outpostsOf(this.ownSave).length > 0,
+        // Repeat attack on a wild camp (#221).
+        autoAttackPlan: (baseid) => getAutoAttackPlan(baseid),
+        onRepeatAttack: (cell, baseid, answer) => this.openAutoAttack(cell, baseid, answer),
       },
       SceneName.MAP_ROOM_2,
       [
@@ -869,6 +875,59 @@ export class MapRoom2Scene implements Scene {
       takenOver: { kind: candidate.kind, name: candidate.name },
     });
     context.goTo(SceneName.YARD);
+  }
+
+  /* ── Auto-attack (#221) ─────────────────────────────────────────────── */
+
+  /**
+   * Repeat attack's confirm sheet and result, over the map. A landed attack
+   * spent monsters and banked loot, so the zones and the player's own yard
+   * are read again, and the camp's panel asks what a repeat would do now.
+   */
+  private openAutoAttack(cell: OffsetCell, baseid: string, answer: AutoAttackPlanResponse): void {
+    const context = this.context;
+    const modal = this.ui?.modalLayer();
+    if (!context || !modal) return;
+    void new AutoAttackFlow({
+      baseid,
+      cell,
+      modal,
+      onWatch: (run) => {
+        setWatchRun(run);
+        context.goTo(SceneName.WATCH);
+      },
+      onAttacked: () => {
+        this.store.invalidateCell(cell.col, cell.row);
+        this.store.refreshVisible();
+        void this.refreshOwnSave();
+        this.ui?.refreshAutoAttack();
+        this.ui?.refreshTakeover();
+      },
+      // Taken over from the result: off to the new outpost, as from the map's own Take over.
+      onTaken: () => {
+        this.store.invalidateCell(cell.col, cell.row);
+        setOwnYardTarget({
+          ...outpostTarget(baseid, cell),
+          takenOver: { kind: "camp", name: answer.plan?.tribe ?? "Wild monster" },
+        });
+        context.goTo(SceneName.YARD);
+      },
+    }).start(answer);
+  }
+
+  /** Reads the player's own yard again: its pool and its army moved. */
+  private async refreshOwnSave(): Promise<void> {
+    try {
+      const base = await loadOwnYard();
+      if (!this.context) return;
+      this.ownSave = base;
+      this.income = new IncomePrediction(base.buildingresources, base.resources);
+      this.incomeCap = storageCapOf(base);
+      this.clockOffset = base.currenttime - Date.now() / 1000;
+      this.showResources(base.resources ?? {}, base.credits);
+    } catch {
+      // The HUD catches up on the next visit; nothing here depends on it.
+    }
   }
 
   /* ── Moving between own yards (outposts WP7, #186) ──────────────────── */
