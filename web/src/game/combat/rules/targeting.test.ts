@@ -140,9 +140,30 @@ describe("findBuildingTarget", () => {
   });
 
   it("group 3 skips a harvester that has already been looted", () => {
-    const found = findBuildingTarget(yard, 0, 0, TARGET_GROUP.RESOURCES, noBunkers);
-    // Id 5 is the nearer harvester but its buffer is empty (`MonsterBase.as:1021`).
+    // From beside the harvesters, so the Town Hall at the origin is the farther
+    // of what is left.
+    const found = findBuildingTarget(yard, 260, 0, TARGET_GROUP.RESOURCES, noBunkers);
+    // Id 5 is nearer than the Town Hall but its buffer is empty (`MonsterBase.as:1021`).
     expect(found.closest?.id).toBe(4);
+    expect(found.second?.id).toBe(1);
+  });
+
+  it("group 3 takes the Storage Silo and the Town Hall, which carry no st (issue #225)", () => {
+    const storage = buildEngineYard({
+      buildingdata: {
+        "1": { id: 1, t: 14, X: 0, Y: 0 },
+        "2": { id: 2, t: 6, X: 100, Y: 0 },
+        "3": { id: 3, t: 20, X: 20, Y: 0 },
+        "4": { id: 4, t: 1, X: 400, Y: 0, st: 500 },
+      } as CombatBuildingDataMap,
+      // An empty pool too: `BSTORAGE` never sets `_looted`, only
+      // `BRESOURCE.Loot` does (`BFOUNDATION.as:198`, `BRESOURCE.as:121-125`).
+      resources: { r1: 0, r2: 0, r3: 0, r4: 0 },
+    });
+    const found = findBuildingTarget(storage, 0, 0, TARGET_GROUP.RESOURCES, noBunkers);
+    expect(found.fellThrough).toBe(false);
+    expect(found.closest?.id).toBe(1);
+    expect(found.second?.id).toBe(2);
   });
 
   it("group 4 skips an empty bunker and takes it once it is in use", () => {

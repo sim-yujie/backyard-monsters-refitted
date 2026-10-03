@@ -250,6 +250,20 @@ describe("loot", () => {
     expect(yard.buildings[0]?.looted).toBe(true);
   });
 
+  it("sends a resource specialist at a Storage Silo before a farther full harvester (issue #225)", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 6, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, X: 600, Y: 0, st: 400 },
+    });
+    const battle = createBattle(yard, { seed: 11, playerLevel: 20 });
+    battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C3: 1 } });
+    run(battle, 600);
+    const [silo, harvester] = yard.buildings;
+    expect(silo!.hp).toBeLessThan(silo!.maxHp);
+    expect(harvester!.hp).toBe(harvester!.maxHp);
+    expect(battle.state().defenderLoss.r1).toBeGreaterThan(0);
+  });
+
   it("gives a low-level attacker the `ATTACK.Loot` bonus, gain by gain", () => {
     // Level 8, so the buffer runs dry before the harvester falls.
     const yard = yardOf({ "1": { id: 1, l: 8, t: 1, X: 0, Y: 0, st: 400 } });

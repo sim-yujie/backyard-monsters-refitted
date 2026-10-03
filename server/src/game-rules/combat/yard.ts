@@ -1,5 +1,12 @@
 import { GRID_COST, TRAP_STATS } from "./combatStatsData.js";
-import { hpLadder, isTower, maxHp, outpostHarvesterStock, trapStats } from "./stats.js";
+import {
+  STORAGE_TYPES,
+  hpLadder,
+  isTower,
+  maxHp,
+  outpostHarvesterStock,
+  trapStats,
+} from "./stats.js";
 import { numberOf } from "./types.js";
 import type {
   BuildingHealthMap,
@@ -392,7 +399,7 @@ export interface EngineBuilding {
   hp: number;
   /** Mutable: a trap that has already gone off. */
   fired: boolean;
-  /** Mutable: a harvester whose buffer is empty, which `targetGroup` 3 skips. */
+  /** Mutable: a harvester whose buffer is empty, which `targetGroup` 3 skips; never storage. */
   looted: boolean;
   /** Mutable: the unbanked buffer still in a harvester. */
   stored: number;
@@ -519,7 +526,10 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
       trap,
       hp,
       fired: trap && reported === 0,
-      looted: banked <= 0,
+      // Only a harvester runs dry: `_looted` starts false (`BFOUNDATION.as:198`)
+      // and only `BRESOURCE.Loot` sets it (`BRESOURCE.as:121-125`), so storage,
+      // which hands out of the pool, is never looted (issue #225).
+      looted: !STORAGE_TYPES.includes(type) && banked <= 0,
       stored: banked,
       jarred: false,
     });

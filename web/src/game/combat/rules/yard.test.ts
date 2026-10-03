@@ -210,6 +210,20 @@ describe("buildEngineYard", () => {
     expect(harvester?.looted).toBe(false);
   });
 
+  it("never marks storage looted, on a main yard or an outpost (issue #225)", () => {
+    for (const kind of ["main", "outpost"] as const) {
+      const yard = buildEngineYard({
+        buildingdata: {
+          "1": { id: 1, t: 6, X: 0, Y: 0 },
+          "2": { id: 2, t: 14, X: 200, Y: 0, st: 0 },
+          "3": { id: 3, t: 112, X: 400, Y: 0 },
+        },
+        kind,
+      });
+      expect(yard.buildings.map((one) => one.looted), kind).toEqual([false, false, false]);
+    }
+  });
+
   it("zeroes the resources a caller does not name", () => {
     const yard = buildEngineYard(input);
     expect(yard.resources).toEqual({ r1: 500, r2: 0, r3: 0, r4: 0 });
