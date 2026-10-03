@@ -14,16 +14,21 @@ import type { Context } from "koa";
 type Row = Record<string, unknown>;
 
 let user: Row;
+/** Userids with a `bot` row (issue #235). */
+let botIds: number[];
+
+const em = {
+  global: true,
+  getContext: () => em,
+  findOne: async (entity: { name?: string }) =>
+    entity?.name === "Bot" ? (botIds.includes(user.userid as number) ? { userid: user.userid } : null) : user,
+  persist: () => {},
+  flush: async () => {},
+  fork: () => ({ findOne: async () => null, flush: async () => {} }),
+};
 
 mock.module("../../server.js", () => ({
-  postgres: {
-    em: {
-      findOne: async () => user,
-      persist: () => {},
-      flush: async () => {},
-      fork: () => ({ findOne: async () => null, flush: async () => {} }),
-    },
-  },
+  postgres: { em },
   redis: {
     get: async () => null,
     set: async () => "OK",
@@ -46,19 +51,19 @@ const HASH = await bcrypt.hash(PASSWORD, 4);
 const saved: Record<string, string | undefined> = {};
 const SWITCHES = ["ENV", "REQUIRE_DISCORD_VERIFICATION", "DISCORD_TOKEN", "SECRET_KEY"];
 
-const run = async () => {
+const run = async (password = PASSWORD) => {
   const ctx = {
-    request: { body: { email: "player@example.com", password: PASSWORD } },
+    request: { body: { email: "player@example.com", password } },
     ip: "127.0.0.1",
     get: () => "test",
   } as unknown as Context & { body: Row };
   try {
     await login(ctx, async () => {});
     const claims = JWT.decode(ctx.body.token as string) as { user: { discordId?: string | null } };
-    return { status: ctx.status, discordId: claims.user.discordId, message: undefined };
+    return { status: ctx.status, discordId: claims.user.discordId, message: undefined, body: ctx.body };
   } catch (caught) {
     const error = caught as { status?: number; message: string };
-    return { status: error.status, discordId: undefined, message: error.message };
+    return { status: error.status, discordId: undefined, message: error.message, body: undefined };
   }
 };
 
@@ -77,6 +82,7 @@ beforeEach(() => {
     discord_verified: false,
     discord_id: null,
   };
+  botIds = [];
 });
 
 afterEach(() => {
@@ -125,5 +131,16 @@ describe("login and REQUIRE_DISCORD_VERIFICATION", () => {
     process.env.REQUIRE_DISCORD_VERIFICATION = "true";
     process.env.ENV = "local";
     expect((await run()).status).toBe(200);
+  });
+});
+
+describe("login and bot accounts (issue #235)", () => {
+  test("a bot's account is refused exactly as a wrong password is", async () => {
+    const wrongPassword = await run("not-the-password");
+    botIds = [user.userid as number];
+    const bot = await run();
+    expect(bot.status).toBe(wrongPassword.status!);
+    expect(bot.message).toBe(wrongPassword.message);
+    expect(bot.body).toBeUndefined();
   });
 });

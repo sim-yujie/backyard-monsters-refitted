@@ -23,6 +23,8 @@ import { AlliancePowerup } from "./database/models/alliancepowerup.model.js";
 import { AllianceRelationship } from "./database/models/alliancerelationship.model.js";
 import { AllianceStats } from "./database/models/alliancestats.view.js";
 import { ApiConsumer } from "./database/models/apiconsumer.model.js";
+import { Bot } from "./database/models/bot.model.js";
+import { BotJob } from "./database/models/botjob.model.js";
 
 /**
  * List of entities to be used with MikroORM.
@@ -49,6 +51,8 @@ const entities = [
   AllianceRelationship,
   AllianceStats,
   ApiConsumer,
+  Bot,
+  BotJob,
 ];
 
 /**

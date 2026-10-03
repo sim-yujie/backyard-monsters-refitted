@@ -18,6 +18,7 @@ import { UserLoginSchema } from "../../schemas/AuthSchemas.js";
 import { Env } from "../../enums/Env.js";
 import { fetchDiscordAvatar } from "../../services/discord/fetchDiscordAvatar.js";
 import { requiresDiscordVerification } from "../../config/AccountConfig.js";
+import { isBot } from "../../services/bots/isBot.js";
 
 type SessionLifetime = NonNullable<SignOptions["expiresIn"]>;
 
@@ -78,6 +79,10 @@ export const login: KoaController = async (ctx) => {
     const isMatch = await bcrypt.compare(password!, user.password);
     if (!isMatch) throw emailPasswordErr();
   }
+
+  // A bot's account cannot be entered (issue #235); it reads as a wrong
+  // password, so the refusal does not say the account is a bot.
+  if (await isBot(user.userid)) throw emailPasswordErr();
 
   if (user.banned) throw userPermaBannedErr();
 

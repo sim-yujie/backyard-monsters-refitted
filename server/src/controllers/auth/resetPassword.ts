@@ -9,6 +9,7 @@ import { User } from "../../database/models/user.model.js";
 import { logger } from "../../utils/logger.js";
 import { ResetPasswordSchema } from "../../schemas/AuthSchemas.js";
 import { verifyJwtToken } from "../../middleware/auth.js";
+import { isBot } from "../../services/bots/isBot.js";
 
 const { JsonWebTokenError, TokenExpiredError } = jwt;
 
@@ -33,6 +34,8 @@ export const resetPassword: KoaController = async (ctx) => {
 
     const user = await postgres.em.findOne(User, { email });
     if (!user || user.resetToken !== token) throw authFailureErr();
+    // A bot's account cannot be entered (issue #235).
+    if (await isBot(user.userid)) throw authFailureErr();
 
     const hashedPassword = await bcrypt.hash(password!, 10);
 

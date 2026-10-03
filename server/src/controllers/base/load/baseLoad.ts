@@ -53,6 +53,8 @@ import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import type { DefenderForces } from "../../../game-rules/combat/index.js";
 import type { ChampionBrains } from "../../../services/base/attackSession.js";
+import { touchLastSeen } from "../../../services/user/lastSeen.js";
+import { logger } from "../../../utils/logger.js";
 
 type Stronghold = { level: number; cell?: { x: number; y: number } | null };
 
@@ -102,6 +104,10 @@ export const baseLoad: KoaController = async (ctx) => {
     case BaseMode.BUILD:
       baseSave = await baseModeBuild(user, baseid);
       redis.setex(`last-seen:main:${user.userid}`, 120, getCurrentDateTime().toString());
+      // Seen in the last 30 days is what earns a Map Room 1 neighbour place (issue #235).
+      await touchLastSeen(postgres.em, user).catch((err) =>
+        logger.warn(`last_seen_at not written for user ${user.userid}: ${err}`)
+      );
       break;
 
     case BaseMode.VIEW:

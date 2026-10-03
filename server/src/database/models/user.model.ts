@@ -50,6 +50,16 @@ export class User {
   @Property({ type: "boolean", default: false })
   sandbox_start: Opt<boolean> = false;
 
+  /**
+   * When the player last opened their own yard, written at most once an hour
+   * (`services/user/lastSeen.ts`, issue #235). The Map Room 1 neighbour search
+   * gives places only to players seen in the last 30 days. Null until the
+   * first load after the column was added. Server-only: never sent to a client.
+   */
+  @Index()
+  @Property({ type: "Date", nullable: true })
+  last_seen_at?: Date | null;
+
   @Property({ type: "boolean", default: false })
   banned: Opt<boolean> = false;
 

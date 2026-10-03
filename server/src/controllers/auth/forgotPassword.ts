@@ -10,6 +10,7 @@ import { User } from "../../database/models/user.model.js";
 import { authFailureErr } from "../../errors/errors.js";
 import { ForgotPasswordSchema } from "../../schemas/AuthSchemas.js";
 import { transporter } from "../../config/MailConfig.js";
+import { isBot } from "../../services/bots/isBot.js";
 /**
  * Controller to handle forgot password functionality.
  *
@@ -34,7 +35,9 @@ export const forgotPassword: KoaController = async (ctx) => {
     // Store the token in the database associated with the user's email
     const user = await postgres.em.findOne(User, { email });
     
-    if (!user) {
+    // A bot's account cannot be entered (issue #235): it fails as an unknown
+    // email does, so the answer does not say the account is a bot.
+    if (!user || (await isBot(user.userid))) {
       logger.error(`ForgotPassword: User not found for email: ${email}`);
       throw authFailureErr();
     }
