@@ -50,6 +50,7 @@ import { infernoSave } from "./controllers/inferno/infernoSave.js";
 import { infernoMonsters } from "./controllers/inferno/infernoMonsters.js";
 import { getNeighbours } from "./controllers/maproom/getNeighbours.js";
 import { getMapRoom1 } from "./controllers/maproom/getMapRoom1.js";
+import { presence } from "./controllers/maproom/presence.js";
 
 import { getArea } from "./controllers/maproom/v2/getArea.js";
 import { getSnapshot } from "./controllers/maproom/v2/bulk/getSnapshot.js";
@@ -157,6 +158,8 @@ router.post("/api/:apiVersion/bm/base/infernomonsters", apiVersion, verifyUserAu
 router.post("/api/:apiVersion/bm/neighbours/get", apiVersion, verifyUserAuth, logRequest, getNeighbours);
 // The web client's Map Room 1 screen (issue #132); re-read while the map is open, so not echoed by logRequest.
 router.get("/api/:apiVersion/bm/maproom1", apiVersion, verifyUserAuth, getMapRoom1);
+// The web client's presence ping (#242), every 30 s while its tab is visible, so not echoed by logRequest.
+router.post("/api/:apiVersion/bm/presence", apiVersion, verifyUserAuth, presence);
 
 /**  ────────────────────────────────────────────────
 * 📦 Map Room 2
