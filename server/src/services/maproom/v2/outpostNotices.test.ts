@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import {
   OUTPOST_ATTACKED,
+  YARD_ATTACKED,
   attackNoticeText,
   noticeOutpostAttack,
   takeOutpostNotices,
@@ -165,6 +166,22 @@ describe("on the owner's next load", () => {
     expect(messages.every((message) => message.targetUnread === 0)).toBe(true);
 
     expect(await takeOutpostNotices(em, OWNER)).toEqual([]);
+  });
+
+  test("a Map Room 1 yard's defence notice comes back as its own kind (#242)", async () => {
+    await writeOutpostNotice(em, {
+      ownerId: OWNER,
+      byUserId: ATTACKER,
+      type: YARD_ATTACKED,
+      text: { subject: "Bramble attacked your yard", message: "It was left 40% damaged, and nothing was looted." },
+      cell: { x: 0, y: 0 },
+      baseid: "1234",
+      now: 30,
+    });
+    const [notice] = await takeOutpostNotices(em, OWNER);
+    expect(notice).toMatchObject({ kind: "yardAttacked", id: "1234", at: 30 });
+    expect(notice!.detail.text).toBe("Bramble attacked your yard. It was left 40% damaged, and nothing was looted.");
+    expect(unread.get(OWNER)).toBe(0);
   });
 
   test("nobody else sees them: not the attacker, not a third player", async () => {

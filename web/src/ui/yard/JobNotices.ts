@@ -144,19 +144,27 @@ const hatchCount = (job: CompletedJob): number => {
 
 /**
  * One of the player's outposts was attacked or taken while they were away
- * (outposts WP8, #187). The server writes the whole sentence
+ * (outposts WP8, #187), or their Map Room 1 yard was attacked (bot neighbours
+ * §4.8, #242). The server writes the whole sentence
  * (`server/src/services/maproom/v2/outpostNotices.ts`): "Bramble attacked your
  * outpost at (243, 206). It was left 63% damaged, and 1,234 Twigs were
- * looted." Told as a sentence of its own, ahead of what finished.
+ * looted." Told as a sentence of its own, ahead of what finished; the value
+ * is what it says if the server sent no text.
  */
-const OUTPOST_NOTICES: ReadonlySet<string> = new Set(["outpostAttacked", "outpostTaken"]);
+const SERVER_NOTICES: Readonly<Record<string, string>> = {
+  outpostAttacked: "One of your outposts was attacked",
+  outpostTaken: "One of your outposts was attacked",
+  yardAttacked: "Your yard was attacked",
+};
 
-/** An outpost notice as its own sentence, with no buttons. */
-const outpostNoticeGroup = (job: CompletedJob): JobNoticeGroup => {
+const isServerNotice = (job: CompletedJob): boolean => Object.hasOwn(SERVER_NOTICES, job.kind);
+
+/** A server-written notice as its own sentence, with no buttons. */
+const serverNoticeGroup = (job: CompletedJob): JobNoticeGroup => {
   const text = (job.detail as { text?: unknown }).text;
   return {
     kind: job.kind,
-    heading: typeof text === "string" && text !== "" ? text.replace(/\.$/, "") : "One of your outposts was attacked",
+    heading: typeof text === "string" && text !== "" ? text.replace(/\.$/, "") : (SERVER_NOTICES[job.kind] ?? ""),
     items: [],
     tail: "",
     standalone: true,
@@ -269,10 +277,10 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
  */
 export const groupCompletedJobs = (completed: readonly CompletedJob[]): JobNoticeGroup[] => {
   const starters = completed.filter((job) => job.kind === STARTER_BASE).map(starterGroup);
-  const outposts = completed.filter((job) => OUTPOST_NOTICES.has(job.kind)).map(outpostNoticeGroup);
+  const notices = completed.filter(isServerNotice).map(serverNoticeGroup);
   const byKind = new Map<string, JobNoticeItem[]>();
   for (const job of completed) {
-    if (job.kind === STARTER_BASE || OUTPOST_NOTICES.has(job.kind)) continue;
+    if (job.kind === STARTER_BASE || isServerNotice(job)) continue;
     const items = byKind.get(job.kind) ?? [];
     items.push(labelOf(job));
     byKind.set(job.kind, items);
@@ -280,7 +288,7 @@ export const groupCompletedJobs = (completed: readonly CompletedJob[]): JobNotic
   const hatched = completed.reduce((sum, job) => (job.kind === HATCH ? sum + hatchCount(job) : sum), 0);
   return [
     ...starters,
-    ...outposts,
+    ...notices,
     ...[...byKind].map(([kind, items]) =>
       kind === MAP_ROOM_ADDED
         ? { kind, heading: "A ", items, tail: " was added to your yard" }

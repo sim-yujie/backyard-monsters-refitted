@@ -27,13 +27,21 @@ export { SYSTEM_SENDER } from "../../mail/systemSender.js";
 
 export const OUTPOST_ATTACKED = "outpostattacked";
 export const OUTPOST_TAKEN = "outposttaken";
+/**
+ * A Map Room 1 main yard was attacked (bot neighbours §4.8, #242): written in
+ * this same form by the after-defence hook (WP8) and handed back here with the
+ * outpost notices. Map Room 1 has no cells, so the web mailbox offers no
+ * "Show on map" for it.
+ */
+export const YARD_ATTACKED = "yardattacked";
 
-/** The two notices' kinds in the away notice, the load's `completed` list. */
-export type OutpostNoticeKind = "outpostAttacked" | "outpostTaken";
+/** The notices' kinds in the away notice, the load's `completed` list. */
+export type OutpostNoticeKind = "outpostAttacked" | "outpostTaken" | "yardAttacked";
 
 const KIND_OF: Readonly<Record<string, OutpostNoticeKind>> = {
   [OUTPOST_ATTACKED]: "outpostAttacked",
   [OUTPOST_TAKEN]: "outpostTaken",
+  [YARD_ATTACKED]: "yardAttacked",
 };
 
 /** A resource amount per key, as the loot is counted. */
@@ -162,7 +170,7 @@ export const takeOutpostNotices = async (em: EntityManager, userid: number): Pro
       targetid: userid,
       userid: SYSTEM_SENDER,
       targetUnread: 1,
-      messagetype: { $in: [OUTPOST_ATTACKED, OUTPOST_TAKEN] },
+      messagetype: { $in: [OUTPOST_ATTACKED, OUTPOST_TAKEN, YARD_ATTACKED] },
     },
     { orderBy: { updatetime: "ASC" } },
   );

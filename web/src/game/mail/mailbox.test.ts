@@ -13,6 +13,7 @@ import {
   threadItems,
   threadList,
   unreadThreads,
+  YARD_ATTACKED,
 } from "./mailbox";
 
 /** What the mailbox screen shows, worked out from the mail routes' answers (#193). */
@@ -83,6 +84,14 @@ describe("threadItems", () => {
     ]);
     expect(items[2]?.cell).toEqual({ col: 241, row: 208 });
     expect(items[0]?.cell).toBeNull();
+  });
+
+  it("gives a Map Room 1 yard's defence notice no cell, so no Show on map (#242)", () => {
+    const [item] = threadItems(
+      [message({ userid: 0, messagetype: YARD_ATTACKED, message: "Kai_Builds attacked your yard", coords: [0, 0] })],
+      2505,
+    );
+    expect(item).toMatchObject({ notice: true, label: null, type: "yardattacked", cell: null });
   });
 
   it("gives a notice without whole coordinates no cell", () => {

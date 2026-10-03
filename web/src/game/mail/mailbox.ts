@@ -16,6 +16,13 @@ export const SYSTEM_SENDER = 0;
 /** The name the game's notices go under. */
 export const SYSTEM_SENDER_NAME = "Backyard Monsters";
 
+/**
+ * The notice that the player's Map Room 1 yard was attacked (bot neighbours
+ * §8, #242; `server/src/services/maproom/v2/outpostNotices.ts`). Map Room 1
+ * has no cells, so it never offers "Show on map", whatever `coords` it carries.
+ */
+export const YARD_ATTACKED = "yardattacked";
+
 /** The most a message may hold (`SendMessageSchema`). */
 export const MESSAGE_LIMIT = 580;
 
@@ -161,7 +168,7 @@ export const threadItems = (messages: readonly MailMessage[], myId: number): Mai
       type: message.messagetype,
       text: message.message ?? "",
       time: Number(message.updatetime) || 0,
-      cell: notice ? noticeCell(message) : null,
+      cell: notice && message.messagetype !== YARD_ATTACKED ? noticeCell(message) : null,
       invite: message.messagetype === "migraterequest" ? inviteOf(message) : null,
     };
   });

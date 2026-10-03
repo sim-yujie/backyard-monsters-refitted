@@ -255,6 +255,40 @@ describe("outpost notices (#187)", () => {
   });
 });
 
+describe("yard defence notices (#242)", () => {
+  const defended = (text?: string): CompletedJob => ({
+    kind: "yardAttacked",
+    id: "1234",
+    t: null,
+    at: 70,
+    detail: text === undefined ? { x: null, y: null } : { text, x: null, y: null },
+  });
+
+  it("tells it as a sentence of its own, ahead of what finished", () => {
+    expect(
+      awayNoticeText(
+        groupCompletedJobs([
+          upgrade(1, CANNON, 5),
+          defended("Kai_Builds attacked your yard. It was left 40% damaged, and 500 Goo were looted."),
+        ]),
+      ),
+    ).toBe(
+      "Kai_Builds attacked your yard. It was left 40% damaged, and 500 Goo were looted. " +
+        `While you were away: upgrade finished: ${typeName(CANNON)} 5`,
+    );
+  });
+
+  it("says the yard was attacked when the server sent no text", () => {
+    expect(awayNoticeText(groupCompletedJobs([defended()]))).toBe("Your yard was attacked");
+  });
+
+  it("is never counted as a finished job", () => {
+    expect(groupCompletedJobs([defended("X attacked your yard.")])).toEqual([
+      { kind: "yardAttacked", heading: "X attacked your yard", items: [], tail: "", standalone: true },
+    ]);
+  });
+});
+
 describe("JobNotices", () => {
   let notices: Notices;
   let select: ReturnType<typeof vi.fn<(id: number) => void>>;

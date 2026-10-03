@@ -144,6 +144,27 @@ describe("the mailbox screen", () => {
     expect(onUnreadChange).toHaveBeenLastCalledWith(0);
   });
 
+  it("reads a Map Room 1 yard's defence notice: no reply, no Show on map (#242)", async () => {
+    const defended = message({
+      threadid: 3,
+      userid: 0,
+      messagetype: "yardattacked",
+      subject: "Kai_Builds attacked your yard",
+      message: "It was left 40% damaged, and nothing was looted.",
+      unread: 1,
+      updatetime: NOW - 30,
+      coords: [0, 0],
+    });
+    const api = fakeApi([[defended]], { 3: [defended] });
+    const { host } = await openScreen(api, { onShowOnMap: vi.fn() });
+
+    click(rows(host)[0]);
+    await settle();
+    expect(host.querySelector(".mail-message--notice")?.textContent).toContain("40% damaged");
+    expect(host.querySelector(".mail-writer")).toBeNull();
+    expect(host.querySelector(".mail-message__map")).toBeNull();
+  });
+
   it("replies in a player's thread, on its subject, and shows the server's refusal", async () => {
     const thread = [message({ userid: 77, message: "hi" }), message({ userid: ME, targetid: 77, message: "hello" })];
     const api = fakeApi([[message()]], { 1: thread });
