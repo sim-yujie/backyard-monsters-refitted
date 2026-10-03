@@ -18,7 +18,7 @@ export const SYSTEM_SENDER_NAME = "Backyard Monsters";
 
 /**
  * The notice that the player's Map Room 1 yard was attacked (bot neighbours
- * ง8, #242; `server/src/services/maproom/v2/outpostNotices.ts`). Map Room 1
+ * ยง4.8, #242; `server/src/services/maproom/v2/outpostNotices.ts`). Map Room 1
  * has no cells, so it never offers "Show on map", whatever `coords` it carries.
  */
 export const YARD_ATTACKED = "yardattacked";

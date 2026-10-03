@@ -145,7 +145,7 @@ const hatchCount = (job: CompletedJob): number => {
 /**
  * One of the player's outposts was attacked or taken while they were away
  * (outposts WP8, #187), or their Map Room 1 yard was attacked (bot neighbours
- * ง4.8, #242). The server writes the whole sentence
+ * ยง4.8, #242). The server writes the whole sentence
  * (`server/src/services/maproom/v2/outpostNotices.ts`): "Bramble attacked your
  * outpost at (243, 206). It was left 63% damaged, and 1,234 Twigs were
  * looted." Told as a sentence of its own, ahead of what finished; the value
