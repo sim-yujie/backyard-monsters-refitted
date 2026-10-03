@@ -528,6 +528,12 @@ export interface ProgressionYard {
   townHall: number;
   /** Actions taken from the starter base. */
   steps: number;
+  /**
+   * The empire level the yard stood at when each building was placed, by id:
+   * 1 for the starter base. The layout (`layout.ts`) places each building on
+   * the plot its owner had then, so growth never moves one.
+   */
+  builtAtLevel: Record<number, number>;
 }
 
 /**
@@ -538,9 +544,12 @@ export interface ProgressionYard {
 export const yardAtPoints = (seed: number, persona: Persona, target: number): ProgressionYard => {
   const run = new Progression(seed, persona);
   const targetLevel = levelOfTotal(target);
+  const builtAtLevel: Record<number, number> = {};
+  for (const building of run.buildings()) builtAtLevel[building.id] = 1;
   while (run.total < target) {
     const action = run.next();
     if (!action || levelOfTotal(action.total) > targetLevel) break;
+    if (action.kind === "build") builtAtLevel[action.id] = run.level;
     run.apply();
   }
   return {
@@ -550,6 +559,7 @@ export const yardAtPoints = (seed: number, persona: Persona, target: number): Pr
     level: run.level,
     townHall: run.townHall,
     steps: run.steps,
+    builtAtLevel,
   };
 };
 

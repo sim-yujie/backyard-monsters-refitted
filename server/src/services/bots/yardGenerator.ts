@@ -11,6 +11,7 @@ import { CHAMPION_CAGE_TYPE, CHAMPION_STATUS } from "../yard/champion.js";
 import { derivedLevels } from "../yard/derivedLevels.js";
 import { housingCapacity } from "../yard/housing.js";
 import { LOCKER_TYPE, STARTER_MONSTER } from "../yard/locker.js";
+import { layoutBotYard, type PlacedSpot } from "./layout.js";
 import { yardAtPoints, type Persona, type ProgressionBuilding } from "./progression.js";
 
 /**
@@ -40,9 +41,9 @@ import { yardAtPoints, type Persona, type ProgressionBuilding } from "./progress
  * - **Loot** (§4.2 step 4, §4.6): each resource at a random 25-70% of the
  *   storage cap `[PLACEHOLDER]`, and each harvester's buffer part full.
  *
- * Positions are WP5's (§4.2 step 2): the buildings come back without `X`/`Y`,
- * in id order, and the yard expansions (`storedata.ENL`) the plot grows with
- * are placed with them.
+ * - **Where everything stands** (§4.2 step 2, `layout.ts`): every building's
+ *   `X`/`Y`, a few decorations, and the yard expansions (`storedata.ENL`) the
+ *   plot grows with.
  */
 
 /** Storage held between these fractions of the cap (§4.6) `[PLACEHOLDER]`. */
@@ -74,8 +75,11 @@ const streamOf = (seed: number, salt: number): Rng => mulberry32((Math.floor(see
 const between = (rng: Rng, band: { min: number; max: number }): number =>
   band.min + (band.max - band.min) * rng.float();
 
-/** One building of a bot's yard, ready for placement (WP5 adds `X`/`Y`). */
+/** One building of a bot's yard, placed. */
 export interface BotBuilding extends ProgressionBuilding {
+  /** Footprint origin, yard units (`layout.ts`). */
+  X: number;
+  Y: number;
   /** A Monster Bunker's garrison (`yard/bunker.ts`). */
   m?: Record<string, number>;
   /** A harvester's buffer and its producing flag (`catchUpHarvesters.ts`). */
@@ -103,7 +107,12 @@ export interface BotYard {
   /** As the save stores them: strings. */
   points: string;
   basevalue: string;
+  /** In id order. */
   buildings: BotBuilding[];
+  /** Decorations, `{ id, t, X, Y }` as a placed one is stored (`yard/decor.ts`); ids from `DECORATION_ID_BASE`. */
+  decorations: PlacedSpot[];
+  /** The yard expansions: `{ ENL: { q } }`, or empty for none (a new save's `storedata` is `{}`). */
+  storedata: { ENL?: { q: number } };
   resources: BotResources;
   lockerdata: Record<string, { t: 2 }>;
   academy: Record<string, { level: number }>;
@@ -296,6 +305,12 @@ export const generateBotYard = (request: BotYardRequest): BotYard => {
   const { seed, persona, targetPoints, now } = request;
   const yard = yardAtPoints(seed, persona, targetPoints);
   const buildingdata = asBuildingData(yard.buildings);
+  const layout = layoutBotYard(
+    seed,
+    persona,
+    yard.buildings.map((building) => ({ id: building.id, t: building.t, level: yard.builtAtLevel[building.id] ?? 1 })),
+    yard.level
+  );
 
   const unlocked = unlockedMonsters(seed, topLevel(yard.buildings, LOCKER_TYPE));
   const academy = academyLevelsFor(seed, yard.level, topLevel(yard.buildings, ACADEMY_TYPE), unlocked);
@@ -303,16 +318,18 @@ export const generateBotYard = (request: BotYardRequest): BotYard => {
   const bunkerPool = unlocked.filter((id) => BUNKERABLE_MONSTERS.includes(id));
   const bunkerRng = streamOf(seed, SALT.bunkers);
   const lootRng = streamOf(seed, SALT.loot);
-  const buildings: BotBuilding[] = yard.buildings.map((building) => {
+  const buildings: BotBuilding[] = yard.buildings.map((building, index) => {
+    const { X, Y } = layout.buildings[index]!;
     if (building.t === BUNKER_TYPE) {
-      return { ...building, m: fillRoom(bunkerRng, bunkerCapacity(building.l), BUNKER_FILL, bunkerPool, academy) };
+      const m = fillRoom(bunkerRng, bunkerCapacity(building.l), BUNKER_FILL, bunkerPool, academy);
+      return { ...building, X, Y, m };
     }
     const stats = productionOf(building.t);
     if (stats) {
       const capacity = stats.capacity[building.l - 1] ?? 0;
-      return { ...building, st: Math.floor(capacity * between(lootRng, HARVESTER_BUFFER)), pr: 1 };
+      return { ...building, X, Y, st: Math.floor(capacity * between(lootRng, HARVESTER_BUFFER)), pr: 1 };
     }
-    return { ...building };
+    return { ...building, X, Y };
   });
 
   const housed = fillRoom(
@@ -332,6 +349,8 @@ export const generateBotYard = (request: BotYardRequest): BotYard => {
     points: String(yard.points),
     basevalue: String(yard.basevalue),
     buildings,
+    decorations: layout.decorations,
+    storedata: layout.expansion > 0 ? { ENL: { q: layout.expansion } } : {},
     resources: resourcesInBand(lootRng, storageCap({ buildingdata })),
     lockerdata: Object.fromEntries(unlocked.map((id) => [id, { t: 2 as const }])),
     academy,

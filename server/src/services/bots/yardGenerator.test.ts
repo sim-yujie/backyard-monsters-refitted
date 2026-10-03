@@ -9,6 +9,8 @@ import { BUNKER_TYPE, BUNKERABLE_MONSTERS, bunkerCapacity } from "../yard/bunker
 import { CHAMPION_CAGE_TYPE } from "../yard/champion.js";
 import { housingCapacity } from "../yard/housing.js";
 import { LOCKER_TYPE, STARTER_MONSTER } from "../yard/locker.js";
+import { checkNodePlacement } from "../yardplanner/validateLayout.js";
+import { expansionFor } from "./layout.js";
 import { PERSONAS, targetInBand } from "./progression.js";
 import {
   BUNKER_FILL,
@@ -103,9 +105,17 @@ const expectFilled = (yard: BotYard) => {
   }
 };
 
+/** Where everything stands (§4.2 step 2): the Yard Planner's Apply check on the plot the yard holds. */
+const expectPlaced = (yard: BotYard, seed: number) => {
+  const expansion = expansionFor(seed, yard.level);
+  expect(yard.storedata).toEqual(expansion > 0 ? { ENL: { q: expansion } } : {});
+  const nodes = [...yard.buildings, ...yard.decorations].map((spot) => ({ id: spot.id, t: spot.t, x: spot.X, y: spot.Y }));
+  expect(() => checkNodePlacement(nodes, expansion)).not.toThrow();
+};
+
 describe("generateBotYard", () => {
   test(
-    "every level 1-40 x 20 seeds hits its level and fills inside every band",
+    "every level 1-40 x 20 seeds hits its level, fills inside every band and fits the plot",
     () => {
       for (let level = 1; level <= 40; level++) {
         for (let index = 0; index < 20; index++) {
@@ -118,6 +128,7 @@ describe("generateBotYard", () => {
           });
           expect({ level, index, got: yard.level }).toEqual({ level, index, got: level });
           expectFilled(yard);
+          expectPlaced(yard, seed);
         }
       }
     },
@@ -129,15 +140,18 @@ describe("generateBotYard", () => {
     expect(generateBotYard(request)).toEqual(generateBotYard(request));
   });
 
-  test("a growing bot keeps its unlocks, its champion type and its buildings", () => {
+  test("a growing bot keeps its unlocks, its champion type and its buildings where they stood", () => {
     for (let seed = 0; seed < 10; seed++) {
       const persona = PERSONAS[seed % PERSONAS.length]!;
       const young = generateBotYard({ seed, persona, targetPoints: targetInBand(24, 0.5), now: NOW });
       const old = generateBotYard({ seed, persona, targetPoints: targetInBand(38, 0.5), now: NOW });
       for (const id of Object.keys(young.lockerdata)) expect(old.lockerdata[id]).toBeDefined();
       if (young.champion[0]) expect(old.champion[0]!.t).toBe(young.champion[0].t);
-      const later = new Map(old.buildings.map((building) => [building.id, building.t]));
-      for (const building of young.buildings) expect(later.get(building.id)).toBe(building.t);
+      const later = new Map(old.buildings.map((building) => [building.id, building]));
+      for (const building of young.buildings) {
+        const grown = later.get(building.id)!;
+        expect({ t: grown.t, X: grown.X, Y: grown.Y }).toEqual({ t: building.t, X: building.X, Y: building.Y });
+      }
     }
   });
 
