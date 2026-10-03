@@ -22,7 +22,6 @@ Contents:
 10. [Rollout](#10-rollout)
 11. [Work packages](#11-work-packages)
 12. [Decisions that turned out costly](#12-decisions-that-turned-out-costly)
-13. [Questions for the owner](#13-questions-for-the-owner)
 
 ---
 
@@ -75,6 +74,25 @@ costly, section 12 says so.
 15. **Home yard only:** no outposts, no alliances, not on leaderboards.
 16. **The 2,500 seeded Map Room 2 dev players stay.** Fix the seed script so it can never hand out
     the `DEV_SANDBOX` maxed yard.
+
+The owner's answers to this design's questions (2026-10-03):
+
+17. **Growth is a conveyor:** each bot climbs through all the levels at about **3 days per level**,
+    retires once it passes level 40, and a fresh level 1 bot takes its place (section 4.4).
+18. **Truce requests** to a bot are declined after a random **2-8 hours**.
+19. **Revenge caps:** at most **2 revenge attacks on one player per 24 hours**, **1 per bot-player
+    pair per 24 hours**; a revenge that cannot run gives up **72 hours** after the attack that
+    triggered it.
+20. **Only real players seen in the last 30 days** take neighbour places, read from a new
+    `user.last_seen_at` column set by the owner's own yard load.
+21. **Defence reports for every Map Room 1 main-yard defence** (real or bot attacker): a mail notice
+    plus the "While you were away" toast, in v1. A **Watch replay for every such defence** comes in
+    v1.1 (WP13).
+22. **Bots appear online now and then,** about 2 minutes at a time, which blocks attacks on them for
+    that minute as for a real player.
+23. **No early re-search when a player's level changes:** the 2-week cache stays as it is. (The
+    separate "fewer than 5 attackable" retry in section 4.3 is kept: it reacts to bots under
+    protection, not to the player's level.)
 
 ## 3. What already exists
 
@@ -284,10 +302,12 @@ function of (seed, P): growth (4.4) is the same progression run a little further
 
 `findOverworldNeighbours` is rewritten in two steps:
 
-1. **Real players.** One query over Map Room 1 main saves that are not bots, filtered in SQL by
+1. **Real players.** One query over Map Room 1 main saves that are not bots and whose owner was
+   seen in the last 30 days (`user.last_seen_at`, decision 20), filtered in SQL by
    the level window turned into an empire-points range
    (`(points::numeric + basevalue::numeric) >= experiencePoints[min-1] AND < experiencePoints[max]`),
-   newest first, limit 25. No 150-row cut, so every real player in range can be found. It runs at
+   newest first, limit 25. This also keeps quit accounts and the 2,500 seeded dev players (which
+   never log in) out of the real-player places. No 150-row cut, so every real player in range can be found. It runs at
    most once per player per cache period, so a scan is affordable; an expression index is noted in
    WP3 if the live table needs it.
 2. **Bots fill the rest.** `25 − real` bots from the `bot` table (`state = 'active'`,
@@ -299,14 +319,15 @@ attack counters of neighbours that stay are carried over, as the Inferno path al
 (`getNeighbours.ts:73-85`); this also fixes the counters reset for real players.
 
 **Keeping lists useful.** A bot attacked hard sits under 36-hour protection, so a two-week list
-can go stale. Proposal: also re-search after the 30-minute retry when fewer than 5 entries are
-attackable right now. Real players keep their places (step 1 runs first); only the bot picks
-change.
+can go stale. So the list is also re-searched after the 30-minute retry when fewer than 5 entries
+are attackable right now. Real players keep their places (step 1 runs first); only the bot picks
+change. There is **no** early re-search when the player's own level changes (decision 23): that
+is a different trigger, and the 2-week cache stays as it is.
 
 ### 4.4 Growth and the even spread (decision 7)
 
-Proposed reading of decision 7 (Q1): **a conveyor**. Each bot climbs through the levels at the same
-average pace, `T` days per level `[PLACEHOLDER: 3]`. A bot that passes level 40 has outgrown the
+Decision 17: **a conveyor**. Each bot climbs through the levels at the same average pace, `T` = 3
+days per level (so a bot lives about four months). A bot that passes level 40 has outgrown the
 range: it retires and a fresh level 1 bot is created in its place. With an equal pace per level,
 the 1-40 spread stays even on its own; a daily rebalance corrects drift.
 
@@ -359,7 +380,7 @@ The `revenge` job, when due:
    protected** (`save.protected > now`, which covers new-player, damage and bought protection);
    the player is **not online** (the last-seen key, which needs the web presence ping, 8.1).
    Online or under attack: retry in 15-60 minutes. Protected: retry when the protection ends plus
-   1-6 hours. Every retry gives up 72 hours `[PLACEHOLDER]` after the attack that triggered it.
+   1-6 hours. Every retry gives up 72 hours after the attack that triggered it (decision 19).
 2. **Army:** the bot's housed monsters (kept full by the refill) and its caged champion if alive.
    The brain does not top Housing up for the attack; it fights with what it has, as a player
    would.
@@ -392,22 +413,21 @@ Cost: one replay, about 0.2-1.1 s in a worker on a full player yard (`docs/desig
   too, or a report would itself say "this was a bot" (decision 3).
 - **Replay:** the game has a playback mode for a server-fought battle (auto-attack's Watch), but no
   defender replay of any kind. For the same reason as the report, a replay offered only for bot
-  revenge would give bots away. Proposed: a v1.1 "Watch" button on the defence notice for every Map
-  Room 1 main-yard defence, storing seed, log and the yard as the battle found it, as `keepReplay`
-  does. See section 12 and Q5.
+  revenge would give bots away. Decision 21: a v1.1 "Watch" button on the defence notice for every
+  Map Room 1 main-yard defence, storing seed, log and the yard as the battle found it, as
+  `keepReplay` does (WP13).
 
 ### 4.9 Messages, invites, chat (decision 14)
 
 - **Messages** to a bot are stored as any message and never answered. Nothing to build.
-- **Truce requests** to a bot: schedule a `declineTruce` job at a random 2-8 hours
-  `[PLACEHOLDER]` that answers through `handleTruceResponse` with Flash's "I reject your truce."
-  (Q2).
+- **Truce requests** to a bot: schedule a `declineTruce` job at a random 2-8 hours (decision 18)
+  that answers through `handleTruceResponse` with Flash's "I reject your truce."
 - **Alliance invites** cannot reach a bot (no world, `inviteUser.ts:51`); the same decline job is
   wired in case that changes. **Friend invites** do not exist on the server.
 - **Chat:** a bot never connects. Nothing to build.
 - **Presence:** each grow job marks the bot online for 2 minutes (`last-seen:main:<bot>`, as a real
   load does), so bots are sometimes seen online and, for that minute, cannot be attacked, like a
-  player (Q6).
+  player (decision 22).
 
 ### 4.10 Seed fix (decision 16)
 
@@ -455,7 +475,11 @@ CREATE UNIQUE INDEX bot_job_one_revenge ON bym.bot_job (bot_userid, target_useri
   `isBot(userid)` (one indexed lookup, cached per request).
 - Entities `bot.model.ts` and `botjob.model.ts`, added to entity discovery
   (`database/entityDiscovery.test.ts`).
-- No change to `user`, `save` or `maproom`. Revenge caps (7.2) are counted from `attack_logs`
+- **`user.last_seen_at`** (decision 20): `timestamptz NULL`, set by the owner's own yard load
+  (`baseLoad.ts`, next to the last-seen key at `:104`) at most once an hour, indexed for the
+  neighbour search. Existing rows start null (not seen), so on live they count again from their
+  next login. It is never sent to a client.
+- No change to `save` or `maproom`. Revenge caps (7.2) are counted from `attack_logs`
   (`attacker_userid`, `attacktime`) joined to `bot`, so no counter table is needed.
 
 ## 6. Server jobs
@@ -501,10 +525,10 @@ saves.
 - One revenge in flight per bot (a per-bot Redis lock as `auto-attack:<userid>`), and the unique
   index allows one pending revenge per bot and player.
 
-### 7.2 Revenge caps (Q3)
+### 7.2 Revenge caps (decision 19)
 
-Proposed defaults `[PLACEHOLDER]`: at most **2 revenge attacks on one player per 24 hours** and
-**1 per bot-player pair per 24 hours**, counted from `attack_logs`. A roll that would break a cap
+At most **2 revenge attacks on one player per 24 hours** and **1 per bot-player pair per 24
+hours**, counted from `attack_logs`. A roll that would break a cap
 is simply not scheduled. A global switch `BOTS_REVENGE=off` stops new revenge and cancels pending
 jobs.
 
@@ -560,7 +584,7 @@ Later (v1.1): "Watch" on a defence notice, reusing the attack scene's playback m
   Same seed and points give the same yard.
 - Progression: a yard at points P is a prefix of the yard at P' > P (growth never moves or removes
   a building).
-- Neighbour search: real players fill first; bots fill the rest within ±7; a real player outside the
+- Neighbour search: real players seen in the last 30 days fill first, others never; bots fill the rest within ±7; a real player outside the
   150 most recent saves is found; retired bots never appear; counters carried over on re-search;
   the attackable-count retry.
 - Revenge decision: roll rate with a seeded RNG; caps; postponement and give-up; refused for
@@ -609,8 +633,8 @@ Each is sized for one agent (S < 2 days, M < 1 week).
 | WP | Work | Depends on | Size |
 | --- | --- | --- | --- |
 | WP1 | **Seed fix.** `sandbox_start: false` in the three seeds, `getDefaultBaseData` refuses the sandbox to bots, test. | — | S |
-| WP2 | **Data model.** Migration, `bot` and `bot_job` entities, `isBot`, config switches, login and reset guards. | — | S |
-| WP3 | **Neighbour search rewrite.** Real players by SQL level range without the 150 cut, bot fill, counters carried over, attackable-count retry. | WP2 | M |
+| WP2 | **Data model.** Migration (`bot`, `bot_job`, `user.last_seen_at`), entities, `isBot`, config switches, login and reset guards, `last_seen_at` written by the owner's yard load. | — | S |
+| WP3 | **Neighbour search rewrite.** Real players seen in 30 days by SQL level range without the 150 cut, bot fill, counters carried over, attackable-count retry (no level-change re-search, decision 23). | WP2 | M |
 | WP4 | **Progression.** Pure seeded build order inside the limits, points and base value, level targeting, the champion and unlock tables. Tests for every level. | — | M |
 | WP5 | **Layout.** Pure seeded placement by zones, walls and traps, expansions; plugs into WP4. | WP4 | M |
 | WP6 | **Bot factory and CLI.** Names, avatars, back-dated rows, army and loot fill, `bots.ts create / status / retire-all / delete-retired`. | WP2, WP5 | M |
@@ -630,24 +654,10 @@ WP11, WP12. WP3 must be live before any bot is created on the live database.
 None is impossible. Three cost more than they look:
 
 - **Decision 13, replay.** No defender replay exists. Offering one for revenge alone would mark the
-  attacker as a bot (decision 3), so it has to come for every Map Room 1 main-yard defence. Proposed
-  as v1.1 (WP13, M), with the mail report in v1. The report has the same catch and is small (WP8).
+  attacker as a bot (decision 3), so it has to come for every Map Room 1 main-yard defence. Decided
+  as v1.1 (decision 21, WP13, M), with the mail report in v1. The report has the same catch and is small (WP8).
 - **Decision 13, "while the player is away".** The web client never reports presence, so "away" is
   wrong after one idle minute. A small fix (WP9), but revenge must not go live without it.
 - **Decision 5 with 36-hour protection.** Bots protected after heavy attacks can leave a two-week
   list with nothing to attack. The attackable-count retry (4.3) handles it; at a large player count
   500 bots run thin (7.5).
-
-## 13. Questions for the owner
-
-Each has a recommended default that applies if the owner has no preference.
-
-| # | Question | Recommendation |
-| --- | --- | --- |
-| Q1 | Decision 7, "outgrows its slot": should a bot climb through all the levels and retire past 40 (a fresh level 1 bot replacing it), or stay within one level and be replaced at that level when it reaches the next? And how many days per level? | Climb through (bots become long-running rivals that grow alongside a player), **3 days per level** on average, so a bot lives about four months. |
-| Q2 | Truce requests to a bot: decline after a few hours, like invites? | Yes, decline after 2-8 hours. A truce would also switch off revenge for a week. |
-| Q3 | Caps on revenge, beyond the 1-in-3 roll? And how long may a revenge wait for a protected or online player? | At most **2 revenges on one player per 24 h**, 1 per bot per player per 24 h; give up **72 h** after the attack. |
-| Q4 | Should a real player only take a neighbour place if they have played recently? Today anyone ever on Map Room 1 counts, including quit accounts and the 2,500 seeded dev players, so new players could get dead yards before bots. | Yes: real players count only if seen in the last **30 days** (needs a small `last_seen_at` column on `user`, set by the owner's yard load). |
-| Q5 | Replay: mail reports for every Map Room 1 main-yard defence in v1, and a "Watch" replay for every defence in v1.1 (not just revenge, so bots are not given away)? | Yes. |
-| Q6 | Should bots appear online now and then (2 minutes per grow job), which also blocks attacks on them for that minute, as with real players? | Yes. |
-| Q7 | A new player levels fast, but their list is cached for two weeks. Re-search early when their level has moved 3 or more since the last search? | Yes (applies to real players' lists too; it only changes which neighbours are offered). |
