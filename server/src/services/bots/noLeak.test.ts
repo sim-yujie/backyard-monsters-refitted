@@ -34,6 +34,8 @@ const READERS: Record<string, string> = {
   "controllers/auth/forgotPassword.ts": "refuses a bot's reset mail as an unknown email",
   "controllers/auth/resetPassword.ts": "refuses a bot's reset as a bad token",
   "mikro-orm.config.ts": "registers the entities",
+  "services/maproom/v1/findOverworldNeighbours.ts":
+    "fills empty neighbour places with bots, built by the same createNeighbourData as real players and shuffled in with them",
 };
 
 /** Directories whose files may read bot data freely: the bot code and the database layer. */

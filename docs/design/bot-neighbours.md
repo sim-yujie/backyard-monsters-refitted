@@ -314,7 +314,10 @@ function of (seed, P): growth (4.4) is the same progression run a little further
    `level BETWEEN min AND max`), not already in the list, preferring bots that are attackable now
    (not protected, not under attack), shuffled and spread across the levels in range.
 
-The cached list stores bot entries exactly as real ones (`createNeighbourData`). On re-search the
+The cached list stores bot entries exactly as real ones (`createNeighbourData`), and the whole
+list is shuffled before it is cached, so the order (real players first, bots after) gives nothing
+away. As built (WP3): "newest first" in step 1 is most recently seen (`last_seen_at`), and with
+`BOTS_FILL` off step 2 is skipped, so the list holds real players only. On re-search the
 attack counters of neighbours that stay are carried over, as the Inferno path already does
 (`getNeighbours.ts:73-85`); this also fixes the counters reset for real players.
 
