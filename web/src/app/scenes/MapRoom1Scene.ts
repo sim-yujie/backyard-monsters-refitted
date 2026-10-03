@@ -11,7 +11,6 @@ import type { BaseLoadResponse } from "@/api/types";
 import { setAttackTarget, setViewTarget, type AttackTarget } from "@/game/attack/attackTarget";
 import { Mr1Guide } from "@/game/guide/mr1Guide";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
-import { presence } from "@/game/presence/presencePing";
 import {
   attackGate,
   FLINGER_TYPE,
@@ -67,12 +66,8 @@ export class MapRoom1Scene implements Scene {
   /** Respawn times already refreshed for, so a late answer does not loop. */
   private readonly respawnsSeen = new Set<number>();
 
-  /** Gives back this screen's hold on the presence ping (#242). */
-  private releasePresence: (() => void) | null = null;
-
   async enter(context: SceneContext): Promise<void> {
     this.context = context;
-    this.releasePresence = presence.hold();
     this.ui = new MapRoom1Ui(
       {
         onSceneSelect: (id) => context.goTo(id),
@@ -104,8 +99,6 @@ export class MapRoom1Scene implements Scene {
   }
 
   exit(): void {
-    this.releasePresence?.();
-    this.releasePresence = null;
     document.removeEventListener("visibilitychange", this.onVisibility);
     this.guide?.destroy();
     this.guide = null;

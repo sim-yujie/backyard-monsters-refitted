@@ -18,7 +18,6 @@ import { Camera } from "@/game/Camera";
 import { setMapFocus } from "@/game/maproom/mapFocus";
 import { MapRoomChoice, mapRoomOf, takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { finishedMonstersJobs } from "@/game/monsters/finishedJobs";
-import { presence } from "@/game/presence/presencePing";
 import {
   blueprintBlock,
   PlannerAccess,
@@ -329,11 +328,6 @@ export class YardScene implements Scene {
    */
   private unmountPlugins: (() => void) | null = null;
   private readonly unregisterTargets: (() => void)[] = [];
-  /**
-   * Gives back this screen's hold on the presence ping (#242): taken on the
-   * player's own yards only, not on a visit.
-   */
-  private releasePresence: (() => void) | null = null;
   private canvasWidth = 0;
   private canvasHeight = 0;
 
@@ -350,7 +344,6 @@ export class YardScene implements Scene {
     const own = consumeOwnYardTarget();
     this.own = this.target ? MAIN_YARD : (own ?? MAIN_YARD);
     this.takenOver = this.target ? null : (own?.takenOver ?? null);
-    if (!this.target) this.releasePresence = presence.hold();
     const whose = this.whose();
     context.stage.addChild(this.renderer.root);
     this.renderer.attach(context.renderer);
@@ -440,8 +433,6 @@ export class YardScene implements Scene {
 
   exit(): void {
     for (const unregister of this.unregisterTargets.splice(0)) unregister();
-    this.releasePresence?.();
-    this.releasePresence = null;
     window.removeEventListener("keydown", this.onKeyDown);
     document.removeEventListener("visibilitychange", this.onVisibilityChange);
     this.dropStore();

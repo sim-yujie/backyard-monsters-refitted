@@ -17,9 +17,10 @@ import { sendPresence } from "@/api/presence";
  * a minute later, as the design wants. Coming back to the tab pings at once
  * when the last ping is 30 seconds old or more.
  *
- * Screens hold it rather than start it: the own yard and the two maps each
- * take a hold on entry and give it back on exit, so it runs only there, and
- * moving between them neither doubles the ping nor sends an extra one.
+ * Screens hold it rather than start it: every screen past sign-in takes a
+ * hold on entry and gives it back on exit (`app/presenceScene.ts`), so it
+ * runs only in the game, and moving between screens neither doubles the ping
+ * nor sends an extra one.
  */
 
 /** How often the ping goes while the tab is visible. */

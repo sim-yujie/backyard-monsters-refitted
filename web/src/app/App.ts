@@ -2,6 +2,7 @@ import { Application, Container } from "pixi.js";
 import { createOverlay, type Overlay } from "@/ui/overlay";
 import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager } from "./SceneManager";
+import { withPresence } from "./presenceScene";
 import { BootScene } from "./scenes/BootScene";
 import { LoginScene } from "./scenes/LoginScene";
 import { MapGateScene } from "./scenes/MapGateScene";
@@ -94,16 +95,17 @@ export class App {
       this.pixi.screen.height,
     );
 
+    // Every screen past sign-in keeps the player online (#242, `presenceScene.ts`).
     this.scenes
       .register(SceneName.BOOT, () => new BootScene())
       .register(SceneName.LOGIN, () => new LoginScene())
-      .register(SceneName.MAP, () => new MapGateScene())
-      .register(SceneName.MAP_ROOM_1, () => new MapRoom1Scene())
-      .register(SceneName.MAP_ROOM_2, () => new MapRoom2Scene())
-      .register(SceneName.YARD, () => new YardScene())
-      .register(SceneName.ATTACK, () => new AttackScene())
-      .register(SceneName.BAITER, () => new AttackScene(BAITER_PLUGINS, { practice: true }))
-      .register(SceneName.WATCH, () => new AttackScene(WATCH_PLUGINS, { watch: true }));
+      .register(SceneName.MAP, withPresence(() => new MapGateScene()))
+      .register(SceneName.MAP_ROOM_1, withPresence(() => new MapRoom1Scene()))
+      .register(SceneName.MAP_ROOM_2, withPresence(() => new MapRoom2Scene()))
+      .register(SceneName.YARD, withPresence(() => new YardScene()))
+      .register(SceneName.ATTACK, withPresence(() => new AttackScene()))
+      .register(SceneName.BAITER, withPresence(() => new AttackScene(BAITER_PLUGINS, { practice: true })))
+      .register(SceneName.WATCH, withPresence(() => new AttackScene(WATCH_PLUGINS, { watch: true })));
 
     // Pixi's renderer resize fires on the window; mirror it to the scenes.
     this.pixi.renderer.on("resize", this.handleResize);

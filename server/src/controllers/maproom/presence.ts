@@ -20,7 +20,8 @@ export const PRESENCE_TTL_SECONDS = 120;
  * `updatesaved` poll; the web client never polls, so a web player sitting in
  * their yard read as offline a minute after the yard loaded and could be
  * attacked while they watched. The client now pings this every 30 seconds
- * while its tab is visible and the player is in their own yard or on the map.
+ * while its tab is visible and the player is on any screen of the game: a
+ * revenge lands only while the player is away.
  *
  * It only refreshes the key: no save is read or written, so it costs one
  * Redis write.

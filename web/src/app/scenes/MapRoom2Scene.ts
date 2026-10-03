@@ -16,7 +16,6 @@ import {
   type TakeoverPayment,
 } from "@/api/maproom";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
-import { presence } from "@/game/presence/presencePing";
 import { getAutoAttackPlan, type AutoAttackPlanResponse } from "@/api/autoAttack";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { AutoAttackFlow } from "@/ui/attack/AutoAttackFlow";
@@ -212,12 +211,9 @@ export class MapRoom2Scene implements Scene {
   private sinceUiTick = 0;
   /** Rolling average of the scene's own per-frame cost, in milliseconds. */
   private frameCostMs = 0;
-  /** Gives back this screen's hold on the presence ping (#242). */
-  private releasePresence: (() => void) | null = null;
 
   async enter(context: SceneContext): Promise<void> {
     this.context = context;
-    this.releasePresence = presence.hold();
     this.pendingFocus = consumeMapFocus();
     this.viewportWidth = context.width;
     this.viewportHeight = context.height;
@@ -392,8 +388,6 @@ export class MapRoom2Scene implements Scene {
     this.input = null;
     this.camera.detach();
 
-    this.releasePresence?.();
-    this.releasePresence = null;
     window.removeEventListener("focus", this.handleFocus);
     document.removeEventListener("visibilitychange", this.handleFocus);
     window.removeEventListener("online", this.handleOnline);
