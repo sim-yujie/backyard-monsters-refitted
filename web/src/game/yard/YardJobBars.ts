@@ -169,6 +169,11 @@ export class YardJobBars {
     return [...this.bars].filter(([, bar]) => bar.root.visible).map(([id]) => id);
   }
 
+  /** Every id given a bar by the last rebuild, showing or not. */
+  get barIds(): ReadonlySet<number> {
+    return new Set(this.bars.keys());
+  }
+
   destroy(): void {
     this.clear();
     this.root.destroy({ children: true });

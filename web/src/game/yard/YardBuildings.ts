@@ -74,6 +74,8 @@ interface BuildingView {
   label: Text | null;
   /** The countdown badge, if this building has one. */
   marker: Sprite | null;
+  /** True while a progress bar stands in for the badge (#230); see `hideBadges`. */
+  badgeHidden: boolean;
   /**
    * World pixels this building is drawn away from where the save put it.
    *
@@ -248,6 +250,7 @@ export class YardBuildings {
         anims,
         label,
         marker: building.countdown ? this.addCountdownMarker(building, atlas) : null,
+        badgeHidden: false,
         offsetX: 0,
         offsetY: 0,
         hidden: false,
@@ -399,7 +402,7 @@ export class YardBuildings {
     view.hidden = hidden;
     // The countdown badge is not culled, so `draw` never touches it: it is the
     // one sprite that has to be switched in both directions here.
-    if (view.marker) view.marker.visible = !hidden;
+    if (view.marker) view.marker.visible = !hidden && !view.badgeHidden;
     if (!hidden) return;
     view.top.visible = false;
     if (view.shadow) view.shadow.visible = false;
@@ -516,9 +519,14 @@ export class YardBuildings {
   }
 
   /**
-   * The highest world y anything of a building is drawn at: its picture (or
-   * placeholder), any animation layer that has arrived, and its countdown
-   * badge. Where a bar over the building goes (#139). Offsets included.
+   * The highest world y a building's art is drawn at: its picture (or
+   * placeholder) and any animation layer that has arrived. Where a bar over
+   * the building goes (#139). Offsets included.
+   *
+   * Not the countdown badge: it stands a fixed height above the footprint
+   * whatever the art does, so over a low building — a Railgun, a Putty
+   * Squisher, Housing — it reached 20 to 45 pixels above the picture and
+   * lifted the bar with it, often over the building behind (#230).
    */
   crownOf(id: number): number | null {
     const view = this.byId.get(id);
@@ -527,8 +535,21 @@ export class YardBuildings {
     for (const layer of view.anims) {
       if (layer.resolved) top = Math.min(top, layer.sprite.y);
     }
-    if (view.marker) top = Math.min(top, view.marker.y - view.marker.height);
     return top;
+  }
+
+  /**
+   * Hides the countdown badge of every building in `ids` and shows the rest
+   * again: a building with a progress bar over it needs no badge, and over a
+   * low building the two would overlap (#230). Each `show` starts with every
+   * badge showing.
+   */
+  hideBadges(ids: ReadonlySet<number>): void {
+    for (const view of this.views) {
+      if (!view.marker) continue;
+      view.badgeHidden = ids.has(view.building.id);
+      view.marker.visible = !view.hidden && !view.badgeHidden;
+    }
   }
 
   /** The offset a building is currently drawn at. */

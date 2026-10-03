@@ -218,7 +218,9 @@ On the player's own yard every running build or upgrade also shows a small progr
 time left just above the building (#139, `web/src/game/yard/YardJobBars.ts`), redrawn once a second
 from the same `countdownProgress` the building panel uses and rebuilt on every store change, so it
 goes when the job finishes. At small zoom the time text is hidden and the bar kept. Visits and
-attacks draw none.
+attacks draw none. The bar sits a fixed gap above the top of the building's art (picture and
+animation layers) and replaces the countdown badge on that building, which would otherwise lift
+the bar well clear of a low building (#230).
 
 ### 2.5 Save format changes and migration
 

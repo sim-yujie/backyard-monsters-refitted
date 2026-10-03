@@ -86,22 +86,59 @@ describe("YardBuildings.pick before the art arrives (#39)", () => {
   });
 });
 
+/** The yard above with the Sniper Tower mid-upgrade, so it carries a countdown badge. */
+const upgradingYard = () => {
+  const response = yardResponse();
+  response.buildingdata!["2"] = { id: 2, t: 21, l: 1, X: 200, Y: 200, cU: 600 };
+  return readYard(response);
+};
+
+/** The countdown badge: the one sprite in the badge layer. */
+const badgeOf = (buildings: YardBuildings) => buildings.markers.children[0]!;
+
 describe("YardBuildings.crownOf", () => {
-  it("is the top of the building's picture, raised to its countdown badge, and moves with it (#139)", () => {
-    const response = yardResponse();
-    response.buildingdata!["2"] = { id: 2, t: 21, l: 1, X: 200, Y: 200, cU: 600 };
-    const yard = readYard(response);
+  it("is the top of the building's picture, not its countdown badge, and moves with it (#139, #230)", () => {
+    const yard = upgradingYard();
     const sniper = yard.buildings.find((one) => one.id === 2)!;
 
     const buildings = new YardBuildings();
     buildings.show(yard, fakeAtlas());
+    // The placeholder fills the footprint box. The badge stands above it, a
+    // fixed height over the footprint whatever the art does, so counting it
+    // lifted the bar far above a low building.
+    const badge = badgeOf(buildings);
+    expect(badge.y - badge.height).toBeLessThan(sniper.box.y);
     const crown = buildings.crownOf(2)!;
-    // The placeholder fills the footprint box; the badge stands above it.
-    expect(crown).toBeLessThan(sniper.box.y);
+    expect(crown).toBe(sniper.box.y);
 
     buildings.offsetBuilding(2, 0, -50);
     expect(buildings.crownOf(2)).toBe(crown - 50);
     expect(buildings.crownOf(99)).toBeNull();
+    buildings.destroy();
+  });
+});
+
+describe("YardBuildings.hideBadges", () => {
+  it("hides the badge of a building with a bar, through the planner's drawer, and gives it back (#230)", () => {
+    const buildings = new YardBuildings();
+    buildings.show(upgradingYard(), fakeAtlas());
+    const badge = badgeOf(buildings);
+    expect(badge.visible).toBe(true);
+
+    buildings.hideBadges(new Set([2]));
+    expect(badge.visible).toBe(false);
+    // Out of the drawer and back: still hidden, the bar is still there.
+    buildings.setHidden(2, true);
+    buildings.setHidden(2, false);
+    expect(badge.visible).toBe(false);
+
+    // No bar any more (the clock was taken away): the badge comes back.
+    buildings.hideBadges(new Set());
+    expect(badge.visible).toBe(true);
+    // A stored building's badge stays hidden whatever the bars say.
+    buildings.setHidden(2, true);
+    buildings.hideBadges(new Set());
+    expect(badge.visible).toBe(false);
     buildings.destroy();
   });
 });

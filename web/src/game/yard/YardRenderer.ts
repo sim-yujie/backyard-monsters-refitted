@@ -181,6 +181,7 @@ export class YardRenderer {
     this.buildings.show(yard, atlas);
     this.mountLife();
     this.jobBars.show(yard);
+    this.buildings.hideBadges(this.jobBars.barIds);
     this.blueprint.show(yard);
     this.blueprint.setActive(this.currentView === YardView.BLUEPRINT);
 
@@ -344,6 +345,8 @@ export class YardRenderer {
    */
   setJobClock(clock: (() => number) | null): void {
     this.jobBars.setClock(clock);
+    // A bar stands in for the countdown badge (#230); with no clock the badges come back.
+    this.buildings.hideBadges(this.jobBars.barIds);
   }
 
   /** The ids of the buildings showing a progress bar, in drawing order. */

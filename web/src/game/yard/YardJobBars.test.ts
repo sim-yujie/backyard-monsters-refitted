@@ -164,6 +164,27 @@ describe("YardJobBars", () => {
     bars.show(yardOf(mixed()));
     expect(bars.ids).not.toContain(2);
     expect(bars.ids).toContain(3);
+    // It still has a bar, so its countdown badge stays hidden (#230).
+    expect([...bars.barIds].sort()).toEqual([2, 3, 5]);
+  });
+
+  it("sits a fixed gap above its anchor, whatever the building (#230)", () => {
+    const bars = new YardJobBars(anchor);
+    bars.setClock(() => SAVED);
+    bars.show(yardOf(mixed()));
+    const gaps = bars.root.children.map((bar, index) => {
+      const id = bars.ids[index]!;
+      return anchor(id).y - bar.position.y;
+    });
+    expect(new Set(gaps).size).toBe(1);
+    expect(gaps[0]).toBeGreaterThan(0);
+    expect(gaps[0]).toBeLessThanOrEqual(8);
+  });
+
+  it("names no bars without a clock", () => {
+    const bars = new YardJobBars(anchor);
+    bars.show(yardOf(mixed()));
+    expect(bars.barIds.size).toBe(0);
   });
 
   it("hides the text at small zoom and keeps the bar", () => {
