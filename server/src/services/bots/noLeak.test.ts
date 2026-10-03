@@ -38,7 +38,8 @@ const READERS: Record<string, string> = {
     "fills empty neighbour places with bots, built by the same createNeighbourData as real players and shuffled in with them",
   "services/base/afterYardDefended.ts":
     "after a defence lands: a real defender gets the same notice whoever attacked, a bot books jobs; returns nothing to the response",
-  "server.ts": "starts the bot sweep when BOTS_BRAIN is on (a background timer; it answers no request)",
+  "server.ts":
+    "starts the bot sweep, with its revenge runner, when BOTS_BRAIN is on (a background timer; it answers no request)",
 };
 
 /** Directories whose files may read bot data freely: the bot code and the database layer. */

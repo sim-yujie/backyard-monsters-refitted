@@ -108,13 +108,16 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   if (botConfig().brain) {
     try {
       const { startBotSweep } = await import("./services/bots/sweep.js");
+      // Revenge attacks (issue #244) run only while BOTS_REVENGE is on too.
+      const { runRevengeAttack, seenRecently } = await import("./services/bots/revengeRun.js");
       startBotSweep({
         em: postgres.em,
         markOnline: async (userid, now) => {
           await redis.setex(`last-seen:main:${userid}`, PRESENCE_TTL_SECONDS, String(now));
         },
+        revenge: { isOnline: seenRecently, attack: (input) => runRevengeAttack(input) },
       });
-      logger.info("Bot sweep (BOTS_BRAIN): on");
+      logger.info(`Bot sweep (BOTS_BRAIN): on; revenge (BOTS_REVENGE): ${botConfig().revenge ? "on" : "off"}`);
     } catch (err) {
       logger.error(`Bot sweep could not start: ${err}`);
     }

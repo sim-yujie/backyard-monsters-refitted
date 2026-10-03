@@ -407,6 +407,31 @@ The `revenge` job, when due:
 Cost: one replay, about 0.2-1.1 s in a worker on a full player yard (`docs/design/auto-attack.md`
 §6.3); a few hundred a day at most.
 
+As built (WP11, `services/bots/revenge.ts` for the checks, `services/bots/revengeRun.ts` for the
+attack, run by the sweep): the job is claimed only with `BOTS_BRAIN` and `BOTS_REVENGE` both on; with
+`BOTS_REVENGE` off every pass deletes the booked revenge jobs. Details the text above leaves open:
+
+- **The checks run in this order**, all read fresh on the job's transaction: past the give-up time,
+  bot not active, player off Map Room 1, **this bot already attacked the player since the attack that
+  booked the job** (its `attack_logs` row; so a crash between the attack and the job's delete never
+  attacks twice), truce: **cancel**. Bot under attack, player online or under attack: 15-60 minutes.
+  Protected: protection end + 1-6 hours. A truce cancels rather than waits (it lasts 7 days, past
+  the 72-hour give-up). Any wait that would end at or past the give-up time cancels instead.
+- **The caps at run time** count bots' attacks on the player that have happened (`attack_logs`), not
+  booked jobs, so revenges that run keep both caps however retries moved them. A full cap waits until
+  the window frees, plus 15-60 minutes.
+- **"Online"** is a last-seen mark in the key's whole life (120 s), stricter than the attack load's
+  60 s.
+- **The per-bot lock** is the bot's `bym.bot` row, taken `FOR NO KEY UPDATE SKIP LOCKED` for the job's
+  transaction (another server holding it: retry in 5 minutes); a `grow` waits on it.
+- **The plan is made before the attack is minted**, so "nothing to send" (`planRevenge` null) cancels
+  with nothing written. No replay slot: retry in 5 minutes. The attack load refusing at the last
+  moment (a check raced): 15-60 minutes.
+- **`retaliatecount` + 1** is written right after the attack load, before the landing, so a revenge
+  whose replay runs past its deadline (it lands later from its checkpoint through the attack
+  finaliser's sweep) still counts. Such a late landing goes through the finaliser's default, so its
+  battle report reads "left the attack", as for any attack landed that way.
+
 ### 4.8 Defence report and replay (decision 13)
 
 - **Report:** `afterYardDefended` writes a system notice for **every Map Room 1 main-yard defence**,
@@ -525,8 +550,9 @@ it runs. Each pass first books a `grow` (due within the hour) for every active b
 is how a bot made by the factory starts; its first grow's catch-up gives it mushrooms and the rest of a
 real save. Jobs are claimed one at a time (`LIMIT 1 … SKIP LOCKED`, at most 20 a pass), each effect in
 a savepoint so a throw undoes it and leaves the backoff (5, 10, 20, 40 minutes; dropped at the fifth
-failure, and a dropped `grow` is booked afresh on the next pass). Only `grow` and `repair` are claimed;
-`revenge` and `declineTruce` rows wait for WP11 and WP12. Details that the text above leaves open:
+failure, and a dropped `grow` is booked afresh on the next pass). `grow` and `repair` are claimed, and
+`revenge` while `BOTS_REVENGE` is on (WP11, §4.7); `declineTruce` rows wait for WP12. Details that the
+text above leaves open:
 
 - **Growth is a diff** of the live yard against the generator's yard at the pace target: missing ids
   are built, lower levels upgraded, each step earning its build or upgrade points; the step with the

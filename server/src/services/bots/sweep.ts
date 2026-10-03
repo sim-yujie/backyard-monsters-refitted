@@ -31,6 +31,15 @@ import {
   tendChampion,
 } from "./brain.js";
 import { activeBotsByLevel, createBots, evenSpread } from "./factory.js";
+import {
+  giveupOf,
+  readRevengeFacts,
+  refusedVerdict,
+  revengeVerdict,
+  slotBusyVerdict,
+  type RevengeOutcome,
+  type RevengeVerdict,
+} from "./revenge.js";
 import { generateBotYard } from "./yardGenerator.js";
 
 /**
@@ -54,7 +63,11 @@ import { generateBotYard } from "./yardGenerator.js";
  *    it is undone and the job gets `attempts + 1` and a backoff
  *    ({@link backoffMinutes}); the {@link MAX_ATTEMPTS}th failure drops it
  *    with an error log. Only the kinds this sweep knows are claimed
- *    ({@link HANDLED_KINDS}); `revenge` and `declineTruce` wait for theirs.
+ *    ({@link HANDLED_KINDS}, and `revenge` while `BOTS_REVENGE` is on);
+ *    `declineTruce` waits for its own.
+ *
+ * With `BOTS_REVENGE` off, every pass first cancels (deletes) the booked
+ * `revenge` jobs, so a revenge booked while it was on never runs.
  *
  * Every yard write is under the save's row lock (`SELECT … FOR UPDATE`, as
  * `catchUpLockedYard`), and a yard under attack is left alone and looked at
@@ -66,6 +79,7 @@ import { generateBotYard } from "./yardGenerator.js";
  * | --- | --- | --- |
  * | `grow` | every 2-6 h | catch-up; retires the bot past level 40; otherwise growth to the pace target (`brain.ts`), the army topped up, the champion fed, loot in its band, `bot.level` kept, and about two minutes online |
  * | `repair` | 1-4 h after an attack (booked by `afterAttack.ts`) | catch-up, Repair all, traps re-armed, bunkers and Housing refilled, the champion fed and healed, loot in its band |
+ * | `revenge` | 1-24 h after an attack, 1 in 3 (booked by `afterAttack.ts`) | the checks (`revenge.ts`), then the attack (`revengeRun.ts`, passed in as {@link SweepDeps.revenge}); waits or gives up as the checks say |
  *
  * A damaged yard does not grow (a player repairs before upgrading); a grow
  * that finds damage and no repair booked books one.
@@ -101,7 +115,7 @@ export const UNDER_ATTACK_RETRY_MINUTES = 10;
 export const RUNNING_SHARE = 0.9;
 /** The rebalance's `bym.job_run` name. */
 export const REBALANCE_JOB = "bots-rebalance";
-/** The kinds this sweep runs. */
+/** The kinds this sweep runs; `revenge` too while `BOTS_REVENGE` is on. */
 export const HANDLED_KINDS: readonly BotJobKind[] = ["grow", "repair"];
 
 /** Minutes until a failed job is tried again: 5, 10, 20, 40. */
@@ -121,6 +135,19 @@ export interface SweepDeps {
   markOnline?: (userid: number, now: number) => Promise<void>;
   /** Random numbers in [0, 1); `Math.random` by default. */
   rng?: () => number;
+  /**
+   * Fights revenge attacks (`revengeRun.ts`, which `server.ts` passes in).
+   * Without it, revenge jobs wait, even with `BOTS_REVENGE` on.
+   */
+  revenge?: RevengeRunner;
+}
+
+/** What the `revenge` job runs the attack with. */
+export interface RevengeRunner {
+  /** Whether the player has been seen within the last-seen key's life. */
+  isOnline: (userid: number, now: number) => Promise<boolean>;
+  /** Fights and lands the attack (`runRevengeAttack`). */
+  attack: (input: { bot: number; target: number; now: number }) => Promise<RevengeOutcome>;
 }
 
 /** One claimed job. */
@@ -130,6 +157,9 @@ interface JobRow {
   kind: BotJobKind;
   attempts: number;
   payload: JsonObject;
+  target_userid: number | null;
+  giveup_at: Date | null;
+  created_at: Date;
 }
 
 /** The bot row a job reads. */
@@ -160,6 +190,8 @@ export interface SweepReport {
   grew: { userid: number; from: number; to: number }[];
   /** Bots whose growth was refused (logged): their yard is not the generator's. */
   refused: number[];
+  /** Revenge jobs by what became of them: `landed`, `pending`, `wait:<why>`, `cancel:<why>`. */
+  revenge: Partial<Record<string, number>>;
 }
 
 /** The context a handler runs in. */
@@ -168,6 +200,7 @@ interface JobContext {
   config: BotConfig;
   rng: () => number;
   report: SweepReport;
+  revenge?: RevengeRunner;
 }
 
 type Handler = (tx: EntityManager, job: JobRow, context: JobContext) => Promise<JobEffect>;
@@ -320,7 +353,74 @@ const repair: Handler = async (tx, job, { now, config, rng }) => {
   return {};
 };
 
-const HANDLERS: Record<string, Handler> = { grow, repair };
+/** Acts on a revenge job's verdict: deletes the job, or moves it to its new time. */
+const settleRevenge = async (tx: EntityManager, job: JobRow, verdict: RevengeVerdict, report: SweepReport) => {
+  if (verdict.act === "run") return;
+  const key = verdict.act === "cancel" ? `cancel:${verdict.reason}` : `wait:${verdict.reason}`;
+  report.revenge[key] = (report.revenge[key] ?? 0) + 1;
+  if (verdict.act === "cancel") await deleteJob(tx, job);
+  else await postpone(tx, job, verdict.due);
+  logger.info("Bot {bot}'s revenge on {target}: {act} ({reason})", {
+    event: "bot-revenge-check",
+    jobid: job.id,
+    bot: job.bot_userid,
+    target: job.target_userid,
+    act: verdict.act,
+    reason: verdict.reason,
+    ...(verdict.act === "postpone" && { due: at(verdict.due).toISOString() }),
+  });
+};
+
+/**
+ * The `revenge` job (`docs/design/bot-neighbours.md` §4.7): the checks, read
+ * fresh with the bot's row locked, then the attack. A landed attack, or one
+ * committed and left to land from its checkpoint, ends the job.
+ */
+const revenge: Handler = async (tx, job, { now, rng, report, revenge: runner }) => {
+  const target = Number(job.target_userid);
+  const giveupAt = giveupOf(job.giveup_at, job.created_at);
+  if (!runner || !target) {
+    await settleRevenge(tx, job, { act: "cancel", reason: "targetGone" }, report);
+    return {};
+  }
+
+  const facts = await readRevengeFacts(tx, { bot: job.bot_userid, target, giveupAt }, now, runner.isOnline);
+  // Null: another server holds this bot right now.
+  const verdict = facts ? revengeVerdict(facts, job.bot_userid, rng) : slotBusyVerdict(now, giveupAt);
+  if (verdict.act !== "run") {
+    await settleRevenge(tx, job, verdict, report);
+    return {};
+  }
+
+  const outcome = await runner.attack({ bot: job.bot_userid, target, now });
+  switch (outcome.status) {
+    case "landed":
+    case "pending":
+      report.revenge[outcome.status] = (report.revenge[outcome.status] ?? 0) + 1;
+      await deleteJob(tx, job);
+      return {};
+    case "busy":
+      await settleRevenge(tx, job, slotBusyVerdict(now, giveupAt), report);
+      return {};
+    case "refused":
+      await settleRevenge(tx, job, refusedVerdict(now, giveupAt, rng), report);
+      return {};
+    case "nothing":
+      await settleRevenge(tx, job, { act: "cancel", reason: "nothingToSend" }, report);
+      return {};
+  }
+};
+
+const HANDLERS: Record<string, Handler> = { grow, repair, revenge };
+
+/** Cancels every booked revenge (`BOTS_REVENGE` off); returns how many. */
+export const cancelRevenges = async (em: EntityManager): Promise<number> => {
+  const rows = await em.execute<{ id: number }[]>(`DELETE FROM bym.bot_job WHERE kind = 'revenge' RETURNING id`);
+  if (rows.length > 0) {
+    logger.info("BOTS_REVENGE is off: cancelled {count} booked revenge attacks", { count: rows.length });
+  }
+  return rows.length;
+};
 
 /** Books a `grow` for every active bot without one (step 1 of a pass). */
 export const bookFirstGrows = async (em: EntityManager, now: number): Promise<number> => {
@@ -338,13 +438,17 @@ export const bookFirstGrows = async (em: EntityManager, now: number): Promise<nu
 };
 
 /** Claims and runs one due job; null when none is due. */
-const runOneJob = async (em: EntityManager, context: JobContext): Promise<{ job: JobRow; effect: JobEffect } | null> =>
+const runOneJob = async (
+  em: EntityManager,
+  context: JobContext,
+  kinds: readonly BotJobKind[]
+): Promise<{ job: JobRow; effect: JobEffect } | null> =>
   em.fork().transactional(async (tx) => {
     const [claimed] = await tx.execute<JobRow[]>(
-      `SELECT id, bot_userid, kind, attempts, payload FROM bym.bot_job
-        WHERE due_at <= ? AND kind IN (${HANDLED_KINDS.map(() => "?").join(", ")})
+      `SELECT id, bot_userid, kind, attempts, payload, target_userid, giveup_at, created_at FROM bym.bot_job
+        WHERE due_at <= ? AND kind IN (${kinds.map(() => "?").join(", ")})
         ORDER BY due_at, id LIMIT 1 FOR UPDATE SKIP LOCKED`,
-      [at(context.now), ...HANDLED_KINDS]
+      [at(context.now), ...kinds]
     );
     if (!claimed) return null;
     const job: JobRow = { ...claimed, id: Number(claimed.id), attempts: Number(claimed.attempts) };
@@ -482,11 +586,22 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
     replaced: [],
     grew: [],
     refused: [],
+    revenge: {},
   };
-  const context: JobContext = { now, config, rng: deps.rng ?? Math.random, report };
+  const context: JobContext = { now, config, rng: deps.rng ?? Math.random, report, revenge: deps.revenge };
   const { em } = deps;
 
   report.booked += await bookFirstGrows(em.fork(), now);
+
+  // Revenge runs only with BOTS_REVENGE on and a runner given; with it off,
+  // nothing booked survives.
+  let kinds = HANDLED_KINDS;
+  if (!config.revenge) {
+    const cancelled = await cancelRevenges(em.fork());
+    if (cancelled > 0) report.revenge["cancel:switchedOff"] = cancelled;
+  } else if (deps.revenge) {
+    kinds = [...HANDLED_KINDS, "revenge"];
+  }
 
   const topUp = await rebalance(em, now, config);
   if (topUp !== null) {
@@ -496,7 +611,7 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
 
   const online: number[] = [];
   for (let n = 0; n < JOBS_PER_PASS; n++) {
-    const outcome = await runOneJob(em, context);
+    const outcome = await runOneJob(em, context, kinds);
     if (!outcome) break;
     if (outcome.effect.online !== undefined) online.push(outcome.effect.online);
     if (outcome.effect.retired !== undefined) report.retired.push(outcome.effect.retired);
