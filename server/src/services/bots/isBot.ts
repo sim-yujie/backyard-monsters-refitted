@@ -1,7 +1,6 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { Bot } from "../../database/models/bot.model.js";
-import { postgres } from "../../server.js";
 
 /**
  * Answers already given, per request or job: each request runs in its own
@@ -19,12 +18,15 @@ const answers = new WeakMap<EntityManager, Map<number, boolean>>();
  * difference in what a bot's responses contain (decision 3): a refusal for a
  * bot reads exactly as the same refusal for a real player would.
  *
+ * `server.js` is imported only when no manager is given: importing it boots
+ * the whole server, so a script or job passes its own `em`.
+ *
  * @param {number} userid - The user to ask about
  * @param {EntityManager} em - The entity manager to read with (the request's by default)
  * @returns {Promise<boolean>} True when the user has a `bot` row
  */
-export const isBot = async (userid: number, em: EntityManager = postgres.em): Promise<boolean> => {
-  const context = em.getContext(false);
+export const isBot = async (userid: number, em?: EntityManager): Promise<boolean> => {
+  const context = (em ?? (await import("../../server.js")).postgres.em).getContext(false);
   const cached = context.global ? undefined : answers.get(context);
   const known = cached?.get(userid);
   if (known !== undefined) return known;
