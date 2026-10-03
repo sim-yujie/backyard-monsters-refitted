@@ -79,6 +79,18 @@ describe("yardLifeOf", () => {
     expect(life.hardHat).toBe(false);
   });
 
+  it("reads ground monsters too, which name no movement (#229)", () => {
+    const pokeys = {
+      ...save,
+      monsters: { ...save.monsters, housed: { C1: 15, C2: 3, C14: 1, NOPE: 4, C3: 0 } },
+    } as BaseLoadResponse;
+    expect(yardLifeOf(pokeys, yard).groups.map((group) => [group.id, group.count])).toEqual([
+      ["C1", 15],
+      ["C2", 3],
+      ["C14", 1],
+    ]);
+  });
+
   it("leaves out a frozen or juiced champion, and a pen at zero health", () => {
     const other = {
       ...save,

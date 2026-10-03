@@ -2,6 +2,7 @@ import type { BaseLoadResponse } from "@/api/types";
 import {
   BEHAVIOUR_SPEED,
   championStat,
+  isKnownMonster,
   monsterMovement,
   monsterTickSpeed,
 } from "@/game/combat/rules";
@@ -256,6 +257,10 @@ const TRIBE_TYPE = "tribe";
  * them (`HOUSING.as:212-215`); one still being built counts, as it did there.
  * The champion list keeps status 0 only (`CHAMPIONCAGE.as:593-594`), and is
  * empty on an attacked yard; a wild monster camp has no workers.
+ *
+ * Every housed monster the combat tables know is drawn. A ground monster, the
+ * Pokey among them, names no `movement` there (only flyers, burrowers and
+ * jumpers do), so it is the table entry that is looked for (#229).
  */
 export const yardLifeOf = (
   save: BaseLoadResponse,
@@ -265,7 +270,7 @@ export const yardLifeOf = (
   const groups: LifeGroup[] = [];
   for (const [id, raw] of Object.entries(save.monsters?.housed ?? {})) {
     const count = Math.floor(Number(raw));
-    if (!Number.isFinite(count) || count <= 0 || monsterMovement(id) === undefined) continue;
+    if (!Number.isFinite(count) || count <= 0 || !isKnownMonster(id)) continue;
     groups.push({ id, level: academyLevel(save.academy, id), count });
   }
 
