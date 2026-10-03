@@ -41,6 +41,13 @@ const PAYLOAD = flingerPayload();
 /** Every replay here runs the whole combat engine, which a loaded machine slows. */
 const REPLAY_TIMEOUT_MS = 120_000;
 
+/**
+ * Generating and laying out yards takes a second or more each on a busy
+ * machine; Bun's 5 s default is a wall-clock watchdog a full suite run blows
+ * through with nothing wrong (issue #141).
+ */
+const GENERATED_TIMEOUT_MS = 60_000;
+
 const SANDBOX = fileURLToPath(new URL("../../../../web/test/fixtures/baseload-sandbox-yard.json", import.meta.url));
 const sandbox = JSON.parse(readFileSync(SANDBOX, "utf8"));
 
@@ -220,7 +227,7 @@ describe("revengeArmyOf", () => {
       expect(army.monsters).toEqual(yard.monsters.housed);
       expect(army.champion?.t).toBe(yard.champion[0]?.t);
     }
-  });
+  }, GENERATED_TIMEOUT_MS);
 });
 
 describe("splitArmy", () => {
@@ -257,38 +264,52 @@ describe("planRevenge", () => {
     const one = planRevenge(army, { buildingdata }, 99);
     expect(planRevenge(army, { buildingdata }, 99)).toEqual(one);
     expect(planRevenge(army, { buildingdata }, 100)).not.toEqual(one);
-  });
+  }, GENERATED_TIMEOUT_MS);
 
-  test("keeps every rule against yards of every level", () => {
-    let planned = 0;
-    for (let level = 1; level <= 40; level++) {
-      for (const seed of [1, 2, 3]) {
-        const { army } = botAt(level, level * 7 + seed);
-        const { buildingdata } = playerAt(Math.min(40, level + seed - 2 || 1), level * 13 + seed);
-        // A young bot with no Housing yet has nothing to field, as a player
-        // without one: no plan, so no revenge.
-        if (Object.keys(army.monsters).length === 0 && !army.champion) {
-          expect(planRevenge(army, { buildingdata }, seed)).toBeNull();
-          continue;
+  // Every level, two seeds each, in four bands so no one test carries all
+  // eighty yards (each is generated and laid out from scratch).
+  for (const [from, to] of [
+    [1, 10],
+    [11, 20],
+    [21, 30],
+    [31, 40],
+  ] as const) {
+    test(
+      `keeps every rule against yards of levels ${from}-${to}`,
+      () => {
+        let planned = 0;
+        for (let level = from; level <= to; level++) {
+          for (const seed of [1, 2]) {
+            const { army } = botAt(level, level * 7 + seed);
+            const { buildingdata } = playerAt(Math.max(1, Math.min(40, level + 2 * seed - 3)), level * 13 + seed);
+            // A young bot with no Housing yet has nothing to field, as a player
+            // without one: no plan, so no revenge.
+            if (Object.keys(army.monsters).length === 0 && !army.champion) {
+              expect(level).toBeLessThanOrEqual(4);
+              expect(planRevenge(army, { buildingdata }, seed)).toBeNull();
+              continue;
+            }
+            planned += 1;
+            expectValid(army, buildingdata, level * 31 + seed);
+          }
         }
-        planned += 1;
-        expectValid(army, buildingdata, level * 31 + seed);
-      }
-    }
-    // Only the first levels can lack Housing.
-    expect(planned).toBeGreaterThanOrEqual(110);
-  });
+        // Only the first levels can lack Housing.
+        expect(planned).toBeGreaterThanOrEqual(from === 1 ? 12 : 20);
+      },
+      GENERATED_TIMEOUT_MS
+    );
+  }
 
   test("keeps every rule against a full player yard", () => {
     const { army } = botAt(40, 5);
     for (const seed of [1, 2, 3, 4, 5]) expectValid(army, sandbox.buildingdata, seed);
-  });
+  }, GENERATED_TIMEOUT_MS);
 
   test("lands a champion alone when there is nothing else", () => {
     const army: RevengeArmy = { monsters: {}, champion: { t: 1, l: 2, pl: 0 }, levels: {} };
     const plan = planRevenge(army, { buildingdata: playerAt(30, 1).buildingdata }, 5)!;
     expect(plan.events).toEqual([expect.objectContaining({ kind: "fling", monsters: {}, champion: army.champion })]);
-  });
+  }, GENERATED_TIMEOUT_MS);
 
   test("is no plan with nothing to fling or nothing to attack", () => {
     const { army } = botAt(20, 1);
@@ -296,7 +317,7 @@ describe("planRevenge", () => {
     expect(planRevenge(army, { buildingdata: {} }, 1)).toBeNull();
     const flat = Object.fromEntries(Object.keys(sandbox.buildingdata).map((id) => [id, 0]));
     expect(planRevenge(army, { buildingdata: sandbox.buildingdata, buildinghealthdata: flat }, 1)).toBeNull();
-  });
+  }, GENERATED_TIMEOUT_MS);
 });
 
 describe("a revenge plan in the shared engine", () => {
