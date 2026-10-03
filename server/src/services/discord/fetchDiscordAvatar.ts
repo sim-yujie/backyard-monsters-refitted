@@ -1,7 +1,7 @@
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { logger } from "../../utils/logger.js";
-import { picSquareAfterDiscordRefresh } from "../../game-data/avatars.js";
+import { PLACEHOLDER_PIC_SQUARE, picSquareAfterDiscordRefresh } from "../../game-data/avatars.js";
 
 export const BYMR_CDN = "https://cdn.bymrefitted.com";
 export const DISCORD_CDN = "https://cdn.discordapp.com";
@@ -63,5 +63,5 @@ export const fetchAvatarUrl = (discordId?: string | null, avatarHash?: string | 
   if (discordId && avatarHash)
     return `${DISCORD_CDN}/avatars/${discordId}/${avatarHash}.png?size=64`;
   
-  return `${BYMR_CDN}/assets/bym-refitted-assets/placeholder.jpg`;
+  return PLACEHOLDER_PIC_SQUARE;
 };

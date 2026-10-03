@@ -634,6 +634,14 @@ Three switches in `server/.env`, all off by default: `BOTS_FILL` (neighbour fill
 on its next read. `bots.ts delete-retired` removes retired bots and their jobs (only when nothing in
 the mail references them).
 
+As built (WP6, `services/bots/factory.ts`, `scripts/bots.ts`): `create` also takes `--fill` (up to
+`BOTS_TOTAL`), `--count N` (the next N of a fill) and `--levels 5,15,25 [--count N]` (a few bots
+on chosen levels, for testing), and `--seed N` for repeatable draws. `--per-day N` counts the bots
+made in the last 24 hours, so a daily run spreads the rollout. For dev only, `remove-all --yes`
+(refused when `ENV` is production) deletes every bot with its mail, truces and attack logs. The
+factory writes no `grow` job: the sweep (WP7) books each active bot's first one. Avatars are a
+critter for 65% of bots and the sign-up placeholder for the rest `[PLACEHOLDER]`.
+
 ## 11. Work packages
 
 Each is sized for one agent (S < 2 days, M < 1 week).

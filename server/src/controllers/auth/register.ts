@@ -14,7 +14,7 @@ import {
 import { logger } from "../../utils/logger.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { UserRegistrationSchema } from "../../schemas/AuthSchemas.js";
-import { BYMR_CDN } from "../../services/discord/fetchDiscordAvatar.js";
+import { PLACEHOLDER_PIC_SQUARE } from "../../game-data/avatars.js";
 import { sameUsername, usernameMatch } from "../../services/user/usernameLookup.js";
 import { assertUsernameAllowed } from "../../services/user/usernameFilter.js";
 import { verifyTurnstileToken } from "../../services/auth/turnstile.js";
@@ -70,7 +70,7 @@ export const register: KoaController = async (ctx) => {
   // Create new user record
   const user = postgres.em.create(User, {
     ...registeredUser,
-    pic_square: `${BYMR_CDN}/assets/bym-refitted-assets/placeholder.jpg`,
+    pic_square: PLACEHOLDER_PIC_SQUARE,
     password: hash,
     terms_accepted_at: termsAccepted ? new Date() : null,
     sandbox_start: sandboxStart === true && devConfig.devSandbox,

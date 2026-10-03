@@ -21,13 +21,21 @@ import { NEW_ONBOARDING_JSON } from "../services/onboarding/state.js";
  * A main yard starts the guided start (`onboarding`, issue #227) while the
  * `guidedStart` switch is on; the sandbox yard never does.
  *
+ * A bot's yard (`services/bots/factory.ts`, issue #239) is never the sandbox
+ * yard, whatever the user row or DEV_SANDBOX say: the factory passes
+ * `forBot`, because whether a user is a bot is a database lookup this
+ * synchronous function cannot make (bot neighbours decision 16).
+ *
  * @param {User} [user] - The user for whom the base data is being generated.
+ * @param {BaseType} baseType - The kind of save.
+ * @param {{ forBot?: boolean }} [options] - `forBot`: the save is a bot's, so never the sandbox yard.
  * @returns {object} - The default base data object.
  */
-export const getDefaultBaseData = (user: User, baseType: BaseType) => {
+export const getDefaultBaseData = (user: User, baseType: BaseType, options: { forBot?: boolean } = {}) => {
   // The sandbox test base, for an account that asked for it at sign-up while
   // DEV_SANDBOX is on (issue #217). Never in production: devSandbox is off there.
-  if (baseType === BaseType.MAIN && devConfig.devSandbox && user.sandbox_start)
+  // Never for a bot (#239).
+  if (baseType === BaseType.MAIN && devConfig.devSandbox && user.sandbox_start && !options.forBot)
     return overworldYardSandbox(user);
 
   if (baseType === BaseType.INFERNO && devConfig.infernoSandbox)

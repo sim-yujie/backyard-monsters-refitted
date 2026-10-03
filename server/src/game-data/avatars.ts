@@ -29,6 +29,13 @@ export const AVATAR_IDS = [
 
 export type AvatarId = (typeof AVATAR_IDS)[number];
 
+/**
+ * The picture a new account starts with, before its player picks a critter
+ * (`controllers/auth/register.ts`); also the fallback when there is no Discord
+ * picture.
+ */
+export const PLACEHOLDER_PIC_SQUARE = "https://cdn.bymrefitted.com/assets/bym-refitted-assets/placeholder.jpg";
+
 /** "/avatars/hedgehog.webp": the value stored for a chosen avatar. */
 export const avatarPath = (id: AvatarId): string => `/avatars/${id}.webp`;
 
