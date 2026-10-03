@@ -243,9 +243,10 @@ export const nextBuildingId = (save: BuildSave): number => {
 
 /**
  * The gates `build` and `build/instant` share: 1 to 4 and 6 of the file
- * comment. Returns the build step.
+ * comment. Returns the build step. The bot progression checks every build it
+ * simulates against them too (`services/bots/progression.ts`).
  */
-const buildGates = (save: BuildSave, request: BuildRequest): CostStep => {
+export const buildGates =(save: BuildSave, request: BuildRequest): CostStep => {
   const { type } = request;
   const kind = yardKindOf(save);
   const row = costOf(type, kind);
