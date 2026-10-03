@@ -4,7 +4,7 @@ import type { Thread } from "../../database/models/thread.model.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { mailboxErr, permissionErr, truceClosedErr } from "../../errors/errors.js";
-import { isRequestOpen, TRUCE_DURATION, TRUCE_RETRY_AFTER_REJECTION } from "./truceRules.js";
+import { answerTruce, isRequestOpen } from "./truceTimes.js";
 
 type TruceResponse = TruceStatus.ACCEPTED | TruceStatus.REJECTED;
 
@@ -35,10 +35,7 @@ export const handleTruceResponse = async (userid: number, thread: Thread, status
 
   if (!isRequestOpen(truce, now)) throw truceClosedErr();
 
-  truce.status = status;
-  thread.trucestate = status;
-
-  truce.expires_at = now + (status === TruceStatus.ACCEPTED ? TRUCE_DURATION : TRUCE_RETRY_AFTER_REJECTION);
+  answerTruce(truce, thread, status, now);
 
   postgres.em.persist(truce);
 };

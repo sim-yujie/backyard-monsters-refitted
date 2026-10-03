@@ -11,6 +11,7 @@ import { postgres } from "../../server.js";
 import { countUnreadMessage } from "../../services/mail/countUnreadMessage.js";
 import { findOrCreateThread } from "../../services/mail/findOrCreateThread.js";
 import { findLiveTruce, rejectionWait } from "../../services/mail/truceRules.js";
+import { bookTruceDecline } from "../../services/bots/truceDecline.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { mailboxErr, permissionErr, truceExistsErr } from "../../errors/errors.js";
@@ -30,6 +31,7 @@ const TruceSchema = z.object({
  *   under 2 days ago (`rejectionWait`)
  * - Creates a Truce record and a new mailbox thread with the request message, and
  *   answers with that thread's id (#203)
+ * - To a bot: books its answer, a rejection some hours later (`bookTruceDecline`)
  *
  * @param {Context} ctx - Koa context. Expects baseid and message in the request body.
  */
@@ -114,6 +116,8 @@ export const requestTruce: KoaController = async (ctx) => {
     postgres.em.persist(recipient);
     await postgres.em.flush();
   }
+
+  await bookTruceDecline(postgres.em, truce, now);
 
   ctx.status = Status.OK;
   ctx.body = { error: 0, threadid: thread.threadid };

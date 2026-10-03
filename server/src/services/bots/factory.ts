@@ -15,6 +15,8 @@ import { usernameMatch } from "../user/usernameLookup.js";
 import { botName } from "./names.js";
 import { PERSONAS, targetInBand, type Persona } from "./progression.js";
 import { generateBotYard, type BotYard } from "./yardGenerator.js";
+import { catchUpYard } from "../yard/catchUp.js";
+import { visitMapRoom1 } from "./lookAlike.js";
 
 /**
  * The bot factory (issue #239, `docs/design/bot-neighbours.md` §4.1 and §10):
@@ -37,7 +39,8 @@ import { generateBotYard, type BotYard } from "./yardGenerator.js";
  *   one run do not share a creation minute.
  * - **Yard**: the generator's yard (`yardGenerator.ts`) for a target drawn
  *   inside the level's band, laid over a new main save's defaults: no
- *   protection, the tutorial passed, `mapversion` 1, no world, no Inferno save.
+ *   protection, the tutorial passed, `mapversion` 1, no world, no Inferno save,
+ *   then settled as a player's own load leaves a yard ({@link settleNewYard}).
  * - **Pace**: `bot.level_since` puts the bot as far into its level as its
  *   target is into the band, which is where the grow job's linear pace (§4.4)
  *   would have it.
@@ -243,6 +246,19 @@ export const botSaveData = (user: User, profile: BotProfile, yard: BotYard) => {
   };
 };
 
+/**
+ * A new bot's save as a player's own load leaves it (#245): caught up to its
+ * `savetime`, a catch-up of no time that only gives the yard the fields every
+ * loaded yard carries (the hatchery queues in `monsters`, mushrooms, the
+ * harvesters' cycles), and Map Room 1's tribes in `wmstatus`, as a player who
+ * has opened the map has them (`lookAlike.ts`). Without it a bot made but not
+ * yet grown reads differently from a player in a view load.
+ */
+export const settleNewYard = (save: Save, savetime: number): void => {
+  catchUpYard(save, savetime);
+  visitMapRoom1(save);
+};
+
 /** One bot the factory made. */
 export interface CreatedBot {
   userid: number;
@@ -326,6 +342,7 @@ export const createBots = async (
           baseid: String(baseid),
           homebaseid: Number(baseid),
         });
+        settleNewYard(save, profile.savetime);
         saves.push(save);
       }
       await tx.flush();

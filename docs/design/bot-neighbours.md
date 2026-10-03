@@ -457,6 +457,20 @@ attack, run by the sweep): the job is claimed only with `BOTS_BRAIN` and `BOTS_R
   load does), so bots are sometimes seen online and, for that minute, cannot be attacked, like a
   player (decision 22).
 
+As built (WP12, `services/bots/truceDecline.ts`): both routes that make a request (`requesttruce` and
+`sendmessage` `trucerequest`) call `bookTruceDecline` once the truce row exists; for a bot it books a
+`declineTruce` job (`payload.truce`, `target_userid` the proposer) due a uniform 2-8 hours later, and
+the route answers exactly as for a player. The sweep (`BOTS_BRAIN`) runs it as a player pressing Reject
+in the web mailbox: the bot opens the thread (what it holds for the bot is read), the truce is answered
+by `answerTruce` (`services/mail/truceTimes.ts`, the rule `handleTruceResponse` uses, split out so the
+sweep need not import `server.js`), and a `trucereject` reply is written from the bot with the thread's
+subject and "I reject your truce.", the thread's count and last message moved and both unread counts
+recounted, as `sendMessage` does. A request no longer open when the job runs (lapsed or answered), or
+between players who have blocked each other since (a player could not answer it either), is left alone.
+Alliance invitations are **not** wired: a bot has no world, so `inviteUser` refuses it, and an
+invitation to move needs a Map Room 2 player; nothing reaches a bot to decline. A retired bot's pending
+decline goes with its other jobs, and the request lapses unanswered after 7 days.
+
 ### 4.10 Seed fix (decision 16)
 
 The three seed scripts set `sandbox_start: false` always; `getDefaultBaseData` additionally refuses
@@ -551,7 +565,7 @@ is how a bot made by the factory starts; its first grow's catch-up gives it mush
 real save. Jobs are claimed one at a time (`LIMIT 1 … SKIP LOCKED`, at most 20 a pass), each effect in
 a savepoint so a throw undoes it and leaves the backoff (5, 10, 20, 40 minutes; dropped at the fifth
 failure, and a dropped `grow` is booked afresh on the next pass). `grow` and `repair` are claimed, and
-`revenge` while `BOTS_REVENGE` is on (WP11, §4.7); `declineTruce` rows wait for WP12. Details that the
+`revenge` while `BOTS_REVENGE` is on (WP11, §4.7), and `declineTruce` (WP12, §4.9). Details that the
 text above leaves open:
 
 - **Growth is a diff** of the live yard against the generator's yard at the pace target: missing ids
@@ -613,6 +627,21 @@ jobs.
 | Identical yards | Seeded progression, personas, jittered placement, banded resources. |
 | Bot names | Word lists in several real styles, unique, filtered. |
 | Unanswered messages | Real players often do not answer either. |
+
+As built (WP12): the audit runs the real routes for a bot fresh from the factory and for a player of
+the same level who signed up, loaded their yard and opened Map Room 1 (`services/bots/leakAudit.db.test.ts`,
+opt-in on a throwaway database): view load, attack load, Map Room 1 read, `bm/neighbours/get`, mail
+targets, thread list and attack logs have the same fields holding the same kinds of value
+(`testing/shapeDiff.ts`), and no response carries an email or a bot-table field. A pure test compares a
+bot's client-visible save at every level with a real account's (`lookAlike.test.ts`). It found two
+differences, both fixed: a bot made but not yet grown lacked what a loaded yard carries (the hatchery
+queues in `monsters`, mushrooms, harvester cycles), so the factory now catches each new save up to its
+own `savetime` (`settleNewYard`); and a bot's `wmstatus` was empty where a player who has opened Map Room
+1 has four tribes, so the factory and every grow write them as opening the map does (`lookAlike.ts`,
+sharing `mr1TribeStatuses` with `createMR1Tribes`). Left as they are (values, not shapes): every bot keeps
+the new-save Shiny (`credits`), which the view load shows; bots made in one run have consecutive user and
+base ids; a bot never reads plain messages, so its unread count only grows; its tribes are never marked
+wrecked; and it buys nothing from the store beyond expansions.
 
 ### 7.5 Scale
 

@@ -5,6 +5,7 @@ import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { truceExistsErr } from "../../errors/errors.js";
 import { findLiveTruce, rejectionWait } from "./truceRules.js";
+import { bookTruceDecline } from "../bots/truceDecline.js";
 
 /**
  * Creates a truce request from the current user to the message recipient.
@@ -13,6 +14,7 @@ import { findLiveTruce, rejectionWait } from "./truceRules.js";
  * - Refuses softly while the recipient's rejection of this user's last request
  *   is under 2 days old: answers that refusal (`rejectionWait`) and writes nothing
  * - Creates a Truce record and links it to the thread
+ * - To a bot: books its answer, a rejection some hours later (`bookTruceDecline`)
  *
  * @param userid - The authenticated user's ID
  * @param recipientId - The target user's ID
@@ -39,5 +41,7 @@ export const handleTruceRequest = async (userid: number, recipientId: number, th
 
   thread.truce_id = truce.id;
   thread.trucestate = TruceStatus.REQUESTED;
+
+  await bookTruceDecline(postgres.em, truce, now);
   return null;
 };

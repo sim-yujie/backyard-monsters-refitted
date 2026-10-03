@@ -1,6 +1,7 @@
 import { TruceStatus } from "../../enums/TruceStatus.js";
 import { Truce } from "../../database/models/truce.model.js";
 import { postgres } from "../../server.js";
+import { TRUCE_REQUEST_LIFETIME } from "./truceTimes.js";
 
 /**
  * The rules of a truce between two players (#203), in one place for the three
@@ -17,36 +18,19 @@ import { postgres } from "../../server.js";
  * - After a rejection, the one who asked waits {@link TRUCE_RETRY_AFTER_REJECTION}
  *   before asking that player again (Flash Map Room 1's rule); the other
  *   player may ask at once. The rejected row's `expires_at` holds the moment.
+ *
+ * The times and the answer itself, which read no rows, live in `truceTimes.ts`
+ * and are re-exported here.
  */
 
-/** How long an accepted truce lasts, in seconds: 7 days (the owner's rule, #203; Flash asked for 14). */
-export const TRUCE_DURATION = 7 * 24 * 60 * 60;
-
-/** How long a request waits for an answer before it lapses, in seconds: 7 days. */
-export const TRUCE_REQUEST_LIFETIME = 7 * 24 * 60 * 60;
-
-/** How long the one who asked waits after a rejection before asking again, in seconds: 2 days. */
-export const TRUCE_RETRY_AFTER_REJECTION = 2 * 24 * 60 * 60;
-
-/** The last moment a request can be answered, in unix seconds. */
-export const requestLapsesAt = (truce: Pick<Truce, "created_at">) =>
-  Math.floor(new Date(truce.created_at).getTime() / 1000) + TRUCE_REQUEST_LIFETIME;
-
-/** True while a request can still be answered. */
-export const isRequestOpen = (truce: Pick<Truce, "status" | "created_at">, now: number) =>
-  truce.status === TruceStatus.REQUESTED && requestLapsesAt(truce) > now;
-
-/**
- * When the thread list says a truce ends (`truceexpire`): an accepted truce's
- * expiry, the moment a request lapses, and for a rejected one when its
- * proposer may ask again.
- */
-export const truceEndsAt = (truce: Pick<Truce, "status" | "created_at" | "expires_at">) => {
-  if (truce.status === TruceStatus.ACCEPTED) return truce.expires_at ?? null;
-  if (truce.status === TruceStatus.REQUESTED) return requestLapsesAt(truce);
-  if (truce.status === TruceStatus.REJECTED) return truce.expires_at ?? null;
-  return null;
-};
+export {
+  isRequestOpen,
+  requestLapsesAt,
+  truceEndsAt,
+  TRUCE_DURATION,
+  TRUCE_REQUEST_LIFETIME,
+  TRUCE_RETRY_AFTER_REJECTION,
+} from "./truceTimes.js";
 
 /** The filter for a truce that still binds its pair at `now`: a waiting request, or an unexpired accepted truce. */
 export const liveTruceFilter = (now: number) => ({

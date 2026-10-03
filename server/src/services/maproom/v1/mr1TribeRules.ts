@@ -63,6 +63,26 @@ export const currentMR1Tribes = (townHallLevel: number, config: MR1TribeScaleCon
   }));
 };
 
+/** The four tribes' levels next to the player's, in slot order: one below, level, one and two above. */
+export const MR1_TRIBE_LEVEL_OFFSETS = [-1, 0, 1, 2] as const;
+
+/**
+ * The `wmstatus` entries opening Map Room 1 gives the four current tribes:
+ * `[baseid, level, destroyed]`, each level set by the player's, `destroyed`
+ * kept from the entry the player already has (`createMR1Tribes.ts`).
+ */
+export const mr1TribeStatuses = (
+  townHallLevel: number,
+  config: MR1TribeScaleConfig,
+  playerLevel: number,
+  wmstatus: readonly number[][] | null | undefined
+): number[][] =>
+  currentMR1Tribes(townHallLevel, config).map(({ index, template }) => {
+    const baseid = Number(template.baseid);
+    const known = wmstatus?.find((status) => status[0] === baseid);
+    return [baseid, Math.max(1, Math.max(1, playerLevel) + MR1_TRIBE_LEVEL_OFFSETS[index]!), known ? known[2] || 0 : 0];
+  });
+
 /**
  * When a wrecked tribe is back, or 0 when it is standing. A tribe marked
  * destroyed with no time on it (rows written before the time was kept) is back

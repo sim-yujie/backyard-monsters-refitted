@@ -40,6 +40,8 @@ import {
   type RevengeOutcome,
   type RevengeVerdict,
 } from "./revenge.js";
+import { declineTruce } from "./truceDecline.js";
+import { visitMapRoom1 } from "./lookAlike.js";
 import { generateBotYard } from "./yardGenerator.js";
 
 /**
@@ -63,8 +65,7 @@ import { generateBotYard } from "./yardGenerator.js";
  *    it is undone and the job gets `attempts + 1` and a backoff
  *    ({@link backoffMinutes}); the {@link MAX_ATTEMPTS}th failure drops it
  *    with an error log. Only the kinds this sweep knows are claimed
- *    ({@link HANDLED_KINDS}, and `revenge` while `BOTS_REVENGE` is on);
- *    `declineTruce` waits for its own.
+ *    ({@link HANDLED_KINDS}, and `revenge` while `BOTS_REVENGE` is on).
  *
  * With `BOTS_REVENGE` off, every pass first cancels (deletes) the booked
  * `revenge` jobs, so a revenge booked while it was on never runs.
@@ -77,9 +78,10 @@ import { generateBotYard } from "./yardGenerator.js";
  *
  * | Job | When | Does |
  * | --- | --- | --- |
- * | `grow` | every 2-6 h | catch-up; retires the bot past level 40; otherwise growth to the pace target (`brain.ts`), the army topped up, the champion fed, loot in its band, `bot.level` kept, and about two minutes online |
+ * | `grow` | every 2-6 h | catch-up; retires the bot past level 40; otherwise growth to the pace target (`brain.ts`), the army topped up, the champion fed, loot in its band, `bot.level` kept, Map Room 1's tribes looked at (`lookAlike.ts`), and about two minutes online |
  * | `repair` | 1-4 h after an attack (booked by `afterAttack.ts`) | catch-up, Repair all, traps re-armed, bunkers and Housing refilled, the champion fed and healed, loot in its band |
  * | `revenge` | 1-24 h after an attack, 1 in 3 (booked by `afterAttack.ts`) | the checks (`revenge.ts`), then the attack (`revengeRun.ts`, passed in as {@link SweepDeps.revenge}); waits or gives up as the checks say |
+ * | `declineTruce` | 2-8 h after a truce request (booked by `truceDecline.ts`) | rejects the request in its thread, as a player would (`truceDecline.ts`) |
  *
  * A damaged yard does not grow (a player repairs before upgrading); a grow
  * that finds damage and no repair booked books one.
@@ -116,7 +118,7 @@ export const RUNNING_SHARE = 0.9;
 /** The rebalance's `bym.job_run` name. */
 export const REBALANCE_JOB = "bots-rebalance";
 /** The kinds this sweep runs; `revenge` too while `BOTS_REVENGE` is on. */
-export const HANDLED_KINDS: readonly BotJobKind[] = ["grow", "repair"];
+export const HANDLED_KINDS: readonly BotJobKind[] = ["grow", "repair", "declineTruce"];
 
 /** Minutes until a failed job is tried again: 5, 10, 20, 40. */
 export const backoffMinutes = (attempts: number): number => 5 * 2 ** Math.max(0, attempts - 1);
@@ -301,6 +303,7 @@ const grow: Handler = async (tx, job, { now, config, rng, report }) => {
 
   const level = calculateBaseLevel(save.points, save.basevalue);
   save.level = level;
+  visitMapRoom1(save);
   if (level !== bot.level) {
     report.grew.push({ userid: bot.userid, from: bot.level, to: level });
     // The place on the climb is kept; a nudged pace lasts until the next level.
@@ -411,7 +414,14 @@ const revenge: Handler = async (tx, job, { now, rng, report, revenge: runner }) 
   }
 };
 
-const HANDLERS: Record<string, Handler> = { grow, repair, revenge };
+/** The `declineTruce` job (`truceDecline.ts`): the answer, then the row is done. */
+const declineTruceJob: Handler = async (tx, job, { now }) => {
+  await declineTruce(tx, job, now);
+  await deleteJob(tx, job);
+  return {};
+};
+
+const HANDLERS: Record<string, Handler> = { grow, repair, revenge, declineTruce: declineTruceJob };
 
 /** Cancels every booked revenge (`BOTS_REVENGE` off); returns how many. */
 export const cancelRevenges = async (em: EntityManager): Promise<number> => {

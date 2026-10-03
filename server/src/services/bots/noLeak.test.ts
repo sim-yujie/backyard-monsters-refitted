@@ -40,6 +40,10 @@ const READERS: Record<string, string> = {
     "after a defence lands: a real defender gets the same notice whoever attacked, a bot books jobs; returns nothing to the response",
   "server.ts":
     "starts the bot sweep, with its revenge runner, when BOTS_BRAIN is on (a background timer; it answers no request)",
+  "controllers/mail/requestTruce.ts":
+    "books a bot's decline of the request after the route has answered alike for anyone (#245); writes only a bot_job row",
+  "services/mail/handleTruceRequest.ts":
+    "books a bot's decline of the request (#245); returns the same as for a player, writes only a bot_job row",
 };
 
 /** Directories whose files may read bot data freely: the bot code and the database layer. */

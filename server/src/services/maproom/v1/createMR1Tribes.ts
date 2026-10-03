@@ -5,7 +5,7 @@ import { User } from "../../../database/models/user.model.js";
 import { postgres } from "../../../server.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
-import { currentMR1Tribes, mr1TribeRespawned, respawnMR1Tribe } from "./mr1TribeRules.js";
+import { currentMR1Tribes, mr1TribeRespawned, mr1TribeStatuses, respawnMR1Tribe } from "./mr1TribeRules.js";
 import { PRACTICE_CAMP_BASEID, practiceCampOpen } from "./practiceCamp.js";
 
 export interface MR1TribeScaleConfig {
@@ -35,8 +35,6 @@ export interface MR1TribeScaleConfig {
  */
 export const createMR1Tribes = async (save: Save, tribes: MR1TribeScaleConfig) => {
   const { userid, wmstatus, level } = save;
-  const playerLevel = Math.max(1, level);
-  const levelPattern = [-1, 0, 1, 2];
 
   const townHall = extractTownHall(save.buildingdata ?? {});
   const thLevel = townHall?.l ?? 1;
@@ -86,10 +84,5 @@ export const createMR1Tribes = async (save: Save, tribes: MR1TribeScaleConfig) =
     await postgres.em.flush();
   }
 
-  return scaledTribes.map((tribe, i) => {
-    const tribeLevel = Math.max(1, playerLevel + levelPattern[i]);
-    const tribeStatus = wmstatus?.find((s) => s[0] === Number(tribe.baseid));
-    const isDestroyed = tribeStatus ? tribeStatus[2] || 0 : 0;
-    return [Number(tribe.baseid), tribeLevel, isDestroyed];
-  });
+  return mr1TribeStatuses(thLevel, tribes, level, wmstatus);
 };
