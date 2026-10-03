@@ -107,7 +107,8 @@ const expectFilled = (yard: BotYard) => {
 
 /** Where everything stands (§4.2 step 2): the Yard Planner's Apply check on the plot the yard holds. */
 const expectPlaced = (yard: BotYard, seed: number) => {
-  const expansion = expansionFor(seed, yard.level);
+  const expansion = yard.storedata.ENL?.q ?? 0;
+  expect(expansion).toBeGreaterThanOrEqual(expansionFor(seed, yard.level));
   expect(yard.storedata).toEqual(expansion > 0 ? { ENL: { q: expansion } } : {});
   const nodes = [...yard.buildings, ...yard.decorations].map((spot) => ({ id: spot.id, t: spot.t, x: spot.X, y: spot.Y }));
   expect(() => checkNodePlacement(nodes, expansion)).not.toThrow();

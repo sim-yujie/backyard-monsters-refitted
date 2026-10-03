@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { footprintOf } from "../../game-data/buildingFootprints.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
-import { placementProblem } from "../yard/build.js";
+import { nextBuildingId, placementProblem } from "../yard/build.js";
 import { MAX_EXPANSIONS, rectOf, withinBounds } from "../yardplanner/layoutGeometry.js";
 import { checkNodePlacement } from "../yardplanner/validateLayout.js";
 import { TOWN_HALL_TYPE } from "../yardplanner/costs.js";
 import {
-  DECORATION_ID_BASE,
   DECORATION_TYPES,
   expansionFor,
   GRID,
@@ -30,7 +29,6 @@ interface Laid {
 const laidOut = (seed: number, persona: Persona, level: number, fraction = 0.5): Laid => {
   const yard = yardAtPoints(seed, persona, targetInBand(level, fraction));
   const entries = yard.buildings.map((building) => ({
-    id: building.id,
     t: building.t,
     level: yard.builtAtLevel[building.id]!,
   }));
@@ -43,25 +41,35 @@ const SILO = 6;
 
 /**
  * The server's own rules, as a player building the yard one piece at a time
- * would meet them: each building passes the build route's placement gate
- * (`placementProblem`) on the plot it was built on, each decoration the same
- * gate on today's plot (as `decor/place`), and the whole yard passes the Yard
- * Planner's Apply check (`checkNodePlacement`).
+ * would meet them, in id order: each building and decoration takes the id the
+ * server would give it (`nextBuildingId`) and passes the build route's
+ * placement gate (`placementProblem`) on the plot the yard had then, and the
+ * whole yard passes the Yard Planner's Apply check (`checkNodePlacement`).
+ * The plot is the level's, or the one a cramped bot bought early and kept.
  */
 const expectBuildable = ({ seed, yard, layout }: Laid) => {
-  expect(layout.buildings.map((spot) => spot.id)).toEqual(yard.buildings.map((building) => building.id));
+  expect(layout.buildings.map((spot) => spot.t)).toEqual(yard.buildings.map((building) => building.t));
+  const builtAt = new Map(layout.buildings.map((spot, index) => [spot.id, yard.builtAtLevel[yard.buildings[index]!.id]!]));
+  const inOrder = [...layout.buildings, ...layout.decorations].sort((a, b) => a.id - b.id);
   const buildingdata: BuildingDataMap = {};
-  const place = (spot: PlacedSpot, expansion: number) => {
+  let level = 1;
+  let bought = 0;
+  for (const spot of inOrder) {
+    // A decoration goes up at the level of the building before it.
+    level = builtAt.get(spot.id) ?? level;
+    let plot = Math.max(expansionFor(seed, level), bought);
+    while (!withinBounds(rectOf(spot.t, spot.X, spot.Y), plot)) plot++;
+    bought = Math.max(bought, plot === expansionFor(seed, level) ? 0 : plot);
+    expect(plot).toBeLessThanOrEqual(layout.expansion);
     expect(Number.isInteger(spot.X) && Number.isInteger(spot.Y)).toBe(true);
     expect(Math.abs(spot.X % GRID)).toBe(0);
     expect(Math.abs(spot.Y % GRID)).toBe(0);
-    const save = { buildingdata, storedata: { ENL: { q: expansion } } };
+    const save = { buildingdata, storedata: { ENL: { q: plot } } };
+    expect(spot.id).toBe(nextBuildingId(save));
     const problem = placementProblem(save, { type: spot.t, x: spot.X, y: spot.Y });
     expect({ id: spot.id, problem }).toEqual({ id: spot.id, problem: null });
     buildingdata[String(spot.id)] = { id: spot.id, t: spot.t, X: spot.X, Y: spot.Y } as never;
-  };
-  for (const spot of layout.buildings) place(spot, expansionFor(seed, yard.builtAtLevel[spot.id]!));
-  for (const spot of layout.decorations) place(spot, layout.expansion);
+  }
 
   const nodes = [...layout.buildings, ...layout.decorations].map((spot) => ({
     id: spot.id,
@@ -95,6 +103,15 @@ describe("layoutBotYard", () => {
     { timeout: 60_000 }
   );
 
+  test("a yard too broken up for its Champion Cage buys its next expansion early, and stays legal", () => {
+    // This seed's cage finds no room on the plot of its level (found by the 800-yard run).
+    const laid = laidOut(231227, "army", 30, 17.5 / 20);
+    const cage = laid.layout.buildings.find((spot) => spot.t === 114)!;
+    const level = laid.yard.builtAtLevel[laid.yard.buildings[laid.layout.buildings.indexOf(cage)]!.id]!;
+    expect(withinBounds(rectOf(cage.t, cage.X, cage.Y), expansionFor(231227, level))).toBe(false);
+    expectBuildable(laid);
+  });
+
   test("growth never moves a building or a decoration", () => {
     const levels = [3, 8, 14, 20, 27, 33, 38, 40];
     for (let seed = 0; seed < 8; seed++) {
@@ -104,6 +121,7 @@ describe("layoutBotYard", () => {
         const before = yards[i - 1]!;
         const after = yards[i]!;
         expect(after.expansion).toBeGreaterThanOrEqual(before.expansion);
+        expect(after.expansion).toBeGreaterThanOrEqual(expansionFor(seed + 500, levels[i]!));
         expect(after.buildings.slice(0, before.buildings.length)).toEqual(before.buildings);
         expect(after.decorations.slice(0, before.decorations.length)).toEqual(before.decorations);
       }
@@ -112,6 +130,12 @@ describe("layoutBotYard", () => {
 
   test("the same seed and buildings give the same layout", () => {
     expect(laidOut(31337, "economy", 33).layout).toEqual(laidOut(31337, "economy", 33).layout);
+  });
+
+  test("spots use the whole 5-unit grid, not only multiples of 10", () => {
+    const spots = [...laidOut(77, "army", 35).layout.buildings];
+    expect(spots.some((spot) => Math.abs(spot.X % 10) === 5)).toBe(true);
+    expect(spots.some((spot) => Math.abs(spot.Y % 10) === 5)).toBe(true);
   });
 
   test("two seeds of one level do not share a layout", () => {
@@ -174,16 +198,15 @@ describe("layoutBotYard", () => {
     }
   });
 
-  test("a few decorations from the list, with ids above anything the progression builds", () => {
+  test("a few decorations from the list, numbered among the buildings", () => {
     let seen = 0;
     for (let seed = 0; seed < 20; seed++) {
-      const { layout, yard } = laidOut(seed, PERSONAS[seed % PERSONAS.length]!, 40, 0.5);
+      const { layout } = laidOut(seed, PERSONAS[seed % PERSONAS.length]!, 40, 0.5);
       expect(layout.decorations.length).toBeGreaterThan(0);
       expect(layout.decorations.length).toBeLessThanOrEqual(MAX_DECORATIONS);
-      const top = Math.max(...yard.buildings.map((building) => building.id));
-      layout.decorations.forEach((spot, index) => {
-        expect(spot.id).toBe(DECORATION_ID_BASE + index);
-        expect(spot.id).toBeGreaterThan(top);
+      const top = Math.max(...layout.buildings.map((spot) => spot.id));
+      expect(layout.decorations[0]!.id).toBeLessThan(top);
+      layout.decorations.forEach((spot) => {
         expect(DECORATION_TYPES).toContain(spot.t);
         expect(footprintOf(spot.t).decoration).toBe(true);
         expect(withinBounds(rectOf(spot.t, spot.X, spot.Y), layout.expansion)).toBe(true);

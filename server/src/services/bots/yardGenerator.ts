@@ -109,7 +109,7 @@ export interface BotYard {
   basevalue: string;
   /** In id order. */
   buildings: BotBuilding[];
-  /** Decorations, `{ id, t, X, Y }` as a placed one is stored (`yard/decor.ts`); ids from `DECORATION_ID_BASE`. */
+  /** Decorations, `{ id, t, X, Y }` as a placed one is stored (`yard/decor.ts`); ids among the buildings'. */
   decorations: PlacedSpot[];
   /** The yard expansions: `{ ENL: { q } }`, or empty for none (a new save's `storedata` is `{}`). */
   storedata: { ENL?: { q: number } };
@@ -308,7 +308,7 @@ export const generateBotYard = (request: BotYardRequest): BotYard => {
   const layout = layoutBotYard(
     seed,
     persona,
-    yard.buildings.map((building) => ({ id: building.id, t: building.t, level: yard.builtAtLevel[building.id] ?? 1 })),
+    yard.buildings.map((building) => ({ t: building.t, level: yard.builtAtLevel[building.id] ?? 1 })),
     yard.level
   );
 
@@ -319,17 +319,18 @@ export const generateBotYard = (request: BotYardRequest): BotYard => {
   const bunkerRng = streamOf(seed, SALT.bunkers);
   const lootRng = streamOf(seed, SALT.loot);
   const buildings: BotBuilding[] = yard.buildings.map((building, index) => {
-    const { X, Y } = layout.buildings[index]!;
+    // The yard's ids are the layout's: decorations take theirs among the buildings' (`layout.ts`).
+    const { id, X, Y } = layout.buildings[index]!;
     if (building.t === BUNKER_TYPE) {
       const m = fillRoom(bunkerRng, bunkerCapacity(building.l), BUNKER_FILL, bunkerPool, academy);
-      return { ...building, X, Y, m };
+      return { ...building, id, X, Y, m };
     }
     const stats = productionOf(building.t);
     if (stats) {
       const capacity = stats.capacity[building.l - 1] ?? 0;
-      return { ...building, X, Y, st: Math.floor(capacity * between(lootRng, HARVESTER_BUFFER)), pr: 1 };
+      return { ...building, id, X, Y, st: Math.floor(capacity * between(lootRng, HARVESTER_BUFFER)), pr: 1 };
     }
-    return { ...building, X, Y };
+    return { ...building, id, X, Y };
   });
 
   const housed = fillRoom(

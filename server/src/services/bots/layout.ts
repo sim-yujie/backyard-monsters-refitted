@@ -41,9 +41,9 @@ import type { Persona } from "./progression.js";
  * Each building tries a few dozen jittered spots in its zone, plus spots
  * lined up beside buildings of its own kind (players build rows), and keeps
  * the best by its zone, its neighbours (and for a tower, its distance from
- * the other towers) and a random share. Every spot is on a 10-unit grid
- * (twice the build grid), inside the plot the bot owned when the building
- * was placed (`withinBounds`), and clear of every other footprint: the rule
+ * the other towers) and a random share. Every spot is on the 5-unit build
+ * grid real players' spots are on, inside the plot the bot owned when the
+ * building was placed (`withinBounds`), and clear of every other footprint: the rule
  * the build route and the Yard Planner's Apply measure by
  * (`placementProblem`, `checkNodePlacement`). When the zone is full the
  * building looks further out, then takes the best free spot anywhere; only
@@ -63,18 +63,29 @@ import type { Persona } from "./progression.js";
  * The plot grows with the "More Yardage" purchases a player of that level
  * usually holds ({@link expansionFor}, `storedata.ENL.q`, at most 6 like the
  * sandbox yard). A building placed at a level uses the plot of that level.
+ * In the rare yard whose free ground is too broken up for a big building, the
+ * bot buys its next expansion early, as a player would, and keeps it: every
+ * later building uses that plot too, and the yard's `ENL` counts it.
  *
  * ## Decorations
  *
  * A few decorations ({@link DECORATION_TYPES}) appear as the yard grows, one
- * after every few dozen buildings, up to {@link MAX_DECORATIONS}. They have
- * ids from {@link DECORATION_ID_BASE}, above anything the progression can
- * build (the Town Hall 10 limits add up to under 600), so later builds never
- * take one's id.
+ * after every few dozen buildings, up to {@link MAX_DECORATIONS}.
+ *
+ * ## Ids
+ *
+ * A player's building takes the next free id when it is placed
+ * (`nextBuildingId`), decorations included, so the layout numbers the yard
+ * the same way: buildings and decorations in the order they went up, from 1.
+ * A decoration's place in that order depends only on how many buildings
+ * stood before it, so a grown yard keeps every id the smaller one had.
  */
 
-/** Every spot is snapped to this: twice the 5-unit build grid, as `mapRoom.ts` searches. */
-export const GRID = 10;
+/** Every spot is snapped to the build grid (`mapRoom.ts`, `client/scripts/GRID.as`). */
+export const GRID = 5;
+
+/** The step of the first search over the whole plot: twice the grid, as `mapRoom.ts` searches. */
+const SCAN_STEP = 10;
 
 /** A wall block's side (`buildingFootprints.ts`, type 17). */
 const WALL_CELL = 20;
@@ -94,9 +105,6 @@ const OPENING_BONUS = 1;
 
 /** Walkway kept clear either side of a reserved wall line. */
 const WALL_MARGIN = 10;
-
-/** Decorations get ids from here (see the file comment). */
-export const DECORATION_ID_BASE = 1001;
 
 /** The most decorations a bot puts out `[PLACEHOLDER]`. */
 export const MAX_DECORATIONS = 6;
@@ -256,8 +264,8 @@ const ringSlots = (rng: Rng, cx: number, cy: number, hx: number, hy: number): Wa
 /** The seed's plan: centre, rings, bands. */
 const planFor = (seed: number, persona: Persona): Plan => {
   const rng = streamOf(seed, SALT.plan);
-  const cx = snap(between(rng, -40, 40), 10);
-  const cy = snap(between(rng, -40, 40), 10);
+  const cx = snap(between(rng, -40, 40), GRID);
+  const cy = snap(between(rng, -40, 40), GRID);
   // The space between the rings takes the biggest buildings (160) with a walkway
   // either side. The outer ring runs past the smallest plots: its walls go up
   // once the plot has grown to them, by which time a player has that many.
@@ -332,49 +340,57 @@ class Grid {
     this.marks = new Uint8Array(this.cols * this.rows);
   }
 
-  /** Calls `visit` with each cell index of the rectangle; stops when it returns false. */
-  private cells(x: number, y: number, w: number, h: number, visit: (index: number) => boolean): boolean {
+  /** The cell span of a rectangle, or null when it leaves the grid. */
+  private span(x: number, y: number, w: number, h: number): [number, number, number, number] | null {
     const c0 = Math.floor((x - this.ox) / GRID);
     const r0 = Math.floor((y - this.oy) / GRID);
     const c1 = Math.ceil((x + w - this.ox) / GRID);
     const r1 = Math.ceil((y + h - this.oy) / GRID);
-    if (c0 < 0 || r0 < 0 || c1 > this.cols || r1 > this.rows) return false;
-    for (let r = r0; r < r1; r++) {
-      for (let c = c0; c < c1; c++) if (!visit(r * this.cols + c)) return false;
-    }
-    return true;
+    if (c0 < 0 || r0 < 0 || c1 > this.cols || r1 > this.rows) return null;
+    return [c0, r0, c1, r1];
   }
 
   /** Marks a rectangle of a reserved wall line; a stronger mark wins. */
   mark(x: number, y: number, w: number, h: number, mark: number): void {
-    this.cells(x, y, w, h, (index) => {
-      this.marks[index] = Math.max(this.marks[index]!, mark);
-      return true;
-    });
+    const span = this.span(x, y, w, h);
+    if (!span) return;
+    const [c0, r0, c1, r1] = span;
+    for (let r = r0; r < r1; r++) {
+      for (let i = r * this.cols + c0, end = r * this.cols + c1; i < end; i++) {
+        if (this.marks[i]! < mark) this.marks[i] = mark;
+      }
+    }
   }
 
   /** Whether a footprint is free and every cell's mark is one `allowed` lets it stand on. */
   free(x: number, y: number, w: number, h: number, allowed: number): boolean {
-    return this.cells(x, y, w, h, (index) => !this.taken[index] && ((1 << this.marks[index]!) & allowed) !== 0);
+    const span = this.span(x, y, w, h);
+    if (!span) return false;
+    const [c0, r0, c1, r1] = span;
+    for (let r = r0; r < r1; r++) {
+      for (let i = r * this.cols + c0, end = r * this.cols + c1; i < end; i++) {
+        if (this.taken[i] || ((1 << this.marks[i]!) & allowed) === 0) return false;
+      }
+    }
+    return true;
   }
 
   take(x: number, y: number, w: number, h: number): void {
-    this.cells(x, y, w, h, (index) => {
-      this.taken[index] = 1;
-      return true;
-    });
+    const span = this.span(x, y, w, h);
+    if (!span) return;
+    const [c0, r0, c1, r1] = span;
+    for (let r = r0; r < r1; r++) this.taken.fill(1, r * this.cols + c0, r * this.cols + c1);
   }
 }
 
-/** One building the layout places: its id, type and the empire level it was built at. */
+/** One building the layout places, in build order: its type and the empire level it was built at. */
 export interface LayoutEntry {
-  id: number;
   t: number;
   /** The empire level the yard stood at when it was built (`builtAtLevel`). */
   level: number;
 }
 
-/** A placed footprint origin. */
+/** A placed footprint origin, with the yard id it went up with. */
 export interface PlacedSpot {
   id: number;
   t: number;
@@ -384,11 +400,11 @@ export interface PlacedSpot {
 
 /** The layout of a bot's yard. */
 export interface BotLayout {
-  /** Every building's spot, in the order given. */
+  /** Every building's spot and id, in the order given. */
   buildings: PlacedSpot[];
   /** The decorations, in id order. */
   decorations: PlacedSpot[];
-  /** `storedata.ENL.q` for the yard's level. */
+  /** `storedata.ENL.q`: what the yard's level usually holds, or more if the bot bought early. */
   expansion: number;
 }
 
@@ -405,6 +421,8 @@ class Layout {
   private readonly towers: { x: number; y: number }[] = [];
   private readonly byGroup = new Map<number, PlacedSpot[]>();
   private readonly slotUsed: boolean[][];
+  /** Expansions bought early because a building found no room (see the file comment). */
+  bought = 0;
 
   constructor(
     private readonly seed: number,
@@ -581,13 +599,13 @@ class Layout {
     return best;
   }
 
-  /** Every spot of the plot on the grid, for the last resort. */
-  private everySpot(type: number, expansion: number): { x: number; y: number }[] {
+  /** Every spot of the plot `step` apart, for the last resort. */
+  private everySpot(type: number, expansion: number, step: number): { x: number; y: number }[] {
     const [width, height] = yardSize(expansion);
     const { w, h } = footprintOf(type);
     const spots: { x: number; y: number }[] = [];
-    for (let y = -height / 2; y + h <= height / 2; y += GRID) {
-      for (let x = -width / 2; x + w <= width / 2; x += GRID) spots.push({ x, y });
+    for (let y = -height / 2; y + h <= height / 2; y += step) {
+      for (let x = -width / 2; x + w <= width / 2; x += step) spots.push({ x, y });
     }
     return spots;
   }
@@ -619,7 +637,7 @@ class Layout {
 
   /** Places one building (see the file comment) and returns its spot. */
   place(id: number, type: number, level: number): PlacedSpot {
-    const expansion = expansionFor(this.seed, level);
+    const expansion = Math.max(expansionFor(this.seed, level), this.bought);
     const role = roleOf(type);
     const rng = streamOf(this.seed, SALT.building, id);
     const { w, h } = footprintOf(type);
@@ -645,11 +663,16 @@ class Layout {
       }
     }
 
-    const found =
+    let found =
       this.best(rng, type, role, level, expansion, allowed, spots) ??
       this.best(rng, type, role, level, expansion, allowed, this.zoneSpots(rng, type, role, level, 160, WIDEN)) ??
-      this.best(rng, type, role, level, expansion, allowed, this.everySpot(type, expansion)) ??
-      this.best(rng, type, role, level, expansion, ANYWHERE, this.everySpot(type, expansion));
+      this.best(rng, type, role, level, expansion, allowed, this.everySpot(type, expansion, SCAN_STEP)) ??
+      // A gap a footprint just fills may start on an odd 5: try every grid spot before giving up.
+      this.best(rng, type, role, level, expansion, ANYWHERE, this.everySpot(type, expansion, GRID));
+    for (let more = expansion + 1; !found && more <= MAX_EXPANSIONS; more++) {
+      found = this.best(rng, type, role, level, more, allowed, this.everySpot(type, more, SCAN_STEP));
+      if (found) this.bought = more;
+    }
     if (!found) throw new Error(`No room in the bot's yard for building ${id} (type ${type}).`);
     return this.put(id, type, found.x, found.y);
   }
@@ -671,13 +694,13 @@ const decorationPlan = (seed: number): { after: number; t: number }[] => {
 };
 
 /**
- * Lays out a bot's yard (see the file comment). Pure: the same seed, persona
- * and buildings always give the same spots, and the spots of a prefix of
- * `entries` are a prefix of the spots of the whole.
+ * Lays out and numbers a bot's yard (see the file comment). Pure: the same
+ * seed, persona and buildings always give the same spots and ids, and the
+ * result for a prefix of `entries` is a prefix of the result for the whole.
  *
  * @param seed - `bot.seed`.
  * @param persona - `bot.persona`.
- * @param entries - Every building in build (id) order, with the level it was built at.
+ * @param entries - Every building in build order, with the level it was built at.
  * @param level - The yard's empire level now, for its expansions.
  */
 export const layoutBotYard = (
@@ -690,13 +713,17 @@ export const layoutBotYard = (
   const decorations = decorationPlan(seed);
   const buildings: PlacedSpot[] = [];
   const placedDecorations: PlacedSpot[] = [];
+  let nextId = 1;
   for (const entry of entries) {
-    buildings.push(layout.place(entry.id, entry.t, entry.level));
+    buildings.push(layout.place(nextId++, entry.t, entry.level));
     const next = decorations[placedDecorations.length];
     if (next && buildings.length >= next.after) {
-      const id = DECORATION_ID_BASE + placedDecorations.length;
-      placedDecorations.push(layout.place(id, next.t, entry.level));
+      placedDecorations.push(layout.place(nextId++, next.t, entry.level));
     }
   }
-  return { buildings, decorations: placedDecorations, expansion: expansionFor(seed, level) };
+  return {
+    buildings,
+    decorations: placedDecorations,
+    expansion: Math.max(expansionFor(seed, level), layout.bought),
+  };
 };
