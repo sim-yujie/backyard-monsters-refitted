@@ -7,8 +7,9 @@ import type { YardPoint } from "./stagedRaid";
 /**
  * New monsters walking into the yard to their Housing (issue #227): Bob's 15
  * free Pokeys in the guided start (`docs/design/tutorial.md` §2.3 step 8),
- * and, for the Goals package, a monster reward arriving. Drawing only: the
- * server has already housed them.
+ * and, for the Goals package, a monster reward arriving. Hatched monsters walk
+ * the same way from their Hatchery (#228, {@link walkOutOfHatchery}). Drawing
+ * only: the server houses them.
  *
  * They start in a loose line past `from` and walk to `to`, then fade there,
  * as if going in. Ends by itself; {@link destroy} takes it down early.
@@ -31,7 +32,10 @@ export interface WalkInOptions {
   readonly from: YardPoint;
   /** The Housing's centre. */
   readonly to: YardPoint;
-  /** Called once when the last has gone in. */
+  /**
+   * Called once when the walk is over: the last has gone in, or it was taken
+   * down before that. The caller lets the pens show them from here (#228).
+   */
   readonly onEnd?: () => void;
 }
 
@@ -69,32 +73,94 @@ export const walkerAt = (
 /** Monster Housing (`YARD_PROPS.as`). */
 const HOUSING_TYPE = 15;
 
+/** One building as the walk reads it. */
+export interface WalkInBuilding {
+  readonly id?: number;
+  readonly type: number;
+  readonly x: number;
+  readonly y: number;
+  readonly footprint: readonly [number, number];
+  /** Health; null or absent is whole. A Housing at zero is no pen (`yardLifeModel`). */
+  readonly hp?: number | null;
+}
+
 /** The yard as the walk-in reads it: where Housing stands and how wide the plot is. */
 export interface WalkInYard {
-  readonly buildings: readonly {
-    readonly type: number;
-    readonly x: number;
-    readonly y: number;
-    readonly footprint: readonly [number, number];
-  }[];
+  readonly buildings: readonly WalkInBuilding[];
   readonly bounds: { readonly yardWidth: number };
 }
+
+const centreOf = (building: WalkInBuilding): YardPoint => ({
+  x: building.x + building.footprint[0] / 2,
+  y: building.y + building.footprint[1] / 2,
+});
 
 /**
  * New monsters walking into the yard's first Housing from the plot's east
  * edge, started at once: the guided start's Pokeys and Goals' monster
- * rewards. Null when there is no Housing to walk to.
+ * rewards. Null when there is no Housing to walk to; `onEnd` is then never
+ * called.
  */
 export const walkIntoHousing = (
   host: RaidHost,
   yard: WalkInYard,
   monster: string,
   count: number,
+  onEnd?: () => void,
 ): MonsterWalkIn | null => {
   const housing = yard.buildings.find((building) => building.type === HOUSING_TYPE);
   if (!housing || count <= 0) return null;
-  const to = { x: housing.x + housing.footprint[0] / 2, y: housing.y + housing.footprint[1] / 2 };
-  const walk = new MonsterWalkIn(host, { monster, count, from: { x: yard.bounds.yardWidth / 2, y: to.y }, to });
+  const to = centreOf(housing);
+  const from = { x: yard.bounds.yardWidth / 2, y: to.y };
+  const walk = new MonsterWalkIn(host, { monster, count, from, to, ...(onEnd ? { onEnd } : {}) });
+  walk.start();
+  return walk;
+};
+
+/**
+ * Where a hatched monster comes out and where it goes (#228): from the front
+ * corner of its Hatchery's footprint, the one nearest the viewer, so it steps
+ * out in front of the building rather than over it, to the middle of the
+ * standing Housing nearest that Hatchery. Null when either is missing.
+ */
+export const hatcheryWalk = (
+  yard: WalkInYard,
+  hatchery: number,
+): { from: YardPoint; to: YardPoint } | null => {
+  const source = yard.buildings.find((building) => building.id === hatchery);
+  if (!source) return null;
+  const start = centreOf(source);
+  let to: YardPoint | null = null;
+  let best = Infinity;
+  for (const building of yard.buildings) {
+    if (building.type !== HOUSING_TYPE || (building.hp != null && building.hp <= 0)) continue;
+    const centre = centreOf(building);
+    const distance = Math.hypot(centre.x - start.x, centre.y - start.y);
+    if (distance < best) {
+      best = distance;
+      to = centre;
+    }
+  }
+  if (!to) return null;
+  return { from: { x: source.x + source.footprint[0], y: source.y + source.footprint[1] }, to };
+};
+
+/**
+ * Hatched monsters walking from their Hatchery to the nearest Housing (#228),
+ * started at once. Null when there is nobody to walk, or no Hatchery or
+ * Housing to walk between; `onEnd` is then never called.
+ */
+export const walkOutOfHatchery = (
+  host: RaidHost,
+  yard: WalkInYard,
+  hatchery: number,
+  monster: string,
+  count: number,
+  onEnd?: () => void,
+): MonsterWalkIn | null => {
+  const route = count > 0 ? hatcheryWalk(yard, hatchery) : null;
+  if (!route) return null;
+  const walk = new MonsterWalkIn(host, { monster, count, ...route, ...(onEnd ? { onEnd } : {}) });
   walk.start();
   return walk;
 };
@@ -169,7 +235,9 @@ export class MonsterWalkIn {
   destroy(): void {
     if (this.frame !== null) cancelAnimationFrame(this.frame);
     this.frame = null;
+    const ending = !this.ended;
     this.ended = true;
+    if (ending) this.options.onEnd?.();
     this.root.parent?.removeChild(this.root);
     this.root.destroy({ children: true });
     this.textures.destroy();

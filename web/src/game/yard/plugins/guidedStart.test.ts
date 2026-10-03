@@ -31,7 +31,7 @@ const harness = (onboarding: Onboarding, buildings: Building[] = []) => {
   let selected: number | null = null;
   const store = {
     kind: "main",
-    save: { onboarding, name: "zz_tut" },
+    save: { onboarding, name: "zz_tut", monsters: { housed: { C1: 15 } } },
     yard: { buildings, bounds: { yardWidth: 1200, yardHeight: 1200 } },
     subscribe: (listener: () => void) => {
       listeners.add(listener);
@@ -43,6 +43,12 @@ const harness = (onboarding: Onboarding, buildings: Building[] = []) => {
       sent.push(action.key);
       return { ok: true, report: { added: 15, housed: 15, retry: false, step: "build-maproom" }, completed: [] };
     }),
+  };
+  const release = vi.fn();
+  const renderer = {
+    root: new Container(),
+    yardToWorld: (x: number, y: number) => ({ x, y }),
+    holdLife: vi.fn(() => release),
   };
   const guide = document.createElement("div");
   document.body.append(guide);
@@ -63,7 +69,7 @@ const harness = (onboarding: Onboarding, buildings: Building[] = []) => {
     store,
     overlay: { guide },
     scene,
-    renderer: { root: new Container(), yardToWorld: (x: number, y: number) => ({ x, y }) },
+    renderer,
     canvas: document.createElement("canvas"),
     camera: new Camera({ zoom: 1 }),
   } as unknown as YardMounts;
@@ -77,6 +83,8 @@ const harness = (onboarding: Onboarding, buildings: Building[] = []) => {
   return {
     runner,
     store,
+    renderer,
+    release,
     guide,
     sent,
     scene,
@@ -144,13 +152,18 @@ describe("the guided start runner", () => {
 
   it("asks for the Pokeys once at the pokeys step, then says his line until Next", async () => {
     const housing: Building = { id: 8, type: 15, x: 300, y: 100, footprint: [80, 80], countdown: null };
-    const { guide, sent, setStep } = harness(at("pokeys"), [housing]);
+    const { guide, sent, setStep, renderer, release, runner } = harness(at("pokeys"), [housing]);
     await settle();
     expect(sent).toEqual(["guide:army"]);
+    // Housed already, they stay out of the pen while they walk in (#228).
+    expect(renderer.holdLife).toHaveBeenCalledWith("C1", 0);
+    expect(release).not.toHaveBeenCalled();
     setStep(at("build-maproom"));
     expect(text(guide)).toBe(LINES.pokeys);
     primary(guide)!.click();
     expect(text(guide)).toBe(GUIDE_BUILDS["build-maproom"]!.lines.open);
+    runner.destroy();
+    expect(release).toHaveBeenCalledOnce();
   });
 
   it("Skip asks first, and skips only when confirmed", async () => {

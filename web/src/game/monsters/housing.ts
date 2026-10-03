@@ -73,6 +73,12 @@ export const academyLevel = (academy: AcademyData | null | undefined, id: string
   return Number.isFinite(level) && level >= 1 ? Math.floor(level) : 1;
 };
 
+/** How many of one monster are housed: 0 for none or a count that is not a number. */
+export const housedCount = (save: Pick<BaseLoadResponse, "monsters">, id: string): number => {
+  const count = Math.floor(Number(save.monsters?.housed?.[id] ?? 0));
+  return Number.isFinite(count) && count > 0 ? count : 0;
+};
+
 /** When the running Housing Expansion ends (unix seconds), or null when none runs. */
 export const expansionEndsAt = (save: BaseLoadResponse, now: number): number | null => {
   const ends = Number(save.storedata?.[HOUSING_EXPANSION.item]?.e);

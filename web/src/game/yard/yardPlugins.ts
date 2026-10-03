@@ -10,8 +10,9 @@ import type { YardStore, YardUiBinding } from "./YardStore";
 /**
  * The registry the own yard mounts the new-player tutorial's packages from
  * (issue #227, `docs/design/tutorial.md` §9.2): Goals (a), the guided start
- * (b) and the screen tips (c). The attack scene's `attackPlugins.ts` is the
- * model.
+ * (b) and the screen tips (c); and the Hatchery walk-out (#228), which needs
+ * the same own-yard store and renderer. The attack scene's `attackPlugins.ts`
+ * is the model.
  *
  * Kept apart from `YardScene.ts` for the same reason: each package's file
  * under `./plugins/` pushes onto {@link YARD_PLUGINS} at module load, and the

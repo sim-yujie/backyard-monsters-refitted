@@ -6,7 +6,7 @@ import type { HarvestKey } from "./harvest";
 import { YardGround } from "./YardGround";
 import { YardJobBars } from "./YardJobBars";
 import { YardLifeLayer } from "./YardLifeLayer";
-import type { YardLife } from "./yardLifeModel";
+import { holdBack, type LifeHold, type YardLife } from "./yardLifeModel";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
@@ -73,6 +73,10 @@ export class YardRenderer {
   private readonly life = new YardLifeLayer({ reducedMotion: prefersReducedMotion() });
   /** The planner is open: the creatures step out of the way until it closes. */
   private lifeHidden = false;
+  /** The life last set, before {@link lifeHolds} cut it. */
+  private lifeShown: YardLife | null = null;
+  /** New monsters still walking home, kept out of their pens until they arrive (#228). */
+  private readonly lifeHolds = new Set<LifeHold>();
   /** The resource balls a bank throws at the Town Hall (#208), over every building. */
   private readonly collect = new CollectFxLayer();
 
@@ -263,10 +267,23 @@ export class YardRenderer {
    * again when a Housing falls.
    */
   setLife(life: YardLife | null): void {
-    const bounds = this.yard?.bounds;
-    if (!bounds) return;
-    this.life.set(life, bounds);
-    this.mountLife();
+    this.lifeShown = life;
+    this.applyLife();
+  }
+
+  /**
+   * Draws at most `cap` of `monster` in the pens until the returned release is
+   * called (#228): the new ones are walking home and join the pen when they
+   * get there. Holds outlive {@link setLife}, so a save read again meanwhile
+   * stays cut; releasing twice does nothing.
+   */
+  holdLife(monster: string, cap: number): () => void {
+    const hold: LifeHold = { monster, cap };
+    this.lifeHolds.add(hold);
+    this.applyLife();
+    return () => {
+      if (this.lifeHolds.delete(hold)) this.applyLife();
+    };
   }
 
   /**
@@ -281,6 +298,14 @@ export class YardRenderer {
   /** How many living things are being drawn. */
   get lifeCount(): number {
     return this.life.count;
+  }
+
+  private applyLife(): void {
+    const bounds = this.yard?.bounds;
+    if (!bounds) return;
+    const life = this.lifeShown;
+    this.life.set(life && holdBack(life, [...this.lifeHolds]), bounds);
+    this.mountLife();
   }
 
   /**

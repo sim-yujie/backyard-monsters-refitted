@@ -1,6 +1,7 @@
 import { guideActions, type GuideActions } from "@/api/guide";
 import type { Onboarding } from "@/api/types";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
+import { housedCount } from "@/game/monsters/housing";
 import { walkIntoHousing, type MonsterWalkIn } from "@/game/guide/MonsterWalkIn";
 import { StagedRaidLayer } from "@/game/guide/StagedRaidLayer";
 import { SPAWN_DISTANCE } from "@/game/guide/stagedRaid";
@@ -589,12 +590,19 @@ export class GuidedStartRunner {
     }
   }
 
-  /** Bob's Pokeys walk in from the yard's edge to the Housing. */
+  /**
+   * Bob's Pokeys walk in from the yard's edge to the Housing. The server has
+   * housed them already, so the pen leaves them out until they get there (#228).
+   */
   private playWalkIn(count: number): void {
     const housing = this.firstOfType(HOUSING);
     if (!housing) return;
     this.walkIn?.destroy();
-    this.walkIn = walkIntoHousing(this.mounts.renderer, this.mounts.store.yard, "C1", Math.min(count, FREE_POKEYS));
+    const { renderer, store } = this.mounts;
+    const walking = Math.min(count, FREE_POKEYS);
+    const release = renderer.holdLife("C1", housedCount(store.save, "C1") - walking);
+    this.walkIn = walkIntoHousing(renderer, store.yard, "C1", walking, release);
+    if (!this.walkIn) release();
     const to = centreOf(housing);
     this.mounts.scene.centreOn(to.x, to.y);
   }

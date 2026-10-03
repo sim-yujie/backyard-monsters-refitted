@@ -2,6 +2,7 @@ import { goalsActions, type GoalsActions, type GoalView } from "@/api/goals";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { walkIntoHousing, type MonsterWalkIn } from "@/game/guide/MonsterWalkIn";
+import { housedCount } from "@/game/monsters/housing";
 import { startBank, type AnswerBank, type BankShowFx, type BankShowHud } from "@/game/yard/bankShow";
 import type { HarvestKey } from "@/game/yard/harvest";
 import { claimFigure, REWARD_KEYS, type ClaimFigure } from "@/ui/goals/claimFigure";
@@ -211,10 +212,14 @@ export class GoalsDoor {
           level: "info",
           timeoutMs: 5_000,
         });
-        // They walk in from the yard's edge, as Bob's Pokeys do (the guided start's walk-in).
+        // They walk in from the yard's edge, as Bob's Pokeys do (the guided
+        // start's walk-in), and join the pen when they get there (#228).
         if (!prefersReducedMotion()) {
           this.walkIn?.destroy();
-          this.walkIn = walkIntoHousing(this.mounts.renderer, store.yard, monsters.id, monsters.count);
+          const { renderer } = this.mounts;
+          const release = renderer.holdLife(monsters.id, housedCount(store.save, monsters.id) - monsters.count);
+          this.walkIn = walkIntoHousing(renderer, store.yard, monsters.id, monsters.count, release);
+          if (!this.walkIn) release();
         }
       }
       // The claimed goal leaves the list now; the next read reveals what its claim opened.

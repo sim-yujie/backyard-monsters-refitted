@@ -333,6 +333,40 @@ export const fellPens = (life: YardLife, destroyed: readonly number[]): YardLife
   return fallen ? { ...life, fallen } : life;
 };
 
+/**
+ * At most `cap` of one monster type in the pens, while the rest of them are
+ * still walking home (#228): a new monster is drawn walking there, and only
+ * joins its pen when it arrives.
+ */
+export interface LifeHold {
+  readonly monster: string;
+  readonly cap: number;
+}
+
+/**
+ * The life with every held type cut to its cap, the lowest when one type is
+ * held more than once; the same object when no group is over its cap.
+ */
+export const holdBack = (life: YardLife, holds: readonly LifeHold[]): YardLife => {
+  if (holds.length === 0) return life;
+  const caps = new Map<string, number>();
+  for (const hold of holds) {
+    caps.set(hold.monster, Math.min(caps.get(hold.monster) ?? Infinity, Math.max(0, hold.cap)));
+  }
+  let held = false;
+  const groups: LifeGroup[] = [];
+  for (const group of life.groups) {
+    const cap = caps.get(group.id);
+    if (cap === undefined || group.count <= cap) {
+      groups.push(group);
+      continue;
+    }
+    held = true;
+    if (cap > 0) groups.push({ ...group, count: Math.floor(cap) });
+  }
+  return held ? { ...life, groups } : life;
+};
+
 /* ── The sample ─────────────────────────────────────────────────────────── */
 
 /** One monster to draw: its type and its academy level. */

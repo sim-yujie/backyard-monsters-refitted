@@ -9,6 +9,7 @@ import {
   CREEP_WANDER_ODDS,
   EMPTY_LIFE,
   fellPens,
+  holdBack,
   jobSpot,
   MAX_HOUSED_DRAWN,
   PEN_SETTLE_TICKS,
@@ -162,6 +163,29 @@ describe("yardLifeOf on somebody else's yard (#159)", () => {
   it("reads the defender's own academy for the walking speed", () => {
     const slow = { ...busy, academy: {} } as BaseLoadResponse;
     expect(yardLifeOf(slow, yard, "visit").groups.map((group) => group.level)).toEqual([1, 1]);
+  });
+});
+
+describe("holdBack (#228)", () => {
+  const life = lifeWith({
+    groups: [
+      { id: "C1", level: 1, count: 15 },
+      { id: "C2", level: 2, count: 4 },
+    ],
+  });
+
+  it("cuts a held type to its cap, the lowest of its holds, and drops it at none", () => {
+    expect(holdBack(life, [{ monster: "C1", cap: 10 }]).groups).toEqual([
+      { id: "C1", level: 1, count: 10 },
+      { id: "C2", level: 2, count: 4 },
+    ]);
+    expect(holdBack(life, [{ monster: "C1", cap: 10 }, { monster: "C1", cap: 14 }]).groups[0]?.count).toBe(10);
+    expect(holdBack(life, [{ monster: "C1", cap: -3 }]).groups).toEqual([{ id: "C2", level: 2, count: 4 }]);
+  });
+
+  it("is the same life when nothing is over its cap", () => {
+    expect(holdBack(life, [])).toBe(life);
+    expect(holdBack(life, [{ monster: "C1", cap: 15 }, { monster: "C9", cap: 0 }])).toBe(life);
   });
 });
 
