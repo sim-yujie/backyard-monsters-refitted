@@ -343,9 +343,9 @@ the 1-40 spread stays even on its own; a daily rebalance corrects drift.
   (`updateNeighbourData.ts:52`, the same path a real player who upgrades off Map Room 1 takes); it
   has no map cell, so nobody sees it anywhere. Its rows stay, so mail threads and attack logs keep
   their names. Retired bots with no mail older than 90 days `[PLACEHOLDER]` may be deleted.
-- **Rebalance** (daily): any level more than 2 bots over its share has its newest arrivals' growth
-  slowed; any level more than 2 under has its arrivals sped up; the total is topped back to 500 at
-  level 1.
+- **Rebalance** (daily, claimed through `bym.job_run`, section 6): any level more than 2 bots
+  over its share has its newest arrivals' growth slowed; any level more than 2 under has its
+  arrivals sped up; the total is topped back to 500 at level 1.
 
 ### 4.5 After a player attacks a bot (decisions 10, 11)
 
@@ -456,7 +456,7 @@ CREATE INDEX bot_state_level ON bym.bot (state, level);
 CREATE TABLE bym.bot_job (
   id            bigserial   PRIMARY KEY,
   bot_userid    integer     NOT NULL REFERENCES bym.bot(userid),
-  kind          text        NOT NULL,           -- grow | repair | revenge | declineTruce | rebalance
+  kind          text        NOT NULL,           -- grow | repair | revenge | declineTruce
   target_userid integer,                        -- revenge, declineTruce
   due_at        timestamptz NOT NULL,
   giveup_at     timestamptz,                    -- revenge: trigger + 72 h
@@ -502,7 +502,12 @@ after 5 attempts it is dropped with an error log.
 | `repair` | 1-4 h after an attack | `planRepair` all, bunkers and Housing refilled, resource band |
 | `revenge` | 1-24 h after an attack, 1 in 3 | section 4.7 |
 | `declineTruce` | 2-8 h after a request | answer "rejected" |
-| `rebalance` | daily, one row | level counts, pace nudges, top up to 500 (creates bots) |
+
+**Rebalance is not a `bot_job` row.** It belongs to no bot, and `bot_job.bot_userid` is required.
+Once a day the sweep claims the day in `bym.job_run` (`job = 'bots-rebalance'`, `period` = the UTC
+date), the same way `scripts/monthly-shiny.ts` claims its month. The insert's primary key means
+only one server runs it each day. It counts bots per level, nudges the pace and tops the total back
+to `BOTS_TOTAL` (creating bots).
 
 Every yard write runs under the save's row lock (`lockRow`, as `catchUpLockedYard`), and is skipped
 while `isAttackActive` (an attack owns the row then), retrying in 10 minutes.

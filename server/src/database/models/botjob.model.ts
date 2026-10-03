@@ -3,8 +3,12 @@ import { BigIntType, type Opt, PrimaryKeyProp } from "@mikro-orm/core";
 
 import type { JsonObject } from "../../types/JsonObject.js";
 
-/** The work a bot job does when due (`docs/design/bot-neighbours.md` §6). */
-export type BotJobKind = "grow" | "repair" | "revenge" | "declineTruce" | "rebalance";
+/**
+ * The work a bot job does when due (`docs/design/bot-neighbours.md` §6). The
+ * daily rebalance is not one: it belongs to no bot and claims its day in
+ * `bym.job_run` instead.
+ */
+export type BotJobKind = "grow" | "repair" | "revenge" | "declineTruce";
 
 /**
  * One piece of bot work due at a future time (issue #235,
