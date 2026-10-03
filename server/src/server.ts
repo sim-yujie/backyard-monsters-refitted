@@ -26,6 +26,8 @@ import { ownerSaveConfig, ownerSaveModeWasUnrecognised } from "./config/OwnerSav
 import { startAttackFinaliser } from "./services/base/finaliseAttack.js";
 import { turnstileSecretKey } from "./services/auth/turnstile.js";
 import { requiresDiscordVerification } from "./config/AccountConfig.js";
+import { botConfig } from "./config/BotConfig.js";
+import { PRESENCE_TTL_SECONDS } from "./controllers/maproom/presence.js";
 
 export const app = new Koa();
 app.proxy = true;
@@ -99,6 +101,24 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // `ATTACK_FINALISER_SWEEP=off` leaves the sweep to another server sharing
   // the same database, such as a second development server.
   if (process.env.ATTACK_FINALISER_SWEEP !== "off") startAttackFinaliser();
+
+  // The bot sweep (issue #240): grows, repairs and rebalances Map Room 1 bots.
+  // Off unless BOTS_BRAIN=on, and then not even loaded, so a server without
+  // bots runs exactly as before; a failure to start it never stops the server.
+  if (botConfig().brain) {
+    try {
+      const { startBotSweep } = await import("./services/bots/sweep.js");
+      startBotSweep({
+        em: postgres.em,
+        markOnline: async (userid, now) => {
+          await redis.setex(`last-seen:main:${userid}`, PRESENCE_TTL_SECONDS, String(now));
+        },
+      });
+      logger.info("Bot sweep (BOTS_BRAIN): on");
+    } catch (err) {
+      logger.error(`Bot sweep could not start: ${err}`);
+    }
+  }
 
   // Say which economy audit mode is live, once, at boot: `log` and `reject`
   // behave very differently for a player and the variable is read only here

@@ -20,8 +20,8 @@ import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
  *    one either.
  * 2. Only known code reads the bot tables. Bot services, scripts and the
  *    database layer may; anything else that imports the bot entities or
- *    `services/bots/` must be listed in {@link READERS}, with what it does
- *    with the answer. A new reader is a place a bot could show: check that
+ *    `services/bots/`, statically or with `import()`, must be listed in
+ *    {@link READERS}, with what it does with the answer. A new reader is a place a bot could show: check that
  *    nothing it learns changes what a player is sent (a refusal reads as the
  *    same refusal for a real player) before adding it.
  */
@@ -38,12 +38,13 @@ const READERS: Record<string, string> = {
     "fills empty neighbour places with bots, built by the same createNeighbourData as real players and shuffled in with them",
   "services/base/afterYardDefended.ts":
     "after a defence lands: a real defender gets the same notice whoever attacked, a bot books jobs; returns nothing to the response",
+  "server.ts": "starts the bot sweep when BOTS_BRAIN is on (a background timer; it answers no request)",
 };
 
 /** Directories whose files may read bot data freely: the bot code and the database layer. */
 const OPEN = ["services/bots/", "database/", "scripts/"];
 
-const BOT_IMPORT = /from\s+["'][^"']*(?:\/bot\.model\.js|\/botjob\.model\.js|\/services\/bots\/[^"']*|\.\.?\/bots\/[^"']*)["']/;
+const BOT_IMPORT = /(?:from\s+|import\s*\(\s*)["'][^"']*(?:\/bot\.model\.js|\/botjob\.model\.js|\/services\/bots\/[^"']*|\.\.?\/bots\/[^"']*)["']/;
 
 const sources = (directory: string): string[] =>
   readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

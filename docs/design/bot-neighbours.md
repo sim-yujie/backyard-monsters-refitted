@@ -519,6 +519,33 @@ Load: 500 bots × one grow every ~4 h ≈ 125 grow jobs an hour, each one row re
 one write. Revenge battles are the only heavy step and share the replay-worker slots with manual
 saves.
 
+As built (WP7, `services/bots/sweep.ts` for the rows and the timer, `services/bots/brain.ts` for the
+pure decisions): `server.ts` loads the sweep only when `BOTS_BRAIN` is on, so with it off nothing of
+it runs. Each pass first books a `grow` (due within the hour) for every active bot without one, which
+is how a bot made by the factory starts; its first grow's catch-up gives it mushrooms and the rest of a
+real save. Jobs are claimed one at a time (`LIMIT 1 … SKIP LOCKED`, at most 20 a pass), each effect in
+a savepoint so a throw undoes it and leaves the backoff (5, 10, 20, 40 minutes; dropped at the fifth
+failure, and a dropped `grow` is booked afresh on the next pass). Only `grow` and `repair` are claimed;
+`revenge` and `declineTruce` rows wait for WP11 and WP12. Details that the text above leaves open:
+
+- **Growth is a diff** of the live yard against the generator's yard at the pace target: missing ids
+  are built, lower levels upgraded, each step earning its build or upgrade points; the step with the
+  highest id is left on its countdown (capped at 90% of the time to the next grow). A mushroom on a
+  new spot is picked; anything else in the way (or an id holding another type) refuses that growth
+  whole and logs it. A damaged yard does not grow; the grow books a repair if none is booked.
+- **The pace** is `level + days on it × speed / BOTS_DAYS_PER_LEVEL`; `level_since` is re-anchored when
+  the level changes so a bot that could not grow catches up rather than losing time. The rebalance's
+  nudges (`[PLACEHOLDER]` 0.75 slow, 1.5 fast) live in the `grow` job's `payload.speed` and end at the
+  bot's next level. "Its arrivals sped up" for a thin level is read as the bots next to arrive: the
+  furthest-on bots of the level below, as many as the level is short.
+- **Retirement** happens when the pace position passes 41 (the bot has had its three days on level 40);
+  the replacement level 1 bot is made after the retirement commits. The daily top-up adds level 1
+  bots only up to level 1's share plus the slack of 2, so an empty table is never refilled at level 1
+  all at once (use `bots.ts create --fill`).
+- **Repair** also re-arms fired traps under their own ids (from `firedtraps`), refills bunkers and
+  Housing that are under their band's floor (to the generator's garrison and army, cut to the Housing
+  standing), feeds and heals the champion and puts loot back in its band.
+
 ## 7. Safety, anti-abuse and not leaking bots
 
 ### 7.1 Never attack the wrong player
