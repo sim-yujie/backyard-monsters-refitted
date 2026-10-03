@@ -104,6 +104,8 @@ interface Harness {
   readonly groups: GroupOutcome[];
   /** The ids the session last asked for a red outline on. */
   readonly faulted: () => ReadonlySet<number>;
+  /** The ids the session last asked for a faint nearby outline on (#231). */
+  readonly nearby: () => ReadonlySet<number>;
   /** How many times the session asked its owner to open the search box. */
   readonly finds: () => number;
   /** Where the renderer has each building drawn, in yard units. */
@@ -204,8 +206,11 @@ const planner = (
       return rect ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null;
     },
     plotCorners: (): Corners => rectCorners(centredRect(500, 400)),
-    setPlannerVisuals: (visuals: { invalid: ReadonlySet<number> } | null): void => {
+    setPlannerVisuals: (
+      visuals: { invalid: ReadonlySet<number>; nearby?: ReadonlySet<number> } | null,
+    ): void => {
       faulted = visuals ? visuals.invalid : new Set<number>();
+      nearby = visuals?.nearby ?? new Set<number>();
     },
     worldSize: (): { width: number; height: number } => ({
       width: BLUEPRINT_WORLD.width,
@@ -221,6 +226,7 @@ const planner = (
   const groups: GroupOutcome[] = [];
   let finds = 0;
   let faulted: ReadonlySet<number> = new Set<number>();
+  let nearby: ReadonlySet<number> = new Set<number>();
 
   const setView = (next: YardView): void => {
     if (view === next) return;
@@ -266,6 +272,7 @@ const planner = (
     states,
     groups,
     faulted: () => faulted,
+    nearby: () => nearby,
     finds: () => finds,
     placements,
     hidden,
@@ -1880,5 +1887,87 @@ describe("placing a run from the drawer (issue #57)", () => {
     expect(state.placing).toBe(false);
     expect(state.storedCount).toBe(1);
     expect(harness.session.plan.get(3)?.stored).toBe(true);
+  });
+});
+
+/* ── Nearby outlines (#231) ───────────────────────────────────────────────── */
+
+describe("nearby outlines while something is in hand (#231)", () => {
+  // A cannon looks 140 units out round its 70-unit footprint: tower one at
+  // (0, 0) sees tower two at (200, 0), and the wall at (-300, -300) is out.
+
+  it("outlines the neighbours of a carried building, not the building itself", () => {
+    const harness = planner();
+    harness.click(ONE);
+    expect(harness.nearby()).toEqual(new Set([2]));
+
+    // Over by the wall, away from tower two.
+    harness.drag(by(ONE, -200, -200));
+    expect(harness.nearby()).toEqual(new Set([3]));
+  });
+
+  it("clears them once the carry is dropped or put back", () => {
+    const harness = planner();
+    harness.click(ONE);
+    harness.drag(by(ONE, 0, 150));
+    harness.click(by(ONE, 0, 150));
+    expect(harness.session.state().carrying).toBe(false);
+    expect(harness.nearby().size).toBe(0);
+
+    // Tower two still has tower one, in its new spot, beside it.
+    harness.click(TWO);
+    expect(harness.nearby()).toEqual(new Set([1]));
+    harness.key("Escape");
+    expect(harness.nearby().size).toBe(0);
+  });
+
+  it("shows them through a press-and-drag too, and not for a marquee", () => {
+    const harness = planner();
+    harness.press(ONE);
+    harness.drag(by(ONE, 20, 0));
+    expect(harness.nearby()).toEqual(new Set([2]));
+    harness.release(by(ONE, 20, 0));
+    expect(harness.nearby().size).toBe(0);
+
+    harness.press(GROUND, { shiftKey: true });
+    harness.drag(by(GROUND, 50, 50));
+    expect(harness.nearby().size).toBe(0);
+  });
+
+  it("shows nothing in a read-only session, where nothing can be picked up", () => {
+    const harness = planner({ readOnly: true });
+    harness.click(ONE);
+    expect(harness.nearby().size).toBe(0);
+  });
+
+  it("outlines round a building out of the drawer, at the spot it follows", () => {
+    const harness = planner();
+    harness.session.selectOnly([1]);
+    harness.session.store();
+    harness.session.startPlacing(1);
+    // Starts where it was stored from, beside tower two.
+    expect(harness.nearby()).toEqual(new Set([2]));
+
+    harness.drag(blueprintToWorld(400, 300));
+    expect(harness.nearby().size).toBe(0);
+
+    harness.key("Escape");
+    expect(harness.nearby().size).toBe(0);
+  });
+
+  it("takes in each building of a run as it lands", () => {
+    const harness = planner();
+    harness.session.selectOnly([1, 2]);
+    harness.session.store();
+    harness.session.startPlacing(1);
+
+    harness.drag(blueprintToWorld(400, 300));
+    harness.press(blueprintToWorld(400, 300));
+    // Tower two is in hand on the spot tower one just took.
+    expect(harness.session.state().placing).toBe(true);
+    expect(harness.nearby()).toEqual(new Set([1]));
+
+    harness.drag(blueprintToWorld(250, 300));
+    expect(harness.nearby()).toEqual(new Set([1]));
   });
 });

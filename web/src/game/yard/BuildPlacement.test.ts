@@ -95,6 +95,70 @@ describe("PlacementGrid", () => {
   });
 });
 
+// #231: the faint outlines round what stands near the building in hand.
+describe("PlacementGrid.nearby", () => {
+  const TRAP = 24; // Booby Trap, 20 x 20
+  const DECORATION = 55; // 30 x 30
+
+  // A cannon held with its origin at (300, -300) looks 140 units out on every
+  // side (two small towers' widths): x in [160, 510), y in [-440, -90).
+  const NEAR: BuildingData[] = [
+    { id: 2, t: BLOCK, X: 450, Y: -200 },
+    { id: 3, t: TRAP, X: 200, Y: -120 },
+    { id: 4, t: DECORATION, X: 340, Y: -420 },
+    { id: 5, t: CANNON, X: 100, Y: -150 }, // reaches x = 170, so half in
+  ];
+  const FAR: BuildingData[] = [
+    { id: 6, t: CANNON, X: -400, Y: 300 },
+    { id: 7, t: BLOCK, X: 300, Y: 0 },
+  ];
+
+  const idsAt = (grid: PlacementGrid, type: number, x: number, y: number): number[] => {
+    const byPlace = new Map([...NEAR, ...FAR, HALL].map((one) => [`${one.X},${one.Y}`, one.id]));
+    return grid
+      .nearby(type, x, y)
+      .map((one) => byPlace.get(`${one.x},${one.y}`) ?? -1)
+      .sort((a, b) => a - b);
+  };
+
+  it("finds buildings, walls, traps and decorations close by, and nothing further out", () => {
+    const grid = new PlacementGrid(yardOf([HALL, ...NEAR, ...FAR]));
+    expect(idsAt(grid, CANNON, 300, -300)).toEqual([2, 3, 4, 5]);
+  });
+
+  it("hands back each footprint's type and origin, for drawing", () => {
+    const grid = new PlacementGrid(yardOf([HALL, { id: 2, t: BLOCK, X: 450, Y: -200 }]));
+    expect(grid.nearby(CANNON, 300, -300)).toEqual([{ type: BLOCK, x: 450, y: -200 }]);
+  });
+
+  it("looks further round a big building than round a wall", () => {
+    // A Town Hall (130) looks 260 out; a wall gets the 140 floor.
+    const grid = new PlacementGrid(yardOf([{ id: 2, t: CANNON, X: 360, Y: 0 }]));
+    expect(grid.nearby(14, 0, 0)).toHaveLength(1);
+    expect(grid.nearby(BLOCK, 100, 0)).toHaveLength(0);
+    expect(grid.nearby(BLOCK, 240, 0)).toHaveLength(1);
+  });
+
+  it("leaves mushrooms out", () => {
+    const grid = new PlacementGrid(
+      yardOf([HALL], { mushrooms: { l: [{ X: 320, Y: -200, frame: 1 }] } }),
+    );
+    expect(grid.nearby(CANNON, 300, -300)).toEqual([]);
+  });
+
+  it("includes a drop still waiting for its answer, and keeps it once the yard has it", () => {
+    const grid = new PlacementGrid(yardOf([HALL]));
+    const before = grid.version;
+    const handle = grid.hold(BLOCK, 200, 200);
+    expect(grid.version).toBeGreaterThan(before);
+    expect(grid.nearby(BLOCK, 220, 200)).toEqual([{ type: BLOCK, x: 200, y: 200 }]);
+
+    grid.rebase(yardOf([HALL, { id: 2, t: BLOCK, X: 200, Y: 200 }]));
+    grid.release(handle);
+    expect(grid.nearby(BLOCK, 220, 200)).toEqual([{ type: BLOCK, x: 200, y: 200 }]);
+  });
+});
+
 describe("insideFootprint", () => {
   it("is the footprint's own rectangle, far edges open", () => {
     expect(insideFootprint(CANNON, { x: 0, y: 0 }, { x: 0, y: 0 })).toBe(true);

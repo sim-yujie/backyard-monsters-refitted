@@ -1,6 +1,7 @@
 import { kindOf, maxLevel } from "../buildingCosts";
 import { isStorageId } from "../decorStorage";
 import { holdsWorker } from "../workers";
+import { nearbyArea } from "../nearbyFootprints";
 import { footprintOf } from "../YardGrid";
 import type { Yard } from "../yardModel";
 import type { MoveEntry, PlanEntry, StoreEntry } from "./commands";
@@ -18,6 +19,7 @@ import {
   type PlanNode,
   type PlotBounds,
   type Position,
+  type YardArea,
 } from "./placement";
 
 /**
@@ -470,6 +472,36 @@ export class Plan {
     const lifted = this.lifted;
     if (!lifted || lifted.length === 0) return { valid: true, issues: [] };
     return validateOffset(lifted, dx, dy, this.occupancy, this.plot);
+  }
+
+  /**
+   * The buildings near the lifted selection shifted by `(dx, dy)`, for their
+   * outlines (#231). Empty when nothing is lifted.
+   *
+   * The selection itself is never among them: `beginMove` took its cells out
+   * of the grid this reads.
+   */
+  nearbyLifted(dx: number, dy: number): Set<number> {
+    const lifted = this.lifted;
+    if (!lifted || lifted.length === 0) return new Set();
+    return this.nearby(
+      lifted.map((node) => nearbyArea(node.x + dx, node.y + dy, node.width, node.height)),
+    );
+  }
+
+  /**
+   * The buildings near a footprint of `width` x `height` at `(x, y)` (#231):
+   * every building, wall, trap and decoration with a cell in the areas round
+   * it. Mushrooms are left out; they are not on the owner's list.
+   */
+  nearbySpot(x: number, y: number, width: number, height: number): Set<number> {
+    return this.nearby([nearbyArea(x, y, width, height)]);
+  }
+
+  private nearby(areas: readonly YardArea[]): Set<number> {
+    const ids = this.occupancy.occupantsIn(areas);
+    for (const id of ids) if (this.nodes.get(id)?.fixed !== false) ids.delete(id);
+    return ids;
   }
 
   /**

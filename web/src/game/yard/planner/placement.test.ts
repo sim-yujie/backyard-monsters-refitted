@@ -177,6 +177,52 @@ describe("Occupancy", () => {
   });
 });
 
+// #231: what the nearby outlines are looked up with. Blocks are 20 units and
+// line up with multiples of 20, so areas on those lines are read exactly.
+describe("Occupancy.occupantsIn", () => {
+  const area = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
+
+  it("finds what stands in an area, including building 0, and nothing outside it", () => {
+    const grid = new Occupancy();
+    grid.stamp(node({ id: 0, x: 0, y: 0 }));
+    grid.stamp(wall(1, 100, 0));
+    grid.stamp(wall(2, 200, 0));
+    expect(grid.occupantsIn([area(0, 0, 200, 100)])).toEqual(new Set([0, 1]));
+  });
+
+  it("counts a footprint with any one cell inside", () => {
+    const grid = new Occupancy();
+    grid.stamp(node({ id: 7, x: -60, y: -60 }));
+    // The tower's last cell is at (5, 5); the area starts at (0, 0).
+    expect(grid.occupantsIn([area(0, 0, 40, 40)])).toEqual(new Set([7]));
+    expect(grid.occupantsIn([area(20, 20, 40, 40)])).toEqual(new Set());
+  });
+
+  it("joins several areas and names each building once", () => {
+    const grid = new Occupancy();
+    grid.stamp(wall(1, 0, 0));
+    grid.stamp(wall(2, 400, 400));
+    grid.stamp(wall(3, 800, 0));
+    const found = grid.occupantsIn([area(-20, -20, 60, 60), area(0, 0, 40, 40), area(380, 380, 60, 60)]);
+    expect(found).toEqual(new Set([1, 2]));
+  });
+
+  it("leaves its scratch clean, so the next call is not answered from the last", () => {
+    const grid = new Occupancy();
+    grid.stamp(wall(1, 0, 0));
+    expect(grid.occupantsIn([area(0, 0, 20, 20)])).toEqual(new Set([1]));
+    grid.erase(wall(1, 0, 0));
+    expect(grid.occupantsIn([area(0, 0, 20, 20)])).toEqual(new Set());
+  });
+
+  it("clips an area running off the grid, and skips an empty one", () => {
+    const grid = new Occupancy();
+    grid.stamp(wall(1, -1620, -1300));
+    expect(grid.occupantsIn([area(-5000, -5000, 3400, 3720)])).toEqual(new Set([1]));
+    expect(grid.occupantsIn([area(-1620, -1300, 0, 20)])).toEqual(new Set());
+  });
+});
+
 describe("validateOffset", () => {
   const plot = plotBounds(0);
 

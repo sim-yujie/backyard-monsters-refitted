@@ -149,6 +149,8 @@ export class PlannerView {
     marquee: Rect | null;
     /** Compare's highlights (#9), or null outside compare. */
     diff?: CompareDiff | null;
+    /** What stands near the item in hand (#231). */
+    nearby?: ReadonlySet<number>;
   }): void {
     this.renderer.setPlannerVisuals({ ...state, plot: this.renderer.plotCorners() });
   }

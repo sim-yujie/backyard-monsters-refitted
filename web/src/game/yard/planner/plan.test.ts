@@ -808,3 +808,99 @@ describe("a stored building and the rest of the plan", () => {
     expect(plan.validate().valid).toBe(true);
   });
 });
+
+// #231: the faint outlines round whatever is in hand, against the captured
+// 575-building yard.
+describe("Plan nearby", () => {
+  /** Whether two yard rectangles share any ground. */
+  const touches = (
+    a: { x: number; y: number; width: number; height: number },
+    b: { x: number; y: number; width: number; height: number },
+  ): boolean => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+  /**
+   * The same question answered the slow way, by a pass over every building:
+   * everything touching an area grown by `slack` on each side. The grid
+   * rounds its areas out to 20-unit blocks, so it may find a little more
+   * than `slack = 0` and never more than `slack = 20`.
+   */
+  const bruteForce = (plan: Plan, ids: number[], dx: number, dy: number, slack: number): Set<number> => {
+    const moving = new Set(ids);
+    const found = new Set<number>();
+    for (const id of ids) {
+      const node = plan.get(id);
+      if (!node) continue;
+      const margin = Math.max(2 * Math.max(node.width, node.height), 140) + slack;
+      const area = {
+        x: node.x + dx - margin,
+        y: node.y + dy - margin,
+        width: node.width + margin * 2,
+        height: node.height + margin * 2,
+      };
+      for (const other of plan.buildings()) {
+        if (!moving.has(other.id) && touches(area, other)) found.add(other.id);
+      }
+    }
+    return found;
+  };
+
+  const expectBetween = (found: Set<number>, least: Set<number>, most: Set<number>): void => {
+    for (const id of least) expect(found.has(id)).toBe(true);
+    for (const id of found) expect(most.has(id)).toBe(true);
+  };
+
+  it("is everything close to a lifted building, and never the building itself", () => {
+    const plan = freshPlan();
+    for (const id of cannonIds(plan)) {
+      plan.beginMove([id]);
+      const found = plan.nearbyLifted(0, 0);
+      expect(found.has(id)).toBe(false);
+      expect(found.size).toBeGreaterThan(0);
+      expectBetween(found, bruteForce(plan, [id], 0, 0, 0), bruteForce(plan, [id], 0, 0, 20));
+      plan.cancelMove();
+    }
+  });
+
+  it("follows the drag's offset", () => {
+    const plan = freshPlan();
+    const [id] = cannonIds(plan);
+    if (id === undefined) throw new Error("no cannon in the fixture");
+    plan.beginMove([id]);
+    const found = plan.nearbyLifted(300, -200);
+    expectBetween(found, bruteForce(plan, [id], 300, -200, 0), bruteForce(plan, [id], 300, -200, 20));
+    plan.cancelMove();
+  });
+
+  it("joins the areas round every building of a big selection, and leaves mushrooms out", () => {
+    const plan = freshPlan();
+    const walls = plan
+      .buildings()
+      .filter((node) => node.type === 17)
+      .map((node) => node.id);
+    expect(walls.length).toBeGreaterThan(100);
+
+    plan.beginMove(walls);
+    const found = plan.nearbyLifted(0, 0);
+    for (const id of walls) expect(found.has(id)).toBe(false);
+    for (const id of found) expect(plan.get(id)?.fixed).toBe(false);
+    expectBetween(found, bruteForce(plan, walls, 0, 0, 0), bruteForce(plan, walls, 0, 0, 20));
+    plan.cancelMove();
+  });
+
+  it("is nothing when nothing is lifted", () => {
+    expect(freshPlan().nearbyLifted(0, 0).size).toBe(0);
+  });
+
+  it("answers for a spot, as a building out of the drawer needs", () => {
+    const plan = freshPlan();
+    const found = plan.nearbySpot(0, 0, 70, 70);
+    const least = new Set(
+      plan
+        .buildings()
+        .filter((node) => touches({ x: -140, y: -140, width: 350, height: 350 }, node))
+        .map((node) => node.id),
+    );
+    for (const id of least) expect(found.has(id)).toBe(true);
+    for (const id of found) expect(plan.get(id)?.fixed).toBe(false);
+  });
+});

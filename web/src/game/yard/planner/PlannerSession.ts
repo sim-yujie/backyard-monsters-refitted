@@ -1209,7 +1209,28 @@ export class PlannerSession {
       // as `movedIds`, which this method already pays for.
       planned: this.plan.plannedLevels(),
       marquee: this.marquee,
+      nearby: compare ? EMPTY : this.nearbyIds(),
     });
     this.onChange();
+  }
+
+  /**
+   * What stands near whatever is in hand (#231), for the faint outlines:
+   * the building out of the drawer at its spot, or the lifted selection at
+   * the drag's offset. Nothing when nothing is in hand.
+   *
+   * Worked out on every refresh rather than cached, because a refresh is
+   * already what a move to a new grid square costs: `onMove` and
+   * `dragPlacement` return early while the snapped spot stays put.
+   */
+  private nearbyIds(): ReadonlySet<number> {
+    const placing = this.placing;
+    if (placing) {
+      const node = this.plan.get(placing.id);
+      return node ? this.plan.nearbySpot(placing.x, placing.y, node.width, node.height) : EMPTY;
+    }
+    // A press held on a building, or a carry: the plan has the selection lifted.
+    if (this.pressWorld) return this.plan.nearbyLifted(this.dragDelta.dx, this.dragDelta.dy);
+    return EMPTY;
   }
 }

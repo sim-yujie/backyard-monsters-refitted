@@ -1,6 +1,7 @@
 import { Assets, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 import type { Camera } from "@/game/Camera";
 import { ArtState, resolveArt } from "./buildingArt";
+import { nearbyArea, NEARBY_STROKE } from "./nearbyFootprints";
 import {
   inBounds,
   Occupancy,
@@ -10,7 +11,7 @@ import {
   type PlotBounds,
 } from "./planner/placement";
 import { footprintCorners, footprintOf, type Point } from "./YardGrid";
-import type { Yard } from "./yardModel";
+import type { Yard, YardBuilding } from "./yardModel";
 
 /**
  * Putting a new building down (`docs/design/yard-buildings.md` §5.3): the
@@ -28,7 +29,9 @@ import type { Yard } from "./yardModel";
  * moves the building to the spot, and the bar's Build here drops it
  * ({@link BuildPlacement.dropHere}, #157). A wall or trap
  * stays in hand after it lands, so a line of walls is one click per block
- * (§5.3); anything else is done after one.
+ * (§5.3); anything else is done after one. While it is in hand, whatever
+ * stands near it is outlined faintly to line it up by (#231,
+ * `nearbyFootprints.ts`).
  *
  * {@link PlacementGrid} is the arithmetic, testable without Pixi or a DOM;
  * {@link BuildPlacement} is the pointer handling and the ghost on the canvas.
@@ -55,6 +58,13 @@ export interface SpotCheck {
   readonly problem: SpotProblem | null;
   /** With `overlap`, the building in the way. */
   readonly blockedBy: number | null;
+}
+
+/** A footprint standing near the spot in hand, for its outline (#231). */
+export interface NearbyFootprint {
+  readonly type: number;
+  readonly x: number;
+  readonly y: number;
 }
 
 /** A footprint as the occupancy grid takes one. */
@@ -89,16 +99,28 @@ export class PlacementGrid {
   private readonly pending = new Map<number, PlanNode>();
   private nextPending = PENDING_ID_BASE;
   private yard: Yard | null = null;
+  private byId = new Map<number, YardBuilding>();
+  private changes = 0;
 
   constructor(yard: Yard) {
     this.rebase(yard);
   }
 
+  /**
+   * Goes up whenever what is stamped in changes: a rebase, a hold, a release.
+   * The nearby outlines are redrawn when it or the spot does, and not otherwise.
+   */
+  get version(): number {
+    return this.changes;
+  }
+
   /** Restamps from a yard the server has just answered with. Pending drops stay. */
   rebase(yard: Yard): void {
     this.yard = yard;
+    this.changes++;
     this.plot = plotBounds(yard.expansionLevel);
     this.occupancy.clear();
+    this.byId = new Map(yard.buildings.map((building) => [building.id, building]));
     for (const building of yard.buildings) {
       this.occupancy.stamp(nodeOf(building.id, building.type, building.x, building.y));
     }
@@ -132,7 +154,30 @@ export class PlacementGrid {
 
   /** The name of the building a spot collides with, for the hint. */
   nameOf(id: number): string | null {
-    return this.yard?.buildings.find((one) => one.id === id)?.name ?? null;
+    return this.byId.get(id)?.name ?? null;
+  }
+
+  /**
+   * What stands near a building of `type` at `(x, y)` (#231): every building,
+   * wall, trap and decoration with a cell inside its {@link nearbyArea}, and
+   * the drops still waiting for an answer, so a wall just put down is
+   * outlined before the server has said so. Mushrooms are not: they are not
+   * on the owner's list, and the planner leaves them out too.
+   */
+  nearby(type: number, x: number, y: number): NearbyFootprint[] {
+    const [width, height] = footprintOf(type);
+    const found: NearbyFootprint[] = [];
+    for (const id of this.occupancy.occupantsIn([nearbyArea(x, y, width, height)])) {
+      if (id >= PENDING_ID_BASE) {
+        const node = this.pending.get(id);
+        if (node) found.push({ type: node.type, x: node.x, y: node.y });
+        continue;
+      }
+      if (id >= MUSHROOM_ID_BASE) continue;
+      const building = this.byId.get(id);
+      if (building) found.push({ type: building.type, x: building.x, y: building.y });
+    }
+    return found;
   }
 
   /** Holds a spot for a drop the server has not answered yet. Returns its handle. */
@@ -141,6 +186,7 @@ export class PlacementGrid {
     const node = nodeOf(handle, type, x, y);
     this.pending.set(handle, node);
     this.occupancy.stamp(node);
+    this.changes++;
     return handle;
   }
 
@@ -196,6 +242,11 @@ export class BuildPlacement {
 
   private readonly options: BuildPlacementOptions;
   private readonly ghost = new Container();
+  /** The neighbours' outlines (#231), under the ghost's own. */
+  private readonly nearby = new Graphics();
+  /** The spot and grid version the outlines were last drawn for. */
+  private nearbyFor = "";
+  private nearbyDrawn: readonly NearbyFootprint[] = [];
   private readonly outline = new Graphics();
   private readonly art = new Sprite(Texture.EMPTY);
   private artOffset: Point = { x: 0, y: 0 };
@@ -215,7 +266,7 @@ export class BuildPlacement {
 
     this.ghost.eventMode = "none";
     this.art.alpha = 0.7;
-    this.ghost.addChild(this.outline, this.art);
+    this.ghost.addChild(this.nearby, this.outline, this.art);
     this.ghost.visible = false;
     options.layer.addChild(this.ghost);
     void this.loadArt();
@@ -295,6 +346,7 @@ export class BuildPlacement {
   }
 
   private draw(check: SpotCheck): void {
+    this.drawNearby(check.x, check.y);
     const corners = footprintCorners(this.yard.bounds, this.options.type, check.x, check.y);
     const [top, right, bottom, left] = corners;
     const g = this.outline;
@@ -314,6 +366,34 @@ export class BuildPlacement {
     if (top) this.art.position.set(top.x + this.artOffset.x, top.y + this.artOffset.y);
     this.art.tint = check.problem ? 0xffb0b0 : 0xffffff;
     this.ghost.visible = true;
+  }
+
+  /**
+   * Outlines what stands near the spot (#231). Only when the spot has moved
+   * to another grid square or the grid has changed under it: a pointer
+   * wandering inside one square redraws nothing.
+   */
+  private drawNearby(x: number, y: number): void {
+    const key = `${x},${y},${this.grid.version}`;
+    if (key === this.nearbyFor) return;
+    this.nearbyFor = key;
+
+    const g = this.nearby;
+    g.clear();
+    const found = this.grid.nearby(this.options.type, x, y);
+    this.nearbyDrawn = found;
+    if (found.length === 0) return;
+    // One path and one stroke for the lot, as the planner's overlay does.
+    for (const one of found) {
+      const corners = footprintCorners(this.yard.bounds, one.type, one.x, one.y);
+      g.poly(corners.flatMap((point) => [point.x, point.y]));
+    }
+    g.stroke(NEARBY_STROKE);
+  }
+
+  /** What the nearby outlines are drawn round now. A new array only when redrawn. */
+  get nearbyShown(): readonly NearbyFootprint[] {
+    return this.nearbyDrawn;
   }
 
   /* ── Input ──────────────────────────────────────────────────────────── */

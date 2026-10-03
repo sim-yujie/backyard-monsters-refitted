@@ -54,6 +54,14 @@ const GRID_ORIGIN_X = DECORATION_WIDTH / 2;
 const GRID_ORIGIN_Y = DECORATION_HEIGHT / 2;
 
 /**
+ * Cells per side of the blocks {@link Occupancy.occupantsIn} marks off before
+ * it reads anything, so overlapping areas are read once between them.
+ */
+const BLOCK = 4;
+const BLOCK_COLUMNS = Math.ceil(GRID_COLUMNS / BLOCK);
+const BLOCK_ROWS = Math.ceil(GRID_ROWS / BLOCK);
+
+/**
  * A planned upgrade on one node (`docs/design/planner-upgrades.md` §2.1).
  *
  * Immutable, so the undo stack can hold the value that was there before an
@@ -149,6 +157,14 @@ export interface Position {
   readonly y: number;
 }
 
+/** A rectangle in yard units, covering `[x, x + width) x [y, y + height)`. */
+export interface YardArea {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 /** Half-extents of the area a node of a given kind may occupy. */
 export interface PlotBounds {
   readonly halfWidth: number;
@@ -230,6 +246,8 @@ export const inBounds = (node: PlanNode, x: number, y: number, plot: PlotBounds)
  */
 export class Occupancy {
   private readonly cells = new Int32Array(GRID_COLUMNS * GRID_ROWS);
+  /** Scratch for `occupantsIn`, all zero between calls. Made on first use. */
+  private marks: Uint8Array | null = null;
 
   /** Empties every cell. */
   clear(): void {
@@ -266,6 +284,55 @@ export class Occupancy {
       }
     }
     return null;
+  }
+
+  /**
+   * Every id standing on any cell of any of the areas (#231).
+   *
+   * The areas are rounded out to 4 x 4-cell blocks and each block is read
+   * once however many areas cover it, so the nearby outlines around a
+   * 400-wall run cost the cells the run's surroundings cover, not 400 times
+   * a square around each wall. A footprint is found if any one of its cells
+   * is in a block, so a building half inside an area counts.
+   */
+  occupantsIn(areas: readonly YardArea[], into = new Set<number>()): Set<number> {
+    const marks = (this.marks ??= new Uint8Array(BLOCK_COLUMNS * BLOCK_ROWS));
+    const touched: number[] = [];
+
+    for (const area of areas) {
+      if (area.width <= 0 || area.height <= 0) continue;
+      const first = this.firstCell(area.x, area.y);
+      // The cell holding the area's last unit, one short of its far edge.
+      const last = this.firstCell(area.x + area.width - 1, area.y + area.height - 1);
+      const fromX = Math.max(0, Math.floor(first.cx / BLOCK));
+      const fromY = Math.max(0, Math.floor(first.cy / BLOCK));
+      const toX = Math.min(BLOCK_COLUMNS - 1, Math.floor(last.cx / BLOCK));
+      const toY = Math.min(BLOCK_ROWS - 1, Math.floor(last.cy / BLOCK));
+      for (let by = fromY; by <= toY; by++) {
+        for (let bx = fromX; bx <= toX; bx++) {
+          const block = by * BLOCK_COLUMNS + bx;
+          if (marks[block]) continue;
+          marks[block] = 1;
+          touched.push(block);
+        }
+      }
+    }
+
+    for (const block of touched) {
+      marks[block] = 0;
+      const bx = block % BLOCK_COLUMNS;
+      const by = (block - bx) / BLOCK_COLUMNS;
+      const endY = Math.min(GRID_ROWS, (by + 1) * BLOCK);
+      const endX = Math.min(GRID_COLUMNS, (bx + 1) * BLOCK);
+      for (let cy = by * BLOCK; cy < endY; cy++) {
+        const base = cy * GRID_COLUMNS;
+        for (let cx = bx * BLOCK; cx < endX; cx++) {
+          const occupant = this.cells[base + cx];
+          if (occupant) into.add(occupant - 1);
+        }
+      }
+    }
+    return into;
   }
 
   /** Writes `value` over a footprint; returns the first occupant displaced. */

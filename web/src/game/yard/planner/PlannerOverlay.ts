@@ -1,4 +1,5 @@
 import { Graphics } from "pixi.js";
+import { NEARBY_STROKE } from "../nearbyFootprints";
 import type { Rect } from "../YardGrid";
 import type { Corners } from "./marquee";
 
@@ -44,6 +45,11 @@ export interface PlannerVisuals {
    * the other side, and buildings this side has and the other does not.
    */
   readonly diff?: CompareDiff | null;
+  /**
+   * Buildings standing near whatever is in hand (#231), outlined faintly so
+   * it can be lined up against them. Empty or absent when nothing is.
+   */
+  readonly nearby?: ReadonlySet<number>;
 }
 
 /** The compare highlights for one pane (#9). */
@@ -114,6 +120,20 @@ export class PlannerOverlay {
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
+
+    // First, so every other mark on a neighbour — moved, the red of the one
+    // in the way — is drawn over its faint outline rather than under it.
+    const nearby = visuals.nearby;
+    if (nearby && nearby.size > 0) {
+      let drewNearby = false;
+      for (const id of nearby) {
+        const shape = shapeOf(id);
+        if (!shape) continue;
+        g.poly(path(shape));
+        drewNearby = true;
+      }
+      if (drewNearby) g.stroke(NEARBY_STROKE);
+    }
 
     const diff = visuals.diff;
     if (diff) {
