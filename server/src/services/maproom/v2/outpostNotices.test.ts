@@ -5,9 +5,11 @@ import {
   YARD_ATTACKED,
   attackNoticeText,
   noticeOutpostAttack,
+  noticeYardAttack,
   takeOutpostNotices,
   takenNoticeText,
   writeOutpostNotice,
+  yardAttackNoticeText,
 } from "./outpostNotices.js";
 
 /**
@@ -93,6 +95,44 @@ describe("the words", () => {
       subject: "Bramble took your outpost at (243, 206)",
       message: "It is theirs now, with every building on it.",
     });
+  });
+
+  test("a Map Room 1 yard attack: who, the damage, the loot and housed monsters, no cell (#241)", () => {
+    expect(yardAttackNoticeText("Bramble", 63.4, { r1: 1234, r4: 500 })).toEqual({
+      subject: "Bramble attacked your yard",
+      message: "It was left 63% damaged, and 1,234 Twigs and 500 Goo were looted.",
+    });
+    expect(yardAttackNoticeText("Bramble", 40, {}, 2).message).toBe(
+      "It was left 40% damaged, nothing was looted, and 2 housed monsters were lost.",
+    );
+  });
+});
+
+describe("a Map Room 1 yard's defence (#241)", () => {
+  test("its owner gets one unread message from the game, with no cell, kept as the loot was taken", async () => {
+    await noticeYardAttack(em, {
+      yard: { baseid: "1234", saveuserid: OWNER, damage: 52 } as never,
+      attacker: { userid: ATTACKER, username: "Bramble" },
+      defenderDelta: { r1: -1234, r2: 0, r3: -20_000_000, r4: 5 },
+      housedLost: 1,
+      now: 40,
+    });
+    expect(messages).toEqual([
+      expect.objectContaining({
+        userid: 0,
+        targetid: OWNER,
+        messagetype: YARD_ATTACKED,
+        targetUnread: 1,
+        subject: "Bramble attacked your yard",
+        message: "It was left 52% damaged, 1,234 Twigs and 10,000,000 Putty were looted, and 1 housed monster was lost.",
+        coords: null,
+        baseid: "1234",
+        updatetime: 40,
+      }),
+    ]);
+    expect(unread.get(OWNER)).toBe(1);
+    const [notice] = await takeOutpostNotices(em, OWNER);
+    expect(notice).toMatchObject({ kind: "yardAttacked", id: "1234", detail: { x: null, y: null } });
   });
 });
 

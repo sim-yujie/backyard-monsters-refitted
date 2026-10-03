@@ -10,6 +10,7 @@ import { defenderLootHandler } from "../../controllers/base/save/handlers/defend
 import { isDeclareWarRunning } from "../alliance/powerups.js";
 import { protectAfterAttack } from "../maproom/v2/damageProtection.js";
 import { noticeOutpostAttack } from "../maproom/v2/outpostNotices.js";
+import { afterYardDefended } from "./afterYardDefended.js";
 import { isMR3Structure } from "../maproom/v3/utils/isMR3Structure.js";
 import { advanceBuildingTimers } from "./advanceBuildingTimers.js";
 import { checkpointExpired, checkpointSession, type AttackCheckpoint } from "./attackCheckpoint.js";
@@ -321,6 +322,15 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   if (!isMR3Structure(defender.wmid)) {
     await noticeOutpostAttack(postgres.em, {
       outpost: defender,
+      attacker,
+      defenderDelta: loot.defenderDelta,
+      housedLost: lostCount(housingLoss),
+      now,
+    });
+    // And a Map Room 1 main yard's, the same; an attacked bot books its
+    // repair and maybe a revenge (bot neighbours, #241).
+    await afterYardDefended(postgres.em, {
+      yard: defender,
       attacker,
       defenderDelta: loot.defenderDelta,
       housedLost: lostCount(housingLoss),

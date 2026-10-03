@@ -31,6 +31,7 @@ import { buildingDataHandler } from "./handlers/buildingDataHandler.js";
 import { takeoverCellMR3, type TakeoverData } from "../../../services/maproom/v3/takeoverCellMR3.js";
 import { protectAfterAttack } from "../../../services/maproom/v2/damageProtection.js";
 import { noticeOutpostAttack } from "../../../services/maproom/v2/outpostNotices.js";
+import { afterYardDefended } from "../../../services/base/afterYardDefended.js";
 import { takeoverOffer, type TakeoverOffer } from "../../../services/maproom/v2/takeoverOffer.js";
 import { isMR3Structure } from "../../../services/maproom/v3/utils/isMR3Structure.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
@@ -559,6 +560,15 @@ const saveBase = async (
     if (saveData.over && !isMR3Structure(baseSave.wmid)) {
       await noticeOutpostAttack(postgres.em, {
         outpost: baseSave,
+        attacker: user,
+        defenderDelta,
+        housedLost: lostCount(housingLoss),
+        now,
+      });
+      // A Map Room 1 main yard's owner is told the same, and an attacked bot
+      // books its repair and maybe a revenge (bot neighbours, #241).
+      await afterYardDefended(postgres.em, {
+        yard: baseSave,
         attacker: user,
         defenderDelta,
         housedLost: lostCount(housingLoss),

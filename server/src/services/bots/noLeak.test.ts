@@ -36,6 +36,8 @@ const READERS: Record<string, string> = {
   "mikro-orm.config.ts": "registers the entities",
   "services/maproom/v1/findOverworldNeighbours.ts":
     "fills empty neighbour places with bots, built by the same createNeighbourData as real players and shuffled in with them",
+  "services/base/afterYardDefended.ts":
+    "after a defence lands: a real defender gets the same notice whoever attacked, a bot books jobs; returns nothing to the response",
 };
 
 /** Directories whose files may read bot data freely: the bot code and the database layer. */

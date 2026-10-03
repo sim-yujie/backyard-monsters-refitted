@@ -28,7 +28,7 @@ export { SYSTEM_SENDER } from "../../mail/systemSender.js";
 export const OUTPOST_ATTACKED = "outpostattacked";
 export const OUTPOST_TAKEN = "outposttaken";
 /**
- * A Map Room 1 main yard was attacked (bot neighbours �4.8, #242): written in
+ * A Map Room 1 main yard was attacked (bot neighbours §4.8, #242): written in
  * this same form by the after-defence hook (WP8) and handed back here with the
  * outpost notices. Map Room 1 has no cells, so the web mailbox offers no
  * "Show on map" for it.
@@ -80,18 +80,36 @@ export const attackNoticeText = (
   damage: number,
   loot: ResourceAmounts,
   housedLost = 0,
-): { subject: string; message: string } => {
+): { subject: string; message: string } => ({
+  subject: `${attacker} attacked your outpost at (${cell.x}, ${cell.y})`,
+  message: costText(damage, loot, housedLost),
+});
+
+/**
+ * "Bramble attacked your yard" and what it cost, in an outpost notice's words
+ * (bot neighbours §4.8, #241). The same words whoever the attacker was.
+ */
+export const yardAttackNoticeText = (
+  attacker: string,
+  damage: number,
+  loot: ResourceAmounts,
+  housedLost = 0,
+): { subject: string; message: string } => ({
+  subject: `${attacker} attacked your yard`,
+  message: costText(damage, loot, housedLost),
+});
+
+/** "It was left 63% damaged, and 1,234 Twigs were looted.", and the housed monsters lost, if any. */
+const costText = (damage: number, loot: ResourceAmounts, housedLost: number): string => {
   const taken = amountsText(loot);
   const looted = taken === "" ? "nothing was looted" : `${taken} were looted`;
   const lost = Math.max(0, Math.floor(housedLost));
-  return {
-    subject: `${attacker} attacked your outpost at (${cell.x}, ${cell.y})`,
-    message:
-      `It was left ${Math.max(0, Math.round(damage))}% damaged` +
-      (lost === 0
-        ? `, and ${looted}.`
-        : `, ${looted}, and ${lost} housed ${lost === 1 ? "monster was" : "monsters were"} lost.`),
-  };
+  return (
+    `It was left ${Math.max(0, Math.round(damage))}% damaged` +
+    (lost === 0
+      ? `, and ${looted}.`
+      : `, ${looted}, and ${lost} housed ${lost === 1 ? "monster was" : "monsters were"} lost.`)
+  );
 };
 
 /** "Bramble took your outpost at (243, 206)". */
@@ -108,7 +126,8 @@ export interface OutpostNoticeInput {
   /** `outpostattacked`, `outposttaken`, or an invitation's answer (`inviteaccepted`, `invitedeclined`, #205). */
   readonly type: string;
   readonly text: { subject: string; message: string };
-  readonly cell: OutpostCell;
+  /** Where it happened; null for a Map Room 1 yard, which has no cell. */
+  readonly cell: OutpostCell | null;
   readonly baseid: string;
   readonly now: number;
 }
@@ -137,7 +156,7 @@ export const writeOutpostNotice = async (em: EntityManager, input: OutpostNotice
     targetUnread: 1,
     subject: text.subject,
     message: text.message,
-    coords: [cell.x, cell.y],
+    coords: cell ? [cell.x, cell.y] : null,
     baseid,
     updatetime: now,
   });
@@ -234,19 +253,52 @@ export const noticeOutpostAttack = async (
   const cell = cellCoordsFromBaseId(outpost.baseid);
   if (!cell) return;
 
+  await writeOutpostNotice(em, {
+    ownerId: outpost.saveuserid,
+    byUserId: attacker.userid,
+    type: OUTPOST_ATTACKED,
+    text: attackNoticeText(attacker.username, cell, Number(outpost.damage) || 0, lootTaken(defenderDelta), housedLost),
+    cell,
+    baseid: outpost.baseid,
+    now,
+  });
+};
+
+/**
+ * At the end of an attack on a Map Room 1 main yard, live or finished by the
+ * server: tells its owner who attacked it, the damage it was left at, what was
+ * looted and the housed monsters lost (bot neighbours §4.8, #241). Sent for
+ * every such defence, so no notice tells one kind of attacker from another.
+ */
+export const noticeYardAttack = async (
+  em: EntityManager,
+  input: {
+    yard: Pick<Save, "baseid" | "saveuserid" | "damage">;
+    attacker: { userid: number; username: string };
+    defenderDelta: ResourceAmounts | null | undefined;
+    /** Housed monsters lost with the yard's fallen Housings (issue #160). */
+    housedLost?: number;
+    now: number;
+  },
+): Promise<void> => {
+  const { yard, attacker, defenderDelta, housedLost, now } = input;
+  await writeOutpostNotice(em, {
+    ownerId: yard.saveuserid,
+    byUserId: attacker.userid,
+    type: YARD_ATTACKED,
+    text: yardAttackNoticeText(attacker.username, Number(yard.damage) || 0, lootTaken(defenderDelta), housedLost),
+    cell: null,
+    baseid: yard.baseid,
+    now,
+  });
+};
+
+/** The owner's loss of each resource, from an attack's `defenderDelta` (never positive). */
+const lootTaken = (defenderDelta: ResourceAmounts | null | undefined): ResourceAmounts => {
   const loot: ResourceAmounts = {};
   for (const key of ["r1", "r2", "r3", "r4"] as const) {
     const delta = Number(defenderDelta?.[key] ?? 0);
     if (Number.isFinite(delta) && delta < 0) loot[key] = Math.min(-delta, MAX_LOOT_PER_RESOURCE);
   }
-
-  await writeOutpostNotice(em, {
-    ownerId: outpost.saveuserid,
-    byUserId: attacker.userid,
-    type: OUTPOST_ATTACKED,
-    text: attackNoticeText(attacker.username, cell, Number(outpost.damage) || 0, loot, housedLost),
-    cell,
-    baseid: outpost.baseid,
-    now,
-  });
+  return loot;
 };
