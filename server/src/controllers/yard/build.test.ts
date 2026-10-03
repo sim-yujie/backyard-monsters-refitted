@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
-import { storageCap } from "../../services/base/economy/resourceBudget.js";
+import { baseValueOf, storageCap } from "../../services/base/economy/resourceBudget.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { yardBuildAction, yardCancelBuildAction, yardInstantBuildAction } from "./build.js";
 import { yardStateAction } from "./state.js";
@@ -83,6 +83,15 @@ const settled = (row: Row | null) => {
   return rest;
 };
 
+/**
+ * {@link settled} with the base value the first action writes (#209), which
+ * a cancel never takes back.
+ */
+const valued = (row: Row | null) => ({
+  ...settled(row),
+  basevalue: String(baseValueOf(row!.buildingdata as Parameters<typeof baseValueOf>[0])),
+});
+
 const buildings = () => db.row!.buildingdata as Record<string, Row>;
 
 beforeEach(() => {
@@ -148,7 +157,7 @@ describe("POST /bm/yard/build", () => {
 
 describe("POST /bm/yard/build/cancel", () => {
   test("build then cancel leaves the row as it was, savetime aside", async () => {
-    const before = settled(db.row);
+    const before = valued(db.row);
 
     await build(20, 300, -300);
     const answer = await cancel(3);

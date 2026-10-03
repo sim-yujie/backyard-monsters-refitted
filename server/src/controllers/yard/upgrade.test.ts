@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
-import { storageCap } from "../../services/base/economy/resourceBudget.js";
+import { baseValueOf, storageCap } from "../../services/base/economy/resourceBudget.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
@@ -88,6 +88,15 @@ const settled = (row: Row | null) => {
   const { savetime: _savetime, monsters: _monsters, ...rest } = row!;
   return rest;
 };
+
+/**
+ * {@link settled} with the base value the first action writes (#209), which
+ * a cancel never takes back.
+ */
+const valued = (row: Row | null) => ({
+  ...settled(row),
+  basevalue: String(baseValueOf(row!.buildingdata as Parameters<typeof baseValueOf>[0])),
+});
 
 beforeEach(() => {
   db.row = rowOf();
@@ -214,7 +223,7 @@ describe("a short upgrade (300 s or less)", () => {
   });
 
   test("Cancel refunds it in full", async () => {
-    const before = settled(db.row);
+    const before = valued(db.row);
     await upgrade(3);
     const answer = await cancel(3);
 
@@ -225,7 +234,7 @@ describe("a short upgrade (300 s or less)", () => {
 
 describe("POST /bm/yard/upgrade/cancel", () => {
   test("upgrade then cancel leaves the row as it was, savetime aside", async () => {
-    const before = settled(db.row);
+    const before = valued(db.row);
 
     await upgrade(1);
     const answer = await cancel(1);

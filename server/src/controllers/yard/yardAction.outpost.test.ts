@@ -317,6 +317,16 @@ describe("the one pool", () => {
     expect((await onOutpost(yardStateAction)).body.playerlevel).toBe(3);
   });
 
+  test("an outpost's buildings never reach the base value, on either row (#209)", async () => {
+    db.rows.set(MAIN, mainRow({ basevalue: "0" }));
+
+    expect((await onOutpost(yardStateAction)).status).toBe(200);
+    expect((await onOutpost(yardInstantBuildAction, { type: 20, x: 250, y: -200 })).status).toBe(200);
+
+    expect(mainSave().basevalue).toBe("0");
+    expect(outpostSave().basevalue).toBeUndefined();
+  });
+
   test("a refund lands in the main pool under the main cap", async () => {
     await onOutpost(yardUpgradeAction, { id: 3 });
     const step = stepOf(20, 1);

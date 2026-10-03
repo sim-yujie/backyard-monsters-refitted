@@ -3,7 +3,7 @@ import { TrapRearmSchema, type TrapPlacement } from "../../schemas/YardPlannerSc
 import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers.js";
 import { Operation, updateResources } from "../../services/base/updateResources.js";
 import { parseTrapPlacements, planTrapRearm } from "../../services/yardplanner/trapRearm.js";
-import { syncDerivedLevels } from "../../services/yard/derivedLevels.js";
+import { syncBaseValue, syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import { onPlannerYard } from "./plannerYard.js";
 import { debitOf } from "./upgradeWalls.js";
 import type { Save } from "../../database/models/save.model.js";
@@ -65,6 +65,7 @@ const rearmTrapsOn = (save: Save, traps: readonly TrapPlacement[], now: number) 
   );
   save.points = String(Number(save.points ?? "0") + plan.points);
   syncDerivedLevels(save);
+  syncBaseValue(save);
   save.savetime = now;
 
   return {

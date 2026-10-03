@@ -30,6 +30,7 @@ import {
 } from "./mapRoom.js";
 import type { MushroomYardSave } from "./mushrooms.js";
 import { clearOutpostMushrooms, placeOutpostCore } from "./outpostYard.js";
+import { syncBaseValue, type BaseValueSave } from "./derivedLevels.js";
 import { addStarterBase, type StarterBaseJob, type StarterBaseSave } from "./starterBase.js";
 import { yardKindOf } from "../yardplanner/costs.js";
 
@@ -58,6 +59,7 @@ import { yardKindOf } from "../yardplanner/costs.js";
  * | 4 | `catchUpTraining.ts` — academy training (legacy relative `time` made absolute once); `catchUpResearch`, lab research | 4 |
  * | 5 | `catchUpChampions.ts` — champions in the cage heal and starve | 5 |
  * | 6 | `catchUpDamage.ts` — `damage` follows the repairs down (#182 B) | — |
+ * | 7 | `derivedLevels.ts` `syncBaseValue` — `basevalue` rises to the finished buildings' worth (#209) | — |
  *
  * Buildings go first (after the locker, which only reads a store buff step 1
  * may expire, and the repairs, which only unpause countdowns step 1 then
@@ -111,7 +113,8 @@ export interface CatchUpSave
     MushroomYardSave,
     CatchUpTrainingSave,
     CatchUpChampionsSave,
-    CatchUpDamageSave {
+    CatchUpDamageSave,
+    BaseValueSave {
   savetime?: number;
 }
 
@@ -150,6 +153,7 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
   completed.push(...catchUpResearch(save, now));
   completed.push(...catchUpChampions(save, from, now));
   catchUpDamage(save);
+  syncBaseValue(save);
 
   save.savetime = now;
 

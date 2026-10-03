@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { LockMode } from "@mikro-orm/core";
 import type { Context } from "koa";
 import type { KoaController } from "../../utils/KoaController.js";
-import { OUTPOST_COSTS } from "../../game-data/buildingCosts.js";
+import { COSTS, OUTPOST_COSTS } from "../../game-data/buildingCosts.js";
 
 /**
  * The Yard Planner routes on a Map Room 2 outpost (outposts WP3, issue #184):
@@ -298,5 +298,47 @@ describe("Apply and decoration storage (#128)", () => {
     const answer = await run(applyLayout, { data, baseid: OUTPOST_BASEID });
     expect(answer.status).toBe(400);
     expect(answer.body.error).toBe("Decorations go in your main yard.");
+  });
+});
+
+describe("basevalue (#209)", () => {
+  /** `time + r1 + r2 + r3 + r4` of `type`'s step that left `level - 1`. */
+  const worth = (type: number, level: number): number => {
+    const [r1, r2, r3, r4, time] = COSTS[type]!.costs[level - 1]!;
+    return time + r1 + r2 + r3 + r4;
+  };
+
+  test("Apply on the main yard writes the yard's worth", async () => {
+    const answer = await run(applyLayout, { data: layout([{ id: 0, t: 14, x: 0, y: 0 }]) });
+
+    expect(answer.status).toBe(200);
+    expect(mainSave.basevalue).toBe(String(Math.ceil(0.1 * worth(14, 10))));
+  });
+
+  test("the wall batch on the main yard counts the walls' new level", async () => {
+    mainSave.buildingdata = {
+      "0": { id: 0, t: 14, X: 0, Y: 0, l: 10 },
+      "5": { id: 5, t: 17, X: 300, Y: 0, l: 1 },
+    };
+
+    const answer = await run(upgradeWalls, { ids: "[5]", level: 2 });
+
+    expect(answer.status).toBe(200);
+    expect(mainSave.basevalue).toBe(String(Math.ceil(0.1 * (worth(14, 10) + worth(17, 2)))));
+  });
+
+  test("Apply on an outpost writes no base value to either row", async () => {
+    mainSave.basevalue = "0";
+    const data = layout([
+      { id: 1, t: 112, x: 0, y: -50 },
+      { id: 2, t: 20, x: 150, y: 150 },
+      { id: 3, t: 17, x: -200, y: 200 },
+    ]);
+
+    const answer = await run(applyLayout, { data, baseid: OUTPOST_BASEID });
+
+    expect(answer.status).toBe(200);
+    expect(mainSave.basevalue).toBe("0");
+    expect(outpostSave.basevalue).toBeUndefined();
   });
 });

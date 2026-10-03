@@ -15,7 +15,7 @@ import { isShinyLocked } from "../../services/user/shinyLock.js";
 import { catchUpYard, type CompletedJob } from "../../services/yard/catchUp.js";
 import { catchUpDamage } from "../../services/yard/catchUpDamage.js";
 import { creditResources } from "../../services/yard/credit.js";
-import { syncDerivedLevels } from "../../services/yard/derivedLevels.js";
+import { syncBaseValue, syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import { joinMapRoom2 } from "../../services/yard/mapRoom.js";
 import { outpostCarryover, outpostProblems } from "../../services/yard/outpostYard.js";
 import { poolView } from "../../services/yard/poolView.js";
@@ -58,7 +58,8 @@ import { logger } from "../../utils/logger.js";
  * 5. Check and apply its {@link YardOutcome}: Shiny (`409 shinyLocked`,
  *    `409 credits`), resources (`409 shortfall`), then the new slices, the
  *    debit, the credit clamped to the cap (T3), the points; re-derive
- *    `flinger`/`catapult`; one flush; commit.
+ *    `flinger`/`catapult` and, on the main yard, raise `basevalue` (#209);
+ *    one flush; commit.
  * 6. Answer `{ error: 0, ...yardState, completed, report, playerlevel }`, the last
  *    the player's level from their main save (the yard HUD's, #192). The yard
  *    state's `onboarding` is the account's tutorial summary, read from the
@@ -244,6 +245,8 @@ export const applyOutcome = (save: Save, user: User, outcome: YardOutcome<unknow
   if (points > 0) save.points = String(Number(save.points ?? "0") + points);
 
   syncDerivedLevels(save);
+  // A no-op on an outpost: the view keeps the outpost's `type`.
+  syncBaseValue(save);
 };
 
 /**

@@ -3,10 +3,12 @@ import { LockMode, type EntityManager } from "@mikro-orm/core";
 import z from "zod";
 import type { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
+import { COSTS } from "../../game-data/buildingCosts.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { BuildingIdField } from "../../schemas/YardSchemas.js";
 import { yardRefusedErr } from "../../services/yard/yardErrors.js";
 import { updateOnboarding } from "../../services/onboarding/state.js";
+import { calculateBaseLevel } from "../../services/base/calculateBaseLevel.js";
 import { yardStateAction } from "./state.js";
 import {
   applyOutcome,
@@ -173,13 +175,14 @@ describe("POST /bm/yard/state", () => {
       report: null,
       workers: { total: 1, busy: 0 },
       completed: [{ kind: "upgrade", id: 1, t: 20, detail: { from: 1, level: 2, points: 6966 } }],
-      // Level 4 (5,000 to 7,499 points) from the points this answer's catch-up awarded (#192).
-      playerlevel: 4,
+      // Level 7 (15,000 to 19,999): the 6,966 points this answer's catch-up
+      // awarded (#192) plus the yard's worth after it, 11,930 (#209).
+      playerlevel: 7,
     });
     expect(ctx.body!.savetime).toBe(ctx.body!.currenttime);
 
-    // Written: level, points and savetime all landed on the row.
-    expect(db.row).toMatchObject({ points: "6966", savetime: ctx.body!.savetime });
+    // Written: level, points, base value and savetime all landed on the row.
+    expect(db.row).toMatchObject({ points: "6966", basevalue: "11930", savetime: ctx.body!.savetime });
     expect((db.row!.buildingdata as Record<string, Row>)["1"]).toMatchObject({ l: 2 });
   });
 
@@ -227,6 +230,14 @@ describe("catchUpLockedYard (the owner's build-mode /base/load)", () => {
     expect(db.readOptions).toEqual([{ lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true }]);
     expect(db.row).toMatchObject({ points: "6966", savetime: save.savetime });
     expect((db.row!.buildingdata as Record<string, Row>)["1"]).toMatchObject({ l: 2 });
+  });
+
+  test("heals a base value nothing wrote, from the yard as the catch-up left it (#209)", async () => {
+    db.row = rowOf({ basevalue: "0" });
+
+    await catchUp();
+
+    expect(db.row!.basevalue).toBe("11930");
   });
 
   test("a second load finds nothing new", async () => {
@@ -459,5 +470,78 @@ describe("applyOutcome", () => {
     });
 
     expect(save.flinger).toBe(4);
+  });
+});
+
+/**
+ * `basevalue` (#209): a tenth of the time and resources of every finished
+ * building's current step (`client/scripts/BASE.as:4830-4861`), kept as a
+ * high-water mark on the main yard.
+ */
+describe("basevalue (#209)", () => {
+  /** `time + r1 + r2 + r3 + r4` of `type`'s step that left `level - 1`. */
+  const worth = (type: number, level: number): number => {
+    const [r1, r2, r3, r4, time] = COSTS[type]!.costs[level - 1]!;
+    return time + r1 + r2 + r3 + r4;
+  };
+
+  /** Replaces the yard's buildings with whatever `buildingdata` it is handed. */
+  const rebuild = defineYardAction({
+    schema: z.object({}).passthrough(),
+    run: ({ body }) => ({ report: null, slices: { buildingdata: body.buildingdata as Save["buildingdata"] } }),
+  });
+
+  test("the fixture's yard is worth what Flash's sum says: Town Hall 3 and Cannon Tower 2", async () => {
+    await call(state);
+
+    // 42,000 + 42,000 + 14,400 s for the hall, 10,000 + 7,500 + 2,500 + 900 s for the tower.
+    expect(worth(14, 3) + worth(20, 2)).toBe(119300);
+    expect(db.row!.basevalue).toBe(String(Math.ceil(0.1 * 119300)));
+  });
+
+  test("a building the action changes counts in the same answer's level", async () => {
+    const buildingdata = {
+      "0": { id: 0, t: 14, X: 0, Y: 0, l: 3 },
+      "1": { id: 1, t: 20, X: 100, Y: 100, l: 3 },
+    };
+
+    const answer = await call(rebuild as YardAction<z.ZodType, unknown>, { buildingdata });
+
+    const value = Math.ceil(0.1 * (worth(14, 3) + worth(20, 3)));
+    expect(db.row!.basevalue).toBe(String(value));
+    // 6,966 points from the catch-up's upgrade, plus the value.
+    expect(answer.body.playerlevel).toBe(calculateBaseLevel("6966", String(value)));
+  });
+
+  test("never lowered: removing a building keeps the high-water mark", async () => {
+    await call(state);
+    expect(db.row!.basevalue).toBe("11930");
+
+    await call(rebuild as YardAction<z.ZodType, unknown>, {
+      buildingdata: { "0": { id: 0, t: 14, X: 0, Y: 0, l: 3 } },
+    });
+
+    expect(db.row!.basevalue).toBe("11930");
+  });
+
+  test("a stored value above the yard's worth is kept as it is", async () => {
+    db.row = rowOf({ basevalue: "500000" });
+
+    await call(state);
+
+    expect(db.row!.basevalue).toBe("500000");
+  });
+
+  test("a refused action writes no base value either", async () => {
+    db.row = rowOf({ basevalue: "0" });
+    const refuse = defineYardAction({
+      schema: z.object({}),
+      run: () => {
+        throw yardRefusedErr("nope", "No.");
+      },
+    });
+
+    expect((await call(refuse as YardAction<z.ZodType, unknown>)).status).toBe(409);
+    expect(db.row!.basevalue).toBe("0");
   });
 });

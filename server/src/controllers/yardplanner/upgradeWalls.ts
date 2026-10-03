@@ -8,7 +8,7 @@ import {
 } from "../../services/base/updateResources.js";
 import { parseWallIds, planWallUpgrade } from "../../services/yardplanner/wallUpgrade.js";
 import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
-import { syncDerivedLevels } from "../../services/yard/derivedLevels.js";
+import { syncBaseValue, syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import type { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
@@ -71,6 +71,7 @@ const upgradeWallsOn = (save: Save, ids: readonly number[], level: number, now: 
   );
   save.points = String(Number(save.points ?? "0") + plan.points);
   syncDerivedLevels(save);
+  syncBaseValue(save);
   save.savetime = now;
 
   return {

@@ -1,4 +1,6 @@
+import { BaseType } from "../../enums/Base.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
+import { baseValueOf } from "../base/economy/resourceBudget.js";
 import { levelOf } from "../yardplanner/costs.js";
 
 /**
@@ -86,4 +88,45 @@ export const syncDerivedLevels = (save: DerivedLevelsSave): boolean => {
   }
 
   return changed;
+};
+
+/** The slice of a save {@link syncBaseValue} reads and writes. */
+export interface BaseValueSave {
+  type?: string;
+  buildingdata?: BuildingDataMap | null;
+  basevalue?: string;
+}
+
+/**
+ * Raises `save.basevalue` to the value of the yard's buildings, never lowering
+ * it (issue #209).
+ *
+ * `basevalue` is the other half of the player level, beside `points`
+ * (`services/base/calculateBaseLevel.ts`). Only the Flash client ever wrote it:
+ * `BASE.CalcBaseValue` ran on every level check, and on the main yard kept the
+ * larger of what it had and what the buildings were worth
+ * (`client/scripts/BASE.as:4830-4861`), so a recycled or destroyed building
+ * never took a level away. Now that the server builds and upgrades, nothing
+ * refreshed it, and the level rose only with job points.
+ *
+ * The value is {@link baseValueOf}, the rule the economy audit already derives
+ * the same high-water mark with (`auditEconomySave.ts`, §2.9). Main yards only,
+ * as in Flash: an outpost's value never reached the level, and an outpost seen
+ * through its main yard (`poolView.ts`) keeps its own `type`, so it is skipped
+ * here and `basevalue` stays on neither row.
+ *
+ * Call it after `buildingdata` is final and before the flush, wherever the
+ * server changes a main yard's buildings.
+ *
+ * @returns Whether `basevalue` changed.
+ */
+export const syncBaseValue = (save: BaseValueSave): boolean => {
+  if (save.type !== BaseType.MAIN) return false;
+
+  const computed = baseValueOf(save.buildingdata);
+  const stored = Number(save.basevalue);
+  if (Number.isFinite(stored) && stored >= computed) return false;
+
+  save.basevalue = String(computed);
+  return true;
 };

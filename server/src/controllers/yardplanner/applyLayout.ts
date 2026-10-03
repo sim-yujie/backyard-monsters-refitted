@@ -8,7 +8,7 @@ import {
   mushroomRects,
 } from "../../services/yardplanner/layoutGeometry.js";
 import { walkUpgrades, type UpgradeWalk } from "../../services/yardplanner/startUpgrades.js";
-import { syncDerivedLevels } from "../../services/yard/derivedLevels.js";
+import { syncBaseValue, syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import { nextBuildingId } from "../../services/yard/build.js";
 import {
   isDecoration,
@@ -170,6 +170,7 @@ const applyTo = (save: Save, raw: unknown, now: number) => {
   save.buildinghealthdata = storage.buildinghealthdata;
   save.researchdata = storage.researchdata;
   syncDerivedLevels(save);
+  syncBaseValue(save);
   save.savetime = now;
 
   return {
