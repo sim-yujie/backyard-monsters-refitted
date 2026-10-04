@@ -1,3 +1,20 @@
+import {
+  AERIAL_DEFENSE_TYPE,
+  AERIAL_SHOT_TICKS,
+  LASER_PULSE_TICKS,
+  LASER_TICKS,
+  LASER_TYPE,
+  TESLA_CHARGE_END,
+  TESLA_LOOP_END,
+  TESLA_TICKS_PER_FRAME,
+  TESLA_TYPE,
+  TESLA_WIND_END,
+  TESLA_ZAP_FRAMES,
+  aerialSalvo,
+  laserPulse,
+  towerShotDamage,
+} from "./stats.js";
+
 /**
  * A champion's Mode when it attacks (issue #220): Offensive, Hybrid or
  * Defensive. The code calls it a **stance**, because `championMode()` in
@@ -201,9 +218,128 @@ export const exposure = (
 /** {@link exposure} as the score reads it, 0 to {@link THREAT_CAP}. */
 export const threatFeature = (share: number): number => Math.min(share, THREAT_CAP);
 
-/** A tower's damage per tick: one shot every `rate × rearm` ticks (`BTOWER.as:184-220`). */
-export const towerPerTick = (damage: number, rate: number, rearm: number): number =>
-  rate > 0 && damage > 0 ? damage / (rate * rearm) : 0;
+/**
+ * Most towers' damage per tick: one shot every `rate × rearm` ticks
+ * (`BTOWER.as:184-220`), the shot already worth less as the tower is hurt
+ * (issue #264, {@link towerShotDamage}).
+ */
+const plainTowerPerTick = (
+  damage: number,
+  rate: number,
+  rearm: number,
+  hp: number,
+  maxHp: number,
+): number => (rate > 0 && damage > 0 ? towerShotDamage(damage, hp, maxHp) / (rate * rearm) : 0);
+
+/**
+ * The Aerial Defense Tower's damage per tick (issue #265, #276): its salvo of
+ * {@link aerialSalvo} shots, one every {@link AERIAL_SHOT_TICKS}, over the
+ * reload (`rate × rearm`) plus the salvo itself — `tickSalvo`'s own cycle,
+ * exact against a target that stays. A tower whose targets all die looks
+ * again with a reload of only `TOWER_ACQUIRE_TICKS`, so in a fight that
+ * keeps killing its targets it fires a little faster than this.
+ */
+const aerialDefensePerTick = (
+  damage: number,
+  level: number,
+  rate: number,
+  rearm: number,
+  hp: number,
+  maxHp: number,
+): number => {
+  const salvo = aerialSalvo(level);
+  const cycle = rate * rearm + salvo * AERIAL_SHOT_TICKS;
+  return cycle > 0 && salvo > 0 ? (towerShotDamage(damage, hp, maxHp) * salvo) / cycle : 0;
+};
+
+/**
+ * The Tesla's damage per tick (issue #266, #276): `rate` zaps a charge. A
+ * charge is busy for the charge itself ({@link TESLA_CHARGE_END} frames), the
+ * zaps (every {@link TESLA_ZAP_FRAMES}) and the wind-down after, each a
+ * {@link TESLA_TICKS_PER_FRAME}-tick frame; the wind-down climbs from wherever
+ * the firing loop ({@link TESLA_CHARGE_END} to {@link TESLA_LOOP_END}) left
+ * the charge, and its midpoint stands in for that. Only the next `Fire`, one
+ * every reload (`rate × rearm`), starts the next charge, so the cycle is the
+ * busy time rounded up to whole reloads.
+ */
+const teslaPerTick = (
+  damage: number,
+  rate: number,
+  rearm: number,
+  hp: number,
+  maxHp: number,
+): number => {
+  const reload = rate * rearm;
+  if (reload <= 0) return 0;
+  const chargeTicks = TESLA_CHARGE_END * TESLA_TICKS_PER_FRAME;
+  const firingTicks = rate * TESLA_ZAP_FRAMES * TESLA_TICKS_PER_FRAME;
+  const windTicks =
+    (TESLA_WIND_END - (TESLA_CHARGE_END + TESLA_LOOP_END) / 2) * 2 * TESLA_TICKS_PER_FRAME;
+  const cycle = Math.ceil((chargeTicks + firingTicks + windTicks) / reload) * reload;
+  return (towerShotDamage(damage, hp, maxHp) * rate) / cycle;
+};
+
+/**
+ * The share of a Laser beam's pulses, each worth half a shot at the beam's
+ * end, that a target standing still takes, on average over where it can
+ * stand in the tower's reach (issue #276).
+ *
+ * The end sweeps across the target and on past it (`laserSweep`), so a
+ * target is never hit by all thirteen pulses at full value: how many land,
+ * and how near, turns on how far off it stands and at what bearing, from
+ * about two fifths of the whole near the edge of the reach to nearly all of
+ * it close by. Averaged over the reach with the engine's own sweep it comes
+ * to 0.62 at level 1, falling with the reach to 0.60 at level 8;
+ * `towerThreat.test.ts` works it out again and holds this to it.
+ */
+export const LASER_SWEEP_SHARE = 0.61;
+
+/**
+ * The Laser's damage per tick (issue #267, #276): one beam every reload
+ * (`rate × rearm`), its {@link LASER_PULSE_TICKS}-spaced pulses over
+ * {@link LASER_TICKS}, thirteen of them, each worth half a shot at the
+ * beam's end ({@link laserPulse}), of which the target takes
+ * {@link LASER_SWEEP_SHARE}.
+ */
+const laserPerTick = (
+  damage: number,
+  rate: number,
+  rearm: number,
+  hp: number,
+  maxHp: number,
+): number => {
+  if (rate <= 0 || damage <= 0) return 0;
+  const pulses = Math.trunc(LASER_TICKS / LASER_PULSE_TICKS) + 1;
+  // A pulse at the end itself, distance 0, is worth the same whatever the splash.
+  const pulse = laserPulse(towerShotDamage(damage, hp, maxHp), 1, 0);
+  return (pulse * pulses * LASER_SWEEP_SHARE) / (rate * rearm);
+};
+
+/**
+ * A tower's damage per tick, scaled by its own health like its shot
+ * ({@link towerShotDamage}). Most towers fire one shot every `rate × rearm`
+ * ticks (`BTOWER.as:184-220`, {@link plainTowerPerTick}); the three the
+ * champion used to underrate (issue #276) read their own real cycle instead:
+ * the Aerial Defense's salvo ({@link aerialDefensePerTick}, issue #265), the
+ * Tesla's charge-and-zap ({@link teslaPerTick}, issue #266), and the Laser's
+ * sweep-and-pulse ({@link laserPerTick}, issue #267).
+ */
+export const towerPerTick = (
+  type: number,
+  level: number,
+  damage: number,
+  rate: number,
+  rearm: number,
+  hp: number,
+  maxHp: number,
+): number => {
+  if (type === AERIAL_DEFENSE_TYPE) {
+    return aerialDefensePerTick(damage, level, rate, rearm, hp, maxHp);
+  }
+  if (type === TESLA_TYPE) return teslaPerTick(damage, rate, rearm, hp, maxHp);
+  if (type === LASER_TYPE) return laserPerTick(damage, rate, rearm, hp, maxHp);
+  return plainTowerPerTick(damage, rate, rearm, hp, maxHp);
+};
 
 /** `trunc(Σ weight × feature)`, summed in one fixed order. */
 export const stanceBonus = (weights: StanceWeights, features: TargetFeatures): number =>

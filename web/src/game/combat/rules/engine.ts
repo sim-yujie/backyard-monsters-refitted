@@ -1986,7 +1986,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         const scan = towerScanPoint(gun);
         if (distanceSquared(scan.x, scan.y, at.x, at.y) >= tower.range * tower.range) continue;
         const stats = towerStats(gun.type, gun.level, yard.kind);
-        perTick += towerPerTick(stats?.damage ?? 0, stats?.rate ?? 0, TOWER_REARM_MULTIPLIER);
+        perTick += towerPerTick(
+          gun.type,
+          gun.level,
+          stats?.damage ?? 0,
+          stats?.rate ?? 0,
+          TOWER_REARM_MULTIPLIER,
+          gun.hp,
+          gun.maxHp,
+        );
       }
       fire.set(building.id, perTick);
       return perTick;
