@@ -287,6 +287,30 @@ describe("TowerFx", () => {
     expect(fired().height).toBeLessThan(400);
   });
 
+  it("sweeps the Laser's beam along the engine's sweep, across the target 75 ticks in (#267)", () => {
+    const { yard, graphics, fx } = setUp(23);
+    const target = creepAt(35, 235);
+    // From 35 px below the anchor to the target's point, as the engine fires it.
+    const sweep = { fromIx: 35, fromIy: 35, toIx: target.ix, toIy: target.iy };
+    fx.onShot({ tick: 0, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy, sweep }, target);
+    const ground = {
+      x: target.ix - target.iy + yard.bounds.originX,
+      y: (target.ix + target.iy) / 2 + yard.bounds.originY,
+    };
+    const reachesTarget = (tick: number) => {
+      fx.update(tick, () => target);
+      const bounds = graphics.getLocalBounds();
+      return ground.x >= bounds.minX && ground.x <= bounds.maxX && ground.y <= bounds.maxY + 1;
+    };
+    // Short of it at first, on it once the sweep crosses its bearing.
+    expect(reachesTarget(15)).toBe(false);
+    expect(reachesTarget(75)).toBe(true);
+    // Gone after its hundred ticks.
+    fx.update(102, () => target);
+    expect(drawn(graphics)).toBe(0);
+    fx.destroy();
+  });
+
   it("ignores a shot from a building it does not know", () => {
     const { frames, graphics, fx } = setUp(21);
     fx.onShot({ tick: 1, towerId: 77, creepId: 9, ix: 0, iy: 0 }, undefined);

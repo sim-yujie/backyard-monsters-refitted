@@ -164,10 +164,10 @@ export const SCENARIOS = [
     name: "outpost-core",
     description:
       "A player outpost on a cell of height 250: the core, six-level outpost towers with the " +
-      "Railgun and the Tesla all but wrecked, so they deal half (issues #261, #266), four " +
-      "harvesters (two damaged), one wave that levels it (issue #179).",
+      "Railgun, the Tesla and the Laser all but wrecked, so they deal half (issues #261, " +
+      "#266, #267), four harvesters (two damaged), one wave that levels it (issue #179).",
     yard: OUTPOST_YARD,
-    health: { 2: 1000, 3: 1000, 6: 40000, 8: 3000 },
+    health: { 1: 1000, 2: 1000, 3: 1000, 6: 40000, 8: 3000 },
     height: 250,
     kind: "outpost",
     resources: { r1: 30_000_000, r2: 30_000_000, r3: 30_000_000, r4: 8_000_000 },

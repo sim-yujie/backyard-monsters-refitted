@@ -670,6 +670,124 @@ export const TESLA_LOOP_END = 41;
 export const TESLA_WIND_END = 55;
 export const TESLA_ZAP_FRAMES = 4;
 
+/**
+ * The Laser Tower (issue #267), whose shot is a beam that sweeps and pulses.
+ *
+ * `BUILDING23.Fire` (`client/scripts/BUILDING23.as:44-67`) hands
+ * `EFFECTS.Laser` the point {@link LASER_DROP} px below its anchor, the
+ * target's drawn point, and `int(damage * scale)`; `LASER.Fire`
+ * (`com/monsters/effects/LASER.as:53-69`) aims short of the target by
+ * `150 / sqrt(distance)` degrees and `LASER.Tick` (`:71-172`) turns it on by
+ * `2 / sqrt(distance)` a loop for {@link LASER_TICKS} loops and more, so the
+ * end of the beam sweeps across the target and on past it. It never hits the
+ * target as such. Every {@link LASER_PULSE_TICKS} loops (`_frameNumber % 8`)
+ * it pulses ({@link laserPulse}) everything on the ground or invisible within
+ * the tower's `splash` of the beam's end (`Splash`, `:174-193`), with no
+ * floor; thirteen pulses a beam. The beam outlives its tower.
+ *
+ * Distances are on screen, as Flash drew them; the splash is measured in
+ * yard units round the end's `PATHING.FromISO`, as `getCreepsInRange` does.
+ * The beam's length wobbles by `sin((duration / 4 + getTimer() / 1000) / 20)`
+ * of a twentieth (`:104-105`); the engine reads `getTimer()` as 0, the only
+ * value two runtimes agree on (fidelity note 16). The angle's sine and cosine
+ * are {@link seriesSin} and {@link seriesCos}, because §3.4 rule 3 keeps
+ * `Math.sin` out of the engine.
+ */
+export const LASER_TYPE = 23;
+export const LASER_DROP = 35;
+export const LASER_TICKS = 100;
+export const LASER_PULSE_TICKS = 8;
+/** The `height` `Fire` passes: where the beam is drawn from, 60 px above its origin. */
+export const LASER_HEIGHT = 60;
+
+/**
+ * `sin` by its Taylor series to the `x^25` term: only `+`, `*` and `/`, which
+ * IEEE 754 rounds alike everywhere (§3.4 rule 3). Within a few ulp of
+ * `Math.sin` for `|x| < 3`, which is all the laser asks.
+ */
+export const seriesSin = (x: number): number => {
+  const squared = x * x;
+  let term = x;
+  let sum = x;
+  for (let n = 1; n <= 12; n += 1) {
+    term *= -squared / (2 * n * (2 * n + 1));
+    sum += term;
+  }
+  return sum;
+};
+
+/** `cos` by its Taylor series to the `x^26` term, as {@link seriesSin}. */
+export const seriesCos = (x: number): number => {
+  const squared = x * x;
+  let term = 1;
+  let sum = 1;
+  for (let n = 1; n <= 13; n += 1) {
+    term *= -squared / ((2 * n - 1) * 2 * n);
+    sum += term;
+  }
+  return sum;
+};
+
+/** A laser beam's geometry, fixed when it is fired; screen px and radians. */
+export interface LaserSweep {
+  /** The beam's origin on screen, below the tower's anchor. */
+  readonly ax: number;
+  readonly ay: number;
+  /** The unit vector from the origin to the target, on screen. */
+  readonly ux: number;
+  readonly uy: number;
+  /** `_distance`, whole screen px from the origin to the target. */
+  readonly distance: number;
+  /** Where the sweep starts, off the target's bearing, and how far it turns a loop. */
+  readonly start: number;
+  readonly turn: number;
+}
+
+const RADIANS = Math.PI / 180;
+
+/**
+ * `LASER.Fire` (`LASER.as:53-69`) from its whole-px origin `(ax, ay)` to its
+ * whole-px target `(bx, by)`. A target on the origin itself gives Flash a
+ * beam of NaNs; {@link laserEnd} gives it none.
+ */
+export const laserSweep = (ax: number, ay: number, bx: number, by: number): LaserSweep => {
+  const dx = Math.trunc(ax - bx);
+  const dy = Math.trunc(ay - by);
+  const length = Math.sqrt(dx * dx + dy * dy);
+  const distance = Math.trunc(length);
+  const root = Math.sqrt(distance);
+  return {
+    ax,
+    ay,
+    // `atan2(dy, dx) + 180`, the bearing from the origin to the target; `atan2(0, 0)` is 0.
+    ux: length > 0 ? -dx / length : -1,
+    uy: length > 0 ? -dy / length : 0,
+    distance,
+    start: root > 0 ? (-150 / root) * RADIANS : 0,
+    turn: root > 0 ? (2 / root) * RADIANS : 0,
+  };
+};
+
+/**
+ * The end of the beam on screen `duration` loops after it was fired, 1 to
+ * {@link LASER_TICKS} + 1 (`LASER.as:101-106`), or null for a beam of no length.
+ */
+export const laserEnd = (sweep: LaserSweep, duration: number): { x: number; y: number } | null => {
+  if (sweep.distance <= 0) return null;
+  const angle = sweep.start + sweep.turn * duration;
+  const cos = seriesCos(angle);
+  const sin = seriesSin(angle);
+  const reach = sweep.distance + seriesSin(duration / 80) * (sweep.distance / 20);
+  return {
+    x: sweep.ax + (sweep.ux * cos - sweep.uy * sin) * reach,
+    y: sweep.ay + (sweep.ux * sin + sweep.uy * cos) * reach,
+  };
+};
+
+/** A pulse `distance` from the beam's end: `damage * 0.5 / splash * (splash - distance)`. */
+export const laserPulse = (damage: number, splash: number, distance: number): number =>
+  splash > 0 ? ((damage * 0.5) / splash) * (splash - distance) : 0;
+
 /** The Heavy Trap, the one trap that is choosy about what sets it off. */
 export const HEAVY_TRAP_TYPE = 117;
 

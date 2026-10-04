@@ -866,7 +866,23 @@ frames, before the next `Fire` can charge it again. A zap after which its target
 untargetable looks for one new target and winds down if there is none (`:174-186`); the zaps that
 follow still go at the old target, and do nothing, until the fire loop's next `Fire` names the new
 one. A level 1 charge is 10 zaps of 100, some 70 frames from the start of the charge to the last
-zap; a level 8 charge is 35 zaps of 240 over some 170. The engine runs it this way, its frames on every second tick (issue #266).
+zap; a level 8 charge is 35 zaps of 240 over some 170. The engine runs it this way, its frames on
+every second tick (issue #266).
+
+**The Laser Tower's beam sweeps and pulses** (`BUILDING23.Fire`, `client/scripts/BUILDING23.as:44-67`;
+`com/monsters/effects/LASER.as`). Each `Fire` starts a beam from 35 px below the tower's anchor
+towards the target's drawn point, carrying `int(damage * (0.5 + 0.5 * health / maxHealth))`. The
+beam starts `150 / sqrt(distance)` degrees short of the target and turns `2 / sqrt(distance)`
+degrees a loop (`LASER.as:67`, `:101-102`); its end lies `distance` px out, give or take a
+twentieth that swings with `sin((duration / 4 + getTimer() / 1000) / 20)` (`:104-105`). It lasts
+until its duration passes 100 loops (`:98`), so its end sweeps across the target, crossing it 75
+loops in, and on past it. It never hits the target as such: every 8 loops (`_frameNumber % 8`,
+`:160-170`), thirteen times a beam, it pulses everything on the ground or invisible within the
+tower's splash of 40 round its end, `damage * 0.5 / 40 * (40 - distance)` each, with no floor
+(`Splash`, `:174-193`). A creep that stays under the sweep takes up to 13 pulses of up to half the
+damage, six and a half shots' worth a beam; the beam is an effect of its own and sweeps on after
+its tower falls. The engine runs it this way, reading `getTimer()` as 0 (issue #267). The tower's
+upgrade text keeps the ordinary `damage * 40 / rate`; it has no `Description` of its own.
 
 Note that `rate` reads as a re-arm time everywhere else: the fire loop re-arms with `_rate * 2`
 loops (`BTOWER.as:179`) and the upgrade tooltip prints damage per second as `damage * 40 / rate`

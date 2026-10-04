@@ -1,6 +1,6 @@
 {
   "name": "outpost-core",
-  "description": "A player outpost on a cell of height 250: the core, six-level outpost towers with the Railgun and the Tesla all but wrecked, so they deal half (issues #261, #266), four harvesters (two damaged), one wave that levels it (issue #179).",
+  "description": "A player outpost on a cell of height 250: the core, six-level outpost towers with the Railgun, the Tesla and the Laser all but wrecked, so they deal half (issues #261, #266, #267), four harvesters (two damaged), one wave that levels it (issue #179).",
   "yard": {
     "0": {
       "id": 0,
@@ -68,6 +68,7 @@
   },
   "kind": "outpost",
   "health": {
+    "1": 1000,
     "2": 1000,
     "3": 1000,
     "6": 40000,
@@ -117,146 +118,146 @@
     "damage": 100,
     "destroyed": 1,
     "attackloot": {
-      "r1": 1904436,
-      "r2": 1714289,
-      "r3": 1629007,
-      "r4": 237562
+      "r1": 1896443,
+      "r2": 1723364,
+      "r3": 1636518,
+      "r4": 242362
     },
     "defenderLoss": {
-      "r1": 1907130,
-      "r2": 1716953,
-      "r3": 1631719,
-      "r4": 240400
+      "r1": 1899854,
+      "r2": 1726937,
+      "r3": 1639960,
+      "r4": 245620
     },
     "firedTraps": 0,
     "destroyedBuildings": 9,
     "creepsFlung": 270,
-    "creepsKilled": 252,
+    "creepsKilled": 183,
     "championHp": null,
     "damagedBuildings": 9,
-    "rngDraws": 124106,
+    "rngDraws": 170278,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "b1b8142b8cf694ed"
+        "digest": "74e59eb90cf4ae5f"
       },
       {
         "tick": 1600,
-        "digest": "b7c14315f86cc2df"
+        "digest": "2bea3b019d5c3697"
       },
       {
         "tick": 2400,
-        "digest": "10c151376b87f4e9"
+        "digest": "ddad94991e05fe07"
       },
       {
         "tick": 3200,
-        "digest": "d1b2ea74c410cb42"
+        "digest": "bf5bf6c105b0ca4b"
       },
       {
         "tick": 4000,
-        "digest": "cea41793a36e6421"
+        "digest": "6b6cb55491c08516"
       },
       {
         "tick": 4800,
-        "digest": "58bcc0848dfda86e"
+        "digest": "3e979e5d9684aa07"
       },
       {
         "tick": 5600,
-        "digest": "eb4085cad3cb0934"
+        "digest": "148b5699181278c7"
       },
       {
         "tick": 6400,
-        "digest": "6b3256c151bd035b"
+        "digest": "fbe9d32503c6dc3f"
       },
       {
         "tick": 7200,
-        "digest": "375bb5bc83fe991e"
+        "digest": "262069fcd2f98f1e"
       },
       {
         "tick": 8000,
-        "digest": "c82881d4031a7ee2"
+        "digest": "08fec8db7b7b4755"
       },
       {
         "tick": 8800,
-        "digest": "f9eb76097d330253"
+        "digest": "4ce7b68da4e91b07"
       },
       {
         "tick": 9600,
-        "digest": "9b259b4c3b336d76"
+        "digest": "443d0ef2b3300844"
       },
       {
         "tick": 10400,
-        "digest": "d1813f44e16fb26e"
+        "digest": "3fa764e4c86508e6"
       },
       {
         "tick": 11200,
-        "digest": "deca4f7604fe52c0"
+        "digest": "1dd01301e80ed083"
       },
       {
         "tick": 12000,
-        "digest": "894913ea7fe1bda8"
+        "digest": "8ddf37a33b87507d"
       },
       {
         "tick": 12800,
-        "digest": "82f52b361a99562c"
+        "digest": "dd926cf5b1978a8f"
       },
       {
         "tick": 13600,
-        "digest": "c2a81706b117e288"
+        "digest": "ccb3d85acafa4fec"
       },
       {
         "tick": 14400,
-        "digest": "1b889f38e9a63a4e"
+        "digest": "e4975f4c1b4226ee"
       },
       {
         "tick": 15200,
-        "digest": "7b29c9fd4ed05b17"
+        "digest": "b50b0429dddcde0b"
       },
       {
         "tick": 16000,
-        "digest": "aca3b0527adf9c6c"
+        "digest": "6a02da2bb7fc5ba5"
       },
       {
         "tick": 16800,
-        "digest": "93c4df0e49b9a250"
+        "digest": "b95381881cd8e182"
       },
       {
         "tick": 17600,
-        "digest": "b7bafb2932983843"
+        "digest": "ee4b84fd80e4dd37"
       },
       {
         "tick": 18400,
-        "digest": "a5928371579a031b"
+        "digest": "d99b8b451b265bcf"
       },
       {
         "tick": 19200,
-        "digest": "353ef2667475cab8"
+        "digest": "b7500e02af5fd4d4"
       },
       {
         "tick": 20000,
-        "digest": "75efd3e36bf64a95"
+        "digest": "4ebb58e70b45e1d9"
       },
       {
         "tick": 20800,
-        "digest": "d24a7b0029cf64c2"
+        "digest": "ea4ca054347b3c96"
       },
       {
         "tick": 21600,
-        "digest": "bb2ba48d6ade060f"
+        "digest": "695972a9ed1e193b"
       },
       {
         "tick": 22400,
-        "digest": "c64e25558c4b5687"
+        "digest": "75d15ed130d8d213"
       },
       {
         "tick": 23200,
-        "digest": "2a6fdb2aa268a884"
+        "digest": "4da63fee9cc3b938"
       },
       {
         "tick": 24000,
-        "digest": "abe9a60770c11ae1"
+        "digest": "2e76fed3993741ed"
       }
     ],
-    "digest": "abe9a60770c11ae1"
+    "digest": "2e76fed3993741ed"
   }
 }

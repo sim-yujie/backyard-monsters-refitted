@@ -96,6 +96,14 @@ import {
   AERIAL_DEFENSE_TYPE,
   AERIAL_SHOT_TICKS,
   aerialSalvo,
+  LASER_DROP,
+  LASER_PULSE_TICKS,
+  LASER_TICKS,
+  LASER_TYPE,
+  laserEnd,
+  laserPulse,
+  laserSweep,
+  type LaserSweep,
   TESLA_CHARGE_END,
   TESLA_LOOP_END,
   TESLA_TICKS_PER_FRAME,
@@ -172,7 +180,8 @@ import type {
  *
  * One tick is 1/80 s (`stats.ts` `TICKS_PER_SECOND`). The order inside a tick
  * is fixed and is the order the client's `BASE.TickFast` runs its lists in:
- * traps, towers, bunkers, then creeps, each by ascending id.
+ * traps, towers, bunkers, then creeps, each by ascending id, after the Laser
+ * beams still sweeping, oldest first (fidelity note 16).
  *
  * ## What is simulated
  *
@@ -180,8 +189,9 @@ import type {
  * pathing grid and the wall that gets in the way; ranged and melee swings;
  * Eye-ra's blast; Slimeattikus splitting as it dies; the healers; Rezghul
  * raising the dead; towers with
- * their acquire delay, re-arm and splash, the Railgun's beam, the Aerial
- * Defense's salvo and the Tesla's charge and zaps; the two traps; bunkers dispatching
+ * their acquire delay, re-arm and splash, the Railgun's beam, the Laser's
+ * sweeping beam, the Aerial Defense's salvo and the Tesla's charge and zaps;
+ * the two traps; bunkers dispatching
  * defenders; resource bombs; loot out of harvesters and storage, hit by hit,
  * and the share of the pool a fallen storage building gives up; the countdown
  * and the retreat.
@@ -312,6 +322,12 @@ import type {
  *    count frames of the 40 fps stage, not loops, and skip catch-up frames
  *    (`GLOBAL._catchup`). The engine runs them on every second tick, which is
  *    a frame at the 80 loops a second it keeps ({@link TESLA_TICKS_PER_FRAME}).
+ * 16. **The Laser's beam does not wobble with the clock.** Its length swings
+ *    by a twentieth with `sin((duration / 4 + getTimer() / 1000) / 20)`
+ *    (`LASER.as:104-105`), so in Flash it depends on how long the player had
+ *    been running; the engine reads `getTimer()` as 0. Its beams tick at the
+ *    start of a step rather than after the frame's loops (`EFFECTS.Tick`), so
+ *    a beam pulses first on the tick after it is fired ({@link LASER_TYPE}).
  *
  * ## The random stream's order
  *
@@ -516,6 +532,13 @@ export type BattleVisualEvent =
        * muzzle to 1,600 screen px on, in yard units. Absent for other towers.
        */
       readonly beam?: BeamLine;
+      /**
+       * The Laser's beam (issue #267): from its origin, below the tower, to
+       * the target's point when it fired, in yard units. The beam sweeps on
+       * from there for {@link LASER_TICKS} ticks ({@link laserSweep},
+       * {@link laserEnd}); its pulses arrive as `hurt`s. Absent for other towers.
+       */
+      readonly sweep?: BeamLine;
     }
   | {
       /** A Tesla Tower began to charge (issue #266); its zaps follow as shots. */
@@ -822,6 +845,19 @@ interface Tower {
   charge: number;
 }
 
+/** A Laser Tower's beam still sweeping (issue #267), `LASER` in Flash. */
+interface LaserBeam {
+  readonly tower: Tower;
+  readonly sweep: LaserSweep;
+  /** `int(damage * scale)`, fixed when it was fired. */
+  readonly damage: number;
+  readonly splash: number;
+  /** `_duration`, loops it has swept. */
+  duration: number;
+  /** `_frameNumber`, which times its pulses. */
+  frame: number;
+}
+
 interface Trap {
   readonly building: EngineBuilding;
   retarget: number;
@@ -1069,6 +1105,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       charge: 0,
     });
   }
+
+  /** Laser beams still sweeping, oldest first; each outlives its tower (`LASERS.as`). */
+  const laserBeams: LaserBeam[] = [];
 
   const bunkerById = new Map<number, Bunker>();
   for (const bunker of bunkers) bunkerById.set(bunker.building.id, bunker);
@@ -2973,6 +3012,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         continue;
       }
       tower.report.shots += 1;
+      if (building.type === LASER_TYPE) {
+        fireLaser(tower, creep, shot, splash);
+        continue;
+      }
       if (building.type === RAILGUN_TYPE) {
         fireRailgun(tower, creep, damage * towerHealthScale(building.hp, building.maxHp));
         continue;
@@ -3155,6 +3198,76 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       tower.report.damageDealt += damageCreep(hit.creep, dealt);
       if (before > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
     }
+  };
+
+  /**
+   * The Laser's shot (issue #267, {@link LASER_TYPE}): a beam from below the
+   * tower that starts short of `aim` and sweeps across it. It hurts nothing
+   * now; {@link tickLaserBeams} pulses it from the next tick on.
+   */
+  const fireLaser = (tower: Tower, aim: Creep, damage: number, splash: number): void => {
+    const building = tower.building;
+    // `EFFECTS.Laser(x, y + 35, target.x, target.y, ...)`, all `int` (`BUILDING23.as:65`).
+    const fromX = building.sx;
+    const fromY = building.sy + LASER_DROP;
+    const target = screenPointOf(aim.ix, aim.iy);
+    const toX = Math.trunc(target.x);
+    const toY = Math.trunc(target.y);
+    visual.push({
+      kind: "shot",
+      tick,
+      towerId: building.id,
+      creepId: aim.id,
+      ix: aim.ix,
+      iy: aim.iy,
+      sweep: {
+        fromIx: fromX / 2 + fromY,
+        fromIy: fromY - fromX / 2,
+        toIx: toX / 2 + toY,
+        toIy: toY - toX / 2,
+      },
+    });
+    laserBeams.push({
+      tower,
+      sweep: laserSweep(fromX, fromY, toX, toY),
+      damage,
+      splash,
+      duration: 0,
+      frame: 0,
+    });
+  };
+
+  /**
+   * `LASERS.Tick`, once a loop (`LASER.as:71-172`): each beam turns, and
+   * every {@link LASER_PULSE_TICKS} of its frames pulses what is round its
+   * end; past {@link LASER_TICKS} it is gone.
+   */
+  const tickLaserBeams = (): void => {
+    if (laserBeams.length === 0) return;
+    let write = 0;
+    for (let read = 0; read < laserBeams.length; read += 1) {
+      const beam = laserBeams[read] as LaserBeam;
+      if (beam.duration > LASER_TICKS) continue;
+      laserBeams[write] = beam;
+      write += 1;
+      beam.duration += 1;
+      const pulse = beam.frame % LASER_PULSE_TICKS === 0;
+      beam.frame += 1;
+      if (!pulse) continue;
+      const end = laserEnd(beam.sweep, beam.duration);
+      if (!end) continue;
+      const at = fromIso(end.x, end.y);
+      const report = beam.tower.report;
+      for (const hit of index.inRange(beam.splash, at.x, at.y, TRAP_TARGETS)) {
+        const before = hit.creep.hp;
+        report.damageDealt += damageCreep(
+          hit.creep,
+          laserPulse(beam.damage, beam.splash, hit.dist),
+        );
+        if (before > 0 && hit.creep.hp <= 0) report.kills += 1;
+      }
+    }
+    laserBeams.length = write;
   };
 
   const tickTrap = (trap: Trap): void => {
@@ -3463,6 +3576,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
 
     index.rebuild(creeps);
+    tickLaserBeams();
     for (const trap of traps) tickTrap(trap);
     for (const tower of towers) tickTower(tower);
     for (const bunker of bunkers) tickBunker(bunker);

@@ -17,6 +17,11 @@ import { digestOf } from "./digest.js";
 import {
   aerialSalvo,
   BOMBS,
+  laserEnd,
+  laserPulse,
+  laserSweep,
+  seriesCos,
+  seriesSin,
   bombBlast,
   championStat,
   championStatWithPower,
@@ -474,6 +479,116 @@ describe("the Tesla Tower's charge and zaps (issue #266)", () => {
     expect(zaps.length).toBeGreaterThan(0);
     // A level 1 Pokey has 200 health: two zaps apiece.
     expect(battle.state().towers[0]?.kills).toBe(4);
+  });
+});
+
+describe("the Laser Tower's sweeping beam (issue #267)", () => {
+  /**
+   * A level 1 Laser Tower (120 damage, range 160, splash 40) and a Town Hall
+   * beside it that ten Pokeys walk up to and stand at.
+   */
+  const laserBattle = () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 23, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 14, l: 1, X: 120, Y: 0 },
+    });
+    const battle = createBattle(yard, { seed: 11 });
+    battle.apply({ kind: "fling", t: 0, x: 260, y: 40, r: 20, monsters: { C1: 10 } });
+    return battle;
+  };
+
+  /** The tower's shots and every hurt over `ticks`. */
+  const record = (battle: ReturnType<typeof createBattle>, ticks: number) => {
+    const shots: Extract<BattleVisualEvent, { kind: "shot" }>[] = [];
+    const hurts: Extract<BattleVisualEvent, { kind: "hurt" }>[] = [];
+    for (let step = 0; step < ticks && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "shot") shots.push(event);
+        if (event.kind === "hurt") hurts.push(event);
+      }
+    }
+    return { shots, hurts };
+  };
+
+  it("fires from 35 px below its anchor at the target's point, and hurts nothing then", () => {
+    const { shots, hurts } = record(laserBattle(), 600);
+    const shot = shots[0]!;
+    const sweep = shot.sweep!;
+    const from = screenPointOf(sweep.fromIx, sweep.fromIy);
+    const to = screenPointOf(sweep.toIx, sweep.toIy);
+    expect(from.x).toBeCloseTo(0, 9);
+    expect(from.y).toBeCloseTo(35, 9);
+    const aimed = screenPointOf(shot.ix, shot.iy);
+    expect(to.x).toBe(Math.trunc(aimed.x));
+    expect(to.y).toBe(Math.trunc(aimed.y));
+    expect(hurts.filter((hurt) => hurt.tick === shot.tick)).toHaveLength(0);
+  });
+
+  it("pulses every 8 ticks for 101 ticks, half its damage at most, falling off with distance", () => {
+    const { shots, hurts } = record(laserBattle(), 600);
+    const shot = shots[0]!;
+    const next = shots[1]?.tick ?? Infinity;
+    const pulses = [...new Set(hurts.filter((hurt) => hurt.tick < next).map((hurt) => hurt.tick))];
+    expect(pulses.length).toBeGreaterThan(3);
+    expect(pulses.length).toBeLessThanOrEqual(13);
+    for (const tick of pulses) {
+      expect(tick).toBeGreaterThan(shot.tick);
+      expect(tick).toBeLessThanOrEqual(shot.tick + 101);
+      expect((tick - shot.tick - 1) % 8).toBe(0);
+    }
+    for (const hurt of hurts.filter((one) => one.tick < next)) {
+      expect(hurt.amount).toBeGreaterThan(0);
+      expect(hurt.amount).toBeLessThanOrEqual(60);
+    }
+    // More than one Pokey under the beam at a time: a pulse is a splash.
+    const most = Math.max(...pulses.map((tick) => hurts.filter((hurt) => hurt.tick === tick).length));
+    expect(most).toBeGreaterThan(1);
+  });
+
+  it("deals what the old single hit never could: the clump falls to its beams", () => {
+    const battle = laserBattle();
+    run(battle, 2400);
+    const tower = battle.state().towers[0]!;
+    expect(tower.kills).toBeGreaterThan(0);
+    // Each beam pulses up to 13 times at up to 60 a creep.
+    expect(tower.damageDealt / tower.shots).toBeGreaterThan(120);
+  });
+});
+
+describe("the laser's sweep (`LASER.as:53-106`)", () => {
+  it("starts 150 / sqrt(distance) degrees short of its target and crosses it 75 ticks in", () => {
+    const sweep = laserSweep(0, 35, 100, 135);
+    expect(sweep.distance).toBe(141);
+    const bearing = Math.atan2(100, 100);
+    const at = (duration: number) => {
+      const end = laserEnd(sweep, duration)!;
+      return Math.atan2(end.y - 35, end.x);
+    };
+    const degrees = 180 / Math.PI;
+    expect((at(0) - bearing) * degrees).toBeCloseTo(-150 / Math.sqrt(141), 9);
+    expect((at(75) - bearing) * degrees).toBeCloseTo(0, 9);
+    expect((at(101) - bearing) * degrees).toBeCloseTo(52 / Math.sqrt(141), 9);
+    // The length wobbles by a twentieth, `sin(duration / 80)` of it with the clock at 0.
+    const end = laserEnd(sweep, 75)!;
+    expect(Math.hypot(end.x, end.y - 35)).toBeCloseTo(141 * (1 + Math.sin(75 / 80) / 20), 9);
+  });
+
+  it("has no end when it is fired at its own origin", () => {
+    expect(laserEnd(laserSweep(5, 5, 5, 5), 10)).toBeNull();
+  });
+
+  it("pulses half its damage at the end, falling to nothing at the splash's edge", () => {
+    expect(laserPulse(120, 40, 0)).toBe(60);
+    expect(laserPulse(120, 40, 20)).toBe(30);
+    expect(laserPulse(120, 40, 40)).toBe(0);
+  });
+
+  it("takes sine and cosine by series, within a few ulp of Math's", () => {
+    for (let x = -3; x <= 3; x += 0.01) {
+      expect(Math.abs(seriesSin(x) - Math.sin(x))).toBeLessThan(1e-14);
+      expect(Math.abs(seriesCos(x) - Math.cos(x))).toBeLessThan(1e-14);
+    }
   });
 });
 

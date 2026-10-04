@@ -1,6 +1,10 @@
 import type { Graphics } from "pixi.js";
 import {
   isTower,
+  LASER_DROP,
+  LASER_HEIGHT,
+  laserEnd,
+  laserSweep,
   TESLA_CHARGE_END,
   TESLA_LOOP_END,
   TESLA_TICKS_PER_FRAME,
@@ -8,6 +12,7 @@ import {
   towerStats,
   type BeamLine,
   type CreepSnapshot,
+  type LaserSweep,
 } from "@/game/combat/rules";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import type { Point } from "@/game/yard/YardGrid";
@@ -43,7 +48,8 @@ import { flyerAltitude } from "./monsterSprites";
  * being the per-class muzzle height ({@link TOWER_MUZZLE}). The Sniper, Cannon
  * and Aerial towers spawn a `PROJECTILE` that flies at half its stat `speed`
  * per tick and re-aims at its target every five ticks (`PROJECTILE.as:33-46`);
- * the Laser sweeps a beam across its target for a hundred ticks (`LASER.as`);
+ * the Laser sweeps a beam across its target for a hundred ticks (`LASER.as`),
+ * along the engine's own sweep, so its end is where the pulses land (issue #267);
  * the Tesla forks a bolt (`EFFECTS.Lightning`); the Railgun lays a glowing
  * trail of gun-balls along its line of fire (`BUILDING118.as:145-185`), all
  * 1,600 px of the beam the engine hurt along (issue #261).
@@ -284,11 +290,9 @@ interface Bullet {
 
 interface Beam {
   readonly towerId: number;
-  readonly from: Point;
   readonly bornTick: number;
-  readonly distance: number;
-  /** Screen degrees; sweeps from `LASER.Fire`'s start across the target. */
-  angle: number;
+  /** The engine's sweep (issue #267), in world px: its end is where the pulses land. */
+  readonly sweep: LaserSweep;
 }
 
 interface Bolt {
@@ -339,6 +343,8 @@ export interface ShotLike {
   readonly iy: number;
   /** The Railgun's beam (issue #261), yard units at both ends. */
   readonly beam?: BeamLine;
+  /** The Laser's sweep (issue #267): its origin and its target's point, yard units. */
+  readonly sweep?: BeamLine;
 }
 
 /** Repeatable jitter from a tick and an index, in `[0, 1)`. */
@@ -418,13 +424,18 @@ export class TowerFx {
     const type = tower.info.type;
 
     if (type === 23) {
-      const distance = Math.hypot(aim.x - from.x, aim.y - from.y);
-      const toward = Math.atan2(aim.y - from.y, aim.x - from.x) * DEGREES;
-      // `LASER.Fire`: the beam starts short of the target and sweeps across it.
-      const angle = toward - 150 / Math.sqrt(Math.max(distance, 1));
-      const kept = this.beams.filter((beam) => beam.towerId !== tower.info.id);
-      this.beams.length = 0;
-      this.beams.push(...kept, { towerId: tower.info.id, from, bornTick: event.tick, distance, angle });
+      // The beam the engine pulses along (issue #267), from below the tower to
+      // the target's point; a shot without one aims at the creep's feet.
+      const sweep = event.sweep;
+      const start = sweep
+        ? this.groundAt(sweep.fromIx, sweep.fromIy)
+        : { x: tower.info.worldX, y: tower.info.worldY + LASER_DROP };
+      const end = sweep ? this.groundAt(sweep.toIx, sweep.toIy) : { x: aim.x, y: aim.y + BODY_HEIGHT };
+      this.beams.push({
+        towerId: tower.info.id,
+        bornTick: event.tick,
+        sweep: laserSweep(Math.trunc(start.x), Math.trunc(start.y), Math.trunc(end.x), Math.trunc(end.y)),
+      });
       return null;
     }
     if (type === 25) {
@@ -498,7 +509,7 @@ export class TowerFx {
     graphics.clear();
     this.drawFlashes(tick);
     this.drawBullets(tick, elapsed, creepAt);
-    this.drawBeams(tick, elapsed);
+    this.drawBeams(tick);
     this.drawCoils(tick);
     this.drawBolts(tick);
     this.drawRails(tick);
@@ -531,8 +542,12 @@ export class TowerFx {
     const recent = tick - tower.lastShotTick <= FACING_HOLD_TICKS;
 
     if (info.type === 23) {
-      const beam = this.beams.find((candidate) => candidate.towerId === info.id);
-      if (beam) this.setCell(tower, laserCell(beam.angle, info.frames));
+      let beam: Beam | undefined;
+      for (const candidate of this.beams) if (candidate.towerId === info.id) beam = candidate;
+      const end = beam ? laserEnd(beam.sweep, Math.max(0, tick - beam.bornTick)) : null;
+      if (!beam || !end) return;
+      const degrees = Math.atan2(end.y - beam.sweep.ay, end.x - beam.sweep.ax) * DEGREES;
+      this.setCell(tower, laserCell(degrees, info.frames));
       return;
     }
 
@@ -697,21 +712,25 @@ export class TowerFx {
     graphics.circle(bullet.x, bullet.y, 4 * life + 1).fill({ color: 0xffffff, alpha: 0.8 * life });
   }
 
-  private drawBeams(tick: number, elapsed: number): void {
+  private drawBeams(tick: number): void {
     let keep = 0;
     for (const beam of this.beams) {
       const age = tick - beam.bornTick;
       if (age > BEAM_TICKS) continue;
       this.beams[keep] = beam;
       keep += 1;
-      // `LASER.Tick`: the angle creeps by 2/sqrt(distance) a tick.
-      beam.angle += (2 / Math.sqrt(Math.max(beam.distance, 1))) * elapsed;
       const power = Math.min(1, age < BEAM_FADE_AT ? age / 10 : (BEAM_TICKS - age) / 10);
       if (power <= 0) continue;
-      const radians = beam.angle / DEGREES;
-      const reach = beam.distance + Math.sin(age / 80) * (beam.distance / 20);
-      const start = { x: beam.from.x + Math.cos(radians) * 8, y: beam.from.y + Math.sin(radians) * 8 };
-      const end = { x: beam.from.x + Math.cos(radians) * reach, y: beam.from.y + Math.sin(radians) * reach };
+      // `LASER.Tick`: the end sweeps on the ground where the engine pulses; the
+      // beam is drawn from 8 px along it and `height` up (`LASER.as:79-84`).
+      const end = laserEnd(beam.sweep, Math.max(0, age));
+      if (!end) continue;
+      const { ax, ay } = beam.sweep;
+      const along = Math.hypot(end.x - ax, end.y - ay) || 1;
+      const start = {
+        x: ax + ((end.x - ax) / along) * 8,
+        y: ay + ((end.y - ay) / along) * 8 - LASER_HEIGHT,
+      };
       const graphics = this.graphics;
       graphics
         .moveTo(start.x, start.y)
