@@ -7,6 +7,7 @@ import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js"
 import { overlaps, rectOf, withinBounds } from "../yardplanner/layoutGeometry.js";
 import { placementProblem } from "./build.js";
 import { catchUpYard, type CatchUpSave } from "./catchUp.js";
+import { moveMushroomsOffBuildings } from "./mushrooms.js";
 import {
   STARTER_BUILDINGS,
   addStarterBase,
@@ -197,24 +198,20 @@ describe("addStarterBase — an existing empty main yard", () => {
     }
   );
 
-  test("a mushroom on a spot moves that building to the nearest free spot, clear of everything", () => {
+  test("a mushroom on a spot does not move the building (#263): the mushroom moves later", () => {
     // A mushroom right on the Town Hall's spot.
     const save = emptyYard({ mushrooms: { l: [[1, -40, 30]] } });
 
     const [job] = addStarterBase(save, NOW);
 
-    const hall = job!.detail.buildings[0]!;
-    expect(hall.t).toBe(HALL);
-    expect([hall.x, hall.y]).not.toEqual([-70, 0]);
-    expect(job!.detail.buildings.slice(1).map(({ x, y }) => [x, y])).toEqual([
-      [60, 0],
-      [60, 70],
-      [60, -70],
-    ]);
-    const mushroom = rectOf(MUSHROOM, -40, 30);
+    expect(job!.detail.buildings.map(({ t, x, y }) => [t, x, y])[0]).toEqual([HALL, -70, 0]);
+    expectPlaceable(save.buildingdata!);
+    // The catch-up's mushroom step (`catchUpMushrooms`) then moves it off.
+    moveMushroomsOffBuildings(save, () => 0.1);
+    const [[, x, y]] = (save.mushrooms as { l: [number, number, number][] }).l;
+    const mushroom = rectOf(MUSHROOM, x, y);
     const rects = Object.values(save.buildingdata!).map((one) => rectOf(Number(one.t), Number(one.X), Number(one.Y)));
     expect(rects.some((rect) => overlaps(rect, mushroom))).toBe(false);
-    expectPlaceable(save.buildingdata!);
   });
 
   test("ids go past a health entry a gone building left behind", () => {

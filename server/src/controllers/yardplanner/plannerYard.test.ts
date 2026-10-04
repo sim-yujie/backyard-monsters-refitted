@@ -53,6 +53,9 @@ mock.module("../../server.js", () => ({
 const { applyLayout } = await import("./applyLayout.js");
 const { upgradeWalls } = await import("./upgradeWalls.js");
 const { saveLayout } = await import("./saveLayout.js");
+const { rearmTraps } = await import("./rearmTraps.js");
+const { MUSHROOM_TYPE } = await import("../../game-data/buildingFootprints.js");
+const { overlaps, rectOf } = await import("../../services/yardplanner/layoutGeometry.js");
 const { layoutRoute } = await import("./layoutRoute.js");
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -298,6 +301,61 @@ describe("Apply and decoration storage (#128)", () => {
     const answer = await run(applyLayout, { data, baseid: OUTPOST_BASEID });
     expect(answer.status).toBe(400);
     expect(answer.body.error).toBe("Decorations go in your main yard.");
+  });
+});
+
+describe("Apply, the trap re-arm and mushrooms (#263)", () => {
+  type Entry = [number, number, number];
+  const saved = () => (mainSave.mushrooms as { l: Entry[]; s: number }).l;
+  /** Whether a mushroom at `entry` stands clear of every building of the main yard. */
+  const clear = ([, x, y]: Entry) =>
+    Object.values(mainSave.buildingdata as Record<string, Row>).every(
+      (one) => !overlaps(rectOf(MUSHROOM_TYPE, x, y), rectOf(Number(one.t), Number(one.X), Number(one.Y)))
+    );
+
+  test("a building moved onto a mushroom is applied, and the mushroom pops up on free ground", async () => {
+    const s = now();
+    mainSave.mushrooms = { l: [[2, -400, 300], [4, 210, -190]], s };
+
+    const answer = await run(applyLayout, { data: layout([{ id: 0, t: 14, x: 200, y: -200 }]) });
+
+    expect(answer.status).toBe(200);
+    expect((mainSave.buildingdata as Record<string, Row>)["0"]).toMatchObject({ X: 200, Y: -200 });
+    const [kept, moved] = saved() as [Entry, Entry];
+    expect(kept).toEqual([2, -400, 300]);
+    expect(moved[0]).toBe(4);
+    expect(clear(moved)).toBe(true);
+    expect((mainSave.mushrooms as { s: number }).s).toBe(s);
+    // The answer carries them, so the client draws them where the server put them.
+    expect(answer.body.mushrooms).toEqual(mainSave.mushrooms);
+  });
+
+  test("a decoration out of storage onto a mushroom is placed too", async () => {
+    mainSave.researchdata = { b28: 1 };
+    mainSave.mushrooms = { l: [[1, 300, 300]], s: now() };
+
+    const answer = await run(applyLayout, {
+      data: JSON.stringify({
+        version: 2,
+        expansion: 0,
+        nodes: [{ id: 0, t: 14, x: 0, y: 0 }],
+        fromStorage: [{ t: 28, x: 300, y: 300 }],
+      }),
+    });
+
+    expect(answer.status).toBe(200);
+    expect(clear(saved()[0]!)).toBe(true);
+  });
+
+  test("a trap re-armed onto a mushroom is built, and the mushroom moves", async () => {
+    mainSave.mushrooms = { l: [[3, 300, 300]], s: now() };
+
+    const answer = await run(rearmTraps, { traps: JSON.stringify([{ t: 24, x: 300, y: 300 }]) });
+
+    expect(answer.status).toBe(200);
+    expect(answer.body.placed).toBe(1);
+    expect(clear(saved()[0]!)).toBe(true);
+    expect(answer.body.mushrooms).toEqual(mainSave.mushrooms);
   });
 });
 

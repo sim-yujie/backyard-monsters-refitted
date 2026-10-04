@@ -42,9 +42,8 @@ export const storedLevel = (researchdata: Researchdata, type: number): number =>
 
 /**
  * The ids the planner gives stored decorations while it is open (#128): one
- * per decoration, `base + type × 1000 + n`, above every building id and the
- * planner's mushrooms (`planner/plan.ts`, `MUSHROOM_ID_BASE`), and stable
- * across a rebase so a decoration the player has put down keeps its node.
+ * per decoration, `base + type × 1000 + n`, above every building id, and
+ * stable across a rebase so a decoration the player has put down keeps its node.
  */
 export const STORAGE_ID_BASE = 1_500_000;
 const STORAGE_ID_END = 2_000_000;

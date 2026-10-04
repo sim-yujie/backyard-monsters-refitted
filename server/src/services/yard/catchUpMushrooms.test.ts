@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { catchUpYard, type CatchUpSave } from "./catchUp.js";
 import { catchUpMushrooms } from "./catchUpMushrooms.js";
+import { overlaps, rectOf } from "../yardplanner/layoutGeometry.js";
 import {
   MUSHROOM_CAP,
   MUSHROOM_RESPAWN_SECONDS,
@@ -45,6 +46,25 @@ describe("catchUpMushrooms", () => {
 
     expect(countOf(save)).toBe(5);
     expect(save.mushrooms!.s).toBe(LAST + 2 * PERIOD + 500);
+  });
+
+  test("a mushroom a building stands on pops up on free ground, period or not (#263)", () => {
+    const save = saveOf(2);
+    // A wall put down on the second mushroom.
+    save.buildingdata!["5"] = { id: 5, t: 17, X: -440, Y: 360 } as never;
+
+    catchUpMushrooms(save, LAST + 1);
+
+    const { l, s } = readMushrooms(save.mushrooms);
+    expect(s).toBe(LAST);
+    expect(l).toHaveLength(2);
+    expect(l[0]).toEqual([1, -480, 360]);
+    expect(l[1]).not.toEqual([1, -440, 360]);
+    expect(l[1]![0]).toBe(1);
+    const wall = rectOf(17, -440, 360);
+    const hall = rectOf(14, 0, 0);
+    const moved = rectOf(7, l[1]![1], l[1]![2]);
+    expect(overlaps(moved, wall) || overlaps(moved, hall)).toBe(false);
   });
 
   test("at most 10 in one catch-up", () => {

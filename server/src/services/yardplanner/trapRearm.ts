@@ -21,7 +21,6 @@ import {
 } from "./costs.js";
 import {
   currentExpansion,
-  mushroomRects,
   rectOf,
   sweepOverlaps,
   withinBounds,
@@ -61,7 +60,6 @@ export interface TrapRearmSave {
   buildingdata?: BuildingDataMap | null;
   resources?: JsonObject | null;
   storedata?: JsonObject | null;
-  mushrooms?: JsonObject | null;
   firedtraps?: FiredTrap[] | null;
 }
 
@@ -88,7 +86,7 @@ export interface TrapRearmPlan {
  */
 const GRID = 5;
 
-/** The key the overlap sweep gives an existing building or a mushroom. */
+/** The key the overlap sweep gives an existing building. */
 const EXISTING = -1;
 
 /**
@@ -239,7 +237,7 @@ export const planTrapRearm = (save: TrapRearmSave, traps: readonly TrapPlacement
     const rect = rectOfBuilding(building);
     if (rect) obstacles.push({ key: EXISTING, rect });
   }
-  for (const rect of mushroomRects(save.mushrooms)) obstacles.push({ key: EXISTING, rect });
+  // A mushroom is no obstacle: the route moves it off the new trap (#263).
 
   // Pairs of two *existing* buildings are ignored: a yard can genuinely hold
   // overlapping decorations, and that is not this route's argument to have.

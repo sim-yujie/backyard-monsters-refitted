@@ -750,8 +750,6 @@ export const spotSentence = (check: SpotCheck, nameOf: (id: number) => string | 
   switch (check.problem) {
     case "outOfBounds":
       return "Outside your yard.";
-    case "mushroom":
-      return "A mushroom is in the way.";
     case "overlap": {
       const other = check.blockedBy === null ? null : nameOf(check.blockedBy);
       return other ? `On top of your ${other}.` : "Something is already there.";

@@ -260,7 +260,7 @@ describe("validateOffset", () => {
     expect(validateOffset([outside], 105, 0, grid, plot).valid).toBe(false);
   });
 
-  it("treats a mushroom in the grid as an obstacle", () => {
+  it("treats a fixed node in the grid as an obstacle", () => {
     const grid = new Occupancy();
     grid.stamp(node({ id: 1_000_001, type: 7, width: 30, height: 30, x: 50, y: 0, fixed: true }));
     const result = validateOffset([node({ id: 2, x: 0, y: 0 })], 50, 0, grid, plot);

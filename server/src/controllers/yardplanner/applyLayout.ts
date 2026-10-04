@@ -3,13 +3,11 @@ import { layoutInvalidErr, layoutUnplacedErr } from "../../errors/errors.js";
 import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers.js";
 import { Operation, updateResources } from "../../services/base/updateResources.js";
 import { ApplyLayoutSchema } from "../../schemas/YardPlannerSchemas.js";
-import {
-  currentExpansion,
-  mushroomRects,
-} from "../../services/yardplanner/layoutGeometry.js";
+import { currentExpansion } from "../../services/yardplanner/layoutGeometry.js";
 import { walkUpgrades, type UpgradeWalk } from "../../services/yardplanner/startUpgrades.js";
 import { syncBaseValue, syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import { nextBuildingId } from "../../services/yard/build.js";
+import { moveMushroomsOffBuildings } from "../../services/yard/mushrooms.js";
 import {
   isDecoration,
   placedDecoration,
@@ -48,8 +46,11 @@ import { debitOf } from "./upgradeWalls.js";
  *
  * - Positions are measured against the plot the player actually owns
  *   (`storedata.ENL.q`), never the expansion the layout claims.
- * - Mushrooms are obstacles. They are not buildings and the planner skips them
- *   (`client/scripts/BASE.as:5097-5109`), but they still occupy their cells.
+ * - Mushrooms never block (#263, owner decision 2026-10-04). They are not
+ *   buildings and the planner skips them (`client/scripts/BASE.as:5097-5109`);
+ *   any mushroom a building lands on pops up on free ground before the save is
+ *   written (`moveMushroomsOffBuildings`), and the answer carries `mushrooms`
+ *   so the client draws them where the server put them.
  * - Every non-decoration building has to be in the layout. Apply stays hard
  *   blocked while any is unplaced, with no auto-place
  *   (`docs/design/yard-planner-redesign.md` §8, decision Q4), because a
@@ -110,14 +111,13 @@ const applyTo = (save: Save, raw: unknown, now: number) => {
   if (unplaced.length > 0) throw layoutUnplacedErr(unplaced);
 
   const expansion = currentExpansion(save.storedata);
-  const mushrooms = mushroomRects(save.mushrooms);
-  checkNodePlacement(payload.nodes, expansion, mushrooms, save.buildingdata);
+  checkNodePlacement(payload.nodes, expansion, save.buildingdata);
 
   const fromStorage = payload.fromStorage ?? [];
   if (fromStorage.length > 0 && yardKindOf(save) === "outpost") {
     throw layoutInvalidErr("Decorations go in your main yard.", { fromStorage: fromStorage.length });
   }
-  checkStoragePlacements(fromStorage, payload.nodes, expansion, mushrooms);
+  checkStoragePlacements(fromStorage, payload.nodes, expansion);
 
   // Bring the countdowns forward before `savetime` moves, or every running job
   // is handed the elapsed time a second time when the base is next loaded. Same
@@ -169,6 +169,7 @@ const applyTo = (save: Save, raw: unknown, now: number) => {
   save.buildingdata = buildingdata;
   save.buildinghealthdata = storage.buildinghealthdata;
   save.researchdata = storage.researchdata;
+  moveMushroomsOffBuildings(save);
   syncDerivedLevels(save);
   syncBaseValue(save);
   save.savetime = now;
@@ -182,6 +183,7 @@ const applyTo = (save: Save, raw: unknown, now: number) => {
     buildinghealthdata: storage.buildinghealthdata,
     researchdata: storage.researchdata,
     resources: save.resources,
+    mushrooms: save.mushrooms ?? {},
     upgrades: upgrades && report(upgrades),
   };
 };

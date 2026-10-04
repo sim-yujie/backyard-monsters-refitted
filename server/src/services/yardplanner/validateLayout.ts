@@ -167,14 +167,13 @@ const decorationUnmoved = (node: LayoutNode, saved: BuildingDataMap | null | und
 
 /**
  * Checks positions: inside the plot for `expansion`, and no two footprints on
- * the same cells. `obstacles` are fixed rectangles nothing may overlap, which
- * is how Apply keeps buildings off mushrooms. With `saved` (the caller's
- * `buildingdata`) a decoration at its saved spot is not held to the plot.
+ * the same cells. Mushrooms are not obstacles: Apply moves any a building
+ * lands on (#263). With `saved` (the caller's `buildingdata`) a decoration at
+ * its saved spot is not held to the plot.
  */
 export const checkNodePlacement = (
   nodes: LayoutNode[],
   expansion: number,
-  obstacles: FootprintRect[] = [],
   saved?: BuildingDataMap | null
 ): void => {
   const outside: number[] = [];
@@ -202,37 +201,19 @@ export const checkNodePlacement = (
       { overlapping: [collision[0], collision[1]] }
     );
   }
-
-  if (obstacles.length === 0) return;
-
-  const blocked = placed.filter((entry) =>
-    obstacles.some((obstacle) => overlaps(entry.rect, obstacle))
-  );
-  if (blocked.length > 0) {
-    const ids = blocked.map((entry) => entry.id);
-    throw layoutInvalidErr(
-      `${ids.length} building${
-        ids.length === 1 ? " is" : "s are"
-      } sitting on a mushroom (${listIds(ids)}). Clear the mushroom or move ${
-        ids.length === 1 ? "it" : "them"
-      }.`,
-      { blocked: ids.slice(0, MAX_LISTED) }
-    );
-  }
 };
 
 /**
  * Checks the decorations a layout takes out of storage (#128): each a
  * decoration, inside the plot (no exception: none of them has a spot yet),
- * clear of every node, of each other and of `obstacles`. Refusals name them
+ * clear of every node and of each other (a mushroom moves, #263). Refusals name them
  * by their place in `fromStorage`. Whether storage holds them is Apply's
  * check, once it knows what the same Apply puts in.
  */
 export const checkStoragePlacements = (
   placements: readonly StoragePlacement[],
   nodes: readonly LayoutNode[],
-  expansion: number,
-  obstacles: FootprintRect[] = []
+  expansion: number
 ): void => {
   const notDecorations = placements.flatMap((one, index) => (footprintOf(one.t).decoration ? [] : [index]));
   if (notDecorations.length > 0) {
@@ -260,15 +241,6 @@ export const checkStoragePlacements = (
   if (overlapping.length > 0) {
     throw layoutInvalidErr("A decoration from storage is on top of something else.", {
       fromStorageOverlapping: overlapping.slice(0, MAX_LISTED),
-    });
-  }
-
-  const blocked = rects.flatMap((rect, index) =>
-    obstacles.some((obstacle) => overlaps(rect, obstacle)) ? [index] : []
-  );
-  if (blocked.length > 0) {
-    throw layoutInvalidErr("A decoration from storage is sitting on a mushroom.", {
-      fromStorageBlocked: blocked.slice(0, MAX_LISTED),
     });
   }
 };

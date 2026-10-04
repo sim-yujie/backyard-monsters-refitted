@@ -5,6 +5,7 @@ import {
   BaseMode,
   type BaseLoadResponse,
   type BuildingDataMap,
+  type MushroomSave,
   type Resources,
   type UpgradeReport,
 } from "@/api/types";
@@ -1361,7 +1362,8 @@ export class YardScene implements Scene {
       ...(this.store?.baseid !== undefined ? { baseid: this.store.baseid } : {}),
       onApplied: (buildingdata, moved, resources, upgrades, storage) =>
         this.onApplied(buildingdata, moved, resources, upgrades, storage),
-      onYardChanged: (buildingdata, resources) => this.onYardChanged(buildingdata, resources),
+      onYardChanged: (buildingdata, resources, mushrooms) =>
+        this.onYardChanged(buildingdata, resources, mushrooms),
       onView: (view) => this.setView(view),
       onInset: (inset) => this.setInset(inset),
       // The plan moved something. The session stays ignorant of the DOM and
@@ -1568,6 +1570,8 @@ export class YardScene implements Scene {
       // What Apply put into storage and took out of it (#128).
       ...(storage.researchdata ? { researchdata: storage.researchdata } : {}),
       ...(storage.buildinghealthdata ? { buildinghealthdata: storage.buildinghealthdata } : {}),
+      // Mushrooms a building landed on have popped up elsewhere (#263).
+      ...(storage.mushrooms ? { mushrooms: storage.mushrooms } : {}),
     });
 
     // Raised here rather than by the planner because the planner has just been
@@ -1599,9 +1603,13 @@ export class YardScene implements Scene {
    * flat view survives the rebuild; `rebase` then puts every sprite back where
    * the plan has it rather than where the save does.
    */
-  private onYardChanged(buildingdata: BuildingDataMap, resources: Resources): void {
+  private onYardChanged(
+    buildingdata: BuildingDataMap,
+    resources: Resources,
+    mushrooms?: MushroomSave,
+  ): void {
     // The store's change does the rebuild and the `rebase` (`onStoreChange`).
-    this.store?.mergeWrite({ buildingdata, resources });
+    this.store?.mergeWrite({ buildingdata, resources, ...(mushrooms ? { mushrooms } : {}) });
   }
 
   /* ── The store ──────────────────────────────────────────────────────── */
@@ -1880,7 +1888,8 @@ export class YardScene implements Scene {
     this.mail?.setSaveUnread(store.save.unreadmessages);
     // While the planner is open its drawer's stored decorations are drawn too.
     const shown = (this.planner && this.plannerYard()) || yard;
-    this.renderer.show(shown);
+    // A mushroom a building landed on comes back somewhere else, and pops up there (#263).
+    this.renderer.show(shown, { popNewMushrooms: true });
     if (before && before.expansionLevel !== yard.expansionLevel) this.onPlotResized(before, yard);
     this.renderer.setLife(yardLifeOf(store.save, yard));
     this.minimap?.refreshBuildings();

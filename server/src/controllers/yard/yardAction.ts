@@ -17,6 +17,7 @@ import { catchUpDamage } from "../../services/yard/catchUpDamage.js";
 import { creditResources } from "../../services/yard/credit.js";
 import { syncBaseValue, syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import { joinMapRoom2 } from "../../services/yard/mapRoom.js";
+import { moveMushroomsOffBuildings } from "../../services/yard/mushrooms.js";
 import { outpostCarryover, outpostProblems } from "../../services/yard/outpostYard.js";
 import { poolView } from "../../services/yard/poolView.js";
 import {
@@ -59,6 +60,8 @@ import { logger } from "../../utils/logger.js";
  *    `409 credits`), resources (`409 shortfall`), then the new slices, the
  *    debit, the credit clamped to the cap (T3), the points; re-derive
  *    `flinger`/`catapult` and, on the main yard, raise `basevalue` (#209);
+ *    move any mushroom a building now stands on to free ground (#263: a
+ *    mushroom never blocks a build or a decoration, it pops up elsewhere);
  *    one flush; commit.
  * 6. Answer `{ error: 0, ...yardState, completed, report, playerlevel }`, the last
  *    the player's level from their main save (the yard HUD's, #192). The yard
@@ -477,6 +480,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
 
       const outcome = await action.run({ save, user, body: parsed.data, now, completed, em: tx });
       applyOutcome(save, user, outcome);
+      moveMushroomsOffBuildings(save);
       // An instant or paid repair shows on the map now, not at the next catch-up (#182 B).
       catchUpDamage(save);
       save.savetime = now;

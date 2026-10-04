@@ -16,8 +16,9 @@ import { yardSize } from "../YardGrid";
  *   of 3240 x 2600 (`BASE.as:4635-4640`, `PlannerDesignView.as:104`), so a
  *   save can hold one outside the plot: it may stay exactly at that spot
  *   ({@link PlanNode.home}), and nothing moves it on its own.
- * - Mushrooms are 30 x 30 obstacles the planner cannot move
- *   (`BUILDING7.as:9-10`, `BASE.as:5097-5109`).
+ * - Mushrooms are not obstacles (#263, owner decision 2026-10-04). The
+ *   Flash planner skipped them (`BASE.as:5097-5109`); here they never block
+ *   either, and Apply moves any mushroom a building lands on.
  *
  * ## Why a bitmap and not a loop over buildings
  *
@@ -107,7 +108,7 @@ export interface PlanNode {
    * it out of storage (`fromStorage`); left in the drawer, it stays there.
    */
   fromStorage?: true;
-  /** Mushrooms: obstacles the planner may not move. */
+  /** An obstacle the planner may not move. Mushrooms were, until #263; nothing is now. */
   readonly fixed: boolean;
   /**
    * The building has been lifted off the plot and into the planner's drawer.

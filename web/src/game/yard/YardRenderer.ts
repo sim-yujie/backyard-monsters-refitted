@@ -16,6 +16,7 @@ import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
 import { diamondCorners, type Corners, type Diamond } from "./planner/marquee";
 import { fromIso, toIso, yardFitRect, yardToWorld, type Point, type Rect } from "./YardGrid";
 import { mushroomAt, mushroomKey } from "./mushroomPick";
+import { MUSHROOM_POP_SECONDS, mushroomPopScale, newMushroomKeys } from "./mushroomPop";
 import type { Yard, YardBuilding, YardMushroom } from "./yardModel";
 
 /**
@@ -65,6 +66,12 @@ export class YardRenderer {
   private readonly mushroomSprites = new Map<string, Sprite>();
   /** Mushrooms shaking for a pick, by `mushroomKey` (`BMUSHROOM.as:76-81`). */
   private readonly shaking = new Set<string>();
+  /**
+   * Mushrooms popping up (#263), by `mushroomKey`: seconds since the pop
+   * began. Kept across `show`, so a redraw mid-pop carries on rather than
+   * snapping the mushroom to full size.
+   */
+  private readonly popping = new Map<string, number>();
   private readonly blueprint = new BlueprintLayer(this.buildings.art);
   private readonly chrome = new Graphics();
   private readonly planner = new PlannerOverlay();
@@ -156,11 +163,18 @@ export class YardRenderer {
     return this.buildings.placeholderCount;
   }
 
-  /** Replaces what is on screen with a yard. */
-  show(yard: Yard): void {
+  /**
+   * Replaces what is on screen with a yard. With `popNewMushrooms`, for a
+   * server answer about the yard already on screen, every mushroom that was
+   * not drawn before pops up out of the ground (#263): one a building landed
+   * on, which the server moved, or one that has just grown.
+   */
+  show(yard: Yard, options: { popNewMushrooms?: boolean } = {}): void {
     const atlas = this.atlas;
     if (!atlas) return;
 
+    const shownBefore = new Set(this.mushroomSprites.keys());
+    const popNew = Boolean(options.popNewMushrooms) && this.yard !== null && !prefersReducedMotion();
     this.clearMushrooms();
     this.setHovered(null);
     this.setSelected(null);
@@ -188,13 +202,20 @@ export class YardRenderer {
     this.blueprint.show(yard);
     this.blueprint.setActive(this.currentView === YardView.BLUEPRINT);
 
+    const fresh = popNew ? newMushroomKeys(shownBefore, yard.mushrooms) : [];
+    const keys = new Set<string>();
     for (const mushroom of yard.mushrooms) {
+      const key = mushroomKey(mushroom);
       const sprite = new Sprite(atlas.mushroom);
       sprite.anchor.set(0.5, 0.85);
       sprite.position.set(mushroom.worldX, mushroom.worldY);
       this.mushroomLayer.addChild(sprite);
-      this.mushroomSprites.set(mushroomKey(mushroom), sprite);
+      this.mushroomSprites.set(key, sprite);
+      keys.add(key);
     }
+    for (const key of this.popping.keys()) if (!keys.has(key)) this.popping.delete(key);
+    for (const key of fresh) this.popping.set(key, 0);
+    this.popMushrooms(0);
   }
 
   /**
@@ -212,6 +233,7 @@ export class YardRenderer {
       this.life.update(visible, deltaSeconds);
       this.jobBars.update();
       this.shakeMushrooms();
+      this.popMushrooms(deltaSeconds);
     }
 
     if (this.chromeDirty) {
@@ -709,6 +731,7 @@ export class YardRenderer {
     this.collect.destroy();
     this.life.destroy();
     this.clearMushrooms();
+    this.popping.clear();
     this.planner.destroy();
     this.jobBars.destroy();
     this.blueprint.destroy();
@@ -768,6 +791,16 @@ export class YardRenderer {
   private clearMushrooms(): void {
     for (const child of this.mushroomLayer.removeChildren()) child.destroy();
     this.mushroomSprites.clear();
+  }
+
+  /** Moves every pop on by `deltaSeconds` and scales its mushroom (`mushroomPop.ts`). */
+  private popMushrooms(deltaSeconds: number): void {
+    for (const [key, elapsed] of this.popping) {
+      const now = elapsed + deltaSeconds;
+      this.mushroomSprites.get(key)?.scale.set(mushroomPopScale(now));
+      if (now >= MUSHROOM_POP_SECONDS) this.popping.delete(key);
+      else this.popping.set(key, now);
+    }
   }
 
   /**

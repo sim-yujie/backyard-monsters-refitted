@@ -4,6 +4,7 @@ import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers
 import { Operation, updateResources } from "../../services/base/updateResources.js";
 import { parseTrapPlacements, planTrapRearm } from "../../services/yardplanner/trapRearm.js";
 import { syncBaseValue, syncDerivedLevels } from "../../services/yard/derivedLevels.js";
+import { moveMushroomsOffBuildings } from "../../services/yard/mushrooms.js";
 import { onPlannerYard } from "./plannerYard.js";
 import { debitOf } from "./upgradeWalls.js";
 import type { Save } from "../../database/models/save.model.js";
@@ -24,6 +25,9 @@ import type { KoaController } from "../../utils/KoaController.js";
  * Old `buildinghealthdata` zeros for the ids the fired traps used are left
  * where they are: the Flash client keys health by the buildings it holds and
  * ignores the rest (decision Q9).
+ *
+ * A trap may go where a mushroom stands: the mushroom pops up on free ground
+ * (#263) and the answer carries `mushrooms`.
  *
  * With a `baseid` naming one of the caller's Map Room 2 outposts the traps go
  * into that outpost (25 Booby Traps and 5 Heavy Traps at most) and the charge
@@ -64,6 +68,7 @@ const rearmTrapsOn = (save: Save, traps: readonly TrapPlacement[], now: number) 
     Operation.SUBTRACT
   );
   save.points = String(Number(save.points ?? "0") + plan.points);
+  moveMushroomsOffBuildings(save);
   syncDerivedLevels(save);
   syncBaseValue(save);
   save.savetime = now;
@@ -76,5 +81,6 @@ const rearmTrapsOn = (save: Save, traps: readonly TrapPlacement[], now: number) 
     resources: save.resources,
     buildingdata: save.buildingdata,
     firedtraps: save.firedtraps,
+    mushrooms: save.mushrooms ?? {},
   };
 };

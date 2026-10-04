@@ -233,8 +233,7 @@ export const applyGrowth = (save: BrainSave, yard: BotYard, runCap: number): Gro
   for (const want of wanted) {
     const found = live.get(want.id);
     if (!found) {
-      const others = { ...view, mushrooms: { l: [] } };
-      const problem = placementProblem(others, { type: want.t, x: want.X, y: want.Y });
+      const problem = placementProblem(view, { type: want.t, x: want.X, y: want.Y });
       if (problem) return { refused: { id: want.id, t: want.t, problem } };
       for (const index of mushroomsUnder(save, want.t, want.X, want.Y)) pick.add(index);
       builds.push(want);
@@ -428,7 +427,11 @@ export const rearmFiredTraps = (save: BrainSave, yard: BotYard): number => {
   for (const record of fired) {
     const index = traps.findIndex((trap) => trap.t === record.t && trap.X === record.X && trap.Y === record.Y);
     const trap = index >= 0 ? traps[index]! : null;
-    if (!trap || placementProblem({ ...save, buildingdata }, { type: trap.t, x: trap.X, y: trap.Y })) {
+    if (
+      !trap ||
+      placementProblem({ ...save, buildingdata }, { type: trap.t, x: trap.X, y: trap.Y }) ||
+      mushroomsUnder(save, trap.t, trap.X, trap.Y).length > 0
+    ) {
       left.push(record);
       continue;
     }

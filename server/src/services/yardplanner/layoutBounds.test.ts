@@ -34,25 +34,25 @@ const refusal = (run: () => void): ClientSafeError => {
 
 describe("checkNodePlacement: decorations and the plot", () => {
   test("a decoration outside the plot may stay at its saved spot", () => {
-    expect(() => checkNodePlacement([node(1, FLAG, 900, 0)], 0, [], saved)).not.toThrow();
+    expect(() => checkNodePlacement([node(1, FLAG, 900, 0)], 0, saved)).not.toThrow();
   });
 
   test("moving it, even further out or to another outside spot, is refused", () => {
-    const error = refusal(() => checkNodePlacement([node(1, FLAG, 920, 0)], 0, [], saved));
+    const error = refusal(() => checkNodePlacement([node(1, FLAG, 920, 0)], 0, saved));
     expect(error.data).toMatchObject({ outOfBounds: [1] });
   });
 
   test("moving it inside the plot is fine", () => {
-    expect(() => checkNodePlacement([node(1, FLAG, 100, 0)], 0, [], saved)).not.toThrow();
+    expect(() => checkNodePlacement([node(1, FLAG, 100, 0)], 0, saved)).not.toThrow();
   });
 
   test("a decoration inside the plot may not be moved out of it", () => {
-    const error = refusal(() => checkNodePlacement([node(3, FLAG, 1200, 0)], 0, [], saved));
+    const error = refusal(() => checkNodePlacement([node(3, FLAG, 1200, 0)], 0, saved));
     expect(error.data).toMatchObject({ outOfBounds: [3] });
   });
 
   test("the exception is for decorations only", () => {
-    const error = refusal(() => checkNodePlacement([node(2, BLOCK, 900, 100)], 0, [], saved));
+    const error = refusal(() => checkNodePlacement([node(2, BLOCK, 900, 100)], 0, saved));
     expect(error.data).toMatchObject({ outOfBounds: [2] });
   });
 

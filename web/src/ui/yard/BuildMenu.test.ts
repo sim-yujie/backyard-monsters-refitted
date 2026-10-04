@@ -389,8 +389,5 @@ describe("PlacementBar", () => {
     expect(spotSentence({ x: 0, y: 0, problem: "overlap", blockedBy: null }, nameOf)).toBe(
       "Something is already there.",
     );
-    expect(spotSentence({ x: 0, y: 0, problem: "mushroom", blockedBy: null }, nameOf)).toBe(
-      "A mushroom is in the way.",
-    );
   });
 });

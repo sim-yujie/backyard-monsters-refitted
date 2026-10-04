@@ -5,7 +5,7 @@ import { readYard, type Yard } from "./yardModel";
 
 /**
  * Where a new building may go (`docs/design/yard-buildings.md` §5.3): the
- * planner's occupancy grid with every building and mushroom stamped in,
+ * planner's occupancy grid with every building stamped in (mushrooms never block, #263),
  * against the smallest plot, 1000 x 800, `[-500, 500) x [-400, 400)`.
  * The server measures the same rectangles (`server/src/services/yard/build.ts`).
  */
@@ -65,11 +65,11 @@ describe("PlacementGrid", () => {
     expect(grid.check(BLOCK, 215, 200).problem).toBe("overlap");
   });
 
-  it("mushrooms are in the way too", () => {
+  it("a mushroom is never in the way: the server moves it (#263)", () => {
     const grid = new PlacementGrid(
       yardOf([HALL], { mushrooms: { l: [{ X: 320, Y: -280, frame: 1 }] } }),
     );
-    expect(grid.check(CANNON, 300, -300).problem).toBe("mushroom");
+    expect(grid.check(CANNON, 300, -300).problem).toBeNull();
   });
 
   it("a held spot refuses a second drop on it until it is released", () => {

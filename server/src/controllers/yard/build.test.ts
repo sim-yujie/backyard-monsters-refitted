@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
 import { baseValueOf, storageCap } from "../../services/base/economy/resourceBudget.js";
+import { MUSHROOM_TYPE } from "../../game-data/buildingFootprints.js";
+import { overlaps, rectOf } from "../../services/yardplanner/layoutGeometry.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { yardBuildAction, yardCancelBuildAction, yardInstantBuildAction } from "./build.js";
 import { yardStateAction } from "./state.js";
@@ -147,6 +149,24 @@ describe("POST /bm/yard/build", () => {
     expect(answer.body).toMatchObject({ reason: "placement", placement: "overlap", with: 1 });
     expect(typeof answer.body.error).toBe("string");
     expect(db.row).toEqual(before);
+  });
+
+  test("a mushroom on the spot does not block it: it pops up elsewhere, in the same write (#263)", async () => {
+    db.row!.mushrooms = { l: [[2, 500, 500], [5, 320, -280]], s: getCurrentDateTime() };
+    // The first one is outside the plot and covered by nothing: it stays.
+    const answer = await build(20, 300, -300);
+
+    expect(answer.status).toBe(200);
+    const saved = (db.row!.mushrooms as { l: [number, number, number][] }).l;
+    expect(saved[0]).toEqual([2, 500, 500]);
+    const [frame, x, y] = saved[1]!;
+    expect(frame).toBe(5);
+    const tower = rectOf(20, 300, -300);
+    expect(overlaps(rectOf(MUSHROOM_TYPE, x, y), tower)).toBe(false);
+    for (const one of Object.values(buildings())) {
+      expect(overlaps(rectOf(MUSHROOM_TYPE, x, y), rectOf(Number(one.t), Number(one.X), Number(one.Y)))).toBe(false);
+    }
+    expect((answer.body.mushrooms as { l: unknown[] }).l).toEqual(saved);
   });
 
   test("a malformed body is a 400 badRequest", async () => {

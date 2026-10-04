@@ -18,7 +18,7 @@ interface Fixture {
 const loadFixture = (): Fixture =>
   JSON.parse(readFileSync(new URL(FIXTURE, import.meta.url), "utf8"));
 
-const sandbox = (): TrapRearmSave => {
+const sandbox = (): TrapRearmSave & { mushrooms: Fixture["mushrooms"] } => {
   const fixture = loadFixture();
   return {
     buildingdata: structuredClone(fixture.buildingdata),
@@ -224,12 +224,12 @@ describe("planTrapRearm rejections", () => {
     expect(err.data).toMatchObject({ overlapping: [0] });
   });
 
-  test("overlapping: on top of a mushroom", () => {
+  test("a mushroom on the spot does not block it (#263: the route moves the mushroom)", () => {
     const save = sandbox();
     const [trap] = fire(save, 24, 1);
-    save.mushrooms = { l: [[0, trap!.x, trap!.y]], s: 1 };
+    save.mushrooms = { l: [[1, trap!.x, trap!.y]], s: 1 };
 
-    expect(rejection(() => planTrapRearm(save, [trap!])).data).toMatchObject({ overlapping: [0] });
+    expect(planTrapRearm(save, [trap!]).placed).toBe(1);
   });
 
   test("overlapping: two requested traps on the same spot", () => {

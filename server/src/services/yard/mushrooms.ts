@@ -190,6 +190,59 @@ export const spawnMushrooms = (
   return list;
 };
 
+/**
+ * Moves every mushroom a building stands on to free ground (#263, owner
+ * decision 2026-10-04): a mushroom never blocks a build, a move, a decoration
+ * or an Apply, and pops up somewhere else instead.
+ *
+ * The new spot follows the growing rule ({@link spawnMushrooms}): inside the
+ * plot, clear of every building and of every other mushroom, the ones moved
+ * earlier in the same call included. A mushroom keeps its art frame and its
+ * place in the list, so the pick route's index still names it; one with no
+ * free spot left goes, as a growing one does not grow. `s` is kept.
+ *
+ * Every route that changes `buildingdata` runs this before it writes, and so
+ * does the catch-up (`catchUpMushrooms.ts`), so a saved yard never holds a
+ * mushroom under a building. Nothing is written when none is covered.
+ *
+ * @param save - The yard, mutated in place: `mushrooms` may change.
+ * @param random - The spot source.
+ * @returns How many mushrooms were covered (moved or, with no room, removed).
+ */
+export const moveMushroomsOffBuildings = (
+  save: MushroomYardSave,
+  random: Random = Math.random
+): number => {
+  const { l, s } = readMushrooms(save.mushrooms);
+  if (l.length === 0) return 0;
+
+  const buildings = buildingRects(save.buildingdata);
+  const covered = l.map((entry) => {
+    const rect = mushroomRect(entry);
+    return buildings.some((building) => overlaps(rect, building));
+  });
+  const count = covered.filter(Boolean).length;
+  if (count === 0) return 0;
+
+  const expansion = currentExpansion(save.storedata);
+  const obstacles = [...buildings, ...l.filter((_, index) => !covered[index]).map(mushroomRect)];
+  const list: MushroomEntry[] = [];
+  l.forEach((entry, index) => {
+    if (!covered[index]) {
+      list.push(entry);
+      return;
+    }
+    const spot = freeSpot(obstacles, expansion, random);
+    if (!spot) return;
+    const moved: MushroomEntry = [entry[0], spot[0], spot[1]];
+    list.push(moved);
+    obstacles.push(mushroomRect(moved));
+  });
+
+  save.mushrooms = { l: list, s };
+  return count;
+};
+
 /** `report` of `POST /bm/yard/mushroom/pick`. */
 export interface MushroomPickReport {
   /** The picked mushroom's place in the list it was picked from. */

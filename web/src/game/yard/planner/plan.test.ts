@@ -4,7 +4,7 @@ import fixture from "../../../../test/fixtures/baseload-sandbox-yard.json";
 import { readYard, type Yard } from "../yardModel";
 import { LAYOUT_VERSION } from "@/api/types";
 import { layoutDate, MissReason, payloadFor, planLoad } from "./layout";
-import { MUSHROOM_ID_BASE, Plan } from "./plan";
+import { Plan } from "./plan";
 import { moveCommand } from "./commands";
 
 const yard = readYard(fixture as unknown as BaseLoadResponse);
@@ -47,10 +47,10 @@ const freeDelta = (plan: Plan, ids: number[]): { dx: number; dy: number } => {
 };
 
 describe("Plan.fromYard", () => {
-  it("takes every building and every mushroom", () => {
+  it("takes every building and no mushroom (#263)", () => {
     const plan = freshPlan();
     expect(plan.buildings()).toHaveLength(yard.buildings.length);
-    expect(plan.size).toBe(yard.buildings.length + yard.mushrooms.length);
+    expect(plan.size).toBe(yard.buildings.length);
   });
 
   it("keeps the yard's expansion level and the plot it implies", () => {
@@ -59,14 +59,6 @@ describe("Plan.fromYard", () => {
     expect(plan.plot).toEqual({ halfWidth: 890, halfHeight: 710 });
   });
 
-  it("marks mushrooms fixed and gives them ids of their own", () => {
-    const plan = freshPlan();
-    for (const mushroom of yard.mushrooms) {
-      const node = plan.get(MUSHROOM_ID_BASE + mushroom.id);
-      expect(node?.fixed).toBe(true);
-      expect(node?.width).toBe(30);
-    }
-  });
 
   it("starts with nothing moved", () => {
     expect(freshPlan().movedIds()).toEqual([]);
@@ -147,11 +139,21 @@ describe("moving a selection", () => {
     expect(plan.commitMove(0, 0)).toBeNull();
   });
 
-  it("will not lift a mushroom", () => {
-    const plan = freshPlan();
-    const mushroom = yard.mushrooms[0];
-    if (!mushroom) return;
-    expect(plan.beginMove([MUSHROOM_ID_BASE + mushroom.id])).toEqual([]);
+  it("a mushroom never blocks a move onto its spot (#263: Apply moves the mushroom)", () => {
+    const small = readYard({
+      error: 0,
+      currenttime: 1,
+      savetime: 1,
+      buildingdata: { "0": { id: 0, t: 14, X: 0, Y: 0, l: 3 } },
+      storedata: {},
+      mushrooms: { l: [{ X: 200, Y: 200, frame: 1 }] },
+    } as unknown as BaseLoadResponse);
+    const plan = Plan.fromYard(small);
+    expect(plan.size).toBe(1);
+
+    plan.beginMove([0]);
+    expect(plan.testMove(190, 190).valid).toBe(true);
+    expect(plan.commitMove(190, 190)).not.toBeNull();
   });
 
   it("leaves the plan valid after a committed move", () => {
@@ -400,13 +402,12 @@ describe("Plan.setPlan", () => {
     expect(plan.get(tower!)!.plan).toEqual({ level: 3, order: 0 });
   });
 
-  it("refuses a mushroom, and anything else fixed", () => {
+  it("refuses anything fixed, and an id the plan does not hold", () => {
     const plan = Plan.fromYard(yardWith({}));
     for (const node of plan.all()) {
       if (node.fixed) expect(plan.setPlan(node.id, 2)).toBeNull();
     }
-    // The captured yard has no mushrooms, so prove the rule on a probe id too.
-    expect(plan.setPlan(MUSHROOM_ID_BASE + 99, 2)).toBeNull();
+    expect(plan.setPlan(1_000_099, 2)).toBeNull();
   });
 
   it("refuses a level the building is already at or past", () => {
@@ -637,11 +638,11 @@ describe("Plan.store", () => {
     expect(plan.index().get(tower!)).toBeDefined();
   });
 
-  it("skips mushrooms and anything already stored", () => {
+  it("skips an id the plan does not hold and anything already stored", () => {
     const plan = freshPlan();
     const [tower] = cannonIds(plan);
 
-    expect(plan.store([MUSHROOM_ID_BASE + 99])).toEqual([]);
+    expect(plan.store([1_000_099])).toEqual([]);
     expect(plan.store([tower!])).toHaveLength(1);
     expect(plan.store([tower!])).toEqual([]);
     expect(plan.storedCount).toBe(1);
@@ -871,7 +872,7 @@ describe("Plan nearby", () => {
     plan.cancelMove();
   });
 
-  it("joins the areas round every building of a big selection, and leaves mushrooms out", () => {
+  it("joins the areas round every building of a big selection", () => {
     const plan = freshPlan();
     const walls = plan
       .buildings()

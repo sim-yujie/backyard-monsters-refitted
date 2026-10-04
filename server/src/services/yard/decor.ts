@@ -19,8 +19,8 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * Owner decisions of 2026-09-29: only what is in storage is placed (Shiny
  * decorations included; none are bought); placing is free and finished at
  * once, holds no worker, awards no points and has no Town Hall limit (the
- * count is the limit); it goes inside the plot, clear of buildings and
- * mushrooms; main yard only. A totem comes back at its stored level, else
+ * count is the limit); it goes inside the plot, clear of buildings (a
+ * mushroom moves out of the way, #263); main yard only. A totem comes back at its stored level, else
  * level 1, and `bl<type>` goes once its count is 0.
  */
 
@@ -97,14 +97,14 @@ export interface PlaceDecorationReport {
 const PLACEMENT_MESSAGES = {
   outOfBounds: "That spot is outside your yard.",
   overlap: "Something is already there.",
-  mushroom: "A mushroom is in the way. Pick it or put it somewhere else.",
 } as const;
 
 /**
  * Takes one decoration out of storage and puts it at `x`, `y`: `400
  * notDecoration` for a type that is not one, `409 notInStorage { type }` when
- * none is stored, `409 placement` (outside the plot, on a building, on a
- * mushroom), the `build` route's placement rule and detail.
+ * none is stored, `409 placement` (outside the plot, on a building), the
+ * `build` route's placement rule and detail. A mushroom under it moves away
+ * (#263, the action wrapper).
  */
 export const planPlaceDecoration = (save: DecorSave, request: BuildRequest) => {
   const { type } = request;

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
+import { MUSHROOM_TYPE } from "../../game-data/buildingFootprints.js";
+import { overlaps, rectOf } from "../../services/yardplanner/layoutGeometry.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { yardPlaceDecorationAction } from "./decor.js";
 import { yardRecycleAction } from "./recycle.js";
@@ -135,11 +137,17 @@ describe("POST /bm/yard/decor/place", () => {
     expect(Object.keys(buildings())).toEqual(["0", "4"]);
   });
 
-  test("a mushroom is in the way", async () => {
-    db.row = rowOf({ mushrooms: { l: [[1, 200, 200]], s: getCurrentDateTime() } });
-    expect(await place({ type: 28, x: 200, y: 200 })).toMatchObject({
-      status: 409,
-      body: { reason: "placement", placement: "mushroom" },
-    });
+  test("a mushroom in the way does not block it: the mushroom pops up elsewhere (#263)", async () => {
+    db.row = rowOf({ mushrooms: { l: [[3, 200, 200]], s: getCurrentDateTime() } });
+    const answer = await place({ type: 28, x: 200, y: 200 });
+    expect(answer.status).toBe(200);
+
+    const saved = (db.row!.mushrooms as { l: [number, number, number][] }).l;
+    expect(saved).toHaveLength(1);
+    const [frame, x, y] = saved[0]!;
+    expect(frame).toBe(3);
+    expect(overlaps(rectOf(MUSHROOM_TYPE, x, y), rectOf(28, 200, 200))).toBe(false);
+    // The answer shows it where the save has it.
+    expect((answer.body.mushrooms as { l: unknown[] }).l).toEqual(saved);
   });
 });

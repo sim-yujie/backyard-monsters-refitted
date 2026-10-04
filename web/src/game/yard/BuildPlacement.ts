@@ -20,9 +20,10 @@ import type { Yard, YardBuilding } from "./yardModel";
  *
  * The rules are the planner's, not a copy of them: the same 5-unit occupancy
  * bitmap and plot bounds (`planner/placement.ts`) that Apply is measured by,
- * with every building and mushroom stamped in. The server checks the same
- * rectangles again (`server/src/services/yard/build.ts`), so a spot drawn green
- * here is a spot the build route accepts.
+ * with every building stamped in. The server checks the same rectangles again
+ * (`server/src/services/yard/build.ts`), so a spot drawn green here is a spot
+ * the build route accepts. Mushrooms are not stamped: they never block (#263);
+ * the server moves one the new building lands on, and it pops up elsewhere.
  *
  * The carry is the planner's too: click to drop, a refused drop stays in hand,
  * Escape cancels. On a touch screen there is no hover to follow, so a tap only
@@ -41,15 +42,14 @@ import type { Yard, YardBuilding } from "./yardModel";
 const DRAG_SLOP = 6;
 
 /**
- * The grid's own ids. A building is stamped under its own id; mushrooms and
- * drops still waiting for an answer get ranges no building reaches, so a
- * collision can say which it was.
+ * The grid's own ids. A building is stamped under its own id; drops still
+ * waiting for an answer get a range no building reaches, so a collision can
+ * say which it was.
  */
-const MUSHROOM_ID_BASE = 1_000_000_000;
 const PENDING_ID_BASE = 1_500_000_000;
 
 /** Why a spot is refused. */
-export type SpotProblem = "outOfBounds" | "overlap" | "mushroom";
+export type SpotProblem = "outOfBounds" | "overlap";
 
 /** A spot, and whether the building can go there. */
 export interface SpotCheck {
@@ -89,8 +89,8 @@ const nodeOf = (id: number, type: number, x: number, y: number): PlanNode => {
 };
 
 /**
- * The yard as the placement sees it: every footprint and mushroom stamped
- * into one occupancy grid, plus the drops still waiting for the server's
+ * The yard as the placement sees it: every footprint stamped into one
+ * occupancy grid, plus the drops still waiting for the server's
  * answer, so two quick clicks on one spot are refused here rather than there.
  */
 export class PlacementGrid {
@@ -124,9 +124,6 @@ export class PlacementGrid {
     for (const building of yard.buildings) {
       this.occupancy.stamp(nodeOf(building.id, building.type, building.x, building.y));
     }
-    yard.mushrooms.forEach((mushroom, index) => {
-      this.occupancy.stamp(nodeOf(MUSHROOM_ID_BASE + index, 7, mushroom.x, mushroom.y));
-    });
     for (const node of this.pending.values()) this.occupancy.stamp(node);
   }
 
@@ -148,7 +145,6 @@ export class PlacementGrid {
     const other = this.occupancy.blockedBy(node, x, y);
     if (other === null) return { x, y, problem: null, blockedBy: null };
     if (other >= PENDING_ID_BASE) return { x, y, problem: "overlap", blockedBy: null };
-    if (other >= MUSHROOM_ID_BASE) return { x, y, problem: "mushroom", blockedBy: null };
     return { x, y, problem: "overlap", blockedBy: other };
   }
 
@@ -161,8 +157,8 @@ export class PlacementGrid {
    * What stands near a building of `type` at `(x, y)` (#231): every building,
    * wall, trap and decoration with a cell inside its {@link nearbyArea}, and
    * the drops still waiting for an answer, so a wall just put down is
-   * outlined before the server has said so. Mushrooms are not: they are not
-   * on the owner's list, and the planner leaves them out too.
+   * outlined before the server has said so. Mushrooms are not in the grid at
+   * all (#263).
    */
   nearby(type: number, x: number, y: number): NearbyFootprint[] {
     const [width, height] = footprintOf(type);
@@ -173,7 +169,6 @@ export class PlacementGrid {
         if (node) found.push({ type: node.type, x: node.x, y: node.y });
         continue;
       }
-      if (id >= MUSHROOM_ID_BASE) continue;
       const building = this.byId.get(id);
       if (building) found.push({ type: building.type, x: building.x, y: building.y });
     }

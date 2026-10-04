@@ -7,6 +7,7 @@ import {
   GOLDEN_SMALL,
   MUSHROOM_CAP,
   MUSHROOM_STORED_CAP,
+  moveMushroomsOffBuildings,
   planMushroomPick,
   readMushrooms,
   rollReward,
@@ -113,6 +114,59 @@ describe("spawnMushrooms", () => {
     const existing: MushroomEntry[] = [[1, -500, -400]];
 
     expect(spawnMushrooms(save, existing, 3, () => 0)).toEqual(existing);
+  });
+});
+
+describe("moveMushroomsOffBuildings (#263)", () => {
+  test("nothing covered: nothing written, the column is the same object", () => {
+    const save = yard();
+    const before = save.mushrooms;
+
+    expect(moveMushroomsOffBuildings(save, Math.random)).toBe(0);
+    expect(save.mushrooms).toBe(before);
+  });
+
+  test("a covered mushroom pops up on free ground, keeping its frame, its place in the list and `s`", () => {
+    // The middle one stands on the Town Hall at the origin.
+    const save = yard({ mushrooms: { l: [[2, 300, 200], [4, 10, 10], [3, -300, 50]], s: 1_700_000_000 } });
+
+    expect(moveMushroomsOffBuildings(save, Math.random)).toBe(1);
+
+    const { l, s } = readMushrooms(save.mushrooms);
+    expect(s).toBe(1_700_000_000);
+    expect(l).toHaveLength(3);
+    expect(l[0]).toEqual([2, 300, 200]);
+    expect(l[2]).toEqual([3, -300, 50]);
+    const [frame, x, y] = l[1]!;
+    expect(frame).toBe(4);
+    const rect = rectOf(7, x, y);
+    const [width, height] = yardSize(0);
+    expect(rect.x).toBeGreaterThanOrEqual(-width / 2);
+    expect(rect.x + rect.w).toBeLessThanOrEqual(width / 2);
+    expect(rect.y).toBeGreaterThanOrEqual(-height / 2);
+    expect(rect.y + rect.h).toBeLessThanOrEqual(height / 2);
+    expect(overlaps(rect, rectOf(HALL, 0, 0))).toBe(false);
+    expect(overlaps(rect, rectOf(7, 300, 200))).toBe(false);
+    expect(overlaps(rect, rectOf(7, -300, 50))).toBe(false);
+  });
+
+  test("two covered mushrooms do not land on each other", () => {
+    const save = yard({ mushrooms: { l: [[1, 0, 0], [1, 20, 20]], s: 5 } });
+    // Both draws aim at the same corner; the second must miss the first.
+    const draws = sequence(0, 0, 0, 0, 0.9, 0.9);
+
+    expect(moveMushroomsOffBuildings(save, draws)).toBe(2);
+
+    const [[, ax, ay], [, bx, by]] = readMushrooms(save.mushrooms).l as [MushroomEntry, MushroomEntry];
+    expect(overlaps(rectOf(7, ax, ay), rectOf(7, bx, by))).toBe(false);
+  });
+
+  test("no room anywhere: the covered mushroom goes, the others stay", () => {
+    // Every draw lands on the spot the first mushroom holds.
+    const save = yard({ mushrooms: { l: [[1, -500, -400], [5, 0, 0]], s: 9 } });
+
+    expect(moveMushroomsOffBuildings(save, () => 0)).toBe(1);
+    expect(save.mushrooms).toEqual({ l: [[1, -500, -400]], s: 9 });
   });
 });
 

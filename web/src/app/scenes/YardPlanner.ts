@@ -4,6 +4,7 @@ import type {
   BuildingHealthData,
   FiredTrap,
   Layout,
+  MushroomSave,
   Resources,
   TrapPlacement,
   UpgradeReport,
@@ -102,6 +103,8 @@ export interface AppliedStorage {
   readonly placed: readonly number[];
   readonly researchdata?: Record<string, unknown>;
   readonly buildinghealthdata?: BuildingHealthData;
+  /** The mushrooms where the server put them: one a building landed on has moved (#263). */
+  readonly mushrooms?: MushroomSave;
 }
 
 /** The slot pane's highlights while comparing (#9). */
@@ -177,9 +180,10 @@ export interface YardPlannerOptions {
    * Unlike `onApplied` this does **not** close the planner: the player is in
    * the middle of a layout and a wall upgrade is not the end of it. The scene
    * rebuilds its yard and must then call `rebase` so the plan keeps its
-   * positions and its undo stack over the new levels.
+   * positions and its undo stack over the new levels. `mushrooms` comes with
+   * a trap re-arm, which may have moved one (#263).
    */
-  onYardChanged: (buildingdata: BuildingDataMap, resources: Resources) => void;
+  onYardChanged: (buildingdata: BuildingDataMap, resources: Resources, mushrooms?: MushroomSave) => void;
   /** Switches the renderer's view and re-bounds the camera to match. */
   onView: (view: YardView) => void;
   /**
@@ -1076,6 +1080,7 @@ export class YardPlanner {
           placed: response.placed ?? [],
           ...(response.researchdata ? { researchdata: response.researchdata } : {}),
           ...(response.buildinghealthdata ? { buildinghealthdata: response.buildinghealthdata } : {}),
+          ...(response.mushrooms ? { mushrooms: response.mushrooms } : {}),
         },
       );
     } catch (caught) {
@@ -1186,7 +1191,7 @@ export class YardPlanner {
         `Re-armed ${response.placed} ${plural(response.placed, "trap")} for ${describeCost(response.cost)}.`,
         { level: "info", timeoutMs: 6000 },
       );
-      this.options.onYardChanged(response.buildingdata, response.resources);
+      this.options.onYardChanged(response.buildingdata, response.resources, response.mushrooms);
       this.bar.setRearmCount(this.rearmTargets().length);
     } catch (caught) {
       this.reportBatchFailure(caught, "The server refused the re-arm.");

@@ -29,8 +29,10 @@ import { freeSpotFor, type MigrationSave } from "./mapRoom.js";
  *   empty, so a second catch-up adds nothing.
  *
  * Each building goes on the original's spot when that spot is free (in the
- * plot, clear of every building and mushroom, `placementProblem`), else on the
- * nearest free spot (`freeSpotFor`). A yard with no room for the Town Hall
+ * plot, clear of every building, `placementProblem`), else on the nearest
+ * free spot (`freeSpotFor`). A mushroom on the original's spot does not
+ * count: the same catch-up moves it to free ground (`catchUpMushrooms.ts`,
+ * #263). A yard with no room for the Town Hall
  * gets nothing and is tried again on the next catch-up.
  */
 

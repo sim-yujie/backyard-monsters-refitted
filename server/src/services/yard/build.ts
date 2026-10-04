@@ -29,13 +29,7 @@ import {
   yardKindOf,
   type ResourceAmounts,
 } from "../yardplanner/costs.js";
-import {
-  currentExpansion,
-  mushroomRects,
-  overlaps,
-  rectOf,
-  withinBounds,
-} from "../yardplanner/layoutGeometry.js";
+import { currentExpansion, overlaps, rectOf, withinBounds } from "../yardplanner/layoutGeometry.js";
 import { busyWorkers, sharperToolsMultiplier, workerCount } from "../yardplanner/workers.js";
 import { buildingOrThrow, finishBuildingJob } from "./buildingJobs.js";
 import { fitCredit } from "./credit.js";
@@ -88,11 +82,13 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  *    (`BASE.as:3757-3788`), a half-built prerequisite counting as level 0.
  * 5. `409 shortfall {r1..r4}`: the yard cannot pay `costs[0]`.
  * 6. `409 placement {placement, with?}`: the footprint leaves the plot
- *    (`outOfBounds`), or lands on a building (`overlap`, `with` its id) or a
- *    mushroom (`mushroom`): the rules Apply measures a layout by
+ *    (`outOfBounds`) or lands on a building (`overlap`, `with` its id): the
+ *    rules Apply measures a layout by
  *    (`controllers/yardplanner/applyLayout.ts`, `services/yardplanner/layoutGeometry.ts`).
  *    A 409 rather than Apply's 400 because the client cannot always see it
- *    coming: a mushroom can spring up under the spot between two requests.
+ *    coming: another request can build on the spot first. A mushroom never
+ *    blocks (#263): the action wrapper moves any mushroom the new building
+ *    stands on to free ground before it writes (`moveMushroomsOffBuildings`).
  * 7. `409 workers {total, busy}`: every worker is on a job. Walls and traps
  *    need none (D13).
  *
@@ -300,15 +296,13 @@ export const buildGates =(save: BuildSave, request: BuildRequest): CostStep => {
 };
 
 /** Why a footprint cannot go where it was asked: gate 6's `placement` detail. */
-export type PlacementProblem =
-  | { placement: "outOfBounds" }
-  | { placement: "overlap"; with: number }
-  | { placement: "mushroom" };
+export type PlacementProblem = { placement: "outOfBounds" } | { placement: "overlap"; with: number };
 
 /**
- * Gate 6's rule, without the refusal: inside the plot, clear of every building
- * and mushroom. Null when the spot is free. The Map Room migration checks the
- * spot it picks with it too (`mapRoom.ts`).
+ * Gate 6's rule, without the refusal: inside the plot, clear of every
+ * building. Null when the spot is free. Mushrooms are not looked at: they
+ * move out of the way (#263). The Map Room migration checks the spot it picks
+ * with it too (`mapRoom.ts`).
  */
 export const placementProblem = (save: BuildSave, request: BuildRequest): PlacementProblem | null => {
   const { type, x, y } = request;
@@ -320,20 +314,15 @@ export const placementProblem = (save: BuildSave, request: BuildRequest): Placem
     const other = rectOf(Number(building.t), Number(building.X), Number(building.Y));
     if (overlaps(rect, other)) return { placement: "overlap", with: Number(building.id ?? key) };
   }
-
-  if (mushroomRects(save.mushrooms).some((mushroom) => overlaps(rect, mushroom))) {
-    return { placement: "mushroom" };
-  }
   return null;
 };
 
 const PLACEMENT_MESSAGES: Readonly<Record<PlacementProblem["placement"], string>> = {
   outOfBounds: "That spot is outside your yard.",
   overlap: "Something is already built there.",
-  mushroom: "A mushroom is in the way. Pick it or build somewhere else.",
 };
 
-/** Gate 6: inside the plot, clear of every building and mushroom. */
+/** Gate 6: inside the plot, clear of every building. */
 const placementGate = (save: BuildSave, request: BuildRequest): void => {
   const problem = placementProblem(save, request);
   if (problem) throw yardRefusedErr("placement", PLACEMENT_MESSAGES[problem.placement], problem);

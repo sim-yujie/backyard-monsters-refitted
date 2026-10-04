@@ -2,6 +2,7 @@ import {
   MUSHROOM_BURST,
   MUSHROOM_CAP,
   MUSHROOM_RESPAWN_SECONDS,
+  moveMushroomsOffBuildings,
   readMushrooms,
   spawnMushrooms,
   type MushroomYardSave,
@@ -21,6 +22,11 @@ import {
  * A yard that never had a spawn (`s` missing or 0) counts as long overdue and
  * gets one burst.
  *
+ * First, any mushroom a building stands on pops up on free ground
+ * (`moveMushroomsOffBuildings`, #263): a building put down by something that
+ * did not move it itself (the starter set, an older save) never keeps one
+ * under it past the next catch-up.
+ *
  * Spots are drawn at random on free ground (`services/yard/mushrooms.ts`), so
  * this step takes its random source as a parameter; it is otherwise pure.
  * Idempotent: a second run at the same `now` finds no whole period since `s`.
@@ -37,6 +43,7 @@ export const catchUpMushrooms = (
   now: number,
   random: Random = Math.random
 ): [] => {
+  moveMushroomsOffBuildings(save, random);
   const { l, s } = readMushrooms(save.mushrooms);
   const periods = s > 0 ? Math.floor((now - s) / MUSHROOM_RESPAWN_SECONDS) : MUSHROOM_BURST;
   if (periods <= 0) return [];

@@ -8,6 +8,7 @@ import {
   planBuild,
   planCancelBuild,
   planInstantBuild,
+  placementProblem,
   type BuildSave,
 } from "./build.js";
 
@@ -249,14 +250,10 @@ describe("build", () => {
       expect(data).toMatchObject({ reason: "placement", placement: "overlap", with: 2 });
     });
 
-    test("409 placement mushroom", () => {
+    test("a mushroom is no placement problem (#263): the wrapper moves it", () => {
       const save = yard({ mushrooms: { l: [[1, 320, -280]] } });
-      const [status, data] = refusedWith(() =>
-        planBuild(save, { type: CANNON, x: 300, y: -300 }, NOW)
-      );
-
-      expect(status).toBe(409);
-      expect(data).toMatchObject({ reason: "placement", placement: "mushroom" });
+      expect(placementProblem(save, { type: CANNON, x: 300, y: -300 })).toBeNull();
+      expect(planBuild(save, { type: CANNON, x: 300, y: -300 }, NOW).report.x).toBe(300);
     });
 
     test("409 workers last, with the counts", () => {

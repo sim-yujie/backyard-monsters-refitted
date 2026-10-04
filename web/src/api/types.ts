@@ -934,6 +934,11 @@ export interface ApplyLayoutResponse extends ApiEnvelope {
   researchdata?: Record<string, unknown>;
   /** Health readings after Apply: a stored decoration's is gone (#128). */
   buildinghealthdata?: BuildingHealthData;
+  /**
+   * The mushrooms after Apply (#263): any a building landed on have popped
+   * up on free ground. Absent from a server that predates it.
+   */
+  mushrooms?: MushroomSave;
 }
 
 /* ── Planned upgrades ───────────────────────────────────────────────────── */
@@ -1145,6 +1150,8 @@ export interface TrapRearmResponse extends ApiEnvelope {
   buildingdata: BuildingDataMap;
   /** What is left of the fired list once the placed traps are struck off. */
   firedtraps: FiredTrap[];
+  /** The mushrooms after the re-arm: one a trap landed on has moved (#263). */
+  mushrooms?: MushroomSave;
 }
 
 /* ── Yard actions ───────────────────────────────────────────────────────── */

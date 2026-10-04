@@ -130,9 +130,9 @@ const obstaclesOf = (save: MigrationSave): FootprintRect[] => {
 
 /**
  * The free spot for a new building of `type` nearest the middle of the plot:
- * inside the plot for the yard's expansion, clear of every building and
- * mushroom, by the build route's own placement rule (`placementProblem`,
- * `build.ts`). Spots are tried on a 10-unit grid, nearest first, ties broken
+ * inside the plot for the yard's expansion, clear of every building, by the
+ * build route's own placement rule (`placementProblem`, `build.ts`), and,
+ * since nothing has to move, clear of every mushroom too. Spots are tried on a 10-unit grid, nearest first, ties broken
  * top to bottom then left to right, so the same yard always gets the same
  * spot. Null when the plot has no room.
  */

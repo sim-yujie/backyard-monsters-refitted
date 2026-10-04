@@ -902,6 +902,16 @@ above the upgrade (Repair, free; Repair all N now, Shiny, free when every repair
 - The golden decision moves from the position hash (`MUSHROOMS.as:223-224`, a Grant Skinner
   `Rndm` seeded by `x × y`) to a server random roll at pick time; the client's stand-in golden tint
   (`web/src/game/yard/yardModel.ts:202-217`) is removed, since the original showed no difference.
+- **Mushrooms never block** (#263, owner decision 2026-10-04: "Can mushrooms not affect the
+  building placement. Make the mushroom pop up elsewhere after placing the yard if it's
+  intersecting."). A build, a decoration, a trap re-arm or a Yard Planner Apply may land on a
+  mushroom; before the save is written the server moves every mushroom a building stands on to a
+  random free spot, by the growing rule (`moveMushroomsOffBuildings`,
+  `server/src/services/yard/mushrooms.ts`), keeping its art frame and its index in `mushrooms.l`
+  (one with no room left goes). The catch-up does the same first thing, so nothing else can leave
+  one under a building either. The client draws no mushroom in the placement grid or the planner,
+  and a mushroom that appears at a new spot pops up out of the ground
+  (`web/src/game/yard/mushroomPop.ts`).
 
 ### 5.7 Map Room and Radio (D15, D16)
 
@@ -1198,7 +1208,7 @@ the lead, and the plot question by the owner (option A):
    puts it, and a decoration in the drawer is a warning row, not a block. The drawer lists storage
    too; one put down is created by Apply (`fromStorage`).
 3. **Placing is free and instant**, no worker, no points, no Town Hall limit (the count is the
-   limit), **inside the plot only**, clear of buildings and mushrooms.
+   limit), **inside the plot only**, clear of buildings (a mushroom moves out of the way, #263).
 4. **Totems** come back at their stored `bl` level, else 1; `bl` goes with the last one.
 5. **Main yard only**; `decor/place` is `notInOutpost` in an outpost.
 6. **The Decorations tab** lists the stored types with their counts and a Place button; empty, it

@@ -35,24 +35,11 @@ import {
  * and `beginMove` / `commitMove` are the only way the grid is opened up.
  */
 
-/**
- * Mushroom ids start here so they cannot collide with a building id.
- *
- * The occupancy grid stores `id + 1` per cell and reads 0 as empty, so ids have
- * to be positive; mushrooms have their own id space in the save and nothing
- * stops it overlapping the buildings'.
- */
-export const MUSHROOM_ID_BASE = 1_000_000;
-
-/** Mushroom footprint, `client/scripts/BUILDING7.as:9-10`. */
-const MUSHROOM_TYPE = 7;
-const MUSHROOM_SIZE = 30;
-
 /** Why a bare spot will not take a building. */
 export const PlaceBlock = {
   /** Outside the plot for the expansion the account has now. */
   BOUNDS: "bounds",
-  /** Held by a building or a mushroom. */
+  /** Held by a building. */
   OCCUPIED: "occupied",
 } as const;
 export type PlaceBlock = (typeof PlaceBlock)[keyof typeof PlaceBlock];
@@ -133,36 +120,15 @@ export class Plan {
   }
 
   /**
-   * Snapshots a yard.
+   * Snapshots a yard: every building becomes a movable node.
    *
-   * Every building becomes a movable node and every mushroom a fixed one, so a
-   * drag is blocked by a mushroom the same way it is blocked by a tower and the
-   * validator needs no second rule for obstacles.
+   * Mushrooms are not in the plan (#263, owner decision 2026-10-04): they
+   * never block a move, and Apply pops any mushroom a building lands on up
+   * somewhere free (`server/src/services/yard/mushrooms.ts`).
    */
   static fromYard(yard: Yard): Plan {
     const plan = new Plan(yard.expansionLevel);
-
     for (const building of yard.buildings) plan.add(nodeOf(building));
-
-    for (const mushroom of yard.mushrooms) {
-      plan.add({
-        id: MUSHROOM_ID_BASE + mushroom.id,
-        type: MUSHROOM_TYPE,
-        x: mushroom.x,
-        y: mushroom.y,
-        width: MUSHROOM_SIZE,
-        height: MUSHROOM_SIZE,
-        level: 1,
-        fort: 0,
-        decoration: false,
-        fixed: true,
-        stored: false,
-        plan: null,
-        busy: false,
-        damaged: false,
-      });
-    }
-
     return plan;
   }
 
@@ -247,9 +213,9 @@ export class Plan {
   /**
    * Lifts buildings off the plot and into the drawer.
    *
-   * Mushrooms and anything else fixed are skipped rather than refused: the
-   * store button acts on a selection the player made with a marquee, and a
-   * marquee cannot help catching an obstacle. A building already stored is
+   * Anything fixed is skipped rather than refused: the store button acts on
+   * a selection the player made with a marquee, and a marquee cannot help
+   * catching an obstacle. A building already stored is
    * skipped too, so storing twice is not two undo entries.
    *
    * The returned entries carry the cells the building came off, which is what
@@ -361,7 +327,7 @@ export class Plan {
    * null when nothing did — which is also how a refusal reads, because every
    * refusal here is a thing the player cannot be shown a button for anyway:
    *
-   * - a mushroom or anything else fixed, and any type with no ladder;
+   * - anything fixed, and any type with no ladder;
    * - a **busy** or **damaged** building, which is F1 rule 3 (design
    *   `yard-planner-redesign.md:131-134`) and which Apply would skip;
    * - a level at or below the one the building already has, or past the top of
@@ -492,7 +458,7 @@ export class Plan {
   /**
    * The buildings near a footprint of `width` x `height` at `(x, y)` (#231):
    * every building, wall, trap and decoration with a cell in the areas round
-   * it. Mushrooms are left out; they are not on the owner's list.
+   * it. Mushrooms are not in the plan (#263).
    */
   nearbySpot(x: number, y: number, width: number, height: number): Set<number> {
     return this.nearby([nearbyArea(x, y, width, height)]);
@@ -643,8 +609,8 @@ export class Plan {
    * yard is where the buildings stood at the last save. Overwriting one with the
    * other is exactly what Apply is for.
    *
-   * Mushrooms are left alone. They are obstacles rather than buildings, the yard
-   * reseeds them on its own, and nothing a batch action does can move one.
+   * Mushrooms are not in the plan (#263): they never block, and the yard
+   * moves one a building lands on by itself.
    */
   absorb(yard: Yard): AbsorbResult {
     // A selection in hand has its cells out of the grid; putting it down first
