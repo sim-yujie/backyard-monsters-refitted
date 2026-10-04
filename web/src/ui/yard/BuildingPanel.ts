@@ -419,9 +419,13 @@ export class BuildingPanel {
     this.renderDetails(building);
   }
 
-  /** A Housing on the own yard: the Housing panel (#170), not the plain card. */
+  /**
+   * A Housing on the own yard: the Housing panel (#170), not the plain card.
+   * Still on its first build, it has no working window yet (#281): the plain
+   * card's construction info shows instead, as for any other building.
+   */
   private isHousing(building: YardBuilding): boolean {
-    return building.type === HOUSING_TYPE && this.yard !== undefined;
+    return building.type === HOUSING_TYPE && this.yard !== undefined && building.level > 0;
   }
 
   /**
@@ -451,12 +455,10 @@ export class BuildingPanel {
 
     const store = yard.store;
     const max = maxLevel(building.type, store.kind);
+    // `isHousing` only turns this branch on past the first build, so `level`
+    // is always at least 1 here.
     this.chip.textContent =
-      building.level <= 0
-        ? "Being built"
-        : building.level >= max
-          ? `Level ${building.level} · max`
-          : `Level ${building.level}`;
+      building.level >= max ? `Level ${building.level} · max` : `Level ${building.level}`;
     const count = housingBuildings(store.save, store.now()).length;
     this.blurb.textContent =
       count > 1

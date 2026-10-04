@@ -465,7 +465,7 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
       ? "map"
       : building.type === YARD_PLANNER_TYPE
         ? "planner"
-        : monstersTab
+        : monstersTab && building.level > 0
           ? "monsters"
           : building.type === BUNKER_TYPE && building.level > 0
             ? "bunker"

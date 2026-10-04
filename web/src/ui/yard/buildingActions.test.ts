@@ -366,6 +366,25 @@ describe("panelModel: which blocks each building gets", () => {
     expect(tabs).toEqual(["unlock", "hatch", "hatch", "housing", "train", "lab"]);
   });
 
+  it("a monster building still on its first build opens no working window (#281)", () => {
+    const context = contextOf({
+      buildings: [
+        HALL(6),
+        building(2, 8, 0, { cB: 600 }),
+        building(3, 13, 0, { cB: 600 }),
+        building(4, 15, 0, { cB: 600 }),
+        building(5, 26, 0, { cB: 600 }),
+        building(6, 116, 0, { cB: 600 }),
+      ],
+    });
+    for (const id of [2, 3, 4, 5, 6]) {
+      const model = panelModel(pick(context, id), context);
+      expect(model.open).toBeNull();
+      // The job (its construction info) is offered instead.
+      expect(model.job?.kind).toBe("build");
+    }
+  });
+
   it("a built Monster Bunker opens its own controls; one still being built does not", () => {
     const context = contextOf({
       buildings: [HALL(6), building(2, 22, 1), building(3, 22, 0, { cB: 600 })],

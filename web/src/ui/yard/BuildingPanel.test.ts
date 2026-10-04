@@ -513,6 +513,18 @@ describe("BuildingPanel: the Housing panel (#170)", () => {
     expect(element.querySelector(".housing-living__count")!.textContent).toBe("51 monsters · 7 kinds");
   });
 
+  it("a Housing still on its first build shows the plain construction card, not the Housing panel (#281)", () => {
+    const { element } = setup([HALL, building(3, 15, 0, { cB: 600 })], 3);
+    expect(element.classList.contains("building-panel--housing")).toBe(false);
+    expect(element.querySelector(".panel__title")!.textContent).toBe("Housing");
+    expect(element.querySelector<HTMLElement>(".building-panel__chip")!.hidden).toBe(true);
+    expect(element.querySelector<HTMLElement>(".building-panel__housing")!.hidden).toBe(true);
+    expect(element.querySelector<HTMLElement>(".cell-kind")!.hidden).toBe(false);
+    // The construction info: a running "build" job with its Cancel.
+    expect(buttonNamed(element, "Cancel build")).toBeDefined();
+    expect(buttonNamed(element, "Open")).toBeUndefined();
+  });
+
   it("offers Housing Expansion in the waiting card, spent on the second tap", () => {
     const { element, store } = setup([HALL, ...HOUSINGS], 3, { load: WAITING });
     const buy = vi.spyOn(store, "buy").mockImplementation(() => new Promise(() => undefined));
