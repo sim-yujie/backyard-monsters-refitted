@@ -90,6 +90,8 @@ export class MonstersScreen {
   private active: MonstersTabId = MonstersTabId.UNLOCK;
   /** What the body shows now: the tab, or the "build one first" note. */
   private showing: "tab" | "empty" | null = null;
+  /** The tab whose element is in the body and was shown, to tell it when it is hidden. */
+  private visible: MonstersTab | null = null;
   private opened = false;
   private destroyed = false;
 
@@ -218,6 +220,7 @@ export class MonstersScreen {
     this.opened = false;
     this.element.hidden = true;
     delete this.element.dataset["shown"];
+    this.hideVisible();
     this.onClose?.();
   }
 
@@ -301,6 +304,7 @@ export class MonstersScreen {
     const has = yard.buildings.some((building) => definition.buildings.includes(building.type));
 
     if (!has) {
+      this.hideVisible();
       this.showing = "empty";
       this.body.replaceChildren(this.emptyNote(definition));
       return false;
@@ -311,10 +315,17 @@ export class MonstersScreen {
       tab = definition.create({ binding: this.binding, showTab: (id, next) => this.open(id, next) });
       this.created.set(definition.id, tab);
     }
+    if (this.visible !== tab) this.hideVisible();
     this.showing = "tab";
+    this.visible = tab;
     this.body.replaceChildren(tab.element);
     tab.show(focus);
     return true;
+  }
+
+  private hideVisible(): void {
+    this.visible?.hide?.();
+    this.visible = null;
   }
 
   private emptyNote(definition: MonstersTabDefinition): HTMLElement {

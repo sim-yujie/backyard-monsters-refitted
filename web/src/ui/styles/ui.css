@@ -365,7 +365,7 @@ body {
 }
 
 /* ── Quantity stepper (`QuantityStepper.ts`) ───────────────────────────────
- * `−`, a number box, `+` and Fill, the same wherever it is used (the Army
+ * `−`, a number box, `+`, optional `+5` / `+10`, and Fill, the same wherever it is used (the Army
  * panel, Hatch, the bunker, juicing). A screen's own `<block>__controls`
  * classes only place the row; the look is here.
  */
@@ -410,6 +410,12 @@ body {
 .qty-stepper__fill {
   padding: var(--space-1) var(--space-3);
   font-size: var(--text-sm);
+}
+
+/* `+5`, `+10`: a step, in the smaller type of a word button. */
+.qty-stepper__jump {
+  font-size: var(--text-sm);
+  font-weight: 700;
 }
 
 /* ── Chips ──────────────────────────────────────────────────────────────────

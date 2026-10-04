@@ -3,8 +3,10 @@ import type { BaseLoadResponse, BuildingData } from "@/api/types";
 import { timeCost } from "@/game/yard/buildingCosts";
 import {
   activeOverdrive,
+  batchSeconds,
   fillLimits,
   freeHousing,
+  hatcheryNumbers,
   hatchMonsters,
   housingWarning,
   lineSeconds,
@@ -241,6 +243,29 @@ describe("previewAdd and queue room", () => {
     const yard = readHatchYard(saveOf({}, [building(10, 13, 3)]), T0);
     expect(previewAdd(yard, 10, "C1", 58)!.fresh).toEqual([20, 20, 17]);
     expect(previewAdd(yard, 10, "C1", 1)!.fresh).toEqual([]);
+  });
+});
+
+describe("hatcheryNumbers and batchSeconds", () => {
+  it("numbers the hatcheries by building id, oldest first, whatever the service order", () => {
+    const save = saveOf(
+      { monsters: monsters({ hid: [12, 10], h: [["", 0, []], ["", 0, []]], hstage: [0, 0] }) },
+      [building(12, 13, 3), building(10, 13, 3), building(11, 13, 2, { cB: 100 })],
+    );
+    const yard = readHatchYard(save, T0);
+    expect(yard.hatcheries.map((one) => one.id)).toEqual([12, 10, 11]);
+    expect([...hatcheryNumbers(yard)]).toEqual([
+      [10, 1],
+      [11, 2],
+      [12, 3],
+    ]);
+  });
+
+  it("times a batch one after another, at the Overdrive's pace while it lasts", () => {
+    const yard = readHatchYard(saveOf({}, [building(10, 13, 3)]), T0);
+    expect(batchSeconds(yard, "C1", 5, {}, T0)).toBe(75);
+    expect(batchSeconds(yard, "C1", 0, {}, T0)).toBe(0);
+    expect(batchSeconds(yard, "C1", 20, { HOD: { q: 1, s: T0, e: T0 + 3600 } }, T0)).toBe(75);
   });
 });
 

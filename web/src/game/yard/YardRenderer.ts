@@ -5,7 +5,8 @@ import { flightEnds, flightTotals, planFlights, TOWN_HALL_TYPE, type BankSource 
 import { CollectFxLayer, type LandListener } from "./CollectFxLayer";
 import type { HarvestKey } from "./harvest";
 import { YardGround } from "./YardGround";
-import { YardJobBars } from "./YardJobBars";
+import { CHOSEN_FILL, YardHatchMarks, type HatcheryMarks } from "./YardHatchMarks";
+import { BAR_HEIGHT, jobBarScale, YardJobBars } from "./YardJobBars";
 import { YardLifeLayer } from "./YardLifeLayer";
 import { holdBack, type LifeHold, type YardLife } from "./yardLifeModel";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
@@ -77,6 +78,8 @@ export class YardRenderer {
   private readonly planner = new PlannerOverlay();
   /** Progress bars over running builds and upgrades, own yard only (#139). */
   private readonly jobBars = new YardJobBars((id) => this.jobBarAnchor(id));
+  /** The hatchery numbers while the Hatch tab is open (#268), above a job bar where there is one. */
+  private readonly hatchMarks = new YardHatchMarks((id) => this.hatchMarkAnchor(id));
   /** What lives on the yard (#158, #159): scenery, never in the battle. */
   private readonly life = new YardLifeLayer({ reducedMotion: prefersReducedMotion() });
   /** The planner is open: the creatures step out of the way until it closes. */
@@ -148,6 +151,7 @@ export class YardRenderer {
       this.planner.root,
       this.buildings.markers,
       this.jobBars.root,
+      this.hatchMarks.root,
       this.buildings.labels,
     );
   }
@@ -232,6 +236,8 @@ export class YardRenderer {
       this.buildings.draw(visible, deltaSeconds, this.work?.now() ?? 0);
       this.life.update(visible, deltaSeconds);
       this.jobBars.update();
+      // A handful of badges, and art arriving moves a crown: cheap to place every frame.
+      if (this.hatchMarks.current) this.hatchMarks.reposition();
       this.shakeMushrooms();
       this.popMushrooms(deltaSeconds);
     }
@@ -274,6 +280,7 @@ export class YardRenderer {
       this.collect.root,
       this.buildings.markers,
       this.jobBars.root,
+      this.hatchMarks.root,
       this.buildings.labels,
     ]) {
       layer.visible = iso;
@@ -358,6 +365,7 @@ export class YardRenderer {
     this.zoomLevel = zoom;
     this.blueprint.setZoom(zoom);
     this.jobBars.setZoom(zoom);
+    this.hatchMarks.setZoom(zoom);
     this.zoomWatcher?.(zoom);
   }
 
@@ -390,6 +398,19 @@ export class YardRenderer {
   /** Whether a building's animation is running now, on the work clock (#255). */
   isAnimating(id: number): boolean {
     return this.buildings.isAnimating(id, this.work?.now() ?? 0);
+  }
+
+  /**
+   * Numbers the hatcheries and outlines the chosen one while the Hatch tab is
+   * open (#268), or clears them when passed null; see `YardHatchMarks`.
+   */
+  setHatcheryMarks(marks: HatcheryMarks | null): void {
+    if (this.hatchMarks.set(marks)) this.chromeDirty = true;
+  }
+
+  /** The hatchery badges drawn now: number and whether it is the chosen one. */
+  get hatcheryMarks(): { id: number; number: number; chosen: boolean }[] {
+    return this.hatchMarks.drawn;
   }
 
   /** The ids of the buildings showing a progress bar, in drawing order. */
@@ -734,6 +755,7 @@ export class YardRenderer {
     this.popping.clear();
     this.planner.destroy();
     this.jobBars.destroy();
+    this.hatchMarks.destroy();
     this.blueprint.destroy();
     this.byId.clear();
     this.yard = null;
@@ -751,6 +773,13 @@ export class YardRenderer {
     const crown = this.buildings.crownOf(id);
     if (!building || crown === null) return null;
     return { x: building.centreX + this.buildings.offsetOf(id).x, y: crown };
+  }
+
+  /** Where a hatchery's number goes: a job bar's place, or above the bar when it has one. */
+  private hatchMarkAnchor(id: number): Point | null {
+    const anchor = this.jobBarAnchor(id);
+    if (!anchor || !this.jobBars.ids.includes(id)) return anchor;
+    return { x: anchor.x, y: anchor.y - JOB_BAR_CLEARANCE * jobBarScale(this.zoomLevel) };
   }
 
   /** The isometric footprint diamond where a building is currently drawn. */
@@ -777,7 +806,20 @@ export class YardRenderer {
       }
     }
 
-    if (this.selected && !this.plannerVisuals) {
+    // The Hatch tab's chosen hatchery (#268) wears the window's cyan, heavier
+    // than the selection, which steps aside when it is the same building.
+    const chosen = this.plannerVisuals ? null : (this.hatchMarks.current?.chosen ?? null);
+    if (chosen !== null) {
+      const corners = this.cornersOf(chosen);
+      if (corners) {
+        this.chrome
+          .poly(flatten(corners))
+          .fill({ color: CHOSEN_FILL, alpha: 0.16 })
+          .stroke({ width: 4, color: CHOSEN_FILL, alpha: 1 });
+      }
+    }
+
+    if (this.selected && !this.plannerVisuals && this.selected.id !== chosen) {
       const corners = this.cornersOf(this.selected.id);
       if (corners) {
         this.chrome
@@ -838,6 +880,9 @@ export class YardRenderer {
     this.buildings.setHighlight(id, on);
   }
 }
+
+/** How far a hatchery's number is raised over a job bar and its time, world pixels at zoom 1. */
+const JOB_BAR_CLEARANCE = BAR_HEIGHT + 22;
 
 /** Corners as the flat point list `Graphics.poly` wants. */
 const flatten = (corners: Corners): number[] => corners.flatMap(([x, y]) => [x, y]);

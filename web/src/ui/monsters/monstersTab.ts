@@ -24,7 +24,10 @@ import type { YardChange, YardUiBinding } from "@/game/yard/YardStore";
  *    re-sync disabled buttons, nothing else). Hidden tabs are not told.
  * 4. `tick()` runs once a second while the tab is visible, for countdowns and
  *    time-priced Shiny.
- * 5. `destroy()` runs when the screen is destroyed (the yard closes). Destroy
+ * 5. `hide()`, when a tab has it, runs when the tab stops being the visible
+ *    one: another tab is shown, or the screen closes. Take down anything the
+ *    tab drew outside its element (the Hatch tab's numbers over the yard).
+ * 6. `destroy()` runs when the screen is destroyed (the yard closes). Destroy
  *    any `ShinyButton` so none stays armed.
  *
  * The screen stays open after every action (§4.1); a tab reports an outcome
@@ -74,6 +77,7 @@ export interface MonstersTab {
   show(focus: MonstersFocus): void;
   update(change: YardChange): void;
   tick(): void;
+  hide?(): void;
   destroy(): void;
 }
 

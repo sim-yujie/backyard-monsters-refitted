@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 /** A stepper over a plain counter clamped to 0..max, redrawn on every change. */
-const mount = (max = 1000) => {
+const mount = (max = 1000, jumps?: readonly number[]) => {
   let count = 0;
   const fill = vi.fn(() => {
     count = max;
@@ -37,6 +37,7 @@ const mount = (max = 1000) => {
     fewerLabel: "Fewer Pokey",
     moreLabel: "More Pokey",
     fillTitle: "As many as fit",
+    ...(jumps ? { jumps } : {}),
     value: () => count,
     set: (value) => {
       count = Math.max(0, Math.min(max, Math.floor(value)));
@@ -195,5 +196,26 @@ describe("QuantityStepper box and Fill", () => {
     for (const control of [stepper.input, stepper.minus, stepper.plus, stepper.fill]) {
       expect(control.disabled).toBe(true);
     }
+  });
+
+  it("offers bigger steps between + and Fill when asked, stopping at the maximum", () => {
+    const { stepper, count } = mount(12, [5, 10]);
+    expect([...stepper.element.children].map((child) => child.textContent)).toEqual([
+      "−",
+      "",
+      "+",
+      "+5",
+      "+10",
+      "Fill",
+    ]);
+    const [five, ten] = stepper.jumps;
+    expect(five!.getAttribute("aria-label")).toBe("5 more");
+    five!.click();
+    expect(count()).toBe(5);
+    ten!.click();
+    expect(count()).toBe(12);
+    expect(five!.disabled).toBe(true);
+    expect(ten!.disabled).toBe(true);
+    expect(mount().stepper.jumps).toHaveLength(0);
   });
 });

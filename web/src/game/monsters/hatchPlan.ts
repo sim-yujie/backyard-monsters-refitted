@@ -307,6 +307,19 @@ export const readHatchYard = (save: BaseLoadResponse, now: number): HatchYard =>
   };
 };
 
+/**
+ * Each hatchery's number, as the Hatch tab and the yard both show it (#268):
+ * by building id, so the oldest is 1 and a number never moves while the
+ * hatcheries stand. Service order (`hid`) can change; this does not.
+ */
+export const hatcheryNumbers = (yard: Pick<HatchYard, "hatcheries">): ReadonlyMap<number, number> =>
+  new Map(
+    yard.hatcheries
+      .map((one) => one.id)
+      .sort((a, b) => a - b)
+      .map((id, index) => [id, index + 1]),
+  );
+
 /** The queue a target adds to: the HCC's shared queue, or a hatchery's own. */
 export const queueOf = (yard: HatchYard, target: HatchTarget): QueueStack[] | null =>
   target === "hcc" ? yard.shared : (yard.hatcheries.find((one) => one.id === target)?.queue ?? null);
@@ -696,6 +709,23 @@ export const lineSeconds = (
     for (const [id, count] of hatchery.queue) end = acceleratedEnd(end, seconds(id) * count, overdrive);
   }
   return end > now ? end - now : null;
+};
+
+/**
+ * Seconds `count` of `monster` take to hatch one after another in one
+ * hatchery, an Overdrive running at `now` counted: the batch's own time,
+ * not counting what is ahead of it in the line.
+ */
+export const batchSeconds = (
+  yard: HatchYard,
+  monster: string,
+  count: number,
+  storedata: StoreData | null | undefined,
+  now: number,
+): number => {
+  if (count <= 0) return 0;
+  const work = secondsOf(monster, levelIn(yard.levels, monster)) * count;
+  return acceleratedEnd(now, work, overdriveAt(storedata, now)) - now;
 };
 
 /* ── Overdrive ─────────────────────────────────────────────────────────── */

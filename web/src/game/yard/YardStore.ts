@@ -17,6 +17,7 @@ import type { BaiterRun } from "@/game/baiter/baiterSession";
 import type { Notices } from "@/ui/maproom/Notices";
 import type { AnswerBank } from "./bankShow";
 import type { BankedByBuilding } from "./harvest";
+import type { HatcheryMarks } from "./YardHatchMarks";
 import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
 import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES, type YardKind } from "./buildingCosts";
 import { JobKind, predictCompletion, SERVER_COMPLETED_KINDS, yardJobs, type YardJob } from "./jobs";
@@ -233,6 +234,13 @@ export interface YardSceneHooks {
    * or null when nothing flies. Absent where there is no yard drawn.
    */
   startBank?(predicted: BankedByBuilding): AnswerBank | null;
+  /**
+   * Numbers the hatcheries in the yard and outlines the chosen one while the
+   * Hatch tab is open (#268), or clears them when passed null. The scene
+   * also moves an open hatchery panel to the chosen one. Absent where there
+   * is no yard drawn.
+   */
+  markHatcheries?(marks: HatcheryMarks | null): void;
 }
 
 /** Handed to the building panel (WP1.5) and the HUD (WP1.6) on the player's own yard. */

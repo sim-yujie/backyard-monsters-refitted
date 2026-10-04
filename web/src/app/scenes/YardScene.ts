@@ -52,6 +52,7 @@ import {
   type YardChange,
   type YardUiBinding,
 } from "@/game/yard/YardStore";
+import type { HatcheryMarks } from "@/game/yard/YardHatchMarks";
 import { YardRenderer, YardView } from "@/game/yard/YardRenderer";
 import { CompareView, pointerInPlanPane } from "@/game/yard/CompareView";
 import { YardInput } from "@/game/yard/YardInput";
@@ -65,6 +66,7 @@ import { ShopScreen } from "@/ui/yard/ShopScreen";
 import { MailDoor } from "@/ui/mail/MailDoor";
 import {
   MONSTERS_TAB_ORDER,
+  MonsterBuilding,
   MonstersTabId,
   monstersTabFor,
   type MonstersFocus,
@@ -1072,6 +1074,25 @@ export class YardScene implements Scene {
   }
 
   /**
+   * The Hatch tab's hatchery numbers and its chosen hatchery (#268), drawn
+   * over the yard. An open hatchery panel follows the window's choice, so the
+   * panel, the outline and the window all name the same building.
+   */
+  private markHatcheries(marks: HatcheryMarks | null): void {
+    this.renderer.setHatcheryMarks(marks);
+    const chosen = marks?.chosen ?? null;
+    const selected = this.selected;
+    if (chosen === null || !this.panel || !selected || selected.id === chosen) return;
+    if (selected.type !== MonsterBuilding.HATCHERY) return;
+    const building = this.yard?.buildings.find((one) => one.id === chosen);
+    if (!building) return;
+    this.selected = building;
+    this.renderer.setSelected(building);
+    this.panel.show(building);
+    guideBus.emit("panel", { building: { id: building.id, type: building.type } });
+  }
+
+  /**
    * The mailbox docks where the Monsters screen, the Shop and the building
    * panel do (#193), so they make way as it opens, as they do for each other.
    * The planner hides the dock, and with it the Mail button.
@@ -1645,6 +1666,7 @@ export class YardScene implements Scene {
         },
         openShop: () => this.openShop(),
         startBank: (predicted) => this.startBank(predicted),
+        markHatcheries: (marks) => this.markHatcheries(marks),
       },
       notices: this.notices,
     };

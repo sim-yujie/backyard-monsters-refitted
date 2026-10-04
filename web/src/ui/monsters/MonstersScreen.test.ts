@@ -217,6 +217,23 @@ describe("MonstersScreen: the tab contract", () => {
     expect(spy.calls).toContain("destroy");
   });
 
+  it("tells the visible tab when it is hidden: another tab, or the screen closing", () => {
+    const { spy, tabs } = withSpy();
+    const hidden = vi.fn();
+    spy.tab.hide = hidden;
+    const { screen } = setup([HALL, LOCKER, building(4, 13, 1)], { tabs });
+    screen.open("hatch");
+    screen.open("hatch", { buildingId: 4 });
+    expect(hidden).not.toHaveBeenCalled();
+    screen.open("unlock");
+    expect(hidden).toHaveBeenCalledTimes(1);
+    screen.open("hatch");
+    screen.close();
+    expect(hidden).toHaveBeenCalledTimes(2);
+    screen.close();
+    expect(hidden).toHaveBeenCalledTimes(2);
+  });
+
   it("does not create a tab whose building is missing", () => {
     const { create, tabs } = withSpy();
     const { screen } = setup([HALL, LOCKER], { tabs });

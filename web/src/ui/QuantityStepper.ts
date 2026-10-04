@@ -1,5 +1,6 @@
 /**
- * The shared quantity control: a number box between `−` and `+`, and Fill
+ * The shared quantity control: a number box between `−` and `+`, optional
+ * bigger steps (`+5`, `+10`), and Fill
  * (`docs/design/yard-buildings.md` §4.4, decision D9). The attack's Army
  * panel uses it for each monster row and the Hatch tab for its batch size, so
  * the two screens hold, type and fill the same way.
@@ -150,6 +151,11 @@ export interface QuantityStepperOptions {
   readonly moreLabel: string;
   /** Fill's hover text. */
   readonly fillTitle: string;
+  /**
+   * Bigger steps offered as buttons between `+` and Fill, `+5` and `+10` for
+   * the Hatch tab (#268). None when absent.
+   */
+  readonly jumps?: readonly number[];
   /** The owner's count now. */
   value(): number;
   /** Asks the owner for a new count; the owner clamps it. */
@@ -181,6 +187,8 @@ export class QuantityStepper {
   readonly input: HTMLInputElement;
   readonly minus: HTMLButtonElement;
   readonly plus: HTMLButtonElement;
+  /** The `+5`-style buttons, in `jumps` order. */
+  readonly jumps: readonly HTMLButtonElement[];
   readonly fill: HTMLButtonElement;
 
   private readonly options: QuantityStepperOptions;
@@ -239,10 +247,18 @@ export class QuantityStepper {
     this.plus.setAttribute("aria-label", options.moreLabel);
     this.cancelHolds.push(holdToRepeat(this.plus, () => this.step(1)));
 
+    this.jumps = (options.jumps ?? []).map((size) => {
+      const jump = stepButton(`btn qty-stepper__step qty-stepper__jump ${block}__jump`, `+${size}`, () =>
+        this.step(size),
+      );
+      jump.setAttribute("aria-label", `${size} more`);
+      return jump;
+    });
+
     this.fill = stepButton(`btn btn--outline qty-stepper__fill ${block}__fill`, "Fill", () => options.fill());
     this.fill.title = options.fillTitle;
 
-    this.element.append(this.minus, input, this.plus, this.fill);
+    this.element.append(this.minus, input, this.plus, ...this.jumps, this.fill);
   }
 
   /** Draws the owner's state: the box (when it may be rewritten), its maximum and the buttons. */
@@ -252,6 +268,7 @@ export class QuantityStepper {
     this.input.disabled = state.disabled;
     this.minus.disabled = state.disabled || state.value <= 0;
     this.plus.disabled = state.disabled || state.value >= state.max;
+    for (const jump of this.jumps) jump.disabled = this.plus.disabled;
     this.fill.disabled = state.disabled || state.value >= state.max;
   }
 
