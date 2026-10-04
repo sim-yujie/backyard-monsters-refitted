@@ -3,6 +3,7 @@ import { Status } from "../../enums/StatusCodes.js";
 import { User } from "../../database/models/user.model.js";
 import { redis } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { presenceAnswer } from "../../services/user/presenceAnswer.js";
 
 /**
  * How long one ping keeps the player online, in seconds: the life every other
@@ -23,16 +24,37 @@ export const PRESENCE_TTL_SECONDS = 120;
  * while its tab is visible and the player is on any screen of the game: a
  * revenge lands only while the player is away.
  *
- * It only refreshes the key: no save is read or written, so it costs one
- * Redis write. It is not a real game action (#271): a ping says a game is
- * open, not that anyone is playing it, and a player online by pings alone
- * reads as offline ten minutes after their last real action
- * (`services/user/online.ts`).
+ * It refreshes the key and reads two more: no save is written, and one is
+ * read only while an attack session runs on the main yard. It is not a real
+ * game action (#271): a ping says a game is open, not that anyone is playing
+ * it, and a player online by pings alone reads as offline ten minutes after
+ * their last real action (`services/user/online.ts`).
+ *
+ * The answer (#275, `PresenceAnswer`) carries the server's clock, the last
+ * real action, for the client's "Stay protected?" prompt, and an attack on
+ * the main yard, for the banner that locks the yard while it runs.
  */
 export const presence: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  await redis.setex(`last-seen:main:${user.userid}`, PRESENCE_TTL_SECONDS, getCurrentDateTime().toString());
+  const now = getCurrentDateTime();
+  await redis.setex(`last-seen:main:${user.userid}`, PRESENCE_TTL_SECONDS, now.toString());
 
   ctx.status = Status.OK;
-  ctx.body = { error: 0 };
+  ctx.body = { error: 0, ...(await presenceAnswer(user, now)) };
+};
+
+/**
+ * `POST /api/:apiVersion/bm/presence/stay` — the "Stay protected?" prompt's
+ * tap (#275): a real game action (`realActions.ts`), so the middleware moves
+ * `last-action` to now once this answers, and the player is online again for
+ * ten minutes. It refreshes the presence mark too, as a ping does, and
+ * answers like one, with `lastAction` already now.
+ */
+export const stayProtected: KoaController = async (ctx) => {
+  const user: User = ctx.authUser;
+  const now = getCurrentDateTime();
+  await redis.setex(`last-seen:main:${user.userid}`, PRESENCE_TTL_SECONDS, now.toString());
+
+  ctx.status = Status.OK;
+  ctx.body = { error: 0, ...(await presenceAnswer(user, now, now)) };
 };

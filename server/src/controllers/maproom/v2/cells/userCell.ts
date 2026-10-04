@@ -40,7 +40,7 @@ type Cell = Loaded<WorldMapCell, "save", UserCellFields>;
  */
 export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number, UserCellOwner>) => {
   const currentUser: User = ctx.authUser;
-  const { lastSeen, truces, pendingInvites } = ctx.state;
+  const { online: onlineNow, truces, pendingInvites } = ctx.state;
 
   const mine = currentUser.userid === cell.uid;
   const cellOwner = mine ? currentUser : cellOwners.get(cell.uid);
@@ -52,7 +52,8 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
 
   const homeCell = cell.base_type === MapRoomCell.HOMECELL;
     
-  const online = homeCell && (lastSeen.get(cell.uid) ?? 0) >= currentTime - 60;
+  // The online rule of #271, read for every owner by `getArea` (#275).
+  const online = homeCell && onlineNow.has(cell.uid);
   const isUnderAttack = homeCell && isAttackActive(cellSave);
 
   let locked = cellSave.locked;

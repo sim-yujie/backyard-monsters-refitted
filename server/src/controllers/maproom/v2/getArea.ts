@@ -9,11 +9,10 @@ import { Status } from "../../../enums/StatusCodes.js";
 import { createCellData } from "../../../services/maproom/v2/createCellData.js";
 import { generateNoise, getTerrainHeight } from "../../../services/maproom/v2/generateMap.js";
 import { MapRoom2, MapRoomCell, MapRoomVersion } from "../../../enums/MapRoom.js";
-import { getLastSeen } from "../../../services/maproom/getLastSeen.js";
+import { onlinePlayers } from "../../../services/user/online.js";
 import { getTruces } from "../../../services/maproom/getTruces.js";
 import { pendingInvitesOn } from "../../../services/mail/inviteRules.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
-import { BaseType } from "../../../enums/Base.js";
 import { mapRoomDisabledErr } from "../../../errors/errors.js";
 import { getAllianceRoster } from "../../../services/alliance/allianceData.js";
 import { visibleCredits } from "../../../services/user/shinyLock.js";
@@ -146,19 +145,21 @@ export const getArea: KoaController = async (ctx) => {
     .filter((cell) => cell.uid === user.userid && cell.base_type === MapRoomCell.OUTPOST)
     .map((cell) => cell.baseid);
 
-  const [ownersList, lastSeen, truces, pendingInvites] = await Promise.all([
+  const [ownersList, online, truces, pendingInvites] = await Promise.all([
     postgres.em.find(User, { userid: { $in: ownerIds } }, {
       populate: ["save"],
       fields: CELL_OWNER_FIELDS,
     }),
-    getLastSeen(ownerIds, BaseType.MAIN),
+    // The online rule of #271, in the attack load's window: the lock shows
+    // only on a player who really cannot be attacked (#275).
+    onlinePlayers(ownerIds, getCurrentDateTime()),
     getTruces(user.userid, ownerIds),
     pendingInvitesOn(postgres.em, user.userid, ownOutposts, getCurrentDateTime()),
   ]);
 
   const cellOwners = new Map(ownersList.map((u) => [u.userid, u]));
 
-  ctx.state.lastSeen = lastSeen;
+  ctx.state.online = online;
   ctx.state.truces = truces;
   ctx.state.pendingInvites = pendingInvites;
 

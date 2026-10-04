@@ -80,6 +80,38 @@ export const readPresenceMarks = async (userid: number, now: number): Promise<Pr
 export const isPlayerOnline = async (userid: number, now: number, seenWithinSeconds: number): Promise<boolean> =>
   isOnline(await readPresenceMarks(userid, now), now, seenWithinSeconds);
 
+/**
+ * Which of these players are online now, read in one Redis call: the dots
+ * and flags other players see (#275), Map Room 2's cells, the Map Room 1
+ * neighbour lists and the alliance tables. They use the attack load's window
+ * by default, so "online" shows only on a player who really cannot be
+ * attacked.
+ */
+export const onlinePlayers = async (
+  userids: readonly number[],
+  now: number,
+  seenWithinSeconds: number = ATTACK_ONLINE_SECONDS
+): Promise<Set<number>> => {
+  const online = new Set<number>();
+  if (userids.length === 0) return online;
+  const keys = userids.flatMap((userid) => [lastSeenKey(userid), lastActionKey(userid), challengeKey(userid)]);
+  const values = await redis.mget(...keys);
+  userids.forEach((userid, i) => {
+    const [seen, action, challenge] = values.slice(i * 3, i * 3 + 3);
+    const marks: PresenceMarks = {
+      lastSeen: timeOf(seen, now),
+      lastAction: timeOf(action, now),
+      challengePending: challenge !== null && challenge !== undefined,
+    };
+    if (isOnline(marks, now, seenWithinSeconds)) online.add(userid);
+  });
+  return online;
+};
+
+/** The player's last real action, unix seconds, or null when none counts any more. */
+export const readLastAction = async (userid: number, now: number): Promise<number | null> =>
+  timeOf(await redis.get(lastActionKey(userid)), now);
+
 /** Records a real game action (`realActions.ts`); the key lives as long as it counts. */
 export const recordRealAction = async (userid: number, now: number): Promise<void> => {
   await redis.setex(lastActionKey(userid), REAL_ACTION_WINDOW_SECONDS, String(now));

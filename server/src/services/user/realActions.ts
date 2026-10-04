@@ -124,6 +124,8 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   { method: "POST", path: "/api/:apiVersion/bm/yardplanner/apply" },
   { method: "POST", path: "/api/:apiVersion/bm/yardplanner/walls/upgrade" },
   { method: "POST", path: "/api/:apiVersion/bm/yardplanner/traps/rearm" },
+  // The "Stay protected?" prompt's tap (#275): the player said they are there.
+  { method: "POST", path: "/api/:apiVersion/bm/presence/stay" },
   // Yard actions.
   ...REAL_ACTION_YARD_PATHS.map((path): RealActionRoute => ({ method: "POST", path: `${YARD_ROUTE_PREFIX}${path}` })),
 ];

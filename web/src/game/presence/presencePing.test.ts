@@ -144,6 +144,35 @@ describe("PresencePing", () => {
     release();
   });
 
+  it("pings at once when asked, counts the next 30 seconds from there, and hands every answer on (#275)", async () => {
+    const answers: unknown[] = [];
+    const answering = new PresencePing({
+      ping: async () => {
+        pings += 1;
+        return { error: 0, now: 1 };
+      },
+      signedIn: () => signedIn,
+      now: () => Date.now(),
+    });
+    const stop = answering.onAnswer((answer) => answers.push(answer));
+    const release = answering.hold();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(pings).toBe(1);
+    answering.pingNow();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(pings).toBe(2);
+    await vi.advanceTimersByTimeAsync(PRESENCE_INTERVAL_MS - 1);
+    expect(pings).toBe(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(pings).toBe(3);
+    expect(answers).toEqual([{ error: 0, now: 1 }, { error: 0, now: 1 }, { error: 0, now: 1 }]);
+    stop();
+    signedIn = false;
+    answering.pingNow();
+    expect(pings).toBe(3);
+    release();
+  });
+
   it("removes its listener once released", () => {
     const release = ping.hold();
     release();

@@ -18,6 +18,11 @@ export interface NeighbourData {
   attacker?: string;
   friend?: number;
   saved?: number;
+  /**
+   * 1 while the neighbour is online and so cannot be attacked, by the rule
+   * the attack load applies (#275); `saved` alone is only a presence mark.
+   */
+  online?: number;
   attackpermitted?: number;
   /** When the neighbour's damage protection ends (unix seconds); 0 without any. */
   protectedUntil?: number;

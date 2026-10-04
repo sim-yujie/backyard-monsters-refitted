@@ -21,6 +21,9 @@ import { sendPresence } from "@/api/presence";
  * hold on entry and gives it back on exit (`app/presenceScene.ts`), so it
  * runs only in the game, and moving between screens neither doubles the ping
  * nor sends an extra one.
+ *
+ * Its answer (#275) carries the server's clock, the last real action and an
+ * attack on the main yard; whoever needs them listens with `onAnswer`.
  */
 
 /** How often the ping goes while the tab is visible. */
@@ -39,6 +42,7 @@ export class PresencePing {
   private readonly ping: () => Promise<unknown>;
   private readonly signedIn: () => boolean;
   private readonly now: () => number;
+  private readonly listeners = new Set<(answer: unknown) => void>();
   private holders = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   /** When the last ping went, or never. */
@@ -48,6 +52,25 @@ export class PresencePing {
     this.ping = options.ping;
     this.signedIn = options.signedIn;
     this.now = options.now ?? Date.now;
+  }
+
+  /** Hears every answer from now on (#275); returns the unsubscribe. */
+  onAnswer(listener: (answer: unknown) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  /**
+   * Pings now, whatever the timer says, and counts the next 30 seconds from
+   * here: a refused yard action asks whether an attack is on (#275). Nothing
+   * goes while signed out.
+   */
+  pingNow(): void {
+    if (!this.signedIn()) return;
+    this.send();
+    if (this.holders > 0) this.schedule();
   }
 
   /** Whether some screen holds the ping. */
@@ -89,13 +112,20 @@ export class PresencePing {
   private readonly fire = (): void => {
     this.timer = null;
     if (this.holders === 0 || document.visibilityState === "hidden") return;
-    if (this.signedIn()) {
-      this.lastPing = this.now();
-      this.ping().catch(() => {});
-    }
+    if (this.signedIn()) this.send();
     // From now, not from the last ping: signed out, there is none to count from.
     this.timer = setTimeout(this.fire, PRESENCE_INTERVAL_MS);
   };
+
+  private send(): void {
+    this.lastPing = this.now();
+    this.ping().then(
+      (answer) => {
+        for (const listener of [...this.listeners]) listener(answer);
+      },
+      () => {},
+    );
+  }
 
   private clear(): void {
     if (this.timer !== null) clearTimeout(this.timer);

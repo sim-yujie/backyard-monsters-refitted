@@ -3,7 +3,8 @@ import type { Context } from "koa";
 
 /**
  * The web presence ping (#242) refreshes the player's own "online" key with
- * the same 120-second life as a yard load, and nothing else.
+ * the same 120-second life as a yard load, and writes nothing else. Its
+ * answer (#275) is covered by `services/user/onlineFollowups.test.ts`.
  */
 
 const writes: [string, number, string][] = [];
@@ -11,6 +12,7 @@ const writes: [string, number, string][] = [];
 mock.module("../../server.js", () => ({
   postgres: { em: {} },
   redis: {
+    get: async () => null,
     setex: async (key: string, ttl: number, value: string) => {
       writes.push([key, ttl, value]);
       return "OK";
@@ -27,7 +29,7 @@ describe("presence", () => {
     await presence(ctx, async () => {});
 
     expect(ctx.status).toBe(200);
-    expect(ctx.body).toEqual({ error: 0 });
+    expect(ctx.body).toMatchObject({ error: 0, lastAction: 0 });
     expect(writes).toHaveLength(1);
     const [key, ttl, value] = writes[0]!;
     expect(key).toBe("last-seen:main:2505");

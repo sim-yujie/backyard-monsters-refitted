@@ -290,6 +290,13 @@ export interface YardStoreOptions {
   hatchRefreshDelayMs?: number;
   /** Called when a request comes back 401/403; the scene sends the player to log in. */
   onAuthFailure?: () => void;
+  /**
+   * Called when the server refuses a request because the yard is being
+   * attacked (`underAttack`, #275): the scene asks whether an attack is on
+   * and locks the yard. The refusal still reaches the caller, with the
+   * server's own sentence.
+   */
+  onUnderAttack?: () => void;
 }
 
 /** One second, the coalescing window of §2.4. */
@@ -329,6 +336,9 @@ interface QueuedRefresh {
 
 type QueueEntry = QueuedAction | QueuedRefresh;
 
+/** The refusal's `reason` while the yard is being attacked (`yardUnderAttackErr`). */
+export const UNDER_ATTACK = "underAttack";
+
 /** The key a `state` call runs under. */
 export const REFRESH_KEY = "state";
 
@@ -347,6 +357,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
   private readonly refreshDelayMs: number;
   private readonly hatchRefreshDelayMs: number;
   private readonly onAuthFailure: (() => void) | undefined;
+  private readonly onUnderAttack: (() => void) | undefined;
   private readonly listeners = new Set<YardListener>();
 
   /** Server clock minus browser clock, seconds, from the latest answer. */
@@ -380,6 +391,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     this.refreshDelayMs = options.refreshDelayMs ?? REFRESH_DELAY_MS;
     this.hatchRefreshDelayMs = options.hatchRefreshDelayMs ?? HATCH_REFRESH_DELAY_MS;
     this.onAuthFailure = options.onAuthFailure;
+    this.onUnderAttack = options.onUnderAttack;
     this.target = options.target ?? MAIN_YARD;
     this.baseid = outpostBaseid(this.target);
     this.yardArgs = this.baseid === undefined ? [] : [this.baseid];
@@ -698,6 +710,9 @@ export class YardStore implements YardStoreReader, YardStoreActions {
         // Nothing to update any more; the caller still hears how it ended.
       } else if (refusal.reason === "auth") {
         this.onAuthFailure?.();
+      } else if (refusal.reason === UNDER_ATTACK) {
+        // Nothing to fetch: the yard answers nothing until the attack ends.
+        this.onUnderAttack?.();
       } else if (refusal.status === 409 && entry.type === "action") {
         // The yard said no to something the client thought it could do, so
         // what the client holds is stale: fetch the server's version.

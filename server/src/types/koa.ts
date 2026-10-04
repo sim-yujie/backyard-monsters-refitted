@@ -3,7 +3,8 @@ import type { Truces } from "../services/maproom/getTruces.js";
 
 declare module "koa" {
   interface DefaultState {
-    lastSeen: Map<number, number>;
+    /** The cell owners online now (#275, `services/user/online.ts`). */
+    online: ReadonlySet<number>;
     truces: Truces;
   }
 

@@ -15,7 +15,7 @@ const now = () => Math.floor(Date.now() / 1000);
 
 const ctx = {
   authUser: { userid: 2505 },
-  state: { lastSeen: new Map(), truces: new Map() },
+  state: { online: new Set(), truces: new Map() },
 } as unknown as Context;
 
 const owners = new Map([
@@ -63,7 +63,7 @@ describe("userCell invitation pending (#205)", () => {
   const OUTPOST = "2000240208";
   const withInvite = {
     authUser: { userid: OWNER, save: { basesaveid: 1 } },
-    state: { lastSeen: new Map(), truces: new Map(), pendingInvites: new Map([[OUTPOST, 41]]) },
+    state: { online: new Set(), truces: new Map(), pendingInvites: new Map([[OUTPOST, 41]]) },
   } as unknown as Context;
   const own = new Map() as unknown as Parameters<typeof userCell>[2];
   // No basesaveid on the save: the owner's own monsters are then the stored ones, with no database read.

@@ -50,7 +50,7 @@ import { infernoSave } from "./controllers/inferno/infernoSave.js";
 import { infernoMonsters } from "./controllers/inferno/infernoMonsters.js";
 import { getNeighbours } from "./controllers/maproom/getNeighbours.js";
 import { getMapRoom1 } from "./controllers/maproom/getMapRoom1.js";
-import { presence } from "./controllers/maproom/presence.js";
+import { presence, stayProtected } from "./controllers/maproom/presence.js";
 
 import { getArea } from "./controllers/maproom/v2/getArea.js";
 import { getSnapshot } from "./controllers/maproom/v2/bulk/getSnapshot.js";
@@ -166,6 +166,8 @@ router.post("/api/:apiVersion/bm/neighbours/get", apiVersion, verifyUserAuth, lo
 router.get("/api/:apiVersion/bm/maproom1", apiVersion, verifyUserAuth, getMapRoom1);
 // The web client's presence ping (#242), every 30 s while its tab is visible, so not echoed by logRequest.
 router.post("/api/:apiVersion/bm/presence", apiVersion, verifyUserAuth, presence);
+// The "Stay protected?" tap (#275): a real game action, unlike the ping.
+router.post("/api/:apiVersion/bm/presence/stay", apiVersion, verifyUserAuth, logRequest, stayProtected);
 
 /**  ────────────────────────────────────────────────
 * 📦 Map Room 2

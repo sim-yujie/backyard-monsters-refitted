@@ -5,7 +5,7 @@ import type { Alliance } from "../../database/models/alliance.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
-import { getLastSeen } from "../maproom/getLastSeen.js";
+import { onlinePlayers } from "../user/online.js";
 import { getCachedWorlds } from "../maproom/knownWorlds.js";
 import { ALLIANCE_MEMBER_FIELDS, toAllianceMember, type AllianceMember } from "./allianceMember.js";
 
@@ -54,10 +54,10 @@ export const getSuggestedMembers = async (alliance: Alliance): Promise<AllianceM
     },
   );
 
-  const lastSeen = await getLastSeen(candidates.map((user) => user.userid), BaseType.MAIN);
   const now = getCurrentDateTime();
+  const online = await onlinePlayers(candidates.map((user) => user.userid), now);
 
   return candidates
-    .map((user) => toAllianceMember(user, lastSeen, now))
+    .map((user) => toAllianceMember(user, online, now))
     .filter((user) => user !== null);
 };

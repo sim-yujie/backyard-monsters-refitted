@@ -1130,6 +1130,98 @@ body {
   max-width: 26rem;
 }
 
+/* "Stay protected?" (#275): a small card, nothing behind it blocked. */
+.stay-protected {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  left: 50%;
+  z-index: var(--z-system);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: min(92vw, 28rem);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--colour-warning-line);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+  transform: translateX(-50%);
+}
+
+.stay-protected__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.stay-protected__title {
+  color: var(--colour-warning-text);
+}
+
+.stay-protected__line {
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.stay-protected--over {
+  border-color: var(--colour-danger);
+}
+
+.stay-protected--over .stay-protected__title {
+  color: var(--colour-danger);
+}
+
+.stay-protected__button {
+  flex: none;
+}
+
+/* The own yard while someone attacks it (#275): everything behind is locked. */
+.yard-attack-lock {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: start center;
+  padding: calc(var(--hud-height) + var(--space-5)) var(--space-4) var(--space-4);
+  background: var(--colour-scrim);
+}
+
+.yard-attack-lock__banner {
+  max-width: min(92vw, 30rem);
+  padding: var(--space-4) var(--space-5);
+  border: 2px solid var(--colour-danger);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+}
+
+.yard-attack-lock__banner p {
+  margin: var(--space-2) 0 0;
+}
+
+.yard-attack-lock__title {
+  margin: 0;
+  color: var(--colour-danger);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  line-height: var(--leading-tight);
+}
+
+.yard-attack-lock__countdown {
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.yard-attack-lock__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
+
 .boot-status {
   display: flex;
   flex-direction: column;

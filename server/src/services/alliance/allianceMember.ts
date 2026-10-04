@@ -6,7 +6,8 @@ import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { calculateEmpirePoints } from "../base/calculateEmpirePoints.js";
 import { calculateBaseLevel } from "../base/calculateBaseLevel.js";
-import { getLastSeen } from "../maproom/getLastSeen.js";
+import { onlinePlayers } from "../user/online.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 
 export interface AllianceDetails {
   online: number;
@@ -55,13 +56,13 @@ const MEMBER_SUMMARY_FIELDS = [
  * Describes one player for the Members and Suggested tables.
  *
  * @param {LoadedMember} member - The user to describe, read with ALLIANCE_MEMBER_FIELDS.
- * @param {Map<number, number>} lastSeen - Who is currently online, by user id.
+ * @param {ReadonlySet<number>} online - Who is online now (`onlinePlayers`, #275).
  * @param {number} now - Current epoch seconds, for the damage protection window.
  * @returns {AllianceMember | null} The player, or null when they have no main base.
  */
 export const toAllianceMember = (
   member: LoadedMember, 
-  lastSeen: Map<number, number>, 
+  online: ReadonlySet<number>,
   now: number
 ): AllianceMember | null => {
   const { userid, save, alliance_role, username, pic_square } = member;
@@ -70,7 +71,7 @@ export const toAllianceMember = (
   if (!save) return null;
 
   const status = {
-    online: lastSeen.has(userid),
+    online: online.has(userid),
     damage_protection: save.protected > now,
   };
 
@@ -103,7 +104,7 @@ export const getAllianceDetails = async (allianceId: number): Promise<AllianceDe
 
   if (members.length === 0) return { online: 0, avgLevel: 0 };
 
-  const lastSeen = await getLastSeen(members.map(({ userid }) => userid), BaseType.MAIN);
+  const online = await onlinePlayers(members.map(({ userid }) => userid), getCurrentDateTime());
 
   const mainYards = members
     .map(({ save }) => save)
@@ -116,5 +117,5 @@ export const getAllianceDetails = async (allianceId: number): Promise<AllianceDe
 
   const average = mainYards.length === 0 ? 0 : Math.round(levels / mainYards.length);
 
-  return { online: lastSeen.size, avgLevel: average };
+  return { online: online.size, avgLevel: average };
 };

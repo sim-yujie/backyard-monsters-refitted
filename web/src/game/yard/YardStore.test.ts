@@ -554,6 +554,27 @@ describe("the action queue", () => {
     expect(onAuthFailure).toHaveBeenCalledTimes(1);
   });
 
+  it("hands an under-attack refusal to the scene, with the server's sentence, and fetches nothing (#275)", async () => {
+    const message = "Your yard is under attack right now. Try again when the attack is over.";
+    const refused = () =>
+      Promise.reject(
+        new ApiError(message, { status: 409, code: message, body: { error: message, reason: "underAttack" } }),
+      );
+    const onUnderAttack = vi.fn();
+    const api = stubApi({ upgrade: vi.fn(refused), state: vi.fn(refused) });
+    const time = manualTime();
+    const store = new YardStore({ save: loadWith(), api, clock: time.clock, timers: time.timers, onUnderAttack });
+
+    expect(await store.upgrade(2)).toMatchObject({ ok: false, refusal: { reason: "underAttack", message } });
+    await flush();
+    expect(onUnderAttack).toHaveBeenCalledTimes(1);
+    // A yard under attack answers nothing: no state call after the refusal.
+    expect(api.state).not.toHaveBeenCalled();
+
+    expect(await store.refresh()).toMatchObject({ ok: false, refusal: { reason: "underAttack" } });
+    expect(onUnderAttack).toHaveBeenCalledTimes(2);
+  });
+
   it("shares one queued refresh between callers", async () => {
     const pending = deferred<YardResponse<unknown>>();
     const api = stubApi({ upgrade: vi.fn(() => pending.promise) });

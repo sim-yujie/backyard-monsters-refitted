@@ -240,6 +240,20 @@ describe("words", () => {
     expect(battlesText(named("Wartwhistle"))).toBe("You attacked them 3 times");
   });
 
+  it("takes the server's word on who is online (#275): seen is not enough without a real action", () => {
+    const seen = named("Bramblefoot");
+    expect(seen.online).toBeNull();
+    expect(presenceText({ ...seen, online: false }, NOW)).toBe("Offline · last seen just now");
+    expect(presenceText({ ...seen, online: true }, NOW)).toBe("Playing now");
+    const fixture = mapRoom1Fixture(NOW);
+    const wires = fixture.neighbours ?? [];
+    const read = readMapRoom1(
+      { ...fixture, neighbours: wires.map((wire) => ({ ...wire, online: 0 })) },
+      NOW,
+    );
+    expect(read.neighbours.every((neighbour) => neighbour.online === false)).toBe(true);
+  });
+
   it("colours pins by what can be done", () => {
     expect(pinTone(named("Mossbeard"))).toBe("attacked");
     expect(pinTone(named("Nettlejaw"))).toBe("protected");

@@ -65,6 +65,12 @@ export interface MapRoom1NeighbourWire {
   baseseed?: number;
   /** Last save, unix seconds; within 62 s means they are in their yard. */
   saved?: number;
+  /**
+   * 1 while the neighbour is online and so cannot be attacked, by the
+   * server's rule (#275): a presence mark AND a real game action in the last
+   * ten minutes. `saved` is only the presence mark.
+   */
+  online?: number;
   attackpermitted?: number;
   /** The attacker's name while `attackpermitted` is UNDER_ATTACK. */
   attacker?: string;

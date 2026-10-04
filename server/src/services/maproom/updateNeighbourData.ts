@@ -5,6 +5,7 @@ import { AttackPermission, MapRoomVersion } from "../../enums/MapRoom.js";
 import { TruceStatus } from "../../enums/TruceStatus.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { getLastSeen } from "./getLastSeen.js";
+import { ATTACK_ONLINE_SECONDS, onlinePlayers } from "../user/online.js";
 import { getTruces } from "./getTruces.js";
 import { isAttackActive } from "../base/isAttackActive.js";
 import { calculateBaseLevel } from "../base/calculateBaseLevel.js";
@@ -51,7 +52,9 @@ export const updateNeighbourData = async (cachedNeighbours: NeighbourData[], bas
   const userIds = cachedNeighbours.map((neighbour) => neighbour.userid);
   const mr1Filter = baseType === BaseType.MAIN ? { mapversion: MapRoomVersion.V1 } : {};
 
-  const [neighbourUsers, neighbourSaves, lastSeens, truces] = await Promise.all([
+  const currentTime = getCurrentDateTime();
+
+  const [neighbourUsers, neighbourSaves, lastSeens, truces, online] = await Promise.all([
     postgres.em.find(
       User,
       { userid: { $in: userIds } },
@@ -67,12 +70,16 @@ export const updateNeighbourData = async (cachedNeighbours: NeighbourData[], bas
     getLastSeen(userIds, baseType),
 
     getTruces(currentUserId, userIds),
+
+    // Who is online by the rule an attack load applies (#271, #275): a main
+    // yard's needs a real action too; an Inferno yard's only its last-seen mark
+    // (`infernoModeAttack.ts`).
+    baseType === BaseType.MAIN ? onlinePlayers(userIds, currentTime) : null,
   ]);
 
   const saves = new Map(neighbourSaves.map((save) => [save.userid, save]));
   const owners = new Map(neighbourUsers.map((owner) => [owner.userid, owner]));
 
-  const currentTime = getCurrentDateTime();
   let needsFlush = false;
 
   for (const save of neighbourSaves) {
@@ -121,6 +128,9 @@ export const updateNeighbourData = async (cachedNeighbours: NeighbourData[], bas
     neighbour.baseid = neighbourSave.baseid;
     neighbour.level = calculateBaseLevel(neighbourSave.points, neighbourSave.basevalue);
     neighbour.saved = lastSeens.get(neighbour.userid) ?? 0;
+    neighbour.online = (
+      online ? online.has(neighbour.userid) : neighbour.saved >= currentTime - ATTACK_ONLINE_SECONDS
+    ) ? 1 : 0;
 
     const owner = owners.get(neighbour.userid);
 

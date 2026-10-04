@@ -16,11 +16,11 @@ import type { CellData } from "../../../types/CellData.js";
 import { getCellBounds, type Coord } from "../../../services/maproom/v3/utils/getCellBounds.js";
 import { getDefenderLevels } from "../../../services/maproom/v3/getDefenderLevels.js";
 import { TRIBE_REGEN_TIME } from "../../../config/MapRoom3Config.js";
-import { getLastSeen } from "../../../services/maproom/getLastSeen.js";
+import { onlinePlayers } from "../../../services/user/online.js";
 import { getTruces } from "../../../services/maproom/getTruces.js";
 import { getAllianceRoster } from "../../../services/alliance/allianceData.js";
 import { findRelationships } from "../../../services/alliance/relationships.js";
-import { BaseType } from "../../../enums/Base.js";
+import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { devConfig } from "../../../config/GameConfig.js";
 
 /**
@@ -214,18 +214,18 @@ export const getMapRoomCells: KoaController = async (ctx) => {
     // =========================================================================
     const ownerIds = [...new Set(dbCells.map((cell) => cell.uid).filter(Boolean))];
 
-    const [ownersList, lastSeenMap, truces] = await Promise.all([
+    const [ownersList, online, truces] = await Promise.all([
       postgres.em.find(User, { userid: { $in: ownerIds } }, {
         populate: ["save"],
         fields: CELL_OWNER_FIELDS,
       }),
-      getLastSeen(ownerIds, BaseType.MAIN),
+      onlinePlayers(ownerIds, getCurrentDateTime()),
       getTruces(user.userid, ownerIds),
     ]);
 
     const cellOwners = new Map(ownersList.map((u) => [u.userid, u]));
 
-    ctx.state.lastSeen = lastSeenMap;
+    ctx.state.online = online;
     ctx.state.truces = truces;
 
     const allianceIds = new Set<number>();

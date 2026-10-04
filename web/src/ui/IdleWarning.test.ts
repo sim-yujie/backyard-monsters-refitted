@@ -39,4 +39,21 @@ describe("IdleWarning", () => {
     expect(host.querySelector(".idle-warning")).toBeNull();
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it("its button also answers \"Stay protected?\" when that is due too (#275)", () => {
+    const host = document.createElement("div");
+    const stillHere = vi.fn();
+    const warning = new IdleWarning(host, Date.now, stillHere);
+    warning.show(Date.now() + 60_000);
+    const button = host.querySelector("button")!;
+    // The press itself answers: the click may never land, as the press takes the countdown down.
+    button.dispatchEvent(new Event("pointerdown"));
+    button.click();
+    expect(stillHere).toHaveBeenCalledTimes(1);
+    warning.hide();
+    warning.show(Date.now() + 60_000);
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(stillHere).toHaveBeenCalledTimes(2);
+    warning.hide();
+  });
 });

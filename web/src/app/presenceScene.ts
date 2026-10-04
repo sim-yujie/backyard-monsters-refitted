@@ -11,14 +11,22 @@ import type { Scene, SceneFactory } from "./SceneManager";
  * presence ping before its own `enter` and gives it back after its `exit`,
  * so the hold passes from one screen to the next with no extra ping.
  */
-export const withPresence =
-  (factory: SceneFactory, ping: Pick<PresencePing, "hold"> = presence): SceneFactory =>
+export const withPresence = (factory: SceneFactory, ping: Pick<PresencePing, "hold"> = presence): SceneFactory =>
+  withHold(factory, ping);
+
+/**
+ * A game screen that holds something for as long as it is up: the presence
+ * ping, or the "Stay protected?" watch (#275). The hold is taken before the
+ * scene's own `enter` and given back after its `exit`.
+ */
+export const withHold =
+  (factory: SceneFactory, holder: { hold(): () => void }): SceneFactory =>
   () => {
     const scene = factory();
     let release: (() => void) | null = null;
     const wrapped: Scene = {
       enter: (context) => {
-        release ??= ping.hold();
+        release ??= holder.hold();
         return scene.enter?.(context);
       },
       exit: () => {

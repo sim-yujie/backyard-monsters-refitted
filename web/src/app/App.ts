@@ -2,10 +2,15 @@ import { Application, Container } from "pixi.js";
 import { createOverlay, type Overlay } from "@/ui/overlay";
 import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager, type SceneFactory } from "./SceneManager";
-import { withPresence } from "./presenceScene";
+import { withHold, withPresence } from "./presenceScene";
 import { withIdle } from "./idleScene";
 import { IdleWatch, idleDurationText, idleTimingsFor } from "@/game/presence/idleWatch";
 import { IdleWarning } from "@/ui/IdleWarning";
+import { getAuthToken, onAnswer } from "@/api/http";
+import { stayProtected } from "@/api/presence";
+import { ProtectionWatch, protectionTimingsFor } from "@/game/presence/protectionWatch";
+import { yardAttack } from "@/game/presence/yardAttack";
+import { StayProtectedPrompt } from "@/ui/StayProtectedPrompt";
 import { BootScene } from "./scenes/BootScene";
 import { LoginScene } from "./scenes/LoginScene";
 import { MapGateScene } from "./scenes/MapGateScene";
@@ -66,6 +71,9 @@ export class App {
   private resizeObserver: ResizeObserver | null = null;
   private idle: IdleWatch | null = null;
   private idleWarning: IdleWarning | null = null;
+  private protection: ProtectionWatch | null = null;
+  private stayPrompt: StayProtectedPrompt | null = null;
+  private stopHearing: (() => void) | null = null;
 
   constructor(private readonly host: HTMLElement) {
     this.pixi = new Application();
@@ -103,25 +111,63 @@ export class App {
       this.pixi.screen.height,
     );
 
+    // "Stay protected?" nine minutes after the last real game action (#275),
+    // on the server's clock. Every answer carrying `lastAction` moves it: the
+    // presence ping's, the tap's, and every real action's own. A dev build
+    // takes `?protect=40,20` (seconds) to test.
+    const prompt = new StayProtectedPrompt(this.host, () => protection.stay());
+    const protection = new ProtectionWatch({
+      timings: protectionTimingsFor(window.location.search, import.meta.env.DEV),
+      onShow: (endsAt) => prompt.show(endsAt),
+      onHide: () => prompt.hide(),
+      stay: stayProtected,
+      account: getAuthToken,
+    });
+    this.protection = protection;
+    this.stayPrompt = prompt;
+    this.stopHearing = onAnswer(({ lastAction, now }) => {
+      if (typeof lastAction === "number") {
+        protection.hear({ lastAction, ...(typeof now === "number" && { now }) });
+      }
+    });
+
     // Ten minutes without input disconnects (#271). The 10 and the 1 minute
     // are `IDLE_TIMINGS`; a dev build takes `?idle=40,20` (seconds) to test.
+    // Its "Still there?" comes first: "Stay protected?" waits while it is up,
+    // and its button answers both when both are due.
     const scenes = this.scenes;
-    const warning = new IdleWarning(this.host);
+    const warning = new IdleWarning(this.host, Date.now, () => {
+      if (protection.due) protection.stay().catch(() => {});
+    });
     const idle = new IdleWatch({
       timings: idleTimingsFor(window.location.search, import.meta.env.DEV),
-      onWarn: (disconnectAt) => warning.show(disconnectAt),
-      onCancelWarn: () => warning.hide(),
-      onDisconnect: () => scenes.goTo(SceneName.AWAY),
+      onWarn: (disconnectAt) => {
+        protection.suppress(true);
+        warning.show(disconnectAt);
+      },
+      onCancelWarn: () => {
+        warning.hide();
+        protection.suppress(false);
+      },
+      onDisconnect: () => {
+        protection.stop();
+        scenes.goTo(SceneName.AWAY);
+      },
     });
     this.idle = idle;
     this.idleWarning = warning;
-    if (import.meta.env.DEV) (globalThis as Record<string, unknown>)["__idle"] = idle;
+    if (import.meta.env.DEV) {
+      const dev = globalThis as Record<string, unknown>;
+      dev["__idle"] = idle;
+      dev["__protection"] = protection;
+      dev["__yardAttack"] = yardAttack;
+    }
 
     // Every screen past sign-in keeps the player online (#242, `presenceScene.ts`)
     // and is watched for the idle disconnect, which an attack or a replay
     // (the Baiter's practice and a Watch included) holds off until it is left.
     const game = (factory: SceneFactory, defer = false): SceneFactory =>
-      withPresence(withIdle(factory, idle, { defer }));
+      withPresence(withHold(withIdle(factory, idle, { defer }), protection));
     this.scenes
       .register(SceneName.BOOT, () => new BootScene())
       .register(SceneName.LOGIN, () => new LoginScene())
@@ -158,9 +204,20 @@ export class App {
     this.resizeObserver = null;
     this.idle?.destroy();
     this.idle = null;
-    if (import.meta.env.DEV) delete (globalThis as Record<string, unknown>)["__idle"];
+    if (import.meta.env.DEV) {
+      const dev = globalThis as Record<string, unknown>;
+      delete dev["__idle"];
+      delete dev["__protection"];
+      delete dev["__yardAttack"];
+    }
     this.idleWarning?.hide();
     this.idleWarning = null;
+    this.stopHearing?.();
+    this.stopHearing = null;
+    this.protection?.stop();
+    this.protection = null;
+    this.stayPrompt?.hide();
+    this.stayPrompt = null;
     this.pixi.renderer.off("resize", this.handleResize);
     this.scenes?.destroy();
     this.scenes = null;

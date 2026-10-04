@@ -43,6 +43,9 @@ import {
   type OwnYardTarget,
 } from "@/game/yard/ownYards";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
+import { isUnderAttackRefusal, YardAttackGuard } from "@/game/yard/yardAttackGuard";
+import { yardAttack } from "@/game/presence/yardAttack";
+import { UnderAttackLock } from "@/ui/yard/UnderAttackLock";
 import { withStoredDecorations } from "@/game/yard/decorStorage";
 import { consumeYardIntent, type YardIntent } from "@/game/yard/yardIntent";
 import { yardLifeOf } from "@/game/yard/yardLifeModel";
@@ -244,6 +247,11 @@ export class YardScene implements Scene {
   private kitPicker: StarterKitPicker | null = null;
   /** Picks a tapped mushroom on the own yard (§5.6); null on a foreign one. */
   private mushroomPicker: MushroomPicker | null = null;
+  /**
+   * Locks the own yard while someone attacks it, and reloads it after
+   * (#275, `yardAttackGuard.ts`); null on a visit.
+   */
+  private attackGuard: YardAttackGuard | null = null;
 
   private yard: Yard | null = null;
   /** The save the yard was built from; on the own yard, always the store's. */
@@ -445,11 +453,15 @@ export class YardScene implements Scene {
     this.panelDock.className = "map-dock map-dock--right";
     context.overlay.content.append(this.panelDock);
 
+    if (!target) this.startAttackGuard(context);
+
     await this.load();
   }
 
   exit(): void {
     for (const unregister of this.unregisterTargets.splice(0)) unregister();
+    this.attackGuard?.destroy();
+    this.attackGuard = null;
     window.removeEventListener("keydown", this.onKeyDown);
     document.removeEventListener("visibilitychange", this.onVisibilityChange);
     this.dropStore();
@@ -672,6 +684,15 @@ export class YardScene implements Scene {
     } catch (caught) {
       if (caught instanceof ApiError && caught.isAuthFailure) {
         context.goTo(SceneName.LOGIN);
+        return;
+      }
+      // Someone is attacking it: the lock says so, and loads it once they are done.
+      if (!target && this.attackGuard && isUnderAttackRefusal(caught)) {
+        this.attackGuard.refused();
+        if (this.status) {
+          this.status.hidden = false;
+          this.status.textContent = "Your yard opens when the attack is over.";
+        }
         return;
       }
       this.notices.show(
@@ -1673,6 +1694,7 @@ export class YardScene implements Scene {
       onAuthFailure: () => {
         if (this.context === context) context.goTo(SceneName.LOGIN);
       },
+      onUnderAttack: () => this.attackGuard?.refused(),
     });
     this.store = store;
     this.unsubscribeStore = store.subscribe((change) => this.onStoreChange(change));
@@ -1801,6 +1823,36 @@ export class YardScene implements Scene {
    * The yard switcher picked another own yard: the yard screen opens again
    * on it. Not over the planner, whose unsaved plan the switch would drop.
    */
+  /**
+   * The own yard's lock while it is attacked (#275): a scrim and a banner on
+   * the modal layer, over every door and panel, with the map still open.
+   */
+  private startAttackGuard(context: SceneContext): void {
+    const lock = new UnderAttackLock({
+      serverNow: () => this.store?.now() ?? yardAttack.serverNow(),
+      onMap: () => this.openMap(),
+    });
+    this.attackGuard = new YardAttackGuard({
+      watch: yardAttack,
+      view: {
+        show: (by, ends) => lock.show(context.overlay.modal, by, ends),
+        hide: () => lock.hide(),
+      },
+      reload: () => this.reloadOwnYard(),
+    });
+  }
+
+  /** Opens this own yard afresh, as the server has it now: after an attack (#275). */
+  private reloadOwnYard(): void {
+    const context = this.context;
+    if (!context) return;
+    if (this.own.kind === "outpost") {
+      const { takenOver: _shown, ...again } = this.own;
+      setOwnYardTarget(again);
+    }
+    context.goTo(SceneName.YARD);
+  }
+
   private openOwnYard(target: OwnYardTarget): void {
     const context = this.context;
     if (!context || sameYard(target, this.own)) return;
@@ -2002,6 +2054,7 @@ export class YardScene implements Scene {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (this.attackGuard?.locked) return;
     if (event.key !== "p" && event.key !== "P") return;
     const target = event.target;
     if (

@@ -77,6 +77,21 @@ export const setAuthToken = (token: string | null): void => {
 
 export const getAuthToken = (): string | null => authToken;
 
+type AnswerListener = (envelope: ApiEnvelope) => void;
+const answerListeners = new Set<AnswerListener>();
+
+/**
+ * Hears every successful answer, whatever sent it: a real game action's
+ * answer carries `lastAction` (#275), which the "Stay protected?" prompt
+ * measures from. Returns the unsubscribe.
+ */
+export const onAnswer = (listener: AnswerListener): (() => void) => {
+  answerListeners.add(listener);
+  return () => {
+    answerListeners.delete(listener);
+  };
+};
+
 /** Expands `:apiVersion` in a path template and prefixes the server origin. */
 export const apiUrl = (path: string): string =>
   `${SERVER_URL}${path.replace(":apiVersion", encodeURIComponent(API_VERSION))}`;
@@ -232,7 +247,15 @@ export const send = async <T extends ApiEnvelope>(
     throw new NetworkError(`Could not reach ${url}`, cause);
   }
 
-  return unwrap<T>(response, await readBody(response));
+  const envelope = unwrap<T>(response, await readBody(response));
+  for (const listener of [...answerListeners]) {
+    try {
+      listener(envelope);
+    } catch {
+      // A listener's mistake is not the request's.
+    }
+  }
+  return envelope;
 };
 
 /** POSTs a form-encoded body and unwraps the JSON envelope. */

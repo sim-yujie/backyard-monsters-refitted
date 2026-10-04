@@ -63,6 +63,11 @@ export interface Mr1Neighbour {
   readonly seed: number;
   /** Their last save, unix seconds; 0 when never. */
   readonly lastSeen: number;
+  /**
+   * Whether the server says they are online and so cannot be attacked
+   * (#275); null from a server that does not say, when `lastSeen` decides.
+   */
+  readonly online: boolean | null;
   readonly permission: number;
   readonly attacker: string | null;
   /** Unix seconds their protection ends, when the route says. */
@@ -166,6 +171,7 @@ const readNeighbour = (wire: MapRoom1NeighbourWire, now: number): Mr1Neighbour =
     attacksTo: num(wire.attacksto),
     seed: num(wire.baseseed),
     lastSeen: num(wire.saved),
+    online: typeof wire.online === "number" ? wire.online === 1 : null,
     permission: num(wire.attackpermitted, AttackPermission.ATTACKABLE),
     attacker: typeof wire.attacker === "string" && wire.attacker ? wire.attacker : null,
     protectedUntil: num(wire.protectedUntil) > 0 ? num(wire.protectedUntil) : null,
@@ -279,8 +285,13 @@ export const readOwn = (save: BaseLoadResponse): Mr1Own => {
 /** Seconds a player counts as in their yard after a save (`PlayerLayer.as:237`). */
 export const ONLINE_SECONDS = 62;
 
+/**
+ * Whether they are in their yard and so cannot be attacked: the server's word
+ * (#275), which needs a real game action as well as a presence mark; the
+ * presence mark alone from a server that does not say.
+ */
 export const isPlayingNow = (neighbour: Mr1Neighbour, now: number): boolean =>
-  neighbour.lastSeen > 0 && neighbour.lastSeen >= now - ONLINE_SECONDS;
+  neighbour.online ?? (neighbour.lastSeen > 0 && neighbour.lastSeen >= now - ONLINE_SECONDS);
 
 /** "2 d 4 h", "31 h", "12 min": how long something lasts, two units at most. */
 export const formatSpan = (seconds: number): string => {
