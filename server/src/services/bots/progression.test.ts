@@ -13,6 +13,7 @@ import {
   PERSONAS,
   Progression,
   targetInBand,
+  wallTargets,
   yardAtPoints,
   type ProgressionBuilding,
   type ProgressionYard,
@@ -169,6 +170,51 @@ describe("walls and traps (issue #250)", () => {
     },
     { timeout: 60_000 }
   );
+});
+
+describe("wall upgrades (issue #252)", () => {
+  /** The average wall level of yards at `level`, over `seeds` seeds. */
+  const averageTier = (level: number, seeds: number): number => {
+    let levels = 0;
+    let walls = 0;
+    for (let index = 0; index < seeds; index++) {
+      const yard = yardAtPoints(level * 7919 + index * 104729, PERSONAS[index % PERSONAS.length]!, targetInBand(level, (index + 0.5) / seeds));
+      expectWithinLimits(yard);
+      for (const building of yard.buildings) {
+        if (building.t !== 17) continue;
+        levels += building.l;
+        walls++;
+      }
+    }
+    return walls === 0 ? 0 : levels / walls;
+  };
+
+  test(
+    "walls go from wood to stone and better as the level rises: mostly upgraded by levels 35-40",
+    () => {
+      const tiers = [12, 15, 20, 25, 30, 35, 40].map((level) => ({ level, tier: averageTier(level, 6) }));
+      // Town Hall 2 builds wood only.
+      expect(tiers[0]!.tier).toBe(1);
+      for (let i = 1; i < tiers.length; i++) expect(tiers[i]!.tier).toBeGreaterThan(tiers[i - 1]!.tier);
+      expect(tiers.find((one) => one.level === 25)!.tier).toBeGreaterThan(1.5);
+      expect(tiers.find((one) => one.level === 35)!.tier).toBeGreaterThan(2.5);
+      expect(tiers.find((one) => one.level === 40)!.tier).toBeGreaterThan(4);
+    },
+    { timeout: 60_000 }
+  );
+
+  test("wallTargets: what each Town Hall stands once caught up, never fewer than the hall before", () => {
+    for (let seed = 0; seed < 50; seed++) {
+      const targets = wallTargets(seed);
+      expect(targets).toHaveLength(11);
+      for (let hall = 1; hall < targets.length; hall++) {
+        expect(targets[hall]!).toBeGreaterThanOrEqual(targets[hall - 1]!);
+        expect(targets[hall]!).toBeLessThanOrEqual(allowed(17, hall));
+      }
+      // From Town Hall 3 at least 90% of the allowance: enough to close the core (54 walls, `layout.ts`).
+      expect(targets[3]!).toBeGreaterThanOrEqual(54);
+    }
+  });
 });
 
 describe("Progression", () => {

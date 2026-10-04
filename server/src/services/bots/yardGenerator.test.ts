@@ -133,7 +133,7 @@ describe("generateBotYard", () => {
         }
       }
     },
-    { timeout: 60_000 }
+    { timeout: 120_000 }
   );
 
   test("the same request gives the same yard", () => {

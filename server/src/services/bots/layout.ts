@@ -3,42 +3,61 @@ import { TOWER_STATS } from "../../game-rules/combat/combatStatsData.js";
 import { mulberry32, type Rng } from "../../game-rules/combat/rng.js";
 import { MAX_EXPANSIONS, rectOf, withinBounds, yardSize } from "../yardplanner/layoutGeometry.js";
 import { TOWN_HALL_TYPE } from "../yardplanner/costs.js";
-import type { Persona } from "./progression.js";
+import { wallTargets, type Persona } from "./progression.js";
 
 /**
  * Where a bot's buildings stand (`docs/design/bot-neighbours.md` §4.2 step 2,
- * issues #238 and #250): a seeded layout that reads as the yard of a player
- * who follows the wiki's Base Defense Guide
+ * issues #238, #250 and #252): a seeded layout that reads as the yard of a
+ * player who follows the wiki's Base Defense Guide
  * (https://backyardmonsters.fandom.com/wiki/Base_Defense_Guide).
  *
  * ## The plan
  *
  * Each seed draws one plan up front: the Town Hall's spot near the middle of
- * the plot, and a 3 x 3 grid of walled compartments round it. The middle one
- * is the core, a box round the Town Hall and its silos alone (the guide's
- * Town Hall and Silo Death Trap); the eight round it hold the towers with the
- * harvesters in front of them. Walls fill the grid one compartment at a time,
- * the core first, then the four beside it in opposite pairs, then the corners,
- * each compartment's walls running on from walls already standing, so the
- * yard always shows closed compartments and at most one being built. Every
- * compartment has one opening two cells wide (two for the core, on opposite
- * sides): the guide's two-space hallway, which traps fill first. Walls left
- * over once the grid is closed go out as single Eye-ra bait blocks round the
- * outside, spread evenly. The grid is kept clear from the first building on
- * (plus a 10-unit walkway either side, which only a big building may back
- * onto), so walls built later always find their path free and nothing ever
- * straddles a wall line; a wall cell outside the plot is skipped until the
- * plot grows to it. The core is kept for the Town Hall, its silos and the
- * traps between them from the start too.
+ * the plot, a small walled core round it, and a 3 x 3 grid of walled
+ * compartments with the core as its middle. The core is the guide's Town Hall
+ * and Silo Death Trap: the Town Hall with two silos either side (or above and
+ * below), sized so the walls a Town Hall 3 yard stands close it
+ * ({@link CORE_LONG}, {@link CORE_SHORT}). The eight compartments round it hold
+ * the towers with the harvesters in front of them.
+ *
+ * Walls go up one compartment at a time, the core first, then the four beside
+ * it in opposite pairs, then the corners, each compartment's walls running on
+ * from walls already standing. A compartment is only started when the walls
+ * the yard will stand at its Town Hall level (`wallTargets`, the
+ * progression's own fill draws) are enough to close it, so the yard shows
+ * closed compartments and at most one being built, the one its walls are
+ * catching up on. Walls the next compartment cannot use yet double the core:
+ * a second ring hard against it, which the guide likes too, built a side at a
+ * time (a side those walls will finish first), so a part-built ring reads as
+ * a thicker wall, not a gap. Once that ring is whole, walls carry on round the
+ * grid regardless. The grid is sized so the grid and the ring hold every wall
+ * a Town Hall 10 allows ({@link TOP_WALLS}), so no wall is ever left over to
+ * stand on its own.
+ *
+ * Only the core has openings: a two-cell hallway in the middle of each of its
+ * two long sides, facing the Town Hall between the silos, and the cells of
+ * the doubling ring in front of them. Traps fill them before anything else,
+ * so a hallway is trapped from the yard's first traps on. The compartments
+ * are closed all round: on an enemy yard traps are hidden, so any other gap
+ * would read as a hole.
+ *
+ * The core, every planned wall cell and a walkway either side of it are kept
+ * clear from the first building on, so walls built later always find their
+ * path free and nothing stands in a wall line or a hallway. Only a big
+ * building may back onto a wall, and never in front of a hallway. A wall
+ * cell outside the plot waits for the plot to grow; a compartment is not
+ * started until all of it is inside.
  *
  * ## Zones
  *
- * A building's zone is measured as how far out it sits, as a share of the
- * grid's outer walls (1 is on them), most important in the middle, as the
- * guide says:
+ * A building's zone is measured as how far out it sits: 0 at the Town Hall,
+ * {@link CORE_REACH} on the core's walls, 1 on the grid's outer walls; the
+ * most important in the middle, as the guide says:
  *
- * - the Town Hall dead centre, the Storage Silos round it inside the core,
- *   a walkway apart so traps fit between them;
+ * - the Town Hall dead centre and the first four Storage Silos at the core's
+ *   corners; the fifth and sixth on spots kept for them from the start in the
+ *   two compartments walled first, just past the doubling ring;
  * - Aerial Defense Towers just outside the core by the silos, Monster
  *   Bunkers as close to the Town Hall as the core walls let them;
  * - Laser, Tesla and Railgun towers in the inner half of the compartments,
@@ -49,7 +68,7 @@ import type { Persona } from "./progression.js";
  * - the general buildings (Store, Locker, Academy, Flinger, Map Room and the
  *   like) and the monster buildings round the edge: once the plot has room
  *   outside the grid they make the guide's Never Ending Chain out there;
- * - walls on the grid, traps in its openings, then between harvesters and
+ * - walls on the plan, traps in the hallways, then between harvesters and
  *   silos and next to towers.
  *
  * Each building tries a few dozen jittered spots in its zone, plus spots
@@ -72,8 +91,8 @@ import type { Persona } from "./progression.js";
  *
  * Buildings are placed one at a time in id order, which is build order, and
  * each spot depends only on the seed, the buildings placed before it and the
- * plot the bot had at the level it was built at: each building draws from its
- * own stream of the seed. The progression's yard at a smaller target is a
+ * plot and Town Hall the bot had when it was built: each building draws from
+ * its own stream of the seed. The progression's yard at a smaller target is a
  * prefix of its yard at a bigger one (`progression.ts`), so the layout of the
  * smaller yard is a prefix of the bigger one's too.
  *
@@ -82,10 +101,9 @@ import type { Persona } from "./progression.js";
  * The plot grows with the "More Yardage" purchases a player of that level
  * usually holds ({@link expansionFor}, `storedata.ENL.q`, at most 6 like the
  * sandbox yard). A building placed at a level uses the plot of that level.
- * When the free ground is too broken up for a big building (most often a
- * second Housing at Town Hall 3 or 4, in about one yard in five), the bot buys
- * its next expansion early, as a player would, rather than build across a
- * wall line, and keeps it: every later building uses that plot too, and the
+ * When the free ground is too broken up for a big building, the bot buys its
+ * next expansion early, as a player would, rather than build across a wall
+ * line, and keeps it: every later building uses that plot too, and the
  * yard's `ENL` counts it.
  *
  * ## Decorations
@@ -115,11 +133,41 @@ const WALL_CELL = 20;
 export const WALL_TYPE = 17;
 export const TRAP_TYPES: ReadonlySet<number> = new Set([24, 117]);
 
-/** The most walls any Town Hall allows (`buildingCosts.ts`, type 17 at hall 10): the Eye-ra bait tops the grid up to it. */
+/** The Storage Silo (`buildingFootprints.ts`, 80 x 80). */
+const SILO_TYPE = 6;
+
+/** The most walls any Town Hall allows (`buildingCosts.ts`, type 17 at hall 10): the plan has a cell for each. */
 const TOP_WALLS = 400;
 
-/** Eye-ra bait blocks: at least and at most this many `[PLACEHOLDER]`. */
-const BAIT = { min: 6, max: 40 } as const;
+/**
+ * The core's inside, long side and short side: the Town Hall (130) with a
+ * silo (80) either side, 10 apart, and a silo above and below each of those.
+ * Its wall is 58 cells, 4 of them hallway, so the 54 walls the leanest Town
+ * Hall 3 stands (`WALL_FILL`, 90% of 60) close it.
+ */
+const CORE_LONG = 320;
+const CORE_SHORT = 220;
+
+/** How far out the core's walls sit on either axis, the grid's outer walls being 1 (see {@link reachAlong}). */
+const CORE_REACH = 0.35;
+
+/**
+ * How far out a distance `d` from the centre sits along one axis: the core's
+ * walls at {@link CORE_REACH}, the grid's outer walls at 1, linear between,
+ * so a long core and a short one share their bands. {@link offsetAt} is its
+ * inverse.
+ */
+const reachAlong = (d: number, core: number, outer: number): number =>
+  d <= core ? (d / core) * CORE_REACH : CORE_REACH + ((d - core) / (outer - core)) * (1 - CORE_REACH);
+const offsetAt = (reach: number, core: number, outer: number): number =>
+  reach <= CORE_REACH ? (reach / CORE_REACH) * core : core + ((reach - CORE_REACH) / (1 - CORE_REACH)) * (outer - core);
+
+/** How far a core silo stands in from the core's walls. */
+const SILO_INSET = 5;
+
+/** The grid's outer size: drawn in these ranges, then grown until it holds {@link TOP_WALLS} `[PLACEHOLDER]`. */
+const GRID_WIDTH = { min: 1000, max: 1040 } as const;
+const GRID_HEIGHT = { min: 780, max: 820 } as const;
 
 /** Past this distance from the nearest tower a tower gains nothing more by spreading `[PLACEHOLDER]`. */
 const TOWER_SPREAD = 200;
@@ -161,6 +209,7 @@ export const EXPANSION_LEVELS: readonly number[] = [10, 14, 19, 24, 29, 34];
 /** Salts that split the seed into independent streams. */
 const SALT = {
   plan: 0x1b873593,
+  walls: 0x3c6ef372,
   expansion: 0x5bd1e995,
   building: 0x7feb352d,
   decorations: 0x846ca68b,
@@ -199,7 +248,7 @@ type Role =
 
 const ROLE_OF: Readonly<Record<number, Role>> = {
   [TOWN_HALL_TYPE]: "hall",
-  6: "silo",
+  [SILO_TYPE]: "silo",
   115: "aerial",
   22: "bunker",
   // Laser, Tesla, Railgun: the guide puts them between or behind harvesters.
@@ -263,24 +312,39 @@ interface WallSlot {
   y: number;
   /** A hallway cell: no wall, a trap. */
   opening: boolean;
-  /** A single Eye-ra bait block outside the grid, not a grid line. */
-  bait: boolean;
-  /** On the core's wall. */
+  /** On the core's own wall. */
   core: boolean;
 }
 
+/** The walls of a seed's plan (see the file comment). */
+interface WallPlan {
+  /** Every planned cell, each once. */
+  slots: WallSlot[];
+  /** The core, then the compartments in the order they are walled: indices into `slots`, in fill order. */
+  groups: number[][];
+  /** Where each of `groups` sits in the 3 x 3 grid, `[column, row]`: the core is `[1, 1]`. */
+  places: [number, number][];
+  /**
+   * The ring that doubles the core, as its four sides between the grid lines
+   * that cross it (each in fill order), then its four corner cells.
+   */
+  ring: number[][];
+  /** The hallway cells, in the order traps fill them. */
+  openings: number[];
+}
+
 /** A seed's layout plan (see the file comment). */
-interface Plan {
+interface Plan extends WallPlan {
   cx: number;
   cy: number;
   /** Half extents of the core box's and the grid's outer edges. */
   core: { hx: number; hy: number };
   outer: { hx: number; hy: number };
-  /** Every wall cell, in the order walls fill them; hallway cells in place. */
-  walls: WallSlot[];
+  /** The silos' spots, in the order silos take them: the core's four corners, then two kept beside it. */
+  silos: { x: number; y: number }[];
   /** How strongly buildings line up beside their own kind. */
   align: number;
-  /** How far out each role sits, in shares of the grid's outer walls. */
+  /** How far out each role sits (see {@link Layout.reachOf}). */
   bands: Readonly<Record<Role, { min: number; max: number }>>;
   /** The edge buildings' band once the plot has room outside the grid. */
   outside: { min: number; max: number };
@@ -305,22 +369,75 @@ const boxSides = (x0: number, y0: number, x1: number, y1: number): { x: number; 
   return [top, right, bottom, left];
 };
 
-/**
- * The wall plan: the 3 x 3 grid round `cx`, `cy`, compartment by
- * compartment (see the file comment), then the Eye-ra bait.
- */
-const wallPlan = (
-  rng: Rng,
-  cx: number,
-  cy: number,
-  core: { hx: number; hy: number },
-  outer: { hx: number; hy: number }
-): WallSlot[] => {
-  // The left (top) cell edge of each grid line.
-  const xs = [cx - outer.hx, cx - core.hx, cx + core.hx - WALL_CELL, cx + outer.hx - WALL_CELL];
-  const ys = [cy - outer.hy, cy - core.hy, cy + core.hy - WALL_CELL, cy + outer.hy - WALL_CELL];
+/** The compartments' depths, in cells, out from the core on each side. */
+interface Depths {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
 
-  // The core, then the compartments beside it in opposite pairs, then the corners in diagonal pairs.
+/**
+ * The wall plan round the core box with cell corners (`x0`, `y0`) and
+ * (`x1`, `y1`): the core, the grid compartment by compartment, the doubling
+ * ring (see the file comment). `rng` draws the order and the hallways only.
+ */
+const wallPlan = (rng: Rng, x0: number, y0: number, x1: number, y1: number, wide: boolean, depths: Depths): WallPlan => {
+  // The left (top) cell edge of each grid line.
+  const xs = [x0 - depths.left * WALL_CELL, x0, x1, x1 + depths.right * WALL_CELL];
+  const ys = [y0 - depths.top * WALL_CELL, y0, y1, y1 + depths.bottom * WALL_CELL];
+
+  const slots: WallSlot[] = [];
+  const index = new Map<string, number>();
+  const add = (x: number, y: number, opening = false, core = false): number => {
+    const key = keyOf(x, y);
+    const known = index.get(key);
+    if (known !== undefined) return known;
+    index.set(key, slots.length);
+    slots.push({ x, y, opening, core });
+    return slots.length - 1;
+  };
+
+  // The core: a hallway in the middle of each long side, give or take a cell, facing the Town Hall between the silos.
+  const core = boxSides(x0, y0, x1, y1);
+  const hallwaySides = wide ? [0, 2] : [1, 3];
+  const hallway = new Set<string>();
+  for (const side of hallwaySides) {
+    const cells = core[side]!;
+    const at = Math.floor(cells.length / 2) - 1 + rng.int(2) - (cells.length % 2 === 0 ? rng.int(2) : 0);
+    for (const cell of cells.slice(at, at + 2)) hallway.add(keyOf(cell.x, cell.y));
+  }
+  const corePath = core.flat();
+  const coreStart = rng.int(corePath.length);
+  const groups: number[][] = [[]];
+  for (let k = 0; k < corePath.length; k++) {
+    const cell = corePath[(coreStart + k) % corePath.length]!;
+    groups[0]!.push(add(cell.x, cell.y, hallway.has(keyOf(cell.x, cell.y)), true));
+  }
+  const places: [number, number][] = [[1, 1]];
+
+  // The doubling ring, planned before the grid so the grid lines run through its cells.
+  const ringSides = boxSides(x0 - WALL_CELL, y0 - WALL_CELL, x1 + WALL_CELL, y1 + WALL_CELL);
+  const outward = new Set<string>();
+  for (const key of hallway) {
+    const [x, y] = key.split(",").map(Number) as [number, number];
+    const dx = x === x0 ? -WALL_CELL : x === x1 ? WALL_CELL : 0;
+    const dy = y === y0 ? -WALL_CELL : y === y1 ? WALL_CELL : 0;
+    outward.add(keyOf(x + dx, y + dy));
+  }
+  // Each side of the ring runs between the two grid lines crossing it, one way or the other; its corners come last.
+  const ringFirst = rng.int(ringSides.length);
+  const ring: number[][] = [];
+  const ringCorners: number[] = [];
+  for (let k = 0; k < ringSides.length; k++) {
+    const [corner, ...side] = ringSides[(ringFirst + k) % ringSides.length]!;
+    if (rng.int(2) === 1) side.reverse();
+    ring.push(side.map((cell) => add(cell.x, cell.y, outward.has(keyOf(cell.x, cell.y)))));
+    ringCorners.push(add(corner!.x, corner!.y));
+  }
+  ring.push(ringCorners);
+
+  // The compartments beside the core in opposite pairs, then the corners in diagonal pairs.
   const sides: [number, number][][] = [
     [
       [1, 0],
@@ -343,104 +460,116 @@ const wallPlan = (
     ],
   ];
   if (rng.int(2) === 1) corners.reverse();
-  const order: [number, number][] = [[1, 1]];
+  const order: [number, number][] = [];
   for (const pair of [...sides, ...corners]) {
     if (rng.int(2) === 1) pair.reverse();
     order.push(...pair);
   }
-
-  const slots: WallSlot[] = [];
-  const planned = new Set<string>();
+  // Walls of the core and of the compartments before, which each compartment runs on from.
+  const walled = new Set<string>(corePath.map((cell) => keyOf(cell.x, cell.y)));
   for (const [i, j] of order) {
-    const box = boxSides(xs[i]!, ys[j]!, xs[i + 1]!, ys[j + 1]!);
-    // Hallways: two on opposite sides of the core, one on an outer side of every other compartment.
-    const outerSides = [
-      ...(j === 0 ? [0] : []),
-      ...(i === 2 ? [1] : []),
-      ...(j === 2 ? [2] : []),
-      ...(i === 0 ? [3] : []),
-    ];
-    const first = rng.int(2);
-    const hallwaySides = outerSides.length === 0 ? [first, first + 2] : [outerSides[rng.int(outerSides.length)]!];
-    const hallway = new Set<string>();
-    for (const side of hallwaySides) {
-      const cells = box[side]!;
-      // Two cells, at least two clear of either corner.
-      const at = 2 + rng.int(Math.max(1, cells.length - 5));
-      for (const cell of cells.slice(at, at + 2)) hallway.add(keyOf(cell.x, cell.y));
-    }
-    // Run on from a wall already standing, so a part-built compartment hangs off the rest.
-    const path = box.flat();
-    let start = rng.int(path.length);
+    const path = boxSides(xs[i]!, ys[j]!, xs[i + 1]!, ys[j + 1]!).flat();
+    let start = 0;
     for (let k = 0; k < path.length; k++) {
       const here = path[k]!;
       const next = path[(k + 1) % path.length]!;
-      if (planned.has(keyOf(here.x, here.y)) && !planned.has(keyOf(next.x, next.y))) {
+      if (walled.has(keyOf(here.x, here.y)) && !walled.has(keyOf(next.x, next.y))) {
         start = (k + 1) % path.length;
         break;
       }
     }
+    const group: number[] = [];
     for (let k = 0; k < path.length; k++) {
       const cell = path[(start + k) % path.length]!;
-      const key = keyOf(cell.x, cell.y);
-      if (planned.has(key)) continue;
-      planned.add(key);
-      slots.push({ ...cell, opening: hallway.has(key), bait: false, core: i === 1 && j === 1 });
+      group.push(add(cell.x, cell.y));
+      walled.add(keyOf(cell.x, cell.y));
     }
+    groups.push(group);
+    places.push([i, j]);
   }
 
-  // Eye-ra bait: single blocks spread evenly round the outside, as many as top the grid up to the wall cap.
-  const grid = slots.filter((slot) => !slot.opening).length;
-  const bait = Math.min(BAIT.max, Math.max(BAIT.min, TOP_WALLS - grid));
-  const offset = between(rng, 0, 1);
-  const away = between(rng, 60, 110);
-  for (let k = 0; k < bait; k++) {
-    const along = ((k + offset) / bait) * 4;
-    const side = Math.floor(along);
-    const t = (along - side) * 2 - 1;
-    const [ux, uy] = side === 0 ? [t, -1] : side === 1 ? [1, t] : side === 2 ? [-t, 1] : [-1, -t];
-    slots.push({
-      x: snap(cx + ux * (outer.hx + away) - WALL_CELL / 2),
-      y: snap(cy + uy * (outer.hy + away) - WALL_CELL / 2),
-      opening: false,
-      bait: true,
-      core: false,
-    });
-  }
-  return slots;
+  const openings = [...groups[0]!, ...ring.flat()].filter((at) => slots[at]!.opening);
+  return { slots, groups, places, ring, openings };
 };
 
 /** The seed's plan: centre, walls, bands. */
 const planFor = (seed: number, persona: Persona): Plan => {
   const rng = streamOf(seed, SALT.plan);
-  const cx = snap(between(rng, -40, 40), GRID);
-  const cy = snap(between(rng, -40, 40), GRID);
-  // Whole cells, so every grid line tiles exactly. The core takes the Town Hall
-  // with a silo either side; a compartment takes a tower or two with
-  // harvesters in front. The grid runs a little past the smallest plot: its
-  // outer walls go up once the plot has grown to them.
-  const core = { hx: 200 + WALL_CELL * rng.int(2), hy: 180 + WALL_CELL * rng.int(2) };
-  const outer = { hx: core.hx + 220 + WALL_CELL * rng.int(4), hy: core.hy + 220 + WALL_CELL * rng.int(3) };
-  const walls = wallPlan(rng, cx, cy, core, outer);
-  const inner = Math.max(core.hx / outer.hx, core.hy / outer.hy);
+  const cx = snap(between(rng, -30, 30), GRID);
+  const cy = snap(between(rng, -20, 20), GRID);
+  // The core's inside: wide with the silos either side, or tall with them above and below.
+  const wide = rng.int(2) === 0;
+  const insideW = wide ? CORE_LONG : CORE_SHORT;
+  const insideH = wide ? CORE_SHORT : CORE_LONG;
+  const x0 = cx - insideW / 2 - WALL_CELL;
+  const x1 = cx + insideW / 2;
+  const y0 = cy - insideH / 2 - WALL_CELL;
+  const y1 = cy + insideH / 2;
+  const silos = [
+    { x: x0 + WALL_CELL + SILO_INSET, y: y0 + WALL_CELL + SILO_INSET },
+    { x: x1 - SILO_INSET - 80, y: y0 + WALL_CELL + SILO_INSET },
+    { x: x0 + WALL_CELL + SILO_INSET, y: y1 - SILO_INSET - 80 },
+    { x: x1 - SILO_INSET - 80, y: y1 - SILO_INSET - 80 },
+  ];
+  for (let k = silos.length - 1; k > 0; k--) {
+    const j = rng.int(k + 1);
+    [silos[k], silos[j]] = [silos[j]!, silos[k]!];
+  }
+
+  // The grid: whole cells out from the core, split unevenly between the sides.
+  const width = GRID_WIDTH.min + WALL_CELL * rng.int((GRID_WIDTH.max - GRID_WIDTH.min) / WALL_CELL + 1);
+  const height = GRID_HEIGHT.min + WALL_CELL * rng.int((GRID_HEIGHT.max - GRID_HEIGHT.min) / WALL_CELL + 1);
+  const across = Math.round((width - insideW - 2 * WALL_CELL) / WALL_CELL);
+  const down = Math.round((height - insideH - 2 * WALL_CELL) / WALL_CELL);
+  const left = Math.floor(across / 2) + rng.int(3) - 1;
+  const top = Math.floor(down / 2) + rng.int(3) - 1;
+  const depths: Depths = { left, right: across - left, top, bottom: down - top };
+  // Grown a cell at a time, round the sides, until it holds every wall.
+  let walls = wallPlan(streamOf(seed, SALT.walls), x0, y0, x1, y1, wide, depths);
+  const grow: (keyof Depths)[] = ["left", "top", "right", "bottom"];
+  for (let k = 0; walls.slots.filter((slot) => !slot.opening).length < TOP_WALLS; k++) {
+    depths[grow[k % grow.length]!]++;
+    walls = wallPlan(streamOf(seed, SALT.walls), x0, y0, x1, y1, wide, depths);
+  }
+
+  // Silos 5 and 6 (Town Halls 5 and 9) in the two compartments walled first, past the ring and its walkway,
+  // and on a hallway's side of the core well clear of it.
+  const off = 2 * WALL_CELL + WALL_MARGIN + SILO_INSET;
+  const along = (low: number, high: number, middle: number, hallways: boolean) =>
+    hallways ? (rng.int(2) === 0 ? low + 2 * WALL_CELL : high - 2 * WALL_CELL - 80) : middle - 40;
+  for (const [i, j] of walls.places.slice(1, 3)) {
+    if (j === 1) {
+      silos.push({ x: i === 0 ? x0 - off - 80 : x1 + WALL_CELL + off, y: along(y0, y1, cy, !wide) });
+    } else {
+      silos.push({ x: along(x0, x1, cx, wide), y: j === 0 ? y0 - off - 80 : y1 + WALL_CELL + off });
+    }
+  }
+
+  const core = { hx: (x1 + WALL_CELL - x0) / 2, hy: (y1 + WALL_CELL - y0) / 2 };
+  const outer = {
+    hx: core.hx + (WALL_CELL * (depths.left + depths.right)) / 2,
+    hy: core.hy + (WALL_CELL * (depths.top + depths.bottom)) / 2,
+  };
+  const inner = CORE_REACH;
   const towersIn = persona === "towers" ? 0.07 : 0;
   return {
+    ...walls,
     cx,
     cy,
     core,
     outer,
-    walls,
+    silos,
     align: between(rng, 0.5, 1.2),
     bands: {
       hall: { min: 0, max: 0.1 },
-      silo: { min: 0.1, max: inner - 0.12 },
+      silo: { min: 0.1, max: inner },
       aerial: { min: inner + 0.02, max: inner + 0.22 },
       bunker: { min: inner + 0.03, max: inner + 0.3 },
-      tower: { min: inner + 0.06, max: 0.72 - towersIn },
-      support: { min: inner + 0.06, max: 0.95 },
+      tower: { min: inner + 0.02, max: 0.72 - towersIn },
+      support: { min: inner + 0.02, max: 0.95 },
       harvester: { min: 0.55, max: persona === "economy" ? 0.92 : 0.97 },
       general: { min: 0.75, max: 1.15 },
-      army: { min: inner + 0.05, max: persona === "army" ? 0.85 : 0.95 },
+      army: { min: inner + 0.1, max: persona === "army" ? 0.85 : 0.95 },
       wall: { min: 0.9, max: 1.4 },
       trap: { min: 0.3, max: 1 },
       decoration: { min: 0.2, max: 1.3 },
@@ -449,20 +578,40 @@ const planFor = (seed: number, persona: Persona): Plan => {
   };
 };
 
+/** A planned wall cell, for checking a layout against its plan. */
+export interface PlannedWallCell {
+  x: number;
+  y: number;
+  /** A hallway cell: a trap, never a wall. */
+  opening: boolean;
+  /** On the core's own wall. */
+  core: boolean;
+}
+
+/** Every cell of a seed's wall plan (see the file comment): for tests and tools. */
+export const botWallPlan = (seed: number): PlannedWallCell[] =>
+  planFor(seed, "economy").slots.map((slot) => ({ ...slot }));
+
 /** Cell marks: what may stand on a cell of the core or the reserved wall lines. */
 const FREE = 0;
 const CORE = 1;
-const WALKWAY = 2;
-const WALL_LINE = 3;
-const OPENING = 4;
+/** A silo's spot kept beside the core (see {@link Plan.silos}). */
+const KEPT = 2;
+const WALKWAY = 3;
+/** The walkway in front of a hallway: traps only, so no big building plugs it. */
+const APPROACH = 4;
+const WALL_LINE = 5;
+const OPENING = 6;
 
 /** What each kind of thing may stand on. */
 const ON_FREE = 1 << FREE;
 const ON_CORE = 1 << CORE;
+const ON_KEPT = 1 << KEPT;
 const ON_WALKWAY = 1 << WALKWAY;
+const ON_APPROACH = 1 << APPROACH;
 const ON_WALL_LINE = 1 << WALL_LINE;
 const ON_OPENING = 1 << OPENING;
-const ANYWHERE = ON_FREE | ON_CORE | ON_WALKWAY | ON_WALL_LINE | ON_OPENING;
+const ANYWHERE = ON_FREE | ON_CORE | ON_KEPT | ON_WALKWAY | ON_APPROACH | ON_WALL_LINE | ON_OPENING;
 
 /** Roles the core is kept for (see the file comment); traps go between the silos. */
 const IN_CORE: ReadonlySet<Role> = new Set(["hall", "silo", "trap", "decoration"]);
@@ -496,7 +645,7 @@ class Grid {
     return [c0, r0, c1, r1];
   }
 
-  /** Marks a rectangle of a reserved wall line; a stronger mark wins. */
+  /** Marks a rectangle of the core or a reserved wall line; a stronger mark wins. */
   mark(x: number, y: number, w: number, h: number, mark: number): void {
     const span = this.span(x, y, w, h);
     if (!span) return;
@@ -554,11 +703,13 @@ class Grid {
   }
 }
 
-/** One building the layout places, in build order: its type and the empire level it was built at. */
+/** One building the layout places, in build order. */
 export interface LayoutEntry {
   t: number;
   /** The empire level the yard stood at when it was built (`builtAtLevel`). */
   level: number;
+  /** The Town Hall level the yard had when it was built (`builtAtHall`): how many walls that hall will stand. */
+  hall: number;
 }
 
 /** A placed footprint origin, with the yard id it went up with. */
@@ -604,6 +755,9 @@ interface Resource {
 /** The sectors the yard is split into round its centre, for keeping every side defended. */
 const SECTORS = 8;
 
+/** What a wall's plan cell may stand on. */
+const ON_LINE = ON_FREE | ON_WALKWAY | ON_APPROACH | ON_WALL_LINE;
+
 /** The layout run: one plan, one grid, buildings placed one at a time. */
 class Layout {
   private readonly grid = new Grid();
@@ -613,8 +767,15 @@ class Layout {
   /** Placed buildings per role and sector (see {@link sectorOf}). */
   private readonly sectors = new Map<Role, number[]>();
   private readonly slotUsed: boolean[];
+  /** Wall groups started (see the file comment); the core always is. */
+  private readonly started = new Set<number>([0]);
+  /** Sides of the doubling ring started. */
+  private readonly ringStarted = new Set<number>();
   /** Cells holding a wall, by {@link keyOf}. */
-  private readonly walls = new Set<string>();
+  private readonly wallAt = new Set<string>();
+  /** Walls the yard stands once caught up, by Town Hall level (`wallTargets`). */
+  private readonly budgets: number[];
+  private wallsPlaced = 0;
   /** Expansions bought early because a building found no room (see the file comment). */
   bought = 0;
 
@@ -622,27 +783,26 @@ class Layout {
     private readonly seed: number,
     private readonly plan: Plan
   ) {
-    this.slotUsed = plan.walls.map(() => false);
-    // The core is kept for the Town Hall and its silos, the grid lines clear, from the start (see the file comment).
+    this.slotUsed = plan.slots.map(() => false);
+    this.budgets = wallTargets(seed);
+    // The core is kept for the Town Hall and its silos, the wall cells clear, from the start (see the file comment).
     const { cx, cy, core } = plan;
     this.grid.mark(cx - core.hx, cy - core.hy, 2 * core.hx, 2 * core.hy, CORE);
-    const lines = plan.walls.filter((slot) => !slot.bait);
-    for (const slot of lines) {
-      this.grid.mark(
-        slot.x - WALL_MARGIN,
-        slot.y - WALL_MARGIN,
-        WALL_CELL + 2 * WALL_MARGIN,
-        WALL_CELL + 2 * WALL_MARGIN,
-        WALKWAY
-      );
+    for (const spot of plan.silos) this.grid.mark(spot.x, spot.y, 80, 80, KEPT);
+    for (const slot of plan.slots) {
+      const mark = slot.opening ? APPROACH : WALKWAY;
+      this.grid.mark(slot.x - WALL_MARGIN, slot.y - WALL_MARGIN, WALL_CELL + 2 * WALL_MARGIN, WALL_CELL + 2 * WALL_MARGIN, mark);
     }
-    for (const slot of lines) this.grid.mark(slot.x, slot.y, WALL_CELL, WALL_CELL, slot.opening ? OPENING : WALL_LINE);
+    for (const slot of plan.slots) this.grid.mark(slot.x, slot.y, WALL_CELL, WALL_CELL, slot.opening ? OPENING : WALL_LINE);
   }
 
-  /** How far out a point sits, in shares of the grid's outer walls. */
+  /** How far out a point sits: the core's walls at {@link CORE_REACH}, the grid's outer walls at 1. */
   private reachOf(x: number, y: number): number {
-    const { outer } = this.plan;
-    return Math.max(Math.abs(x - this.plan.cx) / outer.hx, Math.abs(y - this.plan.cy) / outer.hy);
+    const { core, outer } = this.plan;
+    return Math.max(
+      reachAlong(Math.abs(x - this.plan.cx), core.hx, outer.hx),
+      reachAlong(Math.abs(y - this.plan.cy), core.hy, outer.hy)
+    );
   }
 
   /** Which of the {@link SECTORS} round the centre a point is in. */
@@ -669,7 +829,10 @@ class Layout {
     this.grid.take(x, y, w, h);
     const spot = { id, t: type, X: x, Y: y };
     const role = roleOf(type);
-    if (role === "wall") this.walls.add(keyOf(x, y));
+    if (role === "wall") {
+      this.wallsPlaced++;
+      this.wallAt.add(keyOf(x, y));
+    }
     const cx = x + w / 2;
     const cy = y + h / 2;
     if (DEFENDERS.has(role)) {
@@ -753,7 +916,7 @@ class Layout {
       score += 0.6 * this.crowding(role, cx, cy);
       if (role === "aerial") {
         // Between and behind the silos.
-        const silos = this.byGroup.get(6) ?? [];
+        const silos = this.byGroup.get(SILO_TYPE) ?? [];
         if (silos.some((silo) => Math.hypot(silo.X + 40 - cx, silo.Y + 40 - cy) < 160)) score -= 1;
       }
     }
@@ -804,7 +967,7 @@ class Layout {
     const { w, h } = footprintOf(type);
     const own = this.bandOf(role, expansion);
     const band = { min: Math.max(0, own.min - widen), max: own.max + widen };
-    const { outer } = this.plan;
+    const { core, outer } = this.plan;
     const spots: { x: number; y: number }[] = [];
     for (let i = 0; i < count; i++) {
       const reach = between(rng, band.min, Math.max(band.max, band.min + 0.01));
@@ -813,8 +976,10 @@ class Layout {
       const side = Math.floor(along);
       const t = (along - side) * 2 - 1;
       const [ux, uy] = side === 0 ? [t, -1] : side === 1 ? [1, t] : side === 2 ? [-t, 1] : [-1, -t];
-      const x = this.plan.cx + ux * reach * outer.hx - w / 2 + between(rng, -15, 15);
-      const y = this.plan.cy + uy * reach * outer.hy - h / 2 + between(rng, -15, 15);
+      const dx = Math.sign(ux) * offsetAt(Math.abs(ux) * reach, core.hx, outer.hx);
+      const dy = Math.sign(uy) * offsetAt(Math.abs(uy) * reach, core.hy, outer.hy);
+      const x = this.plan.cx + dx - w / 2 + between(rng, -15, 15);
+      const y = this.plan.cy + dy - h / 2 + between(rng, -15, 15);
       spots.push({ x: snap(x), y: snap(y) });
     }
     return spots;
@@ -892,33 +1057,80 @@ class Layout {
     return spots;
   }
 
+  /** Marks a plan cell used and returns it. */
+  private takeSlot(at: number): WallSlot {
+    this.slotUsed[at] = true;
+    return this.plan.slots[at]!;
+  }
+
   /**
-   * The next free cell of the wall plan of the kind asked for, or null: a
-   * wall's cell, or for a trap a hallway of the core or with a wall already
-   * beside it.
+   * A wall's cell (see the file comment), or null when no planned cell is
+   * free on this plot. In order: the next cell of the compartment being
+   * walled; the first of the next compartment, when the walls a Town Hall at
+   * `hall` stands will close it; the next of the ring side being built, or
+   * of the first side those walls will finish, or of any side; a ring corner
+   * once the two walls beside it stand; the next compartment's first
+   * regardless; any free cell.
    */
-  private planSlot(type: number, expansion: number, opening: boolean): { x: number; y: number } | null {
-    const allowed = opening ? ON_OPENING : ON_FREE | ON_WALKWAY | ON_WALL_LINE;
-    const walled = ({ x, y }: { x: number; y: number }) =>
-      [
-        [WALL_CELL, 0],
-        [-WALL_CELL, 0],
-        [0, WALL_CELL],
-        [0, -WALL_CELL],
-      ].some(([dx, dy]) => this.walls.has(keyOf(x + dx!, y + dy!)));
-    for (let i = 0; i < this.plan.walls.length; i++) {
-      const slot = this.plan.walls[i]!;
-      if (this.slotUsed[i] || slot.opening !== opening) continue;
-      if (opening && !slot.core && !walled(slot)) continue;
-      if (!this.fits(type, slot.x, slot.y, expansion, allowed)) continue;
-      this.slotUsed[i] = true;
-      return slot;
+  private wallCell(type: number, expansion: number, hall: number): WallSlot | null {
+    const { slots, groups, ring } = this.plan;
+    const budget = this.budgets[Math.min(Math.max(hall, 0), this.budgets.length - 1)] ?? 0;
+    const free = (at: number) => !this.slotUsed[at] && !slots[at]!.opening && this.fits(type, slots[at]!.x, slots[at]!.y, expansion, ON_LINE);
+    for (let g = 0; g < groups.length; g++) {
+      const left = groups[g]!.filter((at) => !this.slotUsed[at] && !slots[at]!.opening);
+      if (left.length === 0) continue;
+      if (!this.started.has(g)) {
+        if (this.wallsPlaced + left.length > budget || !left.every(free)) break;
+        this.started.add(g);
+      }
+      const next = left.find(free);
+      if (next !== undefined) return this.takeSlot(next);
+      break;
+    }
+    const sides = ring.slice(0, -1);
+    const building = sides.findIndex((side, r) => this.ringStarted.has(r) && side.some(free));
+    if (building >= 0) return this.takeSlot(sides[building]!.find(free)!);
+    // The first side those walls finish, else the first with room: a short run hugging the core reads as a thicker wall.
+    let closes = sides.findIndex((side) => {
+      const left = side.filter(free);
+      return left.length > 0 && left.length <= budget - this.wallsPlaced;
+    });
+    if (closes < 0) closes = sides.findIndex((side) => side.some(free));
+    if (closes >= 0) {
+      this.ringStarted.add(closes);
+      return this.takeSlot(sides[closes]!.find(free)!);
+    }
+    const corner = ring[ring.length - 1]!.find((at) => free(at) && this.cornered(slots[at]!));
+    if (corner !== undefined) return this.takeSlot(corner);
+    for (const pass of [groups, ring]) {
+      for (let g = 0; g < pass.length; g++) {
+        const next = pass[g]!.find(free);
+        if (next === undefined) continue;
+        if (pass === groups) this.started.add(g);
+        return this.takeSlot(next);
+      }
     }
     return null;
   }
 
+  /** Whether walls stand on two sides of a cell that meet at a corner. */
+  private cornered({ x, y }: { x: number; y: number }): boolean {
+    const across = this.wallAt.has(keyOf(x - WALL_CELL, y)) || this.wallAt.has(keyOf(x + WALL_CELL, y));
+    const down = this.wallAt.has(keyOf(x, y - WALL_CELL)) || this.wallAt.has(keyOf(x, y + WALL_CELL));
+    return across && down;
+  }
+
+  /** The next free hallway cell, for a trap, or null. */
+  private trapCell(type: number, expansion: number): WallSlot | null {
+    const { slots, openings } = this.plan;
+    const next = openings.find(
+      (at) => !this.slotUsed[at] && this.fits(type, slots[at]!.x, slots[at]!.y, expansion, ON_OPENING)
+    );
+    return next === undefined ? null : this.takeSlot(next);
+  }
+
   /** Places one building (see the file comment) and returns its spot. */
-  place(id: number, type: number, level: number): PlacedSpot {
+  place(id: number, type: number, level: number, hall: number): PlacedSpot {
     const expansion = Math.max(expansionFor(this.seed, level), this.bought);
     const role = roleOf(type);
     const rng = streamOf(this.seed, SALT.building, id);
@@ -929,14 +1141,29 @@ class Layout {
       const y = snap(this.plan.cy - h / 2);
       if (this.fits(type, x, y, expansion, ON_FREE | ON_CORE)) return this.put(id, type, x, y);
     }
-    if (role === "wall" || role === "trap") {
-      const slot = this.planSlot(type, expansion, role === "trap");
+    const silos = this.byGroup.get(SILO_TYPE)?.length ?? 0;
+    if (type === SILO_TYPE && silos < this.plan.silos.length) {
+      const spot = this.plan.silos[silos]!;
+      if (this.fits(type, spot.x, spot.y, expansion, ON_FREE | ON_CORE | ON_KEPT | ON_WALKWAY)) {
+        return this.put(id, type, spot.x, spot.y);
+      }
+    }
+    if (role === "wall") {
+      const slot = this.wallCell(type, expansion, hall);
+      if (slot) return this.put(id, type, slot.x, slot.y);
+    }
+    if (role === "trap") {
+      const slot = this.trapCell(type, expansion);
       if (slot) return this.put(id, type, slot.x, slot.y);
     }
 
     // A big building may stand hard against a wall: a compartment keeps no walkway for it.
     const allowed =
-      (role === "wall" ? ON_FREE | ON_WALKWAY : role === "trap" ? ON_FREE | ON_WALKWAY | ON_OPENING : ON_FREE) |
+      (role === "wall"
+        ? ON_FREE | ON_WALKWAY
+        : role === "trap"
+          ? ON_FREE | ON_WALKWAY | ON_APPROACH | ON_OPENING
+          : ON_FREE) |
       (IN_CORE.has(role) ? ON_CORE : 0) |
       (w >= BIG ? ON_WALKWAY : 0);
     const spots: { x: number; y: number }[] = this.zoneSpots(rng, type, role, expansion, 40);
@@ -944,7 +1171,10 @@ class Layout {
     if (gaps) spots.push(...this.beside(rng, type, this.byGroup.get(groupOf(type)) ?? [], gaps, 24));
     if (role === "wall") spots.push(...this.beside(rng, type, this.byGroup.get(WALL_TYPE) ?? [], [0], 24));
     if (role === "trap") {
-      const resources = [...(this.byGroup.get(6) ?? []), ...[1, 2, 3, 4].flatMap((t) => this.byGroup.get(t) ?? [])];
+      const resources = [
+        ...(this.byGroup.get(SILO_TYPE) ?? []),
+        ...[1, 2, 3, 4].flatMap((t) => this.byGroup.get(t) ?? []),
+      ];
       spots.push(...this.beside(rng, type, resources, [0, 0, 5, 10], 24), ...this.besideTowers(rng, 16));
     }
 
@@ -992,7 +1222,7 @@ const decorationPlan = (seed: number): { after: number; t: number }[] => {
  *
  * @param seed - `bot.seed`.
  * @param persona - `bot.persona`.
- * @param entries - Every building in build order, with the level it was built at.
+ * @param entries - Every building in build order, with the level and Town Hall it was built at.
  * @param level - The yard's empire level now, for its expansions.
  */
 export const layoutBotYard = (
@@ -1007,10 +1237,10 @@ export const layoutBotYard = (
   const placedDecorations: PlacedSpot[] = [];
   let nextId = 1;
   for (const entry of entries) {
-    buildings.push(layout.place(nextId++, entry.t, entry.level));
+    buildings.push(layout.place(nextId++, entry.t, entry.level, entry.hall));
     const next = decorations[placedDecorations.length];
     if (next && buildings.length >= next.after) {
-      placedDecorations.push(layout.place(nextId++, next.t, entry.level));
+      placedDecorations.push(layout.place(nextId++, next.t, entry.level, entry.hall));
     }
   }
   return {

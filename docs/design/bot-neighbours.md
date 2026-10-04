@@ -279,20 +279,26 @@ It works the way a player does, so the limits hold by construction:
    The Map Room never goes past level 1.
 2. **Placement.** Each new building gets a spot from zones around the Town Hall, after the wiki's
    [Base Defense Guide](https://backyardmonsters.fandom.com/wiki/Base_Defense_Guide), which most
-   players follow (owner review, issue #250): the Town Hall dead centre with its silos in a walled
-   core (the guide's Town Hall and Silo Death Trap), a 3 x 3 grid of walled compartments round it
-   holding the towers with the harvesters in front of them and inside their range, defences spread
-   so no side is weak, each kind of harvester spread out, the general and monster buildings round
-   the edge (outside the grid once the plot has room: the guide's Never Ending Chain). Walls close
-   the grid one compartment at a time, the core first, each with a two-cell hallway that traps fill
-   first; leftover walls go out as single Eye-ra bait blocks. Further traps go between harvesters
-   and silos and by towers. Decorations are rare: one, on about 15% of bots `[PLACEHOLDER]`. Every
+   players follow (owner reviews, issues #250 and #252): the Town Hall dead centre with four silos
+   in a small walled core that a Town Hall 3 yard's walls close (the guide's Town Hall and Silo
+   Death Trap), a 3 x 3 grid of walled compartments with the core as its middle, holding the
+   towers with the harvesters in front of them and inside their range, defences spread so no side
+   is weak, each kind of harvester spread out, the general and monster buildings round the edge
+   (outside the grid once the plot has room: the guide's Never Ending Chain). Walls close the grid
+   one compartment at a time, the core first, and a compartment is only started when the walls
+   the bot's Town Hall will stand can close it, so at most one is ever being built; walls it cannot
+   use yet double the core, a side at a time. The grid and that ring hold every wall a Town Hall
+   10 allows, so no wall stands on its own. Only the core has openings, a two-cell hallway on each
+   long side (and the ring cells in front), which traps fill first; nothing stands in a wall line
+   or in front of a hallway. Further traps go between harvesters and silos and by towers. Decorations are rare: one, on about 15% of bots `[PLACEHOLDER]`. Every
    spot is jittered, checked with `rectOf` / `overlaps` / `withinBounds` (`layoutGeometry.ts`), and
    the plot grows with the yard expansions a player of that level usually owns (`storedata.ENL.q`,
    up to 6 like the sandbox yard, `utils/sandbox/overworldYard.ts:3864`; one at about levels 10,
    14, 19, 24, 29 and 34 `[PLACEHOLDER]`, each bot shifted by up to 2 levels). The progression
-   builds walls and traps as such a player does: from Town Hall 3 it keeps 85-100% of the wall
-   allowance and 70-100% of the trap allowance standing `[PLACEHOLDER]`.
+   builds walls and traps as such a player does: from Town Hall 3 it keeps 90-100% of the wall
+   allowance and 70-100% of the trap allowance standing `[PLACEHOLDER]`, and it upgrades its walls
+   (real costs, Town Hall gates and points) towards an average level per Town Hall, mostly wood at
+   Town Hall 3, stone by Town Hall 4-5, level 4-5 by Town Hall 10 `[PLACEHOLDER]`.
 3. **Army and defence.** Unlocked monsters: those the Locker level allows
    (`yard/locker.ts:176-204`), less a random one or two of the newest. Academy levels by level band.
    Bunkers filled to 70-100% of capacity with bunkerable unlocked monsters (`yard/bunker.ts:53`,

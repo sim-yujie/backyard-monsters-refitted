@@ -44,6 +44,7 @@ import { yardAtPoints, type Persona, type ProgressionBuilding } from "./progress
  * - **Where everything stands** (§4.2 step 2, `layout.ts`): every building's
  *   `X`/`Y` in a walled layout after the Base Defense Guide, a decoration on a
  *   few bots, and the yard expansions (`storedata.ENL`) the plot grows with.
+ *   The layout is told the level and Town Hall each building went up at.
  */
 
 /** Storage held between these fractions of the cap (§4.6) `[PLACEHOLDER]`. */
@@ -308,7 +309,11 @@ export const generateBotYard = (request: BotYardRequest): BotYard => {
   const layout = layoutBotYard(
     seed,
     persona,
-    yard.buildings.map((building) => ({ t: building.t, level: yard.builtAtLevel[building.id] ?? 1 })),
+    yard.buildings.map((building) => ({
+      t: building.t,
+      level: yard.builtAtLevel[building.id] ?? 1,
+      hall: yard.builtAtHall[building.id] ?? 1,
+    })),
     yard.level
   );
 

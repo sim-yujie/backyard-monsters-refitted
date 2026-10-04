@@ -69,9 +69,23 @@ import { pointsForBuild, pointsForUpgrade, TOWN_HALL_TYPE } from "../yardplanner
  * fill the hallways. Each seed draws, per hall level, the share of the
  * allowance it means to stand ({@link WALL_FILL}, {@link TRAP_FILL}); while a
  * yard is short of it, building one more weighs {@link FILL_WEIGHT} instead
- * of the persona's weight. Upgrading them keeps the persona's weight. The
- * draws come from their own stream, so a yard before its first wall is the
- * same run it always was.
+ * of the persona's weight. The draws come from their own stream, so a yard
+ * before its first wall is the same run it always was. The layout reads the
+ * same draws ({@link wallTargets}) to know how many walls each Town Hall's
+ * yard will stand, so it only starts a compartment those walls will close.
+ *
+ * ## Wall upgrades (issue #252)
+ *
+ * A player turns wood into stone and better as their Town Hall and purse
+ * allow: mostly wood at Town Hall 3, stone by Town Hall 4 or 5, the higher
+ * tiers from Town Hall 6 on. Each seed draws, per hall level, the average wall
+ * level it means to reach ({@link WALL_TIER}); while the yard's walls average
+ * less, and none is short of its fill, upgrading one weighs
+ * {@link TIER_WEIGHT} instead of the persona's weight. The upgrade taken is
+ * always the lowest wall, oldest first, so the core goes to stone before the
+ * outer compartments, as a player's does. Each
+ * upgrade is a real one: the server's gate (`planOneUpgrade`, the Town Hall
+ * its `re` list asks for), its points and its base value.
  */
 
 /** A bot's play style, kept in `bot.persona` (§5). */
@@ -140,18 +154,48 @@ export const PERSONA_WEIGHTS: Readonly<Record<Persona, Readonly<Record<Exclude<C
 /**
  * The share of the wall allowance a seed means to stand at each hall level,
  * drawn in `[min, max)` `[PLACEHOLDER]`: a Town Hall 2 yard has just started,
- * from Town Hall 3 a player walls most of what they may.
+ * from Town Hall 3 a player walls most of what they may, at least enough to
+ * close the core (`layout.ts`).
  */
-export const WALL_FILL = { early: { min: 0.4, max: 0.9 }, later: { min: 0.85, max: 1 } } as const;
+export const WALL_FILL = { early: { min: 0.4, max: 0.9 }, later: { min: 0.9, max: 1 } } as const;
 
 /** The same for traps `[PLACEHOLDER]`. */
-export const TRAP_FILL = { early: { min: 0.4, max: 0.9 }, later: { min: 0.7, max: 1 } } as const;
+export const TRAP_FILL = { early: { min: 0.5, max: 0.9 }, later: { min: 0.7, max: 1 } } as const;
 
-/** A wall or trap build's weight while the yard is short of its fill `[PLACEHOLDER]`. */
-const FILL_WEIGHT = 30;
+/**
+ * A wall or trap build's weight while the yard is short of its fill
+ * `[PLACEHOLDER]`. Walls are cheap and catch up at once, as a player walls in
+ * a new Town Hall's core in one sitting.
+ */
+const FILL_WEIGHT = { walls: 150, traps: 30 } as const;
 
 /** The salt of the fill draws' stream. */
 const FILL_SALT = 0x2545f491;
+
+/**
+ * The average wall level a seed means to reach at each Town Hall level,
+ * drawn in `[min, max)` `[PLACEHOLDER]`, never past what the hall allows (a
+ * level N wall needs Town Hall N + 1). Town Halls 1 and 2 build wood only.
+ */
+export const WALL_TIER: Readonly<Record<number, { min: number; max: number }>> = {
+  3: { min: 1.1, max: 1.5 },
+  4: { min: 1.6, max: 2.2 },
+  5: { min: 2.0, max: 2.8 },
+  6: { min: 2.6, max: 3.4 },
+  7: { min: 3.0, max: 3.8 },
+  8: { min: 3.4, max: 4.2 },
+  9: { min: 3.8, max: 4.6 },
+  10: { min: 4.2, max: 4.9 },
+};
+
+/** A wall upgrade's weight while the walls average less than their tier `[PLACEHOLDER]`. */
+const TIER_WEIGHT = 80;
+
+/** The salt of the tier draws' stream. */
+const TIER_SALT = 0x68e31da4;
+
+/** The Wall Block (`buildingCosts.ts`, type 17). */
+const WALL_TYPE = 17;
 
 /** The Town Hall upgrade's weight once it is offered: strong, so it comes soon after readiness. */
 const HALL_WEIGHT = 6;
@@ -263,6 +307,34 @@ const pick = <T>(rng: Rng, items: readonly { item: T; weight: number }[]): T | n
   return items[items.length - 1]!.item;
 };
 
+/** The share of the wall and trap allowances a seed means to stand, per hall level (see the file comment). */
+const fillsFor = (seed: number): { wall: number[]; trap: number[] } => {
+  const fills = mulberry32((Math.floor(seed) ^ FILL_SALT) >>> 0);
+  const wall: number[] = [];
+  const trap: number[] = [];
+  for (let hall = 0; hall <= TOP_HALL; hall++) {
+    const walls = hall <= 2 ? WALL_FILL.early : WALL_FILL.later;
+    const traps = hall <= 2 ? TRAP_FILL.early : TRAP_FILL.later;
+    wall.push(walls.min + (walls.max - walls.min) * fills.float());
+    trap.push(traps.min + (traps.max - traps.min) * fills.float());
+  }
+  return { wall, trap };
+};
+
+/**
+ * How many walls a seed's yard stands once it has caught up at each Town Hall
+ * level, indexed by hall level (0 to 10): its fill of the allowance, never
+ * fewer than at the hall before. The progression builds at least this many;
+ * the layout plans its compartments by it (`layout.ts`).
+ */
+export const wallTargets = (seed: number): number[] => {
+  let most = 0;
+  return fillsFor(seed).wall.map((fill, hall) => {
+    most = Math.max(most, Math.round(allowedAt(WALL_TYPE, hall) * fill));
+    return most;
+  });
+};
+
 /** A candidate action before it is taken. */
 interface Candidate {
   kind: "build" | "upgrade";
@@ -290,8 +362,10 @@ export class Progression {
   private readonly byType = new Map<number, ProgressionBuilding[]>();
   private readonly thresholds: number[] = [];
   /** The share of the wall and trap allowances to stand, per hall level. */
-  private readonly wallFill: number[] = [];
-  private readonly trapFill: number[] = [];
+  private readonly wallFill: number[];
+  private readonly trapFill: number[];
+  /** The average wall level to reach, per hall level (see the file comment). */
+  private readonly wallTier: number[] = [];
   private nextId = 1;
   private pending: Candidate | null | undefined;
   private hall = 0;
@@ -306,12 +380,13 @@ export class Progression {
     for (let hall = 0; hall <= TOP_HALL; hall++) {
       this.thresholds.push(READINESS_MIN + READINESS_SPREAD * this.rng.float());
     }
-    const fills = mulberry32((Math.floor(seed) ^ FILL_SALT) >>> 0);
+    const fills = fillsFor(seed);
+    this.wallFill = fills.wall;
+    this.trapFill = fills.trap;
+    const tiers = mulberry32((Math.floor(seed) ^ TIER_SALT) >>> 0);
     for (let hall = 0; hall <= TOP_HALL; hall++) {
-      const wall = hall <= 2 ? WALL_FILL.early : WALL_FILL.later;
-      const trap = hall <= 2 ? TRAP_FILL.early : TRAP_FILL.later;
-      this.wallFill.push(wall.min + (wall.max - wall.min) * fills.float());
-      this.trapFill.push(trap.min + (trap.max - trap.min) * fills.float());
+      const band = WALL_TIER[hall] ?? { min: 1, max: 1 };
+      this.wallTier.push(Math.min(band.min + (band.max - band.min) * tiers.float(), capAtHall(WALL_TYPE, hall)));
     }
     for (const starter of STARTER_BUILDINGS) {
       const id = this.nextId++;
@@ -481,6 +556,14 @@ export class Progression {
     return (this.byType.get(type)?.length ?? 0) < Math.round(allowedAt(type, this.hall) * fill);
   }
 
+  /** Whether the yard's walls average a lower level than its tier at this hall (see the file comment). */
+  private shortOfTier(): boolean {
+    const walls = this.byType.get(WALL_TYPE) ?? [];
+    let levels = 0;
+    for (const wall of walls) levels += wall.l;
+    return levels < (this.wallTier[this.hall] ?? 1) * walls.length;
+  }
+
   /** Every action the screens allow now, grouped by category. */
   private candidates(): Map<Category, Candidate[]> {
     const groups = new Map<Category, Candidate[]>();
@@ -528,8 +611,14 @@ export class Progression {
       if (category === "walls" || category === "traps") {
         // Builds short of the fill go in a group of their own, weighed to catch up.
         const short = inBand.filter((candidate) => candidate.kind === "build" && this.shortOfFill(candidate.t));
-        if (short.length > 0) options.push({ item: short, weight: FILL_WEIGHT });
+        if (short.length > 0) options.push({ item: short, weight: FILL_WEIGHT[category] });
         inBand = inBand.filter((candidate) => !short.includes(candidate));
+        // Walls below their tier go to stone and better the same way, once they stand.
+        const low = inBand.filter((candidate) => candidate.kind === "upgrade" && candidate.t === WALL_TYPE);
+        if (low.length > 0 && short.length === 0 && this.shortOfTier()) {
+          options.push({ item: low, weight: TIER_WEIGHT });
+          inBand = inBand.filter((candidate) => !low.includes(candidate));
+        }
       }
       if (inBand.length > 0) options.push({ item: inBand, weight });
     }
@@ -585,6 +674,8 @@ export interface ProgressionYard {
    * the plot its owner had then, so growth never moves one.
    */
   builtAtLevel: Record<number, number>;
+  /** The Town Hall level the yard had when each building was placed, by id: 1 for the starter base. */
+  builtAtHall: Record<number, number>;
 }
 
 /**
@@ -596,11 +687,18 @@ export const yardAtPoints = (seed: number, persona: Persona, target: number): Pr
   const run = new Progression(seed, persona);
   const targetLevel = levelOfTotal(target);
   const builtAtLevel: Record<number, number> = {};
-  for (const building of run.buildings()) builtAtLevel[building.id] = 1;
+  const builtAtHall: Record<number, number> = {};
+  for (const building of run.buildings()) {
+    builtAtLevel[building.id] = 1;
+    builtAtHall[building.id] = 1;
+  }
   while (run.total < target) {
     const action = run.next();
     if (!action || levelOfTotal(action.total) > targetLevel) break;
-    if (action.kind === "build") builtAtLevel[action.id] = run.level;
+    if (action.kind === "build") {
+      builtAtLevel[action.id] = run.level;
+      builtAtHall[action.id] = run.townHall;
+    }
     run.apply();
   }
   return {
@@ -611,6 +709,7 @@ export const yardAtPoints = (seed: number, persona: Persona, target: number): Pr
     townHall: run.townHall,
     steps: run.steps,
     builtAtLevel,
+    builtAtHall,
   };
 };
 
