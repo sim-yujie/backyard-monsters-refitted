@@ -19,6 +19,7 @@ import {
   takeOutpostNotices,
   type OutpostNoticeJob,
 } from "../../../services/maproom/v2/outpostNotices.js";
+import { notifyAndCount } from "../../../services/notifications/notifications.js";
 import { baseModeView } from "./modes/baseModeView.js";
 import { baseModeBuild } from "./modes/baseModeBuild.js";
 import { baseModeAttack } from "./modes/baseModeAttack.js";
@@ -195,13 +196,18 @@ export const baseLoad: KoaController = async (ctx) => {
   // hatcheries and damage, and the core when it is empty (outposts WP3).
   // Both also pay the player's Map Room 2 outpost income into the main pool
   // under the main row's lock (`autobankYard`, outposts WP4).
+  // That notice is no longer a toast but one entry in the player's
+  // notification list, written here; the answer carries the list's unread
+  // count as `notifications`, for the yard's bell (issue #257).
   let completed: (CompletedJob | OutpostNoticeJob)[] | undefined;
+  let notifications: number | undefined;
   if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
     let jobs: CompletedJob[];
     ({ save: baseSave, completed: jobs } = await catchUpOwnerYard(baseSave));
     // Outpost attacks and takeovers since the player last looked, told once
     // in the same notice and kept in the mailbox (outposts WP8, #187).
     completed = [...jobs, ...(await takeOutpostNotices(postgres.em, user.userid))];
+    notifications = await notifyAndCount(postgres.em, user.userid, null, "away", completed);
   } else if (
     type === BaseMode.BUILD &&
     isOwner &&
@@ -209,6 +215,8 @@ export const baseLoad: KoaController = async (ctx) => {
     baseSave.mapversion !== MapRoomVersion.V3
   ) {
     ({ save: baseSave, completed } = await catchUpOwnerOutpost(user, baseSave));
+    const outpost = baseSave.type === BaseType.OUTPOST ? String(baseSave.baseid) : null;
+    notifications = await notifyAndCount(postgres.em, user.userid, outpost, "away", completed);
   }
 
   // Only a client on Map Room 1 asks for its tribes (the web never does).
@@ -420,6 +428,7 @@ export const baseLoad: KoaController = async (ctx) => {
     ...(defenderForces && { defenderforces: defenderForces }),
     ...(championBrains && { attackerbrains: championBrains }),
     ...(completed && { completed }),
+    ...(notifications !== undefined && { notifications }),
     ...(isOwner && {
       chatenabled: 1,
       chattoken,

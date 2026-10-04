@@ -85,6 +85,12 @@ import { upgradeWalls } from "./controllers/yardplanner/upgradeWalls.js";
 import { rearmTraps } from "./controllers/yardplanner/rearmTraps.js";
 import { layoutRoute } from "./controllers/yardplanner/layoutRoute.js";
 import { yardRoutes } from "./controllers/yard/index.js";
+import {
+  getNotifications,
+  getUnreadNotifications,
+  readAllNotifications,
+  readNotification,
+} from "./controllers/notifications/routes.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
@@ -222,6 +228,14 @@ router.post("/api/:apiVersion/bm/yardplanner/deletetemplate", apiVersion, verify
 for (const { path, controller } of yardRoutes) {
   router.post(`/api/:apiVersion/bm/yard/${path}`, apiVersion, verifyUserAuth, logRequest, controller);
 }
+
+/**  ────────────────────────────────────────────────
+* 📦 Notifications (the yard's bell, issue #257, `controllers/notifications/notifications.ts`)
+* ──────────────────────────────────────────────── */
+router.get("/api/:apiVersion/bm/notifications", apiVersion, verifyUserAuth, getNotifications);
+router.get("/api/:apiVersion/bm/notifications/unread", apiVersion, verifyUserAuth, getUnreadNotifications);
+router.post("/api/:apiVersion/bm/notifications/read", apiVersion, verifyUserAuth, logRequest, readNotification);
+router.post("/api/:apiVersion/bm/notifications/readall", apiVersion, verifyUserAuth, logRequest, readAllNotifications);
 
 /**  ────────────────────────────────────────────────
 * 📦 Leaderboards & Attack Logs

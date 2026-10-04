@@ -952,6 +952,28 @@ thread's "Propose truce", `truceaccept`/`trucereject` from a request's Accept an
 `unreadmessages` from `/base/load` (a message count) until the mailbox has fetched the list,
 then counts unread threads. See `docs/design/mailbox.md`.
 
+### Notifications (the yard's bell, #257)
+
+Mounted at `/api/:apiVersion/bm/notifications`, `apiVersion` + `verifyUserAuth` on every route
+(`logRequest` on the two writes). Table `bym.notification` (migration
+`20261004_CreateNotificationTable`); rules in `services/notifications/notifications.ts`. Every
+query names the caller, so no route reads or marks another player's rows.
+
+| Method | Path | Request fields | Response (`ctx.body`) | Description |
+|---|---|---|---|---|
+| GET | `/notifications` | none | `{ error: 0, notifications: [{ id, kind, baseid, at, read, jobs }], unread }` | The caller's notifications, newest first: at most 20, none older than 7 days. `kind` `jobs` is one kind of job a yard answer's catch-up finished; `away` is everything an own-yard `/base/load` finished (hatches and the outpost / yard-attack notices included). `jobs` holds those `completed` entries as they were; `baseid` is the outpost they finished on, null for the main yard; `at` unix seconds. |
+| GET | `/notifications/unread` | none | `{ error: 0, unread }` | The unread count. |
+| POST | `/notifications/read` | `{ id: string→number }` | `{ error: 0, unread }`; 400 `{ error, reason: "badRequest" }` without a positive id | Marks one of the caller's notifications read; another player's id or a read one changes nothing. |
+| POST | `/notifications/readall` | none | `{ error: 0, unread }` | Marks all of the caller's notifications read. |
+
+**Where they are written.** After every successful yard action (`yardRoute`, once its
+transaction has committed): one `jobs` row per kind of job its catch-up finished, hatches left
+out. On the owner's build-mode `/base/load` of their main yard or a Map Room 2 outpost: one
+`away` row with all of its `completed`. Each write prunes the player to their newest 20 and
+drops anything older than 7 days. Both answers carry the unread count as `notifications`, so the
+client never polls. A failure there (the table missing, say) is logged and leaves the count
+out; the yard answer is unchanged.
+
 ### Attack Logs
 
 | Method | Path | Middleware | Request fields | Response | Description |

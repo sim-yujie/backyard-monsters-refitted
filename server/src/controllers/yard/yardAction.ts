@@ -431,6 +431,11 @@ export const catchUpLockedOutpost = async (
 export interface YardAnswer {
   status: number;
   body: Record<string, unknown>;
+  /**
+   * The outpost the action ran on, null for the main yard; set on a success
+   * only, for the notification list (`yardRoute`, issue #257).
+   */
+  outpost?: string | null;
 }
 
 /**
@@ -494,6 +499,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         playerlevel: playerLevelOf(yard.main),
         // The account's, so from the main row on an outpost's answer too.
         onboarding: onboardingSummary(yard.main),
+        outpost: yard.outpost ? String(yard.outpost.baseid) : null,
       };
     });
 
@@ -506,6 +512,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         report: answer.report,
         playerlevel: answer.playerlevel,
       },
+      outpost: answer.outpost,
     };
   } catch (err) {
     if (!(err instanceof ClientSafeError)) throw err;

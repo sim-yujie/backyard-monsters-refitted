@@ -25,6 +25,7 @@ import { AllianceStats } from "./database/models/alliancestats.view.js";
 import { ApiConsumer } from "./database/models/apiconsumer.model.js";
 import { Bot } from "./database/models/bot.model.js";
 import { BotJob } from "./database/models/botjob.model.js";
+import { Notification } from "./database/models/notification.model.js";
 
 /**
  * List of entities to be used with MikroORM.
@@ -53,6 +54,7 @@ const entities = [
   ApiConsumer,
   Bot,
   BotJob,
+  Notification,
 ];
 
 /**

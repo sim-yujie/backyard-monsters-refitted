@@ -61,6 +61,16 @@ describe("entity discovery", () => {
         payload: { type: "jsonb", nullable: false },
         created_at: { type: "timestamptz", nullable: false },
       });
+      // The notification list (issue #257), against its migration.
+      expect(columns("Notification")).toEqual({
+        id: { type: "bigserial", nullable: false },
+        userid: { type: "int", nullable: false },
+        baseid: { type: "varchar(255)", nullable: true },
+        kind: { type: "text", nullable: false },
+        jobs: { type: "jsonb", nullable: false },
+        read_at: { type: "timestamptz", nullable: true },
+        created_at: { type: "timestamptz", nullable: false },
+      });
       expect(columns("User").last_seen_at).toEqual({ type: "timestamptz", nullable: true });
     } finally {
       await orm.close();
