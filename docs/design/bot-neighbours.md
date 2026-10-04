@@ -290,7 +290,11 @@ It works the way a player does, so the limits hold by construction:
    use yet double the core, a side at a time. The grid and that ring hold every wall a Town Hall
    10 allows, so no wall stands on its own. Only the core has openings, a two-cell hallway on each
    long side (and the ring cells in front), which traps fill first; nothing stands in a wall line
-   or in front of a hallway. Further traps go between harvesters and silos and by towers. Decorations are rare: one, on about 15% of bots `[PLACEHOLDER]`. Every
+   or in front of a hallway. Further traps go between harvesters and silos and by towers. The base
+   is compact, as real players build: compartments only a row or two of buildings deep, every
+   building packed hard by its neighbours and the walls and as far in as its zone allows, the
+   compartments filled edge to edge before anything spills out, and from Town Hall 4 the general
+   and monster buildings packed round the outside of the grid. Decorations are rare: one, on about 15% of bots `[PLACEHOLDER]`. Every
    spot is jittered, checked with `rectOf` / `overlaps` / `withinBounds` (`layoutGeometry.ts`), and
    the plot grows with the yard expansions a player of that level usually owns (`storedata.ENL.q`,
    up to 6 like the sandbox yard, `utils/sandbox/overworldYard.ts:3864`; one at about levels 10,

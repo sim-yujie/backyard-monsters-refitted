@@ -115,11 +115,11 @@ describe("layoutBotYard", () => {
   test(
     "a yard too broken up for its next Housing buys its next expansion early, and stays legal",
     () => {
-      // This seed's second Housing finds no room on the plot of its level (found by a 60-yard run).
-      const laid = laidOut(1356739, "economy", 30, 0.5);
+      // This seed's second Housing finds no room on the plot of its level (found by a 400-yard search).
+      const laid = laidOut(209475, "army", 22, 0.5);
       const early = laid.layout.buildings.find((spot, index) => {
         const level = laid.yard.builtAtLevel[laid.yard.buildings[index]!.id]!;
-        return !withinBounds(rectOf(spot.t, spot.X, spot.Y), expansionFor(1356739, level));
+        return !withinBounds(rectOf(spot.t, spot.X, spot.Y), expansionFor(209475, level));
       });
       expect(early?.t).toBe(15);
       expectBuildable(laid);
@@ -207,7 +207,8 @@ describe("layoutBotYard", () => {
             for (const other of towers) if (other !== tower) nearest = Math.min(nearest, Math.hypot(other.x - tower.x, other.y - tower.y));
             return sum + nearest;
           }, 0) / towers.length;
-        expect(spacing).toBeGreaterThan(110);
+        // Spread out, though a compact base keeps them closer than a tower and a half apart.
+        expect(spacing).toBeGreaterThan(90);
 
         const walls = layout.buildings.filter((spot) => spot.t === WALL_TYPE);
         const at = new Set(walls.map((spot) => `${spot.X},${spot.Y}`));
@@ -504,6 +505,68 @@ describe("layoutBotYard keeps its walls tidy", () => {
         if (shut) closed++;
       }
       expect(closed / all).toBeGreaterThan(0.95);
+    },
+    { timeout: 60_000 }
+  );
+});
+
+/**
+ * How compact a yard is: its footprint area over its bounding box's, and the
+ * mean gap from each building (walls and traps aside) to its nearest
+ * neighbour, a wall included, counted to 200 at most.
+ */
+const compactness = (layout: BotLayout): { density: number; gap: number } => {
+  const all = layout.buildings.map((spot) => ({ ...spot, ...footprintOf(spot.t) }));
+  let x0 = Number.POSITIVE_INFINITY;
+  let y0 = Number.POSITIVE_INFINITY;
+  let x1 = Number.NEGATIVE_INFINITY;
+  let y1 = Number.NEGATIVE_INFINITY;
+  let area = 0;
+  for (const one of all) {
+    x0 = Math.min(x0, one.X);
+    y0 = Math.min(y0, one.Y);
+    x1 = Math.max(x1, one.X + one.w);
+    y1 = Math.max(y1, one.Y + one.h);
+    area += one.w * one.h;
+  }
+  const solid = all.filter((one) => !TRAP_TYPES.has(one.t));
+  const big = solid.filter((one) => one.t !== WALL_TYPE);
+  let gaps = 0;
+  for (const one of big) {
+    let nearest = 200;
+    for (const other of solid) {
+      if (other === one) continue;
+      const gapX = Math.max(other.X - (one.X + one.w), one.X - (other.X + other.w), 0);
+      const gapY = Math.max(other.Y - (one.Y + one.h), one.Y - (other.Y + other.h), 0);
+      nearest = Math.min(nearest, Math.hypot(gapX, gapY));
+    }
+    gaps += nearest;
+  }
+  return { density: area / ((x1 - x0) * (y1 - y0)), gap: big.length === 0 ? 0 : gaps / big.length };
+};
+
+/** Real players build tight (owner review, issue #252). */
+describe("layoutBotYard packs the base in", () => {
+  test(
+    "levels 11-40: buildings stand close together and the base fills its bounding box",
+    () => {
+      const bands = [
+        // Before #252's packing: 0.29 and 17.6, 0.33 and 13.8, 0.43 and 7.5.
+        { from: 11, to: 20, density: 0.35, gap: 8 },
+        { from: 21, to: 30, density: 0.35, gap: 8 },
+        { from: 31, to: 40, density: 0.44, gap: 5.5 },
+      ];
+      for (const band of bands) {
+        const yards = matrix().filter(({ yard }) => yard.level >= band.from && yard.level <= band.to);
+        const measured = yards.map(({ layout }) => compactness(layout));
+        const density = measured.reduce((sum, one) => sum + one.density, 0) / measured.length;
+        const gap = measured.reduce((sum, one) => sum + one.gap, 0) / measured.length;
+        expect({ band: band.from, dense: density > band.density, close: gap < band.gap }).toEqual({
+          band: band.from,
+          dense: true,
+          close: true,
+        });
+      }
     },
     { timeout: 60_000 }
   );

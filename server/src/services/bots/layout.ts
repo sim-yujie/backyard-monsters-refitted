@@ -31,9 +31,10 @@ import { wallTargets, type Persona } from "./progression.js";
  * a second ring hard against it, which the guide likes too, built a side at a
  * time (a side those walls will finish first), so a part-built ring reads as
  * a thicker wall, not a gap. Once that ring is whole, walls carry on round the
- * grid regardless. The grid is sized so the grid and the ring hold every wall
- * a Town Hall 10 allows ({@link TOP_WALLS}), so no wall is ever left over to
- * stand on its own.
+ * grid regardless, and once the grid is whole they double its outer walls.
+ * The compartments are only as deep as a row or two of towers and harvesters
+ * needs ({@link DEPTH}); the plan holds every wall a Town Hall 10 allows
+ * ({@link TOP_WALLS}), so no wall is ever left over to stand on its own.
  *
  * Only the core has openings: a two-cell hallway in the middle of each of its
  * two long sides, facing the Town Hall between the silos, and the cells of
@@ -62,12 +63,13 @@ import { wallTargets, type Persona } from "./progression.js";
  *   Bunkers as close to the Town Hall as the core walls let them;
  * - Laser, Tesla and Railgun towers in the inner half of the compartments,
  *   Cannon and Sniper towers further out as support;
- * - harvesters in the outer half of the compartments, in front of the towers
- *   and inside their range, each kind spread round the yard rather than
- *   bunched;
+ * - harvesters a little further out, in front of the towers and inside their
+ *   range, each kind spread round the yard rather than bunched;
  * - the general buildings (Store, Locker, Academy, Flinger, Map Room and the
- *   like) and the monster buildings round the edge: once the plot has room
- *   outside the grid they make the guide's Never Ending Chain out there;
+ *   like) and the monster buildings round the edge, just past the furthest
+ *   silo, tower or harvester so far, and from Town Hall 4 outside the grid,
+ *   leaving the compartments to the towers and harvesters: the guide's Never
+ *   Ending Chain round the base;
  * - walls on the plan, traps in the hallways, then between harvesters and
  *   silos and next to towers.
  *
@@ -83,9 +85,18 @@ import { wallTargets, type Persona } from "./progression.js";
  * (`withinBounds`), and clear of every other footprint: the rule the build
  * route and the Yard Planner's Apply measure by (`placementProblem`,
  * `checkNodePlacement`). A big building also likes to back onto a wall or a
- * neighbour, which keeps the open ground in one piece for the next one. When
- * the zone is full the building looks further out, then takes the best free
- * spot anywhere off the wall lines; only a full plot makes the layout throw.
+ * neighbour, which keeps the open ground in one piece for the next one.
+ *
+ * Real players build tight (owner review, issue #252), so every building
+ * packs in ({@link PACK}): it scores for the ground round it already built on
+ * and for sitting as far in as its band lets it, and besides its zone it tries
+ * spots hard by the buildings standing and across a walkway from the walls;
+ * the defended base also tries every spot of a 10-unit lattice inside the
+ * compartments, so a compartment fills edge to edge before the base spills
+ * out. Traps likewise fill gaps rather than ring a building in the open.
+ * When the zone is full the building looks further out, then takes the best
+ * free spot anywhere off the wall lines; only a full plot makes the layout
+ * throw.
  *
  * ## Growth never moves a building
  *
@@ -165,12 +176,28 @@ const offsetAt = (reach: number, core: number, outer: number): number =>
 /** How far a core silo stands in from the core's walls. */
 const SILO_INSET = 5;
 
-/** The grid's outer size: drawn in these ranges, then grown until it holds {@link TOP_WALLS} `[PLACEHOLDER]`. */
-const GRID_WIDTH = { min: 1000, max: 1040 } as const;
-const GRID_HEIGHT = { min: 780, max: 820 } as const;
+/**
+ * How deep each compartment beside the core is, in wall cells, drawn per side
+ * `[PLACEHOLDER]`: room for a Housing (160) and its walkways, and little more,
+ * so the base stays compact.
+ */
+const DEPTH = { min: 15, max: 18 } as const;
 
 /** Past this distance from the nearest tower a tower gains nothing more by spreading `[PLACEHOLDER]`. */
-const TOWER_SPREAD = 200;
+const TOWER_SPREAD = 150;
+
+/** Roles that pack in beside what already stands (see {@link Layout.place}). */
+const PACKED: ReadonlySet<Role> = new Set(["aerial", "bunker", "tower", "support", "harvester", "general", "army"]);
+
+/** Two harvesters of one kind closer than this read as bunched (the guide: spread each resource) `[PLACEHOLDER]`. */
+const SAME_KIND_APART = 110;
+
+/**
+ * How strongly a building packs in (see {@link Layout.score}) `[PLACEHOLDER]`:
+ * players build tight, buildings close to each other and to the walls, and
+ * the base grows outward from the middle.
+ */
+const PACK = { snug: 2, inward: 10 } as const;
 
 /** How far a crowded zone looks past its band before trying every spot of the plot. */
 const WIDEN = 0.4;
@@ -181,8 +208,14 @@ const WALL_MARGIN = 10;
 /** A footprint this wide or wider may stand on the walkway, hard against the wall. */
 const BIG = 100;
 
-/** Room a plot needs outside the grid, on one axis, before the edge buildings move out there: a Housing and its walkway. */
-const OUTSIDE_ROOM = 170;
+/** Roles whose spread marks how far out the defended base reaches (see `Layout.frontier`). */
+const BASE_ROLES: ReadonlySet<Role> = new Set(["silo", "aerial", "bunker", "tower", "support", "harvester"]);
+
+/** The share of the base's silos, towers and harvesters inside its frontier `[PLACEHOLDER]`. */
+const FRONTIER_SHARE = 0.85;
+
+/** The edge buildings' band, past the defended base's frontier `[PLACEHOLDER]`. */
+const EDGE = { past: 0.03, depth: 0.35, outside: 1.06 } as const;
 
 /** The share of bots that put out a decoration at all `[PLACEHOLDER]`. */
 export const DECORATED_SHARE = 0.15;
@@ -324,11 +357,15 @@ interface WallPlan {
   groups: number[][];
   /** Where each of `groups` sits in the 3 x 3 grid, `[column, row]`: the core is `[1, 1]`. */
   places: [number, number][];
+  /** The inside of each of `groups`, `[x0, y0, x1, y1]`. */
+  insides: [number, number, number, number][];
   /**
    * The ring that doubles the core, as its four sides between the grid lines
    * that cross it (each in fill order), then its four corner cells.
    */
   ring: number[][];
+  /** The ring that doubles the grid's outer walls, in fill order: the last place spare walls go. */
+  outerRing: number[];
   /** The hallway cells, in the order traps fill them. */
   openings: number[];
 }
@@ -346,8 +383,6 @@ interface Plan extends WallPlan {
   align: number;
   /** How far out each role sits (see {@link Layout.reachOf}). */
   bands: Readonly<Record<Role, { min: number; max: number }>>;
-  /** The edge buildings' band once the plot has room outside the grid. */
-  outside: { min: number; max: number };
 }
 
 const keyOf = (x: number, y: number): string => `${x},${y}`;
@@ -415,6 +450,7 @@ const wallPlan = (rng: Rng, x0: number, y0: number, x1: number, y1: number, wide
     groups[0]!.push(add(cell.x, cell.y, hallway.has(keyOf(cell.x, cell.y)), true));
   }
   const places: [number, number][] = [[1, 1]];
+  const insides: [number, number, number, number][] = [[x0 + WALL_CELL, y0 + WALL_CELL, x1, y1]];
 
   // The doubling ring, planned before the grid so the grid lines run through its cells.
   const ringSides = boxSides(x0 - WALL_CELL, y0 - WALL_CELL, x1 + WALL_CELL, y1 + WALL_CELL);
@@ -486,10 +522,19 @@ const wallPlan = (rng: Rng, x0: number, y0: number, x1: number, y1: number, wide
     }
     groups.push(group);
     places.push([i, j]);
+    insides.push([xs[i]! + WALL_CELL, ys[j]! + WALL_CELL, xs[i + 1]!, ys[j + 1]!]);
   }
 
+  // Walls left once the grid and the core's ring are whole double the grid's outer walls.
+  const outerPath = boxSides(xs[0]! - WALL_CELL, ys[0]! - WALL_CELL, xs[3]! + WALL_CELL, ys[3]! + WALL_CELL).flat();
+  const outerStart = rng.int(outerPath.length);
+  const outerRing = outerPath.map((_, k) => {
+    const cell = outerPath[(outerStart + k) % outerPath.length]!;
+    return add(cell.x, cell.y);
+  });
+
   const openings = [...groups[0]!, ...ring.flat()].filter((at) => slots[at]!.opening);
-  return { slots, groups, places, ring, openings };
+  return { slots, groups, places, insides, ring, outerRing, openings };
 };
 
 /** The seed's plan: centre, walls, bands. */
@@ -516,15 +561,10 @@ const planFor = (seed: number, persona: Persona): Plan => {
     [silos[k], silos[j]] = [silos[j]!, silos[k]!];
   }
 
-  // The grid: whole cells out from the core, split unevenly between the sides.
-  const width = GRID_WIDTH.min + WALL_CELL * rng.int((GRID_WIDTH.max - GRID_WIDTH.min) / WALL_CELL + 1);
-  const height = GRID_HEIGHT.min + WALL_CELL * rng.int((GRID_HEIGHT.max - GRID_HEIGHT.min) / WALL_CELL + 1);
-  const across = Math.round((width - insideW - 2 * WALL_CELL) / WALL_CELL);
-  const down = Math.round((height - insideH - 2 * WALL_CELL) / WALL_CELL);
-  const left = Math.floor(across / 2) + rng.int(3) - 1;
-  const top = Math.floor(down / 2) + rng.int(3) - 1;
-  const depths: Depths = { left, right: across - left, top, bottom: down - top };
-  // Grown a cell at a time, round the sides, until it holds every wall.
+  // The grid: whole cells out from the core on each side.
+  const depth = () => DEPTH.min + rng.int(DEPTH.max - DEPTH.min + 1);
+  const depths: Depths = { left: depth(), right: depth(), top: depth(), bottom: depth() };
+  // Grown a cell at a time, round the sides, should it not hold every wall.
   let walls = wallPlan(streamOf(seed, SALT.walls), x0, y0, x1, y1, wide, depths);
   const grow: (keyof Depths)[] = ["left", "top", "right", "bottom"];
   for (let k = 0; walls.slots.filter((slot) => !slot.opening).length < TOP_WALLS; k++) {
@@ -567,14 +607,14 @@ const planFor = (seed: number, persona: Persona): Plan => {
       bunker: { min: inner + 0.03, max: inner + 0.3 },
       tower: { min: inner + 0.02, max: 0.72 - towersIn },
       support: { min: inner + 0.02, max: 0.95 },
-      harvester: { min: 0.55, max: persona === "economy" ? 0.92 : 0.97 },
-      general: { min: 0.75, max: 1.15 },
-      army: { min: inner + 0.1, max: persona === "army" ? 0.85 : 0.95 },
+      harvester: { min: inner + 0.12, max: persona === "economy" ? 0.92 : 0.97 },
+      // The edge buildings follow the base out (see `Layout.bandOf`).
+      general: { min: inner + 0.1, max: inner + 0.1 + EDGE.depth },
+      army: { min: inner + 0.1, max: inner + 0.1 + EDGE.depth },
       wall: { min: 0.9, max: 1.4 },
       trap: { min: 0.3, max: 1 },
       decoration: { min: 0.2, max: 1.3 },
     },
-    outside: { min: 1.1, max: 1.55 },
   };
 };
 
@@ -695,6 +735,33 @@ class Grid {
     return sides;
   }
 
+  /**
+   * How hemmed in a footprint would be: the share of the ground within 15
+   * units round it that a building or a wall stands on (a planned line not
+   * yet walled does not count), or that is off the grid.
+   */
+  snugness(x: number, y: number, w: number, h: number): number {
+    const c0 = Math.floor((x - this.ox) / GRID) - 3;
+    const r0 = Math.floor((y - this.oy) / GRID) - 3;
+    const c1 = Math.ceil((x + w - this.ox) / GRID) + 3;
+    const r1 = Math.ceil((y + h - this.oy) / GRID) + 3;
+    let near = 0;
+    let all = 0;
+    for (let r = r0; r < r1; r++) {
+      const inside = r >= r0 + 3 && r < r1 - 3;
+      for (let c = c0; c < c1; c++) {
+        if (inside && c >= c0 + 3 && c < c1 - 3) {
+          c = c1 - 4;
+          continue;
+        }
+        all++;
+        if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) near++;
+        else if (this.taken[r * this.cols + c] === 1) near++;
+      }
+    }
+    return all === 0 ? 0 : near / all;
+  }
+
   take(x: number, y: number, w: number, h: number): void {
     const span = this.span(x, y, w, h);
     if (!span) return;
@@ -776,6 +843,8 @@ class Layout {
   /** Walls the yard stands once caught up, by Town Hall level (`wallTargets`). */
   private readonly budgets: number[];
   private wallsPlaced = 0;
+  /** How far out each silo, tower and harvester placed so far sits, in order (see {@link frontier}). */
+  private readonly baseReach: number[] = [];
   /** Expansions bought early because a building found no room (see the file comment). */
   bought = 0;
 
@@ -843,6 +912,11 @@ class Layout {
       }
     }
     if (RESOURCES.has(role)) this.resources.push({ x: cx, y: cy, t: type, covered: this.coverAt(cx, cy) });
+    if (BASE_ROLES.has(role)) {
+      const reach = this.reachOf(cx, cy);
+      const at = this.baseReach.findIndex((one) => one > reach);
+      this.baseReach.splice(at < 0 ? this.baseReach.length : at, 0, reach);
+    }
     const counts = this.sectors.get(role) ?? new Array<number>(SECTORS).fill(0);
     counts[this.sectorOf(cx, cy)]!++;
     this.sectors.set(role, counts);
@@ -859,23 +933,30 @@ class Layout {
     return count;
   }
 
-  /** Whether the plot of `expansion` has room outside the grid for the edge buildings. */
-  private roomOutside(expansion: number): boolean {
-    const [width, height] = yardSize(expansion);
-    const { outer } = this.plan;
-    return width / 2 >= outer.hx + OUTSIDE_ROOM || height / 2 >= outer.hy + OUTSIDE_ROOM;
+  /** How far out the defended base reaches: past {@link FRONTIER_SHARE} of its silos, towers and harvesters. */
+  private get frontier(): number {
+    if (this.baseReach.length === 0) return 0;
+    return this.baseReach[Math.min(this.baseReach.length - 1, Math.floor(this.baseReach.length * FRONTIER_SHARE))]!;
   }
 
-  /** The band a building of `role` aims for on the plot of `expansion`. */
-  private bandOf(role: Role, expansion: number): { min: number; max: number } {
-    if ((role === "general" || role === "army") && this.roomOutside(expansion)) return this.plan.outside;
-    return this.plan.bands[role];
+  /**
+   * The band a building of `role` aims for. The general and monster
+   * buildings go just past the defended base's frontier, so they ring the
+   * base as it stands rather than the grid it will fill; once the
+   * compartments are being walled (Town Hall 4), outside the grid, where
+   * they leave the compartments to the towers and harvesters.
+   */
+  private bandOf(role: Role): { min: number; max: number } {
+    if (role !== "general" && role !== "army") return this.plan.bands[role];
+    const own = this.plan.bands[role];
+    const min = this.started.size > 1 ? EDGE.outside : Math.min(EDGE.outside, Math.max(own.min, this.frontier + EDGE.past));
+    return { min, max: min + EDGE.depth };
   }
 
   /** A spot's score: lower is better (see the file comment). */
-  private score(rng: Rng, type: number, role: Role, expansion: number, x: number, y: number): number {
+  private score(rng: Rng, type: number, role: Role, x: number, y: number): number {
     const { w, h } = footprintOf(type);
-    const band = this.bandOf(role, expansion);
+    const band = this.bandOf(role);
     const cx = x + w / 2;
     const cy = y + h / 2;
     const reach = this.reachOf(cx, cy);
@@ -928,15 +1009,19 @@ class Layout {
       if (this.towers.length > 0 && cover === 0) score += 2;
       // Each kind spread round the yard, never bunched (the guide: don't put all of one resource together).
       for (const other of this.resources) {
-        if (other.t === type && Math.hypot(other.x - cx, other.y - cy) < 160) score += 1;
+        if (other.t === type && Math.hypot(other.x - cx, other.y - cy) < SAME_KIND_APART) score += 1;
       }
-      score += 0.5 * this.crowding(role, cx, cy);
+      score += 0.2 * this.crowding(role, cx, cy);
     }
 
-    if (role === "general") score += 0.4 * this.crowding(role, cx, cy);
+    if (role === "general") score += 0.2 * this.crowding(role, cx, cy);
 
     // A big building backs onto a wall or a neighbour, leaving the open ground in one piece.
     if (w >= BIG) score -= 0.8 * this.grid.sidesAgainst(x, y, w, h);
+    // Packed in: close to its neighbours and the walls, and as far in as its band lets it.
+    // A trap fills a gap rather than ringing a building in the open.
+    if (role !== "decoration") score -= PACK.snug * this.grid.snugness(x, y, w, h);
+    if (role !== "trap" && role !== "decoration") score += PACK.inward * Math.max(0, reach - band.min);
 
     if (role === "bunker" && this.towers.length > 0) {
       let nearest = Number.POSITIVE_INFINITY;
@@ -960,12 +1045,11 @@ class Layout {
     rng: Rng,
     type: number,
     role: Role,
-    expansion: number,
     count: number,
     widen = 0
   ): { x: number; y: number }[] {
     const { w, h } = footprintOf(type);
-    const own = this.bandOf(role, expansion);
+    const own = this.bandOf(role);
     const band = { min: Math.max(0, own.min - widen), max: own.max + widen };
     const { core, outer } = this.plan;
     const spots: { x: number; y: number }[] = [];
@@ -983,6 +1067,25 @@ class Layout {
       spots.push({ x: snap(x), y: snap(y) });
     }
     return spots;
+  }
+
+  /**
+   * Spots inside the compartments, for the defended base: every spot of a
+   * 10-unit lattice from the walkway in, so a compartment packs edge to edge
+   * and the grid fills before the base spills out. The `count` that fit
+   * furthest in are kept.
+   */
+  private insideSpots(type: number, expansion: number, allowed: number, count: number): { x: number; y: number }[] {
+    const { w, h } = footprintOf(type);
+    const spots: { x: number; y: number; reach: number }[] = [];
+    for (const [x0, y0, x1, y1] of this.plan.insides.slice(1)) {
+      for (let y = y0 + WALL_MARGIN; y + h <= y1 - WALL_MARGIN; y += 2 * GRID) {
+        for (let x = x0 + WALL_MARGIN; x + w <= x1 - WALL_MARGIN; x += 2 * GRID) {
+          if (this.fits(type, x, y, expansion, allowed)) spots.push({ x, y, reach: this.reachOf(x + w / 2, y + h / 2) });
+        }
+      }
+    }
+    return spots.sort((a, b) => a.reach - b.reach).slice(0, count);
   }
 
   /** Spots beside one of `others`, `gaps` apart, on any side. */
@@ -1040,7 +1143,7 @@ class Layout {
     let best: Candidate | null = null;
     for (const spot of spots) {
       if (!this.fits(type, spot.x, spot.y, expansion, allowed)) continue;
-      const score = this.score(rng, type, role, expansion, spot.x, spot.y);
+      const score = this.score(rng, type, role, spot.x, spot.y);
       if (!best || score < best.score) best = { x: spot.x, y: spot.y, score };
     }
     return best;
@@ -1070,7 +1173,8 @@ class Layout {
    * `hall` stands will close it; the next of the ring side being built, or
    * of the first side those walls will finish, or of any side; a ring corner
    * once the two walls beside it stand; the next compartment's first
-   * regardless; any free cell.
+   * regardless; once the grid is whole, the ring round its outer walls; any
+   * free cell.
    */
   private wallCell(type: number, expansion: number, hall: number): WallSlot | null {
     const { slots, groups, ring } = this.plan;
@@ -1102,7 +1206,7 @@ class Layout {
     }
     const corner = ring[ring.length - 1]!.find((at) => free(at) && this.cornered(slots[at]!));
     if (corner !== undefined) return this.takeSlot(corner);
-    for (const pass of [groups, ring]) {
+    for (const pass of [groups, [this.plan.outerRing], ring]) {
       for (let g = 0; g < pass.length; g++) {
         const next = pass[g]!.find(free);
         if (next === undefined) continue;
@@ -1166,10 +1270,25 @@ class Layout {
           : ON_FREE) |
       (IN_CORE.has(role) ? ON_CORE : 0) |
       (w >= BIG ? ON_WALKWAY : 0);
-    const spots: { x: number; y: number }[] = this.zoneSpots(rng, type, role, expansion, 40);
+    const spots: { x: number; y: number }[] = this.zoneSpots(rng, type, role, 40);
     const gaps = CLUSTER_GAPS[role];
     if (gaps) spots.push(...this.beside(rng, type, this.byGroup.get(groupOf(type)) ?? [], gaps, 24));
     if (role === "wall") spots.push(...this.beside(rng, type, this.byGroup.get(WALL_TYPE) ?? [], [0], 24));
+    if (BASE_ROLES.has(role)) spots.push(...this.insideSpots(type, expansion, allowed, 40));
+    if (PACKED.has(role)) {
+      // Packed in: hard by a building already standing, or across a walkway from a wall. The defended base packs
+      // round its own buildings, never out after the edge buildings.
+      const edge = role === "general" || role === "army";
+      const standing = [...this.byGroup.entries()].flatMap(([group, list]) => {
+        const kind = roleOf(group);
+        if (kind === "wall" || kind === "trap" || kind === "decoration") return [];
+        return edge || (kind !== "general" && kind !== "army") ? list : [];
+      });
+      spots.push(
+        ...this.beside(rng, type, standing, [0, 5, 10], 40),
+        ...this.beside(rng, type, this.byGroup.get(WALL_TYPE) ?? [], [WALL_MARGIN], 16)
+      );
+    }
     if (role === "trap") {
       const resources = [
         ...(this.byGroup.get(SILO_TYPE) ?? []),
@@ -1182,7 +1301,7 @@ class Layout {
     const offLines = allowed | ON_WALKWAY;
     let found =
       this.best(rng, type, role, expansion, allowed, spots) ??
-      this.best(rng, type, role, expansion, allowed, this.zoneSpots(rng, type, role, expansion, 160, WIDEN)) ??
+      this.best(rng, type, role, expansion, allowed, this.zoneSpots(rng, type, role, 160, WIDEN)) ??
       this.best(rng, type, role, expansion, allowed, this.everySpot(type, expansion, SCAN_STEP)) ??
       // A gap a footprint just fills may start on an odd 5: try every grid spot, walkways too.
       this.best(rng, type, role, expansion, offLines, this.everySpot(type, expansion, GRID));
