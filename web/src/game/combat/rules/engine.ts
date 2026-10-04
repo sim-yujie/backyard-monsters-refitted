@@ -3173,9 +3173,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // It aims at the target's `x`/`y`, its graphic, drawn at `int(_tmpPoint)`
     // (`GameObject.as:126-132`, `MonsterBase.as:614-616`).
     const target = screenPointOf(aim.ix, aim.iy);
-    const bearing = Math.atan2(Math.trunc(target.y) - fromY, Math.trunc(target.x) - fromX);
-    const toX = fromX + Math.cos(bearing) * RAILGUN_SEGMENT * RAILGUN_SEGMENTS;
-    const toY = fromY + Math.sin(bearing) * RAILGUN_SEGMENT * RAILGUN_SEGMENTS;
+    // `cos(atan2(dy, dx))` and `sin(atan2(dy, dx))` are the unit vector along
+    // `(dx, dy)`, taken with `sqrt` alone (§3.4 rule 3); `atan2(0, 0)` is 0,
+    // straight along +x.
+    const dx = Math.trunc(target.x) - fromX;
+    const dy = Math.trunc(target.y) - fromY;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const alongX = length > 0 ? dx / length : 1;
+    const alongY = length > 0 ? dy / length : 0;
+    const toX = fromX + alongX * RAILGUN_SEGMENT * RAILGUN_SEGMENTS;
+    const toY = fromY + alongY * RAILGUN_SEGMENT * RAILGUN_SEGMENTS;
     visual.push({
       kind: "shot",
       tick,
