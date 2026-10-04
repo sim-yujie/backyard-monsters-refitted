@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { Context } from "koa";
+import { memoryRedis } from "../../testing/memoryRedis.js";
 import { Save } from "../../database/models/save.model.js";
 import { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
@@ -21,6 +22,8 @@ import { MapRoomCell } from "../../enums/MapRoom.js";
  */
 
 const store = new Map<string, string>();
+// The bot-check patterns (#273) the tracker feeds keep lists and hashes as well.
+const redis = memoryRedis(store);
 const tables = new Map<unknown, Record<string, unknown>[]>();
 
 mock.module("../../server.js", () => ({
@@ -33,19 +36,7 @@ mock.module("../../server.js", () => ({
       flush: async () => {},
     },
   },
-  redis: {
-    get: async (key: string) => store.get(key) ?? null,
-    mget: async (...keys: string[]) => keys.map((key) => store.get(key) ?? null),
-    set: async (key: string, value: string) => {
-      store.set(key, value);
-      return "OK";
-    },
-    setex: async (key: string, _ttl: number, value: string) => {
-      store.set(key, value);
-      return "OK";
-    },
-    del: async (key: string) => (store.delete(key) ? 1 : 0),
-  },
+  redis,
 }));
 
 const { presence, stayProtected } = await import("../../controllers/maproom/presence.js");
@@ -93,7 +84,7 @@ const upgrade = (userid: number) =>
   });
 
 afterEach(() => {
-  store.clear();
+  redis.clear();
   tables.clear();
   setSystemTime();
 });
@@ -196,10 +187,10 @@ describe("the indicators other players see", () => {
 describe("the presence answer", () => {
   test("carries the server's clock and the last real action, 0 when none counts", async () => {
     at(T0);
-    expect(await ping(PLAYER)).toEqual({ error: 0, now: T0, lastAction: 0 });
+    expect(await ping(PLAYER)).toEqual({ error: 0, now: T0, lastAction: 0, checkPending: false });
     await upgrade(PLAYER);
     at(T0 + 100);
-    expect(await ping(PLAYER)).toEqual({ error: 0, now: T0 + 100, lastAction: T0 });
+    expect(await ping(PLAYER)).toEqual({ error: 0, now: T0 + 100, lastAction: T0, checkPending: false });
   });
 
   test("names the attacker while an attack runs on the main yard, and drops it once it ends", async () => {
@@ -231,7 +222,7 @@ describe("the Stay protected tap", () => {
 
     at(T0 + 540);
     const answer = await stay(PLAYER);
-    expect(answer).toEqual({ error: 0, now: T0 + 540, lastAction: T0 + 540 });
+    expect(answer).toEqual({ error: 0, now: T0 + 540, lastAction: T0 + 540, checkPending: false });
     expect(await isPlayerOnline(PLAYER, clock, 60)).toBe(true);
   });
 

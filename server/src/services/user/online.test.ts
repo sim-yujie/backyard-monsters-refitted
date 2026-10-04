@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { Context } from "koa";
+import { memoryRedis } from "../../testing/memoryRedis.js";
 
 /**
  * The server decides who is online (#271): a presence mark AND a real game
@@ -12,21 +13,13 @@ import type { Context } from "koa";
  */
 
 const store = new Map<string, string>();
+// The bot-check patterns (#273) the tracker feeds keep lists and hashes as well.
+// Keys never age here: the rule itself is under test, at the window's last second.
+const redis = memoryRedis(store, { ages: false });
 
 mock.module("../../server.js", () => ({
   postgres: { em: {} },
-  redis: {
-    get: async (key: string) => store.get(key) ?? null,
-    set: async (key: string, value: string) => {
-      store.set(key, value);
-      return "OK";
-    },
-    setex: async (key: string, _ttl: number, value: string) => {
-      store.set(key, value);
-      return "OK";
-    },
-    del: async (key: string) => (store.delete(key) ? 1 : 0),
-  },
+  redis,
 }));
 
 const { presence } = await import("../../controllers/maproom/presence.js");
@@ -68,7 +61,7 @@ const upgrade = (answer?: { status?: number; body?: unknown }) =>
 const online = () => isPlayerOnline(USER, clock, ATTACK_ONLINE_SECONDS);
 
 afterEach(() => {
-  store.clear();
+  redis.clear();
   setSystemTime();
 });
 

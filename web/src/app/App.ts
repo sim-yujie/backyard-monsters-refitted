@@ -11,6 +11,9 @@ import { stayProtected } from "@/api/presence";
 import { ProtectionWatch, protectionTimingsFor } from "@/game/presence/protectionWatch";
 import { yardAttack } from "@/game/presence/yardAttack";
 import { StayProtectedPrompt } from "@/ui/StayProtectedPrompt";
+import { answerBotCheck, fetchBotCheck, forceBotCheck } from "@/api/botCheck";
+import { BotCheckWatch } from "@/game/presence/botCheckWatch";
+import { BotCheckCard } from "@/ui/BotCheckCard";
 import { BootScene } from "./scenes/BootScene";
 import { LoginScene } from "./scenes/LoginScene";
 import { MapGateScene } from "./scenes/MapGateScene";
@@ -73,6 +76,8 @@ export class App {
   private idleWarning: IdleWarning | null = null;
   private protection: ProtectionWatch | null = null;
   private stayPrompt: StayProtectedPrompt | null = null;
+  private botCheck: BotCheckWatch | null = null;
+  private botCheckCard: BotCheckCard | null = null;
   private stopHearing: (() => void) | null = null;
 
   constructor(private readonly host: HTMLElement) {
@@ -125,10 +130,41 @@ export class App {
     });
     this.protection = protection;
     this.stayPrompt = prompt;
-    this.stopHearing = onAnswer(({ lastAction, now }) => {
+
+    // The in-game check (#273): the server asks for one when it sees bot-like
+    // play, and says so as `checkPending` on the ping's answer and on every
+    // real action's. It comes before both prompts: "Stay protected?" waits
+    // while it is up (a tap would protect nothing), and so does "Still
+    // there?", whose disconnect still comes on time.
+    const card = new BotCheckCard(this.host, (option) => botCheck.choose(option));
+    let idleWarnAt: number | null = null;
+    let checkUp = false;
+    const holdBack = (): void => protection.suppress(idleWarnAt !== null || checkUp);
+    const botCheck = new BotCheckWatch({
+      fetch: fetchBotCheck,
+      answer: answerBotCheck,
+      onShow: (view) => {
+        checkUp = true;
+        warning.hide();
+        holdBack();
+        card.show(view);
+      },
+      onHide: () => {
+        checkUp = false;
+        card.hide();
+        if (idleWarnAt !== null) warning.show(idleWarnAt);
+        holdBack();
+      },
+      account: getAuthToken,
+    });
+    this.botCheck = botCheck;
+    this.botCheckCard = card;
+
+    this.stopHearing = onAnswer(({ lastAction, now, checkPending }) => {
       if (typeof lastAction === "number") {
         protection.hear({ lastAction, ...(typeof now === "number" && { now }) });
       }
+      if (typeof checkPending === "boolean") botCheck.hear(checkPending);
     });
 
     // Ten minutes without input disconnects (#271). The 10 and the 1 minute
@@ -142,15 +178,18 @@ export class App {
     const idle = new IdleWatch({
       timings: idleTimingsFor(window.location.search, import.meta.env.DEV),
       onWarn: (disconnectAt) => {
-        protection.suppress(true);
-        warning.show(disconnectAt);
+        idleWarnAt = disconnectAt;
+        holdBack();
+        if (!checkUp) warning.show(disconnectAt);
       },
       onCancelWarn: () => {
+        idleWarnAt = null;
         warning.hide();
-        protection.suppress(false);
+        holdBack();
       },
       onDisconnect: () => {
         protection.stop();
+        botCheck.stop();
         scenes.goTo(SceneName.AWAY);
       },
     });
@@ -161,13 +200,15 @@ export class App {
       dev["__idle"] = idle;
       dev["__protection"] = protection;
       dev["__yardAttack"] = yardAttack;
+      // `__botCheck.force()` asks a local server for a check now (#273).
+      dev["__botCheck"] = { watch: botCheck, force: forceBotCheck };
     }
 
     // Every screen past sign-in keeps the player online (#242, `presenceScene.ts`)
     // and is watched for the idle disconnect, which an attack or a replay
     // (the Baiter's practice and a Watch included) holds off until it is left.
     const game = (factory: SceneFactory, defer = false): SceneFactory =>
-      withPresence(withHold(withIdle(factory, idle, { defer }), protection));
+      withPresence(withHold(withHold(withIdle(factory, idle, { defer }), protection), botCheck));
     this.scenes
       .register(SceneName.BOOT, () => new BootScene())
       .register(SceneName.LOGIN, () => new LoginScene())
@@ -209,6 +250,7 @@ export class App {
       delete dev["__idle"];
       delete dev["__protection"];
       delete dev["__yardAttack"];
+      delete dev["__botCheck"];
     }
     this.idleWarning?.hide();
     this.idleWarning = null;
@@ -218,6 +260,10 @@ export class App {
     this.protection = null;
     this.stayPrompt?.hide();
     this.stayPrompt = null;
+    this.botCheck?.stop();
+    this.botCheck = null;
+    this.botCheckCard?.hide();
+    this.botCheckCard = null;
     this.pixi.renderer.off("resize", this.handleResize);
     this.scenes?.destroy();
     this.scenes = null;

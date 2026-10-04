@@ -21,7 +21,7 @@ import { redis } from "../../server.js";
  * keeps a player protected (like Flash).
  *
  * A pending challenge (`presence-challenge:<userid>`, the in-game check of
- * issue #273) reads as offline whatever the marks say. Nothing sets it yet.
+ * issue #273, `botChallenge.ts`) reads as offline whatever the marks say.
  */
 
 /** A real action keeps a player online this long: the owner's 10 minutes. */
@@ -118,10 +118,17 @@ export const recordRealAction = async (userid: number, now: number): Promise<voi
 };
 
 /**
- * Sets or clears a pending in-game check (#273). While set the player reads
- * as offline. Not called by anything yet: the check that sets it is #273.
+ * A pending check lasts this long unanswered: a player who never comes back
+ * leaves nothing behind for ever, and one who does and still plays like a
+ * bot is asked again.
+ */
+export const CHALLENGE_PENDING_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+/**
+ * Sets or clears a pending in-game check (#273, `botChallenge.ts`). While set
+ * the player reads as offline.
  */
 export const setChallengePending = async (userid: number, pending: boolean): Promise<void> => {
-  if (pending) await redis.set(challengeKey(userid), "1");
+  if (pending) await redis.setex(challengeKey(userid), CHALLENGE_PENDING_TTL_SECONDS, "1");
   else await redis.del(challengeKey(userid));
 };

@@ -1,9 +1,9 @@
 import { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
-import { postgres } from "../../server.js";
+import { postgres, redis } from "../../server.js";
 import { readAttackSession } from "../base/attackSessionStore.js";
 import { ATTACK_TIMEOUT, isAttackActive } from "../base/isAttackActive.js";
-import { readLastAction } from "./online.js";
+import { challengeKey, readLastAction } from "./online.js";
 
 /**
  * What the web client's presence ping, and the "Stay protected?" tap, answer
@@ -18,6 +18,12 @@ export interface PresenceAnswer {
    * minutes after it.
    */
   readonly lastAction: number;
+  /**
+   * An in-game check is waiting for an answer (#273, `botChallenge.ts`): the
+   * player reads as offline until they answer it, so the client asks for it
+   * (`POST /bm/presence/check`) and shows it.
+   */
+  readonly checkPending: boolean;
   /**
    * The player's main yard is being attacked: who by, and when the attack
    * runs out at the latest (unix seconds). Absent otherwise. Every yard
@@ -53,9 +59,10 @@ export const attackOnMainYard = async (user: User): Promise<PresenceAnswer["atta
  *   (the tap that just made one); read from Redis otherwise.
  */
 export const presenceAnswer = async (user: User, now: number, lastAction?: number): Promise<PresenceAnswer> => {
-  const [action, attack] = await Promise.all([
+  const [action, attack, check] = await Promise.all([
     lastAction ?? readLastAction(user.userid, now),
     attackOnMainYard(user),
+    redis.get(challengeKey(user.userid)),
   ]);
-  return { now, lastAction: action ?? 0, ...(attack && { attack }) };
+  return { now, lastAction: action ?? 0, checkPending: check !== null && check !== undefined, ...(attack && { attack }) };
 };

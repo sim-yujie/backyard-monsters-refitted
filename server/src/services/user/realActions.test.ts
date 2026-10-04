@@ -67,6 +67,15 @@ describe("REAL_ACTION_ROUTES", () => {
     }
   });
 
+  test("an in-game check's answer is one only when it was right (#273)", () => {
+    const route = "/api/:apiVersion/bm/presence/check/answer";
+    const answered = (body: unknown) => ({ method: "POST", request: { body: {} }, body }) as unknown as Context;
+    expect(isRealActionRequest(answered({ error: 0, solved: true }), route)).toBe(true);
+    expect(isRealActionRequest(answered({ error: 0, solved: false }), route)).toBe(false);
+    expect(isRealActionRequest(answered(undefined), route)).toBe(false);
+    expect(isRealActionRequest(ctxOf("POST"), "/api/:apiVersion/bm/presence/check")).toBe(false);
+  });
+
   test("matches the method as well as the route", () => {
     expect(isRealActionRequest(ctxOf("POST"), "/api/:apiVersion/bm/yard/build")).toBe(true);
     expect(isRealActionRequest(ctxOf("GET"), "/api/:apiVersion/bm/yard/build")).toBe(false);

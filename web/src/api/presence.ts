@@ -22,6 +22,8 @@ export interface PresenceAnswer extends ApiEnvelope {
   readonly now?: number;
   /** The last real game action, unix seconds; 0 when none in the last ten minutes. */
   readonly lastAction?: number;
+  /** An in-game check waits for an answer (#273, `api/botCheck.ts`); the player counts as away until then. */
+  readonly checkPending?: boolean;
   /** An attack running on the player's main yard: who by, and when it runs out at the latest. */
   readonly attack?: { readonly by: string; readonly ends: number };
 }

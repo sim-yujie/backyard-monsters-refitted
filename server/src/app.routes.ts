@@ -51,6 +51,7 @@ import { infernoMonsters } from "./controllers/inferno/infernoMonsters.js";
 import { getNeighbours } from "./controllers/maproom/getNeighbours.js";
 import { getMapRoom1 } from "./controllers/maproom/getMapRoom1.js";
 import { presence, stayProtected } from "./controllers/maproom/presence.js";
+import { botCheck, botCheckAnswer, botCheckForce, devCheckEnabled } from "./controllers/maproom/botCheck.js";
 
 import { getArea } from "./controllers/maproom/v2/getArea.js";
 import { getSnapshot } from "./controllers/maproom/v2/bulk/getSnapshot.js";
@@ -168,6 +169,13 @@ router.get("/api/:apiVersion/bm/maproom1", apiVersion, verifyUserAuth, getMapRoo
 router.post("/api/:apiVersion/bm/presence", apiVersion, verifyUserAuth, presence);
 // The "Stay protected?" tap (#275): a real game action, unlike the ping.
 router.post("/api/:apiVersion/bm/presence/stay", apiVersion, verifyUserAuth, logRequest, stayProtected);
+// The in-game check (#273): the one waiting, and a tap on it (a real action when right).
+router.post("/api/:apiVersion/bm/presence/check", apiVersion, verifyUserAuth, logRequest, botCheck);
+router.post("/api/:apiVersion/bm/presence/check/answer", apiVersion, verifyUserAuth, logRequest, botCheckAnswer);
+// DEV only, never mounted in production: asks the caller for a check now.
+if (devCheckEnabled()) {
+  router.post("/api/:apiVersion/bm/presence/check/dev", apiVersion, verifyUserAuth, logRequest, botCheckForce);
+}
 
 /**  ────────────────────────────────────────────────
 * 📦 Map Room 2

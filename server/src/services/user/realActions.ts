@@ -28,7 +28,10 @@ export interface RealActionRoute {
   readonly method: "GET" | "POST" | "PUT" | "DELETE";
   /** The pattern as `app.routes.ts` registers it. */
   readonly path: string;
-  /** Narrows a route that is only sometimes an action. */
+  /**
+   * Narrows a route that is only sometimes an action. The middleware asks once
+   * the route has answered, so it may read the request or the answer.
+   */
   readonly when?: (ctx: Context) => boolean;
 }
 
@@ -97,6 +100,9 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
  */
 export const NOT_REAL_ACTION_YARD_PATHS: readonly string[] = ["state", "goals/state", "tips/seen"];
 
+/** An in-game check's answer (#273) counts only when it was right. */
+const isSolvedCheck = (ctx: Context): boolean => (ctx.body as { solved?: unknown } | undefined)?.solved === true;
+
 /** An attack load: the attack's start. Any other load is not an action. */
 const isAttackLoad = (ctx: Context): boolean => {
   const body = ctx.request.body as { type?: unknown } | undefined;
@@ -126,13 +132,15 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   { method: "POST", path: "/api/:apiVersion/bm/yardplanner/traps/rearm" },
   // The "Stay protected?" prompt's tap (#275): the player said they are there.
   { method: "POST", path: "/api/:apiVersion/bm/presence/stay" },
+  // The in-game check (#273), answered right: the player is there after all.
+  { method: "POST", path: "/api/:apiVersion/bm/presence/check/answer", when: isSolvedCheck },
   // Yard actions.
   ...REAL_ACTION_YARD_PATHS.map((path): RealActionRoute => ({ method: "POST", path: `${YARD_ROUTE_PREFIX}${path}` })),
 ];
 
 const byRoute = new Map(REAL_ACTION_ROUTES.map((route) => [`${route.method} ${route.path}`, route]));
 
-/** Whether a request to this route counts, before its answer is known. */
+/** Whether a request to this route counts; asked once it has answered (see `when`). */
 export const isRealActionRequest = (ctx: Context, matchedRoute: string | undefined): boolean => {
   if (matchedRoute === undefined) return false;
   const route = byRoute.get(`${ctx.method} ${matchedRoute}`);
