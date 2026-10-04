@@ -28,8 +28,10 @@ import { challengeKey, setChallengePending } from "./online.js";
  * before the next. Every trigger and every answer goes in the review log
  * (`botCheckLog.ts`).
  *
- * The store keeps the picture's seed, not the picture: the same seed draws
- * the same picture each time the check is read.
+ * The picture is drawn once, when the check is made, and kept beside it for
+ * as long as the check lasts: reading the check again never draws it again.
+ * The check itself keeps the picture's seed, so a picture that has gone from
+ * the store is drawn again the same.
  */
 
 /** A check waits this long for its answer; after that the next read makes another. */
@@ -84,6 +86,8 @@ export type CheckState =
 const storedKey = (userid: number): string => `bot-check:challenge:${userid}`;
 const wrongKey = (userid: number): string => `bot-check:wrong:${userid}`;
 const cooldownKey = (userid: number): string => `bot-check:cooldown:${userid}`;
+/** The check's picture, a `data:image/png` URL, by the check's id. */
+export const pictureKey = (challengeId: string): string => `bot-check:picture:${challengeId}`;
 
 const token = (bytes: number): string => randomBytes(bytes).toString("hex");
 
@@ -100,14 +104,32 @@ export const makeChallenge = (): StoredChallenge => ({
   seed: token(16),
 });
 
+/** Draws the check's picture, as a `data:image/png` URL. */
+export const drawPicture = ({ target, count, seed }: StoredChallenge): string =>
+  `data:image/png;base64,${renderPicture(target, count, alea(seed)).toString("base64")}`;
+
 /** The check as the client may see it: pictures and words, never the count, the target's id or the seed. */
-export const publicChallenge = ({ id, target, count, seed }: StoredChallenge): PublicChallenge => ({
-  id,
+export const publicChallenge = (stored: StoredChallenge, picture: string = drawPicture(stored)): PublicChallenge => ({
+  id: stored.id,
   prompt: CHALLENGE_PROMPT,
-  name: nameOf(target),
-  reference: `data:image/webp;base64,${referencePicture(target).toString("base64")}`,
-  picture: `data:image/png;base64,${renderPicture(target, count, alea(seed)).toString("base64")}`,
+  name: nameOf(stored.target),
+  reference: `data:image/webp;base64,${referencePicture(stored.target).toString("base64")}`,
+  picture,
 });
+
+/** Keeps a check's picture for as long as the check lasts. */
+const keepPicture = async (challengeId: string, picture: string): Promise<void> => {
+  await redis.setex(pictureKey(challengeId), CHALLENGE_TTL_SECONDS, picture);
+};
+
+/** The check as sent, with the picture kept when it was made: drawn again only if that has gone. */
+const sentChallenge = async (stored: StoredChallenge): Promise<PublicChallenge> => {
+  const kept = await redis.get(pictureKey(stored.id));
+  if (kept !== null) return publicChallenge(stored, kept);
+  const picture = drawPicture(stored);
+  await keepPicture(stored.id, picture);
+  return publicChallenge(stored, picture);
+};
 
 const isPending = async (userid: number): Promise<boolean> => (await redis.get(challengeKey(userid))) !== null;
 
@@ -131,10 +153,14 @@ export const readCheck = async (userid: number, now: number): Promise<CheckState
   const until = await cooldownUntil(userid, now);
   if (until !== null) return { pending: true, cooldownUntil: until };
   const raw = await redis.get(storedKey(userid));
-  if (raw !== null) return { pending: true, challenge: publicChallenge(JSON.parse(raw) as StoredChallenge) };
+  if (raw !== null) return { pending: true, challenge: await sentChallenge(JSON.parse(raw) as StoredChallenge) };
   const made = makeChallenge();
-  await redis.setex(storedKey(userid), CHALLENGE_TTL_SECONDS, JSON.stringify(made));
-  return { pending: true, challenge: publicChallenge(made) };
+  const picture = drawPicture(made);
+  await Promise.all([
+    redis.setex(storedKey(userid), CHALLENGE_TTL_SECONDS, JSON.stringify(made)),
+    keepPicture(made.id, picture),
+  ]);
+  return { pending: true, challenge: publicChallenge(made, picture) };
 };
 
 /**
@@ -162,6 +188,7 @@ export const answerCheck = async (
   if (stored === null || stored.id !== challengeId || (await redis.getdel(storedKey(userid))) !== raw) {
     return { solved: false, state: await readCheck(userid, now) };
   }
+  await redis.del(pictureKey(stored.id));
 
   if (Number(optionId) === stored.count) {
     await Promise.all([

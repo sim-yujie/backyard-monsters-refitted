@@ -247,7 +247,8 @@ describe("the patterns, through the real-action middleware", () => {
     }
     await challenge.raiseCheck(USER, { rule: "dev", detail: "test" }, T0);
     await readCheck();
-    for (const key of [challengeKey(USER), `bot-check:challenge:${USER}`, BOT_CHECK_LOG_KEY]) {
+    const kept = challenge.pictureKey((await stored()).id);
+    for (const key of [challengeKey(USER), `bot-check:challenge:${USER}`, kept, BOT_CHECK_LOG_KEY]) {
       const ttl = await redis.ttl(key);
       expect([key, ttl > 0]).toEqual([key, true]);
     }
@@ -339,6 +340,25 @@ describe("the check", () => {
     expect((await readCheck()).challenge).toEqual(first);
   });
 
+  test("the picture is drawn once, when the check is made, and kept as long as the check", async () => {
+    await challenge.raiseCheck(USER, { rule: "dev", detail: "test" }, T0);
+    const first = (await readCheck()).challenge as Check;
+    const key = challenge.pictureKey(first.id);
+    expect(key).toBe(`bot-check:picture:${first.id}`);
+    expect(await redis.get(key)).toBe(first.picture);
+    expect(await redis.ttl(key)).toBe(challenge.CHALLENGE_TTL_SECONDS);
+
+    // Asking again sends what is kept: a stand-in there comes back as it is, so nothing drew it again.
+    const standIn = "data:image/png;base64,S0VQVA==";
+    await redis.setex(key, challenge.CHALLENGE_TTL_SECONDS, standIn);
+    for (let i = 0; i < 3; i += 1) expect(((await readCheck()).challenge as Check).picture).toBe(standIn);
+
+    // Gone from the store (evicted, or kept by an older server): drawn again from the seed, the same, and kept.
+    await redis.del(key);
+    expect(((await readCheck()).challenge as Check).picture).toBe(first.picture);
+    expect(await redis.get(key)).toBe(first.picture);
+  });
+
   test("the right answer clears it, is a real action and protects the player again", async () => {
     atMs(T0 * 1000);
     await ping();
@@ -354,6 +374,7 @@ describe("the check", () => {
     const body = await answer(check.id, right);
     expect(body).toMatchObject({ error: 0, solved: true, checkPending: false, lastAction: nowSeconds() });
     expect(body.challenge).toBeUndefined();
+    expect(await redis.get(challenge.pictureKey(check.id))).toBeNull();
     expect(await pending()).toBe(false);
     expect(await online()).toBe(true);
     expect(await redis.lrange(`bot-check:times:${USER}`, 0, -1)).toEqual([]);
@@ -378,6 +399,9 @@ describe("the check", () => {
     expect(body.lastAction).toBeUndefined();
     const next = body.challenge as Check;
     expect(next.id).not.toBe(check.id);
+    // The old picture goes with its check; the new one is kept.
+    expect(await redis.get(challenge.pictureKey(check.id))).toBeNull();
+    expect(await redis.get(challenge.pictureKey(next.id))).toBe(next.picture);
     expect(await pending()).toBe(true);
     const [row] = await readBotCheckLog();
     expect(row).toMatchObject({ event: "wrong", userid: USER });

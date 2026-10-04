@@ -39,3 +39,6 @@ server/src/scripts/anticheat/priv/*
 
 # local-only notes
 docs/dev-accounts.md
+
+# Agent handoff notes, written by agents for each other: never committed
+agent-handoffs/

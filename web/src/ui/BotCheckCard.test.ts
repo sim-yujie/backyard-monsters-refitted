@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BotCheckChallenge } from "@/api/botCheck";
+import { ApiError } from "@/api/http";
 import { BOT_CHECK_TEXT, BotCheckCard, botCheckWaitText } from "./BotCheckCard";
 
 /** The in-game check's card (#273). */
@@ -100,6 +101,20 @@ describe("BotCheckCard", () => {
     numbers(host)[0]!.click();
     await vi.advanceTimersByTimeAsync(0);
     expect(onChoose).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks the player to slow down when the server limits answers, and keeps the picture", async () => {
+    const host = document.createElement("div");
+    const onChoose = vi.fn(async () => {
+      throw new ApiError("Too many answers. Please wait a minute.", { status: 429 });
+    });
+    const card = new BotCheckCard(host, onChoose);
+    card.show({ kind: "challenge", challenge: check("k1"), retry: false });
+    numbers(host)[4]!.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(host.querySelector(".presence-check__line")!.textContent).toBe(BOT_CHECK_TEXT.tooFast);
+    expect(host.querySelector<HTMLImageElement>(".presence-check__picture")!.src).toBe("data:image/png;base64,k1B");
+    expect(numbers(host).every((button) => !button.disabled)).toBe(true);
   });
 
   it("shows the wait with no picture, counting down, taps doing nothing, and goes when hidden", () => {

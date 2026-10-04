@@ -241,6 +241,34 @@ export const autoAttackLimiter = RateLimit.middleware({
 });
 
 /**
+ * Rate limits for the in-game check (#273) - 20 reads and 20 answers a minute
+ * per user, each counted on its own. The client asks once per check and a
+ * person taps a few times; the picture is kept, not drawn on each read, but
+ * a read still sends about 250 KB.
+ */
+export const botCheckReadLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 20,
+  prefixKey: "botcheck-read",
+  keyGenerator: byUser("botcheck-read"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many check requests. Please wait a minute.", data: { reason: "rateLimited" } };
+  },
+});
+
+export const botCheckAnswerLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 20,
+  prefixKey: "botcheck-answer",
+  keyGenerator: byUser("botcheck-answer"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many answers. Please wait a minute.", data: { reason: "rateLimited" } };
+  },
+});
+
+/**
  * Rate limit for the auto-attack plan and its replay - 120 a minute per user:
  * the map asks for a camp's plan each time its panel opens.
  */

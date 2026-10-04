@@ -21,6 +21,8 @@ import {
   takeoverQuoteLimiter,
   autoAttackLimiter,
   autoAttackPlanLimiter,
+  botCheckReadLimiter,
+  botCheckAnswerLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -170,11 +172,11 @@ router.post("/api/:apiVersion/bm/presence", apiVersion, verifyUserAuth, presence
 // The "Stay protected?" tap (#275): a real game action, unlike the ping.
 router.post("/api/:apiVersion/bm/presence/stay", apiVersion, verifyUserAuth, logRequest, stayProtected);
 // The in-game check (#273): the one waiting, and a tap on it (a real action when right).
-router.post("/api/:apiVersion/bm/presence/check", apiVersion, verifyUserAuth, logRequest, botCheck);
-router.post("/api/:apiVersion/bm/presence/check/answer", apiVersion, verifyUserAuth, logRequest, botCheckAnswer);
+router.post("/api/:apiVersion/bm/presence/check", apiVersion, verifyUserAuth, botCheckReadLimiter, logRequest, botCheck);
+router.post("/api/:apiVersion/bm/presence/check/answer", apiVersion, verifyUserAuth, botCheckAnswerLimiter, logRequest, botCheckAnswer);
 // DEV only, never mounted in production: asks the caller for a check now.
 if (devCheckEnabled()) {
-  router.post("/api/:apiVersion/bm/presence/check/dev", apiVersion, verifyUserAuth, logRequest, botCheckForce);
+  router.post("/api/:apiVersion/bm/presence/check/dev", apiVersion, verifyUserAuth, botCheckReadLimiter, logRequest, botCheckForce);
 }
 
 /**  ────────────────────────────────────────────────

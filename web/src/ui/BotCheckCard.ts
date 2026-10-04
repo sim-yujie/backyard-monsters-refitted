@@ -1,5 +1,6 @@
 import { countdownText } from "./IdleWarning";
 import { BOT_CHECK_ANSWER_MAX } from "@/api/botCheck";
+import { ApiError } from "@/api/http";
 import type { BotCheckView } from "@/game/presence/botCheckWatch";
 
 /** The card's plain words. */
@@ -8,6 +9,7 @@ export const BOT_CHECK_TEXT = {
   why: "Until you answer, you count as away: other players can attack your yard. Everything else keeps working.",
   retry: "Not quite. Here is a new picture.",
   failed: "Could not reach the server. Try again.",
+  tooFast: "Too many tries in a minute. Wait a moment, then answer again.",
 } as const;
 
 /** The line under the title while too many wrong answers wait out their time. */
@@ -152,8 +154,10 @@ export class BotCheckCard {
         this.sending = false;
         this.setDisabled(false);
       }
-    } catch {
-      this.line.textContent = BOT_CHECK_TEXT.failed;
+    } catch (error) {
+      // The server's limit on answers (429): the same picture, answered a little later.
+      this.line.textContent =
+        error instanceof ApiError && error.status === 429 ? BOT_CHECK_TEXT.tooFast : BOT_CHECK_TEXT.failed;
       this.sending = false;
       this.setDisabled(false);
     }
