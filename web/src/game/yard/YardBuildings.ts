@@ -193,6 +193,8 @@ export class YardBuildings {
   /** Buildings drawn highlighted, and the one filter they all share (#88). */
   private readonly highlighted = new Set<number>();
   private highlightFilter: ColorMatrixFilter | null = null;
+  /** What stands among the buildings for a while, kept through a redraw: see `addGuest`. */
+  private readonly guests = new Set<Container>();
 
   constructor() {
     this.textures = new YardTextures(() => {
@@ -285,7 +287,33 @@ export class YardBuildings {
       this.byId.set(building.id, view);
     }
 
+    if (this.guests.size > 0) {
+      for (const guest of this.guests) this.tops.addChild(guest);
+      this.resortByDepth();
+    }
     this.pending = true;
+  }
+
+  /**
+   * Stands a sprite among the buildings, sorted by its own `zIndex` — a
+   * `creepZIndex`, so a building it is behind hides it (#272). For new
+   * monsters walking to Housing, which come and go while the yard stays up:
+   * a redraw keeps them, and switches the depth sort on again for them. The
+   * caller owns the sprite and takes it out with {@link removeGuest}.
+   */
+  addGuest(child: Container): void {
+    // Asked first: Pixi switches sorting on by itself for a child that comes
+    // with a `zIndex`, before the buildings have keys of their own.
+    const sorted = this.tops.sortableChildren;
+    this.guests.add(child);
+    this.tops.addChild(child);
+    if (!sorted) this.resortByDepth();
+  }
+
+  /** Takes out a sprite {@link addGuest} put in, without destroying it. */
+  removeGuest(child: Container): void {
+    if (!this.guests.delete(child)) return;
+    if (child.parent === this.tops) this.tops.removeChild(child);
   }
 
   /**
@@ -616,6 +644,8 @@ export class YardBuildings {
   }
 
   clear(): void {
+    // Guests are their owners' to destroy; `show` puts them back.
+    for (const guest of this.guests) this.tops.removeChild(guest);
     for (const layer of [this.shadows, this.tops, this.labels, this.markers]) {
       for (const child of layer.removeChildren()) child.destroy();
     }
@@ -627,6 +657,7 @@ export class YardBuildings {
 
   destroy(): void {
     this.clear();
+    this.guests.clear();
     this.highlightFilter?.destroy();
     this.highlightFilter = null;
     this.textures.destroy();

@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Container } from "pixi.js";
 import type { BaseLoadResponse, CompletedJob } from "@/api/types";
 import { JobKind, type YardJob } from "@/game/yard/jobs";
 import { YardView } from "@/game/yard/YardRenderer";
@@ -103,7 +102,8 @@ describe("HatchWalkOuts", () => {
     let listener: YardListener = () => {};
     const release = vi.fn();
     const renderer = {
-      root: new Container(),
+      standAmongBuildings: vi.fn(),
+      leaveBuildings: vi.fn(),
       yardToWorld: (x: number, y: number) => ({ x, y }),
       holdLife: vi.fn(() => release),
       view: options.view ?? YardView.ISO,
@@ -128,7 +128,6 @@ describe("HatchWalkOuts", () => {
     emit(predicted(hatchJob(4)));
     expect(walks.walking).toBe(1);
     expect(renderer.holdLife).toHaveBeenCalledWith("C1", 15);
-    expect(renderer.root.children).toHaveLength(1);
     expect(release).not.toHaveBeenCalled();
 
     walks.destroy();

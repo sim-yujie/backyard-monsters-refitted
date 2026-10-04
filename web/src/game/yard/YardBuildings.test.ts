@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // jsdom: a colour-matrix filter asks for a canvas when it is made.
 import { describe, expect, it } from "vitest";
-import { Texture, type ColorMatrixFilter } from "pixi.js";
+import { Sprite, Texture, type ColorMatrixFilter } from "pixi.js";
+import { creepZIndex } from "@/game/attack/AttackBattleLayer";
 import type { BaseLoadResponse } from "@/api/types";
 import type { YardArtAtlas } from "./yardAtlas";
 import { HIGHLIGHT_MATRIX, YardBuildings } from "./YardBuildings";
@@ -215,5 +216,47 @@ describe("YardBuildings.isAnimating, only while working (#255)", () => {
     buildings.setWork(readWork(response));
     expect(buildings.isAnimating(2, now)).toBe(true);
     buildings.destroy();
+  });
+});
+
+describe("YardBuildings guests (#272)", () => {
+  it("stands a walker among the buildings by its depth key, through a redraw, until it leaves", () => {
+    const yard = readYard(yardResponse());
+    const sniper = yard.buildings.find((one) => one.id === 2)!;
+    const buildings = new YardBuildings();
+    buildings.show(yard, fakeAtlas());
+
+    const behind = new Sprite(Texture.WHITE);
+    behind.zIndex = creepZIndex(sniper.centreX, sniper.centreY - 20, 1);
+    const inFront = new Sprite(Texture.WHITE);
+    inFront.zIndex = creepZIndex(sniper.centreX, sniper.centreY + 20, 2);
+    buildings.addGuest(behind);
+    buildings.addGuest(inFront);
+
+    // Where each stands in the draw list once sorted; the Sniper by its key.
+    const order = (): number[] => {
+      buildings.tops.sortChildren();
+      const children = buildings.tops.children;
+      const top = children.findIndex((child) => child.zIndex === sniper.depth * 8);
+      return [children.indexOf(behind), top, children.indexOf(inFront)];
+    };
+    const [before, sniperAt, after] = order();
+    expect(before).toBeLessThan(sniperAt!);
+    expect(after).toBeGreaterThan(sniperAt!);
+
+    // A redraw destroys every building sprite; the walkers stay, sorted.
+    buildings.show(readYard(yardResponse()), fakeAtlas());
+    expect(behind.destroyed).toBe(false);
+    const [again, sniperAgain, afterAgain] = order();
+    expect(again).toBeLessThan(sniperAgain!);
+    expect(afterAgain).toBeGreaterThan(sniperAgain!);
+
+    buildings.removeGuest(behind);
+    expect(behind.parent).toBeNull();
+    expect(behind.destroyed).toBe(false);
+    buildings.destroy();
+    expect(inFront.destroyed).toBe(false);
+    behind.destroy();
+    inFront.destroy();
   });
 });

@@ -106,7 +106,7 @@ export const plannedWalks = (
 /** What the walks need from the yard. */
 export interface HatchWalkMounts {
   readonly store: Pick<YardStore, "save" | "yard" | "subscribe">;
-  readonly renderer: Pick<YardRenderer, "root" | "yardToWorld" | "holdLife" | "view">;
+  readonly renderer: Pick<YardRenderer, "standAmongBuildings" | "leaveBuildings" | "yardToWorld" | "holdLife" | "view">;
   /** Whether walks are left out just now: the planner is open. */
   readonly quiet?: () => boolean;
   readonly reducedMotion?: boolean;

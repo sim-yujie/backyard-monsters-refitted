@@ -1,7 +1,7 @@
-import { Container, Sprite } from "pixi.js";
-import { MonsterSheetTextures } from "@/game/attack/AttackBattleLayer";
+import { Sprite, type Container } from "pixi.js";
+import { creepZIndex, MonsterSheetTextures } from "@/game/attack/AttackBattleLayer";
 import { anchorOffset, frameRow, sheetColumn, spriteFor } from "@/game/attack/monsterSprites";
-import { boxAround, type RaidHost } from "./StagedRaidLayer";
+import { boxAround } from "./StagedRaidLayer";
 import type { YardPoint } from "./stagedRaid";
 
 /**
@@ -13,6 +13,12 @@ import type { YardPoint } from "./stagedRaid";
  *
  * They start in a loose line past `from` and walk to `to`, then fade there,
  * as if going in. Ends by itself; {@link destroy} takes it down early.
+ *
+ * They stand among the buildings, sorted as the pens' monsters and the attack
+ * screen's creeps are (`creepZIndex`), so a building they pass behind hides
+ * them (#272), as Flash's hatched monsters were: it spawns them into the
+ * buildings' own layer (`MAP._BUILDINGTOPS`, `client/scripts/HOUSING.as:131`).
+ * They used to be drawn over every building.
  */
 
 /** Yard units a second. */
@@ -41,6 +47,21 @@ export interface WalkInOptions {
 
 /** The most drawn at once; more read as a crowd anyway. */
 export const MAX_WALKERS = 15;
+
+/** Walkers' depth tie-break ids start here, clear of the pens' walkers. */
+const WALK_IN_DEPTH_ID = 800;
+
+/** What a walk is drawn on: the yard renderer. */
+export interface WalkInHost {
+  yardToWorld(x: number, y: number): { x: number; y: number };
+  /** Puts a sprite among the buildings, sorted by its `zIndex`, until `leaveBuildings`. */
+  standAmongBuildings(child: Container): void;
+  leaveBuildings(child: Container): void;
+}
+
+/** The depth-sort key of walker `index` standing at world `ground` (#272). */
+export const walkerZIndex = (ground: { x: number; y: number }, index: number): number =>
+  creepZIndex(ground.x, ground.y, WALK_IN_DEPTH_ID + index);
 
 /** Where walker `index` is `t` seconds in, and whether it has gone in. */
 export const walkerAt = (
@@ -102,7 +123,7 @@ const centreOf = (building: WalkInBuilding): YardPoint => ({
  * called.
  */
 export const walkIntoHousing = (
-  host: RaidHost,
+  host: WalkInHost,
   yard: WalkInYard,
   monster: string,
   count: number,
@@ -151,7 +172,7 @@ export const hatcheryWalk = (
  * Housing to walk between; `onEnd` is then never called.
  */
 export const walkOutOfHatchery = (
-  host: RaidHost,
+  host: WalkInHost,
   yard: WalkInYard,
   hatchery: number,
   monster: string,
@@ -166,7 +187,6 @@ export const walkOutOfHatchery = (
 };
 
 export class MonsterWalkIn {
-  private readonly root = new Container();
   private readonly sprites: Sprite[] = [];
   private readonly textures = new MonsterSheetTextures();
   private frame: number | null = null;
@@ -174,12 +194,9 @@ export class MonsterWalkIn {
   private ended = false;
 
   constructor(
-    private readonly host: RaidHost,
+    private readonly host: WalkInHost,
     private readonly options: WalkInOptions,
   ) {
-    this.root.eventMode = "none";
-    this.root.sortableChildren = true;
-    host.root.addChild(this.root);
     const sheet = spriteFor(options.monster);
     if (sheet) this.textures.preload(sheet);
   }
@@ -211,13 +228,14 @@ export class MonsterWalkIn {
         if (!texture) continue;
         if (!sprite) {
           sprite = new Sprite(texture);
+          sprite.eventMode = "none";
           this.sprites[index] = sprite;
-          this.root.addChild(sprite);
+          this.host.standAmongBuildings(sprite);
         }
         const anchor = anchorOffset(sheet);
         sprite.texture = texture;
         sprite.position.set(ground.x + anchor.x, ground.y + anchor.y);
-        sprite.zIndex = ground.y;
+        sprite.zIndex = walkerZIndex(ground, index);
         sprite.alpha = at.alpha;
         // Not yet set off: still off the edge, not drawn.
         sprite.visible = t >= index * STAGGER && !at.done;
@@ -238,15 +256,19 @@ export class MonsterWalkIn {
     const ending = !this.ended;
     this.ended = true;
     if (ending) this.options.onEnd?.();
-    this.root.parent?.removeChild(this.root);
-    this.root.destroy({ children: true });
+    for (const sprite of this.sprites) {
+      if (!sprite) continue;
+      this.host.leaveBuildings(sprite);
+      sprite.destroy();
+    }
+    this.sprites.length = 0;
     this.textures.destroy();
   }
 
   private finish(): void {
     if (this.ended) return;
     this.ended = true;
-    this.root.visible = false;
+    for (const sprite of this.sprites) if (sprite) sprite.visible = false;
     this.options.onEnd?.();
   }
 }

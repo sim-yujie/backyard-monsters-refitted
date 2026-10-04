@@ -659,6 +659,21 @@ export class YardRenderer {
   }
 
   /**
+   * Stands a sprite among the buildings, depth-sorted by its `zIndex` (a
+   * `creepZIndex`), until {@link leaveBuildings}: new monsters walking to
+   * Housing (#272). Unlike {@link depthSortedLayer} it survives a redraw. The
+   * caller owns the sprite.
+   */
+  standAmongBuildings(child: Container): void {
+    this.buildings.addGuest(child);
+  }
+
+  /** Takes out a sprite {@link standAmongBuildings} put in, without destroying it. */
+  leaveBuildings(child: Container): void {
+    this.buildings.removeGuest(child);
+  }
+
+  /**
    * The container every building's shadow is drawn in, beneath all the
    * buildings, for a battle layer's flyer shadows (issue #78). Flash draws
    * both at `MAP.DEPTH_SHADOW`, so a wall block stands over a flyer's shadow.
