@@ -11,7 +11,8 @@ import { answerCheck, type CheckState, raiseCheck, readCheck } from "../../servi
  * The in-game check's routes (#273, `services/user/botChallenge.ts`).
  *
  * Each answers `{ error: 0, now, checkPending }` and, while a check waits,
- * either `challenge` (`{ id, prompt, options: [{ id, monster }] }`) or
+ * either `challenge` (`{ id, prompt, name, reference, picture }`, the last two
+ * image data URLs) or
  * `cooldownUntil` (unix seconds) after too many wrong answers.
  */
 
@@ -37,12 +38,12 @@ export const botCheck: KoaController = async (ctx) => {
 const AnswerSchema = z.object({
   /** The check's id. */
   challenge: z.string().min(1).max(64),
-  /** The option tapped. */
-  option: z.string().min(1).max(64),
+  /** The number tapped, 1-9. */
+  option: z.string().min(1).max(8),
 });
 
 /**
- * `POST /api/:apiVersion/bm/presence/check/answer`: a tap on one portrait.
+ * `POST /api/:apiVersion/bm/presence/check/answer`: a number tapped.
  * Right, it clears the check and answers `solved: true`, which makes it a real
  * game action (`realActions.ts`); wrong, it answers the next check, or the
  * wait.

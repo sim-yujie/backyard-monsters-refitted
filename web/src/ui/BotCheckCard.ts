@@ -1,12 +1,12 @@
 import { countdownText } from "./IdleWarning";
-import { monsterPortrait, showPortrait } from "@/game/portraits";
+import { BOT_CHECK_ANSWER_MAX } from "@/api/botCheck";
 import type { BotCheckView } from "@/game/presence/botCheckWatch";
 
 /** The card's plain words. */
 export const BOT_CHECK_TEXT = {
   title: "Quick check",
   why: "Until you answer, you count as away: other players can attack your yard. Everything else keeps working.",
-  retry: "Not that one. Here is a new check.",
+  retry: "Not quite. Here is a new picture.",
   failed: "Could not reach the server. Try again.",
 } as const;
 
@@ -15,22 +15,28 @@ export const botCheckWaitText = (msLeft: number): string =>
   msLeft > 0 ? `Too many wrong answers. The next check comes in ${countdownText(msLeft)}.` : "The next check is coming.";
 
 /**
- * The in-game check's card (#273, `game/presence/botCheckWatch.ts`): "Quick
- * check: tap the Pokey" over a row of monster portraits, in the order the
- * server gave them.
+ * The in-game check's card (#273, `game/presence/botCheckWatch.ts`): "How
+ * many of these are in the picture?" beside the monster's portrait and name,
+ * over a picture of the yard the server drew, with a button for each number
+ * from 1 to 9.
  *
  * A card near the top of the screen, as the "Stay protected?" prompt is, and
  * in its place: it does not dim or block the game behind it, which keeps
  * working. It says plainly that the yard can be attacked until it is
  * answered. It lives on the game's host, so a screen change does not take it
- * down. The portraits carry no names, to a screen reader either: naming them
- * would answer the check.
+ * down.
+ *
+ * Known gap: the picture has no text alternative, so the check cannot be
+ * answered with a screen reader. Describing it would answer it.
  */
 export class BotCheckCard {
   private readonly element: HTMLElement;
   private readonly prompt: HTMLElement;
+  private readonly reference: HTMLImageElement;
+  private readonly name: HTMLElement;
+  private readonly picture: HTMLImageElement;
   private readonly line: HTMLElement;
-  private readonly options: HTMLElement;
+  private readonly numbers: HTMLButtonElement[];
   private view: BotCheckView | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private sending = false;
@@ -41,30 +47,57 @@ export class BotCheckCard {
     private readonly now: () => number = Date.now,
   ) {
     this.element = document.createElement("section");
-    this.element.className = "bot-check";
+    this.element.className = "presence-check";
     this.element.setAttribute("role", "alertdialog");
     this.element.setAttribute("aria-label", BOT_CHECK_TEXT.title);
 
     const title = document.createElement("strong");
-    title.className = "bot-check__title";
+    title.className = "presence-check__title";
     title.textContent = BOT_CHECK_TEXT.title;
-    this.prompt = document.createElement("span");
-    this.prompt.className = "bot-check__prompt";
-    const heading = document.createElement("p");
-    heading.className = "bot-check__heading";
-    heading.append(title, this.prompt);
 
+    this.reference = document.createElement("img");
+    this.reference.className = "presence-check__reference";
+    this.reference.alt = "";
+    this.reference.draggable = false;
+    this.name = document.createElement("span");
+    this.name.className = "presence-check__name";
+    const target = document.createElement("figure");
+    target.className = "presence-check__target";
+    target.append(this.reference, this.name);
+    this.prompt = document.createElement("p");
+    this.prompt.className = "presence-check__prompt";
     const why = document.createElement("p");
-    why.className = "bot-check__why";
+    why.className = "presence-check__why";
     why.textContent = BOT_CHECK_TEXT.why;
+    const words = document.createElement("div");
+    words.className = "presence-check__words";
+    words.append(this.prompt, why);
+    const question = document.createElement("div");
+    question.className = "presence-check__question";
+    question.append(target, words);
 
-    this.options = document.createElement("div");
-    this.options.className = "bot-check__options";
+    this.picture = document.createElement("img");
+    this.picture.className = "presence-check__picture";
+    this.picture.alt = "";
+    this.picture.draggable = false;
+
+    const numbers = document.createElement("div");
+    numbers.className = "presence-check__numbers";
+    this.numbers = Array.from({ length: BOT_CHECK_ANSWER_MAX }, (_, i) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn presence-check__number";
+      button.textContent = String(i + 1);
+      button.addEventListener("click", () => void this.choose(String(i + 1)));
+      return button;
+    });
+    numbers.append(...this.numbers);
+
     this.line = document.createElement("p");
-    this.line.className = "bot-check__line";
+    this.line.className = "presence-check__line";
     this.line.setAttribute("aria-live", "polite");
 
-    this.element.append(heading, why, this.options, this.line);
+    this.element.append(title, question, this.picture, numbers, this.line);
   }
 
   get shown(): boolean {
@@ -91,41 +124,30 @@ export class BotCheckCard {
     const view = this.view;
     if (view === null) return;
     this.sending = false;
-    this.element.classList.toggle("bot-check--wait", view.kind === "wait");
+    this.setDisabled(false);
+    this.element.classList.toggle("presence-check--wait", view.kind === "wait");
     if (view.kind === "wait") {
-      this.prompt.textContent = "";
-      this.options.replaceChildren();
+      this.picture.removeAttribute("src");
+      this.reference.removeAttribute("src");
       this.tick();
       return;
     }
-    this.prompt.textContent = `: ${view.challenge.prompt.charAt(0).toLowerCase()}${view.challenge.prompt.slice(1)}`;
+    const { challenge } = view;
+    this.prompt.textContent = challenge.prompt;
+    this.name.textContent = challenge.name;
+    this.reference.src = challenge.reference;
+    this.picture.src = challenge.picture;
     this.line.textContent = view.retry ? BOT_CHECK_TEXT.retry : "";
-    this.options.replaceChildren(
-      ...view.challenge.options.map((option, i) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "bot-check__option";
-        button.setAttribute("aria-label", `Monster ${i + 1}`);
-        const picture = document.createElement("img");
-        picture.className = "bot-check__picture";
-        picture.alt = "";
-        picture.draggable = false;
-        showPortrait(picture, monsterPortrait(option.monster, "icon"));
-        button.append(picture);
-        button.addEventListener("click", () => void this.choose(option.id));
-        return button;
-      }),
-    );
   }
 
   private async choose(option: string): Promise<void> {
-    if (this.sending) return;
+    if (this.sending || this.view?.kind !== "challenge") return;
     this.sending = true;
     this.setDisabled(true);
     try {
-      // The watch shows what comes next: solved, a new check, or the wait.
+      // The watch shows what comes next: solved, a new picture, or the wait.
       await this.onChoose(option);
-      // Nothing new came (the tap was not sent): the same options again.
+      // Nothing new came (the tap was not sent): the same picture again.
       if (this.sending) {
         this.sending = false;
         this.setDisabled(false);
@@ -138,7 +160,7 @@ export class BotCheckCard {
   }
 
   private setDisabled(disabled: boolean): void {
-    for (const button of this.options.querySelectorAll("button")) button.disabled = disabled;
+    for (const button of this.numbers) button.disabled = disabled;
   }
 
   private tick(): void {

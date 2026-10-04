@@ -1,64 +1,77 @@
 import { randomBytes, randomInt } from "node:crypto";
+import alea from "alea";
 
 import { redis } from "../../server.js";
-import { LISTED_MONSTERS, monsterEntry } from "../../game-data/monsterCatalogue.js";
+import { monsterEntry } from "../../game-data/monsterCatalogue.js";
 import { logBotCheck } from "./botCheckLog.js";
 import { type BotTrigger, observeRealAction, resetPatterns } from "./botPatterns.js";
+import { referencePicture, renderPicture } from "./botPicture.js";
 import { challengeKey, setChallengePending } from "./online.js";
 
 /**
- * The in-game check (#273): "Quick check: tap the Pokey" among a few monster
- * portraits, asked when `botPatterns.ts` sees a bot-like pattern.
+ * The in-game check (#273): "How many of these are in the picture?", asked
+ * when `botPatterns.ts` sees a bot-like pattern.
  *
  * While it is unanswered the player reads as offline, and so can be attacked
  * (`online.ts`, the `presence-challenge:<userid>` flag); everything else keeps
  * working. A right answer clears the flag and is a real game action
  * (`realActions.ts`), so the player is protected again at once.
  *
- * The server makes each check and keeps its answer: the client gets an opaque
- * id, the options in a shuffled order, each an opaque id with the monster to
- * draw, and the prompt. A wrong answer gets a new check;
- * {@link WRONG_ANSWER_LIMIT} of them in {@link WRONG_ANSWER_WINDOW_SECONDS}
- * start a wait of {@link COOLDOWN_SECONDS} before the next. Every trigger and
- * every answer goes in the review log (`botCheckLog.ts`).
+ * The server makes each check and keeps its answer. The picture is drawn here
+ * (`botPicture.ts`): {@link CHALLENGE_COUNT_MIN}-{@link CHALLENGE_COUNT_MAX}
+ * of one monster among others on the yard's grass. The client gets an opaque
+ * id, the question, the monster's name, a reference portrait and the
+ * picture, both as image bytes: no monster id, position or count. The answer
+ * is a number from 1 to {@link CHALLENGE_ANSWER_MAX}. A wrong answer gets a
+ * new picture; {@link WRONG_ANSWER_LIMIT} of them in
+ * {@link WRONG_ANSWER_WINDOW_SECONDS} start a wait of {@link COOLDOWN_SECONDS}
+ * before the next. Every trigger and every answer goes in the review log
+ * (`botCheckLog.ts`).
+ *
+ * The store keeps the picture's seed, not the picture: the same seed draws
+ * the same picture each time the check is read.
  */
 
 /** A check waits this long for its answer; after that the next read makes another. */
 export const CHALLENGE_TTL_SECONDS = 15 * 60;
-/** Portraits on one check: four to six. */
-export const CHALLENGE_OPTIONS_MIN = 4;
-export const CHALLENGE_OPTIONS_MAX = 6;
+/** How many of the monster a picture holds. */
+export const CHALLENGE_COUNT_MIN = 2;
+export const CHALLENGE_COUNT_MAX = 7;
+/** The answer buttons run from 1 to this. */
+export const CHALLENGE_ANSWER_MAX = 9;
 /**
  * The monsters a check asks for: the eight of Monster Locker levels 1 and 2,
- * the ones a player meets first. The other options come from every listed
- * monster.
+ * the ones a player meets first, each with a painted portrait for the
+ * reference. The other monsters in the picture come from C1-C15.
  */
 export const CHALLENGE_TARGETS: readonly string[] = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"];
+export const CHALLENGE_PROMPT = "How many of these are in the picture?";
 export const WRONG_ANSWER_LIMIT = 5;
 export const WRONG_ANSWER_WINDOW_SECONDS = 10 * 60;
 export const COOLDOWN_SECONDS = 2 * 60;
 /** The answer route, as `app.routes.ts` writes it. */
 export const CHECK_ANSWER_ROUTE = "/api/:apiVersion/bm/presence/check/answer";
 
-/** One portrait to tap: an id that means nothing outside this check, and the monster to draw. */
-export interface ChallengeOption {
-  readonly id: string;
-  readonly monster: string;
-}
-
 /** What the client sees of a check. */
 export interface PublicChallenge {
   readonly id: string;
-  /** "Tap the Pokey". */
+  /** {@link CHALLENGE_PROMPT}. */
   readonly prompt: string;
-  readonly options: readonly ChallengeOption[];
+  /** The monster to count, by name: "Pokey". */
+  readonly name: string;
+  /** Its painted portrait, a `data:image/webp` URL. */
+  readonly reference: string;
+  /** The picture to count in, a `data:image/png` URL. */
+  readonly picture: string;
 }
 
 /** What the server keeps. */
-interface StoredChallenge extends PublicChallenge {
-  /** The option id to tap. */
-  readonly answer: string;
+interface StoredChallenge {
+  readonly id: string;
   readonly target: string;
+  readonly count: number;
+  /** Draws the picture (`botPicture.ts`). */
+  readonly seed: string;
 }
 
 /** Where the player's check stands. */
@@ -72,34 +85,28 @@ const storedKey = (userid: number): string => `bot-check:challenge:${userid}`;
 const wrongKey = (userid: number): string => `bot-check:wrong:${userid}`;
 const cooldownKey = (userid: number): string => `bot-check:cooldown:${userid}`;
 
-const token = (): string => randomBytes(8).toString("hex");
-
-const shuffled = <T>(items: readonly T[]): T[] => {
-  const out = [...items];
-  for (let i = out.length - 1; i > 0; i -= 1) {
-    const j = randomInt(i + 1);
-    [out[i], out[j]] = [out[j]!, out[i]!];
-  }
-  return out;
-};
+const token = (bytes: number): string => randomBytes(bytes).toString("hex");
 
 const nameOf = (monster: string): string => monsterEntry(monster)?.name ?? monster;
 
-/** A new check: a target, the other options, all in a random order, every id fresh. */
-export const makeChallenge = (): StoredChallenge => {
-  const target = CHALLENGE_TARGETS[randomInt(CHALLENGE_TARGETS.length)]!;
-  const count = randomInt(CHALLENGE_OPTIONS_MIN, CHALLENGE_OPTIONS_MAX + 1);
-  const others = shuffled(LISTED_MONSTERS.map(({ id }) => id).filter((id) => id !== target)).slice(0, count - 1);
-  const options = shuffled([target, ...others]).map((monster) => ({ id: token(), monster }));
-  const answer = options.find(({ monster }) => monster === target)!.id;
-  return { id: token(), prompt: `Tap the ${nameOf(target)}`, options, answer, target };
-};
+/** "5 Pokeys", for the review log. */
+const counted = (count: number, monster: string): string => `${count} ${nameOf(monster)}${count === 1 ? "" : "s"}`;
 
-/** The check as the client may see it: never the answer or the target. */
-export const publicChallenge = ({ id, prompt, options }: StoredChallenge): PublicChallenge => ({
+/** A new check: a target, how many, and a fresh id and seed. */
+export const makeChallenge = (): StoredChallenge => ({
+  id: token(8),
+  target: CHALLENGE_TARGETS[randomInt(CHALLENGE_TARGETS.length)]!,
+  count: randomInt(CHALLENGE_COUNT_MIN, CHALLENGE_COUNT_MAX + 1),
+  seed: token(16),
+});
+
+/** The check as the client may see it: pictures and words, never the count, the target's id or the seed. */
+export const publicChallenge = ({ id, target, count, seed }: StoredChallenge): PublicChallenge => ({
   id,
-  prompt,
-  options: options.map(({ id: option, monster }) => ({ id: option, monster })),
+  prompt: CHALLENGE_PROMPT,
+  name: nameOf(target),
+  reference: `data:image/webp;base64,${referencePicture(target).toString("base64")}`,
+  picture: `data:image/png;base64,${renderPicture(target, count, alea(seed)).toString("base64")}`,
 });
 
 const isPending = async (userid: number): Promise<boolean> => (await redis.get(challengeKey(userid))) !== null;
@@ -141,6 +148,7 @@ export const readCheck = async (userid: number, now: number): Promise<CheckState
 export const answerCheck = async (
   userid: number,
   challengeId: string,
+  /** The number tapped, as sent. */
   optionId: string,
   now: number,
   nowMs: number = Date.now()
@@ -155,24 +163,23 @@ export const answerCheck = async (
     return { solved: false, state: await readCheck(userid, now) };
   }
 
-  if (optionId === stored.answer) {
+  if (Number(optionId) === stored.count) {
     await Promise.all([
       setChallengePending(userid, false),
       redis.del(wrongKey(userid), cooldownKey(userid)),
       resetPatterns(userid, nowMs),
     ]);
-    await logBotCheck({ at: now, userid, event: "solved", detail: `tapped the ${nameOf(stored.target)}` });
+    await logBotCheck({ at: now, userid, event: "solved", detail: `counted ${counted(stored.count, stored.target)}` });
     return { solved: true, state: { pending: false } };
   }
 
   const wrong = await redis.incr(wrongKey(userid));
   if (wrong === 1) await redis.expire(wrongKey(userid), WRONG_ANSWER_WINDOW_SECONDS);
-  const picked = stored.options.find(({ id }) => id === optionId)?.monster;
   await logBotCheck({
     at: now,
     userid,
     event: "wrong",
-    detail: `tapped ${picked === undefined ? "no option of the check" : `the ${nameOf(picked)}`} for the ${nameOf(stored.target)}, wrong answer ${wrong} of ${WRONG_ANSWER_LIMIT}`,
+    detail: `answered ${optionId.slice(0, 8)} for ${counted(stored.count, stored.target)}, wrong answer ${wrong} of ${WRONG_ANSWER_LIMIT}`,
   });
   if (wrong >= WRONG_ANSWER_LIMIT) {
     const waitUntil = now + COOLDOWN_SECONDS;

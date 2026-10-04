@@ -30,6 +30,9 @@ const { BOT_CHECK_LOG_KEY, BOT_CHECK_LOG_MAX, BOT_CHECK_LOG_TTL_SECONDS, readBot
 const { ATTACK_ONLINE_SECONDS, CHALLENGE_PENDING_TTL_SECONDS, challengeKey, isPlayerOnline } = await import(
   "./online.js"
 );
+const { PICTURE_HEIGHT, PICTURE_WIDTH } = await import("./botPicture.js");
+const { decodePng } = await import("../../utils/png.js");
+const { monsterEntry } = await import("../../game-data/monsterCatalogue.js");
 
 const {
   REGULAR_MIN_GAP_MS,
@@ -84,23 +87,18 @@ const answer = (challengeId: string, option: string) =>
 const online = () => isPlayerOnline(USER, nowSeconds(), ATTACK_ONLINE_SECONDS);
 const pending = async () => (await redis.get(challengeKey(USER))) !== null;
 
-interface Option {
-  id: string;
-  monster: string;
-}
 interface Check {
   id: string;
   prompt: string;
-  options: Option[];
+  name: string;
+  reference: string;
+  picture: string;
 }
 /** The stored check, as only the server sees it. */
-const stored = async (): Promise<Check & { answer: string; target: string }> =>
+const stored = async (): Promise<{ id: string; target: string; count: number; seed: string }> =>
   JSON.parse((await redis.get(`bot-check:challenge:${USER}`))!);
-const rightOption = async () => (await stored()).answer;
-const aWrongOption = async () => {
-  const { options, answer: right } = await stored();
-  return options.find(({ id }) => id !== right)!.id;
-};
+const rightOption = async () => String((await stored()).count);
+const aWrongOption = async () => String((await stored()).count + 1);
 
 /** A small deterministic random, so the human-like runs are the same every time. */
 const seeded = (seed: number) => () => {
@@ -294,40 +292,45 @@ describe("the check", () => {
     expect((await ping()).checkPending).toBe(false);
   });
 
-  test("names a monster among 4 to 6 different ones, and never says which is right", async () => {
+  test("is a picture, a portrait and a name, and never says how many, which monster id or where", async () => {
     const counts = new Set<number>();
-    const places = new Set<number>();
-    for (let i = 0; i < 60; i += 1) {
+    const targets = new Set<string>();
+    const pictures = new Set<string>();
+    for (let i = 0; i < 30; i += 1) {
       redis.clear();
       await challenge.raiseCheck(USER, { rule: "dev", detail: "test" }, T0);
       const body = await readCheck();
       expect(Object.keys(body).sort()).toEqual(["challenge", "checkPending", "error", "now"]);
       const check = body.challenge as Check;
-      expect(Object.keys(check).sort()).toEqual(["id", "options", "prompt"]);
-      for (const option of check.options) expect(Object.keys(option).sort()).toEqual(["id", "monster"]);
-
-      const monsters = check.options.map(({ monster }) => monster);
-      expect(new Set(monsters).size).toBe(monsters.length);
-      expect(monsters.length).toBeGreaterThanOrEqual(4);
-      expect(monsters.length).toBeLessThanOrEqual(6);
-      expect(monsters).not.toContain("C18");
-      const ids = check.options.map(({ id }) => id);
-      expect(new Set([...ids, check.id]).size).toBe(ids.length + 1);
-      for (const id of ids) expect(id).toMatch(/^[0-9a-f]{16}$/);
+      expect(Object.keys(check).sort()).toEqual(["id", "name", "picture", "prompt", "reference"]);
+      expect(check.id).toMatch(/^[0-9a-f]{16}$/);
+      expect(check.prompt).toBe("How many of these are in the picture?");
 
       const secret = await stored();
-      expect(check.prompt).toMatch(/^Tap the /);
-      expect(monsters).toContain(secret.target);
+      expect(check.name).toBe(monsterEntry(secret.target)!.name);
       expect(challenge.CHALLENGE_TARGETS).toContain(secret.target);
-      const serialised = JSON.stringify(body);
-      expect(serialised).not.toContain("answer");
-      expect(serialised).not.toContain("target");
-      counts.add(monsters.length);
-      places.add(monsters.indexOf(secret.target));
+      expect(secret.count).toBeGreaterThanOrEqual(challenge.CHALLENGE_COUNT_MIN);
+      expect(secret.count).toBeLessThanOrEqual(challenge.CHALLENGE_COUNT_MAX);
+
+      // The pictures are image bytes and nothing else.
+      expect(check.reference).toMatch(/^data:image\/webp;base64,[A-Za-z0-9+/]+=*$/);
+      expect(check.picture).toMatch(/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/);
+      const png = decodePng(Buffer.from(check.picture.slice(check.picture.indexOf(",") + 1), "base64"));
+      expect([png.width, png.height]).toEqual([PICTURE_WIDTH, PICTURE_HEIGHT]);
+
+      // Outside the image bytes: no count, no monster id, no seed, no position.
+      const words = JSON.stringify({ ...body, challenge: { ...check, picture: "", reference: "" } });
+      expect(words).not.toMatch(/\bC\d+\b/);
+      expect(words).not.toContain(secret.seed);
+      expect(words).not.toMatch(/count|target|seed|monster|options|answer|"x"|"y"/);
+      expect(words.replace(/"now":\d+/, "").replace('"error":0', "").replace(check.id, "")).not.toMatch(/\d/);
+      counts.add(secret.count);
+      targets.add(secret.target);
+      pictures.add(check.picture);
     }
-    // Shuffled: every size, and the right one in more than one place.
-    expect([...counts].sort()).toEqual([4, 5, 6]);
-    expect(places.size).toBeGreaterThan(2);
+    expect(counts.size).toBeGreaterThan(3);
+    expect(targets.size).toBeGreaterThan(3);
+    expect(pictures.size).toBe(30);
   });
 
   test("asking again shows the same check", async () => {
@@ -358,7 +361,7 @@ describe("the check", () => {
 
     const rows = await readBotCheckLog();
     expect(rows.map(({ event }) => event)).toEqual(["solved", "trigger"]);
-    expect(rows[0]!.detail).toMatch(/^tapped the /);
+    expect(rows[0]!.detail).toMatch(/^counted \d (Pokey|Octo-ooze|Bolt|Fink|Eye-ra|Ichi|Bandito|Fang)s?$/);
     // Used once: the same answer again is nothing.
     expect(await answer(check.id, right)).toMatchObject({
       solved: false,
@@ -381,7 +384,7 @@ describe("the check", () => {
     expect(row!.detail).toContain(`wrong answer 1 of ${WRONG_ANSWER_LIMIT}`);
 
     // An answer to the old check is not counted: it gets the one that stands.
-    const stale = await answer(check.id, check.options[0]!.id);
+    const stale = await answer(check.id, "3");
     expect(stale).toMatchObject({ solved: false, checkPending: true, challenge: next });
     expect((await readBotCheckLog()).length).toBe(2);
   });
@@ -410,7 +413,7 @@ describe("the check", () => {
     // After it: a new check, and the count starts again.
     atMs(until * 1000);
     const fresh = (await readCheck()).challenge as Check;
-    expect(fresh.options.length).toBeGreaterThanOrEqual(4);
+    expect(fresh.picture).toStartWith("data:image/png;base64,");
     const again = await answer(fresh.id, await aWrongOption());
     expect(again.challenge).toBeDefined();
     expect((await readBotCheckLog())[0]!.detail).toContain(`wrong answer 1 of ${WRONG_ANSWER_LIMIT}`);
@@ -434,6 +437,13 @@ describe("the check", () => {
   test("an answer with no check waiting does nothing", async () => {
     expect(await answer("abc", "def")).toMatchObject({ solved: false, checkPending: false });
     expect(await readBotCheckLog()).toEqual([]);
+  });
+
+  test("an answer that is no number is a wrong answer", async () => {
+    await challenge.raiseCheck(USER, { rule: "dev", detail: "test" }, T0);
+    const check = (await readCheck()).challenge as Check;
+    expect(await answer(check.id, "many")).toMatchObject({ solved: false, checkPending: true });
+    expect((await readBotCheckLog())[0]!.detail).toContain("answered many for");
   });
 });
 

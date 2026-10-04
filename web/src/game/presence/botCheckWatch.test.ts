@@ -16,13 +16,10 @@ const serverNow = () => Math.floor(Date.now() / 1000) + SKEW_S;
 
 const check = (id: string): BotCheckChallenge => ({
   id,
-  prompt: "Tap the Pokey",
-  options: [
-    { id: `${id}-a`, monster: "C1" },
-    { id: `${id}-b`, monster: "C2" },
-    { id: `${id}-c`, monster: "C3" },
-    { id: `${id}-d`, monster: "C4" },
-  ],
+  prompt: "How many of these are in the picture?",
+  name: "Pokey",
+  reference: "data:image/webp;base64,AA",
+  picture: "data:image/png;base64,AA",
 });
 
 let shown: BotCheckView[];
@@ -102,8 +99,8 @@ describe("BotCheckWatch", () => {
       sent.push([challenge, option]);
       return { error: 0, checkPending: false, solved: true };
     };
-    await watch.choose("k1-c");
-    expect(sent).toEqual([["k1", "k1-c"]]);
+    await watch.choose("3");
+    expect(sent).toEqual([["k1", "3"]]);
     expect(hides).toBe(1);
     expect(watch.showing).toBe(false);
     expect(watch.waiting).toBe(false);
@@ -114,7 +111,7 @@ describe("BotCheckWatch", () => {
     watch.hear(true);
     await vi.advanceTimersByTimeAsync(0);
     answerFor = async () => ({ error: 0, checkPending: true, solved: false, challenge: check("k2") });
-    await watch.choose("k1-a");
+    await watch.choose("1");
     expect(shown.at(-1)).toEqual({ kind: "challenge", challenge: check("k2"), retry: true });
     expect(hides).toBe(0);
   });
@@ -125,7 +122,7 @@ describe("BotCheckWatch", () => {
     await vi.advanceTimersByTimeAsync(0);
     const until = serverNow() + 120;
     answerFor = async () => ({ error: 0, now: serverNow(), checkPending: true, solved: false, cooldownUntil: until });
-    await watch.choose("k1-a");
+    await watch.choose("1");
     expect(shown.at(-1)).toEqual({ kind: "wait", until: T0_MS + 120_000 });
 
     fetchAnswer = async () => ({ error: 0, now: serverNow(), checkPending: true, challenge: check("k3") });
@@ -143,10 +140,10 @@ describe("BotCheckWatch", () => {
     answerFor = async () => {
       throw new Error("offline");
     };
-    await expect(watch.choose("k1-a")).rejects.toThrow("offline");
+    await expect(watch.choose("1")).rejects.toThrow("offline");
     expect(watch.showing).toBe(true);
     answerFor = async () => ({ error: 0, checkPending: false, solved: true });
-    await watch.choose("k1-b");
+    await watch.choose("2");
     expect(watch.showing).toBe(false);
   });
 
