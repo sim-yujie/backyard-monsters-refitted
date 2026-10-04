@@ -30,7 +30,9 @@ import type { Yard, YardBuilding } from "./yardModel";
  * moves the building to the spot, and the bar's Build here drops it
  * ({@link BuildPlacement.dropHere}, #157). A wall or trap
  * stays in hand after it lands, so a line of walls is one click per block
- * (§5.3); anything else is done after one. While it is in hand, whatever
+ * (§5.3); anything else is done after one, and it stays where it was
+ * clicked, drawn as built, while the server answers rather than flashing red
+ * on its own spot (#277). While it is in hand, whatever
  * stands near it is outlined faintly to line it up by (#231,
  * `nearbyFootprints.ts`).
  *
@@ -231,6 +233,8 @@ export interface BuildPlacementOptions {
 
 const VALID = 0x5cc26a;
 const INVALID = 0xe05252;
+/** The pictures' fade while the building is in hand. */
+const GHOST_ALPHA = 0.7;
 
 export class BuildPlacement {
   readonly grid: PlacementGrid;
@@ -259,6 +263,19 @@ export class BuildPlacement {
   private pressed = false;
   /** Drops sent and not yet answered. */
   private inFlight = 0;
+  /**
+   * Where the last drop went down, until the building moves off it (#277).
+   * The drop holds that spot in the grid, and so does the real building once
+   * the answer is in; checked against either, the building in hand would turn
+   * red on the very spot it was just put on.
+   */
+  private landed: Point | null = null;
+  /**
+   * A one-off building on its way down: it stays where it was clicked, drawn
+   * as built, until the server answers (#277). A wall or trap is never pinned,
+   * so the next block follows the pointer at once.
+   */
+  private pinned = false;
   private done = false;
 
   constructor(options: BuildPlacementOptions) {
@@ -297,6 +314,7 @@ export class BuildPlacement {
 
   /** Puts the building at a spot directly (the keyboard, a test, a centred start). */
   moveTo(x: number, y: number): void {
+    if (this.pinned) return;
     this.show(x, y);
   }
 
@@ -349,12 +367,20 @@ export class BuildPlacement {
         sprite.position.set(layer.x, layer.y);
         this.art.addChild(sprite);
       });
-      this.fade = new AlphaFilter({ alpha: 0.7, resolution: "inherit" });
+      this.fade = new AlphaFilter({
+        alpha: this.pinned ? 1 : GHOST_ALPHA,
+        resolution: "inherit",
+      });
       this.art.filters = [this.fade];
       this.artDrawn = layers;
     } catch {
       // No picture: the footprint alone still says where it goes.
     }
+  }
+
+  /** Whether a one-off building is on its way down: pinned where it was clicked, drawn as built. */
+  get landing(): boolean {
+    return this.pinned;
   }
 
   /** The pictures the ghost is drawn from, bottom to top; empty until they load. */
@@ -364,7 +390,11 @@ export class BuildPlacement {
 
   private show(x: number, y: number): void {
     if (this.done) return;
-    const check = this.grid.check(this.options.type, x, y);
+    if (this.landed && (this.landed.x !== x || this.landed.y !== y)) this.landed = null;
+    // The spot just dropped on is fine: what fills it now is the drop itself.
+    const check: SpotCheck = this.landed
+      ? { x, y, problem: null, blockedBy: null }
+      : this.grid.check(this.options.type, x, y);
     const changed =
       this.spot?.x !== check.x || this.spot?.y !== check.y || this.spot?.problem !== check.problem;
     this.spot = check;
@@ -373,6 +403,10 @@ export class BuildPlacement {
   }
 
   private draw(check: SpotCheck): void {
+    // On its way down it is drawn as built: no footprint, no outlines, no fade.
+    this.outline.visible = !this.pinned;
+    this.nearby.visible = !this.pinned;
+    if (this.fade) this.fade.alpha = this.pinned ? 1 : GHOST_ALPHA;
     this.drawNearby(check.x, check.y);
     const corners = footprintCorners(this.yard.bounds, this.options.type, check.x, check.y);
     const [top, right, bottom, left] = corners;
@@ -443,7 +477,7 @@ export class BuildPlacement {
 
   private readonly onPointerMove = (event: PointerEvent): void => {
     // A finger dragging is a pan, not a carry; only a mouse or pen hovers.
-    if (event.pointerType === "touch") return;
+    if (event.pointerType === "touch" || this.pinned) return;
     const point = this.yardPoint(event);
     const spot = this.grid.spotAt(this.options.type, point.x, point.y);
     this.show(spot.x, spot.y);
@@ -452,6 +486,7 @@ export class BuildPlacement {
   private readonly onPointerUp = (event: PointerEvent): void => {
     if (!this.pressed) return;
     this.pressed = false;
+    if (this.pinned) return;
     if (Math.hypot(event.clientX - this.pressX, event.clientY - this.pressY) > DRAG_SLOP) return;
 
     const point = this.yardPoint(event);
@@ -471,23 +506,36 @@ export class BuildPlacement {
 
   private async drop(spot: SpotCheck): Promise<void> {
     if (this.done) return;
+    // One building at a time unless it is a wall or trap, whose line is the point.
+    if (!this.options.repeat && this.inFlight > 0) return;
     // Refused here: the hint already says why, and the building stays in hand.
     const check = this.grid.check(this.options.type, spot.x, spot.y);
     if (check.problem) {
+      // A second click on the spot just built on: now it is plainly taken.
+      this.landed = null;
+      this.show(spot.x, spot.y);
       this.options.onSpot?.(check);
       return;
     }
-    // One building at a time unless it is a wall or trap, whose line is the point.
-    if (!this.options.repeat && this.inFlight > 0) return;
-
     const handle = this.grid.hold(this.options.type, spot.x, spot.y);
     this.inFlight++;
+    // It goes down now, not when the server answers (#277): the spot stays
+    // green under it, and a one-off building stays put, drawn as built.
+    const landed = { x: spot.x, y: spot.y };
+    this.landed = landed;
+    this.pinned = !this.options.repeat;
     this.show(spot.x, spot.y);
     const outcome = await this.options.onDrop(spot.x, spot.y);
     this.inFlight--;
     if (this.done) return;
     this.grid.release(handle);
+    if (outcome === "placed" && !this.options.repeat) {
+      this.options.onDone?.();
+      return;
+    }
+    // Refused: back in hand, and the spot is checked again for real.
+    this.pinned = false;
+    if (outcome === "refused" && this.landed === landed) this.landed = null;
     if (this.spot) this.show(this.spot.x, this.spot.y);
-    if (outcome === "placed" && !this.options.repeat) this.options.onDone?.();
   }
 }
