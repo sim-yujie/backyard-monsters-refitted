@@ -72,12 +72,6 @@ export interface AttackMounts {
    */
   readonly creditLoot: (credited: ResourceAmounts) => void;
   /**
-   * Closes the enemy building's info panel, if one is open. The dock shows
-   * one panel at a time (#59): the info replaces the Army panel or a picker
-   * while it is open, and a picker opening closes the info.
-   */
-  readonly closeBuildingInfo: () => void;
-  /**
    * What the screen still shows of a battle the engine has moved past: the
    * battle layer holds the end panel while a bomb is falling and hands the
    * HUD the damage it has visibly dealt (#148).

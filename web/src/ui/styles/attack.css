@@ -1003,13 +1003,6 @@
   display: none;
 }
 
-/* The enemy building's info stands in for the Army panel or the open picker
- * while it is open (#59): one panel in the dock at a time. */
-.attack-dock--info .attack-army,
-.attack-dock--info .attack-picker {
-  display: none;
-}
-
 /* The Catapult (#76): one compact row per resource, its sizes as a pill switch (#89). */
 .attack-catapult .panel__body {
   gap: var(--space-2);

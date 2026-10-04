@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { Container } from "pixi.js";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import { AttackSession } from "@/game/attack/AttackSession";
 import type { AttackMounts } from "@/game/attack/attackPlugins";
@@ -10,9 +10,8 @@ import { Notices } from "@/ui/maproom/Notices";
 import { dropPlugin } from "./drop";
 
 /**
- * The drop plugin's share of the dock (#59): one picker open at a time, and
- * a picker opening closes the enemy building's info, so the dock never
- * stacks Army, info, Catapult and Siege on top of each other.
+ * The drop plugin's share of the dock (#59): one picker open at a time, so
+ * the dock never stacks Army, Catapult and Siege on top of each other.
  */
 
 const load = (): BaseLoadResponse =>
@@ -51,7 +50,6 @@ const target = (): AttackTarget => ({
 describe("the drop plugin's pickers in the dock", () => {
   let sheet: HTMLElement;
   let dock: HTMLElement;
-  let closeBuildingInfo: ReturnType<typeof vi.fn>;
   let teardown: (() => void) | void;
 
   const button = (text: string): HTMLButtonElement => {
@@ -72,7 +70,6 @@ describe("the drop plugin's pickers in the dock", () => {
     dock = document.createElement("div");
     sheet.append(dock);
     document.body.append(sheet);
-    closeBuildingInfo = vi.fn();
     const session = new AttackSession({ target: target(), seed: 1 });
     const mounts = {
       session,
@@ -86,7 +83,6 @@ describe("the drop plugin's pickers in the dock", () => {
       notices: new Notices().mount(document.body),
       setBottomInset: () => {},
       showResources: () => {},
-      closeBuildingInfo,
     } as unknown as AttackMounts;
     teardown = dropPlugin(mounts);
   });
@@ -113,15 +109,5 @@ describe("the drop plugin's pickers in the dock", () => {
     button("Catapult").click();
     expect(open()).toEqual([]);
     expect(sheet.classList.contains("attack-dock--picker")).toBe(false);
-  });
-
-  it("closes the enemy building's info when a picker opens", () => {
-    button("Catapult").click();
-    expect(closeBuildingInfo).toHaveBeenCalledTimes(1);
-    button("Siege").click();
-    expect(closeBuildingInfo).toHaveBeenCalledTimes(2);
-    // Closing a picker leaves the info alone: there is none open by then.
-    button("Siege").click();
-    expect(closeBuildingInfo).toHaveBeenCalledTimes(2);
   });
 });

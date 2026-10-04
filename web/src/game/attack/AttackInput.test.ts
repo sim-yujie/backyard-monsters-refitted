@@ -17,9 +17,11 @@ import {
 } from "@/game/combat/rules";
 import { Camera } from "@/game/Camera";
 import { readYard, type Yard } from "@/game/yard/yardModel";
+import { YardInput } from "@/game/yard/YardInput";
 import { toIso } from "@/game/yard/YardGrid";
 import {
   ATTACK_TAP_CLAIMS,
+  attackYardHandlers,
   AttackInput,
   clampDropPoint,
   DECOY_CLEARANCE,
@@ -275,7 +277,7 @@ describe("AttackInput taps", () => {
     const appendFling = vi.spyOn(session, "appendFling");
     const afterDrop = vi.spyOn(bucket, "afterDrop");
 
-    expect(input.tapAt(OPEN, null)).toBe(true);
+    expect(input.tapAt(OPEN)).toBe(true);
 
     expect(appendFling).toHaveBeenCalledTimes(1);
     expect(appendFling.mock.calls[0]![0]).toEqual({ monsters: { C1: 4 }, x: OPEN.x, y: OPEN.y });
@@ -294,16 +296,21 @@ describe("AttackInput taps", () => {
   it("refuses a centre on a footprint and says why, without spending anything", () => {
     const { session, bucket, input, refusals } = rig();
     bucket.setCount("C1", 4);
-    expect(input.tapAt({ x: 0, y: 0 }, null)).toBe(true);
+    expect(input.tapAt({ x: 0, y: 0 })).toBe(true);
     expect(refusals).toEqual(["Too close to a building. Drop on open ground."]);
     expect(session.state().creepsFlung).toBe(0);
   });
 
-  it("leaves a tap on a building, or with an empty bucket, to the scene", () => {
-    const { session, bucket, input, yard } = rig();
-    expect(input.tapAt(OPEN, null)).toBe(false);
+  it("takes nothing with an empty bucket, and judges a tap on a building like any point (#258)", () => {
+    const { session, bucket, input, refusals } = rig();
+    expect(input.tapAt(OPEN)).toBe(false);
+    // On the Town Hall's footprint: nothing to drop, so nothing happens at all.
+    expect(input.tapAt({ x: 300, y: 300 })).toBe(false);
+    expect(refusals).toEqual([]);
+    // With monsters picked it is the drop rules that answer, not the building.
     bucket.setCount("C1", 4);
-    expect(input.tapAt({ x: 300, y: 300 }, yard.buildings[1]!)).toBe(false);
+    expect(input.tapAt({ x: 300, y: 300 })).toBe(true);
+    expect(refusals).toEqual(["Too close to a building. Drop on open ground."]);
     expect(session.state().creepsFlung).toBe(0);
   });
 
@@ -313,7 +320,7 @@ describe("AttackInput taps", () => {
     const twig = BOMBS.find((bomb) => bomb.id === "tw0")!;
 
     input.setTool({ kind: "bomb", bomb: twig });
-    expect(input.tapAt({ x: 0, y: 0 }, null)).toBe(true);
+    expect(input.tapAt({ x: 0, y: 0 })).toBe(true);
 
     const log = session.flingLog();
     expect(log.events).toHaveLength(1);
@@ -328,18 +335,18 @@ describe("AttackInput taps", () => {
   it("takes a putty bomb only where it lands on a live monster (#147)", () => {
     const { session, bucket, input, refusals } = rig();
     bucket.setCount("C1", 2);
-    expect(input.tapAt(OPEN, null)).toBe(true);
+    expect(input.tapAt(OPEN)).toBe(true);
     session.battle()!.runTo(session.battle()!.tick + 1);
     const putty = BOMBS.find((bomb) => bomb.id === "pu0")!;
     input.setTool({ kind: "bomb", bomb: putty });
     // Far from the flung monsters: refused, and the bomb stays armed.
-    expect(input.tapAt({ x: OPEN.x + 600, y: OPEN.y - 600 }, null)).toBe(true);
+    expect(input.tapAt({ x: OPEN.x + 600, y: OPEN.y - 600 })).toBe(true);
     expect(refusals.at(-1)).toMatch(/Aim at them/);
     expect(input.pendingTool()).not.toBeNull();
     expect(session.flingLog().events.filter((event) => event.kind === "bomb")).toHaveLength(0);
     // On them: taken.
     const creep = session.battle()!.creeps().find((one) => !one.friendly)!;
-    expect(input.tapAt({ x: creep.ix, y: creep.iy }, null)).toBe(true);
+    expect(input.tapAt({ x: creep.ix, y: creep.iy })).toBe(true);
     expect(session.flingLog().events.filter((event) => event.kind === "bomb")).toHaveLength(1);
     expect(input.pendingTool()).toBeNull();
   });
@@ -348,7 +355,7 @@ describe("AttackInput taps", () => {
     const { session, bucket, input } = rig();
     bucket.setCount("C1", 4);
     input.setTool({ kind: "siege", weapon: siegeWeapon("decoy")!, level: 1 });
-    expect(input.tapAt(OPEN, null)).toBe(true);
+    expect(input.tapAt(OPEN)).toBe(true);
     expect(session.flingLog().events[0]).toEqual({
       kind: "siege",
       t: 0,
@@ -370,7 +377,7 @@ describe("AttackInput taps", () => {
     // The last hover is where the scene's tap lands: over the tower it is
     // refused but still claimed, and nothing is sent.
     canvas.dispatchEvent(pointerEvent("pointermove", { clientX: 0, clientY: 0, pointerType: "mouse" }));
-    expect(claim(null)).toBe(true);
+    expect(claim()).toBe(true);
     expect(session.state().creepsFlung).toBe(0);
     input.detach();
     expect(ATTACK_TAP_CLAIMS).toHaveLength(before);
@@ -381,7 +388,7 @@ describe("AttackInput taps", () => {
     const { session, bucket, input } = rig();
     bucket.setCount("C1", 4);
     session.retreat();
-    expect(input.tapAt(OPEN, null)).toBe(false);
+    expect(input.tapAt(OPEN)).toBe(false);
     expect(session.flingLog().events.map((event) => event.kind)).toEqual(["retreat"]);
   });
 });
@@ -437,7 +444,7 @@ describe("the grid's edge", () => {
     const aimed = { x: -2600, y: 900 };
     expect(cellOf(aimed.x, aimed.y)).toBe(-1);
 
-    expect(input.tapAt(aimed, null)).toBe(true);
+    expect(input.tapAt(aimed)).toBe(true);
 
     const log = session.flingLog();
     expect(log.events).toHaveLength(1);
@@ -525,7 +532,7 @@ describe("AttackInput preview", () => {
 
     // The highlight is what the bomb then does.
     hover(10, 5);
-    expect(input.tap(null)).toBe(true);
+    expect(input.tap()).toBe(true);
     const health = session.battle()!.state().health;
     expect(Object.keys(health)).toEqual(["1"]);
     // Fired, the bomb is disarmed and the bucket is empty: no ring, nothing lit.
@@ -604,7 +611,7 @@ describe("tool accounting", () => {
     });
     session.setUnusedTools(1);
     bucket.setCount("C1", 1);
-    expect(input.tapAt(OPEN, null)).toBe(true);
+    expect(input.tapAt(OPEN)).toBe(true);
     // One Pokey against a Cannon Tower dies well inside a minute.
     for (let frame = 0; frame < 60 * TICKS_PER_SECOND; frame += 1) session.advance(1 / 60);
     expect(session.state().creepsAlive).toBe(0);
@@ -613,6 +620,66 @@ describe("tool accounting", () => {
     expect(session.state().phase).toBe("ended");
     expect(session.state().endReason).toBe("exhausted");
     input.detach();
+  });
+});
+
+describe("the attack scene's yard input (#258)", () => {
+  /** The scene's `YardInput` over the rig's canvas, wired as `AttackScene` wires it. */
+  const sceneInput = (r: Rig) => {
+    const handlers = attackYardHandlers();
+    const yardInput = new YardInput({
+      camera: r.camera,
+      canvas: r.canvas,
+      ...handlers,
+      onZoomStep: vi.fn(),
+      onZoomReset: vi.fn(),
+    });
+    yardInput.attach();
+    return { handlers, yardInput };
+  };
+  const click = (canvas: HTMLCanvasElement, at: { x: number; y: number }): void => {
+    const init = { clientX: at.x, clientY: at.y, pointerType: "mouse" };
+    canvas.dispatchEvent(pointerEvent("pointerdown", init));
+    canvas.dispatchEvent(pointerEvent("pointerup", init));
+  };
+
+  it("never picks an enemy building, so nothing can be hovered, selected or opened", () => {
+    const r = rig();
+    const { handlers, yardInput } = sceneInput(r);
+    // The Town Hall sits at (300, 300); the scene's picker finds nothing there.
+    expect(handlers.pick(300, 300)).toBeNull();
+    expect(yardInput.buildingAt({ clientX: 300, clientY: 300 })).toBeNull();
+    // A click on it with nothing picked to drop does nothing at all.
+    click(r.canvas, { x: 300, y: 300 });
+    expect(r.refusals).toEqual([]);
+    expect(r.session.flingLog().events).toEqual([]);
+    yardInput.detach();
+    r.input.detach();
+  });
+
+  it("still hands a click to the drop input: a fling on open ground, a refusal on a building", () => {
+    const r = rig();
+    const { yardInput } = sceneInput(r);
+    r.bucket.setCount("C1", 4);
+    click(r.canvas, { x: 300, y: 300 });
+    expect(r.refusals).toEqual(["Too close to a building. Drop on open ground."]);
+    expect(r.session.state().creepsFlung).toBe(0);
+    click(r.canvas, OPEN);
+    expect(r.session.flingLog().events.map((event) => event.kind)).toEqual(["fling"]);
+    expect(r.session.state().creepsFlung).toBe(4);
+    yardInput.detach();
+    r.input.detach();
+  });
+
+  it("keeps a bomb working: armed, a click on a building drops it there", () => {
+    const r = rig();
+    const { yardInput } = sceneInput(r);
+    r.input.setTool({ kind: "bomb", bomb: BOMBS.find((bomb) => bomb.id === "tw0")! });
+    click(r.canvas, { x: 0, y: 0 });
+    expect(r.toolsUsed).toEqual(["bomb"]);
+    expect(r.input.pendingTool()).toBeNull();
+    yardInput.detach();
+    r.input.detach();
   });
 });
 

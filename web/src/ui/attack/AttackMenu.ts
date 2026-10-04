@@ -88,15 +88,13 @@ export class AttackMenu {
 
 /**
  * What the phone sheet's handle says: the panel the sheet is showing, so it
- * reads "Catapult" over the Catapult and the building's name over its info,
- * and "Army" otherwise. Reads the dock's own mode classes (`attack-dock--info`
- * from the scene, `attack-dock--picker` from the drop plugin).
+ * reads "Catapult" over the Catapult and "Army" otherwise. Reads the dock's
+ * own mode class (`attack-dock--picker`, from the drop plugin). An enemy
+ * building never takes the sheet: it opens nothing during an attack (#258).
  */
 export const sheetHandleLabel = (dock: HTMLElement): string => {
-  const shown = dock.classList.contains("attack-dock--info")
-    ? dock.querySelector(".attack-info .panel__title")
-    : dock.classList.contains("attack-dock--picker")
-      ? dock.querySelector(".attack-picker .panel__title")
-      : null;
+  const shown = dock.classList.contains("attack-dock--picker")
+    ? dock.querySelector(".attack-picker .panel__title")
+    : null;
   return shown?.textContent?.trim() || "Army";
 };

@@ -76,14 +76,4 @@ describe("sheetHandleLabel", () => {
     dock.append(panel("attack-army", "Army"), panel("attack-catapult attack-picker", "Catapult"));
     expect(sheetHandleLabel(dock)).toBe("Catapult");
   });
-
-  it("names the building whose info stands in for the rest", () => {
-    const dock = document.createElement("div");
-    dock.classList.add("attack-dock--picker", "attack-dock--info");
-    dock.append(
-      panel("attack-catapult attack-picker", "Catapult"),
-      panel("attack-info", "Cannon Tower"),
-    );
-    expect(sheetHandleLabel(dock)).toBe("Cannon Tower");
-  });
 });

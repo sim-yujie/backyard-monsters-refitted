@@ -177,9 +177,8 @@ const plugin: AttackPlugin = (mounts) => {
    * A picker takes the Army panel's place while it is open (§7 layout table:
    * "Docked right, replaces Army temporarily"), so the Catapult fits without
    * the dock scrolling (#76). The bucket keeps its state underneath and comes
-   * back when the picker closes. Only one picker is open at a time, and
-   * opening one closes the enemy building's info, so the dock never stacks
-   * panels (#59); closing a picker still cancels the tool it armed.
+   * back when the picker closes. Only one picker is open at a time, so the
+   * dock never stacks panels (#59); closing a picker still cancels the tool it armed.
    */
   const syncDockMode = (): void => {
     sheet?.classList.toggle("attack-dock--picker", catapult !== null || siege !== null);
@@ -209,10 +208,8 @@ const plugin: AttackPlugin = (mounts) => {
       catapult.close();
       return;
     }
-    // One panel in the dock at a time (#59): the other picker and the
-    // building info make way.
+    // One panel in the dock at a time (#59): the other picker makes way.
     siege?.close();
-    mounts.closeBuildingInfo();
     catapult = new CatapultPanel({
       catapultLevel,
       onPick: (bomb) => input.setTool(bomb ? { kind: "bomb", bomb } : null),
@@ -236,7 +233,6 @@ const plugin: AttackPlugin = (mounts) => {
       return;
     }
     catapult?.close();
-    mounts.closeBuildingInfo();
     siege = new SiegePanel({
       stock,
       onPick: (pick) =>

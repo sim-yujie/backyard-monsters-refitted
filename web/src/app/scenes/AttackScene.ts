@@ -7,7 +7,7 @@ import { ApiError, NetworkError } from "@/api/http";
 import type { BaseLoadResponse, Resources } from "@/api/types";
 import { clockReading, formatClock } from "@/game/attack/attackClock";
 import { withLoot } from "@/game/attack/attackerPool";
-import { ATTACK_TAP_CLAIMS } from "@/game/attack/AttackInput";
+import { attackYardHandlers } from "@/game/attack/AttackInput";
 import { AttackPresentation } from "@/game/attack/attackPresentation";
 import { AttackSession, type AttackSessionState } from "@/game/attack/AttackSession";
 import { consumeAttackTarget, type AttackTarget } from "@/game/attack/attackTarget";
@@ -17,7 +17,7 @@ import { consumeWatchRun, setWatchRun, watchTarget, type WatchRun } from "@/game
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
 import { fixedWorkSource } from "@/game/yard/buildingWork";
-import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
+import { readYard, type Yard } from "@/game/yard/yardModel";
 import { fellPens, yardLifeOf, type YardLife } from "@/game/yard/yardLifeModel";
 import { YardRenderer } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
@@ -27,14 +27,11 @@ import { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
 import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
-import { BuildingPanel } from "@/ui/yard/BuildingPanel";
 import { confirmPanel } from "@/ui/yard/PlannerDialogs";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { ZoomControl } from "@/ui/ZoomControl";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
-import { devDetails } from "../devDetails";
-import { typeName } from "@/game/yard/planner/summary";
 
 /**
  * The attack: an enemy yard, a clock, and the slots the rest of the flow
@@ -136,8 +133,6 @@ export class AttackScene implements Scene {
   private dockHandle: HTMLButtonElement | null = null;
   private dockOpen = false;
   private dockWatch: MutationObserver | null = null;
-  private panel: BuildingPanel | null = null;
-  private selected: YardBuilding | null = null;
   private status: HTMLElement | null = null;
 
   private viewTools: HTMLElement | null = null;
@@ -252,8 +247,6 @@ export class AttackScene implements Scene {
     this.zoomControl = null;
     this.viewTools?.remove();
     this.viewTools = null;
-    this.panel?.close();
-    this.panel = null;
     this.dockWatch?.disconnect();
     this.dockWatch = null;
     this.dock?.remove();
@@ -330,7 +323,6 @@ export class AttackScene implements Scene {
     if (this.sinceUiTick >= UI_TICK_SECONDS) {
       this.sinceUiTick = 0;
       if (this.session) this.refreshStrip(this.session.state());
-      this.panel?.tick(Date.now() / 1000);
     }
   }
 
@@ -446,7 +438,6 @@ export class AttackScene implements Scene {
       setBottomInset: (px) => this.setInset({ ...this.inset, bottom: px }),
       showResources: (resources) => this.showResources(resources),
       creditLoot: (credited) => this.showResources(withLoot(this.shownResources, credited)),
-      closeBuildingInfo: () => this.select(null),
       presentation: this.presentation,
     };
     for (const plugin of this.plugins) {
@@ -489,15 +480,10 @@ export class AttackScene implements Scene {
     this.input = new YardInput({
       camera,
       canvas: context.canvas,
-      pick: (x, y) => this.renderer.pick(x, y),
-      onHover: (building) => this.renderer.setHovered(building),
-      // WP4's drop input takes a tap it can drop on; every other tap selects.
-      onSelect: (building) => {
-        if (!ATTACK_TAP_CLAIMS.some((claim) => claim(building))) this.select(building);
-      },
+      // Only the drop input answers a tap; the enemy's buildings answer nothing (#258).
+      ...attackYardHandlers(),
       onZoomStep: (direction) => this.zoomBy(Math.pow(ZOOM_STEP, direction)),
       onZoomReset: () => this.fitYard(),
-      onCancel: () => this.select(null),
     });
     this.input.attach();
 
@@ -772,19 +758,14 @@ export class AttackScene implements Scene {
     if (this.practice) {
       status.textContent =
         `Practice on your yard · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
-        `${state.creepsAlive} attacking` +
-        (this.selected ? ` · ${typeName(this.selected.type)}` : "");
+        `${state.creepsAlive} attacking`;
       return;
     }
     status.textContent =
       `${targetLabel(target)} · ` +
       `${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
       `${state.creepsAlive} on the field · ${sent} left to send` +
-      (state.declareWar ? " · Declare War" : "") +
-      // The building a player picked, by name; its id is a developer's (#150).
-      (this.selected
-        ? ` · ${typeName(this.selected.type)}${devDetails() ? ` #${this.selected.id}` : ""}`
-        : "");
+      (state.declareWar ? " · Declare War" : "");
   }
 
   /* ── Retreat ────────────────────────────────────────────────────────── */
@@ -891,48 +872,5 @@ export class AttackScene implements Scene {
 
   private zoomBy(factor: number): void {
     this.camera?.zoomBy(factor, { x: this.viewportWidth / 2, y: this.viewportHeight / 2 });
-  }
-
-  /* ── Enemy building info ────────────────────────────────────────────── */
-
-  /**
-   * Read-only facts on a tapped building (§4.4); no planner, no upgrades.
-   *
-   * The dock shows one panel at a time (#59): while the info is open it
-   * stands in for the Army panel or an open picker, which keep their state
-   * underneath and come back when it closes; opening a picker closes it
-   * (`AttackMounts.closeBuildingInfo`).
-   */
-  private select(building: YardBuilding | null): void {
-    this.selected = building;
-    this.renderer.setSelected(building);
-    if (!building) {
-      this.panel?.close();
-      this.panel = null;
-      this.syncInfoMode();
-      return;
-    }
-    if (!this.panel) {
-      const dock = this.dockBody;
-      if (!dock) return;
-      this.panel = new BuildingPanel({
-        onClose: () => {
-          this.panel = null;
-          this.selected = null;
-          this.renderer.setSelected(null);
-          this.syncInfoMode();
-        },
-      }).mount(dock);
-      this.panel.element.classList.add("attack-info");
-      this.syncInfoMode();
-    }
-    this.panel.show(building);
-    this.labelHandle();
-    if (this.session) this.refreshStatus(this.session.state());
-  }
-
-  private syncInfoMode(): void {
-    this.dock?.classList.toggle("attack-dock--info", this.panel !== null);
-    this.measureDock();
   }
 }

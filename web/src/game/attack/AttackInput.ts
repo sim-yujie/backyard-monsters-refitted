@@ -17,7 +17,8 @@ import {
 } from "@/game/combat/rules";
 import type { Point } from "@/game/yard/YardGrid";
 import { toIso } from "@/game/yard/YardGrid";
-import type { Yard, YardBuilding } from "@/game/yard/yardModel";
+import type { Yard } from "@/game/yard/yardModel";
+import type { YardInputOptions } from "@/game/yard/YardInput";
 import type { YardRenderer } from "@/game/yard/YardRenderer";
 import type { AttackSession } from "./AttackSession";
 import { bombCandidatesOf, bombHits, type BombCandidate } from "./bombTargets";
@@ -35,13 +36,15 @@ import type { Bucket } from "./bucket";
  *
  * ## Who owns a tap
  *
- * The scene mounts `YardInput` for hover and for the read-only building panel.
- * Rather than a second listener racing it on the same canvas — which would
- * also have to swallow the camera's `pointerup` — the scene asks
- * {@link ATTACK_TAP_CLAIMS} first, and the drop input takes a tap when it has
- * something to drop: a pending bomb or siege weapon, or a non-empty bucket
- * over open ground. A tap on a building with nothing pending still opens the
- * building's information, as it did before.
+ * The scene mounts `YardInput` to tell a tap from a pan. Rather than a second
+ * listener racing it on the same canvas — which would also have to swallow the
+ * camera's `pointerup` — the scene hands every tap to
+ * {@link ATTACK_TAP_CLAIMS} ({@link attackYardHandlers}), and the drop input
+ * takes it when it has something to drop: a pending bomb or siege weapon, or a
+ * non-empty bucket. A tap on a building is judged like any other point, by the
+ * drop rules below, so it lands wherever the preview ring says it would. The
+ * enemy's buildings themselves answer nothing — no outline, no selection, no
+ * information panel (issue #258) — so a tap with nothing to drop does nothing.
  *
  * ## The rules, and where they come from
  *
@@ -491,12 +494,32 @@ export interface DropPreview {
 }
 
 /**
- * Who is asked about a tap on the enemy yard before the scene selects a
- * building. Each claim gets the building under the tap, or null on open
- * ground; the first to return true has taken the tap. The attack scene
- * consults this from its `YardInput.onSelect`.
+ * Who is asked about a tap on the enemy yard; the first to return true has
+ * taken it. A tap no claim takes does nothing: the enemy's buildings are not
+ * picked, outlined or opened during an attack (issue #258). The attack scene
+ * consults this through {@link attackYardHandlers}.
  */
-export const ATTACK_TAP_CLAIMS: Array<(building: YardBuilding | null) => boolean> = [];
+export const ATTACK_TAP_CLAIMS: Array<() => boolean> = [];
+
+/**
+ * The attack scene's `YardInput` handlers (issue #258). Nothing on the enemy
+ * yard is ever picked, so no building is hovered, outlined, selected or
+ * opened: a tap goes to {@link ATTACK_TAP_CLAIMS} and nowhere else, and Escape
+ * has no selection to clear (the drop input's own Escape still cancels a
+ * pending tool). `YardInput` keeps what it does for the camera — telling a tap
+ * from a pan, and the zoom keys.
+ */
+export const attackYardHandlers = (): Pick<
+  YardInputOptions,
+  "pick" | "onHover" | "onSelect" | "onCancel"
+> => ({
+  pick: () => null,
+  onHover: () => {},
+  onSelect: () => {
+    ATTACK_TAP_CLAIMS.some((claim) => claim());
+  },
+  onCancel: () => {},
+});
 
 /**
  * Rules a drop must also pass, asked before the yard's own (issue #227): each
@@ -535,7 +558,7 @@ export class AttackInput {
   private pointer: Point | null = null;
   private pressed = false;
   private touchPress = false;
-  private readonly claim = (building: YardBuilding | null): boolean => this.tap(building);
+  private readonly claim = (): boolean => this.tap();
   private unsubscribeBucket: (() => void) | null = null;
   private obstacles: DropObstacle[] | null = null;
   private obstaclesFor = -1;
@@ -650,17 +673,17 @@ export class AttackInput {
   /* ── Taps ───────────────────────────────────────────────────────────── */
 
   /**
-   * A tap at the last pointer position, over `building` or open ground.
-   * Returns whether the drop input took it; false leaves it to the scene.
+   * A tap at the last pointer position, over a building or open ground alike.
+   * Returns whether the drop input took it; false means it had nothing to drop.
    */
-  tap(building: YardBuilding | null): boolean {
+  tap(): boolean {
     const point = this.pointer;
     if (!point) return false;
-    return this.tapAt(point, building);
+    return this.tapAt(point);
   }
 
   /** {@link tap} at an explicit yard point. */
-  tapAt(aimed: Point, building: YardBuilding | null): boolean {
+  tapAt(aimed: Point): boolean {
     const { session, bucket } = this.options;
     const phase = session.state().phase;
     if (phase !== "loaded" && phase !== "running") return false;
@@ -690,7 +713,7 @@ export class AttackInput {
       return true;
     }
 
-    if (bucket.isEmpty() || building) return false;
+    if (bucket.isEmpty()) return false;
 
     const verdict = this.judge(point);
     if (!verdict.legal) {
