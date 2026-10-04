@@ -342,6 +342,13 @@ once when it starts (`YardChangeReason.AWAY`). The map's own-yard load (to find 
 first after a login and is usually the one that finishes those jobs, so every `loadOwnYard` keeps
 its list until the yard takes it (`takeAwayJobs`, `web/src/api/base.ts`).
 
+**Since #257 these are no longer toasts.** The server writes the same events into the player's
+notification list as the catch-up finishes them (one entry per kind of job in a yard answer, one
+"While you were away" entry per own-yard load), keeping the last 20 for 7 days, and the yard shows
+them behind a bell beside Mail with an unread count (`web/src/ui/notifications/`). The wording
+is unchanged (`JobNotices.ts`), and a building named in an entry still selects it. See
+`docs/server-api.md`, "Notifications".
+
 **Click counts, Phase 1.**
 
 | Task | Flash | New |

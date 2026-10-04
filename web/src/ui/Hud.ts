@@ -9,7 +9,6 @@ import { AccountMenu } from "./AccountMenu";
 import { formatAmount, formatCompact } from "./format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
 import { DamageBanner } from "./yard/DamageBanner";
-import { JobNotices } from "./yard/JobNotices";
 
 /**
  * The persistent top bar: resource readouts on the left, a scene switcher on
@@ -29,8 +28,7 @@ import { JobNotices } from "./yard/JobNotices";
  * the bar adds what only that yard knows (issue #100, design §3.1): each
  * resource's storage cap as "amount / cap" with a thin fill bar that turns
  * amber when the silo is full, a Workers control ("free / total") that goes
- * to the job finishing soonest, and a toast for every job the server says
- * finished (`JobNotices`), and the post-attack "N buildings damaged
+ * to the job finishing soonest, and the post-attack "N buildings damaged
  * [Repair all]" line in the notice dock (`DamageBanner`, design §5.5). The
  * map, the attack screen and a foreign yard have no binding and show the
  * amounts alone. In an outpost the amounts and caps are the main yard's pool,
@@ -200,7 +198,6 @@ export class Hud {
   private readonly floats = new Set<HTMLElement>();
   private yardBinding: YardUiBinding | null = null;
   private unsubscribeYard: (() => void) | null = null;
-  private jobNotices: JobNotices | null = null;
   /** The post-attack "N buildings damaged [Repair all]" line, while bound (§5.5). */
   private damageBanner: DamageBanner | null = null;
   private readonly workers: HTMLElement;
@@ -467,7 +464,7 @@ export class Hud {
    * The player's own yard, while one is open: its `YardStore`, the scene's
    * hooks and its notice dock (`YardStore.ts`, "Hooks for the UI work
    * packages"). Null on any other screen and on a foreign yard. It gives the
-   * bar its caps, the Workers control and the job notices.
+   * bar its caps and the Workers control.
    */
   get yard(): YardUiBinding | null {
     return this.yardBinding;
@@ -484,12 +481,10 @@ export class Hud {
     if (!binding) this.releaseHeld();
     this.unsubscribeYard?.();
     this.unsubscribeYard = null;
-    this.jobNotices = null;
     this.damageBanner?.destroy();
     this.damageBanner = null;
     this.yardBinding = binding;
     if (binding) {
-      this.jobNotices = new JobNotices(binding.notices, (id) => binding.scene.selectBuilding(id));
       this.damageBanner = new DamageBanner(binding);
       this.unsubscribeYard = binding.store.subscribe((change) => this.onYardChange(change));
     }
@@ -609,15 +604,15 @@ export class Hud {
     }
   }
 
-  /* ── The own yard: caps, workers, job notices ──────────────────────── */
+  /* ── The own yard: caps and workers ─────────────────────────────────── */
 
+  /**
+   * What the catch-up finished raises no toast here: the server keeps it in
+   * the player's notification list behind the yard's bell (#257).
+   */
   private onYardChange(change: YardChange): void {
-    if (change.reason === YardChangeReason.AWAY) {
-      this.jobNotices?.showAway(change.completed);
-      return;
-    }
+    if (change.reason === YardChangeReason.AWAY) return;
     this.damageBanner?.refresh();
-    if (change.completed.length > 0) this.jobNotices?.show(change.completed);
     if (change.reason !== YardChangeReason.PENDING) this.syncYard();
   }
 

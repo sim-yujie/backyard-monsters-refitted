@@ -587,6 +587,22 @@ describe("the player level (#192)", () => {
   });
 });
 
+describe("the notification count (#257)", () => {
+  it("reads the load's count and takes each answer's, keeping it when an answer has none", async () => {
+    let next: number | undefined = 3;
+    const api = stubApi({
+      state: vi.fn(() => Promise.resolve({ ...answer(T0), ...(next !== undefined && { notifications: next }) })),
+    });
+    const { store } = storeWith(loadWith({ notifications: 1 }), api);
+    expect(store.save.notifications).toBe(1);
+    await store.refresh();
+    expect(store.save.notifications).toBe(3);
+    next = undefined;
+    await store.refresh();
+    expect(store.save.notifications).toBe(3);
+  });
+});
+
 describe("lifecycle", () => {
   it("fetches the state once at start when the load carried no caps", async () => {
     const api = stubApi();

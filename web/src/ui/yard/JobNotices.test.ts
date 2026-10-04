@@ -1,18 +1,13 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CompletedJob } from "@/api/types";
 import { typeName } from "@/game/yard/planner/summary";
-import { Notices } from "@/ui/maproom/Notices";
-import {
-  AWAY_NOTICE_TIMEOUT_MS,
-  awayNoticeText,
-  groupCompletedJobs,
-  JOB_NOTICE_TIMEOUT_MS,
-  JobNotices,
-  noticeText,
-} from "./JobNotices";
+import { awayNoticeText, groupCompletedJobs, jobLine, jobLineText, noticeText } from "./JobNotices";
 
-/** The yard's job toasts (design §3.1 "Notices"): one per kind, grouped, each building a button. */
+/**
+ * The yard's job lines (design §3.1 "Notices"), as the bell's list shows
+ * them (#257): one per kind, grouped, each building a button.
+ */
 
 const CANNON = 20;
 const SNIPER = 21;
@@ -289,107 +284,66 @@ describe("yard defence notices (#242)", () => {
   });
 });
 
-describe("JobNotices", () => {
-  let notices: Notices;
+describe("jobLine", () => {
   let select: ReturnType<typeof vi.fn<(id: number) => void>>;
-  let jobs: JobNotices;
 
   beforeEach(() => {
-    vi.useFakeTimers();
-    document.body.replaceChildren();
-    notices = new Notices().mount(document.body);
     select = vi.fn<(id: number) => void>();
-    jobs = new JobNotices(notices, select);
   });
 
-  afterEach(() => {
-    notices.destroy();
-    vi.useRealTimers();
-  });
+  const buttons = (line: HTMLElement): HTMLButtonElement[] => [
+    ...line.querySelectorAll<HTMLButtonElement>(".job-notice__building"),
+  ];
 
-  const toasts = (): HTMLElement[] => [...notices.element.querySelectorAll<HTMLElement>(".notice")];
-
-  it("shows one info toast per kind, each building a button that selects it", () => {
-    jobs.show([upgrade(1, CANNON, 5), upgrade(2, SNIPER, 3)]);
-    expect(toasts()).toHaveLength(1);
-    expect(toasts()[0]!.classList.contains("notice--info")).toBe(true);
-    const buttons = [...toasts()[0]!.querySelectorAll<HTMLButtonElement>(".job-notice__building")];
-    expect(buttons.map((one) => one.textContent)).toEqual([`${typeName(CANNON)} 5`, `${typeName(SNIPER)} 3`]);
-    buttons[1]!.click();
+  it("words one kind of job, each building a button that selects it", () => {
+    const line = jobLine("jobs", [upgrade(1, CANNON, 5), upgrade(2, SNIPER, 3)], select);
+    expect(line.textContent).toBe(`2 upgrades finished: ${typeName(CANNON)} 5, ${typeName(SNIPER)} 3`);
+    expect(buttons(line).map((one) => one.textContent)).toEqual([`${typeName(CANNON)} 5`, `${typeName(SNIPER)} 3`]);
+    buttons(line)[1]!.click();
     expect(select).toHaveBeenCalledWith(2);
   });
 
-  it("stacks a second batch beside the first rather than overwriting it, and clears both on time", () => {
-    jobs.show([upgrade(1, CANNON, 5)]);
-    jobs.show([upgrade(2, SNIPER, 3)]);
-    expect(toasts()).toHaveLength(2);
-    vi.advanceTimersByTime(JOB_NOTICE_TIMEOUT_MS + 1);
-    expect(toasts()).toHaveLength(0);
+  it("says a building in another yard as plain text", () => {
+    const line = jobLine("jobs", [upgrade(1, CANNON, 5)], null);
+    expect(line.textContent).toBe(`Upgrade finished: ${typeName(CANNON)} 5`);
+    expect(buttons(line)).toEqual([]);
   });
 
-  it("shows nothing for an answer where nothing finished", () => {
-    jobs.show([]);
-    expect(toasts()).toHaveLength(0);
-  });
-
-  it("raises no toast for a live answer's hatches, only for what else finished (#142)", () => {
+  it("says what finished while the player was away as one line, hatches in it, buildings still buttons", () => {
     const hatch = { kind: "hatch", id: "C1", t: null, at: 1, detail: { count: 1 } };
-    jobs.show([hatch]);
-    expect(toasts()).toHaveLength(0);
-    jobs.show([hatch, upgrade(1, CANNON, 5)]);
-    expect(toasts()).toHaveLength(1);
-    expect(toasts()[0]!.textContent).not.toContain("hatched");
-    // While away, they are part of the one toast.
-    jobs.showAway([hatch]);
-    expect(toasts().at(-1)!.textContent).toContain("While you were away: a monster hatched: Pokey");
-  });
-
-  it("shows what finished while the player was away as one toast, buildings still buttons", () => {
-    jobs.showAway([
+    const completed: CompletedJob[] = [
       upgrade(1, CANNON, 5),
       { kind: "build", id: 2, t: SILO, at: 150, detail: { from: 0, level: 1, points: 5 } },
-    ]);
-    expect(toasts()).toHaveLength(1);
-    expect(toasts()[0]!.querySelector(".notice__text")!.textContent).toBe(
-      `While you were away: upgrade finished: ${typeName(CANNON)} 5; build finished: ${typeName(SILO)}`,
-    );
-    const buttons = [...toasts()[0]!.querySelectorAll<HTMLButtonElement>(".job-notice__building")];
-    expect(buttons).toHaveLength(2);
-    buttons[1]!.click();
+      hatch,
+    ];
+    const line = jobLine("away", completed, select);
+    const text =
+      `While you were away: upgrade finished: ${typeName(CANNON)} 5; build finished: ${typeName(SILO)}; ` +
+      "a monster hatched: Pokey";
+    expect(line.textContent).toBe(text);
+    expect(jobLineText("away", completed)).toBe(text);
+    expect(buttons(line)).toHaveLength(2);
+    buttons(line)[1]!.click();
     expect(select).toHaveBeenCalledWith(2);
   });
 
-  it("says the added Map Room in the away toast, the Map Room a button that selects it", () => {
-    jobs.showAway([{ kind: "mapRoomAdded", id: 601, t: 11, at: 100, detail: { level: 2, x: -90, y: -50 } }]);
-    const text = toasts()[0]!.querySelector(".notice__text")!;
-    expect(text.textContent).toBe("While you were away: a Map Room was added to your yard");
-    text.querySelector<HTMLButtonElement>(".job-notice__building")!.click();
+  it("says the added Map Room in the away line, the Map Room a button that selects it", () => {
+    const line = jobLine("away", [{ kind: "mapRoomAdded", id: 601, t: 11, at: 100, detail: { level: 2, x: -90, y: -50 } }], select);
+    expect(line.textContent).toBe("While you were away: a Map Room was added to your yard");
+    buttons(line)[0]!.click();
     expect(select).toHaveBeenCalledWith(601);
   });
 
-  it("puts the starter base first in the away toast, its Town Hall a button that selects it", () => {
-    jobs.showAway([upgrade(7, CANNON, 2), starter()]);
-    expect(toasts()).toHaveLength(1);
-    const text = toasts()[0]!.querySelector(".notice__text")!;
-    expect(text.textContent).toBe(
-      `${READY_WITH_GRANT}. While you were away: upgrade finished: ${typeName(CANNON)} 2`,
-    );
-    const buttons = [...text.querySelectorAll<HTMLButtonElement>(".job-notice__building")];
-    expect(buttons.map((one) => one.textContent)).toEqual(["Town Hall", `${typeName(CANNON)} 2`]);
-    buttons[0]!.click();
+  it("puts the starter base first in the away line, its Town Hall a button that selects it", () => {
+    const line = jobLine("away", [upgrade(7, CANNON, 2), starter()], select);
+    expect(line.textContent).toBe(`${READY_WITH_GRANT}. While you were away: upgrade finished: ${typeName(CANNON)} 2`);
+    expect(buttons(line).map((one) => one.textContent)).toEqual(["Town Hall", `${typeName(CANNON)} 2`]);
+    buttons(line)[0]!.click();
     expect(select).toHaveBeenCalledWith(1);
   });
 
-  it("keeps the away toast up longer than a job toast, then clears it", () => {
-    jobs.showAway([upgrade(1, CANNON, 5)]);
-    vi.advanceTimersByTime(JOB_NOTICE_TIMEOUT_MS + 1);
-    expect(toasts()).toHaveLength(1);
-    vi.advanceTimersByTime(AWAY_NOTICE_TIMEOUT_MS - JOB_NOTICE_TIMEOUT_MS);
-    expect(toasts()).toHaveLength(0);
-  });
-
-  it("shows no away toast when nothing finished while the player was away", () => {
-    jobs.showAway([]);
-    expect(toasts()).toHaveLength(0);
+  it("is empty for nothing", () => {
+    expect(jobLine("away", [], select).textContent).toBe("");
+    expect(jobLineText("jobs", [])).toBe("");
   });
 });

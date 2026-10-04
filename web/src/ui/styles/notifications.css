@@ -1,0 +1,155 @@
+/*
+ * The notification list (#257): the yard's bell
+ * (`web/src/ui/notifications/NotificationBell.ts`) and the list behind it
+ * (`NotificationPanel.ts`).
+ *
+ * Same rule as ui.css: every value comes from tokens.css. The bell is one of
+ * the dock's round buttons (yard-hud.css), dressed as the Mail button is
+ * (mail.css); the list is the shared `.panel`, docked where the mailbox docks,
+ * its rows dressed as the mailbox's.
+ */
+
+/* ── The bell: left of Mail, at its height ──────────────────────────────── */
+
+.yard-dock__right > .yard-dock__button--bell {
+  right: 330px;
+  bottom: 30px;
+}
+
+.yard-dock__badge.notif-badge {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+/* ── The frame: docked right under the HUD ──────────────────────────────── */
+
+.notif-screen {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  right: var(--space-4);
+  z-index: var(--z-hud);
+  width: min(420px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100% - var(--hud-height) - var(--space-3) - var(--space-4));
+  max-width: none;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.notif-screen[hidden] {
+  display: none;
+}
+
+.notif-screen .panel__titlebar {
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
+.notif-screen .panel__title {
+  margin-right: auto;
+  font-size: var(--text-xl);
+}
+
+.notif-screen .panel__body {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.notif-status {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--colour-border-subtle);
+  color: var(--colour-danger);
+  font-size: var(--text-sm);
+}
+
+/* ── The rows ───────────────────────────────────────────────────────────── */
+
+.notif-list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.notif-list__empty {
+  padding: var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.notif-row {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--colour-border-subtle);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.notif-row:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.notif-row:focus-visible {
+  outline: none;
+  box-shadow: inset var(--focus-ring);
+}
+
+/* The unread dot, left of the line, as the mailbox's. */
+.notif-row--unread::before {
+  content: "";
+  position: absolute;
+  left: var(--space-2);
+  top: calc(var(--space-3) + 6px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--colour-accent);
+}
+
+.notif-row--unread {
+  color: var(--colour-text-strong);
+  font-weight: 600;
+}
+
+.notif-row__meta {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 400;
+}
+
+/* ── A phone: a bottom sheet, the bell above Mail ───────────────────────── */
+
+@media (width <= 620px) {
+  .notif-screen {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: min(82vh, calc(100vh - var(--hud-height)));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom: 0;
+  }
+
+  .yard-dock__right > .yard-dock__button--bell {
+    right: 192px;
+    bottom: 136px;
+  }
+
+  /* The sheet has the yard's round buttons' place, as the mailbox does. */
+  .overlay__layer:has(> .notif-screen:not([hidden])) > .yard-dock {
+    display: none;
+  }
+}

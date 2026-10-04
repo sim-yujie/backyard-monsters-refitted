@@ -568,36 +568,17 @@ describe("the HUD on the player's own yard", () => {
     expect(selectBuilding).toHaveBeenCalledTimes(1);
   });
 
-  it("toasts what the server says finished, and a click on a building selects it", () => {
+  it("raises no toast for what finished, live or while away: the bell lists it (#257)", () => {
     hud.bindYard(binding);
     store.emit({
       reason: "refresh",
-      completed: [
-        { kind: "upgrade", id: 7, t: 20, at: 1, detail: { from: 4, level: 5, points: 1 } },
-        { kind: "upgrade", id: 3, t: 21, at: 1, detail: { from: 2, level: 3, points: 1 } },
-      ],
+      completed: [{ kind: "upgrade", id: 7, t: 20, at: 1, detail: { from: 4, level: 5, points: 1 } }],
     });
-    const toasts = notices.element.querySelectorAll(".notice");
-    expect(toasts).toHaveLength(1);
-    expect(toasts[0]!.textContent).toMatch(/^2 upgrades finished: /);
-    toasts[0]!.querySelectorAll<HTMLButtonElement>(".job-notice__building")[1]!.click();
-    expect(selectBuilding).toHaveBeenCalledWith(3);
-  });
-
-  it("toasts what finished while the player was away as one line, every kind in it (#135)", () => {
-    hud.bindYard(binding);
     store.emit({
       reason: "away",
-      completed: [
-        { kind: "upgrade", id: 7, t: 20, at: 1, detail: { from: 4, level: 5, points: 1 } },
-        { kind: "storeItem", id: "BST", t: null, at: 2, detail: {} },
-      ],
+      completed: [{ kind: "storeItem", id: "BST", t: null, at: 2, detail: {} }],
     });
-    const toasts = notices.element.querySelectorAll(".notice");
-    expect(toasts).toHaveLength(1);
-    expect(toasts[0]!.textContent).toMatch(/^While you were away: upgrade finished: .* 5; ran out: Sharper Tools/);
-    toasts[0]!.querySelector<HTMLButtonElement>(".job-notice__building")!.click();
-    expect(selectBuilding).toHaveBeenCalledWith(7);
+    expect(notices.element.querySelectorAll(".notice")).toHaveLength(0);
   });
 
   it("stops listening when unbound or destroyed", () => {

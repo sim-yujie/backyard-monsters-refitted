@@ -64,6 +64,7 @@ import { showBuildMapRoom } from "@/ui/maproom1/MapRoomPrompt";
 import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
 import { ShopScreen } from "@/ui/yard/ShopScreen";
 import { MailDoor } from "@/ui/mail/MailDoor";
+import { NotificationDoor } from "@/ui/notifications/NotificationDoor";
 import {
   MONSTERS_TAB_ORDER,
   MonsterBuilding,
@@ -237,6 +238,8 @@ export class YardScene implements Scene {
   private shop: ShopScreen | null = null;
   /** The Mail button and the mailbox behind it (#193): the player's own yards only. */
   private mail: MailDoor | null = null;
+  /** The bell and its notification list (#257): the own yard only, as Mail is. */
+  private bell: NotificationDoor | null = null;
   /** The Starter Kit picker, while open (outposts WP9). */
   private kitPicker: StarterKitPicker | null = null;
   /** Picks a tapped mushroom on the own yard (§5.6); null on a foreign one. */
@@ -421,6 +424,16 @@ export class YardScene implements Scene {
         onInviteAccepted: () => void this.store?.refresh(),
       });
       this.dock.placeBesideMonsters(tutTarget(this.mail.button.element, TutTarget.DOCK_MAIL));
+      this.bell = new NotificationDoor({
+        container: context.overlay.content,
+        onOpen: () => {
+          this.mail?.close();
+          this.makeRoomForMail();
+        },
+        currentYard: () => outpostBaseid(this.own) ?? null,
+        selectBuilding: (id) => this.focusBuilding(id),
+      });
+      this.mail.button.element.after(this.bell.bell.element);
     }
     context.overlay.content.append(this.status);
     this.inset = { top: this.hud.element.getBoundingClientRect().bottom, bottom: 0 };
@@ -445,6 +458,8 @@ export class YardScene implements Scene {
     this.planner = null;
     this.mail?.destroy();
     this.mail = null;
+    this.bell?.destroy();
+    this.bell = null;
     this.dock?.destroy();
     this.dock = null;
     this.input?.detach();
@@ -1066,6 +1081,7 @@ export class YardScene implements Scene {
     this.buildMenu?.close();
     this.shop?.close();
     this.mail?.close();
+    this.bell?.close();
     this.monsters ??= new MonstersScreen({ binding, tabs }).mount(context.overlay.content);
     this.monsters.besidePanel(this.panel !== null);
     this.monsters.open(shown, focus);
@@ -1095,9 +1111,11 @@ export class YardScene implements Scene {
   /**
    * The mailbox docks where the Monsters screen, the Shop and the building
    * panel do (#193), so they make way as it opens, as they do for each other.
-   * The planner hides the dock, and with it the Mail button.
+   * The planner hides the dock, and with it the Mail button. The bell's list
+   * (#257) docks there too, and makes way for the mailbox the same way.
    */
   private makeRoomForMail(): void {
+    this.bell?.close();
     this.endPlacement();
     this.select(null);
     this.buildMenu?.close();
@@ -1118,6 +1136,7 @@ export class YardScene implements Scene {
     this.buildMenu?.close();
     this.monsters?.close();
     this.mail?.close();
+    this.bell?.close();
     this.shop ??= new ShopScreen({ binding }).mount(context.overlay.content);
     this.shop.besidePanel(this.panel !== null);
     this.shop.open();
@@ -1156,6 +1175,7 @@ export class YardScene implements Scene {
     this.monsters?.close();
     this.shop?.close();
     this.mail?.close();
+    this.bell?.close();
     this.buildMenu ??= new BuildMenu({
       binding,
       onPick: (picked, instant) => this.startPlacement(picked, instant),
@@ -1360,6 +1380,7 @@ export class YardScene implements Scene {
     this.monsters?.close();
     this.shop?.close();
     this.mail?.close();
+    this.bell?.close();
     this.endPlacement();
     this.buildMenu?.close();
     // Stored decorations need sprites to be carried out of the drawer.
@@ -1673,6 +1694,7 @@ export class YardScene implements Scene {
     this.hud?.bindYard(this.binding);
     this.dock?.bind(this.binding);
     this.mail?.setSaveUnread(store.save.unreadmessages);
+    this.bell?.setSaveCount(store.save.notifications);
     // Mushrooms are picked in the main yard only (the route refuses an outpost).
     this.mushroomPicker =
       store.kind === "main" ? new MushroomPicker(store, this.mushroomView(context)) : null;
@@ -1896,6 +1918,7 @@ export class YardScene implements Scene {
     // button's cyan count (#192); one that ends with the screen open is seen.
     if (!this.monsters?.isOpen) finishedMonstersJobs.add(change.completed);
     if (change.completed.length > 0) guideBus.emit("jobFinished", { jobs: change.completed });
+    if (change.reason !== YardChangeReason.AWAY) this.bell?.jobsFinished(change.completed);
     if (change.reason === YardChangeReason.PENDING || change.reason === YardChangeReason.AWAY) return;
     if (change.reason === YardChangeReason.INCOME) {
       this.save = store.save;
@@ -1908,6 +1931,7 @@ export class YardScene implements Scene {
     this.yard = yard;
     this.save = store.save;
     this.mail?.setSaveUnread(store.save.unreadmessages);
+    this.bell?.setSaveCount(store.save.notifications);
     // While the planner is open its drawer's stored decorations are drawn too.
     const shown = (this.planner && this.plannerYard()) || yard;
     // A mushroom a building landed on comes back somewhere else, and pops up there (#263).

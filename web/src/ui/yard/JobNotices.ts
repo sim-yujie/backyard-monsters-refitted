@@ -3,39 +3,32 @@ import { labAbility, monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { championEntry } from "@/game/yard/championCatalogue";
 import { typeName } from "@/game/yard/planner/summary";
 import { formatAmount } from "@/ui/format";
-import type { Notices } from "@/ui/maproom/Notices";
 import { RESOURCE_KEYS, RESOURCE_NAMES } from "@/ui/resourceIcon";
 
 /**
  * "3 upgrades finished: Cannon Tower 5, Sniper Tower 3, Silo 7"
  * (`docs/design/yard-buildings.md` §3.1 "Notices").
  *
- * The server's catch-up says what finished in each answer (`completed`), and
- * this turns one answer's list into toasts in the yard's notice dock: one per
- * kind of job, so five upgrades landing in the same second are one line
- * rather than five. Every building in a toast is a button that selects it,
- * which is where a finished upgrade is looked at and the next one started.
+ * The server's catch-up says what finished in each answer (`completed`). The
+ * yard once showed each answer's list as toasts; since #257 the server keeps
+ * the same events in the player's notification list instead (one per kind of
+ * job in a yard answer, so five upgrades landing in the same second are one
+ * line rather than five), and this words each one for the bell's list
+ * (`ui/notifications/NotificationPanel.ts`). Every building in a line is a
+ * button that selects it, which is where a finished upgrade is looked at and
+ * the next one started.
  *
- * What the owner's own `/base/load` finished while they were away comes as
- * one toast instead, every kind in it: "While you were away: 2 upgrades
- * finished: Cannon Tower 5, Silo 7" (issue #135). The starter base an empty
- * yard was given is told first, as a sentence of its own: "Your yard is
- * ready: …" (issue #154).
+ * What the owner's own `/base/load` finished while they were away is one
+ * notification, every kind in it: "While you were away: 2 upgrades finished:
+ * Cannon Tower 5, Silo 7" (issue #135). The starter base an empty yard was
+ * given is told first, as a sentence of its own: "Your yard is ready: …"
+ * (issue #154).
  */
 
-/** How long a job toast stays up on its own. */
-export const JOB_NOTICE_TIMEOUT_MS = 10_000;
-
-/**
- * How long the "While you were away" toast stays up: longer, since it lands
- * while the player is still taking in the yard they just opened.
- */
-export const AWAY_NOTICE_TIMEOUT_MS = 20_000;
-
-/** The lead-in of the one toast for what finished while the player was away. */
+/** The lead-in of the one line for what finished while the player was away. */
 export const AWAY_PREFIX = "While you were away: ";
 
-/** One building (or item) a toast names. */
+/** One building (or item) a line names. */
 export interface JobNoticeItem {
   /** "Cannon Tower 5". */
   readonly label: string;
@@ -43,7 +36,7 @@ export interface JobNoticeItem {
   readonly buildingId: number | null;
 }
 
-/** One toast: every completed job of one kind in an answer. */
+/** One group: every completed job of one kind in an answer. */
 export interface JobNoticeGroup {
   readonly kind: string;
   /** "3 upgrades finished" or "Upgrade finished". */
@@ -55,7 +48,7 @@ export interface JobNoticeGroup {
    */
   readonly tail?: string;
   /**
-   * Set for a kind told as a sentence of its own, ahead of the away toast's
+   * Set for a kind told as a sentence of its own, ahead of the away line's
    * "While you were away" rather than under it: the starter base.
    */
   readonly standalone?: boolean;
@@ -101,14 +94,14 @@ const headingOf = (kind: string, count: number): string => {
 /**
  * The catch-up takes every Radio Tower down once and refunds its build cost
  * (`server/src/services/yard/mapRoom.ts`, design §5.7, D15); the next load
- * says so in its away toast.
+ * says so in its away notification.
  */
 const RADIO_REMOVED = "radioRemoved";
 
 /**
  * A Map Room 2 yard that had no Map Room is given one by the catch-up
  * (`server/src/services/yard/mapRoom.ts`, owner decision 2026-09-28); the
- * next load says "A Map Room was added to your yard" in its away toast.
+ * next load says "A Map Room was added to your yard" in its away notification.
  */
 const MAP_ROOM_ADDED = "mapRoomAdded";
 
@@ -131,8 +124,8 @@ const STARVED = "starve";
  * Monsters the catch-up moved from a hatchery into housing, one entry per
  * type with its `count` (`server/src/services/yard/catchUpMonsters.ts`). A
  * busy yard hatches one every few seconds, so a live answer's hatches raise
- * no toast (the housing, the Monsters screen and the dock show them, #142);
- * the away toast says them once: "12 monsters hatched: 10 Pokey, 2 Octo-ooze".
+ * no notification (the housing, the Monsters screen and the dock show them, #142);
+ * the away notification says them once: "12 monsters hatched: 10 Pokey, 2 Octo-ooze".
  */
 const HATCH = "hatch";
 
@@ -272,7 +265,7 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
 };
 
 /**
- * One answer's `completed` list as toasts: grouped by kind in the order each
+ * One answer's `completed` list as groups: grouped by kind in the order each
  * kind first appears, the jobs in each in the order they finished.
  */
 export const groupCompletedJobs = (completed: readonly CompletedJob[]): JobNoticeGroup[] => {
@@ -299,7 +292,7 @@ export const groupCompletedJobs = (completed: readonly CompletedJob[]): JobNotic
   ];
 };
 
-/** The toast's plain text, as a screen reader and the tests read it. */
+/** A group's plain text, as a screen reader and the tests read it. */
 export const noticeText = (group: JobNoticeGroup): string => {
   const items = group.items.map((item) => item.label).join(", ");
   return group.tail === undefined ? `${group.heading}: ${items}` : `${group.heading}${items}${group.tail}`;
@@ -312,7 +305,7 @@ const awayHeading = (group: JobNoticeGroup): JobNoticeGroup => ({
 });
 
 /**
- * The away toast's plain text: "While you were away: 2 upgrades finished:
+ * The away line's plain text: "While you were away: 2 upgrades finished:
  * Cannon Tower 5, Silo 7; ran out: Sharper Tools", after any standalone
  * sentence ("Your yard is ready: …. While you were away: …"). Empty for no
  * groups.
@@ -324,84 +317,68 @@ export const awayNoticeText = (groups: readonly JobNoticeGroup[]): string => {
   return [...standalone, ...(away.length === 0 ? [] : [AWAY_PREFIX + rest])].join(". ");
 };
 
-export class JobNotices {
-  private readonly notices: Notices;
-  private readonly select: (buildingId: number) => void;
-  private count = 0;
+/** Whether a line is one answer's kind of job (`jobs`) or a whole load's (`away`). */
+export type JobLineKind = "jobs" | "away";
 
-  /** `select` selects a building: the scene's `selectBuilding`. */
-  constructor(notices: Notices, select: (buildingId: number) => void) {
-    this.notices = notices;
-    this.select = select;
+/**
+ * A notification's plain text: an `away` one as {@link awayNoticeText}, a
+ * `jobs` one as its group (its sentences joined, should it hold several).
+ */
+export const jobLineText = (kind: JobLineKind, completed: readonly CompletedJob[]): string => {
+  const groups = groupCompletedJobs(completed);
+  return kind === "away" ? awayNoticeText(groups) : groups.map(noticeText).join(". ");
+};
+
+/**
+ * A notification as a line of text with every building in it a button that
+ * calls `select` with its id, or plain text when `select` is null (a building
+ * in another yard than the one open). Worded as {@link jobLineText}.
+ */
+export const jobLine = (
+  kind: JobLineKind,
+  completed: readonly CompletedJob[],
+  select: ((buildingId: number) => void) | null,
+): HTMLElement => {
+  const groups = groupCompletedJobs(completed);
+  const line = document.createElement("span");
+  line.className = kind === "away" ? "job-notice job-notice--away" : "job-notice";
+  const standalone = kind === "away" ? groups.filter((group) => group.standalone) : groups;
+  const away = kind === "away" ? groups.filter((group) => !group.standalone) : [];
+  standalone.forEach((group, index) => {
+    if (index > 0) line.append(". ");
+    appendGroup(line, group, select);
+  });
+  if (away.length > 0) {
+    line.append(standalone.length > 0 ? `. ${AWAY_PREFIX}` : AWAY_PREFIX);
+    away.forEach((group, index) => {
+      if (index > 0) line.append("; ");
+      appendGroup(line, awayHeading(group), select);
+    });
   }
+  return line;
+};
 
-  /** Shows one answer's completed jobs, less its hatches (see `HATCH`). Nothing for an empty list. */
-  show(completed: readonly CompletedJob[]): void {
-    for (const group of groupCompletedJobs(completed.filter((job) => job.kind !== HATCH))) {
-      // A key per toast: a second batch landing while the first is still up is
-      // news of its own, not a correction of the first.
-      this.count += 1;
-      this.notices.show(`job:${group.kind}:${this.count}`, this.message(group), {
-        level: "info",
-        timeoutMs: JOB_NOTICE_TIMEOUT_MS,
-      });
+/** "Heading: " then each item, a building as a button that selects it (or the group's sentence). */
+const appendGroup = (
+  line: HTMLElement,
+  group: JobNoticeGroup,
+  select: ((buildingId: number) => void) | null,
+): void => {
+  line.append(group.tail === undefined ? `${group.heading}: ` : group.heading);
+  group.items.forEach((item, index) => {
+    if (index > 0) line.append(", ");
+    if (item.buildingId === null || select === null) {
+      line.append(item.label);
+      return;
     }
-  }
-
-  /**
-   * Shows what the owner's load finished while they were away as one toast,
-   * every kind in it. Nothing for an empty list.
-   */
-  showAway(completed: readonly CompletedJob[]): void {
-    const groups = groupCompletedJobs(completed);
-    if (groups.length === 0) return;
-    const line = document.createElement("span");
-    line.className = "job-notice job-notice--away";
-    const standalone = groups.filter((group) => group.standalone);
-    const away = groups.filter((group) => !group.standalone);
-    standalone.forEach((group, index) => {
-      if (index > 0) line.append(". ");
-      this.appendGroup(line, group);
-    });
-    if (away.length > 0) {
-      line.append(standalone.length > 0 ? `. ${AWAY_PREFIX}` : AWAY_PREFIX);
-      away.forEach((group, index) => {
-        if (index > 0) line.append("; ");
-        this.appendGroup(line, awayHeading(group));
-      });
-    }
-    this.count += 1;
-    this.notices.show(`job:away:${this.count}`, line, {
-      level: "info",
-      timeoutMs: AWAY_NOTICE_TIMEOUT_MS,
-    });
-  }
-
-  private message(group: JobNoticeGroup): HTMLElement {
-    const line = document.createElement("span");
-    line.className = "job-notice";
-    this.appendGroup(line, group);
-    return line;
-  }
-
-  /** "Heading: " then each item, a building as a button that selects it (or the group's sentence). */
-  private appendGroup(line: HTMLElement, group: JobNoticeGroup): void {
-    line.append(group.tail === undefined ? `${group.heading}: ` : group.heading);
-    group.items.forEach((item, index) => {
-      if (index > 0) line.append(", ");
-      if (item.buildingId === null) {
-        line.append(item.label);
-        return;
-      }
-      const buildingId = item.buildingId;
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "job-notice__building";
-      button.textContent = item.label;
-      button.title = `Show ${item.label}`;
-      button.addEventListener("click", () => this.select(buildingId));
-      line.append(button);
-    });
-    if (group.tail !== undefined) line.append(group.tail);
-  }
-}
+    const buildingId = item.buildingId;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "job-notice__building";
+    button.textContent = item.label;
+    button.title = `Show ${item.label}`;
+    button.addEventListener("click", () => select(buildingId));
+    line.append(button);
+  });
+  if (group.tail !== undefined) line.append(group.tail);
+};

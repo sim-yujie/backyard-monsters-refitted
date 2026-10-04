@@ -678,6 +678,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   playerlevel?: number;
   /**
+   * The owner's build-mode loads of their own yard: how many of their
+   * notifications are unread, for the yard's bell (#257). The yard routes
+   * send it too, after the action. Absent when the server could not count.
+   */
+  notifications?: number;
+  /**
    * Map Room 2 attack loads only: the target cell's height, `i`, which
    * stretches an outpost's tower range (`BTOWER.as:80-85`). The server's loot
    * replay reads the same stored value (`world_map_cell.terrainHeight`).
@@ -1294,6 +1300,8 @@ export type YardResponse<Report> = ApiEnvelope &
     report: Report;
     /** The player's level after the action, as `/base/load` sends it (#192). */
     playerlevel?: number;
+    /** The unread notifications after the action, as `/base/load` sends it (#257). */
+    notifications?: number;
   };
 
 /**

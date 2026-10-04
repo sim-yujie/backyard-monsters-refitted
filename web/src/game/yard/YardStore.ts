@@ -714,6 +714,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     }
     // Not a YardState field (that shape is frozen), but it rides every answer.
     if (typeof response.playerlevel === "number") slices.playerlevel = response.playerlevel;
+    if (typeof response.notifications === "number") slices.notifications = response.notifications;
     this.applied = Math.max(this.applied, number);
     this.syncClock(response.currenttime);
     this.setSave({ ...this.current, ...slices });
