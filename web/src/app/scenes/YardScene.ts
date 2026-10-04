@@ -1323,6 +1323,8 @@ export class YardScene implements Scene {
           check?.problem ? spotSentence(check, (id) => placement.grid.nameOf(id)) : null,
         ),
       onDrop: async (x, y) => {
+        // A one-off building is down; the bar says so until the answer (#277).
+        if (!repeat) bar.setBuilding(true);
         const result = storage
           ? await storage.place(type, x, y)
           : instant
@@ -1330,6 +1332,7 @@ export class YardScene implements Scene {
             : await actions.build(type, x, y);
         if (this.placement !== placement) return result.ok ? "placed" : "refused";
         if (!result.ok) {
+          bar.setBuilding(false);
           bar.setMessage(result.refusal.message, "bad");
           return "refused";
         }

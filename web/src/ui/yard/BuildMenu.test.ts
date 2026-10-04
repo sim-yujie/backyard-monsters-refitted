@@ -357,6 +357,37 @@ describe("PlacementBar", () => {
     );
   });
 
+  it("says Building… with Cancel out of the way until the answer, and gives the line back on a refusal (#277)", () => {
+    const bar = new PlacementBar({
+      type: 20,
+      instant: false,
+      instantPrice: 17,
+      cost: { r1: 2000, r2: 1500, r3: 500, r4: 0 },
+      onCancel: vi.fn(),
+      onBuildHere: vi.fn(),
+    }).mount(document.body);
+    const hint = bar.element.querySelector(".build-placing__hint")!;
+    const buttons = bar.element.querySelector<HTMLElement>(".build-placing__buttons")!;
+    const placing = hint.textContent;
+
+    bar.setBuilding(true);
+    expect(hint.textContent).toBe("Building…");
+    expect(buttons.hidden).toBe(true);
+    // The spot changing underneath does not take the line back.
+    bar.setSpot("Something is already there.");
+    expect(hint.textContent).toBe("Building…");
+    expect(bar.element.classList.contains("build-placing--blocked")).toBe(false);
+    bar.setSpot(null);
+
+    bar.setBuilding(false);
+    bar.setMessage("You do not have enough resources for that.", "bad");
+    expect(hint.textContent).toBe(placing);
+    expect(buttons.hidden).toBe(false);
+    expect(bar.element.querySelector(".build-placing__message")?.textContent).toBe(
+      "You do not have enough resources for that.",
+    );
+  });
+
   it("without onBuildHere there is no Build here", () => {
     const bar = new PlacementBar({
       type: 20,

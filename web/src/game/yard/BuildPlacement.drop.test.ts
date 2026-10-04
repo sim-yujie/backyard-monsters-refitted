@@ -56,7 +56,7 @@ const carry = (
   type: number,
   yard: Yard,
   onDrop: (x: number, y: number) => Promise<DropOutcome>,
-  extra: { onDone?: () => void; spots?: (SpotCheck | null)[] } = {},
+  extra: { onDone?: () => void; onCancel?: () => void; spots?: (SpotCheck | null)[] } = {},
 ) => {
   const canvas = new EventTarget() as HTMLCanvasElement;
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0 }) as DOMRect;
@@ -69,12 +69,19 @@ const carry = (
     worldToYard: (x, y) => ({ x, y }),
     onDrop,
     onSpot: (check) => extra.spots?.push(check),
-    onCancel: () => {},
+    onCancel: extra.onCancel ?? (() => {}),
     ...(extra.onDone ? { onDone: extra.onDone } : {}),
     repeat: type === BLOCK,
   });
   open.push(placement);
   return { placement, canvas };
+};
+
+/** Escape on the page (no DOM here: a bare event carrying the key). */
+const escape = () => {
+  vi.stubGlobal("HTMLInputElement", class {});
+  vi.stubGlobal("HTMLTextAreaElement", class {});
+  window.dispatchEvent(Object.assign(new Event("keydown"), { key: "Escape" }));
 };
 
 /** A mouse moved to yard point `(x, y)` (the stand-in camera and view map 1:1). */
@@ -124,6 +131,22 @@ describe("BuildPlacement drop (#277)", () => {
 
     answer("placed");
     await settle();
+  });
+
+  it("Escape does nothing while it lands, and cancels again once it is back in hand", async () => {
+    const { onDrop, answer } = later();
+    const onCancel = vi.fn();
+    const { placement } = carry(TOWER, yardOf([HALL]), onDrop, { onCancel });
+    placement.moveTo(300, 200);
+    placement.dropHere();
+
+    escape();
+    expect(onCancel).not.toHaveBeenCalled();
+
+    answer("refused");
+    await settle();
+    escape();
+    expect(onCancel).toHaveBeenCalledOnce();
   });
 
   it("a refused drop goes back in hand, follows the pointer again and is checked for real", async () => {

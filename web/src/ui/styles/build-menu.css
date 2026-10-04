@@ -592,6 +592,10 @@
   gap: var(--space-2);
 }
 
+.build-placing__buttons[hidden] {
+  display: none;
+}
+
 /* Build here is the touch screen's click; a mouse clicks the spot itself. */
 @media (width > 620px) and (pointer: fine) {
   .build-placing__here {

@@ -781,8 +781,12 @@ export class PlacementBar {
   readonly element: HTMLElement;
   private readonly hint: HTMLElement;
   private readonly message: HTMLElement;
+  private readonly buttons: HTMLElement;
   private readonly here: HTMLButtonElement | null = null;
   private readonly phone = isPhone();
+  /** What the spot last said, for when Building… gives the line back. */
+  private spotText: string | null = null;
+  private building = false;
 
   constructor(options: PlacementBarOptions) {
     this.element = document.createElement("div");
@@ -828,6 +832,7 @@ export class PlacementBar {
 
     const buttons = document.createElement("div");
     buttons.className = "build-placing__buttons";
+    this.buttons = buttons;
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "btn build-placing__cancel";
@@ -857,9 +862,29 @@ export class PlacementBar {
 
   /** What the spot says: nothing when it is fine, why when it is not. */
   setSpot(text: string | null): void {
+    this.spotText = text;
+    if (this.building) return;
     this.element.classList.toggle("build-placing--blocked", Boolean(text));
     this.hint.textContent = text ? `Can't build here: ${text}` : placeHint(this.phone);
     if (this.here) this.here.disabled = Boolean(text);
+  }
+
+  /**
+   * The building was put down and the server has not answered yet (#277):
+   * the line says Building… and Cancel and Build here step aside. Off again
+   * on a refusal, back to what the spot says.
+   */
+  setBuilding(building: boolean): void {
+    this.building = building;
+    this.element.classList.toggle("build-placing--building", building);
+    this.buttons.hidden = building;
+    if (building) {
+      this.element.classList.remove("build-placing--blocked");
+      this.hint.textContent = "Building…";
+      this.setMessage(null);
+    } else {
+      this.setSpot(this.spotText);
+    }
   }
 
   /** A line about the last drop: the server's refusal, or what was built. */

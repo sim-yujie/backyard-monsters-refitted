@@ -498,7 +498,8 @@ export class BuildPlacement {
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key !== "Escape") return;
+    // Nothing to cancel once a one-off building is on its way down.
+    if (event.key !== "Escape" || this.pinned) return;
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
     this.options.onCancel();
