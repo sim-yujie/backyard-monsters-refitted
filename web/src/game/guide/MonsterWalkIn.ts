@@ -1,6 +1,13 @@
 import { Sprite, type Container } from "pixi.js";
 import { creepZIndex, MonsterSheetTextures } from "@/game/attack/AttackBattleLayer";
 import { anchorOffset, frameRow, sheetColumn, spriteFor } from "@/game/attack/monsterSprites";
+import {
+  buildEngineYard,
+  buildPathGrid,
+  mulberry32,
+  type CombatBuildingData,
+  type EngineBuilding,
+} from "@/game/combat/rules";
 import { boxAround } from "./StagedRaidLayer";
 import type { YardPoint } from "./stagedRaid";
 
@@ -19,6 +26,10 @@ import type { YardPoint } from "./stagedRaid";
  * them (#272), as Flash's hatched monsters were: it spawns them into the
  * buildings' own layer (`MAP._BUILDINGTOPS`, `client/scripts/HOUSING.as:131`).
  * They used to be drawn over every building.
+ *
+ * They walk round the buildings in their way rather than through them, on the
+ * route Flash's pathing gives a monster heading home ({@link routeBetween}),
+ * in single file. With no route they walk straight, in a loose line.
  */
 
 /** Yard units a second. */
@@ -38,6 +49,11 @@ export interface WalkInOptions {
   readonly from: YardPoint;
   /** The Housing's centre. */
   readonly to: YardPoint;
+  /**
+   * Yard points from `from` to `to` round the buildings ({@link routeBetween}),
+   * or absent for the straight walk.
+   */
+  readonly route?: readonly YardPoint[] | null;
   /**
    * Called once when the walk is over: the last has gone in, or it was taken
    * down before that. The caller lets the pens show them from here (#228).
@@ -63,12 +79,70 @@ export interface WalkInHost {
 export const walkerZIndex = (ground: { x: number; y: number }, index: number): number =>
   creepZIndex(ground.x, ground.y, WALK_IN_DEPTH_ID + index);
 
-/** Where walker `index` is `t` seconds in, and whether it has gone in. */
-export const walkerAt = (
-  options: Pick<WalkInOptions, "from" | "to">,
+/** Yard units ahead a walker on a route looks to face its way, over the route's 10-unit steps. */
+const LOOK_AHEAD = 30;
+
+/** How long a route is, in yard units. */
+const lengthOf = (route: readonly YardPoint[]): number => {
+  let total = 0;
+  for (let index = 1; index < route.length; index++) {
+    const from = route[index - 1]!;
+    const to = route[index]!;
+    total += Math.hypot(to.x - from.x, to.y - from.y);
+  }
+  return total;
+};
+
+/** The point `distance` yard units along a route, clamped to its ends. */
+const pointAlong = (route: readonly YardPoint[], distance: number): YardPoint => {
+  let left = Math.max(0, distance);
+  for (let index = 1; index < route.length; index++) {
+    const from = route[index - 1]!;
+    const to = route[index]!;
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    if (length > 0 && left <= length) {
+      const k = left / length;
+      return { x: from.x + (to.x - from.x) * k, y: from.y + (to.y - from.y) * k };
+    }
+    left -= length;
+  }
+  return route[route.length - 1]!;
+};
+
+/** Walker `index` on a route: single file, each `STAGGER` behind the one before. */
+const walkerOnRoute = (
+  route: readonly YardPoint[],
   index: number,
   t: number,
 ): { x: number; y: number; alpha: number; done: boolean; heading: number } => {
+  const total = lengthOf(route);
+  const walked = Math.max(0, t - index * STAGGER) * SPEED;
+  const at = pointAlong(route, walked);
+  // Facing a point a little ahead smooths the route's stair steps; at the end,
+  // the last step's way.
+  let ahead = pointAlong(route, walked + LOOK_AHEAD);
+  let back = at;
+  if (Math.hypot(ahead.x - at.x, ahead.y - at.y) < 1) {
+    ahead = route[route.length - 1]!;
+    back = pointAlong(route, total - LOOK_AHEAD);
+  }
+  const over = Math.max(0, walked - total) / SPEED;
+  return {
+    x: at.x,
+    y: at.y,
+    alpha: over <= 0 ? 1 : Math.max(0, 1 - over / FADE),
+    done: over >= FADE,
+    heading: Math.atan2(ahead.y - back.y, ahead.x - back.x),
+  };
+};
+
+/** Where walker `index` is `t` seconds in, and whether it has gone in. */
+export const walkerAt = (
+  options: Pick<WalkInOptions, "from" | "to" | "route">,
+  index: number,
+  t: number,
+): { x: number; y: number; alpha: number; done: boolean; heading: number } => {
+  if (options.route && options.route.length >= 2) return walkerOnRoute(options.route, index, t);
   const dx = options.to.x - options.from.x;
   const dy = options.to.y - options.from.y;
   const length = Math.hypot(dx, dy) || 1;
@@ -103,6 +177,8 @@ export interface WalkInBuilding {
   readonly footprint: readonly [number, number];
   /** Health; null or absent is whole. A Housing at zero is no pen (`yardLifeModel`). */
   readonly hp?: number | null;
+  /** What the pathing grid prices a wall block at; absent is level 1. */
+  readonly level?: number;
 }
 
 /** The yard as the walk-in reads it: where Housing stands and how wide the plot is. */
@@ -115,6 +191,47 @@ const centreOf = (building: WalkInBuilding): YardPoint => ({
   x: building.x + building.footprint[0] / 2,
   y: building.y + building.footprint[1] / 2,
 });
+
+/** Side of the square a route floods out of at its end, as Flash's 10 x 10 target rectangle. */
+const ROUTE_TARGET = 10;
+
+/**
+ * A route from `from` to `to` round the buildings, in yard units, or null when
+ * the grid finds none (the walk is then straight).
+ *
+ * It is the path Flash gives a monster heading for Housing
+ * (`CreepBase.as:152-160`, `MonsterBase.changeModeHousing`): `PATHING.GetPath`
+ * to a 10 x 10 square in the pen, walls ignored. The same grid the attack
+ * engine walks creeps on (`combat/rules/grid.ts`) prices every cell at 10 and
+ * a building's middle at 200 or more, so the route skirts buildings and goes
+ * into a Housing by its gate; with walls ignored a wall block costs 20, which
+ * Flash's monsters crossed too. Flash starts the walk at the Hatchery's top
+ * corner; ours steps out of its front corner (#228).
+ */
+export const routeBetween = (yard: WalkInYard, from: YardPoint, to: YardPoint): YardPoint[] | null => {
+  const buildingdata: CombatBuildingData[] = [];
+  const buildinghealthdata: Record<string, number> = {};
+  yard.buildings.forEach((building, index) => {
+    // Ids only have to be unique here: the grid never looks a building up.
+    const id = building.id ?? 1_000_000 + index;
+    buildingdata.push({ id, t: building.type, X: building.x, Y: building.y, l: building.level ?? 1 });
+    if (building.hp != null) buildinghealthdata[String(id)] = building.hp;
+  });
+  const grid = buildPathGrid(buildEngineYard({ buildingdata, buildinghealthdata }));
+  // The flood reads only where the target is and how big: a square, not a building.
+  const target = {
+    cx: Math.trunc(to.x) - ROUTE_TARGET / 2,
+    cy: Math.trunc(to.y) - ROUTE_TARGET / 2,
+    w: ROUTE_TARGET,
+    h: ROUTE_TARGET,
+  } as EngineBuilding;
+  // Walls ignored, nothing scatters: the stream only jiggles each waypoint.
+  const result = grid.path({ fromX: from.x, fromY: from.y, target, ignoreWalls: true }, mulberry32(1));
+  if (!result.reached || result.waypoints.length < 2) return null;
+  // The first waypoint is the start's own cell and the last is pushed twice
+  // (`grid.ts` fidelity note 4): the walk's real ends replace them.
+  return [from, ...result.waypoints.slice(1, -1), to];
+};
 
 /**
  * New monsters walking into the yard's first Housing from the plot's east
@@ -133,7 +250,8 @@ export const walkIntoHousing = (
   if (!housing || count <= 0) return null;
   const to = centreOf(housing);
   const from = { x: yard.bounds.yardWidth / 2, y: to.y };
-  const walk = new MonsterWalkIn(host, { monster, count, from, to, ...(onEnd ? { onEnd } : {}) });
+  const route = routeBetween(yard, from, to);
+  const walk = new MonsterWalkIn(host, { monster, count, from, to, route, ...(onEnd ? { onEnd } : {}) });
   walk.start();
   return walk;
 };
@@ -181,7 +299,8 @@ export const walkOutOfHatchery = (
 ): MonsterWalkIn | null => {
   const route = count > 0 ? hatcheryWalk(yard, hatchery) : null;
   if (!route) return null;
-  const walk = new MonsterWalkIn(host, { monster, count, ...route, ...(onEnd ? { onEnd } : {}) });
+  const path = routeBetween(yard, route.from, route.to);
+  const walk = new MonsterWalkIn(host, { monster, count, ...route, route: path, ...(onEnd ? { onEnd } : {}) });
   walk.start();
   return walk;
 };
@@ -204,8 +323,12 @@ export class MonsterWalkIn {
   /** The world rectangle the walk crosses, for Bob's spotlight (fixed for the walk). */
   worldBox(): { x: number; y: number; width: number; height: number } | null {
     if (this.ended) return null;
-    const { from, to } = this.options;
-    return boxAround([this.host.yardToWorld(from.x, from.y), this.host.yardToWorld(to.x, to.y)], 60);
+    const { from, to, route } = this.options;
+    const points = route && route.length >= 2 ? route : [from, to];
+    return boxAround(
+      points.map((point) => this.host.yardToWorld(point.x, point.y)),
+      60,
+    );
   }
 
   start(): void {
