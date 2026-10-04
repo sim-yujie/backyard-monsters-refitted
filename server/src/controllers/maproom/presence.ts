@@ -24,7 +24,10 @@ export const PRESENCE_TTL_SECONDS = 120;
  * revenge lands only while the player is away.
  *
  * It only refreshes the key: no save is read or written, so it costs one
- * Redis write.
+ * Redis write. It is not a real game action (#271): a ping says a game is
+ * open, not that anyone is playing it, and a player online by pings alone
+ * reads as offline ten minutes after their last real action
+ * (`services/user/online.ts`).
  */
 export const presence: KoaController = async (ctx) => {
   const user: User = ctx.authUser;

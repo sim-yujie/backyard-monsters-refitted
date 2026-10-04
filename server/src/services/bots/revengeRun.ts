@@ -6,7 +6,7 @@ import { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
-import { postgres, redis } from "../../server.js";
+import { postgres } from "../../server.js";
 import { logger } from "../../utils/logger.js";
 import { newCheckpoint } from "../base/attackCheckpoint.js";
 import { storeCheckpoint } from "../base/attackCheckpointStore.js";
@@ -16,6 +16,7 @@ import { playerLevelOf } from "../base/calculateBaseLevel.js";
 import { ReplayTimeoutError, reserveReplaySlot } from "../base/combat/replayRunner.js";
 import { finaliseAttacksFor, finaliseExpiredOnBase, landCheckpointedAttack } from "../base/finaliseAttack.js";
 import { catchUpArmyRow } from "../yard/armies.js";
+import { isPlayerOnline } from "../user/online.js";
 import { ONLINE_SECONDS, type RevengeOutcome } from "./revenge.js";
 import { planRevenge, revengeArmyOf } from "./revengePlan.js";
 
@@ -211,12 +212,9 @@ const fight = async ({ bot, target, now, planSeed, battleSeed }: RevengeAttack, 
 };
 
 /**
- * Whether the player has been seen within {@link ONLINE_SECONDS} (`revenge.ts`,
- * "online"): their last-seen key is there and not older than that.
+ * Whether the player is online (`revenge.ts`): seen within {@link ONLINE_SECONDS}
+ * and a real game action in the last ten minutes, with no in-game check
+ * pending (`services/user/online.ts`, #271). A tab left open is not online.
  */
-export const seenRecently = async (userid: number, now: number): Promise<boolean> => {
-  const raw = await redis.get(`last-seen:${BaseType.MAIN}:${userid}`);
-  if (raw === null || raw === undefined) return false;
-  const at = Number(raw);
-  return !Number.isFinite(at) || at >= now - ONLINE_SECONDS;
-};
+export const seenRecently = (userid: number, now: number): Promise<boolean> =>
+  isPlayerOnline(userid, now, ONLINE_SECONDS);

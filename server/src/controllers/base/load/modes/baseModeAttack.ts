@@ -16,7 +16,7 @@ import { createAttackLog } from "../../../../services/base/createAttackLog.js";
 import { updateResources, Operation } from "../../../../services/base/updateResources.js";
 import { isAttackActive } from "../../../../services/base/isAttackActive.js";
 import { baseNotFoundErr, baseUnderAttackErr, baseProtectedErr, userOnlineErr, truceActiveErr, shinyLockedErr } from "../../../../errors/errors.js";
-import { redis } from "../../../../server.js";
+import { ATTACK_ONLINE_SECONDS, isPlayerOnline } from "../../../../services/user/online.js";
 import { isTruceActive } from "../../../../services/mail/isTruceActive.js";
 import { MR1_TRIBE_IDS } from "../../../../game-data/tribes/v1/index.js";
 import { registerAttacker } from "../../../../services/maproom/v1/registerAttacker.js";
@@ -97,9 +97,10 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
 
     if (isAttackActive(save)) throw baseUnderAttackErr();
 
-    if (save.type === BaseType.MAIN) {
-      const lastSeen = await redis.get(`last-seen:${BaseType.MAIN}:${save.userid}`);
-      if (lastSeen && parseInt(lastSeen) >= getCurrentDateTime() - 60) throw userOnlineErr();
+    // Online means a game open (a presence mark from the last minute) AND
+    // real play in the last ten minutes: a ping alone protects nobody (#271).
+    if (save.type === BaseType.MAIN && (await isPlayerOnline(save.userid, getCurrentDateTime(), ATTACK_ONLINE_SECONDS))) {
+      throw userOnlineErr();
     }
 
     const activeTruce = await isTruceActive(user.userid, save.saveuserid);

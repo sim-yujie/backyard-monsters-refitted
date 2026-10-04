@@ -11,6 +11,7 @@ import { logger } from "./utils/logger.js";
 import { ascii_node } from "./utils/ascii_art.js";
 import { ErrorInterceptor } from "./middleware/clientSafeError.js";
 import { jsonBodyCompat } from "./middleware/jsonBody.js";
+import { realActionTracker } from "./middleware/realAction.js";
 import { processLanguagesFile } from "./middleware/processLanguageFile.js";
 import { logMissingAssets, requestLogging } from "./middleware/requestLogging.js";
 import { corsCacheControl } from "./middleware/corsCacheControlSetup.js";
@@ -89,6 +90,9 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   });
 
   app.use(ErrorInterceptor);
+
+  // A player's real game actions, which keep them online (#271, `services/user/realActions.ts`).
+  app.use(realActionTracker());
 
   // Routes
   app.use(router.routes());

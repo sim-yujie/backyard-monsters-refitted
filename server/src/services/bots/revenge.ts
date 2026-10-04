@@ -30,9 +30,12 @@ import { REVENGE_CAP_WINDOW_MS, REVENGE_GIVE_UP_HOURS, revengeCapsAllow, type Re
  * `attack_logs` rows), so revenges that run keep them whatever moved the
  * booked times; booked revenges that have not run yet do not hold a place.
  *
- * "Online" is any last-seen mark from the last {@link ONLINE_SECONDS}: the
+ * "Online" is a last-seen mark from the last {@link ONLINE_SECONDS}: the
  * key's whole life, stricter than the attack load's 60 seconds, so a player
- * who closed the game a minute ago is still left alone.
+ * who closed the game a minute ago is still left alone. It also needs a real
+ * game action in the last ten minutes and no in-game check pending, as the
+ * attack load does (`services/user/online.ts`, #271): a tab left open and
+ * pinging is not online.
  */
 
 /** A retry while the player is online or someone is attacking (§4.7). */

@@ -164,10 +164,12 @@ describe.skipIf(!enabled)("a bot's revenge fought for real (issue #244)", () => 
     async () => {
       await attackedBot(bot);
 
-      // Online: the player's last-seen key from a presence ping 30 seconds ago.
+      // Online: a presence ping 30 seconds ago and a real action 5 minutes ago (#271).
       await redis.setex(`last-seen:main:${player}`, 120, String(now() - 30));
+      await redis.setex(`last-action:${player}`, 600, String(now() - 5 * MINUTE));
       expect((await pass()).revenge).toEqual({ "wait:online": 1 });
       await redis.del(`last-seen:main:${player}`);
+      await redis.del(`last-action:${player}`);
 
       // Protected for another hour: again 1-6 hours after it ends.
       await sql(`UPDATE bym.bot_job SET due_at = ? WHERE kind = 'revenge'`, [at(now() - MINUTE)]);
