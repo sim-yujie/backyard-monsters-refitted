@@ -484,8 +484,20 @@ describe("the DEV trigger", () => {
   test("is on only for a local server", () => {
     expect(devCheckEnabled("local")).toBe(true);
     expect(devCheckEnabled("production")).toBe(false);
-    expect(devCheckEnabled(undefined)).toBe(false);
     expect(devCheckEnabled("staging")).toBe(false);
+  });
+
+  test("is off when nothing is set", () => {
+    // `devCheckEnabled(undefined)` would not exercise this: an explicit
+    // `undefined` argument still falls through to the default parameter.
+    const saved = process.env.ENV;
+    delete process.env.ENV;
+    try {
+      expect(devCheckEnabled()).toBe(false);
+    } finally {
+      if (saved === undefined) delete process.env.ENV;
+      else process.env.ENV = saved;
+    }
   });
 
   test("is mounted only behind that switch", () => {
