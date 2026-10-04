@@ -141,6 +141,36 @@ describe("yardAtPoints", () => {
   });
 });
 
+describe("walls and traps (issue #250)", () => {
+  test(
+    "levels 20-40: walls fill most of what the Town Hall allows, traps most of theirs",
+    () => {
+      let walls = 0;
+      let wallRoom = 0;
+      let traps = 0;
+      let trapRoom = 0;
+      for (let level = 20; level <= 40; level++) {
+        for (let index = 0; index < 6; index++) {
+          const seed = level * 7919 + index * 104729;
+          const yard = yardAtPoints(seed, PERSONAS[index % PERSONAS.length]!, targetInBand(level, (index + 0.5) / 6));
+          const hall = yard.townHall;
+          if (hall < 3) continue;
+          const mine = yard.buildings.filter((building) => building.t === 17).length;
+          // A Town Hall just upgraded has not caught up yet, but it filled the last one's room first.
+          expect({ level, index, caughtUp: mine >= 0.7 * allowed(17, hall - 1) }).toEqual({ level, index, caughtUp: true });
+          walls += mine;
+          wallRoom += allowed(17, hall);
+          traps += yard.buildings.filter((building) => building.t === 24 || building.t === 117).length;
+          trapRoom += allowed(24, hall) + allowed(117, hall);
+        }
+      }
+      expect(walls / wallRoom).toBeGreaterThan(0.85);
+      expect(traps / trapRoom).toBeGreaterThan(0.8);
+    },
+    { timeout: 60_000 }
+  );
+});
+
 describe("Progression", () => {
   test("never jumps a whole level band, and never upgrades the Map Room, to the very end", () => {
     for (const persona of PERSONAS) {

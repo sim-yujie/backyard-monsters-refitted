@@ -42,8 +42,8 @@ import { yardAtPoints, type Persona, type ProgressionBuilding } from "./progress
  *   storage cap `[PLACEHOLDER]`, and each harvester's buffer part full.
  *
  * - **Where everything stands** (§4.2 step 2, `layout.ts`): every building's
- *   `X`/`Y`, a few decorations, and the yard expansions (`storedata.ENL`) the
- *   plot grows with.
+ *   `X`/`Y` in a walled layout after the Base Defense Guide, a decoration on a
+ *   few bots, and the yard expansions (`storedata.ENL`) the plot grows with.
  */
 
 /** Storage held between these fractions of the cap (§4.6) `[PLACEHOLDER]`. */

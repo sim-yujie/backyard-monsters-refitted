@@ -277,13 +277,22 @@ It works the way a player does, so the limits hold by construction:
    same checks `planBuild` and `planUpgradeAction` make. Each action adds its points
    (`pointsForBuild` / `pointsForUpgrade`). Stop when points plus base value reach the target.
    The Map Room never goes past level 1.
-2. **Placement.** Each new building gets a spot from zones around the Town Hall: storage and Town
-   Hall in the core, towers spread for coverage, Housing, Hatcheries and Bunkers in a middle ring,
-   harvesters outside, walls as broken ring segments round the core from mid levels, traps near
-   towers, a few decorations. Every spot is jittered, checked with `rectOf` / `overlaps` /
-   `withinBounds` (`layoutGeometry.ts`), and the plot grows with the yard expansions a player of
-   that level usually owns (`storedata.ENL.q`, up to 6 like the sandbox yard,
-   `utils/sandbox/overworldYard.ts:3864`).
+2. **Placement.** Each new building gets a spot from zones around the Town Hall, after the wiki's
+   [Base Defense Guide](https://backyardmonsters.fandom.com/wiki/Base_Defense_Guide), which most
+   players follow (owner review, issue #250): the Town Hall dead centre with its silos in a walled
+   core (the guide's Town Hall and Silo Death Trap), a 3 x 3 grid of walled compartments round it
+   holding the towers with the harvesters in front of them and inside their range, defences spread
+   so no side is weak, each kind of harvester spread out, the general and monster buildings round
+   the edge (outside the grid once the plot has room: the guide's Never Ending Chain). Walls close
+   the grid one compartment at a time, the core first, each with a two-cell hallway that traps fill
+   first; leftover walls go out as single Eye-ra bait blocks. Further traps go between harvesters
+   and silos and by towers. Decorations are rare: one, on about 15% of bots `[PLACEHOLDER]`. Every
+   spot is jittered, checked with `rectOf` / `overlaps` / `withinBounds` (`layoutGeometry.ts`), and
+   the plot grows with the yard expansions a player of that level usually owns (`storedata.ENL.q`,
+   up to 6 like the sandbox yard, `utils/sandbox/overworldYard.ts:3864`; one at about levels 10,
+   14, 19, 24, 29 and 34 `[PLACEHOLDER]`, each bot shifted by up to 2 levels). The progression
+   builds walls and traps as such a player does: from Town Hall 3 it keeps 85-100% of the wall
+   allowance and 70-100% of the trap allowance standing `[PLACEHOLDER]`.
 3. **Army and defence.** Unlocked monsters: those the Locker level allows
    (`yard/locker.ts:176-204`), less a random one or two of the newest. Academy levels by level band.
    Bunkers filled to 70-100% of capacity with bunkerable unlocked monsters (`yard/bunker.ts:53`,

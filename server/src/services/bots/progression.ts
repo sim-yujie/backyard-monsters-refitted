@@ -60,6 +60,18 @@ import { pointsForBuild, pointsForUpgrade, TOWN_HALL_TYPE } from "../yardplanner
  * Every other action is picked in two draws: a category by the persona's
  * weights (`[PLACEHOLDER]`, {@link PERSONA_WEIGHTS}), then an action inside it,
  * a new building weighing more than an upgrade.
+ *
+ * ## Walls and traps (issue #250)
+ *
+ * Most players follow the wiki's Base Defense Guide, which walls the Town
+ * Hall and silos into a death trap and the rest into compartments, so a
+ * player soon uses most of the blocks their Town Hall allows, and traps
+ * fill the hallways. Each seed draws, per hall level, the share of the
+ * allowance it means to stand ({@link WALL_FILL}, {@link TRAP_FILL}); while a
+ * yard is short of it, building one more weighs {@link FILL_WEIGHT} instead
+ * of the persona's weight. Upgrading them keeps the persona's weight. The
+ * draws come from their own stream, so a yard before its first wall is the
+ * same run it always was.
  */
 
 /** A bot's play style, kept in `bot.persona` (§5). */
@@ -124,6 +136,22 @@ export const PERSONA_WEIGHTS: Readonly<Record<Persona, Readonly<Record<Exclude<C
   towers: { economy: 2, defence: 4, army: 1.5, utility: 1, walls: 2.5, traps: 1 },
   army: { economy: 2, defence: 2, army: 4, utility: 1.5, walls: 1.5, traps: 0.5 },
 };
+
+/**
+ * The share of the wall allowance a seed means to stand at each hall level,
+ * drawn in `[min, max)` `[PLACEHOLDER]`: a Town Hall 2 yard has just started,
+ * from Town Hall 3 a player walls most of what they may.
+ */
+export const WALL_FILL = { early: { min: 0.4, max: 0.9 }, later: { min: 0.85, max: 1 } } as const;
+
+/** The same for traps `[PLACEHOLDER]`. */
+export const TRAP_FILL = { early: { min: 0.4, max: 0.9 }, later: { min: 0.7, max: 1 } } as const;
+
+/** A wall or trap build's weight while the yard is short of its fill `[PLACEHOLDER]`. */
+const FILL_WEIGHT = 30;
+
+/** The salt of the fill draws' stream. */
+const FILL_SALT = 0x2545f491;
 
 /** The Town Hall upgrade's weight once it is offered: strong, so it comes soon after readiness. */
 const HALL_WEIGHT = 6;
@@ -261,6 +289,9 @@ export class Progression {
   /** Every building, by type, in the order built. */
   private readonly byType = new Map<number, ProgressionBuilding[]>();
   private readonly thresholds: number[] = [];
+  /** The share of the wall and trap allowances to stand, per hall level. */
+  private readonly wallFill: number[] = [];
+  private readonly trapFill: number[] = [];
   private nextId = 1;
   private pending: Candidate | null | undefined;
   private hall = 0;
@@ -274,6 +305,13 @@ export class Progression {
     this.rng = mulberry32(seed);
     for (let hall = 0; hall <= TOP_HALL; hall++) {
       this.thresholds.push(READINESS_MIN + READINESS_SPREAD * this.rng.float());
+    }
+    const fills = mulberry32((Math.floor(seed) ^ FILL_SALT) >>> 0);
+    for (let hall = 0; hall <= TOP_HALL; hall++) {
+      const wall = hall <= 2 ? WALL_FILL.early : WALL_FILL.later;
+      const trap = hall <= 2 ? TRAP_FILL.early : TRAP_FILL.later;
+      this.wallFill.push(wall.min + (wall.max - wall.min) * fills.float());
+      this.trapFill.push(trap.min + (trap.max - trap.min) * fills.float());
     }
     for (const starter of STARTER_BUILDINGS) {
       const id = this.nextId++;
@@ -437,6 +475,12 @@ export class Progression {
     return want === 0 ? 1 : have / want;
   }
 
+  /** Whether the yard stands fewer walls or traps of `type` than its fill at this hall (see the file comment). */
+  private shortOfFill(type: number): boolean {
+    const fill = (CATEGORY_OF[type] === "walls" ? this.wallFill : this.trapFill)[this.hall] ?? 0;
+    return (this.byType.get(type)?.length ?? 0) < Math.round(allowedAt(type, this.hall) * fill);
+  }
+
   /** Every action the screens allow now, grouped by category. */
   private candidates(): Map<Category, Candidate[]> {
     const groups = new Map<Category, Candidate[]>();
@@ -479,8 +523,15 @@ export class Progression {
     const weights = PERSONA_WEIGHTS[this.persona];
     const options: { item: Candidate[]; weight: number }[] = [];
     for (const [category, list] of groups) {
-      const inBand = list.filter((candidate) => totalAfter(candidate) < ceiling);
-      if (inBand.length > 0) options.push({ item: inBand, weight: weights[category as keyof typeof weights] });
+      let inBand = list.filter((candidate) => totalAfter(candidate) < ceiling);
+      const weight = weights[category as keyof typeof weights];
+      if (category === "walls" || category === "traps") {
+        // Builds short of the fill go in a group of their own, weighed to catch up.
+        const short = inBand.filter((candidate) => candidate.kind === "build" && this.shortOfFill(candidate.t));
+        if (short.length > 0) options.push({ item: short, weight: FILL_WEIGHT });
+        inBand = inBand.filter((candidate) => !short.includes(candidate));
+      }
+      if (inBand.length > 0) options.push({ item: inBand, weight });
     }
     if (hallReady) {
       const inBand = hallUpgrade.filter((candidate) => totalAfter(candidate) < ceiling);

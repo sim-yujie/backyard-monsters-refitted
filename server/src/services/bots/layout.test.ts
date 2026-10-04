@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { footprintOf } from "../../game-data/buildingFootprints.js";
+import { TOWER_STATS } from "../../game-rules/combat/combatStatsData.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { nextBuildingId, placementProblem } from "../yard/build.js";
-import { MAX_EXPANSIONS, rectOf, withinBounds } from "../yardplanner/layoutGeometry.js";
+import { MAX_EXPANSIONS, rectOf, withinBounds, yardSize } from "../yardplanner/layoutGeometry.js";
 import { checkNodePlacement } from "../yardplanner/validateLayout.js";
 import { TOWN_HALL_TYPE } from "../yardplanner/costs.js";
 import {
+  DECORATED_SHARE,
   DECORATION_TYPES,
   expansionFor,
   GRID,
@@ -103,12 +105,14 @@ describe("layoutBotYard", () => {
     { timeout: 60_000 }
   );
 
-  test("a yard too broken up for its Champion Cage buys its next expansion early, and stays legal", () => {
-    // This seed's cage finds no room on the plot of its level (found by the 800-yard run).
-    const laid = laidOut(231227, "army", 30, 17.5 / 20);
-    const cage = laid.layout.buildings.find((spot) => spot.t === 114)!;
-    const level = laid.yard.builtAtLevel[laid.yard.buildings[laid.layout.buildings.indexOf(cage)]!.id]!;
-    expect(withinBounds(rectOf(cage.t, cage.X, cage.Y), expansionFor(231227, level))).toBe(false);
+  test("a yard too broken up for its next Housing buys its next expansion early, and stays legal", () => {
+    // This seed's second Housing finds no room on the plot of its level (found by a 60-yard run).
+    const laid = laidOut(1356739, "economy", 30, 0.5);
+    const early = laid.layout.buildings.find((spot, index) => {
+      const level = laid.yard.builtAtLevel[laid.yard.buildings[index]!.id]!;
+      return !withinBounds(rectOf(spot.t, spot.X, spot.Y), expansionFor(1356739, level));
+    });
+    expect(early?.t).toBe(15);
     expectBuildable(laid);
   });
 
@@ -144,7 +148,7 @@ describe("layoutBotYard", () => {
     expect(a).not.toEqual(b);
   });
 
-  test("zones: the Town Hall in the middle, storage inside, harvesters outside, towers spread, walls in runs", () => {
+  test("zones: the Town Hall in the middle, storage inside, harvesters further out, towers spread, walls in runs", () => {
     for (let seed = 0; seed < 10; seed++) {
       const { layout } = laidOut(seed * 92821 + 7, PERSONAS[seed % PERSONAS.length]!, 40, 0.5);
       const centre = (spot: PlacedSpot) => {
@@ -186,36 +190,170 @@ describe("layoutBotYard", () => {
           [0, -20],
         ].some(([dx, dy]) => at.has(`${spot.X + dx!},${spot.Y + dy!}`))
       ).length;
-      expect(joined / walls.length).toBeGreaterThan(0.9);
+      // Only the single Eye-ra bait blocks stand alone.
+      expect(joined / walls.length).toBeGreaterThan(0.8);
 
-      // Traps sit in a ring opening or near a tower, never out on their own.
+      // Traps sit in a hallway, between the harvesters and silos or near a tower, never out on their own.
+      const resources = layout.buildings.filter((spot) => HARVESTERS.has(spot.t) || spot.t === SILO).map(centre);
       for (const trap of layout.buildings.filter((spot) => TRAP_TYPES.has(spot.t))) {
         const c = centre(trap);
-        const nearestTower = Math.min(...towers.map((tower) => Math.hypot(tower.x - c.x, tower.y - c.y)));
+        const nearest = Math.min(...[...towers, ...resources].map((one) => Math.hypot(one.x - c.x, one.y - c.y)));
         const nearestWall = Math.min(...walls.map((wall) => Math.hypot(wall.X - trap.X, wall.Y - trap.Y)));
-        expect(Math.min(nearestTower, nearestWall)).toBeLessThan(160);
+        expect(Math.min(nearest, nearestWall)).toBeLessThan(160);
       }
     }
   });
 
-  test("a few decorations from the list, numbered among the buildings", () => {
-    let seen = 0;
-    for (let seed = 0; seed < 20; seed++) {
-      const { layout } = laidOut(seed, PERSONAS[seed % PERSONAS.length]!, 40, 0.5);
-      expect(layout.decorations.length).toBeGreaterThan(0);
-      expect(layout.decorations.length).toBeLessThanOrEqual(MAX_DECORATIONS);
-      const top = Math.max(...layout.buildings.map((spot) => spot.id));
-      expect(layout.decorations[0]!.id).toBeLessThan(top);
-      layout.decorations.forEach((spot) => {
-        expect(DECORATION_TYPES).toContain(spot.t);
-        expect(footprintOf(spot.t).decoration).toBe(true);
-        expect(withinBounds(rectOf(spot.t, spot.X, spot.Y), layout.expansion)).toBe(true);
-      });
-      seen += layout.decorations.length;
+  test(
+    "decorations are rare: at most one, on a few bots, from the list, numbered among the buildings",
+    () => {
+      const seeds = 200;
+      let decorated = 0;
+      for (let seed = 0; seed < seeds; seed++) {
+        const { layout } = laidOut(seed, PERSONAS[seed % PERSONAS.length]!, 30, 0.5);
+        expect(layout.decorations.length).toBeLessThanOrEqual(MAX_DECORATIONS);
+        if (layout.decorations.length === 0) continue;
+        decorated++;
+        const top = Math.max(...layout.buildings.map((spot) => spot.id));
+        expect(layout.decorations[0]!.id).toBeLessThan(top);
+        layout.decorations.forEach((spot) => {
+          expect(DECORATION_TYPES).toContain(spot.t);
+          expect(footprintOf(spot.t).decoration).toBe(true);
+          expect(withinBounds(rectOf(spot.t, spot.X, spot.Y), layout.expansion)).toBe(true);
+        });
+      }
+      expect(MAX_DECORATIONS).toBe(1);
+      expect(decorated).toBeGreaterThan(0);
+      expect(decorated / seeds).toBeLessThan(DECORATED_SHARE + 0.07);
+      expect(laidOut(3, "army", 2).layout.decorations).toEqual([]);
+    },
+    { timeout: 60_000 }
+  );
+});
+
+/** Whether a footprint can be reached from the plot's edge without crossing a wall or a trap. */
+const reachable = (blocks: readonly PlacedSpot[], target: PlacedSpot, expansion: number): boolean => {
+  const [width, height] = yardSize(expansion);
+  const cols = width / GRID + 2;
+  const rows = height / GRID + 2;
+  const ox = -width / 2 - GRID;
+  const oy = -height / 2 - GRID;
+  const blocked = new Uint8Array(cols * rows);
+  for (const block of blocks) {
+    const { w, h } = footprintOf(block.t);
+    for (let y = block.Y; y < block.Y + h; y += GRID) {
+      for (let x = block.X; x < block.X + w; x += GRID) blocked[((y - oy) / GRID) * cols + (x - ox) / GRID] = 1;
     }
-    expect(seen).toBeGreaterThan(20);
-    expect(laidOut(3, "army", 2).layout.decorations).toEqual([]);
-  });
+  }
+  const { w, h } = footprintOf(target.t);
+  const c0 = (target.X - ox) / GRID - 1;
+  const c1 = (target.X + w - ox) / GRID;
+  const r0 = (target.Y - oy) / GRID - 1;
+  const r1 = (target.Y + h - oy) / GRID;
+  const seen = new Uint8Array(cols * rows);
+  const queue = [0];
+  seen[0] = 1;
+  while (queue.length > 0) {
+    const at = queue.pop()!;
+    const c = at % cols;
+    const r = (at - c) / cols;
+    if (c >= c0 && c <= c1 && r >= r0 && r <= r1) return true;
+    for (const [dc, dr] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const) {
+      const nc = c + dc;
+      const nr = r + dr;
+      if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) continue;
+      const next = nr * cols + nc;
+      if (seen[next] || blocked[next]) continue;
+      seen[next] = 1;
+      queue.push(next);
+    }
+  }
+  return false;
+};
+
+/** The Base Defense Guide's rules, measured (issue #250). */
+describe("layoutBotYard follows the Base Defense Guide", () => {
+  const RESOURCES = new Set([...HARVESTERS, SILO, TOWN_HALL_TYPE]);
+
+  test(
+    "levels 10-40: towers' ranges cover the Town Hall, silos and harvesters",
+    () => {
+      let covered = 0;
+      let all = 0;
+      for (let level = 10; level <= 40; level++) {
+        for (let index = 0; index < 3; index++) {
+          const { yard, layout } = laidOut(level * 7919 + index * 104729, PERSONAS[index]!, level, (index + 0.5) / 3);
+          const towers = layout.buildings.flatMap((spot, at) => {
+            const range = TOWER_STATS[spot.t]?.[yard.buildings[at]!.l - 1]?.range;
+            if (!TOWERS.has(spot.t) || range === undefined) return [];
+            const { w, h } = footprintOf(spot.t);
+            return [{ x: spot.X + w / 2, y: spot.Y + h / 2, range }];
+          });
+          let mine = 0;
+          let yours = 0;
+          for (const spot of layout.buildings.filter((one) => RESOURCES.has(one.t))) {
+            const { w, h } = footprintOf(spot.t);
+            const x = spot.X + w / 2;
+            const y = spot.Y + h / 2;
+            yours++;
+            if (towers.some((tower) => Math.hypot(tower.x - x, tower.y - y) <= tower.range)) mine++;
+          }
+          // Every yard with towers has most of its resource buildings in range.
+          if (towers.length > 0) expect({ level, index, most: mine / yours >= 0.7 }).toEqual({ level, index, most: true });
+          covered += mine;
+          all += yours;
+        }
+      }
+      expect(covered / all).toBeGreaterThan(0.95);
+    },
+    { timeout: 60_000 }
+  );
+
+  test(
+    "Town Hall 4 and up: the Town Hall and its silos are walled in, the hallways trapped",
+    () => {
+      for (let level = 25; level <= 40; level++) {
+        for (let index = 0; index < 3; index++) {
+          const { yard, layout } = laidOut(level * 7919 + index * 104729, PERSONAS[index]!, level, (index + 0.5) / 3);
+          if (yard.townHall < 4) continue;
+          const blocks = layout.buildings.filter((spot) => spot.t === WALL_TYPE || TRAP_TYPES.has(spot.t));
+          const walls = blocks.filter((spot) => spot.t === WALL_TYPE);
+          const hall = layout.buildings.find((spot) => spot.t === TOWN_HALL_TYPE)!;
+          // Shut in by walls and traps, and not by walls alone: the trapped hallways are the way in.
+          expect({ level, index, hall: reachable(blocks, hall, layout.expansion) }).toEqual({ level, index, hall: false });
+          expect(reachable(walls, hall, layout.expansion)).toBe(true);
+          for (const silo of layout.buildings.filter((spot) => spot.t === SILO)) {
+            expect({ level, index, silo: reachable(blocks, silo, layout.expansion) }).toEqual({ level, index, silo: false });
+          }
+        }
+      }
+    },
+    { timeout: 60_000 }
+  );
+
+  test(
+    "Town Hall 10: most harvesters sit inside the walled compartments",
+    () => {
+      let inside = 0;
+      let all = 0;
+      for (let seed = 0; seed < 9; seed++) {
+        const { yard, layout } = laidOut(seed * 7727 + 3, PERSONAS[seed % PERSONAS.length]!, 40, 0.8);
+        expect(yard.townHall).toBe(10);
+        const blocks = layout.buildings.filter((spot) => spot.t === WALL_TYPE || TRAP_TYPES.has(spot.t));
+        for (const harvester of layout.buildings.filter((spot) => HARVESTERS.has(spot.t))) {
+          all++;
+          if (!reachable(blocks, harvester, layout.expansion)) inside++;
+        }
+      }
+      expect(inside / all).toBeGreaterThan(0.5);
+    },
+    { timeout: 60_000 }
+  );
 });
 
 describe("expansionFor", () => {
