@@ -12,7 +12,7 @@
 
 :root:has(.hud--corner) {
   --hud-inset: var(--space-4);
-  --hud-bar-height: 56px;
+  --hud-bar-height: 64px; /* 56px before the income line (#280) */
 }
 
 /* ── Top left: the readouts and Workers in one glass bar ──────────────── */
@@ -694,7 +694,7 @@
 @media (width <= 620px) {
   :root:has(.hud--corner) {
     --hud-inset: var(--space-2);
-    --hud-bar-height: 96px;
+    --hud-bar-height: 110px; /* 96px before the income line (#280) */
   }
 
   /* Row one: the name and critter, then Workers and Shiny. Row two: the four
