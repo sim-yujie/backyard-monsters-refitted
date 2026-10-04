@@ -853,9 +853,25 @@ level 8 tower fires 16 shells of 400 a salvo, where a single shot every reload w
 upgrade text gives "damage per shot" and "shots fired per salvo" rather than damage per second
 (`:165-176`). The engine fires it this way (issue #265).
 
-Note that `rate` is used inconsistently. The fire loop re-arms with `_rate * 2`
-(`BTOWER.as:179`) while the upgrade tooltip prints damage per second as `damage * 40 / rate`
-(`BTOWER.as:144-148`). The two disagree by a factor of two; the fire loop is what actually runs.
+**The Tesla Tower charges, then zaps** (`client/scripts/BUILDING25.as`). Its `rate` is not a re-arm
+time but the zaps in one charge, 10 to 35 by level ("shots fired per charge" in its upgrade text,
+`:68-73`). `BTOWER.TickAttack` still runs the usual fire loop, `rate * 2` ticks, but the Tesla's
+`Fire` only names its target (`_laserTarget`) and, if the coil is idle, starts a charge
+(`:84-96`). The rest happens in `TickFast` (`:98-203`), an `ENTER_FRAME` handler, so it counts
+frames of the 40 fps stage, two loops each: 32 frames of charge (`_animTick` 0 to 32), then a zap
+every 4 frames, `int(damage * (0.5 + 0.5 * health / maxHealth))` straight into the named target
+wherever it now is (`:123-153`), `rate` of them (`:156-160`), then a wind-down of a strip cell
+every second frame from wherever the 32-40 firing loop stood to cell 55 (`:190-198`), 30 to 46
+frames, before the next `Fire` can charge it again. A zap after which its target is dead or
+untargetable looks for one new target and winds down if there is none (`:174-186`); the zaps that
+follow still go at the old target, and do nothing, until the fire loop's next `Fire` names the new
+one. A level 1 charge is 10 zaps of 100, some 70 frames from the start of the charge to the last
+zap; a level 8 charge is 35 zaps of 240 over some 170. The engine runs it this way, its frames on every second tick (issue #266).
+
+Note that `rate` reads as a re-arm time everywhere else: the fire loop re-arms with `_rate * 2`
+loops (`BTOWER.as:179`) and the upgrade tooltip prints damage per second as `damage * 40 / rate`
+(`BTOWER.as:144-148`). The two agree: at 80 loops a second, one shot every `rate * 2` loops is
+`damage * 80 / (rate * 2) = damage * 40 / rate` a second.
 
 **Fire loop.** `TickAttack` (`BTOWER.as:171-229`):
 

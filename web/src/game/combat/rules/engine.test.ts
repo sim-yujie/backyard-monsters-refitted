@@ -408,6 +408,75 @@ describe("the Aerial Defense Tower's salvo (issue #265)", () => {
   });
 });
 
+describe("the Tesla Tower's charge and zaps (issue #266)", () => {
+  /**
+   * A level 1 Tesla Tower (100 damage, 10 zaps a charge, range 250) and a
+   * harvester beside it, where `monsters` land.
+   */
+  const teslaBattle = (monsters: Record<string, number>) => {
+    const yard = yardOf({
+      "1": { id: 1, t: 25, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 100, Y: 100 },
+    });
+    const battle = createBattle(yard, { seed: 7 });
+    battle.apply({ kind: "fling", t: 0, x: 110, y: 110, r: 0, monsters });
+    return battle;
+  };
+
+  /** The tower's charges and zaps over `ticks`, with what each zap took. */
+  const timeline = (battle: ReturnType<typeof createBattle>, ticks: number) => {
+    const charges: number[] = [];
+    const zaps: { tick: number; creepId: number; amount: number }[] = [];
+    for (let step = 0; step < ticks && !battle.over(); step += 1) {
+      battle.step();
+      const events = battle.recentEvents(battle.tick - 1);
+      for (const event of events) {
+        if (event.kind === "charge") charges.push(event.tick);
+        if (event.kind !== "shot") continue;
+        const hurt = events.find((one) => one.kind === "hurt" && one.creepId === event.creepId);
+        zaps.push({
+          tick: event.tick,
+          creepId: event.creepId,
+          amount: hurt?.kind === "hurt" ? hurt.amount : 0,
+        });
+      }
+    }
+    return { charges, zaps };
+  };
+
+  it("charges 32 frames, then zaps rate times a frame in four, each of its whole damage", () => {
+    const { charges, zaps } = timeline(teslaBattle({ C15: 1 }), 400);
+    const first = charges[0]!;
+    const charge = zaps.filter((zap) => zap.tick > first && zap.tick < (charges[1] ?? Infinity));
+    expect(charge).toHaveLength(10);
+    // 32 frames of two ticks, then the next frame of four.
+    expect(charge[0]!.tick - first).toBeGreaterThanOrEqual(64);
+    expect(charge[0]!.tick - first).toBeLessThan(72);
+    for (let index = 1; index < charge.length; index += 1) {
+      expect(charge[index]!.tick - charge[index - 1]!.tick).toBe(8);
+    }
+    for (const zap of charge) expect(zap.amount).toBe(100);
+  });
+
+  it("winds down before it charges again", () => {
+    const { charges, zaps } = timeline(teslaBattle({ C15: 1 }), 700);
+    expect(charges.length).toBeGreaterThanOrEqual(2);
+    const lastZap = zaps.filter((zap) => zap.tick < charges[1]!).at(-1)!;
+    // A cell every second frame from the loop's 32-40 to 55: 60 to 92 ticks,
+    // then up to `rate * 2` for the next `Fire`.
+    expect(charges[1]! - lastZap.tick).toBeGreaterThanOrEqual(60);
+    expect(charges[1]! - lastZap.tick).toBeLessThanOrEqual(92 + 20);
+  });
+
+  it("kills a clump of Pokeys, a charge at a time", () => {
+    const battle = teslaBattle({ C1: 4 });
+    const { zaps } = timeline(battle, 1200);
+    expect(zaps.length).toBeGreaterThan(0);
+    // A level 1 Pokey has 200 health: two zaps apiece.
+    expect(battle.state().towers[0]?.kills).toBe(4);
+  });
+});
+
 describe("a creep's reach is a circle on screen (issue #85)", () => {
   /** The screen directions a reach used to stretch or squash. */
   const DIRECTIONS: ReadonlyArray<readonly [string, number, number]> = [

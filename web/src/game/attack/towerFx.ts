@@ -1,5 +1,14 @@
 import type { Graphics } from "pixi.js";
-import { isTower, towerStats, type BeamLine, type CreepSnapshot } from "@/game/combat/rules";
+import {
+  isTower,
+  TESLA_CHARGE_END,
+  TESLA_LOOP_END,
+  TESLA_TICKS_PER_FRAME,
+  TESLA_WIND_END,
+  towerStats,
+  type BeamLine,
+  type CreepSnapshot,
+} from "@/game/combat/rules";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import type { Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
@@ -24,7 +33,9 @@ import { flyerAltitude } from "./monsterSprites";
  * which also adds 30 (`BUILDING118.as:55-72`). The Laser Tower follows its
  * beam's screen angle at 6.66 a cell (`BUILDING23.as:64-77`, `LASER.as`
  * `Track`), and the Tesla Tower plays a charge, a firing loop and a wind-down
- * (`BUILDING25.as:84-200`). The Cannon Tower has no animated layer.
+ * (`BUILDING25.as:84-200`), starting on the engine's `charge` event and
+ * looping while its zaps come (issue #266), with a glow on the coil as it
+ * charges. The Cannon Tower has no animated layer.
  *
  * ## Projectiles
  *
@@ -133,26 +144,29 @@ export const laserCell = (beamDegrees: number, frames: number): number => {
 
 /* ── The Tesla timeline ─────────────────────────────────────────────────── */
 
-/** `BUILDING25.as:107-200`: cells 0-31 charge, 32-40 loop, 41-54 wind down. */
-export const TESLA_CHARGE_END = 32;
-export const TESLA_LOOP_END = 41;
-export const TESLA_WIND_END = 55;
+/**
+ * `BUILDING25.as:107-200`: cells 0-31 charge, 32-40 loop, 41-54 wind down,
+ * the engine's own timeline (issue #266).
+ */
+export { TESLA_CHARGE_END, TESLA_LOOP_END, TESLA_WIND_END };
 
 export type TeslaPhase = "idle" | "charge" | "loop" | "wind";
 
 export interface TeslaState {
   readonly phase: TeslaPhase;
   readonly cell: number;
-  /** Ticks into the wind-down, which advances a cell every second tick. */
+  /** Frames into the wind-down, which advances a cell every second frame. */
   readonly windTicks: number;
 }
 
 export const TESLA_IDLE: TeslaState = { phase: "idle", cell: 0, windTicks: 0 };
 
 /**
- * One tick of the Tesla Tower's strip. `firing` is whether it still has
- * something to shoot; the Flash class charged on its first `Fire`, looped
- * while shots remained and wound down once they did not.
+ * One frame of the Tesla Tower's strip, a frame being
+ * {@link TESLA_TICKS_PER_FRAME} ticks as in the engine. `firing` is, when
+ * idle, whether a charge began, and after that whether it is still zapping;
+ * the Flash class charged on its first `Fire`, looped while zaps remained and
+ * wound down once they did not.
  */
 export const teslaTick = (state: TeslaState, firing: boolean): TeslaState => {
   switch (state.phase) {
@@ -213,8 +227,15 @@ export const towersOf = (yard: Yard): TowerInfo[] =>
 
 /** Ticks a turret keeps tracking after its last shot before holding still. */
 export const FACING_HOLD_TICKS = 30;
-/** Ticks the Tesla keeps its loop going after its last shot. */
-const TESLA_HOLD_TICKS = 30;
+/**
+ * Ticks the Tesla keeps its loop going after its last zap: a zap comes every
+ * 4 frames (8 ticks), so a gap past this means the charge is spent.
+ */
+const TESLA_HOLD_TICKS = 12;
+/** Ticks from a charge's start to its first possible zap: the 32 frames of charge. */
+const TESLA_CHARGE_TICKS = TESLA_CHARGE_END * TESLA_TICKS_PER_FRAME;
+/** World px the coil sits above the origin, where the bolts leave (`BUILDING25.as:140-150`). */
+const COIL_HEIGHT = 50;
 /** `PROJECTILE.Move`: half the stat speed per tick, re-aimed every fifth. */
 const BULLET_SPEED_FACTOR = 0.5;
 const BULLET_AIM_TICKS = 5;
@@ -295,6 +316,9 @@ interface TowerState {
   targetCreep: number;
   cell: number | null;
   tesla: TeslaState;
+  /** The tick the Tesla's latest charge began; a charge not yet shown starts the strip. */
+  chargeTick: number;
+  chargePending: boolean;
 }
 
 /** What the effects ask of the yard renderer. */
@@ -350,8 +374,18 @@ export class TowerFx {
         targetCreep: -1,
         cell: null,
         tesla: TESLA_IDLE,
+        chargeTick: Number.NEGATIVE_INFINITY,
+        chargePending: false,
       });
     }
+  }
+
+  /** A Tesla Tower began to charge on `tick` (issue #266): its strip starts. */
+  onCharge(towerId: number, tick: number): void {
+    const tower = this.towers.get(towerId);
+    if (!tower) return;
+    tower.chargeTick = tick;
+    tower.chargePending = true;
   }
 
   /** A tower's splash radius in cartesian units: 0 for none, or a tower this does not know. */
@@ -396,7 +430,7 @@ export class TowerFx {
     if (type === 25) {
       // `BUILDING25.as:150`: the bolt leaves from 50 px above the origin.
       this.bolts.push({
-        from: { x: tower.info.worldX, y: tower.info.worldY - 50 },
+        from: { x: tower.info.worldX, y: tower.info.worldY - COIL_HEIGHT },
         to: aim,
         tick: event.tick,
       });
@@ -465,6 +499,7 @@ export class TowerFx {
     this.drawFlashes(tick);
     this.drawBullets(tick, elapsed, creepAt);
     this.drawBeams(tick, elapsed);
+    this.drawCoils(tick);
     this.drawBolts(tick);
     this.drawRails(tick);
   }
@@ -487,17 +522,13 @@ export class TowerFx {
     creepAt: (id: number) => CreepSnapshot | undefined,
   ): void {
     const { info } = tower;
-    if (info.frames <= 0) return;
-    const recent = tick - tower.lastShotTick <= FACING_HOLD_TICKS;
-
     if (info.type === 25) {
-      const firing = tick - tower.lastShotTick <= TESLA_HOLD_TICKS;
-      let state = tower.tesla;
-      for (let step = 0; step < elapsed; step += 1) state = teslaTick(state, firing);
-      tower.tesla = state;
-      this.setCell(tower, state.cell);
+      this.stepCoil(tower, tick, elapsed);
+      if (info.frames > 0) this.setCell(tower, tower.tesla.cell);
       return;
     }
+    if (info.frames <= 0) return;
+    const recent = tick - tower.lastShotTick <= FACING_HOLD_TICKS;
 
     if (info.type === 23) {
       const beam = this.beams.find((candidate) => candidate.towerId === info.id);
@@ -514,6 +545,29 @@ export class TowerFx {
       info.frames,
     );
     if (cell !== null) this.setCell(tower, cell);
+  }
+
+  /**
+   * The Tesla's strip over the ticks since the last update, a step on every
+   * tick the engine runs a frame on (every second one): it charges on the
+   * engine's charge, loops while zaps keep coming, then winds down.
+   */
+  private stepCoil(tower: TowerState, tick: number, elapsed: number): void {
+    let state = tower.tesla;
+    for (let at = tick - elapsed + 1; at <= tick; at += 1) {
+      if (at % TESLA_TICKS_PER_FRAME !== 0) continue;
+      if (state.phase === "idle") {
+        if (!tower.chargePending || at < tower.chargeTick) continue;
+        tower.chargePending = false;
+        state = teslaTick(state, true);
+        continue;
+      }
+      const zapping =
+        at - tower.lastShotTick <= TESLA_HOLD_TICKS ||
+        at - tower.chargeTick <= TESLA_CHARGE_TICKS + TESLA_HOLD_TICKS;
+      state = teslaTick(state, zapping);
+    }
+    tower.tesla = state;
   }
 
   private setCell(tower: TowerState, cell: number): void {
@@ -671,6 +725,23 @@ export class TowerFx {
       graphics.ellipse(end.x, end.y, 8, 4).fill({ color: BEAM_GLOW, alpha: 0.6 * power });
     }
     this.beams.length = keep;
+  }
+
+  /**
+   * A glow on each Tesla's coil while it charges, growing to full as the
+   * charge does, and flickering at full while it zaps. The strip shows the
+   * same thing in the Flash art; the glow keeps it readable when zoomed out.
+   */
+  private drawCoils(tick: number): void {
+    for (const tower of this.towers.values()) {
+      const { phase, cell } = tower.tesla;
+      if (phase !== "charge" && phase !== "loop") continue;
+      const power = phase === "charge" ? cell / TESLA_CHARGE_END : 0.8 + jitter(tick, 7) * 0.2;
+      const x = tower.info.worldX;
+      const y = tower.info.worldY - COIL_HEIGHT;
+      this.graphics.circle(x, y, 4 + 10 * power).fill({ color: BOLT_COLOUR, alpha: 0.12 + 0.3 * power });
+      this.graphics.circle(x, y, 2 + 3 * power).fill({ color: 0xe8f8ff, alpha: 0.3 + 0.6 * power });
+    }
   }
 
   private drawBolts(tick: number): void {

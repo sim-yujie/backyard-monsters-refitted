@@ -96,6 +96,12 @@ import {
   AERIAL_DEFENSE_TYPE,
   AERIAL_SHOT_TICKS,
   aerialSalvo,
+  TESLA_CHARGE_END,
+  TESLA_LOOP_END,
+  TESLA_TICKS_PER_FRAME,
+  TESLA_TYPE,
+  TESLA_WIND_END,
+  TESLA_ZAP_FRAMES,
   beamHits,
   towerHealthScale,
   towerShotDamage,
@@ -174,8 +180,8 @@ import type {
  * pathing grid and the wall that gets in the way; ranged and melee swings;
  * Eye-ra's blast; Slimeattikus splitting as it dies; the healers; Rezghul
  * raising the dead; towers with
- * their acquire delay, re-arm and splash, the Railgun's beam and the Aerial
- * Defense's salvo; the two traps; bunkers dispatching
+ * their acquire delay, re-arm and splash, the Railgun's beam, the Aerial
+ * Defense's salvo and the Tesla's charge and zaps; the two traps; bunkers dispatching
  * defenders; resource bombs; loot out of harvesters and storage, hit by hit,
  * and the share of the pool a fallen storage building gives up; the countdown
  * and the retreat.
@@ -301,6 +307,11 @@ import type {
  *    and straight home, rather than pathing round walls or heading for where
  *    the foe is going (`interceptTarget`, `:462-498`); and back in the cage it
  *    stands where it stopped rather than pacing.
+ * 15. **The Tesla's frames are every second tick.** Its charge, zaps and
+ *    wind-down run in an `ENTER_FRAME` handler (`BUILDING25.as:98`), so they
+ *    count frames of the 40 fps stage, not loops, and skip catch-up frames
+ *    (`GLOBAL._catchup`). The engine runs them on every second tick, which is
+ *    a frame at the 80 loops a second it keeps ({@link TESLA_TICKS_PER_FRAME}).
  *
  * ## The random stream's order
  *
@@ -505,6 +516,12 @@ export type BattleVisualEvent =
        * muzzle to 1,600 screen px on, in yard units. Absent for other towers.
        */
       readonly beam?: BeamLine;
+    }
+  | {
+      /** A Tesla Tower began to charge (issue #266); its zaps follow as shots. */
+      readonly kind: "charge";
+      readonly tick: number;
+      readonly towerId: number;
     }
   | {
       /** A creep landed a swing on a building or on another creep. */
@@ -792,10 +809,17 @@ interface Tower {
   targets: number[];
   /** Its `_frameNumber`, counted every tick from the start of the battle. */
   frame: number;
-  /** The Aerial Defense's `_fireStage`: 1 while it reloads, 2 while it fires a salvo. */
+  /**
+   * Its `_fireStage`. The Aerial Defense's: 1 while it reloads, 2 while it
+   * fires a salvo. The Tesla's: 0 idle, 1 charging, 2 zapping, 3 winding down.
+   */
   stage: number;
-  /** Shots fired in the salvo under way. */
+  /** Shots fired in the salvo under way, or zaps in the charge. */
   shotsFired: number;
+  /** The creep the Tesla's zaps go at, its `_laserTarget`; -1 for none. */
+  zapTarget: number;
+  /** The Tesla's strip cell, `_animTick`, which times its charge and wind-down. */
+  charge: number;
 }
 
 interface Trap {
@@ -1038,8 +1062,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       fireTick: stats.rate ?? 0,
       targets: [],
       frame: 0,
-      stage: 1,
+      // `BUILDING115.as:34`, `BUILDING25.as:32`.
+      stage: building.type === AERIAL_DEFENSE_TYPE ? 1 : 0,
       shotsFired: 0,
+      zapTarget: -1,
+      charge: 0,
     });
   }
 
@@ -2917,9 +2944,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       tickSalvo(tower, damage, stats.rate ?? 0, stats.splash ?? 0);
       return;
     }
+    rearm(tower, damage, stats.rate ?? 0, stats.splash ?? 0);
+    if (building.type === TESLA_TYPE) tickZaps(tower, damage, stats.rate ?? 0);
+  };
+
+  /** `BTOWER.TickAttack` (`BTOWER.as:171-229`): count down, then find targets or fire. */
+  const rearm = (tower: Tower, damage: number, rate: number, splash: number): void => {
+    const building = tower.building;
     tower.fireTick -= 1;
     if (tower.fireTick > 0) return;
-    tower.fireTick += (stats?.rate ?? 0) * TOWER_REARM_MULTIPLIER;
+    tower.fireTick += rate * TOWER_REARM_MULTIPLIER;
 
     const scan = scanOf(tower);
     const live = liveTargets(tower, scan);
@@ -2934,12 +2968,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // `int(damage * scale)`, but the Railgun's beam is not truncated (`BUILDING118.as:195`).
     const shot = towerShotDamage(damage, building.hp, building.maxHp);
     for (const creep of live) {
+      if (building.type === TESLA_TYPE) {
+        armCoil(tower, creep);
+        continue;
+      }
       tower.report.shots += 1;
       if (building.type === RAILGUN_TYPE) {
         fireRailgun(tower, creep, damage * towerHealthScale(building.hp, building.maxHp));
         continue;
       }
-      fireShell(tower, creep, shot, stats?.splash ?? 0, scan.flags);
+      fireShell(tower, creep, shot, splash, scan.flags);
     }
   };
 
@@ -3011,6 +3049,73 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const shot = towerShotDamage(damage, building.hp, building.maxHp);
     fireShell(tower, creep, shot, splash, scan.flags);
   };
+
+  /**
+   * The Tesla's `Fire` (`BUILDING25.as:84-96`): it names its target, and an
+   * idle coil starts to charge ({@link TESLA_TYPE}, issue #266).
+   */
+  const armCoil = (tower: Tower, creep: Creep): void => {
+    tower.zapTarget = creep.id;
+    if (tower.stage !== 0) return;
+    tower.stage = 1;
+    visual.push({ kind: "charge", tick, towerId: tower.building.id });
+  };
+
+  /** The Tesla's `TickFast`, once a frame: charge, zaps, wind-down (`BUILDING25.as:98-203`). */
+  const tickZaps = (tower: Tower, damage: number, rate: number): void => {
+    if (tower.frame % TESLA_TICKS_PER_FRAME !== 0) return;
+    const frame = tower.frame / TESLA_TICKS_PER_FRAME;
+    if (tower.stage === 1) {
+      tower.charge += 1;
+      if (tower.charge === TESLA_CHARGE_END) {
+        tower.stage = 2;
+        tower.shotsFired = 0;
+      }
+      return;
+    }
+    if (tower.stage === 3) {
+      if (frame % 2 !== 0) return;
+      tower.charge += 1;
+      if (tower.charge === TESLA_WIND_END) {
+        tower.charge = 0;
+        tower.stage = 0;
+      }
+      return;
+    }
+    if (tower.stage !== 2) return;
+    tower.charge += 1;
+    if (tower.charge === TESLA_LOOP_END) tower.charge = TESLA_CHARGE_END;
+    if (frame % TESLA_ZAP_FRAMES !== 0) return;
+    const building = tower.building;
+    const target = byCreepId.get(tower.zapTarget);
+    // It zaps the creep it named wherever that is now; a dead one takes nothing.
+    if (tower.targets.length > 0 && target && target.hp > 0) {
+      tower.report.shots += 1;
+      visual.push({
+        kind: "shot",
+        tick,
+        towerId: building.id,
+        creepId: target.id,
+        ix: target.ix,
+        iy: target.iy,
+      });
+      tower.report.damageDealt += damageCreep(
+        target,
+        towerShotDamage(damage, building.hp, building.maxHp),
+      );
+      if (target.hp <= 0) tower.report.kills += 1;
+    }
+    tower.shotsFired += 1;
+    if (tower.shotsFired >= rate) {
+      tower.stage = 3;
+      return;
+    }
+    if (target && target.hp > 0 && target.targetable) return;
+    const scan = scanOf(tower);
+    findTowerTargets(tower, scan, 1);
+    if (tower.targets.length === 0) tower.stage = 3;
+  };
+
 
   /**
    * The Railgun's shot (issue #261): a beam at `aim` and on past it that hurts

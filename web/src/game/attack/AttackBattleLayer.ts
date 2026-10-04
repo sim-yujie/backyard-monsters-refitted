@@ -1534,6 +1534,10 @@ export class AttackBattleLayer {
       this.spawnQuake(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius);
       return;
     }
+    if (event.kind === "charge") {
+      this.towerFx.onCharge(event.towerId, event.tick);
+      return;
+    }
     // A death a held bullet dealt waits for it to land; the rest splat now.
     if (this.ledger.death(event)) return;
     const at = groundWorld(event.ix, event.iy, this.origin);

@@ -644,6 +644,32 @@ export const AERIAL_SALVO: readonly number[] = [4, 4, 6, 8, 10, 12, 14, 16];
 export const aerialSalvo = (level: number): number =>
   AERIAL_SALVO[Math.min(Math.max(Math.trunc(level), 1), AERIAL_SALVO.length) - 1] ?? 0;
 
+/**
+ * The Tesla Tower (issue #266), which charges and then zaps.
+ *
+ * Its `rate` is not a re-arm time but the zaps in a charge (`BUILDING25.as:157`,
+ * "shots fired per charge" in its upgrade text, `:68-73`). `BTOWER.TickAttack`
+ * still runs its fire tick (`rate * 2`), and every `Fire` there only names the
+ * target and, if the coil is idle, starts a charge (`:84-96`). The rest is
+ * `TickFast` (`:98-203`), an `ENTER_FRAME` handler, so it counts frames of the
+ * 40 fps stage, {@link TESLA_TICKS_PER_FRAME} loops each: {@link TESLA_CHARGE_END}
+ * frames of charge (`_animTick` 0 to 32); then a zap every
+ * {@link TESLA_ZAP_FRAMES} frames, `int(damage * scale)` straight into the
+ * named target wherever it now is, `rate` of them (`:123-160`), its strip
+ * looping cells 32-40 meanwhile; then the wind-down, a cell every second frame
+ * up to {@link TESLA_WIND_END} (`:190-198`), before it can charge again. A
+ * zap whose target is dead or gone looks for one new target and winds down
+ * if there is none (`:174-186`); the zaps that follow still go at the old
+ * target until the next `Fire` names the new one, and a dead target takes
+ * nothing.
+ */
+export const TESLA_TYPE = 25;
+export const TESLA_TICKS_PER_FRAME = 2;
+export const TESLA_CHARGE_END = 32;
+export const TESLA_LOOP_END = 41;
+export const TESLA_WIND_END = 55;
+export const TESLA_ZAP_FRAMES = 4;
+
 /** The Heavy Trap, the one trap that is choosy about what sets it off. */
 export const HEAVY_TRAP_TYPE = 117;
 

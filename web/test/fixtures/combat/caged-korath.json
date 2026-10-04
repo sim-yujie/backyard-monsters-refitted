@@ -54,102 +54,102 @@
   },
   "expected": {
     "ticks": 14400,
-    "damage": 1.001856201849634,
+    "damage": 0.9801731359955426,
     "destroyed": null,
     "attackloot": {
       "r1": 481,
-      "r2": 814,
-      "r3": 555,
-      "r4": 629
+      "r2": 592,
+      "r3": 370,
+      "r4": 444
     },
     "defenderLoss": {
       "r1": 546,
-      "r2": 924,
-      "r3": 630,
-      "r4": 714
+      "r2": 672,
+      "r3": 420,
+      "r4": 504
     },
     "firedTraps": 0,
     "destroyedBuildings": 1,
     "creepsFlung": 112,
     "creepsKilled": 112,
     "championHp": null,
-    "damagedBuildings": 4,
-    "rngDraws": 4517,
+    "damagedBuildings": 3,
+    "rngDraws": 4489,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "5bc8d0e69651c500"
+        "digest": "f5164fb1ceb85d7b"
       },
       {
         "tick": 1600,
-        "digest": "a2d4c5b6ef69e050"
+        "digest": "e6f67de1d0dcf06b"
       },
       {
         "tick": 2400,
-        "digest": "be40088de8768827"
+        "digest": "dfb0987653e32da0"
       },
       {
         "tick": 3200,
-        "digest": "753a9a371b651a29"
+        "digest": "c7843d5d947e4d33"
       },
       {
         "tick": 4000,
-        "digest": "208bf58952dfb5c3"
+        "digest": "620bbfff64d8610d"
       },
       {
         "tick": 4800,
-        "digest": "4aeeea844e69cd56"
+        "digest": "eb01061ec1af6b1c"
       },
       {
         "tick": 5600,
-        "digest": "010cf63b94fda8b5"
+        "digest": "79830721f2ecc4af"
       },
       {
         "tick": 6400,
-        "digest": "51526107ada09179"
+        "digest": "916bc7ed1e030203"
       },
       {
         "tick": 7200,
-        "digest": "7952399a413146c4"
+        "digest": "653331ec8f95ea52"
       },
       {
         "tick": 8000,
-        "digest": "79947f9958090993"
+        "digest": "4d2e41cf99b1d6dd"
       },
       {
         "tick": 8800,
-        "digest": "6d9cea2f5acf7e61"
+        "digest": "6d530b55c9fcc74b"
       },
       {
         "tick": 9600,
-        "digest": "466ad294b9849e26"
+        "digest": "664f20aed93a21ac"
       },
       {
         "tick": 10400,
-        "digest": "90841d02df3802ac"
+        "digest": "9a7e4614a0f9407a"
       },
       {
         "tick": 11200,
-        "digest": "d052158bd1865005"
+        "digest": "2ec92631643a613f"
       },
       {
         "tick": 12000,
-        "digest": "e7b0f6a14306fadb"
+        "digest": "e189a57772dfca25"
       },
       {
         "tick": 12800,
-        "digest": "3a355157e0a3bac9"
+        "digest": "d87653bd868eeb93"
       },
       {
         "tick": 13600,
-        "digest": "0440d75c5998e34e"
+        "digest": "b21ac9b6f05767b4"
       },
       {
         "tick": 14400,
-        "digest": "e00cdb2a1547aa94"
+        "digest": "d7bfd4bc35bfde62"
       }
     ],
-    "digest": "e00cdb2a1547aa94",
+    "digest": "d7bfd4bc35bfde62",
     "bunkerLosses": {},
     "bunkerGarrisons": {},
     "defenderChampionHp": 168310

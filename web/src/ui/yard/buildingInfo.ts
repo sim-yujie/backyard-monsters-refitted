@@ -3,6 +3,7 @@ import {
   aerialSalvo,
   BOMBS,
   capacity,
+  TESLA_TYPE,
   TOWER_STATS,
   towerRange,
   towerStats,
@@ -56,7 +57,7 @@ export interface InfoRow {
   readonly now: InfoValue;
   /** The value one level up, when the next level exists and changes it. */
   readonly next?: InfoValue;
-  /** The next level is worse on this row (a Tesla Tower's level 2 hits softer): not drawn as a gain. */
+  /** The next level is worse on this row (a number that drops): not drawn as a gain. */
   readonly down?: true;
 }
 
@@ -136,7 +137,7 @@ const nextLevelOf = (building: YardBuilding, kind: YardKind = "main"): number | 
 
 /**
  * Range and damage per second, now and next; an Aerial Defense Tower's shot
- * and salvo.
+ * and salvo, and a Tesla Tower's zap and charge, as their own texts give them.
  *
  * Range is read through the shared rules' `towerRange` rather than off the
  * stats block directly (issue #262): on an outpost it is the table's figure
@@ -167,6 +168,13 @@ const towerRows = (building: YardBuilding, kind: YardKind, height: number): Info
         nextLevel !== null ? aerialSalvo(nextLevel) : undefined,
       ),
     );
+    return rows;
+  }
+  // The Tesla Tower's `rate` is the zaps in a charge, not a re-arm time, and its
+  // text gives a zap's damage and the zaps a charge (`BUILDING25.as:62-73`, issue #266).
+  if (building.type === TESLA_TYPE && now.damage !== undefined && now.rate !== undefined) {
+    rows.push(countRow("Damage per shot", now.damage, next?.damage));
+    rows.push(countRow("Shots per charge", now.rate, next?.rate));
     return rows;
   }
   if (now.damage !== undefined && now.rate !== undefined) {

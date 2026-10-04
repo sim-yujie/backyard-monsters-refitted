@@ -212,20 +212,42 @@ describe("TowerFx", () => {
     fx.destroy();
   });
 
-  it("charges the Tesla's strip after its first shot and winds it down once the shots stop", () => {
+  it("charges the Tesla's strip on the engine's charge, a cell a frame, and winds it down after the zaps (#266)", () => {
     const { frames, fx } = setUp(25);
     const target = creepAt(35, 235);
-    fx.onShot({ tick: 0, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
     fx.update(0, () => target);
+    fx.update(9, () => target);
+    // Idle without a charge, whatever the clock does.
+    expect(frames.get(1) ?? 0).toBe(0);
+    fx.onCharge(1, 10);
     fx.update(10, () => target);
-    expect(frames.get(1)).toBe(10);
-    fx.update(40, () => target);
-    const looping = frames.get(1) ?? -1;
-    expect(looping).toBeGreaterThanOrEqual(TESLA_CHARGE_END);
-    expect(looping).toBeLessThan(TESLA_LOOP_END);
-    // Long after the last shot the wind-down has run out and the cell is 0.
-    fx.update(200, () => undefined);
+    expect(frames.get(1)).toBe(1);
+    // A frame is two ticks: ten ticks on, five cells on.
+    fx.update(20, () => target);
+    expect(frames.get(1)).toBe(6);
+    // The charge is done 32 frames in; the zaps keep the loop going.
+    for (let tick = 74; tick <= 120; tick += 8) {
+      fx.onShot({ tick, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
+      fx.update(tick, () => target);
+      const looping = frames.get(1) ?? -1;
+      expect(looping).toBeGreaterThanOrEqual(TESLA_CHARGE_END);
+      expect(looping).toBeLessThan(TESLA_LOOP_END);
+    }
+    // Long after the last zap the wind-down has run out and the cell is 0.
+    fx.update(300, () => undefined);
     expect(frames.get(1)).toBe(0);
+    fx.destroy();
+  });
+
+  it("glows on the Tesla's coil while it charges and nothing once it is idle", () => {
+    const { graphics, fx } = setUp(25);
+    fx.update(0, () => undefined);
+    expect(drawn(graphics)).toBe(0);
+    fx.onCharge(1, 2);
+    fx.update(30, () => undefined);
+    expect(drawn(graphics)).toBeGreaterThan(0);
+    fx.update(400, () => undefined);
+    expect(drawn(graphics)).toBe(0);
     fx.destroy();
   });
 

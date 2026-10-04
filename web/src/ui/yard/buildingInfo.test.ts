@@ -63,14 +63,26 @@ describe("towers", () => {
     });
   });
 
-  it("marks a next level that hits softer instead of showing it as a gain", () => {
-    // Tesla Tower 1 → 2 trades damage per second for range in the props table.
-    expect(row({ t: 25, l: 1 }, "Damage")).toMatchObject({
-      now: { text: "400/s" },
-      next: { text: "320/s" },
-      down: true,
+  it("Tesla Tower: damage per shot and shots per charge, as its own text (#266)", () => {
+    expect(row({ t: 25, l: 1 }, "Damage per shot")).toEqual({
+      label: "Damage per shot",
+      now: { text: "100" },
+      next: { text: "120" },
     });
-    expect(row({ t: 25, l: 1 }, "Range")?.down).toBeUndefined();
+    expect(row({ t: 25, l: 1 }, "Shots per charge")).toEqual({
+      label: "Shots per charge",
+      now: { text: "10" },
+      next: { text: "15" },
+    });
+    // Level 4 to 5 keeps 25 zaps a charge, so no next value there.
+    expect(row({ t: 25, l: 4 }, "Shots per charge")?.next).toBeUndefined();
+    expect(row({ t: 25, l: 1 }, "Damage")).toBeUndefined();
+  });
+
+  it("never shows a Tesla Tower's upgrade as a downgrade (#266)", () => {
+    for (let level = 1; level <= 8; level += 1) {
+      for (const entry of rowsOf({ t: 25, l: level })) expect(entry.down, `level ${level} ${entry.label}`).toBeUndefined();
+    }
   });
 
   it("Aerial Defense Tower: damage per shot and shots per salvo, as its own text (#265)", () => {
