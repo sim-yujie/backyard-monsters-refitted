@@ -554,8 +554,9 @@ export const trapDamageAt = (type: number, distance: number): number => {
  * {@link RAILGUN_SEGMENT} screen px along that bearing (`:157`, `:171-185`): a
  * line 1,600 px long that runs on past the target (`:189`). Every creep among
  * those within {@link RAILGUN_REACH} of the muzzle whose screen point lies
- * within {@link RAILGUN_BEAM_RADIUS} px of the line takes the shot's damage
- * (`:187-198`, {@link beamHits}). It shoots with the trap's flags, the ground
+ * within {@link RAILGUN_BEAM_RADIUS} px of the line takes the shot's damage,
+ * scaled by the Railgun's health like every tower's ({@link towerHealthScale})
+ * but not truncated (`:187-198`, {@link beamHits}). It shoots with the trap's flags, the ground
  * and the invisible (`:44`): no flyer is ever on its line.
  *
  * The beam is measured on screen, as Flash measured it, and the reach in yard
@@ -574,11 +575,23 @@ export const RAILGUN_BEAM_RADIUS = 20;
 export const RAILGUN_REACH = 1600;
 
 /**
- * What a Railgun's shot is worth at its health: `0.5 + 0.5 / maxHealth *
- * health` (`BUILDING118.as:133`), full at full health and half when wrecked.
+ * What a tower's shot is worth at its own health (issue #264): `0.5 + 0.5 /
+ * maxHealth * health`, full at full health and half when all but wrecked.
+ * Every tower's `Fire` reads it: the Cannon (`BUILDING20.as:27`), Sniper
+ * (`BUILDING21.as:42`), Laser (`BUILDING23.as:47`), Tesla (`BUILDING25.as:125`),
+ * Aerial Defense (`BUILDING115.as:126`) and Railgun (`BUILDING118.as:133`).
  */
-export const railgunDamageScale = (hp: number, maxHp: number): number =>
+export const towerHealthScale = (hp: number, maxHp: number): number =>
   maxHp > 0 ? 0.5 + (0.5 / maxHp) * hp : 0.5;
+
+/**
+ * A tower's shot at its health, `int(damage * scale)`: the whole number its
+ * projectile, bolt or beam carries (`BUILDING20.as:43`, `BUILDING21.as:55`,
+ * `BUILDING23.as:65`, `BUILDING25.as:144`, `BUILDING115.as:139`). The
+ * Railgun's beam alone is not truncated (`BUILDING118.as:194-195`).
+ */
+export const towerShotDamage = (damage: number, hp: number, maxHp: number): number =>
+  Math.trunc(damage * towerHealthScale(hp, maxHp));
 
 /**
  * `lineIntersectCircle` (`BUILDING118.as:204-222`): whether the segment from

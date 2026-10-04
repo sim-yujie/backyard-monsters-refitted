@@ -391,12 +391,13 @@ describe("the attacker's army through the save (issue #164)", () => {
 });
 
 describe("a fallen bunker's garrison through the save (issue #130)", () => {
-  // Four Pokeys dropped on a stocked Monster Bunker bring it down, and never
-  // reach the far one.
+  // Three Pokeys dropped on a stocked Monster Bunker bring it down, and never
+  // reach the far one; four would outlast the Cannon Tower, which shoots softer
+  // as it is dented (#264).
   const RAID = {
     v: 1,
     seed: 5,
-    events: [{ kind: "fling", t: 80, x: 440, y: 440, r: 200, monsters: { C1: 4 } }],
+    events: [{ kind: "fling", t: 80, x: 440, y: 440, r: 200, monsters: { C1: 3 } }],
   };
   const BUNKERS = {
     "2": { id: 2, t: 22, l: 1, X: 420, Y: 420, m: { C1: 5 } },
@@ -469,11 +470,12 @@ describe("a fallen bunker's garrison through the save (issue #130)", () => {
 });
 
 describe("a fallen Housing's monsters through the save (issue #160)", () => {
-  // Four Pokeys dropped on a Housing bring it down, and never reach the far one.
+  // Three Pokeys dropped on a Housing bring it down, and never reach the far one;
+  // four would outlast the Cannon Tower, which shoots softer as it is dented (#264).
   const RAID = {
     v: 1,
     seed: 5,
-    events: [{ kind: "fling", t: 80, x: 440, y: 440, r: 200, monsters: { C1: 4 } }],
+    events: [{ kind: "fling", t: 80, x: 440, y: 440, r: 200, monsters: { C1: 3 } }],
   };
   const HOUSINGS = {
     "2": { id: 2, t: 15, l: 1, X: 420, Y: 420 },

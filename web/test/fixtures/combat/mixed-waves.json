@@ -81,27 +81,27 @@
   },
   "expected": {
     "ticks": 33600,
-    "damage": 72.96483072424725,
+    "damage": 71.42927542421604,
     "destroyed": null,
     "attackloot": {
-      "r1": 30644331,
-      "r2": 30626982,
-      "r3": 30642681,
-      "r4": 15730103
+      "r1": 30655244,
+      "r2": 30658812,
+      "r3": 30666170,
+      "r4": 15722765
     },
     "defenderLoss": {
-      "r1": 24793815,
-      "r2": 24778352,
-      "r3": 24792289,
-      "r4": 12763026
+      "r1": 24803802,
+      "r2": 24806988,
+      "r3": 24813551,
+      "r4": 12756684
     },
     "firedTraps": 0,
     "destroyedBuildings": 74,
     "creepsFlung": 340,
-    "creepsKilled": 340,
+    "creepsKilled": 339,
     "championHp": 61600,
-    "damagedBuildings": 80,
-    "rngDraws": 302310,
+    "damagedBuildings": 79,
+    "rngDraws": 305313,
     "checkpoints": [
       {
         "tick": 800,
@@ -129,149 +129,149 @@
       },
       {
         "tick": 5600,
-        "digest": "17e9feb11cd26d37"
+        "digest": "bed33a9ba5674ffd"
       },
       {
         "tick": 6400,
-        "digest": "e8b868e7b22930fd"
+        "digest": "b10d771e69623430"
       },
       {
         "tick": 7200,
-        "digest": "a008871e3a4166f0"
+        "digest": "d856906b19b4bca9"
       },
       {
         "tick": 8000,
-        "digest": "c632874efb8a0ee8"
+        "digest": "660272a06ec133ee"
       },
       {
         "tick": 8800,
-        "digest": "031e4ca59f2d9f7f"
+        "digest": "24eb00a5b027abbb"
       },
       {
         "tick": 9600,
-        "digest": "fa7ac80c890a361e"
+        "digest": "e54c52ae00644e50"
       },
       {
         "tick": 10400,
-        "digest": "f7cdd9c55135f2d7"
+        "digest": "0eb1413d594526f3"
       },
       {
         "tick": 11200,
-        "digest": "6c520ef20ad25064"
+        "digest": "509716f0f27cdfea"
       },
       {
         "tick": 12000,
-        "digest": "57543da12e29337f"
+        "digest": "f3a78f9fbfa45dfd"
       },
       {
         "tick": 12800,
-        "digest": "2b0b78ee50d0cb30"
+        "digest": "333bddc765c9eaf9"
       },
       {
         "tick": 13600,
-        "digest": "6ce99a25d339d93f"
+        "digest": "fa1043bf96375769"
       },
       {
         "tick": 14400,
-        "digest": "fa49a2a693283e5c"
+        "digest": "fb8dbdbcb62b4446"
       },
       {
         "tick": 15200,
-        "digest": "f630f7dd6c413747"
+        "digest": "bdb00bbe43ad9a44"
       },
       {
         "tick": 16000,
-        "digest": "c7c02ade48170df8"
+        "digest": "ff92582a2d7a95d8"
       },
       {
         "tick": 16800,
-        "digest": "52c0599e9e342d48"
+        "digest": "f0590e0190f322a7"
       },
       {
         "tick": 17600,
-        "digest": "378cb9651744c24b"
+        "digest": "dcbe2ac7c42d4611"
       },
       {
         "tick": 18400,
-        "digest": "f5985f8dc8e70d77"
+        "digest": "17e1920d71716f6f"
       },
       {
         "tick": 19200,
-        "digest": "15207343f1badf19"
+        "digest": "37a0ec7ee351502c"
       },
       {
         "tick": 20000,
-        "digest": "702ce51af758358c"
+        "digest": "fc063d5bae612045"
       },
       {
         "tick": 20800,
-        "digest": "20811f6260ded778"
+        "digest": "fa49ed468a538f88"
       },
       {
         "tick": 21600,
-        "digest": "92c49bf156847cc7"
+        "digest": "d6dd04e88ea8c13a"
       },
       {
         "tick": 22400,
-        "digest": "aaf987f03dfe9b2e"
+        "digest": "e3c1ea8d406d084f"
       },
       {
         "tick": 23200,
-        "digest": "401430af5d5a172d"
+        "digest": "17dba70a3b8055c4"
       },
       {
         "tick": 24000,
-        "digest": "cdec88eb9a498385"
+        "digest": "c52daa057961dea7"
       },
       {
         "tick": 24800,
-        "digest": "1fc899e2e41faab0"
+        "digest": "c69a5ee9bc77120f"
       },
       {
         "tick": 25600,
-        "digest": "573edc4ea7bd0bb4"
+        "digest": "7875b12d8241d713"
       },
       {
         "tick": 26400,
-        "digest": "fac9a1d4599f91c6"
+        "digest": "2182c08c21d7fa9a"
       },
       {
         "tick": 27200,
-        "digest": "95768158a8d509c2"
+        "digest": "503f1d929ad6b548"
       },
       {
         "tick": 28000,
-        "digest": "cf47fd719490a737"
+        "digest": "44316adabe163abc"
       },
       {
         "tick": 28800,
-        "digest": "fd027cff4b430f09"
+        "digest": "2f395dc4a5124cbe"
       },
       {
         "tick": 29600,
-        "digest": "3f3361cfe2f25b35"
+        "digest": "194b7d5d196cba33"
       },
       {
         "tick": 30400,
-        "digest": "6bbe5fa588f9ec1f"
+        "digest": "de7285f919fa62e3"
       },
       {
         "tick": 31200,
-        "digest": "632a5f44c5f9fdda"
+        "digest": "0fa0abab174724cd"
       },
       {
         "tick": 32000,
-        "digest": "23e42bffb29a46bd"
+        "digest": "d9ef8cfa9a1e2080"
       },
       {
         "tick": 32800,
-        "digest": "7e3743de0a5896ac"
+        "digest": "0744dc598eb9e273"
       },
       {
         "tick": 33600,
-        "digest": "598e6db5f61fbed3"
+        "digest": "e8e26677ad5741a1"
       }
     ],
-    "digest": "598e6db5f61fbed3"
+    "digest": "e8e26677ad5741a1"
   }
 }

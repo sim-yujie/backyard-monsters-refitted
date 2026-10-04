@@ -23,7 +23,7 @@ import {
   maxHp,
   monsterStat,
   monsterTickSpeed,
-  railgunDamageScale,
+  towerHealthScale,
   TARGET_GROUP,
 } from "./stats.js";
 import { buildEngineYard, reachesBuilding, screenDistanceSquared, screenPointOf } from "./yard.js";
@@ -62,14 +62,15 @@ describe("a Pokey against a lone Cannon Tower", () => {
     return { yard, battle };
   };
 
-  it("kills it in ten shots, at a shot a second", () => {
+  it("kills it in eleven shots, at a shot a second", () => {
     const { battle } = battleOf();
     run(battle, 1200);
     const state = battle.state();
     const tower = state.towers[0];
-    expect(tower?.shots).toBe(10);
+    // Two shots of 20, then 19 once the Pokey has dented it (issue #264):
+    // `int(20 * (0.5 + 0.5 * 5940 / 6000))`, and so on down to 8 for the last.
+    expect(tower?.shots).toBe(11);
     expect(tower?.kills).toBe(1);
-    // Ten shots of 20 is the Pokey's whole 200 health.
     expect(tower?.damageDealt).toBe(200);
     expect(state.creepsKilled).toBe(1);
   });
@@ -78,16 +79,43 @@ describe("a Pokey against a lone Cannon Tower", () => {
     const { yard, battle } = battleOf();
     run(battle, 1200);
     const tower = yard.buildings[0];
-    // 60 damage a swing, and the Pokey got ten in before it died. It lands
+    // 60 damage a swing, and the Pokey got eleven in before it died. It lands
     // within 50 screen pixels of (-100, -100) (issue #91), which with this
-    // seed puts it at the tower in time for a tenth swing.
-    expect(tower!.maxHp - tower!.hp).toBe(600);
+    // seed puts it at the tower in time for an eleventh swing.
+    expect(tower!.maxHp - tower!.hp).toBe(660);
   });
 
   it("ends the battle once the last attacker is gone and the countdown has run", () => {
     const { battle } = battleOf();
     run(battle, 40000);
     expect(battle.over()).toBe(true);
+  });
+});
+
+describe("a tower's shot at its own health (issue #264)", () => {
+  /** One shot from a level 1 Cannon Tower (damage 20) at `hp`, at a lone Octo-ooze. */
+  const firstHit = (hp?: number) => {
+    const health = hp === undefined ? undefined : { "1": hp };
+    const yard = yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } }, health);
+    const battle = createBattle(yard, { seed: 1 });
+    battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 200, monsters: { C2: 1 } });
+    for (let step = 0; step < 1200; step += 1) {
+      battle.step();
+      const hurt = battle.recentEvents(battle.tick - 1).find((event) => event.kind === "hurt");
+      if (hurt?.kind === "hurt") return hurt.amount;
+    }
+    throw new Error("the tower never fired");
+  };
+
+  it("deals its whole damage at full health", () => {
+    expect(firstHit()).toBe(20);
+  });
+
+  it("deals int(damage * (0.5 + 0.5 * hp / maxHp)) when hurt (`BUILDING20.as:27`, `:43`)", () => {
+    const full = maxHp(20, 1);
+    // 0.5 + 0.5 * 0.3 = 0.65 of 20 is 13; a tenth of its health is 0.55, 11.
+    expect(firstHit(Math.round(full * 0.3))).toBe(13);
+    expect(firstHit(Math.round(full * 0.1))).toBe(11);
   });
 });
 
@@ -278,8 +306,9 @@ describe("the Railgun's beam (issue #261)", () => {
     const full = maxHp(118, 1);
     const hp = Math.round(full * 0.3);
     const { shot, hurt } = firstShot(railBattle({}, { "1": hp }));
-    expect(railgunDamageScale(hp, full)).toBeCloseTo(0.65, 3);
-    expect(hurt.get(shot.creepId)).toBeCloseTo(400 * railgunDamageScale(hp, full), 9);
+    expect(towerHealthScale(hp, full)).toBeCloseTo(0.65, 3);
+    // The beam's damage is not truncated, unlike every other tower's shot.
+    expect(hurt.get(shot.creepId)).toBeCloseTo(400 * towerHealthScale(hp, full), 9);
     expect(hurt.get(shot.creepId)).toBeLessThan(400);
   });
 });
@@ -1827,9 +1856,9 @@ describe("the renderer's view of the field (issue #32, WP5)", () => {
       }
       seen = battle.tick;
     }
-    // Ten shots kill the Pokey, which is what the tower report says too.
+    // Eleven shots kill the Pokey (issue #264), which is what the tower report says too.
     expect(shots).toBe(battle.state().towers[0]?.shots);
-    expect(shots).toBe(10);
+    expect(shots).toBe(11);
     expect(deaths).toBe(1);
   });
 
@@ -1847,9 +1876,9 @@ describe("the renderer's view of the field (issue #32, WP5)", () => {
     }
     const hits = events.filter((event) => event.kind === "hit");
     const hurts = events.filter((event) => event.kind === "hurt");
-    // The Pokey got ten swings in before it died, 60 a swing, on foot, at
+    // The Pokey got eleven swings in before it died, 60 a swing, on foot, at
     // the tower it was standing on.
-    expect(hits).toHaveLength(10);
+    expect(hits).toHaveLength(11);
     for (const hit of hits) {
       if (hit.kind !== "hit") throw new Error("filtered");
       expect(hit.creepId).toBe(1);
@@ -1861,13 +1890,16 @@ describe("the renderer's view of the field (issue #32, WP5)", () => {
       expect(hit.targetIx).toBe(0);
       expect(hit.targetIy).toBe(0);
     }
-    // Ten shots of 20, each one a wound with the Pokey's position that tick.
-    expect(hurts).toHaveLength(10);
+    // Eleven shots, each one a wound with the Pokey's position that tick, of
+    // 20 and then 19 as the tower is hurt (issue #264), the last the 8 it had left.
+    expect(hurts).toHaveLength(11);
+    expect(hurts.map((hurt) => (hurt.kind === "hurt" ? hurt.amount : 0))).toEqual([
+      20, 20, 19, 19, 19, 19, 19, 19, 19, 19, 8,
+    ]);
     for (const hurt of hurts) {
       if (hurt.kind !== "hurt") throw new Error("filtered");
       expect(hurt.creepId).toBe(1);
       expect(hurt.friendly).toBe(false);
-      expect(hurt.amount).toBe(20);
       expect(Number.isFinite(hurt.ix)).toBe(true);
     }
     // Hits and hurts come with a tick, in tick order, like every other event.

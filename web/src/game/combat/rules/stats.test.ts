@@ -50,7 +50,8 @@ import {
   tripsTrap,
   heavyTrapFlyerDamageAt,
   beamHits,
-  railgunDamageScale,
+  towerHealthScale,
+  towerShotDamage,
   VICTORY_THRESHOLD,
   withLowLevelBonus,
 } from "./stats";
@@ -301,10 +302,16 @@ describe("traps", () => {
 });
 
 describe("the Railgun (issue #261)", () => {
-  it("scales its damage from half when wrecked to whole at full health (`BUILDING118.as:133`)", () => {
-    expect(railgunDamageScale(1000, 1000)).toBe(1);
-    expect(railgunDamageScale(500, 1000)).toBe(0.75);
-    expect(railgunDamageScale(0, 1000)).toBe(0.5);
+  it("scales a tower's damage from half when wrecked to whole at full health (#264)", () => {
+    expect(towerHealthScale(1000, 1000)).toBe(1);
+    expect(towerHealthScale(500, 1000)).toBe(0.75);
+    expect(towerHealthScale(0, 1000)).toBe(0.5);
+  });
+
+  it("truncates a tower's shot to a whole number (`BUILDING21.as:55`)", () => {
+    expect(towerShotDamage(20, 1000, 1000)).toBe(20);
+    expect(towerShotDamage(20, 300, 1000)).toBe(13);
+    expect(towerShotDamage(155, 999, 1000)).toBe(154);
   });
 
   it("hits a circle the segment passes within its radius of (`BUILDING118.as:204-222`)", () => {

@@ -94,7 +94,8 @@ import {
   RAILGUN_SEGMENTS,
   RAILGUN_TYPE,
   beamHits,
-  railgunDamageScale,
+  towerHealthScale,
+  towerShotDamage,
   specialistMultiplier,
   ticks,
   towerRange,
@@ -2889,10 +2890,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return;
     }
 
+    // Every tower's shot is worth less as it is hurt (issue #264, `towerHealthScale`):
+    // `int(damage * scale)`, but the Railgun's beam is not truncated (`BUILDING118.as:195`).
+    const shot = towerShotDamage(damage, building.hp, building.maxHp);
     for (const creep of live) {
       tower.report.shots += 1;
       if (building.type === RAILGUN_TYPE) {
-        fireRailgun(tower, creep, damage);
+        fireRailgun(tower, creep, damage * towerHealthScale(building.hp, building.maxHp));
         continue;
       }
       visual.push({
@@ -2904,14 +2908,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         iy: creep.iy,
       });
       const before = creep.hp;
-      tower.report.damageDealt += damageCreep(creep, damage);
+      tower.report.damageDealt += damageCreep(creep, shot);
       if (before > 0 && creep.hp <= 0) tower.report.kills += 1;
       const splash = stats?.splash ?? 0;
       if (splash <= 0) continue;
-      // `DealLinearAEDamage` over the blast, with its floor of a fifth (`:340-389`).
+      // `DealLinearAEDamage` over the blast, with its floor of a fifth (`:340-389`),
+      // of what the shell carries.
       for (const hit of index.inRange(splash, creep.x, creep.y, flags, creep.id)) {
-        const linear = (damage / splash) * (splash - hit.dist);
-        const dealt = Math.max(linear, damage / 5);
+        const linear = (shot / splash) * (splash - hit.dist);
+        const dealt = Math.max(linear, shot / 5);
         const health = hit.creep.hp;
         tower.report.damageDealt += damageCreep(hit.creep, dealt);
         if (health > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
@@ -2921,12 +2926,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /**
    * The Railgun's shot (issue #261): a beam at `aim` and on past it that hurts
-   * every ground creep on its line, its damage scaled by the Railgun's own
-   * health ({@link RAILGUN_TYPE}, `BUILDING118.as:133-198`).
+   * every ground creep on its line by `dealt`, its damage already scaled by its
+   * own health ({@link RAILGUN_TYPE}, `BUILDING118.as:133-198`).
    */
-  const fireRailgun = (tower: Tower, aim: Creep, damage: number): void => {
+  const fireRailgun = (tower: Tower, aim: Creep, dealt: number): void => {
     const building = tower.building;
-    const dealt = damage * railgunDamageScale(building.hp, building.maxHp);
     // On screen, as `Fire` works: the muzzle, then 50 segments along the bearing.
     const fromX = building.sx;
     const fromY = building.sy + RAILGUN_MUZZLE_DROP;
