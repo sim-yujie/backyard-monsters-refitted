@@ -208,7 +208,8 @@ describe("AttackSession against a defence (#195)", () => {
       ...(defenderforces === undefined ? {} : { defenderforces }),
     } as unknown as BaseLoadResponse);
     session.appendFling({ x: 150, y: 150, monsters: { C1: 3 } });
-    play(session, 2);
+    // Three seconds: the champion looks out of its cage every 200 frames (#260).
+    play(session, 3);
     return session;
   };
 

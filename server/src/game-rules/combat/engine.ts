@@ -231,12 +231,10 @@ import type {
  *      against its bunker ({@link BattleState.bunkerLosses}, issue #130), and
  *      {@link BattleState.bunkerGarrisons} is what each holds afterwards: a
  *      fallen bunker keeps only the defenders that were out.
- *    - The champion comes out of its Champion Cage when an attacker first
- *      comes within {@link CAGE_ALERT_RANGE} of it, at its stored health, at its
- *      level plus its power level's bonus. It fights the nearest attacker it
- *      can reach within {@link CAGE_LEASH} of the cage, walks back when none is
- *      left, and fights on if the cage falls. Towers, traps and bombs never
- *      hurt a defender.
+ *    - The champion in the Champion Cage comes out at its stored health, at
+ *      its level plus its power level's bonus, and fights on if the cage
+ *      falls. When it comes out and what it chases are Flash's (note 14).
+ *    - Towers, traps and bombs never hurt a defender.
  * 10. **Storage loot is not capped by the attacker's pool.** `ATTACK.Loot`
  *    clamps a gain to the attacker's storage cap (`ATTACK.as:696-710`); the cap
  *    is a property of the attacker's row, not the battle, so the audit derives
@@ -258,8 +256,9 @@ import type {
  *    routes to buildings only); a champion that leaves walks straight back to
  *    its spawn point, and only so its aura lasts until it is off the field
  *    (otherwise note 7 holds); the flung Fomor's render-only first look on
- *    landing (`Fomor.as:13-16`) is not taken. Defenders still choose their
- *    quarry by the owner's rules of note 9.
+ *    landing (`Fomor.as:13-16`) is not taken. A bunker's defenders still
+ *    choose their quarry by the owner's rules of note 9; the caged champion
+ *    by Flash's (note 14).
  * 13. **Modes (issue #220) are not Flash.** An attacking champion flung in
  *    Offensive or Defensive scores Flash's candidate lists rather than taking
  *    the closest (`stance.ts`); Hybrid, and a log that names no Mode, is the
@@ -267,13 +266,34 @@ import type {
  *    on the champion's learned brain (issue #219, `brain.ts`), which the log
  *    carries as the attack froze it; with `learn`, the battle also records
  *    each attacking champion's lesson, reading the field and changing nothing.
+ * 14. **The caged champion defends as Flash's does (issue #260).** It waits in
+ *    its cage at a random point (`CHAMPIONCAGE.as:623`, `:280-283`), off the
+ *    field, and every {@link CAGE_LOOK_FRAMES} of its frames looks
+ *    {@link CHAMPION_DEFEND_SCAN} around itself (`ChampionBase.tickBPen`,
+ *    `:1055-1057`; `getTargetCreeps`, `:500-502`). It comes out at the nearest
+ *    attacker it can hit, passing over one that is retreating and, unless it
+ *    flies, an Eye-ra (`FindDefenseTargets`, `:504-534`). Out, it has no leash
+ *    (`tickBDefend`, `:851-918`): it swings at its foe inside its range, keeps
+ *    swinging until the foe is twice that away, and while it chases one it is
+ *    not yet hitting looks again every {@link CHASE_LOOK_FRAMES} frames for a
+ *    nearer one. When its foe dies it looks again from where it stands; with
+ *    nobody left inside 800 it walks back to the cage (`changeModeCage`,
+ *    `:295-303`), still looking every 200 frames, and goes back in when it
+ *    gets there (`tickBCage`, `:1113-1137`), to come out again the same way.
+ *    Where the engine parts from Flash: its frame count starts with the
+ *    battle rather than with the yard's load; it walks straight at its foe
+ *    and straight home, rather than pathing round walls or heading for where
+ *    the foe is going (`interceptTarget`, `:462-498`); and back in the cage it
+ *    stands where it stopped rather than pacing.
  *
  * ## The random stream's order
  *
- * One stream, drawn in the order the step runs: the bunkers' interceptor picks
- * (towers and traps draw nothing), then the cage's champion's start frame when
- * it comes out, then each creep in id order (its route's scatter, a storage
- * hit's resource pick), then the Slimeattikus Minis born at the step's end.
+ * One stream. Before the first step the caged champion draws its place in its
+ * cage (four draws) and its start frame (one draw, and a second for a flyer).
+ * After that, drawn in the order the step runs: the bunkers' interceptor picks
+ * (towers and traps draw nothing), then each creep in id order (its route's
+ * scatter, a storage hit's resource pick), then the Slimeattikus Minis born at
+ * the step's end.
  * An event draws when it is applied, before the next step: a fling draws each
  * creep's landing point in monster id order and then the champion's, followed
  * by the champion's start frame (one draw, and a second for a flyer).
@@ -721,6 +741,19 @@ interface DefenderHome {
   readonly leash: number;
 }
 
+/** The caged champion in its cage (issue #260): where it stands, and what it looks for. */
+interface CagePen {
+  readonly ix: number;
+  readonly iy: number;
+  /** {@link rangePointOf} the above, which it looks from. */
+  readonly x: number;
+  readonly y: number;
+  /** Its `_frameNumber`, which goes on counting in there. */
+  frame: number;
+  readonly flying: boolean;
+  readonly hitFlags: number;
+}
+
 interface Tower {
   readonly building: EngineBuilding;
   readonly report: TowerReport;
@@ -816,11 +849,19 @@ const raiseTargets = (creep: { friendly: boolean }): number =>
   (creep.friendly ? TARGETS_DEFENDERS : TARGETS_ATTACKERS) | TARGETS_GROUND;
 
 /**
- * How close an attacker must come to a Champion Cage for its champion to come
- * out, and how far from the cage it will chase, in cartesian units (issue #195).
+ * How far around itself the caged champion looks for an attacker, in cartesian
+ * units: `getTargetCreeps` (`ChampionBase.as:500-502`, `Korath.as:117-124`).
  */
-export const CAGE_ALERT_RANGE = 400;
-export const CAGE_LEASH = 2 * CAGE_ALERT_RANGE;
+export const CHAMPION_DEFEND_SCAN = 800;
+
+/** Its frames between looks in its cage or on the way back (`ChampionBase.as:1055`, `:1134`). */
+export const CAGE_LOOK_FRAMES = 200;
+
+/** Its frames between looks while it chases a foe it is not yet hitting (`ChampionBase.as:879`). */
+export const CHASE_LOOK_FRAMES = 60;
+
+/** Eye-ra, which a champion on the ground lets pass (`ChampionBase.as:510`). */
+const EYE_RA_ID = "C5";
 
 /** The Champion Cage's building type (`CHAMPIONCAGE`, `YARD_PROPS.as:5993`). */
 const CHAMPION_CAGE_TYPE = 114;
@@ -839,6 +880,18 @@ const fightFlags = (friendly: boolean, flying: boolean, range: number): number =
   (friendly ? TARGETS_ATTACKERS : TARGETS_DEFENDERS) |
   TARGETS_GROUND |
   (flying || range > 1 ? TARGETS_FLYING : 0);
+
+/**
+ * A champion's {@link fightFlags}, narrowed: only a ranged champion can hit a
+ * flyer (`ChampionBase.canShootCreep`, `:404-409`; `Fomor.as:19`), and Korath
+ * once he has his fireball (`Korath.as:117-133`). `power` is as its class reads it.
+ */
+const championReach = (id: string, level: number, power: number, flags: number): number => {
+  let reach = flags;
+  if (championMode(id, "attack", level) !== "ranged") reach &= ~TARGETS_FLYING;
+  if (hasFireball(id, level, power)) reach |= TARGETS_FLYING;
+  return reach;
+};
 
 /** How far a healer looks for someone to heal (`CreepBase.as:612`). */
 const HEAL_SEARCH = 600;
@@ -981,8 +1034,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
           .filter((building) => building.type === CHAMPION_CAGE_TYPE)
           .sort((one, other) => one.id - other.id)[0] ?? null)
       : null;
-  /** The caged champion once it is out; its health while it lives. */
+  /** The caged champion once it has first come out, whether in its cage or not. */
   let cageChampion: Creep | null = null;
+  /** The caged champion while it is in its cage, set below; null while it is out (issue #260). */
+  let pen: CagePen | null = null;
+  /**
+   * Where it walks back to: `changeModeCage` paths to the cage's anchor plus
+   * (50, 60) on screen (`ChampionBase.as:299-301`), in yard units.
+   */
+  const cageDoor: Cart | null = cage
+    ? { x: cage.sy + 60 + (cage.sx + 50) / 2, y: cage.sy + 60 - (cage.sx + 50) / 2 }
+    : null;
   /** Defenders on the field as this step's creeps move; attackers skip the scan when none is. */
   let defendersOut = 0;
   let defenderChampionHp: number | null =
@@ -1407,12 +1469,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * 1,000, `ChampionBase.as:228`, `:237`), the point it walks back to when it
    * leaves (`_spawnPoint`, the landing point rounded down to hundreds on
    * screen, `ChampionBase.as:115`), its aura, and Korath's reach into the air.
+   * The caged champion brings the frame it drew in its cage instead.
    */
-  const equipChampion = (creep: Creep, power: number, at: Cart): void => {
+  const equipChampion = (creep: Creep, power: number, at: Cart, frame?: number): void => {
     const id = creep.monsterId;
     creep.power = championPower(id, power);
-    creep.frame = Math.trunc(rng.float() * START_FRAME_SPREAD);
-    if (creep.flying) creep.frame = Math.trunc(rng.float() * FLYING_START_FRAME_SPREAD);
+    creep.frame = frame ?? startFrame(creep.flying);
     const screen = screenPointOf(at.x, at.y);
     const spawnSx = Math.trunc(screen.x / 100) * 100;
     const spawnSy = Math.trunc(screen.y / 100) * 100;
@@ -1420,10 +1482,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.spawnX = spawnSy + spawnSx / 2;
     creep.spawnY = spawnSy - spawnSx / 2;
     if (id === FOMOR_ID || hasLootAura(id, creep.power)) creep.aura = { counter: 0, members: [] };
-    // Only a ranged champion can hit a flyer (`ChampionBase.canShootCreep`, `:404-409`;
-    // `Fomor.as:19`), and Korath once he has his fireball (`Korath.as:126-133`).
-    if (championMode(id, "attack", creep.level) !== "ranged") creep.hitFlags &= ~TARGETS_FLYING;
-    if (hasFireball(id, creep.level, creep.power)) creep.hitFlags |= TARGETS_FLYING;
+    creep.hitFlags = championReach(id, creep.level, creep.power, creep.hitFlags);
+  };
+
+  /** A champion's `_frameNumber` at spawn (`ChampionBase.as:228`, `:237`). */
+  const startFrame = (flying: boolean): number => {
+    const frame = Math.trunc(rng.float() * START_FRAME_SPREAD);
+    return flying ? Math.trunc(rng.float() * FLYING_START_FRAME_SPREAD) : frame;
   };
 
   const spawnChampion = (
@@ -1513,11 +1578,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   /**
-   * The caged champion comes out (issue #195): at the cage, at its stored
-   * health, its stats at its level plus its power level's bonus. It defends
-   * like a bunker's monster, leashed to {@link CAGE_LEASH} around the cage.
+   * The caged champion comes out for the first time (issues #195, #260): from
+   * where it stood in its cage, at its stored health, its stats at its level
+   * plus its power level's bonus, with the frame it counted in there.
    */
-  const releaseChampion = (building: EngineBuilding, caged: DefenderChampion): Creep | null => {
+  const releaseChampion = (caged: DefenderChampion, at: CagePen): Creep | null => {
     const id = championByType(caged.t);
     if (!id) return null;
     const level = Math.max(1, Math.floor(caged.l));
@@ -1525,18 +1590,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const maxHp = championStatWithPower(id, "health", level, power);
     const flying = isFlyingMovement(championMode(id, "movement", level));
     const range = championStatWithPower(id, "range", level, power) || 1;
-    const cart = rangePointOf(building.x, building.y);
-    const scan = towerScanPoint(building);
     const creep: Creep = {
       id: nextCreepId,
       monsterId: id,
       level,
       champion: true,
       friendly: true,
-      ix: building.x,
-      iy: building.y,
-      x: cart.x,
-      y: cart.y,
+      ix: at.ix,
+      iy: at.iy,
+      x: at.x,
+      y: at.y,
       hp: Math.min(cagedHealth(caged), maxHp),
       maxHp,
       baseSpeed: championStatWithPower(id, "speed", level, power) / 4,
@@ -1566,16 +1629,52 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       disposable: false,
       rechargeAt: 0,
       hitFlags: fightFlags(true, flying, range),
-      home: { ix: building.x, iy: building.y, centreX: scan.x, centreY: scan.y, leash: CAGE_LEASH },
+      home: null,
       provokedBy: -1,
       ...NO_ABILITIES,
     };
     nextCreepId += 1;
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
-    equipChampion(creep, power, { x: building.x, y: building.y });
+    equipChampion(creep, power, { x: at.ix, y: at.iy }, at.frame);
     return creep;
   };
+
+  /**
+   * Where the caged champion stands in its cage before it first comes out
+   * (issue #260), and what it looks with. `SpawnGuardian` jitters the cage's
+   * anchor 20 either way on screen and `PointInCage` steps 40 to 80 into the
+   * cage on both yard axes, through `GRID`'s rounding (`CHAMPIONCAGE.as:623`,
+   * `:630`, `:280-283`; `GRID.as:135-145`); the champion then draws its frame.
+   */
+  const penOf = (building: EngineBuilding, caged: DefenderChampion): CagePen | null => {
+    const id = championByType(caged.t);
+    if (!id) return null;
+    const level = Math.max(1, Math.floor(caged.l));
+    const power = caged.pl ?? 0;
+    const jitterX = building.sx - 20 + rng.float() * 40;
+    const jitterY = building.sy - 20 + rng.float() * 40;
+    const gridX = Math.ceil(jitterX * 0.5 + jitterY);
+    const gridY = Math.ceil(jitterY - jitterX * 0.5);
+    const inX = gridX + 40 + rng.float() * 40;
+    const inY = gridY + 40 + rng.float() * 40;
+    const screenX = Math.floor(inX - inY);
+    const screenY = Math.floor((inX + inY) * 0.5);
+    // `screenPointOf` undone, as in {@link dropPoint}.
+    const ix = screenY + screenX / 2;
+    const iy = screenY - screenX / 2;
+    const flying = isFlyingMovement(championMode(id, "movement", level));
+    const range = championStatWithPower(id, "range", level, power) || 1;
+    return {
+      ix,
+      iy,
+      ...rangePointOf(ix, iy),
+      frame: startFrame(flying),
+      flying,
+      hitFlags: championReach(id, level, championPower(id, power), fightFlags(true, flying, range)),
+    };
+  };
+  pen = cage && options.defenderChampion ? penOf(cage, options.defenderChampion) : null;
 
   const fling = (event: FlingDrop): void => {
     const ids = Object.keys(event.monsters).sort();
@@ -2656,7 +2755,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
     }
     if (creep.friendly) {
-      tickDefender(creep);
+      if (creep === cageChampion) tickCageChampion(creep);
+      else tickDefender(creep);
       return;
     }
     if (creep.behaviour === "heal") {
@@ -2867,12 +2967,203 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     };
   };
 
-  /** The caged champion comes out when an attacker first comes near its cage (issue #195). */
+  /**
+   * The caged champion in its cage (issue #260): it counts its frame and every
+   * {@link CAGE_LOOK_FRAMES} looks around itself (`tickBPen`,
+   * `ChampionBase.as:1055-1057`), and comes out at what it finds. One that got
+   * back from a fight goes in first, and does not look that frame
+   * (`tickBCage`, `:1114-1133`).
+   */
   const tickCage = (): void => {
-    if (!cage || cageChampion || !options.defenderChampion) return;
-    const scan = towerScanPoint(cage);
-    if (!index.closest(CAGE_ALERT_RANGE, scan.x, scan.y, oldStyleTargets(1))) return;
-    cageChampion = releaseChampion(cage, options.defenderChampion);
+    const out = cageChampion;
+    if (!pen && out && out.homing && out.atTarget && out.hp > 0 && !out.gone) {
+      goInCage(out);
+      return;
+    }
+    if (!pen || !options.defenderChampion) return;
+    const frame = pen.frame + 1;
+    const foe =
+      frame % CAGE_LOOK_FRAMES === 0
+        ? defenceTarget(pen.x, pen.y, pen.hitFlags, pen.flying)
+        : undefined;
+    if (!foe) {
+      pen.frame = frame;
+      return;
+    }
+    // Its own tick this step counts the frame, as `tickState` does before `tickBPen`.
+    let champion = cageChampion;
+    if (champion) {
+      champion.frame = pen.frame;
+      champion.targetable = true;
+      // Back in its place, so the creeps still step in id order.
+      const after = creeps.findIndex((creep) => creep.id > (champion as Creep).id);
+      creeps.splice(after < 0 ? creeps.length : after, 0, champion);
+      byCreepId.set(champion.id, champion);
+    } else {
+      champion = releaseChampion(options.defenderChampion, pen);
+    }
+    pen = null;
+    if (!champion) return;
+    cageChampion = champion;
+    champion.born = tick;
+    champion.homing = false;
+    champion.attacking = false;
+    champion.atTarget = false;
+    takeFoe(champion, foe);
+  };
+
+  /**
+   * The caged champion goes back in (issue #260): off the field, where it
+   * stopped, with the health it has and the frame it is on. It lets go of
+   * whatever its aura held.
+   */
+  const goInCage = (creep: Creep): void => {
+    pen = {
+      ix: creep.ix,
+      iy: creep.iy,
+      x: creep.x,
+      y: creep.y,
+      // This is its tick: `tickState` counts the frame before `tickBCage` sends it in.
+      frame: creep.frame + 1,
+      flying: creep.flying,
+      hitFlags: creep.hitFlags,
+    };
+    defenderChampionHp = creep.hp;
+    if (creep.aura) letGo(creep, creep.aura, new Set());
+    creep.targetCreep = -1;
+    creep.atTarget = false;
+    creep.attacking = false;
+    creep.waypoints = [];
+    // Still in this step's index: hidden, so no scan finds it there.
+    creep.targetable = false;
+    const at = creeps.indexOf(creep);
+    if (at >= 0) creeps.splice(at, 1);
+    byCreepId.delete(creep.id);
+  };
+
+  /**
+   * `FindDefenseTargets`' pick (`ChampionBase.as:504-516`): the nearest
+   * attacker within {@link CHAMPION_DEFEND_SCAN} that it can hit, passing over
+   * one that is retreating and, for a champion on the ground, an Eye-ra.
+   */
+  const defenceTarget = (
+    x: number,
+    y: number,
+    flags: number,
+    flying: boolean,
+  ): Creep | undefined =>
+    index
+      .inRange(CHAMPION_DEFEND_SCAN, x, y, flags)
+      .find(
+        ({ creep }) => creep.behaviour !== "retreat" && (flying || creep.monsterId !== EYE_RA_ID),
+      )?.creep;
+
+  /** The caged champion's foe while it lives, else undefined. */
+  const liveFoe = (creep: Creep): Creep | undefined => {
+    const foe = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
+    return foe && foe.hp > 0 && !foe.gone ? foe : undefined;
+  };
+
+  /** `interceptTarget`: on to a new foe, swinging at once if already in range (`:482-485`). */
+  const takeFoe = (creep: Creep, foe: Creep): void => {
+    creep.targetCreep = foe.id;
+    const squared = screenDistanceSquared(creep.ix, creep.iy, foe.ix, foe.iy);
+    if (squared < creep.range * creep.range) creep.atTarget = true;
+  };
+
+  /**
+   * `FindDefenseTargets` (`ChampionBase.as:504-545`) for the caged champion
+   * out of its cage: the nearest foe around it, else the one it has while that
+   * one lives, else back to the cage.
+   */
+  const lookForFoe = (creep: Creep): void => {
+    const found = defenceTarget(creep.x, creep.y, creep.hitFlags, creep.flying);
+    if (found) {
+      creep.homing = false;
+      takeFoe(creep, found);
+      return;
+    }
+    if (liveFoe(creep)) {
+      creep.homing = false;
+      return;
+    }
+    if (creep.homing) return;
+    // `changeModeCage` (`:295-303`).
+    creep.targetCreep = -1;
+    creep.atTarget = false;
+    creep.attacking = false;
+    creep.homing = true;
+  };
+
+  /** A step straight at a point: the cage, or a foe where it stands now. */
+  const walkTo = (creep: Creep, to: Cart): void => {
+    creep.attacking = false;
+    creep.waypoints = [to];
+    creep.waypointIndex = 0;
+    moveCreep(creep);
+  };
+
+  /**
+   * The caged champion out of its cage (issue #260): `tickBDefend`
+   * (`ChampionBase.as:851-918`) while it has a foe, and on its way back
+   * `tickBCage` (`:1113-1137`), which only looks. No leash: it chases a foe
+   * wherever it goes.
+   */
+  const tickCageChampion = (creep: Creep): void => {
+    // The tick it came out, `tickBPen` found its foe and `move()` only sets off.
+    if (creep.born === tick) {
+      const foe = liveFoe(creep);
+      if (foe && !creep.atTarget) walkTo(creep, { x: foe.ix, y: foe.iy });
+      return;
+    }
+    if (creep.homing) {
+      if (creep.frame % CAGE_LOOK_FRAMES === 0) lookForFoe(creep);
+      if (creep.homing) {
+        walkTo(creep, cageDoor as Cart);
+        return;
+      }
+    }
+    let foe = liveFoe(creep);
+    if (!foe) {
+      creep.atTarget = false;
+      creep.attacking = false;
+      lookForFoe(creep);
+      foe = liveFoe(creep);
+    } else {
+      const squared = screenDistanceSquared(creep.ix, creep.iy, foe.ix, foe.iy);
+      const range = creep.range;
+      const reach = range * KORATH_DEFEND_FLYER_REACH;
+      if (squared < range * range) {
+        creep.atTarget = true;
+      } else if (creep.monsterId === KORATH_ID && foe.flying && squared < reach * reach) {
+        // Korath reaches a flyer from twice his range (`:876-877`).
+        creep.atTarget = true;
+      } else if (!creep.attacking && creep.frame % CHASE_LOOK_FRAMES === 0) {
+        lookForFoe(creep);
+        foe = liveFoe(creep);
+      } else if (creep.attacking && squared > 4 * range * range) {
+        // It swings on at a foe that backs off, until it is twice its range away (`:882-887`).
+        creep.attacking = false;
+        creep.atTarget = false;
+        lookForFoe(creep);
+        foe = liveFoe(creep);
+      }
+    }
+    if (!foe || creep.homing) {
+      walkTo(creep, cageDoor as Cart);
+      return;
+    }
+    if (creep.atTarget) {
+      creep.attacking = true;
+      if (creep.attackCooldown <= 0) {
+        creep.attackCooldown += swingDelay(creep);
+        recordHit(creep, foe.ix, foe.iy, strikeCreep(creep, foe, creep));
+      } else {
+        creep.attackCooldown -= 1;
+      }
+      return;
+    }
+    walkTo(creep, { x: foe.ix, y: foe.iy });
   };
 
   /* ── The tick ──────────────────────────────────────────────────────────── */

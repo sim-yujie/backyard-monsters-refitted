@@ -409,10 +409,21 @@ and at the longest end, plus a siege use, gives no mismatch.
   chase only inside the bunker's range, and walk back in when nothing is left, to be sent again.
   A bunker keeps its healers in. `BattleState.bunkerGarrisons` is what each bunker holds
   afterwards; a fallen bunker keeps only the defenders that were out.
-- The champion in the Champion Cage (`BattleOptions.defenderChampion`) comes out when an
-  attacker first comes within 400 of the cage, at its stored health, its level and its power
-  level's `bonus*`, fights within 800 of the cage, and fights on if the cage falls.
+- The champion in the Champion Cage (`BattleOptions.defenderChampion`) comes out at its stored
+  health, its level and its power level's `bonus*`, and fights on if the cage falls.
   `BattleState.defenderChampionHp` is its health afterwards: 0 if it died.
+- When the champion comes out, what it chases and when it goes back follow Flash, not the #195
+  choice of a 400 alert and an 800 leash (owner decision 2026-10-04, issue #260; engine fidelity
+  note 14). It waits in the cage at a random point and every 200 of its frames looks 800 around
+  itself (`ChampionBase.tickBPen`, `getTargetCreeps`, `ChampionBase.as:500-502`, `:1055-1057`).
+  It comes out at the nearest attacker it can hit, passing over one that is retreating and, unless
+  it flies, an Eye-ra (`FindDefenseTargets`, `:504-545`). Out, it has no leash (`tickBDefend`,
+  `:851-918`): it swings at its foe inside its range and keeps swinging until the foe is twice
+  that away, and while it chases a foe it is not yet hitting it looks again every 60 frames for a
+  nearer one. When its foe dies it looks again from where it stands; with nobody inside 800 it
+  walks back to the cage, still looking every 200 frames, goes back in, and comes out again the
+  same way. The engine walks it straight at its foe and straight home rather than pathing, starts
+  its frame count with the battle, and leaves it standing where it stopped in the cage.
 - Towers, traps and bombs never hurt a defender.
 
 A battle with no defence runs and digests exactly as before: the six older golden fixtures are

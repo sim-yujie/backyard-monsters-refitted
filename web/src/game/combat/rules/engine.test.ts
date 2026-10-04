@@ -1269,7 +1269,7 @@ describe("the fight-back (issue #195)", () => {
   });
 });
 
-describe("the caged champion (issue #195)", () => {
+describe("the caged champion (issues #195, #260)", () => {
   /** A Champion Cage, a harvester by it, one far off, and a Cannon Tower in between. */
   const yard = () =>
     yardOf({
@@ -1278,9 +1278,23 @@ describe("the caged champion (issue #195)", () => {
       "3": { id: 3, t: 1, l: 1, X: 1400, Y: 1400 },
       "4": { id: 4, t: 20, l: 1, X: 300, Y: -200 },
     });
+  /** A Champion Cage and one harvester well away from it, so attackers walk off. */
+  const openYard = () =>
+    yardOf({
+      "1": { id: 1, t: 114, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 1200, Y: 1200 },
+    });
   const gorgo = { t: 1, l: 2, hp: 5000, pl: 1 };
   const champion = (battle: ReturnType<typeof createBattle>) =>
     battle.creeps().find((creep) => creep.champion && creep.friendly);
+  /** Steps until the champion is out, and returns the tick it came out on, or -1. */
+  const untilOut = (battle: ReturnType<typeof createBattle>, limit: number): number => {
+    for (let step = 0; step < limit && !battle.over(); step += 1) {
+      battle.step();
+      if (champion(battle)) return battle.tick;
+    }
+    return -1;
+  };
 
   it("stays in its cage while no attacker is near", () => {
     const battle = createBattle(yard(), { seed: 3, defenderChampion: gorgo });
@@ -1290,10 +1304,19 @@ describe("the caged champion (issue #195)", () => {
     expect(battle.state().defenderChampionHp).toBe(5000);
   });
 
-  it("comes out at its stored health, its level and power level, when an attacker nears the cage", () => {
+  it("only looks out every 200 of its frames (`ChampionBase.as:1055`)", () => {
     const battle = createBattle(yard(), { seed: 3, defenderChampion: gorgo });
     battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
-    run(battle, 1);
+    // Its frame starts below 7, so its first look is on one of ticks 194 to 200.
+    const out = untilOut(battle, 400);
+    expect(out).toBeGreaterThanOrEqual(194);
+    expect(out).toBeLessThanOrEqual(200);
+  });
+
+  it("comes out at its stored health, its level and power level, and fights what came", () => {
+    const battle = createBattle(yard(), { seed: 3, defenderChampion: gorgo });
+    battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
+    untilOut(battle, 400);
     expect(champion(battle)).toMatchObject({
       monsterId: "G1",
       level: 2,
@@ -1306,6 +1329,50 @@ describe("the caged champion (issue #195)", () => {
     const hp = battle.state().defenderChampionHp!;
     expect(hp).toBeGreaterThan(0);
     expect(hp).toBeLessThan(5000);
+  });
+
+  it("sees an attacker 800 from itself, and chases it as far as it goes (`ChampionBase.as:501`)", () => {
+    const battle = createBattle(openYard(), { seed: 3, defenderChampion: gorgo });
+    // About 600 from the cage, walking away from it to the far harvester.
+    battle.apply({ kind: "fling", t: 0, x: 450, y: 450, r: 0, monsters: { C1: 1 } });
+    expect(untilOut(battle, 400)).toBeGreaterThan(0);
+    let farthest = 0;
+    for (let step = 0; step < 6000 && battle.state().creepsKilled === 0; step += 1) {
+      battle.step();
+      const out = champion(battle);
+      if (out) farthest = Math.max(farthest, Math.hypot(out.ix, out.iy));
+    }
+    expect(battle.state().creepsKilled).toBe(1);
+    // The #195 leash held it to 800 around the cage; Flash's champion has none.
+    expect(farthest).toBeGreaterThan(1000);
+  });
+
+  it("lets an Eye-ra pass unless it flies (`ChampionBase.as:510`)", () => {
+    const eyeras = createBattle(openYard(), { seed: 3, defenderChampion: gorgo });
+    eyeras.apply({ kind: "fling", t: 0, x: 300, y: 300, r: 20, monsters: { C5: 3 } });
+    expect(untilOut(eyeras, 400)).toBe(-1);
+    expect(eyeras.creeps().filter((creep) => !creep.friendly)).toHaveLength(3);
+
+    const pokeys = createBattle(openYard(), { seed: 3, defenderChampion: gorgo });
+    pokeys.apply({ kind: "fling", t: 0, x: 300, y: 300, r: 20, monsters: { C1: 3 } });
+    expect(untilOut(pokeys, 400)).toBeGreaterThan(0);
+  });
+
+  it("walks back with nobody left inside 800, goes in, and comes out again for the next", () => {
+    const battle = createBattle(yard(), { seed: 3, defenderChampion: gorgo });
+    battle.apply({ kind: "fling", t: 0, x: 600, y: 600, r: 0, monsters: { C1: 1 } });
+    untilOut(battle, 400);
+    const first = champion(battle)!;
+    for (let step = 0; step < 3000 && champion(battle); step += 1) battle.step();
+    expect(battle.state().creepsKilled).toBe(1);
+    expect(champion(battle)).toBeUndefined();
+    const hp = battle.state().defenderChampionHp!;
+    expect(hp).toBeGreaterThan(0);
+    expect(hp).toBeLessThan(5000);
+
+    battle.apply({ kind: "fling", t: battle.tick, x: 600, y: 600, r: 0, monsters: { C1: 1 } });
+    expect(untilOut(battle, 400)).toBeGreaterThan(0);
+    expect(champion(battle)).toMatchObject({ id: first.id, hp });
   });
 
   it("is never shot by a tower", () => {
@@ -1334,13 +1401,13 @@ describe("the caged champion (issue #195)", () => {
       defenderChampion: gorgo,
     });
     noCage.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
-    run(noCage, 60);
+    run(noCage, 300);
     expect(champion(noCage)).toBeUndefined();
     expect(noCage.state().defenderChampionHp).toBeNull();
 
     const spent = createBattle(yard(), { seed: 3, defenderChampion: { ...gorgo, hp: 0 } });
     spent.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
-    run(spent, 60);
+    run(spent, 300);
     expect(champion(spent)).toBeUndefined();
   });
 });
