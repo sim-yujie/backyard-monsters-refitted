@@ -11,6 +11,7 @@ import {
   maxHealth,
   prettifyArtKey,
   resolveArt,
+  restingLayers,
   stripCrop,
 } from "./buildingArt";
 import { stripCells } from "./yardAnim";
@@ -202,6 +203,46 @@ describe("choosing the image for a state", () => {
     const art = resolveArt(22, 1, ArtState.DEFAULT);
     expect(art?.top.url).toContain("bunker/anim.1.png");
     expect(art?.top.frame).toEqual({ width: 90, height: 83 });
+  });
+});
+
+describe("a building at rest, layer by layer", () => {
+  const layersOf = (type: number) => {
+    const art = resolveArt(type, 1, ArtState.DEFAULT);
+    if (!art) throw new Error(`no art for type ${type}`);
+    return restingLayers(art);
+  };
+
+  it("puts the Sniper Tower's rifle over its base (#256)", () => {
+    const layers = layersOf(21);
+    expect(layers).toHaveLength(2);
+    expect(layers[0]).toMatchObject({ x: -40, y: -30, frame: null });
+    expect(layers[0]?.url).toContain("snipertower/top.");
+    // The rifle is cell 0 of its own strip, at its own offset.
+    expect(layers[1]).toMatchObject({ x: -27, y: -50, frame: { width: 55, height: 47 } });
+    expect(layers[1]?.url).toContain("snipertower/anim.");
+  });
+
+  it("keeps every strip of a building with several, in order", () => {
+    const art = resolveArt(116, 1, ArtState.DEFAULT);
+    const layers = layersOf(116);
+    expect(layers.map((layer) => layer.url)).toEqual([
+      art?.top.url,
+      ...(art?.anims.map((anim) => anim.url) ?? []),
+    ]);
+    expect(layers).toHaveLength(4);
+  });
+
+  it("gives a top that is only a strip's first cell once", () => {
+    const layers = layersOf(22);
+    expect(layers).toHaveLength(1);
+    expect(layers[0]?.frame).toEqual({ width: 90, height: 83 });
+  });
+
+  it("is the top alone for a building that never animates", () => {
+    const art = resolveArt(20, 1, ArtState.DEFAULT);
+    expect(art?.anims).toEqual([]);
+    expect(layersOf(20)).toEqual([art?.top]);
   });
 });
 

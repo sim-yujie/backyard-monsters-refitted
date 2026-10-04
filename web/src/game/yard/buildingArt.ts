@@ -320,3 +320,24 @@ export const resolveArt = (type: number, level: number, state: ArtState): Resolv
     topIsAnim: top.frame !== null && anims[0]?.url === top.url,
   };
 };
+
+/**
+ * A building at rest as a list of pictures, bottom to top: its top and then
+ * cell 0 of each animation strip, every one at its own offset — the stack the
+ * yard draws minus the shadow, frozen on its first frame.
+ *
+ * For something that draws a building without animating it, like the ghost of
+ * a building being placed (#256). The top alone is often not the building: a
+ * Sniper Tower's rifle, a Railgun's gun and a Hatchery's roof live in strips
+ * of their own, and the blueprint tiles once had the same holes in them (#52).
+ * A top that is only cell 0 of the first strip (types 22, 53, 105 and 129) is
+ * given once, not twice.
+ */
+export const restingLayers = (art: ResolvedArt): ResolvedImage[] => {
+  const layers: ResolvedImage[] = art.topIsAnim ? [] : [art.top];
+  for (const anim of art.anims) {
+    const frame = { width: anim.width, height: anim.height };
+    layers.push({ url: anim.url, x: anim.x, y: anim.y, frame });
+  }
+  return layers;
+};

@@ -1,6 +1,6 @@
-import { Assets, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
+import { AlphaFilter, Assets, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 import type { Camera } from "@/game/Camera";
-import { ArtState, resolveArt } from "./buildingArt";
+import { ArtState, resolveArt, restingLayers, type ResolvedImage } from "./buildingArt";
 import { nearbyArea, NEARBY_STROKE } from "./nearbyFootprints";
 import {
   inBounds,
@@ -248,8 +248,15 @@ export class BuildPlacement {
   private nearbyFor = "";
   private nearbyDrawn: readonly NearbyFootprint[] = [];
   private readonly outline = new Graphics();
-  private readonly art = new Sprite(Texture.EMPTY);
-  private artOffset: Point = { x: 0, y: 0 };
+  /** The building's pictures, placed from the footprint's top corner. */
+  private readonly art = new Container();
+  /**
+   * Fades the pictures as one, so the base does not show through the gun
+   * stacked on it the way a fade per sprite would. Made once the art is in:
+   * a filter wants a GPU context, which a placement with no art never needs.
+   */
+  private fade: AlphaFilter | null = null;
+  private artDrawn: readonly ResolvedImage[] = [];
   private yard: Yard;
   private spot: SpotCheck | null = null;
   private pressX = 0;
@@ -265,7 +272,6 @@ export class BuildPlacement {
     this.grid = new PlacementGrid(options.yard);
 
     this.ghost.eventMode = "none";
-    this.art.alpha = 0.7;
     this.ghost.addChild(this.nearby, this.outline, this.art);
     this.ghost.visible = false;
     options.layer.addChild(this.ghost);
@@ -314,25 +320,51 @@ export class BuildPlacement {
     window.removeEventListener("keydown", this.onKeyDown);
     // The renderer's own teardown may already have destroyed the layer.
     if (!this.ghost.destroyed) this.ghost.destroy({ children: true });
+    this.fade?.destroy();
   }
 
   /* ── Drawing ────────────────────────────────────────────────────────── */
 
+  /**
+   * The building as it stands at rest: its top and the first cell of every
+   * animation strip, each at its own offset (#256). The top alone left a
+   * Sniper Tower without its rifle and a Railgun without its gun.
+   */
   private async loadArt(): Promise<void> {
     const art = resolveArt(this.options.type, 1, ArtState.DEFAULT);
     if (!art) return;
+    const layers = restingLayers(art);
     try {
-      const texture = await Assets.load<Texture>(art.top.url);
+      const textures = await Promise.all(
+        layers.map((layer) => Assets.load<Texture>(layer.url)),
+      );
       if (this.done) return;
-      const frame = art.top.frame;
-      this.art.texture = frame
-        ? new Texture({ source: texture.source, frame: new Rectangle(0, 0, frame.width, frame.height) })
-        : texture;
-      this.artOffset = { x: art.top.x, y: art.top.y };
-      if (this.spot) this.show(this.spot.x, this.spot.y);
+      layers.forEach((layer, index) => {
+        const texture = textures[index];
+        if (!texture) return;
+        const frame = layer.frame;
+        const sprite = new Sprite(
+          frame
+            ? new Texture({
+                source: texture.source,
+                frame: new Rectangle(0, 0, frame.width, frame.height),
+              })
+            : texture,
+        );
+        sprite.position.set(layer.x, layer.y);
+        this.art.addChild(sprite);
+      });
+      this.fade = new AlphaFilter({ alpha: 0.7, resolution: "inherit" });
+      this.art.filters = [this.fade];
+      this.artDrawn = layers;
     } catch {
       // No picture: the footprint alone still says where it goes.
     }
+  }
+
+  /** The pictures the ghost is drawn from, bottom to top; empty until they load. */
+  get artShown(): readonly ResolvedImage[] {
+    return this.artDrawn;
   }
 
   private show(x: number, y: number): void {
@@ -363,7 +395,7 @@ export class BuildPlacement {
         .lineTo(right.x, right.y)
         .stroke({ width: 3, color: INVALID, alpha: 0.95 });
     }
-    if (top) this.art.position.set(top.x + this.artOffset.x, top.y + this.artOffset.y);
+    if (top) this.art.position.set(top.x, top.y);
     this.art.tint = check.problem ? 0xffb0b0 : 0xffffff;
     this.ghost.visible = true;
   }
