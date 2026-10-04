@@ -181,6 +181,8 @@
   --z-popup: 30;
   /* The tutorial guide (Bob), above every popup (issue #227). */
   --z-guide: 40;
+  /* The idle countdown (#271), above the whole overlay, Bob included. */
+  --z-system: 50;
 
   /* Bob's speech bubble: the cream balloon of his approved art, the same on
      either theme (guide.css), and the ring round what he points at. */

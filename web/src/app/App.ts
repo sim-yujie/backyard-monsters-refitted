@@ -1,8 +1,11 @@
 import { Application, Container } from "pixi.js";
 import { createOverlay, type Overlay } from "@/ui/overlay";
 import { PerfOverlay } from "@/ui/PerfOverlay";
-import { SceneManager } from "./SceneManager";
+import { SceneManager, type SceneFactory } from "./SceneManager";
 import { withPresence } from "./presenceScene";
+import { withIdle } from "./idleScene";
+import { IdleWatch, idleDurationText, idleTimingsFor } from "@/game/presence/idleWatch";
+import { IdleWarning } from "@/ui/IdleWarning";
 import { BootScene } from "./scenes/BootScene";
 import { LoginScene } from "./scenes/LoginScene";
 import { MapGateScene } from "./scenes/MapGateScene";
@@ -10,6 +13,7 @@ import { MapRoom1Scene } from "./scenes/MapRoom1Scene";
 import { MapRoom2Scene } from "./scenes/MapRoom2Scene";
 import { YardScene } from "./scenes/YardScene";
 import { AttackScene } from "./scenes/AttackScene";
+import { AwayScene } from "./scenes/AwayScene";
 import { BAITER_PLUGINS } from "@/game/baiter/baiterPlugin";
 import { WATCH_PLUGINS } from "@/game/autoAttack/watchPlugin";
 
@@ -40,6 +44,8 @@ export const SceneName = {
    * `game/autoAttack/watchRun`. Nothing on it talks to the server.
    */
   WATCH: "watch",
+  /** "You were away too long": the idle disconnect (#271, `game/presence/idleWatch.ts`). */
+  AWAY: "away",
 } as const;
 export type SceneName = (typeof SceneName)[keyof typeof SceneName];
 
@@ -58,6 +64,8 @@ export class App {
   private perf: PerfOverlay | null = null;
   private scenes: SceneManager | null = null;
   private resizeObserver: ResizeObserver | null = null;
+  private idle: IdleWatch | null = null;
+  private idleWarning: IdleWarning | null = null;
 
   constructor(private readonly host: HTMLElement) {
     this.pixi = new Application();
@@ -95,17 +103,39 @@ export class App {
       this.pixi.screen.height,
     );
 
-    // Every screen past sign-in keeps the player online (#242, `presenceScene.ts`).
+    // Ten minutes without input disconnects (#271). The 10 and the 1 minute
+    // are `IDLE_TIMINGS`; a dev build takes `?idle=40,20` (seconds) to test.
+    const scenes = this.scenes;
+    const warning = new IdleWarning(this.host);
+    const idle = new IdleWatch({
+      timings: idleTimingsFor(window.location.search, import.meta.env.DEV),
+      onWarn: (disconnectAt) => warning.show(disconnectAt),
+      onCancelWarn: () => warning.hide(),
+      onDisconnect: () => scenes.goTo(SceneName.AWAY),
+    });
+    this.idle = idle;
+    this.idleWarning = warning;
+    if (import.meta.env.DEV) (globalThis as Record<string, unknown>)["__idle"] = idle;
+
+    // Every screen past sign-in keeps the player online (#242, `presenceScene.ts`)
+    // and is watched for the idle disconnect, which an attack or a replay
+    // (the Baiter's practice and a Watch included) holds off until it is left.
+    const game = (factory: SceneFactory, defer = false): SceneFactory =>
+      withPresence(withIdle(factory, idle, { defer }));
     this.scenes
       .register(SceneName.BOOT, () => new BootScene())
       .register(SceneName.LOGIN, () => new LoginScene())
-      .register(SceneName.MAP, withPresence(() => new MapGateScene()))
-      .register(SceneName.MAP_ROOM_1, withPresence(() => new MapRoom1Scene()))
-      .register(SceneName.MAP_ROOM_2, withPresence(() => new MapRoom2Scene()))
-      .register(SceneName.YARD, withPresence(() => new YardScene()))
-      .register(SceneName.ATTACK, withPresence(() => new AttackScene()))
-      .register(SceneName.BAITER, withPresence(() => new AttackScene(BAITER_PLUGINS, { practice: true })))
-      .register(SceneName.WATCH, withPresence(() => new AttackScene(WATCH_PLUGINS, { watch: true })));
+      .register(SceneName.MAP, game(() => new MapGateScene()))
+      .register(SceneName.MAP_ROOM_1, game(() => new MapRoom1Scene()))
+      .register(SceneName.MAP_ROOM_2, game(() => new MapRoom2Scene()))
+      .register(SceneName.YARD, game(() => new YardScene()))
+      .register(SceneName.ATTACK, game(() => new AttackScene(), true))
+      .register(SceneName.BAITER, game(() => new AttackScene(BAITER_PLUGINS, { practice: true }), true))
+      .register(SceneName.WATCH, game(() => new AttackScene(WATCH_PLUGINS, { watch: true }), true))
+      .register(
+        SceneName.AWAY,
+        () => new AwayScene(idleDurationText(idle.timings.disconnectMs), this.halt),
+      );
 
     // Pixi's renderer resize fires on the window; mirror it to the scenes.
     this.pixi.renderer.on("resize", this.handleResize);
@@ -126,6 +156,11 @@ export class App {
   destroy(): void {
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+    this.idle?.destroy();
+    this.idle = null;
+    if (import.meta.env.DEV) delete (globalThis as Record<string, unknown>)["__idle"];
+    this.idleWarning?.hide();
+    this.idleWarning = null;
     this.pixi.renderer.off("resize", this.handleResize);
     this.scenes?.destroy();
     this.scenes = null;
@@ -135,6 +170,12 @@ export class App {
     this.overlay = null;
     this.pixi.destroy(true, { children: true });
   }
+
+  /** Stops the frame clock behind the disconnect screen (#271); the overlay is DOM and stays. */
+  private readonly halt = (): void => {
+    this.pixi.render();
+    this.pixi.ticker.stop();
+  };
 
   private readonly handleResize = (width: number, height: number): void => {
     this.scenes?.resize(width, height);

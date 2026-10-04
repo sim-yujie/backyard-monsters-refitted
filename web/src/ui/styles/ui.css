@@ -1090,6 +1090,46 @@ body {
   display: none;
 }
 
+/* ── Idle disconnect (#271) ──────────────────────────────────────────────
+ * The countdown dims the game but lets every pointer through: any input
+ * cancels it, so the move or tap that does reaches the game. Only its button
+ * takes the pointer.
+ */
+.idle-warning {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-system);
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--colour-scrim);
+  pointer-events: none;
+}
+
+.idle-warning__panel {
+  max-width: 26rem;
+  box-shadow: var(--shadow-popup);
+}
+
+.idle-warning__panel button {
+  pointer-events: auto;
+}
+
+.idle-warning__time {
+  font-variant-numeric: tabular-nums;
+}
+
+.idle-warning__actions,
+.away-screen__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
+
+.away-screen {
+  max-width: 26rem;
+}
+
 .boot-status {
   display: flex;
   flex-direction: column;

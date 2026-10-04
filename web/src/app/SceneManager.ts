@@ -106,15 +106,24 @@ export class SceneManager {
     this.overlay.clear();
   }
 
-  private async applyPending(): Promise<void> {
+  private takePending(): string | null {
     const name = this.pending;
-    if (!name) return;
+    this.pending = null;
+    return name;
+  }
+
+  private async applyPending(): Promise<void> {
+    const asked = this.takePending();
+    if (!asked) return;
 
     this.switching = true;
-    this.pending = null;
 
     try {
       this.exitCurrent();
+      // A switch asked for while the old scene was exiting wins: leaving an
+      // attack while idle opens the disconnect screen in place of the yard
+      // (#271), so the yard never loads.
+      const name = this.takePending() ?? asked;
 
       const factory = this.factories.get(name);
       if (!factory) throw new Error(`No scene registered as "${name}"`);
