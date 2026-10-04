@@ -12,7 +12,7 @@
 
 :root:has(.hud--corner) {
   --hud-inset: var(--space-4);
-  --hud-bar-height: 64px; /* 56px before the income line (#280) */
+  --hud-bar-height: 70px; /* 56px before the income line (#280) */
 }
 
 /* ── Top left: the readouts and Workers in one glass bar ──────────────── */
