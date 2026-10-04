@@ -1,4 +1,12 @@
-import { BOMBS, capacity, TOWER_STATS, towerRange, towerStats } from "@/game/combat/rules";
+import {
+  AERIAL_DEFENSE_TYPE,
+  aerialSalvo,
+  BOMBS,
+  capacity,
+  TOWER_STATS,
+  towerRange,
+  towerStats,
+} from "@/game/combat/rules";
 import { outpostRange } from "@/game/maproom/rules/range";
 import { BUILDING_COST_ROWS } from "@/game/yard/buildingCostData";
 import { maxLevel, quantityOf, rowOf, type YardKind } from "@/game/yard/buildingCosts";
@@ -108,6 +116,15 @@ const row = (
   return down ? { label, now, next, down: true } : { label, now, next };
 };
 
+/** A whole number now and next, "190 → 200", marked down when it drops. */
+const countRow = (label: string, now: number, next: number | undefined): InfoRow =>
+  row(
+    label,
+    text(now.toLocaleString("en-US")),
+    next !== undefined ? text(next.toLocaleString("en-US")) : null,
+    [now, next],
+  );
+
 /** The level the info reads: a building still being built reads as the level 1 it will be. */
 const shownLevel = (building: YardBuilding): number => Math.max(building.level, 1);
 
@@ -118,7 +135,8 @@ const nextLevelOf = (building: YardBuilding, kind: YardKind = "main"): number | 
 };
 
 /**
- * Range and damage per second, now and next.
+ * Range and damage per second, now and next; an Aerial Defense Tower's shot
+ * and salvo.
  *
  * Range is read through the shared rules' `towerRange` rather than off the
  * stats block directly (issue #262): on an outpost it is the table's figure
@@ -137,15 +155,19 @@ const towerRows = (building: YardBuilding, kind: YardKind, height: number): Info
   const rows: InfoRow[] = [];
   const nowRange = towerRange(building.type, level, kind, height);
   const nextRange = nextLevel !== null ? towerRange(building.type, nextLevel, kind, height) : undefined;
-  if (nowRange !== undefined) {
+  if (nowRange !== undefined) rows.push(countRow("Range", nowRange, nextRange));
+  // The Aerial Defense Tower's text gives a shell's damage and the shots in a
+  // salvo instead of damage per second (`BUILDING115.as:165-176`, issue #265).
+  if (building.type === AERIAL_DEFENSE_TYPE && now.damage !== undefined) {
+    rows.push(countRow("Damage per shot", now.damage, next?.damage));
     rows.push(
-      row(
-        "Range",
-        text(nowRange.toLocaleString("en-US")),
-        nextRange !== undefined ? text(nextRange.toLocaleString("en-US")) : null,
-        [nowRange, nextRange],
+      countRow(
+        "Shots per salvo",
+        aerialSalvo(level),
+        nextLevel !== null ? aerialSalvo(nextLevel) : undefined,
       ),
     );
+    return rows;
   }
   if (now.damage !== undefined && now.rate !== undefined) {
     const perSecond = (damage: number, rate: number) =>

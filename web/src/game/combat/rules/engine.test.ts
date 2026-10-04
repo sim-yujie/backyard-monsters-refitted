@@ -15,6 +15,7 @@ import {
 } from "./engine.js";
 import { digestOf } from "./digest.js";
 import {
+  aerialSalvo,
   BOMBS,
   bombBlast,
   championStat,
@@ -310,6 +311,100 @@ describe("the Railgun's beam (issue #261)", () => {
     // The beam's damage is not truncated, unlike every other tower's shot.
     expect(hurt.get(shot.creepId)).toBeCloseTo(400 * towerHealthScale(hp, full), 9);
     expect(hurt.get(shot.creepId)).toBeLessThan(400);
+  });
+});
+
+describe("the Aerial Defense Tower's salvo (issue #265)", () => {
+  /**
+   * A level 3 Aerial Defense Tower (250 damage, range 340, rate 60, salvo 6)
+   * and a harvester beside it, where `flyers` land and hover.
+   */
+  const salvoBattle = (flyers: Record<string, number>, health?: Record<string, number>) => {
+    const yard = yardOf(
+      {
+        "1": { id: 1, t: 115, l: 3, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: 100, Y: 100 },
+      },
+      health,
+    );
+    const battle = createBattle(yard, { seed: 5 });
+    battle.apply({ kind: "fling", t: 0, x: 110, y: 110, r: 0, monsters: flyers });
+    return battle;
+  };
+
+  /** Every shot over `ticks`, with its tick and its target. */
+  const shotsOver = (battle: ReturnType<typeof createBattle>, ticks: number) => {
+    const shots: { tick: number; creepId: number }[] = [];
+    for (let step = 0; step < ticks && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "shot") shots.push({ tick: event.tick, creepId: event.creepId });
+      }
+    }
+    return shots;
+  };
+
+  /** Shots grouped into salvoes: a gap over four ticks starts a new one. */
+  const salvoesOf = (shots: readonly { tick: number; creepId: number }[]) => {
+    const salvoes: { tick: number; creepId: number }[][] = [];
+    for (const shot of shots) {
+      const last = salvoes.at(-1);
+      const previous = last?.at(-1);
+      if (last && previous && shot.tick - previous.tick <= 4) last.push(shot);
+      else salvoes.push([shot]);
+    }
+    return salvoes;
+  };
+
+  it("salvoes 4, 4, 6, 8, 10, 12, 14 and 16 shots by level (`BUILDING115.as:27`)", () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 8].map(aerialSalvo)).toEqual([4, 4, 6, 8, 10, 12, 14, 16]);
+    expect(aerialSalvo(9)).toBe(16);
+  });
+
+  it("fires its salvo a shot every 4 ticks, through as many targets in turn", () => {
+    const shots = shotsOver(salvoBattle({ C14: 8 }), 100);
+    const first = salvoesOf(shots)[0]!;
+    expect(first).toHaveLength(6);
+    for (let index = 1; index < first.length; index += 1) {
+      expect(first[index]!.tick - first[index - 1]!.tick).toBe(4);
+    }
+    // Six nearest flyers, one shot each.
+    expect(new Set(first.map((shot) => shot.creepId)).size).toBe(6);
+  });
+
+  it("puts every shot of a salvo into one flyer when it is the only one", () => {
+    const shots = shotsOver(salvoBattle({ C15: 1 }), 100);
+    const first = salvoesOf(shots)[0]!;
+    expect(first).toHaveLength(6);
+    expect(new Set(first.map((shot) => shot.creepId)).size).toBe(1);
+  });
+
+  it("reloads 30 ticks after finding its targets, then rate * 2 while it keeps them", () => {
+    // Healers, 8,000 health apiece, outlive three salvoes.
+    const salvoes = salvoesOf(shotsOver(salvoBattle({ C15: 8 }), 500));
+    expect(salvoes.length).toBeGreaterThanOrEqual(3);
+    const gap = (one: number) => salvoes[one + 1]![0]!.tick - salvoes[one]!.at(-1)!.tick;
+    // The reload runs from the tick after the last shot; the next shot waits for a frame of 4.
+    expect(gap(0)).toBeGreaterThanOrEqual(31);
+    expect(gap(0)).toBeLessThanOrEqual(34);
+    expect(gap(1)).toBeGreaterThanOrEqual(121);
+    expect(gap(1)).toBeLessThanOrEqual(124);
+  });
+
+  it("deals every shell's whole damage with the blast round it", () => {
+    const battle = salvoBattle({ C15: 2 });
+    for (let step = 0; step < 200 && !battle.over(); step += 1) {
+      battle.step();
+      const events = battle.recentEvents(battle.tick - 1);
+      const shot = events.find((event) => event.kind === "shot");
+      if (shot?.kind !== "shot") continue;
+      const hurt = events.filter((event) => event.kind === "hurt");
+      // The target takes the shell; the flyer beside it, the blast's near-full share.
+      expect(hurt.find((event) => event.creepId === shot.creepId)?.amount).toBe(250);
+      expect(hurt).toHaveLength(2);
+      return;
+    }
+    throw new Error("the tower never fired");
   });
 });
 

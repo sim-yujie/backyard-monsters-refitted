@@ -73,6 +73,24 @@ describe("towers", () => {
     expect(row({ t: 25, l: 1 }, "Range")?.down).toBeUndefined();
   });
 
+  it("Aerial Defense Tower: damage per shot and shots per salvo, as its own text (#265)", () => {
+    expect(row({ t: 115, l: 2 }, "Damage per shot")).toEqual({
+      label: "Damage per shot",
+      now: { text: "250" },
+    });
+    expect(row({ t: 115, l: 2 }, "Shots per salvo")).toEqual({
+      label: "Shots per salvo",
+      now: { text: "4" },
+      next: { text: "6" },
+    });
+    expect(row({ t: 115, l: 4 }, "Damage per shot")?.next).toEqual({ text: "300" });
+    expect(row({ t: 115, l: 8 }, "Shots per salvo")).toEqual({
+      label: "Shots per salvo",
+      now: { text: "16" },
+    });
+    expect(row({ t: 115, l: 2 }, "Damage")).toBeUndefined();
+  });
+
   it("a tower at its top level has no next value", () => {
     const damage = row({ t: 20, l: 10 }, "Damage");
     expect(damage?.now).toEqual({ text: "200/s" });

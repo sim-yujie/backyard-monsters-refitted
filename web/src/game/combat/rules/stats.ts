@@ -619,6 +619,31 @@ export const beamHits = (
   return !((far < 0 || far > 1) && (near < 0 || near > 1));
 };
 
+/**
+ * The Aerial Defense Tower (issue #265), which fires in salvoes.
+ *
+ * `BUILDING115.TickAttack` (`client/scripts/BUILDING115.as:40-114`) counts its
+ * fire tick down while it reloads (`_fireStage` 1). When it runs out it
+ * re-arms it by `rate * 2` and opens a salvo (stage 2) of
+ * {@link aerialSalvo} shots, one every {@link AERIAL_SHOT_TICKS} of its frames
+ * (`_frameNumber % 4`), the n-th at the n-th of up to that many targets in turn
+ * (`_shotsFired % _targetCreeps.length`, `FindTargets(salvo, priority)`). Each
+ * is the shell every tower fires, `int(damage * scale)` with the full splash
+ * (`:126-139`). A target found dead costs that frame its shot and the tower
+ * looks again (`:84-93`); while it has nothing in range it looks every tick
+ * and sets the fire tick to 30 (`:65-69`), which is then the reload. Once the
+ * salvo is spent it reloads again (`:71-72`).
+ */
+export const AERIAL_DEFENSE_TYPE = 115;
+export const AERIAL_SHOT_TICKS = 4;
+
+/** Shots in a salvo by level, `_targetArray` (`BUILDING115.as:27`). */
+export const AERIAL_SALVO: readonly number[] = [4, 4, 6, 8, 10, 12, 14, 16];
+
+/** The salvo of an Aerial Defense Tower of `level`; the table's last past its end. */
+export const aerialSalvo = (level: number): number =>
+  AERIAL_SALVO[Math.min(Math.max(Math.trunc(level), 1), AERIAL_SALVO.length) - 1] ?? 0;
+
 /** The Heavy Trap, the one trap that is choosy about what sets it off. */
 export const HEAVY_TRAP_TYPE = 117;
 

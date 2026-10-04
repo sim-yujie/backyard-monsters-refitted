@@ -93,6 +93,9 @@ import {
   RAILGUN_SEGMENT,
   RAILGUN_SEGMENTS,
   RAILGUN_TYPE,
+  AERIAL_DEFENSE_TYPE,
+  AERIAL_SHOT_TICKS,
+  aerialSalvo,
   beamHits,
   towerHealthScale,
   towerShotDamage,
@@ -171,7 +174,8 @@ import type {
  * pathing grid and the wall that gets in the way; ranged and melee swings;
  * Eye-ra's blast; Slimeattikus splitting as it dies; the healers; Rezghul
  * raising the dead; towers with
- * their acquire delay, re-arm and splash; the two traps; bunkers dispatching
+ * their acquire delay, re-arm and splash, the Railgun's beam and the Aerial
+ * Defense's salvo; the two traps; bunkers dispatching
  * defenders; resource bombs; loot out of harvesters and storage, hit by hit,
  * and the share of the pool a fallen storage building gives up; the countdown
  * and the retreat.
@@ -786,6 +790,12 @@ interface Tower {
   readonly range: number;
   fireTick: number;
   targets: number[];
+  /** Its `_frameNumber`, counted every tick from the start of the battle. */
+  frame: number;
+  /** The Aerial Defense's `_fireStage`: 1 while it reloads, 2 while it fires a salvo. */
+  stage: number;
+  /** Shots fired in the salvo under way. */
+  shotsFired: number;
 }
 
 interface Trap {
@@ -1027,6 +1037,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       // `Props()` seeds the fire tick with `rate`, not `rate * 2` (`BTOWER.as:112`).
       fireTick: stats.rate ?? 0,
       targets: [],
+      frame: 0,
+      stage: 1,
+      shotsFired: 0,
     });
   }
 
@@ -2856,35 +2869,62 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /* ── Towers, traps and bunkers ─────────────────────────────────────────── */
 
-  const tickTower = (tower: Tower): void => {
-    const building = tower.building;
-    if (building.hp <= 0) return;
-    const stats = towerStats(building.type, building.level, yard.kind);
-    const damage = stats?.damage;
-    if (stats?.range === undefined || damage === undefined) return;
-    const range = tower.range;
-    tower.fireTick -= 1;
-    if (tower.fireTick > 0) return;
-    tower.fireTick += (stats?.rate ?? 0) * TOWER_REARM_MULTIPLIER;
+  /** Where a tower looks from and how far, squared, with what it may hit. */
+  interface TowerScan {
+    readonly flags: number;
+    readonly x: number;
+    readonly y: number;
+    readonly reach: number;
+  }
 
-    const flags = towerTargets(building.type);
-    const scan = towerScanPoint(building);
-    const scanX = scan.x;
-    const scanY = scan.y;
-    const reach = range * range;
+  const scanOf = (tower: Tower): TowerScan => {
+    const scan = towerScanPoint(tower.building);
+    return {
+      flags: towerTargets(tower.building.type),
+      x: scan.x,
+      y: scan.y,
+      reach: tower.range * tower.range,
+    };
+  };
 
+  /** The targets it holds that it may still shoot: alive, hittable and in range. */
+  const liveTargets = (tower: Tower, scan: TowerScan): Creep[] => {
     const live: Creep[] = [];
     for (const id of tower.targets) {
       const creep = byCreepId.get(id);
       if (!creep || creep.hp <= 0 || !creep.targetable) continue;
-      if (!canHit(flags, creep.flags)) continue;
-      if (distanceSquared(scanX, scanY, creep.x, creep.y) >= reach) continue;
+      if (!canHit(scan.flags, creep.flags)) continue;
+      if (distanceSquared(scan.x, scan.y, creep.x, creep.y) >= scan.reach) continue;
       live.push(creep);
     }
+    return live;
+  };
 
+  /** `FindTargets(count, 1)`: the nearest `count` in range (`BTOWER.as:382-427`). */
+  const findTowerTargets = (tower: Tower, scan: TowerScan, count: number): void => {
+    const found = index.inRange(tower.range, scan.x, scan.y, scan.flags);
+    tower.targets = found.slice(0, count).map((hit) => hit.creep.id);
+  };
+
+  const tickTower = (tower: Tower): void => {
+    const building = tower.building;
+    tower.frame += 1;
+    if (building.hp <= 0) return;
+    const stats = towerStats(building.type, building.level, yard.kind);
+    const damage = stats?.damage;
+    if (stats?.range === undefined || damage === undefined) return;
+    if (building.type === AERIAL_DEFENSE_TYPE) {
+      tickSalvo(tower, damage, stats.rate ?? 0, stats.splash ?? 0);
+      return;
+    }
+    tower.fireTick -= 1;
+    if (tower.fireTick > 0) return;
+    tower.fireTick += (stats?.rate ?? 0) * TOWER_REARM_MULTIPLIER;
+
+    const scan = scanOf(tower);
+    const live = liveTargets(tower, scan);
     if (live.length === 0) {
-      const found = index.inRange(range, scanX, scanY, flags);
-      tower.targets = found.slice(0, 1).map((hit) => hit.creep.id);
+      findTowerTargets(tower, scan, 1);
       // Every re-acquire path resets the fire tick to 30 (`BTOWER.as:184`, `:189`, `:220`).
       tower.fireTick = TOWER_ACQUIRE_TICKS;
       return;
@@ -2899,29 +2939,77 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         fireRailgun(tower, creep, damage * towerHealthScale(building.hp, building.maxHp));
         continue;
       }
-      visual.push({
-        kind: "shot",
-        tick,
-        towerId: building.id,
-        creepId: creep.id,
-        ix: creep.ix,
-        iy: creep.iy,
-      });
-      const before = creep.hp;
-      tower.report.damageDealt += damageCreep(creep, shot);
-      if (before > 0 && creep.hp <= 0) tower.report.kills += 1;
-      const splash = stats?.splash ?? 0;
-      if (splash <= 0) continue;
-      // `DealLinearAEDamage` over the blast, with its floor of a fifth (`:340-389`),
-      // of what the shell carries.
-      for (const hit of index.inRange(splash, creep.x, creep.y, flags, creep.id)) {
-        const linear = (shot / splash) * (splash - hit.dist);
-        const dealt = Math.max(linear, shot / 5);
-        const health = hit.creep.hp;
-        tower.report.damageDealt += damageCreep(hit.creep, dealt);
-        if (health > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
-      }
+      fireShell(tower, creep, shot, stats?.splash ?? 0, scan.flags);
     }
+  };
+
+  /** A shell at `creep` carrying `shot`, then its blast, if it has one. */
+  const fireShell = (
+    tower: Tower,
+    creep: Creep,
+    shot: number,
+    splash: number,
+    flags: number,
+  ): void => {
+    visual.push({
+      kind: "shot",
+      tick,
+      towerId: tower.building.id,
+      creepId: creep.id,
+      ix: creep.ix,
+      iy: creep.iy,
+    });
+    const before = creep.hp;
+    tower.report.damageDealt += damageCreep(creep, shot);
+    if (before > 0 && creep.hp <= 0) tower.report.kills += 1;
+    if (splash <= 0) return;
+    // `DealLinearAEDamage` over the blast, with its floor of a fifth (`:340-389`),
+    // of what the shell carries.
+    for (const hit of index.inRange(splash, creep.x, creep.y, flags, creep.id)) {
+      const linear = (shot / splash) * (splash - hit.dist);
+      const dealt = Math.max(linear, shot / 5);
+      const health = hit.creep.hp;
+      tower.report.damageDealt += damageCreep(hit.creep, dealt);
+      if (health > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
+    }
+  };
+
+  /**
+   * The Aerial Defense Tower's reload and salvo (issue #265,
+   * {@link AERIAL_DEFENSE_TYPE}, `BUILDING115.as:40-96`).
+   */
+  const tickSalvo = (tower: Tower, damage: number, rate: number, splash: number): void => {
+    const building = tower.building;
+    const salvo = aerialSalvo(building.level);
+    if (tower.stage === 1) {
+      tower.fireTick -= 1;
+      if (tower.fireTick > 0) return;
+      tower.stage = 2;
+      tower.shotsFired = 0;
+      tower.fireTick += rate * TOWER_REARM_MULTIPLIER;
+    }
+    const scan = scanOf(tower);
+    if (liveTargets(tower, scan).length === 0) {
+      findTowerTargets(tower, scan, salvo);
+      tower.fireTick = TOWER_ACQUIRE_TICKS;
+    }
+    if (tower.targets.length === 0) return;
+    if (tower.shotsFired >= salvo) {
+      tower.stage = 1;
+      return;
+    }
+    if (tower.frame % AERIAL_SHOT_TICKS !== 0) return;
+    const aim = tower.targets[tower.shotsFired % tower.targets.length] as number;
+    const creep = byCreepId.get(aim);
+    // A target found dead costs the frame its shot; the tower looks again (`:84-93`).
+    if (!creep || creep.hp <= 0) {
+      findTowerTargets(tower, scan, salvo);
+      return;
+    }
+    tower.shotsFired += 1;
+    tower.report.shots += 1;
+    const shot = towerShotDamage(damage, building.hp, building.maxHp);
+    fireShell(tower, creep, shot, splash, scan.flags);
   };
 
   /**

@@ -838,6 +838,21 @@ yard units across the screen and is cut to the 1,600 yard reach down it; the 20 
 28 yard units either side of a line across the screen and 14 of one down it. The engine does the
 test on screen, as Flash does (issue #261).
 
+**The Aerial Defense Tower fires salvoes** (`BUILDING115.TickAttack`,
+`client/scripts/BUILDING115.as:40-114`). While it reloads (`_fireStage` 1) it counts its fire tick
+down; when that runs out it adds `rate * 2` to it and opens a salvo (stage 2) of 4, 4, 6, 8, 10,
+12, 14 or 16 shots by level (`_targetArray`, `:27`). It finds up to that many targets
+(`FindTargets(salvo, priority)`) and fires one shot every 4 frames of its own count
+(`_frameNumber % 4`), the n-th at target `n % targets`, so a salvo cycles through its targets
+(`:74-87`). Each shot is the ordinary shell, `int(damage * (0.5 + 0.5 * health / maxHealth))` with
+the tower's full 180-225 splash (`:126-139`). A target found dead costs that frame its shot and the
+tower looks again (`:84-93`). While nothing it holds is in range it looks every tick and sets the
+fire tick to 30 (`:65-69`), so the reload after a salvo that had to find its targets is 30 ticks,
+and `rate * 2` (120) after one that kept them. Once the salvo is spent it reloads (`:71-72`). A
+level 8 tower fires 16 shells of 400 a salvo, where a single shot every reload would be one. Its
+upgrade text gives "damage per shot" and "shots fired per salvo" rather than damage per second
+(`:165-176`). The engine fires it this way (issue #265).
+
 Note that `rate` is used inconsistently. The fire loop re-arms with `_rate * 2`
 (`BTOWER.as:179`) while the upgrade tooltip prints damage per second as `damage * 40 / rate`
 (`BTOWER.as:144-148`). The two disagree by a factor of two; the fire loop is what actually runs.
