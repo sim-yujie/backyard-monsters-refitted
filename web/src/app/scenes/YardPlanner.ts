@@ -577,6 +577,8 @@ export class YardPlanner {
       view: renderer.view,
       land: on.ranges && on.land,
       air: on.ranges && on.air,
+      kind: this.yard.kind,
+      height: this.yard.cellHeight,
     });
 
     this.deadZones.draw({
@@ -608,7 +610,7 @@ export class YardPlanner {
    * (#55). The plot is the plan's, which is the yard's expansion.
    */
   private currentCoverage(): Coverage {
-    const towers = coverageTowers(this.session.plan.buildings());
+    const towers = coverageTowers(this.session.plan.buildings(), this.yard.kind, this.yard.cellHeight);
     const plot = this.session.plan.plot;
     const key = `${plot.halfWidth}x${plot.halfHeight};${towers
       .map((tower) => `${tower.x},${tower.y},${tower.range},${tower.land ? 1 : 0}${tower.air ? 1 : 0}`)

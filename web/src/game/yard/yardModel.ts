@@ -141,6 +141,17 @@ export interface Yard {
    * core stands in for the Town Hall; `main` for everything else.
    */
   readonly kind: YardKind;
+  /**
+   * The outpost's map cell height (issue #262), 0 where there is none. Every
+   * tower's range on a Map Room 2 outpost is stretched or shrunk by it —
+   * `towerRange` in the shared combat rules, the one function the engine,
+   * the planner's rings and the info panel's range row all read — from a
+   * height of 100 up (`client/scripts/BTOWER.as:80-85`). The server sends it
+   * as `cellheight` on the owner's own outpost build load as well as an
+   * attack load (`baseLoad.ts`); a main yard's load never does, so this is
+   * always 0 there.
+   */
+  readonly cellHeight: number;
   /** Depth-sorted, so the renderer can draw straight down the list. */
   readonly buildings: readonly YardBuilding[];
   readonly mushrooms: readonly YardMushroom[];
@@ -394,6 +405,7 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
     expansionLevel,
     foreign,
     kind,
+    cellHeight: typeof response.cellheight === "number" ? response.cellheight : 0,
     buildings,
     mushrooms,
     resources: response.resources ?? {},

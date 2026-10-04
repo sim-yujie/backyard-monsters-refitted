@@ -185,8 +185,12 @@ export const baseLoad: KoaController = async (ctx) => {
 
   // The target cell's height, which stretches an outpost's tower range in the
   // engine; the attack save's loot replay reads the same stored value, so both
-  // fight the same battle (issue #179, `cellHeight.ts`).
-  const cellHeight = attacking ? await combatCellHeight(baseSave) : undefined;
+  // fight the same battle (issue #179, `cellHeight.ts`). The owner's own
+  // outpost build load reads it too (issue #262): without it the planner has
+  // no way to draw the same range the engine will actually fire at.
+  const ownOutpostBuild = isOwner && type === BaseMode.BUILD && baseSave.type === BaseType.OUTPOST;
+  const cellHeight =
+    attacking || ownOutpostBuild ? await combatCellHeight(baseSave) : undefined;
 
   // The owner opening their own main yard: finish whatever ended while they
   // were away and write it, before anything below reads the yard

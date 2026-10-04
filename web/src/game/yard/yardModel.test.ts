@@ -122,6 +122,22 @@ describe("whose yard it is", () => {
   });
 });
 
+describe("the outpost's cell height (#262)", () => {
+  it("is 0 where the load sends none, the main yard always", () => {
+    expect(yard.cellHeight).toBe(0);
+    expect(yardWith({}).cellHeight).toBe(0);
+  });
+
+  it("carries the load's cellheight, for the planner's rings and the info panel", () => {
+    expect(yardWith({}, { type: "outpost", cellheight: 250 }).cellHeight).toBe(250);
+    expect(yardWith({}, { type: "outpost", cellheight: 0 }).cellHeight).toBe(0);
+  });
+
+  it("ignores a value that is not a number", () => {
+    expect(yardWith({}, { type: "outpost", cellheight: "250" as unknown as number }).cellHeight).toBe(0);
+  });
+});
+
 describe("levels and countdowns", () => {
   it("puts a building with a running build countdown at level 0", () => {
     const built = yardWith({ "1": { X: 0, Y: 0, t: 14, id: 1, l: 3, cB: 600 } });

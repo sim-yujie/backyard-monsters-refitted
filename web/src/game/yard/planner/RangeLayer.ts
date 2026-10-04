@@ -1,5 +1,6 @@
 import { Container, Graphics } from "pixi.js";
-import { buildingClass, flyerMode, towerStats } from "@/game/combat/rules";
+import { buildingClass, flyerMode, towerRange as combatTowerRange } from "@/game/combat/rules";
+import type { YardKind } from "../buildingCostData";
 import type { Point } from "../YardGrid";
 import { YardView } from "../YardRenderer";
 
@@ -78,10 +79,22 @@ export const TOWER_MIN_RANGE: Readonly<Record<number, number>> = {};
  * building that never shoots at an attacker would be a lie. The Monster Bunker
  * (22) is kept — it is a `tower` and its range is the ground it answers for —
  * even though it fires monsters rather than shots.
+ *
+ * `range` is read from the shared rules' own `towerRange` (issue #262) —
+ * the same function the engine fires at — rather than a table lookup, so an
+ * outpost's disc is the outpost table's figure stretched by `height` from a
+ * Map Room 2 cell of 100 or more, exactly as combat does
+ * (`client/scripts/BTOWER.as:80-85`). `kind` and `height` default to the
+ * main yard's, which `height` never changes.
  */
-export const towerRange = (type: number, level: number): TowerRange | null => {
+export const towerRange = (
+  type: number,
+  level: number,
+  kind: YardKind = "main",
+  height = 0,
+): TowerRange | null => {
   if (buildingClass(type) !== "tower") return null;
-  const range = towerStats(type, level)?.range;
+  const range = combatTowerRange(type, level, kind, height);
   if (range === undefined || range <= 0) return null;
 
   const mode = flyerMode(type);
@@ -240,6 +253,10 @@ export interface RangeDrawOptions {
   readonly view: YardView;
   readonly land: boolean;
   readonly air: boolean;
+  /** Which props table the yard reads, for the outpost height stretch (#262). */
+  readonly kind?: YardKind;
+  /** The outpost's map cell height; ignored on the main yard. */
+  readonly height?: number;
 }
 
 /** One disc, resolved to world pixels. */
@@ -275,7 +292,7 @@ export class RangeLayer {
     const land: Disc[] = [];
     const air: Disc[] = [];
     for (const node of options.nodes) {
-      const reach = towerRange(node.type, node.level);
+      const reach = towerRange(node.type, node.level, options.kind, options.height);
       if (!reach) continue;
       if (!(reach.land && options.land) && !(reach.air && options.air)) continue;
 

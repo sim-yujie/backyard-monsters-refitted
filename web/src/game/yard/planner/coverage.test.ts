@@ -72,6 +72,16 @@ describe("coverageTowers", () => {
     expect(aerial).toMatchObject({ land: false, air: true });
     expect(sniper).toMatchObject({ land: true, air: true });
   });
+
+  it("reads the outpost table and its cell height, not the main yard's (#262)", () => {
+    const LASER = 23;
+    const [main] = coverageTowers([node({ id: 1, type: LASER, level: 6 })]);
+    expect(main?.range).toBe(towerRange(LASER, 6)!.range);
+
+    const [outpost] = coverageTowers([node({ id: 1, type: LASER, level: 6 })], "outpost", 250);
+    expect(outpost?.range).toBe(towerRange(LASER, 6, "outpost", 250)!.range);
+    expect(outpost?.range).not.toBe(main?.range);
+  });
 });
 
 describe("computeCoverage", () => {

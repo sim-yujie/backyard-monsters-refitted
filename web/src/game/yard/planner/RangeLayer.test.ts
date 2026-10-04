@@ -89,6 +89,23 @@ describe("towerRange", () => {
     for (const type of [17, 1, 24, 7, 134, 9999]) expect(towerRange(type, 1)).toBeNull();
   });
 
+  it("reads the outpost table, not the main one, on an outpost (#262)", () => {
+    // The Laser Tower's level 6: the main table's 175, the outpost table's 172.
+    expect(towerRange(23, 6)?.range).toBe(175);
+    expect(towerRange(23, 6, "main")?.range).toBe(175);
+    expect(towerRange(23, 6, "outpost")?.range).toBe(172);
+  });
+
+  it("stretches an outpost's range by its cell's height, as the engine does (#262)", () => {
+    // `int(height * range / 125)`: a height of 250 is twice the average, so
+    // twice the table's range (`client/scripts/BTOWER.as:80-85`).
+    expect(towerRange(23, 6, "outpost", 250)?.range).toBe(344);
+    // Below the terrain floor (100), the table range is unchanged.
+    expect(towerRange(23, 6, "outpost", 99)?.range).toBe(172);
+    // The main yard never reads the height, however high it is handed one.
+    expect(towerRange(23, 6, "main", 250)?.range).toBe(175);
+  });
+
   it("draws no dead zone, because no tower has one", () => {
     // `YARD_PROPS.as` carries no minimum range and `targetInRange` tests one
     // bound. If a row ever appears in the table, the ring is already drawn —

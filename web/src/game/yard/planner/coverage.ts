@@ -1,4 +1,5 @@
 import { BUNKER_TYPE } from "@/game/monsters/bunker";
+import type { YardKind } from "../buildingCostData";
 import type { PlanNode, PlotBounds } from "./placement";
 import { towerRange } from "./RangeLayer";
 
@@ -75,12 +76,19 @@ export interface Coverage {
  * `towerRange` decides what is a defence and which layers it reaches, as the
  * range discs do; the planned level where there is one, else the level the
  * yard has. A building still at level 0 is a foundation and fires nothing.
+ * `kind` and `height` are the yard's own (issue #262): an outpost's coverage
+ * is sampled at the range its cell's height actually gives it, the same
+ * figure the rings and the engine use.
  */
-export const coverageTowers = (nodes: Iterable<PlanNode>): CoverageTower[] => {
+export const coverageTowers = (
+  nodes: Iterable<PlanNode>,
+  kind: YardKind = "main",
+  height = 0,
+): CoverageTower[] => {
   const towers: CoverageTower[] = [];
   for (const node of nodes) {
     if (node.fixed || node.stored || node.type === BUNKER_TYPE || node.level <= 0) continue;
-    const reach = towerRange(node.type, node.plan?.level ?? node.level);
+    const reach = towerRange(node.type, node.plan?.level ?? node.level, kind, height);
     if (!reach) continue;
     towers.push({
       x: node.x + node.width / 2,

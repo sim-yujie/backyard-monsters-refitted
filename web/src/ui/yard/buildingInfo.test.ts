@@ -196,4 +196,26 @@ describe("on an outpost (#191)", () => {
     expect(label(rows, "Holds")).toBeUndefined();
     expect(row({ t: 1, l: 3 }, "Holds")).toBeDefined();
   });
+
+  it("reads the outpost table's range, not the main yard's (#262)", () => {
+    // The Laser Tower's level 6: the main table's 175, the outpost table's 172.
+    expect(label(onOutpost({ t: 23, l: 6 }), "Range")?.now).toEqual({ text: "172" });
+    expect(row({ t: 23, l: 6 }, "Range")?.now).toEqual({ text: "175" });
+  });
+
+  it("stretches the Range row by the outpost's cell height, as the engine does (#262)", () => {
+    const stretched = buildingInfo(
+      readYard({
+        error: 0,
+        currenttime: 1_000,
+        savetime: 1_000,
+        type: "outpost",
+        buildingdata: { "1": { id: 1, X: 0, Y: 0, t: 23, l: 6 } },
+      } as unknown as BaseLoadResponse).buildings[0]!,
+      "outpost",
+      250,
+    ).rows;
+    // int(250 * 172 / 125) = 344: twice the table's 172 at the average height.
+    expect(stretched.find((entry) => entry.label === "Range")?.now).toEqual({ text: "344" });
+  });
 });

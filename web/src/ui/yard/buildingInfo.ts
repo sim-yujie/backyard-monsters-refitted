@@ -1,4 +1,4 @@
-import { BOMBS, capacity, TOWER_STATS, towerStats } from "@/game/combat/rules";
+import { BOMBS, capacity, TOWER_STATS, towerRange, towerStats } from "@/game/combat/rules";
 import { outpostRange } from "@/game/maproom/rules/range";
 import { BUILDING_COST_ROWS } from "@/game/yard/buildingCostData";
 import { maxLevel, quantityOf, rowOf, type YardKind } from "@/game/yard/buildingCosts";
@@ -21,9 +21,11 @@ import { resourceKeyOf, type ResourceKey } from "@/ui/resourceIcon";
  * its level caps, its health, tower and capacity ladders (`towerStats`,
  * `capacity` with `kind` "outpost"), and a Flinger reach of one cell a level
  * (`outpostRange`, `BUILDING5.as:16-18`). An outpost's harvesters bank as
- * they make (autobank), so they show no buffer. Two figures stay the
- * table's: a tower's range and a harvester's rate before the outpost cell's
- * height stretches or shrinks them, since the yard does not know the height.
+ * they make (autobank), so they show no buffer. A tower's Range row is read
+ * through the shared rules' `towerRange` rather than off the table directly
+ * (issue #262), so it is also stretched or shrunk by the outpost's own map
+ * cell height, exactly as the engine's range is; a harvester's rate stays
+ * the table's, since the terrain never touches it.
  *
  * A row carries its value now and, where the next level changes it, its value
  * after the upgrade, so the panel can draw "190 → 200". Nothing here touches
@@ -115,8 +117,16 @@ const nextLevelOf = (building: YardBuilding, kind: YardKind = "main"): number | 
   return level < maxLevel(building.type, kind) ? level + 1 : null;
 };
 
-/** Range and damage per second, now and next. */
-const towerRows = (building: YardBuilding, kind: YardKind): InfoRow[] => {
+/**
+ * Range and damage per second, now and next.
+ *
+ * Range is read through the shared rules' `towerRange` rather than off the
+ * stats block directly (issue #262): on an outpost it is the table's figure
+ * stretched by the cell's `height`, the same reading the engine fires at and
+ * the planner's rings now draw. Damage is the table's own — the terrain
+ * never touches it (`client/scripts/BTOWER.as:80-85`).
+ */
+const towerRows = (building: YardBuilding, kind: YardKind, height: number): InfoRow[] => {
   if (!TOWER_STATS[building.type]) return [];
   const level = shownLevel(building);
   const nextLevel = nextLevelOf(building, kind);
@@ -125,13 +135,15 @@ const towerRows = (building: YardBuilding, kind: YardKind): InfoRow[] => {
   if (!now) return [];
 
   const rows: InfoRow[] = [];
-  if (now.range !== undefined) {
+  const nowRange = towerRange(building.type, level, kind, height);
+  const nextRange = nextLevel !== null ? towerRange(building.type, nextLevel, kind, height) : undefined;
+  if (nowRange !== undefined) {
     rows.push(
       row(
         "Range",
-        text(now.range.toLocaleString("en-US")),
-        next?.range !== undefined ? text(next.range.toLocaleString("en-US")) : null,
-        [now.range, next?.range],
+        text(nowRange.toLocaleString("en-US")),
+        nextRange !== undefined ? text(nextRange.toLocaleString("en-US")) : null,
+        [nowRange, nextRange],
       ),
     );
   }
@@ -282,8 +294,17 @@ const healthRow = (building: YardBuilding): InfoRow | null => {
   return { label: "Health", now: text(`${current} / ${max}`) };
 };
 
-/** Every info row for one building, read from its yard's table (`kind`). */
-export const buildingInfo = (building: YardBuilding, kind: YardKind = "main"): BuildingInfo => {
+/**
+ * Every info row for one building, read from its yard's table (`kind`).
+ *
+ * `height` is the outpost's map cell height (issue #262), 0 on the main
+ * yard: the one thing a tower's Range row needs that nothing else here does.
+ */
+export const buildingInfo = (
+  building: YardBuilding,
+  kind: YardKind = "main",
+  height = 0,
+): BuildingInfo => {
   const rows: InfoRow[] = [];
   const health = healthRow(building);
   if (health) rows.push(health);
@@ -296,7 +317,7 @@ export const buildingInfo = (building: YardBuilding, kind: YardKind = "main"): B
       rows.push(...catapultRows(building, kind));
       break;
     default: {
-      rows.push(...towerRows(building, kind));
+      rows.push(...towerRows(building, kind, height));
       if (TOWER_STATS[building.type]) {
         const room = capacityRow(building, "Holds monsters", kind);
         if (room) rows.push(room);

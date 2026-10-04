@@ -569,7 +569,11 @@ export class BuildingPanel {
   };
 
   private renderInfo(building: YardBuilding): void {
-    const { rows, list } = buildingInfo(building, this.yard?.store.kind ?? "main");
+    const { rows, list } = buildingInfo(
+      building,
+      this.yard?.store.kind ?? "main",
+      this.yard?.store.yard.cellHeight ?? 0,
+    );
     this.info.replaceChildren();
     for (const row of rows) {
       const term = document.createElement("dt");
