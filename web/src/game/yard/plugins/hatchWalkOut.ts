@@ -169,6 +169,9 @@ export class HatchWalkOuts {
   }
 }
 
+/** DEV only: `__walkOut(hatchery, monster, count)` walks monsters home with no hatch behind it. */
+type WalkOutHook = (hatchery: number, monster?: string, count?: number) => boolean;
+
 export const hatchWalkOutPlugin: YardPlugin = (mounts: YardMounts) => {
   const walks = new HatchWalkOuts({
     store: mounts.store,
@@ -176,7 +179,22 @@ export const hatchWalkOutPlugin: YardPlugin = (mounts: YardMounts) => {
     quiet: () => mounts.scene.plannerOpen(),
     reducedMotion: prefersReducedMotion(),
   });
-  return () => walks.destroy();
+  let hooked = false;
+  if (import.meta.env.DEV) {
+    // Drawing only, for looking at a walk (#272): no save changes and the pens are left alone.
+    const hook: WalkOutHook = (hatchery, monster = "C1", count = 3) => {
+      const walk: MonsterWalkIn | null = walkOutOfHatchery(mounts.renderer, mounts.store.yard, hatchery, monster, count, () =>
+        queueMicrotask(() => walk?.destroy()),
+      );
+      return walk !== null;
+    };
+    (window as unknown as { __walkOut?: WalkOutHook }).__walkOut = hook;
+    hooked = true;
+  }
+  return () => {
+    walks.destroy();
+    if (hooked) delete (window as unknown as { __walkOut?: WalkOutHook }).__walkOut;
+  };
 };
 
 YARD_PLUGINS.push(hatchWalkOutPlugin);
