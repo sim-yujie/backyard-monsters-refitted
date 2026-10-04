@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, spyOn, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { YARD_ATTACKED } from "../maproom/v2/outpostNotices.js";
@@ -134,13 +134,42 @@ describe("nothing outside a Map Room 1 main yard", () => {
 
 describe("a bot defender", () => {
   test("attacked by a real player books its repair, and gets no notice", async () => {
-    await afterYardDefended(request, defence({ yard: { saveuserid: BOT } }));
+    // Revenge is a random roll (issue #269); hold it off so this case always
+    // sees the one repair job, whatever the environment's BOTS_REVENGE is.
+    const before = process.env.BOTS_REVENGE;
+    try {
+      process.env.BOTS_REVENGE = "off";
+      await afterYardDefended(request, defence({ yard: { saveuserid: BOT } }));
+    } finally {
+      if (before === undefined) delete process.env.BOTS_REVENGE;
+      else process.env.BOTS_REVENGE = before;
+    }
     expect(messages).toEqual([]);
     expect(jobs).toEqual([expect.objectContaining({ params: [BOT, expect.any(Date)] })]);
     expect(String(jobs[0]!.sql)).toContain("'repair'");
     const due = (jobs[0]!.params as [number, Date])[1].getTime();
     expect(due).toBeGreaterThanOrEqual((NOW + 3600) * 1000);
     expect(due).toBeLessThan((NOW + 4 * 3600) * 1000);
+  });
+
+  test("attacked by a real player books both its repair and a revenge, when the roll allows it", async () => {
+    const before = process.env.BOTS_REVENGE;
+    const roll = spyOn(Math, "random").mockReturnValue(0);
+    try {
+      process.env.BOTS_REVENGE = "on";
+      await afterYardDefended(request, defence({ yard: { saveuserid: BOT } }));
+    } finally {
+      roll.mockRestore();
+      if (before === undefined) delete process.env.BOTS_REVENGE;
+      else process.env.BOTS_REVENGE = before;
+    }
+    expect(messages).toEqual([]);
+    expect(jobs).toEqual([
+      expect.objectContaining({ params: [BOT, expect.any(Date)] }),
+      expect.objectContaining({ params: [BOT, OTHER_PLAYER, expect.any(Date), expect.any(Date)] }),
+    ]);
+    expect(String(jobs[0]!.sql)).toContain("'repair'");
+    expect(String(jobs[1]!.sql)).toContain("'revenge'");
   });
 
   test("attacked by another bot books nothing", async () => {
