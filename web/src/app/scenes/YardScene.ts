@@ -26,6 +26,7 @@ import {
 } from "@/game/yard/planner/access";
 import { buildOffer, buildsAtOnce, categoryOf } from "@/game/yard/buildCatalogue";
 import { BuildPlacement } from "@/game/yard/BuildPlacement";
+import { fixedWorkSource } from "@/game/yard/buildingWork";
 import { startBank, type AnswerBank } from "@/game/yard/bankShow";
 import { harvesterNow, predictBank, type BankedByBuilding, type HarvestKey } from "@/game/yard/harvest";
 import { MushroomPicker, type MushroomPickView } from "@/game/yard/mushroomPick";
@@ -617,6 +618,11 @@ export class YardScene implements Scene {
       // Bars over running jobs are the own yard's alone (#139), on the
       // store's server-corrected clock.
       this.renderer.setJobClock(store ? () => store.now() : null);
+      // Harvesters, hatcheries and the rest animate only while working
+      // (#255): read off the store's save on its clock, or the visit's load.
+      this.renderer.setWork(
+        store ? { save: () => store.save, now: () => store.now() } : fixedWorkSource(response),
+      );
       this.renderer.show(yard);
       // What lives on the yard (#158). A visit's load carries the defender's
       // monsters, champion and workers, which Flash drew there too (#159).

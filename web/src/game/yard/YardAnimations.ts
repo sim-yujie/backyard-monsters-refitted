@@ -38,7 +38,13 @@ export interface AnimLayer {
  * cell, which is what the Flash client's base `TickFast` does — nothing
  * (`client/scripts/BFOUNDATION.as:1486-1487`).
  */
-const HOLD: AnimPolicy = { ticksPerFrame: null, randomStart: true, pauseWhileBusy: false };
+const HOLD: AnimPolicy = {
+  ticksPerFrame: null,
+  randomStart: true,
+  pauseWhileBusy: false,
+  work: null,
+  restOnIdle: false,
+};
 
 /**
  * The layers for one building, as sprites ready to go into the scene.
@@ -145,5 +151,17 @@ export const advanceAnimLayers = (layers: readonly AnimLayer[], seconds: number)
     const frames = layer.sprite.totalFrames;
     layer.progress = (layer.progress + (seconds * YARD_TICK_HZ) / ticksPerFrame) % frames;
     layer.sprite.currentFrame = Math.floor(layer.progress);
+  }
+};
+
+/**
+ * Puts every layer back on cell 0, for a hatchery whose production has just
+ * stopped (`BUILDING13.as:44-47`). Called every frame it stays stopped, which
+ * costs a compare: Pixi skips a `currentFrame` that has not changed.
+ */
+export const restAnimLayers = (layers: readonly AnimLayer[]): void => {
+  for (const layer of layers) {
+    layer.progress = 0;
+    if (layer.resolved) layer.sprite.currentFrame = 0;
   }
 };

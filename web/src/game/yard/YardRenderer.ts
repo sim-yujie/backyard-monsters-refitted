@@ -1,5 +1,6 @@
 import { Container, Graphics, Sprite, type Renderer } from "pixi.js";
 import { YardBuildings } from "./YardBuildings";
+import { NO_WORK, readWork, type WorkSource } from "./buildingWork";
 import { flightEnds, flightTotals, planFlights, TOWN_HALL_TYPE, type BankSource } from "./collectFx";
 import { CollectFxLayer, type LandListener } from "./CollectFxLayer";
 import type { HarvestKey } from "./harvest";
@@ -98,6 +99,8 @@ export class YardRenderer {
 
   private atlas: YardArtAtlas | null = null;
   private yard: Yard | null = null;
+  /** Which buildings are working and the clock to read it on (#255); see `setWork`. */
+  private work: WorkSource | null = null;
   private readonly byId = new Map<number, YardBuilding>();
   /**
    * Buildings the planner has taken off the yard and into its drawer.
@@ -178,7 +181,7 @@ export class YardRenderer {
     // The creatures outlive a redraw: out of the containers the yard is about
     // to empty, and back in once it has refilled them.
     this.life.detach();
-    this.buildings.show(yard, atlas);
+    this.buildings.show(yard, atlas, this.work ? readWork(this.work.save()) : undefined);
     this.mountLife();
     this.jobBars.show(yard);
     this.buildings.hideBadges(this.jobBars.barIds);
@@ -205,7 +208,7 @@ export class YardRenderer {
     // The blueprint has no culling and no animation, so a hidden isometric
     // yard costs nothing per frame.
     if (this.currentView === YardView.ISO) {
-      this.buildings.draw(visible, deltaSeconds);
+      this.buildings.draw(visible, deltaSeconds, this.work?.now() ?? 0);
       this.life.update(visible, deltaSeconds);
       this.jobBars.update();
       this.shakeMushrooms();
@@ -347,6 +350,24 @@ export class YardRenderer {
     this.jobBars.setClock(clock);
     // A bar stands in for the countdown badge (#230); with no clock the badges come back.
     this.buildings.hideBadges(this.jobBars.barIds);
+  }
+
+  /**
+   * Where the yard's work is read from (#255): the save being drawn, whose
+   * harvesters, Locker, hatcheries, Academy and Lab animate only while they
+   * work, and the server clock their work ends on. Read again on every
+   * `show`, so the yard scene passes its store once and every store change
+   * re-reads it; a visit or an attack passes a `fixedWorkSource`. With none,
+   * those buildings hold still.
+   */
+  setWork(source: WorkSource | null): void {
+    this.work = source;
+    if (this.yard) this.buildings.setWork(source ? readWork(source.save()) : NO_WORK);
+  }
+
+  /** Whether a building's animation is running now, on the work clock (#255). */
+  isAnimating(id: number): boolean {
+    return this.buildings.isAnimating(id, this.work?.now() ?? 0);
   }
 
   /** The ids of the buildings showing a progress bar, in drawing order. */

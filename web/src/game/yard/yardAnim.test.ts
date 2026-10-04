@@ -7,8 +7,8 @@ describe("the animation rate table", () => {
     expect(YARD_TICK_HZ).toBe(40);
   });
 
-  it("runs the resource producers at one frame every third tick", () => {
-    // BUILDING1.as:31 — `this._frameNumber % 3 == 0` in a yard being looked at.
+  it("runs the resource producers and the Monster Locker at one frame every third tick", () => {
+    // BUILDING1.as:31, BUILDING8.as:33 — `this._frameNumber % 3 == 0` in a yard being looked at.
     for (const type of [1, 2, 3, 4, 8]) {
       expect(animPolicy(type)?.ticksPerFrame, `type ${type}`).toBe(3);
     }

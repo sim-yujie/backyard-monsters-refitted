@@ -22,7 +22,20 @@
  * | ----- | --------- | --- |
  * | 1     | 40 fps    | Outpost Defender (`OutpostDefender.as:34-40`) |
  * | 2     | 20 fps    | every decoration (`BDECORATION.as:35-41`), the hatchery (`BUILDING13.as:33-41`), the taunt totem (`BUILDING52.as:35-40`) |
- * | 3     | 13.3 fps  | the resource producers (`BUILDING1.as:28-38`), the Loot Locker (`BUILDING26.as:35-44`), the Monster Lab (`MONSTERLAB.as:208-217`) |
+ * | 3     | 13.3 fps  | the resource producers (`BUILDING1.as:28-38`), the Monster Locker (`BUILDING8.as:30-41`), the Monster Academy (`BUILDING26.as:35-44`), the Monster Lab (`MONSTERLAB.as:208-217`) |
+ *
+ * ## Only while working (#255)
+ *
+ * Five of the looping classes do not loop for ever: each `TickFast` also asks
+ * whether the building has anything to do, and holds its strip when it has
+ * not. A harvester runs while `_producing`, which `StartProduction` clears the
+ * moment its buffer is full (`BUILDING1.as:30`, `BRESOURCE.as:372-380`); the
+ * Monster Locker while a monster is unlocking (`BUILDING8.as:32`); the
+ * hatchery while it has a monster in production at stage 1, dropping back to
+ * cell 0 when it stops (`BUILDING13.as:34-47`); the Academy while it is
+ * training (`BUILDING26.as:37`) and the Lab while it is researching
+ * (`MONSTERLAB.as:210`). That is `work` below; whether a given building is
+ * working, and until when, is `buildingWork.ts`'s business.
  *
  * ## The ones that do not run
  *
@@ -68,7 +81,7 @@ export interface AnimPolicy {
   /**
    * Whether the strip holds still while a countdown is running on the building.
    *
-   * The producers, the silo, the hatchery, the Loot Locker and the Monster Lab
+   * The producers, the silo, the hatchery, the Academy and the Monster Lab
    * all guard their `AnimFrame` with `_countdownBuild.Get() + ... == 0`
    * (`BUILDING1.as:30`, `BUILDING6.as:51`, `BUILDING13.as:34`,
    * `BUILDING26.as:37`, `MONSTERLAB.as:210`), so a building mid-build or
@@ -76,38 +89,76 @@ export interface AnimPolicy {
    * the taunt totem have no such guard and keep going.
    */
   readonly pauseWhileBusy: boolean;
+  /**
+   * The job the strip runs for, or null when it runs regardless (#255).
+   *
+   * A building with a `work` loops only while `buildingWork.ts` says it is
+   * doing that job, and otherwise holds its cell — or, for the hatchery,
+   * cell 0 (`restOnIdle`).
+   */
+  readonly work: WorkKind | null;
+  /** Whether the strip drops back to cell 0 when the work stops (`BUILDING13.as:44-47`). */
+  readonly restOnIdle: boolean;
 }
 
-const STATIC: AnimPolicy = { ticksPerFrame: null, randomStart: true, pauseWhileBusy: false };
+/** What a working building's strip runs for; see `buildingWork.ts`. */
+export const WorkKind = {
+  /** A harvester filling its buffer. */
+  HARVEST: "harvest",
+  /** The Monster Locker unlocking a monster. */
+  UNLOCK: "unlock",
+  /** The hatchery growing a monster. */
+  HATCH: "hatch",
+  /** The Monster Academy training a monster. */
+  TRAIN: "train",
+  /** The Monster Lab researching a power-up. */
+  RESEARCH: "research",
+} as const;
+export type WorkKind = (typeof WorkKind)[keyof typeof WorkKind];
+
+const STATIC: AnimPolicy = {
+  ticksPerFrame: null,
+  randomStart: true,
+  pauseWhileBusy: false,
+  work: null,
+  restOnIdle: false,
+};
 const STATIC_FIXED: AnimPolicy = { ...STATIC, randomStart: false };
 
 const every = (ticksPerFrame: number, randomStart = true): AnimPolicy => ({
+  ...STATIC,
   ticksPerFrame,
   randomStart,
-  pauseWhileBusy: false,
 });
 
 /** The same rate, but held while the building is mid-build or mid-upgrade. */
 const whenIdle = (policy: AnimPolicy): AnimPolicy => ({ ...policy, pauseWhileBusy: true });
 
+/** The same rate, but only while the building is doing `work`. */
+const whileWorking = (work: WorkKind, policy: AnimPolicy): AnimPolicy => ({ ...policy, work });
+
 /** Types 28 to 50 plus 53, 54, 71 and 105 are all plain `BDECORATION`. */
 const DECORATIONS = [...Array.from({ length: 23 }, (_, i) => 28 + i), 53, 71, 105];
 
 const POLICIES = new Map<number, AnimPolicy>([
-  // Resource producers, all `BRESOURCE` subclasses sharing one `TickFast`.
-  // Type 4 turns off the random start (`BUILDING4.as:28`).
-  [1, whenIdle(every(3))],
-  [2, whenIdle(every(3))],
-  [3, whenIdle(every(3))],
-  [4, whenIdle(every(3, false))],
-  [8, whenIdle(every(3))],
+  // Resource producers, all `BRESOURCE` subclasses with the same `TickFast`,
+  // running only while `_producing`. Type 4 turns off the random start
+  // (`BUILDING4.as:28`).
+  [1, whileWorking(WorkKind.HARVEST, whenIdle(every(3)))],
+  [2, whileWorking(WorkKind.HARVEST, whenIdle(every(3)))],
+  [3, whileWorking(WorkKind.HARVEST, whenIdle(every(3)))],
+  [4, whileWorking(WorkKind.HARVEST, whenIdle(every(3, false)))],
+  // Monster Locker: only while `CREATURELOCKER._unlocking` (`BUILDING8.as:32`).
+  [8, whileWorking(WorkKind.UNLOCK, whenIdle(every(3)))],
   // Storage silo: the cell is how full it is, not a frame (`BUILDING6.as:51-56`),
   // and it is not even re-read while the build countdown runs (`:51`).
   [6, whenIdle(STATIC)],
   // Juicer: runs only while blending, and starts on cell 0
   // (`BUILDING9.as:206`, and `BFOUNDATION.as:1141` names type 9 explicitly).
   [9, STATIC_FIXED],
-  [13, whenIdle(every(2, false))],
+  // Hatchery: only with a monster in production, back to cell 0 when not
+  // (`BUILDING13.as:34-47`).
+  [13, { ...whileWorking(WorkKind.HATCH, whenIdle(every(2, false))), restOnIdle: true }],
   // Monster Baiter: `BFOUNDATION.as:1141` names type 19.
   [19, STATIC_FIXED],
   // Towers. The cell is a facing, set only when something is being shot at.
@@ -121,13 +172,15 @@ const POLICIES = new Map<number, AnimPolicy>([
   [132, STATIC],
   [136, STATIC_FIXED],
   [137, STATIC_FIXED],
-  [26, whenIdle(every(3))],
+  // Monster Academy: only while `_upgrading`, a training (`BUILDING26.as:37`).
+  [26, whileWorking(WorkKind.TRAIN, whenIdle(every(3)))],
   // Enemy bank: only spews when raided (`BUILDING27.as:60-80`).
   [27, STATIC],
   [52, every(2)],
   // `BFOUNDATION.as:1141` names type 54.
   [54, every(2, false)],
-  [116, whenIdle(every(3))],
+  // Monster Lab: only while `_upgrading`, a research (`MONSTERLAB.as:210`).
+  [116, whileWorking(WorkKind.RESEARCH, whenIdle(every(3)))],
   // Siege factory and lab: only while a weapon is unlocking.
   [133, STATIC_FIXED],
   [134, STATIC_FIXED],

@@ -5,6 +5,8 @@ import { Texture, type ColorMatrixFilter } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import type { YardArtAtlas } from "./yardAtlas";
 import { HIGHLIGHT_MATRIX, YardBuildings } from "./YardBuildings";
+import { readWork } from "./buildingWork";
+import { rowOf } from "./buildingCosts";
 import { readYard } from "./yardModel";
 
 /**
@@ -167,6 +169,51 @@ describe("YardBuildings.setHighlight", () => {
     // An unknown id is ignored.
     buildings.setHighlight(99, true);
     expect(buildings.isHighlighted(99)).toBe(false);
+    buildings.destroy();
+  });
+});
+
+describe("YardBuildings.isAnimating, only while working (#255)", () => {
+  const capacity = rowOf(1)![6]!.capacity[0]!;
+  /** A full Twig Snapper, one with a cycle to go, a fountain and a sniper tower. */
+  const workResponse = (): BaseLoadResponse =>
+    ({
+      ...yardResponse(),
+      savetime: 1_700_000_000,
+      buildingdata: {
+        "1": { id: 1, t: 1, l: 1, X: 0, Y: 0, st: capacity },
+        "2": { id: 2, t: 1, l: 1, X: 100, Y: 0, st: 0, cP: 30 },
+        "3": { id: 3, t: 105, l: 1, X: 200, Y: 0 },
+        "4": { id: 4, t: 21, l: 1, X: 300, Y: 0 },
+      },
+    }) as unknown as BaseLoadResponse;
+
+  it("holds a full harvester, runs a filling one until it fills, and leaves the rest as they were", () => {
+    const response = workResponse();
+    const buildings = new YardBuildings();
+    buildings.show(readYard(response), fakeAtlas(), readWork(response));
+    const now = 1_700_000_000;
+    expect(buildings.isAnimating(1, now)).toBe(false);
+    expect(buildings.isAnimating(2, now)).toBe(true);
+    expect(buildings.isAnimating(3, now)).toBe(true);
+    // A tower's strip is a facing, never a loop.
+    expect(buildings.isAnimating(4, now)).toBe(false);
+    // The buffer fills partway through, and the strip stops with it.
+    const full = readWork(response).get(2)!;
+    expect(buildings.isAnimating(2, full - 1)).toBe(true);
+    expect(buildings.isAnimating(2, full)).toBe(false);
+    buildings.destroy();
+  });
+
+  it("holds every working building when nobody says what is working, until told", () => {
+    const response = workResponse();
+    const buildings = new YardBuildings();
+    buildings.show(readYard(response), fakeAtlas());
+    const now = 1_700_000_000;
+    expect(buildings.isAnimating(2, now)).toBe(false);
+    expect(buildings.isAnimating(3, now)).toBe(true);
+    buildings.setWork(readWork(response));
+    expect(buildings.isAnimating(2, now)).toBe(true);
     buildings.destroy();
   });
 });

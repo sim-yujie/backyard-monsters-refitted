@@ -13,9 +13,11 @@ import {
   advanceAnimLayers,
   buildAnimLayers,
   resolveAnimLayers,
+  restAnimLayers,
   setLayerFrame,
   type AnimLayer,
 } from "./YardAnimations";
+import { NO_WORK, workUntil, type WorkMap } from "./buildingWork";
 import { YardTextures } from "./YardTextures";
 import type { YardArtAtlas } from "./yardAtlas";
 import type { Rect } from "./YardGrid";
@@ -44,8 +46,9 @@ import { artFor, type Yard, type YardBuilding } from "./yardModel";
  * a turret's gun, a mill's wheel. They go into the same container as the tops,
  * immediately after the building they belong to, which puts them above it and
  * below the next building along. They are advanced only while on screen, so a
- * yard scrolled off its towers costs nothing for them. `YardAnimations.ts` owns
- * the rest.
+ * yard scrolled off its towers costs nothing for them, and only while the
+ * building is working, so a full harvester or an empty hatchery stands still
+ * (#255). `YardAnimations.ts` owns the rest.
  */
 
 /** Culling margin in world pixels: art reaches well past its footprint box. */
@@ -128,6 +131,14 @@ interface BuildingView {
   swapShadowResolved: boolean;
   /** True once a swap has taken the animation layers off: a ruin does not turn. */
   animsSuppressed: boolean;
+  /**
+   * The server-clock second this building's strips stop: never for one that
+   * runs regardless, or the end of its work — a harvester filling, a hatchery
+   * growing (#255, `buildingWork.ts`). Read every frame against the clock.
+   */
+  workUntil: number;
+  /** Whether the strips go back to cell 0 once the work stops (the hatchery). */
+  readonly restOnIdle: boolean;
 }
 
 /**
@@ -203,8 +214,12 @@ export class YardBuildings {
     return this.views.reduce((count, view) => count + (view.resolved ? 0 : 1), 0);
   }
 
-  /** Builds the sprites for a yard, replacing whatever was there. */
-  show(yard: Yard, atlas: YardArtAtlas): void {
+  /**
+   * Builds the sprites for a yard, replacing whatever was there. `work` says
+   * which buildings are working (`buildingWork.ts`); with none, every strip
+   * that runs only while working holds still.
+   */
+  show(yard: Yard, atlas: YardArtAtlas, work: WorkMap = NO_WORK): void {
     this.clear();
 
     let labels = 0;
@@ -263,12 +278,24 @@ export class YardBuildings {
         swapResolved: true,
         swapShadowResolved: true,
         animsSuppressed: false,
+        workUntil: workUntil(building.type, building.id, work),
+        restOnIdle: anims[0]?.policy.restOnIdle === true,
       };
       this.views.push(view);
       this.byId.set(building.id, view);
     }
 
     this.pending = true;
+  }
+
+  /**
+   * Says again which buildings are working, without rebuilding anything: for
+   * a source handed over after the yard was shown.
+   */
+  setWork(work: WorkMap): void {
+    for (const view of this.views) {
+      view.workUntil = workUntil(view.building.type, view.building.id, work);
+    }
   }
 
   /**
@@ -279,8 +306,12 @@ export class YardBuildings {
    * nothing is created or destroyed while panning. An animation off screen is
    * not advanced at all — it picks up wherever it was left, which nobody can
    * see, and a yard looking at its grass pays nothing for its towers.
+   *
+   * `now` is the server clock the work ends are on (`setWork`): a building
+   * whose work has ended holds its cell, so a harvester that fills between
+   * two store changes stops on the frame it fills.
    */
-  draw(visible: Rect, deltaSeconds = 0): void {
+  draw(visible: Rect, deltaSeconds = 0, now = 0): void {
     if (this.pending) {
       this.pending = false;
       this.resolveTextures();
@@ -312,7 +343,9 @@ export class YardBuildings {
 
       if (view.anims.length === 0) continue;
       for (const layer of view.anims) layer.sprite.visible = animsOn && layer.resolved;
-      if (animsOn && deltaSeconds > 0) advanceAnimLayers(view.anims, deltaSeconds);
+      if (!animsOn || deltaSeconds <= 0) continue;
+      if (now < view.workUntil) advanceAnimLayers(view.anims, deltaSeconds);
+      else if (view.restOnIdle) restAnimLayers(view.anims);
     }
   }
 
@@ -478,6 +511,13 @@ export class YardBuildings {
   animFrameOf(id: number, layerIndex: number): number | null {
     const layer = this.byId.get(id)?.anims[layerIndex];
     return layer ? Math.floor(layer.progress) : null;
+  }
+
+  /** Whether a building's strips are running at `now` (server clock). */
+  isAnimating(id: number, now: number): boolean {
+    const view = this.byId.get(id);
+    if (!view || view.anims.length === 0 || view.animsSuppressed) return false;
+    return view.anims.some((layer) => layer.policy.ticksPerFrame !== null) && now < view.workUntil;
   }
 
   /** How many animation layers a building has right now. */

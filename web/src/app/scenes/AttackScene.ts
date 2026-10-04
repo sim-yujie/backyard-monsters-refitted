@@ -16,6 +16,7 @@ import { baiterTarget, consumeBaiterRun, setBaiterRun, type BaiterRun } from "@/
 import { consumeWatchRun, setWatchRun, watchTarget, type WatchRun } from "@/game/autoAttack/watchRun";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { Camera } from "@/game/Camera";
+import { fixedWorkSource } from "@/game/yard/buildingWork";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
 import { fellPens, yardLifeOf, type YardLife } from "@/game/yard/yardLifeModel";
 import { YardRenderer } from "@/game/yard/YardRenderer";
@@ -365,6 +366,9 @@ export class AttackScene implements Scene {
     // the same way.
     const yard = readYard(response, { foreign: true });
     this.yard = yard;
+    // The defender's harvesters, hatcheries and the rest animate only while
+    // working (#255).
+    this.renderer.setWork(fixedWorkSource(response));
     this.renderer.show(yard);
     // An attacker never sees a trap until it fires (`BTRAP.as:33-43`, #66);
     // the battle layer reveals each one as the engine reports it going off.
