@@ -48,6 +48,7 @@ import {
   trapDamageAt,
   trapStats,
   tripsTrap,
+  heavyTrapFlyerDamageAt,
   beamHits,
   railgunDamageScale,
   VICTORY_THRESHOLD,
@@ -275,6 +276,13 @@ describe("traps", () => {
   it("gives a non-trap nothing", () => {
     expect(trapStats(20)).toBeUndefined();
     expect(trapDamageAt(20, 0)).toBe(0);
+  });
+
+  it("hits a flyer from a Heavy Trap's blast at half the falloff (`BHEAVYTRAP.as:76`)", () => {
+    // 10,000 over a 90-unit blast: 5,000 at the middle, 2,500 at the edge.
+    expect(heavyTrapFlyerDamageAt(0)).toBe(5000);
+    expect(heavyTrapFlyerDamageAt(90)).toBe(2500);
+    expect(heavyTrapFlyerDamageAt(91)).toBe(0);
   });
 
   it("lets anything set off a Booby Trap", () => {

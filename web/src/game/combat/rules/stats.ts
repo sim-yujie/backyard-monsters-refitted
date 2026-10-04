@@ -610,6 +610,15 @@ export const beamHits = (
 export const HEAVY_TRAP_TYPE = 117;
 
 /**
+ * What a Heavy Trap's blast deals to a flyer `distance` away: half the ground
+ * falloff. Its `Explode` runs a second pass over the flyers inside `size` at
+ * `damage * 0.5 / size * (size - distance * 0.5)` (`client/scripts/BHEAVYTRAP.as:68-82`).
+ * No other trap touches a flyer.
+ */
+export const heavyTrapFlyerDamageAt = (distance: number): number =>
+  trapDamageAt(HEAVY_TRAP_TYPE, distance) * 0.5;
+
+/**
  * Whether a creep with this `monsterId` sets off a trap of `type`.
  *
  * A Booby Trap goes off under anything on the ground. A Heavy Trap's

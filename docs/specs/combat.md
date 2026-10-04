@@ -914,7 +914,7 @@ radius, so every creep inside the blast takes at least half damage.
   champions, whose `G` ids neither test excludes. Everything else walks over it (`:28-31`). It
   stops at the first qualifying target (`:38`).
 - It damages ground units at full falloff damage, then runs a second pass on flying units at half
-  (`:51-82`).
+  (`:51-82`). The engine does both (issue #259).
 - A trap only counts as fired if it actually caught something: `_fired` is set inside
   `if (_loc8_ > 0)` (`BTRAP.as:113-114`, `BHEAVYTRAP.as:83-84`). A trap that explodes on nothing
   stays armed.

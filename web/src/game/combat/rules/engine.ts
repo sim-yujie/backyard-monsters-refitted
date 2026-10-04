@@ -99,6 +99,8 @@ import {
   ticks,
   towerRange,
   towerStats,
+  HEAVY_TRAP_TYPE,
+  heavyTrapFlyerDamageAt,
   trapDamageAt,
   trapStats,
   tripsTrap,
@@ -2978,6 +2980,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (hit.creep.hp <= 0) continue;
       touched += 1;
       damageCreep(hit.creep, trapDamageAt(building.type, hit.dist));
+    }
+    // A Heavy Trap's second pass, over the flyers at half (`BHEAVYTRAP.as:68-82`, issue #259).
+    if (building.type === HEAVY_TRAP_TYPE) {
+      for (const hit of index.inRange(spec.size, building.cx, building.cy, oldStyleTargets(2))) {
+        if (hit.creep.hp <= 0) continue;
+        touched += 1;
+        damageCreep(hit.creep, heavyTrapFlyerDamageAt(hit.dist));
+      }
     }
     if (touched === 0) return;
     building.fired = true;

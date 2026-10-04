@@ -160,6 +160,27 @@ describe("traps", () => {
     it("goes off under a champion", () => {
       expect(firedAfter({ monsters: {}, champion: { t: 1, l: 1 } })).toEqual([2]);
     });
+
+    it("hurts the flyers over it too, at half (`BHEAVYTRAP.as:68-82`)", () => {
+      const battle = createBattle(heavyYard(), { seed: 3 });
+      // A Crabatron lands on the trap with Teratorns over it.
+      battle.apply({ kind: "fling", t: 0, x: 200, y: 200, r: 0, monsters: { C10: 1, C14: 4 } });
+      const flyers = new Set(battle.creeps().filter((creep) => creep.flying).map((one) => one.id));
+      expect(flyers.size).toBe(4);
+      const hurt: number[] = [];
+      for (let step = 0; step < 400 && battle.state().firedTraps.length === 0; step += 1) {
+        battle.step();
+        for (const event of battle.recentEvents(battle.tick - 1)) {
+          if (event.kind === "hurt" && flyers.has(event.creepId)) hurt.push(event.amount);
+        }
+      }
+      expect(battle.state().firedTraps).toEqual([2]);
+      expect(hurt.length).toBeGreaterThan(0);
+      // Half the ground falloff: between 2,500 at the blast's edge and 5,000 at its middle.
+      for (const amount of hurt) {
+        expect(amount).toBeGreaterThanOrEqual(Math.min(2500, monsterStat("C14", "health", 1)));
+      }
+    });
   });
 });
 
