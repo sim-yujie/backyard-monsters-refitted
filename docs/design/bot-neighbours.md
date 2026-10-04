@@ -94,6 +94,12 @@ The owner's answers to this design's questions (2026-10-03):
     separate "fewer than 5 attackable" retry in section 4.3 is kept: it reacts to bots under
     protection, not to the player's level.)
 
+Later owner decision (2026-10-04, from the #245 leak audit):
+
+24. **Bots get a random, level-scaled Shiny** (`credits`), roughly what a player of that level might
+    hold, instead of every bot keeping the new-save 1,500 that a view or attack load shows
+    (section 4.6).
+
 ## 3. What already exists
 
 ### 3.1 Map Room 1 neighbours
@@ -392,6 +398,16 @@ is a real player:
 - **Storage** is held in a band: on creation, after each repair and on each grow job, any resource
   outside 25-70% of its cap `[PLACEHOLDER]` is moved to a random point inside it. Loot from a
   revenge attack banks into the bot as for any attacker (`bankAttackLoot`), then the band applies.
+- **Shiny** (decision 24, #254, `services/bots/shiny.ts`): held in a band that rises with level, from a
+  spender's leftovers to a saver's hoard: `120 + 35 (L - 1)` to `1800 + 70 (L - 1)`, so 120-1,800
+  at level 1, 435-2,430 at level 10, 1,485-4,530 at level 40. The top is about what a level-`L`
+  player has earned at the bots' pace: the sign-up 1,500, the monthly 500 (about 50 a level at 3
+  days a level) and golden mushrooms (about 6 a day), plus a little slack; the bottom is what is
+  left after workers, expansions and speed-ups (20-2,000 Shiny each in the store). The factory
+  draws it from the bot's seed (its own stream, so no other draw moves), leaning to the band's
+  middle. Each grow adds 1-14 (a mushroom, a slice of the grant), spends it down to 25-75% of the
+  way up when it would pass the top, and redraws it when it is outside the band for the bot's
+  level or still exactly 1,500 (a bot made before this). It is never a multiple of ten.
 
 ### 4.7 Revenge attack (decisions 11-13)
 
@@ -657,9 +673,9 @@ differences, both fixed: a bot made but not yet grown lacked what a loaded yard 
 queues in `monsters`, mushrooms, harvester cycles), so the factory now catches each new save up to its
 own `savetime` (`settleNewYard`); and a bot's `wmstatus` was empty where a player who has opened Map Room
 1 has four tribes, so the factory and every grow write them as opening the map does (`lookAlike.ts`,
-sharing `mr1TribeStatuses` with `createMR1Tribes`). Left as they are (values, not shapes): every bot keeps
-the new-save Shiny (`credits`), which the view load shows; bots made in one run have consecutive user and
-base ids; a bot never reads plain messages, so its unread count only grows; its tribes are never marked
+sharing `mr1TribeStatuses` with `createMR1Tribes`). Every bot kept the new-save Shiny (`credits`), which the
+view load shows; by decision 24 it is now random and level-scaled (section 4.6). Left as they are (values,
+not shapes): bots made in one run have consecutive user and base ids; a bot never reads plain messages, so its unread count only grows; its tribes are never marked
 wrecked; and it buys nothing from the store beyond expansions.
 
 ### 7.5 Scale

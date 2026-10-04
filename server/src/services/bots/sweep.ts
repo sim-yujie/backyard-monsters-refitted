@@ -40,6 +40,7 @@ import {
   type RevengeOutcome,
   type RevengeVerdict,
 } from "./revenge.js";
+import { tendShiny } from "./shiny.js";
 import { declineTruce } from "./truceDecline.js";
 import { visitMapRoom1 } from "./lookAlike.js";
 import { generateBotYard } from "./yardGenerator.js";
@@ -78,7 +79,7 @@ import { generateBotYard } from "./yardGenerator.js";
  *
  * | Job | When | Does |
  * | --- | --- | --- |
- * | `grow` | every 2-6 h | catch-up; retires the bot past level 40; otherwise growth to the pace target (`brain.ts`), the army topped up, the champion fed, loot in its band, `bot.level` kept, Map Room 1's tribes looked at (`lookAlike.ts`), and about two minutes online |
+ * | `grow` | every 2-6 h | catch-up; retires the bot past level 40; otherwise growth to the pace target (`brain.ts`), the army topped up, the champion fed, loot in its band, Shiny in its band (`shiny.ts`), `bot.level` kept, Map Room 1's tribes looked at (`lookAlike.ts`), and about two minutes online |
  * | `repair` | 1-4 h after an attack (booked by `afterAttack.ts`) | catch-up, Repair all, traps re-armed, bunkers and Housing refilled, the champion fed and healed, loot in its band |
  * | `revenge` | 1-24 h after an attack, 1 in 3 (booked by `afterAttack.ts`) | the checks (`revenge.ts`), then the attack (`revengeRun.ts`, passed in as {@link SweepDeps.revenge}); waits or gives up as the checks say |
  * | `declineTruce` | 2-8 h after a truce request (booked by `truceDecline.ts`) | rejects the request in its thread, as a player would (`truceDecline.ts`) |
@@ -303,6 +304,7 @@ const grow: Handler = async (tx, job, { now, config, rng, report }) => {
 
   const level = calculateBaseLevel(save.points, save.basevalue);
   save.level = level;
+  save.credits = tendShiny(save.credits, level, rng);
   visitMapRoom1(save);
   if (level !== bot.level) {
     report.grew.push({ userid: bot.userid, from: bot.level, to: level });

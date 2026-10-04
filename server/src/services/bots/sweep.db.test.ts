@@ -9,6 +9,7 @@ import { readMushrooms } from "../yard/mushrooms.js";
 import { SLOW_PACE } from "./brain.js";
 import { createBots, deleteBots } from "./factory.js";
 import { LOOT_BAND } from "./yardGenerator.js";
+import { LEGACY_BOT_SHINY, shinyBand } from "./shiny.js";
 import { BUNKER_TYPE } from "../yard/bunker.js";
 import { storageCap } from "../base/economy/resourceBudget.js";
 import { bookFirstGrows, MAX_ATTEMPTS, REBALANCE_JOB, runBotSweep, UNDER_ATTACK_RETRY_MINUTES, type SweepDeps } from "./sweep.js";
@@ -175,6 +176,20 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
     const fresh = await botRow(report.replaced[0]!);
     expect(fresh).toMatchObject({ level: 1, state: "active" });
     expect((await jobs(fresh.userid)).map((job) => job.kind)).toEqual(["grow"]);
+  }, 30_000);
+
+  test("Shiny: made inside the level's band, a bot still on the new-save 1,500 redrawn on its next grow", async () => {
+    const [bot] = await make([15]);
+    const inBand = (credits: number, level: number) =>
+      credits >= shinyBand(level).min && credits <= shinyBand(level).max && credits !== LEGACY_BOT_SHINY;
+    expect(inBand(Number((await saveRow(bot!.userid)).credits), 15)).toBe(true);
+
+    await pass(NOW, 1);
+    await sql(`UPDATE bym.save SET credits = ? WHERE userid = ? AND type = 'main'`, [LEGACY_BOT_SHINY, bot!.userid]);
+    await dueNow(NOW);
+    await pass(NOW, 1);
+    const save = await saveRow(bot!.userid);
+    expect(inBand(Number(save.credits), Number(save.level))).toBe(true);
   }, 30_000);
 
   test("a repair starts Repair all, re-arms nothing missing, refills the bunkers and puts loot back in its band", async () => {

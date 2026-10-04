@@ -22,6 +22,7 @@ import {
   fillPlan,
 } from "./factory.js";
 import { levelBand } from "./progression.js";
+import { LEGACY_BOT_SHINY, shinyBand, shinyForSeed } from "./shiny.js";
 
 /** The bot factory's pure parts (issue #239, `docs/design/bot-neighbours.md` §4.1, §10). */
 
@@ -105,6 +106,21 @@ describe("drawProfile", () => {
     const share = pics.filter((pic) => critters.has(pic)).length / pics.length;
     expect(Math.abs(share - AVATAR_SHARE)).toBeLessThan(0.05);
   });
+
+  test("Shiny: the seed's draw, inside the level's band, never the new-save 1,500", () => {
+    const rng = mulberry32(245);
+    for (let level = 1; level <= BOT_MAX_LEVEL; level++) {
+      const amounts = Array.from({ length: 20 }, () => drawProfile(rng, level, NOW, T));
+      for (const profile of amounts) {
+        const { min, max } = shinyBand(level);
+        expect(profile.credits).toBe(shinyForSeed(profile.seed, level));
+        expect(profile.credits).toBeGreaterThanOrEqual(min);
+        expect(profile.credits).toBeLessThanOrEqual(max);
+        expect(profile.credits).not.toBe(LEGACY_BOT_SHINY);
+      }
+      expect(new Set(amounts.map((profile) => profile.credits)).size).toBeGreaterThan(15);
+    }
+  });
 });
 
 describe("drawBot", () => {
@@ -159,6 +175,7 @@ describe("botSaveData", () => {
     expect(save.name).toBe("MossyGoblin");
     expect(save.resources).toEqual({ ...yard.resources });
     expect(save.champion).toEqual(yard.champion);
+    expect(save.credits).toBe(profile.credits);
   });
 
   test("each building keeps its spot and level", () => {

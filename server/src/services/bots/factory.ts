@@ -13,6 +13,7 @@ import type { Rng } from "../../game-rules/combat/rng.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { usernameMatch } from "../user/usernameLookup.js";
 import { botName } from "./names.js";
+import { shinyForSeed } from "./shiny.js";
 import { PERSONAS, targetInBand, type Persona } from "./progression.js";
 import { generateBotYard, type BotYard } from "./yardGenerator.js";
 import { catchUpYard } from "../yard/catchUp.js";
@@ -44,6 +45,8 @@ import { visitMapRoom1 } from "./lookAlike.js";
  * - **Pace**: `bot.level_since` puts the bot as far into its level as its
  *   target is into the band, which is where the grow job's linear pace (§4.4)
  *   would have it.
+ * - **Shiny**: drawn from the seed inside the band a player of the level
+ *   holds (`shiny.ts`), never the new-save 1,500.
  *
  * {@link createBots} writes in batches of {@link BATCH_SIZE}, one transaction
  * each. {@link fillPlan} decides which levels to make for an even spread over
@@ -126,6 +129,8 @@ export interface BotProfile {
   levelSince: Date;
   /** `user.pic_square`. */
   picSquare: string;
+  /** `save.credits`: the bot's Shiny (`shiny.ts`). */
+  credits: number;
 }
 
 /**
@@ -170,6 +175,7 @@ export const drawProfile = (rng: Rng, level: number, now: number, daysPerLevel: 
     savetime,
     levelSince: new Date((now - Math.floor(fraction * daysPerLevel * DAY)) * 1000),
     picSquare: avatarFor(rng),
+    credits: shinyForSeed(seed, level),
   };
 };
 
@@ -221,6 +227,7 @@ export const botSaveData = (user: User, profile: BotProfile, yard: BotYard) => {
 
   return {
     ...getDefaultBaseData(user, BaseType.MAIN, { forBot: true }),
+    credits: profile.credits,
     createtime: profile.createtime,
     savetime: profile.savetime,
     protected: 0,
