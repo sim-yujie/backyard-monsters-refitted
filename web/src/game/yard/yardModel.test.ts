@@ -3,7 +3,7 @@ import type { BaseLoadResponse } from "@/api/types";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import { artStateFor, BuildingCondition, readYard, TOWN_HALL_TYPE } from "./yardModel";
 import { ArtState } from "./buildingArt";
-import { FOREIGN_YARD_MARGIN, YARD_MARGIN } from "./YardGrid";
+import { depthKey, footprintOf, FOREIGN_YARD_MARGIN, YARD_MARGIN } from "./YardGrid";
 
 const yard = readYard(fixture as unknown as BaseLoadResponse);
 
@@ -259,5 +259,73 @@ describe("mushrooms on an outpost (#191)", () => {
       } as BaseLoadResponse);
     expect(load("outpost").mushrooms).toEqual([]);
     expect(load("main").mushrooms).toHaveLength(1);
+  });
+});
+
+describe("depth order (#270)", () => {
+  const HATCHERY = 13;
+  const WALL = 17;
+
+  /** True when `back` is drawn before `front` in a yard holding just the two. */
+  const drawnBehind = (
+    back: { t: number; X: number; Y: number },
+    front: { t: number; X: number; Y: number },
+  ): boolean => {
+    const { buildings } = yardWith({
+      "1": { id: 1, ...back },
+      "2": { id: 2, ...front },
+    });
+    const backDepth = buildings.find((one) => one.id === 1)!.depth;
+    const frontDepth = buildings.find((one) => one.id === 2)!.depth;
+    return backDepth < frontDepth && buildings[0]!.id === 1;
+  };
+
+  it("draws a wall block against a Hatchery's back faces behind it, as the owner's yard showed", () => {
+    // A Hatchery is 100 x 100 yard units and a wall block 20 x 20. Each block
+    // here touches a back face, so its top corner is further down the screen
+    // than the Hatchery's although it stands behind it.
+    const hatchery = { t: HATCHERY, X: 0, Y: 0 };
+    expect(drawnBehind({ t: WALL, X: -20, Y: 40 }, hatchery)).toBe(true);
+    expect(drawnBehind({ t: WALL, X: -20, Y: 80 }, hatchery)).toBe(true);
+    expect(drawnBehind({ t: WALL, X: 40, Y: -20 }, hatchery)).toBe(true);
+    expect(drawnBehind({ t: WALL, X: 80, Y: -20 }, hatchery)).toBe(true);
+  });
+
+  it("draws a wall block against a Hatchery's front faces in front of it", () => {
+    const hatchery = { t: HATCHERY, X: 0, Y: 0 };
+    expect(drawnBehind(hatchery, { t: WALL, X: 100, Y: 0 })).toBe(true);
+    expect(drawnBehind(hatchery, { t: WALL, X: 100, Y: 80 })).toBe(true);
+    expect(drawnBehind(hatchery, { t: WALL, X: 0, Y: 100 })).toBe(true);
+    expect(drawnBehind(hatchery, { t: WALL, X: 80, Y: 100 })).toBe(true);
+  });
+
+  it("orders two touching buildings of any sizes back to front along both axes", () => {
+    // One type for every square footprint size the yard has, 20 to 160.
+    const types = [17, 52, 1, 6, 5, 13, 14, 27, 15];
+    for (const middle of types) {
+      const [size] = footprintOf(middle);
+      const centre = { t: middle, X: 0, Y: 0 };
+      for (const other of types) {
+        const [side] = footprintOf(other);
+        // Every 10-unit slide of `other` along each face that still touches it.
+        for (let along = -side + 10; along < size; along += 10) {
+          const backLeft = { t: other, X: -side, Y: along };
+          const backRight = { t: other, X: along, Y: -side };
+          const frontRight = { t: other, X: size, Y: along };
+          const frontLeft = { t: other, X: along, Y: size };
+          const where = `type ${other} at ${along} along type ${middle}`;
+          expect(drawnBehind(backLeft, centre), `${where}, back left`).toBe(true);
+          expect(drawnBehind(backRight, centre), `${where}, back right`).toBe(true);
+          expect(drawnBehind(centre, frontRight), `${where}, front right`).toBe(true);
+          expect(drawnBehind(centre, frontLeft), `${where}, front left`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("keys a building by its footprint centre, as Flash does", () => {
+    const { buildings } = yardWith({ "7": { id: 7, t: HATCHERY, X: 30, Y: -50 } });
+    const hatchery = buildings[0]!;
+    expect(hatchery.depth).toBe(depthKey(hatchery.centreX, hatchery.centreY, 7));
   });
 });

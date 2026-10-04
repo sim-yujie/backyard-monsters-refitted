@@ -59,6 +59,7 @@ export interface YardBuilding {
   readonly centreY: number;
   /** Axis-aligned world box of the footprint, for culling and hit testing. */
   readonly box: Rect;
+  /** Painter's-order key: `depthKey` of the footprint centre. */
   readonly depth: number;
   readonly condition: BuildingCondition;
   /** Current health, or null when the save says nothing (meaning full). */
@@ -359,7 +360,8 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
       centreX: centre.x,
       centreY: centre.y,
       box: footprintBox(bounds, raw.t, x, y),
-      depth: depthKey(world.x, world.y, id),
+      // The footprint's centre, not its origin: see `depthKey` (#270).
+      depth: depthKey(centre.x, centre.y, id),
       condition,
       hp,
       maxHp,

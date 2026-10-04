@@ -7,7 +7,7 @@ import { DAMAGE_TINTS, damageStep } from "@/game/yard/YardBuildings";
 import { readYard } from "@/game/yard/yardModel";
 import {
   AttackBattleLayer,
-  DEPTH_BIAS,
+  CREEP_MIDDLE,
   MonsterSheetTextures,
   abilityTint,
   animationFor,
@@ -300,16 +300,23 @@ describe("placement", () => {
   });
 
   it("sorts a creep in front of a building it stands below, and behind one it stands above", () => {
-    // A building whose top corner is at world (500, 300), sorted as the yard sorts it.
-    const building = depthKey(500, 300, 42) * 8;
-    const behind = creepZIndex(500, 300 - 5, 1);
-    const atCorner = creepZIndex(500, 300, 1);
-    const inFront = creepZIndex(500, 300 + DEPTH_BIAS + 5, 1);
-    expect(behind).toBeLessThan(building);
-    expect(atCorner).toBeLessThan(building);
-    expect(inFront).toBeGreaterThan(building);
+    // A wall block, 20 x 20 yard units, whose top corner is at world (500, 300):
+    // its centre is 10 px further down, and the yard keys it there (#270).
+    const wall = depthKey(500, 310, 42) * 8;
+    expect(creepZIndex(500, 300 - 5, 1)).toBeLessThan(wall);
+    expect(creepZIndex(500, 300, 1)).toBeLessThan(wall);
+    // On its back faces, behind; on its front faces and its bottom corner, in front.
+    expect(creepZIndex(495, 302, 1)).toBeLessThan(wall);
+    expect(creepZIndex(505, 302, 1)).toBeLessThan(wall);
+    expect(creepZIndex(495, 318, 1)).toBeGreaterThan(wall);
+    expect(creepZIndex(500, 320, 1)).toBeGreaterThan(wall);
+    // A Hatchery, 100 x 100, with the same top corner: a melee attacker at that
+    // corner is half the footprint behind its centre.
+    const hatchery = depthKey(500, 350, 43) * 8;
+    expect(creepZIndex(500, 300, 1)).toBeLessThan(hatchery);
+    expect(creepZIndex(500, 400, 1)).toBeGreaterThan(hatchery);
     // Never a tie with the building's own animation layers at +1..+3.
-    expect(creepZIndex(500, 300 + DEPTH_BIAS, 1) % 8).toBe(4);
+    expect(creepZIndex(500, 310 - CREEP_MIDDLE, 1) % 8).toBe(4);
   });
 
   it("lifts Teratorn, Zafreeti and Vorg to 144 and Balthazar to 108, with the bob, shadows on the ground (#211)", () => {

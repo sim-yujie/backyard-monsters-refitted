@@ -61,13 +61,13 @@ import {
  *
  * ## Depth
  *
- * Buildings sort by `depthKey` of their footprint's top corner, times eight
+ * Buildings sort by `depthKey` of their footprint's centre, times eight
  * (`YardBuildings.resortByDepth`). Creep bodies go into the same container with
  * a key from their own ground point, so a creep behind a building draws behind
- * it and one in front draws over it. The key is nudged `DEPTH_BIAS` px up the
- * screen first: a building's key is its *top* corner, so without the nudge a
- * creep standing at that corner, where the pathing grid puts a melee attacker
- * coming from the north, would draw over the whole building it is behind.
+ * it and one in front draws over it. The key is nudged `CREEP_MIDDLE` px down
+ * the screen first, as Flash's is. A creep at a building's top corner, where
+ * the pathing grid puts a melee attacker coming from the north, is half a
+ * footprint behind its centre and so draws behind it (#270).
  * A flyer's key adds its altitude, as Flash's depth does (`MonsterBase.as:726`),
  * so a body hovering over a wall block sorts in front of it; its shadow lies in
  * the yard's shadow layer under every building (`MAP.DEPTH_SHADOW`). Both only
@@ -121,11 +121,12 @@ import {
 /* ── Pure layout ────────────────────────────────────────────────────────── */
 
 /**
- * World px a creep's depth key is nudged up the screen, so a creep at a
- * building's top corner sorts behind it and one at its bottom corner in front.
- * Half the on-screen height of a default 40x40 footprint diamond.
+ * World px a creep's depth key is nudged down the screen: Flash's `_middle`
+ * for a creep (`CreepBase.as:62`), added to its y for the depth
+ * (`MonsterBase.as:720-726`). It used to be 20 px *up*, standing in for half a
+ * footprint while buildings were keyed by their top corner (#270).
  */
-export const DEPTH_BIAS = 20;
+export const CREEP_MIDDLE = 5;
 
 /**
  * Where a creep's `zIndex` sits inside a building's block of eight keys:
@@ -245,7 +246,7 @@ const singlePose = (sheet: MonsterSheet): boolean => (sheet.animations.walk?.cou
 
 /** The depth-sort key for a creep at a world ground point. */
 export const creepZIndex = (groundX: number, groundY: number, id: number): number =>
-  depthKey(groundX, groundY - DEPTH_BIAS, id) * 8 + CREEP_Z_OFFSET;
+  depthKey(groundX, groundY + CREEP_MIDDLE, id) * 8 + CREEP_Z_OFFSET;
 
 /**
  * Where and how to draw a creep this frame.
@@ -293,7 +294,7 @@ export const layoutCreep = (
     y,
     // A flyer sorts as if it stood its altitude further down the screen
     // (`MonsterBase.as:726` adds `_altitude` to the depth), so its body is not
-    // hidden behind a building whose top corner is just below its ground point.
+    // hidden behind a building whose centre is just below its ground point.
     zIndex: creepZIndex(ground.x, ground.y + altitude, creep.id),
     groundX: ground.x,
     groundY: ground.y,

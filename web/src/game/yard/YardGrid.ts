@@ -60,13 +60,26 @@ export const fromIso = (x: number, y: number): Point => ({
 });
 
 /**
- * Depth-sort key: a building's isometric y.
+ * Depth-sort key: the isometric y of a point on the ground.
  *
  * Equivalently `(X + Y) / 2`, so drawing in ascending order is the painter's
  * order for this projection — anything further down the screen is nearer the
  * viewer and goes on top. Isometric x breaks ties so the order is stable
  * between loads, and the building id breaks the remaining ones so two buildings
  * sharing a tile never swap places between frames.
+ *
+ * For a building the point is its footprint's **centre**, as Flash's is: the
+ * movie clip's y plus half the footprint (`_middle`,
+ * `client/scripts/BFOUNDATION.as:678`, used at `:1417-1423`). The origin — the
+ * footprint's top corner — is wrong for neighbours of different sizes: a wall
+ * block against the back face of a Hatchery has its top corner further down
+ * the screen than the Hatchery's, so keyed by origin it was drawn over the
+ * building in front of it (#270). Keyed by centre, two square footprints that
+ * do not overlap always sort the right way round whatever their sizes. One
+ * behind the other along X with their Y ranges overlapping has the smaller
+ * `X + Y` at its centre, and the same along Y; one behind the other on both
+ * axes plainly does too. One behind along X but in front along Y stands
+ * beside the other on screen, so their order does not show.
  */
 export const depthKey = (isoX: number, isoY: number, id: number): number =>
   isoY * 4_000_000 + isoX * 1_000 + (id % 1_000);
