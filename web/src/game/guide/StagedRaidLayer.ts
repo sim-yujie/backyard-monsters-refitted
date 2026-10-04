@@ -1,5 +1,5 @@
 import { Container, Graphics, Sprite } from "pixi.js";
-import { MonsterSheetTextures } from "@/game/attack/AttackBattleLayer";
+import { creepZIndex, MonsterSheetTextures } from "@/game/attack/AttackBattleLayer";
 import { anchorOffset, frameRow, sheetColumn, spriteFor } from "@/game/attack/monsterSprites";
 import {
   DEATH_SECONDS,
@@ -14,7 +14,10 @@ import {
 /**
  * Draws the guided start's staged raid (issue #227, `docs/design/tutorial.md`
  * §4) on the own yard: the oozes from the original sprite sheet, the tower's
- * tracer and the death puffs, on a container of its own above the yard.
+ * tracer and the death puffs. The oozes stand among the buildings, sorted by
+ * the attack screen's creep key (`creepZIndex`), so a building they pass
+ * behind hides them as it would in a real attack (#272); the tracer and the
+ * puffs, like the attack screen's shots, are drawn over the yard.
  *
  * It reads the tower's position and nothing else: no engine, no save, no
  * route. The timeline is `stagedRaid.ts`; this only paints it, frame by frame,
@@ -25,7 +28,13 @@ import {
 export interface RaidHost {
   readonly root: Container;
   yardToWorld(x: number, y: number): { x: number; y: number };
+  /** Puts a sprite among the buildings, sorted by its `zIndex`, until `leaveBuildings`. */
+  standAmongBuildings(child: Container): void;
+  leaveBuildings(child: Container): void;
 }
+
+/** The oozes' depth tie-break ids start here, clear of the pens' and the walk-ins'. */
+const RAID_DEPTH_ID = 850;
 
 /** How high above its ground point the tower fires from, world px. */
 const MUZZLE_HEIGHT = 58;
@@ -51,7 +60,6 @@ export const boxAround = (
 
 export class StagedRaidLayer {
   private readonly root = new Container();
-  private readonly bodies = new Container();
   private readonly effects = new Graphics();
   private readonly sprites = new Map<number, Sprite>();
   private readonly textures = new MonsterSheetTextures();
@@ -74,8 +82,7 @@ export class StagedRaidLayer {
   ) {
     this.plan = planRaid(tower, hall);
     this.root.eventMode = "none";
-    this.bodies.sortableChildren = true;
-    this.root.addChild(this.bodies, this.effects);
+    this.root.addChild(this.effects);
     host.root.addChild(this.root);
     const sheet = spriteFor(RAID_MONSTER);
     if (sheet) this.textures.preload(sheet);
@@ -120,6 +127,11 @@ export class StagedRaidLayer {
     if (this.frame !== null) cancelAnimationFrame(this.frame);
     this.frame = null;
     this.ended = true;
+    for (const sprite of this.sprites.values()) {
+      this.host.leaveBuildings(sprite);
+      sprite.destroy();
+    }
+    this.sprites.clear();
     this.root.parent?.removeChild(this.root);
     this.root.destroy({ children: true });
     this.textures.destroy();
@@ -131,6 +143,7 @@ export class StagedRaidLayer {
     if (this.frame !== null) cancelAnimationFrame(this.frame);
     this.frame = null;
     this.root.visible = false;
+    for (const sprite of this.sprites.values()) sprite.visible = false;
     this.onEnd();
   }
 
@@ -167,13 +180,14 @@ export class StagedRaidLayer {
       if (!texture) continue;
       if (!sprite) {
         sprite = new Sprite(texture);
+        sprite.eventMode = "none";
         this.sprites.set(monster.id, sprite);
-        this.bodies.addChild(sprite);
+        this.host.standAmongBuildings(sprite);
       }
       sprite.texture = texture;
       const anchor = anchorOffset(sheet);
       sprite.position.set(ground.x + anchor.x, ground.y + anchor.y);
-      sprite.zIndex = ground.y;
+      sprite.zIndex = creepZIndex(ground.x, ground.y, RAID_DEPTH_ID + monster.id);
       sprite.visible = true;
     }
 

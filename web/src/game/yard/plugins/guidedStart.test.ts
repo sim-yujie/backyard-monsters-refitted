@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Container } from "pixi.js";
 import { Camera } from "@/game/Camera";
 import type { Onboarding } from "@/api/types";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
@@ -45,6 +46,7 @@ const harness = (onboarding: Onboarding, buildings: Building[] = []) => {
   };
   const release = vi.fn();
   const renderer = {
+    root: new Container(),
     standAmongBuildings: vi.fn(),
     leaveBuildings: vi.fn(),
     yardToWorld: (x: number, y: number) => ({ x, y }),
