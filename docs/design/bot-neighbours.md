@@ -371,9 +371,12 @@ the 1-40 spread stays even on its own; a daily rebalance corrects drift.
   (`updateNeighbourData.ts:52`, the same path a real player who upgrades off Map Room 1 takes); it
   has no map cell, so nobody sees it anywhere. Its rows stay, so mail threads and attack logs keep
   their names. Retired bots with no mail older than 90 days `[PLACEHOLDER]` may be deleted.
-- **Rebalance** (daily, claimed through `bym.job_run`, section 6): any level more than 2 bots
-  over its share has its newest arrivals' growth slowed; any level more than 2 under has its
-  arrivals sped up; the total is topped back to 500 at level 1.
+- **Rebalance** (daily, claimed through `bym.job_run`, section 6): the bots line up by how far
+  they have climbed, and each place in the line has a spot spread evenly through its level. A bot
+  more than 2 places ahead of its spot has its growth slowed, one more than 2 behind is sped up,
+  and the rest grow at the normal pace; the total is topped back to 500 at level 1. No pace is
+  nudged while the table is short of the total. No level should drift more than 4 bots
+  (`SPREAD_TOLERANCE`) from its share; the sweep logs a warning when one does (issue #251).
 
 ### 4.5 After a player attacks a bot (decisions 10, 11)
 
@@ -583,8 +586,8 @@ after 5 attempts it is dropped with an error log.
 **Rebalance is not a `bot_job` row.** It belongs to no bot, and `bot_job.bot_userid` is required.
 Once a day the sweep claims the day in `bym.job_run` (`job = 'bots-rebalance'`, `period` = the UTC
 date), the same way `scripts/monthly-shiny.ts` claims its month. The insert's primary key means
-only one server runs it each day. It counts bots per level, nudges the pace and tops the total back
-to `BOTS_TOTAL` (creating bots).
+only one server runs it each day. It nudges the paces against the bots' spots in the line (section
+4.4) and tops the total back to `BOTS_TOTAL` (creating bots).
 
 Every yard write runs under the save's row lock (`lockRow`, as `catchUpLockedYard`), and is skipped
 while `isAttackActive` (an attack owns the row then), retrying in 10 minutes.
@@ -611,10 +614,14 @@ text above leaves open:
 - **The pace** is `level + days on it × speed / BOTS_DAYS_PER_LEVEL`; `level_since` is re-anchored when
   the level changes so a bot that could not grow catches up rather than losing time. The rebalance's
   nudges (`[PLACEHOLDER]` 0.75 slow, 1.5 fast) live in the `grow` job's `payload.speed` and end at the
-  bot's next level. "Its arrivals sped up" for a thin level is read as the bots next to arrive: the
-  furthest-on bots of the level below, as many as the level is short.
+  bot's next level or the next rebalance. The line runs furthest on first: the first `share[39]`
+  places are spread through level 40, the next `share[38]` through level 39, and so on (issue #251:
+  the first version only nudged levels more than 2 off their share, and slowing a crowded level's
+  newest arrivals kept it crowded).
 - **Retirement** happens when the pace position passes 41 (the bot has had its three days on level 40);
-  the replacement level 1 bot is made after the retirement commits. The daily top-up adds level 1
+  the replacement level 1 bot is made after the retirement commits. Replacements and top-up bots start
+  at the bottom of level 1, as a new player would (a random start had them leave level 1 in half the
+  time, so level 1 held about half its share; issue #251). The daily top-up adds level 1
   bots only up to level 1's share plus the slack of 2, so an empty table is never refilled at level 1
   all at once (use `bots.ts create --fill`).
 - **Repair** also re-arms fired traps under their own ids (from `firedtraps`), refills bunkers and
