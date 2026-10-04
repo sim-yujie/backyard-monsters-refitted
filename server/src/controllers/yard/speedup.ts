@@ -4,7 +4,7 @@ import { defineYardAction } from "./yardAction.js";
 
 /**
  * `POST /bm/yard/speedup` — `SP1`..`SP4` on a building's build or upgrade
- * countdown (`docs/design/yard-buildings.md` §3.2). The rules and the price
+ * countdown, or `SP1` on a repair with five minutes or less left (#279) (`docs/design/yard-buildings.md` §3.2). The rules and the price
  * are `planSpeedup`'s; the wrapper refuses a Shiny-locked account and a short
  * balance before anything is written.
  */
@@ -14,7 +14,9 @@ export const yardSpeedupAction = defineYardAction({
     const plan = planSpeedup(save, body.id, body.item, now);
     return {
       report: plan.report,
-      slices: { buildingdata: plan.buildingdata },
+      slices: plan.buildinghealthdata
+        ? { buildingdata: plan.buildingdata, buildinghealthdata: plan.buildinghealthdata }
+        : { buildingdata: plan.buildingdata },
       shiny: plan.shiny,
       points: plan.points,
     };

@@ -3,10 +3,12 @@ import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { yardRepairAction, yardRepairInstantAction } from "./repair.js";
+import { yardSpeedupAction } from "./speedup.js";
 import { runYardAction, type YardAnswer } from "./yardAction.js";
 
 /**
- * `POST /bm/yard/repair` and `/repair/instant` through the real wrapper, the
+ * `POST /bm/yard/repair`, `/repair/instant` and the free finish of a repair
+ * (`/speedup` `SP1`, #279) through the real wrapper, the
  * database replaced by one in-memory row written only when a transaction
  * commits (as `bank.test.ts`).
  */
@@ -108,6 +110,41 @@ describe("POST /bm/yard/repair", () => {
     for (const body of [{}, { ids: "[1]", all: "1" }, { ids: "[]" }]) {
       expect((await repair(body)).status).toBe(400);
     }
+  });
+});
+
+describe("POST /bm/yard/speedup SP1 on a repair (#279)", () => {
+  const finish = (id: number, locked = false): Promise<YardAnswer> =>
+    runYardAction(em as unknown as EntityManager, userOf(locked), yardSpeedupAction, {
+      id: String(id),
+      item: "SP1",
+    });
+
+  beforeEach(() => {
+    const row = rowOf();
+    const buildings = row.buildingdata as Record<string, Row>;
+    buildings["0"] = { ...buildings["0"], rE: 1 };
+    buildings["1"] = { ...buildings["1"], rE: 1 };
+    db.row = row;
+  });
+
+  test("heals a repair with under five minutes left for free, even on a Shiny-locked account", async () => {
+    const answer = await finish(1, true);
+    expect(answer.status).toBe(200);
+    expect(answer.body.report).toMatchObject({ id: 1, credits: 0, remaining: 0, repaired: true });
+    const buildings = db.row!.buildingdata as Record<string, Row>;
+    expect(buildings["1"]!.hp).toBeUndefined();
+    expect(buildings["1"]!.rE).toBeUndefined();
+    expect(db.row!.buildinghealthdata).toEqual({ "0": 0 });
+    expect(db.row!.credits).toBe(1000);
+  });
+
+  test("refuses a repair with more than five minutes left and writes nothing", async () => {
+    const before = structuredClone(db.row);
+    const answer = await finish(0);
+    expect(answer.status).toBe(409);
+    expect(answer.body.reason).toBe("itemRefused");
+    expect(db.row).toEqual(before);
   });
 });
 

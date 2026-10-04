@@ -18,6 +18,12 @@ import { describeSeconds } from "./upgradeText";
  * its label says how many; with every repair at five minutes or less it costs
  * nothing and becomes a plain button, as Finish free does.
  *
+ * In a running repair's last five minutes **Finish free** heals this building
+ * at once, as it finishes a build or upgrade (#279; the original's Speed up on
+ * a repairing building was free then, `client/scripts/STORE.as:162-171`). With
+ * this the only damaged building, Repair now would do the same, so it steps
+ * aside.
+ *
  * The panel owns the block's life: it builds one per redraw and calls
  * {@link RepairBlock.update} once a second.
  */
@@ -29,6 +35,8 @@ export interface RepairBlockHooks {
   pending(key: string, button: HTMLButtonElement | ShinyButton): void;
   repair(): void;
   repairNow(): void;
+  /** Finish free: this building's repair, with five minutes or less left. */
+  finish(): void;
 }
 
 /** "Repair all now" names how many it heals when that is more than this building. */
@@ -45,6 +53,7 @@ export class RepairBlock {
   private readonly now: ShinyButton | null;
   private readonly free: boolean;
   private readonly repairing: boolean;
+  private readonly finishFree: boolean;
 
   /**
    * @param id - The building.
@@ -55,6 +64,7 @@ export class RepairBlock {
     const { damage } = offer;
     this.repairing = damage.repairing;
     this.free = offer.nowPrice === 0;
+    this.finishFree = offer.finishFree;
 
     const block = document.createElement("section");
     block.className = "building-panel__block building-repair";
@@ -96,8 +106,17 @@ export class RepairBlock {
       hooks.pending(RepairKey.one(id), repair);
       row.append(repair);
     }
+    if (offer.finishFree) {
+      const finish = button("Finish free", hooks.finish, "btn--primary");
+      finish.title = "Five minutes or less left: finishing this repair costs nothing.";
+      hooks.pending(RepairKey.finish(id), finish);
+      row.append(finish);
+    }
     const label = repairNowLabel(offer.nowCount);
-    if (this.free) {
+    if (offer.finishFree && offer.nowCount === 1) {
+      // Repair now would heal just this building, which Finish free does for nothing.
+      this.now = null;
+    } else if (this.free) {
       this.now = null;
       const finish = button(label, hooks.repairNow);
       finish.title = "Every repair has five minutes or less left: finishing costs nothing.";
@@ -118,11 +137,18 @@ export class RepairBlock {
   /**
    * Redraws the clock, the bar and the price from an offer read at the
    * current moment. Returns false when the block must be rebuilt instead: the
-   * repair started or ended, or Repair now crossed between free and paid.
+   * repair started or ended, Repair now crossed between free and paid, or
+   * Finish free came on offer.
    */
   update(offer: RepairOffer): boolean {
     const { damage } = offer;
-    if (damage.repairing !== this.repairing || (offer.nowPrice === 0) !== this.free) return false;
+    if (
+      damage.repairing !== this.repairing ||
+      (offer.nowPrice === 0) !== this.free ||
+      offer.finishFree !== this.finishFree
+    ) {
+      return false;
+    }
 
     if (damage.repairing) {
       this.time.textContent = formatCountdown(damage.secondsLeft);

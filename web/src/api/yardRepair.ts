@@ -1,8 +1,8 @@
-import { damagedAt } from "@/game/yard/repair";
+import { canFinishFree, damagedAt } from "@/game/yard/repair";
 import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
 import { post } from "./http";
-import type { YardResponse } from "./types";
-import { yardBody, type YardRefusal } from "./yard";
+import type { SpeedupReport, YardResponse } from "./types";
+import { speedUp, yardBody, type YardRefusal } from "./yard";
 
 /**
  * Repairs (`docs/design/yard-buildings.md` §5.5; wire contract in
@@ -10,9 +10,12 @@ import { yardBody, type YardRefusal } from "./yard";
  *
  *   POST /api/:apiVersion/bm/yard/repair           ids (JSON array) | all=1
  *   POST /api/:apiVersion/bm/yard/repair/instant
+ *   POST /api/:apiVersion/bm/yard/speedup          id, item=SP1 (#279)
  *
  * Repair is free and holds no worker; the server heals in its catch-up. Repair
- * now (`FIX`) heals everything damaged at once for Shiny. The calls hold no
+ * now (`FIX`) heals everything damaged at once for Shiny. A single repair with
+ * five minutes or less left finishes free through the speed-up route's `SP1`,
+ * as the original's Speed up did on a repairing building. The calls hold no
  * state; {@link repairActions} runs them through the `YardStore`'s
  * one-at-a-time queue, which merges each answer.
  */
@@ -52,20 +55,34 @@ export const repairAll = (baseid?: string): Promise<YardResponse<RepairReport>> 
 export const repairNow = (baseid?: string): Promise<YardResponse<RepairInstantReport>> =>
   post<YardResponse<RepairInstantReport>>(`${REPAIR_PATH}/instant`, yardBody({}, baseid));
 
-/** The three calls, so the actions can be handed a stand-in under test. */
+/**
+ * Finish free: one repair with 300 s or less left, to full health at once.
+ * Refusal: `itemRefused` when the server counts more than 300 s left.
+ */
+export const finishRepair = (id: number, baseid?: string): Promise<YardResponse<SpeedupReport>> =>
+  speedUp(id, "SP1", baseid);
+
+/** The four calls, so the actions can be handed a stand-in under test. */
 export interface RepairApi {
   ids: typeof repairBuildings;
   all: typeof repairAll;
   now: typeof repairNow;
+  finish: typeof finishRepair;
 }
 
-export const repairApi: RepairApi = { ids: repairBuildings, all: repairAll, now: repairNow };
+export const repairApi: RepairApi = {
+  ids: repairBuildings,
+  all: repairAll,
+  now: repairNow,
+  finish: finishRepair,
+};
 
 /** The queue keys, for `store.isRunning`. */
 export const RepairKey = {
   ALL: actionKey("repair", "all"),
   NOW: actionKey("repair", "now"),
   one: (id: number): string => actionKey("repair", id),
+  finish: (id: number): string => actionKey("repair-finish", id),
 } as const;
 
 const refuse = (reason: string, message: string): YardRefusal => ({
@@ -82,6 +99,8 @@ export interface RepairActions {
   all(): Promise<YardActionResult<RepairReport>>;
   /** Repair now, for Shiny. Refused locally when nothing is damaged. */
   now(): Promise<YardActionResult<RepairInstantReport>>;
+  /** Finish free. Refused locally unless the building is repairing with five minutes or less left. */
+  finish(id: number): Promise<YardActionResult<SpeedupReport>>;
 }
 
 /**
@@ -116,5 +135,17 @@ export const repairActions = (store: YardStore, api: RepairApi = repairApi): Rep
           ? null
           : refuse("notDamaged", "Nothing needs repairing."),
       send: (_api, ...yard) => api.now(...yard),
+    }),
+  finish: (id) =>
+    store.run({
+      key: RepairKey.finish(id),
+      check: (reader) => {
+        const damage = damagedAt(reader.save, reader.now()).find((one) => one.id === id);
+        if (!damage?.repairing) return refuse("notDamaged", "That building is not being repaired.");
+        return canFinishFree(damage)
+          ? null
+          : refuse("itemRefused", "Finishing free only works with 5 minutes or less to go.");
+      },
+      send: (_api, ...yard) => api.finish(id, ...yard),
     }),
 });

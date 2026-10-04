@@ -200,3 +200,43 @@ describe("YardJobBars", () => {
     expect(bar?.scale.x).toBe(1.8);
   });
 });
+
+describe("jobBarStates: repairs (#279)", () => {
+  // A snapper (type 1) at level 1: 500 health, heals 17 a second.
+  const SNAPPER = 1;
+  const repairing = (extra: Partial<BuildingData> = {}): BuildingData =>
+    row(7, { t: SNAPPER, l: 1, hp: 100, rE: 1, ...extra });
+
+  it("a repairing building gets a green bar filling with its health, with the time to full", () => {
+    const [bar] = jobBarStates(yardOf([repairing()]), SAVED);
+    expect(bar).toEqual({
+      id: 7,
+      kind: "repair",
+      fraction: 0.2,
+      remaining: 24,
+      paused: false,
+      label: "24s",
+    });
+
+    const later = jobBarStates(yardOf([repairing()]), SAVED + 10)[0];
+    expect(later).toMatchObject({ fraction: 270 / 500, remaining: 14 });
+  });
+
+  it("drops the bar once the repair is done", () => {
+    expect(jobBarStates(yardOf([repairing()]), SAVED + 24)).toEqual([]);
+  });
+
+  it("a repair's bar stands in for its paused upgrade's; damage not being repaired keeps Paused", () => {
+    const bars = jobBarStates(
+      yardOf([repairing({ cU: 900, cL: 1_800 }), row(8, { cU: 900, cL: 1_800, hp: 10 })]),
+      SAVED,
+    );
+    expect(bars.find((bar) => bar.id === 7)).toMatchObject({ kind: "repair", paused: false });
+    expect(bars.find((bar) => bar.id === 8)).toMatchObject({ kind: "upgrade", paused: true });
+  });
+
+  it("damage alone draws no bar, and a foreign yard none at all", () => {
+    expect(jobBarStates(yardOf([repairing({ rE: 0 })]), SAVED)).toEqual([]);
+    expect(jobBarStates(yardOf([repairing()], { foreign: true }), SAVED)).toEqual([]);
+  });
+});

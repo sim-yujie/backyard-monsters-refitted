@@ -1359,6 +1359,8 @@ export interface SpeedupReport {
   remaining: number;
   /** The job as a `completed` entry when the speed-up finished it, else null. */
   finished: CompletedJob | null;
+  /** Set when `SP1` finished a repair instead of a job (#279). */
+  repaired?: true;
 }
 
 /** `POST /bm/yard/mushroom/pick` (`docs/design/yard-buildings.md` §5.6). */

@@ -3,6 +3,7 @@ import type { BaseLoadResponse, BuildingData } from "@/api/types";
 import { maxHp } from "@/game/combat/rules";
 import { timeCost } from "./buildingCosts";
 import {
+  canFinishFree,
   damageOf,
   damagedAt,
   repairAt,
@@ -119,6 +120,24 @@ describe("repairNowPrice", () => {
 
   it("is free when every repair is five minutes or less", () => {
     expect(repairNowPrice(damagedAt(saveOf([building(1, 1, { hp: 100 })]), T0))).toBe(0);
+  });
+});
+
+describe("canFinishFree (#279)", () => {
+  it("is a running repair with five minutes or less left", () => {
+    // A snapper at 100 / 500 heals 17 a second: 24 s to go.
+    const running = damagedAt(saveOf([building(1, 1, { hp: 100, rE: 1 })]), T0)[0]!;
+    expect(running.secondsLeft).toBe(24);
+    expect(canFinishFree(running)).toBe(true);
+    expect(canFinishFree({ ...running, secondsLeft: 300 })).toBe(true);
+    expect(canFinishFree({ ...running, secondsLeft: 301 })).toBe(false);
+    expect(canFinishFree({ ...running, repairing: false })).toBe(false);
+  });
+
+  it("is on the panel's offer", () => {
+    const save = saveOf([building(0, 14, { l: 10, hp: 0, rE: 1 }), building(1, 1, { hp: 100, rE: 1 })]);
+    expect(repairOffer(1, save, 0, T0)!.finishFree).toBe(true);
+    expect(repairOffer(0, save, 0, T0)!.finishFree).toBe(false);
   });
 });
 

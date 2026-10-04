@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
+import { maxHp } from "../../game-rules/combat/stats.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
+import { repairRate } from "./repair.js";
 import { planSpeedup, type SpeedupSave } from "./speedup.js";
 
 const NOW = 1_800_000_000;
@@ -166,8 +168,69 @@ describe("planSpeedup: refusals", () => {
     expect(refusal(() => planSpeedup(yard, 1, "SP4", NOW)).reason).toBe("damaged");
   });
 
+  test("a damaged building that is not repairing, with nothing running, is 409 notRunning", () => {
+    const yard = { ...yardOf({ rE: 0 }), buildinghealthdata: { "1": 5 } };
+    expect(refusal(() => planSpeedup(yard, 1, "SP1", NOW)).reason).toBe("notRunning");
+  });
+
   test("a Map Room is 409 mapRoom", () => {
     const yard = yardOf({}, { "2": { id: 2, t: 11, x: 0, y: 0, l: 1, cU: 345600 } });
     expect(refusal(() => planSpeedup(yard, 2, "SP4", NOW)).reason).toBe("mapRoom");
+  });
+});
+
+describe("planSpeedup: SP1 on a repair (#279)", () => {
+  // The Cannon Tower at level 1: its full health and how much it heals a second.
+  const MAX = maxHp(20, 1);
+  const RATE = repairRate(20, 1, MAX);
+  /** The cannon repairing with `seconds` of repair left, by the server's own count. */
+  const repairing = (seconds: number, cannon: Record<string, unknown> = {}): SpeedupSave => ({
+    ...yardOf({ rE: 1, hp: MAX - seconds * RATE, ...cannon }),
+    buildinghealthdata: { "1": MAX - seconds * RATE },
+  });
+
+  test("with 300 s left it heals to full for free", () => {
+    const plan = planSpeedup(repairing(300), 1, "SP1", NOW);
+
+    expect(plan.shiny).toBe(0);
+    expect(plan.points).toBe(0);
+    expect(plan.buildingdata["1"]).toEqual({ id: 1, t: 20, x: 100, y: 100, l: 1 });
+    expect(plan.buildinghealthdata).toEqual({});
+    expect(plan.report).toEqual({
+      id: 1,
+      item: "SP1",
+      credits: 0,
+      remaining: 0,
+      finished: null,
+      repaired: true,
+    });
+  });
+
+  test("with 301 s left it is refused, with the server's count of the time left", () => {
+    expect(refusal(() => planSpeedup(repairing(301), 1, "SP1", NOW))).toMatchObject({
+      status: 409,
+      reason: "itemRefused",
+      data: { id: 1, item: "SP1", remaining: 301 },
+    });
+  });
+
+  test("the paid items are refused on a repair", () => {
+    for (const item of ["SP2", "SP3", "SP4"] as const) {
+      expect(refusal(() => planSpeedup(repairing(4000), 1, item, NOW)).reason).toBe("itemRefused");
+    }
+  });
+
+  test("it finishes the repair, not the paused upgrade, which then runs again", () => {
+    const plan = planSpeedup(repairing(60, { cU: 5000 }), 1, "SP1", NOW);
+
+    expect(plan.buildingdata["1"]).toEqual({ id: 1, t: 20, x: 100, y: 100, l: 1, cU: 5000 });
+    expect(plan.report.finished).toBeNull();
+    expect(plan.report.repaired).toBe(true);
+  });
+
+  test("the rest of the health map is left as it was", () => {
+    const yard = repairing(10);
+    yard.buildinghealthdata = { ...yard.buildinghealthdata, "7": 42 };
+    expect(planSpeedup(yard, 1, "SP1", NOW).buildinghealthdata).toEqual({ "7": 42 });
   });
 });

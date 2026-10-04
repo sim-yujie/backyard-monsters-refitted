@@ -416,6 +416,44 @@ describe("BuildingPanel: a damaged building", () => {
     expect(buttons(element).some((one) => one.textContent === "Repair")).toBe(false);
   });
 
+  it("offers Finish free in a repair's last five minutes, which sends SP1 (#279)", () => {
+    const fetch = vi.fn(() => new Promise<Response>(() => undefined));
+    vi.stubGlobal("fetch", fetch);
+    try {
+      // A snapper repairing with 24 s to go, the only damaged building.
+      const { element } = setup([HALL, building(3, 1, 1, { hp: 100, rE: 1 })], 3);
+      const finish = buttonNamed(element, "Finish free")!;
+      expect(finish.disabled).toBe(false);
+      // Repair now would heal only this building, so it steps aside.
+      expect(buttonNamed(element, "Repair now")).toBeUndefined();
+
+      finish.click();
+      const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+      expect(url).toMatch(/\/bm\/yard\/speedup$/);
+      const body = new URLSearchParams(String(init.body));
+      expect(body.get("id")).toBe("3");
+      expect(body.get("item")).toBe("SP1");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps Repair all now beside Finish free while other buildings are damaged", () => {
+    const { element } = setup(
+      [HALL, building(2, 20, 4, { hp: 8_820 }), building(3, 1, 1, { hp: 100, rE: 1 })],
+      3,
+    );
+    expect(buttonNamed(element, "Finish free")).toBeDefined();
+    expect(buttonNamed(element, "Repair all 2 now")).toBeDefined();
+  });
+
+  it("offers no Finish free on a repair with more than five minutes left, or one not started", () => {
+    const long = setup([HALL, building(2, 20, 4, { hp: 100, rE: 1 })], 2);
+    expect(buttonNamed(long.element, "Finish free")).toBeUndefined();
+    const idle = setup([HALL, building(3, 1, 1, { hp: 100 })], 3);
+    expect(buttonNamed(idle.element, "Finish free")).toBeUndefined();
+  });
+
   it("draws no repair block for a building at full health", () => {
     const { element } = setup([HALL, building(2, 20, 4)], 2);
     expect(element.querySelector(".building-repair")).toBeNull();

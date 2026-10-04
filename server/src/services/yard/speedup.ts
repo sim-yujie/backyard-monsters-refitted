@@ -14,7 +14,14 @@ import {
 } from "./buildingJobs.js";
 import type { BuildingJob } from "./catchUpBuildings.js";
 import { yardKindOf } from "../yardplanner/costs.js";
-import { SPEEDUP_SECONDS, speedupAllowed, speedupPrice, type SpeedupItem } from "./shiny.js";
+import { damageOf, healed, repairSecondsLeft, type Damage } from "./repair.js";
+import {
+  FREE_SECONDS,
+  SPEEDUP_SECONDS,
+  speedupAllowed,
+  speedupPrice,
+  type SpeedupItem,
+} from "./shiny.js";
 import { yardRefusedErr } from "./yardErrors.js";
 
 /**
@@ -34,6 +41,14 @@ import { yardRefusedErr } from "./yardErrors.js";
  * catch-up's own completion (`finishBuildingJob`): level, points, record.
  * On an outpost a fortification's countdown can be sped up too (the building
  * panel offers Speed up on it, `client/scripts/BUILDINGINFO.as:124-127`).
+ *
+ * A building being repaired takes `SP1` too (#279): with five minutes or less
+ * of repair left it heals to full for free. The original offered Speed up on a
+ * repairing building (`BUILDINGINFO.as:146-148`), priced its finish by the
+ * repair time left, free at 300 s or less (`STORE.as:162-171`, `:354-355`),
+ * and spent the item on the repair rather than the paused countdown
+ * (`STORE.as:2056-2061`). The other items are not offered on a repair: Repair
+ * now covers the paid finish.
  *
  * Pure: no database, no clock. The route's wrapper charges the Shiny.
  */
@@ -56,11 +71,15 @@ export interface SpeedupReport {
   remaining: number;
   /** The finished job, as `completed` spells one; null while the countdown still runs. */
   finished: BuildingJob | null;
+  /** Set when the speed-up finished a repair instead of a job. */
+  repaired?: true;
 }
 
 /** What the speed-up decided. */
 export interface SpeedupPlan {
   buildingdata: BuildingDataMap;
+  /** Only when a repair finished: the health map without the building. */
+  buildinghealthdata?: BuildingHealthData;
   shiny: number;
   points: number;
   report: SpeedupReport;
@@ -69,13 +88,13 @@ export interface SpeedupPlan {
 /**
  * Works out a speed-up against a caught-up yard, or throws the refusal.
  *
- * Refusals, in order: an id the yard does not hold (`400 badRequest`); no
- * build or upgrade countdown running (`409 notRunning`); the building is
- * damaged or repairing (`409 damaged` — its countdown is paused, and the
- * original spent the speed-up on the repair instead, `STORE.as:2056-2066`;
- * repairs are Phase 3); a Map Room (`409 mapRoom`); the item not allowed at
- * this much time left (`409 itemRefused`). Shiny lock and balance are the
- * wrapper's.
+ * Refusals, in order: an id the yard does not hold (`400 badRequest`); a
+ * repairing building with an item other than `SP1`, or more than 300 s of
+ * repair left (`409 itemRefused`, {@link planRepairFinish}); no build or
+ * upgrade countdown running (`409 notRunning`); the building is damaged and
+ * not repairing (`409 damaged` — its countdown is paused); a Map Room
+ * (`409 mapRoom`); the item not allowed at this much time left
+ * (`409 itemRefused`). Shiny lock and balance are the wrapper's.
  *
  * @param save - The yard, already caught up to `now`.
  */
@@ -87,6 +106,10 @@ export const planSpeedup = (
 ): SpeedupPlan => {
   const building = buildingOrThrow(save.buildingdata, id);
   const kind = yardKindOf(save);
+
+  // A repair comes first, as the original's speed-up looked at it first.
+  const damage = damageOf(save, String(id), building);
+  if (damage?.repairing) return planRepairFinish(save, damage, item);
 
   const field = runningCountdown(building, kind === "outpost");
   if (!field) {
@@ -118,6 +141,41 @@ export const planSpeedup = (
     shiny,
     points: finished?.detail.points ?? 0,
     report: { id, item, credits: shiny, remaining: left, finished },
+  };
+};
+
+/**
+ * `SP1` on a repairing building: full health now, free, when the repair has
+ * {@link FREE_SECONDS} or less left. The time left is the server's own reading
+ * of the caught-up save, `int((max − health) / rate)` (`repairSecondsLeft`),
+ * the seconds the original priced the finish by (`BFOUNDATION.as:2858-2861`).
+ * Healing clears `hp`, `rE` and the health entry, so a paused build or upgrade
+ * countdown runs again from here.
+ *
+ * @throws 409 `itemRefused` for any other item, or more than 300 s left.
+ */
+const planRepairFinish = (save: SpeedupSave, damage: Damage, item: SpeedupItem): SpeedupPlan => {
+  const { id, key } = damage;
+  const remaining = repairSecondsLeft(damage);
+  if (item !== "SP1") {
+    throw yardRefusedErr(
+      "itemRefused",
+      "A repair can only be finished free, with 5 minutes or less to go. Repair now finishes it for Shiny.",
+      { id, item, remaining }
+    );
+  }
+  if (remaining > FREE_SECONDS) {
+    throw yardRefusedErr("itemRefused", itemRefusedMessage(item), { id, item, remaining });
+  }
+
+  const buildinghealthdata: BuildingHealthData = { ...(save.buildinghealthdata ?? {}) };
+  delete buildinghealthdata[String(id)];
+  return {
+    buildingdata: { ...save.buildingdata, [key]: healed(save.buildingdata![key]!) },
+    buildinghealthdata,
+    shiny: 0,
+    points: 0,
+    report: { id, item, credits: 0, remaining: 0, finished: null, repaired: true },
   };
 };
 

@@ -137,10 +137,21 @@ export const repairNowPrice = (damaged: readonly RepairNow[]): number => {
   return timeCost(long.reduce((sum, seconds) => sum + seconds, 0)) + 10 * long.length;
 };
 
+/**
+ * Whether a repair can be finished free now (#279): it is running and has
+ * {@link FREE_FINISH_SECONDS} or less left. The server counts the seconds as
+ * `int((max − health) / rate)`, never more than {@link RepairNow.secondsLeft},
+ * so a repair this lets through is one the server takes too.
+ */
+export const canFinishFree = (damage: RepairNow): boolean =>
+  damage.repairing && damage.secondsLeft <= FREE_FINISH_SECONDS;
+
 /** What the building panel offers for one damaged building. */
 export interface RepairOffer {
   /** This building's damage, now. */
   readonly damage: RepairNow;
+  /** Finish free is on offer: see {@link canFinishFree}. */
+  readonly finishFree: boolean;
   /** Repair now's price: every damaged building in the yard, not just this one. */
   readonly nowPrice: number;
   /** How many buildings Repair now heals. */
@@ -162,6 +173,7 @@ export const repairOffer = (
   const nowPrice = repairNowPrice(damaged);
   return {
     damage,
+    finishFree: canFinishFree(damage),
     nowPrice,
     nowCount: damaged.length,
     nowBlocked: credits < nowPrice ? "credits" : null,

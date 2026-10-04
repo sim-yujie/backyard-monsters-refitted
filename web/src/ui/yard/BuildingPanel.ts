@@ -759,6 +759,7 @@ export class BuildingPanel {
         pending: (key, button) => this.pendingButtons.push({ key, button }),
         repair: () => void this.runRepair(building.id),
         repairNow: () => void this.runRepairNow(building.id),
+        finish: () => void this.runRepairFinish(building.id),
       },
       used,
     );
@@ -1275,6 +1276,13 @@ export class BuildingPanel {
       const left = repairOffer(id, store.save, store.credits, store.now())?.damage.secondsLeft;
       return [left ? `Repairing: back to full health in ${describeSeconds(left)}.` : "Repaired."];
     });
+  }
+
+  private async runRepairFinish(id: number): Promise<void> {
+    const store = this.yard?.store;
+    if (!store) return;
+    const result = await repairActions(store).finish(id);
+    this.report(id, result, () => ["Repaired."]);
   }
 
   private async runRepairNow(id: number): Promise<void> {

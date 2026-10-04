@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { BaseLoadResponse, BuildingData, YardResponse } from "./types";
+import type { BaseLoadResponse, BuildingData, SpeedupReport, YardResponse } from "./types";
 import type { YardApi } from "./yard";
 import { YardStore } from "@/game/yard/YardStore";
 import {
+  finishRepair,
   repairActions,
   repairAll,
   repairBuildings,
@@ -50,6 +51,14 @@ describe("repair routes", () => {
     expect(sent[0]!.body.get("ids")).toBe("[4,7]");
     expect(sent[1]!.body.get("all")).toBe("1");
   });
+
+  it("Finish free is the speed-up route's SP1 on the building (#279)", async () => {
+    stubFetch();
+    await finishRepair(4);
+    expect(sent[0]!.url).toMatch(/\/bm\/yard\/speedup$/);
+    expect(sent[0]!.body.get("id")).toBe("4");
+    expect(sent[0]!.body.get("item")).toBe("SP1");
+  });
 });
 
 const T0 = 2_000_000;
@@ -78,10 +87,19 @@ const setup = (buildings: BuildingData[]) => {
     }) as unknown as YardResponse<Report>;
   const started: RepairReport = { started: [1], skipped: [], doneBy: T0 + 24 };
   const healed: RepairInstantReport = { repaired: [1], credits: 0 };
+  const finished: SpeedupReport = {
+    id: 1,
+    item: "SP1",
+    credits: 0,
+    remaining: 0,
+    finished: null,
+    repaired: true,
+  };
   const api = {
     ids: vi.fn(() => Promise.resolve(answer(started))),
     all: vi.fn(() => Promise.resolve(answer(started))),
     now: vi.fn(() => Promise.resolve(answer(healed))),
+    finish: vi.fn(() => Promise.resolve(answer(finished))),
   } satisfies RepairApi;
   const store = new YardStore({
     save: {
@@ -125,6 +143,23 @@ describe("repairActions", () => {
     expect(await first).toMatchObject({ ok: true });
     expect(await second).toMatchObject({ ok: false, refusal: { reason: "notDamaged" } });
     expect(api.all).toHaveBeenCalledTimes(1);
+  });
+
+  it("Finish free goes out for a repair with five minutes or less left, and merges the answer (#279)", async () => {
+    const { api, actions } = setup([snapper(1, { hp: 100, rE: 1 })]);
+    expect(await actions.finish(1)).toMatchObject({ ok: true, report: { repaired: true } });
+    expect(api.finish).toHaveBeenCalledWith(1);
+  });
+
+  it("refuses Finish free locally on a repair not started, or one with more than five minutes left", async () => {
+    // A Town Hall 10 at no health heals for about an hour.
+    const { api, actions } = setup([
+      snapper(1, { hp: 100 }),
+      { id: 2, t: 14, l: 10, X: 0, Y: 80, hp: 0, rE: 1 },
+    ]);
+    expect(await actions.finish(1)).toMatchObject({ ok: false, refusal: { reason: "notDamaged", local: true } });
+    expect(await actions.finish(2)).toMatchObject({ ok: false, refusal: { reason: "itemRefused", local: true } });
+    expect(api.finish).not.toHaveBeenCalled();
   });
 
   it("Repair now goes out while anything is damaged, repairing or not", async () => {

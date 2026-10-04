@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { formatCountdown } from "@/ui/format";
 import { countdownProgress } from "./jobs";
+import { damageOf, repairAt } from "./repair";
 import type { Point } from "./YardGrid";
 import type { Yard, YardBuilding } from "./yardModel";
 
@@ -19,6 +20,12 @@ import type { Yard, YardBuilding } from "./yardModel";
  * answered by the server — takes its bar with it. Between changes the bars
  * are redrawn once a second from the same progress reading the building
  * panel uses (`countdownProgress`, `jobs.ts`), so the two cannot disagree.
+ *
+ * A building being repaired gets a bar too (#279), green, filling with its
+ * health and showing the time to full health. The original drew "Repairing"
+ * over the building with its health bar filling under it, in place of the
+ * build or upgrade bar (`client/scripts/com/monsters/display/BuildingOverlay.as:124-126`,
+ * `:225-232`), so a repair's bar stands in for the paused countdown's.
  *
  * The layer sits above every building, so a bar is never hidden behind the
  * building in front; bars are added in the yard's depth order, so where two
@@ -41,14 +48,15 @@ const MAX_COUNTER_SCALE = 1.8;
 
 const BUILD_FILL = 0xffd479;
 const UPGRADE_FILL = 0x8fd0ff;
+const REPAIR_FILL = 0x7fdc6b;
 const PAUSED_FILL = 0x9aa4ad;
 const TRACK = 0x0f1c26;
 
 /** What one bar reads at a moment. */
 export interface JobBarState {
   readonly id: number;
-  readonly kind: "build" | "upgrade";
-  /** 0 just started, 1 done. */
+  readonly kind: "build" | "upgrade" | "repair";
+  /** 0 just started, 1 done; for a repair, the health now over full health. */
   readonly fraction: number;
   readonly remaining: number;
   readonly paused: boolean;
@@ -62,14 +70,47 @@ const hasBar = (building: YardBuilding): building is YardBuilding & {
 } => building.countdown?.kind === "build" || building.countdown?.kind === "upgrade";
 
 /**
+ * A running repair's bar at `now`, read the way the building panel reads it
+ * (`damageOf`, `repairAt`); null when the repair is done by then (the store
+ * is about to flip it), and undefined when the building is not repairing, so
+ * its countdown's bar is drawn instead.
+ */
+const repairBar = (
+  building: YardBuilding,
+  savedAt: number,
+  now: number,
+): JobBarState | null | undefined => {
+  if (!building.raw.rE) return undefined;
+  const health = building.hp === null ? null : { [String(building.id)]: building.hp };
+  const damage = damageOf(building.raw, { buildinghealthdata: health }, String(building.id));
+  if (!damage) return undefined;
+  const at = repairAt(damage, { savetime: savedAt, currenttime: savedAt }, now);
+  if (at.now >= at.max) return null;
+  return {
+    id: building.id,
+    kind: "repair",
+    fraction: at.now / at.max,
+    remaining: at.secondsLeft,
+    paused: false,
+    label: formatCountdown(at.secondsLeft),
+  };
+};
+
+/**
  * Every bar the yard should show at `now` (server clock), in depth order:
- * one per building with a build or upgrade still running. None on a foreign
- * yard. A job whose time is up is left out: the store is about to flip it.
+ * one per building with a build or upgrade still running or a repair under
+ * way. None on a foreign yard. A job whose time is up is left out: the store
+ * is about to flip it.
  */
 export const jobBarStates = (yard: Yard, now: number): JobBarState[] => {
   if (yard.foreign) return [];
   const bars: JobBarState[] = [];
   for (const building of yard.buildings) {
+    const repair = repairBar(building, yard.savedAt, now);
+    if (repair !== undefined) {
+      if (repair) bars.push(repair);
+      continue;
+    }
     if (!hasBar(building)) continue;
     const progress = countdownProgress(building, now, yard.kind);
     if (!progress) continue;
@@ -246,7 +287,13 @@ export class YardJobBars {
 
 /** Draws a bar's fill and text for a state. */
 const paint = (bar: BarView, state: JobBarState): void => {
-  const color = state.paused ? PAUSED_FILL : state.kind === "build" ? BUILD_FILL : UPGRADE_FILL;
+  const color = state.paused
+    ? PAUSED_FILL
+    : state.kind === "repair"
+      ? REPAIR_FILL
+      : state.kind === "build"
+        ? BUILD_FILL
+        : UPGRADE_FILL;
   const width = Math.max(0, Math.min(1, state.fraction)) * BAR_WIDTH;
   bar.fill.clear();
   if (width > 0) {

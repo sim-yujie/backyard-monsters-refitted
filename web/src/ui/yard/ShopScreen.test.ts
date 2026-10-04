@@ -41,6 +41,7 @@ const setup = (extra: Partial<BaseLoadResponse> = {}, kind: "main" | "outpost" =
   const repair: RepairActions = {
     one: vi.fn(),
     all: vi.fn(),
+    finish: vi.fn(),
     now: vi.fn(
       (): Promise<YardActionResult<RepairInstantReport>> =>
         Promise.resolve({ ok: true, report: { repaired: [1], credits: 12 }, completed: [] }),

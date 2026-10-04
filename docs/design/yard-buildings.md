@@ -894,6 +894,16 @@ whole window (at most an hour early). `FIX` prices every damaged building, repai
 original's Repair Now did after starting a repair on each. The building panel shows a repair block
 above the upgrade (Repair, free; Repair all N now, Shiny, free when every repair is ≤ 300 s).
 
+As built (#279): a repair with 300 s or less left can be finished free on its own, as a build or
+upgrade can. The route is `POST /bm/yard/speedup` with `SP1`, which on a repairing building heals it
+to full instead of touching its paused countdown (the original spent the speed-up on the repair,
+`client/scripts/STORE.as:2056-2061`, and priced it by the repair time left, free at ≤ 300 s,
+`STORE.as:162-171`, `:354-355`). The server counts the time left itself (`int((max − health) /
+rate)` on the caught-up save); `SP2`–`SP4` are refused on a repair (`itemRefused`). The repair block
+shows **Finish free** in the last five minutes, and a repairing building gets a green bar over it in
+the yard like the build/upgrade bar: it fills with the building's health and shows the time left (the
+original drew "Repairing" and the filling health bar, `client/scripts/com/monsters/display/BuildingOverlay.as:124-126`, `:225-232`).
+
 ### 5.6 Mushrooms (D14)
 
 - Catch-up respawns one mushroom per 17,280 s since `mushrooms.s`, at most 10 per catch-up and 10
