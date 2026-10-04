@@ -76,8 +76,10 @@ const findRealNeighbours = async (
   em: EntityManager,
   forUserid: number,
   levels: LevelWindow,
-  seenSince: Date
+  seenSince: Date,
+  exclude: number[]
 ): Promise<RealNeighbourRow[]> => {
+  const skipped = [forUserid, ...exclude];
   const { low, high } = empirePointsRange(levels);
   const range: string[] = [];
   const rangeParams: number[] = [];
@@ -102,14 +104,14 @@ const findRealNeighbours = async (
       FROM bym."user" u
       JOIN bym.save s ON s.userid = u.userid AND s.type = ?
       WHERE u.last_seen_at >= ?
-        AND u.userid <> ?
+        AND u.userid NOT IN (${skipped.map(() => "?").join(", ")})
         AND s.mapversion = ?
         AND NOT EXISTS (SELECT 1 FROM bym.bot b WHERE b.userid = u.userid)
         ${range.join("\n        ")}
       ORDER BY u.last_seen_at DESC, u.userid
       LIMIT ?
     `,
-    [BaseType.MAIN, seenSince, forUserid, MapRoomVersion.V1, ...rangeParams, NEIGHBOUR_LIMIT]
+    [BaseType.MAIN, seenSince, ...skipped, MapRoomVersion.V1, ...rangeParams, NEIGHBOUR_LIMIT]
   );
 };
 
@@ -120,6 +122,8 @@ export interface FindNeighboursOptions {
   fill?: boolean;
   /** A source of numbers in [0, 1) for the bot picks and the order; `Math.random` by default. */
   random?: () => number;
+  /** Players and bots to leave out: those dropped today by the attack cap (issue #247). */
+  exclude?: number[];
 }
 
 /**
@@ -149,11 +153,12 @@ export const findOverworldNeighbours = async (
   const now = options.now ?? new Date();
   const fill = options.fill ?? botConfig().fill;
   const random = options.random ?? Math.random;
+  const exclude = options.exclude ?? [];
 
   const levels = neighbourLevelWindow(calculateBaseLevel(save.points, save.basevalue));
   const seenSince = new Date(now.getTime() - ACTIVE_PLAYER_DAYS * 24 * 60 * 60 * 1000);
 
-  const reals = await findRealNeighbours(em, user.userid, levels, seenSince);
+  const reals = await findRealNeighbours(em, user.userid, levels, seenSince, exclude);
 
   const neighbours = reals.map((row) =>
     createNeighbourData(
@@ -166,7 +171,7 @@ export const findOverworldNeighbours = async (
   const empty = NEIGHBOUR_LIMIT - neighbours.length;
 
   if (fill && empty > 0) {
-    const taken = new Set(neighbours.map((neighbour) => neighbour.userid));
+    const taken = new Set([...neighbours.map((neighbour) => neighbour.userid), ...exclude]);
     const candidates = await findBotCandidates(em, user.userid, levels, Math.floor(now.getTime() / 1000));
     const bots = pickBotNeighbours(
       candidates.filter((bot) => !taken.has(bot.userid)),

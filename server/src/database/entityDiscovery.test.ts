@@ -72,6 +72,8 @@ describe("entity discovery", () => {
         created_at: { type: "timestamptz", nullable: false },
       });
       expect(columns("User").last_seen_at).toEqual({ type: "timestamptz", nullable: true });
+      // The attack cap's dropped neighbours (issue #247), against its migration.
+      expect(columns("Maproom").dropped_neighbours).toEqual({ type: "jsonb", nullable: false });
     } finally {
       await orm.close();
     }

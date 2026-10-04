@@ -21,6 +21,51 @@ export const MIN_ATTACKABLE = 5;
 export type NeighbourCache = { neighborsLastCalculated?: Date; neighbors: unknown[] };
 
 /**
+ * A Map Room 1 neighbour dropped from a player's list by the 10 attacks a day
+ * cap (`registerAttacker`), and the day it happened (issue #247).
+ */
+export interface DroppedNeighbour {
+  userid: number;
+  /** The start of the day of the drop, in unix seconds ({@link dayStart}). */
+  day: number;
+}
+
+/** The start of `now`'s day in unix seconds: the day the attack cap counts in. */
+export const dayStart = (now: Date): number => new Date(now).setHours(0, 0, 0, 0) / 1000;
+
+/**
+ * The neighbours dropped on `now`'s day, whom a re-search leaves out until
+ * the day rolls over (issue #247).
+ *
+ * @param {DroppedNeighbour[] | null | undefined} dropped - The maproom row's dropped list
+ * @param {Date} now - The current time
+ * @returns {number[]} Their user ids
+ */
+export const droppedToday = (dropped: DroppedNeighbour[] | null | undefined, now: Date): number[] => {
+  const today = dayStart(now);
+  return (dropped ?? []).filter((entry) => entry.day === today).map((entry) => entry.userid);
+};
+
+/**
+ * The dropped list with `userid` noted as dropped today. Earlier days'
+ * entries are let go, so the list never holds more than one day's drops.
+ *
+ * @param {DroppedNeighbour[] | null | undefined} dropped - The maproom row's dropped list
+ * @param {number} userid - The neighbour just dropped
+ * @param {Date} now - The current time
+ * @returns {DroppedNeighbour[]} The new list
+ */
+export const noteDropped = (
+  dropped: DroppedNeighbour[] | null | undefined,
+  userid: number,
+  now: Date
+): DroppedNeighbour[] => {
+  const day = dayStart(now);
+  const kept = (dropped ?? []).filter((entry) => entry.day === day && entry.userid !== userid);
+  return [...kept, { userid, day }];
+};
+
+/**
  * Determines whether a new neighbour search should be run.
  *
  * Returns true immediately if no search has ever been run. Otherwise applies

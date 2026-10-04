@@ -3,6 +3,7 @@ import { User } from "../../../database/models/user.model.js";
 import { postgres } from "../../../server.js";
 import { calculateBaseLevel } from "../../base/calculateBaseLevel.js";
 import { createNeighbourData } from "../createNeighbourData.js";
+import { dayStart, noteDropped } from "../neighbourCache.js";
 
 /**
  * Adds the attacker to the defender's neighbor list for retaliation purposes.
@@ -10,6 +11,10 @@ import { createNeighbourData } from "../createNeighbourData.js";
  * When a player attacks another player's MR1 base, the attacker is automatically
  * added to the defender's neighbor list (if not already present). This allows the
  * defender to see who attacked them and enables potential retaliation.
+ *
+ * The 10th attack in a day on the same neighbour drops the pair from both
+ * lists and notes the drop on both maproom rows, so a re-search leaves the
+ * pair out until the day rolls over (issue #247).
  *
  * @notes the client has a maximum of 180 neighbors that can theoretically be displayed
  *
@@ -65,7 +70,8 @@ export const registerAttacker = async (attacker: User, defender: User) => {
   if (existingDefender) {
     existingDefender.attacksto = (existingDefender.attacksto ?? 0) + 1;
 
-    const todayStart = new Date().setHours(0, 0, 0, 0) / 1000;
+    const now = new Date();
+    const todayStart = dayStart(now);
 
     if (existingDefender.attacksTodayDate < todayStart) {
       existingDefender.attacksTodayCount = 0;
@@ -82,6 +88,9 @@ export const registerAttacker = async (attacker: User, defender: User) => {
       defenderMaproom.neighbors = defenderMaproom.neighbors.filter(
         (neighbor) => neighbor.userid !== attacker.userid
       );
+
+      attackerMaproom.droppedNeighbours = noteDropped(attackerMaproom.droppedNeighbours, defender.userid, now);
+      defenderMaproom.droppedNeighbours = noteDropped(defenderMaproom.droppedNeighbours, attacker.userid, now);
     }
   }
 

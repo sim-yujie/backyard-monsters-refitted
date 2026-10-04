@@ -11,6 +11,7 @@ import { findOverworldNeighbours } from "../../services/maproom/v1/findOverworld
 import { updateNeighbourData } from "../../services/maproom/updateNeighbourData.js";
 import {
   carryAttackCounters,
+  droppedToday,
   needsAttackableRetry,
   needsNewNeighbours,
 } from "../../services/maproom/neighbourCache.js";
@@ -115,7 +116,8 @@ const getOverworldNeighbours: KoaController = async (ctx) => {
  * The list is also re-searched, once the 30-minute retry has passed, when
  * fewer than 5 of its neighbours can be attacked now (issue #236,
  * `docs/design/bot-neighbours.md` §4.3). Every re-search keeps the attack
- * counters of neighbours who stay on the list.
+ * counters of neighbours who stay on the list, and leaves out neighbours
+ * dropped today by the 10 attacks a day cap (issue #247).
  *
  * @param {User} user - The player.
  * @param {Save} save - Their main save, with at least `points` and `basevalue`.
@@ -130,7 +132,10 @@ export const overworldNeighbours = async (user: User, save: Save): Promise<Neigh
   const currentDate = new Date();
 
   const research = async (cache: Maproom) => {
-    const foundNeighbours = await findOverworldNeighbours(postgres.em, user, save, { now: currentDate });
+    const foundNeighbours = await findOverworldNeighbours(postgres.em, user, save, {
+      now: currentDate,
+      exclude: droppedToday(cache.droppedNeighbours, currentDate),
+    });
 
     cache.neighbors = carryAttackCounters(cache.neighbors, foundNeighbours);
     cache.neighborsLastCalculated = currentDate;

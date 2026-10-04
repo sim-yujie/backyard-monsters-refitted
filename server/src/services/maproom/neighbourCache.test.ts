@@ -5,6 +5,9 @@ import type { NeighbourData } from "../../types/NeighbourData.js";
 import {
   MIN_ATTACKABLE,
   carryAttackCounters,
+  dayStart,
+  droppedToday,
+  noteDropped,
   needsAttackableRetry,
   needsNewNeighbours,
 } from "./neighbourCache.js";
@@ -86,5 +89,31 @@ describe("carryAttackCounters", () => {
       neighbour(2, { attacksfrom: 3, attacksto: 1, retaliatecount: 2, level: 6 }),
       neighbour(4),
     ]);
+  });
+});
+
+describe("the attack cap's dropped list (issue #247)", () => {
+  const morning = new Date(2026, 9, 3, 9, 0, 0);
+  const evening = new Date(2026, 9, 3, 23, 59, 0);
+  const nextDay = new Date(2026, 9, 4, 0, 1, 0);
+
+  test("a drop is noted for its day and holds until the day rolls over", () => {
+    const dropped = noteDropped([], 5, morning);
+
+    expect(dropped).toEqual([{ userid: 5, day: dayStart(morning) }]);
+    expect(droppedToday(dropped, evening)).toEqual([5]);
+    expect(droppedToday(dropped, nextDay)).toEqual([]);
+  });
+
+  test("a new drop lets go of earlier days and never doubles a neighbour", () => {
+    const yesterday = noteDropped(noteDropped([], 5, morning), 6, evening);
+    const today = noteDropped(noteDropped(yesterday, 7, nextDay), 7, nextDay);
+
+    expect(today).toEqual([{ userid: 7, day: dayStart(nextDay) }]);
+  });
+
+  test("a row with no list yet has nothing dropped", () => {
+    expect(droppedToday(undefined, morning)).toEqual([]);
+    expect(droppedToday(null, morning)).toEqual([]);
   });
 });

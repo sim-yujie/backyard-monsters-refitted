@@ -213,3 +213,21 @@ describe("findOverworldNeighbours", () => {
     expect(neighbours.map((n) => n.userid).sort((a, b) => a - b)).toEqual([2, 50]);
   });
 });
+
+describe("neighbours dropped today by the attack cap (issue #247)", () => {
+  test("are left out of the real-player search", async () => {
+    const { em, queries } = fakeEm([]);
+    await findOverworldNeighbours(em, player, levelFive, { now: NOW, fill: false, exclude: [7, 8] });
+
+    const [{ sql, params }] = queries;
+    expect(sql).toContain("u.userid NOT IN (?, ?, ?)");
+    expect(params.slice(2, 5)).toEqual([1, 7, 8]);
+  });
+
+  test("are never picked as bots", async () => {
+    const { em } = fakeEm([realRow(2)], [botRow(50), botRow(51)]);
+    const neighbours = await findOverworldNeighbours(em, player, levelFive, { now: NOW, fill: true, exclude: [50] });
+
+    expect(neighbours.map((n) => n.userid).sort((a, b) => a - b)).toEqual([2, 51]);
+  });
+});

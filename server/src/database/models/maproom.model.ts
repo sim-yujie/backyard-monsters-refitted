@@ -4,6 +4,7 @@ import type { Opt } from "@mikro-orm/core";
 import { User } from "./user.model.js";
 import type { NeighbourData } from "../../types/NeighbourData.js";
 import type { TribeData } from "../../types/TribeData.js";
+import type { DroppedNeighbour } from "../../services/maproom/neighbourCache.js";
 
 @Entity({ tableName: "maproom" })
 export class Maproom {
@@ -18,6 +19,10 @@ export class Maproom {
 
   @Property({ type: Date, nullable: true })
   neighborsLastCalculated?: Date;
+
+  /** Neighbours dropped today by the daily attack cap; a re-search leaves them out (issue #247). */
+  @Property({ columnType: "jsonb" })
+  droppedNeighbours: Opt<DroppedNeighbour[]> = [];
 
   @Property({ type: Date })
   createdAt: Opt<Date> = new Date();
