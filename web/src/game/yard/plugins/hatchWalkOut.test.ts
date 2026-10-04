@@ -37,7 +37,17 @@ const hatched = (monster: string, count: number): CompletedJob => ({
   detail: { count },
 });
 
-const predicted = (...jobs: YardJob[]): YardChange => ({ reason: YardChangeReason.PREDICTED, completed: [], predicted: jobs });
+/** The store's prediction of `jobs`, each hatch housed unless listed in `stalled` (#272). */
+const predicted = (...jobs: YardJob[]): YardChange => stalledOf([], ...jobs);
+const stalledOf = (stalled: number[], ...jobs: YardJob[]): YardChange => ({
+  reason: YardChangeReason.PREDICTED,
+  completed: [],
+  predicted: jobs,
+  hatched: jobs.flatMap((job) => {
+    const monster = job.kind === JobKind.HATCH ? hatchingMonster(save.monsters, job.buildingId!) : null;
+    return monster ? [{ hatchery: job.buildingId!, monster, housed: !stalled.includes(job.buildingId!) }] : [];
+  }),
+});
 const answered = (...completed: CompletedJob[]): YardChange => ({ reason: YardChangeReason.REFRESH, completed, predicted: [] });
 
 describe("which Hatchery makes what", () => {
@@ -55,10 +65,18 @@ describe("which Hatchery makes what", () => {
 });
 
 describe("plannedWalks", () => {
-  it("walks a predicted hatch from its Hatchery, the pens held at what is housed now", () => {
-    const { walks, ahead } = plannedWalks(predicted(hatchJob(4)), save, new Map());
+  it("walks a predicted hatch from its Hatchery, the pens held at what is housed less it", () => {
+    // The prediction already housed it: 15 before, 16 now (#272).
+    const housedNow = { ...save, monsters: { ...save.monsters, housed: { C1: 16, C2: 2 } } } as BaseLoadResponse;
+    const { walks, ahead } = plannedWalks(predicted(hatchJob(4)), housedNow, new Map());
     expect(walks).toEqual([{ monster: "C1", count: 1, hatcheries: [4], cap: 15 }]);
     expect([...ahead]).toEqual([["C1", 1]]);
+  });
+
+  it("walks nothing for a hatch that stalled for room (#272)", () => {
+    const { walks, ahead } = plannedWalks(stalledOf([4], hatchJob(4)), save, new Map());
+    expect(walks).toEqual([]);
+    expect(ahead.size).toBe(0);
   });
 
   it("walks only what the server hatched beyond the predictions, and starts the count again", () => {
@@ -127,7 +145,8 @@ describe("HatchWalkOuts", () => {
     const { walks, renderer, release, emit } = setUp();
     emit(predicted(hatchJob(4)));
     expect(walks.walking).toBe(1);
-    expect(renderer.holdLife).toHaveBeenCalledWith("C1", 15);
+    // The save counts it already; the pens show one fewer until it arrives.
+    expect(renderer.holdLife).toHaveBeenCalledWith("C1", 14);
     expect(release).not.toHaveBeenCalled();
 
     walks.destroy();

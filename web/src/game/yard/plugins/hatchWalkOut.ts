@@ -15,9 +15,11 @@ import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
  * Two things say a monster hatched:
  *
  * - **The client's prediction.** When a hatchery's countdown reaches zero the
- *   store flips the display and announces the job (`predicted`). The walk
- *   starts then, from that Hatchery, with the monster it was making. The
- *   server's answer, up to 10 s later (#142), is what houses it.
+ *   store houses the monster in its copy of the save at once, so every housing
+ *   count includes it, and announces the job (`predicted`, with `hatched`
+ *   saying what each hatch did; #272). The walk starts then, from that
+ *   Hatchery. A hatch housing had no room for stalls instead, and nothing
+ *   walks. The server's answer, up to 10 s later (#142), confirms it.
  * - **The server's catch-up.** Every answer lists what hatched since the last
  *   one, per type (`completed`, kind `hatch`). That is the same monsters again
  *   plus any the prediction could not see: a hatchery making one faster than
@@ -61,8 +63,9 @@ export const hatcheriesFor = (monsters: BaseLoadResponse["monsters"], monster: s
  * The walks one store change starts, and how many of each type have walked
  * ahead of the server since its last answer (`ahead`, carried to the next call).
  *
- * A prediction walks one monster from its Hatchery, with the pens held at what
- * is housed now, which is not yet it. A server answer walks what it hatched
+ * A prediction walks one monster from its Hatchery for each hatch it housed,
+ * with the pens held at what is housed less those, as the save already counts
+ * them. A server answer walks what it hatched
  * beyond those, with the pens held at what is housed less them, and starts the
  * count again; a predicted hatch the server did not make (housing filled up)
  * is forgotten with it.
@@ -75,12 +78,16 @@ export const plannedWalks = (
   const walks: HatchWalk[] = [];
   if (change.reason === YardChangeReason.PREDICTED) {
     const next = new Map(ahead);
-    for (const job of change.predicted) {
-      if (job.kind !== JobKind.HATCH || job.buildingId === null) continue;
-      const monster = hatchingMonster(save.monsters, job.buildingId);
-      if (!monster) continue;
-      walks.push({ monster, count: 1, hatcheries: [job.buildingId], cap: housedCount(save, monster) });
-      next.set(monster, (next.get(monster) ?? 0) + 1);
+    const housed = (change.hatched ?? []).filter((hatch) => hatch.housed);
+    for (const hatch of housed) {
+      const walking = housed.filter((one) => one.monster === hatch.monster).length;
+      walks.push({
+        monster: hatch.monster,
+        count: 1,
+        hatcheries: [hatch.hatchery],
+        cap: housedCount(save, hatch.monster) - walking,
+      });
+      next.set(hatch.monster, (next.get(hatch.monster) ?? 0) + 1);
     }
     return { walks, ahead: next };
   }

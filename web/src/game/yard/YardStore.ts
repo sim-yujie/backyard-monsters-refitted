@@ -20,6 +20,7 @@ import type { BankedByBuilding } from "./harvest";
 import type { HatcheryMarks } from "./YardHatchMarks";
 import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
 import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES, type YardKind } from "./buildingCosts";
+import { predictHatches, type HatchPrediction } from "@/game/monsters/hatchPredict";
 import { JobKind, predictCompletion, SERVER_COMPLETED_KINDS, yardJobs, type YardJob } from "./jobs";
 import { IncomePrediction, overdriveEndOf } from "./outpostIncome";
 import { MAIN_YARD, outpostBaseid, type OwnYardTarget } from "./ownYards";
@@ -138,6 +139,11 @@ export interface YardChange {
   readonly completed: readonly CompletedJob[];
   /** The jobs the client just predicted finished (`predicted` only). */
   readonly predicted: readonly YardJob[];
+  /**
+   * What the predicted hatches did (`predicted` only): housed at once, or
+   * stalled for room (#272).
+   */
+  readonly hatched?: readonly HatchPrediction[];
 }
 
 export type YardListener = (change: YardChange) => void;
@@ -497,8 +503,9 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     if (due.length === 0) return;
 
     for (const job of due) this.handled.add(handledKey(job));
-    this.setSave(predictCompletion(this.current, due));
-    this.emit({ reason: YardChangeReason.PREDICTED, completed: [], predicted: due });
+    const { save, hatched } = predictHatches(predictCompletion(this.current, due), due);
+    this.setSave(save);
+    this.emit({ reason: YardChangeReason.PREDICTED, completed: [], predicted: due, hatched });
     const hatchesOnly = due.every((job) => job.kind === JobKind.HATCH);
     this.scheduleRefresh(hatchesOnly ? this.hatchRefreshDelayMs : this.refreshDelayMs);
   }

@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/http";
 import type { BaseLoadResponse, BuildingDataMap, YardResponse, YardState } from "@/api/types";
 import type { YardApi } from "@/api/yard";
+import { housingSummary } from "@/game/monsters/housing";
+import { housingSpace } from "@/game/monsters/monsterCatalogue";
 import {
   YardChangeReason,
   YardStore,
@@ -208,6 +210,28 @@ describe("finishing jobs", () => {
     time.advance(1);
     await flush();
     expect(api.state).toHaveBeenCalledTimes(1);
+  });
+
+  it("houses a predicted hatch at once, before the server answers (#272)", () => {
+    const api = stubApi({ state: vi.fn(() => Promise.resolve(answer(T0 + 15))) });
+    const { store, changes, time } = storeWith(
+      hatching({ "6": { X: 500, Y: 0, t: 15, id: 6, l: 1 } }),
+      api,
+    );
+    time.advance(5);
+    store.tick();
+    expect(store.save.monsters?.housed?.["C1"]).toBe(1);
+    expect(housingSummary(store.save, store.now()).used).toBe(housingSpace("C1", 1));
+    expect(changes.at(-1)?.hatched).toEqual([{ hatchery: 5, monster: "C1", housed: true }]);
+    expect(api.state).not.toHaveBeenCalled();
+  });
+
+  it("stalls a predicted hatch with no Housing to take it (#272)", () => {
+    const { store, changes, time } = storeWith(hatching(), stubApi());
+    time.advance(5);
+    store.tick();
+    expect(store.save.monsters?.housed?.["C1"]).toBeUndefined();
+    expect(changes.at(-1)?.hatched).toEqual([{ hatchery: 5, monster: "C1", housed: false }]);
   });
 
   it("pulls a waiting hatch refresh in when an upgrade ends meanwhile (#142)", async () => {
