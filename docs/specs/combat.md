@@ -825,6 +825,19 @@ Every `BTOWER` constructs with `_maxTargets = 1` and `_priority = 1`
 override: `SpurtzCannon` sets `_maxTargets = 10` (`client/scripts/SpurtzCannon.as:53`) and
 `HOUSINGBUNKER` calls `FindTargets(3)` (`client/scripts/HOUSINGBUNKER.as:270`).
 
+**The Railgun's shot is a beam** (`BUILDING118.Fire`, `client/scripts/BUILDING118.as:120-202`).
+It leaves from the building's drawn anchor 15 px down the screen (`_top`, `:39`, `:146`) and runs
+50 segments of 32 screen px towards its target, 1,600 px in all, on past the target (`:157`,
+`:171-189`). It hurts every creep among those within 1,600 yard units of the muzzle
+(`getCreepsInRange`, `:187`) whose screen point lies within 20 px of that line
+(`lineIntersectCircle`, `:204-222`), each by `damage * (0.5 + 0.5 * health / maxHealth)` of the
+Railgun's own health (`:133`, `:194-195`). It scans with its own `attackFlags`, the trap's
+`getOldStyleTargets(-1)` (`:44`), so the beam hits ground and invisible creeps and never a flyer.
+A screen pixel is 0.71 yard units across the screen and 1.41 down it, so the line reaches 1,131
+yard units across the screen and is cut to the 1,600 yard reach down it; the 20 px half-width is
+28 yard units either side of a line across the screen and 14 of one down it. The engine does the
+test on screen, as Flash does (issue #261).
+
 Note that `rate` is used inconsistently. The fire loop re-arms with `_rate * 2`
 (`BTOWER.as:179`) while the upgrade tooltip prints damage per second as `damage * 40 / rate`
 (`BTOWER.as:144-148`). The two disagree by a factor of two; the fire loop is what actually runs.
@@ -1502,7 +1515,8 @@ The active set depends on which side the player is on. `_powerups` is the defend
   the same field name; only the monster halving was traced to source.
 - **`targetMode`** on `BTOWER` versus the `_targetFlyerMode` lookup: `BUILDING118.as:44` and
   `INFERNOQUAKETOWER.as:29` set `attackFlags = getOldStyleTargets(-1)`, but `FindTargets` reads the
-  static map instead, so those assignments appear to have no effect. Not confirmed.
+  static map instead, so those assignments do not change what the tower aims at. The Railgun's
+  beam does read its own `attackFlags` (`BUILDING118.as:187`), which keeps flyers off it.
 
 ---
 

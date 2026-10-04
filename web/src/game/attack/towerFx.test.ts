@@ -245,6 +245,26 @@ describe("TowerFx", () => {
     fx.destroy();
   });
 
+  it("lays the Railgun's gun-balls along the whole beam the engine hurt along (#261)", () => {
+    const target = creepAt(35, 235);
+    const fired = (beam?: { fromIx: number; fromIy: number; toIx: number; toIy: number }) => {
+      const { graphics, fx } = setUp(118);
+      const shot = { tick: 1, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy };
+      fx.onShot(beam ? { ...shot, beam } : shot, target);
+      fx.update(1, () => target);
+      const bounds = graphics.getLocalBounds();
+      fx.destroy();
+      return bounds;
+    };
+    // Straight down the screen from the muzzle, 1,600 px: the drawing spans all of it.
+    const whole = fired({ fromIx: 15, fromIy: 15, toIx: 1615, toIy: 1615 });
+    expect(whole.height).toBeGreaterThanOrEqual(1600);
+    expect(whole.height).toBeLessThan(1620);
+    expect(whole.width).toBeLessThan(40);
+    // Without one, the trail stops just past its target.
+    expect(fired().height).toBeLessThan(400);
+  });
+
   it("ignores a shot from a building it does not know", () => {
     const { frames, graphics, fx } = setUp(21);
     fx.onShot({ tick: 1, towerId: 77, creepId: 9, ix: 0, iy: 0 }, undefined);

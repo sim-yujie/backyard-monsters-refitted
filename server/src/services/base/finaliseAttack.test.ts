@@ -412,11 +412,12 @@ describe("finaliseAbandonedAttack", () => {
   }, REPLAY_TIMEOUT_MS);
 
   describe("a fallen bunker's garrison (issue #130)", () => {
-    // Three hundred Pokeys dropped among the sandbox's four Monster Bunkers.
+    // Three hundred Pokeys dropped among the sandbox's four Monster Bunkers, where
+    // enough get past the Railguns' beams (issue #261) to bring both stocked ones down.
     const RAID = {
       v: 1 as const,
       seed: 1834027731,
-      events: [{ kind: "fling" as const, t: 480, x: 495, y: -425, r: 300, monsters: { C1: 300 } }],
+      events: [{ kind: "fling" as const, t: 480, x: 450, y: -350, r: 300, monsters: { C1: 300 } }],
     };
 
     const stock = () => {
@@ -449,11 +450,12 @@ describe("finaliseAbandonedAttack", () => {
   });
 
   describe("a fallen Housing's monsters (issue #160)", () => {
-    // Three hundred Pokeys dropped among the sandbox's four level 6 Housings.
+    // Three hundred Pokeys dropped among the sandbox's four level 6 Housings, where
+    // enough get past the Railguns' beams (issue #261) to bring Housings down.
     const RAID = {
       v: 1 as const,
       seed: 1834027731,
-      events: [{ kind: "fling" as const, t: 480, x: 555, y: -55, r: 300, monsters: { C1: 300 } }],
+      events: [{ kind: "fling" as const, t: 480, x: 650, y: 50, r: 300, monsters: { C1: 300 } }],
     };
     const HOUSINGS = ["82", "584", "585", "586"];
 

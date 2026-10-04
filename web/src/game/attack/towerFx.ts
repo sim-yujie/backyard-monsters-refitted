@@ -1,5 +1,5 @@
 import type { Graphics } from "pixi.js";
-import { isTower, towerStats, type CreepSnapshot } from "@/game/combat/rules";
+import { isTower, towerStats, type BeamLine, type CreepSnapshot } from "@/game/combat/rules";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import type { Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
@@ -34,7 +34,8 @@ import { flyerAltitude } from "./monsterSprites";
  * per tick and re-aims at its target every five ticks (`PROJECTILE.as:33-46`);
  * the Laser sweeps a beam across its target for a hundred ticks (`LASER.as`);
  * the Tesla forks a bolt (`EFFECTS.Lightning`); the Railgun lays a glowing
- * trail of gun-balls along its line of fire (`BUILDING118.as:145-185`).
+ * trail of gun-balls along its line of fire (`BUILDING118.as:145-185`), all
+ * 1,600 px of the beam the engine hurt along (issue #261).
  *
  * A `PROJECTILE` dealt its damage when it arrived, not when it was fired
  * (`PROJECTILE.as:31-50`), so each bullet reports its landing tick to the
@@ -312,6 +313,8 @@ export interface ShotLike {
   readonly creepId: number;
   readonly ix: number;
   readonly iy: number;
+  /** The Railgun's beam (issue #261), yard units at both ends. */
+  readonly beam?: BeamLine;
 }
 
 /** Repeatable jitter from a tick and an index, in `[0, 1)`. */
@@ -400,14 +403,19 @@ export class TowerFx {
       return null;
     }
     if (type === 118) {
-      const dx = aim.x - from.x;
-      const dy = aim.y - from.y;
+      // The beam the engine hurt along (issue #261), on the ground as it was
+      // measured; a shot without one runs just past its target.
+      const beam = event.beam;
+      const start = beam ? this.groundAt(beam.fromIx, beam.fromIy) : from;
+      const end = beam ? this.groundAt(beam.toIx, beam.toIy) : aim;
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
       const distance = Math.hypot(dx, dy) || 1;
       this.rails.push({
-        from,
+        from: start,
         dirX: dx / distance,
         dirY: dy / distance,
-        length: distance + RAIL_SEGMENT * 2,
+        length: beam ? distance : distance + RAIL_SEGMENT * 2,
         tick: event.tick,
       });
       this.flashes.push({ at: from, tick: event.tick });
@@ -515,6 +523,11 @@ export class TowerFx {
   }
 
   /* ── Projectiles ────────────────────────────────────────────────────── */
+
+  /** The world point of a yard position on the ground. */
+  private groundAt(ix: number, iy: number): Point {
+    return { x: ix - iy + this.origin.x, y: (ix + iy) / 2 + this.origin.y };
+  }
 
   /** The world point a shot is aimed at: the creep's body, or its altitude. */
   private aimAt(creep: CreepSnapshot | undefined, ix: number, iy: number): Point {

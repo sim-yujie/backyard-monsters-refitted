@@ -545,6 +545,67 @@ export const trapDamageAt = (type: number, distance: number): number => {
   return (trap.damage / trap.size) * (trap.size - distance * 0.5);
 };
 
+/**
+ * The Railgun (issue #261), whose shot is a beam rather than a bullet.
+ *
+ * `BUILDING118.Fire` (`client/scripts/BUILDING118.as:120-202`) fires from its
+ * drawn anchor {@link RAILGUN_MUZZLE_DROP} px down the screen (`_top`, `:39`,
+ * `:146`) towards its target, and lays {@link RAILGUN_SEGMENTS} segments of
+ * {@link RAILGUN_SEGMENT} screen px along that bearing (`:157`, `:171-185`): a
+ * line 1,600 px long that runs on past the target (`:189`). Every creep among
+ * those within {@link RAILGUN_REACH} of the muzzle whose screen point lies
+ * within {@link RAILGUN_BEAM_RADIUS} px of the line takes the shot's damage
+ * (`:187-198`, {@link beamHits}). It shoots with the trap's flags, the ground
+ * and the invisible (`:44`): no flyer is ever on its line.
+ *
+ * The beam is measured on screen, as Flash measured it, and the reach in yard
+ * units, as `getCreepsInRange` measures every range (`Targeting.as:203-236`).
+ * A screen pixel is 0.71 yard units straight across the screen and 1.41
+ * straight down it (`screenDistanceSquared`), so the 1,600 px line reaches
+ * 1,131 yard units when it points across the screen and 2,263 when it points
+ * down it, where the 1,600 yard reach cuts it short; the 20 px half-width is
+ * 28 yard units either side of a line across the screen and 14 of one down it.
+ */
+export const RAILGUN_TYPE = 118;
+export const RAILGUN_MUZZLE_DROP = 15;
+export const RAILGUN_SEGMENT = 32;
+export const RAILGUN_SEGMENTS = 50;
+export const RAILGUN_BEAM_RADIUS = 20;
+export const RAILGUN_REACH = 1600;
+
+/**
+ * What a Railgun's shot is worth at its health: `0.5 + 0.5 / maxHealth *
+ * health` (`BUILDING118.as:133`), full at full health and half when wrecked.
+ */
+export const railgunDamageScale = (hp: number, maxHp: number): number =>
+  maxHp > 0 ? 0.5 + (0.5 / maxHp) * hp : 0.5;
+
+/**
+ * `lineIntersectCircle` (`BUILDING118.as:204-222`): whether the segment from
+ * `(ax, ay)` to `(bx, by)` passes through the circle of `radius` round
+ * `(cx, cy)`. A line that only touches the circle misses, and so does one that
+ * crosses it only beyond either end of the segment.
+ */
+export const beamHits = (
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  cx: number,
+  cy: number,
+  radius: number,
+): boolean => {
+  const a = (bx - ax) * (bx - ax) + (by - ay) * (by - ay);
+  const b = 2 * ((bx - ax) * (ax - cx) + (by - ay) * (ay - cy));
+  const c = cx * cx + cy * cy + ax * ax + ay * ay - 2 * (cx * ax + cy * ay) - radius * radius;
+  const discriminant = b * b - 4 * a * c;
+  if (discriminant <= 0) return false;
+  const root = Math.sqrt(discriminant);
+  const far = (-b + root) / (2 * a);
+  const near = (-b - root) / (2 * a);
+  return !((far < 0 || far > 1) && (near < 0 || near > 1));
+};
+
 /** The Heavy Trap, the one trap that is choosy about what sets it off. */
 export const HEAVY_TRAP_TYPE = 117;
 

@@ -20,11 +20,13 @@ import {
   championStat,
   championStatWithPower,
   lootingMultiplier,
+  maxHp,
   monsterStat,
   monsterTickSpeed,
+  railgunDamageScale,
   TARGET_GROUP,
 } from "./stats.js";
-import { buildEngineYard, reachesBuilding, screenDistanceSquared } from "./yard.js";
+import { buildEngineYard, reachesBuilding, screenDistanceSquared, screenPointOf } from "./yard.js";
 import type { CombatBuildingDataMap } from "./types.js";
 
 /**
@@ -158,6 +160,106 @@ describe("traps", () => {
     it("goes off under a champion", () => {
       expect(firedAfter({ monsters: {}, champion: { t: 1, l: 1 } })).toEqual([2]);
     });
+  });
+});
+
+describe("the Railgun's beam (issue #261)", () => {
+  /**
+   * A level 1 Railgun (400 damage, range 300) and a harvester beyond it, down
+   * the screen. One Octo-ooze lands by the harvester, in range, and `far`
+   * lands well behind it on the same line, walking in along it.
+   */
+  const railBattle = (far: Record<string, number>, health?: Record<string, number>) => {
+    const yard = yardOf(
+      {
+        "1": { id: 1, t: 118, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: 200, Y: 200 },
+      },
+      health,
+    );
+    const battle = createBattle(yard, { seed: 3 });
+    battle.apply({ kind: "fling", t: 0, x: 210, y: 210, r: 0, monsters: { C2: 1 } });
+    battle.apply({ kind: "fling", t: 0, x: 600, y: 600, r: 0, monsters: far });
+    return battle;
+  };
+
+  /** Steps to the Railgun's first shot: the shot, and the creeps it hurt that tick. */
+  const firstShot = (battle: ReturnType<typeof createBattle>) => {
+    for (let step = 0; step < 1000 && !battle.over(); step += 1) {
+      battle.step();
+      const events = battle.recentEvents(battle.tick - 1);
+      const shot = events.find((event) => event.kind === "shot");
+      if (shot?.kind !== "shot") continue;
+      const hurt = new Map<number, number>();
+      for (const event of events) if (event.kind === "hurt") hurt.set(event.creepId, event.amount);
+      return { shot, hurt };
+    }
+    throw new Error("the Railgun never fired");
+  };
+
+  /** Screen px from a creep to the beam's line, and how far along it the creep is. */
+  const offBeam = (
+    beam: { fromIx: number; fromIy: number; toIx: number; toIy: number },
+    creep: { ix: number; iy: number },
+  ) => {
+    const from = screenPointOf(beam.fromIx, beam.fromIy);
+    const to = screenPointOf(beam.toIx, beam.toIy);
+    const at = screenPointOf(creep.ix, creep.iy);
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    const ux = (to.x - from.x) / length;
+    const uy = (to.y - from.y) / length;
+    return {
+      across: Math.abs((at.x - from.x) * uy - (at.y - from.y) * ux),
+      along: (at.x - from.x) * ux + (at.y - from.y) * uy,
+    };
+  };
+
+  it("runs 1,600 screen px from its muzzle, through its target and on", () => {
+    const { shot } = firstShot(railBattle({ C2: 10 }));
+    const beam = shot.beam!;
+    const from = screenPointOf(beam.fromIx, beam.fromIy);
+    const to = screenPointOf(beam.toIx, beam.toIy);
+    // The anchor plus `_top`, 15 px down the screen (`BUILDING118.as:39`, `:146`).
+    expect(from.x).toBeCloseTo(0, 9);
+    expect(from.y).toBeCloseTo(15, 9);
+    expect(Math.hypot(to.x - from.x, to.y - from.y)).toBeCloseTo(1600, 6);
+    expect(offBeam(beam, shot).across).toBeLessThan(1);
+  });
+
+  it("hurts every ground creep on its line, past its target too, and none off it", () => {
+    const battle = railBattle({ C2: 10 });
+    const { shot, hurt } = firstShot(battle);
+    const beam = shot.beam!;
+    const aimedAlong = offBeam(beam, shot).along;
+    let beyond = 0;
+    for (const creep of battle.creeps()) {
+      const { across, along } = offBeam(beam, creep);
+      expect(hurt.has(creep.id), `creep ${creep.id} at ${across.toFixed(1)} px`).toBe(across < 20);
+      if (hurt.has(creep.id) && along > aimedAlong + 50) beyond += 1;
+    }
+    expect(hurt.size).toBeGreaterThanOrEqual(3);
+    expect(beyond).toBeGreaterThanOrEqual(2);
+    // One shot's damage apiece, from a Railgun at full health.
+    for (const amount of hurt.values()) expect(amount).toBe(400);
+  });
+
+  it("never hurts a flyer on its line (`BUILDING118.as:44`)", () => {
+    const battle = railBattle({ C14: 10 });
+    const { shot, hurt } = firstShot(battle);
+    const flyersOnLine = battle
+      .creeps()
+      .filter((creep) => creep.flying && offBeam(shot.beam!, creep).across < 20);
+    expect(flyersOnLine.length).toBeGreaterThan(0);
+    expect([...hurt.keys()]).toEqual([shot.creepId]);
+  });
+
+  it("deals 0.5 + 0.5 of its health share of its damage (`BUILDING118.as:133`)", () => {
+    const full = maxHp(118, 1);
+    const hp = Math.round(full * 0.3);
+    const { shot, hurt } = firstShot(railBattle({}, { "1": hp }));
+    expect(railgunDamageScale(hp, full)).toBeCloseTo(0.65, 3);
+    expect(hurt.get(shot.creepId)).toBeCloseTo(400 * railgunDamageScale(hp, full), 9);
+    expect(hurt.get(shot.creepId)).toBeLessThan(400);
   });
 });
 

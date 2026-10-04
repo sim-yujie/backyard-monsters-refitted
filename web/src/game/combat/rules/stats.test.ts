@@ -48,6 +48,8 @@ import {
   trapDamageAt,
   trapStats,
   tripsTrap,
+  beamHits,
+  railgunDamageScale,
   VICTORY_THRESHOLD,
   withLowLevelBonus,
 } from "./stats";
@@ -287,6 +289,29 @@ describe("traps", () => {
     for (const id of ["C1", "C9", "C13", "C14", "C17", "C19", "C200", "IC1", "IC6"]) {
       expect(trips(id), id).toBe(false);
     }
+  });
+});
+
+describe("the Railgun (issue #261)", () => {
+  it("scales its damage from half when wrecked to whole at full health (`BUILDING118.as:133`)", () => {
+    expect(railgunDamageScale(1000, 1000)).toBe(1);
+    expect(railgunDamageScale(500, 1000)).toBe(0.75);
+    expect(railgunDamageScale(0, 1000)).toBe(0.5);
+  });
+
+  it("hits a circle the segment passes within its radius of (`BUILDING118.as:204-222`)", () => {
+    // A segment along x from 0 to 100, radius 20.
+    const hits = (cx: number, cy: number) => beamHits(0, 0, 100, 0, cx, cy, 20);
+    expect(hits(50, 0)).toBe(true);
+    expect(hits(50, 19.9)).toBe(true);
+    // Touching is not crossing: the discriminant must be above zero.
+    expect(hits(50, 20)).toBe(false);
+    expect(hits(50, -25)).toBe(false);
+    // Off either end, unless the circle still reaches the segment.
+    expect(hits(110, 0)).toBe(true);
+    expect(hits(125, 0)).toBe(false);
+    expect(hits(-15, 0)).toBe(true);
+    expect(hits(-25, 0)).toBe(false);
   });
 });
 

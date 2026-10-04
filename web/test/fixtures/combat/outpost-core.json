@@ -1,6 +1,6 @@
 {
   "name": "outpost-core",
-  "description": "A player outpost on a cell of height 250: the core, six-level outpost towers, four harvesters (two damaged), one wave that levels it (issue #179).",
+  "description": "A player outpost on a cell of height 250: the core, six-level outpost towers with the Railgun all but wrecked, so its beam deals half (issue #261), four harvesters (two damaged), one wave that levels it (issue #179).",
   "yard": {
     "0": {
       "id": 0,
@@ -68,6 +68,7 @@
   },
   "kind": "outpost",
   "health": {
+    "3": 1000,
     "6": 40000,
     "8": 3000
   },
@@ -115,146 +116,146 @@
     "damage": 100,
     "destroyed": 1,
     "attackloot": {
-      "r1": 1907556,
-      "r2": 1739688,
-      "r3": 1652463,
-      "r4": 258636
+      "r1": 1888276,
+      "r2": 1715520,
+      "r3": 1629751,
+      "r4": 237683
     },
     "defenderLoss": {
-      "r1": 1912194,
-      "r2": 1745092,
-      "r3": 1657682,
-      "r4": 263619
+      "r1": 1890857,
+      "r2": 1718306,
+      "r3": 1632545,
+      "r4": 240512
     },
     "firedTraps": 0,
     "destroyedBuildings": 9,
     "creepsFlung": 270,
-    "creepsKilled": 82,
+    "creepsKilled": 227,
     "championHp": null,
     "damagedBuildings": 9,
-    "rngDraws": 206208,
+    "rngDraws": 137208,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "bd452edaad94d960"
+        "digest": "8672fa569d3dddf4"
       },
       {
         "tick": 1600,
-        "digest": "58a720206b116796"
+        "digest": "7d441a1b15d42ecd"
       },
       {
         "tick": 2400,
-        "digest": "512d25428108711c"
+        "digest": "4c62f031beefd157"
       },
       {
         "tick": 3200,
-        "digest": "e7b73e6c16b9eaf2"
+        "digest": "406ee25fa8438461"
       },
       {
         "tick": 4000,
-        "digest": "8b94d887cdac7561"
+        "digest": "3699c748bdd4e63a"
       },
       {
         "tick": 4800,
-        "digest": "5b69854b7e095a4d"
+        "digest": "18cb7b1b653bee89"
       },
       {
         "tick": 5600,
-        "digest": "46f74e240d0554c6"
+        "digest": "cf4a5ae4b6bed8da"
       },
       {
         "tick": 6400,
-        "digest": "5e529de857ba0dd2"
+        "digest": "26b959f2d7b3904c"
       },
       {
         "tick": 7200,
-        "digest": "5440aa99cc0d13d3"
+        "digest": "d4d11f4667634690"
       },
       {
         "tick": 8000,
-        "digest": "cda167c295f65a64"
+        "digest": "50d3e65f2fed6001"
       },
       {
         "tick": 8800,
-        "digest": "5d946d002707beea"
+        "digest": "0f334390060accbe"
       },
       {
         "tick": 9600,
-        "digest": "4cd8dcfb65b7dcfd"
+        "digest": "958acad3e59a09d1"
       },
       {
         "tick": 10400,
-        "digest": "799b4cd1d7a3822b"
+        "digest": "a67dea91f9a6221f"
       },
       {
         "tick": 11200,
-        "digest": "af693f54ea410676"
+        "digest": "badb82fc3dac829a"
       },
       {
         "tick": 12000,
-        "digest": "3ee0529a55c4a53c"
+        "digest": "7ef517aa5bd79680"
       },
       {
         "tick": 12800,
-        "digest": "ca05ddd82d14ea82"
+        "digest": "ce7565482414b34e"
       },
       {
         "tick": 13600,
-        "digest": "68e5667354f67895"
+        "digest": "0233d50b00ca9c49"
       },
       {
         "tick": 14400,
-        "digest": "2fe789c91f1679c3"
+        "digest": "bade78a9fc9e2157"
       },
       {
         "tick": 15200,
-        "digest": "c3e6802c8e5ee98e"
+        "digest": "6f33d134978dd252"
       },
       {
         "tick": 16000,
-        "digest": "c251357202e10894"
+        "digest": "8399c3022ea5d698"
       },
       {
         "tick": 16800,
-        "digest": "62d00925e3568e77"
+        "digest": "55cec86dae8d6333"
       },
       {
         "tick": 17600,
-        "digest": "a34a7f90379b7afa"
+        "digest": "afa24900181b83e6"
       },
       {
         "tick": 18400,
-        "digest": "b6712b0838cc1142"
+        "digest": "cc47d7d804626b0e"
       },
       {
         "tick": 19200,
-        "digest": "5dfaf9abc15fd92d"
+        "digest": "963a47e3aed3b5a1"
       },
       {
         "tick": 20000,
-        "digest": "1749c54eb7ec9808"
+        "digest": "ebddc416b9695274"
       },
       {
         "tick": 20800,
-        "digest": "a7adafa18ba05ffb"
+        "digest": "bf592dc16fef93cf"
       },
       {
         "tick": 21600,
-        "digest": "b46e3cacb95776de"
+        "digest": "c21ccfb4039cb882"
       },
       {
         "tick": 22400,
-        "digest": "a493edc4f5b68d66"
+        "digest": "e389780c4315056a"
       },
       {
         "tick": 23200,
-        "digest": "1de44e77b151aee1"
+        "digest": "87cf9cd79cf09f8d"
       },
       {
         "tick": 24000,
-        "digest": "b21e7aea2f4bf4cc"
+        "digest": "a9ed1e5a98d0cc30"
       }
     ],
-    "digest": "b21e7aea2f4bf4cc"
+    "digest": "a9ed1e5a98d0cc30"
   }
 }

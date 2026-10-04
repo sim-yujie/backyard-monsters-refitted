@@ -87,6 +87,14 @@ import {
   monsterStat,
   monsterTickSpeed,
   propsSizeOf,
+  RAILGUN_BEAM_RADIUS,
+  RAILGUN_MUZZLE_DROP,
+  RAILGUN_REACH,
+  RAILGUN_SEGMENT,
+  RAILGUN_SEGMENTS,
+  RAILGUN_TYPE,
+  beamHits,
+  railgunDamageScale,
   specialistMultiplier,
   ticks,
   towerRange,
@@ -116,6 +124,7 @@ import {
 } from "./targeting.js";
 import {
   distanceSquared,
+  fromIso,
   isMainTarget,
   rangePointOf,
   reachesBuilding,
@@ -484,6 +493,11 @@ export type BattleVisualEvent =
       /** Where the shot landed: the creep's yard position that tick. */
       readonly ix: number;
       readonly iy: number;
+      /**
+       * The Railgun's beam (issue #261): the line it hurt along, from its
+       * muzzle to 1,600 screen px on, in yard units. Absent for other towers.
+       */
+      readonly beam?: BeamLine;
     }
   | {
       /** A creep landed a swing on a building or on another creep. */
@@ -538,6 +552,14 @@ export type BattleVisualEvent =
       readonly ix: number;
       readonly iy: number;
     };
+
+/** A beam's line, yard units at both ends. */
+export interface BeamLine {
+  readonly fromIx: number;
+  readonly fromIy: number;
+  readonly toIx: number;
+  readonly toIy: number;
+}
 
 /** How many ticks of shots and deaths a battle remembers: two seconds. */
 export const VISUAL_MEMORY_TICKS = 160;
@@ -2867,6 +2889,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
     for (const creep of live) {
       tower.report.shots += 1;
+      if (building.type === RAILGUN_TYPE) {
+        fireRailgun(tower, creep, damage);
+        continue;
+      }
       visual.push({
         kind: "shot",
         tick,
@@ -2888,6 +2914,47 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         tower.report.damageDealt += damageCreep(hit.creep, dealt);
         if (health > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
       }
+    }
+  };
+
+  /**
+   * The Railgun's shot (issue #261): a beam at `aim` and on past it that hurts
+   * every ground creep on its line, its damage scaled by the Railgun's own
+   * health ({@link RAILGUN_TYPE}, `BUILDING118.as:133-198`).
+   */
+  const fireRailgun = (tower: Tower, aim: Creep, damage: number): void => {
+    const building = tower.building;
+    const dealt = damage * railgunDamageScale(building.hp, building.maxHp);
+    // On screen, as `Fire` works: the muzzle, then 50 segments along the bearing.
+    const fromX = building.sx;
+    const fromY = building.sy + RAILGUN_MUZZLE_DROP;
+    // It aims at the target's `x`/`y`, its graphic, drawn at `int(_tmpPoint)`
+    // (`GameObject.as:126-132`, `MonsterBase.as:614-616`).
+    const target = screenPointOf(aim.ix, aim.iy);
+    const bearing = Math.atan2(Math.trunc(target.y) - fromY, Math.trunc(target.x) - fromX);
+    const toX = fromX + Math.cos(bearing) * RAILGUN_SEGMENT * RAILGUN_SEGMENTS;
+    const toY = fromY + Math.sin(bearing) * RAILGUN_SEGMENT * RAILGUN_SEGMENTS;
+    visual.push({
+      kind: "shot",
+      tick,
+      towerId: building.id,
+      creepId: aim.id,
+      ix: aim.ix,
+      iy: aim.iy,
+      beam: {
+        fromIx: fromX / 2 + fromY,
+        fromIy: fromY - fromX / 2,
+        toIx: toX / 2 + toY,
+        toIy: toY - toX / 2,
+      },
+    });
+    const muzzle = fromIso(fromX, fromY);
+    for (const hit of index.inRange(RAILGUN_REACH, muzzle.x, muzzle.y, TRAP_TARGETS)) {
+      const at = screenPointOf(hit.creep.ix, hit.creep.iy);
+      if (!beamHits(fromX, fromY, toX, toY, at.x, at.y, RAILGUN_BEAM_RADIUS)) continue;
+      const before = hit.creep.hp;
+      tower.report.damageDealt += damageCreep(hit.creep, dealt);
+      if (before > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
     }
   };
 
