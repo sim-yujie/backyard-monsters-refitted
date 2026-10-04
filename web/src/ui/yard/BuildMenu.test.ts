@@ -184,6 +184,9 @@ describe("BuildMenu", () => {
       "Done: A Housing",
     ]);
     expect(facts(menu)).toEqual(["Twigs 2,000", "Pebbles 2,000", "15m 0s", "1 worker"]);
+    // Affordable: green, not the gold that read backwards to the owner (#278).
+    expect(panel.querySelectorAll(".build-info__fact--ok")).toHaveLength(2);
+    expect(panel.querySelector(".build-info__fact--short")).toBeNull();
   });
 
   it("a locked building's info lists what it still needs, and Build is off", () => {
@@ -206,6 +209,11 @@ describe("BuildMenu", () => {
     const panel = info(menu);
     expect(spokenText(panel.querySelector(".build-info__gate")!)).toBe("Need Twigs 1,500 more.");
     expect(spokenText(panel.querySelector(".build-info__fact--short")!)).toBe("Twigs 2,000");
+    // Pebbles and Putty are held in full, so they read green while Twigs reads red.
+    expect([...panel.querySelectorAll(".build-info__fact--ok")].map((one) => spokenText(one))).toEqual([
+      "Pebbles 1,500",
+      "Putty 500",
+    ]);
     expect(panel.querySelector(".build-info__build")?.getAttribute("aria-describedby")).toBe(
       "build-gate-20",
     );

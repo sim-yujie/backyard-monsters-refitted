@@ -93,21 +93,16 @@
   white-space: nowrap;
 }
 
+/*
+ * Free (plain text) or a cost (the build tab's own `build-info__fact` chips,
+ * `costFactChips.ts`, #278): either way this sits right under the heading at
+ * the same size, and the chips' own flex-wrap lets them wrap onto a second
+ * line in a 300px dock rather than overflow.
+ */
 .building-panel__cost {
   margin: 0;
   font-size: var(--text-sm);
   line-height: var(--leading-tight);
-}
-
-/* The costs wrap onto a second line in a 300px dock rather than overflow. */
-.building-panel__cost .res-list {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
-}
-
-.building-panel__cost .res-list > .res-amount + .res-amount {
-  margin-left: 0;
 }
 
 /* Why the button beside it is disabled: a state, not an error. */

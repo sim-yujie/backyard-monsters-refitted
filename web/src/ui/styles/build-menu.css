@@ -462,9 +462,20 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* More than the yard holds: the amount says so in the warning colour. */
+/*
+ * Each resource cost chip says, in colour, whether the yard holds enough:
+ * red short of it, green with it in hand (#278). Gold was tried first and
+ * read backwards — the owner took it for "plenty," not "short" — so the
+ * colours here are the same danger/success ones a shortfall or a success
+ * state uses anywhere else in the client, never gold for either state.
+ */
 .build-info__fact--short {
-  color: var(--colour-warning);
+  color: var(--colour-danger);
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.build-info__fact--ok {
+  color: var(--colour-success);
   box-shadow: inset 0 0 0 1px currentColor;
 }
 

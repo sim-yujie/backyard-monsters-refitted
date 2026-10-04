@@ -1,6 +1,6 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
-import type { SpeedupItem } from "@/api/types";
+import type { Resources, SpeedupItem } from "@/api/types";
 import { devDetails } from "@/app/devDetails";
 import type { YardRefusal } from "@/api/yard";
 import { buildActions } from "@/api/yardBuild";
@@ -32,6 +32,7 @@ import { HousingJuice } from "@/ui/monsters/HousingJuice";
 import { HousingView } from "@/ui/monsters/HousingView";
 import { MonstersTabId } from "@/ui/monsters/monstersTab";
 import { costAmounts, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
+import { costFactChips } from "./costFactChips";
 import {
   jobOffer,
   panelModel,
@@ -627,8 +628,8 @@ export class BuildingPanel {
       const repair = repairOffer(building.id, yard.store.save, yard.store.credits, yard.store.now());
       if (repair) blocks.push(this.repairBlock(building, repair, used));
       if (model.job) blocks.push(this.jobBlock(building, model.job, used));
-      if (model.upgrade) blocks.push(this.upgradeBlock(building, model.upgrade, used));
-      if (model.fortify) blocks.push(this.fortifyBlock(building, model.fortify));
+      if (model.upgrade) blocks.push(this.upgradeBlock(building, model.upgrade, used, yard.store.resources));
+      if (model.fortify) blocks.push(this.fortifyBlock(building, model.fortify, yard.store.resources));
       const housing = this.isHousing(building);
       // A one-level building (Yard Planner, General Store) has no ladder to
       // top out; a Housing says "max" in its chip.
@@ -765,7 +766,33 @@ export class BuildingPanel {
     return view.element;
   }
 
-  private upgradeBlock(building: YardBuilding, offer: UpgradeOffer, used: Set<string>): HTMLElement {
+  /**
+   * An upgrade or fortify step's cost: the build tab's own chips, green when
+   * held and red when short (#278), so the colour means the same thing here
+   * as it does picking a new building. `Free` in words when there is nothing
+   * to pay, as the Map Room's single-currency steps sometimes have.
+   */
+  private costFactsLine(cost: UpgradeOffer["cost"], resources: Resources): HTMLElement {
+    const chips = costFactChips(cost, resources);
+    if (chips.length === 0) {
+      const line = document.createElement("p");
+      line.className = "building-panel__cost";
+      line.append("Free");
+      return line;
+    }
+    const line = document.createElement("ul");
+    line.className = "building-panel__cost build-info__facts";
+    line.setAttribute("aria-label", "Cost");
+    line.append(...chips);
+    return line;
+  }
+
+  private upgradeBlock(
+    building: YardBuilding,
+    offer: UpgradeOffer,
+    used: Set<string>,
+    resources: Resources,
+  ): HTMLElement {
     const block = document.createElement("section");
     block.className = "building-panel__block building-upgrade";
     block.setAttribute("aria-label", `Upgrade to level ${offer.to}`);
@@ -782,11 +809,7 @@ export class BuildingPanel {
     head.append(title, time);
     block.append(head);
 
-    const cost = costAmounts(offer.cost);
-    const costLine = document.createElement("p");
-    costLine.className = "building-panel__cost";
-    costLine.append(cost ?? "Free");
-    block.append(costLine);
+    block.append(this.costFactsLine(offer.cost, resources));
 
     if (offer.gate) {
       const line = gateLine(offer.gate);
@@ -829,7 +852,7 @@ export class BuildingPanel {
    * (`msg_inactivefortify`, `BFOUNDATION.as:2207-2210`). Fully fortified
    * says so (`bdg_fullyfortified`).
    */
-  private fortifyBlock(building: YardBuilding, offer: FortifyOffer): HTMLElement {
+  private fortifyBlock(building: YardBuilding, offer: FortifyOffer, resources: Resources): HTMLElement {
     if (offer.maxed) return note(`Fully fortified: F${offer.max} of ${offer.max}.`);
 
     const block = document.createElement("section");
@@ -849,10 +872,7 @@ export class BuildingPanel {
     head.append(title, time);
     block.append(head);
 
-    const costLine = document.createElement("p");
-    costLine.className = "building-panel__cost";
-    costLine.append(costAmounts(offer.cost) ?? "Free");
-    block.append(costLine);
+    block.append(this.costFactsLine(offer.cost, resources));
 
     const gateId = `${this.gateId(building)}-fortify`;
     if (offer.gate) {

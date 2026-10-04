@@ -121,6 +121,22 @@ describe("BuildingPanel: a tower at rest", () => {
     expect(words).toContain("Pebbles");
     expect(buttonNamed(element, "Upgrade")?.disabled).toBe(false);
     expect(buttonNamed(element, "Instant")).toBeDefined();
+    // Every cost chip is held in full here, so every one reads green, never
+    // the gold that read backwards to the owner (#278).
+    const chips = block.querySelectorAll(".build-info__fact");
+    expect(chips.length).toBeGreaterThan(0);
+    expect(block.querySelectorAll(".build-info__fact--ok")).toHaveLength(chips.length);
+    expect(block.querySelector(".build-info__fact--short")).toBeNull();
+  });
+
+  it("marks only the short resource red on an upgrade the yard cannot afford (#278)", () => {
+    const { element } = setup([HALL, building(2, 20, 4)], 2, {
+      load: { resources: { r1: 500, r2: 1e8, r3: 1e8, r4: 1e8 } },
+    });
+    const block = element.querySelector(".building-upgrade")!;
+    expect(spokenText(block.querySelector(".build-info__fact--short")!)).toBe("Twigs 1,250,000");
+    expect(spokenText(block.querySelector(".build-info__fact--ok")!)).toBe("Pebbles 937,500");
+    expect(buttonNamed(element, "Upgrade")?.disabled).toBe(true);
   });
 
   it("Upgrade calls the upgrade route and is disabled while it runs", () => {
@@ -633,6 +649,11 @@ describe("BuildingPanel: fortifying an outpost (#191)", () => {
     const block = element.querySelector<HTMLElement>(".building-fortify")!;
     expect(block.querySelector("h3")?.textContent).toBe("Fortify to F1");
     expect(block.querySelector(".building-panel__time")?.textContent).toBe("4h 0m");
+    // Plenty of every resource: every cost chip reads green, same as the
+    // build tab's own chips (#278).
+    const chips = block.querySelectorAll(".build-info__fact");
+    expect(chips.length).toBeGreaterThan(0);
+    expect(block.querySelectorAll(".build-info__fact--ok")).toHaveLength(chips.length);
 
     buttonNamed(element, "Fortify")!.click();
     await vi.waitFor(() => expect(sent).toHaveLength(1));

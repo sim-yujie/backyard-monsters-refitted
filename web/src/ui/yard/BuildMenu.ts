@@ -20,8 +20,9 @@ import { typeName } from "@/game/yard/planner/summary";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
-import { costAmounts, RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
+import { costAmounts, resourceAmount } from "@/ui/resourceIcon";
 import { BUILD_BLURBS } from "./buildBlurbs";
+import { costFactChips } from "./costFactChips";
 import { ShinyButton } from "./ShinyButton";
 import "@/ui/styles/build-menu.css";
 
@@ -573,16 +574,7 @@ export class BuildMenu {
     const facts = document.createElement("ul");
     facts.className = "build-info__facts";
     facts.setAttribute("aria-label", "Cost");
-    const resources = this.binding.store.resources;
-    for (const key of RESOURCE_KEYS) {
-      const amount = offer.cost[key];
-      if (amount <= 0) continue;
-      const chip = document.createElement("li");
-      chip.className = "build-info__fact";
-      if (Number(resources[key] ?? 0) < amount) chip.classList.add("build-info__fact--short");
-      chip.append(resourceAmount(key, amount));
-      facts.append(chip);
-    }
+    facts.append(...costFactChips(offer.cost, this.binding.store.resources));
     const time = document.createElement("li");
     time.className = "build-info__fact";
     time.append(glyph(CLOCK, "build-info__fact-icon"), offer.atOnce ? "At once" : formatCountdown(offer.seconds));
