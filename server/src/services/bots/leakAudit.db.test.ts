@@ -35,7 +35,7 @@ const enabled = Boolean(dbName) && dbName !== "bym";
 const RUNNING_STATE = new Set(["cB", "cL", "cU", "cF", "cP", "rE", "hp"]);
 
 /** Names that would only be in a response because something about a bot leaked. */
-const BOT_ONLY_KEYS = ["persona", "level_since", "retired_at", "bot_userid", "last_seen_at", "email", "password"];
+const BOT_ONLY_KEYS = ["persona", "level_since", "retired_at", "grow_drops", "bot_userid", "last_seen_at", "email", "password"];
 
 const PREFIX = "wp12leak";
 

@@ -12,7 +12,7 @@ import { LOOT_BAND } from "./yardGenerator.js";
 import { LEGACY_BOT_SHINY, shinyBand } from "./shiny.js";
 import { BUNKER_TYPE } from "../yard/bunker.js";
 import { storageCap } from "../base/economy/resourceBudget.js";
-import { bookFirstGrows, MAX_ATTEMPTS, REBALANCE_JOB, rebalancePeriod, runBotSweep, UNDER_ATTACK_RETRY_MINUTES, type SweepDeps } from "./sweep.js";
+import { bookFirstGrows, MAX_ATTEMPTS, MAX_GROW_DROPS, REBALANCE_JOB, rebalancePeriod, runBotSweep, UNDER_ATTACK_RETRY_MINUTES, type SweepDeps } from "./sweep.js";
 
 /**
  * The bot sweep against a real Postgres (issue #240): the first grows, the
@@ -267,6 +267,51 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
     expect(dropped).toBe(1);
     expect((await pass(at, 1)).report.booked).toBe(1);
     await sql(`UPDATE bym.save SET type = 'main' WHERE userid = ? AND type = 'gone'`, [bot!.userid]);
+  }, 30_000);
+
+  test(`a bot whose grow is dropped ${MAX_GROW_DROPS} times in a row is retired and replaced at level 1`, async () => {
+    const [bot] = await make([6]);
+    await pass(NOW, 1);
+    await sql(`UPDATE bym.save SET type = 'gone' WHERE userid = ? AND type = 'main'`, [bot!.userid]);
+
+    let at = NOW;
+    let dropped = 0;
+    let retiredAt = -1;
+    const replaced: number[] = [];
+    for (let run = 0; run < 2 * MAX_GROW_DROPS * MAX_ATTEMPTS && retiredAt < 0; run++) {
+      await dueNow(at);
+      const { report } = await pass(at, 1);
+      dropped += report.dropped;
+      if (dropped < MAX_GROW_DROPS) expect(report.retired).toEqual([]);
+      if (report.retired.includes(bot!.userid)) {
+        retiredAt = run;
+        replaced.push(...report.replaced);
+      }
+      at += HOUR;
+    }
+
+    expect(dropped).toBe(MAX_GROW_DROPS);
+    expect(retiredAt).toBeGreaterThan(0);
+    const row = await botRow(bot!.userid);
+    expect(row.state).toBe("retired");
+    expect(row.grow_drops).toBe(MAX_GROW_DROPS);
+    expect(await jobs(bot!.userid)).toEqual([]);
+    // The usual replacement: one fresh level 1 bot, with its first grow booked.
+    expect(replaced).toHaveLength(1);
+    expect((await botRow(replaced[0]!)).level).toBe(1);
+    expect((await jobs(replaced[0]!)).map((job) => job.kind)).toEqual(["grow"]);
+    // Retired bots are never booked again.
+    expect((await pass(at, 1)).report.booked).toBe(0);
+    await sql(`UPDATE bym.save SET type = 'main' WHERE userid = ? AND type = 'gone'`, [bot!.userid]);
+  }, 60_000);
+
+  test("a grow that runs clears the count of dropped grows", async () => {
+    const [bot] = await make([6]);
+    await pass(NOW, 1);
+    await sql(`UPDATE bym.bot SET grow_drops = ? WHERE userid = ?`, [MAX_GROW_DROPS - 1, bot!.userid]);
+    await dueNow(NOW + HOUR);
+    expect((await pass(NOW + HOUR, 1)).report.ran.grow).toBe(1);
+    expect((await botRow(bot!.userid)).grow_drops).toBe(0);
   }, 30_000);
 
   test("two sweeps at once never run one job twice", async () => {

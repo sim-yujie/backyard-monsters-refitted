@@ -49,6 +49,7 @@ describe("entity discovery", () => {
         state: { type: "text", nullable: false },
         created_at: { type: "timestamptz", nullable: false },
         retired_at: { type: "timestamptz", nullable: true },
+        grow_drops: { type: "int", nullable: false },
       });
       expect(columns("BotJob")).toEqual({
         id: { type: "bigserial", nullable: false },

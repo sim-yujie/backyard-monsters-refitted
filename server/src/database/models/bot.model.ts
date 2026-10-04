@@ -47,4 +47,8 @@ export class Bot {
 
   @Property({ type: Date, nullable: true })
   retired_at?: Date | null;
+
+  /** Grow jobs dropped in a row by the sweep; it retires the bot at `MAX_GROW_DROPS` (issue #248). */
+  @Property({ type: "number", default: 0 })
+  grow_drops: Opt<number> = 0;
 }

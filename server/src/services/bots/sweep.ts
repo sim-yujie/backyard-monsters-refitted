@@ -94,6 +94,11 @@ import { generateBotYard } from "./yardGenerator.js";
  * neighbour list drops it on its next read. A fresh level 1 bot is made in its
  * place once the retirement has committed.
  *
+ * A bot whose `grow` keeps failing is retired the same way (issue #248): each
+ * time its grow is dropped after {@link MAX_ATTEMPTS} failures, `bot.grow_drops`
+ * goes up, and the {@link MAX_GROW_DROPS}th drop in a row retires it instead
+ * of leaving the next pass to book it again. A grow that runs clears the count.
+ *
  * **Presence** (decision 22): each grow marks the bot online as a yard load
  * does (`markOnline`, the last-seen key for 120 s), so for a minute an attack
  * on it is refused as on a real player's.
@@ -109,6 +114,8 @@ export const SWEEP_MS = 60_000;
 export const JOBS_PER_PASS = 20;
 /** A job that has failed this many times is dropped. */
 export const MAX_ATTEMPTS = 5;
+/** A bot whose grow has been dropped this many times in a row is retired (issue #248). */
+export const MAX_GROW_DROPS = 3;
 /** A grow is due again this many hours after it ran (§6). */
 export const GROW_EVERY_HOURS = { min: 2, max: 6 } as const;
 /** A bot's first grow is due within this many minutes of being booked. */
@@ -240,8 +247,34 @@ const postpone = (tx: EntityManager, job: JobRow, due: number) =>
 const retire = async (tx: EntityManager, save: Save, userid: number, now: number): Promise<void> => {
   save.mapversion = MapRoomVersion.V2;
   save.worldid = null;
+  await retireRow(tx, userid, now);
+};
+
+/**
+ * {@link retire} for a bot whose yard a job could not load (issue #248): the
+ * yard, if there is one, moved in SQL, as `retireAllBots` does.
+ */
+const retireUnloaded = async (tx: EntityManager, userid: number, now: number): Promise<void> => {
+  await tx.execute(`UPDATE bym.save SET mapversion = ?, worldid = NULL WHERE userid = ? AND type = ?`, [
+    MapRoomVersion.V2,
+    userid,
+    BaseType.MAIN,
+  ]);
+  await retireRow(tx, userid, now);
+};
+
+const retireRow = async (tx: EntityManager, userid: number, now: number): Promise<void> => {
   await tx.execute(`UPDATE bym.bot SET state = 'retired', retired_at = ? WHERE userid = ?`, [at(now), userid]);
   await tx.execute(`DELETE FROM bym.bot_job WHERE bot_userid = ?`, [userid]);
+};
+
+/** Counts one more dropped grow for an active bot; returns the count, 0 if the bot is gone or retired. */
+const countGrowDrop = async (tx: EntityManager, userid: number): Promise<number> => {
+  const [row] = await tx.execute<{ grow_drops: number }[]>(
+    `UPDATE bym.bot SET grow_drops = grow_drops + 1 WHERE userid = ? AND state = 'active' RETURNING grow_drops`,
+    [userid]
+  );
+  return row ? Number(row.grow_drops) : 0;
 };
 
 /** The generator's yard at a bot's place on the climb. */
@@ -322,6 +355,7 @@ const grow: Handler = async (tx, job, { now, config, rng, report }) => {
     JSON.stringify(payload ?? {}),
     job.id,
   ]);
+  await tx.execute(`UPDATE bym.bot SET grow_drops = 0 WHERE userid = ? AND grow_drops > 0`, [bot.userid]);
   return { online: bot.userid };
 };
 
@@ -485,6 +519,16 @@ const runOneJob = async (
       if (attempts >= MAX_ATTEMPTS) {
         await deleteJob(tx, job);
         context.report.dropped++;
+        const drops = job.kind === "grow" ? await countGrowDrop(tx, job.bot_userid) : 0;
+        if (drops >= MAX_GROW_DROPS) {
+          await retireUnloaded(tx, job.bot_userid, context.now);
+          logger.error("Bot {bot}'s grow was dropped {drops} times in a row; retired it: {error}", {
+            ...detail,
+            event: "bot-retired-failing",
+            drops,
+          });
+          return { job, effect: { retired: job.bot_userid } };
+        }
         logger.error("Bot job {jobid} ({kind}, bot {bot}) failed {attempts} times and was dropped: {error}", detail);
       } else {
         await tx.execute(`UPDATE bym.bot_job SET attempts = ?, due_at = ? WHERE id = ?`, [
@@ -653,7 +697,7 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
   }
   if (report.retired.length > 0) {
     report.replaced.push(...(await makeLevelOneBots(em, report.retired.length, now, context)));
-    logger.info("Retired {retired} bots past level 40; level 1 bots now {levelOne}", {
+    logger.info("Retired {retired} bots (past level 40, or failing to grow); level 1 bots now {levelOne}", {
       retired: report.retired.length,
       levelOne: (await activeBotsByLevel(em.fork()))[1] ?? 0,
     });
