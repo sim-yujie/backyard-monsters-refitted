@@ -72,8 +72,10 @@ import { generateBotYard } from "./yardGenerator.js";
  * With `BOTS_REVENGE` off, every pass first cancels (deletes) the booked
  * `revenge` jobs, so a revenge booked while it was on never runs.
  *
- * Every yard write is under the save's row lock (`SELECT … FOR UPDATE`, as
- * `catchUpLockedYard`), and a yard under attack is left alone and looked at
+ * Every yard write is under the bot's row lock, taken first (grow and repair
+ * `FOR UPDATE`, revenge `FOR NO KEY UPDATE SKIP LOCKED`), so one bot's jobs
+ * never overlap, and then the save's row lock (`SELECT … FOR UPDATE`, as
+ * `catchUpLockedYard`). A yard under attack is left alone and looked at
  * again in {@link UNDER_ATTACK_RETRY_MINUTES}.
  *
  * ## The jobs
@@ -359,17 +361,17 @@ const grow: Handler = async (tx, job, { now, config, rng, report }) => {
   return { online: bot.userid };
 };
 
-/** The `repair` job (the file comment). */
+/**
+ * The `repair` job (the file comment). It takes the bot's row lock first, as
+ * the grow and the revenge do, and reads the row under it, so it never
+ * writes a yard another server is growing or attacking with (issue #249).
+ */
 const repair: Handler = async (tx, job, { now, config, rng }) => {
-  const [bot] = await tx.execute<BotRow[]>(
-    `SELECT userid, seed, persona, level, level_since, state FROM bym.bot WHERE userid = ?`,
-    [job.bot_userid]
-  );
-  if (!bot || bot.state !== "active") {
+  const row = await lockBot(tx, job.bot_userid);
+  if (!row || row.state !== "active") {
     await deleteJob(tx, job);
     return {};
   }
-  const row: BotRow = { ...bot, seed: Number(bot.seed), level: Number(bot.level), level_since: new Date(bot.level_since) };
   const save = await lockYard(tx, row.userid);
   if (!save) throw new Error(`Bot ${row.userid} has no main yard`);
   if (isAttackActive(save)) {

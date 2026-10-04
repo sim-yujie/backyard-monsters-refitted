@@ -228,6 +228,67 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
     expect(healed.buildingdata[hurtKey].rE).toBeUndefined();
   }, 30_000);
 
+  /** A bot with its grow booked and a repair due at NOW, and NOW's rebalance already claimed. */
+  const repairDue = async (level: number) => {
+    const [bot] = await make([level]);
+    await pass(NOW - DAY, 1);
+    await sql(`INSERT INTO bym.bot_job (bot_userid, kind, due_at) VALUES (?, 'repair', ?)`, [bot!.userid, new Date(NOW * 1000)]);
+    await sql(`INSERT INTO bym.job_run (job, period, ran_at) VALUES (?, ?, now()) ON CONFLICT DO NOTHING`, [
+      REBALANCE_JOB,
+      rebalancePeriod(NOW),
+    ]);
+    return bot!;
+  };
+
+  test("a repair waits while another job holds the bot's row (issue #249)", async () => {
+    const bot = await repairDue(15);
+    await sql(`UPDATE bym.bot_job SET due_at = ? WHERE kind = 'grow'`, [new Date((NOW + DAY) * 1000)]);
+
+    // Another job on this bot, mid-way on another server: the bot's row
+    // locked, as a grow or a revenge holds it, the yard not yet touched.
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    let holding!: () => void;
+    const held = new Promise<void>((resolve) => (holding = resolve));
+    const other = orm.em.fork().transactional(async (tx) => {
+      await tx.execute(`SELECT userid FROM bym.bot WHERE userid = ? FOR UPDATE`, [bot.userid]);
+      holding();
+      await released;
+    });
+    await held;
+
+    let done = false;
+    const repairing = pass(NOW, 1).then((result) => {
+      done = true;
+      return result;
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(done).toBe(false);
+      expect((await jobs(bot.userid)).map((job) => job.kind).sort()).toEqual(["grow", "repair"]);
+    } finally {
+      release();
+      await other;
+    }
+    const { report } = await repairing;
+    expect(report.ran.repair).toBe(1);
+    expect(report.failed).toBe(0);
+    expect((await jobs(bot.userid)).map((job) => job.kind)).toEqual(["grow"]);
+  }, 30_000);
+
+  test("a grow and a repair on one bot at once run one after the other, and both land (issue #249)", async () => {
+    const bot = await repairDue(15);
+    await dueNow(NOW);
+
+    const [a, b] = await Promise.all([pass(NOW, 1), pass(NOW, 1)]);
+    expect((a.report.ran.grow ?? 0) + (b.report.ran.grow ?? 0)).toBe(1);
+    expect((a.report.ran.repair ?? 0) + (b.report.ran.repair ?? 0)).toBe(1);
+    expect(a.report.failed + b.report.failed).toBe(0);
+    const left = await jobs(bot.userid);
+    expect(left.map((job) => job.kind)).toEqual(["grow"]);
+    expect(new Date(left[0]!.due_at).getTime() / 1000).toBeGreaterThan(NOW + HOUR);
+  }, 30_000);
+
   test("a damaged yard does not grow, and books a repair if none is coming", async () => {
     const [bot] = await make([15]);
     await pass(NOW, 1);
