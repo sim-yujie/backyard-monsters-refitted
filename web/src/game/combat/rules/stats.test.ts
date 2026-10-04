@@ -47,6 +47,7 @@ import {
   towerStats,
   trapDamageAt,
   trapStats,
+  tripsTrap,
   VICTORY_THRESHOLD,
   withLowLevelBonus,
 } from "./stats";
@@ -272,6 +273,20 @@ describe("traps", () => {
   it("gives a non-trap nothing", () => {
     expect(trapStats(20)).toBeUndefined();
     expect(trapDamageAt(20, 0)).toBe(0);
+  });
+
+  it("lets anything set off a Booby Trap", () => {
+    for (const id of ["C1", "C9", "C13", "IC1", "G1"]) expect(tripsTrap(24, id)).toBe(true);
+  });
+
+  it("sets off a Heavy Trap only for the big creatures (`BHEAVYTRAP.as:28-31`, issue #259)", () => {
+    const trips = (id: string) => tripsTrap(117, id);
+    for (const id of ["C10", "C11", "C12", "IC7", "IC8", "G1", "G2", "G3", "G4", "G5"]) {
+      expect(trips(id), id).toBe(true);
+    }
+    for (const id of ["C1", "C9", "C13", "C14", "C17", "C19", "C200", "IC1", "IC6"]) {
+      expect(trips(id), id).toBe(false);
+    }
   });
 });
 

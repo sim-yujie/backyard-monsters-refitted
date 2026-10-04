@@ -93,6 +93,7 @@ import {
   towerStats,
   trapDamageAt,
   trapStats,
+  tripsTrap,
   isKnownMonster,
 } from "./stats.js";
 import {
@@ -2801,7 +2802,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const spec = trapStats(building.type);
     if (!spec) return;
     const watching = index.inRange(TRAP_TRIGGER_RANGE, building.cx, building.cy, TRAP_TARGETS);
-    if (watching.length === 0) return;
+    // A Heavy Trap only goes off for the big creatures (issue #259).
+    if (!watching.some((hit) => tripsTrap(building.type, hit.creep.monsterId))) return;
 
     // `Explode` hits everything inside `size`, not just what tripped it.
     let touched = 0;

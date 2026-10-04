@@ -897,8 +897,9 @@ radius, so every creep inside the blast takes at least half damage.
 
 `BHEAVYTRAP` differs in three ways (`client/scripts/BHEAVYTRAP.as`):
 
-- It only triggers on **large** monsters: creature ids `C10`–`C12` and `IC7`–`IC8`. Everything
-  else walks over it (`:28-31`). It stops at the first qualifying target (`:38`).
+- It only triggers on **large** monsters: creature ids `C10`–`C12` and `IC7`–`IC8`, and the
+  champions, whose `G` ids neither test excludes. Everything else walks over it (`:28-31`). It
+  stops at the first qualifying target (`:38`).
 - It damages ground units at full falloff damage, then runs a second pass on flying units at half
   (`:51-82`).
 - A trap only counts as fired if it actually caught something: `_fired` is set inside
@@ -1530,7 +1531,7 @@ These are load-bearing. Change any of them and the economy or the meta breaks.
    threshold. The two must stay equal.
 7. **Damage protection tiers**: 4 attacks in an hour → 1 hour; 50% damage → 36 hours; outposts 25%
    → 8 hours. Attacking clears your own protection. This is the whole anti-farming system.
-8. **Traps only fire on ground units, and heavy traps only on the five large monsters.** That is
+8. **Traps only fire on ground units, and heavy traps only on the five large monsters and the champions.** That is
    the counter-play that makes flying and small units worth bringing.
 9. **A flinger's range is a function of its level**, 4/6/8/10 for main yards and 1/2/3/4 for
    outposts, and outposts are how a player projects reach. This is the entire spatial layer of

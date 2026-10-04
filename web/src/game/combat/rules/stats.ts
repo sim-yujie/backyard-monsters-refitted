@@ -545,6 +545,30 @@ export const trapDamageAt = (type: number, distance: number): number => {
   return (trap.damage / trap.size) * (trap.size - distance * 0.5);
 };
 
+/** The Heavy Trap, the one trap that is choosy about what sets it off. */
+export const HEAVY_TRAP_TYPE = 117;
+
+/**
+ * Whether a creep with this `monsterId` sets off a trap of `type`.
+ *
+ * A Booby Trap goes off under anything on the ground. A Heavy Trap's
+ * `FindTargets` skips every `C` creature but 10 to 12 (Crabatron, Project X,
+ * D.A.V.E.) and every `I` creature but 7 and 8 (Sabnox, King Wormzer), so only
+ * those and the champions, whose `G` ids neither test touches, trip it
+ * (`client/scripts/BHEAVYTRAP.as:28-31`). The number is read after the first
+ * `C`, which is why `IC7` counts as 7. Once tripped, the blast still hurts
+ * every creep inside it, small ones included (`:51-61`).
+ */
+export const tripsTrap = (type: number, monsterId: string): boolean => {
+  if (type !== HEAVY_TRAP_TYPE) return true;
+  const prefix = monsterId.charAt(0);
+  // AS3's `int()` reads a string with no number in it as 0.
+  const number = Number.parseInt(monsterId.substring(monsterId.indexOf("C") + 1), 10) || 0;
+  if (prefix === "C") return number >= 10 && number <= 12;
+  if (prefix === "I") return number >= 7 && number <= 8;
+  return true;
+};
+
 /**
  * The highest fortification a building can hold.
  *

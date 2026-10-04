@@ -160,7 +160,7 @@ this plan:
 6. 90% is the victory and takeover threshold, and the two stay equal.
 7. Damage protection tiers (4 attacks/hour → 1 hour; 50% damage → 36 hours; outposts 25% → 8 hours);
    attacking clears the attacker's own protection.
-8. Traps only fire on ground units, heavy traps only on the five large monsters.
+8. Traps only fire on ground units, heavy traps only on the five large monsters and the champions.
 9. Flinger range is a function of level (4/6/8/10 main, 1/2/3/4 outpost).
 10. The five-minute limit (seven with Declare War), hard retreat two minutes after expiry.
 11. Wild monster camps regenerate after twelve hours and never get damage protection.

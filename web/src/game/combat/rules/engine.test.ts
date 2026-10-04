@@ -124,6 +124,41 @@ describe("traps", () => {
     run(battle, 4000);
     expect(battle.state().health["2"]).toBe(0);
   });
+
+  describe("a Heavy Trap waits for something big (issue #259)", () => {
+    /**
+     * A Heavy Trap halfway along the walk to the Town Hall, which every one of
+     * these passes within 20 of; a champion's longer reach stops it short of
+     * the Booby Trap's corner.
+     */
+    const heavyYard = () =>
+      yardOf({
+        "1": { id: 1, t: 14, X: 400, Y: 400 },
+        "2": { id: 2, t: 117, X: 200, Y: 200 },
+      });
+    type Drop = {
+      monsters: Record<string, number>;
+      champion?: { t: number; l: number };
+    };
+    const firedAfter = (drop: Drop): readonly number[] => {
+      const battle = createBattle(heavyYard(), { seed: 3 });
+      battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, ...drop });
+      run(battle, 4000);
+      return battle.state().firedTraps;
+    };
+
+    it("lets a Pokey walk over it", () => {
+      expect(firedAfter({ monsters: { C1: 3 } })).toEqual([]);
+    });
+
+    it("goes off under a Crabatron", () => {
+      expect(firedAfter({ monsters: { C10: 1 } })).toEqual([2]);
+    });
+
+    it("goes off under a champion", () => {
+      expect(firedAfter({ monsters: {}, champion: { t: 1, l: 1 } })).toEqual([2]);
+    });
+  });
 });
 
 describe("a creep's reach is a circle on screen (issue #85)", () => {
