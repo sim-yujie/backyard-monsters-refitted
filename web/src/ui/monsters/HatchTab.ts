@@ -177,6 +177,8 @@ export class HatchTab implements MonstersTab {
   /** What the batch costs and takes. */
   private readonly sumLine: HTMLElement;
   private readonly addButton: HTMLButtonElement;
+  /** The button's words, kept from draw to draw: see `drawAddLabel`. */
+  private readonly addWords: HTMLElement;
   private readonly noteLine: HTMLElement;
   private readonly warningLine: HTMLElement;
   private readonly gateLine: HTMLElement;
@@ -290,6 +292,9 @@ export class HatchTab implements MonstersTab {
     this.addButton.type = "button";
     this.addButton.className = "btn btn--primary hatch-add__add";
     this.addButton.addEventListener("click", () => void this.runAdd(this.count));
+    this.addWords = document.createElement("span");
+    this.addWords.className = "hatch-add__words";
+    this.addButton.append(this.addWords);
     this.noteLine = document.createElement("p");
     this.noteLine.className = "hatch-add__note";
     this.noteLine.setAttribute("aria-live", "polite");
@@ -474,15 +479,17 @@ export class HatchTab implements MonstersTab {
 
   /** "Add 5 Pokeys to Hatchery 2": the last thing read before the tap says where they go (#268, C). */
   private drawAddLabel(row: HatchMonster | null): void {
-    const words = document.createElement("span");
-    words.className = "hatch-add__words";
     const target = this.target;
     const where = typeof target === "number" ? ` to ${this.hatcheryName(target)}` : "";
-    words.textContent =
+    const words =
       !row || this.count < 1
         ? "Add"
         : `Add ${formatAmount(this.count)} ${plural(row.monster.name, this.count)}${where}`;
-    this.addButton.replaceChildren(words);
+    // The words are rewritten, never replaced: pressing Add straight after
+    // typing a count blurs the box, which redraws here between the press and
+    // the release, and a replaced node under the pointer cancels the click
+    // (the first Add after typing did nothing, #268).
+    if (this.addWords.textContent !== words) this.addWords.textContent = words;
   }
 
   /** "Adding to Hatchery 2 (Level 3)", or the HCC's shared queue. */

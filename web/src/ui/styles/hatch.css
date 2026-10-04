@@ -1182,6 +1182,11 @@ button.hatch-slot:disabled {
   font-size: var(--text-lg);
 }
 
+/* "Max (81)" on one line; the box gives way first. */
+.hatch-add__fill {
+  white-space: nowrap;
+}
+
 .hatch-add__fill[aria-pressed="true"]:not(:disabled) {
   border-color: var(--colour-accent-line);
   background: var(--colour-accent-soft);

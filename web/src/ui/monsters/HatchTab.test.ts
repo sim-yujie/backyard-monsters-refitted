@@ -483,11 +483,15 @@ describe("HatchTab: the info panel and the batch add", () => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
     expect(text(element, ".hatch-add__words")).toBe("Add 5 Pokeys to Hatchery 2");
     expect(text(line(element, 11), ".hatch-line__waiting")).toBe("0 → 4 waiting of 60");
-    // The press takes the focus out of the box first, as a real one does.
+    // The press lands on the button's words and takes the focus out of the
+    // box, whose redraw runs before the release: the words must be the same
+    // node after it, or the browser drops the click (#268).
     const add = addButton(element);
+    const pressed = add.querySelector(".hatch-add__words");
     add.focus();
     input.dispatchEvent(new Event("change", { bubbles: true }));
-    expect(add.isConnected && !add.disabled).toBe(true);
+    expect(add.querySelector(".hatch-add__words")).toBe(pressed);
+    expect(pressed!.isConnected && !add.disabled).toBe(true);
     add.click();
     await flush();
     expect(actions.add).toHaveBeenCalledOnce();
