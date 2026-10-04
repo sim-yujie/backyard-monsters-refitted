@@ -75,8 +75,15 @@ export const RETIRE_POSITION = BOT_MAX_LEVEL + 1;
 export const SLOW_PACE = 0.75;
 export const FAST_PACE = 1.5;
 
-/** A level may hold this many more or fewer than its share before the rebalance nudges it (§4.4). */
+/** A bot may stand this many bots' places off its spot in the queue before the rebalance nudges it (§4.4). */
 export const REBALANCE_SLACK = 2;
+
+/**
+ * With the rebalance running daily, no level should sit more than this many
+ * bots off its share once it has had a few days (issue #251); the rebalance
+ * logs a warning when one does.
+ */
+export const SPREAD_TOLERANCE = 4;
 
 /** Points-plus-base-value of a level-band position: `floor(p)` and the fraction into it. */
 export const targetAt = (position: number): number => {
@@ -470,25 +477,28 @@ export interface RebalancePlan {
 }
 
 /**
- * The daily rebalance (§4.4): against the even spread `share` (index 0 is
- * level 1),
- *
- * - a level more than {@link REBALANCE_SLACK} over its share has its newest
- *   arrivals (the latest `level_since`), as many as it is over, slowed to
- *   {@link SLOW_PACE}: they fall behind the bots they arrived with, so a bunch
- *   spreads out instead of travelling up the levels together;
- * - a level more than {@link REBALANCE_SLACK} under has its arrivals sped up
- *   to {@link FAST_PACE}: the bots next to arrive, the furthest on of the
- *   level below, as many as it is short, so the gap fills sooner.
+ * The daily rebalance (§4.4) against the even spread `share` (index 0 is
+ * level 1). The bots queue up by their place on the climb, furthest on first,
+ * and each place in the queue has a spot: the first `share[39]` places spread
+ * evenly through level 40, the next `share[38]` through level 39, and so on.
+ * A bot more than {@link REBALANCE_SLACK} bots' places ahead of its spot is
+ * slowed to {@link SLOW_PACE}, one as far behind it hurried to
+ * {@link FAST_PACE}, and one near it goes back to the normal pace. So a
+ * crowded level's furthest-on bots move on sooner and its newest arrivals
+ * linger behind, and the bots around a thin level close in on it, until every
+ * level holds about its share.
  *
  * A nudge lasts until the bot's next level (the grow job sets the pace back
- * to 1 then), and moves `level_since` so the bot keeps its place on the climb
- * ({@link anchorFor}). A bot already at the pace asked is left alone.
+ * to 1 then) or the next rebalance, and moves `level_since` so the bot keeps
+ * its place on the climb ({@link anchorFor}). A bot already at the pace asked
+ * is left alone.
  *
  * The total is topped back up with level 1 bots, at most as many as level 1
  * has room for within its share and the slack, so a near-empty table is not
  * refilled at level 1 all at once (the factory's `create --fill` spreads a
- * fresh population over the levels; the rest follow on later days).
+ * fresh population over the levels; the rest follow on later days). While
+ * the table is short no pace is nudged: the queue's spots assume a full table,
+ * and the gaps are the fill's and the top-up's to close.
  */
 export const planRebalance = (
   bots: readonly RebalanceBot[],
@@ -497,33 +507,33 @@ export const planRebalance = (
   now: number,
   daysPerLevel: number
 ): RebalancePlan => {
-  const byLevel = new Map<number, RebalanceBot[]>();
-  for (const bot of bots) byLevel.set(bot.level, [...(byLevel.get(bot.level) ?? []), bot]);
+  const levelOne = bots.filter((bot) => bot.level === 1).length;
+  const missing = Math.max(0, total - bots.length);
+  const levelOneRoom = Math.max(0, (share[0] ?? 0) + REBALANCE_SLACK - levelOne);
+  const topUp = Math.min(missing, levelOneRoom);
+  if (missing > 0) return { nudges: [], topUp };
 
-  const speeds = new Map<number, number>();
-  share.forEach((want, index) => {
-    const level = index + 1;
-    const here = byLevel.get(level) ?? [];
-    if (here.length - want > REBALANCE_SLACK) {
-      const newest = [...here].sort((a, b) => b.level_since.getTime() - a.level_since.getTime());
-      for (const bot of newest.slice(0, here.length - want)) speeds.set(bot.userid, SLOW_PACE);
-    } else if (want - here.length > REBALANCE_SLACK && level > 1) {
-      const below = [...(byLevel.get(level - 1) ?? [])].sort(
-        (a, b) => a.level_since.getTime() - b.level_since.getTime()
-      );
-      for (const bot of below.slice(0, want - here.length)) if (!speeds.has(bot.userid)) speeds.set(bot.userid, FAST_PACE);
-    }
-  });
+  // A bot that could not grow stands at the top of its level, not past it.
+  const placed = bots
+    .map((bot) => ({ bot, at: Math.min(pacePosition(bot, now, daysPerLevel, bot.speed), bot.level + 0.999999) }))
+    .sort((a, b) => b.at - a.at);
 
   const nudges: PaceNudge[] = [];
-  for (const bot of bots) {
-    const speed = speeds.get(bot.userid);
-    if (speed === undefined || speed === bot.speed) continue;
-    const position = Math.min(pacePosition(bot, now, daysPerLevel, bot.speed), bot.level + 0.999999);
-    nudges.push({ userid: bot.userid, speed, level_since: anchorFor(position, bot.level, now, daysPerLevel, speed) });
+  let level = share.length;
+  let inLevel = 0;
+  for (const { bot, at } of placed) {
+    while (level > 1 && inLevel >= (share[level - 1] ?? 0)) {
+      level--;
+      inLevel = 0;
+    }
+    const want = Math.max(1, share[level - 1] ?? 0);
+    const spot = level + 1 - (inLevel + 0.5) / want;
+    inLevel++;
+    const ahead = (at - spot) * want;
+    const speed = ahead > REBALANCE_SLACK ? SLOW_PACE : ahead < -REBALANCE_SLACK ? FAST_PACE : 1;
+    if (speed === bot.speed) continue;
+    nudges.push({ userid: bot.userid, speed, level_since: anchorFor(at, bot.level, now, daysPerLevel, speed) });
   }
 
-  const missing = Math.max(0, total - bots.length);
-  const levelOneRoom = Math.max(0, (share[0] ?? 0) + REBALANCE_SLACK - (byLevel.get(1)?.length ?? 0));
-  return { nudges, topUp: Math.min(missing, levelOneRoom) };
+  return { nudges, topUp };
 };

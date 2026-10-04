@@ -12,7 +12,7 @@ import { LOOT_BAND } from "./yardGenerator.js";
 import { LEGACY_BOT_SHINY, shinyBand } from "./shiny.js";
 import { BUNKER_TYPE } from "../yard/bunker.js";
 import { storageCap } from "../base/economy/resourceBudget.js";
-import { bookFirstGrows, MAX_ATTEMPTS, REBALANCE_JOB, runBotSweep, UNDER_ATTACK_RETRY_MINUTES, type SweepDeps } from "./sweep.js";
+import { bookFirstGrows, MAX_ATTEMPTS, REBALANCE_JOB, rebalancePeriod, runBotSweep, UNDER_ATTACK_RETRY_MINUTES, type SweepDeps } from "./sweep.js";
 
 /**
  * The bot sweep against a real Postgres (issue #240): the first grows, the
@@ -157,6 +157,8 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
 
   test("past level 40 a bot retires to Map Room 2 and a fresh level 1 bot takes its place", async () => {
     const [old] = await make([40]);
+    // The day's rebalance is claimed already: a lone bot on level 40 against a total of one would be slowed.
+    await sql(`INSERT INTO bym.job_run (job, period, ran_at) VALUES (?, ?, ?)`, [REBALANCE_JOB, rebalancePeriod(NOW), new Date(NOW * 1000)]);
     await pass(NOW, 1);
     await sql(`UPDATE bym.bot SET level_since = ? WHERE userid = ?`, [new Date((NOW - 3.2 * T * DAY / 3) * 1000), old!.userid]);
     await dueNow(NOW);
@@ -278,24 +280,27 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
   }, 60_000);
 
   test("the rebalance runs once a day: paces nudged, the total topped up at level 1", async () => {
-    // Four bots on level 5 against a share of 1 a level: three over, so the three newest slow.
-    const made = await make([5, 5, 5, 5, 9]);
-    const total = 42;
+    // A full table of five, one a level on levels 1-5: the level 9 bot is far ahead of its spot, so it slows.
+    const made = await make([1, 2, 3, 4, 9]);
     await bookFirstGrows(orm.em.fork(), NOW + 2 * DAY);
 
-    const first = await pass(NOW, total);
+    const first = await pass(NOW, 5);
     expect(first.report.rebalanced).toBe(true);
-    // Level 1 has room for its share (2) and the slack (2): four of the 37 missing.
-    expect(first.report.replaced).toHaveLength(4);
+    expect(first.report.replaced).toEqual([]);
     const paces = await sql<{ bot_userid: number; speed: number | null }>(
-      `SELECT bot_userid, (payload->>'speed')::float AS speed FROM bym.bot_job WHERE kind = 'grow'`
+      `SELECT bot_userid, (payload->>'speed')::float AS speed FROM bym.bot_job WHERE kind = 'grow' AND payload->>'speed' IS NOT NULL`
     );
-    const levelFive = made.slice(0, 4).map((bot) => bot.userid);
-    const slowed = paces.filter((row) => row.speed === SLOW_PACE).map((row) => row.bot_userid);
-    expect(slowed).toHaveLength(3);
-    expect(slowed.every((userid) => levelFive.includes(userid))).toBe(true);
+    expect(paces).toEqual([{ bot_userid: made[4]!.userid, speed: SLOW_PACE }]);
 
-    expect((await pass(NOW + HOUR, total)).report.rebalanced).toBe(false);
-    expect((await pass(NOW + DAY, total)).report.rebalanced).toBe(true);
+    expect((await pass(NOW + HOUR, 5)).report.rebalanced).toBe(false);
+
+    // The next day the total is 8: level 1 has room for its share (1) and the slack (2), less the one it has.
+    const next = await pass(NOW + DAY, 8);
+    expect(next.report.rebalanced).toBe(true);
+    expect(next.report.replaced).toHaveLength(2);
+    // The new level 1 bots start at the bottom of the level, as new players.
+    for (const userid of next.report.replaced) {
+      expect(new Date((await botRow(userid)).level_since).getTime() / 1000).toBe(NOW + DAY);
+    }
   }, 60_000);
 });

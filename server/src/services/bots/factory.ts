@@ -156,12 +156,13 @@ const avatarFor = (rng: Rng): string =>
  * @param {number} level - The bot's level, 1-40
  * @param {number} now - Unix seconds
  * @param {number} daysPerLevel - `BOTS_DAYS_PER_LEVEL`
+ * @param {boolean} [fresh] - Start at the bottom of the level, as a new player
  * @returns {BotProfile} The bot's profile
  */
-export const drawProfile = (rng: Rng, level: number, now: number, daysPerLevel: number): BotProfile => {
+export const drawProfile = (rng: Rng, level: number, now: number, daysPerLevel: number, fresh = false): BotProfile => {
   const seed = rng.next();
   const persona = PERSONAS[rng.int(PERSONAS.length)]!;
-  const fraction = rng.float();
+  const fraction = fresh ? 0 : rng.float();
   const age = backdate(rng, level, fraction, daysPerLevel);
   // Last seen saving some time in the past day and a half, never before it was made.
   const savetime = now - Math.floor(Math.min(age, 36 * 60 * 60) * rng.float());
@@ -190,13 +191,14 @@ export const drawBot = (
   rng: Rng,
   level: number,
   now: number,
-  daysPerLevel: number
+  daysPerLevel: number,
+  fresh = false
 ): { profile: BotProfile; yard: BotYard } => {
   if (!Number.isInteger(level) || level < BOT_MIN_LEVEL || level > BOT_MAX_LEVEL) {
     throw new Error(`A bot's level must be ${BOT_MIN_LEVEL}-${BOT_MAX_LEVEL}, not ${level}`);
   }
   for (let draw = 0; draw < MAX_YARD_DRAWS; draw++) {
-    const profile = drawProfile(rng, level, now, daysPerLevel);
+    const profile = drawProfile(rng, level, now, daysPerLevel, fresh);
     const yard = generateBotYard({ seed: profile.seed, persona: profile.persona, targetPoints: profile.targetPoints, now });
     if (yard.level === level) return { profile, yard };
   }
@@ -282,6 +284,8 @@ export interface CreateBotsOptions {
   /** Unix seconds. */
   now: number;
   daysPerLevel: number;
+  /** Start each bot at the bottom of its level, as a new player (the sweep's level 1 bots). */
+  fresh?: boolean;
   /** Told after each batch commits. */
   onBatch?: (made: CreatedBot[]) => void;
 }
@@ -325,12 +329,12 @@ export const createBots = async (
   levels: readonly number[],
   options: CreateBotsOptions
 ): Promise<CreatedBot[]> => {
-  const { rng, now, daysPerLevel } = options;
+  const { rng, now, daysPerLevel, fresh } = options;
   const made: CreatedBot[] = [];
 
   for (let start = 0; start < levels.length; start += BATCH_SIZE) {
     const batch = levels.slice(start, start + BATCH_SIZE);
-    const drawn = batch.map((level) => drawBot(rng, level, now, daysPerLevel));
+    const drawn = batch.map((level) => drawBot(rng, level, now, daysPerLevel, fresh));
     const hashes = await Promise.all(batch.map(randomPasswordHash));
 
     const batchMade = await em.fork().transactional(async (tx) => {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { MUSHROOM_TYPE } from "../../game-data/buildingFootprints.js";
+import { mulberry32 } from "../../game-rules/combat/rng.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 import { storageCap } from "../base/economy/resourceBudget.js";
 import { calculateBaseLevel } from "../base/calculateBaseLevel.js";
@@ -18,12 +19,16 @@ import {
   planRebalance,
   rearmFiredTraps,
   refillArmy,
+  RETIRE_POSITION,
   SLOW_PACE,
+  SPREAD_TOLERANCE,
   targetAt,
+  type RebalanceBot,
   tendChampion,
   type BrainSave,
   type GrowthReport,
 } from "./brain.js";
+import { evenSpread } from "./factory.js";
 import { TRAP_TYPES } from "./layout.js";
 import { levelBand, type Persona } from "./progression.js";
 import { generateBotYard, LOOT_BAND, type BotYard } from "./yardGenerator.js";
@@ -290,28 +295,17 @@ describe("the daily rebalance (§4.4)", () => {
     level_since: since(daysAgo),
     speed,
   });
+  /** A bot standing at `position` on the climb at `speed`. */
+  const botAt = (userid: number, position: number, speed = 1) =>
+    bot(userid, Math.floor(position), ((position - Math.floor(position)) * T) / speed, speed);
 
-  test("a crowded level slows its newest arrivals; a thin one speeds up the bots next to arrive", () => {
-    const share = [3, 3, 3, 3];
-    const bots = [
-      // Level 1: 3, its share.
-      bot(1, 1, 1), bot(2, 1, 2), bot(3, 1, 0.5),
-      // Level 2: 7, four over: the four newest are slowed.
-      bot(10, 2, 2.9), bot(11, 2, 2.5), bot(12, 2, 0.1), bot(13, 2, 0.2), bot(14, 2, 0.3), bot(15, 2, 0.4), bot(16, 2, 2.0),
-      // Level 3: 3. Level 4: none, three short: the furthest-on of level 3 hurry.
-      bot(20, 3, 2.8), bot(21, 3, 1), bot(22, 3, 0.2),
-    ];
-    const plan = planRebalance(bots, share, 13, NOW, T);
+  test("a bunch spreads out: its furthest-on bots hurry and its newest arrivals linger", () => {
+    // Nine bots all on level 2 against three a level.
+    const bots = [2.9, 2.8, 2.7, 2.6, 2.5, 2.4, 2.3, 2.2, 2.1].map((position, index) => botAt(index + 1, position));
+    const plan = planRebalance(bots, [3, 3, 3], 9, NOW, T);
     const speeds = Object.fromEntries(plan.nudges.map((nudge) => [nudge.userid, nudge.speed]));
-    expect(speeds).toEqual({
-      12: SLOW_PACE,
-      13: SLOW_PACE,
-      14: SLOW_PACE,
-      15: SLOW_PACE,
-      20: FAST_PACE,
-      21: FAST_PACE,
-      22: FAST_PACE,
-    });
+    // The first three places belong on level 3, the last three on level 1; the middle stays.
+    expect(speeds).toEqual({ 1: FAST_PACE, 2: FAST_PACE, 8: SLOW_PACE, 9: SLOW_PACE });
     // Each keeps its place on the climb.
     for (const nudge of plan.nudges) {
       const before = bots.find((one) => one.userid === nudge.userid)!;
@@ -323,17 +317,95 @@ describe("the daily rebalance (§4.4)", () => {
     expect(plan.topUp).toBe(0);
   });
 
-  test("a bot already at the asked pace is left alone, and a level within the slack is not touched", () => {
-    const bots = [bot(1, 1, 1), bot(2, 1, 0.5, SLOW_PACE), bot(3, 1, 0.1, SLOW_PACE)];
-    // Two over a share of one: within the slack.
-    expect(planRebalance(bots, [1], 3, NOW, T).nudges).toEqual([]);
-    // Three over a share of none: the three newest, two of them slowed already.
-    expect(planRebalance(bots, [0], 3, NOW, T).nudges.map((nudge) => nudge.userid)).toEqual([1]);
+  test("a bot near its spot goes back to the normal pace; one already at the asked pace is left alone", () => {
+    // Spots for a share of three: 1.83, 1.5, 1.17.
+    const settled = [botAt(1, 1.83), botAt(2, 1.5, SLOW_PACE), botAt(3, 1.17, FAST_PACE)];
+    expect(planRebalance(settled, [3], 3, NOW, T).nudges.map((nudge) => [nudge.userid, nudge.speed])).toEqual([
+      [2, 1],
+      [3, 1],
+    ]);
+    const bunch = [2.9, 2.8, 2.7, 2.6, 2.5, 2.4, 2.3, 2.2, 2.1].map((position, index) =>
+      botAt(index + 1, position, index === 0 ? FAST_PACE : 1)
+    );
+    expect(planRebalance(bunch, [3, 3, 3], 9, NOW, T).nudges.map((nudge) => nudge.userid)).toEqual([2, 8, 9]);
   });
 
   test("the total is topped up at level 1, no more than level 1 has room for", () => {
     expect(planRebalance([bot(1, 5, 1)], [3, 3, 3, 3, 3], 15, NOW, T).topUp).toBe(5);
     expect(planRebalance([bot(1, 1, 1), bot(2, 1, 1)], [3, 3], 6, NOW, T).topUp).toBe(3);
     expect(planRebalance([bot(1, 1, 1)], [1], 1, NOW, T).topUp).toBe(0);
+  });
+});
+
+describe("the even spread over simulated days (issue #251)", () => {
+  const TOTAL = 500;
+  const PASS = 10 * 60;
+
+  /**
+   * The sweep's climb without the yards, in 10-minute passes: each bot grows
+   * every 2-6 hours (its level follows its pace, and a new level ends a
+   * nudge), one past level 40 retires for a fresh level 1 bot at the bottom
+   * of the level, and the rebalance runs on the first pass of each UTC day.
+   * It starts as `create --fill` leaves the table: every level at its share,
+   * each bot at a random point in its level.
+   */
+  const simulate = (days: number, seed: number) => {
+    const rng = mulberry32(seed);
+    const share = evenSpread(TOTAL);
+    const bots: (RebalanceBot & { growAt: number })[] = [];
+    const make = (level: number, fraction: number, now: number) =>
+      bots.push({
+        userid: bots.length + 1,
+        level,
+        level_since: new Date((now - fraction * T * DAY) * 1000),
+        speed: 1,
+        growAt: now + rng.float() * 60 * 60,
+      });
+    share.forEach((want, index) => {
+      for (let n = 0; n < want; n++) make(index + 1, rng.float(), NOW);
+    });
+
+    const daily: number[][] = [];
+    let retired = 0;
+    for (let now = NOW + PASS; now <= NOW + days * DAY; now += PASS) {
+      if (Math.floor(now / DAY) !== Math.floor((now - PASS) / DAY)) {
+        const plan = planRebalance(bots, share, TOTAL, now, T);
+        for (const nudge of plan.nudges) Object.assign(bots.find((one) => one.userid === nudge.userid)!, nudge);
+        for (let n = 0; n < plan.topUp; n++) make(1, 0, now);
+        const counts = share.map(() => 0);
+        for (const bot of bots) counts[bot.level - 1]!++;
+        daily.push(counts);
+      }
+      for (let index = bots.length - 1; index >= 0; index--) {
+        const bot = bots[index]!;
+        if (bot.growAt > now) continue;
+        const position = pacePosition(bot, now, T, bot.speed);
+        if (position >= RETIRE_POSITION) {
+          retired++;
+          bots.splice(index, 1);
+          make(1, 0, now);
+          continue;
+        }
+        const level = Math.floor(position);
+        if (level !== bot.level) {
+          bot.level_since = anchorFor(position, level, now, T, bot.speed);
+          bot.level = level;
+          bot.speed = 1;
+        }
+        bot.growAt = now + (2 + 4 * rng.float()) * 60 * 60;
+      }
+    }
+    return { share, daily, retired, active: bots.length };
+  };
+
+  test("500 bots stay within the tolerance of every level's share over two weeks", () => {
+    const { share, daily, retired, active } = simulate(14, 1);
+    const worstOff = daily.map((counts) => Math.max(...counts.map((have, index) => Math.abs(have - share[index]!))));
+    // The fill's random start needs a few rebalances to even out; from the fourth day on it holds.
+    expect(Math.max(...worstOff.slice(3))).toBeLessThanOrEqual(SPREAD_TOLERANCE);
+    expect(active).toBe(TOTAL);
+    // The nudges even out: about 500 / (40 × 3) bots a day still pass level 40.
+    expect(retired).toBeGreaterThan(14 * 3.5);
+    expect(retired).toBeLessThan(14 * 5);
   });
 });

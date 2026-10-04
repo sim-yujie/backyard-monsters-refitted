@@ -88,6 +88,16 @@ describe("drawProfile", () => {
     }
   });
 
+  test("a fresh bot starts at the bottom of its level, as a new player", () => {
+    const rng = mulberry32(7);
+    for (let i = 0; i < 10; i++) {
+      const profile = drawProfile(rng, 1, NOW, T, true);
+      expect(profile.fraction).toBe(0);
+      expect(profile.levelSince.getTime() / 1000).toBe(NOW);
+      expect(profile.targetPoints).toBe(levelBand(1).min);
+    }
+  });
+
   test("an account looks about as old as its level, with jitter", () => {
     const rng = mulberry32(5);
     const ages = Array.from({ length: 50 }, () => backdate(rng, 20, 0.5, T));

@@ -27,6 +27,7 @@ import {
   rearmFiredTraps,
   refillArmy,
   RETIRE_POSITION,
+  SPREAD_TOLERANCE,
   targetAt,
   tendChampion,
 } from "./brain.js";
@@ -525,7 +526,8 @@ const rebalance = async (em: EntityManager, now: number, config: BotConfig): Pro
       level_since: new Date(row.level_since),
       speed: Number(row.speed) > 0 ? Number(row.speed) : 1,
     }));
-    const plan = planRebalance(bots, evenSpread(config.total), config.total, now, config.daysPerLevel);
+    const share = evenSpread(config.total);
+    const plan = planRebalance(bots, share, config.total, now, config.daysPerLevel);
 
     let nudged = 0;
     for (const nudge of plan.nudges) {
@@ -556,6 +558,17 @@ const rebalance = async (em: EntityManager, now: number, config: BotConfig): Pro
         total: config.total,
         topUp: plan.topUp,
       });
+    } else {
+      const drifted = share.flatMap((want, index) => {
+        const have = bots.filter((bot) => bot.level === index + 1).length;
+        return Math.abs(have - want) > SPREAD_TOLERANCE ? [`level ${index + 1}: ${have} of ${want}`] : [];
+      });
+      if (drifted.length > 0) {
+        logger.warn("Bot rebalance: levels more than {tolerance} off their share: {drifted}", {
+          tolerance: SPREAD_TOLERANCE,
+          drifted: drifted.join(", "),
+        });
+      }
     }
     return plan.topUp;
   });
@@ -568,6 +581,7 @@ const makeLevelOneBots = async (em: EntityManager, count: number, now: number, d
       rng: mulberry32(Math.floor(deps.rng() * 2 ** 32)),
       now,
       daysPerLevel: deps.config.daysPerLevel,
+      fresh: true,
     });
     return made.map((bot) => bot.userid);
   } catch (error) {
