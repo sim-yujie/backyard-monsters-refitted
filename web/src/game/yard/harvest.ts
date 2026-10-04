@@ -108,6 +108,70 @@ const levelOf = (building: BuildingData): number => {
   return level !== undefined && level > 0 ? level : 1;
 };
 
+/** One harvester's level, health, rates and whether it runs, which its buffer and its rate both read. */
+interface HarvesterSetup {
+  readonly type: number;
+  readonly level: number;
+  readonly max: number | undefined;
+  readonly health: number | undefined;
+  readonly rates: Rates;
+  /** It produces now: built, no countdown running, at half health or more. */
+  readonly runs: boolean;
+}
+
+const setupOf = (
+  building: BuildingData,
+  save: Pick<BaseLoadResponse, "buildinghealthdata">,
+): HarvesterSetup | null => {
+  const type = Number(building.t);
+  if (!isHarvester(type)) return null;
+  const stats = rowOf(type)?.[6];
+  if (!stats) return null;
+
+  const level = levelOf(building);
+  const max = maxHealth(type, Math.max(1, level)) ?? undefined;
+  const health =
+    finite(save.buildinghealthdata?.[String(building.id)]) ?? finite(building.hp) ?? undefined;
+  const baseCycle = Math.max(1, at(stats.cycleTime, level));
+  const ratio = health === undefined || !max ? 1 : Math.min(Math.max(health, 0), max) / max;
+  const rates: Rates = {
+    produce: at(stats.produce, level),
+    cycle: baseCycle + Math.ceil(baseCycle * (4 - 4 * ratio)),
+    capacity: at(stats.capacity, level),
+  };
+  const runs =
+    level > 0 &&
+    !counting(building) &&
+    (health === undefined || (health > 0 && (!max || health >= max * 0.5)));
+  return { type, level, max, health, rates, runs };
+};
+
+/** When the Production Overdrive ends, if the save holds one. */
+const overdriveEnd = (save: Pick<BaseLoadResponse, "storedata">): number | undefined =>
+  finite(save.storedata?.[OVERDRIVE_ITEM]?.e);
+
+/**
+ * What one harvester makes in an hour (#280), or null for anything that is
+ * not one: `produce` every cycle, the cycle stretched by damage, by the rules
+ * {@link harvesterNow} fills its buffer with. Zero while it does not run
+ * (being built, upgraded or fortified, or under half health); doubled while
+ * the Production Overdrive runs at `now`. A full buffer does not zero it: it
+ * is what the harvester makes as long as it is banked.
+ */
+export const harvesterPerHour = (
+  building: BuildingData,
+  save: Pick<BaseLoadResponse, "buildinghealthdata" | "storedata">,
+  now: number,
+): { readonly resource: HarvestKey; readonly perHour: number } | null => {
+  const setup = setupOf(building, save);
+  if (!setup) return null;
+  const resource = `r${setup.type}` as HarvestKey;
+  if (!setup.runs) return { resource, perHour: 0 };
+  const podEnd = overdriveEnd(save);
+  const power = podEnd !== undefined && now < podEnd ? OVERDRIVE_POWER : 1;
+  return { resource, perHour: (setup.rates.produce * power * 3600) / setup.rates.cycle };
+};
+
 /**
  * One harvester now, or null for anything that is not one.
  *
@@ -120,23 +184,10 @@ export const harvesterNow = (
   save: Pick<BaseLoadResponse, "savetime" | "currenttime" | "buildinghealthdata" | "storedata">,
   now: number,
 ): HarvesterNow | null => {
-  const type = Number(building.t);
-  if (!isHarvester(type)) return null;
-  const stats = rowOf(type)?.[6];
-  if (!stats) return null;
-
-  const level = levelOf(building);
-  const max = maxHealth(type, Math.max(1, level)) ?? undefined;
-  const health =
-    finite(save.buildinghealthdata?.[String(building.id)]) ?? finite(building.hp) ?? undefined;
-  const capacity = at(stats.capacity, level);
-  const baseCycle = Math.max(1, at(stats.cycleTime, level));
-  const ratio = health === undefined || !max ? 1 : Math.min(Math.max(health, 0), max) / max;
-  const rates: Rates = {
-    produce: at(stats.produce, level),
-    cycle: baseCycle + Math.ceil(baseCycle * (4 - 4 * ratio)),
-    capacity,
-  };
+  const setup = setupOf(building, save);
+  if (!setup) return null;
+  const { type, level, max, health, rates, runs } = setup;
+  const capacity = rates.capacity;
 
   const producing = finite(building.pr) !== 0;
   const countdown = finite(building.cP);
@@ -145,14 +196,10 @@ export const harvesterNow = (
     countdown: producing && countdown !== undefined && countdown > 0 ? countdown : null,
   };
 
-  const runs =
-    level > 0 &&
-    !counting(building) &&
-    (health === undefined || (health > 0 && (!max || health >= max * 0.5)));
   if (runs) {
     const from = savedAtOf(save);
     const elapsed = Math.max(0, now - from);
-    const podEnd = finite(save.storedata?.[OVERDRIVE_ITEM]?.e);
+    const podEnd = overdriveEnd(save);
     const overdriven = podEnd === undefined ? 0 : Math.min(elapsed, Math.max(0, podEnd - from));
     if (overdriven > 0) buffer = runBuffer(buffer, rates, overdriven, OVERDRIVE_POWER);
     buffer = runBuffer(buffer, rates, elapsed - overdriven);

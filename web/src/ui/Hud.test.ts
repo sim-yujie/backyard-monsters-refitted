@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ResourceCaps } from "@/api/types";
 import type { YardJob } from "@/game/yard/jobs";
 import type { YardChange, YardListener, YardStore, YardUiBinding } from "@/game/yard/YardStore";
-import { capState, exactLabel, formatDelta, FULL_NOTE, Hud, workersText } from "./Hud";
+import { capState, exactLabel, formatDelta, formatRate, FULL_NOTE, Hud, workersText } from "./Hud";
 import { Notices } from "./maproom/Notices";
 import { spokenText } from "./resourceIcon";
 
@@ -614,5 +614,93 @@ describe("workersText", () => {
     });
     expect(workersText(0, 1).label).toBe("Workers: none of 1 free. Click to go to the job that finishes soonest.");
     expect(workersText(5, 5).label).toBe("Workers: all 5 free.");
+  });
+});
+
+/** The income an hour under each readout (#280), on the main yard only. */
+describe("the HUD's income an hour", () => {
+  const save = {
+    // Two level 1 Twig Snappers (720 twigs an hour each) and outposts sending 5 putty a tick.
+    buildingdata: {
+      "1": { X: 0, Y: 0, id: 1, t: 1, l: 1 },
+      "2": { X: 0, Y: 0, id: 2, t: 1, l: 1 },
+    },
+    buildingresources: { t: 1_000, b77: { r1: 0, r2: 0, r3: 5, r4: 0 } },
+  };
+  const bindTo = (hud: Hud, kind: "main" | "outpost"): void => {
+    const store = {
+      kind,
+      caps: { r1: 20_000, r2: 20_000, r3: 20_000, r4: 20_000 },
+      workers: { total: 5, busy: 0 },
+      jobs: () => [],
+      save,
+      now: () => 1_000,
+      isRunning: () => false,
+      subscribe: () => () => undefined,
+    };
+    hud.bindYard({ store: store as unknown as YardStore, scene: { selectBuilding: () => {} }, notices: new Notices() });
+  };
+  const rate = (hud: Hud, key: string): HTMLElement =>
+    hud.element.querySelector<HTMLElement>(`.hud__resource-button[data-resource="${key}"] .hud__rate`)!;
+
+  afterEach(() => {
+    document.body.replaceChildren();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows each resource's rate under it on the main yard, outposts included, and says it", () => {
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    hud.setResources({ r1: 100, r2: 0, r3: 0, r4: 0 });
+    expect(rate(hud, "r1").hidden).toBe(true);
+    bindTo(hud, "main");
+    expect(rate(hud, "r1").hidden).toBe(false);
+    expect(rate(hud, "r1").textContent).toBe("+1,440/h");
+    expect(rate(hud, "r2").textContent).toBe("+0/h");
+    expect(rate(hud, "r3").textContent).toBe("+1,800/h");
+    expect(hud.element.querySelector(".hud__resource--shiny .hud__rate")!.hasAttribute("hidden")).toBe(true);
+    const r1 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r1"]')!;
+    expect(r1.title).toBe("Twigs: 100 of 20,000\nMaking 1,440 an hour.");
+    r1.click();
+    expect(document.querySelector(".hud__exact-rate")!.textContent).toBe("Making 1,440 an hour.");
+    hud.bindYard(null);
+    expect(rate(hud, "r1").hidden).toBe(true);
+    hud.destroy();
+  });
+
+  it("dims a full silo's rate and says full, since that income is lost", () => {
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    hud.setResources({ r1: 20_000, r2: 0, r3: 0, r4: 0 });
+    bindTo(hud, "main");
+    expect(rate(hud, "r1").classList.contains("hud__rate--full")).toBe(true);
+    expect(rate(hud, "r1").textContent).toBe("+1,440/h full");
+    expect(rate(hud, "r3").classList.contains("hud__rate--full")).toBe(false);
+    // Spending takes it off the cap.
+    hud.setResources({ r1: 19_000 });
+    expect(rate(hud, "r1").classList.contains("hud__rate--full")).toBe(false);
+    expect(rate(hud, "r1").textContent).toBe("+1,440/h");
+    hud.destroy();
+  });
+
+  it("shows no rate in an outpost, whose save is not the main yard's", () => {
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    hud.setResources({ r1: 100 });
+    bindTo(hud, "outpost");
+    expect(rate(hud, "r1").hidden).toBe(true);
+    hud.destroy();
+  });
+
+  it("goes short on a phone", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(width <= 620px)" }));
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    hud.setResources({ r1: 100 });
+    bindTo(hud, "main");
+    expect(rate(hud, "r1").textContent).toBe("+1.4K/h");
+    hud.destroy();
+  });
+
+  it("spells a rate in full or short", () => {
+    expect(formatRate(12_400)).toBe("+12,400/h");
+    expect(formatRate(12_400, true)).toBe("+12.4K/h");
+    expect(formatRate(0)).toBe("+0/h");
   });
 });

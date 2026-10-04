@@ -3,6 +3,7 @@ import { setAvatar } from "@/api/account";
 import { getSession } from "@/api/auth";
 import type { ResourceCaps, Resources } from "@/api/types";
 import { avatarOf, pickedAvatar, type AvatarId } from "@/game/avatars";
+import { incomePerHour } from "@/game/yard/incomeRate";
 import { nextWorkerJob } from "@/game/yard/jobs";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { AccountMenu } from "./AccountMenu";
@@ -31,7 +32,9 @@ import { DamageBanner } from "./yard/DamageBanner";
  * to the job finishing soonest, and the post-attack "N buildings damaged
  * [Repair all]" line in the notice dock (`DamageBanner`, design §5.5). The
  * map, the attack screen and a foreign yard have no binding and show the
- * amounts alone. In an outpost the amounts and caps are the main yard's pool,
+ * amounts alone. On the main yard each resource also carries what the player
+ * makes of it an hour, "+12,400/h" (#280, `incomeRate.ts`), dimmed with
+ * "full" while its silo is full, since that income is lost. In an outpost the amounts and caps are the main yard's pool,
  * as the server sends them.
  *
  * The yard lays it out as its `corner` (the HUD redesign, #171, option B:
@@ -66,6 +69,10 @@ const FIT_ORDER: readonly HudFit[] = [HudFit.FULL, HudFit.NO_BRAND, HudFit.NO_CA
 
 /** What a full silo's readout says on hover and in its bubble (design §3.1). */
 export const FULL_NOTE = "Full: new income is lost. Build or upgrade Storage Silos.";
+
+/** "+12,400/h", or "+12.4K/h" short: a resource's income an hour (#280). */
+export const formatRate = (perHour: number, compact = false): string =>
+  `+${compact ? formatCompact(perHour) : formatAmount(perHour)}/h`;
 
 /** The worker art: the orange builder with the hammer and the hard hat. */
 const WORKER_ICON_URL = "/assets/archived/worker.v1.png";
@@ -152,6 +159,9 @@ export const exactLabel = (key: ResourceKey, amount: number | undefined, cap?: n
     : `${name}: ${formatExact(amount)} of ${formatExact(cap)}`;
 };
 
+/** "Making 12,400 an hour.", the income line's part of the tooltip and the bubble (#280). */
+export const rateNote = (perHour: number): string => `Making ${formatExact(perHour)} an hour.`;
+
 /** "2 / 5" free of total, and the Workers control's tooltip. */
 export const workersText = (free: number, total: number): { value: string; label: string } => ({
   value: `${free} / ${total}`,
@@ -170,8 +180,12 @@ interface Readout {
   /** The fill bar's track and fill; hidden without a cap. */
   readonly bar: HTMLElement;
   readonly fill: HTMLElement;
+  /** "+12,400/h" under the amount; hidden off the main yard (#280). */
+  readonly rate: HTMLElement;
   amount: number | undefined;
   cap: number | undefined;
+  /** Income an hour, on the main yard only. */
+  perHour: number | undefined;
   /**
    * How far the readout is behind `amount` while a bank's balls fly (#208):
    * credited but not landed yet. Below zero while balls thrown on the press
@@ -252,7 +266,11 @@ export class Hud {
       const fill = document.createElement("span");
       fill.className = "hud__cap-fill";
       bar.append(fill);
-      button.append(amount, capText, bar);
+      const rate = document.createElement("span");
+      rate.className = "hud__rate";
+      rate.setAttribute("aria-hidden", "true");
+      rate.hidden = true;
+      button.append(amount, capText, bar, rate);
       // On the own yard the Shiny counter is the Shop's door (§8.2); the
       // Shop's header then shows the exact balance.
       button.addEventListener("click", () => {
@@ -274,8 +292,10 @@ export class Hud {
         capText,
         bar,
         fill,
+        rate,
         amount: undefined,
         cap: undefined,
+        perHour: undefined,
         held: 0,
         expecting: 0,
         shown: null,
@@ -556,6 +576,18 @@ export class Hud {
     readout.bar.hidden = state === null;
     readout.fill.style.width = state === null ? "" : `${+(state.fraction * 100).toFixed(2)}%`;
     readout.button.classList.toggle("hud__resource-button--full", state?.full === true);
+    readout.rate.hidden = readout.perHour === undefined;
+    if (readout.perHour !== undefined) {
+      readout.rate.textContent = formatRate(readout.perHour, this.fitted === HudFit.COMPACT);
+      // Still made, but lost while the silo is full: dimmed, and said.
+      readout.rate.classList.toggle("hud__rate--full", state?.full === true);
+      if (state?.full) {
+        const tag = document.createElement("span");
+        tag.className = "hud__rate-full";
+        tag.textContent = "full";
+        readout.rate.append(" ", tag);
+      }
+    }
   }
 
   /** The amount a readout counts toward: the pool less what is still flying. */
@@ -620,10 +652,14 @@ export class Hud {
   private syncYard(): void {
     const store = this.yardBinding?.store ?? null;
     const caps: ResourceCaps | null = store?.caps ?? null;
+    // An outpost's save has the outpost's harvesters, which pay by the
+    // outposts' own rule, and not the main yard's: the rate is the main yard's.
+    const rates = store?.kind === "main" ? incomePerHour(store.save, store.now()) : null;
     for (const key of RESOURCE_KEYS) {
       const readout = this.readouts.get(key);
       if (!readout) continue;
       readout.cap = caps?.[key];
+      readout.perHour = rates?.[key];
       this.render(readout);
       this.label(readout);
       if (this.bubbleFor === key) this.fillExact(readout);
@@ -672,8 +708,12 @@ export class Hud {
       return;
     }
     const full = capState(readout.amount, readout.cap)?.full === true;
-    readout.button.title = full ? `${text}\n${FULL_NOTE}` : text;
-    readout.button.setAttribute("aria-label", full ? `${text}. ${FULL_NOTE}` : text);
+    const notes = [
+      ...(readout.perHour === undefined ? [] : [rateNote(readout.perHour)]),
+      ...(full ? [FULL_NOTE] : []),
+    ];
+    readout.button.title = [text, ...notes].join("\n");
+    readout.button.setAttribute("aria-label", [text, ...notes].join(". "));
   }
 
   /** The own yard's Shop door, or null where there is no Shop (the map, an attack, a visit). */
@@ -743,6 +783,12 @@ export class Hud {
           ? formatExact(amount)
           : `${formatExact(amount)} / ${formatExact(cap)}`;
     this.bubble.replaceChildren(resourceAmount(readout.key, text, { className: "hud__exact-amount" }));
+    if (readout.perHour !== undefined) {
+      const note = document.createElement("p");
+      note.className = "hud__exact-note hud__exact-rate";
+      note.textContent = rateNote(readout.perHour);
+      this.bubble.append(note);
+    }
     if (capState(amount, cap)?.full) {
       const note = document.createElement("p");
       note.className = "hud__exact-note";

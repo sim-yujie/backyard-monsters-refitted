@@ -622,6 +622,24 @@ body {
   color: var(--colour-warning);
 }
 
+/* The main yard's income an hour (#280): "+12,400/h" in a quiet voice under
+   the amount, dimmed with "full" while the silo is full, as that income is lost. */
+.hud__rate {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.hud__rate--full {
+  opacity: 0.6;
+}
+
+.hud__rate-full {
+  color: var(--colour-warning);
+  font-weight: 600;
+}
+
 /* Workers, free / total; a press goes to the job that finishes soonest. */
 .hud__workers {
   display: flex;
@@ -655,6 +673,10 @@ body {
   color: var(--colour-warning);
   font-size: var(--text-sm);
   font-weight: 400;
+}
+
+.hud__exact-rate {
+  color: var(--colour-text-muted);
 }
 
 /* A job notice names each building as a link-like button that selects it. */
