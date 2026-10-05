@@ -215,7 +215,7 @@ describe("the attack load serves the defence and keeps it in the session (#195)"
       attackerLevel: 40,
     });
 
-    expect(defenderForces).toEqual({ bunkers: { 20: { C1: 3 } }, defenderLevels: { C1: 4 }, defenderChampion: null });
+    expect(defenderForces).toEqual({ bunkers: { 20: { C1: 3 } }, defenderLevels: { C1: 4 }, defenderChampions: [] });
     expect(sessions.get(save.basesaveid)?.defenderForces).toEqual(defenderForces);
   });
 
@@ -226,10 +226,22 @@ describe("the attack load serves the defence and keeps it in the session (#195)"
     ];
     const session = await attack(MAIN_BASEID);
     // At its health as the load's catch-up healed it.
-    const champion = session?.defenderForces?.defenderChampion;
+    const champions = session?.defenderForces?.defenderChampions ?? [];
+    expect(champions).toHaveLength(1);
+    const champion = champions[0];
     expect(champion).toMatchObject({ t: 3, l: 4, pl: 1 });
     expect(champion?.hp).toBeGreaterThanOrEqual(900);
     expect(champion?.hp).toBe(Math.floor((defenderMain().champion as { hp: number }[])[1]!.hp));
+  });
+
+  test("a main yard: a Krallen and a basic champion both at home both defend (#310)", async () => {
+    defenderMain().champion = [
+      { t: 5, l: 5, hp: 9000, pl: 2, status: 0 },
+      { t: 3, l: 6, hp: 900, pl: 1, status: 0 },
+    ];
+    const session = await attack(MAIN_BASEID);
+    const champions = session?.defenderForces?.defenderChampions ?? [];
+    expect(champions.map((champion) => champion.t)).toEqual([5, 3]);
   });
 });
 

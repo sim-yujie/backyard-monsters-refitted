@@ -6,6 +6,18 @@ const stateAt = (damagePercent: number): AttackSessionState =>
   ({ damagePercent }) as AttackSessionState;
 
 describe("AttackPresentation (#148)", () => {
+  it("puts the battle to rest through every settler until it is released (#308)", () => {
+    const presentation = new AttackPresentation();
+    presentation.settle();
+    const calls: string[] = [];
+    const release = presentation.settleWith(() => calls.push("layer"));
+    presentation.settle();
+    expect(calls).toEqual(["layer"]);
+    release();
+    presentation.settle();
+    expect(calls).toEqual(["layer"]);
+  });
+
   it("plays while any hold says so, and stops holding once released", () => {
     const presentation = new AttackPresentation();
     expect(presentation.playing()).toBe(false);

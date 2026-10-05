@@ -248,7 +248,7 @@ export const SCENARIOS = [
     playerLevel: 20,
     tailTicks: 12000,
     defence: {
-      defenderChampion: { t: 2, l: 4, hp: 60000, pl: 2 },
+      defenderChampions: [{ t: 2, l: 4, hp: 60000, pl: 2 }],
     },
     log: {
       v: 1,
@@ -277,7 +277,7 @@ export const SCENARIOS = [
         86: { C3: 6 },
       },
       defenderLevels: { C1: 3, C2: 3, C3: 3, C8: 3 },
-      defenderChampion: { t: 1, l: 3, hp: 120000, pl: 1 },
+      defenderChampions: [{ t: 1, l: 3, hp: 120000, pl: 1 }],
     },
     log: {
       v: 1,
@@ -344,7 +344,7 @@ export const SCENARIOS = [
     playerLevel: 20,
     tailTicks: 12000,
     defence: {
-      defenderChampion: { t: 4, l: 6, hp: 175000, pl: 3 },
+      defenderChampions: [{ t: 4, l: 6, hp: 175000, pl: 3 }],
     },
     log: {
       v: 1,
@@ -371,7 +371,7 @@ export const SCENARIOS = [
         84: { C2: 6 },
       },
       defenderLevels: { C1: 4, C2: 4 },
-      defenderChampion: { t: 3, l: 5, hp: 25000, pl: 2 },
+      defenderChampions: [{ t: 3, l: 5, hp: 25000, pl: 2 }],
     },
     log: {
       v: 1,
@@ -386,6 +386,32 @@ export const SCENARIOS = [
           monsters: { C1: 80, C8: 10 },
           champion: { t: 3, l: 6, pl: 3 },
         },
+      ],
+    },
+  },
+  {
+    name: "both-caged-champions",
+    description:
+      "A cage holding a level 5 Krallen and a level 6 Fomor, Krallen first in the save: both " +
+      "come out, each from its own place in the cage, against ground monsters and Teratorns " +
+      "(issue #310).",
+    yard: "sandbox",
+    kind: "main",
+    levels: MAXED,
+    playerLevel: 20,
+    tailTicks: 12000,
+    defence: {
+      defenderChampions: [
+        { t: 5, l: 5, hp: 60000, pl: 2 },
+        { t: 3, l: 6, hp: 40000, pl: 1 },
+      ],
+    },
+    log: {
+      v: 1,
+      seed: 31001,
+      events: [
+        { kind: "fling", t: 160, x: 120, y: 120, r: 300, monsters: { C1: 80, C2: 20 } },
+        { kind: "fling", t: 2400, x: 60, y: -180, r: 300, monsters: { C14: 12 } },
       ],
     },
   },
@@ -536,7 +562,7 @@ export const expectedOf = (outcome, defended = false) => ({
     ? {
         bunkerLosses: outcome.bunkerLosses,
         bunkerGarrisons: outcome.bunkerGarrisons,
-        defenderChampionHp: outcome.defenderChampionHp,
+        defenderChampionsHp: outcome.defenderChampions.map((caged) => caged.hp),
       }
     : {}),
 });

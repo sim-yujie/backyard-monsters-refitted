@@ -888,7 +888,7 @@ describe("the defence lands (#195)", () => {
   const FORCES = {
     bunkers: { 5: { C1: 3 } },
     defenderLevels: { C1: 3 },
-    defenderChampion: { t: 1, l: 1, hp: 3000, pl: 0 },
+    defenderChampions: [{ t: 1, l: 1, hp: 3000, pl: 0 }],
   };
   const GORGO = { t: 1, l: 1, hp: 3000, pl: 0, status: 0, fd: 0, ft: 0, fb: 0 };
   const TICK = 4_000;
@@ -925,12 +925,12 @@ describe("the defence lands (#195)", () => {
 
   test("the caged champion keeps the health the battle left it, and the bunker what it left", async () => {
     const battle = serverBattle();
-    expect(battle.defenderChampion?.hp).toBeLessThan(3000);
+    expect(battle.defenderChampions[0]?.hp).toBeLessThan(3000);
     expect(Object.keys(battle.bunkerLosses).length).toBeGreaterThan(0);
 
     await baseSave(ctxFor({ over: "1", tick: String(TICK), flinglog: JSON.stringify(LOG) }), async () => {});
 
-    expect(defender.champion).toEqual([{ ...GORGO, hp: Math.floor(battle.defenderChampion!.hp) }]);
+    expect(defender.champion).toEqual([{ ...GORGO, hp: Math.floor(battle.defenderChampions[0]!.hp) }]);
     const garrison = battle.bunkerGarrisons[5]!;
     const entry = defender.buildingdata["5"] as { m?: unknown };
     if (Object.keys(garrison).length > 0) expect(entry.m).toEqual(garrison);

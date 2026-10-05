@@ -245,8 +245,9 @@ export const battleMismatches = (
   }
   if (!sameChampions(client.attackerchampion, server)) fields.push("attackerchampion");
   if (!sameSiege(client.attackersiege, server.attackersiege)) fields.push("attackersiege");
-  // The caged champion's health, the save's against the battle's (issue #195).
-  const caged = server.defenderChampion;
-  if (caged && championHpOf(client.champion, caged.t) !== Math.floor(caged.hp)) fields.push("champion");
+  // Each caged champion's health, the save's against the battle's (issues #195, #310).
+  if (server.defenderChampions.some((caged) => championHpOf(client.champion, caged.t) !== Math.floor(caged.hp))) {
+    fields.push("champion");
+  }
   return fields;
 };

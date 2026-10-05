@@ -167,7 +167,7 @@ export class BuildingPanel {
   /** Holds a Monster Bunker's controls while they are open (`BunkerPanel.ts`). */
   private readonly bunkerSlot: HTMLElement;
   private bunker: BunkerPanel | null = null;
-  /** The Baiter's practice-attack controls, in the bunker's slot (#126). */
+  /** The Baiter's practice-attack window while it is open (#126, #308). */
   private baiter: BaiterPanel | null = null;
   /** Holds the Champion Cage's or Chamber's controls while they are open (`ChampionPanel.ts`, `ChamberPanel.ts`). */
   private readonly championSlot: HTMLElement;
@@ -693,12 +693,11 @@ export class BuildingPanel {
       return button;
     }
     if (model?.open === "baiter" && this.yard) {
-      const open = this.baiter !== null;
-      const button = actionButton(open ? "Close" : "Test attack", () => this.toggleBaiter(model.openBlocked), "btn--primary");
+      const button = actionButton("Test attack", () => this.openBaiterWindow(model.openBlocked), "btn--primary");
       button.classList.add("building-panel__planner");
-      button.setAttribute("aria-expanded", String(open));
+      button.setAttribute("aria-haspopup", "dialog");
       button.title = "A practice attack on your own yard. Nothing is saved.";
-      if (model.openBlocked && !open) {
+      if (model.openBlocked) {
         button.disabled = true;
         const wrap = document.createElement("div");
         wrap.className = "building-panel__block";
@@ -1363,45 +1362,46 @@ export class BuildingPanel {
     if (this.bunker) this.bunker.element.querySelector<HTMLElement>("[role=radio][aria-checked=true]")?.focus();
   }
 
-  /** Opens or closes the Baiter's practice-attack controls under the actions (#126). */
-  private toggleBaiter(blocked: string | null): void {
+  /**
+   * Opens the Baiter's practice-attack window over the yard (#126, #308): a
+   * large window on the overlay's modal layer, the yard dimmed behind it.
+   */
+  private openBaiterWindow(blocked: string | null): void {
     const building = this.building;
     const yard = this.yard;
-    if (this.baiter || !building || !yard) {
-      this.closeBaiter();
-    } else {
-      const store = yard.store;
-      this.baiter = new BaiterPanel({
-        level: building.level,
-        save: () => store.save,
-        blocked,
-        onRun: (run) => yard.scene.runBaiter?.(run),
-        ...(yard.scene.watchBaiter ? { onWatch: (run: BaiterRun) => yard.scene.watchBaiter?.(run) } : {}),
-        ...(yard.scene.showBaiterReport
-          ? { onReport: (test: RecordedTest) => yard.scene.showBaiterReport?.(test) }
-          : {}),
-      });
-      this.bunkerSlot.append(this.baiter.element);
-      this.bunkerSlot.hidden = false;
-      guideBus.emit("screen", { id: GuideScreen.BAITER, root: this.baiter.element, header: null });
-    }
-    this.render();
+    if (this.baiter || !building || !yard) return;
+    const store = yard.store;
+    const opened: BaiterPanel = new BaiterPanel({
+      level: building.level,
+      save: () => store.save,
+      blocked,
+      onRun: (run) => yard.scene.runBaiter?.(run),
+      ...(yard.scene.watchBaiter ? { onWatch: (run: BaiterRun) => yard.scene.watchBaiter?.(run) } : {}),
+      ...(yard.scene.showBaiterReport
+        ? { onReport: (test: RecordedTest) => yard.scene.showBaiterReport?.(test) }
+        : {}),
+      onClose: () => {
+        if (this.baiter === opened) this.baiter = null;
+      },
+    });
+    this.baiter = opened;
+    opened.mount(yard.modal ?? this.element.ownerDocument.body);
+    guideBus.emit("screen", { id: GuideScreen.BAITER, root: opened.element, header: null });
   }
 
-  /** Opens the Baiter's test section when this Baiter may open it (a test's "Change army", #22 WP4). */
+  /** Opens the Baiter's test window when this Baiter may open it (a test's "Change army", #22 WP4). */
   openBaiter(): void {
     const building = this.building;
     const yard = this.yard;
     if (this.baiter || !building || !yard) return;
     const model = panelModel(building, yard.store);
     if (model.open !== "baiter" || model.openBlocked) return;
-    this.toggleBaiter(null);
+    this.openBaiterWindow(null);
   }
 
   private closeBaiter(): void {
     this.baiter?.destroy();
     this.baiter = null;
-    this.bunkerSlot.hidden = this.bunker === null;
   }
 
   private closeBunker(): void {

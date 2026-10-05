@@ -571,13 +571,13 @@ const mapBlocked = (building: YardBuilding, context: PanelContext): string | nul
 };
 
 /**
- * Why the Baiter cannot bring a practice attack now: the original offered its
+ * Why the Baiter cannot run a test attack now: the original offered its
  * Open only on a Baiter at full health with no build, upgrade or fortify
  * running (`client/scripts/BUILDINGINFO.as:97-127`, `:210-211`; #126).
  */
 const baiterBlocked = (building: YardBuilding, context: PanelContext): string | null => {
-  if (isDamaged(building, context.save)) return "Repair the Baiter to bring an attack.";
-  if (building.countdown) return "The Baiter brings an attack once its job is done.";
+  if (isDamaged(building, context.save)) return "Repair the Baiter to run a test attack.";
+  if (building.countdown) return "The Baiter can run a test attack once its job is done.";
   return null;
 };
 

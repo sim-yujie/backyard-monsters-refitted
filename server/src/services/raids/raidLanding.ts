@@ -142,7 +142,7 @@ export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: num
     health
   );
   save.buildinghealthdata = health;
-  save.champion = championsAfterDefence(save.champion, outcome.defenderChampion) ?? save.champion;
+  save.champion = championsAfterDefence(save.champion, outcome.defenderChampions) ?? save.champion;
   save.damage = storedDamage(outcome.damage) ?? save.damage;
   const housing = landHousingLoss(save, { before: healthBefore, after: health }, save, now);
 

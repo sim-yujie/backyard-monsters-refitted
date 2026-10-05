@@ -671,6 +671,8 @@ export class AttackBattleLayer {
   private limitRead = false;
   private readonly unsubscribe: () => void;
   private destroyed = false;
+  /** Put to rest by {@link settle}: no creeps, no guns, only what plays out. */
+  private settled = false;
 
   constructor(options: AttackBattleLayerOptions) {
     this.session = options.session;
@@ -764,19 +766,22 @@ export class AttackBattleLayer {
     // The effects' clock: the battle's, and after the end the wall's.
     const shown = this.shownTick(tick);
 
-    // Creeps the engine still has first, then this frame's events, and only
-    // then the ones it dropped: a creep a held bullet killed must still have
-    // its view when its death is read, to stay on screen until the bullet lands.
-    const seen = this.syncCreeps(battle.creeps(), tick);
-    for (const event of battle.recentEvents(this.lastEventTick)) this.onEvent(event);
-    this.lastEventTick = tick;
-    this.settleGone(seen, tick);
+    if (!this.settled) {
+      // Creeps the engine still has first, then this frame's events, and only
+      // then the ones it dropped: a creep a held bullet killed must still have
+      // its view when its death is read, to stay on screen until the bullet lands.
+      const seen = this.syncCreeps(battle.creeps(), tick);
+      for (const event of battle.recentEvents(this.lastEventTick)) this.onEvent(event);
+      this.lastEventTick = tick;
+      this.settleGone(seen, tick);
 
-    this.towerFx.update(tick, (id) => this.views.get(id)?.snapshot ?? undefined);
-    this.showReleased(this.ledger.expire(tick), tick);
-    this.paintCreeps(tick);
-    this.drawSplats(tick);
-    this.drawBursts(tick);
+      this.towerFx.update(tick, (id) => this.views.get(id)?.snapshot ?? undefined);
+      this.showReleased(this.ledger.expire(tick), tick);
+      this.paintCreeps(tick);
+    }
+    // Once put to rest, what is left — splats, trap rings — fades out on the wall clock.
+    this.drawSplats(this.settled ? shown : tick);
+    this.drawBursts(this.settled ? shown : tick);
     this.fx.update(shown);
     this.bombFx.update(shown);
     this.showBombNumbers(shown);
@@ -812,6 +817,33 @@ export class AttackBattleLayer {
     this.endedAt ??= { tick, ms: now };
     const since = Math.max(0, now - this.endedAt.ms) / 1000;
     return this.endedAt.tick + Math.floor(since * TICKS_PER_SECOND * state.speed);
+  }
+
+  /**
+   * Puts an ended battle to rest (#308). The engine stops on the tick the
+   * battle ended, so its last frame — a champion mid-step, a laser mid-sweep,
+   * a bullet in the air — would stand on screen behind the Baiter's report as
+   * if the game had hung. Every creep goes, every gun stands down, shots in
+   * the air go, and each building shows the engine's own health; splats,
+   * smoke and numbers already made play out on the wall clock. Only the
+   * Baiter's report asks for this (through `AttackPresentation.settle`): a
+   * real attack's end screen is unchanged.
+   */
+  settle(): void {
+    if (this.destroyed || this.settled) return;
+    this.settled = true;
+    for (const view of this.views.values()) this.release(view);
+    this.views.clear();
+    this.ledger.clear();
+    this.heldBuildingHp.clear();
+    this.towerFx.standDown();
+    this.fx.dropProjectiles();
+    this.damageDirty = true;
+  }
+
+  /** Whether {@link settle} has put the battle to rest. */
+  get isSettled(): boolean {
+    return this.settled;
   }
 
   /**
@@ -950,8 +982,8 @@ export class AttackBattleLayer {
       const sheet = spriteFor(`G${champion.t}`, champion.l);
       if (sheet) this.textures.preload(sheet);
     }
-    // And the defence's, so a bunker's monsters and the caged champion come
-    // out drawn rather than as markers while their sheets arrive (#195).
+    // And the defence's, so a bunker's monsters and the caged champions come
+    // out drawn rather than as markers while their sheets arrive (#195, #310).
     const defence = parseDefenderForces(this.session.attackLoad()?.defenderforces);
     if (!defence) return;
     for (const garrison of Object.values(defence.bunkers)) {
@@ -960,9 +992,10 @@ export class AttackBattleLayer {
         if (sheet) this.textures.preload(sheet);
       }
     }
-    const caged = defence.defenderChampion;
-    const sheet = caged ? spriteFor(`G${caged.t}`, caged.l) : undefined;
-    if (sheet) this.textures.preload(sheet);
+    for (const caged of defence.defenderChampions) {
+      const sheet = spriteFor(`G${caged.t}`, caged.l);
+      if (sheet) this.textures.preload(sheet);
+    }
   }
 
   /* ── Creeps ─────────────────────────────────────────────────────────── */

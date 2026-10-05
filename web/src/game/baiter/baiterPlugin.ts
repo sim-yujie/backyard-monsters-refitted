@@ -32,6 +32,11 @@ import { buildTestReport } from "./testReport";
  * finished test (issue #227, `baiterRecord.ts`): a token asked for at the
  * first drop and handed back when the test really finishes.
  *
+ * As the report opens, the battle is put to rest (#308,
+ * `AttackPresentation.settle`): the attackers go, the towers stand down and
+ * the report's scrim dims the yard, so a finished test looks finished rather
+ * than frozen mid-step. A replay's end does the same.
+ *
  * Every finished test with a drop in it is kept for a replay (WP5,
  * `testHistory.ts`), and its report offers Watch replay. A replay is the
  * scene with {@link BAITER_REPLAY_PLUGINS}: no army or drop controls, the
@@ -44,8 +49,8 @@ const TOWER_ZOOM = 0.9;
 
 /**
  * Moves the camera so `world` sits in the middle of what the report leaves
- * uncovered: left of it when it stands at the right, above it when it is a
- * bottom sheet on a phone. From further out it zooms in first.
+ * uncovered: with the window stepped aside (#308), above the small bar that
+ * stands in for it. From further out it zooms in first.
  */
 const showBeside = (mounts: AttackMounts, world: { x: number; y: number }, cover: DOMRect | null): void => {
   const { camera } = mounts;
@@ -101,19 +106,24 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
   const onBuilding = (id: number): void => {
     const building = mounts.yard.buildings.find((one) => one.id === id);
     if (!building) return;
-    const cover = report?.element.querySelector(".test-report")?.getBoundingClientRect() ?? null;
+    const cover = report?.element.querySelector(".test-report__peek")?.getBoundingClientRect() ?? null;
     showBeside(mounts, { x: building.centreX, y: building.centreY }, cover);
     mounts.renderer.setSelected(building);
   };
+  const onLeaveBuilding = (): void => mounts.renderer.setSelected(null);
   const showReport = (): void => {
     const battle = session.battle();
     if (report || !battle) return;
+    // The battle stopped mid-step: put it to rest so a finished test does
+    // not stand frozen behind its report (#308).
+    mounts.presentation.settle();
     const state = session.state();
     if (replay) {
       // The same battle again, so the same report, with Watch again and the way back.
       report = new TestReportPanel({
         report: replay.report,
         onBuilding,
+        onLeaveBuilding,
         onReplay: () => mounts.watchTest?.(run),
         replayLabel: "Watch again",
         onBack: () => mounts.goToYard?.(),
@@ -139,6 +149,7 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
     report = new TestReportPanel({
       report: built,
       onBuilding,
+      onLeaveBuilding,
       ...(recorded ? { onReplay: () => mounts.watchTest?.(replayOf(recorded)) } : {}),
       onAgain: () => mounts.runAgain?.(run),
       onChangeArmy: () => mounts.changeArmy?.(),

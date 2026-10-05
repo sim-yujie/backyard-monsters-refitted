@@ -475,18 +475,30 @@ describe("the pieces", () => {
   });
 });
 
-describe("the defence in the save (#195)", () => {
+describe("the defence in the save (#195, #310)", () => {
   const gorgo: ChampionSaveEntry = { t: 1, l: 2, hp: 5000, pl: 0, status: 0, fd: 0, ft: 0, fb: 0 };
   const drull: ChampionSaveEntry = { ...gorgo, t: 2, hp: 700 };
 
   it("sends the caged champion at the health the battle left it, and every other as loaded", () => {
-    expect(defenderChampionsAfter([gorgo, drull], 1, 1234.9)).toEqual([{ ...gorgo, hp: 1234 }, drull]);
-    expect(defenderChampionsAfter([gorgo, drull], 1, 0)[0]!.hp).toBe(0);
+    expect(defenderChampionsAfter([gorgo, drull], [{ t: 1, hp: 1234.9 }])).toEqual([
+      { ...gorgo, hp: 1234 },
+      drull,
+    ]);
+    expect(defenderChampionsAfter([gorgo, drull], [{ t: 1, hp: 0 }])[0]!.hp).toBe(0);
+  });
+
+  it("sends each of two caged champions at its own health", () => {
+    const krallen: ChampionSaveEntry = { ...gorgo, t: 5, hp: 9000 };
+    expect(
+      defenderChampionsAfter([krallen, drull, gorgo], [
+        { t: 5, hp: 0 },
+        { t: 1, hp: 321 },
+      ]),
+    ).toEqual([{ ...krallen, hp: 0 }, drull, { ...gorgo, hp: 321 }]);
   });
 
   it("sends them all as loaded when none defended", () => {
-    expect(defenderChampionsAfter([gorgo], undefined, 10)).toEqual([gorgo]);
-    expect(defenderChampionsAfter([gorgo], 1, null)).toEqual([gorgo]);
+    expect(defenderChampionsAfter([gorgo], [])).toEqual([gorgo]);
   });
 
   it("says in the report when the defending champion fell", () => {
@@ -496,7 +508,10 @@ describe("the defence in the save (#195)", () => {
     play(session, 1);
     session.retreat();
     const state = session.state();
-    expect(attackReportOf(session.flingLog(), state, undefined, true)).toContain("The defending champion fell.");
-    expect(attackReportOf(session.flingLog(), state)).not.toContain("champion fell");
+    expect(attackReportOf(session.flingLog(), state, undefined, 1)).toContain("The defending champion fell.");
+    expect(attackReportOf(session.flingLog(), state, undefined, 2)).toContain(
+      "Both defending champions fell.",
+    );
+    expect(attackReportOf(session.flingLog(), state)).not.toMatch(/champions? fell/);
   });
 });

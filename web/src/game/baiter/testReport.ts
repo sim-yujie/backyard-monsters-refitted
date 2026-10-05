@@ -82,6 +82,8 @@ export interface BunkerRow {
 }
 
 export interface CagedChampionRow {
+  /** The champion's name, "Fomor" or "Krallen" (issue #310). */
+  readonly name: string;
   readonly damage: number;
   readonly kills: number;
   /** Health left, 0 when it died. */
@@ -127,7 +129,8 @@ export interface TestReport {
   /** In the order they went off. */
   readonly traps: readonly TrapRow[];
   readonly bunkers: readonly BunkerRow[];
-  readonly cagedChampion: CagedChampionRow | null;
+  /** One row per caged champion that defended, in cage order: up to two (issue #310). */
+  readonly cagedChampions: readonly CagedChampionRow[];
   /** Monsters by id, then the champions. */
   readonly attackers: readonly AttackerRow[];
 }
@@ -246,13 +249,12 @@ export const buildTestReport = (input: TestReportInput): TestReport => {
     };
   });
 
-  const cagedChampion: CagedChampionRow | null = state.defenderChampion
-    ? {
-        damage: state.defenderChampion.damageDealt,
-        kills: state.defenderChampion.kills,
-        health: state.defenderChampionHp ?? 0,
-      }
-    : null;
+  const cagedChampions: CagedChampionRow[] = state.defenderChampions.map((caged) => ({
+    name: championEntry(`G${caged.t}`)?.name ?? "Champion",
+    damage: caged.damageDealt,
+    kills: caged.kills,
+    health: caged.hp,
+  }));
 
   const attackers: AttackerRow[] = state.attackers
     .filter((row) => row.sent + row.spawned > 0)
@@ -295,7 +297,7 @@ export const buildTestReport = (input: TestReportInput): TestReport => {
     towers,
     traps,
     bunkers,
-    cagedChampion,
+    cagedChampions,
     attackers,
   };
 };

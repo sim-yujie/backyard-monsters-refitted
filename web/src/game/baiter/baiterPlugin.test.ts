@@ -171,6 +171,24 @@ describe("a Baiter test", () => {
     vi.unstubAllGlobals();
   });
 
+  it("puts the battle to rest as the report opens, and not before (#308)", () => {
+    const presentation = new AttackPresentation();
+    const settle = vi.fn();
+    presentation.settleWith(settle);
+    const run = runOf();
+    const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
+    mount(run, session, createBaiterPlugin(() => spyRecorder()), { presentation });
+    bucketFor(session).setCount("C1", 4);
+    tapAt(canvas, OPEN);
+    session.advance(2);
+    expect(settle).not.toHaveBeenCalled();
+    session.retreat();
+    expect(modal.querySelector(".test-report")).not.toBeNull();
+    expect(settle).toHaveBeenCalledTimes(1);
+    // The report on a dimming scrim, not a clear backdrop.
+    expect(modal.querySelector(".test-report__backdrop")!.classList.contains("popup-backdrop")).toBe(true);
+  });
+
   it("offers exactly the test army, each row at its level, and nothing to bomb or besiege", () => {
     const run = runOf();
     const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
@@ -363,6 +381,9 @@ describe("a Baiter test", () => {
     expect(camera.zoomAt).toHaveBeenCalledWith(0.9, expect.anything());
     expect(camera.centreOn).toHaveBeenCalledWith({ x: cannon.centreX, y: cannon.centreY });
     expect(setSelected).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }));
+    // Back to the report lets the tower go.
+    modal.querySelector<HTMLButtonElement>(".test-report__peek-back")!.click();
+    expect(setSelected).toHaveBeenLastCalledWith(null);
   });
 
   it("stopped before any drop, it asks for no Goals token at all", () => {
@@ -438,6 +459,21 @@ describe("a Baiter test", () => {
       // No controls: the dock names the replay and holds no army.
       expect(dock.textContent).toContain("Test replay");
       expect(dock.querySelector(".attack-army__row")).toBeNull();
+    });
+
+    it("puts the battle to rest as the replay's report opens (#308)", () => {
+      finishedTest();
+      const recorded = recentTests()[0]!;
+      for (const teardown of teardowns) teardown?.();
+      teardowns = [];
+      modal.replaceChildren();
+
+      const presentation = new AttackPresentation();
+      const settle = vi.fn();
+      presentation.settleWith(settle);
+      playBack(replayOf(recorded), spyRecorder(), { presentation });
+      expect(modal.querySelector(".test-report")).not.toBeNull();
+      expect(settle).toHaveBeenCalledTimes(1);
     });
 
     it("Watch replay on the report opens the recorded test on the replay scene", () => {

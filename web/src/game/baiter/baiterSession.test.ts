@@ -224,7 +224,7 @@ describe("the hand-off and the attack target", () => {
     expect((target.load as { defenderforces?: unknown }).defenderforces).toEqual({
       bunkers: { 5: { C1: 4 } },
       defenderLevels: { C1: 6, C4: 3 },
-      defenderChampion: { t: 2, l: 3, hp: 800, pl: 1 },
+      defenderChampions: [{ t: 2, l: 3, hp: 800, pl: 1 }],
     });
     expect(target.roster).toEqual({
       monsters: { C1: 20, C4: 5 },

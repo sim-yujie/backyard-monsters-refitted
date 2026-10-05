@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   academyLevels,
   battleDefence,
-  cagedChampion,
+  cagedChampions,
   defenderForcesOf,
   NO_DEFENCE,
   parseDefenderForces,
@@ -20,30 +20,45 @@ describe("academyLevels", () => {
   });
 });
 
-describe("cagedChampion", () => {
+describe("cagedChampions", () => {
   const gorgo = { t: 1, l: 3, hp: 5000, pl: 2, status: 0, fd: 0, ft: 0, fb: 0 };
 
-  it("is the first champion at home with health left, Krallen included", () => {
-    expect(cagedChampion([gorgo])).toEqual({ t: 1, l: 3, hp: 5000, pl: 2 });
-    expect(cagedChampion([{ ...gorgo, status: 1 }, { ...gorgo, t: 5, l: 2 }])).toEqual({
-      t: 5,
-      l: 2,
-      hp: 5000,
-      pl: 2,
-    });
-    expect(cagedChampion([{ ...gorgo, hp: 0 }, { ...gorgo, t: 3 }])?.t).toBe(3);
+  it("is each champion at home with health left, Krallen included", () => {
+    expect(cagedChampions([gorgo])).toEqual([{ t: 1, l: 3, hp: 5000, pl: 2 }]);
+    expect(cagedChampions([{ ...gorgo, status: 1 }, { ...gorgo, t: 5, l: 2 }])).toEqual([
+      { t: 5, l: 2, hp: 5000, pl: 2 },
+    ]);
+    expect(cagedChampions([{ ...gorgo, hp: 0 }, { ...gorgo, t: 3 }]).map((one) => one.t)).toEqual([3]);
   });
 
-  it("is null for none at home, an unknown type, or no list", () => {
-    expect(cagedChampion([{ ...gorgo, status: 2 }])).toBeNull();
-    expect(cagedChampion([{ ...gorgo, t: 99 }])).toBeNull();
-    expect(cagedChampion(undefined)).toBeNull();
-    expect(cagedChampion([])).toBeNull();
+  it("is both a basic champion and a Krallen, in the save's order (issue #310)", () => {
+    const krallen = { ...gorgo, t: 5, l: 5, hp: 9000 };
+    const fomor = { ...gorgo, t: 3, l: 6, hp: 7000 };
+    expect(cagedChampions([krallen, fomor])).toEqual([
+      { t: 5, l: 5, hp: 9000, pl: 2 },
+      { t: 3, l: 6, hp: 7000, pl: 2 },
+    ]);
+    expect(cagedChampions([fomor, krallen]).map((one) => one.t)).toEqual([3, 5]);
+  });
+
+  it("takes at most one basic champion and one Krallen", () => {
+    const krallen = { ...gorgo, t: 5 };
+    expect(cagedChampions([gorgo, { ...gorgo, t: 3 }, krallen, { ...krallen, l: 1 }])).toEqual([
+      { t: 1, l: 3, hp: 5000, pl: 2 },
+      { t: 5, l: 3, hp: 5000, pl: 2 },
+    ]);
+  });
+
+  it("is empty for none at home, an unknown type, or no list", () => {
+    expect(cagedChampions([{ ...gorgo, status: 2 }])).toEqual([]);
+    expect(cagedChampions([{ ...gorgo, t: 99 }])).toEqual([]);
+    expect(cagedChampions(undefined)).toEqual([]);
+    expect(cagedChampions([])).toEqual([]);
   });
 
   it("clamps the power level to 0..3, and reads none as 0", () => {
-    expect(cagedChampion([{ ...gorgo, pl: 9 }])?.pl).toBe(3);
-    expect(cagedChampion([{ ...gorgo, pl: undefined }])?.pl).toBe(0);
+    expect(cagedChampions([{ ...gorgo, pl: 9 }])[0]?.pl).toBe(3);
+    expect(cagedChampions([{ ...gorgo, pl: undefined }])[0]?.pl).toBe(0);
   });
 });
 
@@ -61,7 +76,7 @@ describe("defenderForcesOf", () => {
     ).toEqual({
       bunkers: { 5: { C1: 4 } },
       defenderLevels: { C1: 3 },
-      defenderChampion: { t: 2, l: 4, hp: 900, pl: 0 },
+      defenderChampions: [{ t: 2, l: 4, hp: 900, pl: 0 }],
     });
   });
 
@@ -77,9 +92,26 @@ describe("parseDefenderForces", () => {
     const forces = {
       bunkers: { 83: { C1: 10, C2: 4 } },
       defenderLevels: { C1: 6 },
-      defenderChampion: { t: 1, l: 2, hp: 5000, pl: 1 },
+      defenderChampions: [
+        { t: 5, l: 4, hp: 8000, pl: 2 },
+        { t: 1, l: 2, hp: 5000, pl: 1 },
+      ],
     };
     expect(parseDefenderForces(JSON.parse(JSON.stringify(forces)))).toEqual(forces);
+  });
+
+  it("reads a session stored before issue #310, with one defenderChampion", () => {
+    expect(
+      parseDefenderForces({
+        bunkers: {},
+        defenderLevels: {},
+        defenderChampion: { t: 1, l: 2, hp: 5000, pl: 1 },
+      }),
+    ).toEqual({
+      bunkers: {},
+      defenderLevels: {},
+      defenderChampions: [{ t: 1, l: 2, hp: 5000, pl: 1 }],
+    });
   });
 
   it("keeps only what reads cleanly, and nothing for no object", () => {
@@ -87,9 +119,9 @@ describe("parseDefenderForces", () => {
       parseDefenderForces({
         bunkers: { 83: { C1: -1, C2: 2.5, C3: 2 }, x: { C1: 1 } },
         defenderLevels: { C1: 0, C2: 3 },
-        defenderChampion: { t: 99, l: 1, hp: 5 },
+        defenderChampions: [{ t: 99, l: 1, hp: 5 }, "x"],
       }),
-    ).toEqual({ bunkers: { 83: { C3: 2 } }, defenderLevels: { C2: 3 }, defenderChampion: null });
+    ).toEqual({ bunkers: { 83: { C3: 2 } }, defenderLevels: { C2: 3 }, defenderChampions: [] });
     expect(parseDefenderForces("nope")).toBeUndefined();
   });
 });
@@ -103,11 +135,11 @@ describe("battleDefence", () => {
   it("gives the garrisons, the levels and the champion when there are any", () => {
     const champion = { t: 1, l: 2, hp: 5000, pl: 0 };
     expect(
-      battleDefence({ bunkers: { 5: { C1: 1 } }, defenderLevels: { C1: 2 }, defenderChampion: null }),
+      battleDefence({ bunkers: { 5: { C1: 1 } }, defenderLevels: { C1: 2 }, defenderChampions: [] }),
     ).toEqual({ bunkers: { 5: { C1: 1 } }, defenderLevels: { C1: 2 } });
-    expect(battleDefence({ bunkers: {}, defenderLevels: {}, defenderChampion: champion })).toEqual({
+    expect(battleDefence({ bunkers: {}, defenderLevels: {}, defenderChampions: [champion] })).toEqual({
       defenderLevels: {},
-      defenderChampion: champion,
+      defenderChampions: [champion],
     });
   });
 });

@@ -584,7 +584,7 @@ describe("AttackBattleLayer against a defence (#195)", () => {
       defenderforces: {
         bunkers: { 9: { C8: 2 } },
         defenderLevels: { C8: 3 },
-        defenderChampion: { t: 1, l: 2, hp: 5000, pl: 0 },
+        defenderChampions: [{ t: 1, l: 2, hp: 5000, pl: 0 }],
       },
     } as unknown as BaseLoadResponse;
     session.load(response);

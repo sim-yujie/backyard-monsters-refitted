@@ -1598,7 +1598,7 @@ describe("a bunker's losses (issue #130)", () => {
     run(plain, 1200);
     expect(plain.state().bunkerLosses).toEqual({});
     expect(plain.state().bunkerGarrisons).toEqual({});
-    expect(plain.state().defenderChampionHp).toBeNull();
+    expect(plain.state().defenderChampions).toEqual([]);
   });
 
   it("folds the defence into the checkpoint only when there is one", () => {
@@ -1728,15 +1728,15 @@ describe("the caged champion (issues #195, #260)", () => {
   };
 
   it("stays in its cage while no attacker is near", () => {
-    const battle = createBattle(yard(), { seed: 3, defenderChampion: gorgo });
+    const battle = createBattle(yard(), { seed: 3, defenderChampions: [gorgo] });
     battle.apply({ kind: "fling", t: 0, x: 1380, y: 1380, r: 50, monsters: { C1: 5 } });
     run(battle, 300);
     expect(champion(battle)).toBeUndefined();
-    expect(battle.state().defenderChampionHp).toBe(5000);
+    expect(battle.state().defenderChampions[0]?.hp).toBe(5000);
   });
 
   it("only looks out every 200 of its frames (`ChampionBase.as:1055`)", () => {
-    const battle = createBattle(yard(), { seed: 3, defenderChampion: gorgo });
+    const battle = createBattle(yard(), { seed: 3, defenderChampions: [gorgo] });
     battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
     // Its frame starts below 7, so its first look is on one of ticks 194 to 200.
     const out = untilOut(battle, 400);
@@ -1745,7 +1745,7 @@ describe("the caged champion (issues #195, #260)", () => {
   });
 
   it("comes out at its stored health, its level and power level, and fights what came", () => {
-    const battle = createBattle(yard(), { seed: 3, defenderChampion: gorgo });
+    const battle = createBattle(yard(), { seed: 3, defenderChampions: [gorgo] });
     battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
     untilOut(battle, 400);
     expect(champion(battle)).toMatchObject({
@@ -1757,13 +1757,13 @@ describe("the caged champion (issues #195, #260)", () => {
     run(battle, 2000);
     // It killed all five, towers never shot it, and it kept what health it had left.
     expect(battle.state().creepsKilled).toBe(5);
-    const hp = battle.state().defenderChampionHp!;
+    const hp = battle.state().defenderChampions[0]!.hp;
     expect(hp).toBeGreaterThan(0);
     expect(hp).toBeLessThan(5000);
   });
 
   it("sees an attacker 800 from itself, and chases it as far as it goes (`ChampionBase.as:501`)", () => {
-    const battle = createBattle(openYard(), { seed: 3, defenderChampion: gorgo });
+    const battle = createBattle(openYard(), { seed: 3, defenderChampions: [gorgo] });
     // About 600 from the cage, walking away from it to the far harvester.
     battle.apply({ kind: "fling", t: 0, x: 450, y: 450, r: 0, monsters: { C1: 1 } });
     expect(untilOut(battle, 400)).toBeGreaterThan(0);
@@ -1779,25 +1779,25 @@ describe("the caged champion (issues #195, #260)", () => {
   });
 
   it("lets an Eye-ra pass unless it flies (`ChampionBase.as:510`)", () => {
-    const eyeras = createBattle(openYard(), { seed: 3, defenderChampion: gorgo });
+    const eyeras = createBattle(openYard(), { seed: 3, defenderChampions: [gorgo] });
     eyeras.apply({ kind: "fling", t: 0, x: 300, y: 300, r: 20, monsters: { C5: 3 } });
     expect(untilOut(eyeras, 400)).toBe(-1);
     expect(eyeras.creeps().filter((creep) => !creep.friendly)).toHaveLength(3);
 
-    const pokeys = createBattle(openYard(), { seed: 3, defenderChampion: gorgo });
+    const pokeys = createBattle(openYard(), { seed: 3, defenderChampions: [gorgo] });
     pokeys.apply({ kind: "fling", t: 0, x: 300, y: 300, r: 20, monsters: { C1: 3 } });
     expect(untilOut(pokeys, 400)).toBeGreaterThan(0);
   });
 
   it("walks back with nobody left inside 800, goes in, and comes out again for the next", () => {
-    const battle = createBattle(yard(), { seed: 3, defenderChampion: gorgo });
+    const battle = createBattle(yard(), { seed: 3, defenderChampions: [gorgo] });
     battle.apply({ kind: "fling", t: 0, x: 600, y: 600, r: 0, monsters: { C1: 1 } });
     untilOut(battle, 400);
     const first = champion(battle)!;
     for (let step = 0; step < 3000 && champion(battle); step += 1) battle.step();
     expect(battle.state().creepsKilled).toBe(1);
     expect(champion(battle)).toBeUndefined();
-    const hp = battle.state().defenderChampionHp!;
+    const hp = battle.state().defenderChampions[0]!.hp;
     expect(hp).toBeGreaterThan(0);
     expect(hp).toBeLessThan(5000);
 
@@ -1807,7 +1807,7 @@ describe("the caged champion (issues #195, #260)", () => {
   });
 
   it("is never shot by a tower", () => {
-    const battle = createBattle(yard(), { seed: 3, defenderChampion: gorgo });
+    const battle = createBattle(yard(), { seed: 3, defenderChampions: [gorgo] });
     battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
     for (let step = 0; step < 1500 && !battle.over(); step += 1) {
       battle.step();
@@ -1819,27 +1819,84 @@ describe("the caged champion (issues #195, #260)", () => {
   });
 
   it("reports 0 when the attackers kill it", () => {
-    const battle = createBattle(yard(), { seed: 3, defenderChampion: gorgo });
+    const battle = createBattle(yard(), { seed: 3, defenderChampions: [gorgo] });
     battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 60 } });
     run(battle, 4000);
     expect(champion(battle)).toBeUndefined();
-    expect(battle.state().defenderChampionHp).toBe(0);
+    expect(battle.state().defenderChampions[0]?.hp).toBe(0);
   });
 
   it("is not there without a cage, or with nothing left in it", () => {
     const noCage = createBattle(yardOf({ "2": { id: 2, t: 1, l: 1, X: 150, Y: 150 } }), {
       seed: 3,
-      defenderChampion: gorgo,
+      defenderChampions: [gorgo],
     });
     noCage.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
     run(noCage, 300);
     expect(champion(noCage)).toBeUndefined();
-    expect(noCage.state().defenderChampionHp).toBeNull();
+    expect(noCage.state().defenderChampions).toEqual([]);
 
-    const spent = createBattle(yard(), { seed: 3, defenderChampion: { ...gorgo, hp: 0 } });
+    const spent = createBattle(yard(), { seed: 3, defenderChampions: [{ ...gorgo, hp: 0 }] });
     spent.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
     run(spent, 300);
     expect(champion(spent)).toBeUndefined();
+  });
+
+  describe("a basic champion and a Krallen in one cage (issue #310)", () => {
+    const krallen = { t: 5, l: 2, hp: 6000, pl: 1 };
+    const both = { seed: 3, defenderChampions: [krallen, gorgo] };
+    const out = (battle: ReturnType<typeof createBattle>) =>
+      battle.creeps().filter((creep) => creep.champion && creep.friendly);
+
+    it("sends both out, each from its own place in the cage, and both fight", () => {
+      const battle = createBattle(yard(), both);
+      battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 8 } });
+      const firstSeen = new Map<string, { ix: number; iy: number }>();
+      for (let step = 0; step < 400 && firstSeen.size < 2; step += 1) {
+        battle.step();
+        for (const creep of out(battle)) {
+          if (!firstSeen.has(creep.monsterId)) firstSeen.set(creep.monsterId, { ix: creep.ix, iy: creep.iy });
+        }
+      }
+      expect([...firstSeen.keys()].sort()).toEqual(["G1", "G5"]);
+      expect(firstSeen.get("G1")).not.toEqual(firstSeen.get("G5"));
+      expect(out(battle).find((creep) => creep.monsterId === "G5")).toMatchObject({ hp: 6000, level: 2 });
+      expect(out(battle).find((creep) => creep.monsterId === "G1")).toMatchObject({ hp: 5000, level: 2 });
+
+      run(battle, 2400);
+      const state = battle.state();
+      expect(state.creepsKilled).toBe(8);
+      // In the order supplied, each with its own tally that adds up to the lot.
+      expect(state.defenderChampions.map((caged) => caged.t)).toEqual([5, 1]);
+      for (const caged of state.defenderChampions) {
+        expect(caged.damageDealt).toBeGreaterThan(0);
+        expect(caged.kills).toBeGreaterThan(0);
+      }
+      expect(state.defenderChampions.reduce((sum, caged) => sum + caged.kills, 0)).toBe(8);
+    });
+
+    it("walks both back in when nobody is left, each keeping its own health", () => {
+      const battle = createBattle(yard(), both);
+      battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 8 } });
+      for (let step = 0; step < 400 && out(battle).length < 2; step += 1) battle.step();
+      expect(out(battle)).toHaveLength(2);
+      for (let step = 0; step < 4000 && out(battle).length > 0; step += 1) battle.step();
+      expect(out(battle)).toHaveLength(0);
+      const [krallenAfter, gorgoAfter] = battle.state().defenderChampions;
+      expect(krallenAfter!.hp).toBeGreaterThan(0);
+      expect(krallenAfter!.hp).toBeLessThanOrEqual(6000);
+      expect(gorgoAfter!.hp).toBeGreaterThan(0);
+      expect(gorgoAfter!.hp).toBeLessThanOrEqual(5000);
+      expect(krallenAfter!.hp + gorgoAfter!.hp).toBeLessThan(11000);
+    });
+
+    it("reports each one's health on its own: 0 for one that died", () => {
+      const battle = createBattle(yard(), both);
+      battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 80 } });
+      run(battle, 4000);
+      expect(out(battle)).toHaveLength(0);
+      expect(battle.state().defenderChampions.map((caged) => caged.hp)).toEqual([0, 0]);
+    });
   });
 });
 
@@ -2397,7 +2454,7 @@ describe("the battle report's tallies (issue #22)", () => {
       expect.objectContaining({ id: 1, level: 1, damageDealt: 200, kills: 1, destroyedTick: null }),
     ]);
     expect(state.bunkers[0]!.sent).toBeGreaterThan(0);
-    expect(state.defenderChampion).toBeNull();
+    expect(state.defenderChampions).toEqual([]);
   });
 
   it("credits the caged champion with what it killed, and has no tally without a cage", () => {
@@ -2405,11 +2462,13 @@ describe("the battle report's tallies (issue #22)", () => {
       "1": { id: 1, t: 114, l: 1, X: 0, Y: 0 },
       "2": { id: 2, t: 1, l: 1, X: 1200, Y: 1200 },
     });
-    const battle = createBattle(yard, { seed: 3, defenderChampion: { t: 1, l: 2, hp: 5000, pl: 1 } });
+    const battle = createBattle(yard, { seed: 3, defenderChampions: [{ t: 1, l: 2, hp: 5000, pl: 1 }] });
     battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
     run(battle, 2400);
     expect(battle.state().creepsKilled).toBe(5);
-    expect(battle.state().defenderChampion).toEqual({ damageDealt: 5 * 200, kills: 5 });
+    expect(battle.state().defenderChampions).toEqual([
+      expect.objectContaining({ t: 1, damageDealt: 5 * 200, kills: 5 }),
+    ]);
 
     // A caged Korath's flame counts as his too.
     const korath = createBattle(
@@ -2417,16 +2476,18 @@ describe("the battle report's tallies (issue #22)", () => {
         "1": { id: 1, t: 114, l: 1, X: 0, Y: 0 },
         "2": { id: 2, t: 1, l: 1, X: 1200, Y: 1200 },
       }),
-      { seed: 3, defenderChampion: { t: 4, l: 3, hp: 96000 } },
+      { seed: 3, defenderChampions: [{ t: 4, l: 3, hp: 96000 }] },
     );
     // Two D.A.V.E.s of 8,000 health take him a few blows each, and burn between them.
     korath.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C12: 2 } });
     run(korath, 4000);
     expect(korath.state().creepsKilled).toBe(2);
-    expect(korath.state().defenderChampion).toEqual({ damageDealt: 2 * 8000, kills: 2 });
+    expect(korath.state().defenderChampions).toEqual([
+      expect.objectContaining({ t: 4, damageDealt: 2 * 8000, kills: 2 }),
+    ]);
 
     const plain = createBattle(yardOf({ "2": { id: 2, t: 1, l: 1, X: 0, Y: 0 } }), { seed: 3 });
-    expect(plain.state().defenderChampion).toBeNull();
+    expect(plain.state().defenderChampions).toEqual([]);
     expect(plain.state().bunkers).toEqual([]);
   });
 

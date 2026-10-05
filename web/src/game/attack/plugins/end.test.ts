@@ -252,6 +252,20 @@ describe("the end plugin", () => {
     expect(modal.querySelector(".attack-end__status")!.textContent).toBe("Result saved.");
   });
 
+  it("leaves the battle as it stands behind a real attack's end panel (#308)", async () => {
+    // Only the Baiter's report puts the battle to rest; a real attack is unchanged.
+    const presentation = new AttackPresentation();
+    const settle = vi.fn();
+    presentation.settleWith(settle);
+    mount(vi.fn(savedOk), undefined, presentation);
+    act();
+    session.retreat();
+    await flush();
+    vi.advanceTimersByTime(200);
+    expect(modal.querySelector(".attack-end")).not.toBeNull();
+    expect(settle).not.toHaveBeenCalled();
+  });
+
   it("opens the panel after the longest wait even if the screen never settles (#148)", () => {
     const presentation = new AttackPresentation();
     presentation.hold(() => true);

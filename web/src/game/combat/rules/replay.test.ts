@@ -98,7 +98,7 @@ const actualOf = (outcome: ReturnType<typeof replayAttack>, defended: boolean) =
     ? {
         bunkerLosses: outcome.bunkerLosses,
         bunkerGarrisons: outcome.bunkerGarrisons,
-        defenderChampionHp: outcome.defenderChampionHp,
+        defenderChampionsHp: outcome.defenderChampions.map((caged) => caged.hp),
       }
     : {}),
 });

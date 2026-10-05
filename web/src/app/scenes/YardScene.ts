@@ -1810,6 +1810,7 @@ export class YardScene implements Scene {
         markHatcheries: (marks) => this.markHatcheries(marks),
       },
       notices: this.notices,
+      modal: context.overlay.modal,
     };
     this.hud?.bindYard(this.binding);
     this.dock?.bind(this.binding);

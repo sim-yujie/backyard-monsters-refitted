@@ -72,8 +72,8 @@ export interface ReplayInput {
   readonly declareWar?: boolean;
   readonly bunkers?: Readonly<Record<number, Roster>>;
   readonly defenderLevels?: MonsterLevels;
-  /** The champion in the defender's Champion Cage (issue #195). */
-  readonly defenderChampion?: DefenderChampion | null;
+  /** The champions in the defender's Champion Cage (issues #195, #310). */
+  readonly defenderChampions?: readonly DefenderChampion[] | null;
   /**
    * Ticks to keep simulating after the last event; the default is the whole
    * attack, or for a raid its whole cap.
@@ -101,7 +101,7 @@ export interface RaidReplayInput {
   readonly bunkers?: Readonly<Record<number, Roster>>;
   /** The player's academy levels, for their bunkers' defenders. */
   readonly defenderLevels?: MonsterLevels;
-  readonly defenderChampion?: DefenderChampion | null;
+  readonly defenderChampions?: readonly DefenderChampion[] | null;
 }
 
 /** One checkpoint: the tick it was taken at and the digest of the state. */
@@ -139,12 +139,11 @@ export interface ReplayOutcome {
   readonly bunkerLosses: BattleState["bunkerLosses"];
   /** What each supplied bunker holds afterwards (`BattleState.bunkerGarrisons`, #195). */
   readonly bunkerGarrisons: BattleState["bunkerGarrisons"];
-  /** The caged champion's health afterwards (`BattleState.defenderChampionHp`, #195). */
-  readonly defenderChampionHp: number | null;
   /** The report's tallies (issue #22); outputs only, in no checkpoint and no digest. */
   readonly traps: BattleState["traps"];
   readonly bunkers: BattleState["bunkers"];
-  readonly defenderChampion: BattleState["defenderChampion"];
+  /** Each caged champion's health and tally afterwards (`BattleState.defenderChampions`, #310). */
+  readonly defenderChampions: BattleState["defenderChampions"];
   readonly attackers: BattleState["attackers"];
   /** Each attacking champion's lesson, with `learn` only (`BattleState.lessons`, #219). */
   readonly lessons?: BattleState["lessons"];
@@ -198,7 +197,7 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     ...(input.declareWar === undefined ? {} : { declareWar: input.declareWar }),
     ...(input.bunkers ? { bunkers: input.bunkers } : {}),
     ...(input.defenderLevels ? { defenderLevels: input.defenderLevels } : {}),
-    ...(input.defenderChampion ? { defenderChampion: input.defenderChampion } : {}),
+    ...(input.defenderChampions ? { defenderChampions: input.defenderChampions } : {}),
     ...(input.learn ? { learn: true } : {}),
     ...(input.raid ? { raid: input.raid } : {}),
   };
@@ -261,10 +260,9 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     rngDraws: state.rngDraws,
     bunkerLosses: state.bunkerLosses,
     bunkerGarrisons: state.bunkerGarrisons,
-    defenderChampionHp: state.defenderChampionHp,
     traps: state.traps,
     bunkers: state.bunkers,
-    defenderChampion: state.defenderChampion,
+    defenderChampions: state.defenderChampions,
     attackers: state.attackers,
     ...(state.lessons ? { lessons: state.lessons } : {}),
   };
@@ -287,6 +285,6 @@ export const replayRaid = (input: RaidReplayInput): ReplayOutcome =>
     ...(input.seed === undefined ? {} : { seed: input.seed }),
     ...(input.bunkers ? { bunkers: input.bunkers } : {}),
     ...(input.defenderLevels ? { defenderLevels: input.defenderLevels } : {}),
-    ...(input.defenderChampion ? { defenderChampion: input.defenderChampion } : {}),
+    ...(input.defenderChampions ? { defenderChampions: input.defenderChampions } : {}),
     raid: { hitLimit: input.hitLimit },
   });

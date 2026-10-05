@@ -72,8 +72,8 @@ export interface RaidFightOutcome {
   /** What is left of the yard, 0 to 1: `1 - damage / 100` over the damage percentage's buildings. */
   readonly healthShare: number;
   readonly bunkerGarrisons: Readonly<Record<number, Readonly<Record<string, number>>>>;
-  /** The caged champion by type and its health afterwards, or null when none defended. */
-  readonly defenderChampion: { readonly t: number; readonly hp: number } | null;
+  /** Each caged champion by type and its health afterwards; empty when none defended (#310). */
+  readonly defenderChampions: readonly { readonly t: number; readonly hp: number }[];
   readonly creepsFlung: number;
   readonly creepsKilled: number;
   readonly digest: string;
@@ -132,7 +132,6 @@ export const fightRaid = (input: RaidFightInput): RaidFightOutcome => {
   }
   const damage = damagePercent(combatYard, state.health, fired);
 
-  const defenderChampion = input.defence?.defenderChampion ?? null;
   return {
     ticks: state.tick,
     health: state.health,
@@ -144,10 +143,7 @@ export const fightRaid = (input: RaidFightInput): RaidFightOutcome => {
     harvesterLoss,
     healthShare: Math.max(0, Math.min(1, 1 - damage / 100)),
     bunkerGarrisons: state.bunkerGarrisons,
-    defenderChampion:
-      state.defenderChampionHp === null || !defenderChampion
-        ? null
-        : { t: defenderChampion.t, hp: state.defenderChampionHp },
+    defenderChampions: state.defenderChampions.map((caged) => ({ t: caged.t, hp: caged.hp })),
     creepsFlung: state.creepsFlung,
     creepsKilled: state.creepsKilled,
     digest: digestState(battle.checkpoint()),

@@ -251,6 +251,32 @@ describe("TowerFx", () => {
     fx.destroy();
   });
 
+  it("stands down: nothing in the air, nothing drawn, a Tesla back on its idle cell (#308)", () => {
+    const sniper = setUp(21);
+    const target = creepAt(35, 235);
+    sniper.fx.onShot({ tick: 1, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
+    sniper.fx.update(2, () => target);
+    expect(sniper.fx.flyingCount).toBe(1);
+    sniper.fx.standDown();
+    expect(sniper.fx.flyingCount).toBe(0);
+    expect(drawn(sniper.graphics)).toBe(0);
+    // The same tick again draws nothing back: the shot is gone, not paused.
+    sniper.fx.update(2, () => target);
+    expect(drawn(sniper.graphics)).toBe(0);
+    sniper.fx.destroy();
+
+    const tesla = setUp(25);
+    tesla.fx.onCharge(1, 0);
+    tesla.fx.update(20, () => target);
+    expect(tesla.frames.get(1)).toBeGreaterThan(0);
+    tesla.fx.standDown();
+    expect(tesla.frames.get(1)).toBe(0);
+    tesla.fx.update(20, () => target);
+    expect(tesla.frames.get(1)).toBe(0);
+    expect(drawn(tesla.graphics)).toBe(0);
+    tesla.fx.destroy();
+  });
+
   it("draws a shot's projectile for a while and nothing once everything has landed", () => {
     const { graphics, fx } = setUp(21);
     const target = creepAt(35, 235);

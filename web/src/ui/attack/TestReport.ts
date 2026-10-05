@@ -6,9 +6,14 @@ import "@/ui/styles/baiter.css";
 /**
  * The report of a Baiter test (#22, WP4, `docs/design/baiter-simulator.md`
  * §7): Summary, Towers and Attackers tabs over the rows `testReport.ts`
- * builds. Tapping a tower's row shows that tower on the yard behind. Like
- * the attack's end screen it has no Escape or scrim close: the test is over
- * and there is nothing behind it to go back to.
+ * builds, in the same large centre window as the test's setup (#308), the
+ * yard dimmed behind it; a full-screen sheet on a phone. Like the attack's
+ * end screen it has no Escape or scrim close: the test is over and there is
+ * nothing behind it to go back to.
+ *
+ * Tapping a tower's row shows that tower: the window steps aside, the scrim
+ * lifts, and a small bar at the foot names the tower with **Back to report**
+ * (or Escape) to bring the window back.
  */
 
 export type TestReportTab = "summary" | "towers" | "attackers";
@@ -21,6 +26,8 @@ export interface TestReportOptions {
    * may have changed since).
    */
   readonly onBuilding?: (id: number) => void;
+  /** The player came back to the report from a tower {@link onBuilding} showed. */
+  readonly onLeaveBuilding?: () => void;
   /** Test again and Change army show only when given: a replay offers neither. */
   readonly onAgain?: () => void;
   readonly onChangeArmy?: () => void;
@@ -59,10 +66,19 @@ const button = (label: string, className: string, onClick: () => void): HTMLButt
   return node;
 };
 
-/** A table of rows, in a box that scrolls sideways when the panel is narrower than it. */
-const table = (caption: string, headings: readonly string[], rows: readonly HTMLTableRowElement[]): HTMLElement => {
+/**
+ * A table of rows, in a box that scrolls sideways when the panel is narrower
+ * than it. Numbers line up on the right; `textLast` keeps a last column of
+ * words (a tower's fate) on the left, heading and cells alike.
+ */
+const table = (
+  caption: string,
+  headings: readonly string[],
+  rows: readonly HTMLTableRowElement[],
+  textLast = false,
+): HTMLElement => {
   const wrap = element("div", "test-report__scroll");
-  const grid = element("table", "test-report__table");
+  const grid = element("table", textLast ? "test-report__table test-report__table--text-last" : "test-report__table");
   const title = element("caption", "test-report__caption", caption);
   const head = element("thead", "");
   const headRow = element("tr", "");
@@ -80,16 +96,17 @@ const table = (caption: string, headings: readonly string[], rows: readonly HTML
 };
 
 /** One row; its first cell is a button when the row names a building on the yard. */
-const row = (cells: readonly string[], onTap?: () => void, muted = false): HTMLTableRowElement => {
+const row = (cells: readonly string[], onTap?: (from: HTMLElement) => void, muted = false): HTMLTableRowElement => {
   const tr = element("tr", muted ? "test-report__row test-report__row--muted" : "test-report__row");
   cells.forEach((text, index) => {
     const cell = element(index === 0 ? "th" : "td", "");
     if (index === 0) (cell as HTMLTableCellElement).scope = "row";
     if (index === 0 && onTap) {
-      cell.append(button(text, "test-report__show", onTap));
+      const show = button(text, "test-report__show", () => onTap(show));
+      cell.append(show);
       tr.classList.add("test-report__row--tap");
       tr.addEventListener("click", (event) => {
-        if (!(event.target instanceof HTMLButtonElement)) onTap();
+        if (!(event.target instanceof HTMLButtonElement)) onTap(show);
       });
     } else {
       cell.textContent = text;
@@ -104,11 +121,16 @@ export class TestReportPanel {
   private readonly panel: Panel;
   private readonly tabs = new Map<TestReportTab, HTMLButtonElement>();
   private readonly views = new Map<TestReportTab, HTMLElement>();
+  /** The bar that stands in for the window while a tower is shown. */
+  private readonly peekBar: HTMLElement;
+  private readonly peekText: HTMLElement;
+  /** The row button that showed the tower, for focus on the way back. */
+  private peekFrom: HTMLElement | null = null;
 
   constructor(private readonly options: TestReportOptions) {
     this.element = element("div", "popup-backdrop test-report__backdrop");
 
-    this.panel = new Panel({ title: "Test report", closable: false, className: "map-panel test-report" });
+    this.panel = new Panel({ title: "Test report", closable: false, className: "test-report baiter-window" });
     this.panel.element.setAttribute("role", "dialog");
     this.panel.element.setAttribute("aria-modal", "true");
 
@@ -151,8 +173,28 @@ export class TestReportPanel {
     actions.append(button(options.backLabel ?? "Back to yard", "btn btn--primary test-report__back", () => options.onBack()));
 
     this.panel.setContent(tablist, ...this.views.values(), actions);
-    this.element.append(this.panel.element);
+
+    this.peekBar = element("div", "test-report__peek");
+    this.peekBar.hidden = true;
+    this.peekBar.setAttribute("role", "status");
+    this.peekText = element("p", "test-report__peek-text");
+    this.peekBar.append(
+      this.peekText,
+      button("Back to report", "btn btn--primary test-report__peek-back", () => this.unpeek()),
+    );
+    this.peekBar.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      this.unpeek();
+    });
+
+    this.element.append(this.panel.element, this.peekBar);
     this.select("summary");
+  }
+
+  /** Whether a tower is being shown, with the window stepped aside. */
+  get peeking(): boolean {
+    return !this.peekBar.hidden;
   }
 
   /** Shows one tab. */
@@ -173,6 +215,25 @@ export class TestReportPanel {
   close(): void {
     this.panel.close();
     this.element.remove();
+  }
+
+  /** Steps the window aside for the yard, a bar naming what is shown. */
+  private peek(name: string, from: HTMLElement): void {
+    this.peekFrom = from;
+    this.peekText.textContent = `Showing ${name}`;
+    this.peekBar.hidden = false;
+    this.element.classList.add("test-report__backdrop--peek");
+    this.peekBar.querySelector<HTMLButtonElement>(".test-report__peek-back")?.focus();
+  }
+
+  /** Brings the window back from a shown tower. */
+  private unpeek(): void {
+    if (!this.peeking) return;
+    this.peekBar.hidden = true;
+    this.element.classList.remove("test-report__backdrop--peek");
+    this.options.onLeaveBuilding?.();
+    this.peekFrom?.focus();
+    this.peekFrom = null;
   }
 
   private summaryView(): HTMLElement {
@@ -209,7 +270,13 @@ export class TestReportPanel {
 
   private towersView(): HTMLElement {
     const { report, onBuilding } = this.options;
-    const tap = (id: number): (() => void) | undefined => (onBuilding ? () => onBuilding(id) : undefined);
+    const tap = (id: number, name: string): ((from: HTMLElement) => void) | undefined =>
+      onBuilding
+        ? (from) => {
+            this.peek(name, from);
+            onBuilding(id);
+          }
+        : undefined;
     const view = element("div", "test-report__view");
     if (report.towers.length === 0) {
       view.append(element("p", "test-report__empty", "Your yard has no towers."));
@@ -221,10 +288,11 @@ export class TestReportPanel {
           report.towers.map((tower) =>
             row(
               [tower.name, amount(tower.damage), amount(tower.kills), amount(tower.shots), tower.firstShot, tower.fate],
-              tap(tower.id),
+              tap(tower.id, tower.name),
               !tower.fired,
             ),
           ),
+          true,
         ),
       );
     }
@@ -234,7 +302,7 @@ export class TestReportPanel {
           "Traps",
           ["Trap", "Went off", "Damage", "Kills"],
           report.traps.map((trap) =>
-            row([trap.name, trap.at, amount(trap.damage), amount(trap.kills)], tap(trap.id)),
+            row([trap.name, trap.at, amount(trap.damage), amount(trap.kills)], tap(trap.id, trap.name)),
           ),
         ),
       );
@@ -255,18 +323,22 @@ export class TestReportPanel {
                 amount(bunker.lost),
                 bunker.fate,
               ],
-              tap(bunker.id),
+              tap(bunker.id, bunker.name),
             ),
           ),
+          true,
         ),
       );
     }
-    const caged = report.cagedChampion;
-    if (caged) {
+    if (report.cagedChampions.length > 0) {
       view.append(
-        table("Caged champion", ["Champion", "Damage", "Kills", "Health left"], [
-          row(["Your champion", amount(caged.damage), amount(caged.kills), amount(caged.health)]),
-        ]),
+        table(
+          report.cagedChampions.length === 1 ? "Caged champion" : "Caged champions",
+          ["Champion", "Damage", "Kills", "Health left"],
+          report.cagedChampions.map((caged) =>
+            row([caged.name, amount(caged.damage), amount(caged.kills), amount(caged.health)]),
+          ),
+        ),
       );
     }
     return view;

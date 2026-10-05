@@ -607,9 +607,9 @@ describe("panelModel: the Wild Monster Baiter (#126)", () => {
 
   it("says why not while it is damaged or on a job (BUILDINGINFO.as:97-127)", () => {
     const damaged = contextOf({ buildings: [HALL(5), building(2, 19, 3)], health: { "2": 100 } });
-    expect(panelModel(pick(damaged, 2), damaged).openBlocked).toBe("Repair the Baiter to bring an attack.");
+    expect(panelModel(pick(damaged, 2), damaged).openBlocked).toBe("Repair the Baiter to run a test attack.");
     const busy = contextOf({ buildings: [HALL(5), building(2, 19, 3, { cU: 600 })] });
-    expect(panelModel(pick(busy, 2), busy).openBlocked).toBe("The Baiter brings an attack once its job is done.");
+    expect(panelModel(pick(busy, 2), busy).openBlocked).toBe("The Baiter can run a test attack once its job is done.");
   });
 
   it("is not offered for a foundation", () => {

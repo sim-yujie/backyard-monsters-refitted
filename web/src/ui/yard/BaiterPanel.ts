@@ -30,29 +30,32 @@ import { CHAMPION_CATALOGUE } from "@/game/yard/championCatalogue";
 import { STANCE_TEXT, championName, monsterName } from "@/ui/attack/ArmyPanel";
 import { formatAmount } from "@/ui/format";
 import { monsterPicture } from "@/ui/monsters/LockerTab";
+import { Popup } from "@/ui/Popup";
 import { QuantityStepper } from "@/ui/QuantityStepper";
 import "@/ui/styles/baiter.css";
 
 /**
- * The Wild Monster Baiter's test setup, inside its building panel (issues
- * #126 and #22, `docs/design/baiter-simulator.md` §5.1 and §6 steps 1-5):
- * Flash's baiter popup (`client/scripts/MONSTERBAITERPOPUP.as`) as a defence
- * simulator.
+ * The Wild Monster Baiter's test setup (issues #126 and #22,
+ * `docs/design/baiter-simulator.md` §5.1 and §6 steps 1-5): Flash's baiter
+ * popup (`client/scripts/MONSTERBAITERPOPUP.as`) as a defence simulator.
  *
- * Top to bottom: the shortcuts (My army, My levels, All level 1, All max), the
- * army size against the Baiter level's cap, one row per test monster (the 18
- * surface monsters, unlocked ones first, locked ones tagged) with its own
- * level picker and a stepper whose Fill takes as many as still fit, the
- * champions (one ordinary champion plus Krallen, each at any level, power
- * level and Mode), then Clear and **Start test**. Start hands the test to the
- * Baiter scene; nothing here talks to the server, and a test is free.
+ * A large window in the middle of the screen with the yard dimmed behind it
+ * (the owner's pick, #308): at the top the army size against the Baiter
+ * level's cap and the shortcuts (My army, My levels, All level 1, All max);
+ * then a grid of cards, one per test monster (the 18 surface monsters,
+ * unlocked ones first, locked ones tagged), each with its own level picker
+ * and a stepper whose Fill takes as many as still fit; then the champions
+ * (one ordinary champion plus Krallen, each at any level, power level and
+ * Mode), Clear and **Start test**. Start hands the test to the Baiter scene;
+ * nothing here talks to the server, and a test is free. On a phone the
+ * window is a full-screen sheet and the grid scrolls.
  *
  * The army is kept for the session, as Flash kept its queue
  * (`MONSTERBAITER.Export`), so a second test starts from the first one's.
  *
- * Under it, **Recent tests** (#22, WP5, §5.3): the last five finished tests,
- * newest first, each with its result line, **Watch** (its replay) and
- * **Report**. They are gone on a page reload (owner answer Q3).
+ * Beside the army, a **Recent tests** tab (#22, WP5, §5.3): the last five
+ * finished tests, newest first, each with its result line, **Watch** (its
+ * replay) and **Report**. They are gone on a page reload (owner answer Q3).
  */
 
 export interface BaiterPanelOptions {
@@ -69,6 +72,8 @@ export interface BaiterPanelOptions {
   readonly onReport?: (test: RecordedTest) => void;
   /** The finished tests to list, newest first; the kept ones by default. */
   readonly recent?: readonly RecordedTest[];
+  /** The window was closed by the player: its close button or Escape. */
+  readonly onClose?: () => void;
 }
 
 /** The last panel's army, for the next one this session. */
@@ -99,8 +104,12 @@ interface ChampionSlot {
 }
 
 export class BaiterPanel {
+  /** The dimmed backdrop the window stands on: what {@link mount} adds. */
   readonly element: HTMLElement;
+  /** The window's contents. */
+  readonly body: HTMLElement;
 
+  private readonly popup: Popup;
   private readonly options: BaiterPanelOptions;
   private readonly cap: number;
   private readonly figures: HTMLElement;
@@ -114,6 +123,8 @@ export class BaiterPanel {
   private readonly runButton: HTMLButtonElement;
 
   private testArmy: TestArmy;
+  /** Set while {@link destroy} closes the window, which is not the player closing it. */
+  private destroying = false;
 
   constructor(options: BaiterPanelOptions) {
     this.options = options;
@@ -121,9 +132,19 @@ export class BaiterPanel {
     const save = options.save();
     this.testArmy = clampArmy(remembered ?? emptyArmy(save), this.cap);
 
-    this.element = document.createElement("section");
-    this.element.className = "baiter";
-    this.element.setAttribute("aria-label", "Defence test");
+    this.popup = new Popup({
+      title: "Baiter: test attack",
+      className: "baiter-window",
+      // A stray tap beside the window must not close it.
+      closeOnBackdrop: false,
+      onClose: () => this.closed(),
+    });
+    this.element = this.popup.backdrop;
+    this.element.classList.add("baiter-window__backdrop");
+
+    this.body = document.createElement("section");
+    this.body.className = "baiter";
+    this.body.setAttribute("aria-label", "Defence test");
 
     const lead = text(
       "p",
@@ -165,8 +186,14 @@ export class BaiterPanel {
     this.fill = document.createElement("span");
     this.fill.className = "monsters-bar__fill";
     this.bar.append(this.fill);
+    const size = document.createElement("div");
+    size.className = "baiter__size";
+    size.append(this.figures, this.bar);
+    const top = document.createElement("div");
+    top.className = "baiter__top";
+    top.append(size, shortcuts);
 
-    // Rows: the monsters the player has unlocked first, each group in roster order.
+    // Cards: the monsters the player has unlocked first, each group in roster order.
     const list = document.createElement("ul");
     list.className = "baiter__list";
     list.setAttribute("aria-label", "Monsters in the test");
@@ -178,10 +205,12 @@ export class BaiterPanel {
     // Champions.
     const champions = document.createElement("div");
     champions.className = "baiter__champions";
+    champions.setAttribute("role", "group");
+    champions.setAttribute("aria-label", "Champions");
     champions.append(this.slot(false), this.slot(true));
 
     // Actions.
-    this.clearButton = button("Clear", "btn btn--ghost");
+    this.clearButton = button("Clear", "btn btn--ghost baiter__clear");
     this.clearButton.addEventListener("click", () => {
       this.testArmy = clampArmy({ monsters: this.withCounts(() => 0), champions: [] }, this.cap);
       this.render();
@@ -191,32 +220,98 @@ export class BaiterPanel {
     this.runButton.addEventListener("click", () => this.run());
     const actions = document.createElement("div");
     actions.className = "baiter__actions";
+    if (options.blocked) actions.append(text("p", "baiter__gate", options.blocked));
     actions.append(this.clearButton, this.runButton);
 
-    this.element.append(
-      lead,
-      part("Quick set", shortcuts),
-      this.figures,
-      this.bar,
-      list,
-      part("Champions", champions),
-      actions,
-    );
-    if (options.blocked) this.element.append(text("p", "baiter__gate", options.blocked));
+    const foot = document.createElement("div");
+    foot.className = "baiter__foot";
+    foot.append(champions, actions);
+
+    const army = document.createElement("div");
+    army.className = "baiter__view baiter__view--army";
+    army.append(lead, top, list, foot);
+
     const recent = options.recent ?? recentTests();
-    if (recent.length > 0) this.element.append(part("Recent tests", this.recentList(recent)));
+    if (recent.length > 0) {
+      const history = document.createElement("div");
+      history.className = "baiter__view baiter__view--recent";
+      history.append(
+        text("p", "baiter__note", "Your tests this session, newest first. They are gone when the page reloads."),
+        this.recentList(recent),
+      );
+      this.body.append(
+        this.tabs([
+          ["Army", army],
+          [`Recent tests (${recent.length})`, history],
+        ]),
+        army,
+        history,
+      );
+    } else {
+      this.body.append(army);
+    }
+    this.popup.setContent(this.body);
     this.render();
   }
 
+  /** Opens the window over `container`: the overlay's modal layer. */
   mount(container: HTMLElement): this {
-    container.append(this.element);
+    this.popup.mount(container);
     return this;
   }
 
+  /** Closes the window without {@link BaiterPanelOptions.onClose}: its owner asked. */
   destroy(): void {
+    this.destroying = true;
+    this.popup.close();
+  }
+
+  /** The window is gone: its close button, Escape or {@link destroy}. */
+  private closed(): void {
     for (const stepper of this.steppers.values()) stepper.destroy();
     this.steppers.clear();
-    this.element.remove();
+    if (!this.destroying) this.options.onClose?.();
+  }
+
+  /** The tab row over the army and the recent tests; the army is shown first. */
+  private tabs(views: ReadonlyArray<readonly [string, HTMLElement]>): HTMLElement {
+    const row = document.createElement("div");
+    row.className = "baiter__tabs";
+    row.setAttribute("role", "tablist");
+    row.setAttribute("aria-label", "Baiter");
+    const controls: HTMLButtonElement[] = [];
+    const select = (index: number): void => {
+      views.forEach(([, view], at) => {
+        view.hidden = at !== index;
+        const control = controls[at];
+        if (!control) return;
+        control.setAttribute("aria-selected", String(at === index));
+        control.tabIndex = at === index ? 0 : -1;
+      });
+    };
+    const key = Math.random().toString(36).slice(2, 9);
+    views.forEach(([label, view], index) => {
+      const tab = button(label, "btn btn--ghost baiter__tab");
+      tab.id = `baiter-tab-${key}-${index}`;
+      tab.setAttribute("role", "tab");
+      view.id = `baiter-view-${key}-${index}`;
+      view.setAttribute("role", "tabpanel");
+      view.setAttribute("aria-labelledby", tab.id);
+      tab.setAttribute("aria-controls", view.id);
+      tab.addEventListener("click", () => select(index));
+      controls.push(tab);
+      row.append(tab);
+    });
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      const current = controls.findIndex((one) => one.getAttribute("aria-selected") === "true");
+      const next = (current + (event.key === "ArrowRight" ? 1 : controls.length - 1)) % controls.length;
+      event.preventDefault();
+      select(next);
+      controls[next]?.focus();
+    });
+    select(0);
+    return row;
   }
 
   /** The test army, for the tests. */
@@ -273,12 +368,15 @@ export class BaiterPanel {
     head.className = "baiter__name";
     const entry = monsterEntry(id);
     if (entry) head.append(monsterPicture(entry, "small", "baiter__picture"));
-    head.append(text("span", "baiter__monster", name));
+    const label = document.createElement("span");
+    label.className = "baiter__label";
+    label.append(text("span", "baiter__monster", name));
     if (locked) {
       const tag = text("span", "baiter__tag", "Not unlocked");
       tag.title = "You have not unlocked this monster, but a test can still send it";
-      head.append(tag);
+      label.append(tag);
     }
+    head.append(label);
     const each = text("span", "baiter__each", "");
     this.eachLabels.set(id, each);
 
@@ -509,12 +607,5 @@ const field = (caption: string, control: HTMLElement): HTMLElement => {
   const element = document.createElement("span");
   element.className = "baiter-champion__field";
   element.append(text("span", "baiter-champion__caption", caption), control);
-  return element;
-};
-
-const part = (heading: string, body: HTMLElement): HTMLElement => {
-  const element = document.createElement("div");
-  element.className = "baiter__part";
-  element.append(text("p", "baiter__heading", heading), body);
   return element;
 };

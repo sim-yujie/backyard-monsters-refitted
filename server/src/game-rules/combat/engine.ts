@@ -250,8 +250,8 @@ import type {
  * 9. **The defence is supplied, and its rules are the owner's.** The defender's
  *    bunker blob is opaque to the server (§6 item 5), so
  *    {@link BattleOptions.bunkers} carries it, read off `buildingdata` by
- *    {@link bunkerGarrisons}; the caged champion comes in as
- *    {@link BattleOptions.defenderChampion}. A bunker with no entry dispatches
+ *    {@link bunkerGarrisons}; the caged champions come in as
+ *    {@link BattleOptions.defenderChampions}. A bunker with no entry dispatches
  *    nothing and is not a valid group 4 or group 6 target, which is what an
  *    empty bunker is. The fight-back rules below are the owner's decisions of
  *    2026-09-29 (issue #195), not traced Flash:
@@ -319,6 +319,11 @@ import type {
  *    and straight home, rather than pathing round walls or heading for where
  *    the foe is going (`interceptTarget`, `:462-498`); and back in the cage it
  *    stands where it stopped rather than pacing.
+ *    A cage holding both a basic champion and a Krallen sends out both (issue
+ *    #310): `SpawnGuardian` pens each at its own random point (`:619-655`;
+ *    `CREATURES.addGuardian`, `:241-257`), so each waits, looks, fights and
+ *    goes back in on its own, with its own health and tally, and both walk
+ *    back to the same door.
  * 15. **The Tesla's frames are every second tick.** Its charge, zaps and
  *    wind-down run in an `ENTER_FRAME` handler (`BUILDING25.as:98`), so they
  *    count frames of the 40 fps stage, not loops, and skip catch-up frames
@@ -349,8 +354,9 @@ import type {
  *
  * ## The random stream's order
  *
- * One stream. Before the first step the caged champion draws its place in its
- * cage (four draws) and its start frame (one draw, and a second for a flyer).
+ * One stream. Before the first step each caged champion in turn draws its place
+ * in its cage (four draws) and its start frame (one draw, and a second for a
+ * flyer).
  * After that, drawn in the order the step runs: the bunkers' interceptor picks
  * (towers and traps draw nothing), then each creep in id order (its route's
  * scatter, a storage hit's resource pick), then the Slimeattikus Minis born at
@@ -404,8 +410,12 @@ export interface BattleOptions {
   readonly bunkers?: Readonly<Record<number, Roster>>;
   /** Levels for the defenders a bunker sends out; defaults to the attacker's. */
   readonly defenderLevels?: MonsterLevels;
-  /** The defender's champion in its Champion Cage (issue #195), or none. */
-  readonly defenderChampion?: DefenderChampion | null;
+  /**
+   * The defender's champions in its Champion Cage (issues #195, #310): its
+   * basic champion and its Krallen, each defending on its own, in the order
+   * given. None, or an empty list, is no caged champion.
+   */
+  readonly defenderChampions?: readonly DefenderChampion[] | null;
   /**
    * Record each attacking champion's lesson for its learning brain (issue
    * #219, {@link BattleState.lessons}). Reads only: the battle, its random
@@ -477,8 +487,15 @@ export interface BunkerReport {
   destroyedTick: number | null;
 }
 
-/** What the caged champion did once out (issue #22), its flame included. */
+/** What one caged champion did once out (issues #22, #310), its flame included. */
 export interface DefenderChampionReport {
+  /** The champion type, as {@link DefenderChampion.t}. */
+  readonly t: number;
+  /**
+   * Its health (issue #195): what it came out with less what it took, 0 when
+   * it died, its stored health when it never came out.
+   */
+  hp: number;
   damageDealt: number;
   kills: number;
 }
@@ -552,18 +569,16 @@ export interface BattleState {
    * when no bunker was supplied.
    */
   readonly bunkerGarrisons: Readonly<Record<number, Readonly<Record<string, number>>>>;
-  /**
-   * The caged champion's health (issue #195): what it came out with less what
-   * it took, 0 when it died, its stored health when it never came out, null
-   * when there is none to defend.
-   */
-  readonly defenderChampionHp: number | null;
   /** Each trap that went off, in the order they did (issue #22). */
   readonly traps: readonly TrapReport[];
   /** Each bunker on the field at the start, by id (issue #22). */
   readonly bunkers: readonly BunkerReport[];
-  /** The caged champion's tally, or null when there is none to defend (issue #22). */
-  readonly defenderChampion: DefenderChampionReport | null;
+  /**
+   * Each caged champion's health and tally (issues #22, #195, #310), in the
+   * order {@link BattleOptions.defenderChampions} gave them; empty when there
+   * is none to defend.
+   */
+  readonly defenderChampions: readonly DefenderChampionReport[];
   /** Every attacker row: monsters by id, then champions in the order flung (issue #22). */
   readonly attackers: readonly AttackerReport[];
   /**
@@ -928,6 +943,17 @@ interface CagePen {
   readonly hitFlags: number;
 }
 
+/** One champion the cage holds (issue #310), from its supply to the end of the battle. */
+interface CageSlot {
+  readonly caged: DefenderChampion;
+  /** The champion once it has first come out, whether in its cage or not. */
+  champion: Creep | null;
+  /** Where it waits while it is in its cage; null while it is out (issue #260). */
+  pen: CagePen | null;
+  /** Its health and report tally (issue #22). */
+  readonly report: DefenderChampionReport;
+}
+
 interface Tower {
   readonly building: EngineBuilding;
   readonly report: TowerReport;
@@ -1174,8 +1200,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const lessons = new Map<number, LessonRecord>();
   /** Whether this battle has a defence at all; without one no fight-back code runs (issue #195). */
   const defended =
-    (options.defenderChampion !== undefined && options.defenderChampion !== null) ||
-    Object.keys(options.bunkers ?? {}).length > 0;
+    (options.defenderChampions?.length ?? 0) > 0 || Object.keys(options.bunkers ?? {}).length > 0;
   let finished = false;
   let retreated = false;
   const raid = options.raid ?? null;
@@ -1271,20 +1296,32 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     return false;
   };
 
+  /** The supplied caged champions with health to come out with (issue #310). */
+  const cagedWithHealth = (options.defenderChampions ?? []).filter((caged) => caged.hp > 0);
   /**
-   * The Champion Cage and the champion it holds (issue #195): the first cage
-   * by id, and only when a champion was supplied for it.
+   * The Champion Cage and the champions it holds (issues #195, #310): the
+   * first cage by id, and only when a champion was supplied for it.
    */
   const cage =
-    options.defenderChampion && options.defenderChampion.hp > 0
+    cagedWithHealth.length > 0
       ? (yard.buildings
           .filter((building) => building.type === CHAMPION_CAGE_TYPE)
           .sort((one, other) => one.id - other.id)[0] ?? null)
       : null;
-  /** The caged champion once it has first come out, whether in its cage or not. */
-  let cageChampion: Creep | null = null;
-  /** The caged champion while it is in its cage, set below; null while it is out (issue #260). */
-  let pen: CagePen | null = null;
+  /** One slot per caged champion, in the order supplied; their pens are set below. */
+  const cageSlots: CageSlot[] = cage
+    ? cagedWithHealth.map((caged) => ({
+        caged,
+        champion: null,
+        pen: null,
+        report: { t: caged.t, hp: cagedHealth(caged), damageDealt: 0, kills: 0 },
+      }))
+    : [];
+  /** The slot of a caged champion's creep, or undefined for any other creep. */
+  const cageSlotOf = (creep: Creep): CageSlot | undefined => {
+    for (const slot of cageSlots) if (slot.champion === creep) return slot;
+    return undefined;
+  };
   /**
    * Where it walks back to: `changeModeCage` paths to the cage's anchor plus
    * (50, 60) on screen (`ChampionBase.as:299-301`), in yard units.
@@ -1294,11 +1331,6 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     : null;
   /** Defenders on the field as this step's creeps move; attackers skip the scan when none is. */
   let defendersOut = 0;
-  let defenderChampionHp: number | null =
-    cage && options.defenderChampion ? cagedHealth(options.defenderChampion) : null;
-  /** The caged champion's report tally (issue #22), there exactly when its health is. */
-  const defenderChampionReport: DefenderChampionReport | null =
-    defenderChampionHp === null ? null : { damageDealt: 0, kills: 0 };
 
   /* ── Damage and loot ───────────────────────────────────────────────────── */
 
@@ -1469,7 +1501,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const creditDefender = (striker: Creep, applied: number, killed: boolean): void => {
     let tally: { damageDealt: number; kills: number } | null | undefined = null;
     if (striker.homeBunker >= 0) tally = bunkerReports.get(striker.homeBunker);
-    else if (striker === cageChampion) tally = defenderChampionReport;
+    else if (striker.champion) tally = cageSlotOf(striker)?.report;
     if (!tally) return;
     tally.damageDealt += applied;
     if (killed) tally.kills += 1;
@@ -1995,7 +2027,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       hitFlags: championReach(id, level, championPower(id, power), fightFlags(true, flying, range)),
     };
   };
-  pen = cage && options.defenderChampion ? penOf(cage, options.defenderChampion) : null;
+  // Each in turn, as `SpawnGuardian` pens each with its own draws (issue #310).
+  if (cage) for (const slot of cageSlots) slot.pen = penOf(cage, slot.caged);
 
   const fling = (event: FlingDrop): void => {
     const ids = Object.keys(event.monsters).sort();
@@ -3109,7 +3142,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
     }
     if (creep.friendly) {
-      if (creep === cageChampion) tickCageChampion(creep);
+      if (creep.champion) tickCageChampion(creep);
       else tickDefender(creep);
       return;
     }
@@ -3625,19 +3658,21 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   /**
-   * The caged champion in its cage (issue #260): it counts its frame and every
+   * A caged champion in its cage (issue #260): it counts its frame and every
    * {@link CAGE_LOOK_FRAMES} looks around itself (`tickBPen`,
    * `ChampionBase.as:1055-1057`), and comes out at what it finds. One that got
    * back from a fight goes in first, and does not look that frame
-   * (`tickBCage`, `:1114-1133`).
+   * (`tickBCage`, `:1114-1133`). Each of the cage's champions does this on its
+   * own, in the order supplied (issue #310).
    */
-  const tickCage = (): void => {
-    const out = cageChampion;
-    if (!pen && out && out.homing && out.atTarget && out.hp > 0 && !out.gone) {
-      goInCage(out);
+  const tickCageSlot = (slot: CageSlot): void => {
+    const out = slot.champion;
+    if (!slot.pen && out && out.homing && out.atTarget && out.hp > 0 && !out.gone) {
+      goInCage(slot, out);
       return;
     }
-    if (!pen || !options.defenderChampion) return;
+    const pen = slot.pen;
+    if (!pen) return;
     const frame = pen.frame + 1;
     const foe =
       frame % CAGE_LOOK_FRAMES === 0
@@ -3648,7 +3683,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return;
     }
     // Its own tick this step counts the frame, as `tickState` does before `tickBPen`.
-    let champion = cageChampion;
+    let champion = slot.champion;
     if (champion) {
       champion.frame = pen.frame;
       champion.targetable = true;
@@ -3657,11 +3692,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creeps.splice(after < 0 ? creeps.length : after, 0, champion);
       byCreepId.set(champion.id, champion);
     } else {
-      champion = releaseChampion(options.defenderChampion, pen);
+      champion = releaseChampion(slot.caged, pen);
     }
-    pen = null;
+    slot.pen = null;
     if (!champion) return;
-    cageChampion = champion;
+    slot.champion = champion;
     champion.born = tick;
     champion.homing = false;
     champion.attacking = false;
@@ -3669,13 +3704,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     takeFoe(champion, foe);
   };
 
+  const tickCage = (): void => {
+    for (const slot of cageSlots) tickCageSlot(slot);
+  };
+
   /**
-   * The caged champion goes back in (issue #260): off the field, where it
+   * A caged champion goes back in (issue #260): off the field, where it
    * stopped, with the health it has and the frame it is on. It lets go of
    * whatever its aura held.
    */
-  const goInCage = (creep: Creep): void => {
-    pen = {
+  const goInCage = (slot: CageSlot, creep: Creep): void => {
+    slot.pen = {
       ix: creep.ix,
       iy: creep.iy,
       x: creep.x,
@@ -3685,7 +3724,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       flying: creep.flying,
       hitFlags: creep.hitFlags,
     };
-    defenderChampionHp = creep.hp;
+    slot.report.hp = creep.hp;
     if (creep.aura) letGo(creep, creep.aura, new Set());
     creep.targetCreep = -1;
     creep.atTarget = false;
@@ -3877,7 +3916,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
           if (lesson && creep.hp > 0 && lesson.leftAt === null) lesson.leftAt = tick;
           if (creep.champion && creep.hp <= 0) {
             if (creep.friendly) {
-              defenderChampionHp = 0;
+              const slot = cageSlotOf(creep);
+              if (slot) slot.report.hp = 0;
             } else {
               championHp = 0;
               championsHp[creep.monsterId] = 0;
@@ -3886,7 +3926,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
           continue;
         }
         if (creep.champion && creep.friendly) {
-          defenderChampionHp = creep.hp;
+          const slot = cageSlotOf(creep);
+          if (slot) slot.report.hp = creep.hp;
         } else if (creep.champion) {
           championHp = creep.hp;
           championsHp[creep.monsterId] = creep.hp;
@@ -3984,12 +4025,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     over: finished,
     bunkerLosses: bunkerLossRecord(bunkerLosses),
     bunkerGarrisons: garrisonsAfter(),
-    defenderChampionHp,
     traps: trapReports.map((trap) => ({ ...trap })),
     bunkers: [...bunkerReports.values()]
       .sort((one, other) => one.id - other.id)
       .map((bunker) => ({ ...bunker })),
-    defenderChampion: defenderChampionReport ? { ...defenderChampionReport } : null,
+    defenderChampions: cageSlots.map((slot) => ({ ...slot.report })),
     attackers: [
       ...[...monsterRows.values()].sort((one, other) => compareIds(one.monsterId, other.monsterId)),
       ...championRows,
@@ -4071,7 +4111,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
           values.push(monsterId.length, count);
         }
       }
-      values.push(defenderChampionHp ?? -1);
+      // Each caged champion's health, or -1 for none: one folds as it always did (issue #310).
+      if (cageSlots.length === 0) values.push(-1);
+      for (const slot of cageSlots) values.push(slot.report.hp);
     }
     return values;
   };

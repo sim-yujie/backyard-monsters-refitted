@@ -326,6 +326,12 @@ export class CreepFx {
     this.drawLabels(tick);
   }
 
+  /** Lets every projectile still in the air go without landing: the battle is over (#308). */
+  dropProjectiles(): void {
+    this.projectiles.length = 0;
+    this.fire.clear();
+  }
+
   destroy(): void {
     this.root.parent?.removeChild(this.root);
     for (const id of this.flashUntil.keys()) this.host.flashBuilding(id, false);

@@ -250,7 +250,7 @@ describe("AttackSession against a defence (#195)", () => {
     const session = defended({
       bunkers: { 1: { C8: 2 } },
       defenderLevels: { C8: 3 },
-      defenderChampion: { t: 1, l: 2, hp: 5000, pl: 0 },
+      defenderChampions: [{ t: 1, l: 2, hp: 5000, pl: 0 }],
     });
     const friendly = session.battle()!.creeps().filter((creep) => creep.friendly);
     expect(friendly.some((creep) => creep.monsterId === "C8" && creep.level === 3)).toBe(true);
@@ -260,7 +260,7 @@ describe("AttackSession against a defence (#195)", () => {
   it("fights none when the load served none, as before", () => {
     const session = defended();
     expect(session.battle()!.creeps().filter((creep) => creep.friendly)).toHaveLength(0);
-    expect(session.battle()!.state().defenderChampionHp).toBeNull();
+    expect(session.battle()!.state().defenderChampions).toEqual([]);
   });
 });
 

@@ -133,7 +133,7 @@ describe("Korath (issue #222)", () => {
   it("fireballs a flyer for a quarter of his damage from power level 2 at level 4, and it burns", () => {
     const battle = createBattle(cageYard(), {
       seed: 5,
-      defenderChampion: { t: 4, l: 4, hp: 200_000, pl: 2 },
+      defenderChampions: [{ t: 4, l: 4, hp: 200_000, pl: 2 }],
     });
     fling(battle, 140, { C14: 3 });
     const { hits, hurts } = korathHits(battle, 1200);
@@ -153,7 +153,7 @@ describe("Korath (issue #222)", () => {
   it("cannot touch a flyer without the fireball", () => {
     const battle = createBattle(cageYard(), {
       seed: 5,
-      defenderChampion: { t: 4, l: 4, hp: 200_000, pl: 1 },
+      defenderChampions: [{ t: 4, l: 4, hp: 200_000, pl: 1 }],
     });
     fling(battle, 140, { C14: 3 });
     expect(korathHits(battle, 1200).hits).toEqual([]);
@@ -163,7 +163,7 @@ describe("Korath (issue #222)", () => {
     const battle = createBattle(cageYard(), {
       seed: 5,
       levels: { C6: 10 },
-      defenderChampion: { t: 4, l: 5, hp: 500_000, pl: 3 },
+      defenderChampions: [{ t: 4, l: 5, hp: 500_000, pl: 3 }],
     });
     fling(battle, 140, { C6: 30 });
     const { hits, quakes } = korathHits(battle, 1500);
@@ -180,7 +180,7 @@ describe("Korath (issue #222)", () => {
     const battle = createBattle(cageYard(), {
       seed: 5,
       levels: { C6: 10 },
-      defenderChampion: { t: 4, l: 5, hp: 500_000, pl: 2 },
+      defenderChampions: [{ t: 4, l: 5, hp: 500_000, pl: 2 }],
     });
     fling(battle, 140, { C6: 30 });
     expect(korathHits(battle, 1500).quakes).toEqual([]);
@@ -255,7 +255,7 @@ describe("Fomor (issue #222)", () => {
     const battle = createBattle(yard, {
       seed: 4,
       bunkers: { 2: { C1: 8 } },
-      defenderChampion: { t: 3, l: 6, hp: 40_000, pl: 3 },
+      defenderChampions: [{ t: 3, l: 6, hp: 40_000, pl: 3 }],
     });
     fling(battle, 140, { C1: 10 });
     let enragedDefender = false;

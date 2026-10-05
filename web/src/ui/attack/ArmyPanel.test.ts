@@ -405,6 +405,17 @@ describe("ArmyPanel champion", () => {
     expect(retreat?.hidden).toBe(true);
   });
 
+  it("takes Retreat away once the attack is over, with the champion still out (#308)", () => {
+    const session = sessionWith(sandboxRoster());
+    const bucket = new Bucket(session, { storage: null, playerKey: "test" });
+    const panel = new ArmyPanel(bucket, { onRetreatChampion: () => {} }).mount(document.body);
+    panels.push(panel);
+    panel.setChampionsOnField([3]);
+    expect(panel.retreatFor(3)?.hidden).toBe(false);
+    session.retreat();
+    expect(panel.retreatFor(3)?.hidden).toBe(true);
+  });
+
   it("offers each champion a Mode: the one its save remembers, else Hybrid (#220)", () => {
     const roster = sandboxRoster();
     const remembered = rosterOf({

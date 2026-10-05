@@ -364,6 +364,8 @@ picker changes the size; Fill respects the cap; shortcuts; champion picks; Start
 
 **Depends on:** WP1. **Size:** M.
 
+**As built (#308, after the owner tried it).** The setup is no longer in the building panel: **Test attack** opens a large window in the middle of the screen (about 90% wide, up to 1240 x 800 px) on the overlay's modal layer, the yard dimmed behind it. Title "Baiter: test attack" with a close button; the size bar and the four shortcuts along the top; the 18 monsters as a grid of cards (portrait, name, "Not unlocked" tag, level picker, stepper with Fill), all visible without scrolling on a desktop; the champion row (type, Level, Power, Mode, "Krallen as well") with Clear and **Start test** along the foot. Recent tests is a second tab ("Recent tests (n)") once a test has finished. On a phone the window is a full-screen sheet with two cards a row that scrolls. The refusals now read "Repair the Baiter to run a test attack." and "The Baiter can run a test attack once its job is done."; the Krallen row no longer shows empty Level and Power boxes before it is ticked.
+
 ### WP3 — Drop anywhere on the test screen
 
 **Goal:** the Baiter scene plays like a real attack with the test army (§5.2, §6 steps 5-8).
@@ -411,6 +413,10 @@ each end reason. A panel test for the tabs and the row tap.
 **Depends on:** WP0, WP3. **Size:** M.
 
 **As built.** A champion's "fell at m:ss" is read off the scene's quarter-second notifications (the engine keeps no death tick). On a wide screen the report stands at the right over a clear backdrop, so a tapped tower is centred in the yard left of it; on a phone it is a bottom sheet and the tower is centred above it. "Change army" goes back through a yard intent (`yardIntent.ts`, kind `baiter`) that selects the Baiter and opens its test panel.
+
+**As built (#308).** The report is now the same large centre window as the setup, the yard dimmed behind it, and a full-screen sheet on a phone. Tapping a tower, trap or bunker row steps the window aside: the scrim lifts, the camera centres on the building and outlines it, and a small bar at the foot says "Showing Cannon Tower L5" with **Back to report** (Escape works too), which brings the window back and drops the outline.
+
+**As built (#308, the "frozen" end).** The engine stops on the tick a test ends, so its last frame (a champion mid-step, a laser mid-sweep, a bullet in the air) used to stand behind the report as if the game had hung, while the yard's own life (Housing monsters) kept moving. As the report opens, the Baiter package now asks `AttackPresentation.settle()`, which the battle layer answers (`AttackBattleLayer.settle`): every attacker and champion goes, every gun stands down (a Tesla back to idle, beams and bullets gone), and each building shows the engine's own health; splats, smoke and numbers already made fade out on the wall clock. The report's scrim dims the yard. A replay's end does the same. A real attack's end screen never calls it and is unchanged.
 
 ### WP5 — Replay and Recent tests
 
