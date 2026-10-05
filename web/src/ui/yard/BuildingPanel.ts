@@ -692,7 +692,7 @@ export class BuildingPanel {
     }
     if (model?.open === "baiter" && this.yard) {
       const open = this.baiter !== null;
-      const button = actionButton(open ? "Close Baiter" : "Bring an attack", () => this.toggleBaiter(model.openBlocked), "btn--primary");
+      const button = actionButton(open ? "Close" : "Test attack", () => this.toggleBaiter(model.openBlocked), "btn--primary");
       button.classList.add("building-panel__planner");
       button.setAttribute("aria-expanded", String(open));
       button.title = "A practice attack on your own yard. Nothing is saved.";
@@ -1380,7 +1380,6 @@ export class BuildingPanel {
       guideBus.emit("screen", { id: GuideScreen.BAITER, root: this.baiter.element, header: null });
     }
     this.render();
-    if (this.baiter) this.baiter.element.querySelector<HTMLElement>("[role=radio][aria-checked=true]")?.focus();
   }
 
   private closeBaiter(): void {
