@@ -23,7 +23,9 @@ import "@/ui/styles/chat.css";
  * their yard, or report the line. Muted players' lines leave the box.
  *
  * The box only draws the session's state and calls back; the connection is
- * `game/chat/chatSession.ts`'s, and outlives the box.
+ * `game/chat/chatSession.ts`'s, and outlives the box. A new line is added on
+ * its own, the oldest dropped as the room's history fills; every line is
+ * drawn afresh only when the room, the mute list or the box's opening changes.
  */
 
 export interface ChatBoxOptions {
@@ -60,6 +62,18 @@ const REPORTED_TEXT = "Thanks. The moderators will take a look.";
 const REPORT_FAILED_TEXT = "That report could not be sent. Try again in a moment.";
 const NO_YARD_TEXT = "That player's yard could not be opened.";
 
+/**
+ * How many of `before`'s newest entries start `after`, when `after` is
+ * `before` with entries dropped from the front and added at the end (the
+ * session's only change to a room's entries); null when it is anything else.
+ */
+const keptOf = (before: readonly ChatEntry[], after: readonly ChatEntry[]): number | null => {
+  const last = before.at(-1);
+  if (last === undefined) return null;
+  const kept = after.lastIndexOf(last) + 1;
+  return kept > 0 && after[0] === before[before.length - kept] ? kept : null;
+};
+
 /** The server's own words for a refusal, when it sent some. */
 const failureText = (error: unknown, fallback: string): string =>
   error instanceof ApiError && typeof error.code === "string" && error.code
@@ -87,6 +101,13 @@ export class ChatBox {
   private picked: ChatLine | null = null;
   /** The strip's question or answer, when it shows one instead of the actions. */
   private pickedNote: { text: string; confirmReport?: boolean } | null = null;
+  /** What the lines were last drawn from; null before the first draw. */
+  private drawn: {
+    readonly entries: readonly ChatEntry[];
+    readonly muted: ReadonlySet<number>;
+    readonly channel: string | null;
+    readonly open: boolean;
+  } | null = null;
 
   constructor(private readonly options: ChatBoxOptions) {
     this.state = options.session.current;
@@ -195,7 +216,7 @@ export class ChatBox {
     this.element.dataset["status"] = state.status;
     this.dot.title = online ? "Connected" : (statusText(state.status) ?? "");
 
-    this.lines.replaceChildren(...visibleEntries(state).map((entry) => this.entry(entry)));
+    this.renderLines(state);
 
     const words = online ? null : statusText(state.status);
     this.status.hidden = words === null;
@@ -210,6 +231,35 @@ export class ChatBox {
     else this.renderPlayer();
 
     if (wasAtEnd || !this.open) this.scrollToEnd();
+  }
+
+  /**
+   * Brings the lines up to `state`: a line that came in is added and the ones
+   * the history dropped are taken off the top; anything else (another room,
+   * a mute, the box opening or folding) draws every line afresh.
+   */
+  private renderLines(state: ChatState): void {
+    const drawn = this.drawn;
+    this.drawn = { entries: state.entries, muted: state.muted, channel: state.channel, open: this.open };
+    if (
+      drawn &&
+      drawn.muted === state.muted &&
+      drawn.channel === state.channel &&
+      drawn.open === this.open
+    ) {
+      if (drawn.entries === state.entries) return;
+      const kept = keptOf(drawn.entries, state.entries);
+      if (kept !== null) {
+        const dropped = drawn.entries.slice(0, drawn.entries.length - kept);
+        for (let gone = visibleEntries({ ...state, entries: dropped }).length; gone > 0; gone -= 1) {
+          this.lines.firstElementChild?.remove();
+        }
+        const added = visibleEntries({ ...state, entries: state.entries.slice(kept) });
+        this.lines.append(...added.map((entry) => this.entry(entry)));
+        return;
+      }
+    }
+    this.lines.replaceChildren(...visibleEntries(state).map((entry) => this.entry(entry)));
   }
 
   private entry(entry: ChatEntry): HTMLLIElement {
