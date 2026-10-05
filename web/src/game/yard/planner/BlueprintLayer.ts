@@ -19,8 +19,8 @@ import {
   rectContains,
   rectCorners,
   stackBoxes,
-  TILE_COLOURS,
   tileCategory,
+  tileColours,
   tileLabel,
   tileRect,
   tileShowsIcon,
@@ -209,6 +209,17 @@ export class BlueprintLayer {
    * like the plan had been lost.
    */
   private planned: ReadonlyMap<number, number> | null = null;
+  /**
+   * Where the renderer has put buildings, and which it has hidden, by id.
+   *
+   * Held for the same reason as {@link planned}, and for one more: the tiles
+   * are built on the first switch to this view, and the planner can store,
+   * clear or move half the yard before that. Without these the first build
+   * drew the save as it was, so a cleared yard showed every building both in
+   * the drawer and on the plot.
+   */
+  private readonly moved = new Map<number, { x: number; y: number }>();
+  private readonly hiddenIds = new Set<number>();
 
   /**
    * @param textures The yard's texture cache, shared rather than duplicated:
@@ -229,6 +240,9 @@ export class BlueprintLayer {
   show(yard: Yard): void {
     this.yard = yard;
     this.built = false;
+    // A new yard starts drawn as saved, as the isometric sprites do.
+    this.moved.clear();
+    this.hiddenIds.clear();
     this.clearTiles();
   }
 
@@ -294,6 +308,7 @@ export class BlueprintLayer {
 
   /** Draws a building's tile at a yard position. */
   place(id: number, x: number, y: number): void {
+    this.moved.set(id, { x, y });
     const tile = this.byId.get(id);
     if (!tile || (tile.x === x && tile.y === y)) return;
     tile.x = x;
@@ -304,10 +319,12 @@ export class BlueprintLayer {
 
   /** Puts every tile back where the save had its building, and shows them all. */
   reset(): void {
+    this.hiddenIds.clear();
     for (const tile of this.byId.values()) {
       tile.root.visible = true;
       this.place(tile.building.id, tile.building.x, tile.building.y);
     }
+    this.moved.clear();
   }
 
   /**
@@ -317,6 +334,8 @@ export class BlueprintLayer {
    * drawing of the plot and nothing else — simply does not draw it.
    */
   setHidden(id: number, hidden: boolean): void {
+    if (hidden) this.hiddenIds.add(id);
+    else this.hiddenIds.delete(id);
     const tile = this.byId.get(id);
     if (tile) tile.root.visible = !hidden;
   }
@@ -366,6 +385,9 @@ export class BlueprintLayer {
     this.drawObstacles(yard);
     this.clearTiles();
     for (const building of yard.buildings) this.addTile(building);
+    // Catch up with whatever the renderer said before there were tiles.
+    for (const [id, at] of this.moved) this.place(id, at.x, at.y);
+    for (const id of this.hiddenIds) this.setHidden(id, true);
   }
 
   private drawGround(yard: Yard): void {
@@ -419,8 +441,9 @@ export class BlueprintLayer {
 
   private addTile(building: YardBuilding): void {
     const [width, height] = building.footprint;
-    const category = tileCategory(building.type, isDecoration(building.type));
-    const colours = TILE_COLOURS[category];
+    const decoration = isDecoration(building.type);
+    const category = tileCategory(building.type, decoration);
+    const colours = tileColours(building.type, decoration);
 
     const root = new Container();
     const world = blueprintToWorld(building.x, building.y);

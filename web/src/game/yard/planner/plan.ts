@@ -714,7 +714,7 @@ export class Plan {
     return FREE;
   }
 
-  /** Puts a building at an absolute position. Used by the load path. */
+  /** Puts a building at an absolute position. */
   setPosition(id: number, x: number, y: number): void {
     const node = this.nodes.get(id);
     if (!node || node.fixed) return;

@@ -1,6 +1,6 @@
 import type { Layout } from "@/api/types";
 import { MAX_LAYOUT_NAME_LENGTH } from "@/api/yardplanner";
-import { layoutDate } from "@/game/yard/planner/layout";
+import { layoutMeta } from "@/game/yard/planner/layout";
 import { Panel } from "@/ui/Panel";
 
 /**
@@ -119,9 +119,7 @@ export class LayoutsPanel {
 
     const meta = document.createElement("span");
     meta.className = "planner-layouts__meta u-muted";
-    meta.textContent = layout
-      ? `${layout.nodes.length} buildings · expansion ${layout.expansion} · ${layoutDate(layout.updatedAt)}`
-      : "Empty";
+    meta.textContent = layout ? layoutMeta(layout) : "Empty";
 
     const save = action("Save", () => {
       const typed = name.value.trim() || `Slot ${slot + 1}`;

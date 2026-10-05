@@ -400,3 +400,60 @@ describe("basevalue (#209)", () => {
     expect(outpostSave.basevalue).toBeUndefined();
   });
 });
+
+describe("a half-finished layout (owner decision 2026-10-05)", () => {
+  const HALL_NODE = { id: 0, t: 14, x: 0, y: 0 };
+  const half = (stored: Row[]) =>
+    JSON.stringify({ version: 2, expansion: 0, nodes: [HALL_NODE], stored });
+
+  beforeEach(() => {
+    mainSave.buildingdata = {
+      "0": { id: 0, t: 14, X: 0, Y: 0, l: 10 },
+      "5": { id: 5, t: 20, X: 300, Y: 300, l: 1 },
+    };
+  });
+
+  test("saves with a building still in the drawer, and keeps it in the slot", async () => {
+    const answer = await run(saveLayout, { name: "Half", data: half([{ id: 5, t: 20 }]) }, { slot: "3" });
+    expect(answer.status).toBe(200);
+    expect((answer.body.layout as Row).stored).toEqual([{ id: 5, t: 20 }]);
+
+    const { readLayouts } = await import("../../services/yardplanner/layoutStorage.js");
+    const [saved] = readLayouts(mainSave.savetemplate as unknown[]);
+    expect(saved?.slot).toBe(3);
+    expect(saved?.nodes).toEqual([HALL_NODE]);
+    expect(saved?.stored).toEqual([{ id: 5, t: 20 }]);
+  });
+
+  test("an empty drawer writes no `stored` field", async () => {
+    const answer = await run(saveLayout, { name: "Full", data: half([]) }, { slot: "0" });
+    expect(answer.status).toBe(200);
+    expect("stored" in (answer.body.layout as Row)).toBe(false);
+  });
+
+  test("a stored building the yard does not have is refused", async () => {
+    const answer = await run(saveLayout, { name: "Half", data: half([{ id: 77, t: 20 }]) }, { slot: "0" });
+    expect(answer.status).toBe(400);
+    expect(answer.body.unknown).toEqual([77]);
+    expect(mainSave.savetemplate).toEqual({});
+  });
+
+  test("a stored building of the wrong type is refused", async () => {
+    const answer = await run(saveLayout, { name: "Half", data: half([{ id: 5, t: 21 }]) }, { slot: "0" });
+    expect(answer.status).toBe(400);
+    expect(answer.body.mismatched).toEqual([5]);
+  });
+
+  test("a building both on the plot and in the drawer is refused", async () => {
+    const answer = await run(saveLayout, { name: "Half", data: half([{ id: 0, t: 14 }]) }, { slot: "0" });
+    expect(answer.status).toBe(400);
+    expect(answer.body.duplicated).toEqual([0]);
+  });
+
+  test("Apply still refuses a layout with a building in the drawer", async () => {
+    const answer = await run(applyLayout, { data: half([{ id: 5, t: 20 }]) });
+    expect(answer.status).toBe(409);
+    expect(answer.body.unplaced).toEqual([5]);
+    expect((mainSave.buildingdata as Record<string, Row>)["5"]?.X).toBe(300);
+  });
+});

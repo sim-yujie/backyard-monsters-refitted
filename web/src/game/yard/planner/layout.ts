@@ -1,7 +1,7 @@
-import type { Layout, LayoutNode, LayoutPayload } from "@/api/types";
+import type { Layout, LayoutNode, LayoutPayload, LayoutStoredNode } from "@/api/types";
 import { LAYOUT_VERSION } from "@/api/types";
 import { maxLevel } from "../buildingCosts";
-import type { MoveEntry, PlanEntry } from "./commands";
+import type { MoveEntry, PlanEntry, StoreEntry } from "./commands";
 import { plannableType, type Plan } from "./plan";
 import { inBounds, Occupancy, snap, type PlanNode } from "./placement";
 
@@ -23,15 +23,28 @@ import { inBounds, Occupancy, snap, type PlanNode } from "./placement";
  * where it was can collide with one the layout puts on the same cells, so the
  * planner never guesses). What does not fit is reported and left where it
  * stands, Apply stays blocked on it, and the player decides.
+ *
+ * ## Half-finished plans
+ *
+ * A layout may be saved with buildings still in the drawer (owner decision
+ * 2026-10-05, reversing Q14 (c)). Those go in `stored`, by id and type, and
+ * loading the layout puts them back in the drawer. Apply is unchanged: it
+ * stays blocked until the drawer holds nothing but decorations.
  */
 
 /**
  * The `data` field for a save or an apply. A decoration put down out of
  * storage is no building yet, so it goes in `fromStorage` rather than
- * `nodes` (#128); a slot save drops those.
+ * `nodes` (#128); a slot save drops those. Buildings in the drawer go in
+ * `stored` — save only, Apply ignores it — except the drawer's stacks out
+ * of storage, which are no buildings either.
  */
 export const payloadFor = (plan: Plan): LayoutPayload => {
   const fromStorage = plan.fromStorageNodes().map((node) => ({ t: node.type, x: node.x, y: node.y }));
+  const stored: LayoutStoredNode[] = plan
+    .storedNodes()
+    .filter((node) => !node.fromStorage && !node.fixed)
+    .map((node) => ({ id: node.id, t: node.type }));
   return {
     version: LAYOUT_VERSION,
     expansion: plan.expansion,
@@ -40,6 +53,7 @@ export const payloadFor = (plan: Plan): LayoutPayload => {
       .filter((node) => !node.fromStorage)
       .map(toLayoutNode),
     ...(fromStorage.length > 0 ? { fromStorage } : {}),
+    ...(stored.length > 0 ? { stored } : {}),
   };
 };
 
@@ -93,6 +107,10 @@ export interface LoadMissing {
 export interface LoadResult {
   /** Before-and-after positions, so a load is one entry on the undo stack. */
   readonly entries: MoveEntry[];
+  /** Buildings on the plot that the layout keeps in the drawer: lifted first. */
+  readonly lifts: StoreEntry[];
+  /** Buildings in the drawer that the layout puts on the plot: put down last. */
+  readonly places: StoreEntry[];
   /** Planned upgrades the layout carried and this yard can still do. */
   readonly plans: PlanEntry[];
   /**
@@ -123,6 +141,16 @@ export interface LoadResult {
  * claim the same cells and the first one named wins — the same first-come rule
  * the original's placement loop used.
  *
+ * ## The drawer
+ *
+ * A building the layout keeps in the drawer is lifted ({@link LoadResult.lifts})
+ * and is no obstacle. A saved node whose building is in the drawer now is put
+ * down ({@link LoadResult.places}) where it fits and stays in the drawer where
+ * it does not. The caller applies lifts, then moves, then places, so each
+ * lands on cells the step before has cleared. A stored entry whose building
+ * the yard no longer has is dropped quietly: it stood nowhere, so there is no
+ * spot to report.
+ *
  * ## Plans are set, never cleared
  *
  * A saved node carrying a `plan` this yard can still do sets one; a saved node
@@ -137,6 +165,13 @@ export const planLoad = (plan: Plan, layout: Layout): LoadResult => {
   for (const node of layout.nodes) {
     if (plan.get(node.id)) named.add(node.id);
   }
+  const lifts: StoreEntry[] = [];
+  for (const saved of layout.stored ?? []) {
+    const node = plan.get(saved.id);
+    if (!node || node.fixed) continue;
+    named.add(node.id);
+    if (!node.stored) lifts.push({ id: node.id, x: node.x, y: node.y, store: true });
+  }
 
   const grid = new Occupancy();
   for (const node of plan.all()) {
@@ -144,6 +179,7 @@ export const planLoad = (plan: Plan, layout: Layout): LoadResult => {
   }
 
   const entries: MoveEntry[] = [];
+  const places: StoreEntry[] = [];
   const plans: PlanEntry[] = [];
   const didNotFit: LoadMiss[] = [];
   const missing: LoadMissing[] = [];
@@ -185,24 +221,50 @@ export const planLoad = (plan: Plan, layout: Layout): LoadResult => {
       }
     }
 
+    // One that does not fit stays where it is: on its cells, or in the drawer.
     if (!inBounds(node, x, y, plan.plot)) {
       didNotFit.push({ id: node.id, type: node.type, reason: MissReason.BOUNDS });
-      grid.stamp(node);
+      if (!node.stored) grid.stamp(node);
       continue;
     }
     if (grid.blockedBy(node, x, y) !== null) {
       didNotFit.push({ id: node.id, type: node.type, reason: MissReason.BLOCKED });
-      grid.stamp(node);
+      if (!node.stored) grid.stamp(node);
       continue;
     }
 
     grid.stamp(node, x, y);
-    if (node.x !== x || node.y !== y) {
+    if (node.stored) {
+      places.push({ id: node.id, x, y, store: false });
+    } else if (node.x !== x || node.y !== y) {
       entries.push({ id: node.id, fromX: node.x, fromY: node.y, toX: x, toY: y });
     }
   }
 
-  return { entries, plans, plansDropped, didNotFit, missing, expansion: layout.expansion };
+  return {
+    entries,
+    lifts,
+    places,
+    plans,
+    plansDropped,
+    didNotFit,
+    missing,
+    expansion: layout.expansion,
+  };
+};
+
+/**
+ * A slot's line in the layouts list: how many buildings it places, how many it
+ * keeps in the drawer when there are any, the plot it was drawn for and when.
+ */
+export const layoutMeta = (layout: Layout): string => {
+  const stored = layout.stored?.length ?? 0;
+  return [
+    `${layout.nodes.length} buildings`,
+    ...(stored > 0 ? [`${stored} in storage`] : []),
+    `expansion ${layout.expansion}`,
+    layoutDate(layout.updatedAt),
+  ].join(" · ");
 };
 
 /**

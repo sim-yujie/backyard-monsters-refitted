@@ -59,6 +59,8 @@ interface PreviewState {
   readonly x: number;
   readonly y: number;
   readonly plan: PlanNode["plan"];
+  /** In the drawer: a half-finished layout can lift buildings off or put them down. */
+  readonly stored: boolean;
 }
 
 /** Why a group operation did nothing, or null when it did something. */
@@ -827,32 +829,38 @@ export class PlannerSession {
 
     if (options.preview || this.readOnly) {
       this.preview = new Map();
-      for (const node of this.plan.buildings()) {
-        this.preview.set(node.id, { x: node.x, y: node.y, plan: node.plan });
+      for (const node of this.plan.index().values()) {
+        if (node.fixed) continue;
+        this.preview.set(node.id, { x: node.x, y: node.y, plan: node.plan, stored: node.stored });
       }
+      // Lifts, then moves, then places: each lands on cells the step before cleared.
+      this.plan.setStored(result.lifts, false);
       this.plan.move(result.entries, false);
+      this.plan.setStored(result.places, false);
       this.plan.setPlans(result.plans, false);
     } else {
-      // One command for both halves of a load: the positions and the upgrades
-      // the layout was saved with are one gesture and have to be one undo.
+      // One command for every part of a load: the drawer, the positions and
+      // the upgrades the layout was saved with are one gesture and have to be
+      // one undo. Reverted backwards, so the drawer refills before the moves
+      // are undone and empties after.
       const label = `Load “${layout.name}”`;
-      const move = moveCommand(
-        result.entries,
-        (batch, reverse) => this.plan.move(batch, reverse),
-        label,
-      );
-      this.stack.push(
-        result.plans.length === 0
-          ? move
-          : compositeCommand(label, [
-              move,
+      const setStored = (batch: readonly StoreEntry[], reverse: boolean) =>
+        this.plan.setStored(batch, reverse);
+      const parts = [
+        ...(result.lifts.length > 0 ? [storeCommand(result.lifts, setStored, label)] : []),
+        moveCommand(result.entries, (batch, reverse) => this.plan.move(batch, reverse), label),
+        ...(result.places.length > 0 ? [storeCommand(result.places, setStored, label)] : []),
+        ...(result.plans.length > 0
+          ? [
               planCommand(
                 result.plans,
                 (batch, reverse) => this.plan.setPlans(batch, reverse),
                 label,
               ),
-            ]),
-      );
+            ]
+          : []),
+      ];
+      this.stack.push(parts.length === 1 ? parts[0]! : compositeCommand(label, parts));
       this.slot = layout.slot;
       this.slotName = layout.name;
     }
@@ -867,10 +875,24 @@ export class PlannerSession {
     if (!preview) return;
     this.preview = null;
     const plans: PlanEntry[] = [];
+    const lifts: StoreEntry[] = [];
+    const moves: MoveEntry[] = [];
+    const places: StoreEntry[] = [];
     for (const [id, was] of preview) {
-      this.plan.setPosition(id, was.x, was.y);
       plans.push({ id, before: was.plan, after: was.plan });
+      const node = this.plan.get(id);
+      if (!node) continue;
+      if (was.stored && !node.stored) lifts.push({ id, x: node.x, y: node.y, store: true });
+      else if (!was.stored && node.stored) places.push({ id, x: was.x, y: was.y, store: false });
+      else if (!node.stored && (node.x !== was.x || node.y !== was.y)) {
+        moves.push({ id, fromX: node.x, fromY: node.y, toX: was.x, toY: was.y });
+      }
     }
+    // The load's three steps undone in reverse order, each as one batch, so
+    // no building is stamped onto cells another has not left yet.
+    this.plan.setStored(lifts, false);
+    this.plan.move(moves, false);
+    this.plan.setStored(places, false);
     // `before` and `after` are the same value here: the preview is being
     // rolled back, so both directions of the stack want what was there first.
     this.plan.setPlans(plans, true);

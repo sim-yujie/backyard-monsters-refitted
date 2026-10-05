@@ -55,6 +55,8 @@ import { debitOf } from "./upgradeWalls.js";
  *   blocked while any is unplaced, with no auto-place
  *   (`docs/design/yard-planner-redesign.md` §8, decision Q4), because a
  *   building left where it was can collide with one the layout moves onto it.
+ *   A slot may hold a half-finished plan with buildings in the drawer
+ *   (`stored`); Apply ignores that list, so those buildings count as unplaced.
  *
  * Buildings under construction, upgrading or fortifying may be moved, matching
  * the original, which never looked at build state before calling `moveTo`. Of

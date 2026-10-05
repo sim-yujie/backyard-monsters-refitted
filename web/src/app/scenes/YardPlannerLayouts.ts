@@ -132,36 +132,14 @@ export class YardPlannerLayouts {
   }
 
   /**
-   * Whether the plan can be written to a slot at all.
+   * Writes the plan to a slot, drawer and all.
    *
-   * A layout is a list of placed buildings and has no room for a stored one:
-   * the payload the client sends is `plan.buildings()`, and the server's
-   * schema has no field that would say "this one is in the drawer"
-   * (`server/src/schemas/YardPlannerSchemas.ts`, `LayoutNodeSchema`). Saving
-   * anyway would quietly drop the drawer, and loading that slot later would
-   * leave those buildings wherever they happened to be.
-   *
-   * So the save is refused rather than the format extended. The alternative —
-   * a `stored` flag on a layout node, taught to the schema, the validator and
-   * Apply — is a server change for a layout that could never be applied
-   * anyway: Apply is hard-blocked while anything is in the drawer (§8, Q4).
-   *
-   * Decorations do not count (#128): Apply puts one left out into storage, so
-   * a layout without it is one Apply can run, and a decoration still in
-   * storage was never in the yard at all.
+   * A half-finished plan saves as it stands (owner decision 2026-10-05,
+   * reversing Q14 (c)): buildings still in the drawer go in the layout's
+   * `stored` list and loading the slot puts them back there. Apply is not
+   * affected — it stays blocked while the drawer holds a building (§8, Q4).
    */
-  private refuseWhileStored(): boolean {
-    const stored = this.options.session.state().unplacedCount;
-    if (stored === 0) return false;
-    this.options.notify(
-      `Place the ${stored} stored ${stored === 1 ? "building" : "buildings"} before saving: a layout cannot hold them.`,
-      "error",
-    );
-    return true;
-  }
-
   private async save(slot: number, name: string): Promise<void> {
-    if (this.refuseWhileStored()) return;
     this.panel?.setBusy(true);
     try {
       const layout = await saveLayout(
@@ -171,7 +149,13 @@ export class YardPlannerLayouts {
         this.options.baseid,
       );
       this.options.session.markSaved(layout.slot, layout.name);
-      this.options.notify(`Saved to slot ${layout.slot + 1}.`, "info");
+      const stored = this.options.session.state().unplacedCount;
+      this.options.notify(
+        stored === 0
+          ? `Saved to slot ${layout.slot + 1}.`
+          : `Saved to slot ${layout.slot + 1}, with ${stored} ${stored === 1 ? "building" : "buildings"} still in storage.`,
+        "info",
+      );
     } catch (caught) {
       this.options.notify(describe(caught, "Could not save the layout."), "error");
     } finally {

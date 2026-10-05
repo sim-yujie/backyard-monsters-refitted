@@ -90,6 +90,22 @@ export const StoragePlacementSchema = z.object({
 
 export type StoragePlacement = z.infer<typeof StoragePlacementSchema>;
 
+/**
+ * A building the layout keeps in the planner's drawer: a half-finished plan
+ * (owner decision 2026-10-05, reversing Q14 (c) of the redesign's §8). It has
+ * no position, because it is not on the plot. Loading the layout puts it back
+ * in the drawer. Apply never reads these: it is blocked while the drawer holds
+ * anything but decorations, and refuses a layout that leaves a building out.
+ */
+export const StoredNodeSchema = z.object({
+  /** Building id, matching a key in the caller's `buildingdata`. */
+  id: z.number().int(),
+  /** Building type id. */
+  t: z.number().int().nonnegative(),
+});
+
+export type StoredNode = z.infer<typeof StoredNodeSchema>;
+
 /** The `data` payload of a PUT or an apply, once the JSON string is parsed. */
 export const LayoutPayloadSchema = z.object({
   version: z.literal(LAYOUT_VERSION),
@@ -98,6 +114,8 @@ export const LayoutPayloadSchema = z.object({
   nodes: z.array(LayoutNodeSchema).max(LAYOUT_NODE_MAX),
   /** Decorations out of storage, Apply only (#128). */
   fromStorage: z.array(StoragePlacementSchema).max(LAYOUT_NODE_MAX).optional(),
+  /** Buildings in the drawer, slot saves only. Absent when the drawer is empty. */
+  stored: z.array(StoredNodeSchema).max(LAYOUT_NODE_MAX).optional(),
 });
 
 export type LayoutPayload = z.infer<typeof LayoutPayloadSchema>;

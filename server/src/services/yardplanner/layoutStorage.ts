@@ -4,6 +4,7 @@ import {
   LAYOUT_VERSION,
   type Layout,
   type LayoutNode,
+  type StoredNode,
 } from "../../schemas/YardPlannerSchemas.js";
 
 /**
@@ -97,6 +98,9 @@ const toLayout = (entry: unknown): Layout | null => {
       expansion: asInt(row.expansion) ?? 0,
       updatedAt: asInt(row.updatedAt) ?? 0,
       nodes: row.nodes as LayoutNode[],
+      ...(Array.isArray(row.stored) && row.stored.length > 0
+        ? { stored: row.stored as StoredNode[] }
+        : {}),
     };
   }
 
@@ -162,7 +166,8 @@ export const makeLayout = (
   slot: number,
   name: string,
   expansion: number,
-  nodes: LayoutNode[]
+  nodes: LayoutNode[],
+  stored: StoredNode[] = []
 ): Layout => ({
   slot,
   name,
@@ -170,6 +175,8 @@ export const makeLayout = (
   expansion,
   updatedAt: getCurrentDateTime(),
   nodes,
+  // Only when there is one, like `plan` on a node: most layouts have none.
+  ...(stored.length > 0 ? { stored } : {}),
 });
 
 /**

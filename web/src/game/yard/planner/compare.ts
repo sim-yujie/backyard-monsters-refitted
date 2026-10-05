@@ -105,8 +105,9 @@ export const sideStats = (
 
 /**
  * The yard's buildings a slot gives no spot: what Load would leave where it
- * stands and what a slot-only Apply is blocked on. Decorations and mushrooms
- * do not count, as neither blocks Apply.
+ * stands or in the drawer (a half-finished slot's `stored`), and what a
+ * slot-only Apply is blocked on. Decorations and mushrooms do not count, as
+ * neither blocks Apply.
  */
 export const slotUnplaced = (yard: Yard, layout: Layout): number => {
   const named = new Set(layout.nodes.map((node) => node.id));

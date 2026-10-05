@@ -145,6 +145,26 @@ export const TILE_COLOURS: Readonly<Record<TileCategory, { fill: number; edge: n
   misc: { fill: 0x7d8a99, edge: 0x4a5561 },
 };
 
+/** Heavy Trap: the one building drawn in a colour of its own rather than its category's. */
+export const HEAVY_TRAP_TYPE = 117;
+
+/**
+ * Colours for a type that its category's would not tell apart.
+ *
+ * The Booby Trap (24) and the Heavy Trap (117) are both 20-unit trap tiles
+ * with no icon and a level number for a label, so in the category amber they
+ * were the same square (owner review 2026-10-05). The Booby Trap keeps the
+ * amber; the Heavy Trap is magenta, a hue no category uses: well clear of the
+ * defensive red-salmon, and far more saturated than the decoration lavender.
+ */
+const TYPE_COLOURS: ReadonlyMap<number, { fill: number; edge: number }> = new Map([
+  [HEAVY_TRAP_TYPE, { fill: 0xd2409e, edge: 0x7d1f5c }],
+]);
+
+/** Fill and edge colours for one building's tile. */
+export const tileColours = (type: number, decoration: boolean): { fill: number; edge: number } =>
+  (decoration ? undefined : TYPE_COLOURS.get(type)) ?? TILE_COLOURS[tileCategory(type, decoration)];
+
 /** Fixed obstacles the planner cannot move: mushrooms. */
 export const OBSTACLE_COLOURS = { fill: 0x8a6a4a, edge: 0x5a4330 } as const;
 
