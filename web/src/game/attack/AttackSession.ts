@@ -21,6 +21,7 @@ import {
   toCombatYard,
   type BrainWeights,
   type BuildingClass,
+  type AttackEvent,
   type Battle,
   type BattleState,
   type BombDrop,
@@ -225,6 +226,13 @@ export interface AttackSessionOptions {
    * A real attack's clock runs from the scene's `start()`.
    */
   readonly clockFromFirstDrop?: boolean;
+  /**
+   * A wild monster raid on the player's own yard (issue #226 WP4): the
+   * battle is fought as the server fought it (`raidFight.ts`), a raid with
+   * this hit limit, a main yard, raiders at level 1 and no countdown, and
+   * played back from the server's waves (`playScript`).
+   */
+  readonly raid?: { readonly hitLimit: number };
 }
 
 /** A random 32-bit seed for a battle the server has not seeded (§7, Q1). */
@@ -331,16 +339,18 @@ export class AttackSession {
    * the events still to apply, each at its own tick, and the tick the server
    * ran the battle to. Null for a battle the player fights.
    */
-  private script: FlingEvent[] | null = null;
+  private script: AttackEvent[] | null = null;
   private scriptEnd = 0;
   private readonly listeners = new Set<AttackSessionListener>();
   /** The last quarter-second the listeners heard about, to rate-limit `advance`. */
   private lastNotifiedQuarter = -1;
   private readonly playerLevel: number | undefined;
   private readonly clockFromFirstDrop: boolean;
+  private readonly raid: { readonly hitLimit: number } | null;
 
   constructor(options: AttackSessionOptions) {
     this.target = options.target;
+    this.raid = options.raid ?? null;
     this.seed = options.seed ?? mintSeed();
     this.playerLevel = options.playerLevel;
     this.clockFromFirstDrop = options.clockFromFirstDrop ?? false;
@@ -369,7 +379,8 @@ export class AttackSession {
       ? DECLARE_WAR_COUNTDOWN_SECONDS
       : ATTACK_COUNTDOWN_SECONDS;
 
-    const kind = combatKind(this.target);
+    // A raid is fought on the player's own yard as a main yard (#226).
+    const kind = this.raid ? "main" : combatKind(this.target);
     const buildingdata = response.buildingdata ?? {};
     const yard = buildEngineYard({
       buildingdata,
@@ -384,13 +395,22 @@ export class AttackSession {
       buildinghealthdata: response.buildinghealthdata ?? null,
     });
     const playerLevel = this.playerLevel ?? servedLevel(response.attackerlevel);
+    const defence = battleDefence(parseDefenderForces(response.defenderforces));
+    // The raid as `raidFight.ts` fights it: its seed, its hit limit, the
+    // player's defence, and nothing of an attacker's.
+    if (this.raid) {
+      this.battle_ = createBattle(yard, { seed: this.seed, ...defence, raid: { hitLimit: this.raid.hitLimit } });
+      this.phase = "loaded";
+      this.notify();
+      return;
+    }
     this.battle_ = createBattle(yard, {
       seed: this.seed,
       levels: this.target.roster.levels,
       declareWar: this.declareWar_,
       ...(playerLevel === undefined ? {} : { playerLevel }),
       // The defence the server replays the battle against (issue #195).
-      ...battleDefence(parseDefenderForces(response.defenderforces)),
+      ...defence,
     });
     this.phase = "loaded";
     this.notify();
@@ -495,12 +515,17 @@ export class AttackSession {
    * @param events - The fought log's events, in its order.
    * @param endTick - The tick the server ran the battle to.
    */
-  playScript(events: readonly FlingEvent[], endTick: number): void {
+  playScript(events: readonly AttackEvent[], endTick: number): void {
     this.script = events
       .map((event, at) => ({ event, at }))
       .sort((one, other) => one.event.t - other.event.t || one.at - other.at)
       .map(({ event }) => event);
     this.scriptEnd = Math.max(0, Math.floor(endTick));
+  }
+
+  /** Whether this session plays a wild monster raid on the player's own yard (#226). */
+  get raiding(): boolean {
+    return this.raid !== null;
   }
 
   /** Whether this session plays a battle back rather than fighting one. */
@@ -516,8 +541,17 @@ export class AttackSession {
       const event = script.shift()!;
       battle.runTo(Math.max(0, Math.floor(event.t)));
       battle.apply(event);
-      this.events.push(event);
       this.acted = true;
+      // A raid's wave is the server's, never the player's: it stays out of the fling log.
+      if (event.kind === "raid") {
+        for (const [id, count] of Object.entries(event.monsters)) {
+          if (count > 0) this.flung[id] = (this.flung[id] ?? 0) + count;
+        }
+        this.checkEnd(battle);
+        if (this.phase !== "running") return;
+        continue;
+      }
+      this.events.push(event);
       if (event.kind === "retreat") {
         this.end("retreat");
         return;
@@ -884,6 +918,14 @@ export class AttackSession {
 
     if (!this.acted) {
       if (battleState.over) this.end("expired");
+      return;
+    }
+    // A raid plays on to where the server's fight ended: no Town Hall or
+    // empty yard ends it early, as none ended the server's (#226).
+    if (this.raid) {
+      if (battleState.over || ((this.script?.length ?? 0) === 0 && battleState.tick >= this.scriptEnd)) {
+        this.end("expired");
+      }
       return;
     }
 

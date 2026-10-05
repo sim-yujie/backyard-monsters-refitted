@@ -3,6 +3,12 @@ import { Panel, type PanelOptions } from "./Panel";
 export interface PopupOptions extends PanelOptions {
   /** Close when the scrim behind the popup is clicked. Defaults to true. */
   closeOnBackdrop?: boolean;
+  /**
+   * Whether Escape and the scrim may close it. Defaults to true; false for a
+   * question that must be answered (the raid alert, #226), which then has no
+   * close button either unless `closable` says so.
+   */
+  dismissable?: boolean;
 }
 
 /** Elements that can hold keyboard focus, in document order. */
@@ -32,7 +38,7 @@ const onPageEscape = (event: KeyboardEvent): void => {
   if (!newest) return;
   if (event.target !== document.body && event.target !== document.documentElement) return;
   event.stopPropagation();
-  newest.close();
+  if (newest.dismissable) newest.close();
 };
 
 /**
@@ -45,13 +51,17 @@ const onPageEscape = (event: KeyboardEvent): void => {
  */
 export class Popup extends Panel {
   readonly backdrop: HTMLElement;
+  /** Whether Escape and the scrim may close it (`PopupOptions.dismissable`). */
+  readonly dismissable: boolean;
 
   /** Focus is returned here on close, so the keyboard does not jump to the top. */
   private previouslyFocused: HTMLElement | null = null;
   private dismissed = false;
 
   constructor(options: PopupOptions) {
-    super({ ...options, closeOnEscape: false });
+    const dismissable = options.dismissable ?? true;
+    super({ ...options, closeOnEscape: false, ...(dismissable ? {} : { closable: options.closable ?? false }) });
+    this.dismissable = dismissable;
 
     this.backdrop = document.createElement("div");
     this.backdrop.className = "popup-backdrop";
@@ -60,7 +70,7 @@ export class Popup extends Panel {
     this.element.setAttribute("role", "dialog");
     this.element.setAttribute("aria-modal", "true");
 
-    if (options.closeOnBackdrop ?? true) {
+    if (dismissable && (options.closeOnBackdrop ?? true)) {
       this.backdrop.addEventListener("pointerdown", (event) => {
         if (event.target === this.backdrop) this.close();
       });
@@ -123,7 +133,7 @@ export class Popup extends Panel {
   private readonly handleModalKeydown = (event: KeyboardEvent): void => {
     if (event.key === "Escape") {
       event.stopPropagation();
-      this.close();
+      if (this.dismissable) this.close();
       return;
     }
 

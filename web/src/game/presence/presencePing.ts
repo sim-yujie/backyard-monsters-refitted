@@ -1,5 +1,5 @@
 import { getAuthToken } from "@/api/http";
-import { sendPresence } from "@/api/presence";
+import { ELSEWHERE, sendPresence, type PresenceScreen } from "@/api/presence";
 
 /**
  * Keeping the player "online" while they sit in the game (bot neighbours WP9,
@@ -24,14 +24,21 @@ import { sendPresence } from "@/api/presence";
  *
  * Its answer (#275) carries the server's clock, the last real action and an
  * attack on the main yard; whoever needs them listens with `onAnswer`.
+ *
+ * Every ping says where the player is (#226, {@link PresenceScreen}): the own
+ * main yard says so, and whether its Yard Planner is open, through
+ * `setScreen`; every other screen leaves it at "elsewhere". Coming onto the
+ * yard with the Planner closed pings at once, so a raid that is due, or one
+ * whose warning ran out while the player was away, shows without waiting for
+ * the next ping.
  */
 
 /** How often the ping goes while the tab is visible. */
 export const PRESENCE_INTERVAL_MS = 30_000;
 
 export interface PresencePingOptions {
-  /** Sends one ping; a failure is ignored, and the next goes on time. */
-  readonly ping: () => Promise<unknown>;
+  /** Sends one ping saying where the player is; a failure is ignored, and the next goes on time. */
+  readonly ping: (screen: PresenceScreen) => Promise<unknown>;
   /** Whether anyone is signed in; nothing is sent while not. */
   readonly signedIn: () => boolean;
   /** Milliseconds, for the tests; `Date.now` by default. */
@@ -39,7 +46,7 @@ export interface PresencePingOptions {
 }
 
 export class PresencePing {
-  private readonly ping: () => Promise<unknown>;
+  private readonly ping: (screen: PresenceScreen) => Promise<unknown>;
   private readonly signedIn: () => boolean;
   private readonly now: () => number;
   private readonly listeners = new Set<(answer: unknown) => void>();
@@ -47,6 +54,7 @@ export class PresencePing {
   private timer: ReturnType<typeof setTimeout> | null = null;
   /** When the last ping went, or never. */
   private lastPing = Number.NEGATIVE_INFINITY;
+  private screen_: PresenceScreen = ELSEWHERE;
 
   constructor(options: PresencePingOptions) {
     this.ping = options.ping;
@@ -71,6 +79,23 @@ export class PresencePing {
     if (!this.signedIn()) return;
     this.send();
     if (this.holders > 0) this.schedule();
+  }
+
+  /** Where the pings say the player is. */
+  get screen(): PresenceScreen {
+    return this.screen_;
+  }
+
+  /**
+   * Says where the player is from the next ping on (#226). Arriving on the
+   * yard with the Planner closed pings at once, while some screen holds the
+   * ping; any other change waits for the next one.
+   */
+  setScreen(screen: PresenceScreen): void {
+    const before = this.screen_;
+    if (before.where === screen.where && before.planner === screen.planner) return;
+    this.screen_ = { where: screen.where, planner: screen.planner };
+    if (this.holders > 0 && screen.where === "yard" && !screen.planner) this.pingNow();
   }
 
   /** Whether some screen holds the ping. */
@@ -119,7 +144,7 @@ export class PresencePing {
 
   private send(): void {
     this.lastPing = this.now();
-    this.ping().then(
+    this.ping(this.screen_).then(
       (answer) => {
         for (const listener of [...this.listeners]) listener(answer);
       },
@@ -135,6 +160,6 @@ export class PresencePing {
 
 /** The game's one presence ping. */
 export const presence = new PresencePing({
-  ping: sendPresence,
+  ping: (screen) => sendPresence(screen),
   signedIn: () => getAuthToken() !== null,
 });

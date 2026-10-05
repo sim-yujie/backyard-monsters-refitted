@@ -72,4 +72,22 @@ describe("Popup Escape", () => {
     expect(titles()).toEqual(["Open"]);
     field.remove();
   });
+
+  it("leaves a popup that must be answered open: no Escape, no scrim, no close button (#226)", () => {
+    host = document.body.appendChild(document.createElement("div"));
+    const onClose = vi.fn();
+    const popup = new Popup({ title: "Alert", onClose, dismissable: false });
+    const answer = document.createElement("button");
+    answer.textContent = "Answer";
+    popup.setContent(answer);
+    popup.mount(host);
+    expect(popup.titlebar.querySelector("button")).toBeNull();
+    escape(answer);
+    escape(document.body);
+    popup.backdrop.dispatchEvent(new Event("pointerdown"));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(titles()).toEqual(["Alert"]);
+    popup.close();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
 });

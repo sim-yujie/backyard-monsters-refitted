@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { PresenceScreen } from "@/api/presence";
 import { PRESENCE_INTERVAL_MS, PresencePing } from "./presencePing";
 
 /**
@@ -180,5 +181,61 @@ describe("PresencePing", () => {
     setVisibility("visible");
     vi.advanceTimersByTime(PRESENCE_INTERVAL_MS);
     expect(pings).toBe(0);
+  });
+
+  describe("the screen it says (#226)", () => {
+    let bodies: PresenceScreen[];
+    let saying: PresencePing;
+
+    beforeEach(() => {
+      bodies = [];
+      saying = new PresencePing({
+        ping: async (screen) => {
+          bodies.push(screen);
+        },
+        signedIn: () => signedIn,
+        now: () => Date.now(),
+      });
+    });
+
+    it("says elsewhere until the yard says otherwise", () => {
+      const release = saying.hold();
+      vi.advanceTimersByTime(0);
+      expect(bodies).toEqual([{ where: "other", planner: false }]);
+      release();
+    });
+
+    it("pings at once arriving on the yard with the Planner closed, and says the Planner open on the next ping", () => {
+      const release = saying.hold();
+      vi.advanceTimersByTime(0);
+      saying.setScreen({ where: "yard", planner: false });
+      expect(bodies.at(-1)).toEqual({ where: "yard", planner: false });
+      expect(bodies).toHaveLength(2);
+
+      saying.setScreen({ where: "yard", planner: true });
+      expect(bodies).toHaveLength(2);
+      vi.advanceTimersByTime(PRESENCE_INTERVAL_MS);
+      expect(bodies.at(-1)).toEqual({ where: "yard", planner: true });
+
+      // Closing the Planner is arriving back on the yard: at once.
+      saying.setScreen({ where: "yard", planner: false });
+      expect(bodies.at(-1)).toEqual({ where: "yard", planner: false });
+      expect(bodies).toHaveLength(4);
+      release();
+    });
+
+    it("sends nothing extra for the same screen again, for leaving the yard, or with no hold", () => {
+      saying.setScreen({ where: "yard", planner: false });
+      expect(bodies).toHaveLength(0);
+      const release = saying.hold();
+      vi.advanceTimersByTime(0);
+      expect(bodies).toEqual([{ where: "yard", planner: false }]);
+      saying.setScreen({ where: "yard", planner: false });
+      saying.setScreen({ where: "other", planner: false });
+      expect(bodies).toHaveLength(1);
+      vi.advanceTimersByTime(PRESENCE_INTERVAL_MS);
+      expect(bodies.at(-1)).toEqual({ where: "other", planner: false });
+      release();
+    });
   });
 });
