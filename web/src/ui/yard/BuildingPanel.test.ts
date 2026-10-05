@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
 import { setDevDetails } from "@/app/devDetails";
@@ -61,6 +61,7 @@ const setup = (
     own?: boolean;
     panel?: Partial<BuildingPanelOptions>;
     scene?: Partial<YardUiBinding["scene"]>;
+    modal?: HTMLElement;
   } = {},
 ) => {
   const api = fakeApi();
@@ -74,6 +75,7 @@ const setup = (
     store,
     scene: { selectBuilding: vi.fn(), ...options.scene },
     notices: {} as Notices,
+    ...(options.modal ? { modal: options.modal } : {}),
   };
   const panel = new BuildingPanel({
     onClose: vi.fn(),
@@ -343,28 +345,50 @@ describe("BuildingPanel: the Monster Bunker (§7.1)", () => {
   });
 });
 
-describe("BuildingPanel: the Wild Monster Baiter (#126, #22)", () => {
-  it("Test attack opens the test panel under the actions, and Close hides it", () => {
-    const { element } = setup([HALL, building(2, 19, 3)], 2);
+describe("BuildingPanel: the Wild Monster Baiter (#126, #22, #308)", () => {
+  // The window opens on the page, outside the panel: start each test on a clean one.
+  beforeEach(() => document.body.replaceChildren());
+
+  it("Test attack opens the test window on the modal layer, and its close button closes it", () => {
+    const modal = document.body.appendChild(document.createElement("div"));
+    const { element } = setup([HALL, building(2, 19, 3)], 2, { modal });
+    expect(modal.querySelector(".baiter")).toBeNull();
+    const open = buttonNamed(element, "Test attack")!;
+    expect(open.getAttribute("aria-haspopup")).toBe("dialog");
+    open.click();
+    const window = modal.querySelector<HTMLElement>(".baiter-window")!;
+    expect(window.getAttribute("role")).toBe("dialog");
+    expect(window.querySelector(".panel__title")!.textContent).toBe("Baiter: test attack");
     expect(element.querySelector(".baiter")).toBeNull();
-    buttonNamed(element, "Test attack")!.click();
-    expect(element.querySelector(".baiter")).not.toBeNull();
-    expect(buttonNamed(element, "Close")!.getAttribute("aria-expanded")).toBe("true");
-    buttonNamed(element, "Close")!.click();
-    expect(element.querySelector(".baiter")).toBeNull();
+    // A second press does not stack a second window.
+    open.click();
+    expect(modal.querySelectorAll(".baiter")).toHaveLength(1);
+    window.querySelector<HTMLButtonElement>(".panel__titlebar button[aria-label='Close']")!.click();
+    expect(modal.querySelector(".baiter")).toBeNull();
+    open.click();
+    expect(modal.querySelectorAll(".baiter")).toHaveLength(1);
   });
 
-  it("opens the test panel when a test's Change army asks, but not on a damaged Baiter (#22, WP4)", () => {
-    const { element, panel } = setup([HALL, building(2, 19, 3)], 2);
+  it("closes the test window when another building is shown", () => {
+    const { panel, store } = setup([HALL, building(2, 19, 3)], 2);
+    buttonNamed(panel.element, "Test attack")!.click();
+    expect(document.querySelector(".baiter")).not.toBeNull();
+    panel.show(store.building(1)!);
+    expect(document.querySelector(".baiter")).toBeNull();
+  });
+
+  it("opens the test window when a test's Change army asks, but not on a damaged Baiter (#22, WP4)", () => {
+    const { panel } = setup([HALL, building(2, 19, 3)], 2);
     panel.openBaiter();
-    expect(element.querySelector(".baiter")).not.toBeNull();
+    expect(document.querySelector(".baiter")).not.toBeNull();
     panel.openBaiter();
-    expect(element.querySelectorAll(".baiter")).toHaveLength(1);
+    expect(document.querySelectorAll(".baiter")).toHaveLength(1);
 
     document.body.replaceChildren();
     const damaged = setup([HALL, building(2, 19, 3)], 2, { load: { buildinghealthdata: { "2": 100 } } });
     damaged.panel.openBaiter();
-    expect(damaged.element.querySelector(".baiter")).toBeNull();
+    expect(document.querySelector(".baiter")).toBeNull();
+    expect(damaged.element.textContent).toContain("Repair the Baiter to run a test attack.");
   });
 });
 

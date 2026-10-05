@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import { TEST_ROSTER, emptyArmy } from "@/game/baiter/baiterSession";
@@ -79,6 +82,30 @@ beforeEach(() => {
 afterEach(() => host.remove());
 
 describe("BaiterPanel", () => {
+  it("is a large window titled for the test, which its close button closes (#308)", () => {
+    const onClose = vi.fn();
+    const { panel } = open({ onClose });
+    const window = host.querySelector<HTMLElement>(".baiter-window")!;
+    expect(host.firstElementChild!.classList.contains("popup-backdrop")).toBe(true);
+    expect(window.getAttribute("role")).toBe("dialog");
+    expect(window.querySelector(".panel__title")!.textContent).toBe("Baiter: test attack");
+    // Every card in one grid.
+    expect(host.querySelectorAll(".baiter__list > .baiter__row")).toHaveLength(18);
+    window.querySelector<HTMLButtonElement>(".panel__titlebar button[aria-label='Close']")!.click();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(host.querySelector(".baiter")).toBeNull();
+    panel.destroy();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes without telling its owner when its owner closes it", () => {
+    const onClose = vi.fn();
+    const { panel } = open({ onClose });
+    panel.destroy();
+    expect(host.querySelector(".baiter")).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("lists the 18 surface monsters, unlocked ones first, locked ones tagged", () => {
     const { panel } = open();
     expect(rows()).toHaveLength(18);
@@ -157,6 +184,10 @@ describe("BaiterPanel", () => {
     const { panel } = open();
     const details = (): HTMLElement[] => [...host.querySelectorAll<HTMLElement>(".baiter-champion__details")];
     expect(details().every((one) => one.hidden)).toBe(true);
+    // And hidden on screen too: the details' own display must not override it
+    // (#308). jsdom does no layout, so the rule itself is pinned.
+    const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../styles/baiter.css"), "utf8");
+    expect(css).toMatch(/\.baiter-champion__details\[hidden\]\s*\{\s*display:\s*none;/);
     choose(".baiter-champion__type", "4");
     expect(panel.army.champions).toEqual([{ t: 4, l: 1, pl: 0 }]);
     expect(details()[0]!.hidden).toBe(false);
@@ -228,9 +259,9 @@ describe("BaiterPanel", () => {
   });
 
   it("says why no test can start, and will not start", () => {
-    const { options } = open({ blocked: "Repair the Baiter to bring an attack." });
+    const { options } = open({ blocked: "Repair the Baiter to run a test attack." });
     fillRow("Pokey");
-    expect(host.textContent).toContain("Repair the Baiter to bring an attack.");
+    expect(host.textContent).toContain("Repair the Baiter to run a test attack.");
     expect(run().disabled).toBe(true);
     run().click();
     expect(options.onRun).not.toHaveBeenCalled();
@@ -268,6 +299,28 @@ describe("BaiterPanel", () => {
       expect(onWatch).toHaveBeenCalledWith(replayOf(first));
       items[0]!.querySelector<HTMLButtonElement>(".baiter__recent-report")!.click();
       expect(onReport).toHaveBeenCalledWith(second);
+    });
+
+    it("keeps them on a tab beside the army", () => {
+      keep("Your yard held");
+      open();
+      const tabs = [...host.querySelectorAll<HTMLButtonElement>(".baiter__tab")];
+      expect(tabs.map((tab) => tab.textContent)).toEqual(["Army", "Recent tests (1)"]);
+      const army = host.querySelector<HTMLElement>(".baiter__view--army")!;
+      const recent = host.querySelector<HTMLElement>(".baiter__view--recent")!;
+      expect([army.hidden, recent.hidden]).toEqual([false, true]);
+      expect(tabs[0]!.getAttribute("aria-selected")).toBe("true");
+      tabs[1]!.click();
+      expect([army.hidden, recent.hidden]).toEqual([true, false]);
+      expect(tabs[1]!.getAttribute("aria-selected")).toBe("true");
+      tabs[1]!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      expect([army.hidden, recent.hidden]).toEqual([false, true]);
+    });
+
+    it("shows no tabs before any test has finished", () => {
+      open();
+      expect(host.querySelector(".baiter__tabs")).toBeNull();
+      expect(host.querySelector<HTMLElement>(".baiter__view--army")!.hidden).toBe(false);
     });
   });
 });

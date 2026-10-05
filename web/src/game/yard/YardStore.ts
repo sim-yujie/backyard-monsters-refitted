@@ -265,6 +265,11 @@ export interface YardUiBinding {
   readonly store: YardStore;
   readonly scene: YardSceneHooks;
   readonly notices: Notices;
+  /**
+   * The overlay's modal layer, for a window over the yard (the Baiter's test
+   * setup, #308). Absent in tests, where such a window opens on the page.
+   */
+  readonly modal?: HTMLElement;
 }
 
 /** The queue key for an action on a target: `upgrade:12`, `buy:BST`. */

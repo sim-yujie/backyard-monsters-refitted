@@ -364,6 +364,8 @@ picker changes the size; Fill respects the cap; shortcuts; champion picks; Start
 
 **Depends on:** WP1. **Size:** M.
 
+**As built (#308, after the owner tried it).** The setup is no longer in the building panel: **Test attack** opens a large window in the middle of the screen (about 90% wide, up to 1240 x 800 px) on the overlay's modal layer, the yard dimmed behind it. Title "Baiter: test attack" with a close button; the size bar and the four shortcuts along the top; the 18 monsters as a grid of cards (portrait, name, "Not unlocked" tag, level picker, stepper with Fill), all visible without scrolling on a desktop; the champion row (type, Level, Power, Mode, "Krallen as well") with Clear and **Start test** along the foot. Recent tests is a second tab ("Recent tests (n)") once a test has finished. On a phone the window is a full-screen sheet with two cards a row that scrolls. The refusals now read "Repair the Baiter to run a test attack." and "The Baiter can run a test attack once its job is done."; the Krallen row no longer shows empty Level and Power boxes before it is ticked.
+
 ### WP3 — Drop anywhere on the test screen
 
 **Goal:** the Baiter scene plays like a real attack with the test army (§5.2, §6 steps 5-8).
