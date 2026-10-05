@@ -149,13 +149,15 @@ describe("unseenAchievements", () => {
 const standIn = (rows: { outposts?: Partial<Save>[]; maproom?: Partial<Maproom> | null } = {}) => {
   const calls = {
     find: [] as unknown[],
+    findOptions: [] as unknown[],
     findOne: [] as unknown[],
     inserted: [] as Record<string, unknown>[],
     pruned: 0,
   };
   const em = {
-    async find(_entity: unknown, where: { baseid: { $in: string[] } }) {
+    async find(_entity: unknown, where: { baseid: { $in: string[] } }, options?: unknown) {
       calls.find.push(where);
+      calls.findOptions.push(options);
       return (rows.outposts ?? []).filter((row) => where.baseid.$in.includes(String(row.baseid)));
     },
     async findOne(entity: unknown, where: unknown) {
@@ -300,6 +302,8 @@ describe("recordAchievements", () => {
     await recordAchievements(em, main, NOW, { blocksbuilt: 1 }, current);
 
     expect(calls.find).toEqual([{ baseid: { $in: ["901"] }, userid: 2503, type: "outpost" }]);
+    // Only the column the backfill counts, not the whole outpost row.
+    expect(calls.findOptions).toEqual([{ fields: ["buildingdata"] }]);
     // 2 + 3 + 4 standing; the event's Block is already one of them.
     expect(stored(main).s.blocksbuilt).toBe(9);
     // An outpost owned: most first outposts are camps (§8).

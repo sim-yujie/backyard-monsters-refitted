@@ -184,7 +184,11 @@ const outpostBuildings = async (
     .filter((baseid) => baseid !== String(current?.baseid));
   const rows =
     others.length > 0
-      ? await em.find(Save, { baseid: { $in: others }, userid: main.userid, type: BaseType.OUTPOST })
+      ? await em.find(
+          Save,
+          { baseid: { $in: others }, userid: main.userid, type: BaseType.OUTPOST },
+          { fields: ["buildingdata"] }
+        )
       : [];
   return [...(current ? [current] : []), ...rows].map((row) => row.buildingdata);
 };
