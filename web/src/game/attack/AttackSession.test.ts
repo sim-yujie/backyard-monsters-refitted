@@ -103,6 +103,39 @@ describe("AttackSession lifecycle", () => {
     expect(state.remainingSeconds).toBe(ATTACK_COUNTDOWN_SECONDS - 2);
   });
 
+  it("holds a Baiter test's clock until the first drop, then runs it from there", () => {
+    const session = new AttackSession({ target: targetOf(), seed: 1, clockFromFirstDrop: true });
+    session.load(towerYard());
+    session.start();
+    play(session, 5);
+    expect(session.state().phase).toBe("loaded");
+    expect(session.state().tick).toBe(0);
+    expect(session.state().remainingSeconds).toBe(ATTACK_COUNTDOWN_SECONDS);
+
+    const event = session.appendFling({ x: -100, y: -100, monsters: { C1: 1 } });
+    expect(event.t).toBe(0);
+    expect(session.state().phase).toBe("running");
+    play(session, 2);
+    expect(session.state().remainingSeconds).toBe(ATTACK_COUNTDOWN_SECONDS - 2);
+  });
+
+  it("runs a real attack's clock from start, before anything is dropped", () => {
+    const session = sessionOf();
+    session.start();
+    play(session, 5);
+    expect(session.state().phase).toBe("running");
+    expect(session.state().remainingSeconds).toBe(ATTACK_COUNTDOWN_SECONDS - 5);
+  });
+
+  it("lets a Baiter test be stopped before the first drop", () => {
+    const session = new AttackSession({ target: targetOf(), seed: 1, clockFromFirstDrop: true });
+    session.load(towerYard());
+    session.start();
+    session.retreat();
+    expect(session.state().phase).toBe("ended");
+    expect(session.state().endReason).toBe("retreat");
+  });
+
   it("advances twice as far per frame at 2x", () => {
     const session = sessionOf();
     session.start();

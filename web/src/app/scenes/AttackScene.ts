@@ -378,9 +378,11 @@ export class AttackScene implements Scene {
 
     // A replay fights with the server's own seed and Declare War (issue #221).
     const replay = this.watchRun?.replay;
+    // A Baiter test's clock waits for the first drop, as Flash's practice did.
     const session = new AttackSession({
       target: { ...target, load: response },
       ...(replay ? { seed: replay.seed, declareWar: replay.declareWar } : {}),
+      ...(this.practice ? { clockFromFirstDrop: true } : {}),
     });
     this.session = session;
     this.unsubscribe = session.subscribe((state) => this.onSessionChange(state));

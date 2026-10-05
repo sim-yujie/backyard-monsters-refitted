@@ -218,6 +218,13 @@ export interface AttackSessionOptions {
    * `attpowerups` when absent ({@link hasDeclareWar}).
    */
   readonly declareWar?: boolean;
+  /**
+   * Holds the clock until the first drop: {@link AttackSession.start} leaves
+   * the session `loaded` and the first fling starts it, as a Flash practice
+   * attack did (the Baiter's test, `docs/design/baiter-simulator.md` §5.2).
+   * A real attack's clock runs from the scene's `start()`.
+   */
+  readonly clockFromFirstDrop?: boolean;
 }
 
 /** A random 32-bit seed for a battle the server has not seeded (§7, Q1). */
@@ -330,11 +337,13 @@ export class AttackSession {
   /** The last quarter-second the listeners heard about, to rate-limit `advance`. */
   private lastNotifiedQuarter = -1;
   private readonly playerLevel: number | undefined;
+  private readonly clockFromFirstDrop: boolean;
 
   constructor(options: AttackSessionOptions) {
     this.target = options.target;
     this.seed = options.seed ?? mintSeed();
     this.playerLevel = options.playerLevel;
+    this.clockFromFirstDrop = options.clockFromFirstDrop ?? false;
     this.declareWar_ = options.declareWar ?? false;
     this.countdownSeconds = this.declareWar_
       ? DECLARE_WAR_COUNTDOWN_SECONDS
@@ -387,9 +396,13 @@ export class AttackSession {
     this.notify();
   }
 
-  /** Starts the clock. `loaded` → `running`; a no-op in any other phase. */
+  /**
+   * Starts the clock. `loaded` → `running`; a no-op in any other phase, and
+   * while {@link AttackSessionOptions.clockFromFirstDrop} holds the clock for
+   * the first drop.
+   */
   start(): void {
-    if (this.phase !== "loaded") return;
+    if (this.phase !== "loaded" || this.clockFromFirstDrop) return;
     this.phase = "running";
     this.notify();
   }
