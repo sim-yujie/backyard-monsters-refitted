@@ -77,7 +77,7 @@ export interface RaidResult {
   readonly at: number;
   /** The yard held at least {@link GOOD_DEFENCE_SHARE}. */
   readonly defended: boolean;
-  /** The health share, 0 to 1, walls and traps left out. */
+  /** The health share, 0 to 1, over the damage percentage's buildings (`raidFight.ts`). */
   readonly health: number;
   /** What the raiders took, bank and harvesters together, as it came off. */
   readonly stolen: ResourceAmounts;

@@ -680,7 +680,7 @@ rejects, in any mode:
 | POST | `/api/:apiVersion/bm/base/infernomonsters` | apiVersion, verifyUserAuth, logRequest | `{ type: "get" \| "set", imonsters?: JSON string, default {} }` | `{ error: 0, imonsters }` | Gets or sets the player's Inferno monster cage/roster (`Save.monsters` on the Inferno save). `get` ignores whatever the client sent and returns the DB value; `set` persists and echoes back the client's value unchanged. |
 | POST | `/api/:apiVersion/bm/neighbours/get` | apiVersion, verifyUserAuth, logRequest | `{ type?: string }` (`"inferno"` selects the Inferno pool, anything else the MR1 overworld pool) | `{ error: 0, wmbases: [], bases: NeighbourData[] }` (`wmbases` always empty, kept for legacy compatibility); if the caller has no `save` at all: `{ error: 0, bases: [] }` (no `wmbases` key) | Returns a cached PvP matchmaking list of opponents (`Maproom.neighbors` / `InfernoMaproom.neighbors`, re-rolled every ~2 weeks once ≥10 candidates are found, else retried every 30 min). MR1/Inferno has **no coordinate grid** at all — there is no per-cell or viewport endpoint; browsing opponents means picking from this cached list. |
 | GET | `/api/:apiVersion/bm/maproom1` | apiVersion, verifyUserAuth (no `logRequest`: re-read while the map is open) | none | `{ error: 0, now, level, protectedUntil, tribes: MapRoom1Tribe[4], neighbours: NeighbourData[] }` — see "Map Room 1 read" below | The web client's Map Room 1 screen in one read (issue #132). 409 `reason: "notMapRoom1"` once the player's main save is on Map Room 2. |
-| POST | `/api/:apiVersion/bm/presence` | apiVersion, verifyUserAuth (no `logRequest`: every 30 s) | none | `{ error: 0, now, lastAction, attack?: { by, ends } }` (#275, `services/user/presenceAnswer.ts`): the server clock, the last real action (unix s, 0 when none in the last 10 min), and an attack running on the main yard (attacker's name, latest end) | The web client's presence ping (#242, `controllers/maproom/presence.ts`): refreshes `last-seen:main:<userid>` (120 s), the presence mark of the online rule (`services/user/online.ts`, #271: online also needs a real action in the last 10 min). Sent every 30 s while the tab is visible and the player is on any game screen past sign-in (yards, maps, attack, Baiter, Watch); writes no save, and reads the main save's `attackid`/`attacks` only while an attack session exists on it. Flash refreshed the same key with its `updatesaved` poll. Not a real action. |
+| POST | `/api/:apiVersion/bm/presence` | apiVersion, verifyUserAuth (no `logRequest`: every 30 s) | optional `{ where: "yard" \| "other", planner: boolean }` (#226): where the player is, and whether the Yard Planner is open; kept 120 s as `raid-screen:<userid>`. A body in any other shape counts as none | `{ error: 0, now, lastAction, attack?: { by, ends }, raid?: RaidView }` (#275, `services/user/presenceAnswer.ts`): the server clock, the last real action (unix s, 0 when none in the last 10 min), an attack running on the main yard (attacker's name, latest end), and the open wild monster raid (see "Wild monster raids") | The web client's presence ping (#242, `controllers/maproom/presence.ts`): refreshes `last-seen:main:<userid>` (120 s), the presence mark of the online rule (`services/user/online.ts`, #271: online also needs a real action in the last 10 min). Sent every 30 s while the tab is visible and the player is on any game screen past sign-in (yards, maps, attack, Baiter, Watch); writes no save, and reads the main save's `attackid`/`attacks` only while an attack session exists on it. Flash refreshed the same key with its `updatesaved` poll. Not a real action. A ping saying `{ where: "yard", planner: false }` may also open a wild monster raid that is due (`raidOnPing`); a ping with no body never does, and a raid check that fails is logged and never fails the ping. |
 | POST | `/api/:apiVersion/bm/presence/stay` | apiVersion, verifyUserAuth, logRequest | none | as `bm/presence`, with `lastAction` = now | The "Stay protected?" prompt's tap (#275): refreshes the presence mark and is on the real-action list (`services/user/realActions.ts`), so the player is online again for 10 minutes. |
 
 
@@ -989,6 +989,41 @@ while it is off unlocks are stored owed and no answer shows them as earned.
 |---|---|---|---|---|---|
 | GET | `/api/:apiVersion/bm/achievements/player/:userid` | apiVersion, verifyUserAuth, `playerAchievementsLimiter` (30 a minute per user; `429 { error, reason: "rateLimited" }`); no `logRequest` | Path `userid` | `{ error: 0, userid, name, earned, total, achievements: [{ id, name, description, status: "locked" \| "earned", at? }] }`; `404 { error, reason: "notFound" }` for an unknown or banned player, one with no main yard, or an id that is not a positive whole number | Another player's achievements (`docs/design/achievements.md` §9.2; `controllers/achievements/player.ts`), for the Map Room panels and the read-only screen. Only what is earned and when: no progress, no Shiny. Read-only: a record never worked out (`NULL`: a bot, a seeded player, anyone who has not loaded since) gets the backfill worked out on the fly (`services/achievements/view.ts` `readPublicRecord`) and nothing is stored; a stored record is taken as it is, without folding in what the yard shows now. Owed unlocks read `locked` while rewards are off. Any player may be asked for, the caller included. |
 
+### Wild monster raids (#226)
+
+Wild monsters raid the player's own main yard (`docs/design/wild-raids.md`; rules in
+`services/raids/`, routes in `controllers/raid/raid.ts`). The **presence ping** opens a raid:
+when its body says `{ where: "yard", planner: false }`, the player is online (a ping in the last
+60 s and a real action in the last 10 min), and the raid is due (level 9+, 4 build-mode visits,
+its time come, nothing damaged or repairing, no attack running), the server plans the army and
+answers it as `raid` in its **warning** (Redis `wild-raid:<userid>`, 5 minutes plus a grace). The
+routes below are the player's answers to it. All are `POST /api/:apiVersion/bm/raid/...`,
+`apiVersion` + `verifyUserAuth` + `logRequest`, and real actions (`services/user/realActions.ts`).
+
+`RaidView` is `{ id, phase: "warning" | "fighting", tribe, monsters: { [monsterId]: count },
+attackAt, warned: 0 | 1, startedAt?, finishFrom? }` (unix seconds). It never carries the fight's
+outcome.
+
+| Path | Request fields | Response (`ctx.body`) | Description |
+|---|---|---|---|
+| `/raid/engage` | `{ id }` | `{ error: 0, raid }` | "Engage now": `attackAt` becomes now. Refused `noRaid`, `notWarning`. |
+| `/raid/prepare` | `{ id }` | `{ error: 0, raid }` | "Prepare defences": `warned: 1`, the top bar counts down to `attackAt` (5 minutes from the warning). Refused `noRaid`, `notWarning`. |
+| `/raid/start` | `{ id }` | `{ error: 0, raid, fight: { seed, events, hitLimit, tick, seconds, yard: { buildingdata, buildinghealthdata, resources }, defence } }` | The fight. Under the main yard's row lock the yard is caught up (repairs, harvesters, autobank) and frozen, and the server fights it once in the replay worker (`raidFight.ts`, the same battle as `replayRaid`, 20 s deadline). The outcome stays with the open raid in Redis; the client is handed the seed, the raid's landing events, its hit limit, the yard as the fight found it and the player's bunkers, academy levels and caged champion (`defence`), so it plays the very same fight. `tick` is where the server's fight ended, `seconds` its length at 1x. The yard is locked (`aiattacks.fight = { id, until }` on the save) until the fight's length plus 2 minutes. Refused `notYet` (with `attackAt`), `underAttack` (an attack is running: the raid waits), `notWarning` (already started, also on a retried start: the client reloads, which cancels it), `busy` (503, the worker ran out of time; the raid stays in its warning), `noRaid`. |
+| `/raid/finish` | `{ id }` | `{ error: 0, result: { id, tribe, at, defended, health, stolen: { r1..r4 }, shiny, damaged: [buildingId], housedLost } }` | The fight is over on the client. The raid is taken out of Redis exactly once (`GETDEL`) and its outcome landed on the caught-up yard under the row lock (`raidLanding.ts`): fired traps gone (kept in `firedtraps`), bunkers and the caged champion as the fight left them, health into `buildinghealthdata` and each `hp`, the stored `damage`, housed monsters lost with a fallen Housing, `rE: 1` on every damaged building (they repair from here), the bank and each harvester's unbanked `st` robbed of what the raiders took (never below 0), +10 Shiny when `health` (what is left of the yard over the buildings an attack's damage percentage counts) is 0.9 or more, and the schedule started again from the fight's start (`recent` keeps the raid). The yard lock is lifted. Refused `tooEarly` (with `readyAt`: sooner than the fight at 2x, minus 5 s; the raid stays open), `cancelled` (no presence ping in the last 120 s, so the game was closed during the fight: nothing lands, the yard is unlocked and the raid is still due next visit), `notFighting`, `noRaid`. A finish for a raid that already landed answers what it landed (from `recent`; `damaged` empty, `housedLost` 0) and changes nothing. |
+| `/raid/frequency` | `{ preference: "more" \| "same" \| "less" }` | `{ error: 0, preference: 1 \| 0 \| -1, nextAttack }` | The frequency popup's choice: the next raid 2, 3 or 4 days after the last, and the army's size and hits with it. Refused `badRequest`. |
+| `/raid/dev/due` | none | `{ error: 0, nextAttack }` | **DEV only**, mounted on a local server alone (`devCheckEnabled`): the next raid is due now (sessions and time). The yard must still be whole, level 9+, and the ping must say `yard`, Planner closed. |
+
+**Errors** are `raidRefusedErr(reason)` (`errors/errors.ts`): the real status (`400` for
+`badRequest`, `503` for `busy`, `409` for the rest; `isClientFriendly`, so `error` is undefined)
+with the reason in `errorDetails.data.reason`, plus `attackAt` or `readyAt` where named above.
+`notMainYard` answers a caller with no main yard.
+
+**The yard lock.** While `aiattacks.fight` holds (`services/raids/raidLock.ts`), every yard action
+is refused `409 raidInProgress` and an attack load on the yard is refused as
+`baseUnderAttackErr`. It lapses by itself at `until`, and is lifted by the finish, by a finish
+that finds the raid cancelled, and by the owner's next build-mode `/base/load`, which also cancels
+a raid being fought (and a warning when the game had been closed).
+
 ### Attack Logs
 
 | Method | Path | Middleware | Request fields | Response | Description |
@@ -1132,7 +1167,9 @@ JSON), parsed by the route's zod schema in `server/src/schemas/YardSchemas.ts`.
 2. Open a transaction and re-read the caller's `user.save` with `SELECT … FOR UPDATE`, so two
    requests for the same player run one after the other and the second sees what the first
    wrote. `409 notMainYard` if the caller has no save yet or it is not their own main yard;
-   `409 underAttack` while `isAttackActive` says an attack is running. A `baseid` naming one of
+   `409 underAttack` while `isAttackActive` says an attack is running; `409 raidInProgress` while
+   a wild monster raid is being fought on the main yard (`aiattacks.fight`, see "Wild monster
+   raids"). A `baseid` naming one of
    the caller's outposts acts on that outpost instead (see "Outposts" below).
 3. **Catch-up** (`services/yard/catchUp.ts`, `catchUpYard(save, now)`): advance the yard from
    `savetime` to `now`, clamped to 30 days; a `savetime` of 0 (never saved) replays nothing.
@@ -1305,7 +1342,7 @@ caller's Map Room 2 outposts (the id `/base/load` and `Save.outposts` use) acts 
 **Errors** use the Yard Planner's flat shape, not the global `errorDetails` envelope: the real
 HTTP status and `{ error: "<message for the player>", reason: "<key>", ...detail }`. `400` means
 the client sent something malformed; `409` means the yard refuses right now. Reasons so far:
-`badRequest`, `notMainYard`, `underAttack`, `shinyLocked`, `credits`, `shortfall`, and for
+`badRequest`, `notMainYard`, `underAttack`, `raidInProgress`, `shinyLocked`, `credits`, `shortfall`, and for
 outposts `notYourYard` (`403`) and `notInOutpost`; each route
 lists its own (so far `notRunning`, `damaged`, `mapRoom`, `itemRefused`, `useBatchRoute`, `busy`,
 `townHall`, `maxLevel`, `requirements`, `notForSale`, `alreadyActive`, `soldOut`,

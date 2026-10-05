@@ -63,8 +63,9 @@ describe("fightRaid", () => {
     expect(fights.some(({ outcome }) => Object.keys(outcome.harvesterLoss).length > 0)).toBe(true);
   });
 
-  test("the health share leaves walls and traps out and stays in 0..1", () => {
+  test("the health share is what the attack's damage percentage leaves, in 0..1", () => {
     for (const { outcome } of fights) {
+      expect(outcome.healthShare).toBeCloseTo(1 - outcome.damage / 100, 12);
       expect(outcome.healthShare).toBeGreaterThanOrEqual(0);
       expect(outcome.healthShare).toBeLessThanOrEqual(1);
     }

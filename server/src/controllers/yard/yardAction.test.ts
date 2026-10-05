@@ -294,6 +294,23 @@ describe("runYardAction refusals", () => {
     expect(db.row).toEqual(before);
   });
 
+  test("a yard a wild monster raid is being fought on is refused raidInProgress, and nothing is written", async () => {
+    db.row = rowOf({ aiattacks: { v: 2, fight: { id: "r_one", until: getCurrentDateTime() + 60 } } });
+    const before = structuredClone(db.row);
+
+    const ctx = await call(state);
+
+    expect(ctx.status).toBe(409);
+    expect(ctx.body!.reason).toBe("raidInProgress");
+    expect(db.row).toEqual(before);
+  });
+
+  test("a raid lock past its end does not block", async () => {
+    db.row = rowOf({ aiattacks: { v: 2, fight: { id: "r_one", until: getCurrentDateTime() - 1 } } });
+
+    expect((await call(state)).status).toBe(200);
+  });
+
   test("a stale attackid (attack long over) does not block", async () => {
     db.row = rowOf({ attackid: 42, attacks: [{ starttime: getCurrentDateTime() - 3600 }] });
 

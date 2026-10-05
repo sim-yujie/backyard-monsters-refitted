@@ -3,7 +3,6 @@ import {
   TICKS_PER_SECOND,
   battleDefence,
   buildEngineYard,
-  buildingClass,
   createBattle,
   damagePercent,
   digestState,
@@ -31,9 +30,12 @@ import {
  *   **what each harvester gave up** from its unbanked amount (`st`).
  *   `defenderLoss` is the two together; on a main yard a harvester's loot
  *   never touches the bank (`engine.ts` `takeLoot`).
- * - **The yard's health share**: health summed over every building except
- *   walls and traps, over the same sum at full health, as Flash's `CleanUp`
- *   sums it for the good-defence popup (`WMATTACK.as:829-835`).
+ * - **The yard's health share**: what is left of the yard over the same
+ *   buildings an attack's damage percentage counts (`countsTowardDamage` in
+ *   `damagePercent.ts`: no mushrooms, walls, fired traps or health-less
+ *   types), so the share is `1 - damage / 100`. Flash's `CleanUp` sums a
+ *   similar set for the good-defence popup (`WMATTACK.as:829-835`); the
+ *   shared rule is used so a raid and an attack read one yard alike.
  *
  * The raid is a main-yard defence (§6.2 item 5): kind `main`, the raid's hit
  * limit, the player's own bunkers, academy levels and caged champion.
@@ -67,7 +69,7 @@ export interface RaidFightOutcome {
   readonly bankLoss: ResourceAmounts;
   /** What each harvester gave up from its unbanked amount, by building id; only those that gave any. */
   readonly harvesterLoss: Readonly<Record<string, number>>;
-  /** Health over full health, walls and traps left out, 0 to 1. */
+  /** What is left of the yard, 0 to 1: `1 - damage / 100` over the damage percentage's buildings. */
   readonly healthShare: number;
   readonly bunkerGarrisons: Readonly<Record<number, Readonly<Record<string, number>>>>;
   /** The caged champion by type and its health afterwards, or null when none defended. */
@@ -124,28 +126,23 @@ export const fightRaid = (input: RaidFightInput): RaidFightOutcome => {
   for (const key of RESOURCES) bankLoss[key] = Math.max(0, Math.trunc(bankBefore[key] - yard.resources[key]));
 
   const harvesterLoss: Record<string, number> = {};
-  let health = 0;
-  let full = 0;
   for (const building of yard.buildings) {
     const gave = (storedBefore.get(building.id) ?? 0) - building.stored;
     if (building.kind === "resource" && gave > 0) harvesterLoss[String(building.id)] = Math.trunc(gave);
-    const kind = buildingClass(building.type);
-    if (kind === "wall" || kind === "trap" || !(building.maxHp > 0)) continue;
-    health += Math.max(0, Math.min(building.maxHp, building.hp));
-    full += building.maxHp;
   }
+  const damage = damagePercent(combatYard, state.health, fired);
 
   const defenderChampion = input.defence?.defenderChampion ?? null;
   return {
     ticks: state.tick,
     health: state.health,
-    damage: damagePercent(combatYard, state.health, fired),
+    damage,
     firedTraps: [...state.firedTraps],
     destroyedIds: [...state.destroyedIds],
     defenderLoss: { ...state.defenderLoss },
     bankLoss: bankLoss as unknown as ResourceAmounts,
     harvesterLoss,
-    healthShare: full > 0 ? health / full : 1,
+    healthShare: Math.max(0, Math.min(1, 1 - damage / 100)),
     bunkerGarrisons: state.bunkerGarrisons,
     defenderChampion:
       state.defenderChampionHp === null || !defenderChampion

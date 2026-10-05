@@ -60,7 +60,7 @@ export interface RaidRecord {
   /** Unix seconds the fight started. */
   readonly at: number;
   readonly tribe: string;
-  /** The yard's health at the end, 0 to 1, walls and traps left out. */
+  /** The yard's health at the end, 0 to 1, over the damage percentage's buildings (`raidFight.ts`). */
   readonly health: number;
   readonly stolen: Readonly<Record<string, number>>;
   /** Shiny paid for a good defence, 0 or 10. */

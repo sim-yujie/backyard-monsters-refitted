@@ -380,8 +380,16 @@ On the caught-up save, under the row lock, the defender half of an attack landin
   write drained `st` back today (`defenderLootHandler.ts` touches `resources` only), so harvester
   theft needs **new code, in WP3** (not WP0: the engine already reports what it took).
 - **Bunkers and champion:** garrisons and champion health as the outcome left them.
-- **Good defence (D4):** health summed over every building except walls and traps, as Flash
-  (`WMATTACK.as:829-835`, `:860-865`), at least 90% of the full total: `credits += 10`.
+- **Housing (as built, WP3):** a Housing that falls takes its share of the housed monsters, as
+  in any defence (Flash's `BUILDING15`, `services/base/combat/housingLoss.ts`).
+- **Damage:** the stored `damage` percentage is set from the outcome, as an attack sets it.
+- **Good defence (D4):** what is left of the yard at least 90%: `credits += 10`. Flash
+  (`WMATTACK.as:829-835`, `:860-865`) summed health over every building except walls and traps.
+  **As built (WP3):** the share counts the same buildings as an attack's damage percentage, by
+  reusing that rule (`countsTowardDamage` in `game-rules/combat/damagePercent.ts`, Flash's
+  `BFOUNDATION.as:433-468`), so it is `1 - damage / 100`: mushrooms, walls, fired traps and types
+  with no health are left out; traps not yet fired and decorations with health count, as they do
+  in an attack's percentage. One rule for both, so a raid and an attack read a yard alike.
 - **Schedule:** `lastattack = start time`, `sessionsSinceLastAttack = 0`, `nextAttack` from the
   preference (§2.1).
 - **Goal counter** for "survive a tribe attack" (WP5): only a good defence (90%+) counts (Q7).
@@ -456,9 +464,19 @@ becomes server-owned:
   "sessionsSinceLastAttack": 5,
   "attackPreference": 0,             // -1 less, 0 same, 1 more
   "lastRaidId": "r_…",              // makes finish idempotent
-  "recent": [ { "id": "r_…", "at": 1791100000, "tribe": "Kozu", "health": 0.93, "stolen": {...}, "shiny": 10 } ]   // newest 10
+  "recent": [ { "id": "r_…", "at": 1791100000, "tribe": "Kozu", "health": 0.93, "stolen": {...}, "shiny": 10 } ],  // newest 10
+  "fight": { "id": "r_…", "until": 1791100300 }   // only while a raid is fought (WP3)
 }
 ```
+
+- **`fight` (added in WP3)** is the yard's lock while a raid is fought (`services/raids/raidLock.ts`):
+  the raid's id and the unix second the lock lapses by itself (the fight's length plus the 2-minute
+  grace, the open raid's own TTL). `/raid/start` writes it under the row lock; the finish, a
+  finish that finds the raid cancelled, and the owner's next build-mode load remove it. While it
+  holds, every yard action is refused `409 raidInProgress` and an attack load on the yard as
+  under attack (§7.2). It lives on the row rather than only in Redis (§8.2), so the yard actions
+  read it under the row lock they already take and `yardAction.ts` stays free of Redis; the open
+  raid in Redis (§8.2) still says whether the raid is alive.
 
 - Flash's names kept, so a Flash-era value still reads. `queued` is dropped; `s1` (Trojan) is left
   untouched for D7.

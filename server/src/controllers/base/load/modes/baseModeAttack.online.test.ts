@@ -196,3 +196,19 @@ describe("an online player cannot be attacked (#271)", () => {
     expect(save.attackid).toBeGreaterThan(0);
   });
 });
+
+describe("a yard a wild monster raid is being fought on cannot be attacked (#226)", () => {
+  test("refused as under attack while the raid's lock holds, and nothing is written", async () => {
+    saveOf(MAIN_BASEID).aiattacks = { v: 2, fight: { id: "r_one", until: now() + 60 } };
+    await expect(attack(ATTACKER, MAIN_BASEID)).rejects.toMatchObject({
+      message: "This base is currently under attack by another player. Please try again later.",
+    });
+    expect(saveOf(MAIN_BASEID)).toMatchObject({ attackid: 0, attacks: [] });
+    expect(sessions.size).toBe(0);
+  });
+
+  test("attackable again once the lock has lapsed", async () => {
+    saveOf(MAIN_BASEID).aiattacks = { v: 2, fight: { id: "r_one", until: now() - 1 } };
+    await goesAhead();
+  });
+});
