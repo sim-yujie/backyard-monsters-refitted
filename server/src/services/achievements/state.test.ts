@@ -29,6 +29,7 @@ describe("readAchievements", () => {
       c: {
         "1": { at: 100, shiny: 5, seen: 1 },
         "6": { at: 200, shiny: 10, backfill: 1 },
+        "13": { at: 250, shiny: 5, unpaid: true },
         "99": { at: 300, shiny: 0 },
         "0": { at: 1, shiny: 1 },
         "x": { at: 1, shiny: 1 },
@@ -46,6 +47,8 @@ describe("readAchievements", () => {
       c: {
         "1": { at: 100, shiny: 5, seen: 1 },
         "6": { at: 200, shiny: 10, backfill: 1 },
+        // Owed while rewards are off (`record.ts`).
+        "13": { at: 250, shiny: 5, unpaid: 1 },
         // An id the catalogue does not know is kept: it has been paid.
         "99": { at: 300, shiny: 0 },
       },

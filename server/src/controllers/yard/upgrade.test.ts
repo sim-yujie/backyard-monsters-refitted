@@ -82,10 +82,11 @@ const cancel = (id: unknown): Promise<YardAnswer> =>
 
 /**
  * The row without the columns a request always moves: `savetime`, and the
- * monster production state the catch-up writes on every request (§2.5).
+ * monster production state the catch-up writes on every request (§2.5), and
+ * the achievements' record the first request works out (issue #204).
  */
 const settled = (row: Row | null) => {
-  const { savetime: _savetime, monsters: _monsters, ...rest } = row!;
+  const { savetime: _savetime, monsters: _monsters, achievements: _achievements, ...rest } = row!;
   return rest;
 };
 

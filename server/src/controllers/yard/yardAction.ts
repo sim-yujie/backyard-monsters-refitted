@@ -11,6 +11,8 @@ import { YardTargetSchema } from "../../schemas/YardSchemas.js";
 import { RESOURCE_KEYS, type ResourceKey } from "../../services/base/economy/resourceBudget.js";
 import { playerLevelOf } from "../../services/base/calculateBaseLevel.js";
 import { isAttackActive } from "../../services/base/isAttackActive.js";
+import { addEvents, builtEvents, recordAchievements, unseenAchievements } from "../../services/achievements/record.js";
+import type { AchievementEvents } from "../../services/achievements/evaluate.js";
 import { autobankYard } from "../../services/maproom/v2/autobank.js";
 import { isShinyLocked } from "../../services/user/shinyLock.js";
 import { catchUpYard, type CompletedJob } from "../../services/yard/catchUp.js";
@@ -63,11 +65,16 @@ import { logger } from "../../utils/logger.js";
  *    `flinger`/`catapult` and, on the main yard, raise `basevalue` (#209);
  *    move any mushroom a building now stands on to free ground (#263: a
  *    mushroom never blocks a build or a decoration, it pops up elsewhere);
- *    one flush; commit.
+ *    evaluate the account's achievements on the main row
+ *    (`recordAchievements`, issue #204): the Blocks and Heavy Traps the
+ *    catch-up finished plus the outcome's `achievementEvents`, paying what
+ *    unlocks when rewards are on; one flush; commit.
  * 6. Answer `{ error: 0, ...yardState, completed, report, playerlevel }`, the last
  *    the player's level from their main save (the yard HUD's, #192). The yard
  *    state's `onboarding` is the account's tutorial summary, read from the
- *    main row after the action (issue #227).
+ *    main row after the action (issue #227). `achievements` lists the
+ *    account's paid unlocks not yet shown, when there are any (§9.3 of
+ *    `docs/design/achievements.md`).
  *
  * Any `ClientSafeError` thrown along the way rolls the transaction back — the
  * catch-up included, so a refused action writes nothing — and answers in the
@@ -98,7 +105,10 @@ import { logger } from "../../utils/logger.js";
  * WP3 added `YardAction.outposts` (optional) and {@link lockOwnYard}.
  * The tutorial's WP0 (issue #227, `docs/design/tutorial.md` §9.2) added
  * `onboarding` to {@link YardSlices}, `em` to {@link YardActionInput}, and the
- * `onboarding` summary to the answer.
+ * `onboarding` summary to the answer. Achievements' WP2 (issue #204,
+ * `docs/design/achievements.md` §7.2) added `achievements` to
+ * {@link YardSlices}, `achievementEvents` to {@link YardOutcome}, and the
+ * unseen unlocks to the answer.
  */
 
 /** Save columns an action may replace wholesale. */
@@ -119,6 +129,10 @@ export type YardSlices = Partial<
     // The tutorial's record (`services/onboarding/state.ts`); always written
     // whole, through `updateOnboarding`. On an outpost it lands on the main row.
     | "onboarding"
+    // The achievements' record (`services/achievements/state.ts`); always
+    // written whole, through `updateAchievements`. On an outpost it lands on
+    // the main row. The wrapper evaluates it again after the slices land.
+    | "achievements"
   >
 >;
 
@@ -161,6 +175,12 @@ export interface YardOutcome<Report> {
   shiny?: number;
   /** Empire points to add. */
   points?: number;
+  /**
+   * Achievement event stats the action brought about (issue #204): a Block or
+   * Heavy Trap it placed finished, a Starter Kit. The catch-up's finished
+   * builds are counted by the wrapper; do not repeat them here.
+   */
+  achievementEvents?: AchievementEvents;
 }
 
 /**
@@ -366,6 +386,8 @@ const logOutpostProblems = (outpost: Save): void => {
  * build-mode `/base/load` (§2.3 "Where it runs"). The same locked read and the
  * same `catchUpYard` an action does, in one flush, so a plain load cannot
  * overwrite an action that committed after the load first read the row.
+ * The account's achievements are evaluated in the same flush, with the
+ * Blocks and Heavy Traps the catch-up finished (issue #204).
  * Skipped while the yard is under attack (the attack save owns the row then).
  *
  * @param em - The request's entity manager.
@@ -388,6 +410,7 @@ export const catchUpLockedYard = async (
     const completed = catchUpYard(locked, now);
     await joinMapRoom2(tx, locked);
     await autobankYard(tx, locked, now, completed);
+    await recordAchievements(tx, locked, now, builtEvents(completed));
     await tx.flush();
     return { save: locked, completed };
   });
@@ -397,8 +420,9 @@ export const catchUpLockedYard = async (
  * build-mode `/base/load` of an own outpost, as {@link catchUpLockedYard} is
  * for the main yard. The main row is locked first (the order of
  * {@link lockOwnYard}), because the catch-up credits it: points, the HCC's
- * goo refund, and the player's outpost income (`autobankYard`). An empty
- * outpost gets its core here. Skipped, and the row
+ * goo refund, the player's outpost income (`autobankYard`), and the
+ * achievements it finishes Blocks or Heavy Traps towards (issue #204). An
+ * empty outpost gets its core here. Skipped, and the row
  * answered as it is, when {@link lockOwnYard} refuses (an attack is running,
  * or the row is not one of the caller's listed outposts).
  *
@@ -424,6 +448,7 @@ export const catchUpLockedOutpost = async (
     const now = getCurrentDateTime();
     const completed = catchUpYard(yard.save, now);
     await autobankYard(tx, yard.main, now, [], yard.outpost);
+    await recordAchievements(tx, yard.main, now, builtEvents(completed), yard.outpost);
     await tx.flush();
     return { save: yard.outpost, completed };
   });
@@ -490,6 +515,14 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       // An instant or paid repair shows on the map now, not at the next catch-up (#182 B).
       catchUpDamage(save);
       save.savetime = now;
+      // The account's, so on the main row from an outpost too (issue #204).
+      await recordAchievements(
+        tx,
+        yard.main,
+        now,
+        addEvents(builtEvents(completed), outcome.achievementEvents),
+        yard.outpost
+      );
 
       await tx.flush();
       const playerlevel = playerLevelOf(yard.main);
@@ -505,6 +538,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         playerlevel,
         // The account's, so from the main row on an outpost's answer too.
         onboarding: onboardingSummary(yard.main),
+        achievements: unseenAchievements(yard.main),
         outpost: yard.outpost ? String(yard.outpost.baseid) : null,
       };
     });
@@ -517,6 +551,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         completed: answer.completed,
         report: answer.report,
         playerlevel: answer.playerlevel,
+        ...(answer.achievements.length > 0 && { achievements: answer.achievements }),
       },
       outpost: answer.outpost,
     };

@@ -32,6 +32,12 @@ export interface UnlockRecord {
   seen?: 1;
   /** 1 when the first read's backfill found it (one summary pop-up, §8). */
   backfill?: 1;
+  /**
+   * 1 while its Shiny is still owed: it unlocked while rewards were switched
+   * off (`config/AchievementConfig.ts`). No bell line and no pop-up until the
+   * first evaluation with rewards on pays it.
+   */
+  unpaid?: 1;
 }
 
 /** Every stat, each a whole number that only ever goes up. */
@@ -78,7 +84,8 @@ const readStats = (raw: unknown): AchievementStats => {
 
 /**
  * The unlocks, keyed by a positive whole number. An id the catalogue does not
- * know is kept: whatever is in `c` has been paid and must never be paid again.
+ * know is kept: whatever is in `c` has been paid, or is owed once (`unpaid`),
+ * and must never be paid again.
  */
 const readCompleted = (raw: unknown): Record<string, UnlockRecord> => {
   const out: Record<string, UnlockRecord> = {};
@@ -90,6 +97,7 @@ const readCompleted = (raw: unknown): Record<string, UnlockRecord> => {
     const unlock: UnlockRecord = { at, shiny: count(value.shiny) };
     if (value.seen) unlock.seen = 1;
     if (value.backfill) unlock.backfill = 1;
+    if (value.unpaid) unlock.unpaid = 1;
     out[id] = unlock;
   }
   return out;
@@ -128,5 +136,5 @@ export const updateAchievements = (
 /** Whether the first read's backfill (§8) has still to run. */
 export const needsBackfill = (record: Achievements): boolean => record.backfilledAt === undefined;
 
-/** Whether achievement `id` is unlocked (and so paid). */
+/** Whether achievement `id` is unlocked (and so paid, or owed once). */
 export const isEarned = (record: Achievements, id: number): boolean => record.c[String(id)] !== undefined;

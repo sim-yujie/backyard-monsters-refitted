@@ -1,4 +1,5 @@
 import { YardBuildSchema, YardCancelBuildSchema } from "../../schemas/YardSchemas.js";
+import { placedFinishedEvents } from "../../services/achievements/record.js";
 import {
   fundedBuildingIds,
   isGuidedBuild,
@@ -20,14 +21,21 @@ import { defineYardAction } from "./yardAction.js";
  * (`planGuidedBuild`, `docs/design/tutorial.md` §2.4), records the grant and
  * moves the guide on, in the same commit. The Build menu sends the same
  * request either way; it only waives its own shortfall gate at that step.
+ *
+ * A Block or Heavy Trap placed finished counts as built for the
+ * achievements (issue #204); one that starts a countdown counts when it ends.
  */
 export const yardBuildAction = defineYardAction({
   schema: YardBuildSchema,
   run: ({ save, body, now }) => {
     const onboarding = readOnboarding(save);
-    if (!isGuidedBuild(save, onboarding, body.type)) return planBuild(save, body, now);
+    const built = (finished: boolean) => (finished ? placedFinishedEvents(body.type) : undefined);
+    if (!isGuidedBuild(save, onboarding, body.type)) {
+      const plan = planBuild(save, body, now);
+      return { ...plan, achievementEvents: built(plan.report.finished) };
+    }
     const { onboarding: guided, slices, ...plan } = planGuidedBuild(save, onboarding, body, now);
-    return { ...plan, slices: { ...slices, onboarding: guided } };
+    return { ...plan, slices: { ...slices, onboarding: guided }, achievementEvents: built(plan.report.finished) };
   },
   outposts: "allow",
 });
@@ -57,10 +65,14 @@ export const yardCancelBuildAction = defineYardAction({
 /**
  * `POST /bm/yard/build/instant` — place a new building finished, for Shiny:
  * no resources, no worker, its points now (§5.3). The wrapper refuses a
- * Shiny-locked account and a short balance.
+ * Shiny-locked account and a short balance. A Block or Heavy Trap counts as
+ * built for the achievements (issue #204).
  */
 export const yardInstantBuildAction = defineYardAction({
   schema: YardBuildSchema,
-  run: ({ save, body, now }) => planInstantBuild(save, body, now),
+  run: ({ save, body, now }) => ({
+    ...planInstantBuild(save, body, now),
+    achievementEvents: placedFinishedEvents(body.type),
+  }),
   outposts: "allow",
 });

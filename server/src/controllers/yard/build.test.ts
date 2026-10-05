@@ -81,7 +81,7 @@ const instant = (type: unknown, x: unknown, y: unknown) =>
 
 /** The row without the columns a request always moves (as in `upgrade.test.ts`). */
 const settled = (row: Row | null) => {
-  const { savetime: _savetime, monsters: _monsters, ...rest } = row!;
+  const { savetime: _savetime, monsters: _monsters, achievements: _achievements, ...rest } = row!;
   return rest;
 };
 

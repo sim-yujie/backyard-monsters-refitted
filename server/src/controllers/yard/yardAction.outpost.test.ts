@@ -28,6 +28,8 @@ import {
   type YardAction,
   type YardAnswer,
 } from "./yardAction.js";
+import { STARTER_KITS } from "../../game-data/starterKits.js";
+import { readAchievements } from "../../services/achievements/state.js";
 
 /**
  * The yard action wrapper on Map Room 2 outposts (outposts WP3, issue #184),
@@ -791,5 +793,56 @@ describe("Starter Kits (outposts WP9, issue #188)", () => {
     const answer = await call(yardStarterKitAction, { kit: 1, pay: "shiny" });
     expect(answer.status).toBe(409);
     expect(answer.body.reason).toBe("notOutpost");
+  });
+});
+
+describe("achievements (issue #204)", () => {
+  const RICH = { r1: 20_000_000, r2: 20_000_000, r3: 20_000_000, r4: 7 };
+  /** A record already worked out, so the tests see events rather than the backfill. */
+  const backfilled = { v: 1, s: {}, c: {}, backfilledAt: 1 };
+  const stats = () => readAchievements(mainSave()).s;
+
+  test("a Starter Kit counts on the main row's record; its Shiny-finished Blocks are not builds", async () => {
+    db.rows.set(MAIN, mainRow({ achievements: backfilled }));
+
+    const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+
+    expect(answer.status).toBe(200);
+    expect(stats()).toMatchObject({ starterkit: 1, blocksbuilt: 0 });
+    expect(outpostSave().achievements).toBeUndefined();
+  });
+
+  test("a kit paid with resources: its Blocks count when their countdowns end", async () => {
+    db.rows.set(MAIN, mainRow({ resources: RICH, achievements: backfilled }));
+    await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources" });
+    expect(stats().blocksbuilt).toBe(0);
+
+    outpostSave().savetime = now() - 29 * 24 * 60 * 60;
+    const answer = await onOutpost(yardStateAction);
+
+    const kitBlocks = STARTER_KITS.find((kit) => kit.id === 1)!.buildings.filter((b) => b.t === 17).length;
+    expect(kitBlocks).toBeGreaterThan(0);
+    expect(answer.body.completed).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "build", t: 17 })])
+    );
+    expect(stats()).toMatchObject({ starterkit: 1, blocksbuilt: kitBlocks });
+  });
+
+  test("the first action on an outpost backfills from every yard and writes only the main row", async () => {
+    db.rows.set(
+      OUTPOST,
+      outpostRow({
+        buildingdata: {
+          ...(outpostRow().buildingdata as Row),
+          "4": { id: 4, t: 17, X: 200, Y: 200, l: 1 },
+        },
+      })
+    );
+
+    await onOutpost(yardStateAction);
+
+    expect(readAchievements(mainSave())).toMatchObject({ s: { blocksbuilt: 1, wmoutpost: 1, thlevel: 10 } });
+    expect(readAchievements(mainSave()).backfilledAt).toBeGreaterThan(0);
+    expect(outpostSave().achievements).toBeUndefined();
   });
 });

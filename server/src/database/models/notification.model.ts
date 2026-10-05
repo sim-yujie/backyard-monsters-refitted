@@ -1,8 +1,12 @@
 import { Entity, Index, PrimaryKey, Property } from "@mikro-orm/decorators/es";
 import { BigIntType, type Opt, PrimaryKeyProp } from "@mikro-orm/core";
 
-/** A `jobs` row is one kind of job from a yard answer; an `away` row is a whole load's. */
-export type NotificationKind = "jobs" | "away";
+/**
+ * A `jobs` row is one kind of job from a yard answer; an `away` row is a whole
+ * load's; an `achievement` row is one paid unlock, or the backfill's together
+ * (`services/achievements/record.ts`, issue #204).
+ */
+export type NotificationKind = "jobs" | "away" | "achievement";
 
 /**
  * One entry in the yard's notification list (issue #257,

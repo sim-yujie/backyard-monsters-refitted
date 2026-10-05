@@ -40,6 +40,7 @@ import { calculateBaseLevel, playerLevelOf } from "../../../services/base/calcul
 import { RESOURCE_KEYS } from "../../../services/base/updateResources.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
 import { onboardingSummary } from "../../../services/onboarding/summary.js";
+import { unseenAchievements } from "../../../services/achievements/record.js";
 import { clearExpiredStoreItems } from "../../../services/base/clearExpiredStoreItems.js";
 import { syncDerivedLevels } from "../../../services/yard/derivedLevels.js";
 import { catchUpOwnerOutpost, catchUpOwnerYard } from "../../yard/yardRoute.js";
@@ -406,6 +407,11 @@ export const baseLoad: KoaController = async (ctx) => {
     ? EnumBaseRelationship.SELF
     : cellRelationship(user.alliance_id, ownerAllianceId, stances);
 
+  // The account's paid achievement unlocks not yet shown, on the owner's
+  // build-mode load, main yard or outpost (issue #204,
+  // `docs/design/achievements.md` §9.3). The catch-up above evaluated them.
+  const achievements = isOwner && !isInferno && type === BaseMode.BUILD ? unseenAchievements(user.save!) : [];
+
   const response: Record<string, unknown> = {
     ...filteredSave,
     relationship,
@@ -428,6 +434,7 @@ export const baseLoad: KoaController = async (ctx) => {
     // load, main yard or outpost (issue #227, `services/onboarding/summary.ts`).
     // The column itself is server-only and never sent.
     ...(isOwner && !isInferno && type === BaseMode.BUILD && { onboarding: onboardingSummary(user.save!) }),
+    ...(achievements.length > 0 && { achievements }),
     ...(cellHeight !== undefined && { cellheight: cellHeight }),
     ...(defenderForces && { defenderforces: defenderForces }),
     ...(championBrains && { attackerbrains: championBrains }),
