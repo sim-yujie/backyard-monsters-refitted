@@ -2,6 +2,7 @@ import type { EntityManager } from "@mikro-orm/core";
 import z from "zod";
 import { User } from "../../database/models/user.model.js";
 import { Status } from "../../enums/StatusCodes.js";
+import { VIEW_SAVE_FIELDS } from "../../services/achievements/record.js";
 import { publicAchievements, readPublicRecord } from "../../services/achievements/view.js";
 
 /**
@@ -23,6 +24,14 @@ export interface PlayerAchievementsAnswer {
 
 const ParamsSchema = z.object({ userid: z.coerce.number().int().positive() });
 
+/** The player's name and ban, and the save columns the record reads. */
+const PLAYER_FIELDS = [
+  "userid",
+  "username",
+  "banned",
+  ...VIEW_SAVE_FIELDS.map((field) => `save.${field}` as const),
+] as const;
+
 const notFound = (): PlayerAchievementsAnswer => ({
   status: Status.NOT_FOUND,
   body: { error: "That player could not be found.", reason: "notFound" },
@@ -41,7 +50,12 @@ export const playerAchievementsAnswer = async (
   const parsed = ParamsSchema.safeParse(rawParams ?? {});
   if (!parsed.success) return notFound();
 
-  const player = await em.findOne(User, { userid: parsed.data.userid }, { populate: ["save"] });
+  // Only the columns the record and its backfill read, not the whole yard.
+  const player = await em.findOne(
+    User,
+    { userid: parsed.data.userid },
+    { populate: ["save"], fields: PLAYER_FIELDS }
+  );
   const main = player?.save;
   if (!player || player.banned || !main) return notFound();
 

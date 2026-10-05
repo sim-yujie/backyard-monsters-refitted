@@ -1,6 +1,5 @@
 import type { EntityManager } from "@mikro-orm/core";
 import { achievementConfig } from "../../config/AchievementConfig.js";
-import type { Save } from "../../database/models/save.model.js";
 import {
   AVAILABLE_ACHIEVEMENTS,
   type AchievementDef,
@@ -8,7 +7,7 @@ import {
   type AchievementStat,
 } from "../../game-data/achievements.js";
 import { evaluateAchievements } from "./evaluate.js";
-import { readView, unseenAchievements, type UnlockView } from "./record.js";
+import { readView, unseenAchievements, type UnlockView, type ViewSave } from "./record.js";
 import {
   needsBackfill,
   readAchievements,
@@ -193,7 +192,7 @@ export const publicAchievements = (
  */
 export const readPublicRecord = async (
   em: EntityManager,
-  main: Save,
+  main: ViewSave,
   now: number,
   rewards: boolean = achievementConfig.rewards
 ): Promise<Achievements> => {

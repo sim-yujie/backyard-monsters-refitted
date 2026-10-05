@@ -155,7 +155,7 @@ export const achievementBatches = (paid: readonly UnlockView[], now: number): Ac
 };
 
 /** Whether any of the player's Map Room 1 Kozu tribes is still marked destroyed (§8). */
-const mr1KozuDestroyed = async (em: EntityManager, main: Save): Promise<boolean> => {
+const mr1KozuDestroyed = async (em: EntityManager, main: ViewSave): Promise<boolean> => {
   // `wmstatus` mirrors the tribe records' `destroyed` (`scaledMR1Tribes.ts`).
   // The client could once write it, so it only decides whether the read is
   // worth making; the tribe record, which only the server writes, decides.
@@ -176,7 +176,7 @@ const mr1KozuDestroyed = async (em: EntityManager, main: Save): Promise<boolean>
  */
 const outpostBuildings = async (
   em: EntityManager,
-  main: Save,
+  main: ViewSave,
   current: Save | null
 ): Promise<(BuildingDataMap | null | undefined)[]> => {
   const others = (main.outposts ?? [])
@@ -194,13 +194,34 @@ const outpostBuildings = async (
 };
 
 /**
+ * Every column of the main save that {@link readView} and `readAchievements`
+ * read, for a caller that loads only those (`controllers/achievements/player.ts`).
+ * A column the view starts reading goes here too.
+ */
+export const VIEW_SAVE_FIELDS = [
+  "userid",
+  "achievements",
+  "buildingdata",
+  "champion",
+  "lockerdata",
+  "resources",
+  "mapversion",
+  "outposts",
+  "onboarding",
+  "wmstatus",
+] as const satisfies readonly (keyof Save)[];
+
+/** The main save as {@link readView} reads it. */
+export type ViewSave = Pick<Save, (typeof VIEW_SAVE_FIELDS)[number]>;
+
+/**
  * The evaluator's view of the main save (`evaluate.ts`), with the backfill's
  * reads of other rows only while the record still needs its backfill. Only
  * reads; the public view (`view.ts`) uses it for a record never worked out.
  */
 export const readView = async (
   em: EntityManager,
-  main: Save,
+  main: ViewSave,
   outpost: Save | null,
   record: Achievements
 ): Promise<AchievementView> => {
