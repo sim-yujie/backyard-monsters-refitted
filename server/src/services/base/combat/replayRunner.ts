@@ -1,6 +1,7 @@
 import { availableParallelism } from "node:os";
 import type { AbandonedInput, AbandonedOutcome } from "./abandonedAttack.js";
 import type { ReplayedLoot, ReplayedLootInput } from "./attackLoot.js";
+import type { RaidFightInput, RaidFightOutcome } from "../../raids/raidFight.js";
 
 /**
  * Runs a battle replay in a Bun worker, with a deadline (issue #23, C5;
@@ -43,15 +44,17 @@ export const SAVE_REPLAY_DEADLINE_MS = 5_000;
  */
 export const FINALISE_REPLAY_DEADLINE_MS = 20_000;
 
-/** A replay to run: the save's loot cap, or an abandoned attack. */
+/** A replay to run: the save's loot cap, an abandoned attack, or a wild monster raid's fight (#226). */
 export type ReplayJob =
   | { readonly kind: "loot"; readonly input: ReplayedLootInput }
-  | { readonly kind: "abandoned"; readonly input: AbandonedInput };
+  | { readonly kind: "abandoned"; readonly input: AbandonedInput }
+  | { readonly kind: "raid"; readonly input: RaidFightInput };
 
 /** What the worker sends back. */
 export type ReplayReply =
   | { readonly ok: true; readonly kind: "loot"; readonly result: ReplayedLoot }
   | { readonly ok: true; readonly kind: "abandoned"; readonly result: AbandonedOutcome }
+  | { readonly ok: true; readonly kind: "raid"; readonly result: RaidFightOutcome }
   | { readonly ok: false; readonly error: string };
 
 /** The replay did not answer before its deadline, and was stopped. */
@@ -153,5 +156,20 @@ export const replayAbandonedInWorker = async (
 ): Promise<AbandonedOutcome> => {
   const reply = await run({ kind: "abandoned", input }, deadlineMs);
   if (reply.kind !== "abandoned") throw new Error("Battle replay answered the wrong job");
+  return reply.result;
+};
+
+/**
+ * A wild monster raid's fight (`fightRaid`, #226), in a worker. The player
+ * waits on it to start watching, so it gets the finaliser's longer deadline.
+ *
+ * @throws {ReplayTimeoutError} Past the deadline.
+ */
+export const fightRaidInWorker = async (
+  input: RaidFightInput,
+  deadlineMs = FINALISE_REPLAY_DEADLINE_MS
+): Promise<RaidFightOutcome> => {
+  const reply = await run({ kind: "raid", input }, deadlineMs);
+  if (reply.kind !== "raid") throw new Error("Battle replay answered the wrong job");
   return reply.result;
 };

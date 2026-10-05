@@ -3,6 +3,7 @@ import type { User } from "../../database/models/user.model.js";
 import { postgres, redis } from "../../server.js";
 import { readAttackSession } from "../base/attackSessionStore.js";
 import { ATTACK_TIMEOUT, isAttackActive } from "../base/isAttackActive.js";
+import type { RaidView } from "../raids/raidFlow.js";
 import { challengeKey, readLastAction } from "./online.js";
 
 /**
@@ -31,6 +32,12 @@ export interface PresenceAnswer {
    * locks the yard and reloads it once this is gone.
    */
   readonly attack?: { readonly by: string; readonly ends: number };
+  /**
+   * The wild monster raid open on the player's yard, in its warning or its
+   * fight (#226, `services/raids/raidFlow.ts`). Absent otherwise. Only the
+   * ping answers it: a ping that says "yard, Planner closed" may open one.
+   */
+  readonly raid?: RaidView;
 }
 
 /**

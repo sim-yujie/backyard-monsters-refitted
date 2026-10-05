@@ -55,6 +55,7 @@ import { infernoMonsters } from "./controllers/inferno/infernoMonsters.js";
 import { getNeighbours } from "./controllers/maproom/getNeighbours.js";
 import { getMapRoom1 } from "./controllers/maproom/getMapRoom1.js";
 import { presence, stayProtected } from "./controllers/maproom/presence.js";
+import { raidDevDue, raidEngage, raidFinish, raidFrequency, raidPrepare, raidStart } from "./controllers/raid/raid.js";
 import { botCheck, botCheckAnswer, botCheckForce, devCheckEnabled } from "./controllers/maproom/botCheck.js";
 
 import { getArea } from "./controllers/maproom/v2/getArea.js";
@@ -181,6 +182,16 @@ router.post("/api/:apiVersion/bm/presence/check/answer", apiVersion, verifyUserA
 // DEV only, never mounted in production: asks the caller for a check now.
 if (devCheckEnabled()) {
   router.post("/api/:apiVersion/bm/presence/check/dev", apiVersion, verifyUserAuth, botCheckReadLimiter, logRequest, botCheckForce);
+}
+// A wild monster raid on the player's yard (#226): the ping opens one; these answer it.
+router.post("/api/:apiVersion/bm/raid/engage", apiVersion, verifyUserAuth, logRequest, raidEngage);
+router.post("/api/:apiVersion/bm/raid/prepare", apiVersion, verifyUserAuth, logRequest, raidPrepare);
+router.post("/api/:apiVersion/bm/raid/start", apiVersion, verifyUserAuth, logRequest, raidStart);
+router.post("/api/:apiVersion/bm/raid/finish", apiVersion, verifyUserAuth, logRequest, raidFinish);
+router.post("/api/:apiVersion/bm/raid/frequency", apiVersion, verifyUserAuth, logRequest, raidFrequency);
+// DEV only, never mounted in production: the next raid is due now.
+if (devCheckEnabled()) {
+  router.post("/api/:apiVersion/bm/raid/dev/due", apiVersion, verifyUserAuth, logRequest, raidDevDue);
 }
 
 /**  ────────────────────────────────────────────────

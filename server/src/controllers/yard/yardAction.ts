@@ -29,8 +29,10 @@ import {
   notYourYardErr,
   yardBadRequestErr,
   yardRefusedErr,
+  yardRaidInProgressErr,
   yardUnderAttackErr,
 } from "../../services/yard/yardErrors.js";
+import { raidFighting } from "../../services/raids/raidLock.js";
 import { yardState } from "../../services/yard/yardState.js";
 import { onboardingSummary } from "../../services/onboarding/summary.js";
 import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
@@ -52,7 +54,9 @@ import { logger } from "../../utils/logger.js";
  * 2. Inside one transaction, re-read `user.save` with `SELECT … FOR UPDATE`
  *    (T4), so two requests for the same player run one after the other and
  *    the second sees what the first wrote. `409 notMainYard` unless it is the
- *    caller's own main yard, `409 underAttack` while `isAttackActive`.
+ *    caller's own main yard, `409 underAttack` while `isAttackActive`, and
+ *    `409 raidInProgress` while a wild monster raid is being fought on it
+ *    (#226, `services/raids/raidLock.ts`).
  * 3. `catchUpYard(save, now)`: finish every job that ended, award its points,
  *    move `savetime` to `now` (§2.3); then, if that left a level 2 Map Room
  *    on a yard not yet on Map Room 2, join a world (`joinMapRoom2`, §5.7);
@@ -295,6 +299,7 @@ const lockMainYard = async (em: EntityManager, user: User): Promise<Save> => {
 
   if (!save || save.type !== BaseType.MAIN || save.userid !== user.userid) throw notMainYardErr();
   if (isAttackActive(save)) throw yardUnderAttackErr();
+  if (raidFighting(save, getCurrentDateTime())) throw yardRaidInProgressErr();
 
   return save;
 };
@@ -415,13 +420,26 @@ export const catchUpLockedYard = async (
     if (!locked || isAttackActive(locked)) return { save: locked ?? save, completed: [] };
 
     const now = getCurrentDateTime();
-    const completed = catchUpYard(locked, now);
-    await joinMapRoom2(tx, locked);
-    await autobankYard(tx, locked, now, completed);
+    const completed = await catchUpLockedRow(tx, locked, now);
     await recordAchievements(tx, locked, now, builtEvents(completed));
     await tx.flush();
     return { save: locked, completed };
   });
+
+/**
+ * The main yard's catch-up on a row the caller has locked, not yet flushed:
+ * `catchUpYard`, then Map Room 2 if it now qualifies, then the outpost income.
+ * {@link catchUpLockedYard}'s, and a wild monster raid's at its start and its
+ * finish (#226, `services/raids/raidFlow.ts`).
+ *
+ * @returns What the catch-up finished.
+ */
+export const catchUpLockedRow = async (tx: EntityManager, locked: Save, now: number): Promise<CompletedJob[]> => {
+  const completed = catchUpYard(locked, now);
+  await joinMapRoom2(tx, locked);
+  await autobankYard(tx, locked, now, completed);
+  return completed;
+};
 
 /**
  * Catches an owner's outpost up under the row locks and writes it: the

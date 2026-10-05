@@ -15,6 +15,7 @@ import { getGeneratedCells, cellKey } from "../../../../services/maproom/v3/gene
 import { createAttackLog } from "../../../../services/base/createAttackLog.js";
 import { updateResources, Operation } from "../../../../services/base/updateResources.js";
 import { isAttackActive } from "../../../../services/base/isAttackActive.js";
+import { raidFighting } from "../../../../services/raids/raidLock.js";
 import { baseNotFoundErr, baseUnderAttackErr, baseProtectedErr, userOnlineErr, truceActiveErr, shinyLockedErr } from "../../../../errors/errors.js";
 import { ATTACK_ONLINE_SECONDS, isPlayerOnline } from "../../../../services/user/online.js";
 import { isTruceActive } from "../../../../services/mail/isTruceActive.js";
@@ -96,6 +97,8 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
     if (save.protected > getCurrentDateTime()) throw baseProtectedErr();
 
     if (isAttackActive(save)) throw baseUnderAttackErr();
+    // A wild monster raid being fought locks the yard as an attack does (#226, `raidLock.ts`).
+    if (raidFighting(save, getCurrentDateTime())) throw baseUnderAttackErr();
 
     // Online means a game open (a presence mark from the last minute) AND
     // real play in the last ten minutes: a ping alone protects nobody (#271).

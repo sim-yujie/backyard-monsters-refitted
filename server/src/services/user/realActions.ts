@@ -139,6 +139,12 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   { method: "POST", path: "/api/:apiVersion/bm/yardplanner/traps/rearm" },
   // The "Stay protected?" prompt's tap (#275): the player said they are there.
   { method: "POST", path: "/api/:apiVersion/bm/presence/stay" },
+  // A wild monster raid on the player's yard (#226): every answer to it, so watching one keeps them online.
+  { method: "POST", path: "/api/:apiVersion/bm/raid/engage" },
+  { method: "POST", path: "/api/:apiVersion/bm/raid/prepare" },
+  { method: "POST", path: "/api/:apiVersion/bm/raid/start" },
+  { method: "POST", path: "/api/:apiVersion/bm/raid/finish" },
+  { method: "POST", path: "/api/:apiVersion/bm/raid/frequency" },
   // The in-game check (#273), answered right: the player is there after all.
   { method: "POST", path: "/api/:apiVersion/bm/presence/check/answer", when: isSolvedCheck },
   // Yard actions.

@@ -8,6 +8,7 @@ import { playerLevelOf } from "../base/calculateBaseLevel.js";
 import { isAttackActive } from "../base/isAttackActive.js";
 import { ATTACK_ONLINE_SECONDS, isOnline, readPresenceMarks, type PresenceMarks } from "../user/online.js";
 import { damagedBuildings } from "../yard/repair.js";
+import { readFightLock, type RaidFightLock } from "./raidLock.js";
 import { RAID_PREFERENCES, type RaidPreference } from "./raidPreferences.js";
 import { readOpenRaid, readRaidScreen, type RaidScreen } from "./raidStore.js";
 
@@ -78,6 +79,8 @@ export interface RaidSchedule {
   /** The last raid applied, so a second finish of it applies nothing. */
   readonly lastRaidId?: string;
   readonly recent: readonly RaidRecord[];
+  /** The raid being fought, which locks the yard until it lands (`raidLock.ts`, WP3). */
+  readonly fight?: RaidFightLock;
   /** Flash's Trojan Horse state, left as it is for the backlog's issue (#306). */
   readonly s1?: unknown;
 }
@@ -121,6 +124,7 @@ export const readSchedule = (raw: unknown): RaidSchedule => {
   const stored = isObject(raw) ? raw : {};
   const preference = whole(stored.attackPreference) ?? 0;
   const nextAttack = whole(stored.nextAttack);
+  const fight = readFightLock(stored.fight);
   const recent = Array.isArray(stored.recent)
     ? stored.recent.flatMap((entry) => readRecord(entry) ?? []).slice(0, RECENT_RAIDS_KEPT)
     : [];
@@ -132,6 +136,7 @@ export const readSchedule = (raw: unknown): RaidSchedule => {
     attackPreference: Math.sign(preference) as RaidPreference,
     ...(typeof stored.lastRaidId === "string" ? { lastRaidId: stored.lastRaidId } : {}),
     recent,
+    ...(fight ? { fight } : {}),
     ...("s1" in stored ? { s1: stored.s1 } : {}),
   };
 };
@@ -143,10 +148,11 @@ export const scheduleColumn = (schedule: RaidSchedule): JsonObject => structured
  * One own-main-yard build load (`WMATTACK.Setup`, `:143-202`): one more
  * session, and the next raid's time when the last is over 4 days old (60
  * seconds from now, renewed on every load, as Flash did) or when none is set
- * yet (the wait the player's preference gives).
+ * yet (the wait the player's preference gives). A load cancels any fight
+ * (`cancelRaidOnYardLoad`), so the yard's fight lock goes too.
  */
 export const startSession = (schedule: RaidSchedule, now: number): RaidSchedule => {
-  const sessions = { ...schedule, sessionsSinceLastAttack: schedule.sessionsSinceLastAttack + 1 };
+  const sessions = { ...withoutFightLock(schedule), sessionsSinceLastAttack: schedule.sessionsSinceLastAttack + 1 };
   if (now - schedule.lastattack > LONG_GAP_SECONDS) return { ...sessions, nextAttack: now + FIRST_RAID_DELAY_SECONDS };
   if (schedule.nextAttack === undefined) {
     return { ...sessions, nextAttack: schedule.lastattack + RAID_PREFERENCES[schedule.attackPreference].waitSeconds };
@@ -194,13 +200,22 @@ export const raidAlreadyApplied = (schedule: RaidSchedule, raidId: string): bool
  * due and comes back on the player's next yard visit (owner, Q1).
  */
 export const recordRaidFinished = (schedule: RaidSchedule, record: RaidRecord): RaidSchedule => ({
-  ...schedule,
+  ...withoutFightLock(schedule),
   lastattack: record.at,
   nextAttack: record.at + RAID_PREFERENCES[schedule.attackPreference].waitSeconds,
   sessionsSinceLastAttack: 0,
   lastRaidId: record.id,
   recent: [record, ...schedule.recent].slice(0, RECENT_RAIDS_KEPT),
 });
+
+/** The yard locked for a raid's fight (`raidLock.ts`). */
+export const withFightLock = (schedule: RaidSchedule, fight: RaidFightLock): RaidSchedule => ({ ...schedule, fight });
+
+/** The yard's fight lock lifted. */
+export const withoutFightLock = (schedule: RaidSchedule): RaidSchedule => {
+  const { fight: _fight, ...rest } = schedule;
+  return rest;
+};
 
 /** Why no raid is due; the gates in the order they are checked. */
 export type RaidNotDue =

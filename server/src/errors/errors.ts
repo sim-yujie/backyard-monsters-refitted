@@ -925,3 +925,47 @@ export const autoAttackRefusedErr = (reason: AutoAttackRefusal, details: object 
     data: { reason, ...details },
     isClientFriendly: false,
   });
+
+/** Why a wild monster raid route said no (#226 WP3, `controllers/raid/raid.ts`). */
+export type RaidRefusal =
+  | "badRequest"
+  | "notMainYard"
+  | "noRaid"
+  | "notWarning"
+  | "notYet"
+  | "notFighting"
+  | "tooEarly"
+  | "cancelled"
+  | "underAttack"
+  | "busy";
+
+const RAID_REFUSAL_MESSAGES: Record<RaidRefusal, string> = {
+  badRequest: "That raid request was not understood.",
+  notMainYard: "Wild monsters only raid your main yard.",
+  noRaid: "That raid is over or was called off.",
+  notWarning: "That raid has already started.",
+  notYet: "The wild monsters have not arrived yet.",
+  notFighting: "That raid has not started yet.",
+  tooEarly: "The raid is still going on.",
+  cancelled: "The raid was called off because the game was closed during it.",
+  underAttack: "Your yard is under attack right now. The wild monsters will wait.",
+  busy: "The server is busy. Try again in a moment.",
+};
+
+/**
+ * A wild monster raid route refused (`409`, or `503 busy` when the fight could
+ * not be run in time); `data.reason` says why. `tooEarly` carries `readyAt`,
+ * `notYet` `attackAt`.
+ */
+export const raidRefusedErr = (reason: RaidRefusal, details: object = {}) =>
+  new ClientSafeError({
+    message: RAID_REFUSAL_MESSAGES[reason],
+    status:
+      reason === "busy"
+        ? Status.SERVICE_UNAVAILABLE
+        : reason === "badRequest"
+          ? Status.BAD_REQUEST
+          : Status.CONFLICT,
+    data: { reason, ...details },
+    isClientFriendly: true,
+  });
