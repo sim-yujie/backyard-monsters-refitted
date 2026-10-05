@@ -130,6 +130,18 @@ describe("a Baiter test's report", () => {
     expect(report).toMatchObject({ result: "stopped", resultLine: "Stopped", attackersSent: 0, attackersBeaten: 0 });
   });
 
+  it("counts its times from the first drop, not from when the screen opened", () => {
+    const battle = createBattle(yardOf(TWO_CANNONS), { seed: 1 });
+    run(battle, 800);
+    battle.apply({ ...fling(-100, -100, { C1: 3 }), t: battle.tick });
+    run(battle, 1600);
+    const state = battle.state();
+    const near = state.towers.find((tower) => tower.id === 1)!;
+    const report = reportOf(battle, TWO_CANNONS, { startTick: 800 });
+    expect(report.time).toBe(clockOf(state.tick - 800));
+    expect(report.towers[0]!.firstShot).toBe(clockOf(near.firstShotTick! - 800));
+  });
+
   it("reads one result line per end reason", () => {
     expect(resultOf("exhausted")).toBe("held");
     expect(resultOf("destroyed")).toBe("flattened");

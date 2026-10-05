@@ -32,13 +32,17 @@ import { buildTestReport } from "./testReport";
  * first drop and handed back when the test really finishes.
  */
 
+/** Close enough to make out one tower: the attack screen's opening zoom. */
+const TOWER_ZOOM = 0.9;
+
 /**
  * Moves the camera so `world` sits in the middle of what the report leaves
  * uncovered: left of it when it stands at the right, above it when it is a
- * bottom sheet on a phone.
+ * bottom sheet on a phone. From further out it zooms in first.
  */
 const showBeside = (mounts: AttackMounts, world: { x: number; y: number }, cover: DOMRect | null): void => {
   const { camera } = mounts;
+  if (camera.zoom < TOWER_ZOOM) camera.zoomAt(TOWER_ZOOM, { x: 0, y: 0 });
   camera.centreOn(world);
   const view = mounts.canvas.getBoundingClientRect();
   if (cover && view.width > 0 && view.height > 0) {
@@ -99,6 +103,7 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
         buildingsDestroyed: facts.buildingsDestroyed,
         buildingsTotal: facts.buildingsTotal,
         championFell,
+        startTick: session.flingLog().events.find((event) => event.kind === "fling")?.t ?? 0,
       }),
       onBuilding: (id) => {
         const building = mounts.yard.buildings.find((one) => one.id === id);

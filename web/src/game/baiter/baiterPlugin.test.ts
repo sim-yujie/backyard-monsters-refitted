@@ -325,7 +325,13 @@ describe("a Baiter test", () => {
   it("shows a tower tapped in the report: the camera centres on it and rings it (#22, WP4)", () => {
     const run = runOf();
     const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
-    const camera = { screenToWorld: (point: { x: number; y: number }) => point, centreOn: vi.fn(), panByScreen: vi.fn() };
+    const camera = {
+      zoom: 0.3,
+      screenToWorld: (point: { x: number; y: number }) => point,
+      zoomAt: vi.fn(),
+      centreOn: vi.fn(),
+      panByScreen: vi.fn(),
+    };
     const setSelected = vi.fn();
     const renderer = {
       yardToWorld: (x: number, y: number) => ({ x, y }),
@@ -347,6 +353,8 @@ describe("a Baiter test", () => {
     expect(rows.map((row) => row.querySelector("th")!.textContent)).toEqual(["Cannon Tower L1"]);
     rows[0]!.querySelector<HTMLButtonElement>(".test-report__show")!.click();
     const cannon = readYard(ownYard()).buildings.find((building) => building.id === 2)!;
+    // From the fitted view it zooms in first, close enough to make out one tower.
+    expect(camera.zoomAt).toHaveBeenCalledWith(0.9, expect.anything());
     expect(camera.centreOn).toHaveBeenCalledWith({ x: cannon.centreX, y: cannon.centreY });
     expect(setSelected).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }));
   });

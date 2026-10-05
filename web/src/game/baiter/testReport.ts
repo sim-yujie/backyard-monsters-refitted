@@ -36,6 +36,11 @@ export interface TestReportInput {
   readonly buildingsTotal: number;
   /** The tick each attacking champion fell at, by champion id, as the scene saw it. */
   readonly championFell?: Readonly<Record<string, number>>;
+  /**
+   * The tick of the first drop: the battle's clock runs from the moment the
+   * screen opens, and the report's times count from the first drop. 0 when absent.
+   */
+  readonly startTick?: number;
 }
 
 /** How the test ended: the army beaten, every building down, the clock out, or stopped. */
@@ -149,8 +154,13 @@ const sum = (values: Iterable<number>): number => {
 };
 
 /** "Standing, 72%" off the battle's health map (absent is full), or when it fell. */
-const fateOf = (destroyedTick: number | null, health: number | undefined, maxHp: number): string => {
-  if (destroyedTick !== null) return `Destroyed at ${clockOf(destroyedTick)}`;
+const fateOf = (
+  at: (tick: number) => string,
+  destroyedTick: number | null,
+  health: number | undefined,
+  maxHp: number,
+): string => {
+  if (destroyedTick !== null) return `Destroyed at ${at(destroyedTick)}`;
   if (maxHp <= 0) return "Standing";
   const left = health ?? maxHp;
   return `Standing, ${Math.max(0, Math.floor((left / maxHp) * 100))}%`;
@@ -191,6 +201,7 @@ const hintOf = (state: BattleState): string | null => {
 export const buildTestReport = (input: TestReportInput): TestReport => {
   const { state } = input;
   const buildings = new Map(input.buildings.map((building) => [building.id, building]));
+  const at = (tick: number): string => clockOf(tick - (input.startTick ?? 0));
 
   const towers: TowerRow[] = [...state.towers]
     .sort(
@@ -206,15 +217,15 @@ export const buildTestReport = (input: TestReportInput): TestReport => {
       damage: tower.damageDealt,
       kills: tower.kills,
       shots: tower.shots,
-      firstShot: tower.firstShotTick === null ? "Never fired" : clockOf(tower.firstShotTick),
+      firstShot: tower.firstShotTick === null ? "Never fired" : at(tower.firstShotTick),
       fired: tower.firstShotTick !== null,
-      fate: fateOf(tower.destroyedTick, state.health[String(tower.id)], buildings.get(tower.id)?.maxHp ?? 0),
+      fate: fateOf(at, tower.destroyedTick, state.health[String(tower.id)], buildings.get(tower.id)?.maxHp ?? 0),
     }));
 
   const traps: TrapRow[] = state.traps.map((trap) => ({
     id: trap.id,
     name: typeName(trap.type),
-    at: clockOf(trap.tick),
+    at: at(trap.tick),
     damage: trap.damageDealt,
     kills: trap.kills,
   }));
@@ -231,7 +242,7 @@ export const buildTestReport = (input: TestReportInput): TestReport => {
       damage: bunker.damageDealt,
       kills: bunker.kills,
       lost,
-      fate: fateOf(bunker.destroyedTick, state.health[String(bunker.id)], building?.maxHp ?? 0),
+      fate: fateOf(at, bunker.destroyedTick, state.health[String(bunker.id)], building?.maxHp ?? 0),
     };
   });
 
@@ -265,7 +276,7 @@ export const buildTestReport = (input: TestReportInput): TestReport => {
         name: championEntry(row.monsterId)?.name ?? "Champion",
         survived,
         health: survived ? health : 0,
-        fellAt: !survived && fell !== undefined ? clockOf(fell) : null,
+        fellAt: !survived && fell !== undefined ? at(fell) : null,
       };
     });
 
@@ -276,7 +287,7 @@ export const buildTestReport = (input: TestReportInput): TestReport => {
     damagePercent: input.damagePercent,
     buildingsDestroyed: input.buildingsDestroyed,
     buildingsTotal: input.buildingsTotal,
-    time: clockOf(state.tick),
+    time: at(state.tick),
     attackersSent: sum(monsters.map((row) => row.sent + row.spawned)),
     attackersBeaten: sum(monsters.map((row) => row.lost)),
     champions,
