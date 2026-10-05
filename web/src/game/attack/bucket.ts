@@ -373,6 +373,11 @@ export class Bucket {
 
   /* ── Listening ──────────────────────────────────────────────────────── */
 
+  /** Whether a last army is kept at all: not on a Baiter test (#22, WP3). */
+  remembersLast(): boolean {
+    return this.storage !== null;
+  }
+
   /** Hears about every change. Not called on subscribe. Returns the unsubscribe. */
   subscribe(fn: (bucket: Bucket) => void): () => void {
     this.listeners.add(fn);
@@ -457,11 +462,14 @@ export class Bucket {
 
 const buckets = new WeakMap<AttackSession, Bucket>();
 
-/** The one bucket for a session, made on first ask. */
-export const bucketFor = (session: AttackSession): Bucket => {
+/**
+ * The one bucket for a session, made on first ask. `options` count only on
+ * that first ask, so every package of one scene passes the same ones.
+ */
+export const bucketFor = (session: AttackSession, options?: BucketOptions): Bucket => {
   let bucket = buckets.get(session);
   if (!bucket) {
-    bucket = new Bucket(session);
+    bucket = new Bucket(session, options);
     buckets.set(session, bucket);
   }
   return bucket;

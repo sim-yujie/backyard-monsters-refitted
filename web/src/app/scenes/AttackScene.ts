@@ -520,7 +520,7 @@ export class AttackScene implements Scene {
     const title = document.createElement("span");
     title.className = "attack-strip__title";
     title.textContent = this.practice
-      ? "Practice attack"
+      ? "Test attack"
       : this.watching && this.target
         ? `Replay: ${this.target.name} camp`
         : this.target
@@ -580,7 +580,7 @@ export class AttackScene implements Scene {
     tutTarget(retreat, TutTarget.ATTACK_RETREAT);
     retreat.textContent = this.practice ? "Stop" : this.watching ? "End replay" : "Retreat";
     retreat.title = this.practice
-      ? "End the practice attack now"
+      ? "End the test now"
       : this.watching
         ? "Stop watching"
         : "End the attack now";
@@ -757,7 +757,7 @@ export class AttackScene implements Scene {
     const sent = Object.values(state.remaining).reduce((sum, count) => sum + count, 0);
     if (this.practice) {
       status.textContent =
-        `Practice on your yard · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
+        `Test on your yard · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
         `${state.creepsAlive} attacking`;
       return;
     }

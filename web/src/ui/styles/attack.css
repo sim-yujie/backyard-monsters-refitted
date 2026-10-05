@@ -600,7 +600,8 @@
   font-size: var(--text-sm);
 }
 
-.attack-army__champion-retreat[hidden] {
+.attack-army__champion-retreat[hidden],
+.attack-army__load-last[hidden] {
   display: none;
 }
 

@@ -34,9 +34,16 @@
  * by the bomb's cost the moment the bomb is fired — the same number the
  * Catapult panel's rows read. The server charges the same cost when the
  * attack is saved (#90); nothing here writes it.
+ *
+ * ## A Baiter test
+ *
+ * The Monster Baiter's test screen mounts the same tap-to-drop in its test
+ * flavour ({@link testDropPlugin}, issue #22 WP3): monsters and champions
+ * only (owner answer Q7), so neither picker nor its key is offered, and the
+ * bucket keeps no last army (`bucketOptionsOf`).
  */
 import type { Resources } from "@/api/types";
-import { ATTACK_PLUGINS, type AttackPlugin } from "@/app/scenes/AttackScene";
+import { ATTACK_PLUGINS, type AttackPlugin } from "@/game/attack/attackPlugins";
 import {
   AttackInput,
   parseSiegeStock,
@@ -49,6 +56,7 @@ import {
 } from "@/game/attack/AttackInput";
 import { hudResources, poolOf, spendBomb, type AttackerPool } from "@/game/attack/attackerPool";
 import { bucketFor } from "@/game/attack/bucket";
+import { bucketOptionsOf, type TestFlavour } from "@/game/attack/plugins/army";
 import { DropHighlight } from "@/game/attack/dropHighlight";
 import { CatapultPanel } from "@/ui/attack/CatapultPanel";
 import { SiegePanel } from "@/ui/attack/SiegePanel";
@@ -95,9 +103,10 @@ class DropRing {
   }
 }
 
-const plugin: AttackPlugin = (mounts) => {
+/** The drop package, in a real attack's flavour or a Baiter test's. */
+export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mounts) => {
   const { session, target, yard, renderer, camera, canvas, dock, notices } = mounts;
-  const bucket = bucketFor(session);
+  const bucket = bucketFor(session, bucketOptionsOf(flavour));
   const catapultLevel = target.roster.catapultLevel;
 
   /* ── The attacker's inventory ─────────────────────────────────────── */
@@ -154,7 +163,7 @@ const plugin: AttackPlugin = (mounts) => {
   siegeButton.setAttribute("aria-expanded", "false");
 
   tools.append(catapultButton, siegeButton);
-  dock.append(tools);
+  if (!flavour.test) dock.append(tools);
 
   let catapult: CatapultPanel | null = null;
   let siege: SiegePanel | null = null;
@@ -283,8 +292,7 @@ const plugin: AttackPlugin = (mounts) => {
     onRefuse: (reason) => notices.show("attack-drop", reason, { level: "info", timeoutMs: 2500 }),
     onToolUsed,
     onToolChange: () => refreshPanels(),
-    onOpenCatapult: toggleCatapult,
-    onOpenSiege: toggleSiege,
+    ...(flavour.test ? {} : { onOpenCatapult: toggleCatapult, onOpenSiege: toggleSiege }),
   });
   input.attach();
 
@@ -315,7 +323,10 @@ const plugin: AttackPlugin = (mounts) => {
   };
 };
 
-ATTACK_PLUGINS.push(plugin);
+/** A real attack's drop package. */
+export const dropPlugin: AttackPlugin = createDropPlugin();
 
-/** The plugin itself, for the tests. */
-export { plugin as dropPlugin };
+/** The Baiter test's drop package: tap to drop the army, no bombs or siege. */
+export const testDropPlugin: AttackPlugin = createDropPlugin({ test: true });
+
+ATTACK_PLUGINS.push(dropPlugin);

@@ -220,6 +220,8 @@ export class ArmyPanel {
       }
     });
     this.loadLastButton.title = "Recall the composition you sent last";
+    // A Baiter test keeps no last army, so there is none to recall (#22, WP3).
+    this.loadLastButton.hidden = !bucket.remembersLast();
     actions.append(this.fillAllButton, this.clearButton, this.loadLastButton);
 
     // One row per housed type, in roster order.

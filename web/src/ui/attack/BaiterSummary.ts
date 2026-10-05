@@ -1,7 +1,6 @@
 import type { AttackEndReason, AttackSessionState } from "@/game/attack/AttackSession";
 import { picksOf, type BaiterRun } from "@/game/baiter/baiterSession";
 import { championEntry } from "@/game/yard/championCatalogue";
-import { monsterName } from "@/ui/attack/ArmyPanel";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 import "@/ui/styles/baiter.css";
@@ -11,55 +10,42 @@ import "@/ui/styles/baiter.css";
  * what is attacking while it runs, and the summary when it is over.
  */
 
-/** The docked panel: the test army, each at its level, and that nothing is saved. */
+/**
+ * The docked panel above the army panel (#22, WP3): names the test, says
+ * nothing is saved, and keeps count while it runs. The army itself, each row
+ * at its level, is in the army panel below it.
+ */
 export class BaiterDock {
   readonly element: HTMLElement;
   private readonly panel: Panel;
   private readonly progress: HTMLElement;
 
   constructor(run: BaiterRun) {
-    this.panel = new Panel({ title: "Practice attack", closable: false, className: "map-panel baiter-dock" });
+    this.panel = new Panel({ title: "Test attack", closable: false, className: "map-panel baiter-dock" });
     this.element = this.panel.element;
 
-    const from = document.createElement("p");
-    from.className = "baiter__note";
-    from.textContent = "Your test army, against your yard as it is now.";
+    const note = document.createElement("p");
+    note.className = "baiter__note";
+    note.textContent = "Test attack: nothing is saved. Your yard, its traps and your resources stay as they are.";
 
-    const list = document.createElement("ul");
-    list.className = "baiter__list";
-    list.setAttribute("aria-label", "The attacking army");
-    const row = (label: string, detail: string): void => {
-      const item = document.createElement("li");
-      item.className = "baiter-dock__row";
-      const name = document.createElement("span");
-      name.className = "baiter__monster";
-      name.textContent = label;
-      const amount = document.createElement("span");
-      amount.className = "baiter__each";
-      amount.textContent = detail;
-      item.append(name, amount);
-      list.append(item);
-    };
-    for (const [id, count] of Object.entries(picksOf(run.army))) {
-      row(`${monsterName(id)} L${run.army.monsters[id]?.level ?? 1}`, `× ${formatAmount(count)}`);
-    }
-    for (const champion of run.army.champions) {
-      row(`${championEntry(champion.t)?.name ?? "Champion"} L${champion.l}`, "champion");
-    }
+    const army = document.createElement("p");
+    army.className = "baiter__note";
+    const sent = Object.values(picksOf(run.army)).reduce((sum, count) => sum + count, 0);
+    const champions = run.army.champions.map((champion) => championEntry(champion.t)?.name ?? "Champion");
+    army.textContent =
+      `${formatAmount(sent)} monsters` + (champions.length > 0 ? ` and ${champions.join(" and ")}` : "") +
+      ". Tap the yard to drop them.";
 
     this.progress = document.createElement("p");
     this.progress.className = "baiter__figures";
     this.progress.setAttribute("aria-live", "polite");
 
-    const note = document.createElement("p");
-    note.className = "baiter__note";
-    note.textContent = "Only practice: your yard, its traps and your resources stay as they are.";
-
-    this.panel.setContent(from, list, this.progress, note);
+    this.panel.setContent(note, army, this.progress);
   }
 
+  /** Goes first in the dock, above the army panel. */
   mount(container: HTMLElement): this {
-    container.append(this.element);
+    container.prepend(this.element);
     return this;
   }
 
