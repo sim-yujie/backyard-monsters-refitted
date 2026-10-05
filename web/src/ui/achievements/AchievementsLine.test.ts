@@ -57,7 +57,19 @@ describe("achievementsLine", () => {
     const { options, onOpen } = setUp(async () => bob);
     const line = achievementsLine(42, "Bob", options);
     line.click();
-    expect(onOpen).toHaveBeenCalledWith(42, "Bob");
+    expect(onOpen).toHaveBeenCalledWith(42, "Bob", undefined);
+  });
+
+  it("hands the list its fresh answer, so opening it does not ask again", async () => {
+    let now = 1_000;
+    const { options, onOpen } = setUp(async () => bob, () => now);
+    const line = achievementsLine(42, "Bob", options);
+    await settle();
+    line.click();
+    expect(onOpen).toHaveBeenLastCalledWith(42, "Bob", bob);
+    now += LINE_FRESH_MS;
+    line.click();
+    expect(onOpen).toHaveBeenLastCalledWith(42, "Bob", undefined);
   });
 
   it("shows no badges for a player with none earned", async () => {

@@ -308,7 +308,7 @@ export class MapRoom1Ui {
    */
   private achievementsLine(neighbour: Mr1Neighbour): HTMLElement {
     return achievementsLine(neighbour.userid, neighbour.name, {
-      onOpen: (userid, name) => void this.hud.achievements?.openPlayer(userid, name),
+      onOpen: (userid, name, known) => void this.hud.achievements?.openPlayer(userid, name, known),
     });
   }
 

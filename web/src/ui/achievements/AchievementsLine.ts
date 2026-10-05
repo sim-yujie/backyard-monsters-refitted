@@ -30,8 +30,11 @@ export const LINE_CACHE_SIZE = 50;
 export const NEWEST_BADGES = 3;
 
 export interface AchievementsLineOptions {
-  /** Opens the read-only list: `AchievementsDoor.openPlayer`. */
-  readonly onOpen: (userid: number, name: string) => void;
+  /**
+   * Opens the read-only list: `AchievementsDoor.openPlayer`. `known` is the
+   * kept answer while it is fresh, so the list need not ask again.
+   */
+  readonly onOpen: (userid: number, name: string, known?: PlayerAchievements) => void;
   /** The route, for a test. */
   readonly fetch?: (userid: number) => Promise<PlayerAchievements>;
   /** The clock, for a test. */
@@ -90,7 +93,6 @@ export const achievementsLine = (
   count.textContent = "…";
   line.append(label, badges, count, icon("chevronRight", 16, "ach-line__more"));
   line.setAttribute("aria-label", `${name}'s achievements`);
-  line.addEventListener("click", () => options.onOpen(userid, name));
 
   const fill = (player: PlayerAchievements | null): void => {
     if (!player) {
@@ -110,5 +112,9 @@ export const achievementsLine = (
   const entry = lookUp(userid, options);
   if (entry.settled !== undefined) fill(entry.settled);
   else void entry.answer.then(fill);
+  line.addEventListener("click", () => {
+    const fresh = (options.now ?? Date.now)() - entry.at < LINE_FRESH_MS;
+    options.onOpen(userid, name, fresh && entry.settled ? entry.settled : undefined);
+  });
   return line;
 };

@@ -204,6 +204,19 @@ describe("AchievementsScreen: someone else's, read-only", () => {
     expect(screen.element.querySelectorAll(".ach-badge--plain").length).toBe(3);
   });
 
+  it("shows an answer already in hand without asking again", async () => {
+    const calls = api();
+    const screen = new AchievementsScreen({ api: calls }).mount(document.body);
+    await screen.openPlayer(77, "Bobby", someone());
+    expect(calls.player).not.toHaveBeenCalled();
+    expect(text(screen.element, ".panel__title")).toBe("Bob's achievements");
+    expect(text(screen.element, ".ach-summary")).toBe("1 of 3 earned");
+    expect(rows(screen, 1).map((row) => row.dataset["achievement"])).toEqual(["1"]);
+    // Opened again with nothing in hand, it asks.
+    await screen.openPlayer(77, "Bobby");
+    expect(calls.player).toHaveBeenCalledOnce();
+  });
+
   it("says None yet when they have earned nothing", async () => {
     const nothing = { ...someone(), earned: 0, achievements: someone().achievements.filter((one) => one.status !== "earned") };
     const screen = new AchievementsScreen({ api: api({ player: vi.fn(async () => nothing) }) }).mount(document.body);
@@ -267,7 +280,8 @@ describe("AchievementsDoor", () => {
     const container = document.createElement("div");
     document.body.append(container);
     const onOpen = vi.fn();
-    const door = new AchievementsDoor({ container: () => container, onOpen, api: api() });
+    const calls = api();
+    const door = new AchievementsDoor({ container: () => container, onOpen, api: calls });
     expect(container.querySelector(".ach-screen")).toBeNull();
     expect(door.isOpen).toBe(false);
 
@@ -279,6 +293,10 @@ describe("AchievementsDoor", () => {
     await door.openPlayer(77, "Bob");
     expect(container.querySelectorAll(".ach-screen").length).toBe(1);
     expect(onOpen).toHaveBeenCalledTimes(2);
+
+    // An answer in hand reaches the screen, which does not ask for it.
+    await door.openPlayer(77, "Bob", someone());
+    expect(calls.player).toHaveBeenCalledOnce();
 
     door.close();
     expect(door.isOpen).toBe(false);
