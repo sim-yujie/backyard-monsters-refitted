@@ -37,6 +37,8 @@ const db = {
   readOptions: [] as unknown[],
   /** Awaited after a locked read, while the lock is held. */
   afterLockedRead: null as (() => Promise<void>) | null,
+  /** Makes the next commit fail after the callback returned (a lost connection, say). */
+  failCommit: false,
   tail: Promise.resolve() as Promise<void>,
 };
 
@@ -76,6 +78,7 @@ const em = {
     try {
       const result = await cb(fork);
       await fork.flush();
+      if (db.failCommit) throw new Error("commit failed");
       if (pending) db.row = pending;
       return result;
     } finally {
@@ -139,6 +142,7 @@ beforeEach(() => {
   db.reads = 0;
   db.readOptions = [];
   db.afterLockedRead = null;
+  db.failCommit = false;
   db.tail = Promise.resolve();
 });
 
@@ -584,6 +588,27 @@ describe("chat display name on level change (#232)", () => {
 
     expect(answer.body.playerlevel).toBe(7);
     expect(calls).toEqual([[2503, "agenttester", 7]]);
+  });
+
+  test("reports it only once the write has committed", async () => {
+    const before = db.row!.savetime;
+    let rowAtReport: unknown;
+    const { onLevelChange } = await import("../../chat/levelChangeBus.js");
+    onLevelChange(() => (rowAtReport = db.row!.savetime));
+
+    await call(state, {}, userOf({ username: "agenttester" }));
+
+    expect(rowAtReport).not.toBe(before);
+    expect(rowAtReport).toBe(db.row!.savetime);
+  });
+
+  test("a commit that fails reports nothing", async () => {
+    db.failCommit = true;
+
+    await expect(call(state, {}, userOf({ username: "agenttester" }))).rejects.toThrow(
+      "commit failed"
+    );
+    expect(calls).toEqual([]);
   });
 
   // The outpost case (the level reported is always the main yard's, not the
