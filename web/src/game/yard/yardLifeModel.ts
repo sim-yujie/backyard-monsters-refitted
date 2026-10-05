@@ -77,6 +77,17 @@ import type { Yard, YardBuilding } from "./yardModel";
  * from 3, never lands in its cage but hovers at its flight height and flaps,
  * standing or pacing (`YardLifeLayer`). Krallen picks its sheet by power level (`champions/Krallen.as:46-48`).
  *
+ * ## To and from the Champion Chamber (#314)
+ *
+ * Freezing a champion walks it out of its cage to the Champion Chamber, where
+ * it goes in and is gone; thawing one brings it out of the Chamber's door and
+ * walks it to its cage, where it paces as before. The owner's rule: no new
+ * art, only the champion walking. The save says frozen at once, so this is
+ * read off two lives in a row ({@link championTrips}), on the same yard only:
+ * a yard read fresh shows the end state. The trip goes round the buildings on
+ * the route hatched monsters take home (`routeBetween`), at its heading-home
+ * speed ({@link TRIP_SPEED_FACTOR}); with no route it snaps.
+ *
  * ## Workers (`client/scripts/WORKERS.as`, `WORKER.as`)
  *
  * One `WORKER` per worker the yard has (`QUEUE.as:40-70`), each spawned at a
@@ -122,6 +133,18 @@ const PEN = { inset: 40, size: 80 } as const;
 /** The Champion Cage's type id and its pen (`CHAMPIONCAGE.as:280-283`). */
 export const CHAMPION_CAGE_TYPE = 114;
 const CAGE = { inset: 40, size: 40, jitter: 20 } as const;
+
+/** The Champion Chamber's type id (`CHAMPIONCHAMBER.as`), where frozen champions go. */
+export const CHAMPION_CHAMBER_TYPE = 119;
+
+/** A frozen champion's `status` (`champions/ChampionBase.as:26-36`). */
+const FROZEN_STATUS = 1;
+
+/**
+ * A champion's speed on a trip to or from the Chamber against its pacing
+ * speed: behaviour `housing`, a monster heading home, over `pen`.
+ */
+export const TRIP_SPEED_FACTOR = (BEHAVIOUR_SPEED["housing"] ?? 1) / (BEHAVIOUR_SPEED["pen"] ?? 1);
 
 /** Ticks a penned creature stands before it may first move (`CreepBase.as:1377`). */
 export const PEN_SETTLE_TICKS = 240;
@@ -220,6 +243,10 @@ export interface YardLife {
   readonly champions: readonly LifeChampion[];
   /** The cage's top corner in yard units, or null when the yard has none. */
   readonly cage: LifePen | null;
+  /** Ids (`G1`..`G5`) of the champions frozen in the Chamber (#314). */
+  readonly frozen: readonly string[];
+  /** The Champion Chamber's footprint, or null when the yard has none. */
+  readonly chamber: LifeArea | null;
   readonly workers: number;
   readonly jobs: readonly LifeJob[];
   /** Sharper Tools is running: every worker wears the hard hat. */
@@ -237,6 +264,8 @@ export const EMPTY_LIFE: YardLife = {
   fallen: new Set(),
   champions: [],
   cage: null,
+  frozen: [],
+  chamber: null,
   workers: 0,
   jobs: [],
   hardHat: false,
@@ -276,6 +305,7 @@ export const yardLifeOf = (
 
   const pens: LifePen[] = [];
   let cage: LifePen | null = null;
+  let chamber: LifeArea | null = null;
   const jobs: LifeJob[] = [];
   const footprints: LifeArea[] = [];
   for (const building of yard.buildings) {
@@ -287,6 +317,9 @@ export const yardLifeOf = (
     if (building.type === CHAMPION_CAGE_TYPE && cage === null) {
       cage = { id: building.id, x: building.x, y: building.y };
     }
+    if (building.type === CHAMPION_CHAMBER_TYPE && chamber === null) {
+      chamber = { x: building.x, y: building.y, width, height };
+    }
     if (building.countdown && WORKER_JOBS.has(building.countdown.kind)) {
       jobs.push({ id: building.id, x: building.x, y: building.y, width, height });
     }
@@ -295,10 +328,14 @@ export const yardLifeOf = (
   jobs.sort((a, b) => a.id - b.id);
 
   const champions: LifeChampion[] = [];
+  const frozen: string[] = [];
   for (const entry of view === "attack" ? [] : (save.champion ?? [])) {
-    if (!entry || Number(entry.status ?? 0) !== 0) continue;
+    if (!entry) continue;
     const t = Math.floor(Number(entry.t));
     if (!(t >= 1)) continue;
+    const status = Number(entry.status ?? 0);
+    if (status === FROZEN_STATUS) frozen.push(`G${t}`);
+    if (status !== 0) continue;
     const level = Math.max(1, Math.floor(Number(entry.l)) || 1);
     const power = Math.max(1, Math.floor(Number(entry.pl)) || 1);
     champions.push({ id: `G${t}`, level, sheetLevel: t === KRALLEN_TYPE ? power : level });
@@ -311,6 +348,8 @@ export const yardLifeOf = (
     fallen: EMPTY_LIFE.fallen,
     champions,
     cage,
+    frozen,
+    chamber,
     workers: workless ? 0 : yard.workers.total,
     jobs: workless ? [] : jobs,
     hardHat: yard.buildTime < 1,
@@ -454,6 +493,19 @@ export interface Walker {
   speed: number;
   /** One chance in this many, a tick, of moving on. */
   odds: number;
+  /**
+   * A champion on its way to or from the Chamber (#314): the yard points still
+   * ahead, the next first, or null when it is pacing.
+   */
+  trip: YardPoint[] | null;
+  /** Going into the Chamber: gone once its trip is over ({@link walkerGone}). */
+  leaving: boolean;
+}
+
+/** A point in yard units. */
+export interface YardPoint {
+  readonly x: number;
+  readonly y: number;
 }
 
 export type Random = () => number;
@@ -517,8 +569,13 @@ const makeWalker = (spec: WalkerSpec, random: Random): Walker => {
     // A flyer's frame counter starts anywhere up to 1000 (`CreepBase.as:125`),
     // so the flock does not flap in step; everything else starts at 0.
     age: monsterMovement(spec.monsterId) === "fly" ? Math.floor(random() * 1000) : 0,
+    trip: null,
+    leaving: false,
   };
 };
+
+/** The key a champion's walker goes by in its cage. */
+export const championWalkerKey = (cageId: number, championId: string): string => `c:${cageId}:${championId}`;
 
 /** The walkers a yard's pens and cage hold, by key. */
 export const walkerSpecs = (
@@ -554,7 +611,7 @@ export const walkerSpecs = (
   if (cage) {
     for (const champion of life.champions) {
       specs.push({
-        key: `c:${cage.id}:${champion.id}`,
+        key: championWalkerKey(cage.id, champion.id),
         monsterId: champion.id,
         sheetLevel: champion.sheetLevel,
         champion: true,
@@ -576,7 +633,8 @@ export const walkerSpecs = (
  *
  * A kept walker takes the new spec's area, so a pen that moved has its
  * creatures walk over to it rather than blink there, and a kept champion keeps
- * the cage spot it already chose.
+ * the cage spot it already chose. A champion on its way into the Chamber is
+ * kept though the save no longer has it, until it gets there (#314).
  */
 export const reconcileWalkers = (
   current: ReadonlyMap<string, Walker>,
@@ -589,7 +647,7 @@ export const reconcileWalkers = (
     if (kept) {
       if (!kept.champion) kept.area = spec.area;
       kept.speed = spec.speed;
-      if (!inside(kept.area, kept.targetX, kept.targetY)) {
+      if (kept.trip === null && !inside(kept.area, kept.targetX, kept.targetY)) {
         const at = pointIn(kept.area, random);
         kept.targetX = at.x;
         kept.targetY = at.y;
@@ -599,6 +657,9 @@ export const reconcileWalkers = (
     } else {
       next.set(spec.key, makeWalker(spec, random));
     }
+  }
+  for (const [key, walker] of current) {
+    if (!next.has(key) && walker.leaving && walker.trip !== null) next.set(key, walker);
   }
   return next;
 };
@@ -610,10 +671,15 @@ const inside = (area: LifeArea, x: number, y: number): boolean =>
  * One creature tick for a walker: maybe pick a new spot, then step toward it.
  *
  * `int(Math.random() * odds) == 1` in Flash; `random() * odds` landing in
- * `[1, 2)` is the same one chance in `odds`.
+ * `[1, 2)` is the same one chance in `odds`. A champion on a trip follows it
+ * instead ({@link stepTrip}).
  */
 export const stepWalker = (walker: Walker, random: Random): void => {
   walker.age++;
+  if (walker.trip !== null) {
+    stepTrip(walker);
+    return;
+  }
   if (!walker.moving && walker.age > PEN_SETTLE_TICKS && Math.floor(random() * walker.odds) === 1) {
     const at = pointIn(walker.area, random);
     walker.targetX = at.x;
@@ -633,6 +699,118 @@ export const stepWalker = (walker: Walker, random: Random): void => {
   walker.x += (dx / distance) * step;
   walker.y += (dy / distance) * step;
   walker.heading = screenHeading(dx, dy);
+};
+
+/* ── Trips to and from the Champion Chamber (#314) ──────────────────────── */
+
+/**
+ * The champions one life to the next froze (cage to Chamber) and thawed
+ * (Chamber to cage), by id. Nothing unless both are the same yard with the
+ * same cage and a Chamber: a yard read fresh shows the end state.
+ */
+export const championTrips = (
+  before: YardLife,
+  after: YardLife,
+): { freezing: string[]; thawing: string[] } => {
+  if (!before.cage || !after.cage || before.cage.id !== after.cage.id || !after.chamber) {
+    return { freezing: [], thawing: [] };
+  }
+  const caged = (life: YardLife, id: string): boolean => life.champions.some((champion) => champion.id === id);
+  const freezing = before.champions
+    .map((champion) => champion.id)
+    .filter((id) => after.frozen.includes(id) && !caged(after, id));
+  const thawing = before.frozen.filter((id) => caged(after, id) && !after.frozen.includes(id));
+  return { freezing, thawing };
+};
+
+/**
+ * The Chamber's door, where a champion goes in and comes out: the front corner
+ * of its footprint, the one nearest the viewer, as a hatched monster steps out
+ * of its Hatchery's (`hatcheryWalk`).
+ */
+export const chamberDoor = (chamber: LifeArea): YardPoint => ({
+  x: chamber.x + chamber.width,
+  y: chamber.y + chamber.height,
+});
+
+/**
+ * Sends a walker along `route` (yard points, its start first), into the
+ * Chamber when `leaving`. Returns false and leaves the walker be when there is
+ * no route: the caller then snaps to the end state.
+ */
+export const startTrip = (walker: Walker, route: readonly YardPoint[] | null, leaving: boolean): boolean => {
+  if (!route || route.length < 2 || walker.speed <= 0) return false;
+  const start = route[0]!;
+  const end = route[route.length - 1]!;
+  walker.x = start.x;
+  walker.y = start.y;
+  walker.targetX = end.x;
+  walker.targetY = end.y;
+  walker.trip = route.slice(1).map((point) => ({ x: point.x, y: point.y }));
+  walker.leaving = leaving;
+  walker.moving = true;
+  return true;
+};
+
+/** A route between two yard points round the buildings, its ends included, or null when there is none. */
+export type TripRoute = (from: YardPoint, to: YardPoint) => readonly YardPoint[] | null;
+
+/** Walks a caged champion from where it stands into the Chamber; false when there is no way. */
+export const freezeTrip = (walker: Walker, door: YardPoint, route: TripRoute): boolean =>
+  startTrip(walker, route({ x: walker.x, y: walker.y }, door), true);
+
+/**
+ * Walks a thawed champion out of the Chamber's door to its spot in the cage:
+ * one just made by the cage stands on that spot already. One still on its way
+ * in turns round where it is, for the middle of its cage. With no way there it
+ * is put straight on that spot, and false comes back.
+ */
+export const thawTrip = (walker: Walker, door: YardPoint, route: TripRoute): boolean => {
+  const turning = walker.leaving;
+  const home = turning
+    ? { x: walker.area.x + walker.area.width / 2, y: walker.area.y + walker.area.height / 2 }
+    : { x: walker.x, y: walker.y };
+  const from = turning ? { x: walker.x, y: walker.y } : door;
+  if (startTrip(walker, route(from, home), false)) return true;
+  walker.trip = null;
+  walker.leaving = false;
+  walker.moving = false;
+  walker.x = walker.targetX = home.x;
+  walker.y = walker.targetY = home.y;
+  return false;
+};
+
+/** Whether a walker has gone into the Chamber and is to be taken off. */
+export const walkerGone = (walker: Walker): boolean => walker.leaving && walker.trip === null;
+
+/** One tick of a trip: on at its trip speed, through as many waypoints as that reaches. */
+const stepTrip = (walker: Walker): void => {
+  const trip = walker.trip;
+  if (!trip) return;
+  let left = walker.speed * TRIP_SPEED_FACTOR;
+  while (trip.length > 0) {
+    const next = trip[0]!;
+    const dx = next.x - walker.x;
+    const dy = next.y - walker.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance > 0) walker.heading = screenHeading(dx, dy);
+    if (distance > left) {
+      if (left > 0) {
+        walker.x += (dx / distance) * left;
+        walker.y += (dy / distance) * left;
+      }
+      return;
+    }
+    walker.x = next.x;
+    walker.y = next.y;
+    left -= distance;
+    trip.shift();
+  }
+  // There: a thawed champion paces its cage from here, a frozen one is gone.
+  walker.trip = null;
+  walker.moving = false;
+  walker.targetX = walker.x;
+  walker.targetY = walker.y;
 };
 
 /* ── Workers ────────────────────────────────────────────────────────────── */

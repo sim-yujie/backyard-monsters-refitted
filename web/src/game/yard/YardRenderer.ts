@@ -8,7 +8,8 @@ import { YardGround } from "./YardGround";
 import { CHOSEN_FILL, YardHatchMarks, type HatcheryMarks } from "./YardHatchMarks";
 import { BAR_HEIGHT, jobBarScale, YardJobBars } from "./YardJobBars";
 import { YardLifeLayer } from "./YardLifeLayer";
-import { holdBack, type LifeHold, type YardLife } from "./yardLifeModel";
+import { holdBack, type LifeHold, type YardLife, type YardPoint } from "./yardLifeModel";
+import { routeBetween } from "@/game/guide/MonsterWalkIn";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
@@ -334,10 +335,12 @@ export class YardRenderer {
   }
 
   private applyLife(): void {
-    const bounds = this.yard?.bounds;
-    if (!bounds) return;
+    const yard = this.yard;
+    if (!yard) return;
     const life = this.lifeShown;
-    this.life.set(life && holdBack(life, [...this.lifeHolds]), bounds);
+    // A frozen or thawed champion walks round the buildings, as a hatched monster does (#314).
+    const route = (from: YardPoint, to: YardPoint) => routeBetween(yard, from, to);
+    this.life.set(life && holdBack(life, [...this.lifeHolds]), yard.bounds, route);
     this.mountLife();
   }
 
