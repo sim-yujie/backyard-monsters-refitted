@@ -13,13 +13,18 @@ import "./achievements.css";
  *
  * A panel rebuilds as its data refreshes, so answers are kept a minute per
  * player: a rebuilt line fills at once and the route's limiter (30 a minute)
- * is not spent on the same player. A player the route refuses (unknown,
+ * is not spent on the same player. Stale answers are dropped whenever a new
+ * one is asked for, and at most {@link LINE_CACHE_SIZE} are kept, oldest
+ * asked dropped first. A player the route refuses (unknown,
  * banned, too many asks) or a failed fetch hides the line; it is extra, and
  * the panel reads fine without it.
  */
 
 /** How long an answer, or a refusal, is reused. */
 export const LINE_FRESH_MS = 60_000;
+
+/** How many players' answers are kept at most. */
+export const LINE_CACHE_SIZE = 50;
 
 /** Badges shown, newest first. */
 export const NEWEST_BADGES = 3;
@@ -57,7 +62,12 @@ const lookUp = (userid: number, options: AchievementsLineOptions): Cached => {
       () => (entry.settled = null),
     ),
   };
+  for (const [id, old] of cache) if (now - old.at >= LINE_FRESH_MS) cache.delete(id);
   cache.set(userid, entry);
+  for (const id of cache.keys()) {
+    if (cache.size <= LINE_CACHE_SIZE) break;
+    cache.delete(id);
+  }
   return entry;
 };
 
