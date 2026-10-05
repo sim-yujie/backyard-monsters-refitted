@@ -83,6 +83,7 @@ import { championsAfterDefence } from "../../../services/base/combat/defenderCha
 import { championsAfterLessons, withStoredBrains } from "../../../services/base/combat/championBrain.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
+import { recordAttackAchievements } from "../../../services/achievements/events.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -609,6 +610,17 @@ const saveBase = async (
   // to the tick it fought it to.
   if (battle && battleInput && saveData.over && userSave.mapversion === MapRoomVersion.V2) {
     await recordAttackPlan(user.userid, baseSave, battleInput.log, battleInput.tick);
+  }
+
+  // A Map Room 2 Kozu Town Hall the battle brought down counts towards the
+  // attacker's achievements, on their main row under its own lock (issue #204).
+  if (battle && saveData.over) {
+    await recordAttackAchievements(postgres.em, {
+      attackerBasesaveid: userSave.basesaveid,
+      defender: baseSave,
+      before: storedHealthData,
+      after: battle.buildinghealthdata,
+    });
   }
 
   const filteredSave = buildSaveData(baseSave, user, outpostOwnerSave);

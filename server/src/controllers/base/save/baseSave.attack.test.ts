@@ -56,6 +56,13 @@ mock.module("../../../server.js", () => ({
       upsert,
       persist: () => {},
       flush: async () => {},
+      // The attacker's main row, locked for an achievement event (#204).
+      transactional: async (cb: (tx: unknown) => Promise<unknown>) =>
+        cb({
+          findOne: async (_entity: unknown, where: Record<string, unknown>) =>
+            where.basesaveid === attackerSave.basesaveid ? attackerSave : null,
+          flush: async () => {},
+        }),
     },
   },
   redis: {
@@ -183,6 +190,7 @@ beforeEach(() => {
     resources: { r1: 5000, r2: 0, r3: 0, r4: 0 },
   };
   attackerSave = {
+    basesaveid: 5,
     baseid: HOME,
     saveuserid: ATTACKER,
     userid: ATTACKER,
@@ -221,6 +229,35 @@ describe("the plan a hand-played camp attack leaves (issue #221)", () => {
     attackerSave.mapversion = 1;
     await baseSave(ctxFor({ over: "1", flinglog: JSON.stringify(LOG) }), async () => {});
     expect(upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("the Kozu Town Hall a save brings down (issue #204)", () => {
+  const kozuCrusher = () => attackerSave.achievements?.c?.["10"];
+
+  test("the save that ends a Kozu camp attack with its Town Hall down counts towards Kozu Crusher", async () => {
+    Object.assign(defender, { wmid: 11, level: 35 });
+    attackerSave.mapversion = 2;
+    attackerSave.achievements = { v: 1, s: {}, c: {}, backfilledAt: 1 };
+
+    await baseSave(ctxFor({ over: "1", tick: "20000", flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(defender.buildinghealthdata["0"]).toBe(0);
+    expect(kozuCrusher()).toMatchObject({ shiny: 10 });
+  });
+
+  test("a save that does not end it, or another tribe's camp, counts nothing", async () => {
+    Object.assign(defender, { wmid: 11, level: 35 });
+    attackerSave.mapversion = 2;
+    attackerSave.achievements = { v: 1, s: {}, c: {}, backfilledAt: 1 };
+    await baseSave(ctxFor({ tick: "20000", flinglog: JSON.stringify(LOG) }), async () => {});
+    expect(kozuCrusher()).toBeUndefined();
+
+    defender.wmid = 1;
+    defender.attackid = ATTACK_ID;
+    await baseSave(ctxFor({ over: "1", tick: "20000", flinglog: JSON.stringify(LOG) }), async () => {});
+    expect(defender.buildinghealthdata["0"]).toBe(0);
+    expect(kozuCrusher()).toBeUndefined();
   });
 });
 

@@ -32,6 +32,8 @@ import { runningPowerups } from "../../../services/alliance/powerups.js";
 import { AlliancePowerupType } from "../../../enums/Alliance.js";
 import { isAttackActive } from "../../../services/base/isAttackActive.js";
 import { readAttackSession } from "../../../services/base/attackSessionStore.js";
+import { recordAchievements, unseenAchievements } from "../../../services/achievements/record.js";
+import type { AchievementEvents } from "../../../services/achievements/evaluate.js";
 
 /** `SELECT … FOR UPDATE` on one save row, refreshed into the identity map. */
 const lockSave = (em: EntityManager, where: { basesaveid: number } | { userid: number; type: string }) =>
@@ -53,6 +55,10 @@ const lockSave = (em: EntityManager, where: { basesaveid: number } | { userid: n
  * takeover consumes. The checks and every write run in one transaction
  * with the taker's main yard, the target and the previous owner's main yard
  * locked, so two takers cannot both pay for the same cell.
+ *
+ * The takeover counts towards the taker's achievements in the same
+ * transaction, and the answer carries `achievements`, the paid unlocks not
+ * yet shown (issue #204).
  *
  * @param {Context} ctx - The Koa context object.
  * @throws Will throw an error if the base or base type is invalid.
@@ -87,7 +93,7 @@ export const takeoverCell: KoaController = async (ctx) => {
 
   const conquestActive = powerups.some(({ id }) => id === AlliancePowerupType.CONQUEST);
 
-  const isOriginCell = await postgres.em.transactional(async (em) => {
+  const { originCell: isOriginCell, achievements } = await postgres.em.transactional(async (em) => {
     const taker = await lockSave(em, { basesaveid: userSave.basesaveid });
     const cellSave = await lockSave(em, { basesaveid: cell.save!.basesaveid });
 
@@ -149,6 +155,11 @@ export const takeoverCell: KoaController = async (ctx) => {
       ? await lockSave(em, { userid: cellSave.userid, type: BaseType.MAIN })
       : null;
 
+    // Achievements (issue #204, `docs/design/achievements.md` §7.2): a wild
+    // camp counts towards "Camp Crusher", a player's outpost "Empire Builder".
+    const events: AchievementEvents =
+      cellSave.type === BaseType.TRIBE ? { wmoutpost: 1 } : previousOwner ? { playeroutpost: 1 } : {};
+
     if (previousOwner) {
       previousOwner.outposts = previousOwner.outposts.filter(
         ([x, y, id]) => !(x === cell.x && y === cell.y && String(id) === String(baseid))
@@ -203,6 +214,11 @@ export const takeoverCell: KoaController = async (ctx) => {
     cell.uid = currentUser.userid;
     cell.base_type = MapRoomCell.OUTPOST;
 
+    // Evaluated on the taker's locked main row before the outpost joins their
+    // list, so a first-ever evaluation's backfill (§8) does not take this
+    // takeover for an outpost they already had: it is a live unlock.
+    await recordAchievements(em, taker, now, events);
+
     // Update user
     taker.outposts.push([cell.x, cell.y, baseid]);
 
@@ -215,11 +231,12 @@ export const takeoverCell: KoaController = async (ctx) => {
     // Spent: the chance was one takeover.
     if (grant) await endTakeoverGrant(cellSave.basesaveid);
 
-    return originCell;
+    return { originCell, achievements: unseenAchievements(taker) };
   });
 
   if (isOriginCell) await invalidateWorldsCache();
 
   ctx.status = Status.OK;
-  ctx.body = { error: 0 };
+  // The paid unlocks not yet shown, as yard answers carry them (§9.3).
+  ctx.body = { error: 0, ...(achievements.length > 0 && { achievements }) };
 };

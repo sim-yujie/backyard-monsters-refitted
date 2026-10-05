@@ -494,6 +494,17 @@ off unless set to `on`. Counting and unlocking run either way; while it is off a
 `unpaid` unlock once. Bell rows are kind `achievement`: the backfill's unlocks share one row, every
 other unlock has its own.
 
+**As built (WP3):** `takeoverCell` evaluates on the taker's locked main row before the new outpost
+joins their list (so a first-ever backfill does not take it for one they already had): a cell
+that was `BaseType.TRIBE` adds `wmoutpost`, one with a previous owner `playeroutpost` + 1; the
+answer carries `achievements`. Attack landings call `recordAttackAchievements`
+(`server/src/services/achievements/events.ts`) once the landing is written: `wm2hall` = 1 when the
+defender is a Map Room 2 Kozu camp (`type` tribe, `wmid` 11) whose Town Hall was standing when the
+attack began and is at 0 health in the battle's result, recorded through `recordAchievementEvents`,
+a short transaction that locks the attacker's main row. It runs in the `/base/save` attack branch
+(the save that ends the attack) and in the finaliser, which auto-attack lands through; a failure is
+logged and never fails the landed attack. `recordTribeDestroyed` evaluates in its own transaction.
+
 **As built (WP4):** `progress` is `{ value, target, parts? }`: `value` capped at `target` and full
 once earned; entries 4 and 5 count champions met and list each in `parts`. The state list is built
 after the wrapper's evaluation (`YardAction.reportAfterAchievements`), so a first read answers with

@@ -77,6 +77,8 @@ const reset = () => {
     resources: { r1: 5_000_000, r2: 5_000_000, r3: 5_000_000, r4: 5_000_000 },
   };
   userSave = {
+    basesaveid: 5,
+    userid: ATTACKER,
     baseid: HOME,
     catapult: 2,
     buildingdata: {},
@@ -106,6 +108,13 @@ mock.module("../../server.js", () => ({
       persist: () => {},
       upsert,
       flush,
+      // The attacker's main row, locked for an achievement event (#204).
+      transactional: async (cb: (tx: unknown) => Promise<unknown>) =>
+        cb({
+          findOne: async (_entity: unknown, where: Record<string, unknown>) =>
+            where.basesaveid === userSave.basesaveid ? userSave : null,
+          flush: async () => {},
+        }),
     },
   },
 }));
@@ -558,6 +567,51 @@ describe("the plan an abandoned camp attack leaves (issue #221)", () => {
     await arm();
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
     expect(upsert).not.toHaveBeenCalled();
+  }, REPLAY_TIMEOUT_MS);
+});
+
+describe("the Kozu Town Hall an abandoned attack brings down (issue #204)", () => {
+  /** A Kozu camp of nothing but its Town Hall, which 300 Pokeys flatten. */
+  const asKozuHall = () =>
+    Object.assign(defender, {
+      wmid: 11,
+      level: 35,
+      buildingdata: { "0": structuredClone(sandbox.buildingdata["0"]) },
+      achievements: null,
+    });
+  const kozuCrusher = () => (userSave.achievements as { c?: Record<string, unknown> } | undefined)?.c?.["10"];
+
+  test("counts towards the attacker's Kozu Crusher", async () => {
+    asKozuHall();
+    userSave.achievements = { v: 1, s: {}, c: {}, backfilledAt: 1 };
+    await arm({ tick: LATE });
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    expect(defender.buildinghealthdata["0"]).toBe(0);
+    expect(kozuCrusher()).toMatchObject({ shiny: 10 });
+  }, REPLAY_TIMEOUT_MS);
+
+  test("an auto-attack's landing counts too", async () => {
+    asKozuHall();
+    userSave.achievements = { v: 1, s: {}, c: {}, backfilledAt: 1 };
+    await arm({ tick: LATE });
+
+    const landed = await landCheckpointedAttack(BASESAVEID, "auto-attack", { left: false, recordPlan: false });
+
+    expect(landed.status).toBe("finalised");
+    expect(kozuCrusher()).toMatchObject({ shiny: 10 });
+  }, REPLAY_TIMEOUT_MS);
+
+  test("another tribe's camp counts nothing", async () => {
+    asKozuHall();
+    defender.wmid = 21;
+    userSave.achievements = { v: 1, s: {}, c: {}, backfilledAt: 1 };
+    await arm({ tick: LATE });
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    expect(kozuCrusher()).toBeUndefined();
   }, REPLAY_TIMEOUT_MS);
 });
 

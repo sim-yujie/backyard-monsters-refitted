@@ -39,6 +39,7 @@ import { MapRoomVersion } from "../../enums/MapRoom.js";
 import type { FlingLog, ResourceAmounts } from "../../game-rules/combat/index.js";
 import type { AbandonedOutcome } from "./combat/abandonedAttack.js";
 import { recordAttackPlan } from "./autoAttack/attackPlanStore.js";
+import { recordAttackAchievements } from "../achievements/events.js";
 
 /**
  * Finishes an attack its attacker left without saving (issue #138).
@@ -353,6 +354,15 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   // An attack played by hand on a Map Room 2 camp is the attacker's plan for
   // its tribe and level from now on (issue #221); an auto-attack never is.
   if (options.recordPlan ?? true) await recordAttackPlan(attacker.userid, defender, input.log, input.tick);
+
+  // A Map Room 2 Kozu Town Hall the battle brought down counts towards the
+  // attacker's achievements, hand-played or auto-attack alike (issue #204).
+  await recordAttackAchievements(postgres.em, {
+    attackerBasesaveid: userSave.basesaveid,
+    defender,
+    before: storedHealthData,
+    after: outcome.buildinghealthdata,
+  });
 
   logger.info("Finalised {username}'s abandoned attack on base {baseid} at tick {tick}", {
     event: "attack-finalised",

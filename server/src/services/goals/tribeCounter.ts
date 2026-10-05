@@ -1,5 +1,7 @@
 import { LockMode, type EntityManager } from "@mikro-orm/core";
 import { Save } from "../../database/models/save.model.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { recordAchievements } from "../achievements/record.js";
 import { countTribeDestroyed } from "./counters.js";
 
 /**
@@ -11,6 +13,10 @@ import { countTribeDestroyed } from "./counters.js";
  * every yard action locks it), re-reading `onboarding` there: a yard action
  * writing the column at the same moment (a claim, another counter) is never
  * overwritten, nor overwrites this.
+ *
+ * The account's achievements are evaluated in the same transaction
+ * (`docs/design/achievements.md` §7.2, issue #204), so a Kozu tribe unlocks
+ * "Kozu Crusher" at once: the evaluator reads `tribes.kozu`.
  *
  * @param em - The request's entity manager.
  * @param basesaveid - The attacker's main save.
@@ -31,5 +37,6 @@ export const recordTribeDestroyed = async (
     const onboarding = countTribeDestroyed(save, baseid);
     if (!onboarding) return;
     save.onboarding = onboarding;
+    await recordAchievements(tx, save, getCurrentDateTime());
     await tx.flush();
   });

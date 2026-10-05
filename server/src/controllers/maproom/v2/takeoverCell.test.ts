@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
+import { achievementConfig } from "../../../config/AchievementConfig.js";
+import { readAchievements } from "../../../services/achievements/state.js";
 
 /**
  * `POST /worldmapv2/takeoverCell` (issue #182). The route took any cell at 90%
@@ -24,6 +26,8 @@ let sessions: Set<number>;
 let inRange: boolean;
 /** Rows the takeover created: the mailbox notice to the previous owner (#187). */
 let created: Row[];
+/** Bell rows the takeover wrote (achievements, #204). */
+let bell: Row[];
 
 const store = new Map<string, string>();
 const GRANT_KEY = "takeover-grant:900";
@@ -57,6 +61,11 @@ const txEm = {
     created.push(data);
     return data;
   },
+  insertMany: async (_entity: unknown, rows: Row[]) => {
+    bell.push(...rows);
+  },
+  nativeDelete: async () => 0,
+  getConnection: () => ({ execute: async () => [] }),
   count: async () => 1,
   nativeUpdate: async () => 1,
   persist: () => {},
@@ -154,11 +163,18 @@ beforeEach(() => {
   ];
   flushed = 0;
   created = [];
+  bell = [];
+  achievementConfig.rewards = false;
   sessions = new Set();
   inRange = true;
   store.clear();
   // By default the taker has just destroyed the outpost and holds its grant.
   grantTo(TAKER);
+});
+
+const startingRewards = achievementConfig.rewards;
+afterEach(() => {
+  achievementConfig.rewards = startingRewards;
 });
 
 describe("takeoverCell", () => {
@@ -307,5 +323,69 @@ describe("takeoverCell", () => {
     const shiny = await run({ baseid: OUTPOST, shiny: "1" });
     expect(shiny.reason).toBe("notEnoughShiny");
     expect(takerSave.credits).toBe(10);
+  });
+});
+
+describe("takeoverCell achievements (#204)", () => {
+  /**
+   * A record already worked out, so a test sees only the takeover's unlocks:
+   * "Hoarder", which the taker's 100 million of each already earns, seen.
+   */
+  const HOARDER = { "15": { at: 1, shiny: 25, seen: 1 } };
+  const backfilled = (s: Row = {}) => ({ v: 1, s, c: { ...HOARDER }, backfilledAt: 1 });
+  const record = () => readAchievements(takerSave);
+
+  test("a wild camp counts towards Camp Crusher; owed while rewards are off, so the answer is plain", async () => {
+    takerSave.achievements = backfilled();
+    const result = await run({ baseid: CAMP, shiny: "1" });
+    expect(result.body).toEqual({ error: 0 });
+    expect(record().s.wmoutpost).toBe(1);
+    expect(record().s.playeroutpost).toBe(0);
+    expect(record().c["7"]).toMatchObject({ shiny: 10, unpaid: 1 });
+    expect(bell).toEqual([]);
+  });
+
+  test("with rewards on the takeover pays the Shiny and its answer carries the unlock", async () => {
+    achievementConfig.rewards = true;
+    takerSave.achievements = backfilled();
+    takerSave.credits = 10_000_000;
+    const result = await run({ baseid: CAMP, shiny: "1" });
+    expect(result.body).toEqual({ error: 0, achievements: [{ id: 7, name: "Camp Crusher", shiny: 10 }] });
+    expect(takerSave.credits as number).toBeLessThan(10_000_000);
+    expect(bell).toEqual([expect.objectContaining({ userid: TAKER, kind: "achievement" })]);
+  });
+
+  test("a player's outpost counts towards Empire Builder, one each", async () => {
+    takerSave.achievements = backfilled({ playeroutpost: 3 });
+    const result = await run({ baseid: OUTPOST });
+    expect(result.ok).toBe(true);
+    expect(record().s.playeroutpost).toBe(4);
+    expect(record().s.wmoutpost).toBe(0);
+    expect(record().c["8"]).toBeUndefined();
+  });
+
+  test("the fifth player outpost unlocks Empire Builder", async () => {
+    achievementConfig.rewards = true;
+    takerSave.achievements = backfilled({ playeroutpost: 4 });
+    const result = await run({ baseid: OUTPOST });
+    expect(result.body).toEqual({ error: 0, achievements: [{ id: 8, name: "Empire Builder", shiny: 20 }] });
+  });
+
+  test("a record never worked out: the takeover is a live unlock, not the backfill's", async () => {
+    achievementConfig.rewards = true;
+    const result = await run({ baseid: CAMP, shiny: "1" });
+    // The backfill finds "Hoarder" in the taker's resources; the camp is the takeover's own.
+    expect(result.body?.achievements).toEqual([
+      { id: 7, name: "Camp Crusher", shiny: 10 },
+      { id: 15, name: "Hoarder", shiny: 25, backfill: true },
+    ]);
+    expect(record().backfilledAt).toBeDefined();
+  });
+
+  test("a refused takeover counts nothing", async () => {
+    takerSave.achievements = backfilled();
+    camp().damage = 10;
+    expect((await run({ baseid: CAMP, shiny: "1" })).ok).toBe(false);
+    expect(record().s.wmoutpost).toBe(0);
   });
 });
