@@ -684,6 +684,15 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   notifications?: number;
   /**
+   * The owner's loads: how to reach world chat (#282, `game/chat/chatSession.ts`).
+   * `chatservers` is every load's, the chat WebSocket's `host:port`;
+   * `chattoken` (a day's, per player) and `chatchannel` (the world room for
+   * the player's Map Room) ride the owner's loads only.
+   */
+  chatservers?: string[];
+  chattoken?: string;
+  chatchannel?: string;
+  /**
    * Map Room 2 attack loads only: the target cell's height, `i`, which
    * stretches an outpost's tower range (`BTOWER.as:80-85`). The server's loot
    * replay reads the same stored value (`world_map_cell.terrainHeight`).

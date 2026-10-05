@@ -23,6 +23,7 @@ import {
   autoAttackPlanLimiter,
   botCheckReadLimiter,
   botCheckAnswerLimiter,
+  chatReportLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -94,6 +95,7 @@ import {
   readAllNotifications,
   readNotification,
 } from "./controllers/notifications/routes.js";
+import { chatPlayerYard, reportChatMessage } from "./controllers/chat/routes.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
@@ -248,6 +250,12 @@ router.get("/api/:apiVersion/bm/notifications", apiVersion, verifyUserAuth, getN
 router.get("/api/:apiVersion/bm/notifications/unread", apiVersion, verifyUserAuth, getUnreadNotifications);
 router.post("/api/:apiVersion/bm/notifications/read", apiVersion, verifyUserAuth, logRequest, readNotification);
 router.post("/api/:apiVersion/bm/notifications/readall", apiVersion, verifyUserAuth, logRequest, readAllNotifications);
+
+/**  ────────────────────────────────────────────────
+* 📦 Chat box (the web client's world chat, issue #282, `controllers/chat/chat.ts`)
+* ──────────────────────────────────────────────── */
+router.post("/api/:apiVersion/bm/chat/report", apiVersion, verifyUserAuth, chatReportLimiter, logRequest, reportChatMessage);
+router.get("/api/:apiVersion/bm/chat/yard", apiVersion, verifyUserAuth, chatPlayerYard);
 
 /**  ────────────────────────────────────────────────
 * 📦 Leaderboards & Attack Logs

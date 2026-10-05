@@ -1,4 +1,5 @@
-import { logout } from "@/api/auth";
+import { getSession, logout } from "@/api/auth";
+import { chatApi, chatConfigFrom } from "@/api/chat";
 import { loadAttackOn, loadOwnBase, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
 import {
@@ -12,7 +13,8 @@ import {
 import { bankActions } from "@/api/yardBank";
 import { buildActions } from "@/api/yardBuild";
 import { decorActions } from "@/api/yardDecor";
-import { consumeViewTarget, setAttackTarget, type ViewTarget } from "@/game/attack/attackTarget";
+import { consumeViewTarget, setAttackTarget, setViewTarget, type ViewTarget } from "@/game/attack/attackTarget";
+import { worldChat } from "@/game/chat/chatSession";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { Camera } from "@/game/Camera";
@@ -68,6 +70,7 @@ import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
 import { ShopScreen } from "@/ui/yard/ShopScreen";
 import { MailDoor } from "@/ui/mail/MailDoor";
 import { NotificationDoor } from "@/ui/notifications/NotificationDoor";
+import { ChatBox } from "@/ui/chat/ChatBox";
 import {
   MONSTERS_TAB_ORDER,
   MonsterBuilding,
@@ -243,6 +246,8 @@ export class YardScene implements Scene {
   private mail: MailDoor | null = null;
   /** The bell and its notification list (#257): the own yard only, as Mail is. */
   private bell: NotificationDoor | null = null;
+  /** World chat's box (#282), on every yard; the connection is `worldChat`'s and outlives it. */
+  private chat: ChatBox | null = null;
   /** The Starter Kit picker, while open (outposts WP9). */
   private kitPicker: StarterKitPicker | null = null;
   /** Picks a tapped mushroom on the own yard (§5.6); null on a foreign one. */
@@ -381,6 +386,13 @@ export class YardScene implements Scene {
     this.hud.setActiveScene(SceneName.YARD);
     this.hud.mount(context.overlay.content);
 
+    this.chat = new ChatBox({
+      session: worldChat,
+      api: chatApi,
+      container: context.overlay.content,
+      onViewYard: (userId) => this.viewChatPlayer(userId),
+    });
+
     this.notices.mount(context.overlay.content);
     this.notices.element.classList.add("yard-notices");
 
@@ -472,6 +484,8 @@ export class YardScene implements Scene {
     this.mail = null;
     this.bell?.destroy();
     this.bell = null;
+    this.chat?.destroy();
+    this.chat = null;
     this.dock?.destroy();
     this.dock = null;
     this.input?.detach();
@@ -634,6 +648,9 @@ export class YardScene implements Scene {
       this.yard = yard;
       this.save = response;
       this.notices.clear("yard-load");
+      // The owner's load carries world chat's token and room (#282).
+      const chat = target ? null : chatConfigFrom(response, getSession()?.userId ?? 0, location.protocol === "https:");
+      if (chat) worldChat.configure(chat);
 
       // Q5's entry rule. The player's own main yard arrives in build mode and
       // is editable; a visit arrives in view mode and opens the planner, if
@@ -1222,6 +1239,32 @@ export class YardScene implements Scene {
   }
 
   /**
+   * World chat's "View yard" (#282): the player's main yard, read-only, by
+   * the map rooms' way in (`setViewTarget`). Chat does not know where they
+   * are on the map, so the visit has no cell and no Attack button. Throws
+   * when the yard cannot be found, for the box to say so.
+   */
+  private async viewChatPlayer(userId: number): Promise<void> {
+    const context = this.context;
+    const yard = await chatApi.yardOf(userId);
+    if (!yard) throw new Error("No yard");
+    if (this.context !== context || !context) return;
+    const store = this.store;
+    const own = store
+      ? { resources: store.resources, credits: store.credits }
+      : this.target?.own;
+    setViewTarget({
+      baseid: yard.baseid,
+      kind: "main",
+      name: yard.name,
+      attack: null,
+      refusal: null,
+      own,
+    });
+    context.goTo(SceneName.YARD);
+  }
+
+  /**
    * The HUD's Map and the Map Room's Open map (issue #162): Map Room 2 for a
    * player who has moved, Map Room 1 for a built Map Room, and with none,
    * the way to build one — never the Map Room 2 world, which is a dead end
@@ -1416,6 +1459,9 @@ export class YardScene implements Scene {
       this.renderer.show(yard);
       this.minimap?.refreshBuildings();
     }
+    // The planner takes the whole screen; chat steps aside until it closes.
+    this.chat?.setOpen(false);
+    this.chat?.setHidden(true);
     this.planner = new YardPlanner({
       yard,
       renderer: this.renderer,
@@ -1589,6 +1635,7 @@ export class YardScene implements Scene {
     this.endCompare();
     this.planner?.destroy();
     this.planner = null;
+    this.chat?.setHidden(false);
     this.renderer.setLifeHidden(false);
     // The drawer's stored decorations had sprites of their own; the yard has not.
     const yard = this.store?.yard;

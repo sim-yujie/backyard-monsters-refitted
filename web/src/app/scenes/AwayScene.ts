@@ -1,3 +1,4 @@
+import { worldChat } from "@/game/chat/chatSession";
 import { Panel } from "@/ui/Panel";
 import type { Scene, SceneContext } from "../SceneManager";
 
@@ -25,6 +26,8 @@ export class AwayScene implements Scene {
   ) {}
 
   enter(context: SceneContext): void {
+    // Offline means out of world chat too (#282); the reload starts it again.
+    worldChat.stop();
     const text = document.createElement("p");
     text.textContent =
       `You were disconnected after ${this.after} without any input. ` +

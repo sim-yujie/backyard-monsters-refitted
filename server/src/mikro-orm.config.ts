@@ -26,6 +26,7 @@ import { ApiConsumer } from "./database/models/apiconsumer.model.js";
 import { Bot } from "./database/models/bot.model.js";
 import { BotJob } from "./database/models/botjob.model.js";
 import { Notification } from "./database/models/notification.model.js";
+import { ChatReport } from "./database/models/chatReport.model.js";
 
 /**
  * List of entities to be used with MikroORM.
@@ -55,6 +56,7 @@ const entities = [
   Bot,
   BotJob,
   Notification,
+  ChatReport,
 ];
 
 /**

@@ -282,3 +282,18 @@ export const autoAttackPlanLimiter = RateLimit.middleware({
     ctx.body = { error: "Too many requests. Please slow down." };
   },
 });
+
+/**
+ * Rate limit for reporting chat lines (issue #282) - 10 per 15 minutes per user:
+ * enough to report a spammer's run of lines, not enough to flood the table.
+ */
+export const chatReportLimiter = RateLimit.middleware({
+  interval: { min: 15 },
+  max: 10,
+  prefixKey: "chat-report",
+  keyGenerator: byUser("chat-report"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "You have sent a lot of reports. Please wait a few minutes.", reason: "rateLimited" };
+  },
+});

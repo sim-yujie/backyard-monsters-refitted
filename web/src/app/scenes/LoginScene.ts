@@ -1,5 +1,6 @@
 import { fetchSignUpOptions, login, register } from "@/api/auth";
 import { ApiError, NetworkError } from "@/api/http";
+import { worldChat } from "@/game/chat/chatSession";
 import { PRIVACY_URL, TERMS_URL, TURNSTILE_SITE_KEY } from "@/config";
 import { Panel } from "@/ui/Panel";
 import type { Scene, SceneContext } from "../SceneManager";
@@ -174,6 +175,8 @@ export class LoginScene implements Scene {
   constructor(private readonly turnstileSiteKey: string = TURNSTILE_SITE_KEY) {}
 
   enter(context: SceneContext): void {
+    // Signed out: world chat (#282) closes with the session.
+    worldChat.stop();
     this.wrapper = document.createElement("div");
     this.wrapper.className = "scene-centre";
 

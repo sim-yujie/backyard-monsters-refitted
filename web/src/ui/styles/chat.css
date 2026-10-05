@@ -1,0 +1,344 @@
+/*
+ * The yard's world chat box (#282, ui/chat/ChatBox.ts): top left, under the
+ * floating "?", where neither the yard's panels nor its dock reach.
+ *
+ * Folded, the box is see-through and takes no clicks but its tab, so the yard
+ * under the lines stays tappable. Open, it is a panel with the whole room, a
+ * player's strip and the input.
+ */
+
+.chat-box {
+  --chat-top: calc(var(--hud-height) + var(--space-2) + 32px + var(--space-3));
+  position: absolute;
+  top: var(--chat-top);
+  left: calc(var(--hud-inset) + var(--space-2));
+  width: min(360px, calc(100% - 2 * var(--space-4)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  /* Open, the panel follows the theme. */
+  --chat-text: var(--colour-text-strong);
+  --chat-name: var(--colour-accent);
+  --chat-own: var(--colour-warning-bright);
+  color: var(--chat-text);
+  pointer-events: none;
+}
+
+/* Folded, the lines sit on the yard itself under a dark shade: light words in
+   either theme. */
+.chat-box:not(.chat-box--open) {
+  --chat-text: #ffffff;
+  --chat-name: #7fe4f8;
+  --chat-own: #ffe2a8;
+}
+
+.chat-box[hidden] {
+  display: none;
+}
+
+/* ── The tab: the folded box's one way in, the open box's way out ───── */
+
+.chat-box__tab {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  padding: 2px var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  color: var(--colour-text-strong);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.chat-box__tab:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.chat-box__tab:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.chat-box__close-icon {
+  display: none;
+}
+
+.chat-box--open .chat-box__close-icon {
+  display: inline;
+}
+
+/* Online is a quiet green; anything else a dimmer amber, never a shout. */
+.chat-box__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--colour-warning);
+  flex: none;
+}
+
+.chat-box[data-status="online"] .chat-box__dot {
+  background: var(--colour-online);
+}
+
+/* ── The lines ─────────────────────────────────────────────────────── */
+
+.chat-box__lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+}
+
+.chat-line {
+  padding: 1px var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.chat-box:not(.chat-box--open) .chat-line {
+  text-shadow:
+    0 1px 2px rgb(0 0 0 / 0.85),
+    0 0 1px rgb(0 0 0 / 0.9);
+}
+
+.chat-line__name {
+  margin-right: 0.4em;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--chat-name);
+  font: inherit;
+  font-weight: 700;
+  text-shadow: inherit;
+}
+
+.chat-line__name::after {
+  content: ":";
+}
+
+button.chat-line__name {
+  cursor: pointer;
+}
+
+/* Your own lines: the name in the warm accent, a bar down the side. */
+.chat-line--own {
+  border-left: 3px solid var(--chat-own);
+}
+
+.chat-line--own .chat-line__name {
+  color: var(--chat-own);
+}
+
+.chat-line--notice {
+  color: var(--colour-text-secondary);
+  font-style: italic;
+}
+
+/* Folded: the last four lines over a light shade, nothing clickable. */
+.chat-box:not(.chat-box--open) .chat-box__lines {
+  border-radius: var(--radius-md);
+  background: linear-gradient(to right, rgb(10 14 20 / 0.42), rgb(10 14 20 / 0.12));
+}
+
+.chat-box:not(.chat-box--open) .chat-line:not(:nth-last-child(-n + 4)) {
+  display: none;
+}
+
+.chat-box:not(.chat-box--open) .chat-box__lines:empty,
+.chat-box:not(.chat-box--open) .chat-box__status,
+.chat-box:not(.chat-box--open) .chat-box__player,
+.chat-box:not(.chat-box--open) .chat-box__form {
+  display: none;
+}
+
+/* ── Open: a panel ─────────────────────────────────────────────────── */
+
+.chat-box--open {
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-panel);
+  pointer-events: auto;
+}
+
+.chat-box--open .chat-box__lines {
+  height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chat-box--open .chat-line {
+  padding-block: 2px;
+}
+
+.chat-box--open .chat-line:hover {
+  background: var(--colour-shade);
+}
+
+.chat-box__status {
+  padding: 0 var(--space-2);
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.chat-box__status[hidden] {
+  display: none;
+}
+
+.chat-box__link {
+  margin-left: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--chat-name);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.chat-box__link[hidden] {
+  display: none;
+}
+
+/* A player's strip: their name, then mute, view yard and report. */
+.chat-box__player {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.chat-box__player[hidden] {
+  display: none;
+}
+
+.chat-box__player-name {
+  flex: 1 1 100%;
+  min-width: 0;
+  color: var(--chat-name);
+}
+
+.chat-box__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+}
+
+.chat-box__note {
+  flex: 1 1 100%;
+  color: var(--colour-text);
+}
+
+.chat-box__action {
+  min-height: 32px;
+  padding: var(--space-1) var(--space-3);
+}
+
+.chat-box__player-close {
+  position: absolute;
+  display: inline-flex;
+  top: var(--space-2);
+  right: var(--space-2);
+  padding: 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--colour-text-secondary);
+  cursor: pointer;
+}
+
+.chat-box__form {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.chat-box__form[hidden] {
+  display: none;
+}
+
+.chat-box__input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-input);
+  color: var(--colour-text-strong);
+  font: inherit;
+}
+
+.chat-box__input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ── Phone: a one-line strip, opening to a panel that keeps clear of the
+      HUD above and the dock below ─────────────────────────────────── */
+
+@media (width <= 620px) {
+  .chat-box {
+    left: var(--space-3);
+    width: calc(100% - 2 * var(--space-3));
+  }
+
+  .chat-box:not(.chat-box--open) {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .chat-box:not(.chat-box--open) .chat-box__tab-label {
+    /* The dot and "Chat" are enough beside the line. */
+    font-size: 0;
+  }
+
+  .chat-box:not(.chat-box--open) .chat-box__tab-label::after {
+    content: "Chat";
+    font-size: var(--text-sm);
+  }
+
+  .chat-box:not(.chat-box--open) .chat-box__lines {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .chat-box:not(.chat-box--open) .chat-line:not(:last-child) {
+    display: none;
+  }
+
+  .chat-box:not(.chat-box--open) .chat-line {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chat-box--open .chat-box__lines {
+    /* The dock takes about 270px at the bottom of a phone. */
+    height: auto;
+    min-height: 120px;
+    max-height: calc(100dvh - var(--chat-top) - 270px - 140px);
+  }
+
+  .chat-box--open .chat-line,
+  .chat-box__action {
+    min-height: 32px;
+  }
+}
