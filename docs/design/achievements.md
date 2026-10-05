@@ -472,16 +472,16 @@ Each is sized for one agent (S < 2 days, M < 1 week).
 
 | WP | Work | Depends on | Size |
 | --- | --- | --- | --- |
-| WP0 | **Catalogue and storage.** Migration adding `save.achievements jsonb NULL`; the entity property (server-only, not a frontend key, in neither save-key list); `services/achievements/state.ts` reader/normaliser and `updateAchievements`; `game-data/achievements.ts` with all 22, Flash citations, names, Shiny, `available`. Tests: reader, `/base/save` cannot write it. | — | S |
-| WP1 | **Evaluator and backfill (pure).** `deriveStats(view)`, `evaluateAchievements(record, view, now)`, `backfillAchievements(view)` per §7.1, §7.2, §8, with the pure tests in §12. | WP0 | M |
-| WP2 | **Yard wiring.** Evaluate in the yard action wrapper and the owner `/base/load` catch-up; Block and Heavy Trap build counts from `build` jobs and instant builds (and any other route that finishes one); Starter Kit; Shiny credit; bell kind `achievement` (model, service); `achievements` in yard and load answers. DB tests. | WP1 | M |
-| WP3 | **Map and attack events.** `takeoverCell` (camp vs player); Map Room 2 Kozu Town Hall in both attack landings and auto-attack via a short locked-transaction helper; evaluation inside `recordTribeDestroyed`; `achievements` in the takeover answer. DB tests. | WP2 | S-M |
-| WP4 | **Routes.** `bm/yard/achievements/state`, `bm/yard/achievements/seen`, `GET bm/achievements/player/:userid` with rate limiter and read-only backfill; `docs/server-api.md`. | WP2 | S |
-| WP5 | **Web: achievements screen.** `web/src/api/achievements.ts`; `AchievementsDoor` + screen per §10.1; account-menu item on every HUD screen; read-only mode for another player. vitest. | WP4 | M |
-| WP6 | **Web: unlock pop-up.** Card and queue per §10.2; reads `achievements` from yard, load and takeover answers; calls `seen`; holds back during the guided start; bell wording; Shiny readout. vitest. | WP4 (View button needs WP5) | S |
-| WP7 | **Web: other players.** Line and newest badges in the Map Room 2 cell panel's "More about this yard" and the Map Room 1 target card; opens WP5's read-only screen. vitest. | WP5 | S |
-| WP8 | **Badge art.** Sixteen badges via Gemini (owner's art pipeline), swapped in for the CSS tiers. | — | S |
-| WP9 (backlog) | **The six hidden achievements.** Turn each on when its feature lands: alliance (with a web alliance screen), Descent ×2, Underhall, Inferno quests, and `hugerage` if the owner wants it. | Those features | S each |
+| WP0 (#290) | **Catalogue and storage.** Migration adding `save.achievements jsonb NULL`; the entity property (server-only, not a frontend key, in neither save-key list); `services/achievements/state.ts` reader/normaliser and `updateAchievements`; `game-data/achievements.ts` with all 22, Flash citations, names, Shiny, `available`. Tests: reader, `/base/save` cannot write it. | — | S |
+| WP1 (#291) | **Evaluator and backfill (pure).** `deriveStats(view)`, `evaluateAchievements(record, view, now)`, `backfillAchievements(view)` per §7.1, §7.2, §8, with the pure tests in §12. | WP0 | M |
+| WP2 (#292) | **Yard wiring.** Evaluate in the yard action wrapper and the owner `/base/load` catch-up; Block and Heavy Trap build counts from `build` jobs and instant builds (and any other route that finishes one); Starter Kit; Shiny credit; bell kind `achievement` (model, service); `achievements` in yard and load answers. DB tests. | WP1 | M |
+| WP3 (#293) | **Map and attack events.** `takeoverCell` (camp vs player); Map Room 2 Kozu Town Hall in both attack landings and auto-attack via a short locked-transaction helper; evaluation inside `recordTribeDestroyed`; `achievements` in the takeover answer. DB tests. | WP2 | S-M |
+| WP4 (#294) | **Routes.** `bm/yard/achievements/state`, `bm/yard/achievements/seen`, `GET bm/achievements/player/:userid` with rate limiter and read-only backfill; `docs/server-api.md`. | WP2 | S |
+| WP5 (#295) | **Web: achievements screen.** `web/src/api/achievements.ts`; `AchievementsDoor` + screen per §10.1; account-menu item on every HUD screen; read-only mode for another player. vitest. | WP4 | M |
+| WP6 (#296) | **Web: unlock pop-up.** Card and queue per §10.2; reads `achievements` from yard, load and takeover answers; calls `seen`; holds back during the guided start; bell wording; Shiny readout. vitest. | WP4 (View button needs WP5) | S |
+| WP7 (#297) | **Web: other players.** Line and newest badges in the Map Room 2 cell panel's "More about this yard" and the Map Room 1 target card; opens WP5's read-only screen. vitest. | WP5 | S |
+| WP8 (#298) | **Badge art.** Sixteen badges via Gemini (owner's art pipeline), swapped in for the CSS tiers. | — | S |
+| WP9 (#299, backlog) | **The six hidden achievements.** Turn each on when its feature lands: alliance (with a web alliance screen), Descent ×2, Underhall, Inferno quests, and `hugerage` if the owner wants it. | Those features | S each |
 
 Order: WP0 and WP8 can start at once; then WP1; then WP2; then WP3 and WP4 side by side; then WP5
 and WP6; then WP7. Nothing is visible to players until WP5 and WP6, but WP2-WP4 already pay Shiny
