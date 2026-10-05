@@ -49,12 +49,16 @@ interface Fixture {
   resources?: Record<string, number>;
   levels: Record<string, number>;
   log: FlingLog;
+  /** Set on a wild monster raid's fixture (#226). */
+  raid?: { hitLimit: number };
 }
 
 const fixtures: Fixture[] = readdirSync(FIXTURE_DIR)
   .filter((file) => file.endsWith(".json"))
   .sort()
-  .map((file) => JSON.parse(readFileSync(`${FIXTURE_DIR}${file}`, "utf8")));
+  .map((file) => JSON.parse(readFileSync(`${FIXTURE_DIR}${file}`, "utf8")))
+  // A raid's log is the server's own (#226), never an attack save's.
+  .filter((one: Fixture) => !one.raid);
 
 const fixture = (name: string) => fixtures.find((one) => one.name === name)!;
 

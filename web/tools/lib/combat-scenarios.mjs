@@ -451,6 +451,41 @@ export const SCENARIOS = [
       ],
     },
   },
+  // A wild monster raid (issue #226): the server's own log, not a client's.
+  // Tanks, damage dealers and looters in three discs off the yard's east
+  // corner, each type further out (`docs/design/wild-raids.md` §5.3); the
+  // sandbox yard's bunkers garrisoned as above.
+  {
+    name: "raid-east",
+    description:
+      "A wild monster raid on the sandbox yard: C2 tanks, C4 damage dealers and C3 looters at " +
+      "level 1 from off the east side, a hit limit of 30, the bunkers defending; ends when no " +
+      "raider is left (issue #226).",
+    yard: "sandbox",
+    kind: "main",
+    levels: LEVEL_ONE,
+    playerLevel: 20,
+    tailTicks: 48000,
+    raid: { hitLimit: 30 },
+    defence: {
+      bunkers: {
+        83: { C1: 10, C2: 4 },
+        84: { C8: 6 },
+        85: { C3: 8 },
+        86: { C1: 6, C15: 2 },
+      },
+      defenderLevels: { C1: 6, C2: 6, C3: 6, C8: 6, C15: 1 },
+    },
+    log: {
+      v: 1,
+      seed: 22601,
+      events: [
+        { kind: "raid", t: 0, x: 900, y: -700, r: 80, monsters: { C2: 30 } },
+        { kind: "raid", t: 0, x: 925, y: -725, r: 60, monsters: { C4: 15 } },
+        { kind: "raid", t: 0, x: 980, y: -780, r: 60, monsters: { C3: 10 } },
+      ],
+    },
+  },
 ];
 
 /** The scenario the bench times, which is the busiest of them. */
@@ -472,6 +507,7 @@ export const scenarioInput = (scenario) => {
       playerLevel: scenario.playerLevel,
       tailTicks: scenario.tailTicks,
       ...(scenario.defence ?? {}),
+      ...(scenario.raid ? { raid: scenario.raid } : {}),
     };
   }
   return {
@@ -485,6 +521,7 @@ export const scenarioInput = (scenario) => {
     playerLevel: scenario.playerLevel,
     tailTicks: scenario.tailTicks,
     ...(scenario.defence ?? {}),
+    ...(scenario.raid ? { raid: scenario.raid } : {}),
   };
 };
 

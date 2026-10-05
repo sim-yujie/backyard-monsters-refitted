@@ -1,17 +1,24 @@
 import { damagePercent, derivedDestroyed } from "./damagePercent.js";
 import { createDigest } from "./digest.js";
 import { createBattle } from "./engine.js";
-import { ATTACK_MAX_SECONDS, ticks } from "./stats.js";
+import { ATTACK_MAX_SECONDS, RAID_MAX_SECONDS, ticks } from "./stats.js";
 import { toCombatYard } from "./types.js";
 import { buildEngineYard } from "./yard.js";
-import type { BattleOptions, BattleState, DefenderChampion, TowerReport } from "./engine.js";
+import type {
+  AttackEvent,
+  BattleOptions,
+  BattleState,
+  DefenderChampion,
+  RaidOptions,
+  TowerReport,
+} from "./engine.js";
 import type {
   BuildingHealthMap,
   CombatBuildingDataMap,
   CombatTargetKind,
-  FlingEvent,
   FlingLog,
   MonsterLevels,
+  RaidLog,
   ResourceAmounts,
   Roster,
 } from "./types.js";
@@ -56,7 +63,8 @@ export interface ReplayInput {
   readonly kind?: CombatTargetKind;
   /** The map cell's height, which stretches an outpost's tower range (`towerRange`). */
   readonly height?: number | null;
-  readonly log: FlingLog;
+  /** A client's fling log, or with {@link raid} the server's raid log. */
+  readonly log: FlingLog | RaidLog;
   /** The seed to run with; the log's `seed` when absent. */
   readonly seed?: number;
   readonly levels?: MonsterLevels;
@@ -66,10 +74,34 @@ export interface ReplayInput {
   readonly defenderLevels?: MonsterLevels;
   /** The champion in the defender's Champion Cage (issue #195). */
   readonly defenderChampion?: DefenderChampion | null;
-  /** Ticks to keep simulating after the last event; the default is the whole attack. */
+  /**
+   * Ticks to keep simulating after the last event; the default is the whole
+   * attack, or for a raid its whole cap.
+   */
   readonly tailTicks?: number;
   /** Record the attacking champions' lessons (`BattleOptions.learn`, issue #219). */
   readonly learn?: boolean;
+  /**
+   * Fight a wild monster raid (`BattleOptions.raid`, issue #226). A raid is
+   * always on a main yard, whatever {@link kind} says.
+   */
+  readonly raid?: RaidOptions;
+}
+
+/** What {@link replayRaid} is handed: the defender's side only (issue #226). */
+export interface RaidReplayInput {
+  readonly buildingdata: CombatBuildingDataMap;
+  readonly buildinghealthdata?: BuildingHealthMap | null;
+  readonly resources?: Partial<ResourceAmounts> | null;
+  readonly log: RaidLog;
+  /** The seed to run with; the log's `seed` when absent. */
+  readonly seed?: number;
+  /** Building hits before a raider leaves (`RaidOptions.hitLimit`). */
+  readonly hitLimit: number;
+  readonly bunkers?: Readonly<Record<number, Roster>>;
+  /** The player's academy levels, for their bunkers' defenders. */
+  readonly defenderLevels?: MonsterLevels;
+  readonly defenderChampion?: DefenderChampion | null;
 }
 
 /** One checkpoint: the tick it was taken at and the digest of the state. */
@@ -133,7 +165,7 @@ export const digestState = (values: readonly number[]): string => {
  * two servers two answers. The sort is stable on `t`, so events sharing a tick
  * keep the order the client sent them in, which is the order it rendered them.
  */
-const ordered = (events: readonly FlingEvent[]): FlingEvent[] =>
+const ordered = (events: readonly AttackEvent[]): AttackEvent[] =>
   events
     .map((event, at) => ({ event, at }))
     .sort((one, other) =>
@@ -150,11 +182,12 @@ const ordered = (events: readonly FlingEvent[]): FlingEvent[] =>
  * the engine's copy is its own.
  */
 export const replayAttack = (input: ReplayInput): ReplayOutcome => {
+  const kind: CombatTargetKind = input.raid ? "main" : (input.kind ?? "main");
   const yard = buildEngineYard({
     buildingdata: input.buildingdata,
     buildinghealthdata: input.buildinghealthdata ?? null,
     resources: input.resources ?? null,
-    kind: input.kind ?? "main",
+    kind,
     height: input.height ?? null,
   });
 
@@ -167,6 +200,7 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     ...(input.defenderLevels ? { defenderLevels: input.defenderLevels } : {}),
     ...(input.defenderChampion ? { defenderChampion: input.defenderChampion } : {}),
     ...(input.learn ? { learn: true } : {}),
+    ...(input.raid ? { raid: input.raid } : {}),
   };
 
   const battle = createBattle(yard, options);
@@ -195,14 +229,14 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
   // Keep simulating after the last event, because the damage a fling does lands
   // long after the fling: the default is the whole attack window, and a caller
   // that wants a shorter tail says so.
-  const tail = input.tailTicks ?? ticks(ATTACK_MAX_SECONDS);
+  const tail = input.tailTicks ?? ticks(input.raid ? RAID_MAX_SECONDS : ATTACK_MAX_SECONDS);
   advanceTo(last + tail);
 
   const state: BattleState = battle.state();
   const health = state.health;
   const fired = new Set(state.firedTraps);
   const combatYard = toCombatYard({
-    kind: input.kind ?? "main",
+    kind,
     buildingdata: input.buildingdata,
     buildinghealthdata: health,
     spent: fired,
@@ -235,3 +269,24 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     ...(state.lessons ? { lessons: state.lessons } : {}),
   };
 };
+
+/**
+ * Fight a wild monster raid over the player's own yard (issue #226).
+ *
+ * {@link replayAttack} on a main yard with the raid's hit limit and its whole
+ * cap as the tail. The outcome's `defenderLoss` is what the raiders stole;
+ * there is no attacker, so `attackloot` means nothing here.
+ */
+export const replayRaid = (input: RaidReplayInput): ReplayOutcome =>
+  replayAttack({
+    buildingdata: input.buildingdata,
+    buildinghealthdata: input.buildinghealthdata ?? null,
+    resources: input.resources ?? null,
+    kind: "main",
+    log: input.log,
+    ...(input.seed === undefined ? {} : { seed: input.seed }),
+    ...(input.bunkers ? { bunkers: input.bunkers } : {}),
+    ...(input.defenderLevels ? { defenderLevels: input.defenderLevels } : {}),
+    ...(input.defenderChampion ? { defenderChampion: input.defenderChampion } : {}),
+    raid: { hitLimit: input.hitLimit },
+  });

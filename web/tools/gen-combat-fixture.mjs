@@ -55,6 +55,7 @@ for (const scenario of chosen) {
     playerLevel: scenario.playerLevel,
     tailTicks: scenario.tailTicks,
     ...(scenario.defence ? { defence: scenario.defence } : {}),
+    ...(scenario.raid ? { raid: scenario.raid } : {}),
     log: scenario.log,
     expected: expectedOf(outcome, Boolean(scenario.defence)),
   };

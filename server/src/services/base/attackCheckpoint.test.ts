@@ -109,6 +109,8 @@ describe("parseCheckpoint", () => {
     ["a bomb with no id", { flinglog: { v: 1, seed: 77, events: [{ kind: "bomb", t: 1, x: 0, y: 0 }] } }],
     ["a champion called back by no type (#222)", { flinglog: { v: 1, seed: 77, events: [{ kind: "championRetreat", t: 1 }] } }],
     ["a champion called back by a fractional type", { flinglog: { v: 1, seed: 77, events: [{ kind: "championRetreat", t: 1, c: 1.5 }] } }],
+    // Only the server builds a raid's log (#226); a client's log never carries a raid wave.
+    ["a raid wave", { flinglog: { v: 1, seed: 77, events: [{ kind: "raid", t: 1, x: 900, y: 0, r: 50, monsters: { C1: 5 } }] } }],
     ["no sources", { sources: undefined }],
     ["a source that is not a base id", { sources: ["drop table"] }],
   ])("refuses %s", (_, overrides) => {

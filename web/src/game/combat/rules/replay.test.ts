@@ -39,6 +39,8 @@ interface Fixture {
   tailTicks: number;
   /** The defender's garrisons, their levels and the caged champion (issue #195). */
   defence?: Record<string, unknown>;
+  /** A wild monster raid's hit limit, when the log is a raid (issue #226). */
+  raid?: { hitLimit: number };
   log: { v: 1; seed: number; events: unknown[] };
   expected: Record<string, unknown>;
 }
@@ -70,6 +72,7 @@ const inputOf = (fixture: Fixture) => {
       playerLevel: fixture.playerLevel,
       tailTicks: fixture.tailTicks,
       ...(fixture.defence ?? {}),
+      ...(fixture.raid ? { raid: fixture.raid } : {}),
     };
   }
   return {
@@ -83,6 +86,7 @@ const inputOf = (fixture: Fixture) => {
     playerLevel: fixture.playerLevel,
     tailTicks: fixture.tailTicks,
     ...(fixture.defence ?? {}),
+    ...(fixture.raid ? { raid: fixture.raid } : {}),
   };
 };
 

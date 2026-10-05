@@ -89,6 +89,15 @@ export const RETREAT_GRACE_SECONDS = 120;
 export const ATTACK_MAX_SECONDS = DECLARE_WAR_COUNTDOWN_SECONDS + RETREAT_GRACE_SECONDS;
 
 /**
+ * The longest a wild monster raid runs, in seconds (issue #226).
+ *
+ * A raid has no countdown: Flash ends it when no raider is left
+ * (`client/scripts/WMATTACK.as:331-347`). This is only a safety cap, so a
+ * raider stuck somewhere cannot keep the battle open for ever.
+ */
+export const RAID_MAX_SECONDS = 600;
+
+/**
  * The damage percentage that counts as a win.
  *
  * `BYMConfig.k_sVICTORY_THRESHOLD`

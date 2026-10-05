@@ -523,6 +523,36 @@ export interface FlingLog {
   readonly events: readonly FlingEvent[];
 }
 
+/**
+ * One wave of a wild monster raid on a player's own yard (issue #226,
+ * `docs/design/wild-raids.md` §6.2).
+ *
+ * No client writes one: the server plans the raid and builds the log, so a
+ * client's {@link FlingLog} never carries this kind and the fling validator
+ * refuses it. The engine takes it only in a raid battle
+ * (`BattleOptions.raid`), and takes nothing else there. Every raider spawns at
+ * level 1, the bottom of its ladder, whatever the player's academy says.
+ */
+export interface RaidEvent {
+  readonly kind: "raid";
+  /** Fast ticks since the raid started. */
+  readonly t: number;
+  /** The centre of the spawn disc, in yard units; off the yard, and may be off the grid. */
+  readonly x: number;
+  readonly y: number;
+  /** The disc's radius on screen, as the planner chose it; not recomputed. */
+  readonly r: number;
+  readonly monsters: Roster;
+}
+
+/** The complete record of a raid, which the server builds (issue #226). */
+export interface RaidLog {
+  readonly v: 1;
+  /** The raid's own seed, rolled when it was planned. */
+  readonly seed: number;
+  readonly events: readonly RaidEvent[];
+}
+
 /** What a replay derives, which in `authoritative` mode is what is written (§2.8). */
 export interface Outcome {
   readonly health: BuildingHealthMap;
