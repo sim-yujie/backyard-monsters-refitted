@@ -108,7 +108,8 @@ import { logger } from "../../utils/logger.js";
  * `onboarding` summary to the answer. Achievements' WP2 (issue #204,
  * `docs/design/achievements.md` §7.2) added `achievements` to
  * {@link YardSlices}, `achievementEvents` to {@link YardOutcome}, and the
- * unseen unlocks to the answer.
+ * unseen unlocks to the answer; its WP4 added
+ * {@link YardAction.reportAfterAchievements}.
  */
 
 /** Save columns an action may replace wholesale. */
@@ -197,6 +198,13 @@ export interface YardAction<Schema extends z.ZodType, Report> {
   ) => YardOutcome<Report> | Promise<YardOutcome<Report>>;
   /** Whether the route works on an outpost; refused with a plain message when absent. */
   outposts?: OutpostPolicy;
+  /**
+   * Builds the report again once the wrapper has evaluated the account's
+   * achievements (issue #204), for a route that answers with that record, so
+   * the answer holds this request's backfill and unlocks. `save` is the one
+   * `run` saw, with the outcome applied. Replaces the report `run` returned.
+   */
+  reportAfterAchievements?: (save: Save) => Report;
 }
 
 /** Identity helper so `run`'s `body` is typed from `schema`. */
@@ -523,6 +531,9 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         addEvents(builtEvents(completed), outcome.achievementEvents),
         yard.outpost
       );
+      const report = action.reportAfterAchievements
+        ? action.reportAfterAchievements(save)
+        : outcome.report;
 
       await tx.flush();
       const playerlevel = playerLevelOf(yard.main);
@@ -534,7 +545,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         save,
         now,
         completed,
-        report: outcome.report,
+        report,
         playerlevel,
         // The account's, so from the main row on an outpost's answer too.
         onboarding: onboardingSummary(yard.main),

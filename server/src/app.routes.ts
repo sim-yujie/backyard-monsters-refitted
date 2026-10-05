@@ -24,6 +24,7 @@ import {
   botCheckReadLimiter,
   botCheckAnswerLimiter,
   chatReportLimiter,
+  playerAchievementsLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -96,6 +97,7 @@ import {
   readNotification,
 } from "./controllers/notifications/routes.js";
 import { chatPlayerYard, reportChatMessage } from "./controllers/chat/routes.js";
+import { playerAchievements } from "./controllers/achievements/routes.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
@@ -256,6 +258,12 @@ router.post("/api/:apiVersion/bm/notifications/readall", apiVersion, verifyUserA
 * ──────────────────────────────────────────────── */
 router.post("/api/:apiVersion/bm/chat/report", apiVersion, verifyUserAuth, chatReportLimiter, logRequest, reportChatMessage);
 router.get("/api/:apiVersion/bm/chat/yard", apiVersion, verifyUserAuth, chatPlayerYard);
+
+/**  ────────────────────────────────────────────────
+* 📦 Achievements: another player's (issue #204, `controllers/achievements/player.ts`).
+*    The player's own are yard actions (`controllers/yard/achievements.ts`).
+* ──────────────────────────────────────────────── */
+router.get("/api/:apiVersion/bm/achievements/player/:userid", apiVersion, verifyUserAuth, playerAchievementsLimiter, playerAchievements);
 
 /**  ────────────────────────────────────────────────
 * 📦 Leaderboards & Attack Logs

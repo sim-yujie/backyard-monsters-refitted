@@ -95,10 +95,17 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
 ];
 
 /**
- * The yard routes that are not: reads, and a tip marked seen. A test holds
- * every yard route to one list or the other, so a new route needs a decision.
+ * The yard routes that are not: reads, and a tip or an achievement pop-up
+ * marked seen. A test holds every yard route to one list or the other, so a
+ * new route needs a decision.
  */
-export const NOT_REAL_ACTION_YARD_PATHS: readonly string[] = ["state", "goals/state", "tips/seen"];
+export const NOT_REAL_ACTION_YARD_PATHS: readonly string[] = [
+  "state",
+  "goals/state",
+  "tips/seen",
+  "achievements/state",
+  "achievements/seen",
+];
 
 /** An in-game check's answer (#273) counts only when it was right. */
 const isSolvedCheck = (ctx: Context): boolean => (ctx.body as { solved?: unknown } | undefined)?.solved === true;

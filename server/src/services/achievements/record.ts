@@ -191,9 +191,10 @@ const outpostBuildings = async (
 
 /**
  * The evaluator's view of the main save (`evaluate.ts`), with the backfill's
- * reads of other rows only while the record still needs its backfill.
+ * reads of other rows only while the record still needs its backfill. Only
+ * reads; the public view (`view.ts`) uses it for a record never worked out.
  */
-const readView = async (
+export const readView = async (
   em: EntityManager,
   main: Save,
   outpost: Save | null,

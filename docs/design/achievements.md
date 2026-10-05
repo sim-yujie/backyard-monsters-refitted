@@ -494,6 +494,13 @@ off unless set to `on`. Counting and unlocking run either way; while it is off a
 `unpaid` unlock once. Bell rows are kind `achievement`: the backfill's unlocks share one row, every
 other unlock has its own.
 
+**As built (WP4):** `progress` is `{ value, target, parts? }`: `value` capped at `target` and full
+once earned; entries 4 and 5 count champions met and list each in `parts`. The state list is built
+after the wrapper's evaluation (`YardAction.reportAfterAchievements`), so a first read answers with
+its backfill. While rewards are off an owed unlock reads `locked` in both the player's own list and
+the public one. Both yard routes work on an outpost. The public route's limiter is 30 a minute per
+user.
+
 ## 14. Open questions
 
 | # | Question | Recommendation |

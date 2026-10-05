@@ -51,6 +51,7 @@ import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
 import { goalsRoutes } from "./goals.js";
 import { guideRoutes } from "./guide.js";
 import { tipsRoutes } from "./tips.js";
+import { achievementsRoutes } from "./achievements.js";
 
 /**
  * Every yard action route, mounted by `app.routes.ts` as
@@ -120,4 +121,6 @@ export const yardRoutes: YardRouteEntry[] = [
   ...goalsRoutes,
   ...guideRoutes,
   ...tipsRoutes,
+  // Achievements (issue #204, WP4).
+  ...achievementsRoutes,
 ];

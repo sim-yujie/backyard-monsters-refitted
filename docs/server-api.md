@@ -975,6 +975,20 @@ drops anything older than 7 days. Both answers carry the unread count as `notifi
 client never polls. A failure there (the table missing, say) is logged and leaves the count
 out; the yard answer is unchanged.
 
+### Achievements (issue #204)
+
+The player's own list and the pop-ups' `seen` are yard actions (`achievements/state`,
+`achievements/seen`, under "Yard actions"). The record is `save.achievements`, a server-only
+column on the main save (`services/achievements/state.ts`; `/base/save` cannot write it).
+Yard action answers and the owner's build-mode `/base/load` carry `achievements: [{ id, name,
+shiny, backfill? }]` when paid unlocks are not yet shown. Shiny and bell lines are paid only
+while `ACHIEVEMENT_REWARDS=on` (`config/AchievementConfig.ts`, default off); until then unlocks
+are stored owed and no answer shows them as earned.
+
+| Method | Path | Middleware | Request fields | Response | Description |
+|---|---|---|---|---|---|
+| GET | `/api/:apiVersion/bm/achievements/player/:userid` | apiVersion, verifyUserAuth, `playerAchievementsLimiter` (30 a minute per user; `429 { error, reason: "rateLimited" }`); no `logRequest` | Path `userid` | `{ error: 0, userid, name, earned, total, achievements: [{ id, name, description, status: "locked" \| "earned", at? }] }`; `404 { error, reason: "notFound" }` for an unknown or banned player, one with no main yard, or an id that is not a positive whole number | Another player's achievements (`docs/design/achievements.md` §9.2; `controllers/achievements/player.ts`), for the Map Room panels and the read-only screen. Only what is earned and when: no progress, no Shiny. Read-only: a record never worked out (`NULL`: a bot, a seeded player, anyone who has not loaded since) gets the backfill worked out on the fly (`services/achievements/view.ts` `readPublicRecord`) and nothing is stored; a stored record is taken as it is, without folding in what the yard shows now. Owed unlocks read `locked` while rewards are off. Any player may be asked for, the caller included. |
+
 ### Attack Logs
 
 | Method | Path | Middleware | Request fields | Response | Description |
@@ -1441,6 +1455,8 @@ Later phases add kinds (`train`, …) with the same five keys.
 | POST | `/api/:apiVersion/bm/yard/guide/finish` | `id` (building id) | `{ id, t, finished, points, step }` | The free Finish now at `finish-<type>`: only the building recorded in `grants["fund:<type>"]`, only its construction (`cB`), finished through the catch-up's own completion with Shiny 0 (for the level 1 Map Room, the one-off exception to D16). A construction that ran out by itself is recorded without finishing anything (`finished: false`). Records `finish:<type>`; after the Flinger it also opens the practice camp (`camp.state` `open`, a fresh `tribedata` entry `"1"`). `409 wrongStep`, `409 alreadyGranted`, `409 notGuideBuilding { id }`, `409 guideClosed`. Refused on an outpost. |
 | POST | `/api/:apiVersion/bm/yard/guide/army` | none | `{ added, housed, retry, step }` | Housed Pokeys (`C1`) topped up to 15, never above, one entry in `grants.army`. At `pokeys` it is Bob's gift (once; step `build-maproom`); at `attack-result` with the camp not destroyed it is the free retry: the camp's health, `destroyed` and `damage` reset (its `looted` kept) and the step goes back to `pick-camp`. `409 alreadyGranted`, `409 notYet` (the camp was beaten), `409 wrongStep`, `409 guideClosed`. Refused on an outpost. |
 | POST | `/api/:apiVersion/bm/yard/guide/skip` | none | `{ state: "skipped" }` | Ends the guide for good while `pending` or `active`: `skipped`, `tutorialstage` 205, `protected = max(protected, now + 7 days)`, the practice camp removed if open. Anything already granted stays. `409 guideClosed` after. Refused on an outpost. |
+| POST | `/api/:apiVersion/bm/yard/achievements/state` | none | `{ achievements: [{ id, name, description, shiny, status: "locked" \| "earned", at?, progress: { value, target, parts?: [{ label, value, target }] } }], earned, total, shinyEarned, fresh: [{ id, name, shiny, backfill? }] }` — every available entry in Flash's order (16 today); `at` (unix seconds) on an earned one; `progress.value` is capped at `target` and reads full once earned; entries 4 and 5 (champions) count the champions met and list them in `parts` (Gorgo, Drull, Fomor); `fresh` is the paid unlocks not yet shown | The achievements screen (issue #204, `docs/design/achievements.md` §9.1; `controllers/yard/achievementsActions.ts`, `services/achievements/view.ts`). Built after the wrapper has evaluated the record, so a save never worked out answers with its backfill. While `ACHIEVEMENT_REWARDS` is off (the default) an unlock is stored owed (`unpaid`): it reads `locked`, counts towards neither `earned` nor `shinyEarned`, and is not in `fresh`. Works on an outpost (`baseid`): the record is the account's, on the main row. Not a real action (`services/user/realActions.ts`). |
+| POST | `/api/:apiVersion/bm/yard/achievements/seen` | `ids` (JSON array of achievement numbers, at most 64) | `{ seen: number[] }` — the ids it marked | The client showed these unlocks' pop-ups: each paid, unseen unlock named is marked `seen`, so no later answer carries it. An id not earned, already seen or still owed is ignored. Refusal: `400` (`ids` missing or not a list of positive whole numbers). Works on an outpost. Not a real action. |
 
 **Shiny prices** are all worked out on the server by `services/yard/shiny.ts`, never taken from
 the client (`docs/design/yard-buildings.md` §2.6). `timeCost(t)` is the original
