@@ -491,7 +491,11 @@ becomes server-owned:
 
 - **`fight` (added in WP3)** is the yard's lock while a raid is fought (`services/raids/raidLock.ts`):
   the raid's id and the unix second the lock lapses by itself (the fight's length plus the 2-minute
-  grace, the open raid's own TTL). `/raid/start` writes it under the row lock; the finish, a
+  grace, the open raid's own TTL). `/raid/start` writes it under the row lock, in two short
+  transactions with the fight run between them outside any: first a provisional lock (the
+  worker's deadline plus a margin) on the yard it copies for the fight, then the fight's own, once
+  it has checked the provisional one is still there (a load in between lifts it and cancels the
+  raid; a second start of the same raid finds it and is refused `notWarning`). The finish, a
   finish that finds the raid cancelled, and the owner's next build-mode load remove it. While it
   holds, every yard action is refused `409 raidInProgress` and an attack load on the yard as
   under attack (§7.2). It lives on the row rather than only in Redis (§8.2), so the yard actions

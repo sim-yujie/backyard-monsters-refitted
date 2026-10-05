@@ -7,18 +7,24 @@ import { raidRefusedErr } from "../../errors/errors.js";
 import { defenderForcesOf, type DefenderForces, type RaidEvent, type Roster } from "../../game-rules/combat/index.js";
 import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 import { catchUpLockedRow, catchUpLockedYard } from "../../controllers/yard/yardAction.js";
 import { notifyAndCount } from "../notifications/notifications.js";
 import { playerLevelOf } from "../base/calculateBaseLevel.js";
 import { isAttackActive } from "../base/isAttackActive.js";
-import { ReplayTimeoutError, fightRaidInWorker } from "../base/combat/replayRunner.js";
+import {
+  FINALISE_REPLAY_DEADLINE_MS,
+  ReplayTimeoutError,
+  fightRaidInWorker,
+  reserveReplaySlot,
+} from "../base/combat/replayRunner.js";
 import type { CompletedJob } from "../yard/catchUp.js";
 import { repairsDoneBy } from "../yard/catchUpRepairs.js";
 import { readPresenceMarks } from "../user/online.js";
 import { fightSecondsOf, type RaidFightInput, type RaidFightOutcome } from "./raidFight.js";
 import { landRaid, landedResult, type RaidResult } from "./raidLanding.js";
-import { readFightLock } from "./raidLock.js";
+import { raidFighting, readFightLock } from "./raidLock.js";
 import { planRaid, type RaidPlan } from "./raidPlan.js";
 import {
   SESSIONS_BETWEEN_RAIDS,
@@ -35,6 +41,7 @@ import {
 import {
   FIGHT_GRACE_SECONDS,
   WARNING_SECONDS,
+  cancelOpenRaid,
   earliestFinish,
   newRaidId,
   openRaid,
@@ -264,25 +271,33 @@ const lockMain = async (tx: EntityManager, user: User): Promise<Save> => {
   return locked;
 };
 
-/**
- * The fight's start (§4.2): under the yard's row lock, the yard brought up to
- * date and frozen, the fight run once in a worker on it, the outcome kept with
- * the open raid (never sent), the yard locked for the fight (`raidLock.ts`),
- * and the client handed what it needs to play the same fight.
- *
- * A raid whose time has not come is refused (`notYet`), as is one on a yard
- * under attack (`underAttack`: it waits, §4.1). A fight the worker could not
- * finish in time is `503 busy` and the raid stays in its warning.
- */
-export const startRaid = async (em: EntityManager, user: User, raidId: unknown, now: number): Promise<RaidStart> => {
-  const raid = await openWarning(user.userid, raidId);
-  if (now < raid.attackAt) throw raidRefusedErr("notYet", { attackAt: raid.attackAt });
-  const plan = planOf(raid);
+/** What the start fights over: the yard as it stood, and its defence. */
+interface FrozenYard {
+  readonly yard: RaidStart["fight"]["yard"];
+  readonly defence: DefenderForces;
+}
 
+/**
+ * How long the start's provisional fight lock holds the yard while the fight
+ * runs: the worker's deadline, and a margin for the second transaction.
+ */
+export const START_LOCK_SECONDS = Math.ceil(FINALISE_REPLAY_DEADLINE_MS / 1000) + 10;
+
+/**
+ * The start's first transaction: the yard brought up to date and copied for
+ * the fight, and held for it by a provisional fight lock (`raidLock.ts`), so
+ * nothing changes it while the fight runs outside any transaction.
+ */
+const freezeYard = async (em: EntityManager, user: User, raid: OpenRaid, now: number): Promise<FrozenYard> => {
   let completed: CompletedJob[] = [];
-  const start = await em.transactional(async (tx) => {
+  const frozen = await em.transactional(async (tx) => {
     const locked = await lockMain(tx, user);
     if (isAttackActive(locked)) throw raidRefusedErr("underAttack");
+    // A second start of this raid, sent before the first answered: both read
+    // the warning, but the first already holds the yard.
+    if (readFightLock(readSchedule(locked.aiattacks).fight)?.id === raid.id && raidFighting(locked, now)) {
+      throw raidRefusedErr("notWarning");
+    }
     completed = await catchUpLockedRow(tx, locked, now);
 
     const yard = structuredClone({
@@ -291,6 +306,74 @@ export const startRaid = async (em: EntityManager, user: User, raidId: unknown, 
       resources: locked.resources ?? {},
     });
     const defence = defenderForcesOf({ buildingdata: yard.buildingdata, academy: locked.academy, champion: locked.champion });
+    locked.aiattacks = scheduleColumn(
+      withFightLock(readSchedule(locked.aiattacks), { id: raid.id, until: now + START_LOCK_SECONDS })
+    );
+    await tx.flush();
+    return { yard, defence };
+  });
+  await notifyJobs(em, user.userid, completed);
+  return frozen;
+};
+
+/** How the start's second transaction went. */
+type FightLocked = "locked" | "lapsed" | "lifted" | "raidGone";
+
+/**
+ * The start's second transaction: the provisional lock made the fight's own,
+ * lasting the fight and its grace, and the open raid moved to its fight. The
+ * lock may have gone meanwhile: lifted by a yard load (`startSession`), or
+ * lapsed. Any outcome but "locked" leaves the yard unlocked.
+ */
+const lockForFight = (em: EntityManager, user: User, fighting: OpenRaid, now: number): Promise<FightLocked> =>
+  em.transactional(async (tx) => {
+    const locked = await lockMain(tx, user);
+    const schedule = readSchedule(locked.aiattacks);
+    if (readFightLock(schedule.fight)?.id !== fighting.id) return "lifted";
+
+    let outcome: FightLocked = "lapsed";
+    if (raidFighting(locked, getCurrentDateTime())) {
+      outcome = (await updateOpenRaid(user.userid, fighting, now)) ? "locked" : "raidGone";
+    }
+    locked.aiattacks = scheduleColumn(
+      outcome === "locked"
+        ? withFightLock(schedule, {
+            id: fighting.id,
+            until: now + Math.ceil(fighting.fightSeconds ?? 0) + FIGHT_GRACE_SECONDS,
+          })
+        : withoutFightLock(schedule)
+    );
+    await tx.flush();
+    return outcome;
+  });
+
+/**
+ * The fight's start (§4.2), in two short transactions with the fight between
+ * them, outside any: the yard brought up to date, copied and held by a
+ * provisional fight lock (`freezeYard`); the fight run once in a worker on
+ * the copy; then the lock made the fight's and the outcome kept with the open
+ * raid, never sent (`lockForFight`). The client is handed what it needs to
+ * play the same fight.
+ *
+ * A raid whose time has not come is refused (`notYet`), as is one on a yard
+ * under attack (`underAttack`: it waits, §4.1), and a second start of a raid
+ * already starting (`notWarning`). With no replay slot free, or a fight the
+ * worker could not finish in time, it is `503 busy` and the raid stays in its
+ * warning. A yard load during the fight cancels it, as a load cancels any
+ * fight: the start is refused `noRaid` and the raid is called off.
+ */
+export const startRaid = async (em: EntityManager, user: User, raidId: unknown, now: number): Promise<RaidStart> => {
+  const raid = await openWarning(user.userid, raidId);
+  if (now < raid.attackAt) throw raidRefusedErr("notYet", { attackAt: raid.attackAt });
+  const plan = planOf(raid);
+
+  // The slot before the yard is touched: a server too busy to fight says so
+  // at once, as an auto-attack's does (`reserveReplaySlot`).
+  const release = await reserveReplaySlot();
+  if (!release) throw raidRefusedErr("busy");
+  let start: RaidStart;
+  try {
+    const { yard, defence } = await freezeYard(em, user, raid, now);
     let outcome: RaidFightOutcome;
     try {
       outcome = await fightRaidInWorker({
@@ -302,22 +385,27 @@ export const startRaid = async (em: EntityManager, user: User, raidId: unknown, 
         defence,
       });
     } catch (err) {
+      // Left alone, the lock would lapse by itself; the fight's error is the answer.
+      await unlockYard(em, user, raid.id).catch((unlockErr: unknown) =>
+        logger.warn(`Wild monster raid ${raid.id} could not unlock its yard: ${(unlockErr as Error).message}`)
+      );
       if (err instanceof ReplayTimeoutError) throw raidRefusedErr("busy");
       throw err;
     }
 
     const fightSeconds = fightSecondsOf(outcome);
     const fighting: OpenRaid = { ...raid, phase: "fighting", startedAt: now, fightSeconds, outcome };
-    locked.aiattacks = scheduleColumn(
-      withFightLock(readSchedule(locked.aiattacks), {
-        id: raid.id,
-        until: now + Math.ceil(fightSeconds) + FIGHT_GRACE_SECONDS,
-      })
-    );
-    if (!(await updateOpenRaid(user.userid, fighting, now))) throw raidRefusedErr("noRaid");
-    await tx.flush();
-
-    return {
+    switch (await lockForFight(em, user, fighting, now)) {
+      case "lapsed":
+        throw raidRefusedErr("busy");
+      case "lifted":
+        // The load that lifted it found the raid still in its warning.
+        if ((await readOpenRaid(user.userid))?.id === raid.id) await cancelOpenRaid(user.userid);
+        throw raidRefusedErr("noRaid");
+      case "raidGone":
+        throw raidRefusedErr("noRaid");
+    }
+    start = {
       raid: raidView(fighting),
       fight: {
         seed: plan.log.seed,
@@ -328,9 +416,10 @@ export const startRaid = async (em: EntityManager, user: User, raidId: unknown, 
         yard,
         defence,
       },
-    } satisfies RaidStart;
-  });
-  await notifyJobs(em, user.userid, completed);
+    };
+  } finally {
+    release();
+  }
   logger.info("Wild monster raid {id} started for userid {userid}", {
     event: "wild-raid-start",
     userid: user.userid,
