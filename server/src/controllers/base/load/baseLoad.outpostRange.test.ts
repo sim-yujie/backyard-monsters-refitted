@@ -29,6 +29,8 @@ const em = {
   find: async (entity: unknown, where: Row) => (tables.get(entity) ?? []).filter((row) => matches(row, where)),
   populate: async () => {},
   nativeUpdate: async () => 0,
+  // The main yard's load counts a raid session under a row lock (#226).
+  transactional: async (run: (tx: unknown) => Promise<unknown>) => run(em),
   create: (_entity: unknown, data: Row) => data,
   persist: () => {},
   flush: async () => {},
@@ -174,5 +176,26 @@ describe("the owner's own outpost build load serves the cell height (#262)", () 
     const response = await load(OUTPOST_BASEID);
 
     expect(response.cellheight).toBeUndefined();
+  });
+});
+
+// Not #262's, but the same two loads: only the main yard's counts towards
+// the next wild monster raid (#226, `services/raids/raidSchedule.ts`).
+describe("a wild monster raid session (#226)", () => {
+  const sessions = (type: string) =>
+    (tables.get(Save)!.find((row) => row.type === type)!.aiattacks as Row | undefined)?.sessionsSinceLastAttack;
+
+  test("the main yard's own build load is one more session", async () => {
+    await load(MAIN_BASEID);
+    await load(MAIN_BASEID);
+
+    expect(sessions("main")).toBe(2);
+  });
+
+  test("an outpost's build load is not", async () => {
+    await load(OUTPOST_BASEID);
+
+    expect(sessions("main")).toBeUndefined();
+    expect(sessions("outpost")).toBeUndefined();
   });
 });

@@ -45,8 +45,12 @@ export const memoryRedis = (strings: Map<string, string> = new Map(), { ages = t
         age(key);
         return strings.get(key) ?? null;
       }),
-    set: async (key: string, value: string, ...options: (string | number)[]): Promise<"OK"> => {
-      const ex = options.findIndex((option) => String(option).toUpperCase() === "EX");
+    set: async (key: string, value: string, ...options: (string | number)[]): Promise<"OK" | null> => {
+      const flags = options.map((option) => String(option).toUpperCase());
+      const ex = flags.indexOf("EX");
+      // NX writes only a missing key, XX only an existing one; either answers null when it skips.
+      if (flags.includes("NX") && exists(key)) return null;
+      if (flags.includes("XX") && !exists(key)) return null;
       setString(key, value, ex >= 0 ? Number(options[ex + 1]) : undefined);
       return "OK";
     },

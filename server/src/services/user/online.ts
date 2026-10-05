@@ -32,7 +32,7 @@ export const ATTACK_ONLINE_SECONDS = 60;
 
 export const lastActionKey = (userid: number): string => `last-action:${userid}`;
 export const challengeKey = (userid: number): string => `presence-challenge:${userid}`;
-const lastSeenKey = (userid: number): string => `last-seen:${BaseType.MAIN}:${userid}`;
+export const lastSeenKey = (userid: number): string => `last-seen:${BaseType.MAIN}:${userid}`;
 
 /** What the server knows of a player's presence; times in unix seconds. */
 export interface PresenceMarks {

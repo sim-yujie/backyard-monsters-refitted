@@ -57,6 +57,8 @@ import type { DefenderForces } from "../../../game-rules/combat/index.js";
 import type { ChampionBrains } from "../../../services/base/attackSession.js";
 import { touchLastSeen } from "../../../services/user/lastSeen.js";
 import { logger } from "../../../utils/logger.js";
+import { countRaidSession } from "../../../services/raids/raidSchedule.js";
+import { cancelRaidOnYardLoad, presenceLapsed } from "../../../services/raids/raidStore.js";
 
 type Stronghold = { level: number; cell?: { x: number; y: number } | null };
 
@@ -96,6 +98,8 @@ export const baseLoad: KoaController = async (ctx) => {
   let defenderForces: DefenderForces | undefined;
   /** The attacker's champions' brains, as the attack froze them (issue #219), served to the client. */
   let championBrains: ChampionBrains | undefined;
+  /** No presence mark before this load: the game had been closed (#226, `raidStore.ts`). */
+  let gameWasClosed = false;
 
   // The attacker's level for the engine's low-level loot bonus, served to the
   // client and kept in the attack session for the loot replay, so both run
@@ -104,6 +108,8 @@ export const baseLoad: KoaController = async (ctx) => {
 
   switch (type) {
     case BaseMode.BUILD:
+      // Read before the mark is refreshed below (wild monster raids, #226).
+      gameWasClosed = await presenceLapsed(user.userid);
       baseSave = await baseModeBuild(user, baseid);
       redis.setex(`last-seen:main:${user.userid}`, 120, getCurrentDateTime().toString());
       // Seen in the last 30 days is what earns a Map Room 1 neighbour place (issue #235).
@@ -213,6 +219,11 @@ export const baseLoad: KoaController = async (ctx) => {
     // in the same notice and kept in the mailbox (outposts WP8, #187).
     completed = [...jobs, ...(await takeOutpostNotices(postgres.em, user.userid))];
     notifications = await notifyAndCount(postgres.em, user.userid, null, "away", completed);
+    // Wild monster raids (#226, `docs/design/wild-raids.md` §7.1, §8.1): a
+    // fight left by this load is cancelled, as is a warning when the game had
+    // been closed, and the load is one more session towards the next raid.
+    await cancelRaidOnYardLoad(user.userid, gameWasClosed);
+    baseSave = (await countRaidSession(postgres.em, baseSave.basesaveid, getCurrentDateTime())) ?? baseSave;
   } else if (
     type === BaseMode.BUILD &&
     isOwner &&

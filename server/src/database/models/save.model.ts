@@ -484,6 +484,8 @@ export class Save {
    * list (issue #182): they decide whether a yard can be attacked or taken
    * over, so only the server sets them (`damageProtection.ts`, the store's
    * protection items, a takeover). Flash never sends either (`BASE.as` Save).
+   * `aiattacks` is not either (#226): the wild monster raid schedule is the
+   * server's (`services/raids/raidSchedule.ts`), though Flash still sends it.
    */
   public static saveKeys: Extract<keyof Save, string>[] = [
     "buildingdata",
@@ -492,7 +494,6 @@ export class Save {
     "stats",
     "rewards",
     "tutorialstage",
-    "aiattacks",
     "monsters",
     "resources",
     "iresources",
