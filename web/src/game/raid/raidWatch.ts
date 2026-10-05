@@ -72,10 +72,14 @@ export class RaidWatch {
     this.apply(heard === null ? null : merge(this.raid, heard));
   }
 
-  /** A raid route's own answer: the raid as it is now, or null once it is over or gone. */
+  /**
+   * A raid route's own answer: the raid as it is now, or null once it is over
+   * or gone. Taken as it is, unmerged: it is the server's latest word, and
+   * may put the fight later (`notYet`), which a crossing ping may not.
+   */
   set(raid: RaidView | null): void {
     if (this.simulated !== undefined) this.simulated = raid;
-    this.apply(raid === null ? null : merge(this.raid, raid));
+    this.apply(raid);
   }
 
   /**

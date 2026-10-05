@@ -1,1 +1,291 @@
-/* Raid screens (issue #226 WP4, ui/raid/RaidScreens.ts). TODO (next builder): style .raid-alert, .raid-bar, .raid-result, .raid-frequency with tokens.css values. */
+/*
+ * Wild monster raids (issue #226 WP4, `ui/raid/RaidScreens.ts`, design
+ * `docs/design/wild-raids.md` §4.3): the WILD MONSTER ALERT, the top bar's
+ * "WILD MONSTERS SPOTTED!", the result and frequency popups, and the raid
+ * fight's "Don't Panic!" banner. The lock reuses `.yard-attack-lock` (ui.css).
+ * Every value comes from tokens.css.
+ */
+
+/* ── The alert ─────────────────────────────────────────────────────────── */
+
+.raid-alert,
+.raid-result,
+.raid-frequency {
+  width: min(92vw, 30rem);
+}
+
+.raid-alert {
+  border: 2px solid var(--colour-danger);
+}
+
+.raid-alert .panel__body,
+.raid-result .panel__body,
+.raid-frequency .panel__body {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.raid-alert__head,
+.raid-result__head {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.raid-alert__splash,
+.raid-result__splash {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 0 var(--colour-art-shadow));
+}
+
+.raid-alert__words,
+.raid-result__words {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.raid-alert__words p,
+.raid-result__words p {
+  margin: 0;
+}
+
+.raid-alert__tribe {
+  color: var(--colour-danger);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  line-height: var(--leading-tight);
+}
+
+.raid-alert__lead,
+.raid-result__lead {
+  font-weight: 700;
+  line-height: var(--leading-normal);
+}
+
+.raid-alert__eta {
+  color: var(--colour-warning);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.raid-alert__monsters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.raid-alert__monster {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  text-align: center;
+}
+
+.raid-alert__portrait {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.raid-alert__name {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.raid-alert__count {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.raid-alert__actions,
+.raid-result__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* ── The top bar ───────────────────────────────────────────────────────── */
+
+.raid-bar {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  left: 50%;
+  z-index: var(--z-hud);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: min(92vw, 30rem);
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--colour-warning-line);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-float);
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.raid-bar__words p {
+  margin: 0;
+}
+
+.raid-bar__title {
+  color: var(--colour-warning);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  line-height: var(--leading-tight);
+}
+
+.raid-bar__line {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.raid-bar__ready {
+  white-space: nowrap;
+}
+
+.raid-bar__ready[hidden] {
+  display: none;
+}
+
+/* ── After the fight ───────────────────────────────────────────────────── */
+
+.raid-result--good {
+  border: 2px solid var(--colour-success);
+}
+
+.raid-result--poor {
+  border: 2px solid var(--colour-danger);
+}
+
+.raid-result__advice,
+.raid-result__health,
+.raid-result__note {
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.raid-result__reward {
+  margin: 0;
+  color: var(--colour-success);
+  font-weight: 800;
+}
+
+.raid-result__stolen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  font-variant-numeric: tabular-nums;
+}
+
+.raid-result__label {
+  font-weight: 700;
+}
+
+.raid-result__status {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  color: var(--colour-danger);
+  font-size: var(--text-sm);
+}
+
+.raid-result__status[hidden] {
+  display: none;
+}
+
+.raid-frequency__taunt {
+  color: var(--colour-text-strong);
+  font-style: italic;
+  font-weight: 700;
+}
+
+.raid-frequency__choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.raid-frequency__choice {
+  display: grid;
+  gap: var(--space-1);
+  height: auto;
+  padding: var(--space-2);
+  text-align: center;
+  white-space: normal;
+}
+
+.raid-frequency__label {
+  font-weight: 800;
+}
+
+.raid-frequency__hint {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 400;
+}
+
+/* ── The fight ─────────────────────────────────────────────────────────── */
+
+/* The raid scene has no HUD: the strip takes the top edge, and nothing on it
+   stops or leaves the fight (`AttackScene`, raid mode). */
+.attack-strip--raid {
+  top: var(--hud-inset);
+}
+
+.attack-strip--raid [hidden],
+.attack-dock[hidden] {
+  display: none;
+}
+
+/* "Don't Panic!" in the strip's slot, for as long as the raid runs. */
+.raid-panic {
+  padding: var(--space-1) var(--space-3);
+  border: 1.5px solid var(--colour-danger);
+  border-radius: var(--radius-pill);
+  background: var(--colour-danger-soft);
+  color: var(--colour-danger);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .raid-alert__head,
+  .raid-result__head {
+    grid-template-columns: 5rem minmax(0, 1fr);
+  }
+
+  .raid-frequency__choices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

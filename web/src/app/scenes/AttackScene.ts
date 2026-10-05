@@ -15,6 +15,8 @@ import { targetLabel } from "@/game/attack/attackSave";
 import { baiterTarget, consumeBaiterRun, setBaiterRun, type BaiterRun } from "@/game/baiter/baiterSession";
 import { consumeWatchRun, setWatchRun, watchTarget, type WatchRun } from "@/game/autoAttack/watchRun";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
+import { consumeRaidRun, raidTarget, type RaidRun } from "@/game/raid/raidSession";
+import { tribeTitle } from "@/game/raid/raidText";
 import { Camera } from "@/game/Camera";
 import { fixedWorkSource } from "@/game/yard/buildingWork";
 import { readYard, type Yard } from "@/game/yard/yardModel";
@@ -103,6 +105,14 @@ export class AttackScene implements Scene {
    */
   private readonly watching: boolean;
   private watchRun: WatchRun | null = null;
+  /**
+   * A wild monster raid on the player's own yard (issue #226 WP4): the raid
+   * scene is this scene with `RAID_PLUGINS` and this set. The server fought
+   * it already; the screen plays it back with no HUD, no army and no way to
+   * stop it but 1x and 2x, and the raid package lands it when it ends.
+   */
+  private readonly raiding: boolean;
+  private raidRun: RaidRun | null = null;
 
   private context: SceneContext | null = null;
   private viewportWidth = 0;
@@ -153,11 +163,12 @@ export class AttackScene implements Scene {
 
   constructor(
     plugins: readonly AttackPlugin[] = ATTACK_PLUGINS,
-    options: { practice?: boolean; watch?: boolean } = {},
+    options: { practice?: boolean; watch?: boolean; raid?: boolean } = {},
   ) {
     this.plugins = plugins;
     this.practice = options.practice ?? false;
     this.watching = options.watch ?? false;
+    this.raiding = options.raid ?? false;
     this.battleLayer.eventMode = "none";
   }
 
@@ -171,6 +182,9 @@ export class AttackScene implements Scene {
     } else if (this.watching) {
       this.watchRun = consumeWatchRun();
       this.target = this.watchRun ? watchTarget(this.watchRun) : null;
+    } else if (this.raiding) {
+      this.raidRun = consumeRaidRun();
+      this.target = this.raidRun ? raidTarget(this.raidRun) : null;
     } else {
       this.target = consumeAttackTarget();
     }
@@ -179,16 +193,19 @@ export class AttackScene implements Scene {
     this.renderer.attach(context.renderer);
     this.renderer.root.addChild(this.battleLayer);
 
-    this.hud = new Hud({
-      scenes: [
-        { id: SceneName.MAP, label: "Map" },
-        { id: SceneName.YARD, label: "Yard" },
-      ],
-      onSceneSelect: (id) => this.leaveFor(id),
-      onSignOut: () => this.leaveFor(SceneName.LOGIN, logout),
-    });
-    this.hud.element.classList.add("hud--attack");
-    this.hud.mount(context.overlay.content);
+    // A raid has no HUD: nothing on it may be left until it is over.
+    if (!this.raiding) {
+      this.hud = new Hud({
+        scenes: [
+          { id: SceneName.MAP, label: "Map" },
+          { id: SceneName.YARD, label: "Yard" },
+        ],
+        onSceneSelect: (id) => this.leaveFor(id),
+        onSignOut: () => this.leaveFor(SceneName.LOGIN, logout),
+      });
+      this.hud.element.classList.add("hud--attack");
+      this.hud.mount(context.overlay.content);
+    }
     this.buildStrip(context);
     this.notices.mount(context.overlay.content);
     this.notices.setTopInset(this.inset.top);
@@ -198,11 +215,22 @@ export class AttackScene implements Scene {
     context.overlay.content.append(this.status);
 
     this.buildDock(context);
+    // No army to send: the raiders come in the server's waves.
+    if (this.raiding && this.dock) this.dock.hidden = true;
 
     const target = this.target;
     if (!target && this.practice) {
       this.status.textContent = "No practice attack was set up.";
       this.notices.show("attack-load", "Open the Wild Monster Baiter in your yard to bring a practice attack.", {
+        level: "info",
+        actionLabel: "Back to the yard",
+        onAction: () => context.goTo(SceneName.YARD),
+      });
+      return;
+    }
+    if (!target && this.raiding) {
+      this.status.textContent = "No raid to play.";
+      this.notices.show("attack-load", "The wild monsters are not here.", {
         level: "info",
         actionLabel: "Back to the yard",
         onAction: () => context.goTo(SceneName.YARD),
@@ -232,7 +260,9 @@ export class AttackScene implements Scene {
       ? "Setting up the practice attack…"
       : this.watching
         ? "Setting up the replay…"
-        : `Loading ${targetLabel(target, false)}…`;
+        : this.raiding
+          ? "The wild monsters are coming…"
+          : `Loading ${targetLabel(target, false)}…`;
     await this.load(target, context);
   }
 
@@ -281,6 +311,7 @@ export class AttackScene implements Scene {
     this.yard = null;
     this.life = null;
     this.lifeDestroyed = 0;
+    this.raidRun = null;
     this.target = null;
     this.context = null;
   }
@@ -370,7 +401,7 @@ export class AttackScene implements Scene {
     // An attacker never sees a trap until it fires (`BTRAP.as:33-43`, #66);
     // the battle layer reveals each one as the engine reports it going off.
     // The player's own traps are no secret to them.
-    if (!this.practice) concealTraps(this.renderer, yard);
+    if (!this.practice && !this.raiding) concealTraps(this.renderer, yard);
     // The defender's pens, as Flash drew them on an attacked yard (#159):
     // scenery in the yard's own containers, never in the battle layer, so no
     // creep targets them and no count includes them. No caged champion: the
@@ -381,14 +412,22 @@ export class AttackScene implements Scene {
     this.startCamera(yard, context);
 
     // A replay fights with the server's own seed and Declare War (issue #221).
+    // A raid fights with the server's seed and hit limit (issue #226).
     const replay = this.watchRun?.replay;
     // A Baiter test's clock waits for the first drop, as Flash's practice
     // did; its replay plays the recorded seed from the start (#22, WP5).
     const testReplay = this.run?.replay;
+    const raid = this.raidRun?.fight;
     const session = new AttackSession({
       target: { ...target, load: response },
       ...(replay ? { seed: replay.seed, declareWar: replay.declareWar } : {}),
-      ...(testReplay ? { seed: testReplay.seed } : this.practice ? { clockFromFirstDrop: true } : {}),
+      ...(testReplay
+        ? { seed: testReplay.seed }
+        : raid
+          ? { seed: raid.seed, raid: { hitLimit: raid.hitLimit } }
+          : this.practice
+            ? { clockFromFirstDrop: true }
+            : {}),
     });
     this.session = session;
     this.unsubscribe = session.subscribe((state) => this.onSessionChange(state));
@@ -397,9 +436,10 @@ export class AttackScene implements Scene {
 
     // The attacker's own pool, not the defender's the load carries; the drop
     // package keeps it current as bombs go out (#92).
+    const ownYard = this.practice || this.raiding;
     this.showResources(
-      this.practice ? (response.resources ?? {}) : (target.roster.resources ?? {}),
-      this.practice ? response.credits : target.roster.credits,
+      ownYard ? (response.resources ?? {}) : (target.roster.resources ?? {}),
+      ownYard ? response.credits : target.roster.credits,
     );
     this.mountPlugins(session, target, yard, context);
     session.start();
@@ -448,6 +488,7 @@ export class AttackScene implements Scene {
           }
         : {}),
       ...(this.watchRun ? { watch: this.watchRun } : {}),
+      ...(this.raidRun ? { raid: this.raidRun, goToYard: () => context.goTo(SceneName.YARD) } : {}),
       openWatch: (run: WatchRun) => {
         setWatchRun(run);
         context.goTo(SceneName.WATCH);
@@ -462,6 +503,8 @@ export class AttackScene implements Scene {
       if (teardown) this.teardowns.push(teardown);
     }
     this.measureDock();
+    // No tips over a raid: the player has nothing to do on it.
+    if (this.raiding) return;
     // The tutorial's tips (issue #227); the attack strip is the screen's header.
     guideBus.emit("screen", {
       id: GuideScreen.ATTACK,
@@ -532,7 +575,7 @@ export class AttackScene implements Scene {
 
   private buildStrip(context: SceneContext): void {
     const strip = document.createElement("div");
-    strip.className = "attack-strip";
+    strip.className = this.raiding ? "attack-strip attack-strip--raid" : "attack-strip";
 
     const title = document.createElement("span");
     title.className = "attack-strip__title";
@@ -540,11 +583,15 @@ export class AttackScene implements Scene {
       ? this.run?.replay
         ? "Test replay"
         : "Test attack"
-      : this.watching && this.target
-        ? `Replay: ${this.target.name} camp`
-        : this.target
-        ? `Attacking ${this.target.name}`
-        : "Attack";
+      : this.raiding
+        ? this.raidRun
+          ? `${tribeTitle(this.raidRun.raid.tribe)} raid`
+          : "Wild monster raid"
+        : this.watching && this.target
+          ? `Replay: ${this.target.name} camp`
+          : this.target
+            ? `Attacking ${this.target.name}`
+            : "Attack";
 
     const clock = document.createElement("span");
     clock.className = "attack-strip__clock";
@@ -567,8 +614,10 @@ export class AttackScene implements Scene {
       return amount.querySelector<HTMLElement>(".res-amount__value")!;
     });
     loot.append("Loot ", amounts);
-    // Nothing is taken in practice.
-    loot.hidden = this.practice;
+    // Nothing is taken in practice; a raid's losses show when it has landed.
+    loot.hidden = this.practice || this.raiding;
+    // A raid has no countdown: it runs until the server's fight ended.
+    clock.hidden = this.raiding;
 
     const spacer = document.createElement("span");
     spacer.className = "attack-strip__spacer";
@@ -609,6 +658,10 @@ export class AttackScene implements Scene {
       { label: "Yard", run: () => this.leaveFor(SceneName.YARD) },
       { label: "Log out", run: () => this.leaveFor(SceneName.LOGIN, logout) },
     ]);
+
+    // A raid cannot be stopped or left (quitting the game cancels it).
+    retreat.hidden = this.raiding;
+    this.menu.element.hidden = this.raiding;
 
     strip.append(title, clock, damage, loot, spacer, hudSlot, speed, retreat, this.menu.element);
     context.overlay.content.append(strip);
@@ -798,6 +851,14 @@ export class AttackScene implements Scene {
         `${state.creepsAlive} attacking`;
       return;
     }
+    if (this.raiding) {
+      status.textContent =
+        state.phase === "ended"
+          ? "The raid is over."
+          : `Wild monsters on your yard · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
+            `${state.creepsAlive} attacking`;
+      return;
+    }
     status.textContent =
       `${targetLabel(target)} · ` +
       `${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
@@ -861,7 +922,8 @@ export class AttackScene implements Scene {
    */
   private leaveFor(scene: string, before?: () => void): void {
     const context = this.context;
-    if (!context) return;
+    // A raid is not left from the screen: it lands, then opens the yard.
+    if (!context || this.raiding) return;
     const session = this.session;
     const phase = session?.state().phase;
     // A practice attack or a replay is simply left: nothing was going to be saved.

@@ -14,7 +14,7 @@ export interface RaidAftermathView {
   /** Shows the result; resolves once the player has closed it. */
   result(result: RaidResult): Promise<void>;
   /** Asks more, same or less; resolves with the answer, or null when closed without one. */
-  frequency(tribe: string): Promise<RaidPreference | null>;
+  frequency(tribe: string, defended: boolean): Promise<RaidPreference | null>;
   /** A short line when the answer could not be saved. */
   notice(message: string): void;
 }
@@ -28,7 +28,7 @@ export interface RaidAftermathOptions {
 export const runRaidAftermath = async (options: RaidAftermathOptions, result: RaidResult): Promise<void> => {
   const { api, view } = options;
   await view.result(result);
-  const preference = await view.frequency(result.tribe);
+  const preference = await view.frequency(result.tribe, result.defended);
   if (preference === null) return;
   try {
     await api.frequency(preference);

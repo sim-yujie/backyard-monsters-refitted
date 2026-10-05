@@ -4,6 +4,7 @@ import type { Camera } from "@/game/Camera";
 import type { ResourceAmounts } from "@/game/combat/rules";
 import type { BaiterRun } from "@/game/baiter/baiterSession";
 import type { WatchRun } from "@/game/autoAttack/watchRun";
+import type { RaidRun } from "@/game/raid/raidSession";
 import type { Yard } from "@/game/yard/yardModel";
 import type { YardRenderer } from "@/game/yard/YardRenderer";
 import type { Notices } from "@/ui/maproom/Notices";
@@ -84,7 +85,7 @@ export interface AttackMounts {
   readonly practice?: BaiterRun;
   /** The Baiter scene: the same practice attack again, on a fresh scene. */
   readonly runAgain?: (run: BaiterRun) => void;
-  /** The Baiter scene: back to the player's own yard. */
+  /** The Baiter and raid scenes: back to the player's own yard. */
   readonly goToYard?: () => void;
   /** The Baiter scene: back to the yard with the Baiter's test panel open (#22, WP4). */
   readonly changeArmy?: () => void;
@@ -97,6 +98,11 @@ export interface AttackMounts {
   readonly watch?: WatchRun;
   /** Opens the watch scene on an auto-attack's battle (issue #221). */
   readonly openWatch?: (run: WatchRun) => void;
+  /**
+   * The wild monster raid the raid scene plays (issue #226), or absent on
+   * any other attack. Only the raid package reads it; `goToYard` is set too.
+   */
+  readonly raid?: RaidRun;
 }
 
 /** A package mounted on the scene; may return its teardown. */

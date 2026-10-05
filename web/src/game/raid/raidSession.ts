@@ -43,6 +43,20 @@ export const consumeRaidResult = (): RaidResult | null => {
   return result;
 };
 
+let pendingNote: string | null = null;
+
+/** A line for the yard to show when a fight did not land (called off, or the server out of reach). */
+export const setRaidNote = (note: string): void => {
+  pendingNote = note;
+};
+
+/** Takes that line, clearing it. */
+export const consumeRaidNote = (): string | null => {
+  const note = pendingNote;
+  pendingNote = null;
+  return note;
+};
+
 /**
  * The fight's waves for the session's playback (`AttackSession.playScript`).
  * The server built and fought them; anything that is not a raid wave is

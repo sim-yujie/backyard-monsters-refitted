@@ -47,6 +47,10 @@ export interface YardSceneControls {
   plannerOpen(): boolean;
   /** Whether a new building is in hand. */
   carrying(): boolean;
+  /** Opens the raid scene on the fight handed over with `setRaidRun` (#226). */
+  openRaid(): void;
+  /** Opens this own yard afresh, as the server has it now. */
+  reload(): void;
 }
 
 /** Everything a package mounted on the own yard can reach. */

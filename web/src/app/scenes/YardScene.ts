@@ -2,6 +2,7 @@ import { getSession, logout } from "@/api/auth";
 import { chatApi, chatConfigFrom } from "@/api/chat";
 import { loadAttackOn, loadOwnBase, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
 import { ApiError, NetworkError } from "@/api/http";
+import { ELSEWHERE } from "@/api/presence";
 import {
   BaseMode,
   type BaseLoadResponse,
@@ -46,6 +47,7 @@ import {
 } from "@/game/yard/ownYards";
 import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
 import { isUnderAttackRefusal, YardAttackGuard } from "@/game/yard/yardAttackGuard";
+import { presence } from "@/game/presence/presencePing";
 import { yardAttack } from "@/game/presence/yardAttack";
 import { UnderAttackLock } from "@/ui/yard/UnderAttackLock";
 import { withStoredDecorations } from "@/game/yard/decorStorage";
@@ -478,6 +480,7 @@ export class YardScene implements Scene {
   }
 
   exit(): void {
+    presence.setScreen(ELSEWHERE);
     for (const unregister of this.unregisterTargets.splice(0)) unregister();
     this.attackGuard?.destroy();
     this.attackGuard = null;
@@ -702,6 +705,8 @@ export class YardScene implements Scene {
       store?.start();
       // The tutorial's packages (issue #227), then the screen event they listen for.
       if (store) this.mountPlugins(store, context);
+      // The presence ping says the player is here (#226): a raid may be due.
+      this.tellPresence();
       // What the screen the player came from asked for, on the own yard only.
       if (store) this.applyIntent(consumeYardIntent());
       if (store?.kind === "outpost") this.arriveAtOutpost(store, context);
@@ -1529,6 +1534,7 @@ export class YardScene implements Scene {
     // instead of the HUD, so it stops sitting partly behind the bar (#44).
     this.notices.setTopInset(this.inset.top);
     this.refreshPlannerButton();
+    this.tellPresence();
     guideBus.emit("screen", {
       id: GuideScreen.PLANNER,
       root: context.overlay.content,
@@ -1672,6 +1678,7 @@ export class YardScene implements Scene {
     // The blueprint is a planner view; the yard itself is always isometric.
     this.setView(YardView.ISO);
     this.refreshPlannerButton();
+    this.tellPresence();
   }
 
   /**
@@ -1865,7 +1872,19 @@ export class YardScene implements Scene {
       },
       plannerOpen: () => this.planner !== null,
       carrying: () => this.placement !== null,
+      openRaid: () => this.context?.goTo(SceneName.RAID),
+      reload: () => this.reloadOwnYard(),
     };
+  }
+
+  /**
+   * Where the presence ping says the player is (#226): the own main yard, and
+   * whether its Yard Planner is open, so the server knows when a wild monster
+   * raid may come. A visit and an outpost are "elsewhere".
+   */
+  private tellPresence(): void {
+    const ownMain = !this.target && this.own.kind === "main" && this.store !== null;
+    presence.setScreen(ownMain ? { where: "yard", planner: this.planner !== null } : ELSEWHERE);
   }
 
   /**

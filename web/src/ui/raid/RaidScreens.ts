@@ -3,11 +3,11 @@ import type { RaidAftermathView } from "@/game/raid/raidAftermath";
 import {
   ALERT_TITLE,
   FREQUENCY_CHOICES,
-  FREQUENCY_TITLE,
   POOR_DEFENCE,
   READY_NOW,
   SPOTTED_TITLE,
   alertMonsters,
+  frequencyTitle,
   anyStolen,
   goodDefenceText,
   healthText,
@@ -363,10 +363,14 @@ export const raidResultPopup = (result: RaidResult, repair: RaidRepairOffer | nu
  * The frequency popup (`ai_settings_*`): the tribe's taunt and Flash's three
  * answers. Closing it keeps the last choice.
  */
-export const raidFrequencyPopup = (tribe: string, onAnswer: (preference: RaidPreference | null) => void): Popup => {
+export const raidFrequencyPopup = (
+  tribe: string,
+  defended: boolean,
+  onAnswer: (preference: RaidPreference | null) => void,
+): Popup => {
   let answered = false;
   const popup = new Popup({
-    title: FREQUENCY_TITLE,
+    title: frequencyTitle(defended),
     className: "raid-frequency",
     onClose: () => {
       if (!answered) onAnswer(null);
@@ -405,9 +409,9 @@ export const raidAftermathView = (
     new Promise<void>((resolve) => {
       raidResultPopup(result, repair(), resolve).mount(host);
     }),
-  frequency: (tribe) =>
+  frequency: (tribe, defended) =>
     new Promise<RaidPreference | null>((resolve) => {
-      raidFrequencyPopup(tribe, resolve).mount(host);
+      raidFrequencyPopup(tribe, defended, resolve).mount(host);
     }),
   notice,
 });

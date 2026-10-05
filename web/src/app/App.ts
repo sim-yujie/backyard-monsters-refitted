@@ -24,6 +24,9 @@ import { AttackScene } from "./scenes/AttackScene";
 import { AwayScene } from "./scenes/AwayScene";
 import { BAITER_PLUGINS, BAITER_REPLAY_PLUGINS } from "@/game/baiter/baiterPlugin";
 import { WATCH_PLUGINS } from "@/game/autoAttack/watchPlugin";
+import { makeRaidDue } from "@/api/raid";
+import { RAID_PLUGINS } from "@/game/raid/raidPlugin";
+import { raidWatch } from "@/game/raid/raidWatch";
 
 /** Loads Titan One (#223) before anything draws canvas text with it; see the
  * comment in `start()`. `document.fonts` is missing in some test environments
@@ -71,6 +74,13 @@ export const SceneName = {
    * `game/autoAttack/watchRun`. Nothing on it talks to the server.
    */
   WATCH: "watch",
+  /**
+   * A wild monster raid on the own main yard (#226): the attack scene with
+   * only the battle layer and the raid package, opened through
+   * `game/raid/raidSession`. It plays the fight the server already fought,
+   * then lands it and opens the yard.
+   */
+  RAID: "raid",
   /** "You were away too long": the idle disconnect (#271, `game/presence/idleWatch.ts`). */
   AWAY: "away",
 } as const;
@@ -233,6 +243,8 @@ export class App {
       dev["__yardAttack"] = yardAttack;
       // `__botCheck.force()` asks a local server for a check now (#273).
       dev["__botCheck"] = { watch: botCheck, force: forceBotCheck };
+      // `__raid.watch.simulate({...})` pins a raid by hand; `__raid.due()` asks a local server for one now (#226).
+      dev["__raid"] = { watch: raidWatch, due: makeRaidDue };
     }
 
     // Every screen past sign-in keeps the player online (#242, `presenceScene.ts`)
@@ -254,6 +266,7 @@ export class App {
         game(() => new AttackScene(BAITER_REPLAY_PLUGINS, { practice: true }), true),
       )
       .register(SceneName.WATCH, game(() => new AttackScene(WATCH_PLUGINS, { watch: true }), true))
+      .register(SceneName.RAID, game(() => new AttackScene(RAID_PLUGINS, { raid: true }), true))
       .register(
         SceneName.AWAY,
         () => new AwayScene(idleDurationText(idle.timings.disconnectMs), this.halt),

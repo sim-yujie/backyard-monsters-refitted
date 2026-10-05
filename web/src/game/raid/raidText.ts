@@ -54,8 +54,11 @@ export const SPOTTED_TITLE = "WILD MONSTERS SPOTTED!";
 export const READY_NOW = "I'm Ready Now";
 /** `msg_dontpanic`. */
 export const DONT_PANIC = "Don't Panic!";
-/** `ai_settings_title`. */
-export const FREQUENCY_TITLE = "ATTACK REPELLED";
+/**
+ * The frequency popup's title: Flash's `ai_settings_title` after a good
+ * defence; after a poor one "repelled" would not be true, so a plain line.
+ */
+export const frequencyTitle = (defended: boolean): string => (defended ? "ATTACK REPELLED" : "THE RAIDERS HAVE GONE");
 
 /** `ai_tribe`: "Kozu Tribe". */
 export const tribeTitle = (tribe: string): string => `${raidTribe(tribe).name} Tribe`;
