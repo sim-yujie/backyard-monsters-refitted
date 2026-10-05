@@ -1,7 +1,7 @@
 # Wild Monster Raids on Player Yards — Design (issue #226)
 
-Status: planning, 2026-10-05. No code yet. Owner decisions of 2026-10-05 are final (§1); the open
-questions are in §10.
+Status: planning, 2026-10-05. Owner decisions of 2026-10-05 are final (§1). The §10 questions were
+answered by the owner on 2026-10-05; the answers are in §10 and the sections below follow them.
 
 ## Contents
 
@@ -14,7 +14,7 @@ questions are in §10.
 7. [Cancel on quit, online, other players](#7-cancel-on-quit-online-and-other-players)
 8. [Where state lives](#8-where-state-lives)
 9. [Work packages](#9-work-packages)
-10. [Open questions for the owner](#10-open-questions-for-the-owner)
+10. [Owner questions (answered)](#10-owner-questions-answered-2026-10-05)
 
 ---
 
@@ -30,6 +30,13 @@ questions are in §10.
 | D6 | **The warning works as in Flash.** A "WILD MONSTER ALERT" offers "Engage now" or "Prepare defences" (a 5-minute countdown in the top bar). No skip. |
 | D7 | **Later, separate issue (Backlog):** the Trojan Horse and the special events (WMI1/WMI2, Monster Blitzkrieg). |
 | D8 | **Already in #226:** the tutorial's staged raid becomes a named tribe attack (still harmless), and the later defence goal becomes "survive a tribe attack". |
+
+The owner's answers to the §10 questions (2026-10-05) are just as final. In short: a cancelled raid
+comes back on the next yard visit; quitting during the warning is a cancel; the tribe is random; the
+raid comes in on the least-defended side, with tanks, as Flash meant it to; no raid while anything
+is damaged or repairing; protection does not stop raids; the goal counts only a 90%+ defence; plain
+monster stats, no strength scaling. A raid counts as an attack on a **normal yard**, never as a
+wild-camp attack.
 
 ---
 
@@ -119,6 +126,9 @@ stored the client's `aiattacks` JSON.
   they silently fell back to x1 and 30 (`WMATTACK.as:197-199`, `:978-1008`). D2 applies the choice
   every time.
 - Flash had no reward (D4 adds 10 Shiny) and kept a queued raid across reloads (D5 cancels).
+- Flash's two broken checks work as they were meant to here: the damaged-yard check (Q5) and the
+  least-defended-side check (Q4).
+- Flash's strength scaling (x0.4 to x0.9) is dropped: raiders fight with plain stats (Q8).
 
 ---
 
@@ -129,7 +139,7 @@ stored the client's `aiattacks` JSON.
 | What | Who | How |
 |---|---|---|
 | Is a raid due? | Server | §4.1 rule, on the presence ping |
-| Which tribe, which direction, which monsters, how many, how strong, hits before leaving | Server | §5, from the saved yard |
+| Which tribe, which direction, which monsters, how many, hits before leaving | Server | §5, from the saved yard |
 | The seed | Server | fresh random 31-bit number per raid |
 | When the fight starts | Server | `attackAt` it stored; the client can only bring it forward ("Engage now") |
 | The fight | Server | runs the shared engine once, at fight start, on the frozen yard (§6) |
@@ -159,7 +169,9 @@ A raid is due for a player when all hold:
    `services/user/online.ts`), and no in-game check pending (#273).
 6. The latest presence ping said "yard, Planner closed" (§7.3).
 7. The yard is not under attack (`isAttackActive`) and no raid is already open.
-8. Protection: see question Q6.
+8. Protection does **not** stop raids (Q6): bought or earned, the timer is ignored.
+9. No building in the yard is damaged or repairing (Q5), as Flash's `baseIsRepairing` was meant
+   to work (§2.1). A raid that is due waits until the yard is whole again.
 
 ### 4.2 Steps
 
@@ -222,8 +234,9 @@ All of this is computed on the server from the saved yard, by pure functions (WP
 - **Here:** a Map Room 1 player's camps are `save.wmstatus` `[baseid, level, destroyed]`
   (`services/maproom/v1/mr1TribeRules.ts:74-85`). The four camps sit at player level -1, +0, +1,
   +2 (`MR1_TRIBE_LEVEL_OFFSETS`, `:67`), so Flash's rule picks the Legionnaire camp unless it is
-  down (10 minutes, `MR1_TRIBE_RESPAWN_SECONDS`). A Map Room 2 player has no camps, so the tribe is
-  random. See **Q3**.
+  down (10 minutes, `MR1_TRIBE_RESPAWN_SECONDS`). A Map Room 2 player has no camps.
+- **Decided (Q3):** the tribe is random, one of the four, for every player (Map Room 1 or 2),
+  rolled from the raid's seed. Flash's camp rule is not used.
 
 ### 5.2 Direction
 
@@ -238,7 +251,11 @@ All of this is computed on the server from the saved yard, by pure functions (WP
 - **Flash's bug:** `dpsAtPoint` only counts a tower whose fortify countdown is running
   (`WMATTACK.as:1020`), so on almost every yard every direction scores 0 and the raid takes **the
   shortest path to its first target**. It also changes the armies of Abunakki and Dreadnaut, which
-  read the damage (§5.3). See **Q4**.
+  read the damage (§5.3). Decided in **Q4** below: we do what Flash meant.
+- **Decided (Q4): as Flash meant it, not as it behaved.** The damage along each path counts every
+  tower in range, not only the ones with a fortify countdown running, so the raid comes in on the
+  least-defended side (the shortest way on a tie), and Abunakki and Dreadnaut bring tanks when
+  that way still takes damage (§5.3).
 - **Here:** the server floods the engine's grid (`game-rules/combat/grid.ts`) from each entry point
   to the target, which is what the engine already does for creeps.
 
@@ -265,7 +282,8 @@ looters 80 (`PROCESS3.as:138-155`, `PROCESS5.as:166-187`). Each type lands in a 
 
 ### 5.4 Strength and hits
 
-- Strength x0.4 to x0.9 by points + base value (§2.3), on health and damage, if **Q8** keeps it.
+- **Plain stats (Q8):** no strength scaling at all. Flash's x0.4 to x0.9 (§2.3) is dropped, so
+  the engine gets no strength multiplier (as for the Baiter).
 - Hits before leaving: 50 / 30 / 20 by the choice (D2).
 - Raiders fight at level 0 stats (no academy levels).
 
@@ -287,10 +305,8 @@ hit, bunkers, the caged champion, traps and towers (`engine.ts:186-197`, note 9)
 1. **A raid spawn.** A new event kind, `{ kind: "raid", t, x, y, r, monsters }`, placed outside
    the yard, which the fling validator only accepts in a raid log. The server builds the log; there
    is no client log to check.
-2. **Strength.** A battle option multiplying spawned raiders' health and damage
-   (`CreepBase.as:88`, `:93`). For the Baiter the owner ruled this out ("the combat engine gets no
-   multiplier", `docs/design/yard-buildings.md:1147-1150`), so it depends on **Q8**; with plain
-   stats this item drops.
+2. ~~**Strength.**~~ **Dropped (Q8):** raiders fight with plain stats, so the engine gets no
+   strength multiplier, as for the Baiter (`docs/design/yard-buildings.md:1147-1150`).
 3. **Hit limit.** A battle option: a raider that has hit buildings more than N times leaves
    (`CreepBase.as:926-941`). Today `_hitLimit` is "not modelled" (`engine.ts:246`, note 8).
 4. **No countdown.** A raid ends when no raider is left on the yard (`WMATTACK.as:331-347`), with
@@ -298,7 +314,8 @@ hit, bunkers, the caged champion, traps and towers (`engine.ts:186-197`, note 9)
 5. **Defender side only, as a main yard.** The raid runs with target kind `main`, not `wild`:
    `wild` and `tribe` apply the camp rules (the camp storage scalar and the divide-by-5,
    `stats.ts:855-877`, `engine.ts:1063`, `:1212`), which belong to attacking a camp. No attacker
-   storage; the "attacker loot" figure is ignored.
+   storage; the "attacker loot" figure is ignored. Everywhere (engine, landing, stats, goals) a
+   raid counts as an attack on a **normal yard**, never as a wild-camp attack.
 6. Golden fixtures for a raid log on Node and Bun (`replay.test.ts` pattern), and the sync script
    with both `MANIFEST.json` files.
 
@@ -313,14 +330,14 @@ On the caught-up save, under the row lock, the defender half of an attack landin
 - **Theft (D3):** the bank loses the outcome's `defenderDelta`, clamped at 0. Harvesters lose what
   the engine took from their unbanked amount (`buildingdata.st`, `game-rules/combat/yard.ts:505-533`),
   clamped at what they hold now (they kept producing during the fight). The PvP landing does not
-  write drained `st` back today (`defenderLootHandler.ts` touches `resources` only), so this is
-  new code in WP3.
+  write drained `st` back today (`defenderLootHandler.ts` touches `resources` only), so harvester
+  theft needs **new code, in WP3** (not WP0: the engine already reports what it took).
 - **Bunkers and champion:** garrisons and champion health as the outcome left them.
 - **Good defence (D4):** health summed over every building except walls and traps, as Flash
   (`WMATTACK.as:829-835`, `:860-865`), at least 90% of the full total: `credits += 10`.
 - **Schedule:** `lastattack = start time`, `sessionsSinceLastAttack = 0`, `nextAttack` from the
   preference (§2.1).
-- **Goal counter** for "survive a tribe attack" (WP5).
+- **Goal counter** for "survive a tribe attack" (WP5): only a good defence (90%+) counts (Q7).
 - A `wild-raid` server log line with the plan, seed and outcome, so any raid can be reproduced.
 
 ---
@@ -347,8 +364,9 @@ A finish is **refused** (and the raid stays open until it times out) when it com
 the fight's length at 2x minus 5 seconds after start, so a script cannot collect the Shiny without
 watching.
 
-After a cancel nothing changes in the schedule, so the raid is still due. **Q1** asks whether that
-means "right away next time" (Flash's effect) or "after a fresh wait".
+After a cancel nothing changes in the schedule, so the raid is still due. **Decided (Q1):** it comes
+back on the player's next yard visit (Flash's effect), with no fresh wait. **Decided (Q2):** quitting
+during the 5-minute warning is a cancel too, exactly like quitting mid-fight (rules 3 and 4 above).
 
 ### 7.2 Other players during a raid
 
@@ -425,16 +443,16 @@ WP0 and WP2 can start together. WP4 can start against WP3's contract (§4.2) wit
 
 ### WP0: Engine support for raids (shared rules) (#300)
 
-**Goal:** the shared engine can fight a wild raid: an off-yard raid spawn, a strength multiplier,
-a per-raider hit limit, and an end with no countdown.
+**Goal:** the shared engine can fight a wild raid: an off-yard raid spawn, a per-raider hit limit,
+and an end with no countdown. No strength multiplier (Q8: plain stats).
 
-**Scope:** §6.2 items 1-6. New event kind `raid`, battle options `raid: { strength, hitLimit }` (strength only if Q8 keeps it), target kind `main`,
+**Scope:** §6.2 items 1 and 3-6. New event kind `raid`, battle option `raid: { hitLimit }`, target kind `main`,
 end when no raider is left (10-minute cap), fidelity notes updated. Sync to the web mirror.
 
 **Files:** `server/src/game-rules/combat/{types,engine,replay,stats}.ts`, the web mirror
 `web/src/game/combat/rules/`, both `MANIFEST.json`, `replay.test.ts` and a raid golden fixture.
 
-**Tests:** strength scales health and damage; a raider leaves after N building hits (monster hits
+**Tests:** a raider leaves after N building hits (monster hits
 not counted); the battle ends when the last raider leaves or dies; the same raid log gives the same
 digests on Bun and Node; existing fixtures unchanged.
 
@@ -443,19 +461,19 @@ digests on Bun and Node; existing fixtures unchanged.
 ### WP1: Raid planner (server, pure) (#301)
 
 **Goal:** from a saved yard and the schedule, the raid Flash would have sent: tribe, bearing, army,
-spawn discs, strength, hit limit, as a raid log for the engine.
+spawn discs, hit limit, as a raid log for the engine.
 
-**Scope:** §5. Tribe pick (MR1 `wmstatus` rule, random for MR2, per Q3); 16 entry points, path to
-the first target over the engine grid, damage along the path (per Q4); the four make-ups with the
-tier tables; spawn distances; Kozu's groups of three every 8 degrees; strength by points + value;
-hits by preference.
+**Scope:** §5. Tribe pick (random for everyone, Q3); 16 entry points, path to
+the first target over the engine grid, damage along the path counting every tower (Q4); the four
+make-ups with the tier tables (Abunakki and Dreadnaut mixed when the path takes damage); spawn
+distances; Kozu's groups of three every 8 degrees; hits by preference. No strength (Q8).
 
 **Files:** new `server/src/services/raids/{raidTribe,raidDirection,raidArmy,raidPlan}.ts` and tests.
 
 **Tests:** each tribe's army against hand-worked Flash numbers (the §5.3 example among them); the
 tier switches (tanks at levels 14, 27 and 40, damage dealers every 8 levels); C12 halving and C14 / 2.5; Abunakki's kamikaze cap of 5;
-amplifier 1.3 / 1 / 0.5; strength thresholds; direction picks the cheapest entry point and the
-shortest on a tie; deterministic for a given seed.
+amplifier 1.3 / 1 / 0.5; direction picks the cheapest entry point and the
+shortest on a tie, with every tower counted; deterministic for a given seed.
 
 **Depends on:** WP0 #300 (event shape, grid). **Size:** M.
 
@@ -465,13 +483,15 @@ shortest on a tie; deterministic for a given seed.
 
 **Scope:** §4.1 and §8. Remove `aiattacks` from `Save.saveKeys`; normalise Flash-era values;
 count sessions on own-main-yard build loads; the due rule (level, sessions, `nextAttack`, the
-4-day rule, online, screen, not under attack, Q6 protection); the Redis open-raid store with its
+4-day rule, online, screen, not under attack, nothing damaged or repairing (Q5); protection
+ignored (Q6)); the Redis open-raid store with its
 TTLs, `GETDEL` and cancel rules (§7.1); frequency setter (§2.1).
 
 **Files:** new `server/src/services/raids/{raidSchedule,raidStore}.ts`;
 `database/models/save.model.ts`; `controllers/base/load/baseLoad.ts`.
 
-**Tests:** due / not due for each gate; 4-day and first-raid rule gives `now + 60`; preference sets
+**Tests:** due / not due for each gate (a damaged or repairing building blocks, protection does
+not); 4-day and first-raid rule gives `now + 60`; preference sets
 2 / 3 / 4 days; a reload cancels an open raid and leaves the schedule; a Flash save cannot write
 `aiattacks`; store TTLs and `GETDEL` exactly once.
 
@@ -528,14 +548,14 @@ frequency), countdown text, ping body with the Planner open and closed; a browse
 a named tribe attack.
 
 **Scope:** N1's condition from `baiterRuns >= 1` to a new counter `raidsSurvived >= 1`, counted
-by WP3's landing (per Q7); goal text; the staged raid already shows "Legionnaire scouts are
+by WP3's landing for a good defence (90%+) only (Q7); goal text; the staged raid already shows "Legionnaire scouts are
 attacking!" (`web/src/game/guide/steps.ts:217`), so check it names the tribe after, as
 `docs/design/tutorial.md` §4 says, and update §4 and §6.1 there.
 
 **Files:** `server/src/game-data/goals.ts`, `server/src/services/raids/raidLanding.ts`,
 `web/src/api/goals.ts`, `web/src/game/guide/steps.ts`, `docs/design/tutorial.md`.
 
-**Tests:** N1 completes after a counted raid and not before; a player who already finished N1
+**Tests:** N1 completes after a good defence and not after a poor one; a player who already finished N1
 keeps it.
 
 **Depends on:** WP3 #303. **Size:** S.
@@ -548,27 +568,44 @@ designed here (D7).
 
 ---
 
-## 10. Open questions for the owner
+## 10. Owner questions (answered 2026-10-05)
+
+All eight were answered by the owner on 2026-10-05 (also recorded as a comment on #226). The
+sections above follow the answers.
 
 1. **After a cancelled raid, when does it come back?** Flash's effect was "the very next time you're
    in your yard" (the timer had already run out). Or should it wait a fresh 2 to 4 days?
+   **Answered:** on the player's next yard visit (no fresh wait). §7.1.
 2. **Quitting during the 5-minute warning** (before the fight starts): treat it the same as quitting
    mid-fight (cancelled, comes back per Q1)?
+   **Answered:** yes, it counts as a cancel. §7.1.
 3. **Which tribe comes?** Flash sends your weakest Map Room 1 camp. In our Map Room 1 the
    Legionnaire camp is always one level below you, so almost every raid would be Legionnaire. Map
    Room 2 players have no camps, so Flash picked at random. Keep Flash's rule, or pick one of the
    four at random for everyone?
+   **Answered:** random, one of the four, for everyone. §5.1.
 4. **Flash's "find the weakest side" check was broken.** In practice raids came the shortest way to
    their first target, and Abunakki and Dreadnaut never brought tanks. Copy what Flash really did,
    or what it was meant to do (come in where your towers are weakest, with mixed armies)?
+   **Answered:** what Flash meant: the least-defended side, with tanks. §5.2, §5.3.
 5. **Raid a damaged yard?** Flash meant to skip raids while buildings were still damaged or
    repairing, but that check never worked, so it raided anyway. Raid anyway, or wait until the yard
    is repaired?
+   **Answered:** no raid starts while anything in the yard is damaged or repairing. §4.1 rule 9.
 6. **Does protection stop raids?** In Flash only bought protection did. Here bought and earned
    protection are one timer. Should any protection stop raids, or none?
+   **Answered:** none. Damage protection does not stop raids. §4.1 rule 8.
 7. **"Survive a tribe attack" goal:** does any finished raid count, or only a good defence (90%+)?
    Raids start at level 9, so a player who reaches that goal earlier waits until level 9. OK?
+   **Answered:** only a 90%+ defence counts. §6.3, WP5.
 8. **Raider strength.** Flash made raiders weaker than normal (x0.4 to x0.9 health and damage, by
    how big your yard is). For the Baiter you chose plain stats and no multiplier in the engine. For
    raids: keep Flash's weaker raiders (needs that multiplier), or plain stats (raids about 1.1 to
    2.5 times tougher than in Flash)?
+   **Answered:** plain monster stats, no strength scaling at all; dropped from WP0. §5.4, §6.2.
+
+Two further notes from the owner's review:
+
+- A raid must count as an attack on a **normal yard**, not a wild-camp attack (§6.2 item 5).
+- Harvester theft (writing the drained unbanked amount back) needs new code. That is WP3's, not
+  WP0's (§6.3).
