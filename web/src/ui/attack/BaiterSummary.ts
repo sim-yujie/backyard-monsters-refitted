@@ -1,5 +1,6 @@
 import type { AttackEndReason, AttackSessionState } from "@/game/attack/AttackSession";
-import type { BaiterRun } from "@/game/baiter/baiterSession";
+import { picksOf, type BaiterRun } from "@/game/baiter/baiterSession";
+import { championEntry } from "@/game/yard/championCatalogue";
 import { monsterName } from "@/ui/attack/ArmyPanel";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
@@ -10,11 +11,7 @@ import "@/ui/styles/baiter.css";
  * what is attacking while it runs, and the summary when it is over.
  */
 
-/** "level 1" or "your academy levels": the attackers' stats, as the dock names them. */
-const levelsText = (run: BaiterRun): string =>
-  run.levels === "academy" ? "your academy levels" : "level 1";
-
-/** The docked panel: where the attack came from, the army, and that nothing is saved. */
+/** The docked panel: the test army, each at its level, and that nothing is saved. */
 export class BaiterDock {
   readonly element: HTMLElement;
   private readonly panel: Panel;
@@ -26,23 +23,28 @@ export class BaiterDock {
 
     const from = document.createElement("p");
     from.className = "baiter__note";
-    from.textContent = `Wild monsters from the ${run.direction.label.toLowerCase()}, at ${levelsText(run)}.`;
+    from.textContent = "Your test army, against your yard as it is now.";
 
     const list = document.createElement("ul");
     list.className = "baiter__list";
     list.setAttribute("aria-label", "The attacking army");
-    for (const [id, count] of Object.entries(run.picks)) {
-      if (count <= 0) continue;
+    const row = (label: string, detail: string): void => {
       const item = document.createElement("li");
       item.className = "baiter-dock__row";
       const name = document.createElement("span");
       name.className = "baiter__monster";
-      name.textContent = monsterName(id);
+      name.textContent = label;
       const amount = document.createElement("span");
       amount.className = "baiter__each";
-      amount.textContent = `× ${formatAmount(count)}`;
+      amount.textContent = detail;
       item.append(name, amount);
       list.append(item);
+    };
+    for (const [id, count] of Object.entries(picksOf(run.army))) {
+      row(`${monsterName(id)} L${run.army.monsters[id]?.level ?? 1}`, `× ${formatAmount(count)}`);
+    }
+    for (const champion of run.army.champions) {
+      row(`${championEntry(champion.t)?.name ?? "Champion"} L${champion.l}`, "champion");
     }
 
     this.progress = document.createElement("p");

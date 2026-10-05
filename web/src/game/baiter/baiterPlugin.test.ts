@@ -8,9 +8,9 @@ import { battlePlugin } from "@/game/attack/plugins/battle";
 import "@/game/attack/plugins";
 import { readYard } from "@/game/yard/yardModel";
 import { Notices } from "@/ui/maproom/Notices";
-import { BAITER_PLUGINS, baiterPlugin, createBaiterPlugin } from "./baiterPlugin";
+import { BAITER_PLUGINS, TEST_LANDING, baiterPlugin, createBaiterPlugin } from "./baiterPlugin";
 import type { BaiterRecorder } from "./baiterRecord";
-import { BAITER_DIRECTIONS, baiterTarget, type BaiterRun } from "./baiterSession";
+import { baiterTarget, emptyArmy, withChampion, type BaiterRun, type TestArmy } from "./baiterSession";
 
 /**
  * The Baiter's practice attack sends nothing (issue #126): the scene mounts
@@ -45,13 +45,34 @@ const ownYard = (): BaseLoadResponse =>
     academy: {},
   }) as unknown as BaseLoadResponse;
 
-const runOf = (): BaiterRun => ({
-  save: ownYard(),
-  picks: { C1: 20, C4: 5 },
-  direction: BAITER_DIRECTIONS[2]!,
-  levels: "wild",
-  baiterLevel: 3,
-});
+/** A test army of 20 level-1 Pokeys and 5 level-2 Banditos. */
+const armyOf = (): TestArmy => {
+  const army = emptyArmy(ownYard());
+  return {
+    ...army,
+    monsters: { ...army.monsters, C1: { count: 20, level: 1 }, C4: { count: 5, level: 2 } },
+  };
+};
+
+const runOf = (army: TestArmy = armyOf()): BaiterRun => ({ save: ownYard(), army, baiterLevel: 3 });
+
+/** The scene's mounts for `run`, as the attack scene builds them. */
+const mountsOf = (
+  run: BaiterRun,
+  session: AttackSession,
+  parts: { dock: HTMLElement; modal: HTMLElement; notices: Notices },
+  extra: Partial<AttackMounts> = {},
+): AttackMounts =>
+  ({
+    session,
+    target: baiterTarget(run),
+    yard: readYard(ownYard()),
+    ...parts,
+    presentation: new AttackPresentation(),
+    goToMap: vi.fn(),
+    practice: run,
+    ...extra,
+  }) as unknown as AttackMounts;
 
 describe("the Baiter scene's packages", () => {
   it("are the battle layer and the Baiter's own, and none of the attack's save, checkpoint or drop packages", () => {
@@ -85,34 +106,24 @@ describe("a practice attack", () => {
     vi.unstubAllGlobals();
   });
 
-  it("flings the army from its direction, plays out and summarises, and sends nothing (#126)", () => {
+  it("flings the test army at the landing point, plays out and summarises, and sends nothing (#126, #22)", () => {
     const run = runOf();
-    const target = baiterTarget(run);
-    const session = new AttackSession({ target, seed: 3 });
+    const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
     const runAgain = vi.fn();
     const goToYard = vi.fn();
-    const mounts = {
-      session,
-      target,
-      yard: readYard(ownYard()),
-      dock,
-      modal,
-      notices,
-      presentation: new AttackPresentation(),
-      goToMap: vi.fn(),
-      practice: run,
-      runAgain,
-      goToYard,
-    } as unknown as AttackMounts;
+    const mounts = mountsOf(run, session, { dock, modal, notices }, { runAgain, goToYard });
 
     const recorder = spyRecorder();
     const teardown = createBaiterPlugin(() => recorder)(mounts);
     expect(recorder.start).toHaveBeenCalledTimes(1);
     session.start();
-    // The whole army went in at once, at the direction's point.
+    // The whole army went in at once, at the landing point, each row at its own level.
     const fling = session.flingLog().events.find((event) => event.kind === "fling");
-    expect(fling).toMatchObject({ x: 1000, y: 0, monsters: { C1: 20, C4: 5 } });
+    expect(fling).toMatchObject({ x: TEST_LANDING.x, y: TEST_LANDING.y, monsters: { C1: 20, C4: 5 } });
+    expect(session.flingLog().events.filter((event) => event.kind === "fling")).toHaveLength(1);
+    expect(baiterTarget(run).roster.levels).toMatchObject({ C1: 1, C4: 2 });
     expect(dock.textContent).toContain("Practice attack");
+    expect(dock.textContent).toContain("L2");
 
     for (let frame = 0; frame < 4 * 60 * 8 && session.state().phase !== "ended"; frame += 1) {
       session.advance(0.25);
@@ -142,21 +153,27 @@ describe("a practice attack", () => {
     expect(session.battle()?.state().health["2"]).toBe(1234);
   });
 
+  it("flings each made-up champion on its own, fresh and at its own level (#22, owner answer Q6)", () => {
+    const army = withChampion(withChampion(armyOf(), { t: 1, l: 4, pl: 2 }), { t: 5, l: 3, pl: 1 });
+    const save = { ...ownYard(), attackerbrains: { 1: { tower: 1 } } } as unknown as BaseLoadResponse;
+    const run: BaiterRun = { ...runOf(army), save };
+    const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
+    const teardown = createBaiterPlugin(() => spyRecorder())(mountsOf(run, session, { dock, modal, notices }));
+    const flings = session.flingLog().events.filter((event) => event.kind === "fling");
+    expect(flings).toHaveLength(3);
+    expect(flings[1]).toMatchObject({ x: TEST_LANDING.x, y: TEST_LANDING.y, monsters: {}, champion: { t: 1, l: 4, pl: 2 } });
+    expect(flings[2]).toMatchObject({ monsters: {}, champion: { t: 5, l: 3, pl: 1 } });
+    // No learned brain rides along: the own yard's load is never a frozen attack.
+    for (const fling of flings) expect(fling.kind === "fling" && fling.champion?.b).toBeFalsy();
+    expect(dock.textContent).toContain("champion");
+    teardown?.();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("stopping early sends nothing either", () => {
     const run = runOf();
-    const target = baiterTarget(run);
-    const session = new AttackSession({ target, seed: 3 });
-    const mounts = {
-      session,
-      target,
-      yard: readYard(ownYard()),
-      dock,
-      modal,
-      notices,
-      presentation: new AttackPresentation(),
-      goToMap: vi.fn(),
-      practice: run,
-    } as unknown as AttackMounts;
+    const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
+    const mounts = mountsOf(run, session, { dock, modal, notices });
     const recorder = spyRecorder();
     const teardown = createBaiterPlugin(() => recorder)(mounts);
     session.start();

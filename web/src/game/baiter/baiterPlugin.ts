@@ -4,7 +4,7 @@ import { battlePlugin } from "@/game/attack/plugins/battle";
 import { typeName } from "@/game/yard/planner/summary";
 import { BaiterDock, BaiterSummaryPanel, type BaiterOutcome } from "@/ui/attack/BaiterSummary";
 import { baiterRecorder, type BaiterRecorder } from "./baiterRecord";
-import { spawnPointOf } from "./baiterSession";
+import { picksOf } from "./baiterSession";
 
 /**
  * The Baiter scene's own package (issue #126): the practice attack's army
@@ -16,14 +16,18 @@ import { spawnPointOf } from "./baiterSession";
  * package and the drop and army controls are not mounted, so nothing a real
  * attack sends to the server exists on this screen (`baiterPlugin.test.ts`).
  *
- * The army lands where the original's did: every monster at the direction's
- * point 1,000 yard units out (`client/scripts/WMATTACK.as:711`), in one
- * fling, which scatters them as a fling of that size scatters.
+ * Until the test screen gets the real attack's drop controls (#22, WP3), the
+ * army lands in one fling at {@link TEST_LANDING}, 1,000 yard units out as
+ * the original's did (`client/scripts/WMATTACK.as:711`), and each champion in
+ * a fling of its own at the same point.
  *
  * Nothing of the run is sent. The one exception is the Goals record of a
  * finished run (issue #227, `baiterRecord.ts`): a token asked for as the run
  * starts and handed back when it really finishes.
  */
+
+/** Where a test's army lands until WP3: the old top-left arrow's point. */
+export const TEST_LANDING = { x: -1_000, y: 0 } as const;
 
 /** "Cannon Tower × 3, Sniper Tower": the towers that fired, by type, most first. */
 const towerNames = (ids: Iterable<number>, mounts: AttackMounts): string[] => {
@@ -50,8 +54,17 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
   // The attack comes in at once; the first fling starts the clock. The view
   // turns to meet it, as the original focused the first monster
   // (`client/scripts/CUSTOMATTACKS.as:59-60`): halfway between it and the yard.
-  const at = spawnPointOf(run.direction);
-  session.appendFling({ x: at.x, y: at.y, monsters: { ...run.picks } });
+  const at = TEST_LANDING;
+  const picks = picksOf(run.army);
+  if (Object.keys(picks).length > 0) session.appendFling({ x: at.x, y: at.y, monsters: picks });
+  for (const champion of run.army.champions) {
+    session.appendFling({
+      x: at.x,
+      y: at.y,
+      monsters: {},
+      champion: { t: champion.t, l: champion.l, ...(champion.s ? { s: champion.s } : {}) },
+    });
+  }
   mounts.camera?.centreOn(mounts.renderer.yardToWorld(at.x / 2, at.y / 2));
   if (mounts.camera) mounts.camera.dirty = true;
 

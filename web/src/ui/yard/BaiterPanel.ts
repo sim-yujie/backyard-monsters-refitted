@@ -1,17 +1,18 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import type { BaseLoadResponse } from "@/api/types";
 import {
-  BAITER_ROSTER,
-  attackSize,
-  budgetOf,
-  clampPicks,
-  costOf,
-  directionsOf,
-  levelsFor,
+  TEST_ROSTER,
+  allLevel1,
+  allMax,
+  armySize,
+  capOf,
+  clampArmy,
+  emptyArmy,
   maxOf,
-  type BaiterDirection,
-  type BaiterLevels,
+  myLevels,
+  spaceOf,
   type BaiterRun,
+  type TestArmy,
 } from "@/game/baiter/baiterSession";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { monsterName } from "@/ui/attack/ArmyPanel";
@@ -23,22 +24,21 @@ import "@/ui/styles/baiter.css";
 /**
  * The Wild Monster Baiter's controls, inside its building panel (issue #126,
  * `docs/design/yard-buildings.md` §8.1): Flash's baiter popup
- * (`client/scripts/MONSTERBAITERPOPUP.as`) as a practice attack.
+ * (`client/scripts/MONSTERBAITERPOPUP.as`) as a defence test.
  *
- * Top to bottom: where the attack comes from (the corners, and the sides from
- * level 3), which stats the attackers fight with (level 1, as the original's
- * wild attack, or the player's academy levels, Q5), the attack size against
- * the level's budget, one row per monster C1–C14 with a stepper whose Fill
- * takes as many as still fit, then Clear and **Run**. Run hands the attack to
- * the Baiter scene; nothing here talks to the server.
+ * Top to bottom: level shortcuts (My levels, All level 1, All max), the army
+ * size against the level's cap, one row per test monster (issue #22: the 18
+ * surface monsters) at its level, with a stepper whose Fill takes as many as
+ * still fit, then Clear and **Run**. Run hands the test to the Baiter scene;
+ * nothing here talks to the server. The full setup panel, with a level picker
+ * per row and champions, is #22's WP2.
  *
- * The army, the direction and the levels choice are kept for the session, as
- * Flash kept its queue (`MONSTERBAITER.Export`), so a second run starts from
- * the first one's picks.
+ * The army is kept for the session, as Flash kept its queue
+ * (`MONSTERBAITER.Export`), so a second run starts from the first one's.
  */
 
 export interface BaiterPanelOptions {
-  /** The Baiter's level: the budget and the directions. */
+  /** The Baiter's level: the army's cap. */
   readonly level: number;
   /** The own yard as it stands now, read when Run is pressed. */
   readonly save: () => BaseLoadResponse;
@@ -47,39 +47,19 @@ export interface BaiterPanelOptions {
   readonly onRun: (run: BaiterRun) => void;
 }
 
-/** What the last panel was set to, for the next one this session. */
-let remembered: {
-  picks: Record<string, number>;
-  direction: string;
-  levels: BaiterLevels;
-} = { picks: {}, direction: "tl", levels: "wild" };
+/** The last panel's army, for the next one this session. */
+let remembered: TestArmy | null = null;
 
 /** For tests: forget what earlier panels were set to. */
 export const resetBaiterMemory = (): void => {
-  remembered = { picks: {}, direction: "tl", levels: "wild" };
-};
-
-/** Where each direction sits in the 3 x 3 compass, row by row. */
-const COMPASS: readonly (string | null)[] = ["tl", "t", "tr", "l", null, "r", "bl", "b", "br"];
-const ARROWS: Readonly<Record<string, string>> = {
-  tl: "↖",
-  t: "↑",
-  tr: "↗",
-  l: "←",
-  r: "→",
-  bl: "↙",
-  b: "↓",
-  br: "↘",
+  remembered = null;
 };
 
 export class BaiterPanel {
   readonly element: HTMLElement;
 
   private readonly options: BaiterPanelOptions;
-  private readonly budget: number;
-  private readonly directions: readonly BaiterDirection[];
-  private readonly directionButtons = new Map<string, HTMLButtonElement>();
-  private readonly levelButtons = new Map<BaiterLevels, HTMLButtonElement>();
+  private readonly cap: number;
   private readonly figures: HTMLElement;
   private readonly bar: HTMLElement;
   private readonly fill: HTMLElement;
@@ -88,18 +68,12 @@ export class BaiterPanel {
   private readonly clearButton: HTMLButtonElement;
   private readonly runButton: HTMLButtonElement;
 
-  private picks: Record<string, number>;
-  private direction: BaiterDirection;
-  private levelsChoice: BaiterLevels;
+  private testArmy: TestArmy;
 
   constructor(options: BaiterPanelOptions) {
     this.options = options;
-    this.budget = budgetOf(options.level);
-    this.directions = directionsOf(options.level);
-    this.direction =
-      this.directions.find((one) => one.id === remembered.direction) ?? this.directions[0]!;
-    this.levelsChoice = remembered.levels;
-    this.picks = clampPicks(remembered.picks, this.budget, this.levels());
+    this.cap = capOf(options.level);
+    this.testArmy = clampArmy(remembered ?? emptyArmy(options.save()), this.cap);
 
     this.element = document.createElement("section");
     this.element.className = "baiter";
@@ -111,60 +85,29 @@ export class BaiterPanel {
       "Send wild monsters at your own yard to see how it holds. It is only practice: nothing is saved.",
     );
 
-    // Direction.
-    const compass = document.createElement("div");
-    compass.className = "baiter-compass";
-    compass.setAttribute("role", "radiogroup");
-    compass.setAttribute("aria-label", "Where the attack comes from");
-    for (const id of COMPASS) {
-      const direction = id ? this.directions.find((one) => one.id === id) : undefined;
-      if (!direction) {
-        const cell = document.createElement("span");
-        cell.className = id ? "baiter-compass__cell baiter-compass__cell--off" : "baiter-compass__yard";
-        if (id) cell.title = "From level 3 the Baiter can bring an attack in from the sides too.";
-        compass.append(cell);
-        continue;
-      }
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "baiter-compass__cell";
-      button.setAttribute("role", "radio");
-      button.setAttribute("aria-label", direction.label);
-      button.title = direction.label;
-      button.textContent = ARROWS[direction.id] ?? "•";
-      button.addEventListener("click", () => {
-        this.direction = direction;
-        this.render();
-      });
-      this.directionButtons.set(direction.id, button);
-      compass.append(button);
-    }
-    const from = part("From", compass);
-
-    // Levels (Q5).
+    // Level shortcuts.
     const levels = document.createElement("div");
     levels.className = "baiter-switch";
-    levels.setAttribute("role", "radiogroup");
     levels.setAttribute("aria-label", "Attacker levels");
-    for (const [choice, label, title] of [
-      ["wild", "Level 1", "Level 1 monsters, as the original Baiter's wild attack"],
-      ["academy", "My academy levels", "Each monster at the level your Monster Academy has trained it to"],
-    ] as const) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "baiter-switch__option";
-      button.setAttribute("role", "radio");
-      button.textContent = label;
-      button.title = title;
-      button.addEventListener("click", () => {
-        this.levelsChoice = choice;
-        this.picks = clampPicks(this.picks, this.budget, this.levels());
+    const shortcuts: ReadonlyArray<readonly [string, string, (army: TestArmy) => TestArmy]> = [
+      [
+        "My levels",
+        "Each monster at the level your Monster Academy has trained it to",
+        (army) => myLevels(army, this.options.save()),
+      ],
+      ["All level 1", "Every monster at level 1", allLevel1],
+      ["All max", "Every monster at its highest level", allMax],
+    ];
+    for (const [label, title, apply] of shortcuts) {
+      const shortcut = button(label, "baiter-switch__option");
+      shortcut.title = title;
+      shortcut.addEventListener("click", () => {
+        this.testArmy = clampArmy(apply(this.testArmy), this.cap);
         this.render();
       });
-      this.levelButtons.set(choice, button);
-      levels.append(button);
+      levels.append(shortcut);
     }
-    const strength = part("Attackers", levels);
+    const strength = part("Levels", levels);
 
     // Size.
     this.figures = text("p", "baiter__figures", "");
@@ -173,7 +116,7 @@ export class BaiterPanel {
     this.bar.setAttribute("role", "meter");
     this.bar.setAttribute("aria-label", "Attack size");
     this.bar.setAttribute("aria-valuemin", "0");
-    this.bar.setAttribute("aria-valuemax", String(this.budget));
+    this.bar.setAttribute("aria-valuemax", String(this.cap));
     this.fill = document.createElement("span");
     this.fill.className = "monsters-bar__fill";
     this.bar.append(this.fill);
@@ -182,12 +125,15 @@ export class BaiterPanel {
     const list = document.createElement("ul");
     list.className = "baiter__list";
     list.setAttribute("aria-label", "Monsters in the attack");
-    for (const id of BAITER_ROSTER) list.append(this.row(id));
+    for (const id of TEST_ROSTER) list.append(this.row(id));
 
     // Actions.
     this.clearButton = button("Clear", "btn btn--ghost");
     this.clearButton.addEventListener("click", () => {
-      this.picks = {};
+      this.testArmy = clampArmy(
+        { monsters: this.withCounts(() => 0), champions: [] },
+        this.cap,
+      );
       this.render();
     });
     this.runButton = button("Run attack", "btn btn--primary baiter__run");
@@ -197,7 +143,7 @@ export class BaiterPanel {
     actions.className = "baiter__actions";
     actions.append(this.clearButton, this.runButton);
 
-    this.element.append(lead, from, strength, this.figures, this.bar, list, actions);
+    this.element.append(lead, strength, this.figures, this.bar, list, actions);
     if (options.blocked) this.element.append(text("p", "baiter__gate", options.blocked));
     this.render();
   }
@@ -213,13 +159,16 @@ export class BaiterPanel {
     this.element.remove();
   }
 
-  /** The picks, for the tests. */
-  get army(): Readonly<Record<string, number>> {
-    return this.picks;
+  /** The test army, for the tests. */
+  get army(): TestArmy {
+    return this.testArmy;
   }
 
-  private levels(): Record<string, number> {
-    return levelsFor(this.levelsChoice, this.options.save());
+  /** Every row with the count `countOf` gives it, at its level. */
+  private withCounts(countOf: (id: string) => number): TestArmy["monsters"] {
+    return Object.fromEntries(
+      TEST_ROSTER.map((id) => [id, { count: countOf(id), level: this.testArmy.monsters[id]?.level ?? 1 }]),
+    );
   }
 
   private row(id: string): HTMLElement {
@@ -239,7 +188,7 @@ export class BaiterPanel {
       fewerLabel: `Fewer ${name}`,
       moreLabel: `More ${name}`,
       fillTitle: "As many as still fit in the attack",
-      value: () => this.picks[id] ?? 0,
+      value: () => this.testArmy.monsters[id]?.count ?? 0,
       set: (value) => this.set(id, value),
       fill: () => this.set(id, Number.MAX_SAFE_INTEGER),
       commit: () => this.render(),
@@ -250,69 +199,48 @@ export class BaiterPanel {
   }
 
   private set(id: string, value: number): void {
-    const max = maxOf(id, this.picks, this.budget, this.levels());
-    const next = Math.max(0, Math.min(Math.floor(value), max));
-    if (next > 0) this.picks = { ...this.picks, [id]: next };
-    else {
-      const rest = { ...this.picks };
-      delete rest[id];
-      this.picks = rest;
-    }
+    const count = Math.max(0, Math.min(Math.floor(value), maxOf(this.testArmy, id, this.cap)));
+    const level = this.testArmy.monsters[id]?.level ?? 1;
+    this.testArmy = { ...this.testArmy, monsters: { ...this.testArmy.monsters, [id]: { count, level } } };
     this.render();
   }
 
   private render(): void {
-    remembered = { picks: { ...this.picks }, direction: this.direction.id, levels: this.levelsChoice };
+    remembered = this.testArmy;
 
-    for (const [id, button] of this.directionButtons) {
-      const on = id === this.direction.id;
-      button.setAttribute("aria-checked", String(on));
-      button.classList.toggle("baiter-compass__cell--on", on);
-      button.tabIndex = on ? 0 : -1;
-    }
-    for (const [choice, button] of this.levelButtons) {
-      const on = choice === this.levelsChoice;
-      button.setAttribute("aria-checked", String(on));
-      button.classList.toggle("baiter-switch__option--on", on);
-    }
-
-    const levels = this.levels();
-    const used = attackSize(this.picks, levels);
+    const used = armySize(this.testArmy);
     this.figures.replaceChildren(
       "Attack size ",
       strong(formatAmount(used)),
-      ` / ${formatAmount(this.budget)}`,
+      ` / ${formatAmount(this.cap)}`,
     );
-    this.bar.setAttribute("aria-valuenow", String(Math.min(used, this.budget)));
-    this.fill.style.width = `${+((Math.min(used, this.budget) / this.budget) * 100).toFixed(2)}%`;
+    this.bar.setAttribute("aria-valuenow", String(Math.min(used, this.cap)));
+    this.fill.style.width = `${+((Math.min(used, this.cap) / this.cap) * 100).toFixed(2)}%`;
 
-    for (const id of BAITER_ROSTER) {
+    for (const id of TEST_ROSTER) {
+      const row = this.testArmy.monsters[id];
+      const level = row?.level ?? 1;
       const each = this.eachLabels.get(id);
-      if (each) each.textContent = `${formatAmount(costOf(id, levels))} space each`;
+      if (each) each.textContent = `Level ${level} · ${formatAmount(spaceOf(id, level))} space each`;
       this.steppers.get(id)?.sync({
-        value: this.picks[id] ?? 0,
-        max: maxOf(id, this.picks, this.budget, levels),
+        value: row?.count ?? 0,
+        max: maxOf(this.testArmy, id, this.cap),
         disabled: false,
         rewrite: document.activeElement !== this.steppers.get(id)?.input,
       });
     }
 
-    this.clearButton.disabled = used === 0;
-    this.runButton.disabled = used === 0 || this.options.blocked !== null;
-    this.runButton.title = this.options.blocked ?? (used === 0 ? "Pick some monsters first" : "");
+    const empty = used === 0 && this.testArmy.champions.length === 0;
+    this.clearButton.disabled = empty;
+    this.runButton.disabled = empty || this.options.blocked !== null;
+    this.runButton.title = this.options.blocked ?? (empty ? "Pick some monsters first" : "");
   }
 
   private run(): void {
     if (this.options.blocked) return;
-    const picks = clampPicks(this.picks, this.budget, this.levels());
-    if (attackSize(picks, this.levels()) === 0) return;
-    this.options.onRun({
-      save: this.options.save(),
-      picks,
-      direction: this.direction,
-      levels: this.levelsChoice,
-      baiterLevel: this.options.level,
-    });
+    const army = clampArmy(this.testArmy, this.cap);
+    if (armySize(army) === 0 && army.champions.length === 0) return;
+    this.options.onRun({ save: this.options.save(), army, baiterLevel: this.options.level });
   }
 }
 
