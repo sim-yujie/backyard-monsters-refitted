@@ -131,8 +131,6 @@ export interface TestReport {
   readonly bunkers: readonly BunkerRow[];
   /** One row per caged champion that defended, in cage order: up to two (issue #310). */
   readonly cagedChampions: readonly CagedChampionRow[];
-  /** The first of {@link cagedChampions}, or null; kept for the window until it reads them all. */
-  readonly cagedChampion: CagedChampionRow | null;
   /** Monsters by id, then the champions. */
   readonly attackers: readonly AttackerRow[];
 }
@@ -300,7 +298,6 @@ export const buildTestReport = (input: TestReportInput): TestReport => {
     traps,
     bunkers,
     cagedChampions,
-    cagedChampion: cagedChampions[0] ?? null,
     attackers,
   };
 };

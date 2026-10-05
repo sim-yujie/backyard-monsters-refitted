@@ -23,7 +23,6 @@ const REPORT: TestReport = {
   traps: [{ id: 11, name: "Boom Trap", at: "0:20", damage: 600, kills: 3 }],
   bunkers: [],
   cagedChampions: [],
-  cagedChampion: null,
   attackers: [
     { name: "Bandito L3", champion: false, sent: 20, spawned: 0, lost: 20, buildingDamage: 3100 },
     { name: "Korath L4", champion: true, sent: 1, spawned: 0, lost: 1, buildingDamage: 900 },
@@ -126,6 +125,39 @@ describe("a Baiter test's report panel", () => {
     back.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(panel.peeking).toBe(false);
     expect(onLeaveBuilding).toHaveBeenCalledTimes(2);
+  });
+
+  it("names each caged champion that defended on its own row (#310)", () => {
+    mountPanel({
+      report: {
+        ...REPORT,
+        cagedChampions: [
+          { name: "Krallen", damage: 1500, kills: 4, health: 0 },
+          { name: "Gorgo", damage: 2300, kills: 6, health: 1800 },
+        ],
+      },
+    });
+    document.querySelector<HTMLButtonElement>("#test-report-tab-towers")!.click();
+    const caged = [...visibleView().querySelectorAll("table")].at(-1)!;
+    expect(caged.textContent).toContain("Caged champions");
+    const rows = [...caged.querySelectorAll("tbody tr")];
+    expect(rows.map((row) => row.querySelector("th")!.textContent)).toEqual(["Krallen", "Gorgo"]);
+    expect(rows[0]!.textContent).toBe("Krallen1,50040");
+    expect(rows[1]!.textContent).toBe("Gorgo2,30061,800");
+  });
+
+  it("calls a lone caged champion by its name, and shows no cage table without one", () => {
+    mountPanel({ report: { ...REPORT, cagedChampions: [{ name: "Fomor", damage: 900, kills: 2, health: 3000 }] } });
+    document.querySelector<HTMLButtonElement>("#test-report-tab-towers")!.click();
+    const caged = [...visibleView().querySelectorAll("table")].at(-1)!;
+    expect(caged.textContent).toContain("Caged champion");
+    expect(caged.textContent).not.toContain("Caged champions");
+    expect([...caged.querySelectorAll("tbody th")].map((cell) => cell.textContent)).toEqual(["Fomor"]);
+    document.body.replaceChildren();
+
+    mountPanel();
+    document.querySelector<HTMLButtonElement>("#test-report-tab-towers")!.click();
+    expect(visibleView().textContent).not.toContain("Caged champion");
   });
 
   it("lists the attackers with sent, lost and building damage", () => {

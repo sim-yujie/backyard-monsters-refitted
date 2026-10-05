@@ -230,6 +230,5 @@ describe("a Baiter test's report", () => {
         health: caged.hp,
       })),
     );
-    expect(report.cagedChampion).toEqual(report.cagedChampions[0]);
   });
 });

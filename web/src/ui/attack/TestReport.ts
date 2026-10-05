@@ -330,12 +330,15 @@ export class TestReportPanel {
         ),
       );
     }
-    const caged = report.cagedChampion;
-    if (caged) {
+    if (report.cagedChampions.length > 0) {
       view.append(
-        table("Caged champion", ["Champion", "Damage", "Kills", "Health left"], [
-          row(["Your champion", amount(caged.damage), amount(caged.kills), amount(caged.health)]),
-        ]),
+        table(
+          report.cagedChampions.length === 1 ? "Caged champion" : "Caged champions",
+          ["Champion", "Damage", "Kills", "Health left"],
+          report.cagedChampions.map((caged) =>
+            row([caged.name, amount(caged.damage), amount(caged.kills), amount(caged.health)]),
+          ),
+        ),
       );
     }
     return view;
