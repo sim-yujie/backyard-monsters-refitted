@@ -8,7 +8,7 @@ import {
 } from "@/api/types";
 import fixture from "../../../../test/fixtures/baseload-sandbox-yard.json";
 import { readYard, type Yard } from "../yardModel";
-import { payloadFor, planLoad } from "./layout";
+import { layoutMeta, payloadFor, planLoad } from "./layout";
 import { Plan } from "./plan";
 
 /**
@@ -209,5 +209,66 @@ describe("planLoad: plans", () => {
 
     expect(result.plans).toEqual([]);
     expect(result.plansDropped).toBe(0);
+  });
+});
+
+describe("layoutMeta", () => {
+  it("names the drawer only when the layout keeps something in it", () => {
+    const layout = asLayout([]);
+    layout.updatedAt = "2026-10-05T00:00:00Z";
+    expect(layoutMeta(layout)).toMatch(/^0 buildings · expansion 6 · /);
+
+    layout.stored = [
+      { id: 1, t: 20 },
+      { id: 2, t: 20 },
+    ];
+    expect(layoutMeta(layout)).toMatch(/^0 buildings · 2 in storage · expansion 6 · /);
+  });
+});
+
+describe("planLoad and the drawer", () => {
+  it("lifts what the layout stores and places what it names, leaving the rest", () => {
+    const plan = planOf();
+    const [lifted, placed] = cannonIds(plan);
+    plan.store([placed!]);
+
+    const result = planLoad(plan, {
+      ...asLayout([savedNode(plan, placed!)]),
+      stored: [{ id: lifted!, t: 20 }],
+    });
+
+    expect(result.lifts.map((entry) => entry.id)).toEqual([lifted]);
+    expect(result.lifts[0]?.store).toBe(true);
+    expect(result.places.map((entry) => entry.id)).toEqual([placed]);
+    expect(result.places[0]?.store).toBe(false);
+    expect(result.entries).toEqual([]);
+  });
+
+  it("does not lift a building already in the drawer, and drops one the yard has lost", () => {
+    const plan = planOf();
+    const [stored] = cannonIds(plan);
+    plan.store([stored!]);
+
+    const result = planLoad(plan, {
+      ...asLayout([]),
+      stored: [
+        { id: stored!, t: 20 },
+        { id: 999_999, t: 20 },
+      ],
+    });
+
+    expect(result.lifts).toEqual([]);
+    expect(result.missing).toEqual([]);
+  });
+
+  it("leaves a stored building in the drawer when its saved spot is outside the plot", () => {
+    const plan = planOf();
+    const [stored] = cannonIds(plan);
+    plan.store([stored!]);
+
+    const result = planLoad(plan, asLayout([savedNode(plan, stored!, { x: 5000, y: 5000 })]));
+
+    expect(result.places).toEqual([]);
+    expect(result.didNotFit.map((miss) => miss.id)).toEqual([stored]);
   });
 });

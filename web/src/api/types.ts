@@ -908,6 +908,19 @@ export interface Layout {
   /** Unix seconds, or an ISO string; the client formats whichever arrives. */
   updatedAt: number | string;
   nodes: LayoutNode[];
+  /** Buildings the layout keeps in the drawer: a half-finished plan. Absent when none. */
+  stored?: LayoutStoredNode[];
+}
+
+/**
+ * A building a saved layout keeps in the planner's drawer (owner decision
+ * 2026-10-05). Not on the plot, so no position: loading puts it back in the
+ * drawer, and Apply stays blocked on it like any other stored building.
+ */
+export interface LayoutStoredNode {
+  id: number;
+  /** Building type id. */
+  t: number;
 }
 
 /** The body of the `data` form field on save and apply. */
@@ -917,6 +930,8 @@ export interface LayoutPayload {
   nodes: LayoutNode[];
   /** Decorations Apply takes out of storage and puts down (#128); a slot save drops them. */
   fromStorage?: { t: number; x: number; y: number }[];
+  /** Buildings in the drawer, for a slot save. Apply ignores them. */
+  stored?: LayoutStoredNode[];
 }
 
 export interface LayoutsResponse extends ApiEnvelope {

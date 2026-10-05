@@ -31,6 +31,11 @@ import { refuseOutpostLayouts } from "./plannerYard.js";
  * a client *writing* a plan the yard has already passed has lost track of the
  * yard (`docs/design/planner-upgrades.md` §2.2).
  *
+ * A layout may keep buildings in the drawer (`stored`): a half-finished plan
+ * is saved as it stands (owner decision 2026-10-05). Those are held to the
+ * same ownership rules as the placed nodes, and Apply still refuses anything
+ * a layout leaves off the plot.
+ *
  * @param {Context} ctx - The Koa context object, which includes the authenticated user.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
  */
@@ -46,11 +51,12 @@ export const saveLayout: KoaController = async (ctx) => {
   const name = parseName(body.name);
   const payload = parsePayload(body.data);
 
-  checkNodesOwned(payload.nodes, save.buildingdata);
+  const stored = payload.stored ?? [];
+  checkNodesOwned([...payload.nodes, ...stored], save.buildingdata);
   checkPlans(payload.nodes, save.buildingdata, { refuseCaughtUp: true });
   checkNodePlacement(payload.nodes, payload.expansion, save.buildingdata);
 
-  const layout = makeLayout(slot, name, payload.expansion, payload.nodes);
+  const layout = makeLayout(slot, name, payload.expansion, payload.nodes, stored);
   save.savetemplate = writeLayout(save.savetemplate, layout);
 
   postgres.em.persist(save);

@@ -107,9 +107,12 @@ export const parsePayload = (raw: unknown): LayoutPayload => {
  * A node has to name a building the caller owns, of the same type, and no
  * building may be listed twice. Ids the save does not have are reported back so
  * the client can say which ones went missing rather than failing silently.
+ *
+ * A slot save passes its drawer in with the placed nodes, so a building cannot
+ * be both on the plot and in the drawer either.
  */
 export const checkNodesOwned = (
-  nodes: LayoutNode[],
+  nodes: readonly Pick<LayoutNode, "id" | "t">[],
   buildingdata: BuildingDataMap | null | undefined
 ): void => {
   const buildings = buildingdata ?? {};

@@ -143,3 +143,24 @@ describe("statRows", () => {
     expect(rows.every((row) => row.better === null)).toBe(true);
   });
 });
+
+describe("a slot with buildings in the drawer (owner decision 2026-10-05)", () => {
+  const half: Layout = {
+    ...layoutOf([
+      { id: 1, t: 14, x: -400, y: -300 },
+      { id: 2, t: 20, x: 0, y: 0 },
+    ]),
+    stored: [{ id: 3, t: 17 }],
+  };
+
+  it("leaves the stored building off the slot's side and counts it unplaced", () => {
+    expect(slotSave(save(), half).buildingdata?.["3"]).toBeUndefined();
+    expect(slotUnplaced(readYard(save()), half)).toBe(1);
+  });
+
+  it("shows it on the plan's side only when the plan has it placed", () => {
+    const plan = Plan.fromYard(readYard(save()));
+    const diff = diffLayouts(plan.buildings(), half);
+    expect([...diff.onlyPlan]).toContain(3);
+  });
+});

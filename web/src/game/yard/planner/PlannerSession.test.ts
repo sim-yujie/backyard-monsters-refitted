@@ -1971,3 +1971,106 @@ describe("nearby outlines while something is in hand (#231)", () => {
     expect(harness.nearby()).toEqual(new Set([1]));
   });
 });
+
+/* ── Half-finished layouts (owner decision 2026-10-05) ───────────────────── */
+
+describe("a layout with buildings in the drawer", () => {
+  /** The three-building yard as saved with tower 2 in the drawer. */
+  const halfLayout = (): Layout => ({
+    slot: 4,
+    name: "Half",
+    version: LAYOUT_VERSION,
+    expansion: 0,
+    updatedAt: 1_700_000_000,
+    nodes: [
+      { id: 1, t: 20, x: 0, y: 200 },
+      { id: 3, t: 17, x: -300, y: -300 },
+    ],
+    stored: [{ id: 2, t: 20 }],
+  });
+
+  it("puts the drawer into the save payload", () => {
+    const harness = planner();
+    harness.session.selectOnly([2]);
+    harness.session.store();
+
+    const payload = harness.session.payload();
+    expect(payload.nodes.map((node) => node.id).sort()).toEqual([1, 3]);
+    expect(payload.stored).toEqual([{ id: 2, t: 20 }]);
+  });
+
+  it("sends no drawer field when the drawer is empty", () => {
+    const harness = planner();
+    expect("stored" in harness.session.payload()).toBe(false);
+  });
+
+  it("loads the stored buildings back into the drawer, as one undo", () => {
+    const harness = planner();
+    harness.session.load(halfLayout());
+
+    expect(harness.session.plan.storedIds()).toEqual([2]);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 200 });
+    expect(harness.session.state().unplacedCount).toBe(1);
+    // Apply stays blocked on it.
+    expect(harness.session.checklist().ok).toBe(false);
+
+    harness.session.undo();
+    expect(harness.session.plan.storedIds()).toEqual([]);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(at(harness, 2)).toEqual({ x: 200, y: 0 });
+  });
+
+  it("lets a placed building land where a lifted one stood", () => {
+    const harness = planner();
+    const layout = halfLayout();
+    layout.nodes[0] = { id: 1, t: 20, x: 200, y: 0 };
+
+    const result = harness.session.load(layout);
+
+    expect(result.didNotFit).toEqual([]);
+    expect(at(harness, 1)).toEqual({ x: 200, y: 0 });
+    expect(harness.session.plan.storedIds()).toEqual([2]);
+    harness.session.undo();
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(at(harness, 2)).toEqual({ x: 200, y: 0 });
+  });
+
+  it("takes buildings out of the drawer when the layout places them (Clear yard, then Load)", () => {
+    const harness = planner();
+    harness.session.clearYard();
+
+    harness.session.load({
+      ...halfLayout(),
+      nodes: [
+        { id: 1, t: 20, x: 0, y: 0 },
+        { id: 2, t: 20, x: 200, y: 200 },
+        { id: 3, t: 17, x: -300, y: -300 },
+      ],
+      stored: [],
+    });
+
+    expect(harness.session.plan.storedIds()).toEqual([]);
+    expect(at(harness, 2)).toEqual({ x: 200, y: 200 });
+    expect(stillOccupies(harness, 2, 1)).toBe(true);
+
+    harness.session.undo();
+    expect(harness.session.plan.storedIds()).toEqual([1, 2, 3]);
+  });
+
+  it("puts the drawer back when a preview is closed", () => {
+    const harness = planner();
+    harness.session.selectOnly([3]);
+    harness.session.store();
+
+    harness.session.load(halfLayout(), { preview: true });
+    expect(harness.session.plan.storedIds()).toEqual([2]);
+    expect(at(harness, 3)).toEqual({ x: -300, y: -300 });
+
+    harness.session.dismissPreview();
+    expect(harness.session.plan.storedIds()).toEqual([3]);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(at(harness, 2)).toEqual({ x: 200, y: 0 });
+    expect(stillOccupies(harness, 2, 1)).toBe(true);
+    expect(harness.session.state().dirty).toBe(true);
+  });
+});
