@@ -18,6 +18,7 @@ import type { AttackSessionState } from "./AttackSession";
 export class AttackPresentation {
   private readonly holds = new Set<() => boolean>();
   private damageView: ((state: AttackSessionState) => number) | null = null;
+  private readonly settlers = new Set<() => void>();
 
   /**
    * Registers something still playing out while `playing` answers true. The
@@ -45,6 +46,26 @@ export class AttackPresentation {
     return () => {
       if (this.damageView === view) this.damageView = null;
     };
+  }
+
+  /**
+   * Registers what puts the battle's picture to rest once it is over (the
+   * battle layer's {@link AttackBattleLayer.settle}). Returns the release.
+   */
+  settleWith(settle: () => void): () => void {
+    this.settlers.add(settle);
+    return () => {
+      this.settlers.delete(settle);
+    };
+  }
+
+  /**
+   * Puts the battle's picture to rest: no creeps, every gun idle, nothing in
+   * the air (#308). The Baiter's report asks for it as it opens, so a finished
+   * test does not stand frozen behind it; a real attack's end screen does not.
+   */
+  settle(): void {
+    for (const settle of this.settlers) settle();
   }
 
   /**

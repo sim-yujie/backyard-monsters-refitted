@@ -75,6 +75,8 @@ const plugin: AttackPlugin = (mounts) => {
   // The HUD's damage and the end panel follow what the screen shows (#148).
   const releaseHold = mounts.presentation.hold(() => layer.settling);
   const releaseDamage = mounts.presentation.showDamageWith(() => layer.shownDamage());
+  // Only the Baiter's report asks for this (#308); a real attack never does.
+  const releaseSettle = mounts.presentation.settleWith(() => layer.settle());
 
   let hooked = false;
   if (import.meta.env.DEV) {
@@ -100,6 +102,7 @@ const plugin: AttackPlugin = (mounts) => {
   return () => {
     releaseHold();
     releaseDamage();
+    releaseSettle();
     layer.destroy();
     if (hooked) delete (window as unknown as { __attackBattle?: DevHook }).__attackBattle;
   };

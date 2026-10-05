@@ -32,6 +32,11 @@ import { buildTestReport } from "./testReport";
  * finished test (issue #227, `baiterRecord.ts`): a token asked for at the
  * first drop and handed back when the test really finishes.
  *
+ * As the report opens, the battle is put to rest (#308,
+ * `AttackPresentation.settle`): the attackers go, the towers stand down and
+ * the report's scrim dims the yard, so a finished test looks finished rather
+ * than frozen mid-step. A replay's end does the same.
+ *
  * Every finished test with a drop in it is kept for a replay (WP5,
  * `testHistory.ts`), and its report offers Watch replay. A replay is the
  * scene with {@link BAITER_REPLAY_PLUGINS}: no army or drop controls, the
@@ -109,6 +114,9 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
   const showReport = (): void => {
     const battle = session.battle();
     if (report || !battle) return;
+    // The battle stopped mid-step: put it to rest so a finished test does
+    // not stand frozen behind its report (#308).
+    mounts.presentation.settle();
     const state = session.state();
     if (replay) {
       // The same battle again, so the same report, with Watch again and the way back.

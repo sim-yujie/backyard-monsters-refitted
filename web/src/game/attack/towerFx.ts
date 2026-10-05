@@ -515,6 +515,26 @@ export class TowerFx {
     this.drawRails(tick);
   }
 
+  /**
+   * Every gun at rest and nothing in the air: the battle is over (#308). A
+   * Tesla goes back to its idle cell; the other guns keep the way they face.
+   */
+  standDown(): void {
+    this.bullets.length = 0;
+    this.beams.length = 0;
+    this.bolts.length = 0;
+    this.rails.length = 0;
+    this.flashes.length = 0;
+    for (const tower of this.towers.values()) {
+      tower.targetCreep = -1;
+      tower.chargePending = false;
+      tower.chargeTick = Number.NEGATIVE_INFINITY;
+      tower.tesla = TESLA_IDLE;
+      if (tower.info.type === 25 && tower.info.frames > 0) this.setCell(tower, TESLA_IDLE.cell);
+    }
+    this.graphics.clear();
+  }
+
   destroy(): void {
     this.towers.clear();
     this.bullets.length = 0;

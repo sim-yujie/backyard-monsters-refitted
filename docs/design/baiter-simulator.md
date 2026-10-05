@@ -416,6 +416,8 @@ each end reason. A panel test for the tabs and the row tap.
 
 **As built (#308).** The report is now the same large centre window as the setup, the yard dimmed behind it, and a full-screen sheet on a phone. Tapping a tower, trap or bunker row steps the window aside: the scrim lifts, the camera centres on the building and outlines it, and a small bar at the foot says "Showing Cannon Tower L5" with **Back to report** (Escape works too), which brings the window back and drops the outline.
 
+**As built (#308, the "frozen" end).** The engine stops on the tick a test ends, so its last frame (a champion mid-step, a laser mid-sweep, a bullet in the air) used to stand behind the report as if the game had hung, while the yard's own life (Housing monsters) kept moving. As the report opens, the Baiter package now asks `AttackPresentation.settle()`, which the battle layer answers (`AttackBattleLayer.settle`): every attacker and champion goes, every gun stands down (a Tesla back to idle, beams and bullets gone), and each building shows the engine's own health; splats, smoke and numbers already made fade out on the wall clock. The report's scrim dims the yard. A replay's end does the same. A real attack's end screen never calls it and is unchanged.
+
 ### WP5 — Replay and Recent tests
 
 **Goal:** every finished test can be watched again and its report reopened (§5.3).
