@@ -501,7 +501,8 @@
 }
 
 .test-report__table th:first-child,
-.test-report__table td:last-child {
+.test-report__table--text-last th:last-child,
+.test-report__table--text-last td:last-child {
   text-align: left;
 }
 

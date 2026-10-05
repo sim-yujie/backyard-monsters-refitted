@@ -66,10 +66,19 @@ const button = (label: string, className: string, onClick: () => void): HTMLButt
   return node;
 };
 
-/** A table of rows, in a box that scrolls sideways when the panel is narrower than it. */
-const table = (caption: string, headings: readonly string[], rows: readonly HTMLTableRowElement[]): HTMLElement => {
+/**
+ * A table of rows, in a box that scrolls sideways when the panel is narrower
+ * than it. Numbers line up on the right; `textLast` keeps a last column of
+ * words (a tower's fate) on the left, heading and cells alike.
+ */
+const table = (
+  caption: string,
+  headings: readonly string[],
+  rows: readonly HTMLTableRowElement[],
+  textLast = false,
+): HTMLElement => {
   const wrap = element("div", "test-report__scroll");
-  const grid = element("table", "test-report__table");
+  const grid = element("table", textLast ? "test-report__table test-report__table--text-last" : "test-report__table");
   const title = element("caption", "test-report__caption", caption);
   const head = element("thead", "");
   const headRow = element("tr", "");
@@ -283,6 +292,7 @@ export class TestReportPanel {
               !tower.fired,
             ),
           ),
+          true,
         ),
       );
     }
@@ -316,6 +326,7 @@ export class TestReportPanel {
               tap(bunker.id, bunker.name),
             ),
           ),
+          true,
         ),
       );
     }

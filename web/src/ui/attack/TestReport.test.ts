@@ -134,6 +134,16 @@ describe("a Baiter test's report panel", () => {
     expect(rows).toEqual(["Bandito L320 / 203,100", "Korath L41 / 1900"]);
   });
 
+  it("keeps a last column of words on the left and a last column of numbers on the right", () => {
+    mountPanel();
+    document.querySelector<HTMLButtonElement>("#test-report-tab-towers")!.click();
+    const [towers, traps] = [...visibleView().querySelectorAll("table")];
+    expect(towers!.classList.contains("test-report__table--text-last")).toBe(true);
+    expect(traps!.classList.contains("test-report__table--text-last")).toBe(false);
+    document.querySelector<HTMLButtonElement>("#test-report-tab-attackers")!.click();
+    expect(visibleView().querySelector("table")!.classList.contains("test-report__table--text-last")).toBe(false);
+  });
+
   it("offers Test again, Change army and Back to yard, and Watch replay only when it can", () => {
     const { options } = mountPanel();
     expect(document.querySelector(".test-report__replay")).toBeNull();
