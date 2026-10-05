@@ -235,7 +235,6 @@ export class BaiterPanel {
     }
     const each = text("span", "baiter__each", "");
     this.eachLabels.set(id, each);
-    head.append(each);
 
     const level = select("baiter__level", `${name}'s level`);
     for (let value = 1; value <= Math.max(1, maxTrainingLevel(id)); value += 1) {
@@ -258,10 +257,10 @@ export class BaiterPanel {
     });
     this.steppers.set(id, stepper);
 
-    const controls = document.createElement("div");
-    controls.className = "baiter__row-controls";
-    controls.append(level, stepper.element);
-    item.append(head, controls);
+    const size = document.createElement("div");
+    size.className = "baiter__row-level";
+    size.append(level, each);
+    item.append(head, size, stepper.element);
     return item;
   }
 
@@ -401,8 +400,8 @@ export class BaiterPanel {
     else slot.pick.value = champion ? String(champion.t) : "";
     slot.details.hidden = !champion;
     if (!champion) return;
-    fillNumbers(slot.level, 1, championLevels(champion.t), (value) => `Level ${value}`);
-    fillNumbers(slot.power, 0, championPowerLevels(champion.t), (value) => `Power ${value}`);
+    fillNumbers(slot.level, 1, championLevels(champion.t));
+    fillNumbers(slot.power, 0, championPowerLevels(champion.t));
     slot.level.value = String(champion.l);
     slot.power.value = String(champion.pl);
     slot.mode.value = champion.s ?? DEFAULT_STANCE;
@@ -416,17 +415,12 @@ export class BaiterPanel {
   }
 }
 
-/** Gives `picker` the options `from`..`to`, unless it already has them. */
-const fillNumbers = (
-  picker: HTMLSelectElement,
-  from: number,
-  to: number,
-  labelOf: (value: number) => string,
-): void => {
+/** Gives `picker` the options `from`..`to`, unless it already has them; its caption names them. */
+const fillNumbers = (picker: HTMLSelectElement, from: number, to: number): void => {
   const first = picker.options[0]?.value;
   if (picker.options.length === to - from + 1 && first === String(from)) return;
   picker.replaceChildren();
-  for (let value = from; value <= to; value += 1) picker.append(option(String(value), labelOf(value)));
+  for (let value = from; value <= to; value += 1) picker.append(option(String(value), String(value)));
 };
 
 const text = (tag: "p" | "span", className: string, content: string): HTMLElement => {
