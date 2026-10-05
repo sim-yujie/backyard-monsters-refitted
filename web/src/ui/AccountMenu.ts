@@ -19,6 +19,9 @@
  * The yard's HUD (#171) shows it as a `pill`: the player's name beside their
  * critter in a ring, rather than the word "Account", and under the name the
  * player's level once the yard has sent it (`setLevel`, #192).
+ *
+ * With `onAchievements` (issue #204) the menu has an "Achievements" item,
+ * the way into the achievements screen on every screen with the HUD.
  */
 
 import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
@@ -45,6 +48,8 @@ export interface AccountMenuOptions {
    * "pill": the name and the face in a ring, the yard HUD's corner (#171).
    */
   readonly variant?: "button" | "pill";
+  /** The "Achievements" item's action; without it there is no such item. */
+  readonly onAchievements?: () => void;
 }
 
 /** What the picker's heading adds while the player still wears the default. */
@@ -207,6 +212,20 @@ export class AccountMenu {
       this.toggle(false);
       startGuideTour();
     });
+    if (options.onAchievements) {
+      const onAchievements = options.onAchievements;
+      // Not `account-menu__item` either, for the same reason as Help's.
+      const achievements = document.createElement("button");
+      achievements.type = "button";
+      achievements.className = "btn btn--ghost account-menu__help account-menu__achievements";
+      achievements.setAttribute("role", "menuitem");
+      achievements.textContent = "Achievements";
+      achievements.addEventListener("click", () => {
+        this.toggle(false);
+        onAchievements();
+      });
+      this.list.append(achievements);
+    }
     this.list.append(this.replay, signOut);
     this.element.append(this.button, this.list);
     document.addEventListener("pointerdown", this.dismiss, true);
@@ -237,6 +256,11 @@ export class AccountMenu {
       "aria-label",
       level === null ? `Your account: ${this.name}` : `Your account: ${this.name}, ${text}`,
     );
+  }
+
+  /** Focus back on the menu's button, for a screen it opened that has closed. */
+  focus(): void {
+    this.button.focus();
   }
 
   destroy(): void {

@@ -380,6 +380,11 @@ export class YardScene implements Scene {
       scenes: [],
       layout: "corner",
       onSceneSelect: (id) => context.goTo(id),
+      // The achievements screen docks where the mailbox does.
+      onAchievementsOpen: () => {
+        this.mail?.close();
+        this.makeRoomForMail();
+      },
       onSignOut: () => {
         logout();
         context.goTo(SceneName.LOGIN);
@@ -1126,6 +1131,7 @@ export class YardScene implements Scene {
     this.shop?.close();
     this.mail?.close();
     this.bell?.close();
+    this.hud?.achievements?.close();
     this.monsters ??= new MonstersScreen({ binding, tabs }).mount(context.overlay.content);
     this.monsters.besidePanel(this.panel !== null);
     this.monsters.open(shown, focus);
@@ -1160,6 +1166,7 @@ export class YardScene implements Scene {
    */
   private makeRoomForMail(): void {
     this.bell?.close();
+    this.hud?.achievements?.close();
     this.endPlacement();
     this.select(null);
     this.buildMenu?.close();
@@ -1181,6 +1188,7 @@ export class YardScene implements Scene {
     this.monsters?.close();
     this.mail?.close();
     this.bell?.close();
+    this.hud?.achievements?.close();
     this.shop ??= new ShopScreen({ binding }).mount(context.overlay.content);
     this.shop.besidePanel(this.panel !== null);
     this.shop.open();
@@ -1220,6 +1228,7 @@ export class YardScene implements Scene {
     this.shop?.close();
     this.mail?.close();
     this.bell?.close();
+    this.hud?.achievements?.close();
     this.buildMenu ??= new BuildMenu({
       binding,
       onPick: (picked, instant) => this.startPlacement(picked, instant),
@@ -1459,6 +1468,7 @@ export class YardScene implements Scene {
     this.shop?.close();
     this.mail?.close();
     this.bell?.close();
+    this.hud?.achievements?.close();
     this.endPlacement();
     this.buildMenu?.close();
     // Stored decorations need sprites to be carried out of the drawer.

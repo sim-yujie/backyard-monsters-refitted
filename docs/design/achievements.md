@@ -512,6 +512,16 @@ its backfill. While rewards are off an owed unlock reads `locked` in both the pl
 the public one. Both yard routes work on an outpost. The public route's limiter is 30 a minute per
 user.
 
+**As built (WP5):** the screen is `web/src/ui/achievements/AchievementsScreen.ts`, behind
+`AchievementsDoor`, which the HUD owns whenever it has the Account menu (`Hud.achievements`), so
+every screen with the HUD (yard, both Map Rooms, attack) gets the "Achievements" item with no
+wiring of its own; the screen docks beside the HUD. The yard and Map Room 2 close their other
+docked panels first (`onAchievementsOpen`). `openPlayer(userid, name)` is the read-only list for
+WP7. The progress line's unit ("Town Hall", "Blocks built") is the only client-side wording
+(`web/src/game/achievements/achievements.ts`); one-step entries without a unit read "Not yet". The
+screen never calls `seen`; that stays with the pop-up (WP6). The placeholder medal is
+`ui/achievements/badge.ts`, the one place the art (#298) swaps in.
+
 **As built (WP6):** the pop-up is an own-yard plugin (`web/src/game/yard/plugins/achievements.ts`,
 card in `web/src/ui/achievements/UnlockPopup.ts`). Unlocks from the load, every yard answer and a
 takeover (`takeOverCell` in `web/src/api/maproom.ts`) join one queue per tab

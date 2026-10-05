@@ -9,6 +9,7 @@ import type { ZoneRecord } from "@/game/maproom/ZoneStore";
 import type { CellRange } from "@/game/maproom/zones";
 import type { TakeoverCandidate, TakeoverKind } from "@/game/maproom/takeover";
 import type { OwnOutpost } from "@/game/yard/ownYards";
+import type { AchievementsDoor } from "@/ui/achievements/AchievementsDoor";
 import { Hud } from "@/ui/Hud";
 import { ZoomControl } from "@/ui/ZoomControl";
 import { CellPanel, type OwnFlinger, type OwnMoves } from "./CellPanel";
@@ -57,6 +58,8 @@ const ZOOM_LABELS = {
 export interface MapRoomUiHandlers {
   onSceneSelect: (id: string) => void;
   onSignOut: () => void;
+  /** Before the Account menu's achievements screen opens (#204): it docks where the cell panel does. */
+  onAchievementsOpen?: () => void;
   onHome: () => void;
   onRefresh: () => void;
   onJump: (cell: OffsetCell) => void;
@@ -143,6 +146,7 @@ export class MapRoomUi {
       scenes,
       onSceneSelect: handlers.onSceneSelect,
       onSignOut: handlers.onSignOut,
+      ...(handlers.onAchievementsOpen ? { onAchievementsOpen: handlers.onAchievementsOpen } : {}),
     });
     this.hud.setActiveScene(activeScene);
 
@@ -388,6 +392,11 @@ export class MapRoomUi {
   }
 
   /** The bottom edge of the HUD: the map shows nothing above it. */
+  /** The achievements screen behind the HUD's Account menu (#204). */
+  get achievements(): AchievementsDoor | null {
+    return this.hud.achievements;
+  }
+
   hudBottom(): number {
     return this.hud.element.getBoundingClientRect().bottom;
   }

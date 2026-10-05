@@ -235,6 +235,11 @@ export class MapRoom2Scene implements Scene {
           logout();
           context.goTo(SceneName.LOGIN);
         },
+        // The achievements screen docks where the mailbox and the cell panel do.
+        onAchievementsOpen: () => {
+          this.mail?.close();
+          this.clearSelection();
+        },
         onHome: () => this.goHome(),
         onRefresh: () => this.refreshNow(),
         onJump: (cell) => this.jumpTo(cell),
@@ -320,8 +325,11 @@ export class MapRoom2Scene implements Scene {
     this.mail = new MailDoor({
       style: "tool",
       container: context.overlay.content,
-      // The mailbox docks where the cell panel does.
-      onOpen: () => this.clearSelection(),
+      // The mailbox docks where the cell panel and the achievements screen do.
+      onOpen: () => {
+        this.ui?.achievements?.close();
+        this.clearSelection();
+      },
       onShowOnMap: (cell) => {
         this.mail?.close();
         this.jumpTo(cell);

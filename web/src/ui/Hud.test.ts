@@ -283,6 +283,46 @@ describe("the HUD's Account control (#173)", () => {
     expect(onSignOut).toHaveBeenCalledOnce();
     hud.destroy();
   });
+
+  it("opens the achievements screen from the menu, docked beside the HUD (#204)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            error: 0,
+            completed: [],
+            report: { achievements: [], earned: 0, total: 16, shinyEarned: 0, fresh: [] },
+          }),
+        ),
+      ),
+    );
+    const layer = document.createElement("div");
+    document.body.append(layer);
+    const onAchievementsOpen = vi.fn();
+    const hud = new Hud({
+      scenes: [],
+      onSceneSelect: () => {},
+      onSignOut: () => {},
+      onAchievementsOpen,
+    }).mount(layer);
+    expect(hud.achievements?.isOpen).toBe(false);
+    hud.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
+    hud.element.querySelector<HTMLButtonElement>(".account-menu__achievements")!.click();
+    await vi.waitFor(() => expect(layer.querySelector(".ach-summary")?.textContent).toBe("0 of 16 earned · 0 Shiny earned"));
+    expect(onAchievementsOpen).toHaveBeenCalledOnce();
+    expect(hud.achievements?.isOpen).toBe(true);
+    hud.destroy();
+    expect(layer.querySelector(".ach-screen")).toBeNull();
+    vi.unstubAllGlobals();
+    layer.remove();
+  });
+
+  it("has no achievements screen without the Account menu", () => {
+    const hud = new Hud({ scenes: [], onSceneSelect: () => {} });
+    expect(hud.achievements).toBeNull();
+    hud.destroy();
+  });
 });
 
 describe("the yard's corner layout (#171)", () => {

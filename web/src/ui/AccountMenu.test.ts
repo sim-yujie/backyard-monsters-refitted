@@ -185,4 +185,25 @@ describe("AccountMenu", () => {
       expect(menu.element.querySelector(".account-menu__pill-level")).toBeNull();
     });
   });
+  describe("the Achievements item (#204)", () => {
+    it("is there only when asked for, closes the menu and opens the screen", () => {
+      const { button } = build();
+      button.click();
+      expect(menu!.element.querySelector(".account-menu__achievements")).toBeNull();
+      menu!.destroy();
+
+      const onAchievements = vi.fn();
+      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onAchievements });
+      document.body.append(menu.element);
+      menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
+      const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__achievements")!;
+      expect(item.textContent).toBe("Achievements");
+      expect(item.getAttribute("role")).toBe("menuitem");
+      // Log out keeps the one `account-menu__item`.
+      expect(menu.element.querySelectorAll(".account-menu__item").length).toBe(1);
+      item.click();
+      expect(onAchievements).toHaveBeenCalledOnce();
+      expect(menu.open).toBe(false);
+    });
+  });
 });

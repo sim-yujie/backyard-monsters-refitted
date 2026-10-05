@@ -7,6 +7,7 @@ import { incomePerHour } from "@/game/yard/incomeRate";
 import { nextWorkerJob } from "@/game/yard/jobs";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { AccountMenu } from "./AccountMenu";
+import { AchievementsDoor } from "./achievements/AchievementsDoor";
 import { formatAmount, formatCompact } from "./format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
 import { DamageBanner } from "./yard/DamageBanner";
@@ -116,6 +117,11 @@ export interface HudOptions {
    * tabs. "corner": the yard's (#171), see the class comment.
    */
   layout?: "bar" | "corner";
+  /**
+   * Before the achievements screen opens from the Account menu (issue #204):
+   * the scene closes whatever else docks where it does.
+   */
+  onAchievementsOpen?: () => void;
 }
 
 /** At or under this width the corner layout is the phone's (`yard-hud.css`). */
@@ -221,6 +227,8 @@ export class Hud {
   /** The yard's corner layout (#171) rather than the bar. */
   private readonly corner: boolean;
   private accountMenu: AccountMenu | null = null;
+  /** The achievements screen behind the Account menu's item; null without the menu. */
+  private achievementsDoor: AchievementsDoor | null = null;
   private fitted: HudFit = HudFit.FULL;
   /** The animation frame counting a readout up, or 0. */
   private frame = 0;
@@ -358,7 +366,15 @@ export class Hud {
 
     if (options.onSignOut) {
       const session = getSession();
+      // Docked beside the HUD, in whatever the scene put it in.
+      const door = new AchievementsDoor({
+        container: () => this.element.parentElement,
+        ...(options.onAchievementsOpen ? { onOpen: options.onAchievementsOpen } : {}),
+        onClosedWithFocus: () => this.accountMenu?.focus(),
+      });
+      this.achievementsDoor = door;
       this.accountMenu = new AccountMenu({
+        onAchievements: () => void door.open(),
         name: options.accountName === undefined ? session?.username : options.accountName,
         onSignOut: options.onSignOut,
         variant: this.corner ? "pill" : "button",
@@ -457,6 +473,14 @@ export class Hud {
     return readout ? (readout.shown ?? this.target(readout)) : undefined;
   }
 
+  /**
+   * The achievements screen behind the Account menu (issue #204), for the
+   * pop-up's View and the map's read-only lists; null without the menu.
+   */
+  get achievements(): AchievementsDoor | null {
+    return this.achievementsDoor;
+  }
+
   /** The level the bar is showing at (`HudFit`). */
   get fitLevel(): HudFit {
     return this.fitted;
@@ -537,6 +561,8 @@ export class Hud {
     this.hideExact();
     this.accountMenu?.destroy();
     this.accountMenu = null;
+    this.achievementsDoor?.destroy();
+    this.achievementsDoor = null;
     for (const float of this.floats) float.remove();
     this.floats.clear();
     this.element.remove();

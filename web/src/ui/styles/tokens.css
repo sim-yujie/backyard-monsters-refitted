@@ -121,6 +121,10 @@
   --colour-art-shadow: rgb(0 0 0 / 50%);
   /* A count badge on a picture ("×10"). */
   --colour-badge-ground: #0b1017;
+  /* The achievements' placeholder medals by reward (#204, §10.4), until the art lands. */
+  --colour-medal-bronze: #b87333;
+  --colour-medal-silver: #a8b2bd;
+  --colour-medal-gold: #e0b330;
   /* Shade laid on a panel under a picture. */
   --colour-shade: rgb(0 0 0 / 25%);
   --colour-shade-strong: rgb(0 0 0 / 35%);
