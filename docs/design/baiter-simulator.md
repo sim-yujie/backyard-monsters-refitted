@@ -7,8 +7,8 @@ unlimited, with nothing saved.
 
 All citations are `path:line` or `path` relative to the repository root. Claims about current
 behaviour cite the web client, the server or the Flash client (`client/scripts`, through the spec);
-anything new is marked as a proposal. Open questions for the owner are in §9 and are not decided
-here.
+anything new is marked as a proposal. The owner answered the open questions on 2026-10-05; the
+answers are in §9.
 
 Contents:
 
@@ -20,7 +20,7 @@ Contents:
 6. [Click by click](#6-click-by-click)
 7. [The report](#7-the-report)
 8. [What the wild raids (#226) can share](#8-what-the-wild-raids-226-can-share)
-9. [Open questions for the owner](#9-open-questions-for-the-owner)
+9. [The owner's answers](#9-the-owners-answers-2026-10-05)
 10. [Work packages](#10-work-packages)
 
 ---
@@ -76,7 +76,7 @@ are not monsters anyone flings. The web client's catalogue lists **18 surface mo
 hatch: C1-C17 and C19** (`web/src/game/monsters/monsterCatalogue.ts:88-424`, C18 `blocked`). The
 **8 Inferno monsters** (IC1-IC8) have combat stats (`web/src/game/combat/rules/combatStatsData.ts`)
 and sprites and portraits, but no catalogue entry (no housing space ladder) and no way to get them
-in the revamp yet. See Q2.
+in the revamp yet. Owner answer Q2: they are not in the test roster.
 
 ## 3. What already exists
 
@@ -124,7 +124,7 @@ Cheating is not a concern: nothing a test does reaches the player's save, resour
 
 A **test army** is made up on the client, not taken from housing:
 
-- **Monsters.** Every monster in the roster (proposal: the 18 surface monsters, C1-C17 and C19; see
+- **Monsters.** Every monster in the roster (the 18 surface monsters, C1-C17 and C19; owner answer
   Q2), each with a count and its own level from 1 to its highest academy level
   (`maxTrainingLevel`, `monsterCatalogue.ts:605`). Locked monsters are offered like any other, with a
   small "Not unlocked" tag so the player knows (decision 13).
@@ -134,9 +134,9 @@ A **test army** is made up on the client, not taken from housing:
   Krallen 1-5) and power level (0-3, Krallen 0-2), with a Mode. The attack's own rule still applies:
   one ordinary champion plus Krallen (`AttackSession.championBlock`). Each pick becomes a made-up
   champion entry in the roster (`ChampionSaveEntry`: `t`, `l`, `pl`, full `hp`, `status: 0`). Its
-  learned brain: see Q6.
+  learned brain: none. A test champion is always a fresh one at the chosen level (owner answer Q6).
 - **Size.** Monsters count their housing space at the chosen level, as Flash did
-  (`MonsterBaiterItem.as:35`). The cap is one constant; which number it is, is Q1. Champions take no
+  (`MonsterBaiterItem.as:35`). The cap is set by the Baiter's level, 600 to 4,800 (owner answer Q1). Champions take no
   space.
 - **Shortcut: My army.** Copies the monsters housed in the yard right now at the player's own levels,
   so "will my real army get through my own defences?" is one click.
@@ -145,7 +145,7 @@ The army, levels and champion picks are kept for the session, as today (`BaiterP
 
 The attack target is built as today's `baiterTarget` is (`baiterSession.ts:181-207`): the own yard's
 load with its `defenderforces`, the test army as the roster, no Catapult, no siege weapons, no
-resources (Q7). That function moves to a neutral module so the wild raids can use it (§8).
+resources (owner answer Q7). That function moves to a neutral module so the wild raids can use it (§8).
 
 ### 5.2 The test screen (WP3)
 
@@ -172,10 +172,9 @@ test army, the seed and the drop log, and the tick it ended. Because the engine 
 replay is the same battle, frame for frame, even after the player has changed the yard since.
 
 **Watch replay** plays a recorded run on the Baiter scene with the army and drop controls left out
-(as the auto-attack Watch does, `watchPlugin.ts`), with 1x/2x, and ends on the same report. How many
-runs are kept, and whether they survive a reload, is Q3; the proposal is the last 5 tests, this
-session only. The Baiter panel lists them under **Recent tests** with their result line, **Watch**
-and **Report**.
+(as the auto-attack Watch does, `watchPlugin.ts`), with 1x/2x, and ends on the same report. The
+last 5 tests are kept, gone on page reload (owner answer Q3). The Baiter panel lists them under
+**Recent tests** with their result line, **Watch** and **Report**.
 
 A replay does not ask for a Goals token: it is not a new test.
 
@@ -274,19 +273,20 @@ without waiting:
   WP5 uses, as the auto-attack Watch already does.
 - **Not shared:** a real raid saves damage and is fought by the server; the simulator never saves.
 
-## 9. Open questions for the owner
+## 9. The owner's answers (2026-10-05)
 
-Each has a proposal the design is written around; none is decided here.
+The seven open questions, answered by the owner on 2026-10-05. The rest of the document is built to
+these answers.
 
-| # | Question (plain language) | Proposal | What changes if the answer differs |
+| # | Question (plain language) | Answer | What it means for the work |
 | --- | --- | --- | --- |
-| Q1 | **How big can a test army be?** Today the Baiter's level sets it: 600 space at level 1 up to 4,800 at level 7. Keep that, or let every Baiter test the same size? | Keep the level limits: it is the only thing Baiter upgrades still do, and D18 kept the 7 levels. | One constant in WP1; if every Baiter gets the same size, the Baiter's upgrades do nothing and the owner may want them removed |
-| Q2 | **Should the 8 Inferno monsters (Spurtz to King Wormzer) be testable?** No player can get them yet. | No: the 18 surface monsters now, Inferno ones when the Inferno arrives. | Yes adds a small WP: housing-space data for IC1-IC8 in the catalogue |
-| Q3 | **How many replays are kept, and do they survive a page reload?** | The last 5 tests, this session only; gone on reload or sign-out. | Keeping them across reloads means storing yard copies in the browser (WP5 grows a little) |
-| Q4 | **Offer a "full health, traps re-armed" switch** for a what-if on a repaired yard? Decision 4 says tests start from the yard as it is. | Add the switch, off by default. | One switch in WP2 and a small transform in WP1 |
-| Q5 | **Test a saved planner layout** instead of the current yard? | Not now; a backlog idea. | A new WP reading a layout slot into the test yard |
-| Q6 | **A test champion's battle habits:** if you own that champion, should it fight with what yours has learned (#219), or always as a fresh one? | Yours if you own that type, fresh otherwise. | Which brain WP1 hands the engine |
-| Q7 | **Catapult bombs and siege weapons in tests?** | No: monsters and champions only. A defence test is about what attacks the yard, and the engine does not model siege weapons (`engine.ts:242-247`). | Yes would mount the Catapult picker with a free pool (WP3 grows) |
+| Q1 | **How big can a test army be?** | **The Baiter's level sets it:** 600 housing space at level 1 up to 4,800 at level 7 (600, 900, 1,200, 1,500, 2,100, 3,200, 4,800). | One cap per level in WP1; Baiter upgrades keep a purpose |
+| Q2 | **Should the 8 Inferno monsters (Spurtz to King Wormzer) be testable?** | **No:** the 18 surface monsters (C1-C17, C19) plus the champions. | `TEST_ROSTER` in WP1 is the 18 surface monsters |
+| Q3 | **How many replays are kept, and do they survive a page reload?** | **The last 5 tests, gone on page reload** (the proposal; the owner did not object). | WP5 keeps 5 recorded runs in memory only |
+| Q4 | **Offer a "full health, traps re-armed" switch?** | **No.** A test always uses the yard as it is right now (decision 4). | No `fullHealthYard` in WP1, no switch in WP2 |
+| Q5 | **Test a saved planner layout** instead of the current yard? | **Later:** a backlog idea, #307. | Nothing in WP0-WP6 |
+| Q6 | **A test champion's battle habits:** your own learned champion (#219), or a fresh one? | **Always a fresh champion at the chosen level**, never the player's own learned one. | WP1's made-up champion entries carry no learned brain |
+| Q7 | **Catapult bombs and siege weapons in tests?** | **No:** monsters and champions only (the proposal). | No Catapult picker; the target carries no Catapult, siege or resources |
 
 ## 10. Work packages
 
@@ -325,17 +325,16 @@ target built from it (§5.1).
 **Scope:**
 
 - `web/src/game/baiter/baiterSession.ts`: replace `BAITER_ROSTER` (C1-C14), `BaiterDirection`,
-  `directionsOf`, `spawnPointOf` and the `BaiterLevels` switch with: `TEST_ROSTER` (Q2), a test army
+  `directionsOf`, `spawnPointOf` and the `BaiterLevels` switch with: `TEST_ROSTER` (18 monsters, Q2), a test army
   `{ monsters: {id: {count, level}}, champions: [{t, l, pl, s}] }`, `defaultLevelOf` (own academy
   level, else 1), the shortcuts (`myLevels`, `allLevel1`, `allMax`, `myArmy` from the housed
-  monsters), size and `maxOf` at each row's level, the cap (Q1), `clampArmy`.
+  monsters), size and `maxOf` at each row's level, the cap (by Baiter level, Q1), `clampArmy`.
 - Made-up champion entries for the roster (`ChampionSaveEntry` with full health and `status: 0`),
-  and the brain per Q6.
+  always fresh, with no learned brain (Q6).
 - Move `baiterTarget` to `web/src/game/attack/ownYardTarget.ts` (`ownYardTarget(save, roster)`), kept
   general for #226; the Baiter builds its roster and calls it.
 - `BaiterRun` becomes `{ save, army, baiterLevel }`.
-- Q4, if the owner says yes: `fullHealthYard(save)` (every building at full health, every trap
-  re-armed), applied to the frozen copy only.
+- No `fullHealthYard`: the owner said no to Q4, so a test always uses the yard as it is.
 
 **Tests:** `baiterSession.test.ts` rewritten: locked monsters allowed; levels clamp to each monster's
 range; size counts each row's level; cap and `clampArmy`; one ordinary champion plus Krallen; My army
@@ -356,7 +355,7 @@ copies housing; `ownYardTarget` carries `defenderforces` and no Catapult, siege 
   **Start test**. Keep `TutTarget.BAITER_RUN` on the start button (`BaiterPanel.ts:194`) and the
   Baiter tip (`web/src/game/guide/tipsCatalogue.ts:180-183`) working.
 - Keep the "why not now" refusals (damaged or busy Baiter, `web/src/ui/yard/buildingActions.ts:574-580`).
-- Q4's switch if the owner says yes.
+- No full-health switch (owner answer Q4).
 - `web/src/ui/styles/baiter.css`.
 
 **Tests:** `BaiterPanel.test.ts` rewritten: every roster row present, locked ones tagged; level
@@ -419,7 +418,7 @@ each end reason. A panel test for the tabs and the row tap.
 
 - `web/src/game/baiter/testHistory.ts`: a recorded run `{ save copy, army, seed, events, endTick,
   summary line }` taken from the session at the end (`session.flingLog()`, `session.seed`); keep the
-  last N in memory (Q3).
+  last 5 in memory, gone on reload (Q3).
 - Playback: the Baiter scene in replay mode mounts the battle layer and the Baiter package only,
   hands the engine the recorded seed and plays the drops with `session.playScript`
   (`AttackSession.ts:485`), as the auto-attack Watch does (`AttackScene.ts:378-382`). Ends on the
