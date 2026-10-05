@@ -545,3 +545,44 @@ describe("basevalue (#209)", () => {
     expect(db.row!.basevalue).toBe("0");
   });
 });
+
+/**
+ * The chat display name push (issue #232): `runYardAction` reports the
+ * account's level after every write, successful or not touching level at
+ * all, and leaves it to `notifyLevelChange` to decide whether that is new
+ * (`chatIdentity.test.ts`) — it never tracks a before/after itself.
+ */
+describe("chat display name on level change (#232)", () => {
+  type Call = [userId: number, username: string, level: number];
+  let calls: Call[];
+
+  beforeEach(async () => {
+    calls = [];
+    const { onLevelChange } = await import("../../chat/levelChangeBus.js");
+    onLevelChange((userId, username, level) => calls.push([userId, username, level]));
+  });
+
+  test("reports the account's level once, after the write", async () => {
+    const answer = await call(state, {}, userOf({ username: "agenttester" }));
+
+    expect(answer.body.playerlevel).toBe(7);
+    expect(calls).toEqual([[2503, "agenttester", 7]]);
+  });
+
+  // The outpost case (the level reported is always the main yard's, not the
+  // outpost's) is covered in `yardAction.outpost.test.ts`, whose fixture
+  // actually has two distinct rows.
+
+  test("still reports it when the level does not move, as plain duplicates", async () => {
+    await call(state, {}, userOf({ username: "agenttester" }));
+    await call(state, {}, userOf({ username: "agenttester" }));
+
+    // The second catch-up has nothing left to award, so the level is the
+    // same both times; `runYardAction` reports it either way; it is
+    // `notifyLevelChange`'s job (not this wrapper's) to drop the repeat.
+    expect(calls).toEqual([
+      [2503, "agenttester", 7],
+      [2503, "agenttester", 7],
+    ]);
+  });
+});

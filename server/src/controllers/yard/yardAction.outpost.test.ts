@@ -115,7 +115,12 @@ const OUTPOST_BASEID = "900";
 const WORLD = "world-a";
 
 const userOf = (): User =>
-  ({ userid: USERID, shiny_locked: false, save: { basesaveid: MAIN, baseid: "7" } }) as unknown as User;
+  ({
+    userid: USERID,
+    username: "agenttester",
+    shiny_locked: false,
+    save: { basesaveid: MAIN, baseid: "7" },
+  }) as unknown as User;
 
 const now = () => getCurrentDateTime();
 
@@ -367,6 +372,33 @@ describe("the one pool", () => {
     expect(second.status).toBe(409);
     expect(second.body.reason).toBe("shortfall");
     expect(pool()).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
+  });
+});
+
+/**
+ * The chat display name push (issue #232) from an outpost action: the level
+ * `runYardAction` reports is always the main yard's (the test above this
+ * one, #192), so this is the same level an outpost action's `playerlevel`
+ * already carries.
+ */
+describe("chat display name on level change from an outpost (#232)", () => {
+  type Call = [userId: number, username: string, level: number];
+  let calls: Call[];
+
+  beforeEach(async () => {
+    calls = [];
+    const { onLevelChange } = await import("../../chat/levelChangeBus.js");
+    onLevelChange((userId, username, level) => calls.push([userId, username, level]));
+  });
+
+  test("reports the main yard's level, not the outpost's", async () => {
+    db.rows.set(MAIN, mainRow({ points: "3500", basevalue: "0" }));
+    db.rows.set(OUTPOST, outpostRow({ points: "900000" }));
+
+    const answer = await onOutpost(yardStateAction);
+
+    expect(answer.body.playerlevel).toBe(3);
+    expect(calls).toEqual([[USERID, "agenttester", 3]]);
   });
 });
 

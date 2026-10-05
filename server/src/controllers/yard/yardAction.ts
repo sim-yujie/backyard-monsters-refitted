@@ -2,6 +2,7 @@ import { LockMode, type EntityManager } from "@mikro-orm/core";
 import type z from "zod";
 import { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
+import { emitLevelChange } from "../../chat/levelChangeBus.js";
 import { BaseType } from "../../enums/Base.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { Status } from "../../enums/StatusCodes.js";
@@ -491,12 +492,17 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       save.savetime = now;
 
       await tx.flush();
+      const playerlevel = playerLevelOf(yard.main);
+      // The account's level, so this fires from an outpost action too
+      // (issue #232); a no-op (in chat) if it is not the level last
+      // broadcast, or if chat is not even loaded, per `levelChangeBus.ts`.
+      emitLevelChange(user.userid, user.username, playerlevel);
       return {
         save,
         now,
         completed,
         report: outcome.report,
-        playerlevel: playerLevelOf(yard.main),
+        playerlevel,
         // The account's, so from the main row on an outpost's answer too.
         onboarding: onboardingSummary(yard.main),
         outpost: yard.outpost ? String(yard.outpost.baseid) : null,

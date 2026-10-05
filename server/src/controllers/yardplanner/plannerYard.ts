@@ -1,8 +1,10 @@
 import type { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
+import { emitLevelChange } from "../../chat/levelChangeBus.js";
 import { layoutInvalidErr } from "../../errors/errors.js";
 import { YardTargetSchema } from "../../schemas/YardSchemas.js";
 import { postgres } from "../../server.js";
+import { playerLevelOf } from "../../services/base/calculateBaseLevel.js";
 import { catchUpYard } from "../../services/yard/catchUp.js";
 import { notInOutpostErr } from "../../services/yard/yardErrors.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
@@ -45,6 +47,11 @@ const targetOf = (user: User, raw: unknown): string | undefined => {
  * Runs `run` against the yard the request names and writes it (the file
  * comment). `run` mutates the save it is handed; it must not persist it.
  *
+ * On the main yard, once written, the caller's chat display name is pushed
+ * if the level `run` leaves it at differs from the one last broadcast
+ * (issue #232) — a no-op off an outpost, where #209's `basevalue` never
+ * moves.
+ *
  * @param user - The caller (`ctx.authUser`).
  * @param raw - The request body, which may carry `baseid`.
  * @param run - The route's work, given the yard and the request's `now`.
@@ -63,6 +70,7 @@ export const onPlannerYard = async <T>(
     const result = run(save, getCurrentDateTime());
     postgres.em.persist(save);
     await postgres.em.flush();
+    emitLevelChange(user.userid, user.username, playerLevelOf(save));
     return result;
   }
 

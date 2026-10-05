@@ -19,6 +19,7 @@ export enum ServerMessageType {
   Message = "message",
   UserEnter = "user_enter",
   UserExit = "user_exit",
+  NameUpdate = "name_update",
   IgnoreList = "ignore_list",
   Error = "error",
 }
@@ -71,6 +72,7 @@ export type ServerMessage =
   | { type: ServerMessageType.Message; channel: string; messageType: AllianceMessageType; userId: number; displayName: string; picSquare: string | null; allianceImage: number | null; body: string; ts: number }
   | { type: ServerMessageType.UserEnter; channel: string; userId: number; displayName: string }
   | { type: ServerMessageType.UserExit; channel: string; userId: number }
+  | { type: ServerMessageType.NameUpdate; channel: string; userId: number; displayName: string }
   | { type: ServerMessageType.IgnoreList; list: IgnoreEntry[] }
   | { type: ServerMessageType.Error; code: ErrorCode };
 
