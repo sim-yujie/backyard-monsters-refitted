@@ -57,9 +57,10 @@ export class BaiterDock {
   }
 
   update(state: AttackSessionState): void {
+    // Once it is over the battle is put to rest (#308), so nothing is still attacking.
+    const attacking = state.phase === "ended" ? "Over" : `${formatAmount(state.creepsAlive)} attacking`;
     this.progress.textContent =
-      `${formatAmount(state.creepsAlive)} attacking · ${formatAmount(state.creepsKilled)} beaten · ` +
-      `${Math.floor(state.damagePercent)}% damage`;
+      `${attacking} · ${formatAmount(state.creepsKilled)} beaten · ${Math.floor(state.damagePercent)}% damage`;
   }
 
   destroy(): void {

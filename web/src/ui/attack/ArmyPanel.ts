@@ -457,7 +457,8 @@ export class ArmyPanel {
       row.stance.disabled = !live || this.onField.includes(row.t);
       if (!row.retreat) continue;
       const out = this.onField.includes(row.t);
-      row.retreat.hidden = !out;
+      // Nothing can be called back once the attack is over.
+      row.retreat.hidden = !out || !live;
       row.element.classList.toggle("attack-army__champion--fighting", out);
     }
   }
@@ -510,6 +511,7 @@ export class ArmyPanel {
       champion.stance.title = STANCE_TEXT[stance].title;
       champion.stance.disabled = !live || this.onField.includes(champion.t);
     }
+    this.refreshRetreat();
 
     this.hint.textContent = !live
       ? "The attack is over."

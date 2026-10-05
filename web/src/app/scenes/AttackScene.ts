@@ -846,9 +846,10 @@ export class AttackScene implements Scene {
     if (!status || !yard || !target) return;
     const sent = Object.values(state.remaining).reduce((sum, count) => sum + count, 0);
     if (this.practice) {
+      // An ended test has put its battle to rest (#308): nobody is left attacking on screen.
       status.textContent =
         `Test on your yard · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
-        `${state.creepsAlive} attacking`;
+        (state.phase === "ended" ? "over" : `${state.creepsAlive} attacking`);
       return;
     }
     if (this.raiding) {
