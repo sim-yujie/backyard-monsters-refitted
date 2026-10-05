@@ -8,6 +8,7 @@ import { playerLevelOf } from "../base/calculateBaseLevel.js";
 import { isAttackActive } from "../base/isAttackActive.js";
 import { ATTACK_ONLINE_SECONDS, isOnline, readPresenceMarks, type PresenceMarks } from "../user/online.js";
 import { damagedBuildings } from "../yard/repair.js";
+import { RAID_PREFERENCES, type RaidPreference } from "./raidPreferences.js";
 import { readOpenRaid, readRaidScreen, type RaidScreen } from "./raidStore.js";
 
 /**
@@ -50,26 +51,7 @@ export const FIRST_RAID_DELAY_SECONDS = 60;
 /** How many finished raids `recent` keeps, newest first. */
 export const RECENT_RAIDS_KEPT = 10;
 
-/** The player's choice after a raid: -1 less often, 0 the same, 1 more often. */
-export type RaidPreference = -1 | 0 | 1;
-
-/** What a preference does (`WMATTACK.as:978-1008`). */
-export interface RaidPreferenceEffect {
-  /** The wait from the last raid to the next. */
-  readonly waitSeconds: number;
-  /** The army's size multiplier (`_attackVolumeAmplifier`). */
-  readonly amplifier: number;
-  /** Building hits each raider makes before it leaves (`_hitsPerCreep`). */
-  readonly hitLimit: number;
-}
-
-const DAY = 24 * 60 * 60;
-
-export const RAID_PREFERENCES: Readonly<Record<RaidPreference, RaidPreferenceEffect>> = {
-  [-1]: { waitSeconds: 4 * DAY, amplifier: 0.5, hitLimit: 20 },
-  0: { waitSeconds: 3 * DAY, amplifier: 1, hitLimit: 30 },
-  1: { waitSeconds: 2 * DAY, amplifier: 1.3, hitLimit: 50 },
-};
+export { RAID_PREFERENCES, type RaidPreference, type RaidPreferenceEffect } from "./raidPreferences.js";
 
 /** One finished raid, as `recent` keeps it. */
 export interface RaidRecord {
