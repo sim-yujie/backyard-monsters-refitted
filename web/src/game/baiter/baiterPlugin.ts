@@ -44,8 +44,8 @@ const TOWER_ZOOM = 0.9;
 
 /**
  * Moves the camera so `world` sits in the middle of what the report leaves
- * uncovered: left of it when it stands at the right, above it when it is a
- * bottom sheet on a phone. From further out it zooms in first.
+ * uncovered: with the window stepped aside (#308), above the small bar that
+ * stands in for it. From further out it zooms in first.
  */
 const showBeside = (mounts: AttackMounts, world: { x: number; y: number }, cover: DOMRect | null): void => {
   const { camera } = mounts;
@@ -101,10 +101,11 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
   const onBuilding = (id: number): void => {
     const building = mounts.yard.buildings.find((one) => one.id === id);
     if (!building) return;
-    const cover = report?.element.querySelector(".test-report")?.getBoundingClientRect() ?? null;
+    const cover = report?.element.querySelector(".test-report__peek")?.getBoundingClientRect() ?? null;
     showBeside(mounts, { x: building.centreX, y: building.centreY }, cover);
     mounts.renderer.setSelected(building);
   };
+  const onLeaveBuilding = (): void => mounts.renderer.setSelected(null);
   const showReport = (): void => {
     const battle = session.battle();
     if (report || !battle) return;
@@ -114,6 +115,7 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
       report = new TestReportPanel({
         report: replay.report,
         onBuilding,
+        onLeaveBuilding,
         onReplay: () => mounts.watchTest?.(run),
         replayLabel: "Watch again",
         onBack: () => mounts.goToYard?.(),
@@ -139,6 +141,7 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
     report = new TestReportPanel({
       report: built,
       onBuilding,
+      onLeaveBuilding,
       ...(recorded ? { onReplay: () => mounts.watchTest?.(replayOf(recorded)) } : {}),
       onAgain: () => mounts.runAgain?.(run),
       onChangeArmy: () => mounts.changeArmy?.(),

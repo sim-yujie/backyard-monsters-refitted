@@ -363,6 +363,9 @@ describe("a Baiter test", () => {
     expect(camera.zoomAt).toHaveBeenCalledWith(0.9, expect.anything());
     expect(camera.centreOn).toHaveBeenCalledWith({ x: cannon.centreX, y: cannon.centreY });
     expect(setSelected).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }));
+    // Back to the report lets the tower go.
+    modal.querySelector<HTMLButtonElement>(".test-report__peek-back")!.click();
+    expect(setSelected).toHaveBeenLastCalledWith(null);
   });
 
   it("stopped before any drop, it asks for no Goals token at all", () => {

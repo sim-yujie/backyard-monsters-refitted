@@ -414,6 +414,8 @@ each end reason. A panel test for the tabs and the row tap.
 
 **As built.** A champion's "fell at m:ss" is read off the scene's quarter-second notifications (the engine keeps no death tick). On a wide screen the report stands at the right over a clear backdrop, so a tapped tower is centred in the yard left of it; on a phone it is a bottom sheet and the tower is centred above it. "Change army" goes back through a yard intent (`yardIntent.ts`, kind `baiter`) that selects the Baiter and opens its test panel.
 
+**As built (#308).** The report is now the same large centre window as the setup, the yard dimmed behind it, and a full-screen sheet on a phone. Tapping a tower, trap or bunker row steps the window aside: the scrim lifts, the camera centres on the building and outlines it, and a small bar at the foot says "Showing Cannon Tower L5" with **Back to report** (Escape works too), which brings the window back and drops the outline.
+
 ### WP5 — Replay and Recent tests
 
 **Goal:** every finished test can be watched again and its report reopened (§5.3).

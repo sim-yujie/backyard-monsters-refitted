@@ -93,6 +93,40 @@ describe("a Baiter test's report panel", () => {
     expect(options.onBuilding).toHaveBeenCalledTimes(2);
   });
 
+  it("steps aside for a tapped tower, with a bar that brings the report back (#308)", () => {
+    const onLeaveBuilding = vi.fn();
+    const { panel, options } = mountPanel({ onLeaveBuilding });
+    const backdrop = panel.element;
+    const bar = backdrop.querySelector<HTMLElement>(".test-report__peek")!;
+    // The same large window as the setup, on a dimming scrim.
+    expect(backdrop.querySelector(".test-report")!.classList.contains("baiter-window")).toBe(true);
+    expect(backdrop.classList.contains("popup-backdrop")).toBe(true);
+    expect(bar.hidden).toBe(true);
+
+    document.querySelector<HTMLButtonElement>("#test-report-tab-towers")!.click();
+    const show = visibleView().querySelector<HTMLButtonElement>(".test-report__show")!;
+    show.click();
+    expect(options.onBuilding).toHaveBeenLastCalledWith(7);
+    expect(panel.peeking).toBe(true);
+    expect(backdrop.classList.contains("test-report__backdrop--peek")).toBe(true);
+    expect(bar.hidden).toBe(false);
+    expect(bar.textContent).toContain("Showing Cannon Tower L5");
+    const back = bar.querySelector<HTMLButtonElement>(".test-report__peek-back")!;
+    expect(document.activeElement).toBe(back);
+
+    back.click();
+    expect(panel.peeking).toBe(false);
+    expect(backdrop.classList.contains("test-report__backdrop--peek")).toBe(false);
+    expect(onLeaveBuilding).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(show);
+
+    // Escape on the bar comes back too.
+    show.click();
+    back.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(panel.peeking).toBe(false);
+    expect(onLeaveBuilding).toHaveBeenCalledTimes(2);
+  });
+
   it("lists the attackers with sent, lost and building damage", () => {
     mountPanel();
     document.querySelector<HTMLButtonElement>("#test-report-tab-attackers")!.click();
