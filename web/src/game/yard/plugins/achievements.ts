@@ -1,4 +1,4 @@
-import { markAchievementsSeen, markSeenAction } from "@/api/achievementsSeen";
+import { markAchievementsSeen, markSeenAction } from "@/api/achievements";
 import type { Onboarding } from "@/api/types";
 import { achievementsOpener } from "@/game/achievements/achievementsView";
 import { unlockInbox, type UnlockInbox } from "@/game/achievements/unlockInbox";

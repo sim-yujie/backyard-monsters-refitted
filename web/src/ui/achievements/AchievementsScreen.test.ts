@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AchievementsApi, AchievementsStateReport, PlayerAchievements } from "@/api/achievements";
 import { ApiError } from "@/api/http";
 import { FOOTER_TEXT } from "@/game/achievements/achievements";
+import { achievementsOpener, setAchievementsOpener } from "@/game/achievements/achievementsView";
 import { AchievementsDoor } from "./AchievementsDoor";
 import { ALL_DONE, AchievementsScreen, LOAD_FAILED, NONE_YET, NOT_FOUND } from "./AchievementsScreen";
 
@@ -75,7 +76,6 @@ const someone = (): PlayerAchievements => ({
 
 const api = (over: Partial<AchievementsApi> = {}): AchievementsApi => ({
   state: vi.fn(async () => ownState()),
-  seen: vi.fn(async () => []),
   player: vi.fn(async () => someone()),
   ...over,
 });
@@ -233,7 +233,35 @@ describe("AchievementsScreen: someone else's, read-only", () => {
 });
 
 describe("AchievementsDoor", () => {
-  afterEach(() => document.body.replaceChildren());
+  afterEach(() => {
+    document.body.replaceChildren();
+    setAchievementsOpener(null);
+  });
+
+  it("gives the unlock pop-up's View its opener while it lives, and takes it back on destroy", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const door = new AchievementsDoor({ container: () => container, api: api() });
+    const open = achievementsOpener();
+    expect(open).not.toBeNull();
+
+    open!();
+    await vi.waitFor(() => expect(door.isOpen).toBe(true));
+    expect(container.querySelectorAll(".ach-screen").length).toBe(1);
+
+    door.destroy();
+    expect(achievementsOpener()).toBeNull();
+  });
+
+  it("leaves a newer door's opener alone when an older one goes", () => {
+    const older = new AchievementsDoor({ container: () => null, api: api() });
+    const newer = new AchievementsDoor({ container: () => null, api: api() });
+    const newerOpener = achievementsOpener();
+    older.destroy();
+    expect(achievementsOpener()).toBe(newerOpener);
+    newer.destroy();
+    expect(achievementsOpener()).toBeNull();
+  });
 
   it("docks the screen in its container the first time, and makes room first", async () => {
     const container = document.createElement("div");

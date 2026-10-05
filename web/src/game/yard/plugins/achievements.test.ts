@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AchievementsSeenReport } from "@/api/achievementsSeen";
+import type { AchievementsSeenReport } from "@/api/achievements";
 import type { AchievementUnlock, BaseLoadResponse, GuideState, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
 import { NetworkError } from "@/api/http";

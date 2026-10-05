@@ -1,12 +1,14 @@
 import type { AchievementsApi } from "@/api/achievements";
+import { setAchievementsOpener } from "@/game/achievements/achievementsView";
 import { AchievementsScreen } from "./AchievementsScreen";
 
 /**
  * A screen's way into the achievements screen (issue #204, §10.1): the
  * screen, made and docked the first time it opens. It has no button of its
  * own: the Account menu's "Achievements" item opens the player's list on
- * every screen with the HUD, the unlock pop-up's View (WP6) does the same,
- * and the map's panels (WP7) open another player's read-only list.
+ * every screen with the HUD, the unlock pop-up's View (WP6) does the same
+ * through the opener the door registers while it lives, and the map's panels
+ * (WP7) open another player's read-only list.
  */
 
 export interface AchievementsDoorOptions {
@@ -23,9 +25,11 @@ export interface AchievementsDoorOptions {
 export class AchievementsDoor {
   private readonly options: AchievementsDoorOptions;
   private screen: AchievementsScreen | null = null;
+  private readonly clearOpener: () => void;
 
   constructor(options: AchievementsDoorOptions) {
     this.options = options;
+    this.clearOpener = setAchievementsOpener(() => void this.open());
   }
 
   get isOpen(): boolean {
@@ -53,6 +57,7 @@ export class AchievementsDoor {
   }
 
   destroy(): void {
+    this.clearOpener();
     this.screen?.destroy();
     this.screen = null;
   }

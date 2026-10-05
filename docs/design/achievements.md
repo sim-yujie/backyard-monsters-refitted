@@ -527,10 +527,12 @@ card in `web/src/ui/achievements/UnlockPopup.ts`). Unlocks from the load, every 
 takeover (`takeOverCell` in `web/src/api/maproom.ts`) join one queue per tab
 (`web/src/game/achievements/unlockInbox.ts`), which drops an id it already has, since every answer
 carries it until `seen` lands; a takeover's are shown on the yard that opens next. Each card shown is
-sent to `seen` (`web/src/api/achievementsSeen.ts`, through the yard store's queue); a call with no
-answer is tried again after the yard's next answer. Cards wait while `onboarding.guide.state` is
-`pending` or `active`. The card's View button shows only while the screen has registered an opener
-(`setAchievementsOpener`, `web/src/game/achievements/achievementsView.ts`); WP5 registers it. The
+sent to `seen` (`markSeenAction` in `web/src/api/achievements.ts`, through the yard store's queue,
+with the open yard's `baseid`; the screen has no `seen` of its own); a call with no answer is tried
+again after the yard's next answer. Cards wait while `onboarding.guide.state` is `pending` or
+`active`. The card's View button shows only while the screen has registered an opener
+(`setAchievementsOpener`, `web/src/game/achievements/achievementsView.ts`): `AchievementsDoor`
+registers one when the HUD makes it and takes it back in `destroy`. The
 bell words `achievement` rows in `NotificationPanel.ts` (`achievementLineText`). The HUD's Shiny
 readout needed nothing: `credits` rides the same yard answer.
 
