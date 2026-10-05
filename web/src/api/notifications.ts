@@ -21,18 +21,21 @@ const READ_PATH = "/api/:apiVersion/bm/notifications/read";
 const READ_ALL_PATH = "/api/:apiVersion/bm/notifications/readall";
 
 /**
- * One notification: one kind of job a yard answer finished (`jobs`), or
- * everything a yard load finished while the player was away (`away`).
+ * One notification: one kind of job a yard answer finished (`jobs`),
+ * everything a yard load finished while the player was away (`away`), or an
+ * achievement earned (`achievement`, #204: one unlock, or the backfill's
+ * together, each entry `{ kind: "achievement", id, detail: { name, shiny,
+ * backfill? } }`).
  */
 export interface GameNotification {
   readonly id: number;
-  readonly kind: "jobs" | "away";
+  readonly kind: "jobs" | "away" | "achievement";
   /** The outpost it is about; null for the main yard. */
   readonly baseid: string | null;
   /** Unix seconds it was written. */
   readonly at: number;
   readonly read: boolean;
-  /** The catch-up's `completed` entries, as the yard answer carried them. */
+  /** The catch-up's `completed` entries, as the yard answer carried them; an achievement's unlocks. */
   readonly jobs: readonly CompletedJob[];
 }
 

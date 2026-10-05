@@ -1,4 +1,5 @@
 import type { GameNotification } from "@/api/notifications";
+import { achievementLineText } from "@/game/achievements/unlockText";
 import { sentText } from "@/game/mail/mailbox";
 import { Panel } from "@/ui/Panel";
 import { jobLine, jobLineText } from "@/ui/yard/JobNotices";
@@ -11,7 +12,8 @@ import "@/ui/styles/notifications.css";
  *
  * Each row is one notification worded as the yard's toasts were
  * (`jobLine`): one kind of job a yard answer finished, or the "While you were
- * away" line of a load. An unread row has a dot and stays unread until it is
+ * away" line of a load; or an achievement earned ("Achievement earned: Town
+ * Planner, +10 Shiny", `achievementLineText`, #204). An unread row has a dot and stays unread until it is
  * clicked; a building named in it is a button that selects it, when the
  * notification is about the yard that is open. "Mark all read" clears every
  * dot. The panel only shows and reports; `NotificationDoor` fetches and marks.
@@ -34,6 +36,12 @@ export interface NotificationPanelOptions {
 /** What the list says with nothing in it. */
 export const EMPTY_TEXT = "Nothing yet. Finished upgrades, builds and other jobs show up here.";
 export const LOAD_FAILED_TEXT = "Your notifications could not load.";
+
+/** A notification's plain text, as its row reads and its tooltip says it. */
+export const lineText = (notification: GameNotification): string =>
+  notification.kind === "achievement"
+    ? achievementLineText(notification.jobs)
+    : jobLineText(notification.kind, notification.jobs);
 
 export class NotificationPanel {
   readonly element: HTMLElement;
@@ -159,8 +167,11 @@ export class NotificationPanel {
     row.className = notification.read ? "notif-row" : "notif-row notif-row--unread";
     row.dataset["id"] = String(notification.id);
     row.tabIndex = 0;
-    const select = this.options.selectFor(notification);
-    const text = jobLine(notification.kind, notification.jobs, select);
+    const words = lineText(notification);
+    const text =
+      notification.kind === "achievement"
+        ? Object.assign(document.createElement("span"), { textContent: words })
+        : jobLine(notification.kind, notification.jobs, this.options.selectFor(notification));
     text.classList.add("notif-row__text");
 
     const meta = document.createElement("span");
@@ -174,7 +185,7 @@ export class NotificationPanel {
       row.append(unread);
     }
     row.append(text, meta);
-    row.title = jobLineText(notification.kind, notification.jobs);
+    row.title = words;
 
     const read = (): void => {
       if (!notification.read) this.options.onRead(notification.id);

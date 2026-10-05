@@ -719,6 +719,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * answer refreshes it.
    */
   onboarding?: Onboarding;
+  /**
+   * Only on the owner's build-mode load of their own main yard or outpost:
+   * achievements earned and paid but not yet shown (issue #204). Absent when
+   * there are none, and always while the server's `ACHIEVEMENT_REWARDS` is off.
+   */
+  achievements?: AchievementUnlock[];
 }
 
 /* ── Map Room 2 ─────────────────────────────────────────────────────────── */
@@ -1311,7 +1317,23 @@ export type YardResponse<Report> = ApiEnvelope &
     playerlevel?: number;
     /** The unread notifications after the action, as `/base/load` sends it (#257). */
     notifications?: number;
+    /** Paid unlocks not yet shown, as `/base/load` sends them (#204). */
+    achievements?: AchievementUnlock[];
   };
+
+/**
+ * An achievement earned and paid but not yet shown: what the yard answers,
+ * the owner's load and a takeover carry until `bm/yard/achievements/seen`
+ * names it (`docs/design/achievements.md` §9.3, issue #204). The server's
+ * `UnlockView`.
+ */
+export interface AchievementUnlock {
+  id: number;
+  name: string;
+  shiny: number;
+  /** Found by the first read's backfill: shown together as one summary. */
+  backfill?: true;
+}
 
 /**
  * A yard refusal's body (`{ error: message, reason, ...detail }`), carried by

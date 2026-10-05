@@ -1,6 +1,8 @@
 import { AREA_ZONE_SIZE, WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
+import { unlockInbox } from "@/game/achievements/unlockInbox";
 import { post, type RequestOptions } from "./http";
 import type {
+  AchievementUnlock,
   ApiEnvelope,
   GetAreaRequest,
   GetAreaResponse,
@@ -95,17 +97,28 @@ export const getTakeoverQuote = (baseid: string): Promise<TakeoverQuoteResponse>
 /** How a takeover is paid: Flash's "Use resources" or "Use N Shiny". */
 export type TakeoverPayment = "resources" | "shiny";
 
+/** `takeoverCell`'s answer. */
+export interface TakeoverCellResponse extends ApiEnvelope {
+  /** Paid unlocks not yet shown (#204); absent when none, and while rewards are off. */
+  achievements?: AchievementUnlock[];
+}
+
 /**
  * Takes the cell over (`POST /worldmapv2/takeoverCell`). The server charges
  * its own price whatever is posted; a positive `shiny` only says which of the
  * two payments was chosen. A refusal is an {@link ApiError} with the reason in
  * `details.data.reason` and Flash's `err_takeoverproblem` suffix as the message.
+ * The answer's `achievements` join the unlock pop-up's queue, which shows them
+ * on the yard that opens next (`game/achievements/unlockInbox.ts`).
  */
-export const takeOverCell = (baseid: string, payment: TakeoverPayment): Promise<ApiEnvelope> =>
-  post<ApiEnvelope>("/worldmapv2/takeoverCell", {
+export const takeOverCell = async (baseid: string, payment: TakeoverPayment): Promise<TakeoverCellResponse> => {
+  const answer = await post<TakeoverCellResponse>("/worldmapv2/takeoverCell", {
     baseid,
     shiny: payment === "shiny" ? "1" : undefined,
   });
+  unlockInbox.add(answer.achievements);
+  return answer;
+};
 
 /**
  * Turns down the one chance at a destroyed player outpost

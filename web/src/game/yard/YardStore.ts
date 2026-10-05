@@ -1,4 +1,5 @@
 import type {
+  AchievementUnlock,
   BaseLoadResponse,
   CompletedJob,
   ResourceCaps,
@@ -145,6 +146,11 @@ export interface YardChange {
    * stalled for room (#272).
    */
   readonly hatched?: readonly HatchPrediction[];
+  /**
+   * The answer's paid unlocks not yet shown (#204), as the server sent them;
+   * absent when it sent none. The unlock pop-up reads them.
+   */
+  readonly achievements?: readonly AchievementUnlock[];
 }
 
 export type YardListener = (change: YardChange) => void;
@@ -751,6 +757,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
       reason: refresh ? YardChangeReason.REFRESH : YardChangeReason.ACTION,
       completed: response.completed ?? [],
       predicted: [],
+      ...(response.achievements !== undefined && { achievements: response.achievements }),
     });
   }
 
