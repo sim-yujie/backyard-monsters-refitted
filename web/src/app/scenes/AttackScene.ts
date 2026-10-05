@@ -382,11 +382,13 @@ export class AttackScene implements Scene {
 
     // A replay fights with the server's own seed and Declare War (issue #221).
     const replay = this.watchRun?.replay;
-    // A Baiter test's clock waits for the first drop, as Flash's practice did.
+    // A Baiter test's clock waits for the first drop, as Flash's practice
+    // did; its replay plays the recorded seed from the start (#22, WP5).
+    const testReplay = this.run?.replay;
     const session = new AttackSession({
       target: { ...target, load: response },
       ...(replay ? { seed: replay.seed, declareWar: replay.declareWar } : {}),
-      ...(this.practice ? { clockFromFirstDrop: true } : {}),
+      ...(testReplay ? { seed: testReplay.seed } : this.practice ? { clockFromFirstDrop: true } : {}),
     });
     this.session = session;
     this.unsubscribe = session.subscribe((state) => this.onSessionChange(state));
@@ -438,6 +440,10 @@ export class AttackScene implements Scene {
             changeArmy: () => {
               setYardIntent({ kind: "baiter" });
               context.goTo(SceneName.YARD);
+            },
+            watchTest: (run: BaiterRun) => {
+              setBaiterRun(run);
+              context.goTo(SceneName.BAITER_REPLAY);
             },
           }
         : {}),
@@ -531,7 +537,9 @@ export class AttackScene implements Scene {
     const title = document.createElement("span");
     title.className = "attack-strip__title";
     title.textContent = this.practice
-      ? "Test attack"
+      ? this.run?.replay
+        ? "Test replay"
+        : "Test attack"
       : this.watching && this.target
         ? `Replay: ${this.target.name} camp`
         : this.target
@@ -589,12 +597,9 @@ export class AttackScene implements Scene {
     retreat.type = "button";
     retreat.className = "btn attack-strip__retreat";
     tutTarget(retreat, TutTarget.ATTACK_RETREAT);
-    retreat.textContent = this.practice ? "Stop" : this.watching ? "End replay" : "Retreat";
-    retreat.title = this.practice
-      ? "End the test now"
-      : this.watching
-        ? "Stop watching"
-        : "End the attack now";
+    const replaying = this.watching || Boolean(this.run?.replay);
+    retreat.textContent = replaying ? "End replay" : this.practice ? "Stop" : "Retreat";
+    retreat.title = replaying ? "Stop watching" : this.practice ? "End the test now" : "End the attack now";
     retreat.disabled = true;
     retreat.addEventListener("click", () => this.askRetreat());
 

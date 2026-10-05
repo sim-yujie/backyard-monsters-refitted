@@ -20,13 +20,20 @@ export class BaiterDock {
   private readonly panel: Panel;
   private readonly progress: HTMLElement;
 
-  constructor(run: BaiterRun) {
-    this.panel = new Panel({ title: "Test attack", closable: false, className: "map-panel baiter-dock" });
+  /** `replay`: a finished test played back (#22, WP5), on the yard as it was then. */
+  constructor(run: BaiterRun, replay = false) {
+    this.panel = new Panel({
+      title: replay ? "Test replay" : "Test attack",
+      closable: false,
+      className: "map-panel baiter-dock",
+    });
     this.element = this.panel.element;
 
     const note = document.createElement("p");
     note.className = "baiter__note";
-    note.textContent = "Test attack: nothing is saved. Your yard, its traps and your resources stay as they are.";
+    note.textContent = replay
+      ? "Replay of a test, on your yard as it was then. Nothing is saved."
+      : "Test attack: nothing is saved. Your yard, its traps and your resources stay as they are.";
 
     const army = document.createElement("p");
     army.className = "baiter__note";
@@ -34,7 +41,7 @@ export class BaiterDock {
     const champions = run.army.champions.map((champion) => championEntry(champion.t)?.name ?? "Champion");
     army.textContent =
       `${formatAmount(sent)} monsters` + (champions.length > 0 ? ` and ${champions.join(" and ")}` : "") +
-      ". Tap the yard to drop them.";
+      (replay ? "." : ". Tap the yard to drop them.");
 
     this.progress = document.createElement("p");
     this.progress.className = "baiter__figures";

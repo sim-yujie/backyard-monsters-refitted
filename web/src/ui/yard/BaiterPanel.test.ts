@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
-import { TEST_ROSTER } from "@/game/baiter/baiterSession";
+import { TEST_ROSTER, emptyArmy } from "@/game/baiter/baiterSession";
+import { clearTestHistory, recordTest, replayOf } from "@/game/baiter/testHistory";
+import type { TestReport } from "@/game/baiter/testReport";
 import { BaiterPanel, resetBaiterMemory, type BaiterPanelOptions } from "./BaiterPanel";
 
 /**
@@ -232,5 +234,40 @@ describe("BaiterPanel", () => {
     expect(run().disabled).toBe(true);
     run().click();
     expect(options.onRun).not.toHaveBeenCalled();
+  });
+
+  describe("Recent tests (WP5)", () => {
+    afterEach(() => clearTestHistory());
+
+    const keep = (resultLine: string) =>
+      recordTest({
+        run: { save, army: emptyArmy(save), baiterLevel: 1 },
+        seed: 1,
+        events: [],
+        endTick: 80,
+        report: { resultLine, damagePercent: 42.7, time: "1:05" } as unknown as TestReport,
+      });
+
+    it("is not shown before any test has finished", () => {
+      open();
+      expect(host.querySelector(".baiter__recent")).toBeNull();
+    });
+
+    it("lists the kept tests newest first, each with Watch and Report", () => {
+      const first = keep("Your yard held");
+      const second = keep("Flattened");
+      const onWatch = vi.fn();
+      const onReport = vi.fn();
+      open({ onWatch, onReport });
+      const items = [...host.querySelectorAll<HTMLElement>(".baiter__recent-row")];
+      expect(items.map((item) => item.querySelector(".baiter__recent-line")!.textContent)).toEqual([
+        "Flattened · 42% damage · 1:05",
+        "Your yard held · 42% damage · 1:05",
+      ]);
+      items[1]!.querySelector<HTMLButtonElement>(".baiter__recent-watch")!.click();
+      expect(onWatch).toHaveBeenCalledWith(replayOf(first));
+      items[0]!.querySelector<HTMLButtonElement>(".baiter__recent-report")!.click();
+      expect(onReport).toHaveBeenCalledWith(second);
+    });
   });
 });

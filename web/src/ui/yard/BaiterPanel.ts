@@ -23,6 +23,7 @@ import {
   type TestArmy,
   type TestChampion,
 } from "@/game/baiter/baiterSession";
+import { recentTests, replayOf, type RecordedTest } from "@/game/baiter/testHistory";
 import { CHAMPION_STANCES, isChampionStance } from "@/game/combat/rules";
 import { maxTrainingLevel, monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { CHAMPION_CATALOGUE } from "@/game/yard/championCatalogue";
@@ -48,6 +49,10 @@ import "@/ui/styles/baiter.css";
  *
  * The army is kept for the session, as Flash kept its queue
  * (`MONSTERBAITER.Export`), so a second test starts from the first one's.
+ *
+ * Under it, **Recent tests** (#22, WP5, §5.3): the last five finished tests,
+ * newest first, each with its result line, **Watch** (its replay) and
+ * **Report**. They are gone on a page reload (owner answer Q3).
  */
 
 export interface BaiterPanelOptions {
@@ -58,6 +63,12 @@ export interface BaiterPanelOptions {
   /** Why no test can start now (the Baiter is damaged or busy), or null. */
   readonly blocked: string | null;
   readonly onRun: (run: BaiterRun) => void;
+  /** Plays a finished test back; without it the list offers no Watch. */
+  readonly onWatch?: (run: BaiterRun) => void;
+  /** Reopens a finished test's report; without it the list offers no Report. */
+  readonly onReport?: (test: RecordedTest) => void;
+  /** The finished tests to list, newest first; the kept ones by default. */
+  readonly recent?: readonly RecordedTest[];
 }
 
 /** The last panel's army, for the next one this session. */
@@ -192,6 +203,8 @@ export class BaiterPanel {
       actions,
     );
     if (options.blocked) this.element.append(text("p", "baiter__gate", options.blocked));
+    const recent = options.recent ?? recentTests();
+    if (recent.length > 0) this.element.append(part("Recent tests", this.recentList(recent)));
     this.render();
   }
 
@@ -216,6 +229,39 @@ export class BaiterPanel {
     return Object.fromEntries(
       TEST_ROSTER.map((id) => [id, { count: countOf(id), level: this.testArmy.monsters[id]?.level ?? 1 }]),
     );
+  }
+
+  /** One line per finished test: what happened, then Watch and Report. */
+  private recentList(tests: readonly RecordedTest[]): HTMLElement {
+    const list = document.createElement("ul");
+    list.className = "baiter__recent";
+    list.setAttribute("aria-label", "Recent tests");
+    for (const test of tests) {
+      const { report } = test;
+      const item = document.createElement("li");
+      item.className = "baiter__recent-row";
+      const line = text(
+        "span",
+        "baiter__recent-line",
+        `${report.resultLine} · ${Math.floor(report.damagePercent)}% damage · ${report.time}`,
+      );
+      item.append(line);
+      const { onWatch, onReport } = this.options;
+      if (onWatch) {
+        const watch = button("Watch", "btn btn--ghost baiter__recent-watch");
+        watch.setAttribute("aria-label", `Watch the replay: ${line.textContent}`);
+        watch.addEventListener("click", () => onWatch(replayOf(test)));
+        item.append(watch);
+      }
+      if (onReport) {
+        const open = button("Report", "btn btn--ghost baiter__recent-report");
+        open.setAttribute("aria-label", `Open the report: ${line.textContent}`);
+        open.addEventListener("click", () => onReport(test));
+        item.append(open);
+      }
+      list.append(item);
+    }
+    return list;
   }
 
   private row(id: string, locked: boolean): HTMLElement {

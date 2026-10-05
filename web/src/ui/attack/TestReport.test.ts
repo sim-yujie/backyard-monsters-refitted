@@ -116,4 +116,20 @@ describe("a Baiter test's report panel", () => {
     document.querySelector<HTMLButtonElement>(".test-report__replay")!.click();
     expect(onReplay).toHaveBeenCalledTimes(1);
   });
+
+  it("reopened in the yard: plain rows, its own way back, and no Test again or Change army (WP5)", () => {
+    const onBack = vi.fn();
+    new TestReportPanel({ report: REPORT, onBack, backLabel: "Close", onReplay: vi.fn(), replayLabel: "Watch again" }).mount(
+      document.body,
+    );
+    expect(document.querySelector(".test-report__again")).toBeNull();
+    expect(document.querySelector(".test-report__change")).toBeNull();
+    expect(document.querySelector(".test-report__replay")!.textContent).toBe("Watch again");
+    expect(document.querySelectorAll(".test-report__show")).toHaveLength(0);
+    expect(document.querySelector("#test-report-towers caption")!.textContent).not.toContain("Tap one");
+    const back = document.querySelector<HTMLButtonElement>(".test-report__back")!;
+    expect(back.textContent).toBe("Close");
+    back.click();
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
 });

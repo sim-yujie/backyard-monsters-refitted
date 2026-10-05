@@ -22,7 +22,7 @@ import { MapRoom2Scene } from "./scenes/MapRoom2Scene";
 import { YardScene } from "./scenes/YardScene";
 import { AttackScene } from "./scenes/AttackScene";
 import { AwayScene } from "./scenes/AwayScene";
-import { BAITER_PLUGINS } from "@/game/baiter/baiterPlugin";
+import { BAITER_PLUGINS, BAITER_REPLAY_PLUGINS } from "@/game/baiter/baiterPlugin";
 import { WATCH_PLUGINS } from "@/game/autoAttack/watchPlugin";
 
 /** Loads Titan One (#223) before anything draws canvas text with it; see the
@@ -59,6 +59,12 @@ export const SceneName = {
    * `game/baiter/baiterSession`. Nothing on it talks to the server.
    */
   BAITER: "baiter",
+  /**
+   * A finished Baiter test played back (#22, WP5): the attack scene with only
+   * the battle layer and the Baiter's package, opened through
+   * `game/baiter/testHistory`. Nothing on it talks to the server.
+   */
+  BAITER_REPLAY: "baiter-replay",
   /**
    * An auto-attack's battle played back (issue #221): the attack scene with
    * only the battle layer and the watch package, opened through
@@ -243,6 +249,10 @@ export class App {
       .register(SceneName.YARD, game(() => new YardScene()))
       .register(SceneName.ATTACK, game(() => new AttackScene(), true))
       .register(SceneName.BAITER, game(() => new AttackScene(BAITER_PLUGINS, { practice: true }), true))
+      .register(
+        SceneName.BAITER_REPLAY,
+        game(() => new AttackScene(BAITER_REPLAY_PLUGINS, { practice: true }), true),
+      )
       .register(SceneName.WATCH, game(() => new AttackScene(WATCH_PLUGINS, { watch: true }), true))
       .register(
         SceneName.AWAY,

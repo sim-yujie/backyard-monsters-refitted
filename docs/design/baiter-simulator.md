@@ -433,6 +433,8 @@ after a test does not change its replay.
 
 **Depends on:** WP3; WP4 for the report screen, WP2 for the Recent tests list. **Size:** M.
 
+**As built.** A replay is its own scene, `baiter-replay` (`SceneName.BAITER_REPLAY`), mounting `BAITER_REPLAY_PLUGINS` (the battle layer and the Baiter package); the recorded run travels as a `BaiterRun` with a `replay` field (seed, drops, end tick, report). A test stopped before its first drop is not kept. The yard is copied when the test is recorded. The replay ends on the recorded report with **Watch again** and **Back to yard**. **Report** in Recent tests opens that report over the yard with **Watch replay** and **Close**; its rows do not show a tower, because the yard may have changed since. The test clock now waits for the first drop (`AttackSessionOptions.clockFromFirstDrop`), so a recorded test's first drop is at tick 0.
+
 ### WP6 — Wrap-up
 
 **Goal:** the docs say what was built and the whole flow is checked in the browser.

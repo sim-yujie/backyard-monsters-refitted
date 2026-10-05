@@ -9,10 +9,12 @@ import {
   championStatWithPower,
   isChampionStance,
   type ChampionStance,
+  type FlingEvent,
 } from "@/game/combat/rules";
 import { academyLevel, housedCount } from "@/game/monsters/housing";
 import { LISTED_MONSTERS, housingSpace, maxTrainingLevel } from "@/game/monsters/monsterCatalogue";
 import { championEntry } from "@/game/yard/championCatalogue";
+import type { TestReport } from "./testReport";
 
 /**
  * The Wild Monster Baiter as a defence simulator (issues #126 and #22,
@@ -280,6 +282,20 @@ export interface BaiterRun {
   readonly army: TestArmy;
   /** The Baiter's level, for the summary. */
   readonly baiterLevel: number;
+  /** A finished test to play back rather than a new one (#22, WP5, `testHistory.ts`). */
+  readonly replay?: TestReplay;
+}
+
+/**
+ * What a replay plays (§5.3): the seed and the drops of a finished test, the
+ * tick it ended on, and the report it ended with. With the frozen yard and
+ * the army of its {@link BaiterRun} the engine fights the same battle again.
+ */
+export interface TestReplay {
+  readonly seed: number;
+  readonly events: readonly FlingEvent[];
+  readonly endTick: number;
+  readonly report: TestReport;
 }
 
 let pendingRun: BaiterRun | null = null;

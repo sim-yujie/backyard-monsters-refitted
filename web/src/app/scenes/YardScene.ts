@@ -80,6 +80,7 @@ import {
 } from "@/ui/monsters/monstersTab";
 import { monstersTabsFor } from "@/ui/monsters/tabs";
 import { resourceAmount } from "@/ui/resourceIcon";
+import { TestReportPanel } from "@/ui/attack/TestReport";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
 import { MAP_ROOM_TYPE } from "@/ui/yard/buildingActions";
 import { BuildMenu, PlacementBar, spotSentence } from "@/ui/yard/BuildMenu";
@@ -96,6 +97,7 @@ import { sceneForMap } from "./MapGateScene";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
 import { BAITER_TYPE, setBaiterRun } from "@/game/baiter/baiterSession";
+import { replayOf } from "@/game/baiter/testHistory";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { registerCanvasTarget, tutTarget, TutTarget, type TargetRect } from "@/game/guide/targets";
 import { footprintBox } from "@/game/yard/YardGrid";
@@ -1765,6 +1767,26 @@ export class YardScene implements Scene {
         runBaiter: (run) => {
           setBaiterRun(run);
           this.context?.goTo(SceneName.BAITER);
+        },
+        watchBaiter: (run) => {
+          setBaiterRun(run);
+          this.context?.goTo(SceneName.BAITER_REPLAY);
+        },
+        showBaiterReport: (test) => {
+          const modal = this.context?.overlay.modal;
+          if (!modal) return;
+          // The yard may have changed since, so the rows show nothing on it;
+          // the replay plays the yard as it was.
+          const report: TestReportPanel = new TestReportPanel({
+            report: test.report,
+            onReplay: () => {
+              report.close();
+              setBaiterRun(replayOf(test));
+              this.context?.goTo(SceneName.BAITER_REPLAY);
+            },
+            onBack: () => report.close(),
+            backLabel: "Close",
+          }).mount(modal);
         },
         openShop: () => this.openShop(),
         startBank: (predicted) => this.startBank(predicted),

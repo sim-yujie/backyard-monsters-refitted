@@ -15,13 +15,22 @@ export type TestReportTab = "summary" | "towers" | "attackers";
 
 export interface TestReportOptions {
   readonly report: TestReport;
-  /** A tower, bunker or trap row was tapped: centre the camera on it and ring it. */
-  readonly onBuilding: (id: number) => void;
-  readonly onAgain: () => void;
-  readonly onChangeArmy: () => void;
+  /**
+   * A tower, bunker or trap row was tapped: centre the camera on it and ring
+   * it. Without it the rows are plain (the report reopened in the yard, which
+   * may have changed since).
+   */
+  readonly onBuilding?: (id: number) => void;
+  /** Test again and Change army show only when given: a replay offers neither. */
+  readonly onAgain?: () => void;
+  readonly onChangeArmy?: () => void;
   readonly onBack: () => void;
+  /** "Back to yard" unless named otherwise. */
+  readonly backLabel?: string;
   /** Watch the test again; the button shows only when given (WP5). */
   readonly onReplay?: () => void;
+  /** "Watch replay" unless named otherwise. */
+  readonly replayLabel?: string;
 }
 
 const TABS: readonly [TestReportTab, string][] = [
@@ -133,12 +142,13 @@ export class TestReportPanel {
     });
 
     const actions = element("div", "test-report__actions");
-    if (options.onReplay) actions.append(button("Watch replay", "btn btn--ghost test-report__replay", options.onReplay));
-    actions.append(
-      button("Test again", "btn btn--ghost test-report__again", () => options.onAgain()),
-      button("Change army", "btn btn--ghost test-report__change", () => options.onChangeArmy()),
-      button("Back to yard", "btn btn--primary test-report__back", () => options.onBack()),
-    );
+    const { onReplay, onAgain, onChangeArmy } = options;
+    if (onReplay) {
+      actions.append(button(options.replayLabel ?? "Watch replay", "btn btn--ghost test-report__replay", onReplay));
+    }
+    if (onAgain) actions.append(button("Test again", "btn btn--ghost test-report__again", onAgain));
+    if (onChangeArmy) actions.append(button("Change army", "btn btn--ghost test-report__change", onChangeArmy));
+    actions.append(button(options.backLabel ?? "Back to yard", "btn btn--primary test-report__back", () => options.onBack()));
 
     this.panel.setContent(tablist, ...this.views.values(), actions);
     this.element.append(this.panel.element);
@@ -199,18 +209,19 @@ export class TestReportPanel {
 
   private towersView(): HTMLElement {
     const { report, onBuilding } = this.options;
+    const tap = (id: number): (() => void) | undefined => (onBuilding ? () => onBuilding(id) : undefined);
     const view = element("div", "test-report__view");
     if (report.towers.length === 0) {
       view.append(element("p", "test-report__empty", "Your yard has no towers."));
     } else {
       view.append(
         table(
-          "Towers, most damage first. Tap one to see it on your yard.",
+          onBuilding ? "Towers, most damage first. Tap one to see it on your yard." : "Towers, most damage first.",
           ["Tower", "Damage", "Kills", "Shots", "First shot", "Fate"],
           report.towers.map((tower) =>
             row(
               [tower.name, amount(tower.damage), amount(tower.kills), amount(tower.shots), tower.firstShot, tower.fate],
-              () => onBuilding(tower.id),
+              tap(tower.id),
               !tower.fired,
             ),
           ),
@@ -223,7 +234,7 @@ export class TestReportPanel {
           "Traps",
           ["Trap", "Went off", "Damage", "Kills"],
           report.traps.map((trap) =>
-            row([trap.name, trap.at, amount(trap.damage), amount(trap.kills)], () => onBuilding(trap.id)),
+            row([trap.name, trap.at, amount(trap.damage), amount(trap.kills)], tap(trap.id)),
           ),
         ),
       );
@@ -244,7 +255,7 @@ export class TestReportPanel {
                 amount(bunker.lost),
                 bunker.fate,
               ],
-              () => onBuilding(bunker.id),
+              tap(bunker.id),
             ),
           ),
         ),

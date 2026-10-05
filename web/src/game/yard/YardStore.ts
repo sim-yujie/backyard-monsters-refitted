@@ -14,6 +14,7 @@ import type {
 import { YARD_STATE_KEYS } from "@/api/types";
 import { yardApi, yardRefusal, type YardApi, type YardRefusal } from "@/api/yard";
 import type { BaiterRun } from "@/game/baiter/baiterSession";
+import type { RecordedTest } from "@/game/baiter/testHistory";
 import type { Notices } from "@/ui/maproom/Notices";
 import type { AnswerBank } from "./bankShow";
 import type { BankedByBuilding } from "./harvest";
@@ -227,6 +228,10 @@ export interface YardSceneHooks {
   openMonsters?(tab: MonstersTabId, focus?: MonstersFocus): void;
   /** Starts a Wild Monster Baiter practice attack (#126). Absent where there is none. */
   runBaiter?(run: BaiterRun): void;
+  /** Plays a finished Baiter test back (#22, WP5, `testHistory.ts`). Absent where there is none. */
+  watchBaiter?(run: BaiterRun): void;
+  /** Reopens a finished Baiter test's report over the yard (#22, WP5). Absent where there is none. */
+  showBaiterReport?(test: RecordedTest): void;
   /**
    * Opens the Shop (§8.2): the General Store's Open Shop button and the HUD's
    * Shiny counter use it. Absent where there is no screen.

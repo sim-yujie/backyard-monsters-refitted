@@ -232,6 +232,30 @@
   min-height: 36px;
 }
 
+/* ── Recent tests (#22 WP5) ─────────────────────────────────────────── */
+
+.baiter__recent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.baiter__recent-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.baiter__recent-line {
+  flex: 1 1 10rem;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
 /* ── A test's report (the attack scene's modal layer, #22 WP4) ──────── */
 
 /* Wide screens: the report stands at the right over a clear backdrop, so a

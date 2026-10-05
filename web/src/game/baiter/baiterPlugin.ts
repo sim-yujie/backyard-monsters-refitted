@@ -9,6 +9,7 @@ import { championEntry } from "@/game/yard/championCatalogue";
 import { BaiterDock } from "@/ui/attack/BaiterSummary";
 import { TestReportPanel } from "@/ui/attack/TestReport";
 import { baiterRecorder, type BaiterRecorder } from "./baiterRecord";
+import { recordTest, replayOf } from "./testHistory";
 import { buildTestReport } from "./testReport";
 
 /**
@@ -30,6 +31,12 @@ import { buildTestReport } from "./testReport";
  * Nothing of the test is sent. The one exception is the Goals record of a
  * finished test (issue #227, `baiterRecord.ts`): a token asked for at the
  * first drop and handed back when the test really finishes.
+ *
+ * Every finished test with a drop in it is kept for a replay (WP5,
+ * `testHistory.ts`), and its report offers Watch replay. A replay is the
+ * scene with {@link BAITER_REPLAY_PLUGINS}: no army or drop controls, the
+ * recorded seed and drops played back as an auto-attack's Watch plays its
+ * battle, no Goals token, and the recorded report at the end.
  */
 
 /** Close enough to make out one tower: the attack screen's opening zoom. */
@@ -57,17 +64,20 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
   const run = mounts.practice;
   if (!run) return;
   const { session } = mounts;
-  const record = recorder();
+  const replay = run.replay ?? null;
+  if (replay) session.playScript(replay.events, replay.endTick);
+  // A replay is not a new test: it asks for no Goals token.
+  const record = replay ? null : recorder();
   // The test starts with the player's first drop, and so does its Goals
   // record: a test stopped before anything was dropped asks for nothing.
   let started = false;
   const startRecord = (): void => {
     if (started || !session.flingLog().events.some((event) => event.kind === "fling")) return;
     started = true;
-    record.start();
+    record?.start();
   };
 
-  const dock = new BaiterDock(run).mount(mounts.dock);
+  const dock = new BaiterDock(run, replay !== null).mount(mounts.dock);
 
   // When each champion fell, read off the notifications (a quarter of a
   // second apart), which the battle's own counters do not keep.
@@ -88,30 +98,48 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
   }));
 
   let report: TestReportPanel | null = null;
+  const onBuilding = (id: number): void => {
+    const building = mounts.yard.buildings.find((one) => one.id === id);
+    if (!building) return;
+    const cover = report?.element.querySelector(".test-report")?.getBoundingClientRect() ?? null;
+    showBeside(mounts, { x: building.centreX, y: building.centreY }, cover);
+    mounts.renderer.setSelected(building);
+  };
   const showReport = (): void => {
     const battle = session.battle();
     if (report || !battle) return;
     const state = session.state();
-    record.finish(state.endReason);
+    if (replay) {
+      // The same battle again, so the same report, with Watch again and the way back.
+      report = new TestReportPanel({
+        report: replay.report,
+        onBuilding,
+        onReplay: () => mounts.watchTest?.(run),
+        replayLabel: "Watch again",
+        onBack: () => mounts.goToYard?.(),
+      }).mount(mounts.modal);
+      return;
+    }
+    record?.finish(state.endReason);
     const facts = summariseAttack(session);
+    const built = buildTestReport({
+      state: battle.state(),
+      endReason: state.endReason,
+      buildings,
+      damagePercent: facts.damagePercent,
+      buildingsDestroyed: facts.buildingsDestroyed,
+      buildingsTotal: facts.buildingsTotal,
+      championFell,
+      startTick: session.flingLog().events.find((event) => event.kind === "fling")?.t ?? 0,
+    });
+    // A test stopped before anything was dropped has nothing to watch.
+    const recorded = started
+      ? recordTest({ run, seed: session.seed, events: session.flingLog().events, endTick: battle.tick, report: built })
+      : null;
     report = new TestReportPanel({
-      report: buildTestReport({
-        state: battle.state(),
-        endReason: state.endReason,
-        buildings,
-        damagePercent: facts.damagePercent,
-        buildingsDestroyed: facts.buildingsDestroyed,
-        buildingsTotal: facts.buildingsTotal,
-        championFell,
-        startTick: session.flingLog().events.find((event) => event.kind === "fling")?.t ?? 0,
-      }),
-      onBuilding: (id) => {
-        const building = mounts.yard.buildings.find((one) => one.id === id);
-        if (!building) return;
-        const cover = report?.element.querySelector(".test-report")?.getBoundingClientRect() ?? null;
-        showBeside(mounts, { x: building.centreX, y: building.centreY }, cover);
-        mounts.renderer.setSelected(building);
-      },
+      report: built,
+      onBuilding,
+      ...(recorded ? { onReplay: () => mounts.watchTest?.(replayOf(recorded)) } : {}),
       onAgain: () => mounts.runAgain?.(run),
       onChangeArmy: () => mounts.changeArmy?.(),
       onBack: () => mounts.goToYard?.(),
@@ -140,3 +168,6 @@ export const baiterPlugin: AttackPlugin = createBaiterPlugin(() => baiterRecorde
  * a real attack's order, so the drop ring sits under the battle as it does there.
  */
 export const BAITER_PLUGINS: readonly AttackPlugin[] = [testArmyPlugin, testDropPlugin, battlePlugin, baiterPlugin];
+
+/** What the Baiter's replay scene mounts (WP5): the battle layer and this, no controls. */
+export const BAITER_REPLAY_PLUGINS: readonly AttackPlugin[] = [battlePlugin, baiterPlugin];

@@ -7,6 +7,8 @@ import { buildActions } from "@/api/yardBuild";
 import { fortifyActions, FortifyKey } from "@/api/yardFortify";
 import { recycleAction, recycleKey, type RecycleReport } from "@/api/yardRecycle";
 import { repairActions } from "@/api/yardRepair";
+import type { BaiterRun } from "@/game/baiter/baiterSession";
+import type { RecordedTest } from "@/game/baiter/testHistory";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, OUTPOST_CORE_TYPE, WALL_TYPES } from "@/game/yard/buildingCosts";
 import { HOUSING_TYPE, housingBuildings } from "@/game/monsters/housing";
@@ -1374,6 +1376,10 @@ export class BuildingPanel {
         save: () => store.save,
         blocked,
         onRun: (run) => yard.scene.runBaiter?.(run),
+        ...(yard.scene.watchBaiter ? { onWatch: (run: BaiterRun) => yard.scene.watchBaiter?.(run) } : {}),
+        ...(yard.scene.showBaiterReport
+          ? { onReport: (test: RecordedTest) => yard.scene.showBaiterReport?.(test) }
+          : {}),
       });
       this.bunkerSlot.append(this.baiter.element);
       this.bunkerSlot.hidden = false;

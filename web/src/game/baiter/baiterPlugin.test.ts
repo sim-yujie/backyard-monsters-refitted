@@ -13,9 +13,10 @@ import { dropPlugin, testDropPlugin } from "@/game/attack/plugins/drop";
 import "@/game/attack/plugins";
 import { readYard } from "@/game/yard/yardModel";
 import { Notices } from "@/ui/maproom/Notices";
-import { BAITER_PLUGINS, baiterPlugin, createBaiterPlugin } from "./baiterPlugin";
+import { BAITER_PLUGINS, BAITER_REPLAY_PLUGINS, baiterPlugin, createBaiterPlugin } from "./baiterPlugin";
 import type { BaiterRecorder } from "./baiterRecord";
 import { baiterTarget, emptyArmy, withChampion, type BaiterRun, type TestArmy } from "./baiterSession";
+import { clearTestHistory, recentTests, replayOf } from "./testHistory";
 
 /**
  * A Baiter test plays like a real attack and sends nothing (issues #126, #22
@@ -119,6 +120,10 @@ describe("the Baiter scene's packages", () => {
     expect(others.length).toBeGreaterThanOrEqual(5);
     for (const plugin of others) expect(BAITER_PLUGINS).not.toContain(plugin);
   });
+
+  it("on a replay are the battle layer and the Baiter's own, with no army or drop controls (WP5)", () => {
+    expect(BAITER_REPLAY_PLUGINS).toEqual([battlePlugin, baiterPlugin]);
+  });
 });
 
 describe("a Baiter test", () => {
@@ -160,6 +165,7 @@ describe("a Baiter test", () => {
 
   afterEach(() => {
     for (const teardown of teardowns) teardown?.();
+    clearTestHistory();
     notices.destroy();
     document.body.replaceChildren();
     vi.unstubAllGlobals();
@@ -368,5 +374,131 @@ describe("a Baiter test", () => {
     expect(recorder.start).not.toHaveBeenCalled();
     expect(session.state().phase).toBe("ended");
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  describe("replay (#22, WP5)", () => {
+    /** A finished test: two drops, played out to its own end. */
+    const finishedTest = (run: BaiterRun = runOf()): AttackSession => {
+      const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
+      mount(run, session);
+      const bucket = bucketFor(session);
+      bucket.setCount("C1", 12);
+      tapAt(canvas, OPEN);
+      session.advance(1.5);
+      bucket.fillAll();
+      tapAt(canvas, ELSEWHERE);
+      playOut(session);
+      return session;
+    };
+
+    /** Plays `run` back as the replay scene does: its seed, the Baiter package alone, then start. */
+    const playBack = (run: BaiterRun, recorder = spyRecorder(), extra: Partial<AttackMounts> = {}): AttackSession => {
+      const session = new AttackSession({ target: baiterTarget(run), seed: run.replay!.seed });
+      teardowns.push(createBaiterPlugin(() => recorder)(mountsOf(run, session, { dock, modal, notices, canvas }, extra)));
+      session.start();
+      playOut(session);
+      return session;
+    };
+
+    /** What the report reads off the battle: damage, what fell, every tower's counters, the attackers'. */
+    const outcome = (session: AttackSession) => {
+      const state = session.battle()!.state();
+      return {
+        damage: session.state().damagePercent,
+        destroyed: [...state.destroyedIds].sort(),
+        health: state.health,
+        towers: state.towers,
+        attackers: state.attackers,
+      };
+    };
+
+    it("keeps a finished test and plays it back to the same battle, asking nothing", () => {
+      const original = finishedTest();
+      expect(original.state().phase).toBe("ended");
+      const [recorded] = recentTests();
+      expect(recorded).toBeDefined();
+      expect(recorded!.seed).toBe(3);
+      expect(recorded!.events).toEqual(original.flingLog().events);
+
+      for (const teardown of teardowns) teardown?.();
+      teardowns = [];
+      modal.replaceChildren();
+      dock.replaceChildren();
+
+      const recorder = spyRecorder();
+      const replay = playBack(replayOf(recorded!), recorder);
+      expect(replay.state().phase).toBe("ended");
+      expect(outcome(replay)).toEqual(outcome(original));
+      expect(replay.battle()!.state().tick).toBe(recorded!.endTick);
+      // No new test: no Goals token, no request, nothing new kept.
+      expect(recorder.start).not.toHaveBeenCalled();
+      expect(recorder.finish).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(recentTests()).toHaveLength(1);
+      // No controls: the dock names the replay and holds no army.
+      expect(dock.textContent).toContain("Test replay");
+      expect(dock.querySelector(".attack-army__row")).toBeNull();
+    });
+
+    it("Watch replay on the report opens the recorded test on the replay scene", () => {
+      const watchTest = vi.fn();
+      const run = runOf();
+      const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
+      mount(run, session, createBaiterPlugin(() => spyRecorder()), { watchTest });
+      bucketFor(session).setCount("C1", 4);
+      tapAt(canvas, OPEN);
+      session.advance(2);
+      session.retreat();
+      modal.querySelector<HTMLButtonElement>(".test-report__replay")!.click();
+      expect(watchTest).toHaveBeenCalledWith(replayOf(recentTests()[0]!));
+      const replay = watchTest.mock.calls[0]![0] as BaiterRun;
+      expect(replay.replay?.events.map((event) => event.kind)).toEqual(["fling", "retreat"]);
+    });
+
+    it("ends a replay on the recorded report, with Watch again and Back to yard only", () => {
+      finishedTest();
+      const recorded = recentTests()[0]!;
+      for (const teardown of teardowns) teardown?.();
+      teardowns = [];
+      modal.replaceChildren();
+
+      const watchTest = vi.fn();
+      const goToYard = vi.fn();
+      const run = replayOf(recorded);
+      playBack(run, spyRecorder(), { watchTest, goToYard });
+      const report = modal.querySelector(".test-report")!;
+      expect(report.querySelector(".test-report__result")!.textContent).toBe(recorded.report.resultLine);
+      expect(report.querySelector(".test-report__again")).toBeNull();
+      expect(report.querySelector(".test-report__change")).toBeNull();
+      const again = report.querySelector<HTMLButtonElement>(".test-report__replay")!;
+      expect(again.textContent).toBe("Watch again");
+      again.click();
+      expect(watchTest).toHaveBeenCalledWith(run);
+      report.querySelector<HTMLButtonElement>(".test-report__back")!.click();
+      expect(goToYard).toHaveBeenCalledTimes(1);
+    });
+
+    it("plays the yard as it was: changing the yard after a test does not change its replay", () => {
+      const save = ownYard();
+      const original = finishedTest({ ...runOf(), save });
+      const recorded = recentTests()[0]!;
+      for (const teardown of teardowns) teardown?.();
+      teardowns = [];
+
+      // The tower is repaired and upgraded in the yard since.
+      save.buildinghealthdata = { "2": 1 };
+      (save.buildingdata as Record<string, { l: number }>)["2"]!.l = 9;
+      const replay = playBack(replayOf(recorded));
+      expect(outcome(replay)).toEqual(outcome(original));
+    });
+
+    it("keeps nothing of a test stopped before any drop, and offers no replay of it", () => {
+      const run = runOf();
+      const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
+      mount(run, session);
+      session.retreat();
+      expect(recentTests()).toHaveLength(0);
+      expect(modal.querySelector(".test-report__replay")).toBeNull();
+    });
   });
 });
