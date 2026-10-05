@@ -72,6 +72,10 @@ const ZOOM_STEP = 1.5;
 /** Viewport width at or below which the dock is a bottom sheet (§4.3). */
 const PHONE_WIDTH = 620;
 
+/** Space kept between the wide-screen dock and the minimap under it, and the least the dock shrinks to. */
+const DOCK_GAP = 12;
+const MIN_DOCK_HEIGHT = 160;
+
 export { formatClock };
 
 /** A HUD destination as the retreat question names it (#152). */
@@ -669,6 +673,7 @@ export class AttackScene implements Scene {
     const bottom = phone ? dock.getBoundingClientRect().height : 0;
     const top = this.strip ? this.strip.getBoundingClientRect().bottom : this.inset.top;
     if (bottom !== this.inset.bottom || top !== this.inset.top) this.setInset({ top, bottom });
+    else this.fitDock();
   }
 
   private setInset(inset: { top: number; bottom: number }): void {
@@ -697,6 +702,26 @@ export class AttackScene implements Scene {
   private placeViewTools(): void {
     if (!this.viewTools) return;
     this.viewTools.style.bottom = `calc(${this.inset.bottom}px + var(--space-3))`;
+    this.fitDock();
+  }
+
+  /**
+   * On a wide screen the dock stands at the right and the minimap sits in the
+   * corner below it; a tall army panel (the Baiter's whole test roster, with
+   * its champion row last) ran on under the minimap, which took its taps. The
+   * dock stops above the view tools and scrolls. A phone's sheet is sized by
+   * the stylesheet.
+   */
+  private fitDock(): void {
+    const dock = this.dock;
+    const tools = this.viewTools;
+    if (!dock || !tools) return;
+    if (dock.classList.contains("attack-dock--sheet")) {
+      dock.style.maxHeight = "";
+      return;
+    }
+    const room = tools.getBoundingClientRect().top - dock.getBoundingClientRect().top - DOCK_GAP;
+    dock.style.maxHeight = room > 0 ? `${Math.max(MIN_DOCK_HEIGHT, Math.floor(room))}px` : "";
   }
 
   /* ── The session on screen ──────────────────────────────────────────── */
