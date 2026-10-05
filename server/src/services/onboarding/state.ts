@@ -108,8 +108,10 @@ export interface OnboardingCounters {
   /** The most banked by one request (Collect all counts as one tap). */
   bestBank: number;
   juiced: number;
-  /** Finished Wild Monster Baiter practice runs (goal N1, decision of 2026-10-01). */
+  /** Finished Wild Monster Baiter practice runs (goal N1 until #226 WP5; still counted, no goal reads it). */
   baiterRuns: number;
+  /** Wild monster raids held to a good defence, 90% or more (goal N1, #226 WP5). */
+  raidsSurvived: number;
   tribes: Record<TribeCounterName, number>;
 }
 
@@ -140,6 +142,7 @@ export const emptyCounters = (): OnboardingCounters => ({
   bestBank: 0,
   juiced: 0,
   baiterRuns: 0,
+  raidsSurvived: 0,
   tribes: { legionnaire: 0, kozu: 0, abunakki: 0, dreadnaut: 0 },
 });
 
@@ -206,6 +209,7 @@ const readCounters = (raw: unknown): OnboardingCounters => {
   counters.bestBank = count(raw.bestBank);
   counters.juiced = count(raw.juiced);
   counters.baiterRuns = count(raw.baiterRuns);
+  counters.raidsSurvived = count(raw.raidsSurvived);
   const tribes = isRecord(raw.tribes) ? raw.tribes : {};
   for (const name of Object.keys(counters.tribes) as TribeCounterName[]) {
     counters.tribes[name] = count(tribes[name]);

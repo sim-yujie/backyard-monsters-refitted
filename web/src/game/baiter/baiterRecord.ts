@@ -2,8 +2,9 @@ import { baiterRun, baiterStart } from "@/api/goals";
 import type { AttackEndReason } from "@/game/attack/AttackSession";
 
 /**
- * The server's record of a finished Baiter practice run, for goal N1 "Test
- * Your Defences" (`docs/design/tutorial.md` §6.2, issue #227). The run itself
+ * The server's record of a finished Baiter practice run, which goal N1
+ * counted until it became "survive a tribe attack" (#226 WP5,
+ * `docs/design/tutorial.md` §6.2, issue #227). The run itself
  * stays on this screen, as before (#126): the battle, the army and the
  * outcome never leave it. Only these two small calls do:
  *

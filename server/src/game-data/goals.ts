@@ -22,7 +22,7 @@ import type { TribeCounterName } from "../services/onboarding/state.js";
  */
 
 /** The server-side counters a goal can read (`OnboardingCounters`). */
-export type GoalCounter = "mushrooms" | "goldMushrooms" | "bestBank" | "juiced" | "baiterRuns";
+export type GoalCounter = "mushrooms" | "goldMushrooms" | "bestBank" | "juiced" | "baiterRuns" | "raidsSurvived";
 
 /** What has to be true for a goal to be met (§6.2). */
 export type GoalCondition =
@@ -650,11 +650,11 @@ const LIST: readonly GoalDef[] = [
   {
     id: "N1",
     order: 80,
-    name: "Test Your Defences",
-    description: "Finish a practice run with the Wild Monster Baiter.",
+    name: "Survive a Tribe Attack",
+    description: "Hold off a wild monster tribe's raid on your yard with at least 90% of it standing.",
     reward: { r1: 5_000, r2: 5_000, r3: 2_500, r4: 2_500 },
     prereq: "CR1",
-    condition: { kind: "counter", counter: "baiterRuns", target: 1 },
+    condition: { kind: "counter", counter: "raidsSurvived", target: 1 },
   },
   {
     id: "N2",

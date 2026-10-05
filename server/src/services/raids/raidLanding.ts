@@ -4,6 +4,7 @@ import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingDa
 import type { JsonObject } from "../../types/JsonObject.js";
 import { buildingDataHandler } from "../../controllers/base/save/handlers/buildingDataHandler.js";
 import { buildingDataWithout } from "../base/combat/abandonedAttack.js";
+import { countRaidSurvived } from "../goals/counters.js";
 import { garrisonsAfterBattle } from "../base/combat/bunkerGarrison.js";
 import { championsAfterDefence } from "../base/combat/defenderChampion.js";
 import { landHousingLoss, lostCount } from "../base/combat/housingLoss.js";
@@ -36,7 +37,9 @@ import { readSchedule, recordRaidFinished, scheduleColumn, type RaidRecord } fro
  *   at what is there now, since harvesters kept filling during the fight and
  *   nothing may take the bank below 0. The PvP landing never wrote a drained
  *   harvester back; this is new.
- * - **Good defence** (D4, new): a health share of 90% or more pays 10 Shiny.
+ * - **Good defence** (D4, new): a health share of 90% or more pays 10 Shiny
+ *   and counts towards goal N1, "survive a tribe attack" (`raidsSurvived`,
+ *   WP5, Q7); a poor defence counts nothing.
  * - **Schedule**: the wait starts again from the fight's start, and the raid
  *   is kept in `recent` (`recordRaidFinished`), which also lifts the yard's
  *   fight lock.
@@ -67,6 +70,7 @@ export type RaidLandingSave = Pick<
   | "firedtraps"
   | "damage"
   | "aiattacks"
+  | "onboarding"
 >;
 
 /** What the player is told; `recent` keeps its core. */
@@ -177,6 +181,7 @@ export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: num
   const defended = outcome.healthShare >= GOOD_DEFENCE_SHARE;
   const shiny = defended ? GOOD_DEFENCE_SHINY : 0;
   if (shiny > 0) save.credits = amount(save.credits) + shiny;
+  if (defended) save.onboarding = countRaidSurvived(save);
 
   const share = Math.round(outcome.healthShare * 1000) / 1000;
   const record: RaidRecord = { id: raid.id, at: raid.startedAt, tribe: raid.tribe, health: share, stolen: { ...stolen }, shiny };

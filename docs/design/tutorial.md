@@ -232,9 +232,10 @@ the bubble ships with the original hand scaled up and no portrait.
   calls `guide/advance {from: "raid"}`, which sets `raidSeen`.
 - **Presented as a tribe attack.** **Decided 2026-10-01.** The raid is shown as a NAMED wild-monster tribe
   attack: a banner "Legionnaire scouts are attacking!" before the monsters walk in, and Bob names
-  the tribe after. It stays client-only and harmless: nothing is lost. Real periodic tribe raids
-  are a separate feature (#226), not part of this build; when #226 lands, the later defence goal
-  becomes "survive a tribe attack" (§6.1, N1).
+  the tribe after ("Those were Legionnaire scouts.", `tut_42`/`tut_44` in step 5; checked in #226
+  WP5). It stays client-only and harmless: nothing is lost, and it does not count towards N1. Real
+  tribe raids are #226 (`docs/design/wild-raids.md`); since its WP5 the later defence goal is
+  "survive a tribe attack" (§6.1, N1): a real raid held with 90% of the yard standing.
 - **Monsters.** 8 Octo-oozes (C2), from the original sprite sheets, as Flash's
   `CUSTOMATTACKS.TutorialAttack` sent (`client/scripts/CUSTOMATTACKS.as:75-103`). Six die, one per
   shot; the last two turn and run away (`TUTORIAL.as:1490-1497`).
@@ -452,7 +453,7 @@ refers to §6.2; "B" is a building check.
 | 70 | FAN | Become a fan | Facebook | 50 Shiny | — | drop | — |
 | 71, 74, 76 | INVITE1, INVITE5, INVITE10 | Invite friends | Facebook invites | 25 / 45 / 65 Shiny | chain | drop | — |
 | 72-73 | GA1-GA3 | Gifts accepted | Facebook gifts | 1,000 to 20,000 each | chain | drop | — |
-| 80 | N1 | Test Your Defences | finish a practice run with the Wild Monster Baiter (needs Town Hall 4 and a Monster Locker) | 5,000 / 5,000 / 2,500 / 2,500 [PLACEHOLDER] | CR1 | **new** | counter `baiterRuns >= 1` (Decided 2026-10-01: a real recorded run, not just the building; see §6.2). Becomes "survive a tribe attack" when #226 lands |
+| 80 | N1 | Survive a Tribe Attack | hold off a wild monster raid with at least 90% of the yard standing (raids come from level 9) | 5,000 / 5,000 / 2,500 / 2,500 [PLACEHOLDER] | CR1 | **new** | counter `raidsSurvived >= 1` (#226 WP5, D8 and Q7 of `docs/design/wild-raids.md`: only a good defence counts). Was "Test Your Defences", `baiterRuns >= 1` (Decided 2026-10-01); a player who finished it then keeps it (done is sticky) |
 | 81 | N2 | Master Planner | save a layout in the Yard Planner | 2,000 / 2,000 / 0 / 0 [PLACEHOLDER] | — | **new** | `save.savetemplate` holds a layout |
 | 82 | N3 | Into the Wild | move to Map Room 2 (Map Room level 2) | 10,000 each [PLACEHOLDER] | C14 | **new** | B: type 11 `l >= 2` |
 
@@ -489,7 +490,8 @@ trusted for them: `/base/save` lets the Flash client write it (`saveKeys` in
 | `bestBank` | `POST /bm/yard/bank` (`controllers/yard/bank.ts`) | `max(bestBank, total banked by this request)`; Collect all counts as one tap |
 | `juiced` | `POST /bm/yard/juice` (`controllers/yard/juice.ts`) and `POST /bm/yard/bunker/remove` when a Juicer works (`bunker.ts`) | monsters juiced by the request. As Flash (`BUILDING9.Prep`, called from `CreepBase.changeModeJuice`), from Housing and from a bunker alike; a champion's juicing never counted. Left out (accepted 2026-10-01): Flash also counted monsters a "juice"-behaviour Map Room 1 tribe juiced during an attack (`HOUSING.as:104-114`) |
 | `tribes.<name>` | the Map Room 1 tribe save, when the replay marks the tribe destroyed (`services/maproom/v1/scaledMR1Tribes.ts`) | +1 to the tribe whose template holds that base id; base `"1"` counts as Legionnaire |
-| `baiterRuns` | `goals/baiter-run`, sent by the Baiter scene when a practice run really ends (not a stop), spending the one-use token `goals/baiter-start` issued as the run began (Redis, 15 min) | +1, only with that token, at least 5 s after it was issued, and with a finished Wild Monster Baiter (type 19) standing. **Decided 2026-10-01.** A Baiter run is a client simulation, so this is the "tiny server-side record of finished Baiter runs" the owner asked for: the server cannot replay it, but a run counts only from a token it issued |
+| `raidsSurvived` | `POST /bm/raid/finish`, when the raid lands (`services/raids/raidLanding.ts`) | +1 when the server's own fight left at least 90% of the yard standing (a good defence, the one that pays 10 Shiny); a poor defence or a cancelled raid adds nothing. Goal N1 since #226 WP5 |
+| `baiterRuns` | (no goal reads it since #226 WP5; still counted) `goals/baiter-run`, sent by the Baiter scene when a practice run really ends (not a stop), spending the one-use token `goals/baiter-start` issued as the run began (Redis, 15 min) | +1, only with that token, at least 5 s after it was issued, and with a finished Wild Monster Baiter (type 19) standing. **Decided 2026-10-01.** A Baiter run is a client simulation, so this is the "tiny server-side record of finished Baiter runs" the owner asked for: the server cannot replay it, but a run counts only from a token it issued |
 
 **Done is sticky.** When a condition is first seen met (in `goals/state`, `goals/claim` or the guided
 start), `goals[id].done` is written with the time, so recycling a building later does not take a
@@ -621,7 +623,7 @@ of someone's yard never carries it), and it is in neither `saveKeys` nor `attack
   "goals": { "T1": { "done": 1790000075, "claimed": 1790000700 }, "U1": { "claimed": "baseline" } },
   "goalsBaseline": 1790000000,
   "counters": {
-    "mushrooms": 0, "goldMushrooms": 0, "bestBank": 200, "juiced": 0, "baiterRuns": 0,
+    "mushrooms": 0, "goldMushrooms": 0, "bestBank": 200, "juiced": 0, "baiterRuns": 0, "raidsSurvived": 0,
     "tribes": { "legionnaire": 1, "kozu": 0, "abunakki": 0, "dreadnaut": 0 }
   },
   "tips": { "mail": 1790003000 }
@@ -686,7 +688,7 @@ outpost (`notInOutpost`).
 | `goals/state` | `{}` | any | marks newly met goals done; returns the list |
 | `goals/claim` | `{ id }` | goal met or done, not claimed, prereq claimed, Housing room for monster rewards | pays the reward capped at storage (`credit`, Decided 2026-10-01), adds monsters to `housed`, writes `claimed` |
 | `goals/baiter-start` | `{}` | a finished Wild Monster Baiter stands | issues a one-use run token (Redis, 15 min) |
-| `goals/baiter-run` | `{ token }` | the token this player was issued, unspent, at least 5 s old; a finished Baiter stands | `counters.baiterRuns + 1` (goal N1) |
+| `goals/baiter-run` | `{ token }` | the token this player was issued, unspent, at least 5 s old; a finished Baiter stands | `counters.baiterRuns + 1` (goal N1 until #226 WP5) |
 | `tips/seen` | `{ screen }` | `screen` is a known screen id | writes `tips[screen]` |
 
 `guide/advance` checks, by step:
@@ -890,7 +892,7 @@ proposed defaults and are written into the sections above.
 | Q5 | Replay from Help: a tour with Next buttons (no grants, no camp; the raid replays), rather than doing the steps again | Tour | A tour with Next buttons; no grants, no camp, no builds (§2.1) |
 | Q6 | D1 "First Blood" is met by watching the staged raid. A skipper can earn it by replaying the raid from Help | Allow it: D1 is a Goal, not a guided-start gift | Yes |
 | Q7 | New goals: Baiter, Yard Planner layout, Map Room 2. Their rewards are placeholders | These three, with the placeholder rewards in §6.1 | Yes, with the placeholder rewards |
-| Q8 | The Baiter goal can only check that a Baiter is built: its runs never reach the server | Building only | Overridden: the Baiter goal needs an actual finished practice run, recorded on the server (`baiterRuns`, §6.1, §6.2); it becomes "survive a tribe attack" when #226 lands |
+| Q8 | The Baiter goal can only check that a Baiter is built: its runs never reach the server | Building only | Overridden: the Baiter goal needs an actual finished practice run, recorded on the server (`baiterRuns`, §6.1, §6.2); since #226 WP5 it is "survive a tribe attack" (`raidsSurvived`) |
 | Q9 | WM1-WM4 need Map Room 1 tribes. Hide them on Map Room 2, or also count Map Room 2 wild camps of the same tribe? | Hide on Map Room 2 for now | Yes, hidden |
 | Q10 | Monster rewards when Housing is short: wait for room, or take what fits (Flash offered to take what fits and lose the rest) | Wait for room | Yes, wait for room |
 | Q11 | Does skipping also restart the 7 days of protection? | Yes: `max(protected, now + 7 days)` at skip, as at finish | Yes |

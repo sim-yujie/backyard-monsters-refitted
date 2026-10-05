@@ -645,6 +645,15 @@ keeps it.
 
 **Depends on:** WP3 #303. **Size:** S.
 
+**As built:** `counters.raidsSurvived` (`services/onboarding/state.ts`), +1 in `landRaid` only when
+`defended` (`countRaidSurvived`, `services/goals/counters.ts`); N1 is "Survive a Tribe Attack" on
+`raidsSurvived >= 1`. A finish sent twice lands once, so it counts once. `baiterRuns` is still
+counted but no goal reads it. A player whose N1 was already marked done keeps it (done is sticky);
+one who ran the Baiter but never opened Goals afterwards has no done mark and now needs a raid.
+The staged raid already names the tribe before ("Legionnaire scouts are attacking!") and after
+("Those were Legionnaire scouts."), so `steps.ts` is unchanged; `tutorial.md` §4, §6.1 and §6.2
+say so.
+
 ### Backlog (separate issue, #306): Trojan Horse and wild-monster events
 
 The Trojan Horse (`CUSTOMATTACKS.TrojanHorse`, `BUILDING27.as`, `WMATTACK.as:288-296`, `s1` in

@@ -5,7 +5,8 @@ import { memoryRedis } from "../../testing/memoryRedis.js";
  * A wild monster raid's landing on the yard (#226 WP3,
  * `docs/design/wild-raids.md` §6.3), on a hand-made fight outcome: the theft
  * from the bank and the harvesters never below 0, the good defence's Shiny,
- * the repairs, the fired traps and the schedule starting again.
+ * the repairs, the fired traps and the schedule starting again; and goal N1,
+ * "survive a tribe attack" (WP5), which only a good defence counts towards.
  */
 
 mock.module("../../server.js", () => ({
@@ -15,6 +16,9 @@ mock.module("../../server.js", () => ({
 
 const { GOOD_DEFENCE_SHINY, landRaid, landedResult } = await import("./raidLanding.js");
 const { RAID_PREFERENCES, readSchedule } = await import("./raidSchedule.js");
+const { GOALS } = await import("../../game-data/goals.js");
+const { goalStatus } = await import("../goals/goalRules.js");
+const { readOnboarding } = await import("../onboarding/state.js");
 type Outcome = Parameters<typeof landRaid>[1]["outcome"];
 type LandingSave = Parameters<typeof landRaid>[0];
 
@@ -139,5 +143,58 @@ describe("landRaid", () => {
       stolen: result.stolen,
     });
     expect(landedResult(save.aiattacks, "r_other")).toBeNull();
+  });
+});
+
+describe("goal N1, survive a tribe attack (WP5)", () => {
+  const N1 = GOALS.find((goal) => goal.id === "N1")!;
+
+  /** A guided-start player past CR1, so N1 shows; `goals` and `counters` as given. */
+  const playerSave = (goals: Record<string, unknown> = {}, counters: Record<string, unknown> = {}) =>
+    saveOf({
+      onboarding: {
+        v: 1,
+        guide: { state: "done" },
+        goals: { CR1: { done: STARTED - 100, claimed: STARTED - 50 }, ...goals },
+        counters: { mushrooms: 3, ...counters },
+      },
+    });
+
+  const n1 = (save: LandingSave) => goalStatus(N1, save, readOnboarding(save));
+
+  test("N1 counts raids survived, nothing else", () => {
+    expect(N1.condition).toEqual({ kind: "counter", counter: "raidsSurvived", target: 1 });
+    expect(N1.name).toBe("Survive a Tribe Attack");
+  });
+
+  test("a good defence completes N1", () => {
+    const save = playerSave();
+    expect(n1(save)).toBe("open");
+    land(save, outcomeOf({ healthShare: 0.9 }));
+    const onboarding = readOnboarding(save);
+    expect(onboarding.counters.raidsSurvived).toBe(1);
+    // The rest of the record stays as it was.
+    expect(onboarding.counters.mushrooms).toBe(3);
+    expect(onboarding.goals.CR1).toEqual({ done: STARTED - 100, claimed: STARTED - 50 });
+    expect(n1(save)).toBe("ready");
+  });
+
+  test("a poor defence does not", () => {
+    const save = playerSave();
+    land(save, outcomeOf({ healthShare: 0.8999 }));
+    expect(readOnboarding(save).counters.raidsSurvived).toBe(0);
+    expect(n1(save)).toBe("open");
+  });
+
+  test("a Baiter practice run no longer counts", () => {
+    expect(n1(playerSave({}, { baiterRuns: 3 }))).toBe("open");
+  });
+
+  test("a player who already finished N1 keeps it, even after a poor defence", () => {
+    const finished = playerSave({ N1: { done: STARTED - 10 } }, { baiterRuns: 1 });
+    const claimed = playerSave({ N1: { done: STARTED - 10, claimed: STARTED - 5 } }, { baiterRuns: 1 });
+    for (const save of [finished, claimed]) land(save, outcomeOf({ healthShare: 0.5 }));
+    expect(n1(finished)).toBe("ready");
+    expect(n1(claimed)).toBe("claimed");
   });
 });

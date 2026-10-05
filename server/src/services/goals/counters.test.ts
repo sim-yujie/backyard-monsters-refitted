@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { countBank, countJuiced, countMushroom, countTribeDestroyed, tribeOfBase } from "./counters.js";
+import {
+  countBank,
+  countJuiced,
+  countMushroom,
+  countRaidSurvived,
+  countTribeDestroyed,
+  tribeOfBase,
+} from "./counters.js";
 
 /** A save whose counters already hold something, and a field another package owns. */
 const save = () => ({
@@ -39,5 +46,10 @@ describe("Goals counters (#227)", () => {
     expect(tribeOfBase("999")).toBeUndefined();
     expect(countTribeDestroyed(save(), "12")?.counters.tribes).toMatchObject({ kozu: 2, legionnaire: 0 });
     expect(countTribeDestroyed(save(), "999")).toBeNull();
+  });
+
+  test("a raid survived adds one, from none recorded yet", () => {
+    expect(countRaidSurvived(save()).counters).toMatchObject({ raidsSurvived: 1, mushrooms: 2 });
+    expect(countRaidSurvived({ onboarding: countRaidSurvived(save()) }).counters.raidsSurvived).toBe(2);
   });
 });

@@ -58,7 +58,7 @@ describe("readOnboarding", () => {
       camp: { state: "open", openedAt: 400 },
       goals: { T1: { done: 75, claimed: 700 }, U1: { claimed: "baseline" }, bad: 3 },
       goalsBaseline: 90,
-      counters: { mushrooms: 4, bestBank: 200.7, juiced: -3, baiterRuns: 2, tribes: { kozu: 1 } },
+      counters: { mushrooms: 4, bestBank: 200.7, juiced: -3, baiterRuns: 2, raidsSurvived: 1, tribes: { kozu: 1 } },
       tips: { mail: 3000, shop: "no" },
     };
     const onboarding = readOnboarding({ onboarding: stored });
@@ -77,6 +77,7 @@ describe("readOnboarding", () => {
         bestBank: 200,
         juiced: 0,
         baiterRuns: 2,
+        raidsSurvived: 1,
         tribes: { legionnaire: 0, kozu: 1, abunakki: 0, dreadnaut: 0 },
       },
       tips: { mail: 3000 },

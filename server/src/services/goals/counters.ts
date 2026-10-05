@@ -15,7 +15,7 @@ import {
  *
  * Counters move on server events only (anti-cheat rule 8): a mushroom the
  * server rolled, a bank the server paid, a juice the server performed, a
- * tribe the server's replay destroyed.
+ * tribe the server's replay destroyed, a raid the server's fight held off.
  */
 
 /** A mushroom picked: `mushrooms` + 1, and `goldMushrooms` + 1 for a golden one (the server's roll). */
@@ -87,3 +87,13 @@ export const countTribeDestroyed = (save: OnboardingSave, baseid: string): Onboa
     counters.tribes[tribe] += 1;
   });
 };
+
+/**
+ * A wild monster raid held to a good defence (90% or more of the yard
+ * standing, `docs/design/wild-raids.md` §6.3, Q7): `raidsSurvived` + 1, for
+ * goal N1. The raid landing calls it only for a good defence.
+ */
+export const countRaidSurvived = (save: OnboardingSave): Onboarding =>
+  updateOnboarding(save, ({ counters }) => {
+    counters.raidsSurvived += 1;
+  });
