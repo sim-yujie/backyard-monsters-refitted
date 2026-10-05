@@ -283,3 +283,63 @@
     flex-wrap: wrap;
   }
 }
+
+/* Another player's line on the map's panels (WP7, §10.3): "Achievements", the newest badges, "7 / 16". */
+.ach-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 40px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-control);
+  color: var(--colour-text-strong);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ach-line[hidden] {
+  display: none;
+}
+
+.ach-line:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.ach-line:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.ach-line__label {
+  font-weight: 600;
+}
+
+.ach-line__badges {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+/* The medal is drawn in fixed pixels; a half-size copy keeps its cup in proportion. */
+.ach-line__badges .ach-badge {
+  zoom: 0.5;
+}
+
+.ach-line__count {
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text-muted);
+}
+
+.ach-line__badges:empty + .ach-line__count {
+  margin-left: auto;
+}
+
+.ach-line__more {
+  flex: none;
+  color: var(--colour-text-muted);
+}

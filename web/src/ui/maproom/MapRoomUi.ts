@@ -10,6 +10,7 @@ import type { CellRange } from "@/game/maproom/zones";
 import type { TakeoverCandidate, TakeoverKind } from "@/game/maproom/takeover";
 import type { OwnOutpost } from "@/game/yard/ownYards";
 import type { AchievementsDoor } from "@/ui/achievements/AchievementsDoor";
+import { achievementsLine } from "@/ui/achievements/AchievementsLine";
 import { Hud } from "@/ui/Hud";
 import { ZoomControl } from "@/ui/ZoomControl";
 import { CellPanel, type OwnFlinger, type OwnMoves } from "./CellPanel";
@@ -345,6 +346,7 @@ export class MapRoomUi {
         ...(this.handlers.canInviteToOutpost ? { canInviteToOutpost: this.handlers.canInviteToOutpost } : {}),
         onRangeToggle: (on) => this.toggleRange(on),
         extraAction: this.autoAttack ? [this.autoAttack, this.takeover] : this.takeover,
+        ...(this.hud.achievements ? { achievementsLine: (payload: PlayerCell) => this.achievementsLine(payload) } : {}),
       }).mount(this.dock("map-dock map-dock--right mr2-cell-dock"));
       this.cellPanel.setRangeOn(this.rangeOn);
     }
@@ -391,12 +393,22 @@ export class MapRoomUi {
     return this.cellPanel?.element.getBoundingClientRect() ?? null;
   }
 
-  /** The bottom edge of the HUD: the map shows nothing above it. */
   /** The achievements screen behind the HUD's Account menu (#204). */
   get achievements(): AchievementsDoor | null {
     return this.hud.achievements;
   }
 
+  /**
+   * Another player's achievements in the cell panel (#204 WP7); tapping it
+   * opens their read-only list, which docks where the panel does.
+   */
+  private achievementsLine(payload: PlayerCell): HTMLElement {
+    return achievementsLine(payload.uid, payload.n, {
+      onOpen: (userid, name) => void this.achievements?.openPlayer(userid, name),
+    });
+  }
+
+  /** The bottom edge of the HUD: the map shows nothing above it. */
   hudBottom(): number {
     return this.hud.element.getBoundingClientRect().bottom;
   }

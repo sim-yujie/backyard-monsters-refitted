@@ -89,6 +89,12 @@ export interface CellPanelOptions {
    * every show and update and decides for itself what to show.
    */
   extraAction?: CellPanelAction | readonly CellPanelAction[];
+  /**
+   * Another player's achievements line, last in "More about this yard"
+   * (#204, `ui/achievements/AchievementsLine.ts`). Made only once that
+   * section is open, so a closed one costs no fetch. Absent: no line.
+   */
+  achievementsLine?: (payload: PlayerCell) => HTMLElement;
 }
 
 /** How far one of the player's own cells flings. */
@@ -169,6 +175,10 @@ export class CellPanel {
   private readonly inviteToOutpostButton: HTMLButtonElement;
   private readonly more: HTMLDetailsElement;
   private readonly facts: HTMLDListElement;
+  /** Under the facts: another player's achievements line (#204). */
+  private readonly achievementsSlot: HTMLElement;
+  /** The other player's cell the slot is for, or null. */
+  private achievementsOf: PlayerCell | null = null;
 
   private cell: OffsetCell | null = null;
   private payload: MapCell | undefined;
@@ -311,7 +321,9 @@ export class CellPanel {
     summary.append(icon("chevronRight", 14, "map-icon mr2-cell__more-icon"), "More about this yard");
     this.more = document.createElement("details");
     this.more.className = "mr2-cell__more";
-    this.more.append(summary, this.facts);
+    this.achievementsSlot = el("div", "mr2-cell__achievements");
+    this.more.append(summary, this.facts, this.achievementsSlot);
+    this.more.addEventListener("toggle", () => this.syncAchievements());
 
     this.element.append(
       grip,
@@ -345,6 +357,7 @@ export class CellPanel {
     this.payload = payload;
     for (const action of this.extras) action.setCell(cell, payload);
     this.render(cell, payload);
+    this.syncAchievements();
     for (const action of this.extras) if (action.chip) this.chips.append(action.chip);
   }
 
@@ -386,6 +399,7 @@ export class CellPanel {
     this.flinger.hidden = true;
     this.more.hidden = true;
     this.attackNote.hidden = true;
+    this.achievementsOf = null;
 
     if (!payload) {
       this.setHead({ kind: "loading" }, "Loading…", "", where);
@@ -455,6 +469,7 @@ export class CellPanel {
       this.social.hidden = this.messageButton.hidden && this.truceButton.hidden;
       this.inviteRow.hidden =
         this.options.onInviteToOutpost === undefined || !(this.options.canInviteToOutpost?.(payload) ?? true);
+      this.achievementsOf = payload;
     }
 
     this.addDamage(payload.dm, payload.d === 1);
@@ -484,6 +499,26 @@ export class CellPanel {
     if (payload.aid !== null && devDetails()) this.addFact("Alliance", `#${payload.aid}`);
     this.addFact("Flinger", `Level ${payload.f}`);
     this.addFact("Catapult", `Level ${payload.c}`);
+  }
+
+  /**
+   * Puts the shown player's achievements line under the facts once "More
+   * about this yard" is open, and keeps it while the same player stays shown.
+   */
+  private syncAchievements(): void {
+    const payload = this.achievementsOf;
+    const make = this.options.achievementsLine;
+    this.achievementsSlot.hidden = !payload || !make;
+    if (!payload || !make) {
+      this.achievementsSlot.replaceChildren();
+      delete this.achievementsSlot.dataset["uid"];
+      return;
+    }
+    if (!this.more.open) return;
+    const uid = String(payload.uid);
+    if (this.achievementsSlot.dataset["uid"] === uid && this.achievementsSlot.firstChild) return;
+    this.achievementsSlot.dataset["uid"] = uid;
+    this.achievementsSlot.replaceChildren(make(payload));
   }
 
   /** The own-yard line: how far the Flinger reaches, and the range switch. */

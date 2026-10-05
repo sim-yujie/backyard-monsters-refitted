@@ -9,6 +9,7 @@ import {
   ReasonKey,
   respawnIn,
   type Mr1Gate,
+  type Mr1Neighbour,
   type Mr1Own,
   type Mr1Reason,
   type Mr1Target,
@@ -40,6 +41,11 @@ export interface CardHandlers {
   readonly onView: (target: Mr1Target) => void;
   readonly onAttack: (target: Mr1Target) => void;
   readonly onAction: (action: CardAction) => void;
+  /**
+   * A neighbour's achievements line under the name and level (#204,
+   * `ui/achievements/AchievementsLine.ts`). Absent: no line.
+   */
+  readonly achievementsLine?: (target: Mr1Neighbour) => HTMLElement;
 }
 
 export interface CardState {
@@ -228,6 +234,8 @@ export const targetCard = (
       card.append(facts);
     }
   } else {
+    const line = handlers.achievementsLine?.(target);
+    if (line) card.append(line);
     const stats = el("div", "mr1-card__stats");
     const stat = (count: number, words: string, warn: boolean): HTMLElement => {
       const tile = el("div", warn ? "mr1-stat mr1-stat--warn" : "mr1-stat");

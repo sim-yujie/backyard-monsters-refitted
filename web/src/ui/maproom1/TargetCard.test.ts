@@ -31,6 +31,24 @@ const buttonNamed = (card: HTMLElement, text: string): HTMLButtonElement =>
   [...card.querySelectorAll("button")].find((one) => one.textContent?.trim() === text)!;
 
 describe("targetCard", () => {
+  it("puts a neighbour's achievements line under the name, and none on a tribe (#204)", () => {
+    const achievementsLine = vi.fn((target: { userid: number; name: string }) => {
+      const line = document.createElement("button");
+      line.className = "ach-line";
+      line.textContent = `Achievements of ${target.name}`;
+      return line;
+    });
+    const card = targetCard(find("player-901"), { world, own, now: NOW }, { ...handlers(), achievementsLine }, "panel");
+    expect(achievementsLine).toHaveBeenCalledTimes(1);
+    expect(achievementsLine.mock.calls[0]![0].userid).toBe(901);
+    const line = card.querySelector(".ach-line")!;
+    expect(line.previousElementSibling?.classList.contains("mr1-card__head")).toBe(true);
+    targetCard(find("tribe-11"), { world, own, now: NOW }, { ...handlers(), achievementsLine }, "panel");
+    expect(achievementsLine).toHaveBeenCalledTimes(1);
+    // Without the option, no line.
+    expect(targetCard(find("player-901"), { world, own, now: NOW }, handlers(), "panel").querySelector(".ach-line")).toBeNull();
+  });
+
   it("tells the truth about the guided start's practice camp: it does not come back (#227)", () => {
     const practice = readMapRoom1(
       { ...mapRoom1Fixture(NOW), practice: { baseid: "1", name: "Practice camp", level: 1, step: "pick-camp" } } as never,

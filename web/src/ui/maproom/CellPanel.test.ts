@@ -192,6 +192,70 @@ describe("another player's yard", () => {
   });
 });
 
+describe("another player's achievements (#204)", () => {
+  const line = () =>
+    vi.fn((payload: PlayerCell) => {
+      const node = document.createElement("button");
+      node.className = "ach-line";
+      node.textContent = `Achievements of ${payload.n}`;
+      return node;
+    });
+
+  const expand = (host: HTMLElement): void => {
+    const more = host.querySelector<HTMLDetailsElement>(".mr2-cell__more")!;
+    more.open = true;
+    more.dispatchEvent(new Event("toggle"));
+  };
+
+  it("makes the line only once More about this yard is open, under the facts", () => {
+    const achievementsLine = line();
+    const { host } = open(player(), { achievementsLine });
+    expect(achievementsLine).not.toHaveBeenCalled();
+    expand(host);
+    expect(achievementsLine).toHaveBeenCalledTimes(1);
+    expect(achievementsLine.mock.calls[0]![0].uid).toBe(77);
+    const slot = host.querySelector(".mr2-cell__more .mr2-cell__achievements")!;
+    expect(slot.previousElementSibling?.matches("dl")).toBe(true);
+    expect(text(host, ".ach-line")).toBe("Achievements of Bramblefoot");
+  });
+
+  it("keeps the same player's line through a refresh, and makes a new one for the next", () => {
+    const achievementsLine = line();
+    const { host, panel } = open(player(), { achievementsLine });
+    expand(host);
+    const first = host.querySelector(".ach-line");
+    panel.update(player({ dm: 20 }));
+    expect(host.querySelector(".ach-line")).toBe(first);
+    expect(achievementsLine).toHaveBeenCalledTimes(1);
+    // Another cell closes the section; its line waits for it to open again.
+    panel.show({ col: 1, row: 2 }, player({ uid: 88, n: "Thornback" }));
+    expect(achievementsLine).toHaveBeenCalledTimes(1);
+    expand(host);
+    expect(text(host, ".ach-line")).toBe("Achievements of Thornback");
+  });
+
+  it("shows none on the player's own yard, a camp, or without the option", () => {
+    const achievementsLine = line();
+    const own = open(player({ mine: 1 }), { achievementsLine });
+    expand(own.host);
+    expect(own.host.querySelector(".ach-line")).toBeNull();
+    const wild = open(camp(), { achievementsLine });
+    expect(wild.host.querySelector(".ach-line")).toBeNull();
+    expect(achievementsLine).not.toHaveBeenCalled();
+    const plain = open(player());
+    expand(plain.host);
+    expect(plain.host.querySelector(".ach-line")).toBeNull();
+  });
+
+  it("drops the line when the shown cell stops being another player's", () => {
+    const achievementsLine = line();
+    const { host, panel } = open(player(), { achievementsLine });
+    expand(host);
+    panel.show({ col: 3, row: 4 }, camp());
+    expect(host.querySelector(".ach-line")).toBeNull();
+  });
+});
+
 describe("the player's own yards", () => {
   it("shows how far the Flinger reaches, the range switch and Open yard", () => {
     const { host, options, panel } = open(player({ mine: 1, n: "agenttester", l: 12 }), {

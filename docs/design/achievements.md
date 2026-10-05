@@ -534,6 +534,13 @@ answer is tried again after the yard's next answer. Cards wait while `onboarding
 bell words `achievement` rows in `NotificationPanel.ts` (`achievementLineText`). The HUD's Shiny
 readout needed nothing: `credits` rides the same yard answer.
 
+**As built (WP7):** the line is `web/src/ui/achievements/AchievementsLine.ts`: "Achievements 7 / 16",
+the three newest badges (plain tier, since the public list has no rewards) and a chevron; tapping it
+calls `openPlayer`. In Map Room 2 it is last inside "More about this yard" and is made only when that
+section opens, so a closed one costs no fetch; in Map Room 1 it sits under the card's head. Answers,
+refusals included, are kept a minute per player, so a panel rebuilt by a refresh fills at once
+without spending the route's limit. A refused or failed fetch hides the line.
+
 ## 14. Open questions
 
 | # | Question | Recommendation |
