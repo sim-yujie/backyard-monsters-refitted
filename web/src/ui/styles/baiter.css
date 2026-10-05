@@ -4,7 +4,7 @@
  * §8.1, issue #126), and the practice attack's summary in the attack scene.
  *
  * The panel sits in the 300px right dock, so rows stack: the monster's name
- * over its stepper. Every value comes from tokens.css.
+ * over its level picker and stepper. Every value comes from tokens.css.
  */
 
 .baiter {
@@ -41,88 +41,41 @@
   color: var(--colour-warning);
 }
 
-/* ── Where from: a compass around the yard ────────────────────────────── */
+/* ── Shortcuts ──────────────────────────────────────────────────────────── */
 
-.baiter-compass {
+.baiter__shortcuts {
   display: grid;
-  grid-template-columns: repeat(3, 44px);
-  grid-template-rows: repeat(3, 44px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-1);
-  justify-content: center;
 }
 
-.baiter-compass__cell {
-  display: grid;
-  place-items: center;
+.baiter__shortcut {
+  min-height: var(--control-height-compact);
+  font-size: var(--text-sm);
+}
+
+/* The level, power and Mode pickers. */
+.baiter__select {
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-2);
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-sm);
-  background: var(--colour-surface-base);
+  background: var(--colour-surface-control);
   color: var(--colour-text);
   font: inherit;
-  font-size: var(--text-lg);
+  font-size: var(--text-sm);
+  font-weight: 600;
   cursor: pointer;
 }
 
-.baiter-compass__cell--off {
-  border-style: dashed;
-  background: transparent;
+.baiter__select:disabled {
+  color: var(--colour-text-muted);
   cursor: default;
-  opacity: 0.4;
 }
 
-.baiter-compass__cell--on {
-  background: var(--colour-accent);
-  border-color: var(--colour-accent);
-  color: var(--colour-accent-text);
-}
-
-.baiter-compass__cell:focus-visible {
+.baiter__select:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
-}
-
-/* The yard, in the middle of the compass. */
-.baiter-compass__yard {
-  margin: 8px;
-  border-radius: var(--radius-sm);
-  background: var(--colour-success);
-  opacity: 0.35;
-  transform: rotate(45deg) scale(0.8);
-}
-
-/* ── Level 1 / academy ───────────────────────────────────────────────────── */
-
-.baiter-switch {
-  display: flex;
-  border: 1px solid var(--colour-border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.baiter-switch__option {
-  flex: 1;
-  padding: var(--space-2);
-  border: 0;
-  background: transparent;
-  color: var(--colour-text-muted);
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.baiter-switch__option + .baiter-switch__option {
-  border-left: 1px solid var(--colour-border);
-}
-
-.baiter-switch__option--on {
-  background: var(--colour-accent);
-  color: var(--colour-accent-text);
-}
-
-.baiter-switch__option:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 2px var(--colour-accent-hover);
 }
 
 /* ── Size and rows ──────────────────────────────────────────────────────── */
@@ -187,11 +140,88 @@
   font-weight: 700;
 }
 
+.baiter__tag {
+  padding: 0 var(--space-1);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  white-space: nowrap;
+}
+
 .baiter__each {
   margin-left: auto;
+  white-space: nowrap;
   font-size: var(--text-xs);
   color: var(--colour-text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+.baiter__row-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ── Champions ──────────────────────────────────────────────────────────── */
+
+.baiter__champions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.baiter-champion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-base);
+}
+
+.baiter-champion__pick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.baiter-champion__type {
+  flex: 1;
+}
+
+.baiter-champion__krallen {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--colour-accent);
+}
+
+.baiter-champion__details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.baiter-champion__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.baiter-champion__caption {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.baiter-champion__field .baiter__select {
+  min-width: 0;
+  width: 100%;
 }
 
 .baiter__actions {
@@ -245,7 +275,8 @@
   .baiter__fill,
   .baiter__count,
   .baiter__run,
-  .baiter-switch__option {
+  .baiter__shortcut,
+  .baiter__select {
     min-height: 44px;
   }
 }

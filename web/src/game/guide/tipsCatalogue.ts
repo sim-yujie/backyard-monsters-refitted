@@ -179,7 +179,7 @@ export const TIPS: Readonly<Partial<Record<GuideScreen, readonly Tip[]>>> = {
   ],
   [GuideScreen.BAITER]: [
     {
-      text: "Send pretend wild monsters at your own yard to see how your defences hold. Nothing is lost.",
+      text: "Make up any army and test it on your own yard to see how your defences hold. Nothing is lost.",
       target: TutTarget.BAITER_RUN,
     },
   ],
