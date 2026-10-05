@@ -488,8 +488,9 @@ and WP6; then WP7. Nothing is visible to players until WP5 and WP6, but WP2-WP4 
 and write bell lines when they merge. If the owner wants nothing paid before the screen exists,
 WP2 puts the Shiny credit and the bell line behind a switch that WP6 turns on.
 
-**As built (WP2):** the switch is `ACHIEVEMENT_REWARDS` (`server/src/config/AchievementConfig.ts`),
-off unless set to `on`. Counting and unlocking run either way; while it is off an unlock is stored
+**As built (WP2):** the switch is `ACHIEVEMENT_REWARDS` (`server/src/config/AchievementConfig.ts`).
+WP2 built it off unless set to `on`; the owner put rewards live on 2026-10-05, when the screen and
+pop-up were combined, so it is now on unless set to `off`. Counting and unlocking run either way; while it is off an unlock is stored
 `unpaid` (no Shiny, no bell line, not in any answer), and the first evaluation with it on pays every
 `unpaid` unlock once. Bell rows are kind `achievement`: the backfill's unlocks share one row, every
 other unlock has its own.

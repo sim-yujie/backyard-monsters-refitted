@@ -982,8 +982,8 @@ The player's own list and the pop-ups' `seen` are yard actions (`achievements/st
 column on the main save (`services/achievements/state.ts`; `/base/save` cannot write it).
 Yard action answers and the owner's build-mode `/base/load` carry `achievements: [{ id, name,
 shiny, backfill? }]` when paid unlocks are not yet shown. Shiny and bell lines are paid only
-while `ACHIEVEMENT_REWARDS=on` (`config/AchievementConfig.ts`, default off); until then unlocks
-are stored owed and no answer shows them as earned.
+while `ACHIEVEMENT_REWARDS` is on (`config/AchievementConfig.ts`, default on; `off` pauses them);
+while it is off unlocks are stored owed and no answer shows them as earned.
 
 | Method | Path | Middleware | Request fields | Response | Description |
 |---|---|---|---|---|---|
