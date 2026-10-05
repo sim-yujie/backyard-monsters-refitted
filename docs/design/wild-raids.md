@@ -327,6 +327,26 @@ looters 80 (`PROCESS3.as:138-155`, `PROCESS5.as:166-187`). Each type lands in a 
 4. Dreadnaut's loot figure (its looter share) uses Abunakki's estimate (`worth` above).
 5. A Legionnaire raid on a yard with no shooting tower heads for loot instead of stalling.
 
+**Two outcomes checked in WP5** (both follow from the rules above; nothing changed):
+
+- **An Abunakki raid can do nothing to a tiny open yard.** A Town Hall, four harvesters and a silo
+  give `N = trunc(6 x 0.3) = 1`, and with no tower fire on the way in that is one Eye-ra (C5). With
+  no walls it heads for the nearest building, the silo, and stops at the silo's far corner. Its
+  blast (radius 60) is measured to the building's anchor corner, not its middle (Flash's
+  `CreepBase.as:797` throws the middle offset away; the engine copies it), and that corner is
+  113 away across an 80-wide silo, so the blast touches nothing. From the opposite side
+  (bearing 225, the same yard turned round) the same Eye-ra levels the silo and its fall takes 4%
+  of the bank. On the sandbox yard the same seed brings 24 Bolts and 5 Eye-ras (fire on the way in)
+  and the walls take the blasts.
+- **A Dreadnaut raid can empty a full bank while the yard stays 84% healthy.** On the sandbox yard
+  (81 buildings, 493 walls and traps) `N = trunc(81 + 0.15 x 493) = 154`, and with no fire on the
+  way in all 154 are Brains (C9). Each storage hit takes `damage x 2` (a looter's multiplier) of one
+  random banked resource: 100 x 2 = 200, and each Brain makes 31 hits (limit 30) before it leaves,
+  so the raid can take up to 154 x 31 x 200 = 954,800. The 100k of each resource (400k) is gone
+  after about 2,000 hits, 11 seconds in; Brains do little building damage, so the yard keeps 84%.
+  This is Flash's theft rule (§2.4) at plain stats (Q8): Flash's x0.4 strength would make it 80 a
+  hit, 154 x 31 x 80 = 381,920 at most (x0.9: 180 a hit, enough to empty it again).
+
 ### 5.4 Strength and hits
 
 - **Plain stats (Q8):** no strength scaling at all. Flash's x0.4 to x0.9 (§2.3) is dropped, so
