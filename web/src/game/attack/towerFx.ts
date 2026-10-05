@@ -254,8 +254,14 @@ const BEAM_TICKS = 100;
 const BEAM_FADE_AT = 80;
 /** `EFFECTS.Lightning` fades by 1.75 a tick and is gone after three. */
 const BOLT_TICKS = 3;
-/** Ticks the railgun's trail lasts, and the length of each gun-ball segment. */
-const RAIL_TICKS = 16;
+/**
+ * `BUILDING118.TickFast` counts the railgun's trail in stage frames, a frame
+ * every second tick: solid for ten, then a fifth fainter each frame, gone at
+ * the fifteenth (`BUILDING118.as:74-112`).
+ */
+const RAIL_SOLID_FRAMES = 10;
+const RAIL_GONE_FRAME = 15;
+/** The length of each gun-ball segment. */
 const RAIL_SEGMENT = 32;
 /** World px a walking creep's body middle sits above its ground point: where shots land and leave. */
 export const BODY_HEIGHT = 10;
@@ -264,9 +270,27 @@ const BOLT_COLOUR = 0x30c8fa; // `EFFECTS.Lightning` default 3197178
 const BEAM_GLOW = 0xfca133; // `LASER.Tick` 16555315
 const BEAM_CORE = 0xf4eddd; // 16051677
 const RAIL_GLOW = 0x0088bb; // `BUILDING118.Fire` GlowFilter 35003
-const CANNON_BALL = 0x2b2b2b;
-const SNIPER_ROUND = 0xfff1a8;
+// `RAILGUNPROJECTILE_CLIP` (shape 1563): a 10 px ball, blue at the rim, near white inside.
+const GUN_BALL_RIM = 0x1892fc;
+const GUN_BALL_CORE = 0xd4ebff;
+// `PROJECTILE_CLIP` (shape 1836): a 9 px dark ball lit from the top left.
+const CANNON_BALL = 0x1e1e1e;
+const CANNON_BALL_LIT = 0x464646;
+const SNIPER_ROUND = 0xffd75e;
+const SNIPER_CORE = 0xfffbe8;
 const FLAK_ROUND = 0xdfe8ff;
+
+/**
+ * How solid the railgun's trail is `age` ticks after the shot, as
+ * `BUILDING118.TickFast` steps it a frame at a time: 1 for ten frames, then
+ * 0.8, 0.6, 0.4, 0.2, and null once it is gone. It counts the render clock
+ * only, never the battle.
+ */
+export const railFade = (age: number): number | null => {
+  const frame = Math.floor(Math.max(0, age) / TESLA_TICKS_PER_FRAME);
+  if (frame >= RAIL_GONE_FRAME) return null;
+  return frame <= RAIL_SOLID_FRAMES ? 1 : 1 - (frame - RAIL_SOLID_FRAMES) * 0.2;
+};
 
 interface Bullet {
   /** What `onShot` returned for it, and what `landed` reports. */
@@ -702,8 +726,26 @@ export class TowerFx {
   private drawRound(bullet: Bullet): void {
     const graphics = this.graphics;
     if (bullet.type === 20) {
-      graphics.circle(bullet.x, bullet.y, 4).fill({ color: CANNON_BALL, alpha: 0.95 });
-      graphics.circle(bullet.x - 1.2, bullet.y - 1.2, 1.4).fill({ color: 0x8c8c8c, alpha: 0.8 });
+      // Flash's cannon ball, a slow heavy round.
+      graphics.circle(bullet.x, bullet.y, 4.5).fill({ color: CANNON_BALL });
+      graphics.circle(bullet.x - 1, bullet.y - 1, 2.8).fill({ color: CANNON_BALL_LIT });
+      graphics.circle(bullet.x - 1.6, bullet.y - 1.6, 1).fill({ color: 0x6e6e6e });
+      return;
+    }
+    if (bullet.type === 21) {
+      // Flash fires the Sniper's shot with the cannon's ball too, only two or
+      // three times as fast (#312); here it is a bright tracer, so the two
+      // towers' shots read apart at a glance.
+      const reach = Math.min(4, 36 / Math.max(bullet.speed, 1));
+      graphics
+        .moveTo(bullet.x - bullet.stepX * reach, bullet.y - bullet.stepY * reach)
+        .lineTo(bullet.x, bullet.y)
+        .stroke({ width: 4, color: SNIPER_ROUND, alpha: 0.35 });
+      graphics
+        .moveTo(bullet.x - bullet.stepX * reach * 0.6, bullet.y - bullet.stepY * reach * 0.6)
+        .lineTo(bullet.x, bullet.y)
+        .stroke({ width: 1.5, color: SNIPER_CORE, alpha: 0.9 });
+      graphics.circle(bullet.x, bullet.y, 1.8).fill({ color: SNIPER_CORE });
       return;
     }
     const colour = bullet.type === 115 ? FLAK_ROUND : SNIPER_ROUND;
@@ -726,7 +768,25 @@ export class TowerFx {
       graphics
         .ellipse(bullet.x, bullet.y + BODY_HEIGHT, radius, radius / 2)
         .stroke({ width: 2, color: 0xffd28a, alpha: 0.8 * life });
+      if (bullet.type === 20) {
+        // The cannon ball bursts: a dark puff behind a hot core.
+        graphics.circle(bullet.x, bullet.y, 4 + 6 * (1 - life)).fill({ color: 0x3a342e, alpha: 0.45 * life });
+        graphics.circle(bullet.x, bullet.y, 5 * life + 2).fill({ color: 0xffb347, alpha: 0.85 * life });
+        return;
+      }
       graphics.circle(bullet.x, bullet.y, 6 * life + 2).fill({ color: 0xffffff, alpha: 0.7 * life });
+      return;
+    }
+    if (bullet.type === 21) {
+      // The sniper's round strikes as a small sharp spark.
+      const ray = 3 + 5 * (1 - life);
+      for (const [dx, dy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]] as const) {
+        graphics
+          .moveTo(bullet.x + dx * 1.5, bullet.y + dy * 1.5)
+          .lineTo(bullet.x + dx * ray, bullet.y + dy * ray)
+          .stroke({ width: 1.5, color: SNIPER_CORE, alpha: life });
+      }
+      graphics.circle(bullet.x, bullet.y, 2 * life + 1).fill({ color: SNIPER_ROUND, alpha: life });
       return;
     }
     graphics.circle(bullet.x, bullet.y, 4 * life + 1).fill({ color: 0xffffff, alpha: 0.8 * life });
@@ -825,30 +885,37 @@ export class TowerFx {
   private drawRails(tick: number): void {
     let keep = 0;
     for (const rail of this.rails) {
-      const age = tick - rail.tick;
-      if (age > RAIL_TICKS) continue;
+      const life = railFade(tick - rail.tick);
+      if (life === null) continue;
       this.rails[keep] = rail;
       keep += 1;
-      const life = age < RAIL_TICKS / 2 ? 1 : (RAIL_TICKS - age) / (RAIL_TICKS / 2);
+      if (life <= 0) continue;
       const graphics = this.graphics;
       const end = {
         x: rail.from.x + rail.dirX * rail.length,
         y: rail.from.y + rail.dirY * rail.length,
       };
+      // A 1 px white line under a strength-4 blue glow (`BUILDING118.as:176-179`).
       graphics
         .moveTo(rail.from.x, rail.from.y)
         .lineTo(end.x, end.y)
-        .stroke({ width: 7, color: RAIL_GLOW, alpha: 0.35 * life });
-      // The gun-balls: one every segment along the line, as `Fire` laid them.
+        .stroke({ width: 10, color: RAIL_GLOW, alpha: 0.3 * life });
+      graphics
+        .moveTo(rail.from.x, rail.from.y)
+        .lineTo(end.x, end.y)
+        .stroke({ width: 5, color: RAIL_GLOW, alpha: 0.75 * life });
+      graphics
+        .moveTo(rail.from.x, rail.from.y)
+        .lineTo(end.x, end.y)
+        .stroke({ width: 1.5, color: 0xffffff, alpha: life });
+      // The gun-balls on top: one every segment along the line, as `Fire` laid them.
       for (let along = RAIL_SEGMENT; along <= rail.length; along += RAIL_SEGMENT) {
-        graphics
-          .circle(rail.from.x + rail.dirX * along, rail.from.y + rail.dirY * along, 2.5)
-          .fill({ color: 0xffffff, alpha: life });
+        const x = rail.from.x + rail.dirX * along;
+        const y = rail.from.y + rail.dirY * along;
+        graphics.circle(x, y, 5).fill({ color: GUN_BALL_RIM, alpha: 0.6 * life });
+        graphics.circle(x, y, 3.5).fill({ color: GUN_BALL_CORE, alpha: life });
+        graphics.circle(x, y, 1.5).fill({ color: 0xffffff, alpha: life });
       }
-      graphics
-        .moveTo(rail.from.x, rail.from.y)
-        .lineTo(end.x, end.y)
-        .stroke({ width: 1.5, color: 0xffffff, alpha: 0.9 * life });
     }
     this.rails.length = keep;
   }
