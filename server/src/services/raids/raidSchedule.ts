@@ -1,5 +1,4 @@
-import { LockMode, type EntityManager } from "@mikro-orm/core";
-import { Save } from "../../database/models/save.model.js";
+import type { Save } from "../../database/models/save.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 import type { JsonObject } from "../../types/JsonObject.js";
@@ -321,17 +320,15 @@ export const raidDueNow = async (userid: number, save: Save, now: number): Promi
 
 /**
  * Counts a session on the owner's build-mode load of their main yard
- * (design §8.1), under the row lock, and writes the schedule back in the
- * server's shape (a Flash-era value is normalised here). Skipped for any
- * row that is not a main yard.
+ * (design §8.1), on the row the load's catch-up has locked and will flush
+ * (`catchUpLockedYard`), so the load takes the lock and writes once. The
+ * schedule goes back in the server's shape (a Flash-era value is normalised
+ * here). Any row that is not a main yard is left alone.
  *
- * @returns The locked row as written, or null when nothing was.
+ * @param locked - The row, under its lock, not yet flushed.
+ * @param now - Unix seconds.
  */
-export const countRaidSession = (em: EntityManager, basesaveid: number, now: number): Promise<Save | null> =>
-  em.transactional(async (tx) => {
-    const locked = await tx.findOne(Save, { basesaveid }, { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true });
-    if (!locked || locked.type !== BaseType.MAIN) return null;
-    locked.aiattacks = scheduleColumn(startSession(readSchedule(locked.aiattacks), now));
-    await tx.flush();
-    return locked;
-  });
+export const countRaidSession = (locked: Save, now: number): void => {
+  if (locked.type !== BaseType.MAIN) return;
+  locked.aiattacks = scheduleColumn(startSession(readSchedule(locked.aiattacks), now));
+};

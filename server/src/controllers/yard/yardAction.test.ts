@@ -259,6 +259,29 @@ describe("catchUpLockedYard (the owner's build-mode /base/load)", () => {
     expect(completed).toEqual([]);
     expect(db.row).toEqual(before);
   });
+
+  // The load's raid session count (`countRaidSession`, #226), stood in for
+  // here: this file loads no Redis.
+  const countSession = (locked: Save, now: number) => {
+    locked.aiattacks = { counted: now };
+  };
+
+  test("more to write on the row rides on the same lock and the same write", async () => {
+    const { save } = await catchUpLockedYard(em as unknown as EntityManager, { basesaveid: BASESAVEID } as Save, countSession);
+
+    expect(db.readOptions).toEqual([{ lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true }]);
+    expect(db.row).toMatchObject({ points: "6966", aiattacks: { counted: save.savetime } });
+  });
+
+  test("under attack, that is still written, and nothing else", async () => {
+    db.row = rowOf({ attackid: 42, attacks: [{ starttime: getCurrentDateTime() - 30 }] });
+    const before = structuredClone(db.row);
+
+    const { completed } = await catchUpLockedYard(em as unknown as EntityManager, { basesaveid: BASESAVEID } as Save, countSession);
+
+    expect(completed).toEqual([]);
+    expect(db.row).toEqual({ ...before, aiattacks: { counted: expect.any(Number) } });
+  });
 });
 
 describe("runYardAction refusals", () => {

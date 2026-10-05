@@ -57,7 +57,6 @@ import type { DefenderForces } from "../../../game-rules/combat/index.js";
 import type { ChampionBrains } from "../../../services/base/attackSession.js";
 import { touchLastSeen } from "../../../services/user/lastSeen.js";
 import { logger } from "../../../utils/logger.js";
-import { countRaidSession } from "../../../services/raids/raidSchedule.js";
 import { cancelRaidOnYardLoad, presenceLapsed } from "../../../services/raids/raidStore.js";
 
 type Stronghold = { level: number; cell?: { x: number; y: number } | null };
@@ -213,6 +212,8 @@ export const baseLoad: KoaController = async (ctx) => {
   let completed: (CompletedJob | OutpostNoticeJob)[] | undefined;
   let notifications: number | undefined;
   if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
+    // The catch-up also counts this load as one more session towards the
+    // next wild monster raid, in the same write (`catchUpOwnerYard`, #226).
     let jobs: CompletedJob[];
     ({ save: baseSave, completed: jobs } = await catchUpOwnerYard(baseSave));
     // Outpost attacks and takeovers since the player last looked, told once
@@ -221,9 +222,10 @@ export const baseLoad: KoaController = async (ctx) => {
     notifications = await notifyAndCount(postgres.em, user.userid, null, "away", completed);
     // Wild monster raids (#226, `docs/design/wild-raids.md` §7.1, §8.1): a
     // fight left by this load is cancelled, as is a warning when the game had
-    // been closed, and the load is one more session towards the next raid.
+    // been closed. After the catch-up, whose session count lifts the yard's
+    // fight lock (`startSession`): a fight a raid start set going meanwhile
+    // is cancelled here, not left open on an unlocked yard.
     await cancelRaidOnYardLoad(user.userid, gameWasClosed);
-    baseSave = (await countRaidSession(postgres.em, baseSave.basesaveid, getCurrentDateTime())) ?? baseSave;
   } else if (
     type === BaseMode.BUILD &&
     isOwner &&

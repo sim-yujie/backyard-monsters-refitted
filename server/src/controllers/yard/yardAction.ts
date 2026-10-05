@@ -405,6 +405,9 @@ const logOutpostProblems = (outpost: Save): void => {
  *
  * @param em - The request's entity manager.
  * @param save - The main yard the load is about to answer with.
+ * @param alsoUnderLock - More to write on the locked row in the same flush,
+ *   under attack too: the load's raid session count (`countRaidSession`,
+ *   passed in because this module reads no Redis and so cannot import it).
  * @returns The caught-up save to answer with (the same entity in practice,
  *   since the transaction shares the request's identity map) and what the
  *   catch-up finished, which the load sends as `completed` so the client can
@@ -413,13 +416,19 @@ const logOutpostProblems = (outpost: Save): void => {
  */
 export const catchUpLockedYard = async (
   em: EntityManager,
-  save: Save
+  save: Save,
+  alsoUnderLock?: (locked: Save, now: number) => void
 ): Promise<{ save: Save; completed: CompletedJob[] }> =>
   em.transactional(async (tx) => {
     const locked = await lockRow(tx, save.basesaveid);
-    if (!locked || isAttackActive(locked)) return { save: locked ?? save, completed: [] };
-
+    if (!locked) return { save, completed: [] };
     const now = getCurrentDateTime();
+    if (alsoUnderLock) alsoUnderLock(locked, now);
+    if (isAttackActive(locked)) {
+      if (alsoUnderLock) await tx.flush();
+      return { save: locked, completed: [] };
+    }
+
     const completed = await catchUpLockedRow(tx, locked, now);
     await recordAchievements(tx, locked, now, builtEvents(completed));
     await tx.flush();
