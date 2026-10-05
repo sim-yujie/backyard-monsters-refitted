@@ -26,18 +26,42 @@ mock.module("../../server.js", () => ({
   redis,
 }));
 
-const { engageRaid, finishRaid, prepareRaid, raidOnPing, setRaidPreference, startRaid } = await import("./raidFlow.js");
+// The real replay runner, with stand-ins a test can put in for the slot and
+// the fight (as `autoAttack.test.ts` does).
+const REAL_RUNNER = "../base/combat/replayRunner.ts?real";
+const runner = (await import(REAL_RUNNER)) as typeof import("../base/combat/replayRunner.js");
+const standIn = {
+  slot: null as null | (() => Promise<(() => void) | null>),
+  fight: null as null | ((input: unknown) => Promise<never>),
+};
+mock.module("../base/combat/replayRunner.js", () => ({
+  ...runner,
+  reserveReplaySlot: (...args: Parameters<typeof runner.reserveReplaySlot>) =>
+    standIn.slot ? standIn.slot() : runner.reserveReplaySlot(...args),
+  fightRaidInWorker: (...args: Parameters<typeof runner.fightRaidInWorker>) =>
+    standIn.fight ? standIn.fight(args[0]) : runner.fightRaidInWorker(...args),
+}));
+
+const { START_LOCK_SECONDS, engageRaid, finishRaid, prepareRaid, raidOnPing, setRaidPreference, startRaid } = await import(
+  "./raidFlow.js"
+);
 const { fightRaid } = await import("./raidFight.js");
 const { raidFighting } = await import("./raidLock.js");
-const { RAID_PREFERENCES, readSchedule } = await import("./raidSchedule.js");
+const { RAID_PREFERENCES, countRaidSession, readSchedule } = await import("./raidSchedule.js");
 const { planRaid } = await import("./raidPlan.js");
 const { WARNING_SECONDS, readOpenRaid, recordRaidScreen, updateOpenRaid } = await import("./raidStore.js");
-const { lastActionKey, lastSeenKey } = await import("../user/online.js");
+const { challengeKey, lastActionKey, lastSeenKey } = await import("../user/online.js");
 const { damagedBuildings } = await import("../yard/repair.js");
 
 type Row = Record<string, unknown>;
 
-const db = { row: null as Row | null, tail: Promise.resolve() as Promise<void> };
+const db = {
+  row: null as Row | null,
+  tail: Promise.resolve() as Promise<void>,
+  /** Unlocked reads of the whole row (no `fields`), and locked reads. */
+  fullReads: 0,
+  locks: 0,
+};
 
 /** Takes the row lock; resolves with its release once every earlier holder let go. */
 const acquire = (): Promise<() => void> => {
@@ -49,7 +73,8 @@ const acquire = (): Promise<() => void> => {
 };
 
 const em = {
-  async findOne() {
+  async findOne(_entity: unknown, _where: unknown, options?: { fields?: unknown }) {
+    if (!options?.fields) db.fullReads++;
     return db.row && structuredClone(db.row);
   },
   // The bell's notices for what a catch-up finished: not under test here.
@@ -63,7 +88,10 @@ const em = {
     let pending: Row | null = null;
     const fork = {
       async findOne(_entity: unknown, _where: unknown, options?: { lockMode?: LockMode }) {
-        if (options?.lockMode === LockMode.PESSIMISTIC_WRITE && !release) release = await acquire();
+        if (options?.lockMode === LockMode.PESSIMISTIC_WRITE && !release) {
+          db.locks++;
+          release = await acquire();
+        }
         entity = db.row && structuredClone(db.row);
         return entity;
       },
@@ -163,7 +191,7 @@ const OPEN_YARD_FALLS = 2;
  * plan is swapped for the plan of a fixed seed, so the fight is the same on
  * every run.
  */
-const toFight = async (seed = SANDBOX_HOLDS) => {
+const toStart = async (seed = SANDBOX_HOLDS) => {
   await present(NOW);
   const warning = (await raidOnPing(em, user, YARD, NOW))!;
   const open = (await readOpenRaid(USER))!;
@@ -176,9 +204,25 @@ const toFight = async (seed = SANDBOX_HOLDS) => {
   })!;
   await updateOpenRaid(USER, { ...open, plan, seed, tribe: plan.tribe }, NOW);
   await engageRaid(USER, warning.id, NOW);
-  const start = await startRaid(em, user, warning.id, NOW);
-  return { id: warning.id, start, finishFrom: start.raid.finishFrom! };
+  return warning.id;
 };
+
+const toFight = async (seed = SANDBOX_HOLDS) => {
+  const id = await toStart(seed);
+  const start = await startRaid(em, user, id, NOW);
+  return { id, start, finishFrom: start.raid.finishFrom! };
+};
+
+/** Resolves once `check` holds, looking every millisecond. */
+const until = async (check: () => boolean) => {
+  for (let tries = 0; !check(); tries++) {
+    if (tries > 5_000) throw new Error("never happened");
+    await Bun.sleep(1);
+  }
+};
+
+/** The yard's fight lock as stored. */
+const fightLock = () => readSchedule(db.row!.aiattacks).fight;
 
 /** The finish, on time and with the game still open. */
 const finishOnTime = async (id: string, finishFrom: number) => {
@@ -190,6 +234,10 @@ const finishOnTime = async (id: string, finishFrom: number) => {
 beforeEach(() => {
   redis.clear();
   db.row = rowOf();
+  db.fullReads = 0;
+  db.locks = 0;
+  standIn.slot = null;
+  standIn.fight = null;
   at(NOW);
 });
 
@@ -215,6 +263,57 @@ describe("the warning", () => {
   test("a player who is not online gets no raid", async () => {
     await recordRaidScreen(USER, YARD);
     expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
+  });
+
+  /** The ping read the yard whole or caught it up. */
+  const touchedYard = () => db.fullReads + db.locks > 0;
+
+  test("an idle player (no real action in 10 minutes) is not raided, and the yard is not read whole or caught up", async () => {
+    await present(NOW);
+    await redis.set(lastActionKey(USER), String(NOW - 11 * 60));
+    const before = structuredClone(db.row);
+
+    expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
+    expect(touchedYard()).toBe(false);
+    expect(db.row).toEqual(before);
+  });
+
+  test("nor is a player with an in-game check pending", async () => {
+    await present(NOW);
+    await redis.set(challengeKey(USER), "1");
+
+    expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
+    expect(touchedYard()).toBe(false);
+  });
+
+  test("nor a yard under attack", async () => {
+    db.row = rowOf({ attackid: 42, attacks: [{ starttime: NOW - 30 }] });
+    await present(NOW);
+
+    expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
+    expect(touchedYard()).toBe(false);
+  });
+
+  test("a repair not done yet is left to finish; once it is, the ping catches it up and warns", async () => {
+    // A level 1 Silo at 1 of 750 health heals 25 a second: whole after 30 s.
+    const repairing = (savetime: number) =>
+      rowOf({
+        savetime,
+        buildingdata: { ...structuredClone(OPEN_YARD), "5": { id: 5, t: 6, X: 120, Y: 120, l: 1, hp: 1, rE: 1 } },
+        buildinghealthdata: { "5": 1 },
+      });
+    await present(NOW);
+
+    db.row = repairing(NOW - 29);
+    const before = structuredClone(db.row);
+    expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
+    expect(db.locks).toBe(0);
+    expect(db.row).toEqual(before);
+
+    db.row = repairing(NOW - 30);
+    expect(await raidOnPing(em, user, YARD, NOW)).toMatchObject({ phase: "warning" });
+    expect(db.locks).toBe(1);
+    expect(damagedBuildings(db.row as never)).toEqual([]);
   });
 
   test("a due player on the yard is warned, and the next ping shows the same raid", async () => {
@@ -269,6 +368,122 @@ describe("the fight", () => {
       expect(readSchedule(db.row!.aiattacks).fight?.id).toBe(id);
 
       expect(await refusal(startRaid(em, user, id, NOW))).toEqual({ reason: "notWarning" });
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "runs outside any transaction: the yard's row is free meanwhile, held by a provisional fight lock",
+    async () => {
+      const id = await toStart();
+      let started = false;
+      const starting = startRaid(em, user, id, NOW).then((start) => {
+        started = true;
+        return start;
+      });
+
+      // The first transaction has committed: the yard is held, the row is not.
+      await until(() => fightLock() !== undefined);
+      expect(fightLock()).toEqual({ id, until: NOW + START_LOCK_SECONDS });
+      expect(raidFighting(db.row!, NOW)).toBe(true);
+      await setRaidPreference(em, user, 1);
+      expect(started).toBe(false);
+
+      const start = await starting;
+      // The second transaction re-read the row: the preference written meanwhile stands.
+      expect(readSchedule(db.row!.aiattacks).attackPreference).toBe(1);
+      expect(fightLock()?.until).toBe(NOW + Math.ceil(start.fight.seconds) + 120);
+      expect((await readOpenRaid(USER))?.phase).toBe("fighting");
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "two starts at once: one fight, and the second is refused",
+    async () => {
+      const id = await toStart();
+
+      const [one, two] = await Promise.allSettled([startRaid(em, user, id, NOW), startRaid(em, user, id, NOW)]);
+
+      const won = [one, two].filter((settled) => settled.status === "fulfilled");
+      const lost = [one, two].filter((settled) => settled.status === "rejected");
+      expect(won).toHaveLength(1);
+      expect(lost).toHaveLength(1);
+      expect((lost[0] as PromiseRejectedResult).reason.data).toEqual({ reason: "notWarning" });
+      const open = (await readOpenRaid(USER))!;
+      expect(open.phase).toBe("fighting");
+      expect(open.fightSeconds).toBe((won[0] as PromiseFulfilledResult<{ fight: { seconds: number } }>).value.fight.seconds);
+      expect(fightLock()?.id).toBe(id);
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "a yard load during the fight lifts its lock: the second transaction finds it gone, and the raid is called off",
+    async () => {
+      const id = await toStart();
+      const starting = startRaid(em, user, id, NOW);
+
+      await until(() => fightLock() !== undefined);
+      // The load's session count, under the row lock, as `catchUpOwnerYard` does it.
+      await em.transactional(async (tx) => {
+        const locked = (await tx.findOne(Object, {}, { lockMode: LockMode.PESSIMISTIC_WRITE })) as never;
+        countRaidSession(locked, NOW);
+        await tx.flush();
+      });
+
+      expect(await refusal(starting)).toEqual({ reason: "noRaid" });
+      expect(fightLock()).toBeUndefined();
+      expect(raidFighting(db.row!, NOW)).toBe(false);
+      expect(await readOpenRaid(USER)).toBeNull();
+      // Still due: nothing landed, and the load counted its session.
+      expect(readSchedule(db.row!.aiattacks)).toMatchObject({ nextAttack: NOW - 10, sessionsSinceLastAttack: 5, recent: [] });
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test("no replay slot free is busy, before the yard is touched; the raid stays in its warning", async () => {
+    const id = await toStart();
+    standIn.slot = async () => null;
+    db.locks = 0;
+
+    expect(await refusal(startRaid(em, user, id, NOW))).toEqual({ reason: "busy" });
+    expect(db.locks).toBe(0);
+    expect((await readOpenRaid(USER))?.phase).toBe("warning");
+  });
+
+  test("a fight the worker could not finish in time is busy: the yard is unlocked and the slot given back", async () => {
+    const id = await toStart();
+    let released = 0;
+    standIn.slot = async () => () => released++;
+    standIn.fight = async () => {
+      throw new runner.ReplayTimeoutError(1);
+    };
+
+    expect(await refusal(startRaid(em, user, id, NOW))).toEqual({ reason: "busy" });
+    expect(fightLock()).toBeUndefined();
+    expect(released).toBe(1);
+    expect((await readOpenRaid(USER))?.phase).toBe("warning");
+  });
+
+  test(
+    "a provisional lock that lapsed before the fight came back is busy, and lifted",
+    async () => {
+      const id = await toStart();
+      let fought!: () => void;
+      const fightBegan = new Promise<void>((resolve) => (fought = resolve));
+      standIn.fight = async (input) => {
+        fought();
+        // The fight outlasts the lock.
+        at(NOW + START_LOCK_SECONDS);
+        return runner.fightRaidInWorker(input as never) as never;
+      };
+      const starting = startRaid(em, user, id, NOW);
+      await fightBegan;
+
+      expect(await refusal(starting)).toEqual({ reason: "busy" });
+      expect(fightLock()).toBeUndefined();
+      expect((await readOpenRaid(USER))?.phase).toBe("warning");
     },
     FIGHT_TIMEOUT_MS
   );

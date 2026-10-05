@@ -405,6 +405,9 @@ const logOutpostProblems = (outpost: Save): void => {
  *
  * @param em - The request's entity manager.
  * @param save - The main yard the load is about to answer with.
+ * @param alsoUnderLock - More to write on the locked row in the same flush,
+ *   under attack too: the load's raid session count (`countRaidSession`,
+ *   passed in because this module reads no Redis and so cannot import it).
  * @returns The caught-up save to answer with (the same entity in practice,
  *   since the transaction shares the request's identity map) and what the
  *   catch-up finished, which the load sends as `completed` so the client can
@@ -413,13 +416,19 @@ const logOutpostProblems = (outpost: Save): void => {
  */
 export const catchUpLockedYard = async (
   em: EntityManager,
-  save: Save
+  save: Save,
+  alsoUnderLock?: (locked: Save, now: number) => void
 ): Promise<{ save: Save; completed: CompletedJob[] }> =>
   em.transactional(async (tx) => {
     const locked = await lockRow(tx, save.basesaveid);
-    if (!locked || isAttackActive(locked)) return { save: locked ?? save, completed: [] };
-
+    if (!locked) return { save, completed: [] };
     const now = getCurrentDateTime();
+    if (alsoUnderLock) alsoUnderLock(locked, now);
+    if (isAttackActive(locked)) {
+      if (alsoUnderLock) await tx.flush();
+      return { save: locked, completed: [] };
+    }
+
     const completed = await catchUpLockedRow(tx, locked, now);
     await recordAchievements(tx, locked, now, builtEvents(completed));
     await tx.flush();
@@ -554,23 +563,24 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         : outcome.report;
 
       await tx.flush();
-      const playerlevel = playerLevelOf(yard.main);
-      // The account's level, so this fires from an outpost action too
-      // (issue #232); a no-op (in chat) if it is not the level last
-      // broadcast, or if chat is not even loaded, per `levelChangeBus.ts`.
-      emitLevelChange(user.userid, user.username, playerlevel);
       return {
         save,
         now,
         completed,
         report,
-        playerlevel,
+        playerlevel: playerLevelOf(yard.main),
         // The account's, so from the main row on an outpost's answer too.
         onboarding: onboardingSummary(yard.main),
         achievements: unseenAchievements(yard.main),
         outpost: yard.outpost ? String(yard.outpost.baseid) : null,
       };
     });
+
+    // After the commit, so a rolled-back action never announces a level it
+    // did not save. The account's level, so this fires from an outpost
+    // action too (issue #232); a no-op (in chat) if it is not the level last
+    // broadcast, or if chat is not even loaded, per `levelChangeBus.ts`.
+    emitLevelChange(user.userid, user.username, answer.playerlevel);
 
     return {
       status: Status.OK,

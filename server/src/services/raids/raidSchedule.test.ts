@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
-import { LockMode, type EntityManager } from "@mikro-orm/core";
 import { memoryRedis } from "../../testing/memoryRedis.js";
 import { experiencePoints } from "../../game-data/stats/experiencePoints.js";
 
@@ -280,34 +279,14 @@ describe("the due rule", () => {
 });
 
 describe("the session count on a yard load", () => {
-  const db = { row: null as Record<string, unknown> | null, options: [] as unknown[], flushed: 0 };
-  const em = {
-    transactional: async <T>(run: (tx: unknown) => Promise<T>) =>
-      run({
-        findOne: async (_entity: unknown, _where: unknown, options: unknown) => {
-          db.options.push(options);
-          return db.row;
-        },
-        flush: async () => {
-          db.flushed++;
-        },
-      }),
-  } as unknown as EntityManager;
+  // Under the row lock and flushed by the load's catch-up
+  // (`catchUpLockedYard`, `yardAction.test.ts`).
+  test("writes a Flash-era value back in the server's shape", () => {
+    const row: Record<string, unknown> = { basesaveid: 7, type: "main", aiattacks: { sessionsSinceLastAttack: 2, lastattack: NOW - DAY, attackPreference: 1, queued: {} } };
 
-  beforeEach(() => {
-    db.options = [];
-    db.flushed = 0;
-  });
+    countRaidSession(row as never, NOW);
 
-  test("counts under the row lock and writes a Flash-era value back in the server's shape", async () => {
-    db.row = { basesaveid: 7, type: "main", aiattacks: { sessionsSinceLastAttack: 2, lastattack: NOW - DAY, attackPreference: 1, queued: {} } };
-
-    const written = await countRaidSession(em, 7, NOW);
-
-    expect(written).toBe(db.row as never);
-    expect(db.options).toEqual([{ lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true }]);
-    expect(db.flushed).toBe(1);
-    expect(db.row!.aiattacks).toEqual({
+    expect(row.aiattacks).toEqual({
       v: 2,
       lastattack: NOW - DAY,
       nextAttack: NOW + DAY,
@@ -317,11 +296,10 @@ describe("the session count on a yard load", () => {
     });
   });
 
-  test("leaves anything but a main yard alone", async () => {
-    db.row = { basesaveid: 8, type: "outpost", aiattacks: {} };
-    expect(await countRaidSession(em, 8, NOW)).toBeNull();
-    expect(db.flushed).toBe(0);
-    expect(db.row.aiattacks).toEqual({});
+  test("leaves anything but a main yard alone", () => {
+    const row: Record<string, unknown> = { basesaveid: 8, type: "outpost", aiattacks: {} };
+    countRaidSession(row as never, NOW);
+    expect(row.aiattacks).toEqual({});
   });
 });
 

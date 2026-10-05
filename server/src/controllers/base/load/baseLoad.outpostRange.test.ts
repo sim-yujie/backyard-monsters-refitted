@@ -29,7 +29,6 @@ const em = {
   find: async (entity: unknown, where: Row) => (tables.get(entity) ?? []).filter((row) => matches(row, where)),
   populate: async () => {},
   nativeUpdate: async () => 0,
-  // The main yard's load counts a raid session under a row lock (#226).
   transactional: async (run: (tx: unknown) => Promise<unknown>) => run(em),
   create: (_entity: unknown, data: Row) => data,
   persist: () => {},
@@ -60,8 +59,14 @@ mock.module("../../../services/base/reportManager.js", () => ({
 // file is testing; it is given its own coverage elsewhere. Standing in for it
 // keeps this file about the one thing issue #262 changed: whether `baseLoad`
 // asks `combatCellHeight` for the owner's own outpost build load.
+// The main yard's stand-in still counts the load's raid session, as the real
+// one does in its own write (`countRaidSession`, #226).
 mock.module("../../yard/yardRoute.js", () => ({
-  catchUpOwnerYard: async (save: unknown) => ({ save, completed: [] }),
+  catchUpOwnerYard: async (save: unknown) => {
+    const { countRaidSession } = await import("../../../services/raids/raidSchedule.js");
+    countRaidSession(save as never, Math.floor(Date.now() / 1000));
+    return { save, completed: [] };
+  },
   catchUpOwnerOutpost: async (_user: unknown, outpost: unknown) => ({ save: outpost, completed: [] }),
 }));
 

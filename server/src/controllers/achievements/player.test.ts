@@ -21,13 +21,30 @@ const db = {
   outposts: [] as Row[],
   maproom: null as Row | null,
   reads: [] as string[],
+  userFields: undefined as readonly string[] | undefined,
+};
+
+/**
+ * What a partial load hands back: only the `fields` asked for, the save's
+ * as `save.<column>`. So a column the route forgets to ask for reads as
+ * missing here, as it would from Postgres.
+ */
+const loadedOnly = (user: Row, fields: readonly string[] | undefined): Row => {
+  if (!fields) return user;
+  const pick = (row: Row, names: string[]): Row =>
+    Object.fromEntries(names.filter((name) => name in row).map((name) => [name, row[name]]));
+  const own = fields.filter((field) => !field.includes("."));
+  const saveFields = fields.filter((field) => field.startsWith("save.")).map((field) => field.slice(5));
+  const save = user.save as Row | null | undefined;
+  return { ...pick(user, own), save: save && pick(save, saveFields) };
 };
 
 const em = {
-  async findOne(entity: unknown, where: Row) {
+  async findOne(entity: unknown, where: Row, options?: { fields?: readonly string[] }) {
     if (entity === User) {
       db.reads.push(`user ${String(where.userid)}`);
-      return db.user && Number(db.user.userid) === where.userid ? db.user : null;
+      db.userFields = options?.fields;
+      return db.user && Number(db.user.userid) === where.userid ? loadedOnly(db.user, options?.fields) : null;
     }
     if (entity === Maproom) {
       db.reads.push("maproom");
@@ -79,6 +96,7 @@ beforeEach(() => {
   db.outposts = [];
   db.maproom = null;
   db.reads = [];
+  db.userFields = undefined;
   achievementConfig.rewards = true;
 });
 
@@ -100,6 +118,18 @@ describe("GET bm/achievements/player/:userid", () => {
     ]);
     expect((db.user!.save as Row).achievements).toBeNull();
     expect((db.user!.save as Row).credits).toBe(100);
+  });
+
+  // Every other test here runs on that partial load, so a column the record
+  // reads but the route does not ask for fails them.
+  test("loads only the player's name and ban and the save columns the record reads", async () => {
+    await ask();
+
+    expect(db.userFields).toContain("banned");
+    expect(db.userFields).toContain("save.buildingdata");
+    expect(db.userFields).toContain("save.achievements");
+    expect(db.userFields).not.toContain("save.monsters");
+    expect(db.userFields!.some((field) => field === "save" || field === "save.*")).toBe(false);
   });
 
   test("never sends progress or Shiny", async () => {
