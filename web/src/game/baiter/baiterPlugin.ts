@@ -1,19 +1,24 @@
 import type { AttackMounts, AttackPlugin } from "@/game/attack/attackPlugins";
 import { summariseAttack } from "@/game/attack/attackSave";
+import { combatKind, type AttackSessionState } from "@/game/attack/AttackSession";
 import { testArmyPlugin } from "@/game/attack/plugins/army";
 import { battlePlugin } from "@/game/attack/plugins/battle";
 import { testDropPlugin } from "@/game/attack/plugins/drop";
-import { typeName } from "@/game/yard/planner/summary";
-import { BaiterDock, BaiterSummaryPanel, type BaiterOutcome } from "@/ui/attack/BaiterSummary";
+import { maxHp } from "@/game/combat/rules";
+import { championEntry } from "@/game/yard/championCatalogue";
+import { BaiterDock } from "@/ui/attack/BaiterSummary";
+import { TestReportPanel } from "@/ui/attack/TestReport";
 import { baiterRecorder, type BaiterRecorder } from "./baiterRecord";
+import { buildTestReport } from "./testReport";
 
 /**
  * The Baiter scene's own package (issue #126): a test plays like a real
  * attack (#22, WP3, `docs/design/baiter-simulator.md` §5.2): the test army
  * sits in the real attack's army panel, the player taps anywhere a real
  * attack may drop, as many drops as the army allows, the champion from its
- * row, and the clock starts at the first drop. When the battle ends a
- * summary says how the yard held, with Run again and Back to yard.
+ * row, and the clock starts at the first drop. When the battle ends the
+ * report (WP4, `testReport.ts`) says how the yard held, tower by tower, with
+ * Test again, Change army and Back to yard.
  *
  * The scene mounts only {@link BAITER_PLUGINS}: the army and drop packages in
  * their test flavour (no last army kept, no champion's Mode saved, no
@@ -27,16 +32,20 @@ import { baiterRecorder, type BaiterRecorder } from "./baiterRecord";
  * first drop and handed back when the test really finishes.
  */
 
-/** "Cannon Tower × 3, Sniper Tower": the towers that fired, by type, most first. */
-const towerNames = (ids: Iterable<number>, mounts: AttackMounts): string[] => {
-  const byType = new Map<number, number>();
-  for (const id of ids) {
-    const building = mounts.yard.buildings.find((one) => one.id === id);
-    if (building) byType.set(building.type, (byType.get(building.type) ?? 0) + 1);
+/**
+ * Moves the camera so `world` sits in the middle of what the report leaves
+ * uncovered: left of it when it stands at the right, above it when it is a
+ * bottom sheet on a phone.
+ */
+const showBeside = (mounts: AttackMounts, world: { x: number; y: number }, cover: DOMRect | null): void => {
+  const { camera } = mounts;
+  camera.centreOn(world);
+  const view = mounts.canvas.getBoundingClientRect();
+  if (cover && view.width > 0 && view.height > 0) {
+    if (cover.left > view.left + view.width / 3) camera.panByScreen((cover.left - view.left) / 2 - view.width / 2, 0);
+    else if (cover.top > view.top + view.height / 4) camera.panByScreen(0, (cover.top - view.top) / 2 - view.height / 2);
   }
-  return [...byType]
-    .sort((one, other) => other[1] - one[1] || typeName(one[0]).localeCompare(typeName(other[0])))
-    .map(([type, count]) => (count > 1 ? `${typeName(type)} × ${count}` : typeName(type)));
+  camera.dirty = true;
 };
 
 /** The Baiter package, with the Goals run record as a parameter so tests can watch it. */
@@ -56,56 +65,66 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
 
   const dock = new BaiterDock(run).mount(mounts.dock);
 
-  // Which towers fired, read from the battle's short event memory on every
-  // notification (a quarter of a second, well inside its 160 ticks).
-  const fired = new Set<number>();
-  let seenTick = -1;
-  const collect = (): void => {
-    const battle = session.battle();
-    if (!battle) return;
-    for (const event of battle.recentEvents(seenTick + 1)) {
-      if (event.kind === "shot") fired.add(event.towerId);
+  // When each champion fell, read off the notifications (a quarter of a
+  // second apart), which the battle's own counters do not keep.
+  const championFell: Record<string, number> = {};
+  const watchChampions = (state: AttackSessionState): void => {
+    for (const [t, hp] of Object.entries(state.championsHp)) {
+      const id = championEntry(Number(t))?.id;
+      if (id && hp <= 0 && championFell[id] === undefined) championFell[id] = state.tick;
     }
-    seenTick = battle.tick;
   };
 
-  let summary: BaiterSummaryPanel | null = null;
-  const showSummary = (): void => {
-    if (summary) return;
-    collect();
+  const kind = combatKind(mounts.target);
+  const buildings = mounts.yard.buildings.map((building) => ({
+    id: building.id,
+    type: building.type,
+    level: building.level,
+    maxHp: maxHp(building.type, building.level, kind),
+  }));
+
+  let report: TestReportPanel | null = null;
+  const showReport = (): void => {
+    const battle = session.battle();
+    if (report || !battle) return;
     const state = session.state();
     record.finish(state.endReason);
     const facts = summariseAttack(session);
-    const traps = session.battle()?.state().firedTraps ?? [];
-    const outcome: BaiterOutcome = {
-      endReason: state.endReason,
-      damagePercent: facts.damagePercent,
-      buildingsDestroyed: facts.buildingsDestroyed,
-      buildingsTotal: facts.buildingsTotal,
-      attackersSent: facts.monstersSent,
-      attackersBeaten: facts.monstersLost,
-      towersFired: towerNames(fired, mounts),
-      trapsFired: traps.length,
-    };
-    summary = new BaiterSummaryPanel({
-      outcome,
+    report = new TestReportPanel({
+      report: buildTestReport({
+        state: battle.state(),
+        endReason: state.endReason,
+        buildings,
+        damagePercent: facts.damagePercent,
+        buildingsDestroyed: facts.buildingsDestroyed,
+        buildingsTotal: facts.buildingsTotal,
+        championFell,
+      }),
+      onBuilding: (id) => {
+        const building = mounts.yard.buildings.find((one) => one.id === id);
+        if (!building) return;
+        const cover = report?.element.querySelector(".test-report")?.getBoundingClientRect() ?? null;
+        showBeside(mounts, { x: building.centreX, y: building.centreY }, cover);
+        mounts.renderer.setSelected(building);
+      },
       onAgain: () => mounts.runAgain?.(run),
+      onChangeArmy: () => mounts.changeArmy?.(),
       onBack: () => mounts.goToYard?.(),
     }).mount(mounts.modal);
   };
 
   const unsubscribe = session.subscribe((state) => {
     startRecord();
-    collect();
+    watchChampions(state);
     dock.update(state);
-    if (state.phase === "ended") showSummary();
+    if (state.phase === "ended") showReport();
   });
-  if (session.state().phase === "ended") showSummary();
+  if (session.state().phase === "ended") showReport();
 
   return () => {
     unsubscribe();
     dock.destroy();
-    summary?.close();
+    report?.close();
   };
 };
 

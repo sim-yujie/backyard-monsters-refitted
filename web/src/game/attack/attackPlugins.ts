@@ -86,6 +86,8 @@ export interface AttackMounts {
   readonly runAgain?: (run: BaiterRun) => void;
   /** The Baiter scene: back to the player's own yard. */
   readonly goToYard?: () => void;
+  /** The Baiter scene: back to the yard with the Baiter's test panel open (#22, WP4). */
+  readonly changeArmy?: () => void;
   /**
    * The auto-attack battle the watch scene plays back (issue #221), or
    * absent on any other attack. Only the watch package reads it.

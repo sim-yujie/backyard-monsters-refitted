@@ -22,7 +22,7 @@ import { baiterTarget, emptyArmy, withChampion, type BaiterRun, type TestArmy } 
  * WP3): the scene mounts the army and drop packages in their test flavour,
  * the battle layer and the Baiter's own package, so the player drops the
  * test army anywhere a real attack may, and a whole test, from the first
- * drop to the summary, makes no request but the Goals record of a finished
+ * drop to the report, makes no request but the Goals record of a finished
  * run (#227), asked for only once something was dropped.
  */
 
@@ -80,8 +80,13 @@ const mountsOf = (
       yardToWorld: (x: number, y: number) => ({ x, y }),
       worldToYard: (x: number, y: number) => ({ x, y }),
       highlightBuilding: () => {},
+      setSelected: vi.fn(),
     },
-    camera: { screenToWorld: (point: { x: number; y: number }) => point },
+    camera: {
+      screenToWorld: (point: { x: number; y: number }) => point,
+      centreOn: vi.fn(),
+      panByScreen: vi.fn(),
+    },
     battleLayer: new Container(),
     setBottomInset: () => {},
     showResources: () => {},
@@ -247,7 +252,7 @@ describe("a Baiter test", () => {
     setItem.mockRestore();
   });
 
-  it("plays out and summarises; the only requests are the Goals record's, and only after the first drop", async () => {
+  it("plays out and reports; the only requests are the Goals record's, and only after the first drop", async () => {
     fetchSpy.mockImplementation((url: string) =>
       /goals\/baiter-(start|run)/.test(url)
         ? Promise.resolve(new Response(JSON.stringify({ error: 0, report: { token: "t1" } })))
@@ -257,7 +262,8 @@ describe("a Baiter test", () => {
     const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
     const runAgain = vi.fn();
     const goToYard = vi.fn();
-    mount(run, session, baiterPlugin, { runAgain, goToYard });
+    const changeArmy = vi.fn();
+    mount(run, session, baiterPlugin, { runAgain, goToYard, changeArmy });
 
     await Promise.resolve();
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -275,16 +281,18 @@ describe("a Baiter test", () => {
     playOut(session);
     expect(session.state().phase).toBe("ended");
     expect(session.state().endReason).not.toBe("retreat");
-    const summary = modal.querySelector(".baiter-summary")!;
-    expect(summary.textContent).toContain("Nothing was saved");
+    const report = modal.querySelector(".test-report")!;
+    expect(report.textContent).toContain("Nothing was saved");
     await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
     const urls = fetchSpy.mock.calls.map((call) => String(call[0]));
     expect(urls[0]).toMatch(/goals\/baiter-start$/);
     expect(urls[1]).toMatch(/goals\/baiter-run$/);
 
-    modal.querySelector<HTMLButtonElement>(".baiter-summary__again")!.click();
+    modal.querySelector<HTMLButtonElement>(".test-report__again")!.click();
     expect(runAgain).toHaveBeenCalledWith(run);
-    modal.querySelector<HTMLButtonElement>(".baiter-summary__back")!.click();
+    modal.querySelector<HTMLButtonElement>(".test-report__change")!.click();
+    expect(changeArmy).toHaveBeenCalledTimes(1);
+    modal.querySelector<HTMLButtonElement>(".test-report__back")!.click();
     expect(goToYard).toHaveBeenCalledTimes(1);
     for (const teardown of teardowns) teardown?.();
     teardowns = [];
@@ -310,8 +318,37 @@ describe("a Baiter test", () => {
     session.retreat();
     expect(session.state().endReason).toBe("retreat");
     expect(recorder.finish).toHaveBeenCalledWith("retreat");
-    expect(modal.querySelector(".baiter-summary")!.textContent).toContain("You stopped the practice");
+    expect(modal.querySelector(".test-report__result")!.textContent).toBe("Stopped");
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("shows a tower tapped in the report: the camera centres on it and rings it (#22, WP4)", () => {
+    const run = runOf();
+    const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
+    const camera = { screenToWorld: (point: { x: number; y: number }) => point, centreOn: vi.fn(), panByScreen: vi.fn() };
+    const setSelected = vi.fn();
+    const renderer = {
+      yardToWorld: (x: number, y: number) => ({ x, y }),
+      worldToYard: (x: number, y: number) => ({ x, y }),
+      highlightBuilding: () => {},
+      setSelected,
+    };
+    mount(run, session, createBaiterPlugin(() => spyRecorder()), {
+      camera: camera as unknown as AttackMounts["camera"],
+      renderer: renderer as unknown as AttackMounts["renderer"],
+    });
+    bucketFor(session).setCount("C1", 4);
+    tapAt(canvas, OPEN);
+    session.advance(2);
+    session.retreat();
+
+    modal.querySelector<HTMLButtonElement>("#test-report-tab-towers")!.click();
+    const rows = [...modal.querySelectorAll<HTMLTableRowElement>("#test-report-towers tbody tr")];
+    expect(rows.map((row) => row.querySelector("th")!.textContent)).toEqual(["Cannon Tower L1"]);
+    rows[0]!.querySelector<HTMLButtonElement>(".test-report__show")!.click();
+    const cannon = readYard(ownYard()).buildings.find((building) => building.id === 2)!;
+    expect(camera.centreOn).toHaveBeenCalledWith({ x: cannon.centreX, y: cannon.centreY });
+    expect(setSelected).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }));
   });
 
   it("stopped before any drop, it asks for no Goals token at all", () => {

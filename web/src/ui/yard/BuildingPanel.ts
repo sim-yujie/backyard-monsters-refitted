@@ -1382,6 +1382,16 @@ export class BuildingPanel {
     this.render();
   }
 
+  /** Opens the Baiter's test section when this Baiter may open it (a test's "Change army", #22 WP4). */
+  openBaiter(): void {
+    const building = this.building;
+    const yard = this.yard;
+    if (this.baiter || !building || !yard) return;
+    const model = panelModel(building, yard.store);
+    if (model.open !== "baiter" || model.openBlocked) return;
+    this.toggleBaiter(null);
+  }
+
   private closeBaiter(): void {
     this.baiter?.destroy();
     this.baiter = null;

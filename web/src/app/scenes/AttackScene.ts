@@ -19,6 +19,7 @@ import { Camera } from "@/game/Camera";
 import { fixedWorkSource } from "@/game/yard/buildingWork";
 import { readYard, type Yard } from "@/game/yard/yardModel";
 import { fellPens, yardLifeOf, type YardLife } from "@/game/yard/yardLifeModel";
+import { setYardIntent } from "@/game/yard/yardIntent";
 import { YardRenderer } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
 import { formatAmount } from "@/ui/format";
@@ -428,6 +429,10 @@ export class AttackScene implements Scene {
               context.goTo(SceneName.BAITER);
             },
             goToYard: () => context.goTo(SceneName.YARD),
+            changeArmy: () => {
+              setYardIntent({ kind: "baiter" });
+              context.goTo(SceneName.YARD);
+            },
           }
         : {}),
       ...(this.watchRun ? { watch: this.watchRun } : {}),

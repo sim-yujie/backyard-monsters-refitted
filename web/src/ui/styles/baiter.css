@@ -1,7 +1,7 @@
 /*
  * The Wild Monster Baiter's practice-attack controls inside its building panel
  * (`web/src/ui/yard/BaiterPanel.ts`, design `docs/design/yard-buildings.md`
- * §8.1, issue #126), and the practice attack's summary in the attack scene.
+ * §8.1, issue #126), and a test's report in the attack scene (#22, WP4).
  *
  * The panel sits in the 300px right dock, so rows stack: the monster's name
  * over its level picker and stepper. Every value comes from tokens.css.
@@ -232,19 +232,42 @@
   min-height: 36px;
 }
 
-/* ── The practice attack's summary (the attack scene's modal layer) ───── */
+/* ── A test's report (the attack scene's modal layer, #22 WP4) ──────── */
 
-.baiter-summary {
-  width: min(92vw, 420px);
+/* Wide screens: the report stands at the right over a clear backdrop, so a
+   tapped tower shows on the yard to its left. */
+.test-report__backdrop {
+  pointer-events: auto;
+  place-items: center end;
+  background: transparent;
 }
 
-.baiter-summary__lead {
+.test-report {
+  width: min(92vw, 520px);
+}
+
+.test-report .panel__body {
+  max-height: min(80vh, 720px);
+}
+
+.test-report__tabs {
+  display: flex;
+  gap: var(--space-1);
   margin: 0 0 var(--space-3);
-  font-size: var(--text-sm);
-  color: var(--colour-text-muted);
 }
 
-.baiter-summary__facts {
+.test-report__tab[aria-selected="true"] {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.test-report__result {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.test-report__facts {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: var(--space-1) var(--space-3);
@@ -252,20 +275,130 @@
   font-size: var(--text-sm);
 }
 
-.baiter-summary__facts dt {
+.test-report__facts dt {
   color: var(--colour-text-muted);
 }
 
-.baiter-summary__facts dd {
+.test-report__facts dd {
   margin: 0;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-.baiter-summary__actions {
+.test-report__hint {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--colour-accent);
+  background: var(--colour-surface-sunken);
+  font-size: var(--text-sm);
+}
+
+.test-report__note,
+.test-report__empty {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.test-report__scroll {
+  overflow-x: auto;
+  margin: 0 0 var(--space-3);
+}
+
+.test-report__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.test-report__caption {
+  padding: 0 0 var(--space-1);
+  text-align: left;
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.test-report__table th,
+.test-report__table td {
+  padding: var(--space-1) var(--space-2);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.test-report__table thead th {
+  color: var(--colour-text-muted);
+  font-weight: 400;
+  border-bottom: 1px solid var(--colour-border);
+}
+
+.test-report__table th:first-child,
+.test-report__table td:last-child {
+  text-align: left;
+}
+
+.test-report__row + .test-report__row {
+  border-top: 1px solid var(--colour-border-subtle);
+}
+
+.test-report__row--tap {
+  cursor: pointer;
+}
+
+.test-report__row--tap:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.test-report__row--muted {
+  color: var(--colour-text-muted);
+}
+
+.test-report__show {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.test-report__show:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.test-report__actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-2);
+}
+
+/* A phone: a full-width sheet at the bottom with the tabs at its top, so a
+   tapped tower shows on the yard above it. */
+@media (width <= 620px) {
+  .test-report__backdrop {
+    padding: 0;
+    place-items: end stretch;
+  }
+
+  .test-report {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    border-radius: 0;
+  }
+
+  .test-report .panel__body {
+    max-height: 62vh;
+  }
+
+  .test-report__tab,
+  .test-report__actions .btn {
+    min-height: 44px;
+  }
 }
 
 @media (width <= 620px) {

@@ -343,6 +343,31 @@ describe("BuildingPanel: the Monster Bunker (§7.1)", () => {
   });
 });
 
+describe("BuildingPanel: the Wild Monster Baiter (#126, #22)", () => {
+  it("Test attack opens the test panel under the actions, and Close hides it", () => {
+    const { element } = setup([HALL, building(2, 19, 3)], 2);
+    expect(element.querySelector(".baiter")).toBeNull();
+    buttonNamed(element, "Test attack")!.click();
+    expect(element.querySelector(".baiter")).not.toBeNull();
+    expect(buttonNamed(element, "Close")!.getAttribute("aria-expanded")).toBe("true");
+    buttonNamed(element, "Close")!.click();
+    expect(element.querySelector(".baiter")).toBeNull();
+  });
+
+  it("opens the test panel when a test's Change army asks, but not on a damaged Baiter (#22, WP4)", () => {
+    const { element, panel } = setup([HALL, building(2, 19, 3)], 2);
+    panel.openBaiter();
+    expect(element.querySelector(".baiter")).not.toBeNull();
+    panel.openBaiter();
+    expect(element.querySelectorAll(".baiter")).toHaveLength(1);
+
+    document.body.replaceChildren();
+    const damaged = setup([HALL, building(2, 19, 3)], 2, { load: { buildinghealthdata: { "2": 100 } } });
+    damaged.panel.openBaiter();
+    expect(damaged.element.querySelector(".baiter")).toBeNull();
+  });
+});
+
 describe("BuildingPanel: the Champion Cage (§7.2)", () => {
   it("Open cage shows the cage's controls under the actions, and Close cage hides them", () => {
     const { element, panel, store } = setup([HALL, building(2, 114, 1)], 2);

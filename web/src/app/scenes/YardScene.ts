@@ -95,7 +95,7 @@ import { YardPlanner, type AppliedStorage, type CompareVisuals } from "./YardPla
 import { sceneForMap } from "./MapGateScene";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
-import { setBaiterRun } from "@/game/baiter/baiterSession";
+import { BAITER_TYPE, setBaiterRun } from "@/game/baiter/baiterSession";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { registerCanvasTarget, tutTarget, TutTarget, type TargetRect } from "@/game/guide/targets";
 import { footprintBox } from "@/game/yard/YardGrid";
@@ -1297,7 +1297,12 @@ export class YardScene implements Scene {
   private applyIntent(intent: YardIntent | null): void {
     if (!intent) return;
     if (intent.kind === "build") this.openBuildMenu(intent.type);
-    else {
+    else if (intent.kind === "baiter") {
+      const baiter = this.yard?.buildings.find((one) => one.type === BAITER_TYPE);
+      if (!baiter) return;
+      this.focusBuilding(baiter.id);
+      this.panel?.openBaiter();
+    } else {
       const tab = MONSTERS_TAB_ORDER.find((one) => one === intent.tab);
       if (tab) this.openMonsters(tab);
     }
