@@ -248,6 +248,12 @@ describe("outpost notices (#187)", () => {
       "Bramble attacked your outpost at (243, 206). It was left 63% damaged, and 1,234 Twigs were looted",
     );
   });
+
+  it("says which happened when the server sent no text", () => {
+    const bare = (job: CompletedJob): CompletedJob => ({ ...job, detail: { x: 243, y: 206 } });
+    expect(awayNoticeText(groupCompletedJobs([bare(attacked)]))).toBe("One of your outposts was attacked");
+    expect(awayNoticeText(groupCompletedJobs([bare(taken)]))).toBe("One of your outposts was taken");
+  });
 });
 
 describe("yard defence notices (#242)", () => {

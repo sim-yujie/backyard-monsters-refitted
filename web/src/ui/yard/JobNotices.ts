@@ -146,7 +146,7 @@ const hatchCount = (job: CompletedJob): number => {
  */
 const SERVER_NOTICES: Readonly<Record<string, string>> = {
   outpostAttacked: "One of your outposts was attacked",
-  outpostTaken: "One of your outposts was attacked",
+  outpostTaken: "One of your outposts was taken",
   yardAttacked: "Your yard was attacked",
 };
 
