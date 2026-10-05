@@ -585,13 +585,15 @@
   color: var(--colour-text-muted);
 }
 
-/* A champion on the field offers Retreat beside its row (issue #222). */
+/* A champion on the field offers Retreat beside its "On the field" note (issue
+ * #222). The name and the Mode keep the row's full width: a Retreat column
+ * beside all three squeezed the name to an ellipsis in the narrow dock. */
 .attack-army__champion:has(.attack-army__champion-retreat:not([hidden])) {
   grid-template-columns: auto auto minmax(0, 1fr) auto;
   grid-template-areas:
-    "pick icon label retreat"
+    "pick icon label label"
     "pick icon note retreat"
-    "pick icon mode retreat";
+    "pick icon mode mode";
 }
 
 .attack-army__champion-retreat {

@@ -250,8 +250,10 @@
   gap: var(--space-1) var(--space-2);
 }
 
+/* The result line has the row to itself and Watch and Report sit together
+   under it: in the narrow panel a shared row wrapped Report alone. */
 .baiter__recent-line {
-  flex: 1 1 10rem;
+  flex: 1 1 100%;
   min-width: 0;
   font-size: var(--text-sm);
 }
