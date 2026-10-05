@@ -36,6 +36,8 @@ export const POOL_FIELDS: ReadonlySet<PropertyKey> = new Set([
   "academy",
   // The account's tutorial record lives on the main row (issue #227).
   "onboarding",
+  // So is the achievements' record (issue #204).
+  "achievements",
 ]);
 
 /** The extra key the view adds: the main yard's storage cap. */

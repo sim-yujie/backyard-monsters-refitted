@@ -14,6 +14,10 @@
  *              `reason: "ownerSaveRetired"` before anything is read or written.
  * - `allow`  — the save goes through as it always did.
  *
+ * `allow` also lets a forged yard earn achievements: their derived stats
+ * (Town Hall level, champions, Locker, resources) trust the yard as the server
+ * holds it (`docs/design/achievements.md` §11).
+ *
  * Attack saves are not affected by either mode. Outpost owner saves were left
  * open until the outposts plan (WP0b); they are refused alongside main yards.
  *

@@ -29,6 +29,10 @@ describe("entity discovery", () => {
       const onboarding = orm.getMetadata().getByClassName("Save").properties.onboarding;
       expect(onboarding.columnTypes).toEqual(["jsonb"]);
       expect(onboarding.nullable).toBe(true);
+      // The achievements' record (issue #204), against its migration.
+      const achievements = orm.getMetadata().getByClassName("Save").properties.achievements;
+      expect(achievements.columnTypes).toEqual(["jsonb"]);
+      expect(achievements.nullable).toBe(true);
 
       // The bot tables (issue #235): every column the entities map is one the
       // migration creates, with the type it creates, so a load never asks

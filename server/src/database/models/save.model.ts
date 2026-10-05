@@ -391,6 +391,19 @@ export class Save {
   @Property({ type: "json", columnType: "jsonb", nullable: true })
   onboarding?: JsonObject | null = null;
 
+  /**
+   * The achievements' record: stats, unlocks, the Shiny each paid and whether
+   * its pop-up was seen (`services/achievements/state.ts`,
+   * `docs/design/achievements.md` §6). Main saves only; `NULL` means never
+   * worked out, which the first evaluation backfills.
+   *
+   * Server-only, like {@link Save.onboarding}: not a `@FrontendKey`, and in
+   * neither {@link Save.saveKeys} nor {@link Save.attackSaveKeys}, so
+   * `/base/save` can never write it: it decides what Shiny is paid.
+   */
+  @Property({ type: "json", columnType: "jsonb", nullable: true })
+  achievements?: JsonObject | null = null;
+
   @Property({ type: Date })
   takeoverDate: Opt<Date> = new Date();
 
