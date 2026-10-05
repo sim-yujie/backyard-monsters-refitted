@@ -43,7 +43,15 @@ export const createRaidPlugin =
     if (!run) return;
     const { session } = mounts;
 
-    session.playScript(raidEvents(run), run.fight.tick);
+    const waves = raidEvents(run);
+    session.playScript(waves, run.fight.tick);
+    // The view turns to meet the first wave, as the Baiter's does: halfway
+    // between it and the yard.
+    const first = waves[0];
+    if (first && mounts.camera) {
+      mounts.camera.centreOn(mounts.renderer.yardToWorld(first.x / 2, first.y / 2));
+      mounts.camera.dirty = true;
+    }
 
     const banner = document.createElement("span");
     banner.className = "raid-panic";

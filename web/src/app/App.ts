@@ -299,6 +299,7 @@ export class App {
       delete dev["__protection"];
       delete dev["__yardAttack"];
       delete dev["__botCheck"];
+      delete dev["__raid"];
     }
     this.idleWarning?.hide();
     this.idleWarning = null;
