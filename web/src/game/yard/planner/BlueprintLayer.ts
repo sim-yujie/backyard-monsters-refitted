@@ -69,9 +69,10 @@ const installFont = (): void => {
   BitmapFontManager.install({
     name: FONT,
     style: {
-      fontFamily: "Figtree, sans-serif",
+      // Titan One (#223) has one weight, already bold; no fontWeight, or the
+      // browser fakes a heavier cut when it rasterises this atlas.
+      fontFamily: "Titan One, sans-serif",
       fontSize: FONT_PX,
-      fontWeight: "700",
       fill: 0xffffff,
       stroke: { color: 0x101418, width: 4, join: "round" },
     },

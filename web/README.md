@@ -302,16 +302,27 @@ chroma-key it to transparency, and save it as `<tribe>.png` at 1024 px with a
 
 ## Fonts
 
-The UI follows visual direction B, "Clean Command" (#155), which replaced the
-earlier Grobold look-alike (Titan One with Nunito).
+The UI follows visual direction B, "Clean Command" (#155). That direction
+originally paired Sora (headings) with Figtree (body), replacing an earlier
+Grobold look-alike of Titan One with Nunito. #223 went back to Titan One, this
+time alone, everywhere: `--font-display` and `--font-body` in `tokens.css`
+both point at it, and the Pixi canvas labels (`YardBuildings`, `YardJobBars`,
+`YardHatchMarks`, `creepFx`, `LabelLayer`, `BlueprintLayer`) name it directly,
+since Pixi text cannot read a CSS custom property.
 
-**Headings and figures: [Sora](https://fonts.google.com/specimen/Sora)** by
-Jonathan Barnbrook and Julián Moncada, under the SIL Open Font License 1.1. A
-geometric sans with open, even figures, used for titles and for the amounts the
-player reads at a glance (the HUD, costs on the big buttons).
+**[Titan One](https://fonts.google.com/specimen/Titan+One)** by Rodrigo
+Fuenzalida, under the SIL Open Font License 1.1 — the free look-alike of
+Flash's Grobold. One weight only (400, already heavy): `--display-weight` and
+`font-synthesis: none` (in `ui.css`) stop a stray `font-weight: 700` left over
+from Sora/Figtree from making the browser fake a bolder cut that does not
+exist. Wider than Sora or Figtree, so `--display-tracking` dropped its
+negative value and a few tight spots (the HUD's resource amounts at phone
+width, the build menu) size down a step to still fit.
 
-**Body: [Figtree](https://fonts.google.com/specimen/Figtree)** by Erik Kennedy,
-under the SIL Open Font License 1.1. A friendly, compact sans that stays clear
-at 12-13px, which is most of the panel text. The Pixi canvas labels use it too.
-
-Both load from Google Fonts through a `<link>` in `index.html`.
+Self-hosted under `public/fonts/titan-one/` (two woff2 subsets, matching how
+Google itself splits the file, plus `OFL.txt`) and declared with `@font-face`
+in `tokens.css`, rather than loaded from Google's servers at runtime — no
+third-party request, no flash of a fallback font while it loads. Since canvas
+text does not redraw itself when a web font finishes loading after the first
+paint, `App.start()` awaits `document.fonts.load(...)` before Pixi draws
+anything.

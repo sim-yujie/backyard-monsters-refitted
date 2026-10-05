@@ -126,9 +126,10 @@ export class YardHatchMarks {
       const label = new Text({
         text: String(number),
         style: {
-          fontFamily: "Figtree, sans-serif",
+          // Titan One (#223) has one weight, already bold; no fontWeight, or
+          // the browser fakes a heavier cut on a face that cannot get bolder.
+          fontFamily: "Titan One, sans-serif",
           fontSize: 16,
-          fontWeight: "800",
           fill: chosen ? CHOSEN_TEXT : OTHER_TEXT,
         },
         resolution: 2,

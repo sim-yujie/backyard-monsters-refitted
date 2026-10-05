@@ -252,7 +252,7 @@ export class YardBuildings {
         labels++;
         label = new Text({
           text: building.name,
-          style: { fontFamily: "Figtree, sans-serif", fontSize: 16, fill: 0xe8eef5 },
+          style: { fontFamily: "Titan One, sans-serif", fontSize: 16, fill: 0xe8eef5 },
         });
         label.anchor.set(0.5);
         label.position.set(building.centreX, building.centreY);

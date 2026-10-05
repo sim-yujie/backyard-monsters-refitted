@@ -494,9 +494,11 @@ export class CreepFx {
     const text = new Text({
       text: "",
       style: {
-        fontFamily: "Figtree, sans-serif",
+        // Titan One (#223) has one weight, already bold; no fontWeight here,
+        // or the browser fakes a bolder cut by thickening strokes on a face
+        // that cannot get any heavier.
+        fontFamily: "Titan One, sans-serif",
         fontSize: 13,
-        fontWeight: "bold",
         fill: LABEL_COLOUR,
         stroke: { color: LABEL_STROKE, width: 3 },
       },

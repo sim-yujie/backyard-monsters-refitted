@@ -22,6 +22,11 @@ body {
   font-size: var(--text-md);
   line-height: var(--leading-normal);
   -webkit-font-smoothing: antialiased;
+  /* Titan One (#223) ships one weight. Without this, a stray `font-weight:
+     700` left over from Sora/Figtree would make the browser draw a faked
+     bold by thickening strokes on a face that is already heavy, instead of
+     just falling back to the one weight that exists. */
+  font-synthesis: none;
 }
 
 #game-root {
@@ -574,7 +579,7 @@ body {
   height: 20px;
 }
 
-/* The amounts are Sora: figures read at a glance. */
+/* The amounts are the display face, Titan One: figures read at a glance. */
 .hud__resource-value {
   font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
@@ -990,8 +995,8 @@ body {
     padding: var(--space-1);
   }
 
-  /* Sora's figures are wider than the body face's: one step down so the
-     five short amounts still share the row at 412 px. */
+  /* Titan One is wide; one step down so the five short amounts still share
+     the row at 412 px. */
   .hud__resource-value {
     font-size: var(--text-sm);
   }

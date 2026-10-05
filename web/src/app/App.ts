@@ -25,6 +25,19 @@ import { AwayScene } from "./scenes/AwayScene";
 import { BAITER_PLUGINS } from "@/game/baiter/baiterPlugin";
 import { WATCH_PLUGINS } from "@/game/autoAttack/watchPlugin";
 
+/** Loads Titan One (#223) before anything draws canvas text with it; see the
+ * comment in `start()`. `document.fonts` is missing in some test environments
+ * (jsdom), so this is a no-op there rather than a thrown error. */
+async function loadTitanOne(): Promise<void> {
+  const fonts = (document as { fonts?: FontFaceSet }).fonts;
+  if (!fonts) return;
+  try {
+    await fonts.load('400 16px "Titan One"');
+  } catch {
+    // Fallback stack takes over; see the comment in `start()`.
+  }
+}
+
 /** Scene names, so nothing depends on a bare string in two places. */
 export const SceneName = {
   BOOT: "boot",
@@ -86,6 +99,18 @@ export class App {
   }
 
   async start(): Promise<void> {
+    // Titan One (#223) is drawn straight to canvas by Phaser/Pixi text and
+    // bitmap-font atlases (YardBuildings, YardJobBars, YardHatchMarks,
+    // creepFx, LabelLayer, BlueprintLayer). Canvas text, unlike DOM text,
+    // does not get redrawn when a web font finishes loading after the first
+    // paint, so a scene built before the font is ready would be stuck
+    // showing the fallback sans-serif. Nothing in index.html's markup is a
+    // text node, so the browser has no reason to start fetching the font on
+    // its own; this is what asks for it. Best-effort: an old browser without
+    // the Font Loading API, or a font request that fails, still renders —
+    // just with the fallback stack from --font-display/--font-body.
+    await loadTitanOne();
+
     await this.pixi.init({
       // The canvas fills the window; CSS pins it and `resizeTo` keeps the
       // backing store in step.

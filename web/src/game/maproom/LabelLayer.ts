@@ -52,14 +52,14 @@ const installFont = (): void => {
   fontInstalled = true;
   BitmapFontManager.install({
     name: PLAIN_FONT,
-    style: { fontFamily: "Figtree, sans-serif", fontSize: ATLAS_FONT_PX, fill: 0xffffff },
+    style: { fontFamily: "Titan One, sans-serif", fontSize: ATLAS_FONT_PX, fill: 0xffffff },
     resolution: 2,
     chars: BitmapFontManager.ASCII,
   });
   BitmapFontManager.install({
     name: MAP_FONT,
     style: {
-      fontFamily: "Figtree, sans-serif",
+      fontFamily: "Titan One, sans-serif",
       fontSize: ATLAS_FONT_PX,
       fill: 0xffffff,
       // Baked into the atlas, so it costs nothing per label and keeps white

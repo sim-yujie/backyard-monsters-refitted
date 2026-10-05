@@ -240,9 +240,10 @@ export class YardJobBars {
       const label = new Text({
         text: state.label,
         style: {
-          fontFamily: "Figtree, sans-serif",
+          // Titan One (#223) has one weight, already bold; no fontWeight, or
+          // the browser fakes a heavier cut on a face that cannot get bolder.
+          fontFamily: "Titan One, sans-serif",
           fontSize: 13,
-          fontWeight: "800",
           fill: 0xffffff,
           stroke: { color: TRACK, width: 3 },
         },
