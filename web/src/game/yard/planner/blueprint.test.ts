@@ -5,13 +5,16 @@ import {
   blueprintToWorld,
   blueprintToYard,
   centredRect,
+  HEAVY_TRAP_TYPE,
   iconBox,
   MAX_ICON_SCALE,
   MIN_ICON_WIDTH,
   rectContains,
   rectCorners,
   stackBoxes,
+  TILE_COLOURS,
   tileCategory,
+  tileColours,
   tileLabel,
   tileRect,
   TileCategory,
@@ -119,6 +122,27 @@ describe("tileCategory", () => {
     expect(tileCategory(52, false)).toBe(TileCategory.MISC);
     expect(tileCategory(7, false)).toBe(TileCategory.MISC);
     expect(tileCategory(9999, false)).toBe(TileCategory.MISC);
+  });
+});
+
+describe("tileColours", () => {
+  it("keeps the Booby Trap amber and gives the Heavy Trap a colour of its own", () => {
+    const booby = tileColours(24, false);
+    const heavy = tileColours(HEAVY_TRAP_TYPE, false);
+    expect(booby).toEqual(TILE_COLOURS.trap);
+    expect(heavy.fill).not.toBe(booby.fill);
+    expect(heavy.edge).not.toBe(booby.edge);
+  });
+
+  it("does not reuse any category's fill for the Heavy Trap", () => {
+    const fills = Object.values(TILE_COLOURS).map((colours) => colours.fill);
+    expect(fills).not.toContain(tileColours(HEAVY_TRAP_TYPE, false).fill);
+  });
+
+  it("gives every other type its category's colours", () => {
+    expect(tileColours(21, false)).toEqual(TILE_COLOURS.defensive);
+    expect(tileColours(17, false)).toEqual(TILE_COLOURS.wall);
+    expect(tileColours(30, true)).toEqual(TILE_COLOURS.decoration);
   });
 });
 

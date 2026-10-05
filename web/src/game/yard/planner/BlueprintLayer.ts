@@ -19,8 +19,8 @@ import {
   rectContains,
   rectCorners,
   stackBoxes,
-  TILE_COLOURS,
   tileCategory,
+  tileColours,
   tileLabel,
   tileRect,
   tileShowsIcon,
@@ -419,8 +419,9 @@ export class BlueprintLayer {
 
   private addTile(building: YardBuilding): void {
     const [width, height] = building.footprint;
-    const category = tileCategory(building.type, isDecoration(building.type));
-    const colours = TILE_COLOURS[category];
+    const decoration = isDecoration(building.type);
+    const category = tileCategory(building.type, decoration);
+    const colours = tileColours(building.type, decoration);
 
     const root = new Container();
     const world = blueprintToWorld(building.x, building.y);
