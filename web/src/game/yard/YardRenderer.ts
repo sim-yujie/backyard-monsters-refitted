@@ -504,7 +504,9 @@ export class YardRenderer {
    * Draws a building at a yard position, in both views at once.
    *
    * Keeping the hidden view in step is a container move and an offset write,
-   * so switching views mid-plan needs no catch-up pass.
+   * so switching views mid-plan needs no catch-up pass. The blueprint builds
+   * its tiles on the first switch to it, so it remembers what it was told
+   * before then and catches itself up when it builds.
    */
   placeBuilding(id: number, x: number, y: number): void {
     const building = this.byId.get(id);
