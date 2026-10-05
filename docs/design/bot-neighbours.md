@@ -515,6 +515,24 @@ The three seed scripts set `sandbox_start: false` always; `getDefaultBaseData` a
 the sandbox yard to any account in the `bot` table. A test seeds one user with `DEV_SANDBOX=true`
 and checks the yard is the starter yard.
 
+### 4.11 Seeded Map Room 2 dev players get real yards (issue #233)
+
+Owner decisions (2026-10-05): the 2,500 `db:seed:mr2` players are for dev testing only; they get
+this generator's yards, spread over levels 1-40 as the bots are; after an attack they repair and
+grow by the bots' own jobs.
+
+- `db:seed:mr2` gives each new player a yard, and `bun run db:seed:mr2:yards` fills in the blank
+  players of a database seeded before (`services/bots/seededPlayers.ts`). Both refuse
+  `ENV=production`. A seeded account someone has built on keeps its yard.
+- Each player gets a `bym.bot` row in state **`seeded`**. Every bot query reads `active` rows, so
+  they are never neighbours, never count towards `BOTS_TOTAL` or the rebalance, and retire-all and
+  remove-all leave them alone. `isBot` is false for them: they can still log in and are told of
+  attacks as players are.
+- With `BOTS_BRAIN=on` and `ENV` not production (`BotConfig.seeded`), the sweep books their first
+  grows and runs their `grow` and `repair` jobs as a bot's, except that their growth stops at the
+  top of level 40 instead of retiring, they never visit Map Room 1 and never show online. An
+  attack on one books its repair (`afterYardDefended`), never a revenge.
+
 ## 5. Data model and migrations
 
 One migration, `server/src/database/migrations/2026XXXX_CreateBotTables.ts`, in the existing

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { botConfig, DEFAULT_BOTS_DAYS_PER_LEVEL, DEFAULT_BOTS_TOTAL } from "./BotConfig.js";
 
-const KEYS = ["BOTS_FILL", "BOTS_BRAIN", "BOTS_REVENGE", "BOTS_TOTAL", "BOTS_DAYS_PER_LEVEL"];
+const KEYS = ["BOTS_FILL", "BOTS_BRAIN", "BOTS_REVENGE", "BOTS_TOTAL", "BOTS_DAYS_PER_LEVEL", "ENV"];
 const saved: Record<string, string | undefined> = {};
 
 beforeEach(() => {
@@ -27,9 +27,17 @@ describe("bot switches (issue #235)", () => {
       revenge: false,
       total: DEFAULT_BOTS_TOTAL,
       daysPerLevel: DEFAULT_BOTS_DAYS_PER_LEVEL,
+      seeded: true,
     });
     expect(DEFAULT_BOTS_TOTAL).toBe(500);
     expect(DEFAULT_BOTS_DAYS_PER_LEVEL).toBe(3);
+  });
+
+  test("seeded Map Room 2 dev yards are tended everywhere but production (issue #233)", () => {
+    process.env.ENV = "local";
+    expect(botConfig().seeded).toBe(true);
+    process.env.ENV = "production";
+    expect(botConfig().seeded).toBe(false);
   });
 
   test("on or true turns a switch on; anything else leaves it off", () => {

@@ -1,3 +1,5 @@
+import { Env } from "../enums/Env.js";
+
 /**
  * The switches for Map Room 1 bot neighbours (issue #235,
  * `docs/design/bot-neighbours.md` §10). All three are off unless set to `on`,
@@ -12,6 +14,10 @@
  * - `BOTS_DAYS_PER_LEVEL` — the growth pace: days a bot spends on each level
  *                           (default 3).
  *
+ * Not a switch: `seeded` is whether the sweep may tend the seeded Map Room 2
+ * dev players' yards (issue #233, `services/bots/seededPlayers.ts`), true
+ * everywhere but `ENV=production` ({@link seededYardsOn}).
+ *
  * Read on each call rather than once at import, so tests can flip them.
  */
 
@@ -24,7 +30,12 @@ export interface BotConfig {
   readonly revenge: boolean;
   readonly total: number;
   readonly daysPerLevel: number;
+  /** Seeded Map Room 2 dev players are repaired and grown too; absent reads as false. */
+  readonly seeded?: boolean;
 }
+
+/** Whether seeded Map Room 2 dev yards may be given or tended with these variables: never on production. */
+export const seededYardsOn = (env: Record<string, string | undefined>): boolean => env.ENV !== Env.PROD;
 
 /** Whether a switch is turned on: `on` or `true`, any case; anything else is off. */
 export const isSwitchOn = (raw: string | undefined): boolean => {
@@ -45,4 +56,5 @@ export const botConfig = (): BotConfig => ({
   revenge: isSwitchOn(process.env.BOTS_REVENGE),
   total: Math.floor(positiveNumber(process.env.BOTS_TOTAL, DEFAULT_BOTS_TOTAL)) || DEFAULT_BOTS_TOTAL,
   daysPerLevel: positiveNumber(process.env.BOTS_DAYS_PER_LEVEL, DEFAULT_BOTS_DAYS_PER_LEVEL),
+  seeded: seededYardsOn(process.env),
 });

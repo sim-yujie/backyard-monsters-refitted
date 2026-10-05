@@ -11,6 +11,9 @@ import { Save } from "../models/save.model.js";
 import { User } from "../models/user.model.js";
 import { joinOrCreateWorld } from "../../services/maproom/v2/joinOrCreateWorld.js";
 import { logger } from "../../utils/logger.js";
+import { botConfig, seededYardsOn } from "../../config/BotConfig.js";
+import { mulberry32 } from "../../game-rules/combat/rng.js";
+import { giveSeededYards } from "../../services/bots/seededPlayers.js";
 
 const NEXT_USER_BASEID = `SELECT nextval('bym.user_baseid_seq') AS baseid`;
 
@@ -19,7 +22,11 @@ const NEXT_USER_BASEID = `SELECT nextval('bym.user_baseid_seq') AS baseid`;
  *
  * This function initializes the MikroORM, seeds the database with dummy users
  * for Map Room 2 (count determined by MapRoom2.MAX_PLAYERS constant),
- * and then closes the ORM connection. Each user is assigned a cell in the Map Room 2 world.
+ * and then closes the ORM connection. Each user is assigned a cell in the Map Room 2 world,
+ * then given a generated yard spread over levels 1-40 that the bot sweep repairs and grows
+ * (issue #233, `services/bots/seededPlayers.ts`).
+ *
+ * Dev databases only: refused when ENV is production.
  *
  * Usage:
  * - npm run db:seed:mr2
@@ -30,6 +37,9 @@ const NEXT_USER_BASEID = `SELECT nextval('bym.user_baseid_seq') AS baseid`;
  */
 (async () => {
   try {
+    if (!seededYardsOn(process.env)) {
+      throw new Error("db:seed:mr2 is for dev databases only (ENV is production)");
+    }
     const orm = await MikroORM.init(ormConfig);
     const em = orm.em.fork();
 
@@ -69,6 +79,14 @@ const NEXT_USER_BASEID = `SELECT nextval('bym.user_baseid_seq') AS baseid`;
       // Join user to a world and assign them a cell
       await joinOrCreateWorld(user, save, em);
     }
+
+    logger.info(`Giving the seeded players their yards`);
+    const { given } = await giveSeededYards(orm.em.fork(), {
+      rng: mulberry32(Date.now() >>> 0),
+      now: Math.floor(Date.now() / 1000),
+      daysPerLevel: botConfig().daysPerLevel,
+    });
+    logger.info(`Gave ${given.length} seeded players a yard`);
 
     logger.info(`Seeding completed successfully! 🌱`);
 

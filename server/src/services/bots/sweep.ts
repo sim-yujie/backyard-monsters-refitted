@@ -105,6 +105,14 @@ import { generateBotYard } from "./yardGenerator.js";
  * does (`markOnline`, the last-seen key for 120 s), so for a minute an attack
  * on it is refused as on a real player's.
  *
+ * **Seeded Map Room 2 dev players** (issue #233, `seededPlayers.ts`): rows in
+ * state `seeded` get first grows and run `grow` and `repair` as an active bot
+ * does, but only while `config.seeded` is set (never on production; their
+ * jobs are dropped otherwise). Their growth stops at the top of level 40
+ * instead of retiring, they are never moved off their Map Room, never shown
+ * online and never visit Map Room 1. Every other step reads `active` rows
+ * only, so they never count towards the total, the spread or the rebalance.
+ *
  * It takes its entity manager, clock and Redis write from the caller and
  * never imports `server.js`, so tests run it on a throwaway database with a
  * made-up clock.
@@ -283,16 +291,27 @@ const countGrowDrop = async (tx: EntityManager, userid: number): Promise<number>
 const yardAt = (bot: BotRow, position: number, now: number) =>
   generateBotYard({ seed: bot.seed, persona: bot.persona, targetPoints: targetAt(position), now });
 
+/**
+ * Whether the sweep tends a bot row in this state: an active bot, or a seeded
+ * Map Room 2 dev player while `config.seeded` is set (the file comment).
+ */
+export const tends = (state: string, config: Pick<BotConfig, "seeded">): boolean =>
+  state === "active" || (state === "seeded" && config.seeded === true);
+
+/** Just under {@link RETIRE_POSITION}: where a seeded player's climb stops, the top of level 40. */
+export const SEEDED_TOP_POSITION = RETIRE_POSITION - 1e-6;
+
 /** The `grow` job (the file comment). */
 const grow: Handler = async (tx, job, { now, config, rng, report }) => {
   const bot = await lockBot(tx, job.bot_userid);
-  if (!bot || bot.state !== "active") {
+  if (!bot || !tends(bot.state, config)) {
     await deleteJob(tx, job);
     return {};
   }
+  const seeded = bot.state === "seeded";
   const save = await lockYard(tx, bot.userid);
   if (!save) throw new Error(`Bot ${bot.userid} has no main yard`);
-  if (save.mapversion !== MapRoomVersion.V1) {
+  if (!seeded && save.mapversion !== MapRoomVersion.V1) {
     // Off Map Room 1 by some other road: it can never be a neighbour again.
     logger.warn("Bot {userid} is no longer on Map Room 1; retiring it", { userid: bot.userid });
     await retire(tx, save, bot.userid, now);
@@ -307,7 +326,8 @@ const grow: Handler = async (tx, job, { now, config, rng, report }) => {
   const speed = Number(job.payload?.speed) > 0 ? Number(job.payload.speed) : 1;
   catchUpYard(save, now);
 
-  const position = pacePosition(bot, now, days, speed);
+  const climbed = pacePosition(bot, now, days, speed);
+  const position = seeded ? Math.min(climbed, SEEDED_TOP_POSITION) : climbed;
   if (position >= RETIRE_POSITION) {
     await retire(tx, save, bot.userid, now);
     return { retired: bot.userid };
@@ -341,7 +361,7 @@ const grow: Handler = async (tx, job, { now, config, rng, report }) => {
   const level = calculateBaseLevel(save.points, save.basevalue);
   save.level = level;
   save.credits = tendShiny(save.credits, level, rng);
-  visitMapRoom1(save);
+  if (!seeded) visitMapRoom1(save);
   if (level !== bot.level) {
     report.grew.push({ userid: bot.userid, from: bot.level, to: level });
     // The place on the climb is kept; a nudged pace lasts until the next level.
@@ -358,7 +378,7 @@ const grow: Handler = async (tx, job, { now, config, rng, report }) => {
     job.id,
   ]);
   await tx.execute(`UPDATE bym.bot SET grow_drops = 0 WHERE userid = ? AND grow_drops > 0`, [bot.userid]);
-  return { online: bot.userid };
+  return seeded ? {} : { online: bot.userid };
 };
 
 /**
@@ -368,7 +388,7 @@ const grow: Handler = async (tx, job, { now, config, rng, report }) => {
  */
 const repair: Handler = async (tx, job, { now, config, rng }) => {
   const row = await lockBot(tx, job.bot_userid);
-  if (!row || row.state !== "active") {
+  if (!row || !tends(row.state, config)) {
     await deleteJob(tx, job);
     return {};
   }
@@ -386,7 +406,8 @@ const repair: Handler = async (tx, job, { now, config, rng }) => {
     // Nothing damaged, or all of it already repairing: the refills still run.
     if (!(error instanceof ClientSafeError)) throw error;
   }
-  const yard = yardAt(row, pacePosition(row, now, config.daysPerLevel), now);
+  const climbed = pacePosition(row, now, config.daysPerLevel);
+  const yard = yardAt(row, row.state === "seeded" ? Math.min(climbed, SEEDED_TOP_POSITION) : climbed, now);
   rearmFiredTraps(save, yard);
   refillArmy(save, yard);
   tendChampion(save, yard, true);
@@ -471,17 +492,20 @@ export const cancelRevenges = async (em: EntityManager): Promise<number> => {
   return rows.length;
 };
 
-/** Books a `grow` for every active bot without one (step 1 of a pass). */
-export const bookFirstGrows = async (em: EntityManager, now: number): Promise<number> => {
+/**
+ * Books a `grow` for every active bot without one (step 1 of a pass), and
+ * every seeded Map Room 2 dev player when `seeded` is set.
+ */
+export const bookFirstGrows = async (em: EntityManager, now: number, seeded = false): Promise<number> => {
   const rows = await em.execute<{ id: number }[]>(
     `INSERT INTO bym.bot_job (bot_userid, kind, due_at)
      SELECT b.userid, 'grow', to_timestamp(? + floor(random() * ?))
        FROM bym.bot b
-      WHERE b.state = 'active'
+      WHERE (b.state = 'active' OR (?::boolean AND b.state = 'seeded'))
         AND NOT EXISTS (SELECT 1 FROM bym.bot_job j WHERE j.bot_userid = b.userid AND j.kind = 'grow')
      ON CONFLICT DO NOTHING
      RETURNING id`,
-    [now, FIRST_GROW_WITHIN_MINUTES * 60]
+    [now, FIRST_GROW_WITHIN_MINUTES * 60, seeded]
   );
   return rows.length;
 };
@@ -663,7 +687,7 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
   const context: JobContext = { now, config, rng: deps.rng ?? Math.random, report, revenge: deps.revenge };
   const { em } = deps;
 
-  report.booked += await bookFirstGrows(em.fork(), now);
+  report.booked += await bookFirstGrows(em.fork(), now, config.seeded === true);
 
   // Revenge runs only with BOTS_REVENGE on and a runner given; with it off,
   // nothing booked survives.

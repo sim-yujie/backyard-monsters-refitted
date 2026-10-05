@@ -17,6 +17,8 @@ const PLAYER = 7;
 const OTHER_PLAYER = 8;
 const BOT = 41;
 const OTHER_BOT = 42;
+/** A `db:seed:mr2` dev player with a `seeded` bot row (issue #233). */
+const SEEDED = 51;
 const NOW = 1_790_000_000;
 
 let messages: Row[];
@@ -35,7 +37,8 @@ const em = {
   getContext: () => em,
   fork: () => em,
   transactional: async <T>(body: (tx: unknown) => Promise<T>) => body(em),
-  findOne: async (_entity: unknown, where: { userid: number }) => (bots.has(where.userid) ? where : null),
+  findOne: async (_entity: unknown, where: { userid: number }) =>
+    bots.has(where.userid) ? where : where.userid === SEEDED ? { ...where, state: "seeded" } : null,
   find: async (entity: { name: string }) => (entity.name === "Thread" ? threads : messages),
   create: (_entity: unknown, data: Row) => {
     const row = { ...data };
@@ -189,5 +192,39 @@ describe("a bot defender", () => {
     } as unknown as EntityManager;
     await afterYardDefended(failing, defence({ yard: { saveuserid: BOT } }));
     expect(jobs).toEqual([]);
+  });
+});
+
+describe("a seeded Map Room 2 dev player (issue #233)", () => {
+  const withEnv = async (env: Record<string, string>, body: () => Promise<void>) => {
+    const before = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
+    const roll = spyOn(Math, "random").mockReturnValue(0);
+    try {
+      Object.assign(process.env, env);
+      await body();
+    } finally {
+      roll.mockRestore();
+      for (const [key, value] of Object.entries(before)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  };
+
+  test("books its repair and never a revenge, and is told as a player is", async () => {
+    await withEnv({ ENV: "local", BOTS_REVENGE: "on" }, () =>
+      afterYardDefended(request, defence({ yard: { saveuserid: SEEDED } }))
+    );
+    expect(jobs).toEqual([expect.objectContaining({ params: [SEEDED, expect.any(Date)] })]);
+    expect(String(jobs[0]!.sql)).toContain("'repair'");
+    expect(messages).toEqual([expect.objectContaining({ targetid: SEEDED, messagetype: YARD_ATTACKED })]);
+  });
+
+  test("on production books nothing, and is still told", async () => {
+    await withEnv({ ENV: "production", BOTS_REVENGE: "on" }, () =>
+      afterYardDefended(request, defence({ yard: { saveuserid: SEEDED } }))
+    );
+    expect(jobs).toEqual([]);
+    expect(messages).toEqual([expect.objectContaining({ targetid: SEEDED, messagetype: YARD_ATTACKED })]);
   });
 });

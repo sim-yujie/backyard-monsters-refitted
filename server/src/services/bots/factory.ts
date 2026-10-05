@@ -222,38 +222,47 @@ export const botUserData = (username: string, passwordHash: string, profile: Bot
  * `baseid` and `homebaseid` are the caller's, from the sequence.
  */
 export const botSaveData = (user: User, profile: BotProfile, yard: BotYard) => {
-  const buildingdata = Object.fromEntries(
-    [...yard.buildings, ...yard.decorations].map((building) => [String(building.id), { ...building }])
-  ) as unknown as BuildingDataMap;
   const made = new Date(profile.createtime * 1000);
 
   return {
     ...getDefaultBaseData(user, BaseType.MAIN, { forBot: true }),
-    credits: profile.credits,
+    ...botYardSlices(profile, yard),
     createtime: profile.createtime,
-    savetime: profile.savetime,
-    protected: 0,
-    tutorialstage: TUTORIAL_DONE,
-    level: yard.level,
-    points: yard.points,
-    basevalue: yard.basevalue,
-    buildingdata,
-    resources: { ...yard.resources },
-    lockerdata: yard.lockerdata,
-    academy: yard.academy,
-    monsters: yard.monsters,
-    champion: yard.champion,
-    storedata: yard.storedata,
-    flinger: yard.flinger,
-    catapult: yard.catapult,
     mapversion: MapRoomVersion.V1,
     worldid: null,
-    // A bot never runs the guided start; null reads as a legacy save (`onboarding/state.ts`).
-    onboarding: null,
     createdAt: made,
     takeoverDate: made,
   };
 };
+
+/**
+ * The save fields a bot's drawn yard sets, the yard itself and the state a
+ * player of its level is in, without the account's age or its Map Room: what
+ * {@link botSaveData} lays over a new save, and `seededPlayers.ts` over a
+ * seeded dev player's existing one (issue #233).
+ */
+export const botYardSlices = (profile: BotProfile, yard: BotYard) => ({
+  credits: profile.credits,
+  savetime: profile.savetime,
+  protected: 0,
+  tutorialstage: TUTORIAL_DONE,
+  level: yard.level,
+  points: yard.points,
+  basevalue: yard.basevalue,
+  buildingdata: Object.fromEntries(
+    [...yard.buildings, ...yard.decorations].map((building) => [String(building.id), { ...building }])
+  ) as unknown as BuildingDataMap,
+  resources: { ...yard.resources },
+  lockerdata: yard.lockerdata,
+  academy: yard.academy,
+  monsters: yard.monsters,
+  champion: yard.champion,
+  storedata: yard.storedata,
+  flinger: yard.flinger,
+  catapult: yard.catapult,
+  // A bot never runs the guided start; null reads as a legacy save (`onboarding/state.ts`).
+  onboarding: null,
+});
 
 /**
  * A new bot's save as a player's own load leaves it (#245): caught up to its
@@ -394,11 +403,14 @@ export const activeBotsByLevel = async (em: EntityManager): Promise<Record<numbe
   return Object.fromEntries(rows.map((row) => [Number(row.level), Number(row.count)]));
 };
 
-/** Bots made since `since`, for `--per-day` and `status`. */
+/** Bots made since `since`, for `--per-day` and `status`; seeded dev players are not bots (issue #233). */
 export const botsMadeSince = async (em: EntityManager, since: Date): Promise<number> => {
-  const [row] = await em.execute<[{ count: string }]>(`SELECT count(*) AS count FROM bym.bot WHERE created_at >= ?`, [
-    since,
-  ]);
+  const [row] = await em.execute<[{ count: string }]>(
+    `SELECT count(*) AS count FROM bym.bot WHERE created_at >= ? AND state <> 'seeded'`,
+    [
+      since,
+    ]
+  );
   return Number(row?.count ?? 0);
 };
 
@@ -441,6 +453,9 @@ export type DeleteScope = "retired" | "all";
  *   mail, truces and attack logs it is part of, so a dev database is as it
  *   was before the bots.
  *
+ * Neither touches a seeded Map Room 2 dev player's row (issue #233): those
+ * accounts are the dev world map, not bots.
+ *
  * @returns {Promise<number>} How many bots were deleted
  */
 export const deleteBots = async (em: EntityManager, scope: DeleteScope): Promise<number> =>
@@ -451,7 +466,7 @@ export const deleteBots = async (em: EntityManager, scope: DeleteScope): Promise
       AND NOT EXISTS (SELECT 1 FROM bym.truce r WHERE r.initiator_userid = b.userid OR r.recipient_userid = b.userid)`;
     await tx.execute(
       `CREATE TEMP TABLE doomed_bots ON COMMIT DROP AS
-       SELECT b.userid FROM bym.bot b WHERE ${scope === "retired" ? `b.state = 'retired' ${unreferenced}` : "TRUE"}`
+       SELECT b.userid FROM bym.bot b WHERE ${scope === "retired" ? `b.state = 'retired' ${unreferenced}` : "b.state <> 'seeded'"}`
     );
     const doomed = `(SELECT userid FROM doomed_bots)`;
 

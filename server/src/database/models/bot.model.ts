@@ -4,8 +4,14 @@ import { BigIntType, type Opt, PrimaryKeyProp } from "@mikro-orm/core";
 /** How a bot's progression weighs its next build (`docs/design/bot-neighbours.md` §4.2). */
 export type BotPersona = "economy" | "towers" | "army";
 
-/** `retired` bots have moved off Map Room 1 and are never picked again (§4.4). */
-export type BotState = "active" | "retired";
+/**
+ * `retired` bots have moved off Map Room 1 and are never picked again (§4.4).
+ * `seeded` rows are not bots at all but `db:seed:mr2` dev players, kept here
+ * only so the sweep repairs and grows their yards outside production (issue
+ * #233, `services/bots/seededPlayers.ts`): never a neighbour, never retired,
+ * never counted in the bot total, and `isBot` is false for them.
+ */
+export type BotState = "active" | "retired" | "seeded";
 
 /**
  * A computer-run Map Room 1 player (issue #235, `docs/design/bot-neighbours.md`

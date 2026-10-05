@@ -15,6 +15,7 @@
     "db:seed": "bun src/seed.ts",
     "db:drop": "bun --bun x mikro-orm schema:drop --drop-db -r",
     "db:seed:mr2": "bun src/database/seeds/seed_maproom2.ts",
+    "db:seed:mr2:yards": "bun src/database/seeds/fill_maproom2_yards.ts",
     "db:seed:mr3": "bun src/database/seeds/seed_maproom3.ts",
     "db:seed:alliances": "bun src/database/seeds/seed_alliances.ts",
     "migration:up": "bun --bun x mikro-orm migration:up",

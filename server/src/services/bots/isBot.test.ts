@@ -3,17 +3,18 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 
 mock.module("../../server.js", () => ({ postgres: { em: {} } }));
 
-const { isBot } = await import("./isBot.js");
+const { isBot, isSeededPlayer } = await import("./isBot.js");
 const { Bot } = await import("../../database/models/bot.model.js");
 
 /** A stand-in entity manager over a set of bot userids, counting its reads. */
-const fakeEm = (bots: number[], global = false) => {
+const fakeEm = (bots: number[], global = false, seeded: number[] = []) => {
   const reads: unknown[] = [];
   const em = {
     global,
     getContext: () => em,
     findOne: async (entity: unknown, where: { userid: number }) => {
       reads.push(entity);
+      if (seeded.includes(where.userid)) return { userid: where.userid, state: "seeded" };
       return bots.includes(where.userid) ? { userid: where.userid } : null;
     },
   };
@@ -49,5 +50,16 @@ describe("isBot", () => {
     await isBot(41, em);
     await isBot(41, em);
     expect(reads).toHaveLength(2);
+  });
+
+  test("a seeded Map Room 2 dev player's row is not a bot (issue #233)", async () => {
+    const { em, reads } = fakeEm([41], false, [51]);
+    expect(await isBot(51, em)).toBe(false);
+    expect(await isSeededPlayer(51, em)).toBe(true);
+    expect(await isSeededPlayer(41, em)).toBe(false);
+    expect(await isSeededPlayer(42, em)).toBe(false);
+    expect(await isBot(41, em)).toBe(true);
+    // One read per user, shared by both questions.
+    expect(reads).toHaveLength(3);
   });
 });
