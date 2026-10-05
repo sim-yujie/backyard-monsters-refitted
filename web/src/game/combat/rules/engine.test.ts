@@ -2329,3 +2329,173 @@ describe("a flung champion's power level (issue #202)", () => {
     expect(gorgo(0).maxHp).toBe(gorgo().maxHp);
   });
 });
+
+describe("the battle report's tallies (issue #22)", () => {
+  /** Steps until `done`, at most `limit` ticks; the tick it stopped on. */
+  const until = (
+    battle: ReturnType<typeof createBattle>,
+    limit: number,
+    done: () => boolean,
+  ): number => {
+    for (let step = 0; step < limit && !battle.over() && !done(); step += 1) battle.step();
+    return battle.tick;
+  };
+
+  it("times a tower's first shot, and its fall, and leaves both null while it has neither", () => {
+    const lone = createBattle(yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } }), { seed: 1 });
+    expect(lone.state().towers[0]).toMatchObject({ firstShotTick: null, destroyedTick: null });
+    lone.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 200, monsters: { C1: 1 } });
+    const firstShot = until(lone, 1200, () => (lone.state().towers[0]?.shots ?? 0) > 0);
+    run(lone, 1200);
+    // The Pokey dies under it, so it stands.
+    expect(lone.state().towers[0]).toMatchObject({ firstShotTick: firstShot, destroyedTick: null });
+    expect(firstShot).toBeGreaterThan(0);
+
+    const swarmed = createBattle(yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } }), { seed: 1 });
+    swarmed.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 100, monsters: { C1: 40 } });
+    const fell = until(swarmed, 6000, () => swarmed.state().destroyedIds.includes(1));
+    const tower = swarmed.state().towers[0]!;
+    expect(tower.destroyedTick).toBe(fell);
+    expect(tower.firstShotTick).toBeLessThan(fell);
+  });
+
+  it("counts a trap's damage and kills, and lists only the traps that went off", () => {
+    const trapYard = () =>
+      yardOf({
+        "1": { id: 1, t: 14, X: 400, Y: 400 },
+        "2": { id: 2, t: 24, X: 380, Y: 380 },
+      });
+    const battle = createBattle(trapYard(), { seed: 3 });
+    battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C1: 3 } });
+    const went = until(battle, 4000, () => battle.state().firedTraps.length > 0);
+    const [trap, ...others] = battle.state().traps;
+    expect(others).toEqual([]);
+    expect(trap).toMatchObject({ id: 2, type: 24, tick: went });
+    // Every Pokey it killed took its whole 200 off; any it only hurt, some.
+    expect(trap!.kills).toBeGreaterThan(0);
+    expect(trap!.damageDealt).toBeGreaterThanOrEqual(trap!.kills * 200);
+    expect(battle.state().creepsKilled).toBe(trap!.kills);
+
+    const quiet = createBattle(trapYard(), { seed: 3 });
+    quiet.apply({ kind: "fling", t: 0, x: 900, y: 900, r: 40, monsters: { C1: 2 } });
+    run(quiet, 400);
+    expect(quiet.state().traps).toEqual([]);
+  });
+
+  it("credits a bunker's garrison with what its defenders sent out did", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 290, Y: 290 },
+    });
+    const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 4 } } });
+    battle.apply({ kind: "fling", t: 0, x: 270, y: 270, r: 0, monsters: { C1: 1 } });
+    run(battle, 3000);
+    const state = battle.state();
+    // No tower, no trap and no champion: the one Pokey fell to the garrison.
+    expect(state.creepsKilled).toBe(1);
+    expect(state.bunkers).toEqual([
+      expect.objectContaining({ id: 1, level: 1, damageDealt: 200, kills: 1, destroyedTick: null }),
+    ]);
+    expect(state.bunkers[0]!.sent).toBeGreaterThan(0);
+    expect(state.defenderChampion).toBeNull();
+  });
+
+  it("credits the caged champion with what it killed, and has no tally without a cage", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 114, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 1200, Y: 1200 },
+    });
+    const battle = createBattle(yard, { seed: 3, defenderChampion: { t: 1, l: 2, hp: 5000, pl: 1 } });
+    battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
+    run(battle, 2400);
+    expect(battle.state().creepsKilled).toBe(5);
+    expect(battle.state().defenderChampion).toEqual({ damageDealt: 5 * 200, kills: 5 });
+
+    // A caged Korath's flame counts as his too.
+    const korath = createBattle(
+      yardOf({
+        "1": { id: 1, t: 114, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: 1200, Y: 1200 },
+      }),
+      { seed: 3, defenderChampion: { t: 4, l: 3, hp: 96000 } },
+    );
+    // Two D.A.V.E.s of 8,000 health take him a few blows each, and burn between them.
+    korath.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C12: 2 } });
+    run(korath, 4000);
+    expect(korath.state().creepsKilled).toBe(2);
+    expect(korath.state().defenderChampion).toEqual({ damageDealt: 2 * 8000, kills: 2 });
+
+    const plain = createBattle(yardOf({ "2": { id: 2, t: 1, l: 1, X: 0, Y: 0 } }), { seed: 3 });
+    expect(plain.state().defenderChampion).toBeNull();
+    expect(plain.state().bunkers).toEqual([]);
+  });
+
+  it("gives each monster type and each champion a row, and their building damage adds up", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 14, l: 1, X: 400, Y: 400 },
+      "2": { id: 2, t: 20, l: 1, X: 200, Y: 0 },
+      "3": { id: 3, t: 1, l: 1, X: 0, Y: 200 },
+      "4": { id: 4, t: 17, l: 1, X: 300, Y: 300 },
+    });
+    const start = new Map(yard.buildings.map((building) => [building.id, building.hp]));
+    const battle = createBattle(yard, { seed: 5, levels: { C2: 2 } });
+    battle.apply({
+      kind: "fling",
+      t: 0,
+      x: -60,
+      y: -60,
+      r: 80,
+      monsters: { C2: 3, C1: 6, C10: 2 },
+      champion: { t: 1, l: 1 },
+    });
+    run(battle, 6000);
+    const state = battle.state();
+    expect(state.attackers.map((row) => [row.monsterId, row.champion, row.level, row.sent])).toEqual([
+      ["C1", false, 1, 6],
+      ["C2", false, 2, 3],
+      ["C10", false, 1, 2],
+      ["G1", true, 1, 1],
+    ]);
+    const monsters = state.attackers.filter((row) => !row.champion);
+    expect(monsters.reduce((sum, row) => sum + row.lost, 0)).toBe(state.creepsKilled);
+    const dealt = state.attackers.reduce((sum, row) => sum + row.buildingDamage, 0);
+    const lost = yard.buildings.reduce(
+      (sum, building) => sum + (start.get(building.id)! - building.hp),
+      0,
+    );
+    expect(dealt).toBeGreaterThan(0);
+    expect(dealt).toBeCloseTo(lost, 6);
+  });
+
+  it("counts a Slimeattikus's Minis as born on the field, not flung", () => {
+    // Three level 6 towers bring a level 3 Slimeattikus down; it leaves 3 Minis (issue #129).
+    const yard = yardOf({
+      "1": { id: 1, t: 20, l: 6, X: 0, Y: 0 },
+      "2": { id: 2, t: 20, l: 6, X: 100, Y: 0 },
+      "3": { id: 3, t: 21, l: 6, X: 0, Y: 100 },
+      "4": { id: 4, t: 1, l: 1, X: 200, Y: 200 },
+    });
+    const battle = createBattle(yard, { seed: 3, levels: { C17: 3 } });
+    battle.apply({ kind: "fling", t: 0, x: 150, y: 150, r: 0, monsters: { C17: 1 } });
+    run(battle, 6000);
+    const rows = Object.fromEntries(battle.state().attackers.map((row) => [row.monsterId, row]));
+    expect(rows.C17).toMatchObject({ sent: 1, spawned: 0, lost: 1 });
+    expect(rows.C18).toMatchObject({ sent: 0, spawned: 3, level: 3 });
+  });
+
+  it("leaves the battle itself alone: the same digest with or without anyone reading the tallies", () => {
+    const battleOf = () => {
+      const battle = createBattle(yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } }), { seed: 4 });
+      battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 100, monsters: { C1: 20 } });
+      return battle;
+    };
+    const read = battleOf();
+    for (let step = 0; step < 3000 && !read.over(); step += 1) {
+      read.step();
+      read.state();
+    }
+    const unread = battleOf();
+    run(unread, 3000);
+    expect(digestOf(read.checkpoint())).toBe(digestOf(unread.checkpoint()));
+  });
+});

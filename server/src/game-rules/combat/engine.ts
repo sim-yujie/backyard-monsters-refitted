@@ -408,6 +408,62 @@ export interface TowerReport {
   damageDealt: number;
   shots: number;
   kills: number;
+  /** The tick of its first shot, or null while it has not fired (issue #22). */
+  firstShotTick: number | null;
+  /** The tick it fell, or null while it stands (issue #22). */
+  destroyedTick: number | null;
+}
+
+/** What one trap that went off did (issue #22). */
+export interface TrapReport {
+  readonly id: number;
+  readonly type: number;
+  /** The tick it went off. */
+  readonly tick: number;
+  /** Health it removed from creeps, attackers or not. */
+  damageDealt: number;
+  kills: number;
+}
+
+/**
+ * What one bunker's garrison did (issue #22): the defenders it sent out, the
+ * health they took off attackers and the attackers they finished. A creep a
+ * defender leaves behind (a Slimeattikus Mini, a zombie) fights for nobody's
+ * tally.
+ */
+export interface BunkerReport {
+  readonly id: number;
+  readonly level: number;
+  sent: number;
+  damageDealt: number;
+  kills: number;
+  /** The tick it fell, or null while it stands. */
+  destroyedTick: number | null;
+}
+
+/** What the caged champion did once out (issue #22), its flame included. */
+export interface DefenderChampionReport {
+  damageDealt: number;
+  kills: number;
+}
+
+/**
+ * One attacking monster type, or one champion, over the battle (issue #22).
+ * Monsters are one row per monster id; each champion is its own row.
+ */
+export interface AttackerReport {
+  /** The monster id, `C1`..`C19`, or the champion's `G1`..`G5`. */
+  readonly monsterId: string;
+  readonly champion: boolean;
+  readonly level: number;
+  /** Flung by the attacker. */
+  sent: number;
+  /** Born on the field rather than flung: Slimeattikus Minis and zombies. */
+  spawned: number;
+  /** Died, an Eye-ra's own blast included; one that walked home is not lost. */
+  lost: number;
+  /** Health it took off buildings, after fortification. */
+  buildingDamage: number;
 }
 
 /** The battle at one moment. */
@@ -466,6 +522,14 @@ export interface BattleState {
    * when there is none to defend.
    */
   readonly defenderChampionHp: number | null;
+  /** Each trap that went off, in the order they did (issue #22). */
+  readonly traps: readonly TrapReport[];
+  /** Each bunker on the field at the start, by id (issue #22). */
+  readonly bunkers: readonly BunkerReport[];
+  /** The caged champion's tally, or null when there is none to defend (issue #22). */
+  readonly defenderChampion: DefenderChampionReport | null;
+  /** Every attacker row: monsters by id, then champions in the order flung (issue #22). */
+  readonly attackers: readonly AttackerReport[];
   /**
    * What each attacking champion learned (issue #219, `brain.ts`), in the
    * order they were flung; present only for a battle run with
@@ -716,6 +780,8 @@ interface Creep {
   burnDps: number;
   /** The flame's `_curTick`. */
   burnTick: number;
+  /** The creep that lit the flame, or null; read only by the report (issue #22). */
+  burnBy: Creep | null;
   /** An enraged creep's speed and swing-rate multiplier; 1 when it is not enraged. */
   enrage: number;
   /** Its armour: what share of each hit it shrugs off; 0 for all but the enraged. */
@@ -785,6 +851,7 @@ const NO_ABILITIES = {
   quaking: false,
   burnDps: 0,
   burnTick: 0,
+  burnBy: null,
   enrage: 1,
   armour: 0,
   enragedBy: -1,
@@ -1007,6 +1074,14 @@ const clampLevel = (levels: MonsterLevels | undefined, id: string): number => {
   return level && level > 0 ? Math.floor(level) : 1;
 };
 
+/** Monster ids in reading order: by prefix, then by number, so `C2` comes before `C10`. */
+const compareIds = (one: string, other: string): number => {
+  const prefixOne = one.replace(/\d+$/, "");
+  const prefixOther = other.replace(/\d+$/, "");
+  if (prefixOne !== prefixOther) return prefixOne < prefixOther ? -1 : 1;
+  return Number(one.slice(prefixOne.length)) - Number(other.slice(prefixOther.length));
+};
+
 /**
  * Start a battle over a yard.
  *
@@ -1033,6 +1108,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const pendingZombies: Array<{ readonly corpse: Corpse; readonly raiser: Creep }> = [];
   const firedTraps: number[] = [];
   const destroyedIds: number[] = [];
+  /*
+   * The report's tallies (issue #22). Outputs only: nothing the battle decides
+   * reads them, and they are in neither a checkpoint nor the digest.
+   */
+  const trapReports: TrapReport[] = [];
+  const bunkerReports = new Map<number, BunkerReport>();
+  const towerReports = new Map<number, TowerReport>();
+  /** Monster rows by monster id, champion rows in the order flung. */
+  const monsterRows = new Map<string, AttackerReport>();
+  const championRows: AttackerReport[] = [];
+  /** Each attacker's row, by creep id. */
+  const attackerRowOf = new Map<number, AttackerReport>();
   /** Shots, hits, hurts and deaths for the renderer, pruned each step; not simulation state. */
   const visual: BattleVisualEvent[] = [];
 
@@ -1079,6 +1166,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         }
       }
       bunkers.push({ building, pool, dispatched: 0, tickNumber: 0 });
+      bunkerReports.set(building.id, {
+        id: building.id,
+        level: building.level,
+        sent: 0,
+        damageDealt: 0,
+        kills: 0,
+        destroyedTick: null,
+      });
       continue;
     }
     const stats = towerStats(building.type, building.level, yard.kind);
@@ -1093,6 +1188,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         damageDealt: 0,
         shots: 0,
         kills: 0,
+        firstShotTick: null,
+        destroyedTick: null,
       },
       // `Props()` seeds the fire tick with `rate`, not `rate * 2` (`BTOWER.as:112`).
       fireTick: stats.rate ?? 0,
@@ -1105,6 +1202,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       charge: 0,
     });
   }
+
+  for (const tower of towers) towerReports.set(tower.building.id, tower.report);
 
   /** Laser beams still sweeping, oldest first; each outlives its tower (`LASERS.as`). */
   const laserBeams: LaserBeam[] = [];
@@ -1153,6 +1252,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   let defendersOut = 0;
   let defenderChampionHp: number | null =
     cage && options.defenderChampion ? cagedHealth(options.defenderChampion) : null;
+  /** The caged champion's report tally (issue #22), there exactly when its health is. */
+  const defenderChampionReport: DefenderChampionReport | null =
+    defenderChampionHp === null ? null : { damageDealt: 0, kills: 0 };
 
   /* ── Damage and loot ───────────────────────────────────────────────────── */
 
@@ -1254,6 +1356,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const destroy = (building: EngineBuilding, byAttacker: boolean): void => {
     building.hp = 0;
     destroyedIds.push(building.id);
+    const fallen = towerReports.get(building.id) ?? bunkerReports.get(building.id);
+    if (fallen) fallen.destroyedTick = tick;
     if (byAttacker) {
       // The client empties a harvester when it falls (`BRESOURCE.as:129-134`).
       if (building.stored > 0) takeLoot(building, building.stored, 1);
@@ -1278,6 +1382,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (building.hp <= 0 || raw <= 0) return 0;
     const dealt = fortifiedDamage(raw, building.fortification, 0);
     const applied = Math.min(dealt, building.hp);
+    if (creep) {
+      const row = attackerRowOf.get(creep.id);
+      if (row) row.buildingDamage += applied;
+    }
     if (creep && lessons.size > 0) {
       const lesson = lessons.get(creep.id);
       if (lesson) lesson.dealt += applied;
@@ -1309,7 +1417,61 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     });
   };
 
-  const damageCreep = (creep: Creep, raw: number, by: Creep | null = null): number => {
+  /**
+   * The report's credit for a defender's blow (issue #22): to the bunker that
+   * sent it or to the caged champion. Nobody else's blows are tallied here;
+   * towers and traps keep their own.
+   */
+  const creditDefender = (striker: Creep, applied: number, killed: boolean): void => {
+    let tally: { damageDealt: number; kills: number } | null | undefined = null;
+    if (striker.homeBunker >= 0) tally = bunkerReports.get(striker.homeBunker);
+    else if (striker === cageChampion) tally = defenderChampionReport;
+    if (!tally) return;
+    tally.damageDealt += applied;
+    if (killed) tally.kills += 1;
+  };
+
+  /**
+   * An attacker joins its report row (issue #22): its monster id's, or a row
+   * of its own for a champion. `flung` says whether the attacker flung it.
+   */
+  const joinRow = (creep: Creep, flung: boolean): void => {
+    if (creep.friendly) return;
+    let row = creep.champion ? undefined : monsterRows.get(creep.monsterId);
+    if (!row) {
+      row = {
+        monsterId: creep.monsterId,
+        champion: creep.champion,
+        level: creep.level,
+        sent: 0,
+        spawned: 0,
+        lost: 0,
+        buildingDamage: 0,
+      };
+      if (creep.champion) championRows.push(row);
+      else monsterRows.set(creep.monsterId, row);
+    }
+    if (flung) row.sent += 1;
+    else row.spawned += 1;
+    attackerRowOf.set(creep.id, row);
+  };
+
+  /** An attacker's death on its report row (issue #22). */
+  const countLost = (creep: Creep): void => {
+    const row = attackerRowOf.get(creep.id);
+    if (row) row.lost += 1;
+  };
+
+  /**
+   * `by` is who the blow turns (issue #195); `striker` is who dealt it, for
+   * the report (issue #22), and is the same creep wherever a creep strikes.
+   */
+  const damageCreep = (
+    creep: Creep,
+    raw: number,
+    by: Creep | null = null,
+    striker: Creep | null = null,
+  ): number => {
     if (creep.hp <= 0) return 0;
     // A defender's blow turns the attacker on it (issue #195), and its aggro
     // ends a flying champion's look (`ChampionBase.as:903`, issue #222).
@@ -1332,13 +1494,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       });
     }
     creep.hp -= raw;
-    if (creep.hp <= 0) {
+    const killed = creep.hp <= 0;
+    if (killed) {
       creep.hp = 0;
       creep.gone = true;
-      if (!creep.friendly) creepsKilled += 1;
+      if (!creep.friendly) {
+        creepsKilled += 1;
+        countLost(creep);
+      }
       recordDeath(creep);
       onDeath(creep);
     }
+    if (striker && striker.friendly && !creep.friendly) creditDefender(striker, applied, killed);
     return applied;
   };
 
@@ -1393,6 +1560,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       );
       // `CREEPS.Spawn(…, true)`, and `isDisposable` for a defender's (`:40-44`).
       mini.disposable = true;
+      joinRow(mini, false);
     }
   };
 
@@ -1467,6 +1635,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     zombie.maxHp *= health;
     zombie.hp = zombie.maxHp;
     zombie.disposable = true;
+    joinRow(zombie, false);
   };
 
   /* ── Flinging ──────────────────────────────────────────────────────────── */
@@ -1678,6 +1847,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     championHp = creep.hp;
     championsHp[id] = creep.hp;
+    joinRow(creep, true);
     return creep;
   };
 
@@ -1789,7 +1959,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const count = Math.max(0, Math.floor(event.monsters[monsterId] ?? 0));
       const level = clampLevel(options.levels, monsterId);
       for (let spawned = 0; spawned < count; spawned += 1) {
-        spawnCreep(monsterId, level, dropPoint(event.x, event.y, radius), false, "attack");
+        joinRow(
+          spawnCreep(monsterId, level, dropPoint(event.x, event.y, radius), false, "attack"),
+          true,
+        );
         creepsFlung += 1;
       }
     }
@@ -2125,15 +2298,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   const strikeCreep = (creep: Creep, foe: Creep, by: Creep | null): number => {
     if (!(creep.champion && creep.monsterId === KORATH_ID)) {
-      return damageCreep(foe, creep.damage, by);
+      return damageCreep(foe, creep.damage, by, creep);
     }
     if (foe.flying && hasFireball(KORATH_ID, creep.level, creep.power)) {
       // The flame catches as the fireball lands, before its damage (`FIREBALL.as:138-149`).
       burn(foe, creep);
-      return damageCreep(foe, Math.trunc(creep.damage / KORATH_FIREBALL_DIVISOR), by);
+      return damageCreep(foe, Math.trunc(creep.damage / KORATH_FIREBALL_DIVISOR), by, creep);
     }
     creep.hits += 1;
-    const dealt = damageCreep(foe, creep.damage, by);
+    const dealt = damageCreep(foe, creep.damage, by, creep);
     burn(foe, creep);
     return dealt;
   };
@@ -2143,6 +2316,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (foe.hp <= 0 || foe.burnDps > 0) return;
     foe.burnDps = korath.damage * FLAME_SHARE;
     foe.burnTick = 0;
+    foe.burnBy = korath;
   };
 
   /**
@@ -2154,7 +2328,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.burnTick += 1;
     if (creep.burnTick < FLAME_INTERVAL) return false;
     creep.burnTick -= FLAME_INTERVAL;
-    damageCreep(creep, creep.burnDps);
+    damageCreep(creep, creep.burnDps, null, creep.burnBy);
     return creep.hp <= 0;
   };
 
@@ -2172,6 +2346,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     creep.hp = 0;
     creep.gone = true;
+    countLost(creep);
     recordDeath(creep);
     onDeath(creep);
   };
@@ -2588,7 +2763,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const flags = side | TARGETS_GROUND | TARGETS_INVISIBLE;
     for (const hit of index.inRange(radius, creep.x, creep.y, flags)) {
       const dealt = linearAreaDamage(creep.damage, radius, inner, hit.dist);
-      if (dealt !== undefined && !hit.creep.gone) damageCreep(hit.creep, dealt);
+      if (dealt !== undefined && !hit.creep.gone) damageCreep(hit.creep, dealt, null, creep);
     }
     if (!creep.friendly) {
       for (const building of yard.buildings) {
@@ -2980,6 +3155,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     tower.targets = found.slice(0, count).map((hit) => hit.creep.id);
   };
 
+  /** One shot on a tower's report, and the tick of its first (issue #22). */
+  const countShot = (report: TowerReport): void => {
+    report.shots += 1;
+    if (report.firstShotTick === null) report.firstShotTick = tick;
+  };
+
   const tickTower = (tower: Tower): void => {
     const building = tower.building;
     tower.frame += 1;
@@ -3019,7 +3200,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         armCoil(tower, creep);
         continue;
       }
-      tower.report.shots += 1;
+      countShot(tower.report);
       if (building.type === LASER_TYPE) {
         fireLaser(tower, creep, shot, splash);
         continue;
@@ -3096,7 +3277,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return;
     }
     tower.shotsFired += 1;
-    tower.report.shots += 1;
+    countShot(tower.report);
     const shot = towerShotDamage(damage, building.hp, building.maxHp);
     fireShell(tower, creep, shot, splash, scan.flags);
   };
@@ -3141,7 +3322,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const target = byCreepId.get(tower.zapTarget);
     // It zaps the creep it named wherever that is now; a dead one takes nothing.
     if (tower.targets.length > 0 && target && target.hp > 0) {
-      tower.report.shots += 1;
+      countShot(tower.report);
       visual.push({
         kind: "shot",
         tick,
@@ -3301,23 +3482,28 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
     // `Explode` hits everything inside `size`, not just what tripped it.
     let touched = 0;
+    let dealt = 0;
+    let kills = 0;
     for (const hit of index.inRange(spec.size, building.cx, building.cy, TRAP_TARGETS)) {
       if (hit.creep.hp <= 0) continue;
       touched += 1;
-      damageCreep(hit.creep, trapDamageAt(building.type, hit.dist));
+      dealt += damageCreep(hit.creep, trapDamageAt(building.type, hit.dist));
+      if (hit.creep.hp <= 0) kills += 1;
     }
     // A Heavy Trap's second pass, over the flyers at half (`BHEAVYTRAP.as:68-82`, issue #259).
     if (building.type === HEAVY_TRAP_TYPE) {
       for (const hit of index.inRange(spec.size, building.cx, building.cy, oldStyleTargets(2))) {
         if (hit.creep.hp <= 0) continue;
         touched += 1;
-        damageCreep(hit.creep, heavyTrapFlyerDamageAt(hit.dist));
+        dealt += damageCreep(hit.creep, heavyTrapFlyerDamageAt(hit.dist));
+        if (hit.creep.hp <= 0) kills += 1;
       }
     }
     if (touched === 0) return;
     building.fired = true;
     building.hp = 0;
     firedTraps.push(building.id);
+    trapReports.push({ id: building.id, type: building.type, tick, damageDealt: dealt, kills });
     grid.removeBuilding(building);
   };
 
@@ -3349,6 +3535,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const monsterId = ids[rng.int(ids.length)] as string;
     bunker.pool.set(monsterId, (bunker.pool.get(monsterId) ?? 0) - 1);
     bunker.dispatched += 1;
+    const sentBy = bunkerReports.get(building.id);
+    if (sentBy) sentBy.sent += 1;
     const level = clampLevel(options.defenderLevels ?? options.levels, monsterId);
     const defender = spawnCreep(
       monsterId,
@@ -3727,6 +3915,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     bunkerLosses: bunkerLossRecord(bunkerLosses),
     bunkerGarrisons: garrisonsAfter(),
     defenderChampionHp,
+    traps: trapReports.map((trap) => ({ ...trap })),
+    bunkers: [...bunkerReports.values()]
+      .sort((one, other) => one.id - other.id)
+      .map((bunker) => ({ ...bunker })),
+    defenderChampion: defenderChampionReport ? { ...defenderChampionReport } : null,
+    attackers: [
+      ...[...monsterRows.values()].sort((one, other) => compareIds(one.monsterId, other.monsterId)),
+      ...championRows,
+    ].map((row) => ({ ...row })),
     ...(options.learn ? { lessons: lessonsNow() } : {}),
   });
 

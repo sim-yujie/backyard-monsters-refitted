@@ -109,6 +109,11 @@ export interface ReplayOutcome {
   readonly bunkerGarrisons: BattleState["bunkerGarrisons"];
   /** The caged champion's health afterwards (`BattleState.defenderChampionHp`, #195). */
   readonly defenderChampionHp: number | null;
+  /** The report's tallies (issue #22); outputs only, in no checkpoint and no digest. */
+  readonly traps: BattleState["traps"];
+  readonly bunkers: BattleState["bunkers"];
+  readonly defenderChampion: BattleState["defenderChampion"];
+  readonly attackers: BattleState["attackers"];
   /** Each attacking champion's lesson, with `learn` only (`BattleState.lessons`, #219). */
   readonly lessons?: BattleState["lessons"];
 }
@@ -223,6 +228,10 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     bunkerLosses: state.bunkerLosses,
     bunkerGarrisons: state.bunkerGarrisons,
     defenderChampionHp: state.defenderChampionHp,
+    traps: state.traps,
+    bunkers: state.bunkers,
+    defenderChampion: state.defenderChampion,
+    attackers: state.attackers,
     ...(state.lessons ? { lessons: state.lessons } : {}),
   };
 };
