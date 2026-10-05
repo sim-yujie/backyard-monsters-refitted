@@ -414,7 +414,7 @@ WP2 schedule ─────────────┼──▶ WP3 routes ─�
 
 WP0 and WP2 can start together. WP4 can start against WP3's contract (§4.2) with a stub.
 
-### WP0: Engine support for raids (shared rules)
+### WP0: Engine support for raids (shared rules) (#300)
 
 **Goal:** the shared engine can fight a wild raid: an off-yard raid spawn, a strength multiplier,
 a per-raider hit limit, and an end with no countdown.
@@ -431,7 +431,7 @@ digests on Bun and Node; existing fixtures unchanged.
 
 **Depends on:** none. **Size:** M.
 
-### WP1: Raid planner (server, pure)
+### WP1: Raid planner (server, pure) (#301)
 
 **Goal:** from a saved yard and the schedule, the raid Flash would have sent: tribe, bearing, army,
 spawn discs, strength, hit limit, as a raid log for the engine.
@@ -448,9 +448,9 @@ tier switches (tanks at levels 14, 27 and 40, damage dealers every 8 levels); C1
 amplifier 1.3 / 1 / 0.5; strength thresholds; direction picks the cheapest entry point and the
 shortest on a tie; deterministic for a given seed.
 
-**Depends on:** WP0 (event shape, grid). **Size:** M.
+**Depends on:** WP0 #300 (event shape, grid). **Size:** M.
 
-### WP2: Raid schedule and state (server)
+### WP2: Raid schedule and state (server) (#302)
 
 **Goal:** the server owns `aiattacks` and can say, for a player, "a raid is due now".
 
@@ -468,7 +468,7 @@ TTLs, `GETDEL` and cancel rules (§7.1); frequency setter (§2.1).
 
 **Depends on:** none. **Size:** M.
 
-### WP3: Raid routes and landing (server)
+### WP3: Raid routes and landing (server) (#303)
 
 **Goal:** the whole server flow of §4.2: warning, engage / prepare, start, finish, frequency, with
 the outcome computed and applied by the server only.
@@ -490,9 +490,9 @@ finish twice applies once; good defence gives exactly 10 Shiny, poor gives 0; th
 bank below 0; every damaged building gets `rE`; another player's attack load is refused during the
 fight; yard actions refused during the fight; the outcome equals a fresh replay of the logged raid.
 
-**Depends on:** WP0, WP1, WP2. **Size:** L.
+**Depends on:** WP0 #300, WP1 #301, WP2 #302. **Size:** L.
 
-### WP4: Raid screens (web)
+### WP4: Raid screens (web) (#304)
 
 **Goal:** the player sees a Flash-style raid on their own yard.
 
@@ -511,9 +511,9 @@ locked with a banner if a raid is fighting. Uses the original tribe splash art a
 frequency), countdown text, ping body with the Planner open and closed; a browser check on
 `agenttester` with a forced-due raid (a dev-only way to make one due, WP3).
 
-**Depends on:** WP3 (can start on its contract). **Size:** L.
+**Depends on:** WP3 #303 (can start on its contract). **Size:** L.
 
-### WP5: "Survive a tribe attack" goal and the staged raid
+### WP5: "Survive a tribe attack" goal and the staged raid (#305)
 
 **Goal:** D8. Goal N1 becomes "survive a tribe attack"; the tutorial's staged raid is presented as
 a named tribe attack.
@@ -529,9 +529,9 @@ attacking!" (`web/src/game/guide/steps.ts:217`), so check it names the tribe aft
 **Tests:** N1 completes after a counted raid and not before; a player who already finished N1
 keeps it.
 
-**Depends on:** WP3. **Size:** S.
+**Depends on:** WP3 #303. **Size:** S.
 
-### Backlog (separate issue): Trojan Horse and wild-monster events
+### Backlog (separate issue, #306): Trojan Horse and wild-monster events
 
 The Trojan Horse (`CUSTOMATTACKS.TrojanHorse`, `BUILDING27.as`, `WMATTACK.as:288-296`, `s1` in
 `aiattacks`) and the special events WMI1 / WMI2 and Monster Blitzkrieg (`SPECIALEVENT`). Not
