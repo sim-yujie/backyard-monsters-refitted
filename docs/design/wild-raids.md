@@ -280,6 +280,53 @@ type starts the same walking time out and they arrive together; damage dealers a
 looters 80 (`PROCESS3.as:138-155`, `PROCESS5.as:166-187`). Each type lands in a disc centred
 `800 + d/2` out, radius `d/2` (`WMATTACK.as:710-718`, `:755-768`).
 
+**The exact formulas, as built** (WP1, `server/src/services/raids/raidArmy.ts` and
+`raidDirection.ts`, copied from Flash's `ProcessC` and `ProcessB` with every `int` and `ceil`):
+
+- **Size:** `N = trunc(sum over buildings of w x A)`, added one building at a time in id order (so
+  the float rounds as Flash's loop did). `w` is the tribe's building weight for a harvester, tower
+  or "special" building, its trap-or-wall weight for a trap or wall, 0 for anything else; `A` is
+  1.3 / 1 / 0.5. Damaged buildings count too (none are, Q5).
+- **Tier:** `f = min(1, max(0, level / 40))`. Tank `RAID_TANKS[trunc(3f)]` (C2, C6 from level 14,
+  C10 from 27, C12 at 40); damage dealer `[C1,C4,C7,C8,C11,C11][trunc(5f)]` (a step every 8
+  levels); Abunakki's looter `[C3,C9][trunc(f)]`; Dreadnaut's `[C9,C14][trunc(f)]`.
+- **Legionnaire:** `tanks = N/3`, `dealers = tanks/2`; C12 tanks become `ceil(tanks/2)`; both
+  truncated.
+- **Kozu:** slots `m = trunc(5f)`, `m-1` and `m+1` (held at the table's ends) of
+  `[C1,C1,C1,C3,C8,C9]`, `trunc(0.33N)` each (the same type twice adds up).
+- **Abunakki:** with fire on the way in, `looters = 0.2N`, `tanks = (N - looters)/1.3`,
+  `kamikaze = tanks/0.3`; with none, `looters = tanks = 0`, `kamikaze = N` (1 when `N < 1`). Each is
+  then rounded up; kamikaze above 5 become looters (kamikaze = 5); C12 tanks `ceil(/2)`; all
+  truncated.
+- **Dreadnaut:** with fire, `share = max(0.5, loot / (fire + loot))`, `looters = share x N`,
+  `tanks = N - looters`; with none, all looters. C12 tanks `ceil(/2)`, C14 looters `ceil(/2.5)`;
+  truncated.
+- **Walk:** `walk = 200`, plus `100 - distance` when the target is nearer than 100 to the way in.
+  The first type present (tank, else the next) sets `time = walk / speed`; each type's distance is
+  `time x its speed`, plus 25 (damage dealers), 40 (kamikaze) or 80 (Abunakki's looters). Kozu's
+  time comes from its low slot. Speeds are level-0 `speed`.
+- **Way in:** 16 bearings `22.5 x i`, entry `800 x (cos, sin)` with Flash's degrees constant
+  `0.0174532925`. Target: the nearest candidate (by anchor) to the entry, lower id on a tie;
+  Legionnaire's candidates are shooting towers, the others' (and Legionnaire's with no shooting
+  tower) harvesters, silos and the Town Hall not looted out, and failing those any harvester,
+  tower or special building. Route: the engine grid's path from the entry. Fire:
+  `200 x 3 x sum(damage / rate)` of every shooting tower whose range reaches every third waypoint,
+  range measured from the tower's middle. Loot worth: `min(10000, 0.04 x twigs bank)` for a silo or
+  Town Hall, else `min(10000, 0.1 x the harvester's unbanked amount)`. Pick: sort by fire, then
+  route length, both descending (Abunakki: then worth ascending), stable, and take the last.
+- **Landing:** one disc per type at `800 + d/2` out, radius `d/2`, pulled in (and only if that is
+  not enough, shrunk) to stay a cell inside the pathing grid (±1300). Kozu lands in threes, each
+  three 8 degrees further round, a remainder with the last three; its count is exact.
+
+**Defaults decided in WP1** (orchestrator, owner told; not owner questions):
+
+1. Kozu comes in its exact planned number. Flash spawned a whole three while any were left, then
+   the leftovers again, so a count not divisible by 3 came with 3 extra; that is not copied.
+2. Abunakki can target the Town Hall. Flash's `in BUILDING14` (for `is`) was a typo.
+3. Tower range is measured from the tower's middle (Flash meant to and threw the sum away).
+4. Dreadnaut's loot figure (its looter share) uses Abunakki's estimate (`worth` above).
+5. A Legionnaire raid on a yard with no shooting tower heads for loot instead of stalling.
+
 ### 5.4 Strength and hits
 
 - **Plain stats (Q8):** no strength scaling at all. Flash's x0.4 to x0.9 (§2.3) is dropped, so
