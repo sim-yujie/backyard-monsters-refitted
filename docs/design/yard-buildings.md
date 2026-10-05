@@ -1148,7 +1148,8 @@ for WP6.1 (#126):
 1. **Strength: plain stats.** Flash multiplied every wild monster's health and damage by 0.4 to
    0.9 by the yard's base points and value (`client/scripts/WMATTACK.as:729-752`, then
    `CreepBase.as:88`, `:93`). The simulator does not: the attackers fight at level 1 or at the
-   player's academy levels (the Q5 toggle), at 100%, and the combat engine gets no multiplier.
+   player's academy levels (the Q5 toggle; since #22, a level picked per monster), at 100%, and
+   the combat engine gets no multiplier.
 2. **Time limit: the attack's.** Flash's Baiter attack had no clock; it ran until the attackers died
    or the player scared them away (`MONSTERBAITER.End`). The simulator keeps the attack scene's
    5-minute countdown and its automatic ends (every attacker beaten, the yard flattened), and
@@ -1157,22 +1158,44 @@ for WP6.1 (#126):
    already fired stay spent (a fired trap is gone from `buildingdata` until it is re-armed).
    Nothing is saved either way.
 
-**As built (#126).** The Baiter's panel offers **Bring an attack** on a built Baiter at full health
-with no job running (`BUILDINGINFO.as:97-127`, `:210-211`), not on an outpost. Its controls
-(`web/src/ui/yard/BaiterPanel.ts`) are a compass of the level's directions, the Level 1 / My
-academy levels switch, "Attack size N / budget", C1–C14 steppers with Fill, Clear and **Run
-attack**; the army, direction and switch are kept for the session. Run opens the Baiter scene
-(`SceneName.BAITER`): the attack scene in practice mode with only the battle layer and the
-Baiter's package (`web/src/game/baiter/baiterPlugin.ts`, `BAITER_PLUGINS`), fighting on the own
-yard's load it was handed (`baiterSession.ts`, `baiterTarget`), so there is no attack load, no
-checkpoint and no save. Every monster lands in one fling 1,000 yard units out at the direction's
-angle (`WMATTACK.as:711`), the view turns to meet it, and the end shows damage, buildings
-destroyed, attackers beaten, which towers fired and how many traps went off, with Run again and
-Back to yard. `baiterPlugin.test.ts` runs a whole practice attack with every request stubbed to
-fail and checks none is made.
-The yard defends itself as it would against a real attack (issue #195): the Baiter hands the
-scene the yard's own `defenderforces` (the shared `defenderForcesOf`), so its bunkers send their
-garrisons out at the player's academy levels and its caged champion comes out to fight.
+**As built (#126, rebuilt as the simulator in #22).** The first version (a compass of 4 or 8
+directions, a Level 1 / My academy levels switch, C1-C14 steppers and one far-out fling) was
+replaced by the full defence simulator of `docs/design/baiter-simulator.md` (owner answers in its
+§9). The Baiter's panel (`web/src/ui/yard/BaiterPanel.ts`) offers **Test attack** on a built Baiter
+at full health with no job running (`BUILDINGINFO.as:97-127`, `:210-211`), not on an outpost. What
+was built:
+
+- **Roster and levels.** The 18 surface monsters (C1-C17, C19; no Inferno monsters), locked ones
+  included with a "Not unlocked" tag. Each row has its own level, from 1 to the monster's highest
+  academy level, defaulting to the player's academy level (1 if never trained). Quick set: **My
+  army** (copies the housed monsters), **My levels**, **All level 1**, **All max**. The army size
+  counts each monster's housing space at its chosen level against a cap set by the Baiter's level:
+  600, 900, 1,200, 1,500, 2,100, 3,200, 4,800 (`BAITER_CAP`, `web/src/game/baiter/baiterSession.ts`).
+  Musk is gone.
+- **Champions.** Any of the five at any evolution and power level, with a Mode; one ordinary
+  champion plus Krallen, as in a real attack. A test champion is always a fresh made-up one (full
+  health, no learned brain) and takes no army space.
+- **Drops.** **Start test** opens the Baiter scene (`SceneName.BAITER`): the player's own yard as
+  it is now (damage and spent traps included, no Catapult, siege or resources;
+  `web/src/game/attack/ownYardTarget.ts`) with the real attack's army panel and tap-to-drop, as
+  many drops as the army allows, anywhere a real attack may drop, the champion from its row, 1x/2x.
+  The 5-minute clock waits for the first drop. **Stop** ends a test early and asks nothing. The test
+  keeps no "last army" and a Mode change saves nothing. The yard defends itself as in a real attack
+  (#195): bunker garrisons at the player's academy levels and the caged champion fight.
+- **Report.** The end opens a report with **Summary**, **Towers** and **Attackers** tabs
+  (`web/src/ui/attack/TestReport.ts`, rows from `web/src/game/baiter/testReport.ts`, fed by the
+  engine's fuller battle report). Tapping a tower row centres the camera on it and rings it. Buttons:
+  **Watch replay**, **Test again** (same army, fresh screen), **Change army** (back to the yard with
+  the Baiter's panel open) and **Back to yard**.
+- **Replay.** Every finished test is recorded in memory (a copy of the yard, the army, the seed and
+  the drops; `web/src/game/baiter/testHistory.ts`); the last 5 are kept and are gone on page reload.
+  **Watch replay** plays the same battle on the `baiter-replay` scene, even if the yard has changed
+  since. The panel's **Recent tests** list shows each one's result line with **Watch** and
+  **Report**. A test stopped before its first drop is not kept.
+- **Nothing is saved and tests are free.** No damage, fired traps, resources or army are saved, and
+  no request reaches the server except the Goals token at the first drop of a new test (not for a
+  replay). `baiterPlugin.test.ts` runs a whole test with every request stubbed to fail and checks
+  that.
 
 ### 8.2 General Store as a Shiny shop (D15)
 

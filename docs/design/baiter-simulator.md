@@ -446,3 +446,9 @@ a locked monster and a champion, drop twice, read the report, tap a tower row, w
 Test again, confirm the yard is unchanged afterwards. Close #22.
 
 **Depends on:** WP0-WP5. **Size:** S.
+
+**As built.** `docs/design/yard-buildings.md` §8.1 "As built" now describes the simulator, and
+`docs/specs/monsters-and-hatchery.md` §8 points here; the Baiter tip named no arrows, so it stayed. The
+browser walkthrough (2026-10-05, `agenttester`, desktop and phone) passed. Two layout fixes came out of
+it: a champion on the field no longer squeezes its name to an ellipsis beside Retreat (the army panel,
+real attacks too), and a Recent tests row keeps Watch and Report together under its result line.

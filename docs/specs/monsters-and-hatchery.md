@@ -1023,6 +1023,12 @@ Healing is on the first tab: click **Champion**, then **Heal Champion**, then co
 
 ## 8. Monster Baiter
 
+> **The revamp.** This section records the Flash original. The revamp turns the Baiter into a free
+> defence simulator: any of the 18 surface monsters at any level, champions, drops anywhere, a
+> tower-by-tower report and a replay, with nothing saved and no Musk. The Baiter's level now only
+> sets the army size cap (600 to 4,800). See `docs/design/baiter-simulator.md` (#22) and
+> `docs/design/yard-buildings.md` §8.1.
+
 Building id **19** (`#b_wildmonsterbaiter#`, `YARD_PROPS.as:1876-1968`, class `BUILDING19`, controller
 `client/scripts/MONSTERBAITER.as`).
 
