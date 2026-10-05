@@ -198,7 +198,8 @@ A raid is due for a player when all hold:
 - **Alert popup:** tribe name and picture, up to three monster types with names, "Engage now" and
   "Prepare defences", no close-to-skip (D6).
 - **Top bar:** "WILD MONSTERS SPOTTED!" with the countdown to `attackAt`.
-- **Fight:** the attack scene in a raid mode, showing the player's own yard (as Watch shows a camp):
+- **Fight:** the attack scene in a raid mode (a fourth variant next to attack, practice and watch,
+  `AttackScene.ts:86-100`; a HUD-hidden flag is new, none exists today), showing the player's own yard (as Watch shows a camp):
   no army panel, no input, HUD hidden, "Don't Panic!" banner, 1x/2x kept. Back to the yard after.
 - **Result popup:** "well defended" (+10 Shiny shown) or "poor defence" with what was stolen and
   "Repair now" (the existing `FIX`). Repairs have already started (D3).
@@ -264,7 +265,7 @@ looters 80 (`PROCESS3.as:138-155`, `PROCESS5.as:166-187`). Each type lands in a 
 
 ### 5.4 Strength and hits
 
-- Strength x0.4 to x0.9 by points + base value (§2.3), on health and damage.
+- Strength x0.4 to x0.9 by points + base value (§2.3), on health and damage, if **Q8** keeps it.
 - Hits before leaving: 50 / 30 / 20 by the choice (D2).
 - Raiders fight at level 0 stats (no academy levels).
 
@@ -287,12 +288,17 @@ hit, bunkers, the caged champion, traps and towers (`engine.ts:186-197`, note 9)
    the yard, which the fling validator only accepts in a raid log. The server builds the log; there
    is no client log to check.
 2. **Strength.** A battle option multiplying spawned raiders' health and damage
-   (`CreepBase.as:88`, `:93`).
+   (`CreepBase.as:88`, `:93`). For the Baiter the owner ruled this out ("the combat engine gets no
+   multiplier", `docs/design/yard-buildings.md:1147-1150`), so it depends on **Q8**; with plain
+   stats this item drops.
 3. **Hit limit.** A battle option: a raider that has hit buildings more than N times leaves
    (`CreepBase.as:926-941`). Today `_hitLimit` is "not modelled" (`engine.ts:246`, note 8).
 4. **No countdown.** A raid ends when no raider is left on the yard (`WMATTACK.as:331-347`), with
    a safety cap of 10 minutes of game time.
-5. **Defender side only.** No attacker storage; the "attacker loot" figure is ignored.
+5. **Defender side only, as a main yard.** The raid runs with target kind `main`, not `wild`:
+   `wild` and `tribe` apply the camp rules (the camp storage scalar and the divide-by-5,
+   `stats.ts:855-877`, `engine.ts:1063`, `:1212`), which belong to attacking a camp. No attacker
+   storage; the "attacker loot" figure is ignored.
 6. Golden fixtures for a raid log on Node and Bun (`replay.test.ts` pattern), and the sync script
    with both `MANIFEST.json` files.
 
@@ -305,8 +311,10 @@ On the caught-up save, under the row lock, the defender half of an attack landin
 - **Repair (D3):** `rE: 1` on every damaged building not already repairing, as Flash's `CleanUp`
   and the "Repair all" button do (`services/yard/repair.ts:19-26`); the catch-up heals them.
 - **Theft (D3):** the bank loses the outcome's `defenderDelta`, clamped at 0. Harvesters lose what
-  the engine took from their unbanked amount, clamped at what they hold now (they kept producing
-  during the fight).
+  the engine took from their unbanked amount (`buildingdata.st`, `game-rules/combat/yard.ts:505-533`),
+  clamped at what they hold now (they kept producing during the fight). The PvP landing does not
+  write drained `st` back today (`defenderLootHandler.ts` touches `resources` only), so this is
+  new code in WP3.
 - **Bunkers and champion:** garrisons and champion health as the outcome left them.
 - **Good defence (D4):** health summed over every building except walls and traps, as Flash
   (`WMATTACK.as:829-835`, `:860-865`), at least 90% of the full total: `credits += 10`.
@@ -361,8 +369,9 @@ means "right away next time" (Flash's effect) or "after a fresh wait".
   `where: "yard"` and `planner: this.planner !== null` (`web/src/app/scenes/YardScene.ts:266`). The
   server keeps the last answer for 120 s in Redis. A ping with no body (older clients, Flash) never
   gets a raid.
-- **Yard actions during the fight** are refused with `raidInProgress` (409), as during a PvP
-  attack (`web/src/game/presence/yardAttack.ts`), so the frozen yard stays the yard the fight ran on.
+- **Yard actions during the fight** are refused with `raidInProgress` (409), next to the PvP
+  attack's `yardUnderAttackErr` in `controllers/yard/yardAction.ts:268`, `:327`, `:384`
+  (client side `web/src/game/presence/yardAttack.ts`), so the frozen yard stays the yard the fight ran on.
   The client has no way to act anyway (HUD hidden).
 
 ---
@@ -419,7 +428,7 @@ WP0 and WP2 can start together. WP4 can start against WP3's contract (§4.2) wit
 **Goal:** the shared engine can fight a wild raid: an off-yard raid spawn, a strength multiplier,
 a per-raider hit limit, and an end with no countdown.
 
-**Scope:** §6.2 items 1-6. New event kind `raid`, battle options `raid: { strength, hitLimit }`,
+**Scope:** §6.2 items 1-6. New event kind `raid`, battle options `raid: { strength, hitLimit }` (strength only if Q8 keeps it), target kind `main`,
 end when no raider is left (10-minute cap), fidelity notes updated. Sync to the web mirror.
 
 **Files:** `server/src/game-rules/combat/{types,engine,replay,stats}.ts`, the web mirror
@@ -559,4 +568,7 @@ designed here (D7).
    protection are one timer. Should any protection stop raids, or none?
 7. **"Survive a tribe attack" goal:** does any finished raid count, or only a good defence (90%+)?
    Raids start at level 9, so a player who reaches that goal earlier waits until level 9. OK?
-</content>
+8. **Raider strength.** Flash made raiders weaker than normal (x0.4 to x0.9 health and damage, by
+   how big your yard is). For the Baiter you chose plain stats and no multiplier in the engine. For
+   raids: keep Flash's weaker raiders (needs that multiplier), or plain stats (raids about 1.1 to
+   2.5 times tougher than in Flash)?
