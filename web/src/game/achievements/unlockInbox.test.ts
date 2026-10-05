@@ -80,4 +80,18 @@ describe("UnlockInbox", () => {
     inbox.confirmed([1, 2]);
     expect(inbox.toConfirm()).toEqual([3]);
   });
+
+  it("clear forgets every unlock but keeps its listeners (sign-out)", () => {
+    const inbox = new UnlockInbox();
+    const listener = vi.fn();
+    inbox.subscribe(listener);
+    inbox.add([live(1), live(2)]);
+    inbox.shown(inbox.next()!);
+    inbox.clear();
+    expect(inbox.size).toBe(0);
+    expect(inbox.toConfirm()).toEqual([]);
+    // The next account's unlock with the same id is new to the cleared queue.
+    expect(inbox.add([live(1)])).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
 });

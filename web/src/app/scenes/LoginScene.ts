@@ -1,5 +1,7 @@
 import { fetchSignUpOptions, login, register } from "@/api/auth";
 import { ApiError, NetworkError } from "@/api/http";
+import { unlockInbox } from "@/game/achievements/unlockInbox";
+import { clearTestHistory } from "@/game/baiter/testHistory";
 import { worldChat } from "@/game/chat/chatSession";
 import { PRIVACY_URL, TERMS_URL, TURNSTILE_SITE_KEY } from "@/config";
 import { Panel } from "@/ui/Panel";
@@ -175,8 +177,11 @@ export class LoginScene implements Scene {
   constructor(private readonly turnstileSiteKey: string = TURNSTILE_SITE_KEY) {}
 
   enter(context: SceneContext): void {
-    // Signed out: world chat (#282) closes with the session.
+    // Signed out: world chat (#282) closes with the session, and the tab's
+    // Baiter tests and unlock queue are the last account's, not the next one's.
     worldChat.stop();
+    clearTestHistory();
+    unlockInbox.clear();
     this.wrapper = document.createElement("div");
     this.wrapper.className = "scene-centre";
 

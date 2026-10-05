@@ -5,6 +5,7 @@ import { ApiError } from "@/api/http";
 import {
   achievementsLine,
   clearAchievementsLineCache,
+  LINE_CACHE_SIZE,
   LINE_FRESH_MS,
   type AchievementsLineOptions,
 } from "./AchievementsLine";
@@ -56,7 +57,19 @@ describe("achievementsLine", () => {
     const { options, onOpen } = setUp(async () => bob);
     const line = achievementsLine(42, "Bob", options);
     line.click();
-    expect(onOpen).toHaveBeenCalledWith(42, "Bob");
+    expect(onOpen).toHaveBeenCalledWith(42, "Bob", undefined);
+  });
+
+  it("hands the list its fresh answer, so opening it does not ask again", async () => {
+    let now = 1_000;
+    const { options, onOpen } = setUp(async () => bob, () => now);
+    const line = achievementsLine(42, "Bob", options);
+    await settle();
+    line.click();
+    expect(onOpen).toHaveBeenLastCalledWith(42, "Bob", bob);
+    now += LINE_FRESH_MS;
+    line.click();
+    expect(onOpen).toHaveBeenLastCalledWith(42, "Bob", undefined);
   });
 
   it("shows no badges for a player with none earned", async () => {
@@ -95,6 +108,31 @@ describe("achievementsLine", () => {
     achievementsLine(43, "Ann", options);
     expect(fetch).toHaveBeenCalledTimes(2);
     now += LINE_FRESH_MS;
+    achievementsLine(42, "Bob", options);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps at most fifty players, the oldest asked dropped first", async () => {
+    const { options, fetch } = setUp(async () => bob);
+    for (let userid = 1; userid <= LINE_CACHE_SIZE + 1; userid += 1) achievementsLine(userid, "P", options);
+    expect(LINE_CACHE_SIZE).toBe(50);
+    expect(fetch).toHaveBeenCalledTimes(51);
+    // The newest fifty are kept; the first was dropped and is asked again.
+    achievementsLine(LINE_CACHE_SIZE + 1, "P", options);
+    achievementsLine(2, "P", options);
+    expect(fetch).toHaveBeenCalledTimes(51);
+    achievementsLine(1, "P", options);
+    expect(fetch).toHaveBeenCalledTimes(52);
+  });
+
+  it("drops stale answers when a new one is asked for", async () => {
+    let now = 1_000;
+    const { options, fetch } = setUp(async () => bob, () => now);
+    achievementsLine(42, "Bob", options);
+    now += LINE_FRESH_MS;
+    // Ann's ask sweeps out Bob's stale answer, so Bob's next ask is fresh.
+    achievementsLine(43, "Ann", options);
+    now -= 1;
     achievementsLine(42, "Bob", options);
     expect(fetch).toHaveBeenCalledTimes(3);
   });

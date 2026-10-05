@@ -2,7 +2,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatApi, ChatLineWire } from "@/api/chat";
 import { ApiError } from "@/api/http";
-import { ChatSession, RATE_LIMITED_TEXT, type ChatSocket } from "@/game/chat/chatSession";
+import {
+  ChatSession,
+  MAX_ENTRIES,
+  RATE_LIMITED_TEXT,
+  type ChatSocket,
+} from "@/game/chat/chatSession";
 import { ChatBox } from "./ChatBox";
 
 const CHANNEL = "chat:mr2-global";
@@ -85,6 +90,38 @@ describe("ChatBox", () => {
     expect(own.classList.contains("chat-line--own")).toBe(true);
     // Your own name offers nothing to do.
     expect(own.querySelector("button")).toBeNull();
+  });
+
+  it("adds a new line on its own, leaving the lines already drawn alone", () => {
+    mount([wire(77, "hello", 1), wire(78, "hi", 2)]);
+    const first = box.element.querySelector(".chat-line");
+    socket.hear({ type: "message", channel: CHANNEL, ...wire(79, "new", 3) });
+    expect(lineTexts()).toEqual(["[12] p77hello", "[12] p78hi", "[12] p79new"]);
+    expect(box.element.querySelector(".chat-line")).toBe(first);
+  });
+
+  it("drops the oldest line as a full room's history takes a new one", () => {
+    const full = Array.from({ length: MAX_ENTRIES }, (_, index) => wire(77, `line ${index}`, index));
+    mount(full);
+    const second = box.element.querySelectorAll(".chat-line")[1];
+    socket.hear({ type: "message", channel: CHANNEL, ...wire(78, "newest", 999) });
+    const lines = box.element.querySelectorAll(".chat-line");
+    expect(lines).toHaveLength(MAX_ENTRIES);
+    expect(lines[0]).toBe(second);
+    expect(lineTexts().at(-1)).toBe("[12] p78newest");
+  });
+
+  it("keeps a muted player's new line out, and gives an open box's new names Tab", () => {
+    mount([wire(77, "noise", 1)]);
+    box.setOpen(true);
+    nameButton("[12] p77").click();
+    stripButton("Mute").click();
+    socket.hear({ type: "message", channel: CHANNEL, ...wire(77, "more noise", 2) });
+    socket.hear({ type: "message", channel: CHANNEL, ...wire(78, "fine", 3) });
+    expect(lineTexts()).toEqual(["[12] p78fine"]);
+    expect(nameButton("[12] p78").tabIndex).toBe(0);
+    box.setOpen(false);
+    expect(nameButton("[12] p78").tabIndex).toBe(-1);
   });
 
   it("starts folded, and the tab opens it to the input", () => {

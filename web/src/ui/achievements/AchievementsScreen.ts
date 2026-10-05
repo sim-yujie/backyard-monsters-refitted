@@ -2,6 +2,7 @@ import {
   achievementsApi,
   type AchievementsApi,
   type AchievementView,
+  type PlayerAchievements,
   type PublicAchievementView,
 } from "@/api/achievements";
 import {
@@ -35,7 +36,9 @@ import "./achievements.css";
  *   yet** in Flash's order.
  *
  * Both end in the §5.3 line about the six left out. Every open fetches
- * fresh; an answer for a view the player has since left is dropped.
+ * fresh, except another player's list opened with an answer already in hand
+ * (the map's line, under a minute old), which shows that at once; an answer
+ * for a view the player has since left is dropped.
  */
 
 export interface AchievementsScreenOptions {
@@ -46,7 +49,15 @@ export interface AchievementsScreenOptions {
 }
 
 /** Who the screen is showing: the player, or another player by id. */
-type Subject = { readonly kind: "own" } | { readonly kind: "player"; readonly userid: number; readonly name: string | null };
+type Subject =
+  | { readonly kind: "own" }
+  | {
+      readonly kind: "player";
+      readonly userid: number;
+      readonly name: string | null;
+      /** An answer already in hand, shown instead of asking. */
+      readonly known: PlayerAchievements | null;
+    };
 
 export const LOAD_FAILED = "Could not load achievements. Try again.";
 export const NOT_FOUND = "That player's achievements could not be found.";
@@ -130,9 +141,13 @@ export class AchievementsScreen {
     await this.show({ kind: "own" });
   }
 
-  /** Another player's list, read-only (§10.3); `name` titles it until the answer names them. */
-  async openPlayer(userid: number, name?: string | null): Promise<void> {
-    await this.show({ kind: "player", userid, name: name ?? null });
+  /**
+   * Another player's list, read-only (§10.3); `name` titles it until the
+   * answer names them. `known`, an answer already in hand, is shown without
+   * asking the server again.
+   */
+  async openPlayer(userid: number, name?: string | null, known?: PlayerAchievements): Promise<void> {
+    await this.show({ kind: "player", userid, name: name ?? null, known: known ?? null });
   }
 
   close(): void {
@@ -180,7 +195,7 @@ export class AchievementsScreen {
           this.group("Earned", earnedGroup(state.achievements).map((entry) => this.earnedRow(entry)), NONE_YET),
         );
       } else {
-        const player = await this.api.player(subject.userid);
+        const player = subject.known ?? (await this.api.player(subject.userid));
         if (this.destroyed || generation !== this.generation) return;
         this.setStatus(null);
         this.panel.setTitle(playerTitle(player.name || subject.name));

@@ -404,7 +404,7 @@ export class MapRoomUi {
    */
   private achievementsLine(payload: PlayerCell): HTMLElement {
     return achievementsLine(payload.uid, payload.n, {
-      onOpen: (userid, name) => void this.achievements?.openPlayer(userid, name),
+      onOpen: (userid, name, known) => void this.achievements?.openPlayer(userid, name, known),
     });
   }
 

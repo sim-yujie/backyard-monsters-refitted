@@ -62,7 +62,7 @@ export const replayOf = (test: RecordedTest): BaiterRun => ({
   replay: { seed: test.seed, events: test.events, endTick: test.endTick, report: test.report },
 });
 
-/** For tests: forget every kept test. */
+/** Forgets every kept test: on sign-out, so the next account in the tab sees none of them; and for tests. */
 export const clearTestHistory = (): void => {
   tests = [];
   nextId = 1;

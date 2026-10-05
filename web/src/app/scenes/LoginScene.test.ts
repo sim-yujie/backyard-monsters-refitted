@@ -402,3 +402,29 @@ describe("LoginScene sign-up — the dev-only test yard box (#217)", () => {
     });
   });
 });
+
+describe("LoginScene sign-out", () => {
+  it("forgets the last account's Baiter tests and unlock queue", async () => {
+    const { clearTestHistory, recentTests, recordTest } = await import("@/game/baiter/testHistory");
+    const { unlockInbox } = await import("@/game/achievements/unlockInbox");
+    recordTest({
+      run: { save: {}, army: {}, baiterLevel: 1 },
+      seed: 7,
+      events: [],
+      endTick: 400,
+      report: {},
+    } as unknown as Parameters<typeof recordTest>[0]);
+    unlockInbox.add([{ id: 3, name: "Seen it", shiny: 5 }]);
+    expect(recentTests()).toHaveLength(1);
+    expect(unlockInbox.size).toBe(1);
+
+    open();
+
+    expect(recentTests()).toEqual([]);
+    expect(unlockInbox.size).toBe(0);
+    // The next account's unlock with the same id still pops up.
+    expect(unlockInbox.add([{ id: 3, name: "Seen it", shiny: 5 }])).toBe(true);
+    unlockInbox.reset();
+    clearTestHistory();
+  });
+});
