@@ -110,11 +110,19 @@ export class UnlockInbox {
     return () => this.listeners.delete(listener);
   }
 
-  /** Forgets everything; for tests. */
-  reset(): void {
+  /**
+   * Forgets every unlock, queued, shown or waiting for `seen`, and keeps the
+   * listeners: on sign-out, so the next account in the tab starts afresh.
+   */
+  clear(): void {
     this.waiting = [];
     this.known.clear();
     this.unconfirmed.clear();
+  }
+
+  /** Forgets everything, listeners too; for tests. */
+  reset(): void {
+    this.clear();
     this.listeners.clear();
   }
 }
