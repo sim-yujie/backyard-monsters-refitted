@@ -79,6 +79,9 @@ export class MapRoom1Ui {
       scenes,
       onSceneSelect: handlers.onSceneSelect,
       onSignOut: handlers.onSignOut,
+      // The achievements screen docks over the side panel and a floating
+      // card: the card goes first, as Map Room 2's cell panel does.
+      onAchievementsOpen: () => this.select(null),
     });
     this.hud.setActiveScene(activeScene);
 

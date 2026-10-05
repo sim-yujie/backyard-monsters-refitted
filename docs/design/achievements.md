@@ -541,7 +541,9 @@ the three newest badges (plain tier, since the public list has no rewards) and a
 calls `openPlayer`. In Map Room 2 it is last inside "More about this yard" and is made only when that
 section opens, so a closed one costs no fetch; in Map Room 1 it sits under the card's head. Answers,
 refusals included, are kept a minute per player, so a panel rebuilt by a refresh fills at once
-without spending the route's limit. A refused or failed fetch hides the line.
+without spending the route's limit. A refused or failed fetch hides the line. The screen docks over
+Map Room 1's side panel and floating card, so Map Room 1 takes the card down when it opens
+(`onAchievementsOpen` in `MapRoom1Ui.ts`), as Map Room 2 closes its cell panel.
 
 ## 14. Open questions
 
