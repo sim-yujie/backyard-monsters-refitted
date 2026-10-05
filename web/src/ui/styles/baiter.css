@@ -215,13 +215,13 @@
   white-space: nowrap;
 }
 
+/* Wraps to a second line beside the level picker rather than clipping "space each". */
 .baiter__each {
-  overflow: hidden;
+  min-width: 0;
   font-size: var(--text-xs);
+  line-height: 1.2;
   color: var(--colour-text-muted);
   font-variant-numeric: tabular-nums;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .baiter__row-level {
@@ -546,6 +546,24 @@
   gap: var(--space-2);
   padding-top: var(--space-3);
   border-top: 1px solid var(--colour-border-subtle);
+}
+
+/* ── A short laptop screen (1366x768): all 18 cards still fit, with the
+   Recent tests tab and a champion's pickers showing ─────────────────────── */
+
+@media (width > 620px) and (height <= 860px) {
+  .baiter-window {
+    height: min(100vh - 2 * var(--space-4), 800px);
+  }
+
+  .baiter__row {
+    gap: var(--space-1);
+  }
+
+  .baiter__picture {
+    width: 28px;
+    height: 28px;
+  }
 }
 
 /* ── A phone: both windows are full-screen sheets ──────────────────────── */
