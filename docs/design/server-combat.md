@@ -409,9 +409,11 @@ and at the longest end, plus a siege use, gives no mismatch.
   chase only inside the bunker's range, and walk back in when nothing is left, to be sent again.
   A bunker keeps its healers in. `BattleState.bunkerGarrisons` is what each bunker holds
   afterwards; a fallen bunker keeps only the defenders that were out.
-- The champion in the Champion Cage (`BattleOptions.defenderChampion`) comes out at its stored
-  health, its level and its power level's `bonus*`, and fights on if the cage falls.
-  `BattleState.defenderChampionHp` is its health afterwards: 0 if it died.
+- The champions in the Champion Cage (`BattleOptions.defenderChampions`) come out at their stored
+  health, their level and their power level's `bonus*`, and fight on if the cage falls. A cage
+  holding a basic champion and a Krallen sends out both, each on its own, as Flash does (issue
+  #310). `BattleState.defenderChampions` holds each one's health afterwards (0 if it died), damage
+  and kills.
 - When the champion comes out, what it chases and when it goes back follow Flash, not the #195
   choice of a 400 alert and an 800 leash (owner decision 2026-10-04, issue #260; engine fidelity
   note 14). It waits in the cage at a random point and every 200 of its frames looks 800 around

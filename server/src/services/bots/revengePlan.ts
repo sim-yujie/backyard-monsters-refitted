@@ -2,7 +2,7 @@ import {
   academyLevels,
   bucketCost,
   buildEngineYard,
-  cagedChampion,
+  cagedChampions,
   dropRadius,
   ELLIPSE_SQUASH,
   flingCost,
@@ -136,7 +136,7 @@ export interface RevengeTarget {
 /**
  * The bot's revenge army, read off its main save: everything housed and the
  * champion at home with health left (the defending champion's own rule,
- * `cagedChampion`).
+ * the first of `cagedChampions`).
  *
  * @param save - The bot's `monsters`, `champion` and `academy`.
  */
@@ -146,7 +146,7 @@ export const revengeArmyOf = (save: {
   readonly academy: unknown;
 }): RevengeArmy => {
   const housed = (save.monsters as { housed?: unknown } | null | undefined)?.housed;
-  const champion = cagedChampion(save.champion);
+  const champion = cagedChampions(save.champion)[0];
   return {
     monsters: countsOf(housed),
     champion: champion ? { t: champion.t, l: champion.l, pl: champion.pl } : null,

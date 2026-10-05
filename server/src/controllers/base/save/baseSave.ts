@@ -426,7 +426,7 @@ const saveBase = async (
     // The report too is the replay's, in the web client's words (C6).
     (baseSave as unknown as { attackreport: unknown }).attackreport = battle.attackreport;
     // The caged champion keeps what health the battle left it (issue #195).
-    baseSave.champion = championsAfterDefence(baseSave.champion, battle.defenderChampion) ?? baseSave.champion;
+    baseSave.champion = championsAfterDefence(baseSave.champion, battle.defenderChampions) ?? baseSave.champion;
   }
 
   // In `reject` mode the storage caps and the base value are the server's to

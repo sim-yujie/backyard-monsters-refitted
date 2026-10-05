@@ -114,8 +114,8 @@ export interface AbandonedOutcome {
   bunkerLosses: Readonly<Record<number, Readonly<Record<string, number>>>>;
   /** What each bunker holds afterwards (`BattleState.bunkerGarrisons`, #195). */
   bunkerGarrisons: Readonly<Record<number, Readonly<Record<string, number>>>>;
-  /** The caged champion, by type, and its health afterwards: 0 if it died; null for none (#195). */
-  defenderChampion: { t: number; hp: number } | null;
+  /** Each caged champion, by type, and its health afterwards: 0 if it died; empty for none (#195, #310). */
+  defenderChampions: { t: number; hp: number }[];
   /** What each attacking champion learned, for its brain (`championBrain.ts`, issue #219). */
   lessons?: readonly ChampionLesson[];
 }
@@ -262,14 +262,11 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
       damagePercent: percent,
       buildingsDestroyed: state.destroyedIds.length,
       loot,
-      defenderChampionFell: state.defenderChampionHp === 0,
+      defenderChampionsFell: state.defenderChampions.filter((caged) => caged.hp === 0).length,
     }),
     bunkerLosses: state.bunkerLosses,
     bunkerGarrisons: state.bunkerGarrisons,
-    defenderChampion:
-      state.defenderChampionHp === null || !input.defence?.defenderChampion
-        ? null
-        : { t: input.defence.defenderChampion.t, hp: state.defenderChampionHp },
+    defenderChampions: state.defenderChampions.map((caged) => ({ t: caged.t, hp: caged.hp })),
     lessons: state.lessons ?? [],
   };
 };

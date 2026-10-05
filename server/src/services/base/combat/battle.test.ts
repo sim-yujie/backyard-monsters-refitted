@@ -157,7 +157,7 @@ const honestClient = (one: Fixture, end: number) => {
       damagePercent: percent,
       buildingsDestroyed: state.destroyedIds.length,
       loot: state.loot,
-      defenderChampionFell: state.defenderChampionHp === 0,
+      defenderChampionsFell: state.defenderChampions.filter((caged) => caged.hp === 0).length,
     }),
     tick: state.tick,
     health: { ...state.health },
@@ -167,7 +167,7 @@ const honestClient = (one: Fixture, end: number) => {
     firedTraps: [...state.firedTraps],
     attackloot: wholeAmounts(state.loot),
     defenderLoss: wholeAmounts(state.defenderLoss),
-    defenderChampionHp: state.defenderChampionHp,
+    defenderChampions: state.defenderChampions.map((caged) => ({ t: caged.t, hp: caged.hp })),
     bunkerGarrisons: state.bunkerGarrisons,
     ...attackerRowAfter(one, logAt(one.log, end).events, state.championsHp),
   };
@@ -217,7 +217,7 @@ const stopsOf = (one: Fixture): number[] => {
 /** What `baseSave.ts` hands `battleMismatches` for this honest save. */
 const honestSave = (one: Fixture, client: ReturnType<typeof honestClient>) => {
   const stored = defenderOf(one).buildingdata ?? {};
-  const caged = defenceOf(one)?.defenderChampion;
+  const caged = defenceOf(one)?.defenderChampions ?? [];
   return {
     stored,
     save: {
@@ -234,10 +234,14 @@ const honestSave = (one: Fixture, client: ReturnType<typeof honestClient>) => {
       attackloot: client.attackloot,
       attackerchampion: client.attackerchampion,
       attackersiege: client.attackersiege,
-      // `defenderChampionsAfter`: the champions as loaded, the caged one at its
-      // health after the battle (issue #195).
-      ...(caged && {
-        champion: [{ ...caged, status: 0, hp: Math.floor(client.defenderChampionHp ?? caged.hp) }],
+      // `defenderChampionsAfter`: the champions as loaded, each caged one at its
+      // health after the battle (issues #195, #310).
+      ...(caged.length > 0 && {
+        champion: caged.map((champion, at) => ({
+          ...champion,
+          status: 0,
+          hp: Math.floor(client.defenderChampions[at]?.hp ?? champion.hp),
+        })),
       }),
     },
   };
@@ -284,8 +288,8 @@ describe("an honest save writes what its client showed, and never trips the chec
           expect(server.attackloot).toEqual(client.attackloot);
           // The report too, word for word (#23, C6).
           expect(server.attackreport).toBe(client.report);
-          // And the defence: the champion's health and what each bunker holds (#195).
-          expect(server.defenderChampion?.hp ?? null).toBe(client.defenderChampionHp);
+          // And the defence: each caged champion's health and what each bunker holds (#195, #310).
+          expect(server.defenderChampions).toEqual(client.defenderChampions);
           expect(server.bunkerGarrisons).toEqual(client.bunkerGarrisons);
           expect(wholeAmounts(Object.fromEntries(Object.entries(server.defenderDelta).map(([k, v]) => [k, -v])))).toEqual(
             client.defenderLoss

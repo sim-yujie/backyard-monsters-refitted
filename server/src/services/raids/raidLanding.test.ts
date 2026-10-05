@@ -63,7 +63,7 @@ const outcomeOf = (extra: Partial<Outcome> = {}): Outcome => ({
   harvesterLoss: {},
   healthShare: 1,
   bunkerGarrisons: {},
-  defenderChampion: null,
+  defenderChampions: [],
   creepsFlung: 10,
   creepsKilled: 10,
   digest: "d",

@@ -1,6 +1,6 @@
 {
-  "name": "caged-korath",
-  "description": "The sandbox yard's Champion Cage holding a level 6 Korath at power level 3: he fireballs the Teratorns, burns what he hits and quakes the ground monsters (issue #222).",
+  "name": "both-caged-champions",
+  "description": "A cage holding a level 5 Krallen and a level 6 Fomor, Krallen first in the save: both come out, each from its own place in the cage, against ground monsters and Teratorns (issue #310).",
   "yard": "sandbox",
   "kind": "main",
   "levels": {
@@ -20,16 +20,22 @@
   "defence": {
     "defenderChampions": [
       {
-        "t": 4,
+        "t": 5,
+        "l": 5,
+        "hp": 60000,
+        "pl": 2
+      },
+      {
+        "t": 3,
         "l": 6,
-        "hp": 175000,
-        "pl": 3
+        "hp": 40000,
+        "pl": 1
       }
     ]
   },
   "log": {
     "v": 1,
-    "seed": 22202,
+    "seed": 31001,
     "events": [
       {
         "kind": "fling",
@@ -39,7 +45,7 @@
         "r": 300,
         "monsters": {
           "C1": 80,
-          "C6": 20
+          "C2": 20
         }
       },
       {
@@ -56,106 +62,107 @@
   },
   "expected": {
     "ticks": 14400,
-    "damage": 0.9801731359955426,
+    "damage": 0.9977495605893836,
     "destroyed": null,
     "attackloot": {
-      "r1": 481,
-      "r2": 592,
-      "r3": 370,
-      "r4": 444
+      "r1": 777,
+      "r2": 518,
+      "r3": 962,
+      "r4": 777
     },
     "defenderLoss": {
-      "r1": 546,
-      "r2": 672,
-      "r3": 420,
-      "r4": 504
+      "r1": 882,
+      "r2": 588,
+      "r3": 1092,
+      "r4": 882
     },
     "firedTraps": 0,
     "destroyedBuildings": 1,
     "creepsFlung": 112,
     "creepsKilled": 112,
     "championHp": null,
-    "damagedBuildings": 3,
-    "rngDraws": 4489,
+    "damagedBuildings": 4,
+    "rngDraws": 3782,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "f5164fb1ceb85d7b"
+        "digest": "f6b2cfc5b2e58b57"
       },
       {
         "tick": 1600,
-        "digest": "e6f67de1d0dcf06b"
+        "digest": "68107daf5c890519"
       },
       {
         "tick": 2400,
-        "digest": "dfb0987653e32da0"
+        "digest": "45fae7747e100986"
       },
       {
         "tick": 3200,
-        "digest": "c7843d5d947e4d33"
+        "digest": "f96ebd4df3b7069b"
       },
       {
         "tick": 4000,
-        "digest": "620bbfff64d8610d"
+        "digest": "4375fa13dba200a1"
       },
       {
         "tick": 4800,
-        "digest": "eb01061ec1af6b1c"
+        "digest": "0d8ec89284c7cf00"
       },
       {
         "tick": 5600,
-        "digest": "79830721f2ecc4af"
+        "digest": "a44e73997088634f"
       },
       {
         "tick": 6400,
-        "digest": "916bc7ed1e030203"
+        "digest": "d65f6e3d9da73f4b"
       },
       {
         "tick": 7200,
-        "digest": "653331ec8f95ea52"
+        "digest": "f346dbcc15293f1a"
       },
       {
         "tick": 8000,
-        "digest": "4d2e41cf99b1d6dd"
+        "digest": "4fa5fd0383277511"
       },
       {
         "tick": 8800,
-        "digest": "6d530b55c9fcc74b"
+        "digest": "a45a7df5e0501663"
       },
       {
         "tick": 9600,
-        "digest": "664f20aed93a21ac"
+        "digest": "ad762c82d6dd0530"
       },
       {
         "tick": 10400,
-        "digest": "9a7e4614a0f9407a"
+        "digest": "224ccca47616d352"
       },
       {
         "tick": 11200,
-        "digest": "2ec92631643a613f"
+        "digest": "b6d84949bcc7473f"
       },
       {
         "tick": 12000,
-        "digest": "e189a57772dfca25"
+        "digest": "96e3555b2c7b8b29"
       },
       {
         "tick": 12800,
-        "digest": "d87653bd868eeb93"
+        "digest": "73e3daad512d267b"
       },
       {
         "tick": 13600,
-        "digest": "b21ac9b6f05767b4"
+        "digest": "dcf4595a125b2928"
       },
       {
         "tick": 14400,
-        "digest": "d7bfd4bc35bfde62"
+        "digest": "313e56fc0faf75ca"
       }
     ],
-    "digest": "d7bfd4bc35bfde62",
+    "digest": "313e56fc0faf75ca",
     "bunkerLosses": {},
     "bunkerGarrisons": {},
     "defenderChampionsHp": [
-      168310
+      59110.30000000019,
+      38600
     ]
   }
 }

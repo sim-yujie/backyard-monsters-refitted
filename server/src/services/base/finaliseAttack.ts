@@ -292,7 +292,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   // fought with holds what it left it, as the save's own would (issues #130,
   // #195, `bunkerGarrison.ts`); the caged champion keeps what health it has.
   defender.buildingdata = garrisonsAfterBattle(defender.buildingdata, outcome);
-  defender.champion = championsAfterDefence(defender.champion, outcome.defenderChampion) ?? defender.champion;
+  defender.champion = championsAfterDefence(defender.champion, outcome.defenderChampions) ?? defender.champion;
   defender.buildinghealthdata = outcome.buildinghealthdata;
   // Whole and cut down, as the attack's own save stores it (#72).
   defender.damage = storedDamage(outcome.damage) ?? defender.damage;

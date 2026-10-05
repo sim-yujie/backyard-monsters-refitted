@@ -1,10 +1,11 @@
+import { KRALLEN_ID } from "./champions.js";
 import { bunkerGarrisons, type BattleOptions, type DefenderChampion } from "./engine.js";
 import { championByType, CHAMPION_MAX_POWER_LEVEL } from "./stats.js";
 import type { CombatBuildingDataMap, MonsterLevels, Roster } from "./types.js";
 
 /**
  * What a yard defends itself with (issue #195): each Monster Bunker's
- * garrison, the levels its monsters fight at, and the champion in its
+ * garrison, the levels its monsters fight at, and the champions in its
  * Champion Cage.
  *
  * One picker for every caller, so the server's replay, the web client's battle
@@ -17,15 +18,15 @@ export interface DefenderForces {
   readonly bunkers: Readonly<Record<number, Roster>>;
   /** The defender's academy levels, by monster id; an absent one fights at level 1. */
   readonly defenderLevels: MonsterLevels;
-  /** The champion at home in its cage, or null ({@link cagedChampion}). */
-  readonly defenderChampion: DefenderChampion | null;
+  /** The champions at home in the cage, none to two ({@link cagedChampions}). */
+  readonly defenderChampions: readonly DefenderChampion[];
 }
 
 /** No defence at all: what a Map Room 1 tribe or a Map Room 2 camp has. */
 export const NO_DEFENCE: DefenderForces = {
   bunkers: {},
   defenderLevels: {},
-  defenderChampion: null,
+  defenderChampions: [],
 };
 
 const record = (value: unknown): Record<string, unknown> | null =>
@@ -43,31 +44,48 @@ export const academyLevels = (academy: unknown): MonsterLevels => {
   return levels;
 };
 
+/** One save entry as a caged champion, or null when it is not at home with health left. */
+const atHome = (entry: unknown): DefenderChampion | null => {
+  const champion = record(entry);
+  if (!champion) return null;
+  const t = Number(champion.t);
+  const l = Number(champion.l);
+  const hp = Number(champion.hp);
+  if (!championByType(t) || !(Number(champion.status ?? 0) === 0)) return null;
+  if (!Number.isFinite(l) || l < 1 || !Number.isFinite(hp) || hp <= 0) return null;
+  const pl = Number(champion.pl);
+  return {
+    t,
+    l: Math.floor(l),
+    hp: Math.floor(hp),
+    pl: Number.isFinite(pl) ? Math.min(Math.max(Math.floor(pl), 0), CHAMPION_MAX_POWER_LEVEL) : 0,
+  };
+};
+
 /**
- * The champion that defends (issue #195): the first in the save's order that
- * is at home (`status` 0) with health left, Krallen as much as any other.
+ * The champions that defend (issues #195, #310): those at home (`status` 0)
+ * with health left, at most one basic champion and one Krallen, in the save's
+ * order. Flash's cage pens both: the basic one in `CREATURES._guardian`, its
+ * single slot, and Krallen, a special champion, beside it through
+ * `addGuardian` (`CHAMPIONCAGE.as:628-655`, `CREATURES.as:219-257`).
  *
  * @param champions - The defender's save's `champion` list.
  */
-export const cagedChampion = (champions: unknown): DefenderChampion | null => {
-  if (!Array.isArray(champions)) return null;
+export const cagedChampions = (champions: unknown): DefenderChampion[] => {
+  if (!Array.isArray(champions)) return [];
+  const picked: DefenderChampion[] = [];
+  let basic = false;
+  let krallen = false;
   for (const entry of champions) {
-    const champion = record(entry);
+    const champion = atHome(entry);
     if (!champion) continue;
-    const t = Number(champion.t);
-    const l = Number(champion.l);
-    const hp = Number(champion.hp);
-    if (!championByType(t) || !(Number(champion.status ?? 0) === 0)) continue;
-    if (!Number.isFinite(l) || l < 1 || !Number.isFinite(hp) || hp <= 0) continue;
-    const pl = Number(champion.pl);
-    return {
-      t,
-      l: Math.floor(l),
-      hp: Math.floor(hp),
-      pl: Number.isFinite(pl) ? Math.min(Math.max(Math.floor(pl), 0), CHAMPION_MAX_POWER_LEVEL) : 0,
-    };
+    const isKrallen = championByType(champion.t) === KRALLEN_ID;
+    if (isKrallen ? krallen : basic) continue;
+    if (isKrallen) krallen = true;
+    else basic = true;
+    picked.push(champion);
   }
-  return null;
+  return picked;
 };
 
 /**
@@ -84,7 +102,7 @@ export const defenderForcesOf = (save: {
 }): DefenderForces => ({
   bunkers: bunkerGarrisons(record(save.buildingdata) as CombatBuildingDataMap | null),
   defenderLevels: academyLevels(save.academy),
-  defenderChampion: cagedChampion(save.champion),
+  defenderChampions: cagedChampions(save.champion),
 });
 
 /**
@@ -108,11 +126,21 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
   for (const [id, level] of Object.entries(record(value.defenderLevels) ?? {})) {
     if (Number.isSafeInteger(level) && (level as number) >= 1) levels[id] = level as number;
   }
-  const champion = record(value.defenderChampion);
+  // A session stored before issue #310 holds one `defenderChampion`.
+  const champions = Array.isArray(value.defenderChampions)
+    ? value.defenderChampions
+    : value.defenderChampion === undefined
+      ? []
+      : [value.defenderChampion];
   return {
     bunkers,
     defenderLevels: levels,
-    defenderChampion: champion ? cagedChampion([{ ...champion, status: 0 }]) : null,
+    defenderChampions: cagedChampions(
+      champions.map((entry) => {
+        const champion = record(entry);
+        return champion ? { ...champion, status: 0 } : null;
+      }),
+    ),
   };
 };
 
@@ -122,12 +150,13 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
  */
 export const battleDefence = (
   forces: DefenderForces | null | undefined,
-): Pick<BattleOptions, "bunkers" | "defenderLevels" | "defenderChampion"> => {
+): Pick<BattleOptions, "bunkers" | "defenderLevels" | "defenderChampions"> => {
   if (!forces) return {};
   const hasBunkers = Object.keys(forces.bunkers).length > 0;
+  const hasChampions = forces.defenderChampions.length > 0;
   return {
     ...(hasBunkers ? { bunkers: forces.bunkers } : {}),
-    ...(hasBunkers || forces.defenderChampion ? { defenderLevels: forces.defenderLevels } : {}),
-    ...(forces.defenderChampion ? { defenderChampion: forces.defenderChampion } : {}),
+    ...(hasBunkers || hasChampions ? { defenderLevels: forces.defenderLevels } : {}),
+    ...(hasChampions ? { defenderChampions: forces.defenderChampions } : {}),
   };
 };

@@ -11,7 +11,6 @@ import {
   VICTORY_THRESHOLD,
   attackReport,
   derivedDestroyed,
-  parseDefenderForces,
   type BattleState,
   type FlingEvent,
   type FlingLog,
@@ -128,21 +127,20 @@ export const attackerChampionsAfter = (
 };
 
 /**
- * `champion`: the defender's champions as loaded, the one that came out of
- * its Champion Cage at the health the battle left it (issue #195). The server
- * writes the replay's figure and only compares this one.
+ * `champion`: the defender's champions as loaded, each that defended from its
+ * Champion Cage at the health the battle left it (issues #195, #310): the
+ * first stored champion of each caged one's type. The server writes the
+ * replay's figures and only compares these.
  */
 export const defenderChampionsAfter = (
   champions: readonly ChampionSaveEntry[],
-  cagedType: number | undefined,
-  hp: number | null,
+  caged: readonly { readonly t: number; readonly hp: number }[],
 ): ChampionSaveEntry[] => {
-  let done = false;
+  const left = [...caged];
   return champions.map((champion) => {
-    if (done || cagedType === undefined || hp === null || champion.t !== cagedType) {
-      return champion;
-    }
-    done = true;
+    const at = left.findIndex((fought) => fought.t === champion.t);
+    if (at < 0) return champion;
+    const hp = (left.splice(at, 1)[0] as { readonly hp: number }).hp;
     return { ...champion, hp: Math.max(0, Math.floor(hp)) };
   });
 };
@@ -235,7 +233,7 @@ export const attackReportOf = (
   log: FlingLog,
   state: AttackSessionState,
   nameOf: (id: string) => string = (id) => id,
-  defenderChampionFell = false,
+  defenderChampionsFell = 0,
 ): string =>
   attackReport(
     log.events,
@@ -245,7 +243,7 @@ export const attackReportOf = (
       damagePercent: state.damagePercent,
       buildingsDestroyed: state.buildingsDestroyed,
       loot: state.loot,
-      defenderChampionFell,
+      defenderChampionsFell,
     },
     nameOf,
   );
@@ -288,7 +286,7 @@ export const buildAttackSave = (
       log,
       state,
       options.nameOf,
-      battleState.defenderChampionHp === 0,
+      battleState.defenderChampions.filter((caged) => caged.hp === 0).length,
     ),
     flinglog: log,
   };
@@ -302,11 +300,7 @@ export const buildAttackSave = (
   // server honours only a lower champion hp anyway.
   if (load.monsters) payload.monsters = load.monsters;
   if (load.champion && load.champion.length > 0) {
-    payload.champion = defenderChampionsAfter(
-      load.champion,
-      parseDefenderForces(load.defenderforces)?.defenderChampion?.t,
-      battleState.defenderChampionHp,
-    );
+    payload.champion = defenderChampionsAfter(load.champion, battleState.defenderChampions);
   }
   if (attackerchampion) payload.attackerchampion = attackerchampion;
   if (attackersiege) payload.attackersiege = attackersiege;

@@ -38,12 +38,14 @@
       "C3": 3,
       "C8": 3
     },
-    "defenderChampion": {
-      "t": 1,
-      "l": 3,
-      "hp": 120000,
-      "pl": 1
-    }
+    "defenderChampions": [
+      {
+        "t": 1,
+        "l": 3,
+        "hp": 120000,
+        "pl": 1
+      }
+    ]
   },
   "log": {
     "v": 1,
@@ -196,6 +198,8 @@
       "85": {},
       "86": {}
     },
-    "defenderChampionHp": 0
+    "defenderChampionsHp": [
+      0
+    ]
   }
 }

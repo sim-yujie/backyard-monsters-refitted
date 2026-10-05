@@ -18,12 +18,14 @@
   "playerLevel": 20,
   "tailTicks": 12000,
   "defence": {
-    "defenderChampion": {
-      "t": 2,
-      "l": 4,
-      "hp": 60000,
-      "pl": 2
-    }
+    "defenderChampions": [
+      {
+        "t": 2,
+        "l": 4,
+        "hp": 60000,
+        "pl": 2
+      }
+    ]
   },
   "log": {
     "v": 1,
@@ -152,6 +154,8 @@
     "digest": "0d377d41baa72817",
     "bunkerLosses": {},
     "bunkerGarrisons": {},
-    "defenderChampionHp": 43265
+    "defenderChampionsHp": [
+      43265
+    ]
   }
 }

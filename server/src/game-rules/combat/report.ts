@@ -105,13 +105,13 @@ export interface ReportOutcome {
   readonly buildingsDestroyed: number;
   /** The attacker's gain. */
   readonly loot: ResourceAmounts;
-  /** The defender's caged champion died in the battle (issue #195). */
-  readonly defenderChampionFell?: boolean;
+  /** How many of the defender's caged champions died in the battle (issues #195, #310). */
+  readonly defenderChampionsFell?: number;
 }
 
 /**
  * The whole report: the events' lines, "Left the attack" when the attacker
- * left, a line when the defender's champion fell (issue #195), then the result.
+ * left, a line when the defender's champions fell (issues #195, #310), then the result.
  */
 export const attackReport = (
   events: readonly FlingEvent[],
@@ -120,7 +120,9 @@ export const attackReport = (
 ): string => {
   const lines = events.map((event) => reportLine(event, nameOf));
   if (outcome.left) lines.push(`${clockOf(outcome.tick)} Left the attack`);
-  if (outcome.defenderChampionFell) lines.push("The defending champion fell.");
+  const fell = outcome.defenderChampionsFell ?? 0;
+  if (fell === 1) lines.push("The defending champion fell.");
+  else if (fell > 1) lines.push("Both defending champions fell.");
   const loot = RESOURCE_KEYS.map((key) => Math.floor(outcome.loot[key]));
   lines.push(
     `Result: ${Math.floor(outcome.damagePercent)}% damage, ` +

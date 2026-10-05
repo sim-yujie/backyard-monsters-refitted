@@ -196,7 +196,10 @@ describe("a Baiter test's report", () => {
     const battle = createBattle(yardOf(yard), {
       seed: 3,
       bunkers: { 1: { C1: 4 } },
-      defenderChampion: { t: 1, l: 2, hp: 5000, pl: 1 },
+      defenderChampions: [
+        { t: 5, l: 2, hp: 6000, pl: 1 },
+        { t: 1, l: 2, hp: 5000, pl: 1 },
+      ],
     });
     battle.apply({ kind: "fling", t: 0, x: 270, y: 270, r: 30, monsters: { C1: 3 } });
     run(battle, 3000);
@@ -217,10 +220,16 @@ describe("a Baiter test's report", () => {
     expect(report.bunkers).toEqual([
       expect.objectContaining({ id: 1, name: "Monster Bunker L1", held: 4, sent: bunker.sent, damage: bunker.damageDealt, kills: bunker.kills }),
     ]);
-    expect(report.cagedChampion).toEqual({
-      damage: state.defenderChampion!.damageDealt,
-      kills: state.defenderChampion!.kills,
-      health: state.defenderChampionHp,
-    });
+    // One row per caged champion, in cage order (issue #310).
+    expect(state.defenderChampions).toHaveLength(2);
+    expect(report.cagedChampions).toEqual(
+      state.defenderChampions.map((caged, at) => ({
+        name: at === 0 ? "Krallen" : "Gorgo",
+        damage: caged.damageDealt,
+        kills: caged.kills,
+        health: caged.hp,
+      })),
+    );
+    expect(report.cagedChampion).toEqual(report.cagedChampions[0]);
   });
 });

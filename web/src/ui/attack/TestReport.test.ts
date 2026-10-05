@@ -22,6 +22,7 @@ const REPORT: TestReport = {
   ],
   traps: [{ id: 11, name: "Boom Trap", at: "0:20", damage: 600, kills: 3 }],
   bunkers: [],
+  cagedChampions: [],
   cagedChampion: null,
   attackers: [
     { name: "Bandito L3", champion: false, sent: 20, spawned: 0, lost: 20, buildingDamage: 3100 },

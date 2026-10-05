@@ -161,7 +161,10 @@ describe("the stored session", () => {
     const defenderForces = {
       bunkers: { 83: { C1: 10 } },
       defenderLevels: { C1: 6 },
-      defenderChampion: { t: 1, l: 2, hp: 5000, pl: 1 },
+      defenderChampions: [
+        { t: 5, l: 3, hp: 8000, pl: 2 },
+        { t: 1, l: 2, hp: 5000, pl: 1 },
+      ],
     };
     const stored = newAttackSession(ATTACKER, DEFENDER_ATTACK_ID, undefined, undefined, undefined, undefined, defenderForces);
     const read = parseAttackSession(serialiseAttackSession(stored));

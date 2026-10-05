@@ -982,8 +982,8 @@ export class AttackBattleLayer {
       const sheet = spriteFor(`G${champion.t}`, champion.l);
       if (sheet) this.textures.preload(sheet);
     }
-    // And the defence's, so a bunker's monsters and the caged champion come
-    // out drawn rather than as markers while their sheets arrive (#195).
+    // And the defence's, so a bunker's monsters and the caged champions come
+    // out drawn rather than as markers while their sheets arrive (#195, #310).
     const defence = parseDefenderForces(this.session.attackLoad()?.defenderforces);
     if (!defence) return;
     for (const garrison of Object.values(defence.bunkers)) {
@@ -992,9 +992,10 @@ export class AttackBattleLayer {
         if (sheet) this.textures.preload(sheet);
       }
     }
-    const caged = defence.defenderChampion;
-    const sheet = caged ? spriteFor(`G${caged.t}`, caged.l) : undefined;
-    if (sheet) this.textures.preload(sheet);
+    for (const caged of defence.defenderChampions) {
+      const sheet = spriteFor(`G${caged.t}`, caged.l);
+      if (sheet) this.textures.preload(sheet);
+    }
   }
 
   /* ── Creeps ─────────────────────────────────────────────────────────── */

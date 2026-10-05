@@ -48,7 +48,7 @@ const battle: AbandonedOutcome = {
   attackreport: "",
   bunkerLosses: {},
   bunkerGarrisons: {},
-  defenderChampion: null,
+  defenderChampions: [],
 };
 
 /** What an honest client sends for that battle. */
