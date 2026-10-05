@@ -14,7 +14,8 @@ import { playerLevelOf } from "../base/calculateBaseLevel.js";
 import { isAttackActive } from "../base/isAttackActive.js";
 import { ReplayTimeoutError, fightRaidInWorker } from "../base/combat/replayRunner.js";
 import type { CompletedJob } from "../yard/catchUp.js";
-import { damagedBuildings } from "../yard/repair.js";
+import { repairsDoneBy } from "../yard/catchUpRepairs.js";
+import { readPresenceMarks } from "../user/online.js";
 import { fightSecondsOf, type RaidFightInput, type RaidFightOutcome } from "./raidFight.js";
 import { landRaid, landedResult, type RaidResult } from "./raidLanding.js";
 import { readFightLock } from "./raidLock.js";
@@ -29,7 +30,6 @@ import {
   setRaidFrequency,
   withFightLock,
   withoutFightLock,
-  type RaidNotDue,
   type RaidPreference,
 } from "./raidSchedule.js";
 import {
@@ -111,11 +111,21 @@ export const raidView = (raid: OpenRaid): RaidView => ({
     : {}),
 });
 
-/** Gates decided by the schedule and the player alone, which a ping checks before reading the yard. */
-const EARLY_GATES: ReadonlySet<RaidNotDue> = new Set(["notMainYard", "mapRoom", "level", "sessions", "notYet"]);
-
-/** Columns those gates read. */
-const SCHEDULE_FIELDS = ["basesaveid", "userid", "type", "mapversion", "points", "basevalue", "aiattacks"] as const;
+/**
+ * Columns the due rule's gates read before the yard's buildings: the
+ * schedule's, and the attack's for `underAttack`.
+ */
+const SCHEDULE_FIELDS = [
+  "basesaveid",
+  "userid",
+  "type",
+  "mapversion",
+  "points",
+  "basevalue",
+  "aiattacks",
+  "attackid",
+  "attacks",
+] as const;
 
 /** A fresh 31-bit seed for a raid (§3). */
 const newSeed = (): number => randomInt(1, 2 ** 31);
@@ -130,12 +140,14 @@ const notifyJobs = async (em: EntityManager, userid: number, completed: readonly
  * otherwise, when the ping says "yard, Planner closed" and a raid is due, a
  * new one opened in its warning.
  *
- * Cheap on most pings: the open raid is one Redis read, and the schedule's own
- * gates (level, sessions, time) read a handful of columns. Only a raid that is
- * otherwise due reads the yard, and brings it up to date under its row lock
- * (the repairs that finished, the harvesters) before the due rule's damage
- * check and the plan. A yard left damaged with nothing repairing stays
- * damaged, so it is not caught up again on every ping.
+ * Cheap on most pings: the open raid is one Redis read, and every gate but
+ * the damage one (level, sessions, time, under attack, online, an in-game
+ * check pending) reads the presence marks and a handful of columns. Only a
+ * raid that is otherwise due reads the yard, and brings it up to date under
+ * its row lock (the repairs that finished, the harvesters) before the due
+ * rule's damage check and the plan. A yard the catch-up would leave damaged
+ * (a building not repairing, or a repair not done yet) is not caught up on
+ * every ping only to be found damaged.
  *
  * @param em - The request's entity manager.
  * @param user - The caller.
@@ -155,22 +167,25 @@ export const raidOnPing = async (
   const basesaveid = user.save?.basesaveid;
   if (basesaveid == null) return undefined;
 
-  const scheduled = await em.findOne(Save, { basesaveid }, { fields: [...SCHEDULE_FIELDS], refresh: true });
+  const [scheduled, marks] = await Promise.all([
+    em.findOne(Save, { basesaveid }, { fields: [...SCHEDULE_FIELDS], refresh: true }),
+    readPresenceMarks(user.userid, now),
+  ]);
   if (!scheduled || scheduled.userid !== user.userid) return undefined;
+  // No buildings in this slice, so the damage gate waits for the full read.
   const early = raidDueCheck({
     save: { type: scheduled.type, mapversion: scheduled.mapversion, points: scheduled.points, basevalue: scheduled.basevalue, aiattacks: scheduled.aiattacks },
     now,
-    marks: { lastSeen: now, lastAction: now, challengePending: false },
+    marks,
     screen,
-    underAttack: false,
+    underAttack: isAttackActive(scheduled),
     raidOpen: false,
   });
-  if (early !== null && EARLY_GATES.has(early)) return undefined;
+  if (early !== null) return undefined;
 
   const stored = await em.findOne(Save, { basesaveid }, { refresh: true });
   if (!stored) return undefined;
-  const damaged = damagedBuildings(stored);
-  if (damaged.length > 0 && !damaged.some((damage) => damage.repairing)) return undefined;
+  if (!repairsDoneBy(stored, Number(stored.savetime), now)) return undefined;
 
   const { save, completed } = await catchUpLockedYard(em, stored);
   await notifyJobs(em, user.userid, completed);

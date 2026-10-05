@@ -32,12 +32,18 @@ const { raidFighting } = await import("./raidLock.js");
 const { RAID_PREFERENCES, readSchedule } = await import("./raidSchedule.js");
 const { planRaid } = await import("./raidPlan.js");
 const { WARNING_SECONDS, readOpenRaid, recordRaidScreen, updateOpenRaid } = await import("./raidStore.js");
-const { lastActionKey, lastSeenKey } = await import("../user/online.js");
+const { challengeKey, lastActionKey, lastSeenKey } = await import("../user/online.js");
 const { damagedBuildings } = await import("../yard/repair.js");
 
 type Row = Record<string, unknown>;
 
-const db = { row: null as Row | null, tail: Promise.resolve() as Promise<void> };
+const db = {
+  row: null as Row | null,
+  tail: Promise.resolve() as Promise<void>,
+  /** Unlocked reads of the whole row (no `fields`), and locked reads. */
+  fullReads: 0,
+  locks: 0,
+};
 
 /** Takes the row lock; resolves with its release once every earlier holder let go. */
 const acquire = (): Promise<() => void> => {
@@ -49,7 +55,8 @@ const acquire = (): Promise<() => void> => {
 };
 
 const em = {
-  async findOne() {
+  async findOne(_entity: unknown, _where: unknown, options?: { fields?: unknown }) {
+    if (!options?.fields) db.fullReads++;
     return db.row && structuredClone(db.row);
   },
   // The bell's notices for what a catch-up finished: not under test here.
@@ -63,7 +70,10 @@ const em = {
     let pending: Row | null = null;
     const fork = {
       async findOne(_entity: unknown, _where: unknown, options?: { lockMode?: LockMode }) {
-        if (options?.lockMode === LockMode.PESSIMISTIC_WRITE && !release) release = await acquire();
+        if (options?.lockMode === LockMode.PESSIMISTIC_WRITE && !release) {
+          db.locks++;
+          release = await acquire();
+        }
         entity = db.row && structuredClone(db.row);
         return entity;
       },
@@ -190,6 +200,8 @@ const finishOnTime = async (id: string, finishFrom: number) => {
 beforeEach(() => {
   redis.clear();
   db.row = rowOf();
+  db.fullReads = 0;
+  db.locks = 0;
   at(NOW);
 });
 
@@ -215,6 +227,57 @@ describe("the warning", () => {
   test("a player who is not online gets no raid", async () => {
     await recordRaidScreen(USER, YARD);
     expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
+  });
+
+  /** The ping read the yard whole or caught it up. */
+  const touchedYard = () => db.fullReads + db.locks > 0;
+
+  test("an idle player (no real action in 10 minutes) is not raided, and the yard is not read whole or caught up", async () => {
+    await present(NOW);
+    await redis.set(lastActionKey(USER), String(NOW - 11 * 60));
+    const before = structuredClone(db.row);
+
+    expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
+    expect(touchedYard()).toBe(false);
+    expect(db.row).toEqual(before);
+  });
+
+  test("nor is a player with an in-game check pending", async () => {
+    await present(NOW);
+    await redis.set(challengeKey(USER), "1");
+
+    expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
+    expect(touchedYard()).toBe(false);
+  });
+
+  test("nor a yard under attack", async () => {
+    db.row = rowOf({ attackid: 42, attacks: [{ starttime: NOW - 30 }] });
+    await present(NOW);
+
+    expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
+    expect(touchedYard()).toBe(false);
+  });
+
+  test("a repair not done yet is left to finish; once it is, the ping catches it up and warns", async () => {
+    // A level 1 Silo at 1 of 750 health heals 25 a second: whole after 30 s.
+    const repairing = (savetime: number) =>
+      rowOf({
+        savetime,
+        buildingdata: { ...structuredClone(OPEN_YARD), "5": { id: 5, t: 6, X: 120, Y: 120, l: 1, hp: 1, rE: 1 } },
+        buildinghealthdata: { "5": 1 },
+      });
+    await present(NOW);
+
+    db.row = repairing(NOW - 29);
+    const before = structuredClone(db.row);
+    expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
+    expect(db.locks).toBe(0);
+    expect(db.row).toEqual(before);
+
+    db.row = repairing(NOW - 30);
+    expect(await raidOnPing(em, user, YARD, NOW)).toMatchObject({ phase: "warning" });
+    expect(db.locks).toBe(1);
+    expect(damagedBuildings(db.row as never)).toEqual([]);
   });
 
   test("a due player on the yard is warned, and the next ping shows the same raid", async () => {

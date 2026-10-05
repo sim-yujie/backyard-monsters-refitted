@@ -1,5 +1,5 @@
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
-import { damageOf, healed, type RepairSave } from "./repair.js";
+import { damageOf, damagedBuildings, healed, type Damage, type RepairSave } from "./repair.js";
 
 /**
  * Catch-up step 3: repairs heal (`docs/design/yard-buildings.md` §2.3, §5.5).
@@ -53,6 +53,23 @@ export interface RepairJob {
 /** The longest replay, as `advanceBuildingTimers` clamps it. */
 const MAX_ELAPSED_SECONDS = 60 * 60 * 24 * 30;
 
+/** The seconds of the window, clamped. */
+const elapsedOf = (from: number, now: number): number =>
+  Math.min(Math.max(Math.floor(now - from), 0), MAX_ELAPSED_SECONDS);
+
+/** Whole seconds a repair needs to reach full health. */
+const secondsToHeal = (damage: Damage): number => Math.ceil((damage.max - damage.health) / damage.rate);
+
+/**
+ * Whether {@link catchUpRepairs} from `from` to `now` would leave no building
+ * damaged: every damaged one repairing, and done by `now`. Reads only; for a
+ * caller that wants a whole yard and need not catch it up when it would not be.
+ */
+export const repairsDoneBy = (save: RepairSave, from: number, now: number): boolean => {
+  const elapsed = elapsedOf(from, now);
+  return damagedBuildings(save).every((damage) => damage.repairing && secondsToHeal(damage) <= elapsed);
+};
+
 /** The countdown `advanceBuildingTimers` would advance on this building, if any. */
 const runningCountdown = (building: BuildingData): "cU" | "cB" | "cF" | null => {
   if (building.cU) return "cU";
@@ -74,7 +91,7 @@ export const catchUpRepairs = (save: RepairSave, from: number, now: number): Rep
   const buildings = save.buildingdata;
   if (!buildings) return [];
 
-  const elapsed = Math.min(Math.max(Math.floor(now - from), 0), MAX_ELAPSED_SECONDS);
+  const elapsed = elapsedOf(from, now);
   const jobs: RepairJob[] = [];
   let out: BuildingDataMap | null = null;
   let health: BuildingHealthData | null = null;
@@ -94,7 +111,7 @@ export const catchUpRepairs = (save: RepairSave, from: number, now: number): Rep
       continue;
     }
 
-    const needed = Math.ceil((damage.max - damage.health) / damage.rate);
+    const needed = secondsToHeal(damage);
     if (needed > elapsed) {
       const reached = damage.health + damage.rate * elapsed;
       out[key] = { ...building, hp: reached };

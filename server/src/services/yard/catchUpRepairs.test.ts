@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { maxHp } from "../../game-rules/combat/stats.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import { catchUpYard, type CatchUpSave } from "./catchUp.js";
-import { catchUpRepairs } from "./catchUpRepairs.js";
+import { catchUpRepairs, repairsDoneBy } from "./catchUpRepairs.js";
 
 const T0 = 1_800_000_000;
 
@@ -75,6 +75,22 @@ describe("catchUpRepairs", () => {
     const save = yardOf(snapper({ hp: 100, rE: 1, cU: 50 }), { "1": 100 });
     catchUpRepairs(save, T0, T0 + 30);
     expect(save.buildingdata["1"]?.cU).toBe(50 + 24);
+  });
+});
+
+describe("repairsDoneBy", () => {
+  test("agrees with the catch-up: done at the second the repair ends, not one before", () => {
+    // ceil(400 / 17) = 24 s, as above.
+    const yard = () => yardOf(snapper({ hp: 100, rE: 1 }), { "1": 100 });
+    expect(repairsDoneBy(yard(), T0, T0 + 23)).toBe(false);
+    expect(catchUpRepairs(yard(), T0, T0 + 23)).toEqual([]);
+    expect(repairsDoneBy(yard(), T0, T0 + 24)).toBe(true);
+    expect(catchUpRepairs(yard(), T0, T0 + 24)).toHaveLength(1);
+  });
+
+  test("a damaged building not repairing is never done; a whole yard always is", () => {
+    expect(repairsDoneBy(yardOf(snapper({ hp: 100 }), { "1": 100 }), T0, T0 + 3600)).toBe(false);
+    expect(repairsDoneBy(yardOf(snapper()), T0, T0)).toBe(true);
   });
 });
 
