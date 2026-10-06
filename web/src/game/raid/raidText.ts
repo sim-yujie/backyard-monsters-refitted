@@ -1,6 +1,8 @@
 import type { RaidPreference, RaidResult } from "@/api/raid";
 import type { Roster } from "@/game/combat/rules";
 import { monsterName } from "@/game/combat/rules";
+import { TROJAN_TRIBE } from "@/game/trojan/trojanHorse";
+import { TROJAN_GOOD_DEFENCE } from "@/game/trojan/trojanText";
 
 /**
  * The words and pictures of the raid screens (issue #226 WP4). The text is
@@ -94,9 +96,15 @@ export const alertMonsters = (monsters: Roster, most = 3): AlertMonster[] =>
 export const raiderCount = (monsters: Roster): number =>
   Object.values(monsters).reduce((sum, count) => sum + Math.max(0, count), 0);
 
-/** The good defence's headline (`ai_gooddefense`). */
+/**
+ * The good defence's headline (`ai_gooddefense`). A Trojan Horse's landed
+ * fight carries `tribe: "wild"` (issue #327, `docs/design/trojan-horse.md`
+ * §6), never a real tribe, and names "the wild monsters" instead.
+ */
 export const goodDefenceText = (tribe: string): string =>
-  `You successfully defended your yard from an attack by the ${raidTribe(tribe).name} Tribe`;
+  tribe === TROJAN_TRIBE
+    ? TROJAN_GOOD_DEFENCE
+    : `You successfully defended your yard from an attack by the ${raidTribe(tribe).name} Tribe`;
 
 /** The poor defence's three lines (`ai_poordefense_ta`, `_tb`, `_tc`). */
 export const POOR_DEFENCE = {

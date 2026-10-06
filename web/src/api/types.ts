@@ -731,6 +731,13 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * there are none, and always while the server's `ACHIEVEMENT_REWARDS` is off.
    */
   achievements?: AchievementUnlock[];
+  /**
+   * The Trojan Horse was just placed on this load (issue #324, #327,
+   * `docs/design/trojan-horse.md` §3.1): the own yard's one-time camera pan
+   * to it. Absent on every other load, including a later one that still
+   * finds the horse unsprung.
+   */
+  trojanNew?: true;
 }
 
 /* ── Map Room 2 ─────────────────────────────────────────────────────────── */

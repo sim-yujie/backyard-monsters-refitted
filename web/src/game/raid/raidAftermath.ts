@@ -1,4 +1,5 @@
 import type { RaidApi, RaidPreference, RaidResult } from "@/api/raid";
+import { TROJAN_TRIBE } from "@/game/trojan/trojanHorse";
 
 /**
  * After a raid has landed (issue #226 WP4, `docs/design/wild-raids.md` §4.3):
@@ -8,6 +9,11 @@ import type { RaidApi, RaidPreference, RaidResult } from "@/api/raid";
  *
  * Closing the frequency popup without an answer keeps the last choice, as
  * Flash's close button did.
+ *
+ * A landed Trojan Horse fight (`tribe: "wild"`, issue #327,
+ * `docs/design/trojan-horse.md` §6) skips the frequency popup entirely:
+ * Flash never asked after it (`_isAI` false), and it is not a recurring raid
+ * to tune.
  */
 
 export interface RaidAftermathView {
@@ -28,6 +34,7 @@ export interface RaidAftermathOptions {
 export const runRaidAftermath = async (options: RaidAftermathOptions, result: RaidResult): Promise<void> => {
   const { api, view } = options;
   await view.result(result);
+  if (result.tribe === TROJAN_TRIBE) return;
   const preference = await view.frequency(result.tribe, result.defended);
   if (preference === null) return;
   try {
