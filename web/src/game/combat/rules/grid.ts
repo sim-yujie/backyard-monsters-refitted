@@ -90,9 +90,6 @@ export const JIGGLE_SPREAD = 0.4;
 
 const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
 
-/** Packing factor for the heap: cell index below, depth above. */
-const HEAP_SCALE = 1 << 17;
-
 /** Cartesian units to a cell coordinate (`PATHING.GlobalLocal`, `:653-661`). */
 const toCellAxis = (value: number, extent: number): number =>
   Math.trunc(value * 0.1 + (extent >> 1));
@@ -168,50 +165,77 @@ interface Flood {
   readonly depth: Int32Array;
   readonly settled: Uint8Array;
   readonly ignoreWalls: boolean;
-  heap: Float64Array;
+  /**
+   * A binary min-heap of (depth, cell) entries, ordered by depth and then by
+   * cell index, held as two parallel arrays.
+   */
+  heapDepth: Int32Array;
+  heapCell: Int32Array;
   size: number;
   exhausted: boolean;
 }
 
-const push = (flood: Flood, value: number): void => {
-  if (flood.size === flood.heap.length) {
-    const grown = new Float64Array(flood.heap.length * 2);
-    grown.set(flood.heap);
-    flood.heap = grown;
+/** Whether heap entry `one` sorts strictly before entry `other`. */
+const before = (depths: Int32Array, cells: Int32Array, one: number, other: number): boolean => {
+  const oneDepth = depths[one] as number;
+  const otherDepth = depths[other] as number;
+  return (
+    oneDepth < otherDepth ||
+    (oneDepth === otherDepth && (cells[one] as number) < (cells[other] as number))
+  );
+};
+
+const push = (flood: Flood, depth: number, cell: number): void => {
+  if (flood.size === flood.heapDepth.length) {
+    const grownDepth = new Int32Array(flood.heapDepth.length * 2);
+    grownDepth.set(flood.heapDepth);
+    flood.heapDepth = grownDepth;
+    const grownCell = new Int32Array(flood.heapCell.length * 2);
+    grownCell.set(flood.heapCell);
+    flood.heapCell = grownCell;
   }
-  const heap = flood.heap;
+  const depths = flood.heapDepth;
+  const cells = flood.heapCell;
   let child = flood.size;
   flood.size += 1;
-  heap[child] = value;
+  depths[child] = depth;
+  cells[child] = cell;
   while (child > 0) {
     const parent = (child - 1) >> 1;
-    if ((heap[parent] as number) <= (heap[child] as number)) break;
-    const swap = heap[parent] as number;
-    heap[parent] = heap[child] as number;
-    heap[child] = swap;
+    if (!before(depths, cells, child, parent)) break;
+    const swapDepth = depths[parent] as number;
+    const swapCell = cells[parent] as number;
+    depths[parent] = depths[child] as number;
+    cells[parent] = cells[child] as number;
+    depths[child] = swapDepth;
+    cells[child] = swapCell;
     child = parent;
   }
 };
 
-const pop = (flood: Flood): number => {
-  const heap = flood.heap;
-  const top = heap[0] as number;
+/** Remove the top entry; read it from index 0 of both arrays first. */
+const pop = (flood: Flood): void => {
+  const depths = flood.heapDepth;
+  const cells = flood.heapCell;
   flood.size -= 1;
-  heap[0] = heap[flood.size] as number;
+  depths[0] = depths[flood.size] as number;
+  cells[0] = cells[flood.size] as number;
   let parent = 0;
   for (;;) {
     const left = parent * 2 + 1;
     if (left >= flood.size) break;
     const right = left + 1;
     let smallest = left;
-    if (right < flood.size && (heap[right] as number) < (heap[left] as number)) smallest = right;
-    if ((heap[parent] as number) <= (heap[smallest] as number)) break;
-    const swap = heap[parent] as number;
-    heap[parent] = heap[smallest] as number;
-    heap[smallest] = swap;
+    if (right < flood.size && before(depths, cells, right, left)) smallest = right;
+    if (!before(depths, cells, smallest, parent)) break;
+    const swapDepth = depths[parent] as number;
+    const swapCell = cells[parent] as number;
+    depths[parent] = depths[smallest] as number;
+    cells[parent] = cells[smallest] as number;
+    depths[smallest] = swapDepth;
+    cells[smallest] = swapCell;
     parent = smallest;
   }
-  return top;
 };
 
 /**
@@ -278,7 +302,9 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
     stamp(building, -1);
     if (blocksPathing(building.type)) register(building, -1);
     version += 1;
-    for (const flood of floods.values()) spare.push({ depth: flood.depth, settled: flood.settled });
+    for (const flood of floods.values()) {
+      spare.push({ depth: flood.depth, settled: flood.settled });
+    }
     floods = new Map();
   };
 
@@ -301,7 +327,8 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
       depth: reused ? reused.depth.fill(-1) : new Int32Array(CELL_COUNT).fill(-1),
       settled: reused ? reused.settled.fill(0) : new Uint8Array(CELL_COUNT),
       ignoreWalls,
-      heap: new Float64Array(1024),
+      heapDepth: new Int32Array(1024),
+      heapCell: new Int32Array(1024),
       size: 0,
       exhausted: false,
     };
@@ -312,7 +339,7 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
         const index = cellIndexOf(originX + stepX, originY + stepY);
         if (index < 0) continue;
         flood.depth[index] = 0;
-        push(flood, index);
+        push(flood, 0, index);
       }
     }
     floods.set(key, flood);
@@ -324,9 +351,9 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
   const expandTo = (flood: Flood, goal: number): void => {
     if (flood.exhausted || (flood.settled[goal] as number) === 1) return;
     while (flood.size > 0) {
-      const packed = pop(flood);
-      const index = packed % HEAP_SCALE;
-      const depth = (packed - index) / HEAP_SCALE;
+      const depth = flood.heapDepth[0] as number;
+      const index = flood.heapCell[0] as number;
+      pop(flood);
       if ((flood.settled[index] as number) === 1) continue;
       flood.settled[index] = 1;
       if (index === goal) return;
@@ -345,7 +372,7 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
           const held = flood.depth[neighbour] as number;
           if (held >= 0 && held <= next) continue;
           flood.depth[neighbour] = next;
-          push(flood, next * HEAP_SCALE + neighbour);
+          push(flood, next, neighbour);
         }
       }
     }
