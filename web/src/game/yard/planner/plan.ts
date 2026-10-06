@@ -3,6 +3,7 @@ import { isStorageId } from "../decorStorage";
 import { holdsWorker } from "../workers";
 import { nearbyArea } from "../nearbyFootprints";
 import { footprintOf } from "../YardGrid";
+import { TROJAN_HORSE_TYPE } from "@/game/trojan/trojanHorse";
 import type { Yard } from "../yardModel";
 import type { MoveEntry, PlanEntry, StoreEntry } from "./commands";
 import {
@@ -754,7 +755,10 @@ const nodeOf = (building: Yard["buildings"][number]): PlanNode => {
     decoration,
     ...(decoration && !fromStorage ? { home: { x: building.x, y: building.y } } : {}),
     ...(fromStorage ? { fromStorage: true as const } : {}),
-    fixed: false,
+    // The Trojan Horse is not selectable or movable here (issue #327, design
+    // §3): an obstacle for everything else to plan around, never a node a
+    // move, a clear or Apply's layout may touch.
+    fixed: building.type === TROJAN_HORSE_TYPE,
     stored: fromStorage,
     plan: null,
     busy: holdsWorker(building),

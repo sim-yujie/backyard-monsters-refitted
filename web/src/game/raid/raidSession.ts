@@ -16,6 +16,13 @@ export interface RaidRun {
   readonly fight: RaidFight;
   /** The own yard's save as the yard had it, for everything the fight's yard does not carry. */
   readonly save: BaseLoadResponse;
+  /**
+   * Sprung from the Trojan Horse rather than a wild raid's warning (issue
+   * #327, `docs/design/trojan-horse.md` §5): the raid scene shows the trap
+   * banner before "Don't Panic!" (`raidPlugin.ts`), and its result and
+   * aftermath are worded for "the wild monsters", not a tribe (§6).
+   */
+  readonly trojan?: boolean;
 }
 
 let pendingRun: RaidRun | null = null;

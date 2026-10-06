@@ -99,6 +99,11 @@ import { sceneForMap } from "./MapGateScene";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
 import { BAITER_TYPE, setBaiterRun } from "@/game/baiter/baiterSession";
+import { trojanApi } from "@/api/trojan";
+import { setRaidRun } from "@/game/raid/raidSession";
+import { TROJAN_HORSE_TYPE, findTrojanHorse } from "@/game/trojan/trojanHorse";
+import { TrojanFlow } from "@/game/trojan/trojanFlow";
+import { TrojanLetter } from "@/ui/trojan/TrojanLetter";
 import { replayOf } from "@/game/baiter/testHistory";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { registerCanvasTarget, tutTarget, TutTarget, type TargetRect } from "@/game/guide/targets";
@@ -293,6 +298,8 @@ export class YardScene implements Scene {
   private access: PlannerAccess = PlannerAccess.LOCKED;
   /** The build menu, made the first time it opens. */
   private buildMenu: BuildMenu | null = null;
+  /** The Trojan Horse's letter popup, open between a click on the horse and an answer (#327). */
+  private trojanLetter: TrojanLetter | null = null;
   /** A new building in hand, and the bar that says what it is; null otherwise. */
   private placement: BuildPlacement | null = null;
   private placementBar: PlacementBar | null = null;
@@ -520,6 +527,7 @@ export class YardScene implements Scene {
     this.panel = null;
     this.panelDock?.remove();
     this.panelDock = null;
+    this.closeTrojanLetter();
     this.status?.remove();
     this.status = null;
 
@@ -694,6 +702,16 @@ export class YardScene implements Scene {
       // the player's own yard shows them, as build mode always did.
       if (target) concealTraps(this.renderer, yard);
       this.startCamera(yard, context);
+      // The Trojan Horse was just placed (issue #327, design §3.1): the
+      // camera pans to it once, no popup, no sound. Own main yard only —
+      // `trojanNew` never comes with a visit's or an outpost's load.
+      if (store?.kind === "main" && response.trojanNew) {
+        const horse = findTrojanHorse(yard.buildings);
+        if (horse && this.camera) {
+          this.camera.centreOn({ x: horse.centreX, y: horse.centreY });
+          this.camera.dirty = true;
+        }
+      }
 
       // A visit's response carries the defender's pool, not the player's, so
       // the HUD shows the visitor's own, as the map read it (#60), and never
@@ -996,6 +1014,13 @@ export class YardScene implements Scene {
   private tap(building: YardBuilding | null): void {
     // Carrying a new building, a click is a drop, which the placement takes.
     if (this.placement) return;
+    if (building?.type === TROJAN_HORSE_TYPE) {
+      // Never selectable or movable (design §3, §8): own yard, build mode,
+      // opens the letter; a visit, an attack or the planner does nothing,
+      // the same as Flash's untargetable prop (`champions.ts`).
+      if (this.binding && !this.planner) this.openTrojanLetter();
+      return;
+    }
     this.select(building);
     const store = this.store;
     const binding = this.binding;
@@ -1017,6 +1042,39 @@ export class YardScene implements Scene {
         const amount = result.ok ? (result.report.byBuilding[String(building.id)]?.amount ?? 0) : 0;
         if (amount > 0) this.floatBanked(building.id, waiting.resource, amount);
       });
+  }
+
+  /**
+   * The letter (design §3.3, issue #327): clicking the horse in build mode
+   * opens it. Either button springs the trap (`TrojanFlow`); the server
+   * answers with the fight already fought, exactly as `/raid/start` does, and
+   * the raid scene plays it, the trap banner ahead of "Don't Panic!"
+   * (`raidPlugin.ts`).
+   */
+  private openTrojanLetter(): void {
+    const store = this.store;
+    const context = this.context;
+    if (!store || !context || this.trojanLetter) return;
+    const flow = new TrojanFlow({
+      api: trojanApi,
+      fight: (response) => {
+        setRaidRun({ raid: response.raid, fight: response.fight, save: store.save, trojan: true });
+        this.closeTrojanLetter();
+        context.goTo(SceneName.RAID);
+      },
+      notice: (message) => {
+        this.closeTrojanLetter();
+        this.notices.show("trojan", message, { level: "info", timeoutMs: 6_000 });
+      },
+    });
+    this.trojanLetter = new TrojanLetter(store.save.name ?? "", {
+      onAnswer: () => void flow.spring(),
+    }).mount(context.overlay.modal);
+  }
+
+  private closeTrojanLetter(): void {
+    this.trojanLetter?.close();
+    this.trojanLetter = null;
   }
 
   /**

@@ -1,0 +1,19 @@
+/*
+ * The Trojan Horse's letter popup (issue #327 WP4, `TrojanLetter.ts`, design
+ * `docs/design/trojan-horse.md` §3.3). Every value comes from tokens.css.
+ */
+
+.trojan-letter {
+  width: min(92vw, 28rem);
+}
+
+.trojan-letter__body {
+  white-space: pre-line;
+}
+
+.trojan-letter__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}

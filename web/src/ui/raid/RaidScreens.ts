@@ -16,6 +16,7 @@ import {
   tribeTitle,
 } from "@/game/raid/raidText";
 import { raidCountdownText, type RaidBusy, type RaidStage, type RaidYardView } from "@/game/raid/raidYardFlow";
+import { TROJAN_TRIBE } from "@/game/trojan/trojanHorse";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
@@ -52,6 +53,21 @@ const splash = (tribe: string, className: string): HTMLImageElement => {
   const image = element("img", className);
   image.src = raidTribe(tribe).splash;
   image.alt = tribeTitle(tribe);
+  image.decoding = "async";
+  return image;
+};
+
+/**
+ * The result popup's picture: a tribe's splash, or the horse itself for a
+ * landed Trojan Horse fight (`tribe: "wild"`, issue #327,
+ * `docs/design/trojan-horse.md` §6), which names "the wild monsters", never
+ * a tribe.
+ */
+const resultPicture = (tribe: string, className: string): HTMLImageElement => {
+  if (tribe !== TROJAN_TRIBE) return splash(tribe, className);
+  const image = element("img", className);
+  image.src = "/assets/buildings/trojanhorse/anim.1.png";
+  image.alt = "The wild monsters";
   image.decoding = "async";
   return image;
 };
@@ -292,7 +308,7 @@ export const raidResultPopup = (result: RaidResult, repair: RaidRepairOffer | nu
     words.append(element("p", "raid-result__lead", POOR_DEFENCE.line), element("p", "raid-result__advice", POOR_DEFENCE.advice));
   }
   words.append(element("p", "raid-result__health", `Your yard held at ${healthText(result.health)}.`));
-  head.append(splash(result.tribe, "raid-result__splash"), words);
+  head.append(resultPicture(result.tribe, "raid-result__splash"), words);
   const parts: HTMLElement[] = [head];
 
   if (result.shiny > 0) {
