@@ -5,10 +5,11 @@ import { postgres } from "../../server.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { BaseType } from "../../enums/Base.js";
 import { Save } from "../../database/models/save.model.js";
+import { optionalJsonField } from "../../schemas/jsonField.js";
 
-const InfernoMonstersSchema = z.object({
+export const InfernoMonstersSchema = z.object({
   type: z.string(),
-  imonsters: z.string().optional().transform((data) => (data ? JSON.parse(data) : {})),
+  imonsters: optionalJsonField("imonsters").transform((data) => data ?? {}),
 });
 
 export const infernoMonsters: KoaController = async (ctx) => {

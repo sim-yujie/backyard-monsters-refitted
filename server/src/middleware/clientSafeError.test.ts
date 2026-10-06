@@ -101,6 +101,15 @@ describe("a request body that fails its route's schema (#224)", () => {
     expect(ctx.body.errorDetails.data.field).toBe("attackData");
   });
 
+  test("malformed JSON in a field that parses it is a 400, not a 500 (#224 follow-up)", async () => {
+    const ctx = await failWith(
+      schemaError({ userid: "1", baseid: "1", type: "build", attackData: "{not valid json" })
+    );
+
+    expect(ctx.status).toBe(400);
+    expect(ctx.body.errorDetails.data).toEqual({ reason: "invalidRequest", field: "attackData" });
+  });
+
   test("any other unexpected error is still a 500", async () => {
     const ctx = await failWith(new TypeError("boom"));
     expect(ctx.status).toBe(500);

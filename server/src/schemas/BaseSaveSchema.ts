@@ -1,6 +1,7 @@
 import z from "zod";
 import { ChampionListSchema } from "./ChampionSchema.js";
 import type { Resources } from "../services/base/updateResources.js";
+import { optionalJsonField } from "./jsonField.js";
 
 /**
  * Schema for validating and transforming base save data.
@@ -27,12 +28,7 @@ export const BaseSaveSchema = z.object({
    * This property is optional.
    * @type {[string, number] | undefined}
    */
-  purchase: z
-    .string()
-    .optional()
-    .transform((data) =>
-      data ? (JSON.parse(data) as [string, number]) : undefined
-    ),
+  purchase: optionalJsonField<[string, number]>("purchase"),
 
   /**
    * The champions belonging to the base being saved. During an attack this is
@@ -52,20 +48,14 @@ export const BaseSaveSchema = z.object({
    * This property is optional.
    * @type {object | undefined}
    */
-  buildingdata: z
-    .string()
-    .optional()
-    .transform((data) => (data ? JSON.parse(data) : undefined)),
+  buildingdata: optionalJsonField("buildingdata"),
 
   /**
    * The building health data, transformed from a JSON string to an object.
    * This property is optional.
    * @type {object | undefined}
    */
-  buildinghealthdata: z
-    .string()
-    .optional()
-    .transform((data) => (data ? JSON.parse(data) : undefined)),
+  buildinghealthdata: optionalJsonField("buildinghealthdata"),
 
   /**
    * The monster update data, transformed from a JSON string to an array of objects.
@@ -73,55 +63,37 @@ export const BaseSaveSchema = z.object({
    * The client always sends it initially as an empty array, so it is expected to be an array of objects.
    * @type {any[] | undefined}
    */
-  monsterupdate: z
-    .string()
-    .optional()
-    .transform((data) => (data ? JSON.parse(data) : undefined)),
+  monsterupdate: optionalJsonField("monsterupdate"),
 
   /**
    * The attack loot data, transformed from a JSON string to an object.
    * This property is optional.
    * @type {object | undefined}
    */
-  attackloot: z
-    .string()
-    .optional()
-    .transform((data) => (data ? (JSON.parse(data) as Resources) : undefined)),
+  attackloot: optionalJsonField<Resources>("attackloot"),
 
   /**
    * The resource delta for the base being saved. During an attack this is the
    * defender's, reported by the attacking client.
    * @type {Resources | undefined}
    */
-  resources: z
-    .string()
-    .optional()
-    .transform((data) => (data ? (JSON.parse(data) as Resources) : undefined)),
+  resources: optionalJsonField<Resources>("resources"),
 
   /**
    * The monsters data, transformed from a JSON string to an object.
    * This property is optional.
    * @type {object | undefined}
    */
-  monsters: z
-    .string()
-    .optional()
-    .transform((data) => (data ? JSON.parse(data) : undefined)),
+  monsters: optionalJsonField("monsters"),
 
   /**
    * The attack creatures data, transformed from a JSON string to an object.
    * This property is optional.
    * @type {object | undefined}
    */
-  attackcreatures: z
-    .string()
-    .optional()
-    .transform((data) => (data ? JSON.parse(data) : undefined)),
+  attackcreatures: optionalJsonField("attackcreatures"),
 
-  attackersiege: z
-    .string()
-    .optional()
-    .transform((data) => (data ? JSON.parse(data) : undefined)),
+  attackersiege: optionalJsonField("attackersiege"),
 
   /**
    * The web client's fling log (`docs/design/server-combat.md` §3.10): every

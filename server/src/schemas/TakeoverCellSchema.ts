@@ -1,4 +1,5 @@
 import z from "zod";
+import { optionalJsonField } from "./jsonField.js";
 
 export const TakeoverCellSchema = z.object({
   /**
@@ -11,10 +12,7 @@ export const TakeoverCellSchema = z.object({
    * The resources to be used for the takeover, transformed from a JSON string to an object.
    * @type {object | undefined}
    */
-  resources: z
-    .string()
-    .transform((res) => JSON.parse(res))
-    .optional(),
+  resources: optionalJsonField("resources"),
 
   /**
    * The amount of shiny to be used for the takeover, transformed from a string to a number.
