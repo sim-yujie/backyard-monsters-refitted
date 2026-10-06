@@ -177,6 +177,32 @@ describe("a Baiter test's report", () => {
     expect(fate({ endReason: "expired", championsOnField: ["G1"] })).toMatchObject({ retreated: true, health });
   });
 
+  it("credits a caged champion with every attacker it kills (#308)", () => {
+    const yard: CombatBuildingDataMap = {
+      "1": { id: 1, t: 114, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 150, Y: 150 },
+      "3": { id: 3, t: 1, l: 1, X: 1400, Y: 1400 },
+    };
+    const battle = createBattle(yardOf(yard), { seed: 3, defenderChampions: [{ t: 3, l: 6, hp: 200_000, pl: 3 }] });
+    battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 4 } });
+    run(battle, 6000);
+    // Nothing else defends this yard: Fomor beat all four, and each one is his.
+    expect(battle.state().creepsKilled).toBe(4);
+    expect(reportOf(battle, yard).cagedChampions).toEqual([
+      { name: "Fomor", damage: battle.state().defenderChampions[0]!.damageDealt, kills: 4, health: expect.any(Number) },
+    ]);
+
+    // Healers heal back what he deals: a lot of damage, and no kills to show for it.
+    const healed = createBattle(yardOf(yard), { seed: 3, defenderChampions: [{ t: 3, l: 2, hp: 200_000, pl: 0 }] });
+    healed.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C15: 4 } });
+    run(healed, 33_600);
+    const [fomor] = healed.state().defenderChampions;
+    expect(fomor!.hp).toBeGreaterThan(0);
+    expect(fomor!.damageDealt).toBeGreaterThan(5000);
+    expect(fomor!.kills).toBe(0);
+    expect(healed.state().creepsKilled).toBe(0);
+  });
+
   it("reads one result line per end reason", () => {
     expect(resultOf("exhausted")).toBe("held");
     expect(resultOf("destroyed")).toBe("flattened");
