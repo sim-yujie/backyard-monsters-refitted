@@ -282,7 +282,22 @@ export function flyerAltitude(creatureId: string): number {
   return FLYER_ALTITUDE[creatureId] ?? FLYER_ALTITUDE["default"] ?? 108;
 }
 
-/** The URL the sheet is served from: `/assets/monsters/<file>`. */
+/**
+ * Sheets repainted for the revamp, by original file. Each is the original
+ * layout drawn at four times the size; the `@4x` in the name is how Pixi knows
+ * the resolution, so the table's 1x cell rectangles still frame it. An art
+ * trial: only the Pokey so far (`web/tools/gen-pokey-sprite.py`). Remove an
+ * entry to go back to the original sheet.
+ */
+export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
+  "monsters/sprite.1.v1.png": "monsters/pokey-repaint@4x.png",
+};
+
+/** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */
+export const isHighResolutionSheet = (url: string): boolean => /@\d+x\.\w+$/.test(url);
+
+/** The URL the sheet is served from: `/assets/monsters/<file>`, or its repaint. */
 export function sheetUrl(sheet: MonsterSheet | string): string {
-  return `${ASSET_ROOT}${typeof sheet === "string" ? sheet : sheet.file}`;
+  const file = typeof sheet === "string" ? sheet : sheet.file;
+  return `${ASSET_ROOT}${REPAINTED_SHEETS[file] ?? file}`;
 }

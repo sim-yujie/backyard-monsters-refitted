@@ -11,6 +11,7 @@ import {
 import { AttackSession } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
+import { sheetUrl } from "./monsterSprites";
 
 /**
  * An ended battle put to rest (#308): the engine stops on the tick the battle
@@ -55,9 +56,7 @@ const targetOf = (monsters: Record<string, number> = { C1: 20 }): AttackTarget =
 });
 
 const blankSheet = (url: string): Promise<Texture> => {
-  const sheet = Object.values(MONSTER_SPRITES).find((candidate) =>
-    url.endsWith(candidate.file),
-  );
+  const sheet = Object.values(MONSTER_SPRITES).find((candidate) => url === sheetUrl(candidate));
   if (!sheet) throw new Error(`no sheet at ${url}`);
   return Promise.resolve(
     new Texture({ source: new TextureSource({ width: sheet.width, height: sheet.height }) }),

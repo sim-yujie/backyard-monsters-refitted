@@ -12,6 +12,7 @@ import { AttackSession } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 import { PROJECTILE_TICKS } from "./creepFx";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
+import { sheetUrl } from "./monsterSprites";
 
 /**
  * A tower's bullet hurts when it lands, not when it is fired (issue #77): over
@@ -55,9 +56,7 @@ const targetOf = (monsters: Record<string, number> = { C1: 20 }): AttackTarget =
 });
 
 const blankSheet = (url: string): Promise<Texture> => {
-  const sheet = Object.values(MONSTER_SPRITES).find((candidate) =>
-    url.endsWith(candidate.file),
-  );
+  const sheet = Object.values(MONSTER_SPRITES).find((candidate) => url === sheetUrl(candidate));
   if (!sheet) throw new Error(`no sheet at ${url}`);
   return Promise.resolve(
     new Texture({ source: new TextureSource({ width: sheet.width, height: sheet.height }) }),

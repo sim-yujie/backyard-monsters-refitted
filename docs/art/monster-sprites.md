@@ -229,3 +229,16 @@ Notes on the table:
 champion walk and attack. This does not give C1-C12 a walk cycle or any monster a death
 animation, because that art never existed. Those would be new art, for example generated with
 Gemini, drawn at the same cell sizes so they drop into the same table.
+
+## 4. Repainted sheets (art trial)
+
+A repainted sheet keeps the original layout at four times the size and is named `<name>@4x.png`.
+`REPAINTED_SHEETS` in `web/src/game/attack/monsterSprites.ts` maps the original file to it;
+Pixi reads the resolution from the name, so the 1x cell rectangles in the table still frame it,
+and the loader turns on mipmaps for it so it does not shimmer when drawn small. Remove the
+entry to go back to the original.
+
+Only the Pokey (C1) so far: `monsters/pokey-repaint@4x.png` (and a 1x `pokey-repaint.png`),
+built by `web/tools/gen-pokey-sprite.py` from two Gemini paintings, the faceless body and the
+face parts. Gemini cannot keep one creature identical across 30 directions, so the script turns
+the face round the ball itself.

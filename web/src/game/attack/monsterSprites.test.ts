@@ -9,6 +9,7 @@ import {
   frameRow,
   championFlightTop,
   hoverOffset,
+  isHighResolutionSheet,
   shadowOffset,
   sheetColumn,
   sheetUrl,
@@ -211,5 +212,11 @@ describe("sheetUrl", () => {
   it("serves from /assets/ like the building art", () => {
     expect(sheetUrl(sheet("C4"))).toBe("/assets/monsters/fink.png");
     expect(sheetUrl("monsters/flyingshadow.png")).toBe("/assets/monsters/flyingshadow.png");
+  });
+
+  it("serves a repainted sheet in place of the original", () => {
+    expect(sheetUrl(sheet("C1"))).toBe("/assets/monsters/pokey-repaint@4x.png");
+    expect(isHighResolutionSheet(sheetUrl(sheet("C1")))).toBe(true);
+    expect(isHighResolutionSheet(sheetUrl(sheet("C4")))).toBe(false);
   });
 });

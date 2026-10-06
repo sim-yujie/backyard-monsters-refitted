@@ -21,7 +21,7 @@ import {
 import { AttackSession } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
-import { championFlightTop, flyerAltitude, spriteFor } from "./monsterSprites";
+import { championFlightTop, flyerAltitude, sheetUrl, spriteFor } from "./monsterSprites";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 
 /**
@@ -560,7 +560,7 @@ const setUp = (
 };
 
 const keyOf = (url: string): string => {
-  const hit = Object.values(MONSTER_SPRITES).find((sheet) => url.endsWith(sheet.file));
+  const hit = Object.values(MONSTER_SPRITES).find((sheet) => url === sheetUrl(sheet));
   if (!hit) throw new Error(`no sheet at ${url}`);
   return hit.key;
 };
@@ -602,7 +602,7 @@ describe("AttackBattleLayer against a defence (#195)", () => {
     const wanted = [spriteFor("C8", 3), spriteFor("G1", 2)];
     for (const sheet of wanted) {
       expect(sheet).toBeDefined();
-      expect(urls.some((url) => url.endsWith(sheet!.file))).toBe(true);
+      expect(urls.some((url) => url === sheetUrl(sheet!))).toBe(true);
     }
     layer.destroy();
   });

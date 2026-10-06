@@ -2,7 +2,7 @@ import { Container, Texture, TextureSource, type Sprite } from "pixi.js";
 import { describe, expect, it } from "vitest";
 import { creepZIndex, MonsterSheetTextures } from "@/game/attack/AttackBattleLayer";
 import { MONSTER_SPRITES } from "@/game/attack/monsterSpriteData";
-import { championFlightTop, shadowOffset } from "@/game/attack/monsterSprites";
+import { championFlightTop, shadowOffset, sheetUrl } from "@/game/attack/monsterSprites";
 import { yardBounds } from "./YardGrid";
 import { EMPTY_LIFE, type YardLife } from "./yardLifeModel";
 import { YardLifeLayer } from "./YardLifeLayer";
@@ -10,7 +10,7 @@ import { YardLifeLayer } from "./YardLifeLayer";
 /** Every sheet arrives at once as a blank of the right size. */
 const textures = () =>
   new MonsterSheetTextures((url) => {
-    const sheet = Object.values(MONSTER_SPRITES).find((one) => url.endsWith(one.file));
+    const sheet = Object.values(MONSTER_SPRITES).find((one) => url === sheetUrl(one));
     if (!sheet) return Promise.reject(new Error(url));
     return Promise.resolve(
       new Texture({ source: new TextureSource({ width: sheet.width, height: sheet.height }) }),
