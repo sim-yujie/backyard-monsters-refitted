@@ -19,7 +19,8 @@
  * who signs in and only looks around is asked nine minutes later.
  *
  * Only on game screens: every screen past sign-in holds the watch, as it
- * holds the presence ping (`app/presenceScene.ts`). The idle disconnect's
+ * holds the presence ping (`app/presenceScene.ts`), but a Baiter test or its
+ * replay, which it waits out (#308). The idle disconnect's
  * "Still there?" countdown comes first: while it is up this prompt waits
  * (`suppress`), and once input takes the countdown down this one shows if it
  * is still due. After the idle disconnect it never shows again (`stop`).

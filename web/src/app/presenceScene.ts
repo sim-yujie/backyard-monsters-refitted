@@ -42,3 +42,17 @@ export const withHold =
     };
     return wrapped;
   };
+
+/**
+ * A game screen the "Stay protected?" prompt may show on (#275), which is
+ * every one but a simulation: a Baiter test or its replay (#308). There the
+ * screen takes no hold, so the prompt neither interrupts the test nor shows
+ * over its report; once the player leaves, the next screen's hold shows it if
+ * it is still due. Starting and finishing a test are real actions
+ * (`goals/baiter-start`, `goals/baiter-run`), so after a test it seldom is.
+ */
+export const withProtection = (
+  factory: SceneFactory,
+  watch: { hold(): () => void },
+  options: { readonly simulation?: boolean } = {},
+): SceneFactory => (options.simulation ? factory : withHold(factory, watch));
