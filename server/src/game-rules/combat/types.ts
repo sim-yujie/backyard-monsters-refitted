@@ -525,13 +525,15 @@ export interface FlingLog {
 
 /**
  * One wave of a wild monster raid on a player's own yard (issue #226,
- * `docs/design/wild-raids.md` §6.2).
+ * `docs/design/wild-raids.md` §6.2), or one spawn of the Trojan Horse's army
+ * (issue #325, `docs/design/trojan-horse.md` §4).
  *
  * No client writes one: the server plans the raid and builds the log, so a
  * client's {@link FlingLog} never carries this kind and the fling validator
  * refuses it. The engine takes it only in a raid battle
  * (`BattleOptions.raid`), and takes nothing else there. Every raider spawns at
- * level 1, the bottom of its ladder, whatever the player's academy says.
+ * the defender's own academy level for its type (fidelity note 17), not level
+ * 1.
  */
 export interface RaidEvent {
   readonly kind: "raid";
@@ -543,6 +545,13 @@ export interface RaidEvent {
   /** The disc's radius on screen, as the planner chose it; not recomputed. */
   readonly r: number;
   readonly monsters: Roster;
+  /**
+   * Health and damage multiplier, read once when the wave lands (fidelity
+   * note 17). Absent, 1: a wild raid's raiders fight at plain stats. The
+   * Trojan Horse's army uses x0.4 to x1.0 by the player's score
+   * (`docs/design/trojan-horse.md` §4, `BUILDING27.as:54-64`).
+   */
+  readonly strength?: number;
 }
 
 /** The complete record of a raid, which the server builds (issue #226). */

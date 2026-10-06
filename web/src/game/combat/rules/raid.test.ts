@@ -182,6 +182,75 @@ describe("the end of a raid", () => {
     battle.apply({ ...wave({ C1: 1 }, 250, 0), t: 100 });
     expect(battle.state().creepsFlung).toBe(1);
   });
+
+  it("does not end in a gap between waves while more are still due (the Trojan Horse, #325)", () => {
+    // Each raider is given a strength so small its health truncates to 0
+    // (Flash's own `int()` rule), so the field empties on the very next step
+    // while a second wave, ten ticks out, is still due. The old rule ("no
+    // raider left once one has come") would have ended the fight in that
+    // gap, the bug Flash's own horse had (`BUILDING27.as:51-81`);
+    // `raidSpawnsUntil` keeps it open until the second wave is due — set to
+    // its own tick, as the fight driver's `runTo(tick); apply(event)` would.
+    const yard = yardOf(BUNKER);
+    const battle = createBattle(yard, { seed: 1, raid: true, raidSpawnsUntil: 10 });
+    battle.apply({ ...wave({ C1: 1 }, 250, 0), strength: 1e-6 });
+    battle.step();
+    expect(battle.state().creepsAlive).toBe(0); // the first Pokey arrived already dead.
+    for (let step = 0; step < 8; step += 1) {
+      battle.step();
+      expect(battle.over()).toBe(false);
+    }
+    battle.runTo(10);
+    battle.apply({ ...wave({ C1: 1 }, 250, 0), t: 10, strength: 1e-6 });
+    expect(battle.state().creepsFlung).toBe(2);
+    expect(battle.over()).toBe(false); // the second wave's own tick must not end it either.
+    battle.step();
+    expect(battle.state().over).toBe(true); // only the tick after it may.
+  });
+
+  it("ends once every wave has landed and none is left, not merely when the field empties", () => {
+    const { state } = raidOn({ "1": { id: 1, t: 1, l: 1, X: 0, Y: 0 } }, wave({ C1: 1 }, 250, 0), {
+      raidSpawnsUntil: ticks(5),
+    });
+    expect(state.over).toBe(true);
+    expect(state.tick).toBeGreaterThanOrEqual(ticks(5));
+  });
+
+  it("still caps at RAID_MAX_SECONDS however far off raidSpawnsUntil is", () => {
+    const { state } = raidOn({ "1": { id: 1, t: 1, l: 1, X: 0, Y: 0 } }, wave({ C1: 1 }, 250, 0), {
+      raidSpawnsUntil: ticks(RAID_MAX_SECONDS) * 10,
+    });
+    expect(state.over).toBe(true);
+    expect(state.tick).toBe(ticks(RAID_MAX_SECONDS));
+  });
+});
+
+describe("strength (the Trojan Horse, #325, fidelity note 17)", () => {
+  it("is plain stats when a wave carries none, so a wild raid is unchanged", () => {
+    const yard = yardOf(BUNKER);
+    const battle = createBattle(yard, { seed: 1, raid: true });
+    battle.apply(wave({ C1: 1 }));
+    const [creep] = battle.creeps();
+    expect(creep?.maxHp).toBe(monsterStat("C1", "health", 1));
+  });
+
+  it("scales a wave's health and damage by its own strength, truncated like Flash's int()", () => {
+    const yard = yardOf(BUNKER);
+    const battle = createBattle(yard, { seed: 1, raid: true });
+    battle.apply({ ...wave({ C1: 1 }), strength: 0.4 });
+    const [creep] = battle.creeps();
+    expect(creep?.maxHp).toBe(Math.trunc(monsterStat("C1", "health", 1) * 0.4));
+    expect(creep?.hp).toBe(creep?.maxHp);
+  });
+
+  it("leaves other waves in the same battle alone", () => {
+    const yard = yardOf(BUNKER);
+    const battle = createBattle(yard, { seed: 1, raid: true });
+    battle.apply({ ...wave({ C1: 1 }, 250, 0), strength: 0.4 });
+    battle.apply({ ...wave({ C3: 1 }, 250, 0), t: 1 });
+    const plain = battle.creeps().find((creep) => creep.monsterId === "C3");
+    expect(plain?.maxHp).toBe(monsterStat("C3", "health", 1));
+  });
 });
 
 describe("theft", () => {

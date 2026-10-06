@@ -357,25 +357,34 @@ import type {
  *    been running; the engine reads `getTimer()` as 0. Its beams tick at the
  *    start of a step rather than after the frame's loops (`EFFECTS.Tick`), so
  *    a beam pulses first on the tick after it is fired ({@link LASER_TYPE}).
- * 17. **Wild monster raids (issue #226, `docs/design/wild-raids.md` §6.2).**
- *    A battle given {@link BattleOptions.raid} is a raid on the player's own
- *    yard, fought as a main yard and never as a wild camp. It takes `raid`
- *    events and nothing else, and no other battle takes them. Each wave
- *    spawns its raiders at the defender's own academy level for their type
- *    ({@link BattleOptions.defenderLevels}, an absent one level 1), not
- *    Flash's level 0 (`CREATURES.as:243-255`), with plain stats otherwise:
- *    Flash's x0.4 to x0.9 strength (`WMATTACK.as:729-753`) is the owner's to
- *    drop, and was dropped (owner decisions, 2026-10-05 and 2026-10-06). They
- *    scatter in the disc the planner chose, with no recomputed radius. There
- *    is no hit limit (`_hitLimit`, `CreepBase.as:926-941`, dropped by owner
- *    decision 2026-10-06): a raider fights on like an attacker, until it dies
- *    or has nothing left to attack and retreats (note 7). There is no
- *    countdown: the raid ends when no raider is left once one has come
- *    (`WMATTACK.as:331-347`), and {@link RAID_MAX_SECONDS} caps it. Flash also
- *    ended it when no raider was still attacking, looting or hunting; a
- *    raider with nothing left to attack retreats and is gone (note 7), so the
- *    two agree. A spawn off the pathing grid has no route, so the raider
- *    walks straight at its target until a look from on the grid routes it.
+ * 17. **Wild monster raids (issue #226, `docs/design/wild-raids.md` §6.2) and
+ *    the Trojan Horse's army (issue #325, `docs/design/trojan-horse.md`
+ *    §4-5).** A battle given {@link BattleOptions.raid} is a raid on the
+ *    player's own yard, fought as a main yard and never as a wild camp. It
+ *    takes `raid` events and nothing else, and no other battle takes them.
+ *    Each wave spawns its raiders at the defender's own academy level for
+ *    their type ({@link BattleOptions.defenderLevels}, an absent one level
+ *    1), not Flash's level 0 (`CREATURES.as:243-255`), with plain stats
+ *    otherwise: Flash's wild-raid x0.4 to x0.9 strength (`WMATTACK.as:729-753`)
+ *    is the owner's to drop, and was dropped (owner decisions, 2026-10-05 and
+ *    2026-10-06); the Trojan Horse keeps its own strength figure, x0.4 to
+ *    x1.0 by the player's score, as {@link RaidEvent.strength} (absent, 1,
+ *    so a wild raid is unchanged). They scatter in the disc the planner
+ *    chose, with no recomputed radius. There is no hit limit (`_hitLimit`,
+ *    `CreepBase.as:926-941`, dropped by owner decision 2026-10-06): a raider
+ *    fights on like an attacker, until it dies or has nothing left to attack
+ *    and retreats (note 7). There is no countdown: a wild raid's single wave
+ *    lands at tick 0, so the raid ends as soon as no raider is left once one
+ *    has come (`WMATTACK.as:331-347`); the Trojan Horse's army keeps landing
+ *    for about 45.8 s, so {@link BattleOptions.raidSpawnsUntil} holds the
+ *    fight open through the gaps between its spawns the way Flash's own horse
+ *    did not (`BUILDING27.as:51-81`) — every wave must have landed, not only
+ *    the field be empty. Either way {@link RAID_MAX_SECONDS} caps it. Flash
+ *    also ended a wild raid when no raider was still attacking, looting or
+ *    hunting; a raider with nothing left to attack retreats and is gone (note
+ *    7), so the two agree. A spawn off the pathing grid has no route, so the
+ *    raider walks straight at its target until a look from on the grid
+ *    routes it.
  * 18. **The Spurtz Cannon (issue #313, `SpurtzCannon.as`).** Its burst, the
  *    shells' flight and the hatching are Flash's, and its shells, unlike
  *    note 1, are in the air until they land. Where it is not Flash: a shell
@@ -461,6 +470,17 @@ export interface BattleOptions {
    * alongside their bunkers' defenders.
    */
   readonly raid?: boolean;
+  /**
+   * The last tick a raid wave is due (fidelity note 17): a raid does not end
+   * merely because no raider is on the field, only once this tick is behind
+   * it too (or {@link RAID_MAX_SECONDS}, whichever comes first) — set it to
+   * the last wave's own tick, not one past it, so the caller's own
+   * `runTo(tick); apply(event)` for that wave still lands first. Absent, 0:
+   * every wave has already landed, as a wild raid's single wave at tick 0
+   * does. The Trojan Horse's army spreads its waves to about 45.8 s
+   * (`docs/design/trojan-horse.md` §5), so it sets this to its last spawn.
+   */
+  readonly raidSpawnsUntil?: number;
 }
 
 /** The champion a Champion Cage holds, as the defender's save keeps it (issue #195). */
@@ -1312,6 +1332,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     ? Number.POSITIVE_INFINITY
     : ticks(options.declareWar === true ? DECLARE_WAR_COUNTDOWN_SECONDS : ATTACK_COUNTDOWN_SECONDS);
   const retreatAt = raid ? ticks(RAID_MAX_SECONDS) : countdown + ticks(RETREAT_GRACE_SECONDS);
+  // Every wave must have landed, not only the field be empty (fidelity note 17).
+  const raidSpawnsUntil = options.raidSpawnsUntil ?? 0;
   const playerLevel = options.playerLevel ?? 20;
   const storageHitScalar = storageScalar(yard.kind);
   const wildMonsterAttack = isWildMonsterAttack(yard.kind);
@@ -1877,10 +1899,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     friendly: boolean,
     behaviour: Behaviour,
     homeBunker = -1,
+    /** The Trojan Horse's strength figure (`BUILDING27.as:54-64`); 1 for every other spawn. */
+    strength = 1,
   ): Creep => {
     const movement = monsterMovement(monsterId);
     const flying = isFlyingMovement(movement);
-    const health = monsterStat(monsterId, "health", level);
+    const health = Math.trunc(monsterStat(monsterId, "health", level) * strength);
     const targetGroup = monsterStat(monsterId, "targetGroup", level) || TARGET_GROUP.ALL;
     const cart = rangePointOf(at.x, at.y);
     // An attacker whose target group is monsters is a healer: it goes straight
@@ -1900,7 +1924,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       hp: health,
       maxHp: health,
       baseSpeed: monsterTickSpeed(monsterId, level),
-      damage: monsterStat(monsterId, "damage", level),
+      damage: Math.trunc(monsterStat(monsterId, "damage", level) * strength),
       range: monsterRange(monsterId, level),
       attackDelay: monsterAttackDelay(monsterId, level),
       targetGroup,
@@ -2192,15 +2216,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * A raid wave (fidelity note 17): each raider at the defender's own academy
    * level for its type ({@link BattleOptions.defenderLevels}, an absent one
    * level 1), scattered in the disc the planner chose, in monster id order as
-   * a fling lands its creeps.
+   * a fling lands its creeps, at the wave's own strength
+   * ({@link RaidEvent.strength}, absent 1).
    */
   const raidWave = (event: RaidEvent): void => {
     const radius = Math.max(0, event.r);
+    const strength = event.strength ?? 1;
     for (const monsterId of Object.keys(event.monsters).sort()) {
       const count = Math.max(0, Math.floor(event.monsters[monsterId] ?? 0));
       const level = clampLevel(options.defenderLevels, monsterId);
+      const at = (): Cart => dropPoint(event.x, event.y, radius);
       for (let spawned = 0; spawned < count; spawned += 1) {
-        spawnCreep(monsterId, level, dropPoint(event.x, event.y, radius), false, "attack");
+        spawnCreep(monsterId, level, at(), false, "attack", -1, strength);
         creepsFlung += 1;
       }
     }
@@ -4331,7 +4358,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     bornAtStepEnd();
 
     if (tick >= countdown && !retreated) retreated = true;
-    if (creepsFlung > 0 && !anyAttackerLeft() && (retreated || raid)) finished = true;
+    if (creepsFlung > 0 && !anyAttackerLeft() && (retreated || (raid && tick > raidSpawnsUntil))) {
+      finished = true;
+    }
   };
 
   const apply = (event: AttackEvent): void => {
