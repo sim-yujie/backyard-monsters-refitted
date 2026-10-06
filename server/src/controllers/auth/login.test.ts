@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import bcrypt from "bcrypt";
 import JWT from "jsonwebtoken";
 import type { Context } from "koa";
@@ -142,5 +142,27 @@ describe("login and bot accounts (issue #235)", () => {
     expect(bot.status).toBe(wrongPassword.status!);
     expect(bot.message).toBe(wrongPassword.message);
     expect(bot.body).toBeUndefined();
+  });
+});
+
+describe("login does not say which emails have an account (issue #317)", () => {
+  test("an unknown email gets the wrong-password answer, after a bcrypt compare", async () => {
+    const wrongPassword = await run("not-the-password");
+
+    const compare = spyOn(bcrypt, "compare");
+    user = null as unknown as Row;
+    const unknown = await run();
+    expect(compare).toHaveBeenCalledTimes(1);
+    compare.mockRestore();
+
+    expect(unknown.status).toBe(wrongPassword.status!);
+    expect(unknown.message).toBe(wrongPassword.message);
+    expect(unknown.body).toBeUndefined();
+  });
+
+  test("an email with no password is a wrong password, not a crash", async () => {
+    const wrongPassword = await run("not-the-password");
+    const none = await run("");
+    expect(none.message).toBe(wrongPassword.message);
   });
 });

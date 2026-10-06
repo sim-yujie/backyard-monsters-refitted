@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import { randomBytes } from "crypto";
 import JWT, { type SignOptions } from "jsonwebtoken";
 
 import { User } from "../../database/models/user.model.js";
@@ -21,6 +22,13 @@ import { requiresDiscordVerification } from "../../config/AccountConfig.js";
 import { isBot } from "../../services/bots/isBot.js";
 
 type SessionLifetime = NonNullable<SignOptions["expiresIn"]>;
+
+/**
+ * Compared against when no account has the email (issue #317), at the cost
+ * players' hashes use, so a wrong email takes as long as a wrong password and
+ * the timing does not say which emails have an account.
+ */
+const missingAccountHash = bcrypt.hash(randomBytes(16).toString("hex"), 10);
 
 /**
  * Authenticates a user using a JWT token.
@@ -74,10 +82,9 @@ export const login: KoaController = async (ctx) => {
 
   if (!user) {
     user = await postgres.em.findOne(User, { email });
-    if (!user) throw emailPasswordErr();
 
-    const isMatch = await bcrypt.compare(password!, user.password);
-    if (!isMatch) throw emailPasswordErr();
+    const isMatch = await bcrypt.compare(password ?? "", user?.password ?? (await missingAccountHash));
+    if (!user || !isMatch) throw emailPasswordErr();
   }
 
   // A bot's account cannot be entered (issue #235); it reads as a wrong

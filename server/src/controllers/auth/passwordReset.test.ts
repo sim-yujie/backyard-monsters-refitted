@@ -3,10 +3,10 @@ import JWT from "jsonwebtoken";
 import type { Context } from "koa";
 
 /**
- * A bot's account cannot be entered (issue #235,
- * `docs/design/bot-neighbours.md` §4.1): forgot-password fails for it as for
- * an unknown email, and a reset is refused, so neither says the account is a
- * bot.
+ * Forgot-password answers the same for every well-formed request (issue #317),
+ * so it does not say which emails have an account, and a bot's account
+ * (issue #235, `docs/design/bot-neighbours.md` §4.1) is treated as no account.
+ * A reset is refused for a bot.
  */
 
 type Row = Record<string, unknown>;
@@ -14,6 +14,7 @@ type Row = Record<string, unknown>;
 let user: Row | null;
 let botIds: number[];
 let mailsSent: number;
+let mailFails: boolean;
 
 const em = {
   global: true,
@@ -28,13 +29,18 @@ const em = {
 
 mock.module("../../server.js", () => ({ postgres: { em }, redis: { get: async () => null } }));
 mock.module("../../config/MailConfig.js", () => ({
-  transporter: { sendMail: async () => void mailsSent++ },
+  transporter: {
+    sendMail: async () => {
+      if (mailFails) throw new Error("mail server down");
+      mailsSent++;
+    },
+  },
 }));
 mock.module("../../utils/logger.js", () => ({
   logger: { warn: mock(() => {}), error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
 }));
 
-const { forgotPassword } = await import("./forgotPassword.js");
+const { forgotPassword, FORGOT_PASSWORD_SENT } = await import("./forgotPassword.js");
 const { resetPassword } = await import("./resetPassword.js");
 
 const EMAIL = "player@example.com";
@@ -51,12 +57,18 @@ const call = async (controller: typeof forgotPassword, body: Row) => {
   }
 };
 
+/** The email goes out after the answer; give it time to. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+
+const realUser = (): Row => ({ userid: 7, email: EMAIL, password: "old-hash", resetToken: "" });
+
 beforeEach(() => {
   savedSecret = process.env.SECRET_KEY;
   process.env.SECRET_KEY = "test-secret";
-  user = { userid: 7, email: EMAIL, password: "old-hash", resetToken: "" };
+  user = realUser();
   botIds = [];
   mailsSent = 0;
+  mailFails = false;
 });
 
 afterEach(() => {
@@ -64,22 +76,38 @@ afterEach(() => {
   else process.env.SECRET_KEY = savedSecret;
 });
 
-describe("forgot password and bot accounts", () => {
-  test("a bot's email gets the unknown-email answer and no mail", async () => {
-    const real = await call(forgotPassword, { email: EMAIL });
-    expect(real.status).toBe(200);
+describe("forgot password answers the same whether or not the account exists", () => {
+  test("a known email, an unknown one and a bot's all get the one generic success", async () => {
+    const known = await call(forgotPassword, { email: EMAIL });
+    await settle();
+    expect(known).toEqual({ status: 200, body: FORGOT_PASSWORD_SENT, error: undefined });
     expect(mailsSent).toBe(1);
 
     user = null;
     const unknown = await call(forgotPassword, { email: EMAIL });
 
-    user = { userid: 7, email: EMAIL, password: "old-hash", resetToken: "" };
+    user = realUser();
     botIds = [7];
     const bot = await call(forgotPassword, { email: EMAIL });
+    await settle();
 
-    expect(bot).toEqual(unknown);
+    expect(unknown).toEqual(known);
+    expect(bot).toEqual(known);
     expect(user.resetToken).toBe("");
     expect(mailsSent).toBe(1);
+  });
+
+  test("a mail server failure is logged, not shown", async () => {
+    mailFails = true;
+    const failed = await call(forgotPassword, { email: EMAIL });
+    await settle();
+    expect(failed).toEqual({ status: 200, body: FORGOT_PASSWORD_SENT, error: undefined });
+  });
+
+  test("a malformed email is still refused", async () => {
+    const bad = await call(forgotPassword, { email: "not-an-email" });
+    expect(bad.status).toBe(400);
+    expect(mailsSent).toBe(0);
   });
 });
 
