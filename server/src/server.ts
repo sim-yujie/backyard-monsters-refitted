@@ -31,6 +31,7 @@ import { botConfig } from "./config/BotConfig.js";
 import { PRESENCE_TTL_SECONDS } from "./controllers/maproom/presence.js";
 import { clientIp } from "./middleware/clientIp.js";
 import { trustedProxies } from "./config/ProxyConfig.js";
+import { startupRefusals } from "./config/StartupSafety.js";
 
 // `ctx.ip` comes from the clientIp middleware, which believes CF-Connecting-IP
 // only from a trusted proxy (issue #214), so Koa's own proxy trust stays off.
@@ -52,6 +53,13 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
 
 // Initialize MikroORM, Redis, and start the Koa server
 (async () => {
+  // Refuses development settings on a production server (issue #319).
+  const refusals = startupRefusals(process.env);
+  if (refusals.length) {
+    for (const refusal of refusals) logger.fatal(`Refusing to start: ${refusal}`);
+    process.exit(1);
+  }
+
   postgres.orm = await MikroORM.init<PostgreSqlDriver>(ormConfig);
   postgres.em = postgres.orm.em;
 

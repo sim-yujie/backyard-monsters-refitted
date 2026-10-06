@@ -76,3 +76,23 @@ describe("verifyJwtToken's Discord age check", () => {
     expect(() => verifyJwtToken(forged)).toThrow();
   });
 });
+
+describe("verifyJwtToken checks the signature on every server (issue #319)", () => {
+  test("a local server refuses a token signed with another key, or not signed at all", () => {
+    process.env.ENV = "local";
+    const forged = JWT.sign({ user: { email: "player@example.com", sessionType: "game" } }, "other");
+    expect(() => verifyJwtToken(forged)).toThrow();
+
+    const unsigned = JWT.sign({ user: { email: "player@example.com", sessionType: "game" } }, "", {
+      algorithm: "none",
+    });
+    expect(() => verifyJwtToken(unsigned)).toThrow();
+  });
+
+  test("a local server accepts its own token, and never asks for Discord", () => {
+    process.env.ENV = "local";
+    process.env.REQUIRE_DISCORD_VERIFICATION = "true";
+    const { user } = verifyJwtToken(tokenFor(null));
+    expect(user).toMatchObject({ email: "player@example.com", sessionType: "game", meetsDiscordAgeCheck: true });
+  });
+});

@@ -82,35 +82,27 @@ export const verifyAccountStatus = async (ctx: Context, next: Next) => {
 /**
  * Verifies a JWT token and returns the decoded payload.
  *
- * For local development, we return a basic payload with the user's email.
- * In production, we introduce discord authentication. The Discord age check
- * only applies with REQUIRE_DISCORD_VERIFICATION set (`config/AccountConfig.ts`);
- * without it every account meets it.
+ * The signature is checked on every server (issue #319); a local server used
+ * to only decode the token. A local server signs its tokens with its own
+ * `SECRET_KEY` like any other, so it needs no shortcut.
+ *
+ * The Discord age check applies only on a production server with
+ * REQUIRE_DISCORD_VERIFICATION set (`config/AccountConfig.ts`); otherwise
+ * every account meets it.
  *
  * @param {string} token - The JWT token to verify.
  * @returns {AuthTokenPayload} The decoded JWT payload.
  * @throws Will throw an error if the token is invalid or verification fails.
  */
 export const verifyJwtToken = (token: string): AuthTokenPayload => {
-  if (process.env.ENV === Env.LOCAL) {
-    const decoded = <AuthTokenPayload>JWT.decode(token);
-
-    return {
-      user: {
-        email: decoded.user?.email,
-        discordId: null,
-        meetsDiscordAgeCheck: true,
-        sessionType: decoded.user?.sessionType,
-      },
-    };
-  }
-
   try {
-    const decoded = <AuthTokenPayload>JWT.verify(token, process.env.SECRET_KEY!);
-    
+    const decoded = <AuthTokenPayload>JWT.verify(token, process.env.SECRET_KEY!, { algorithms: ["HS256"] });
+
     const { discordId } = decoded.user;
     const meetsDiscordAgeCheck =
-      !requiresDiscordVerification() || (discordId ? isDiscordAccountOldEnough(discordId) : false);
+      process.env.ENV !== Env.PROD ||
+      !requiresDiscordVerification() ||
+      (discordId ? isDiscordAccountOldEnough(discordId) : false);
 
     return {
       user: { ...decoded.user, meetsDiscordAgeCheck },
