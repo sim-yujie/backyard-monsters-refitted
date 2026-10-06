@@ -142,6 +142,18 @@ describe("a Baiter test's report", () => {
     expect(report.towers[0]!.firstShot).toBe(clockOf(near.firstShotTick! - 800));
   });
 
+  it("stops the time at the countdown, not counting the retreat after it (#308)", () => {
+    const battle = createBattle(yardOf(TWO_CANNONS), { seed: 1 });
+    battle.apply(fling(-100, -100, { C1: 3 }));
+    run(battle, 800);
+    // The countdown ran out at tick 400, and the monsters pulled back after it.
+    expect(reportOf(battle, TWO_CANNONS, { endReason: "expired", countdownTick: 400 }).time).toBe(clockOf(400));
+    // Ended before the countdown ran out: the real time.
+    expect(reportOf(battle, TWO_CANNONS, { countdownTick: 4000 }).time).toBe(clockOf(battle.tick));
+    // Counted from the first drop all the same.
+    expect(reportOf(battle, TWO_CANNONS, { countdownTick: 400, startTick: 100 }).time).toBe(clockOf(300));
+  });
+
   it("reads one result line per end reason", () => {
     expect(resultOf("exhausted")).toBe("held");
     expect(resultOf("destroyed")).toBe("flattened");

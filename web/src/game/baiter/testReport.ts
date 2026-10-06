@@ -41,6 +41,13 @@ export interface TestReportInput {
    * screen opens, and the report's times count from the first drop. 0 when absent.
    */
   readonly startTick?: number;
+  /**
+   * The tick the countdown runs out on (#308). Once it has, the monsters pull
+   * back for up to two minutes more, and the report's time stops at the
+   * countdown rather than counting that retreat in: a test that ran out of
+   * time took 5:00, not 7:00. Uncapped when absent.
+   */
+  readonly countdownTick?: number;
 }
 
 /** How the test ended: the army beaten, every building down, the clock out, or stopped. */
@@ -116,7 +123,7 @@ export interface TestReport {
   readonly damagePercent: number;
   readonly buildingsDestroyed: number;
   readonly buildingsTotal: number;
-  /** m:ss from the first drop to the end. */
+  /** m:ss from the first drop to the end, or to the countdown's end when that came first. */
   readonly time: string;
   /** Monsters on the field (dropped and born) and how many of them were beaten. */
   readonly attackersSent: number;
@@ -289,7 +296,7 @@ export const buildTestReport = (input: TestReportInput): TestReport => {
     damagePercent: input.damagePercent,
     buildingsDestroyed: input.buildingsDestroyed,
     buildingsTotal: input.buildingsTotal,
-    time: at(state.tick),
+    time: at(Math.min(state.tick, input.countdownTick ?? state.tick)),
     attackersSent: sum(monsters.map((row) => row.sent + row.spawned)),
     attackersBeaten: sum(monsters.map((row) => row.lost)),
     champions,

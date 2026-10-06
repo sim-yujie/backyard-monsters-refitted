@@ -346,6 +346,20 @@ describe("a Baiter test", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("times a test that ran out of time to the countdown, not the retreat after it (#308)", () => {
+    const run = runOf();
+    const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
+    mount(run, session);
+    bucketFor(session).setCount("C1", 4);
+    tapAt(canvas, OPEN);
+    session.advance(3);
+    // A one-second countdown: the three seconds after it were the retreat.
+    const real = session.state.bind(session);
+    vi.spyOn(session, "state").mockImplementation(() => ({ ...real(), countdownSeconds: 1 }));
+    session.retreat();
+    expect(recentTests()[0]!.report.time).toBe("0:01");
+  });
+
   it("shows a tower tapped in the report: the camera centres on it and rings it (#22, WP4)", () => {
     const run = runOf();
     const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
