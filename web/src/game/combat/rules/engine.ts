@@ -111,6 +111,27 @@ import {
   TESLA_TYPE,
   TESLA_WIND_END,
   TESLA_ZAP_FRAMES,
+  SPURTZ_CULL_FRAMES,
+  SPURTZ_CULL_ROLL,
+  SPURTZ_CULL_TICKS,
+  SPURTZ_HATCH_CHANCE,
+  SPURTZ_ID,
+  SPURTZ_LOOK,
+  SPURTZ_MAX_TARGETS,
+  SPURTZ_MUZZLE_RISE,
+  SPURTZ_RELOOK_FRAMES,
+  SPURTZ_SCALE_MIN,
+  SPURTZ_SCALE_SPREAD,
+  SPURTZ_SCATTER,
+  SPURTZ_SHOT_TICKS,
+  SPURTZ_START_ANGLE,
+  SPURTZ_SWITCH_ANGLE,
+  isSpurtzCannon,
+  seriesAtan2Degrees,
+  seriesCos,
+  seriesSin,
+  spurtzBlastRadius,
+  turnSpurtzBarrel,
   beamHits,
   towerHealthScale,
   towerShotDamage,
@@ -196,7 +217,8 @@ import type {
  * the two traps; bunkers dispatching
  * defenders; resource bombs; loot out of harvesters and storage, hit by hit,
  * and the share of the pool a fallen storage building gives up; the countdown
- * and the retreat; and a wild monster raid on the player's own yard (note 17).
+ * and the retreat; a wild monster raid on the player's own yard (note 17); and
+ * the Spurtz Cannon's burst of shells and the Spurtz they hatch (note 18).
  *
  * ## Fidelity notes — every place this is not Flash
  *
@@ -244,7 +266,7 @@ import type {
  * 8. **Not modelled at all**, each because its numbers were never traced
  *    (`docs/specs/combat.md:1362-1375`) or because it is out of Map Room 2's
  *    scope: invisibility, `Blink`, `PoisonOnAttack`, `GlavesOnAttack`, the Stronghold's
- *    four emitters, the Spurtz Cannon's burst, and every siege weapon. A yard
+ *    four emitters, and every siege weapon. A yard
  *    holding one of those buildings fires it as an ordinary single-target
  *    tower. The per-creep `_hitLimit` is modelled for raids only (note 17).
  * 9. **The defence is supplied, and its rules are the owner's.** The defender's
@@ -351,6 +373,20 @@ import type {
  *    attack retreats and is gone (note 7), so the two agree. A spawn off the
  *    pathing grid has no route, so the raider walks straight at its target
  *    until a look from on the grid routes it.
+ * 18. **The Spurtz Cannon (issue #313, `SpurtzCannon.as`).** Its burst, the
+ *    shells' flight and the hatching are Flash's, and its shells, unlike
+ *    note 1, are in the air until they land. Where it is not Flash: a shell
+ *    flies straight along its heading from its first loop (the pooled
+ *    `FIREBALL`'s leftover frame and direction are not reproduced); each
+ *    landing's blast is that shell's own size, damage and point, where Flash
+ *    borrows the newest shell's; a fallen cannon stops firing at once, where
+ *    Flash's finishes its burst at half damage (both the owner's calls,
+ *    2026-10-06). The jar and the tower overdrive are not modelled. The cull
+ *    goes on once the cannon has fallen. A hatched Spurtz walks straight at
+ *    its foe, and an attacker that hits it does not make it turn on that
+ *    attacker. Its level is the defender's for it from
+ *    {@link BattleOptions.defenderLevels}, else 1. Its damage and kills go on
+ *    its cannon's report row; Flash has no such report.
  *
  * ## The random stream's order
  *
@@ -408,7 +444,10 @@ export interface BattleOptions {
   readonly declareWar?: boolean;
   /** What each bunker holds, keyed by building id (fidelity note 9). */
   readonly bunkers?: Readonly<Record<number, Roster>>;
-  /** Levels for the defenders a bunker sends out; defaults to the attacker's. */
+  /**
+   * The defender's levels: for the defenders a bunker sends out, which default
+   * to the attacker's, and a Spurtz Cannon's Spurtz, which default to 1.
+   */
   readonly defenderLevels?: MonsterLevels;
   /**
    * The defender's champions in its Champion Cage (issues #195, #310): its
@@ -654,6 +693,13 @@ export type BattleVisualEvent =
        * {@link laserEnd}); its pulses arrive as `hurt`s. Absent for other towers.
        */
       readonly sweep?: BeamLine;
+      /**
+       * A Spurtz Cannon's shell (issue #313): from its muzzle to the ground
+       * point it goes off at, in yard units, landing on `landTick`. It hurts
+       * whatever is round it then, not `creepId`, which is only what the
+       * barrel aimed at. Absent for other towers.
+       */
+      readonly lob?: LobLine;
     }
   | {
       /** A Tesla Tower began to charge (issue #266); its zaps follow as shots. */
@@ -721,6 +767,16 @@ export interface BeamLine {
   readonly fromIy: number;
   readonly toIx: number;
   readonly toIy: number;
+}
+
+/**
+ * A Spurtz Cannon shell's flight (issue #313): a {@link BeamLine} from the
+ * muzzle to where it goes off, when it does, and its graphic's scale, which
+ * sizes its blast ({@link spurtzBlastRadius}) and the Spurtz it may hatch.
+ */
+export interface LobLine extends BeamLine {
+  readonly landTick: number;
+  readonly scale: number;
 }
 
 /** How many ticks of shots and deaths a battle remembers: two seconds. */
@@ -806,6 +862,11 @@ interface Creep {
    * raises it again.
    */
   disposable: boolean;
+  /**
+   * The Spurtz Cannon that hatched it (issue #313), by building id, or -1.
+   * Such a Spurtz fights as Flash's does rather than by the bunker rules.
+   */
+  hatchedBy: number;
   /** Rezghul: the tick its raise is ready again (`RangedAttack.as:45-51`). */
   rechargeAt: number;
   /** The flags of the creeps it can fight: its foes' side, and whether it reaches the air. */
@@ -974,6 +1035,46 @@ interface Tower {
   zapTarget: number;
   /** The Tesla's strip cell, `_animTick`, which times its charge and wind-down. */
   charge: number;
+  /** A Spurtz Cannon's gun (issue #313); null for every other tower. */
+  gun: SpurtzGun | null;
+}
+
+/** A Spurtz Cannon's barrel, aim and brood (issue #313, `SpurtzCannon.as`). */
+interface SpurtzGun {
+  /** `_barrelRotation`, degrees. */
+  barrel: number;
+  /** `_angleToTarget`, degrees. */
+  aim: number;
+  /** `_targetCreeps`, nearest first; a creep stays in it after it dies. */
+  targets: Creep[];
+  /** `_targetCreepIndex`. */
+  index: number;
+  /** `_target`, or null. */
+  target: Creep | null;
+  /** `_spurts`: the Spurtz it hatched, while they live. */
+  readonly hatched: Creep[];
+}
+
+/** A Spurtz Cannon's shell in the air (issue #313), a `FIREBALL` at a point. */
+interface SpurtzShell {
+  readonly tower: Tower;
+  /** Where it is, on screen. */
+  x: number;
+  y: number;
+  /** The point it was fired at, on screen. */
+  readonly toX: number;
+  readonly toY: number;
+  /** Its move a loop, on screen: half its `speed` along its heading. */
+  readonly stepX: number;
+  readonly stepY: number;
+  /** That move's length, `_maxSpeed * _acceleration`. */
+  readonly step: number;
+  /** Its `_maxSpeed`: it lands once what is left is within this. */
+  readonly speed: number;
+  /** `int(damage * scale)`, fixed when it was fired. */
+  readonly damage: number;
+  /** Its graphic's scale, which sizes the blast. */
+  readonly scale: number;
 }
 
 /** A Laser Tower's beam still sweeping (issue #267), `LASER` in Flash. */
@@ -1170,6 +1271,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const corpses: Corpse[] = [];
   /** Corpses Rezghul raised this step, back on their feet at its end. */
   const pendingZombies: Array<{ readonly corpse: Corpse; readonly raiser: Creep }> = [];
+  /** Spurtz Cannon shells in the air, in the order fired (issue #313, `FIREBALLS`). */
+  const spurtzShells: SpurtzShell[] = [];
+  /** Spurtz hatched this step, on their feet at its end: screen points, whole. */
+  const pendingSpurtz: Array<{ readonly tower: Tower; readonly x: number; readonly y: number }> =
+    [];
   const firedTraps: number[] = [];
   const destroyedIds: number[] = [];
   /*
@@ -1198,9 +1304,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const championsHp: Record<string, number> = {};
   /** Each attacking champion's lesson as it builds, by creep id; empty unless `learn`. */
   const lessons = new Map<number, LessonRecord>();
-  /** Whether this battle has a defence at all; without one no fight-back code runs (issue #195). */
+  /**
+   * Whether this battle has a defence at all; without one no fight-back code
+   * runs (issue #195). A Spurtz Cannon is one, for the Spurtz it hatches (#313).
+   */
   const defended =
-    (options.defenderChampions?.length ?? 0) > 0 || Object.keys(options.bunkers ?? {}).length > 0;
+    (options.defenderChampions?.length ?? 0) > 0 ||
+    Object.keys(options.bunkers ?? {}).length > 0 ||
+    yard.buildings.some((building) => isSpurtzCannon(building.type));
   let finished = false;
   let retreated = false;
   const raid = options.raid ?? null;
@@ -1269,6 +1380,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       shotsFired: 0,
       zapTarget: -1,
       charge: 0,
+      gun: isSpurtzCannon(building.type)
+        ? { barrel: 0, aim: 0, targets: [], index: 0, target: null, hatched: [] }
+        : null,
     });
   }
 
@@ -1502,6 +1616,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     let tally: { damageDealt: number; kills: number } | null | undefined = null;
     if (striker.homeBunker >= 0) tally = bunkerReports.get(striker.homeBunker);
     else if (striker.champion) tally = cageSlotOf(striker)?.report;
+    // A hatched Spurtz's work goes on its cannon's row (issue #313).
+    else if (striker.hatchedBy >= 0) tally = towerReports.get(striker.hatchedBy);
     if (!tally) return;
     tally.damageDealt += applied;
     if (killed) tally.kills += 1;
@@ -1646,6 +1762,31 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     for (const { parent, count } of waiting) splitOnDeath(parent, count);
     const risen = pendingZombies.splice(0);
     for (const { corpse, raiser } of risen) raise(corpse, raiser);
+    const hatching = pendingSpurtz.splice(0);
+    for (const { tower, x, y } of hatching) hatchSpurtz(tower, x, y);
+  };
+
+  /**
+   * `spawnSpurtzAt` (`SpurtzCannon.as:246-253`, issue #313): a Spurtz where a
+   * shell landed, a disposable defender at the defender's level for it, that
+   * looks for its foe at once. `CREATURES.Spawn` files no report row for it.
+   */
+  const hatchSpurtz = (tower: Tower, screenX: number, screenY: number): void => {
+    const gun = tower.gun;
+    if (!gun) return;
+    const spurtz = spawnCreep(
+      SPURTZ_ID,
+      clampLevel(options.defenderLevels, SPURTZ_ID),
+      { x: screenX / 2 + screenY, y: screenY - screenX / 2 },
+      true,
+      "defend",
+    );
+    spurtz.disposable = true;
+    spurtz.hatchedBy = tower.building.id;
+    // `targetMode` 0: it fights ground attackers only (`CreepBase.as:663`).
+    spurtz.hitFlags = oldStyleTargets(0);
+    gun.hatched.push(spurtz);
+    lookForSpurtzFoe(spurtz);
   };
 
   /**
@@ -1796,6 +1937,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       born: tick,
       giveUp: HEALER_GIVE_UP,
       disposable: false,
+      hatchedBy: -1,
       buildingHits: 0,
       rechargeAt: 0,
       // A bunker's defender chases anything attacking, air or ground (`HOUSINGBUNKER.as:269-300`).
@@ -1897,6 +2039,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       born: tick,
       giveUp: HEALER_GIVE_UP,
       disposable: false,
+      hatchedBy: -1,
       buildingHits: 0,
       rechargeAt: 0,
       hitFlags: fightFlags(false, flying, championStatWithPower(id, "range", level, power) || 1),
@@ -1979,6 +2122,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       born: tick,
       giveUp: HEALER_GIVE_UP,
       disposable: false,
+      hatchedBy: -1,
       buildingHits: 0,
       rechargeAt: 0,
       hitFlags: fightFlags(true, flying, range),
@@ -2524,6 +2668,49 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     creep.homing = false;
     fight(creep, target);
+  };
+
+  /**
+   * A hatched Spurtz (issue #313): `tickBDefend` with no home
+   * (`CreepBase.as:1038-1068`). It fights its foe while that one lives, looks
+   * again when it dies, and while it is not swinging looks again every
+   * {@link SPURTZ_RELOOK_FRAMES} of its frames. With nobody to fight it
+   * stands where it is until its cannon culls it.
+   */
+  const tickSpurtz = (creep: Creep): void => {
+    let foe = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
+    if (creep.targetCreep >= 0 && (!foe || foe.hp <= 0 || foe.gone)) {
+      creep.targetCreep = -1;
+      creep.atTarget = false;
+      creep.attacking = false;
+      foe = lookForSpurtzFoe(creep);
+    } else if (foe && !creep.attacking && (tick - creep.born) % SPURTZ_RELOOK_FRAMES === 0) {
+      foe = lookForSpurtzFoe(creep);
+    }
+    if (!foe) {
+      creep.attacking = false;
+      return;
+    }
+    fight(creep, foe);
+  };
+
+  /**
+   * `findDefenseTargets` for a Spurtz (`CreepBase.as:660-694`): the nearest
+   * attacker it can hit within {@link SPURTZ_LOOK} that is not retreating,
+   * else the foe it has while that one lives, else none.
+   */
+  const lookForSpurtzFoe = (creep: Creep): Creep | undefined => {
+    const found = index
+      .inRange(SPURTZ_LOOK, creep.x, creep.y, creep.hitFlags)
+      .find((hit) => hit.creep.behaviour !== "retreat" && !hit.creep.gone)?.creep;
+    if (found) {
+      creep.targetCreep = found.id;
+      return found;
+    }
+    const held = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
+    if (held && held.hp > 0 && !held.gone) return held;
+    creep.targetCreep = -1;
+    return undefined;
   };
 
   /**
@@ -3143,6 +3330,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     if (creep.friendly) {
       if (creep.champion) tickCageChampion(creep);
+      else if (creep.hatchedBy >= 0) tickSpurtz(creep);
       else tickDefender(creep);
       return;
     }
@@ -3264,6 +3452,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const tickTower = (tower: Tower): void => {
     const building = tower.building;
     tower.frame += 1;
+    // A Spurtz Cannon culls and finishes its burst even once it has fallen (issue #313).
+    if (tower.gun) {
+      tickSpurtzCannon(tower, tower.gun);
+      return;
+    }
     if (building.hp <= 0) return;
     const stats = towerStats(building.type, building.level, yard.kind);
     const damage = stats?.damage;
@@ -3341,6 +3534,221 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const health = hit.creep.hp;
       tower.report.damageDealt += damageCreep(hit.creep, dealt);
       if (health > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
+    }
+  };
+
+  /**
+   * A Spurtz Cannon's loop (issue #313, `SpurtzCannon.TickAttack`,
+   * `SpurtzCannon.as:109-118`): its `TickFast` cull, standing or not, then
+   * `BTOWER.TickAttack`'s reload, the barrel, the aim and a shot. Flash's goes
+   * on turning and firing out its burst once it has fallen; ours stops dead,
+   * the owner's call (2026-10-06).
+   */
+  const tickSpurtzCannon = (tower: Tower, gun: SpurtzGun): void => {
+    const building = tower.building;
+    cullSpurtz(tower, gun);
+    if (building.hp <= 0) return;
+    const stats = towerStats(building.type, building.level, yard.kind);
+    const damage = stats?.damage;
+    if (stats?.range === undefined || damage === undefined) return;
+
+    tower.fireTick -= 1;
+    if (tower.fireTick <= 0) {
+      tower.fireTick += (stats.rate ?? 0) * TOWER_REARM_MULTIPLIER;
+      const scan = scanOf(tower);
+      const live = liveTargets(tower, scan).length > 0;
+      // `FindTargets` keeps the list it had when it finds nobody (`BTOWER.as:395-426`).
+      const found = index.inRange(tower.range, scan.x, scan.y, scan.flags);
+      if (found.length > 0) {
+        gun.targets = found.slice(0, SPURTZ_MAX_TARGETS).map((hit) => hit.creep);
+        tower.targets = gun.targets.map((creep) => creep.id);
+      } else {
+        tower.targets = [];
+      }
+      if (!live) {
+        tower.fireTick = TOWER_ACQUIRE_TICKS;
+      } else if (gun.targets.length > 0) {
+        // `Fire` on every target held: each takes the nearest ten again and
+        // aims at the one it was handed, so the last of them wins (`:83-91`).
+        gun.target = gun.targets[gun.targets.length - 1] as Creep;
+        gun.index = 0;
+        tower.shotsFired = 0;
+        aimSpurtz(tower, gun);
+      }
+    }
+
+    // `updateTarget` (`:120-131`): only the first in the list has to be alive.
+    const first = gun.targets[0];
+    if (!first || first.hp <= 0 || first.gone) {
+      gun.target = null;
+    } else if (
+      Math.abs(gun.aim - gun.barrel) <= SPURTZ_SWITCH_ANGLE &&
+      gun.targets.length > 1
+    ) {
+      gun.index = (gun.index + 1) % gun.targets.length;
+      gun.target = gun.targets[gun.index] as Creep;
+      aimSpurtz(tower, gun);
+    }
+    if (!gun.target) return;
+    gun.barrel = turnSpurtzBarrel(gun.barrel, gun.aim);
+    if (
+      tower.fireTick % SPURTZ_SHOT_TICKS === 0 &&
+      tower.shotsFired < (stats.shots ?? 0) &&
+      (Math.abs(gun.aim - gun.barrel) <= SPURTZ_START_ANGLE || tower.shotsFired > 0)
+    ) {
+      shootSpurtz(tower, gun, gun.target, damage, stats.speed ?? 0);
+    }
+  };
+
+  /** `setAngleToTarget` (`:141-144`): from just above the anchor to where the target is drawn. */
+  const aimSpurtz = (tower: Tower, gun: SpurtzGun): void => {
+    if (!gun.target) return;
+    const at = screenPointOf(gun.target.ix, gun.target.iy);
+    gun.aim = seriesAtan2Degrees(
+      tower.building.sy + SPURTZ_MUZZLE_RISE - Math.trunc(at.y),
+      tower.building.sx - Math.trunc(at.x),
+    );
+  };
+
+  /**
+   * `shoot` (`:173-191`): a shell down the barrel as far as the target is,
+   * scattered, from the muzzle; `FIREBALLS.Spawn2` then the random scale.
+   */
+  const shootSpurtz = (
+    tower: Tower,
+    gun: SpurtzGun,
+    target: Creep,
+    damage: number,
+    speed: number,
+  ): void => {
+    const building = tower.building;
+    const at = screenPointOf(target.ix, target.iy);
+    const dx = Math.trunc(at.x) - building.sx;
+    const dy = Math.trunc(at.y) - building.sy;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    // `barrel + 180` degrees: its cosine and sine are the barrel's, negated.
+    const radians = gun.barrel * (Math.PI / 180);
+    const scatter = distance * SPURTZ_SCATTER;
+    const toX = building.sx - seriesCos(radians) * distance + (rng.float() * scatter * 2 - scatter);
+    const toY = building.sy - seriesSin(radians) * distance + (rng.float() * scatter * 2 - scatter);
+    const fromX = building.sx;
+    const fromY = building.sy - SPURTZ_MUZZLE_RISE;
+    const scale = rng.float() * SPURTZ_SCALE_SPREAD + SPURTZ_SCALE_MIN;
+    // It flies at `speed * 0.5` along its heading; `atan2(0, 0)` is 0, along +x.
+    const headX = toX - fromX;
+    const headY = toY - fromY;
+    const length = Math.sqrt(headX * headX + headY * headY);
+    const step = speed * 0.5;
+    const shell: SpurtzShell = {
+      tower,
+      x: fromX,
+      y: fromY,
+      toX,
+      toY,
+      stepX: length > 0 ? (headX / length) * step : step,
+      stepY: length > 0 ? (headY / length) * step : 0,
+      step,
+      speed,
+      damage: towerShotDamage(damage, building.hp, building.maxHp),
+      scale,
+    };
+    spurtzShells.push(shell);
+    tower.shotsFired += 1;
+    countShot(tower.report);
+    // It lands on the first loop its distance left is within `speed`; the first
+    // of those loops is this one (`FIREBALLS.Tick` runs after the towers).
+    const flight = step > 0 ? Math.max(1, Math.ceil((length - speed) / step)) : 1;
+    // Where it goes off, which falls short of where it was fired by up to `speed`.
+    const landX = fromX + shell.stepX * flight;
+    const landY = fromY + shell.stepY * flight;
+    visual.push({
+      kind: "shot",
+      tick,
+      towerId: building.id,
+      creepId: target.id,
+      ix: landX / 2 + landY,
+      iy: landY - landX / 2,
+      lob: {
+        fromIx: fromX / 2 + fromY,
+        fromIy: fromY - fromX / 2,
+        toIx: landX / 2 + landY,
+        toIy: landY - landX / 2,
+        landTick: tick + flight - 1,
+        scale,
+      },
+    });
+  };
+
+  /**
+   * `FIREBALLS.Tick` for the Spurtz shells, after the towers, in the order
+   * they were fired (`FIREBALL.as:92-141`): each moves, and lands once its
+   * distance left, less this move, is within its `speed`.
+   */
+  const tickSpurtzShells = (): void => {
+    if (spurtzShells.length === 0) return;
+    let write = 0;
+    for (let read = 0; read < spurtzShells.length; read += 1) {
+      const shell = spurtzShells[read] as SpurtzShell;
+      const left = Math.sqrt((shell.toX - shell.x) ** 2 + (shell.toY - shell.y) ** 2);
+      shell.x += shell.stepX;
+      shell.y += shell.stepY;
+      if (left - shell.step <= shell.speed) {
+        landSpurtzShell(shell);
+        continue;
+      }
+      spurtzShells[write] = shell;
+      write += 1;
+    }
+    spurtzShells.length = write;
+  };
+
+  /**
+   * `collidedWithTarget` (`SpurtzCannon.as:226-244`). Flash's blast borrows
+   * the cannon's most recent shell, `_projectile`, for its size, its damage
+   * and the height on screen it goes off at; ours is the landing shell's own,
+   * the owner's call (2026-10-06). Ground attackers inside take
+   * `DealLinearAEDamage` with its floor of a fifth, in whole points
+   * (`Targeting.as:340-389`); then half the time a Spurtz hatches.
+   */
+  const landSpurtzShell = (shell: SpurtzShell): void => {
+    const tower = shell.tower;
+    const radius = spurtzBlastRadius(shell.scale);
+    const centre = fromIso(shell.x, shell.y);
+    const report = tower.report;
+    for (const hit of index.inRange(radius, centre.x, centre.y, oldStyleTargets(0))) {
+      const dist = Math.trunc(hit.dist);
+      if (radius < dist) continue;
+      const linear = Math.trunc((shell.damage / radius) * (radius - dist));
+      const dealt = Math.max(linear, Math.trunc(shell.damage / 5));
+      const before = hit.creep.hp;
+      report.damageDealt += damageCreep(hit.creep, dealt);
+      if (before > 0 && hit.creep.hp <= 0) report.kills += 1;
+    }
+    if (rng.float() > SPURTZ_HATCH_CHANCE) {
+      pendingSpurtz.push({ tower, x: Math.trunc(shell.x), y: Math.trunc(shell.y) });
+    }
+  };
+
+  /**
+   * `killSpurts` (`SpurtzCannon.as:98-107`), from its `TickFast`: once a 40 fps
+   * frame, standing or not, each Spurtz past {@link SPURTZ_CULL_FRAMES} frames
+   * dies if it has nobody to fight, else one time in ten.
+   */
+  const cullSpurtz = (tower: Tower, gun: SpurtzGun): void => {
+    if (tower.frame % SPURTZ_CULL_TICKS !== 0) return;
+    for (let at = gun.hatched.length - 1; at >= 0; at -= 1) {
+      const spurtz = gun.hatched[at] as Creep;
+      if (
+        tick - spurtz.born > SPURTZ_CULL_FRAMES &&
+        (rng.float() > SPURTZ_CULL_ROLL || spurtz.targetCreep < 0) &&
+        spurtz.hp > 0
+      ) {
+        spurtz.hp = 0;
+        spurtz.gone = true;
+        recordDeath(spurtz);
+        onDeath(spurtz);
+      }
+      if (spurtz.hp <= 0 || spurtz.gone) gun.hatched.splice(at, 1);
     }
   };
 
@@ -3888,6 +4296,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     tickLaserBeams();
     for (const trap of traps) tickTrap(trap);
     for (const tower of towers) tickTower(tower);
+    tickSpurtzShells();
     for (const bunker of bunkers) tickBunker(bunker);
     if (defended) {
       tickCage();

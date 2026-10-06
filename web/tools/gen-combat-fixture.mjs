@@ -47,6 +47,7 @@ for (const scenario of chosen) {
     name: scenario.name,
     description: scenario.description,
     yard: scenario.yard,
+    ...(scenario.without ? { without: scenario.without } : {}),
     kind: scenario.kind,
     ...(scenario.health ? { health: scenario.health } : {}),
     ...(scenario.height === undefined ? {} : { height: scenario.height }),

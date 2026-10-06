@@ -2,6 +2,10 @@
   "name": "champion-power",
   "description": "A level 4 Gorgo at power level 3 with sixty Pokeys: the champion's bonus ladders add health, damage and speed to its level's (issue #202).",
   "yard": "sandbox",
+  "without": [
+    52,
+    53
+  ],
   "kind": "main",
   "levels": {
     "C1": 6,
@@ -40,7 +44,7 @@
   },
   "expected": {
     "ticks": 8200,
-    "damage": 6.971434203393727,
+    "damage": 7.037215404287835,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -58,51 +62,51 @@
     "destroyedBuildings": 22,
     "creepsFlung": 60,
     "creepsKilled": 60,
-    "championHp": 127701.80568981328,
+    "championHp": 144998.06850469226,
     "damagedBuildings": 23,
-    "rngDraws": 1453,
+    "rngDraws": 1548,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "6154074c5d7b5a0e"
+        "digest": "86814f016443e0a7"
       },
       {
         "tick": 1600,
-        "digest": "aba1a18eeb8550c0"
+        "digest": "b2127e4a891a4670"
       },
       {
         "tick": 2400,
-        "digest": "1e2de2c68926922c"
+        "digest": "229efbe17db6dd6f"
       },
       {
         "tick": 3200,
-        "digest": "a8139c1d6b318fbb"
+        "digest": "d884b3ef2d6b2895"
       },
       {
         "tick": 4000,
-        "digest": "0c4b7dbf0ef87d15"
+        "digest": "4619e10170bf10a3"
       },
       {
         "tick": 4800,
-        "digest": "39a473574eef86b1"
+        "digest": "5530d3c63e62aaf8"
       },
       {
         "tick": 5600,
-        "digest": "999c20b5a861163f"
+        "digest": "86e3f8a9317f9d27"
       },
       {
         "tick": 6400,
-        "digest": "057094156f800277"
+        "digest": "6cafb69d65e6cd4b"
       },
       {
         "tick": 7200,
-        "digest": "c7d750840ab58032"
+        "digest": "7eb872a8192f0416"
       },
       {
         "tick": 8000,
-        "digest": "b0c89b3ddca561db"
+        "digest": "191d40fa81b62244"
       }
     ],
-    "digest": "b9ae6fe2d43d4598"
+    "digest": "d2974a59fab1431b"
   }
 }

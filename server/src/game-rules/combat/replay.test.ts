@@ -32,6 +32,8 @@ const SANDBOX = fileURLToPath(
 interface Fixture {
   name: string;
   yard: "sandbox" | Record<string, Record<string, number>>;
+  /** Building ids taken off the sandbox yard (issue #313: its Spurtz Cannons). */
+  without?: number[];
   kind: "main" | "outpost" | "wild" | "tribe";
   /** `buildinghealthdata`, when the yard opens damaged. */
   health?: Record<string, number>;
@@ -66,11 +68,17 @@ const names = readdirSync(FIXTURE_DIR)
 
 let sandbox: any = null;
 
+/** The sandbox yard's buildings less the fixture's `without` ids. */
+const sandboxBuildings = <T>(buildingdata: Record<string, T>, without?: readonly number[]): Record<string, T> =>
+  without?.length
+    ? Object.fromEntries(Object.entries(buildingdata).filter(([key]) => !without.includes(Number(key))))
+    : buildingdata;
+
 const inputOf = (fixture: Fixture): any => {
   if (fixture.yard === "sandbox") {
     sandbox ??= read(SANDBOX);
     return {
-      buildingdata: sandbox.buildingdata,
+      buildingdata: sandboxBuildings(sandbox.buildingdata, fixture.without),
       buildinghealthdata: sandbox.buildinghealthdata,
       resources: sandbox.resources,
       kind: fixture.kind,

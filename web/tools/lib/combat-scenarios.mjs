@@ -35,6 +35,13 @@ export const SANDBOX = fileURLToPath(
   new URL("../../test/fixtures/baseload-sandbox-yard.json", import.meta.url),
 );
 
+/**
+ * The sandbox yard's two Black Spurtz Cannons (issue #313), which a champion
+ * fixture takes off the yard: their burst kills the champion within seconds,
+ * and it would test nothing of the champion's Modes or brain.
+ */
+const SPURTZ_CANNONS = [52, 53];
+
 /** Every monster at level 1, which is what an academy-less attacker brings. */
 const LEVEL_ONE = {};
 
@@ -188,6 +195,7 @@ export const SCENARIOS = [
       "A level 4 Gorgo at power level 3 with sixty Pokeys: the champion's bonus ladders add " +
       "health, damage and speed to its level's (issue #202).",
     yard: "sandbox",
+    without: SPURTZ_CANNONS,
     kind: "main",
     levels: MAXED,
     playerLevel: 20,
@@ -423,6 +431,7 @@ export const SCENARIOS = [
       `A level 4 Gorgo at power level 3 flung in the ${stance} Mode with forty Pokeys: ` +
       "the Mode scores Flash's own target lists (issue #220).",
     yard: "sandbox",
+    without: SPURTZ_CANNONS,
     kind: "main",
     levels: MAXED,
     playerLevel: 20,
@@ -451,6 +460,7 @@ export const SCENARIOS = [
       "A level 4 Gorgo at power level 3 flung in Hybrid with forty Pokeys and a learned brain " +
       "that likes towers and the pack and shuns loot (issue #219).",
     yard: "sandbox",
+    without: SPURTZ_CANNONS,
     kind: "main",
     levels: MAXED,
     playerLevel: 20,
@@ -519,12 +529,21 @@ export const BENCH_SCENARIO = "mixed-waves";
 
 let sandbox = null;
 
+/**
+ * The sandbox yard's buildings less the ids a scenario's `without` names, keyed
+ * by id as the yard file is; the whole yard when it names none.
+ */
+export const sandboxWithout = (buildingdata, without) =>
+  without?.length
+    ? Object.fromEntries(Object.entries(buildingdata).filter(([key]) => !without.includes(Number(key))))
+    : buildingdata;
+
 /** The `replayAttack` input a scenario names, with its yard resolved. */
 export const scenarioInput = (scenario) => {
   if (scenario.yard === "sandbox") {
     sandbox ??= JSON.parse(readFileSync(SANDBOX, "utf8"));
     return {
-      buildingdata: sandbox.buildingdata,
+      buildingdata: sandboxWithout(sandbox.buildingdata, scenario.without),
       buildinghealthdata: sandbox.buildinghealthdata ?? {},
       resources: sandbox.resources,
       kind: scenario.kind,

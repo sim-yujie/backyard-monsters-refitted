@@ -146,7 +146,9 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
 
 /**
  * The battle options a defence gives, and none for no defence at all, so a
- * battle without one runs as it always did.
+ * battle without one runs as it always did. The levels go in whenever there
+ * are any: a Spurtz Cannon's Spurtz fight at the defender's level with no
+ * bunker or caged champion on the yard too (issue #313).
  */
 export const battleDefence = (
   forces: DefenderForces | null | undefined,
@@ -154,9 +156,10 @@ export const battleDefence = (
   if (!forces) return {};
   const hasBunkers = Object.keys(forces.bunkers).length > 0;
   const hasChampions = forces.defenderChampions.length > 0;
+  const hasLevels = Object.keys(forces.defenderLevels).length > 0;
   return {
     ...(hasBunkers ? { bunkers: forces.bunkers } : {}),
-    ...(hasBunkers || hasChampions ? { defenderLevels: forces.defenderLevels } : {}),
+    ...(hasBunkers || hasChampions || hasLevels ? { defenderLevels: forces.defenderLevels } : {}),
     ...(hasChampions ? { defenderChampions: forces.defenderChampions } : {}),
   };
 };

@@ -28,6 +28,8 @@ interface Fixture {
   name: string;
   description: string;
   yard: "sandbox" | Record<string, Record<string, number>>;
+  /** Building ids taken off the sandbox yard (issue #313: its Spurtz Cannons). */
+  without?: number[];
   kind: "main" | "outpost" | "wild" | "tribe";
   /** `buildinghealthdata`, when the yard opens damaged. */
   health?: Record<string, number>;
@@ -59,11 +61,17 @@ interface SandboxYard {
 
 let sandbox: SandboxYard | undefined;
 
+/** The sandbox yard's buildings less the fixture's `without` ids. */
+const sandboxBuildings = <T>(buildingdata: Record<string, T>, without?: readonly number[]): Record<string, T> =>
+  without?.length
+    ? Object.fromEntries(Object.entries(buildingdata).filter(([key]) => !without.includes(Number(key))))
+    : buildingdata;
+
 const inputOf = (fixture: Fixture) => {
   if (fixture.yard === "sandbox") {
     const yard = (sandbox ??= read<SandboxYard>(SANDBOX));
     return {
-      buildingdata: yard.buildingdata,
+      buildingdata: sandboxBuildings(yard.buildingdata as Record<string, unknown>, fixture.without),
       buildinghealthdata: yard.buildinghealthdata,
       resources: yard.resources,
       kind: fixture.kind,
@@ -179,6 +187,16 @@ describe("golden replays", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(replayAttack(inputOf(fixture) as any).lessons).toBeUndefined();
   }, REPLAY_TIMEOUT_MS);
+
+  // The champion fixtures fight on the sandbox without its Spurtz Cannons
+  // (issue #313), so the champion lives and each Mode is its own fight.
+  it("fights each champion Mode its own way, the champion alive at the end", () => {
+    const champions = ["champion-offensive", "champion-defensive", "champion-brain"].map(
+      (name) => read<Fixture>(`${FIXTURE_DIR}${name}.json`).expected as { digest: string; championHp: number },
+    );
+    expect(new Set(champions.map((one) => one.digest)).size).toBe(3);
+    for (const one of champions) expect(one.championHp).toBeGreaterThan(0);
+  });
 
   it("does not mutate the yard it was handed", () => {
     const fixture = read<Fixture>(`${FIXTURE_DIR}empty-yard.json`);
