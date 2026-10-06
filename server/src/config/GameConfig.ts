@@ -111,6 +111,14 @@ export const devConfig = {
    */
   guidedStart: guidedStartOn(process.env),
 
+  /*
+   * Map Room 2 fog of war, off by default: turns the fog off for local
+   * testing (issue #329, `docs/design/fog-of-war.md` §8). The sight service
+   * itself keeps working either way; this only tells WP2's enforcement
+   * (getarea redaction, the view gate) to treat every cell as visible.
+   */
+  disableFogOfWar: false,
+
   /**
    * Sets the type of messages that are allowed to be sent by the client.
    */

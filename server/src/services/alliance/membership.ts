@@ -5,6 +5,7 @@ import { Alliance } from "../../database/models/alliance.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { disconnectAllianceChat } from "../../chat/chatControl.js";
+import { invalidateAllianceSight, invalidatePlayerSight } from "../maproom/sight/sightService.js";
 import { announceShout, emitShout, type ShoutDraft } from "./allianceMessages.js";
 
 type EntryShout = AllianceMessageType.CREATED | AllianceMessageType.JOINED;
@@ -50,6 +51,11 @@ export const addAllianceMember = async (
   user.alliance_role = role;
 
   if (shoutType) await emitShout({ allianceId: id, author: user, type: shoutType, body: "", em });
+
+  // A Map Room 2 fog of war sight cached before this join is missing the
+  // alliance's shared sight, and the alliance's own cache is missing this
+  // member's (issue #329, `docs/design/fog-of-war.md` §9).
+  await Promise.all([invalidatePlayerSight(user.userid), invalidateAllianceSight(id)]);
 };
 
 /**
@@ -77,6 +83,11 @@ export const removeAllianceMember = async (
   if (disbanded) postgres.em.remove(alliance);
 
   await postgres.em.flush();
+
+  // The player's own sight no longer shares the alliance's, and the
+  // alliance's cached union no longer includes them (issue #329,
+  // `docs/design/fog-of-war.md` §9).
+  await Promise.all([invalidatePlayerSight(user.userid), invalidateAllianceSight(alliance.id)]);
 
   if (!disbanded) {
     const shout: ShoutDraft = {

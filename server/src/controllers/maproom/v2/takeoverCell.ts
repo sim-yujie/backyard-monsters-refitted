@@ -4,6 +4,7 @@ import { User } from "../../../database/models/user.model.js";
 import { Save } from "../../../database/models/save.model.js";
 import { postgres } from "../../../server.js";
 import { invalidateWorldsCache } from "../../../services/maproom/knownWorlds.js";
+import { invalidatePlayerSight } from "../../../services/maproom/sight/sightService.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { Status } from "../../../enums/StatusCodes.js";
 import { BaseType } from "../../../enums/Base.js";
@@ -93,7 +94,7 @@ export const takeoverCell: KoaController = async (ctx) => {
 
   const conquestActive = powerups.some(({ id }) => id === AlliancePowerupType.CONQUEST);
 
-  const { originCell: isOriginCell, achievements } = await postgres.em.transactional(async (em) => {
+  const result = await postgres.em.transactional(async (em) => {
     const taker = await lockSave(em, { basesaveid: userSave.basesaveid });
     const cellSave = await lockSave(em, { basesaveid: cell.save!.basesaveid });
 
@@ -231,10 +232,21 @@ export const takeoverCell: KoaController = async (ctx) => {
     // Spent: the chance was one takeover.
     if (grant) await endTakeoverGrant(cellSave.basesaveid);
 
-    return { originCell, achievements: unseenAchievements(taker) };
+    return { originCell, achievements: unseenAchievements(taker), previousOwnerId: previousOwner?.userid };
   });
 
+  const { originCell: isOriginCell, achievements, previousOwnerId } = result;
+
   if (isOriginCell) await invalidateWorldsCache();
+
+  // The taker's own sight just grew a base, and the previous owner (a wild
+  // monster camp has none) lost one, both outside a flinger's reach rule
+  // (issue #329, `docs/design/fog-of-war.md` §9).
+  await Promise.all(
+    [currentUser.userid, previousOwnerId]
+      .filter((userid): userid is number => userid !== undefined)
+      .map(invalidatePlayerSight),
+  );
 
   ctx.status = Status.OK;
   // The paid unlocks not yet shown, as yard answers carry them (§9.3).

@@ -4,6 +4,7 @@ import { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { invalidateAllianceSight } from "../maproom/sight/sightService.js";
 import {
   notEnoughShinyErr,
   powerupNotReadyErr,
@@ -107,6 +108,11 @@ export const startPowerup = async ({ allianceId, author, powerupId }: PowerupAct
   status.end_time = now + rules.running_time;
 
   await postgres.em.flush();
+
+  // Declare War's +2 reach changes every member's Map Room 2 fog of war
+  // sight; a cache built before this start is missing it (issue #329,
+  // `docs/design/fog-of-war.md` §9).
+  if (rules.type === AlliancePowerupType.DECLARE_WAR) await invalidateAllianceSight(allianceId);
 
   await announceShout({
     allianceId,
