@@ -16,16 +16,23 @@ import {
 } from "@/game/attack/monsterSprites";
 import { fromIso, type Point, type Rect, type YardBounds } from "./YardGrid";
 import {
+  chamberDoor,
+  championTrips,
+  championWalkerKey,
   CREATURE_TICK_HZ,
   EMPTY_LIFE,
+  freezeTrip,
   MAX_TICKS_PER_FRAME,
   reconcileWalkers,
   reconcileWorkers,
   stepWalker,
   stepWorker,
+  thawTrip,
+  walkerGone,
   walkerSpecs,
   WORKER_TICK_HZ,
   type Random,
+  type TripRoute,
   type Walker,
   type Worker,
   type YardLife,
@@ -55,6 +62,11 @@ import {
  * Off-screen creatures still walk, which is a few additions each, but touch no
  * sprite. Under `prefers-reduced-motion` nothing walks and no row cycles: every
  * creature stands where it was put, and workers stand at their jobs.
+ *
+ * A champion frozen or thawed on the yard in view walks between its cage and
+ * the Champion Chamber (#314) when `set` is handed a route to walk; under
+ * reduced motion, with no route, or on a yard read fresh it is simply gone
+ * from the cage or back in it.
  */
 
 /** World px of slack around the view before a creature counts as off screen. */
@@ -150,17 +162,43 @@ export class YardLifeLayer {
 
   /**
    * Brings the creatures in line with a yard's life, or clears them all when
-   * passed null. `bounds` is the yard's, for world positions.
+   * passed null. `bounds` is the yard's, for world positions; `route` finds a
+   * frozen or thawed champion its way between cage and Chamber (#314).
    */
-  set(life: YardLife | null, bounds: YardBounds): void {
+  set(life: YardLife | null, bounds: YardBounds, route: TripRoute | null = null): void {
     const next = life ?? EMPTY_LIFE;
     // A new yard, rather than the same yard read again after a change: its
     // workers start at their jobs instead of walking there.
     const first = this.life === EMPTY_LIFE || !sameBounds(this.bounds, bounds);
+    const before = this.life;
     this.life = next;
     this.bounds = bounds;
 
+    const sameCage = !first && life !== null && before.cage?.id === next.cage?.id;
+    // Off this yard every trip snaps to its end: one going in is gone, one coming out is home.
+    if (!sameCage) {
+      for (const walker of this.walkers.values()) {
+        walker.trip = null;
+        walker.leaving = false;
+      }
+    }
+    const way = sameCage && !this.reducedMotion ? route : null;
+    const trips = way ? championTrips(before, next) : { freezing: [], thawing: [] };
+    const door = next.chamber && chamberDoor(next.chamber);
+    if (way && door && before.cage) {
+      for (const id of trips.freezing) {
+        const walker = this.walkers.get(championWalkerKey(before.cage.id, id));
+        if (walker) freezeTrip(walker, door, way);
+      }
+    }
+
     this.walkers = reconcileWalkers(this.walkers, walkerSpecs(next, this.random), this.random);
+    if (way && door && next.cage) {
+      for (const id of trips.thawing) {
+        const walker = this.walkers.get(championWalkerKey(next.cage.id, id));
+        if (walker) thawTrip(walker, door, way);
+      }
+    }
     for (const [key, body] of this.walkerBodies) {
       if (this.walkers.has(key)) continue;
       this.release(body);
@@ -248,6 +286,7 @@ export class YardLifeLayer {
       for (let tick = 0; tick < creatureTicks; tick++) {
         for (const walker of this.walkers.values()) stepWalker(walker, this.random);
       }
+      this.dropGone();
 
       this.workerClock += deltaSeconds * WORKER_TICK_HZ;
       const workerTicks = Math.min(MAX_TICKS_PER_FRAME, Math.floor(this.workerClock));
@@ -307,6 +346,17 @@ export class YardLifeLayer {
     this.walkers.clear();
     this.workers = [];
     this.textures.destroy();
+  }
+
+  /** Takes off every champion that has walked into the Chamber (#314). */
+  private dropGone(): void {
+    for (const [key, walker] of this.walkers) {
+      if (!walkerGone(walker)) continue;
+      this.walkers.delete(key);
+      const body = this.walkerBodies.get(key);
+      if (body) this.release(body);
+      this.walkerBodies.delete(key);
+    }
   }
 
   /* ── Sprites ──────────────────────────────────────────────────────── */

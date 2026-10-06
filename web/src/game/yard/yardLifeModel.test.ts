@@ -5,6 +5,15 @@ import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import { readYard } from "./yardModel";
 import {
   cageArea,
+  chamberDoor,
+  CHAMPION_CHAMBER_TYPE,
+  championTrips,
+  championWalkerKey,
+  freezeTrip,
+  thawTrip,
+  TRIP_SPEED_FACTOR,
+  walkerGone,
+  type TripRoute,
   CHAMPION_WANDER_ODDS,
   CREEP_WANDER_ODDS,
   EMPTY_LIFE,
@@ -317,6 +326,8 @@ describe("walkers", () => {
     age: 0,
     speed: 1,
     odds: 200,
+    trip: null,
+    leaving: false,
     ...overrides,
   });
 
@@ -376,6 +387,149 @@ describe("walkers", () => {
     expect(screenHeading(1, 0)).toBeCloseTo(Math.atan2(0.5, 1));
     expect(screenHeading(0, 1)).toBeCloseTo(Math.atan2(0.5, -1));
     expect(screenHeading(1, 1)).toBeCloseTo(Math.PI / 2);
+  });
+});
+
+describe("trips to and from the Champion Chamber (#314)", () => {
+  const cage = { id: 7, x: 100, y: 200 };
+  const chamber = { x: 400, y: 400, width: 60, height: 60 };
+  const g1 = { id: "G1", level: 2, sheetLevel: 2 };
+  const caged = lifeWith({ cage, chamber, champions: [g1] });
+  const frozen = lifeWith({ cage, chamber, frozen: ["G1"] });
+  const straight: TripRoute = (from, to) => [from, to];
+
+  const cageWalker = (): Walker => {
+    const walkers = reconcileWalkers(new Map(), walkerSpecs(caged, fixed(0.5)), fixed(0.5));
+    const walker = walkers.get(championWalkerKey(cage.id, "G1"));
+    if (!walker) throw new Error("no champion");
+    return walker;
+  };
+
+  it("reads frozen champions and the Chamber off the save", () => {
+    const yard = readYard(save);
+    const champion = [{ t: 1, l: 2, status: 1 }, { t: 3, l: 1, status: 0 }, { t: 4, l: 1, status: 2 }];
+    const life = yardLifeOf({ ...save, champion } as unknown as BaseLoadResponse, yard);
+    expect(life.frozen).toEqual(["G1"]);
+    expect(life.champions.map((one) => one.id)).toEqual(["G3"]);
+    expect(yardLifeOf({ ...save, champion } as unknown as BaseLoadResponse, yard, "attack").frozen).toEqual([]);
+  });
+
+  it("finds the Chamber's footprint among the buildings", () => {
+    const yard = readYard(save);
+    const building = { ...yard.buildings[0]!, type: CHAMPION_CHAMBER_TYPE, x: 10, y: 20 };
+    const life = yardLifeOf(save, { ...yard, buildings: [building] });
+    expect(life.chamber).toEqual({ x: 10, y: 20, width: building.footprint[0], height: building.footprint[1] });
+  });
+
+  it("tells a freeze and a thaw from one life to the next", () => {
+    expect(championTrips(caged, frozen)).toEqual({ freezing: ["G1"], thawing: [] });
+    expect(championTrips(frozen, caged)).toEqual({ freezing: [], thawing: ["G1"] });
+    expect(championTrips(caged, caged)).toEqual({ freezing: [], thawing: [] });
+  });
+
+  it("walks nobody on a fresh yard, another cage, or a yard with no Chamber", () => {
+    expect(championTrips(EMPTY_LIFE, frozen)).toEqual({ freezing: [], thawing: [] });
+    expect(championTrips(caged, { ...frozen, cage: { ...cage, id: 8 } })).toEqual({ freezing: [], thawing: [] });
+    expect(championTrips(caged, { ...frozen, chamber: null })).toEqual({ freezing: [], thawing: [] });
+  });
+
+  it("does not count a juiced champion as frozen", () => {
+    expect(championTrips(caged, lifeWith({ cage, chamber }))).toEqual({ freezing: [], thawing: [] });
+  });
+
+  it("goes in and out by the Chamber's front corner", () => {
+    expect(chamberDoor(chamber)).toEqual({ x: 460, y: 460 });
+  });
+
+  it("walks a frozen champion from where it stands to the door at its heading-home speed, then is gone", () => {
+    const walker = cageWalker();
+    const start = { x: walker.x, y: walker.y };
+    expect(freezeTrip(walker, chamberDoor(chamber), straight)).toBe(true);
+    expect(walker.leaving).toBe(true);
+    expect(walker.moving).toBe(true);
+    stepWalker(walker, fixed(0.5));
+    const stepped = Math.hypot(walker.x - start.x, walker.y - start.y);
+    expect(stepped).toBeCloseTo(walker.speed * TRIP_SPEED_FACTOR);
+    expect(TRIP_SPEED_FACTOR).toBeCloseTo((BEHAVIOUR_SPEED["housing"] ?? 0) / (BEHAVIOUR_SPEED["pen"] ?? 1));
+    expect(walker.heading).toBeCloseTo(screenHeading(460 - start.x, 460 - start.y));
+    expect(walkerGone(walker)).toBe(false);
+    for (let tick = 0; tick < 10_000 && walker.trip; tick++) stepWalker(walker, fixed(0.5));
+    expect(walker).toMatchObject({ x: 460, y: 460, trip: null });
+    expect(walkerGone(walker)).toBe(true);
+  });
+
+  it("follows every waypoint of a route round the buildings", () => {
+    const walker = cageWalker();
+    const corner = { x: walker.x, y: 460 };
+    freezeTrip(walker, chamberDoor(chamber), (from, to) => [from, corner, to]);
+    // Down the first leg x never changes.
+    while (walker.trip && walker.trip.length === 2) {
+      stepWalker(walker, fixed(0.5));
+      if (walker.trip.length === 2) expect(walker.x).toBe(corner.x);
+    }
+    // Round the corner: along the second leg, y stays at the door's.
+    expect(walker.y).toBe(460);
+    expect(walker.x).toBeGreaterThanOrEqual(corner.x);
+    for (let tick = 0; tick < 10_000 && walker.trip; tick++) stepWalker(walker, fixed(0.5));
+    expect(walker).toMatchObject({ x: 460, y: 460 });
+  });
+
+  it("keeps a champion on its way in though the save no longer has it, until it is there", () => {
+    const walker = cageWalker();
+    freezeTrip(walker, chamberDoor(chamber), straight);
+    const current = new Map([[walker.key, walker]]);
+    const during = reconcileWalkers(current, walkerSpecs(frozen, fixed(0.5)), fixed(0.5));
+    expect(during.get(walker.key)).toBe(walker);
+    walker.trip = null;
+    expect(reconcileWalkers(during, walkerSpecs(frozen, fixed(0.5)), fixed(0.5)).size).toBe(0);
+  });
+
+  it("snaps when there is no route", () => {
+    const walker = cageWalker();
+    expect(freezeTrip(walker, chamberDoor(chamber), () => null)).toBe(false);
+    expect(walker.trip).toBeNull();
+    expect(walker.leaving).toBe(false);
+  });
+
+  it("brings a thawed champion out of the door to its cage spot, then paces as before", () => {
+    const walker = cageWalker();
+    const home = { x: walker.x, y: walker.y };
+    expect(thawTrip(walker, chamberDoor(chamber), straight)).toBe(true);
+    expect(walker).toMatchObject({ x: 460, y: 460, leaving: false, moving: true });
+    for (let tick = 0; tick < 10_000 && walker.trip; tick++) stepWalker(walker, fixed(0.5));
+    expect(walker.x).toBeCloseTo(home.x);
+    expect(walker.y).toBeCloseTo(home.y);
+    expect(walker.moving).toBe(false);
+    expect(walkerGone(walker)).toBe(false);
+    // Kept by the next read of the yard with the cage spot it walked to.
+    const kept = reconcileWalkers(new Map([[walker.key, walker]]), walkerSpecs(caged, fixed(0.5)), fixed(0.5));
+    expect(kept.get(walker.key)).toMatchObject({ x: home.x, y: home.y, moving: false });
+  });
+
+  it("does not let the cage re-aim a champion on its way out", () => {
+    const walker = cageWalker();
+    thawTrip(walker, chamberDoor(chamber), straight);
+    reconcileWalkers(new Map([[walker.key, walker]]), walkerSpecs(caged, fixed(0.9)), fixed(0.9));
+    expect(walker.trip).not.toBeNull();
+    expect(walker.x).toBe(460);
+  });
+
+  it("turns a champion on its way in round for its cage when it is thawed again", () => {
+    const walker = cageWalker();
+    freezeTrip(walker, chamberDoor(chamber), straight);
+    for (let tick = 0; tick < 5; tick++) stepWalker(walker, fixed(0.5));
+    const midway = { x: walker.x, y: walker.y };
+    expect(thawTrip(walker, chamberDoor(chamber), straight)).toBe(true);
+    expect(walker).toMatchObject({ x: midway.x, y: midway.y, leaving: false });
+    const area = walker.area;
+    expect(walker.targetX).toBeCloseTo(area.x + area.width / 2);
+  });
+
+  it("puts a thawed champion straight on its spot when there is no route", () => {
+    const walker = cageWalker();
+    const home = { x: walker.x, y: walker.y };
+    expect(thawTrip(walker, chamberDoor(chamber), () => null)).toBe(false);
+    expect(walker).toMatchObject({ x: home.x, y: home.y, trip: null, leaving: false });
   });
 });
 

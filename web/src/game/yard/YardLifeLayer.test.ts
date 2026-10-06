@@ -250,3 +250,70 @@ describe("YardLifeLayer", () => {
     expect(there?.y).toBe(there?.targetY);
   });
 });
+
+describe("YardLifeLayer champion trips (#314)", () => {
+  const chamber = { x: 300, y: 300, width: 60, height: 60 };
+  const caged = life({ groups: [], pens: [], workers: 0, chamber });
+  const frozen = life({ groups: [], pens: [], workers: 0, chamber, champions: [], frozen: ["G1"] });
+  const straight = (from: { x: number; y: number }, to: { x: number; y: number }) => [from, to];
+  const champion = (layer: YardLifeLayer) => layer.walkerList.find((walker) => walker.champion);
+
+  it("walks a frozen champion to the Chamber's door, then takes it and its body off", () => {
+    const { layer, tops, shadows } = setUp();
+    layer.set(caged, bounds, straight);
+    layer.attach(tops, shadows);
+    const walker = champion(layer);
+    layer.set(frozen, bounds, straight);
+    expect(champion(layer)).toBe(walker);
+    expect(walker?.leaving).toBe(true);
+    expect(tops.children).toHaveLength(1);
+    for (let frame = 0; frame < 600 && layer.count > 0; frame++) layer.update(everywhere, 1 / 10);
+    expect(layer.count).toBe(0);
+    expect(tops.children).toHaveLength(0);
+  });
+
+  it("brings a thawed champion out of the Chamber's door and leaves it pacing its cage", () => {
+    const { layer, tops, shadows } = setUp();
+    layer.set(frozen, bounds, straight);
+    layer.attach(tops, shadows);
+    expect(layer.count).toBe(0);
+    layer.set(caged, bounds, straight);
+    const walker = champion(layer);
+    expect(walker).toMatchObject({ x: 360, y: 360, leaving: false, moving: true });
+    for (let frame = 0; frame < 600 && walker?.trip; frame++) layer.update(everywhere, 1 / 10);
+    expect(walker?.trip).toBeNull();
+    expect(layer.count).toBe(1);
+    const area = walker!.area;
+    expect(walker!.x).toBeGreaterThanOrEqual(area.x);
+    expect(walker!.x).toBeLessThanOrEqual(area.x + area.width);
+  });
+
+  it("snaps with no route, under reduced motion, and on a yard read fresh", () => {
+    const noRoute = setUp();
+    noRoute.layer.set(caged, bounds, () => null);
+    noRoute.layer.set(frozen, bounds, () => null);
+    expect(noRoute.layer.count).toBe(0);
+
+    const still = setUp(true);
+    still.layer.set(caged, bounds, straight);
+    still.layer.set(frozen, bounds, straight);
+    expect(still.layer.count).toBe(0);
+    still.layer.set(caged, bounds, straight);
+    expect(champion(still.layer)?.trip).toBeNull();
+
+    const fresh = setUp();
+    fresh.layer.set(frozen, bounds, straight);
+    fresh.layer.set(null, bounds, straight);
+    fresh.layer.set(caged, bounds, straight);
+    expect(champion(fresh.layer)?.trip).toBeNull();
+  });
+
+  it("drops a champion still walking in when the player leaves the yard", () => {
+    const { layer } = setUp();
+    layer.set(caged, bounds, straight);
+    layer.set(frozen, bounds, straight);
+    expect(layer.count).toBe(1);
+    layer.set(null, bounds, straight);
+    expect(layer.count).toBe(0);
+  });
+});
