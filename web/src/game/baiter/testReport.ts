@@ -48,6 +48,12 @@ export interface TestReportInput {
    * time took 5:00, not 7:00. Uncapped when absent.
    */
   readonly countdownTick?: number;
+  /**
+   * The attacking champions still on the field as it ended, by champion id
+   * (#308). One alive and not among them left it: it retreated, or walked
+   * home. Every one on the field when absent.
+   */
+  readonly championsOnField?: readonly string[];
 }
 
 /** How the test ended: the army beaten, every building down, the clock out, or stopped. */
@@ -112,6 +118,11 @@ export interface AttackerRow {
 export interface ChampionFate {
   readonly name: string;
   readonly survived: boolean;
+  /**
+   * Alive, and off the field by the end (#308): called back, gone home with
+   * the army, or pulled back as the time ran out. Its health is what it left with.
+   */
+  readonly retreated: boolean;
   readonly health: number;
   readonly fellAt: string | null;
 }
@@ -274,7 +285,9 @@ export const buildTestReport = (input: TestReportInput): TestReport => {
       buildingDamage: row.buildingDamage,
     }));
 
+  const result = resultOf(input.endReason);
   const monsters = state.attackers.filter((row) => !row.champion);
+  const onField = input.championsOnField ? new Set(input.championsOnField) : null;
   const champions: ChampionFate[] = state.attackers
     .filter((row) => row.champion && row.sent > 0)
     .map((row) => {
@@ -284,12 +297,13 @@ export const buildTestReport = (input: TestReportInput): TestReport => {
       return {
         name: championEntry(row.monsterId)?.name ?? "Champion",
         survived,
+        // When the time runs out the whole army pulls back, whoever is still out.
+        retreated: survived && (result === "time" || (onField !== null && !onField.has(row.monsterId))),
         health: survived ? health : 0,
         fellAt: !survived && fell !== undefined ? at(fell) : null,
       };
     });
 
-  const result = resultOf(input.endReason);
   return {
     result,
     resultLine: RESULT_LINES[result],

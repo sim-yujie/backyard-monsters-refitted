@@ -14,7 +14,7 @@ const REPORT: TestReport = {
   time: "1:42",
   attackersSent: 21,
   attackersBeaten: 21,
-  champions: [{ name: "Korath", survived: false, health: 0, fellAt: "1:30" }],
+  champions: [{ name: "Korath", survived: false, retreated: false, health: 0, fellAt: "1:30" }],
   hint: "1 tower never fired.",
   towers: [
     { id: 7, name: "Cannon Tower L5", damage: 4200, kills: 12, shots: 80, firstShot: "0:04", fired: true, fate: "Standing, 72%" },
@@ -62,6 +62,21 @@ describe("a Baiter test's report panel", () => {
     expect(summary.textContent).toContain("Fell at 1:30");
     expect(summary.querySelector(".test-report__hint")!.textContent).toBe("1 tower never fired.");
     expect(document.activeElement).toBe(document.querySelector(".test-report__back"));
+  });
+
+  it("says a champion that left the field retreated, with its health (#308)", () => {
+    mountPanel({
+      report: {
+        ...REPORT,
+        champions: [
+          { name: "Gorgo", survived: true, retreated: true, health: 4210, fellAt: null },
+          { name: "Krallen", survived: true, retreated: false, health: 900, fellAt: null },
+        ],
+      },
+    });
+    const summary = visibleView().textContent ?? "";
+    expect(summary).toContain("Retreated with 4,210 health");
+    expect(summary).toContain("Survived with 900 health");
   });
 
   it("switches tabs by click and by arrow keys", () => {

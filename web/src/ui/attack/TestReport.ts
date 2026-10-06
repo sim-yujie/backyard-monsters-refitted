@@ -252,11 +252,13 @@ export class TestReportPanel {
     for (const champion of report.champions) {
       fact(
         champion.name,
-        champion.survived
-          ? `Survived with ${amount(champion.health)} health`
-          : champion.fellAt
-            ? `Fell at ${champion.fellAt}`
-            : "Fell",
+        champion.retreated
+          ? `Retreated with ${amount(champion.health)} health`
+          : champion.survived
+            ? `Survived with ${amount(champion.health)} health`
+            : champion.fellAt
+              ? `Fell at ${champion.fellAt}`
+              : "Fell",
       );
     }
 

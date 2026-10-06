@@ -142,6 +142,10 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
       championFell,
       startTick: session.flingLog().events.find((event) => event.kind === "fling")?.t ?? 0,
       countdownTick: ticks(state.countdownSeconds),
+      championsOnField: battle
+        .creeps()
+        .filter((creep) => creep.champion && !creep.friendly && creep.hp > 0)
+        .map((creep) => creep.monsterId),
     });
     // A test stopped before anything was dropped has nothing to watch.
     const recorded = started

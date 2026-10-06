@@ -154,6 +154,29 @@ describe("a Baiter test's report", () => {
     expect(reportOf(battle, TWO_CANNONS, { countdownTick: 400, startTick: 100 }).time).toBe(clockOf(300));
   });
 
+  it("says a champion that left the field alive retreated, with the health it left with (#308)", () => {
+    const battle = createBattle(yardOf(TWO_CANNONS), { seed: 1 });
+    battle.apply(fling(-100, -100, { C1: 2 }, { t: 1, l: 1 }));
+    run(battle, 200);
+    const health = battle.state().championsHp["G1"]!;
+    expect(health).toBeGreaterThan(0);
+    const fate = (extra: Partial<TestReportInput>) => reportOf(battle, TWO_CANNONS, extra).champions[0];
+
+    // Gone from the field: called back, or home with the army.
+    expect(fate({ championsOnField: [] })).toEqual({
+      name: "Gorgo",
+      survived: true,
+      retreated: true,
+      health,
+      fellAt: null,
+    });
+    // Still out when the yard fell, or the test was stopped: it survived.
+    expect(fate({ endReason: "destroyed", championsOnField: ["G1"] })).toMatchObject({ retreated: false, health });
+    expect(fate({ endReason: "retreat", championsOnField: ["G1"] })).toMatchObject({ retreated: false });
+    // When the time runs out the whole army pulls back, whoever is still out.
+    expect(fate({ endReason: "expired", championsOnField: ["G1"] })).toMatchObject({ retreated: true, health });
+  });
+
   it("reads one result line per end reason", () => {
     expect(resultOf("exhausted")).toBe("held");
     expect(resultOf("destroyed")).toBe("flattened");
@@ -192,8 +215,8 @@ describe("a Baiter test's report", () => {
     const gorgo = state.championsHp["G1"]!;
     expect(report.champions).toEqual([
       gorgo > 0
-        ? { name: "Gorgo", survived: true, health: gorgo, fellAt: null }
-        : { name: "Gorgo", survived: false, health: 0, fellAt: "0:05" },
+        ? { name: "Gorgo", survived: true, retreated: false, health: gorgo, fellAt: null }
+        : { name: "Gorgo", survived: false, retreated: false, health: 0, fellAt: "0:05" },
     ]);
     expect(report.time).toBe(clockOf(state.tick));
   });
