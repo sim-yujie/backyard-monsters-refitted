@@ -63,7 +63,8 @@ export const replayBattleForSave = async (
  *
  * - `off`    — nothing.
  * - `log`    — one `attack-replay-mismatch` warning and one `Report` row.
- * - `reject` — the same, then the save is refused with `attackReplayRejectedErr`.
+ * - `reject` — the same, then the save is refused with `attackReplayRejectedErr`,
+ *   unless every field that differs is in {@link LOG_ONLY_FIELDS}.
  *
  * An honest client fought the same battle with the same engine, so it never
  * disagrees (`battle.test.ts`); any line here is a tampered save or a
@@ -74,6 +75,15 @@ export const replayBattleForSave = async (
  * @param storedBuildingdata - The defender's `buildingdata` before the save.
  * @throws {ClientSafeError} `attackReplayRejectedErr` in `reject` mode.
  */
+/**
+ * Fields a disagreement on is logged but never refused (issue #201). The server
+ * never writes the client's `attackersiege` (it writes the replay's), and the
+ * attacker's siege stock can honestly move under an attack (bought in another
+ * tab after the map loaded), so refusing on it would cost honest players a
+ * battle for a figure the save does not decide.
+ */
+export const LOG_ONLY_FIELDS: ReadonlySet<string> = new Set(["attackersiege"]);
+
 export const recordBattleMismatches = async (
   ctx: Context,
   user: User,
@@ -86,7 +96,8 @@ export const recordBattleMismatches = async (
   if (mode === "off") return;
   const fields = battleMismatches(client, battle, storedBuildingdata);
   if (fields.length === 0) return;
-  const rejected = mode === "reject";
+  const refused = fields.filter((field) => !LOG_ONLY_FIELDS.has(field));
+  const rejected = mode === "reject" && refused.length > 0;
 
   logger.warn("Attack save {outcome} for {username} on base {baseid}: disagrees with the replay on {fields}", {
     event: "attack-replay-mismatch",
@@ -117,5 +128,5 @@ export const recordBattleMismatches = async (
     });
   }
 
-  if (rejected) throw attackReplayRejectedErr(fields);
+  if (rejected) throw attackReplayRejectedErr(refused);
 };

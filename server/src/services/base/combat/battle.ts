@@ -5,6 +5,7 @@ import type { AttackSession } from "../attackSession.js";
 import type { AbandonedDefender, AbandonedInput, AbandonedOutcome } from "./abandonedAttack.js";
 import {
   fightableLog,
+  foughtAcademy,
   wholeAmounts,
   withFrozenBrains,
   type LootAttacker,
@@ -62,11 +63,13 @@ export interface BattleAttacker extends LootAttacker {
  * is no usable fling log to replay.
  *
  * @param flinglog - The log: a save's `flinglog` or a checkpoint's.
- * @param session - What the attack load recorded: the roster, the pools, the level.
+ * @param session - What the attack load recorded: the roster, the pools, the level,
+ *   the attacker's academy and Declare War (issue #201), which win over the rows.
  * @param defender - The defender's row.
  * @param attacker - The attacker's main save.
  * @param tick - The tick the battle ended at.
- * @param declareWar - Whether the attacker's alliance has Declare War running.
+ * @param declareWar - Whether the attacker's alliance has Declare War running, for a
+ *   session that did not record it.
  * @param left - Whether the report says the attacker left (`AbandonedInput.left`):
  *   always for the finaliser; for a save, when its `left` says so.
  */
@@ -89,8 +92,9 @@ export const battleReplayInput = ({
 }): AbandonedInput | null => {
   const log = parseFlingLog(flinglog);
   if (!log) return null;
+  const academy = foughtAcademy(session, attacker.academy);
   const fighter: LootAttacker = {
-    academy: attacker.academy ?? null,
+    academy,
     champion: attacker.champion ?? null,
     catapult: attacker.catapult ?? null,
     buildingdata: attacker.buildingdata ?? null,
@@ -107,7 +111,7 @@ export const battleReplayInput = ({
       ...(defender.kind !== undefined && { kind: defender.kind }),
     },
     attacker: {
-      academy: attacker.academy ?? null,
+      academy,
       champion: (attacker.champion ?? null) as AbandonedInput["attacker"]["champion"],
       siege: attacker.siege ?? null,
     },
@@ -117,7 +121,8 @@ export const battleReplayInput = ({
       ? fightableLog(log, fighter, session.entryHoused)
       : withFrozenBrains(log, session?.championBrains),
     tick,
-    declareWar,
+    // The countdown the client was served, whatever runs now (issue #201).
+    declareWar: session?.declareWar ?? declareWar,
     ...(session?.attackerlevel !== undefined && { playerLevel: session.attackerlevel }),
     ...(left !== undefined && { left }),
     // The defence the attack load served (issue #195).

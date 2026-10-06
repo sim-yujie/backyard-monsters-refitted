@@ -54,7 +54,7 @@ import { INFERNO_CHAT_CHANNEL } from "../../../config/ChatConfig.js";
 import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import type { DefenderForces } from "../../../game-rules/combat/index.js";
-import type { ChampionBrains } from "../../../services/base/attackSession.js";
+import type { AcademyLevels, ChampionBrains } from "../../../services/base/attackSession.js";
 import { touchLastSeen } from "../../../services/user/lastSeen.js";
 import { logger } from "../../../utils/logger.js";
 import { cancelRaidOnYardLoad, presenceLapsed } from "../../../services/raids/raidStore.js";
@@ -97,6 +97,8 @@ export const baseLoad: KoaController = async (ctx) => {
   let defenderForces: DefenderForces | undefined;
   /** The attacker's champions' brains, as the attack froze them (issue #219), served to the client. */
   let championBrains: ChampionBrains | undefined;
+  /** The attacker's academy levels, as the attack froze them (issue #201), served to the client. */
+  let attackerAcademy: AcademyLevels | undefined;
   /** No presence mark before this load: the game had been closed (#226, `raidStore.ts`). */
   let gameWasClosed = false;
 
@@ -126,7 +128,7 @@ export const baseLoad: KoaController = async (ctx) => {
       if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
 
       await validateAttack(user, attackData, mapversion);
-      ({ save: baseSave, defenderForces, championBrains } = await baseModeAttack({
+      ({ save: baseSave, defenderForces, championBrains, attackerAcademy } = await baseModeAttack({
         user,
         baseid,
         mapversion,
@@ -169,7 +171,7 @@ export const baseLoad: KoaController = async (ctx) => {
       if (!ctx.meetsDiscordAgeCheck && !MR1_TRIBE_IDS.has(baseid)) throw discordAgeErr();
       
       await validateAttack(user, attackData, mapversion);
-      ({ save: baseSave, defenderForces, championBrains } = await baseModeAttack({
+      ({ save: baseSave, defenderForces, championBrains, attackerAcademy } = await baseModeAttack({
         user,
         baseid,
         mapversion,
@@ -451,6 +453,7 @@ export const baseLoad: KoaController = async (ctx) => {
     ...(cellHeight !== undefined && { cellheight: cellHeight }),
     ...(defenderForces && { defenderforces: defenderForces }),
     ...(championBrains && { attackerbrains: championBrains }),
+    ...(attackerAcademy && { attackeracademy: attackerAcademy }),
     ...(completed && { completed }),
     ...(notifications !== undefined && { notifications }),
     ...(isOwner && {

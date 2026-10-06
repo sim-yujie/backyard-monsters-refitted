@@ -1,0 +1,9 @@
+{
+  "name": "outpost-core-left-at-2x",
+  "fixture": "outpost-core",
+  "kind": "outpost",
+  "attacker": {"monsters":{"C3":150,"C6":80,"C8":40},"academy":{"C1":6,"C2":6,"C3":6,"C4":6,"C5":6,"C6":6,"C7":6,"C8":6,"C13":6,"C14":6},"champion":[{"t":5,"l":5,"hp":62000,"pl":2,"ft":0,"fd":0,"fb":0,"status":0},{"t":1,"l":4,"hp":190000,"pl":3,"ft":0,"fd":0,"fb":0,"status":0},{"t":4,"l":6,"hp":179000,"pl":3,"ft":0,"fd":0,"fb":0,"status":0},{"t":3,"l":6,"hp":44000,"pl":3,"ft":0,"fd":0,"fb":0,"status":0}],"siege":{"jars":{"quantity":2},"decoy":{"quantity":1}},"catapult":5,"resources":{"r1":50000000,"r2":50000000,"r3":50000000,"r4":50000000}},
+  "declareWar": false,
+  "endReason": "left",
+  "save": {"tick":4080,"damage":90.34,"destroyed":1,"left":true,"buildinghealthdata":{"0":40210,"1":0,"2":0,"3":0,"4":0,"5":0,"6":40000,"7":0,"8":0},"buildingdata":{},"attackloot":{"r1":416561,"r2":27641,"r3":139489,"r4":42568},"resources":{"r1":-419869,"r2":-30800,"r3":-142427,"r4":-45705},"attackerchampion":[{"t":5,"l":5,"hp":62000,"pl":2,"ft":0,"fd":0,"fb":0,"status":0},{"t":1,"l":4,"hp":190000,"pl":3,"ft":0,"fd":0,"fb":0,"status":0},{"t":4,"l":6,"hp":179000,"pl":3,"ft":0,"fd":0,"fb":0,"status":0},{"t":3,"l":6,"hp":44000,"pl":3,"ft":0,"fd":0,"fb":0,"status":0}],"attackersiege":{"jars":{"quantity":2},"decoy":{"quantity":1}},"attackreport":"0:01 Flung 150 Bolt, 80 Ichi, 40 Fang at (600, 0)\n0:51 Left the attack\nResult: 90% damage, 7 buildings destroyed, looted 416561 twigs, 27641 pebbles, 139489 putty, 42568 goo.","flinglog":{"v":1,"seed":179,"events":[{"kind":"fling","t":80,"x":600,"y":0,"r":631.25,"monsters":{"C3":150,"C6":80,"C8":40}}]}}
+}

@@ -11,6 +11,7 @@ import {
   combatKind,
   hasDeclareWar,
   mintSeed,
+  servedAcademy,
   servedBrain,
   servedHeight,
 } from "./AttackSession";
@@ -187,6 +188,30 @@ describe("AttackSession loot level (#167)", () => {
   it("prefers a level it was handed, and ignores a served level that is not one", () => {
     expect(twigsTaken(hallYard(1), 20)).toBe(10_000);
     expect(twigsTaken({ ...hallYard(), attackerlevel: 0 } as BaseLoadResponse)).toBe(10_000);
+  });
+});
+
+describe("AttackSession academy levels (#201)", () => {
+  const withRoster = (levels: Record<string, number>): AttackSession =>
+    new AttackSession({ target: targetOf({ roster: { ...targetOf().roster, levels } }), seed: 1 });
+
+  it("fights at the levels the attack load serves, which the server replays with", () => {
+    const session = withRoster({ C1: 1 });
+    session.load({ ...towerYard(), attackeracademy: { C1: 3 } } as BaseLoadResponse);
+    expect(session.levels).toEqual({ C1: 3 });
+  });
+
+  it("keeps the roster's levels when the load serves none", () => {
+    const session = withRoster({ C1: 2 });
+    session.load(towerYard());
+    expect(session.levels).toEqual({ C1: 2 });
+  });
+
+  it("reads only whole levels of 1 or more, and nothing from what is not a table", () => {
+    expect(servedAcademy({ C1: 3, C2: 0, C3: 2.5, C4: "4" })).toEqual({ C1: 3 });
+    expect(servedAcademy(undefined)).toBeNull();
+    expect(servedAcademy([3])).toBeNull();
+    expect(servedAcademy({})).toEqual({});
   });
 });
 

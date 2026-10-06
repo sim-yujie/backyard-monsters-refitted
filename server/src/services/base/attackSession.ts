@@ -107,7 +107,28 @@ export interface AttackSession {
    * battle fought with none.
    */
   championBrains?: ChampionBrains;
+  /**
+   * The attacker's academy levels at attack start, monster id → level, after
+   * the load caught their yard up (issue #201). The attack load serves them to
+   * the client as `attackeracademy` and every replay fights at these, so a
+   * training that finished after the client last read its own yard, or that
+   * finishes while the attack runs, changes nothing. Absent on a session
+   * minted before it; the replay then reads the attacker's row.
+   */
+  attackerAcademy?: AcademyLevels;
+  /**
+   * Whether Declare War was running for the attacker's alliance at attack
+   * start, as the attack load served it (`attpowerups`), which sets the
+   * client's countdown. Every replay fights with this, so a Declare War that
+   * runs out, or starts, while the attack runs changes nothing (issue #201).
+   * Absent on a session minted before it; the replay then asks whether one is
+   * running at the time.
+   */
+  declareWar?: boolean;
 }
+
+/** Monster id → academy level, as {@link AttackSession.attackerAcademy} keeps it. */
+export type AcademyLevels = Readonly<Record<string, number>>;
 
 /** Champion type → brain, as {@link AttackSession.championBrains} keeps it. */
 export type ChampionBrains = Readonly<Record<string, BrainWeights>>;
@@ -156,6 +177,8 @@ export const serialiseAttackSession = (session: AttackSession): string =>
   session.attackerResources ||
   session.defenderForces ||
   session.championBrains ||
+  session.attackerAcademy ||
+  session.declareWar !== undefined ||
   session.attackerlevel !== undefined
     ? JSON.stringify(session)
     : `${session.attackerid}:${session.attackid}:${session.startedat}`;
@@ -191,6 +214,16 @@ const defenderResourcesOf = (raw: unknown): ResourceAmounts | undefined => {
   return amounts;
 };
 
+/** The `attackerAcademy` of a JSON session: monster id → whole level ≥ 1. */
+const academyLevelsOf = (raw: unknown): AcademyLevels | undefined => {
+  if (!isRecord(raw)) return undefined;
+  const out: Record<string, number> = {};
+  for (const [id, level] of Object.entries(raw)) {
+    if (Number.isSafeInteger(level) && (level as number) >= 1) out[id] = level as number;
+  }
+  return out;
+};
+
 /** What an attack load records of the battle beside its binding: see {@link AttackSession}. */
 export type AttackSessionFacts = Pick<
   AttackSession,
@@ -200,6 +233,8 @@ export type AttackSessionFacts = Pick<
   | "attackerlevel"
   | "defenderForces"
   | "championBrains"
+  | "attackerAcademy"
+  | "declareWar"
 >;
 
 /**
@@ -217,7 +252,8 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
   const championBrains = isRecord(parsed.championBrains)
     ? brainsOf(Object.entries(parsed.championBrains).map(([t, b]) => ({ t: Number(t), b })))
     : undefined;
-  const { attackerlevel } = parsed;
+  const attackerAcademy = academyLevelsOf(parsed.attackerAcademy);
+  const { attackerlevel, declareWar } = parsed;
   return {
     ...(entryHoused && { entryHoused }),
     ...(defenderForces && { defenderForces }),
@@ -226,6 +262,8 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
     ...(championBrains && { championBrains }),
     ...(Number.isSafeInteger(attackerlevel) &&
       (attackerlevel as number) >= 1 && { attackerlevel: attackerlevel as number }),
+    ...(attackerAcademy && { attackerAcademy }),
+    ...(typeof declareWar === "boolean" && { declareWar }),
   };
 };
 
@@ -331,6 +369,8 @@ export const checkAttackBinding = ({
  * @param {ResourceAmounts} [attackerResources] - The attacker's own pool at attack start.
  * @param {DefenderForces} [defenderForces] - The defence the attack load serves (issue #195).
  * @param {ChampionBrains} [championBrains] - The attacker's champions' brains, frozen (#219).
+ * @param {AcademyLevels} [attackerAcademy] - The attacker's academy levels, which the attack load serves too (#201).
+ * @param {boolean} [declareWar] - Whether Declare War was running for the attacker (#201).
  */
 export const newAttackSession = (
   attackerid: number,
@@ -340,7 +380,9 @@ export const newAttackSession = (
   attackerlevel?: number,
   attackerResources?: ResourceAmounts,
   defenderForces?: DefenderForces,
-  championBrains?: ChampionBrains
+  championBrains?: ChampionBrains,
+  attackerAcademy?: AcademyLevels,
+  declareWar?: boolean
 ): AttackSession => ({
   attackerid,
   attackid,
@@ -351,4 +393,6 @@ export const newAttackSession = (
   ...(attackerResources && { attackerResources }),
   ...(attackerlevel !== undefined && { attackerlevel }),
   ...(championBrains && { championBrains }),
+  ...(attackerAcademy && { attackerAcademy }),
+  ...(declareWar !== undefined && { declareWar }),
 });

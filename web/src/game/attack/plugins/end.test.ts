@@ -13,6 +13,9 @@ import {
   PENDING_GAVE_UP,
   PENDING_MESSAGE,
   PENDING_RESEND_MESSAGE,
+  REPLAY_MISMATCH_LOST,
+  REPLAY_MISMATCH_MESSAGE,
+  REPLAY_MISMATCH_SETTLES,
   REPLAY_RESEND_DELAY_MS,
   SESSION_WINDOW_SECONDS,
   WINDOW_MARGIN_SECONDS,
@@ -636,6 +639,15 @@ describe("describeSaveFailure", () => {
     expect(describeSaveFailure(refused("bombSpend")).canRetry).toBe(false);
     expect(describeSaveFailure(refused("replayMismatch")).canRetry).toBe(false);
     expect(describeSaveFailure(refused("finalising")).canRetry).toBe(false);
+    // A replay that did not bear the save out says what happens to the attack (#201).
+    expect(describeSaveFailure(refused("replayMismatch"))).toEqual({
+      message: `${REPLAY_MISMATCH_MESSAGE} ${REPLAY_MISMATCH_SETTLES}`,
+      canRetry: false,
+    });
+    expect(describeSaveFailure(refused("replayMismatch"), true)).toEqual({
+      message: `${REPLAY_MISMATCH_MESSAGE} ${REPLAY_MISMATCH_LOST}`,
+      canRetry: false,
+    });
     expect(describeSaveFailure(refused("wrong-attacker"))).toEqual({
       message: "The server refused the result: no",
       canRetry: false,

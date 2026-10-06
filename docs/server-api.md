@@ -280,7 +280,7 @@ client's `flinglog` are then charged to the attacker at the shared rules' bomb c
 by the save that ends the attack only (issue #90, `services/base/combat/bombSpend.ts`; priced
 against the pool the attack load recorded in the session, `attackerResources`, since issue #23,
 C3, and against the stored pool for a session without one; a bomb the attacker could not have fired is logged
-or, under `COMBAT_SAVE_VALIDATION=reject`, refuses the save with reason `bombSpend`; a Flash save
+or, under `COMBAT_SAVE_VALIDATION=reject` (the default since issue #201), refuses the save with reason `bombSpend`; a Flash save
 carries no log and nets its bomb spend into `attackloot` instead); `resources` (the defender's
 reported delta) → `defenderLootHandler.ts` **only ever subtracts** from the defender/outpost
 pool (any positive value in the client's delta is ignored — an attacker cannot top up a base by
@@ -370,6 +370,13 @@ flung champion's log entry with its type's (`champion.b`), and every replay (`fi
 `withFrozenBrains` when there is no roster) replaces whatever `b` the log carries with the
 session's copy, or removes it when there is none. So the battle is fought with the brains as they
 were at launch, whatever the log or the live save says by the time it is replayed.
+It freezes the attacker's academy levels the same way, `attackerAcademy` (issue #201), read after
+the load's catch-up has finished any training, and serves them as `attackeracademy`; the client
+fights at those levels rather than its own-yard load's, which a training finishing in between can
+make stale. And it records whether Declare War was running, `declareWar`, which the client's
+countdown also came from (`attpowerups`). Every replay (save, finaliser, Map Room 1 tribe) uses
+the session's copies, so a training finishing or Declare War ending mid-attack cannot make an
+honest save disagree. A session minted before them falls back to the attacker's row at save time.
 Only a successful one: every refusal,
 range included, is decided before the first write, so an attack the server turns down leaves no
 `attackid`, no lock, no attack log and no session key (issue #26). The key's TTL is 480 seconds; the window it
@@ -491,13 +498,18 @@ of these are never written. Where they differ from the replay (by field: `damage
 `buildinghealthdata`, `firedTraps`, `attackloot`, the attacker's own row, `attackerchampion`
 for a flung champion's health and `attackersiege`, and the defender's caged champion's health,
 `champion`, issue #195), `COMBAT_SAVE_VALIDATION` decides what it
-costs (issue #23, C7, `services/base/combat/saveBattle.ts`): `off` nothing; `log` (the default)
-one `attack-replay-mismatch` warning and one `Report` row; `reject` the same, then the save is
-refused with `attackReplayRejectedErr` (409, `reason: "replayMismatch"`, `fields`) before anything
-is written, so a Map Room 2 attack is left to the finaliser, which lands the server's own result
+costs (issue #23, C7, `services/base/combat/saveBattle.ts`): `off` nothing; `log` one
+`attack-replay-mismatch` warning and one `Report` row; `reject` (the default since issue #201;
+`log` is the way back) the same, then the save is refused with `attackReplayRejectedErr` (409,
+`reason: "replayMismatch"`, `fields`, "The server replayed this battle and got a different result,
+so it did not take this save.") before anything is written, so a Map Room 2 attack is left to the finaliser, which lands the server's own result
 from the checkpoint, and a Map Room 1 tribe attack lands nothing. The defender's `monsters` is not
-compared (C2 ignores it). An honest web client fought the same battle with the same engine, so its
-save writes exactly the figures it showed and is never flagged (`battle.test.ts` checks both on
+compared (C2 ignores it). An `attackersiege` difference alone is logged but never refused
+(`LOG_ONLY_FIELDS`, issue #201): the server writes its own siege figure, and the attacker's stock
+can honestly move during an attack (bought in another tab after the map loaded). An honest web client fought the same battle with the same engine and the same inputs (the
+session's `attackerAcademy` and `declareWar`, above), so its
+save writes exactly the figures it showed and is never flagged (`combat/honestSaves.test.ts` replays
+40 saves the real web client built; `battle.test.ts` checks both on
 the golden replay fixtures, at every point a client can stop, main yards and tribes). The takeover grant
 and damage protection read the replay's damage. A save that does not end the attack writes none
 of these keys, and a save with no usable log writes no battle at all. A Map Room 3 attack has no
@@ -524,7 +536,8 @@ held: same seed, every stored event unchanged and in place, a clock that has not
 game state: the latest checkpoint is kept in Redis under `attack-checkpoint:<basesaveid>`, indexed
 by the set `attack-checkpoints` (`services/base/attackCheckpoint.ts`, `attackCheckpointStore.ts`).
 Each checkpoint also keeps a copy of what the attack load recorded in the session (`entryHoused`,
-`defenderResources`, `attackerResources`, `attackerlevel`, `defenderForces`, `championBrains`), because the session key is gone 60 seconds after the window
+`defenderResources`, `attackerResources`, `attackerlevel`, `defenderForces`, `championBrains`,
+`attackerAcademy`, `declareWar`), because the session key is gone 60 seconds after the window
 and an attack is often finalised later than that.
 
 **Finalisation** (`services/base/finaliseAttack.ts`) finishes an attack from its checkpoint: the
