@@ -63,7 +63,7 @@ import { infernoMonsters } from "./controllers/inferno/infernoMonsters.js";
 import { getNeighbours } from "./controllers/maproom/getNeighbours.js";
 import { getMapRoom1 } from "./controllers/maproom/getMapRoom1.js";
 import { presence, stayProtected } from "./controllers/maproom/presence.js";
-import { raidDevDue, raidEngage, raidFinish, raidFrequency, raidPrepare, raidStart } from "./controllers/raid/raid.js";
+import { raidDevDue, raidDevTrojan, raidEngage, raidFinish, raidFrequency, raidPrepare, raidStart } from "./controllers/raid/raid.js";
 import { botCheck, botCheckAnswer, botCheckForce, devCheckEnabled } from "./controllers/maproom/botCheck.js";
 
 import { getArea } from "./controllers/maproom/v2/getArea.js";
@@ -200,6 +200,10 @@ router.post("/api/:apiVersion/bm/raid/frequency", apiVersion, verifyUserAuth, lo
 // DEV only, never mounted in production: the next raid is due now.
 if (devCheckEnabled()) {
   router.post("/api/:apiVersion/bm/raid/dev/due", apiVersion, verifyUserAuth, logRequest, raidDevDue);
+}
+// DEV only, never mounted in production: a Trojan Horse now (#324).
+if (devCheckEnabled()) {
+  router.post("/api/:apiVersion/bm/raid/dev/trojan", apiVersion, verifyUserAuth, logRequest, raidDevTrojan);
 }
 
 /**  ────────────────────────────────────────────────

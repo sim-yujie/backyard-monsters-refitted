@@ -80,8 +80,21 @@ export interface RaidSchedule {
   readonly recent: readonly RaidRecord[];
   /** The raid being fought, which locks the yard until it lands (`raidLock.ts`, WP3). */
   readonly fight?: RaidFightLock;
-  /** Flash's Trojan Horse state, left as it is for the backlog's issue (#306). */
+  /** Flash's Trojan Horse state, kept but never read (design §7, §9): the new flag below replaces it. */
   readonly s1?: unknown;
+  /**
+   * The Trojan Horse flag (`docs/design/trojan-horse.md` §7, issue #324).
+   * Absent: not placed yet, so the next qualifying load may place one.
+   * `placedAt` set: placed, never placed again. `doneAt` set too: sprung and
+   * landed (WP3).
+   */
+  readonly trojan?: TrojanFlag;
+}
+
+/** The Trojan Horse's once-per-account flag, as `aiattacks.trojan` stores it. */
+export interface TrojanFlag {
+  readonly placedAt: number;
+  readonly doneAt?: number;
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -113,6 +126,15 @@ const readRecord = (value: unknown): RaidRecord | null => {
   };
 };
 
+/** The Trojan Horse flag, from whatever is at `aiattacks.trojan`; undefined for anything else. */
+const readTrojan = (value: unknown): TrojanFlag | undefined => {
+  if (!isObject(value)) return undefined;
+  const placedAt = whole(value.placedAt);
+  if (placedAt === undefined) return undefined;
+  const doneAt = whole(value.doneAt);
+  return { placedAt, ...(doneAt !== undefined ? { doneAt } : {}) };
+};
+
 /**
  * Reads `aiattacks` as it is stored, in any shape: null, `{}`, a Flash-era
  * `_history` (numbers or numeric strings, Flash's `queued` raid, its debug
@@ -127,6 +149,7 @@ export const readSchedule = (raw: unknown): RaidSchedule => {
   const recent = Array.isArray(stored.recent)
     ? stored.recent.flatMap((entry) => readRecord(entry) ?? []).slice(0, RECENT_RAIDS_KEPT)
     : [];
+  const trojan = readTrojan(stored.trojan);
   return {
     v: 2,
     lastattack: Math.max(0, whole(stored.lastattack) ?? 0),
@@ -137,6 +160,7 @@ export const readSchedule = (raw: unknown): RaidSchedule => {
     recent,
     ...(fight ? { fight } : {}),
     ...("s1" in stored ? { s1: stored.s1 } : {}),
+    ...(trojan ? { trojan } : {}),
   };
 };
 
@@ -251,8 +275,12 @@ export interface RaidDueFacts {
   readonly raidOpen: boolean;
 }
 
-/** Map Rooms whose main yards are raided (design §4.1: Map Room 1 or 2). */
-const RAIDED_MAP_ROOMS: ReadonlySet<number> = new Set([MapRoomVersion.V1, MapRoomVersion.V2]);
+/**
+ * Map Rooms whose main yards are raided (design §4.1: Map Room 1 or 2). The
+ * Trojan Horse appears on the same yards (`docs/design/trojan-horse.md` §2,
+ * `services/raids/trojanHorse.ts`).
+ */
+export const RAIDED_MAP_ROOMS: ReadonlySet<number> = new Set([MapRoomVersion.V1, MapRoomVersion.V2]);
 
 /**
  * Any building damaged or repairing. The save should be caught up first: a

@@ -1,6 +1,6 @@
 import { layoutInvalidErr } from "../../errors/errors.js";
 import { costOf, maxLevel, type YardKind } from "../../game-data/buildingCosts.js";
-import { footprintOf, MUSHROOM_TYPE } from "../../game-data/buildingFootprints.js";
+import { footprintOf, MUSHROOM_TYPE, TROJAN_HORSE_TYPE } from "../../game-data/buildingFootprints.js";
 import {
   LAYOUT_NAME_MAX,
   LAYOUT_NODE_MAX,
@@ -254,7 +254,10 @@ export const checkStoragePlacements = (
  * Decorations are exempt, because the Flash planner recycled unplaced
  * decorations into storage instead of blocking
  * (`com/monsters/baseplanner/BasePlanner.as:113-122`), and so are mushrooms,
- * which the planner skips entirely (`client/scripts/BASE.as:5097-5109`).
+ * which the planner skips entirely (`client/scripts/BASE.as:5097-5109`). The
+ * Trojan Horse is exempt too: the client never lists it (`applyLayout.ts`
+ * leaves it alone regardless), so Apply must not hard-block on its absence
+ * (`docs/design/trojan-horse.md` §7, issue #324).
  */
 export const unplacedBuildings = (
   nodes: LayoutNode[],
@@ -265,7 +268,7 @@ export const unplacedBuildings = (
 
   for (const [key, building] of Object.entries(buildingdata ?? {})) {
     const type = Number((building as BuildingData).t);
-    if (type === MUSHROOM_TYPE || footprintOf(type).decoration) continue;
+    if (type === MUSHROOM_TYPE || type === TROJAN_HORSE_TYPE || footprintOf(type).decoration) continue;
 
     const id = Number((building as BuildingData).id ?? key);
     if (!placed.has(id)) unplaced.push(id);

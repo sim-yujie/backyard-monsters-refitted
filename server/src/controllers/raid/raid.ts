@@ -11,6 +11,7 @@ import {
   startRaid,
 } from "../../services/raids/raidFlow.js";
 import { parseRaidPreference } from "../../services/raids/raidSchedule.js";
+import { devPlaceTrojanHorse } from "../../services/raids/trojanHorse.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { devCheckEnabled } from "../maproom/botCheck.js";
@@ -30,6 +31,8 @@ import { devCheckEnabled } from "../maproom/botCheck.js";
  * - `frequency { preference: "more" | "same" | "less" }`. Answers
  *   `{ preference, nextAttack }`.
  * - `dev/due` (local server only): the next raid is due now.
+ * - `dev/trojan` (local server only): a Trojan Horse now, score and the
+ *   once-per-account flag both ignored (`docs/design/trojan-horse.md` §7).
  */
 
 const raidIdOf = (body: unknown): unknown => (body as { id?: unknown } | undefined)?.id;
@@ -74,4 +77,12 @@ export const raidDevDue: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   ctx.status = Status.OK;
   ctx.body = { error: 0, ...(await makeRaidDue(postgres.em, user, getCurrentDateTime())) };
+};
+
+/** DEV only: `app.routes.ts` mounts it on a local server alone, and it refuses anywhere else as well. */
+export const raidDevTrojan: KoaController = async (ctx) => {
+  if (!devCheckEnabled()) throw raidRefusedErr("badRequest");
+  const user: User = ctx.authUser;
+  ctx.status = Status.OK;
+  ctx.body = { error: 0, ...(await devPlaceTrojanHorse(postgres.em, user, getCurrentDateTime())) };
 };

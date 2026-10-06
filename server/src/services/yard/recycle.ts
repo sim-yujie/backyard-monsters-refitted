@@ -1,4 +1,5 @@
 import { costOf } from "../../game-data/buildingCosts.js";
+import { TROJAN_HORSE_TYPE } from "../../game-data/buildingFootprints.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { pricingType, refundOf, type StorageCapSave } from "../base/economy/resourceBudget.js";
@@ -38,6 +39,8 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * - `isTownHall`: the Town Hall;
  * - `mapRoom`: the Map Room, whose level is the map version (D16) — recycling
  *   it in the original left Map Room 2 (`client/scripts/BUILDING11.as:190-212`);
+ * - `trojanHorse`: the Trojan Horse (building 27) — the server places it and
+ *   takes it away once it is sprung (`docs/design/trojan-horse.md` §7, #324);
  * - `busy`: a build, upgrade or fortify running (a build is cancelled, not
  *   recycled: WP3.3's `build/cancel`);
  * - `championInCage`: a Champion Cage with a champion in it (`CHAMPIONCAGE.as:898-906`);
@@ -130,6 +133,9 @@ const refuse = (save: RecycleSave, building: BuildingData, id: number, now: numb
   if (type === MAP_ROOM_TYPE) {
     throw refused("mapRoom", "The Map Room cannot be recycled: its level is your map.");
   }
+  // The server placed it and the server takes it away once it is sprung
+  // (design §7 "Save protection", issue #324).
+  if (type === TROJAN_HORSE_TYPE) throw refused("trojanHorse", "That cannot be recycled.");
   if (Boolean(building.cB) || Boolean(building.cU) || Boolean(building.cF)) {
     throw refused("busy", "Finish or cancel this building's job first.");
   }
