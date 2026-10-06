@@ -27,7 +27,18 @@ const em = {
   flush: async () => {},
 };
 
-mock.module("../../server.js", () => ({ postgres: { em }, redis: { get: async () => null } }));
+let deletedKeys: string[];
+
+mock.module("../../server.js", () => ({
+  postgres: { em },
+  redis: {
+    get: async () => null,
+    del: async (...keys: string[]) => {
+      deletedKeys.push(...keys);
+      return keys.length;
+    },
+  },
+}));
 mock.module("../../config/MailConfig.js", () => ({
   transporter: {
     sendMail: async () => {
@@ -69,6 +80,7 @@ beforeEach(() => {
   botIds = [];
   mailsSent = 0;
   mailFails = false;
+  deletedKeys = [];
 });
 
 afterEach(() => {
@@ -129,5 +141,22 @@ describe("reset password and bot accounts", () => {
     expect(bot.status).toBe(401);
     expect(bot.error).toBe("Could not authenticate");
     expect(user!.password).toBe("old-hash");
+  });
+});
+
+describe("a reset logs the account out everywhere (issue #318)", () => {
+  test("the game, launcher and chat tokens are dropped", async () => {
+    const token = JWT.sign({ user: { email: EMAIL } }, process.env.SECRET_KEY!, { expiresIn: "20m" });
+    user!.resetToken = token;
+    expect((await call(resetPassword, { password: "NewPassword1!", token })).status).toBe(200);
+    expect(deletedKeys.sort()).toEqual([`chat-token:7`, `user-token:game:${EMAIL}`, `user-token:launcher:${EMAIL}`]);
+  });
+
+  test("a refused reset logs no one out", async () => {
+    botIds = [7];
+    const token = JWT.sign({ user: { email: EMAIL } }, process.env.SECRET_KEY!, { expiresIn: "20m" });
+    user!.resetToken = token;
+    expect((await call(resetPassword, { password: "NewPassword1!", token })).status).toBe(401);
+    expect(deletedKeys).toEqual([]);
   });
 });

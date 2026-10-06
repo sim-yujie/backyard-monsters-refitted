@@ -20,6 +20,7 @@ import { Env } from "../../enums/Env.js";
 import { fetchDiscordAvatar } from "../../services/discord/fetchDiscordAvatar.js";
 import { requiresDiscordVerification } from "../../config/AccountConfig.js";
 import { isBot } from "../../services/bots/isBot.js";
+import { sessionTokenKey } from "../../services/auth/sessions.js";
 
 type SessionLifetime = NonNullable<SignOptions["expiresIn"]>;
 
@@ -44,7 +45,7 @@ const missingAccountHash = bcrypt.hash(randomBytes(16).toString("hex"), 10);
 const authenticateWithToken = async (token: string) => {
   const { user } = verifyJwtToken(token);
 
-  const storedToken = await redis.get(`user-token:${user.sessionType}:${user.email}`);
+  const storedToken = await redis.get(sessionTokenKey(user.sessionType, user.email));
   if (storedToken !== token) throw tokenAuthFailureErr();
 
   let userRecord = await postgres.em.findOne(User, { email: user.email });
@@ -120,7 +121,7 @@ export const login: KoaController = async (ctx) => {
     }
   );
 
-  await redis.set(`user-token:${sessionType}:${user.email}`, newToken);
+  await redis.set(sessionTokenKey(sessionType, user.email), newToken);
   postgres.em.persist(user);
   await postgres.em.flush();
 

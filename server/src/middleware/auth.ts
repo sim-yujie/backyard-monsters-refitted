@@ -12,6 +12,7 @@ import { isDiscordAccountOldEnough } from "../services/discord/discordAccountSta
 import { requiresDiscordVerification } from "../config/AccountConfig.js";
 import type { SessionType } from "../enums/SessionType.js";
 import { logger } from "../utils/logger.js";
+import { sessionTokenKey } from "../services/auth/sessions.js";
 
 export interface JwtClaims {
   user: {
@@ -47,7 +48,7 @@ export const verifyUserAuth = async (ctx: Context, next: Next) => {
   const sessionType = decodedToken.user.sessionType;
   const email = decodedToken.user.email;
 
-  const storedToken = await redis.get(`user-token:${sessionType}:${email}`);
+  const storedToken = await redis.get(sessionTokenKey(sessionType, email));
 
   if (storedToken !== token) throw authFailureErr();
 

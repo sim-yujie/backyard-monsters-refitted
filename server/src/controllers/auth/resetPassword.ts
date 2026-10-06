@@ -10,6 +10,7 @@ import { logger } from "../../utils/logger.js";
 import { ResetPasswordSchema } from "../../schemas/AuthSchemas.js";
 import { verifyJwtToken } from "../../middleware/auth.js";
 import { isBot } from "../../services/bots/isBot.js";
+import { endAllSessions } from "../../services/auth/sessions.js";
 
 const { JsonWebTokenError, TokenExpiredError } = jwt;
 
@@ -18,7 +19,8 @@ const { JsonWebTokenError, TokenExpiredError } = jwt;
  *
  * This controller validates the password and token provided in the request body,
  * verifies the token, retrieves the user associated with the token from the database,
- * and updates the user's password. If the token is expired, an error is returned.
+ * and updates the user's password, logging the account out of every session
+ * (issue #318). If the token is expired, an error is returned.
  *
  * @param {Context} ctx - Koa context object.
  * @returns {Promise<void>} - A promise that resolves when the password reset process is complete.
@@ -44,6 +46,9 @@ export const resetPassword: KoaController = async (ctx) => {
     user.resetToken = "";
     postgres.em.persist(user);
     await postgres.em.flush();
+
+    // Logs out every session the old password let in (issue #318).
+    await endAllSessions(user);
 
     ctx.status = Status.OK;
     ctx.body = {
