@@ -2,6 +2,10 @@
   "name": "champion-power",
   "description": "A level 4 Gorgo at power level 3 with sixty Pokeys: the champion's bonus ladders add health, damage and speed to its level's (issue #202).",
   "yard": "sandbox",
+  "without": [
+    52,
+    53
+  ],
   "kind": "main",
   "levels": {
     "C1": 6,
@@ -40,7 +44,7 @@
   },
   "expected": {
     "ticks": 8200,
-    "damage": 0.49361827948158066,
+    "damage": 7.037215404287835,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -55,54 +59,54 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 2,
+    "destroyedBuildings": 22,
     "creepsFlung": 60,
-    "creepsKilled": 61,
-    "championHp": 0,
-    "damagedBuildings": 4,
-    "rngDraws": 7721,
+    "creepsKilled": 60,
+    "championHp": 144998.06850469226,
+    "damagedBuildings": 23,
+    "rngDraws": 1548,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "970ce6b02fc8845e"
+        "digest": "86814f016443e0a7"
       },
       {
         "tick": 1600,
-        "digest": "15175950f1a3e55a"
+        "digest": "b2127e4a891a4670"
       },
       {
         "tick": 2400,
-        "digest": "384ae85f4593bbbd"
+        "digest": "229efbe17db6dd6f"
       },
       {
         "tick": 3200,
-        "digest": "a201391e44ea5c74"
+        "digest": "d884b3ef2d6b2895"
       },
       {
         "tick": 4000,
-        "digest": "9b21953f6a6ccac1"
+        "digest": "4619e10170bf10a3"
       },
       {
         "tick": 4800,
-        "digest": "67f1abc3d0fcc6c1"
+        "digest": "5530d3c63e62aaf8"
       },
       {
         "tick": 5600,
-        "digest": "704353326022feb4"
+        "digest": "86e3f8a9317f9d27"
       },
       {
         "tick": 6400,
-        "digest": "2fc93d4e1a6921e8"
+        "digest": "6cafb69d65e6cd4b"
       },
       {
         "tick": 7200,
-        "digest": "ee9f9203e15431bd"
+        "digest": "7eb872a8192f0416"
       },
       {
         "tick": 8000,
-        "digest": "f09af8146237b5ee"
+        "digest": "191d40fa81b62244"
       }
     ],
-    "digest": "87158a53a16de75d"
+    "digest": "d2974a59fab1431b"
   }
 }

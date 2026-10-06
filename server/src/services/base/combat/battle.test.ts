@@ -43,6 +43,8 @@ const SWEEP_TIMEOUT_MS = 300_000;
 interface Fixture {
   name: string;
   yard: "sandbox" | Record<string, Record<string, number>>;
+  /** Building ids taken off the sandbox yard (issue #313: its Spurtz Cannons). */
+  without?: number[];
   /** `tribe`: a Map Room 1 tribe, a `tribe` row the engine fights as `"tribe"`. */
   kind: "main" | "outpost" | "wild" | "tribe";
   health?: Record<string, number>;
@@ -65,11 +67,17 @@ const fixtures: Fixture[] = readdirSync(FIXTURE_DIR)
 
 const TYPE_OF = { main: "main", outpost: "outpost", wild: "tribe", tribe: "tribe" } as const;
 
+/** The sandbox yard's buildings less the fixture's `without` ids. */
+const sandboxBuildings = <T>(buildingdata: Record<string, T>, without?: readonly number[]): Record<string, T> =>
+  without?.length
+    ? Object.fromEntries(Object.entries(buildingdata).filter(([key]) => !without.includes(Number(key))))
+    : buildingdata;
+
 const defenderOf = (one: Fixture): BattleDefender =>
   one.yard === "sandbox"
     ? {
         type: TYPE_OF[one.kind],
-        buildingdata: sandbox.buildingdata,
+        buildingdata: sandboxBuildings(sandbox.buildingdata, one.without),
         buildinghealthdata: sandbox.buildinghealthdata,
         resources: sandbox.resources,
       }
@@ -255,6 +263,20 @@ const withSiege = (): Fixture => {
   return { ...one, name: "pokey-rush with a jar", log: { ...one.log, events } as FlingLog };
 };
 
+/**
+ * One fixture against a yard with academy levels and no bunker or caged
+ * champion, so the Spurtz its Spurtz Cannons hatch fight at level 4 on both
+ * sides (issue #313).
+ */
+const withSpurtzLevel = (): Fixture => {
+  const one = fixtures.find((fixture) => fixture.name === "burrow-rush")!;
+  return {
+    ...one,
+    name: "burrow-rush with level 4 Spurtz",
+    defence: { bunkers: {}, defenderLevels: { IC1: 4 }, defenderChampions: [] },
+  };
+};
+
 /** The server's battle for the same save (`baseSave.ts`). */
 const serverBattle = (one: Fixture, log: FlingLog, tick: unknown) =>
   replayAbandonedAttack(
@@ -272,7 +294,7 @@ const serverBattle = (one: Fixture, log: FlingLog, tick: unknown) =>
 const FULL = ticks(ATTACK_COUNTDOWN_SECONDS + RETREAT_GRACE_SECONDS);
 
 describe("an honest save writes what its client showed, and never trips the check (#23, C3, C7)", () => {
-  for (const one of [...fixtures, withSiege()]) {
+  for (const one of [...fixtures, withSiege(), withSpurtzLevel()]) {
     test(
       `${one.name}: health, damage, destroyed, traps, loot and the attacker's row, wherever the client stops`,
       () => {

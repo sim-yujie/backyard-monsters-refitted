@@ -1,4 +1,4 @@
-import type { Graphics } from "pixi.js";
+import type { Container, Graphics } from "pixi.js";
 import {
   isSpurtzCannon,
   isTower,
@@ -21,6 +21,7 @@ import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import type { Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import { flyerAltitude } from "./monsterSprites";
+import { ShellSprites } from "./spurtzShell";
 
 /**
  * What a defence tower does on screen while it fights (issue #67): which way
@@ -314,6 +315,8 @@ interface Bullet {
   stepY: number;
   ticks: number;
   landedTick: number | null;
+  /** A Spurtz Cannon shell's size (issue #313), 0.4 to 1. */
+  readonly scale?: number;
 }
 
 interface Beam {
@@ -361,6 +364,11 @@ export interface TowerFxHost {
    * `PROJECTILE.Move` dealt its damage, so the moment the wound is shown.
    */
   landed?(key: number, tick: number): void;
+  /**
+   * Where the Spurtz Cannon's shells are drawn off their sheet (issue #313),
+   * over the same px as the graphics; without it they are plain dots.
+   */
+  shellLayer?(): Container;
 }
 
 export interface ShotLike {
@@ -392,6 +400,7 @@ export class TowerFx {
   private readonly flashes: Flash[] = [];
   private lastTick = 0;
   private nextKey = 1;
+  private readonly shells: ShellSprites | null;
 
   /**
    * `graphics` is redrawn every frame; `origin` turns isometric yard px into
@@ -403,6 +412,9 @@ export class TowerFx {
     private readonly host: TowerFxHost,
     private readonly origin: Point,
   ) {
+    const shellLayer = host.shellLayer?.bind(host);
+    this.shells = shellLayer ? new ShellSprites(shellLayer) : null;
+    if (towers.some((info) => isSpurtzCannon(info.type))) this.shells?.preload();
     for (const info of towers) {
       this.towers.set(info.id, {
         info,
@@ -519,6 +531,7 @@ export class TowerFx {
         stepY: 0,
         ticks: 0,
         landedTick: null,
+        scale: lob.scale,
       });
       return null;
     }
@@ -574,6 +587,7 @@ export class TowerFx {
    */
   standDown(): void {
     this.bullets.length = 0;
+    this.shells?.sweep();
     this.beams.length = 0;
     this.bolts.length = 0;
     this.rails.length = 0;
@@ -591,6 +605,7 @@ export class TowerFx {
   destroy(): void {
     this.towers.clear();
     this.bullets.length = 0;
+    this.shells?.destroy();
     this.beams.length = 0;
     this.bolts.length = 0;
     this.rails.length = 0;
@@ -712,6 +727,7 @@ export class TowerFx {
       keep += 1;
     }
     this.bullets.length = keep;
+    this.shells?.sweep();
   }
 
   private flyBullet(
@@ -778,6 +794,10 @@ export class TowerFx {
       return;
     }
     if (isSpurtzCannon(bullet.type)) {
+      // Flash's shell off its sheet, facing where it flies (`FIREBALL.as:199-203`);
+      // a plain dot until the sheet is in.
+      const heading = Math.atan2(bullet.aim.y - bullet.y, bullet.aim.x - bullet.x) * (180 / Math.PI);
+      if (this.shells?.draw(bullet, bullet.x, bullet.y, heading, bullet.ticks, bullet.scale ?? 1)) return;
       graphics.circle(bullet.x, bullet.y, 3).fill({ color: SPURTZ_SHELL, alpha: 0.95 });
       return;
     }

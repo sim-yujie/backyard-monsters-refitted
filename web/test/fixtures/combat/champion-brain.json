@@ -2,6 +2,10 @@
   "name": "champion-brain",
   "description": "A level 4 Gorgo at power level 3 flung in Hybrid with forty Pokeys and a learned brain that likes towers and the pack and shuns loot (issue #219).",
   "yard": "sandbox",
+  "without": [
+    52,
+    53
+  ],
   "kind": "main",
   "levels": {
     "C1": 6,
@@ -48,77 +52,77 @@
   },
   "expected": {
     "ticks": 9800,
-    "damage": 0.4640504624078119,
+    "damage": 8.40028563362506,
     "destroyed": null,
     "attackloot": {
-      "r1": 0,
-      "r2": 0,
-      "r3": 0,
-      "r4": 0
+      "r1": 9360,
+      "r2": 14040,
+      "r3": 9360,
+      "r4": 14040
     },
     "defenderLoss": {
-      "r1": 0,
-      "r2": 0,
-      "r3": 0,
-      "r4": 0
+      "r1": 10400,
+      "r2": 15600,
+      "r3": 10400,
+      "r4": 15600
     },
     "firedTraps": 0,
-    "destroyedBuildings": 2,
+    "destroyedBuildings": 23,
     "creepsFlung": 40,
-    "creepsKilled": 41,
-    "championHp": 0,
-    "damagedBuildings": 3,
-    "rngDraws": 8413,
+    "creepsKilled": 40,
+    "championHp": 147445.9034305836,
+    "damagedBuildings": 24,
+    "rngDraws": 2334,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "87877ebc1f361456"
+        "digest": "8db57b3ee54ecd20"
       },
       {
         "tick": 1600,
-        "digest": "9004cc8c788b0556"
+        "digest": "99b02447b95253c1"
       },
       {
         "tick": 2400,
-        "digest": "3b7713fb421bacc5"
+        "digest": "5c18b6243e0372a6"
       },
       {
         "tick": 3200,
-        "digest": "b81d62ee1266c3f8"
+        "digest": "56bbdb52fb115b1c"
       },
       {
         "tick": 4000,
-        "digest": "7f98d4b051971fb6"
+        "digest": "23cc15e806dd5fb6"
       },
       {
         "tick": 4800,
-        "digest": "5eee6bef584a45a5"
+        "digest": "089068094303cedb"
       },
       {
         "tick": 5600,
-        "digest": "c3a5f661217025af"
+        "digest": "a61e58df7b157c4d"
       },
       {
         "tick": 6400,
-        "digest": "17ec7b5d729aefd3"
+        "digest": "66037a73bc3a5ce1"
       },
       {
         "tick": 7200,
-        "digest": "fcf99e0cec6072aa"
+        "digest": "f3c5f6938569a325"
       },
       {
         "tick": 8000,
-        "digest": "135ab0af50cb1ffd"
+        "digest": "b2afbc13f0383bc9"
       },
       {
         "tick": 8800,
-        "digest": "1adbf9e5a91fca9b"
+        "digest": "34272952ce2982f8"
       },
       {
         "tick": 9600,
-        "digest": "5bf5b6ae63ec9c44"
+        "digest": "c7c5068e52d5b24c"
       }
     ],
-    "digest": "4e542bffc763cb5d"
+    "digest": "1c4032dd6099e8e3"
   }
 }

@@ -41,6 +41,8 @@ const REPLAY_TIMEOUT_MS = 60_000;
 interface Fixture {
   name: string;
   yard: "sandbox" | Record<string, Record<string, number>>;
+  /** Building ids taken off the sandbox yard (issue #313: its Spurtz Cannons). */
+  without?: number[];
   kind: "main" | "outpost" | "wild";
   /** `buildinghealthdata`, when the yard opens damaged. */
   health?: Record<string, number>;
@@ -64,11 +66,17 @@ const fixture = (name: string) => fixtures.find((one) => one.name === name)!;
 
 const TYPE_OF = { main: "main", outpost: "outpost", wild: "tribe" } as const;
 
+/** The sandbox yard's buildings less the fixture's `without` ids. */
+const sandboxBuildings = <T>(buildingdata: Record<string, T>, without?: readonly number[]): Record<string, T> =>
+  without?.length
+    ? Object.fromEntries(Object.entries(buildingdata).filter(([key]) => !without.includes(Number(key))))
+    : buildingdata;
+
 const defenderOf = (one: Fixture): LootDefender =>
   one.yard === "sandbox"
     ? {
         type: TYPE_OF[one.kind],
-        buildingdata: sandbox.buildingdata,
+        buildingdata: sandboxBuildings(sandbox.buildingdata, one.without),
         buildinghealthdata: sandbox.buildinghealthdata,
         resources: sandbox.resources,
       }

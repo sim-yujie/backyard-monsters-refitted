@@ -142,4 +142,10 @@ describe("battleDefence", () => {
       defenderChampions: [champion],
     });
   });
+
+  it("gives the levels on their own, for a Spurtz Cannon's Spurtz (#313)", () => {
+    expect(battleDefence({ bunkers: {}, defenderLevels: { IC1: 4 }, defenderChampions: [] })).toEqual({
+      defenderLevels: { IC1: 4 },
+    });
+  });
 });

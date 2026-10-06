@@ -444,7 +444,10 @@ export interface BattleOptions {
   readonly declareWar?: boolean;
   /** What each bunker holds, keyed by building id (fidelity note 9). */
   readonly bunkers?: Readonly<Record<number, Roster>>;
-  /** Levels for the defenders a bunker sends out; defaults to the attacker's. */
+  /**
+   * The defender's levels: for the defenders a bunker sends out, which default
+   * to the attacker's, and a Spurtz Cannon's Spurtz, which default to 1.
+   */
   readonly defenderLevels?: MonsterLevels;
   /**
    * The defender's champions in its Champion Cage (issues #195, #310): its

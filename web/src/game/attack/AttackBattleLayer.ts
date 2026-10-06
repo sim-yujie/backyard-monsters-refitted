@@ -619,6 +619,8 @@ export class AttackBattleLayer {
   /** In the overlay, in this order. */
   private readonly effects = new Container();
   private readonly fire = new Graphics();
+  /** The Spurtz Cannon's shells, off their sheet, just over `fire` (issue #313). */
+  private readonly shells = new Container();
   private readonly bars = new Container();
 
   private readonly views = new Map<number, CreepView>();
@@ -694,10 +696,10 @@ export class AttackBattleLayer {
 
     this.depth = this.host.depthSortedLayer();
     this.shadows = this.host.groundShadowLayer?.() ?? this.depth;
-    for (const layer of [this.effects, this.fire, this.bars]) layer.eventMode = "none";
+    for (const layer of [this.effects, this.fire, this.shells, this.bars]) layer.eventMode = "none";
     // Our own children only: the drop ring and anything else already in the
     // overlay stays where it is.
-    this.overlay.addChild(this.effects, this.fire, this.bars);
+    this.overlay.addChild(this.effects, this.fire, this.shells, this.bars);
     this.bombFx = new BombFx(
       {
         air: () => this.airLayer(),
@@ -730,6 +732,7 @@ export class AttackBattleLayer {
       {
         setAnimFrame: (id, layer, frame) => this.host.setAnimFrame(id, layer, frame),
         landed: (key, tick) => this.showReleased(this.ledger.land(key), tick),
+        shellLayer: () => this.shells,
       },
       this.origin,
     );
@@ -955,7 +958,7 @@ export class AttackBattleLayer {
 
     // Only what this added: the overlay and the sorted container are the
     // scene's and the renderer's, and keep their other children.
-    for (const layer of [this.effects, this.fire, this.bars]) {
+    for (const layer of [this.effects, this.fire, this.shells, this.bars]) {
       this.overlay.removeChild(layer);
       layer.destroy({ children: true });
     }
