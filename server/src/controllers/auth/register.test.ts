@@ -52,6 +52,7 @@ mock.module("../../utils/logger.js", () => ({
 }));
 
 const { register } = await import("./register.js");
+const { logger } = await import("../../utils/logger.js");
 
 const VALID = { username: "zz_signup", email: "New.Player@Example.com", password: "hunter22!" };
 
@@ -155,6 +156,16 @@ describe("register", () => {
   test("a sign-up that loses a race for the same username is refused as taken", async () => {
     flushError = new UniqueConstraintViolationException(
       new Error('duplicate key value violates unique constraint "user_username_unique"')
+    );
+    expect(await run(VALID)).toMatchObject({ status: 409, reason: "usernameTaken" });
+  });
+
+  test("a sign-up that loses a race for the same name in another case is refused as taken (#216)", async () => {
+    flushError = new UniqueConstraintViolationException(
+      new Error(
+        'duplicate key value violates unique constraint "user_username_lower_unique" - ' +
+          "Key (lower(username))=(bob) already exists."
+      )
     );
     expect(await run(VALID)).toMatchObject({ status: 409, reason: "usernameTaken" });
   });
@@ -313,5 +324,17 @@ describe("register — the dev-only test yard choice (#217)", () => {
   test("anything but true or false is refused as a broken field", async () => {
     expect(await run({ ...VALID, sandboxStart: "yes" })).toMatchObject({ status: 400, field: "sandboxStart" });
     expect(users).toHaveLength(1);
+  });
+});
+
+describe("the sign-up log line (issue #321)", () => {
+  test("has the user id and a masked email, not the email or the IP", async () => {
+    const info = logger.info as unknown as ReturnType<typeof mock>;
+    info.mockClear();
+    expect((await run(VALID)).status).toBe(200);
+    const line = String(info.mock.calls.at(-1)?.[0]);
+    expect(line).toContain("ne***@example.com");
+    expect(line).not.toContain("new.player@example.com");
+    expect(line).not.toContain("127.0.0.1");
   });
 });

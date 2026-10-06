@@ -19,6 +19,7 @@ import { sameUsername, usernameMatch } from "../../services/user/usernameLookup.
 import { assertUsernameAllowed } from "../../services/user/usernameFilter.js";
 import { verifyTurnstileToken } from "../../services/auth/turnstile.js";
 import { devConfig } from "../../config/GameConfig.js";
+import { maskEmail } from "../../utils/maskEmail.js";
 
 /**
  * Controller to handle user registration.
@@ -89,7 +90,7 @@ export const register: KoaController = async (ctx) => {
 
   const filteredUser = FilterFrontendKeys(user);
   logger.info(
-    `User ${filteredUser.username} registered successfully | ID: ${filteredUser.userid} | Email: ${filteredUser.email} | IP Address: ${ctx.ip}`
+    `User ${filteredUser.username} registered successfully | ID: ${filteredUser.userid} | Email: ${maskEmail(user.email)}`
   );
 
   ctx.status = Status.OK;

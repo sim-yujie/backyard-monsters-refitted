@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import { randomBytes } from "crypto";
 import JWT, { type SignOptions } from "jsonwebtoken";
 
 import { User } from "../../database/models/user.model.js";
@@ -19,8 +20,17 @@ import { Env } from "../../enums/Env.js";
 import { fetchDiscordAvatar } from "../../services/discord/fetchDiscordAvatar.js";
 import { requiresDiscordVerification } from "../../config/AccountConfig.js";
 import { isBot } from "../../services/bots/isBot.js";
+import { sessionTokenKey } from "../../services/auth/sessions.js";
+import { maskEmail } from "../../utils/maskEmail.js";
 
 type SessionLifetime = NonNullable<SignOptions["expiresIn"]>;
+
+/**
+ * Compared against when no account has the email (issue #317), at the cost
+ * players' hashes use, so a wrong email takes as long as a wrong password and
+ * the timing does not say which emails have an account.
+ */
+const missingAccountHash = bcrypt.hash(randomBytes(16).toString("hex"), 10);
 
 /**
  * Authenticates a user using a JWT token.
@@ -36,7 +46,7 @@ type SessionLifetime = NonNullable<SignOptions["expiresIn"]>;
 const authenticateWithToken = async (token: string) => {
   const { user } = verifyJwtToken(token);
 
-  const storedToken = await redis.get(`user-token:${user.sessionType}:${user.email}`);
+  const storedToken = await redis.get(sessionTokenKey(user.sessionType, user.email));
   if (storedToken !== token) throw tokenAuthFailureErr();
 
   let userRecord = await postgres.em.findOne(User, { email: user.email });
@@ -74,10 +84,9 @@ export const login: KoaController = async (ctx) => {
 
   if (!user) {
     user = await postgres.em.findOne(User, { email });
-    if (!user) throw emailPasswordErr();
 
-    const isMatch = await bcrypt.compare(password!, user.password);
-    if (!isMatch) throw emailPasswordErr();
+    const isMatch = await bcrypt.compare(password ?? "", user?.password ?? (await missingAccountHash));
+    if (!user || !isMatch) throw emailPasswordErr();
   }
 
   // A bot's account cannot be entered (issue #235); it reads as a wrong
@@ -113,7 +122,7 @@ export const login: KoaController = async (ctx) => {
     }
   );
 
-  await redis.set(`user-token:${sessionType}:${user.email}`, newToken);
+  await redis.set(sessionTokenKey(sessionType, user.email), newToken);
   postgres.em.persist(user);
   await postgres.em.flush();
 
@@ -124,7 +133,7 @@ export const login: KoaController = async (ctx) => {
     event: "login",
     username: filteredUser.username,
     userid: filteredUser.userid,
-    email: filteredUser.email,
+    email: maskEmail(user.email),
     ip: ctx.ip,
     userAgent,
   });

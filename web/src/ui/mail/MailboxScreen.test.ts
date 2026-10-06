@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { InviteAnswer, InvitePayment, MailApi, MailMessage, MailTarget, Outgoing, SendResult } from "@/api/mail";
 import { MailboxScreen, type MailboxScreenOptions } from "./MailboxScreen";
+import { ApiError } from "@/api/http";
 
 /**
  * The mailbox screen (#193) over a fake mail API: the list, a thread, a
@@ -255,6 +256,23 @@ describe("the mailbox screen", () => {
     expect(api.blocked).toEqual([1]);
     expect(host.querySelector(".mail-status")?.textContent).toBe("Bramblefoot is blocked.");
     expect(rows(host)).toHaveLength(0);
+  });
+
+  it("shows the server's words when a block is refused (#323)", async () => {
+    const api = fakeApi([[message()]], { 1: [message()] });
+    const words = "You have reported a lot of threads. Please wait a while before reporting more.";
+    api.block = vi.fn(async () => {
+      throw new ApiError(words, { status: 429, body: { error: words, message: words, reason: "rateLimited" } });
+    });
+    const { host } = await openScreen(api);
+    click(rows(host)[0]);
+    await settle();
+
+    click(host.querySelector(".mail-block__ask"));
+    click(host.querySelector(".mail-block__yes"));
+    await settle();
+    expect(host.querySelector(".mail-status")?.textContent).toBe(words);
+    expect(rows(host)).toHaveLength(1);
   });
 
   it("drops a note such as 'blocked' once another thread opens", async () => {

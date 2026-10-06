@@ -7,6 +7,16 @@ const LOG_LEVEL = {
   INFO: "info",
   ERROR: "err",
 };
+
+/** The longest client debug message kept in the log. */
+export const MAX_DETAILS_LENGTH = 2000;
+
+/** A field as text, at most `max` characters. */
+const clip = (value: unknown, max: number): string => {
+  const text = String(value);
+  return text.length > max ? `${text.slice(0, max)}... [${text.length - max} more]` : text;
+};
+
 interface DebugData {
   key: string;
   saveid: string;
@@ -29,7 +39,13 @@ export const recordDebugData: KoaController = async (ctx) => {
 
     if (!body.key || !body.saveid || !body.value) throw debugClientErr();
 
-    const properties = { key: body.key, saveid: body.saveid, details: body.value };
+    // Anyone may call this, so each field is cut short: an 8 MB value per
+    // request would otherwise fill the rotating log and push real records out.
+    const properties = {
+      key: clip(body.key, 16),
+      saveid: clip(body.saveid, 64),
+      details: clip(body.value, MAX_DETAILS_LENGTH),
+    };
 
     if (body.key === LOG_LEVEL.ERROR) {
       logger.error("ERROR logged for basesaveid {saveid}. Details: {details}", properties);

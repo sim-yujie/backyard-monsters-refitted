@@ -20,7 +20,8 @@ export const reportMessageThread: KoaController = async (ctx) => {
 
   const thread = await postgres.em.findOne(Thread, { threadid });
 
-  if (!thread) throw mailboxErr();
+  // Only a thread the player is in (a stranger's thread would block a stranger).
+  if (!thread || (thread.userid !== user.userid && thread.targetid !== user.userid)) throw mailboxErr();
 
   // Determine the other user in the thread
   const blockedUserId = thread.userid === user.userid ? thread.targetid : thread.userid;

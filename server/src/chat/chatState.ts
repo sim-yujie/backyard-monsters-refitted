@@ -10,6 +10,8 @@ export interface SocketData {
   userId: number | null;
   displayName: string;
   lastMsgAt: number;
+  /** Closes the connection if it has not logged in in time (`chatLimits.ts`). */
+  loginDeadline?: ReturnType<typeof setTimeout> | null;
 }
 
 /**

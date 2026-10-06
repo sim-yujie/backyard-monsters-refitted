@@ -2,6 +2,7 @@ import { RateLimit } from "koa2-ratelimit";
 import { Env } from "../enums/Env.js";
 import { Status } from "../enums/StatusCodes.js";
 import type { Context } from "koa";
+import { SPAM_LIMITS, type SpamLimit } from "../config/SpamLimitConfig.js";
 
 /**
  * Keys a limiter by account, falling back to IP only for unauthenticated routes.
@@ -225,6 +226,52 @@ export const loginLimiter = RateLimit.middleware({
 });
 
 /**
+ * Rate limits for forgot-password (issue #316): each request sends an email, so
+ * one address can ask for 10 an hour and one email can be sent 3 an hour,
+ * whoever asks. Both answer the same for an email with or without an account.
+ */
+export const forgotPasswordIpLimiter = RateLimit.middleware({
+  interval: { min: 60 },
+  max: 10,
+  prefixKey: "forgot-password-ip",
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { message: "Too many password reset requests. Please try again later." };
+  },
+});
+
+/** The email as it is looked up: trimmed and lowercased, as the schema does. */
+const requestedEmail = (ctx: Context): string => {
+  const email = (ctx.request.body as { email?: unknown } | undefined)?.email;
+  return typeof email === "string" ? email.trim().toLowerCase() : "";
+};
+
+export const forgotPasswordEmailLimiter = RateLimit.middleware({
+  interval: { min: 60 },
+  max: 3,
+  prefixKey: "forgot-password-email",
+  keyGenerator: async (ctx: Context) => `forgot-password-email|${requestedEmail(ctx)}`,
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { message: "Too many password reset requests. Please try again later." };
+  },
+});
+
+/**
+ * Rate limit for setting a new password from a reset link (issue #316) - 10
+ * per 15 minutes per IP. Each try hashes a password.
+ */
+export const resetPasswordLimiter = RateLimit.middleware({
+  interval: { min: 15 },
+  max: 10,
+  prefixKey: "reset-password",
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { message: "Too many password reset attempts. Please try again later." };
+  },
+});
+
+/**
  * Rate limit for auto-attacks (issue #221) - 10 a minute per user, the owner's
  * figure. Each runs a battle replay, and one is in progress at a time besides
  * (`services/base/autoAttack/autoAttack.ts`).
@@ -312,4 +359,75 @@ export const chatReportLimiter = RateLimit.middleware({
     ctx.status = Status.TOO_MANY_REQUESTS;
     ctx.body = { error: "You have sent a lot of reports. Please wait a few minutes.", reason: "rateLimited" };
   },
+});
+
+/**
+ * Builds a spam limiter (issue #323) from its entry in `SPAM_LIMITS`, keyed by
+ * player. Limiters given the same prefix share one count.
+ *
+ * @param {string} prefixKey - Scopes the limiter's counters.
+ * @param {SpamLimit} limit - How many in how many minutes.
+ * @param {(ctx: Context) => void} handler - Answers a refused request.
+ * @param {(ctx: Context) => boolean} skip - True for a request this limiter does not count.
+ */
+const spamLimiter = (
+  prefixKey: string,
+  limit: SpamLimit,
+  handler: (ctx: Context) => void,
+  skip?: (ctx: Context) => boolean
+) =>
+  RateLimit.middleware({
+    interval: { min: limit.minutes },
+    max: limit.max,
+    prefixKey,
+    keyGenerator: byUser(prefixKey),
+    ...(skip && { skip: async (ctx: Context) => skip(ctx) }),
+    handler: async (ctx: Context) => handler(ctx),
+  });
+
+/**
+ * A mail refusal: `message` is what the web mailbox shows (`sendRefusal`),
+ * `error` what Flash reads.
+ */
+const mailRefusal = (text: string) => (ctx: Context) => {
+  ctx.status = Status.TOO_MANY_REQUESTS;
+  ctx.body = { error: text, message: text, reason: "rateLimited" };
+};
+
+/** The `type` of a `sendmessage` body: "message", "trucerequest", ... */
+const mailType = (ctx: Context): unknown => (ctx.request.body as { type?: unknown } | undefined)?.type;
+
+const isTruceRequest = (ctx: Context) => mailType(ctx) === "trucerequest";
+
+const truceRefusal = mailRefusal("You have proposed a lot of truces. Please wait a while before proposing another.");
+
+/** Mail sent or replied to; a truce request is counted by the truce limit instead. */
+export const playerMailLimiter = spamLimiter(
+  "player-mail",
+  SPAM_LIMITS.playerMail,
+  mailRefusal("You have sent a lot of mail. Please wait a while before sending more."),
+  isTruceRequest
+);
+
+/** A truce proposed from a yard (`requesttruce`). */
+export const truceRequestLimiter = spamLimiter("truce-request", SPAM_LIMITS.truceRequest, truceRefusal);
+
+/** A truce proposed in a thread (`sendmessage` "trucerequest"), counted with `truceRequestLimiter`. */
+export const mailTruceRequestLimiter = spamLimiter(
+  "truce-request",
+  SPAM_LIMITS.truceRequest,
+  truceRefusal,
+  (ctx) => !isTruceRequest(ctx)
+);
+
+export const threadReportLimiter = spamLimiter(
+  "thread-report",
+  SPAM_LIMITS.threadReport,
+  mailRefusal("You have reported a lot of threads. Please wait a while before reporting more.")
+);
+
+/** Alliances created and edited, counted together. */
+export const allianceCreateEditLimiter = spamLimiter("alliance-create-edit", SPAM_LIMITS.allianceCreateEdit, (ctx) => {
+  ctx.status = Status.TOO_MANY_REQUESTS;
+  ctx.body = { error: "You have changed alliances a lot. Please wait a while and try again.", reason: "rateLimited" };
 });

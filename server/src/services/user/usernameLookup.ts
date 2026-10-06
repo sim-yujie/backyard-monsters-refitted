@@ -7,8 +7,9 @@ import type { User } from "../../database/models/user.model.js";
  * (issue #213): "Bob" and "bob" read as the same player on the map and in
  * mail, so one of them may not be taken while the other exists.
  *
- * The database's unique index is case-sensitive, so this is the check that
- * holds the rule. An underscore is a LIKE wildcard and is escaped; the other
+ * This check gives the friendly answer; the unique index on lower(username)
+ * (migration 20261006, issue #216) catches two requests that race past it.
+ * An underscore is a LIKE wildcard and is escaped; the other
  * characters a username may hold (letters and digits) match only themselves.
  *
  * @param {string} username - A username that passed the account rules
