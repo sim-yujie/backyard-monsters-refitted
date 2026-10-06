@@ -122,6 +122,13 @@ describe("the game's notices in the mail routes", () => {
     expect(written).toEqual([]);
   });
 
+  test("reporting a thread the player is not in blocks no one", async () => {
+    threads.push({ threadid: 43, userid: OTHER, targetid: 8, messagecount: 1, lastMessage: null });
+    const user = owner();
+    await expect(reportMessageThread(ctxFor(user, { threadid: "43", reason: "spam" }))).rejects.toThrow();
+    expect(user.blockedUsers).toEqual([]);
+  });
+
   test("reporting a player's thread still blocks the player", async () => {
     const user = owner();
     await reportMessageThread(ctxFor(user, { threadid: String(PLAYER_THREAD), reason: "spam" }));
