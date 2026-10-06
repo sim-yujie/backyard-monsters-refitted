@@ -672,6 +672,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   attackerbrains?: unknown;
   /**
+   * Attack modes only: the attacker's academy levels, by monster id, as the
+   * server froze them into this attack at launch after catching their yard up
+   * (issue #201). The battle is fought at these, which the server replays.
+   */
+  attackeracademy?: unknown;
+  /**
    * The own yard's loads (not Inferno): the player's level from their main
    * save's empire points, the level the map shows (#192). The yard routes
    * send it too, read after the action.

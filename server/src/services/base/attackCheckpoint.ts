@@ -257,6 +257,8 @@ export const newCheckpoint = (
   ...(session.attackerlevel !== undefined && { attackerlevel: session.attackerlevel }),
   ...(session.defenderForces && { defenderForces: session.defenderForces }),
   ...(session.championBrains && { championBrains: session.championBrains }),
+  ...(session.attackerAcademy && { attackerAcademy: session.attackerAcademy }),
+  ...(session.declareWar !== undefined && { declareWar: session.declareWar }),
 });
 
 export const serialiseCheckpoint = (checkpoint: AttackCheckpoint): string =>
@@ -311,6 +313,8 @@ export const checkpointSession = (checkpoint: AttackCheckpoint): AttackSession =
   ...(checkpoint.attackerlevel !== undefined && { attackerlevel: checkpoint.attackerlevel }),
   ...(checkpoint.defenderForces && { defenderForces: checkpoint.defenderForces }),
   ...(checkpoint.championBrains && { championBrains: checkpoint.championBrains }),
+  ...(checkpoint.attackerAcademy && { attackerAcademy: checkpoint.attackerAcademy }),
+  ...(checkpoint.declareWar !== undefined && { declareWar: checkpoint.declareWar }),
 });
 
 /**

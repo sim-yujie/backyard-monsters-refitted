@@ -162,7 +162,7 @@ export class Bucket {
 
   /** The academy level a row is priced and drawn at. */
   level(id: string): number {
-    return this.session.target.roster.levels[id] ?? 1;
+    return this.session.levels[id] ?? 1;
   }
 
   /** Housed and not yet flung. */
@@ -182,7 +182,7 @@ export class Bucket {
 
   /** Bucket units one of this monster costs at its level. */
   unitCost(id: string): number {
-    return bucketCost({ [id]: 1 }, this.session.target.roster.levels);
+    return bucketCost({ [id]: 1 }, this.session.levels);
   }
 
   /** The rows above zero plus the champion if picked; already clamped. */
@@ -204,7 +204,7 @@ export class Bucket {
 
   /** Bucket units the composition costs. */
   cost(): number {
-    return bucketCost(this.composition().monsters, this.session.target.roster.levels);
+    return bucketCost(this.composition().monsters, this.session.levels);
   }
 
   /** The flinger's payload: what one drop may cost at most. */
@@ -218,7 +218,7 @@ export class Bucket {
    * (`ATTACK.as:645-653`, #143).
    */
   radius(): number {
-    return dropRadius(flingCost(this.composition(), this.session.target.roster.levels));
+    return dropRadius(flingCost(this.composition(), this.session.levels));
   }
 
   /**

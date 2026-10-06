@@ -30,6 +30,7 @@ import {
   type FlingDrop,
   type FlingEvent,
   type FlingLog,
+  type MonsterLevels,
   type ResourceAmounts,
   type Roster,
   type ChampionStance,
@@ -264,6 +265,22 @@ export const servedBrain = (raw: unknown, t: number): BrainWeights | null => {
   return isZeroBrain(brain) ? null : brain;
 };
 
+/**
+ * The academy levels from the load's `attackeracademy` (issue #201): the ones
+ * the server froze into this attack at launch, after catching the attacker's
+ * yard up, and replays with; null when the load has none (an older server),
+ * so the roster's own stand. The own-yard load's copy can be older: a
+ * training can finish between that load and this attack's launch.
+ */
+export const servedAcademy = (raw: unknown): MonsterLevels | null => {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const levels: Record<string, number> = {};
+  for (const [id, level] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof level === "number" && Number.isSafeInteger(level) && level >= 1) levels[id] = level;
+  }
+  return levels;
+};
+
 /** The load's `attackerlevel`, when it is a whole level of 1 or more. */
 export const servedLevel = (raw: unknown): number | undefined =>
   typeof raw === "number" && Number.isSafeInteger(raw) && raw >= 1 ? raw : undefined;
@@ -347,11 +364,14 @@ export class AttackSession {
   private readonly playerLevel: number | undefined;
   private readonly clockFromFirstDrop: boolean;
   private readonly raid: { readonly hitLimit: number } | null;
+  /** The academy levels the battle is fought at: the load's, else the roster's. */
+  private levels_: MonsterLevels;
 
   constructor(options: AttackSessionOptions) {
     this.target = options.target;
     this.raid = options.raid ?? null;
     this.seed = options.seed ?? mintSeed();
+    this.levels_ = options.target.roster.levels;
     this.playerLevel = options.playerLevel;
     this.clockFromFirstDrop = options.clockFromFirstDrop ?? false;
     this.declareWar_ = options.declareWar ?? false;
@@ -395,6 +415,7 @@ export class AttackSession {
       buildinghealthdata: response.buildinghealthdata ?? null,
     });
     const playerLevel = this.playerLevel ?? servedLevel(response.attackerlevel);
+    this.levels_ = servedAcademy(response.attackeracademy) ?? this.target.roster.levels;
     const defence = battleDefence(parseDefenderForces(response.defenderforces));
     // The raid as `raidFight.ts` fights it: its seed, its hit limit, the
     // player's defence, and nothing of an attacker's.
@@ -406,7 +427,7 @@ export class AttackSession {
     }
     this.battle_ = createBattle(yard, {
       seed: this.seed,
-      levels: this.target.roster.levels,
+      levels: this.levels_,
       declareWar: this.declareWar_,
       ...(playerLevel === undefined ? {} : { playerLevel }),
       // The defence the server replays the battle against (issue #195).
@@ -603,7 +624,7 @@ export class AttackSession {
     }
 
     // The champion's own bucket widens the zone too (`ATTACK.as:645-653`, #143).
-    const bucket = flingCost(input, this.target.roster.levels);
+    const bucket = flingCost(input, this.levels_);
     const event: FlingDrop = {
       kind: "fling",
       t: battle.tick,
@@ -706,6 +727,15 @@ export class AttackSession {
 
   get speed(): AttackSpeed {
     return this.speed_;
+  }
+
+  /**
+   * The attacker's academy levels the battle is fought at: the attack load's
+   * frozen copy once loaded (issue #201, {@link servedAcademy}), the roster's
+   * until then.
+   */
+  get levels(): MonsterLevels {
+    return this.levels_;
   }
 
   /* ── Reading ────────────────────────────────────────────────────────── */

@@ -981,7 +981,7 @@ export class AttackBattleLayer {
   private preloadRoster(): void {
     const roster = this.session.target.roster;
     for (const id of Object.keys(roster.monsters)) {
-      const sheet = spriteFor(id, roster.levels[id] ?? 1);
+      const sheet = spriteFor(id, this.session.levels[id] ?? 1);
       if (sheet) this.textures.preload(sheet);
     }
     for (const champion of roster.champions) {

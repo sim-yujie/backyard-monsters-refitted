@@ -134,6 +134,22 @@ export interface LootDefender {
   height?: number;
 }
 
+/**
+ * The academy the attack is fought at: the levels the attack load froze into
+ * the session and served to the client (issue #201), as an `academy` field
+ * reads, or the attacker's row's own for a session minted before them.
+ *
+ * @param session - The attack session the save was bound to.
+ * @param academy - The attacker's `academy` as it stands now.
+ */
+export const foughtAcademy = (
+  session: Pick<AttackSession, "attackerAcademy"> | null | undefined,
+  academy: JsonObject | null | undefined
+): JsonObject | null =>
+  session?.attackerAcademy
+    ? Object.fromEntries(Object.entries(session.attackerAcademy).map(([id, level]) => [id, { level }]))
+    : (academy ?? null);
+
 /** What the replay needs of the attacker's main save, as it stood before this save. */
 export interface LootAttacker {
   academy?: JsonObject | null;
@@ -383,7 +399,7 @@ export const lootReplayInput = ({
     },
     pool: session.defenderResources ?? poolAmounts(defender.resources),
     attacker: {
-      academy: attacker.academy ?? null,
+      academy: foughtAcademy(session, attacker.academy),
       champion: attacker.champion ?? null,
       catapult: attacker.catapult ?? null,
       buildingdata: attacker.buildingdata ?? null,

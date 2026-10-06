@@ -1,0 +1,9 @@
+{
+  "name": "empty-yard-to-end",
+  "fixture": "empty-yard",
+  "kind": "outpost",
+  "attacker": {"monsters":{"C4":12},"academy":{},"champion":[{"t":5,"l":5,"hp":62000,"pl":2,"ft":0,"fd":0,"fb":0,"status":0},{"t":1,"l":4,"hp":190000,"pl":3,"ft":0,"fd":0,"fb":0,"status":0},{"t":4,"l":6,"hp":179000,"pl":3,"ft":0,"fd":0,"fb":0,"status":0},{"t":3,"l":6,"hp":44000,"pl":3,"ft":0,"fd":0,"fb":0,"status":0}],"siege":{"jars":{"quantity":2},"decoy":{"quantity":1}},"catapult":5,"resources":{"r1":50000000,"r2":50000000,"r3":50000000,"r4":50000000}},
+  "declareWar": false,
+  "endReason": "destroyed",
+  "save": {"tick":1081,"damage":100,"destroyed":1,"buildinghealthdata":{"0":0,"1":0},"buildingdata":{},"attackloot":{"r1":3221,"r2":0,"r3":0,"r4":0},"resources":{"r1":-2255,"r2":0,"r3":0,"r4":0},"attackerchampion":[{"t":5,"l":5,"hp":62000,"pl":2,"ft":0,"fd":0,"fb":0,"status":0},{"t":1,"l":4,"hp":190000,"pl":3,"ft":0,"fd":0,"fb":0,"status":0},{"t":4,"l":6,"hp":179000,"pl":3,"ft":0,"fd":0,"fb":0,"status":0},{"t":3,"l":6,"hp":44000,"pl":3,"ft":0,"fd":0,"fb":0,"status":0}],"attackersiege":{"jars":{"quantity":2},"decoy":{"quantity":1}},"attackreport":"0:01 Flung 12 Fink at (400, 400)\nResult: 100% damage, 2 buildings destroyed, looted 3221 twigs, 0 pebbles, 0 putty, 0 goo.","flinglog":{"v":1,"seed":5,"events":[{"kind":"fling","t":80,"x":400,"y":400,"r":100,"monsters":{"C4":12}}]}}
+}

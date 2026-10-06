@@ -228,8 +228,24 @@ export const PENDING_GAVE_UP: SaveFailure = {
 export const isReplayPending = (caught: unknown): boolean =>
   caught instanceof ApiError && bindingReason(caught) === "replayTimeout";
 
-/** Turns a failed save into what the panel says (§4.7). */
-export const describeSaveFailure = (caught: unknown): SaveFailure => {
+/**
+ * The panel's words when the server's replay of the battle did not bear the
+ * save out (`attackReplayRejectedErr`, reason `replayMismatch`, issue #201).
+ * Nothing was written. On Map Room 2 the server lands its own replay of the
+ * attack once its window closes (the finaliser, from the last checkpoint); a
+ * Map Room 1 tribe has no finaliser, so nothing of the attack lands.
+ */
+export const REPLAY_MISMATCH_MESSAGE =
+  "The server replayed this battle and got a different result from your screen, so it did not take this one.";
+export const REPLAY_MISMATCH_SETTLES = "It will settle the attack from its own replay in a few minutes.";
+export const REPLAY_MISMATCH_LOST = "Nothing from this attack was saved.";
+
+/**
+ * Turns a failed save into what the panel says (§4.7).
+ *
+ * @param isTribe - The attack was on a Map Room 1 tribe, which no finaliser lands.
+ */
+export const describeSaveFailure = (caught: unknown, isTribe = false): SaveFailure => {
   if (caught instanceof NetworkError) {
     return { message: "Could not reach the server to save the result.", canRetry: true };
   }
@@ -240,6 +256,12 @@ export const describeSaveFailure = (caught: unknown): SaveFailure => {
         message:
           "This attack expired before it could be saved: the server accepts a result " +
           `for ${SESSION_WINDOW_SECONDS / 60} minutes after an attack starts.`,
+        canRetry: false,
+      };
+    }
+    if (reason === "replayMismatch") {
+      return {
+        message: `${REPLAY_MISMATCH_MESSAGE} ${isTribe ? REPLAY_MISMATCH_LOST : REPLAY_MISMATCH_SETTLES}`,
         canRetry: false,
       };
     }
@@ -444,7 +466,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
      */
     const showFailure = (caught: unknown): void => {
       if (!isReplayPending(caught)) {
-        show({ kind: "failed", failure: describeSaveFailure(caught) });
+        show({ kind: "failed", failure: describeSaveFailure(caught, isTribe) });
         return;
       }
       if (!isTribe) {
