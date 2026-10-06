@@ -53,6 +53,7 @@ mock.module("../../utils/logger.js", () => ({
 
 const { forgotPassword, FORGOT_PASSWORD_SENT } = await import("./forgotPassword.js");
 const { resetPassword } = await import("./resetPassword.js");
+const { hashResetToken } = await import("../../services/auth/resetToken.js");
 
 const EMAIL = "player@example.com";
 let savedSecret: string | undefined;
@@ -126,7 +127,7 @@ describe("forgot password answers the same whether or not the account exists", (
 describe("reset password and bot accounts", () => {
   const resetWith = async () => {
     const token = JWT.sign({ user: { email: EMAIL } }, process.env.SECRET_KEY!, { expiresIn: "20m" });
-    user!.resetToken = token;
+    user!.resetToken = hashResetToken(token);
     return call(resetPassword, { password: "NewPassword1!", token });
   };
 
@@ -147,7 +148,7 @@ describe("reset password and bot accounts", () => {
 describe("a reset logs the account out everywhere (issue #318)", () => {
   test("the game, launcher and chat tokens are dropped", async () => {
     const token = JWT.sign({ user: { email: EMAIL } }, process.env.SECRET_KEY!, { expiresIn: "20m" });
-    user!.resetToken = token;
+    user!.resetToken = hashResetToken(token);
     expect((await call(resetPassword, { password: "NewPassword1!", token })).status).toBe(200);
     expect(deletedKeys.sort()).toEqual([`chat-token:7`, `user-token:game:${EMAIL}`, `user-token:launcher:${EMAIL}`]);
   });
@@ -155,8 +156,35 @@ describe("a reset logs the account out everywhere (issue #318)", () => {
   test("a refused reset logs no one out", async () => {
     botIds = [7];
     const token = JWT.sign({ user: { email: EMAIL } }, process.env.SECRET_KEY!, { expiresIn: "20m" });
-    user!.resetToken = token;
+    user!.resetToken = hashResetToken(token);
     expect((await call(resetPassword, { password: "NewPassword1!", token })).status).toBe(401);
     expect(deletedKeys).toEqual([]);
+  });
+});
+
+describe("reset tokens are stored hashed (issue #321)", () => {
+  test("forgot-password stores the token's hash, never the token", async () => {
+    await call(forgotPassword, { email: EMAIL });
+    const stored = user!.resetToken as string;
+    expect(stored).toMatch(/^[0-9a-f]{64}$/);
+    expect(stored.startsWith("eyJ")).toBe(false);
+  });
+
+  test("the emailed token resets the password once; the stored hash itself does not", async () => {
+    const token = JWT.sign({ user: { email: EMAIL } }, process.env.SECRET_KEY!, { expiresIn: "20m" });
+    user!.resetToken = hashResetToken(token);
+
+    const leaked = await call(resetPassword, { password: "NewPassword1!", token: user!.resetToken as string });
+    expect(leaked.status).toBe(401);
+
+    expect((await call(resetPassword, { password: "NewPassword1!", token })).status).toBe(200);
+    expect(user!.resetToken).toBe("");
+    expect((await call(resetPassword, { password: "Another1!", token })).status).toBe(401);
+  });
+
+  test("a token stored in plain text before the change no longer works", async () => {
+    const token = JWT.sign({ user: { email: EMAIL } }, process.env.SECRET_KEY!, { expiresIn: "20m" });
+    user!.resetToken = token;
+    expect((await call(resetPassword, { password: "NewPassword1!", token })).status).toBe(401);
   });
 });

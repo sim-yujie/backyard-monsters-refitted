@@ -10,6 +10,7 @@ import { User } from "../../database/models/user.model.js";
 import { ForgotPasswordSchema } from "../../schemas/AuthSchemas.js";
 import { transporter } from "../../config/MailConfig.js";
 import { isBot } from "../../services/bots/isBot.js";
+import { hashResetToken } from "../../services/auth/resetToken.js";
 
 /**
  * The one answer to a well-formed request (issue #317), whether or not an
@@ -46,9 +47,10 @@ const sendResetEmail = async (email: string, token: string): Promise<void> => {
 /**
  * Controller to handle forgot password functionality.
  *
- * For an email with an account, generates a short-lived JWT token, stores it
- * against the account, and emails the reset link. Every well-formed request
- * gets the same answer (issue #317), and the email is sent without the
+ * For an email with an account, generates a short-lived JWT token, stores its
+ * hash against the account (issue #321), and emails the reset link. Every
+ * well-formed request gets the same answer (issue #317), and the email is sent
+ * without the
  * request waiting for it, so neither the answer nor its timing says whether
  * the account exists. A bot's account (issue #235) is treated as no account.
  *
@@ -73,7 +75,7 @@ export const forgotPassword: KoaController = async (ctx) => {
         expiresIn: "20m",
       });
 
-      user.resetToken = token;
+      user.resetToken = hashResetToken(token);
       postgres.em.persist(user);
       await postgres.em.flush();
 

@@ -21,6 +21,7 @@ import { fetchDiscordAvatar } from "../../services/discord/fetchDiscordAvatar.js
 import { requiresDiscordVerification } from "../../config/AccountConfig.js";
 import { isBot } from "../../services/bots/isBot.js";
 import { sessionTokenKey } from "../../services/auth/sessions.js";
+import { maskEmail } from "../../utils/maskEmail.js";
 
 type SessionLifetime = NonNullable<SignOptions["expiresIn"]>;
 
@@ -132,7 +133,7 @@ export const login: KoaController = async (ctx) => {
     event: "login",
     username: filteredUser.username,
     userid: filteredUser.userid,
-    email: filteredUser.email,
+    email: maskEmail(user.email),
     ip: ctx.ip,
     userAgent,
   });
