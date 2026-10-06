@@ -37,8 +37,9 @@ import {
  *   similar set for the good-defence popup (`WMATTACK.as:829-835`); the
  *   shared rule is used so a raid and an attack read one yard alike.
  *
- * The raid is a main-yard defence (§6.2 item 5): kind `main`, the raid's hit
- * limit, the player's own bunkers, academy levels and caged champion.
+ * The raid is a main-yard defence (§6.2 item 5): kind `main`, the player's own
+ * bunkers, academy levels (the raiders fight at them too, §5.4) and caged
+ * champion; no hit limit (owner decision, 2026-10-06).
  */
 
 /** What the fight is handed: the yard frozen at the fight's start, and the plan. */
@@ -47,8 +48,6 @@ export interface RaidFightInput {
   readonly buildinghealthdata?: BuildingHealthMap | null;
   readonly resources?: Partial<ResourceAmounts> | null;
   readonly log: RaidLog;
-  /** Building hits before a raider leaves. */
-  readonly hitLimit: number;
   /** The player's bunkers, academy levels and caged champion (`defenderForcesOf`). */
   readonly defence?: DefenderForces | null;
 }
@@ -97,7 +96,7 @@ export const fightRaid = (input: RaidFightInput): RaidFightOutcome => {
   const battle = createBattle(yard, {
     seed: input.log.seed,
     ...battleDefence(input.defence),
-    raid: { hitLimit: input.hitLimit },
+    raid: true,
   });
   // A raid's waves all land at once (`raidPlan.ts`); kept in log order, as the replay's sort keeps ties.
   const events = input.log.events

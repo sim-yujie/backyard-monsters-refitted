@@ -1,6 +1,6 @@
 {
   "name": "raid-east",
-  "description": "A wild monster raid on the sandbox yard: C2 tanks, C4 damage dealers and C3 looters at level 1 from off the east side, a hit limit of 30, the bunkers defending; ends when no raider is left (issue #226).",
+  "description": "A wild monster raid on the sandbox yard: C2 tanks, C4 damage dealers and C3 looters at the defender's own academy levels (C4 untrained, level 1) from off the east side, no hit limit, the bunkers defending; ends when no raider is left (issue #226, owner decision 2026-10-06).",
   "yard": "sandbox",
   "kind": "main",
   "levels": {},
@@ -31,9 +31,7 @@
       "C15": 1
     }
   },
-  "raid": {
-    "hitLimit": 30
-  },
+  "raid": true,
   "log": {
     "v": 1,
     "seed": 22601,
@@ -71,8 +69,8 @@
     ]
   },
   "expected": {
-    "ticks": 4234,
-    "damage": 0.7615355553000285,
+    "ticks": 5030,
+    "damage": 1.2346206284803856,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -87,35 +85,39 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 2,
+    "destroyedBuildings": 3,
     "creepsFlung": 55,
-    "creepsKilled": 54,
+    "creepsKilled": 55,
     "championHp": null,
-    "damagedBuildings": 3,
-    "rngDraws": 37993,
+    "damagedBuildings": 6,
+    "rngDraws": 37254,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "5bb9b0b4ea4ab39e"
+        "digest": "5e06be6b2419da81"
       },
       {
         "tick": 1600,
-        "digest": "9e2f379ac7799984"
+        "digest": "51c2ef6857641ae6"
       },
       {
         "tick": 2400,
-        "digest": "569839604fa47c82"
+        "digest": "d1e6d82b39e2a875"
       },
       {
         "tick": 3200,
-        "digest": "19c8c749197c814f"
+        "digest": "b03caf54fbb362be"
       },
       {
         "tick": 4000,
-        "digest": "25c5ea94eceb8836"
+        "digest": "e6afcf072293aa21"
+      },
+      {
+        "tick": 4800,
+        "digest": "097ee795f40ea7e7"
       }
     ],
-    "digest": "41ff5d6659f6fcc8",
+    "digest": "cd1ffa99bda6b237",
     "bunkerLosses": {
       "83": {
         "C1": 10,

@@ -32,7 +32,6 @@ const startAnswer = (view: RaidView): RaidStartResponse =>
     fight: {
       seed: 1,
       events: [],
-      hitLimit: 30,
       tick: 400,
       seconds: 5,
       yard: { buildingdata: {}, buildinghealthdata: {}, resources: {} },
@@ -135,7 +134,7 @@ describe("RaidYardFlow", () => {
     await settle();
     expect(t.api.start).toHaveBeenCalledWith("r1");
     expect(t.fight).toHaveBeenCalledTimes(1);
-    expect(t.fight.mock.calls[0]![0].fight.hitLimit).toBe(30);
+    expect(t.fight.mock.calls[0]![0].fight.seed).toBe(1);
     expect(t.watch.current?.phase).toBe("fighting");
     t.flow.stop();
   });

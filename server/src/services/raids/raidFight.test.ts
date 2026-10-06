@@ -27,7 +27,7 @@ const BUILDINGDATA: CombatBuildingDataMap = Object.fromEntries(
 const fightFor = (seed: number) => {
   const plan = planRaid({ buildingdata: BUILDINGDATA, resources: SANDBOX.resources, level: 20, preference: 1, seed });
   if (!plan) throw new Error("the sandbox yard always has a raid");
-  const input = { buildingdata: BUILDINGDATA, resources: SANDBOX.resources, log: plan.log, hitLimit: plan.hitLimit };
+  const input = { buildingdata: BUILDINGDATA, resources: SANDBOX.resources, log: plan.log };
   return { plan, input, outcome: fightRaid(input) };
 };
 

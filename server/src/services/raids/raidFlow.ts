@@ -87,7 +87,6 @@ export interface RaidStart {
   readonly fight: {
     readonly seed: number;
     readonly events: readonly RaidEvent[];
-    readonly hitLimit: number;
     /** The tick the server's fight ended on. */
     readonly tick: number;
     /** Its length at 1x, seconds. */
@@ -230,7 +229,6 @@ export const raidOnPing = async (
     seed,
     bearing: plan.bearing,
     army: JSON.stringify(plan.army),
-    hitLimit: plan.hitLimit,
   });
   return raidView(raid);
 };
@@ -381,7 +379,6 @@ export const startRaid = async (em: EntityManager, user: User, raidId: unknown, 
         buildinghealthdata: yard.buildinghealthdata,
         resources: yard.resources as RaidFightInput["resources"],
         log: plan.log,
-        hitLimit: plan.hitLimit,
         defence,
       });
     } catch (err) {
@@ -410,7 +407,6 @@ export const startRaid = async (em: EntityManager, user: User, raidId: unknown, 
       fight: {
         seed: plan.log.seed,
         events: plan.log.events,
-        hitLimit: plan.hitLimit,
         tick: outcome.ticks,
         seconds: fightSeconds,
         yard,
@@ -502,7 +498,6 @@ export const finishRaid = async (em: EntityManager, user: User, raidId: unknown,
     seed: raid.seed,
     bearing: plan.bearing,
     army: JSON.stringify(plan.army),
-    hitLimit: plan.hitLimit,
     startedAt: raid.startedAt,
     tick: outcome.ticks,
     digest: outcome.digest,

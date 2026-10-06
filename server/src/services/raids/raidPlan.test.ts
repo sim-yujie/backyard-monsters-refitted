@@ -68,10 +68,6 @@ describe("planRaid", () => {
     expect(plan(42)).toEqual(plan(42));
   });
 
-  test("the hit limit follows the choice: 50 more often, 30 the same, 20 less often", () => {
-    expect([1, 0, -1].map((preference) => plan(7, { preference: preference as -1 | 0 | 1 }).hitLimit)).toEqual([50, 30, 20]);
-  });
-
   test("the choice scales the army", () => {
     const size = (preference: -1 | 0 | 1) =>
       Object.values(plan(seedFor(Tribe.LEGIONNAIRE), { preference }).army).reduce((sum, count) => sum + count, 0);
@@ -135,16 +131,15 @@ describe("planRaid", () => {
     expect(planRaid({ buildingdata: {}, level: 20, preference: 0, seed: 1 })).toBeNull();
   });
 
-  test("the engine fights the planned log: every raider lands, and the raid ends before its cap", () => {
+  test("the engine fights the planned log: every raider lands, and the raid ends by its cap", () => {
     const planned = plan(seedFor(Tribe.LEGIONNAIRE));
     const outcome = replayRaid({
       buildingdata: SANDBOX.buildingdata,
       resources: SANDBOX.resources,
       log: planned.log,
-      hitLimit: planned.hitLimit,
     });
     expect(outcome.creepsFlung).toBe(Object.values(planned.army).reduce((sum, count) => sum + count, 0));
     expect(outcome.damage).toBeGreaterThan(0);
-    expect(outcome.ticks).toBeLessThan(ticks(RAID_MAX_SECONDS));
+    expect(outcome.ticks).toBeLessThanOrEqual(ticks(RAID_MAX_SECONDS));
   });
 });

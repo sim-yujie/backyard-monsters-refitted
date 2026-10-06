@@ -229,11 +229,11 @@ export interface AttackSessionOptions {
   readonly clockFromFirstDrop?: boolean;
   /**
    * A wild monster raid on the player's own yard (issue #226 WP4): the
-   * battle is fought as the server fought it (`raidFight.ts`), a raid with
-   * this hit limit, a main yard, raiders at level 1 and no countdown, and
-   * played back from the server's waves (`playScript`).
+   * battle is fought as the server fought it (`raidFight.ts`), a main yard,
+   * raiders at the defender's own academy levels and no countdown or hit
+   * limit, and played back from the server's waves (`playScript`).
    */
-  readonly raid?: { readonly hitLimit: number };
+  readonly raid?: boolean;
 }
 
 /** A random 32-bit seed for a battle the server has not seeded (§7, Q1). */
@@ -363,13 +363,13 @@ export class AttackSession {
   private lastNotifiedQuarter = -1;
   private readonly playerLevel: number | undefined;
   private readonly clockFromFirstDrop: boolean;
-  private readonly raid: { readonly hitLimit: number } | null;
+  private readonly raid: boolean;
   /** The academy levels the battle is fought at: the load's, else the roster's. */
   private levels_: MonsterLevels;
 
   constructor(options: AttackSessionOptions) {
     this.target = options.target;
-    this.raid = options.raid ?? null;
+    this.raid = options.raid ?? false;
     this.seed = options.seed ?? mintSeed();
     this.levels_ = options.target.roster.levels;
     this.playerLevel = options.playerLevel;
@@ -420,7 +420,7 @@ export class AttackSession {
     // The raid as `raidFight.ts` fights it: its seed, its hit limit, the
     // player's defence, and nothing of an attacker's.
     if (this.raid) {
-      this.battle_ = createBattle(yard, { seed: this.seed, ...defence, raid: { hitLimit: this.raid.hitLimit } });
+      this.battle_ = createBattle(yard, { seed: this.seed, ...defence, raid: true });
       this.phase = "loaded";
       this.notify();
       return;
@@ -546,7 +546,7 @@ export class AttackSession {
 
   /** Whether this session plays a wild monster raid on the player's own yard (#226). */
   get raiding(): boolean {
-    return this.raid !== null;
+    return this.raid;
   }
 
   /** Whether this session plays a battle back rather than fighting one. */

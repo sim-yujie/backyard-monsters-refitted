@@ -55,7 +55,7 @@ interface Fixture {
   defence?: Record<string, unknown>;
   log: FlingLog;
   /** Set on a wild monster raid's fixture (#226). */
-  raid?: { hitLimit: number };
+  raid?: boolean;
 }
 
 const fixtures: Fixture[] = readdirSync(FIXTURE_DIR)

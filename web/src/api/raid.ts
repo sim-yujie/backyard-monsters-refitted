@@ -43,7 +43,6 @@ export interface RaidView {
 export interface RaidFight {
   readonly seed: number;
   readonly events: readonly RaidEvent[];
-  readonly hitLimit: number;
   /** The tick the server's fight ended on. */
   readonly tick: number;
   /** Its length at 1x, seconds. */
