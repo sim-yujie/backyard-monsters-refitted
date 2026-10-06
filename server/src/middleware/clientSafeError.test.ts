@@ -12,10 +12,11 @@ mock.module("../utils/logger.js", () => ({
 }));
 
 const { ClientSafeError, ErrorInterceptor } = await import("./clientSafeError.js");
+const { BaseLoadSchema } = await import("../schemas/BaseLoadSchema.js");
 
 interface Body {
   error: string;
-  errorDetails: { internalInfo?: string; message: string; status: number };
+  errorDetails: { internalInfo?: string; message: string; status: number; data: Record<string, unknown> };
 }
 
 let savedEnv: string | undefined;
@@ -72,5 +73,36 @@ describe("ErrorInterceptor", () => {
     const ctx = await failWith(refusal);
     expect(ctx.status).toBe(409);
     expect(ctx.body.errorDetails.internalInfo).toBeUndefined();
+  });
+});
+
+describe("a request body that fails its route's schema (#224)", () => {
+  const schemaError = (body: unknown): unknown => {
+    try {
+      BaseLoadSchema.parse(body);
+    } catch (err) {
+      return err;
+    }
+    throw new Error("the body passed the schema");
+  };
+
+  test("answers 400 naming the field, not 500", async () => {
+    const ctx = await failWith(schemaError({ userid: "1", type: "build" }));
+
+    expect(ctx.status).toBe(400);
+    expect(ctx.body.error).toStartWith("Invalid request: baseid: ");
+    expect(ctx.body.errorDetails.data).toEqual({ reason: "invalidRequest", field: "baseid" });
+  });
+
+  test("names whichever field is wrong", async () => {
+    const ctx = await failWith(schemaError({ userid: "1", baseid: "1", type: "build", attackData: 5 }));
+
+    expect(ctx.status).toBe(400);
+    expect(ctx.body.errorDetails.data.field).toBe("attackData");
+  });
+
+  test("any other unexpected error is still a 500", async () => {
+    const ctx = await failWith(new TypeError("boom"));
+    expect(ctx.status).toBe(500);
   });
 });

@@ -1,4 +1,5 @@
 import type { Context, Next } from "koa";
+import { ZodError } from "zod";
 import { logger } from "../utils/logger.js";
 import { Status } from "../enums/StatusCodes.js";
 import { Env } from "../enums/Env.js";
@@ -61,6 +62,25 @@ export class ClientSafeError extends Error {
 }
 
 /**
+ * A request whose body failed its route's schema (issue #224): a 400 naming
+ * the first field at fault, never a 500. Routes parse their bodies with
+ * `Schema.parse`, so this one mapping covers every one of them.
+ *
+ * @param err - The schema's error.
+ */
+export const invalidRequestErr = (err: ZodError): ClientSafeError => {
+  const [issue] = err.issues;
+  const field = issue?.path.map(String).join(".") ?? "";
+  const detail = issue?.message ?? "the request is not valid";
+  return new ClientSafeError({
+    message: field ? `Invalid request: ${field}: ${detail}` : `Invalid request: ${detail}`,
+    status: Status.BAD_REQUEST,
+    data: { reason: "invalidRequest", ...(field && { field }) },
+    isClientFriendly: true,
+  });
+};
+
+/**
  * Middleware to intercept errors and hide them from the user unless they are specifically thrown as ClientSafeErrors.
  *
  * @param {Context} ctx - The Koa context object.
@@ -70,6 +90,19 @@ export const ErrorInterceptor = async (ctx: Context, next: Next) => {
   try {
     await next();
   } catch (err) {
+    // A body that fails its schema is the caller's mistake, not the server's.
+    if (err instanceof ZodError) {
+      const refusal = invalidRequestErr(err);
+      logger.warn("Invalid request on {method} {path}: {message}", {
+        method: ctx.method,
+        path: ctx.path,
+        message: refusal.message,
+      });
+      ctx.status = refusal.status;
+      ctx.body = { error: refusal.message, errorDetails: refusal.toSafeJson() };
+      return;
+    }
+
     // Check if the error is client safe
     const isSafe = err instanceof ClientSafeError;
     let clientError = isSafe

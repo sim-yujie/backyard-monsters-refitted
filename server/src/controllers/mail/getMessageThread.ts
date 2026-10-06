@@ -1,3 +1,4 @@
+import { ZodError } from "zod";
 import { Status } from "../../enums/StatusCodes.js";
 import { mailboxErr } from "../../errors/errors.js";
 import { User } from "../../database/models/user.model.js";
@@ -70,6 +71,8 @@ export const getMessageThread: KoaController = async (ctx) => {
     ctx.status = Status.OK;
     ctx.body = { error: 0, thread };
   } catch (err) {
+    // A body that fails its schema answers 400 globally (issue #224).
+    if (err instanceof ZodError) throw err;
     throw mailboxErr();
   }
 };
