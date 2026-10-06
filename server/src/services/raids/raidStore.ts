@@ -112,6 +112,17 @@ export const openRaid = (userid: number, raid: OpenRaid, now: number): Promise<b
   writeRaid(userid, { ...raid, phase: "warning" }, now, "NX");
 
 /**
+ * Opens a raid already in its fighting phase, unless one is open already: the
+ * Trojan Horse's spring, which has no warning (`docs/design/trojan-horse.md`
+ * §5, §7, issue #326). Two springs at once open one fight, the same way two
+ * presence pings open one warning.
+ *
+ * @returns True when this raid is now the open one.
+ */
+export const openFightingRaid = (userid: number, raid: OpenRaid, now: number): Promise<boolean> =>
+  writeRaid(userid, raid, now, "NX");
+
+/**
  * Rewrites the open raid ("Engage now", "Prepare defences", the fight's
  * start), its life recomputed for its phase. Never brings back a raid that
  * has gone in the meantime.

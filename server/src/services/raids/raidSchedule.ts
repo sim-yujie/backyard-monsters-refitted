@@ -62,8 +62,16 @@ export interface RaidRecord {
   /** The yard's health at the end, 0 to 1, over the damage percentage's buildings (`raidFight.ts`). */
   readonly health: number;
   readonly stolen: Readonly<Record<string, number>>;
-  /** Shiny paid for a good defence, 0 or 10. */
+  /** Shiny paid for a good defence, 0 or 10; always 0 for the Trojan Horse. */
   readonly shiny: number;
+  /**
+   * Whether the health share reached {@link GOOD_DEFENCE_SHARE}
+   * (`raidLanding.ts`), kept apart from `shiny` because the Trojan Horse
+   * pays none even when well defended (`docs/design/trojan-horse.md` §6). A
+   * record from before this field was added falls back to `shiny > 0`
+   * (`landedResult`).
+   */
+  readonly defended?: boolean;
 }
 
 /** `aiattacks` as the server keeps it (design §8.1). */
@@ -123,6 +131,7 @@ const readRecord = (value: unknown): RaidRecord | null => {
     health,
     stolen,
     shiny: whole(value.shiny) ?? 0,
+    ...(typeof value.defended === "boolean" ? { defended: value.defended } : {}),
   };
 };
 
@@ -230,6 +239,28 @@ export const recordRaidFinished = (schedule: RaidSchedule, record: RaidRecord): 
   lastRaidId: record.id,
   recent: [record, ...schedule.recent].slice(0, RECENT_RAIDS_KEPT),
 });
+
+/** `aiattacks.recent`'s tribe for a landed Trojan Horse fight (`docs/design/trojan-horse.md` §6, §7). */
+export const TROJAN_TRIBE = "wild";
+
+/**
+ * A landed Trojan Horse fight (design §6, Flash's `WMATTACK.as:964-972`):
+ * unlike {@link recordRaidFinished}, `lastattack` is untouched and any
+ * planned `nextAttack` is dropped rather than retimed — only the session
+ * count resets, as if no raid had happened at all — and the once-per-account
+ * flag is marked done. A cancelled spring never comes here, so the horse
+ * stays and can be sprung again (owner, §5).
+ */
+export const recordTrojanFinished = (schedule: RaidSchedule, record: RaidRecord, now: number): RaidSchedule => {
+  const { nextAttack: _nextAttack, ...withoutNext } = withoutFightLock(schedule);
+  return {
+    ...withoutNext,
+    sessionsSinceLastAttack: 0,
+    lastRaidId: record.id,
+    recent: [record, ...schedule.recent].slice(0, RECENT_RAIDS_KEPT),
+    ...(schedule.trojan ? { trojan: { ...schedule.trojan, doneAt: now } } : {}),
+  };
+};
 
 /** The yard locked for a raid's fight (`raidLock.ts`). */
 export const withFightLock = (schedule: RaidSchedule, fight: RaidFightLock): RaidSchedule => ({ ...schedule, fight });

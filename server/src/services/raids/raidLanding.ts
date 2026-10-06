@@ -1,5 +1,6 @@
 import type { Save } from "../../database/models/save.model.js";
 import type { ResourceAmounts } from "../../game-rules/combat/index.js";
+import { TROJAN_HORSE_TYPE } from "../../game-data/buildingFootprints.js";
 import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { buildingDataHandler } from "../../controllers/base/save/handlers/buildingDataHandler.js";
@@ -11,7 +12,14 @@ import { landHousingLoss, lostCount } from "../base/combat/housingLoss.js";
 import { storedDamage } from "../base/storedDamage.js";
 import { damagedBuildings } from "../yard/repair.js";
 import type { RaidFightOutcome } from "./raidFight.js";
-import { readSchedule, recordRaidFinished, scheduleColumn, type RaidRecord } from "./raidSchedule.js";
+import {
+  readSchedule,
+  recordRaidFinished,
+  recordTrojanFinished,
+  scheduleColumn,
+  TROJAN_TRIBE,
+  type RaidRecord,
+} from "./raidSchedule.js";
 
 /**
  * Applying a wild monster raid's outcome to the player's yard at finish (#226
@@ -43,6 +51,14 @@ import { readSchedule, recordRaidFinished, scheduleColumn, type RaidRecord } fro
  * - **Schedule**: the wait starts again from the fight's start, and the raid
  *   is kept in `recent` (`recordRaidFinished`), which also lifts the yard's
  *   fight lock.
+ *
+ * The Trojan Horse's fight lands the same way (`tribe === "wild"`,
+ * {@link TROJAN_TRIBE}, `docs/design/trojan-horse.md` §6, issue #326), with
+ * three differences: no Shiny and no "survive a tribe attack" credit even at
+ * a good defence; the horse (building 27) is gone from `buildingdata`
+ * afterwards either way; and the schedule's wait is not retimed
+ * (`recordTrojanFinished`) — only the session count resets and the
+ * once-per-account flag is marked done.
  *
  * Pure apart from mutating the save it is handed.
  */
@@ -131,8 +147,18 @@ const withHealth = (buildingdata: BuildingDataMap, health: BuildingHealthData): 
  * @param raid - The raid and the fight's outcome.
  * @param now - Unix seconds, for the Housing rules.
  */
+/** `buildingdata` with the horse (building 27) gone, once its fight has landed (design §6). */
+const withoutTrojanHorse = (buildingdata: BuildingDataMap): BuildingDataMap => {
+  const next: BuildingDataMap = {};
+  for (const [key, building] of Object.entries(buildingdata)) {
+    if (Number(building?.t) !== TROJAN_HORSE_TYPE) next[key] = building;
+  }
+  return next;
+};
+
 export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: number): RaidResult => {
   const { outcome } = raid;
+  const isTrojan = raid.tribe === TROJAN_TRIBE;
   const healthBefore = save.buildinghealthdata;
 
   buildingDataHandler(buildingDataWithout(save.buildingdata as JsonObject, outcome.firedTraps), save as Save);
@@ -177,15 +203,28 @@ export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: num
     stolen[key] += taken;
   }
   save.resources = resources;
+  if (isTrojan) save.buildingdata = withoutTrojanHorse(save.buildingdata as BuildingDataMap);
 
   const defended = outcome.healthShare >= GOOD_DEFENCE_SHARE;
-  const shiny = defended ? GOOD_DEFENCE_SHINY : 0;
+  const shiny = defended && !isTrojan ? GOOD_DEFENCE_SHINY : 0;
   if (shiny > 0) save.credits = amount(save.credits) + shiny;
-  if (defended) save.onboarding = countRaidSurvived(save);
+  if (defended && !isTrojan) save.onboarding = countRaidSurvived(save);
 
   const share = Math.round(outcome.healthShare * 1000) / 1000;
-  const record: RaidRecord = { id: raid.id, at: raid.startedAt, tribe: raid.tribe, health: share, stolen: { ...stolen }, shiny };
-  save.aiattacks = scheduleColumn(recordRaidFinished(readSchedule(save.aiattacks), record));
+  const record: RaidRecord = {
+    id: raid.id,
+    at: raid.startedAt,
+    tribe: raid.tribe,
+    health: share,
+    stolen: { ...stolen },
+    shiny,
+    defended,
+  };
+  save.aiattacks = scheduleColumn(
+    isTrojan
+      ? recordTrojanFinished(readSchedule(save.aiattacks), record, now)
+      : recordRaidFinished(readSchedule(save.aiattacks), record)
+  );
 
   return {
     id: raid.id,
@@ -208,7 +247,7 @@ export const landedResult = (aiattacks: unknown, raidId: string): RaidResult | n
     id: record.id,
     tribe: record.tribe,
     at: record.at,
-    defended: record.shiny > 0,
+    defended: record.defended ?? record.shiny > 0,
     health: record.health,
     stolen: { r1: 0, r2: 0, r3: 0, r4: 0, ...record.stolen },
     shiny: record.shiny,

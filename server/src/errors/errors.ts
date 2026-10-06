@@ -927,7 +927,13 @@ export const autoAttackRefusedErr = (reason: AutoAttackRefusal, details: object 
     isClientFriendly: false,
   });
 
-/** Why a wild monster raid route said no (#226 WP3, `controllers/raid/raid.ts`). */
+/**
+ * Why a wild monster raid route said no (#226 WP3, `controllers/raid/raid.ts`),
+ * with the Trojan Horse's springing added (`docs/design/trojan-horse.md` §7,
+ * issue #326): `raidOpen` (a raid, or another spring, is already open or
+ * fighting) and `noHorse` (no horse to spring: never placed, already sprung,
+ * or not in `buildingdata`) and `offline` (the raid presence check).
+ */
 export type RaidRefusal =
   | "badRequest"
   | "notMainYard"
@@ -938,6 +944,9 @@ export type RaidRefusal =
   | "tooEarly"
   | "cancelled"
   | "underAttack"
+  | "raidOpen"
+  | "noHorse"
+  | "offline"
   | "busy";
 
 const RAID_REFUSAL_MESSAGES: Record<RaidRefusal, string> = {
@@ -950,6 +959,9 @@ const RAID_REFUSAL_MESSAGES: Record<RaidRefusal, string> = {
   tooEarly: "The raid is still going on.",
   cancelled: "The raid was called off because the game was closed during it.",
   underAttack: "Your yard is under attack right now. The wild monsters will wait.",
+  raidOpen: "A raid is already happening on your yard.",
+  noHorse: "There is no Trojan Horse waiting to be sprung.",
+  offline: "You need to be at your yard for this.",
   busy: "The server is busy. Try again in a moment.",
 };
 

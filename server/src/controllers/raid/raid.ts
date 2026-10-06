@@ -11,6 +11,7 @@ import {
   startRaid,
 } from "../../services/raids/raidFlow.js";
 import { parseRaidPreference } from "../../services/raids/raidSchedule.js";
+import { springTrojanHorse } from "../../services/raids/trojanFight.js";
 import { devPlaceTrojanHorse } from "../../services/raids/trojanHorse.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
@@ -30,6 +31,9 @@ import { devCheckEnabled } from "../maproom/botCheck.js";
  * - `finish { id }`: the fight is over on the client. Answers `{ result }`.
  * - `frequency { preference: "more" | "same" | "less" }`. Answers
  *   `{ preference, nextAttack }`.
+ * - `trojan {}`: springs the Trojan Horse, no warning, no body (#306 WP3,
+ *   `docs/design/trojan-horse.md` §5-§7, issue #326). Answers `{ raid, fight }`
+ *   like `start`; its own fight lands through the same `finish`.
  * - `dev/due` (local server only): the next raid is due now.
  * - `dev/trojan` (local server only): a Trojan Horse now, score and the
  *   once-per-account flag both ignored (`docs/design/trojan-horse.md` §7).
@@ -61,6 +65,13 @@ export const raidFinish: KoaController = async (ctx) => {
   const result = await finishRaid(postgres.em, user, raidIdOf(ctx.request.body), getCurrentDateTime());
   ctx.status = Status.OK;
   ctx.body = { error: 0, result };
+};
+
+export const raidTrojan: KoaController = async (ctx) => {
+  const user: User = ctx.authUser;
+  const start = await springTrojanHorse(postgres.em, user, getCurrentDateTime());
+  ctx.status = Status.OK;
+  ctx.body = { error: 0, ...start };
 };
 
 export const raidFrequency: KoaController = async (ctx) => {

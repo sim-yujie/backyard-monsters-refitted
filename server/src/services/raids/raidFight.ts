@@ -50,6 +50,14 @@ export interface RaidFightInput {
   readonly log: RaidLog;
   /** The player's bunkers, academy levels and caged champion (`defenderForcesOf`). */
   readonly defence?: DefenderForces | null;
+  /**
+   * The tick every spawn has happened by, for a fight spread over more than
+   * one instant (`BattleOptions.raidSpawnsUntil`); absent for an ordinary
+   * raid, whose waves all land at `t: 0`. The Trojan Horse passes
+   * `TROJAN_LAST_SPAWN_TICK` (`docs/design/trojan-horse.md` §5,
+   * `trojanArmy.ts`).
+   */
+  readonly raidSpawnsUntil?: number;
 }
 
 /** What the landing needs of the fight, kept with the open raid until finish. */
@@ -97,6 +105,7 @@ export const fightRaid = (input: RaidFightInput): RaidFightOutcome => {
     seed: input.log.seed,
     ...battleDefence(input.defence),
     raid: true,
+    ...(input.raidSpawnsUntil !== undefined ? { raidSpawnsUntil: input.raidSpawnsUntil } : {}),
   });
   // A raid's waves all land at once (`raidPlan.ts`); kept in log order, as the replay's sort keeps ties.
   const events = input.log.events
