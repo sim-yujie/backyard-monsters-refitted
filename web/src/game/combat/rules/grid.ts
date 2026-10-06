@@ -229,6 +229,12 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
   let version = 0;
   let floods = new Map<number, Flood>();
   let floodsComputed = 0;
+  /**
+   * The depth and settled arrays of discarded floods, kept for the next ones.
+   * A battle computes thousands of floods and each needs two full-grid arrays;
+   * clearing a used pair is far cheaper than allocating and collecting one.
+   */
+  const spare: { depth: Int32Array; settled: Uint8Array }[] = [];
 
   /** `PATHING.Cost`: add one rectangle's price to the cells it covers. */
   const stamp = (building: EngineBuilding, sign: number): void => {
@@ -272,6 +278,7 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
     stamp(building, -1);
     if (blocksPathing(building.type)) register(building, -1);
     version += 1;
+    for (const flood of floods.values()) spare.push({ depth: flood.depth, settled: flood.settled });
     floods = new Map();
   };
 
@@ -289,9 +296,10 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
     const held = floods.get(key);
     if (held) return held;
 
+    const reused = spare.pop();
     const flood: Flood = {
-      depth: new Int32Array(CELL_COUNT).fill(-1),
-      settled: new Uint8Array(CELL_COUNT),
+      depth: reused ? reused.depth.fill(-1) : new Int32Array(CELL_COUNT).fill(-1),
+      settled: reused ? reused.settled.fill(0) : new Uint8Array(CELL_COUNT),
       ignoreWalls,
       heap: new Float64Array(1024),
       size: 0,
