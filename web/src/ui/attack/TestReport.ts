@@ -126,6 +126,8 @@ export class TestReportPanel {
   private readonly peekText: HTMLElement;
   /** The row button that showed the tower, for focus on the way back. */
   private peekFrom: HTMLElement | null = null;
+  /** What had focus as the report opened, such as Recent tests' Report button, to get it back on close (#308). */
+  private opener: HTMLElement | null = null;
 
   constructor(private readonly options: TestReportOptions) {
     this.element = element("div", "popup-backdrop test-report__backdrop");
@@ -207,14 +209,19 @@ export class TestReportPanel {
   }
 
   mount(container: HTMLElement): this {
+    this.opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     container.append(this.element);
     this.element.querySelector<HTMLButtonElement>(".test-report__back")?.focus();
     return this;
   }
 
   close(): void {
+    const hadFocus = this.element.contains(document.activeElement);
     this.panel.close();
     this.element.remove();
+    // Back where it was, not lost to the page's first control.
+    if (hadFocus && this.opener?.isConnected) this.opener.focus();
+    this.opener = null;
   }
 
   /** Steps the window aside for the yard, a bar naming what is shown. */

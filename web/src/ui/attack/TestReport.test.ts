@@ -79,6 +79,23 @@ describe("a Baiter test's report panel", () => {
     expect(summary).toContain("Survived with 900 health");
   });
 
+  it("gives focus back to what opened it on close (#308)", () => {
+    const opener = document.body.appendChild(document.createElement("button"));
+    opener.focus();
+    const { panel } = mountPanel({ onBack: () => panel.close() });
+    expect(document.activeElement).toBe(document.querySelector(".test-report__back"));
+    document.querySelector<HTMLButtonElement>(".test-report__back")!.click();
+    expect(document.querySelector(".test-report")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+
+    // An opener gone meanwhile is left alone.
+    opener.focus();
+    const again = mountPanel().panel;
+    opener.remove();
+    expect(() => again.close()).not.toThrow();
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it("switches tabs by click and by arrow keys", () => {
     mountPanel();
     const tabs = [...document.querySelectorAll<HTMLButtonElement>("[role=tab]")];
