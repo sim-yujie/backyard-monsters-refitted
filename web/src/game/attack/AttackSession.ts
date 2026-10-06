@@ -187,7 +187,7 @@ export interface AttackSessionState {
   readonly championAvailable: boolean;
   /** Every flung champion's health by type, zero for a death; empty when none was flung. */
   readonly championsHp: Readonly<Record<number, number>>;
-  /** The types of the player's champions on the field now, which can be called back (#222). */
+  /** The types of the player's champions on the field now, which can be called back (#222); none once ended. */
   readonly championsOnField: readonly number[];
   /** Bombs and siege weapons WP4 reports as still usable (see `setUnusedTools`). */
   readonly unusedTools: number;
@@ -820,7 +820,8 @@ export class AttackSession {
       remaining: this.remaining(),
       championAvailable: this.championAvailable(),
       championsHp: this.championsHpOf(battleState),
-      championsOnField: battle ? this.championsOnField(battle) : [],
+      // An ended attack has nobody left out there to call back (#308).
+      championsOnField: battle && this.phase !== "ended" ? this.championsOnField(battle) : [],
       unusedTools: this.unusedTools,
       acted: this.acted,
       eventCount: this.events.length,

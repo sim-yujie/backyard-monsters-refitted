@@ -291,14 +291,15 @@ export class ArmyPanel {
 
   /**
    * Which of the player's champions are on the field, by type, so their rows
-   * offer Retreat (issue #222). The session's `championsOnField`.
+   * offer Retreat (issue #222) and say "On the field" until they leave it,
+   * or the attack ends (#308). The session's `championsOnField`.
    */
   setChampionsOnField(types: readonly number[]): void {
     const same =
       types.length === this.onField.length && types.every((t, at) => this.onField[at] === t);
     if (same) return;
     this.onField = [...types];
-    this.refreshRetreat();
+    this.refresh();
   }
 
   /** The Mode picker of a champion's row, for the tests. */
