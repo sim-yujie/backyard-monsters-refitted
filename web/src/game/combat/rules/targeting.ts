@@ -131,7 +131,15 @@ export interface CreepIndex<T extends CreepView> {
 
 const bucketAxis = (value: number): number => Math.trunc(value / CREEP_CELL_SIZE);
 
-/** Buckets are keyed by a packed pair; the offset keeps both halves positive. */
+/**
+ * Buckets within this many of the origin on each axis live in a flat array;
+ * that is 4,800 units either way, well past the yard. A creep further out
+ * still gets a bucket, kept in a map keyed by a packed pair.
+ */
+const BUCKET_SPAN = 24;
+const BUCKET_SIDE = BUCKET_SPAN * 2;
+
+/** The packed key of an outlying bucket; the offset keeps both halves positive. */
 const BUCKET_OFFSET = 512;
 const bucketKey = (bucketX: number, bucketY: number): number =>
   (bucketX + BUCKET_OFFSET) * 1024 + (bucketY + BUCKET_OFFSET);
@@ -140,17 +148,51 @@ const bucketKey = (bucketX: number, bucketY: number): number =>
 const byDistanceThenId = <T extends CreepView>(one: CreepHit<T>, other: CreepHit<T>): number =>
   one.dist === other.dist ? one.creep.id - other.creep.id : one.dist - other.dist;
 
+/** What a scan that found nothing returns; frozen, so no caller can fill it. */
+const NO_HITS: readonly CreepHit<CreepView>[] = Object.freeze([]);
+
 export const createCreepIndex = <T extends CreepView>(): CreepIndex<T> => {
-  const buckets = new Map<number, T[]>();
+  const near: T[][] = Array.from({ length: BUCKET_SIDE * BUCKET_SIDE }, () => []);
+  const far = new Map<number, T[]>();
+  /** The buckets the last rebuild filled, which the next one empties. */
+  const filled: T[][] = [];
+  /** The rectangle of buckets holding a creep; a scan never looks outside it. */
+  let lowX = 0;
+  let highX = -1;
+  let lowY = 0;
+  let highY = -1;
+
+  const bucketAt = (bucketX: number, bucketY: number): T[] | undefined => {
+    const nearX = bucketX + BUCKET_SPAN;
+    const nearY = bucketY + BUCKET_SPAN;
+    if (nearX >= 0 && nearX < BUCKET_SIDE && nearY >= 0 && nearY < BUCKET_SIDE) {
+      return near[nearX * BUCKET_SIDE + nearY];
+    }
+    return far.get(bucketKey(bucketX, bucketY));
+  };
 
   const rebuild = (creeps: readonly T[]): void => {
-    for (const bucket of buckets.values()) bucket.length = 0;
+    for (const bucket of filled) bucket.length = 0;
+    filled.length = 0;
+    lowX = Infinity;
+    highX = -Infinity;
+    lowY = Infinity;
+    highY = -Infinity;
     for (const creep of creeps) {
       if (creep.hp <= 0) continue;
-      const key = bucketKey(bucketAxis(creep.x), bucketAxis(creep.y));
-      const bucket = buckets.get(key);
-      if (bucket) bucket.push(creep);
-      else buckets.set(key, [creep]);
+      const bucketX = bucketAxis(creep.x);
+      const bucketY = bucketAxis(creep.y);
+      if (bucketX < lowX) lowX = bucketX;
+      if (bucketX > highX) highX = bucketX;
+      if (bucketY < lowY) lowY = bucketY;
+      if (bucketY > highY) highY = bucketY;
+      let bucket = bucketAt(bucketX, bucketY);
+      if (!bucket) {
+        bucket = [];
+        far.set(bucketKey(bucketX, bucketY), bucket);
+      }
+      if (bucket.length === 0) filled.push(bucket);
+      bucket.push(creep);
     }
   };
 
@@ -161,26 +203,32 @@ export const createCreepIndex = <T extends CreepView>(): CreepIndex<T> => {
     flags: number,
     exclude?: number,
   ): CreepHit<T>[] => {
-    const hits: CreepHit<T>[] = [];
-    if (radius <= 0) return hits;
+    if (radius <= 0 || filled.length === 0) return NO_HITS as CreepHit<T>[];
+    let hits: CreepHit<T>[] | null = null;
     const centreX = bucketAxis(x);
     const centreY = bucketAxis(y);
     const reach = Math.trunc(radius / CREEP_CELL_SIZE) + 1;
     const limit = radius * radius;
-    for (let bucketX = centreX - reach; bucketX <= centreX + reach; bucketX += 1) {
-      for (let bucketY = centreY - reach; bucketY <= centreY + reach; bucketY += 1) {
-        const bucket = buckets.get(bucketKey(bucketX, bucketY));
-        if (!bucket) continue;
-        for (const creep of bucket) {
+    const fromX = Math.max(centreX - reach, lowX);
+    const toX = Math.min(centreX + reach, highX);
+    const fromY = Math.max(centreY - reach, lowY);
+    const toY = Math.min(centreY + reach, highY);
+    for (let bucketX = fromX; bucketX <= toX; bucketX += 1) {
+      for (let bucketY = fromY; bucketY <= toY; bucketY += 1) {
+        const bucket = bucketAt(bucketX, bucketY);
+        if (!bucket || bucket.length === 0) continue;
+        for (let at = 0; at < bucket.length; at += 1) {
+          const creep = bucket[at] as T;
           if (creep.hp <= 0 || !creep.targetable || creep.id === exclude) continue;
           if (!canHit(flags, creep.flags)) continue;
           // `int(QuickDistanceSquared(...)) < radius * radius` (`Targeting.as:241`).
           const squared = Math.trunc(distanceSquared(x, y, creep.x, creep.y));
-          if (squared < limit) hits.push({ creep, dist: Math.sqrt(squared) });
+          if (squared < limit) (hits ??= []).push({ creep, dist: Math.sqrt(squared) });
         }
       }
     }
-    hits.sort(byDistanceThenId);
+    if (!hits) return NO_HITS as CreepHit<T>[];
+    if (hits.length > 1) hits.sort(byDistanceThenId);
     return hits;
   };
 
