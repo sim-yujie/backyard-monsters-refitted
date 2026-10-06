@@ -607,9 +607,10 @@ few dozen towers and 75 traps (fixture counts); the grid is 67,600 cells. Per ti
 every creep and fires every tower, which is cheap. The cost is pathing: the Flash client floods the
 whole grid per request (`PATHING.as:188-200`), and a creep re-requests every 150 ticks
 (`CreepBase.as:874-876`), so a naive port would run tens of thousands of floods. The engine instead
-caches one flood field per `(target building, grid version)`, invalidating on every building death
-(`BFOUNDATION.as:2010-2011` is when the client resets costs), so floods are bounded by targets times
-grid changes, a few hundred per attack.
+caches one flood field per target building, and a building death
+(`BFOUNDATION.as:2010-2011` is when the client resets costs) drops only the floods that had reached
+a cell whose cost it changed, so floods are bounded by targets times grid changes, a few hundred per
+attack at most.
 
 Budget, to be measured by `bench.test.ts` in WP4 on the sandbox yard with a 300-Pokey, 4-fling,
 5-minute log: **under 500 ms median and under 2 s worst on Bun 1.4**; the test fails above 5 s.

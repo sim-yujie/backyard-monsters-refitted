@@ -23,7 +23,7 @@ import type { Rng } from "./rng.js";
  * A route is found by flooding outwards from the target's footprint and then
  * walking downhill from the creep (`:225-269`, `:303-392`, `:412-493`). The
  * flood is per target, shared by every creep heading there, and thrown away
- * whenever the costs change.
+ * when the costs change under it.
  *
  * ## Fidelity notes
  *
@@ -34,14 +34,20 @@ import type { Rng } from "./rng.js";
  *    fast the machine is. That is exactly what `docs/design/server-combat.md`
  *    §3.4 forbids. The engine runs an exact shortest-path flood with the same
  *    cost model, stopping as soon as the creep's own cell is settled, which is
- *    the same early exit `CheckStartReached` makes (`:394-410`). Routes through
- *    open ground are identical; a route through a dense cost field can be
+ *    the same early exit `CheckStartReached` makes (`:394-410`), though only
+ *    once that cell's neighbours are priced, so a flood resumed for the next
+ *    creep carries on exactly as an unbroken one would and a route never
+ *    depends on which creep asked first. Routes through open ground are
+ *    identical; a route through a dense cost field can be
  *    cheaper here than the one Flash drew.
- * 2. **One flood cache, invalidated wholesale.** A building's death makes the
- *    client call `ResetCosts`, which restamps the grid and drops every flood
- *    (`:140-168`, `:535-561`; `BFOUNDATION.as:2010-2011`). The engine does the
- *    same by version: {@link PathGrid.removeBuilding} subtracts that building's
- *    rectangles and bumps `version`, and every cached flood is discarded. The
+ * 2. **One flood cache, invalidated where the costs changed.** A building's
+ *    death makes the client call `ResetCosts`, which restamps the grid and
+ *    drops every flood (`:140-168`, `:535-561`; `BFOUNDATION.as:2010-2011`).
+ *    The engine's {@link PathGrid.removeBuilding} subtracts that building's
+ *    rectangles, bumps `version`, and discards every flood that had priced a
+ *    changed cell. A flood that never gave one a depth never read its cost,
+ *    so it is exactly the flood a fresh start would grow, and is kept: the
+ *    routes are the ones dropping every flood gives, with fewer floods. The
  *    subtraction is exact rather than a restamp because no `_gridCost`
  *    rectangle in the table is negative, so the `cost < 2` floor at `:104-105`
  *    never fires and adding then subtracting is a round trip; `grid.test.ts`
@@ -89,9 +95,6 @@ export const SCATTER_SPREAD = 3;
 export const JIGGLE_SPREAD = 0.4;
 
 const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
-
-/** Packing factor for the heap: cell index below, depth above. */
-const HEAP_SCALE = 1 << 17;
 
 /** Cartesian units to a cell coordinate (`PATHING.GlobalLocal`, `:653-661`). */
 const toCellAxis = (value: number, extent: number): number =>
@@ -149,7 +152,10 @@ export interface PathRequest {
 
 /** The grid of one battle. */
 export interface PathGrid {
-  /** Bumped whenever the costs change, which discards every cached flood. */
+  /**
+   * Bumped whenever the costs change, which discards every cached flood that
+   * had reached a changed cell.
+   */
   readonly version: number;
   /** What it costs to enter a cell; 0 for a cell off the grid. */
   costAt(index: number): number;
@@ -168,50 +174,77 @@ interface Flood {
   readonly depth: Int32Array;
   readonly settled: Uint8Array;
   readonly ignoreWalls: boolean;
-  heap: Float64Array;
+  /**
+   * A binary min-heap of (depth, cell) entries, ordered by depth and then by
+   * cell index, held as two parallel arrays.
+   */
+  heapDepth: Int32Array;
+  heapCell: Int32Array;
   size: number;
   exhausted: boolean;
 }
 
-const push = (flood: Flood, value: number): void => {
-  if (flood.size === flood.heap.length) {
-    const grown = new Float64Array(flood.heap.length * 2);
-    grown.set(flood.heap);
-    flood.heap = grown;
+/** Whether heap entry `one` sorts strictly before entry `other`. */
+const before = (depths: Int32Array, cells: Int32Array, one: number, other: number): boolean => {
+  const oneDepth = depths[one] as number;
+  const otherDepth = depths[other] as number;
+  return (
+    oneDepth < otherDepth ||
+    (oneDepth === otherDepth && (cells[one] as number) < (cells[other] as number))
+  );
+};
+
+const push = (flood: Flood, depth: number, cell: number): void => {
+  if (flood.size === flood.heapDepth.length) {
+    const grownDepth = new Int32Array(flood.heapDepth.length * 2);
+    grownDepth.set(flood.heapDepth);
+    flood.heapDepth = grownDepth;
+    const grownCell = new Int32Array(flood.heapCell.length * 2);
+    grownCell.set(flood.heapCell);
+    flood.heapCell = grownCell;
   }
-  const heap = flood.heap;
+  const depths = flood.heapDepth;
+  const cells = flood.heapCell;
   let child = flood.size;
   flood.size += 1;
-  heap[child] = value;
+  depths[child] = depth;
+  cells[child] = cell;
   while (child > 0) {
     const parent = (child - 1) >> 1;
-    if ((heap[parent] as number) <= (heap[child] as number)) break;
-    const swap = heap[parent] as number;
-    heap[parent] = heap[child] as number;
-    heap[child] = swap;
+    if (!before(depths, cells, child, parent)) break;
+    const swapDepth = depths[parent] as number;
+    const swapCell = cells[parent] as number;
+    depths[parent] = depths[child] as number;
+    cells[parent] = cells[child] as number;
+    depths[child] = swapDepth;
+    cells[child] = swapCell;
     child = parent;
   }
 };
 
-const pop = (flood: Flood): number => {
-  const heap = flood.heap;
-  const top = heap[0] as number;
+/** Remove the top entry; read it from index 0 of both arrays first. */
+const pop = (flood: Flood): void => {
+  const depths = flood.heapDepth;
+  const cells = flood.heapCell;
   flood.size -= 1;
-  heap[0] = heap[flood.size] as number;
+  depths[0] = depths[flood.size] as number;
+  cells[0] = cells[flood.size] as number;
   let parent = 0;
   for (;;) {
     const left = parent * 2 + 1;
     if (left >= flood.size) break;
     const right = left + 1;
     let smallest = left;
-    if (right < flood.size && (heap[right] as number) < (heap[left] as number)) smallest = right;
-    if ((heap[parent] as number) <= (heap[smallest] as number)) break;
-    const swap = heap[parent] as number;
-    heap[parent] = heap[smallest] as number;
-    heap[smallest] = swap;
+    if (right < flood.size && before(depths, cells, right, left)) smallest = right;
+    if (!before(depths, cells, smallest, parent)) break;
+    const swapDepth = depths[parent] as number;
+    const swapCell = cells[parent] as number;
+    depths[parent] = depths[smallest] as number;
+    cells[parent] = cells[smallest] as number;
+    depths[smallest] = swapDepth;
+    cells[smallest] = swapCell;
     parent = smallest;
   }
-  return top;
 };
 
 /**
@@ -227,11 +260,20 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
   const cost = new Int32Array(CELL_COUNT).fill(GRID_BASE_COST);
   const wall = new Int32Array(CELL_COUNT).fill(-1);
   let version = 0;
-  let floods = new Map<number, Flood>();
+  const floods = new Map<number, Flood>();
   let floodsComputed = 0;
+  /**
+   * The depth and settled arrays of discarded floods, kept for the next ones.
+   * A battle computes thousands of floods and each needs two full-grid arrays;
+   * clearing a used pair is far cheaper than allocating and collecting one.
+   */
+  const spare: { depth: Int32Array; settled: Uint8Array }[] = [];
 
-  /** `PATHING.Cost`: add one rectangle's price to the cells it covers. */
-  const stamp = (building: EngineBuilding, sign: number): void => {
+  /**
+   * `PATHING.Cost`: add one rectangle's price to the cells it covers, noting
+   * each cell in `touched` when given.
+   */
+  const stamp = (building: EngineBuilding, sign: number, touched?: number[]): void => {
     for (const rect of gridCost(building.type, building.level)) {
       const originX = toCellAxis(building.cx + rect[0], GRID_WIDTH);
       const originY = toCellAxis(building.cy + rect[1], GRID_HEIGHT);
@@ -243,13 +285,14 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
           if (index < 0) continue;
           const next = (cost[index] as number) + sign * rect[4];
           cost[index] = next < GRID_MIN_COST ? GRID_MIN_COST : next;
+          touched?.push(index);
         }
       }
     }
   };
 
   /** `PATHING.RegisterBuilding`: mark the footprint cells of a wall (`:121-138`). */
-  const register = (building: EngineBuilding, id: number): void => {
+  const register = (building: EngineBuilding, id: number, touched?: number[]): void => {
     const originX = toCellAxis(building.cx, GRID_WIDTH);
     const originY = toCellAxis(building.cy, GRID_HEIGHT);
     const across = Math.ceil(building.w * 0.1);
@@ -257,7 +300,9 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
     for (let stepX = 0; stepX < across; stepX += 1) {
       for (let stepY = 0; stepY < down; stepY += 1) {
         const index = cellIndexOf(originX + stepX, originY + stepY);
-        if (index >= 0) wall[index] = id;
+        if (index < 0) continue;
+        wall[index] = id;
+        touched?.push(index);
       }
     }
   };
@@ -268,12 +313,33 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
     if (blocksPathing(building.type)) register(building, building.id);
   }
 
+  /**
+   * Take a fallen building off the grid, and with it every flood its cells
+   * could have changed.
+   *
+   * A flood that never priced a changed cell — gave it no depth — never read
+   * its old cost, so it stands exactly as a flood started afresh would at the
+   * same point, and is kept. Any other is dropped, as is the fallen
+   * building's own flood, which nothing will ask for again.
+   */
   const removeBuilding = (building: EngineBuilding): void => {
-    stamp(building, -1);
-    if (blocksPathing(building.type)) register(building, -1);
+    const touched: number[] = [];
+    stamp(building, -1, touched);
+    if (blocksPathing(building.type)) register(building, -1, touched);
     version += 1;
-    floods = new Map();
+    const own = floodKey(building, false);
+    for (const [key, flood] of floods) {
+      const priced = touched.some((index) => (flood.depth[index] as number) >= 0);
+      if (!priced && key !== own && key !== own + 1) continue;
+      floods.delete(key);
+      spare.push({ depth: flood.depth, settled: flood.settled });
+    }
   };
+
+  /** A flood's key: its target's origin cell, and whether it ignores walls. */
+  const floodKey = (target: EngineBuilding, ignoreWalls: boolean): number =>
+    (toCellAxis(target.cx, GRID_WIDTH) * GRID_HEIGHT + toCellAxis(target.cy, GRID_HEIGHT)) * 2 +
+    (ignoreWalls ? 1 : 0);
 
   /** The cost of entering one cell, as the flood prices it. */
   const enterCost = (index: number, ignoreWalls: boolean): number =>
@@ -285,15 +351,17 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
   const floodFor = (target: EngineBuilding, ignoreWalls: boolean): Flood => {
     const originX = toCellAxis(target.cx, GRID_WIDTH);
     const originY = toCellAxis(target.cy, GRID_HEIGHT);
-    const key = (originX * GRID_HEIGHT + originY) * 2 + (ignoreWalls ? 1 : 0);
+    const key = floodKey(target, ignoreWalls);
     const held = floods.get(key);
     if (held) return held;
 
+    const reused = spare.pop();
     const flood: Flood = {
-      depth: new Int32Array(CELL_COUNT).fill(-1),
-      settled: new Uint8Array(CELL_COUNT),
+      depth: reused ? reused.depth.fill(-1) : new Int32Array(CELL_COUNT).fill(-1),
+      settled: reused ? reused.settled.fill(0) : new Uint8Array(CELL_COUNT),
       ignoreWalls,
-      heap: new Float64Array(1024),
+      heapDepth: new Int32Array(1024),
+      heapCell: new Int32Array(1024),
       size: 0,
       exhausted: false,
     };
@@ -304,7 +372,7 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
         const index = cellIndexOf(originX + stepX, originY + stepY);
         if (index < 0) continue;
         flood.depth[index] = 0;
-        push(flood, index);
+        push(flood, 0, index);
       }
     }
     floods.set(key, flood);
@@ -316,12 +384,11 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
   const expandTo = (flood: Flood, goal: number): void => {
     if (flood.exhausted || (flood.settled[goal] as number) === 1) return;
     while (flood.size > 0) {
-      const packed = pop(flood);
-      const index = packed % HEAP_SCALE;
-      const depth = (packed - index) / HEAP_SCALE;
+      const depth = flood.heapDepth[0] as number;
+      const index = flood.heapCell[0] as number;
+      pop(flood);
       if ((flood.settled[index] as number) === 1) continue;
       flood.settled[index] = 1;
-      if (index === goal) return;
       const cellX = Math.floor(index / GRID_HEIGHT);
       const cellY = index % GRID_HEIGHT;
       for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
@@ -337,9 +404,12 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
           const held = flood.depth[neighbour] as number;
           if (held >= 0 && held <= next) continue;
           flood.depth[neighbour] = next;
-          push(flood, next * HEAP_SCALE + neighbour);
+          push(flood, next, neighbour);
         }
       }
+      // Only once the cell's neighbours are priced, so a flood resumed later
+      // carries on exactly as one that never stopped would.
+      if (index === goal) return;
     }
     flood.exhausted = true;
   };

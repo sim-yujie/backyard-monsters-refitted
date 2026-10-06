@@ -813,15 +813,16 @@ export class AttackBattleLayer {
    * on the wall clock, so a winning bomb is seen to land (#148).
    */
   private shownTick(tick: number): number {
-    const state = this.session.state();
-    if (state.phase !== "ended") {
+    // Every frame asks, so it reads the phase and speed alone rather than
+    // building the session's whole summary.
+    if (!this.session.ended) {
       this.endedAt = null;
       return tick;
     }
     const now = this.now();
     this.endedAt ??= { tick, ms: now };
     const since = Math.max(0, now - this.endedAt.ms) / 1000;
-    return this.endedAt.tick + Math.floor(since * TICKS_PER_SECOND * state.speed);
+    return this.endedAt.tick + Math.floor(since * TICKS_PER_SECOND * this.session.speed);
   }
 
   /**

@@ -131,7 +131,15 @@ export interface CreepIndex<T extends CreepView> {
 
 const bucketAxis = (value: number): number => Math.trunc(value / CREEP_CELL_SIZE);
 
-/** Buckets are keyed by a packed pair; the offset keeps both halves positive. */
+/**
+ * Buckets within this many of the origin on each axis live in a flat array;
+ * that is 4,800 units either way, well past the yard. A creep further out
+ * still gets a bucket, kept in a map keyed by a packed pair.
+ */
+const BUCKET_SPAN = 24;
+const BUCKET_SIDE = BUCKET_SPAN * 2;
+
+/** The packed key of an outlying bucket; the offset keeps both halves positive. */
 const BUCKET_OFFSET = 512;
 const bucketKey = (bucketX: number, bucketY: number): number =>
   (bucketX + BUCKET_OFFSET) * 1024 + (bucketY + BUCKET_OFFSET);
@@ -140,17 +148,51 @@ const bucketKey = (bucketX: number, bucketY: number): number =>
 const byDistanceThenId = <T extends CreepView>(one: CreepHit<T>, other: CreepHit<T>): number =>
   one.dist === other.dist ? one.creep.id - other.creep.id : one.dist - other.dist;
 
+/** What a scan that found nothing returns; frozen, so no caller can fill it. */
+const NO_HITS: readonly CreepHit<CreepView>[] = Object.freeze([]);
+
 export const createCreepIndex = <T extends CreepView>(): CreepIndex<T> => {
-  const buckets = new Map<number, T[]>();
+  const near: T[][] = Array.from({ length: BUCKET_SIDE * BUCKET_SIDE }, () => []);
+  const far = new Map<number, T[]>();
+  /** The buckets the last rebuild filled, which the next one empties. */
+  const filled: T[][] = [];
+  /** The rectangle of buckets holding a creep; a scan never looks outside it. */
+  let lowX = 0;
+  let highX = -1;
+  let lowY = 0;
+  let highY = -1;
+
+  const bucketAt = (bucketX: number, bucketY: number): T[] | undefined => {
+    const nearX = bucketX + BUCKET_SPAN;
+    const nearY = bucketY + BUCKET_SPAN;
+    if (nearX >= 0 && nearX < BUCKET_SIDE && nearY >= 0 && nearY < BUCKET_SIDE) {
+      return near[nearX * BUCKET_SIDE + nearY];
+    }
+    return far.get(bucketKey(bucketX, bucketY));
+  };
 
   const rebuild = (creeps: readonly T[]): void => {
-    for (const bucket of buckets.values()) bucket.length = 0;
+    for (const bucket of filled) bucket.length = 0;
+    filled.length = 0;
+    lowX = Infinity;
+    highX = -Infinity;
+    lowY = Infinity;
+    highY = -Infinity;
     for (const creep of creeps) {
       if (creep.hp <= 0) continue;
-      const key = bucketKey(bucketAxis(creep.x), bucketAxis(creep.y));
-      const bucket = buckets.get(key);
-      if (bucket) bucket.push(creep);
-      else buckets.set(key, [creep]);
+      const bucketX = bucketAxis(creep.x);
+      const bucketY = bucketAxis(creep.y);
+      if (bucketX < lowX) lowX = bucketX;
+      if (bucketX > highX) highX = bucketX;
+      if (bucketY < lowY) lowY = bucketY;
+      if (bucketY > highY) highY = bucketY;
+      let bucket = bucketAt(bucketX, bucketY);
+      if (!bucket) {
+        bucket = [];
+        far.set(bucketKey(bucketX, bucketY), bucket);
+      }
+      if (bucket.length === 0) filled.push(bucket);
+      bucket.push(creep);
     }
   };
 
@@ -161,26 +203,32 @@ export const createCreepIndex = <T extends CreepView>(): CreepIndex<T> => {
     flags: number,
     exclude?: number,
   ): CreepHit<T>[] => {
-    const hits: CreepHit<T>[] = [];
-    if (radius <= 0) return hits;
+    if (radius <= 0 || filled.length === 0) return NO_HITS as CreepHit<T>[];
+    let hits: CreepHit<T>[] | null = null;
     const centreX = bucketAxis(x);
     const centreY = bucketAxis(y);
     const reach = Math.trunc(radius / CREEP_CELL_SIZE) + 1;
     const limit = radius * radius;
-    for (let bucketX = centreX - reach; bucketX <= centreX + reach; bucketX += 1) {
-      for (let bucketY = centreY - reach; bucketY <= centreY + reach; bucketY += 1) {
-        const bucket = buckets.get(bucketKey(bucketX, bucketY));
-        if (!bucket) continue;
-        for (const creep of bucket) {
+    const fromX = Math.max(centreX - reach, lowX);
+    const toX = Math.min(centreX + reach, highX);
+    const fromY = Math.max(centreY - reach, lowY);
+    const toY = Math.min(centreY + reach, highY);
+    for (let bucketX = fromX; bucketX <= toX; bucketX += 1) {
+      for (let bucketY = fromY; bucketY <= toY; bucketY += 1) {
+        const bucket = bucketAt(bucketX, bucketY);
+        if (!bucket || bucket.length === 0) continue;
+        for (let at = 0; at < bucket.length; at += 1) {
+          const creep = bucket[at] as T;
           if (creep.hp <= 0 || !creep.targetable || creep.id === exclude) continue;
           if (!canHit(flags, creep.flags)) continue;
           // `int(QuickDistanceSquared(...)) < radius * radius` (`Targeting.as:241`).
           const squared = Math.trunc(distanceSquared(x, y, creep.x, creep.y));
-          if (squared < limit) hits.push({ creep, dist: Math.sqrt(squared) });
+          if (squared < limit) (hits ??= []).push({ creep, dist: Math.sqrt(squared) });
         }
       }
     }
-    hits.sort(byDistanceThenId);
+    if (!hits) return NO_HITS as CreepHit<T>[];
+    if (hits.length > 1) hits.sort(byDistanceThenId);
     return hits;
   };
 
@@ -222,6 +270,51 @@ export interface BuildingTarget {
    */
   readonly fellThrough: boolean;
 }
+
+/**
+ * A yard's buildings sorted once into the classes a creep can prefer, as
+ * indices in id order. A building's class never changes and a fallen building
+ * never stands up again, so each list only ever loses entries, which
+ * {@link living} drops as it meets them. Iterating these instead of the whole
+ * yard visits the same buildings in the same order.
+ */
+interface TargetLists {
+  readonly walls: number[];
+  readonly towers: number[];
+  readonly bunkers: number[];
+  readonly main: number[];
+}
+
+const targetLists = new WeakMap<EngineYard, TargetLists>();
+
+const targetListsOf = (yard: EngineYard): TargetLists => {
+  const held = targetLists.get(yard);
+  if (held) return held;
+  const lists: TargetLists = { walls: [], towers: [], bunkers: [], main: [] };
+  yard.buildings.forEach((building, index) => {
+    if (building.hp <= 0) return;
+    if (building.kind === "wall") lists.walls.push(index);
+    if (building.kind === "tower") lists.towers.push(index);
+    if (isBunker(building.type)) lists.bunkers.push(index);
+    if (isMainTarget(building.kind)) lists.main.push(index);
+  });
+  targetLists.set(yard, lists);
+  return lists;
+};
+
+/** Drop the fallen from a list, keeping the order of the rest; returns the list. */
+const living = (list: number[], buildings: readonly EngineBuilding[]): number[] => {
+  let kept = 0;
+  for (let read = 0; read < list.length; read += 1) {
+    const index = list[read] as number;
+    if ((buildings[index] as EngineBuilding).hp > 0) {
+      list[kept] = index;
+      kept += 1;
+    }
+  }
+  list.length = kept;
+  return list;
+};
 
 /**
  * The two closest buildings of a creep's preferred class.
@@ -275,17 +368,20 @@ export const findBuildingTarget = (
   const usableTower = (building: EngineBuilding): boolean =>
     isBunker(building.type) ? context.bunkerInUse(building) : !building.jarred;
 
-  for (let index = 0; index < buildings.length; index += 1) {
-    const building = buildings[index] as EngineBuilding;
-    if (building.hp <= 0) continue;
-    if (targetGroup === TARGET_GROUP.WALLS) {
-      if (building.kind === "wall") consider(index);
-    } else if (targetGroup === TARGET_GROUP.RESOURCES) {
-      if (isMainTarget(building.kind) && isLootableTarget(building)) consider(index);
-    } else if (targetGroup === TARGET_GROUP.TOWERS) {
-      if (building.kind === "tower" && usableTower(building)) consider(index);
-    } else if (targetGroup === TARGET_GROUP.CHAMPIONS) {
-      if (isBunker(building.type) && context.bunkerInUse(building)) consider(index);
+  const lists = targetListsOf(yard);
+  if (targetGroup === TARGET_GROUP.WALLS) {
+    for (const index of living(lists.walls, buildings)) consider(index);
+  } else if (targetGroup === TARGET_GROUP.RESOURCES) {
+    for (const index of living(lists.main, buildings)) {
+      if (isLootableTarget(buildings[index] as EngineBuilding)) consider(index);
+    }
+  } else if (targetGroup === TARGET_GROUP.TOWERS) {
+    for (const index of living(lists.towers, buildings)) {
+      if (usableTower(buildings[index] as EngineBuilding)) consider(index);
+    }
+  } else if (targetGroup === TARGET_GROUP.CHAMPIONS) {
+    for (const index of living(lists.bunkers, buildings)) {
+      if (context.bunkerInUse(buildings[index] as EngineBuilding)) consider(index);
     }
   }
 
@@ -293,9 +389,8 @@ export const findBuildingTarget = (
   // creep never had a preference (`MonsterBase.as:1072-1085`).
   const fellThrough = closestIndex < 0;
   if (fellThrough || targetGroup === TARGET_GROUP.ALL) {
-    for (let index = 0; index < buildings.length; index += 1) {
+    for (const index of living(lists.main, buildings)) {
       const building = buildings[index] as EngineBuilding;
-      if (building.hp <= 0 || !isMainTarget(building.kind)) continue;
       if (building.kind === "tower" && !isBunker(building.type) && building.jarred) continue;
       consider(index);
     }

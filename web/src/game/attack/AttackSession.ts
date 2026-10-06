@@ -710,6 +710,11 @@ export class AttackSession {
 
   /* ── Reading ────────────────────────────────────────────────────────── */
 
+  /** Whether the attack is over; {@link state}'s phase without building the rest. */
+  get ended(): boolean {
+    return this.phase === "ended";
+  }
+
   /** The running battle, or null before {@link load}. */
   battle(): Battle | null {
     return this.battle_;

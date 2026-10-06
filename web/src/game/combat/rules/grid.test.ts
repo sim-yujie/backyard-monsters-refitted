@@ -192,4 +192,35 @@ describe("routing", () => {
     grid.path({ fromX: -580, fromY: -60, target: townHall! }, mulberry32(2));
     expect(grid.floodCount()).toBe(1);
   });
+
+  it("routes a creep the same whether or not another creep asked first", () => {
+    const routeFrom = (first: { fromX: number; fromY: number } | null) => {
+      const yard = walledYard();
+      const grid = buildPathGrid(yard);
+      const townHall = yard.buildings.find((one) => one.type === 14)!;
+      // The first creep's cell is settled part-way along the second one's flood.
+      if (first) grid.path({ ...first, target: townHall, ignoreWalls: true }, mulberry32(7));
+      return grid.path(
+        { fromX: -600, fromY: -80, target: townHall, ignoreWalls: true },
+        mulberry32(1),
+      );
+    };
+    expect(routeFrom({ fromX: -500, fromY: 0 }).waypoints).toEqual(routeFrom(null).waypoints);
+  });
+
+  it("keeps a flood a fallen building never reached, and drops one it did", () => {
+    const yard = walledYard();
+    const grid = buildPathGrid(yard);
+    const townHall = yard.buildings.find((one) => one.type === 14)!;
+    // From just beside the Town Hall the flood stops long before the wall line.
+    grid.path({ fromX: 90, fromY: 0, target: townHall }, mulberry32(1));
+    grid.removeBuilding(yard.buildings.find((one) => one.id === 0)!);
+    grid.path({ fromX: 90, fromY: 0, target: townHall }, mulberry32(1));
+    expect(grid.floodCount()).toBe(1);
+    // From beyond the wall it has priced the wall's cells, so the next death drops it.
+    grid.path({ fromX: -600, fromY: -80, target: townHall }, mulberry32(1));
+    grid.removeBuilding(yard.buildings.find((one) => one.id === 10)!);
+    grid.path({ fromX: -600, fromY: -80, target: townHall }, mulberry32(1));
+    expect(grid.floodCount()).toBe(2);
+  });
 });
