@@ -213,11 +213,14 @@ export const baseLoad: KoaController = async (ctx) => {
   // count as `notifications`, for the yard's bell (issue #257).
   let completed: (CompletedJob | OutpostNoticeJob)[] | undefined;
   let notifications: number | undefined;
+  let trojanNew = false;
   if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
     // The catch-up also counts this load as one more session towards the
-    // next wild monster raid, in the same write (`catchUpOwnerYard`, #226).
+    // next wild monster raid, in the same write (`catchUpOwnerYard`, #226),
+    // and places the Trojan Horse the moment the player qualifies for one
+    // (issue #324); `trojanNew` tells the client to pan the camera to it once.
     let jobs: CompletedJob[];
-    ({ save: baseSave, completed: jobs } = await catchUpOwnerYard(baseSave));
+    ({ save: baseSave, completed: jobs, trojanPlaced: trojanNew } = await catchUpOwnerYard(baseSave));
     // Outpost attacks and takeovers since the player last looked, told once
     // in the same notice and kept in the mailbox (outposts WP8, #187).
     completed = [...jobs, ...(await takeOutpostNotices(postgres.em, user.userid))];
@@ -456,6 +459,9 @@ export const baseLoad: KoaController = async (ctx) => {
     ...(attackerAcademy && { attackeracademy: attackerAcademy }),
     ...(completed && { completed }),
     ...(notifications !== undefined && { notifications }),
+    // The Trojan Horse was just placed on this load (issue #324): the
+    // client's one-time camera pan (design §3.1).
+    ...(trojanNew && { trojanNew: true }),
     ...(isOwner && {
       chatenabled: 1,
       chattoken,

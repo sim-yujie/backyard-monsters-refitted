@@ -7,6 +7,7 @@ import { currentExpansion } from "../../services/yardplanner/layoutGeometry.js";
 import { walkUpgrades, type UpgradeWalk } from "../../services/yardplanner/startUpgrades.js";
 import { syncBaseValue, syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import { nextBuildingId } from "../../services/yard/build.js";
+import { TROJAN_HORSE_TYPE } from "../../game-data/buildingFootprints.js";
 import { moveMushroomsOffBuildings } from "../../services/yard/mushrooms.js";
 import {
   isDecoration,
@@ -136,6 +137,9 @@ const applyTo = (save: Save, raw: unknown, now: number) => {
   for (const node of payload.nodes) {
     const building = buildingdata[String(node.id)] as BuildingData | undefined;
     if (!building) continue;
+    // The Trojan Horse never moves through Apply, even if a forged layout
+    // lists it (`docs/design/trojan-horse.md` §7, issue #324).
+    if (Number(building.t) === TROJAN_HORSE_TYPE) continue;
     if (Number(building.X) === node.x && Number(building.Y) === node.y) continue;
 
     buildingdata[String(node.id)] = { ...building, X: node.x, Y: node.y };

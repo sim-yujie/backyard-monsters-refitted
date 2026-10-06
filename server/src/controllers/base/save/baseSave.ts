@@ -28,6 +28,7 @@ import { getHousingOwner, getOutpostOwnerSave } from "../../../services/base/get
 import { advanceBuildingTimers } from "../../../services/base/advanceBuildingTimers.js";
 import { championHandler } from "./handlers/championHandler.js";
 import { buildingDataHandler } from "./handlers/buildingDataHandler.js";
+import { protectTrojanHorse } from "../../../services/raids/trojanHorse.js";
 import { takeoverCellMR3, type TakeoverData } from "../../../services/maproom/v3/takeoverCellMR3.js";
 import { protectAfterAttack } from "../../../services/maproom/v2/damageProtection.js";
 import { noticeOutpostAttack } from "../../../services/maproom/v2/outpostNotices.js";
@@ -345,9 +346,19 @@ const saveBase = async (
         if (saveData.buildingdata == null) break;
 
         if (isAttack) {
+          // Non-trap buildings are already taken from the DB, untouched
+          // (`buildingDataHandler`), so the Trojan Horse cannot be touched
+          // here either.
           buildingDataHandler(saveData.buildingdata, baseSave);
         } else {
-          baseSave[SaveKeys.BUILDINGDATA] = saveData.buildingdata;
+          // The owner-save path is retired by default (`requireOwnerSaveAllowed`
+          // above) and writes `buildingdata` wholesale when `allow` turns it
+          // back on; the stored Trojan Horse survives that regardless (design
+          // §7 "Save protection", issue #324).
+          baseSave[SaveKeys.BUILDINGDATA] =
+            baseSave.type === BaseType.MAIN
+              ? protectTrojanHorse(baseSave.buildingdata, saveData.buildingdata)
+              : saveData.buildingdata;
         }
         break;
 

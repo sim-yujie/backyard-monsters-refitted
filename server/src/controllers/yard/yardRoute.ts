@@ -4,6 +4,7 @@ import type { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { notifyAndCount } from "../../services/notifications/notifications.js";
 import { countRaidSession } from "../../services/raids/raidSchedule.js";
+import { placeTrojanHorse } from "../../services/raids/trojanHorse.js";
 import type { CompletedJob } from "../../services/yard/catchUp.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import {
@@ -46,10 +47,19 @@ export const yardRoute =
  * The catch-up on the owner's build-mode `/base/load` of their main yard,
  * locked and written (`catchUpLockedYard`): the save, and what finished.
  * The load is one more session towards the next wild monster raid, counted
- * in the same flush (`countRaidSession`, #226).
+ * in the same flush (`countRaidSession`, #226); the same lock also places the
+ * Trojan Horse the moment the player qualifies for one (`placeTrojanHorse`,
+ * issue #324), so two loads at once still place exactly one.
  */
-export const catchUpOwnerYard = (save: Save): Promise<{ save: Save; completed: CompletedJob[] }> =>
-  catchUpLockedYard(postgres.em, save, countRaidSession);
+export const catchUpOwnerYard = (
+  save: Save
+): Promise<{ save: Save; completed: CompletedJob[]; trojanPlaced: boolean }> => {
+  let trojanPlaced = false;
+  return catchUpLockedYard(postgres.em, save, (locked, now) => {
+    countRaidSession(locked, now);
+    trojanPlaced = placeTrojanHorse(locked, now);
+  }).then((result) => ({ ...result, trojanPlaced }));
+};
 
 /**
  * The catch-up on the owner's build-mode `/base/load` of one of their Map

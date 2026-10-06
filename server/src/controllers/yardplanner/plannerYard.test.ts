@@ -54,7 +54,7 @@ const { applyLayout } = await import("./applyLayout.js");
 const { upgradeWalls } = await import("./upgradeWalls.js");
 const { saveLayout } = await import("./saveLayout.js");
 const { rearmTraps } = await import("./rearmTraps.js");
-const { MUSHROOM_TYPE } = await import("../../game-data/buildingFootprints.js");
+const { MUSHROOM_TYPE, TROJAN_HORSE_TYPE } = await import("../../game-data/buildingFootprints.js");
 const { overlaps, rectOf } = await import("../../services/yardplanner/layoutGeometry.js");
 const { layoutRoute } = await import("./layoutRoute.js");
 
@@ -356,6 +356,34 @@ describe("Apply, the trap re-arm and mushrooms (#263)", () => {
     expect(answer.body.placed).toBe(1);
     expect(clear(saved()[0]!)).toBe(true);
     expect(answer.body.mushrooms).toEqual(mainSave.mushrooms);
+  });
+});
+
+describe("Apply and the Trojan Horse (#324)", () => {
+  const HORSE = { id: 9, t: TROJAN_HORSE_TYPE, X: -70, Y: -800 };
+
+  test("does not hard-block on it, even though the client never lists it", async () => {
+    mainSave.buildingdata = { ...(mainSave.buildingdata as Row), "9": HORSE };
+
+    const answer = await run(applyLayout, { data: layout([{ id: 0, t: 14, x: 50, y: 50 }]) });
+
+    expect(answer.status).toBe(200);
+    expect((mainSave.buildingdata as Record<string, Row>)["9"]).toEqual(HORSE);
+  });
+
+  test("never moves it, even if a forged layout lists it", async () => {
+    mainSave.buildingdata = { ...(mainSave.buildingdata as Row), "9": HORSE };
+
+    const answer = await run(applyLayout, {
+      data: layout([
+        { id: 0, t: 14, x: 50, y: 50 },
+        // Clear of id 0's footprint, so this is a geometry-valid forged move.
+        { id: 9, t: TROJAN_HORSE_TYPE, x: 200, y: -200 },
+      ]),
+    });
+
+    expect(answer.status).toBe(200);
+    expect((mainSave.buildingdata as Record<string, Row>)["9"]).toEqual(HORSE);
   });
 });
 

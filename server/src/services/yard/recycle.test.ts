@@ -123,6 +123,12 @@ describe("planRecycle: refusals", () => {
     }
   });
 
+  // The server places it and takes it away once it is sprung; a client can
+  // never recycle it instead (`docs/design/trojan-horse.md` §7, issue #324).
+  test("the Trojan Horse", () => {
+    expect(reasonOf(() => planRecycle(yardOf([building(1, 27)]), 1, NOW))).toBe("trojanHorse");
+  });
+
   test("a Champion Cage with its champion, a Chamber with frozen champions", () => {
     const cage = building(1, 114);
     expect(reasonOf(() => planRecycle(yardOf([cage], { champion: [{ t: 1, status: 0 }] }), 1, NOW))).toBe(

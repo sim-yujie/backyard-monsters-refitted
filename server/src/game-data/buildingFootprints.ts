@@ -189,6 +189,13 @@ export const DEFAULT_FOOTPRINT: Footprint = { w: 40, h: 40, decoration: false };
 /** The mushroom type id. Mushrooms are yard obstacles, not buildings. */
 export const MUSHROOM_TYPE = 7;
 
+/**
+ * The Trojan Horse ("Horsey"), building 27 (`docs/design/trojan-horse.md`
+ * §2, issue #324). The server places and removes it; a client save can never
+ * add, move, recycle or drop one (`services/raids/trojanHorse.ts`).
+ */
+export const TROJAN_HORSE_TYPE = 27;
+
 /** Footprint for a building type, falling back to {@link DEFAULT_FOOTPRINT}. */
 export const footprintOf = (type: number): Footprint =>
   FOOTPRINTS[type] ?? DEFAULT_FOOTPRINT;
