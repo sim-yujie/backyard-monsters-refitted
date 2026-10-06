@@ -17,9 +17,15 @@ import {
 } from "./cellVisuals";
 import { LabelLayer, type LabelRequest, type TextPool } from "./LabelLayer";
 import { MARKER_UNIT, PLATE_HALF_HEIGHT, type MapAtlas } from "./mapAtlas";
+// MOCK-UP ONLY (branch mock/hexcell-styles): the hex-cell style trial. Every
+// import and block marked this way goes when the branch is thrown away.
+import { mockBuildingArt, type MockBuildingKind } from "./mockBuildingArt";
+import { mockCellStyle } from "./mockCellStyle";
 import type { PlayerAvatars } from "./playerAvatars";
 import type { TribeAvatars } from "./tribeAvatars";
 import type { ZoneStore } from "./ZoneStore";
+
+if (mockCellStyle === "a" || mockCellStyle === "c") void mockBuildingArt.load();
 
 /**
  * One 10 x 10 block of the map, built once as sprites.
@@ -116,6 +122,19 @@ const PLATE_ALPHA = 0.92;
  * recedes behind the camps (#176).
  */
 const GRID_ALPHA = 0.2;
+
+/* ── MOCK-UP ONLY (branch mock/hexcell-styles): the hex-cell style trial ── */
+
+/** Marks a main yard apart from an outpost in styles B and C: a gold accent. */
+const MOCK_GOLD = 0xd9a441;
+/** Style A's small avatar badge, tucked in a corner of the hex. */
+const MOCK_BADGE_RADIUS = CELL_HEIGHT * 0.14;
+const MOCK_BADGE_X = -CELL_WIDTH * 0.26;
+const MOCK_BADGE_Y = -CELL_HEIGHT * 0.22;
+/** Where the small in-hex name sits, and how wide it may grow, for every style. */
+const MOCK_NAME_Y = CELL_HEIGHT * 0.24;
+const MOCK_NAME_SIZE = CELL_HEIGHT * 0.15;
+const MOCK_NAME_MAX_WIDTH = CELL_WIDTH * 0.84;
 
 export class MapChunk {
   /** The ground and the camps' pictures. */
@@ -373,6 +392,23 @@ export class MapChunk {
    * it waits (#205).
    */
   private addPlayer(appearance: CellAppearance, x: number, y: number): void {
+    // MOCK-UP ONLY (branch mock/hexcell-styles): dispatch to a trial style.
+    switch (mockCellStyle) {
+      case "a":
+        this.addPlayerStyleA(appearance, x, y);
+        return;
+      case "b":
+        this.addPlayerStyleB(appearance, x, y);
+        return;
+      case "c":
+        this.addPlayerStyleC(appearance, x, y);
+        return;
+      default:
+        this.addPlayerDefault(appearance, x, y);
+    }
+  }
+
+  private addPlayerDefault(appearance: CellAppearance, x: number, y: number): void {
     const ownYard = appearance.own && appearance.marker === CellMarker.YARD;
     const radius = ownYard ? OWN_MARKER_RADIUS : MARKER_RADIUS;
     const cy = y + MARKER_Y;
@@ -434,6 +470,140 @@ export class MapChunk {
     plate.tint = own ? OWN_COLOUR : MARKER_FILL_COLOUR;
     plate.alpha = own ? 1 : PLATE_ALPHA;
     this.plates.addChild(plate);
+  }
+
+  /* ── MOCK-UP ONLY (branch mock/hexcell-styles): the hex-cell style trial ──
+   *
+   * Three alternate looks for a player's yard and outpost cells, picked by
+   * `?cellStyle=a|b|c` (mockCellStyle.ts) for the owner to compare. Every
+   * method below, and the constants it uses, goes when the branch is thrown
+   * away; nothing here is reachable with the switch off.
+   */
+
+  /** A: the building itself, a small avatar badge, and a small name at the foot. */
+  private addPlayerStyleA(appearance: CellAppearance, x: number, y: number): void {
+    const outpost = appearance.marker === CellMarker.OUTPOST;
+    const kind: MockBuildingKind = outpost ? "outpost" : "yard";
+    const texture = mockBuildingArt.textureFor(kind);
+    if (texture) {
+      const height = outpost ? CELL_HEIGHT * 0.5 : CELL_HEIGHT * 0.76;
+      const sprite = new Sprite(texture);
+      sprite.anchor.set(0.5, 1);
+      sprite.setSize((height * texture.width) / texture.height, height);
+      sprite.position.set(x, y + CELL_HEIGHT * 0.16);
+      this.bases.addChild(sprite);
+    }
+
+    // Main yard vs outpost by building already; own vs others by a hex border.
+    const ownColour = outpost ? OWN_COLOUR : MOCK_GOLD;
+    const border = place(
+      new Sprite(this.atlas.outlineBold),
+      x,
+      y,
+      appearance.own ? ownColour : PLAYER_RING_COLOUR,
+    );
+    if (!appearance.own) border.alpha = 0.6;
+    this.bases.addChild(border);
+
+    const bx = x + MOCK_BADGE_X;
+    const by = y + MOCK_BADGE_Y;
+    this.bases.addChild(disc(this.atlas.disc, bx, by, MOCK_BADGE_RADIUS, MARKER_FILL_COLOUR));
+    const picture = this.players.textureFor(appearance.avatar);
+    if (picture) {
+      const inner = MOCK_BADGE_RADIUS * (1 - MARKER_RING_SHARE);
+      const sprite = new Sprite(picture);
+      sprite.anchor.set(0.5);
+      sprite.setSize(inner * 2, inner * 2);
+      sprite.position.set(bx, by);
+      this.bases.addChild(sprite);
+    }
+    this.bases.addChild(
+      disc(this.atlas.ring, bx, by, MOCK_BADGE_RADIUS, appearance.own ? OWN_COLOUR : PLAYER_RING_COLOUR),
+    );
+
+    this.addMockName(appearance, x, y);
+  }
+
+  /** B: the avatar fills a hex-shaped frame; the frame's weight and colour say who and what. */
+  private addPlayerStyleB(appearance: CellAppearance, x: number, y: number): void {
+    const outpost = appearance.marker === CellMarker.OUTPOST;
+    const scale = outpost ? 0.62 : 0.88;
+    const cy = y - CELL_HEIGHT * 0.06;
+
+    const frame = place(new Sprite(this.atlas.hex), x, cy, MARKER_FILL_COLOUR);
+    frame.scale.set(scale);
+    this.bases.addChild(frame);
+
+    const picture = this.players.textureFor(appearance.avatar);
+    if (picture) {
+      const inner = CELL_HEIGHT * scale * 0.86;
+      const sprite = new Sprite(picture);
+      sprite.anchor.set(0.5);
+      sprite.setSize(inner, inner);
+      sprite.position.set(x, cy);
+      this.bases.addChild(sprite);
+    }
+
+    // Thick and gold for a main yard, thin for an outpost; own vs others by colour.
+    const outlineTexture = outpost ? this.atlas.outlineFine : this.atlas.outlineBold;
+    const outlineColour = appearance.own
+      ? outpost
+        ? OWN_COLOUR
+        : MOCK_GOLD
+      : PLAYER_RING_COLOUR;
+    const outline = place(new Sprite(outlineTexture), x, cy, outlineColour);
+    outline.scale.set(scale);
+    this.bases.addChild(outline);
+
+    this.addMockName(appearance, x, y);
+  }
+
+  /** C (own idea): a flat tile washed in the owner's colour, the building small on it, a flag for the main yard. */
+  private addPlayerStyleC(appearance: CellAppearance, x: number, y: number): void {
+    const outpost = appearance.marker === CellMarker.OUTPOST;
+
+    const washColour = appearance.own ? OWN_COLOUR : outpost ? 0x4a5672 : 0x606c88;
+    const wash = place(new Sprite(this.atlas.hex), x, y, washColour);
+    wash.alpha = appearance.own ? 0.3 : outpost ? 0.18 : 0.26;
+    this.bases.addChild(wash);
+
+    const kind: MockBuildingKind = outpost ? "outpost" : "yard";
+    const texture = mockBuildingArt.textureFor(kind);
+    if (texture) {
+      const height = outpost ? CELL_HEIGHT * 0.36 : CELL_HEIGHT * 0.52;
+      const sprite = new Sprite(texture);
+      sprite.anchor.set(0.5, 1);
+      sprite.setSize((height * texture.width) / texture.height, height);
+      sprite.position.set(x, y + CELL_HEIGHT * 0.14);
+      this.bases.addChild(sprite);
+    }
+
+    if (!outpost) {
+      // The one thing that still reads as "this is the yard" at a glance.
+      this.bases.addChild(disc(this.atlas.disc, x + CELL_WIDTH * 0.18, y - CELL_HEIGHT * 0.34, CELL_HEIGHT * 0.1, MOCK_GOLD));
+    }
+
+    const border = place(
+      new Sprite(this.atlas.outlineFine),
+      x,
+      y,
+      appearance.own ? OWN_COLOUR : PLAYER_RING_COLOUR,
+    );
+    this.bases.addChild(border);
+
+    this.addMockName(appearance, x, y);
+  }
+
+  /** The small in-hex name every trial style shares: always visible; `appearanceOf` already cuts long ones short with "...". */
+  private addMockName(appearance: CellAppearance, x: number, y: number): void {
+    if (appearance.plate === "") return;
+    this.requests.push({
+      text: appearance.plate,
+      x,
+      y: y + MOCK_NAME_Y,
+      size: MOCK_NAME_SIZE,
+      maxWidth: MOCK_NAME_MAX_WIDTH,
+    });
   }
 }
 

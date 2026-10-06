@@ -12,6 +12,8 @@ import type { RangeSource } from "./attackRange";
 import { TextPool } from "./LabelLayer";
 import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
+// MOCK-UP ONLY (branch mock/hexcell-styles): faked outposts for the style trial.
+import { installMockOutposts } from "./mockFakeOutposts";
 import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
 import { PlayerAvatars } from "./playerAvatars";
 import { RangeOverlay } from "./RangeOverlay";
@@ -98,6 +100,8 @@ export class MapRenderer {
   private selected: OffsetCell | null = null;
 
   constructor(private readonly store: ZoneStore) {
+    // MOCK-UP ONLY (branch mock/hexcell-styles): no-op unless ?fakeOutposts=1.
+    installMockOutposts(store);
     this.world.interactiveChildren = false;
     this.worldTop.interactiveChildren = false;
     // The raster stays under the chunks at every tier, so a chunk that has not
