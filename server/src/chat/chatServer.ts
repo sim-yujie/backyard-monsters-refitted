@@ -2,6 +2,7 @@ import type { TCPSocketListenOptions } from "bun";
 import { logger } from "../utils/logger.js";
 import { initGateway, handleOpen, handleMessage, handleClose } from "./chatGateway.js";
 import { type SocketData } from "./chatState.js";
+import { CHAT_SOCKET_LIMITS } from "../config/SpamLimitConfig.js";
 
 const POLICY_PORTS = process.env.CHAT_POLICY_PORTS ?? process.env.CHAT_WS_PORT;
 
@@ -82,6 +83,8 @@ export const startChatServer = () => {
       message: handleMessage,
       close: handleClose,
       idleTimeout: 120,
+      // Bun's default is 16 MB; a chat line is under 1 KB (issue #323).
+      maxPayloadLength: CHAT_SOCKET_LIMITS.maxMessageBytes,
     },
   };
 

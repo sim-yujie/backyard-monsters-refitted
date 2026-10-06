@@ -873,7 +873,9 @@ bid, n, tid, x, y, i, l, rel: ENEMY, dm, d }`; anything else (border/plain terra
 
 Mounted at `/alliance/...`, `verifyUserAuth` + `logRequest` on every route, plus a per-route
 rate limiter on a few of them (see `app.routes.ts`: `searchAlliancesLimiter` 30/min,
-`allianceJoinRequestLimiter` 10/min, `allianceInviteLimiter` 20/min).
+`allianceJoinRequestLimiter` 10/min, `allianceInviteLimiter` 20/min, and
+`allianceCreateEditLimiter` 10/hour counting `createalliance` and `editalliance` together,
+`429 { error, reason: "rateLimited" }`; issue #323).
 
 | Method | Path | Request fields | Response (`ctx.body`) | Description |
 |---|---|---|---|---|
@@ -1824,6 +1826,13 @@ invalid_channel | not_in_channel | server_error}`.
 alliance-feed "shouts" delivered through the same channel and envelope, distinguishable only
 by this field.
 
+### Socket size and login limits (issue #323)
+
+Numbers in `config/SpamLimitConfig.ts` (`CHAT_SOCKET_LIMITS`). A message over **4 KB** closes
+the connection (Bun's `maxPayloadLength`, close code 1009); before `auth_ok` the cap is
+**512 bytes**, also closing with 1009. A connection that has not logged in within **10 s** is
+closed with 1008.
+
 ### `say` rate limiting and filtering
 
 Enforced per-connection, in-process (not Redis, so it resets per socket, not per account across
@@ -1832,8 +1841,10 @@ sent less than **500ms** after the connection's previous `say`. The message body
 truncated to **200 characters** and passed through the `bad-words` npm package's profanity
 filter; if filtering leaves nothing (the whole message was blocked words), the message is
 **silently dropped** — no `message` is broadcast and no error is sent back, so a client should
-not assume every accepted `say` produces a visible chat line. `join`/`leave`/`ignore`/`unignore`
-have no rate limit.
+not assume every accepted `say` produces a visible chat line. An alliance-channel `say`
+(each one a Postgres write) is also capped at **300 an hour per player** (`SPAM_LIMITS.allianceChat`,
+counted per account in-process, so reconnecting does not reset it), answered with the same
+`rate_limited` error. `join`/`leave`/`ignore`/`unignore` have no rate limit.
 
 ### Rooms / channels
 
@@ -1955,7 +1966,11 @@ surface automatically through the normal base-load flow per cell.
   MR2 `getarea` 120/min, MR3 `getcells` 60/min, alliance search 30/min, alliance invite 20/min,
   alliance join-request 10/min, public leaderboard/world reads 30/min (unauthenticated, by IP),
   debug logging 120/min (by IP). All return `429` with a plain `{ error: "..." }` body (not the
-  `ClientSafeError` envelope).
+  `ClientSafeError` envelope). Spam limits (issue #323, `config/SpamLimitConfig.ts`
+  `SPAM_LIMITS`, per player per hour): mail 30 (`sendmessage` other than a truce request),
+  truce requests 20 (`requesttruce` and `sendmessage` `trucerequest` together), thread reports
+  20, alliance create/edit 10 together, alliance chat lines 300. The mail ones answer
+  `429 { error, message, reason: "rateLimited" }`, `message` being what the web mailbox shows.
 - **Flash-specific artifacts to be aware of, not necessarily reproduce:** the socket-policy
   TCP server on port 843 exists purely for the SWF's cross-domain-socket requirement and is
   irrelevant to a web/WebSocket client. `AlliancePowerupType` values (`ap_armament`,

@@ -12,6 +12,7 @@ import {
   validateChannel,
 } from "./chatChannels.js";
 import { getHistory, pushMessage } from "./chatHistory.js";
+import { takeAllianceLine } from "./chatLimits.js";
 import {
   ErrorCode,
   send,
@@ -190,6 +191,12 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
   const messageBody = filter.clean(body.slice(0, MAX_MSG_LEN).trim());
 
   if (!messageBody) return;
+
+  // Alliance lines are database writes, so they have an hourly limit too (issue #323).
+  if (info.type === ChannelType.Alliance && !takeAllianceLine(client.userId, now)) {
+    send(client.ws, { type: ServerMessageType.Error, code: ErrorCode.RateLimited });
+    return;
+  }
 
   const fields = {
     userId: client.userId,

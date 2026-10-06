@@ -8,6 +8,7 @@ import {
   type ClientMessage,
 } from "./chatProtocol.js";
 import { authenticate } from "./chatIdentity.js";
+import { armLoginDeadline, clearLoginDeadline, closeIfTooLargeBeforeLogin } from "./chatLimits.js";
 import { addIgnore, removeIgnore, sendIgnoreList } from "./chatIgnoreList.js";
 import {
   authorizeJoin,
@@ -60,12 +61,14 @@ const handleControlMessage = (payload: string) => {
 
 /**
  * Called when a new WebSocket connection is opened.
- * Initialises the socket's data to an unauthenticated state.
+ * Initialises the socket's data to an unauthenticated state and gives it a
+ * few seconds to log in.
  *
  * @param {ServerWebSocket<SocketData>} ws - The newly opened WebSocket connection.
  */
 export const handleOpen = (ws: ServerWebSocket<SocketData>) => {
-  ws.data = { userId: null, displayName: "", lastMsgAt: 0 };
+  ws.data = { userId: null, displayName: "", lastMsgAt: 0, loginDeadline: null };
+  armLoginDeadline(ws);
 };
 
 /**
@@ -88,6 +91,7 @@ const dispatch = async (ws: ServerWebSocket<SocketData>, data: string | Buffer) 
 
   if (message.type === ClientMessageType.Auth) {
     await authenticate(ws, message);
+    if (ws.data.userId !== null) clearLoginDeadline(ws);
     return;
   }
 
@@ -157,6 +161,8 @@ const dispatch = async (ws: ServerWebSocket<SocketData>, data: string | Buffer) 
  * @param {string | Buffer} data - The raw message data received from the client.
  */
 export const handleMessage = async (ws: ServerWebSocket<SocketData>, data: string | Buffer) => {
+  if (closeIfTooLargeBeforeLogin(ws, data)) return;
+
   try {
     await dispatch(ws, data);
   } catch (err) {
@@ -173,6 +179,8 @@ export const handleMessage = async (ws: ServerWebSocket<SocketData>, data: strin
  * @param {ServerWebSocket<SocketData>} ws - The WebSocket connection that was closed.
  */
 export const handleClose = (ws: ServerWebSocket<SocketData>): void => {
+  clearLoginDeadline(ws);
+
   const userId = ws.data.userId;
   if (userId === null) return;
 
