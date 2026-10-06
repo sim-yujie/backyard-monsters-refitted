@@ -1158,25 +1158,33 @@ body {
 }
 
 /* "Stay protected?" (#275): a small card, nothing behind it blocked. */
+/* Centred between both edges rather than from `left: 50%`, which left it only
+   half the screen to grow into and squeezed it on a phone (#308). */
 .stay-protected {
   position: absolute;
   top: calc(var(--hud-height) + var(--space-3));
-  left: 50%;
+  inset-inline: var(--space-3);
   z-index: var(--z-system);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4);
-  max-width: min(92vw, 28rem);
+  gap: var(--space-3) var(--space-4);
+  width: fit-content;
+  max-width: 28rem;
+  margin-inline: auto;
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--colour-warning-line);
   border-radius: var(--radius-lg);
   background: var(--colour-surface-raised);
   box-shadow: var(--shadow-popup);
-  transform: translateX(-50%);
+  /* The chat box sits under it on a phone: blurred, not read through it. */
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
 }
 
 .stay-protected__text {
   display: flex;
+  flex: 1 1 12rem;
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
@@ -1203,6 +1211,13 @@ body {
 
 .stay-protected__button {
   flex: none;
+}
+
+/* Too narrow for the line and the button side by side: the button goes under, full width. */
+@media (width <= 480px) {
+  .stay-protected__button {
+    flex: 1 1 100%;
+  }
 }
 
 /* The in-game check (#273): in the "Stay protected?" card's place, and like it

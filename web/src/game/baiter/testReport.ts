@@ -41,6 +41,19 @@ export interface TestReportInput {
    * screen opens, and the report's times count from the first drop. 0 when absent.
    */
   readonly startTick?: number;
+  /**
+   * The tick the countdown runs out on (#308). Once it has, the monsters pull
+   * back for up to two minutes more, and the report's time stops at the
+   * countdown rather than counting that retreat in: a test that ran out of
+   * time took 5:00, not 7:00. Uncapped when absent.
+   */
+  readonly countdownTick?: number;
+  /**
+   * The attacking champions still on the field as it ended, by champion id
+   * (#308). One alive and not among them left it: it retreated, or walked
+   * home. Every one on the field when absent.
+   */
+  readonly championsOnField?: readonly string[];
 }
 
 /** How the test ended: the army beaten, every building down, the clock out, or stopped. */
@@ -105,6 +118,11 @@ export interface AttackerRow {
 export interface ChampionFate {
   readonly name: string;
   readonly survived: boolean;
+  /**
+   * Alive, and off the field by the end (#308): called back, gone home with
+   * the army, or pulled back as the time ran out. Its health is what it left with.
+   */
+  readonly retreated: boolean;
   readonly health: number;
   readonly fellAt: string | null;
 }
@@ -116,7 +134,7 @@ export interface TestReport {
   readonly damagePercent: number;
   readonly buildingsDestroyed: number;
   readonly buildingsTotal: number;
-  /** m:ss from the first drop to the end. */
+  /** m:ss from the first drop to the end, or to the countdown's end when that came first. */
   readonly time: string;
   /** Monsters on the field (dropped and born) and how many of them were beaten. */
   readonly attackersSent: number;
@@ -267,7 +285,9 @@ export const buildTestReport = (input: TestReportInput): TestReport => {
       buildingDamage: row.buildingDamage,
     }));
 
+  const result = resultOf(input.endReason);
   const monsters = state.attackers.filter((row) => !row.champion);
+  const onField = input.championsOnField ? new Set(input.championsOnField) : null;
   const champions: ChampionFate[] = state.attackers
     .filter((row) => row.champion && row.sent > 0)
     .map((row) => {
@@ -277,19 +297,20 @@ export const buildTestReport = (input: TestReportInput): TestReport => {
       return {
         name: championEntry(row.monsterId)?.name ?? "Champion",
         survived,
+        // When the time runs out the whole army pulls back, whoever is still out.
+        retreated: survived && (result === "time" || (onField !== null && !onField.has(row.monsterId))),
         health: survived ? health : 0,
         fellAt: !survived && fell !== undefined ? at(fell) : null,
       };
     });
 
-  const result = resultOf(input.endReason);
   return {
     result,
     resultLine: RESULT_LINES[result],
     damagePercent: input.damagePercent,
     buildingsDestroyed: input.buildingsDestroyed,
     buildingsTotal: input.buildingsTotal,
-    time: at(state.tick),
+    time: at(Math.min(state.tick, input.countdownTick ?? state.tick)),
     attackersSent: sum(monsters.map((row) => row.sent + row.spawned)),
     attackersBeaten: sum(monsters.map((row) => row.lost)),
     champions,

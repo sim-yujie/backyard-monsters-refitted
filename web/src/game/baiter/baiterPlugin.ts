@@ -4,7 +4,7 @@ import { combatKind, type AttackSessionState } from "@/game/attack/AttackSession
 import { testArmyPlugin } from "@/game/attack/plugins/army";
 import { battlePlugin } from "@/game/attack/plugins/battle";
 import { testDropPlugin } from "@/game/attack/plugins/drop";
-import { maxHp } from "@/game/combat/rules";
+import { maxHp, ticks } from "@/game/combat/rules";
 import { championEntry } from "@/game/yard/championCatalogue";
 import { BaiterDock } from "@/ui/attack/BaiterSummary";
 import { TestReportPanel } from "@/ui/attack/TestReport";
@@ -141,6 +141,11 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
       buildingsTotal: facts.buildingsTotal,
       championFell,
       startTick: session.flingLog().events.find((event) => event.kind === "fling")?.t ?? 0,
+      countdownTick: ticks(state.countdownSeconds),
+      championsOnField: battle
+        .creeps()
+        .filter((creep) => creep.champion && !creep.friendly && creep.hp > 0)
+        .map((creep) => creep.monsterId),
     });
     // A test stopped before anything was dropped has nothing to watch.
     const recorded = started

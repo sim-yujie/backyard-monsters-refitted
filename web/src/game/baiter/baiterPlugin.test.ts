@@ -12,6 +12,7 @@ import { battlePlugin } from "@/game/attack/plugins/battle";
 import { dropPlugin, testDropPlugin } from "@/game/attack/plugins/drop";
 import "@/game/attack/plugins";
 import { readYard } from "@/game/yard/yardModel";
+import { formatAmount } from "@/ui/format";
 import { Notices } from "@/ui/maproom/Notices";
 import { BAITER_PLUGINS, BAITER_REPLAY_PLUGINS, baiterPlugin, createBaiterPlugin } from "./baiterPlugin";
 import type { BaiterRecorder } from "./baiterRecord";
@@ -344,6 +345,54 @@ describe("a Baiter test", () => {
     expect(recorder.finish).toHaveBeenCalledWith("retreat");
     expect(modal.querySelector(".test-report__result")!.textContent).toBe("Stopped");
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("times a test that ran out of time to the countdown, not the retreat after it (#308)", () => {
+    const run = runOf();
+    const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
+    mount(run, session);
+    bucketFor(session).setCount("C1", 4);
+    tapAt(canvas, OPEN);
+    session.advance(3);
+    // A one-second countdown: the three seconds after it were the retreat.
+    const real = session.state.bind(session);
+    vi.spyOn(session, "state").mockImplementation(() => ({ ...real(), countdownSeconds: 1 }));
+    session.retreat();
+    expect(recentTests()[0]!.report.time).toBe("0:01");
+  });
+
+  it("reports a champion called back off the field as retreated, with its health (#308)", () => {
+    const run = runOf(withChampion(armyOf(), { t: 1, l: 4, pl: 0 }));
+    const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
+    mount(run, session);
+    const bucket = bucketFor(session);
+    bucket.pickChampion(1);
+    tapAt(canvas, OPEN);
+    session.advance(1);
+    session.retreatChampion(1);
+    for (let step = 0; step < 240 && session.battle()!.creeps().some((creep) => creep.champion); step += 1) {
+      session.advance(0.25);
+    }
+    expect(session.battle()!.creeps().some((creep) => creep.champion)).toBe(false);
+    const health = session.state().championsHp[1]!;
+    expect(health).toBeGreaterThan(0);
+    session.retreat();
+    expect(modal.querySelector(".test-report")!.textContent).toContain(`GorgoRetreated with ${formatAmount(health)} health`);
+  });
+
+  it("no longer calls a champion on the field once the test is over (#308)", () => {
+    const run = runOf(withChampion(armyOf(), { t: 1, l: 4, pl: 0 }));
+    const session = new AttackSession({ target: baiterTarget(run), seed: 3 });
+    mount(run, session);
+    bucketFor(session).pickChampion(1);
+    tapAt(canvas, OPEN);
+    session.advance(1);
+    const note = (): string => dock.querySelector(".attack-army__champion .attack-army__note")?.textContent ?? "";
+    expect(note()).toBe("On the field");
+    session.retreat();
+    expect(note()).not.toBe("On the field");
+    // Still out when it was stopped: it survived, and did not retreat.
+    expect(modal.querySelector(".test-report")!.textContent).toContain("GorgoSurvived with");
   });
 
   it("shows a tower tapped in the report: the camera centres on it and rings it (#22, WP4)", () => {

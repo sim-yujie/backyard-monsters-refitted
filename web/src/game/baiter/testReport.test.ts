@@ -142,6 +142,67 @@ describe("a Baiter test's report", () => {
     expect(report.towers[0]!.firstShot).toBe(clockOf(near.firstShotTick! - 800));
   });
 
+  it("stops the time at the countdown, not counting the retreat after it (#308)", () => {
+    const battle = createBattle(yardOf(TWO_CANNONS), { seed: 1 });
+    battle.apply(fling(-100, -100, { C1: 3 }));
+    run(battle, 800);
+    // The countdown ran out at tick 400, and the monsters pulled back after it.
+    expect(reportOf(battle, TWO_CANNONS, { endReason: "expired", countdownTick: 400 }).time).toBe(clockOf(400));
+    // Ended before the countdown ran out: the real time.
+    expect(reportOf(battle, TWO_CANNONS, { countdownTick: 4000 }).time).toBe(clockOf(battle.tick));
+    // Counted from the first drop all the same.
+    expect(reportOf(battle, TWO_CANNONS, { countdownTick: 400, startTick: 100 }).time).toBe(clockOf(300));
+  });
+
+  it("says a champion that left the field alive retreated, with the health it left with (#308)", () => {
+    const battle = createBattle(yardOf(TWO_CANNONS), { seed: 1 });
+    battle.apply(fling(-100, -100, { C1: 2 }, { t: 1, l: 1 }));
+    run(battle, 200);
+    const health = battle.state().championsHp["G1"]!;
+    expect(health).toBeGreaterThan(0);
+    const fate = (extra: Partial<TestReportInput>) => reportOf(battle, TWO_CANNONS, extra).champions[0];
+
+    // Gone from the field: called back, or home with the army.
+    expect(fate({ championsOnField: [] })).toEqual({
+      name: "Gorgo",
+      survived: true,
+      retreated: true,
+      health,
+      fellAt: null,
+    });
+    // Still out when the yard fell, or the test was stopped: it survived.
+    expect(fate({ endReason: "destroyed", championsOnField: ["G1"] })).toMatchObject({ retreated: false, health });
+    expect(fate({ endReason: "retreat", championsOnField: ["G1"] })).toMatchObject({ retreated: false });
+    // When the time runs out the whole army pulls back, whoever is still out.
+    expect(fate({ endReason: "expired", championsOnField: ["G1"] })).toMatchObject({ retreated: true, health });
+  });
+
+  it("credits a caged champion with every attacker it kills (#308)", () => {
+    const yard: CombatBuildingDataMap = {
+      "1": { id: 1, t: 114, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 150, Y: 150 },
+      "3": { id: 3, t: 1, l: 1, X: 1400, Y: 1400 },
+    };
+    const battle = createBattle(yardOf(yard), { seed: 3, defenderChampions: [{ t: 3, l: 6, hp: 200_000, pl: 3 }] });
+    battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 4 } });
+    run(battle, 6000);
+    // Nothing else defends this yard: Fomor beat all four, and each one is his.
+    expect(battle.state().creepsKilled).toBe(4);
+    expect(reportOf(battle, yard).cagedChampions).toEqual([
+      { name: "Fomor", damage: battle.state().defenderChampions[0]!.damageDealt, kills: 4, health: expect.any(Number) },
+    ]);
+
+    // Healers heal back what he deals: a lot of damage, and no kills to show for it.
+    const healed = createBattle(yardOf(yard), { seed: 3, defenderChampions: [{ t: 3, l: 2, hp: 200_000, pl: 0 }] });
+    healed.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C15: 4 } });
+    run(healed, 33_600);
+    const [fomor] = healed.state().defenderChampions;
+    expect(fomor!.hp).toBeGreaterThan(0);
+    expect(fomor!.damageDealt).toBeGreaterThan(5000);
+    expect(fomor!.kills).toBe(0);
+    expect(healed.state().creepsKilled).toBe(0);
+  });
+
   it("reads one result line per end reason", () => {
     expect(resultOf("exhausted")).toBe("held");
     expect(resultOf("destroyed")).toBe("flattened");
@@ -180,8 +241,8 @@ describe("a Baiter test's report", () => {
     const gorgo = state.championsHp["G1"]!;
     expect(report.champions).toEqual([
       gorgo > 0
-        ? { name: "Gorgo", survived: true, health: gorgo, fellAt: null }
-        : { name: "Gorgo", survived: false, health: 0, fellAt: "0:05" },
+        ? { name: "Gorgo", survived: true, retreated: false, health: gorgo, fellAt: null }
+        : { name: "Gorgo", survived: false, retreated: false, health: 0, fellAt: "0:05" },
     ]);
     expect(report.time).toBe(clockOf(state.tick));
   });

@@ -2,7 +2,7 @@ import { Application, Container } from "pixi.js";
 import { createOverlay, type Overlay } from "@/ui/overlay";
 import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager, type SceneFactory } from "./SceneManager";
-import { withHold, withPresence } from "./presenceScene";
+import { withHold, withPresence, withProtection } from "./presenceScene";
 import { withIdle } from "./idleScene";
 import { IdleWatch, idleDurationText, idleTimingsFor } from "@/game/presence/idleWatch";
 import { IdleWarning } from "@/ui/IdleWarning";
@@ -250,8 +250,11 @@ export class App {
     // Every screen past sign-in keeps the player online (#242, `presenceScene.ts`)
     // and is watched for the idle disconnect, which an attack or a replay
     // (the Baiter's practice and a Watch included) holds off until it is left.
-    const game = (factory: SceneFactory, defer = false): SceneFactory =>
-      withPresence(withHold(withHold(withIdle(factory, idle, { defer }), protection), botCheck));
+    // "Stay protected?" waits while a Baiter test or its replay is up (#308).
+    const game = (factory: SceneFactory, defer = false, simulation = false): SceneFactory =>
+      withPresence(
+        withHold(withProtection(withIdle(factory, idle, { defer }), protection, { simulation }), botCheck),
+      );
     this.scenes
       .register(SceneName.BOOT, () => new BootScene())
       .register(SceneName.LOGIN, () => new LoginScene())
@@ -260,10 +263,10 @@ export class App {
       .register(SceneName.MAP_ROOM_2, game(() => new MapRoom2Scene()))
       .register(SceneName.YARD, game(() => new YardScene()))
       .register(SceneName.ATTACK, game(() => new AttackScene(), true))
-      .register(SceneName.BAITER, game(() => new AttackScene(BAITER_PLUGINS, { practice: true }), true))
+      .register(SceneName.BAITER, game(() => new AttackScene(BAITER_PLUGINS, { practice: true }), true, true))
       .register(
         SceneName.BAITER_REPLAY,
-        game(() => new AttackScene(BAITER_REPLAY_PLUGINS, { practice: true }), true),
+        game(() => new AttackScene(BAITER_REPLAY_PLUGINS, { practice: true }), true, true),
       )
       .register(SceneName.WATCH, game(() => new AttackScene(WATCH_PLUGINS, { watch: true }), true))
       .register(SceneName.RAID, game(() => new AttackScene(RAID_PLUGINS, { raid: true }), true))

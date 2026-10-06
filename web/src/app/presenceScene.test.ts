@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Scene, SceneContext } from "./SceneManager";
-import { withPresence } from "./presenceScene";
+import { withPresence, withProtection } from "./presenceScene";
 
 /** Every game screen holds the presence ping while it is up (#242). */
 
@@ -84,5 +84,26 @@ describe("withPresence", () => {
     expect(ping.holders).toBe(1);
     scene.exit?.();
     expect(ping.holders).toBe(0);
+  });
+});
+
+describe("withProtection", () => {
+  it("holds the Stay protected watch on a game screen, and none on a Baiter test or replay (#308)", async () => {
+    const watch = fakePing();
+    const seen: number[] = [];
+    const inner = (): Scene => ({ enter: () => void seen.push(watch.holders) });
+
+    const yard = withProtection(inner, watch)();
+    await yard.enter?.(context);
+    expect(seen).toEqual([1]);
+    yard.exit?.();
+    expect(watch.holders).toBe(0);
+
+    const baiter = withProtection(inner, watch, { simulation: true })();
+    await baiter.enter?.(context);
+    expect(seen).toEqual([1, 0]);
+    expect(watch.hold).toHaveBeenCalledTimes(1);
+    baiter.exit?.();
+    expect(watch.holders).toBe(0);
   });
 });
