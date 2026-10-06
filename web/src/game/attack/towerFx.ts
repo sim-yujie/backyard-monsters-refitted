@@ -1,5 +1,6 @@
 import type { Graphics } from "pixi.js";
 import {
+  isSpurtzCannon,
   isTower,
   LASER_DROP,
   LASER_HEIGHT,
@@ -9,10 +10,12 @@ import {
   TESLA_LOOP_END,
   TESLA_TICKS_PER_FRAME,
   TESLA_WIND_END,
+  spurtzBlastRadius,
   towerStats,
   type BeamLine,
   type CreepSnapshot,
   type LaserSweep,
+  type LobLine,
 } from "@/game/combat/rules";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import type { Point } from "@/game/yard/YardGrid";
@@ -279,6 +282,7 @@ const CANNON_BALL_LIT = 0x464646;
 const SNIPER_ROUND = 0xffd75e;
 const SNIPER_CORE = 0xfffbe8;
 const FLAK_ROUND = 0xdfe8ff;
+const SPURTZ_SHELL = 0xf3f0dc;
 
 /**
  * How solid the railgun's trail is `age` ticks after the shot, as
@@ -369,6 +373,8 @@ export interface ShotLike {
   readonly beam?: BeamLine;
   /** The Laser's sweep (issue #267): its origin and its target's point, yard units. */
   readonly sweep?: BeamLine;
+  /** A Spurtz Cannon's shell (issue #313): from its muzzle to where it goes off. */
+  readonly lob?: LobLine;
 }
 
 /** Repeatable jitter from a tick and an index, in `[0, 1)`. */
@@ -493,6 +499,29 @@ export class TowerFx {
 
     const stats = towerStats(type, tower.info.level);
     const speed = (stats?.speed ?? 10) * BULLET_SPEED_FACTOR;
+    const lob = event.lob;
+    if (lob && isSpurtzCannon(type)) {
+      // A shell at a point on the ground (issue #313), not at a creep: the
+      // engine hurts what is round it when it lands, so no wound waits on it.
+      const start = this.groundAt(lob.fromIx, lob.fromIy);
+      this.bullets.push({
+        key: 0,
+        type,
+        creepId: -1,
+        bornTick: event.tick,
+        x: start.x,
+        y: start.y,
+        speed: Math.max(speed, 1),
+        // Drawn at half its splash: the blast's own screen radius.
+        splash: spurtzBlastRadius(lob.scale) * 2,
+        aim: this.groundAt(lob.toIx, lob.toIy),
+        stepX: 0,
+        stepY: 0,
+        ticks: 0,
+        landedTick: null,
+      });
+      return null;
+    }
     const key = this.nextKey;
     this.nextKey += 1;
     this.bullets.push({
@@ -717,7 +746,7 @@ export class TowerFx {
         bullet.x = bullet.aim.x;
         bullet.y = bullet.aim.y;
         bullet.landedTick = stepTick;
-        this.host.landed?.(bullet.key, stepTick);
+        if (bullet.creepId >= 0) this.host.landed?.(bullet.key, stepTick);
         return;
       }
     }
@@ -746,6 +775,10 @@ export class TowerFx {
         .lineTo(bullet.x, bullet.y)
         .stroke({ width: 1.5, color: SNIPER_CORE, alpha: 0.9 });
       graphics.circle(bullet.x, bullet.y, 1.8).fill({ color: SNIPER_CORE });
+      return;
+    }
+    if (isSpurtzCannon(bullet.type)) {
+      graphics.circle(bullet.x, bullet.y, 3).fill({ color: SPURTZ_SHELL, alpha: 0.95 });
       return;
     }
     const colour = bullet.type === 115 ? FLAK_ROUND : SNIPER_ROUND;

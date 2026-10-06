@@ -11,6 +11,8 @@ import {
 import {
   BOMBS,
   TICKS_PER_SECOND,
+  battleDefence,
+  isSpurtzCannon,
   parseDefenderForces,
   type BattleVisualEvent,
   type CreepSnapshot,
@@ -985,6 +987,12 @@ export class AttackBattleLayer {
     // And the defence's, so a bunker's monsters and the caged champions come
     // out drawn rather than as markers while their sheets arrive (#195, #310).
     const defence = parseDefenderForces(this.session.attackLoad()?.defenderforces);
+    // The Spurtz a Spurtz Cannon hatches (issue #313), at the level the
+    // battle gives it.
+    if (this.yard.buildings.some((building) => isSpurtzCannon(building.type))) {
+      const sheet = spriteFor("IC1", battleDefence(defence).defenderLevels?.IC1 ?? 1);
+      if (sheet) this.textures.preload(sheet);
+    }
     if (!defence) return;
     for (const garrison of Object.values(defence.bunkers)) {
       for (const id of Object.keys(garrison)) {

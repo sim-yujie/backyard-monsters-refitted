@@ -41,7 +41,7 @@
   },
   "expected": {
     "ticks": 9800,
-    "damage": 8.539185570905275,
+    "damage": 0.6611692428996179,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -56,62 +56,62 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 25,
+    "destroyedBuildings": 3,
     "creepsFlung": 40,
-    "creepsKilled": 40,
-    "championHp": 128842.15162913634,
-    "damagedBuildings": 25,
-    "rngDraws": 1908,
+    "creepsKilled": 41,
+    "championHp": 0,
+    "damagedBuildings": 4,
+    "rngDraws": 7858,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "9f2375e5a19bc687"
+        "digest": "78b322c6e72f9b4c"
       },
       {
         "tick": 1600,
-        "digest": "c212573ea7a38804"
+        "digest": "f6bbf2857fe82313"
       },
       {
         "tick": 2400,
-        "digest": "069539f8d665fb76"
+        "digest": "0509c7e2fd848674"
       },
       {
         "tick": 3200,
-        "digest": "a8b89379930bd187"
+        "digest": "0c191cfb39b72c05"
       },
       {
         "tick": 4000,
-        "digest": "9860016dd2ee7a7b"
+        "digest": "9c48329e275864b8"
       },
       {
         "tick": 4800,
-        "digest": "f246f306e9d47118"
+        "digest": "53027b91b79bacaf"
       },
       {
         "tick": 5600,
-        "digest": "f7c594680e4b740e"
+        "digest": "48cde11b728a4dd5"
       },
       {
         "tick": 6400,
-        "digest": "0b42b5ca7b11edd0"
+        "digest": "fd8b7fc8bc9afc22"
       },
       {
         "tick": 7200,
-        "digest": "13c1ea874bd5d2f9"
+        "digest": "40c7e83e3e5d8d54"
       },
       {
         "tick": 8000,
-        "digest": "5885389e10d88900"
+        "digest": "db4ec58a96418ce8"
       },
       {
         "tick": 8800,
-        "digest": "d67434fc5175667e"
+        "digest": "586ec504b565c352"
       },
       {
         "tick": 9600,
-        "digest": "c857df475c8e1bb1"
+        "digest": "6f9105bb912de9e1"
       }
     ],
-    "digest": "7b43201ce5d7d4fe"
+    "digest": "eb7e5dfaadbc9a08"
   }
 }

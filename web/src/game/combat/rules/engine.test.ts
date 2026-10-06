@@ -20,8 +20,10 @@ import {
   laserEnd,
   laserPulse,
   laserSweep,
+  seriesAtan2Degrees,
   seriesCos,
   seriesSin,
+  spurtzBlastRadius,
   bombBlast,
   championStat,
   championStatWithPower,
@@ -30,6 +32,7 @@ import {
   monsterStat,
   monsterTickSpeed,
   towerHealthScale,
+  turnSpurtzBarrel,
   TARGET_GROUP,
 } from "./stats.js";
 import { buildEngineYard, reachesBuilding, screenDistanceSquared, screenPointOf } from "./yard.js";
@@ -589,6 +592,159 @@ describe("the laser's sweep (`LASER.as:53-106`)", () => {
       expect(Math.abs(seriesSin(x) - Math.sin(x))).toBeLessThan(1e-14);
       expect(Math.abs(seriesCos(x) - Math.cos(x))).toBeLessThan(1e-14);
     }
+  });
+});
+
+describe("the Spurtz Cannon's burst and its Spurtz (issue #313)", () => {
+  /**
+   * A level 1 Black Spurtz Cannon (330 damage, range 300, rate 72, 15 shells a
+   * burst) and a harvester well away from it, so the battle outlasts it.
+   */
+  const spurtzBattle = (monsters: Record<string, number>, health?: Record<string, number>) => {
+    const yard = yardOf(
+      {
+        "1": { id: 1, t: 137, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: 900, Y: 900 },
+      },
+      health,
+    );
+    const battle = createBattle(yard, { seed: 7 });
+    battle.apply({ kind: "fling", t: 0, x: 150, y: 150, r: 20, monsters });
+    return battle;
+  };
+
+  /** Every event over `ticks`, and every Spurtz with the tick it was first seen. */
+  const watch = (battle: ReturnType<typeof createBattle>, ticks: number) => {
+    const events: BattleVisualEvent[] = [];
+    const hatched = new Map<number, { tick: number; ix: number; iy: number }>();
+    for (let step = 0; step < ticks && !battle.over(); step += 1) {
+      battle.step();
+      events.push(...battle.recentEvents(battle.tick - 1));
+      for (const creep of battle.creeps()) {
+        if (creep.friendly && creep.monsterId === "IC1" && !hatched.has(creep.id)) {
+          hatched.set(creep.id, { tick: battle.tick, ix: creep.ix, iy: creep.iy });
+        }
+      }
+    }
+    const lobs = events.flatMap((event) =>
+      event.kind === "shot" && event.lob ? [{ tick: event.tick, ...event.lob }] : [],
+    );
+    return { events, hatched, lobs };
+  };
+
+  it("fires 15 shells a burst at level 1, one every 5 ticks, each lobbed at the ground", () => {
+    const { events, lobs } = watch(spurtzBattle({ C10: 2 }), 300);
+    const shots = events.filter((event) => event.kind === "shot");
+    expect(shots.length).toBeGreaterThanOrEqual(15);
+    expect(lobs).toHaveLength(shots.length);
+    const first = lobs.slice(0, 15);
+    for (let at = 1; at < first.length; at += 1) {
+      expect(first[at]!.tick - first[at - 1]!.tick).toBe(5);
+    }
+    // The 16th waits for the reload.
+    if (lobs[15]) expect(lobs[15].tick - lobs[14]!.tick).toBeGreaterThan(5);
+    for (const lob of lobs) expect(lob.landTick).toBeGreaterThanOrEqual(lob.tick);
+  });
+
+  it("hatches friendly Spurtz where its shells land, about half the time, and culls them", () => {
+    const { events, hatched, lobs } = watch(spurtzBattle({ C10: 2 }), 900);
+    const landed = lobs.filter((lob) => lob.landTick < 900);
+    expect(hatched.size).toBeGreaterThan(0);
+    expect(hatched.size).toBeLessThan(landed.length);
+    for (const spurtz of hatched.values()) {
+      const shell = landed.find(
+        (lob) =>
+          lob.landTick === spurtz.tick &&
+          screenDistanceSquared(lob.toIx, lob.toIy, spurtz.ix, spurtz.iy) < 4,
+      );
+      expect(shell).toBeDefined();
+    }
+    const culled = events.filter(
+      (event) => event.kind === "death" && event.friendly && event.monsterId === "IC1",
+    );
+    expect(culled.length).toBeGreaterThan(0);
+  });
+
+  it("credits its Spurtz's damage and kills to its own report row", () => {
+    const battle = spurtzBattle({ C1: 6, C10: 1 });
+    const { events, hatched } = watch(battle, 2000);
+    const tower = battle.state().towers.find((one) => one.id === 1)!;
+    // Nothing else fights back, so every point the attackers lost is the cannon's.
+    const lost = events
+      .filter((event) => event.kind === "hurt" && !event.friendly)
+      .reduce((sum, event) => sum + (event.kind === "hurt" ? event.amount : 0), 0);
+    expect(tower.damageDealt).toBe(lost);
+    const bitten = events
+      .filter((event) => event.kind === "hit" && hatched.has(event.creepId))
+      .reduce((sum, event) => sum + (event.kind === "hit" ? event.amount : 0), 0);
+    expect(bitten).toBeGreaterThan(0);
+    const deaths = events.filter((event) => event.kind === "death" && !event.friendly);
+    expect(tower.kills).toBe(deaths.length);
+  });
+
+  it("goes off with the landing shell's own blast, not the newest shell's (owner, 2026-10-06)", () => {
+    const { events, hatched, lobs } = watch(spurtzBattle({ C10: 1 }), 900);
+    let checked = 0;
+    for (const lob of lobs) {
+      if (lobs.filter((other) => other.landTick === lob.landTick).length !== 1) continue;
+      const atTick = events.filter((event) => event.tick === lob.landTick);
+      for (const hurt of atTick) {
+        if (hurt.kind !== "hurt" || hurt.friendly) continue;
+        // Take away the Spurtz's bites; what is left is the blast.
+        const bites = atTick.reduce(
+          (sum, event) =>
+            sum +
+            (event.kind === "hit" &&
+            hatched.has(event.creepId) &&
+            event.creepTargetId === hurt.creepId
+              ? event.amount
+              : 0),
+          0,
+        );
+        if (hurt.amount - bites <= 0) continue;
+        const radius = spurtzBlastRadius(lob.scale);
+        const distance = Math.sqrt(screenDistanceSquared(lob.toIx, lob.toIy, hurt.ix, hurt.iy));
+        expect(distance).toBeLessThanOrEqual(radius + 2);
+        checked += 1;
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  it("stops firing the moment it falls (owner, 2026-10-06)", () => {
+    // A cannon on a sliver of health, bombed flat on the tick of its fourth
+    // shell, so its fire tick stands at a shot's.
+    const battle = spurtzBattle({ C10: 2 }, { "1": 50 });
+    const before = watch(battle, 136).lobs;
+    expect(before).toHaveLength(4);
+    expect(before.at(-1)!.tick).toBe(battle.tick);
+    battle.apply({ kind: "bomb", t: battle.tick, x: 0, y: 0, id: "pb1" });
+    const fell = battle.state().towers.find((one) => one.id === 1)!.destroyedTick;
+    expect(fell).not.toBeNull();
+    const after = watch(battle, 300);
+    expect(battle.tick).toBeGreaterThan(fell! + 100);
+    expect(after.lobs).toEqual([]);
+  });
+
+  it("works out atan2 without the runtime's trigonometry (§3.4 rule 3)", () => {
+    for (let y = -300; y <= 300; y += 37) {
+      for (let x = -300; x <= 300; x += 41) {
+        expect(seriesAtan2Degrees(y, x)).toBeCloseTo(Math.atan2(y, x) * (180 / Math.PI), 9);
+      }
+    }
+    expect(seriesAtan2Degrees(0, 0)).toBe(0);
+    expect(seriesAtan2Degrees(5, 0)).toBe(90);
+    expect(seriesAtan2Degrees(0, -5)).toBeCloseTo(180, 12);
+  });
+
+  it("turns its barrel a degree a tick, folding past 180 as Flash's does (`SpurtzCannon.as:154-165`)", () => {
+    expect(turnSpurtzBarrel(0, 10)).toBe(1);
+    expect(turnSpurtzBarrel(0, -10)).toBe(-1);
+    // Level with its aim it turns down.
+    expect(turnSpurtzBarrel(30, 30)).toBe(29);
+    // No shortest way round: from -170 to 170 it climbs the long way.
+    expect(turnSpurtzBarrel(-170, 170)).toBe(-169);
+    expect(turnSpurtzBarrel(-180, -180)).toBe(-181);
   });
 });
 

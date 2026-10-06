@@ -203,7 +203,8 @@ describe("a champion's lesson and brain (issue #219)", () => {
     expect(outcome.lessons).toHaveLength(1);
     const [lesson] = outcome.lessons!;
     expect(lesson).toMatchObject({ t: 1, startHp: 190_000 });
-    expect(lesson!.picks).toBeGreaterThan(10);
+    // The sandbox's Spurtz Cannons cut its fight short since #313: seven picks.
+    expect(lesson!.picks).toBeGreaterThan(5);
     expect(lesson!.dealt).toBeGreaterThan(0);
     expect(lesson!.dealt).toBeLessThanOrEqual(lesson!.potential);
     expect(lesson!.endHp).toBe(outcome.championHp);

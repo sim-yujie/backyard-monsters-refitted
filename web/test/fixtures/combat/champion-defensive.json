@@ -41,7 +41,7 @@
   },
   "expected": {
     "ticks": 9800,
-    "damage": 8.539185570905275,
+    "damage": 0.4640504624078119,
     "destroyed": null,
     "attackloot": {
       "r1": 0,
@@ -56,62 +56,62 @@
       "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 25,
+    "destroyedBuildings": 2,
     "creepsFlung": 40,
-    "creepsKilled": 40,
-    "championHp": 98316.98576932531,
-    "damagedBuildings": 25,
-    "rngDraws": 1776,
+    "creepsKilled": 41,
+    "championHp": 0,
+    "damagedBuildings": 3,
+    "rngDraws": 8413,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "e3988f60eb8b1d76"
+        "digest": "87877ebc1f361456"
       },
       {
         "tick": 1600,
-        "digest": "e32336c160117613"
+        "digest": "9004cc8c788b0556"
       },
       {
         "tick": 2400,
-        "digest": "1eadbebbde42d2dd"
+        "digest": "3b7713fb421bacc5"
       },
       {
         "tick": 3200,
-        "digest": "8f7dc40258b41364"
+        "digest": "b81d62ee1266c3f8"
       },
       {
         "tick": 4000,
-        "digest": "55691407023b0f25"
+        "digest": "7f98d4b051971fb6"
       },
       {
         "tick": 4800,
-        "digest": "060b14ead1f3a798"
+        "digest": "5eee6bef584a45a5"
       },
       {
         "tick": 5600,
-        "digest": "013d39f9217c72bf"
+        "digest": "c3a5f661217025af"
       },
       {
         "tick": 6400,
-        "digest": "b637195c0526979a"
+        "digest": "17ec7b5d729aefd3"
       },
       {
         "tick": 7200,
-        "digest": "a7b0901d495268df"
+        "digest": "fcf99e0cec6072aa"
       },
       {
         "tick": 8000,
-        "digest": "0d2469a7233bdc55"
+        "digest": "135ab0af50cb1ffd"
       },
       {
         "tick": 8800,
-        "digest": "dfe6860f948a08a5"
+        "digest": "1adbf9e5a91fca9b"
       },
       {
         "tick": 9600,
-        "digest": "27444e531deb86f9"
+        "digest": "5bf5b6ae63ec9c44"
       }
     ],
-    "digest": "b610f115eee93ec3"
+    "digest": "4e542bffc763cb5d"
   }
 }

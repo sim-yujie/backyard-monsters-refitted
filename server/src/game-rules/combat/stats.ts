@@ -797,6 +797,113 @@ export const laserEnd = (sweep: LaserSweep, duration: number): { x: number; y: n
 export const laserPulse = (damage: number, splash: number, distance: number): number =>
   splash > 0 ? ((damage * 0.5) / splash) * (splash - distance) : 0;
 
+/**
+ * The Spurtz Cannon and the Black Spurtz Cannon (issue #313), which spray
+ * shells that may hatch Spurtz.
+ *
+ * `BTOWER.TickAttack` re-arms the cannon by `rate * 2` and calls `Fire` on
+ * each target it holds; `SpurtzCannon.Fire` (`client/scripts/SpurtzCannon.as:
+ * 83-91`) takes the nearest {@link SPURTZ_MAX_TARGETS} again and aims at the
+ * last of them, so a burst opens on that one. Every tick (`:109-118`) the
+ * barrel turns a degree towards the aim, the long way round if that is the way
+ * the difference points (`:154-165`); once the barrel is within
+ * {@link SPURTZ_SWITCH_ANGLE} degrees the aim moves to the next target in the
+ * list (`:120-139`). While the fire tick is a multiple of
+ * {@link SPURTZ_SHOT_TICKS} it fires, up to `shots` a burst, the first only
+ * once the barrel is within {@link SPURTZ_START_ANGLE} degrees (`:146-148`).
+ *
+ * A shell flies down the barrel as far as the target is, scattered by up to a
+ * fifth of that distance across and down (`:173-191`, `:220-222`), at half its
+ * `speed` a loop, and lands at the first loop its remaining distance is
+ * within `speed` (`FIREBALL.as:113-141`). There it hurts the ground attackers
+ * within {@link spurtzBlastRadius} with `DealLinearAEDamage` (`:237-244`), and
+ * half the time (`Math.random() > 0.5`) a Spurtz hatches where it landed
+ * (`:226-235`). The cannon's `splash` stat is never read: the shell has no
+ * creep to splash round (`FIREBALLS.as:102-107`).
+ *
+ * A hatched Spurtz, {@link SPURTZ_ID}, is a disposable defender
+ * (`:246-253`) at the defender's level for it (`CREATURES.as:45-66`). It goes
+ * for the nearest ground attacker within {@link SPURTZ_LOOK}
+ * (`CreepBase.as:660-694`) and is culled by its cannon's `TickFast`, every
+ * second loop, once past {@link SPURTZ_CULL_FRAMES} frames: at once with
+ * nothing to fight, else one time in ten (`:98-107`).
+ */
+export const SPURTZ_CANNON_TYPES: ReadonlySet<number> = new Set([136, 137]);
+export const isSpurtzCannon = (type: number): boolean => SPURTZ_CANNON_TYPES.has(type);
+/** `_maxTargets` (`SpurtzCannon.as:53`). */
+export const SPURTZ_MAX_TARGETS = 10;
+/** The fire tick a shot needs to be a multiple of (`:147`). */
+export const SPURTZ_SHOT_TICKS = 5;
+/** Degrees off the aim the barrel may be and still open a burst (`:39`). */
+export const SPURTZ_START_ANGLE = 20;
+/** Degrees off the aim at which the aim moves on to the next target (`:37`). */
+export const SPURTZ_SWITCH_ANGLE = 2;
+/** `-_top`: the muzzle and the aiming point sit this far above the anchor (`:50`). */
+export const SPURTZ_MUZZLE_RISE = 32;
+/** The shell's scatter, either way, as a share of the distance it is fired (`:177`). */
+export const SPURTZ_SCATTER = 0.2;
+/** The shell's sprite, 34 by 27 (`SPRITES.as:90`): its width plus height at full scale. */
+export const SPURTZ_SHELL_SPAN = 61;
+/** The shell's random scale, `random * 0.6 + 0.4` (`:207-211`). */
+export const SPURTZ_SCALE_MIN = 0.4;
+export const SPURTZ_SCALE_SPREAD = 0.6;
+/** `Math.random() > 0.5`: a landing hatches a Spurtz (`:35`, `:232`). */
+export const SPURTZ_HATCH_CHANCE = 0.5;
+export const SPURTZ_ID = "IC1";
+/** How far a hatched Spurtz looks for an attacker (`CreepBase.as:663`). */
+export const SPURTZ_LOOK = 200;
+/** Frames a hatched Spurtz looks again after, while it is not swinging (`CreepBase.as:1066`). */
+export const SPURTZ_RELOOK_FRAMES = 150;
+/** Frames before the cull can take a hatched Spurtz (`SpurtzCannon.as:102`). */
+export const SPURTZ_CULL_FRAMES = 100;
+/** `Math.random() > 0.9`: the cull takes a Spurtz that still has a foe. */
+export const SPURTZ_CULL_ROLL = 0.9;
+/** The cull runs in `TickFast`, once a 40 fps frame: every second loop. */
+export const SPURTZ_CULL_TICKS = 2;
+
+/** The blast round a landing shell: the most recent shell's `width + height`, a `uint`. */
+export const spurtzBlastRadius = (scale: number): number => Math.trunc(SPURTZ_SHELL_SPAN * scale);
+
+/**
+ * `atan` by range reduction and its series: only `+`, `*`, `/` and `sqrt`,
+ * which IEEE 754 rounds alike everywhere (§3.4 rule 3). Halving the angle
+ * twice brings any argument within `tan(pi / 8)`, where twenty terms are
+ * far below a double's last bit.
+ */
+export const seriesAtan = (z: number): number => {
+  if (z !== z) return z;
+  let x = z;
+  for (let halving = 0; halving < 2; halving += 1) x /= 1 + Math.sqrt(1 + x * x);
+  const squared = x * x;
+  let term = x;
+  let sum = x;
+  for (let n = 1; n <= 20; n += 1) {
+    term *= -squared;
+    sum += term / (2 * n + 1);
+  }
+  return sum * 4;
+};
+
+/** `Math.atan2(y, x)` in degrees, on {@link seriesAtan}; `atan2(0, 0)` is 0. */
+export const seriesAtan2Degrees = (y: number, x: number): number => {
+  let radians: number;
+  if (x > 0) radians = seriesAtan(y / x);
+  else if (x < 0) radians = seriesAtan(y / x) + (y >= 0 ? Math.PI : -Math.PI);
+  else radians = y > 0 ? Math.PI / 2 : y < 0 ? -Math.PI / 2 : 0;
+  return radians * (180 / Math.PI);
+};
+
+/**
+ * `rotateBarrelTowardsTarget` (`SpurtzCannon.as:154-165`): a degree towards
+ * `aim`, down when they are equal, with Flash's own folding past 180 either way.
+ */
+export const turnSpurtzBarrel = (barrel: number, aim: number): number => {
+  let next = barrel + (aim - barrel > 0 ? 1 : -1);
+  if (next > 180) next = -(180 - next);
+  else if (next < -180) next = 180 - (180 - next);
+  return next;
+};
+
 /** The Heavy Trap, the one trap that is choosy about what sets it off. */
 export const HEAVY_TRAP_TYPE = 117;
 
