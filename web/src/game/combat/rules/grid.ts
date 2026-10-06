@@ -23,7 +23,7 @@ import type { Rng } from "./rng.js";
  * A route is found by flooding outwards from the target's footprint and then
  * walking downhill from the creep (`:225-269`, `:303-392`, `:412-493`). The
  * flood is per target, shared by every creep heading there, and thrown away
- * whenever the costs change.
+ * when the costs change under it.
  *
  * ## Fidelity notes
  *
@@ -34,14 +34,20 @@ import type { Rng } from "./rng.js";
  *    fast the machine is. That is exactly what `docs/design/server-combat.md`
  *    §3.4 forbids. The engine runs an exact shortest-path flood with the same
  *    cost model, stopping as soon as the creep's own cell is settled, which is
- *    the same early exit `CheckStartReached` makes (`:394-410`). Routes through
- *    open ground are identical; a route through a dense cost field can be
+ *    the same early exit `CheckStartReached` makes (`:394-410`), though only
+ *    once that cell's neighbours are priced, so a flood resumed for the next
+ *    creep carries on exactly as an unbroken one would and a route never
+ *    depends on which creep asked first. Routes through open ground are
+ *    identical; a route through a dense cost field can be
  *    cheaper here than the one Flash drew.
- * 2. **One flood cache, invalidated wholesale.** A building's death makes the
- *    client call `ResetCosts`, which restamps the grid and drops every flood
- *    (`:140-168`, `:535-561`; `BFOUNDATION.as:2010-2011`). The engine does the
- *    same by version: {@link PathGrid.removeBuilding} subtracts that building's
- *    rectangles and bumps `version`, and every cached flood is discarded. The
+ * 2. **One flood cache, invalidated where the costs changed.** A building's
+ *    death makes the client call `ResetCosts`, which restamps the grid and
+ *    drops every flood (`:140-168`, `:535-561`; `BFOUNDATION.as:2010-2011`).
+ *    The engine's {@link PathGrid.removeBuilding} subtracts that building's
+ *    rectangles, bumps `version`, and discards every flood that had priced a
+ *    changed cell. A flood that never gave one a depth never read its cost,
+ *    so it is exactly the flood a fresh start would grow, and is kept: the
+ *    routes are the ones dropping every flood gives, with fewer floods. The
  *    subtraction is exact rather than a restamp because no `_gridCost`
  *    rectangle in the table is negative, so the `cost < 2` floor at `:104-105`
  *    never fires and adding then subtracting is a round trip; `grid.test.ts`
@@ -146,7 +152,10 @@ export interface PathRequest {
 
 /** The grid of one battle. */
 export interface PathGrid {
-  /** Bumped whenever the costs change, which discards every cached flood. */
+  /**
+   * Bumped whenever the costs change, which discards every cached flood that
+   * had reached a changed cell.
+   */
   readonly version: number;
   /** What it costs to enter a cell; 0 for a cell off the grid. */
   costAt(index: number): number;
@@ -251,7 +260,7 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
   const cost = new Int32Array(CELL_COUNT).fill(GRID_BASE_COST);
   const wall = new Int32Array(CELL_COUNT).fill(-1);
   let version = 0;
-  let floods = new Map<number, Flood>();
+  const floods = new Map<number, Flood>();
   let floodsComputed = 0;
   /**
    * The depth and settled arrays of discarded floods, kept for the next ones.
@@ -260,8 +269,11 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
    */
   const spare: { depth: Int32Array; settled: Uint8Array }[] = [];
 
-  /** `PATHING.Cost`: add one rectangle's price to the cells it covers. */
-  const stamp = (building: EngineBuilding, sign: number): void => {
+  /**
+   * `PATHING.Cost`: add one rectangle's price to the cells it covers, noting
+   * each cell in `touched` when given.
+   */
+  const stamp = (building: EngineBuilding, sign: number, touched?: number[]): void => {
     for (const rect of gridCost(building.type, building.level)) {
       const originX = toCellAxis(building.cx + rect[0], GRID_WIDTH);
       const originY = toCellAxis(building.cy + rect[1], GRID_HEIGHT);
@@ -273,13 +285,14 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
           if (index < 0) continue;
           const next = (cost[index] as number) + sign * rect[4];
           cost[index] = next < GRID_MIN_COST ? GRID_MIN_COST : next;
+          touched?.push(index);
         }
       }
     }
   };
 
   /** `PATHING.RegisterBuilding`: mark the footprint cells of a wall (`:121-138`). */
-  const register = (building: EngineBuilding, id: number): void => {
+  const register = (building: EngineBuilding, id: number, touched?: number[]): void => {
     const originX = toCellAxis(building.cx, GRID_WIDTH);
     const originY = toCellAxis(building.cy, GRID_HEIGHT);
     const across = Math.ceil(building.w * 0.1);
@@ -287,7 +300,9 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
     for (let stepX = 0; stepX < across; stepX += 1) {
       for (let stepY = 0; stepY < down; stepY += 1) {
         const index = cellIndexOf(originX + stepX, originY + stepY);
-        if (index >= 0) wall[index] = id;
+        if (index < 0) continue;
+        wall[index] = id;
+        touched?.push(index);
       }
     }
   };
@@ -298,15 +313,33 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
     if (blocksPathing(building.type)) register(building, building.id);
   }
 
+  /**
+   * Take a fallen building off the grid, and with it every flood its cells
+   * could have changed.
+   *
+   * A flood that never priced a changed cell — gave it no depth — never read
+   * its old cost, so it stands exactly as a flood started afresh would at the
+   * same point, and is kept. Any other is dropped, as is the fallen
+   * building's own flood, which nothing will ask for again.
+   */
   const removeBuilding = (building: EngineBuilding): void => {
-    stamp(building, -1);
-    if (blocksPathing(building.type)) register(building, -1);
+    const touched: number[] = [];
+    stamp(building, -1, touched);
+    if (blocksPathing(building.type)) register(building, -1, touched);
     version += 1;
-    for (const flood of floods.values()) {
+    const own = floodKey(building, false);
+    for (const [key, flood] of floods) {
+      const priced = touched.some((index) => (flood.depth[index] as number) >= 0);
+      if (!priced && key !== own && key !== own + 1) continue;
+      floods.delete(key);
       spare.push({ depth: flood.depth, settled: flood.settled });
     }
-    floods = new Map();
   };
+
+  /** A flood's key: its target's origin cell, and whether it ignores walls. */
+  const floodKey = (target: EngineBuilding, ignoreWalls: boolean): number =>
+    (toCellAxis(target.cx, GRID_WIDTH) * GRID_HEIGHT + toCellAxis(target.cy, GRID_HEIGHT)) * 2 +
+    (ignoreWalls ? 1 : 0);
 
   /** The cost of entering one cell, as the flood prices it. */
   const enterCost = (index: number, ignoreWalls: boolean): number =>
@@ -318,7 +351,7 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
   const floodFor = (target: EngineBuilding, ignoreWalls: boolean): Flood => {
     const originX = toCellAxis(target.cx, GRID_WIDTH);
     const originY = toCellAxis(target.cy, GRID_HEIGHT);
-    const key = (originX * GRID_HEIGHT + originY) * 2 + (ignoreWalls ? 1 : 0);
+    const key = floodKey(target, ignoreWalls);
     const held = floods.get(key);
     if (held) return held;
 
@@ -356,7 +389,6 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
       pop(flood);
       if ((flood.settled[index] as number) === 1) continue;
       flood.settled[index] = 1;
-      if (index === goal) return;
       const cellX = Math.floor(index / GRID_HEIGHT);
       const cellY = index % GRID_HEIGHT;
       for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
@@ -375,6 +407,9 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
           push(flood, next, neighbour);
         }
       }
+      // Only once the cell's neighbours are priced, so a flood resumed later
+      // carries on exactly as one that never stopped would.
+      if (index === goal) return;
     }
     flood.exhausted = true;
   };
