@@ -27,10 +27,10 @@ describe("ECONOMY_SAVE_VALIDATION", () => {
     expect(isEconomyValidationMode("allow")).toBe(false);
   });
 
-  test("the combat audit keeps its own default of log", () => {
-    expect(DEFAULT_COMBAT_VALIDATION_MODE).toBe("log");
-    expect(parseEconomyValidationMode(undefined, DEFAULT_COMBAT_VALIDATION_MODE)).toBe("log");
-    expect(parseEconomyValidationMode("nonsense", DEFAULT_COMBAT_VALIDATION_MODE)).toBe("log");
-    expect(parseEconomyValidationMode("reject", DEFAULT_COMBAT_VALIDATION_MODE)).toBe("reject");
+  test("the combat audit refuses by default, and log is still a way back (#201)", () => {
+    expect(DEFAULT_COMBAT_VALIDATION_MODE).toBe("reject");
+    expect(parseEconomyValidationMode(undefined, DEFAULT_COMBAT_VALIDATION_MODE)).toBe("reject");
+    expect(parseEconomyValidationMode("nonsense", DEFAULT_COMBAT_VALIDATION_MODE)).toBe("reject");
+    expect(parseEconomyValidationMode("log", DEFAULT_COMBAT_VALIDATION_MODE)).toBe("log");
   });
 });

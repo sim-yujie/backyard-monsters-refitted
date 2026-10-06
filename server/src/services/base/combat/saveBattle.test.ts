@@ -28,6 +28,7 @@ mock.module("../reportManager.js", () => ({
 }));
 
 const { recordBattleMismatches } = await import("./saveBattle.js");
+const { DEFAULT_COMBAT_VALIDATION_MODE } = await import("../../../config/CombatConfig.js");
 
 const ctx = { ip: "127.0.0.1" } as unknown as Context;
 const user = { userid: 2505, username: "agenttester" } as unknown as User;
@@ -61,6 +62,8 @@ const honest = {
 };
 const crafted = { ...honest, damage: 100, attackloot: { r1: 1e9, r2: 0, r3: 0, r4: 0 } };
 const stored = { "1": { id: 1, t: 14 } };
+/** An honest save but for a siege stock the replay did not end with. */
+const otherSiege = { ...honest, attackersiege: { jars: { quantity: 3 } } };
 
 const mismatchLines = () =>
   warn.mock.calls.filter((call) => (call[1] as { event?: string })?.event === "attack-replay-mismatch");
@@ -103,6 +106,50 @@ describe("recordBattleMismatches", () => {
     expect(caught?.data).toEqual({ reason: "replayMismatch", fields: ["damage", "attackloot"] });
     expect(mismatchLines()[0]![1]).toMatchObject({ outcome: "rejected", mode: "reject" });
     expect(reports).toHaveLength(1);
+  });
+
+  test("the default mode refuses a crafted save, with the message the client words alike (#201)", async () => {
+    const caught = await recordBattleMismatches(
+      ctx,
+      user,
+      base,
+      crafted,
+      battle,
+      stored,
+      DEFAULT_COMBAT_VALIDATION_MODE
+    ).catch((err: unknown) => err as { message?: string; data?: { reason?: string } });
+
+    expect(caught?.data?.reason).toBe("replayMismatch");
+    expect(caught?.message).toBe(
+      "The server replayed this battle and got a different result, so it did not take this save."
+    );
+    expect(mismatchLines()[0]![1]).toMatchObject({ outcome: "rejected", mode: "reject" });
+  });
+
+  test("reject: a siege stock alone is logged, never refused (#201)", async () => {
+    await recordBattleMismatches(ctx, user, base, otherSiege, battle, stored, "reject");
+
+    expect(mismatchLines()).toHaveLength(1);
+    expect(mismatchLines()[0]![1]).toMatchObject({ outcome: "flagged", mode: "reject", fields: ["attackersiege"] });
+    expect(reports).toEqual(["Attack save on base 1234 flagged (reject): disagrees with the replay on attackersiege"]);
+  });
+
+  test("reject: a siege stock beside a real mismatch is refused for the real one only", async () => {
+    const caught = await recordBattleMismatches(
+      ctx,
+      user,
+      base,
+      { ...crafted, attackersiege: otherSiege.attackersiege },
+      battle,
+      stored,
+      "reject"
+    ).catch((err: unknown) => err as { data?: { fields?: string[] } });
+
+    expect(caught?.data?.fields).toEqual(["damage", "attackloot"]);
+    expect(mismatchLines()[0]![1]).toMatchObject({
+      outcome: "rejected",
+      fields: ["damage", "attackloot", "attackersiege"],
+    });
   });
 
   test("a Report row that cannot be written never fails the save", async () => {

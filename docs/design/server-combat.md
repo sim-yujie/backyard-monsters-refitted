@@ -175,7 +175,7 @@ to them, but its server wiring is the last work package and is gated on #32.
 | Shared rules module | `web/src/game/combat/rules/`, copied to `server/src/game-rules/combat/` by a sync script with a hash manifest and a drift test on both sides (section 3.2). Holds the stat readers, the bound model, the damage-percent and loot rules, the seeded RNG, the grid, targeting and the tick engine. |
 | Attack audit | Pure `auditAttackSave(input)` returning a verdict: derived fields plus violations. Runs before any key is applied. |
 | Key trims | `protected`, `locked` and `buildingresources` leave `attackSaveKeys`; `monsters`, `attackerchampion` and `attackcreatures` become clamps rather than overwrites. |
-| Rollout | `COMBAT_SAVE_VALIDATION=off\|log\|reject`, default `log`, mirroring `ECONOMY_SAVE_VALIDATION`. |
+| Rollout | `COMBAT_SAVE_VALIDATION=off\|log\|reject`, default `log`, mirroring `ECONOMY_SAVE_VALIDATION`. Now `reject` (issue #201), with `log` as the way back. |
 | Engine and golden replays | The deterministic simulation (creeps, towers, traps, bunkers, champions, bombs) with fixture replays whose digests must match under Bun and under Vitest. |
 | Fling log contract | The keys the web client must add to an attack save for Phase B, fixed now for #32. |
 | Tests and a curl script | `bun:test` over the sandbox fixture for the server, Vitest for the shared module, and a shell script that drives a real attack through accept and reject. |
@@ -395,8 +395,13 @@ as `attack-replay-mismatch`) are under `COMBAT_SAVE_VALIDATION`, with the attack
 flung champion's health, the siege stock; the C1 fields) added to the compared fields and the
 defender's `monsters` left out. `off` is silent, `log` warns and writes one `Report` row per
 flagged save, `reject` also refuses the save (`attackReplayRejectedErr`, `reason:
-"replayMismatch"`) before anything is written. The default stays `log`, per section 5 of the #23
-plan: read what honest play produces before refusing. `battle.test.ts` shows an honest save never
+"replayMismatch"`) before anything is written. The default stayed `log`, per section 5 of the #23
+plan: read what honest play produces before refusing. **Issue #201** made it `reject`, after fixing
+the two inputs the replay took from a different moment from the client (the attacker's academy
+levels and Declare War, now frozen into the session at launch) and checking 40 saves the real web
+client built (`server/src/services/base/combat/honestSaves.test.ts`). A siege stock difference on
+its own is logged but never refused: the server never writes the client's figure for it, and the
+stock can honestly move during an attack. `battle.test.ts` shows an honest save never
 trips it: every golden fixture, main yard and tribe, stopped at every event, just after it, part way
 and at the longest end, plus a siege use, gives no mismatch.
 
@@ -491,7 +496,7 @@ Modified:
 | `server/src/services/base/attackSession.ts`, `attackSessionStore.ts` | A fourth field, `seed`, on the session string; `parseAttackSession` accepts three or four fields. Phase B reads it; Phase A mints it so the value exists from day one. |
 | `server/src/controllers/base/load/modes/baseModeAttack.ts` | Returns `combatseed` in the attack-mode load response beside `attackid` (`:126`, `:191-192`). The Flash client ignores unknown fields. |
 | `server/src/schemas/BaseSaveSchema.ts` | `flinglog` (JSON string, optional) for Phase B. |
-| `server/example.env` | `COMBAT_SAVE_VALIDATION=log`, `COMBAT_REPLAY=off`, each with a comment. |
+| `server/example.env` | `COMBAT_SAVE_VALIDATION=log`, `COMBAT_REPLAY=off`, each with a comment. (`reject` since issue #201.) |
 | `web/package.json` | `"gen:combat"` and `"sync:combat"` scripts; `"test"` unchanged (Vitest picks the new tests up under `src/**/*.test.ts`, `web/vite.config.ts:62`). |
 | `docs/server-api.md`, `docs/specs/combat.md`, `docs/specs/monsters-and-hatchery.md` | Section 3.11. |
 

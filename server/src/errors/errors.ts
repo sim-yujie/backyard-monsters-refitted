@@ -704,19 +704,20 @@ export const attackCheckpointRefusedErr = (reason: string) =>
 /**
  * An attack save whose battle the server's replay does not bear out — its
  * damage, health, destroyed flag, fired traps, loot or the attacker's own
- * champion health or siege differ from the replay's — refused in
+ * champion health differ from the replay's — refused in
  * `COMBAT_SAVE_VALIDATION=reject` mode (issue #23, C7,
  * `services/base/combat/saveBattle.ts`). Nothing was written, and on Map Room
  * 2 the attack's checkpoint lets the finaliser land the server's result.
  *
  * `reason` is `replayMismatch` so the web client can tell a retry will not
- * help; `fields` says which figures differed.
+ * help; `fields` says which figures differed. A siege-only difference is
+ * logged, never refused (`LOG_ONLY_FIELDS` in `saveBattle.ts`).
  *
  * @param fields The fields that differed.
  */
 export const attackReplayRejectedErr = (fields: readonly string[]) =>
   new ClientSafeError({
-    message: "This attack's result does not match the battle. Reload your yard.",
+    message: "The server replayed this battle and got a different result, so it did not take this save.",
     status: Status.CONFLICT,
     data: { reason: "replayMismatch", fields: [...fields] },
     isClientFriendly: false,

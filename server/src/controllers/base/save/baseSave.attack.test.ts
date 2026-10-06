@@ -826,7 +826,7 @@ describe("the battle is the server's (#23, C3)", () => {
     expect(attackerSave.resources.r1).toBe(100 + battle.attackloot.r1);
   });
 
-  test("reject: a siege stock the log does not explain is refused too (C7)", async () => {
+  test("reject: a siege stock the log does not explain is logged, not refused, and never written (#201)", async () => {
     setMode("reject");
     attackerSave.siege = { jars: { quantity: 2 } };
     const battle = serverBattle();
@@ -842,9 +842,10 @@ describe("the battle is the server's (#23, C3)", () => {
         attackersiege: JSON.stringify({ jars: { quantity: 99 } }),
       }),
       async () => {}
-    ).catch((err: unknown) => err as { data?: { fields?: string[] } });
+    ).catch((err: unknown) => err);
 
-    expect(caught?.data?.fields).toEqual(["attackersiege"]);
+    expect(caught).toBeUndefined();
+    expect(defender.damage).toBe(Math.trunc(battle.damage));
     expect(attackerSave.siege).toEqual({ jars: { quantity: 2 } });
   });
 

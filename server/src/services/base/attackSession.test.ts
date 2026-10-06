@@ -174,6 +174,32 @@ describe("the stored session", () => {
     expect(sessionFactsOf({ defenderForces: "nope" }).defenderForces).toBeUndefined();
   });
 
+  test("carries the academy and Declare War the attack was fought with (#201), checkpoint copy too", () => {
+    const attackerAcademy = { C1: 3, C5: 1 };
+    const stored = newAttackSession(
+      ATTACKER,
+      DEFENDER_ATTACK_ID,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      attackerAcademy,
+      false
+    );
+    const read = parseAttackSession(serialiseAttackSession(stored));
+
+    expect(read?.attackerAcademy).toEqual(attackerAcademy);
+    expect(read?.declareWar).toBe(false);
+    expect(sessionFactsOf(JSON.parse(JSON.stringify({ attackerAcademy, declareWar: true })))).toEqual({
+      attackerAcademy,
+      declareWar: true,
+    });
+    expect(sessionFactsOf({ attackerAcademy: { C1: 0, C2: 2.5, C3: "4", C4: 2 } }).attackerAcademy).toEqual({ C4: 2 });
+    expect(sessionFactsOf({ attackerAcademy: "nope", declareWar: "yes" })).toEqual({});
+  });
+
   test("newAttackSession records the attacker's level only when it is given one", () => {
     expect(newAttackSession(ATTACKER, DEFENDER_ATTACK_ID, undefined, undefined, 3).attackerlevel).toBe(3);
     expect("attackerlevel" in newAttackSession(ATTACKER, DEFENDER_ATTACK_ID)).toBe(false);

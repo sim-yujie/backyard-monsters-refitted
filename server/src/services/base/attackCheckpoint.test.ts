@@ -173,6 +173,9 @@ describe("stored checkpoints", () => {
       entryHoused: { "1000239208": { C1: 200 } },
       defenderResources: { r1: 5, r2: 6, r3: 7, r4: 8.5 },
       attackerlevel: 12,
+      // What the replay must fight with (#201).
+      attackerAcademy: { C1: 3, C5: 1 },
+      declareWar: true,
     };
     const kept = newCheckpoint(recorded, 9, accepted(parseCheckpoint(body())), 1_000_010);
     const read = parseStoredCheckpoint(serialiseCheckpoint(kept))!;
