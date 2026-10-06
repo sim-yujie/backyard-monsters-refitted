@@ -6,6 +6,7 @@ import { AttackBattleLayer, MonsterSheetTextures, type BattleYardHost } from "./
 import { AttackSession } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
+import { sheetUrl } from "./monsterSprites";
 
 /**
  * The building side of the battle layer over a real session (issues #64, #66,
@@ -49,7 +50,7 @@ const targetOf = (): AttackTarget => ({
 });
 
 const blankSheet = (url: string): Promise<Texture> => {
-  const sheet = Object.values(MONSTER_SPRITES).find((candidate) => url.endsWith(candidate.file));
+  const sheet = Object.values(MONSTER_SPRITES).find((candidate) => url === sheetUrl(candidate));
   if (!sheet) throw new Error(`no sheet at ${url}`);
   return Promise.resolve(
     new Texture({ source: new TextureSource({ width: sheet.width, height: sheet.height }) }),
