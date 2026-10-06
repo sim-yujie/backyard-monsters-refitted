@@ -28,6 +28,11 @@ import {
   botCheckAnswerLimiter,
   chatReportLimiter,
   playerAchievementsLimiter,
+  playerMailLimiter,
+  truceRequestLimiter,
+  mailTruceRequestLimiter,
+  threadReportLimiter,
+  allianceCreateEditLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -232,9 +237,9 @@ router.post("/worldmapv3/setmapversion", verifyUserAuth, verifyAccountStatus, lo
 router.get("/api/:apiVersion/player/getmessagetargets", apiVersion, verifyUserAuth, logRequest, getMessageTargets);
 router.get("/api/:apiVersion/player/getmessagethreads", apiVersion, verifyUserAuth, logRequest, getMessageThreads);
 router.post("/api/:apiVersion/player/getmessagethread", apiVersion, verifyUserAuth, logRequest, getMessageThread);
-router.post("/api/:apiVersion/player/sendmessage", apiVersion, verifyUserAuth, logRequest, sendMessage);
-router.post("/api/:apiVersion/player/requesttruce", apiVersion, verifyUserAuth, logRequest, requestTruce);
-router.post("/api/:apiVersion/player/reportmessagethread", apiVersion, verifyUserAuth, logRequest, reportMessageThread);
+router.post("/api/:apiVersion/player/sendmessage", apiVersion, verifyUserAuth, playerMailLimiter, mailTruceRequestLimiter, logRequest, sendMessage);
+router.post("/api/:apiVersion/player/requesttruce", apiVersion, verifyUserAuth, truceRequestLimiter, logRequest, requestTruce);
+router.post("/api/:apiVersion/player/reportmessagethread", apiVersion, verifyUserAuth, threadReportLimiter, logRequest, reportMessageThread);
 
 /**  ────────────────────────────────────────────────
 * 📦 Yard Planner
@@ -289,8 +294,8 @@ router.get("/api/:apiVersion/attacklogs", verifyUserAuth, getAttackLogs);
 /**  ────────────────────────────────────────────────
 * 📦 Alliances
 * ──────────────────────────────────────────────── */
-router.post("/alliance/createalliance", verifyUserAuth, logRequest, createAlliance);
-router.post("/alliance/editalliance", verifyUserAuth, logRequest, editAlliance);
+router.post("/alliance/createalliance", verifyUserAuth, allianceCreateEditLimiter, logRequest, createAlliance);
+router.post("/alliance/editalliance", verifyUserAuth, allianceCreateEditLimiter, logRequest, editAlliance);
 router.post("/alliance/leavealliance", verifyUserAuth, logRequest, leaveAlliance);
 router.get("/alliance/myalliance", verifyUserAuth, logRequest, myAlliance);
 router.get("/alliance/myalliancemembers", verifyUserAuth, logRequest, myAllianceMembers);

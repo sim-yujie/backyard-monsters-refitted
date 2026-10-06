@@ -2,6 +2,7 @@ import { RateLimit } from "koa2-ratelimit";
 import { Env } from "../enums/Env.js";
 import { Status } from "../enums/StatusCodes.js";
 import type { Context } from "koa";
+import { SPAM_LIMITS, type SpamLimit } from "../config/SpamLimitConfig.js";
 
 /**
  * Keys a limiter by account, falling back to IP only for unauthenticated routes.
@@ -358,4 +359,75 @@ export const chatReportLimiter = RateLimit.middleware({
     ctx.status = Status.TOO_MANY_REQUESTS;
     ctx.body = { error: "You have sent a lot of reports. Please wait a few minutes.", reason: "rateLimited" };
   },
+});
+
+/**
+ * Builds a spam limiter (issue #323) from its entry in `SPAM_LIMITS`, keyed by
+ * player. Limiters given the same prefix share one count.
+ *
+ * @param {string} prefixKey - Scopes the limiter's counters.
+ * @param {SpamLimit} limit - How many in how many minutes.
+ * @param {(ctx: Context) => void} handler - Answers a refused request.
+ * @param {(ctx: Context) => boolean} skip - True for a request this limiter does not count.
+ */
+const spamLimiter = (
+  prefixKey: string,
+  limit: SpamLimit,
+  handler: (ctx: Context) => void,
+  skip?: (ctx: Context) => boolean
+) =>
+  RateLimit.middleware({
+    interval: { min: limit.minutes },
+    max: limit.max,
+    prefixKey,
+    keyGenerator: byUser(prefixKey),
+    ...(skip && { skip: async (ctx: Context) => skip(ctx) }),
+    handler: async (ctx: Context) => handler(ctx),
+  });
+
+/**
+ * A mail refusal: `message` is what the web mailbox shows (`sendRefusal`),
+ * `error` what Flash reads.
+ */
+const mailRefusal = (text: string) => (ctx: Context) => {
+  ctx.status = Status.TOO_MANY_REQUESTS;
+  ctx.body = { error: text, message: text, reason: "rateLimited" };
+};
+
+/** The `type` of a `sendmessage` body: "message", "trucerequest", ... */
+const mailType = (ctx: Context): unknown => (ctx.request.body as { type?: unknown } | undefined)?.type;
+
+const isTruceRequest = (ctx: Context) => mailType(ctx) === "trucerequest";
+
+const truceRefusal = mailRefusal("You have proposed a lot of truces. Please wait a while before proposing another.");
+
+/** Mail sent or replied to; a truce request is counted by the truce limit instead. */
+export const playerMailLimiter = spamLimiter(
+  "player-mail",
+  SPAM_LIMITS.playerMail,
+  mailRefusal("You have sent a lot of mail. Please wait a while before sending more."),
+  isTruceRequest
+);
+
+/** A truce proposed from a yard (`requesttruce`). */
+export const truceRequestLimiter = spamLimiter("truce-request", SPAM_LIMITS.truceRequest, truceRefusal);
+
+/** A truce proposed in a thread (`sendmessage` "trucerequest"), counted with `truceRequestLimiter`. */
+export const mailTruceRequestLimiter = spamLimiter(
+  "truce-request",
+  SPAM_LIMITS.truceRequest,
+  truceRefusal,
+  (ctx) => !isTruceRequest(ctx)
+);
+
+export const threadReportLimiter = spamLimiter(
+  "thread-report",
+  SPAM_LIMITS.threadReport,
+  mailRefusal("You have reported a lot of threads. Please wait a while before reporting more.")
+);
+
+/** Alliances created and edited, counted together. */
+export const allianceCreateEditLimiter = spamLimiter("alliance-create-edit", SPAM_LIMITS.allianceCreateEdit, (ctx) => {
+  ctx.status = Status.TOO_MANY_REQUESTS;
+  ctx.body = { error: "You have changed alliances a lot. Please wait a while and try again.", reason: "rateLimited" };
 });
