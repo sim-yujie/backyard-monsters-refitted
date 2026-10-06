@@ -158,6 +158,16 @@ describe("register", () => {
     );
     expect(await run(VALID)).toMatchObject({ status: 409, reason: "usernameTaken" });
   });
+
+  test("a sign-up that loses a race for the same name in another case is refused as taken (#216)", async () => {
+    flushError = new UniqueConstraintViolationException(
+      new Error(
+        'duplicate key value violates unique constraint "user_username_lower_unique" - ' +
+          "Key (lower(username))=(bob) already exists."
+      )
+    );
+    expect(await run(VALID)).toMatchObject({ status: 409, reason: "usernameTaken" });
+  });
 });
 
 describe("register: launch checks", () => {
