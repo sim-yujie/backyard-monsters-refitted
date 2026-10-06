@@ -133,11 +133,11 @@ const SCHEDULE_FIELDS = [
   "attacks",
 ] as const;
 
-/** A fresh 31-bit seed for a raid (§3). */
-const newSeed = (): number => randomInt(1, 2 ** 31);
+/** A fresh 31-bit seed for a raid (§3), also used to seed the Trojan Horse's fight (`trojanFight.ts`). */
+export const newSeed = (): number => randomInt(1, 2 ** 31);
 
-/** Tells the bell what a catch-up finished; never fails the raid. */
-const notifyJobs = async (em: EntityManager, userid: number, completed: readonly CompletedJob[]): Promise<void> => {
+/** Tells the bell what a catch-up finished; never fails the raid. Shared with `trojanFight.ts`. */
+export const notifyJobs = async (em: EntityManager, userid: number, completed: readonly CompletedJob[]): Promise<void> => {
   if (completed.length > 0) await notifyAndCount(em, userid, null, "jobs", completed);
 };
 
@@ -260,8 +260,8 @@ export const prepareRaid = async (userid: number, raidId: unknown, now: number):
   return rewrite(userid, { ...raid, warned: 1 }, now);
 };
 
-/** The caller's main yard, locked, or refused. */
-const lockMain = async (tx: EntityManager, user: User): Promise<Save> => {
+/** The caller's main yard, locked, or refused. Shared with `trojanFight.ts`. */
+export const lockMain = async (tx: EntityManager, user: User): Promise<Save> => {
   const basesaveid = user.save?.basesaveid;
   if (basesaveid == null) throw raidRefusedErr("notMainYard");
   const locked = await tx.findOne(Save, { basesaveid }, { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true });
@@ -314,16 +314,25 @@ const freezeYard = async (em: EntityManager, user: User, raid: OpenRaid, now: nu
   return frozen;
 };
 
-/** How the start's second transaction went. */
-type FightLocked = "locked" | "lapsed" | "lifted" | "raidGone";
+/** How the start's second transaction went. Shared with `trojanFight.ts`. */
+export type FightLocked = "locked" | "lapsed" | "lifted" | "raidGone";
 
 /**
  * The start's second transaction: the provisional lock made the fight's own,
- * lasting the fight and its grace, and the open raid moved to its fight. The
- * lock may have gone meanwhile: lifted by a yard load (`startSession`), or
- * lapsed. Any outcome but "locked" leaves the yard unlocked.
+ * lasting the fight and its grace, and the open raid claimed in Redis by
+ * `claim` (`updateOpenRaid` for a raid already warned; the Trojan Horse's
+ * spring claims instead with `openFightingRaid`, having no warning to update,
+ * `trojanFight.ts`). The lock may have gone meanwhile: lifted by a yard load
+ * (`startSession`), or lapsed. Any outcome but "locked" leaves the yard
+ * unlocked.
  */
-const lockForFight = (em: EntityManager, user: User, fighting: OpenRaid, now: number): Promise<FightLocked> =>
+export const lockForFight = (
+  em: EntityManager,
+  user: User,
+  fighting: OpenRaid,
+  now: number,
+  claim: (userid: number, raid: OpenRaid, now: number) => Promise<boolean> = updateOpenRaid
+): Promise<FightLocked> =>
   em.transactional(async (tx) => {
     const locked = await lockMain(tx, user);
     const schedule = readSchedule(locked.aiattacks);
@@ -331,7 +340,7 @@ const lockForFight = (em: EntityManager, user: User, fighting: OpenRaid, now: nu
 
     let outcome: FightLocked = "lapsed";
     if (raidFighting(locked, getCurrentDateTime())) {
-      outcome = (await updateOpenRaid(user.userid, fighting, now)) ? "locked" : "raidGone";
+      outcome = (await claim(user.userid, fighting, now)) ? "locked" : "raidGone";
     }
     locked.aiattacks = scheduleColumn(
       outcome === "locked"
@@ -425,8 +434,8 @@ export const startRaid = async (em: EntityManager, user: User, raidId: unknown, 
   return start;
 };
 
-/** Lifts the yard's fight lock for a raid that will not land. */
-const unlockYard = (em: EntityManager, user: User, raidId: string): Promise<void> =>
+/** Lifts the yard's fight lock for a raid that will not land. Shared with `trojanFight.ts`. */
+export const unlockYard = (em: EntityManager, user: User, raidId: string): Promise<void> =>
   em.transactional(async (tx) => {
     const locked = await lockMain(tx, user);
     const schedule = readSchedule(locked.aiattacks);

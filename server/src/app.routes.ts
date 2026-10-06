@@ -63,7 +63,7 @@ import { infernoMonsters } from "./controllers/inferno/infernoMonsters.js";
 import { getNeighbours } from "./controllers/maproom/getNeighbours.js";
 import { getMapRoom1 } from "./controllers/maproom/getMapRoom1.js";
 import { presence, stayProtected } from "./controllers/maproom/presence.js";
-import { raidDevDue, raidDevTrojan, raidEngage, raidFinish, raidFrequency, raidPrepare, raidStart } from "./controllers/raid/raid.js";
+import { raidDevDue, raidDevTrojan, raidEngage, raidFinish, raidFrequency, raidPrepare, raidStart, raidTrojan } from "./controllers/raid/raid.js";
 import { botCheck, botCheckAnswer, botCheckForce, devCheckEnabled } from "./controllers/maproom/botCheck.js";
 
 import { getArea } from "./controllers/maproom/v2/getArea.js";
@@ -195,6 +195,8 @@ if (devCheckEnabled()) {
 router.post("/api/:apiVersion/bm/raid/engage", apiVersion, verifyUserAuth, logRequest, raidEngage);
 router.post("/api/:apiVersion/bm/raid/prepare", apiVersion, verifyUserAuth, logRequest, raidPrepare);
 router.post("/api/:apiVersion/bm/raid/start", apiVersion, verifyUserAuth, logRequest, raidStart);
+// The Trojan Horse's spring (#306 WP3): no warning, opens the fight at once; its own fight lands through `finish` above.
+router.post("/api/:apiVersion/bm/raid/trojan", apiVersion, verifyUserAuth, logRequest, raidTrojan);
 router.post("/api/:apiVersion/bm/raid/finish", apiVersion, verifyUserAuth, logRequest, raidFinish);
 router.post("/api/:apiVersion/bm/raid/frequency", apiVersion, verifyUserAuth, logRequest, raidFrequency);
 // DEV only, never mounted in production: the next raid is due now.
