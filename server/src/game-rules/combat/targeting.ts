@@ -224,6 +224,51 @@ export interface BuildingTarget {
 }
 
 /**
+ * A yard's buildings sorted once into the classes a creep can prefer, as
+ * indices in id order. A building's class never changes and a fallen building
+ * never stands up again, so each list only ever loses entries, which
+ * {@link living} drops as it meets them. Iterating these instead of the whole
+ * yard visits the same buildings in the same order.
+ */
+interface TargetLists {
+  readonly walls: number[];
+  readonly towers: number[];
+  readonly bunkers: number[];
+  readonly main: number[];
+}
+
+const targetLists = new WeakMap<EngineYard, TargetLists>();
+
+const targetListsOf = (yard: EngineYard): TargetLists => {
+  const held = targetLists.get(yard);
+  if (held) return held;
+  const lists: TargetLists = { walls: [], towers: [], bunkers: [], main: [] };
+  yard.buildings.forEach((building, index) => {
+    if (building.hp <= 0) return;
+    if (building.kind === "wall") lists.walls.push(index);
+    if (building.kind === "tower") lists.towers.push(index);
+    if (isBunker(building.type)) lists.bunkers.push(index);
+    if (isMainTarget(building.kind)) lists.main.push(index);
+  });
+  targetLists.set(yard, lists);
+  return lists;
+};
+
+/** Drop the fallen from a list, keeping the order of the rest; returns the list. */
+const living = (list: number[], buildings: readonly EngineBuilding[]): number[] => {
+  let kept = 0;
+  for (let read = 0; read < list.length; read += 1) {
+    const index = list[read] as number;
+    if ((buildings[index] as EngineBuilding).hp > 0) {
+      list[kept] = index;
+      kept += 1;
+    }
+  }
+  list.length = kept;
+  return list;
+};
+
+/**
  * The two closest buildings of a creep's preferred class.
  *
  * `checkTarget` measures anchor to anchor and subtracts the candidate's
@@ -275,17 +320,20 @@ export const findBuildingTarget = (
   const usableTower = (building: EngineBuilding): boolean =>
     isBunker(building.type) ? context.bunkerInUse(building) : !building.jarred;
 
-  for (let index = 0; index < buildings.length; index += 1) {
-    const building = buildings[index] as EngineBuilding;
-    if (building.hp <= 0) continue;
-    if (targetGroup === TARGET_GROUP.WALLS) {
-      if (building.kind === "wall") consider(index);
-    } else if (targetGroup === TARGET_GROUP.RESOURCES) {
-      if (isMainTarget(building.kind) && isLootableTarget(building)) consider(index);
-    } else if (targetGroup === TARGET_GROUP.TOWERS) {
-      if (building.kind === "tower" && usableTower(building)) consider(index);
-    } else if (targetGroup === TARGET_GROUP.CHAMPIONS) {
-      if (isBunker(building.type) && context.bunkerInUse(building)) consider(index);
+  const lists = targetListsOf(yard);
+  if (targetGroup === TARGET_GROUP.WALLS) {
+    for (const index of living(lists.walls, buildings)) consider(index);
+  } else if (targetGroup === TARGET_GROUP.RESOURCES) {
+    for (const index of living(lists.main, buildings)) {
+      if (isLootableTarget(buildings[index] as EngineBuilding)) consider(index);
+    }
+  } else if (targetGroup === TARGET_GROUP.TOWERS) {
+    for (const index of living(lists.towers, buildings)) {
+      if (usableTower(buildings[index] as EngineBuilding)) consider(index);
+    }
+  } else if (targetGroup === TARGET_GROUP.CHAMPIONS) {
+    for (const index of living(lists.bunkers, buildings)) {
+      if (context.bunkerInUse(buildings[index] as EngineBuilding)) consider(index);
     }
   }
 
@@ -293,9 +341,8 @@ export const findBuildingTarget = (
   // creep never had a preference (`MonsterBase.as:1072-1085`).
   const fellThrough = closestIndex < 0;
   if (fellThrough || targetGroup === TARGET_GROUP.ALL) {
-    for (let index = 0; index < buildings.length; index += 1) {
+    for (const index of living(lists.main, buildings)) {
       const building = buildings[index] as EngineBuilding;
-      if (building.hp <= 0 || !isMainTarget(building.kind)) continue;
       if (building.kind === "tower" && !isBunker(building.type) && building.jarred) continue;
       consider(index);
     }
