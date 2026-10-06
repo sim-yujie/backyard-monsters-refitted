@@ -266,9 +266,9 @@ import type {
  * 8. **Not modelled at all**, each because its numbers were never traced
  *    (`docs/specs/combat.md:1362-1375`) or because it is out of Map Room 2's
  *    scope: invisibility, `Blink`, `PoisonOnAttack`, `GlavesOnAttack`, the Stronghold's
- *    four emitters, and every siege weapon. A yard
- *    holding one of those buildings fires it as an ordinary single-target
- *    tower. The per-creep `_hitLimit` is modelled for raids only (note 17).
+ *    four emitters, every siege weapon, and the per-creep `_hitLimit`, even
+ *    for a raid (note 17, owner decision 2026-10-06). A yard holding one of
+ *    those buildings fires it as an ordinary single-target tower.
  * 9. **The defence is supplied, and its rules are the owner's.** The defender's
  *    bunker blob is opaque to the server (§6 item 5), so
  *    {@link BattleOptions.bunkers} carries it, read off `buildingdata` by
@@ -361,18 +361,21 @@ import type {
  *    A battle given {@link BattleOptions.raid} is a raid on the player's own
  *    yard, fought as a main yard and never as a wild camp. It takes `raid`
  *    events and nothing else, and no other battle takes them. Each wave
- *    spawns its raiders at level 1 (Flash's level 0, `CREATURES.as:243-255`)
- *    with plain stats: Flash's x0.4 to x0.9 strength (`WMATTACK.as:729-753`)
- *    is the owner's to drop, and was dropped. They scatter in the disc the
- *    planner chose, with no recomputed radius. A raider leaves on the swing
- *    that takes its building hits past the limit (`CreepBase.as:926-941`);
- *    blows at monsters do not count. There is no countdown: the raid ends
- *    when no raider is left once one has come (`WMATTACK.as:331-347`), and
- *    {@link RAID_MAX_SECONDS} caps it. Flash also ended it when no raider was
- *    still attacking, looting or hunting; here a raider with nothing left to
- *    attack retreats and is gone (note 7), so the two agree. A spawn off the
- *    pathing grid has no route, so the raider walks straight at its target
- *    until a look from on the grid routes it.
+ *    spawns its raiders at the defender's own academy level for their type
+ *    ({@link BattleOptions.defenderLevels}, an absent one level 1), not
+ *    Flash's level 0 (`CREATURES.as:243-255`), with plain stats otherwise:
+ *    Flash's x0.4 to x0.9 strength (`WMATTACK.as:729-753`) is the owner's to
+ *    drop, and was dropped (owner decisions, 2026-10-05 and 2026-10-06). They
+ *    scatter in the disc the planner chose, with no recomputed radius. There
+ *    is no hit limit (`_hitLimit`, `CreepBase.as:926-941`, dropped by owner
+ *    decision 2026-10-06): a raider fights on like an attacker, until it dies
+ *    or has nothing left to attack and retreats (note 7). There is no
+ *    countdown: the raid ends when no raider is left once one has come
+ *    (`WMATTACK.as:331-347`), and {@link RAID_MAX_SECONDS} caps it. Flash also
+ *    ended it when no raider was still attacking, looting or hunting; a
+ *    raider with nothing left to attack retreats and is gone (note 7), so the
+ *    two agree. A spawn off the pathing grid has no route, so the raider
+ *    walks straight at its target until a look from on the grid routes it.
  * 18. **The Spurtz Cannon (issue #313, `SpurtzCannon.as`).** Its burst, the
  *    shells' flight and the hatching are Flash's, and its shells, unlike
  *    note 1, are in the air until they land. Where it is not Flash: a shell
@@ -422,16 +425,6 @@ export type FlingDrop = Extract<FlingEvent, { kind: "fling" }>;
 /** A resource bomb, narrowed out of the union. */
 export type BombDrop = Extract<FlingEvent, { kind: "bomb" }>;
 
-/** What makes a battle a wild monster raid (issue #226, fidelity note 17). */
-export interface RaidOptions {
-  /**
-   * The building hits a raider makes before it leaves: it goes on the swing
-   * that takes it past this, so a limit of 30 is 31 hits (`_hits > _hitLimit`,
-   * `CreepBase.as:938`). 50, 30 or 20 by the player's frequency choice.
-   */
-  readonly hitLimit: number;
-}
-
 /** Everything a battle needs that the yard does not carry. */
 export interface BattleOptions {
   /** The attack session's seed; the whole battle hangs off it. */
@@ -463,11 +456,11 @@ export interface BattleOptions {
    */
   readonly learn?: boolean;
   /**
-   * Fight a wild monster raid rather than an attack (fidelity note 17). The
-   * player's academy levels, for their bunkers' defenders, then go in
-   * {@link defenderLevels}: the raiders read no levels at all.
+   * Fight a wild monster raid rather than an attack (fidelity note 17): the
+   * raiders spawn at {@link defenderLevels} too, the player's own academy,
+   * alongside their bunkers' defenders.
    */
-  readonly raid?: RaidOptions;
+  readonly raid?: boolean;
 }
 
 /** The champion a Champion Cage holds, as the defender's save keeps it (issue #195). */
@@ -930,8 +923,6 @@ interface Creep {
    * for every other creep and for a Hybrid champion, which picks as Flash's.
    */
   weights: StanceWeights | null;
-  /** A raider's `_hits`: swings at buildings so far (fidelity note 17). */
-  buildingHits: number;
 }
 
 /** A {@link ChampionLesson} as the battle builds it (issue #219). */
@@ -1314,17 +1305,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     yard.buildings.some((building) => isSpurtzCannon(building.type));
   let finished = false;
   let retreated = false;
-  const raid = options.raid ?? null;
+  const raid = options.raid === true;
 
   // A raid has no countdown, only its cap (fidelity note 17).
-  const countdown =
-    raid !== null
-      ? Number.POSITIVE_INFINITY
-      : ticks(
-          options.declareWar === true ? DECLARE_WAR_COUNTDOWN_SECONDS : ATTACK_COUNTDOWN_SECONDS,
-        );
-  const retreatAt =
-    raid !== null ? ticks(RAID_MAX_SECONDS) : countdown + ticks(RETREAT_GRACE_SECONDS);
+  const countdown = raid
+    ? Number.POSITIVE_INFINITY
+    : ticks(options.declareWar === true ? DECLARE_WAR_COUNTDOWN_SECONDS : ATTACK_COUNTDOWN_SECONDS);
+  const retreatAt = raid ? ticks(RAID_MAX_SECONDS) : countdown + ticks(RETREAT_GRACE_SECONDS);
   const playerLevel = options.playerLevel ?? 20;
   const storageHitScalar = storageScalar(yard.kind);
   const wildMonsterAttack = isWildMonsterAttack(yard.kind);
@@ -1938,7 +1925,6 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       giveUp: HEALER_GIVE_UP,
       disposable: false,
       hatchedBy: -1,
-      buildingHits: 0,
       rechargeAt: 0,
       // A bunker's defender chases anything attacking, air or ground (`HOUSINGBUNKER.as:269-300`).
       hitFlags: friendly
@@ -2040,7 +2026,6 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       giveUp: HEALER_GIVE_UP,
       disposable: false,
       hatchedBy: -1,
-      buildingHits: 0,
       rechargeAt: 0,
       hitFlags: fightFlags(false, flying, championStatWithPower(id, "range", level, power) || 1),
       home: null,
@@ -2123,7 +2108,6 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       giveUp: HEALER_GIVE_UP,
       disposable: false,
       hatchedBy: -1,
-      buildingHits: 0,
       rechargeAt: 0,
       hitFlags: fightFlags(true, flying, range),
       home: null,
@@ -2205,15 +2189,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   /**
-   * A raid wave (fidelity note 17): every raider at level 1, scattered in the
-   * disc the planner chose, in monster id order as a fling lands its creeps.
+   * A raid wave (fidelity note 17): each raider at the defender's own academy
+   * level for its type ({@link BattleOptions.defenderLevels}, an absent one
+   * level 1), scattered in the disc the planner chose, in monster id order as
+   * a fling lands its creeps.
    */
   const raidWave = (event: RaidEvent): void => {
     const radius = Math.max(0, event.r);
     for (const monsterId of Object.keys(event.monsters).sort()) {
       const count = Math.max(0, Math.floor(event.monsters[monsterId] ?? 0));
+      const level = clampLevel(options.defenderLevels, monsterId);
       for (let spawned = 0; spawned < count; spawned += 1) {
-        spawnCreep(monsterId, 1, dropPoint(event.x, event.y, radius), false, "attack");
+        spawnCreep(monsterId, level, dropPoint(event.x, event.y, radius), false, "attack");
         creepsFlung += 1;
       }
     }
@@ -2526,11 +2513,6 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       !unlootedForKrallen(target)
     ) {
       findTarget(creep);
-    }
-    // A raider leaves once its building hits pass the limit (fidelity note 17).
-    if (raid !== null && !creep.friendly) {
-      creep.buildingHits += 1;
-      if (creep.buildingHits > raid.hitLimit) creep.gone = true;
     }
   };
 
@@ -4349,13 +4331,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     bornAtStepEnd();
 
     if (tick >= countdown && !retreated) retreated = true;
-    if (creepsFlung > 0 && !anyAttackerLeft() && (retreated || raid !== null)) finished = true;
+    if (creepsFlung > 0 && !anyAttackerLeft() && (retreated || raid)) finished = true;
   };
 
   const apply = (event: AttackEvent): void => {
     if (finished) return;
     // Raid waves in a raid battle only, and nothing else there (fidelity note 17).
-    if ((event.kind === "raid") !== (raid !== null)) return;
+    if ((event.kind === "raid") !== raid) return;
     if (event.kind === "raid") raidWave(event);
     else if (event.kind === "fling") fling(event);
     else if (event.kind === "bomb") bomb(event);

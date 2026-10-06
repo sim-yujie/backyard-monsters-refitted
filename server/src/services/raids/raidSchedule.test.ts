@@ -149,15 +149,15 @@ describe("Flash's timing", () => {
     expect(startSession(readSchedule({ lastattack: last, attackPreference: -1 }), NOW).nextAttack).toBe(last + 4 * DAY);
   });
 
-  test("more / same / less set 2 / 3 / 4 days after the last raid, with Flash's size and hits", () => {
+  test("more / same / less set 2 / 3 / 4 days after the last raid, with Flash's size", () => {
     const schedule = readSchedule({ lastattack: NOW - DAY, nextAttack: NOW + 5 });
     expect(setRaidFrequency(schedule, 1)).toMatchObject({ attackPreference: 1, nextAttack: NOW + DAY });
     expect(setRaidFrequency(schedule, 0)).toMatchObject({ attackPreference: 0, nextAttack: NOW + 2 * DAY });
     expect(setRaidFrequency(schedule, -1)).toMatchObject({ attackPreference: -1, nextAttack: NOW + 3 * DAY });
     expect(RAID_PREFERENCES).toEqual({
-      [-1]: { waitSeconds: 4 * DAY, amplifier: 0.5, hitLimit: 20 },
-      0: { waitSeconds: 3 * DAY, amplifier: 1, hitLimit: 30 },
-      1: { waitSeconds: 2 * DAY, amplifier: 1.3, hitLimit: 50 },
+      [-1]: { waitSeconds: 4 * DAY, amplifier: 0.5 },
+      0: { waitSeconds: 3 * DAY, amplifier: 1 },
+      1: { waitSeconds: 2 * DAY, amplifier: 1.3 },
     });
   });
 

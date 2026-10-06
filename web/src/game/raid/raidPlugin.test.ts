@@ -31,7 +31,6 @@ const run = (): RaidRun =>
     fight: {
       seed: 7,
       events: [{ kind: "raid", t: 0, x: 900, y: -700, r: 80, monsters: { C2: 3 } }, { kind: "fling", t: 5 }],
-      hitLimit: 30,
       tick: 480,
       seconds: 6,
       yard: { buildingdata: {}, buildinghealthdata: {}, resources: {} },

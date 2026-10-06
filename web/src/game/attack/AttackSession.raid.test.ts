@@ -6,8 +6,8 @@ import type { AttackTarget } from "./attackTarget";
 
 /**
  * A wild monster raid played back (issue #226 WP4): the session fights the
- * raid as the server's `raidFight.ts` did (a main yard, the seed, the hit
- * limit, the waves at their ticks), keeps the waves out of the fling log, and
+ * raid as the server's `raidFight.ts` did (a main yard, the seed, the waves
+ * at their ticks, no hit limit), keeps the waves out of the fling log, and
  * runs on to where the server's fight ended.
  */
 
@@ -30,7 +30,6 @@ const yard = (): BaseLoadResponse =>
   }) as unknown as BaseLoadResponse;
 
 const SEED = 22601;
-const HIT_LIMIT = 30;
 
 const WAVES: RaidEvent[] = [
   { kind: "raid", t: 0, x: 900, y: -700, r: 80, monsters: { C2: 12 } },
@@ -65,7 +64,7 @@ const serverBattle = (end: number) => {
       kind: "main",
       height: 0,
     }),
-    { seed: SEED, raid: { hitLimit: HIT_LIMIT } },
+    { seed: SEED, raid: true },
   );
   for (const event of WAVES) {
     battle.runTo(event.t);
@@ -82,7 +81,7 @@ const watch = (session: AttackSession, seconds = 900): void => {
 
 describe("AttackSession raid playback", () => {
   it("fights the server's raid: the same health and loot at the same tick", () => {
-    const session = new AttackSession({ target: target(), seed: SEED, raid: { hitLimit: HIT_LIMIT } });
+    const session = new AttackSession({ target: target(), seed: SEED, raid: true });
     expect(session.raiding).toBe(true);
     session.playScript(WAVES, 60_000);
     session.start();
@@ -98,7 +97,7 @@ describe("AttackSession raid playback", () => {
   });
 
   it("keeps the waves out of the fling log but counts the raiders", () => {
-    const session = new AttackSession({ target: target(), seed: SEED, raid: { hitLimit: HIT_LIMIT } });
+    const session = new AttackSession({ target: target(), seed: SEED, raid: true });
     session.playScript(WAVES, 400);
     session.start();
     watch(session, 1);
@@ -107,7 +106,7 @@ describe("AttackSession raid playback", () => {
   });
 
   it("runs on to the server's end tick when the raiders are still about", () => {
-    const session = new AttackSession({ target: target(), seed: SEED, raid: { hitLimit: HIT_LIMIT } });
+    const session = new AttackSession({ target: target(), seed: SEED, raid: true });
     session.playScript(WAVES, 400);
     session.start();
     watch(session, 3);

@@ -75,8 +75,6 @@ export interface RaidPlan {
   /** Tower fire along the chosen route (0: no tower covers it). */
   readonly damageTaken: number;
   readonly army: Roster;
-  /** Building hits before a raider leaves (`BattleOptions.raid.hitLimit`). */
-  readonly hitLimit: number;
   readonly log: RaidLog;
 }
 
@@ -165,7 +163,6 @@ export const planRaid = (input: RaidPlanInput): RaidPlan | null => {
     targetId: target.id,
     damageTaken: solution.damageTaken,
     army: monsters,
-    hitLimit: effect.hitLimit,
     log: { v: 1, seed: input.seed, events: raidEvents(tribe, solution.bearing, monsters, distances) },
   };
 };

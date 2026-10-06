@@ -45,8 +45,8 @@ interface Fixture {
   tailTicks: number;
   /** The defender's garrisons, their levels and the caged champion (issue #195). */
   defence?: Record<string, unknown>;
-  /** A wild monster raid's hit limit, when the log is a raid (issue #226). */
-  raid?: { hitLimit: number };
+  /** Whether the log is a wild monster raid (issue #226). */
+  raid?: boolean;
   log: { v: 1; seed: number; events: unknown[] };
   expected: Record<string, unknown>;
 }

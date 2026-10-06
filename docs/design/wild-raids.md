@@ -31,6 +31,13 @@ answered by the owner on 2026-10-05; the answers are in §10 and the sections be
 | D7 | **Later, separate issue (Backlog):** the Trojan Horse and the special events (WMI1/WMI2, Monster Blitzkrieg). |
 | D8 | **Already in #226:** the tutorial's staged raid becomes a named tribe attack (still harmless), and the later defence goal becomes "survive a tribe attack". |
 
+Later owner decisions (2026-10-06):
+
+| # | Decision |
+|---|---|
+| D9 | **Raiders use the defending player's own Monster Academy levels** per monster type, not level 0/1 — an untrained type still spawns at level 1. |
+| D10 | **The hit limit is dropped entirely.** A raider now fights exactly like a normal attacker: it leaves only when it dies or has nothing left to attack, never on a swing count. |
+
 The owner's answers to the §10 questions (2026-10-05) are just as final. In short: a cancelled raid
 comes back on the next yard visit; quitting during the warning is a cancel; the tribe is random; the
 raid comes in on the least-defended side, with tanks, as Flash meant it to; no raid while anything
@@ -351,8 +358,15 @@ looters 80 (`PROCESS3.as:138-155`, `PROCESS5.as:166-187`). Each type lands in a 
 
 - **Plain stats (Q8):** no strength scaling at all. Flash's x0.4 to x0.9 (§2.3) is dropped, so
   the engine gets no strength multiplier (as for the Baiter).
-- Hits before leaving: 50 / 30 / 20 by the choice (D2).
-- Raiders fight at level 0 stats (no academy levels).
+- **No hit limit (D10, 2026-10-06):** the 50 / 30 / 20 hits-before-leaving from D2 were built then
+  dropped. A raider fights until it dies or has nothing left to attack, exactly like a plain
+  attacker (the existing "nothing left to attack" retreat rule every battle already has) — never
+  because of a swing count.
+- **Raiders use the defender's own Academy levels (D9, 2026-10-06):** not level 0/1 flat. Each
+  raider spawns at the level the raided player has trained that monster type to in their own
+  Monster Academy; an untrained type still spawns at level 1. This reuses `BattleOptions.defenderLevels`,
+  the same field the yard's bunker defenders already read (`server/src/game-rules/combat/defence.ts`),
+  so the lookup lives in one shared place — the Trojan Horse feature is expected to reuse it.
 
 ---
 
@@ -374,8 +388,12 @@ hit, bunkers, the caged champion, traps and towers (`engine.ts:186-197`, note 9)
    is no client log to check.
 2. ~~**Strength.**~~ **Dropped (Q8):** raiders fight with plain stats, so the engine gets no
    strength multiplier, as for the Baiter (`docs/design/yard-buildings.md:1147-1150`).
-3. **Hit limit.** A battle option: a raider that has hit buildings more than N times leaves
-   (`CreepBase.as:926-941`). Today `_hitLimit` is "not modelled" (`engine.ts:246`, note 8).
+3. ~~**Hit limit.**~~ **Built, then dropped (D10, 2026-10-06).** A battle option was added so a
+   raider that had hit buildings more than N times would leave (`CreepBase.as:926-941`), but the
+   owner later decided raiders should have no hit limit at all — they fight until they die or have
+   nothing left to attack, reusing the "nothing left to attack" retreat rule every battle already
+   has. `BattleOptions.raid` is now a plain boolean flag (was an object carrying the limit); `_hitLimit`
+   stays "not modelled" (`engine.ts`, note 8), now for raids too.
 4. **No countdown.** A raid ends when no raider is left on the yard (`WMATTACK.as:331-347`), with
    a safety cap of 10 minutes of game time.
 5. **Defender side only, as a main yard.** The raid runs with target kind `main`, not `wild`:

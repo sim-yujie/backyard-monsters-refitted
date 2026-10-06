@@ -412,7 +412,7 @@ export class AttackScene implements Scene {
     this.startCamera(yard, context);
 
     // A replay fights with the server's own seed and Declare War (issue #221).
-    // A raid fights with the server's seed and hit limit (issue #226).
+    // A raid fights with the server's own seed (issue #226).
     const replay = this.watchRun?.replay;
     // A Baiter test's clock waits for the first drop, as Flash's practice
     // did; its replay plays the recorded seed from the start (#22, WP5).
@@ -424,7 +424,7 @@ export class AttackScene implements Scene {
       ...(testReplay
         ? { seed: testReplay.seed }
         : raid
-          ? { seed: raid.seed, raid: { hitLimit: raid.hitLimit } }
+          ? { seed: raid.seed, raid: true }
           : this.practice
             ? { clockFromFirstDrop: true }
             : {}),

@@ -9,7 +9,6 @@ import type {
   BattleOptions,
   BattleState,
   DefenderChampion,
-  RaidOptions,
   TowerReport,
 } from "./engine.js";
 import type {
@@ -85,7 +84,7 @@ export interface ReplayInput {
    * Fight a wild monster raid (`BattleOptions.raid`, issue #226). A raid is
    * always on a main yard, whatever {@link kind} says.
    */
-  readonly raid?: RaidOptions;
+  readonly raid?: boolean;
 }
 
 /** What {@link replayRaid} is handed: the defender's side only (issue #226). */
@@ -96,10 +95,8 @@ export interface RaidReplayInput {
   readonly log: RaidLog;
   /** The seed to run with; the log's `seed` when absent. */
   readonly seed?: number;
-  /** Building hits before a raider leaves (`RaidOptions.hitLimit`). */
-  readonly hitLimit: number;
   readonly bunkers?: Readonly<Record<number, Roster>>;
-  /** The player's academy levels, for their bunkers' defenders. */
+  /** The player's academy levels: their bunkers' defenders, and the raiders too. */
   readonly defenderLevels?: MonsterLevels;
   readonly defenderChampions?: readonly DefenderChampion[] | null;
 }
@@ -271,9 +268,10 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
 /**
  * Fight a wild monster raid over the player's own yard (issue #226).
  *
- * {@link replayAttack} on a main yard with the raid's hit limit and its whole
- * cap as the tail. The outcome's `defenderLoss` is what the raiders stole;
- * there is no attacker, so `attackloot` means nothing here.
+ * {@link replayAttack} on a main yard with no hit limit (dropped, owner
+ * decision 2026-10-06) and its whole cap as the tail. The outcome's
+ * `defenderLoss` is what the raiders stole; there is no attacker, so
+ * `attackloot` means nothing here.
  */
 export const replayRaid = (input: RaidReplayInput): ReplayOutcome =>
   replayAttack({
@@ -286,5 +284,5 @@ export const replayRaid = (input: RaidReplayInput): ReplayOutcome =>
     ...(input.bunkers ? { bunkers: input.bunkers } : {}),
     ...(input.defenderLevels ? { defenderLevels: input.defenderLevels } : {}),
     ...(input.defenderChampions ? { defenderChampions: input.defenderChampions } : {}),
-    raid: { hitLimit: input.hitLimit },
+    raid: true,
   });

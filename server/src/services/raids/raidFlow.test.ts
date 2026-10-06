@@ -358,7 +358,6 @@ describe("the fight", () => {
         buildinghealthdata: start.fight.yard.buildinghealthdata,
         resources: start.fight.yard.resources as never,
         log: { v: 1, seed: start.fight.seed, events: start.fight.events },
-        hitLimit: start.fight.hitLimit,
         defence: start.fight.defence,
       });
       expect((open.outcome as { digest: string }).digest).toBe(fresh.digest);
