@@ -3,7 +3,8 @@
 Status: design, 2026-10-07. Not built yet. Work packages: see section 11.
 
 Every point is marked **[owner]** (decided by the owner, OWNER-QUESTIONS.md section 0j) or
-**[suggested]** (this doc's proposal; the owner can overrule it). Open points are in section 12.
+**[suggested]** (this doc's proposal; the owner can overrule it). The open points raised in section 12
+were all closed by the owner on 2026-10-07; see that section for the decisions.
 
 Map Room 1 (and Map Room 3) are not touched. **[owner]** for Map Room 1, **[suggested]** for Map Room 3.
 
@@ -49,13 +50,13 @@ A cell is **visible** to player P when any of these holds:
 2. **Own cells.** It is one of P's own bases. **[suggested]**
 3. **Alliance shared sight.** It is visible to any member of P's alliance under rules 1 and 2
    (members on the same world only). **[owner]** Only P's own alliance, not alliances it has marked
-   friendly. **[suggested; see section 12 Q3]**
+   friendly. **[owner]**
 4. **Attackers.** It holds a base of a player who has ever attacked P. **[owner]**
    - "Attacked P" = any row in `bym.attack_logs` with `defender_userid = P` (written when an attack
      starts, `services/base/createAttackLog.ts`, called from `baseModeAttack.ts` and
      `infernoModeAttack.ts`; never pruned). Attacks on P's outposts count. **[suggested]**
    - Which cells: every base the attacker owns on P's world today (main yard and outposts), each as a
-     single lit cell; the terrain around it stays dark. **[suggested; see section 12 Q2]**
+     single lit cell; the terrain around it stays dark. **[owner]**
    - Forever: it does not expire. Seeing an attacker does not put them in range; attacking still
      needs range. **[owner]**
 
@@ -111,8 +112,8 @@ edge and the minimap without waiting for zones, and to skip zones that are entir
 |---|---|---|
 | `/base/load` view mode (`baseModeView.ts`) | any base id can be viewed | A Map Room 2 yard or outpost can be viewed only if its cell is visible to P. Own and alliance bases always pass. **[suggested]** |
 | Attack, takeover quote, takeover, auto-attack | range-checked (`validateRange.ts`) | Unchanged: in range implies visible. **[owner]** (attacking still needs range) |
-| `/worldmapv2/snapshot` (API key) | every base in a world | **Owner decision needed (section 12 Q1).** Suggested: switched off while fog is on. |
-| `/worldmapv2/terrain` (API key) | whole terrain map | Shows only land and water, no bases. Suggested: follows the Q1 answer. |
+| `/worldmapv2/snapshot` (API key) | every base in a world | Switched off: this and any other bulk whole-world base feed for API consumers goes dark while fog is on. **[owner]** |
+| `/worldmapv2/terrain` (API key) | whole terrain map, no bases | Unchanged: it carries no base data today, so it is not the "whole-world base data" the owner's shutoff covers. **[owner]** |
 | `/worldmapv2/alliances` (API key) | alliances and member ids, no positions | Unchanged; it carries no locations. **[suggested]** |
 | `/api/.../leaderboards` | names and outpost counts, no positions | Unchanged. **[suggested]** |
 | Relocate (`/base/migrate`) | onto own outposts only | Unchanged. |
@@ -143,10 +144,11 @@ map. **[suggested]** (fact)
 - Remove the coordinate jump form from the Find panel (`NavPanel.ts`). **[owner]**
 - Remove whole-world zoom-out: the "World" button (`NavPanel.ts`), the Fit / keyboard `0` action
   (`MapRoom2Scene.fitWorld`, `onZoomReset`) and its "The whole world" notice. **[owner]**
-- Raise Map Room 2's minimum zoom from `MIN_ZOOM` 0.0175 (whole world) to `LOD_HEX_ZOOM` 0.22: about
-  78 x 65 cells on a 1080p screen, roughly three times the widest single-yard sight.
-  **[suggested; see section 12 Q4]** The far raster level (`TerrainRaster.ts`) is then never used on
-  this map and can be retired. **[suggested]**
+- No change to today's zoom range: `MIN_ZOOM` stays 0.0175 and the max is untouched. Only the World
+  button / whole-world view controls above are removed; a player can still scroll or pinch all the
+  way out, they just land on an ordinary (mostly fogged) view instead of the dedicated whole-world
+  mode. **[owner]** The far raster level (`TerrainRaster.ts`) is still reachable this way and is not
+  retired. **[suggested]**
 - Keep: minimap click-to-jump, bookmarks (a bookmark out of sight just shows fog), Home, one button
   per own outpost, Refresh. **[owner]**
 - Minimap: instead of "loaded zones", draw P's sight (own and alliance in two tints), dots for home,
@@ -203,7 +205,7 @@ map. **[suggested]** (fact)
   `alliancedata` lists no alliance seen only on hidden cells; `sv` changes when sight changes.
 - **View gate** (server): viewing a hidden Map Room 2 base is refused; own, ally and visible bases pass.
 - **Client**: fully fogged zones are never requested; a new `sv` drops the cache; no World button,
-  no coordinate form, `0` does nothing; minimum zoom holds; minimap draws the sight.
+  no coordinate form, `0` does nothing; zoom range unchanged from today; minimap draws the sight.
 - **Live check** (playwright-cli, shared `bymr` session): two seeded accounts on one world, one
   outside the other's range: hidden until it attacks, then visible; join an alliance, see the ally's
   sight.
@@ -215,22 +217,26 @@ Server first. Each is one GitHub issue, linked to this doc.
 | WP | What | Depends on |
 |---|---|---|
 | WP1 | Shared sight rule and server sight service with cache (sections 3, 4, 9) | none |
-| WP2 | Server enforcement: getarea redaction, `/worldmapv2/sight`, view gate, API snapshot per Q1 (section 5) | WP1 |
+| WP2 | Server enforcement: getarea redaction, `/worldmapv2/sight`, view gate, switch off API snapshot feed (section 5) | WP1 |
 | WP3 | Client fog: drawing, sight fetch and `sv`, skip fogged zones, cell panel, minimap (sections 6, 7 minimap) | WP2 |
-| WP4 | Navigation: remove coordinate jump and World / Fit, raise minimum zoom, retire far raster (section 7) | none (ship with WP3) |
+| WP4 | Navigation: remove coordinate jump and World / Fit; zoom range unchanged (section 7) | none (ship with WP3) |
 
-## 12. Open questions for the owner
+## 12. Owner decisions (closed 2026-10-07)
+
+All four open questions below were answered by the owner on 2026-10-07; nothing in this section is
+still open.
 
 1. **Outside map viewers.** `/worldmapv2/snapshot` hands any approved API key the position of every
-   base in a world, for outside map websites. That shows the whole map and defeats the fog. Switch
-   it off, keep it but only for alliance-owned tools, or keep it as it is? Suggested: off.
+   base in a world, for outside map websites. That shows the whole map and defeats the fog.
+   **Decided: switched off** — this and any other bulk whole-world base feed for API consumers goes
+   dark while fog is on (section 5.3). **[owner]**
 2. **Attackers.** Show all of an attacker's bases (main yard and outposts), or only their main yard?
-   Suggested: all, each as one lit cell.
+   **Decided: all of them**, each as one lit cell (section 3 rule 4). **[owner]**
 3. **Friendly alliances.** Your alliance can mark other alliances friendly. Share sight with them too,
-   or only within your own alliance? Suggested: own alliance only. (The game has no friends list, so
-   "friends" in your earlier answer is taken to mean alliance members.)
-4. **Zoom-out limit.** How far may the player pull back? Suggested: about 78 x 65 cells on a normal
-   screen (roughly three times the widest yard sight).
+   or only within your own alliance? **Decided: own alliance only**, not friendly alliances (section 3
+   rule 3). **[owner]**
+4. **Zoom-out limit.** How far may the player pull back? **Decided: no change** to today's zoom range;
+   only the World button / whole-world view controls are removed (section 7). **[owner]**
 
 FYI, not a question: terrain and wild monster camps are generated from a seed by code anyone can
 read, so a determined cheater could rebuild them. Players' bases are not derivable, and those are
