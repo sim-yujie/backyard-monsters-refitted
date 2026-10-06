@@ -127,6 +127,24 @@ describe("ChampionPanel: a fed champion", () => {
     expect(buttonNamed(element, "Evolve now")!.textContent).toContain("104");
   });
 
+  it("shows the new level's picture as soon as Evolve now is done (#311)", async () => {
+    const evolved = gorgo({ l: 2, fd: 0 });
+    const cage = setup([gorgo()], undefined, {
+      evolve: async () => {
+        cage.store.mergeWrite({ champion: [evolved] });
+        return { ok: true, report: { champion: evolved, credits: 104 }, completed: [] };
+      },
+    });
+    const picture = () => cage.element.querySelector(".champion__picture")!.getAttribute("src");
+    expect(picture()).toBe("/portraits/G1-L1.webp");
+    const evolve = buttonNamed(cage.element, "Evolve now")!;
+    evolve.click();
+    evolve.click();
+    await vi.waitFor(() => expect(cage.spies.evolve).toHaveBeenCalled());
+    await vi.waitFor(() => expect(picture()).toBe("/portraits/G1-L2.webp"));
+    expect(textOf(cage.element, ".champion__level")).toContain("Level 2 of 6");
+  });
+
   it("Heal is two taps and hidden at full health", () => {
     const hurt = setup([gorgo({ hp: 20_000 })]);
     const heal = buttonNamed(hurt.element, "Heal now")!;

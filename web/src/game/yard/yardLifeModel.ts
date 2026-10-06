@@ -576,7 +576,8 @@ export const walkerSpecs = (
  *
  * A kept walker takes the new spec's area, so a pen that moved has its
  * creatures walk over to it rather than blink there, and a kept champion keeps
- * the cage spot it already chose.
+ * the cage spot it already chose. A champion that evolved keeps its key and
+ * spot but takes its new level's sheet (#311).
  */
 export const reconcileWalkers = (
   current: ReadonlyMap<string, Walker>,
@@ -585,7 +586,9 @@ export const reconcileWalkers = (
 ): Map<string, Walker> => {
   const next = new Map<string, Walker>();
   for (const spec of specs) {
-    const kept = current.get(spec.key);
+    const found = current.get(spec.key);
+    const kept =
+      found && found.sheetLevel !== spec.sheetLevel ? { ...found, sheetLevel: spec.sheetLevel } : found;
     if (kept) {
       if (!kept.champion) kept.area = spec.area;
       kept.speed = spec.speed;

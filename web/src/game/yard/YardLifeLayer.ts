@@ -167,8 +167,11 @@ export class YardLifeLayer {
       this.walkerBodies.delete(key);
     }
     for (const [key, walker] of this.walkers) {
-      if (this.walkerBodies.has(key)) continue;
       const sheet = spriteFor(walker.monsterId, walker.sheetLevel) ?? null;
+      const body = this.walkerBodies.get(key);
+      if (body?.sheet === sheet) continue;
+      // A champion that evolved keeps its walker but needs its new level's look (#311).
+      if (body) this.release(body);
       if (sheet) this.textures.preload(sheet);
       this.walkerBodies.set(key, this.makeBody(sheet));
     }

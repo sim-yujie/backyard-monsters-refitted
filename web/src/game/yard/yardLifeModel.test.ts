@@ -354,6 +354,23 @@ describe("walkers", () => {
     expect(walker.x).toBe(155);
   });
 
+  it("gives a champion that evolved its new sheet level, where it stands (#311)", () => {
+    const cage = { id: 4, x: 100, y: 200 };
+    const at = (level: number) => lifeWith({ cage, champions: [{ id: "G1", level, sheetLevel: level }] });
+    const first = reconcileWalkers(new Map(), walkerSpecs(at(2), seeded()), seeded());
+    const before = first.get("c:4:G1");
+    if (!before) throw new Error("no champion");
+    before.x += 3;
+    const second = reconcileWalkers(first, walkerSpecs(at(3), seeded()), seeded());
+    const after = second.get("c:4:G1");
+    expect(after?.sheetLevel).toBe(3);
+    expect(after && { x: after.x, y: after.y, area: after.area }).toEqual({
+      x: before.x,
+      y: before.y,
+      area: before.area,
+    });
+  });
+
   it("faces a step the way the isometric projection draws it", () => {
     // +x in yard units runs down-right on screen, +y down-left.
     expect(screenHeading(1, 0)).toBeCloseTo(Math.atan2(0.5, 1));

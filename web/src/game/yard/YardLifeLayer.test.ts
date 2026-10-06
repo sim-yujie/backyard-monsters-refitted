@@ -119,6 +119,30 @@ describe("YardLifeLayer", () => {
     expect(fresh.children).toEqual(bodies);
   });
 
+  it("redraws a champion in its new look when it evolves, without a reload (#311)", async () => {
+    const { layer, tops, shadows } = setUp(true);
+    const at = (level: number) =>
+      life({ groups: [], workers: 0, champions: [{ id: "G1", level, sheetLevel: level }] });
+    layer.set(at(2), bounds);
+    layer.attach(tops, shadows);
+    layer.update(everywhere, 0);
+    await flush();
+    layer.update(everywhere, 0);
+    const old = tops.children[0] as Sprite | undefined;
+    if (!old) throw new Error("no champion");
+    expect(old.width).toBe(MONSTER_SPRITES["G1_2"]!.frameWidth);
+
+    layer.set(at(5), bounds);
+    expect(tops.children).toHaveLength(1);
+    layer.update(everywhere, 0);
+    await flush();
+    layer.update(everywhere, 0);
+    const body = tops.children[0] as Sprite | undefined;
+    expect(body).not.toBe(old);
+    expect(body?.visible).toBe(true);
+    expect(body?.width).toBe(MONSTER_SPRITES["G1_5"]!.frameWidth);
+  });
+
   it("drops the bodies of creatures that are gone, and clears on null", () => {
     const { layer, tops, shadows } = setUp();
     layer.set(life(), bounds);
