@@ -1,13 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { lootReplayInput, replayedLoot } from "./attackLoot.js";
 import { replayAbandonedAttack } from "./abandonedAttack.js";
 import {
   ReplayTimeoutError,
   replayAbandonedInWorker,
   replayLoad,
-  replayLootInWorker,
   reserveReplaySlot,
 } from "./replayRunner.js";
 
@@ -38,21 +36,6 @@ const attacker = {
   buildingdata: {},
 };
 
-const lootInput = () =>
-  lootReplayInput({
-    flinglog: LOG,
-    session: {
-      attackerid: 1,
-      attackid: 1,
-      startedat: 0,
-      entryHoused: { home: { C1: 300 } },
-      defenderResources: SERVED,
-      attackerlevel: 40,
-    },
-    defender: { type: "tribe", buildingdata: sandbox.buildingdata, buildinghealthdata: {}, resources: SERVED },
-    attacker,
-  })!;
-
 const abandonedInput = () => ({
   defender: { type: "tribe", buildingdata: sandbox.buildingdata, buildinghealthdata: {}, resources: SERVED },
   attacker: { academy: attacker.academy, champion: attacker.champion as never, siege: null },
@@ -81,14 +64,6 @@ const longestStall = async (work: () => Promise<unknown>): Promise<number> => {
 
 describe("replays in a worker (#23, C5)", () => {
   test(
-    "give the same loot as the replay run inline",
-    async () => {
-      expect(await replayLootInWorker(lootInput())).toEqual(replayedLoot(lootInput()));
-    },
-    REPLAY_TIMEOUT_MS
-  );
-
-  test(
     "give the same abandoned-attack outcome as the replay run inline",
     async () => {
       expect(await replayAbandonedInWorker(abandonedInput())).toEqual(replayAbandonedAttack(abandonedInput()));
@@ -100,10 +75,10 @@ describe("replays in a worker (#23, C5)", () => {
     "leave the event loop free: a 1 ms timer keeps firing through a heavy replay",
     async () => {
       const inlineStart = performance.now();
-      replayedLoot(lootInput());
+      replayAbandonedAttack(abandonedInput());
       const inline = performance.now() - inlineStart;
 
-      const stall = await longestStall(() => replayLootInWorker(lootInput()));
+      const stall = await longestStall(() => replayAbandonedInWorker(abandonedInput()));
 
       console.warn(`replay inline ${inline.toFixed(0)} ms; longest event-loop stall in a worker ${stall.toFixed(0)} ms`);
       // Inline, the loop is held for the whole replay; in a worker, never for long.
@@ -117,7 +92,7 @@ describe("replays in a worker (#23, C5)", () => {
     "stop at the deadline",
     async () => {
       const started = performance.now();
-      const caught = await replayLootInWorker(lootInput(), 50).catch((err: unknown) => err);
+      const caught = await replayAbandonedInWorker(abandonedInput(), 50).catch((err: unknown) => err);
       expect(caught).toBeInstanceOf(ReplayTimeoutError);
       expect(performance.now() - started).toBeLessThan(1_000);
     },
@@ -148,7 +123,7 @@ describe("the auto-attack slots (issue #221)", () => {
   });
 
   test("count the replays already running: a slot waits for a worker to finish", async () => {
-    const replay = replayLootInWorker(lootInput());
+    const replay = replayAbandonedInWorker(abandonedInput());
     expect(replayLoad().running).toBe(1);
     const waiting = reserveReplaySlot(REPLAY_TIMEOUT_MS, 1);
     await replay;

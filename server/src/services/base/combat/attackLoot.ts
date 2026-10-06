@@ -6,7 +6,6 @@ import {
   RESOURCE_KEYS,
   championStat,
   lowLevelLootBonus,
-  replayAttack,
   type BombStats,
   type BuildingHealthMap,
   type CombatBuildingDataMap,
@@ -21,7 +20,6 @@ import { creditResources, type CreditResult, type CreditSave } from "../../yard/
 import { storageCap } from "../economy/resourceBudget.js";
 import { parseFlingLog } from "../attackCheckpoint.js";
 import type { AttackSession, ChampionBrains } from "../attackSession.js";
-import { academyLevels, combatKindOf } from "./abandonedAttack.js";
 import { catapultLevelOf } from "./bombSpend.js";
 
 /**
@@ -35,11 +33,14 @@ import { catapultLevelOf } from "./bombSpend.js";
  *
  * ## The cap on a Map Room 2 attack
  *
- * The server replays the save's fling log over the defender's yard as stored
- * (the row is frozen while an attack runs: yard actions and the owner's
- * catch-up refuse it) and the pool the attack load served (kept in the attack
- * session, because an outpost draws on its owner's main pool, which is not
- * frozen). The replay:
+ * The cap is the server's own battle, handed in as `fought`: the save's replay
+ * (`battle.ts`, run in a worker by `baseSave.ts`) or the finaliser's
+ * (`finaliseAttack.ts`). Either replays the save's fling log over the
+ * defender's yard as stored (the row is frozen while an attack runs: yard
+ * actions and the owner's catch-up refuse it), the defence the attack load
+ * served (bunkers, the caged champion, issue #195) and the pool it served
+ * (kept in the attack session, because an outpost draws on its owner's main
+ * pool, which is not frozen). The replay:
  *
  * - flings only what the attacker could have flung: each monster id at most
  *   what their yards housed at attack entry (the session's `entryHoused`),
@@ -53,13 +54,11 @@ import { catapultLevelOf } from "./bombSpend.js";
  *   session's `attackerlevel`), which is the level the client's engine ran at,
  *   so the low-level loot bonus (`ATTACK.as:678-680`) is the same on both
  *   sides and never the client's say (issue #167);
- * - runs the battle to its longest possible end, Declare War's countdown plus
- *   the retreat grace, whatever the client's own clock said.
+ * - runs the battle to the client's own battle clock, and never past its
+ *   longest possible end, Declare War's countdown plus the retreat grace.
  *
- * Loot only ever grows as a battle runs (the engine adds to it and never takes
- * away), and a longer countdown only lets creeps fight longer, so an honest
- * client — which ran the same engine over the same inputs and stopped at or
- * before that end — reports at most what the replay gives. The credit is the
+ * An honest client ran the same engine over the same inputs to the same tick,
+ * so it reports what the replay gives. The credit is the
  * smaller of the two, per resource: an honest attack is credited in full,
  * and no attack is credited more than the battle it could actually have
  * fought would have given it. The defender's loss is held between what the
@@ -299,105 +298,6 @@ export interface ReplayedLoot {
   fallen?: readonly number[];
 }
 
-/**
- * Replays an attack to its longest possible end and says what it looted.
- *
- * `playerLevel` must be the level the client's engine ran at: the one the
- * attack load served and the session kept (`attackerlevel`). Absent, the
- * engine's default gives no bonus, which is what a client that was served no
- * level ran at.
- */
-export const replayedLoot = ({
-  defender,
-  pool,
-  attacker,
-  log,
-  entryHoused,
-  playerLevel,
-}: {
-  defender: LootDefender;
-  pool: ResourceAmounts;
-  attacker: LootAttacker;
-  log: FlingLog;
-  entryHoused: EntryHoused;
-  playerLevel?: number;
-}): ReplayedLoot => {
-  const outcome = replayAttack({
-    buildingdata: defender.buildingdata ?? {},
-    buildinghealthdata: defender.buildinghealthdata ?? null,
-    resources: pool,
-    kind: combatKindOf(defender.type),
-    ...(defender.height !== undefined && { height: defender.height }),
-    log: fightableLog(log, attacker, entryHoused),
-    levels: academyLevels(attacker.academy),
-    ...(playerLevel !== undefined && { playerLevel }),
-    // The longer countdown only lets the creeps fight on, so this is the most
-    // any client could have seen, with or without the power-up.
-    declareWar: true,
-  });
-  return {
-    attackloot: wholeAmounts(outcome.attackloot),
-    defenderLoss: wholeAmounts(outcome.defenderLoss),
-    fallen: outcome.destroyedIds,
-  };
-};
-
-/** What {@link replayedLoot} is handed. */
-export type ReplayedLootInput = Parameters<typeof replayedLoot>[0];
-
-/**
- * What the loot replay of an attack save needs, as plain data, or null when
- * the save gets no replay: a session without a roster, or a save without a
- * usable fling log. It is `attackLootOf`'s own test, for a caller that runs the
- * replay in a worker first (`replayRunner.ts`) and hands the result back as
- * `fought`. Every field is copied off the rows, so nothing the worker is sent
- * is an ORM entity.
- *
- * @param flinglog - The save's `flinglog`, as parsed from the body.
- * @param session - The attack session the save was bound to.
- * @param defender - The defender's row, with the pool it draws from now.
- * @param attacker - The attacker's main save as it stood before this save.
- */
-export const lootReplayInput = ({
-  flinglog,
-  session,
-  defender,
-  attacker,
-}: {
-  flinglog: unknown;
-  session: AttackSession | null;
-  defender: LootDefender;
-  attacker: LootAttacker;
-}): ReplayedLootInput | null => {
-  const entryHoused = session?.entryHoused;
-  if (!entryHoused) return null;
-  const log = parseFlingLog(flinglog);
-  if (!log) return null;
-  return {
-    defender: {
-      type: defender.type,
-      buildingdata: defender.buildingdata,
-      buildinghealthdata: defender.buildinghealthdata,
-      resources: defender.resources,
-      ...(defender.height !== undefined && { height: defender.height }),
-    },
-    pool: session.defenderResources ?? poolAmounts(defender.resources),
-    attacker: {
-      academy: attacker.academy ?? null,
-      champion: attacker.champion ?? null,
-      catapult: attacker.catapult ?? null,
-      buildingdata: attacker.buildingdata ?? null,
-      // Only the pool the attack began with, never the one the save finds.
-      resources: session.attackerResources ?? null,
-      // Only the brains the attack froze (issue #219).
-      brains: session.championBrains ?? null,
-    },
-    log,
-    entryHoused,
-    ...(session.attackerlevel !== undefined && { playerLevel: session.attackerlevel }),
-  };
-};
-
 /** What an attack's save lands on each side. */
 export interface AttackLoot {
   /** What the attacker is credited. */
@@ -440,13 +340,11 @@ export interface AttackLoot {
  * @param defender - The defender's row, with the pool it draws from now.
  * @param attacker - The attacker's main save as it stood before this save.
  * @param mapRoom3 - Whether the attacker's own save is on Map Room 3.
- * @param fought - The battle as the server already fought it, when the caller
- *   did: the finaliser's own replay (`finaliseAttack.ts`), over the fightable
- *   log, the served pool and level, and no further than the longest end, so
- *   its own bound (loot and loss only grow as a battle runs); or the save's
- *   loot replay run in a worker (`replayRunner.ts`, {@link lootReplayInput}).
- *   Either stands in for the replay here, which would run the battle again on
- *   the request thread.
+ * @param fought - The battle as the server fought it ({@link ReplayedLoot},
+ *   `foughtLoot` in `battle.ts`): the save's replay to the client's clock
+ *   (`baseSave.ts`) or the finaliser's (`finaliseAttack.ts`), each over the
+ *   fightable log, the served defence, pool and level. Null only when there was
+ *   nothing to replay (no roster, or no usable fling log).
  */
 export const attackLootOf = ({
   sent,
@@ -465,7 +363,7 @@ export const attackLootOf = ({
   defender: LootDefender;
   attacker: LootAttacker;
   mapRoom3: boolean;
-  fought?: ReplayedLoot;
+  fought: ReplayedLoot | null;
 }): AttackLoot => {
   const asked = wholeAmounts(sent);
   const reportedLoss = wholeAmounts(negatedRaw(reported));
@@ -494,10 +392,11 @@ export const attackLootOf = ({
 
   const none = { r1: 0, r2: 0, r3: 0, r4: 0 };
   if (session?.entryHoused) {
-    const input = lootReplayInput({ flinglog, session, defender, attacker });
-    if (!input) return land(none, none, "no-log");
-    const replayed = fought ?? replayedLoot(input);
-    return land(replayed.attackloot, replayed.defenderLoss, "replay", replayed.fallen ?? null);
+    if (!parseFlingLog(flinglog)) return land(none, none, "no-log");
+    // Both callers replay every save with a usable log and a roster before
+    // they get here, so a missing battle is a bug, never a save to credit.
+    if (!fought) throw new Error("An attack save with a fling log reached the loot rule without the server's battle");
+    return land(fought.attackloot, fought.defenderLoss, "replay", fought.fallen ?? null);
   }
 
   if (!mapRoom3) return land(none, none, "no-roster");

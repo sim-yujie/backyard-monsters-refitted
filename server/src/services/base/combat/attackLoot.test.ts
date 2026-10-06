@@ -23,6 +23,8 @@ import {
   type LootAttacker,
   type LootDefender,
 } from "./attackLoot.js";
+import { replayAbandonedAttack } from "./abandonedAttack.js";
+import { battleReplayInput, battleTick, foughtLoot } from "./battle.js";
 
 /**
  * Attack loot is capped by the server's own replay (issue #163). The golden
@@ -153,12 +155,24 @@ const honestClient = (one: Fixture, end: number, playerLevel?: number, height = 
   return { attackloot: wholeAmounts(state.loot), defenderLoss: wholeAmounts(state.defenderLoss) };
 };
 
+/**
+ * The loot rule as `baseSave.ts` runs it: with the server's own battle as
+ * `fought`, the save's replay (`battle.ts`), here to the longest end with
+ * Declare War's countdown, the most any client could have seen.
+ */
+const lootOf = (args: Omit<Parameters<typeof attackLootOf>[0], "fought">) => {
+  const input = args.session?.entryHoused
+    ? battleReplayInput({ ...args, tick: battleTick(undefined), declareWar: true })
+    : null;
+  return attackLootOf({ ...args, fought: input ? foughtLoot(replayAbandonedAttack(input)) : null });
+};
+
 const lootFor = (
   one: Fixture,
   sent: unknown,
   overrides: { log?: unknown; session?: AttackSession | null; reported?: unknown } = {}
 ) =>
-  attackLootOf({
+  lootOf({
     sent,
     reported: overrides.reported,
     flinglog: overrides.log ?? one.log,
@@ -355,7 +369,7 @@ describe("a crafted save is not", () => {
   test("a Map Room 2 save with no usable fling log is credited nothing and costs the defender nothing", () => {
     const one = fixture("pokey-rush");
     for (const log of [undefined, "not a log", { v: 2, seed: 1, events: [] }, { v: 1, seed: 1, events: [{ kind: "x" }] }]) {
-      const loot = attackLootOf({
+      const loot = lootOf({
         sent: { r1: 5000 },
         reported: { r1: -5000 },
         flinglog: log,
@@ -369,6 +383,41 @@ describe("a crafted save is not", () => {
       expect(loot.defenderDelta).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
     }
   }, REPLAY_TIMEOUT_MS);
+
+  test("a save with a usable log but no server battle is refused, never credited from a replay of its own (#315)", () => {
+    const one = fixture("pokey-rush");
+    expect(() =>
+      attackLootOf({
+        sent: { r1: 5000 },
+        reported: { r1: -5000 },
+        flinglog: one.log,
+        session: sessionOf(one.log),
+        defender: defenderOf(one),
+        attacker: attackerOf(one),
+        mapRoom3: false,
+        fought: null,
+      })
+    ).toThrow("without the server's battle");
+  });
+
+  test("the server's battle is the cap as handed in (#315)", () => {
+    const one = fixture("pokey-rush");
+    const fought = { attackloot: { r1: 700, r2: 0, r3: 0, r4: 0 }, defenderLoss: { r1: 900, r2: 0, r3: 0, r4: 0 }, fallen: [7] };
+    const loot = attackLootOf({
+      sent: { r1: 5000, r2: 5000 },
+      reported: { r1: -5000 },
+      flinglog: one.log,
+      session: sessionOf(one.log),
+      defender: defenderOf(one),
+      attacker: attackerOf(one),
+      mapRoom3: false,
+      fought,
+    });
+    expect(loot.basis).toBe("replay");
+    expect(loot.credit).toEqual({ r1: 700, r2: 0, r3: 0, r4: 0 });
+    expect(loot.defenderDelta).toEqual({ r1: -900, r2: 0, r3: 0, r4: 0 });
+    expect(loot.fallen).toEqual([7]);
+  });
 
   test("an empty log loots nothing", () => {
     const one = fixture("empty-yard");
@@ -387,7 +436,7 @@ describe("the pool the replay draws on", () => {
       const drained = { ...defenderOf(one), resources: { r1: 0, r2: 0, r3: 0, r4: 0 } };
       const sent = { r1: 1e12, r2: 1e12, r3: 1e12, r4: 1e12 };
 
-      const fromSession = attackLootOf({
+      const fromSession = lootOf({
         sent,
         reported: undefined,
         flinglog: one.log,
@@ -396,7 +445,7 @@ describe("the pool the replay draws on", () => {
         attacker: attackerOf(one),
         mapRoom3: false,
       });
-      const fromServed = attackLootOf({
+      const fromServed = lootOf({
         sent,
         reported: undefined,
         flinglog: one.log,
@@ -411,7 +460,7 @@ describe("the pool the replay draws on", () => {
   );
 
   const mapRoom3Attack = (mapRoom3: boolean) =>
-    attackLootOf({
+    lootOf({
       sent: { r1: 1e9, r2: 10, r3: 1e9, r4: 1e9 },
       reported: { r1: -3000, r2: 0 },
       flinglog: undefined,
