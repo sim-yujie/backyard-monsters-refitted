@@ -575,6 +575,34 @@ describe("the action queue", () => {
     expect(onUnderAttack).toHaveBeenCalledTimes(2);
   });
 
+  it("hands a raid-fight refusal to the scene, with the server's sentence, and fetches nothing (#309)", async () => {
+    const message = "Wild monsters are raiding your yard right now. Try again when the raid is over.";
+    const refused = () =>
+      Promise.reject(
+        new ApiError(message, { status: 409, code: message, body: { error: message, reason: "raidInProgress" } }),
+      );
+    const onRaidInProgress = vi.fn();
+    const onUnderAttack = vi.fn();
+    const api = stubApi({ upgrade: vi.fn(refused), state: vi.fn(refused) });
+    const time = manualTime();
+    const store = new YardStore({
+      save: loadWith(),
+      api,
+      clock: time.clock,
+      timers: time.timers,
+      onRaidInProgress,
+      onUnderAttack,
+    });
+
+    expect(await store.upgrade(2)).toMatchObject({ ok: false, refusal: { reason: "raidInProgress", message } });
+    await flush();
+    expect(onRaidInProgress).toHaveBeenCalledExactlyOnceWith(message);
+    // The yard is frozen for the fight: no state call that would be refused too.
+    expect(api.state).not.toHaveBeenCalled();
+    // A raid is not a player's attack: the yard is not locked as one.
+    expect(onUnderAttack).not.toHaveBeenCalled();
+  });
+
   it("shares one queued refresh between callers", async () => {
     const pending = deferred<YardResponse<unknown>>();
     const api = stubApi({ upgrade: vi.fn(() => pending.promise) });

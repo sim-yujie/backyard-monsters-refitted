@@ -206,6 +206,12 @@ const UI_TICK_SECONDS = 1;
 /** The notice key of the empty-outpost hint. */
 const OUTPOST_HINT_NOTICE = "outpost-empty";
 
+/** The notice for a yard request refused while a wild monster raid is fought on the yard (#309). */
+const RAID_FIGHT_NOTICE = "raid-in-progress";
+
+/** What it says when the refusal carried no sentence of its own. */
+const RAID_FIGHT_TEXT = "Wild monsters are raiding your yard right now. Try again when the raid is over.";
+
 /** Zoom the yard opens at, over the town hall. 1 is art at native size. */
 const OPENING_ZOOM = 0.9;
 
@@ -1773,6 +1779,10 @@ export class YardScene implements Scene {
         if (this.context === context) context.goTo(SceneName.LOGIN);
       },
       onUnderAttack: () => this.attackGuard?.refused(),
+      onRaidInProgress: (message) => {
+        if (this.context !== context) return;
+        this.notices.show(RAID_FIGHT_NOTICE, message || RAID_FIGHT_TEXT, { level: "info", timeoutMs: 6_000 });
+      },
     });
     this.store = store;
     this.unsubscribeStore = store.subscribe((change) => this.onStoreChange(change));

@@ -66,14 +66,18 @@ export const notYourYardErr = () =>
 export const notInOutpostErr = (message = "That cannot be done in an outpost.") =>
   yardRefusedErr("notInOutpost", message);
 
-/** The yard is being attacked right now (`services/base/isAttackActive.ts`). */
-/** `409 raidInProgress`: a wild monster raid is being fought on the yard (#226, `services/raids/raidLock.ts`). */
+/**
+ * `409 raidInProgress`: a wild monster raid is being fought on the yard (#226,
+ * `services/raids/raidLock.ts`). The web yard shows this sentence as a notice
+ * (#309, `YardStore`'s `onRaidInProgress`).
+ */
 export const yardRaidInProgressErr = () =>
   yardRefusedErr(
     "raidInProgress",
     "Wild monsters are raiding your yard right now. Try again when the raid is over."
   );
 
+/** The yard is being attacked right now (`services/base/isAttackActive.ts`). */
 export const yardUnderAttackErr = () =>
   yardRefusedErr(
     "underAttack",
