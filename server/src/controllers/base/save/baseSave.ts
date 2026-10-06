@@ -274,7 +274,7 @@ const saveBase = async (
         sent: saveData.attackloot,
         reported: saveData.resources,
         mapRoom3,
-        ...(battle && { fought: foughtLoot(battle) }),
+        fought: battle ? foughtLoot(battle) : null,
       })
     : null;
 

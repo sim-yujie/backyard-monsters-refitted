@@ -1,5 +1,6 @@
 import z from "zod";
 import { CHAMPION_STANCES, type ChampionStance } from "../game-rules/combat/index.js";
+import { jsonField } from "./jsonField.js";
 
 /**
  * Body schemas for the yard action routes, `POST /api/:apiVersion/bm/yard/*`
@@ -114,16 +115,7 @@ export const YardHatcheryFinishSchema = z.object({
  */
 export const YardBankSchema = z
   .object({
-    ids: z
-      .string()
-      .transform((raw, ctx) => {
-        try {
-          return JSON.parse(raw) as unknown;
-        } catch {
-          ctx.addIssue({ code: "custom", message: "ids must be a JSON array of building ids" });
-          return z.NEVER;
-        }
-      })
+    ids: jsonField("ids must be a JSON array of building ids")
       .pipe(z.array(z.number().int().nonnegative()).min(1).max(1000))
       .optional(),
     all: z.coerce.number().int().min(1).max(1).optional(),
@@ -176,16 +168,7 @@ export const YardAcademyMonsterSchema = z.object({
  */
 export const YardRepairSchema = z
   .object({
-    ids: z
-      .string()
-      .transform((raw, ctx) => {
-        try {
-          return JSON.parse(raw) as unknown;
-        } catch {
-          ctx.addIssue({ code: "custom", message: "ids must be a JSON array of building ids" });
-          return z.NEVER;
-        }
-      })
+    ids: jsonField("ids must be a JSON array of building ids")
       .pipe(z.array(z.number().int().nonnegative()).min(1).max(1000))
       .optional(),
     all: z.coerce.number().int().min(1).max(1).optional(),
@@ -205,17 +188,7 @@ export const YardRecycleSchema = z.object({ id: BuildingIdField });
  * object arrives stringified, `middleware/jsonBody.ts`): at least one id,
  * each a whole count of 1 or more. Which ids are allowed is the route's rule.
  */
-const MonsterCountsField = z
-  .string()
-  .transform((raw, ctx) => {
-    try {
-      return JSON.parse(raw) as unknown;
-    } catch {
-      ctx.addIssue({ code: "custom", message: "monsters must be a JSON object of counts" });
-      return z.NEVER;
-    }
-  })
-  .pipe(
+const MonsterCountsField = jsonField("monsters must be a JSON object of counts").pipe(
     z
       .record(z.string().min(1).max(16), z.number().int().min(1).max(100_000))
       .refine((counts) => {

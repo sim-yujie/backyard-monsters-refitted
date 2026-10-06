@@ -120,6 +120,12 @@ All thrown errors that controllers want to surface use `ClientSafeError`
   `{ error: <message-or-undefined>, errorDetails: { error, status, data, message,
   internalInfo? } }`. `internalInfo` is the wrapped error's stack, sent only when
   `ENV` is not `production` (issue #213); a production server logs it and leaves it out.
+- A request body that fails its route's zod schema (every route parses with `Schema.parse`)
+  is a **400**, `invalidRequestErr`: `error` is `"Invalid request: <field>: <zod message>"`
+  and `errorDetails.data` is `{ reason: "invalidRequest", field }`, the first issue's path
+  (issue #224). It is logged as a warning, not an error. The few controllers that wrap their
+  whole body in a `try` (`sendMessage`, `getMessageThread`, `getCells`, `infernoSave`) let a
+  `ZodError` through to it.
 - Any other thrown value (a bug, a DB error, etc.) is wrapped into a generic
   `ClientSafeError` with the message `"Something went wrong, please contact support."`,
   status 500, and `isClientFriendly: true`; the original error is logged server-side only.

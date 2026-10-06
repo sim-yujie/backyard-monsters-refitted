@@ -1,3 +1,4 @@
+import { ZodError } from "zod";
 import { User } from "../../../database/models/user.model.js";
 import { Status } from "../../../enums/StatusCodes.js";
 import { CellSchema } from "../../../schemas/CellSchema.js";
@@ -295,6 +296,8 @@ export const getMapRoomCells: KoaController = async (ctx) => {
     ctx.status = Status.OK;
     ctx.body = { celldata: [...cellsToReturn.values()], alliancedata };
   } catch (error) {
+    // A body that fails its schema answers 400 globally (issue #224).
+    if (error instanceof ZodError) throw error;
     logger.error(`Error in getMapRoomCells: ${error}`);
     throw loadFailureErr();
   }

@@ -26,6 +26,9 @@ import { LEGACY_BOT_SHINY, shinyBand, shinyForSeed } from "./shiny.js";
 
 /** The bot factory's pure parts (issue #239, `docs/design/bot-neighbours.md` §4.1, §10). */
 
+/** CPU-bound and slow on a busy machine (issue #210): time, not a property under test. */
+const SLOW_TEST_TIMEOUT_MS = 30_000;
+
 const NOW = 1_800_000_000;
 const DAY = 24 * 60 * 60;
 const T = 3;
@@ -142,7 +145,7 @@ describe("drawBot", () => {
       expect(calculateBaseLevel(yard.points, yard.basevalue)).toBe(level);
       expect(profile.level).toBe(level);
     }
-  });
+  }, SLOW_TEST_TIMEOUT_MS);
 
   test("refuses a level outside 1-40", () => {
     expect(() => drawBot(mulberry32(1), 0, NOW, T)).toThrow();

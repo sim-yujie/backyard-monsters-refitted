@@ -1,3 +1,4 @@
+import { ZodError } from "zod";
 import { BaseType } from "../../enums/Base.js";
 import { SaveKeys } from "../../enums/SaveKeys.js";
 import { Status } from "../../enums/StatusCodes.js";
@@ -171,6 +172,8 @@ export const infernoSave: KoaController = async (ctx) => {
       credits,
     };
   } catch (err) {
+    // A body that fails its schema answers 400 globally (issue #224).
+    if (err instanceof ZodError) throw err;
     logger.error(`Failed to save inferno base for user: ${user.username}: ${err}`);
 
     if (err instanceof ClientSafeError) throw err;

@@ -1,5 +1,6 @@
 import z from "zod";
 import type { AttackData } from "./AttackSchema.js";
+import { optionalJsonField } from "./jsonField.js";
 
 export const BaseLoadSchema = z.object({
   /**
@@ -33,22 +34,12 @@ export const BaseLoadSchema = z.object({
    * The attack payload, transformed from a JSON string to an AttackPayload object.
    * @type {AttackData | undefined}
    */
-  attackData: z
-    .string()
-    .optional()
-    .transform((data): AttackData | undefined =>
-      data ? JSON.parse(data) : undefined
-    ),
+  attackData: optionalJsonField<AttackData>("attackData"),
 
   /**
    * The MR3 out-of-range attack cost, sent by the client when attacking outside
    * the player's range. Either resource amounts or a shiny cost.
    * @type {{ resources?: number[]; shiny?: number } | undefined}
    */
-  attackcost: z
-    .string()
-    .optional()
-    .transform((data): { resources?: number[]; shiny?: number } | undefined =>
-      data ? JSON.parse(data) : undefined
-    ),
+  attackcost: optionalJsonField<{ resources?: number[]; shiny?: number }>("attackcost"),
 });

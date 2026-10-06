@@ -48,10 +48,11 @@ describe("mulberry32", () => {
     const buckets = [0, 0, 0, 0, 0, 0];
     for (let draw = 0; draw < 60000; draw += 1) {
       const value = rng.int(6);
-      expect(value).toBeGreaterThanOrEqual(0);
-      expect(value).toBeLessThan(6);
       buckets[value] = (buckets[value] ?? 0) + 1;
     }
+    // Any value outside 0-5 (or not whole) would add a key. One check, not
+    // 120,000 in the loop, which timed out on a busy machine (issue #210).
+    expect(Object.keys(buckets)).toEqual(["0", "1", "2", "3", "4", "5"]);
     for (const count of buckets) expect(Math.abs(count - 10000)).toBeLessThan(200);
   });
 

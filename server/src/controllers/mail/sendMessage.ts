@@ -1,3 +1,4 @@
+import { ZodError } from "zod";
 import { Status } from "../../enums/StatusCodes.js";
 import { TruceStatus } from "../../enums/TruceStatus.js";
 import { MessageType } from "../../enums/MessageType.js";
@@ -154,6 +155,8 @@ export const sendMessage: KoaController = async (ctx) => {
   } catch (err) {
     // A refusal that already says why (a truce already waiting, #203) goes out as it is.
     if (err instanceof ClientSafeError) throw err;
+    // A body that fails its schema answers 400 globally (issue #224).
+    if (err instanceof ZodError) throw err;
     logger.error(`Error sending message: ${err}`);
     throw mailboxErr();
   }

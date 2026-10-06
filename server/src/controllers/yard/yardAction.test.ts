@@ -329,6 +329,8 @@ describe("runYardAction refusals", () => {
 
     expect(ctx.status).toBe(409);
     expect(ctx.body!.reason).toBe("raidInProgress");
+    // The sentence the web yard shows the player (#309).
+    expect(ctx.body!.error).toBe("Wild monsters are raiding your yard right now. Try again when the raid is over.");
     expect(db.row).toEqual(before);
   });
 

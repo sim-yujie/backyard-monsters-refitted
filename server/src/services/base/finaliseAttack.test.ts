@@ -142,6 +142,7 @@ const { attackCheckpointKey } = await import("./attackCheckpoint.js");
 const { attackSessionKey } = await import("./attackSession.js");
 const { replayAbandonedAttack } = await import("./combat/abandonedAttack.js");
 const { attackLootOf } = await import("./combat/attackLoot.js");
+const { foughtLoot } = await import("./combat/battle.js");
 const { housingLossOf, housingLossLine } = await import("./combat/housingLoss.js");
 
 const LOG = {
@@ -314,6 +315,8 @@ describe("finaliseAbandonedAttack", () => {
       defender: { type: "tribe", buildingdata: sandbox.buildingdata, buildinghealthdata: {}, resources: defender.resources },
       attacker: structuredClone(userSave),
       mapRoom3: false,
+      // The save's own battle, to the same tick: the client's engine's figures.
+      fought: foughtLoot(client),
     });
     userSave.resources = { r1: 0, r2: 0, r3: 0, r4: 0 };
     userSave.buildingdata = { "1": { id: 1, t: 6, l: 10 }, "2": { id: 2, t: 6, l: 10 } };

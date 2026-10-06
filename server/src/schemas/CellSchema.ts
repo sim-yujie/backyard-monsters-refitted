@@ -1,4 +1,5 @@
 import z from "zod";
+import { optionalJsonField } from "./jsonField.js";
 
 /**
  * Schema for validating and transforming MR3 cellid's from the client.
@@ -11,8 +12,5 @@ export const CellSchema = z.object({
    * The list of cell IDs requested by the client.
    * @type {number[] | undefined}
    */
-  cellids: z
-    .string()
-    .transform((val) => JSON.parse(val) as number[])
-    .optional(),
+  cellids: optionalJsonField<number[]>("cellids"),
 });

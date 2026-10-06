@@ -61,6 +61,7 @@ describe("MONSTER_SPRITES", () => {
     }
   });
 
+  // Reads every sprite PNG from disk, so slow on a busy machine (issue #210).
   it("records each PNG's real size, and columns x frame size matches it", () => {
     for (const sheet of sheets) {
       const size = pngSize(`${ASSETS}${sheet.file}`);
@@ -71,7 +72,7 @@ describe("MONSTER_SPRITES", () => {
       expect(sheet.columns, sheet.key).toBeGreaterThan(0);
       expect(sheet.rows, sheet.key).toBeGreaterThan(0);
     }
-  });
+  }, 20_000);
 
   it("keeps every animation cycle inside its sheet", () => {
     for (const sheet of sheets) {

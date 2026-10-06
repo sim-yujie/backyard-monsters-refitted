@@ -1,6 +1,5 @@
 import { availableParallelism } from "node:os";
 import type { AbandonedInput, AbandonedOutcome } from "./abandonedAttack.js";
-import type { ReplayedLoot, ReplayedLootInput } from "./attackLoot.js";
 import type { RaidFightInput, RaidFightOutcome } from "../../raids/raidFight.js";
 
 /**
@@ -44,15 +43,13 @@ export const SAVE_REPLAY_DEADLINE_MS = 5_000;
  */
 export const FINALISE_REPLAY_DEADLINE_MS = 20_000;
 
-/** A replay to run: the save's loot cap, an abandoned attack, or a wild monster raid's fight (#226). */
+/** A replay to run: an attack's battle (a save's or an abandoned one), or a wild monster raid's fight (#226). */
 export type ReplayJob =
-  | { readonly kind: "loot"; readonly input: ReplayedLootInput }
   | { readonly kind: "abandoned"; readonly input: AbandonedInput }
   | { readonly kind: "raid"; readonly input: RaidFightInput };
 
 /** What the worker sends back. */
 export type ReplayReply =
-  | { readonly ok: true; readonly kind: "loot"; readonly result: ReplayedLoot }
   | { readonly ok: true; readonly kind: "abandoned"; readonly result: AbandonedOutcome }
   | { readonly ok: true; readonly kind: "raid"; readonly result: RaidFightOutcome }
   | { readonly ok: false; readonly error: string };
@@ -130,20 +127,6 @@ const run = (job: ReplayJob, deadlineMs: number): Promise<ReplayReply & { ok: tr
     };
     worker.postMessage(job);
   });
-
-/**
- * The save's loot replay (`replayedLoot`), in a worker.
- *
- * @throws {ReplayTimeoutError} Past the deadline.
- */
-export const replayLootInWorker = async (
-  input: ReplayedLootInput,
-  deadlineMs = SAVE_REPLAY_DEADLINE_MS
-): Promise<ReplayedLoot> => {
-  const reply = await run({ kind: "loot", input }, deadlineMs);
-  if (reply.kind !== "loot") throw new Error("Battle replay answered the wrong job");
-  return reply.result;
-};
 
 /**
  * An abandoned attack's replay (`replayAbandonedAttack`), in a worker.

@@ -21,17 +21,7 @@ import type { JsonObject } from "../../../types/JsonObject.js";
 import { catchUpTransferYards } from "../../../services/yard/armies.js";
 import { isAttackActive } from "../../../services/base/isAttackActive.js";
 import { readAttackSession } from "../../../services/base/attackSessionStore.js";
-
-/** A JSON form field, parsed. */
-const jsonField = (name: string) =>
-  z.string().transform((raw, ctx) => {
-    try {
-      return JSON.parse(raw) as unknown;
-    } catch {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${name} is not valid JSON` });
-      return z.NEVER;
-    }
-  });
+import { jsonField } from "../../../schemas/jsonField.js";
 
 /**
  * `moved` is the counts to move (`{"C1": 5}`, the web client, #196);
@@ -41,8 +31,8 @@ const jsonField = (name: string) =>
 const TransferMonstersScema = z.object({
   frombaseid: z.string(),
   tobaseid: z.string(),
-  moved: jsonField("moved").optional(),
-  monsters: jsonField("monsters").optional(),
+  moved: jsonField("moved is not valid JSON").optional(),
+  monsters: jsonField("monsters is not valid JSON").optional(),
 });
 
 /**

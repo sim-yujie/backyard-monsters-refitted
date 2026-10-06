@@ -3,6 +3,7 @@ import type { Save } from "../../database/models/save.model.js";
 import { updateAchievements } from "../../services/achievements/state.js";
 import { achievementsState } from "../../services/achievements/view.js";
 import { defineYardAction } from "./yardAction.js";
+import { jsonField } from "../../schemas/jsonField.js";
 
 /**
  * The player's own achievements actions (`docs/design/achievements.md` §9.1,
@@ -16,17 +17,9 @@ import { defineYardAction } from "./yardAction.js";
 
 /** `ids`: a JSON array of achievement numbers, as `repair`'s `ids` is read. */
 export const AchievementsSeenSchema = z.object({
-  ids: z
-    .string()
-    .transform((raw, ctx) => {
-      try {
-        return JSON.parse(raw) as unknown;
-      } catch {
-        ctx.addIssue({ code: "custom", message: "ids must be a JSON array of achievement numbers" });
-        return z.NEVER;
-      }
-    })
-    .pipe(z.array(z.number().int().positive()).max(64)),
+  ids: jsonField("ids must be a JSON array of achievement numbers").pipe(
+    z.array(z.number().int().positive()).max(64)
+  ),
 });
 
 /**

@@ -25,6 +25,9 @@ import {
 
 /** The bot yard generator's entry (issue #237, `docs/design/bot-neighbours.md` §4.2). */
 
+/** CPU-bound and slow on a busy machine (issue #210): time, not a property under test. */
+const SLOW_TEST_TIMEOUT_MS = 30_000;
+
 const NOW = 1_800_000_000;
 
 const buildingDataOf = (yard: BotYard): BuildingDataMap =>
@@ -154,7 +157,7 @@ describe("generateBotYard", () => {
         expect({ t: grown.t, X: grown.X, Y: grown.Y }).toEqual({ t: building.t, X: building.X, Y: building.Y });
       }
     }
-  });
+  }, SLOW_TEST_TIMEOUT_MS);
 
   test("points and base value are the save's strings", () => {
     const yard = generateBotYard({ seed: 1, persona: "towers", targetPoints: targetInBand(12, 0.5), now: NOW });

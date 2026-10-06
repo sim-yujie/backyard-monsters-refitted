@@ -138,7 +138,7 @@ const setMode = (mode: typeof MODE) => {
 };
 const { attackLootOf } = await import("../../../services/base/combat/attackLoot.js");
 const { replayAbandonedAttack } = await import("../../../services/base/combat/abandonedAttack.js");
-const { battleReplayInput, battleTick } = await import("../../../services/base/combat/battle.js");
+const { battleReplayInput, battleTick, foughtLoot } = await import("../../../services/base/combat/battle.js");
 
 const ctxFor = (body: Record<string, string>) =>
   ({
@@ -150,17 +150,26 @@ const ctxFor = (body: Record<string, string>) =>
 
 const CLAIM = { r1: 1e9, r2: 1e9, r3: 1e9, r4: 1e9 };
 
-/** What the server's replay allows this attack, worked out the same way. */
-const replayCap = (flinglog: unknown = LOG) =>
-  attackLootOf({
+/**
+ * The loot rule over the server's own battle, worked out as the save that ends
+ * the attack does: a save with no tick is replayed to the longest end.
+ */
+const serverLoot = (flinglog: unknown, buildingdata: unknown) => {
+  const args = {
     sent: CLAIM,
     reported: undefined,
     flinglog,
     session: { attackerid: ATTACKER, attackid: ATTACK_ID, startedat: 0, entryHoused: ENTRY },
-    defender: { type: "tribe", buildingdata: YARD as never, buildinghealthdata: {}, resources: defender.resources },
+    defender: { type: "tribe", buildingdata: buildingdata as never, buildinghealthdata: {}, resources: defender.resources },
     attacker: attackerSave,
     mapRoom3: false,
-  }).cap;
+  };
+  const input = battleReplayInput({ ...args, tick: battleTick(undefined), declareWar: false });
+  return attackLootOf({ ...args, fought: input && foughtLoot(replayAbandonedAttack(input)) });
+};
+
+/** What the server's replay allows this attack, worked out the same way. */
+const replayCap = (flinglog: unknown = LOG) => serverLoot(flinglog, YARD).cap;
 
 // The mock outlives this file (bun keeps module mocks across files), so it is
 // left delegating to the real runner.
@@ -446,16 +455,7 @@ describe("a fallen bunker's garrison through the save (issue #130)", () => {
   };
 
   /** What the server's own battle brings down, as the save works it out. */
-  const serverFallen = () =>
-    attackLootOf({
-      sent: CLAIM,
-      reported: undefined,
-      flinglog: RAID,
-      session: { attackerid: ATTACKER, attackid: ATTACK_ID, startedat: 0, entryHoused: ENTRY },
-      defender: { type: "tribe", buildingdata: defender.buildingdata, buildinghealthdata: {}, resources: defender.resources },
-      attacker: attackerSave,
-      mapRoom3: false,
-    }).fallen;
+  const serverFallen = () => serverLoot(RAID, defender.buildingdata).fallen;
 
   const save = (health: Record<string, number>, over = true) =>
     baseSave(

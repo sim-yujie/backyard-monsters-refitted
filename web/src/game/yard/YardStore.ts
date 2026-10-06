@@ -313,6 +313,13 @@ export interface YardStoreOptions {
    * server's own sentence.
    */
   onUnderAttack?: () => void;
+  /**
+   * Called when the server refuses a request because a wild monster raid is
+   * being fought on the yard (`raidInProgress`, #309), with the server's
+   * sentence: the scene tells the player why. The yard is frozen until the
+   * fight ends, so nothing is fetched. The refusal still reaches the caller.
+   */
+  onRaidInProgress?: (message: string) => void;
 }
 
 /** One second, the coalescing window of §2.4. */
@@ -355,6 +362,9 @@ type QueueEntry = QueuedAction | QueuedRefresh;
 /** The refusal's `reason` while the yard is being attacked (`yardUnderAttackErr`). */
 export const UNDER_ATTACK = "underAttack";
 
+/** The refusal's `reason` while a wild monster raid is fought on the yard (`yardRaidInProgressErr`, #309). */
+export const RAID_IN_PROGRESS = "raidInProgress";
+
 /** The key a `state` call runs under. */
 export const REFRESH_KEY = "state";
 
@@ -374,6 +384,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
   private readonly hatchRefreshDelayMs: number;
   private readonly onAuthFailure: (() => void) | undefined;
   private readonly onUnderAttack: (() => void) | undefined;
+  private readonly onRaidInProgress: ((message: string) => void) | undefined;
   private readonly listeners = new Set<YardListener>();
 
   /** Server clock minus browser clock, seconds, from the latest answer. */
@@ -408,6 +419,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     this.hatchRefreshDelayMs = options.hatchRefreshDelayMs ?? HATCH_REFRESH_DELAY_MS;
     this.onAuthFailure = options.onAuthFailure;
     this.onUnderAttack = options.onUnderAttack;
+    this.onRaidInProgress = options.onRaidInProgress;
     this.target = options.target ?? MAIN_YARD;
     this.baseid = outpostBaseid(this.target);
     this.yardArgs = this.baseid === undefined ? [] : [this.baseid];
@@ -729,6 +741,9 @@ export class YardStore implements YardStoreReader, YardStoreActions {
       } else if (refusal.reason === UNDER_ATTACK) {
         // Nothing to fetch: the yard answers nothing until the attack ends.
         this.onUnderAttack?.();
+      } else if (refusal.reason === RAID_IN_PROGRESS) {
+        // The same: the yard stays as the fight found it until the raid ends.
+        this.onRaidInProgress?.(refusal.message);
       } else if (refusal.status === 409 && entry.type === "action") {
         // The yard said no to something the client thought it could do, so
         // what the client holds is stale: fetch the server's version.
