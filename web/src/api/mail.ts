@@ -174,6 +174,12 @@ export const sendRefusal = (caught: unknown): string => {
   return "The message was not sent.";
 };
 
+/** Why a block did not go: the server's words (too many reports, #323), else a plain one. */
+export const blockRefusal = (caught: unknown): string => {
+  const body = caught instanceof ApiError ? (caught.body as { message?: unknown } | undefined) : undefined;
+  return typeof body?.message === "string" && body.message ? body.message : "Could not block that player. Try again.";
+};
+
 /** Why an answer to an invitation did not go: the server's words, else a plain one (#205). */
 const answerRefusal = (caught: unknown): string => {
   if (caught instanceof NetworkError) return "Could not reach the server. Try again.";

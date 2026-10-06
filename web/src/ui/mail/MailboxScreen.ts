@@ -1,7 +1,7 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { getSession } from "@/api/auth";
-import { mailApi, type InvitePayment, type MailApi, type MailTarget } from "@/api/mail";
+import { blockRefusal, mailApi, type InvitePayment, type MailApi, type MailTarget } from "@/api/mail";
 import type { OffsetCell } from "@/game/HexGrid";
 import {
   contactsOf,
@@ -553,8 +553,8 @@ export class MailboxScreen {
   private async block(thread: MailThread): Promise<void> {
     try {
       await this.api.block(thread.threadid);
-    } catch {
-      this.setStatus("bad", "Could not block that player. Try again.");
+    } catch (caught) {
+      this.setStatus("bad", blockRefusal(caught));
       return;
     }
     this.setStatus("info", `${thread.otherName} is blocked.`);
