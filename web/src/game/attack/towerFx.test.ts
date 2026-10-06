@@ -13,6 +13,7 @@ import {
   facingCell,
   laserCell,
   muzzleOf,
+  railFade,
   teslaTick,
   towersOf,
   wrapDegrees,
@@ -311,6 +312,25 @@ describe("TowerFx", () => {
     expect(whole.width).toBeLessThan(40);
     // Without one, the trail stops just past its target.
     expect(fired().height).toBeLessThan(400);
+  });
+
+  it("keeps the Railgun's trail solid ten frames, then fades it out over five, as Flash (#312)", () => {
+    // A frame every second tick: solid to the end of frame 10, then 0.8 down to 0.2.
+    expect(railFade(0)).toBe(1);
+    expect(railFade(21)).toBe(1);
+    expect(railFade(22)).toBeCloseTo(0.8);
+    expect(railFade(28)).toBeCloseTo(0.2);
+    expect(railFade(29)).toBeCloseTo(0.2);
+    expect(railFade(30)).toBeNull();
+
+    const target = creepAt(35, 235);
+    const { graphics, fx } = setUp(118);
+    fx.onShot({ tick: 1, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
+    fx.update(25, () => target);
+    expect(drawn(graphics)).toBeGreaterThan(0);
+    fx.update(31, () => target);
+    expect(drawn(graphics)).toBe(0);
+    fx.destroy();
   });
 
   it("sweeps the Laser's beam along the engine's sweep, across the target 75 ticks in (#267)", () => {
