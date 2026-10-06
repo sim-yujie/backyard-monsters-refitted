@@ -2,6 +2,7 @@ import { Container, Texture, TextureSource, type Sprite } from "pixi.js";
 import { describe, expect, it } from "vitest";
 import { creepZIndex, MonsterSheetTextures } from "@/game/attack/AttackBattleLayer";
 import { MONSTER_SPRITES } from "@/game/attack/monsterSpriteData";
+import { mulberry32 } from "@/game/combat/rules/rng";
 import { championFlightTop, shadowOffset } from "@/game/attack/monsterSprites";
 import { yardBounds } from "./YardGrid";
 import { EMPTY_LIFE, type YardLife } from "./yardLifeModel";
@@ -37,8 +38,8 @@ const life = (overrides: Partial<YardLife> = {}): YardLife => ({
   ...overrides,
 });
 
-const setUp = (reducedMotion = false) => {
-  const layer = new YardLifeLayer({ textures: textures(), reducedMotion });
+const setUp = (reducedMotion = false, random?: () => number) => {
+  const layer = new YardLifeLayer({ textures: textures(), reducedMotion, ...(random && { random }) });
   const tops = new Container();
   const shadows = new Container();
   return { layer, tops, shadows };
@@ -231,7 +232,9 @@ describe("YardLifeLayer", () => {
 
   it("sends a worker walking to a job that starts, and stands one at a job there on load", () => {
     const job = { id: 9, x: 300, y: 300, width: 40, height: 40 };
-    const { layer, tops, shadows } = setUp();
+    // Seeded (issue #210): with `Math.random` the worker now and then starts
+    // on the very spot the job sends it to, and has nowhere to walk.
+    const { layer, tops, shadows } = setUp(false, mulberry32(7).float);
     layer.set(life({ workers: 1 }), bounds);
     layer.attach(tops, shadows);
     const [worker] = layer.workerList;
