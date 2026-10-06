@@ -29,10 +29,12 @@ import { turnstileSecretKey } from "./services/auth/turnstile.js";
 import { requiresDiscordVerification } from "./config/AccountConfig.js";
 import { botConfig } from "./config/BotConfig.js";
 import { PRESENCE_TTL_SECONDS } from "./controllers/maproom/presence.js";
+import { clientIp } from "./middleware/clientIp.js";
+import { trustedProxies } from "./config/ProxyConfig.js";
 
+// `ctx.ip` comes from the clientIp middleware, which believes CF-Connecting-IP
+// only from a trusted proxy (issue #214), so Koa's own proxy trust stays off.
 export const app = new Koa();
-app.proxy = true;
-app.proxyIpHeader = "CF-Connecting-IP";
 
 export const PORT = process.env.PORT || 3001;
 export const BASE_URL = process.env.BASE_URL;
@@ -66,6 +68,7 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
 
   startChatServer();
 
+  app.use(clientIp());
   app.use(corsCacheControl);
   app.use(bodyParser({ enableTypes: ["json", "form"], jsonLimit: "8mb", formLimit: "8mb"}));
 
@@ -171,6 +174,22 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
       requiresDiscordVerification()
         ? `required${process.env.ENV === Env.PROD ? "" : " (production only; not enforced here)"}`
         : "not required"
+    }`
+  );
+
+  // Who may name a player's IP (issue #214). A server behind another proxy that
+  // is not listed sees every player as that proxy's address.
+  if (trustedProxies.rejected.length) {
+    logger.warn("TRUSTED_PROXIES entries ignored, not an address or range: {rejected}", {
+      rejected: trustedProxies.rejected.join(", "),
+    });
+  }
+
+  logger.info(
+    `Client IP: ${
+      trustedProxies.entries.length
+        ? `CF-Connecting-IP from ${trustedProxies.entries.join(", ")}, otherwise the connecting address`
+        : "the connecting address (no trusted proxies)"
     }`
   );
 
