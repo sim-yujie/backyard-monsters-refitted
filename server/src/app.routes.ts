@@ -10,6 +10,9 @@ import {
   getAreaLimiter,
   getCellsLimiter,
   loginLimiter,
+  forgotPasswordEmailLimiter,
+  forgotPasswordIpLimiter,
+  resetPasswordLimiter,
   publicReadLimiter,
   registerLimiter,
   allianceInviteLimiter,
@@ -140,8 +143,8 @@ router.get("/connection", (ctx) => (ctx.status = Status.OK));
 router.post("/api/:apiVersion/player/getinfo", apiVersion, loginLimiter, logRequest, login);
 router.post("/api/:apiVersion/player/register", apiVersion, registerLimiter, logRequest, register);
 router.get("/api/:apiVersion/player/signupoptions", apiVersion, signUpOptions);
-router.post("/api/:apiVersion/player/forgotPassword", apiVersion, forgotPassword);
-router.post("/api/:apiVersion/player/reset-password", resetPassword);
+router.post("/api/:apiVersion/player/forgotPassword", apiVersion, forgotPasswordIpLimiter, forgotPasswordEmailLimiter, forgotPassword);
+router.post("/api/:apiVersion/player/reset-password", resetPasswordLimiter, resetPassword);
 router.get("/api/:apiVersion/supportedLangs", apiVersion, logRequest, supportedLangs);
 router.get("/api/:apiVersion/player/account", apiVersion, verifyUserAuth, getAccount);
 router.post("/api/:apiVersion/player/changeusername", apiVersion, verifyUserAuth, changeUsernameLimiter, logRequest, changeUsername);

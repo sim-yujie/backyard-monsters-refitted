@@ -225,6 +225,52 @@ export const loginLimiter = RateLimit.middleware({
 });
 
 /**
+ * Rate limits for forgot-password (issue #316): each request sends an email, so
+ * one address can ask for 10 an hour and one email can be sent 3 an hour,
+ * whoever asks. Both answer the same for an email with or without an account.
+ */
+export const forgotPasswordIpLimiter = RateLimit.middleware({
+  interval: { min: 60 },
+  max: 10,
+  prefixKey: "forgot-password-ip",
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { message: "Too many password reset requests. Please try again later." };
+  },
+});
+
+/** The email as it is looked up: trimmed and lowercased, as the schema does. */
+const requestedEmail = (ctx: Context): string => {
+  const email = (ctx.request.body as { email?: unknown } | undefined)?.email;
+  return typeof email === "string" ? email.trim().toLowerCase() : "";
+};
+
+export const forgotPasswordEmailLimiter = RateLimit.middleware({
+  interval: { min: 60 },
+  max: 3,
+  prefixKey: "forgot-password-email",
+  keyGenerator: async (ctx: Context) => `forgot-password-email|${requestedEmail(ctx)}`,
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { message: "Too many password reset requests. Please try again later." };
+  },
+});
+
+/**
+ * Rate limit for setting a new password from a reset link (issue #316) - 10
+ * per 15 minutes per IP. Each try hashes a password.
+ */
+export const resetPasswordLimiter = RateLimit.middleware({
+  interval: { min: 15 },
+  max: 10,
+  prefixKey: "reset-password",
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { message: "Too many password reset attempts. Please try again later." };
+  },
+});
+
+/**
  * Rate limit for auto-attacks (issue #221) - 10 a minute per user, the owner's
  * figure. Each runs a battle replay, and one is in progress at a time besides
  * (`services/base/autoAttack/autoAttack.ts`).
