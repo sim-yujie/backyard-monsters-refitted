@@ -106,6 +106,30 @@ describe("landRaid", () => {
     expect(result.stolen).toEqual({ r1: 400 + 300, r2: 50, r3: 0, r4: 0 });
   });
 
+  test("a Trojan Horse's fight (tribe wild) steals exactly as a raid's does, even at a good defence, which still pays no Shiny (design §6)", () => {
+    const save = saveOf();
+    const result = landRaid(
+      save,
+      {
+        id: "r_horse",
+        tribe: "wild",
+        startedAt: STARTED,
+        outcome: outcomeOf({
+          healthShare: 0.95,
+          bankLoss: { r1: 400, r2: 500, r3: 0, r4: 0 },
+          harvesterLoss: { "1": 1000 },
+        }),
+      },
+      NOW
+    );
+    expect(result.defended).toBe(true);
+    expect(result.shiny).toBe(0);
+    expect(save.credits).toBe(100);
+    expect(save.resources).toMatchObject({ r1: 600, r2: 0, r3: 0, r4: 0 });
+    expect(save.buildingdata!["1"]!.st).toBe(0);
+    expect(result.stolen).toEqual({ r1: 400 + 300, r2: 50, r3: 0, r4: 0 });
+  });
+
   test("every damaged building is repairing afterwards, its hp in step with the health map", () => {
     const save = saveOf();
     const result = land(save, outcomeOf({ health: { "0": 500, "2": 0, "4": 100 }, damage: 40 }));

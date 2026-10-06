@@ -142,6 +142,20 @@ describe("raid result popup", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("shows a Trojan Horse's own loss of resources even at a good defence (no Shiny, design §6)", () => {
+    const { modal } = layers();
+    const horse: RaidResult = {
+      ...result(true),
+      tribe: "wild",
+      shiny: 0,
+      stolen: { r1: 1_200, r2: 0, r3: 300, r4: 0 },
+    };
+    raidResultPopup(horse, { price: 50, blocked: null, buy: vi.fn() }, () => {}).mount(modal);
+    const popup = modal.querySelector(".raid-result--good")!;
+    expect(popup.querySelector(".raid-result__reward")).toBeNull();
+    expect(popup.querySelector(".raid-result__stolen")!.textContent).toContain("1,200");
+  });
+
   it("keeps the popup up with the reason when Repair now is refused", async () => {
     const { modal } = layers();
     raidResultPopup(result(false), { price: 50, blocked: null, buy: async () => "Not enough Shiny." }, () => {}).mount(
