@@ -188,3 +188,33 @@ describe("reset tokens are stored hashed (issue #321)", () => {
     expect((await call(resetPassword, { password: "NewPassword1!", token })).status).toBe(401);
   });
 });
+
+describe("an expired reset link says so", () => {
+  const expiredToken = (secret = process.env.SECRET_KEY!) =>
+    JWT.sign({ user: { email: EMAIL }, exp: Math.floor(Date.now() / 1000) - 60 }, secret);
+
+  test("an expired link gets the expired message and changes nothing", async () => {
+    const token = expiredToken();
+    user!.resetToken = hashResetToken(token);
+    const expired = await call(resetPassword, { password: "NewPassword1!", token });
+    expect(expired.status).toBe(401);
+    expect((expired.body as { message: string }).message).toMatch(/expired/);
+    expect(user!.password).toBe("old-hash");
+    expect(deletedKeys).toEqual([]);
+  });
+
+  test("answers the same whether or not the account exists", async () => {
+    const token = expiredToken();
+    user!.resetToken = hashResetToken(token);
+    const known = await call(resetPassword, { password: "NewPassword1!", token });
+    user = null;
+    const unknown = await call(resetPassword, { password: "NewPassword1!", token });
+    expect(unknown).toEqual(known);
+  });
+
+  test("an expired link that was never ours is just refused", async () => {
+    const forged = await call(resetPassword, { password: "NewPassword1!", token: expiredToken("another-secret") });
+    expect(forged.status).toBe(401);
+    expect(forged.error).toBe("Could not authenticate");
+  });
+});

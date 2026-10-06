@@ -8,7 +8,6 @@ import { postgres } from "../../server.js";
 import { User } from "../../database/models/user.model.js";
 import { logger } from "../../utils/logger.js";
 import { ResetPasswordSchema } from "../../schemas/AuthSchemas.js";
-import { verifyJwtToken } from "../../middleware/auth.js";
 import { isBot } from "../../services/bots/isBot.js";
 import { endAllSessions } from "../../services/auth/sessions.js";
 import { resetTokenMatches } from "../../services/auth/resetToken.js";
@@ -30,9 +29,14 @@ export const resetPassword: KoaController = async (ctx) => {
   try {
     const { password, token } = ResetPasswordSchema.parse(ctx.request.body);
 
-    const decodedToken = verifyJwtToken(token);
+    // Checked here rather than with verifyJwtToken, which turns every failure
+    // into one error, so an expired link could never be told apart. Expiry is
+    // only checked once the signature is good, and before any account lookup,
+    // so saying "expired" tells nothing about which emails have accounts.
+    const decodedToken = <{ user: { email: string } }>(
+      jwt.verify(token, process.env.SECRET_KEY!, { algorithms: ["HS256"] })
+    );
 
-    // Verify the token
     const { email } = decodedToken.user;
 
     const user = await postgres.em.findOne(User, { email });
