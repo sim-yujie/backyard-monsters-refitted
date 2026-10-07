@@ -119,6 +119,11 @@ describe("paid with resources: prefabs", () => {
     );
   });
 
+  test("records which kit the outpost now wears, for the map's kit tint and filter (#334)", () => {
+    expect(planStarterKit(outpost(), { kit: 1, pay: "resources" }, NOW).slices.starterkit).toBe(1);
+    expect(planStarterKit(outpost(), { kit: 3, pay: "shiny" }, NOW).slices.starterkit).toBe(3);
+  });
+
   test("each building counts down the steps up to its prefab level, and none holds the worker", () => {
     const { buildingdata, seconds } = kitBuildings(starterKit(1)!, "resources", outpost().buildingdata!);
     const sniper = Object.values(buildingdata).find((b) => b.t === 21)!;

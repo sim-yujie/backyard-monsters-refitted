@@ -5,6 +5,7 @@ import type { MapCell, PlayerCell, Resources, TakeoverQuoteResponse } from "@/ap
 import { MAX_ZOOM, MIN_ZOOM } from "@/config";
 import type { OffsetCell } from "@/game/HexGrid";
 import type { RangeSource } from "@/game/maproom/attackRange";
+import type { KitFilter } from "@/game/maproom/cellVisuals";
 import type { ZoneRecord } from "@/game/maproom/ZoneStore";
 import type { CellRange } from "@/game/maproom/zones";
 import type { TakeoverCandidate, TakeoverKind } from "@/game/maproom/takeover";
@@ -17,6 +18,7 @@ import { CellPanel, type OwnFlinger, type OwnMoves } from "./CellPanel";
 import { FindControl } from "./FindControl";
 import { HoverCard, type HoverCardContent } from "./HoverCard";
 import { Minimap } from "./Minimap";
+import { KitFilterControl } from "./KitFilterControl";
 import { NavPanel } from "./NavPanel";
 import { Notices } from "./Notices";
 import { RangeControl } from "./RangeControl";
@@ -92,6 +94,8 @@ export interface MapRoomUiHandlers {
   onCellPanelClose: () => void;
   /** "My range" turned on or off (#177), from its button or the cell panel. */
   onRangeToggle: (on: boolean) => void;
+  /** The kit filter (#334) was changed. */
+  onKitFilterChange: (filter: KitFilter) => void;
   /** The cell panel's range chip (#174); see `CellPanelOptions.reach`. */
   reach: (cell: OffsetCell) => { text: string; inRange: boolean } | null;
   /** The cell panel's own-yard Flinger line (#174). */
@@ -127,6 +131,7 @@ export class MapRoomUi {
   private readonly minimap: Minimap;
   private readonly zoomControl: ZoomControl;
   private readonly rangeControl: RangeControl;
+  private readonly kitFilterControl: KitFilterControl;
   private readonly docks: HTMLElement[] = [];
   /** The tool row, bottom right: Range and the zoom, and what `placeTool` puts first. */
   private tools: HTMLElement | null = null;
@@ -187,6 +192,9 @@ export class MapRoomUi {
     });
 
     this.rangeControl = new RangeControl({ onToggle: (on) => this.toggleRange(on) });
+    this.kitFilterControl = new KitFilterControl({
+      onFilterChange: (filter) => this.handlers.onKitFilterChange(filter),
+    });
   }
 
   mount(container: HTMLElement, modal?: HTMLElement): this {
@@ -202,7 +210,7 @@ export class MapRoomUi {
     bottomRight.append(this.rangeControl.legend);
     const tools = document.createElement("div");
     tools.className = "mr2-toolrow";
-    tools.append(this.rangeControl.button);
+    tools.append(this.rangeControl.button, this.kitFilterControl.element);
     this.zoomControl.mount(tools);
     bottomRight.append(tools);
     this.tools = tools;
@@ -277,6 +285,11 @@ export class MapRoomUi {
     this.rangeOn = on;
     this.rangeControl.setOn(on);
     this.cellPanel?.setRangeOn(on);
+  }
+
+  /** The kit filter (#334) as the player last left it. */
+  setKitFilter(filter: KitFilter): void {
+    this.kitFilterControl.setFilter(filter);
   }
 
   /** The flingers the range is drawn from, for the legend (#177). */

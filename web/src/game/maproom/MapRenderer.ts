@@ -1,7 +1,7 @@
 import { Container, Graphics, type Renderer } from "pixi.js";
 import { MAX_TEXT_OBJECTS } from "@/config";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
-import { HOVER_COLOUR, SELECT_COLOUR } from "./cellVisuals";
+import { HOVER_COLOUR, KitFilter, SELECT_COLOUR, type MapViewerContext } from "./cellVisuals";
 import {
   CHUNK_TTL_MS,
   MAX_RESIDENT_CHUNKS,
@@ -13,7 +13,7 @@ import { TextPool } from "./LabelLayer";
 import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
 import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
-import { PlayerAvatars } from "./playerAvatars";
+import { BuildingAvatars } from "./buildingAvatars";
 import { RangeOverlay } from "./RangeOverlay";
 import { TerrainRaster } from "./TerrainRaster";
 import { TribeAvatars } from "./tribeAvatars";
@@ -72,8 +72,8 @@ export class MapRenderer {
    * arrives whenever it arrives, and the map has to look right in between.
    */
   private readonly avatars = new TribeAvatars();
-  /** The players' critters for their markers (#176), fetched the same way. */
-  private readonly players = new PlayerAvatars();
+  /** The Town Hall and outpost pictures a player cell wears (#334), fetched the same way. */
+  private readonly buildings = new BuildingAvatars();
   private readonly chunks = new Map<number, MapChunk>();
   private readonly residency = new ChunkResidency({
     ttlMs: CHUNK_TTL_MS,
@@ -96,6 +96,11 @@ export class MapRenderer {
 
   private hovered: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
+
+  /** The viewer's own alliance id (#334), or null; drives the "your alliance" plate colour. */
+  private myAlliance: number | null = null;
+  /** The active kit filter (#334). */
+  private kitFilter: KitFilter = KitFilter.ALL;
 
   constructor(private readonly store: ZoneStore) {
     this.world.interactiveChildren = false;
@@ -129,12 +134,26 @@ export class MapRenderer {
   async loadPictures(): Promise<void> {
     await Promise.all([
       this.avatars.load().then((ok) => ok && this.rebuildAll()),
-      this.players.load().then((ok) => ok && this.rebuildAll()),
+      this.buildings.load().then((ok) => ok && this.rebuildAll()),
     ]);
   }
 
   private rebuildAll(): void {
     for (const id of this.chunks.keys()) this.dirty.add(id);
+  }
+
+  /** Sets the viewer's own alliance id (#334) and rebuilds every chunk if it changed. */
+  setMyAlliance(id: number | null): void {
+    if (id === this.myAlliance) return;
+    this.myAlliance = id;
+    this.rebuildAll();
+  }
+
+  /** Sets the active kit filter (#334) and rebuilds every chunk if it changed. */
+  setKitFilter(filter: KitFilter): void {
+    if (filter === this.kitFilter) return;
+    this.kitFilter = filter;
+    this.rebuildAll();
   }
 
   /**
@@ -229,7 +248,7 @@ export class MapRenderer {
     this.dropAllChunks();
     this.pool.destroy();
     this.avatars.destroy();
-    this.players.destroy();
+    this.buildings.destroy();
     this.atlas?.destroy();
     this.atlas = null;
     this.raster.destroy();
@@ -267,13 +286,14 @@ export class MapRenderer {
         }
         budget -= 1;
         if (!chunk) {
-          chunk = new MapChunk(ref, atlas, this.avatars, this.players, this.pool);
+          chunk = new MapChunk(ref, atlas, this.avatars, this.buildings, this.pool);
           this.chunks.set(ref.id, chunk);
           this.world.addChild(chunk.container);
           this.worldTop.addChild(chunk.top);
         }
         const started = performance.now();
-        chunk.build(this.store, nowSeconds);
+        const context: MapViewerContext = { myAlliance: this.myAlliance, kitFilter: this.kitFilter };
+        chunk.build(this.store, nowSeconds, context);
         this.buildMs = performance.now() - started;
         this.dirty.delete(ref.id);
       }

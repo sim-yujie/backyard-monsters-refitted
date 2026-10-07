@@ -836,6 +836,11 @@ export interface PlayerCell {
   r?: Resources;
   /** Own cells only: hatchery and garrison state. */
   m?: Record<string, unknown>;
+  /**
+   * An outpost's Starter Kit (issue #334): 0 none, 1 Regular, 2 Mega, 3 Ultra.
+   * Everyone sees it, not only the owner. Absent on a main yard cell (`b` 2).
+   */
+  kit?: number;
 }
 
 export type MapCell = WaterCell | WildMonsterCell | PlayerCell | FogCell;
@@ -859,6 +864,8 @@ export interface GetAreaResponse extends ApiEnvelope {
   /** 11 x 11 cells covering x..x+10, y..y+10. */
   data: AreaCellGrid;
   alliancedata?: unknown;
+  /** The viewer's own alliance id (issue #334: the map's "your alliance" plate colour), or null. */
+  myalliance?: number | null;
   resources?: Resources;
   credits?: number;
   /**

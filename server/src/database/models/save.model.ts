@@ -451,6 +451,16 @@ export class Save {
   @Property({ columnType: "jsonb", nullable: true })
   outposts: Opt<[number, number, string][]> = [];
 
+  /**
+   * Which outpost Starter Kit (`game-data/starterKits.ts`) this row's buildings
+   * were last replaced with: 1 Regular, 2 Mega, 3 Ultra, 0 for never (issue
+   * #334, the map's kit tint and kit filter). Not sent to the client through
+   * `yardState` - `getArea`'s outpost cells carry it as `kit` instead, since it
+   * is read on the map, not in the yard.
+   */
+  @Property({ type: "number", default: 0 })
+  starterkit!: Opt<number>;
+
   @FrontendKey
   @Property({ columnType: "jsonb", nullable: true })
   wmstatus: Opt<number[][]> = [];

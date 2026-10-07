@@ -52,6 +52,9 @@ const RING_WIDTH = 6;
 /** Half the height of a name plate, and the radius of its ends. */
 export const PLATE_HALF_HEIGHT = 16;
 
+/** Half-width the level star and the relation icons are baked at. */
+export const ICON_UNIT = 32;
+
 const hexPoints = (scale: number): number[] => [
   -HALF_WIDTH * scale,
   0,
@@ -96,6 +99,21 @@ export class MapAtlas {
    * nine-slice sprite so its round ends keep their shape.
    */
   readonly plate: Texture;
+  /** The gold level badge drawn on every player cell (#334). */
+  readonly star: Texture;
+  /** Relation icon: a house, for the viewer's own cell (#334). */
+  readonly houseIcon: Texture;
+  /** Relation icon: a shield, for an alliance-mate's cell (#334). */
+  readonly shieldIcon: Texture;
+  /** Relation icon: crossed swords, for a cell that attacked the viewer (#334). */
+  readonly swordsIcon: Texture;
+  /**
+   * A faint circular bubble drawn over a player cell's building while it has
+   * damage protection or an active truce (#334). Replaces the vector ring the
+   * old map drew round a protected base; a sprite scales and tints it to sit
+   * over the building picture instead.
+   */
+  readonly shieldBubble: Texture;
 
   private readonly owned: Texture[];
 
@@ -165,6 +183,72 @@ export class MapAtlas {
         .fill(0xffffff),
     );
 
+    // The gold level badge: a five-point star, outer radius ICON_UNIT.
+    const starOuter = ICON_UNIT;
+    const starInner = ICON_UNIT * 0.5;
+    const starPoints: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      const radius = i % 2 === 0 ? starOuter : starInner;
+      const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+      starPoints.push(Math.cos(angle) * radius, Math.sin(angle) * radius);
+    }
+    this.star = bake(renderer, frame(ICON_UNIT + 1, ICON_UNIT + 1), (g) =>
+      g.poly(starPoints).fill(0xffffff),
+    );
+
+    // Relation icons, baked small - a sprite scales and tints each at the cell.
+    const iconHalf = ICON_UNIT * 0.6;
+    this.houseIcon = bake(renderer, frame(iconHalf + 1, iconHalf + 1), (g) =>
+      g
+        .poly([
+          0,
+          -iconHalf,
+          iconHalf,
+          0,
+          iconHalf * 0.7,
+          0,
+          iconHalf * 0.7,
+          iconHalf,
+          -iconHalf * 0.7,
+          iconHalf,
+          -iconHalf * 0.7,
+          0,
+          -iconHalf,
+          0,
+        ])
+        .fill(0xffffff),
+    );
+    this.shieldIcon = bake(renderer, frame(iconHalf + 1, iconHalf + 1), (g) =>
+      g
+        .poly([
+          -iconHalf,
+          -iconHalf,
+          iconHalf,
+          -iconHalf,
+          iconHalf,
+          iconHalf * 0.2,
+          0,
+          iconHalf,
+          -iconHalf,
+          iconHalf * 0.2,
+        ])
+        .fill(0xffffff),
+    );
+    const swordArm = iconHalf * 0.8;
+    const swordWidth = ICON_UNIT * 0.12;
+    this.swordsIcon = bake(renderer, frame(swordArm + swordWidth, swordArm + swordWidth), (g) =>
+      g
+        .moveTo(-swordArm, -swordArm)
+        .lineTo(swordArm, swordArm)
+        .moveTo(swordArm, -swordArm)
+        .lineTo(-swordArm, swordArm)
+        .stroke({ width: swordWidth, color: 0xffffff, cap: "round" }),
+    );
+
+    this.shieldBubble = bake(renderer, frame(MARKER_UNIT + 1, MARKER_UNIT + 1), (g) =>
+      g.circle(0, 0, MARKER_UNIT).fill(0xffffff),
+    );
+
     this.owned = [
       this.hex,
       this.outlineFine,
@@ -175,6 +259,11 @@ export class MapAtlas {
       this.disc,
       this.ring,
       this.plate,
+      this.star,
+      this.houseIcon,
+      this.shieldIcon,
+      this.swordsIcon,
+      this.shieldBubble,
     ];
   }
 

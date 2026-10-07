@@ -50,6 +50,8 @@ export interface ZoneStoreOptions {
   onZone?: (zone: ZoneRecord) => void;
   /** Fired when a response carried the caller's own resources. */
   onResources?: (resources: Resources, credits: number | undefined) => void;
+  /** Fired when a response carried the viewer's own alliance id (#334). */
+  onAlliance?: (allianceId: number | null) => void;
   onError?: (error: ZoneError) => void;
   /** Fired when a request came back 401, so the app can return to login. */
   onAuthFailure?: () => void;
@@ -377,6 +379,9 @@ export class ZoneStore {
 
     if (response.resources) {
       this.options.onResources?.(response.resources, response.credits);
+    }
+    if (response.myalliance !== undefined) {
+      this.options.onAlliance?.(response.myalliance);
     }
   }
 

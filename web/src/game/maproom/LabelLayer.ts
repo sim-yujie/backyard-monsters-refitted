@@ -90,6 +90,8 @@ export interface LabelRequest {
   dark?: number;
   /** Hears how wide the text came out, so a name plate can be sized behind it. */
   measured?: (width: number) => void;
+  /** Faded alongside its sprites when the kit filter dims this cell (#334). Default 1. */
+  alpha?: number;
 }
 
 /**
@@ -126,6 +128,7 @@ export class TextPool {
     this.live -= 1;
     text.text = "";
     text.tint = 0xffffff;
+    text.alpha = 1;
     this.idle.push(text);
   }
 
@@ -166,6 +169,7 @@ export class LabelLayer {
     text.style.fontFamily = item.dark === undefined ? MAP_FONT : PLAIN_FONT;
     text.text = item.text;
     text.tint = item.dark ?? 0xffffff;
+    text.alpha = item.alpha ?? 1;
 
     // Measured at the atlas size, then scaled to the world size it wants, or
     // smaller when that would overhang its space.
