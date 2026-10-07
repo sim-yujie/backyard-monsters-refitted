@@ -59,6 +59,41 @@ describe("userCell protection end (#187)", () => {
   });
 });
 
+describe("userCell outpost kit (#334)", () => {
+  const withKit = (kit: number | undefined) =>
+    ({
+      uid: OWNER,
+      base_type: 3,
+      baseid: "2000240208",
+      terrainHeight: 100,
+      save: {
+        damage: 0,
+        protected: 0,
+        locked: 0,
+        empirevalue: 0,
+        flinger: 0,
+        catapult: 0,
+        attackid: 0,
+        attacks: [],
+        starterkit: kit,
+      },
+    }) as unknown as Parameters<typeof userCell>[1];
+
+  test("an outpost carries its Starter Kit, for the map's tint and filter", async () => {
+    expect(await userCell(ctx, withKit(2), owners)).toMatchObject({ kit: 2 });
+  });
+
+  test("an outpost that never took one reads 0, not undefined", async () => {
+    expect(await userCell(ctx, withKit(undefined), owners)).toMatchObject({ kit: 0 });
+  });
+
+  test("a main yard carries no kit at all", async () => {
+    const homeCell = { ...withKit(1), base_type: 2 } as unknown as Parameters<typeof userCell>[1];
+    const payload = await userCell(ctx, homeCell, owners);
+    expect(payload).not.toHaveProperty("kit");
+  });
+});
+
 describe("userCell invitation pending (#205)", () => {
   const OUTPOST = "2000240208";
   const withInvite = {

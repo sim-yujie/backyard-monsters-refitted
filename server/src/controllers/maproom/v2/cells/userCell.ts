@@ -21,7 +21,8 @@ export type UserCellFields =
   | "save.monsters"
   | "save.basesaveid"
   | "save.attackid"
-  | "save.attacks";
+  | "save.attacks"
+  | "save.starterkit";
 
 export type UserCellOwner = Loaded<User, "save", "userid" | "username" | "pic_square" | "alliance_id" | "save.points" | "save.basevalue">;
 
@@ -51,6 +52,7 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
   const currentTime = getCurrentDateTime();
 
   const homeCell = cell.base_type === MapRoomCell.HOMECELL;
+  const outpostCell = cell.base_type === MapRoomCell.OUTPOST;
     
   // The online rule of #271, read for every owner by `getArea` (#275).
   const online = homeCell && onlineNow.has(cell.uid);
@@ -112,6 +114,10 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     lo: locked,
     dm: damage,
     pic_square: cellOwner.pic_square,
+    // An outpost's Starter Kit (issue #334): everyone's tower reads bronze,
+    // silver or gold by it, including a viewer who does not own it, so this
+    // is not gated on `mine` the way `r`/`m` are.
+    ...(outpostCell && { kit: cellSave.starterkit || 0 }),
   };
 };
 

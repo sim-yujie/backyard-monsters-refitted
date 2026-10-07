@@ -131,6 +131,9 @@ export type YardSlices = Partial<
     | "researchdata"
     | "firedtraps"
     | "protected"
+    // Which Starter Kit an outpost last took (issue #334); see the column's
+    // own comment on `Save`.
+    | "starterkit"
     // The tutorial's record (`services/onboarding/state.ts`); always written
     // whole, through `updateOnboarding`. On an outpost it lands on the main row.
     | "onboarding"

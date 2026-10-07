@@ -75,6 +75,9 @@ const CELL_SAVE_FIELDS = [
   "save.basevalue",
   "save.attackid",
   "save.attacks",
+  // Which Starter Kit an outpost wears (issue #334): `userCell` sends it as
+  // `kit`, visible on every outpost, not only the owner's.
+  "save.starterkit",
 ] as const;
 
 /**
@@ -209,6 +212,11 @@ export const getArea: KoaController = async (ctx) => {
     y: currentY,
     data: cells,
     alliancedata,
+    // The viewer's own alliance id (issue #334: plates read gold for "you",
+    // green for "your alliance"); cheap, since `user` is already loaded for
+    // this request and carries it directly, unlike a cell owner's, which is a
+    // batched lookup (`CELL_OWNER_FIELDS`).
+    myalliance: user.alliance_id ?? null,
     ...(sendresources === 1 && {
       resources: placedSave.resources,
       credits,

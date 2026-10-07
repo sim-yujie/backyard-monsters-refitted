@@ -296,6 +296,9 @@ export const planStarterKit = (save: StarterKitSave, request: StarterKitRequest,
       buildingdata,
       buildinghealthdata: {},
       monsters: withoutProduction(save.monsters),
+      // The one durable record of which kit this outpost wears (issue #334):
+      // the map's kit tint and kit filter read it off `getArea`'s outpost cells.
+      starterkit: kit.id,
     },
     debit,
     ...(shiny > 0 ? { shiny } : {}),
