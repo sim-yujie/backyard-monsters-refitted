@@ -238,7 +238,14 @@ Pixi reads the resolution from the name, so the 1x cell rectangles in the table 
 and the loader turns on mipmaps for it so it does not shimmer when drawn small. Remove the
 entry to go back to the original.
 
-None is switched on yet. The Teratorn (C14) is in progress: `monsters/14-repaint@4x.png` (and a
+Two are switched on as a trial.
+
+The Pokey (C1): `monsters/pokey-repaint@4x.png` (and a 1x `pokey-repaint.png`),
+built by `web/tools/gen-pokey-sprite.py` from two Gemini paintings, the faceless body and the
+face parts. Gemini cannot keep one creature identical across 30 directions, so the script turns
+the face round the ball itself.
+
+The Teratorn (C14): `monsters/14-repaint@4x.png` (and a
 1x `14-repaint.png`), built by `web/tools/gen-teratorn-sprite.py` from Gemini restyles of the original frames. Gemini
 was given the original frames blown up 8x, three flap frames per row and three or four headings
 per picture, plus the portrait, and asked to redraw each frame in place in the cel style; after

@@ -221,6 +221,7 @@ describe("sheetUrl", () => {
       expect(sheetUrl(one)).toBe(`/assets/${repaint ?? one.file}`);
     }
     expect(isHighResolutionSheet("/assets/monsters/14-repaint@4x.png")).toBe(true);
+    expect(isHighResolutionSheet(sheetUrl(sheet("C1")))).toBe(true);
     expect(isHighResolutionSheet(sheetUrl(sheet("C4")))).toBe(false);
   });
 });
