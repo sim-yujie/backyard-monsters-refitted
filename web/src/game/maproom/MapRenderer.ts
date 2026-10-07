@@ -15,6 +15,7 @@ import { MapAtlas } from "./mapAtlas";
 import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
 import { BuildingAvatars } from "./buildingAvatars";
 import { RangeOverlay } from "./RangeOverlay";
+import type { Sight } from "./Sight";
 import { TerrainRaster } from "./TerrainRaster";
 import { TribeAvatars } from "./tribeAvatars";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
@@ -102,7 +103,11 @@ export class MapRenderer {
   /** The active kit filter (#334). */
   private kitFilter: KitFilter = KitFilter.ALL;
 
-  constructor(private readonly store: ZoneStore) {
+  constructor(
+    private readonly store: ZoneStore,
+    /** The fog of war sight (#331): a long-lived 1:1 dependency, like `store`. */
+    private readonly sight: Sight,
+  ) {
     this.world.interactiveChildren = false;
     this.worldTop.interactiveChildren = false;
     // The raster stays under the chunks at every tier, so a chunk that has not
@@ -153,6 +158,18 @@ export class MapRenderer {
   setKitFilter(filter: KitFilter): void {
     if (filter === this.kitFilter) return;
     this.kitFilter = filter;
+    this.rebuildAll();
+  }
+
+  /**
+   * The sight version changed (#331): what used to be drawn, chunk and raster
+   * alike, may no longer be owed to the viewer ("no memory" — leaving sight
+   * means fully dark again). Forgets the raster back to flat fog and rebuilds
+   * every chunk so its fog cloud/feather follows the new sight, as the zone
+   * cache the scene re-requests lands.
+   */
+  resetSight(): void {
+    this.raster.reset();
     this.rebuildAll();
   }
 
@@ -292,7 +309,11 @@ export class MapRenderer {
           this.worldTop.addChild(chunk.top);
         }
         const started = performance.now();
-        const context: MapViewerContext = { myAlliance: this.myAlliance, kitFilter: this.kitFilter };
+        const context: MapViewerContext = {
+          myAlliance: this.myAlliance,
+          kitFilter: this.kitFilter,
+          sight: this.sight,
+        };
         chunk.build(this.store, nowSeconds, context);
         this.buildMs = performance.now() - started;
         this.dirty.delete(ref.id);

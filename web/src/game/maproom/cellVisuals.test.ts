@@ -3,6 +3,9 @@ import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
 import type { MapCell, PlayerCell } from "@/api/types";
 import {
   CellMarker,
+  FOG_CLOUD_COLOUR,
+  FOG_COLOUR,
+  FOG_EDGE_COLOUR,
   KitFilter,
   LOADING_COLOUR,
   OutpostKit,
@@ -13,12 +16,14 @@ import {
   UNEXPLORED_STRIPE,
   UNEXPLORED_STRIPE_COLOUR,
   appearanceOf,
+  fogAppearance,
   hexWidthAt,
   kitOf,
   plateName,
   terrainColour,
   unexploredColour,
   type MapViewerContext,
+  type SightLookup,
 } from "./cellVisuals";
 
 /**
@@ -165,6 +170,66 @@ describe("player relation and kit (#334)", () => {
     expect(appearanceOf(player({ mine: 1, b: 2 }), 0, context).dimmed).toBe(true);
     // Someone else's outpost with the same kit still dims; the filter is "own only".
     expect(appearanceOf(player({ mine: 0, b: 3, kit: 2 }), 0, context).dimmed).toBe(true);
+  });
+});
+
+/** A `SightLookup` that answers however the test wants, for the feather tests below. */
+const sightOf = (visible: (x: number, y: number) => boolean): SightLookup => ({ isCellVisible: visible });
+
+describe("fog of war (#331)", () => {
+  it("is plain deep fog with no coordinate or sight to feather with", () => {
+    expect(fogAppearance().terrain).toBe(FOG_COLOUR);
+    expect(fogAppearance()).toMatchObject({
+      marker: CellMarker.NONE,
+      plate: "",
+      own: false,
+      loading: false,
+    });
+  });
+
+  it("feathers a fog cell touching the sight edge, lighter than deep fog or the cloud", () => {
+    const sight = sightOf((x, y) => x === 11 && y === 10); // one neighbour of (10, 10) is visible
+    expect(fogAppearance({ x: 10, y: 10 }, sight).terrain).toBe(FOG_EDGE_COLOUR);
+  });
+
+  it("never feathers a fog cell with no visible neighbour, only plain fog or the cloud blotch", () => {
+    const sight = sightOf(() => false);
+    expect([FOG_COLOUR, FOG_CLOUD_COLOUR]).toContain(fogAppearance({ x: 10, y: 10 }, sight).terrain);
+  });
+
+  it("gives the same cell the same look every time (no flicker as chunks rebuild)", () => {
+    const sight = sightOf(() => false);
+    const first = fogAppearance({ x: 42, y: 7 }, sight).terrain;
+    const second = fogAppearance({ x: 42, y: 7 }, sight).terrain;
+    expect(first).toBe(second);
+  });
+
+  it("appearanceOf draws a FogCell payload as fog, feathered the same way as the coordinate case", () => {
+    const fogCell = { fog: 1 } as MapCell;
+    const sight = sightOf((x, y) => x === 1 && y === 0);
+    const context: MapViewerContext = { myAlliance: null, kitFilter: KitFilter.ALL, sight };
+    expect(appearanceOf(fogCell, 0, context, { x: 0, y: 0 }).terrain).toBe(FOG_EDGE_COLOUR);
+  });
+
+  it("draws an unfetched cell outside sight as fog, not as loading forever", () => {
+    const sight = sightOf(() => false); // nothing visible: the zone is skipZone-refused, never coming
+    const context: MapViewerContext = { myAlliance: null, kitFilter: KitFilter.ALL, sight };
+    const appearance = appearanceOf(undefined, 0, context, { x: 10, y: 10 });
+    expect(appearance.loading).toBe(false);
+    expect([FOG_COLOUR, FOG_CLOUD_COLOUR, FOG_EDGE_COLOUR]).toContain(appearance.terrain);
+  });
+
+  it("draws an unfetched cell inside sight as plain loading, not fog", () => {
+    const sight = sightOf(() => true); // the coordinate itself is visible: a real fetch is coming
+    const context: MapViewerContext = { myAlliance: null, kitFilter: KitFilter.ALL, sight };
+    expect(appearanceOf(undefined, 0, context, { x: 10, y: 10 })).toMatchObject({
+      terrain: LOADING_COLOUR,
+      loading: true,
+    });
+  });
+
+  it("draws an unfetched cell as loading when sight has not loaded yet, even without a coordinate", () => {
+    expect(appearanceOf(undefined, 0)).toMatchObject({ terrain: LOADING_COLOUR, loading: true });
   });
 });
 

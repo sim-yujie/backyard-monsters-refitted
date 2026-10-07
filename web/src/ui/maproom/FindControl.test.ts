@@ -12,7 +12,6 @@ const make = () => {
     onHome: vi.fn(),
     onJump: vi.fn(),
     onRefresh: vi.fn(),
-    onFit: vi.fn(),
     onBookmarkJump: vi.fn(),
     onBookmarkAdd: vi.fn(),
     onBookmarkRemove: vi.fn(),
@@ -46,9 +45,12 @@ describe("FindControl", () => {
     const { toggle, sheet } = make();
     toggle.click();
     expect(sheet.querySelector(".panel__title")?.textContent).toBe("Find a place");
-    expect([...sheet.querySelectorAll("button")].map((node) => node.textContent)).toEqual(
-      expect.arrayContaining(["Home", "World", "Refresh", "Jump"]),
-    );
+    const labels = [...sheet.querySelectorAll("button")].map((node) => node.textContent);
+    expect(labels).toEqual(expect.arrayContaining(["Home", "Refresh"]));
+    // No coordinate jump and no World button (#332): fog of war makes both
+    // no longer sensible things to offer.
+    expect(labels).not.toContain("World");
+    expect(labels).not.toContain("Jump");
     sheet.querySelector<HTMLButtonElement>("[aria-label='Close']")!.click();
     expect(sheet.hidden).toBe(true);
 

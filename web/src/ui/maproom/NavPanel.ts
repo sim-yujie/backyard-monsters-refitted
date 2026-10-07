@@ -1,13 +1,18 @@
-import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import type { Bookmark } from "@/api/bookmarks";
 import { outpostTitle, type OwnOutpost } from "@/game/yard/ownYards";
 import { Panel } from "@/ui/Panel";
 
 /**
- * Navigation: home, jump to a coordinate, bookmarks and a manual refresh.
- * Beside Home, one button per own outpost centres on it (outposts WP5), so
- * Home reaches any of the player's yards. Since the calm map (#176) it opens
- * from the Find button (`FindControl`) instead of sitting on the map.
+ * Navigation: home, bookmarks and a manual refresh. Beside Home, one button
+ * per own outpost centres on it (outposts WP5), so Home reaches any of the
+ * player's yards. Since the calm map (#176) it opens from the Find button
+ * (`FindControl`) instead of sitting on the map.
+ *
+ * No coordinate jump and no "pull back to the whole world" (issue #332): fog
+ * of war means most of the world is nothing the player can see, so jumping
+ * to an arbitrary coordinate or framing all of it is no longer a sensible
+ * thing to offer — the minimap's click-jump, Home, the outpost buttons and
+ * bookmarks cover every place still worth going.
  *
  * A view only. It holds no bookmark state and does no network work — it reports
  * intent and is told what to display, so the save-and-roll-back rules live in
@@ -16,10 +21,9 @@ import { Panel } from "@/ui/Panel";
 
 export interface NavPanelOptions {
   onHome: () => void;
+  /** Still used directly by the outpost buttons below, and by the minimap's/bookmarks' jump on `MapRoomUi`. */
   onJump: (x: number, y: number) => void;
   onRefresh: () => void;
-  /** Pulls back until the whole world is on screen. */
-  onFit: () => void;
   onBookmarkJump: (bookmark: Bookmark) => void;
   onBookmarkAdd: (name: string) => void;
   onBookmarkRemove: (index: number) => void;
@@ -29,8 +33,6 @@ export class NavPanel {
   readonly element: HTMLElement;
 
   private readonly panel: Panel;
-  private readonly xInput: HTMLInputElement;
-  private readonly yInput: HTMLInputElement;
   private readonly nameInput: HTMLInputElement;
   private readonly addButton: HTMLButtonElement;
   private readonly list: HTMLUListElement;
@@ -48,7 +50,6 @@ export class NavPanel {
     actions.className = "map-row";
     actions.append(
       button("Home", "Centre on your main yard", options.onHome),
-      button("World", "Pull back to see the whole world", options.onFit),
       button("Refresh", "Refetch every visible zone now", options.onRefresh),
     );
 
@@ -57,20 +58,6 @@ export class NavPanel {
     this.outposts.setAttribute("role", "group");
     this.outposts.setAttribute("aria-label", "Your outposts");
     this.outposts.hidden = true;
-
-    const jump = document.createElement("form");
-    jump.className = "map-row";
-    this.xInput = coordInput("Jump to x", WORLD_WIDTH);
-    this.yInput = coordInput("Jump to y", WORLD_HEIGHT);
-    const go = document.createElement("button");
-    go.type = "submit";
-    go.className = "btn";
-    go.textContent = "Jump";
-    jump.append(this.xInput, this.yInput, go);
-    jump.addEventListener("submit", (event) => {
-      event.preventDefault();
-      this.submitJump();
-    });
 
     const add = document.createElement("form");
     add.className = "map-row";
@@ -99,7 +86,7 @@ export class NavPanel {
     // The frame and zone counts are for whoever is building the map (#176).
     this.status.hidden = !import.meta.env.DEV;
 
-    this.panel.setContent(actions, this.outposts, jump, this.list, add, this.status);
+    this.panel.setContent(actions, this.outposts, this.list, add, this.status);
   }
 
   /** The title bar, for the Find panel's own close button. */
@@ -185,31 +172,7 @@ export class NavPanel {
   destroy(): void {
     this.panel.close();
   }
-
-  private submitJump(): void {
-    const x = Number(this.xInput.value);
-    const y = Number(this.yInput.value);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    this.options.onJump(
-      clampInt(x, WORLD_WIDTH),
-      // The original client's y bound was 0 <= y <= mapHeight, one past the
-      // last row (MapRoomPopup.as:1277-1293). Clamped properly here.
-      clampInt(y, WORLD_HEIGHT),
-    );
-  }
 }
-
-const coordInput = (label: string, size: number): HTMLInputElement => {
-  const input = document.createElement("input");
-  input.className = "map-coord-input";
-  input.type = "number";
-  input.min = "0";
-  input.max = String(size - 1);
-  input.step = "1";
-  input.placeholder = label.endsWith("x") ? "x" : "y";
-  input.setAttribute("aria-label", label);
-  return input;
-};
 
 const button = (label: string, title: string, onClick: () => void): HTMLButtonElement => {
   const element = document.createElement("button");
@@ -220,6 +183,3 @@ const button = (label: string, title: string, onClick: () => void): HTMLButtonEl
   element.addEventListener("click", onClick);
   return element;
 };
-
-const clampInt = (value: number, size: number): number =>
-  Math.min(Math.max(Math.trunc(value), 0), size - 1);

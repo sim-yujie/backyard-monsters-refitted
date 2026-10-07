@@ -77,6 +77,18 @@ export const zoneCentre = (zone: ZoneRef): { x: number; y: number } => ({
 });
 
 /**
+ * The full extent a zone's `getarea` response covers: `x..x+10`, `y..y+10`
+ * inclusive (see the module comment), not clamped or wrapped — a caller
+ * testing individual cells against the wrapping world wraps them itself.
+ */
+export const zoneCells = (zone: ZoneRef): CellRange => ({
+  minCol: zone.originX,
+  maxCol: zone.originX + AREA_ZONE_SIZE,
+  minRow: zone.originY,
+  maxRow: zone.originY + AREA_ZONE_SIZE,
+});
+
+/**
  * Ordering key for the request queue: squared cell distance from a point.
  *
  * Squared because only the order matters and a square root per comparison is

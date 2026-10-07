@@ -1,7 +1,8 @@
-import { AREA_ZONE_SIZE, WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
+import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import type { OffsetCell } from "@/game/HexGrid";
-import type { ZoneRecord } from "@/game/maproom/ZoneStore";
+import { RELATION_ALLIANCE_COLOUR, RELATION_ATTACKER_COLOUR } from "@/game/maproom/cellVisuals";
 import type { CellRange } from "@/game/maproom/zones";
+import type { SightSource } from "@/api/types";
 
 /**
  * A world-scale locator.
@@ -42,7 +43,12 @@ export class Minimap {
   private home: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
   private viewport: CellRange | null = null;
-  private zones: Iterable<ZoneRecord> = [];
+  /** The viewer's fog of war sight (#331), painted as filled circles instead of the old "loaded zones" shading. */
+  private sources: readonly SightSource[] = [];
+  /** The player's own outposts (#331): a dot each, like home's but smaller. */
+  private outposts: readonly OffsetCell[] = [];
+  /** Revealed attacker bases (#331): the player's own bases and outposts are never in this list (the scene already subtracts them). */
+  private attackers: readonly OffsetCell[] = [];
   /**
    * The keyboard's marker (issue #153): where Enter or Space jumps to. It
    * starts on the viewport's centre each time the map takes focus, and the
@@ -115,8 +121,21 @@ export class Minimap {
     this.dirty = true;
   }
 
-  setZones(zones: Iterable<ZoneRecord>): void {
-    this.zones = zones;
+  /** The viewer's fog of war sight (#331): own and alliance circles, two tints. */
+  setSight(sources: readonly SightSource[]): void {
+    this.sources = sources;
+    this.dirty = true;
+  }
+
+  /** The player's own outposts (#331), each a small dot beside home's. */
+  setOutposts(outposts: readonly OffsetCell[]): void {
+    this.outposts = outposts;
+    this.dirty = true;
+  }
+
+  /** Revealed attacker bases (#331): own bases and outposts already excluded by the caller. */
+  setAttackers(cells: readonly OffsetCell[]): void {
+    this.attackers = cells;
     this.dirty = true;
   }
 
@@ -132,23 +151,22 @@ export class Minimap {
     context.fillStyle = palette.ground;
     context.fillRect(0, 0, SIZE, SIZE);
 
-    // Loaded coverage, so it is obvious which parts of the world are known.
-    const zoneSize = Math.max(AREA_ZONE_SIZE * this.scale, 1);
-    context.fillStyle = palette.loaded;
-    for (const zone of this.zones) {
-      context.fillRect(
-        zone.originX * this.scale,
-        zone.originY * this.scale,
-        zoneSize,
-        zoneSize,
-      );
+    // The viewer's fog of war sight (#331), instead of the old "loaded
+    // zones" shading: own and alliance circles in two tints, so it is
+    // obvious which parts of the world are visible and whose sight it is.
+    context.globalAlpha = 0.35;
+    for (const source of this.sources) {
+      this.circle(source, source.kind === "own" ? palette.accent : palette.ally);
     }
+    context.globalAlpha = 1;
 
     context.strokeStyle = palette.border;
     context.lineWidth = 1;
     context.strokeRect(0.5, 0.5, SIZE - 1, SIZE - 1);
 
     if (this.home) this.dot(this.home, palette.accent, 3);
+    for (const outpost of this.outposts) this.dot(outpost, palette.accent, 2);
+    for (const cell of this.attackers) this.dot(cell, palette.attacker, 2.5);
     if (this.selected) this.dot(this.selected, palette.text, 2.5);
     if (this.cursor) this.marker(this.cursor, palette.accent);
 
@@ -217,13 +235,30 @@ export class Minimap {
     this.context.fill();
   }
 
+  /** One sight circle (#331): cell-space treated as square, same simplification the old "loaded zones" patches used. */
+  private circle(source: SightSource, colour: string): void {
+    this.context.beginPath();
+    this.context.arc(
+      source.x * this.scale,
+      source.y * this.scale,
+      Math.max(source.reach * this.scale, 1),
+      0,
+      Math.PI * 2,
+    );
+    this.context.fillStyle = colour;
+    this.context.fill();
+  }
+
   /** Current token values, so a theme switch is picked up on the next repaint. */
   private palette(): {
     ground: string;
     border: string;
     accent: string;
     text: string;
-    loaded: string;
+    /** An alliance-mate's sight circle, `cellVisuals.ts`'s `RELATION_ALLIANCE_COLOUR` (#331) — not a theme token, like every other relation colour the map draws. */
+    ally: string;
+    /** A revealed attacker's dot, `RELATION_ATTACKER_COLOUR` (#331). */
+    attacker: string;
   } {
     const style = getComputedStyle(document.documentElement);
     const token = (name: string, fallback: string): string =>
@@ -235,13 +270,14 @@ export class Minimap {
       border: token("--colour-border", "rgb(255 255 255 / 9%)"),
       accent: token("--colour-accent", "#3dd6f5"),
       text: token("--colour-text", "#edf1f5"),
-      // The strong border token rather than a surface one: against the ground
-      // the surface tokens are only a few levels lighter and the coverage
-      // patch was invisible at 2 px per zone.
-      loaded: token("--colour-border-strong", "rgb(255 255 255 / 16%)"),
+      ally: cssColour(RELATION_ALLIANCE_COLOUR),
+      attacker: cssColour(RELATION_ATTACKER_COLOUR),
     };
   }
 }
+
+/** A Pixi-style numeric colour as a CSS hex string, the same conversion `CellPanel.ts`/`HoverCard.ts` use. */
+const cssColour = (colour: number): string => `#${colour.toString(16).padStart(6, "0")}`;
 
 const LABEL =
   "World map. Click to jump to a place, or move the marker with the arrow keys (Shift for bigger steps) and press Enter.";

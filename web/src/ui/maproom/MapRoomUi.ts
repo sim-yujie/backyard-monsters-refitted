@@ -1,12 +1,11 @@
 import type { AutoAttackPlanResponse } from "@/api/autoAttack";
 import type { Bookmark } from "@/api/bookmarks";
 import type { TakeoverPayment } from "@/api/maproom";
-import type { MapCell, PlayerCell, Resources, TakeoverQuoteResponse } from "@/api/types";
+import type { MapCell, PlayerCell, Resources, SightSource, TakeoverQuoteResponse } from "@/api/types";
 import { MAX_ZOOM, MIN_ZOOM } from "@/config";
 import type { OffsetCell } from "@/game/HexGrid";
 import type { RangeSource } from "@/game/maproom/attackRange";
 import type { KitFilter } from "@/game/maproom/cellVisuals";
-import type { ZoneRecord } from "@/game/maproom/ZoneStore";
 import type { CellRange } from "@/game/maproom/zones";
 import type { TakeoverCandidate, TakeoverKind } from "@/game/maproom/takeover";
 import type { OwnOutpost } from "@/game/yard/ownYards";
@@ -30,19 +29,18 @@ import { showTakenOver } from "./TakeoverDialog";
  * The map's own shape of the shared zoom control: a fixed range taken once
  * at construction (the whole world always fits the same way, so this never
  * calls `setRange` again), a "0.60×" factor readout instead of a percentage,
- * and the classes `maproom.css`'s `.zoom-controls` rules already style.
+ * the classes `maproom.css`'s `.zoom-controls` rules already style, and no
+ * Fit button (issue #332 — `onFit` omitted below).
  */
 const ZOOM_CLASSES = {
   root: "zoom-controls",
   slider: "zoom-controls__slider",
   readout: "zoom-controls__value",
   step: "btn btn--ghost btn--icon",
-  fit: "btn btn--ghost btn--icon",
 };
 const ZOOM_LABELS = {
   out: "Zoom out",
   into: "Zoom in",
-  fit: "Fit the whole world on screen",
   slider: "Zoom level",
 };
 
@@ -90,7 +88,6 @@ export interface MapRoomUiHandlers {
   ) => void;
   onZoom: (zoom: number) => void;
   onZoomStep: (direction: 1 | -1) => void;
-  onZoomReset: () => void;
   onCellPanelClose: () => void;
   /** "My range" turned on or off (#177), from its button or the cell panel. */
   onRangeToggle: (on: boolean) => void;
@@ -164,7 +161,6 @@ export class MapRoomUi {
     this.navPanel = new NavPanel({
       onHome: () => went(handlers.onHome),
       onRefresh: handlers.onRefresh,
-      onFit: () => went(handlers.onZoomReset),
       onJump: (x, y) => went(() => handlers.onJump({ col: x, row: y })),
       onBookmarkJump: (bookmark) => went(() => handlers.onJump({ col: bookmark.x, row: bookmark.y })),
       onBookmarkAdd: handlers.onBookmarkAdd,
@@ -183,7 +179,6 @@ export class MapRoomUi {
     this.zoomControl = new ZoomControl({
       onZoom: handlers.onZoom,
       onStep: handlers.onZoomStep,
-      onFit: handlers.onZoomReset,
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
       readout: "factor",
@@ -275,9 +270,10 @@ export class MapRoomUi {
     this.minimap.setHome(cell);
   }
 
-  /** The player's outposts, for the Navigate panel's buttons beside Home. */
+  /** The player's outposts, for the Navigate panel's buttons beside Home and the minimap's dots (#331). */
   setOutposts(outposts: readonly OwnOutpost[]): void {
     this.navPanel.setOutposts(outposts);
+    this.minimap.setOutposts(outposts.map((outpost) => outpost.cell));
   }
 
   /** "My range" as the player last left it. */
@@ -297,8 +293,14 @@ export class MapRoomUi {
     this.rangeControl.setSources(sources, declareWar);
   }
 
-  setZones(zones: Iterable<ZoneRecord>): void {
-    this.minimap.setZones(zones);
+  /** The viewer's fog of war sight (#331), for the minimap's two-tint circles. */
+  setSight(sources: readonly SightSource[]): void {
+    this.minimap.setSight(sources);
+  }
+
+  /** Revealed attacker bases (#331), own bases and outposts already excluded; see `Minimap.setAttackers`. */
+  setAttackers(cells: readonly OffsetCell[]): void {
+    this.minimap.setAttackers(cells);
   }
 
   /** Redraws the world map, while the Find panel that holds it is open. */

@@ -1,7 +1,7 @@
 import { CanvasSource, Sprite, Texture } from "pixi.js";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { mapRoomGrid } from "@/game/HexGrid";
-import { rasterColour, unexploredColour } from "./cellVisuals";
+import { FOG_COLOUR, rasterColour } from "./cellVisuals";
 import type { ZoneRecord } from "./ZoneStore";
 
 /**
@@ -15,9 +15,12 @@ import type { ZoneRecord } from "./ZoneStore";
  * so dropping it is invisible.
  *
  * Texels are written per zone as responses arrive, never by walking the world,
- * and the GPU upload happens at most once per frame. Until then a cell is
- * striped as unexplored (`unexploredColour`, issue #153): zoomed right out,
- * most of the world has never been loaded, and a flat fill read as blank.
+ * and the GPU upload happens at most once per frame. Until then a cell defaults
+ * to flat fog (issue #331): fog of war means most of the world is never fetched
+ * at all now, not merely "not loaded yet" (that striped look, issue #153,
+ * stays reserved for `cellVisuals.ts`'s per-hex chunk view, which does know
+ * which unfetched cells are inside the player's sight and which are not — a
+ * distinction this one texture-wide default does not try to draw).
  */
 export class TerrainRaster {
   readonly sprite: Sprite;
@@ -38,7 +41,7 @@ export class TerrainRaster {
     this.context = context;
 
     this.image = context.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
-    this.fillUnexplored();
+    this.fillFog();
     context.putImageData(this.image, 0, 0);
 
     // Nearest neighbour: a cell is a cell, not a smear of its neighbours.
@@ -65,6 +68,17 @@ export class TerrainRaster {
     this.dirty = true;
   }
 
+  /**
+   * Forgets every texel written so far, back to flat fog (issue #331): the
+   * player's sight version changed, so none of what used to be drawn here is
+   * still owed to them (`ZoneStore.dropAll`'s raster-side counterpart). The
+   * caller re-applies whatever is still visible as its zones reload.
+   */
+  reset(): void {
+    this.fillFog();
+    this.dirty = true;
+  }
+
   /** Uploads pending texel writes. Cheap and a no-op when nothing changed. */
   flush(): void {
     if (!this.dirty) return;
@@ -87,9 +101,9 @@ export class TerrainRaster {
     data[offset + 3] = 255;
   }
 
-  private fillUnexplored(): void {
+  private fillFog(): void {
     for (let y = 0; y < WORLD_HEIGHT; y++) {
-      for (let x = 0; x < WORLD_WIDTH; x++) this.writeTexel(x, y, unexploredColour(x, y));
+      for (let x = 0; x < WORLD_WIDTH; x++) this.writeTexel(x, y, FOG_COLOUR);
     }
   }
 }

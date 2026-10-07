@@ -240,7 +240,7 @@ export class MapChunk {
     const cells = chunkCells(this.ref);
     for (let col = cells.minCol; col <= cells.maxCol; col++) {
       for (let row = cells.minRow; row <= cells.maxRow; row++) {
-        const appearance = appearanceOf(store.getCell(col, row), nowSeconds, context);
+        const appearance = appearanceOf(store.getCell(col, row), nowSeconds, context, { x: col, y: row });
         const centre = mapRoomGrid.cellToPixel(col, row);
 
         this.terrain.addChild(

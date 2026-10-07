@@ -52,9 +52,22 @@ export interface ZoneStoreOptions {
   onResources?: (resources: Resources, credits: number | undefined) => void;
   /** Fired when a response carried the viewer's own alliance id (#334). */
   onAlliance?: (allianceId: number | null) => void;
+  /**
+   * Fired with every applied response's `sv` (issue #330, #331): the fog of
+   * war sight version, so the caller can refetch `/worldmapv2/sight` and
+   * drop the zone cache the moment it disagrees with what it is holding.
+   */
+  onSightVersion?: (sv: string | undefined) => void;
   onError?: (error: ZoneError) => void;
   /** Fired when a request came back 401, so the app can return to login. */
   onAuthFailure?: () => void;
+  /**
+   * True for a zone the caller already knows is entirely outside the
+   * player's fog of war sight (issue #331, `Sight.isZoneFullyFogged`): never
+   * queued, so a zoomed-out viewport does not spend its request budget on
+   * zones the server would answer as nothing but `{ fog: 1 }`.
+   */
+  skipZone?: (zone: ZoneRef) => boolean;
 }
 
 interface QueueEntry extends ZoneRef {
@@ -246,6 +259,23 @@ export class ZoneStore {
   }
 
   /**
+   * Forgets every cached zone (issue #331, `fog-of-war.md` §6): the player's
+   * sight version changed, so what used to be visible may now be fog and
+   * there is no memory of it to fall back on. Queued requests are dropped
+   * too, since some may now be for zones `skipZone` would refuse; already
+   * in-flight requests are left to land — whatever they come back with is
+   * still the server's own, current word on what is visible.
+   *
+   * Callers follow this with `ensureVisible` for the current viewport, so
+   * the map refills rather than sitting empty.
+   */
+  dropAll(): void {
+    this.zones.clear();
+    this.queue.clear();
+    this.revision += 1;
+  }
+
+  /**
    * Starts as many queued requests as the budget and concurrency allow.
    *
    * Call it from the scene's update loop. The returned promise settles when the
@@ -302,6 +332,7 @@ export class ZoneStore {
 
   private enqueue(zone: ZoneRef, forced: boolean): void {
     if (this.inFlight.has(zone.id)) return;
+    if (this.options.skipZone?.(zone)) return;
     const existing = this.queue.get(zone.id);
     if (existing) {
       // A forced request never gets downgraded to speculative.
@@ -383,6 +414,7 @@ export class ZoneStore {
     if (response.myalliance !== undefined) {
       this.options.onAlliance?.(response.myalliance);
     }
+    this.options.onSightVersion?.(response.sv);
   }
 
   private handleFailure(entry: QueueEntry, caught: unknown): void {
