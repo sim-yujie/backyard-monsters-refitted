@@ -42,6 +42,7 @@ import {
   frameRect,
   frameRow,
   hoverOffset,
+  isHighResolutionSheet,
   shadowOffset,
   sheetColumn,
   sheetUrl,
@@ -310,6 +311,16 @@ export const layoutCreep = (
 export type SheetLoader = (url: string) => Promise<Texture>;
 
 /**
+ * `Assets.load`, with mipmaps for a high-resolution sheet: a 4x repaint is
+ * drawn at a quarter of its size or less at the usual zoom, and without them
+ * it shimmers.
+ */
+const loadSheet: SheetLoader = (url) =>
+  Assets.load<Texture>(
+    isHighResolutionSheet(url) ? { src: url, data: { autoGenerateMipmaps: true } } : url,
+  );
+
+/**
  * The cells of the monster sheets as textures, cut once and shared.
  *
  * Mirrors `YardTextures`: `frame` never blocks and never throws; it starts the
@@ -329,7 +340,7 @@ export class MonsterSheetTextures {
   private limit: number;
 
   constructor(
-    private readonly load: SheetLoader = (url) => Assets.load<Texture>(url),
+    private readonly load: SheetLoader = loadSheet,
     maxTextureSize = DEFAULT_MAX_TEXTURE_SIZE,
   ) {
     this.limit = maxTextureSize;

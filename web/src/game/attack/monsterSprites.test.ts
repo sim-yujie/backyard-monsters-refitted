@@ -9,6 +9,8 @@ import {
   frameRow,
   championFlightTop,
   hoverOffset,
+  isHighResolutionSheet,
+  REPAINTED_SHEETS,
   shadowOffset,
   sheetColumn,
   sheetUrl,
@@ -211,5 +213,14 @@ describe("sheetUrl", () => {
   it("serves from /assets/ like the building art", () => {
     expect(sheetUrl(sheet("C4"))).toBe("/assets/monsters/fink.png");
     expect(sheetUrl("monsters/flyingshadow.png")).toBe("/assets/monsters/flyingshadow.png");
+  });
+
+  it("serves a repainted sheet in place of the original", () => {
+    for (const one of Object.values(MONSTER_SPRITES)) {
+      const repaint = REPAINTED_SHEETS[one.file];
+      expect(sheetUrl(one)).toBe(`/assets/${repaint ?? one.file}`);
+    }
+    expect(isHighResolutionSheet("/assets/monsters/14-repaint@4x.png")).toBe(true);
+    expect(isHighResolutionSheet(sheetUrl(sheet("C4")))).toBe(false);
   });
 });

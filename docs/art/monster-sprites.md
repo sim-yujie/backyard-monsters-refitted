@@ -229,3 +229,20 @@ Notes on the table:
 champion walk and attack. This does not give C1-C12 a walk cycle or any monster a death
 animation, because that art never existed. Those would be new art, for example generated with
 Gemini, drawn at the same cell sizes so they drop into the same table.
+
+## 4. Repainted sheets (art trial)
+
+A repainted sheet keeps the original layout at four times the size and is named `<name>@4x.png`.
+`REPAINTED_SHEETS` in `web/src/game/attack/monsterSprites.ts` maps the original file to it;
+Pixi reads the resolution from the name, so the 1x cell rectangles in the table still frame it,
+and the loader turns on mipmaps for it so it does not shimmer when drawn small. Remove the
+entry to go back to the original.
+
+None is switched on yet. The Teratorn (C14) is in progress: `monsters/14-repaint@4x.png` (and a
+1x `14-repaint.png`), built by `web/tools/gen-teratorn-sprite.py` from Gemini restyles of the original frames. Gemini
+was given the original frames blown up 8x, three flap frames per row and three or four headings
+per picture, plus the portrait, and asked to redraw each frame in place in the cel style; after
+the first picture it was also given that first result as a style key. The original pins the pose,
+so the body stays put between flap frames. The original sheet is its own mirror image (column c
+flipped is column 16 - c, one pixel over), so only columns 8 to 24 were painted and the script
+flips the rest.

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { closeSync, existsSync, openSync, readSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { MONSTER_SPRITES, type MonsterSheet } from "./monsterSpriteData";
+import { REPAINTED_SHEETS } from "./monsterSprites";
 
 /**
  * The generated sprite table, checked against the PNGs on the game server's
@@ -192,5 +193,17 @@ describe("MONSTER_SPRITES", () => {
     expect(MONSTER_SPRITES["C12"]?.skins).toEqual(["C12Gold"]);
     expect(MONSTER_SPRITES["C12Gold"]).toMatchObject({ frameWidth: 53, frameHeight: 46, skins: [] });
     expect(sheets.filter((one) => one.skins.length > 0).map((one) => one.key)).toEqual(["C12"]);
+  });
+
+  it("has every repaint on disk at its scale times the original's size", () => {
+    for (const [original, repaint] of Object.entries(REPAINTED_SHEETS)) {
+      const sheet = sheets.find((one) => one.file === original);
+      expect(sheet, original).toBeDefined();
+      const scale = Number(/@(\d+)x\./.exec(repaint)?.[1] ?? 1);
+      expect(pngSize(`${ASSETS}${repaint}`), repaint).toEqual({
+        width: (sheet?.width ?? 0) * scale,
+        height: (sheet?.height ?? 0) * scale,
+      });
+    }
   });
 });
