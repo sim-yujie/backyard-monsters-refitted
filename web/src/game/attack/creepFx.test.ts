@@ -10,6 +10,7 @@ import {
   LABEL_MAX,
   LABEL_PER_TARGET,
   LABEL_RISE,
+  mouthPoint,
   LABEL_TICKS,
   LABEL_WINDOW_TICKS,
   LUNGE_PX,
@@ -295,5 +296,28 @@ describe("CreepFx", () => {
     fx.destroy();
     expect(host.flashes.at(-1)).toEqual({ id: 4, on: false });
     expect(fx.root.parent).toBeNull();
+  });
+});
+
+describe("mouthPoint", () => {
+  const cell = { x: 100, y: -144, width: 100, height: 80 };
+
+  it("sits low on the cell, not at the top where the old start was", () => {
+    const mouth = mouthPoint(cell, { x: 100, y: 200 });
+    expect(mouth.y).toBeGreaterThan(cell.y + cell.height / 2);
+    expect(mouth.y).toBeLessThan(cell.y + cell.height);
+  });
+
+  it("leans toward the side the target is on", () => {
+    const right = mouthPoint(cell, { x: 600, y: -50 });
+    const left = mouthPoint(cell, { x: -400, y: -50 });
+    expect(right.x).toBeGreaterThan(150);
+    expect(left.x).toBeLessThan(150);
+    expect(right.x - 150).toBeCloseTo(30, 0);
+  });
+
+  it("stays in the cell's middle when the target is straight on", () => {
+    const mouth = mouthPoint(cell, { x: 150, y: -144 + 80 * 0.62 });
+    expect(mouth).toEqual({ x: 150, y: -144 + 80 * 0.62 });
   });
 });

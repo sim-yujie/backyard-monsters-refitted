@@ -146,6 +146,34 @@ export const labelShift = (index: number, digits: number): number => {
 export const drawsProjectile = (monsterId: string, ranged: boolean): boolean =>
   ranged && !STOMPING_CHAMPIONS.has(monsterId);
 
+/**
+ * Where a big flyer's shot leaves its body: the mouth, low on the cell and
+ * toward the target. The old start (ground point lifted by a fixed height)
+ * ignored the cell, so a tall flyer such as Fomor fired from the top of its
+ * head. `cell` is the drawn cell's top-left and size in world px; the mouth
+ * sits `MOUTH_REACH` of the cell's width out along the way to the target
+ * and `MOUTH_DROP` of its height down from the top, nudged by the aim.
+ */
+export const MOUTH_REACH = 0.3;
+export const MOUTH_DROP = 0.62;
+export const MOUTH_AIM = 0.12;
+
+export const mouthPoint = (
+  cell: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+  target: Point,
+): Point => {
+  const cx = cell.x + cell.width / 2;
+  const cy = cell.y + cell.height * MOUTH_DROP;
+  const dx = target.x - cx;
+  const dy = target.y - cy;
+  const length = Math.hypot(dx, dy);
+  if (length === 0) return { x: cx, y: cy };
+  return {
+    x: cx + (dx / length) * cell.width * MOUTH_REACH,
+    y: cy + (dy / length) * cell.height * MOUTH_AIM,
+  };
+};
+
 /* ── The effects ────────────────────────────────────────────────────────── */
 
 /** What the effects ask the layer for each frame. */
