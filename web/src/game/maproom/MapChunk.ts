@@ -146,6 +146,8 @@ const PLATE_HEIGHT = PLATE_HALF_HEIGHT * 2;
 const PLATE_Y_OFFSET = CELL_HEIGHT * 0.28;
 const PLATE_TEXT_SIZE = PLATE_HEIGHT * 0.6;
 const PLATE_PADDING = CELL_WIDTH * 0.07;
+/** A long name shrinks only this far before it is cut short with dots. */
+const PLATE_MIN_TEXT_SIZE = PLATE_TEXT_SIZE * 0.6;
 const PLATE_ALPHA = 0.92;
 
 /**
@@ -487,15 +489,18 @@ export class MapChunk {
     // Capped to the hex's actual width at py, so the plate never spills into
     // the neighbour hex sharing that edge (#334).
     const maxTotalWidth = hexWidthAt(py - y);
+    // The relation icon takes the plate's left end; the name sits in the rest.
+    const iconRoom = appearance.relationIcon === "none" ? 0 : RELATION_ICON_RADIUS * 2 + RELATION_ICON_PAD * 2;
     this.requests.push({
       text: appearance.plate,
-      x,
+      x: x + iconRoom / 2,
       y: py,
       size: PLATE_TEXT_SIZE,
-      maxWidth: Math.max(maxTotalWidth - PLATE_PADDING * 2, PLATE_HEIGHT),
+      minSize: PLATE_MIN_TEXT_SIZE,
+      maxWidth: Math.max(maxTotalWidth - PLATE_PADDING * 2 - iconRoom, PLATE_HEIGHT),
       alpha,
       ...(appearance.own ? { dark: OWN_PLATE_TEXT_COLOUR } : {}),
-      measured: (width) => this.addPlate(x, py, width, maxTotalWidth, appearance, alpha),
+      measured: (width) => this.addPlate(x, py, width + iconRoom, maxTotalWidth, appearance, alpha),
     });
   }
 
