@@ -1250,7 +1250,7 @@ describe("bombs", () => {
     expect(yard.buildings[0]!.hp).toBeLessThan(before);
   });
 
-  it("ignores a putty bomb, which slows rather than damages", () => {
+  it("does no damage with a putty bomb, which enrages rather than damages", () => {
     const yard = yardOf({ "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 } });
     const battle = createBattle(yard, { seed: 2 });
     const before = yard.buildings[0]!.hp;
@@ -1339,6 +1339,164 @@ describe("bombs", () => {
         });
       }
     }
+  });
+});
+
+describe("putty bombs", () => {
+  /** A far-off building to walk at, and one Pokey (C1) flung at the drop point. */
+  const puttyBattle = (bomb: string | null, seed = 3, onTick = 0) => {
+    const yard = yardOf({ "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed });
+    battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 40, monsters: { C1: 1 } });
+    if (bomb) battle.apply({ kind: "bomb", t: onTick, x: -100, y: -100, id: bomb });
+    return { yard, battle };
+  };
+  const puttied = (battle: ReturnType<typeof createBattle>) =>
+    battle.creeps().map((creep) => creep.puttied === true);
+  const travelled = (battle: ReturnType<typeof createBattle>, ticks: number): number => {
+    const start = battle.creeps()[0]!;
+    const from = { x: start.ix, y: start.iy };
+    run(battle, ticks);
+    const end = battle.creeps()[0]!;
+    return Math.hypot(end.ix - from.x, end.iy - from.y);
+  };
+
+  it("keeps the whole table: speed, armour and seconds per tier", () => {
+    const tiers = BOMBS.filter((one) => one.resource === 3).map((one) => [
+      one.id, one.speed, one.damageMult, one.speedlength,
+    ]);
+    expect(tiers).toEqual([
+      ["pu0", 1.2, 0.2, 10],
+      ["pu1", 1.4, 0.4, 15],
+      ["pu2", 1.8, 0.7, 30],
+      ["pu3", 2.0, 0.9, 40],
+    ]);
+  });
+
+  it("boosts only once the first blob lands, then for its seconds", () => {
+    const { battle } = puttyBattle("pu0");
+    run(battle, 50);
+    expect(puttied(battle)).toEqual([false]);
+    run(battle, 100);
+    expect(puttied(battle)).toEqual([true]);
+    run(battle, 10 * 80 - 100);
+    expect(puttied(battle)).toEqual([true]);
+    run(battle, 120);
+    expect(puttied(battle)).toEqual([false]);
+  });
+
+  it("moves the creep faster while it lasts", () => {
+    const control = puttyBattle(null).battle;
+    const boosted = puttyBattle("pu3").battle;
+    run(control, 110);
+    run(boosted, 110);
+    const slow = travelled(control, 60);
+    const fast = travelled(boosted, 60);
+    expect(fast).toBeGreaterThan(slow * 1.5);
+  });
+
+  it("swings faster by the same factor", () => {
+    const swings = (bomb: string | null): number => {
+      const { battle } = puttyBattle(bomb);
+      let count = 0;
+      let seen = 0;
+      for (let step = 0; step < 2400 && !battle.over(); step += 1) {
+        battle.step();
+        if (battle.tick < 400) {
+          seen = battle.tick;
+          continue;
+        }
+        for (const event of battle.recentEvents(seen)) {
+          if (event.kind === "hit" && event.amount > 0) count += 1;
+        }
+        seen = battle.tick;
+      }
+      return count;
+    };
+    expect(swings("pu3")).toBeGreaterThan(swings(null) * 1.6);
+  });
+
+  it("takes less damage from towers while armoured", () => {
+    const hpAfter = (bomb: string | null): number => {
+      const yard = yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } });
+      const battle = createBattle(yard, { seed: 4 });
+      battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 40, monsters: { C1: 1 } });
+      if (bomb) battle.apply({ kind: "bomb", t: 0, x: -100, y: -100, id: bomb });
+      run(battle, 400);
+      return battle.creeps()[0]?.hp ?? 0;
+    };
+    expect(hpAfter("pu3")).toBeGreaterThan(hpAfter(null));
+  });
+
+  it("does not stack a second putty bomb on a boosted creep", () => {
+    // pu0 lasts 10 s from tick 104; a pu3 dropped on the same creep at tick 130
+    // must neither replace it nor extend it.
+    const { battle } = puttyBattle("pu0");
+    run(battle, 130);
+    battle.apply({ kind: "bomb", t: battle.tick, x: -100, y: -100, id: "pu3" });
+    run(battle, 700);
+    expect(battle.creeps()).toHaveLength(1);
+    expect(puttied(battle)).toEqual([true]);
+    run(battle, 150);
+    expect(battle.creeps()).toHaveLength(1);
+    expect(puttied(battle)).toEqual([false]);
+  });
+
+  it("leaves the defenders' monsters alone", () => {
+    const yard = yardOf({ "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 3 });
+    battle.apply({ kind: "bomb", t: 0, x: 0, y: 0, id: "pu3" });
+    run(battle, 200);
+    expect(battle.creeps().some((creep) => creep.puttied)).toBe(false);
+  });
+
+  it("fixes its targets at the drop: a creep that walks in later gets nothing", () => {
+    const yard = yardOf({ "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 3 });
+    battle.apply({ kind: "bomb", t: 0, x: -100, y: -100, id: "pu3" });
+    battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 40, monsters: { C1: 1 } });
+    run(battle, 200);
+    expect(puttied(battle)).toEqual([false]);
+  });
+
+  it("leaves a creep outside the ring unboosted", () => {
+    const yard = yardOf({ "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 3 });
+    battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 20, monsters: { C1: 1 } });
+    battle.apply({ kind: "bomb", t: 0, x: -100 + 400, y: -100, id: "pu0" });
+    run(battle, 200);
+    expect(puttied(battle)).toEqual([false]);
+  });
+
+  it("stacks with Fomor's enrage rather than being wiped by it", () => {
+    const withFomor = (bomb: string | null) => {
+      const yard = yardOf({ "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 } });
+      const battle = createBattle(yard, { seed: 5, playerLevel: 8 });
+      battle.apply({
+        kind: "fling", t: 0, x: -100, y: -100, r: 40, monsters: { C1: 1 }, champion: { t: 3, l: 1 },
+      });
+      if (bomb) battle.apply({ kind: "bomb", t: 0, x: -100, y: -100, id: bomb });
+      return battle;
+    };
+    const pokey = (battle: ReturnType<typeof createBattle>) =>
+      battle.creeps().find((creep) => !creep.champion)!;
+    const both = withFomor("pu3");
+    run(both, 200);
+    // Fomor's aura ticks every 30 ticks and releases what it lets go of; the
+    // putty boost lives in its own fields and is untouched by it.
+    expect(pokey(both).enraged).toBe(true);
+    expect(pokey(both).puttied).toBe(true);
+    run(both, 100);
+    expect(pokey(both).puttied).toBe(true);
+  });
+
+  it("is deterministic", () => {
+    const states = (): string => {
+      const { battle } = puttyBattle("pu2", 9);
+      run(battle, 600);
+      return JSON.stringify(battle.creeps());
+    };
+    expect(states()).toBe(states());
   });
 });
 

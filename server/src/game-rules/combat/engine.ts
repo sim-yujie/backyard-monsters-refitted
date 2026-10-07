@@ -56,8 +56,11 @@ import {
   BEHAVIOUR_SPEED,
   RAID_MAX_SECONDS,
   BOMBS,
+  type BombStats,
   bombParticleDamage,
   bombReaches,
+  puttyReach,
+  TICKS_PER_SECOND,
   DECLARE_WAR_COUNTDOWN_SECONDS,
   MR2_FLINGER_LEVEL,
   RETARGET_TICKS,
@@ -672,6 +675,8 @@ export interface CreepSnapshot {
   readonly burning?: boolean;
   /** Inside Fomor's enrage aura: faster, and harder to hurt. */
   readonly enraged?: boolean;
+  /** Under a putty bomb's boost: drawn with a pink glow. */
+  readonly puttied?: boolean;
   /** Inside Krallen's loot aura. */
   readonly lootBoosted?: boolean;
   /** Korath standing in his quake. */
@@ -913,6 +918,12 @@ interface Creep {
   armour: number;
   /** The Fomor whose aura enraged it, by creep id, or -1. */
   enragedBy: number;
+  /** Putty boost: speed and swing-rate multiplier, 1 without one; apart from `enrage`. */
+  puttySpeed: number;
+  /** A putty bomb's armour share; 0 without one. */
+  puttyArmour: number;
+  /** The tick the putty boost ends on; 0 when there is none. */
+  puttyUntil: number;
   /** What Krallen's aura adds to its looting property; 0 when it is not in it. */
   lootBonus: number;
   /** The Krallen whose aura it is in, by creep id, or -1. */
@@ -980,6 +991,9 @@ const NO_ABILITIES = {
   enrage: 1,
   armour: 0,
   enragedBy: -1,
+  puttySpeed: 1,
+  puttyArmour: 0,
+  puttyUntil: 0,
   lootBonus: 0,
   lootBuffedBy: -1,
   aura: null,
@@ -1308,6 +1322,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const defenderLoss: ResourceAmounts = { r1: 0, r2: 0, r3: 0, r4: 0 };
 
   let tick = 0;
+  /** How many creeps carry a putty boost; lets the tick skip the scan. */
+  let puttied = 0;
   let nextCreepId = 1;
   let creepsFlung = 0;
   let creepsKilled = 0;
@@ -1681,7 +1697,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creep.looking = false;
     }
     // An enraged creep's armour, `1 - armor` off every hit (issue #222).
+    // A putty boost is its own armour; the two combine as 1-(1-a)(1-b).
     if (creep.armour > 0) raw *= 1 - creep.armour;
+    if (creep.puttyArmour > 0) raw *= 1 - creep.puttyArmour;
     const applied = Math.min(raw, creep.hp);
     if (applied > 0) {
       visual.push({
@@ -2246,12 +2264,64 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * second or so in the client; here they land together, on this tick, which
    * changes when a building falls but not how much it takes.
    *
-   * Putty bombs carry no damage at all; their slow is not modelled
-   * (fidelity note 8).
+   * Putty bombs carry no damage; they enrage the attacker's own creeps (see
+   * {@link puttyBomb}).
    */
+  /** Ticks from drop to the first blob landing: 1 s fall delay plus the shortest flight. */
+  const PUTTY_LAND_TICKS = Math.round(1.3 * TICKS_PER_SECOND);
+  const puttyPending: { at: number; spec: BombStats; targets: Creep[] }[] = [];
+
+  /**
+   * A putty bomb (`ResourceBomb.as:126-139`, `:170-185`; `Enrage.as`). Whom it
+   * reaches is fixed now: the attacker's live creeps within `radius / 2` of the
+   * drop, the ring the player aims with. Flash lists every creep there; the
+   * remake keeps it to the attacker's side. The boost itself lands with the
+   * first blob.
+   */
+  const puttyBomb = (event: BombDrop, spec: BombStats): void => {
+    const reach = puttyReach(spec);
+    const targets: Creep[] = [];
+    for (const creep of creeps) {
+      if (creep.friendly || creep.gone || creep.hp <= 0) continue;
+      if (Math.hypot(creep.ix - event.x, creep.iy - event.y) <= reach) targets.push(creep);
+    }
+    puttyPending.push({ at: tick + PUTTY_LAND_TICKS, spec, targets });
+  };
+
+  /** Lands due putty bombs and ends boosts that have run out. */
+  const tickPutty = (): void => {
+    for (let at = 0; at < puttyPending.length; at += 1) {
+      const pending = puttyPending[at] as (typeof puttyPending)[number];
+      if (pending.at > tick) continue;
+      puttyPending.splice(at, 1);
+      at -= 1;
+      for (const creep of pending.targets) {
+        // One putty boost at a time: no stacking.
+        if (creep.gone || creep.hp <= 0 || creep.puttyUntil > 0) continue;
+        creep.puttySpeed = pending.spec.speed ?? 1;
+        creep.puttyArmour = pending.spec.damageMult ?? 0;
+        creep.puttyUntil = tick + Math.round((pending.spec.speedlength ?? 0) * TICKS_PER_SECOND);
+        puttied += 1;
+      }
+    }
+    if (puttied === 0) return;
+    for (const creep of creeps) {
+      if (creep.puttyUntil > 0 && tick >= creep.puttyUntil) {
+        creep.puttySpeed = 1;
+        creep.puttyArmour = 0;
+        creep.puttyUntil = 0;
+        puttied -= 1;
+      }
+    }
+  };
+
   const bomb = (event: BombDrop): void => {
     const spec = BOMBS.find((one) => one.id === event.id);
-    if (!spec || spec.damage <= 0) return;
+    if (!spec) return;
+    if (spec.damage <= 0) {
+      puttyBomb(event, spec);
+      return;
+    }
     const centre = screenOf(event.x, event.y);
     for (const building of yard.buildings) {
       if (building.hp <= 0) continue;
@@ -2502,8 +2572,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * The ticks to the next swing: `int(attackDelay)`, with an enraged creep's
    * delay divided by its multiplier (`Enrage.as:23`, `DivisionModifier`).
    */
-  const swingDelay = (creep: Creep): number =>
-    Math.trunc(creep.enrage === 1 ? creep.attackDelay : creep.attackDelay / creep.enrage);
+  const swingDelay = (creep: Creep): number => {
+    const boost = creep.enrage * creep.puttySpeed;
+    return Math.trunc(boost === 1 ? creep.attackDelay : creep.attackDelay / boost);
+  };
 
   /** One swing, with the specialist multipliers of `CreepBase.as:884-894`. */
   const swing = (creep: Creep): void => {
@@ -2608,6 +2680,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     let speed = creep.baseSpeed;
     // Enraged: `MultiplicationPropertyModifier` on its speed (`Enrage.as:22`, issue #222).
     if (creep.enrage !== 1) speed *= creep.enrage;
+    // A putty bomb's boost, on top of Fomor's (`ResourceBomb.as:170-185`).
+    if (creep.puttySpeed !== 1) speed *= creep.puttySpeed;
     const factor = BEHAVIOUR_SPEED[creep.behaviour];
     if (factor !== undefined) speed *= factor;
     if (creep.attacking) return;
@@ -4312,6 +4386,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       defendersOut = 0;
       for (const creep of creeps) if (creep.friendly && creep.hp > 0) defendersOut += 1;
     }
+    tickPutty();
     for (const creep of creeps) tickCreep(creep);
     tickLeaving();
 
@@ -4416,6 +4491,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       targetCreep: creep.targetCreep,
       burning: creep.burnDps > 0,
       enraged: creep.enragedBy >= 0,
+      puttied: creep.puttyUntil > 0,
       lootBoosted: creep.lootBuffedBy >= 0,
       quaking: creep.quaking,
     }));

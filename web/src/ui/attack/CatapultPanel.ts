@@ -73,6 +73,12 @@ const shortCost = (value: number): string => {
   return String(value);
 };
 
+/** A putty bomb's effect as Flash words it: `bomb_pu_description` with its three figures. */
+export const puttyText = (bomb: BombStats): string =>
+  `Enrages your monsters: speed x${bomb.speed ?? 1}, armour ${Math.round(
+    (bomb.damageMult ?? 0) * 100,
+  )}%, ${bomb.speedlength ?? 0} s`;
+
 /** What the panel needs to know to light or grey each row. */
 export interface CatapultView {
   /** The attacker's pool by resource, or null while unknown. */
@@ -206,13 +212,6 @@ export class CatapultPanel {
     have.className = "attack-catapult__have";
     title.append(resourceIcon(resourceKeyOf(resource)), have);
     head.append(title);
-    if (resource === 3) {
-      const badge = document.createElement("span");
-      badge.className = "attack-picker__badge";
-      badge.textContent = "no effect yet";
-      badge.title = "The battle engine does not apply putty bombs yet; the drop is still logged.";
-      head.append(badge);
-    }
 
     const group = document.createElement("div");
     group.className = "attack-catapult__tiers";
@@ -315,7 +314,9 @@ export class CatapultPanel {
           why !== ""
             ? why
             : affordable
-              ? bombName(segment.bomb.id)
+              ? segment.bomb.damage > 0
+                ? bombName(segment.bomb.id)
+                : `${bombName(segment.bomb.id)}. ${puttyText(segment.bomb)}`
               : `${bombName(segment.bomb.id)}: costs ${formatAmount(segment.bomb.cost)}`;
         const on = segment.bomb.id === bomb.id;
         segment.button.setAttribute("aria-pressed", String(on));
@@ -330,8 +331,7 @@ export class CatapultPanel {
           ? block
           : bomb.damage > 0
             ? `${shortCost(bomb.damage)} damage per building`
-            : // The engine gives putty no effect yet; say so rather than promise one (#152).
-              "No effect yet: the putty is spent but does nothing in battle.";
+            : puttyText(bomb);
       row.detail.classList.toggle("attack-catapult__detail--blocked", block !== "");
 
       const isArmed = armed === bomb.id;
