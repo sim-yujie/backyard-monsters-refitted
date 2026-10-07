@@ -19,6 +19,8 @@ const OUTPOST_BASEID = "2291380300302";
 type Row = Record<string, unknown>;
 
 let tables: Map<unknown, Row[]>;
+/** Keys `invalidateSightIfFlingerChanged` dropped (issue #329, #330 WP1). */
+let delCalls: string[];
 
 const matches = (row: Row, where: Row) =>
   Object.entries(where).every(([key, value]) => row[key] === value);
@@ -40,7 +42,10 @@ mock.module("../../../server.js", () => ({
   redis: {
     get: async () => null,
     setex: async () => "OK",
-    del: async () => 0,
+    del: async (key: string) => {
+      delCalls.push(key);
+      return 0;
+    },
     smembers: async () => [],
   },
 }));
@@ -152,6 +157,7 @@ beforeEach(() => {
     [Save, [mainSave(), outpostSave()]],
     [WorldMapCell, [{ baseid: OUTPOST_BASEID, map_version: 2, terrainHeight: 250 }]],
   ]);
+  delCalls = [];
 });
 
 describe("the owner's own outpost build load serves the cell height (#262)", () => {
@@ -202,5 +208,60 @@ describe("a wild monster raid session (#226)", () => {
 
     expect(sessions("main")).toBeUndefined();
     expect(sessions("outpost")).toBeUndefined();
+  });
+});
+
+/**
+ * The owner's own build-mode load heals `flinger`/`catapult` from whatever
+ * `buildingdata` now says (`syncDerivedLevels`, issue #94), which this file's
+ * catch-up stand-ins never touch themselves — so the before/after capture
+ * around them (`baseLoad.ts`'s own `flingerBefore` comment) sees that heal
+ * too, same as a real Flinger upgrade finishing would (issue #329, #330 WP1).
+ */
+describe("owner's own load: sight cache invalidation (#329, #330 WP1)", () => {
+  test("a main yard's flinger healing from a stale value invalidates the owner's own cache", async () => {
+    // The fixture's main yard has no Flinger building at all, so the true,
+    // derived level is 0 — different from the stale `flinger: 2` it starts at.
+    await load(MAIN_BASEID);
+
+    expect(delCalls).toEqual([`sight:${OWNER}`]);
+  });
+
+  test("a main yard whose stored flinger already matches its buildings invalidates nothing", async () => {
+    tables.set(Save, [mainSave({ flinger: 0 }), outpostSave()]);
+
+    await load(MAIN_BASEID);
+
+    expect(delCalls).toEqual([]);
+  });
+
+  test("...and the owner's alliance too, if they have one", async () => {
+    const owner = ownerUser();
+    tables.set(Save, [mainSave(), outpostSave()]);
+    const ctx = {
+      authUser: { ...owner, alliance_id: 11 },
+      meetsDiscordAgeCheck: true,
+      request: { body: { type: "build", userid: String(OWNER), baseid: MAIN_BASEID, mapversion: "2" } },
+    } as unknown as Context;
+    await baseLoad(ctx, async () => {});
+
+    expect(delCalls).toContain(`sight:${OWNER}`);
+    expect(delCalls).toContain("sight:ally:11");
+  });
+
+  test("an outpost build load with no flinger change invalidates nothing", async () => {
+    tables.set(Save, [mainSave(), outpostSave({ flinger: 0 })]);
+
+    await load(OUTPOST_BASEID);
+
+    expect(delCalls).toEqual([]);
+  });
+
+  test("an outpost build load that heals the owner's flinger invalidates (cached under the owner, not the outpost)", async () => {
+    tables.set(Save, [mainSave(), outpostSave({ flinger: 3 })]);
+
+    await load(OUTPOST_BASEID);
+
+    expect(delCalls).toEqual([`sight:${OWNER}`]);
   });
 });

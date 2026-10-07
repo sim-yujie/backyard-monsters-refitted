@@ -17,6 +17,8 @@ let save: Row;
 let flushed: number;
 let removed: Row[];
 let moves: string[];
+/** Keys `invalidatePlayerSight` dropped (issue #329, #330 WP1). */
+let delCalls: string[];
 
 mock.module("../../server.js", () => ({
   postgres: {
@@ -33,7 +35,12 @@ mock.module("../../server.js", () => ({
       },
     },
   },
-  redis: {},
+  redis: {
+    del: async (key: string) => {
+      delCalls.push(key);
+      return 0;
+    },
+  },
 }));
 
 mock.module("../../services/maproom/v2/leaveWorld.js", () => ({
@@ -50,9 +57,9 @@ mock.module("../../services/maproom/v2/joinOrCreateWorld.js", () => ({
 
 const { setMapVersion } = await import("./setMapVersion.js");
 
-const run = async (version: number) => {
+const run = async (version: number, allianceId: number | null = null) => {
   const ctx = {
-    authUser: { userid: ME, alliance_id: null },
+    authUser: { userid: ME, alliance_id: allianceId },
     meetsDiscordAgeCheck: true,
     request: { body: { version: String(version) } },
   } as unknown as Context;
@@ -71,6 +78,7 @@ beforeEach(() => {
   flushed = 0;
   removed = [];
   moves = [];
+  delCalls = [];
 });
 
 describe("setMapVersion from Map Room 2", () => {
@@ -128,5 +136,19 @@ describe("setMapVersion from Map Room 1", () => {
     const result = await run(1);
     expect(result.ok).toBe(true);
     expect(save.mapversion).toBe(1);
+  });
+
+  test("version 0 (leaving entirely) drops the player's own cached sight (#329, #330 WP1)", async () => {
+    const result = await run(0);
+    expect(result.ok).toBe(true);
+    expect(moves).toEqual(["leave"]);
+    expect(delCalls).toEqual([`sight:${ME}`]);
+  });
+
+  test("a member of an alliance is refused first, and nothing invalidates", async () => {
+    const result = await run(0, 42);
+    expect(result).toMatchObject({ ok: false, status: 409 });
+    expect(moves).toEqual([]);
+    expect(delCalls).toEqual([]);
   });
 });

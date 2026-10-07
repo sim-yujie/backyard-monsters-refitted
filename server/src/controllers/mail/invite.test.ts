@@ -101,6 +101,9 @@ const { attackSessionKey, serialiseAttackSession } = await import("../../service
  * attack running. Stubbed here rather than the store itself, whose module
  * mock would outlive this file.
  */
+/** Keys `invalidateSight` dropped, in call order. */
+let delCalls: string[];
+
 const redis = {
   get: async (key: string) => {
     const basesaveid = [...sessions].find((id) => attackSessionKey(id) === key);
@@ -108,7 +111,10 @@ const redis = {
   },
   // An accepted invitation invalidates both players' Map Room 2 fog of war
   // sight cache (issue #329, #330 WP1).
-  del: async () => 0,
+  del: async (key: string) => {
+    delCalls.push(key);
+    return 0;
+  },
 };
 
 mock.module("../../server.js", () => ({ postgres: { em }, redis }));
@@ -217,6 +223,7 @@ const cell = (baseid: string, uid: number, x: number, y: number, base_type: numb
 
 beforeEach(async () => {
   sessions = new Set();
+  delCalls = [];
   const aliceMain = mainSave(ALICE, 2526, 241, 207, {
     outposts: [
       [241, 208, OUTPOST],
@@ -448,6 +455,46 @@ describe("accepting an invitation", () => {
     second.saveuserid = DAVE;
     await expect(accept(BOB, taken)).rejects.toMatchObject({ status: 409 });
     expect(second.saveuserid).toBe(DAVE);
+  });
+});
+
+/**
+ * A successful accept moves the invitee's main yard and shrinks the
+ * inviter's outposts, so both players' Map Room 2 fog of war sight cache is
+ * dropped (issue #329, #330 WP1) — the inviter's own, since
+ * `migrateToFriend.ts` never loads their full `User`, only their `Save`.
+ */
+describe("accepting an invitation: sight cache invalidation (#329, #330 WP1)", () => {
+  test("drops both the invitee's and the inviter's own cached sight", async () => {
+    const threadid = (await invite()).threadid as number;
+
+    expect(await accept(BOB, threadid)).toMatchObject({ error: 0 });
+
+    expect(delCalls).toContain(`sight:${BOB}`);
+    expect(delCalls).toContain(`sight:${ALICE}`);
+  });
+
+  test("...and the inviter's alliance too, if they have one", async () => {
+    // Not the invitee's: both `inviteSendRefusal` and `inviteAcceptRefusal`
+    // already refuse an allied invitee, so a real accept never reaches
+    // `invalidateSight` with one — only the inviter's alliance is live here.
+    const threadid = (await invite()).threadid as number;
+    user(ALICE).alliance_id = 9;
+
+    expect(await accept(BOB, threadid)).toMatchObject({ error: 0 });
+
+    expect(delCalls).toContain(`sight:${BOB}`);
+    expect(delCalls).toContain(`sight:${ALICE}`);
+    expect(delCalls).toContain("sight:ally:9");
+  });
+
+  test("a soft refusal invalidates neither", async () => {
+    const threadid = (await invite()).threadid as number;
+    mainOf(BOB).cantmovetill = now() + 3_600;
+
+    expect(await accept(BOB, threadid)).toMatchObject({ error: 1, reason: "coolingDown" });
+
+    expect(delCalls).toEqual([]);
   });
 });
 

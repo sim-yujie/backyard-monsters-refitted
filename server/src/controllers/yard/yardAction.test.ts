@@ -454,6 +454,43 @@ describe("runYardAction refusals", () => {
   });
 });
 
+/**
+ * `YardAnswer.flingerBefore`/`flingerAfter` (issue #329, #330 WP1): `yardRoute`
+ * compares these to invalidate the Map Room 2 fog of war sight cache only
+ * when the Flinger's reach actually moved. Captured here, not in
+ * `yardRoute.test.ts`, since this module stays drivable without a server.
+ */
+describe("YardAnswer.flingerBefore/flingerAfter (#329, #330 WP1)", () => {
+  test("a Flinger upgrade finishing reports the before and after level", async () => {
+    const finishFlinger = defineYardAction({
+      schema: z.object({}),
+      run: () => ({
+        report: { ok: true },
+        slices: { buildingdata: { "9": { id: 9, t: 5, x: 0, y: 0, l: 4 } } },
+      }),
+    });
+
+    const ctx = await call(finishFlinger);
+
+    expect(ctx.flingerBefore).toBe(0);
+    expect(ctx.flingerAfter).toBe(4);
+  });
+
+  test("an action that never touches the Flinger reports the same level both times", async () => {
+    const ctx = await call(state);
+
+    expect(ctx.flingerBefore).toBe(0);
+    expect(ctx.flingerAfter).toBe(0);
+  });
+
+  test("a refused action reports neither (undefined)", async () => {
+    const ctx = await call(state, {}, userOf({ save: null }));
+
+    expect(ctx.flingerBefore).toBeUndefined();
+    expect(ctx.flingerAfter).toBeUndefined();
+  });
+});
+
 describe("applyOutcome", () => {
   const saveOf = (overrides: Row = {}) => rowOf(overrides) as unknown as Save;
 
