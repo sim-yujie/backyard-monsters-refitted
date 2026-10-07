@@ -50,7 +50,7 @@ export const MARKER_UNIT = 32;
 /** The ring's width at {@link MARKER_UNIT}. */
 const RING_WIDTH = 6;
 /** Half the height of a name plate, and the radius of its ends. */
-export const PLATE_HALF_HEIGHT = 16;
+export const PLATE_HALF_HEIGHT = 11;
 
 /** Half-width the level star and the relation icons are baked at. */
 export const ICON_UNIT = 32;
