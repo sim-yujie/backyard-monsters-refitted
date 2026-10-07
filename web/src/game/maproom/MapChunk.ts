@@ -132,8 +132,8 @@ const STAR_TEXT_SIZE = CELL_HEIGHT * 0.2;
 const STAR_COLOUR = 0xf2c230;
 
 /** A relation icon (house/shield/swords), drawn inside the plate's left end (#334). */
-const RELATION_ICON_RADIUS = CELL_HEIGHT * 0.13;
-const RELATION_ICON_PAD = CELL_WIDTH * 0.015;
+const RELATION_ICON_RADIUS = CELL_HEIGHT * 0.1;
+const RELATION_ICON_PAD = CELL_WIDTH * 0.01;
 
 /**
  * A player's name plate, placed low in the hex so the width it has to work
@@ -143,11 +143,11 @@ const RELATION_ICON_PAD = CELL_WIDTH * 0.015;
  * plate is allowed.
  */
 const PLATE_HEIGHT = PLATE_HALF_HEIGHT * 2;
-const PLATE_Y_OFFSET = CELL_HEIGHT * 0.28;
-const PLATE_TEXT_SIZE = PLATE_HEIGHT * 0.6;
-const PLATE_PADDING = CELL_WIDTH * 0.07;
-/** A long name shrinks only this far before it is cut short with dots. */
-const PLATE_MIN_TEXT_SIZE = PLATE_TEXT_SIZE * 0.6;
+const PLATE_Y_OFFSET = CELL_HEIGHT * 0.22;
+const PLATE_TEXT_SIZE = PLATE_HEIGHT * 0.62;
+const PLATE_PADDING = CELL_WIDTH * 0.03;
+/** A long name shrinks only this far (about 14 letters fit) before it is cut short with dots. */
+const PLATE_MIN_TEXT_SIZE = PLATE_TEXT_SIZE * 0.55;
 const PLATE_ALPHA = 0.92;
 
 /**
@@ -488,7 +488,9 @@ export class MapChunk {
     const py = y + PLATE_Y_OFFSET;
     // Capped to the hex's actual width at py, so the plate never spills into
     // the neighbour hex sharing that edge (#334).
-    const maxTotalWidth = hexWidthAt(py - y);
+    // Measured at the plate's lower edge, where the hex is narrowest, less a
+    // little for the rounded ends.
+    const maxTotalWidth = hexWidthAt(py - y + PLATE_HALF_HEIGHT * 0.5);
     // The relation icon takes the plate's left end; the name sits in the rest.
     const iconRoom = appearance.relationIcon === "none" ? 0 : RELATION_ICON_RADIUS * 2 + RELATION_ICON_PAD * 2;
     this.requests.push({
