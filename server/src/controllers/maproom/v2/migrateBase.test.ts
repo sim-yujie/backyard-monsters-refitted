@@ -84,7 +84,7 @@ mock.module("../../../server.js", () => ({
       transactional: async (run: (em: typeof txEm) => Promise<unknown>) => run(txEm),
     },
   },
-  redis: {},
+  redis: { del: async () => 0 },
 }));
 
 mock.module("../../../services/base/attackSessionStore.js", () => ({

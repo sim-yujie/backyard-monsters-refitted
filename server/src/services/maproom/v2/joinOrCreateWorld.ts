@@ -7,6 +7,7 @@ import { MapRoom2, MapRoomCell, MapRoomVersion } from "../../../enums/MapRoom.js
 import { EntityManager, PostgreSqlDriver } from "@mikro-orm/postgresql";
 import { postgres } from "../../../server.js";
 import { invalidateWorldsCache } from "../knownWorlds.js";
+import { invalidateSight } from "../sight/sightService.js";
 import { findFreeCell } from "./findFreeCell.js";
 
 /**
@@ -81,4 +82,8 @@ export const joinOrCreateWorld = async (
   await em.flush();
 
   await invalidateWorldsCache();
+  // A new world, a new home cell: the sight this player's old one was built
+  // from (and their alliance's union, if they are in one) is gone
+  // (issue #329, #330 WP1).
+  await invalidateSight(user);
 };

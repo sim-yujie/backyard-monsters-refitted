@@ -106,6 +106,9 @@ const redis = {
     const basesaveid = [...sessions].find((id) => attackSessionKey(id) === key);
     return basesaveid === undefined ? null : serialiseAttackSession({ attackerid: DAVE, attackid: 1, startedat: 0 });
   },
+  // An accepted invitation invalidates both players' Map Room 2 fog of war
+  // sight cache (issue #329, #330 WP1).
+  del: async () => 0,
 };
 
 mock.module("../../server.js", () => ({ postgres: { em }, redis }));

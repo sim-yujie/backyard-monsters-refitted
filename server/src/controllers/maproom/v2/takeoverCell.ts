@@ -4,7 +4,7 @@ import { User } from "../../../database/models/user.model.js";
 import { Save } from "../../../database/models/save.model.js";
 import { postgres } from "../../../server.js";
 import { invalidateWorldsCache } from "../../../services/maproom/knownWorlds.js";
-import { invalidatePlayerSight } from "../../../services/maproom/sight/sightService.js";
+import { invalidateSight } from "../../../services/maproom/sight/sightService.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { Status } from "../../../enums/StatusCodes.js";
 import { BaseType } from "../../../enums/Base.js";
@@ -240,12 +240,14 @@ export const takeoverCell: KoaController = async (ctx) => {
   if (isOriginCell) await invalidateWorldsCache();
 
   // The taker's own sight just grew a base, and the previous owner (a wild
-  // monster camp has none) lost one, both outside a flinger's reach rule
+  // monster camp has none) lost one, both outside a flinger's reach rule —
+  // and, since `outposts` is what changed, each one's alliance union too
   // (issue #329, `docs/design/fog-of-war.md` §9).
   await Promise.all(
-    [currentUser.userid, previousOwnerId]
-      .filter((userid): userid is number => userid !== undefined)
-      .map(invalidatePlayerSight),
+    [
+      invalidateSight(currentUser),
+      ...(previousOwnerId !== undefined ? [invalidateSight(previousOwnerId)] : []),
+    ],
   );
 
   ctx.status = Status.OK;

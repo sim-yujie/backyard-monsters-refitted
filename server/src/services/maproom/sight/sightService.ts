@@ -290,3 +290,51 @@ export const invalidatePlayerSight = (userid: number): Promise<number> =>
  */
 export const invalidateAllianceSight = (allianceId: number): Promise<number> =>
   redis.del(allianceSightKey(allianceId));
+
+/** A player's alliance, read fresh for a caller holding only their id. */
+const allianceIdOf = async (userid: number): Promise<Pick<User, "userid" | "alliance_id">> => {
+  const row = await postgres.em.findOne(User, { userid }, { fields: ["userid", "alliance_id"] });
+  return { userid, alliance_id: row?.alliance_id ?? null };
+};
+
+/**
+ * Drops a player's own cached sight and, when they have one, their
+ * alliance's cached union too: a player's own sources or revealed cells
+ * changed (a flinger level, a won, lost or relocated base), so whatever the
+ * alliance cache combined them into is stale as well (`fog-of-war.md` §9).
+ * `invalidatePlayerSight`/`invalidateAllianceSight` stay the right call on
+ * their own where only one side moved (an attacker's revealed base is never
+ * shared into the alliance union; a Declare War start touches no member's
+ * own sources).
+ *
+ * @param who - The affected player, already loaded (`alliance_id` read
+ *   straight off it), or just their id for a caller holding only the other
+ *   side's `Save` (a takeover's previous owner, a relocate invite's
+ *   inviter).
+ */
+export const invalidateSight = async (who: number | Pick<User, "userid" | "alliance_id">): Promise<void> => {
+  const { userid, alliance_id } = typeof who === "number" ? await allianceIdOf(who) : who;
+
+  await invalidatePlayerSight(userid);
+  if (alliance_id) await invalidateAllianceSight(alliance_id);
+};
+
+/**
+ * {@link invalidateSight}, but only when a save's `flinger` actually moved —
+ * `syncDerivedLevels` runs on every yard write regardless, and most leave it
+ * unchanged (`derivedLevels.ts`).
+ *
+ * @param user - The save's owner (an outpost's own flinger level is cached
+ *   under its main yard owner's sight, the same key `playerSightKey` uses).
+ * @param before - `save.flinger` read before the write that might have
+ *   changed it.
+ * @param after - `save.flinger` read after.
+ */
+export const invalidateSightIfFlingerChanged = async (
+  user: Pick<User, "userid" | "alliance_id">,
+  before: number | undefined,
+  after: number | undefined,
+): Promise<void> => {
+  if (before === after) return;
+  await invalidateSight(user);
+};

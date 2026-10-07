@@ -19,6 +19,7 @@ import {
   type RelocatePayment,
 } from "../../../services/maproom/v2/relocateRules.js";
 import { writeOutpostNotice } from "../../../services/maproom/v2/outpostNotices.js";
+import { invalidateSight } from "../../../services/maproom/sight/sightService.js";
 import {
   INVITE_ACCEPTED,
   INVITE_DECLINED,
@@ -179,6 +180,14 @@ export const migrateToFriend: KoaController = async (ctx) => {
   });
 
   if ("closed" in outcome) throw inviteClosedErr();
+
+  if (!("refusal" in outcome)) {
+    // The invitee's main yard just moved onto the outpost's cell, and the
+    // inviter lost the outpost: both change each player's own sight
+    // (issue #329, #330 WP1). The inviter's own `User` was never loaded
+    // here, only their `Save`, so `invalidateSight` is handed their id.
+    await Promise.all([invalidateSight(user), invalidateSight(invite.userid)]);
+  }
 
   ctx.status = Status.OK;
   ctx.body = "refusal" in outcome ? outcome.refusal : { error: 0, coords: outcome.coords };

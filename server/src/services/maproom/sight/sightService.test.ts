@@ -30,6 +30,9 @@ const em = {
     findCalls.push({ entity, where });
     return (tables.get(entity) ?? []).filter((row) => matchesWhere(row, where));
   },
+  // `invalidateSight` reads a bare userid's alliance off `User` with this.
+  findOne: async (entity: unknown, where: Row) =>
+    (tables.get(entity) ?? []).find((row) => matchesWhere(row, where)) ?? null,
   // The fixtures below always attach `save` directly, so there is nothing to load.
   populate: async () => {},
 };
@@ -45,6 +48,8 @@ const {
   getPlayerSight,
   invalidateAllianceSight,
   invalidatePlayerSight,
+  invalidateSight,
+  invalidateSightIfFlingerChanged,
   playerSightKey,
 } = await import("./sightService.js");
 
@@ -337,5 +342,90 @@ describe("the Redis cache", () => {
 
     expect(second.sources).not.toEqual(first.sources);
     expect(second.sources).toContainEqual({ x: 200, y: 200, reach: 4 });
+  });
+});
+
+describe("invalidateSight", () => {
+  test("given an already-loaded user, drops their own cache and their alliance's, without a Postgres lookup", async () => {
+    const p = user(1, { alliance_id: 9 });
+    tables.set(User, [{ userid: 1, alliance_id: 9 }]);
+    tables.set(Save, []);
+
+    await getPlayerSight(p);
+    findCalls.length = 0;
+
+    await invalidateSight(p);
+
+    expect(await redis.get(playerSightKey(1))).toBeNull();
+    expect(await redis.get(allianceSightKey(9))).toBeNull();
+    expect(findCalls).toEqual([]);
+  });
+
+  test("given an already-loaded user with no alliance, drops only their own cache", async () => {
+    const p = user(1);
+    tables.set(Save, []);
+
+    await getPlayerSight(p);
+    await invalidateSight(p);
+
+    expect(await redis.get(playerSightKey(1))).toBeNull();
+  });
+
+  test("given a bare userid, reads their alliance off Postgres and drops both caches", async () => {
+    const p = user(1, { alliance_id: 9 });
+    tables.set(User, [{ userid: 1, alliance_id: 9 }]);
+    tables.set(Save, []);
+
+    await getPlayerSight(p);
+    await invalidateSight(1);
+
+    expect(await redis.get(playerSightKey(1))).toBeNull();
+    expect(await redis.get(allianceSightKey(9))).toBeNull();
+  });
+
+  test("given a bare userid with no User row (already gone), still drops their own cache", async () => {
+    const p = user(1);
+    tables.set(Save, []);
+
+    await getPlayerSight(p);
+    await invalidateSight(1);
+
+    expect(await redis.get(playerSightKey(1))).toBeNull();
+  });
+});
+
+describe("invalidateSightIfFlingerChanged", () => {
+  test("a no-op when the flinger level did not move", async () => {
+    const p = user(1, { alliance_id: 9 });
+    tables.set(User, [{ userid: 1, alliance_id: 9 }]);
+    tables.set(Save, []);
+
+    await getPlayerSight(p);
+    await invalidateSightIfFlingerChanged(p, 3, 3);
+
+    expect(await redis.get(playerSightKey(1))).not.toBeNull();
+    expect(await redis.get(allianceSightKey(9))).not.toBeNull();
+  });
+
+  test("a no-op when both are undefined (an outpost whose level was never read)", async () => {
+    const p = user(1);
+    tables.set(Save, []);
+
+    await getPlayerSight(p);
+    await invalidateSightIfFlingerChanged(p, undefined, undefined);
+
+    expect(await redis.get(playerSightKey(1))).not.toBeNull();
+  });
+
+  test("invalidates the player's own cache and their alliance's when the level moved", async () => {
+    const p = user(1, { alliance_id: 9 });
+    tables.set(User, [{ userid: 1, alliance_id: 9 }]);
+    tables.set(Save, []);
+
+    await getPlayerSight(p);
+    await invalidateSightIfFlingerChanged(p, 3, 4);
+
+    expect(await redis.get(playerSightKey(1))).toBeNull();
+    expect(await redis.get(allianceSightKey(9))).toBeNull();
   });
 });

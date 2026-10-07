@@ -497,6 +497,15 @@ export interface YardAnswer {
    * only, for the notification list (`yardRoute`, issue #257).
    */
   outpost?: string | null;
+  /**
+   * The acted-on save's `flinger` just before the catch-up and the action
+   * ran, and once they and the transaction committed; set on a success only.
+   * `yardRoute` compares them to invalidate the Map Room 2 fog of war sight
+   * cache (issue #329, #330 WP1) — kept out of this module so it stays
+   * drivable without a server (the file comment).
+   */
+  flingerBefore?: number;
+  flingerAfter?: number;
 }
 
 /**
@@ -529,6 +538,12 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
     const target = YardTargetSchema.safeParse(rawBody ?? {});
     if (!target.success) throw yardBadRequestErr("That yard could not be read.", { field: "baseid" });
 
+    // Read under the lock, before the catch-up or the action itself might
+    // move it; compared against the post-action value once the transaction
+    // commits, to invalidate the Map Room 2 fog of war sight cache only when
+    // it actually changed (issue #329, #330 WP1).
+    let flingerBefore: number | undefined;
+
     const answer = await em.transactional(async (tx) => {
       const yard = await lockOwnYard(tx, user, target.data.baseid);
       if (yard.outpost && action.outposts !== "allow") {
@@ -536,6 +551,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       }
 
       const save = yard.save;
+      flingerBefore = save.flinger;
       const now = getCurrentDateTime();
       const completed = catchUpYard(save, now);
       if (!yard.outpost) await joinMapRoom2(tx, save, user);
@@ -593,6 +609,8 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         ...(answer.achievements.length > 0 && { achievements: answer.achievements }),
       },
       outpost: answer.outpost,
+      flingerBefore,
+      flingerAfter: answer.save.flinger,
     };
   } catch (err) {
     if (!(err instanceof ClientSafeError)) throw err;

@@ -48,6 +48,9 @@ mock.module("../../server.js", () => ({
       transactional: async (run: (em: typeof txEm) => Promise<unknown>) => run(txEm),
     },
   },
+  // `onPlannerYard` invalidates the Map Room 2 fog of war sight cache when a
+  // batch moves the Flinger's level (issue #329, #330 WP1); none here do.
+  redis: { del: async () => 0 },
 }));
 
 const { applyLayout } = await import("./applyLayout.js");

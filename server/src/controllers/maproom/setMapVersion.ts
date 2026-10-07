@@ -5,6 +5,7 @@ import type { KoaController } from "../../utils/KoaController.js";
 import { postgres } from "../../server.js";
 import { joinOrCreateWorld } from "../../services/maproom/v2/joinOrCreateWorld.js";
 import { leaveWorld } from "../../services/maproom/v2/leaveWorld.js";
+import { invalidatePlayerSight } from "../../services/maproom/sight/sightService.js";
 import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { Status } from "../../enums/StatusCodes.js";
@@ -73,6 +74,11 @@ export const setMapVersion: KoaController = async (ctx) => {
 
       save.mapversion = MapRoomVersion.V1;
       await leaveWorld(user, save);
+      // Leaving with no follow-up join (unlike the V2 case below, whose
+      // `joinOrCreateWorld` invalidates its own): the old Map Room 2 sight
+      // is gone (issue #329, #330 WP1). No alliance to invalidate too — the
+      // guard above already refused one.
+      await invalidatePlayerSight(user.userid);
       break;
     }
 
