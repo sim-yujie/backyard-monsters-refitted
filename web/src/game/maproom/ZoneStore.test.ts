@@ -340,4 +340,47 @@ describe("ZoneStore", () => {
       fetchedAt: time.now(),
     });
   });
+
+  it("never queues a zone skipZone refuses (issue #331: zones outside sight go unrequested)", async () => {
+    const fetcher = okFetcher();
+    const fogged = zoneFor(720, 345).id;
+    const store = new ZoneStore({
+      fetcher,
+      now: time.now,
+      skipZone: (zone) => zone.id === fogged,
+    });
+
+    store.ensureVisible({ minCol: 710, maxCol: 725, minRow: 345, maxRow: 347 });
+    await drain(store);
+
+    expect(fetcher.calls).toEqual([[710, 340]]);
+    expect(store.getZone(fogged)).toBeUndefined();
+  });
+
+  it("dropAll forgets every cached and queued zone and bumps the revision (a sight version change)", async () => {
+    const fetcher = okFetcher();
+    const store = new ZoneStore({ fetcher, now: time.now });
+
+    store.ensureVisible({ minCol: 710, maxCol: 712, minRow: 345, maxRow: 347 });
+    await drain(store);
+    const revisionBefore = store.revision;
+
+    store.dropAll();
+
+    expect(store.loadedZones).toBe(0);
+    expect(store.pendingRequests).toBe(0);
+    expect(store.getCell(712, 347)).toBeUndefined();
+    expect(store.revision).toBeGreaterThan(revisionBefore);
+  });
+
+  it("reports each applied response's sv", async () => {
+    const onSightVersion = vi.fn();
+    const fetcher: AreaFetcher = (x, y) => Promise.resolve({ ...areaResponse(x, y), sv: "abc123" });
+    const store = new ZoneStore({ fetcher, now: time.now, onSightVersion });
+
+    store.ensureVisible({ minCol: 710, maxCol: 712, minRow: 345, maxRow: 347 });
+    await drain(store);
+
+    expect(onSightVersion).toHaveBeenCalledWith("abc123");
+  });
 });

@@ -7,6 +7,7 @@ import type {
   GetAreaRequest,
   GetAreaResponse,
   MapCell,
+  SightResponse,
   TakeoverQuoteResponse,
 } from "./types";
 
@@ -15,6 +16,7 @@ import type {
  * prefix (docs/server-api.md §Map Room 2).
  */
 const GET_AREA_PATH = "/worldmapv2/getarea";
+const SIGHT_PATH = "/worldmapv2/sight";
 
 /**
  * Rounds a coordinate down to a zone origin.
@@ -61,6 +63,14 @@ export const getArea = async (
 
 const clampCoordinate = (value: number, size: number): number =>
   Math.min(Math.max(Math.trunc(value), 0), size - 1);
+
+/**
+ * Fetches the caller's whole Map Room 2 fog of war sight (issue #331,
+ * `docs/design/fog-of-war.md` §5.2): every sight circle and always-visible
+ * cell, so the map can draw the fog edge and the minimap, and skip a zone
+ * entirely outside it with no `getarea` request at all.
+ */
+export const getSight = (): Promise<SightResponse> => post<SightResponse>(SIGHT_PATH);
 
 /**
  * Reads one cell out of an area response.

@@ -876,6 +876,41 @@ export interface GetAreaResponse extends ApiEnvelope {
   sv?: string;
 }
 
+/**
+ * One of the caller's sight circles (issue #330, #331): their main yard's or
+ * an outpost's flinger reach, or an ally's under the same rule, Declare War's
+ * bonus already folded into `reach`.
+ */
+export interface SightSource {
+  x: number;
+  y: number;
+  reach: number;
+  /** Whose circle this is, so the minimap can paint the two in different tints (#331). */
+  kind: "own" | "ally";
+}
+
+/** A cell visible regardless of range: the caller's own bases, and any attacker's (#330). */
+export interface RevealedSightCell {
+  x: number;
+  y: number;
+}
+
+/**
+ * `POST /worldmapv2/sight`'s answer (`docs/design/fog-of-war.md` §5.2): the
+ * caller's whole Map Room 2 fog of war sight, so the client can draw the fog
+ * edge and the minimap without waiting on individual `getarea` zones, and
+ * skip a zone entirely outside it with no request at all. Everything in it is
+ * already visible to the caller (`getarea` would show all of it), so none of
+ * it is a leak.
+ */
+export interface SightResponse extends ApiEnvelope {
+  error: number;
+  /** Matches `GetAreaResponse.sv` when the two are in step. */
+  sv: string;
+  sources: SightSource[];
+  revealed: RevealedSightCell[];
+}
+
 /** Narrows a cell payload to one outside the viewer's fog of war sight. */
 export const isFogCell = (cell: MapCell): cell is FogCell => "fog" in cell;
 
