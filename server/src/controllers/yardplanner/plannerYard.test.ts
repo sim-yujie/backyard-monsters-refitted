@@ -22,6 +22,8 @@ let mainSave: Row;
 let outpostSave: Row;
 let locked: number[];
 let persisted: number;
+/** Keys `invalidateSightIfFlingerChanged` dropped (issue #329, #330 WP1). */
+const redisDel = mock(async (_key: string) => 0);
 
 const rows = () => [mainSave, outpostSave];
 const matches = (row: Row, where: Row) => Object.entries(where).every(([key, value]) => row[key] === value);
@@ -48,8 +50,13 @@ mock.module("../../server.js", () => ({
       transactional: async (run: (em: typeof txEm) => Promise<unknown>) => run(txEm),
     },
   },
+  // `onPlannerYard` invalidates the Map Room 2 fog of war sight cache when a
+  // batch moves the Flinger's level (issue #329, #330 WP1); none of the
+  // layout/wall/trap batches below happen to, so most tests never call it.
+  redis: { del: redisDel },
 }));
 
+const { onPlannerYard } = await import("./plannerYard.js");
 const { applyLayout } = await import("./applyLayout.js");
 const { upgradeWalls } = await import("./upgradeWalls.js");
 const { saveLayout } = await import("./saveLayout.js");
@@ -80,6 +87,7 @@ const CORE = { id: 1, t: 112, X: 0, Y: -50, l: 1 };
 beforeEach(() => {
   locked = [];
   persisted = 0;
+  redisDel.mockClear();
   mainSave = {
     basesaveid: 7,
     baseid: "7",
@@ -483,5 +491,69 @@ describe("a half-finished layout (owner decision 2026-10-05)", () => {
     expect(answer.status).toBe(409);
     expect(answer.body.unplaced).toEqual([5]);
     expect((mainSave.buildingdata as Record<string, Row>)["5"]?.X).toBe(300);
+  });
+});
+
+/**
+ * `onPlannerYard`'s own before/after capture and invalidation call (issue
+ * #329, #330 WP1), driven directly with a synthetic `run` rather than through
+ * a real batch: `applyLayout`/`upgradeWalls`/`rearmTraps` only ever change
+ * `save.flinger` once their `syncDerivedLevels` call sees a Flinger building
+ * actually finish a level, which none of this file's fixtures reach — this
+ * targets the wiring itself instead (the same angle `yardAction.test.ts`
+ * takes for its own `flingerBefore`/`flingerAfter` fields).
+ */
+describe("sight cache invalidation (#329, #330 WP1)", () => {
+  test("main yard: a run that raises the Flinger's level invalidates the player's sight", async () => {
+    mainSave.flinger = 0;
+    const user = { userid: USERID, shiny_locked: false };
+
+    const result = await onPlannerYard(user as never, {}, (save) => {
+      (save as unknown as Row).flinger = 4;
+      return "done";
+    });
+
+    expect(result).toBe("done");
+    expect(redisDel).toHaveBeenCalledWith(`sight:${USERID}`);
+  });
+
+  test("main yard: a run that never moves it does not invalidate", async () => {
+    mainSave.flinger = 0;
+    const user = { userid: USERID, shiny_locked: false };
+
+    await onPlannerYard(user as never, {}, () => "done");
+
+    expect(redisDel).not.toHaveBeenCalled();
+  });
+
+  // The outpost branch runs `catchUpYard` (and so `catchUpBuildings`'s own
+  // `syncDerivedLevels`) before `run`, which re-derives `flinger` from
+  // `buildingdata` regardless — a fixture with no Flinger building there
+  // would drive it to 0 on every call, a false "it moved". Giving the
+  // outpost a Flinger matching the starting level keeps that pre-`run`
+  // derivation a no-op, same as a real catch-up on an unrelated action.
+  const withFlinger = (level: number) => {
+    (outpostSave.buildingdata as Record<string, Row>)["9"] = { id: 9, t: 5, X: 0, Y: 0, l: level };
+    outpostSave.flinger = level;
+  };
+
+  test("outpost: a batch that raises its Flinger's level invalidates the owner's sight", async () => {
+    withFlinger(1);
+    const user = { userid: USERID, shiny_locked: false };
+
+    await onPlannerYard(user as never, { baseid: OUTPOST_BASEID }, (save) => {
+      (save as unknown as Row).flinger = 2;
+    });
+
+    expect(redisDel).toHaveBeenCalledWith(`sight:${USERID}`);
+  });
+
+  test("outpost: a batch that never moves it does not invalidate", async () => {
+    withFlinger(1);
+    const user = { userid: USERID, shiny_locked: false };
+
+    await onPlannerYard(user as never, { baseid: OUTPOST_BASEID }, () => {});
+
+    expect(redisDel).not.toHaveBeenCalled();
   });
 });

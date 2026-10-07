@@ -31,6 +31,10 @@ let bell: Row[];
 
 const store = new Map<string, string>();
 const GRANT_KEY = "takeover-grant:900";
+/** A user's alliance, for `invalidateSight`'s bare-userid form (the previous owner). */
+let allianceOf: Map<number, number | null>;
+/** Keys dropped via Redis, in call order (issue #329, #330 WP1). */
+let delCalls: string[];
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -81,7 +85,17 @@ mock.module("../../../server.js", () => ({
         user.save = takerSave;
       },
       findOne: async (_entity: unknown, where: Row) =>
-        cells.find((cell) => cell.baseid === where.baseid && where.world === WORLD) ?? null,
+        "baseid" in where
+          ? (cells.find((cell) => cell.baseid === where.baseid && where.world === WORLD) ?? null)
+          // `invalidateSight`'s `allianceIdOf`, looking up the previous owner by bare userid.
+          : { userid: where.userid, alliance_id: allianceOf.get(where.userid as number) ?? null },
+      // A taker (or previous owner) with an alliance makes `runningPowerups`
+      // read it (`services/alliance/powerups.ts`'s `alliancePowerup`); no
+      // powerup row is ever seeded, so every alliance's three come back idle.
+      find: async () => [],
+      create: (_entity: unknown, data: Row) => data,
+      persist: () => {},
+      flush: async () => {},
       transactional: async (run: (em: typeof txEm) => Promise<unknown>) => run(txEm),
     },
   },
@@ -91,7 +105,10 @@ mock.module("../../../server.js", () => ({
       store.set(key, value);
       return "OK";
     },
-    del: async (key: string) => (store.delete(key) ? 1 : 0),
+    del: async (key: string) => {
+      delCalls.push(key);
+      return store.delete(key) ? 1 : 0;
+    },
   },
 }));
 
@@ -114,8 +131,11 @@ mock.module("../../../services/base/attackSessionStore.js", () => ({
 
 const { takeoverCell } = await import("./takeoverCell.js");
 
-const run = async (body: Row) => {
-  const ctx = { authUser: { userid: TAKER, username: "taker", alliance_id: null }, request: { body } } as unknown as Context;
+const run = async (body: Row, takerAllianceId: number | null = null) => {
+  const ctx = {
+    authUser: { userid: TAKER, username: "taker", alliance_id: takerAllianceId },
+    request: { body },
+  } as unknown as Context;
   try {
     await takeoverCell(ctx, async () => {});
     return { ok: true as const, body: ctx.body as Row, reason: undefined };
@@ -168,6 +188,8 @@ beforeEach(() => {
   sessions = new Set();
   inRange = true;
   store.clear();
+  allianceOf = new Map();
+  delCalls = [];
   // By default the taker has just destroyed the outpost and holds its grant.
   grantTo(TAKER);
 });
@@ -387,5 +409,42 @@ describe("takeoverCell achievements (#204)", () => {
     camp().damage = 10;
     expect((await run({ baseid: CAMP, shiny: "1" })).ok).toBe(false);
     expect(record().s.wmoutpost).toBe(0);
+  });
+});
+
+/**
+ * A takeover changes `save.outposts` for both the taker and the previous
+ * owner, which also feeds each one's alliance's shared union — so both drop
+ * `invalidateSight`, not just `invalidatePlayerSight` (a bug fixed alongside
+ * issue #329, #330 WP1's named gaps; a wild camp has no previous owner).
+ */
+describe("sight cache invalidation (#329, #330 WP1)", () => {
+  test("the taker's own cache drops; their alliance's too, if they have one", async () => {
+    expect((await run({ baseid: OUTPOST }, 42)).ok).toBe(true);
+
+    expect(delCalls).toContain(`sight:${TAKER}`);
+    expect(delCalls).toContain("sight:ally:42");
+  });
+
+  test("a taker with no alliance drops only their own cache", async () => {
+    expect((await run({ baseid: OUTPOST })).ok).toBe(true);
+
+    expect(delCalls).toContain(`sight:${TAKER}`);
+    expect(delCalls.some((key) => key.startsWith("sight:ally:"))).toBe(false);
+  });
+
+  test("the previous owner's own cache drops; their alliance's too, if they have one", async () => {
+    allianceOf.set(OWNER, 99);
+
+    expect((await run({ baseid: OUTPOST })).ok).toBe(true);
+
+    expect(delCalls).toContain(`sight:${OWNER}`);
+    expect(delCalls).toContain("sight:ally:99");
+  });
+
+  test("taking an unowned wild camp drops only the taker's cache", async () => {
+    expect((await run({ baseid: CAMP, shiny: "1" })).ok).toBe(true);
+
+    expect(delCalls).toEqual([`sight:${TAKER}`]);
   });
 });

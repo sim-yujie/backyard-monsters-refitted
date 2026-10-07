@@ -191,6 +191,12 @@ export const baseLoad: KoaController = async (ctx) => {
   const isInferno = baseSave.type === BaseType.INFERNO;
   const isAttack = ATTACK_MODES.has(type);
 
+  // Read before any catch-up below might finish a Flinger upgrade or heal
+  // historic drift (issue #94); compared against the post-sync value near
+  // the bottom of this function to invalidate the Map Room 2 fog of war
+  // sight cache only when it actually moved (issue #329, #330 WP1).
+  const flingerBefore = isOwner ? baseSave.flinger : undefined;
+
   // The target cell's height, which stretches an outpost's tower range in the
   // engine; the attack save's loot replay reads the same stored value, so both
   // fight the same battle (issue #179, `cellHeight.ts`). The owner's own
@@ -262,6 +268,17 @@ export const baseLoad: KoaController = async (ctx) => {
   if (isOwner && (clearExpiredStoreItems(baseSave) || levelsChanged)) {
     postgres.em.persist(baseSave);
     await postgres.em.flush();
+  }
+
+  if (isOwner) {
+    // Imported on use: `sightService.ts` reaches the server's shared Redis
+    // handle through a chain that loops back to this module (`tips.ts` ->
+    // `yardAction.ts` -> `armies.ts` -> ... ), the same reason
+    // `services/yard/mapRoom.ts`'s `joinWorld` imports late too.
+    const { invalidateSightIfFlingerChanged } = await import(
+      "../../../services/maproom/sight/sightService.js"
+    );
+    await invalidateSightIfFlingerChanged(user, flingerBefore, baseSave.flinger);
   }
 
   const filteredSave = await mapSaveData(baseSave, user);

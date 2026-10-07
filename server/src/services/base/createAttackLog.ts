@@ -2,6 +2,7 @@ import { AttackLogs } from "../../database/models/attacklogs.model.js";
 import { Save } from "../../database/models/save.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
+import { invalidatePlayerSight } from "../maproom/sight/sightService.js";
 
 /**
  * Creates a new attack log entry in the database
@@ -37,4 +38,9 @@ export const createAttackLog = async (attacker: User, defender: User, save: Save
 
   postgres.em.persist(attackLog);
   await postgres.em.flush();
+
+  // The defender's attacker history just grew, so a Map Room 2 fog of war
+  // sight built before this attack would be missing their new revealed base
+  // (issue #329, `docs/design/fog-of-war.md` §9).
+  await invalidatePlayerSight(defender.userid);
 };

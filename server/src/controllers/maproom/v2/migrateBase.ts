@@ -9,6 +9,7 @@ import { BaseType } from "../../../enums/Base.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { joinOrCreateWorld } from "../../../services/maproom/v2/joinOrCreateWorld.js";
 import { leaveWorld } from "../../../services/maproom/v2/leaveWorld.js";
+import { invalidateSight } from "../../../services/maproom/sight/sightService.js";
 import { MapRoomCell, MapRoomVersion } from "../../../enums/MapRoom.js";
 import { relocateRefusedErr, shinyLockedErr } from "../../../errors/errors.js";
 import { MigrateBaseSchema } from "../../../schemas/MigrateBaseSchema.js";
@@ -91,6 +92,8 @@ export const migrateBase: KoaController = async (ctx) => {
     if (refusal) throw relocateRefusedErr(refusal);
 
     await leaveWorld(currentUser, userSave);
+    // Invalidates the caller's sight itself (a new world, a new home cell —
+    // issue #329, #330 WP1).
     await joinOrCreateWorld(currentUser, userSave, postgres.em, true);
 
     ctx.status = Status.OK;
@@ -198,6 +201,12 @@ export const migrateBase: KoaController = async (ctx) => {
 
     return { coords: [outpostX, outpostY] };
   });
+
+  // The main yard just moved onto the outpost's cell, and the outpost it
+  // used is gone: both change the caller's own sight (issue #329, #330 WP1).
+  // A no-op on the cooldown-rejection branch above, which returns before
+  // anything moves.
+  if (!("cantMoveTill" in outcome)) await invalidateSight(currentUser);
 
   ctx.status = Status.OK;
   ctx.body = { error: 0, ...outcome };

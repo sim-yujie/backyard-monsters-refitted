@@ -75,6 +75,9 @@ const txEm = {
   },
 };
 
+/** Keys `invalidateSight` dropped (issue #329, #330 WP1). */
+let delCalls: string[] = [];
+
 mock.module("../../../server.js", () => ({
   postgres: {
     em: {
@@ -84,7 +87,12 @@ mock.module("../../../server.js", () => ({
       transactional: async (run: (em: typeof txEm) => Promise<unknown>) => run(txEm),
     },
   },
-  redis: {},
+  redis: {
+    del: async (key: string) => {
+      delCalls.push(key);
+      return 0;
+    },
+  },
 }));
 
 mock.module("../../../services/base/attackSessionStore.js", () => ({
@@ -161,6 +169,7 @@ beforeEach(() => {
   flushed = 0;
   sessions = new Set();
   lockedRows = [];
+  delCalls = [];
 });
 
 const untouched = () => {
@@ -301,6 +310,29 @@ describe("migrateBase, type=outpost", () => {
     const result = await run({ baseid: MY_OUTPOST, shiny: "1500" });
     expect(result.body).toMatchObject({ error: 0, cantMoveTill: until });
     untouched();
+    // Never reaches `invalidateSight` (issue #329, #330 WP1): nothing moved.
+    expect(delCalls).toEqual([]);
+  });
+
+  describe("sight cache invalidation (#329, #330 WP1)", () => {
+    test("a completed relocate drops the caller's own cached sight", async () => {
+      const result = await run({ baseid: MY_OUTPOST, shiny: "1" });
+      expect(result.ok).toBe(true);
+      expect(delCalls).toContain(`sight:${ME}`);
+    });
+
+    test("...and their alliance's too, if they have one", async () => {
+      const result = await run({ baseid: MY_OUTPOST, shiny: "1" }, { userid: ME, shiny_locked: false, alliance_id: 7 });
+      expect(result.ok).toBe(true);
+      expect(delCalls).toContain(`sight:${ME}`);
+      expect(delCalls).toContain("sight:ally:7");
+    });
+
+    test("a refused relocate (another refusal reason) does not invalidate", async () => {
+      const result = await run({ baseid: MY_OUTPOST, shiny: "1500" }, { userid: ME, shiny_locked: true });
+      expect(result.ok).toBe(false);
+      expect(delCalls).toEqual([]);
+    });
   });
 });
 
