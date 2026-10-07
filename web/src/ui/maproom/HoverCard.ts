@@ -1,4 +1,4 @@
-import { CellType, isPlayerCell, isWaterCell, type MapCell } from "@/api/types";
+import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell } from "@/api/types";
 import { avatarOf, avatarUrl } from "@/game/avatars";
 import { cellsText, type ReachAnswer } from "@/game/maproom/attackRange";
 import { TRIBE_COLOURS } from "@/game/maproom/cellVisuals";
@@ -96,7 +96,7 @@ export class HoverCard {
 
 /** A camp's or a yard's name and level as the card titles it. */
 export const hoverTitle = (payload: MapCell): string | null => {
-  if (isWaterCell(payload)) return null;
+  if (isWaterCell(payload) || isFogCell(payload)) return null;
   if (!isPlayerCell(payload)) return `${payload.n} camp · Level ${payload.l}`;
   const outpost = payload.b === CellType.OUTPOST;
   const name = payload.mine === 1 ? (outpost ? "Your outpost" : "Your yard") : payload.n;
@@ -111,7 +111,7 @@ export const hoverContentFor = (
   payload: MapCell | undefined,
   reach: ReachAnswer,
 ): HoverCardContent | null => {
-  if (!payload || isWaterCell(payload)) return null;
+  if (!payload || isWaterCell(payload) || isFogCell(payload)) return null;
   const title = hoverTitle(payload);
   if (!title) return null;
 

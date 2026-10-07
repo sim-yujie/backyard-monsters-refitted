@@ -9,6 +9,7 @@ import {
   debugDataLimiter,
   getAreaLimiter,
   getCellsLimiter,
+  sightLimiter,
   loginLimiter,
   forgotPasswordEmailLimiter,
   forgotPasswordIpLimiter,
@@ -67,6 +68,7 @@ import { raidDevDue, raidDevTrojan, raidEngage, raidFinish, raidFrequency, raidP
 import { botCheck, botCheckAnswer, botCheckForce, devCheckEnabled } from "./controllers/maproom/botCheck.js";
 
 import { getArea } from "./controllers/maproom/v2/getArea.js";
+import { getSight } from "./controllers/maproom/v2/getSight.js";
 import { getSnapshot } from "./controllers/maproom/v2/bulk/getSnapshot.js";
 import { getTerrain } from "./controllers/maproom/v2/bulk/getTerrain.js";
 import { getAlliances } from "./controllers/maproom/v2/bulk/getAlliances.js";
@@ -212,6 +214,7 @@ if (devCheckEnabled()) {
 * 📦 Map Room 2
 * ──────────────────────────────────────────────── */
 router.post("/worldmapv2/getarea", verifyUserAuth, verifyAccountStatus, getAreaLimiter, logRequest, getArea);
+router.post("/worldmapv2/sight", verifyUserAuth, verifyAccountStatus, sightLimiter, logRequest, getSight);
 router.get("/worldmapv2/terrain", verifyApiConsumer, terrainLimiter, logRequest, getTerrain);
 router.get("/worldmapv2/snapshot", verifyApiConsumer, snapshotLimiter, logRequest, getSnapshot);
 router.get("/worldmapv2/alliances", verifyApiConsumer, alliancesLimiter, logRequest, getAlliances);

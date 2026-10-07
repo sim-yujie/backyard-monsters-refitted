@@ -638,6 +638,11 @@
   background: var(--colour-terrain-water);
 }
 
+/* Fog of war (#330); the real cloud art is #331. */
+.mr2-cell__picture--fog {
+  background: var(--colour-surface-sunken);
+}
+
 .mr2-cell__picture--loading {
   background: var(--colour-surface-sunken);
 }

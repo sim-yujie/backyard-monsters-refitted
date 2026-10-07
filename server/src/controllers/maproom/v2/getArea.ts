@@ -17,6 +17,21 @@ import { mapRoomDisabledErr } from "../../../errors/errors.js";
 import { getAllianceRoster } from "../../../services/alliance/allianceData.js";
 import { visibleCredits } from "../../../services/user/shinyLock.js";
 import { emptyAreaResponse, hasWorldPlacement } from "../../../services/maproom/v2/emptyAreaResponse.js";
+import { getPlayerSight } from "../../../services/maproom/sight/sightService.js";
+import { isVisible } from "../../../game-rules/maproom/sight.js";
+
+/**
+ * Wraps a zone coordinate to the world's `0..size-1`: `getarea`'s 11×11 block
+ * can run past the world edge (`x+10` etc.), unwrapped, same as today. Only
+ * the fog of war's visibility test needs the wrapped form, so a cell near
+ * the seam compares correctly against `revealed`'s exact coordinates
+ * (`fog-of-war.md` §5.1 step 3); the hex-ring sight circles already wrap on
+ * their own (`game-rules/maproom/range.ts`'s `hexDistance`).
+ */
+const wrap = (n: number, size: number): number => ((n % size) + size) % size;
+
+/** `x,y` as a `Map` key for a zone's per-cell visibility lookup. */
+const cellKey = (x: number, y: number): string => `${x},${y}`;
 
 /**
  * Schema for validating the request body when getting area data.
@@ -119,6 +134,48 @@ export const getArea: KoaController = async (ctx) => {
   const currentX = x;
   const currentY = y;
 
+  // The fog of war (issue #330, `docs/design/fog-of-war.md` §5.1): what P can
+  // see of this zone, before any `world_map_cell` row is touched. `sv` rides
+  // on every response below so the client can tell its cached zones apart
+  // from a sight that has changed.
+  const sight = await getPlayerSight(user);
+
+  const zoneVisibility = new Map<string, boolean>();
+  for (let cellX = currentX; cellX <= currentX + width; cellX++) {
+    for (let cellY = currentY; cellY <= currentY + height; cellY++) {
+      const wrapped = { x: wrap(cellX, MapRoom2.WIDTH), y: wrap(cellY, MapRoom2.HEIGHT) };
+      const visible = devConfig.disableFogOfWar || isVisible(wrapped, sight.sources, sight.revealed);
+      zoneVisibility.set(cellKey(cellX, cellY), visible);
+    }
+  }
+
+  const credits = visibleCredits(user, placedSave.credits);
+  const extras = sendresources === 1 ? { resources: placedSave.resources, credits } : {};
+
+  // No sight source or revealed cell touches this zone at all: answer at
+  // once with every cell fogged, no `world_map_cell` query, no owner data.
+  if (![...zoneVisibility.values()].some(Boolean)) {
+    const cells: Record<number, Record<number, unknown>> = {};
+    for (let cellX = currentX; cellX <= currentX + width; cellX++) {
+      cells[cellX] = {};
+      for (let cellY = currentY; cellY <= currentY + height; cellY++) {
+        cells[cellX][cellY] = { fog: 1 };
+      }
+    }
+
+    ctx.status = Status.OK;
+    ctx.body = {
+      error: 0,
+      x: currentX,
+      y: currentY,
+      data: cells,
+      alliancedata: await getAllianceRoster(user.alliance_id ? [user.alliance_id] : []),
+      sv: sight.sv,
+      ...extras,
+    };
+    return;
+  }
+
   // First, get persistant cells which have been stored in the database.
   const dbCells = await postgres.em.find(
     WorldMapCell,
@@ -137,11 +194,16 @@ export const getArea: KoaController = async (ctx) => {
     { populate: ["save"], fields: CELL_SAVE_FIELDS }
   );
 
+  // Hidden rows are dropped here, before owners, online status, truces and
+  // invites are loaded, so nothing about them reaches the response or the
+  // logs (`fog-of-war.md` §5.1 step 4).
+  const visibleDbCells = dbCells.filter((cell) => zoneVisibility.get(cellKey(cell.x, cell.y)));
+
   // Batch load all unique cell owners in a single query
-  const ownerIds = [...new Set(dbCells.map(cell => cell.uid).filter(Boolean))] as number[];
+  const ownerIds = [...new Set(visibleDbCells.map(cell => cell.uid).filter(Boolean))] as number[];
 
   // The player's own outposts here, for their invitations still waiting (`pi`, #205).
-  const ownOutposts = dbCells
+  const ownOutposts = visibleDbCells
     .filter((cell) => cell.uid === user.userid && cell.base_type === MapRoomCell.OUTPOST)
     .map((cell) => cell.baseid);
 
@@ -166,7 +228,7 @@ export const getArea: KoaController = async (ctx) => {
   const allianceIds = new Set<number>();
 
   if (user.alliance_id) allianceIds.add(user.alliance_id);
-  
+
   for (const owner of cellOwners.values()) {
     if (owner.alliance_id) allianceIds.add(owner.alliance_id);
   }
@@ -174,13 +236,13 @@ export const getArea: KoaController = async (ctx) => {
   const alliancedata = await getAllianceRoster([...allianceIds]);
 
   const cells: Record<number, Record<number, unknown>> = {};
-  for (const cell of dbCells) {
+  for (const cell of visibleDbCells) {
     if (!cells[cell.x]) cells[cell.x] = {};
 
     cells[cell.x][cell.y] = await createCellData(cell, worldid, ctx, cellOwners);
   }
 
-  // Then, fill the remaining cells in-memory
+  // Then, fill the remaining cells: fog where hidden, else generated in-memory.
   const noise = generateNoise(worldid);
   for (let cellX = currentX; cellX <= currentX + width; cellX++) {
     // Ensure the cellX object exists in the cells map to append the cellY object to it
@@ -188,6 +250,12 @@ export const getArea: KoaController = async (ctx) => {
     for (let cellY = currentY; cellY <= currentY + height; cellY++) {
       // The cell already exists, skip it
       if (cells[cellX][cellY]) continue;
+
+      if (!zoneVisibility.get(cellKey(cellX, cellY))) {
+        cells[cellX][cellY] = { fog: 1 };
+        continue;
+      }
+
       const terrainHeight = getTerrainHeight(noise, cellX, cellY);
       // Create a cell in-memory, skip the world being defined for memory efficency
       const inMemoryCell = new WorldMapCell(
@@ -200,8 +268,6 @@ export const getArea: KoaController = async (ctx) => {
     }
   }
 
-  const credits = visibleCredits(user, placedSave.credits);
-
   ctx.status = Status.OK;
   ctx.body = {
     error: 0,
@@ -209,9 +275,7 @@ export const getArea: KoaController = async (ctx) => {
     y: currentY,
     data: cells,
     alliancedata,
-    ...(sendresources === 1 && {
-      resources: placedSave.resources,
-      credits,
-    }),
+    sv: sight.sv,
+    ...extras,
   };
 };

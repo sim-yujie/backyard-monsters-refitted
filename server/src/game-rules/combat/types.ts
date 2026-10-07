@@ -415,7 +415,7 @@ export interface MalformedIssue {
  * A blob the rules do not model, passed through rather than parsed.
  *
  * The defender's `monsters` carries housing, bunkers and hatchery state in a
- * shape the server treats as opaque (`docs/server-api.md:783`); the audit
+ * shape the server treats as opaque (`docs/server-api.md:784`); the audit
  * clamps the counts it understands and copies the rest, so the type says only
  * that it is an object.
  */

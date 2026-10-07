@@ -761,6 +761,18 @@ export interface WaterCell {
 }
 
 /**
+ * A cell outside the viewer's Map Room 2 fog of war sight (issue #330,
+ * `docs/design/fog-of-war.md` §5.1): nothing else is sent about it, not even
+ * terrain height, so a hidden cell can never be told apart from another by
+ * its payload. Drawing fog cells is #331; this shape only lets the client
+ * compile against `getarea`'s new wire format.
+ */
+export interface FogCell {
+  fog: 1;
+  b?: undefined;
+}
+
+/**
  * A wild monster camp. Also what every unoccupied land cell is served as —
  * Map Room 2 has no distinct "empty land" shape.
  */
@@ -826,7 +838,7 @@ export interface PlayerCell {
   m?: Record<string, unknown>;
 }
 
-export type MapCell = WaterCell | WildMonsterCell | PlayerCell;
+export type MapCell = WaterCell | WildMonsterCell | PlayerCell | FogCell;
 
 /** `data[x][y]`, exactly as the client stores it (`_zones[zoneId].data`). */
 export type AreaCellGrid = Record<string, Record<string, MapCell>>;
@@ -849,10 +861,19 @@ export interface GetAreaResponse extends ApiEnvelope {
   alliancedata?: unknown;
   resources?: Resources;
   credits?: number;
+  /**
+   * The viewer's Map Room 2 sight version (issue #330): a short fingerprint
+   * of their sight sources and revealed cells, so the client can tell when
+   * its cached zones need refetching without comparing the two lists itself.
+   */
+  sv?: string;
 }
 
+/** Narrows a cell payload to one outside the viewer's fog of war sight. */
+export const isFogCell = (cell: MapCell): cell is FogCell => "fog" in cell;
+
 /** Narrows a cell payload to water, which carries terrain height only. */
-export const isWaterCell = (cell: MapCell): cell is WaterCell => cell.b === undefined;
+export const isWaterCell = (cell: MapCell): cell is WaterCell => cell.b === undefined && !isFogCell(cell);
 
 /** Narrows a cell payload to a player-owned main yard or outpost. */
 export const isPlayerCell = (cell: MapCell): cell is PlayerCell =>

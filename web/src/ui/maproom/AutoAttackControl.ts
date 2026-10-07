@@ -1,5 +1,5 @@
 import type { AutoAttackPlanResponse } from "@/api/autoAttack";
-import { CellType, isWaterCell, type MapCell } from "@/api/types";
+import { CellType, isFogCell, isWaterCell, type MapCell } from "@/api/types";
 import type { OffsetCell } from "@/game/HexGrid";
 import { noPlanText, planSourceText, repeatRefusal, shortfallText } from "@/ui/attack/autoAttackText";
 import { el, icon } from "@/ui/maproom1/icons";
@@ -76,7 +76,10 @@ export class AutoAttackControl implements CellPanelAction {
 
   setCell(cell: OffsetCell, payload: MapCell | undefined): void {
     const camp = campOf(payload);
-    const key = camp && payload && !isWaterCell(payload) ? `${camp.baseid}:${payload.dm}:${payload.d}` : null;
+    const key =
+      camp && payload && !isWaterCell(payload) && !isFogCell(payload)
+        ? `${camp.baseid}:${payload.dm}:${payload.d}`
+        : null;
     const sameCell = this.cell?.col === cell.col && this.cell?.row === cell.row;
     this.cell = cell;
     if (sameCell && key === this.key) return;
