@@ -238,7 +238,7 @@ Pixi reads the resolution from the name, so the 1x cell rectangles in the table 
 and the loader turns on mipmaps for it so it does not shimmer when drawn small. Remove the
 entry to go back to the original.
 
-Two are switched on as a trial.
+Three are switched on as a trial.
 
 The Pokey (C1): `monsters/pokey-repaint@4x.png` (and a 1x `pokey-repaint.png`),
 built by `web/tools/gen-pokey-sprite.py` from two Gemini paintings, the faceless body and the
@@ -253,3 +253,11 @@ the first picture it was also given that first result as a style key. The origin
 so the body stays put between flap frames. The original sheet is its own mirror image (column c
 flipped is column 16 - c, one pixel over), so only columns 8 to 24 were painted and the script
 flips the rest.
+
+The Bolt (C3): `monsters/bolt-repaint@4x.png` (and a 1x `bolt-repaint.png`), built by
+`web/tools/gen-bolt-sprite.py` from Gemini paintings in the portrait's painted style (not cel). Gemini
+was given the original frames blown up 8x, four headings per picture (2x2 grid, 8 pictures), the portrait
+and the approved 4-direction test as a style key (prompt: `web/tools/bolt-kit/run-full.sh`), on a magenta
+ground. The script keys it, scales each heading so the body covers the original's body box (smoothed over
+neighbouring headings), lifts it brighter, and redraws the soft ground shadow. Sheet: 30 headings x 1 row,
+30x28 cells, anchor 7,20.
