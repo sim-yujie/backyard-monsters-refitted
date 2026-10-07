@@ -285,12 +285,12 @@ export function flyerAltitude(creatureId: string): number {
 /**
  * Sheets repainted for the revamp, by original file. Each is the original
  * layout drawn at four times the size; the `@4x` in the name is how Pixi knows
- * the resolution, so the table's 1x cell rectangles still frame it. An art
- * trial: the Teratorn is next (`web/tools/gen-teratorn-sprite.py`), as
- * `"monsters/14.v1.png": "monsters/14-repaint@4x.png"` once its sheet is
- * painted. Remove an entry to go back to the original sheet.
+ * the resolution, so the table's 1x cell rectangles still frame it. Remove an
+ * entry to go back to the original sheet.
  */
-export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {};
+export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
+  "monsters/14.v1.png": "monsters/14-repaint@4x.png", // Teratorn art trial
+};
 
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */
 export const isHighResolutionSheet = (url: string): boolean => /@\d+x\.\w+$/.test(url);
