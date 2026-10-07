@@ -12,6 +12,7 @@ import {
   MARKER_FILL_COLOUR,
   OWN_PLATE_TEXT_COLOUR,
   OutpostKit,
+  SHIELD_COLOUR,
   appearanceOf,
   hexWidthAt,
   type CellAppearance,
@@ -109,6 +110,14 @@ const BUILDING_HEIGHT = CELL_HEIGHT * 0.85;
 const BUILDING_FOOT_Y = CELL_HEIGHT * 0.12;
 /** Nominal half-height used only to place the invite dot near the building's edge. */
 const BUILDING_INVITE_RADIUS = BUILDING_HEIGHT * 0.4;
+
+/**
+ * The faint shield bubble over a protected or truced cell's building (#334,
+ * owner decision 2026-10-07): a little larger than the building picture so it
+ * reads as a bubble round it, not a patch on it.
+ */
+const SHIELD_BUBBLE_SCALE = 1.2;
+const SHIELD_BUBBLE_ALPHA = 0.4;
 
 /** The dot on the player's own outpost while an invitation to move onto it waits (#205). */
 const INVITE_DOT_RADIUS = CELL_HEIGHT * 0.11;
@@ -411,12 +420,12 @@ export class MapChunk {
    * filter dims every sprite this draws together when the cell does not match
    * it.
    *
-   * Dropped in this redraw: the old ring that showed damage protection or an
-   * active truce in a different colour (`appearance.shielded`). The Flash
-   * reference (#334) does not show one on a player cell, and no replacement
-   * was specified - `shielded` is still computed in `cellVisuals.ts` but
-   * nothing reads it here. Flagged for the owner: protection/truce currently
-   * has no visual on Map Room 2 any more.
+   * A cell under damage protection or an active truce (`appearance.shielded`)
+   * wears a faint blue bubble over its building picture (#334, owner decision
+   * 2026-10-07) - the earlier redraw dropped the old vector ring with no
+   * replacement; this is that replacement, drawn in `bases` so it sits over
+   * the building but under the star and the plate (both in later layers), and
+   * dims with the rest of the cell under the kit filter.
    */
   private addPlayer(appearance: CellAppearance, x: number, y: number): void {
     const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
@@ -435,6 +444,16 @@ export class MapChunk {
       }
       sprite.alpha = alpha;
       this.bases.addChild(sprite);
+
+      if (appearance.shielded) {
+        const bubble = new Sprite(this.atlas.shieldBubble);
+        bubble.anchor.set(0.5, 1);
+        bubble.setSize(sprite.width * SHIELD_BUBBLE_SCALE, sprite.height * SHIELD_BUBBLE_SCALE);
+        bubble.position.set(footX, footY);
+        bubble.tint = SHIELD_COLOUR;
+        bubble.alpha = SHIELD_BUBBLE_ALPHA * alpha;
+        this.bases.addChild(bubble);
+      }
     }
 
     if (appearance.invitePending) {

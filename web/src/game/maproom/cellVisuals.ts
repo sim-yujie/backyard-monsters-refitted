@@ -36,8 +36,10 @@ export interface CellAppearance {
   /** A camp's level on its badge. Empty means no badge. */
   badge: string;
   /**
-   * A player's name plate (#176): "Bramblefoot  24", or "You" and "Outpost"
-   * on the player's own. Empty means no plate.
+   * A player's name plate (#176): "Bramblefoot  24", username and level, the
+   * same on the viewer's own cells as everyone else's (#334, owner decision
+   * 2026-10-07) - the gold plate and house icon mark those, not the text.
+   * Empty means no plate.
    */
   plate: string;
   /** The cell belongs to the caller: a cyan ring and plate. */
@@ -300,7 +302,11 @@ export const appearanceOf = (
       ...base,
       marker: outpost ? CellMarker.OUTPOST : CellMarker.YARD,
       markerColour: outpost ? OUTPOST_COLOUR : PLAYER_COLOUR,
-      plate: own ? (outpost ? "Outpost" : "You") : `${plateName(cell.n)}  ${cell.l}`,
+      // Every player cell's plate carries the owner's username (#334, owner
+      // decision 2026-10-07) - including the viewer's own cells, which used to
+      // say "You"/"Outpost" instead. The gold plate and house icon already
+      // mark a cell as the viewer's own, so the text no longer needs to.
+      plate: `${plateName(cell.n)}  ${cell.l}`,
       own,
       shielded: cell.p === 1 || truceActive,
       invitePending: own && outpost && Number(cell.pi) > 0,

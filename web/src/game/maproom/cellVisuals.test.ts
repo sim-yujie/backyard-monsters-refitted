@@ -75,11 +75,11 @@ describe("appearanceOf", () => {
     expect(appearanceOf(player({ mine: 0, l: 99 }), 0).star).toBe("99");
   });
 
-  it("plates the player's own yard You and their outpost Outpost", () => {
-    expect(appearanceOf(player({ mine: 1 }), 0)).toMatchObject({ plate: "You", own: true });
+  it("plates the viewer's own yard and outpost with their username, same as anyone else's (#334)", () => {
+    expect(appearanceOf(player({ mine: 1 }), 0)).toMatchObject({ plate: "Bramblefoot  24", own: true });
     expect(appearanceOf(player({ mine: 1, b: 3 }), 0)).toMatchObject({
       marker: CellMarker.OUTPOST,
-      plate: "Outpost",
+      plate: "Bramblefoot  24",
     });
   });
 

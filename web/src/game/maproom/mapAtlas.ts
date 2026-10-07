@@ -107,6 +107,13 @@ export class MapAtlas {
   readonly shieldIcon: Texture;
   /** Relation icon: crossed swords, for a cell that attacked the viewer (#334). */
   readonly swordsIcon: Texture;
+  /**
+   * A faint circular bubble drawn over a player cell's building while it has
+   * damage protection or an active truce (#334). Replaces the vector ring the
+   * old map drew round a protected base; a sprite scales and tints it to sit
+   * over the building picture instead.
+   */
+  readonly shieldBubble: Texture;
 
   private readonly owned: Texture[];
 
@@ -238,6 +245,10 @@ export class MapAtlas {
         .stroke({ width: swordWidth, color: 0xffffff, cap: "round" }),
     );
 
+    this.shieldBubble = bake(renderer, frame(MARKER_UNIT + 1, MARKER_UNIT + 1), (g) =>
+      g.circle(0, 0, MARKER_UNIT).fill(0xffffff),
+    );
+
     this.owned = [
       this.hex,
       this.outlineFine,
@@ -252,6 +263,7 @@ export class MapAtlas {
       this.houseIcon,
       this.shieldIcon,
       this.swordsIcon,
+      this.shieldBubble,
     ];
   }
 
