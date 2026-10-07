@@ -52,6 +52,9 @@ const RING_WIDTH = 6;
 /** Half the height of a name plate, and the radius of its ends. */
 export const PLATE_HALF_HEIGHT = 16;
 
+/** Half-width the level star and the relation icons are baked at. */
+export const ICON_UNIT = 32;
+
 const hexPoints = (scale: number): number[] => [
   -HALF_WIDTH * scale,
   0,

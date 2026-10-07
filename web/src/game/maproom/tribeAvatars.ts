@@ -105,8 +105,13 @@ export class TribeAvatars {
   }
 }
 
-/** A view of the same image cropped to the pixels that are actually drawn. */
-const trim = (texture: Texture): Texture => {
+/**
+ * A view of the same image cropped to the pixels that are actually drawn.
+ *
+ * Exported for `buildingAvatars.ts` (#334), which trims the Town Hall and
+ * outpost map pictures the same way and for the same reason.
+ */
+export const trim = (texture: Texture): Texture => {
   const source = texture.source;
   const bounds = opaqueBounds(texture);
   return new Texture({
