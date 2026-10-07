@@ -1,4 +1,4 @@
-import { CellType, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
+import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
 import { devDetails } from "@/app/devDetails";
 import { avatarOf, avatarUrl } from "@/game/avatars";
 import type { OffsetCell } from "@/game/HexGrid";
@@ -413,6 +413,15 @@ export class CellPanel {
       return;
     }
 
+    // Fog of war (issue #330, `docs/design/fog-of-war.md` §8): nothing was
+    // sent about this cell, so nothing here but where it is and that it can
+    // still be bookmarked. The clouds and sight-edge feather are #331.
+    if (isFogCell(payload)) {
+      this.setHead({ kind: "fog" }, "Covered in fog", "", `Outside your flingers' reach · ${where}`);
+      this.setActions("bookmark");
+      return;
+    }
+
     if (isPlayerCell(payload)) {
       this.renderPlayer(cell, payload, where);
       return;
@@ -539,7 +548,7 @@ export class CellPanel {
 
   private setHead(
     picture:
-      | { kind: "loading" | "water" }
+      | { kind: "loading" | "water" | "fog" }
       | { kind: "tribe"; tribe: string; faded: boolean }
       | { kind: "player"; picture: string | null; uid: number; mine: boolean },
     title: string,

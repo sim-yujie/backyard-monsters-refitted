@@ -1,5 +1,5 @@
 import { WATER_MAX_HEIGHT } from "@/config";
-import { CellType, isPlayerCell, isWaterCell, type MapCell } from "@/api/types";
+import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell } from "@/api/types";
 import { avatarOf, type AvatarId } from "@/game/avatars";
 
 /**
@@ -159,9 +159,34 @@ export const loadingAppearance = (): CellAppearance => ({
   loading: true,
 });
 
+/**
+ * A placeholder colour for a fogged cell, distinct from {@link LOADING_COLOUR}
+ * — the design (`docs/design/fog-of-war.md` §6) wants fog and "not loaded
+ * yet" to never look the same. The actual clouds and sight-edge feather are
+ * issue #331; this is only the server's `{ fog: 1 }` kept from crashing the
+ * renderer until then.
+ */
+export const FOG_COLOUR = 0x1a1e24;
+
+/** The appearance of a cell outside the viewer's fog of war sight (#330, #331 draws the real one). */
+export const fogAppearance = (): CellAppearance => ({
+  terrain: FOG_COLOUR,
+  marker: CellMarker.NONE,
+  markerColour: 0,
+  tribe: "",
+  avatar: null,
+  badge: "",
+  plate: "",
+  own: false,
+  shielded: false,
+  invitePending: false,
+  loading: false,
+});
+
 /** Reads one cell payload into the shapes and text that represent it. */
 export const appearanceOf = (cell: MapCell | undefined, nowSeconds: number): CellAppearance => {
   if (!cell) return loadingAppearance();
+  if (isFogCell(cell)) return fogAppearance();
 
   const base = {
     terrain: terrainColour(cell.i),
@@ -213,6 +238,7 @@ export const appearanceOf = (cell: MapCell | undefined, nowSeconds: number): Cel
  */
 export const rasterColour = (cell: MapCell | undefined): number => {
   if (!cell) return LOADING_COLOUR;
+  if (isFogCell(cell)) return FOG_COLOUR;
   if (isWaterCell(cell)) return terrainColour(cell.i);
   if (isPlayerCell(cell)) {
     if (cell.mine === 1) return OWN_COLOUR;

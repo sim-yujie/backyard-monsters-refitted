@@ -242,6 +242,21 @@ export const mapRoomDisabledErr = () =>
     isClientFriendly: false,
   });
 
+/**
+ * Map Room 2's whole-world bulk base feeds (`/worldmapv2/snapshot`) for API
+ * consumers, switched off while the fog of war is on (issue #330, owner
+ * decision, `docs/design/fog-of-war.md` §5.3): the feed served every base in
+ * a world, which the fog's whole point is to stop happening.
+ * `/worldmapv2/terrain` carries no base data and is unaffected.
+ */
+export const bulkFeedDisabledErr = () =>
+  new ClientSafeError({
+    message: "This feed is switched off while Map Room 2's fog of war is on.",
+    status: Status.NOT_FOUND,
+    data: {},
+    isClientFriendly: false,
+  });
+
 export const townHallLevelErr = () =>
   new ClientSafeError({
     message: "Town Hall level 6 required to upgrade Map Room.",

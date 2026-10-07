@@ -1,5 +1,6 @@
 import {
   CellType,
+  isFogCell,
   isPlayerCell,
   isWaterCell,
   type AreaCellGrid,
@@ -109,14 +110,17 @@ export const outpostsToLoad = (
 
 /** Which load mode family a cell payload takes. */
 export const targetKind = (payload: MapCell): AttackTargetKind | null => {
-  if (isWaterCell(payload)) return null;
+  if (isWaterCell(payload) || isFogCell(payload)) return null;
   if (payload.b === CellType.WILD_MONSTER) return "wild";
   return payload.b === CellType.OUTPOST ? "outpost" : "main";
 };
 
 /** Owner username, or a wild monster camp's tribe name. */
-export const targetName = (payload: MapCell): string =>
-  isWaterCell(payload) ? "Water" : payload.n;
+export const targetName = (payload: MapCell): string => {
+  if (isWaterCell(payload)) return "Water";
+  if (isFogCell(payload)) return "Fog";
+  return payload.n;
+};
 
 /** Building type 51, the Catapult (`YARD_PROPS.as:3849`, `BUILDING51.as`). */
 const CATAPULT_TYPE = 51;
@@ -286,6 +290,7 @@ export const attackRefusal = (
 ): string | null => {
   if (!payload) return "Waiting for this zone to load.";
   if (isWaterCell(payload)) return "Water cannot be attacked.";
+  if (isFogCell(payload)) return "That cell is hidden by fog.";
   if (isPlayerCell(payload)) {
     const outpost = payload.b === CellType.OUTPOST;
     if (payload.mine === 1) return outpost ? "This is your own outpost." : "This is your own yard.";

@@ -33,6 +33,22 @@ export const getAreaLimiter = RateLimit.middleware({
 });
 
 /**
+ * Rate limit for `/worldmapv2/sight` (issue #330) - fetched on entering the
+ * map, on Refresh, and whenever a `getarea` `sv` changes, so far fewer times
+ * a minute than `getarea` itself.
+ */
+export const sightLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 30,
+  prefixKey: "sight",
+  keyGenerator: byUser("sight"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many sight requests. Please slow down." };
+  },
+});
+
+/**
  * Rate limit for the unauthenticated public read routes (worlds, leaderboards).
  * Both are Redis cached, so this bounds cache misses rather than the cached
  * path. Keyed by IP because there is no account to key on.

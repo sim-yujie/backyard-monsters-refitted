@@ -1,6 +1,7 @@
 import type { TakeoverPayment } from "@/api/maproom";
 import {
   CellType,
+  isFogCell,
   isPlayerCell,
   isWaterCell,
   type MapCell,
@@ -100,7 +101,7 @@ export const takeoverCandidate = (payload: MapCell | undefined): TakeoverCandida
  */
 export const quoteKey = (payload: MapCell | undefined): string | null => {
   const candidate = takeoverCandidate(payload);
-  if (!candidate || !payload || isWaterCell(payload)) return null;
+  if (!candidate || !payload || isWaterCell(payload) || isFogCell(payload)) return null;
   const flags = isPlayerCell(payload) ? `${payload.uid}:${payload.p}:${payload.lo}` : "0";
   return `${candidate.baseid}:${payload.b}:${payload.d}:${flags}`;
 };
