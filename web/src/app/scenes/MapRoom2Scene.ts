@@ -75,6 +75,7 @@ import { housingSpace } from "@/game/monsters/monsterCatalogue";
 import { takenOverResources, type TakeoverCandidate } from "@/game/maproom/takeover";
 import { MapInput } from "@/game/maproom/MapInput";
 import { MapRenderer } from "@/game/maproom/MapRenderer";
+import { Sight } from "@/game/maproom/Sight";
 import { ZoneStore, type ZoneError } from "@/game/maproom/ZoneStore";
 import { inWorld, type CellRange } from "@/game/maproom/zones";
 import { IncomePrediction, overdriveEndOf } from "@/game/yard/outpostIncome";
@@ -130,15 +131,34 @@ export class MapRoom2Scene implements Scene {
     bounds: mapRoomGrid.worldBounds(WORLD_WIDTH, WORLD_HEIGHT),
   });
 
+  /**
+   * The fog of war sight (#331, `docs/design/fog-of-war.md` §6): drawing-only
+   * data kept in step with every `getarea` response's `sv` (`onSightVersion`
+   * below), so the fog edge and the minimap never lag a zone fetch that
+   * already noticed the sight changed.
+   */
+  private readonly sight = new Sight({
+    onChange: () => {
+      // "No memory" (owner decision): what used to be drawn may no longer be
+      // owed to the viewer, so both caches are dropped and refilled from the
+      // current viewport rather than left to look stale until they expire.
+      this.store.dropAll();
+      this.renderer.resetSight();
+      this.store.ensureVisible(this.range);
+    },
+  });
+
   private readonly store = new ZoneStore({
     onZone: (zone) => this.renderer.applyZone(zone),
     onResources: (resources, credits) => this.syncPool(resources, credits),
     onAlliance: (id) => this.renderer.setMyAlliance(id),
     onError: (error) => this.reportError(error),
     onAuthFailure: () => this.context?.goTo(SceneName.LOGIN),
+    skipZone: (zone) => this.sight.isZoneFullyFogged(zone),
+    onSightVersion: (sv) => void this.sight.syncVersion(sv),
   });
 
-  private readonly renderer = new MapRenderer(this.store);
+  private readonly renderer = new MapRenderer(this.store, this.sight);
 
   private readonly bookmarks = new Bookmarks({
     onError: (message) => this.ui?.notices.show("bookmarks", message, { level: "warning" }),
@@ -279,7 +299,6 @@ export class MapRoom2Scene implements Scene {
         onTakenOver: (cell, candidate, quote, payment) => this.tookOver(cell, candidate, quote, payment),
         onZoom: (zoom) => this.zoomTo(zoom),
         onZoomStep: (direction) => this.zoomTo(this.camera.zoom * Math.pow(ZOOM_STEP, direction)),
-        onZoomReset: () => this.fitWorld(),
         onCellPanelClose: () => this.clearSelection(),
         onRangeToggle: (on) => {
           this.rangeOn = on;
@@ -368,7 +387,6 @@ export class MapRoom2Scene implements Scene {
       onSelect: (cell) => this.selectCell(cell),
       onZoomToCell: (cell) => this.zoomToCell(cell),
       onZoomStep: (direction) => this.zoomTo(this.camera.zoom * Math.pow(ZOOM_STEP, direction)),
-      onZoomReset: () => this.fitWorld(),
       onCancel: () => this.clearSelection(),
     });
     this.input.attach();
@@ -387,6 +405,7 @@ export class MapRoom2Scene implements Scene {
 
     // A sensible view before the network answers, replaced by the home cell.
     this.camera.centreOn(mapRoomGrid.cellToPixel(WORLD_WIDTH / 2, WORLD_HEIGHT / 2));
+    void this.sight.refresh();
     await this.loadOwnCell();
     // The tutorial's tips (issue #227).
     if (this.context === context) {
@@ -628,20 +647,6 @@ export class MapRoom2Scene implements Scene {
     this.camera.zoom = Math.min(this.camera.zoom * 2, this.camera.maxZoom);
     this.camera.centreOn(mapRoomGrid.cellToPixel(cell.col, cell.row));
     this.selectCell(cell);
-  }
-
-  /** Keyboard `0` and the Fit button: pull back until the world is on screen. */
-  private fitWorld(): void {
-    this.camera.zoom = this.camera.minZoom;
-    this.camera.centreOn(mapRoomGrid.cellToPixel(WORLD_WIDTH / 2, WORLD_HEIGHT / 2));
-    this.camera.dirty = true;
-    // Most of the world has never been loaded, and it cannot all be: say what
-    // the striped ground is (#153).
-    this.ui?.notices.show(
-      "world-view",
-      "The whole world. Striped ground is not loaded yet: zoom in anywhere to see it.",
-      { level: "info", timeoutMs: 6_000 },
-    );
   }
 
   private jumpTo(cell: OffsetCell, zoom?: number): void {
@@ -1092,6 +1097,7 @@ export class MapRoom2Scene implements Scene {
     this.store.resume();
     this.store.refreshVisible();
     void this.store.pump();
+    void this.sight.refresh();
     this.ui?.refreshTakeover();
     this.ui?.notices.show("refresh", "Refetching the visible map.", {
       level: "info",
@@ -1134,12 +1140,30 @@ export class MapRoom2Scene implements Scene {
     const shown = ui.shownCell;
     if (shown) ui.updateCell(this.store.getCell(shown.col, shown.row));
 
-    ui.setZones(this.store.loadedZoneRefs());
+    ui.setSight(this.sight.sources);
+    ui.setAttackers(this.revealedAttackers());
     ui.setStatus(
       `${this.store.loadedZones} zones · ${this.store.pendingRequests} queued · ` +
         `${this.frameCostMs.toFixed(1)} ms/frame · ` +
         `${this.renderer.lastBuildMs.toFixed(2)} ms/chunk`,
     );
+  }
+
+  /**
+   * The minimap's "revealed attacker" dots (#331): `sight.revealed` holds the
+   * player's own bases too (so they stay lit at any flinger reach), which
+   * already have their own home/outpost dot — subtracted here rather than on
+   * the server, which has no reason to tell the two apart.
+   */
+  private revealedAttackers(): OffsetCell[] {
+    const own = new Set<string>();
+    if (this.home) own.add(`${this.home.col},${this.home.row}`);
+    if (this.ownSave) {
+      for (const outpost of outpostsOf(this.ownSave)) own.add(`${outpost.cell.col},${outpost.cell.row}`);
+    }
+    return this.sight.revealed
+      .filter((cell) => !own.has(`${cell.x},${cell.y}`))
+      .map((cell) => ({ col: cell.x, row: cell.y }));
   }
 
   private reportError(error: ZoneError): void {

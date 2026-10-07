@@ -80,3 +80,19 @@ describe("Minimap from the keyboard (#153)", () => {
     minimap.destroy();
   });
 });
+
+describe("sight, outposts and attackers (#331)", () => {
+  it("draws the viewer's sight circles, outpost dots and attacker dots without throwing", () => {
+    const { minimap } = make();
+    expect(() => {
+      minimap.setSight([
+        { x: 240, y: 207, reach: 4, kind: "own" },
+        { x: 300, y: 300, reach: 3, kind: "ally" },
+      ]);
+      minimap.setOutposts([{ col: 260, row: 220 }]);
+      minimap.setAttackers([{ col: 400, row: 400 }]);
+      minimap.draw();
+    }).not.toThrow();
+    minimap.destroy();
+  });
+});
