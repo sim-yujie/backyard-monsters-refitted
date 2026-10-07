@@ -2049,13 +2049,21 @@ export class YardScene implements Scene {
   /**
    * What an outpost says as it opens: Flash's "Veni, Vidi, Vici!" when it was
    * just taken over, and the empty-outpost hint while it holds only its core.
+   *
+   * A fresh takeover of an empty outpost opens the Starter Kit shop straight
+   * away, under the banner, so dismissing "Veni, Vidi, Vici!" already finds
+   * it open (owner, 2026-10-07, issue #333): the attacker usually buys a kit
+   * right after. A later visit that still finds the outpost empty (the kit
+   * picker closed unbought) falls back to the dismissable hint instead.
    */
   private arriveAtOutpost(store: YardStore, context: SceneContext): void {
     const takenOver = this.takenOver;
     this.takenOver = null;
+    const empty = isEmptyOutpost(store.yard);
+    if (takenOver && empty) this.openKits();
     if (takenOver) showTakenOver(context.overlay.modal, takenOver.kind, takenOver.name);
     guideBus.emit("screen", { id: GuideScreen.OUTPOSTS, root: context.overlay.content, header: null });
-    if (!isEmptyOutpost(store.yard)) return;
+    if (!empty || takenOver) return;
     // Stays until dismissed, or until the first building goes up (`onStoreChange`).
     this.notices.show(OUTPOST_HINT_NOTICE, EMPTY_OUTPOST_HINT, {
       level: "info",

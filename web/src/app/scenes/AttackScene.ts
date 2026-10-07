@@ -19,6 +19,7 @@ import { consumeRaidRun, raidTarget, type RaidRun } from "@/game/raid/raidSessio
 import { tribeTitle } from "@/game/raid/raidText";
 import { Camera } from "@/game/Camera";
 import { fixedWorkSource } from "@/game/yard/buildingWork";
+import { setOwnYardTarget, type OwnYardTarget } from "@/game/yard/ownYards";
 import { readYard, type Yard } from "@/game/yard/yardModel";
 import { fellPens, yardLifeOf, type YardLife } from "@/game/yard/yardLifeModel";
 import { setYardIntent } from "@/game/yard/yardIntent";
@@ -469,6 +470,10 @@ export class AttackScene implements Scene {
       battleLayer: this.battleLayer,
       notices: this.notices,
       goToMap: () => context.goTo(SceneName.MAP),
+      goToOutpost: (outpostTarget: OwnYardTarget) => {
+        setOwnYardTarget(outpostTarget);
+        context.goTo(SceneName.YARD);
+      },
       ...(this.run
         ? {
             practice: this.run,
