@@ -5,19 +5,21 @@ import { chunkCells, type ChunkRef } from "./chunks";
 import {
   CellMarker,
   DAMAGE_COLOUR,
+  DIMMED_ALPHA,
   GRID_LINE_COLOUR,
   INVITE_COLOUR,
+  KIT_TINT,
   MARKER_FILL_COLOUR,
-  OWN_COLOUR,
   OWN_PLATE_TEXT_COLOUR,
-  PLAYER_RING_COLOUR,
-  SHIELD_COLOUR,
+  OutpostKit,
   appearanceOf,
+  hexWidthAt,
   type CellAppearance,
+  type MapViewerContext,
 } from "./cellVisuals";
 import { LabelLayer, type LabelRequest, type TextPool } from "./LabelLayer";
-import { MARKER_UNIT, PLATE_HALF_HEIGHT, type MapAtlas } from "./mapAtlas";
-import type { PlayerAvatars } from "./playerAvatars";
+import { ICON_UNIT, MARKER_UNIT, PLATE_HALF_HEIGHT, type MapAtlas } from "./mapAtlas";
+import { BuildingKind, type BuildingAvatars } from "./buildingAvatars";
 import type { TribeAvatars } from "./tribeAvatars";
 import type { ZoneStore } from "./ZoneStore";
 
@@ -34,11 +36,16 @@ import type { ZoneStore } from "./ZoneStore";
  * screen, so it is added the first time a chunk is actually shown at a tier
  * that wants it (`ensureText`).
  *
- * What it draws is the approved "one calm look" (#176, R-MR2-Map-A): toned
- * ground and light grid lines; each camp its tribe's picture with the level on
- * a round badge ringed in the tribe's colour, and no name; each player a round
- * marker with their critter, ringed white (cyan for the player's own), and a
- * name plate under it.
+ * What it draws is the approved "one calm look" (#176, R-MR2-Map-A) for camps:
+ * each its tribe's picture with the level on a round badge ringed in the
+ * tribe's colour, and no name. A player cell is Flash-faithful instead (#334,
+ * owner decision 2026-10-07): the Town Hall or outpost picture standing on the
+ * hex, a gold level star, and a rounded name plate coloured and iconed by how
+ * the cell relates to the viewer (gold+house for the viewer's own, green+
+ * shield for an alliance-mate, plain blue for everyone else - red+crossed
+ * swords for an attacker is drawn but never reached yet, see `cellVisuals.ts`).
+ * An outpost's tower also carries its Starter Kit's tint, and every sprite a
+ * cell draws dims together when the kit filter excludes it.
  */
 
 /** Detail a chunk has been asked to carry. */
@@ -91,24 +98,45 @@ const BADGE_X = CELL_WIDTH * 0.12;
 const BADGE_Y = CELL_HEIGHT * 0.15;
 const BADGE_TEXT_SIZE = CELL_HEIGHT * 0.21;
 
-/** A player's marker: a round critter, a little larger for the player's own yard. */
-const MARKER_RADIUS = CELL_HEIGHT * 0.38;
-const OWN_MARKER_RADIUS = CELL_HEIGHT * 0.44;
-const MARKER_Y = -CELL_HEIGHT * 0.14;
-/** The ring's share of the radius; the picture fills the rest. */
-const MARKER_RING_SHARE = 6 / MARKER_UNIT;
+/**
+ * A player's hex wears its Town Hall or outpost picture (#334), foot-anchored
+ * like a camp's portrait (`AVATAR_HEIGHT`/`AVATAR_BASE_Y` above), but taller:
+ * it is now the whole hex's identity, not a small critter. Needs tuning
+ * against the reference screenshot once it is on screen.
+ */
+const BUILDING_HEIGHT = CELL_HEIGHT * 0.85;
+/** Where the building's foot sits: a little above the plate, so they overlap slightly. */
+const BUILDING_FOOT_Y = CELL_HEIGHT * 0.12;
+/** Nominal half-height used only to place the invite dot near the building's edge. */
+const BUILDING_INVITE_RADIUS = BUILDING_HEIGHT * 0.4;
 
 /** The dot on the player's own outpost while an invitation to move onto it waits (#205). */
 const INVITE_DOT_RADIUS = CELL_HEIGHT * 0.11;
 /** Where on the rim: to the right, a little above the middle, clear of the plate of the cell above. */
 const INVITE_DOT_ANGLE = -Math.PI / 10;
 
-/** A player's name plate, just overlapping the foot of the marker. */
+/** The gold level star every player cell wears, top-left of the hex (#334). */
+const STAR_RADIUS = CELL_HEIGHT * 0.19;
+const STAR_X = -CELL_WIDTH * 0.32;
+const STAR_Y = -CELL_HEIGHT * 0.28;
+const STAR_TEXT_SIZE = CELL_HEIGHT * 0.2;
+const STAR_COLOUR = 0xf2c230;
+
+/** A relation icon (house/shield/swords), drawn inside the plate's left end (#334). */
+const RELATION_ICON_RADIUS = CELL_HEIGHT * 0.13;
+const RELATION_ICON_PAD = CELL_WIDTH * 0.015;
+
+/**
+ * A player's name plate, placed low in the hex so the width it has to work
+ * with (`hexWidthAt`) is enough to hold a name without spilling into the
+ * hex's neighbour (#334) - this offset is the geometry's load-bearing
+ * constant, not just a layout nicety; moving it changes how much width the
+ * plate is allowed.
+ */
 const PLATE_HEIGHT = PLATE_HALF_HEIGHT * 2;
-const PLATE_OVERLAP = CELL_HEIGHT * 0.05;
+const PLATE_Y_OFFSET = CELL_HEIGHT * 0.28;
 const PLATE_TEXT_SIZE = PLATE_HEIGHT * 0.6;
 const PLATE_PADDING = CELL_WIDTH * 0.07;
-const PLATE_MAX_TEXT = CELL_WIDTH * 1.3;
 const PLATE_ALPHA = 0.92;
 
 /**
@@ -161,7 +189,7 @@ export class MapChunk {
     readonly ref: ChunkRef,
     private readonly atlas: MapAtlas,
     private readonly avatars: TribeAvatars,
-    private readonly players: PlayerAvatars,
+    private readonly buildings: BuildingAvatars,
     pool: TextPool,
   ) {
     this.labels = new LabelLayer(pool);
@@ -196,14 +224,14 @@ export class MapChunk {
    * freezes that judgement until it is rebuilt, which the zone refresh clock
    * (ZONE_STALE_SECONDS) guarantees happens within the minute.
    */
-  build(store: ZoneStore, nowSeconds: number): void {
+  build(store: ZoneStore, nowSeconds: number, context: MapViewerContext): void {
     this.clear();
     this.hasPortraits = this.avatars.ready;
 
     const cells = chunkCells(this.ref);
     for (let col = cells.minCol; col <= cells.maxCol; col++) {
       for (let row = cells.minRow; row <= cells.maxRow; row++) {
-        const appearance = appearanceOf(store.getCell(col, row), nowSeconds);
+        const appearance = appearanceOf(store.getCell(col, row), nowSeconds, context);
         const centre = mapRoomGrid.cellToPixel(col, row);
 
         this.terrain.addChild(
@@ -295,10 +323,14 @@ export class MapChunk {
     this.plates.removeChildren().forEach(destroyChild);
   }
 
-  /** A wild monster camp: its tent, its portrait, and its level on a badge. */
+  /**
+   * A wild monster camp: its tent, its portrait, and its level on a badge.
+   * Dims along with the rest of the map under the kit filter (#334).
+   */
   private addCamp(appearance: CellAppearance, x: number, y: number): void {
     const destroyed = appearance.marker === CellMarker.CAMP_DESTROYED;
     if (appearance.marker !== CellMarker.CAMP && !destroyed) return;
+    const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
 
     const tent = place(
       new Sprite(destroyed ? this.atlas.tentDestroyed : this.atlas.tent),
@@ -307,9 +339,10 @@ export class MapChunk {
       appearance.markerColour,
     );
     tent.scale.set(GLYPH_SCALE);
+    tent.alpha = alpha;
     this.tents.addChild(tent);
 
-    const portrait = this.addPortrait(appearance, x, y, destroyed);
+    const portrait = this.addPortrait(appearance, x, y, destroyed, alpha);
 
     if (destroyed) {
       // The cross sits on the picture the close tiers show, or on the tent.
@@ -320,22 +353,25 @@ export class MapChunk {
         DAMAGE_COLOUR,
       );
       cross.scale.set(GLYPH_SCALE);
+      cross.alpha = alpha;
       this.details.addChild(cross);
     }
 
     if (appearance.badge === "") return;
     const bx = x + BADGE_X;
     const by = y + BADGE_Y;
-    this.badgeDiscs.addChild(
-      disc(this.atlas.disc, bx, by, BADGE_RADIUS, MARKER_FILL_COLOUR),
-      disc(this.atlas.ring, bx, by, BADGE_RADIUS, appearance.markerColour),
-    );
+    const badgeDisc = disc(this.atlas.disc, bx, by, BADGE_RADIUS, MARKER_FILL_COLOUR);
+    const badgeRing = disc(this.atlas.ring, bx, by, BADGE_RADIUS, appearance.markerColour);
+    badgeDisc.alpha = alpha;
+    badgeRing.alpha = alpha;
+    this.badgeDiscs.addChild(badgeDisc, badgeRing);
     this.requests.push({
       text: appearance.badge,
       x: bx,
       y: by,
       size: BADGE_TEXT_SIZE,
       maxWidth: BADGE_RADIUS * 1.6,
+      alpha,
     });
   }
 
@@ -351,6 +387,7 @@ export class MapChunk {
     x: number,
     y: number,
     destroyed: boolean,
+    alpha: number,
   ): boolean {
     const texture = this.avatars.textureFor(appearance.tribe);
     if (!texture) return false;
@@ -360,66 +397,102 @@ export class MapChunk {
     sprite.setSize((AVATAR_HEIGHT * texture.width) / texture.height, AVATAR_HEIGHT);
     sprite.position.set(x, y + AVATAR_BASE_Y);
     sprite.tint = destroyed ? AVATAR_DESTROYED_TINT : 0xffffff;
-    sprite.alpha = destroyed ? AVATAR_DESTROYED_ALPHA : 1;
+    sprite.alpha = (destroyed ? AVATAR_DESTROYED_ALPHA : 1) * alpha;
     this.portraits.addChild(sprite);
     return true;
   }
 
   /**
-   * A player's yard or outpost: a round marker with their critter, ringed
-   * white, cyan for the player's own and blue under protection or a truce, and
-   * a name plate under it ("Bramblefoot  24", or "You" and "Outpost"). The
-   * player's own outpost wears an amber dot while an invitation to move onto
-   * it waits (#205).
+   * A player's yard or outpost (#334, Flash-faithful redraw): the Town Hall or
+   * outpost picture standing on the hex (tinted by the outpost's Starter Kit),
+   * a gold level star top-left, and a name plate below it, coloured and iconed
+   * by how the cell relates to the viewer. The player's own outpost wears an
+   * amber dot while an invitation to move onto it waits (#205). The kit
+   * filter dims every sprite this draws together when the cell does not match
+   * it.
+   *
+   * Dropped in this redraw: the old ring that showed damage protection or an
+   * active truce in a different colour (`appearance.shielded`). The Flash
+   * reference (#334) does not show one on a player cell, and no replacement
+   * was specified - `shielded` is still computed in `cellVisuals.ts` but
+   * nothing reads it here. Flagged for the owner: protection/truce currently
+   * has no visual on Map Room 2 any more.
    */
   private addPlayer(appearance: CellAppearance, x: number, y: number): void {
-    const ownYard = appearance.own && appearance.marker === CellMarker.YARD;
-    const radius = ownYard ? OWN_MARKER_RADIUS : MARKER_RADIUS;
-    const cy = y + MARKER_Y;
-    const ring = appearance.own
-      ? OWN_COLOUR
-      : appearance.shielded
-        ? SHIELD_COLOUR
-        : PLAYER_RING_COLOUR;
+    const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
+    const outpost = appearance.marker === CellMarker.OUTPOST;
+    const footX = x;
+    const footY = y + BUILDING_FOOT_Y;
 
-    this.bases.addChild(disc(this.atlas.disc, x, cy, radius, MARKER_FILL_COLOUR));
-    const picture = this.players.textureFor(appearance.avatar);
-    if (picture) {
-      const inner = radius * (1 - MARKER_RING_SHARE);
-      const sprite = new Sprite(picture);
-      sprite.anchor.set(0.5, 0.5);
-      sprite.setSize(inner * 2, inner * 2);
-      sprite.position.set(x, cy);
+    const texture = this.buildings.textureFor(outpost ? BuildingKind.OUTPOST : BuildingKind.YARD);
+    if (texture) {
+      const sprite = new Sprite(texture);
+      sprite.anchor.set(0.5, 1);
+      sprite.setSize((BUILDING_HEIGHT * texture.width) / texture.height, BUILDING_HEIGHT);
+      sprite.position.set(footX, footY);
+      if (appearance.kit !== null && appearance.kit !== OutpostKit.NONE) {
+        sprite.tint = KIT_TINT[appearance.kit];
+      }
+      sprite.alpha = alpha;
       this.bases.addChild(sprite);
     }
-    this.bases.addChild(disc(this.atlas.ring, x, cy, radius, ring));
 
     if (appearance.invitePending) {
-      // On the marker's rim, drawn over it: it shows whenever the marker does.
-      const dx = x + radius * Math.cos(INVITE_DOT_ANGLE);
-      const dy = cy + radius * Math.sin(INVITE_DOT_ANGLE);
-      this.bases.addChild(
-        disc(this.atlas.disc, dx, dy, INVITE_DOT_RADIUS, INVITE_COLOUR),
-        disc(this.atlas.ring, dx, dy, INVITE_DOT_RADIUS, MARKER_FILL_COLOUR),
-      );
+      // Near the building's upper-right edge, drawn over it.
+      const dx = footX + BUILDING_INVITE_RADIUS * Math.cos(INVITE_DOT_ANGLE);
+      const dy = footY - BUILDING_HEIGHT * 0.5 + BUILDING_INVITE_RADIUS * Math.sin(INVITE_DOT_ANGLE);
+      const dot = disc(this.atlas.disc, dx, dy, INVITE_DOT_RADIUS, INVITE_COLOUR);
+      const dotRing = disc(this.atlas.ring, dx, dy, INVITE_DOT_RADIUS, MARKER_FILL_COLOUR);
+      dot.alpha = alpha;
+      dotRing.alpha = alpha;
+      this.bases.addChild(dot, dotRing);
     }
 
+    // The gold level star every player cell wears (#334).
+    const starX = x + STAR_X;
+    const starY = y + STAR_Y;
+    const star = icon(this.atlas.star, starX, starY, STAR_RADIUS, STAR_COLOUR);
+    star.alpha = alpha;
+    this.badgeDiscs.addChild(star);
+    this.requests.push({
+      text: appearance.star,
+      x: starX,
+      y: starY,
+      size: STAR_TEXT_SIZE,
+      maxWidth: STAR_RADIUS * 1.6,
+      alpha,
+    });
+
     if (appearance.plate === "") return;
-    const own = appearance.own;
-    const py = cy + radius + PLATE_HALF_HEIGHT - PLATE_OVERLAP;
+    const py = y + PLATE_Y_OFFSET;
+    // Capped to the hex's actual width at py, so the plate never spills into
+    // the neighbour hex sharing that edge (#334).
+    const maxTotalWidth = hexWidthAt(py - y);
     this.requests.push({
       text: appearance.plate,
       x,
       y: py,
       size: PLATE_TEXT_SIZE,
-      maxWidth: PLATE_MAX_TEXT,
-      ...(own ? { dark: OWN_PLATE_TEXT_COLOUR } : {}),
-      measured: (width) => this.addPlate(x, py, width, own),
+      maxWidth: Math.max(maxTotalWidth - PLATE_PADDING * 2, PLATE_HEIGHT),
+      alpha,
+      ...(appearance.own ? { dark: OWN_PLATE_TEXT_COLOUR } : {}),
+      measured: (width) => this.addPlate(x, py, width, maxTotalWidth, appearance, alpha),
     });
   }
 
-  /** The rounded bar behind a name, as wide as the name it holds. */
-  private addPlate(x: number, y: number, textWidth: number, own: boolean): void {
+  /**
+   * The rounded bar behind a name, as wide as the name it holds (but never
+   * wider than the hex it sits in, #334), tinted and iconed by the cell's
+   * relation to the viewer.
+   */
+  private addPlate(
+    x: number,
+    y: number,
+    textWidth: number,
+    maxTotalWidth: number,
+    appearance: CellAppearance,
+    alpha: number,
+  ): void {
     const plate = new NineSliceSprite({
       texture: this.atlas.plate,
       leftWidth: PLATE_HALF_HEIGHT,
@@ -427,13 +500,35 @@ export class MapChunk {
       topHeight: PLATE_HALF_HEIGHT,
       bottomHeight: PLATE_HALF_HEIGHT,
     });
-    const width = Math.max(textWidth + PLATE_PADDING * 2, PLATE_HEIGHT * 1.5);
+    const width = Math.min(Math.max(textWidth + PLATE_PADDING * 2, PLATE_HEIGHT * 1.5), maxTotalWidth);
     plate.width = width;
     plate.height = PLATE_HEIGHT;
     plate.position.set(x - width / 2, y - PLATE_HALF_HEIGHT);
-    plate.tint = own ? OWN_COLOUR : MARKER_FILL_COLOUR;
-    plate.alpha = own ? 1 : PLATE_ALPHA;
+    plate.tint = appearance.plateColour;
+    plate.alpha = (appearance.own ? 1 : PLATE_ALPHA) * alpha;
     this.plates.addChild(plate);
+
+    const iconTexture = this.relationIconTexture(appearance.relationIcon);
+    if (iconTexture) {
+      const iconX = x - width / 2 + RELATION_ICON_RADIUS + RELATION_ICON_PAD;
+      const iconSprite = icon(iconTexture, iconX, y, RELATION_ICON_RADIUS, 0xffffff);
+      iconSprite.alpha = alpha;
+      this.plates.addChild(iconSprite);
+    }
+  }
+
+  /** The atlas texture for a relation icon, or null for `"none"`. */
+  private relationIconTexture(icon: CellAppearance["relationIcon"]): Texture | null {
+    switch (icon) {
+      case "house":
+        return this.atlas.houseIcon;
+      case "shield":
+        return this.atlas.shieldIcon;
+      case "swords":
+        return this.atlas.swordsIcon;
+      default:
+        return null;
+    }
   }
 }
 
@@ -448,6 +543,13 @@ const place = (sprite: Sprite, x: number, y: number, tint: number): Sprite => {
 const disc = (texture: Texture, x: number, y: number, radius: number, tint: number): Sprite => {
   const sprite = place(new Sprite(texture), x, y, tint);
   sprite.scale.set(radius / MARKER_UNIT);
+  return sprite;
+};
+
+/** The star or a relation icon from the atlas (#334), baked at `ICON_UNIT` rather than `MARKER_UNIT`. */
+const icon = (texture: Texture, x: number, y: number, radius: number, tint: number): Sprite => {
+  const sprite = place(new Sprite(texture), x, y, tint);
+  sprite.scale.set(radius / ICON_UNIT);
   return sprite;
 };
 
