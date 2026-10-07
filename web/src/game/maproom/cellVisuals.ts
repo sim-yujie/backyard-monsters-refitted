@@ -1,5 +1,6 @@
 import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
+import { HexGrid } from "@/game/HexGrid";
 
 /**
  * What a cell looks like, as data.
@@ -99,12 +100,29 @@ export type KitFilter = (typeof KitFilter)[keyof typeof KitFilter];
 /** How a player cell relates to the viewer (#334), driving the plate's colour and icon. */
 export type PlayerRelation = "you" | "alliance" | "attacker" | "other";
 
+/**
+ * What `appearanceOf` needs of the viewer's fog of war sight (#331) to draw
+ * the sight-edge feather: just the one question, so this file does not have
+ * to import `Sight` itself. `MapRenderer` passes its real `Sight` instance,
+ * which already answers this; tests pass a stub.
+ */
+export interface SightLookup {
+  isCellVisible(x: number, y: number): boolean;
+}
+
 /** What the map needs to know about the viewer to render relation and kit (#334). */
 export interface MapViewerContext {
   /** The viewer's own alliance id (`GetAreaResponse.myalliance`), or null. */
   myAlliance: number | null;
   /** The active kit filter. */
   kitFilter: KitFilter;
+  /**
+   * The viewer's fog of war sight (#331), for the fog cloud and the
+   * sight-edge feather. Undefined before the first `/worldmapv2/sight` fetch
+   * lands — `appearanceOf` then draws plain deep fog, no feather, rather than
+   * treating every fog cell as an edge.
+   */
+  sight?: SightLookup;
 }
 export const DEFAULT_VIEWER_CONTEXT: MapViewerContext = { myAlliance: null, kitFilter: KitFilter.ALL };
 
@@ -265,41 +283,102 @@ export const loadingAppearance = (): CellAppearance => ({
 });
 
 /**
- * A placeholder colour for a fogged cell, distinct from {@link LOADING_COLOUR}
- * — the design (`docs/design/fog-of-war.md` §6) wants fog and "not loaded
- * yet" to never look the same. The actual clouds and sight-edge feather are
- * issue #331; this is only the server's `{ fog: 1 }` kept from crashing the
- * renderer until then.
+ * Fog of war fill (issue #331, `docs/design/fog-of-war.md` §6), distinct from
+ * {@link LOADING_COLOUR} and from {@link UNEXPLORED_STRIPE_COLOUR}'s diagonal
+ * stripe — fog and "not loaded yet" must never look the same, and neither
+ * must the fog cloud reuse the "not loaded" stripe's own look.
+ *
+ * ONE place for the fog look, deliberately: the owner has not seen it yet and
+ * may ask for a different cloud or edge once they have (no mock-up exists for
+ * this, unlike the cell-look work in #334). Change the three colours and
+ * {@link fogMottle}'s chance below and every fogged cell follows.
  */
 export const FOG_COLOUR = 0x1a1e24;
+/** The cloud's sparse lighter blotch, picked by {@link fogMottle}. */
+export const FOG_CLOUD_COLOUR = 0x242b35;
+/** A one-hex ring of lighter fog right where the sight edge is (owner-approved approximation of a continuous feather). */
+export const FOG_EDGE_COLOUR = 0x34404e;
 
-/** The appearance of a cell outside the viewer's fog of war sight (#330, #331 draws the real one). */
-export const fogAppearance = (): CellAppearance => ({
-  terrain: FOG_COLOUR,
-  marker: CellMarker.NONE,
-  markerColour: 0,
-  tribe: "",
-  badge: "",
-  plate: "",
-  own: false,
-  shielded: false,
-  invitePending: false,
-  loading: false,
-  star: "",
-  plateColour: 0,
-  relationIcon: "none",
-  kit: null,
-  dimmed: false,
-});
+/**
+ * A cheap, deterministic "does this fog cell get the lighter cloud blotch"
+ * test — the same cell always answers the same way, so the cloud does not
+ * crawl as chunks rebuild. A bit-mixing hash rather than `(x + y) % n` (which
+ * is exactly {@link unexploredColour}'s diagonal stripe, the look fog must
+ * not share) — about one cell in eight gets the blotch, scattered rather than
+ * banded.
+ */
+const fogMottle = (x: number, y: number): boolean => {
+  const h = (x * 374761393 + y * 668265263) ^ ((x << 13) + (y >> 7));
+  return (h & 7) === 0;
+};
 
-/** Reads one cell payload into the shapes and text that represent it. */
+/** Whether any hex neighbour of `coord` is inside `sight` — the one-ring feather band. */
+const isFogEdge = (coord: { x: number; y: number }, sight: SightLookup): boolean =>
+  HexGrid.neighbours(coord.x, coord.y).some((n) => sight.isCellVisible(n.col, n.row));
+
+/**
+ * The appearance of a cell outside the viewer's fog of war sight (#330,
+ * #331). `coord` and `sight` are both optional because an unfetched cell
+ * outside a zone the client never requested (by design, now that whole zones
+ * are skipped) carries no payload and so no coordinate of its own until the
+ * chunk loop passes one in, and `sight` itself is absent before the first
+ * `/worldmapv2/sight` fetch lands — both fall back to plain deep fog rather
+ * than guessing.
+ */
+export const fogAppearance = (coord?: { x: number; y: number }, sight?: SightLookup): CellAppearance => {
+  const terrain =
+    coord && sight && isFogEdge(coord, sight)
+      ? FOG_EDGE_COLOUR
+      : coord && fogMottle(coord.x, coord.y)
+        ? FOG_CLOUD_COLOUR
+        : FOG_COLOUR;
+  return {
+    terrain,
+    marker: CellMarker.NONE,
+    markerColour: 0,
+    tribe: "",
+    badge: "",
+    plate: "",
+    own: false,
+    shielded: false,
+    invitePending: false,
+    loading: false,
+    star: "",
+    plateColour: 0,
+    relationIcon: "none",
+    kit: null,
+    dimmed: false,
+  };
+};
+
+/**
+ * Reads one cell payload into the shapes and text that represent it.
+ *
+ * `coord` is the cell's own coordinates (`MapChunk.build()`'s loop already
+ * has them as `col`/`row`). Needed for two fog cases (#331): a `FogCell`
+ * payload carries no coordinate of its own, and an unfetched cell now has
+ * none either when its zone is one the player's sight skips outright rather
+ * than one merely not fetched yet — `coord` plus `context.sight` is what
+ * tells those two apart (see the `!cell` branch below) and what decides the
+ * cloud's one-hex sight-edge feather.
+ */
 export const appearanceOf = (
   cell: MapCell | undefined,
   nowSeconds: number,
   context: MapViewerContext = DEFAULT_VIEWER_CONTEXT,
+  coord?: { x: number; y: number },
 ): CellAppearance => {
-  if (!cell) return loadingAppearance();
-  if (isFogCell(cell)) return fogAppearance();
+  if (!cell) {
+    // Outside sight, a missing cell is a zone `skipZone` refused — it is
+    // never coming, so it reads as fog, not as "loading" forever. Inside
+    // sight (or before the first sight fetch lands, when this can't be told
+    // yet) it really is just not here yet.
+    if (coord && context.sight && !context.sight.isCellVisible(coord.x, coord.y)) {
+      return fogAppearance(coord, context.sight);
+    }
+    return loadingAppearance();
+  }
+  if (isFogCell(cell)) return fogAppearance(coord, context.sight);
 
   const base = {
     terrain: terrainColour(cell.i),
