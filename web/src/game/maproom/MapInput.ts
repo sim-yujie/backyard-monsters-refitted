@@ -27,8 +27,6 @@ export interface MapInputOptions {
   onZoomToCell: (cell: OffsetCell) => void;
   /** Keyboard `+` and `-`; the argument is +1 or -1. */
   onZoomStep: (direction: number) => void;
-  /** Keyboard `0`. */
-  onZoomReset: () => void;
   /** Escape. */
   onCancel: () => void;
 }
@@ -109,9 +107,10 @@ export class MapInput {
   /**
    * Keyboard zoom.
    *
-   * Ignored while a text field has focus, otherwise typing a "0" into the jump
-   * box would reset the view. `=` is accepted alongside `+` because that is the
-   * unshifted key on most layouts.
+   * Ignored while a text field has focus — the bookmark name input is still
+   * one of those, and the guard is generally useful for `+`/`-`/Escape too.
+   * `=` is accepted alongside `+` because that is the unshifted key on most
+   * layouts.
    */
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -127,10 +126,6 @@ export class MapInput {
       case "_":
         event.preventDefault();
         this.options.onZoomStep(-1);
-        break;
-      case "0":
-        event.preventDefault();
-        this.options.onZoomReset();
         break;
       case "Escape":
         this.options.onCancel();

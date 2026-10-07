@@ -81,8 +81,13 @@ export interface ZoomControlOptions {
    * cannot drift apart.
    */
   onStep: (direction: 1 | -1) => void;
-  /** Fit was pressed: frame the whole thing, the same as its keyboard shortcut. */
-  onFit: () => void;
+  /**
+   * Fit was pressed: frame the whole thing, the same as its keyboard shortcut.
+   * Omitted: no Fit button at all (Map Room 2 has none since issue #332 — fog
+   * of war makes "frame the whole world" no longer a sensible thing to
+   * offer). The yard and the attack scene's own Fit stays required there.
+   */
+  onFit?: () => void;
   /**
    * The starting range. Moved later with `setRange` for a floor that follows
    * the viewport (the yard); left alone for a floor that never moves (the
@@ -157,14 +162,17 @@ export class ZoomControl {
     this.readout.setAttribute("role", "status");
     this.readout.textContent = this.readoutStyle === "factor" ? "1.00×" : "100%";
 
-    const fit = document.createElement("button");
-    fit.type = "button";
-    fit.className = classes.fit;
-    fit.textContent = "Fit";
-    fit.title = labels.fit;
-    fit.addEventListener("click", options.onFit);
+    this.element.append(this.out, this.slider, this.into, this.readout);
 
-    this.element.append(this.out, this.slider, this.into, this.readout, fit);
+    if (options.onFit) {
+      const fit = document.createElement("button");
+      fit.type = "button";
+      fit.className = classes.fit;
+      fit.textContent = "Fit";
+      fit.title = labels.fit;
+      fit.addEventListener("click", options.onFit);
+      this.element.append(fit);
+    }
   }
 
   mount(container: HTMLElement): this {

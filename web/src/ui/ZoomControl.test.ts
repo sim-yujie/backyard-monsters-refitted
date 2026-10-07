@@ -164,6 +164,13 @@ describe("the buttons", () => {
     fit?.click();
     expect(harness.fits).toBe(1);
   });
+
+  it("has no Fit button at all when onFit is omitted (#332, Map Room 2)", () => {
+    const control = new ZoomControl({ onZoom: () => {}, onStep: () => {} });
+    control.mount(document.body);
+    const buttons = [...control.element.querySelectorAll("button")];
+    expect(buttons.find((button) => button.textContent === "Fit")).toBeUndefined();
+  });
 });
 
 describe("teardown", () => {

@@ -4,9 +4,11 @@ import type { NavPanel } from "./NavPanel";
 
 /**
  * "Find" (#176, R-MR2-Map-A): one button in the corner where the Navigate
- * panel used to stand open. It opens that panel — home and outposts, a jump
- * to coordinates, the bookmarks, the world map — and closes it again, so the
- * map is clear until the player wants to go somewhere.
+ * panel used to stand open. It opens that panel — home and outposts, the
+ * bookmarks, the minimap — and closes it again, so the map is clear until
+ * the player wants to go somewhere. No coordinate jump and no world map
+ * view (issue #332): fog of war means most of the world is nothing the
+ * player can see.
  */
 
 export class FindControl {
@@ -25,11 +27,11 @@ export class FindControl {
 
     this.toggle = button("mr2-tool mr2-find__button");
     this.toggle.setAttribute("aria-expanded", "false");
-    this.toggle.setAttribute("aria-label", "Find a place: coordinates, bookmarks");
+    this.toggle.setAttribute("aria-label", "Find a place: bookmarks, outposts");
     this.toggle.append(
       icon("search", 20, "map-icon"),
       el("span", "mr2-tool__label", "Find"),
-      el("span", "mr2-find__hint", "coordinates, bookmarks"),
+      el("span", "mr2-find__hint", "bookmarks, outposts"),
       el("span", "mr2-find__phone-label", "Find a place"),
     );
     this.toggle.addEventListener("click", () => this.setOpen(!this.open));
