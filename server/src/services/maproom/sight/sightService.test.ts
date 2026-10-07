@@ -106,7 +106,7 @@ describe("getPlayerSight: own circles and cells", () => {
 
     const sight = await getPlayerSight(p);
 
-    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 6 }]);
+    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 6, kind: "own" }]);
     expect(sight.revealed).toEqual([{ x: 101, y: 101 }]);
   });
 
@@ -115,7 +115,7 @@ describe("getPlayerSight: own circles and cells", () => {
 
     const sight = await getPlayerSight(p);
 
-    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 0 }]);
+    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 0, kind: "own" }]);
     expect(sight.revealed).toEqual([{ x: 101, y: 101 }]);
   });
 
@@ -135,9 +135,9 @@ describe("getPlayerSight: own circles and cells", () => {
     const sight = await getPlayerSight(p);
 
     expect(sight.sources).toEqual([
-      { x: 101, y: 101, reach: 4 },
-      { x: 200, y: 200, reach: 3 },
-      { x: 300, y: 300, reach: 1 },
+      { x: 101, y: 101, reach: 4, kind: "own" },
+      { x: 200, y: 200, reach: 3, kind: "own" },
+      { x: 300, y: 300, reach: 1, kind: "own" },
     ]);
     expect(sight.revealed).toEqual([
       { x: 101, y: 101 },
@@ -152,7 +152,7 @@ describe("getPlayerSight: own circles and cells", () => {
 
     const sight = await getPlayerSight(p);
 
-    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 8 }]);
+    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 8, kind: "own" }]);
   });
 });
 
@@ -190,7 +190,7 @@ describe("getPlayerSight: attackers", () => {
 
     const sight = await getPlayerSight(p);
 
-    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 6 }]);
+    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 6, kind: "own" }]);
   });
 
   test("never attacked: no revealed cells beyond the player's own", async () => {
@@ -213,8 +213,21 @@ describe("getPlayerSight: alliance union", () => {
 
     const sight = await getPlayerSight(p);
 
-    expect(sight.sources).toContainEqual({ x: 102, y: 102, reach: 8 });
+    expect(sight.sources).toContainEqual({ x: 102, y: 102, reach: 8, kind: "ally" });
     expect(sight.revealed).toContainEqual({ x: 102, y: 102 });
+  });
+
+  test("tags the player's own circle 'own', for the minimap's two-tint drawing (#331)", async () => {
+    const p = user(1, { alliance_id: 9 });
+    tables.set(User, [
+      { userid: 1, alliance_id: 9 },
+      { userid: 2, alliance_id: 9 },
+    ]);
+    tables.set(Save, [mainSaveRow(2, { flinger: 3 })]);
+
+    const sight = await getPlayerSight(p);
+
+    expect(sight.sources).toContainEqual({ x: 101, y: 101, reach: 6, kind: "own" });
   });
 
   test("ignores an ally on a different world (\"allies on another world ignored\")", async () => {
@@ -227,7 +240,7 @@ describe("getPlayerSight: alliance union", () => {
 
     const sight = await getPlayerSight(p);
 
-    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 6 }]);
+    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 6, kind: "own" }]);
   });
 
   test("does not share an ally's attacker history (rule 4 is not unioned)", async () => {
@@ -341,7 +354,7 @@ describe("the Redis cache", () => {
     const second = await getPlayerSight(p);
 
     expect(second.sources).not.toEqual(first.sources);
-    expect(second.sources).toContainEqual({ x: 200, y: 200, reach: 4 });
+    expect(second.sources).toContainEqual({ x: 200, y: 200, reach: 4, kind: "own" });
   });
 });
 

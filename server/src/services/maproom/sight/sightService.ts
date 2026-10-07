@@ -40,11 +40,21 @@ export const allianceSightKey = (allianceId: number): string => `sight:ally:${al
 /** The cache's normal life (`fog-of-war.md` §9): never longer than this, and never past Declare War's end. */
 export const SIGHT_CACHE_TTL_SECONDS = 30;
 
+/**
+ * A sight circle, tagged with whose it is (`fog-of-war.md` §5.2, §7): the
+ * client's minimap paints the two in different tints. Not part of the shared,
+ * byte-for-byte-copied rule file — `isVisible` tests `x`, `y` and `reach`
+ * alone and does not care which half a circle came from.
+ */
+export interface TaggedSightSource extends SightSource {
+  kind: "own" | "ally";
+}
+
 /** A player's complete sight, ready for `isVisible` (`game-rules/maproom/sight.ts`) to test a cell against. */
 export interface PlayerSight {
   /** A short fingerprint of `sources` and `revealed`, so a caller can tell when either has changed. */
   sv: string;
-  sources: SightSource[];
+  sources: TaggedSightSource[];
   revealed: RevealedCell[];
 }
 
@@ -265,10 +275,16 @@ export const getPlayerSight = async (user: User): Promise<PlayerSight> => {
     ? await cachedAllianceSight(user.alliance_id, save.worldid, war)
     : EMPTY_HALF;
 
-  const sources = [...own.sources, ...ally.sources];
   const revealed = [...own.revealed, ...ally.revealed];
+  // The fingerprint is taken on the untagged circles, so `kind` (added only
+  // for the minimap's two-tint drawing) can never change `sv` on its own.
+  const sv = sightVersionOf([...own.sources, ...ally.sources], revealed);
+  const sources: TaggedSightSource[] = [
+    ...own.sources.map((source) => ({ ...source, kind: "own" as const })),
+    ...ally.sources.map((source) => ({ ...source, kind: "ally" as const })),
+  ];
 
-  return { sv: sightVersionOf(sources, revealed), sources, revealed };
+  return { sv, sources, revealed };
 };
 
 /**
