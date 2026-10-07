@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { spokenText } from "@/ui/resourceIcon";
 import { BOMBS, type BombStats } from "@/game/combat/rules";
-import { CatapultPanel, defaultTier } from "./CatapultPanel";
+import { CatapultPanel, defaultTier, puttyText } from "./CatapultPanel";
 import { SiegePanel } from "./SiegePanel";
 
 /** The two pickers: what is offered, what is greyed, what arming looks like. */
@@ -46,11 +46,17 @@ describe("CatapultPanel", () => {
     expect(panel.element.querySelectorAll("[data-arm]")).toHaveLength(3);
     expect(tier(panel, "pb3").textContent).toBe("Massive10M");
     expect(tier(panel, "tw1").textContent).toBe("Big100K");
-    // The putty row carries the engine-gap badge once, and says so as its
-    // main text instead of promising an effect (#152).
-    expect(panel.element.querySelectorAll(".attack-picker__badge")).toHaveLength(1);
+    // The putty row tells the truth about what putty does: speed, armour, time.
+    expect(panel.element.querySelectorAll(".attack-picker__badge")).toHaveLength(0);
     panel.update(view({ creepsAlive: 3 }));
-    expect(row(panel, 3).querySelector(".attack-catapult__detail")!.textContent).toMatch(/^No effect yet: /);
+    expect(row(panel, 3).querySelector(".attack-catapult__detail")!.textContent).toBe(
+      "Enrages your monsters: speed x1.4, armour 40%, 15 s",
+    );
+    expect(row(panel, 3).textContent).not.toContain("no effect");
+    expect(puttyText(BOMBS.find((one) => one.id === "pu3")!)).toBe(
+      "Enrages your monsters: speed x2, armour 90%, 40 s",
+    );
+    expect(tier(panel, "pu1").title).toContain("Enrages your monsters");
     expect(row(panel, 2).querySelector(".attack-catapult__detail")!.textContent).toMatch(/damage per building/);
     panel.destroy();
   });

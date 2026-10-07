@@ -1162,10 +1162,17 @@ export interface BombStats {
   readonly id: string;
   /** 1 twigs, 2 pebbles, 3 putty. There is no goo bomb. */
   readonly resource: number;
-  /** Flat damage at the centre; 0 for a putty bomb, which slows instead. */
+  /** Flat damage at the centre; 0 for a putty bomb, which enrages instead. */
   readonly damage: number;
-  /** The fraction a putty bomb takes off a creep's speed. */
+  /**
+   * Putty only: the share of each hit an enraged creep shrugs off. Flash names
+   * it `damageMult` but it is the `Enrage` armour (`ResourceBomb.as:170-185`).
+   */
   readonly damageMult?: number;
+  /** Putty only: the move-speed and swing-rate multiplier (`speed`). */
+  readonly speed?: number;
+  /** Putty only: how long the boost lasts, in seconds (`speedlength`). */
+  readonly speedlength?: number;
   /**
    * `_size` of the blast, in isometric pixels. Despite the name it is a full
    * width, not a radius: see {@link bombBlast}.
@@ -1216,20 +1223,25 @@ export const BOMBS: readonly BombStats[] = [
   // :139
   { id: "pb3", resource: 2, damage: 75_000, radius: 400, particles: 200,
     cost: 10_000_000, catapultLevel: 2 },
-  // Putty bombs deal no damage: `damageMult` is what they take off a creep's
-  // speed, so none of them reaches the damage bound of §2.3.
+  // Putty bombs deal no damage: they enrage the attacker's own creeps for
+  // `speedlength` seconds (`speed`, `damageMult` armour), so none of them
+  // reaches the damage bound of §2.3.
   // :154
   { id: "pu0", resource: 3, damage: 0, radius: 150, particles: 25,
-    cost: 10_000, catapultLevel: 3, damageMult: 0.2 },
+    cost: 10_000, catapultLevel: 3, damageMult: 0.2,
+    speed: 1.2, speedlength: 10 },
   // :172
   { id: "pu1", resource: 3, damage: 0, radius: 150, particles: 37,
-    cost: 100_000, catapultLevel: 3, damageMult: 0.4 },
+    cost: 100_000, catapultLevel: 3, damageMult: 0.4,
+    speed: 1.4, speedlength: 15 },
   // :190
   { id: "pu2", resource: 3, damage: 0, radius: 300, particles: 43,
-    cost: 5_000_000, catapultLevel: 3, damageMult: 0.7 },
+    cost: 5_000_000, catapultLevel: 3, damageMult: 0.7,
+    speed: 1.8, speedlength: 30 },
   // :208
   { id: "pu3", resource: 3, damage: 0, radius: 500, particles: 50,
-    cost: 10_000_000, catapultLevel: 3, damageMult: 0.9 },
+    cost: 10_000_000, catapultLevel: 3, damageMult: 0.9,
+    speed: 2.0, speedlength: 40 },
 ];
 
 /** The bombs a catapult at `catapultLevel` can fire. */

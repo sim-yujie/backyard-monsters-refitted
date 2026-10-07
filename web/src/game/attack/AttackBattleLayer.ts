@@ -216,7 +216,7 @@ export const groundWorld = (ix: number, iy: number, origin: Point): Point => ({
 export const abilityTint = (creep: CreepSnapshot | null): number => {
   if (!creep) return 0xffffff;
   if (creep.burning) return 0xffb070;
-  if (creep.enraged) return 0xff9cff;
+  if (creep.enraged || creep.puttied) return 0xff9cff;
   if (creep.lootBoosted) return 0xa8ff80;
   return 0xffffff;
 };

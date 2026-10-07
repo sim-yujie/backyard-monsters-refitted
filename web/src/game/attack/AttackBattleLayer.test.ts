@@ -64,6 +64,7 @@ describe("ability tints (issue #222)", () => {
     expect(abilityTint(creepOf())).toBe(0xffffff);
     expect(abilityTint(creepOf({ lootBoosted: true }))).toBe(0xa8ff80);
     expect(abilityTint(creepOf({ lootBoosted: true, enraged: true }))).toBe(0xff9cff);
+    expect(abilityTint(creepOf({ puttied: true }))).toBe(0xff9cff);
     expect(abilityTint(creepOf({ enraged: true, burning: true }))).toBe(0xffb070);
   });
 });
