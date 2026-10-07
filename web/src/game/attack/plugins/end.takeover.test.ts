@@ -74,6 +74,7 @@ describe("the end panel's takeover offer", () => {
   let modal: HTMLElement;
   let notices: Notices;
   let goToMap: ReturnType<typeof vi.fn>;
+  let goToOutpost: ReturnType<typeof vi.fn>;
   let teardown: (() => void) | void;
   let calls: { [K in keyof TakeoverCalls]: ReturnType<typeof vi.fn> };
 
@@ -84,6 +85,7 @@ describe("the end panel's takeover offer", () => {
     document.body.append(modal);
     notices = new Notices().mount(document.body);
     goToMap = vi.fn();
+    goToOutpost = vi.fn();
     calls = {
       quote: vi.fn(async () => quoteOf()),
       takeOver: vi.fn(async () => ({ error: 0 })),
@@ -111,6 +113,7 @@ describe("the end panel's takeover offer", () => {
       modal,
       notices,
       goToMap,
+      goToOutpost,
       presentation: new AttackPresentation(),
     } as unknown as AttackMounts);
     session.appendFling({ x: -100, y: -100, monsters: { C1: 1 } });
@@ -173,7 +176,7 @@ describe("the end panel's takeover offer", () => {
     expect(calls.decline.mock.calls[0]![1]).toMatchObject({ keepalive: true });
   });
 
-  it("Take over opens the dialog, takes it, and opens the map on the new outpost", async () => {
+  it("Take over opens the dialog, takes it, and opens the new outpost's yard (issue #333)", async () => {
     await endWith({ destroyed: 1, takeovergrant: grant });
     $(".end-takeover__take")!.click();
     expect($(".takeover-dialog .panel__title")!.textContent).toBe("Take Over Bramble's Outpost");
@@ -181,15 +184,42 @@ describe("the end panel's takeover offer", () => {
     $(".takeover-dialog__go")!.click();
     await flush();
     expect(calls.takeOver).toHaveBeenCalledWith("2000240208", "shiny");
-    expect(goToMap).toHaveBeenCalledTimes(1);
-    expect(consumeMapFocus()).toEqual({
+    // Straight to the outpost's yard, not the map (owner, 2026-10-07).
+    expect(goToMap).not.toHaveBeenCalled();
+    expect(goToOutpost).toHaveBeenCalledTimes(1);
+    expect(goToOutpost).toHaveBeenCalledWith({
+      baseid: "2000240208",
+      kind: "outpost",
       cell: { col: 240, row: 208 },
       takenOver: { kind: "outpost", name: "Bramble" },
     });
+    expect(consumeMapFocus()).toBeNull();
     // Taken, so nothing is declined on the way out.
     teardown?.();
     teardown = undefined;
     expect(calls.decline).not.toHaveBeenCalled();
+  });
+
+  it("taking over a destroyed camp also opens its new outpost's yard (issue #333)", async () => {
+    calls.quote.mockImplementation(async () =>
+      withoutGrant(quoteOf({ baseid: "2000241208", kind: "camp", resources: 3_500_000, shiny: 924, adjacent: true })),
+    );
+    await endWith(
+      { destroyed: 1 },
+      target({ baseid: "2000241208", kind: "wild", cell: { col: 241, row: 208 }, name: "Kozu" }),
+    );
+    $(".end-takeover__take")!.click();
+    $(".takeover-dialog__shiny")!.click();
+    $(".takeover-dialog__go")!.click();
+    await flush();
+    expect(calls.takeOver).toHaveBeenCalledWith("2000241208", "shiny");
+    expect(goToMap).not.toHaveBeenCalled();
+    expect(goToOutpost).toHaveBeenCalledWith({
+      baseid: "2000241208",
+      kind: "outpost",
+      cell: { col: 241, row: 208 },
+      takenOver: { kind: "camp", name: "Kozu" },
+    });
   });
 
   it("when the countdown runs out it asks the server, which says the chance has ended", async () => {

@@ -16,6 +16,7 @@ import type { AttackTarget } from "@/game/attack/attackTarget";
 import type { ResourceAmounts } from "@/game/combat/rules";
 import { setMapFocus } from "@/game/maproom/mapFocus";
 import { takeoverGrantOf, type TakeoverKind } from "@/game/maproom/takeover";
+import { outpostTarget } from "@/game/yard/ownYards";
 import { monsterName } from "@/ui/attack/ArmyPanel";
 import { EndAttackPanel, type SaveFailure } from "@/ui/attack/EndAttackPanel";
 import { EndTakeoverOffer } from "@/ui/attack/EndTakeoverOffer";
@@ -67,8 +68,10 @@ import { AutoAttackFlow } from "@/ui/attack/AutoAttackFlow";
  * best effort. Return to map and in-app navigation send the decline as an
  * ordinary request, a closing page as a keepalive one (`pagehide`), and if
  * neither arrives the server lets the chance expire. Return to map opens the
- * map on the target's cell (`mapFocus.ts`); a takeover opens it on the new
- * outpost with Flash's "Veni, Vidi, Vici!".
+ * map on the target's cell (`mapFocus.ts`). Taking the offer skips the map
+ * entirely (owner, 2026-10-07, issue #333): it opens straight on the new
+ * outpost's yard with Flash's "Veni, Vidi, Vici!" and, while the outpost
+ * still holds only its core, the Starter Kit shop already open.
  */
 
 /** How long the server accepts this attack's save, from the attack load. */
@@ -308,7 +311,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
   const takeoverCalls = deps.takeover ?? TAKEOVER_CALLS;
 
   return (mounts: AttackMounts) => {
-    const { session, target, modal, notices, goToMap, presentation, creditLoot } = mounts;
+    const { session, target, modal, notices, goToMap, goToOutpost, presentation, creditLoot } = mounts;
     const page = deps.page ?? { window };
     const mountedAt = now();
     const token = getAuthToken();
@@ -358,14 +361,24 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       creditLoot(shown.credited);
     };
 
-    /** Opens the map on the target's cell, or on the outpost just taken over. */
-    const returnToMap = (takenOver?: TakeoverKind): void => {
-      if (target.cell && (target.mapversion ?? 2) === 2) {
-        setMapFocus({
-          cell: target.cell,
-          ...(takenOver ? { takenOver: { kind: takenOver, name: target.name } } : {}),
-        });
+    /** Opens the map on the target's cell. */
+    const returnToMap = (): void => {
+      if (target.cell && (target.mapversion ?? 2) === 2) setMapFocus({ cell: target.cell });
+      goToMap();
+    };
+
+    /**
+     * A takeover just won: off to the new outpost's yard, Flash's "Veni,
+     * Vidi, Vici!" and the Starter Kit shop waiting there, instead of the map
+     * (owner, 2026-10-07; previously `returnToMap(takenOver)` opened the map
+     * on the outpost's cell — issue #333 moved that hop to the yard itself).
+     */
+    const enterNewOutpost = (kind: TakeoverKind, baseid: string, cell: AttackTarget["cell"]): void => {
+      if (cell) {
+        goToOutpost({ ...outpostTarget(baseid, cell), takenOver: { kind, name: target.name } });
+        return;
       }
+      // No cell to open the yard on (should not happen: takeoverChanceOf requires one) — fall back.
       goToMap();
     };
 
@@ -380,7 +393,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
         takeOver: takeoverCalls.takeOver,
         decline: (baseid, options) => takeoverCalls.decline(baseid, { ...options, token }),
         modal,
-        onTaken: () => returnToMap(chance.kind),
+        onTaken: () => enterNewOutpost(chance.kind, target.baseid, target.cell),
         now: () => now() / 1000,
       });
       panel?.setExtra(offer.element);
@@ -397,7 +410,8 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
         onWatch: (run) => mounts.openWatch?.(run),
         // The loot it banked joins the pool the HUD shows, as this attack's did (#168).
         onAttacked: (result) => creditLoot(result.loot),
-        onTaken: () => returnToMap("camp"),
+        // Repeats only ever hit the same wild camp, so a take is always "camp" (#333).
+        onTaken: () => enterNewOutpost("camp", target.baseid, target.cell),
       });
       void repeat.start();
     };

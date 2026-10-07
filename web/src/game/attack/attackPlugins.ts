@@ -5,6 +5,7 @@ import type { ResourceAmounts } from "@/game/combat/rules";
 import type { BaiterRun } from "@/game/baiter/baiterSession";
 import type { WatchRun } from "@/game/autoAttack/watchRun";
 import type { RaidRun } from "@/game/raid/raidSession";
+import type { OwnYardTarget } from "@/game/yard/ownYards";
 import type { Yard } from "@/game/yard/yardModel";
 import type { YardRenderer } from "@/game/yard/YardRenderer";
 import type { Notices } from "@/ui/maproom/Notices";
@@ -56,6 +57,12 @@ export interface AttackMounts {
   readonly notices: Notices;
   /** Leaves for the map. */
   readonly goToMap: () => void;
+  /**
+   * Leaves straight for an own outpost's yard (owner, 2026-10-07): a
+   * takeover won on the end panel lands here instead of on the map, so the
+   * attacker meets their new outpost's Starter Kit shop at once.
+   */
+  readonly goToOutpost: (target: OwnYardTarget) => void;
   /**
    * How much of the canvas, in CSS px from the bottom edge, the dock covers.
    * The bottom sheet reports through this so the fit zoom stays honest.
