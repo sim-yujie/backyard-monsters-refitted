@@ -1,6 +1,5 @@
 import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
-import { avatarOf, type AvatarId } from "@/game/avatars";
 
 /**
  * What a cell looks like, as data.
@@ -280,13 +279,17 @@ export const fogAppearance = (): CellAppearance => ({
   marker: CellMarker.NONE,
   markerColour: 0,
   tribe: "",
-  avatar: null,
   badge: "",
   plate: "",
   own: false,
   shielded: false,
   invitePending: false,
   loading: false,
+  star: "",
+  plateColour: 0,
+  relationIcon: "none",
+  kit: null,
+  dimmed: false,
 });
 
 /** Reads one cell payload into the shapes and text that represent it. */
