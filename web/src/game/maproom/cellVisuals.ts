@@ -37,9 +37,9 @@ export interface CellAppearance {
   /** A camp's level on its badge. Empty means no badge. */
   badge: string;
   /**
-   * A player's name plate (#176): "Bramblefoot  24", username and level, the
-   * same on the viewer's own cells as everyone else's (#334, owner decision
-   * 2026-10-07) - the gold plate and house icon mark those, not the text.
+   * A player's name plate (#176): the username only, the same on the viewer's
+   * own cells as everyone else's (#334, owner decision 2026-10-07) - the gold
+   * plate and house icon mark those, and the level lives on the gold star.
    * Empty means no plate.
    */
   plate: string;
@@ -414,7 +414,7 @@ export const appearanceOf = (
       // decision 2026-10-07) - including the viewer's own cells, which used to
       // say "You"/"Outpost" instead. The gold plate and house icon already
       // mark a cell as the viewer's own, so the text no longer needs to.
-      plate: `${plateName(cell.n)}  ${cell.l}`,
+      plate: cell.n,
       own,
       shielded: cell.p === 1 || truceActive,
       invitePending: own && outpost && Number(cell.pi) > 0,
@@ -455,16 +455,6 @@ export const rasterColour = (cell: MapCell | undefined): number => {
   // they keep their terrain and only a destroyed one is called out.
   return cell.d === 1 ? 0x6b2b2b : terrainColour(cell.i);
 };
-
-/** Names longer than this are cut on a plate, because no plate would fit them. */
-const MAX_PLATE_NAME = 12;
-
-/**
- * A name as a plate shows it: cut short with three dots, which the map's
- * ASCII bitmap font can draw (it has no ellipsis).
- */
-export const plateName = (name: string): string =>
-  name.length > MAX_PLATE_NAME ? `${name.slice(0, MAX_PLATE_NAME)}...` : name;
 
 /**
  * How wide the hex is at a vertical offset from its centre (#334).

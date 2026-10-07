@@ -19,7 +19,6 @@ import {
   fogAppearance,
   hexWidthAt,
   kitOf,
-  plateName,
   terrainColour,
   unexploredColour,
   type MapViewerContext,
@@ -65,10 +64,10 @@ describe("appearanceOf", () => {
     });
   });
 
-  it("gives a player a name plate with their level, and the same level on their gold star (#334)", () => {
+  it("gives a player a name plate with only their username, and the level on their gold star (#334)", () => {
     expect(appearanceOf(player(), 0)).toMatchObject({
       marker: CellMarker.YARD,
-      plate: "Bramblefoot  24",
+      plate: "Bramblefoot",
       badge: "",
       own: false,
       star: "24",
@@ -81,10 +80,10 @@ describe("appearanceOf", () => {
   });
 
   it("plates the viewer's own yard and outpost with their username, same as anyone else's (#334)", () => {
-    expect(appearanceOf(player({ mine: 1 }), 0)).toMatchObject({ plate: "Bramblefoot  24", own: true });
+    expect(appearanceOf(player({ mine: 1 }), 0)).toMatchObject({ plate: "Bramblefoot", own: true });
     expect(appearanceOf(player({ mine: 1, b: 3 }), 0)).toMatchObject({
       marker: CellMarker.OUTPOST,
-      plate: "Bramblefoot  24",
+      plate: "Bramblefoot",
     });
   });
 
@@ -233,9 +232,10 @@ describe("fog of war (#331)", () => {
   });
 });
 
-it("cuts a long name on its plate with dots the map's font can draw", () => {
-  expect(plateName("Bramblefoot")).toBe("Bramblefoot");
-  expect(plateName("AVeryLongPlayerName")).toBe("AVeryLongPla...");
+it("never writes the level on the plate, only on the star (#334)", () => {
+  const looks = appearanceOf(player({ n: "AVeryLongPlayerName", l: 30 }), 0);
+  expect(looks.plate).toBe("AVeryLongPlayerName");
+  expect(looks.star).toBe("30");
 });
 
 describe("hexWidthAt (#334): how much width a plate has before it spills into a neighbour hex", () => {
