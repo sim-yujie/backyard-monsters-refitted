@@ -400,6 +400,47 @@
   color: var(--colour-accent);
 }
 
+/* The kit filter (#334): a compact row of pill buttons, smaller than .mr2-tool. */
+.mr2-kit-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--colour-border);
+  border-radius: 12px;
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
+}
+
+.mr2-kit-filter__option {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--colour-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mr2-kit-filter__option:hover {
+  background: var(--colour-surface-base);
+}
+
+.mr2-kit-filter__option:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.mr2-kit-filter__option[aria-pressed="true"] {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
 .mr2-range-legend {
   width: 360px;
   max-width: calc(100vw - 2 * var(--space-4));

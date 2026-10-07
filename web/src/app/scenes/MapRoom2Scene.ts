@@ -53,6 +53,7 @@ import {
   type RangeSource,
 } from "@/game/maproom/attackRange";
 import { mainYardRange, outpostRange, withDeclareWar } from "@/game/maproom/rules/range";
+import { KitFilter } from "@/game/maproom/cellVisuals";
 import { Bookmarks } from "@/game/maproom/Bookmarks";
 import {
   consumeMapFocus,
@@ -121,6 +122,9 @@ const UI_TICK_SECONDS = 1;
 /** Where "My range" remembers whether it was on (#177): this browser only. */
 const RANGE_ON_KEY = "bymr.map.showRange";
 
+/** Where the kit filter remembers its last choice (#334): this browser only. */
+const KIT_FILTER_KEY = "bymr.map.kitFilter";
+
 export class MapRoom2Scene implements Scene {
   private readonly camera = new Camera({
     bounds: mapRoomGrid.worldBounds(WORLD_WIDTH, WORLD_HEIGHT),
@@ -129,6 +133,7 @@ export class MapRoom2Scene implements Scene {
   private readonly store = new ZoneStore({
     onZone: (zone) => this.renderer.applyZone(zone),
     onResources: (resources, credits) => this.syncPool(resources, credits),
+    onAlliance: (id) => this.renderer.setMyAlliance(id),
     onError: (error) => this.reportError(error),
     onAuthFailure: () => this.context?.goTo(SceneName.LOGIN),
   });
@@ -204,6 +209,8 @@ export class MapRoom2Scene implements Scene {
   /** "My range" is on (#177), and the flingers the range is drawn from. */
   private rangeOn = readRangeOn();
   private rangeSources: RangeSource[] = [];
+  /** The active kit filter (#334). */
+  private kitFilter: KitFilter = readKitFilter();
 
   // Starts at the interval so the first update after `ready` pumps at once.
   private sincePump = PUMP_INTERVAL_SECONDS;
@@ -279,6 +286,11 @@ export class MapRoom2Scene implements Scene {
           writeRangeOn(on);
           this.updateRange();
         },
+        onKitFilterChange: (filter) => {
+          this.kitFilter = filter;
+          writeKitFilter(filter);
+          this.renderer.setKitFilter(filter);
+        },
         reach: (cell) => {
           const answer = reachTo(cell, this.rangeSources);
           const text = reachText(answer);
@@ -346,6 +358,8 @@ export class MapRoom2Scene implements Scene {
     this.updateBookmarkTarget();
     this.ui.setZoom(this.camera.zoom);
     this.ui.setRangeOn(this.rangeOn);
+    this.ui.setKitFilter(this.kitFilter);
+    this.renderer.setKitFilter(this.kitFilter);
 
     this.input = new MapInput({
       camera: this.camera,
@@ -1155,6 +1169,26 @@ const readRangeOn = (): boolean => {
 const writeRangeOn = (on: boolean): void => {
   try {
     globalThis.localStorage?.setItem(RANGE_ON_KEY, on ? "1" : "0");
+  } catch {
+    // Private windows and full storage: the choice lasts this visit only.
+  }
+};
+
+const KIT_FILTER_VALUES = Object.values(KitFilter) as string[];
+
+/** The kit filter (#334) the player last left the map with. All at first. */
+const readKitFilter = (): KitFilter => {
+  try {
+    const stored = globalThis.localStorage?.getItem(KIT_FILTER_KEY);
+    return stored && KIT_FILTER_VALUES.includes(stored) ? (stored as KitFilter) : KitFilter.ALL;
+  } catch {
+    return KitFilter.ALL;
+  }
+};
+
+const writeKitFilter = (filter: KitFilter): void => {
+  try {
+    globalThis.localStorage?.setItem(KIT_FILTER_KEY, filter);
   } catch {
     // Private windows and full storage: the choice lasts this visit only.
   }
