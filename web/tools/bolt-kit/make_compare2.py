@@ -80,7 +80,7 @@ grey=(128,128,128)
 def tile_bg(im):
     b=Image.new('RGBA',im.size,grey+(255,)); b.alpha_composite(im.convert('RGBA')); return b
 order=[0,1,2,3]  # east,south,west,north
-rows=Image.new('RGB',(4*cellw,3*cellh-150),(60,60,60))
+rows=Image.new('RGB',(4*cellw,3*cellh),(60,60,60))
 for i,q in enumerate(order):
     rows.paste(tiles_old[q].convert('RGB'),(i*cellw,0))
     rows.paste(tile_bg(tiles_new[q]).convert('RGB'),(i*cellw,cellh))
@@ -91,5 +91,5 @@ for i,q in enumerate(order):
     # also 3x magnified real size for readability
     rows.paste(ro.resize((cellw//8*3,cellh//8*3),Image.NEAREST),(i*cellw+10,2*cellh+60) if False else (i*cellw+5,2*cellh+60))
     rows.paste(rn.resize((cellw//8*3,cellh//8*3),Image.NEAREST),(i*cellw+160,2*cellh+60))
-rows=rows.crop((0,0,rows.size[0],2*cellh+200)); rows.save('D:/Coding/BYMR/art-trials/bolt/test2-compare.png')
+rows=rows.crop((0,0,rows.size[0],2*cellh+240)); rows.save('D:/Coding/BYMR/art-trials/bolt/test2-compare.png')
 for q,t in enumerate(tiles_new): t.save(K+f'tmp/new{q}.png')
