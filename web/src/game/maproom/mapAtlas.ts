@@ -73,6 +73,8 @@ export const MARKER_UNIT = 32;
 const RING_WIDTH = 6;
 /** Half the height of a name plate, and the radius of its ends. */
 export const PLATE_HALF_HEIGHT = 11;
+/** Half the height of the slim plates (temporary ?plateStyle options). */
+export const SLIM_PLATE_HALF_HEIGHT = 6;
 
 /** Half-width the level star and the relation icons are baked at. */
 export const ICON_UNIT = 32;
@@ -121,6 +123,9 @@ export class MapAtlas {
    * nine-slice sprite so its round ends keep their shape.
    */
   readonly plate: Texture;
+  /** Slim pill and slim rectangle plates for the ?plateStyle options. */
+  readonly plateSlim: Texture;
+  readonly plateRect: Texture;
   /** The gold level badge drawn on every player cell (#334). */
   readonly star: Texture;
   /** Relation icon: a house, for the viewer's own cell (#334). */
@@ -210,6 +215,21 @@ export class MapAtlas {
         )
         .fill(0xffffff),
     );
+
+    const slimPlate = (radius: number): Texture =>
+      bake(renderer, frame(SLIM_PLATE_HALF_HEIGHT * 2, SLIM_PLATE_HALF_HEIGHT), (g) =>
+        g
+          .roundRect(
+            -SLIM_PLATE_HALF_HEIGHT * 2,
+            -SLIM_PLATE_HALF_HEIGHT,
+            SLIM_PLATE_HALF_HEIGHT * 4,
+            SLIM_PLATE_HALF_HEIGHT * 2,
+            radius,
+          )
+          .fill(0xffffff),
+      );
+    this.plateSlim = slimPlate(SLIM_PLATE_HALF_HEIGHT);
+    this.plateRect = slimPlate(2);
 
     // The gold level badge: a five-point star, outer radius ICON_UNIT.
     const starOuter = ICON_UNIT;
@@ -309,6 +329,8 @@ export class MapAtlas {
       this.disc,
       this.ring,
       this.plate,
+      this.plateSlim,
+      this.plateRect,
       this.star,
       this.houseIcon,
       this.shieldIcon,

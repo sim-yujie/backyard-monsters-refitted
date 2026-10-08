@@ -10,6 +10,7 @@ import {
   KIT_TINT,
   MARKER_FILL_COLOUR,
   OWN_PLATE_TEXT_COLOUR,
+  RELATION_OTHER_COLOUR,
   OutpostKit,
   appearanceOf,
   hexWidthAt,
@@ -26,6 +27,7 @@ import {
   ICON_UNIT,
   MARKER_UNIT,
   PLATE_HALF_HEIGHT,
+  SLIM_PLATE_HALF_HEIGHT,
   TICK_HEIGHT,
   TICK_WIDTH,
   WORKER_SIZE,
@@ -163,6 +165,37 @@ const PLATE_ALPHA = 0.92;
  * recedes behind the camps (#176).
  */
 const GRID_ALPHA = 0.2;
+
+/**
+ * TEMPORARY: the owner picks one of these with ?plateStyle=a|b|c; anything else
+ * keeps the current look. All three also seat the tower lower in its hex and
+ * shrink the level star to sit at the tower's upper left.
+ */
+type PlateStyle = "current" | "a" | "b" | "c";
+const readPlateStyle = (): PlateStyle => {
+  try {
+    const value = new URLSearchParams(globalThis.location?.search ?? "").get("plateStyle");
+    return value === "a" || value === "b" || value === "c" ? value : "current";
+  } catch {
+    return "current";
+  }
+};
+const PLATE_STYLE = readPlateStyle();
+const SLIM = PLATE_STYLE !== "current";
+/** The slim options seat the tower this much lower (fraction of the hex height). */
+const SLIM_FOOT_Y = CELL_HEIGHT * 0.27;
+const SLIM_PLATE_Y = CELL_HEIGHT * 0.36;
+const SLIM_STAR_SCALE = 0.58;
+const SLIM_ICON_RADIUS = CELL_HEIGHT * 0.06;
+/** Dark text on a white label, and bare-text colours for option b. */
+const LABEL_DARK_TEXT = 0x1b2733;
+const GOLD_PLATE = 0xd4af37;
+const BARE_TEXT_COLOUR: Record<number, number> = {
+  0xd4af37: 0xffd84d,
+  0x3fae4e: 0x7bea8b,
+  0xd64545: 0xff7a7a,
+  0x2f74c0: 0xffffff,
+};
 
 export class MapChunk {
   /** The ground and the camps' pictures. */
@@ -440,7 +473,7 @@ export class MapChunk {
     const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
     const outpost = appearance.marker === CellMarker.OUTPOST;
     const footX = x;
-    const footY = y + BUILDING_FOOT_Y;
+    const footY = y + (SLIM ? SLIM_FOOT_Y : BUILDING_FOOT_Y);
     const flashScale = BUILDING_HEIGHT / FLASH_TOWER_HEIGHT;
 
     const texture = this.buildings.textureFor(outpost ? BuildingKind.OUTPOST : BuildingKind.YARD);
@@ -459,7 +492,9 @@ export class MapChunk {
         const dome = new Sprite(this.atlas.protectionDome);
         // The baked tile has 2 units of padding on every side; the foot is DOME_ABOVE_FOOT + 2 below its top.
         dome.anchor.set(0.5, (DOME_ABOVE_FOOT + 2) / (DOME_HEIGHT + 4));
-        dome.setSize((DOME_WIDTH + 4) * flashScale, (DOME_HEIGHT + 4) * flashScale);
+        // Sized from the tower's full drawn bounds so the glass encloses it, spire and all.
+        const { scaleX, scaleY } = domeScale(sprite.width, sprite.height);
+        dome.setSize((DOME_WIDTH + 4) * scaleX, (DOME_HEIGHT + 4) * scaleY);
         dome.position.set(footX, footY);
         dome.alpha = alpha;
         this.bases.addChild(dome);
@@ -496,21 +531,27 @@ export class MapChunk {
     }
 
     // The gold level star every player cell wears (#334).
-    const starX = x + STAR_X;
-    const starY = y + STAR_Y;
-    const star = icon(this.atlas.star, starX, starY, STAR_RADIUS, STAR_COLOUR);
+    const starScale = SLIM ? SLIM_STAR_SCALE : 1;
+    const starRadius = STAR_RADIUS * starScale;
+    const starX = SLIM ? footX - BUILDING_HEIGHT * 0.3 : x + STAR_X;
+    const starY = SLIM ? footY - BUILDING_HEIGHT * 0.82 : y + STAR_Y;
+    const star = icon(this.atlas.star, starX, starY, starRadius, STAR_COLOUR);
     star.alpha = alpha;
     this.badgeDiscs.addChild(star);
     this.requests.push({
       text: appearance.star,
       x: starX,
       y: starY,
-      size: STAR_TEXT_SIZE,
-      maxWidth: STAR_RADIUS * 1.6,
+      size: STAR_TEXT_SIZE * starScale,
+      maxWidth: starRadius * 1.6,
       alpha,
     });
 
     if (appearance.plate === "") return;
+    if (SLIM) {
+      this.addSlimLabel(appearance, x, y, alpha);
+      return;
+    }
     const py = y + PLATE_Y_OFFSET;
     // Capped to the hex's actual width at py, so the plate never spills into
     // the neighbour hex sharing that edge (#334).
@@ -530,6 +571,73 @@ export class MapChunk {
       ...(appearance.own ? { dark: OWN_PLATE_TEXT_COLOUR } : {}),
       measured: (width) => this.addPlate(x, py, width + iconRoom, maxTotalWidth, appearance, alpha),
     });
+  }
+
+  /** The ?plateStyle a / b / c name label, slim and seated low under the tower. */
+  private addSlimLabel(appearance: CellAppearance, x: number, y: number, alpha: number): void {
+    const py = y + SLIM_PLATE_Y;
+    const height = SLIM_PLATE_HALF_HEIGHT * 2;
+    const hasIcon = appearance.relationIcon !== "none" && PLATE_STYLE !== "a";
+    const iconRadius = SLIM_ICON_RADIUS;
+    const iconRoom = hasIcon ? iconRadius * 2 + 2 : 0;
+    const padding = 3;
+    const maxTotalWidth = hexWidthAt(py - y + SLIM_PLATE_HALF_HEIGHT * 0.5);
+    const textSize = PLATE_STYLE === "a" ? 8 : PLATE_STYLE === "b" ? 9.5 : 8.5;
+    const request: LabelRequest = {
+      text: appearance.plate,
+      x: x + iconRoom / 2,
+      y: py,
+      size: textSize,
+      minSize: textSize * 0.7,
+      maxWidth: Math.max(maxTotalWidth - padding * 2 - iconRoom, height),
+      alpha,
+      light: true,
+    };
+
+    if (PLATE_STYLE === "b") {
+      // No plate: bare outlined text, relation by colour and the small icon.
+      const colour = BARE_TEXT_COLOUR[appearance.plateColour] ?? 0xffffff;
+      request.tint = colour;
+      request.measured = (width) => {
+        const iconTexture = this.relationIconTexture(appearance.relationIcon);
+        if (!iconTexture) return;
+        const iconX = x + iconRoom / 2 - width / 2 - iconRadius - 1;
+        const iconSprite = icon(iconTexture, iconX, py, iconRadius, colour);
+        iconSprite.alpha = alpha;
+        this.plates.addChild(iconSprite);
+      };
+      this.requests.push(request);
+      return;
+    }
+
+    // a: white label with dark text for others, relation colour for the rest, no icon.
+    // c: the usual relation colours and icons, as a thin pill.
+    const whiteLabel = PLATE_STYLE === "a" && appearance.plateColour === RELATION_OTHER_COLOUR;
+    const gold = appearance.plateColour === GOLD_PLATE;
+    request.dark = whiteLabel ? LABEL_DARK_TEXT : gold ? OWN_PLATE_TEXT_COLOUR : 0xffffff;
+    request.measured = (width) => {
+      const total = Math.min(Math.max(width + iconRoom + padding * 2, height * 1.5), maxTotalWidth);
+      const plate = new NineSliceSprite({
+        texture: PLATE_STYLE === "a" ? this.atlas.plateRect : this.atlas.plateSlim,
+        leftWidth: SLIM_PLATE_HALF_HEIGHT,
+        rightWidth: SLIM_PLATE_HALF_HEIGHT,
+        topHeight: SLIM_PLATE_HALF_HEIGHT,
+        bottomHeight: SLIM_PLATE_HALF_HEIGHT,
+      });
+      plate.width = total;
+      plate.height = height;
+      plate.position.set(x - total / 2, py - SLIM_PLATE_HALF_HEIGHT);
+      plate.tint = whiteLabel ? 0xffffff : appearance.plateColour;
+      plate.alpha = (appearance.own ? 1 : PLATE_ALPHA) * alpha;
+      this.plates.addChild(plate);
+      const iconTexture = hasIcon ? this.relationIconTexture(appearance.relationIcon) : null;
+      if (iconTexture) {
+        const iconSprite = icon(iconTexture, x - total / 2 + iconRadius + 2, py, iconRadius, 0xffffff);
+        iconSprite.alpha = alpha;
+        this.plates.addChild(iconSprite);
+      }
+    };
+    this.requests.push(request);
   }
 
   /**
@@ -583,6 +691,32 @@ export class MapChunk {
     }
   }
 }
+
+/**
+ * How big the protection dome's baked picture is drawn so the glass encloses
+ * the whole tower (spire included) with a margin: tall enough for the full
+ * drawn height, wide enough that the tower's upper body sits inside the
+ * ellipse the picture draws (see `drawDome`).
+ */
+const domeScale = (towerWidth: number, towerHeight: number): { scaleX: number; scaleY: number } => {
+  const floorCentre = 16; // units above the foot
+  const domeRy = 35;
+  const scaleY = (towerHeight * 1.1) / DOME_ABOVE_FOOT;
+  // Probes down the tower: [half-width fraction of its width, height fraction].
+  const probes: [number, number][] = [
+    [0.5, 0.55],
+    [0.4, 0.8],
+    [0.2, 1],
+  ];
+  let scaleX = scaleY;
+  for (const [widthFraction, heightFraction] of probes) {
+    const dy = (towerHeight * heightFraction) / scaleY - floorCentre;
+    const inside = 0.85 - (dy / domeRy) ** 2;
+    if (inside <= 0.05) continue;
+    scaleX = Math.max(scaleX, (towerWidth * widthFraction) / ((DOME_WIDTH / 2) * Math.sqrt(inside)));
+  }
+  return { scaleX, scaleY };
+};
 
 const place = (sprite: Sprite, x: number, y: number, tint: number): Sprite => {
   sprite.anchor.set(0.5, 0.5);

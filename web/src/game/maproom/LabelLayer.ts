@@ -45,6 +45,11 @@ const MAP_FONT = "MapRoomLabel";
  */
 const PLAIN_FONT = "MapRoomLabelPlain";
 
+/** Thinner, regular-weight faces for the slim ?plateStyle options: plain, and outlined. */
+const LIGHT_PLAIN_FONT = "MapRoomLabelLightPlain";
+const LIGHT_FONT = "MapRoomLabelLight";
+const LIGHT_FAMILY = "Segoe UI, Arial, sans-serif";
+
 let fontInstalled = false;
 
 const installFont = (): void => {
@@ -53,6 +58,24 @@ const installFont = (): void => {
   BitmapFontManager.install({
     name: PLAIN_FONT,
     style: { fontFamily: "Titan One, sans-serif", fontSize: ATLAS_FONT_PX, fill: 0xffffff },
+    resolution: 2,
+    chars: BitmapFontManager.ASCII,
+  });
+  BitmapFontManager.install({
+    name: LIGHT_PLAIN_FONT,
+    style: { fontFamily: LIGHT_FAMILY, fontSize: ATLAS_FONT_PX, fontWeight: "600", fill: 0xffffff },
+    resolution: 2,
+    chars: BitmapFontManager.ASCII,
+  });
+  BitmapFontManager.install({
+    name: LIGHT_FONT,
+    style: {
+      fontFamily: LIGHT_FAMILY,
+      fontSize: ATLAS_FONT_PX,
+      fontWeight: "600",
+      fill: 0xffffff,
+      stroke: { color: 0x0d1017, width: 5, join: "round" },
+    },
     resolution: 2,
     chars: BitmapFontManager.ASCII,
   });
@@ -94,6 +117,10 @@ export interface LabelRequest {
    * tinted this colour.
    */
   dark?: number;
+  /** Regular-weight face instead of the heavy one (slim ?plateStyle options). */
+  light?: boolean;
+  /** Colours the outlined face (b option: relation colour on bare text). */
+  tint?: number;
   /** Hears how wide the text came out, so a name plate can be sized behind it. */
   measured?: (width: number) => void;
   /** Faded alongside its sprites when the kit filter dims this cell (#334). Default 1. */
@@ -186,9 +213,10 @@ export class LabelLayer {
   private place(item: LabelRequest): void {
     const text = this.pool.take();
     this.borrowed.push(text);
-    text.style.fontFamily = item.dark === undefined ? MAP_FONT : PLAIN_FONT;
+    const plain = item.dark !== undefined;
+    text.style.fontFamily = item.light ? (plain ? LIGHT_PLAIN_FONT : LIGHT_FONT) : plain ? PLAIN_FONT : MAP_FONT;
     text.text = item.text;
-    text.tint = item.dark ?? 0xffffff;
+    text.tint = item.dark ?? item.tint ?? 0xffffff;
     text.alpha = item.alpha ?? 1;
 
     // Measured at the atlas size, then scaled to the world size it wants, or
