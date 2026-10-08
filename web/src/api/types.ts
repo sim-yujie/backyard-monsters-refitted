@@ -832,6 +832,8 @@ export interface PlayerCell {
   pi: number;
   /** Always 0. */
   fr: number;
+  /** 1 on the caller's own outpost whose worker is free (#338); absent otherwise. */
+  wi?: 1;
   /** Own cells only: the owner's live resources. */
   r?: Resources;
   /** Own cells only: hatchery and garrison state. */

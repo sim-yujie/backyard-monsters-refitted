@@ -41,6 +41,20 @@ const HALF_HEIGHT = CELL_HEIGHT / 2;
  */
 const FILL_BLEED = 1;
 
+/**
+ * Texels per world pixel for the protection art (#338): drawn small but shown
+ * large and zoomed in, so it is baked at four times the density of the hexes.
+ * A handful of tiny textures, so the memory cost is trivial.
+ */
+const DETAIL_RESOLUTION = 8;
+
+/** The dome's drawing size in world units (Flash's 80 x 64), bottom-centre at the origin. */
+export const DOME_WIDTH = 80;
+export const DOME_HEIGHT = 64;
+export const TICK_WIDTH = 21;
+export const TICK_HEIGHT = 17;
+export const WORKER_SIZE = 28;
+
 /** Outline stroke widths in world pixels, one per tier band. */
 const OUTLINE_FINE = 1.5;
 const OUTLINE_BOLD = 4;
@@ -108,12 +122,16 @@ export class MapAtlas {
   /** Relation icon: crossed swords, for a cell that attacked the viewer (#334). */
   readonly swordsIcon: Texture;
   /**
-   * A faint circular bubble drawn over a player cell's building while it has
-   * damage protection or an active truce (#334). Replaces the vector ring the
-   * old map drew round a protected base; a sprite scales and tints it to sit
-   * over the building picture instead.
+   * Flash's glass protection dome (#338): a translucent green-white
+   * half-sphere with a soft highlight, a bright rim and an arc line, flat
+   * along the bottom. Drawn in code at {@link DETAIL_RESOLUTION} so it stays
+   * sharp when zoomed in; sized by `DOME_WIDTH` x `DOME_HEIGHT` units.
    */
-  readonly shieldBubble: Texture;
+  readonly protectionDome: Texture;
+  /** Flash's green truce tick, a small tile with a white check (#338). */
+  readonly truceTick: Texture;
+  /** Flash's idle worker, a little blue creature looking right (#338). */
+  readonly idleWorker: Texture;
 
   private readonly owned: Texture[];
 
@@ -245,8 +263,23 @@ export class MapAtlas {
         .stroke({ width: swordWidth, color: 0xffffff, cap: "round" }),
     );
 
-    this.shieldBubble = bake(renderer, frame(MARKER_UNIT + 1, MARKER_UNIT + 1), (g) =>
-      g.circle(0, 0, MARKER_UNIT).fill(0xffffff),
+    this.protectionDome = bake(
+      renderer,
+      new Rectangle(-DOME_WIDTH / 2 - 2, -DOME_HEIGHT - 2, DOME_WIDTH + 4, DOME_HEIGHT + 4),
+      drawDome,
+      DETAIL_RESOLUTION,
+    );
+    this.truceTick = bake(
+      renderer,
+      new Rectangle(-TICK_WIDTH / 2 - 1, -TICK_HEIGHT / 2 - 1, TICK_WIDTH + 2, TICK_HEIGHT + 2),
+      drawTick,
+      DETAIL_RESOLUTION,
+    );
+    this.idleWorker = bake(
+      renderer,
+      new Rectangle(-WORKER_SIZE / 2 - 2, -WORKER_SIZE / 2 - 2, WORKER_SIZE + 4, WORKER_SIZE + 4),
+      drawWorker,
+      DETAIL_RESOLUTION,
     );
 
     this.owned = [
@@ -263,7 +296,9 @@ export class MapAtlas {
       this.houseIcon,
       this.shieldIcon,
       this.swordsIcon,
-      this.shieldBubble,
+      this.protectionDome,
+      this.truceTick,
+      this.idleWorker,
     ];
   }
 
@@ -279,15 +314,73 @@ export class MapAtlas {
 }
 
 /** Draws one shape and hands back the texture, discarding the Graphics. */
-const bake = (renderer: Renderer, region: Rectangle, draw: (g: Graphics) => void): Texture => {
+const bake = (
+  renderer: Renderer,
+  region: Rectangle,
+  draw: (g: Graphics) => void,
+  resolution: number = ATLAS_RESOLUTION,
+): Texture => {
   const graphics = new Graphics();
   draw(graphics);
   const texture = renderer.generateTexture({
     target: graphics,
     frame: region,
-    resolution: ATLAS_RESOLUTION,
+    resolution,
     antialias: true,
   });
   graphics.destroy();
   return texture;
+};
+
+/** The points of the dome's outline: a half-ellipse from the left foot over the top to the right. */
+const domeArc = (halfWidth: number, height: number, steps = 48): number[] => {
+  const points: number[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const angle = Math.PI - (Math.PI * i) / steps;
+    points.push(Math.cos(angle) * halfWidth, -Math.sin(angle) * height);
+  }
+  return points;
+};
+
+/** Flash's glass dome: pale green-white body, top-left highlight, bright rim and arc line. */
+const drawDome = (g: Graphics): void => {
+  const halfWidth = DOME_WIDTH / 2;
+  g.poly(domeArc(halfWidth, DOME_HEIGHT)).fill({ color: 0xd6ffe4, alpha: 0.32 });
+  // A deeper tint toward the foot, so the glass reads as a volume.
+  g.poly(domeArc(halfWidth * 0.98, DOME_HEIGHT * 0.5)).fill({ color: 0x9fe8bc, alpha: 0.12 });
+  // The soft highlight, upper left.
+  g.ellipse(-halfWidth * 0.38, -DOME_HEIGHT * 0.68, halfWidth * 0.3, DOME_HEIGHT * 0.17)
+    .fill({ color: 0xffffff, alpha: 0.38 });
+  // The arc line just inside the rim, and the rim itself.
+  g.poly(domeArc(halfWidth * 0.9, DOME_HEIGHT * 0.9).slice(6, -6), false)
+    .stroke({ width: 0.9, color: 0xffffff, alpha: 0.5 });
+  g.poly(domeArc(halfWidth, DOME_HEIGHT)).stroke({ width: 1.6, color: 0xf2fff6, alpha: 0.9 });
+};
+
+/** Flash's truce marker: a green tile with a white check. */
+const drawTick = (g: Graphics): void => {
+  g.roundRect(-TICK_WIDTH / 2, -TICK_HEIGHT / 2, TICK_WIDTH, TICK_HEIGHT, 4)
+    .fill(0x2f9e44)
+    .stroke({ width: 1.2, color: 0xffffff });
+  g.moveTo(-5, 0.5).lineTo(-1.5, 4).lineTo(5.5, -4)
+    .stroke({ width: 2.4, color: 0xffffff, cap: "round", join: "round" });
+};
+
+/** Flash's idle worker: a blue teardrop with two big eyes, looking right. */
+const drawWorker = (g: Graphics): void => {
+  const r = WORKER_SIZE / 2;
+  // A soft ground shadow.
+  g.ellipse(1, r * 0.8, r * 0.7, r * 0.22).fill({ color: 0x000000, alpha: 0.22 });
+  // The body: a round blue drop with a little point at the top.
+  g.moveTo(-r * 0.15, -r * 0.95)
+    .bezierCurveTo(r * 0.7, -r * 0.5, r * 0.8, r * 0.2, 0, r * 0.75)
+    .bezierCurveTo(-r * 0.8, r * 0.3, -r * 0.8, -r * 0.4, -r * 0.15, -r * 0.95)
+    .fill(0x2f7de1)
+    .stroke({ width: 1, color: 0x1a4f9e });
+  g.ellipse(-r * 0.3, -r * 0.1, r * 0.14, r * 0.3).fill({ color: 0xa9d0ff, alpha: 0.55 });
+  // Two eyes, pupils to the right.
+  for (const eyeX of [-r * 0.05, r * 0.42]) {
+    g.ellipse(eyeX, -r * 0.18, r * 0.24, r * 0.3).fill(0xffffff).stroke({ width: 0.6, color: 0x1a4f9e });
+    g.circle(eyeX + r * 0.08, -r * 0.14, r * 0.1).fill(0x10213f);
+  }
 };
