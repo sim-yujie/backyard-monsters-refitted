@@ -48,9 +48,15 @@ const FILL_BLEED = 1;
  */
 const DETAIL_RESOLUTION = 8;
 
-/** The dome's drawing size in world units (Flash's 80 x 64), bottom-centre at the origin. */
+/**
+ * The dome's drawing size in world units (Flash's 80 x 64). The origin is the
+ * tower's foot: the glass rises `DOME_ABOVE_FOOT` above it and the front of the
+ * floor ellipse dips `DOME_BELOW_FOOT` below it.
+ */
 export const DOME_WIDTH = 80;
 export const DOME_HEIGHT = 64;
+export const DOME_ABOVE_FOOT = 51;
+export const DOME_BELOW_FOOT = DOME_HEIGHT - DOME_ABOVE_FOOT;
 export const TICK_WIDTH = 21;
 export const TICK_HEIGHT = 17;
 export const WORKER_SIZE = 28;
@@ -265,7 +271,7 @@ export class MapAtlas {
 
     this.protectionDome = bake(
       renderer,
-      new Rectangle(-DOME_WIDTH / 2 - 2, -DOME_HEIGHT - 2, DOME_WIDTH + 4, DOME_HEIGHT + 4),
+      new Rectangle(-DOME_WIDTH / 2 - 2, -DOME_ABOVE_FOOT - 2, DOME_WIDTH + 4, DOME_HEIGHT + 4),
       drawDome,
       DETAIL_RESOLUTION,
     );
@@ -333,31 +339,33 @@ const bake = (
 };
 
 /**
- * Flash's glass dome (shape 150): a hemisphere seen from a little above, so its
- * silhouette is a wide, slightly squashed oval (80 x 64) whose lower edge is
- * the curve of the base. Pale green-white body, a soft top-left highlight, a
- * bright rim and the base-rim arc line across the front.
+ * Flash's glass dome (shape 150), traced from it: a half-dome (80 wide, 35 high
+ * above the floor) standing on a floor ellipse (80 x 56) whose centre is 16
+ * above the tower's foot. Very translucent pale body, a thin soft rim, a faint
+ * highlight at the upper left and the floor's front arc drawn as a light line.
  */
 const drawDome = (g: Graphics): void => {
   const rx = DOME_WIDTH / 2;
-  const ry = DOME_HEIGHT / 2;
-  const cy = -ry;
-  // Half an oval, from the left edge round to the right one (upper) or back under (lower).
-  const half = (upper: boolean, steps = 48): number[] => {
+  const floorY = -16;
+  const floorRy = 28;
+  const domeRy = 35;
+  const arc = (ry: number, upper: boolean, steps = 48): number[] => {
     const points: number[] = [];
     for (let i = 0; i <= steps; i++) {
       const angle = Math.PI - (Math.PI * i) / steps;
-      points.push(Math.cos(angle) * rx, cy + (upper ? -1 : 1) * Math.sin(angle) * ry);
+      points.push(Math.cos(angle) * rx, floorY + (upper ? -1 : 1) * Math.sin(angle) * ry);
     }
     return points;
   };
-  g.ellipse(0, cy, rx, ry).fill({ color: 0xd6ffe4, alpha: 0.26 });
-  // The soft highlight, upper left.
-  g.ellipse(-rx * 0.4, cy - ry * 0.52, rx * 0.26, ry * 0.2).fill({ color: 0xffffff, alpha: 0.4 });
-  // The base-rim arc line across the front, and the outline.
-  g.ellipse(0, cy + ry * 0.05, rx * 0.97, ry * 0.45).stroke({ width: 0.9, color: 0xffffff, alpha: 0.4 });
-  g.poly(half(true), false).stroke({ width: 1.6, color: 0xf2fff6, alpha: 0.9 });
-  g.poly(half(false), false).stroke({ width: 1.2, color: 0xf2fff6, alpha: 0.5 });
+  // Body: the half-dome, then the floor ellipse a little fainter.
+  g.poly(arc(domeRy, true)).fill({ color: 0xeaffef, alpha: 0.14 });
+  g.ellipse(0, floorY, rx, floorRy).fill({ color: 0xeaffef, alpha: 0.07 });
+  // Faint highlight, top left.
+  g.ellipse(-rx * 0.45, floorY - domeRy * 0.62, rx * 0.2, domeRy * 0.14)
+    .fill({ color: 0xffffff, alpha: 0.22 });
+  // Thin rims: the dome's outline and the floor's front arc.
+  g.poly(arc(domeRy, true), false).stroke({ width: 0.8, color: 0xffffff, alpha: 0.55 });
+  g.poly(arc(floorRy, false), false).stroke({ width: 0.8, color: 0xffffff, alpha: 0.45 });
 };
 
 /** Flash's truce marker: a green tile with a white check. */

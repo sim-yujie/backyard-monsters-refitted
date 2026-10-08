@@ -19,6 +19,7 @@ import {
 } from "./cellVisuals";
 import { LabelLayer, type LabelRequest, type TextPool } from "./LabelLayer";
 import {
+  DOME_ABOVE_FOOT,
   DOME_HEIGHT,
   DOME_WIDTH,
   ICON_UNIT,
@@ -462,8 +463,8 @@ export class MapChunk {
 
       if (appearance.protected) {
         const dome = new Sprite(this.atlas.protectionDome);
-        // The baked tile has 2 units of padding on every side; the foot is 2 above its bottom.
-        dome.anchor.set(0.5, (DOME_HEIGHT + 2) / (DOME_HEIGHT + 4));
+        // The baked tile has 2 units of padding on every side; the foot is DOME_ABOVE_FOOT + 2 below its top.
+        dome.anchor.set(0.5, (DOME_ABOVE_FOOT + 2) / (DOME_HEIGHT + 4));
         dome.setSize((DOME_WIDTH + 4) * flashScale, (DOME_HEIGHT + 4) * flashScale);
         dome.position.set(footX, footY);
         dome.alpha = alpha;
@@ -483,7 +484,7 @@ export class MapChunk {
         const worker = new Sprite(this.atlas.idleWorker);
         worker.anchor.set(0.5);
         worker.setSize((WORKER_SIZE + 4) * flashScale, (WORKER_SIZE + 4) * flashScale);
-        worker.position.set(footX + (DOME_WIDTH / 2) * flashScale, footY - DOME_HEIGHT * flashScale * WORKER_Y_FRACTION);
+        worker.position.set(footX + (DOME_WIDTH / 2) * flashScale, footY - DOME_ABOVE_FOOT * flashScale * WORKER_Y_FRACTION);
         worker.alpha = alpha;
         this.bases.addChild(worker);
       }
