@@ -18,7 +18,17 @@ import {
   type MapViewerContext,
 } from "./cellVisuals";
 import { LabelLayer, type LabelRequest, type TextPool } from "./LabelLayer";
-import { ICON_UNIT, MARKER_UNIT, PLATE_HALF_HEIGHT, TICK_HEIGHT, TICK_WIDTH, WORKER_SIZE, type MapAtlas } from "./mapAtlas";
+import {
+  DOME_HEIGHT,
+  DOME_WIDTH,
+  ICON_UNIT,
+  MARKER_UNIT,
+  PLATE_HALF_HEIGHT,
+  TICK_HEIGHT,
+  TICK_WIDTH,
+  WORKER_SIZE,
+  type MapAtlas,
+} from "./mapAtlas";
 import { BuildingKind, type BuildingAvatars } from "./buildingAvatars";
 import type { TribeAvatars } from "./tribeAvatars";
 import type { ZoneStore } from "./ZoneStore";
@@ -111,16 +121,15 @@ const BUILDING_FOOT_Y = CELL_HEIGHT * 0.12;
 const BUILDING_INVITE_RADIUS = BUILDING_HEIGHT * 0.4;
 
 /**
- * Flash's protection dome (#338): about 1.1x the tower's width and 1.05x its
- * height, seated on the tower's foot.
+ * Flash's protection extras (#338) are all sized from one scale: our building's
+ * height over Flash's outpost picture height (61 px). Flash's dome is then
+ * 80 x 64 of those (a wide, low half-dome, 1.3x as wide and 1.05x as tall as
+ * the tower), its truce tick 21 x 17 and its idle worker 28 x 28. Sizing from
+ * the height only keeps the shape right although our tower is slimmer than
+ * Flash's.
  */
-const DOME_WIDTH_SCALE = 1.1;
-const DOME_HEIGHT_SCALE = 1.05;
-/** The truce tick's size in world units (Flash's 21 x 17 shape, scaled up a little to read on the map). */
-const TICK_SCALE = 1.3;
-/** The idle worker's size (Flash's 28 px), and where it stands against the tower: right of the foot, low. */
-const WORKER_SCALE = 1.2;
-const WORKER_X_FRACTION = 0.5;
+const FLASH_TOWER_HEIGHT = 61;
+/** The idle worker stands at the dome's right edge, this fraction of the dome height above the foot. */
 const WORKER_Y_FRACTION = 0.3;
 
 /** The dot on the player's own outpost while an invitation to move onto it waits (#205). */
@@ -437,6 +446,7 @@ export class MapChunk {
     const outpost = appearance.marker === CellMarker.OUTPOST;
     const footX = x;
     const footY = y + BUILDING_FOOT_Y;
+    const flashScale = BUILDING_HEIGHT / FLASH_TOWER_HEIGHT;
 
     const texture = this.buildings.textureFor(outpost ? BuildingKind.OUTPOST : BuildingKind.YARD);
     if (texture) {
@@ -452,8 +462,9 @@ export class MapChunk {
 
       if (appearance.protected) {
         const dome = new Sprite(this.atlas.protectionDome);
-        dome.anchor.set(0.5, 1);
-        dome.setSize(sprite.width * DOME_WIDTH_SCALE, sprite.height * DOME_HEIGHT_SCALE);
+        // The baked tile has 2 units of padding on every side; the foot is 2 above its bottom.
+        dome.anchor.set(0.5, (DOME_HEIGHT + 2) / (DOME_HEIGHT + 4));
+        dome.setSize((DOME_WIDTH + 4) * flashScale, (DOME_HEIGHT + 4) * flashScale);
         dome.position.set(footX, footY);
         dome.alpha = alpha;
         this.bases.addChild(dome);
@@ -462,7 +473,7 @@ export class MapChunk {
       if (appearance.truce) {
         const tick = new Sprite(this.atlas.truceTick);
         tick.anchor.set(0.5);
-        tick.setSize(TICK_WIDTH * TICK_SCALE, TICK_HEIGHT * TICK_SCALE);
+        tick.setSize((TICK_WIDTH + 2) * flashScale, (TICK_HEIGHT + 2) * flashScale);
         tick.position.set(footX + sprite.width * 0.5, footY - sprite.height * 0.8);
         tick.alpha = alpha;
         this.bases.addChild(tick);
@@ -471,8 +482,8 @@ export class MapChunk {
       if (appearance.idleWorker) {
         const worker = new Sprite(this.atlas.idleWorker);
         worker.anchor.set(0.5);
-        worker.setSize(WORKER_SIZE * WORKER_SCALE, WORKER_SIZE * WORKER_SCALE);
-        worker.position.set(footX + sprite.width * WORKER_X_FRACTION, footY - sprite.height * WORKER_Y_FRACTION);
+        worker.setSize((WORKER_SIZE + 4) * flashScale, (WORKER_SIZE + 4) * flashScale);
+        worker.position.set(footX + (DOME_WIDTH / 2) * flashScale, footY - DOME_HEIGHT * flashScale * WORKER_Y_FRACTION);
         worker.alpha = alpha;
         this.bases.addChild(worker);
       }

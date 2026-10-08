@@ -332,29 +332,32 @@ const bake = (
   return texture;
 };
 
-/** The points of the dome's outline: a half-ellipse from the left foot over the top to the right. */
-const domeArc = (halfWidth: number, height: number, steps = 48): number[] => {
-  const points: number[] = [];
-  for (let i = 0; i <= steps; i++) {
-    const angle = Math.PI - (Math.PI * i) / steps;
-    points.push(Math.cos(angle) * halfWidth, -Math.sin(angle) * height);
-  }
-  return points;
-};
-
-/** Flash's glass dome: pale green-white body, top-left highlight, bright rim and arc line. */
+/**
+ * Flash's glass dome (shape 150): a hemisphere seen from a little above, so its
+ * silhouette is a wide, slightly squashed oval (80 x 64) whose lower edge is
+ * the curve of the base. Pale green-white body, a soft top-left highlight, a
+ * bright rim and the base-rim arc line across the front.
+ */
 const drawDome = (g: Graphics): void => {
-  const halfWidth = DOME_WIDTH / 2;
-  g.poly(domeArc(halfWidth, DOME_HEIGHT)).fill({ color: 0xd6ffe4, alpha: 0.32 });
-  // A deeper tint toward the foot, so the glass reads as a volume.
-  g.poly(domeArc(halfWidth * 0.98, DOME_HEIGHT * 0.5)).fill({ color: 0x9fe8bc, alpha: 0.12 });
+  const rx = DOME_WIDTH / 2;
+  const ry = DOME_HEIGHT / 2;
+  const cy = -ry;
+  // Half an oval, from the left edge round to the right one (upper) or back under (lower).
+  const half = (upper: boolean, steps = 48): number[] => {
+    const points: number[] = [];
+    for (let i = 0; i <= steps; i++) {
+      const angle = Math.PI - (Math.PI * i) / steps;
+      points.push(Math.cos(angle) * rx, cy + (upper ? -1 : 1) * Math.sin(angle) * ry);
+    }
+    return points;
+  };
+  g.ellipse(0, cy, rx, ry).fill({ color: 0xd6ffe4, alpha: 0.26 });
   // The soft highlight, upper left.
-  g.ellipse(-halfWidth * 0.38, -DOME_HEIGHT * 0.68, halfWidth * 0.3, DOME_HEIGHT * 0.17)
-    .fill({ color: 0xffffff, alpha: 0.38 });
-  // The arc line just inside the rim, and the rim itself.
-  g.poly(domeArc(halfWidth * 0.9, DOME_HEIGHT * 0.9).slice(6, -6), false)
-    .stroke({ width: 0.9, color: 0xffffff, alpha: 0.5 });
-  g.poly(domeArc(halfWidth, DOME_HEIGHT)).stroke({ width: 1.6, color: 0xf2fff6, alpha: 0.9 });
+  g.ellipse(-rx * 0.4, cy - ry * 0.52, rx * 0.26, ry * 0.2).fill({ color: 0xffffff, alpha: 0.4 });
+  // The base-rim arc line across the front, and the outline.
+  g.ellipse(0, cy + ry * 0.05, rx * 0.97, ry * 0.45).stroke({ width: 0.9, color: 0xffffff, alpha: 0.4 });
+  g.poly(half(true), false).stroke({ width: 1.6, color: 0xf2fff6, alpha: 0.9 });
+  g.poly(half(false), false).stroke({ width: 1.2, color: 0xf2fff6, alpha: 0.5 });
 };
 
 /** Flash's truce marker: a green tile with a white check. */
