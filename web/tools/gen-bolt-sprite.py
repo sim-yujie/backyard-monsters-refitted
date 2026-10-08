@@ -45,6 +45,12 @@ GAMMA = 0.75               # lifts the dark shell so it reads at the real size
 MARGIN = 0.5               # keep this many 1x pixels inside the cell
 SINK = 2.0                 # the painted body stands this many 1x pixels below the original's body bottom (its shadow sits there)
 
+# per-heading fixes, no repaint needed: size up the narrow back views, keep the cut-off ones well inside the cell,
+# and take the blue out of the glossy shell highlights so they match the black shell of the front views
+SIZE_UP = {22: 1.1, 23: 1.1}
+EXTRA_MARGIN = {28: 1.0, 29: 1.0}   # 1x pixels, on top of MARGIN
+DEBLUE = {17: 0.85, 21: 0.85, 25: 0.85, 26: 0.85, 27: 0.85}   # how much of the blue cast is removed
+
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
 PARTIAL = "--partial" in sys.argv
 if len(args) != 1:
@@ -135,14 +141,15 @@ for col, cut in painted.items():
 scale = {}
 for col, cut in painted.items():
     near = [cover[(col + d) % DIRS] for d in range(-2, 3) if (col + d) % DIRS in cover]
-    k = float(np.median(near))   # 1x pixels per painted pixel
+    k = float(np.median(near)) * SIZE_UP.get(col, 1.0)   # 1x pixels per painted pixel
     x0, y0, x1, y1 = trim[col]
     ox0, oy0, ox1, oy1 = original_box(col)
     cx, bottom = (ox0 + ox1) / 2, oy1 + SINK
     fx0, fy0, fx1, fy1 = bbox(np.asarray(cut)[..., 3] > 40)
     mid = (x0 + x1) / 2
     left, right, up = (mid - fx0) * k, (fx1 - mid) * k, (y1 - fy0) * k
-    limit = min((cx - MARGIN) / left, (CELL[0] - MARGIN - cx) / right, (bottom - MARGIN) / up)
+    m = MARGIN + EXTRA_MARGIN.get(col, 0)
+    limit = min((cx - m) / left, (CELL[0] - m - cx) / right, (bottom - m) / up)
     scale[col] = k * min(1.0, limit)
     print(f"column {col:2}: scale {scale[col]:.4f}" + (" (cut to fit the cell)" if limit < 1 else ""), file=sys.stderr)
 
@@ -159,6 +166,12 @@ for col in range(DIRS):
     mon = resize_premultiplied(cut, (max(1, round(cut.width * s)), max(1, round(cut.height * s))))
     px = np.asarray(mon).astype(float)
     px[..., :3] = 255 * (px[..., :3] / 255) ** GAMMA
+    if col in DEBLUE:
+        r, g, b = px[..., 0], px[..., 1], px[..., 2]
+        luma = 0.3 * r + 0.59 * g + 0.11 * b
+        bluish = np.clip((b - np.maximum(r, g)) / 40, 0, 1)   # 0 for the pink body, 1 for the blue gloss
+        for i in range(3):
+            px[..., i] += (luma - px[..., i]) * bluish * DEBLUE[col]
     mon = Image.fromarray(px.astype("uint8"), "RGBA")
     bx, by = (ox0 + ox1) / 2 * UP, (oy1 + SINK) * UP        # ground point: bottom centre of the original's body
     ox, oy = round(bx - (x0 + x1) / 2 * s), round(by - y1 * s)
