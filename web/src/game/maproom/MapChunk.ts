@@ -489,7 +489,8 @@ export class MapChunk {
       const envelope = new Sprite(this.atlas.inviteEnvelope);
       envelope.anchor.set(0.5);
       envelope.setSize((ENVELOPE_WIDTH + 2) * flashScale, (ENVELOPE_HEIGHT + 2) * flashScale);
-      envelope.position.set(footX - BUILDING_HEIGHT * 0.3, footY - BUILDING_HEIGHT * 0.78);
+      envelope.position.set(footX - BUILDING_HEIGHT * 0.34, footY - BUILDING_HEIGHT * 0.66);
+      envelope.rotation = 0.2; // Flash tilts it a little clockwise
       envelope.alpha = alpha;
       this.bases.addChild(envelope);
     }
