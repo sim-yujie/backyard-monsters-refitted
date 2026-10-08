@@ -45,8 +45,15 @@ export interface CellAppearance {
   plate: string;
   /** The cell belongs to the caller: a cyan ring and plate. */
   own: boolean;
-  /** Damage protection or an active truce. */
-  shielded: boolean;
+  /** Damage protection: the glass dome over the building (#338). */
+  protected: boolean;
+  /** An active truce: a small green tick (#338), no dome. */
+  truce: boolean;
+  /**
+   * The player's own outpost with its worker free (#338; Flash's `mcWorker`):
+   * a small blue creature beside the tower. Only the owner sees it.
+   */
+  idleWorker: boolean;
   /**
    * The player's own outpost with an invitation to move onto it still waiting
    * (#205; Flash's `mcInvite`): a small dot on its marker. Only the owner sees it.
@@ -272,7 +279,9 @@ export const loadingAppearance = (): CellAppearance => ({
   badge: "",
   plate: "",
   own: false,
-  shielded: false,
+  protected: false,
+  truce: false,
+  idleWorker: false,
   invitePending: false,
   loading: true,
   star: "",
@@ -340,7 +349,9 @@ export const fogAppearance = (coord?: { x: number; y: number }, sight?: SightLoo
     badge: "",
     plate: "",
     own: false,
-    shielded: false,
+    protected: false,
+  truce: false,
+  idleWorker: false,
     invitePending: false,
     loading: false,
     star: "",
@@ -386,7 +397,9 @@ export const appearanceOf = (
     badge: "",
     plate: "",
     own: false,
-    shielded: false,
+    protected: false,
+  truce: false,
+  idleWorker: false,
     invitePending: false,
     loading: false,
     star: "",
@@ -416,7 +429,9 @@ export const appearanceOf = (
       // mark a cell as the viewer's own, so the text no longer needs to.
       plate: cell.n,
       own,
-      shielded: cell.p === 1 || truceActive,
+      protected: cell.p === 1,
+      truce: truceActive,
+      idleWorker: own && outpost && cell.wi === 1,
       invitePending: own && outpost && Number(cell.pi) > 0,
       star: String(cell.l),
       plateColour: style.colour,

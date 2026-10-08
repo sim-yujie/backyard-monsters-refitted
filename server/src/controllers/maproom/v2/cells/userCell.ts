@@ -41,7 +41,7 @@ type Cell = Loaded<WorldMapCell, "save", UserCellFields>;
  */
 export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number, UserCellOwner>) => {
   const currentUser: User = ctx.authUser;
-  const { online: onlineNow, truces, pendingInvites } = ctx.state;
+  const { online: onlineNow, truces, pendingInvites, idleWorkers } = ctx.state;
 
   const mine = currentUser.userid === cell.uid;
   const cellOwner = mine ? currentUser : cellOwners.get(cell.uid);
@@ -87,6 +87,9 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     // The thread of an invitation to move still waiting on this, one of the
     // viewer's own outposts (#205; Flash's `_invitePendingID`), else 0.
     pi: (mine && !homeCell && (pendingInvites as Map<string, number> | undefined)?.get(cell.baseid)) || 0,
+    // The viewer's own outpost with its one worker free (#338; Flash's idle
+    // `mcWorker`). Absent elsewhere: nobody else sees whether a worker is busy.
+    ...(mine && outpostCell && (idleWorkers as Set<number> | undefined)?.has(cellSave.basesaveid) && { wi: 1 }),
     bid: cell.baseid,
     aid: cellOwner.alliance_id,
     i: cell.terrainHeight,

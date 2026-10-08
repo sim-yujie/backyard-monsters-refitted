@@ -8,6 +8,14 @@ import type { Context } from "koa";
 
 mock.module("../../../../server.js", () => ({ postgres: { em: {} }, redis: {} }));
 
+const REAL_ARMIES = "../../../../services/yard/armies.ts?real";
+const realArmies = (await import(REAL_ARMIES)) as typeof import("../../../../services/yard/armies.js");
+mock.module("../../../../services/yard/armies.js", () => ({
+  ...realArmies,
+  loadArmyOwner: async () => null,
+  monstersForMap: () => ({}),
+}));
+
 const { userCell } = await import("./userCell.js");
 
 const OWNER = 77;
@@ -115,5 +123,29 @@ describe("userCell invitation pending (#205)", () => {
       pi: 0,
     });
     expect(await userCell(withInvite, cellOwnedBy(2), own)).toMatchObject({ pi: 0 });
+  });
+});
+
+describe("userCell idle worker (#338)", () => {
+  const own = (base_type: number, basesaveid: number) =>
+    ({ ...outpostWith(0, 0), uid: 2505, base_type, save: { ...outpostWith(0, 0).save, basesaveid } }) as unknown as Parameters<typeof userCell>[1];
+  const withIdle = (ids: number[]) =>
+    ({ authUser: { userid: 2505, save: {} }, state: { online: new Set(), truces: new Map(), idleWorkers: new Set(ids) } }) as unknown as Context;
+  const ownerFor = new Map([
+    [2505, { userid: 2505, username: "me", pic_square: "", alliance_id: null, save: { points: "0", basevalue: "0" } }],
+  ]) as unknown as Parameters<typeof userCell>[2];
+
+  test("an own outpost with a free worker says so", async () => {
+    const payload = await userCell(withIdle([9]), own(3, 9), ownerFor);
+    expect(payload).toMatchObject({ wi: 1 });
+  });
+
+  test("an own outpost with a busy worker does not", async () => {
+    expect(await userCell(withIdle([]), own(3, 9), ownerFor)).not.toHaveProperty("wi");
+  });
+
+  test("someone else's outpost never does", async () => {
+    const other = { ...outpostWith(0, 0), save: { ...outpostWith(0, 0).save, basesaveid: 9 } } as unknown as Parameters<typeof userCell>[1];
+    expect(await userCell(withIdle([9]), other, owners)).not.toHaveProperty("wi");
   });
 });

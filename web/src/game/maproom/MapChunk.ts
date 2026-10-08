@@ -12,14 +12,13 @@ import {
   MARKER_FILL_COLOUR,
   OWN_PLATE_TEXT_COLOUR,
   OutpostKit,
-  SHIELD_COLOUR,
   appearanceOf,
   hexWidthAt,
   type CellAppearance,
   type MapViewerContext,
 } from "./cellVisuals";
 import { LabelLayer, type LabelRequest, type TextPool } from "./LabelLayer";
-import { ICON_UNIT, MARKER_UNIT, PLATE_HALF_HEIGHT, type MapAtlas } from "./mapAtlas";
+import { ICON_UNIT, MARKER_UNIT, PLATE_HALF_HEIGHT, TICK_HEIGHT, TICK_WIDTH, WORKER_SIZE, type MapAtlas } from "./mapAtlas";
 import { BuildingKind, type BuildingAvatars } from "./buildingAvatars";
 import type { TribeAvatars } from "./tribeAvatars";
 import type { ZoneStore } from "./ZoneStore";
@@ -112,12 +111,17 @@ const BUILDING_FOOT_Y = CELL_HEIGHT * 0.12;
 const BUILDING_INVITE_RADIUS = BUILDING_HEIGHT * 0.4;
 
 /**
- * The faint shield bubble over a protected or truced cell's building (#334,
- * owner decision 2026-10-07): a little larger than the building picture so it
- * reads as a bubble round it, not a patch on it.
+ * Flash's protection dome (#338): about 1.1x the tower's width and 1.05x its
+ * height, seated on the tower's foot.
  */
-const SHIELD_BUBBLE_SCALE = 1.2;
-const SHIELD_BUBBLE_ALPHA = 0.4;
+const DOME_WIDTH_SCALE = 1.1;
+const DOME_HEIGHT_SCALE = 1.05;
+/** The truce tick's size in world units (Flash's 21 x 17 shape, scaled up a little to read on the map). */
+const TICK_SCALE = 1.3;
+/** The idle worker's size (Flash's 28 px), and where it stands against the tower: right of the foot, low. */
+const WORKER_SCALE = 1.2;
+const WORKER_X_FRACTION = 0.5;
+const WORKER_Y_FRACTION = 0.3;
 
 /** The dot on the player's own outpost while an invitation to move onto it waits (#205). */
 const INVITE_DOT_RADIUS = CELL_HEIGHT * 0.11;
@@ -422,12 +426,11 @@ export class MapChunk {
    * filter dims every sprite this draws together when the cell does not match
    * it.
    *
-   * A cell under damage protection or an active truce (`appearance.shielded`)
-   * wears a faint blue bubble over its building picture (#334, owner decision
-   * 2026-10-07) - the earlier redraw dropped the old vector ring with no
-   * replacement; this is that replacement, drawn in `bases` so it sits over
-   * the building but under the star and the plate (both in later layers), and
-   * dims with the rest of the cell under the kit filter.
+   * A cell under damage protection wears Flash's glass dome over its building
+   * (#338), an active truce a small green tick, and the player's own outpost
+   * with a free worker the little blue worker. All three are drawn in `bases`
+   * so they sit over the building but under the star and the plate (both in
+   * later layers), and dim with the rest of the cell under the kit filter.
    */
   private addPlayer(appearance: CellAppearance, x: number, y: number): void {
     const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
@@ -447,14 +450,31 @@ export class MapChunk {
       sprite.alpha = alpha;
       this.bases.addChild(sprite);
 
-      if (appearance.shielded) {
-        const bubble = new Sprite(this.atlas.shieldBubble);
-        bubble.anchor.set(0.5, 1);
-        bubble.setSize(sprite.width * SHIELD_BUBBLE_SCALE, sprite.height * SHIELD_BUBBLE_SCALE);
-        bubble.position.set(footX, footY);
-        bubble.tint = SHIELD_COLOUR;
-        bubble.alpha = SHIELD_BUBBLE_ALPHA * alpha;
-        this.bases.addChild(bubble);
+      if (appearance.protected) {
+        const dome = new Sprite(this.atlas.protectionDome);
+        dome.anchor.set(0.5, 1);
+        dome.setSize(sprite.width * DOME_WIDTH_SCALE, sprite.height * DOME_HEIGHT_SCALE);
+        dome.position.set(footX, footY);
+        dome.alpha = alpha;
+        this.bases.addChild(dome);
+      }
+
+      if (appearance.truce) {
+        const tick = new Sprite(this.atlas.truceTick);
+        tick.anchor.set(0.5);
+        tick.setSize(TICK_WIDTH * TICK_SCALE, TICK_HEIGHT * TICK_SCALE);
+        tick.position.set(footX + sprite.width * 0.5, footY - sprite.height * 0.8);
+        tick.alpha = alpha;
+        this.bases.addChild(tick);
+      }
+
+      if (appearance.idleWorker) {
+        const worker = new Sprite(this.atlas.idleWorker);
+        worker.anchor.set(0.5);
+        worker.setSize(WORKER_SIZE * WORKER_SCALE, WORKER_SIZE * WORKER_SCALE);
+        worker.position.set(footX + sprite.width * WORKER_X_FRACTION, footY - sprite.height * WORKER_Y_FRACTION);
+        worker.alpha = alpha;
+        this.bases.addChild(worker);
       }
     }
 

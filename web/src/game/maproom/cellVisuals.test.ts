@@ -87,10 +87,24 @@ describe("appearanceOf", () => {
     });
   });
 
-  it("marks protection and a running truce, and not an expired one", () => {
-    expect(appearanceOf(player({ p: 1 }), 0).shielded).toBe(true);
-    expect(appearanceOf(player({ t: 100 }), 50).shielded).toBe(true);
-    expect(appearanceOf(player({ t: 100 }), 150).shielded).toBe(false);
+  it("marks protection with a dome, any owner, a main yard or an outpost (#338)", () => {
+    expect(appearanceOf(player({ p: 1 }), 0)).toMatchObject({ protected: true, truce: false });
+    expect(appearanceOf(player({ p: 1, b: 3 }), 0).protected).toBe(true);
+    expect(appearanceOf(player({ p: 1, b: 3, mine: 1 }), 0).protected).toBe(true);
+    expect(appearanceOf(player({ p: 0 }), 0).protected).toBe(false);
+  });
+
+  it("marks a running truce with a tick and not the dome, and not an expired one (#338)", () => {
+    expect(appearanceOf(player({ t: 100 }), 50)).toMatchObject({ truce: true, protected: false });
+    expect(appearanceOf(player({ t: 100 }), 150).truce).toBe(false);
+    expect(appearanceOf(player({ p: 1, t: 100 }), 50)).toMatchObject({ truce: true, protected: true });
+  });
+
+  it("shows the idle worker on the player's own outpost only when the server says it is free (#338)", () => {
+    expect(appearanceOf(player({ mine: 1, b: 3, wi: 1 }), 0).idleWorker).toBe(true);
+    expect(appearanceOf(player({ mine: 1, b: 3 }), 0).idleWorker).toBe(false);
+    expect(appearanceOf(player({ mine: 0, b: 3, wi: 1 }), 0).idleWorker).toBe(false);
+    expect(appearanceOf(player({ mine: 1, b: 2, wi: 1 }), 0).idleWorker).toBe(false);
   });
 
   it("dots the player's own outpost while an invitation to move onto it waits, and nothing else (#205)", () => {
