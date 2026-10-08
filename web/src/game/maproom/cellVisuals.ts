@@ -56,7 +56,7 @@ export interface CellAppearance {
   idleWorker: boolean;
   /**
    * The player's own outpost with an invitation to move onto it still waiting
-   * (#205; Flash's `mcInvite`): a small dot on its marker. Only the owner sees it.
+   * (#205; Flash's `mcInvite`): Flash's open envelope on its tower. Only the owner sees it.
    */
   invitePending: boolean;
   /** The cell has not been fetched yet. */
@@ -183,8 +183,6 @@ export const unexploredColour = (col: number, row: number): number =>
 export const RANGE_COLOUR = 0x3dd6f5;
 export const OWN_COLOUR = RANGE_COLOUR;
 export const SHIELD_COLOUR = 0x9cb9ff;
-/** An invitation waiting on the player's own outpost (#205), `--colour-warning`. */
-export const INVITE_COLOUR = 0xf5b94a;
 export const DAMAGE_COLOUR = 0xe05252;
 export const SELECT_COLOUR = 0xffffff;
 export const HOVER_COLOUR = 0xffffff;

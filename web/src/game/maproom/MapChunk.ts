@@ -7,7 +7,6 @@ import {
   DAMAGE_COLOUR,
   DIMMED_ALPHA,
   GRID_LINE_COLOUR,
-  INVITE_COLOUR,
   KIT_TINT,
   MARKER_FILL_COLOUR,
   OWN_PLATE_TEXT_COLOUR,
@@ -22,6 +21,8 @@ import {
   DOME_ABOVE_FOOT,
   DOME_HEIGHT,
   DOME_WIDTH,
+  ENVELOPE_HEIGHT,
+  ENVELOPE_WIDTH,
   ICON_UNIT,
   MARKER_UNIT,
   PLATE_HALF_HEIGHT,
@@ -118,8 +119,6 @@ const BADGE_TEXT_SIZE = CELL_HEIGHT * 0.21;
 const BUILDING_HEIGHT = CELL_HEIGHT * 0.85;
 /** Where the building's foot sits: a little above the plate, so they overlap slightly. */
 const BUILDING_FOOT_Y = CELL_HEIGHT * 0.12;
-/** Nominal half-height used only to place the invite dot near the building's edge. */
-const BUILDING_INVITE_RADIUS = BUILDING_HEIGHT * 0.4;
 
 /**
  * Flash's protection extras (#338) are all sized from one scale: our building's
@@ -132,11 +131,6 @@ const BUILDING_INVITE_RADIUS = BUILDING_HEIGHT * 0.4;
 const FLASH_TOWER_HEIGHT = 61;
 /** The idle worker stands at the dome's right edge, this fraction of the dome height above the foot. */
 const WORKER_Y_FRACTION = 0.3;
-
-/** The dot on the player's own outpost while an invitation to move onto it waits (#205). */
-const INVITE_DOT_RADIUS = CELL_HEIGHT * 0.11;
-/** Where on the rim: to the right, a little above the middle, clear of the plate of the cell above. */
-const INVITE_DOT_ANGLE = -Math.PI / 10;
 
 /** The gold level star every player cell wears, top-left of the hex (#334). */
 const STAR_RADIUS = CELL_HEIGHT * 0.19;
@@ -491,14 +485,13 @@ export class MapChunk {
     }
 
     if (appearance.invitePending) {
-      // Near the building's upper-right edge, drawn over it.
-      const dx = footX + BUILDING_INVITE_RADIUS * Math.cos(INVITE_DOT_ANGLE);
-      const dy = footY - BUILDING_HEIGHT * 0.5 + BUILDING_INVITE_RADIUS * Math.sin(INVITE_DOT_ANGLE);
-      const dot = disc(this.atlas.disc, dx, dy, INVITE_DOT_RADIUS, INVITE_COLOUR);
-      const dotRing = disc(this.atlas.ring, dx, dy, INVITE_DOT_RADIUS, MARKER_FILL_COLOUR);
-      dot.alpha = alpha;
-      dotRing.alpha = alpha;
-      this.bases.addChild(dot, dotRing);
+      // Flash's open envelope, at the tower's upper left (the tick sits upper right, the worker lower right).
+      const envelope = new Sprite(this.atlas.inviteEnvelope);
+      envelope.anchor.set(0.5);
+      envelope.setSize((ENVELOPE_WIDTH + 2) * flashScale, (ENVELOPE_HEIGHT + 2) * flashScale);
+      envelope.position.set(footX - BUILDING_HEIGHT * 0.3, footY - BUILDING_HEIGHT * 0.78);
+      envelope.alpha = alpha;
+      this.bases.addChild(envelope);
     }
 
     // The gold level star every player cell wears (#334).

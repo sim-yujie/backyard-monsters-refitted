@@ -60,6 +60,8 @@ export const DOME_BELOW_FOOT = DOME_HEIGHT - DOME_ABOVE_FOOT;
 export const TICK_WIDTH = 21;
 export const TICK_HEIGHT = 17;
 export const WORKER_SIZE = 28;
+export const ENVELOPE_WIDTH = 24;
+export const ENVELOPE_HEIGHT = 27;
 
 /** Outline stroke widths in world pixels, one per tier band. */
 const OUTLINE_FINE = 1.5;
@@ -138,6 +140,8 @@ export class MapAtlas {
   readonly truceTick: Texture;
   /** Flash's idle worker, a little blue creature looking right (#338). */
   readonly idleWorker: Texture;
+  /** Flash's open envelope with a letter peeking out, the pending-invitation marker. */
+  readonly inviteEnvelope: Texture;
 
   private readonly owned: Texture[];
 
@@ -288,6 +292,13 @@ export class MapAtlas {
       DETAIL_RESOLUTION,
     );
 
+    this.inviteEnvelope = bake(
+      renderer,
+      new Rectangle(-ENVELOPE_WIDTH / 2 - 1, -ENVELOPE_HEIGHT / 2 - 1, ENVELOPE_WIDTH + 2, ENVELOPE_HEIGHT + 2),
+      drawEnvelope,
+      DETAIL_RESOLUTION,
+    );
+
     this.owned = [
       this.hex,
       this.outlineFine,
@@ -305,6 +316,7 @@ export class MapAtlas {
       this.protectionDome,
       this.truceTick,
       this.idleWorker,
+      this.inviteEnvelope,
     ];
   }
 
@@ -394,4 +406,38 @@ const drawWorker = (g: Graphics): void => {
     g.ellipse(eyeX, -r * 0.18, r * 0.24, r * 0.3).fill(0xffffff).stroke({ width: 0.6, color: 0x1a4f9e });
     g.circle(eyeX + r * 0.08, -r * 0.14, r * 0.1).fill(0x10213f);
   }
+};
+
+/**
+ * Flash's pending-invitation marker (shape 137): an open grey envelope with a
+ * cream letter, written with grey lines, rising out of its pocket.
+ */
+const drawEnvelope = (g: Graphics): void => {
+  const w = ENVELOPE_WIDTH / 2;
+  const h = ENVELOPE_HEIGHT / 2;
+  const edge = { width: 1, color: 0x6b6b66, join: "round" as const };
+  // The envelope's back and its open flap standing up behind the letter.
+  g.poly([-w, -h * 0.05, -w * 0.45, -h * 0.55, w * 0.55, -h * 0.55, w, -h * 0.05, w, h * 0.9, -w, h * 0.9])
+    .fill(0xb9b9b4)
+    .stroke(edge);
+  // The letter.
+  g.roundRect(-w * 0.6, -h, w * 1.2, h * 1.15, 1.2).fill(0xf2e2c4).stroke({ width: 0.9, color: 0x7a6e58 });
+  const lines: Array<[number, number, number]> = [
+    [-0.4, -0.78, 0.0],
+    [-0.4, -0.52, 0.65],
+    [-0.4, -0.3, 0.35],
+    [0.1, -0.3, 0.3],
+    [-0.4, -0.1, 0.5],
+  ];
+  for (const [x, y, len] of lines) {
+    g.moveTo(w * x, h * y).lineTo(w * (x + (len || 0.6)), h * y)
+      .stroke({ width: 1.1, color: 0x8a8a86, cap: "round" });
+  }
+  // The front pocket with its two fold lines.
+  g.poly([-w, -h * 0.05, 0, h * 0.5, w, -h * 0.05, w, h * 0.9, -w, h * 0.9])
+    .fill(0xe8e8e4)
+    .stroke(edge);
+  g.moveTo(-w, h * 0.9).lineTo(-w * 0.25, h * 0.3)
+    .moveTo(w, h * 0.9).lineTo(w * 0.25, h * 0.3)
+    .stroke({ width: 0.7, color: 0x9a9a95, cap: "round" });
 };

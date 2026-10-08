@@ -107,11 +107,12 @@ describe("appearanceOf", () => {
     expect(appearanceOf(player({ mine: 1, b: 2, wi: 1 }), 0).idleWorker).toBe(false);
   });
 
-  it("dots the player's own outpost while an invitation to move onto it waits, and nothing else (#205)", () => {
+  it("shows the envelope on the player's own outpost while an invitation to move onto it waits, and nothing else (#205)", () => {
     expect(appearanceOf(player({ mine: 1, b: 3, pi: 12 }), 0).invitePending).toBe(true);
     expect(appearanceOf(player({ mine: 1, b: 3, pi: 0 }), 0).invitePending).toBe(false);
     expect(appearanceOf(player({ mine: 0, b: 3, pi: 12 }), 0).invitePending).toBe(false);
     expect(appearanceOf(player({ mine: 1, b: 2, pi: 12 }), 0).invitePending).toBe(false);
+    expect(appearanceOf(player({ mine: 1, b: 3 }), 0).invitePending).toBe(false);
   });
 });
 
