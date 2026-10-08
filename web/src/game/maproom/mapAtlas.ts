@@ -1,4 +1,4 @@
-import { Graphics, Rectangle, type Renderer, type Texture } from "pixi.js";
+import { Assets, Container, Graphics, Rectangle, Sprite, type Renderer, type Texture } from "pixi.js";
 import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
 
 /**
@@ -60,6 +60,8 @@ export const DOME_BELOW_FOOT = DOME_HEIGHT - DOME_ABOVE_FOOT;
 export const TICK_WIDTH = 21;
 export const TICK_HEIGHT = 17;
 export const WORKER_SIZE = 28;
+/** The picture fills this share of the worker box, so the helper stands about a third of the tower tall (Flash). */
+const HELPER_ART_FRACTION = 0.72;
 export const ENVELOPE_WIDTH = 24;
 export const ENVELOPE_HEIGHT = 27;
 
@@ -148,6 +150,7 @@ export class MapAtlas {
   readonly inviteEnvelope: Texture;
 
   private readonly owned: Texture[];
+  private destroyed = false;
 
   constructor(renderer: Renderer) {
     this.hex = bake(renderer, frame(HALF_WIDTH + FILL_BLEED, HALF_HEIGHT + FILL_BLEED), (g) =>
@@ -309,6 +312,7 @@ export class MapAtlas {
       drawWorker,
       DETAIL_RESOLUTION,
     );
+    void this.paintWorkerArt(renderer);
 
     this.inviteEnvelope = bake(
       renderer,
@@ -339,7 +343,31 @@ export class MapAtlas {
     ];
   }
 
+  /**
+   * Paints the painted helper picture over the drawn stand-in. The stand-in
+   * stays if the picture does not load; the texture is painted in place, so
+   * sprites that already use it pick the picture up.
+   */
+  private async paintWorkerArt(renderer: Renderer): Promise<void> {
+    try {
+      const art = await Assets.load<Texture>(`${import.meta.env.BASE_URL}map/idle-helper.png`);
+      if (this.destroyed) return;
+      const side = WORKER_SIZE + 4;
+      const sprite = new Sprite(art);
+      sprite.anchor.set(0.5);
+      sprite.position.set(side / 2, side / 2);
+      sprite.setSize(WORKER_SIZE * HELPER_ART_FRACTION, WORKER_SIZE * HELPER_ART_FRACTION);
+      const stage = new Container();
+      stage.addChild(sprite);
+      renderer.render({ container: stage, target: this.idleWorker, clear: true });
+      stage.destroy({ children: true });
+    } catch (caught) {
+      console.warn("The idle helper picture did not load; keeping the drawn stand-in.", caught);
+    }
+  }
+
   destroy(): void {
+    this.destroyed = true;
     for (const texture of this.owned) texture.destroy(true);
   }
 
