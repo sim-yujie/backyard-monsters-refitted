@@ -26,7 +26,6 @@ import {
   ENVELOPE_WIDTH,
   ICON_UNIT,
   MARKER_UNIT,
-  PLATE_HALF_HEIGHT,
   SLIM_PLATE_HALF_HEIGHT,
   TICK_HEIGHT,
   TICK_WIDTH,
@@ -119,8 +118,6 @@ const BADGE_TEXT_SIZE = CELL_HEIGHT * 0.21;
  * against the reference screenshot once it is on screen.
  */
 const BUILDING_HEIGHT = CELL_HEIGHT * 0.85;
-/** Where the building's foot sits: a little above the plate, so they overlap slightly. */
-const BUILDING_FOOT_Y = CELL_HEIGHT * 0.12;
 
 /**
  * Flash's protection extras (#338) are all sized from one scale: our building's
@@ -134,30 +131,12 @@ const FLASH_TOWER_HEIGHT = 61;
 /** The idle worker stands at the dome's right edge, this fraction of the dome height above the foot. */
 const WORKER_Y_FRACTION = 0.3;
 
-/** The gold level star every player cell wears, top-left of the hex (#334). */
+/** The gold level star every player cell wears (#334), tucked at the tower's upper left. */
 const STAR_RADIUS = CELL_HEIGHT * 0.19;
-const STAR_X = -CELL_WIDTH * 0.32;
-const STAR_Y = -CELL_HEIGHT * 0.28;
 const STAR_TEXT_SIZE = CELL_HEIGHT * 0.2;
 const STAR_COLOUR = 0xf2c230;
 
-/** A relation icon (house/shield/swords), drawn inside the plate's left end (#334). */
-const RELATION_ICON_RADIUS = CELL_HEIGHT * 0.1;
-const RELATION_ICON_PAD = CELL_WIDTH * 0.01;
-
-/**
- * A player's name plate, placed low in the hex so the width it has to work
- * with (`hexWidthAt`) is enough to hold a name without spilling into the
- * hex's neighbour (#334) - this offset is the geometry's load-bearing
- * constant, not just a layout nicety; moving it changes how much width the
- * plate is allowed.
- */
-const PLATE_HEIGHT = PLATE_HALF_HEIGHT * 2;
-const PLATE_Y_OFFSET = CELL_HEIGHT * 0.22;
-const PLATE_TEXT_SIZE = PLATE_HEIGHT * 0.62;
-const PLATE_PADDING = CELL_WIDTH * 0.03;
-/** A long name shrinks only this far (about 14 letters fit) before it is cut short with dots. */
-const PLATE_MIN_TEXT_SIZE = PLATE_TEXT_SIZE * 0.55;
+/** Opacity of other players' labels. */
 const PLATE_ALPHA = 0.92;
 
 /**
@@ -167,35 +146,18 @@ const PLATE_ALPHA = 0.92;
 const GRID_ALPHA = 0.2;
 
 /**
- * TEMPORARY: the owner picks one of these with ?plateStyle=a|b|c; anything else
- * keeps the current look. All three also seat the tower lower in its hex and
- * shrink the level star to sit at the tower's upper left.
+ * Flash-style slim name label (owner pick, 2026-10-08): a thin rectangle under
+ * the tower, a small star at the tower's upper left, and the tower seated low
+ * in its hex.
  */
-type PlateStyle = "current" | "a" | "b" | "c";
-const readPlateStyle = (): PlateStyle => {
-  try {
-    const value = new URLSearchParams(globalThis.location?.search ?? "").get("plateStyle");
-    return value === "a" || value === "b" || value === "c" ? value : "current";
-  } catch {
-    return "current";
-  }
-};
-const PLATE_STYLE = readPlateStyle();
-const SLIM = PLATE_STYLE !== "current";
-/** The slim options seat the tower this much lower (fraction of the hex height). */
-const SLIM_FOOT_Y = CELL_HEIGHT * 0.27;
-const SLIM_PLATE_Y = CELL_HEIGHT * 0.36;
-const SLIM_STAR_SCALE = 0.58;
-const SLIM_ICON_RADIUS = CELL_HEIGHT * 0.06;
-/** Dark text on a white label, and bare-text colours for option b. */
+const FOOT_Y = CELL_HEIGHT * 0.27;
+const LABEL_Y = CELL_HEIGHT * 0.36;
+const LABEL_TEXT_SIZE = 8;
+const LABEL_PADDING = 3;
+const STAR_SCALE = 0.58;
+/** Dark text on the white label other players get. */
 const LABEL_DARK_TEXT = 0x1b2733;
 const GOLD_PLATE = 0xd4af37;
-const BARE_TEXT_COLOUR: Record<number, number> = {
-  0xd4af37: 0xffd84d,
-  0x3fae4e: 0x7bea8b,
-  0xd64545: 0xff7a7a,
-  0x2f74c0: 0xffffff,
-};
 
 export class MapChunk {
   /** The ground and the camps' pictures. */
@@ -473,7 +435,7 @@ export class MapChunk {
     const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
     const outpost = appearance.marker === CellMarker.OUTPOST;
     const footX = x;
-    const footY = y + (SLIM ? SLIM_FOOT_Y : BUILDING_FOOT_Y);
+    const footY = y + FOOT_Y;
     const flashScale = BUILDING_HEIGHT / FLASH_TOWER_HEIGHT;
 
     const texture = this.buildings.textureFor(outpost ? BuildingKind.OUTPOST : BuildingKind.YARD);
@@ -531,10 +493,9 @@ export class MapChunk {
     }
 
     // The gold level star every player cell wears (#334).
-    const starScale = SLIM ? SLIM_STAR_SCALE : 1;
-    const starRadius = STAR_RADIUS * starScale;
-    const starX = SLIM ? footX - BUILDING_HEIGHT * 0.3 : x + STAR_X;
-    const starY = SLIM ? footY - BUILDING_HEIGHT * 0.82 : y + STAR_Y;
+    const starRadius = STAR_RADIUS * STAR_SCALE;
+    const starX = footX - BUILDING_HEIGHT * 0.3;
+    const starY = footY - BUILDING_HEIGHT * 0.82;
     const star = icon(this.atlas.star, starX, starY, starRadius, STAR_COLOUR);
     star.alpha = alpha;
     this.badgeDiscs.addChild(star);
@@ -542,110 +503,34 @@ export class MapChunk {
       text: appearance.star,
       x: starX,
       y: starY,
-      size: STAR_TEXT_SIZE * starScale,
+      size: STAR_TEXT_SIZE * STAR_SCALE,
       maxWidth: starRadius * 1.6,
       alpha,
     });
 
     if (appearance.plate === "") return;
-    if (SLIM) {
-      this.addSlimLabel(appearance, x, y, alpha);
-      return;
-    }
-    const py = y + PLATE_Y_OFFSET;
-    // Capped to the hex's actual width at py, so the plate never spills into
-    // the neighbour hex sharing that edge (#334).
-    // Measured at the plate's lower edge, where the hex is narrowest, less a
-    // little for the rounded ends.
-    const maxTotalWidth = hexWidthAt(py - y + PLATE_HALF_HEIGHT * 0.5);
-    // The relation icon takes the plate's left end; the name sits in the rest.
-    const iconRoom = appearance.relationIcon === "none" ? 0 : RELATION_ICON_RADIUS * 2 + RELATION_ICON_PAD * 2;
+    const py = y + LABEL_Y;
+    const height = SLIM_PLATE_HALF_HEIGHT * 2;
+    // Capped to the hex's width at the label's lower edge, so it never spills into a neighbour.
+    const maxTotalWidth = hexWidthAt(py - y + SLIM_PLATE_HALF_HEIGHT * 0.5);
+    const whiteLabel = appearance.plateColour === RELATION_OTHER_COLOUR;
+    const gold = appearance.plateColour === GOLD_PLATE;
     this.requests.push({
       text: appearance.plate,
-      x: x + iconRoom / 2,
+      x,
       y: py,
-      size: PLATE_TEXT_SIZE,
-      minSize: PLATE_MIN_TEXT_SIZE,
-      maxWidth: Math.max(maxTotalWidth - PLATE_PADDING * 2 - iconRoom, PLATE_HEIGHT),
+      size: LABEL_TEXT_SIZE,
+      minSize: LABEL_TEXT_SIZE * 0.7,
+      maxWidth: Math.max(maxTotalWidth - LABEL_PADDING * 2, height),
       alpha,
-      ...(appearance.own ? { dark: OWN_PLATE_TEXT_COLOUR } : {}),
-      measured: (width) => this.addPlate(x, py, width + iconRoom, maxTotalWidth, appearance, alpha),
+      light: true,
+      dark: whiteLabel ? LABEL_DARK_TEXT : gold ? OWN_PLATE_TEXT_COLOUR : 0xffffff,
+      measured: (width) => this.addLabel(x, py, width, maxTotalWidth, appearance, alpha),
     });
   }
 
-  /** The ?plateStyle a / b / c name label, slim and seated low under the tower. */
-  private addSlimLabel(appearance: CellAppearance, x: number, y: number, alpha: number): void {
-    const py = y + SLIM_PLATE_Y;
-    const height = SLIM_PLATE_HALF_HEIGHT * 2;
-    const hasIcon = appearance.relationIcon !== "none" && PLATE_STYLE !== "a";
-    const iconRadius = SLIM_ICON_RADIUS;
-    const iconRoom = hasIcon ? iconRadius * 2 + 2 : 0;
-    const padding = 3;
-    const maxTotalWidth = hexWidthAt(py - y + SLIM_PLATE_HALF_HEIGHT * 0.5);
-    const textSize = PLATE_STYLE === "a" ? 8 : PLATE_STYLE === "b" ? 9.5 : 8.5;
-    const request: LabelRequest = {
-      text: appearance.plate,
-      x: x + iconRoom / 2,
-      y: py,
-      size: textSize,
-      minSize: textSize * 0.7,
-      maxWidth: Math.max(maxTotalWidth - padding * 2 - iconRoom, height),
-      alpha,
-      light: true,
-    };
-
-    if (PLATE_STYLE === "b") {
-      // No plate: bare outlined text, relation by colour and the small icon.
-      const colour = BARE_TEXT_COLOUR[appearance.plateColour] ?? 0xffffff;
-      request.tint = colour;
-      request.measured = (width) => {
-        const iconTexture = this.relationIconTexture(appearance.relationIcon);
-        if (!iconTexture) return;
-        const iconX = x + iconRoom / 2 - width / 2 - iconRadius - 1;
-        const iconSprite = icon(iconTexture, iconX, py, iconRadius, colour);
-        iconSprite.alpha = alpha;
-        this.plates.addChild(iconSprite);
-      };
-      this.requests.push(request);
-      return;
-    }
-
-    // a: white label with dark text for others, relation colour for the rest, no icon.
-    // c: the usual relation colours and icons, as a thin pill.
-    const whiteLabel = PLATE_STYLE === "a" && appearance.plateColour === RELATION_OTHER_COLOUR;
-    const gold = appearance.plateColour === GOLD_PLATE;
-    request.dark = whiteLabel ? LABEL_DARK_TEXT : gold ? OWN_PLATE_TEXT_COLOUR : 0xffffff;
-    request.measured = (width) => {
-      const total = Math.min(Math.max(width + iconRoom + padding * 2, height * 1.5), maxTotalWidth);
-      const plate = new NineSliceSprite({
-        texture: PLATE_STYLE === "a" ? this.atlas.plateRect : this.atlas.plateSlim,
-        leftWidth: SLIM_PLATE_HALF_HEIGHT,
-        rightWidth: SLIM_PLATE_HALF_HEIGHT,
-        topHeight: SLIM_PLATE_HALF_HEIGHT,
-        bottomHeight: SLIM_PLATE_HALF_HEIGHT,
-      });
-      plate.width = total;
-      plate.height = height;
-      plate.position.set(x - total / 2, py - SLIM_PLATE_HALF_HEIGHT);
-      plate.tint = whiteLabel ? 0xffffff : appearance.plateColour;
-      plate.alpha = (appearance.own ? 1 : PLATE_ALPHA) * alpha;
-      this.plates.addChild(plate);
-      const iconTexture = hasIcon ? this.relationIconTexture(appearance.relationIcon) : null;
-      if (iconTexture) {
-        const iconSprite = icon(iconTexture, x - total / 2 + iconRadius + 2, py, iconRadius, 0xffffff);
-        iconSprite.alpha = alpha;
-        this.plates.addChild(iconSprite);
-      }
-    };
-    this.requests.push(request);
-  }
-
-  /**
-   * The rounded bar behind a name, as wide as the name it holds (but never
-   * wider than the hex it sits in, #334), tinted and iconed by the cell's
-   * relation to the viewer.
-   */
-  private addPlate(
+  /** The thin rectangle behind a name: white for others, the relation colour otherwise. */
+  private addLabel(
     x: number,
     y: number,
     textWidth: number,
@@ -653,42 +538,21 @@ export class MapChunk {
     appearance: CellAppearance,
     alpha: number,
   ): void {
+    const height = SLIM_PLATE_HALF_HEIGHT * 2;
+    const total = Math.min(Math.max(textWidth + LABEL_PADDING * 2, height * 1.5), maxTotalWidth);
     const plate = new NineSliceSprite({
-      texture: this.atlas.plate,
-      leftWidth: PLATE_HALF_HEIGHT,
-      rightWidth: PLATE_HALF_HEIGHT,
-      topHeight: PLATE_HALF_HEIGHT,
-      bottomHeight: PLATE_HALF_HEIGHT,
+      texture: this.atlas.plateRect,
+      leftWidth: SLIM_PLATE_HALF_HEIGHT,
+      rightWidth: SLIM_PLATE_HALF_HEIGHT,
+      topHeight: SLIM_PLATE_HALF_HEIGHT,
+      bottomHeight: SLIM_PLATE_HALF_HEIGHT,
     });
-    const width = Math.min(Math.max(textWidth + PLATE_PADDING * 2, PLATE_HEIGHT * 1.5), maxTotalWidth);
-    plate.width = width;
-    plate.height = PLATE_HEIGHT;
-    plate.position.set(x - width / 2, y - PLATE_HALF_HEIGHT);
-    plate.tint = appearance.plateColour;
+    plate.width = total;
+    plate.height = height;
+    plate.position.set(x - total / 2, y - SLIM_PLATE_HALF_HEIGHT);
+    plate.tint = appearance.plateColour === RELATION_OTHER_COLOUR ? 0xffffff : appearance.plateColour;
     plate.alpha = (appearance.own ? 1 : PLATE_ALPHA) * alpha;
     this.plates.addChild(plate);
-
-    const iconTexture = this.relationIconTexture(appearance.relationIcon);
-    if (iconTexture) {
-      const iconX = x - width / 2 + RELATION_ICON_RADIUS + RELATION_ICON_PAD;
-      const iconSprite = icon(iconTexture, iconX, y, RELATION_ICON_RADIUS, 0xffffff);
-      iconSprite.alpha = alpha;
-      this.plates.addChild(iconSprite);
-    }
-  }
-
-  /** The atlas texture for a relation icon, or null for `"none"`. */
-  private relationIconTexture(icon: CellAppearance["relationIcon"]): Texture | null {
-    switch (icon) {
-      case "house":
-        return this.atlas.houseIcon;
-      case "shield":
-        return this.atlas.shieldIcon;
-      case "swords":
-        return this.atlas.swordsIcon;
-      default:
-        return null;
-    }
   }
 }
 
