@@ -37,19 +37,26 @@ export interface CellAppearance {
   /** A camp's level on its badge. Empty means no badge. */
   badge: string;
   /**
-   * A player's name plate (#176): "Bramblefoot  24", username and level, the
-   * same on the viewer's own cells as everyone else's (#334, owner decision
-   * 2026-10-07) - the gold plate and house icon mark those, not the text.
+   * A player's name plate (#176): the username only, the same on the viewer's
+   * own cells as everyone else's (#334, owner decision 2026-10-07) - the gold
+   * plate and house icon mark those, and the level lives on the gold star.
    * Empty means no plate.
    */
   plate: string;
   /** The cell belongs to the caller: a cyan ring and plate. */
   own: boolean;
-  /** Damage protection or an active truce. */
-  shielded: boolean;
+  /** Damage protection: the glass dome over the building (#338). */
+  protected: boolean;
+  /** An active truce: a small green tick (#338), no dome. */
+  truce: boolean;
+  /**
+   * The player's own outpost with its worker free (#338; Flash's `mcWorker`):
+   * a small blue creature beside the tower. Only the owner sees it.
+   */
+  idleWorker: boolean;
   /**
    * The player's own outpost with an invitation to move onto it still waiting
-   * (#205; Flash's `mcInvite`): a small dot on its marker. Only the owner sees it.
+   * (#205; Flash's `mcInvite`): Flash's open envelope on its tower. Only the owner sees it.
    */
   invitePending: boolean;
   /** The cell has not been fetched yet. */
@@ -176,8 +183,6 @@ export const unexploredColour = (col: number, row: number): number =>
 export const RANGE_COLOUR = 0x3dd6f5;
 export const OWN_COLOUR = RANGE_COLOUR;
 export const SHIELD_COLOUR = 0x9cb9ff;
-/** An invitation waiting on the player's own outpost (#205), `--colour-warning`. */
-export const INVITE_COLOUR = 0xf5b94a;
 export const DAMAGE_COLOUR = 0xe05252;
 export const SELECT_COLOUR = 0xffffff;
 export const HOVER_COLOUR = 0xffffff;
@@ -272,7 +277,9 @@ export const loadingAppearance = (): CellAppearance => ({
   badge: "",
   plate: "",
   own: false,
-  shielded: false,
+  protected: false,
+  truce: false,
+  idleWorker: false,
   invitePending: false,
   loading: true,
   star: "",
@@ -340,7 +347,9 @@ export const fogAppearance = (coord?: { x: number; y: number }, sight?: SightLoo
     badge: "",
     plate: "",
     own: false,
-    shielded: false,
+    protected: false,
+  truce: false,
+  idleWorker: false,
     invitePending: false,
     loading: false,
     star: "",
@@ -386,7 +395,9 @@ export const appearanceOf = (
     badge: "",
     plate: "",
     own: false,
-    shielded: false,
+    protected: false,
+  truce: false,
+  idleWorker: false,
     invitePending: false,
     loading: false,
     star: "",
@@ -414,9 +425,11 @@ export const appearanceOf = (
       // decision 2026-10-07) - including the viewer's own cells, which used to
       // say "You"/"Outpost" instead. The gold plate and house icon already
       // mark a cell as the viewer's own, so the text no longer needs to.
-      plate: `${plateName(cell.n)}  ${cell.l}`,
+      plate: cell.n,
       own,
-      shielded: cell.p === 1 || truceActive,
+      protected: cell.p === 1,
+      truce: truceActive,
+      idleWorker: own && outpost && cell.wi === 1,
       invitePending: own && outpost && Number(cell.pi) > 0,
       star: String(cell.l),
       plateColour: style.colour,
@@ -455,16 +468,6 @@ export const rasterColour = (cell: MapCell | undefined): number => {
   // they keep their terrain and only a destroyed one is called out.
   return cell.d === 1 ? 0x6b2b2b : terrainColour(cell.i);
 };
-
-/** Names longer than this are cut on a plate, because no plate would fit them. */
-const MAX_PLATE_NAME = 12;
-
-/**
- * A name as a plate shows it: cut short with three dots, which the map's
- * ASCII bitmap font can draw (it has no ellipsis).
- */
-export const plateName = (name: string): string =>
-  name.length > MAX_PLATE_NAME ? `${name.slice(0, MAX_PLATE_NAME)}...` : name;
 
 /**
  * How wide the hex is at a vertical offset from its centre (#334).

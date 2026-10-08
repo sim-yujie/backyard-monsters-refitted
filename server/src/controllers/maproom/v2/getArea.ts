@@ -11,6 +11,7 @@ import { generateNoise, getTerrainHeight } from "../../../services/maproom/v2/ge
 import { MapRoom2, MapRoomCell, MapRoomVersion } from "../../../enums/MapRoom.js";
 import { onlinePlayers } from "../../../services/user/online.js";
 import { getTruces } from "../../../services/maproom/getTruces.js";
+import { idleWorkerSaves } from "../../../services/maproom/v2/idleWorkers.js";
 import { pendingInvitesOn } from "../../../services/mail/inviteRules.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { mapRoomDisabledErr } from "../../../errors/errors.js";
@@ -211,7 +212,12 @@ export const getArea: KoaController = async (ctx) => {
     .filter((cell) => cell.uid === user.userid && cell.base_type === MapRoomCell.OUTPOST)
     .map((cell) => cell.baseid);
 
-  const [ownersList, online, truces, pendingInvites] = await Promise.all([
+  // Own outposts whose worker is free (#338), by base-save id.
+  const ownOutpostSaveIds = visibleDbCells
+    .filter((cell) => cell.uid === user.userid && cell.base_type === MapRoomCell.OUTPOST && cell.save)
+    .map((cell) => cell.save!.basesaveid);
+
+  const [ownersList, online, truces, pendingInvites, idleWorkers] = await Promise.all([
     postgres.em.find(User, { userid: { $in: ownerIds } }, {
       populate: ["save"],
       fields: CELL_OWNER_FIELDS,
@@ -221,6 +227,7 @@ export const getArea: KoaController = async (ctx) => {
     onlinePlayers(ownerIds, getCurrentDateTime()),
     getTruces(user.userid, ownerIds),
     pendingInvitesOn(postgres.em, user.userid, ownOutposts, getCurrentDateTime()),
+    idleWorkerSaves(postgres.em, ownOutpostSaveIds),
   ]);
 
   const cellOwners = new Map(ownersList.map((u) => [u.userid, u]));
@@ -228,6 +235,7 @@ export const getArea: KoaController = async (ctx) => {
   ctx.state.online = online;
   ctx.state.truces = truces;
   ctx.state.pendingInvites = pendingInvites;
+  ctx.state.idleWorkers = idleWorkers;
 
   const allianceIds = new Set<number>();
 

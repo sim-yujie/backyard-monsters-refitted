@@ -19,7 +19,6 @@ import {
   fogAppearance,
   hexWidthAt,
   kitOf,
-  plateName,
   terrainColour,
   unexploredColour,
   type MapViewerContext,
@@ -65,10 +64,10 @@ describe("appearanceOf", () => {
     });
   });
 
-  it("gives a player a name plate with their level, and the same level on their gold star (#334)", () => {
+  it("gives a player a name plate with only their username, and the level on their gold star (#334)", () => {
     expect(appearanceOf(player(), 0)).toMatchObject({
       marker: CellMarker.YARD,
-      plate: "Bramblefoot  24",
+      plate: "Bramblefoot",
       badge: "",
       own: false,
       star: "24",
@@ -81,24 +80,39 @@ describe("appearanceOf", () => {
   });
 
   it("plates the viewer's own yard and outpost with their username, same as anyone else's (#334)", () => {
-    expect(appearanceOf(player({ mine: 1 }), 0)).toMatchObject({ plate: "Bramblefoot  24", own: true });
+    expect(appearanceOf(player({ mine: 1 }), 0)).toMatchObject({ plate: "Bramblefoot", own: true });
     expect(appearanceOf(player({ mine: 1, b: 3 }), 0)).toMatchObject({
       marker: CellMarker.OUTPOST,
-      plate: "Bramblefoot  24",
+      plate: "Bramblefoot",
     });
   });
 
-  it("marks protection and a running truce, and not an expired one", () => {
-    expect(appearanceOf(player({ p: 1 }), 0).shielded).toBe(true);
-    expect(appearanceOf(player({ t: 100 }), 50).shielded).toBe(true);
-    expect(appearanceOf(player({ t: 100 }), 150).shielded).toBe(false);
+  it("marks protection with a dome, any owner, a main yard or an outpost (#338)", () => {
+    expect(appearanceOf(player({ p: 1 }), 0)).toMatchObject({ protected: true, truce: false });
+    expect(appearanceOf(player({ p: 1, b: 3 }), 0).protected).toBe(true);
+    expect(appearanceOf(player({ p: 1, b: 3, mine: 1 }), 0).protected).toBe(true);
+    expect(appearanceOf(player({ p: 0 }), 0).protected).toBe(false);
   });
 
-  it("dots the player's own outpost while an invitation to move onto it waits, and nothing else (#205)", () => {
+  it("marks a running truce with a tick and not the dome, and not an expired one (#338)", () => {
+    expect(appearanceOf(player({ t: 100 }), 50)).toMatchObject({ truce: true, protected: false });
+    expect(appearanceOf(player({ t: 100 }), 150).truce).toBe(false);
+    expect(appearanceOf(player({ p: 1, t: 100 }), 50)).toMatchObject({ truce: true, protected: true });
+  });
+
+  it("shows the idle worker on the player's own outpost only when the server says it is free (#338)", () => {
+    expect(appearanceOf(player({ mine: 1, b: 3, wi: 1 }), 0).idleWorker).toBe(true);
+    expect(appearanceOf(player({ mine: 1, b: 3 }), 0).idleWorker).toBe(false);
+    expect(appearanceOf(player({ mine: 0, b: 3, wi: 1 }), 0).idleWorker).toBe(false);
+    expect(appearanceOf(player({ mine: 1, b: 2, wi: 1 }), 0).idleWorker).toBe(false);
+  });
+
+  it("shows the envelope on the player's own outpost while an invitation to move onto it waits, and nothing else (#205)", () => {
     expect(appearanceOf(player({ mine: 1, b: 3, pi: 12 }), 0).invitePending).toBe(true);
     expect(appearanceOf(player({ mine: 1, b: 3, pi: 0 }), 0).invitePending).toBe(false);
     expect(appearanceOf(player({ mine: 0, b: 3, pi: 12 }), 0).invitePending).toBe(false);
     expect(appearanceOf(player({ mine: 1, b: 2, pi: 12 }), 0).invitePending).toBe(false);
+    expect(appearanceOf(player({ mine: 1, b: 3 }), 0).invitePending).toBe(false);
   });
 });
 
@@ -233,9 +247,10 @@ describe("fog of war (#331)", () => {
   });
 });
 
-it("cuts a long name on its plate with dots the map's font can draw", () => {
-  expect(plateName("Bramblefoot")).toBe("Bramblefoot");
-  expect(plateName("AVeryLongPlayerName")).toBe("AVeryLongPla...");
+it("never writes the level on the plate, only on the star (#334)", () => {
+  const looks = appearanceOf(player({ n: "AVeryLongPlayerName", l: 30 }), 0);
+  expect(looks.plate).toBe("AVeryLongPlayerName");
+  expect(looks.star).toBe("30");
 });
 
 describe("hexWidthAt (#334): how much width a plate has before it spills into a neighbour hex", () => {

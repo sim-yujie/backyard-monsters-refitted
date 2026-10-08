@@ -38,7 +38,12 @@ const em = {
 };
 
 mock.module("../../../server.js", () => ({ postgres: { em }, redis }));
+// Spread the real module: bun's mock.module leaks into later test files, which import
+// other exports (`isDeclareWarRunning`) from the same module.
+const REAL_POWERUPS = "../../alliance/powerups.ts?real";
+const realPowerups = (await import(REAL_POWERUPS)) as typeof import("../../alliance/powerups.js");
 mock.module("../../alliance/powerups.js", () => ({
+  ...realPowerups,
   runningPowerups: async (allianceId: number | null) => (allianceId ? runningPowerups : []),
 }));
 

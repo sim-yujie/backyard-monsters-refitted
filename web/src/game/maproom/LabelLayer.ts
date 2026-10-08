@@ -84,6 +84,12 @@ export interface LabelRequest {
   /** Widest it may be, in world units; it shrinks to fit. */
   maxWidth: number;
   /**
+   * Smallest line height it may shrink to, in world units. Past that it keeps
+   * this size and is cut short with "..." instead, so a long name stays
+   * readable. Absent: it shrinks as far as it takes.
+   */
+  minSize?: number;
+  /**
    * Dark words for the player's own cyan plate: the face without its outline,
    * tinted this colour.
    */
@@ -93,6 +99,20 @@ export interface LabelRequest {
   /** Faded alongside its sprites when the kit filter dims this cell (#334). Default 1. */
   alpha?: number;
 }
+
+/**
+ * `text` cut from the end, with "..." (the map's ASCII font has no ellipsis
+ * character), until `widthOf` says it fits `maxWidth`. Text that already fits
+ * comes back as it was; at the very least one letter and the dots remain.
+ */
+export const truncateToFit = (text: string, widthOf: (s: string) => number, maxWidth: number): string => {
+  if (widthOf(text) <= maxWidth) return text;
+  for (let keep = text.length - 1; keep > 1; keep--) {
+    const cut = `${text.slice(0, keep).trimEnd()}...`;
+    if (widthOf(cut) <= maxWidth) return cut;
+  }
+  return `${text.slice(0, 1)}...`;
+};
 
 /**
  * Shared store of idle `BitmapText` objects.
@@ -176,7 +196,20 @@ export class LabelLayer {
     text.scale.set(1);
     const natural = text.width;
     const wanted = item.size / ATLAS_FONT_PX;
-    text.scale.set(natural > 0 ? Math.min(wanted, item.maxWidth / natural) : wanted);
+    let scale = natural > 0 ? Math.min(wanted, item.maxWidth / natural) : wanted;
+    if (item.minSize !== undefined && scale < item.minSize / ATLAS_FONT_PX) {
+      // Too long even at the smallest readable size: keep that size and cut the name.
+      scale = item.minSize / ATLAS_FONT_PX;
+      text.text = truncateToFit(
+        item.text,
+        (candidate) => {
+          text.text = candidate;
+          return text.width;
+        },
+        item.maxWidth / scale,
+      );
+    }
+    text.scale.set(scale);
 
     text.position.set(item.x, item.y);
     this.badges.addChild(text);

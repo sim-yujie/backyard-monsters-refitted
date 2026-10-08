@@ -7,19 +7,30 @@ import {
   DAMAGE_COLOUR,
   DIMMED_ALPHA,
   GRID_LINE_COLOUR,
-  INVITE_COLOUR,
   KIT_TINT,
   MARKER_FILL_COLOUR,
   OWN_PLATE_TEXT_COLOUR,
   OutpostKit,
-  SHIELD_COLOUR,
   appearanceOf,
   hexWidthAt,
   type CellAppearance,
   type MapViewerContext,
 } from "./cellVisuals";
 import { LabelLayer, type LabelRequest, type TextPool } from "./LabelLayer";
-import { ICON_UNIT, MARKER_UNIT, PLATE_HALF_HEIGHT, type MapAtlas } from "./mapAtlas";
+import {
+  DOME_ABOVE_FOOT,
+  DOME_HEIGHT,
+  DOME_WIDTH,
+  ENVELOPE_HEIGHT,
+  ENVELOPE_WIDTH,
+  ICON_UNIT,
+  MARKER_UNIT,
+  PLATE_HALF_HEIGHT,
+  TICK_HEIGHT,
+  TICK_WIDTH,
+  WORKER_SIZE,
+  type MapAtlas,
+} from "./mapAtlas";
 import { BuildingKind, type BuildingAvatars } from "./buildingAvatars";
 import type { TribeAvatars } from "./tribeAvatars";
 import type { ZoneStore } from "./ZoneStore";
@@ -108,21 +119,18 @@ const BADGE_TEXT_SIZE = CELL_HEIGHT * 0.21;
 const BUILDING_HEIGHT = CELL_HEIGHT * 0.85;
 /** Where the building's foot sits: a little above the plate, so they overlap slightly. */
 const BUILDING_FOOT_Y = CELL_HEIGHT * 0.12;
-/** Nominal half-height used only to place the invite dot near the building's edge. */
-const BUILDING_INVITE_RADIUS = BUILDING_HEIGHT * 0.4;
 
 /**
- * The faint shield bubble over a protected or truced cell's building (#334,
- * owner decision 2026-10-07): a little larger than the building picture so it
- * reads as a bubble round it, not a patch on it.
+ * Flash's protection extras (#338) are all sized from one scale: our building's
+ * height over Flash's outpost picture height (61 px). Flash's dome is then
+ * 80 x 64 of those (a wide, low half-dome, 1.3x as wide and 1.05x as tall as
+ * the tower), its truce tick 21 x 17 and its idle worker 28 x 28. Sizing from
+ * the height only keeps the shape right although our tower is slimmer than
+ * Flash's.
  */
-const SHIELD_BUBBLE_SCALE = 1.2;
-const SHIELD_BUBBLE_ALPHA = 0.4;
-
-/** The dot on the player's own outpost while an invitation to move onto it waits (#205). */
-const INVITE_DOT_RADIUS = CELL_HEIGHT * 0.11;
-/** Where on the rim: to the right, a little above the middle, clear of the plate of the cell above. */
-const INVITE_DOT_ANGLE = -Math.PI / 10;
+const FLASH_TOWER_HEIGHT = 61;
+/** The idle worker stands at the dome's right edge, this fraction of the dome height above the foot. */
+const WORKER_Y_FRACTION = 0.3;
 
 /** The gold level star every player cell wears, top-left of the hex (#334). */
 const STAR_RADIUS = CELL_HEIGHT * 0.19;
@@ -132,8 +140,8 @@ const STAR_TEXT_SIZE = CELL_HEIGHT * 0.2;
 const STAR_COLOUR = 0xf2c230;
 
 /** A relation icon (house/shield/swords), drawn inside the plate's left end (#334). */
-const RELATION_ICON_RADIUS = CELL_HEIGHT * 0.13;
-const RELATION_ICON_PAD = CELL_WIDTH * 0.015;
+const RELATION_ICON_RADIUS = CELL_HEIGHT * 0.1;
+const RELATION_ICON_PAD = CELL_WIDTH * 0.01;
 
 /**
  * A player's name plate, placed low in the hex so the width it has to work
@@ -143,9 +151,11 @@ const RELATION_ICON_PAD = CELL_WIDTH * 0.015;
  * plate is allowed.
  */
 const PLATE_HEIGHT = PLATE_HALF_HEIGHT * 2;
-const PLATE_Y_OFFSET = CELL_HEIGHT * 0.28;
-const PLATE_TEXT_SIZE = PLATE_HEIGHT * 0.6;
-const PLATE_PADDING = CELL_WIDTH * 0.07;
+const PLATE_Y_OFFSET = CELL_HEIGHT * 0.22;
+const PLATE_TEXT_SIZE = PLATE_HEIGHT * 0.62;
+const PLATE_PADDING = CELL_WIDTH * 0.03;
+/** A long name shrinks only this far (about 14 letters fit) before it is cut short with dots. */
+const PLATE_MIN_TEXT_SIZE = PLATE_TEXT_SIZE * 0.55;
 const PLATE_ALPHA = 0.92;
 
 /**
@@ -420,18 +430,18 @@ export class MapChunk {
    * filter dims every sprite this draws together when the cell does not match
    * it.
    *
-   * A cell under damage protection or an active truce (`appearance.shielded`)
-   * wears a faint blue bubble over its building picture (#334, owner decision
-   * 2026-10-07) - the earlier redraw dropped the old vector ring with no
-   * replacement; this is that replacement, drawn in `bases` so it sits over
-   * the building but under the star and the plate (both in later layers), and
-   * dims with the rest of the cell under the kit filter.
+   * A cell under damage protection wears Flash's glass dome over its building
+   * (#338), an active truce a small green tick, and the player's own outpost
+   * with a free worker the little blue worker. All three are drawn in `bases`
+   * so they sit over the building but under the star and the plate (both in
+   * later layers), and dim with the rest of the cell under the kit filter.
    */
   private addPlayer(appearance: CellAppearance, x: number, y: number): void {
     const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
     const outpost = appearance.marker === CellMarker.OUTPOST;
     const footX = x;
     const footY = y + BUILDING_FOOT_Y;
+    const flashScale = BUILDING_HEIGHT / FLASH_TOWER_HEIGHT;
 
     const texture = this.buildings.textureFor(outpost ? BuildingKind.OUTPOST : BuildingKind.YARD);
     if (texture) {
@@ -445,26 +455,44 @@ export class MapChunk {
       sprite.alpha = alpha;
       this.bases.addChild(sprite);
 
-      if (appearance.shielded) {
-        const bubble = new Sprite(this.atlas.shieldBubble);
-        bubble.anchor.set(0.5, 1);
-        bubble.setSize(sprite.width * SHIELD_BUBBLE_SCALE, sprite.height * SHIELD_BUBBLE_SCALE);
-        bubble.position.set(footX, footY);
-        bubble.tint = SHIELD_COLOUR;
-        bubble.alpha = SHIELD_BUBBLE_ALPHA * alpha;
-        this.bases.addChild(bubble);
+      if (appearance.protected) {
+        const dome = new Sprite(this.atlas.protectionDome);
+        // The baked tile has 2 units of padding on every side; the foot is DOME_ABOVE_FOOT + 2 below its top.
+        dome.anchor.set(0.5, (DOME_ABOVE_FOOT + 2) / (DOME_HEIGHT + 4));
+        dome.setSize((DOME_WIDTH + 4) * flashScale, (DOME_HEIGHT + 4) * flashScale);
+        dome.position.set(footX, footY);
+        dome.alpha = alpha;
+        this.bases.addChild(dome);
+      }
+
+      if (appearance.truce) {
+        const tick = new Sprite(this.atlas.truceTick);
+        tick.anchor.set(0.5);
+        tick.setSize((TICK_WIDTH + 2) * flashScale, (TICK_HEIGHT + 2) * flashScale);
+        tick.position.set(footX + sprite.width * 0.5, footY - sprite.height * 0.8);
+        tick.alpha = alpha;
+        this.bases.addChild(tick);
+      }
+
+      if (appearance.idleWorker) {
+        const worker = new Sprite(this.atlas.idleWorker);
+        worker.anchor.set(0.5);
+        worker.setSize((WORKER_SIZE + 4) * flashScale, (WORKER_SIZE + 4) * flashScale);
+        worker.position.set(footX + (DOME_WIDTH / 2) * flashScale, footY - DOME_ABOVE_FOOT * flashScale * WORKER_Y_FRACTION);
+        worker.alpha = alpha;
+        this.bases.addChild(worker);
       }
     }
 
     if (appearance.invitePending) {
-      // Near the building's upper-right edge, drawn over it.
-      const dx = footX + BUILDING_INVITE_RADIUS * Math.cos(INVITE_DOT_ANGLE);
-      const dy = footY - BUILDING_HEIGHT * 0.5 + BUILDING_INVITE_RADIUS * Math.sin(INVITE_DOT_ANGLE);
-      const dot = disc(this.atlas.disc, dx, dy, INVITE_DOT_RADIUS, INVITE_COLOUR);
-      const dotRing = disc(this.atlas.ring, dx, dy, INVITE_DOT_RADIUS, MARKER_FILL_COLOUR);
-      dot.alpha = alpha;
-      dotRing.alpha = alpha;
-      this.bases.addChild(dot, dotRing);
+      // Flash's open envelope, at the tower's upper left (the tick sits upper right, the worker lower right).
+      const envelope = new Sprite(this.atlas.inviteEnvelope);
+      envelope.anchor.set(0.5);
+      envelope.setSize((ENVELOPE_WIDTH + 2) * flashScale, (ENVELOPE_HEIGHT + 2) * flashScale);
+      envelope.position.set(footX - BUILDING_HEIGHT * 0.34, footY - BUILDING_HEIGHT * 0.66);
+      envelope.rotation = 0.2; // Flash tilts it a little clockwise
+      envelope.alpha = alpha;
+      this.bases.addChild(envelope);
     }
 
     // The gold level star every player cell wears (#334).
@@ -486,16 +514,21 @@ export class MapChunk {
     const py = y + PLATE_Y_OFFSET;
     // Capped to the hex's actual width at py, so the plate never spills into
     // the neighbour hex sharing that edge (#334).
-    const maxTotalWidth = hexWidthAt(py - y);
+    // Measured at the plate's lower edge, where the hex is narrowest, less a
+    // little for the rounded ends.
+    const maxTotalWidth = hexWidthAt(py - y + PLATE_HALF_HEIGHT * 0.5);
+    // The relation icon takes the plate's left end; the name sits in the rest.
+    const iconRoom = appearance.relationIcon === "none" ? 0 : RELATION_ICON_RADIUS * 2 + RELATION_ICON_PAD * 2;
     this.requests.push({
       text: appearance.plate,
-      x,
+      x: x + iconRoom / 2,
       y: py,
       size: PLATE_TEXT_SIZE,
-      maxWidth: Math.max(maxTotalWidth - PLATE_PADDING * 2, PLATE_HEIGHT),
+      minSize: PLATE_MIN_TEXT_SIZE,
+      maxWidth: Math.max(maxTotalWidth - PLATE_PADDING * 2 - iconRoom, PLATE_HEIGHT),
       alpha,
       ...(appearance.own ? { dark: OWN_PLATE_TEXT_COLOUR } : {}),
-      measured: (width) => this.addPlate(x, py, width, maxTotalWidth, appearance, alpha),
+      measured: (width) => this.addPlate(x, py, width + iconRoom, maxTotalWidth, appearance, alpha),
     });
   }
 

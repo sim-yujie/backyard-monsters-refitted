@@ -30,7 +30,9 @@ import {
   HURT_TICKS,
   drawsProjectile,
   lungeOffset,
+  mouthPoint,
 } from "./creepFx";
+import { FOMOR_ID } from "@/game/combat/rules/champions";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
 import { BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
@@ -216,7 +218,7 @@ export const groundWorld = (ix: number, iy: number, origin: Point): Point => ({
 export const abilityTint = (creep: CreepSnapshot | null): number => {
   if (!creep) return 0xffffff;
   if (creep.burning) return 0xffb070;
-  if (creep.enraged) return 0xff9cff;
+  if (creep.enraged || creep.puttied) return 0xff9cff;
   if (creep.lootBoosted) return 0xa8ff80;
   return 0xffffff;
 };
@@ -1336,7 +1338,14 @@ export class AttackBattleLayer {
 
     if (drawsProjectile(monsterId, event.ranged)) {
       const altitude = event.flying ? flyerAltitude(monsterId) : 0;
-      const from = { x: ground.x, y: ground.y - BODY_HEIGHT - altitude };
+      // Fomor, a tall flying champion, fires from its drawn mouth, not from a point above its ground spot.
+      const from =
+        view?.sheet && event.flying && view.sheet.family === FOMOR_ID
+          ? mouthPoint(
+              { x: view.body.x, y: view.body.y, width: view.sheet.frameWidth, height: view.sheet.frameHeight },
+              target,
+            )
+          : { x: ground.x, y: ground.y - BODY_HEIGHT - altitude };
       const champion = view?.sheet ? view.sheet.family !== view.sheet.key : false;
       // The number over the building lands with the shot, and so does the
       // damage to the building's art, bar and smoke (#77).

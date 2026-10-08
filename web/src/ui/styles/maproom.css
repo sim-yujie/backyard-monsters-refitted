@@ -890,8 +890,9 @@
   border-radius: 14px;
 }
 
+/* No negative margin: it tucked the first line under the button above (#338). */
 .mr2-cell__note {
-  margin: -6px 0 0;
+  margin: 0;
   font-size: var(--text-sm);
   color: var(--colour-text-muted);
 }
