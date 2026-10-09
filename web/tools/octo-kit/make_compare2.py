@@ -1,9 +1,9 @@
 import numpy as np
 from PIL import Image, ImageFilter, ImageDraw
 from scipy import ndimage as ndi
-K='D:/Coding/BYMR/art-trials/bolt/kit/run2/'
-old=Image.open(K+'reference/frames.png').convert('RGB')
-new=Image.open(K+'out/frames-new.png').convert('RGB').resize((640*2,512*2) if False else (640,512),Image.LANCZOS) if False else Image.open(K+'out/frames-new.png').convert('RGB')
+K='D:/Coding/BYMR/art-trials/octo-ooze/codex/'
+old=Image.open(K+'frames.png').convert('RGB')
+new=Image.open(K+'frames-new.png').convert('RGB').resize((640*2,512*2) if False else (640,512),Image.LANCZOS) if False else Image.open(K+'frames-new.png').convert('RGB')
 W,H=new.size; sx=W/640
 a=np.asarray(new).astype(float); R,G,B=a[...,0],a[...,1],a[...,2]
 mx=np.maximum(R,B)
@@ -40,7 +40,7 @@ for c in (0,2):
     ch_[edgeband]=np.minimum(ch_[edgeband],np.maximum(lim[edgeband],0)) if False else ch_[edgeband]
 rgba=np.dstack([rgb,np.asarray(alpha)]).astype('uint8')
 cut=Image.fromarray(rgba,'RGBA')
-cut.save(K+'out/frames-cut.png')
+cut.save(K+'frames-cut.png')
 # old frames at real size: 8x down
 oa=np.asarray(old).astype(float)
 def sat(img):
@@ -91,5 +91,5 @@ for i,q in enumerate(order):
     # also 3x magnified real size for readability
     rows.paste(ro.resize((cellw//8*3,cellh//8*3),Image.NEAREST),(i*cellw+10,2*cellh+60) if False else (i*cellw+5,2*cellh+60))
     rows.paste(rn.resize((cellw//8*3,cellh//8*3),Image.NEAREST),(i*cellw+160,2*cellh+60))
-rows=rows.crop((0,0,rows.size[0],2*cellh+240)); rows.save('D:/Coding/BYMR/art-trials/bolt/test2-compare.png')
-for q,t in enumerate(tiles_new): t.save(K+f'tmp/new{q}.png')
+rows=rows.crop((0,0,rows.size[0],2*cellh+240)); rows.save('D:/Coding/BYMR/art-trials/octo-ooze/test2-compare.png')
+for q,t in enumerate(tiles_new): t.save(K+f'new{q}.png')
