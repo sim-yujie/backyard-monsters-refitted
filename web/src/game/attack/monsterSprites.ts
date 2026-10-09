@@ -286,7 +286,7 @@ export function flyerAltitude(creatureId: string): number {
  * Sheets repainted for the revamp, by original file. Each is the original
  * layout drawn at four times the size; the `@4x` in the name is how Pixi knows
  * the resolution, so the table's 1x cell rectangles still frame it. Art trial: the Pokey
- * (`gen-pokey-sprite.py`), the Teratorn (`gen-teratorn-sprite.py`) and the Bolt (`gen-bolt-sprite.py`).
+ * (`gen-pokey-sprite.py`), the Teratorn (`gen-teratorn-sprite.py`) the Bolt (`gen-bolt-sprite.py`) and the Octo-ooze (`gen-octo-sprite.py`).
  * Remove an entry to go back to the original sheet; empty the table to
  * switch the trial off.
  */
@@ -294,6 +294,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/14.v1.png": "monsters/14-repaint@4x.png", // Teratorn art trial
   "monsters/sprite.1.v1.png": "monsters/pokey-repaint@4x.png", // Pokey art trial
   "monsters/sprite.3.v2.png": "monsters/bolt-repaint@4x.png", // Bolt art trial
+  "monsters/octoooze.png": "monsters/octoooze-repaint@4x.png", // Octo-ooze art trial
 };
 
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */
