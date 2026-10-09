@@ -1,0 +1,169 @@
+"""
+Build the repainted Octo-ooze (C2) sprite sheet from Codex-painted frames. Art trial, Octo-ooze only.
+Usage (from the repo root):
+
+    pip install pillow numpy scipy
+    python web/tools/gen-octo-sprite.py <source folder>
+
+The source folder holds the 2x2 grids that Codex painted on a flat #FF00FF ground (web/tools/octo-kit/make_batch.py
+builds the inputs and the prompt of each call), named after the four sheet columns they cover, left to right then
+top to bottom: frames-0-1-2-3.png ... A quadrant that is not to be used (a column painted better in another grid)
+is written `x`, e.g. frames-16-17-18-x.png.
+
+Each painted frame is keyed (the magenta ground is flood-filled from the edge) and scaled so its teal body and neck
+(the tentacles are left out of the measure, the old leg fringe is a thin haze) cover as many pixels as the old
+green body does, with one factor smoothed over the 5 nearest headings so the size does not wobble. The monster stands
+on the old sprite's ground line, lifted a little brighter so it reads at the real size, with a soft ground shadow
+drawn under it. Output, in the original layout (30 headings in one row, 0 = east, clockwise, 12 degrees apart;
+39x28 cells):
+
+    server/public/assets/monsters/octoooze-repaint.png      1170x28
+    server/public/assets/monsters/octoooze-repaint@4x.png   4680x112, the same at 4x
+
+The game draws the @4x sheet (REPAINTED_SHEETS in web/src/game/attack/monsterSprites.ts).
+"""
+import sys
+from pathlib import Path
+import numpy as np
+from PIL import Image, ImageFilter, ImageDraw
+from scipy import ndimage as ndi
+
+CELL = (39, 28)
+DIRS = 30
+UP = 4                     # the repaint's scale
+GAMMA = 0.9                # lifts the painting a little so it reads at the real size
+MARGIN = 0.5               # keep this many 1x pixels inside the cell
+AREA = 1.0                 # new body area / old body area (1 = the same size as the old green body)
+DROP = 3.5                 # the new tentacle tips stand this many 1x pixels below the old solid body's bottom
+
+if len(sys.argv) != 2:
+    sys.exit(__doc__)
+SOURCE = Path(sys.argv[1])
+REPO = Path(__file__).resolve().parents[2]
+ASSETS = REPO / "server" / "public" / "assets" / "monsters"
+ORIGINAL = Image.open(ASSETS / "octoooze.png").convert("RGBA")
+
+
+def original_cell(col):
+    return np.asarray(ORIGINAL.crop((col * CELL[0], 0, (col + 1) * CELL[0], CELL[1]))).astype(int)
+
+
+def bbox(mask):
+    ys, xs = np.where(mask)
+    return xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
+
+
+def old_body(col):
+    c = original_cell(col)
+    solid = c[..., 3] > 235
+    green = solid & (c[..., 1] > c[..., 0] * 1.5) & (c[..., 1] >= c[..., 2])
+    return solid, green
+
+
+def teal(im):
+    """The teal body and neck of a painted cutout (not the tan tentacles, not the cream eyes)."""
+    a = np.asarray(im).astype(float)
+    r, g, b = a[..., 0], a[..., 1], a[..., 2]
+    return (a[..., 3] > 200) & (g > r * 1.3) & (b > r * 1.2)
+
+
+def key(path):
+    """The 4 monsters of a grid as RGBA cutouts, one per quadrant (cut at half the width and height)."""
+    rgb = np.asarray(Image.open(path).convert("RGB"), dtype=float)
+    h, w = rgb.shape[:2]
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    mx = np.maximum(r, b)
+    ground = (g < np.minimum(r, b) * 0.62) & (np.abs(r - b) < 0.4 * mx) & (mx > 60)
+    lab, _ = ndi.label(ground)
+    edge = set(lab[0, :]) | set(lab[-1, :]) | set(lab[:, 0]) | set(lab[:, -1])
+    edge.discard(0)
+    fg = ndi.binary_opening(~np.isin(lab, list(edge)), iterations=2)
+    lab2, _ = ndi.label(fg)
+    keep = np.zeros_like(fg)
+    for q in range(4):
+        x0, y0 = (q % 2) * w // 2, (q // 2) * h // 2
+        sub = lab2[y0:y0 + h // 2, x0:x0 + w // 2]
+        ids, cnt = np.unique(sub[sub > 0], return_counts=True)
+        for i, c in zip(ids, cnt):
+            if c > cnt.max() * 0.02:
+                keep[y0:y0 + h // 2, x0:x0 + w // 2] |= sub == i
+    keep = ndi.binary_fill_holes(keep)
+    keep &= ~((r > 190) & (b > 150) & (g < 90) & (np.abs(r - b) < 70))   # stray ground flecks
+    keep = ndi.binary_erosion(keep, iterations=2)
+    alpha = np.asarray(Image.fromarray((keep * 255).astype("uint8")).filter(ImageFilter.GaussianBlur(1.2)))
+    cut = Image.fromarray(np.dstack([rgb, alpha]).astype("uint8"), "RGBA")
+    return [cut.crop(((q % 2) * w // 2, (q // 2) * h // 2, (q % 2 + 1) * w // 2, (q // 2 + 1) * h // 2)) for q in range(4)]
+
+
+def resize_premultiplied(im, size):
+    """LANCZOS resize with the colour weighted by alpha, so the magenta ground leaves no fringe."""
+    a = np.asarray(im).astype("float32")
+    a[..., :3] *= a[..., 3:] / 255
+    chans = [np.asarray(Image.fromarray(a[..., i], "F").resize(size, Image.LANCZOS)) for i in range(4)]
+    o = np.dstack(chans)
+    al = np.clip(o[..., 3:], 0, 255)
+    rgb = np.where(al > 0, o[..., :3] / np.maximum(al, 1e-3) * 255, 0)
+    return Image.fromarray(np.dstack([np.clip(rgb, 0, 255), al]).astype("uint8"), "RGBA")
+
+
+painted = {}
+for path in sorted(SOURCE.glob("frames-*.png"), key=lambda p: [int(c) for c in p.stem.split("-")[1:] if c != "x"]):
+    names = path.stem.split("-")[1:]
+    for name, cut in zip(names, key(path)):
+        if name != "x":
+            painted.setdefault(int(name), cut)
+missing = [c for c in range(DIRS) if c not in painted]
+if missing:
+    sys.exit(f"no painting of columns {missing}")
+
+# one scale per heading: the body area of the old green body over the new teal one, smoothed over 5 headings
+cover = {}
+for col, cut in painted.items():
+    cover[col] = np.sqrt(AREA * old_body(col)[1].sum() / teal(cut).sum())   # 1x pixels per painted pixel
+scale, fit, cap = {}, {}, {}
+for col, cut in painted.items():
+    near = [cover[(col + d) % DIRS] for d in range(-2, 3)]
+    k = float(np.median(near))
+    solid, green = old_body(col)
+    gx0, gy0, gx1, gy1 = bbox(green)
+    tx0, ty0, tx1, ty1 = bbox(teal(cut))
+    cx, bottom = (gx0 + gx1) / 2, min(bbox(solid)[3] + DROP, CELL[1] - 2.5)   # the tentacle tips stand on the old ground line
+    fx0, fy0, fx1, fy1 = bbox(np.asarray(cut)[..., 3] > 40)
+    mid = (tx0 + tx1) / 2
+    left, right = (mid - fx0) * k, (fx1 - mid) * k
+    # the whole painting (tentacles included) has to stay in the cell
+    limit = min((cx - MARGIN) / left, (CELL[0] - MARGIN - cx) / right, (bottom - MARGIN) / ((fy1 - fy0) * k))
+    scale[col] = k * min(1.0, limit)
+    cap[col] = k * limit
+    fit[col] = (cx, bottom, mid, fy1)
+    print(f"column {col:2}: want {k:.4f} limit {limit:.3f} scale {scale[col]:.4f}" + (" (cut to fit the cell)" if limit < 1 else ""), file=sys.stderr)
+
+# smooth the cut sizes too (a heading cut harder than its neighbours would pulse), but never past the cell
+scale = {c: min(cap[c], float(np.mean([scale[(c + d) % DIRS] for d in range(-2, 3)]))) for c in scale}
+
+cw, ch = CELL[0] * UP, CELL[1] * UP
+sheet = Image.new("RGBA", (DIRS * cw, ch))
+for col in range(DIRS):
+    cut = painted[col]
+    cx, bottom, mid, fy1 = fit[col]
+    s = scale[col] * UP
+    mon = resize_premultiplied(cut, (max(1, round(cut.width * s)), max(1, round(cut.height * s))))
+    px = np.asarray(mon).astype(float)
+    px[..., :3] = 255 * (px[..., :3] / 255) ** GAMMA
+    mon = Image.fromarray(px.astype("uint8"), "RGBA")
+    bx, by = cx * UP, bottom * UP
+    ox, oy = round(bx - mid * s), round(by - fy1 * s)
+    shadow = Image.new("L", (cw, ch), 0)
+    sw = (np.asarray(cut)[..., 3] > 40).any(0).sum() * s * 0.4
+    ImageDraw.Draw(shadow).ellipse((bx - sw, by - sw * 0.3 - 1.5 * UP, bx + sw, by + sw * 0.3 - 1.5 * UP), fill=110)
+    shadow = shadow.filter(ImageFilter.GaussianBlur(1.3 * UP))
+    cell = Image.new("RGBA", (cw, ch))
+    cell.paste((20, 25, 15, 255), (0, 0), shadow)
+    layer = Image.new("RGBA", (cw, ch))
+    layer.paste(mon, (ox, oy))
+    cell.alpha_composite(layer)
+    sheet.paste(cell, (col * cw, 0))
+
+sheet.save(ASSETS / "octoooze-repaint@4x.png", optimize=True)
+sheet.resize(ORIGINAL.size, Image.LANCZOS).save(ASSETS / "octoooze-repaint.png", optimize=True)
+print("wrote octoooze-repaint@4x.png and octoooze-repaint.png", file=sys.stderr)
