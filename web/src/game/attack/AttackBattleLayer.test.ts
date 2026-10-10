@@ -626,7 +626,7 @@ describe("AttackBattleLayer over a session", () => {
     expect(layer.creepCount).toBe(3);
     expect(host.depth.children).toHaveLength(3);
     const bars = overlay.children[4];
-    expect(bars?.children).toHaveLength(6);
+    expect(bars?.children).toHaveLength(9); // bar back, bar front, venom drop per creep
 
     // Before the sheet is in, a marker; once it is, the sheet's cell.
     await flush();
