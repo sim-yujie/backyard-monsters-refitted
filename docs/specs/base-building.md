@@ -1007,8 +1007,11 @@ A parallel ladder to upgrading, driven by `can_fortify` and `fortify_costs`
 (`client/scripts/BFOUNDATION.as:2153-2247`, `:2702-2740`). It has its own countdown (`cF`), its own
 worker slot, its own instant-buy price and its own cancel-with-full-refund. `btn_fortify` only
 appears past tutorial stage 200 and never in a Map Room 3 outpost
-(`client/scripts/BUILDINGINFO.as:250-252`). No building in the Map Room 2 main-yard table sets
-`can_fortify`, so in practice this is Map Room 3 / Inferno content.
+(`client/scripts/BUILDINGINFO.as:250-252`). The main-yard table sets `can_fortify` on the Storage
+Silo (6), Town Hall (14) and the cannon (20), sniper (21), laser (23), tesla (25), flak (115) and
+railgun (118) towers, and Map Room 2 does not strip it, so home yards fortify too. Each has four
+steps needing a Town Hall of level 5, 6, 7 and 8; a step does not need the building at max level.
+Fortification F1-F4 cuts incoming damage by 20/30/40/50% (`BFOUNDATION.as:508-511`).
 
 ---
 

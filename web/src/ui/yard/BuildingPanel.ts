@@ -847,7 +847,7 @@ export class BuildingPanel {
   }
 
   /**
-   * Fortify, on an outpost's core and towers (#191): Flash's `btn_fortify`
+   * Fortify, on a home yard's silo, Town Hall and towers or an outpost's core and towers (#191): Flash's `btn_fortify`
    * and its options popup (`client/scripts/BUILDINGINFO.as:263-265`,
    * `:571-572`), with the step's price and time, the one reason it cannot
    * start, and Flash's warning that a tower does not fire while it fortifies
@@ -870,7 +870,7 @@ export class BuildingPanel {
     const time = document.createElement("span");
     time.className = "building-panel__time";
     time.textContent = describeSeconds(offer.seconds);
-    time.title = "How long the fortification takes. It holds the outpost's worker until it finishes.";
+    time.title = "How long the fortification takes. It holds a worker until it finishes.";
     head.append(title, time);
     block.append(head);
 

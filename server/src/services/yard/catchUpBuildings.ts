@@ -40,11 +40,9 @@ import { syncDerivedLevels, type DerivedLevelsSave } from "./derivedLevels.js";
  *   `services/base/clearExpiredStoreItems.ts` applies on load, here run against
  *   the catch-up's own `now` so the step stays free of the clock.
  *
- * A fortification that completes on an outpost earns `Fortified()`'s points, a
- * third of the step's time and resources (`:2485-2503`), from the outpost
- * table's fortify ladder. On a main yard it is recorded with 0 points: the
- * main table has no `fortify_costs` (fortifying a main yard is a Map Room 3
- * feature), so the formula has nothing to read.
+ * A fortification that completes earns `Fortified()`'s points, a third of the
+ * step's time and resources (`:2485-2503`), from the yard's own fortify ladder
+ * (the outpost table's, or the home yard's `can_fortify` buildings).
  *
  * An outpost (`type` `outpost`) prices every job from the outpost table
  * (`yardKindOf`), the table its building was charged from.

@@ -581,10 +581,123 @@ describe("fortify", () => {
     expect(housing.body.reason).toBe("notFortifiable");
   });
 
-  test("a main yard has nothing to fortify", async () => {
-    const answer = await call(yardFortifyAction, { id: 0 });
-    expect(answer.status).toBe(400);
-    expect(answer.body.reason).toBe("notFortifiable");
+});
+
+describe("fortify on the home yard", () => {
+  const TOWER = { id: 5, t: 20, X: 100, Y: 100, l: 3 };
+  const homeWith = (...extra: Row[]) => {
+    const buildingdata: Record<string, Row> = { ...buildings(mainRow()) };
+    for (const one of extra) buildingdata[String(one.id)] = one;
+    db.rows.set(MAIN, mainRow({ buildingdata }));
+  };
+
+  test("a cannon fortifies F1 on the main pool, holding a worker", async () => {
+    homeWith(TOWER);
+    const [r1, r2, r3, , time] = fortifyStepsOf(20, "main")[0]!;
+    const answer = await call(yardFortifyAction, { id: 5 });
+
+    expect(answer.status).toBe(200);
+    expect(answer.body.report).toMatchObject({ id: 5, from: 0, to: 1, seconds: time });
+    expect(r1).toBe(50_000);
+    expect(buildings(mainSave())["5"]).toMatchObject({ cF: time });
+    expect(pool()).toMatchObject({ r1: 1_000_000 - r1, r2: 1_000_000 - r2, r3: 1_000_000 - r3 });
+    expect(answer.body.workers).toEqual({ total: 5, busy: 1 });
+  });
+
+  test("the silo, the Town Hall and every tower type can be fortified", async () => {
+    for (const type of [6, 14, 20, 21, 23, 25, 115, 118]) {
+      expect(fortifyStepsOf(type, "main")).toHaveLength(4);
+    }
+    homeWith({ id: 6, t: 6, X: 100, Y: 100, l: 2 });
+    const silo = await call(yardFortifyAction, { id: 6 });
+    expect(silo.status).toBe(200);
+  });
+
+  test("walls, harvesters, housing and the bunker are refused", async () => {
+    homeWith(
+      { id: 1, t: 17, X: 10, Y: 10, l: 1 },
+      { id: 2, t: 1, X: 20, Y: 20, l: 1 },
+      { id: 3, t: 15, X: 30, Y: 30, l: 1 },
+      { id: 4, t: 22, X: 40, Y: 40, l: 1 }
+    );
+    for (const id of [1, 2, 3, 4]) {
+      const answer = await call(yardFortifyAction, { id });
+      expect(answer.status).toBe(400);
+      expect(answer.body.reason).toBe("notFortifiable");
+    }
+  });
+
+  test("the steps need a Town Hall of level 5, 6, 7 and 8", async () => {
+    for (const [hall, fort, ok] of [
+      [4, 0, false],
+      [5, 0, true],
+      [5, 1, false],
+      [6, 1, true],
+      [7, 2, true],
+      [7, 3, false],
+      [8, 3, true],
+    ] as const) {
+      db.rows.set(
+        MAIN,
+        mainRow({
+          resources: { r1: 50_000_000, r2: 50_000_000, r3: 50_000_000, r4: 50_000_000 },
+          buildingdata: {
+            "0": { id: 0, t: 14, X: 0, Y: 0, l: hall },
+            "5": { ...TOWER, fort },
+          },
+        })
+      );
+      const answer = await call(yardFortifyAction, { id: 5 });
+      if (ok) expect([hall, fort, answer.status, answer.body.reason]).toEqual([hall, fort, 200, undefined]);
+      else {
+        expect(answer.status).toBe(409);
+        expect(answer.body.reason).toBe("townHall");
+      }
+    }
+  });
+
+  test("the Town Hall can fortify itself, and F4 is the last step", async () => {
+    db.rows.set(MAIN, mainRow({ buildingdata: { "0": { id: 0, t: 14, X: 0, Y: 0, l: 10, fort: 4 } } }));
+    expect((await call(yardFortifyAction, { id: 0 })).body.reason).toBe("maxFortify");
+  });
+
+  test("cancel refunds the whole step and frees the worker", async () => {
+    homeWith(TOWER);
+    await call(yardFortifyAction, { id: 5 });
+    const answer = await call(yardCancelFortifyAction, { id: 5 });
+
+    expect(answer.status).toBe(200);
+    expect(pool()).toEqual(mainRow().resources as Record<string, number>);
+    expect(buildings(mainSave())["5"]!.cF).toBeUndefined();
+  });
+
+  test("a short purse and busy workers are refused", async () => {
+    homeWith(TOWER);
+    db.rows.set(MAIN, { ...mainSave(), resources: { r1: 10, r2: 10, r3: 10, r4: 10 } });
+    expect((await call(yardFortifyAction, { id: 5 })).body.reason).toBe("shortfall");
+  });
+
+  test("the catch-up finishes it and the points come from the home ladder", async () => {
+    const [r1, r2, r3, r4, time] = fortifyStepsOf(20, "main")[0]!;
+    homeWith({ ...TOWER, cF: 5 });
+    db.rows.set(MAIN, { ...mainSave(), savetime: now() - 100 });
+
+    const answer = await call(yardStateAction);
+
+    expect(buildings(mainSave())["5"]).toMatchObject({ fort: 1 });
+    expect(buildings(mainSave())["5"]!.cF).toBeUndefined();
+    expect(answer.body.completed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "fortify",
+          id: 5,
+          detail: expect.objectContaining({
+            fort: 1,
+            points: Math.floor((time + r1 + r2 + r3 + r4) / 3),
+          }),
+        }),
+      ])
+    );
   });
 });
 

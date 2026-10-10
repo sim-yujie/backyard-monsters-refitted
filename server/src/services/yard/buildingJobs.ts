@@ -59,9 +59,9 @@ export const mapRoomErr = (id: number) =>
 
 /**
  * The countdown that is running on a building, in the order the timers advance
- * them. A fortification counts only when `fortify` says so: an outpost's, which
- * the server starts (`services/yard/fortify.ts`); a main yard has no fortify
- * route, so its countdowns read as they always did.
+ * them. A fortification counts only when `fortify` says so, for callers that
+ * only mean builds and upgrades (`services/yard/fortify.ts` starts it, in any
+ * yard).
  */
 export const runningCountdown = (
   building: BuildingData,

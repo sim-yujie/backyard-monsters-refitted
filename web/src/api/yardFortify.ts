@@ -4,13 +4,13 @@ import type { UpgradeCost, YardResponse } from "./types";
 import { yardBody, type YardRefusal } from "./yard";
 
 /**
- * Fortifying an outpost's core and towers (#191; server routes from outposts
+ * Fortifying an outpost's core and towers, or a home yard's silo, Town Hall and towers (#191; server routes from outposts
  * WP3, `server/src/services/yard/fortify.ts`):
  *
  *   POST /api/:apiVersion/bm/yard/fortify          id, baseid
  *   POST /api/:apiVersion/bm/yard/fortify/cancel   id, baseid
  *
- * A fortification is a countdown holding the outpost's worker
+ * A fortification is a countdown holding a worker
  * (`BFOUNDATION.FortifyB`, `client/scripts/BFOUNDATION.as:2175-2216`), paid
  * from the main pool. Stopping it gives the step's whole price back, clamped
  * to the storage cap (`FortifyCancelC`, `:2227-2246`). The calls hold no

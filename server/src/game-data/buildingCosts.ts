@@ -1636,6 +1636,64 @@ export const OUTPOST_TRAIT_ROWS: readonly OutpostTraitRow[] = [
   [135, true, [100], [], []],
 ];
 
+/**
+ * The main yard's fortify ladders, `[type, steps]`: the Storage Silo, the Town
+ * Hall and the cannon, sniper, laser, tesla, flak and railgun towers
+ * (`client/scripts/YARD_PROPS.as`, entries with `can_fortify`). Every step
+ * requires a Town Hall of level 5, 6, 7 and 8 in turn. The Map Room 2 overrides
+ * leave them alone (`client/scripts/GLOBAL.as:615-712`).
+ */
+export const MAIN_FORTIFY_ROWS: readonly (readonly [type: number, steps: readonly CostStep[]])[] = [
+  [6, [
+    [59375,29687,0,0,60750,[[14,1,5]]],
+    [118750,59375,0,0,91120,[[14,1,6]]],
+    [637500,518750,0,0,136680,[[14,1,7]]],
+    [1475000,1237500,0,0,205030,[[14,1,8]]],
+  ]],
+  [14, [
+    [500000,100000,50000,0,14400,[[14,1,5]]],
+    [1000000,1000000,500000,0,57600,[[14,1,6]]],
+    [5000000,5000000,2000000,0,172800,[[14,1,7]]],
+    [10000000,10000000,5000000,0,345600,[[14,1,8]]],
+  ]],
+  [20, [
+    [50000,37500,12500,0,8100,[[14,1,5]]],
+    [250000,187500,62500,0,24300,[[14,1,6]]],
+    [1250000,937500,312500,0,72900,[[14,1,7]]],
+    [6250000,4687500,1562500,0,172800,[[14,1,8]]],
+  ]],
+  [21, [
+    [37500,50000,12500,0,18000,[[14,1,5]]],
+    [187500,250000,62500,0,43200,[[14,1,6]]],
+    [937500,1250000,312500,0,86400,[[14,1,7]]],
+    [4687500,6250000,1562500,0,172800,[[14,1,8]]],
+  ]],
+  [23, [
+    [500000,250000,100000,0,18000,[[14,1,5]]],
+    [1000000,500000,200000,0,86400,[[14,1,6]]],
+    [2000000,1000000,400000,0,172800,[[14,1,7]]],
+    [4000000,2000000,800000,0,259200,[[14,1,8]]],
+  ]],
+  [25, [
+    [187500,250000,62500,0,18000,[[14,1,5]]],
+    [750000,1000000,250000,0,86400,[[14,1,6]]],
+    [2250000,3000000,750000,0,172800,[[14,1,7]]],
+    [5250000,5000000,1250000,0,345600,[[14,1,8]]],
+  ]],
+  [115, [
+    [215000,280000,62500,0,18000,[[14,1,5]]],
+    [850000,1200000,250000,0,86400,[[14,1,6]]],
+    [2750000,3400000,750000,0,172800,[[14,1,7]]],
+    [5750000,5200000,1250000,0,345600,[[14,1,8]]],
+  ]],
+  [118, [
+    [2000000,2400000,1600000,0,43200,[[14,1,5]]],
+    [2600000,3320000,1880000,0,86400,[[14,1,6]]],
+    [4480000,4776000,2184000,0,172800,[[14,1,7]]],
+    [9664000,9996800,4331200,0,345600,[[14,1,8]]],
+  ]],
+];
+
 /** One building type's costs, keyed lookups over {@link BUILDING_COST_ROWS}. */
 export interface BuildingCost {
   readonly name: string;
@@ -1732,13 +1790,15 @@ export const maxLevel = (type: number, kind: YardKind = "main"): number =>
   propsFor(kind)[type]?.costs.length ?? 0;
 
 /**
- * The fortify ladder of a type in a yard of `kind`, empty when it has none.
+* The fortify ladder of a type in a yard of `kind`, empty when it has none.
  *
- * Only the outpost table's is carried: fortifying a main-yard building is a Map
- * Room 3 feature this project does not offer (`services/yard/catchUpBuildings.ts`).
+ * The main yard's (Storage Silo, Town Hall, six towers) is {@link MAIN_FORTIFY_ROWS};
+ * an outpost's is its trait row's. Walls, harvesters, housing and the bunker have none.
  */
 export const fortifyStepsOf = (type: number, kind: YardKind): readonly CostStep[] =>
-  kind === "outpost" ? (OUTPOST_TRAITS[type]?.fortify ?? []) : [];
+  kind === "outpost"
+    ? (OUTPOST_TRAITS[type]?.fortify ?? [])
+    : (MAIN_FORTIFY_ROWS.find(([one]) => one === type)?.[1] ?? []);
 
 /** The hall type of a yard: the Town Hall, or the core on an outpost. */
 export const hallTypeOf = (kind: YardKind): number => (kind === "outpost" ? OUTPOST_CORE_TYPE : 14);

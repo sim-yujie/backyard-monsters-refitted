@@ -72,6 +72,12 @@ describe("the outpost cost table", () => {
       [5000000, 5000000, 2500000, 0, 345600],
     ]);
     expect(fortifyStepsOf(112, "main")).toEqual([]);
+    expect(fortifyStepsOf(14, "main").map((step) => step[5])).toEqual([
+      [[14, 1, 5]],
+      [[14, 1, 6]],
+      [[14, 1, 7]],
+      [[14, 1, 8]],
+    ]);
   });
 
   test("prices the outpost's own entries, with the core as the hall", () => {

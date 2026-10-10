@@ -72,6 +72,47 @@ describe("YardBuildings.setAnimFrame", () => {
   });
 });
 
+describe("YardBuildings: fortification overlays", () => {
+  const fortified = (fort: number): BaseLoadResponse => {
+    const response = yardResponse();
+    (response.buildingdata as Record<string, Record<string, unknown>>)["2"]!.fort = fort;
+    return response;
+  };
+
+  it("adds a back and a front picture for a fortified building only", () => {
+    const plain = new YardBuildings();
+    plain.show(readYard(yardResponse()), fakeAtlas());
+    const base = plain.tops.children.length;
+    plain.destroy();
+
+    const buildings = new YardBuildings();
+    buildings.show(readYard(fortified(2)), fakeAtlas());
+    expect(buildings.tops.children.length).toBe(base + 2);
+    buildings.destroy();
+  });
+
+  it("stands the back behind the building and the front after its strips", () => {
+    const buildings = new YardBuildings();
+    buildings.show(readYard(fortified(1)), fakeAtlas());
+    const kids = buildings.tops.children;
+    // Booby trap (1 sprite), then back, sniper top, its gun strip, front.
+    expect(kids.length).toBe(5);
+    buildings.setDamage(2, 0.4);
+    expect(buildings.tops.children.length).toBe(5);
+    buildings.destroy();
+  });
+
+  it("moves with the building in the planner", () => {
+    const buildings = new YardBuildings();
+    buildings.show(readYard(fortified(1)), fakeAtlas());
+    const before = buildings.tops.children.map((one) => [one.x, one.y]);
+    buildings.offsetBuilding(2, 10, 20);
+    const after = buildings.tops.children.map((one) => [one.x, one.y]);
+    expect(after.slice(1).every(([x, y], i) => x === before[i + 1]![0]! + 10 && y === before[i + 1]![1]! + 20)).toBe(true);
+    buildings.destroy();
+  });
+});
+
 describe("YardBuildings.pick before the art arrives (#39)", () => {
   it("takes a press on the footprint drawn meanwhile, and none where the picture will stand", () => {
     const yard = readYard(yardResponse());

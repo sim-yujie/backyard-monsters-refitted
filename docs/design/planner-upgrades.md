@@ -85,11 +85,10 @@ is active (`BFOUNDATION.as:2295`, `STORE.as:2513-2519`; spec `:932-939`, `:854-8
 charges all four resources and sets `cU` (`BFOUNDATION.as:2283-2329`). Completion awards
 `floor((time + r1 + r2 + r3 + r4) / 3)` points (`:2434-2461`; server `costs.ts:215-218`).
 
-**Fortification has no ladder here.** No building in the Map Room 2 main-yard table sets
-`can_fortify` (spec `:998-1006`), the generator skips `fortify_costs` on purpose
-(`web/tools/gen-building-costs.mjs:204-207`), and the audit records a `fort` change as
-`fortifyUnpriced` and never enforces it (`docs/design/economy-save-validation.md:347-354`, §6 item
-4 at `:720`). Confirmed: there is nothing to price a fortify with. **Fortify is deferred**; see 1.3.
+**Fortification is not part of the planner's upgrade walk.** (Updated 2026-10-10: home yards can
+fortify through `POST /bm/yard/fortify`, and the save audit refuses an unpaid `fort` change as
+`unpaidFortify`; see `docs/design/economy-save-validation.md` §2.8.) Fortify from inside the
+planner stays deferred; see 1.3.
 
 **The economy audit.** Every owner save of the main yard is now audited against the cost table
 before any key is applied (`server/src/controllers/base/save/baseSave.ts:95-119`). The audit

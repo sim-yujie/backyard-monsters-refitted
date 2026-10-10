@@ -186,27 +186,34 @@ const checkCountdownShape = (
 };
 
 /**
- * Fortification, shape only (§2.8).
+ * Fortification (§2.8): a save can never pay for one.
  *
- * No building in the Map Room 2 main-yard table can fortify and the generator
- * emits no `fortify_costs`, so there is no ladder to price a `cF` with. A new
- * one, or a `fort` that climbed, is recorded and never enforced (§6, item 4);
- * the magnitude checks that *can* be made live in {@link checkCountdownShape}.
+ * Starting a step is `POST /bm/yard/fortify`, which charges it and writes `cF`,
+ * so a `cF` that appears in a save, or a `fort` that climbs without a running
+ * `cF` close enough to done, is a fortification nothing paid for. Both are
+ * refused (`unpaidFortify`), as an upgrade the save did not pay for is
+ * (`unpaidUpgrade`). The magnitude checks on a `cF` that was already running
+ * are in {@link checkCountdownShape}.
  */
 const explainFortify = (
   reference: BuildingData,
   submitted: BuildingData,
+  ctx: TransitionContext,
   id: number,
   out: Transition
 ): void => {
   const before = Math.max(0, Number(reference.fort) || 0);
   const after = Math.max(0, Number(submitted.fort) || 0);
-  const started = countdownOf(submitted, "cF") > 0 && countdownOf(reference, "cF") === 0;
+  const running = countdownOf(reference, "cF");
+  const started = countdownOf(submitted, "cF") > 0 && running === 0;
+  const raised = after > before;
+  // The one honest rise: the running step finished between the two saves.
+  const finished = raised && after === before + 1 && running > 0 && mayFinish(running, ctx);
 
-  if (!started && after <= before) return;
+  if (!started && (!raised || finished)) return;
 
   out.violations.push(
-    violation("fortifyUnpriced", id, { from: before, to: after, cF: countdownOf(submitted, "cF") }, false)
+    violation("unpaidFortify", id, { from: before, to: after, cF: countdownOf(submitted, "cF") })
   );
 };
 
@@ -306,7 +313,7 @@ export const explainTransition = (
   const type = pricingType(rawType);
 
   checkCountdownShape(stored, reference, submitted, ctx, id, out);
-  explainFortify(reference, submitted, id, out);
+  explainFortify(reference, submitted, ctx, id, out);
 
   const row = costOf(type);
   if (!row) return out;

@@ -1,5 +1,6 @@
 import { ColorMatrixFilter, Container, Sprite, Text, Texture } from "pixi.js";
 import { ArtState, resolveArt, type ResolvedArt } from "./buildingArt";
+import { fortArtFor, type FortArt } from "./fortArt";
 import {
   applyArt,
   fillBox,
@@ -63,6 +64,14 @@ const CULL_MARGIN = 160;
  */
 const MAX_PLACEHOLDER_LABELS = 60;
 
+interface FortOverlay {
+  readonly art: FortArt;
+  readonly back: Sprite;
+  readonly front: Sprite;
+  backResolved: boolean;
+  frontResolved: boolean;
+}
+
 interface BuildingView {
   readonly building: YardBuilding;
   readonly art: ResolvedArt | null;
@@ -97,6 +106,12 @@ interface BuildingView {
    * full rebuilds of the draw list.
    */
   hidden: boolean;
+  /**
+   * The fortification overlay: the back picture stands behind the building, the
+   * front in front of it. Null for an unfortified building or a type with no
+   * overlay art.
+   */
+  readonly fort: FortOverlay | null;
   /** True once the real picture is on the sprite. */
   resolved: boolean;
   /**
@@ -229,6 +244,24 @@ export class YardBuildings {
     for (const building of yard.buildings) {
       const art = artFor(building);
 
+      const fortArt = fortArtFor(building.type, building.fortification);
+      let fort: FortOverlay | null = null;
+      if (fortArt) {
+        // The back goes in before the building and the front after its layers,
+        // so the list order reads back, building, strips, front.
+        const back = new Sprite(Texture.EMPTY);
+        back.visible = false;
+        this.tops.addChild(back);
+        fort = {
+          art: fortArt,
+          back,
+          front: new Sprite(Texture.EMPTY),
+          backResolved: false,
+          frontResolved: false,
+        };
+        fort.front.visible = false;
+      }
+
       const top = new Sprite(atlas.placeholder);
       fillBox(top, building.box);
       top.tint = placeholderTint(building);
@@ -238,6 +271,7 @@ export class YardBuildings {
       // Straight after their own top, so depth order still reads down the list.
       const anims = art ? buildAnimLayers(building, art) : [];
       for (const layer of anims) this.tops.addChild(layer.sprite);
+      if (fort) this.tops.addChild(fort.front);
 
       let shadow: Sprite | null = null;
       if (art?.shadow) {
@@ -265,6 +299,7 @@ export class YardBuildings {
         top,
         shadow,
         anims,
+        fort,
         label,
         marker: building.countdown ? this.addCountdownMarker(building, atlas) : null,
         badgeHidden: false,
@@ -368,6 +403,11 @@ export class YardBuildings {
         on && !(view.topIsAnim && animsOn && view.anims[0]?.resolved === true);
       if (view.shadow) view.shadow.visible = on && view.shadowResolved;
       if (view.label) view.label.visible = on;
+      if (view.fort) {
+        const shown = on && view.damageStep < 4;
+        view.fort.back.visible = shown && view.fort.backResolved;
+        view.fort.front.visible = shown && view.fort.frontResolved;
+      }
 
       if (view.anims.length === 0) continue;
       for (const layer of view.anims) layer.sprite.visible = animsOn && layer.resolved;
@@ -447,6 +487,11 @@ export class YardBuildings {
     for (const layer of view.anims) {
       layer.sprite.position.set(layer.sprite.position.x + dx, layer.sprite.position.y + dy);
     }
+    if (view.fort) {
+      for (const sprite of [view.fort.back, view.fort.front]) {
+        sprite.position.set(sprite.position.x + dx, sprite.position.y + dy);
+      }
+    }
   }
 
   /**
@@ -469,6 +514,10 @@ export class YardBuildings {
     if (view.shadow) view.shadow.visible = false;
     if (view.label) view.label.visible = false;
     for (const layer of view.anims) layer.sprite.visible = false;
+    if (view.fort) {
+      view.fort.back.visible = false;
+      view.fort.front.visible = false;
+    }
   }
 
   /** Puts every hidden building back. What leaving the planner does. */
@@ -503,6 +552,10 @@ export class YardBuildings {
     const tint = DAMAGE_TINTS[step] ?? 0xffffff;
     if (view.resolved) view.top.tint = tint;
     for (const layer of view.anims) layer.sprite.tint = tint;
+    if (view.fort) {
+      view.fort.back.tint = tint;
+      view.fort.front.tint = tint;
+    }
 
     const state =
       step >= 4 ? ArtState.DESTROYED : step >= 2 ? ArtState.DAMAGED : ArtState.DEFAULT;
@@ -638,6 +691,10 @@ export class YardBuildings {
       const base = (view.building.depth + view.offsetY * 4_000_000 + view.offsetX * 1_000) * 8;
       view.top.zIndex = base;
       view.anims.forEach((layer, index) => (layer.sprite.zIndex = base + index + 1));
+      if (view.fort) {
+        view.fort.back.zIndex = base - 4;
+        view.fort.front.zIndex = base + 4;
+      }
     }
     this.tops.sortableChildren = true;
     this.tops.sortChildren();
@@ -666,6 +723,7 @@ export class YardBuildings {
   /** Swaps in whichever pictures have arrived since the last pass. */
   private resolveTextures(): void {
     for (const view of this.views) {
+      if (view.fort) this.resolveFort(view.fort, view.building);
       if (view.swap && !(view.swapResolved && view.swapShadowResolved)) this.resolveSwap(view);
       if (view.resolved && view.shadowResolved && !view.animsPending) continue;
       const art = view.art;
@@ -695,6 +753,24 @@ export class YardBuildings {
           view.shadow.visible = true;
           view.shadowResolved = true;
         }
+      }
+    }
+  }
+
+  /** Puts a fortification's back and front pictures on their sprites as they arrive. */
+  private resolveFort(fort: FortOverlay, building: YardBuilding): void {
+    if (!fort.backResolved) {
+      const texture = this.textures.get(fort.art.back);
+      if (texture) {
+        applyArt(fort.back, texture, building, fort.art.back);
+        fort.backResolved = true;
+      }
+    }
+    if (!fort.frontResolved) {
+      const texture = this.textures.get(fort.art.front);
+      if (texture) {
+        applyArt(fort.front, texture, building, fort.art.front);
+        fort.frontResolved = true;
       }
     }
   }
@@ -785,6 +861,10 @@ export class YardBuildings {
     const filters = this.filtersFor(view);
     view.top.filters = filters;
     for (const layer of view.anims) layer.sprite.filters = filters;
+    if (view.fort) {
+      view.fort.back.filters = filters;
+      view.fort.front.filters = filters;
+    }
   }
 
   /** Whether a building is drawn highlighted. */

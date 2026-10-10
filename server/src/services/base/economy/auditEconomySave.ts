@@ -85,7 +85,7 @@ export type EconomyRule =
   | "capMismatch"
   | "basevalueMismatch"
   | "pointsJumped"
-  | "fortifyUnpriced";
+  | "unpaidFortify";
 
 /** One thing the save could not explain. */
 export interface EconomyViolation {
@@ -98,8 +98,8 @@ export interface EconomyViolation {
    *
    * Decided by the rule and never by the mode, so one verdict serves both and
    * the log line can say which violations *would* have rejected. False for the
-   * `r3`/`r4` budgets (§6, item 1), for fortification (§6, item 4) and for the
-   * two log-only mismatches, which are derived rather than refused.
+   * `r3`/`r4` budgets (§6, item 1) and for the two log-only mismatches, which
+   * are derived rather than refused.
    */
   enforced: boolean;
 }
