@@ -66,7 +66,7 @@ describe("directionColumn", () => {
   });
 
   it("reads the count and offset off the sheet", () => {
-    expect(sheetColumn(sheet("C1"), Math.PI)).toBe(15);
+    expect(sheetColumn(sheet("C2"), Math.PI)).toBe(15);
     expect(sheetColumn(sheet("C15"), Math.PI)).toBe(16);
     expect(sheetColumn(sheet("G1_1"), Math.PI)).toBe(6);
   });
@@ -93,7 +93,7 @@ describe("frameRow", () => {
   });
 
   it("keeps a single-pose creep on row 0 whatever is asked", () => {
-    const pokey = sheet("C1");
+    const pokey = sheet("C2");
     for (const animation of ["idle", "walk", "attack", "stomp", "invisible"] as const) {
       for (const tick of [0, 7, 8, 100, 1234]) expect(frameRow(pokey, animation, tick)).toBe(0);
     }
@@ -163,7 +163,7 @@ describe("spriteFor", () => {
 
 describe("placement", () => {
   it("puts the cell's top-left at the ground point minus the anchor", () => {
-    expect(anchorOffset(sheet("C1"))).toEqual({ x: -8, y: -14 });
+    expect(anchorOffset(sheet("C2"))).toEqual({ x: -19, y: -15 });
     expect(anchorOffset(sheet("G1_1"))).toEqual({ x: -48, y: -38 });
   });
 
@@ -176,11 +176,11 @@ describe("placement", () => {
   it("puts a flying champion's shadow ten pixels higher (ChampionBase.as:235-236)", () => {
     expect(shadowOffset(sheet("G3_3"))).toEqual({ x: -19, y: -6 });
     expect(shadowOffset(sheet("G3_1"))).toBeNull();
-    expect(shadowOffset(sheet("C1"))).toBeNull();
+    expect(shadowOffset(sheet("C2"))).toBeNull();
   });
 
   it("cuts cell (column, row) at column * width, row * height (SPRITES.as:379-380)", () => {
-    expect(frameRect(sheet("C1"), 3, 0)).toEqual({ x: 72, y: 0, width: 24, height: 21 });
+    expect(frameRect(sheet("C2"), 3, 0)).toEqual({ x: 117, y: 0, width: 39, height: 28 });
     expect(frameRect(sheet("G1_1"), 15, 14)).toEqual({ x: 1440, y: 966, width: 96, height: 69 });
     expect(frameRect(sheet("IC2"), 5, 0).x).toBeCloseTo(322, 6);
   });
