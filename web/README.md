@@ -61,9 +61,9 @@ You need an account on whichever server you point at. The login screen's
 | Command             | What it does                                  |
 | ------------------- | --------------------------------------------- |
 | `bun run dev`       | Dev server with hot module replacement        |
-| `bun run build`     | Typecheck, then a production build to `dist/` |
+| `bun run build`     | Typecheck (no tests), build to `dist/`        |
 | `bun run preview`   | Serves the built `dist/` locally              |
-| `bun run typecheck` | `tsc --noEmit`                                |
+| `bun run typecheck` | `tsc --noEmit`, tests included                |
 | `bun run test`      | Unit tests with Vitest                        |
 | `bun run lint`      | ESLint                                        |
 
