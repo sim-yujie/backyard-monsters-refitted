@@ -1,48 +1,42 @@
 """
-Build the repainted Teratorn (C14) sprite sheet from Gemini-restyled frames.
-Art trial, Teratorn only. Usage (from the repo root):
+Build the repainted Teratorn (C14) sprite sheet from Codex-painted frames. Art trial, Teratorn only.
+Usage (from the repo root):
 
-    pip install pillow numpy
+    pip install pillow numpy scipy
     python web/tools/gen-teratorn-sprite.py <source folder>
 
-The source folder holds Gemini's restyles of the original frames, each a grid
-on a flat #00FF00 ground named after the sheet columns it covers, one row per
-column and the three wing-flap frames left to right:
+The source folder holds the grids that Codex painted on a flat #FF00FF ground (web/tools/teratorn-kit/make_batch.py
+builds the inputs and the prompt of each call), named after the sheet columns they cover, top to bottom:
+frames-8-9-10.png ... Each grid has one row per heading and 3 columns, the three wing-flap frames (wings raised, half way,
+swept low), the body identical in the three and only the wings moving.
 
-    frames-8-0-4-24.png     4 rows: columns 8, 0, 4 and 24
-    frames-9-10-11-12.png   ...
+The original sheet is a mirror image of itself: column c flipped left to right is column 16 - c, one pixel over. So only
+columns 8 to 24 (facing down round to facing up through left) are painted; the rest are flipped.
 
-Each grid was made by handing Gemini the original frames blown up 8x, every
-frame in a 256 px cell with the 224 px blow-up 16 px in, and asking it to
-redraw them in place in the revamp's cel style (prompt in
-docs/art/monster-sprites.md). The original pins the pose, so the body stays
-put from frame to frame and only the wings move.
-
-The original sheet is a mirror image of itself: column c flipped left to
-right is column 16 - c, one pixel over. So only columns 8 to 24 (facing down
-round to facing up through left) need painting; the rest are flipped, unless
-the folder has a painting of them too.
-
-Each painted row is fitted to the original row with one scale and offset for
-all three frames (so fitting adds no wobble), keyed, and placed in the
-original layout (32 headings x 3 flap frames, 28x28 cells, anchor 15,14; see
-docs/art/monster-sprites.md):
+Each painted cell is keyed (every magenta pixel becomes clear) and scaled so its silhouette covers about as many pixels as
+the old sprite's does (AREA), the factor smoothed over the 5 nearest headings and blended towards the median so the small
+old front view does not make the new one small. One scale and offset serves a heading's three frames (so the body does not
+wobble from frame to frame): the union of the three frames is centred on the old sprite and its feet stand on the old
+sprite's bottom, and is kept inside the cell. Output, in the original layout (32 headings x 3 flap frames, 28x28 cells):
 
     server/public/assets/monsters/14-repaint.png      896x84
     server/public/assets/monsters/14-repaint@4x.png   3584x336, the same at 4x
 
-The game draws the @4x sheet (REPAINTED_SHEETS in
-web/src/game/attack/monsterSprites.ts).
+The game draws the @4x sheet (REPAINTED_SHEETS in web/src/game/attack/monsterSprites.ts).
 """
 import sys
 from pathlib import Path
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image, ImageFilter, ImageOps
+from scipy import ndimage as ndi
 
 CELL = 28
 COLS, ROWS = 32, 3
-UP = 4                       # the repaint's scale
-REF_CELL, REF_INSET, REF_SCALE = 256, 16, 8
+UP = 4                     # the repaint's scale
+GAMMA = 0.9                # lifts the painting a little so it reads at the real size
+MARGIN = 1.0               # keep this many 1x pixels inside the cell
+AREA = 1.2                 # new silhouette area / old silhouette area (1 = the same size as the old sprite)
+BLEND = 0.5                # how far each heading's size is pulled to the median (the old front view is small)
 
 if len(sys.argv) != 2:
     sys.exit(__doc__)
@@ -52,92 +46,121 @@ ASSETS = REPO / "server" / "public" / "assets" / "monsters"
 ORIGINAL = Image.open(ASSETS / "14.v1.png").convert("RGBA")
 
 
-def key(im):
-    """
-    Chroma-key the green ground. The Teratorn's legs are green too, so only
-    a strong green excess (G - max(R, B)) counts as ground: opaque at 105 or
-    less, clear at 235. Part-clear pixels are unmixed from the green.
-    """
-    rgb = np.asarray(im.convert("RGB"), dtype=float)
-    excess = rgb[..., 1] - np.maximum(rgb[..., 0], rgb[..., 2])
-    a = np.clip((235 - excess) / 130, 0, 1)
-    ground = np.array([0, 255, 0], dtype=float)
-    safe = np.maximum(a, 1e-3)[..., None]
-    fg = np.clip((rgb - (1 - a[..., None]) * ground) / safe, 0, 255)
-    fg = np.where((a < 1)[..., None], fg, rgb)
-    return Image.fromarray(np.dstack([fg, a * 255]).astype(np.uint8), "RGBA")
-
-
 def original_cell(col, frame):
-    return ORIGINAL.crop((col * CELL, frame * CELL, (col + 1) * CELL, (frame + 1) * CELL))
+    return np.asarray(ORIGINAL.crop((col * CELL, frame * CELL, (col + 1) * CELL, (frame + 1) * CELL))).astype(int)
 
 
-def place(im, scale, dx, dy, size):
-    """`im` scaled by `scale` about its centre and moved by (dx, dy), on a `size` canvas."""
-    w = max(1, round(im.width * scale))
-    scaled = im.resize((w, w), Image.LANCZOS)
-    pad = w + size
-    out = Image.new("RGBA", (size + 2 * pad, size + 2 * pad))
-    out.alpha_composite(scaled, (pad + round((size - w) / 2 + dx), pad + round((size - w) / 2 + dy)))
-    return out.crop((pad, pad, pad + size, pad + size))
+def bbox(mask):
+    ys, xs = np.where(mask)
+    return xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
 
 
-def fit_row(painted, col):
-    """
-    One scale and offset for a row's three frames that best lays Gemini's
-    silhouettes over the original's, compared at 2x. The original's wings
-    are a faint blur, so only its solid pixels and Gemini's are compared.
-    """
-    n = CELL * 2
-    targets = [np.asarray(original_cell(col, f).resize((n, n), Image.LANCZOS))[..., 3] > 160 for f in range(ROWS)]
-    small = [p.resize((n, n), Image.LANCZOS) for p in painted]
-    best = None
-    for scale in np.arange(0.86, 1.10, 0.02):
-        masks = [np.asarray(place(s, scale, 0, 0, n))[..., 3] > 160 for s in small]
-        for dy in range(-6, 7):
-            for dx in range(-6, 7):
-                err = 0
-                for m, t in zip(masks, targets):
-                    err += np.count_nonzero(np.roll(np.roll(m, dy, 0), dx, 1) ^ t)
-                if best is None or err < best[0]:
-                    best = (err, scale, dx, dy)
-    _, scale, dx, dy = best
-    return scale, dx / 2, dy / 2   # offsets in 1x pixels
+def key(path, rows):
+    """The grid's cells as RGBA cutouts: cells[row][frame]."""
+    rgb = np.asarray(Image.open(path).convert("RGB"), dtype=float)
+    h, w = rgb.shape[:2]
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    mx = np.maximum(r, b)
+    ground = (g < np.minimum(r, b) * 0.62) & (np.abs(r - b) < 0.4 * mx) & (mx > 60)
+    fg = ndi.binary_opening(~ground, iterations=1)
+    cw, ch = w // 3, h // rows
+    keep = np.zeros_like(fg)
+    lab, _ = ndi.label(fg)
+    for ry in range(rows):
+        for cx in range(3):
+            y0, x0 = ry * ch, cx * cw
+            sub = lab[y0:y0 + ch, x0:x0 + cw]
+            ids, cnt = np.unique(sub[sub > 0], return_counts=True)
+            for i, c in zip(ids, cnt):
+                if c > cnt.max() * 0.02:
+                    keep[y0:y0 + ch, x0:x0 + cw] |= sub == i
+    keep &= ~((r > 190) & (b > 150) & (g < 90) & (np.abs(r - b) < 70))   # stray ground flecks
+    keep = ndi.binary_erosion(keep, iterations=1)
+    alpha = np.asarray(Image.fromarray((keep * 255).astype("uint8")).filter(ImageFilter.GaussianBlur(1.0)))
+    cut = Image.fromarray(np.dstack([rgb, alpha]).astype("uint8"), "RGBA")
+    return [[cut.crop((cx * cw, ry * ch, (cx + 1) * cw, (ry + 1) * ch)) for cx in range(3)] for ry in range(rows)]
+
+
+def resize_premultiplied(im, size):
+    """LANCZOS resize with the colour weighted by alpha, so the magenta ground leaves no fringe."""
+    a = np.asarray(im).astype("float32")
+    a[..., :3] *= a[..., 3:] / 255
+    chans = [np.asarray(Image.fromarray(a[..., i], "F").resize(size, Image.LANCZOS)) for i in range(4)]
+    o = np.dstack(chans)
+    al = np.clip(o[..., 3:], 0, 255)
+    rgb = np.where(al > 0, o[..., :3] / np.maximum(al, 1e-3) * 255, 0)
+    return Image.fromarray(np.dstack([np.clip(rgb, 0, 255), al]).astype("uint8"), "RGBA")
+
+
+def area(im):
+    return float((np.asarray(im)[..., 3] > 200).sum())
 
 
 painted = {}
-for path in sorted(SOURCE.glob("frames-*.png")):
+for path in sorted(SOURCE.glob("frames-*.png"), key=lambda p: [int(c) for c in p.stem.split("-")[1:]]):
     cols = [int(c) for c in path.stem.split("-")[1:]]
-    grid = key(Image.open(path))
-    s = grid.width / (3 * REF_CELL)
-    for r, col in enumerate(cols):
-        cells = []
-        for f in range(ROWS):
-            x0 = (f * REF_CELL + REF_INSET) * s
-            y0 = (r * REF_CELL + REF_INSET) * s
-            span = CELL * REF_SCALE * s
-            cells.append(grid.crop((round(x0), round(y0), round(x0 + span), round(y0 + span))).resize((CELL * UP, CELL * UP), Image.LANCZOS))
-        scale, dx, dy = fit_row(cells, col)
-        print(f"column {col:2}: scale {scale:.2f}, offset {dx:+.1f},{dy:+.1f} px", file=sys.stderr)
-        painted[col] = [place(c, scale, dx * UP, dy * UP, CELL * UP) for c in cells]
+    for col, cells in zip(cols, key(path, len(cols))):
+        painted[col] = cells          # a heading in two grids: the later grid wins
+if sorted(painted) != list(range(8, 25)):
+    sys.exit(f"painted columns {sorted(painted)}, need 8 to 24")
 
-missing = []
+# old silhouette (any visible pixel, faint wings included) of the middle frame, per heading
+old = {c: float((original_cell(c, 1)[..., 3] > 40).sum()) for c in range(COLS)}
+med = float(np.median([old[c] for c in painted]))
+target = {c: AREA * ((1 - BLEND) * old[c] + BLEND * med) for c in painted}
+size = {c: np.sqrt(target[c]) for c in painted}           # wanted size in 1x pixels (square root of the area)
+fit, scale, cap = {}, {}, {}
+for c, cells in painted.items():
+    near = [size[min(24, max(8, c + d))] for d in range(-2, 3)]
+    k = float(np.mean(near)) / np.sqrt(area(cells[1]))     # 1x pixels per painted pixel
+    boxes = [bbox(np.asarray(f)[..., 3] > 40) for f in cells]
+    ux0, uy0, ux1, uy1 = min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)
+    om = original_cell(c, 1)[..., 3] > 235
+    ox0, oy0, ox1, oy1 = bbox(om if om.any() else original_cell(c, 1)[..., 3] > 40)
+    cx, bottom = (ox0 + ox1) / 2, min(oy1 + 0.5, CELL - MARGIN)
+    mid = (ux0 + ux1) / 2
+    left, right = (mid - ux0) * k, (ux1 - mid) * k
+    limit = min((cx - MARGIN) / left, (CELL - MARGIN - cx) / right, (bottom - MARGIN) / ((uy1 - uy0) * k))
+    scale[c] = k * min(1.0, limit)
+    cap[c] = k * limit
+    fit[c] = (cx, bottom, mid, uy1)
+    print(f"column {c:2}: want {k:.4f} limit {limit:.3f} scale {scale[c]:.4f}" + (" (cut to fit the cell)" if limit < 1 else ""), file=sys.stderr)
+
+# smooth the cut sizes too (a heading cut harder than its neighbours would pulse), but never past the cell
+cut = {c: scale[c] * np.sqrt(area(painted[c][1])) for c in scale}
+scale = {c: min(cap[c], float(np.mean([cut[min(24, max(8, c + d))] for d in range(-2, 3)])) / np.sqrt(area(painted[c][1]))) for c in scale}
+
+cw = CELL * UP
+cells_out = {}
+for c, cells in painted.items():
+    cx, bottom, mid, fy1 = fit[c]
+    s = scale[c] * UP
+    frames = []
+    for f in cells:
+        mon = resize_premultiplied(f, (max(1, round(f.width * s)), max(1, round(f.height * s))))
+        px = np.asarray(mon).astype(float)
+        px[..., :3] = 255 * (px[..., :3] / 255) ** GAMMA
+        mon = Image.fromarray(px.astype("uint8"), "RGBA")
+        ox, oy = round(cx * UP - mid * s), round(bottom * UP - fy1 * s)
+        layer = Image.new("RGBA", (cw + 2 * mon.width, cw + 2 * mon.height))
+        layer.alpha_composite(mon, (mon.width + ox, mon.height + oy))
+        frames.append(layer.crop((mon.width, mon.height, mon.width + cw, mon.height + cw)))
+    cells_out[c] = frames
+
 for col in range(COLS):
-    if col in painted:
-        continue
-    mirror = (16 - col) % COLS
-    if mirror not in painted:
-        missing.append(col)
+    if col in cells_out:
         continue
     # flipped, then one 1x pixel left, as the original's own mirror pairs sit
-    painted[col] = [place(ImageOps.mirror(c), 1.0, -UP, 0, CELL * UP) for c in painted[mirror]]
-if missing:
-    sys.exit(f"no painting of columns {missing} or their mirror images")
+    cells_out[col] = []
+    for m in cells_out[(16 - col) % COLS]:
+        shifted = Image.new("RGBA", m.size)
+        shifted.paste(ImageOps.mirror(m), (-UP, 0))
+        cells_out[col].append(shifted)
 
-sheet = Image.new("RGBA", (COLS * CELL * UP, ROWS * CELL * UP))
-for col, cells in painted.items():
-    for f, c in enumerate(cells):
-        sheet.paste(c, (col * CELL * UP, f * CELL * UP))
+sheet = Image.new("RGBA", (COLS * cw, ROWS * cw))
+for col, frames in cells_out.items():
+    for f, im in enumerate(frames):
+        sheet.paste(im, (col * cw, f * cw))
 sheet.save(ASSETS / "14-repaint@4x.png", optimize=True)
 sheet.resize(ORIGINAL.size, Image.LANCZOS).save(ASSETS / "14-repaint.png", optimize=True)
 print("wrote 14-repaint@4x.png and 14-repaint.png", file=sys.stderr)
