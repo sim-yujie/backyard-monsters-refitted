@@ -72,6 +72,8 @@ export interface CellAppearance {
   relationIcon: "house" | "shield" | "swords" | "none";
   /** An outpost's Starter Kit tint (#334). Null off an outpost. */
   kit: OutpostKit | null;
+  /** A main yard cell's Town Hall level, for the hall picture it wears (0 = unknown, and off a main yard). */
+  hallLevel: number;
   /** The kit filter dims this cell (#334): everything but a matching own outpost, unless `ALL`. */
   dimmed: boolean;
 }
@@ -286,6 +288,7 @@ export const loadingAppearance = (): CellAppearance => ({
   plateColour: 0,
   relationIcon: "none",
   kit: null,
+  hallLevel: 0,
   dimmed: false,
 });
 
@@ -356,6 +359,7 @@ export const fogAppearance = (coord?: { x: number; y: number }, sight?: SightLoo
     plateColour: 0,
     relationIcon: "none",
     kit: null,
+    hallLevel: 0,
     dimmed: false,
   };
 };
@@ -404,6 +408,7 @@ export const appearanceOf = (
     plateColour: 0,
     relationIcon: "none" as CellAppearance["relationIcon"],
     kit: null,
+    hallLevel: 0,
     dimmed: false,
   };
 
@@ -435,6 +440,7 @@ export const appearanceOf = (
       plateColour: style.colour,
       relationIcon: style.icon,
       kit: outpost ? kitOf(cell.kit) : null,
+      hallLevel: outpost ? 0 : Number(cell.th) || 0,
       dimmed: !matchesKitFilter(cell, context.kitFilter),
     };
   }

@@ -22,7 +22,8 @@ export type UserCellFields =
   | "save.basesaveid"
   | "save.attackid"
   | "save.attacks"
-  | "save.starterkit";
+  | "save.starterkit"
+  | "save.thlevel";
 
 export type UserCellOwner = Loaded<User, "save", "userid" | "username" | "pic_square" | "alliance_id" | "save.points" | "save.basevalue">;
 
@@ -121,6 +122,9 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     // silver or gold by it, including a viewer who does not own it, so this
     // is not gated on `mine` the way `r`/`m` are.
     ...(outpostCell && { kit: cellSave.starterkit || 0 }),
+    // A home cell's Town Hall level, from the stored column (never the blob),
+    // so the map draws that level's hall. 0 = not known: the client falls back.
+    ...(homeCell && { th: cellSave.thlevel || 0 }),
   };
 };
 
