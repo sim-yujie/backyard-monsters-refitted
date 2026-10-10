@@ -147,6 +147,22 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Bolt: 42x38 cells (the old 30x28 cell plus 6 px each side and 10 px on
+  // top), so the anchor moves by (6, 10) and the worm and its shadow stay put.
+  // Same rows as the Bandito: 0 idle, 1-6 crawl, 7-11 attack.
+  "monsters/sprite.3.v2.png": {
+    frameWidth: 42,
+    frameHeight: 38,
+    anchorX: 13,
+    anchorY: 30,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
 };
 
 const layoutCache = new Map<MonsterSheet, AnimatedSheet>();
@@ -400,7 +416,7 @@ export function flyerAltitude(creatureId: string): number {
 export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/14.v1.png": "monsters/14-repaint@4x.png", // Teratorn art trial
   "monsters/sprite.1.v1.png": "monsters/pokey-repaint@4x.png", // Pokey art trial
-  "monsters/sprite.3.v2.png": "monsters/bolt-repaint@4x.png", // Bolt art trial
+  "monsters/sprite.3.v2.png": "monsters/bolt-anim@4x.png", // Bolt animated repaint
   "monsters/octoooze.png": "monsters/octoooze-repaint@4x.png", // Octo-ooze art trial
   "monsters/fink.png": "monsters/fink-repaint@4x.png", // Fink art trial
   "monsters/bandito.png": "monsters/bandito-anim@4x.png", // Bandito animated repaint

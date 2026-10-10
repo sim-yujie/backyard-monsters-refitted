@@ -61,9 +61,36 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito layout, so every other sheet is exactly the Flash table", () => {
-    expect(Object.keys(REPAINT_LAYOUTS)).toEqual(["monsters/bandito.png"]);
-    expect(spriteFor("C1")).toBe(POKEY);
+  it("ships only the Bandito and Bolt layouts, so every other sheet is exactly the Flash table", () => {
+    expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
+      "monsters/bandito.png",
+      "monsters/sprite.3.v2.png",
+    ]);
+    const plain = MONSTER_SPRITES["IC8"];
+    if (!plain) throw new Error("no IC8");
+    expect(spriteFor("IC8")).toBe(plain);
+  });
+
+  it("the Bolt layout matches the animated PNG and keeps the worm where it was", () => {
+    const old = MONSTER_SPRITES["C3"];
+    if (!old) throw new Error("no C3");
+    const sheet = spriteFor("C3");
+    if (!sheet) throw new Error("no sprite for C3");
+    const png = readFileSync(
+      resolve(__dirname, "../../../../server/public/assets/monsters/bolt-anim@4x.png"),
+    );
+    expect(png.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(png.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(png.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(png.readUInt32BE(20));
+    // 6 px added left and right, 10 px added on top: the worm stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 10);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
   });
 
   it("the Bandito layout matches the animated PNG and keeps the feet where they were", () => {
