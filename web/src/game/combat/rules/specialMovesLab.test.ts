@@ -165,7 +165,7 @@ describe("Fang's venom", () => {
     expect(stacks).toBe(0);
   });
 
-  it.each([1, 2, 3])("adds a stack a bite and hurts once a second for stacks x damage x %i/10", (rank) => {
+  it.each([1, 2, 3])("adds a stack a bite and hurts every half second for stacks x damage x %i/10", (rank) => {
     const battle = fight(rank);
     const damage = monsterStat("C8", "damage", 1);
     let top = 0;
@@ -189,10 +189,10 @@ describe("Fang's venom", () => {
     for (const bite of bites) {
       expect(bite.amount).toBeCloseTo((bite.stacks * damage * rank) / 10, 6);
     }
-    // One bite a second.
+    // One bite every 40 loops (half a second).
     if (bites.length > 1) {
       for (let at = 1; at < bites.length; at += 1) {
-        expect((bites[at]?.tick ?? 0) - (bites[at - 1]?.tick ?? 0)).toBe(TICKS_PER_SECOND);
+        expect((bites[at]?.tick ?? 0) - (bites[at - 1]?.tick ?? 0)).toBe(TICKS_PER_SECOND / 2);
       }
     }
   });

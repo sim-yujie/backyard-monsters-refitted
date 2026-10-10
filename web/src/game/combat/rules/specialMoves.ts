@@ -80,7 +80,7 @@ export const banditoSpeedPercent = (rank: number): number => 50 + 50 * rank;
 export const FANG_ID = "C8";
 /** Each stack of venom hurts for the Fang's damage times this: 0.1, 0.2, 0.3 (the Lab screen's). */
 export const venomShare = (rank: number): number => rank / 10;
-/** The venom bites every half second: Flash's 40 loops at 80 loops a second (owner decision 2026-10-10). */
+/** The venom bites every half second: Flash's 40 loops at 80 a second (owner, 2026-10-10). */
 export const VENOM_INTERVAL_SECONDS = 0.5;
 
 /** C9 Brain: "Cloak Delay" (`Brain.as:5-7`, `Invisibility.as`). */
