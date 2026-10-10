@@ -211,7 +211,7 @@ describe("placement", () => {
 
 describe("sheetUrl", () => {
   it("serves from /assets/ like the building art", () => {
-    expect(sheetUrl(sheet("C5"))).toBe("/assets/monsters/eyera.png");
+    expect(sheetUrl(sheet("C6"))).toBe("/assets/monsters/ichi.png");
     expect(sheetUrl("monsters/flyingshadow.png")).toBe("/assets/monsters/flyingshadow.png");
   });
 
@@ -222,6 +222,6 @@ describe("sheetUrl", () => {
     }
     expect(isHighResolutionSheet("/assets/monsters/14-repaint@4x.png")).toBe(true);
     expect(isHighResolutionSheet(sheetUrl(sheet("C1")))).toBe(true);
-    expect(isHighResolutionSheet(sheetUrl(sheet("C5")))).toBe(false);
+    expect(isHighResolutionSheet(sheetUrl(sheet("C6")))).toBe(false);
   });
 });
