@@ -99,6 +99,72 @@ export interface FrameRect {
   readonly height: number;
 }
 
+/**
+ * A repaint that redraws a sheet with a different animation layout (more
+ * rows, taller cells). Every field is optional and replaces the generated
+ * Flash value of the same name; leave a field out to keep the original. The
+ * numbers are in 1x cell units, as in the table, even when the PNG is `@4x`.
+ */
+export interface SheetLayoutOverride {
+  readonly frameWidth?: number;
+  readonly frameHeight?: number;
+  readonly anchorX?: number;
+  readonly anchorY?: number;
+  readonly rows?: number;
+  readonly animations?: Readonly<Partial<Record<MonsterAnimation, RowCycle>>>;
+  /**
+   * Which frame of the `attack` cycle is the blow itself (0-based). When set,
+   * the attack is played once per swing with that frame landing on the tick
+   * the hit connects; see `attackRow`. Leave out to loop the cycle.
+   */
+  readonly strikeFrame?: number;
+}
+
+/** A sheet as the game draws it: the Flash table row plus any repaint layout. */
+export interface AnimatedSheet extends MonsterSheet {
+  readonly strikeFrame?: number;
+}
+
+/**
+ * Animation layouts for repainted sheets, by original file (the same key as
+ * `REPAINTED_SHEETS`). A sheet with no entry is drawn exactly as the table
+ * says. Add an entry only together with the matching repaint entry.
+ */
+export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {};
+
+const layoutCache = new Map<MonsterSheet, AnimatedSheet>();
+
+/** Applies a sheet's repaint layout, if it has one; the same object each time. */
+export function applyLayout(
+  sheet: MonsterSheet,
+  layouts: Readonly<Record<string, SheetLayoutOverride>> = REPAINT_LAYOUTS,
+): AnimatedSheet {
+  const override = layouts[sheet.file];
+  if (!override) return sheet;
+  const cacheable = layouts === REPAINT_LAYOUTS;
+  const cached = cacheable ? layoutCache.get(sheet) : undefined;
+  if (cached) return cached;
+  const frameWidth = override.frameWidth ?? sheet.frameWidth;
+  const frameHeight = override.frameHeight ?? sheet.frameHeight;
+  const rows = override.rows ?? sheet.rows;
+  const result: AnimatedSheet = {
+    ...sheet,
+    frameWidth,
+    frameHeight,
+    rows,
+    width: frameWidth * sheet.columns,
+    height: frameHeight * rows,
+    anchorX: override.anchorX ?? sheet.anchorX,
+    anchorY: override.anchorY ?? sheet.anchorY,
+    animations: override.animations ?? sheet.animations,
+    ...(override.strikeFrame !== undefined ? { strikeFrame: override.strikeFrame } : {}),
+  };
+  if (cacheable) layoutCache.set(sheet, result);
+  return result;
+}
+
+const withLayout = (sheet: MonsterSheet): AnimatedSheet => applyLayout(sheet);
+
 /** Champion families and their sheets in level order, built once on first use. */
 let familyIndex: ReadonlyMap<string, readonly MonsterSheet[]> | null = null;
 
@@ -128,13 +194,14 @@ const championSheets = (family: string): readonly MonsterSheet[] => {
  * (`Krallen.as:48`), so pass that. A level below 1 uses the first sheet.
  * Undefined for an id the table does not know.
  */
-export function spriteFor(creatureId: string, level = 1): MonsterSheet | undefined {
+export function spriteFor(creatureId: string, level = 1): AnimatedSheet | undefined {
   const direct = MONSTER_SPRITES[creatureId];
-  if (direct) return direct;
+  if (direct) return withLayout(direct);
   const sheets = championSheets(creatureId);
   if (sheets.length === 0) return undefined;
   const index = Math.min(Math.max(1, Math.floor(level)), sheets.length) - 1;
-  return sheets[index];
+  const chosen = sheets[index];
+  return chosen ? withLayout(chosen) : undefined;
 }
 
 /**
@@ -206,6 +273,29 @@ export function frameRow(sheet: MonsterSheet, animation: MonsterAnimation, tick:
     if (cycle) return cycleRow(cycle, tick);
   }
   return 0;
+}
+
+/**
+ * The row for an attacking monster.
+ *
+ * A sheet that names a `strikeFrame` plays its attack cycle once per swing,
+ * timed so the strike frame shows on the tick the hit lands (`swingAge` is
+ * ticks since then): the follow-through and recovery play out after it, and
+ * once the cycle is over the monster stands (idle row) until the next hit.
+ * If the next hit comes before the cycle ends, the cycle restarts at its
+ * strike frame, so a fast attacker shows a shortened swing. With no
+ * `strikeFrame`, or before the first hit has landed (`swingAge` undefined),
+ * the cycle simply loops on the animation clock `age`.
+ */
+export function attackRow(sheet: AnimatedSheet, swingAge: number | undefined, age: number): number {
+  const cycle = sheet.animations.attack;
+  if (!cycle || sheet.strikeFrame === undefined || swingAge === undefined || !Number.isFinite(swingAge)) {
+    return frameRow(sheet, "attack", age);
+  }
+  const strike = Math.min(Math.max(0, sheet.strikeFrame), cycle.count - 1);
+  const step = Math.floor(Math.max(0, swingAge) / cycle.ticksPerFrame) + strike;
+  if (step >= cycle.count) return frameRow(sheet, "idle", age);
+  return cycle.first + step;
 }
 
 /** The pixel rectangle of cell `(column, row)` in the sheet (`SPRITES.as:379-380`). */
