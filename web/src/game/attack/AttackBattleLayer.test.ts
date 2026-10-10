@@ -37,7 +37,7 @@ const STILL = { reducedMotion: false } as const;
 
 const creepOf = (overrides: Partial<CreepSnapshot> = {}): CreepSnapshot => ({
   id: 1,
-  monsterId: "C2",
+  monsterId: "IC8",
   level: 1,
   champion: false,
   friendly: false,
@@ -71,7 +71,7 @@ describe("ability tints (issue #222)", () => {
 
 describe("headings and cells", () => {
   it("picks column 0 for a creep heading right, and walks the columns clockwise", () => {
-    const pokey = sheetOf("C2");
+    const pokey = sheetOf("IC8");
     const right = layoutCreep(
       creepOf(),
       pokey,
@@ -99,7 +99,7 @@ describe("headings and cells", () => {
     expect(left.column).toBe(15);
     // Every column is one cell across the sheet, a single row for a classic creep.
     expect(right.row).toBe(0);
-    expect(right.key).toBe("C2:0:0");
+    expect(right.key).toBe("IC8:0:0");
   });
 
   it("shows a champion's attack row while it is attacking, and its walk row while it walks", () => {
@@ -147,7 +147,7 @@ describe("headings and cells", () => {
   });
 
   it("stands a classic creep still on its walk row, and hops it while it walks", () => {
-    const pokey = sheetOf("C2");
+    const pokey = sheetOf("IC8");
     const standing = layoutCreep(
       creepOf(),
       pokey,
@@ -208,7 +208,7 @@ describe("headings and cells", () => {
 
 describe("placement", () => {
   it("puts the cell's top-left at the ground point minus the anchor", () => {
-    const pokey = sheetOf("C2");
+    const pokey = sheetOf("IC8");
     const origin = { x: 1000, y: 500 };
     const creep = creepOf({ ix: 120, iy: 40 });
     const layout = layoutCreep(
