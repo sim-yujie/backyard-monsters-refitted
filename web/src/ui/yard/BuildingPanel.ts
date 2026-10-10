@@ -129,6 +129,9 @@ export interface BuildingPanelOptions {
 }
 
 /** Words for each job kind, as the heading of the job block. */
+/** The fortifiable buildings that are not towers: the Storage Silo, Town Hall and outpost core. */
+const NON_TOWER_FORTIFY_TYPES: ReadonlySet<number> = new Set([6, 14, OUTPOST_CORE_TYPE]);
+
 const JOB_HEADING: Readonly<Record<JobOffer["kind"], string>> = {
   build: "Building",
   upgrade: "Upgrading to",
@@ -881,7 +884,7 @@ export class BuildingPanel {
       const line = gateLine(offer.gate);
       line.id = gateId;
       block.append(line);
-    } else if (building.type !== OUTPOST_CORE_TYPE) {
+    } else if (!NON_TOWER_FORTIFY_TYPES.has(building.type)) {
       block.append(gateText("A tower does not fire while it fortifies."));
     }
 
