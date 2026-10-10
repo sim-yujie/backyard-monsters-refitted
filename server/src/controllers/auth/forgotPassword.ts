@@ -11,6 +11,7 @@ import { ForgotPasswordSchema } from "../../schemas/AuthSchemas.js";
 import { transporter } from "../../config/MailConfig.js";
 import { isBot } from "../../services/bots/isBot.js";
 import { hashResetToken } from "../../services/auth/resetToken.js";
+import { sandboxStartAvailable } from "../../config/GameConfig.js";
 
 /**
  * The one answer to a well-formed request (issue #317), whether or not an
@@ -79,7 +80,12 @@ export const forgotPassword: KoaController = async (ctx) => {
       postgres.em.persist(user);
       await postgres.em.flush();
 
-      sendResetEmail(email, token).catch((error) =>
+      if (sandboxStartAvailable(process.env)) {
+        // Local development has no mail server, and a test must never email a
+        // real address: the link goes to the server log instead.
+        const webUrl = process.env.DEV_WEB_URL || "http://localhost:5173";
+        logger.info(`ForgotPassword (dev): reset link for user ${user.userid}: ${webUrl}/reset-password?token=${token}`);
+      } else sendResetEmail(email, token).catch((error) =>
         logger.error(`ForgotPassword: reset email for user ${user.userid} failed: ${error}`)
       );
     }

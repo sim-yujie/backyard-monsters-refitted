@@ -2,6 +2,7 @@ import { loginWithToken, logout, restoreStoredSession } from "@/api/auth";
 import { Panel } from "@/ui/Panel";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
+import { resetTokenFromLocation } from "./passwordReset";
 
 /**
  * The first screen.
@@ -29,6 +30,12 @@ export class BootScene implements Scene {
     this.panel.setContent(status);
     wrapper.append(this.panel.element);
     context.overlay.content.append(wrapper);
+
+    // An emailed reset link goes to the form for it, signed in or not.
+    if (resetTokenFromLocation(window.location)) {
+      context.goTo(SceneName.LOGIN);
+      return;
+    }
 
     const stored = restoreStoredSession();
     if (!stored) {

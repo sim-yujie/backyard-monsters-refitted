@@ -101,6 +101,28 @@ export interface SetAvatarResponse extends ApiEnvelope {
   pic_square: string;
 }
 
+/** `GET /api/:apiVersion/player/account`. */
+export interface AccountResponse extends ApiEnvelope {
+  error: number;
+  username: string;
+  canChangeUsername: boolean;
+  nextChangeAt: string | null;
+  settings?: { shinyLocked?: boolean };
+}
+
+/** `POST /api/:apiVersion/player/changeusername`. */
+export interface ChangeUsernameResponse extends ApiEnvelope {
+  error: number;
+  username: string;
+  nextChangeAt: string;
+}
+
+/** `POST /api/:apiVersion/player/settings`. */
+export interface SettingsResponse extends ApiEnvelope {
+  error: number;
+  settings: { shinyLocked: boolean };
+}
+
 /* ── Base / yard ────────────────────────────────────────────────────────── */
 
 /** `type` on /base/load. Values from server/src/enums/Base.ts (BaseMode). */
