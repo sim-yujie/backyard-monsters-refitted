@@ -402,6 +402,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/slimeattikusmini_anim.png": "monsters/slimeattikusmini-repaint@4x.png", // mini slime, same frames
   "monsters/rezghul.png": "monsters/rezghul-repaint@4x.png", // Rezghul art trial (rows 1-5 walk bob)
   "monsters/ape_1.png": "monsters/ape_1-repaint@4x.png", // Gorgo level 1 repaint (all 16 headings, idle + walk + attack)
+  "monsters/dragon_1.png": "monsters/dragon_1-repaint@4x.png", // Drull level 1 repaint (all 16 headings painted, idle + walk + attack)
 };
 
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */
