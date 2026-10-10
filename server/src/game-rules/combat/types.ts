@@ -582,3 +582,9 @@ export interface Outcome {
   /** `digest(state)` at every 800-tick checkpoint (§3.4). */
   readonly digests: readonly string[];
 }
+
+/**
+ * Monster Lab ranks keyed by monster id, 0 to 3; an absent id is rank 0, the
+ * plain monster (issue #352, `specialMoves.ts`).
+ */
+export type MonsterRanks = Readonly<Record<string, number>>;

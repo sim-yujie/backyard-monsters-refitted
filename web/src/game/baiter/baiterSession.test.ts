@@ -238,6 +238,15 @@ describe("the hand-off and the attack target", () => {
     });
   });
 
+  it("fights at the player's own Monster Lab ranks, whatever level a row is set to (#352)", () => {
+    const researched = {
+      ...save,
+      academy: { C1: { level: 6 }, C4: { level: 3, powerup: 2 } },
+    } as unknown as BaseLoadResponse;
+    expect(baiterTarget({ ...run, save: researched }).roster.ranks).toEqual({ C4: 2 });
+    expect(baiterTarget(run).roster).not.toHaveProperty("ranks");
+  });
+
   it("leaves the load's frozen champion brains behind, so a test champion is a fresh one (Q6)", () => {
     const target = baiterTarget(run);
     expect(target.load).not.toHaveProperty("attackerbrains");

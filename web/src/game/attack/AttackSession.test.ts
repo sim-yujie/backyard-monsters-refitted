@@ -12,6 +12,7 @@ import {
   hasDeclareWar,
   mintSeed,
   servedAcademy,
+  servedRanks,
   servedBrain,
   servedHeight,
 } from "./AttackSession";
@@ -742,5 +743,38 @@ describe("helpers", () => {
     expect(Number.isInteger(seed)).toBe(true);
     expect(seed).toBeGreaterThanOrEqual(0);
     expect(seed).toBeLessThan(0x1_0000_0000);
+  });
+});
+
+describe("AttackSession Monster Lab ranks (#352)", () => {
+  const withRanks = (ranks?: Record<string, number>): AttackSession =>
+    new AttackSession({
+      target: targetOf({ roster: { ...targetOf().roster, ...(ranks ? { ranks } : {}) } }),
+      seed: 1,
+    });
+
+  it("fights at the ranks the attack load serves with the academy", () => {
+    const session = withRanks({ C4: 1 });
+    session.load({ ...towerYard(), attackeracademy: { C4: 3 }, attackerranks: { C4: 2 } } as BaseLoadResponse);
+    expect(session.ranks).toEqual({ C4: 2 });
+  });
+
+  it("takes a load that froze the academy but sent no ranks to mean none", () => {
+    const session = withRanks({ C4: 1 });
+    session.load({ ...towerYard(), attackeracademy: { C4: 3 } } as BaseLoadResponse);
+    expect(session.ranks).toEqual({});
+  });
+
+  it("keeps the roster's ranks when the load froze no academy", () => {
+    const session = withRanks({ C4: 1 });
+    expect(session.ranks).toEqual({ C4: 1 });
+    session.load(towerYard());
+    expect(session.ranks).toEqual({ C4: 1 });
+  });
+
+  it("reads only whole ranks 1 to 3, and nothing from what is not a table", () => {
+    expect(servedRanks({ C1: 3, C2: 0, C3: 2.5, C4: "2", C5: 4, C6: 1 })).toEqual({ C1: 3, C6: 1 });
+    expect(servedRanks(undefined)).toEqual({});
+    expect(servedRanks([2])).toEqual({});
   });
 });

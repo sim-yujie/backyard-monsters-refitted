@@ -4,7 +4,7 @@ import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { Tribes, type Tribe } from "../../../enums/Tribes.js";
 import { autoAttackRefusedErr, attackResultPendingErr, baseUnderAttackErr } from "../../../errors/errors.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
-import type { ResourceAmounts } from "../../../game-rules/combat/index.js";
+import { academyRanks, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { postgres, redis } from "../../../server.js";
 import { generateBaseId } from "../../../utils/generateBaseId.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
@@ -346,6 +346,7 @@ export const runAutoAttack = async (user: User, baseid: string): Promise<AutoAtt
       events: fought.events,
       tick: landed.landed.tick,
       levels: academyLevels(userSave.academy),
+      ranks: academyRanks(userSave.academy),
       declareWar,
     });
 
@@ -404,6 +405,8 @@ export interface AutoAttackReplay {
   readonly tick: number;
   /** The attacker's academy levels, which their monsters fought at. */
   readonly levels: Readonly<Record<string, number>>;
+  /** The attacker's Monster Lab ranks (issue #352); absent on a replay kept before them. */
+  readonly ranks?: Readonly<Record<string, number>>;
   readonly declareWar: boolean;
 }
 

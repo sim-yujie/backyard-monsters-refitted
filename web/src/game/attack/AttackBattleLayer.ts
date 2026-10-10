@@ -525,6 +525,8 @@ interface CreepView {
   shadow: Sprite | null;
   barBack: Sprite;
   barFront: Sprite;
+  /** The venom drop over a poisoned creep (issue #352). */
+  venom: Graphics;
   /** The ground point at the last tick that was looked at, for the heading. */
   lastX: number;
   lastY: number;
@@ -586,6 +588,13 @@ const MARKER_SIZE = 8;
 const SPLAT_COLOUR = 0x5da832;
 /** `G4QuakeGraphic`'s line colour, 15893760 (`champions/Korath.as:233`). */
 const QUAKE_COLOUR = 0xf28500;
+/** The special moves' bursts (issue #352): a splash, a Bolt's hop, a Teratorn's jump, the venom drop. */
+const SPLASH_COLOUR = 0xe8d44d;
+const BLINK_COLOUR = 0x9fd4ff;
+const BOUNCE_COLOUR = 0xff7a1a;
+const VENOM_COLOUR = 0x7bd62a;
+/** Blink.as:78: a hopping Bolt is drawn at this alpha. A cloaked Brain is drawn the same. */
+const UNSEEN_ALPHA = 0.3;
 const GIB_COLOURS = [0x5da832, 0x3f7a1e, 0x8ad14a] as const;
 const BAR_BACK_COLOUR = 0x6b1616;
 const BAR_FRONT_COLOUR = 0x5ee06a;
@@ -1078,6 +1087,25 @@ export class AttackBattleLayer {
           : view.baseTint === 0xffffff
             ? abilityTint(view.snapshot)
             : view.baseTint;
+      this.paintMoves(view, tick);
+    }
+  }
+
+  /**
+   * The special moves' looks (issue #352): a hopping Bolt flickers at the
+   * alpha Flash gave it (Blink.as:78), a cloaked Brain is see-through, and a
+   * poisoned creep carries a green drop that grows with its stacks.
+   */
+  private paintMoves(view: CreepView, tick: number): void {
+    const creep = view.snapshot;
+    const unseen = creep?.invisible === true || creep?.blinking === true;
+    const flicker = creep?.blinking === true && !this.reducedMotion && Math.floor(tick / 4) % 2 === 1;
+    view.body.alpha = unseen ? (flicker ? UNSEEN_ALPHA * 0.5 : UNSEEN_ALPHA) : 1;
+    const stacks = creep?.poisonStacks ?? 0;
+    view.venom.visible = stacks > 0;
+    if (stacks > 0) {
+      view.venom.position.set(view.barBack.x + view.barBack.width + 5, view.barBack.y - 3);
+      view.venom.scale.set(1 + Math.min(stacks, 5) * 0.12);
     }
   }
 
@@ -1128,7 +1156,10 @@ export class AttackBattleLayer {
     barBack.tint = BAR_BACK_COLOUR;
     const barFront = new Sprite(Texture.WHITE);
     barFront.tint = BAR_FRONT_COLOUR;
-    this.bars.addChild(barBack, barFront);
+    const venom = new Graphics();
+    venom.moveTo(0, -5).quadraticCurveTo(4, 0, 0, 3).quadraticCurveTo(-4, 0, 0, -5).fill({ color: VENOM_COLOUR });
+    venom.visible = false;
+    this.bars.addChild(barBack, barFront, venom);
     return {
       id: -1,
       monsterId: "",
@@ -1137,6 +1168,7 @@ export class AttackBattleLayer {
       shadow: null,
       barBack,
       barFront,
+      venom,
       lastX: 0,
       lastY: 0,
       lastTick: -1,
@@ -1161,6 +1193,7 @@ export class AttackBattleLayer {
     view.body.visible = false;
     view.barBack.visible = false;
     view.barFront.visible = false;
+    view.venom.visible = false;
     if (view.shadow) view.shadow.visible = false;
     view.id = -1;
     view.snapshot = null;
@@ -1176,6 +1209,7 @@ export class AttackBattleLayer {
     }
     view.barBack.destroy();
     view.barFront.destroy();
+    view.venom.destroy();
   }
 
   private place(view: CreepView, creep: CreepSnapshot, tick: number): void {
@@ -1603,6 +1637,21 @@ export class AttackBattleLayer {
       this.towerFx.onCharge(event.towerId, event.tick);
       return;
     }
+    if (event.kind === "splash") {
+      this.spawnRing(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius, SPLASH_COLOUR);
+      return;
+    }
+    if (event.kind === "blink") {
+      this.spawnRing(event.tick, groundWorld(event.ix, event.iy, this.origin), 16, BLINK_COLOUR);
+      return;
+    }
+    if (event.kind === "bounce") {
+      const to = groundWorld(event.toIx, event.toIy, this.origin);
+      this.spawnRing(event.tick, groundWorld(event.fromIx, event.fromIy, this.origin), 14, BOUNCE_COLOUR);
+      this.spawnRing(event.tick, to, 26, BOUNCE_COLOUR);
+      return;
+    }
+    if (event.kind !== "death") return;
     // A death a held bullet dealt waits for it to land; the rest splat now.
     if (this.ledger.death(event)) return;
     const at = groundWorld(event.ix, event.iy, this.origin);
@@ -1644,11 +1693,16 @@ export class AttackBattleLayer {
    * the quake's reach, fading like a splat. Drawing only.
    */
   private spawnQuake(tick: number, at: Point, radius: number): void {
+    this.spawnRing(tick, at, radius, QUAKE_COLOUR);
+  }
+
+  /** Three fading rings on the ground, radius wide: a quake, or a special move's burst. */
+  private spawnRing(tick: number, at: Point, radius: number, colour: number): void {
     const rings = new Graphics();
     for (const share of [1, 0.8, 0.6]) {
       rings.ellipse(0, 0, radius * share, (radius * share) / 2);
     }
-    rings.stroke({ color: QUAKE_COLOUR, width: 2, alpha: 0.9 });
+    rings.stroke({ color: colour, width: 2, alpha: 0.9 });
     rings.position.set(at.x, at.y);
     this.effects.addChild(rings);
     this.splats.push({ tick, at, radius, disc: rings, gibs: [] });

@@ -347,7 +347,7 @@ const EFFECTS: Readonly<Record<string, { readonly label: string; readonly value:
   C7: { label: "Whirlwind speed", value: times },
   C8: { label: "Venom", value: (v) => `${percent(v)} of its damage` },
   C5: { label: "Airburst bonus", value: percent },
-  C9: { label: "Invisibility", value: (v) => (v > 0 ? `${v} s cloak delay` : "on") },
+  C9: { label: "Invisibility", value: (v) => `${v} s cloak delay` },
   C11: { label: "Acid on death", value: (v) => `${times(v)} its damage` },
   C13: { label: "Pop-up splash", value: (v) => `${times(v)} its damage` },
   C14: { label: "Fireball bounces", value: String },

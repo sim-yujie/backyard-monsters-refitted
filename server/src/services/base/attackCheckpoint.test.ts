@@ -193,3 +193,14 @@ describe("stored checkpoints", () => {
     expect(checkpointExpired(checkpoint, session.startedat + ATTACK_SESSION_WINDOW)).toBe(true);
   });
 });
+
+describe("the attacker's Monster Lab ranks (issue #352)", () => {
+  const ranked = { attackerid: 2, attackid: 9, startedat: 1_000_000, attackerRanks: { C13: 3 } };
+
+  test("a checkpoint copies them from the session, and gives them back", () => {
+    const checkpoint = newCheckpoint(ranked, 9, accepted(parseCheckpoint(body())), 1_000_010);
+    expect(checkpoint.attackerRanks).toEqual({ C13: 3 });
+    expect(checkpointSession(checkpoint).attackerRanks).toEqual({ C13: 3 });
+    expect(parseStoredCheckpoint(serialiseCheckpoint(checkpoint))?.attackerRanks).toEqual({ C13: 3 });
+  });
+});

@@ -247,3 +247,22 @@ describe("the stored session", () => {
     expect(ATTACK_SESSION_TTL).toBeGreaterThan(ATTACK_SESSION_WINDOW);
   });
 });
+
+describe("the attacker's Monster Lab ranks (issue #352)", () => {
+  const ranks = { C4: 2, C13: 3 };
+
+  test("newAttackSession freezes them, and leaves them out when there are none", () => {
+    expect(newAttackSession(ATTACKER, DEFENDER_ATTACK_ID, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, ranks).attackerRanks).toEqual(ranks);
+    expect(newAttackSession(ATTACKER, DEFENDER_ATTACK_ID, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, {})).not.toHaveProperty("attackerRanks");
+  });
+
+  test("survive a round trip through the stored session", () => {
+    const stored = { ...session(), attackerRanks: ranks };
+    expect(parseAttackSession(serialiseAttackSession(stored))).toEqual(stored);
+  });
+
+  test("drop a rank that is not a whole 1 to 3", () => {
+    const raw = JSON.stringify({ ...session(), attackerRanks: { C4: 2, C13: 0, C5: 1.5, C9: 7, C1: "2" } });
+    expect(parseAttackSession(raw)?.attackerRanks).toEqual({ C4: 2 });
+  });
+});

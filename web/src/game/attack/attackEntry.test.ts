@@ -171,6 +171,21 @@ describe("rosterInRange", () => {
     expect(roster.catapultLevel).toBe(2);
   });
 
+  it("takes the Monster Lab ranks from the own-yard load (#352), and none when none are researched", () => {
+    const ranked = rosterInRange({ col: 100, row: 100 }, [ownCell(100, 101)], {
+      champion: [],
+      academy: { C1: { level: 6 }, C4: { level: 3, powerup: 2 } },
+      catapult: 0,
+    });
+    expect(ranked.ranks).toEqual({ C4: 2 });
+    const plain = rosterInRange({ col: 100, row: 100 }, [ownCell(100, 101)], {
+      champion: [],
+      academy: { C1: { level: 6 } },
+      catapult: 0,
+    });
+    expect(plain).not.toHaveProperty("ranks");
+  });
+
   describe("the catapult level (#70)", () => {
     const catapult = (row: Record<string, number>) => ({
       "595": { X: 0, Y: 0, t: 51, id: 595, ...row },

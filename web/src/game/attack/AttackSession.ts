@@ -31,6 +31,7 @@ import {
   type FlingEvent,
   type FlingLog,
   type MonsterLevels,
+  type MonsterRanks,
   type ResourceAmounts,
   type Roster,
   type ChampionStance,
@@ -281,6 +282,22 @@ export const servedAcademy = (raw: unknown): MonsterLevels | null => {
   return levels;
 };
 
+/**
+ * The Monster Lab ranks from the load's `attackerranks` (issue #352): the ones
+ * the server froze into this attack with the academy. Only whole ranks 1 to 3
+ * are kept; a monster with none is rank 0.
+ */
+export const servedRanks = (raw: unknown): MonsterRanks => {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
+  const ranks: Record<string, number> = {};
+  for (const [id, rank] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof rank === "number" && Number.isSafeInteger(rank) && rank >= 1 && rank <= 3) {
+      ranks[id] = rank;
+    }
+  }
+  return ranks;
+};
+
 /** The load's `attackerlevel`, when it is a whole level of 1 or more. */
 export const servedLevel = (raw: unknown): number | undefined =>
   typeof raw === "number" && Number.isSafeInteger(raw) && raw >= 1 ? raw : undefined;
@@ -366,12 +383,15 @@ export class AttackSession {
   private readonly raid: boolean;
   /** The academy levels the battle is fought at: the load's, else the roster's. */
   private levels_: MonsterLevels;
+  /** The Lab ranks the battle is fought at: the load's, else the roster's (issue #352). */
+  private ranks_: MonsterRanks;
 
   constructor(options: AttackSessionOptions) {
     this.target = options.target;
     this.raid = options.raid ?? false;
     this.seed = options.seed ?? mintSeed();
     this.levels_ = options.target.roster.levels;
+    this.ranks_ = options.target.roster.ranks ?? {};
     this.playerLevel = options.playerLevel;
     this.clockFromFirstDrop = options.clockFromFirstDrop ?? false;
     this.declareWar_ = options.declareWar ?? false;
@@ -416,6 +436,12 @@ export class AttackSession {
     });
     const playerLevel = this.playerLevel ?? servedLevel(response.attackerlevel);
     this.levels_ = servedAcademy(response.attackeracademy) ?? this.target.roster.levels;
+    // The server freezes the ranks with the academy: a load that froze the
+    // academy and sent no ranks means none are researched (issue #352).
+    this.ranks_ =
+      response.attackeracademy === undefined
+        ? (this.target.roster.ranks ?? {})
+        : servedRanks(response.attackerranks);
     const defence = battleDefence(parseDefenderForces(response.defenderforces));
     // The raid as `raidFight.ts` fights it: its seed, its hit limit, the
     // player's defence, and nothing of an attacker's.
@@ -428,6 +454,7 @@ export class AttackSession {
     this.battle_ = createBattle(yard, {
       seed: this.seed,
       levels: this.levels_,
+      ...(Object.keys(this.ranks_).length > 0 ? { ranks: this.ranks_ } : {}),
       declareWar: this.declareWar_,
       ...(playerLevel === undefined ? {} : { playerLevel }),
       // The defence the server replays the battle against (issue #195).
@@ -736,6 +763,11 @@ export class AttackSession {
    */
   get levels(): MonsterLevels {
     return this.levels_;
+  }
+
+  /** The Monster Lab ranks the battle is fought at (issue #352), {@link servedRanks} once loaded. */
+  get ranks(): MonsterRanks {
+    return this.ranks_;
   }
 
   /* ── Reading ────────────────────────────────────────────────────────── */

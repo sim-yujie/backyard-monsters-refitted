@@ -700,6 +700,11 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   attackeracademy?: unknown;
   /**
+   * Attack modes only: the attacker's Monster Lab ranks, by monster id, frozen
+   * with the academy (issue #352). Absent when nothing is researched.
+   */
+  attackerranks?: unknown;
+  /**
    * The own yard's loads (not Inferno): the player's level from their main
    * save's empire points, the level the map shows (#192). The yard routes
    * send it too, read after the action.

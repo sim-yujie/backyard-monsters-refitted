@@ -1,5 +1,6 @@
 import {
   RESOURCE_KEYS,
+  academyRanks,
   attackReport,
   battleDefence,
   buildEngineYard,
@@ -203,6 +204,8 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
     {
       seed: log.seed,
       levels: academyLevels(attacker.academy),
+      // The Lab ranks the attack froze (issue #352): off the same academy as the levels.
+      ranks: academyRanks(attacker.academy),
       declareWar,
       ...(input.playerLevel !== undefined && { playerLevel: input.playerLevel }),
       ...battleDefence(input.defence),

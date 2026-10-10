@@ -223,8 +223,12 @@ describe("words", () => {
     expect(effectLine(ability("C5"), 1)).toBe("Airburst bonus: 20% → 30%");
     expect(effectLine(ability("C7"), 1)).toBe("Whirlwind speed: 1× → 1.5×");
     expect(effectLine(ability("C8"), 0)).toBe("Venom: none → 10% of its damage");
-    expect(effectLine(ability("C9"), 1)).toBe("Invisibility: on → 4 s cloak delay");
+    expect(effectLine(ability("C9"), 1)).toBe("Invisibility: 0 s cloak delay → 4 s cloak delay");
     expect(effectLine(ability("C14"), 2)).toBe("Fireball bounces: 2 → 3");
+    expect(effectLine(ability("C9"), 0)).toBe("Invisibility: none → 0 s cloak delay");
+    expect(effectLine(ability("C9"), 3)).toBe("Invisibility: 8 s cloak delay (top rank)");
+    expect(effectLine(ability("C4"), 1)).toBe("Extra targets: 1 → 2");
+    expect(effectLine(ability("C11"), 2)).toBe("Acid on death: 2× its damage → 3× its damage");
   });
 
   it("powerupRank reads 0..3", () => {

@@ -142,11 +142,17 @@ export interface LootDefender {
  * @param academy - The attacker's `academy` as it stands now.
  */
 export const foughtAcademy = (
-  session: Pick<AttackSession, "attackerAcademy"> | null | undefined,
+  session: Pick<AttackSession, "attackerAcademy" | "attackerRanks"> | null | undefined,
   academy: JsonObject | null | undefined
 ): JsonObject | null =>
   session?.attackerAcademy
-    ? Object.fromEntries(Object.entries(session.attackerAcademy).map(([id, level]) => [id, { level }]))
+    ? Object.fromEntries(
+        Object.entries(session.attackerAcademy).map(([id, level]) => {
+          // The Lab ranks the attack load froze with the levels (issue #352).
+          const powerup = session.attackerRanks?.[id];
+          return [id, powerup ? { level, powerup } : { level }];
+        })
+      )
     : (academy ?? null);
 
 /** What the replay needs of the attacker's main save, as it stood before this save. */

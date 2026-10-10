@@ -258,6 +258,7 @@ export const newCheckpoint = (
   ...(session.defenderForces && { defenderForces: session.defenderForces }),
   ...(session.championBrains && { championBrains: session.championBrains }),
   ...(session.attackerAcademy && { attackerAcademy: session.attackerAcademy }),
+  ...(session.attackerRanks && { attackerRanks: session.attackerRanks }),
   ...(session.declareWar !== undefined && { declareWar: session.declareWar }),
 });
 
@@ -314,6 +315,7 @@ export const checkpointSession = (checkpoint: AttackCheckpoint): AttackSession =
   ...(checkpoint.defenderForces && { defenderForces: checkpoint.defenderForces }),
   ...(checkpoint.championBrains && { championBrains: checkpoint.championBrains }),
   ...(checkpoint.attackerAcademy && { attackerAcademy: checkpoint.attackerAcademy }),
+  ...(checkpoint.attackerRanks && { attackerRanks: checkpoint.attackerRanks }),
   ...(checkpoint.declareWar !== undefined && { declareWar: checkpoint.declareWar }),
 });
 

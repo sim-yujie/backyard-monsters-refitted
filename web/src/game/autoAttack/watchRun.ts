@@ -62,6 +62,7 @@ export const watchTarget = (run: WatchRun): AttackTarget => ({
   roster: {
     monsters: flungOf(watchEvents(run)),
     levels: { ...run.replay.levels },
+    ...(run.replay.ranks ? { ranks: { ...run.replay.ranks } } : {}),
     champions: [],
     flingerLevel: 0,
     catapultLevel: 0,
