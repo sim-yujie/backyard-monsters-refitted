@@ -23,9 +23,10 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * A Map Room 2 outpost can fortify its core (F1-F4) and its cannon, sniper,
  * laser, tesla, flak and railgun towers, each four steps up the outpost
  * table's fortify ladder (`fortifyStepsOf`, from `fortify_costs` in
- * `client/scripts/OUTPOST_YARD_PROPS.as`). A main yard has no ladder here
- * (fortifying one is a Map Room 3 feature), so every main-yard building is
- * refused `400 notFortifiable`.
+ * `client/scripts/OUTPOST_YARD_PROPS.as`). A home yard can fortify its Storage
+ * Silo, Town Hall and the same six towers, four steps each, gated on a Town
+ * Hall of level 5, 6, 7 and 8 (`client/scripts/YARD_PROPS.as`, `can_fortify`).
+ * Every other building is refused `400 notFortifiable`.
  *
  * **Fortify** is `BFOUNDATION.Fortify` (`client/scripts/BFOUNDATION.as:2153-2216`)
  * with `BASE.CanFortify` (`client/scripts/BASE.as:3980-4110`): the step's
@@ -46,7 +47,7 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 
 /** The slice of a save the two routes read. */
 export interface FortifySave extends StorageCapSave {
-  /** `BaseType`: only an outpost has fortify ladders. */
+  /** `BaseType`: picks the outpost or the home-yard fortify ladders. */
   type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;

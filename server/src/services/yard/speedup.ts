@@ -111,7 +111,7 @@ export const planSpeedup = (
   const damage = damageOf(save, String(id), building);
   if (damage?.repairing) return planRepairFinish(save, damage, item);
 
-  const field = runningCountdown(building, kind === "outpost");
+  const field = runningCountdown(building, true);
   if (!field) {
     throw yardRefusedErr("notRunning", "This building is not building or upgrading.", { id });
   }

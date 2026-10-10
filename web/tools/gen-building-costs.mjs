@@ -585,6 +585,20 @@ export type OutpostTraitRow = readonly [
 export const OUTPOST_TRAIT_ROWS: readonly OutpostTraitRow[] = [
 ${traitRows(outposts)}
 ];
+
+/**
+ * The main yard's fortify ladders, \`[type, steps]\`: the Storage Silo, the Town
+ * Hall and the cannon, sniper, laser, tesla, flak and railgun towers
+ * (\`client/scripts/YARD_PROPS.as\`, entries with \`can_fortify\`). Every step
+ * requires a Town Hall of level 5, 6, 7 and 8 in turn. The Map Room 2 overrides
+ * leave them alone (\`client/scripts/GLOBAL.as:615-712\`).
+ */
+export const MAIN_FORTIFY_ROWS: readonly (readonly [type: number, steps: readonly CostStep[]])[] = [
+${entries
+  .filter((one) => one.fortify.length > 0)
+  .map((one) => `  [${one.id}, [\n${one.fortify.map((one) => `    ${step(one)},`).join("\n")}\n  ]],`)
+  .join("\n")}
+];
 `;
 
 const header = `/**
@@ -779,14 +793,15 @@ export const siloCapacity = (level: number): number =>
 export const maxLevel = (type: number, kind: YardKind = "main"): number =>
   propsFor(kind)[type]?.costs.length ?? 0;
 
-/**
- * The fortify ladder of a type in a yard of \`kind\`, empty when it has none.
+/*** The fortify ladder of a type in a yard of \`kind\`, empty when it has none.
  *
- * Only the outpost table's is carried: fortifying a main-yard building is a Map
- * Room 3 feature this project does not offer (\`services/yard/catchUpBuildings.ts\`).
+ * The main yard's (Storage Silo, Town Hall, six towers) is {@link MAIN_FORTIFY_ROWS};
+ * an outpost's is its trait row's. Walls, harvesters, housing and the bunker have none.
  */
 export const fortifyStepsOf = (type: number, kind: YardKind): readonly CostStep[] =>
-  kind === "outpost" ? (OUTPOST_TRAITS[type]?.fortify ?? []) : [];
+  kind === "outpost"
+    ? (OUTPOST_TRAITS[type]?.fortify ?? [])
+    : (MAIN_FORTIFY_ROWS.find(([one]) => one === type)?.[1] ?? []);
 
 /** The hall type of a yard: the Town Hall, or the core on an outpost. */
 export const hallTypeOf = (kind: YardKind): number => (kind === "outpost" ? OUTPOST_CORE_TYPE : 14);

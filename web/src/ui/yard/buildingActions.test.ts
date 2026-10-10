@@ -444,10 +444,13 @@ describe("panelModel: which blocks each building gets", () => {
     expect(job?.finish?.item).toBe("SP1");
   });
 
-  it("a fortify countdown shows its clock but no speed-ups", () => {
+  it("a fortify countdown shows its clock, speed-ups and a stop button", () => {
     const context = contextOf({ buildings: [HALL(5), building(2, 20, 4, { cF: 600 })] });
     const job = panelModel(pick(context, 2), context).job;
-    expect(job).toMatchObject({ kind: "fortify", finish: null, minusOne: null, cancel: null });
+    expect(job?.kind).toBe("fortify");
+    expect(job?.finish).not.toBeNull();
+    expect(job?.minusOne).not.toBeNull();
+    expect(job?.cancel?.refund).toEqual({ r1: 50_000, r2: 37_500, r3: 12_500, r4: 0 });
   });
 });
 
@@ -568,7 +571,7 @@ describe("on an outpost (outposts WP5)", () => {
 describe("fortifying on an outpost (#191)", () => {
   const CORE = building(1, 112, 1);
 
-  it("offers the core's next step from the outpost's fortify ladder, and nothing on a main yard", () => {
+  it("offers the core's next step from the outpost's fortify ladder", () => {
     const context = contextOf({ type: "outpost", buildings: [CORE] });
     expect(fortifyOffer(pick(context, 1), context)).toMatchObject({
       from: 0,
@@ -579,8 +582,6 @@ describe("fortifying on an outpost (#191)", () => {
       gate: null,
       maxed: false,
     });
-    const main = contextOf({ buildings: [HALL(5), building(2, 20, 4)] });
-    expect(fortifyOffer(pick(main, 2), main)).toBeNull();
   });
 
   it("waits for the one worker, and is fully fortified at F4", () => {
@@ -596,6 +597,55 @@ describe("fortifying on an outpost (#191)", () => {
     expect(job?.kind).toBe("fortify");
     expect(job?.minusOne).not.toBeNull();
     expect(job?.cancel?.refund).toEqual({ r1: 500_000, r2: 500_000, r3: 500_000, r4: 0 });
+  });
+});
+
+describe("fortifying on the home yard", () => {
+  const rich = { r1: 50_000_000, r2: 50_000_000, r3: 50_000_000, r4: 0 };
+
+  it("offers a tower F1 from the home ladder once the Town Hall is level 5", () => {
+    const context = contextOf({ buildings: [HALL(5), building(2, 20, 4)], resources: rich });
+    expect(fortifyOffer(pick(context, 2), context)).toMatchObject({
+      from: 0,
+      to: 1,
+      max: 4,
+      cost: { r1: 50_000, r2: 37_500, r3: 12_500, r4: 0 },
+      gate: null,
+      maxed: false,
+    });
+  });
+
+  it("gates each step on the Town Hall level: 5, 6, 7 and 8", () => {
+    const gateOf = (hall: number, fort: number) => {
+      const context = contextOf({
+        buildings: [HALL(hall), building(2, 20, 4, { fort })],
+        resources: rich,
+      });
+      return fortifyOffer(pick(context, 2), context)?.gate ?? null;
+    };
+    expect(gateOf(4, 0)).toMatchObject({ reason: "townHall", need: 5 });
+    expect(gateOf(5, 0)).toBeNull();
+    expect(gateOf(5, 1)).toMatchObject({ reason: "townHall", need: 6 });
+    expect(gateOf(7, 2)).toBeNull();
+    expect(gateOf(7, 3)).toMatchObject({ reason: "townHall", need: 8 });
+    expect(gateOf(8, 3)).toBeNull();
+  });
+
+  it("offers the silo and the Town Hall, but not walls, harvesters or housing", () => {
+    const offers = (type: number) => {
+      const context = contextOf({ buildings: [HALL(5), building(2, type, 2)], resources: rich });
+      return fortifyOffer(pick(context, 2), context);
+    };
+    expect(offers(6)).not.toBeNull();
+    expect(offers(14)).not.toBeNull();
+    for (const type of [17, 1, 15, 22]) expect(offers(type)).toBeNull();
+  });
+
+  it("has no offer while a job runs, and is maxed at F4", () => {
+    const busy = contextOf({ buildings: [HALL(5), building(2, 20, 4, { cU: 600 })], resources: rich });
+    expect(fortifyOffer(pick(busy, 2), busy)).toBeNull();
+    const done = contextOf({ buildings: [HALL(8), building(2, 20, 4, { fort: 4 })], resources: rich });
+    expect(fortifyOffer(pick(done, 2), done)).toMatchObject({ maxed: true, max: 4 });
   });
 });
 

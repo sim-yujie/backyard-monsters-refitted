@@ -443,21 +443,49 @@ describe("explainTransition: levels that nothing explains", () => {
 });
 
 describe("explainTransition: fortification", () => {
-  test("a fortification level that climbed is recorded and never enforced", () => {
+  test("a fortification level that climbed with nothing running is refused", () => {
     const before = at({ t: CANNON, id: 1, l: 2 });
     const submitted = at({ t: CANNON, id: 1, l: 2, fort: 1 });
     const result = explainTransition(before, before, submitted, ctx());
 
-    expect(rules(result)).toEqual(["fortifyUnpriced"]);
-    expect(result.violations[0]!.enforced).toBe(false);
+    expect(rules(result)).toEqual(["unpaidFortify"]);
+    expect(result.violations[0]!.enforced).toBe(true);
   });
 
-  test("a fortify countdown that appeared is recorded the same way", () => {
+  test("a fortify countdown that appeared is refused the same way", () => {
     const before = at({ t: CANNON, id: 1, l: 2 });
     const submitted = at({ t: CANNON, id: 1, l: 2, cF: 600 });
     const result = explainTransition(before, before, submitted, ctx());
 
-    expect(rules(result)).toEqual(["fortifyUnpriced"]);
+    expect(rules(result)).toEqual(["unpaidFortify"]);
+    expect(result.violations[0]!.enforced).toBe(true);
+  });
+
+  test("a running step that finished, by one level, is fine", () => {
+    const before = at({ t: CANNON, id: 1, l: 2, cF: 2 });
+    const submitted = at({ t: CANNON, id: 1, l: 2, fort: 1 });
+    const result = explainTransition(before, before, submitted, ctx());
+
+    expect(rules(result)).toEqual([]);
+  });
+
+  test("a running step cannot jump two levels, or finish early", () => {
+    const early = at({ t: CANNON, id: 1, l: 2, cF: 5000 });
+    expect(
+      rules(explainTransition(early, early, at({ t: CANNON, id: 1, l: 2, fort: 1 }), ctx()))
+    ).toContain("unpaidFortify");
+
+    const near = at({ t: CANNON, id: 1, l: 2, cF: 2 });
+    expect(
+      rules(explainTransition(near, near, at({ t: CANNON, id: 1, l: 2, fort: 2 }), ctx()))
+    ).toContain("unpaidFortify");
+  });
+
+  test("a countdown that was already running and keeps running is fine", () => {
+    const before = at({ t: CANNON, id: 1, l: 2, cF: 600 });
+    const result = explainTransition(before, before, at({ t: CANNON, id: 1, l: 2, cF: 600 }), ctx());
+
+    expect(rules(result)).toEqual([]);
   });
 });
 

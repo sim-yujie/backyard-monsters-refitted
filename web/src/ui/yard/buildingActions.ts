@@ -142,7 +142,7 @@ export interface SpeedupOffer {
 }
 
 /**
- * The next fortification of an outpost's core or tower (#191): `F{from}` to
+ * The next fortification of an outpost's core or tower, or of a home yard's silo, Town Hall or tower (#191): `F{from}` to
  * `F{to}` of `max`, its price and countdown, and the one reason it cannot
  * start, in the server's order (`server/src/services/yard/fortify.ts`:
  * damaged, no core, requirements, resources, the worker). `maxed` when the
@@ -220,7 +220,7 @@ export interface PanelModel {
    * Hall (§5.4) and on an outpost, where nothing is recycled.
    */
   readonly recycle: RecycleOffer | null;
-  /** Fortify, on an outpost's core and towers only; null elsewhere and while a job runs. */
+  /** Fortify, on a building with a fortify ladder in this yard; null elsewhere and while a job runs. */
   readonly fortify: FortifyOffer | null;
 }
 
@@ -425,12 +425,10 @@ export const jobOffer = (building: YardBuilding, context: PanelContext): JobOffe
   if (!progress) return null;
   const { remaining, total } = progress;
   const endsAt = countdown.paused ? now + remaining : countdown.endsAt;
-  // An outpost's fortification speeds up as a build does (`ui_fortifying`,
-  // "Speed up to finish"; the server's `speedup` takes a `cF` on an outpost).
+  // A fortification speeds up as a build does (`ui_fortifying`, "Speed up to
+  // finish"; the server's `speedup` takes a `cF` in any yard).
   const speedable =
-    (countdown.kind === "build" ||
-      countdown.kind === "upgrade" ||
-      (countdown.kind === "fortify" && context.yard.kind === "outpost")) &&
+    (countdown.kind === "build" || countdown.kind === "upgrade" || countdown.kind === "fortify") &&
     building.type !== MAP_ROOM_TYPE;
   const { credits } = context;
   const finishItem: SpeedupItem = Math.trunc(remaining) <= FREE_FINISH_SECONDS ? "SP1" : "SP4";
@@ -449,7 +447,7 @@ export const jobOffer = (building: YardBuilding, context: PanelContext): JobOffe
     // full price, which `build/cancel` gives back (§5.3).
     cancel:
       countdown.kind === "upgrade" ||
-      (countdown.kind === "fortify" && context.yard.kind === "outpost") ||
+      countdown.kind === "fortify" ||
       (countdown.kind === "build" && context.yard.kind !== "outpost")
         ? cancelOffer(building, context)
         : null,
@@ -500,14 +498,14 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
 };
 
 /**
- * The Fortify offer for a building (see {@link FortifyOffer}), or null: not an
- * outpost, no fortify ladder for the type (`can_fortify`, `FortifyCost`,
+ * The Fortify offer for a building (see {@link FortifyOffer}), or null: no
+ * fortify ladder for the type in this yard (`can_fortify`, `FortifyCost`,
  * `client/scripts/BFOUNDATION.as:2702-2708`), or a job already running,
  * which its own block shows.
  */
 export const fortifyOffer = (building: YardBuilding, context: PanelContext): FortifyOffer | null => {
-  if (context.yard.kind !== "outpost" || building.countdown) return null;
-  const ladder = fortifyStepsOf(building.type, "outpost");
+  if (building.countdown) return null;
+  const ladder = fortifyStepsOf(building.type, context.yard.kind);
   if (ladder.length === 0) return null;
 
   const from = building.fortification;

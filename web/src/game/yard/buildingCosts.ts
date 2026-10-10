@@ -3,6 +3,7 @@ import {
   type CostRequirement,
   type CostRow,
   type CostStep,
+  MAIN_FORTIFY_ROWS,
   OUTPOST_CORE_TYPE,
   OUTPOST_COST_ROWS,
   OUTPOST_TRAIT_ROWS,
@@ -105,6 +106,7 @@ const byType = <T extends readonly [number, ...unknown[]]>(rows: readonly T[]): 
 const ROWS = byType(BUILDING_COST_ROWS);
 const OUTPOST_ROWS = byType(OUTPOST_COST_ROWS);
 const OUTPOST_TRAITS = byType(OUTPOST_TRAIT_ROWS);
+const MAIN_FORTIFY = byType(MAIN_FORTIFY_ROWS);
 
 /**
  * The cost table a yard of `kind` builds from, keyed by type: the main yard's,
@@ -191,12 +193,12 @@ export const outpostTraitsOf = (type: number): OutpostTraitRow | null =>
  * The fortify ladder of a type in a yard of `kind`: `fortify[k]` takes
  * fortification `k` to `k + 1` (`client/scripts/BFOUNDATION.as:2099-2102`).
  *
- * Empty on a main yard, where fortifying is a Map Room 3 feature this project
- * does not offer; on an outpost, the core and the cannon, sniper, laser, tesla,
- * flak and railgun towers have one.
+ * On a main yard the Storage Silo, the Town Hall and the cannon, sniper, laser,
+ * tesla, flak and railgun towers have one (Town Hall 5 to 8); on an outpost, the
+ * core and the same towers except the silo and the Town Hall.
  */
 export const fortifyStepsOf = (type: number, kind: YardKind): readonly CostStep[] =>
-  kind === "outpost" ? (OUTPOST_TRAITS.get(type)?.[3] ?? []) : [];
+  kind === "outpost" ? (OUTPOST_TRAITS.get(type)?.[3] ?? []) : (MAIN_FORTIFY.get(type)?.[1] ?? []);
 
 /** The four resource totals and the total time of a run of steps. */
 export const sumCosts = (steps: Iterable<CostStep>): CostTotals => {

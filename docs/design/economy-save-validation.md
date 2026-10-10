@@ -346,12 +346,11 @@ cap is not a violation (sandbox yards and the past are what they are; `overworld
 
 ### 2.8 Fortification
 
-No building in the Map Room 2 main-yard table sets `can_fortify`
-(`docs/specs/base-building.md:998-1006`), and the generator skips `fortify_costs`
-(`gen-building-costs.mjs:148-150`). Until a fortify ladder is generated, the server can only check
-shape: `cF_T <= cF_S`, `cF_T >= cF_R - TOL - speedup`, and `fort_T` is `fort_R` or `fort_R + 1` when
-R's `cF` finished or the voucher is `IF`. A new `cF` or a `fort` increase with no ladder is recorded
-as `fortifyUnpriced` and **never enforced** in this phase (section 6, item 4).
+Fortifying is a dedicated route (`POST /bm/yard/fortify`), which charges the step and writes `cF`;
+a save never pays for one. The shape checks hold: `cF_T <= cF_S`, `cF_T >= cF_R - TOL - speedup`. On
+top, a `cF` that appears in a save (none in R), or a `fort` that climbs other than by one when R's
+`cF` was close enough to done, is `unpaidFortify` and **enforced**, in any yard. Both ladders now
+exist (home: silo, Town Hall and six towers; outposts: core and towers).
 
 ### 2.9 Points and base value
 
@@ -625,7 +624,7 @@ Body:
 | 409 | `overCap` | `resource`, `cap`, `pool` | A positive delta carrying a pool over the derived cap. |
 | log only | `capMismatch`, `basevalueMismatch` | `resource`/`sent`/`derived` | Client value differs from the derived one. Derived in reject mode, so never a rejection. |
 | 409 | `pointsJumped` | `delta`, `budget` | `points` grew by more than banking, completions and income allow, or shrank. |
-| log only | `fortifyUnpriced` | `ids` | A fortify step with no ladder to price it. |
+| 409 | `unpaidFortify` | `ids`, `from`, `to`, `cF` | A fortification step appeared in a save, or `fort` rose with no running step about to finish. |
 
 ### 3.6 Cost table generator additions
 
@@ -737,7 +736,7 @@ Each item below states the default this plan takes; the owner can overturn any o
 | 1 | Enforce the positive-delta budget on `r3` and `r4`? | **Recorded, not enforced**, until monster accounting lands. Goo returns from the juicer and cancelled hatchings and putty from cancelled academy training (`docs/specs/monsters-and-hatchery.md:707`, `:792-794`), none of it derivable from the yard. Twigs and pebbles have no such source and are the currency of every building ladder, so they are enforced. |
 | 2 | Trust `S.buildingresources` for outpost income? | **Yes, with an `overdriveMax` of 2.** The per-outpost figure is client-written (`AutoBankManager.as:44-52`) and bounding it needs `OUTPOST_YARD_PROPS`, which the generator does not read. The bound uses the stored copy, not the submitted one, so a save cannot raise its own allowance; a follow-up can price outposts. |
 | 3 | Reject with a real 409 or the Flash-friendly 200? | **200 with `error` set (`isClientFriendly: false`).** The Flash client shows the message once (`BASE.as:3413-3416`); a 409 gives it five silent retries and a generic popup (`:3420-3428`). The web client reads `errorDetails.status` either way (`web/src/api/http.ts:21-22`). |
-| 4 | Fortification rules? | **Shape checks only, `fortifyUnpriced` never enforced.** No Map Room 2 main-yard type can fortify (`docs/specs/base-building.md:998-1006`) and the generator emits no `fortify_costs`; Map Room 3 sessions may write `fort` on the main yard, and refusing those needs a ladder first. |
+| 4 | Fortification rules? | **Superseded 2026-10-10: `unpaidFortify` is enforced.** Home-yard buildings can fortify (the main-yard table has `can_fortify`) and the dedicated route is the only way to start a step; a save that starts one or raises `fort` unpaid is refused. |
 | 5 | Timer tolerance | **10 seconds.** The save delay is 3 s (`server/src/game-data/flags.ts:44`), the tick 1 s, and the worker walk only ever makes a countdown longer. Section 5's WP4 revisits it from the log. |
 | 6 | Resource slack | **1% of the production terms, at least 1 unit per resource.** Production is integer per cycle and the bound already adds a whole cycle; the slack covers the client's per-tick rounding without hiding a real gain. |
 | 7 | Return the server's `resources` and `buildingdata` in a rejection so the web client can resync without reloading? | **No.** The Flash client cannot use them and `buildingdata` is 50 KB; the web client calls `/base/load` when it gets `serverStatus === 409`. Revisit when the web client sends economy saves. |

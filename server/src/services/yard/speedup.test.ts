@@ -150,11 +150,14 @@ describe("planSpeedup: refusals", () => {
     });
   });
 
-  test("nothing running is 409 notRunning (a fortify does not count)", () => {
+  test("nothing running is 409 notRunning", () => {
     expect(refusal(() => planSpeedup(yardOf(), 1, "SP4", NOW)).reason).toBe("notRunning");
-    expect(refusal(() => planSpeedup(yardOf({ cF: 5000 }), 1, "SP4", NOW)).reason).toBe(
-      "notRunning"
-    );
+  });
+
+  test("a running fortification speeds up on a home yard too", () => {
+    const plan = planSpeedup(yardOf({ cF: 5000 }), 1, "SP4", NOW);
+    expect(plan.buildingdata["1"].cF).toBeUndefined();
+    expect(plan.buildingdata["1"].fort).toBe(1);
   });
 
   test("a damaged or repairing building is 409 damaged", () => {
