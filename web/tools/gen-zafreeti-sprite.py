@@ -34,7 +34,7 @@ UP = 4                     # the repaint's scale
 GAMMA = 1.0               # lifts the painting a little so it reads at the real size
 OVER = 1.0                # the horns may run this much past the cell (they are cut at the cell edge), so the body can stay near the old size
 MARGIN = 0.5               # keep this many 1x pixels inside the cell
-AREA = 1.2               # new silhouette area / old silhouette area (1 = the same size as the old sprite)
+AREA = 1.3               # new silhouette area / old silhouette area (1 = the same size as the old sprite)
 
 if len(sys.argv) != 2:
     sys.exit(__doc__)
