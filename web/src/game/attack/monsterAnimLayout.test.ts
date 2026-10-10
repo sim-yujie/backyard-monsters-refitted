@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { CreepSnapshot } from "@/game/combat/rules/engine";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
@@ -59,9 +61,31 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships no layouts yet, so every real sheet is exactly the Flash table", () => {
-    expect(Object.keys(REPAINT_LAYOUTS)).toEqual([]);
+  it("ships only the Bandito layout, so every other sheet is exactly the Flash table", () => {
+    expect(Object.keys(REPAINT_LAYOUTS)).toEqual(["monsters/bandito.png"]);
     expect(spriteFor("C1")).toBe(POKEY);
+  });
+
+  it("the Bandito layout matches the animated PNG and keeps the feet where they were", () => {
+    const old = MONSTER_SPRITES["C7"];
+    if (!old) throw new Error("no C7");
+    const sheet = spriteFor("C7");
+    if (!sheet) throw new Error("no sprite for C7");
+    const png = readFileSync(
+      resolve(__dirname, "../../../../server/public/assets/monsters/bandito-anim@4x.png"),
+    );
+    expect(png.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(png.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(png.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(png.readUInt32BE(20));
+    // 6 px added left and right, 12 px added on top: feet stay on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 12);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
   });
 
   it("replaces only the fields it names and keeps the rest", () => {
