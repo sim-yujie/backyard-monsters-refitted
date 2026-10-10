@@ -9,7 +9,7 @@ import { Status } from "../../enums/StatusCodes.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { YardTargetSchema } from "../../schemas/YardSchemas.js";
 import { RESOURCE_KEYS, type ResourceKey } from "../../services/base/economy/resourceBudget.js";
-import { playerLevelOf } from "../../services/base/calculateBaseLevel.js";
+import { playerLevelOf, playerPointsOf } from "../../services/base/calculateBaseLevel.js";
 import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { addEvents, builtEvents, recordAchievements, unseenAchievements } from "../../services/achievements/record.js";
 import type { AchievementEvents } from "../../services/achievements/evaluate.js";
@@ -588,6 +588,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         completed,
         report,
         playerlevel: playerLevelOf(yard.main),
+        playerpoints: playerPointsOf(yard.main),
         // The account's, so from the main row on an outpost's answer too.
         onboarding: onboardingSummary(yard.main),
         achievements: unseenAchievements(yard.main),
@@ -609,6 +610,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         completed: answer.completed,
         report: answer.report,
         playerlevel: answer.playerlevel,
+        playerpoints: answer.playerpoints,
         ...(answer.achievements.length > 0 && { achievements: answer.achievements }),
       },
       outpost: answer.outpost,

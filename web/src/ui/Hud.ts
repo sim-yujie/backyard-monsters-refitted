@@ -1,3 +1,4 @@
+import { HudStatus } from "./yard/HudStatus";
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { setAvatar } from "@/api/account";
 import { getSession } from "@/api/auth";
@@ -220,6 +221,8 @@ export class Hud {
   private unsubscribeYard: (() => void) | null = null;
   /** The post-attack "N buildings damaged [Repair all]" line, while bound (§5.5). */
   private damageBanner: DamageBanner | null = null;
+  /** Protection time, level bar and running boosts under the corner bar. */
+  private status: HudStatus | null = null;
   private readonly workers: HTMLElement;
   private readonly workersButton: HTMLButtonElement;
   private readonly workersName: HTMLElement;
@@ -527,9 +530,15 @@ export class Hud {
     this.unsubscribeYard = null;
     this.damageBanner?.destroy();
     this.damageBanner = null;
+    this.status?.destroy();
+    this.status = null;
     this.yardBinding = binding;
     if (binding) {
       this.damageBanner = new DamageBanner(binding);
+      if (this.corner) {
+        this.status = new HudStatus(binding);
+        this.element.append(this.status.element);
+      }
       this.unsubscribeYard = binding.store.subscribe((change) => this.onYardChange(change));
     }
     this.syncYard();

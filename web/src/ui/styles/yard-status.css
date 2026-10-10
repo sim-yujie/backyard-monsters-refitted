@@ -1,0 +1,76 @@
+/*
+ * The yard's status strip under the top bar (HudStatus.ts): protection time,
+ * the level with its bar, and running boosts. It hangs below the corner HUD
+ * rather than sitting in its grid, so the bar's own layout is untouched.
+ */
+
+.hud--corner > .hud-status {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: min(100%, 560px);
+  pointer-events: none;
+}
+
+.hud-status[hidden],
+.hud-status [hidden] {
+  display: none;
+}
+
+.hud-status__badge,
+.hud-status__xp,
+.hud-status__boost {
+  pointer-events: auto;
+  padding: 3px var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
+  color: var(--colour-text);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.hud-status__badge {
+  border-color: var(--colour-pin-protected);
+}
+
+.hud-status__xp {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hud-status__track {
+  width: 64px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+}
+
+.hud-status__fill {
+  display: block;
+  height: 100%;
+  background: var(--colour-accent);
+}
+
+.hud-status__boosts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.level-up__text {
+  margin: 0 0 var(--space-3);
+}

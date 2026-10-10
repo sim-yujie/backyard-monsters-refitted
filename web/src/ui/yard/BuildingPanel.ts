@@ -1,3 +1,4 @@
+import { openWorkersBusyBox } from "./WorkersBusyBox";
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import type { Resources, SpeedupItem } from "@/api/types";
@@ -824,9 +825,13 @@ export class BuildingPanel {
 
     const row = document.createElement("div");
     row.className = "map-row building-panel__buttons";
-    const upgrade = actionButton("Upgrade", () => void this.runUpgrade(building.id), "btn--primary");
+    const upgrade = actionButton(
+      "Upgrade",
+      () => this.runOrAskForWorker(offer.gate, () => void this.runUpgrade(building.id)),
+      "btn--primary",
+    );
     tutTarget(upgrade, TutTarget.UPGRADE);
-    upgrade.disabled = offer.gate !== null;
+    upgrade.disabled = offer.gate !== null && offer.gate.reason !== "workers";
     if (offer.gate) upgrade.setAttribute("aria-describedby", this.gateId(building));
     row.append(upgrade);
     this.pendingButtons.push({ key: actionKey("upgrade", building.id), button: upgrade });
@@ -890,8 +895,12 @@ export class BuildingPanel {
 
     const row = document.createElement("div");
     row.className = "map-row building-panel__buttons";
-    const fortify = actionButton("Fortify", () => void this.runFortify(building.id), "btn--primary");
-    fortify.disabled = offer.gate !== null;
+    const fortify = actionButton(
+      "Fortify",
+      () => this.runOrAskForWorker(offer.gate, () => void this.runFortify(building.id)),
+      "btn--primary",
+    );
+    fortify.disabled = offer.gate !== null && offer.gate.reason !== "workers";
     if (offer.gate) fortify.setAttribute("aria-describedby", gateId);
     row.append(fortify);
     this.pendingButtons.push({ key: FortifyKey.start(building.id), button: fortify });
@@ -1209,6 +1218,15 @@ export class BuildingPanel {
     if (!store) return;
     const result = await store.upgrade(id);
     this.report(id, result, (report) => [`Upgrade to ${report.to} started.`]);
+  }
+
+  /**
+   * Runs `go`, or, when the only thing stopping it is that every worker is
+   * busy, opens the "all workers busy" box and runs `go` once one is free.
+   */
+  private runOrAskForWorker(gate: { readonly reason: string } | null, go: () => void): void {
+    if (gate?.reason === "workers" && this.yard) openWorkersBusyBox(this.yard, go);
+    else go();
   }
 
   private async runInstant(id: number): Promise<void> {

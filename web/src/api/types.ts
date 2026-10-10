@@ -683,6 +683,8 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * send it too, read after the action.
    */
   playerlevel?: number;
+  /** The empire points behind `playerlevel`, for the yard HUD's XP bar. */
+  playerpoints?: number;
   /**
    * The owner's build-mode loads of their own yard: how many of their
    * notifications are unread, for the yard's bell (#257). The yard routes
@@ -1414,6 +1416,8 @@ export type YardResponse<Report> = ApiEnvelope &
     report: Report;
     /** The player's level after the action, as `/base/load` sends it (#192). */
     playerlevel?: number;
+    /** The empire points behind it, for the XP bar. */
+    playerpoints?: number;
     /** The unread notifications after the action, as `/base/load` sends it (#257). */
     notifications?: number;
     /** Paid unlocks not yet shown, as `/base/load` sends them (#204). */

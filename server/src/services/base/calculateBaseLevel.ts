@@ -19,6 +19,10 @@ export const calculateBaseLevel = (basePoints: string, baseValue: string) => {
   return baseLevel;
 };
 
+/** A player's empire points from their main save: what the level is worked out from. */
+export const playerPointsOf = (save: { points?: string | null; basevalue?: string | null }): number =>
+  calculateEmpirePoints(save.points ?? "0", save.basevalue ?? "0");
+
 /**
  * A player's level from their main save, which is the level `ATTACK.Loot`'s
  * low-level bonus reads (`LOGIN._playerLevel`, set from `BASE.BaseLevel()` in

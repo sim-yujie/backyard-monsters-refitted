@@ -1,3 +1,4 @@
+import { openWorkersBusyBox } from "./WorkersBusyBox";
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { buttonUrl, silhouetteUrl } from "@/game/yard/buildButtonArt";
@@ -604,10 +605,14 @@ export class BuildMenu {
     build.dataset["focus"] = "build";
     tutTarget(build, TutTarget.BUILD_GO);
     build.textContent = "Build · then pick a spot";
-    build.disabled = gate !== null;
+    build.disabled = gate !== null && gate.reason !== "workers";
     build.setAttribute("aria-label", `Build ${name}` + (gate ? `. ${gateSentence(gate)}` : ""));
     if (saysWhy) build.setAttribute("aria-describedby", reasonId);
-    build.addEventListener("click", () => this.onPick(offer.type, false));
+    build.addEventListener("click", () => {
+      // Every worker busy: the box offers a worker or a finish; the player then presses Build again.
+      if (gate?.reason === "workers") openWorkersBusyBox(this.binding);
+      else this.onPick(offer.type, false);
+    });
     actions.append(build);
 
     // Build instantly is offered once the hall and prerequisites allow the
