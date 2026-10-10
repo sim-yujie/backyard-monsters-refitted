@@ -1381,6 +1381,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       });
       continue;
     }
+    // `BTOWER.canAttack` (`:159-161`): a tower being built, upgraded or fortified is silent.
+    if (building.busy) continue;
     const stats = towerStats(building.type, building.level, yard.kind);
     if (!stats || stats.damage === undefined) continue;
     towers.push({
@@ -2496,7 +2498,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return perTick;
     };
     const liveTower = (building: EngineBuilding): boolean =>
-      building.hp > 0 && building.kind === "tower" && !isBunker(building.type) && !building.jarred;
+      building.hp > 0 &&
+      building.kind === "tower" &&
+      !isBunker(building.type) &&
+      !building.jarred &&
+      !building.busy;
     const delay = Math.max(1, swingDelay(champion));
     /** The share of its health taking `building` down would cost it. */
     const shareAt = (building: EngineBuilding): number =>

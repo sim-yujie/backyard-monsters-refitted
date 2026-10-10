@@ -83,6 +83,10 @@ export interface CombatBuildingData {
   readonly st?: unknown;
   /** Seconds left on the initial build; present means level 0. */
   readonly cB?: unknown;
+  /** Seconds left on an upgrade; a tower cannot fire while it runs. */
+  readonly cU?: unknown;
+  /** Seconds left on a fortification; a tower cannot fire while it runs. */
+  readonly cF?: unknown;
   readonly [key: string]: unknown;
 }
 

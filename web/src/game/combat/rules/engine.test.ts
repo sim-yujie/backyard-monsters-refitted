@@ -101,6 +101,37 @@ describe("a Pokey against a lone Cannon Tower", () => {
   });
 });
 
+describe("a tower that is busy cannot fire (BTOWER.canAttack)", () => {
+  const shotsWith = (extra: Record<string, unknown>) => {
+    const yard = yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0, ...extra } });
+    const battle = createBattle(yard, { seed: 1 });
+    battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 200, monsters: { C1: 1 } });
+    run(battle, 1200);
+    return battle.state();
+  };
+
+  it("fires normally with no countdown", () => {
+    expect(shotsWith({}).towers[0]?.shots).toBe(11);
+  });
+
+  it.each([
+    ["building", { cB: 600 }],
+    ["upgrading", { cU: 600 }],
+    ["fortifying", { cF: 600 }],
+  ])("stays silent while %s", (_name, extra) => {
+    const state = shotsWith(extra);
+    expect(state.towers.reduce((sum, tower) => sum + tower.shots, 0)).toBe(0);
+    expect(state.creepsKilled).toBe(0);
+  });
+
+  it("marks only a countdown above zero as busy", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 20, l: 1, X: 0, Y: 0, cU: 0 },
+      "2": { id: 2, t: 20, l: 1, X: 100, Y: 0, cU: 5 },
+    });
+    expect(yard.buildings.map((building) => building.busy)).toEqual([false, true]);
+  });
+});
 describe("a tower's shot at its own health (issue #264)", () => {
   /** One shot from a level 1 Cannon Tower (damage 20) at `hp`, at a lone Octo-ooze. */
   const firstHit = (hp?: number) => {

@@ -391,6 +391,8 @@ export interface EngineBuilding {
   readonly middle: number;
   readonly maxHp: number;
   readonly fortification: number;
+  /** Building, upgrading or fortifying: a busy tower cannot fire (`BTOWER.as:159-161`). */
+  readonly busy: boolean;
   /** Whether this type carries a `stats` block and shoots back. */
   readonly tower: boolean;
   /** Whether this type is a one-shot trap. */
@@ -522,6 +524,7 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
       middle: footprint.h * 0.5,
       maxHp: ceiling,
       fortification: Math.max(0, Math.floor(numberOf(data.fort))),
+      busy: numberOf(data.cB) > 0 || numberOf(data.cU) > 0 || numberOf(data.cF) > 0,
       tower: isTower(type),
       trap,
       hp,
