@@ -39,6 +39,7 @@ import { BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
 import { TrapReveal } from "./trapReveal";
 import {
   anchorOffset,
+  attackRow,
   championFlightTop,
   flyerAltitude,
   frameRect,
@@ -190,6 +191,8 @@ export interface CreepPose {
   readonly moving: boolean;
   /** Ticks since the creep appeared: the animation clock. */
   readonly age: number;
+  /** Ticks since this creep's last hit landed; absent before its first. */
+  readonly swingAge?: number;
 }
 
 export interface LayoutOptions {
@@ -270,7 +273,8 @@ export const layoutCreep = (
   const ground = groundWorld(creep.ix, creep.iy, origin);
   const column = sheetColumn(sheet, pose.heading);
   const animation = animationFor(creep, pose.moving);
-  const row = frameRow(sheet, animation, pose.age);
+  const row =
+    animation === "attack" ? attackRow(sheet, pose.swingAge, pose.age) : frameRow(sheet, animation, pose.age);
   const anchor = anchorOffset(sheet);
 
   let y = ground.y + anchor.y;
@@ -543,6 +547,8 @@ interface CreepView {
   cellKey: string;
   /** The tick of the last melee hit and the unit vector it lunged along (#63). */
   lungeTick: number;
+  /** Tick of its last hit, melee or ranged: the attack animation's clock. */
+  swingTick: number;
   lungeX: number;
   lungeY: number;
   /** The tick the creep was last hurt, for the red tint (#68). */
@@ -1130,6 +1136,7 @@ export class AttackBattleLayer {
     view.bornTick = tick;
     view.cellKey = "";
     view.lungeTick = Number.NEGATIVE_INFINITY;
+    view.swingTick = Number.NEGATIVE_INFINITY;
     view.lungeX = 0;
     view.lungeY = 0;
     view.hurtTick = Number.NEGATIVE_INFINITY;
@@ -1179,6 +1186,7 @@ export class AttackBattleLayer {
       bornTick: 0,
       cellKey: "",
       lungeTick: Number.NEGATIVE_INFINITY,
+      swingTick: Number.NEGATIVE_INFINITY,
       lungeX: 0,
       lungeY: 0,
       hurtTick: Number.NEGATIVE_INFINITY,
@@ -1252,7 +1260,12 @@ export class AttackBattleLayer {
     }
 
     const sheet = view.sheet;
-    const pose: CreepPose = { heading: view.heading, moving: view.moving, age: tick - view.bornTick };
+    const pose: CreepPose = {
+      heading: view.heading,
+      moving: view.moving,
+      age: tick - view.bornTick,
+      swingAge: tick - view.swingTick,
+    };
     const body = view.body;
 
     // A melee hit nudges the body toward what it struck and back (#63). The
@@ -1360,6 +1373,7 @@ export class AttackBattleLayer {
     const view = this.views.get(event.creepId);
     const ground = groundWorld(event.ix, event.iy, this.origin);
     const monsterId = view?.monsterId ?? "";
+    if (view) view.swingTick = event.tick;
     let target: Point | null = null;
     if (event.buildingId >= 0) {
       target = this.host.centreOf(event.buildingId);
