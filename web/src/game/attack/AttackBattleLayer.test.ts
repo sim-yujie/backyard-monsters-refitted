@@ -37,7 +37,7 @@ const STILL = { reducedMotion: false } as const;
 
 const creepOf = (overrides: Partial<CreepSnapshot> = {}): CreepSnapshot => ({
   id: 1,
-  monsterId: "C1",
+  monsterId: "C2",
   level: 1,
   champion: false,
   friendly: false,
@@ -71,7 +71,7 @@ describe("ability tints (issue #222)", () => {
 
 describe("headings and cells", () => {
   it("picks column 0 for a creep heading right, and walks the columns clockwise", () => {
-    const pokey = sheetOf("C1");
+    const pokey = sheetOf("C2");
     const right = layoutCreep(
       creepOf(),
       pokey,
@@ -99,7 +99,7 @@ describe("headings and cells", () => {
     expect(left.column).toBe(15);
     // Every column is one cell across the sheet, a single row for a classic creep.
     expect(right.row).toBe(0);
-    expect(right.key).toBe("C1:0:0");
+    expect(right.key).toBe("C2:0:0");
   });
 
   it("shows a champion's attack row while it is attacking, and its walk row while it walks", () => {
@@ -147,7 +147,7 @@ describe("headings and cells", () => {
   });
 
   it("stands a classic creep still on its walk row, and hops it while it walks", () => {
-    const pokey = sheetOf("C1");
+    const pokey = sheetOf("C2");
     const standing = layoutCreep(
       creepOf(),
       pokey,
@@ -208,7 +208,7 @@ describe("headings and cells", () => {
 
 describe("placement", () => {
   it("puts the cell's top-left at the ground point minus the anchor", () => {
-    const pokey = sheetOf("C1");
+    const pokey = sheetOf("C2");
     const origin = { x: 1000, y: 500 };
     const creep = creepOf({ ix: 120, iy: 40 });
     const layout = layoutCreep(
@@ -631,12 +631,12 @@ describe("AttackBattleLayer over a session", () => {
     // Before the sheet is in, a marker; once it is, the sheet's cell.
     await flush();
     play(session, 0.1, layer);
-    const pokey = MONSTER_SPRITES["C1"];
+    const pokey = spriteFor("C1");
     for (const body of host.depth.children) {
       const texture = (body as unknown as { texture: Texture }).texture;
       expect(texture.frame.width).toBe(pokey?.frameWidth);
       expect(texture.frame.height).toBe(pokey?.frameHeight);
-      expect(texture.frame.y).toBe(0);
+      expect(texture.frame.y % (pokey?.frameHeight ?? 1)).toBe(0); // a whole row (walk rows now)
     }
     layer.destroy();
   });
@@ -655,7 +655,7 @@ describe("AttackBattleLayer over a session", () => {
     // Walking from (-200, -200) toward the tower at the origin is down the
     // screen, give or take the grid-aligned legs of the route: a heading with
     // a downward component, so a column in the lower half of the circle.
-    const pokey = MONSTER_SPRITES["C1"];
+    const pokey = spriteFor("C1");
     if (!pokey) throw new Error("no Pokey");
     const column = body.texture.frame.x / pokey.frameWidth;
     expect(column).toBeGreaterThanOrEqual(1);

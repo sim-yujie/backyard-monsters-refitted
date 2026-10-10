@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { creepZIndex, MonsterSheetTextures } from "@/game/attack/AttackBattleLayer";
 import { MONSTER_SPRITES } from "@/game/attack/monsterSpriteData";
 import { mulberry32 } from "@/game/combat/rules/rng";
-import { championFlightTop, shadowOffset, sheetUrl } from "@/game/attack/monsterSprites";
+import { championFlightTop, shadowOffset, sheetUrl, spriteFor } from "@/game/attack/monsterSprites";
 import { yardBounds } from "./YardGrid";
 import { EMPTY_LIFE, type YardLife } from "./yardLifeModel";
 import { YardLifeLayer } from "./YardLifeLayer";
@@ -74,7 +74,7 @@ describe("YardLifeLayer", () => {
       const [walker] = layer.walkerList;
       const body = tops.children[0] as Sprite | undefined;
       if (!walker || !body) throw new Error(`no ${id}`);
-      const sheet = MONSTER_SPRITES[id]!;
+      const sheet = spriteFor(id)!;
       for (let frame = 0; frame < 40; frame++) {
         layer.update(everywhere, 1 / 10);
         const groundX = walker.x - walker.y + bounds.originX;
