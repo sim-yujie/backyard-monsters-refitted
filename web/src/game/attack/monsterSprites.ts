@@ -130,7 +130,24 @@ export interface AnimatedSheet extends MonsterSheet {
  * `REPAINTED_SHEETS`). A sheet with no entry is drawn exactly as the table
  * says. Add an entry only together with the matching repaint entry.
  */
-export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {};
+export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
+  // Bandito: 41x40 cells (the old 29x28 cell plus 6 px each side and 12 px on
+  // top), so the anchor moves by (6, 12) and the feet stay on the same ground
+  // point. Rows: 0 idle, 1-6 walk, 7-11 attack (strike is the third frame).
+  "monsters/bandito.png": {
+    frameWidth: 41,
+    frameHeight: 40,
+    anchorX: 17,
+    anchorY: 29,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+};
 
 const layoutCache = new Map<MonsterSheet, AnimatedSheet>();
 
@@ -386,7 +403,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/sprite.3.v2.png": "monsters/bolt-repaint@4x.png", // Bolt art trial
   "monsters/octoooze.png": "monsters/octoooze-repaint@4x.png", // Octo-ooze art trial
   "monsters/fink.png": "monsters/fink-repaint@4x.png", // Fink art trial
-  "monsters/bandito.png": "monsters/bandito-repaint@4x.png", // Bandito art trial
+  "monsters/bandito.png": "monsters/bandito-anim@4x.png", // Bandito animated repaint
   "monsters/fang.png": "monsters/fang-repaint@4x.png", // Fang art trial
   "monsters/eyera.png": "monsters/eyera-repaint@4x.png", // Eye-ra art trial
   "monsters/ichi.png": "monsters/ichi-repaint@4x.png", // Ichi art trial
