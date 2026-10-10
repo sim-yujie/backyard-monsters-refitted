@@ -245,7 +245,7 @@ describe("LoginScene sign-up launch extras", () => {
 
     const terms = $(".login-form__terms");
     expect(terms.textContent).toBe(
-      "By creating an account you agree to the Terms and Privacy Policy and confirm you are 13 or older.",
+      "By creating an account you agree to the Terms and Privacy Policy and confirm you are 16 or older.",
     );
     expect(terms.previousElementSibling).toBe(button("Create account"));
     const links = [...terms.querySelectorAll("a")];

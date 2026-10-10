@@ -317,7 +317,7 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     expect(await countOf(`bym.message WHERE threadid = ?`, [qr])).toBe(2);
 
     // The alliance passes to Q.
-    expect(await one(`SELECT leader_userid, leader_name FROM bym.alliance WHERE id = ?`, [allianceId])).toEqual({
+    expect(await one<{ leader_userid: number; leader_name: string }>(`SELECT leader_userid, leader_name FROM bym.alliance WHERE id = ?`, [allianceId])).toEqual({
       leader_userid: q,
       leader_name: "zz_del_q",
     });
@@ -372,6 +372,6 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     const done = await deleteAccount(orm.em, store.redis, await findAccount(orm.em, "zz_del_p"));
 
     expect(done.alliance).toBe(`leaves alliance "zz_del_qp"`);
-    expect(await one(`SELECT leader_userid FROM bym.alliance WHERE id = ?`, [allianceId])).toEqual({ leader_userid: q });
+    expect(await one<{ leader_userid: number }>(`SELECT leader_userid FROM bym.alliance WHERE id = ?`, [allianceId])).toEqual({ leader_userid: q });
   });
 });

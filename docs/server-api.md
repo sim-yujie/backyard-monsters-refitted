@@ -1598,7 +1598,7 @@ sent over the wire as-is.
 | `infernosave` | one-to-one → `Save`, nullable | — | The account's Inferno-yard save. |
 | `username` | string, unique | yes | Display name. |
 | `username_changed_at` | Date, nullable | yes | Drives the 6-month rename cooldown. |
-| `terms_accepted_at` | Date, nullable | — | When the player agreed to the Terms and Privacy Policy and confirmed they are 13+, on the web sign-up form (`termsAccepted` on register, issue #213). Null for older accounts and clients that do not send it. Migration `20261001_AddTermsAcceptedAtToUser`. |
+| `terms_accepted_at` | Date, nullable | — | When the player agreed to the Terms and Privacy Policy and confirmed they are 16+, on the web sign-up form (`termsAccepted` on register, issue #213). Null for older accounts and clients that do not send it. Migration `20261001_AddTermsAcceptedAtToUser`. |
 | `sandbox_start` | boolean, default false | — | The player ticked the dev-only "Start with the test yard (dev)" box at sign-up (`sandboxStart` on register, issue #217). Read once, when the first main yard is built (`getDefaultBaseData`): true and `DEV_SANDBOX` on gives the maxed sandbox yard (`utils/sandbox/overworldYard.ts`), anything else the normal starter base. Never true on a production server. Migration `20261001_AddSandboxStartToUser`. |
 | `banned` | boolean, default false | — | Blocks login and `verifyUserAuth`. |
 | `shiny_locked` | boolean, default false | — | No-shiny mode toggle (`/player/settings`). |

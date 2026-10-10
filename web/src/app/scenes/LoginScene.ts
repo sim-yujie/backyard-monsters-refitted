@@ -128,7 +128,7 @@ const termsLine = (): HTMLElement => {
     newTabLink(TERMS_URL, "Terms"),
     " and ",
     newTabLink(PRIVACY_URL, "Privacy Policy"),
-    " and confirm you are 13 or older.",
+    " and confirm you are 16 or older.",
   );
   return line;
 };
