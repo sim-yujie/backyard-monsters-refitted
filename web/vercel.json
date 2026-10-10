@@ -1,13 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
-  "buildCommand": "VITE_SERVER_URL=https://api.EXAMPLE.com npm run build",
+  "buildCommand": "VITE_SERVER_URL=https://api.bymrevamped.com npm run build",
   "outputDirectory": "dist",
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/assets/:path*", "destination": "https://api.EXAMPLE.com/assets/:path*" },
-    { "source": "/gamestage/:path*", "destination": "https://api.EXAMPLE.com/gamestage/:path*" },
-    { "source": "/templates/:path*", "destination": "https://api.EXAMPLE.com/templates/:path*" },
+    { "source": "/assets/:path*", "destination": "https://api.bymrevamped.com/assets/:path*" },
+    { "source": "/gamestage/:path*", "destination": "https://api.bymrevamped.com/gamestage/:path*" },
+    { "source": "/templates/:path*", "destination": "https://api.bymrevamped.com/templates/:path*" },
     { "source": "/reset-password", "destination": "/index.html" }
   ],
   "headers": [

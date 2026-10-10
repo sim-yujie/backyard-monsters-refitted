@@ -35,6 +35,9 @@ Throughout this guide, `yourgame.com` stands for the domain you buy:
 You can pick other names than `play` and `api`; just use the same ones
 everywhere below.
 
+For this game the domain is **`bymrevamped.com`**: players open
+`play.bymrevamped.com` and the game server is `api.bymrevamped.com`.
+
 ### Where your domain name is written down
 
 The code ships with the placeholder `EXAMPLE.com`. Your real domain goes in
@@ -81,18 +84,22 @@ explains what changes at 5,000.
 
 ## Step 2. Buy the domain
 
-Buy `yourgame.com` from any registrar. Cloudflare Registrar sells at cost and
-its DNS page is simple, so this guide uses its words; any registrar has the
-same settings under similar names.
+Buy `yourgame.com` at Vercel (**Domains → Buy** in the Vercel dashboard).
+Vercel then also runs the domain's DNS (its "address book"), so everything
+below happens in one place. This guide uses Vercel's words.
 
 ## Step 3. Point the addresses at the right places (DNS)
 
-In the domain's DNS settings, add:
+In Vercel, open **Domains → yourgame.com** and add this record under **DNS
+Records**:
 
 | Type | Name | Value | Notes |
 |---|---|---|---|
-| A | `api` | the VPS IP address | On Cloudflare, set the cloud to **grey ("DNS only")**, not orange. With orange, Caddy cannot get its certificate and every player would look like the same person to the game's limits. |
-| CNAME | `play` | the value Vercel shows you in step 6 (usually `cname.vercel-dns.com`) | Grey cloud on Cloudflare too. |
+| A | `api` | the VPS IP address | Points the game server's address straight at the VPS, so Caddy can get its certificate. |
+
+The `play` address needs no record of its own: when you add
+`play.yourgame.com` to the Vercel project in step 6, Vercel points it at the
+game page by itself. Leave Vercel's own default records (ALIAS and CAA) alone.
 
 Resend (step 4) gives you a few more records to add; add those here as well.
 
@@ -112,7 +119,8 @@ The game sends one kind of email: the "reset your password" link.
 
 ## Step 5. Set up the sign-up bot check (Cloudflare Turnstile)
 
-1. Make a free Cloudflare account (you may have one from step 2).
+1. Make a free Cloudflare account. It is only used for this check; the
+   domain's DNS stays at Vercel.
 2. In the dashboard, open **Turnstile → Add widget**.
 3. Name it "BYMR sign-up", add the hostname `play.yourgame.com`, widget mode
    **Managed**.
@@ -134,8 +142,9 @@ The game sends one kind of email: the "reset your password" link.
 5. Press **Deploy**.
 6. In the project's **Settings → Git**, set the **Production Branch** to the
    branch you play from (for this project, `revamp`).
-7. In **Settings → Domains**, add `play.yourgame.com`. Vercel shows the CNAME
-   value for step 3 if you have not added it yet.
+7. In **Settings → Domains**, add `play.yourgame.com`. The domain's DNS is
+   at Vercel, so the address works straight away; there is nothing to add in
+   step 3 for it.
 
 The page will load now but cannot log anyone in until the game server is up.
 
@@ -354,7 +363,7 @@ All from `/opt/bymr/server` on the VPS:
 | What you see | Likely cause |
 |---|---|
 | The page loads but no art, or "can't connect" | `api.yourgame.com` does not point at the VPS yet, or `web/vercel.json` still says `EXAMPLE.com`. Check step 3 and step 6. |
-| The browser warns the API address is not secure | Caddy has not got its certificate. The `api` DNS record must point at the VPS with the grey cloud, and ports 80 and 443 must be open. `deploy/prod.sh logs caddy` says what went wrong. |
+| The browser warns the API address is not secure | Caddy has not got its certificate. The `api` DNS record (Vercel DNS) must point straight at the VPS, and ports 80 and 443 must be open. `deploy/prod.sh logs caddy` says what went wrong. |
 | `web` keeps restarting | A setting is missing or still a placeholder: `deploy/prod.sh logs web \| grep "Refusing to start"`. |
 | Sign-up says "We couldn't confirm you're a person" every time | The Turnstile site key (Vercel) and secret key (`production.env`) are from different widgets, or the widget does not list `play.yourgame.com`. After changing the Vercel key, redeploy the page in Vercel. |
 | Reset emails never arrive | The domain is not "Verified" in Resend, `MAIL_FROM` uses a different domain, or the API key is wrong. `deploy/prod.sh logs web \| grep ForgotPassword` shows the error. |
@@ -375,7 +384,7 @@ All from `/opt/bymr/server` on the VPS:
 - Caddy passes each player's real address to the game server
   (`CF-Connecting-IP`); the game server trusts that header from Caddy's fixed
   internal address only (`TRUSTED_PROXIES`). This is why the `api` DNS record
-  must not go through Cloudflare's proxy (orange cloud).
+  must point straight at the VPS, not through any proxy.
 - The old Flash client's port 843 is not opened: this setup serves the web
   client only.
 - PM2 (`ecosystem.config.mjs`) is not used here; Docker restarts anything that
