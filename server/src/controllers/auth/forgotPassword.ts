@@ -21,6 +21,9 @@ export const FORGOT_PASSWORD_SENT = {
   message: "If an account uses that email, a link to reset its password is on its way.",
 };
 
+/** Who the reset email comes from when `MAIL_FROM` is not set. */
+const DEFAULT_MAIL_FROM = "Backyard Monsters Refitted <info@bymrefitted.com>";
+
 /**
  * Reads the email template and sends the reset link.
  *
@@ -38,7 +41,8 @@ const sendResetEmail = async (email: string, token: string): Promise<void> => {
   const resetLink = `${process.env.WEB_URL}/reset-password?token=${token}`;
 
   await transporter.sendMail({
-    from: "Backyard Monsters Refitted <info@bymrefitted.com>",
+    // The mail service refuses a sender whose domain it has not verified.
+    from: process.env.MAIL_FROM?.trim() || DEFAULT_MAIL_FROM,
     to: email,
     subject: "Password reset request | BYM Refitted",
     html: html.replace("{{resetLink}}", resetLink),

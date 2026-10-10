@@ -3,7 +3,7 @@
   "version": "1.4.4",
   "description": "The Backyard Monsters preservation project.",
   "author": "React1-X",
-  "license": "GPL-3.0-only",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "main": "src/server.ts",
   "type": "module",
   "scripts": {

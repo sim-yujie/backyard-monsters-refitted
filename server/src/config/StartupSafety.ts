@@ -13,7 +13,13 @@ import { Env } from "../enums/Env.js";
  * - `ENV=production`, so the production-only protections are on (Discord
  *   gate, SMTP checks, no dev routes or sandbox yard);
  * - a `SECRET_KEY` of at least 32 characters that is not a known example;
- * - a `DB_PASSWORD` other than the example one, `dev12345`.
+ * - a `DB_PASSWORD` other than the example one, `dev12345`;
+ * - a Turnstile secret key, so sign-ups are checked for bots (issue #213);
+ * - a mail server (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`), so
+ *   password-reset emails can be sent;
+ * - `WEB_URL`, the site the reset emails link to;
+ * - no setting still holding a placeholder from `production.env.example`:
+ *   `FILL IN`, or the `EXAMPLE.com` domain (docs/deploy.md).
  *
  * A local server (`ENV=local`, no `NODE_ENV=production`) is never refused
  * for these beyond a missing `SECRET_KEY`.
@@ -25,6 +31,23 @@ export const MIN_PRODUCTION_SECRET_LENGTH = 32;
 /** Example values that must never be a production secret. */
 const EXAMPLE_SECRETS = new Set(["secret", "changeme", "change-me", "your-secret-key", "test-secret"]);
 const EXAMPLE_DB_PASSWORD = "dev12345";
+
+/** What `production.env.example` leaves for the owner to replace. */
+const FILL_IN = "FILL IN";
+const PLACEHOLDER_DOMAIN = /(^|[^a-z0-9-])example\.com\b/i;
+
+/** Settings a production server cannot work without, and what goes wrong otherwise. */
+const REQUIRED_IN_PRODUCTION: Record<string, string> = {
+  TURNSTILE_SECRET_KEY: "sign-ups would not be checked for bots",
+  SMTP_HOST: "password-reset emails could not be sent",
+  SMTP_PORT: "password-reset emails could not be sent",
+  SMTP_USER: "password-reset emails could not be sent",
+  SMTP_PASSWORD: "password-reset emails could not be sent",
+  WEB_URL: "password-reset emails would have no link",
+};
+
+/** Settings that name an address, which must be the real one. */
+const ADDRESS_SETTINGS = ["WEB_URL", "BASE_URL", "CHAT_WS_HOST", "MAIL_FROM"];
 
 /** A value as written in an env file, without surrounding quotes. */
 const unquoted = (value: string | undefined): string => (value ?? "").trim().replace(/^(['"])(.*)\1$/, "$2");
@@ -58,6 +81,18 @@ export const startupRefusals = (env: Record<string, string | undefined>): string
 
   if (unquoted(env.DB_PASSWORD) === EXAMPLE_DB_PASSWORD) {
     refusals.push(`DB_PASSWORD is the example password (${EXAMPLE_DB_PASSWORD})`);
+  }
+
+  for (const [name, consequence] of Object.entries(REQUIRED_IN_PRODUCTION)) {
+    if (!unquoted(env[name])) refusals.push(`${name} is not set, so ${consequence}`);
+  }
+
+  for (const [name, value] of Object.entries(env)) {
+    if (unquoted(value) === FILL_IN) refusals.push(`${name} is still "${FILL_IN}"`);
+  }
+
+  for (const name of ADDRESS_SETTINGS) {
+    if (PLACEHOLDER_DOMAIN.test(unquoted(env[name]))) refusals.push(`${name} still names the placeholder EXAMPLE.com`);
   }
 
   return refusals;

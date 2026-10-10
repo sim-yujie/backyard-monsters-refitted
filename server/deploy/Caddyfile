@@ -1,0 +1,35 @@
+# The front door of the game server (docs/deploy.md).
+#
+# Caddy answers on ports 80 and 443, gets and renews the HTTPS certificate for
+# API_DOMAIN by itself (Let's Encrypt), and passes each request on to the game
+# server inside Docker. Nothing else on the server is reachable from outside.
+#
+# API_DOMAIN and ACME_EMAIL come from production.env (docker-compose.prod.yml).
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$API_DOMAIN} {
+	# The chat WebSocket (CHAT_WS_HOST=wss://<API_DOMAIN>/chat). The chat
+	# server answers on any path, so the /chat prefix is only how Caddy tells
+	# it apart from the game's own routes.
+	handle /chat* {
+		reverse_proxy web:3010 {
+			header_up CF-Connecting-IP {remote_host}
+		}
+	}
+
+	# Everything else: the game API and the art under /assets, /gamestage and
+	# /templates (which the web client on Vercel fetches through its rewrites).
+	handle {
+		encode zstd gzip
+		# The server keys its rate limits on CF-Connecting-IP when the request
+		# comes from a trusted proxy (TRUSTED_PROXIES, server/src/config/ProxyConfig.ts).
+		# Caddy is that proxy here: it overwrites whatever the visitor sent with
+		# the address that really connected.
+		reverse_proxy web:3001 {
+			header_up CF-Connecting-IP {remote_host}
+		}
+	}
+}

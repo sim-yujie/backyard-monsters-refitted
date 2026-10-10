@@ -1,15 +1,187 @@
-services:
-  web:
-    ports:
-      - "80:3001"
-      - "${CHAT_WS_PORT:-3010}:3010"
-      - "843:843"
-    environment:
-      - ENV=production
+# The whole game server on one machine (docs/deploy.md): HTTPS front door,
+# game server and chat, database, Redis and daily backups.
+#
+# This file stands on its own; it is not layered over docker-compose.yml
+# (Compose adds port lists together when files are layered, so the
+# development file's database and Redis ports could never be taken away).
+#
+# Every setting comes from production.env (copy production.env.example).
+# deploy/prod.sh runs Compose with both, e.g.:
+#   deploy/prod.sh up -d --build
+#
+# Only Caddy is reachable from the internet, on ports 80 and 443. The
+# database, Redis and the game server itself have no published ports.
 
-  # Don't expose db or redis ports to the host in production
+name: bymr
+
+volumes:
   db:
-    ports: []
+  redis:
+  caddy-data:
+  caddy-config:
+
+networks:
+  bymr:
+    ipam:
+      config:
+        # Caddy has a fixed address, 172.28.0.2, so the game server can trust
+        # it, and only it, to tell it a player's real address (TRUSTED_PROXIES
+        # below). Every other container gets one from the upper half
+        # (ip_range), so none can take Caddy's.
+        - subnet: 172.28.0.0/24
+          ip_range: 172.28.0.128/25
+          gateway: 172.28.0.1
+
+# What each container prints goes to journald, which keeps it at most 30 days
+# (deploy/journald-bymr.conf; the lines include players' IP addresses).
+# `deploy/prod.sh logs` still shows it. LOG_DRIVER exists only for testing on
+# a machine without journald (Docker Desktop: LOG_DRIVER=local).
+x-logging: &logging
+  driver: ${LOG_DRIVER:-journald}
+
+x-game-env: &game-env
+  ENV: production
+  PORT: "3001"
+  DB_HOST: db
+  DB_PORT: "5432"
+  REDIS_URL: redis://redis:6379
+  BASE_URL: https://${API_DOMAIN:?API_DOMAIN is not set in production.env}
+  WEB_URL: https://${WEB_DOMAIN:?WEB_DOMAIN is not set in production.env}
+  CHAT_WS_PORT: "3010"
+  CHAT_WS_HOST: wss://${API_DOMAIN}/chat
+  TRUSTED_PROXIES: 172.28.0.2
+
+services:
+  # HTTPS for the game API and the chat WebSocket (deploy/Caddyfile).
+  caddy:
+    logging: *logging
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    environment:
+      API_DOMAIN: ${API_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is not set in production.env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      bymr:
+        ipv4_address: 172.28.0.2
+    depends_on:
+      - web
+
+  # Creates the tables on first start and applies new migrations on every
+  # start, then exits. The game server waits for it.
+  db-init:
+    logging: *logging
+    build: .
+    env_file: production.env
+    environment: *game-env
+    networks:
+      - bymr
+    depends_on:
+      db:
+        condition: service_healthy
+    command: bun run db:init
+    restart: "no"
+
+  # The game server: the API on 3001 and chat on 3010, both behind Caddy.
+  web:
+    logging: *logging
+    build: .
+    restart: unless-stopped
+    env_file: production.env
+    environment: *game-env
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - bymr
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+
+  db:
+    logging: *logging
+    image: postgres:18.1
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-bym}
+      POSTGRES_USER: ${DB_USER:-bym}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is not set in production.env}
+    volumes:
+      - db:/var/lib/postgresql
+    networks:
+      - bymr
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   redis:
-    ports: []
+    logging: *logging
+    image: redis:8.10.1
+    restart: unless-stopped
+    volumes:
+      - redis:/data
+    networks:
+      - bymr
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # A database backup when it starts, then one a day at BACKUP_HOUR (UTC),
+  # into server/backups/, keeping KEEP_DAYS days (deploy/backup.sh).
+  backup:
+    logging: *logging
+    image: postgres:18.1
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGDATABASE: ${DB_NAME:-bym}
+      PGUSER: ${DB_USER:-bym}
+      PGPASSWORD: ${DB_PASSWORD}
+      KEEP_DAYS: ${KEEP_DAYS:-14}
+      BACKUP_HOUR: ${BACKUP_HOUR:-3}
+    volumes:
+      - ./deploy/backup.sh:/backup.sh:ro
+      - ./backups:/backups
+    networks:
+      - bymr
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint:
+      - bash
+      - -c
+      - |
+        while true; do
+          bash /backup.sh || echo "backup failed; trying again at the next run" >&2
+          now=$$(date -u +%s)
+          next=$$(date -u -d "today $${BACKUP_HOUR}:00" +%s)
+          [ "$$next" -le "$$now" ] && next=$$(date -u -d "tomorrow $${BACKUP_HOUR}:00" +%s)
+          sleep $$((next - now))
+        done
