@@ -240,6 +240,9 @@ export const YardChampionFeedSchema = z.object({
 /** `POST /bm/yard/champion/evolve`, `/heal` and `/juice` act on the champion in the cage. */
 export const YardChampionSchema = z.object({});
 
+/** `POST /bm/yard/champion/heal` and `/freeze`: `type` 5 names Krallen; none means the basic champion. */
+export const YardChampionTypedSchema = z.object({ type: z.coerce.number().int().min(1).max(5).optional() });
+
 /** `POST /bm/yard/champion/rename`: the new name, checked for length and language by the route. */
 export const YardChampionRenameSchema = z.object({
   name: z.string().max(200),
@@ -255,7 +258,7 @@ export const YardChampionStanceSchema = z.object({
 });
 
 /** `POST /bm/yard/champion/freeze` moves the champion in the cage into the Champion Chamber. */
-export const YardChampionFreezeSchema = z.object({});
+export const YardChampionFreezeSchema = YardChampionTypedSchema;
 
 /** `POST /bm/yard/champion/thaw`: the frozen champion type to bring back to the cage. */
 export const YardChampionThawSchema = z.object({

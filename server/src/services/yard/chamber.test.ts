@@ -98,3 +98,24 @@ describe("champion/thaw", () => {
     expect(JSON.parse(frozenBlob(afterThaw)).map((one: { t: number }) => one.t)).toEqual([1]);
   });
 });
+
+describe("champion/freeze and thaw for Krallen", () => {
+  const krallen = (overrides: Partial<ChampionData> = {}) => gorgo({ t: 5, l: 5, hp: 62_000, ...overrides });
+
+  test("Krallen freezes beside the basic champion in the cage", () => {
+    const outcome = planChampionFreeze(yard([gorgo(), krallen()]), NOW, 5);
+    expect(outcome.slices.champion.map((one) => [one.t, one.status])).toEqual([
+      [1, 0],
+      [5, 1],
+    ]);
+  });
+
+  test("a frozen Krallen thaws while the basic champion is in the cage", () => {
+    const save = yard([gorgo(), krallen({ status: 1, ft: HOUR })]);
+    const thawed = planChampionThaw(save, 5, NOW).slices.champion;
+    expect(thawed.map((one) => [one.t, one.status])).toEqual([
+      [1, 0],
+      [5, 0],
+    ]);
+  });
+});

@@ -19,12 +19,13 @@ import {
   type RunningUnlock,
   type UnlockGate,
 } from "@/game/monsters/lockerModel";
-import { housingSpace, monsterEntry, type MonsterEntry } from "@/game/monsters/monsterCatalogue";
+import { hatchCost, housingSpace, monsterEntry, type MonsterEntry } from "@/game/monsters/monsterCatalogue";
 import { progressFraction } from "@/game/yard/jobs";
 import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { resourceAmount } from "@/ui/resourceIcon";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
+import { hatchTimeText, speedText } from "./monsterNumbers";
 import { MonstersTabId, type MonstersFocus, type MonstersTab, type MonstersTabContext } from "./monstersTab";
 
 /**
@@ -383,7 +384,10 @@ export class LockerTab implements MonstersTab {
     stats.textContent = [
       `Health ${formatAmount(monsterStat(monster.id, "health", level))}`,
       damage < 0 ? `Heals ${formatAmount(-damage)}` : `Damage ${formatAmount(damage)}`,
+      `Speed ${speedText(monster.id, level)}`,
       `Space ${housingSpace(monster.id, level) ?? 0}`,
+      `Hatch ${formatAmount(hatchCost(monster.id, level) ?? 0)} goo`,
+      `Hatch time ${hatchTimeText(monster.id, level)}`,
     ].join(" · ");
     heading.append(name, facts, stats);
     head.append(heading);

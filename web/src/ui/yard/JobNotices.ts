@@ -129,8 +129,15 @@ const STARVED = "starve";
  */
 const HATCH = "hatch";
 
+/**
+ * Monsters the catch-up removed because housing shrank, one entry per type
+ * with its `count` (`catchUpMonsters.ts`, `HOUSING.Cull()`): "3 monsters were
+ * lost, housing was too small: 2 Pokey, 1 Fang".
+ */
+const CULL = "cull";
+
 /** How many monsters a hatch entry moved into housing; 1 when it does not say. */
-const hatchCount = (job: CompletedJob): number => {
+const countOf = (job: CompletedJob): number => {
   const count = Number((job.detail as { count?: unknown }).count);
   return Number.isFinite(count) && count > 0 ? count : 1;
 };
@@ -225,9 +232,9 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
     const id = String(job.id);
     return { label: monsterEntry(id)?.name ?? id, buildingId: null };
   }
-  if (job.kind === HATCH) {
+  if (job.kind === HATCH || job.kind === CULL) {
     const id = String(job.id);
-    const count = hatchCount(job);
+    const count = countOf(job);
     const name = monsterEntry(id)?.name ?? id;
     return { label: count === 1 ? name : `${formatAmount(count)} ${name}`, buildingId: null };
   }
@@ -278,13 +285,22 @@ export const groupCompletedJobs = (completed: readonly CompletedJob[]): JobNotic
     items.push(labelOf(job));
     byKind.set(job.kind, items);
   }
-  const hatched = completed.reduce((sum, job) => (job.kind === HATCH ? sum + hatchCount(job) : sum), 0);
+  const sumOf = (kind: string): number =>
+    completed.reduce((sum, job) => (job.kind === kind ? sum + countOf(job) : sum), 0);
+  const hatched = sumOf(HATCH);
+  const lost = sumOf(CULL);
   return [
     ...starters,
     ...notices,
     ...[...byKind].map(([kind, items]) =>
       kind === MAP_ROOM_ADDED
         ? { kind, heading: "A ", items, tail: " was added to your yard" }
+        : kind === CULL
+          ? {
+              kind,
+              heading: lost === 1 ? "1 monster was lost, housing was too small" : `${formatAmount(lost)} monsters were lost, housing was too small`,
+              items,
+            }
         : kind === HATCH
           ? { kind, heading: hatched === 1 ? "A monster hatched" : `${formatAmount(hatched)} monsters hatched`, items }
           : { kind, heading: headingOf(kind, items.length), items },

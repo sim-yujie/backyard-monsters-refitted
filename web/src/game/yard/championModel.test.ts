@@ -166,6 +166,12 @@ describe("the Champion Chamber (#125)", () => {
     expect(freezeGate(withChamber([gorgo({ ft: NOW - 1 })]), hungry)).toMatch(/^Feed Gorgo/);
   });
 
+  it("lets Krallen thaw beside the champion in the cage", () => {
+    const view = chamberView(withChamber([gorgo(), gorgo({ t: 5, l: 5, status: 1, ft: HOUR })]), NOW);
+    expect(thawGate(view)).toMatch(/^Freeze Gorgo first/);
+    expect(thawGate(view, true)).toBeNull();
+  });
+
   it("thaws nothing while the chamber is damaged", () => {
     const view = chamberView(withChamber([gorgo({ status: 1 })], { hp: 10 }), NOW);
     expect(thawGate(view)).toMatch(/damaged/);

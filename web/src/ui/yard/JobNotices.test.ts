@@ -176,6 +176,14 @@ describe("groupCompletedJobs", () => {
     expect(noticeText(group!)).toBe("Hunger finished: C5");
   });
 
+  it("names the monsters lost when housing shrank", () => {
+    const cull = (id: string, count: number) => ({ kind: "cull", id, t: null, at: 1, detail: { count } });
+    const [group] = groupCompletedJobs([cull("C1", 2), cull("C5", 1)]);
+    expect(noticeText(group!)).toBe("3 monsters were lost, housing was too small: 2 Pokey, Eye-ra");
+    const [one] = groupCompletedJobs([cull("C1", 1)]);
+    expect(noticeText(one!)).toBe("1 monster was lost, housing was too small: Pokey");
+  });
+
   it("counts hatched monsters, not their types, by name (#142)", () => {
     const hatch = (id: string, count: number) => ({ kind: "hatch", id, t: null, at: 1, detail: { count } });
     const [group] = groupCompletedJobs([hatch("C1", 10), hatch("C5", 2)]);

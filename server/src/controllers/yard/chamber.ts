@@ -10,7 +10,7 @@ import { defineYardAction } from "./yardAction.js";
 /** `POST /bm/yard/champion/freeze` — the champion in the cage into the chamber. */
 export const yardChampionFreezeAction = defineYardAction({
   schema: YardChampionFreezeSchema,
-  run: ({ save, now }) => planChampionFreeze(save, now),
+  run: ({ save, body, now }) => planChampionFreeze(save, now, body.type),
 });
 
 /** `POST /bm/yard/champion/thaw` — a frozen champion back into the cage. */

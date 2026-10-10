@@ -167,10 +167,21 @@ export const cageOrThrow = (save: ChampionSave): BuildingData => {
   return cage.building;
 };
 
-/** The champion in the cage: `409 noChampion` when there is none. */
-const activeOrThrow = (save: ChampionSave) => {
+/**
+ * Index of the active (status 0) entry of `type`, or -1. Krallen (5) lives
+ * beside the basic champion; any other type, or none, means the basic champion.
+ */
+export const activeIndexOfType = (champions: readonly ChampionData[], type?: number): number =>
+  type === undefined || championEntry(type)?.kind !== "special"
+    ? activeChampionIndex(champions)
+    : champions.findIndex(
+        (champion) => Math.trunc(numberOf(champion.t)) === type && statusOf(champion) === CHAMPION_STATUS.ACTIVE
+      );
+
+/** The champion in the cage (or Krallen, for `type` 5): `409 noChampion` when there is none. */
+const activeOrThrow = (save: ChampionSave, type?: number) => {
   const champions = readChampions(save.champion);
-  const index = activeChampionIndex(champions);
+  const index = activeIndexOfType(champions, type);
   if (index < 0) throw yardRefusedErr("noChampion", "There is no champion in your cage.");
   const champion = champions[index]!;
   return { champions, index, champion, entry: entryOf(champion)! };
@@ -369,9 +380,9 @@ export const healPriceOf = (champion: ChampionData, entry: ChampionEntry): numbe
  * Refusals: `409 noCage` / `409 busy`; `409 noChampion`; `409 fullHealth`.
  * The wrapper then refuses `409 shinyLocked` / `409 credits`.
  */
-export const planChampionHeal = (save: ChampionSave) => {
+export const planChampionHeal = (save: ChampionSave, type?: number) => {
   cageOrThrow(save);
-  const { champions, index, champion, entry } = activeOrThrow(save);
+  const { champions, index, champion, entry } = activeOrThrow(save, type);
   const max = maxHealthOf(champion, entry);
   if (numberOf(champion.hp) >= max) {
     throw yardRefusedErr("fullHealth", `Your ${entry.name} is already at full health.`);

@@ -1,8 +1,10 @@
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
+import { championEntry } from "../../game-data/championCatalogue.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 import { isDamaged } from "./buildingJobs.js";
 import {
   activeChampionIndex,
+  activeIndexOfType,
   buildingOfType,
   cageOrThrow,
   CHAMPION_CHAMBER_TYPE,
@@ -99,10 +101,10 @@ export interface ChamberReport {
  * Refusals, in order: `409 noChamber` / `409 busy`; `409 noChampion`;
  * `409 injured { hp, max }`; `409 hungry { feedTime }`.
  */
-export const planChampionFreeze = (save: ChampionSave, now: number) => {
+export const planChampionFreeze = (save: ChampionSave, now: number, type?: number) => {
   const { key, building } = chamberOrThrow(save);
   const champions = readChampions(save.champion);
-  const index = activeChampionIndex(champions);
+  const index = activeIndexOfType(champions, type);
   if (index < 0) throw yardRefusedErr("noChampion", "There is no champion in your cage.");
   const champion = champions[index]!;
   const entry = entryOf(champion)!;
@@ -153,7 +155,8 @@ export const planChampionThaw = (save: ChampionSave, type: number, now: number) 
   cageOrThrow(save);
 
   const champions = readChampions(save.champion);
-  if (activeChampionIndex(champions) >= 0) {
+  // Krallen waits beside the basic champion, so only a basic thaw needs the cage empty.
+  if (championEntry(type)?.kind !== "special" && activeChampionIndex(champions) >= 0) {
     throw yardRefusedErr("championInCage", "Freeze the champion in your cage before you thaw another.");
   }
   const index = champions.findIndex(

@@ -71,6 +71,8 @@ const setup = (
     juice: vi.fn(actions.juice ?? (() => never())),
     freeze: vi.fn(actions.freeze ?? (() => never())),
     thaw: vi.fn(actions.thaw ?? (() => never())),
+    healSpecial: vi.fn(actions.healSpecial ?? (() => never())),
+    freezeSpecial: vi.fn(actions.freezeSpecial ?? (() => never())),
   };
   const panel = new ChampionPanel({ store, actions: spies as ChampionActions });
   document.body.replaceChildren(panel.element);
@@ -277,5 +279,44 @@ describe("hunger words", () => {
       title: "Starving!",
       detail: "It went too long without food and loses a feed.",
     });
+  });
+});
+
+describe("ChampionPanel: stats and Krallen", () => {
+  const krallen = (overrides: Partial<ChampionSaveEntry> = {}) =>
+    gorgo({ t: 5, l: 5, hp: 30_000, ft: T0 + 14 * HOUR, ...overrides });
+
+  it("shows speed and range with a level preview on the champion's card", () => {
+    const { element } = setup([gorgo()]);
+    const text = element.querySelector(".champion__stats")!.textContent ?? "";
+    expect(text).toMatch(/Speed/);
+    expect(text).toMatch(/Range/);
+    expect(text).toMatch(/→/);
+    expect(element.textContent).toMatch(/Arrows show level 2/);
+  });
+
+  it("at the top level names what the next food-bonus rank adds", () => {
+    const { element } = setup([gorgo({ l: 6, fb: 1, hp: 227_500 })]);
+    expect(element.textContent).toMatch(/Next food-bonus rank \(2 of 3\): \+/);
+  });
+
+  it("shows Krallen under the cage and heals him with the special action", () => {
+    const { element, spies } = setup([gorgo(), krallen()]);
+    const card = element.querySelector<HTMLElement>(".champion__part--special")!;
+    expect(card.textContent).toMatch(/Krallen/);
+    expect(card.textContent).toMatch(/Level 5 of 5/);
+    expect(card.querySelector(".champion__heal--special")).not.toBeNull();
+    buttonNamed(card, "Freeze")!.click();
+    expect(spies.freezeSpecial).toHaveBeenCalled();
+  });
+
+  it("says a frozen Krallen waits in the Chamber", () => {
+    const { element } = setup([krallen({ status: 1 })]);
+    expect(element.querySelector(".champion__part--special")!.textContent).toMatch(/asleep in the Champion Chamber/);
+  });
+
+  it("shows no Krallen card before he is granted", () => {
+    const { element } = setup([gorgo()]);
+    expect(element.querySelector(".champion__part--special")).toBeNull();
   });
 });
