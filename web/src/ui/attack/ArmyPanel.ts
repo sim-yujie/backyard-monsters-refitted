@@ -364,17 +364,22 @@ export class ArmyPanel {
     item.dataset["t"] = String(t);
 
     const input = document.createElement("input");
-    input.type = "radio";
+    input.type = "checkbox";
     input.name = this.radioName;
     input.value = String(t);
     input.className = "attack-army__champion-pick";
-    // A click on the picked radio is the un-pick: the same control both ways
+    // A click on a picked champion is the un-pick: the same control both ways
     // (§F2 "Champion"). Decided before the browser flips `checked`, so the
-    // previous pick, not the new state, is what is compared.
+    // previous pick, not the new state, is what is compared. Krallen is picked
+    // beside an ordinary champion; picking another ordinary one replaces it.
     input.addEventListener("click", () => {
-      const picked = this.bucket.champion()?.t === t;
-      this.bucket.pickChampion(picked ? null : t);
-      if (picked) input.checked = false;
+      const picked = this.bucket.isPicked(t);
+      if (picked) {
+        this.bucket.unpickChampion(t);
+        input.checked = false;
+      } else {
+        this.bucket.pickChampion(t);
+      }
     });
 
     const id = championByType(t) ?? `G${t}`;
@@ -492,13 +497,13 @@ export class ArmyPanel {
 
     for (const row of this.rows) this.refreshRow(row, document.activeElement !== row.input);
 
-    const picked = bucket.champion()?.t ?? null;
     for (const champion of this.champions) {
       const entry = bucket.champions().find((candidate) => candidate.t === champion.t);
       const available = live && (entry?.available ?? false) && this.locked.steppers !== true;
       champion.input.disabled = !available;
-      champion.input.checked = picked === champion.t;
-      champion.element.classList.toggle("attack-army__champion--picked", picked === champion.t);
+      const isPicked = bucket.isPicked(champion.t);
+      champion.input.checked = isPicked;
+      champion.element.classList.toggle("attack-army__champion--picked", isPicked);
       champion.element.classList.toggle("attack-army__champion--unavailable", !available);
       champion.note.textContent = this.onField.includes(champion.t)
         ? "On the field"
@@ -561,7 +566,10 @@ const describeComposition = (bucket: Bucket): string => {
   const last = parts[parts.length - 1] ?? "";
   const monsters =
     parts.length <= 1 ? last : `${parts.slice(0, -1).join(", ")} and ${last}`;
-  const champion = composition.champion ? championName(composition.champion.t) : "";
+  const champion = [composition.champion, composition.second]
+    .filter((one) => one !== undefined)
+    .map((one) => championName(one.t))
+    .join(" and ");
   if (monsters && champion) return `${monsters} with ${champion}`;
   return monsters || champion;
 };

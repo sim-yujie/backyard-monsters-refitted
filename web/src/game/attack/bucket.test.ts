@@ -277,13 +277,50 @@ describe("Bucket champion", () => {
     ]);
     bucket.pickChampion(5);
     expect(bucket.champion()).toEqual({ t: 5, l: 5, s: "hybrid" });
+    // Fomor goes on top of Krallen: both ride, the ordinary one first.
     bucket.pickChampion(3);
     expect(bucket.champion()).toEqual({ t: 3, l: 6, s: "hybrid" });
+    bucket.unpickChampion(5);
     bucket.setCount("C1", 4);
     expect(bucket.composition()).toEqual({ monsters: { C1: 4 }, champion: { t: 3, l: 6, s: "hybrid" } });
     bucket.pickChampion(null);
     expect(bucket.champion()).toBeNull();
     expect(bucket.composition()).toEqual({ monsters: { C1: 4 } });
+  });
+
+  it("sends Krallen and one ordinary champion in the same composition", () => {
+    const bucket = new Bucket(
+      sessionWith({ monsters: { C1: 10 }, champions: [champion(5, 5), champion(3, 6)] }),
+      { storage: null },
+    );
+    bucket.setCount("C1", 4);
+    bucket.pickChampion(5);
+    bucket.pickChampion(3);
+    expect(bucket.composition()).toEqual({
+      monsters: { C1: 4 },
+      champion: { t: 3, l: 6, s: "hybrid" },
+      second: { t: 5, l: 5, s: "hybrid" },
+    });
+    bucket.unpickChampion(3);
+    expect(bucket.composition().champion?.t).toBe(5);
+    expect(bucket.composition().second).toBeUndefined();
+  });
+
+  it("flings both champions as two events at one tick and spot", () => {
+    const session = sessionWith({ monsters: { C1: 10 }, champions: [champion(5, 5), champion(3, 6)] });
+    const bucket = new Bucket(session, { storage: null });
+    bucket.setCount("C1", 4);
+    bucket.pickChampion(5);
+    bucket.pickChampion(3);
+    const { second, ...drop } = bucket.composition();
+    session.appendFling({ ...drop, x: 100, y: 100 });
+    if (second) session.appendFling({ x: 100, y: 100, monsters: {}, champion: second });
+    bucket.afterDrop();
+    const flings = session.flingLog().events.filter((event) => event.kind === "fling");
+    expect(flings.map((event) => event.champion?.t)).toEqual([3, 5]);
+    expect(flings[0]?.t).toBe(flings[1]?.t);
+    expect(bucket.champions().map((entry) => entry.blocked)).toEqual(["flung", "flung"]);
+    expect(bucket.champion()).toBeNull();
   });
 
   it("widens the drop ring by the champion's bucket, as Flash sizes the zone (#143)", () => {
@@ -488,6 +525,7 @@ describe("Bucket last army", () => {
       v: 1,
       monsters: { C1: 4 },
       champion: null,
+      champions: [],
     });
   });
 });
