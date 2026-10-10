@@ -137,9 +137,9 @@ for SRC, OUT, CELL in SHEETS:
     scale = {c: min(cap[c], float(np.mean([size[(c + d) % DIRS] for d in range(-2, 3)])) / np.sqrt(teal(painted[c]).sum())) for c in scale}
 
     cw, ch = CELL[0] * UP, CELL[1] * UP
-    sheet = Image.new("RGBA", (COLS * cw, ch * ROWS))
+    sheet = Image.new("RGBA", (COLS * cw, ORIGINAL.height * UP))   # the mini sheet is 116 high, not 6 x 20
     # rows 1-5 are never drawn: keep the old ones, scaled up
-    sheet.paste(ORIGINAL.crop((0, CELL[1], ORIGINAL.width, ORIGINAL.height)).resize((COLS * cw, ch * (ROWS - 1)), Image.NEAREST), (0, ch))
+    sheet.paste(ORIGINAL.crop((0, CELL[1], ORIGINAL.width, ORIGINAL.height)).resize((COLS * cw, (ORIGINAL.height - CELL[1]) * UP), Image.NEAREST), (0, ch))
     for col in range(DIRS):
         cut = painted[col]
         cx, bottom, mid, fy1 = fit[col]
