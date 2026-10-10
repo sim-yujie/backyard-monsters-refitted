@@ -390,7 +390,7 @@ All from `/opt/bymr/server` on the VPS:
 | The browser warns the API address is not secure | Caddy has not got its certificate. The `api` DNS record (Vercel DNS) must point straight at the VPS, and ports 80 and 443 must be open. `deploy/prod.sh logs caddy` says what went wrong. |
 | `web` keeps restarting | A setting is missing or still a placeholder: `deploy/prod.sh logs web \| grep "Refusing to start"`. |
 | Sign-up says "We couldn't confirm you're a person" every time | The Turnstile site key (Vercel) and secret key (`production.env`) are from different widgets, or the widget does not list `play.yourgame.com`. After changing the Vercel key, redeploy the page in Vercel. |
-| Reset emails never arrive | The domain is not "Verified" in Resend, `MAIL_FROM` uses a different domain, or the API key is wrong. `deploy/prod.sh logs web \| grep ForgotPassword` shows the error. |
+| Reset emails never arrive | The domain is not "Verified" in Resend, `MAIL_FROM` uses a different domain, the API key is wrong, or the VPS provider blocks the mail port (DigitalOcean blocks 465 and 587; keep `SMTP_PORT=2465`). `deploy/prod.sh logs web \| grep ForgotPassword` shows the error. |
 | Chat dot stays orange | Chat goes through `wss://api.yourgame.com/chat`. Check `deploy/prod.sh logs caddy`. |
 
 ## For the technically curious
