@@ -1464,3 +1464,33 @@ body {
   pointer-events: none;
   white-space: pre;
 }
+
+/* "Forgot password?" under Play: a quiet link, not a second primary. */
+.login-form__forgot {
+  align-self: center;
+  font-size: var(--text-sm);
+}
+
+/* ── Account settings (username, Shiny Lock) ───────────────────────────── */
+
+.account-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: min(84vw, 340px);
+}
+
+.account-settings__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.account-settings__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--colour-text-strong);
+}

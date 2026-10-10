@@ -1,4 +1,4 @@
-import { fetchSignUpOptions, login, register } from "@/api/auth";
+import { fetchSignUpOptions, login, register, requestPasswordReset, resetPassword } from "@/api/auth";
 import { ApiError, NetworkError } from "@/api/http";
 import { unlockInbox } from "@/game/achievements/unlockInbox";
 import { clearTestHistory } from "@/game/baiter/testHistory";
@@ -21,6 +21,14 @@ import {
   type SignUpValues,
 } from "./signUp";
 import { BotCheck } from "./turnstile";
+import {
+  FORGOT_INTRO,
+  RESET_DONE,
+  RESET_EXPIRED,
+  clearResetLink,
+  resetProblem,
+  resetTokenFromLocation,
+} from "./passwordReset";
 
 interface FieldOptions {
   id: string;
@@ -190,7 +198,10 @@ export class LoginScene implements Scene {
     this.wrapper.append(this.panel.element);
     context.overlay.content.append(this.wrapper);
 
-    this.showSignIn(context);
+    // The emailed reset link opens straight on the new-password form.
+    const resetToken = resetTokenFromLocation(window.location);
+    if (resetToken) this.showReset(context, resetToken);
+    else this.showSignIn(context);
   }
 
   exit(): void {
@@ -236,7 +247,15 @@ export class LoginScene implements Scene {
       this.showSignUp(context, { email: email.input.value }),
     );
 
-    form.append(email.wrapper, password.wrapper, error, submit, toSignUp);
+    const forgot = document.createElement("button");
+    forgot.type = "button";
+    forgot.className = "btn btn--ghost login-form__forgot";
+    forgot.textContent = "Forgot password?";
+    forgot.addEventListener("click", () =>
+      this.showForgot(context, { email: email.input.value.trim() }),
+    );
+
+    form.append(email.wrapper, password.wrapper, error, submit, forgot, toSignUp);
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -250,6 +269,118 @@ export class LoginScene implements Scene {
 
     this.panel?.setTitle("Sign in").setContent(form);
     (email.input.value ? password.input : email.input).focus();
+  }
+
+  /** Asks for the email and has the server send a reset link. */
+  private showForgot(context: SceneContext, carried: { email?: string } = {}): void {
+    this.dropBotCheck();
+    const form = document.createElement("form");
+    form.className = "login-form";
+    form.noValidate = true;
+
+    const intro = document.createElement("p");
+    intro.className = "login-form__terms";
+    intro.textContent = FORGOT_INTRO;
+
+    const email = field({ id: "forgot-email", label: "Email", type: "email", autocomplete: "username" });
+    plainText(email.input);
+    email.input.value = carried.email ?? "";
+
+    const error = document.createElement("p");
+    error.className = "form-error";
+    error.setAttribute("role", "alert");
+    const done = document.createElement("p");
+    done.className = "field__hint field__hint--ok";
+    done.setAttribute("role", "status");
+    done.hidden = true;
+
+    const submit = primaryButton("Send reset link");
+    const back = switchRow("", "Back to sign in", () =>
+      this.showSignIn(context, { email: email.input.value.trim() }),
+    );
+
+    form.append(intro, email.wrapper, error, done, submit, back);
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      error.textContent = "";
+      done.hidden = true;
+      const address = email.input.value.trim();
+      if (!address) {
+        error.textContent = "Enter your email address.";
+        return;
+      }
+      submit.disabled = true;
+      void requestPasswordReset(address)
+        .then((message) => {
+          done.textContent = message;
+          done.hidden = false;
+        })
+        .catch((caught: unknown) => {
+          error.textContent = describe(caught);
+        })
+        .finally(() => {
+          submit.disabled = false;
+        });
+    });
+
+    this.panel?.setTitle("Forgot password").setContent(form);
+    email.input.focus();
+  }
+
+  /** The new-password form a reset link opens. */
+  private showReset(context: SceneContext, token: string): void {
+    this.dropBotCheck();
+    const form = document.createElement("form");
+    form.className = "login-form";
+    form.noValidate = true;
+
+    const password = field({
+      id: "reset-password",
+      label: "New password",
+      type: "password",
+      autocomplete: "new-password",
+      hint: SIGN_UP_HINTS.password,
+    });
+    const confirm = field({
+      id: "reset-confirm",
+      label: "Confirm new password",
+      type: "password",
+      autocomplete: "new-password",
+    });
+    const error = document.createElement("p");
+    error.className = "form-error";
+    error.setAttribute("role", "alert");
+    const submit = primaryButton("Set new password");
+    const back = switchRow("", "Back to sign in", () => {
+      clearResetLink();
+      this.showSignIn(context);
+    });
+
+    form.append(password.wrapper, confirm.wrapper, error, submit, back);
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      error.textContent = "";
+      const problem = resetProblem(password.input.value, confirm.input.value);
+      if (problem) {
+        error.textContent = problem;
+        return;
+      }
+      submit.disabled = true;
+      resetPassword(token, password.input.value.trim()).then(
+        () => {
+          clearResetLink();
+          this.showSignIn(context, { notice: RESET_DONE });
+        },
+        (caught: unknown) => {
+          error.textContent =
+            caught instanceof ApiError && caught.status === 401 ? RESET_EXPIRED : describe(caught);
+          submit.disabled = false;
+        },
+      );
+    });
+
+    this.panel?.setTitle("New password").setContent(form);
+    password.input.focus();
   }
 
   private showSignUp(context: SceneContext, carried: { email?: string } = {}): void {

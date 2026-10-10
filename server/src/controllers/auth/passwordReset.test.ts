@@ -117,6 +117,24 @@ describe("forgot password answers the same whether or not the account exists", (
     expect(failed).toEqual({ status: 200, body: FORGOT_PASSWORD_SENT, error: undefined });
   });
 
+  test("a dev sandbox keeps the link in the log and sends no email", async () => {
+    const saved = { env: process.env.ENV, sandbox: process.env.DEV_SANDBOX };
+    process.env.ENV = "local";
+    process.env.DEV_SANDBOX = "true";
+    try {
+      const answer = await call(forgotPassword, { email: EMAIL });
+      await settle();
+      expect(answer).toEqual({ status: 200, body: FORGOT_PASSWORD_SENT, error: undefined });
+      expect(mailsSent).toBe(0);
+      expect(user?.resetToken).not.toBe("");
+    } finally {
+      if (saved.env === undefined) delete process.env.ENV;
+      else process.env.ENV = saved.env;
+      if (saved.sandbox === undefined) delete process.env.DEV_SANDBOX;
+      else process.env.DEV_SANDBOX = saved.sandbox;
+    }
+  });
+
   test("a malformed email is still refused", async () => {
     const bad = await call(forgotPassword, { email: "not-an-email" });
     expect(bad.status).toBe(400);

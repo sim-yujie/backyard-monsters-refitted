@@ -26,6 +26,8 @@
 
 import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
 import { guideTourAvailable, startGuideTour } from "@/game/guide/tour";
+import { openAccountSettings } from "@/ui/AccountSettings";
+import { fullscreenAvailable, isFullscreen, toggleFullscreen } from "@/ui/fullscreen";
 import "@/ui/styles/guide-start.css";
 
 export interface AccountAvatar {
@@ -79,6 +81,8 @@ export class AccountMenu {
   private readonly level: HTMLElement | null = null;
   /** Help's replay of the guided start; shown only while one is on offer. */
   private readonly replay: HTMLButtonElement;
+  /** Enters or leaves fullscreen; hidden where the browser has none. */
+  private readonly fullscreen: HTMLButtonElement;
   private readonly name: string;
   private current: AvatarId | null = null;
   private saving = false;
@@ -226,7 +230,27 @@ export class AccountMenu {
       });
       this.list.append(achievements);
     }
-    this.list.append(this.replay, signOut);
+    // Account settings (username, Shiny Lock) and Fullscreen, the original's top-bar button.
+    const settings = document.createElement("button");
+    settings.type = "button";
+    settings.className = "btn btn--ghost account-menu__help account-menu__settings";
+    settings.setAttribute("role", "menuitem");
+    settings.textContent = "Account settings";
+    settings.addEventListener("click", () => {
+      this.toggle(false);
+      const container = document.querySelector<HTMLElement>(".overlay__layer--modal") ?? document.body;
+      openAccountSettings({ container });
+    });
+    this.fullscreen = document.createElement("button");
+    this.fullscreen.type = "button";
+    this.fullscreen.className = "btn btn--ghost account-menu__help account-menu__fullscreen";
+    this.fullscreen.setAttribute("role", "menuitem");
+    this.fullscreen.hidden = !fullscreenAvailable();
+    this.fullscreen.addEventListener("click", () => {
+      this.toggle(false);
+      void toggleFullscreen();
+    });
+    this.list.append(settings, this.fullscreen, this.replay, signOut);
     this.element.append(this.button, this.list);
     document.addEventListener("pointerdown", this.dismiss, true);
     document.addEventListener("keydown", this.dismiss, true);
@@ -317,7 +341,10 @@ export class AccountMenu {
   }
 
   private toggle(open: boolean): void {
-    if (open) this.replay.hidden = !guideTourAvailable();
+    if (open) {
+      this.replay.hidden = !guideTourAvailable();
+      this.fullscreen.textContent = isFullscreen() ? "Exit fullscreen" : "Fullscreen";
+    }
     this.list.hidden = !open;
     this.button.setAttribute("aria-expanded", String(open));
   }
