@@ -5,12 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Privacy Policy · Backyard Monsters Refitted</title>
     <meta name="robots" content="noindex" />
-    <!-- A placeholder the sign-up form links to (issue #213) until the owner
-         supplies the real document. Point VITE_PRIVACY_URL at it then. -->
+    <!-- The sign-up form links here (issue #213). The text is the draft in
+         launch/legal/ (outside the repo); highlighted [SQUARE BRACKETS] are
+         placeholders the owner still has to fill in. -->
     <style>
       :root {
         color-scheme: dark;
         --bg: #0f141c;
+        --surface: #161d28;
+        --line: #2a3442;
         --text: #edf1f5;
         --muted: #a7b2c0;
         --accent: #3dd6f5;
@@ -24,39 +27,210 @@
         font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
       }
       main {
-        max-width: 640px;
+        max-width: 720px;
         margin: 0 auto;
       }
       h1 {
         margin: 0 0 16px;
         font-size: 1.75rem;
       }
+      h2 {
+        margin: 32px 0 8px;
+        font-size: 1.3rem;
+      }
+      h3 {
+        margin: 24px 0 8px;
+        font-size: 1.05rem;
+      }
+      p,
+      li {
+        color: var(--muted);
+      }
+      strong {
+        color: var(--text);
+      }
+      ul {
+        padding-left: 1.4em;
+      }
+      li + li {
+        margin-top: 4px;
+      }
+      hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 32px 0;
+      }
       .draft {
-        display: inline-block;
-        margin: 0 0 24px;
-        padding: 4px 10px;
+        padding: 8px 12px;
         border: 1px solid var(--warning);
         border-radius: 6px;
         color: var(--warning);
         font-weight: 600;
       }
-      p {
+      mark.todo {
+        padding: 0 3px;
+        border-radius: 3px;
+        background: rgba(245, 185, 74, 0.18);
+        color: var(--warning);
+      }
+      .table {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+      }
+      th,
+      td {
+        padding: 8px;
+        border: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
         color: var(--muted);
+      }
+      th {
+        background: var(--surface);
+        color: var(--text);
       }
       a {
         color: var(--accent);
+      }
+      footer {
+        margin-top: 40px;
       }
     </style>
   </head>
   <body>
     <main>
-      <h1>Privacy Policy</h1>
-      <p class="draft">Draft: to be written</p>
-      <p>
-        The Backyard Monsters Refitted Privacy Policy has not been published yet. This page
-        will hold it once it is written.
-      </p>
-      <p><a href="/terms">Terms of Service</a> · <a href="/">Back to the game</a></p>
+<h1>Privacy Policy</h1>
+<p><strong><mark class="todo">[GAME NAME]</mark></strong> (a fan-made revamp of Backyard Monsters, built on the Backyard Monsters Refitted project)</p>
+<p>Last updated: <mark class="todo">[DATE]</mark></p>
+<p class="draft">DRAFT. This is not final, and it is not legal advice. Items in <mark class="todo">[SQUARE BRACKETS]</mark> still need filling in.</p>
+<p>This page explains what information the game keeps about you, why, who else handles it, and how you can see or delete it. We try to keep as little as we can.</p>
+<p>"We" means the volunteer team that runs <mark class="todo">[GAME NAME]</mark>. You can reach us at <strong><mark class="todo">[CONTACT EMAIL]</mark></strong>.</p>
+<hr />
+<h2 id="s1">1. What we collect</h2>
+<h3>When you sign up</h3>
+<ul>
+<li><strong>Username.</strong> Other players can see it.</li>
+<li><strong>Email address.</strong> We use it to log you in and to send password-reset emails. Other players never see it.</li>
+<li><strong>Password.</strong> We never store your actual password. We store a scrambled version (a "bcrypt hash") that cannot be turned back into the password.</li>
+<li><strong>When you agreed to these terms and confirmed you are 13 or older.</strong> We record the date and time you ticked that box.</li>
+</ul>
+<h3>While you play</h3>
+<ul>
+<li><strong>Your game progress.</strong> Your bases, buildings, monsters, resources, map positions, alliance, achievements and similar game data.</li>
+<li><strong>Battle records.</strong> Who attacked whom, when, and what was taken. These records include both players' usernames. They are deleted automatically after 12 months.</li>
+<li><strong>Account details.</strong> Your chosen avatar, map bookmarks, the list of players you have blocked, your total play time and number of sessions, and when you last opened your yard (we update this at most once an hour).</li>
+<li><strong>Messages:</strong>
+<ul>
+<li><strong>World chat:</strong> each chat room keeps only its latest 100 lines. A room's lines are deleted automatically 30 days after the last message in it.</li>
+<li><strong>Alliance chat:</strong> each alliance keeps only its latest 50 messages. Older ones are deleted automatically.</li>
+<li><strong>In-game mail between players:</strong> deleted automatically 12 months after it was sent.</li>
+<li><strong>Chat reports:</strong> if someone reports a chat line, we keep a copy of that line, who said it and who reported it, so we can moderate. Deleted automatically after 12 months.</li>
+</ul>
+</li>
+<li><strong>Notifications</strong> (such as "you were attacked"). We keep only your 20 newest, and none older than 7 days.</li>
+<li><strong>Fair-play checks.</strong> To catch bots and cheating, the game sometimes asks you a quick in-game question, and we log when this happens and the result. These logs are deleted automatically after 30 days. We also log game actions that look like cheating, such as a modified game client.</li>
+</ul>
+<h3>Technical information</h3>
+<ul>
+<li><strong>IP address and browser type.</strong> Our game server records your IP address and browser details (your "user agent") with each request, when you log in, and with some game actions. We use this to keep the game running, stop abuse and investigate cheating. We keep these logs for up to 30 days, then they are deleted automatically.</li>
+<li><strong>Rate limits.</strong> To stop spam and password guessing, we briefly count requests from each account or IP address. These counts expire within minutes to hours.</li>
+</ul>
+<h3>What we do NOT collect</h3>
+<ul>
+<li>No real name, address, phone number or date of birth.</li>
+<li>No payment details. We never see your card details (see "Supporters" below).</li>
+<li>No advertising, no tracking pixels, and no analytics services selling or profiling your data.</li>
+</ul>
+<hr />
+<h2 id="s2">2. Why we use it</h2>
+<div class="table"><table>
+<thead><tr><th>What</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>Username, email, password</td><td>To create your account and let you log in</td></tr>
+<tr><td>Email</td><td>To send password-reset emails. We do not send newsletters or marketing.</td></tr>
+<tr><td>Game progress, battle records, messages</td><td>To run the game, which is what you signed up for</td></tr>
+<tr><td>IP address, browser details, logs, fair-play checks</td><td>To keep the game secure and fair, stop bots and cheaters, and fix bugs</td></tr>
+<tr><td>Chat reports, blocked players</td><td>To moderate chat and keep players safe</td></tr>
+<tr><td>Date you accepted the terms</td><td>To show you agreed to these rules and confirmed your age</td></tr>
+</tbody></table></div>
+<p>If you are in the UK or EU, the legal reasons we rely on are: <strong>providing the service you asked for</strong> (your account and game), and our <strong>legitimate interest</strong> in keeping the game secure, fair and free of abuse.</p>
+<hr />
+<h2 id="s3">3. Who else handles your data</h2>
+<p>We use a few outside services to run the game. They only get what they need to do their job:</p>
+<div class="table"><table>
+<thead><tr><th>Service</th><th>What it does</th><th>What it sees</th></tr></thead>
+<tbody>
+<tr><td><strong>Vercel</strong> (USA)</td><td>Hosts the web pages that load the game</td><td>Your IP address and browser details when you load the site</td></tr>
+<tr><td><strong><mark class="todo">[SERVER HOST NAME]</mark></strong> (<mark class="todo">[COUNTRY]</mark>)</td><td>Rents us the server that runs the game and stores the database</td><td>Everything listed in section 1, stored on their machines</td></tr>
+<tr><td><strong>Cloudflare</strong> (USA)</td><td>Runs the "are you human?" check on the sign-up form (Turnstile), and <mark class="todo">[protects our game server from attacks / routes traffic to it]</mark></td><td>Your IP address and browser details, and information about how you use the sign-up page</td></tr>
+<tr><td><strong><mark class="todo">[EMAIL SERVICE, e.g. Resend]</mark></strong> (USA)</td><td>Sends password-reset emails</td><td>Your email address and the email we send you</td></tr>
+<tr><td><strong><mark class="todo">[PATREON]</mark></strong> (USA), only if you choose to support us</td><td>Handles optional supporter payments</td><td>Whatever you give Patreon. See their privacy policy. We only see what Patreon shares with creators (such as your Patreon name and tier).</td></tr>
+</tbody></table></div>
+<p>We may also let approved fan-made tools (such as map or stats sites) read <strong>public game information</strong>, such as alliance names, descriptions and the player number of each alliance's leader. We never share email addresses, passwords, IP addresses or private messages with them.</p>
+<p>We do not sell your data. We will only hand data to the police or other authorities if the law requires it.</p>
+<p><strong>Where it is stored.</strong> Your data is stored in <mark class="todo">[COUNTRY, likely the USA]</mark>. If you live elsewhere (for example in the UK or EU), your data is sent there. Where the law requires it, we rely on standard legal safeguards for this, such as the EU's Standard Contractual Clauses offered by these providers.</p>
+<hr />
+<h2 id="s4">4. How long we keep it</h2>
+<ul>
+<li><strong>Your account and game progress:</strong> while your account exists. If you ask us to delete it, we delete it within <mark class="todo">[30]</mark> days.</li>
+<li><strong>Inactive accounts:</strong> <mark class="todo">[e.g. "We may delete accounts that have not logged in for 24 months." / "We keep them until you ask us to delete them."]</mark></li>
+<li><strong>In-game mail, battle records and chat reports:</strong> 12 months, then deleted automatically.</li>
+<li><strong>Chat, notifications, fair-play logs:</strong> see the times in section 1.</li>
+<li><strong>Server logs with IP addresses:</strong> up to 30 days, then deleted automatically.</li>
+<li><strong>Backups:</strong> copies of the database are kept for up to <mark class="todo">[BACKUP RETENTION, e.g. 14 days]</mark>, so deleted data can stay in a backup until that backup expires.</li>
+</ul>
+<p><strong>Beta resets.</strong> The game is in beta. If we reset game progress, we may keep your account (username, email, password) so you can still log in.</p>
+<hr />
+<h2 id="s5">5. Your rights</h2>
+<p>You can ask us to:</p>
+<ul>
+<li><strong>See</strong> what data we hold about you.</li>
+<li><strong>Correct</strong> anything that is wrong.</li>
+<li><strong>Delete</strong> your account and data.</li>
+<li><strong>Object</strong> to, or ask us to limit, how we use your data.</li>
+</ul>
+<p>There is no delete button or download button in the game. To do any of the above, email <strong><mark class="todo">[CONTACT EMAIL]</mark></strong> from the email address on your account and tell us your username. We will reply within 30 days.</p>
+<p>When we delete your account, we remove your login, email, game progress, your bases and land on the map, your alliance chat messages, your lines in world chat, and every in-game mail conversation you were part of (for both sides, since you can no longer reply). Some traces may stay for a short time or in a form that no longer identifies you:</p>
+<ul>
+<li>Other players' battle records keep the fight, but your username is replaced with "Deleted player".</li>
+<li>Chat reports about rule-breaking may be kept for up to 12 months to stop banned players from coming back.</li>
+<li>Server logs and backups are removed when they expire (see section 4).</li>
+</ul>
+<p>If you are in the UK or EU and are unhappy with how we handled your data, you can complain to your local data protection authority (in the UK, the ICO).</p>
+<hr />
+<h2 id="s6">6. Browser storage and cookies</h2>
+<p>The game does <strong>not</strong> set any advertising or tracking cookies.</p>
+<p>The game saves some small items in your browser's <strong>local storage</strong>:</p>
+<ul>
+<li><strong>Your login session.</strong> A login token (which includes your email address and player number), plus your username and avatar, so you stay logged in. The token stops working after 30 days, or when you log out.</li>
+<li><strong>Your preferences.</strong> Things like whether map ranges are shown, your map filter, base-planner overlays, whether you have seen a help tip, and the army you last used in an attack.</li>
+</ul>
+<p>These are needed for the game to work, so we do not ask for permission first. You can clear them at any time by logging out or clearing your browser's site data.</p>
+<p>Cloudflare's sign-up check may use its own small technical storage to tell humans from bots. See <a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">Cloudflare's privacy policy</a>.</p>
+<hr />
+<h2 id="s7">7. Children</h2>
+<p>You must be <strong>13 or older</strong> to play. We ask you to confirm this when you sign up.</p>
+<p>We do not knowingly collect information from children under 13. If you think a child under 13 has made an account, email <strong><mark class="todo">[CONTACT EMAIL]</mark></strong> and we will delete it.</p>
+<p><mark class="todo">[OWNER: some EU countries set this age at 14, 15 or 16. See notes-for-owner.md.]</mark></p>
+<hr />
+<h2 id="s8">8. Keeping your data safe</h2>
+<p>Passwords are stored as hashes, connections to the game use encryption (HTTPS), password-reset links expire after 20 minutes, and only the people who run the server can access the database. No system is perfect. If a breach affects your data, we will tell you and, where the law requires it, the authorities.</p>
+<hr />
+<h2 id="s9">9. Supporters</h2>
+<p>The game is free. There may be an <strong>optional supporter programme</strong> (for example on Patreon) for people who want to help pay for the servers. It gives <strong>no gameplay advantage</strong>. If you join, the platform you pay through handles your payment details under its own privacy policy. We never see your card details.</p>
+<hr />
+<h2 id="s10">10. Changes to this policy</h2>
+<p>If we make big changes, we will say so in the game or on our website before they take effect. The date at the top shows the last update.</p>
+<h2 id="s11">11. Contact</h2>
+<p>Questions or requests: <strong><mark class="todo">[CONTACT EMAIL]</mark></strong><br />
+<mark class="todo">[OPTIONAL: postal address, if needed for your country.]</mark></p>
+      <footer>
+        <p><a href="C:/Program Files/Git/terms">Terms of Service</a> · <a href="/">Back to the game</a></p>
+      </footer>
     </main>
   </body>
 </html>

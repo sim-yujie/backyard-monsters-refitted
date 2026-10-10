@@ -7,7 +7,7 @@ import { logger } from "../../utils/logger.js";
  *
  * Two copies of each row. A structured log line (`Bot check: ...`, with the
  * row as its properties and `botCheck: true` to filter on), which production
- * keeps in `logs/bymr.jsonl` with the rest; and the Redis list {@link BOT_CHECK_LOG_KEY}, newest first,
+ * keeps in the day's `logs/bymr-<date>.jsonl` with the rest; and the Redis list {@link BOT_CHECK_LOG_KEY}, newest first,
  * capped at {@link BOT_CHECK_LOG_MAX} rows and gone
  * {@link BOT_CHECK_LOG_TTL_SECONDS} after the last one, so it never grows for
  * ever. Read it with `LRANGE bot-check:log 0 99`, or {@link readBotCheckLog}.
