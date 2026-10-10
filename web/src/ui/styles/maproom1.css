@@ -763,6 +763,12 @@
   gap: 10px;
 }
 
+.mr1-card__social {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .mr1-card__button {
   display: inline-flex;
   align-items: center;

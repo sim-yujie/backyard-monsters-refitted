@@ -36,6 +36,8 @@ export interface MapRoom1UiHandlers {
   readonly onView: (target: Mr1Target) => void;
   readonly onAttack: (target: Mr1Target) => void;
   readonly onAction: (action: CardAction) => void;
+  readonly onMessage?: (target: Mr1Neighbour) => void;
+  readonly onTruce?: (target: Mr1Neighbour) => void;
 }
 
 const PHONE_QUERY = "(width <= 620px)";
@@ -271,6 +273,8 @@ export class MapRoom1Ui {
               onView: this.handlers.onView,
               onAttack: this.handlers.onAttack,
               onAction: this.handlers.onAction,
+              ...(this.handlers.onMessage ? { onMessage: this.handlers.onMessage } : {}),
+              ...(this.handlers.onTruce ? { onTruce: this.handlers.onTruce } : {}),
               ...(achievements ? { achievementsLine: (neighbour: Mr1Neighbour) => this.achievementsLine(neighbour) } : {}),
             },
             variant,
