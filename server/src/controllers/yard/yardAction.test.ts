@@ -173,6 +173,7 @@ describe("POST /bm/yard/state", () => {
       "completed",
       "report",
       "playerlevel",
+      "playerpoints",
     ]);
     expect(ctx.body).toMatchObject({
       error: 0,
@@ -182,6 +183,7 @@ describe("POST /bm/yard/state", () => {
       // Level 7 (15,000 to 19,999): the 6,966 points this answer's catch-up
       // awarded (#192) plus the yard's worth after it, 11,930 (#209).
       playerlevel: 7,
+      playerpoints: 6_966 + 11_930,
     });
     expect(ctx.body!.savetime).toBe(ctx.body!.currenttime);
 

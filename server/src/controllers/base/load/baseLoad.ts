@@ -36,7 +36,7 @@ import { canAttack } from "../../../services/base/canAttack.js";
 import { createMR1Tribes } from "../../../services/maproom/v1/createMR1Tribes.js";
 import { MR1_TRIBES } from "../../../enums/Tribes.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
-import { calculateBaseLevel, playerLevelOf } from "../../../services/base/calculateBaseLevel.js";
+import { calculateBaseLevel, playerLevelOf, playerPointsOf } from "../../../services/base/calculateBaseLevel.js";
 import { RESOURCE_KEYS } from "../../../services/base/updateResources.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
 import { onboardingSummary } from "../../../services/onboarding/summary.js";
@@ -464,7 +464,11 @@ export const baseLoad: KoaController = async (ctx) => {
     ...(attackerLevel !== undefined && { attackerlevel: attackerLevel }),
     // The player's own level for the yard HUD (#192): their main save's, on
     // an outpost too, as the map shows it (`userCell.ts`).
-    ...(isOwner && !isInferno && { playerlevel: playerLevelOf(user.save!) }),
+    ...(isOwner &&
+      !isInferno && {
+        playerlevel: playerLevelOf(user.save!),
+        playerpoints: playerPointsOf(user.save!),
+      }),
     // The account's new-player tutorial summary on the owner's build-mode
     // load, main yard or outpost (issue #227, `services/onboarding/summary.ts`).
     // The column itself is server-only and never sent.

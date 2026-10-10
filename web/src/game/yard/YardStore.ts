@@ -463,6 +463,12 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     return typeof level === "number" && level > 0 ? level : null;
   }
 
+  /** The empire points behind the level, or null from a server that does not send them. */
+  get playerPoints(): number | null {
+    const points = this.current.playerpoints;
+    return typeof points === "number" && points >= 0 ? points : null;
+  }
+
   /**
    * Derived from the buildings rather than read off the last answer's
    * `workers`, so a predicted finish frees its worker at once. The rule is
@@ -767,6 +773,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     }
     // Not a YardState field (that shape is frozen), but it rides every answer.
     if (typeof response.playerlevel === "number") slices.playerlevel = response.playerlevel;
+    if (typeof response.playerpoints === "number") slices.playerpoints = response.playerpoints;
     if (typeof response.notifications === "number") slices.notifications = response.notifications;
     this.applied = Math.max(this.applied, number);
     this.syncClock(response.currenttime);
