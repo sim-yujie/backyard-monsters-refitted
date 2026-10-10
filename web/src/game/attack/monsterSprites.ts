@@ -300,6 +300,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/fang.png": "monsters/fang-repaint@4x.png", // Fang art trial
   "monsters/eyera.png": "monsters/eyera-repaint@4x.png", // Eye-ra art trial
   "monsters/ichi.png": "monsters/ichi-repaint@4x.png", // Ichi art trial
+  "monsters/brain.v2.png": "monsters/brain-repaint@4x.png", // Brain art trial (2 rows: visible, invisible)
 };
 
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */
