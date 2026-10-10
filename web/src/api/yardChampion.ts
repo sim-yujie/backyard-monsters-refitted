@@ -5,6 +5,7 @@ import {
   activeChampion,
   cageView,
   chamberView,
+  specialChampion,
   CHAMPION_NAME_MAX,
   championView,
   freezeGate,
@@ -71,8 +72,12 @@ export const championFeed = (
 export const championEvolve = (baseid?: string): Promise<YardResponse<ChampionPaidReport>> =>
   post<YardResponse<ChampionPaidReport>>(`${CHAMPION_PATH}/evolve`, yardBody({}, baseid));
 
-export const championHeal = (baseid?: string): Promise<YardResponse<ChampionPaidReport>> =>
-  post<YardResponse<ChampionPaidReport>>(`${CHAMPION_PATH}/heal`, yardBody({}, baseid));
+/** `type` 5 heals Krallen; leave it out for the champion in the cage. */
+export const championHeal = (baseid?: string, type?: number): Promise<YardResponse<ChampionPaidReport>> =>
+  post<YardResponse<ChampionPaidReport>>(
+    `${CHAMPION_PATH}/heal`,
+    yardBody(type === undefined ? {} : { type: String(type) }, baseid),
+  );
 
 export const championRename = (
   name: string,
@@ -96,8 +101,11 @@ export const championStance = (
 export const championJuice = (baseid?: string): Promise<YardResponse<ChampionReport>> =>
   post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/juice`, yardBody({}, baseid));
 
-export const championFreeze = (baseid?: string): Promise<YardResponse<ChampionReport>> =>
-  post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/freeze`, yardBody({}, baseid));
+export const championFreeze = (baseid?: string, type?: number): Promise<YardResponse<ChampionReport>> =>
+  post<YardResponse<ChampionReport>>(
+    `${CHAMPION_PATH}/freeze`,
+    yardBody(type === undefined ? {} : { type: String(type) }, baseid),
+  );
 
 export const championThaw = (
   type: number,
@@ -139,6 +147,8 @@ export const ChampionKey = {
   rename: actionKey("champion", "rename"),
   juice: actionKey("champion", "juice"),
   freeze: actionKey("champion", "freeze"),
+  healSpecial: actionKey("champion", "healSpecial"),
+  freezeSpecial: actionKey("champion", "freezeSpecial"),
   thaw: (type: number): string => actionKey("championThaw", type),
 } as const;
 
@@ -150,6 +160,10 @@ export interface ChampionActions {
   rename(name: string): Promise<YardActionResult<ChampionReport>>;
   juice(): Promise<YardActionResult<ChampionReport>>;
   freeze(): Promise<YardActionResult<ChampionReport>>;
+  /** Heals Krallen, who stays beside the champion in the cage. */
+  healSpecial(): Promise<YardActionResult<ChampionPaidReport>>;
+  /** Freezes Krallen into the Chamber. */
+  freezeSpecial(): Promise<YardActionResult<ChampionReport>>;
   thaw(type: number): Promise<YardActionResult<ChampionReport>>;
 }
 
@@ -167,6 +181,17 @@ const activeOrRefuse = (reader: YardStoreReader) => {
   if (cage.kind === "building") return refuse("busy", "Your Champion Cage is still being built.");
   if (cage.kind !== "active") return refuse("noChampion", "There is no champion in your cage.");
   return cage.view;
+};
+
+/** `t` of Krallen, the one special champion. */
+const SPECIAL_TYPE = 5;
+
+/** Krallen as the panel sees him now (awake), or the refusal for his absence. */
+const specialOrRefuse = (reader: YardStoreReader) => {
+  const champion = specialChampion(reader.save);
+  const view =
+    champion && Number(champion.status ?? 0) === 0 ? championView(reader.save, champion, reader.now()) : null;
+  return view ?? refuse("noChampion", "Krallen is not in your yard.");
 };
 
 /**
@@ -243,6 +268,29 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
       },
       send: (_api, ...yard) => api.heal(...yard),
     }),
+  healSpecial: () =>
+    store.run({
+      key: ChampionKey.healSpecial,
+      check: (reader) => {
+        const view = specialOrRefuse(reader);
+        if ("reason" in view) return view;
+        return view.health >= view.maxHealth
+          ? refuse("fullHealth", `${view.name} is already at full health.`)
+          : null;
+      },
+      send: (_api, ...yard) => api.heal(yard[0], SPECIAL_TYPE),
+    }),
+  freezeSpecial: () =>
+    store.run({
+      key: ChampionKey.freezeSpecial,
+      check: (reader) => {
+        const view = specialOrRefuse(reader);
+        if ("reason" in view) return view;
+        const gate = freezeGate(reader.save, view);
+        return gate ? refuse("freezeRefused", gate) : null;
+      },
+      send: (_api, ...yard) => api.freeze(yard[0], SPECIAL_TYPE),
+    }),
   rename: (name) =>
     store.run({
       key: ChampionKey.rename,
@@ -289,7 +337,7 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
       key: ChampionKey.thaw(type),
       check: (reader) => {
         const view = chamberView(reader.save, reader.now());
-        const gate = thawGate(view);
+        const gate = thawGate(view, championEntry(type)?.kind === "special");
         if (gate) return refuse("thawRefused", gate);
         if (view.kind === "ready" && !view.frozen.some((one) => one.entry.t === type)) {
           return refuse("notFrozen", "That champion is not in the chamber.");

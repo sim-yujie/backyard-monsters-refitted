@@ -104,12 +104,12 @@ describe("LockerTab: the list", () => {
       "Locker level 2 · Putty 384,000 · 1d 12h",
     );
     // Vorg's damage is negative: it heals.
-    expect(card.querySelector(".locker-detail__stats")!.textContent).toBe(
-      "Health 750 · Heals 60 · Space 60",
+    expect(card.querySelector(".locker-detail__stats")!.textContent).toMatch(
+      /^Health 750 · Heals 60 · Speed [\d.]+ · Space 60 · Hatch [\d,]+ goo · Hatch time .+$/,
     );
     row(element, "C3").click();
     expect(card.querySelector(".locker-detail__stats")!.textContent).toMatch(
-      /^Health [\d,]+ · Damage [\d,]+ · Space 15$/,
+      /^Health [\d,]+ · Damage [\d,]+ · Speed [\d.]+ · Space 15 · Hatch [\d,]+ goo · Hatch time .+$/,
     );
   });
 });

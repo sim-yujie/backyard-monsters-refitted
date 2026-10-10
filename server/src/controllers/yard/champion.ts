@@ -4,6 +4,7 @@ import {
   YardChampionRenameSchema,
   YardChampionSchema,
   YardChampionStanceSchema,
+  YardChampionTypedSchema,
 } from "../../schemas/YardSchemas.js";
 import {
   planChampionEvolve,
@@ -43,8 +44,8 @@ export const yardChampionEvolveAction = defineYardAction({
 
 /** `POST /bm/yard/champion/heal` — heal to full now, for Shiny. */
 export const yardChampionHealAction = defineYardAction({
-  schema: YardChampionSchema,
-  run: ({ save }) => planChampionHeal(save),
+  schema: YardChampionTypedSchema,
+  run: ({ save, body }) => planChampionHeal(save, body.type),
 });
 
 /** `POST /bm/yard/champion/rename` — name the champion. */

@@ -17,7 +17,11 @@ import {
   cageView,
   championPicture,
   freezeGate,
+  specialChampion,
+  ChampionStatus,
+  championView,
   type CageView,
+  type ChampionStats,
   type ChampionView,
   type RaiseChoice,
 } from "@/game/yard/championModel";
@@ -78,6 +82,7 @@ export class ChampionPanel {
   private readonly heal: ShinyButton;
   private readonly feedShiny: ShinyButton;
   private readonly evolve: ShinyButton;
+  private readonly healSpecial: ShinyButton;
 
   private view: CageView | null = null;
   /** What the drawn body shows; a tick that sees another shape redraws. */
@@ -87,6 +92,8 @@ export class ChampionPanel {
   private raiseButtons = new Map<number, HTMLButtonElement>();
   private juiceYes: HTMLButtonElement | null = null;
   private freezeButton: HTMLButtonElement | null = null;
+  private freezeSpecialButton: HTMLButtonElement | null = null;
+  private specialHealth: HTMLElement | null = null;
   private renameSave: HTMLButtonElement | null = null;
   private renaming = false;
   private nameDraft = "";
@@ -129,6 +136,13 @@ export class ChampionPanel {
       className: "champion__evolve",
     });
 
+    this.healSpecial = new ShinyButton({
+      label: "Heal now",
+      spell: formatAmount,
+      onSpend: () => void this.runSpecial("heal"),
+      className: "champion__heal champion__heal--special",
+    });
+
     this.element.append(this.status, this.body);
   }
 
@@ -136,11 +150,13 @@ export class ChampionPanel {
   show(): void {
     const now = this.store.now();
     this.view = cageView(this.store.save, now);
-    this.shape = shapeOf(this.view);
+    this.shape = shapeOf(this.view) + specialShapeOf(this.store.save, now);
     this.live = null;
     this.feedButton = null;
     this.juiceYes = null;
     this.freezeButton = null;
+    this.freezeSpecialButton = null;
+    this.specialHealth = null;
     this.renameSave = null;
     this.raiseButtons.clear();
 
@@ -157,11 +173,11 @@ export class ChampionPanel {
         this.body.replaceChildren(note("The cage takes a champion once it is built."));
         break;
       case "empty":
-        this.body.replaceChildren(...this.raiseCards(view.choices));
+        this.body.replaceChildren(...this.raiseCards(view.choices), ...this.specialBlocks(now));
         break;
       case "active":
         this.refreshedStarving = view.view.hunger === "starving" && this.refreshedStarving;
-        this.body.replaceChildren(...this.championBlocks(view.view));
+        this.body.replaceChildren(...this.championBlocks(view.view), ...this.specialBlocks(now));
         break;
     }
     this.syncPending();
@@ -171,11 +187,12 @@ export class ChampionPanel {
   tick(): void {
     const now = this.store.now();
     const view = cageView(this.store.save, now);
-    if (shapeOf(view) !== this.shape) {
+    if (shapeOf(view) + specialShapeOf(this.store.save, now) !== this.shape) {
       this.show();
       return;
     }
     this.view = view;
+    this.drawSpecialHealth(now);
     if (view.kind !== "active" || !this.live) return;
     const champion = view.view;
     this.drawHealth(champion, now);
@@ -194,6 +211,8 @@ export class ChampionPanel {
     this.heal.setBusy(store.isRunning(ChampionKey.heal));
     this.feedShiny.setBusy(store.isRunning(ChampionKey.feed("shiny")));
     this.evolve.setBusy(store.isRunning(ChampionKey.evolve));
+    this.healSpecial.setBusy(store.isRunning(ChampionKey.healSpecial));
+    if (this.freezeSpecialButton) this.freezeSpecialButton.disabled = store.isRunning(ChampionKey.freezeSpecial);
     const view = this.view?.kind === "active" ? this.view.view : null;
     if (this.feedButton && view) {
       this.feedButton.disabled = feedGate(view) !== null || store.isRunning(ChampionKey.feed("monsters"));
@@ -210,6 +229,7 @@ export class ChampionPanel {
     this.heal.destroy();
     this.feedShiny.destroy();
     this.evolve.destroy();
+    this.healSpecial.destroy();
     this.element.remove();
   }
 
@@ -311,10 +331,7 @@ export class ChampionPanel {
       `${view.entry.name !== view.name ? `${view.entry.name} · ` : ""}` +
       `Level ${view.level} of ${view.entry.levels}` +
       (view.entry.role ? ` · ${view.entry.role}` : "");
-    const damage = document.createElement("p");
-    damage.className = "champion__stat";
-    damage.textContent = `Damage ${formatAmount(view.damage)}`;
-    words.append(level, damage);
+    words.append(level, statsBlock(view));
 
     header.append(portrait(view.entry, view.level, "champion__picture"), words);
     return header;
@@ -530,6 +547,89 @@ export class ChampionPanel {
     return block;
   }
 
+  /* ── Krallen: beside the champion, not in the cage ────────────────── */
+
+  /** Krallen's card (view, heal, freeze) once he is in the yard; nothing before. */
+  private specialBlocks(now: number): HTMLElement[] {
+    const champion = specialChampion(this.store.save);
+    const view = champion ? championView(this.store.save, champion, now) : null;
+    if (!champion || !view) return [];
+    const frozen = Number(champion.status ?? 0) === ChampionStatus.FROZEN;
+    const block = document.createElement("div");
+    block.className = "champion__part champion__part--special";
+    block.dataset["champion"] = view.entry.id;
+    const header = document.createElement("div");
+    header.className = "champion__header";
+    const words = document.createElement("div");
+    words.className = "champion__who";
+    const name = document.createElement("h4");
+    name.className = "champion__name";
+    name.textContent = view.name;
+    const level = document.createElement("p");
+    level.className = "champion__level";
+    level.textContent = `Level ${view.level} of ${view.entry.levels}${frozen ? " · frozen in the Chamber" : ""}`;
+    words.append(name, level, statsBlock(view));
+    header.append(portrait(view.entry, view.level, "champion__picture"), words);
+    block.append(heading("Your second champion"), header);
+    if (frozen) {
+      block.append(note("Krallen is asleep in the Champion Chamber. Thaw him from there."));
+      return [block];
+    }
+    const health = document.createElement("p");
+    health.className = "champion__line";
+    this.specialHealth = health;
+    this.drawSpecialHealth(now);
+    block.append(health);
+    if (view.health < view.maxHealth) {
+      this.healSpecial.setPrice(view.healShiny);
+      this.healSpecial.setBlocked(this.store.credits < view.healShiny ? "Not enough Shiny." : null);
+      block.append(this.healSpecial.element);
+    }
+    const freeze = document.createElement("button");
+    freeze.type = "button";
+    freeze.className = "btn champion__freeze champion__freeze--special";
+    freeze.textContent = "Freeze in the Chamber";
+    const gate = freezeGate(this.store.save, view);
+    freeze.disabled = gate !== null || this.store.isRunning(ChampionKey.freezeSpecial);
+    freeze.addEventListener("click", () => void this.runSpecial("freeze"));
+    this.freezeSpecialButton = freeze;
+    block.append(freeze);
+    if (gate) block.append(gateLine(gate));
+    return [block];
+  }
+
+  private drawSpecialHealth(now: number): void {
+    const line = this.specialHealth;
+    const champion = specialChampion(this.store.save);
+    const view = champion ? championView(this.store.save, champion, now) : null;
+    if (!line || !view) return;
+    const full = view.health >= view.maxHealth;
+    line.replaceChildren(
+      strong(`Health ${formatAmount(Math.floor(view.health))} / ${formatAmount(view.maxHealth)}`),
+      full ? " · full" : view.fullAt !== null ? ` · full in ${formatCountdown(view.fullAt - now)}` : "",
+    );
+  }
+
+  private async runSpecial(what: "heal" | "freeze"): Promise<void> {
+    if (what === "heal") {
+      const result = await this.actions.healSpecial();
+      this.setStatus(
+        result.ok
+          ? {
+              tone: "good",
+              content: ["Krallen healed to full for ", resourceAmount("shiny", formatAmount(result.report.credits)), "."],
+            }
+          : bad(result.refusal),
+      );
+    } else {
+      const result = await this.actions.freezeSpecial();
+      this.setStatus(
+        result.ok ? { tone: "good", content: ["Krallen is frozen in the Champion Chamber."] } : bad(result.refusal),
+      );
+    }
+    this.show();
+  }
+
   /** Freeze into the Champion Chamber (#125): reversible, so one tap. */
   private freezeBlock(view: ChampionView): HTMLElement {
     const block = document.createElement("div");
@@ -725,6 +825,56 @@ export const brainBlock = (view: ChampionView): HTMLElement => {
 };
 
 /* ── Words ──────────────────────────────────────────────────────────── */
+
+/** What Krallen's card compares: his status, level and whether he is hurt or hungry. */
+const specialShapeOf = (save: YardStore["save"], now: number): string => {
+  const champion = specialChampion(save);
+  const view = champion ? championView(save, champion, now) : null;
+  if (!champion || !view) return "";
+  return `|K:${champion.status ?? 0}:${view.level}:${view.health >= view.maxHealth}:${view.hunger}:${view.healShiny}`;
+};
+
+/** The numbers on a champion's card: current, with what evolving (or the next food-bonus rank) adds. */
+export const statsBlock = (view: ChampionView): HTMLElement => {
+  const wrap = document.createElement("div");
+  wrap.className = "champion__stats-wrap";
+  const list = document.createElement("ul");
+  list.className = "champion__stats";
+  list.setAttribute("aria-label", "Stats");
+  const rows: ReadonlyArray<readonly [string, keyof ChampionStats, (value: number) => string]> = [
+    ["Damage", "damage", formatAmount],
+    ["Health", "health", formatAmount],
+    ["Speed", "speed", (value) => String(Math.round(value * 10) / 10)],
+    ["Range", "range", formatAmount],
+    ["Buff", "buff", (value) => `${value}%`],
+  ];
+  for (const [label, key, spell] of rows) {
+    const now = view.stats[key];
+    if (key === "buff" && now <= 0) continue;
+    const item = document.createElement("li");
+    item.className = "champion__stat";
+    const next = view.nextStats?.[key];
+    item.append(`${label} `, strong(spell(now)));
+    if (next !== undefined && next !== now) item.append(` → ${spell(next)}`);
+    list.append(item);
+  }
+  wrap.append(list);
+  if (view.nextBonus) {
+    const gain = view.nextBonus;
+    const parts = [
+      gain.damage > 0 ? `+${formatAmount(gain.damage)} damage` : "",
+      gain.health > 0 ? `+${formatAmount(gain.health)} health` : "",
+      gain.speed > 0 ? `+${gain.speed} speed` : "",
+      gain.range > 0 ? `+${formatAmount(gain.range)} range` : "",
+      gain.buff > 0 ? `+${gain.buff}% buff` : "",
+    ].filter(Boolean);
+    if (parts.length > 0) {
+      wrap.append(note(`Next food-bonus rank (${view.foodBonus + 1} of 3): ${parts.join(", ")}.`));
+    }
+  }
+  if (view.nextStats) wrap.append(note(`Arrows show level ${view.level + 1}.`));
+  return wrap;
+};
 
 /** What the tick compares to decide whether the body must be rebuilt. */
 const shapeOf = (view: CageView): string => {

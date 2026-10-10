@@ -68,6 +68,14 @@ export const activeChampion = (save: BaseLoadResponse): ChampionSaveEntry | null
       statusOf(champion) === ChampionStatus.ACTIVE && entryOfChampion(champion)?.kind === "basic",
   ) ?? null;
 
+/** A special champion (Krallen) that is out of the cage's one-champion rule: awake or frozen, or null. */
+export const specialChampion = (save: BaseLoadResponse): ChampionSaveEntry | null =>
+  championsOf(save).find(
+    (champion) =>
+      entryOfChampion(champion)?.kind === "special" &&
+      [ChampionStatus.ACTIVE, ChampionStatus.FROZEN].includes(statusOf(champion) as 0 | 1),
+  ) ?? null;
+
 /** Every champion frozen in the Chamber. */
 export const frozenChampions = (save: BaseLoadResponse): ChampionSaveEntry[] =>
   championsOf(save).filter(
@@ -89,6 +97,15 @@ export interface RecipeRow {
   readonly name: string;
   readonly need: number;
   readonly have: number;
+}
+
+/** The numbers a champion's card shows; `buff` is a percentage. */
+export interface ChampionStats {
+  readonly damage: number;
+  readonly health: number;
+  readonly speed: number;
+  readonly range: number;
+  readonly buff: number;
 }
 
 /** Everything the cage panel shows for the champion in it. */
@@ -129,6 +146,12 @@ export interface ChampionView {
   readonly healShiny: number;
   /** Damage with the food bonus, as the cage's stats show it. */
   readonly damage: number;
+  /** Every stat at the current level and food-bonus rank. */
+  readonly stats: ChampionStats;
+  /** The stats once it evolves; null at the top level. */
+  readonly nextStats: ChampionStats | null;
+  /** What the next food-bonus rank adds on top; null below the top level or at rank 3. */
+  readonly nextBonus: ChampionStats | null;
 }
 
 /** The cage's state for the panel. */
@@ -167,6 +190,30 @@ const levelOf = (champion: ChampionSaveEntry, entry: ChampionEntry): number =>
 
 const foodBonusOf = (champion: ChampionSaveEntry): number =>
   Math.min(Math.max(Math.trunc(numberOf(champion.fb)), 0), MAX_FOOD_BONUS);
+
+const statsAt = (entry: ChampionEntry, level: number, foodBonus: number): ChampionStats => {
+  const bonus = (ladder: readonly number[]): number => (foodBonus > 0 ? atChampionLevel(ladder, foodBonus) : 0);
+  return {
+    damage: atChampionLevel(entry.damage, level) + bonus(entry.bonusDamage),
+    health: atChampionLevel(entry.health, level) + bonus(entry.bonusHealth),
+    speed: atChampionLevel(entry.speed, level) + bonus(entry.bonusSpeed),
+    range: atChampionLevel(entry.range, level) + bonus(entry.bonusRange),
+    buff: Math.round((atChampionLevel(entry.buffs, level) + bonus(entry.bonusBuffs)) * 1000) / 10,
+  };
+};
+
+/** What food-bonus rank `rank` adds over rank `rank - 1`. */
+const rankGain = (entry: ChampionEntry, level: number, rank: number): ChampionStats => {
+  const after = statsAt(entry, level, rank);
+  const before = statsAt(entry, level, rank - 1);
+  return {
+    damage: after.damage - before.damage,
+    health: after.health - before.health,
+    speed: Math.round((after.speed - before.speed) * 100) / 100,
+    range: after.range - before.range,
+    buff: Math.round((after.buff - before.buff) * 10) / 10,
+  };
+};
 
 /** The view of a champion in the cage at `now`. */
 export const championView = (
@@ -233,6 +280,9 @@ export const championView = (
     damage:
       atChampionLevel(entry.damage, level) +
       (foodBonus > 0 ? atChampionLevel(entry.bonusDamage, foodBonus) : 0),
+    stats: statsAt(entry, level, foodBonus),
+    nextStats: top ? null : statsAt(entry, level + 1, 0),
+    nextBonus: top && foodBonus < MAX_FOOD_BONUS ? rankGain(entry, level, foodBonus + 1) : null,
   };
 };
 
@@ -347,12 +397,12 @@ export const freezeGate = (save: BaseLoadResponse, view: ChampionView): string |
 };
 
 /** Why a frozen champion cannot be thawed now, or null (`ThawGuardian`, `:143-221`). */
-export const thawGate = (view: ChamberView): string | null => {
+export const thawGate = (view: ChamberView, special = false): string | null => {
   if (view.kind !== "ready") return view.kind === "building" ? "Your Champion Chamber is still being built." : "Build a Champion Chamber first.";
   if (view.damaged) return "Your Champion Chamber is damaged. Repair it before you thaw a champion.";
   if (view.cage === "none") return "Build a Champion Cage first.";
   if (view.cage === "building") return "Your Champion Cage is still being built.";
-  if (view.active) return `Freeze ${view.active.name} first: the cage holds one champion at a time.`;
+  if (view.active && !special) return `Freeze ${view.active.name} first: the cage holds one champion at a time.`;
   return null;
 };
 

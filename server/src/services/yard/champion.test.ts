@@ -190,6 +190,18 @@ describe("champion/heal", () => {
   test("refuses at full health", () => {
     expect(refusal(() => planChampionHeal(yard())).reason).toBe("fullHealth");
   });
+
+  test("heals Krallen (type 5) beside the basic champion, and leaves the basic one alone", () => {
+    const krallen = gorgo({ t: 5, l: 5, hp: 31_000 });
+    const outcome = planChampionHeal(yard({ champion: [gorgo({ hp: 20_000 }), krallen] }), 5);
+    expect(outcome.slices.champion[0]!.hp).toBe(20_000);
+    expect(outcome.slices.champion[1]!.hp).toBeGreaterThan(31_000);
+    expect(outcome.shiny).toBeGreaterThan(0);
+  });
+
+  test("refuses a Krallen heal when he is not active", () => {
+    expect(refusal(() => planChampionHeal(yard({ champion: [gorgo()] }), 5)).reason).toBe("noChampion");
+  });
 });
 
 describe("champion/rename", () => {
