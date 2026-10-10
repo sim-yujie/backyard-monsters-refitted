@@ -9,7 +9,7 @@ import {
   type ChampionStance,
   type Roster,
 } from "@/game/combat/rules";
-import type { AttackSession, ChampionBlockReason } from "./AttackSession";
+import { KRALLEN_TYPE, type AttackSession, type ChampionBlockReason } from "./AttackSession";
 
 /**
  * The bucket: what the next tap on the enemy yard will send
@@ -44,9 +44,9 @@ import type { AttackSession, ChampionBlockReason } from "./AttackSession";
  *
  * ## The champion
  *
- * One per drop, by type. Across the attack the session allows one ordinary
- * champion plus Krallen, each once (`AttackSession.championBlock`), so after
- * Fomor is flung Krallen can still be picked for a later drop. The pick is
+ * Per drop: one ordinary champion and Krallen, by type. Across the attack the session allows one ordinary
+ * champion plus Krallen, each once (`AttackSession.championBlock`), so Krallen
+ * can be picked beside Fomor and goes out in the same tap. The pick is
  * dropped by {@link afterDrop} because the champion is then on the field, and
  * {@link champion} answers null whenever the session says that champion
  * cannot be sent, so a stale pick never reaches the log.
@@ -67,6 +67,12 @@ import type { AttackSession, ChampionBlockReason } from "./AttackSession";
 export interface FlingComposition {
   readonly monsters: Roster;
   readonly champion?: { readonly t: number; readonly l: number; readonly s: ChampionStance };
+  /**
+   * Krallen, when she is picked beside an ordinary champion. The champion in
+   * `champion` and this one go out in the same tap, as two fling events at the
+   * same tick and spot (`AttackInput`); the log format is unchanged.
+   */
+  readonly second?: { readonly t: number; readonly l: number; readonly s: ChampionStance };
 }
 
 /** A champion as the panel lists it. */
@@ -103,6 +109,8 @@ interface LastArmyRecord {
   readonly v: 1;
   readonly monsters: Record<string, number>;
   readonly champion: number | null;
+  /** Every picked champion; older records carry only `champion`. */
+  readonly champions?: readonly number[];
 }
 
 const defaultStorage = (): Storage | null => {
@@ -126,7 +134,8 @@ export class Bucket {
   /** Roster order: the ids the map gathered, in the order it listed them. */
   private readonly order: readonly string[];
   private readonly requested: Record<string, number> = {};
-  private championType: number | null = null;
+  /** The picked champions: at most one ordinary one, plus Krallen. */
+  private championTypes: number[] = [];
   /** Modes picked this attack, by champion type; the rest read their save entry. */
   private readonly stances = new Map<number, ChampionStance>();
   private readonly listeners = new Set<(bucket: Bucket) => void>();
@@ -192,13 +201,14 @@ export class Bucket {
       const count = this.count(id);
       if (count > 0) monsters[id] = count;
     }
-    const champion = this.champion();
-    return champion ? { monsters, champion } : { monsters };
+    const [champion, second] = this.picked();
+    if (!champion) return { monsters };
+    return second ? { monsters, champion, second } : { monsters, champion };
   }
 
   /** Nothing to drop: no row above zero and no champion picked. */
   isEmpty(): boolean {
-    if (this.champion()) return false;
+    if (this.picked().length > 0) return false;
     return this.order.every((id) => this.count(id) === 0);
   }
 
@@ -292,8 +302,8 @@ export class Bucket {
   clear(): void {
     const hadRows = Object.keys(this.requested).length > 0;
     for (const id of Object.keys(this.requested)) delete this.requested[id];
-    const hadChampion = this.championType !== null;
-    this.championType = null;
+    const hadChampion = this.championTypes.length > 0;
+    this.championTypes = [];
     if (hadRows || hadChampion) this.notify();
   }
 
@@ -315,25 +325,53 @@ export class Bucket {
   }
 
   /**
-   * Picks a champion by type, or null to un-pick. A type that cannot be sent
-   * — unknown, hurt, frozen, or already flung — leaves the pick empty.
+   * Picks a champion by type, or null to un-pick them all. A type that cannot
+   * be sent — unknown, hurt, frozen, or already flung — is ignored. One
+   * ordinary champion at most: picking another replaces it. Krallen is picked
+   * on top of it, not instead (`AttackSession.championBlock`).
    */
   pickChampion(t: number | null): void {
-    const next =
-      t !== null && this.champions().some((champion) => champion.t === t && champion.available)
-        ? t
-        : null;
-    if (next === this.championType) return;
-    this.championType = next;
+    if (t === null) {
+      if (this.championTypes.length === 0) return;
+      this.championTypes = [];
+      this.notify();
+      return;
+    }
+    if (!this.champions().some((champion) => champion.t === t && champion.available)) return;
+    if (this.championTypes.includes(t)) return;
+    const keep = this.championTypes.filter((other) => (other === KRALLEN_TYPE) !== (t === KRALLEN_TYPE));
+    this.championTypes = [...keep, t];
     this.notify();
   }
 
-  /** The picked champion as the fling wants it, Mode and all, or null. */
+  /** Takes one champion off the pick, leaving the other. */
+  unpickChampion(t: number): void {
+    if (!this.championTypes.includes(t)) return;
+    this.championTypes = this.championTypes.filter((other) => other !== t);
+    this.notify();
+  }
+
+  /** Whether `t` is picked (and can still go). */
+  isPicked(t: number): boolean {
+    return this.picked().some((champion) => champion.t === t);
+  }
+
+  /**
+   * The picked champions as the fling wants them, Mode and all: the ordinary
+   * one first, then Krallen. Those the session now refuses are left out.
+   */
+  private picked(): { t: number; l: number; s: ChampionStance }[] {
+    const out: { t: number; l: number; s: ChampionStance }[] = [];
+    for (const t of [...this.championTypes].sort((a, b) => Number(a === KRALLEN_TYPE) - Number(b === KRALLEN_TYPE))) {
+      const entry = this.champions().find((champion) => champion.t === t);
+      if (entry?.available) out.push({ t: entry.t, l: entry.l, s: this.stance(entry.t) });
+    }
+    return out;
+  }
+
+  /** The first picked champion as the fling wants it, or null. */
   champion(): { t: number; l: number; s: ChampionStance } | null {
-    if (this.championType === null) return null;
-    const entry = this.champions().find((champion) => champion.t === this.championType);
-    if (!entry || !entry.available) return null;
-    return { t: entry.t, l: entry.l, s: this.stance(entry.t) };
+    return this.picked()[0] ?? null;
   }
 
   /**
@@ -366,7 +404,7 @@ export class Bucket {
    */
   afterDrop(): void {
     this.saveLast();
-    this.championType = null;
+    this.championTypes = [];
     this.sessionSignature = this.signature();
     this.notify();
   }
@@ -395,7 +433,7 @@ export class Bucket {
       const requested = this.requestedCount(id);
       if (requested > 0) monsters[id] = requested;
     }
-    const record: LastArmyRecord = { v: 1, monsters, champion: this.championType };
+    const record: LastArmyRecord = { v: 1, monsters, champion: this.championTypes[0] ?? null, champions: this.championTypes };
     try {
       this.storage?.setItem(LAST_ARMY_KEY_PREFIX + this.playerKey, JSON.stringify(record));
     } catch {
@@ -435,12 +473,14 @@ export class Bucket {
       const next = Math.min(wholeCount(wanted), this.max(id));
       if (next > 0) this.requested[id] = next;
     }
-    const champion = record.champion;
-    this.championType =
-      typeof champion === "number" &&
-      this.champions().some((entry) => entry.t === champion && entry.available)
-        ? champion
-        : null;
+    const wanted = record.champions ?? (record.champion === null ? [] : [record.champion]);
+    this.championTypes = [];
+    for (const t of wanted) {
+      if (typeof t !== "number") continue;
+      if (!this.champions().some((entry) => entry.t === t && entry.available)) continue;
+      if (this.championTypes.some((other) => (other === KRALLEN_TYPE) === (t === KRALLEN_TYPE))) continue;
+      this.championTypes.push(t);
+    }
     this.notify();
     return true;
   }

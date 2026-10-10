@@ -721,7 +721,10 @@ export class AttackInput {
       return true;
     }
     try {
-      session.appendFling({ ...bucket.composition(), x: point.x, y: point.y });
+      const { second, ...drop } = bucket.composition();
+      session.appendFling({ ...drop, x: point.x, y: point.y });
+      // Krallen beside another champion: the same tap, the same spot and tick.
+      if (second) session.appendFling({ x: point.x, y: point.y, monsters: {}, champion: second });
     } catch (caught) {
       this.options.onRefuse?.(caught instanceof Error ? caught.message : "That could not be sent.");
       return true;

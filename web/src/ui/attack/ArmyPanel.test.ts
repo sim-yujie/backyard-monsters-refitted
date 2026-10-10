@@ -333,7 +333,7 @@ describe("ArmyPanel capacity bar", () => {
 });
 
 describe("ArmyPanel champion", () => {
-  it("lists every champion as a radio and picks one at a time", () => {
+  it("lists every champion and picks Krallen beside one ordinary champion", () => {
     const { panel, bucket } = mount();
     const [krallen, fomor] = radios(panel);
     if (!krallen || !fomor) throw new Error("two champions expected");
@@ -348,8 +348,9 @@ describe("ArmyPanel champion", () => {
     expect(krallen.checked).toBe(true);
     fomor.click();
     expect(bucket.champion()).toEqual({ t: 3, l: 6, s: "hybrid" });
+    expect(bucket.composition().second).toEqual({ t: 5, l: 5, s: "hybrid" });
     expect(fomor.checked).toBe(true);
-    expect(krallen.checked).toBe(false);
+    expect(krallen.checked).toBe(true);
   });
 
   it("shows each champion's painting at its level: Krallen's one, Fomor's level 6", () => {
@@ -446,7 +447,7 @@ describe("ArmyPanel champion", () => {
     );
     expect(fomor.value).toBe("defensive");
     // The radio is named by the champion, not by the picker inside its row.
-    const radio = fomor.closest(".attack-army__champion")?.querySelector("input[type=radio]");
+    const radio = fomor.closest(".attack-army__champion")?.querySelector("input[type=checkbox]");
     const by = (radio?.getAttribute("aria-labelledby") ?? "").split(" ")[0] ?? "";
     expect(document.getElementById(by)?.textContent).toContain(championName(3));
     expect(document.getElementById(by)?.textContent).not.toContain("Mode");
