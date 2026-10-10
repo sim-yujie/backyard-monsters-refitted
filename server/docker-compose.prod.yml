@@ -32,6 +32,13 @@ networks:
           ip_range: 172.28.0.128/25
           gateway: 172.28.0.1
 
+# What each container prints goes to journald, which keeps it at most 30 days
+# (deploy/journald-bymr.conf; the lines include players' IP addresses).
+# `deploy/prod.sh logs` still shows it. LOG_DRIVER exists only for testing on
+# a machine without journald (Docker Desktop: LOG_DRIVER=local).
+x-logging: &logging
+  driver: ${LOG_DRIVER:-journald}
+
 x-game-env: &game-env
   ENV: production
   PORT: "3001"
@@ -47,6 +54,7 @@ x-game-env: &game-env
 services:
   # HTTPS for the game API and the chat WebSocket (deploy/Caddyfile).
   caddy:
+    logging: *logging
     image: caddy:2.10.2-alpine
     restart: unless-stopped
     ports:
@@ -69,6 +77,7 @@ services:
   # Creates the tables on first start and applies new migrations on every
   # start, then exits. The game server waits for it.
   db-init:
+    logging: *logging
     build: .
     env_file: production.env
     environment: *game-env
@@ -82,6 +91,7 @@ services:
 
   # The game server: the API on 3001 and chat on 3010, both behind Caddy.
   web:
+    logging: *logging
     build: .
     restart: unless-stopped
     env_file: production.env
@@ -103,6 +113,7 @@ services:
         condition: service_completed_successfully
 
   db:
+    logging: *logging
     image: postgres:18.1
     restart: unless-stopped
     environment:
@@ -125,6 +136,7 @@ services:
       retries: 3
 
   redis:
+    logging: *logging
     image: redis:8.10.1
     restart: unless-stopped
     volumes:
@@ -144,6 +156,7 @@ services:
   # A database backup when it starts, then one a day at BACKUP_HOUR (UTC),
   # into server/backups/, keeping KEEP_DAYS days (deploy/backup.sh).
   backup:
+    logging: *logging
     image: postgres:18.1
     restart: unless-stopped
     environment:
