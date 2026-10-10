@@ -6,3 +6,8 @@ web/src/game/maproom/rules/** text eol=lf
 server/src/game-rules/maproom/** text eol=lf
 web/src/game/account/rules/** text eol=lf
 server/src/game-rules/account/** text eol=lf
+
+# Production server scripts and config run on Linux.
+server/deploy/** text eol=lf
+server/docker-compose.prod.yml text eol=lf
+server/production.env.example text eol=lf

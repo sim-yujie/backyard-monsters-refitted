@@ -13,3 +13,7 @@ coverage/
 *.log
 .DS_Store
 Thumbs.db
+# Production secrets, backups and logs stay on the server, out of the image
+production.env
+backups/
+logs/
