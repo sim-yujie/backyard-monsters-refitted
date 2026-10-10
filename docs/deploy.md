@@ -287,6 +287,30 @@ The first takes a fresh backup, just in case. The last rebuilds the game
 server and brings the database up to date by itself. Players are cut off for
 about half a minute while it restarts.
 
+### Updating without GitHub (how bymrevamped.com is run now)
+
+The live game was first put online straight from a computer, not from
+GitHub: the server's `/opt/bymr` is a plain copy of the code (no `git`
+inside), and the Vercel project `bymrevamped` is not connected to a
+repository. To update, from Git Bash on your computer, in the main
+`backyard-monsters-refitted` folder, on the `revamp` branch with the new code:
+
+```
+ssh -i ~/.ssh/bymr_server root@157.245.94.86 'cd /opt/bymr/server && deploy/prod.sh exec -T backup bash /backup.sh'
+git archive --format=tar revamp | ssh -i ~/.ssh/bymr_server root@157.245.94.86 'tar -x -C /opt/bymr'
+ssh -i ~/.ssh/bymr_server root@157.245.94.86 'cd /opt/bymr/server && deploy/prod.sh up -d --build'
+cd web && vercel link --yes --project bymrevamped --scope sim-yujies-projects && vercel deploy --prod --scope sim-yujies-projects
+```
+
+The first line takes a backup; the second copies the code over the old copy
+(`production.env`, the backups and the logs are not in the code, so they are
+kept); the third restarts the game server; the last rebuilds the game page.
+A file deleted from the code stays behind on the server; that is harmless.
+
+If you later connect GitHub instead, set the Vercel project's **Root
+Directory** to `web` (it is empty now, because the page was sent from inside
+the `web` folder) and turn `/opt/bymr` into a `git clone` as in step 7.
+
 ## Backups
 
 **What happens by itself:** the backup helper copies the whole database once

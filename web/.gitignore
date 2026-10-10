@@ -6,3 +6,4 @@ dist/
 *.tsbuildinfo
 .vite/
 coverage/
+.vercel
