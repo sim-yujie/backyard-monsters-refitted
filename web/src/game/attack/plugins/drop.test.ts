@@ -92,19 +92,12 @@ describe("the drop plugin's pickers in the dock", () => {
     document.body.replaceChildren();
   });
 
-  it("opens one picker at a time: Siege closes the Catapult and back", () => {
+  it("opens and closes the Catapult picker, and shows no Siege button while siege is off", () => {
+    expect([...document.querySelectorAll("button")].some((b) => b.textContent === "Siege")).toBe(false);
     button("Catapult").click();
     expect(open()).toEqual(["catapult"]);
     expect(button("Catapult").getAttribute("aria-expanded")).toBe("true");
-
-    button("Siege").click();
-    expect(open()).toEqual(["siege"]);
-    expect(button("Catapult").getAttribute("aria-expanded")).toBe("false");
-    expect(button("Siege").getAttribute("aria-expanded")).toBe("true");
     expect(sheet.classList.contains("attack-dock--picker")).toBe(true);
-
-    button("Catapult").click();
-    expect(open()).toEqual(["catapult"]);
 
     button("Catapult").click();
     expect(open()).toEqual([]);
