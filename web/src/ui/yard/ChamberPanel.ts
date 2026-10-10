@@ -105,8 +105,8 @@ export class ChamberPanel {
       this.freezeButton.disabled =
         freezeGate(this.store.save, view.active) !== null || this.store.isRunning(ChampionKey.freeze);
     }
-    const gate = thawGate(view);
     for (const [type, button] of this.thawButtons) {
+      const gate = thawGate(view, view.frozen.find((one) => one.entry.t === type)?.entry.kind === "special");
       button.disabled = gate !== null || this.store.isRunning(ChampionKey.thaw(type));
     }
   }
@@ -161,7 +161,7 @@ export class ChamberPanel {
     );
     this.thawButtons.set(frozen.entry.t, thaw);
     item.append(thaw);
-    const gate = thawGate(view);
+    const gate = thawGate(view, frozen.entry.kind === "special");
     if (gate) item.append(gateLine(gate));
     return item;
   }

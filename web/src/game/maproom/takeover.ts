@@ -78,6 +78,8 @@ export interface TakeoverCandidate {
   readonly kind: TakeoverKind;
   /** The tribe's name for a camp, the owner's for an outpost. */
   readonly name: string;
+  /** The cell's height (`i`): the yard becomes an outpost on it (see `heightBonus`). */
+  readonly height?: number;
 }
 
 /**
@@ -87,9 +89,9 @@ export interface TakeoverCandidate {
  */
 export const takeoverCandidate = (payload: MapCell | undefined): TakeoverCandidate | null => {
   if (!payload || isWaterCell(payload)) return null;
-  if (payload.b === CellType.WILD_MONSTER) return { baseid: payload.bid, kind: "camp", name: payload.n };
+  if (payload.b === CellType.WILD_MONSTER) return { baseid: payload.bid, kind: "camp", name: payload.n, height: payload.i };
   if (isPlayerCell(payload) && payload.mine === 0 && payload.b === CellType.OUTPOST) {
-    return { baseid: payload.bid, kind: "outpost", name: payload.n };
+    return { baseid: payload.bid, kind: "outpost", name: payload.n, height: payload.i };
   }
   return null;
 };

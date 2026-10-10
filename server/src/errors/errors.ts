@@ -313,7 +313,7 @@ export const shinyLockedErr = () =>
   new ClientSafeError({
     message: "Shiny is turned off on your account, so it cannot be spent. You can turn it back on from your account page in the launcher.",
     status: Status.FORBIDDEN,
-    data: {},
+    data: { reason: "shinyLocked" },
     isClientFriendly: true,
   });
 

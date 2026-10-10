@@ -30,6 +30,35 @@ const find = (key: string) =>
 const buttonNamed = (card: HTMLElement, text: string): HTMLButtonElement =>
   [...card.querySelectorAll("button")].find((one) => one.textContent?.trim() === text)!;
 
+describe("targetCard Message and Truce", () => {
+  it("offers both on a neighbour and reports the neighbour tapped", () => {
+    const onMessage = vi.fn();
+    const onTruce = vi.fn();
+    const target = find("player-901");
+    const card = targetCard(target, { world, own, now: NOW }, { ...handlers(), onMessage, onTruce }, "panel");
+    buttonNamed(card, "Message").click();
+    buttonNamed(card, "Truce").click();
+    expect(onMessage).toHaveBeenCalledWith(target);
+    expect(onTruce).toHaveBeenCalledWith(target);
+  });
+
+  it("leaves them off a tribe, and off when the scene gives no handlers", () => {
+    const onMessage = vi.fn();
+    const tribe = targetCard(find("tribe-11"), { world, own, now: NOW }, { ...handlers(), onMessage }, "panel");
+    expect(buttonNamed(tribe, "Message")).toBeUndefined();
+    const plain = targetCard(find("player-901"), { world, own, now: NOW }, handlers(), "panel");
+    expect(buttonNamed(plain, "Message")).toBeUndefined();
+    expect(buttonNamed(plain, "Truce")).toBeUndefined();
+  });
+
+  it("hides Truce while one runs", () => {
+    const target = { ...find("player-901"), truceUntil: NOW + 3600 } as ReturnType<typeof find>;
+    const card = targetCard(target, { world, own, now: NOW }, { ...handlers(), onMessage: vi.fn(), onTruce: vi.fn() }, "panel");
+    expect(buttonNamed(card, "Truce")).toBeUndefined();
+    expect(buttonNamed(card, "Message")).toBeDefined();
+  });
+});
+
 describe("targetCard", () => {
   it("puts a neighbour's achievements line under the name, and none on a tribe (#204)", () => {
     const achievementsLine = vi.fn((target: { userid: number; name: string }) => {

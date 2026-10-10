@@ -46,7 +46,15 @@ export class ApiError extends Error {
 
   /** True when the caller should send the player back to the login screen. */
   get isAuthFailure(): boolean {
-    return this.serverStatus === 401 || this.serverStatus === 403;
+    return !this.shinyLocked && (this.serverStatus === 401 || this.serverStatus === 403);
+  }
+
+  /**
+   * Shiny Lock refused a Shiny spend. The server answers 403, but the player is
+   * still signed in: the message says how to turn the lock off, nothing more.
+   */
+  get shinyLocked(): boolean {
+    return (this.details?.data as { reason?: unknown } | undefined)?.reason === "shinyLocked";
   }
 }
 

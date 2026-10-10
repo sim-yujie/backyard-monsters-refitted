@@ -227,14 +227,13 @@ const RELATION_STYLE: Record<PlayerRelation, { colour: number; icon: CellAppeara
 /**
  * How a player cell relates to the viewer (#334).
  *
- * `"attacker"` is deliberately unreachable today: it needs attacker history
- * that only the fog-of-war sight service (issue #329, branch `feat/fog-wp1`,
- * not yet merged) will provide. No cheap source exists on this payload, so
- * every cell falls through to `"other"` until that lands.
+ * `"attacker"` is a base whose owner has ever attacked the viewer: the server
+ * tags it `ak` (`services/maproom/v2/attackers.ts`), with no time limit.
  */
 const relationOf = (cell: PlayerCell, myAlliance: number | null): PlayerRelation => {
   if (cell.mine === 1) return "you";
   if (myAlliance !== null && cell.aid !== null && cell.aid === myAlliance) return "alliance";
+  if (cell.ak === 1) return "attacker";
   return "other";
 };
 

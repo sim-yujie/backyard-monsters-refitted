@@ -201,6 +201,7 @@ export class TakeoverControl {
     this.dialog = new TakeoverDialog({
       kind: candidate.kind,
       name: candidate.name,
+      ...(candidate.height === undefined ? {} : { height: candidate.height }),
       price: quote,
       takeOver: (payment) => this.options.takeOver(candidate.baseid, payment),
       onTaken: (payment) => {

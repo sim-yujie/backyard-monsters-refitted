@@ -9,6 +9,7 @@ import {
   useShinyLabel,
   type TakeoverKind,
 } from "@/game/maproom/takeover";
+import { heightBonusLine } from "@/game/maproom/heightBonus";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
@@ -45,6 +46,8 @@ export interface TakeoverDialogOptions {
   readonly kind: TakeoverKind;
   /** The tribe's name for a camp, the owner's for an outpost. */
   readonly name: string;
+  /** The cell's height: said as its tower range and income bonus. Absent: no line. */
+  readonly height?: number;
   readonly price: TakeoverDialogPrice;
   /** Takes the yard over; rejects with the server's refusal. */
   readonly takeOver: (payment: TakeoverPayment) => Promise<unknown>;
@@ -96,6 +99,11 @@ export class TakeoverDialog {
     const expand = document.createElement("p");
     expand.className = "takeover-dialog__lead";
     expand.textContent = TAKEOVER_TEXT.expand;
+
+    const ground = document.createElement("p");
+    ground.className = "u-muted takeover-dialog__ground";
+    ground.textContent = options.height === undefined ? "" : `The ground here — ${heightBonusLine(options.height).toLowerCase()}.`;
+    ground.hidden = options.height === undefined;
 
     const cost = document.createElement("ul");
     cost.className = "takeover-dialog__cost";
@@ -175,7 +183,7 @@ export class TakeoverDialog {
     this.status.setAttribute("aria-live", "polite");
     this.status.hidden = true;
 
-    this.popup.setContent(expand, cost, adjacent, this.countdown, this.choice, this.confirm, this.status);
+    this.popup.setContent(expand, ground, cost, adjacent, this.countdown, this.choice, this.confirm, this.status);
     this.setStep("choose");
     this.tick();
     if (price.grantExpiresAt !== undefined) this.timer = window.setInterval(() => this.tick(), 1000);

@@ -22,6 +22,7 @@ import {
 import { progressFraction } from "@/game/yard/jobs";
 import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
+import { hatchTimeText, speedText } from "./monsterNumbers";
 import { resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/train.css";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
@@ -592,9 +593,19 @@ export const statLine = (id: string, level: number, next: number | null): string
     damageNow < 0
       ? `Heals ${pair(-damageNow, damageNext === null ? null : -damageNext)}`
       : `Damage ${pair(damageNow, damageNext)}`;
+  const speedNow = monsterStat(id, "speed", level);
+  const speedNext = next && monsterStat(id, "speed", next);
+  const speed =
+    speedNext === null || speedNext === speedNow
+      ? speedText(id, level)
+      : `${speedText(id, level)} → ${speedText(id, next ?? level)}`;
   const space = pair(housingSpace(id, level) ?? 0, next && (housingSpace(id, next) ?? 0));
   const goo = pair(hatchCost(id, level) ?? 0, next && (hatchCost(id, next) ?? 0));
-  return [`Health ${health}`, damage, `Space ${space}`, `Hatch ${goo} goo`].join(" · ");
+  const time =
+    next === null || hatchTimeText(id, next) === hatchTimeText(id, level)
+      ? hatchTimeText(id, level)
+      : `${hatchTimeText(id, level)} → ${hatchTimeText(id, next)}`;
+  return [`Health ${health}`, damage, `Speed ${speed}`, `Space ${space}`, `Hatch ${goo} goo`, `Hatch time ${time}`].join(" · ");
 };
 
 /** The one line that says why Train is disabled; a putty shortfall with its icon. */

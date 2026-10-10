@@ -9,6 +9,7 @@ import {
 } from "@/api/maproom1";
 import type { BaseLoadResponse } from "@/api/types";
 import { setAttackTarget, setViewTarget, type AttackTarget } from "@/game/attack/attackTarget";
+import { MailDoor } from "@/ui/mail/MailDoor";
 import { Mr1Guide } from "@/game/guide/mr1Guide";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import {
@@ -55,6 +56,8 @@ export class MapRoom1Scene implements Scene {
   private ui: MapRoom1Ui | null = null;
   /** Bob, while the guided start's practice camp is open (issue #227). */
   private guide: Mr1Guide | null = null;
+  /** The mailbox behind the card's Message and Truce buttons (#193, #203). */
+  private mail: MailDoor | null = null;
   private ownSave: BaseLoadResponse | null = null;
   private own: Mr1Own | null = null;
   private world: Mr1World | null = null;
@@ -79,6 +82,9 @@ export class MapRoom1Scene implements Scene {
         onView: (target) => this.view(target),
         onAttack: (target) => this.attack(target),
         onAction: (action) => this.act(action),
+        onMessage: (target) => void this.mail?.openCompose({ userid: target.userid, name: target.name }),
+        onTruce: (target) =>
+          void this.mail?.openTruce({ userid: target.userid, name: target.name, baseid: target.baseid }),
       },
       SceneName.MAP_ROOM_1,
       [
@@ -86,6 +92,11 @@ export class MapRoom1Scene implements Scene {
         { id: SceneName.YARD, label: "Yard" },
       ],
     ).mount(context.overlay.content);
+    this.mail = new MailDoor({
+      style: "tool",
+      container: context.overlay.content,
+      onTruceAccepted: () => void this.refresh(),
+    });
     this.guide = new Mr1Guide(context.overlay.guide, {
       goHome: () => context.goTo(SceneName.YARD),
       refresh: () => void this.refresh(),
@@ -102,6 +113,8 @@ export class MapRoom1Scene implements Scene {
     document.removeEventListener("visibilitychange", this.onVisibility);
     this.guide?.destroy();
     this.guide = null;
+    this.mail?.destroy();
+    this.mail = null;
     this.ui?.destroy();
     this.ui = null;
     this.context = null;

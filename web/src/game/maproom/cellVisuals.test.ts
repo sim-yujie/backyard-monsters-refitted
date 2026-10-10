@@ -10,6 +10,7 @@ import {
   LOADING_COLOUR,
   OutpostKit,
   RELATION_ALLIANCE_COLOUR,
+  RELATION_ATTACKER_COLOUR,
   RELATION_OTHER_COLOUR,
   RELATION_YOU_COLOUR,
   UNEXPLORED_PERIOD,
@@ -145,12 +146,13 @@ describe("player relation and kit (#334)", () => {
     });
   });
 
-  it("never reaches the attacker relation yet (#329 not merged - no cheap data source)", () => {
-    // Every combination of inputs this payload can carry falls through to
-    // "other" rather than "attacker"; there is nothing on PlayerCell today
-    // that could select it.
+  it("colours and icons a base whose owner has attacked the viewer red with swords", () => {
     const context: MapViewerContext = { myAlliance: null, kitFilter: KitFilter.ALL };
-    expect(appearanceOf(player({ mine: 0, aid: null }), 0, context).relationIcon).not.toBe("swords");
+    expect(appearanceOf(player({ mine: 0, aid: null, ak: 1 }), 0, context)).toMatchObject({
+      plateColour: RELATION_ATTACKER_COLOUR,
+      relationIcon: "swords",
+    });
+    expect(appearanceOf(player({ mine: 0, aid: null }), 0, context).relationIcon).toBe("none");
   });
 
   it("maps the server's kit id to a kit name, falling back to none", () => {

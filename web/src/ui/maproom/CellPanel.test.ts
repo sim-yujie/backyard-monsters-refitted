@@ -192,6 +192,21 @@ describe("another player's yard", () => {
   });
 });
 
+describe("the ground an outpost stands on", () => {
+  it("says the tower range and income bonus of a hill on an outpost, and the height behind More", () => {
+    const { host } = open(player({ b: 3, i: 150 }));
+    expect(shown(host, ".mr2-chip").map((chip) => chip.textContent)).toContain(
+      "High ground: tower range +20%, income −17%",
+    );
+    expect(host.textContent).toContain("50 m");
+  });
+
+  it("says nothing of the ground on a main yard", () => {
+    const { host } = open(player({ b: 2, i: 150 }));
+    expect(host.textContent).not.toContain("High ground");
+  });
+});
+
 describe("another player's achievements (#204)", () => {
   const line = () =>
     vi.fn((payload: PlayerCell) => {

@@ -1,5 +1,5 @@
 import { SESSION_STORAGE_KEY } from "@/config";
-import { get, post, setAuthToken } from "./http";
+import { ApiError, get, post, setAuthToken } from "./http";
 import {
   SessionType,
   type LoginRequest,
@@ -134,6 +134,11 @@ export const setSessionPicSquare = (picSquare: string): void => {
   if (current) remember({ ...current, picSquare });
 };
 
+/** Records a new username on the active session, after the server has stored it. */
+export const setSessionUsername = (username: string): void => {
+  if (current) remember({ ...current, username });
+};
+
 /** Reads a session off localStorage without contacting the server. */
 export const restoreStoredSession = (): Session | null => {
   let raw: string | null = null;
@@ -177,5 +182,47 @@ export const logout = (): void => {
     localStorage.removeItem(SESSION_STORAGE_KEY);
   } catch {
     // Nothing to clean up if storage is unavailable.
+  }
+};
+
+/**
+ * Forgot password: POST /api/:apiVersion/player/forgotPassword, `email`. The
+ * server gives every well-formed request the same answer whether or not an
+ * account has the email (issue #317), then emails a link to
+ * `/reset-password?token=...` (to the server log in a dev sandbox).
+ */
+const FORGOT_PASSWORD_PATH = "/api/:apiVersion/player/forgotPassword";
+
+/**
+ * Sets a new password from a reset link: POST /api/:apiVersion/player/reset-password,
+ * `token` + `password`. It signs the account out everywhere (issue #318).
+ */
+const RESET_PASSWORD_PATH = "/api/:apiVersion/player/reset-password";
+
+/** Reads the server's `{ message }` off a refusal that has no `error` field. */
+const refusalMessage = (caught: unknown): never => {
+  if (caught instanceof ApiError) {
+    const body = caught.body as { message?: unknown } | undefined;
+    if (typeof body?.message === "string") throw new ApiError(body.message, { status: caught.status, body });
+  }
+  throw caught;
+};
+
+/** Asks for a reset link to be sent. Resolves with the server's one answer. */
+export const requestPasswordReset = async (email: string): Promise<string> => {
+  try {
+    const response = await post<{ message?: string }>(FORGOT_PASSWORD_PATH, { email });
+    return response.message ?? "If an account uses that email, a link to reset its password is on its way.";
+  } catch (caught) {
+    return refusalMessage(caught);
+  }
+};
+
+/** Stores the new password. The player signs in with it afterwards. */
+export const resetPassword = async (token: string, password: string): Promise<void> => {
+  try {
+    await post(RESET_PASSWORD_PATH, { token, password });
+  } catch (caught) {
+    refusalMessage(caught);
   }
 };
