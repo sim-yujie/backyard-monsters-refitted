@@ -56,6 +56,7 @@ const { resetPassword } = await import("./resetPassword.js");
 const { hashResetToken } = await import("../../services/auth/resetToken.js");
 
 const EMAIL = "player@example.com";
+let savedSandbox: string | undefined;
 let savedSecret: string | undefined;
 
 const call = async (controller: typeof forgotPassword, body: Row) => {
@@ -77,6 +78,8 @@ const realUser = (): Row => ({ userid: 7, email: EMAIL, password: "old-hash", re
 beforeEach(() => {
   savedSecret = process.env.SECRET_KEY;
   process.env.SECRET_KEY = "test-secret";
+  savedSandbox = process.env.DEV_SANDBOX;
+  delete process.env.DEV_SANDBOX;
   user = realUser();
   botIds = [];
   mailsSent = 0;
@@ -85,6 +88,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (savedSandbox === undefined) delete process.env.DEV_SANDBOX;
+  else process.env.DEV_SANDBOX = savedSandbox;
   if (savedSecret === undefined) delete process.env.SECRET_KEY;
   else process.env.SECRET_KEY = savedSecret;
 });
