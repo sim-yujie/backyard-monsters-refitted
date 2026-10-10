@@ -234,6 +234,20 @@ deploy/prod.sh logs web | grep "Refusing to start"
 Each line names a setting to fix in `production.env`. Fix it and run
 `deploy/prod.sh up -d` again.
 
+**Add the bot neighbours**. Bot neighbours are switched on in
+`production.env` (`BOTS_FILL`, `BOTS_BRAIN` and `BOTS_REVENGE` are `on`), so a
+new game with few players still has yards to attack in Map Room 1. The bots
+themselves are made once, after the first start:
+
+```
+deploy/prod.sh exec web bun src/scripts/bots.ts create --fill
+```
+
+It makes 500 bots (`BOTS_TOTAL`), spread over the levels, and takes a minute
+or two. Running it again is safe: it only adds bots that are missing. After
+that the game looks after them by itself. To see how many there are, run
+`deploy/prod.sh exec web bun src/scripts/bots.ts status`.
+
 ## Step 8. Check it works
 
 1. Open `https://api.yourgame.com/assets/alliances/10_large.png`. A small
@@ -331,6 +345,9 @@ All from `/opt/bymr/server` on the VPS:
 | Stop everything (data is kept) | `deploy/prod.sh down` |
 | Start everything | `deploy/prod.sh up -d` |
 | Take a backup now | `deploy/prod.sh exec backup bash /backup.sh` |
+| Count the bot neighbours | `deploy/prod.sh exec web bun src/scripts/bots.ts status` |
+| Take every bot off the map now (then switch them off, next row, or new ones appear) | `deploy/prod.sh exec web bun src/scripts/bots.ts retire-all` |
+| Switch bots off for good | Set `BOTS_FILL`, `BOTS_BRAIN` and `BOTS_REVENGE` to `off` in `production.env`, then `deploy/prod.sh up -d` |
 
 ## When something goes wrong
 

@@ -24,15 +24,20 @@ import {
  * section 5; `scripts/delete-account.ts`).
  *
  * Gone: the login and email, every save (main yard, outposts, inferno), the
- * player's Map Room land, all mail threads they are in (both sides, since
- * the other side can no longer answer), truces, alliance chat and invites,
- * notifications, attack plans, neighbour lists, the anti-cheat report and
- * every Redis key of theirs, including login sessions, so they are logged out.
- * Their lines are taken out of world chat history and the fair-play log.
+ * player's Map Room land, mail no one else will read (the game's notices to
+ * them, mail with bots or with players already deleted, and threads the other
+ * player had blocked), truces, alliance chat and invites, notifications,
+ * attack plans, neighbour lists, the anti-cheat report and every Redis key of
+ * theirs, including login sessions, so they are logged out. Their lines are
+ * taken out of world chat history and the fair-play log.
  *
  * Kept, without their name: other players' battle records show
  * {@link DELETED_PLAYER_NAME} in their place, and so does a base's "last
- * attacked by". Kept as they are: chat reports, which hold a user id but no
+ * attacked by". Other players keep their mail threads with them: a thread is
+ * one shared copy, so only the deleted side goes (its truce is cleared), and
+ * `getmessagetargets` names a partner with no account
+ * {@link DELETED_PLAYER_NAME}. The daily clean-up removes that mail when it
+ * is old enough. Kept as they are: chat reports, which hold a user id but no
  * name and go with the daily clean-up after `CHAT_REPORT_RETENTION_DAYS`.
  *
  * An alliance they lead passes to another member (the longest-standing by
@@ -148,14 +153,32 @@ interface UpdateStep {
   params: unknown[];
 }
 
+/**
+ * Whether thread `t`'s other side, seen from player `u`, will still read it: a
+ * player with an account, not a bot, who has not blocked `u`. The game's
+ * notices (userid 0) and a player already deleted have no account. Takes
+ * `[u, u, u]`.
+ */
+const someoneElseReads = (t: string) =>
+  `EXISTS (SELECT 1 FROM bym."user" o
+     WHERE o.userid = CASE WHEN ${t}.userid = ? THEN ${t}.targetid ELSE ${t}.userid END
+       AND o.userid <> ?
+       AND NOT EXISTS (SELECT 1 FROM bym.bot b WHERE b.userid = o.userid)
+       AND NOT coalesce(o.blocked_users, '[]'::jsonb) @> jsonb_build_array(?::int))`;
+
+/** The account's threads no one else will read, which go. Takes `[u, u, u, u, u]`. */
+const unreadThreads = (t: string) => `(${t}.userid = ? OR ${t}.targetid = ?) AND NOT ${someoneElseReads(t)}`;
+
 const deleteSteps = (u: number): DeleteStep[] => [
   {
-    label: "mail messages",
+    label: "mail messages (in threads no one else will read)",
     table: "message",
-    where: `userid = ? OR targetid = ? OR threadid IN (SELECT threadid FROM bym.thread WHERE userid = ? OR targetid = ?)`,
-    params: [u, u, u, u],
+    // Also any of theirs whose thread is already gone.
+    where: `threadid IN (SELECT t.threadid FROM bym.thread t WHERE ${unreadThreads("t")})
+      OR ((userid = ? OR targetid = ?) AND threadid NOT IN (SELECT threadid FROM bym.thread))`,
+    params: [u, u, u, u, u, u, u],
   },
-  { label: "mail threads", table: "thread", where: `userid = ? OR targetid = ?`, params: [u, u] },
+  { label: "mail threads (no one else will read)", table: "thread", where: unreadThreads("thread"), params: [u, u, u, u, u] },
   { label: "truces", table: "truce", where: `initiator_userid = ? OR recipient_userid = ?`, params: [u, u] },
   { label: "alliance chat messages", table: "alliance_message", where: `user_id = ?`, params: [u] },
   { label: "alliance invites", table: "alliance_invite", where: `user_id = ?`, params: [u] },
@@ -171,6 +194,14 @@ const deleteSteps = (u: number): DeleteStep[] => [
 ];
 
 const updateSteps = (u: number, username: string): UpdateStep[] => [
+  {
+    label: `mail threads kept for the other player (shown as "${DELETED_PLAYER_NAME}", truce cleared)`,
+    table: "thread",
+    set: `truce_id = NULL, trucestate = NULL`,
+    setParams: [],
+    where: `(thread.userid = ? OR thread.targetid = ?) AND ${someoneElseReads("thread")}`,
+    params: [u, u, u, u, u],
+  },
   {
     label: "battle records where they attacked (name replaced)",
     table: "attack_logs",

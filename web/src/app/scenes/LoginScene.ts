@@ -155,6 +155,26 @@ const sandboxStartBox = (): { row: HTMLLabelElement; input: HTMLInputElement } =
   return { row, input };
 };
 
+/** The game's name with a BETA tag, and the beta warning, above every form here. */
+const brand = (): HTMLElement => {
+  const header = document.createElement("header");
+  header.className = "login-brand";
+
+  const title = document.createElement("h1");
+  title.className = "login-brand__title";
+  const tag = document.createElement("span");
+  tag.className = "chip chip--warning login-brand__tag";
+  tag.textContent = "BETA";
+  title.append("Backyard Monsters Revamped", tag);
+
+  const note = document.createElement("p");
+  note.className = "login-brand__note";
+  note.textContent = "Beta: game progress may be reset.";
+
+  header.append(title, note);
+  return header;
+};
+
 const primaryButton = (label: string): HTMLButtonElement => {
   const submit = document.createElement("button");
   submit.type = "submit";
@@ -195,7 +215,10 @@ export class LoginScene implements Scene {
 
     this.panel = new Panel({ title: "Sign in", closable: false, className: "panel--login" });
 
-    this.wrapper.append(this.panel.element);
+    const stack = document.createElement("div");
+    stack.className = "login-stack";
+    stack.append(brand(), this.panel.element);
+    this.wrapper.append(stack);
     context.overlay.content.append(this.wrapper);
 
     // The emailed reset link opens straight on the new-password form.

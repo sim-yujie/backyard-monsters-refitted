@@ -107,6 +107,13 @@ describe("contactsOf", () => {
       { userid: 77, name: "Bramblefoot" },
     ]);
   });
+
+  it("leaves out a player who deleted their account", () => {
+    expect(contactsOf({ ...targets, "99": { first_name: "Deleted player", deleted: 1 } })).toEqual([
+      { userid: 88, name: "Acorn" },
+      { userid: 77, name: "Bramblefoot" },
+    ]);
+  });
 });
 
 describe("words", () => {

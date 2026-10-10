@@ -5,6 +5,7 @@ import { Thread } from "../../database/models/thread.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { SYSTEM_SENDER, SYSTEM_SENDER_NAME } from "../../services/mail/systemSender.js";
+import { DELETED_PLAYER_NAME } from "../../services/privacy/deleteAccount.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
 interface TargetUser {
@@ -13,6 +14,8 @@ interface TargetUser {
   first_name: string;
   last_name?: string;
   pic_square?: string | null | undefined;
+  /** 1 when the player's account was deleted: their mail stays, but they cannot be written to. */
+  deleted?: 1;
 }
 
 type TargetUsers = Record<number, TargetUser>;
@@ -20,7 +23,9 @@ type TargetUsers = Record<number, TargetUser>;
 /**
  * Controller to get message targets for MailBox/FriendPicker.
  *
- * This controller get message targets
+ * This controller get message targets. A partner whose account was deleted
+ * (`scripts/delete-account.ts`) has no user row: they are named
+ * {@link DELETED_PLAYER_NAME}, as in battle records.
  *
  * @param {Context} ctx - The Koa context object, which includes the request body.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
@@ -83,6 +88,18 @@ export const getMessageTargets: KoaController = async (ctx) => {
         mapver: MapRoomVersion.V2,
         first_name: SYSTEM_SENDER_NAME,
         pic_square: null,
+      };
+    }
+
+    // Anyone else without a user row deleted their account: their mail stays, unnamed.
+    for (const partnerId of conversationPartnerIds) {
+      if (targets[partnerId]) continue;
+      targets[partnerId] = {
+        friend: 0,
+        mapver: MapRoomVersion.V2,
+        first_name: DELETED_PLAYER_NAME,
+        pic_square: null,
+        deleted: 1,
       };
     }
 

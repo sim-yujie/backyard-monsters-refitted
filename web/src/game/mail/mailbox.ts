@@ -173,9 +173,13 @@ export const threadItems = (messages: readonly MailMessage[], myId: number): Mai
     };
   });
 
-/** Everyone the player has written with, by name, the game left out: the recipients a new message offers. */
+/**
+ * Everyone the player has written with, by name, the game and deleted
+ * accounts left out: the recipients a new message offers.
+ */
 export const contactsOf = (targets: Readonly<Record<string, MailTarget>>): MailContact[] =>
   Object.entries(targets)
+    .filter(([, target]) => !target.deleted)
     .map(([userid, target]) => ({ userid: Number(userid), name: target.first_name || `Player ${userid}` }))
     .filter((contact) => Number.isSafeInteger(contact.userid) && contact.userid !== SYSTEM_SENDER)
     .sort((one, other) => one.name.localeCompare(other.name) || one.userid - other.userid);

@@ -5,6 +5,7 @@ import { MikroORM } from "@mikro-orm/postgresql";
 
 import {
   AccountDeletionRefused,
+  DELETED_PLAYER_NAME,
   deleteAccount,
   findAccount,
   planAccountDeletion,
@@ -41,7 +42,8 @@ const printPlan = (plan: DeletionPlan, done: boolean) => {
   for (const key of plan.redis.keys) console.log(`          ${key}`);
   console.log(`  Redis: ${plan.redis.chatLines} world chat lines, ${plan.redis.botCheckRows} fair-play log rows,`);
   console.log(`         ${plan.redis.ignoreLists} other players' chat ignore lists`);
-  console.log(`  Kept: chat reports (no name in them), deleted by the daily clean-up when they are old enough.`);
+  console.log(`  Kept: other players' mail with them (shown from "${DELETED_PLAYER_NAME}") and chat reports (no name`);
+  console.log(`        in them), both deleted by the daily clean-up when they are old enough.`);
   console.log(`  Not covered: database backups and server log files, which expire on their own.\n`);
 };
 

@@ -159,9 +159,10 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     );
 
   /**
-   * P, the player who asked to be deleted, leads an alliance with Q, mails Q,
-   * fought Q and R, has land on the map and keys in Redis. Q and R mail each
-   * other, and R blocks P.
+   * P, the player who asked to be deleted, leads an alliance with Q, mails Q
+   * (with a truce asked for in that thread), fought Q and R, has land on the
+   * map and keys in Redis. Q and R mail each other. R blocks P, and their
+   * thread is hidden from R. The game has sent P a notice.
    */
   const world = async () => {
     const p = await player("p");
@@ -181,7 +182,13 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
 
     const pq = await mail(p, q);
     const qr = await mail(q, r);
-    await sql(`INSERT INTO bym.truce (initiator_userid, recipient_userid, status, created_at) VALUES (?, ?, 'requested', now())`, [p, q]);
+    const pr = await mail(r, p);
+    const notice = await mail(0, p);
+    const truce = await one<{ id: number }>(
+      `INSERT INTO bym.truce (initiator_userid, recipient_userid, status, created_at) VALUES (?, ?, 'requested', now()) RETURNING id`,
+      [p, q]
+    );
+    await sql(`UPDATE bym.thread SET truce_id = ?, trucestate = 'requested' WHERE threadid = ?`, [truce!.id, pq]);
     await sql(`INSERT INTO bym.notification (userid, kind, jobs, created_at) VALUES (?, 'away', '[]', now())`, [p]);
     await sql(`INSERT INTO bym.report (userid, username, created_at, lastupdate_at) VALUES (?, 'zz_del_p', now(), now())`, [p]);
     await sql(`INSERT INTO bym.maproom (userid, neighbors, dropped_neighbours, created_at, lastupdate_at) VALUES (?, '[]', '[]', now(), now())`, [p]);
@@ -215,7 +222,7 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     store.sets.set(`chat-ignore:${q}`, new Set([String(p), "77"]));
     store.sets.set(`chat-ignore:${p}`, new Set([String(q)]));
 
-    return { p, q, r, allianceId, pq, qr };
+    return { p, q, r, allianceId, pq, qr, pr, notice };
   };
 
   beforeAll(async () => {
@@ -255,8 +262,8 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     const plan = await planAccountDeletion(orm.em, store.redis, account);
 
     expect(plan.rows).toMatchObject({
-      "mail messages": 2,
-      "mail threads": 1,
+      "mail messages (in threads no one else will read)": 4,
+      "mail threads (no one else will read)": 2,
       truces: 1,
       "alliance chat messages": 1,
       notifications: 1,
@@ -269,6 +276,7 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
       "battle records where they defended (name replaced)": 1,
       "other bases last attacked by them (name replaced)": 1,
       "other players' block lists (id removed)": 1,
+      [`mail threads kept for the other player (shown as "${DELETED_PLAYER_NAME}", truce cleared)`]: 1,
     });
     expect(plan.alliance).toBe(`leadership of "zz_del_pq" passes to zz_del_q (#${q})`);
     expect(plan.redis.keys.sort()).toEqual(
@@ -288,13 +296,13 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     expect(plan.redis).toMatchObject({ chatLines: 2, botCheckRows: 1, ignoreLists: 1 });
 
     expect(await countOf(`bym."user" WHERE userid = ?`, [p])).toBe(1);
-    expect(await countOf(`bym.message WHERE userid = ?`, [p])).toBe(1);
+    expect(await countOf(`bym.message WHERE userid = ?`, [p])).toBe(3);
     expect(store.strings.has(`chat-token:${p}`)).toBe(true);
     expect(store.lists.get("history:chat:mr2-global")).toHaveLength(3);
   });
 
   test("deleting removes their rows and keys and keeps others' history without their name", async () => {
-    const { p, q, r, allianceId, pq, qr } = await world();
+    const { p, q, r, allianceId, pq, qr, pr, notice } = await world();
     const account = await findAccount(orm.em, "zz_del_p");
 
     const done = await deleteAccount(orm.em, store.redis, account);
@@ -304,8 +312,9 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     expect(await countOf(`bym."user" WHERE userid = ?`, [p])).toBe(0);
     expect(await countOf(`bym.save WHERE userid = ?`, [p])).toBe(0);
     expect(await countOf(`bym.world_map_cell WHERE uid = ?`, [p])).toBe(0);
-    expect(await countOf(`bym.thread WHERE threadid = ?`, [pq])).toBe(0);
-    expect(await countOf(`bym.message WHERE threadid = ?`, [pq])).toBe(0);
+    // Mail no one else will read: R had blocked P, and the game's notice.
+    expect(await countOf(`bym.thread WHERE threadid IN (?, ?)`, [pr, notice])).toBe(0);
+    expect(await countOf(`bym.message WHERE threadid IN (?, ?)`, [pr, notice])).toBe(0);
     expect(await countOf(`bym.truce WHERE initiator_userid = ?`, [p])).toBe(0);
     expect(await countOf(`bym.alliance_message WHERE user_id = ?`, [p])).toBe(0);
     expect(await countOf(`bym.notification WHERE userid = ?`, [p])).toBe(0);
@@ -313,8 +322,20 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     expect(await countOf(`bym.maproom WHERE userid = ?`, [p])).toBe(0);
     expect(Number((await one<{ player_count: number }>(`SELECT player_count FROM bym.world WHERE uuid = ?`, [WORLD]))!.player_count)).toBe(2);
 
-    // Other players' mail is untouched.
+    // Other players' mail is untouched, and Q keeps the thread with P, its truce cleared.
     expect(await countOf(`bym.message WHERE threadid = ?`, [qr])).toBe(2);
+    expect(await countOf(`bym.message WHERE threadid = ?`, [pq])).toBe(2);
+    expect(
+      await one<{ userid: number; targetid: number; truce_id: number | null; trucestate: string | null }>(
+        `SELECT userid, targetid, truce_id, trucestate FROM bym.thread WHERE threadid = ?`,
+        [pq]
+      )
+    ).toEqual({
+      userid: p,
+      targetid: q,
+      truce_id: null,
+      trucestate: null,
+    });
 
     // The alliance passes to Q.
     expect(await one<{ leader_userid: number; leader_name: string }>(`SELECT leader_userid, leader_name FROM bym.alliance WHERE id = ?`, [allianceId])).toEqual({
@@ -348,6 +369,25 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     expect(store.lists.get("bot-check:log")).toEqual([JSON.stringify({ userid: q })]);
     expect([...store.sets.get(`chat-ignore:${q}`)!]).toEqual(["77"]);
     expect(store.sets.has(`chat-ignore:${p}`)).toBe(false);
+  });
+
+  test("a kept thread goes once the player on its other side is deleted too", async () => {
+    const { pq, qr } = await world();
+    await deleteAccount(orm.em, store.redis, await findAccount(orm.em, "zz_del_p"));
+
+    const q = await findAccount(orm.em, "zz_del_q");
+    const plan = await planAccountDeletion(orm.em, store.redis, q);
+    expect(plan.rows).toMatchObject({
+      "mail messages (in threads no one else will read)": 2,
+      "mail threads (no one else will read)": 1,
+      [`mail threads kept for the other player (shown as "${DELETED_PLAYER_NAME}", truce cleared)`]: 1,
+    });
+
+    await deleteAccount(orm.em, store.redis, q);
+    expect(await countOf(`bym.thread WHERE threadid = ?`, [pq])).toBe(0);
+    expect(await countOf(`bym.message WHERE threadid = ?`, [pq])).toBe(0);
+    // R still has the thread with Q.
+    expect(await countOf(`bym.message WHERE threadid = ?`, [qr])).toBe(2);
   });
 
   test("an alliance with no one else in it is disbanded", async () => {

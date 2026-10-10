@@ -75,6 +75,8 @@ export interface MailTarget {
   readonly first_name: string;
   readonly last_name?: string;
   readonly pic_square?: string | null;
+  /** 1 when the player deleted their account: named "Deleted player", and not offered as a recipient. */
+  readonly deleted?: number;
 }
 
 interface ThreadsResponse extends ApiEnvelope {

@@ -92,6 +92,16 @@ describe("the game's notices in the mail routes", () => {
     expect(Object.keys((ctx.body as { targets: object }).targets)).toEqual([String(OTHER)]);
   });
 
+  test("getmessagetargets names a partner whose account was deleted \"Deleted player\"", async () => {
+    users = [];
+    const ctx = ctxFor(owner());
+    await getMessageTargets(ctx);
+    const { targets } = ctx.body as { targets: Record<number, { first_name: string; deleted?: number }> };
+    expect(targets[OTHER]).toMatchObject({ first_name: "Deleted player", deleted: 1 });
+    expect(targets[0]).toMatchObject({ first_name: "Backyard Monsters" });
+    expect(targets[0]?.deleted).toBeUndefined();
+  });
+
   test("getmessagethreads lists the notice, from userid 0, unread", async () => {
     const ctx = ctxFor(owner());
     await getMessageThreads(ctx);
