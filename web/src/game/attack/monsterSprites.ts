@@ -304,6 +304,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/sprite.12.gold.png": "monsters/dave-gold-repaint@4x.png", // D.A.V.E. gold skin (same frames, gold tone)
   "monsters/crabatron.png": "monsters/crabatron-repaint@4x.png", // Crabatron art trial
   "monsters/brain.v2.png": "monsters/brain-repaint@4x.png", // Brain art trial (2 rows: visible, invisible)
+  "monsters/sprite.11.v2.png": "monsters/projectx-repaint@4x.png", // Project X art trial
 };
 
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */
