@@ -62,8 +62,8 @@ const quote = (over: Partial<TakeoverQuoteResponse> = {}): TakeoverQuoteResponse
 
 describe("takeover candidates", () => {
   it("asks about wild camps and other players' outposts only", () => {
-    expect(takeoverCandidate(camp())).toEqual({ baseid: "2000241208", kind: "camp", name: "Kozu" });
-    expect(takeoverCandidate(outpost())).toEqual({ baseid: "2000240208", kind: "outpost", name: "Bramble" });
+    expect(takeoverCandidate(camp())).toEqual({ baseid: "2000241208", kind: "camp", name: "Kozu", height: 150 });
+    expect(takeoverCandidate(outpost())).toEqual({ baseid: "2000240208", kind: "outpost", name: "Bramble", height: 150 });
     expect(takeoverCandidate(outpost({ mine: 1 }))).toBeNull();
     expect(takeoverCandidate(outpost({ b: 2 }))).toBeNull();
     expect(takeoverCandidate({ i: 50 } as MapCell)).toBeNull();
