@@ -1,5 +1,6 @@
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import {
+  MAX_RANK,
   isZeroBrain,
   parseBrain,
   parseDefenderForces,
@@ -117,6 +118,14 @@ export interface AttackSession {
    */
   attackerAcademy?: AcademyLevels;
   /**
+   * The attacker's Monster Lab ranks at attack start, monster id → rank 1 to 3,
+   * frozen with the academy (issue #352). The attack load serves them as
+   * `attackerranks` and every replay fights at these, never at ranks a client
+   * claims. Absent on a session minted before them, and when nothing is
+   * researched: every monster fights at rank 0.
+   */
+  attackerRanks?: AcademyRanks;
+  /**
    * Whether Declare War was running for the attacker's alliance at attack
    * start, as the attack load served it (`attpowerups`), which sets the
    * client's countdown. Every replay fights with this, so a Declare War that
@@ -129,6 +138,9 @@ export interface AttackSession {
 
 /** Monster id → academy level, as {@link AttackSession.attackerAcademy} keeps it. */
 export type AcademyLevels = Readonly<Record<string, number>>;
+
+/** Monster id → Lab rank, as {@link AttackSession.attackerRanks} keeps it. */
+export type AcademyRanks = Readonly<Record<string, number>>;
 
 /** Champion type → brain, as {@link AttackSession.championBrains} keeps it. */
 export type ChampionBrains = Readonly<Record<string, BrainWeights>>;
@@ -178,6 +190,7 @@ export const serialiseAttackSession = (session: AttackSession): string =>
   session.defenderForces ||
   session.championBrains ||
   session.attackerAcademy ||
+  session.attackerRanks ||
   session.declareWar !== undefined ||
   session.attackerlevel !== undefined
     ? JSON.stringify(session)
@@ -234,6 +247,7 @@ export type AttackSessionFacts = Pick<
   | "defenderForces"
   | "championBrains"
   | "attackerAcademy"
+  | "attackerRanks"
   | "declareWar"
 >;
 
@@ -253,6 +267,7 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
     ? brainsOf(Object.entries(parsed.championBrains).map(([t, b]) => ({ t: Number(t), b })))
     : undefined;
   const attackerAcademy = academyLevelsOf(parsed.attackerAcademy);
+  const attackerRanks = academyRanksOf(parsed.attackerRanks);
   const { attackerlevel, declareWar } = parsed;
   return {
     ...(entryHoused && { entryHoused }),
@@ -263,6 +278,7 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
     ...(Number.isSafeInteger(attackerlevel) &&
       (attackerlevel as number) >= 1 && { attackerlevel: attackerlevel as number }),
     ...(attackerAcademy && { attackerAcademy }),
+    ...(attackerRanks && { attackerRanks }),
     ...(typeof declareWar === "boolean" && { declareWar }),
   };
 };
@@ -358,6 +374,18 @@ export const checkAttackBinding = ({
   return OK;
 };
 
+/** The `attackerRanks` of a JSON session: monster id → whole rank 1 to 3; none when empty. */
+const academyRanksOf = (raw: unknown): AcademyRanks | undefined => {
+  if (!isRecord(raw)) return undefined;
+  const out: Record<string, number> = {};
+  for (const [id, rank] of Object.entries(raw)) {
+    if (Number.isSafeInteger(rank) && (rank as number) >= 1 && (rank as number) <= MAX_RANK) {
+      out[id] = rank as number;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+};
+
 /**
  * A session for an attack starting now.
  *
@@ -371,6 +399,7 @@ export const checkAttackBinding = ({
  * @param {ChampionBrains} [championBrains] - The attacker's champions' brains, frozen (#219).
  * @param {AcademyLevels} [attackerAcademy] - The attacker's academy levels, which the attack load serves too (#201).
  * @param {boolean} [declareWar] - Whether Declare War was running for the attacker (#201).
+ * @param {AcademyRanks} [attackerRanks] - The attacker's Monster Lab ranks, frozen (#352).
  */
 export const newAttackSession = (
   attackerid: number,
@@ -382,7 +411,8 @@ export const newAttackSession = (
   defenderForces?: DefenderForces,
   championBrains?: ChampionBrains,
   attackerAcademy?: AcademyLevels,
-  declareWar?: boolean
+  declareWar?: boolean,
+  attackerRanks?: AcademyRanks
 ): AttackSession => ({
   attackerid,
   attackid,
@@ -394,5 +424,6 @@ export const newAttackSession = (
   ...(attackerlevel !== undefined && { attackerlevel }),
   ...(championBrains && { championBrains }),
   ...(attackerAcademy && { attackerAcademy }),
+  ...(attackerRanks && Object.keys(attackerRanks).length > 0 && { attackerRanks }),
   ...(declareWar !== undefined && { declareWar }),
 });

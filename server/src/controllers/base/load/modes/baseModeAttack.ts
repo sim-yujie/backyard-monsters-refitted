@@ -32,6 +32,7 @@ import { getOutpostOwnerSave } from "../../../../services/base/getOutpostOwnerSa
 import { poolAmounts } from "../../../../services/base/combat/attackLoot.js";
 import { autobankOwner } from "../../../../services/maproom/v2/autobank.js";
 import { academyLevels } from "../../../../services/base/combat/abandonedAttack.js";
+import { academyRanks } from "../../../../game-rules/combat/index.js";
 import { isDeclareWarRunning } from "../../../../services/alliance/powerups.js";
 import {
   generateNoise,
@@ -260,6 +261,8 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
   // runs for them: frozen into the session and served to the client, so the
   // battle is fought with these however either moves meanwhile (issue #201).
   const attackerAcademy = academyLevels(userSave.academy);
+  // The Monster Lab ranks, frozen the same way (issue #352).
+  const attackerRanks = academyRanks(userSave.academy);
   const declareWar = await isDeclareWarRunning(user.alliance_id);
 
   if (isMR1Tribe) {
@@ -276,7 +279,8 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
         defenderForces,
         championBrains,
         attackerAcademy,
-        declareWar
+        declareWar,
+        attackerRanks
       )
     );
   } else if (save.basesaveid) {
@@ -297,7 +301,8 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
         defenderForces,
         championBrains,
         attackerAcademy,
-        declareWar
+        declareWar,
+        attackerRanks
       )
     );
   }
@@ -314,5 +319,5 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
     await createAttackLog(user, defender, save)
   }
 
-  return { save, defenderForces, championBrains, attackerAcademy };
+  return { save, defenderForces, championBrains, attackerAcademy, attackerRanks };
 };

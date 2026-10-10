@@ -34,6 +34,7 @@ export * from "./champions.js";
 export * from "./stance.js";
 export * from "./brain.js";
 export * from "./types.js";
+export * from "./specialMoves.js";
 export * from "./damagePercent.js";
 export * from "./potential.js";
 export * from "./rng.js";

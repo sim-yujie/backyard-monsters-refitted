@@ -4,20 +4,21 @@
     "champions.ts": "54a831945f8e65ef3a733b70e64d16d6f63ae75b4a2b3d6139b071d4b4f16834",
     "combatStatsData.ts": "abfcedbfcac84e2ec6ea837c2f5310f34008cc10e3c277c6ebda5acc9236ec65",
     "damagePercent.ts": "524e0129a9dd84a1b4e171bcfce0826b969b0119bce891271b33bb1b3e8528bf",
-    "defence.ts": "9dfa24006f8178a28feeb304cf6dc4c7d8f303c05871fef9f649dd4c28a358eb",
+    "defence.ts": "8d5743c0ee7edd523434b68dbaefea284a0dc059b79e7e9a11b1d822e0e83f9b",
     "digest.ts": "5b989c2765d079953fa20f07589fa378c11af5ab28885e2cfa7fba6e63e5b752",
-    "engine.ts": "c49b30c20ace1337f249de77f1205dbca56028a06e09a7eb5dd4e139994ba582",
+    "engine.ts": "cea12f32cfb54ce85c31d102dcce1a122996c22758ddf1c35a3af6a87cc79e17",
     "grid.ts": "94b9792b4cc3813baf4d1e44e2f10c1535ee7340ef48af80e85cadd8b73e702c",
-    "index.ts": "c306b33295cbef3aa54b81043ddcf02031d9cd411f65cf46520cdd6186c115fa",
+    "index.ts": "58c1a62f1864f80071e303d2223f9167ec26e6931ff8c49d29757ed0a7150f42",
     "potential.ts": "6ba884da1553e98f3ffe2026849b2fa3908e76efcf7858a910d0b66c78e374f9",
-    "replay.ts": "5b9efc1e9631d4ba5ab5357337b0ef4b23f215ab7406ef79da30305cef6ec6d2",
+    "replay.ts": "7b1c7188cfa3b33f49676a13de85b8576cbda61b95f99d27d2a503ac7a5dce6c",
     "report.ts": "85b837935a479f94c18fc68345f845379e12f9e6c7e562c00ecb76c168a0c76d",
     "rng.ts": "f9e813c674fd46b30904fca04d9a77005e0b3ed8286f91b8732aaa405d641f1d",
+    "specialMoves.ts": "376e3d2affaf07e34e8e87501ea19c221a05c277e0a7e3915ad0d737b05dcd5a",
     "stance.ts": "1bac231d7e5821ca3d5a86b64b8553b8a3754faa59c0e6ea3c0315b43cb40085",
     "stats.ts": "ce2aa25c5059b0c1a9372bd7ed7b2567e1a0156caf1cdd2c98f0b0f536bc6a75",
     "targeting.ts": "983804794c1969acfba33346c3ff6113839a3906015a80056fb3f186613b9c01",
-    "types.ts": "de6056c4aa4f8de81ff4d166685bb0aeff2d94f6ad770c5243ec8cbe308faf35",
+    "types.ts": "9ac24788c5dca2a9400a823bef3a23ce57d6f601e1225d8e4a2c5c57d5f1e7ea",
     "yard.ts": "a962f69b05cfcd229dbfcff53a9424087164dcca5bfe7f4b9e8785f8022cbf12"
   },
-  "count": 18
+  "count": 19
 }

@@ -80,6 +80,8 @@ export interface AutoAttackReplay {
   readonly events: readonly unknown[];
   readonly tick: number;
   readonly levels: Readonly<Record<string, number>>;
+  /** The attacker's Monster Lab ranks (issue #352); absent on a replay kept before them. */
+  readonly ranks?: Readonly<Record<string, number>>;
   readonly declareWar: boolean;
 }
 

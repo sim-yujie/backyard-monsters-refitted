@@ -17,6 +17,7 @@ import type {
   CombatTargetKind,
   FlingLog,
   MonsterLevels,
+  MonsterRanks,
   RaidLog,
   ResourceAmounts,
   Roster,
@@ -71,6 +72,10 @@ export interface ReplayInput {
   readonly declareWar?: boolean;
   readonly bunkers?: Readonly<Record<number, Roster>>;
   readonly defenderLevels?: MonsterLevels;
+  /** The attacker's Monster Lab ranks (issue #352); absent, every monster is rank 0. */
+  readonly ranks?: MonsterRanks;
+  /** The defender's Monster Lab ranks, for its bunkers' monsters (issue #352). */
+  readonly defenderRanks?: MonsterRanks;
   /** The champions in the defender's Champion Cage (issues #195, #310). */
   readonly defenderChampions?: readonly DefenderChampion[] | null;
   /**
@@ -98,6 +103,8 @@ export interface RaidReplayInput {
   readonly bunkers?: Readonly<Record<number, Roster>>;
   /** The player's academy levels: their bunkers' defenders, and the raiders too. */
   readonly defenderLevels?: MonsterLevels;
+  /** The player's Lab ranks for their bunkers' defenders; the raiders have none (issue #352). */
+  readonly defenderRanks?: MonsterRanks;
   readonly defenderChampions?: readonly DefenderChampion[] | null;
 }
 
@@ -194,6 +201,8 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     ...(input.declareWar === undefined ? {} : { declareWar: input.declareWar }),
     ...(input.bunkers ? { bunkers: input.bunkers } : {}),
     ...(input.defenderLevels ? { defenderLevels: input.defenderLevels } : {}),
+    ...(input.ranks ? { ranks: input.ranks } : {}),
+    ...(input.defenderRanks ? { defenderRanks: input.defenderRanks } : {}),
     ...(input.defenderChampions ? { defenderChampions: input.defenderChampions } : {}),
     ...(input.learn ? { learn: true } : {}),
     ...(input.raid ? { raid: input.raid } : {}),
@@ -283,6 +292,7 @@ export const replayRaid = (input: RaidReplayInput): ReplayOutcome =>
     ...(input.seed === undefined ? {} : { seed: input.seed }),
     ...(input.bunkers ? { bunkers: input.bunkers } : {}),
     ...(input.defenderLevels ? { defenderLevels: input.defenderLevels } : {}),
+    ...(input.defenderRanks ? { defenderRanks: input.defenderRanks } : {}),
     ...(input.defenderChampions ? { defenderChampions: input.defenderChampions } : {}),
     raid: true,
   });

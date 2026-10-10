@@ -1,5 +1,5 @@
 import type { BaseLoadResponse, ChampionSaveEntry, PlayerCell, Resources } from "@/api/types";
-import type { MonsterLevels, Roster } from "@/game/combat/rules/types";
+import type { MonsterLevels, MonsterRanks, Roster } from "@/game/combat/rules/types";
 import type { OffsetCell } from "@/game/HexGrid";
 
 /**
@@ -66,6 +66,11 @@ export interface AttackRoster {
   readonly monsters: Roster;
   /** Academy levels by roster id; an absent id is level 1. */
   readonly levels: MonsterLevels;
+  /**
+   * Monster Lab ranks by roster id (issue #352): what the attacker's monsters
+   * fight with. Absent, or an absent id, is rank 0.
+   */
+  readonly ranks?: MonsterRanks;
   /**
    * Every champion the attacker owns, as the own-yard save lists them. The
    * attack load declares all of them, as `ATTACK.AttackData()` does; which one

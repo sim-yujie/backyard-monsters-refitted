@@ -2,6 +2,7 @@ import type { BaseLoadResponse, ChampionSaveEntry } from "@/api/types";
 import type { AttackRoster, AttackTarget } from "@/game/attack/attackTarget";
 import { KRALLEN_TYPE } from "@/game/attack/AttackSession";
 import { ownYardTarget } from "@/game/attack/ownYardTarget";
+import { academyRanks } from "@/game/combat/rules/defence";
 import {
   CHAMPION_MAX_POWER_LEVEL,
   KRALLEN_MAX_POWER_LEVEL,
@@ -258,15 +259,26 @@ export const testChampionEntry = (champion: TestChampion): ChampionSaveEntry => 
   };
 };
 
+/** `{ ranks }` for a roster, or nothing when the player's Lab has researched nothing. */
+const rankFields = (save?: Pick<BaseLoadResponse, "academy">): Pick<AttackRoster, "ranks"> => {
+  const ranks = academyRanks(save?.academy);
+  return Object.keys(ranks).length > 0 ? { ranks } : {};
+};
+
 /**
  * The attack roster of a test: the army's monsters at their levels and its
  * made-up champions. No Catapult, no siege weapons, no resources to buy bombs
  * with (owner answer Q7), and no flinger cells: a test is monsters and
  * champions only.
  */
-export const testRoster = (army: TestArmy): AttackRoster => ({
+export const testRoster = (
+  army: TestArmy,
+  save?: Pick<BaseLoadResponse, "academy">,
+): AttackRoster => ({
   monsters: picksOf(army),
   levels: levelsOf(army),
+  // The player's own Monster Lab ranks, whatever level a row is set to (issue #352).
+  ...rankFields(save),
   champions: army.champions.map(testChampionEntry),
   flingerLevel: 0,
   catapultLevel: 0,
@@ -313,4 +325,5 @@ export const consumeBaiterRun = (): BaiterRun | null => {
 };
 
 /** The attack scene's target for a test: the own yard against the test army. */
-export const baiterTarget = (run: BaiterRun): AttackTarget => ownYardTarget(run.save, testRoster(run.army));
+export const baiterTarget = (run: BaiterRun): AttackTarget =>
+  ownYardTarget(run.save, testRoster(run.army, run.save));

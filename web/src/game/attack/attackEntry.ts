@@ -10,6 +10,7 @@ import {
   type PlayerCell,
 } from "@/api/types";
 import type { OffsetCell } from "@/game/HexGrid";
+import { academyRanks } from "@/game/combat/rules/defence";
 import {
   hexDistance,
   mainYardRange,
@@ -252,10 +253,12 @@ const rosterOf = (
   }
 
   const siege = ownSave?.siege;
+  const ranks = academyRanks(ownSave?.academy);
 
   return {
     monsters,
     levels,
+    ...(Object.keys(ranks).length > 0 ? { ranks } : {}),
     champions: ownSave?.champion ?? [],
     flingerLevel,
     catapultLevel: ownCatapultLevel(ownSave),

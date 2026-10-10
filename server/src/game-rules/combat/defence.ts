@@ -1,7 +1,8 @@
 import { KRALLEN_ID } from "./champions.js";
 import { bunkerGarrisons, type BattleOptions, type DefenderChampion } from "./engine.js";
 import { championByType, CHAMPION_MAX_POWER_LEVEL } from "./stats.js";
-import type { CombatBuildingDataMap, MonsterLevels, Roster } from "./types.js";
+import { MAX_RANK } from "./specialMoves.js";
+import type { CombatBuildingDataMap, MonsterLevels, MonsterRanks, Roster } from "./types.js";
 
 /**
  * What a yard defends itself with (issue #195): each Monster Bunker's
@@ -18,6 +19,11 @@ export interface DefenderForces {
   readonly bunkers: Readonly<Record<number, Roster>>;
   /** The defender's academy levels, by monster id; an absent one fights at level 1. */
   readonly defenderLevels: MonsterLevels;
+  /**
+   * The defender's Monster Lab ranks, by monster id: what its bunkers'
+   * monsters fight with (issue #352). Absent, or an absent id, is rank 0.
+   */
+  readonly defenderRanks?: MonsterRanks;
   /** The champions at home in the cage, none to two ({@link cagedChampions}). */
   readonly defenderChampions: readonly DefenderChampion[];
 }
@@ -42,6 +48,19 @@ export const academyLevels = (academy: unknown): MonsterLevels => {
     if (Number.isFinite(level) && level >= 1) levels[id] = Math.floor(level);
   }
   return levels;
+};
+
+/**
+ * A save's `academy`, `{ monsterId: { powerup } }`, as Monster Lab ranks: whole,
+ * 1 to 3. A monster with no rank is left out (issue #352).
+ */
+export const academyRanks = (academy: unknown): MonsterRanks => {
+  const ranks: Record<string, number> = {};
+  for (const [id, entry] of Object.entries(record(academy) ?? {})) {
+    const rank = Number(record(entry)?.powerup);
+    if (Number.isFinite(rank) && rank >= 1) ranks[id] = Math.min(Math.floor(rank), MAX_RANK);
+  }
+  return ranks;
 };
 
 /** One save entry as a caged champion, or null when it is not at home with health left. */
@@ -99,11 +118,16 @@ export const defenderForcesOf = (save: {
   readonly buildingdata: unknown;
   readonly academy: unknown;
   readonly champion: unknown;
-}): DefenderForces => ({
-  bunkers: bunkerGarrisons(record(save.buildingdata) as CombatBuildingDataMap | null),
-  defenderLevels: academyLevels(save.academy),
-  defenderChampions: cagedChampions(save.champion),
-});
+}): DefenderForces => {
+  const defenderRanks = academyRanks(save.academy);
+  return {
+    bunkers: bunkerGarrisons(record(save.buildingdata) as CombatBuildingDataMap | null),
+    defenderLevels: academyLevels(save.academy),
+    // Kept only when the Lab has researched something, so a yard without ranks serves what it did.
+    ...(Object.keys(defenderRanks).length > 0 ? { defenderRanks } : {}),
+    defenderChampions: cagedChampions(save.champion),
+  };
+};
 
 /**
  * A defence as stored or served (the attack session, the attack load's
@@ -126,6 +150,12 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
   for (const [id, level] of Object.entries(record(value.defenderLevels) ?? {})) {
     if (Number.isSafeInteger(level) && (level as number) >= 1) levels[id] = level as number;
   }
+  const ranks: Record<string, number> = {};
+  for (const [id, rank] of Object.entries(record(value.defenderRanks) ?? {})) {
+    if (Number.isSafeInteger(rank) && (rank as number) >= 1 && (rank as number) <= MAX_RANK) {
+      ranks[id] = rank as number;
+    }
+  }
   // A session stored before issue #310 holds one `defenderChampion`.
   const champions = Array.isArray(value.defenderChampions)
     ? value.defenderChampions
@@ -135,6 +165,7 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
   return {
     bunkers,
     defenderLevels: levels,
+    ...(Object.keys(ranks).length > 0 ? { defenderRanks: ranks } : {}),
     defenderChampions: cagedChampions(
       champions.map((entry) => {
         const champion = record(entry);
@@ -152,14 +183,17 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
  */
 export const battleDefence = (
   forces: DefenderForces | null | undefined,
-): Pick<BattleOptions, "bunkers" | "defenderLevels" | "defenderChampions"> => {
+): Pick<BattleOptions, "bunkers" | "defenderLevels" | "defenderRanks" | "defenderChampions"> => {
   if (!forces) return {};
   const hasBunkers = Object.keys(forces.bunkers).length > 0;
   const hasChampions = forces.defenderChampions.length > 0;
   const hasLevels = Object.keys(forces.defenderLevels).length > 0;
+  const hasRanks = Object.keys(forces.defenderRanks ?? {}).length > 0;
   return {
     ...(hasBunkers ? { bunkers: forces.bunkers } : {}),
     ...(hasBunkers || hasChampions || hasLevels ? { defenderLevels: forces.defenderLevels } : {}),
+    // Only a bunker's monsters fight at the defender's rank (issue #352).
+    ...(hasBunkers && hasRanks ? { defenderRanks: forces.defenderRanks as MonsterRanks } : {}),
     ...(hasChampions ? { defenderChampions: forces.defenderChampions } : {}),
   };
 };
