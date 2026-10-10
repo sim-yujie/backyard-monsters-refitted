@@ -308,6 +308,8 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/13.png": "monsters/wormzer-repaint@4x.png", // Wormzer art trial
   "monsters/zafreeti.v2.png": "monsters/zafreeti-repaint@4x.png", // Zafreeti art trial
   "monsters/vorg_anim.png": "monsters/vorg-repaint@4x.png", // Vorg art trial (3 rows: wings up, half open, down)
+  "monsters/slimeattikus_anim.png": "monsters/slimeattikus-repaint@4x.png", // Slimeattikus art trial (only row 0 is drawn)
+  "monsters/slimeattikusmini_anim.png": "monsters/slimeattikusmini-repaint@4x.png", // mini slime, same frames
 };
 
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */
