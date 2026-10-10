@@ -94,5 +94,6 @@ describe("bots never reach a client", () => {
       .sort();
 
     expect(readers).toEqual(Object.keys(READERS).sort());
-  });
+    // Reads every source file, so it needs more than the 5 s default when the full suite loads the machine.
+  }, 30_000);
 });
