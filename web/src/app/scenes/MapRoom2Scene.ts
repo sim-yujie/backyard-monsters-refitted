@@ -730,8 +730,13 @@ export class MapRoom2Scene implements Scene {
     this.updateBookmarkTarget();
   }
 
+  /** The selected cell, or else the one in the middle of the view. */
   private addBookmark(name: string, cell: OffsetCell | null = this.selected): void {
-    if (!cell) return;
+    if (!cell) {
+      const view = this.camera.visibleWorldRect();
+      cell = mapRoomGrid.pixelToCell((view.left + view.right) / 2, (view.top + view.bottom) / 2);
+      if (!inWorld(cell.col, cell.row)) return;
+    }
     const refused = this.bookmarks.add(cell.col, cell.row, name);
     if (refused) {
       this.ui?.notices.show("bookmarks", refused, { level: "info", timeoutMs: 4_000 });

@@ -200,10 +200,10 @@
   margin: 0;
 }
 
-/* ── The dock button: the bottom row, left of Mail (mail.css) ──────────── */
+/* ── The dock button: the bottom row, left of Mail and the bell (mail.css, notifications.css) ── */
 
 .yard-dock__right > .yard-dock__button--goals {
-  right: 330px;
+  right: 420px;
   bottom: 30px;
 }
 

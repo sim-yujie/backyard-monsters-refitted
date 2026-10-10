@@ -35,6 +35,8 @@ export class NavPanel {
   private readonly panel: Panel;
   private readonly nameInput: HTMLInputElement;
   private readonly addButton: HTMLButtonElement;
+  /** Why the selected cell cannot be bookmarked, if it cannot (full, already saved). */
+  private refusal: string | undefined;
   private readonly list: HTMLUListElement;
   /** One button per own outpost; hidden while there are none. */
   private readonly outposts: HTMLElement;
@@ -72,10 +74,12 @@ export class NavPanel {
     this.addButton.textContent = "Add";
     this.addButton.disabled = true;
     add.append(this.nameInput, this.addButton);
+    this.nameInput.addEventListener("input", () => this.refreshAdd());
     add.addEventListener("submit", (event) => {
       event.preventDefault();
       options.onBookmarkAdd(this.nameInput.value);
       this.nameInput.value = "";
+      this.refreshAdd();
     });
 
     this.list = document.createElement("ul");
@@ -99,12 +103,20 @@ export class NavPanel {
     this.panel.body.prepend(node);
   }
 
-  /** Enables the add button and names what it would bookmark. */
+  /**
+   * Names what the add button would bookmark: the selected cell, or the middle
+   * of the view when none is selected. It stays off for an empty name.
+   */
   setBookmarkTarget(cell: { col: number; row: number } | null, reason?: string): void {
-    this.addButton.disabled = cell === null || reason !== undefined;
+    this.refusal = reason;
     this.addButton.title =
-      reason ?? (cell ? `Bookmark ${cell.col}, ${cell.row}` : "Select a cell first");
-    if (cell) this.nameInput.placeholder = `Name for ${cell.col}, ${cell.row}`;
+      reason ?? (cell ? `Bookmark ${cell.col}, ${cell.row}` : "Bookmark the middle of the view");
+    this.nameInput.placeholder = cell ? `Name for ${cell.col}, ${cell.row}` : "Bookmark name";
+    this.refreshAdd();
+  }
+
+  private refreshAdd(): void {
+    this.addButton.disabled = this.refusal !== undefined || this.nameInput.value.trim() === "";
   }
 
   setBookmarks(bookmarks: readonly Bookmark[]): void {

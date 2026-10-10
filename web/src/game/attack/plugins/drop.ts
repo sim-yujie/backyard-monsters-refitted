@@ -62,6 +62,9 @@ import { CatapultPanel } from "@/ui/attack/CatapultPanel";
 import { SiegePanel } from "@/ui/attack/SiegePanel";
 import { Container, Graphics } from "pixi.js";
 
+/** Siege weapons are not built yet (owner, 2026-10-10): the panel, its button and its S key stay off. */
+const SIEGE_PANEL_ENABLED = false;
+
 /** Ring colours: the success and danger tokens of `tokens.css`. */
 const RING_LEGAL = 0x5bbd6a;
 const RING_ILLEGAL = 0xe05252;
@@ -162,7 +165,8 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
   siegeButton.title = "Siege weapons (S)";
   siegeButton.setAttribute("aria-expanded", "false");
 
-  tools.append(catapultButton, siegeButton);
+  tools.append(catapultButton);
+  if (SIEGE_PANEL_ENABLED) tools.append(siegeButton);
   if (!flavour.test) dock.append(tools);
 
   let catapult: CatapultPanel | null = null;
@@ -292,7 +296,7 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
     onRefuse: (reason) => notices.show("attack-drop", reason, { level: "info", timeoutMs: 2500 }),
     onToolUsed,
     onToolChange: () => refreshPanels(),
-    ...(flavour.test ? {} : { onOpenCatapult: toggleCatapult, onOpenSiege: toggleSiege }),
+    ...(flavour.test ? {} : { onOpenCatapult: toggleCatapult, ...(SIEGE_PANEL_ENABLED ? { onOpenSiege: toggleSiege } : {}) }),
   });
   input.attach();
 
