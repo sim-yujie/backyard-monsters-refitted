@@ -822,6 +822,8 @@ export interface PlayerCell {
   pe?: number;
   /** Truce expiry, unix seconds. Absent on the caller's own cell. */
   t?: number;
+  /** 1 when this base's owner has ever attacked the caller (the map's red plate). */
+  ak?: 1;
   /** 1 when the cell belongs to the caller. */
   mine: 0 | 1;
   pic_square: string | null;
