@@ -26,6 +26,7 @@ import { economyConfig, economyModeWasUnrecognised } from "./config/EconomyConfi
 import { combatConfig, combatModeWasUnrecognised } from "./config/CombatConfig.js";
 import { ownerSaveConfig, ownerSaveModeWasUnrecognised } from "./config/OwnerSaveConfig.js";
 import { startAttackFinaliser } from "./services/base/finaliseAttack.js";
+import { startRetentionSweep } from "./services/privacy/retention.js";
 import { turnstileSecretKey } from "./services/auth/turnstile.js";
 import { requiresDiscordVerification } from "./config/AccountConfig.js";
 import { botConfig } from "./config/BotConfig.js";
@@ -119,6 +120,12 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // `ATTACK_FINALISER_SWEEP=off` leaves the sweep to another server sharing
   // the same database, such as a second development server.
   if (process.env.ATTACK_FINALISER_SWEEP !== "off") startAttackFinaliser();
+
+  // Deletes mail, battle records and chat reports past their retention limits,
+  // once a UTC day (`config/RetentionConfig.ts`, the Privacy Policy). Two
+  // servers sharing a database run it once between them; `RETENTION_SWEEP=off`
+  // turns it off on this one.
+  if (process.env.RETENTION_SWEEP !== "off") startRetentionSweep(postgres.em);
 
   // The bot sweep (issue #240): grows, repairs and rebalances Map Room 1 bots.
   // Off unless BOTS_BRAIN=on, and then not even loaded, so a server without

@@ -22,6 +22,7 @@
     "consumer:create": "bun src/scripts/api-consumers.ts create",
     "consumer:list": "bun src/scripts/api-consumers.ts list",
     "consumer:revoke": "bun src/scripts/api-consumers.ts revoke",
+    "account:delete": "bun src/scripts/delete-account.ts",
     "typecheck": "bunx tsc --noEmit"
   },
   "engines": {
