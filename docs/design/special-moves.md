@@ -45,7 +45,7 @@ the total damage is already counted that way.
 | C3 Bolt | Blink: with fewer than rank*5 waypoints of route left and the route's end within rank*150 screen px, it goes untargetable and hops a tenth of the way ten times, then counts as arrived | range 150 / 300 / 450 px; route test 5 / 10 / 15 waypoints |
 | C9 Brain | Cloak: from the moment it has a target and is walking, it carries `TARGETS_INVISIBLE`; after arriving it stays cloaked for the delay, then shows until it walks again | 0 / 4 / 8 s after arriving |
 | C7 Bandito | Whirlwind: each swing splashes everything within 60 (target left out, no cap, full damage); the swing comes faster | attack speed 1x / 1.5x / 2x |
-| C8 Fang | Venom: a bite on a creep leaves ONE venom on it and each bite adds a stack; once a second it hurts for stacks x Fang damage x share; never wears off, ends with the creep's death; buildings take none | share 0.1 / 0.2 / 0.3 |
+| C8 Fang | Venom: a bite on a creep leaves ONE venom on it and each bite adds a stack; every half second (40 loops) it hurts for stacks x Fang damage x share; never wears off, ends with the creep's death; buildings take none | share 0.1 / 0.2 / 0.3 |
 | C14 Teratorn | Fireball bounce: after it lands on a building it jumps to the nearest other building within 100 screen px, `rank` times, half the last damage each time | 1 / 2 / 3 jumps |
 
 How it is wired:
