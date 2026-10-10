@@ -36,9 +36,33 @@ hooks are `onAttack` (Fink, Wormzer; after a building swing, a creep swing and `
 splash buildings (Flash `AOEDamage`). D.A.V.E.'s two half-damage rockets are visual only (WP3);
 the total damage is already counted that way.
 
-The rest of the list (Bolt blink, Bandito whirlwind, Fang venom, Brain invisibility, Teratorn
-bounce) is later work packages. `CreepSnapshot.rank` (only when above 0) is already there for
-their visuals.
+`CreepSnapshot.rank` (only when above 0) is there for the visuals.
+
+## 2b. WP2: five more moves
+
+| Monster | Move | Numbers (rank 1 / 2 / 3) |
+|---|---|---|
+| C3 Bolt | Blink: with fewer than rank*5 waypoints of route left and the route's end within rank*150 screen px, it goes untargetable and hops a tenth of the way ten times, then counts as arrived | range 150 / 300 / 450 px; route test 5 / 10 / 15 waypoints |
+| C9 Brain | Cloak: from the moment it has a target and is walking, it carries `TARGETS_INVISIBLE`; after arriving it stays cloaked for the delay, then shows until it walks again | 0 / 4 / 8 s after arriving |
+| C7 Bandito | Whirlwind: each swing splashes everything within 60 (target left out, no cap, full damage); the swing comes faster | attack speed 1x / 1.5x / 2x |
+| C8 Fang | Venom: a bite on a creep leaves ONE venom on it and each bite adds a stack; once a second it hurts for stacks x Fang damage x share; never wears off, ends with the creep's death; buildings take none | share 0.1 / 0.2 / 0.3 |
+| C14 Teratorn | Fireball bounce: after it lands on a building it jumps to the nearest other building within 100 screen px, `rank` times, half the last damage each time | 1 / 2 / 3 jumps |
+
+How it is wired:
+- Brain: the creep's `flags` gain `TARGETS_INVISIBLE` while cloaked. Towers, the Spurtz Cannon and
+  every splash ask for the flags they can reach, so a cloaked Brain is skipped by all of them; the
+  trap, Fomor's aura and Korath's quake already ask for the invisible and still see it. Bunker
+  monsters and the caged champion also drop a foe that has gone unseen.
+- Bolt: `targetable` is false for the ten hops, which the creep index already honours.
+- Fang: `venomStacks`, `venomDps`, `venomTick` and `venomBy` on the poisoned creep. The bite runs
+  at the start of the creep's tick, beside Korath's flame, through the creep's armour.
+- Bandito: `onAttack` (the same hook as Fink and Wormzer); the speed is in `swingDelay`.
+- Teratorn: `onAttack` on a building hit; the jumps follow Flash's `FindGlaiveTarget`.
+
+For the visuals (WP3), `CreepSnapshot` gains `invisible`, `blinking` and `poisonStacks` (each
+present only when set), and `recentEvents` gains `splash` (Fink, Wormzer, Bandito swings and
+Project X's death blast: striker point, radius, how many it reached), `blink` (each hop) and
+`bounce` (building ids and yard points, damage taken off). None of these enters the checkpoint.
 
 ## 3. Determinism
 
@@ -61,6 +85,30 @@ Choice made by builder:
 - Bots have no ranks, so revenge replays of bot attacks stay rank 0.
 - Housing, transfer and revenge-planning code reads levels only, so it carries no ranks.
 
+WP2:
+- The Fang's venom bites every 80 ticks, which is the owner's "1 s". Flash's own interval is 40
+  loops (`CStatusEffect._MAX_TICKS`), which at the 80 loops a second the game really runs is half a
+  second, the same 40 Korath's flame uses here. The owner's figure was followed; it is one constant,
+  `VENOM_INTERVAL_SECONDS`.
+- Venom strength is the first Fang's damage times its rank's share and later bites only add stacks
+  (Flash's `DOTEffect` keeps `_initialDPS`). Damage comes off the creep as from no one, but kills are
+  credited to the Fang for the report.
+- Bandito's whirlwind also reaches enemy buildings when it is an attacker, as Flash's
+  `AOEDamageOnAttack` base does (the decisions file says "ground enemies"). It is the attacker's
+  swing, not a Fink's: no cap.
+- Bandito's speed is `attackDelay / (rank-based multiplier)`, truncated, combined with enrage and putty.
+- Brain's cloak delay counts real seconds (80 ticks each). With a delay of 0 it shows itself the tick
+  after it arrives, as Flash does. Flash's aggro range of 1 while cloaked is not modelled.
+- Brain and Bolt only matter between an attacker and the defence. A defending (bunker) Brain also
+  cloaks, which keeps attackers from engaging it; a defending Bolt never blinks (no route to blink on).
+- Bolt does not walk during its blink (Flash also lets `move()` run); it hops from the tick after it
+  starts. Its blink also needs the creep not to be at its target. If the target is lost mid-blink the
+  blink ends without counting as arrived. Distances are screen px, as the route's waypoints are.
+- Teratorn's bounce reads building points as the screen anchor plus half the footprint height, and
+  keeps Flash's rule of skipping the building before only when another stands. Flash falls back to
+  walls when nothing else is near; the owner's decision (no walls) is followed. Jumps loot as a
+  `DummyTarget` (1). Only fireballs at buildings bounce, not those at creeps.
+
 ## 5. Tests
 
 - `web/src/game/combat/rules/specialMoves.test.ts`: the numbers per rank, rank reading, damage per
@@ -68,5 +116,10 @@ Choice made by builder:
   (and not the attacker's), web/server replay equality, rank 0 equals no ranks.
 - Server: session roundtrip and sanitising of `attackerRanks`, checkpoint copy, `foughtAcademy`
   merging `powerup`, abandoned-attack replay at the attacker's ranks.
+- `web/src/game/combat/rules/specialMovesLab.test.ts` (WP2): the numbers per rank; Bandito's
+  splash at every rank, no cap, and its swing gaps; Fang's stacks, bite size and one-second spacing,
+  never wearing off, ending with the creep's death, no venom on buildings; Brain's cloak timeline per
+  rank, towers, a trap and a bunker monster (with a rank-0 baseline); Bolt's ten hops, untargetable,
+  arriving sooner; Teratorn's jumps, halving, no walls, nothing in reach; web/server replay equality.
 - Web: `servedRanks`, the session's ranks (served, none served, roster fallback), roster ranks from
   the own-yard load, Baiter at the player's ranks.

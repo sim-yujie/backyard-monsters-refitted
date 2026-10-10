@@ -196,20 +196,35 @@ import type {
 import {
   AIRBURST_BUILDING_RADIUS,
   AIRBURST_CREEP_RADIUS,
+  BANDITO_ID,
+  BANDITO_RADIUS,
+  BLINK_HOPS,
+  BOLT_ID,
+  BOUNCE_RADIUS,
+  BRAIN_ID,
   DAVE_ID,
   EYE_RA_ID,
+  FANG_ID,
   FINK_ID,
   FINK_RADIUS,
   PROJECT_X_ID,
   PROJECT_X_RADIUS,
+  TERATORN_ID,
+  VENOM_INTERVAL_SECONDS,
   WORMZER_ID,
   WORMZER_RADIUS,
   airburstPercent,
   airburstRadius,
+  banditoSpeedPercent,
+  blinkRange,
+  blinkRouteLimit,
+  bounceCount,
+  cloakDelaySeconds,
   daveRange,
   finkExtraTargets,
   projectXMultiplier,
   rankOf,
+  venomShare,
   wormzerMultiplier,
 } from "./specialMoves.js";
 
@@ -714,6 +729,12 @@ export interface CreepSnapshot {
   readonly quaking?: boolean;
   /** Its Monster Lab rank, 1 to 3; absent at rank 0 (issue #352). */
   readonly rank?: number;
+  /** A Brain that cannot be targeted: drawn see-through (issue #352). */
+  readonly invisible?: boolean;
+  /** A Bolt in mid-blink, flickering and untargetable (issue #352). */
+  readonly blinking?: boolean;
+  /** Fang's venom stacks on it; absent when it is not poisoned (issue #352). */
+  readonly poisonStacks?: number;
 }
 
 /**
@@ -789,6 +810,44 @@ export type BattleVisualEvent =
       readonly ix: number;
       readonly iy: number;
       /** Health actually taken, capped at what the creep had left. */
+      readonly amount: number;
+    }
+  | {
+      /**
+       * A ranked splash went off (issue #352): a Fink's, Wormzer's or Bandito's
+       * swing, or a Project X's death blast, `moveId` the monster's id. Round
+       * the striker's yard point, `radius` screen px; `hits` is how many it reached.
+       */
+      readonly kind: "splash";
+      readonly tick: number;
+      readonly creepId: number;
+      readonly moveId: string;
+      readonly ix: number;
+      readonly iy: number;
+      readonly radius: number;
+      readonly hits: number;
+    }
+  | {
+      /** A Bolt hopped (issue #352): `hop` of {@link BLINK_HOPS}, now at `ix`, `iy`. */
+      readonly kind: "blink";
+      readonly tick: number;
+      readonly creepId: number;
+      readonly hop: number;
+      readonly ix: number;
+      readonly iy: number;
+    }
+  | {
+      /** A Teratorn's fireball jumped between buildings (issue #352), yard points. */
+      readonly kind: "bounce";
+      readonly tick: number;
+      readonly creepId: number;
+      readonly fromBuildingId: number;
+      readonly toBuildingId: number;
+      readonly fromIx: number;
+      readonly fromIy: number;
+      readonly toIx: number;
+      readonly toIy: number;
+      /** Health the jump took off, after fortification. */
       readonly amount: number;
     }
   | {
@@ -941,6 +1000,22 @@ interface Creep {
   rank: number;
   /** Wormzer's `m_lastTarget`: its last splash's target ({@link splashKey}); -1 for none. */
   lastSplash: number;
+  /** A Brain that is cloaked: it carries `TARGETS_INVISIBLE` in `flags` (issue #352). */
+  invisible: boolean;
+  /** The tick a cloaked, arrived Brain shows itself; -1 until it has arrived. */
+  cloakEnds: number;
+  /** Hops a Bolt's blink has left; 0 when it is not blinking. */
+  blinkHops: number;
+  /** The screen px each hop covers. */
+  blinkStep: number;
+  /** Fang's venom: stacks on this creep, 0 when it is not poisoned. */
+  venomStacks: number;
+  /** Damage one stack does a bite (the first Fang's, as `DOTEffect` keeps `_initialDPS`). */
+  venomDps: number;
+  /** Ticks since the last bite of the venom. */
+  venomTick: number;
+  /** The Fang that poisoned it, or null; credits the venom's kills. */
+  venomBy: Creep | null;
   /** Korath standing in his quake. */
   quaking: boolean;
   /** The flame on this creep, per {@link FLAME_INTERVAL} ticks; 0 when it is not burning. */
@@ -1023,6 +1098,14 @@ const NO_ABILITIES = {
   hits: 0,
   rank: 0,
   lastSplash: -1,
+  invisible: false,
+  cloakEnds: -1,
+  blinkHops: 0,
+  blinkStep: 0,
+  venomStacks: 0,
+  venomDps: 0,
+  venomTick: 0,
+  venomBy: null,
   quaking: false,
   burnDps: 0,
   burnTick: 0,
@@ -2630,7 +2713,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * delay divided by its multiplier (`Enrage.as:23`, `DivisionModifier`).
    */
   const swingDelay = (creep: Creep): number => {
-    const boost = creep.enrage * creep.puttySpeed;
+    let boost = creep.enrage * creep.puttySpeed;
+    // A ranked Bandito spins faster: 1, 1.5, 2 x (`BanditoAOEDamageSpin.as:23`, issue #352).
+    if (creep.rank > 0 && creep.monsterId === BANDITO_ID) {
+      boost *= banditoSpeedPercent(creep.rank) / 100;
+    }
     return Math.trunc(boost === 1 ? creep.attackDelay : creep.attackDelay / boost);
   };
 
@@ -2813,14 +2900,130 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const targets = splashTargets(creep, FINK_RADIUS, foe, building);
       targets.length = Math.min(targets.length, finkExtraTargets(creep.rank));
       dealSplash(creep, damage, FINK_RADIUS, FINK_RADIUS, targets);
+      noteSplash(creep, FINK_RADIUS, targets.length);
     } else if (creep.monsterId === WORMZER_ID) {
       const key = splashKey(foe, building);
       if (key === creep.lastSplash) return;
       creep.lastSplash = key;
       const targets = splashTargets(creep, WORMZER_RADIUS, null, null);
       dealSplash(creep, damage * wormzerMultiplier(creep.rank), WORMZER_RADIUS, 0, targets);
+      noteSplash(creep, WORMZER_RADIUS, targets.length);
+    } else if (creep.monsterId === BANDITO_ID) {
+      // The whirlwind: everything within 60, the target left out, no cap, full damage
+      // (`Bandito.as:15`, `BanditoAOEDamageSpin`: `includeInitialTarget` false).
+      const targets = splashTargets(creep, BANDITO_RADIUS, foe, building);
+      dealSplash(creep, damage, BANDITO_RADIUS, BANDITO_RADIUS, targets);
+      noteSplash(creep, BANDITO_RADIUS, targets.length);
+    } else if (creep.monsterId === FANG_ID) {
+      if (foe) poison(foe, creep);
+    } else if (creep.monsterId === TERATORN_ID) {
+      if (building) bounceFireball(creep, building, damage);
     }
   };
+
+  /** The renderer's note of a splash (issue #352); not simulation state. */
+  const noteSplash = (creep: Creep, radius: number, hits: number): void => {
+    visual.push({
+      kind: "splash",
+      tick,
+      creepId: creep.id,
+      moveId: creep.monsterId,
+      ix: creep.ix,
+      iy: creep.iy,
+      radius,
+      hits,
+    });
+  };
+
+  /**
+   * `PoisonOnAttack.onAttack` (`PoisonOnAttack.as:12`, `DOTEffect.as`): a bite
+   * on a creep leaves one venom on it, and each further bite adds a stack. The
+   * venom's strength is the first Fang's damage times its rank's share, and it
+   * never runs out. A building takes none (`param1 is MonsterBase`).
+   */
+  const poison = (foe: Creep, fang: Creep): void => {
+    if (foe.hp <= 0 || foe.gone) return;
+    if (foe.venomStacks === 0) {
+      foe.venomDps = fang.damage * venomShare(fang.rank);
+      foe.venomTick = 0;
+      foe.venomBy = fang;
+    }
+    foe.venomStacks += 1;
+  };
+
+  /**
+   * The venom's bite, ahead of its creep acting like the flame's: every
+   * {@link VENOM_INTERVAL_SECONDS} it takes stacks times the stack's damage,
+   * through the creep's armour, from no one. True when it killed.
+   */
+  const tickVenom = (creep: Creep): boolean => {
+    creep.venomTick += 1;
+    if (creep.venomTick < ticks(VENOM_INTERVAL_SECONDS)) return false;
+    creep.venomTick = 0;
+    damageCreep(creep, creep.venomStacks * creep.venomDps, null, creep.venomBy);
+    return creep.hp <= 0;
+  };
+
+  /**
+   * `FIREBALL.FindGlaiveTarget` (`FIREBALL.as:269-340`): after the fireball
+   * lands, a ranked Teratorn's jumps on `rank` times, each to the nearest
+   * other building within 100 screen px of the last (not a wall, mushroom,
+   * decoration, immovable, enemy, trap or jarred tower), skipping back to the
+   * one before only when another stands. Each jump is half the last, and loots
+   * as a `DummyTarget` does (1).
+   */
+  const bounceFireball = (creep: Creep, first: EngineBuilding, damage: number): void => {
+    let from = first;
+    let previous: EngineBuilding | null = null;
+    let dealt = damage;
+    for (let jump = 0; jump < bounceCount(creep.rank); jump += 1) {
+      dealt *= 0.5;
+      const originX = from.sx;
+      const originY = from.sy + from.middle;
+      const near: { building: EngineBuilding; dist: number }[] = [];
+      for (const building of yard.buildings) {
+        if (building === from || !glaiveable(building)) continue;
+        const dist = Math.trunc(
+          Math.sqrt(distanceSquared(originX, originY, building.sx, building.sy + building.middle)),
+        );
+        if (dist <= BOUNCE_RADIUS) near.push({ building, dist });
+      }
+      near.sort((one, other) => one.dist - other.dist || one.building.id - other.building.id);
+      if (near[0]?.building === previous) near.shift();
+      const next = near[0]?.building;
+      if (!next) return;
+      const amount = damageBuilding(next, dealt, creep, 1);
+      visual.push({
+        kind: "bounce",
+        tick,
+        creepId: creep.id,
+        fromBuildingId: from.id,
+        toBuildingId: next.id,
+        fromIx: from.x,
+        fromIy: from.y,
+        toIx: next.x,
+        toIy: next.y,
+        amount,
+      });
+      previous = from;
+      from = next;
+    }
+  };
+
+  /** A building a fireball may jump to (`FIREBALL.as:279`). */
+  const glaiveable = (building: EngineBuilding): boolean =>
+    building.hp > 0 &&
+    building.kind !== "wall" &&
+    building.kind !== "mushroom" &&
+    building.kind !== "decoration" &&
+    building.kind !== "immovable" &&
+    building.kind !== "enemy" &&
+    building.kind !== "trap" &&
+    !(building.kind === "tower" && building.jarred) &&
+    !UNTARGETABLE_TYPES.includes(building.type);
+
+  /** A foe a defender can no longer see: a cloaked Brain, or a Bolt mid-blink (issue #352). */
+  const unseen = (foe: Creep): boolean => foe.invisible || foe.blinkHops > 0;
 
   /**
    * `AOEDamageOnDeath` (`ProjectX.as:14`, `AOEDamageOnDeath.as:12-15`): a ranked
@@ -2831,6 +3034,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const projectXBlast = (creep: Creep): void => {
     const targets = splashTargets(creep, PROJECT_X_RADIUS, null, null);
     dealSplash(creep, creep.damage * projectXMultiplier(creep.rank), PROJECT_X_RADIUS, 0, targets);
+    noteSplash(creep, PROJECT_X_RADIUS, targets.length);
   };
 
   /**
@@ -2924,8 +3128,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // (`CreepBase.as:1679-1680`), so a creep covers the same ground on screen
     // whichever way it heads. The step is taken on screen, then turned back
     // into yard units: screen (a, d) is yard (a / 2 + d, d - a / 2).
-    const deltaX = waypoint.x - creep.ix;
-    const deltaY = waypoint.y - creep.iy;
+    stepCreep(creep, waypoint.x, waypoint.y, speed);
+  };
+
+  /** `speed` screen px towards a yard point, as {@link moveCreep} takes them. */
+  const stepCreep = (creep: Creep, toX: number, toY: number, speed: number): void => {
+    const deltaX = toX - creep.ix;
+    const deltaY = toY - creep.iy;
     const across = deltaX - deltaY;
     const down = (deltaX + deltaY) * 0.5;
     const length = Math.sqrt(across * across + down * down);
@@ -2955,7 +3164,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       !home ||
       distanceSquared(home.centreX, home.centreY, other.x, other.y) < home.leash * home.leash;
     let target = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
-    if (!target || target.hp <= 0 || target.gone || !leashed(target)) {
+    if (!target || target.hp <= 0 || target.gone || !leashed(target) || unseen(target)) {
       const found = index
         .inRange(DEFEND_SEARCH, creep.x, creep.y, creep.hitFlags)
         .find((hit) => leashed(hit.creep))?.creep;
@@ -3012,7 +3221,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return found;
     }
     const held = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
-    if (held && held.hp > 0 && !held.gone) return held;
+    if (held && held.hp > 0 && !held.gone && !unseen(held)) return held;
     creep.targetCreep = -1;
     return undefined;
   };
@@ -3616,6 +3825,87 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     leaving.length = write;
   };
 
+  /**
+   * `Invisibility.tick` (`Invisibility.as:18-34`): a ranked Brain with a
+   * target to walk to cloaks, which takes `TARGETS_INVISIBLE` into its flags so
+   * only what reaches the invisible (the trap, Fomor's aura, Korath's quake)
+   * can see it. Once it has arrived it stays cloaked for the rank's delay, then
+   * shows itself until it has to walk again. Flash's aggro range of 1 is not
+   * modelled (it is the Brain's own awareness, which this engine has none of).
+   */
+  const tickCloak = (creep: Creep): void => {
+    if (creep.invisible) {
+      if (!creep.atTarget) {
+        creep.cloakEnds = -1;
+      } else if (creep.cloakEnds >= 0) {
+        if (tick >= creep.cloakEnds) {
+          creep.invisible = false;
+          creep.flags &= ~TARGETS_INVISIBLE;
+          creep.cloakEnds = -1;
+        }
+      } else {
+        creep.cloakEnds = tick + ticks(cloakDelaySeconds(creep.rank));
+      }
+    } else if ((creep.targetBuilding >= 0 || creep.targetCreep >= 0) && !creep.atTarget) {
+      creep.invisible = true;
+      creep.flags |= TARGETS_INVISIBLE;
+    }
+  };
+
+  /** Ends a blink: the creep can be shot again. */
+  const stopBlink = (creep: Creep): void => {
+    creep.blinkHops = 0;
+    creep.targetable = true;
+  };
+
+  /**
+   * `Blink.tick` (`Blink.as:35-79`): while a ranked Bolt is not at its target,
+   * has fewer than rank*5 waypoints of route left and the end of it is within
+   * rank*150 screen px, it blinks: untargetable, it jumps a tenth of the way
+   * to the last waypoint each tick for ten ticks and then counts as arrived.
+   * It does not walk meanwhile. True when this tick was a hop or the blink's
+   * start. Attackers only: a defender has no route to blink along.
+   */
+  const tickBlink = (creep: Creep): boolean => {
+    const last = creep.waypoints[creep.waypoints.length - 1];
+    const left = creep.waypoints.length - creep.waypointIndex;
+    const within =
+      !creep.friendly &&
+      !creep.atTarget &&
+      !!last &&
+      left > 0 &&
+      left < blinkRouteLimit(creep.rank) &&
+      screenDistanceSquared(creep.ix, creep.iy, last.x, last.y) <=
+        blinkRange(creep.rank) * blinkRange(creep.rank);
+    if (!within || !last) {
+      if (creep.blinkHops > 0) stopBlink(creep);
+      return false;
+    }
+    if (creep.blinkHops === 0) {
+      creep.blinkHops = BLINK_HOPS;
+      creep.blinkStep =
+        Math.sqrt(screenDistanceSquared(creep.ix, creep.iy, last.x, last.y)) / BLINK_HOPS;
+      creep.targetable = false;
+      creep.attacking = false;
+      return true;
+    }
+    stepCreep(creep, last.x, last.y, creep.blinkStep);
+    creep.blinkHops -= 1;
+    visual.push({
+      kind: "blink",
+      tick,
+      creepId: creep.id,
+      hop: BLINK_HOPS - creep.blinkHops,
+      ix: creep.ix,
+      iy: creep.iy,
+    });
+    if (creep.blinkHops === 0) {
+      stopBlink(creep);
+      creep.atTarget = true;
+    }
+    return true;
+  };
+
   const tickCreep = (creep: Creep): void => {
     if (creep.hp <= 0 || creep.gone) return;
     if (creep.behaviour === "retreat") {
@@ -3625,6 +3915,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // The flame and the auras tick before their creep acts, and a champion's
     // frame counts up in `tickState` before its behaviour reads it (issue #222).
     if (creep.burnDps > 0 && tickBurn(creep)) return;
+    if (creep.venomStacks > 0 && tickVenom(creep)) return;
+    if (creep.rank > 0 && creep.monsterId === BRAIN_ID) tickCloak(creep);
     if (creep.champion) {
       tickAura(creep);
       creep.frame += 1;
@@ -3673,6 +3965,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     if (hunting && creep.targetBuilding < 0) hunting = findTarget(creep);
     if (!hunting) return;
+    // A Bolt that blinks spends the tick on its hop (issue #352).
+    if (creep.rank > 0 && creep.monsterId === BOLT_ID && tickBlink(creep)) return;
 
     // A ranged creep stops as soon as its target is inside its range, a circle
     // on screen around the building's anchor (`CreepBase.as:735-748`).
@@ -4472,7 +4766,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /** The caged champion's foe while it lives, else undefined. */
   const liveFoe = (creep: Creep): Creep | undefined => {
     const foe = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
-    return foe && foe.hp > 0 && !foe.gone ? foe : undefined;
+    return foe && foe.hp > 0 && !foe.gone && !unseen(foe) ? foe : undefined;
   };
 
   /** `interceptTarget`: on to a new foe, swinging at once if already in range (`:482-485`). */
@@ -4719,6 +5013,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       lootBoosted: creep.lootBuffedBy >= 0,
       quaking: creep.quaking,
       ...(creep.rank > 0 ? { rank: creep.rank } : {}),
+      ...(creep.invisible ? { invisible: true } : {}),
+      ...(creep.blinkHops > 0 ? { blinking: true } : {}),
+      ...(creep.venomStacks > 0 ? { poisonStacks: creep.venomStacks } : {}),
     }));
 
   const recentEvents = (sinceTick: number): BattleVisualEvent[] => {

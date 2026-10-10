@@ -1603,6 +1603,8 @@ export class AttackBattleLayer {
       this.towerFx.onCharge(event.towerId, event.tick);
       return;
     }
+    // The special moves' notes (issue #352) are drawn by a later package.
+    if (event.kind !== "death") return;
     // A death a held bullet dealt waits for it to land; the rest splat now.
     if (this.ledger.death(event)) return;
     const at = groundWorld(event.ix, event.iy, this.origin);

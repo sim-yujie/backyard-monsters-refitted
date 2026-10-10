@@ -59,3 +59,38 @@ export const airburstRadius = (base: number, rank: number): number =>
 export const DAVE_ID = "C12";
 /** D.A.V.E.'s range at a rank: 140, 180, 220. It has no range, and so no rockets, at rank 0. */
 export const daveRange = (rank: number): number => 100 + 40 * rank;
+
+/** C3 Bolt: "Blink Range" (`Bolt.as:5-7`, `Blink.as`). */
+export const BOLT_ID = "C3";
+/** Bolt's blink reaches this far, on screen, per rank: 150, 300, 450 (`Blink.as:21`). */
+export const blinkRange = (rank: number): number => 150 * rank;
+/** It only blinks with fewer than this many waypoints of route left: 5, 10, 15 (`Blink.as:17`). */
+export const blinkRouteLimit = (rank: number): number => 5 * rank;
+/** The blink is this many hops, each a tenth of the way (`Blink.as:12`, `:42`). */
+export const BLINK_HOPS = 10;
+
+/** C7 Bandito: "Whirlwind" (`Bandito.as`, `BanditoAOEDamageSpin.as`). */
+export const BANDITO_ID = "C7";
+/** The spin splashes this far round the Bandito, full damage inside it (`Bandito.as:15`). */
+export const BANDITO_RADIUS = 60;
+/** Its attack speed as a percentage: 100, 150, 200 (the Lab screen's 1 / 1.5 / 2 x). */
+export const banditoSpeedPercent = (rank: number): number => 50 + 50 * rank;
+
+/** C8 Fang: "Venom Damage" (`Fang.as:5-7`, `PoisonOnAttack.as`, `DOTEffect.as`). */
+export const FANG_ID = "C8";
+/** Each stack of venom hurts for the Fang's damage times this: 0.1, 0.2, 0.3 (the Lab screen's). */
+export const venomShare = (rank: number): number => rank / 10;
+/** The venom bites once a second (owner decision 2026-10-10). */
+export const VENOM_INTERVAL_SECONDS = 1;
+
+/** C9 Brain: "Cloak Delay" (`Brain.as:5-7`, `Invisibility.as`). */
+export const BRAIN_ID = "C9";
+/** Seconds a Brain stays unseen once it has arrived: 0, 4, 8 (the Lab screen's). */
+export const cloakDelaySeconds = (rank: number): number => 4 * (rank - 1);
+
+/** C14 Teratorn: "Fireball Bounces" (`Teratorn.as:5-8`, `GlavesOnAttack.as`, `FIREBALL.as`). */
+export const TERATORN_ID = "C14";
+/** A fireball jumps on to a building within this many screen px of the last (`FIREBALL.as:279`). */
+export const BOUNCE_RADIUS = 100;
+/** How many times the fireball jumps on: its rank. */
+export const bounceCount = (rank: number): number => rank;
