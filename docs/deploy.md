@@ -169,6 +169,17 @@ cd /opt/bymr/server
 cp production.env.example production.env
 ```
 
+**Keep the logs short** (once). Everything the server prints goes to the
+VPS's own log store. Those lines include players' IP addresses, so the game
+keeps them for at most 30 days and lets them take up to 2 GB in all; older
+lines are deleted on their own. This copies that rule into place:
+
+```
+mkdir -p /etc/systemd/journald.conf.d
+cp deploy/journald-bymr.conf /etc/systemd/journald.conf.d/bymr.conf
+systemctl restart systemd-journald
+```
+
 **Make two random secrets** and copy them somewhere safe for a minute:
 
 ```
@@ -352,3 +363,9 @@ All from `/opt/bymr/server` on the VPS:
   client only.
 - PM2 (`ecosystem.config.mjs`) is not used here; Docker restarts anything that
   stops.
+- Console logs: `docker-compose.prod.yml` sends every container's output to
+  journald (`LOG_DRIVER`, default `journald`), and
+  `server/deploy/journald-bymr.conf` starts a new file each day, deletes files
+  older than 29 days and caps the total at 2 GB. `deploy/prod.sh logs` still
+  works. A setup run with PM2 instead of Docker runs
+  `server/deploy/pm2-logrotate.sh` once (nightly rotation, 30 files kept).
