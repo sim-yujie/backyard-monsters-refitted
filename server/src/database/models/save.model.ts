@@ -1,4 +1,4 @@
-import { Entity, Property, PrimaryKey, OneToOne, Index } from "@mikro-orm/decorators/es";
+import { Entity, Property, PrimaryKey, OneToOne, Index, BeforeCreate, BeforeUpdate } from "@mikro-orm/decorators/es";
 import { EntityManager, PostgreSqlDriver } from "@mikro-orm/postgresql";
 import { FrontendKey } from "../../utils/FrontendKey.js";
 import { getDefaultBaseData } from "../../game-data/getDefaultBaseData.js";
@@ -12,6 +12,7 @@ import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import type { BuildingDataMap, BuildingHealthData, FiredTrap } from "../../types/BuildingData.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
+import { townHallColumnValue } from "../../services/yard/townHallColumn.js";
 
 const NEXT_USER_BASEID = `SELECT nextval('bym.user_baseid_seq') AS baseid`;
 
@@ -460,6 +461,24 @@ export class Save {
    */
   @Property({ type: "number", default: 0 })
   starterkit!: Opt<number>;
+
+  /**
+   * The main yard's Town Hall level, 0 for none (`services/yard/townHallColumn.ts`).
+   * Kept in step with `buildingdata` by {@link Save.syncTownHallLevel} on every
+   * insert and every update that touches `buildingdata`, so no write path has
+   * to remember it. `getArea` sends it as `th` on home cells (the map draws that
+   * level's hall) without loading the blob. Not a `@FrontendKey`.
+   */
+  @Property({ type: "number", default: 0 })
+  thlevel!: Opt<number>;
+
+  @BeforeCreate()
+  @BeforeUpdate()
+  syncTownHallLevel(args?: { changeSet?: { payload?: Record<string, unknown> } }): void {
+    const payload = args?.changeSet?.payload;
+    if (payload && !("buildingdata" in payload)) return;
+    this.thlevel = townHallColumnValue(this.buildingdata);
+  }
 
   @FrontendKey
   @Property({ columnType: "jsonb", nullable: true })

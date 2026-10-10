@@ -94,6 +94,8 @@ const CELL_SAVE_FIELDS = [
   // Which Starter Kit an outpost wears (issue #334): `userCell` sends it as
   // `kit`, visible on every outpost, not only the owner's.
   "save.starterkit",
+  // The main yard's Town Hall level, sent as `th` on home cells (Map Room 2 draws that hall).
+  "save.thlevel",
 ] as const;
 
 /**

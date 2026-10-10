@@ -438,7 +438,10 @@ export class MapChunk {
     const footY = y + FOOT_Y;
     const flashScale = BUILDING_HEIGHT / FLASH_TOWER_HEIGHT;
 
-    const texture = this.buildings.textureFor(outpost ? BuildingKind.OUTPOST : BuildingKind.YARD);
+    const texture = this.buildings.textureFor(
+      outpost ? BuildingKind.OUTPOST : BuildingKind.YARD,
+      appearance.hallLevel,
+    );
     if (texture) {
       const sprite = new Sprite(texture);
       sprite.anchor.set(0.5, 1);

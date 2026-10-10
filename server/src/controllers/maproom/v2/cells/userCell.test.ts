@@ -149,3 +149,26 @@ describe("userCell idle worker (#338)", () => {
     expect(await userCell(withIdle([9]), other, owners)).not.toHaveProperty("wi");
   });
 });
+
+describe("userCell town hall level", () => {
+  const withLevel = (baseType: number, thlevel: number | undefined) =>
+    ({
+      uid: OWNER,
+      base_type: baseType,
+      baseid: "2000240208",
+      terrainHeight: 100,
+      save: { damage: 0, protected: 0, locked: 0, empirevalue: 0, flinger: 0, catapult: 0, attackid: 0, attacks: [], thlevel },
+    }) as unknown as Parameters<typeof userCell>[1];
+
+  test("a home cell carries the stored level as th", async () => {
+    expect(await userCell(ctx, withLevel(2, 8), owners)).toMatchObject({ th: 8 });
+  });
+
+  test("a home cell with no stored level sends 0", async () => {
+    expect(await userCell(ctx, withLevel(2, undefined), owners)).toMatchObject({ th: 0 });
+  });
+
+  test("an outpost carries no th", async () => {
+    expect(await userCell(ctx, withLevel(3, 8), owners)).not.toHaveProperty("th");
+  });
+});

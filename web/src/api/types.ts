@@ -843,6 +843,12 @@ export interface PlayerCell {
    * Everyone sees it, not only the owner. Absent on a main yard cell (`b` 2).
    */
   kit?: number;
+  /**
+   * A main yard cell's Town Hall level (1-10), kept in a column by the server;
+   * 0 or absent when unknown, and then the map draws the level-3 hall. Absent
+   * on an outpost (`b` 3).
+   */
+  th?: number;
 }
 
 export type MapCell = WaterCell | WildMonsterCell | PlayerCell | FogCell;
