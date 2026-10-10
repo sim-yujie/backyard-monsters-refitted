@@ -213,3 +213,29 @@ describe("helpers", () => {
     expect(buildingDataWithout({ "1": { t: 24 }, "2": { t: 1 } }, [1])).toEqual({ "2": { t: 1 } });
   }, REPLAY_TIMEOUT_MS);
 });
+
+describe("replayAbandonedAttack at the attacker's Lab ranks (issue #352)", () => {
+  const WORMZERS: FlingLog = {
+    v: 1,
+    seed: 5,
+    events: [{ kind: "fling", t: 480, x: -615, y: 115, r: 100, monsters: { C13: 6 } }],
+  };
+  const at = (powerup: number) =>
+    replayAbandonedAttack(
+      input(6000, {
+        log: WORMZERS,
+        attacker: { academy: { C13: { level: 1, powerup } }, champion: [], siege: null },
+      })
+    );
+
+  test("a ranked Wormzer fights a different battle than a plain one", () => {
+    expect(at(3).buildinghealthdata).not.toEqual(at(0).buildinghealthdata);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("rank 0 is the same battle as no `powerup` at all", () => {
+    const plain = replayAbandonedAttack(
+      input(6000, { log: WORMZERS, attacker: { academy: { C13: { level: 1 } }, champion: [], siege: null } })
+    );
+    expect(at(0).buildinghealthdata).toEqual(plain.buildinghealthdata);
+  }, REPLAY_TIMEOUT_MS);
+});

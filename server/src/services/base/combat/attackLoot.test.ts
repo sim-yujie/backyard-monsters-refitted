@@ -18,6 +18,7 @@ import {
   attackerLootCap,
   bankAttackLoot,
   fightableLog,
+  foughtAcademy,
   krallenBuffOf,
   wholeAmounts,
   type LootAttacker,
@@ -646,4 +647,17 @@ describe("the attacker's storage (issue #166)", () => {
     expect(lootFor(fixture("mixed-waves"), {}).krallenBuff).toBeCloseTo(0.3);
     expect(lootFor(fixture("mixed-waves"), {}, { log: "not a log" }).krallenBuff).toBe(0);
   }, REPLAY_TIMEOUT_MS);
+});
+
+describe("the academy an attack is fought at (issue #352)", () => {
+  test("the frozen levels carry the frozen Lab ranks, as `powerup`", () => {
+    expect(
+      foughtAcademy({ attackerAcademy: { C4: 3, C13: 2, C1: 1 }, attackerRanks: { C13: 3 } }, null)
+    ).toEqual({ C4: { level: 3 }, C13: { level: 2, powerup: 3 }, C1: { level: 1 } });
+  });
+
+  test("a session with no ranks, or none frozen at all, adds none", () => {
+    expect(foughtAcademy({ attackerAcademy: { C4: 3 } }, null)).toEqual({ C4: { level: 3 } });
+    expect(foughtAcademy(null, { C4: { level: 5, powerup: 2 } })).toEqual({ C4: { level: 5, powerup: 2 } });
+  });
 });

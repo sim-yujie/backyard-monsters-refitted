@@ -765,6 +765,11 @@ export class AttackSession {
     return this.levels_;
   }
 
+  /** The Monster Lab ranks the battle is fought at (issue #352), {@link servedRanks} once loaded. */
+  get ranks(): MonsterRanks {
+    return this.ranks_;
+  }
+
   /* ── Reading ────────────────────────────────────────────────────────── */
 
   /** Whether the attack is over; {@link state}'s phase without building the rest. */
