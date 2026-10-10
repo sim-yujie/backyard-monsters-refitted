@@ -59,10 +59,11 @@ We welcome contributions from the community! Whether you're fixing bugs, adding 
 
 <br />
 
-## License [![GPL v3](https://img.shields.io/badge/GPL%20v3-blue)](http://www.gnu.org/licenses/gpl-3.0)
+## License [![PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](https://polyformproject.org/licenses/noncommercial/1.0.0)
 
 ```
 Backyard Monsters preservation project.
 Copyright (C) 2025 | The Backyard Monsters Refitted team
-See the GNU General Public License <https://www.gnu.org/licenses/>.
+Licensed under the PolyForm Noncommercial License 1.0.0 (see LICENSE)
+<https://polyformproject.org/licenses/noncommercial/1.0.0>.
 ```

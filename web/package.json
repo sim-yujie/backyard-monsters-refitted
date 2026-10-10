@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Browser client for Backyard Monsters Refitted.",
-  "license": "GPL-3.0-only",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
