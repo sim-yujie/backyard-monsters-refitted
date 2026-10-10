@@ -90,6 +90,14 @@ describe("TakeoverDialog", () => {
     });
   });
 
+  it("tells the player what the ground does to the yard they take, when the height is known", () => {
+    expect(open().$(".takeover-dialog__ground").hidden).toBe(true);
+    modal.replaceChildren();
+    const { $ } = open({ height: 150 });
+    expect($(".takeover-dialog__ground").hidden).toBe(false);
+    expect($(".takeover-dialog__ground").textContent).toContain("high ground: tower range +20%, income −17%");
+  });
+
   it("shows Flash's title and lead, and the quote's price for each resource", () => {
     const { $ } = open();
     expect($(".panel__title").textContent).toBe("Take over this Wild Monster Yard");

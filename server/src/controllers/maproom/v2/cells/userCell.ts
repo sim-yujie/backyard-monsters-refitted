@@ -42,7 +42,7 @@ type Cell = Loaded<WorldMapCell, "save", UserCellFields>;
  */
 export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number, UserCellOwner>) => {
   const currentUser: User = ctx.authUser;
-  const { online: onlineNow, truces, pendingInvites, idleWorkers } = ctx.state;
+  const { online: onlineNow, truces, pendingInvites, idleWorkers, attackers } = ctx.state;
 
   const mine = currentUser.userid === cell.uid;
   const cellOwner = mine ? currentUser : cellOwners.get(cell.uid);
@@ -99,6 +99,8 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     f: cellSave.flinger,
     c: cellSave.catapult,
     t: truceExpiry,
+    // 1 on a base whose owner has ever attacked the viewer: the map's red plate.
+    ...(!mine && (attackers as Set<number> | undefined)?.has(cellOwner.userid) && { ak: 1 }),
     n: cellOwner.username,
     fr: 0,
     p: isProtected ? 1 : 0,

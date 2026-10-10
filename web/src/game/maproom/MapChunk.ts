@@ -56,7 +56,7 @@ import type { ZoneStore } from "./ZoneStore";
  * hex, a gold level star, and a rounded name plate coloured and iconed by how
  * the cell relates to the viewer (gold+house for the viewer's own, green+
  * shield for an alliance-mate, plain blue for everyone else - red+crossed
- * swords for an attacker is drawn but never reached yet, see `cellVisuals.ts`).
+ * swords for a player who has attacked the viewer, see `cellVisuals.ts`).
  * An outpost's tower also carries its Starter Kit's tint, and every sprite a
  * cell draws dims together when the kit filter excludes it.
  */

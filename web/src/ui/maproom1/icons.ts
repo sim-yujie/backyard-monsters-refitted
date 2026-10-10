@@ -36,6 +36,7 @@ const PATHS = {
   clock: ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", "M12 7v5l3 2"],
   respawn: ["M3 12a9 9 0 1 0 3-6.7", "M3 4v5h5"],
   truce: ["M7 11l3-3 4 1 3 3", "M3 12l4-4", "M21 12l-4-4", "M7 11l5 5 5-5"],
+  mail: ["M3.5 6h17v12h-17z", "M3.5 7l8.5 6.5L20.5 7"],
   chevronRight: ["M9 6l6 6-6 6"],
   chevronLeft: ["M15 6l-6 6 6 6"],
   // Map Room 2 (#174, #176, #177).

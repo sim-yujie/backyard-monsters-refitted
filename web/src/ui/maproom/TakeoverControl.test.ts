@@ -132,7 +132,7 @@ describe("TakeoverControl", () => {
     modal.querySelector<HTMLElement>(".takeover-dialog__go")!.click();
     await flush();
     expect(takeOver).toHaveBeenCalledWith("2000241208", "resources");
-    expect(onTaken).toHaveBeenCalledWith(KOZU, { baseid: "2000241208", kind: "camp", name: "Kozu" }, quote, "resources");
+    expect(onTaken).toHaveBeenCalledWith(KOZU, { baseid: "2000241208", kind: "camp", name: "Kozu", height: 150 }, quote, "resources");
   });
 
   it("stays hidden on a player outpost without the caller's grant", async () => {

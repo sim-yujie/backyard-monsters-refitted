@@ -172,3 +172,18 @@ describe("userCell town hall level", () => {
     expect(await userCell(ctx, withLevel(3, 8), owners)).not.toHaveProperty("th");
   });
 });
+
+describe("userCell attacker mark", () => {
+  const withAttackers = (ids: number[]) =>
+    ({ authUser: { userid: 2505 }, state: { online: new Set(), truces: new Map(), attackers: new Set(ids) } }) as unknown as Context;
+  const cell = outpostWith(0, 0);
+
+  test("a base whose owner has attacked the viewer carries ak", async () => {
+    expect(await userCell(withAttackers([OWNER]), cell, owners)).toMatchObject({ ak: 1 });
+  });
+
+  test("anyone else carries none, and so does a request with no attackers read", async () => {
+    expect(await userCell(withAttackers([]), cell, owners)).not.toHaveProperty("ak");
+    expect(await userCell(ctx, cell, owners)).not.toHaveProperty("ak");
+  });
+});

@@ -31,7 +31,8 @@ import { button, el, icon, type IconName } from "./icons";
  * Attack stays on the card when it is off, greyed, with the reason under it
  * (and a way out when there is one: Build Flinger, Hatch). Attacking a player
  * while protected says so on the card before the tap, in place of Flash's
- * confirm box. Truce and Message are left out until there is a mail screen.
+ * confirm box. Message and Truce sit in a row of their own on a neighbour
+ * (not a tribe), as on the Map Room 2 cell panel; the scene opens the mailbox.
  */
 
 export type CardAction = NonNullable<Mr1Reason["action"]>;
@@ -41,6 +42,10 @@ export interface CardHandlers {
   readonly onView: (target: Mr1Target) => void;
   readonly onAttack: (target: Mr1Target) => void;
   readonly onAction: (action: CardAction) => void;
+  /** Writes to a neighbour (#193). Absent: no Message button. */
+  readonly onMessage?: (target: Mr1Neighbour) => void;
+  /** Proposes a truce to a neighbour (#203). Absent: no Truce button. */
+  readonly onTruce?: (target: Mr1Neighbour) => void;
   /**
    * A neighbour's achievements line under the name and level (#204,
    * `ui/achievements/AchievementsLine.ts`). Absent: no line.
@@ -298,6 +303,26 @@ export const targetCard = (
   }
   actions.append(view, attack);
   card.append(actions);
+
+  if (target.kind === "player") {
+    const { onMessage, onTruce } = handlers;
+    // No Truce button while one already runs.
+    const truceRuns = target.truceUntil !== null && target.truceUntil > state.now;
+    const social = el("div", "mr1-card__social");
+    if (onMessage) {
+      const message = actionButton("Message", "mail", "btn btn--outline mr1-card__button mr1-card__message");
+      message.title = "Write to this player";
+      message.addEventListener("click", () => onMessage(target));
+      social.append(message);
+    }
+    if (onTruce && !truceRuns) {
+      const truce = actionButton("Truce", "truce", "btn btn--outline mr1-card__button mr1-card__truce");
+      truce.title = "Propose a truce to this player";
+      truce.addEventListener("click", () => onTruce(target));
+      social.append(truce);
+    }
+    if (social.childElementCount > 0) card.append(social);
+  }
 
   if (gate.reason) {
     const why = el("div", "mr1-card__why");
