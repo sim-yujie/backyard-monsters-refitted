@@ -3,6 +3,7 @@ title: Getting started
 description: Make an account, follow Bob through your first few minutes, and learn what to do next.
 order: 1
 icon: /images/bob.webp
+updated: 2026-10-11
 ---
 
 ## Make an account

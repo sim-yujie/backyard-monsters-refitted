@@ -2,6 +2,7 @@
 import Base from "../../layouts/Base.astro";
 import { SITE } from "../../config";
 import { getCollection, render } from "astro:content";
+import { breadcrumbs, guideArticle } from "../../data/schema";
 
 export async function getStaticPaths() {
   const guides = (await getCollection("guides", ({ data }) => !data.draft)).sort((a, b) => a.data.order - b.data.order);
@@ -14,9 +15,18 @@ export async function getStaticPaths() {
 const { guide, prev, next } = Astro.props;
 const { Content, headings } = await render(guide);
 const toc = headings.filter((h) => h.depth === 2);
+const path = `/guides/${guide.id}/`;
+const schema = [
+  guideArticle({ ...guide.data, path }),
+  breadcrumbs([
+    { name: "Home", path: "/" },
+    { name: "Guides", path: "/guides/" },
+    { name: guide.data.title, path },
+  ]),
+];
 ---
 
-<Base title={guide.data.title} description={guide.data.description} current="guides">
+<Base title={guide.data.title} description={guide.data.description} current="guides" schema={schema}>
   <header class="page-head">
     <div class="wrap">
       <a class="crumb" href="/guides/">All guides</a>

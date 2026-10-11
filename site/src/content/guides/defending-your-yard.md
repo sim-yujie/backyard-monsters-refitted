@@ -3,6 +3,7 @@ title: Defending your yard
 description: Towers, walls, traps and protection, and how to test your defences before anyone else does.
 order: 4
 icon: /images/monsters/C10.webp
+updated: 2026-10-11
 ---
 
 ## Why defence matters

@@ -29,6 +29,8 @@ const guides = defineCollection({
     order: z.number(),
     /** A monster portrait from /images/ to show on the guide's card. */
     icon: z.string().optional(),
+    /** The day the guide was last changed in a way readers would notice (yyyy-mm-dd). */
+    updated: z.coerce.date(),
     draft: z.boolean().default(false),
   }),
 });
