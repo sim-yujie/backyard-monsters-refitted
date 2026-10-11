@@ -293,12 +293,13 @@ The live game was first put online straight from a computer, not from
 GitHub: the server's `/opt/bymr` is a plain copy of the code (no `git`
 inside), and the Vercel project `bymrevamped` is not connected to a
 repository. To update, from Git Bash on your computer, in the main
-`backyard-monsters-refitted` folder, on the `revamp` branch with the new code:
+`backyard-monsters-refitted` folder, on the `revamp` branch with the new code
+(put in your server's IP address and your ssh key's file name):
 
 ```
-ssh -i ~/.ssh/bymr_server root@157.245.94.86 'cd /opt/bymr/server && deploy/prod.sh exec -T backup bash /backup.sh'
-git archive --format=tar revamp | ssh -i ~/.ssh/bymr_server root@157.245.94.86 'tar -x -C /opt/bymr'
-ssh -i ~/.ssh/bymr_server root@157.245.94.86 'cd /opt/bymr/server && deploy/prod.sh up -d --build'
+ssh -i ~/.ssh/<your-key> root@<server-ip> 'cd /opt/bymr/server && deploy/prod.sh exec -T backup bash /backup.sh'
+git archive --format=tar revamp | ssh -i ~/.ssh/<your-key> root@<server-ip> 'tar -x -C /opt/bymr'
+ssh -i ~/.ssh/<your-key> root@<server-ip> 'cd /opt/bymr/server && deploy/prod.sh up -d --build'
 cd web && vercel link --yes --project bymrevamped --scope sim-yujies-projects && vercel deploy --prod --scope sim-yujies-projects
 ```
 
