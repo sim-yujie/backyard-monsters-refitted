@@ -326,6 +326,24 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Vorg: 52x56 cells (the old 40x40 cell plus 6 px each side, 10 px on top and 6 at the bottom),
+  // so the anchor moves by (6, 10) and the flyer stays put (its shadow is a separate sprite).
+  // Rows: 0-2 the wing flap exactly as before (wings up, half open, down; `walk` steps through
+  // them every 3 ticks, `landed` shows row 0), 3-7 attack (anticipation, wind-up, strike,
+  // follow-through, recovery), each with its own clear wing pose. Between swings the flap goes on.
+  "monsters/vorg_anim.png": {
+    frameWidth: 52,
+    frameHeight: 56,
+    anchorX: 32,
+    anchorY: 46,
+    rows: 8,
+    animations: {
+      walk: { first: 0, count: 3, ticksPerFrame: 3 },
+      landed: { first: 0, count: 1, ticksPerFrame: 8 },
+      attack: { first: 3, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
   "monsters/sprite.12.gold.png": {
     frameWidth: 77,
     frameHeight: 60,
@@ -622,7 +640,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/sprite.11.v2.png": "monsters/projectx-anim@4x.png", // Project X animated repaint
   "monsters/13.png": "monsters/wormzer-anim@4x.png", // Wormzer animated repaint
   "monsters/zafreeti.v2.png": "monsters/zafreeti-anim@4x.png", // Zafreeti animated repaint
-  "monsters/vorg_anim.png": "monsters/vorg-repaint@4x.png", // Vorg art trial (3 rows: wings up, half open, down)
+  "monsters/vorg_anim.png": "monsters/vorg-anim@4x.png", // Vorg animated repaint (3 flap rows + 5 attack rows)
   "monsters/slimeattikus_anim.png": "monsters/slimeattikus-repaint@4x.png", // Slimeattikus art trial (only row 0 is drawn)
   "monsters/slimeattikusmini_anim.png": "monsters/slimeattikusmini-repaint@4x.png", // mini slime, same frames
   "monsters/rezghul.png": "monsters/rezghul-repaint@4x.png", // Rezghul art trial (rows 1-5 walk bob)
