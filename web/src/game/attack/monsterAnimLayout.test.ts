@@ -61,9 +61,35 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito layout, so every other sheet is exactly the Flash table", () => {
-    expect(Object.keys(REPAINT_LAYOUTS)).toEqual(["monsters/bandito.png"]);
-    expect(spriteFor("C1")).toBe(POKEY);
+  it("ships only the Bandito, Pokey and Octo-ooze layouts, so every other sheet is exactly the Flash table", () => {
+    expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
+      "monsters/bandito.png",
+      "monsters/octoooze.png",
+      "monsters/sprite.1.v1.png",
+    ]);
+    const other = MONSTER_SPRITES["IC8"];
+    if (!other) throw new Error("no IC8");
+    expect(spriteFor("IC8")).toBe(other);
+  });
+
+  it("the Pokey layout matches the animated PNG and keeps the ball where it was", () => {
+    const sheet = spriteFor("C1");
+    if (!sheet) throw new Error("no sprite for C1");
+    const png = readFileSync(
+      resolve(__dirname, "../../../../server/public/assets/monsters/pokey-anim@4x.png"),
+    );
+    expect(png.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(png.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(png.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(png.readUInt32BE(20));
+    // 6 px added left and right, 8 px added on top: the ball stays on the same ground point.
+    expect(sheet.anchorX).toBe(POKEY.anchorX + 6);
+    expect(sheet.anchorY).toBe(POKEY.anchorY + 8);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(POKEY.frameHeight - POKEY.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(POKEY.frameWidth - POKEY.anchorX + 6);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
   });
 
   it("the Bandito layout matches the animated PNG and keeps the feet where they were", () => {
@@ -83,6 +109,28 @@ describe("applyLayout", () => {
     expect(sheet.anchorY).toBe(old.anchorY + 12);
     expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
     expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Octo-ooze layout matches the animated PNG and keeps the body where it was", () => {
+    const old = MONSTER_SPRITES["C2"];
+    if (!old) throw new Error("no C2");
+    const sheet = spriteFor("C2");
+    if (!sheet) throw new Error("no sprite for C2");
+    const png = readFileSync(
+      resolve(__dirname, "../../../../server/public/assets/monsters/octo-anim@4x.png"),
+    );
+    expect(png.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(png.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(png.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(png.readUInt32BE(20));
+    // 8 px added left and right, 8 px added on top: the body stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 8);
+    expect(sheet.anchorY).toBe(old.anchorY + 8);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 8);
     expect(sheet.animations.attack?.first).toBe(7);
     expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
     expect(sheet.strikeFrame).toBe(2);
