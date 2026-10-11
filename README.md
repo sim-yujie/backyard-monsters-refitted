@@ -1,65 +1,86 @@
-<p align="center">
-  <img width="90%" src="./server/public/assets/popups/outpost-takeover.png">
-</p>
+# Backyard Monsters Revamped
 
-<br>
+A free, unofficial fan revamp of Backyard Monsters, Kixeye's 2010 Flash strategy
+game. It runs in any modern browser, with no Flash and no download: a new web
+client talks to a game server based on
+[Backyard Monsters Refitted](https://github.com/bym-refitted/backyard-monsters-refitted).
 
-![Bun](https://img.shields.io/badge/Bun-%23000000.svg?style=for-the-badge&logo=bun&logoColor=white)
-![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
-![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white)
-![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
-![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white)
-![ActionScript](https://img.shields.io/badge/ActionScript-%23DD0031.svg?style=for-the-badge)
+- Play: <https://play.bymrevamped.com>
+- Website: <https://bymrevamped.com>
+- Support the project: <https://www.patreon.com/c/TheMonsterLab>
 
-<br>
+This is a fan project. It is not affiliated with, endorsed by or connected to
+Kixeye, which owns Backyard Monsters and its art.
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/bym-refitted/backyard-monsters-refitted)
+## What is in this repository
 
+| Folder | What it is |
+|---|---|
+| `web/` | The browser game client (Vite, TypeScript, PixiJS). See [`web/README.md`](web/README.md). |
+| `server/` | The game server (Bun, Koa, PostgreSQL with MikroORM, Redis), based on Refitted's. It also serves the original game art from `server/public/`. |
+| `site/` | The website at bymrevamped.com (Astro). See [`site/README.md`](site/README.md). |
+| `docs/` | Design notes, game rule specs, server API notes and the deploy guide ([`docs/deploy.md`](docs/deploy.md)). |
+| `client/scripts/` | The decompiled code of the original Flash game. Nothing runs it; it is kept as the reference our tools and docs check the game rules against. |
+| `client/` (other folders) | Raw art and text dumps from the original Flash game, kept for reference. |
 
-## 📖 About This Project
-This repository is a complete digital preservation and restoration of Backyard Monsters, Kixeye’s 2010 Flash-based strategy game. It features a reconstructed client, decompiled from original game files, alongside a custom-built server component implemented through extensive reverse engineering efforts.
-The client runs on version 128.5690 and remains fully compatible with the original ActionScript 3 codebase, rendered through Adobe Flash Player. The backend is powered by Bun, using the Koa framework, with a PostgreSQL database managed via MikroORM and written entirely in TypeScript.
-This project aims to keep a piece of gaming history alive and playable for future generations.
+## Running it on your own computer
 
-<br>
+You need [Bun](https://bun.sh) 1.4.2 or newer and Docker.
 
-## 🚀 How to Play
-We recommend to download our game launcher which can be installed from our website's [download page](https://bymrefitted.com/downloads). This will allow you to seamlessly manage what build versions of the client you play, all from one place, without worrying about manually downloading new versions. The launcher supports Windows (64-bit), MacOS and Linux.
+1. Start the database and Redis:
 
-<br>
+   ```bash
+   cd server
+   cp example.env .env      # then set SECRET_KEY to any long random string
+   docker compose up -d db redis
+   bun install
+   bun run db:init          # creates the tables and runs the migrations
+   ```
 
-## 🛠️ Setup & Installation
-Choose your setup method:
+2. Start the game server (port 3001):
 
-| Setup Type | Documentation |
-|------------|---------------|
-| 🖥️ **Server Setup** | [Server & Database Configuration](https://github.com/bym-refitted/backyard-monsters-refitted/wiki/Server-&-Database-Setup) |
-| 🎮 **Client Setup** | [Client Recompilation Guide](https://github.com/bym-refitted/backyard-monsters-refitted/wiki/Client-Recompilation-Guide) |
-| 🐳 **Docker Setup** | [Docker Configuration](https://github.com/bym-refitted/backyard-monsters-refitted/wiki/Docker-Setup) |
-| 📱 **Android Setup** | [Android APK Compilation](https://github.com/bym-refitted/backyard-monsters-refitted/wiki/Android-APK-Setup) |
+   ```bash
+   cd server
+   bun run dev
+   ```
 
-<br>
+3. Start the web client (in a second terminal):
 
-## 🤝 Contributing
+   ```bash
+   cd web
+   bun install
+   bun run dev
+   ```
 
-We welcome contributions from the community! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
+   Open <http://localhost:5173> and use "Create account" on the login screen.
+   The web dev server passes game requests on to the local server, so no extra
+   setup is needed.
 
-**Ready to contribute?** Please read our [Contributing Guidelines](./CONTRIBUTING.md) to get started.
+Optional: `bun run db:seed:mr2` (in `server/`) fills Map Room 2 with 2,500
+test players for local testing. Seeded accounts use the dev-only password
+`Dev12345!`; the seed scripts refuse to run when `ENV` is `production`.
+`DEV_SANDBOX=true` in `server/.env` gives every new account a fully built
+test yard.
 
-<br>
+Tests and type checks:
 
-## Preservation of digital heritage
-- [Exemption to PCCPSACT](https://www.federalregister.gov/documents/2018/10/26/2018-23241/exemption-to-prohibition-on-circumvention-of-copyright-protection-systems-for-access-control), exemptions to the provision of the Digital Millennium Copyright Act (“DMCA”).
-- [EFGAMP](https://efgamp.eu/), the European Federation of Video Game Archives, Museums and Preservation projects.
-- [UNESCO PERSIST Programme](https://unescopersist.org/), helps ensure that digital information can continue to be accessed in the future.
-- [The Internet Archive](https://archive.org/), a digital library of Internet sites and other cultural artifacts in digital form.
-- [Flashpoint Archive](https://flashpointarchive.org/), the webgame preservation project.
-- [Adobe Flash Player Archive](https://archive.org/download/flashplayerarchive/), the Adobe Inc. archive.org Flash Player Archive.
-- [Stop Killing Games](https://www.stopkillinggames.com/) a campaign advocating for the legal right to preserve and play digital games.
+```bash
+cd web && bun run typecheck && bun run test
+cd server && bun run typecheck && bun test
+```
 
-<br />
+To put your own copy online, follow [`docs/deploy.md`](docs/deploy.md).
 
-## License [![PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](https://polyformproject.org/licenses/noncommercial/1.0.0)
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Please report security problems
+privately, as described in [SECURITY.md](SECURITY.md), not in a public issue.
+
+## Licence
+
+[PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0),
+see [LICENSE](LICENSE). You may use, change and share the code for any
+noncommercial purpose.
 
 ```
 Backyard Monsters preservation project.
@@ -67,3 +88,11 @@ Copyright (C) 2025 | The Backyard Monsters Refitted team
 Licensed under the PolyForm Noncommercial License 1.0.0 (see LICENSE)
 <https://polyformproject.org/licenses/noncommercial/1.0.0>.
 ```
+
+## Credits
+
+- The [Backyard Monsters Refitted](https://github.com/bym-refitted/backyard-monsters-refitted)
+  team, whose server, reverse engineering and preservation work this revamp is
+  built on.
+- Kixeye, who made Backyard Monsters and own the game and its original art.
+- Titan One font by Rodrigo Fuenzalida (SIL Open Font License 1.1).

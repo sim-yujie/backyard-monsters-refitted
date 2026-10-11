@@ -1,76 +1,51 @@
 # Security Policy
 
-## Test Locally
-Before doing any security research, set up your own
-local instance. bymrefitted.com is a live server with
-real players — testing against it degrades the game
-for everyone and is not authorised.
+## Reporting a vulnerability
 
-Setup instructions are in the README. A full video
-walkthrough is available here:
-https://youtu.be/d7obn2h3GTI
+Please do not open a public issue. Email **simyujie@gmail.com** privately
+instead, with:
 
-Nearly every class of issue in this policy — auth
-bypass, injection, rate limit
-logic, etc — reproduces perfectly on a local instance.
-Report it from there.
+- what the problem is and what someone could do with it,
+- the steps to reproduce it (the request, page or endpoint involved),
+- whether you checked it on a local copy or on the live game.
 
-The narrow exception is findings that only exist in
-production infrastructure: origin IP exposure that
-bypasses Cloudflare, edge or proxy misconfiguration,
-and TLS issues. For these, use the minimum requests
-needed to confirm the issue — typically fewer than
-ten — and stop. If confirming impact appears to
-require sustained traffic, stop and report what you
-have; we will reproduce it ourselves.
+You should get a reply within a few days. Please give us a reasonable time to
+fix the problem before you talk about it publicly.
 
-## Supported Versions
-Only the currently deployed server and launcher builds
-on `main` receive security fixes.
+## Test on your own copy
 
-## Reporting a Vulnerability
-Please do not open a public issue.
+The live game at play.bymrevamped.com and its server at api.bymrevamped.com
+have real players. Please do your testing on a local copy instead; the README
+explains how to run one. Almost every kind of problem (logging in as someone
+else, changing another player's yard, cheating the server's checks, injection)
+shows up the same way locally.
 
-Use GitHub's private reporting:
-Security tab → Report a vulnerability.
-Alternatively, contact us on Discord.
+If a problem only exists on the live servers (for example a misconfigured
+proxy or certificate), send as few requests as you need to confirm it and
+then stop and report it.
 
-Include reproduction steps, affected endpoint or client
-build, and impact. We aim to acknowledge within 72 hours.
+## What we look at
 
-## In Scope
-- bymrefitted.com and the game/API server
-- The Tauri launcher
-- The Flash client where a flaw affects other players
-  or server integrity (auth bypass, account takeover,
-  injection, RCE)
-- Flaws in rate limiting, abuse controls, or proxy
-  configuration: bypasses of per-IP or per-account
-  limits, origin IP exposure that circumvents our edge
-  protections, and endpoints where a single cheap
-  request triggers disproportionate server work
+- The game server (`server/`) and its API
+- The web client (`web/`) where a flaw affects other players or the server,
+  such as account takeover, reading other players' data or getting around
+  the server's save checks
+- The website (`site/`)
 
-## Out of Scope
-- Volumetric attacks. Do not send floods of traffic,
-  run stress tests, or attempt to exhaust bandwidth,
-  CPU, or connections against production.
-- Client-side cheats affecting only your own account
-- Reports from automated scanners without a working PoC
-- Social engineering of players or staff
+## What we do not need
 
-## Safe Harbour
-We will not pursue action against researchers who
-follow this policy: test on a local instance, keep any
-production checks within the limits above, don't access
-other players' data, don't degrade service, and don't
-destroy data. Act in good faith and report promptly.
+- Floods of traffic, stress tests or anything else that slows the game down
+- Cheats that only change your own game in your own browser
+- Automated scanner output without a working example
+- Tricking players or staff
 
-If you plan to do any testing against production, tell
-us first — a quick message on Discord or via private
-vulnerability reporting is enough. We monitor for
-attacks and will treat unannounced traffic as hostile
-and block it. A heads-up saves us both the confusion.
+## Safe harbour
 
-Forgetting to notify us does not by itself void safe
-harbour, provided you otherwise acted in good faith
-and within this policy.
+We will not take action against anyone who follows this policy in good faith:
+test on a local copy, keep any live checks small, do not access other
+players' data, do not harm the service and do not destroy data.
+
+## Supported versions
+
+Only the version currently running on play.bymrevamped.com (the `revamp`
+branch) gets security fixes.

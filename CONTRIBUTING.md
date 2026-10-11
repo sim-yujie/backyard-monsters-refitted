@@ -1,80 +1,57 @@
-# Contributing to Backyard Monsters Refitted
+# Contributing to Backyard Monsters Revamped
 
-Welcome to the Backyard Monsters Refitted development team! This document covers what we expect from contributions and how to get a pull request merged.
+Thanks for wanting to help. This is a small fan project run by one person, so
+please open an issue (or ask first) before starting on anything big, to check
+it fits the plans.
 
----
+## Getting set up
 
-## 🤖 On AI-Assisted Contributions
+Follow "Running it on your own computer" in the [README](README.md). The
+web client has its own notes in [`web/README.md`](web/README.md), including
+how the code is laid out and the conventions it follows. Game rules are
+written up in `docs/specs/`, and new features in `docs/design/`.
 
-We're not banning AI tools, in-fact, we encourage them - but we are strict about where they belong.
+## Branches and pull requests
 
-**Reasonable use** is the mechanical stuff: boilerplate, repetitive edits across many files, type definitions, test scaffolding, formatting, renames, and other deterministic work where you already know exactly what the correct output looks like and you're just saving yourself the keystrokes.
+- Work from the `revamp` branch and open pull requests against it.
+- Name branches by kind: `feat/<name>`, `fix/<name>`, `art/<name>`,
+  `chore/<name>`.
+- In the pull request, say **what** you changed, **why**, and **how you
+  tested it**.
+- Keep each pull request to one change. Small is easier to review.
 
-**Not acceptable** is handing over the thinking. Entire files, whole features, and architectural decisions must come from a person who understands this codebase. If the structure of your change - how it's split up, where it lives, how it talks to the rest of the system - was decided by a model rather than by you, the pull request will be closed.
+## Before you send it
 
-The reason is that nothing here exists in isolation. New code lands in a system with established conventions, and a model has none of that context. What it produces looks plausible and quietly ignores how the project actually works. Reviewers are then left reverse-engineering intent that was never there, which costs us far more time than the change saved you.
+```bash
+cd web && bun run typecheck && bun run test
+cd server && bun run typecheck && bun test
+```
 
-The standard: **you must be able to explain every line you submit and why it's there.** If a reviewer asks why something is structured the way it is and the honest answer is "that's what the model gave me", it isn't ready. Read it, understand it, test it, own it.
+Both must pass. Add or update tests for the behaviour you change.
 
-This is ultimately at the maintainers' discretion. If a reviewer judges a pull request to be sub-par and substantially AI-generated, it will be closed without a second look. We're not going to litigate it line by line - the burden is on you to submit work you can stand behind.
+## Code
 
-If you're unsure about part of your own change, say so in the description or ask in Discord. Nobody minds a question. We do mind a wall of confident, untested code.
+- Match the style of the code around your change (Prettier settings are in
+  `web/.prettierrc.json`).
+- The server decides game rules (costs, timers, combat results); the web
+  client never trusts itself for those. Use the ORM for every database query.
+- Use TypeScript types properly, and prefer JSDoc comments that say why
+  something is the way it is.
+- When a rule comes from the original game, cite where (for example
+  `client/scripts/BASE.as:4830`).
+- You are welcome to use AI tools, but you must understand, test and be able
+  to explain every line you send.
 
----
+## Art
 
-## 📝 Development Guidelines
+- Do not commit game binaries (`.swf`, `.exe`) or screenshots.
+- Shrink a monster sheet before committing it
+  (`python web/tools/shrink-sheet.py <sheet.png>`), and commit only the final
+  sheet, not every trial: git keeps every old version forever.
+- Original Backyard Monsters art belongs to Kixeye. Only add art you made
+  yourself or have the right to share.
 
-We recommend compiling the client application using VSCode, as outlined in our [Wiki](https://github.com/bym-refitted/backyard-monsters-refitted/wiki). This keeps development consistent and makes your changes easy for us to track.
+## Licence
 
-### Code Standards
-
-Follow the style and conventions already established in the codebase:
-
-- Use the ORM provided for all database queries and operations
-- Make proper use of TypeScript features (interfaces, type definitions)
-- Prefer JSDoc comments over single-line comments
-- Keep logic modular and concise
-- Understand what you're writing and the problem it solves
-
-Other developers will need to work with your code, so make it readable and maintainable. **We will not accept subpar pull requests.**
-
-### Communication
-
-Communication is key. We have a Discord channel where developers can ask questions and work through issues together. Check the Wiki first, then ask if anything is still unclear.
-
----
-
-## 🔀 Pull Requests
-
-### Branch Setup
-
-- Check out directly from the branch you intend to make changes to
-- Use proper branch naming: `feature/your-change`, `bugfix/issue-description`, `hotfix/urgent-fix`
-
-### Requirements
-
-Every pull request must include a description covering:
-
-- **What** changes you made
-- **Why** the changes were necessary
-- **How** you tested them
-
-Also:
-
-- Write meaningful commit messages
-- **Do not** include any `.swf` files or game binaries — changes should only be in `src`
-
-### Feature Tags
-
-Tag your changes appropriately:
-
-| Tag | Use for |
-| --- | --- |
-| `experimental` | New features in testing |
-| `bugfix` | Bug fixes |
-| `performance` | Performance improvements |
-| `security` | Security-related changes |
-
----
-
-*We maintain high standards to ensure quality contributions. Thank you for helping make Backyard Monsters Refitted better!*
+By contributing you agree that your work is shared under the repository's
+licence, [PolyForm Noncommercial 1.0.0](LICENSE).
