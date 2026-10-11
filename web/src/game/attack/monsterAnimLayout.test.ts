@@ -61,9 +61,10 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink and Octo-ooze layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra and Octo-ooze layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/bandito.png",
+      "monsters/eyera.png",
       "monsters/fink.png",
       "monsters/octoooze.png",
       "monsters/sprite.1.v1.png",
@@ -133,6 +134,28 @@ describe("applyLayout", () => {
     expect(sheet.anchorY).toBe(old.anchorY + 10);
     expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
     expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Eye-ra layout matches the animated PNG and keeps the creature where it was", () => {
+    const old = MONSTER_SPRITES["C5"];
+    if (!old) throw new Error("no C5");
+    const sheet = spriteFor("C5");
+    if (!sheet) throw new Error("no sprite for C5");
+    const png = readFileSync(
+      resolve(__dirname, "../../../../server/public/assets/monsters/eyera-anim@4x.png"),
+    );
+    expect(png.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(png.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(png.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(png.readUInt32BE(20));
+    // 7 px added left and right, 9 px added on top: the Eye-ra stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 7);
+    expect(sheet.anchorY).toBe(old.anchorY + 9);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 7);
     expect(sheet.animations.attack?.first).toBe(7);
     expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
     expect(sheet.strikeFrame).toBe(2);
