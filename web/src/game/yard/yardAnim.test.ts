@@ -3,7 +3,7 @@ import { animPolicy, startFrame, stripCells, YARD_TICK_HZ } from "./yardAnim";
 
 describe("the animation rate table", () => {
   it("ticks at the Flash stage's own frame rate", () => {
-    // asconfig.json, "default-frame-rate": 40.
+    // The old Flash build settings (asconfig.json, since removed), "default-frame-rate": 40.
     expect(YARD_TICK_HZ).toBe(40);
   });
 

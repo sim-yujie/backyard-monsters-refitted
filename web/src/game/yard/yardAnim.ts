@@ -3,7 +3,7 @@
  *
  * ## The clock
  *
- * The Flash client's stage runs at 40 frames a second (`asconfig.json`,
+ * The Flash client's stage runs at 40 frames a second (the old Flash build settings,
  * `"default-frame-rate": 40`). Every animated building listens for
  * `ENTER_FRAME` and does its work in `TickFast`
  * (`client/scripts/BFOUNDATION.as:1146-1148`), so one tick is 1/40 s. `TickFast`
