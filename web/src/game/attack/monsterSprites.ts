@@ -326,6 +326,24 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Teratorn: 40x44 cells (the old 28x28 cell plus 6 px each side, 10 px on top and 6 at the bottom),
+  // so the anchor moves by (6, 10) and the flyer stays put (its shadow is a separate sprite).
+  // Rows: 0-2 the wing flap exactly as before (`walk` steps through them every 3 ticks, `landed`
+  // shows row 0), 3-7 attack (anticipation, wind-up, strike, follow-through, recovery), each with
+  // its own clear wing pose. Between swings the flap goes on.
+  "monsters/14.v1.png": {
+    frameWidth: 40,
+    frameHeight: 44,
+    anchorX: 21,
+    anchorY: 24,
+    rows: 8,
+    animations: {
+      walk: { first: 0, count: 3, ticksPerFrame: 3 },
+      landed: { first: 0, count: 1, ticksPerFrame: 8 },
+      attack: { first: 3, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
   // Vorg: 52x56 cells (the old 40x40 cell plus 6 px each side, 10 px on top and 6 at the bottom),
   // so the anchor moves by (6, 10) and the flyer stays put (its shadow is a separate sprite).
   // Rows: 0-2 the wing flap exactly as before (wings up, half open, down; `walk` steps through
@@ -624,7 +642,7 @@ export function flyerAltitude(creatureId: string): number {
  * switch the trial off.
  */
 export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
-  "monsters/14.v1.png": "monsters/14-repaint@4x.png", // Teratorn art trial
+  "monsters/14.v1.png": "monsters/teratorn-anim@4x.png", // Teratorn animated repaint (3 flap rows + 5 attack rows)
   "monsters/sprite.1.v1.png": "monsters/pokey-anim@4x.png", // Pokey animated repaint
   "monsters/sprite.3.v2.png": "monsters/bolt-anim@4x.png", // Bolt animated repaint
   "monsters/octoooze.png": "monsters/octo-anim@4x.png", // Octo-ooze animated repaint

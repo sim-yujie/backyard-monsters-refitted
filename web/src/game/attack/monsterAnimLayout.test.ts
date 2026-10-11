@@ -61,9 +61,10 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg and Octo-ooze layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn and Octo-ooze layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/13.png",
+      "monsters/14.v1.png",
       "monsters/bandito.png",
       "monsters/crabatron.png",
       "monsters/eyera.png",
@@ -324,6 +325,34 @@ describe("applyLayout", () => {
     const sheet = spriteFor("C16");
     if (!sheet) throw new Error("no sprite for C16");
     const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/vorg-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.columns).toBe(32);
+    // 6 px added left and right, 10 px on top: the flyer stays on the same point.
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 10);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    // The flap is untouched: rows 0-2, a new row every 3 ticks, `tick % 9 / 3`.
+    expect(sheet.animations.walk).toEqual(old.animations.walk);
+    expect(sheet.animations.landed).toEqual(old.animations.landed);
+    expect([0, 3, 6, 9, 12, 15].map((tick) => frameRow(sheet, "walk", tick))).toEqual([0, 1, 2, 0, 1, 2]);
+    expect(sheet.animations.attack?.first).toBe(3);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(sheet.rows);
+    expect(sheet.strikeFrame).toBe(2);
+    // The strike lands on row 5, the swing ends on the recovery row and the flap goes on after it.
+    expect(attackRow(sheet, 0, 0)).toBe(5);
+    expect(attackRow(sheet, 4, 0)).toBe(6);
+    expect(attackRow(sheet, 8, 0)).toBe(7);
+    expect(attackRow(sheet, 12, 6)).toBe(frameRow(sheet, "idle", 6));
+    expect(frameRow(sheet, "idle", 6)).toBe(2);
+  });
+
+  it("the Teratorn layout matches the animated PNG, keeps the 3-row wing flap and adds attack rows", () => {
+    const old = MONSTER_SPRITES["C14"];
+    if (!old) throw new Error("no C14");
+    const sheet = spriteFor("C14");
+    if (!sheet) throw new Error("no sprite for C14");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/teratorn-anim@4x.png"));
     expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
     expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
     expect(sheet.columns).toBe(32);
