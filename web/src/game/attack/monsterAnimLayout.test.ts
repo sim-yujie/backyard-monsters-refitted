@@ -61,8 +61,9 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, D.A.V.E. (both skins), Project X and Octo-ooze layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, D.A.V.E. (both skins), Project X, Wormzer and Octo-ooze layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
+      "monsters/13.png",
       "monsters/bandito.png",
       "monsters/crabatron.png",
       "monsters/eyera.png",
@@ -270,6 +271,26 @@ describe("applyLayout", () => {
     expect(sheet.anchorY).toBe(old.anchorY + 12);
     expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
     expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 10);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Wormzer layout matches the animated PNG and keeps the worm where it was", () => {
+    const old = MONSTER_SPRITES["C13"];
+    if (!old) throw new Error("no C13");
+    const sheet = spriteFor("C13");
+    if (!sheet) throw new Error("no sprite for C13");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/wormzer-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.columns).toBe(32);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(data.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(data.readUInt32BE(20));
+    // 8 px added left and right, 14 px on top: the worm stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 8);
+    expect(sheet.anchorY).toBe(old.anchorY + 14);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 8);
     expect(sheet.animations.attack?.first).toBe(7);
     expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
     expect(sheet.strikeFrame).toBe(2);

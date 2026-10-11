@@ -291,6 +291,24 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Wormzer: 56x41 cells (the old 40x26 cell plus 8 px each side, 14 px on top and 1 px at the
+  // bottom for the PNG's extra shadow row), so the anchor moves by (8, 14) and the worm and its
+  // shadow stay put. The sheet keeps the Flash 32 columns (30 headings, then copies of 29 and 0).
+  // Rows: 0 idle, 1-6 caterpillar crawl, 7-11 attack. Burrowing is not drawn: the normal sprite
+  // is shown while it moves.
+  "monsters/13.png": {
+    frameWidth: 56,
+    frameHeight: 41,
+    anchorX: 27,
+    anchorY: 31,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
   "monsters/sprite.12.gold.png": {
     frameWidth: 77,
     frameHeight: 60,
@@ -585,7 +603,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/crabatron.png": "monsters/crabatron-anim@4x.png", // Crabatron animated repaint
   "monsters/brain.v2.png": "monsters/brain-repaint@4x.png", // Brain art trial (2 rows: visible, invisible)
   "monsters/sprite.11.v2.png": "monsters/projectx-anim@4x.png", // Project X animated repaint
-  "monsters/13.png": "monsters/wormzer-repaint@4x.png", // Wormzer art trial
+  "monsters/13.png": "monsters/wormzer-anim@4x.png", // Wormzer animated repaint
   "monsters/zafreeti.v2.png": "monsters/zafreeti-repaint@4x.png", // Zafreeti art trial
   "monsters/vorg_anim.png": "monsters/vorg-repaint@4x.png", // Vorg art trial (3 rows: wings up, half open, down)
   "monsters/slimeattikus_anim.png": "monsters/slimeattikus-repaint@4x.png", // Slimeattikus art trial (only row 0 is drawn)
