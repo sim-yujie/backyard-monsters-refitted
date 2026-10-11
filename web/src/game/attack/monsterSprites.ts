@@ -243,6 +243,22 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Crabatron: 57x39 cells (the old 37x27 cell plus 10 px each side and 12 px on
+  // top), so the anchor moves by (10, 12) and the creature and its shadow stay
+  // put. Same rows as the Bandito: 0 idle, 1-6 scuttle, 7-11 attack.
+  "monsters/crabatron.png": {
+    frameWidth: 57,
+    frameHeight: 39,
+    anchorX: 25,
+    anchorY: 30,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
   // Octo-ooze: 55x36 cells (the old 39x28 cell plus 8 px each side and 8 px on
   // top), so the anchor moves by (8, 8) and the body and its shadow stay put.
   // Same rows as the Bandito: 0 idle, 1-6 tentacle crawl, 7-11 attack.
@@ -521,7 +537,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/ichi.png": "monsters/ichi-anim@4x.png", // Ichi animated repaint
   "monsters/sprite.12.v2.png": "monsters/dave-repaint@4x.png", // D.A.V.E. art trial
   "monsters/sprite.12.gold.png": "monsters/dave-gold-repaint@4x.png", // D.A.V.E. gold skin (same frames, gold tone)
-  "monsters/crabatron.png": "monsters/crabatron-repaint@4x.png", // Crabatron art trial
+  "monsters/crabatron.png": "monsters/crabatron-anim@4x.png", // Crabatron animated repaint
   "monsters/brain.v2.png": "monsters/brain-repaint@4x.png", // Brain art trial (2 rows: visible, invisible)
   "monsters/sprite.11.v2.png": "monsters/projectx-repaint@4x.png", // Project X art trial
   "monsters/13.png": "monsters/wormzer-repaint@4x.png", // Wormzer art trial
