@@ -21,13 +21,13 @@ A **Hatchery** turns goo into monsters.
 - Each monster costs goo, so keep your Goo Factories busy.
 - More Hatcheries let you hatch more at once.
 
-![The Hatch screen, with painted portraits of every monster and Bandito picked](/images/shots/hatchery.webp)
+![The Hatch screen: five Hatcheries busy with Banditos, and painted portraits of every monster to pick from](/images/shots/hatchery.webp)
 
 ## Give them somewhere to live
 
 Hatched monsters move into **Monster Housing**. When your Housing is full, hatching waits until there is room, so build and upgrade Housing as your army grows.
 
-![Pokeys, Octo-oozes, Bolts and more wandering around their pens](/images/shots/pens.webp)
+![The Housing tab: how much room is left, who lives in your pens, and the Monster Juicer](/images/shots/pens.webp)
 
 Need space? The **Monster Juicer** turns monsters you no longer want back into goo.
 

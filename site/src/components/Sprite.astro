@@ -1,0 +1,64 @@
+---
+import strips from "../data/sprites.json";
+
+/**
+ * An in-game monster sprite, played from a strip made by tools/build-sprites.py.
+ * The strip slides one frame at a time inside a box exactly one frame wide
+ * (CSS steps()), so it needs no script. With reduced motion it shows the
+ * first frame.
+ */
+interface Props {
+  /** Strip name, e.g. "walk-C1" or "spin-C14" (see src/data/sprites.json). */
+  name: keyof typeof strips;
+  /** Shown height in CSS pixels; the width follows the frame's shape. */
+  height: number;
+  /** Seconds for one pass through every frame. */
+  duration?: number;
+  eager?: boolean;
+  class?: string;
+}
+
+const { name, height, duration = 0.8, eager = false, class: className } = Astro.props;
+const strip = strips[name];
+// Whole pixels, so a frame never shows a sliver of its neighbour.
+const width = Math.round((strip.width * height) / strip.height);
+---
+
+<span
+  class:list={["sprite", className]}
+  style={`--frames:${strip.frames};--sprite-w:${width}px;--sprite-h:${height}px;--sprite-time:${duration}s`}
+  aria-hidden="true"
+>
+  <img
+    src={`/images/sprites/${name}.webp`}
+    alt=""
+    width={width * strip.frames}
+    height={height}
+    loading={eager ? "eager" : "lazy"}
+    decoding="async"
+  />
+</span>
+
+<style>
+  .sprite {
+    display: block;
+    width: var(--sprite-w);
+    height: var(--sprite-h);
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .sprite img {
+    display: block;
+    max-width: none;
+    width: calc(var(--sprite-w) * var(--frames));
+    height: var(--sprite-h);
+    animation: sprite-frames var(--sprite-time) steps(var(--frames)) infinite;
+  }
+
+  @keyframes sprite-frames {
+    to {
+      transform: translateX(-100%);
+    }
+  }
+</style>

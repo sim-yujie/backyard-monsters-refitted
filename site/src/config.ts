@@ -23,4 +23,14 @@ export const SITE = {
    * text with a mailto link on the Support page and the home page's beta notice.
    */
   bugEmail: "simyujie@gmail.com",
+  /**
+   * The muted, looping gameplay clip on the home page (files under public/).
+   * To swap in another clip, drop the MP4 (H.264, about 1280x720, a few MB)
+   * and a still from it into public/video/ and change these two paths.
+   * Set `src` to "" to show only the still.
+   */
+  showcaseVideo: {
+    src: "/video/raid-loop.mp4",
+    poster: "/video/raid-loop-poster.webp",
+  },
 } as const;

@@ -1,0 +1,82 @@
+{
+  "spin-C1": {
+    "frames": 15,
+    "width": 83,
+    "height": 85
+  },
+  "walk-C1": {
+    "frames": 6,
+    "width": 89,
+    "height": 101
+  },
+  "spin-C2": {
+    "frames": 15,
+    "width": 129,
+    "height": 100
+  },
+  "walk-C2": {
+    "frames": 6,
+    "width": 139,
+    "height": 120
+  },
+  "spin-C3": {
+    "frames": 15,
+    "width": 90,
+    "height": 100
+  },
+  "spin-C4": {
+    "frames": 15,
+    "width": 96,
+    "height": 100
+  },
+  "spin-C5": {
+    "frames": 15,
+    "width": 93,
+    "height": 87
+  },
+  "spin-C6": {
+    "frames": 15,
+    "width": 94,
+    "height": 95
+  },
+  "spin-C7": {
+    "frames": 15,
+    "width": 115,
+    "height": 100
+  },
+  "walk-C7": {
+    "frames": 6,
+    "width": 109,
+    "height": 90
+  },
+  "spin-C8": {
+    "frames": 15,
+    "width": 111,
+    "height": 100
+  },
+  "spin-C9": {
+    "frames": 15,
+    "width": 130,
+    "height": 96
+  },
+  "spin-C10": {
+    "frames": 15,
+    "width": 131,
+    "height": 100
+  },
+  "spin-C14": {
+    "frames": 16,
+    "width": 99,
+    "height": 100
+  },
+  "walk-C14": {
+    "frames": 3,
+    "width": 95,
+    "height": 97
+  },
+  "spin-C16": {
+    "frames": 16,
+    "width": 107,
+    "height": 100
+  }
+}

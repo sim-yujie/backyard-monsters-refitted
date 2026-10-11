@@ -1,0 +1,150 @@
+/*
+ * Motion shared by every page. Two rules hold throughout:
+ * - Nothing starts hidden. Entrances animate from a visible (moved or scaled)
+ *   state, so a page with no script, or seen in a still capture, is complete.
+ * - prefers-reduced-motion switches all of it off (global.css stops every
+ *   animation and transition).
+ */
+
+/* ── The big "Play free" button: a breathing glow, a shine and a springy hover ── */
+
+.btn--glow {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition:
+    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 0.12s ease,
+    box-shadow 0.12s ease;
+  animation: btn-breathe 2.6s ease-in-out infinite;
+}
+
+.btn--glow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / 55%) 48%, transparent 66%);
+  transform: translateX(-120%);
+  animation: btn-shine 4.2s ease-in-out 1.4s infinite;
+}
+
+.btn--glow:hover {
+  transform: translateY(-3px) scale(1.05);
+}
+
+.btn--glow:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+@keyframes btn-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 6px 0 var(--accent-pressed),
+      0 14px 30px rgb(61 214 245 / 25%),
+      0 0 0 0 rgb(61 214 245 / 40%);
+  }
+  50% {
+    box-shadow:
+      0 6px 0 var(--accent-pressed),
+      0 16px 44px rgb(61 214 245 / 45%),
+      0 0 0 10px rgb(61 214 245 / 0%);
+  }
+}
+
+@keyframes btn-shine {
+  0%,
+  55% {
+    transform: translateX(-120%);
+  }
+  80%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+/* ── Scroll reveal ─────────────────────────────────────────────────────────
+ * Tied to the scroll position itself (CSS scroll-driven animations), so there
+ * is no script and nothing waits on an observer: an item rises into place as
+ * it comes up the screen. Only position and size move, never opacity, so
+ * nothing is ever faded out. Browsers without support show it in place.
+ * --i staggers items in a row.
+ */
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: reveal-rise linear both;
+      animation-timeline: view();
+      animation-range: entry calc(var(--i, 0) * 6%) entry calc(70% + var(--i, 0) * 6%);
+    }
+
+    .reveal--pop {
+      animation-name: reveal-pop;
+    }
+  }
+}
+
+@keyframes reveal-rise {
+  from {
+    transform: translateY(56px);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes reveal-pop {
+  from {
+    transform: translateY(64px) scale(0.86) rotate(-2deg);
+  }
+  70% {
+    transform: translateY(-4px) scale(1.02) rotate(0.5deg);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* ── Small helpers ─────────────────────────────────────────────────────── */
+
+@keyframes float-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  50% {
+    transform: translateY(-9px) rotate(-1.5deg);
+  }
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(0) scale(1.06);
+  }
+  20% {
+    transform: rotate(-5deg) scale(1.08);
+  }
+  45% {
+    transform: rotate(4deg) scale(1.08);
+  }
+  70% {
+    transform: rotate(-2deg) scale(1.07);
+  }
+}
+
+/* A page title settles in with a small bounce. */
+.page-head h1 {
+  animation: title-settle 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes title-settle {
+  from {
+    transform: translateY(18px) scale(0.96);
+  }
+  to {
+    transform: none;
+  }
+}
