@@ -46,3 +46,23 @@ agent-handoffs/
 # Production server secrets and backups (docs/deploy.md)
 server/production.env
 server/backups/
+
+# Env variants (.env.local, .env.production, ...); the example files stay tracked
+.env.*
+!.env.example
+!*.env.example
+!example.env
+
+# Vercel CLI link folders (root, site/, web/)
+.vercel
+
+# Browser-test tool output
+.playwright-cli/
+.playwright-mcp/
+
+# Logs, Python caches, network captures, keys
+*.log
+__pycache__/
+*.pyc
+*.har
+*.pem
