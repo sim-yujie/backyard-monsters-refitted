@@ -34,6 +34,12 @@ export const TURNSTILE_SITE_KEY: string = import.meta.env.TURNSTILE_SITE_KEY?.tr
 export const TERMS_URL: string = import.meta.env.VITE_TERMS_URL || "/terms";
 export const PRIVACY_URL: string = import.meta.env.VITE_PRIVACY_URL || "/privacy";
 
+/** The credits page this client ships (`credits.html`), linked under the sign-in panel. */
+export const CREDITS_URL = "/credits";
+
+/** The owner's Patreon, the login screen's "Support us" link. */
+export const PATREON_URL = "https://www.patreon.com/c/TheMonsterLab";
+
 /* ── Map Room 2 world ──────────────────────────────────────────────────────
  * Source: server/src/enums/MapRoom.ts (MapRoom2) via
  * server/src/config/MapRoom2Config.ts, where WORLD_SIZE = [HEIGHT, WIDTH].

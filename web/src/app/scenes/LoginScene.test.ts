@@ -253,6 +253,20 @@ describe("LoginScene sign-up launch extras", () => {
     expect(links.every((link) => link.target === "_blank" && link.rel === "noopener")).toBe(true);
   });
 
+  it("links Terms, Privacy, Credits and the Patreon under the panel, in new tabs", () => {
+    open();
+
+    const links = [...$(".login-footer").querySelectorAll("a")];
+    expect(links.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
+      ["Terms", "/terms"],
+      ["Privacy Policy", "/privacy"],
+      ["Credits", "/credits"],
+      ["Support us on Patreon", "https://www.patreon.com/c/TheMonsterLab"],
+    ]);
+    expect(links.every((link) => link.target === "_blank")).toBe(true);
+    expect(links.at(-1)?.rel).toBe("noopener noreferrer");
+  });
+
   it("flags a reserved name as it is typed", () => {
     open();
     button("Create account").click();

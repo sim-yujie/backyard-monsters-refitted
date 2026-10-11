@@ -1141,12 +1141,27 @@ body {
   text-align: center;
 }
 
-.login-form__terms a {
+.login-form__terms a,
+.login-footer a {
   color: var(--colour-accent);
 }
 
-.login-form__terms a:hover {
+.login-form__terms a:hover,
+.login-footer a:hover {
   color: var(--colour-accent-hover);
+}
+
+/* The Terms, Privacy, Credits and Patreon links under the sign-in panel. */
+.login-footer {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+/* A phone breaks the line between links, not inside one. */
+.login-footer a {
+  white-space: nowrap;
 }
 
 /* Cloudflare Turnstile's widget on the sign-up form: it draws its own box. */

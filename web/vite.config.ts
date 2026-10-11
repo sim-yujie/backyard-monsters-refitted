@@ -60,13 +60,15 @@ export default defineConfig(({ mode }) => {
       assetsDir: "static",
       sourcemap: true,
       target: "es2022",
-      // The game, and the Terms and Privacy placeholder pages the sign-up form
-      // links to (issue #213), served at /terms and /privacy.
+      // The game, the Terms and Privacy pages the sign-up form links to
+      // (issue #213), and the credits page, served at /terms, /privacy and
+      // /credits.
       rollupOptions: {
         input: {
           index: fileURLToPath(new URL("./index.html", import.meta.url)),
           terms: fileURLToPath(new URL("./terms.html", import.meta.url)),
           privacy: fileURLToPath(new URL("./privacy.html", import.meta.url)),
+          credits: fileURLToPath(new URL("./credits.html", import.meta.url)),
         },
       },
     },

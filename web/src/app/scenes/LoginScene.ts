@@ -3,7 +3,7 @@ import { ApiError, NetworkError } from "@/api/http";
 import { unlockInbox } from "@/game/achievements/unlockInbox";
 import { clearTestHistory } from "@/game/baiter/testHistory";
 import { worldChat } from "@/game/chat/chatSession";
-import { PRIVACY_URL, TERMS_URL, TURNSTILE_SITE_KEY } from "@/config";
+import { CREDITS_URL, PATREON_URL, PRIVACY_URL, TERMS_URL, TURNSTILE_SITE_KEY } from "@/config";
 import { Panel } from "@/ui/Panel";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
@@ -110,11 +110,11 @@ const switchRow = (question: string, action: string, onClick: () => void): HTMLE
 };
 
 /** A link that opens in a new tab, so the half-filled form stays where it is. */
-const newTabLink = (href: string, words: string): HTMLAnchorElement => {
+const newTabLink = (href: string, words: string, rel = "noopener"): HTMLAnchorElement => {
   const link = document.createElement("a");
   link.href = href;
   link.target = "_blank";
-  link.rel = "noopener";
+  link.rel = rel;
   link.textContent = words;
   return link;
 };
@@ -131,6 +131,23 @@ const termsLine = (): HTMLElement => {
     " and confirm you are 16 or older.",
   );
   return line;
+};
+
+/** The Terms, Privacy, Credits and Patreon links under the sign-in panel. */
+const footerLinks = (): HTMLElement => {
+  const footer = document.createElement("p");
+  footer.className = "login-footer";
+  footer.append(
+    newTabLink(TERMS_URL, "Terms"),
+    " · ",
+    newTabLink(PRIVACY_URL, "Privacy Policy"),
+    " · ",
+    newTabLink(CREDITS_URL, "Credits"),
+    " · ",
+    // An outside site: no referrer, so it does not learn which page sent the player.
+    newTabLink(PATREON_URL, "Support us on Patreon", "noopener noreferrer"),
+  );
+  return footer;
 };
 
 /**
@@ -217,7 +234,7 @@ export class LoginScene implements Scene {
 
     const stack = document.createElement("div");
     stack.className = "login-stack";
-    stack.append(brand(), this.panel.element);
+    stack.append(brand(), this.panel.element, footerLinks());
     this.wrapper.append(stack);
     context.overlay.content.append(this.wrapper);
 
