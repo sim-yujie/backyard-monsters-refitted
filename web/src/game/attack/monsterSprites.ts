@@ -179,6 +179,22 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Fink: 46x42 cells (the old 34x32 cell plus 6 px each side and 10 px on
+  // top), so the anchor moves by (6, 10) and the creature and its shadow stay
+  // put. Same rows as the Bandito: 0 idle, 1-6 scuttle, 7-11 attack.
+  "monsters/fink.png": {
+    frameWidth: 46,
+    frameHeight: 42,
+    anchorX: 21,
+    anchorY: 31,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
   // Octo-ooze: 55x36 cells (the old 39x28 cell plus 8 px each side and 8 px on
   // top), so the anchor moves by (8, 8) and the body and its shadow stay put.
   // Same rows as the Bandito: 0 idle, 1-6 tentacle crawl, 7-11 attack.
@@ -450,7 +466,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/sprite.1.v1.png": "monsters/pokey-anim@4x.png", // Pokey animated repaint
   "monsters/sprite.3.v2.png": "monsters/bolt-anim@4x.png", // Bolt animated repaint
   "monsters/octoooze.png": "monsters/octo-anim@4x.png", // Octo-ooze animated repaint
-  "monsters/fink.png": "monsters/fink-repaint@4x.png", // Fink art trial
+  "monsters/fink.png": "monsters/fink-anim@4x.png", // Fink animated repaint
   "monsters/bandito.png": "monsters/bandito-anim@4x.png", // Bandito animated repaint
   "monsters/fang.png": "monsters/fang-repaint@4x.png", // Fang art trial
   "monsters/eyera.png": "monsters/eyera-repaint@4x.png", // Eye-ra art trial
