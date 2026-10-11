@@ -1,0 +1,240 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE } from "../config";
+
+/**
+ * Supporter names, shown in a "Thank you" section once the list has any.
+ * Empty for now: the section stays hidden until names are added here.
+ */
+const supporters: string[] = [];
+
+const costs = [
+  {
+    title: "The game server",
+    text: "The machine that runs the game, stores every yard and replays every battle, online all day, every day.",
+  },
+  {
+    title: "This website",
+    text: "Hosting for the game's web pages and this site, so they load fast wherever you are.",
+  },
+  {
+    title: "Email",
+    text: "The mail service that sends your account emails, such as password resets.",
+  },
+];
+---
+
+<Base
+  title="Support us"
+  description="Help keep Backyard Monsters Revamped online. Support goes to the server, website and email. The game stays free, with no in-game advantage."
+  current="support"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow">Support us</span>
+      <h1>Help keep the yard running</h1>
+      <p>
+        Backyard Monsters Revamped is free and made by volunteers. If you enjoy it, you can chip in towards the
+        running costs on Patreon.
+      </p>
+    </div>
+  </header>
+
+  <div class="wrap page-body">
+    <section class="patreon" aria-labelledby="patreon-title">
+      <div class="patreon__copy">
+        <h2 id="patreon-title">Support us on Patreon</h2>
+        <p>
+          Every bit helps pay the monthly bills that keep the game online. Supporting is entirely optional, and you can
+          stop at any time on Patreon.
+        </p>
+        <a class="btn btn--patreon btn--big" href={SITE.patreonUrl} rel="noopener noreferrer">Support on Patreon</a>
+      </div>
+      <ul class="promises">
+        <li>
+          <strong>The game stays free.</strong>
+          Everyone can play everything, whether they support or not.
+        </li>
+        <li>
+          <strong>No in-game advantage.</strong>
+          Supporting does not buy you anything inside the game.
+        </li>
+      </ul>
+    </section>
+
+    <section class="costs" aria-labelledby="costs-title">
+      <h2 id="costs-title">What the money pays for</h2>
+      <ul class="costs__list">
+        {
+          costs.map((c) => (
+            <li class="cost">
+              <h3>{c.title}</h3>
+              <p>{c.text}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    {
+      supporters.length > 0 && (
+        <section class="thanks" aria-labelledby="thanks-title">
+          <h2 id="thanks-title">Thank you</h2>
+          <ul class="thanks__list">
+            {supporters.map((name) => (
+              <li>{name}</li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+
+    <section class="other" aria-labelledby="other-title">
+      <h2 id="other-title">Other ways to help</h2>
+      <ul class="prose">
+        <li>Play, and tell your friends about the game.</li>
+        <li>Remember it is a beta: when something looks wrong, let us know.</li>
+        {SITE.discordUrl && <li>Join the community on Discord.</li>}
+      </ul>
+      {
+        SITE.discordUrl && (
+          <a class="btn btn--discord" href={SITE.discordUrl} rel="noopener noreferrer">
+            Join the Discord
+          </a>
+        )
+      }
+    </section>
+
+    <section class="credits-teaser" aria-labelledby="credits-title">
+      <h2 id="credits-title">Credits</h2>
+      <p>
+        The game server is based on <a href={SITE.refittedUrl} rel="noopener noreferrer">Backyard Monsters Refitted</a>,
+        whose team restored the original game and wrote its server. Backyard Monsters was created by Kixeye; this is an
+        unofficial fan project and is not affiliated with Kixeye.
+      </p>
+      <a href="/credits/">Full credits and licences</a>
+    </section>
+  </div>
+</Base>
+
+<style>
+  .page-body > section + section {
+    margin-top: clamp(40px, 6vw, 64px);
+  }
+
+  .patreon {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 32px;
+    align-items: center;
+    padding: clamp(24px, 4vw, 40px);
+    border-radius: var(--radius-lg);
+    background:
+      radial-gradient(500px 260px at 0% 0%, rgb(255 95 74 / 16%), transparent 70%),
+      var(--panel);
+    border: 1px solid rgb(255 95 74 / 30%);
+  }
+
+  .patreon__copy p {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    margin-bottom: 26px;
+  }
+
+  .promises {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 14px;
+  }
+
+  .promises li {
+    padding: 16px 18px 16px 52px;
+    position: relative;
+    border-radius: var(--radius-md);
+    background: rgb(159 224 176 / 8%);
+    border: 1px solid rgb(159 224 176 / 30%);
+    color: var(--text-secondary);
+  }
+
+  .promises li::before {
+    content: "";
+    position: absolute;
+    left: 18px;
+    top: 19px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #9fe0b0
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10.5l3 3 7-7' stroke='%230f141c' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      center / 100% no-repeat;
+  }
+
+  .promises strong {
+    display: block;
+    font-family: var(--font-display);
+    font-weight: 400;
+    color: var(--text-strong);
+    font-size: 1.1rem;
+    margin-bottom: 2px;
+  }
+
+  .costs__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .cost {
+    padding: 20px 22px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+
+  .cost p {
+    margin: 0;
+    color: var(--text-secondary);
+  }
+
+  .thanks__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .thanks__list li {
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    background: var(--wash);
+    border: 1px solid var(--border);
+  }
+
+  .other .btn {
+    margin-top: 6px;
+  }
+
+  .credits-teaser {
+    max-width: 720px;
+    padding-top: 32px;
+    border-top: 1px solid var(--border);
+  }
+
+  .credits-teaser p {
+    color: var(--text-secondary);
+  }
+
+  @media (max-width: 860px) {
+    .patreon,
+    .costs__list {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

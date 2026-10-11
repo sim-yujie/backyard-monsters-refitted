@@ -1,0 +1,111 @@
+---
+import Base from "../../layouts/Base.astro";
+import { getCollection, render } from "astro:content";
+
+const entries = (await getCollection("changelog", ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.date.getTime() - a.data.date.getTime(),
+);
+const rendered = await Promise.all(entries.map(async (entry) => ({ entry, ...(await render(entry)) })));
+const fmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+---
+
+<Base
+  title="Changelog"
+  description="What's new in Backyard Monsters Revamped: every update, in plain language."
+  current="changelog"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow">Changelog</span>
+      <h1>What's new</h1>
+      <p>Every update to the game, newest first, in plain language.</p>
+    </div>
+  </header>
+
+  <div class="wrap page-body">
+    <ol class="log">
+      {
+        rendered.map(({ entry, Content }) => (
+          <li class="log__entry" id={entry.id}>
+            <div class="log__when">
+              <time datetime={entry.data.date.toISOString().slice(0, 10)}>{fmt.format(entry.data.date)}</time>
+            </div>
+            <article class="log__card prose">
+              <h2>
+                <a href={`#${entry.id}`}>{entry.data.title}</a>
+              </h2>
+              <Content />
+            </article>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</Base>
+
+<style>
+  .log {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .log__entry {
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: 28px;
+    padding-bottom: 36px;
+    scroll-margin-top: 90px;
+  }
+
+  .log__when {
+    padding-top: 26px;
+    text-align: right;
+    font-family: var(--font-display);
+    color: var(--accent);
+  }
+
+  .log__card {
+    max-width: none;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 22px 26px 8px;
+  }
+
+  .log__card h2 {
+    margin-top: 0;
+    font-size: 1.55rem;
+  }
+
+  .log__card h2 a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .log__card h2 a:hover {
+    color: var(--accent);
+  }
+
+  .log__entry:target .log__card {
+    border-color: var(--accent-line);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  @media (max-width: 720px) {
+    .log__entry {
+      grid-template-columns: 1fr;
+      gap: 8px;
+      padding-bottom: 24px;
+    }
+
+    .log__when {
+      text-align: left;
+      padding-top: 0;
+    }
+
+    .log__card {
+      padding: 18px 18px 4px;
+    }
+  }
+</style>

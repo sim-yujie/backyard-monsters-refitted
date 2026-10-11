@@ -1,0 +1,683 @@
+---
+import Base from "../layouts/Base.astro";
+import Shot from "../components/Shot.astro";
+import { SITE } from "../config";
+import { getCollection } from "astro:content";
+
+const latest = (await getCollection("changelog", ({ data }) => !data.draft))
+  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime())
+  .slice(0, 2);
+
+const fmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+
+const features = [
+  {
+    title: "Build your yard",
+    text: "Harvesters gather twigs, pebbles, putty and goo. Spend them on new buildings and upgrades, and grow your Town Hall to unlock more.",
+    img: "/images/monsters/C12.webp",
+    alt: "D.A.V.E., a rusty robot monster",
+  },
+  {
+    title: "Hatch an army",
+    text: "Unlock new kinds of monster in the Locker, hatch them from goo, and train them up in the Monster Academy.",
+    img: "/images/monsters/C1.webp",
+    alt: "Pokey, a round pink monster covered in spikes",
+  },
+  {
+    title: "Defend what's yours",
+    text: "Towers, walls and traps guard your yard. Test your defences against an army of your own choosing with the Wild Monster Baiter.",
+    img: "/images/monsters/C8.webp",
+    alt: "Fang, a red spider-legged monster",
+  },
+  {
+    title: "Raid your rivals",
+    text: "Fling your monsters into wild tribe camps and other players' yards from the Map Room, and bring home their loot.",
+    img: "/images/monsters/C7.webp",
+    alt: "Bandito, a green clawed monster",
+  },
+];
+
+const roster = [
+  ["C1", "Pokey"],
+  ["C2", "Octo-ooze"],
+  ["C3", "Bolt"],
+  ["C4", "Fink"],
+  ["C5", "Eye-ra"],
+  ["C6", "Ichi"],
+  ["C9", "Brain"],
+  ["C10", "Crabatron"],
+  ["C14", "Teratorn"],
+  ["C16", "Vorg"],
+];
+---
+
+<Base current="home">
+  <section class="hero">
+    <div class="wrap hero__inner">
+      <div class="hero__copy">
+        <span class="pill pill--beta">Open beta</span>
+        <h1><span class="hero__line">Your backyard.</span> <span class="hero__line hero__accent">Your monsters.</span> <span class="hero__line">Their loot.</span></h1>
+        <p class="hero__lead">
+          Backyard Monsters Revamped is a free, fan-made revamp of Backyard Monsters. Build a yard, hatch an army of
+          monsters and raid wild tribes and other players, right in your browser. No Flash, no download.
+        </p>
+        <div class="btn-row">
+          <a class="btn btn--primary btn--big" href={SITE.gameUrl}>Play free now</a>
+          <a class="btn btn--ghost" href="/guides/getting-started/">How to start</a>
+        </div>
+        <p class="hero__small">Sign up with a username, email and password. Free to play, nothing to install.</p>
+      </div>
+
+      <div class="hero__art" aria-hidden="true">
+        <div class="hero__glow"></div>
+        <div class="hero__ground"></div>
+        <img class="tribe tribe--kozu" src="/images/tribes/kozu.webp" alt="" width="560" height="560" />
+        <img class="tribe tribe--dreadnaut" src="/images/tribes/dreadnaut.webp" alt="" width="560" height="560" />
+        <img class="tribe tribe--abunakki" src="/images/tribes/abunakki.webp" alt="" width="560" height="560" />
+        <img class="tribe tribe--legionnaire" src="/images/tribes/legionnaire.webp" alt="" width="560" height="560" />
+      </div>
+    </div>
+  </section>
+
+  <section class="beta" aria-labelledby="beta-title">
+    <div class="wrap">
+      <div class="notice beta__notice">
+        <svg class="beta__icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 2 1 21h22L12 2Z" fill="#f5b94a"></path>
+          <path d="M11 9h2v6h-2zM11 17h2v2h-2z" fill="#2a1a00"></path>
+        </svg>
+        <div>
+          <h2 id="beta-title" class="beta__title">This is an open beta</h2>
+          <p>
+            The game is live and free to play, but it is still being built. Things may break, and
+            <strong>your progress may be reset</strong> before the full launch. Play for fun, and tell us what you find.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="features-title">
+    <div class="wrap">
+      <div class="section__head">
+        <span class="eyebrow">How it plays</span>
+        <h2 id="features-title">Build, hatch, defend, raid</h2>
+        <p>The yard-building monster battler you remember, rebuilt to run in a modern browser.</p>
+      </div>
+      <ul class="features">
+        {
+          features.map((f) => (
+            <li class="feature">
+              <img src={f.img} alt={f.alt} width="360" height="240" loading="lazy" />
+              <div class="feature__body">
+                <h3>{f.title}</h3>
+                <p>{f.text}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <section class="section bob" aria-labelledby="bob-title">
+    <div class="wrap bob__inner">
+      <div class="bob__art">
+        <div class="bubble">
+          "Welcome to Backyard Monsters! I'm Bob. Give me eight minutes and I'll have your yard ready for anything."
+        </div>
+        <img src="/images/bob.webp" alt="Bob, a friendly green monster, pointing" width="240" height="240" loading="lazy" />
+      </div>
+      <div class="bob__copy">
+        <span class="eyebrow">New here?</span>
+        <h2 id="bob-title">Bob shows you the ropes</h2>
+        <p>
+          New players get a guided start with Bob. In a few minutes you build your first defences, watch a wild tribe
+          attack, get a squad of free Pokeys and lead your first raid.
+        </p>
+        <p>When Bob is done, your yard is protected from other players for 7 days while you find your feet.</p>
+        <a class="btn btn--ghost" href="/guides/getting-started/">Read the starter guide</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="shots-title">
+    <div class="wrap">
+      <div class="section__head">
+        <span class="eyebrow">In the game</span>
+        <h2 id="shots-title">See it in action</h2>
+      </div>
+      <div class="shots">
+        <Shot name="yard" caption="Your yard" />
+        <Shot name="attack" caption="Flinging monsters into an enemy yard" />
+        <Shot name="map" caption="The Map Room" />
+      </div>
+    </div>
+  </section>
+
+  <section class="section roster" aria-labelledby="roster-title">
+    <div class="wrap">
+      <div class="section__head">
+        <span class="eyebrow">Meet the monsters</span>
+        <h2 id="roster-title">Start with Pokeys. Unlock the rest.</h2>
+        <p>Every monster has its own job in a raid. Mix them up to crack open any defence.</p>
+      </div>
+    </div>
+    <ul class="roster__list">
+      {
+        roster.map(([id, name]) => (
+          <li class="roster__card">
+            <img src={`/images/monsters/${id}.webp`} alt="" width="360" height="240" loading="lazy" />
+            <span>{name}</span>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <section class="section news" aria-labelledby="news-title">
+    <div class="wrap news__inner">
+      <div>
+        <span class="eyebrow">What's new</span>
+        <h2 id="news-title">Latest updates</h2>
+        <ul class="news__list">
+          {
+            latest.map((entry) => (
+              <li>
+                <a href={`/changelog/#${entry.id}`}>
+                  <time datetime={entry.data.date.toISOString().slice(0, 10)}>{fmt.format(entry.data.date)}</time>
+                  <span>{entry.data.title}</span>
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+        <a href="/changelog/">See the full changelog</a>
+      </div>
+      <div class="support-card">
+        <h2>Keep the yard running</h2>
+        <p>
+          The game is free and stays free. If you enjoy it, you can help pay for the server, the website and email on
+          Patreon. Supporting gives no in-game advantage.
+        </p>
+        <div class="btn-row">
+          <a class="btn btn--patreon" href={SITE.patreonUrl} rel="noopener noreferrer">Support on Patreon</a>
+          <a href="/support/">Where the money goes</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap final__inner">
+      <img src="/images/monsters/C1.webp" alt="" width="360" height="240" loading="lazy" class="final__pokey" />
+      <h2>Your yard is waiting</h2>
+      <p>Free, in your browser, in under a minute.</p>
+      <div class="btn-row final__buttons">
+        <a class="btn btn--primary btn--big" href={SITE.gameUrl}>Play free now</a>
+        {
+          SITE.discordUrl && (
+            <a class="btn btn--discord" href={SITE.discordUrl} rel="noopener noreferrer">
+              Join the Discord
+            </a>
+          )
+        }
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .hero {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(900px 500px at 78% 40%, rgb(61 214 245 / 16%), transparent 65%),
+      radial-gradient(700px 400px at 10% 110%, rgb(111 191 74 / 14%), transparent 70%),
+      linear-gradient(180deg, #0a0e14 0%, #0f141c 100%);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .hero__inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 32px;
+    min-height: min(720px, calc(100vh - 68px));
+    padding-top: 48px;
+    padding-bottom: 56px;
+  }
+
+  .hero__copy h1 {
+    margin-top: 18px;
+    font-size: clamp(2.4rem, 5vw, 4rem);
+    line-height: 1.05;
+    text-shadow: 0 4px 0 rgb(0 0 0 / 35%);
+  }
+
+  .hero__line {
+    display: block;
+    white-space: nowrap;
+  }
+
+  .hero__accent {
+    color: var(--accent);
+  }
+
+  .hero__lead {
+    max-width: 540px;
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    margin-bottom: 28px;
+  }
+
+  .hero__small {
+    margin: 22px 0 0;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+  }
+
+  .hero__art {
+    position: relative;
+    aspect-ratio: 1 / 0.92;
+    width: 100%;
+    max-width: 600px;
+    justify-self: center;
+  }
+
+  .hero__glow {
+    position: absolute;
+    inset: 6% 8% 14%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgb(61 214 245 / 28%), rgb(61 214 245 / 0%) 68%);
+  }
+
+  .hero__ground {
+    position: absolute;
+    left: 4%;
+    right: 4%;
+    bottom: 3%;
+    height: 22%;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, #4f9a35 0%, #3b7a28 45%, rgb(43 90 30 / 0%) 72%);
+    opacity: 0.85;
+  }
+
+  .tribe {
+    position: absolute;
+    height: auto;
+    filter: drop-shadow(0 14px 18px rgb(0 0 0 / 45%));
+  }
+
+  .tribe--kozu {
+    width: 50%;
+    left: 26%;
+    top: 0;
+    animation: bob 6s ease-in-out infinite;
+  }
+
+  .tribe--dreadnaut {
+    width: 40%;
+    right: 0;
+    top: 22%;
+    animation: bob 7s ease-in-out -2s infinite;
+  }
+
+  .tribe--abunakki {
+    width: 42%;
+    left: 0;
+    top: 24%;
+    animation: bob 6.5s ease-in-out -4s infinite;
+  }
+
+  .tribe--legionnaire {
+    width: 44%;
+    left: 30%;
+    bottom: 2%;
+    animation: bob 5.5s ease-in-out -1s infinite;
+  }
+
+  @keyframes bob {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+
+  @media (max-width: 860px) {
+    .hero__inner {
+      grid-template-columns: 1fr;
+      min-height: 0;
+      padding-top: 28px;
+      padding-bottom: 40px;
+      gap: 8px;
+    }
+
+    .hero__copy h1 {
+      font-size: clamp(2rem, 9.2vw, 3.2rem);
+    }
+
+    .hero__art {
+      order: -1;
+      max-width: 420px;
+      width: 92%;
+    }
+  }
+
+  .beta {
+    padding-top: clamp(28px, 4vw, 44px);
+  }
+
+  .beta__notice {
+    padding: 20px 22px;
+  }
+
+  .beta__icon {
+    width: 30px;
+    height: 30px;
+    flex: none;
+    margin-top: 2px;
+  }
+
+  .beta__title {
+    font-size: 1.3rem;
+    color: var(--warning-bright);
+    margin-bottom: 6px;
+  }
+
+  .features {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .feature {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .feature img {
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    object-fit: cover;
+  }
+
+  .feature__body {
+    padding: 18px 20px 22px;
+  }
+
+  .feature__body h3 {
+    margin-bottom: 8px;
+  }
+
+  .feature__body p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 1rem;
+  }
+
+  @media (max-width: 1020px) {
+    .features {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 560px) {
+    .features {
+      grid-template-columns: 1fr;
+    }
+
+    .feature {
+      flex-direction: row;
+      align-items: stretch;
+    }
+
+    .feature img {
+      width: 38%;
+      aspect-ratio: auto;
+      object-fit: cover;
+    }
+
+    .feature__body {
+      padding: 14px 16px;
+    }
+
+    .feature__body h3 {
+      font-size: 1.15rem;
+    }
+
+    .feature__body p {
+      font-size: 0.95rem;
+    }
+  }
+
+  .bob {
+    background:
+      radial-gradient(600px 300px at 25% 50%, rgb(111 191 74 / 14%), transparent 70%),
+      var(--bg-deep);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .bob__inner {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 40px;
+    align-items: center;
+  }
+
+  .bob__art {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .bob__art img {
+    width: min(260px, 70%);
+  }
+
+  .bubble {
+    position: relative;
+    max-width: 380px;
+    padding: 18px 22px;
+    background: #fff;
+    color: #17202b;
+    border-radius: 20px;
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    line-height: 1.35;
+    box-shadow: var(--shadow);
+  }
+
+  .bubble::after {
+    content: "";
+    position: absolute;
+    left: 42%;
+    bottom: -14px;
+    border: 14px solid transparent;
+    border-top-color: #fff;
+    border-bottom: 0;
+  }
+
+  .bob__copy p {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    max-width: 560px;
+  }
+
+  @media (max-width: 860px) {
+    .bob__inner {
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+  }
+
+  .shots {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  @media (max-width: 860px) {
+    .shots {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .roster {
+    padding-bottom: clamp(48px, 7vw, 88px);
+  }
+
+  .roster__list {
+    list-style: none;
+    margin: 0 auto;
+    padding: 4px var(--gutter) 12px;
+    max-width: var(--wrap);
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .roster__card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    text-align: center;
+  }
+
+  .roster__card img {
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    object-fit: cover;
+  }
+
+  .roster__card span {
+    display: block;
+    padding: 10px 8px 12px;
+    font-family: var(--font-display);
+    color: var(--text-strong);
+  }
+
+  @media (max-width: 860px) {
+    .roster__list {
+      display: flex;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+
+    .roster__card {
+      flex: 0 0 42%;
+      scroll-snap-align: start;
+    }
+  }
+
+  .news {
+    border-top: 1px solid var(--border);
+  }
+
+  .news__inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: start;
+  }
+
+  .news__list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 18px;
+  }
+
+  .news__list a {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    text-decoration: none;
+    color: var(--text-strong);
+  }
+
+  .news__list a:hover span {
+    color: var(--accent);
+  }
+
+  .news__list time {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+
+  .news__list span {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+  }
+
+  .support-card {
+    background: linear-gradient(160deg, #241a2a, #1a1f2b);
+    border: 1px solid rgb(255 95 74 / 35%);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+  }
+
+  .support-card h2 {
+    font-size: 1.6rem;
+  }
+
+  .support-card p {
+    color: var(--text-secondary);
+  }
+
+  @media (max-width: 860px) {
+    .news__inner {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .final {
+    padding: clamp(64px, 9vw, 110px) 0;
+    text-align: center;
+    background:
+      radial-gradient(700px 360px at 50% 100%, rgb(61 214 245 / 18%), transparent 70%),
+      var(--bg-deep);
+    border-top: 1px solid var(--border);
+  }
+
+  .final__inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .final__pokey {
+    width: 150px;
+    border-radius: 50%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border: 4px solid var(--accent-line);
+    margin-bottom: 22px;
+  }
+
+  .final p {
+    color: var(--text-secondary);
+    font-size: 1.15rem;
+  }
+
+  .final__buttons {
+    justify-content: center;
+    margin-top: 10px;
+  }
+</style>

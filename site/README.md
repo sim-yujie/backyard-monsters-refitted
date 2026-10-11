@@ -1,0 +1,30 @@
+# bymrevamped.com
+
+The public website for Backyard Monsters Revamped: landing page, changelog, guides, support and credits. The game itself is in `web/` and lives at play.bymrevamped.com; this folder is a separate Astro project and nothing in `web/` depends on it.
+
+```sh
+cd site
+bun install
+bun run dev      # local preview at http://localhost:4321
+bun run build    # static site in site/dist/
+```
+
+Vercel: root directory `site`, build command `bun run build`, output directory `dist` (Astro preset).
+
+## Adding content
+
+- **Changelog entry:** add `src/content/changelog/<yyyy-mm-dd>-<short-name>.md` with `title` and `date` in the front matter, then plain Markdown. Newest entries show first; the home page lists the latest two.
+- **Guide:** add `src/content/guides/<address>.md` with `title`, `description`, `order` (position on the list) and optionally `icon` (an image under `public/images/`). The file name becomes `/guides/<address>/`.
+- Either kind can carry `draft: true` to keep it off the built site.
+
+## Settings
+
+`src/config.ts` holds every outside link (game, Patreon, Privacy, Terms). `discordUrl` is empty for now: paste the invite there and the Discord buttons appear.
+
+## Images
+
+All images are pre-sized WebP files in `public/images/` (screenshots 1280x720 in `shots/`). A `<Shot name="...">` on the home page shows `public/images/shots/<name>.webp`, or a "Screenshot coming soon" box until that file exists. `public/og.jpg` is the 1200x630 share picture.
+
+## Font
+
+Headings and buttons use Titan One by Rodrigo Fuenzalida, the same file as the game (`public/fonts/titan-one/`), under the SIL Open Font License 1.1 (`OFL.txt` beside it), which allows web use and self-hosting. Body text uses the reader's system font.

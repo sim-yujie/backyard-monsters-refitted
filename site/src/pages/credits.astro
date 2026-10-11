@@ -1,0 +1,74 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE } from "../config";
+---
+
+<Base
+  title="Credits"
+  description="Credits for Backyard Monsters Revamped: the Backyard Monsters Refitted server, the licence, the art and the font."
+  current="credits"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow">Credits</span>
+      <h1>Credits</h1>
+      <p>
+        <strong>Backyard Monsters Revamped</strong> is a fan-made revamp of Backyard Monsters, built on the Backyard
+        Monsters Refitted project.
+      </p>
+    </div>
+  </header>
+
+  <div class="wrap page-body">
+    <div class="prose">
+      <h2 id="fan-project">A free fan project</h2>
+      <p>Backyard Monsters Revamped is an unofficial, free, non-commercial fan project run by volunteers.</p>
+      <p>
+        Backyard Monsters was created by <strong>Kixeye</strong>. "Backyard Monsters" and related names, logos and
+        artwork belong to Kixeye or their respective owners. This project is
+        <strong>not affiliated with, endorsed by or sponsored by Kixeye</strong>. It is made to keep the game alive.
+      </p>
+
+      <h2 id="server">The game server</h2>
+      <p>
+        The game server is based on <strong><a href={SITE.refittedUrl} rel="noopener noreferrer">Backyard Monsters Refitted</a></strong>.
+        Its team restored the original game and wrote its server. Thank you to them and to all contributors.
+      </p>
+      <p>
+        The source code is used and shared under the
+        <strong><a href={SITE.licenceUrl} rel="noopener noreferrer">PolyForm Noncommercial License 1.0.0</a></strong>.
+        In short: you may use, change and share the code for non-commercial purposes. The licence covers the code only.
+        It does not give you any rights to Kixeye's names, logos or artwork.
+      </p>
+
+      <h2 id="client">The web client, art and font</h2>
+      <ul>
+        <li>
+          <strong>Web client:</strong> the game you play in your browser was written for Backyard Monsters Revamped. It
+          shares the same licence as the server.
+        </li>
+        <li>
+          <strong>Art:</strong> the monsters, buildings and other game art come from the original Backyard Monsters,
+          with some new and repainted art made for this project. The painted monster portraits and tribe leaders on
+          this website were made for this project with Google Gemini, using the original art as a reference. Bob, the
+          guide, is a new character painted the same way.
+        </li>
+        <li>
+          <strong>Font:</strong> <strong>Titan One</strong> by Rodrigo Fuenzalida, used under the
+          <a href="https://openfontlicense.org" rel="noopener noreferrer">SIL Open Font License 1.1</a>. The full licence
+          text: <a href="/fonts/titan-one/OFL.txt">OFL.txt</a>.
+        </li>
+        <li>
+          <strong>Website:</strong> built with <a href="https://astro.build" rel="noopener noreferrer">Astro</a>.
+        </li>
+      </ul>
+
+      <h2 id="support">Support us</h2>
+      <p>
+        If you enjoy the game, you can
+        <strong><a href={SITE.patreonUrl} rel="noopener noreferrer">support us on Patreon</a></strong>. It helps pay for
+        the servers. It gives no in-game advantage. <a href="/support/">More about supporting</a>.
+      </p>
+    </div>
+  </div>
+</Base>

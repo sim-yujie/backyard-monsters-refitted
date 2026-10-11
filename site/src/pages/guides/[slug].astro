@@ -1,0 +1,199 @@
+---
+import Base from "../../layouts/Base.astro";
+import { SITE } from "../../config";
+import { getCollection, render } from "astro:content";
+
+export async function getStaticPaths() {
+  const guides = (await getCollection("guides", ({ data }) => !data.draft)).sort((a, b) => a.data.order - b.data.order);
+  return guides.map((guide, i) => ({
+    params: { slug: guide.id },
+    props: { guide, prev: guides[i - 1], next: guides[i + 1] },
+  }));
+}
+
+const { guide, prev, next } = Astro.props;
+const { Content, headings } = await render(guide);
+const toc = headings.filter((h) => h.depth === 2);
+---
+
+<Base title={guide.data.title} description={guide.data.description} current="guides">
+  <header class="page-head">
+    <div class="wrap">
+      <a class="crumb" href="/guides/">All guides</a>
+      <h1>{guide.data.title}</h1>
+      <p>{guide.data.description}</p>
+    </div>
+  </header>
+
+  <div class="wrap page-body guide">
+    {
+      toc.length > 1 && (
+        <nav class="toc" aria-label="On this page">
+          <p class="toc__title">On this page</p>
+          <ul>
+            {toc.map((h) => (
+              <li>
+                <a href={`#${h.slug}`}>{h.text}</a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )
+    }
+
+    <article class="prose">
+      <Content />
+
+      <div class="guide__cta">
+        <p>Ready to try it?</p>
+        <a class="btn btn--primary" href={SITE.gameUrl}>Play free now</a>
+      </div>
+
+      <nav class="pager" aria-label="More guides">
+        {
+          prev ? (
+            <a class="pager__link" href={`/guides/${prev.id}/`}>
+              <span>Previous</span>
+              {prev.data.title}
+            </a>
+          ) : (
+            <span />
+          )
+        }
+        {
+          next && (
+            <a class="pager__link pager__link--next" href={`/guides/${next.id}/`}>
+              <span>Next</span>
+              {next.data.title}
+            </a>
+          )
+        }
+      </nav>
+    </article>
+  </div>
+</Base>
+
+<style>
+  .crumb {
+    display: inline-block;
+    margin-bottom: 14px;
+    font-family: var(--font-display);
+    text-decoration: none;
+  }
+
+  .crumb::before {
+    content: "\2190\00a0";
+  }
+
+  .guide {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 720px);
+    gap: 48px;
+    align-items: start;
+  }
+
+  .toc {
+    position: sticky;
+    top: 96px;
+    font-size: 0.95rem;
+  }
+
+  .toc__title {
+    font-family: var(--font-display);
+    color: var(--text-strong);
+    margin-bottom: 8px;
+  }
+
+  .toc ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-left: 2px solid var(--border-strong);
+  }
+
+  .toc a {
+    display: block;
+    padding: 5px 0 5px 14px;
+    color: var(--text-secondary);
+    text-decoration: none;
+  }
+
+  .toc a:hover {
+    color: var(--accent);
+  }
+
+  .prose :global(h2) {
+    scroll-margin-top: 90px;
+  }
+
+  .guide__cta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin: 44px 0 28px;
+    padding: 20px 22px;
+    border-radius: var(--radius-md);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+  }
+
+  .guide__cta p {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    color: var(--text-strong);
+  }
+
+  .pager {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .pager__link {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-width: 48%;
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    font-family: var(--font-display);
+    text-decoration: none;
+    color: var(--text-strong);
+  }
+
+  .pager__link:hover {
+    border-color: var(--accent-line);
+    color: var(--text-strong);
+  }
+
+  .pager__link span {
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  .pager__link--next {
+    text-align: right;
+    margin-left: auto;
+  }
+
+  @media (max-width: 900px) {
+    .guide {
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+
+    .toc {
+      position: static;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 18px;
+    }
+  }
+</style>

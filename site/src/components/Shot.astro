@@ -1,0 +1,64 @@
+---
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
+/**
+ * A game screenshot from public/images/shots/<name>.webp. Until that file
+ * exists, a clearly marked placeholder box is shown in its place, so adding
+ * the screenshot later is just dropping the file in.
+ */
+interface Props {
+  name: string;
+  caption: string;
+  /** Pixel size of the file, for layout. Screenshots are saved at 1280x720. */
+  width?: number;
+  height?: number;
+}
+
+const { name, caption, width = 1280, height = 720 } = Astro.props;
+const src = `/images/shots/${name}.webp`;
+// The build runs from site/, so public/ is relative to the working directory.
+const file = join(process.cwd(), "public", src);
+const ready = existsSync(file);
+---
+
+<figure class="shot">
+  {
+    ready ? (
+      <img src={src} alt={caption} width={width} height={height} loading="lazy" decoding="async" />
+    ) : (
+      <div class="placeholder-shot" role="img" aria-label={`Screenshot coming soon: ${caption}`}>
+        Screenshot coming soon
+        <br />
+        <small>{name}.webp</small>
+      </div>
+    )
+  }
+  <figcaption>{caption}</figcaption>
+</figure>
+
+<style>
+  .shot {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .shot img {
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-strong);
+    box-shadow: var(--shadow);
+  }
+
+  .shot :global(.placeholder-shot) {
+    flex: 1;
+  }
+
+  figcaption {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+  }
+</style>
