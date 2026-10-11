@@ -13,6 +13,7 @@ s1=Image.new('RGBA',(N*CW//4,12*CH//4))
 for n in range(N):
     for k in range(12): s1.paste(premul_resize(F[n][k],(CW//4,CH//4)),(n*CW//4,k*CH//4))
 s1.save('out/bolt-anim.png',optimize=True)
+import subprocess; subprocess.run([sys.executable,os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','shrink-sheet.py'),'out/bolt-anim@4x.png','out/bolt-anim.png'],check=True)  # 256 colours
 BG=(86,92,74,255)
 def flat(c,sc):
     b=Image.new('RGBA',c.size,BG); b.alpha_composite(c); b=b.convert('RGB')
