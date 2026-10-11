@@ -18,4 +18,9 @@ export const SITE = {
    * stays hidden; paste the invite link here once the server is ready.
    */
   discordUrl: "",
+  /**
+   * Where players send bug reports until the Discord exists. Shown as plain
+   * text with a mailto link on the Support page and the home page's beta notice.
+   */
+  bugEmail: "simyujie@gmail.com",
 } as const;
