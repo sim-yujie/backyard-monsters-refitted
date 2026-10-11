@@ -33,12 +33,12 @@ MONSTERS = {
     "C3": ("bolt-repaint", 120, 112, 30, "still"),
     "C4": ("fink-repaint", 136, 128, 30, "still"),
     "C5": ("eyera-repaint", 104, 92, 30, "still"),
-    "C6": ("ichi-repaint", 108, 104, 30, "still"),
     "C7": ("bandito-anim", 164, 160, 30, "walker"),
     "C8": ("fang-repaint", 136, 124, 30, "still"),
     "C9": ("brain-repaint", 136, 96, 30, "still"),
     "C10": ("crabatron-repaint", 148, 108, 30, "still"),
     "C14": ("14-repaint", 112, 112, 32, "flyer"),
+    "C15": ("zafreeti-repaint", 224, 280, 32, "still"),
     "C16": ("vorg-repaint", 160, 160, 32, "flyer"),
 }
 
