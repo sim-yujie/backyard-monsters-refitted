@@ -14,8 +14,12 @@ Vercel: root directory `site`, build command `bun run build`, output directory `
 ## Adding content
 
 - **Changelog entry:** add `src/content/changelog/<yyyy-mm-dd>-<short-name>.md` with `title` and `date` in the front matter, then plain Markdown. Newest entries show first; the home page lists the latest two.
-- **Guide:** add `src/content/guides/<address>.md` with `title`, `description`, `order` (position on the list) and optionally `icon` (an image under `public/images/`). The file name becomes `/guides/<address>/`.
+- **Guide:** add `src/content/guides/<address>.md` with `title`, `description`, `order` (position on the list), `updated` (the day you last changed it, `yyyy-mm-dd`; it feeds the sitemap and search data) and optionally `icon` (an image under `public/images/`). The file name becomes `/guides/<address>/`.
 - Either kind can carry `draft: true` to keep it off the built site.
+
+## Search engines
+
+Every page carries structured data (JSON-LD, built from `src/data/schema.ts`) describing the site, and the home page also describes the game, the raid clip and the FAQ. The FAQ questions and answers live in `src/data/faq.ts`, which fills both the visible section and the data. `/sitemap.xml` and `/llms.txt` (a plain summary for AI answer engines) are built from the same settings and guides, so they stay current.
 
 ## Settings
 

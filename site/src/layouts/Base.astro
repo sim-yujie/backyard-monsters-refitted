@@ -2,6 +2,7 @@
 import "../styles/global.css";
 import "../styles/motion.css";
 import { SITE } from "../config";
+import { organization, toJsonLd, website, type Thing } from "../data/schema";
 
 interface Props {
   /** The page's own name; the site name is added after it. Omit on the home page. */
@@ -11,10 +12,14 @@ interface Props {
   current?: "home" | "guides" | "changelog" | "support" | "credits";
   /** A path under public/ for the share preview; defaults to the site card. */
   ogImage?: string;
+  /** Extra structured data this page describes (the website and organisation are always added). */
+  schema?: Thing[];
+  /** Keep the page out of search results (the 404 page). */
+  noindex?: boolean;
 }
 
-const { title, description = SITE.description, current, ogImage = "/og.jpg" } = Astro.props;
-const fullTitle = title ? `${title} | ${SITE.name}` : `${SITE.name}: free monster yard battles in your browser`;
+const { title, description = SITE.description, current, ogImage = "/og.jpg", schema = [], noindex = false } = Astro.props;
+const fullTitle = title ? `${title} | ${SITE.name}` : `${SITE.name}: play free in your browser`;
 const canonical = new URL(Astro.url.pathname, SITE.url).href;
 const ogImageUrl = new URL(ogImage, SITE.url).href;
 
@@ -32,9 +37,10 @@ const nav = [
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
-    <link rel="canonical" href={canonical} />
+    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
     <meta name="theme-color" content="#0f141c" />
 
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preload" href="/fonts/titan-one/titan-one-latin.woff2" as="font" type="font/woff2" crossorigin />
@@ -52,6 +58,8 @@ const nav = [
     <meta name="twitter:title" content={title ?? SITE.name} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImageUrl} />
+
+    <script type="application/ld+json" is:inline set:html={toJsonLd([website, organization, ...schema])} />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -99,6 +107,7 @@ const nav = [
             <a href="/guides/">Guides</a>
             <a href="/changelog/">Changelog</a>
             <a href="/support/">Support</a>
+            <a href="/#faq">FAQ</a>
             <a href="/credits/">Credits</a>
             <a href={SITE.privacyUrl}>Privacy</a>
             <a href={SITE.termsUrl}>Terms</a>

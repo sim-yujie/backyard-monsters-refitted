@@ -3,6 +3,7 @@ title: Attacking and the Map Room
 description: Find a target, fling your monsters in and bring home the loot.
 order: 5
 icon: /images/monsters/C7.webp
+updated: 2026-10-11
 ---
 
 ## What you need

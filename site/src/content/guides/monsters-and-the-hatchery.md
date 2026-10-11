@@ -3,6 +3,7 @@ title: Monsters and the Hatchery
 description: How to unlock, hatch, house and train the monsters in your army.
 order: 3
 icon: /images/monsters/C1.webp
+updated: 2026-10-11
 ---
 
 ## Your first monster: the Pokey

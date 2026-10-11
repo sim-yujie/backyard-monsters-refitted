@@ -3,6 +3,7 @@ title: Resources and buildings
 description: The four resources, the harvesters that make them, and how building and upgrading works.
 order: 2
 icon: /images/monsters/C12.webp
+updated: 2026-10-11
 ---
 
 ## The four resources

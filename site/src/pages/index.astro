@@ -4,6 +4,8 @@ import Shot from "../components/Shot.astro";
 import Sprite from "../components/Sprite.astro";
 import { SITE } from "../config";
 import { getCollection } from "astro:content";
+import { faq } from "../data/faq";
+import { faqPage, raidVideo, videoGame } from "../data/schema";
 
 const latest = (await getCollection("changelog", ({ data }) => !data.draft))
   .sort((a, b) => b.data.date.getTime() - a.data.date.getTime())
@@ -53,6 +55,18 @@ const roster = [
   ["C16", "Vorg"],
 ] as const;
 
+// The FAQ answers are plain text; the game's address and the bug email in
+// them become links.
+const gameHost = new URL(SITE.gameUrl).host;
+const linkable = new RegExp(`(${[gameHost, SITE.bugEmail].map((t) => t.replace(/[.]/g, "\\.")).join("|")})`);
+const answerParts = (text: string) =>
+  text.split(linkable).map((part) => ({
+    text: part,
+    href: part === gameHost ? SITE.gameUrl : part === SITE.bugEmail ? `mailto:${SITE.bugEmail}` : undefined,
+  }));
+
+const schema = [videoGame, ...(SITE.showcaseVideo.src ? [raidVideo] : []), faqPage(faq)];
+
 // The four tribe leaders in the hero. Each sits at its own depth for the
 // mouse parallax and pops in at its own moment.
 const leaders = [
@@ -91,7 +105,7 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
 }));
 ---
 
-<Base current="home">
+<Base current="home" schema={schema}>
   <section class="hero" data-parallax>
     <div class="hero__motes" aria-hidden="true">
       {
@@ -310,6 +324,25 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
           <a href="/support/">Where the money goes</a>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section id="faq" class="section faq" aria-labelledby="faq-title">
+    <div class="wrap">
+      <div class="section__head reveal">
+        <span class="eyebrow">FAQ</span>
+        <h2 id="faq-title">Questions people ask</h2>
+      </div>
+      <ul class="faq__list">
+        {
+          faq.map((item, i) => (
+            <li class="faq__item reveal" style={`--i:${i % 2}`}>
+              <h3>{item.q}</h3>
+              <p>{answerParts(item.a).map((part) => (part.href ? <a href={part.href}>{part.text}</a> : part.text))}</p>
+            </li>
+          ))
+        }
+      </ul>
     </div>
   </section>
 
@@ -1270,6 +1303,46 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
 
   @media (max-width: 860px) {
     .news__inner {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* ── FAQ ─────────────────────────────────────────────────────────────── */
+
+  .faq {
+    border-top: 1px solid var(--border);
+    /* The footer's FAQ link jumps here; keep the heading clear of the sticky header on phones. */
+    scroll-margin-top: 60px;
+  }
+
+  .faq__list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .faq__item {
+    padding: 20px 22px;
+    border-radius: var(--radius-md);
+    background: var(--panel);
+    border: 1px solid var(--border);
+  }
+
+  .faq__item h3 {
+    font-size: 1.15rem;
+    margin-bottom: 8px;
+  }
+
+  .faq__item p {
+    margin: 0;
+    color: var(--text-secondary);
+  }
+
+  @media (max-width: 860px) {
+    .faq__list {
       grid-template-columns: 1fr;
     }
   }
