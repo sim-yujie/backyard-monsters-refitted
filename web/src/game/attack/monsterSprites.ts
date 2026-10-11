@@ -309,6 +309,23 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Zafreeti: 76x88 cells (the old 56x70 cell plus 10 px each side, 12 px on top and 6 at the
+  // bottom), so the anchor moves by (10, 12) and the creature stays put (it flies; its shadow is a
+  // separate sprite). The sheet keeps the 32 headings. Rows: 0 idle, 1-6 hover-float (a gentle bob
+  // and sway), 7-11 attack.
+  "monsters/zafreeti.v2.png": {
+    frameWidth: 76,
+    frameHeight: 88,
+    anchorX: 38,
+    anchorY: 47,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
   "monsters/sprite.12.gold.png": {
     frameWidth: 77,
     frameHeight: 60,
@@ -604,7 +621,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/brain.v2.png": "monsters/brain-repaint@4x.png", // Brain art trial (2 rows: visible, invisible)
   "monsters/sprite.11.v2.png": "monsters/projectx-anim@4x.png", // Project X animated repaint
   "monsters/13.png": "monsters/wormzer-anim@4x.png", // Wormzer animated repaint
-  "monsters/zafreeti.v2.png": "monsters/zafreeti-repaint@4x.png", // Zafreeti art trial
+  "monsters/zafreeti.v2.png": "monsters/zafreeti-anim@4x.png", // Zafreeti animated repaint
   "monsters/vorg_anim.png": "monsters/vorg-repaint@4x.png", // Vorg art trial (3 rows: wings up, half open, down)
   "monsters/slimeattikus_anim.png": "monsters/slimeattikus-repaint@4x.png", // Slimeattikus art trial (only row 0 is drawn)
   "monsters/slimeattikusmini_anim.png": "monsters/slimeattikusmini-repaint@4x.png", // mini slime, same frames
