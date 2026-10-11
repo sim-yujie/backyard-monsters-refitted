@@ -13,6 +13,7 @@ import { User } from "../models/user.model.js";
 import { World } from "../models/world.model.js";
 import { addAllianceMember } from "../../services/alliance/membership.js";
 import { logger } from "../../utils/logger.js";
+import { seededYardsOn } from "../../config/BotConfig.js";
 import type { EntityManager, PostgreSqlDriver } from "@mikro-orm/postgresql";
 
 const NEXT_USER_BASEID = `SELECT nextval('bym.user_baseid_seq') AS baseid`;
@@ -101,6 +102,8 @@ const createSeedUser = async (em: EntityManager<PostgreSqlDriver>, passwordHash:
  * tab's "This World" filter returns a real subset rather than everything. No
  * worlds are created; seed a map room first if the database has none.
  *
+ * Dev databases only: refused when ENV is production.
+ *
  * Usage:
  * - bun run db:seed:alliances
  *
@@ -110,6 +113,9 @@ const createSeedUser = async (em: EntityManager<PostgreSqlDriver>, passwordHash:
  */
 (async () => {
   try {
+    if (!seededYardsOn(process.env)) {
+      throw new Error("db:seed:alliances is for dev databases only (ENV is production)");
+    }
     const orm = await MikroORM.init(ormConfig);
     const em = orm.em.fork();
 

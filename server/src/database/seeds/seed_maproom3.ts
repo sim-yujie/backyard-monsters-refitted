@@ -11,6 +11,7 @@ import { User } from "../models/user.model.js";
 import { joinNewWorldMap } from "../../services/maproom/v3/joinNewWorldMap.js";
 import { MapRoom3 } from "../../enums/MapRoom.js";
 import { logger } from "../../utils/logger.js";
+import { seededYardsOn } from "../../config/BotConfig.js";
 
 const NEXT_USER_BASEID = `SELECT nextval('bym.user_baseid_seq') AS baseid`;
 
@@ -22,6 +23,8 @@ const NEXT_USER_BASEID = `SELECT nextval('bym.user_baseid_seq') AS baseid`;
  * and then closes the ORM connection. Each user is assigned a cell in the Map Room 3 world
  * using the procedural generation system with sector placement.
  *
+ * Dev databases only: refused when ENV is production.
+ *
  * Usage:
  * - npm run db:seed:mr3
  *
@@ -31,6 +34,9 @@ const NEXT_USER_BASEID = `SELECT nextval('bym.user_baseid_seq') AS baseid`;
  */
 (async () => {
   try {
+    if (!seededYardsOn(process.env)) {
+      throw new Error("db:seed:mr3 is for dev databases only (ENV is production)");
+    }
     const orm = await MikroORM.init(ormConfig);
     const em = orm.em.fork();
 
