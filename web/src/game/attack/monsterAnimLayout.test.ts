@@ -61,7 +61,7 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, D.A.V.E. (both skins) and Octo-ooze layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, D.A.V.E. (both skins), Project X and Octo-ooze layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/bandito.png",
       "monsters/crabatron.png",
@@ -71,6 +71,7 @@ describe("applyLayout", () => {
       "monsters/ichi.png",
       "monsters/octoooze.png",
       "monsters/sprite.1.v1.png",
+      "monsters/sprite.11.v2.png",
       "monsters/sprite.12.gold.png",
       "monsters/sprite.12.v2.png",
       "monsters/sprite.3.v2.png",
@@ -252,6 +253,26 @@ describe("applyLayout", () => {
       expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
       expect(sheet.strikeFrame).toBe(2);
     }
+  });
+
+  it("the Project X layout matches the animated PNG and keeps the creature where it was", () => {
+    const old = MONSTER_SPRITES["C11"];
+    if (!old) throw new Error("no C11");
+    const sheet = spriteFor("C11");
+    if (!sheet) throw new Error("no sprite for C11");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/projectx-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(data.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(data.readUInt32BE(20));
+    // 10 px added left and right, 12 px on top: the creature stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 10);
+    expect(sheet.anchorY).toBe(old.anchorY + 12);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 10);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
   });
 
   it("the Bandito layout matches the animated PNG and keeps the feet where they were", () => {

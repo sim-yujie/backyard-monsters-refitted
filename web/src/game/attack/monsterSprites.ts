@@ -275,6 +275,22 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Project X: 68x47 cells (the old 48x35 cell plus 10 px each side and 12 px on top), so the
+  // anchor moves by (10, 12) and the creature and its shadow stay put. Same rows as the
+  // Bandito: 0 idle, 1-6 tentacle crawl, 7-11 attack.
+  "monsters/sprite.11.v2.png": {
+    frameWidth: 68,
+    frameHeight: 47,
+    anchorX: 34,
+    anchorY: 34,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
   "monsters/sprite.12.gold.png": {
     frameWidth: 77,
     frameHeight: 60,
@@ -568,7 +584,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/sprite.12.gold.png": "monsters/dave-gold-anim@4x.png", // D.A.V.E. animated gold skin (same frames, gold tone)
   "monsters/crabatron.png": "monsters/crabatron-anim@4x.png", // Crabatron animated repaint
   "monsters/brain.v2.png": "monsters/brain-repaint@4x.png", // Brain art trial (2 rows: visible, invisible)
-  "monsters/sprite.11.v2.png": "monsters/projectx-repaint@4x.png", // Project X art trial
+  "monsters/sprite.11.v2.png": "monsters/projectx-anim@4x.png", // Project X animated repaint
   "monsters/13.png": "monsters/wormzer-repaint@4x.png", // Wormzer art trial
   "monsters/zafreeti.v2.png": "monsters/zafreeti-repaint@4x.png", // Zafreeti art trial
   "monsters/vorg_anim.png": "monsters/vorg-repaint@4x.png", // Vorg art trial (3 rows: wings up, half open, down)
