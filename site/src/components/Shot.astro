@@ -13,19 +13,33 @@ interface Props {
   /** Pixel size of the file, for layout. Screenshots are saved at 1280x720. */
   width?: number;
   height?: number;
+  /** Shown width, for the browser's pick between the full and the 640 px file. */
+  sizes?: string;
 }
 
-const { name, caption, width = 1280, height = 720 } = Astro.props;
+const { name, caption, width = 1280, height = 720, sizes = "(max-width: 860px) 100vw, 760px" } = Astro.props;
 const src = `/images/shots/${name}.webp`;
 // The build runs from site/, so public/ is relative to the working directory.
 const file = join(process.cwd(), "public", src);
 const ready = existsSync(file);
+// Every shot also has a 640 px wide copy (<name>-640.webp) for small slots.
+const small = `/images/shots/${name}-640.webp`;
+const srcset = existsSync(join(process.cwd(), "public", small)) ? `${small} 640w, ${src} ${width}w` : undefined;
 ---
 
 <figure class="shot">
   {
     ready ? (
-      <img src={src} alt={caption} width={width} height={height} loading="lazy" decoding="async" />
+      <img
+        src={src}
+        srcset={srcset}
+        sizes={srcset ? sizes : undefined}
+        alt={caption}
+        width={width}
+        height={height}
+        loading="lazy"
+        decoding="async"
+      />
     ) : (
       <div class="placeholder-shot" role="img" aria-label={`Screenshot coming soon: ${caption}`}>
         Screenshot coming soon

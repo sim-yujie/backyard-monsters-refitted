@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import Shot from "../components/Shot.astro";
+import Sprite from "../components/Sprite.astro";
 import { SITE } from "../config";
 import { getCollection } from "astro:content";
 
@@ -44,44 +45,124 @@ const roster = [
   ["C4", "Fink"],
   ["C5", "Eye-ra"],
   ["C6", "Ichi"],
+  ["C7", "Bandito"],
+  ["C8", "Fang"],
   ["C9", "Brain"],
   ["C10", "Crabatron"],
   ["C14", "Teratorn"],
   ["C16", "Vorg"],
+] as const;
+
+// The four tribe leaders in the hero. Each sits at its own depth for the
+// mouse parallax and pops in at its own moment.
+const leaders = [
+  { id: "kozu", w: 489, h: 560, depth: 10, delay: 0.35 },
+  { id: "dreadnaut", w: 540, h: 560, depth: 22, delay: 0.55 },
+  { id: "abunakki", w: 515, h: 560, depth: 18, delay: 0.7 },
+  { id: "legionnaire", w: 560, h: 464, depth: 34, delay: 0.85 },
 ];
+
+// Real game sprites crossing the bottom of the hero. `rest` is where each one
+// stands when motion is switched off; `delay` is negative so the parade is
+// already under way when the page opens.
+const parade = [
+  { name: "walk-C1", height: 58, step: 0.42, cross: 15, delay: -2, rest: "6%", y: 10 },
+  { name: "walk-C1", height: 52, step: 0.42, cross: 15, delay: -3.2, rest: "12%", y: 2 },
+  { name: "walk-C7", height: 78, step: 0.75, cross: 28, delay: -16, rest: "44%", y: 6 },
+  { name: "walk-C2", height: 70, step: 0.9, cross: 36, delay: -26, rest: "70%", y: 4 },
+  { name: "walk-C1", height: 54, step: 0.42, cross: 15, delay: -10, rest: "88%", y: 12 },
+] as const;
+
+// The grass fringe along the bottom of the hero: one blade every 12 units of
+// a 1440-wide strip, heights from a fixed pattern.
+const grass =
+  "M0 40V26" +
+  Array.from({ length: 120 }, (_, i) => `L${i * 12 + 6} ${8 + ((i * 7) % 11)}L${i * 12 + 12} ${24 + ((i * 5) % 6)}`).join("") +
+  "V40Z";
+
+// Glowing goo motes drifting up through the hero, placed by a fixed pattern
+// so every build is the same.
+const motes = Array.from({ length: 18 }, (_, i) => ({
+  x: (i * 37 + 11) % 100,
+  size: 4 + ((i * 7) % 6),
+  time: 9 + ((i * 5) % 8),
+  delay: -((i * 13) % 17),
+  hue: ["cyan", "lime", "amber"][i % 3],
+}));
 ---
 
 <Base current="home">
-  <section class="hero">
+  <section class="hero" data-parallax>
+    <div class="hero__motes" aria-hidden="true">
+      {
+        motes.map((m) => (
+          <span
+            class={`mote mote--${m.hue}`}
+            style={`--x:${m.x}%;--size:${m.size}px;--time:${m.time}s;--delay:${m.delay}s`}
+          />
+        ))
+      }
+    </div>
+
+    <svg class="hero__hills hero__hills--far depth" style="--depth:6px" viewBox="0 0 1440 220" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 120C180 60 330 70 480 110S800 170 980 120 1300 40 1440 90V220H0Z" fill="#132a1c"></path>
+    </svg>
+    <svg class="hero__hills hero__hills--near depth" style="--depth:12px" viewBox="0 0 1440 160" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 80C220 30 420 40 640 76S1050 120 1240 70 1400 40 1440 50V160H0Z" fill="#1a3a22"></path>
+    </svg>
+
     <div class="wrap hero__inner">
       <div class="hero__copy">
-        <span class="pill pill--beta">Open beta</span>
-        <h1><span class="hero__line">Your backyard.</span> <span class="hero__line hero__accent">Your monsters.</span> <span class="hero__line">Their loot.</span></h1>
+        <span class="pill pill--beta hero__pill"><span class="live-dot" aria-hidden="true"></span>Open beta</span>
+        <h1>
+          <span class="hero__line" style="--n:0">Your backyard.</span>
+          <span class="hero__line hero__accent" style="--n:1">Your monsters.</span>
+          <span class="hero__line" style="--n:2">Their loot.</span>
+        </h1>
         <p class="hero__lead">
           Backyard Monsters Revamped is a free, fan-made revamp of Backyard Monsters. Build a yard, hatch an army of
           monsters and raid wild tribes and other players, right in your browser. No Flash, no download.
         </p>
-        <div class="btn-row">
-          <a class="btn btn--primary btn--big" href={SITE.gameUrl}>Play free now</a>
+        <div class="btn-row hero__buttons">
+          <a class="btn btn--primary btn--big btn--glow" href={SITE.gameUrl}>Play free now</a>
           <a class="btn btn--ghost" href="/guides/getting-started/">How to start</a>
         </div>
         <p class="hero__small">Sign up with a username, email and password. Free to play, nothing to install.</p>
       </div>
 
       <div class="hero__art" aria-hidden="true">
-        <div class="hero__glow"></div>
-        <div class="hero__ground"></div>
-        <img class="tribe tribe--kozu" src="/images/tribes/kozu.webp" alt="" width="560" height="560" />
-        <img class="tribe tribe--dreadnaut" src="/images/tribes/dreadnaut.webp" alt="" width="560" height="560" />
-        <img class="tribe tribe--abunakki" src="/images/tribes/abunakki.webp" alt="" width="560" height="560" />
-        <img class="tribe tribe--legionnaire" src="/images/tribes/legionnaire.webp" alt="" width="560" height="560" />
+        <div class="hero__glow depth" style="--depth:4px"></div>
+        <div class="hero__ground depth" style="--depth:14px"></div>
+        {
+          leaders.map((l) => (
+            <div class={`leader leader--${l.id} depth`} style={`--depth:${l.depth}px;--delay:${l.delay}s`}>
+              <img src={`/images/tribes/${l.id}.webp`} alt="" width={l.w} height={l.h} fetchpriority={l.id === "kozu" ? "high" : undefined} />
+            </div>
+          ))
+        }
+        <span class="flyer depth" style="--depth:40px">
+          <Sprite name="walk-C14" height={64} duration={0.36} eager />
+        </span>
       </div>
     </div>
+
+    <div class="parade" aria-hidden="true">
+      {
+        parade.map((p) => (
+          <span class="marcher" style={`--cross:${p.cross}s;--delay:${p.delay}s;--rest:${p.rest};--y:${p.y}px`}>
+            <Sprite name={p.name} height={p.height} duration={p.step} eager />
+          </span>
+        ))
+      }
+    </div>
+    <svg class="hero__grass" viewBox="0 0 1440 40" preserveAspectRatio="none" aria-hidden="true">
+      <path d={grass} fill="#1f4527"></path>
+    </svg>
   </section>
 
   <section class="beta" aria-labelledby="beta-title">
     <div class="wrap">
-      <div class="notice beta__notice">
+      <div class="notice beta__notice reveal">
         <svg class="beta__icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 2 1 21h22L12 2Z" fill="#f5b94a"></path>
           <path d="M11 9h2v6h-2zM11 17h2v2h-2z" fill="#2a1a00"></path>
@@ -100,16 +181,18 @@ const roster = [
 
   <section class="section" aria-labelledby="features-title">
     <div class="wrap">
-      <div class="section__head">
+      <div class="section__head reveal">
         <span class="eyebrow">How it plays</span>
         <h2 id="features-title">Build, hatch, defend, raid</h2>
         <p>The yard-building monster battler you remember, rebuilt to run in a modern browser.</p>
       </div>
       <ul class="features">
         {
-          features.map((f) => (
-            <li class="feature">
-              <img src={f.img} alt={f.alt} width="360" height="240" loading="lazy" />
+          features.map((f, i) => (
+            <li class="feature reveal reveal--pop" style={`--i:${i}`}>
+              <div class="feature__art">
+                <img src={f.img} alt={f.alt} width="360" height="240" loading="lazy" />
+              </div>
               <div class="feature__body">
                 <h3>{f.title}</h3>
                 <p>{f.text}</p>
@@ -123,13 +206,13 @@ const roster = [
 
   <section class="section bob" aria-labelledby="bob-title">
     <div class="wrap bob__inner">
-      <div class="bob__art">
+      <div class="bob__art reveal reveal--pop">
         <div class="bubble">
           "Welcome to Backyard Monsters! I'm Bob. Give me eight minutes and I'll have your yard ready for anything."
         </div>
         <img src="/images/bob.webp" alt="Bob, a friendly green monster, pointing" width="240" height="240" loading="lazy" />
       </div>
-      <div class="bob__copy">
+      <div class="bob__copy reveal" style="--i:1">
         <span class="eyebrow">New here?</span>
         <h2 id="bob-title">Bob shows you the ropes</h2>
         <p>
@@ -144,21 +227,39 @@ const roster = [
 
   <section class="section" aria-labelledby="shots-title">
     <div class="wrap">
-      <div class="section__head">
+      <div class="section__head reveal">
         <span class="eyebrow">In the game</span>
         <h2 id="shots-title">See it in action</h2>
+        <p>Teratorns tear into a Kozu Tribe camp. Every raid plays out live, right in your browser.</p>
       </div>
+      <figure class="showcase reveal">
+        <div class="showcase__frame">
+          <video
+            class="showcase__video"
+            data-src={SITE.showcaseVideo.src || undefined}
+            poster={SITE.showcaseVideo.poster}
+            width="1280"
+            height="720"
+            muted
+            loop
+            playsinline
+            preload="none"
+            aria-label="Gameplay: Teratorns raiding a wild tribe camp"
+          ></video>
+          <span class="showcase__badge" aria-hidden="true"><span class="live-dot"></span>Raid in progress</span>
+        </div>
+      </figure>
       <div class="shots">
-        <Shot name="yard" caption="Your yard" />
-        <Shot name="attack" caption="Flinging monsters into an enemy yard" />
-        <Shot name="map" caption="The Map Room" />
+        <div class="reveal" style="--i:0"><Shot name="yard" caption="Your yard: Town Hall walled in the middle, towers all round" sizes="(max-width: 860px) 100vw, 380px" /></div>
+        <div class="reveal" style="--i:1"><Shot name="attack" caption="Flinging monsters into an enemy yard" sizes="(max-width: 860px) 100vw, 380px" /></div>
+        <div class="reveal" style="--i:2"><Shot name="map" caption="The Map Room" sizes="(max-width: 860px) 100vw, 380px" /></div>
       </div>
     </div>
   </section>
 
   <section class="section roster" aria-labelledby="roster-title">
     <div class="wrap">
-      <div class="section__head">
+      <div class="section__head reveal">
         <span class="eyebrow">Meet the monsters</span>
         <h2 id="roster-title">Start with Pokeys. Unlock the rest.</h2>
         <p>Every monster has its own job in a raid. Mix them up to crack open any defence.</p>
@@ -166,10 +267,13 @@ const roster = [
     </div>
     <ul class="roster__list">
       {
-        roster.map(([id, name]) => (
-          <li class="roster__card">
-            <img src={`/images/monsters/${id}.webp`} alt="" width="360" height="240" loading="lazy" />
-            <span>{name}</span>
+        roster.map(([id, name], i) => (
+          <li class="roster__card reveal reveal--pop" style={`--i:${i % 6}`}>
+            <div class="roster__art">
+              <img class="roster__portrait" src={`/images/monsters/${id}.webp`} alt="" width="360" height="240" loading="lazy" />
+              <Sprite name={`spin-${id}`} height={80} duration={1.5} class="roster__sprite" />
+            </div>
+            <span class="roster__name">{name}</span>
           </li>
         ))
       }
@@ -178,7 +282,7 @@ const roster = [
 
   <section class="section news" aria-labelledby="news-title">
     <div class="wrap news__inner">
-      <div>
+      <div class="reveal">
         <span class="eyebrow">What's new</span>
         <h2 id="news-title">Latest updates</h2>
         <ul class="news__list">
@@ -195,7 +299,7 @@ const roster = [
         </ul>
         <a href="/changelog/">See the full changelog</a>
       </div>
-      <div class="support-card">
+      <div class="support-card reveal reveal--pop" style="--i:1">
         <h2>Keep the yard running</h2>
         <p>
           The game is free and stays free. If you enjoy it, you can help pay for the server, the website and email on
@@ -210,12 +314,19 @@ const roster = [
   </section>
 
   <section class="final">
+    <div class="final__motes" aria-hidden="true">
+      {motes.slice(0, 10).map((m) => <span class={`mote mote--${m.hue}`} style={`--x:${m.x}%;--size:${m.size}px;--time:${m.time}s;--delay:${m.delay}s`} />)}
+    </div>
     <div class="wrap final__inner">
-      <img src="/images/monsters/C1.webp" alt="" width="360" height="240" loading="lazy" class="final__pokey" />
-      <h2>Your yard is waiting</h2>
-      <p>Free, in your browser, in under a minute.</p>
-      <div class="btn-row final__buttons">
-        <a class="btn btn--primary btn--big" href={SITE.gameUrl}>Play free now</a>
+      <div class="final__pokeys reveal reveal--pop" aria-hidden="true">
+        <Sprite name="spin-C7" height={72} duration={1.5} />
+        <Sprite name="walk-C1" height={60} duration={0.42} class="final__pokey" />
+        <Sprite name="spin-C2" height={66} duration={1.5} />
+      </div>
+      <h2 class="reveal">Your yard is waiting</h2>
+      <p class="reveal" style="--i:1">Free, in your browser, in under a minute.</p>
+      <div class="btn-row final__buttons reveal" style="--i:2">
+        <a class="btn btn--primary btn--big btn--glow" href={SITE.gameUrl}>Play free now</a>
         {
           SITE.discordUrl && (
             <a class="btn btn--discord" href={SITE.discordUrl} rel="noopener noreferrer">
@@ -228,25 +339,120 @@ const roster = [
   </section>
 </Base>
 
+<script>
+  const calm = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  // Mouse parallax in the hero: each layer drifts by its own --depth.
+  const hero = document.querySelector<HTMLElement>("[data-parallax]");
+  if (hero && window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+    let frame = 0;
+    let x = 0;
+    let y = 0;
+    hero.addEventListener("pointermove", (event) => {
+      const box = hero.getBoundingClientRect();
+      x = ((event.clientX - box.left) / box.width) * 2 - 1;
+      y = ((event.clientY - box.top) / box.height) * 2 - 1;
+      if (!frame && !calm.matches) {
+        frame = requestAnimationFrame(() => {
+          hero.style.setProperty("--px", x.toFixed(3));
+          hero.style.setProperty("--py", y.toFixed(3));
+          frame = 0;
+        });
+      }
+    });
+    hero.addEventListener("pointerleave", () => {
+      hero.style.setProperty("--px", "0");
+      hero.style.setProperty("--py", "0");
+    });
+  }
+
+  // The gameplay clip loads only when it is about to scroll into view. With
+  // reduced motion it does not play by itself; it gets controls instead.
+  const video = document.querySelector<HTMLVideoElement>(".showcase__video");
+  const source = video?.dataset.src;
+  if (video && source) {
+    if (calm.matches) {
+      video.controls = true;
+      video.src = source;
+    } else if ("IntersectionObserver" in window) {
+      const watcher = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              if (!video.src) video.src = source;
+              video.play().catch(() => {
+                video.controls = true;
+              });
+            } else if (video.src) {
+              video.pause();
+            }
+          }
+        },
+        { rootMargin: "200px 0px" },
+      );
+      watcher.observe(video);
+    } else {
+      video.controls = true;
+      video.src = source;
+    }
+  }
+</script>
+
 <style>
+  /* ── Hero ────────────────────────────────────────────────────────────── */
+
   .hero {
+    --px: 0;
+    --py: 0;
     position: relative;
     overflow: hidden;
     background:
       radial-gradient(900px 500px at 78% 40%, rgb(61 214 245 / 16%), transparent 65%),
       radial-gradient(700px 400px at 10% 110%, rgb(111 191 74 / 14%), transparent 70%),
-      linear-gradient(180deg, #0a0e14 0%, #0f141c 100%);
+      linear-gradient(180deg, #0a0e14 0%, #0f141c 70%, #10201a 100%);
     border-bottom: 1px solid var(--border);
   }
 
+  /* Each layer drifts against the mouse by its own depth (set by the script). */
+  .depth {
+    translate: calc(var(--px) * var(--depth) * -1) calc(var(--py) * var(--depth) * -1);
+    transition: translate 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
   .hero__inner {
+    position: relative;
+    z-index: 2;
     display: grid;
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
     align-items: center;
     gap: 32px;
-    min-height: min(720px, calc(100vh - 68px));
+    min-height: min(760px, calc(100vh - 68px));
     padding-top: 48px;
-    padding-bottom: 56px;
+    padding-bottom: 136px;
+  }
+
+  .hero__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 0 currentColor;
+    animation: live-ping 1.8s ease-out infinite;
+  }
+
+  @keyframes live-ping {
+    0% {
+      box-shadow: 0 0 0 0 rgb(255 255 255 / 55%);
+    }
+    100% {
+      box-shadow: 0 0 0 9px rgb(255 255 255 / 0%);
+    }
   }
 
   .hero__copy h1 {
@@ -256,13 +462,46 @@ const roster = [
     text-shadow: 0 4px 0 rgb(0 0 0 / 35%);
   }
 
+  /* The three lines bounce up one after another; they start in view, just lower. */
   .hero__line {
     display: block;
     white-space: nowrap;
+    transform-origin: 0 100%;
+    animation: line-in 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) calc(0.08s + var(--n) * 0.14s) both;
+  }
+
+  @keyframes line-in {
+    from {
+      transform: translateY(0.45em) scale(0.92) rotate(-2deg);
+    }
+    to {
+      transform: none;
+    }
   }
 
   .hero__accent {
     color: var(--accent);
+    background: linear-gradient(100deg, var(--accent) 0%, var(--accent) 40%, #d9fbff 50%, var(--accent) 60%, var(--accent) 100%)
+      0 0 / 250% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    /* A text-shadow would show through the clipped text; a drop shadow does not. */
+    text-shadow: none;
+    filter: drop-shadow(0 4px 0 rgb(0 0 0 / 35%));
+    animation:
+      line-in 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) calc(0.08s + var(--n) * 0.14s) both,
+      shimmer 5s ease-in-out 1.6s infinite;
+  }
+
+  @keyframes shimmer {
+    0%,
+    60% {
+      background-position: 100% 0;
+    }
+    100% {
+      background-position: 0% 0;
+    }
   }
 
   .hero__lead {
@@ -291,6 +530,19 @@ const roster = [
     inset: 6% 8% 14%;
     border-radius: 50%;
     background: radial-gradient(circle, rgb(61 214 245 / 28%), rgb(61 214 245 / 0%) 68%);
+    animation: glow-pulse 5s ease-in-out infinite;
+  }
+
+  @keyframes glow-pulse {
+    0%,
+    100% {
+      opacity: 0.75;
+      scale: 0.96;
+    }
+    50% {
+      opacity: 1;
+      scale: 1.04;
+    }
   }
 
   .hero__ground {
@@ -304,47 +556,215 @@ const roster = [
     opacity: 0.85;
   }
 
-  .tribe {
+  /* A leader pops up out of the ground, then breathes. The wrapper takes the
+     pop and the parallax; the picture takes the idle bob. */
+  .leader {
     position: absolute;
+    transform-origin: 50% 100%;
+    animation: leader-pop 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) var(--delay) both;
+  }
+
+  .leader img {
+    width: 100%;
     height: auto;
     filter: drop-shadow(0 14px 18px rgb(0 0 0 / 45%));
+    transform-origin: 50% 100%;
+    animation: breathe var(--idle, 6s) ease-in-out calc(var(--delay) + 0.9s) infinite;
   }
 
-  .tribe--kozu {
-    width: 50%;
-    left: 26%;
+  @keyframes leader-pop {
+    from {
+      transform: translateY(18%) scale(0.55);
+    }
+    to {
+      transform: none;
+    }
+  }
+
+  @keyframes breathe {
+    0%,
+    100% {
+      transform: translateY(0) scale(1, 1);
+    }
+    50% {
+      transform: translateY(-8px) scale(1.015, 0.985);
+    }
+  }
+
+  .leader--kozu {
+    width: 46%;
+    left: 28%;
     top: 0;
-    animation: bob 6s ease-in-out infinite;
+    --idle: 6s;
   }
 
-  .tribe--dreadnaut {
+  .leader--dreadnaut {
     width: 40%;
     right: 0;
     top: 22%;
-    animation: bob 7s ease-in-out -2s infinite;
+    --idle: 7s;
   }
 
-  .tribe--abunakki {
-    width: 42%;
+  .leader--abunakki {
+    width: 39%;
     left: 0;
     top: 24%;
-    animation: bob 6.5s ease-in-out -4s infinite;
+    --idle: 6.5s;
   }
 
-  .tribe--legionnaire {
+  .leader--legionnaire {
     width: 44%;
     left: 30%;
     bottom: 2%;
-    animation: bob 5.5s ease-in-out -1s infinite;
+    --idle: 5.5s;
   }
 
-  @keyframes bob {
+  /* A Teratorn circles above the leaders. */
+  .flyer {
+    position: absolute;
+    top: 4%;
+    left: 4%;
+    animation: fly-loop 14s ease-in-out infinite;
+  }
+
+  @keyframes fly-loop {
     0%,
     100% {
-      transform: translateY(0);
+      transform: translate(0, 0) scaleX(1);
+    }
+    24% {
+      transform: translate(90px, -16px) scaleX(1);
+    }
+    48% {
+      transform: translate(150px, 12px) scaleX(1);
     }
     50% {
-      transform: translateY(-8px);
+      transform: translate(150px, 12px) scaleX(-1);
+    }
+    74% {
+      transform: translate(60px, -10px) scaleX(-1);
+    }
+    98% {
+      transform: translate(0, 0) scaleX(-1);
+    }
+  }
+
+  .hero__hills {
+    position: absolute;
+    left: -2%;
+    width: 104%;
+    bottom: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .hero__hills--far {
+    height: 210px;
+  }
+
+  .hero__hills--near {
+    height: 120px;
+  }
+
+  .hero__grass {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 34px;
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  /* The parade: real game sprites walking right along the bottom of the hero. */
+  .parade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 10px;
+    height: 100px;
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  /* Full width, so translateX(100%) is the width of the hero. */
+  .marcher {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    bottom: var(--y);
+    transform: translateX(var(--rest));
+    animation: march var(--cross) linear var(--delay) infinite;
+    filter: drop-shadow(0 3px 2px rgb(0 0 0 / 30%));
+  }
+
+  @keyframes march {
+    from {
+      transform: translateX(-140px);
+    }
+    to {
+      transform: translateX(calc(100% + 40px));
+    }
+  }
+
+  /* Goo motes rising through the scene. */
+  .hero__motes,
+  .final__motes {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .mote {
+    position: absolute;
+    left: var(--x);
+    bottom: -12px;
+    width: var(--size);
+    height: var(--size);
+    border-radius: 50%;
+    opacity: 0;
+    animation: rise var(--time) linear var(--delay) infinite;
+  }
+
+  .mote--cyan {
+    background: #8ef0ff;
+    box-shadow: 0 0 10px 2px rgb(61 214 245 / 70%);
+  }
+
+  .mote--lime {
+    background: #b6f27a;
+    box-shadow: 0 0 10px 2px rgb(111 191 74 / 70%);
+  }
+
+  .mote--amber {
+    background: #ffd27a;
+    box-shadow: 0 0 10px 2px rgb(245 185 74 / 65%);
+  }
+
+  @keyframes rise {
+    0% {
+      transform: translate(0, 0);
+      opacity: 0;
+    }
+    12% {
+      opacity: 0.8;
+    }
+    50% {
+      transform: translate(18px, -45vh);
+    }
+    85% {
+      opacity: 0.5;
+    }
+    100% {
+      transform: translate(-10px, -90vh);
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mote {
+      display: none;
     }
   }
 
@@ -353,7 +773,7 @@ const roster = [
       grid-template-columns: 1fr;
       min-height: 0;
       padding-top: 28px;
-      padding-bottom: 40px;
+      padding-bottom: 104px;
       gap: 8px;
     }
 
@@ -366,7 +786,17 @@ const roster = [
       max-width: 420px;
       width: 92%;
     }
+
+    .hero__hills--far {
+      height: 150px;
+    }
+
+    .hero__hills--near {
+      height: 90px;
+    }
   }
+
+  /* ── Beta notice ─────────────────────────────────────────────────────── */
 
   .beta {
     padding-top: clamp(28px, 4vw, 44px);
@@ -389,6 +819,8 @@ const roster = [
     margin-bottom: 6px;
   }
 
+  /* ── Features ────────────────────────────────────────────────────────── */
+
   .features {
     list-style: none;
     margin: 0;
@@ -405,12 +837,31 @@ const roster = [
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    transition:
+      translate 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+      border-color 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+
+  .feature:hover {
+    translate: 0 -6px;
+    border-color: var(--accent-line);
+    box-shadow: 0 18px 40px rgb(0 0 0 / 35%);
+  }
+
+  .feature__art {
+    overflow: hidden;
   }
 
   .feature img {
     width: 100%;
     aspect-ratio: 3 / 2;
     object-fit: cover;
+    transition: transform 0.4s ease;
+  }
+
+  .feature:hover img {
+    animation: wiggle 0.7s ease-in-out both;
   }
 
   .feature__body {
@@ -443,8 +894,13 @@ const roster = [
       align-items: stretch;
     }
 
-    .feature img {
+    .feature__art {
       width: 38%;
+      flex: none;
+    }
+
+    .feature img {
+      height: 100%;
       aspect-ratio: auto;
       object-fit: cover;
     }
@@ -461,6 +917,8 @@ const roster = [
       font-size: 0.95rem;
     }
   }
+
+  /* ── Bob ─────────────────────────────────────────────────────────────── */
 
   .bob {
     background:
@@ -486,6 +944,8 @@ const roster = [
 
   .bob__art img {
     width: min(260px, 70%);
+    transform-origin: 50% 100%;
+    animation: float-bob 4.5s ease-in-out infinite;
   }
 
   .bubble {
@@ -499,6 +959,18 @@ const roster = [
     font-size: 1.1rem;
     line-height: 1.35;
     box-shadow: var(--shadow);
+    transform-origin: 42% 100%;
+    animation: bubble-nod 4.5s ease-in-out infinite;
+  }
+
+  @keyframes bubble-nod {
+    0%,
+    100% {
+      transform: rotate(0);
+    }
+    50% {
+      transform: rotate(-1.2deg) translateY(-3px);
+    }
   }
 
   .bubble::after {
@@ -524,10 +996,60 @@ const roster = [
     }
   }
 
+  /* ── Gameplay clip and screenshots ───────────────────────────────────── */
+
+  .showcase {
+    margin: 0 0 24px;
+  }
+
+  .showcase__frame {
+    position: relative;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 2px solid var(--border-strong);
+    background: #0b1a10;
+    box-shadow:
+      0 0 0 6px rgb(255 255 255 / 3%),
+      0 30px 80px rgb(0 0 0 / 50%),
+      0 0 120px rgb(61 214 245 / 10%);
+  }
+
+  .showcase__video {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+  }
+
+  .showcase__badge {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: var(--radius-pill);
+    background: rgb(10 14 20 / 72%);
+    color: #ff8a7a;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    backdrop-filter: blur(4px);
+  }
+
   .shots {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 20px;
+  }
+
+  .shots :global(img) {
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .shots :global(.shot:hover img) {
+    transform: translateY(-4px) scale(1.02);
   }
 
   @media (max-width: 860px) {
@@ -535,6 +1057,8 @@ const roster = [
       grid-template-columns: 1fr;
     }
   }
+
+  /* ── Monster roll-call ───────────────────────────────────────────────── */
 
   .roster {
     padding-bottom: clamp(48px, 7vw, 88px);
@@ -546,7 +1070,7 @@ const roster = [
     padding: 4px var(--gutter) 12px;
     max-width: var(--wrap);
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 16px;
   }
 
@@ -556,19 +1080,114 @@ const roster = [
     border-radius: var(--radius-md);
     overflow: hidden;
     text-align: center;
+    transition:
+      translate 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+      border-color 0.2s ease;
   }
 
-  .roster__card img {
+  .roster__art {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .roster__portrait {
     width: 100%;
     aspect-ratio: 3 / 2;
     object-fit: cover;
+    transition: filter 0.3s ease;
   }
 
-  .roster__card span {
+  /* The monster as it looks in the game: on hover the portrait dims and the
+     in-game sprite pops up in front of it and turns round on a pool of light. */
+  .roster__art::after {
+    content: "";
+    position: absolute;
+    left: 20%;
+    right: 20%;
+    bottom: 8%;
+    height: 22%;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, rgb(61 214 245 / 45%), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .roster__art :global(.roster__sprite) {
+    position: absolute;
+    left: 50%;
+    bottom: 10%;
+    z-index: 1;
+    margin-left: calc(var(--sprite-w) / -2);
+    transform: translateY(40%) scale(0.3);
+    opacity: 0;
+    transform-origin: 50% 100%;
+    transition:
+      transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+      opacity 0.2s ease;
+    filter: drop-shadow(0 4px 6px rgb(0 0 0 / 55%));
+  }
+
+  .roster__art :global(.roster__sprite img) {
+    animation-play-state: paused;
+  }
+
+  .roster__name {
     display: block;
     padding: 10px 8px 12px;
     font-family: var(--font-display);
     color: var(--text-strong);
+  }
+
+  @media (hover: hover) {
+    .roster__card:hover {
+      translate: 0 -6px;
+      border-color: var(--accent-line);
+    }
+
+    .roster__card:hover .roster__portrait {
+      animation: wiggle 0.7s ease-in-out both;
+      filter: brightness(0.4) saturate(0.7) blur(1px);
+    }
+
+    .roster__card:hover .roster__art::after {
+      opacity: 1;
+    }
+
+    .roster__card:hover :global(.roster__sprite) {
+      transform: none;
+      opacity: 1;
+    }
+
+    .roster__card:hover :global(.roster__sprite img) {
+      animation-play-state: running;
+    }
+
+    .roster__card:hover .roster__name {
+      color: var(--accent);
+    }
+  }
+
+  /* Touch screens have no hover: the in-game sprite stands in the corner and turns. */
+  @media (hover: none) {
+    .roster__art :global(.roster__sprite) {
+      left: auto;
+      right: 2px;
+      bottom: 0;
+      margin-left: 0;
+      transform: scale(0.7);
+      transform-origin: 100% 100%;
+      opacity: 1;
+    }
+
+    .roster__art :global(.roster__sprite img) {
+      animation-play-state: running;
+    }
+  }
+
+  @media (max-width: 1020px) {
+    .roster__list {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
   }
 
   @media (max-width: 860px) {
@@ -585,6 +1204,8 @@ const roster = [
       scroll-snap-align: start;
     }
   }
+
+  /* ── News and support ────────────────────────────────────────────────── */
 
   .news {
     border-top: 1px solid var(--border);
@@ -611,6 +1232,11 @@ const roster = [
     border-bottom: 1px solid var(--border);
     text-decoration: none;
     color: var(--text-strong);
+    transition: padding-left 0.25s ease;
+  }
+
+  .news__list a:hover {
+    padding-left: 8px;
   }
 
   .news__list a:hover span {
@@ -648,7 +1274,11 @@ const roster = [
     }
   }
 
+  /* ── Final call ──────────────────────────────────────────────────────── */
+
   .final {
+    position: relative;
+    overflow: hidden;
     padding: clamp(64px, 9vw, 110px) 0;
     text-align: center;
     background:
@@ -658,18 +1288,20 @@ const roster = [
   }
 
   .final__inner {
+    position: relative;
+    z-index: 2;
     display: flex;
     flex-direction: column;
     align-items: center;
   }
 
-  .final__pokey {
-    width: 150px;
-    border-radius: 50%;
-    aspect-ratio: 1;
-    object-fit: cover;
-    border: 4px solid var(--accent-line);
-    margin-bottom: 22px;
+  .final__pokeys {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    margin-bottom: 18px;
+    padding: 0 22px 10px;
+    background: radial-gradient(ellipse at 50% 100%, rgb(111 191 74 / 35%), transparent 70%);
   }
 
   .final p {

@@ -413,6 +413,13 @@ p {
   margin: 1.4em 0;
 }
 
+/* Game screenshots are all 16:9; reserving the box stops the text jumping as they load. */
+.prose img[src*="/images/shots/"] {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
 .prose blockquote {
   margin: 1.4em 0;
   padding: 14px 18px;
