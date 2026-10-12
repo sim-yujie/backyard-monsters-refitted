@@ -326,6 +326,38 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Slimeattikus: 64x48 cells (the old 48x31 cell plus 8 px each side and 17 px on top), so the
+  // anchor moves by (8, 17) and the slime stays put. The sheet keeps the Flash 32 columns
+  // (30 headings, then copies of 29 and 0). Rows: 0 idle (the old still), 1-6 ooze crawl
+  // (squash and stretch), 7-11 attack (crouch, rear up, slam, spread, recover).
+  "monsters/slimeattikus_anim.png": {
+    frameWidth: 64,
+    frameHeight: 48,
+    anchorX: 34,
+    anchorY: 32,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // The small slime: the same frames scaled down, 40x32 cells (old 30x20 plus 5 px each side, 11 px
+  // on top and 1 at the bottom), anchor moves by (5, 11).
+  "monsters/slimeattikusmini_anim.png": {
+    frameWidth: 40,
+    frameHeight: 32,
+    anchorX: 20,
+    anchorY: 22,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
   // Brain: 46x38 cells (the old 34x24 cell plus 6 px each side, 12 px on top and 2 at the bottom),
   // so the anchor moves by (6, 12) and the creature stays put. The sheet keeps the 30 headings.
   // Rows: 0 idle (the old still), 1-6 walk, 7-11 attack. The old "invisible" row is gone: a cloaked
@@ -676,8 +708,8 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/13.png": "monsters/wormzer-anim@4x.png", // Wormzer animated repaint
   "monsters/zafreeti.v2.png": "monsters/zafreeti-anim@4x.png", // Zafreeti animated repaint
   "monsters/vorg_anim.png": "monsters/vorg-anim@4x.png", // Vorg animated repaint (3 flap rows + 5 attack rows)
-  "monsters/slimeattikus_anim.png": "monsters/slimeattikus-repaint@4x.png", // Slimeattikus art trial (only row 0 is drawn)
-  "monsters/slimeattikusmini_anim.png": "monsters/slimeattikusmini-repaint@4x.png", // mini slime, same frames
+  "monsters/slimeattikus_anim.png": "monsters/slimeattikus-anim@4x.png", // Slimeattikus animated repaint
+  "monsters/slimeattikusmini_anim.png": "monsters/slimeattikusmini-anim@4x.png", // mini slime animated repaint (same frames scaled)
   "monsters/rezghul.png": "monsters/rezghul-repaint@4x.png", // Rezghul art trial (rows 1-5 walk bob)
   "monsters/ape_1.png": "monsters/ape_1-repaint@4x.png", // Gorgo level 1 repaint (all 16 headings, idle + walk + attack)
   "monsters/fly_1.png": "monsters/fly_1-repaint@4x.png", // Fomor level 1 repaint (all 16 headings, idle + walk)

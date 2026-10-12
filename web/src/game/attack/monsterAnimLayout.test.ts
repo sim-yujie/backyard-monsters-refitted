@@ -61,7 +61,7 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn and Octo-ooze layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze and Slimeattikus (big and mini) layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/13.png",
       "monsters/14.v1.png",
@@ -73,6 +73,8 @@ describe("applyLayout", () => {
       "monsters/fink.png",
       "monsters/ichi.png",
       "monsters/octoooze.png",
+      "monsters/slimeattikus_anim.png",
+      "monsters/slimeattikusmini_anim.png",
       "monsters/sprite.1.v1.png",
       "monsters/sprite.11.v2.png",
       "monsters/sprite.12.gold.png",
@@ -440,6 +442,30 @@ describe("applyLayout", () => {
     expect(sheet.animations.attack?.first).toBe(7);
     expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
     expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Slimeattikus layouts (big and mini) match the animated PNGs and keep the slime where it was", () => {
+    for (const [key, png, dx, dy] of [
+      ["C17", "slimeattikus-anim@4x.png", 8, 17],
+      ["C18", "slimeattikusmini-anim@4x.png", 5, 11],
+    ] as const) {
+      const old = MONSTER_SPRITES[key];
+      if (!old) throw new Error(`no ${key}`);
+      const sheet = spriteFor(key);
+      if (!sheet) throw new Error(`no sprite for ${key}`);
+      const data = readFileSync(resolve(__dirname, `../../../../server/public/assets/monsters/${png}`));
+      expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+      expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+      expect(sheet.columns).toBe(32);
+      expect(sheet.frameWidth * sheet.columns * 4).toBe(data.readUInt32BE(16));
+      expect(sheet.frameHeight * sheet.rows * 4).toBe(data.readUInt32BE(20));
+      expect(sheet.anchorX).toBe(old.anchorX + dx);
+      expect(sheet.anchorY).toBe(old.anchorY + dy);
+      expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+      expect(sheet.animations.attack?.first).toBe(7);
+      expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+      expect(sheet.strikeFrame).toBe(2);
+    }
   });
 
   it("replaces only the fields it names and keeps the rest", () => {
