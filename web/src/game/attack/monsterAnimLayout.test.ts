@@ -61,7 +61,7 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze and Slimeattikus (big and mini) layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul and Slimeattikus (big and mini) layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/13.png",
       "monsters/14.v1.png",
@@ -73,6 +73,7 @@ describe("applyLayout", () => {
       "monsters/fink.png",
       "monsters/ichi.png",
       "monsters/octoooze.png",
+      "monsters/rezghul.png",
       "monsters/slimeattikus_anim.png",
       "monsters/slimeattikusmini_anim.png",
       "monsters/sprite.1.v1.png",
@@ -466,6 +467,30 @@ describe("applyLayout", () => {
       expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
       expect(sheet.strikeFrame).toBe(2);
     }
+  });
+
+  it("the Rezghul layout matches the animated PNG and keeps the demon where it was", () => {
+    const old = MONSTER_SPRITES["C19"];
+    if (!old) throw new Error("no C19");
+    const sheet = spriteFor("C19");
+    if (!sheet) throw new Error("no sprite for C19");
+    const png = readFileSync(
+      resolve(__dirname, "../../../../server/public/assets/monsters/rezghul-anim@4x.png"),
+    );
+    expect(png.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(png.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.columns).toBe(32);
+    expect(sheet.rows).toBe(12);
+    // 8 px added left and right, 13 px added on top: the demon stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 8);
+    expect(sheet.anchorY).toBe(old.anchorY + 13);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 8);
+    expect(sheet.animations.idle).toEqual({ first: 0, count: 1, ticksPerFrame: 8 });
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
   });
 
   it("replaces only the fields it names and keeps the rest", () => {
