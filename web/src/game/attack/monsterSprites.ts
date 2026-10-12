@@ -326,6 +326,23 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Brain: 46x38 cells (the old 34x24 cell plus 6 px each side, 12 px on top and 2 at the bottom),
+  // so the anchor moves by (6, 12) and the creature stays put. The sheet keeps the 30 headings.
+  // Rows: 0 idle (the old still), 1-6 walk, 7-11 attack. The old "invisible" row is gone: a cloaked
+  // Brain is drawn from the walk/attack rows at the see-through alpha (AttackBattleLayer.paintMoves).
+  "monsters/brain.v2.png": {
+    frameWidth: 46,
+    frameHeight: 38,
+    anchorX: 22,
+    anchorY: 25,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
   // Teratorn: 40x44 cells (the old 28x28 cell plus 6 px each side, 10 px on top and 6 at the bottom),
   // so the anchor moves by (6, 10) and the flyer stays put (its shadow is a separate sprite).
   // Rows: 0-2 the wing flap exactly as before (`walk` steps through them every 3 ticks, `landed`
@@ -654,7 +671,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/sprite.12.v2.png": "monsters/dave-anim@4x.png", // D.A.V.E. animated repaint
   "monsters/sprite.12.gold.png": "monsters/dave-gold-anim@4x.png", // D.A.V.E. animated gold skin (same frames, gold tone)
   "monsters/crabatron.png": "monsters/crabatron-anim@4x.png", // Crabatron animated repaint
-  "monsters/brain.v2.png": "monsters/brain-repaint@4x.png", // Brain art trial (2 rows: visible, invisible)
+  "monsters/brain.v2.png": "monsters/brain-anim@4x.png", // Brain animated repaint (walk + attack; cloak = alpha)
   "monsters/sprite.11.v2.png": "monsters/projectx-anim@4x.png", // Project X animated repaint
   "monsters/13.png": "monsters/wormzer-anim@4x.png", // Wormzer animated repaint
   "monsters/zafreeti.v2.png": "monsters/zafreeti-anim@4x.png", // Zafreeti animated repaint

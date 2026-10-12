@@ -61,11 +61,12 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn and Octo-ooze layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn and Octo-ooze layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/13.png",
       "monsters/14.v1.png",
       "monsters/bandito.png",
+      "monsters/brain.v2.png",
       "monsters/crabatron.png",
       "monsters/eyera.png",
       "monsters/fang.png",
@@ -294,6 +295,28 @@ describe("applyLayout", () => {
     expect(sheet.anchorX).toBe(old.anchorX + 8);
     expect(sheet.anchorY).toBe(old.anchorY + 14);
     expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 8);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Brain layout matches the animated PNG and keeps the creature where it was", () => {
+    const old = MONSTER_SPRITES["C9"];
+    if (!old) throw new Error("no C9");
+    const sheet = spriteFor("C9");
+    if (!sheet) throw new Error("no sprite for C9");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/brain-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.columns).toBe(30);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(data.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(data.readUInt32BE(20));
+    // 6 px added left and right, 12 px on top: the creature stays on the same point.
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 12);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.invisible).toBeUndefined();
     expect(sheet.animations.attack?.first).toBe(7);
     expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
     expect(sheet.strikeFrame).toBe(2);
