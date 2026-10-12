@@ -141,7 +141,9 @@ The game sends one kind of email: the "reset your password" link.
    from step 5.
 5. Press **Deploy**.
 6. In the project's **Settings → Git**, set the **Production Branch** to the
-   branch you play from (for this project, `revamp`).
+   branch you play from (for this project, `release`; see `docs/release.md`).
+   The live bymrevamped.com projects are not connected to GitHub at all, so
+   this step does not apply to them.
 7. In **Settings → Domains**, add `play.yourgame.com`. The domain's DNS is
    at Vercel, so the address works straight away; there is nothing to add in
    step 3 for it.
@@ -273,7 +275,8 @@ The game is live. It is a beta: tell players so wherever you announce it.
 When new code is on GitHub:
 
 - **The game page** updates by itself: Vercel rebuilds whenever the
-  production branch changes.
+  production branch changes. (Not so for bymrevamped.com: it is updated by
+  hand, see below, and only at a release, see `docs/release.md`.)
 - **The game server** needs three commands on the VPS:
 
 ```
@@ -293,12 +296,12 @@ The live game was first put online straight from a computer, not from
 GitHub: the server's `/opt/bymr` is a plain copy of the code (no `git`
 inside), and the Vercel project `bymrevamped` is not connected to a
 repository. To update, from Git Bash on your computer, in the main
-`backyard-monsters-refitted` folder, on the `revamp` branch with the new code
-(put in your server's IP address and your ssh key's file name):
+`backyard-monsters-refitted` folder, on the `release` branch at the new version tag, never `revamp`
+(see `docs/release.md`; put in your server's IP address and your ssh key's file name):
 
 ```
 ssh -i ~/.ssh/<your-key> root@<server-ip> 'cd /opt/bymr/server && deploy/prod.sh exec -T backup bash /backup.sh'
-git archive --format=tar revamp | ssh -i ~/.ssh/<your-key> root@<server-ip> 'tar -x -C /opt/bymr'
+git archive --format=tar release | ssh -i ~/.ssh/<your-key> root@<server-ip> 'tar -x -C /opt/bymr'
 ssh -i ~/.ssh/<your-key> root@<server-ip> 'cd /opt/bymr/server && deploy/prod.sh up -d --build'
 cd web && vercel link --yes --project bymrevamped --scope sim-yujies-projects && vercel deploy --prod --scope sim-yujies-projects
 ```
