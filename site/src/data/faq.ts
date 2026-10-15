@@ -38,7 +38,7 @@ export const faq: { q: string; a: string }[] = [
   },
   {
     q: "How is it different from the original?",
-    a: "The heart of the game is the same: build your yard, hatch monsters, defend and raid. It has been rebuilt to run in a modern browser, with a fresh look and a guided start with Bob for new players.",
+    a: "The heart of the game is the same: build your yard, hatch monsters, defend and raid. It has been rebuilt from scratch to run in a modern browser, with repainted monsters, fewer clicks (hatch a whole army at once), fog of war in the Map Room and a guided start with Bob for new players.",
   },
   {
     q: "Who makes it?",

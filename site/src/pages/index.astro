@@ -40,6 +40,48 @@ const features = [
   },
 ];
 
+// "What's new in Revamped": what is different from the original game. Every
+// picture is from the game itself; `img` names a pair in
+// public/images/whatsnew/ (<name>.webp at 768 px wide, <name>-384.webp).
+const whatsNew = [
+  {
+    title: "No Flash. No download.",
+    text: "Plays in any modern browser tab, on a game rebuilt from scratch.",
+    img: "yard",
+    alt: "A busy yard in the game, open in a browser tab",
+  },
+  {
+    title: "Monsters, repainted.",
+    text: "Your favourite monsters redrawn in high detail, some with brand-new animations.",
+    alt: "The repainted Teratorn, a winged monster breathing fire",
+  },
+  {
+    title: "Less clicking, more raiding.",
+    text: "Hatch a whole army in one click, collect everything at once, and see exact numbers and timers at a glance. Speed battles up to 2x.",
+    img: "hatch",
+    alt: "The Hatchery screen: 40 Pokeys added in one go, spread across five Hatcheries",
+  },
+  {
+    title: "A friendly start.",
+    text: "Bob walks you through your first yard, first defence and first raid in about 8 minutes.",
+    img: "bob",
+    alt: "Bob, a green monster, explaining the next step of the guided start",
+  },
+  {
+    title: "New ways to play.",
+    text: "Fog of war in the Map Room (not in the original), auto-attack wild camps, set each champion to attack, defend or both, and plan your perfect layout in the Yard Planner.",
+    img: "fog",
+    alt: "The Map Room, with unexplored cells hidden under fog at the edge",
+    badge: "New: not in the original",
+  },
+  {
+    title: "Free and fair.",
+    text: "Free to play, with no store: Shiny is earned in the game. Patreon is optional and gives no in-game advantage. The server checks every attack, so cheaters have a harder time.",
+    img: "raid",
+    alt: "Monsters raiding a walled yard",
+  },
+];
+
 const roster = [
   ["C1", "Pokey"],
   ["C2", "Octo-ooze"],
@@ -190,6 +232,61 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
           </p>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section class="section whatsnew" aria-labelledby="whatsnew-title">
+    <div class="wrap">
+      <div class="section__head reveal">
+        <span class="eyebrow">What's different</span>
+        <h2 id="whatsnew-title">What's new in Revamped</h2>
+        <p>The game you remember, with some big changes from the original Backyard Monsters.</p>
+      </div>
+      <ul class="whatsnew__list">
+        {
+          whatsNew.map((w, i) => (
+            <li class="change reveal reveal--pop" style={`--i:${i % 3}`}>
+              <div class={`change__art${w.img === "yard" ? " change__art--browser" : ""}`}>
+                {w.img === "yard" && (
+                  <div class="change__tab" aria-hidden="true">
+                    <span class="change__dots">
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                    <span class="change__url">{gameHost}</span>
+                  </div>
+                )}
+                {w.img ? (
+                  <img
+                    src={`/images/whatsnew/${w.img}.webp`}
+                    srcset={`/images/whatsnew/${w.img}-384.webp 384w, /images/whatsnew/${w.img}.webp 768w`}
+                    sizes="(max-width: 560px) 100vw, (max-width: 1020px) 50vw, 380px"
+                    alt={w.alt}
+                    width="768"
+                    height="512"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <>
+                    <img src="/images/monsters/C14.webp" alt={w.alt} width="360" height="240" loading="lazy" />
+                    <span class="change__walker">
+                      <Sprite name="walk-C1" height={72} duration={0.42} />
+                    </span>
+                  </>
+                )}
+                {w.badge && <span class="pill pill--beta change__badge">{w.badge}</span>}
+              </div>
+              <div class="change__body">
+                <span class="change__num" aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
+                <h3>{w.title}</h3>
+                <p>{w.text}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ul>
     </div>
   </section>
 
@@ -850,6 +947,156 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
     font-size: 1.3rem;
     color: var(--warning-bright);
     margin-bottom: 6px;
+  }
+
+  /* ── What's new in Revamped ──────────────────────────────────────────── */
+
+  .whatsnew__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .change {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition:
+      translate 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+      border-color 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+
+  .change:hover {
+    translate: 0 -6px;
+    border-color: var(--accent-line);
+    box-shadow: 0 18px 40px rgb(0 0 0 / 35%);
+  }
+
+  .change__art {
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 3 / 2;
+    background: var(--bg-deep);
+  }
+
+  .change__art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: scale 0.5s ease;
+  }
+
+  .change:hover .change__art img {
+    scale: 1.05;
+  }
+
+  /* The first card's picture sits in a little browser tab. */
+  .change__art--browser {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .change__art--browser img {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .change__tab {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    background: var(--panel-raised);
+    border-bottom: 1px solid var(--border-strong);
+  }
+
+  .change__dots {
+    display: flex;
+    gap: 5px;
+  }
+
+  .change__dots i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border-strong);
+  }
+
+  .change__url {
+    flex: 1;
+    min-width: 0;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    background: var(--bg-deep);
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .change__walker {
+    position: absolute;
+    left: 6%;
+    bottom: 6%;
+    filter: drop-shadow(0 6px 6px rgb(0 0 0 / 45%));
+  }
+
+  .change__badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    font-size: 0.78rem;
+    box-shadow: 0 6px 16px rgb(0 0 0 / 40%);
+  }
+
+  .change__body {
+    padding: 18px 20px 22px;
+  }
+
+  .change__num {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--accent);
+    font-family: var(--font-display);
+    font-size: 0.9rem;
+    letter-spacing: 0.08em;
+  }
+
+  .change__body h3 {
+    margin-bottom: 8px;
+  }
+
+  .change__body p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 1rem;
+  }
+
+  @media (max-width: 1020px) {
+    .whatsnew__list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 560px) {
+    .whatsnew__list {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .change__body {
+      padding: 14px 16px 18px;
+    }
   }
 
   /* ── Features ────────────────────────────────────────────────────────── */
