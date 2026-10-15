@@ -47,9 +47,9 @@ export class BotJob {
   @Property({ type: "number", default: 0 })
   attempts: Opt<number> = 0;
 
-  @Property({ type: "json", columnType: "jsonb" })
+  @Property({ type: "json", columnType: "jsonb", defaultRaw: "'{}'" })
   payload: Opt<JsonObject> = {};
 
-  @Property({ type: Date })
+  @Property({ type: Date, defaultRaw: "now()" })
   created_at: Opt<Date> = new Date();
 }
