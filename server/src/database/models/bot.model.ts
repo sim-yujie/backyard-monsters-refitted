@@ -48,7 +48,7 @@ export class Bot {
   @Property({ type: "string", columnType: "text", default: "active" })
   state: Opt<BotState> = "active";
 
-  @Property({ type: Date })
+  @Property({ type: Date, defaultRaw: "now()" })
   created_at: Opt<Date> = new Date();
 
   @Property({ type: Date, nullable: true })
