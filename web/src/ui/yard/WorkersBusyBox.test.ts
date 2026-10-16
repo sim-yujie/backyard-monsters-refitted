@@ -78,4 +78,10 @@ describe("openWorkersBusyBox", () => {
     expect(onFreed).toHaveBeenCalled();
     expect(document.body.querySelector(".workers-busy")).toBeNull();
   });
+
+  it("names each Shiny button once, as it reads on screen", () => {
+    const popup = openWorkersBusyBox({ store: setup(5_400), scene: { selectBuilding: vi.fn() }, notices: {} as Notices });
+    const names = [...popup.body.querySelectorAll("button")].map((one) => one.getAttribute("aria-label"));
+    expect(names).toEqual(["Buy a worker, 250 Shiny", expect.stringMatching(/^Finish soonest job, \d+ Shiny$/)]);
+  });
 });
