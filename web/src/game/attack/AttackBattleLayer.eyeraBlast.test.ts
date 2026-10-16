@@ -14,9 +14,9 @@ import { MONSTER_SPRITES } from "./monsterSpriteData";
 import { sheetUrl } from "./monsterSprites";
 
 /**
- * The three new Eye-ra blasts (feat/eyera-explosion) are drawing only: over
- * a real session, each draws its own blast in place of the yellow rings, and
- * the battle comes out the same in every style.
+ * Eye-ra's fiery blast (feat/eyera-explosion) is drawing only: over a real
+ * session it draws a fireball in place of the yellow rings, and the battle
+ * comes out the same as one nobody draws.
  */
 
 type BuildingRow = { id: number; t: number; l: number; X: number; Y: number };
@@ -79,11 +79,7 @@ const hostOf = (): Host => {
   };
 };
 
-const setUp = (
-  buildings: BuildingRow[],
-  monsters: Record<string, number>,
-  blastStyle: "ring" | "punchy" | "fiery" | "goo",
-) => {
+const setUp = (buildings: BuildingRow[], monsters: Record<string, number>) => {
   const session = new AttackSession({ target: targetOf(monsters), seed: 1 });
   const response = yardOf(buildings);
   session.load(response);
@@ -95,7 +91,6 @@ const setUp = (
     overlay: new Container(),
     reducedMotion: false,
     textures: new MonsterSheetTextures(blankSheet),
-    blastStyle,
   });
   return { session, layer, host };
 };
@@ -121,34 +116,32 @@ const untilBlast = (session: AttackSession, layer: AttackBattleLayer) => {
   throw new Error("no Eye-ra blast");
 };
 
-describe("an Eye-ra's blast, drawn in the style picked (feat/eyera-explosion)", () => {
-  for (const blastStyle of ["punchy", "fiery", "goo"] as const) {
-    it(`${blastStyle}: draws its own blast, not the yellow rings`, () => {
-      const { session, layer } = setUp([{ id: 1, t: 14, l: 1, X: 0, Y: 0 }], { C5: 2 }, blastStyle);
-      session.appendFling({ x: -150, y: -150, monsters: { C5: 1 } });
-      untilBlast(session, layer);
-      expect(layer.eyeraBlast.blastsMade).toBe(1);
-      expect(layer.eyeraBlast.bitCount).toBeGreaterThan(0);
-    });
-  }
-
-  it("ring: keeps today's rings and draws nothing more", () => {
-    const { session, layer } = setUp([{ id: 1, t: 14, l: 1, X: 0, Y: 0 }], { C5: 2 }, "ring");
+describe("an Eye-ra's blast, drawn as a fireball (feat/eyera-explosion)", () => {
+  it("draws the fireball and its scorch, not the yellow rings", () => {
+    const { session, layer } = setUp([{ id: 1, t: 14, l: 1, X: 0, Y: 0 }], { C5: 2 });
     session.appendFling({ x: -150, y: -150, monsters: { C5: 1 } });
     untilBlast(session, layer);
-    expect(layer.eyeraBlast.blastsMade).toBe(0);
+    expect(layer.blasts.blastsMade).toBe(1);
+    expect(layer.blasts.bitCount).toBeGreaterThan(0);
+    expect(layer.blasts.markCount).toBe(1);
   });
 
-  it("changes nothing in the battle: the same health in every style", () => {
-    const healthAfter = (blastStyle: "ring" | "punchy" | "fiery" | "goo") => {
-      const { session, layer } = setUp([{ id: 1, t: 14, l: 1, X: 0, Y: 0 }], { C5: 2 }, blastStyle);
-      session.appendFling({ x: -150, y: -150, monsters: { C5: 2 } });
-      untilBlast(session, layer);
-      for (let step = 0; step < TICKS_PER_SECOND * 3; step += 1) frame(session, layer);
-      return session.battle()?.state().health;
-    };
-    const ring = healthAfter("ring");
-    expect(ring?.["1"]).toBeLessThan(Infinity);
-    for (const style of ["punchy", "fiery", "goo"] as const) expect(healthAfter(style)).toEqual(ring);
+  it("changes nothing in the battle: the same health as an undrawn one", () => {
+    const fling = { x: -150, y: -150, monsters: { C5: 2 } };
+    const drawn = setUp([{ id: 1, t: 14, l: 1, X: 0, Y: 0 }], { C5: 2 });
+    drawn.session.appendFling(fling);
+    untilBlast(drawn.session, drawn.layer);
+    const ticks = drawn.session.battle()?.tick ?? 0;
+    for (let step = 0; step < TICKS_PER_SECOND * 3; step += 1) frame(drawn.session, drawn.layer);
+
+    const bare = new AttackSession({ target: targetOf({ C5: 2 }), seed: 1 });
+    bare.load(yardOf([{ id: 1, t: 14, l: 1, X: 0, Y: 0 }]));
+    bare.appendFling(fling);
+    for (let step = 0; step < ticks + TICKS_PER_SECOND * 3; step += 1) bare.advance(1 / TICKS_PER_SECOND);
+
+    const health = drawn.session.battle()?.state().health;
+    expect(health?.["1"]).toBeLessThan(Infinity);
+    expect(bare.battle()?.tick).toBe(drawn.session.battle()?.tick);
+    expect(bare.battle()?.state().health).toEqual(health);
   });
 });

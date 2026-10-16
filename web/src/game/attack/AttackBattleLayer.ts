@@ -34,7 +34,7 @@ import {
   mouthPoint,
 } from "./creepFx";
 import { FOMOR_ID } from "@/game/combat/rules/champions";
-import { EyeraBlastFx, readBlastStyle, type BlastStyle } from "./eyeraBlastFx";
+import { BlastFx } from "./blastFx";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
 import { BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
@@ -522,8 +522,6 @@ export interface AttackBattleLayerOptions {
   readonly random?: () => number;
   /** Wall-clock milliseconds, for the rain after the end; `performance.now` unless a test fixes it. */
   readonly now?: () => number;
-  /** How an Eye-ra's blast is drawn; the page's `?blast=` choice unless a test fixes it. */
-  readonly blastStyle?: BlastStyle;
 }
 
 interface CreepView {
@@ -660,9 +658,9 @@ export class AttackBattleLayer {
   private readonly shadows: Container;
   /** In the overlay, in this order. */
   private readonly effects = new Container();
-  /** An Eye-ra's blast, in the style picked for it (feat/eyera-explosion); inside `effects`. */
+  /** Drawn explosions, Eye-ra's fiery one (feat/eyera-explosion); inside `effects`. */
   private readonly blastAir = new Container();
-  private readonly blastFx: EyeraBlastFx;
+  private readonly blastFx: BlastFx;
   private readonly fire = new Graphics();
   /** The Spurtz Cannon's shells, off their sheet, just over `fire` (issue #313). */
   private readonly shells = new Container();
@@ -757,13 +755,12 @@ export class AttackBattleLayer {
     // Our own children only: the drop ring and anything else already in the
     // overlay stays where it is.
     this.overlay.addChild(this.effects, this.fire, this.shells, this.bars);
-    this.blastFx = new EyeraBlastFx(
+    this.blastFx = new BlastFx(
       {
         air: this.blastAir,
         ground: () => this.debrisLayer(),
         shake: (dx, dy) => this.shakeYard(dx, dy),
       },
-      options.blastStyle ?? readBlastStyle(),
       this.reducedMotion,
     );
     this.bombFx = new BombFx(
@@ -1576,9 +1573,7 @@ export class AttackBattleLayer {
     // Flash showed the same red numbers on buildings (`BFOUNDATION.as:534`).
     if (event.buildingId >= 0 && event.amount > 0) {
       const over = { x: target.x, y: target.y - BUILDING_NUMBER_LIFT };
-      // The goo blast's number pops big (feat/eyera-explosion).
-      const pop = this.blastFx.style === "goo" && monsterId === EYE_RA_ID;
-      this.fx.number(event.tick, `building:${event.buildingId}`, -1, event.amount, over, "damage", pop);
+      this.fx.number(event.tick, `building:${event.buildingId}`, -1, event.amount, over, "damage");
     }
   }
 
@@ -1812,8 +1807,9 @@ export class AttackBattleLayer {
       return;
     }
     if (event.kind === "splash") {
-      if (event.moveId === EYE_RA_ID && this.blastFx.style !== "ring") {
-        this.blastFx.blast(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius);
+      // Eye-ra's blast is a fireball (feat/eyera-explosion); other splashes keep the rings.
+      if (event.moveId === EYE_RA_ID) {
+        this.blastFx.fiery(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius);
         return;
       }
       this.spawnRing(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius, SPLASH_COLOUR);
@@ -1898,8 +1894,8 @@ export class AttackBattleLayer {
     root.pivot.set(dx / (zoom > 0 ? zoom : 1), dy / (zoom > 0 ? zoom : 1));
   }
 
-  /** The Eye-ra blast's drawing, for tests and the dev hook. */
-  get eyeraBlast(): EyeraBlastFx {
+  /** The drawn explosions, for tests and the dev hook. */
+  get blasts(): BlastFx {
     return this.blastFx;
   }
 

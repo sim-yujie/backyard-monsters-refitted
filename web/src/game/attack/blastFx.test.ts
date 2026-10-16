@@ -1,52 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { Container } from "pixi.js";
-import { popScale } from "./creepFx";
-import {
-  EyeraBlastFx,
-  MAX_BITS,
-  MAX_MARKS,
-  bitPath,
-  blastNoise,
-  blastStyleNamed,
-  tintAt,
-  type BlastStyle,
-} from "./eyeraBlastFx";
+import { BlastFx, MAX_BITS, MAX_MARKS, bitPath, blastNoise, tintAt } from "./blastFx";
 
-const fxOf = (style: BlastStyle, reducedMotion = false) => {
+const fxOf = (reducedMotion = false) => {
   const air = new Container();
   const ground = new Container();
   const shakes: [number, number][] = [];
-  const fx = new EyeraBlastFx(
+  const fx = new BlastFx(
     { air, ground: () => ground, shake: (dx, dy) => shakes.push([dx, dy]) },
-    style,
     reducedMotion,
   );
   return { fx, air, ground, shakes };
 };
 
-describe("the Eye-ra blast styles (feat/eyera-explosion)", () => {
-  it("reads the ?blast= names, and nothing else", () => {
-    expect(blastStyleNamed("a")).toBe("punchy");
-    expect(blastStyleNamed(" B ")).toBe("fiery");
-    expect(blastStyleNamed("goo")).toBe("goo");
-    expect(blastStyleNamed("off")).toBe("ring");
-    expect(blastStyleNamed("nuke")).toBeNull();
-    expect(blastStyleNamed(null)).toBeNull();
-  });
-
-  it("leaves today's rings to the layer: the ring style draws nothing", () => {
-    const { fx, air, ground } = fxOf("ring");
-    fx.blast(10, { x: 0, y: 0 }, 85);
-    fx.update(11);
-    expect(fx.bitCount).toBe(0);
-    expect(air.children.length + ground.children.length).toBe(0);
-  });
-
-  for (const style of ["punchy", "fiery", "goo"] as const) {
-    it(`${style}: plays out and leaves nothing behind`, () => {
-      const { fx, air, ground } = fxOf(style);
-      fx.blast(10, { x: 100, y: 50 }, 85);
+describe("the drawn blasts (feat/eyera-explosion)", () => {
+  for (const kind of ["punchy", "fiery"] as const) {
+    it(`${kind}: plays out and leaves nothing behind`, () => {
+      const { fx, air, ground } = fxOf();
+      fx[kind](10, { x: 100, y: 50 }, 85);
       fx.update(12);
+      expect(fx.blastsMade).toBe(1);
       expect(fx.bitCount).toBeGreaterThan(5);
       // Long after: every bit back in the pool, every mark gone.
       fx.update(10 + 400);
@@ -57,13 +30,23 @@ describe("the Eye-ra blast styles (feat/eyera-explosion)", () => {
     });
   }
 
+  it("fiery: leaves a scorch on the ground and does not shake", () => {
+    const { fx, ground, shakes } = fxOf();
+    fx.fiery(10, { x: 0, y: 0 }, 85);
+    fx.update(11);
+    expect(fx.markCount).toBe(1);
+    expect(ground.children.length).toBe(1);
+    for (let tick = 11; tick < 40; tick += 1) fx.update(tick);
+    expect(shakes.every(([dx, dy]) => dx === 0 && dy === 0)).toBe(true);
+  });
+
   it("draws the same blast for the same tick: the replay looks alike", () => {
     expect(blastNoise(120, 3)).toBe(blastNoise(120, 3));
     expect(blastNoise(120, 3)).not.toBe(blastNoise(121, 3));
-    const a = fxOf("goo");
-    const b = fxOf("goo");
-    a.fx.blast(50, { x: 0, y: 0 }, 85);
-    b.fx.blast(50, { x: 0, y: 0 }, 85);
+    const a = fxOf();
+    const b = fxOf();
+    a.fx.fiery(50, { x: 0, y: 0 }, 85);
+    b.fx.fiery(50, { x: 0, y: 0 }, 85);
     a.fx.update(60);
     b.fx.update(60);
     const where = (air: Container) => air.children.map((child) => [child.x, child.y]);
@@ -71,16 +54,16 @@ describe("the Eye-ra blast styles (feat/eyera-explosion)", () => {
   });
 
   it("caps the sprites with many Eye-ras at once", () => {
-    const { fx, ground } = fxOf("fiery");
-    for (let index = 0; index < 40; index += 1) fx.blast(10, { x: index * 10, y: 0 }, 85);
+    const { fx, ground } = fxOf();
+    for (let index = 0; index < 40; index += 1) fx.fiery(10, { x: index * 10, y: 0 }, 85);
     expect(fx.bitCount).toBeLessThanOrEqual(MAX_BITS);
     expect(fx.markCount).toBeLessThanOrEqual(MAX_MARKS);
     expect(ground.children.length).toBeLessThanOrEqual(MAX_MARKS);
   });
 
   it("shakes the yard for a punchy blast, then puts it back", () => {
-    const { fx, shakes } = fxOf("punchy");
-    fx.blast(10, { x: 0, y: 0 }, 85);
+    const { fx, shakes } = fxOf();
+    fx.punchy(10, { x: 0, y: 0 }, 85);
     for (let tick = 10; tick < 40; tick += 1) fx.update(tick);
     expect(shakes.some(([dx, dy]) => dx !== 0 || dy !== 0)).toBe(true);
     expect(shakes.at(-1)).toEqual([0, 0]);
@@ -91,13 +74,13 @@ describe("the Eye-ra blast styles (feat/eyera-explosion)", () => {
   });
 
   it("does not shake, nor throw bits, for a viewer who asked for less motion", () => {
-    const { fx, shakes } = fxOf("punchy", true);
-    fx.blast(10, { x: 0, y: 0 }, 85);
+    const { fx, shakes } = fxOf(true);
+    fx.punchy(10, { x: 0, y: 0 }, 85);
     for (let tick = 10; tick < 40; tick += 1) fx.update(tick);
     expect(shakes.every(([dx, dy]) => dx === 0 && dy === 0)).toBe(true);
     // The flashes and rings only.
-    const still = fxOf("punchy", true);
-    still.fx.blast(10, { x: 0, y: 0 }, 85);
+    const still = fxOf(true);
+    still.fx.punchy(10, { x: 0, y: 0 }, 85);
     expect(still.fx.bitCount).toBeLessThanOrEqual(5);
   });
 });
@@ -123,11 +106,5 @@ describe("the blast's arithmetic", () => {
     const bit = { x: 0, y: 0, z: 0, vx: 10, vy: 0, vz: 0, drag: 0.2, gravity: 0 };
     expect(bitPath(bit, 1).x).toBeCloseTo(10);
     expect(bitPath(bit, 200).x).toBeCloseTo(50);
-  });
-
-  it("pops a goo blast's number in big, then settles", () => {
-    expect(popScale(0)).toBe(1);
-    expect(popScale(4)).toBeCloseTo(2.3);
-    expect(popScale(30)).toBeCloseTo(1.6);
   });
 });
