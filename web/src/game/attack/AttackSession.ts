@@ -57,9 +57,10 @@ import type { AttackTarget } from "./attackTarget";
  * The attack clock runs in *battle* time, not wall time: `elapsedSeconds` is
  * `battle.tick / 80`. A frame at 2x advances the target tick twice as far, so
  * the countdown and the creeps speed up together and nothing is skipped (§F5,
- * "two speeds, 1x and 2x, no pause"). The countdown is 300 s, or 420 s when
- * the attacker's alliance holds Declare War (`stats.ts`), and the engine's own
- * hard retreat lands 120 s after that.
+ * "two speeds, 1x and 2x, no pause"). A playback also has 4x, and can skip to
+ * its end ({@link skipToEnd}; defence replays, issue #362). The countdown is
+ * 300 s, or 420 s when the attacker's alliance holds Declare War
+ * (`stats.ts`), and the engine's own hard retreat lands 120 s after that.
  *
  * ## Ending
  *
@@ -102,8 +103,25 @@ export type AttackPhase = "idle" | "loaded" | "running" | "ended";
  */
 export type AttackEndReason = "destroyed" | "exhausted" | "expired" | "retreat" | "left";
 
-/** The two battle speeds, as ticks advanced per real second over 80. */
-export type AttackSpeed = 1 | 2;
+/**
+ * The battle speeds, as ticks advanced per real second over 80. An attack
+ * the player fights has 1x and 2x; 4x is a playback's alone (issue #362).
+ */
+export type AttackSpeed = 1 | 2 | 4;
+
+/** The speeds an attack the player fights offers (§F5). */
+export const LIVE_SPEEDS: readonly AttackSpeed[] = [1, 2];
+/** The speeds a playback offers (issue #362). */
+export const PLAYBACK_SPEEDS: readonly AttackSpeed[] = [1, 2, 4];
+
+/**
+ * Skip to end runs the battle in slices of this many ticks (half a battle
+ * second), as many a frame as {@link SKIP_FRAME_BUDGET_MS} allows, so the page
+ * never freezes on a long battle.
+ */
+export const SKIP_SLICE_TICKS = 40;
+/** How long one frame of Skip to end may run the engine for, in ms. */
+export const SKIP_FRAME_BUDGET_MS = 12;
 
 /** A fling before the session stamps its tick and radius. */
 export interface FlingInput {
@@ -235,6 +253,8 @@ export interface AttackSessionOptions {
    * limit, and played back from the server's waves (`playScript`).
    */
   readonly raid?: boolean;
+  /** The clock {@link AttackSession.skipToEnd} budgets a frame by, in ms; `performance.now` by default. */
+  readonly now?: () => number;
 }
 
 /** A random 32-bit seed for a battle the server has not seeded (§7, Q1). */
@@ -375,6 +395,11 @@ export class AttackSession {
    */
   private script: AttackEvent[] | null = null;
   private scriptEnd = 0;
+  /** {@link skipToEnd} is running the rest of a playback, slice by slice. */
+  private skipping_ = false;
+  /** The playback ended by skipping to it: nothing of its end was drawn. */
+  private skipped_ = false;
+  private readonly now: () => number;
   private readonly listeners = new Set<AttackSessionListener>();
   /** The last quarter-second the listeners heard about, to rate-limit `advance`. */
   private lastNotifiedQuarter = -1;
@@ -395,6 +420,7 @@ export class AttackSession {
     this.playerLevel = options.playerLevel;
     this.clockFromFirstDrop = options.clockFromFirstDrop ?? false;
     this.declareWar_ = options.declareWar ?? false;
+    this.now = options.now ?? (() => performance.now());
     this.countdownSeconds = this.declareWar_
       ? DECLARE_WAR_COUNTDOWN_SECONDS
       : ATTACK_COUNTDOWN_SECONDS;
@@ -486,14 +512,12 @@ export class AttackSession {
     const battle = this.battle_;
     if (this.phase !== "running" || !battle) return;
 
+    if (this.skipping_) {
+      this.skipSlices(battle);
+      return;
+    }
     this.targetTick += Math.max(0, deltaSeconds) * TICKS_PER_SECOND * this.speed_;
-    // Sixty frames of 1/60 s sum to 79.999…, not 80; the nudge keeps a whole
-    // second of frames worth a whole second of ticks.
-    const target = Math.floor(this.targetTick + 1e-6);
-    this.playScriptTo(battle, target);
-    if (this.phase !== "running") return;
-    battle.runTo(target);
-    this.checkEnd(battle);
+    this.runToTarget(battle);
 
     if (this.phase !== "running") return;
     const quarter = Math.floor((battle.tick / TICKS_PER_SECOND) * 4);
@@ -501,6 +525,63 @@ export class AttackSession {
       this.lastNotifiedQuarter = quarter;
       this.notify();
     }
+  }
+
+  /**
+   * Runs the battle to the target tick: the script's events due by then, each
+   * at its own tick, then the battle itself, and checks for the end. A
+   * playback never runs past the tick the server stopped at, however long a
+   * frame was: the battle on screen is the server's to that tick, not beyond.
+   */
+  private runToTarget(battle: Battle): void {
+    // Sixty frames of 1/60 s sum to 79.999…, not 80; the nudge keeps a whole
+    // second of frames worth a whole second of ticks.
+    const target = Math.floor(this.targetTick + 1e-6);
+    this.playScriptTo(battle, target);
+    if (this.phase !== "running") return;
+    battle.runTo(this.script ? Math.min(target, Math.max(battle.tick, this.scriptEnd)) : target);
+    this.checkEnd(battle);
+  }
+
+  /**
+   * One frame of {@link skipToEnd}: slices of {@link SKIP_SLICE_TICKS} until
+   * the playback ends or the frame's budget is spent, and at least one. The
+   * slices change nothing about the battle, only when it is computed: each
+   * event still goes in at its own tick, as in {@link advance}.
+   */
+  private skipSlices(battle: Battle): void {
+    const until = this.now() + SKIP_FRAME_BUDGET_MS;
+    do {
+      this.targetTick = Math.floor(this.targetTick + 1e-6) + SKIP_SLICE_TICKS;
+      this.runToTarget(battle);
+    } while (this.phase === "running" && this.now() < until);
+    if (this.phase === "running") this.notify();
+  }
+
+  /**
+   * Skip to end on a playback (issue #362): runs what is left of the battle
+   * without drawing it, a few slices a frame from {@link advance}, to where
+   * the server stopped, then ends as playing it through would have. The
+   * battle layer draws nothing while it runs and shows the yard as the battle
+   * left it once it is over ({@link skipped}). A no-op on an attack the player
+   * fights, or one that is over.
+   */
+  skipToEnd(): void {
+    if (!this.script || !this.battle_ || this.phase === "ended" || this.phase === "idle") return;
+    if (this.skipping_) return;
+    if (this.phase === "loaded") this.phase = "running";
+    this.skipping_ = true;
+    this.notify();
+  }
+
+  /** Whether {@link skipToEnd} is running the rest of the battle. */
+  get skipping(): boolean {
+    return this.skipping_;
+  }
+
+  /** Whether the playback ended by {@link skipToEnd}, so nothing of its end was drawn. */
+  get skipped(): boolean {
+    return this.skipped_;
   }
 
   /**
@@ -746,14 +827,24 @@ export class AttackSession {
 
   /* ── Speed ──────────────────────────────────────────────────────────── */
 
+  /**
+   * Sets the battle speed. 4x is a playback's alone (issue #362): an attack
+   * the player fights keeps 1x and 2x, and asking it for 4x does nothing.
+   */
   setSpeed(speed: AttackSpeed): void {
     if (speed === this.speed_) return;
+    if (!this.speeds.includes(speed)) return;
     this.speed_ = speed;
     this.notify();
   }
 
   get speed(): AttackSpeed {
     return this.speed_;
+  }
+
+  /** The speeds this session offers: a playback's, or an attack's. */
+  get speeds(): readonly AttackSpeed[] {
+    return this.script ? PLAYBACK_SPEEDS : LIVE_SPEEDS;
   }
 
   /**
@@ -1024,6 +1115,10 @@ export class AttackSession {
     if (this.phase === "ended") return;
     this.phase = "ended";
     this.endReason = reason;
+    if (this.skipping_) {
+      this.skipping_ = false;
+      this.skipped_ = true;
+    }
     this.notify();
   }
 
