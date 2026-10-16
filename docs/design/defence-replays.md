@@ -3,7 +3,7 @@
 Status: planning, 2026-10-16. Owner decisions of 2026-10-16 are final. Points are marked **[owner]**
 (decided), **[fact]** (checked in code on `revamp` db87084b) or **[suggested]** (our proposal, taken
 unless the owner objects). Facts gathered in `agent-handoffs/reports/facts-defence-replays.md`.
-Parent issue #TBD.
+Parent issue #357.
 
 ## 1. Owner decisions (verbatim)
 
@@ -207,13 +207,13 @@ it on an MR2 own-yard load. Wording "yard" vs "base" and a Watch button on the n
 
 | WP | Issue | What | Depends on | Size |
 |---|---|---|---|---|
-| WP1 | #TBD | Server storage: rules version in MANIFEST (sync tool) + `REPLAY_FORMAT`; migration + entity `defence_replay`; gzip payload helpers; insert + prune to 20; account deletion; unit/DB tests | none | M |
-| WP2 | #TBD | Server recording: load key at attack load; `recordDefenceReplay` from save and finaliser; gate; never fails landing; Redis key in account keys; landing-path + determinism tests | WP1 | M |
-| WP3 | #TBD | Server API: `GET defences`, `GET defences/:id/replay`, limiter, ownership, tests | WP1 | S |
-| WP4 | #TBD | MR2 "attacked your yard" notice (widen `afterYardDefended`, bot jobs stay MR1) + "While you were away" check | none | S |
-| WP5 | #TBD | Client viewer: defence watch source, roster with champion/siege, 4x playback speed, `skipToEnd`, defence dock + result panel (stored figures), version check, drift log | WP1 (version field); API mocked until WP3 | M |
-| WP6 | #TBD | Client Defences screen + API client + entry point (OPEN 1), Watch into the viewer, "not available" states | WP3, WP5 | M |
-| WP7 | #TBD | Golden defence-replay fixture + version guard test; end-to-end live browser check (§10) | WP2, WP4, WP6 | S |
+| WP1 | #358 | Server storage: rules version in MANIFEST (sync tool) + `REPLAY_FORMAT`; migration + entity `defence_replay`; gzip payload helpers; insert + prune to 20; account deletion; unit/DB tests | none | M |
+| WP2 | #359 | Server recording: load key at attack load; `recordDefenceReplay` from save and finaliser; gate; never fails landing; Redis key in account keys; landing-path + determinism tests | WP1 | M |
+| WP3 | #360 | Server API: `GET defences`, `GET defences/:id/replay`, limiter, ownership, tests | WP1 | S |
+| WP4 | #361 | MR2 "attacked your yard" notice (widen `afterYardDefended`, bot jobs stay MR1) + "While you were away" check | none | S |
+| WP5 | #362 | Client viewer: defence watch source, roster with champion/siege, 4x playback speed, `skipToEnd`, defence dock + result panel (stored figures), version check, drift log | WP1 (version field); API mocked until WP3 | M |
+| WP6 | #363 | Client Defences screen + API client + entry point (OPEN 1), Watch into the viewer, "not available" states | WP3, WP5 | M |
+| WP7 | #364 | Golden defence-replay fixture + version guard test; end-to-end live browser check (§10) | WP2, WP4, WP6 | S |
 
 WP1 and WP4 can start at once; WP3 and WP5 in parallel after WP1.
 
