@@ -43,7 +43,12 @@ mock.module("../../../server.js", () => ({
       populate: async (user: Record<string, unknown>) => {
         user.save = attackerSave;
       },
-      findOne: async () => defender,
+      // `isBot` asks the request's context (bot neighbours, #241); nobody here is one.
+      global: false,
+      getContext() {
+        return this;
+      },
+      findOne: async (entity: { name?: string }) => (entity?.name === "Bot" ? null : defender),
       find: async () => [],
       // The outpost owner's academy and buffs are read in a fork (issue #160).
       fork() {
@@ -196,6 +201,7 @@ beforeEach(() => {
   setMode("log");
   reports.length = 0;
   replays.length = 0;
+  notices.length = 0;
   store.clear();
   defender = {
     basesaveid: 9,
@@ -1011,6 +1017,46 @@ describe("the defence replay a save lands (issue #359)", () => {
 
     // The kept load goes with the checkpoint.
     expect(store.has(LOAD_KEY)).toBe(false);
+  });
+
+  test("its owner is told as a Map Room 1 player is, the notice carrying the replay (#361)", async () => {
+    asPlayerYard();
+
+    await baseSave(ctxFor({ over: "1", tick: "3200", flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(replays).toHaveLength(1);
+    expect(notices).toEqual([
+      expect.objectContaining({
+        userid: 0,
+        targetid: DEFENDER_OWNER,
+        messagetype: "yardattacked",
+        subject: "attacker attacked your yard",
+        coords: null,
+        baseid: "1234",
+        targetUnread: 1,
+        replayid: 1,
+      }),
+    ]);
+    expect(String(notices[0]!.message)).toStartWith(`It was left ${defender.damage}% damaged`);
+  });
+
+  test("a Map Room 1 main yard's owner is told the same words, with no replay", async () => {
+    asPlayerYard();
+    defender.mapversion = 1;
+
+    await baseSave(ctxFor({ over: "1", tick: "3200", flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(replays).toEqual([]);
+    expect(notices).toEqual([
+      expect.objectContaining({ targetid: DEFENDER_OWNER, messagetype: "yardattacked", subject: "attacker attacked your yard" }),
+    ]);
+    expect(notices[0]).not.toHaveProperty("replayid");
+  });
+
+  test("a save that does not end the attack tells nobody yet", async () => {
+    asPlayerYard();
+    await baseSave(ctxFor({ tick: "800", flinglog: JSON.stringify(LOG) }), async () => {});
+    expect(notices).toEqual([]);
   });
 
   test("a save that left the attack says so", async () => {

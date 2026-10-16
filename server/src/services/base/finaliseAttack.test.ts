@@ -57,6 +57,8 @@ const flush = mock(async () => {});
 const upsert = mock(async (_entity: unknown, _row: Record<string, any>) => {});
 /** Defence replays written (issue #359). */
 const replays: Record<string, any>[] = [];
+/** Messages the landing leaves in a mailbox (#187, #361). */
+const notices: Record<string, any>[] = [];
 
 const reset = () => {
   store.clear();
@@ -64,6 +66,7 @@ const reset = () => {
   flush.mockClear();
   upsert.mockClear();
   replays.length = 0;
+  notices.length = 0;
   defender = {
     basesaveid: BASESAVEID,
     baseid: "2000241208",
@@ -102,12 +105,24 @@ mock.module("../../server.js", () => ({
   postgres: {
     orm: { em: {} },
     em: {
+      // `isBot` asks the request's context (bot neighbours, #241).
+      global: false,
+      getContext() {
+        return this;
+      },
       findOne: async (entity: { name: string }, where: Record<string, unknown>) => {
         if (entity.name === "User") return where.userid === ATTACKER ? attacker() : null;
         return where.basesaveid === BASESAVEID || where.baseid === defender.baseid ? defender : null;
       },
-      find: async (_entity: unknown, where: { baseid: { $in: string[] } }) =>
-        where.baseid.$in.includes(OUTPOST) ? [outpost] : [],
+      find: async (entity: { name: string }, where: { baseid: { $in: string[] } }) =>
+        entity.name === "Thread" ? [] : where.baseid.$in.includes(OUTPOST) ? [outpost] : [],
+      // The defender's mail: a yard notice's message, its unread count (#361).
+      create: (_entity: unknown, data: Record<string, any>) => {
+        notices.push(data);
+        return data;
+      },
+      count: async () => 0,
+      nativeUpdate: async () => 0,
       persist: () => {},
       upsert,
       flush,
@@ -778,6 +793,26 @@ describe("the defence replay an abandoned attack lands (issue #359)", () => {
     expect(store.has(defenceReplayLoadKey(BASESAVEID))).toBe(false);
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("none");
     expect(replays).toHaveLength(1);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("its owner is told once, as a Map Room 1 player is, the notice carrying the replay (#361)", async () => {
+    await asPlayerYard();
+    await arm();
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("none");
+
+    expect(notices).toEqual([
+      expect.objectContaining({
+        userid: 0,
+        targetid: DEFENDER_OWNER,
+        messagetype: "yardattacked",
+        subject: "yardtester attacked your yard",
+        coords: null,
+        baseid: defender.baseid,
+        replayid: 1,
+      }),
+    ]);
   }, REPLAY_TIMEOUT_MS);
 
   test("after Redis lost the kept load, the row is written with no replay", async () => {

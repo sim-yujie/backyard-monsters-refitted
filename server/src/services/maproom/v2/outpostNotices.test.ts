@@ -136,6 +136,42 @@ describe("a Map Room 1 yard's defence (#241)", () => {
   });
 });
 
+describe("a Map Room 2 yard's defence (#361)", () => {
+  test("the same notice carries its defence replay, and the next load tells it once", async () => {
+    await noticeYardAttack(em, {
+      yard: { baseid: "1234", saveuserid: OWNER, damage: 35 } as never,
+      attacker: { userid: ATTACKER, username: "Bramble" },
+      defenderDelta: { r2: -800 },
+      now: 50,
+      replayId: 77,
+    });
+    expect(messages).toEqual([
+      expect.objectContaining({
+        targetid: OWNER,
+        messagetype: YARD_ATTACKED,
+        subject: "Bramble attacked your yard",
+        message: "It was left 35% damaged, and 800 Pebbles were looted.",
+        coords: null,
+        replayid: 77,
+      }),
+    ]);
+
+    const first = await takeOutpostNotices(em, OWNER);
+    expect(first).toEqual([
+      {
+        kind: "yardAttacked",
+        id: "1234",
+        t: null,
+        at: 50,
+        detail: { text: "Bramble attacked your yard. It was left 35% damaged, and 800 Pebbles were looted.", x: null, y: null },
+      },
+    ]);
+    // Kept in the mailbox, read, with its replay.
+    expect(messages[0]).toMatchObject({ targetUnread: 0, replayid: 77 });
+    expect(await takeOutpostNotices(em, OWNER)).toEqual([]);
+  });
+});
+
 describe("at attack end", () => {
   test("the owner, and only the owner, gets one unread message from the game", async () => {
     await noticeOutpostAttack(em, {
