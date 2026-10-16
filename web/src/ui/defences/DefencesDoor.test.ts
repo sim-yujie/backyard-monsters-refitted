@@ -121,6 +121,17 @@ describe("the Defences screen", () => {
     expect(second?.querySelector(".defences-row__left")?.textContent).toBe("they left the attack");
   });
 
+  it("shows the loot as the defender's pool lost it: no more than 10,000,000 of a resource", async () => {
+    const api = fakeApi([defence({ id: 3, loot: { r1: 34_699_101, r2: 9_999_999, r4: 17_677_619 } })]);
+    const { host } = await openDoor(api);
+    const loot = [...(rows(host)[0]?.querySelectorAll<HTMLElement>(".defences-row__loot .res-amount") ?? [])];
+    expect(loot.map((one) => [one.dataset["resource"], one.textContent])).toEqual([
+      ["r1", "10,000,000"],
+      ["r2", "9,999,999"],
+      ["r4", "10,000,000"],
+    ]);
+  });
+
   it("hides Watch, with the owner's words, for an old rules version or a replay not kept", async () => {
     const api = fakeApi([
       defence({ id: 3, rulesVersion: "0000000000000000" }),

@@ -545,8 +545,9 @@ export class AttackScene implements Scene {
       if (teardown) this.teardowns.push(teardown);
     }
     this.measureDock();
-    // No tips over a raid: the player has nothing to do on it.
-    if (this.raiding) return;
+    // No tips over a raid or a replay (an auto-attack's or a defence's): the
+    // player has no army to pick or drop on it.
+    if (this.raiding || this.watching) return;
     // The tutorial's tips (issue #227); the attack strip is the screen's header.
     guideBus.emit("screen", {
       id: GuideScreen.ATTACK,

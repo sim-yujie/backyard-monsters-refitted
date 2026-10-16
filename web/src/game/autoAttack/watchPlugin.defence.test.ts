@@ -232,6 +232,12 @@ describe("defenceResultText", () => {
     );
   });
 
+  it("names no more of a resource than one attack takes from the pool, as the attack notice does", () => {
+    expect(defenceResultText({ ...defence, loot: { r1: 34_699_101, r4: 17_677_619 } })).toBe(
+      "Bramble attacked your yard and did 35% damage. 10,000,000 Twigs and 10,000,000 Goo were looted.",
+    );
+  });
+
   it("says when nothing was taken", () => {
     expect(defenceResultText(defence)).toBe("Bramble attacked your yard and did 35% damage. Nothing was looted.");
   });

@@ -8,6 +8,7 @@ import {
   CLIENT_RULES_VERSION,
   defenceDrift,
   defenceReadout,
+  lootTakenOf,
   storedDamageOf,
   type DefenceWatch,
 } from "@/game/defences/defenceWatch";
@@ -107,9 +108,10 @@ describe("a stored defence played back", { timeout: BATTLE_TIMEOUT_MS }, () => {
         expect(state.loot[key], key).toBeGreaterThan(state.defenderLoss[key]);
       }
       expect(defenceDrift(run, state.damagePercent, state.tick, state.defenderLoss)).toBeNull();
+      // The strip reads it as the defender's pool lost it: at most 10,000,000 a resource.
       expect(defenceReadout(run.defence, state.damagePercent, state.defenderLoss, false)).toEqual({
         damage: run.defence.damageDone,
-        loot: run.defence.loot,
+        loot: lootTakenOf(run.defence.loot),
       });
     }
   });

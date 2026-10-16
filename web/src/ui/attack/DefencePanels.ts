@@ -1,5 +1,6 @@
 import type { Defence, DefenceLoot } from "@/api/defences";
 import type { AttackSessionState } from "@/game/attack/AttackSession";
+import { lootTakenOf } from "@/game/defences/defenceWatch";
 import { agoText } from "@/ui/attack/autoAttackText";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
@@ -14,10 +15,11 @@ import { RESOURCE_KEYS, RESOURCE_NAMES } from "@/ui/resourceIcon";
  * stored when the attack landed, never the engine's own figure.
  */
 
-/** "1,234 Twigs and 500 Goo", or "" when nothing was taken, as the attack notice says it. */
+/** "1,234 Twigs and 500 Goo", or "" when nothing was taken, as the attack notice says it (held to the cap). */
 export const lootText = (loot: DefenceLoot): string => {
+  const taken = lootTakenOf(loot);
   const parts = RESOURCE_KEYS.flatMap((key) => {
-    const amount = Math.floor(Number(loot[key] ?? 0));
+    const amount = taken[key];
     return Number.isFinite(amount) && amount > 0 ? [`${amount.toLocaleString("en-GB")} ${RESOURCE_NAMES[key]}`] : [];
   });
   if (parts.length <= 1) return parts.join("");

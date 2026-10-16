@@ -146,6 +146,12 @@ describe("the attack strip on a defence replay", () => {
     expect(defenceReadout(defence, 40, loss(612.9, 3), false).loot).toEqual({ r1: 612, r2: 3, r3: 0, r4: 0 });
   });
 
+  it("never reads more of a resource than one attack takes from the pool (10,000,000), playing or over", () => {
+    expect(defenceReadout(defence, 40, loss(24_497_189, 9_999_999), false).loot).toEqual({ r1: 10_000_000, r2: 9_999_999, r3: 0, r4: 0 });
+    const big = { ...defence, loot: { r1: 34_699_101, r2: 17_677_619 } };
+    expect(defenceReadout(big, 55, loss(0), true).loot).toEqual({ r1: 10_000_000, r2: 10_000_000, r3: 0, r4: 0 });
+  });
+
   it("reads this attack's damage alone, not the yard's whole damage", () => {
     expect(defenceReadout(defence, 20, loss(0), false).damage).toBe(0);
     expect(defenceReadout(defence, 40.9, loss(0), false).damage).toBe(20);

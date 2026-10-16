@@ -1,6 +1,6 @@
 import type { Defence } from "@/api/defences";
 import { avatarOf, avatarUrl } from "@/game/avatars";
-import { DEFENCE_REFUSAL_TEXT, defenceRefusal } from "@/game/defences/defenceWatch";
+import { DEFENCE_REFUSAL_TEXT, defenceRefusal, lootTakenOf } from "@/game/defences/defenceWatch";
 import { agoText } from "@/ui/attack/autoAttackText";
 import { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
@@ -202,12 +202,13 @@ export class DefencesScreen {
 
     const facts = el("div", "defences-row__facts");
     facts.append(el("span", "defences-row__damage", damageText(defence)));
-    const loot = RESOURCE_KEYS.filter((key) => Math.floor(Number(defence.loot[key] ?? 0)) > 0);
+    const lost = lootTakenOf(defence.loot);
+    const loot = RESOURCE_KEYS.filter((key) => lost[key] > 0);
     if (loot.length > 0) {
       const taken = el("span", "defences-row__loot");
       taken.setAttribute("aria-label", "Loot lost");
       taken.title = "Loot lost";
-      for (const key of loot) taken.append(resourceAmount(key, Math.floor(Number(defence.loot[key]))));
+      for (const key of loot) taken.append(resourceAmount(key, lost[key]));
       facts.append(taken);
     } else {
       facts.append(el("span", "defences-row__loot defences-row__loot--none", "nothing looted"));

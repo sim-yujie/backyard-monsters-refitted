@@ -162,6 +162,22 @@ const wholeLoot = (amounts: Partial<Record<"r1" | "r2" | "r3" | "r4", number>>):
   return out;
 };
 
+/** Most a single attack takes of one resource (the server's `defenderLootHandler.ts`). */
+const MAX_LOOT_PER_RESOURCE = 10_000_000;
+
+/**
+ * What the defender really lost of a battle's loss: whole, each resource held
+ * to the most one attack takes from the pool, as the attack notice says it.
+ * The stored `loot` is the battle's own loss, uncapped, so the drift check can
+ * compare it with the engine's; everything the player reads goes through here.
+ */
+export const lootTakenOf = (amounts: Partial<Record<"r1" | "r2" | "r3" | "r4", number>>): WholeLoot => {
+  const whole = wholeLoot(amounts);
+  const out = { r1: 0, r2: 0, r3: 0, r4: 0 };
+  for (const key of RESOURCE_KEYS) out[key] = Math.min(whole[key], MAX_LOOT_PER_RESOURCE);
+  return out;
+};
+
 /** The engine's end damage against the stored one, and its loot when that differs too. */
 export interface DefenceDrift {
   readonly id: number;
@@ -211,7 +227,7 @@ export interface DefenceReadout {
 /**
  * The attack strip's figures on a defence replay (#362). Not the attacker's
  * view: the loot is what the defender lost, without the attacker's low-level
- * bonus, and the damage is this attack's alone, not the yard's whole damage.
+ * bonus and held to the per-attack cap (`lootTakenOf`), and the damage is this attack's alone, not the yard's whole damage.
  * Once the battle is over it reads the STORED figures, as the result panel
  * does, so the two never disagree (owner decision).
  *
@@ -226,10 +242,10 @@ export const defenceReadout = (
   defenderLoss: ResourceAmounts,
   over: boolean,
 ): DefenceReadout => {
-  if (over) return { damage: Math.max(0, Math.round(defence.damageDone)), loot: wholeLoot(defence.loot) };
+  if (over) return { damage: Math.max(0, Math.round(defence.damageDone)), loot: lootTakenOf(defence.loot) };
   const before = defence.damageAfter - defence.damageDone;
   const shown = Number.isFinite(damageShown) ? Math.floor(damageShown) : 0;
-  return { damage: Math.min(100, Math.max(0, shown - before)), loot: wholeLoot(defenderLoss) };
+  return { damage: Math.min(100, Math.max(0, shown - before)), loot: lootTakenOf(defenderLoss) };
 };
 
 /** Logs a drift as `defence-replay-drift`; there is no client telemetry to send it to. */
