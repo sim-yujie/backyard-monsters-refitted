@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AvatarId } from "@/game/avatars";
 import { AccountMenu, DEFAULT_NOTE, PICK_FAILED, accountName, levelText } from "./AccountMenu";
@@ -205,5 +206,25 @@ describe("AccountMenu", () => {
       expect(onAchievements).toHaveBeenCalledOnce();
       expect(menu.open).toBe(false);
     });
+  });
+});
+
+/**
+ * #355: the HUD and the yard's zoom rail both sit at `--z-hud`, and the rail
+ * comes later, so the open list hung under the rail. jsdom applies no
+ * stylesheet, so the rule that lifts the HUD is checked in the CSS text.
+ */
+describe("AccountMenu stacking", () => {
+  const read = (file: string): string =>
+    readFileSync(new URL(file, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const token = (name: string): number =>
+    Number(new RegExp(`--${name}:\\s*(\\d+)`).exec(read("./styles/tokens.css"))?.[1]);
+
+  it("lifts the HUD above the zoom rail while the list is open", () => {
+    const rule = /\.hud:has\(\.account-menu__list:not\(\[hidden\]\)\)\s*\{([^}]*)\}/.exec(
+      read("./styles/ui.css"),
+    );
+    expect(rule?.[1]).toMatch(/z-index:\s*var\(--z-popup\)/);
+    expect(token("z-popup")).toBeGreaterThan(token("z-hud"));
   });
 });

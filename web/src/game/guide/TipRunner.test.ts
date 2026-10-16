@@ -436,9 +436,29 @@ describe("more than one screen", () => {
     expect(view()!.shown).toMatchObject({ text: "Build is here." });
     await settle();
     expect(view()!.shown).toMatchObject({ text: "Threads." });
-    view()!.press("Skip tips");
+    view()!.press("Next");
+    view()!.press("Got it");
 
     expect(view()!.shown).toMatchObject({ text: "Build is here.", dots: { index: 1, count: 2 } });
+  });
+
+  it("Skip tips closes the bubble, with the yard's tips it paused (#356)", async () => {
+    const { bus, view, send, runner: tips } = setup();
+    tips.setOnboarding(onboarding("skipped"));
+    bus.emit("screen", { id: GuideScreen.YARD, root: yard(), header: null });
+    await settle();
+    const mail = box();
+    control(TutTarget.MAIL_THREADS, mail);
+    bus.emit("screen", { id: GuideScreen.MAIL, root: mail, header: null });
+    await settle();
+    expect(view()!.shown).toMatchObject({ text: "Threads." });
+
+    view()!.press("Skip tips");
+    expect(view()!.destroyed).toBe(true);
+    // Both showed, so both count as seen.
+    expect(send.mock.calls.map(([screen]) => screen)).toEqual([GuideScreen.YARD, GuideScreen.MAIL]);
+    await settle(1_000);
+    expect(view()!.shown).toBeNull();
   });
 
   it("screens that open together take turns: the building panel, then its repair", async () => {
@@ -456,6 +476,29 @@ describe("more than one screen", () => {
     expect(view()!.shown).toMatchObject({ text: "Repair." });
     view()!.press("Got it");
     expect(send.mock.calls.map(([screen]) => screen)).toEqual([GuideScreen.BUILDING, GuideScreen.REPAIR]);
+  });
+
+  it("Skip tips on the building panel closes the bubble; the repair tips wait for next time (#356)", async () => {
+    const { bus, view, send, runner: tips } = setup();
+    tips.setOnboarding(onboarding("skipped"));
+    const { root, header } = panel();
+    control(TutTarget.UPGRADE, root);
+    control(TutTarget.REPAIR, root);
+    bus.emit("screen", { id: GuideScreen.BUILDING, root, header });
+    bus.emit("screen", { id: GuideScreen.REPAIR, root, header });
+    await settle();
+    expect(view()!.shown).toMatchObject({ text: "Upgrade." });
+
+    view()!.press("Skip tips");
+    expect(view()!.destroyed).toBe(true);
+    expect(send.mock.calls.map(([screen]) => screen)).toEqual([GuideScreen.BUILDING]);
+    expect(tips.isSeen(GuideScreen.REPAIR)).toBe(false);
+
+    // The panel opens again: only the repair tips are left.
+    bus.emit("screen", { id: GuideScreen.BUILDING, root, header });
+    bus.emit("screen", { id: GuideScreen.REPAIR, root, header });
+    await settle();
+    expect(view()!.shown).toMatchObject({ text: "Repair." });
   });
 
   it("hides while something blocks it (the planner) and comes back after", async () => {

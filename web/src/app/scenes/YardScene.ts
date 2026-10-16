@@ -217,6 +217,9 @@ const RAID_FIGHT_NOTICE = "raid-in-progress";
 /** What it says when the refusal carried no sentence of its own. */
 const RAID_FIGHT_TEXT = "Wild monsters are raiding your yard right now. Try again when the raid is over.";
 
+/** How far inside the screen edge, in screen pixels, a building just put down is kept. */
+const PLACED_MARGIN = 96;
+
 /** Zoom the yard opens at, over the town hall. 1 is art at native size. */
 const OPENING_ZOOM = 0.9;
 
@@ -1478,7 +1481,7 @@ export class YardScene implements Scene {
       onDone: () => {
         this.endPlacement();
         // The new building's panel: its countdown, Finish now and Cancel build.
-        if (placed !== null) this.focusBuilding(placed);
+        if (placed !== null) this.showPlaced(placed);
       },
     });
     this.placement = placement;
@@ -2222,6 +2225,20 @@ export class YardScene implements Scene {
     if (!camera || !building || this.planner) return;
     camera.centreOn({ x: building.centreX, y: building.centreY });
     camera.dirty = true;
+    this.select(building);
+  }
+
+  /**
+   * Opens the panel of a building the player has just put down. It went where
+   * they were looking, so the camera stays put: centring on it, as
+   * `focusBuilding` does, jerked the whole yard sideways the moment a build
+   * started. It pans only to bring one dropped at the very edge on screen.
+   */
+  private showPlaced(id: number): void {
+    const camera = this.camera;
+    const building = this.yard?.buildings.find((one) => one.id === id) ?? null;
+    if (!camera || !building || this.planner) return;
+    camera.reveal({ x: building.centreX, y: building.centreY }, PLACED_MARGIN);
     this.select(building);
   }
 
