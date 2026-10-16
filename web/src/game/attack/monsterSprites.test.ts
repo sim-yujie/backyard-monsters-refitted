@@ -10,6 +10,7 @@ import {
   championFlightTop,
   hoverOffset,
   isHighResolutionSheet,
+  MIRRORED_HEADINGS,
   REPAINTED_SHEETS,
   shadowOffset,
   sheetColumn,
@@ -69,6 +70,33 @@ describe("directionColumn", () => {
     expect(sheetColumn(sheet("C2"), Math.PI)).toBe(15);
     expect(sheetColumn(sheet("C15"), Math.PI)).toBe(16);
     expect(sheetColumn(sheet("G1_1"), Math.PI)).toBe(6);
+  });
+
+  it("reads a mirror-painted repaint (Ichi) through the mirror", () => {
+    const ichi = sheet("C6");
+    expect(MIRRORED_HEADINGS.has(ichi.file)).toBe(true);
+    // The painted column 0 faces left and column 15 faces right.
+    expect(sheetColumn(ichi, 0)).toBe(15); // moving right
+    expect(sheetColumn(ichi, Math.PI)).toBe(0); // moving left
+    expect(sheetColumn(ichi, degrees(45))).toBe(12); // down-right: column 3 mirrored
+    expect(sheetColumn(ichi, degrees(135))).toBe(4); // down-left: column 11 mirrored
+    expect(sheetColumn(ichi, degrees(225))).toBe(27); // up-left: column 18 mirrored
+    expect(sheetColumn(ichi, degrees(315))).toBe(19); // up-right: column 26 mirrored
+    // Straight down and straight up keep their side of the sheet.
+    expect([7, 8]).toContain(sheetColumn(ichi, Math.PI / 2));
+    expect([22, 23]).toContain(sheetColumn(ichi, (3 * Math.PI) / 2));
+  });
+
+  it("swaps every column with its mirror and only for the listed sheets", () => {
+    const ichi = sheet("C6");
+    for (let column = 0; column < 30; column++) {
+      const angle = degrees(column * 12 + 6);
+      expect(sheetColumn(ichi, angle)).toBe((45 - column) % 30);
+    }
+    const others = Object.values(MONSTER_SPRITES).filter((s) => !MIRRORED_HEADINGS.has(s.file));
+    for (const other of others) {
+      expect(sheetColumn(other, degrees(5))).toBe(directionColumn(degrees(5), other.directions, other.directionOffset));
+    }
   });
 });
 
