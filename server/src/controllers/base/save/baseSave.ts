@@ -598,8 +598,9 @@ const saveBase = async (
               now,
             })
           : null;
-      // A Map Room 1 main yard's owner is told the same, and an attacked bot
-      // books its repair and maybe a revenge (bot neighbours, #241).
+      // A Map Room 1 or 2 main yard's owner is told the same (#361), and an
+      // attacked Map Room 1 bot books its repair and maybe a revenge (bot
+      // neighbours, #241).
       await afterYardDefended(postgres.em, {
         yard: baseSave,
         attacker: user,

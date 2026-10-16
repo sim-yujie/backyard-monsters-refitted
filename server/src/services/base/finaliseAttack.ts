@@ -344,8 +344,8 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
       housedLost: lostCount(housingLoss),
       now,
     });
-    // And a Map Room 1 main yard's, the same; an attacked bot books its
-    // repair and maybe a revenge (bot neighbours, #241).
+    // And a Map Room 1 or 2 main yard's, the same (#361); an attacked Map
+    // Room 1 bot books its repair and maybe a revenge (bot neighbours, #241).
     await afterYardDefended(postgres.em, {
       yard: defender,
       attacker,

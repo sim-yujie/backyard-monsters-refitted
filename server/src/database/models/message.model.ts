@@ -98,9 +98,11 @@ export class Message {
   /**
    * An "attacked your yard" notice's defence replay (`defence_replay.id`,
    * `docs/design/defence-replays.md` §8), for its Watch button; null on every
-   * other message, and once the replay is pruned.
+   * other message, and once the replay is pruned. The mail API returns it
+   * (#361); only the defender is ever sent a notice that has one.
    */
   @Property({ type: new BigIntType("number"), nullable: true })
+  @FrontendKey
   replayid: number | null = null;
 
   @Property({ type: Date, onCreate: () => new Date() })

@@ -26,6 +26,8 @@ const noticeMessage = () =>
   });
 
 let threads: Array<Record<string, unknown>> = [];
+/** The messages `getmessagethread` reads, by thread. */
+let messages: Array<{ threadid: number }> = [];
 let users: Array<Record<string, unknown>> = [];
 let written: unknown[] = [];
 
@@ -36,8 +38,12 @@ const em = {
       const ids = (where.userid as { $in: number[] }).$in;
       return users.filter((user) => ids.includes(user.userid as number));
     }
+    if (entity.name === "Message" && typeof where.threadid === "number") {
+      return messages.filter((message) => message.threadid === where.threadid);
+    }
     return [];
   },
+  populate: async () => {},
   findOne: async (entity: { name: string }, where: Record<string, unknown>) => {
     if (entity.name === "Thread") return threads.find((thread) => thread.threadid === where.threadid) ?? null;
     if (entity.name === "User") return users.find((user) => user.userid === where.userid) ?? null;
@@ -59,6 +65,7 @@ mock.module("../../server.js", () => ({ postgres: { em } }));
 const { Message } = await import("../../database/models/message.model.js");
 const { getMessageTargets } = await import("./getMessageTargets.js");
 const { getMessageThreads } = await import("./getMessageThreads.js");
+const { getMessageThread } = await import("./getMessageThread.js");
 const { reportMessageThread } = await import("./reportMessageThread.js");
 const { sendMessage } = await import("./sendMessage.js");
 
@@ -74,6 +81,7 @@ beforeEach(() => {
     { threadid: PLAYER_THREAD, userid: OTHER, targetid: OWNER, messagecount: 1, lastMessage: null },
   ];
   users = [{ userid: OTHER, username: "Bramble", last_name: "", pic_square: null, blockedUsers: [] }];
+  messages = [];
 });
 
 describe("the game's notices in the mail routes", () => {
@@ -143,5 +151,51 @@ describe("the game's notices in the mail routes", () => {
     const user = owner();
     await reportMessageThread(ctxFor(user, { threadid: String(PLAYER_THREAD), reason: "spam" }));
     expect(user.blockedUsers).toEqual([OTHER]);
+  });
+});
+
+/**
+ * The "attacked your yard" notice's defence replay (#361,
+ * `docs/design/defence-replays.md` §8): the mail API returns its `replayid`
+ * for the notice's Watch button, and null on every other message.
+ */
+describe("a yard notice's defence replay", () => {
+  const yardNotice = (replayid: number | null) =>
+    Object.assign(new Message(), {
+      threadid: SYSTEM_THREAD,
+      userid: 0,
+      targetid: OWNER,
+      messagetype: "yardattacked",
+      userUnread: 0,
+      targetUnread: 0,
+      subject: "Bramble attacked your yard",
+      message: "It was left 47% damaged, and nothing was looted.",
+      baseid: "70001",
+      updatetime: 100,
+      replayid,
+    });
+
+  test("getmessagethreads lists the notice with its replay id", async () => {
+    threads[0]!.lastMessage = yardNotice(9001);
+    const ctx = ctxFor(owner());
+    await getMessageThreads(ctx);
+    const listed = (ctx.body as { threads: Record<number, Record<string, unknown>> }).threads[SYSTEM_THREAD];
+    expect(listed).toMatchObject({ messagetype: "yardattacked", replayid: 9001 });
+  });
+
+  test("getmessagethread reads the notice with its replay id", async () => {
+    messages = [yardNotice(9001)];
+    const ctx = ctxFor({ ...owner(), save: { unreadmessages: 0 } }, { threadid: String(SYSTEM_THREAD) });
+    await getMessageThread(ctx);
+    const thread = (ctx.body as { thread: Record<string, Record<string, unknown>> }).thread;
+    expect(Object.values(thread)).toEqual([expect.objectContaining({ messagetype: "yardattacked", replayid: 9001 })]);
+  });
+
+  test("a notice without a replay, and any other message, says null", async () => {
+    messages = [yardNotice(null), noticeMessage()];
+    const ctx = ctxFor({ ...owner(), save: { unreadmessages: 0 } }, { threadid: String(SYSTEM_THREAD) });
+    await getMessageThread(ctx);
+    const thread = (ctx.body as { thread: Record<string, Record<string, unknown>> }).thread;
+    expect(Object.values(thread).map((message) => message.replayid)).toEqual([null, null]);
   });
 });

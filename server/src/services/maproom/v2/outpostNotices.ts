@@ -268,10 +268,11 @@ export const noticeOutpostAttack = async (
 };
 
 /**
- * At the end of an attack on a Map Room 1 main yard, live or finished by the
- * server: tells its owner who attacked it, the damage it was left at, what was
- * looted and the housed monsters lost (bot neighbours §4.8, #241). Sent for
- * every such defence, so no notice tells one kind of attacker from another.
+ * At the end of an attack on a Map Room 1 or 2 main yard, live or finished by
+ * the server: tells its owner who attacked it, the damage it was left at, what
+ * was looted and the housed monsters lost (bot neighbours §4.8, #241; Map Room
+ * 2 by #361). Sent for every such defence, so no notice tells one kind of
+ * attacker from another. Like Map Room 1's, a Map Room 2 notice has no cell.
  */
 export const noticeYardAttack = async (
   em: EntityManager,

@@ -7,8 +7,14 @@ import { afterYardDefended, type YardDefence } from "./afterYardDefended.js";
 /**
  * The after-defence hook (issue #241, `docs/design/bot-neighbours.md` §4.5,
  * §4.8): every Map Room 1 main-yard defence tells a real defender, whoever
- * attacked, and an attacked bot books its jobs instead. Driven over an
- * in-memory stand-in for the mail tables, `bym.bot` and `bym.bot_job`.
+ * attacked, and an attacked bot books its jobs instead. A Map Room 2 main yard
+ * (#361, `docs/design/defence-replays.md` §8) tells its defender the same, and
+ * books no bot job. Driven over an in-memory stand-in for the mail tables,
+ * `bym.bot` and `bym.bot_job`.
+ *
+ * Map Room 2 cases use saves really on Map Room 2 (`mapversion` 2): the
+ * `db:seed:mr2` dev players' saves stay on `mapversion` 1, so they are Map Room
+ * 1 yards to this hook (the seeded cases below).
  */
 
 type Row = Record<string, unknown>;
@@ -118,10 +124,72 @@ describe("a real defender", () => {
   });
 });
 
-describe("nothing outside a Map Room 1 main yard", () => {
-  test("not an outpost, not a Map Room 2 or 3 yard, not an Inferno yard", async () => {
+describe("a Map Room 2 main yard (#361)", () => {
+  const mr2 = (overrides: YardOverrides = {}): YardDefence =>
+    defence({ ...overrides, yard: { mapversion: 2, ...overrides.yard } });
+
+  test("tells its real defender in the very words a Map Room 1 player gets, with the replay", async () => {
+    await afterYardDefended(request, defence());
+    const onMr1 = messages[0]!;
+    threads = [];
+    messages = [];
+
+    await afterYardDefended(request, mr2({ replayId: 9001 }));
+
+    expect(messages).toEqual([{ ...onMr1, replayid: 9001 }]);
+    expect(messages[0]).toMatchObject({
+      targetid: PLAYER,
+      messagetype: YARD_ATTACKED,
+      subject: "Bramble attacked your yard",
+      message: "It was left 47% damaged, and 1,234 Twigs and 500 Goo were looted.",
+      coords: null,
+      targetUnread: 1,
+    });
+    expect(jobs).toEqual([]);
+  });
+
+  test("with no replay recorded, the notice has none", async () => {
+    await afterYardDefended(request, mr2({ replayId: null }));
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).not.toHaveProperty("replayid");
+  });
+
+  test("is the very same notice when a bot attacked", async () => {
+    await afterYardDefended(request, mr2({ replayId: 5 }));
+    const fromPlayer = messages[0];
+    threads = [];
+    messages = [];
+    await afterYardDefended(request, mr2({ replayId: 5, attacker: { userid: BOT, username: "Bramble" } }));
+    expect(messages[0]).toEqual(fromPlayer);
+    expect(jobs).toEqual([]);
+  });
+
+  test("a bot's yard there is told nothing and books nothing", async () => {
+    const before = process.env.BOTS_REVENGE;
+    const roll = spyOn(Math, "random").mockReturnValue(0);
+    try {
+      process.env.BOTS_REVENGE = "on";
+      await afterYardDefended(request, mr2({ yard: { saveuserid: BOT } }));
+    } finally {
+      roll.mockRestore();
+      if (before === undefined) delete process.env.BOTS_REVENGE;
+      else process.env.BOTS_REVENGE = before;
+    }
+    expect(messages).toEqual([]);
+    expect(jobs).toEqual([]);
+  });
+
+  test("not an outpost, and not the owner attacking their own yard", async () => {
+    await afterYardDefended(request, mr2({ yard: { type: "outpost" } }));
+    await afterYardDefended(request, mr2({ attacker: { userid: PLAYER, username: "Me" } }));
+    expect(messages).toEqual([]);
+    expect(jobs).toEqual([]);
+  });
+});
+
+describe("nothing outside a Map Room 1 or 2 main yard", () => {
+  test("not an outpost, not a Map Room 3 yard, not an Inferno yard", async () => {
     await afterYardDefended(request, defence({ yard: { type: "outpost" } }));
-    await afterYardDefended(request, defence({ yard: { mapversion: 2 } }));
     await afterYardDefended(request, defence({ yard: { mapversion: 3 } }));
     await afterYardDefended(request, defence({ yard: { type: "inferno" } }));
     await afterYardDefended(request, defence({ yard: { saveuserid: BOT, mapversion: 2 } }));
@@ -217,6 +285,14 @@ describe("a seeded Map Room 2 dev player (issue #233)", () => {
     );
     expect(jobs).toEqual([expect.objectContaining({ params: [SEEDED, expect.any(Date)] })]);
     expect(String(jobs[0]!.sql)).toContain("'repair'");
+    expect(messages).toEqual([expect.objectContaining({ targetid: SEEDED, messagetype: YARD_ATTACKED })]);
+  });
+
+  test("on a save really on Map Room 2, is told and books nothing (#361)", async () => {
+    await withEnv({ ENV: "local", BOTS_REVENGE: "on" }, () =>
+      afterYardDefended(request, defence({ yard: { saveuserid: SEEDED, mapversion: 2 } }))
+    );
+    expect(jobs).toEqual([]);
     expect(messages).toEqual([expect.objectContaining({ targetid: SEEDED, messagetype: YARD_ATTACKED })]);
   });
 
