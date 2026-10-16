@@ -70,6 +70,11 @@ export const buildSaveData = (save: Save, user: User, ownerSave: OwnerSave | nul
 
   if (ownerSave) filteredSave.resources = ownerSave.resources;
 
+  // The wild monster raid schedule is the owner's alone (#302): only their own
+  // yard loads fill it, so a bot, which never loads its yard, would show an
+  // empty one where a real player shows theirs (#245).
+  if (!isOwner) filteredSave.aiattacks = {};
+
   const shinyLocked = isShinyLocked(user);
   
   if (shinyLocked) filteredSave.credits = 0;

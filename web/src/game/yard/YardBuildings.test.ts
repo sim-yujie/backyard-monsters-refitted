@@ -8,7 +8,7 @@ import type { YardArtAtlas } from "./yardAtlas";
 import { HIGHLIGHT_MATRIX, YardBuildings } from "./YardBuildings";
 import { readWork } from "./buildingWork";
 import { rowOf } from "./buildingCosts";
-import { readYard } from "./yardModel";
+import { artFor, readYard } from "./yardModel";
 
 /**
  * The frame setter a battle turns a tower's gun with (issue #67), and the
@@ -144,20 +144,42 @@ describe("YardBuildings.crownOf", () => {
   it("is the top of the building's picture, not its countdown badge, and moves with it (#139, #230)", () => {
     const yard = upgradingYard();
     const sniper = yard.buildings.find((one) => one.id === 2)!;
+    const art = artFor(sniper)!;
+    const artTop = Math.min(
+      sniper.worldY + art.top.y,
+      ...art.anims.map((anim) => sniper.worldY + anim.y),
+    );
 
     const buildings = new YardBuildings();
     buildings.show(yard, fakeAtlas());
-    // The placeholder fills the footprint box. The badge stands above it, a
-    // fixed height over the footprint whatever the art does, so counting it
-    // lifted the bar far above a low building.
+    // The badge stands a fixed height over the footprint whatever the art
+    // does, so counting it lifted the bar far above a low building.
     const badge = badgeOf(buildings);
     expect(badge.y - badge.height).toBeLessThan(sniper.box.y);
     const crown = buildings.crownOf(2)!;
-    expect(crown).toBe(sniper.box.y);
+    expect(crown).toBe(artTop);
 
     buildings.offsetBuilding(2, 0, -50);
     expect(buildings.crownOf(2)).toBe(crown - 50);
     expect(buildings.crownOf(99)).toBeNull();
+    buildings.destroy();
+  });
+
+  it("is where the picture will stand before it arrives, so a redraw does not move a bar (#139)", () => {
+    const yard = upgradingYard();
+    const sniper = yard.buildings.find((one) => one.id === 2)!;
+
+    const buildings = new YardBuildings();
+    buildings.show(yard, fakeAtlas());
+    // No art is fetched here: every building is still its placeholder, which
+    // fills the footprint box well below where the tower's picture rises.
+    expect(buildings.placeholderCount).toBe(2);
+    const crown = buildings.crownOf(2)!;
+    expect(crown).toBeLessThan(sniper.box.y);
+
+    // Every store change redraws the yard from placeholders again.
+    buildings.show(yard, fakeAtlas());
+    expect(buildings.crownOf(2)).toBe(crown);
     buildings.destroy();
   });
 });

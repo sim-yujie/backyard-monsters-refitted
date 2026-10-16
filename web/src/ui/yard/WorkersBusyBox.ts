@@ -102,7 +102,6 @@ export const openWorkersBusyBox = (binding: YardUiBinding, onFreed?: () => void)
   if (model.buyWorker) {
     const button = new ShinyButton({
       label: "Buy a worker",
-      what: "an extra worker",
       spell: formatAmount,
       onSpend: () => void run(() => store.buy(WORKER_ITEM)),
     });
@@ -123,7 +122,6 @@ export const openWorkersBusyBox = (binding: YardUiBinding, onFreed?: () => void)
     } else {
       const button = new ShinyButton({
         label: "Finish soonest job",
-        what: "the soonest job",
         spell: formatAmount,
         onSpend: () => void run(() => store.speedUp(buildingId, item)),
       });

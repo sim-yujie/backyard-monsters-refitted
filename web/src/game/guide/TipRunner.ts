@@ -39,7 +39,8 @@ import { GUIDED_SCREENS, targetsOf, tipsFor, tipWording, type Tip, type TipTarge
  * open together (a damaged building's panel is also its repair screen) take
  * turns. A new scene drops everything (the overlay is cleared under it). The
  * tips hide while something blocks them (the Yard Planner) and come back
- * after.
+ * after. Skip tips (Close on a replay) drops everything too, so the bubble
+ * goes rather than coming straight back with the next screen's tips (#356).
  *
  * ## "?"
  *
@@ -437,7 +438,7 @@ export class TipRunner {
       ...(tip.side && { side: tip.side }),
       ...(count > 1 && { dots: { index: sequence.index, count } }),
       actions: [{ label: last ? "Got it" : "Next", primary: true, onClick: () => this.advance() }],
-      skip: { label: sequence.replay ? "Close" : "Skip tips", onClick: () => this.finish() },
+      skip: { label: sequence.replay ? "Close" : "Skip tips", onClick: () => this.skip() },
       // A control scrolled out of its panel (the Shop's Protection) is brought into view.
       onTargetFound: (rect) => {
         if (!found || !offScreen(rect)) return;
@@ -456,7 +457,16 @@ export class TipRunner {
     else this.display();
   }
 
-  /** The current screen is done (finished, skipped or left): marks it seen and moves on. */
+  /**
+   * Skip tips: the bubble goes, and so does whatever waited behind it (the
+   * rest of its batch, the screens it paused). What showed counts as seen; a
+   * screen whose tips never showed gets them the next time it opens.
+   */
+  private skip(): void {
+    this.stopAll(true);
+  }
+
+  /** The current screen is done (finished or left): marks it seen and moves on. */
   private finish(): void {
     const sequence = this.current;
     this.current = null;

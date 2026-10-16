@@ -39,6 +39,7 @@ import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./mon
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
 import { BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
 import { TrapReveal } from "./trapReveal";
+import { WALK_OFF_PAUSE_TICKS, WALK_OFF_TICKS, planWalkOff, walkOffAt, type WalkOff } from "./walkOff";
 import {
   anchorOffset,
   attackRow,
@@ -569,6 +570,12 @@ interface CreepView {
 
 type DeathEvent = Extract<BattleVisualEvent, { kind: "death" }>;
 
+/** A creep the engine let go of alive, walking off the field on screen. */
+interface Leaver {
+  readonly view: CreepView;
+  readonly plan: WalkOff;
+}
+
 /** A trap going off: a ring that grows and fades over a scorch that stays. */
 interface Burst {
   readonly tick: number;
@@ -594,6 +601,9 @@ interface Gib {
 
 /** A creep with no sheet, or whose sheet has not arrived: a marker this big. */
 const MARKER_SIZE = 8;
+
+/** A flyer's shadow, at rest. */
+const SHADOW_ALPHA = 0.8;
 
 const SPLAT_COLOUR = 0x5da832;
 /** `G4QuakeGraphic`'s line colour, 15893760 (`champions/Korath.as:233`). */
@@ -660,6 +670,16 @@ export class AttackBattleLayer {
 
   private readonly views = new Map<number, CreepView>();
   private readonly pool: CreepView[] = [];
+  /** Creeps walking off the field: out of `views`, not yet back in `pool`. */
+  private readonly leavers = new Map<number, Leaver>();
+  /** Every creep that has walked off or is walking, so the frozen field never redraws it. */
+  private readonly departed = new Set<number>();
+  /** Creeps the engine reported dead: they splat rather than walk off. */
+  private readonly died = new Set<number>();
+  /** The shown tick the last walk-off ends on, plus the pause before the end panel. */
+  private walkOffUntil = Number.NEGATIVE_INFINITY;
+  /** Whether the attackers left standing at the end have been sent walking. */
+  private endWalked = false;
   private readonly splats: Splat[] = [];
   private readonly gibPool: Sprite[] = [];
   private readonly damageApplied = new Map<number, number>();
@@ -831,6 +851,8 @@ export class AttackBattleLayer {
       this.towerFx.update(tick, (id) => this.views.get(id)?.snapshot ?? undefined);
       this.showReleased(this.ledger.expire(tick), tick);
       this.paintCreeps(tick);
+      if (this.session.ended && !this.endWalked) this.walkOffAtEnd(shown);
+      this.walkOff(shown);
     }
     // Once put to rest, what is left — splats, trap rings — fades out on the wall clock.
     this.drawSplats(this.settled ? shown : tick);
@@ -889,6 +911,8 @@ export class AttackBattleLayer {
     this.settled = true;
     for (const view of this.views.values()) this.release(view);
     this.views.clear();
+    for (const leaver of this.leavers.values()) this.release(leaver.view);
+    this.leavers.clear();
     this.ledger.clear();
     this.heldBuildingHp.clear();
     this.towerFx.standDown();
@@ -912,7 +936,31 @@ export class AttackBattleLayer {
     for (let index = this.eventsSeen; index < events.length; index += 1) {
       if (events[index]?.kind === "bomb") return true;
     }
-    return false;
+    return this.walkingOff();
+  }
+
+  /**
+   * Whether the monsters of an ended attack are still walking off, or in the
+   * short pause after them: the end panel waits for it. The wait is one
+   * walk-off long however many walk, since they all set off together; a
+   * Retreat the player chose does not wait at all, the walk plays behind the
+   * panel. Asked before the frame that sends them walking, it answers for
+   * the attackers still standing.
+   */
+  private walkingOff(): boolean {
+    const reason = this.session.endedBy;
+    if (this.settled || reason === null || reason === "retreat" || reason === "left") return false;
+    const battle = this.session.battle();
+    if (!battle) return false;
+    if (!this.endWalked) {
+      for (const view of this.views.values()) if (this.walksOffAtEnd(view)) return true;
+    }
+    return this.shownTick(battle.tick) < this.walkOffUntil;
+  }
+
+  /** How many creeps are walking off right now. */
+  get walkingOffCount(): number {
+    return this.leavers.size;
   }
 
   /**
@@ -934,9 +982,9 @@ export class AttackBattleLayer {
     return this.session.damageFor(this.shownHealth(state.health), state.firedTraps);
   }
 
-  /** How many creeps have a sprite right now. */
+  /** How many creeps have a sprite right now, walkers included. */
   get creepCount(): number {
-    return this.views.size;
+    return this.views.size + this.leavers.size;
   }
 
   /** The projectiles, smoke and damage numbers, for a test or the dev hook to read. */
@@ -977,7 +1025,9 @@ export class AttackBattleLayer {
     this.effects.onRender = null;
 
     for (const view of [...this.views.values(), ...this.pool]) this.dispose(view);
+    for (const leaver of this.leavers.values()) this.dispose(leaver.view);
     this.views.clear();
+    this.leavers.clear();
     this.pool.length = 0;
 
     for (const splat of this.splats) {
@@ -1066,6 +1116,8 @@ export class AttackBattleLayer {
   private syncCreeps(creeps: readonly CreepSnapshot[], tick: number): Set<number> {
     const seen = new Set<number>();
     for (const creep of creeps) {
+      // An ended battle still lists the attackers it froze; theirs walk off.
+      if (this.departed.has(creep.id)) continue;
       seen.add(creep.id);
       let view = this.views.get(creep.id);
       if (!view) {
@@ -1079,8 +1131,9 @@ export class AttackBattleLayer {
 
   /**
    * The views of creeps the engine no longer has: kept standing where they
-   * were last seen while a bullet is still on its way to them (#77), let go
-   * otherwise.
+   * were last seen while a bullet is still on its way to them (#77). An
+   * attacker that left alive (nothing left to attack, or its champion
+   * called back) walks off; the rest are let go.
    */
   private settleGone(seen: ReadonlySet<number>, tick: number): void {
     if (seen.size === this.views.size) return;
@@ -1091,7 +1144,84 @@ export class AttackBattleLayer {
         continue;
       }
       this.views.delete(id);
+      const creep = view.snapshot;
+      if (creep && !creep.friendly && creep.hp > 0 && !this.died.has(id)) {
+        this.startWalkOff(view, creep, this.shownTick(tick));
+        continue;
+      }
+      this.died.delete(id);
       this.release(view);
+    }
+  }
+
+  /* ── Walking off ────────────────────────────────────────────────────── */
+
+  /** Whether a creep still standing when the attack ends walks off: any living attacker. */
+  private walksOffAtEnd(view: CreepView): boolean {
+    const creep = view.snapshot;
+    return creep !== null && !creep.friendly && creep.hp > 0 && !this.ledger.holdsDeath(view.id);
+  }
+
+  /**
+   * Sends the attackers the ended battle froze walking off, rather than
+   * leaving them standing under the end panel. Nothing walks for a player
+   * leaving the screen, which tears the layer down anyway.
+   */
+  private walkOffAtEnd(shown: number): void {
+    this.endWalked = true;
+    if (this.session.endedBy === "left") return;
+    for (const [id, view] of this.views) {
+      if (!this.walksOffAtEnd(view) || !view.snapshot) continue;
+      this.views.delete(id);
+      this.startWalkOff(view, view.snapshot, shown);
+    }
+  }
+
+  private startWalkOff(view: CreepView, creep: CreepSnapshot, shown: number): void {
+    const bounds = this.yard.bounds;
+    const plan = planWalkOff(
+      creep.ix,
+      creep.iy,
+      creep.flying,
+      shown,
+      bounds.yardWidth / 2,
+      bounds.yardHeight / 2,
+    );
+    this.departed.add(view.id);
+    this.leavers.set(view.id, { view, plan });
+    this.walkOffUntil = Math.max(this.walkOffUntil, shown + WALK_OFF_TICKS + WALK_OFF_PAUSE_TICKS);
+    // Whatever it was doing, it is only walking now: no hurt tint, no venom.
+    view.body.tint = view.baseTint;
+    view.venom.visible = false;
+  }
+
+  /** Moves and fades every walker; one that is done goes back to the pool. */
+  private walkOff(shown: number): void {
+    for (const [id, { view, plan }] of this.leavers) {
+      const frame = walkOffAt(plan, shown, this.reducedMotion);
+      if (frame.done || !view.snapshot) {
+        this.leavers.delete(id);
+        this.release(view);
+        continue;
+      }
+      const walking: CreepSnapshot = {
+        ...view.snapshot,
+        ix: frame.ix,
+        iy: frame.iy,
+        state: "walking",
+        targetBuilding: -1,
+        targetCreep: -1,
+      };
+      this.place(view, walking, shown);
+      if (frame.climb > 0) {
+        view.body.y = Math.round(view.body.y - frame.climb);
+        view.barBack.y = Math.round(view.barBack.y - frame.climb);
+        view.barFront.y = view.barBack.y;
+      }
+      view.body.alpha = frame.alpha;
+      view.barBack.alpha = frame.alpha;
+      view.barFront.alpha = frame.alpha;
+      if (view.shadow) view.shadow.alpha = SHADOW_ALPHA * frame.alpha;
     }
   }
 
@@ -1224,7 +1354,13 @@ export class AttackBattleLayer {
     view.barBack.visible = false;
     view.barFront.visible = false;
     view.venom.visible = false;
-    if (view.shadow) view.shadow.visible = false;
+    // A walker leaves faded; the next creep to use the view starts whole.
+    view.barBack.alpha = 1;
+    view.barFront.alpha = 1;
+    if (view.shadow) {
+      view.shadow.visible = false;
+      view.shadow.alpha = SHADOW_ALPHA;
+    }
     view.id = -1;
     view.snapshot = null;
     this.pool.push(view);
@@ -1364,7 +1500,7 @@ export class AttackBattleLayer {
     if (!shadow) {
       shadow = new Sprite(cell);
       shadow.eventMode = "none";
-      shadow.alpha = 0.8;
+      shadow.alpha = SHADOW_ALPHA;
       this.shadows.addChild(shadow);
       view.shadow = shadow;
     } else if (shadow.texture !== cell) {
@@ -1694,6 +1830,7 @@ export class AttackBattleLayer {
       return;
     }
     if (event.kind !== "death") return;
+    this.died.add(event.creepId);
     // A death a held bullet dealt waits for it to land; the rest splat now.
     if (this.ledger.death(event)) return;
     const at = groundWorld(event.ix, event.iy, this.origin);
