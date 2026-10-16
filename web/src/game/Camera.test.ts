@@ -72,3 +72,31 @@ describe("Camera.setMinZoom", () => {
     expect(camera.zoom).toBe(0.1);
   });
 });
+
+/** A building just put down opens its panel without the yard jumping under it. */
+describe("Camera.reveal", () => {
+  const camera = (): Camera => {
+    const one = new Camera({ minZoom: 0.05, maxZoom: 2, zoom: 0.5 });
+    one.resize(800, 600);
+    one.setBounds({ width: 10_000, height: 10_000 });
+    one.setPosition(1_000, 1_000);
+    one.dirty = false;
+    return one;
+  };
+
+  it("does not move for a point already inside the margin", () => {
+    const one = camera();
+    // Screen (500, 220) at zoom 0.5: a little right of and above the middle.
+    one.reveal({ x: 2_000, y: 1_440 }, 96);
+    expect(one.position).toEqual({ x: 1_000, y: 1_000 });
+    expect(one.dirty).toBe(false);
+  });
+
+  it("pans just far enough to bring a point past an edge back inside the margin", () => {
+    const one = camera();
+    // Screen (790, -40): past the right margin by 86 px and the top one by 136.
+    one.reveal({ x: 2_580, y: 920 }, 96);
+    expect(one.worldToScreen({ x: 2_580, y: 920 })).toEqual({ x: 704, y: 96 });
+    expect(one.dirty).toBe(true);
+  });
+});
