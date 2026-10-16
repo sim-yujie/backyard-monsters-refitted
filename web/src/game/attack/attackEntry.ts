@@ -82,19 +82,31 @@ export interface OwnCell {
   readonly cell: PlayerCell;
 }
 
-/** Every cell marked `mine` across the loaded zones. */
-export const ownCellsIn = (zones: Iterable<{ data: AreaCellGrid }>): OwnCell[] => {
-  const own: OwnCell[] = [];
+/**
+ * Every cell marked `mine` across the loaded zones, once each.
+ *
+ * Neighbouring zones overlap by one row and one column (`zones.ts`), so a
+ * cell on a zone edge arrives in two zones, four at a corner. Counted per
+ * copy, a yard there flung its housing twice over: the attack screen offered
+ * monsters the server never housed, and the save was refused because the
+ * server's replay flings only what was housed (`fightableLog`). The copy from
+ * the zone fetched last is the one read, mine or not.
+ */
+export const ownCellsIn = (zones: Iterable<{ data: AreaCellGrid; fetchedAt?: number }>): OwnCell[] => {
+  const latest = new Map<string, { fetchedAt: number; own: OwnCell | null }>();
   for (const zone of zones) {
+    const fetchedAt = zone.fetchedAt ?? 0;
     for (const [x, column] of Object.entries(zone.data)) {
       for (const [y, cell] of Object.entries(column)) {
-        if (isPlayerCell(cell) && cell.mine === 1) {
-          own.push({ col: Number(x), row: Number(y), cell });
-        }
+        const key = `${x},${y}`;
+        const seen = latest.get(key);
+        if (seen && seen.fetchedAt > fetchedAt) continue;
+        const own = isPlayerCell(cell) && cell.mine === 1 ? { col: Number(x), row: Number(y), cell } : null;
+        latest.set(key, { fetchedAt, own });
       }
     }
   }
-  return own;
+  return [...latest.values()].flatMap(({ own }) => (own ? [own] : []));
 };
 
 /**
