@@ -237,7 +237,7 @@ export class YardRenderer {
       this.buildings.draw(visible, deltaSeconds, this.work?.now() ?? 0);
       this.life.update(visible, deltaSeconds);
       this.jobBars.update();
-      // A handful of badges, and art arriving moves a crown: cheap to place every frame.
+      // A handful of badges: cheap to place every frame.
       if (this.hatchMarks.current) this.hatchMarks.reposition();
       this.shakeMushrooms();
       this.popMushrooms(deltaSeconds);

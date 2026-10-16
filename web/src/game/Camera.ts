@@ -166,6 +166,23 @@ export class Camera {
     );
   }
 
+  /**
+   * Pans the least distance that brings a world point `margin` screen pixels
+   * inside the viewport, and not at all when it is already there.
+   */
+  reveal(world: Point, margin = 0): void {
+    const screen = this.worldToScreen(world);
+    const past = (at: number, size: number): number => {
+      const low = Math.min(margin, size / 2);
+      const high = size - low;
+      return at < low ? at - low : at > high ? at - high : 0;
+    };
+    const dx = past(screen.x, this.viewportWidth);
+    const dy = past(screen.y, this.viewportHeight);
+    if (dx === 0 && dy === 0) return;
+    this.setPosition(this.position.x + dx / this.zoom, this.position.y + dy / this.zoom);
+  }
+
   /** Sets the zoom while keeping the world point under `anchor` in place. */
   zoomAt(nextZoom: number, anchor: Point): void {
     const clamped = clamp(nextZoom, this.minZoom, this.maxZoom);
