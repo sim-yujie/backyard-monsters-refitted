@@ -21,8 +21,13 @@
  * 2. Deletes a copy whose source is gone, so a renamed file cannot leave a
  *    stale one behind for the server to import. The server's own
  *    `sync.test.ts` is not a copy and is never touched.
- * 3. Writes `MANIFEST.json` — file name to SHA-256, plus the count — into both
- *    directories.
+ * 3. Writes `MANIFEST.json` — file name to SHA-256, the count and a `version` —
+ *    into both directories. `version` is the first 16 hex of a SHA-256 over the
+ *    file names and hashes (`versionOf`), so any edit to any member gives a new
+ *    one. A defence replay is stamped with the combat module's version and
+ *    hidden once it no longer matches (`docs/design/defence-replays.md` §4);
+ *    the web bundle and the server read the same string from their own
+ *    manifest, with no hashing at run time.
  *
  * `sync.test.ts` in each tree re-hashes what it holds and compares it to the
  * manifest, so a forgotten sync fails both test suites rather than shipping two
@@ -90,10 +95,19 @@ const copies = (target) => {
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
-/** `{ files: { name: sha }, count }`, the shape both `sync.test.ts` files read. */
+/**
+ * The module's version: the first 16 hex of a SHA-256 over one
+ * `<name>:<sha256>` line per member, in name order. The combat rules'
+ * `sync.test.ts` files recompute it the same way.
+ */
+const versionOf = (files) =>
+  sha256(files.map(({ name, hash }) => `${name}:${hash}\n`).join("")).slice(0, 16);
+
+/** `{ files: { name: sha }, count, version }`, the shape both `sync.test.ts` files read. */
 const manifestOf = (files) => ({
   files: Object.fromEntries(files.map(({ name, hash }) => [name, hash])),
   count: files.length,
+  version: versionOf(files),
 });
 
 /** Syncs or checks one module; returns its problems in `--check` mode. */

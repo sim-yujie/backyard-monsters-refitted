@@ -1,5 +1,5 @@
 import { Entity, Index, PrimaryKey, Property } from "@mikro-orm/decorators/es";
-import type { Opt } from "@mikro-orm/core";
+import { BigIntType, type Opt } from "@mikro-orm/core";
 import { FrontendKey } from "../../utils/FrontendKey.js";
 import { v4 } from "uuid";
 
@@ -94,6 +94,14 @@ export class Message {
   @Property({ type: 'string', nullable: true })
   @FrontendKey
   baseid: string | null = null;
+
+  /**
+   * An "attacked your yard" notice's defence replay (`defence_replay.id`,
+   * `docs/design/defence-replays.md` §8), for its Watch button; null on every
+   * other message, and once the replay is pruned.
+   */
+  @Property({ type: new BigIntType("number"), nullable: true })
+  replayid: number | null = null;
 
   @Property({ type: Date, onCreate: () => new Date() })
   createdAt: Opt<Date> = new Date();
