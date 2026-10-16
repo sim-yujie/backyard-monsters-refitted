@@ -94,6 +94,20 @@ describe("threadItems", () => {
     expect(item).toMatchObject({ notice: true, label: null, type: "yardattacked", cell: null });
   });
 
+  it("carries a Map Room 2 defence notice's replay id, and none on anything else (#363)", () => {
+    const items = threadItems(
+      [
+        message({ userid: 0, messagetype: YARD_ATTACKED, message: "attacked", replayid: 41 }),
+        message({ userid: 0, messagetype: YARD_ATTACKED, message: "attacked", replayid: null }),
+        message({ userid: 0, messagetype: "outpostattacked", message: "attacked", replayid: 41 }),
+        message({ userid: 77, messagetype: YARD_ATTACKED, message: "forged", replayid: 41 }),
+        message({ userid: 0, messagetype: YARD_ATTACKED, message: "bad", replayid: -3 }),
+      ],
+      2505,
+    );
+    expect(items.map((one) => one.defenceId)).toEqual([41, null, null, null, null]);
+  });
+
   it("gives a notice without whole coordinates no cell", () => {
     expect(noticeCell({ coords: null })).toBeNull();
     expect(noticeCell({ coords: [1.5, 2] })).toBeNull();

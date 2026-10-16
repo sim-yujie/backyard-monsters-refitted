@@ -18,6 +18,8 @@ import {
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { getAutoAttackPlan, type AutoAttackPlanResponse } from "@/api/autoAttack";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
+import { openDefence } from "@/game/defences/openDefence";
+import { setYardIntent } from "@/game/yard/yardIntent";
 import { AutoAttackFlow } from "@/ui/attack/AutoAttackFlow";
 import { ApiError, NetworkError } from "@/api/http";
 import {
@@ -370,6 +372,18 @@ export class MapRoom2Scene implements Scene {
       // An invitation sent or withdrawn: the outpost's pending mark comes with fresh zones (#205).
       onInviteChanged: () => this.store.refreshVisible(),
       onInviteAccepted: (coords) => this.movedByInvite(coords),
+      // An attack notice's Watch plays its replay; its Defences opens the list, in the yard (#363).
+      onWatchDefence: async (id) => {
+        const opening = await openDefence(id);
+        if ("refusal" in opening) return opening.refusal;
+        setWatchRun(opening.run);
+        this.context?.goTo(SceneName.WATCH);
+        return null;
+      },
+      onOpenDefences: () => {
+        setYardIntent({ kind: "defences" });
+        this.context?.goTo(SceneName.YARD);
+      },
     });
     this.ui.placeTool(this.mail.button.element);
 

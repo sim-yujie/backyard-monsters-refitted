@@ -521,8 +521,15 @@ export class AttackScene implements Scene {
           }
         : {}),
       ...(this.watchRun ? { watch: this.watchRun } : {}),
-      // A defence replay goes back to the yard it was fought on (#362).
-      ...(isDefenceWatch(this.watchRun) ? { goToYard: () => context.goTo(SceneName.YARD) } : {}),
+      // A defence replay goes back to the yard it was fought on, on the Defences screen (#362, #363).
+      ...(isDefenceWatch(this.watchRun)
+        ? {
+            goToYard: () => {
+              setYardIntent({ kind: "defences" });
+              context.goTo(SceneName.YARD);
+            },
+          }
+        : {}),
       ...(this.raidRun ? { raid: this.raidRun, goToYard: () => context.goTo(SceneName.YARD) } : {}),
       openWatch: (run: WatchRun) => {
         setWatchRun(run);

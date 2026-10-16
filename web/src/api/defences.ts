@@ -69,3 +69,25 @@ export interface DefenceReplayResponse extends ApiEnvelope {
  */
 export const getDefenceReplay = (id: number): Promise<DefenceReplayResponse> =>
   get<DefenceReplayResponse>(`/api/:apiVersion/defences/${encodeURIComponent(String(id))}/replay`);
+
+interface DefencesListResponse extends ApiEnvelope {
+  readonly defences?: Defence[];
+}
+
+/**
+ * `GET /api/:apiVersion/defences`: the player's newest 20 defences, newest
+ * landing first, without their battles. Empty for a Map Room 1 player.
+ */
+export const listDefences = async (): Promise<Defence[]> =>
+  (await get<DefencesListResponse>("/api/:apiVersion/defences")).defences ?? [];
+
+/** The defence routes, so a test can swap them. */
+export interface DefencesApi {
+  list(): Promise<Defence[]>;
+  replay(id: number): Promise<DefenceReplayResponse>;
+}
+
+export const defencesApi: DefencesApi = {
+  list: listDefences,
+  replay: getDefenceReplay,
+};

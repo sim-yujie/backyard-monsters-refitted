@@ -166,6 +166,63 @@ describe("the mailbox screen", () => {
     expect(host.querySelector(".mail-message__map")).toBeNull();
   });
 
+  describe("a Map Room 2 yard's defence notice (#363)", () => {
+    const defended = message({
+      threadid: 4,
+      userid: 0,
+      messagetype: "yardattacked",
+      subject: "Kai_Builds attacked your yard",
+      message: "It was left 63% damaged, and 1,234 Twigs were looted.",
+      unread: 1,
+      updatetime: NOW - 30,
+      replayid: 41,
+    });
+    const openNotice = async (overrides: Partial<MailboxScreenOptions>, notice: MailMessage = defended) => {
+      const api = fakeApi([[notice]], { 4: [notice] });
+      const opened = await openScreen(api, overrides);
+      click(rows(opened.host)[0]);
+      await settle();
+      return opened;
+    };
+
+    it("offers Watch, which plays its own defence, and Defences, which opens the list", async () => {
+      const onWatchDefence = vi.fn(async () => null);
+      const onOpenDefences = vi.fn();
+      const { host } = await openNotice({ onWatchDefence, onOpenDefences });
+
+      const watch = host.querySelector<HTMLButtonElement>(".mail-message__watch");
+      expect(watch?.textContent).toBe("Watch");
+      click(watch);
+      expect(onWatchDefence).toHaveBeenCalledWith(41);
+      await settle();
+      expect(watch?.disabled).toBe(false);
+      click(host.querySelector(".mail-message__defences"));
+      expect(onOpenDefences).toHaveBeenCalledTimes(1);
+    });
+
+    it("says why in Watch's place when the replay cannot be played", async () => {
+      const onWatchDefence = vi.fn(async () => "Replay not available after a game update");
+      const { host } = await openNotice({ onWatchDefence, onOpenDefences: vi.fn() });
+
+      click(host.querySelector(".mail-message__watch"));
+      await settle();
+      expect(host.querySelector(".mail-message__watch")).toBeNull();
+      expect(host.querySelector(".mail-message__defence-note")?.textContent).toBe(
+        "Replay not available after a game update",
+      );
+      expect(host.querySelector(".mail-message__defences")).not.toBeNull();
+    });
+
+    it("offers neither on a notice with no defence kept (Map Room 1), nor where the scene has no Defences", async () => {
+      const plain = { ...defended, replayid: null };
+      const first = await openNotice({ onWatchDefence: vi.fn(), onOpenDefences: vi.fn() }, plain);
+      expect(first.host.querySelector(".mail-message__defence")).toBeNull();
+
+      const second = await openNotice({});
+      expect(second.host.querySelector(".mail-message__defence")).toBeNull();
+    });
+  });
+
   it("replies in a player's thread, on its subject, and shows the server's refusal", async () => {
     const thread = [message({ userid: 77, message: "hi" }), message({ userid: ME, targetid: 77, message: "hello" })];
     const api = fakeApi([[message()]], { 1: thread });
