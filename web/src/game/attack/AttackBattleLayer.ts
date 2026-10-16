@@ -10,6 +10,7 @@ import {
 } from "pixi.js";
 import {
   BOMBS,
+  EYE_RA_ID,
   TICKS_PER_SECOND,
   battleDefence,
   isSpurtzCannon,
@@ -33,6 +34,7 @@ import {
   mouthPoint,
 } from "./creepFx";
 import { FOMOR_ID } from "@/game/combat/rules/champions";
+import { BlastFx } from "./blastFx";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
 import { BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
@@ -656,6 +658,9 @@ export class AttackBattleLayer {
   private readonly shadows: Container;
   /** In the overlay, in this order. */
   private readonly effects = new Container();
+  /** Drawn explosions, Eye-ra's fiery one (feat/eyera-explosion); inside `effects`. */
+  private readonly blastAir = new Container();
+  private readonly blastFx: BlastFx;
   private readonly fire = new Graphics();
   /** The Spurtz Cannon's shells, off their sheet, just over `fire` (issue #313). */
   private readonly shells = new Container();
@@ -744,10 +749,20 @@ export class AttackBattleLayer {
 
     this.depth = this.host.depthSortedLayer();
     this.shadows = this.host.groundShadowLayer?.() ?? this.depth;
-    for (const layer of [this.effects, this.fire, this.shells, this.bars]) layer.eventMode = "none";
+    for (const layer of [this.effects, this.blastAir, this.fire, this.shells, this.bars]) {
+      layer.eventMode = "none";
+    }
     // Our own children only: the drop ring and anything else already in the
     // overlay stays where it is.
     this.overlay.addChild(this.effects, this.fire, this.shells, this.bars);
+    this.blastFx = new BlastFx(
+      {
+        air: this.blastAir,
+        ground: () => this.debrisLayer(),
+        shake: (dx, dy) => this.shakeYard(dx, dy),
+      },
+      this.reducedMotion,
+    );
     this.bombFx = new BombFx(
       {
         air: () => this.airLayer(),
@@ -795,6 +810,8 @@ export class AttackBattleLayer {
       (id) => this.maxHpById.get(id),
     );
     this.effects.addChild(this.buildingBars.root);
+    // The blast over the bars; the splats it leaves come after, over it.
+    this.effects.addChild(this.blastAir);
 
     // Once a frame, inside the render the scene already drives, after the
     // scene's own `session.advance`. The renderer comes with the call.
@@ -837,6 +854,7 @@ export class AttackBattleLayer {
     // Once put to rest, what is left — splats, trap rings — fades out on the wall clock.
     this.drawSplats(this.settled ? shown : tick);
     this.drawBursts(this.settled ? shown : tick);
+    this.blastFx.update(this.settled ? shown : tick);
     this.fx.update(shown);
     this.bombFx.update(shown);
     this.showBombNumbers(shown);
@@ -1023,6 +1041,7 @@ export class AttackBattleLayer {
     this.bursts.length = 0;
     for (const scorch of this.scorches) scorch.destroy();
     this.scorches.length = 0;
+    this.blastFx.destroy();
     this.ledger.clear();
     this.heldBuildingHp.clear();
     this.fx.destroy();
@@ -1788,6 +1807,11 @@ export class AttackBattleLayer {
       return;
     }
     if (event.kind === "splash") {
+      // Eye-ra's blast is a fireball (feat/eyera-explosion); other splashes keep the rings.
+      if (event.moveId === EYE_RA_ID) {
+        this.blastFx.fiery(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius);
+        return;
+      }
       this.spawnRing(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius, SPLASH_COLOUR);
       return;
     }
@@ -1857,6 +1881,22 @@ export class AttackBattleLayer {
     rings.position.set(at.x, at.y);
     this.effects.addChild(rings);
     this.splats.push({ tick, at, radius, disc: rings, gibs: [] });
+  }
+
+  /**
+   * Shakes the yard on screen for a punchy blast: the renderer's root, by its
+   * pivot, which the camera leaves alone. `dx`, `dy` are screen px.
+   */
+  private shakeYard(dx: number, dy: number): void {
+    const root = this.overlay.parent;
+    if (!root) return;
+    const zoom = this.host.zoom ?? 1;
+    root.pivot.set(dx / (zoom > 0 ? zoom : 1), dy / (zoom > 0 ? zoom : 1));
+  }
+
+  /** The drawn explosions, for tests and the dev hook. */
+  get blasts(): BlastFx {
+    return this.blastFx;
   }
 
   private makeGib(): Sprite {
