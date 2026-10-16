@@ -145,8 +145,13 @@ and pic cleared, as `attack_logs` does today. New Redis key added to `accountRed
 - **Result panel:** the STORED figures: "<attacker> attacked your yard and did 35% damage. 1,234
   Twigs were looted." (housed monsters lost added as the notice words them), plus "They left the
   attack" when `left`. Buttons: Watch again, Back (to the Defences screen).
-- **Drift check:** at the end, if the engine's damage differs from the stored damage, log it
-  (`defence-replay-drift`, console + client telemetry if any); the panel still shows the stored result.
+- **Drift check:** at the end, if the engine's damage or the defender's loss differs from the stored
+  one, log it (`defence-replay-drift`, console + client telemetry if any); the panel still shows the
+  stored result.
+- **Top strip:** the defender's side, not the attacker's: the damage this attack has done (the yard's
+  damage minus the stored `damage_before`) and what the defender has lost (`defenderLoss`, without the
+  attacker's low-level loot bonus). Once the battle ends it reads the stored figures, like the panel
+  [owner, fix/replay-loot].
 
 ## 8. Defences screen and the message
 

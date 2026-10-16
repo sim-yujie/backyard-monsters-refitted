@@ -4,7 +4,13 @@ import { describe, expect, it } from "vitest";
 import { watchEvents, watchTarget } from "@/game/autoAttack/watchRun";
 import { VISUAL_MEMORY_TICKS } from "@/game/combat/rules/engine";
 import { fixtureRun, type DefenceReplayFixture } from "@/game/defences/defenceFixture";
-import { CLIENT_RULES_VERSION, storedDamageOf, type DefenceWatch } from "@/game/defences/defenceWatch";
+import {
+  CLIENT_RULES_VERSION,
+  defenceDrift,
+  defenceReadout,
+  storedDamageOf,
+  type DefenceWatch,
+} from "@/game/defences/defenceWatch";
 import { AttackSession, SKIP_SLICE_TICKS, type AttackSpeed } from "./AttackSession";
 
 /**
@@ -88,6 +94,24 @@ describe("a stored defence played back", { timeout: BATTLE_TIMEOUT_MS }, () => {
     expect(state.tick).toBe(fixture.left.tick);
     expect(storedDamageOf(state.damagePercent)).toBe(fixture.left.defence.damageAfter);
     expectServerHealth(session, fixture.left.server);
+  });
+
+  it("loses the defender exactly the stored loot; the attacker's gain is more, with the low-level bonus on it", () => {
+    for (const run of [fixtureRun(fixture), fixtureRun(fixture, { left: true })]) {
+      const session = sessionFor(run);
+      playThrough(session);
+      const state = session.state();
+      for (const key of ["r1", "r2", "r3", "r4"] as const) {
+        expect(Math.floor(state.defenderLoss[key]), key).toBe(run.defence.loot[key]);
+        // The top strip used to show this one: 30,597,545 Twigs against the stored 24,752,019.
+        expect(state.loot[key], key).toBeGreaterThan(state.defenderLoss[key]);
+      }
+      expect(defenceDrift(run, state.damagePercent, state.tick, state.defenderLoss)).toBeNull();
+      expect(defenceReadout(run.defence, state.damagePercent, state.defenderLoss, false)).toEqual({
+        damage: run.defence.damageDone,
+        loot: run.defence.loot,
+      });
+    }
   });
 
   it("never runs past the tick the server stopped at, however long a frame is", () => {

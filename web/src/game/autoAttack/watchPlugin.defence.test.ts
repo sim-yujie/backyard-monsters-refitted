@@ -122,6 +122,25 @@ describe("the watch scene on a defence replay", { timeout: BATTLE_TIMEOUT_MS }, 
     expect(resultText()).toContain("did 10% damage");
   });
 
+  it("logs a drift when the engine's loot is not the stored one", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const played = runOf();
+    const run: DefenceWatch = { ...played, defence: { ...played.defence, loot: { ...played.defence.loot, r1: 7 } } };
+    mount(run);
+    skipThrough();
+    expect(warn).toHaveBeenCalledWith(
+      "defence-replay-drift",
+      expect.objectContaining({
+        id: run.defence.id,
+        loot: expect.objectContaining({
+          stored: expect.objectContaining({ r1: 7 }),
+          replayed: expect.objectContaining({ r1: fixture.defence.loot.r1 }),
+        }),
+      }),
+    );
+    expect(resultText()).toBe(defenceResultText(run.defence));
+  });
+
   it("shows a left attack's stored result, saying they left", () => {
     const run = runOf({ left: true });
     mount(run);

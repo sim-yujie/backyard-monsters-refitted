@@ -58,7 +58,7 @@ const RESULT_MAX_WAIT_MS = 6000;
  * dock with Skip to end, and at the end the STORED result, once the monsters
  * left standing have walked off. A replay that skipped to its end shows the
  * result at once, over the yard as the battle left it. If the engine's end
- * damage is not the stored one, that is logged (`defence-replay-drift`); the
+ * damage or loot is not the stored one, that is logged (`defence-replay-drift`); the
  * panel still shows the stored figures.
  */
 const defenceWatch = (mounts: AttackMounts, run: DefenceWatch): (() => void) => {
@@ -83,7 +83,7 @@ const defenceWatch = (mounts: AttackMounts, run: DefenceWatch): (() => void) => 
     // Leaving the screen ends the session too; that is no result to check or show.
     if (session.endedBy === "left") return;
     const state = session.state();
-    const drift = defenceDrift(run, state.damagePercent, state.tick);
+    const drift = defenceDrift(run, state.damagePercent, state.tick, state.defenderLoss);
     if (drift) logDefenceDrift(drift);
     if (!presentation.playing()) {
       openResult();
