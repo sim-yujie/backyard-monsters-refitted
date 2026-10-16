@@ -75,6 +75,7 @@ describe("directionColumn", () => {
   it("reads a mirror-painted repaint (Ichi) through the mirror", () => {
     const ichi = sheet("C6");
     expect(MIRRORED_HEADINGS.has(ichi.file)).toBe(true);
+    expect(MIRRORED_HEADINGS.has(sheet("C8").file)).toBe(true); // Fang, painted the same way
     // The painted column 0 faces left and column 15 faces right.
     expect(sheetColumn(ichi, 0)).toBe(15); // moving right
     expect(sheetColumn(ichi, Math.PI)).toBe(0); // moving left

@@ -288,6 +288,7 @@ export function directionColumn(angleRadians: number, directions: number, offset
  */
 export const MIRRORED_HEADINGS: ReadonlySet<string> = new Set([
   "monsters/ichi.png", // Ichi repaint and its animated sheet
+  "monsters/fang.png", // Fang repaint and its animated sheet
 ]);
 
 /**
