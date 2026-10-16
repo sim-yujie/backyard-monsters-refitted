@@ -92,6 +92,7 @@ import { describeUpgradeReport } from "@/ui/yard/upgradeText";
 import { YardDock } from "@/ui/yard/YardDock";
 import { StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
+import { askForWorker } from "@/ui/yard/WorkersBusyBox";
 import { icon } from "@/ui/icons";
 import { ZoomControl } from "@/ui/ZoomControl";
 import { YardPlanner, type AppliedStorage, type CompareVisuals } from "./YardPlanner";
@@ -1458,6 +1459,18 @@ export class YardScene implements Scene {
           check?.problem ? spotSentence(check, (id) => placement.grid.nameOf(id)) : null,
         ),
       onDrop: async (x, y) => {
+        // Every worker busy: the building waits on its spot under the "all
+        // workers busy" box, and is built there once one is free (#345).
+        // Closing the box puts it back in hand, with nothing spent on it.
+        const binding = this.binding;
+        if (!storage && !instant && binding && buildOffer(type, store)?.gate?.reason === "workers") {
+          const freed = await askForWorker(binding);
+          if (this.placement !== placement) return "refused";
+          if (!freed) {
+            bar.setMessage("Not built: every worker is still busy.", "bad");
+            return "refused";
+          }
+        }
         // A one-off building is down; the bar says so until the answer (#277).
         if (!repeat) bar.setBuilding(true);
         const result = storage

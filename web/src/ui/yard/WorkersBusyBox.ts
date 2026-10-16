@@ -1,6 +1,7 @@
 import { SHOP_ITEMS, shopOffer } from "@/game/yard/shop";
 import type { SpeedupItem } from "@/api/types";
 import type { YardStore, YardUiBinding } from "@/game/yard/YardStore";
+import { freeWorkers } from "@/game/yard/workers";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { jobOffer } from "./buildingActions";
@@ -70,13 +71,35 @@ export const workersBusyText = (total: number): string =>
 
 /**
  * Opens the box over the yard. `onFreed` runs once a worker is free again (a
- * worker bought, or a job finished), so the action that was refused can go
- * ahead; the box closes first.
+ * worker bought, a job finished from the box, or a job ending on its own while
+ * the box is up), so the action that was refused can go ahead; the box closes
+ * first. `onDismissed` runs instead when the player closes the box with every
+ * worker still busy.
  */
-export const openWorkersBusyBox = (binding: YardUiBinding, onFreed?: () => void): Popup => {
+export const openWorkersBusyBox = (
+  binding: YardUiBinding,
+  onFreed?: () => void,
+  onDismissed?: () => void,
+): Popup => {
   const { store } = binding;
-  const popup = new Popup({ title: "All workers busy", className: "workers-busy" });
+  let freed = false;
+  let stopWatching: (() => void) | null = null;
+  const popup = new Popup({
+    title: "All workers busy",
+    className: "workers-busy",
+    onClose: () => {
+      stopWatching?.();
+      if (!freed) onDismissed?.();
+    },
+  });
   const model = workersBusyModel(store);
+  // Once only, however the worker came free.
+  const free = (): void => {
+    if (freed) return;
+    freed = true;
+    popup.close();
+    onFreed?.();
+  };
 
   const text = document.createElement("p");
   text.className = "workers-busy__text";
@@ -91,12 +114,8 @@ export const openWorkersBusyBox = (binding: YardUiBinding, onFreed?: () => void)
   const buttons: HTMLElement[] = [];
   const run = async (action: () => Promise<{ ok: true } | { ok: false; refusal: { message?: string } }>): Promise<void> => {
     const result = await action();
-    if (result.ok) {
-      popup.close();
-      onFreed?.();
-    } else {
-      status.textContent = result.refusal.message || "That did not work.";
-    }
+    if (result.ok) free();
+    else status.textContent = result.refusal.message || "That did not work.";
   };
 
   if (model.buyWorker) {
@@ -137,5 +156,18 @@ export const openWorkersBusyBox = (binding: YardUiBinding, onFreed?: () => void)
   }
 
   popup.mount(binding.modal ?? document.body);
+  stopWatching = store.subscribe(() => {
+    if (freeWorkers(store) > 0) free();
+  });
   return popup;
 };
+
+/**
+ * The box as a question: resolves true once a worker is free, false if the
+ * player closes it first. A new building from the Build menu waits on it at
+ * the spot the player picked, then is built there (#345).
+ */
+export const askForWorker = (binding: YardUiBinding): Promise<boolean> =>
+  new Promise((resolve) => {
+    openWorkersBusyBox(binding, () => resolve(true), () => resolve(false));
+  });
