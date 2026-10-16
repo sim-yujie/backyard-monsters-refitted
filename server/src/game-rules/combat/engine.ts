@@ -3141,8 +3141,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       onDeath(creep);
       return;
     }
+    // The building it walked to takes the whole blast, as a ranked airburst's
+    // does. Flash's own test, below, measures to the building's anchor corner,
+    // so an Eye-ra that came at any other side blew up and hurt nothing: about
+    // two blasts in five on a yard with no walls (fix/eyera-nowalls).
+    const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
     const struck: BlastHit[] = [];
+    if (aim && aim.hp > 0) struck.push([aim, damageBuilding(aim, creep.damage, creep)]);
     for (const building of yard.buildings) {
+      if (building === aim) continue;
       if (building.hp <= 0 || building.kind === "decoration" || building.kind === "enemy") continue;
       // `tmpPointB.add(tmpPointC)` at `CreepBase.as:797` discards its result, so
       // the `_middle` offset the client meant to apply never reaches the test.

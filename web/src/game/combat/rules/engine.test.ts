@@ -2948,6 +2948,18 @@ describe("an Eye-ra with no wall to break", () => {
     expect(ring).toMatchObject({ tick: blastTick, moveId: "C5", radius: 85, hits: 1 });
   });
 
+  it("hurts the building it walked to from whichever side it came", () => {
+    // Flash measured the blast to the anchor corner, so an Eye-ra that came at
+    // the far side of a Town Hall blew up 60 short of it and did nothing.
+    const yard = yardOf({ "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 } });
+    const hall = yard.buildings[0]!;
+    const battle = createBattle(yard, { seed: 1 });
+    battle.apply({ kind: "fling", t: 0, x: 400, y: 400, r: 20, monsters: { C5: 1 } });
+    eventsOf(battle, 2000);
+    expect(eyeras(battle)).toHaveLength(0);
+    expect(hall.maxHp - hall.hp).toBe(4000);
+  });
+
   it("turns on the buildings once the last wall is down", () => {
     const yard = yardOf({
       "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 },
