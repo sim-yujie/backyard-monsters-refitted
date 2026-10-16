@@ -120,15 +120,16 @@ const midFight = (session: AttackSession, layer: AttackBattleLayer): void => {
 };
 
 describe("an ended battle put to rest (#308)", () => {
-  it("stands frozen on its last frame when it is not settled: a real attack's end", () => {
+  it("keeps its creeps on screen when it is not settled: a real attack's end", () => {
     const { session, layer } = setUp([{ id: 1, t: 21, l: 1, X: 0, Y: 0 }]);
     midFight(session, layer);
     session.retreat();
     expect(session.state().phase).toBe("ended");
     layer.update();
     layer.update();
-    // Unchanged for a real attack: the creeps stay where the battle stopped.
+    // A real attack's creeps stay on screen, walking off rather than vanishing.
     expect(layer.creepCount).toBeGreaterThan(0);
+    expect(layer.walkingOffCount).toBe(layer.creepCount);
     expect(layer.isSettled).toBe(false);
     layer.destroy();
   });
