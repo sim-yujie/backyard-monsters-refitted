@@ -2905,3 +2905,78 @@ describe("the battle report's tallies (issue #22)", () => {
     expect(digestOf(read.checkpoint())).toBe(digestOf(unread.checkpoint()));
   });
 });
+
+describe("an Eye-ra with no wall to break", () => {
+  /** Steps to the end, keeping every visual event once. */
+  const eventsOf = (battle: ReturnType<typeof createBattle>, ticks: number): BattleVisualEvent[] => {
+    const seen: BattleVisualEvent[] = [];
+    let since = -1;
+    for (let step = 0; step < ticks && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(since)) {
+        seen.push(event);
+        since = Math.max(since, event.tick);
+      }
+    }
+    return seen;
+  };
+  const eyeras = (battle: ReturnType<typeof createBattle>) =>
+    battle.creeps().filter((creep) => creep.monsterId === "C5");
+
+  it("walks to the nearest building and blows up on it, where it shows", () => {
+    // A Town Hall and a harvester, not a wall in the yard.
+    const yard = yardOf({
+      "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 400, Y: 400 },
+    });
+    const battle = createBattle(yard, { seed: 1 });
+    battle.apply({ kind: "fling", t: 0, x: -300, y: -300, r: 20, monsters: { C5: 1 } });
+    battle.step();
+    expect(eyeras(battle)[0]?.targetBuilding).toBe(1);
+
+    const events = eventsOf(battle, 2000);
+    expect(eyeras(battle)).toHaveLength(0);
+    const hall = yard.buildings.find((building) => building.id === 1)!;
+    expect(hall.hp).toBeLessThan(hall.maxHp);
+
+    // The blast draws: a hit on the hall for what it took, a ring, then the splat.
+    const death = events.find((event) => event.kind === "death" && event.monsterId === "C5");
+    const blastTick = death!.tick;
+    const hit = events.find((event) => event.kind === "hit" && event.buildingId === 1);
+    expect(hit).toMatchObject({ tick: blastTick, amount: hall.maxHp - hall.hp, ranged: false });
+    const ring = events.find((event) => event.kind === "splash");
+    expect(ring).toMatchObject({ tick: blastTick, moveId: "C5", radius: 85, hits: 1 });
+  });
+
+  it("turns on the buildings once the last wall is down", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 },
+      "3": { id: 3, t: 17, X: -100, Y: -100 },
+    });
+    const battle = createBattle(yard, { seed: 1 });
+    battle.apply({ kind: "fling", t: 0, x: -300, y: -300, r: 20, monsters: { C5: 2 } });
+    battle.step();
+    expect(eyeras(battle).map((creep) => creep.targetBuilding)).toEqual([3, 3]);
+
+    const events = eventsOf(battle, 3000);
+    expect(eyeras(battle)).toHaveLength(0);
+    expect(yard.buildings.find((building) => building.id === 3)?.hp).toBe(0);
+    const hall = yard.buildings.find((building) => building.id === 1)!;
+    expect(hall.hp).toBeLessThan(hall.maxHp);
+    const blasts = events.filter((event) => event.kind === "splash" && event.moveId === "C5");
+    expect(blasts).toHaveLength(2);
+  });
+
+  it("shows a ranked Eye-ra's airburst the same way", () => {
+    const yard = yardOf({ "1": { id: 1, t: 14, l: 1, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 1, ranks: { C5: 1 } });
+    battle.apply({ kind: "fling", t: 0, x: -300, y: -300, r: 20, monsters: { C5: 1 } });
+    const events = eventsOf(battle, 2000);
+    const hall = yard.buildings[0]!;
+    expect(hall.hp).toBeLessThan(hall.maxHp);
+    expect(events.find((event) => event.kind === "hit" && event.buildingId === 1)).toMatchObject({
+      amount: hall.maxHp - hall.hp,
+    });
+    expect(events.find((event) => event.kind === "splash")).toMatchObject({ moveId: "C5", hits: 1 });
+  });
+});
