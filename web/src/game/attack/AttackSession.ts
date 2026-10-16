@@ -777,6 +777,11 @@ export class AttackSession {
     return this.phase === "ended";
   }
 
+  /** Why the attack ended, or null while it runs; {@link state}'s `endReason` without the rest. */
+  get endedBy(): AttackEndReason | null {
+    return this.endReason;
+  }
+
   /** The running battle, or null before {@link load}. */
   battle(): Battle | null {
     return this.battle_;
