@@ -179,9 +179,12 @@ describe("groupCompletedJobs", () => {
   it("names the monsters lost when housing shrank", () => {
     const cull = (id: string, count: number) => ({ kind: "cull", id, t: null, at: 1, detail: { count } });
     const [group] = groupCompletedJobs([cull("C1", 2), cull("C5", 1)]);
-    expect(noticeText(group!)).toBe("3 monsters were lost, housing was too small: 2 Pokey, Eye-ra");
+    expect(noticeText(group!)).toBe("Not enough housing: 3 monsters left your yard (2 Pokey, 1 Eye-ra)");
     const [one] = groupCompletedJobs([cull("C1", 1)]);
-    expect(noticeText(one!)).toBe("1 monster was lost, housing was too small: Pokey");
+    expect(noticeText(one!)).toBe("Not enough housing: 1 monster left your yard (1 Pokey)");
+    expect(jobLineText("away", [cull("C1", 2), cull("C5", 1)])).toBe(
+      "While you were away: not enough housing: 3 monsters left your yard (2 Pokey, 1 Eye-ra)",
+    );
   });
 
   it("counts hatched monsters, not their types, by name (#142)", () => {

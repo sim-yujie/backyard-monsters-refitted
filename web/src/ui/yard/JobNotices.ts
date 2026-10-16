@@ -131,8 +131,9 @@ const HATCH = "hatch";
 
 /**
  * Monsters the catch-up removed because housing shrank, one entry per type
- * with its `count` (`catchUpMonsters.ts`, `HOUSING.Cull()`): "3 monsters were
- * lost, housing was too small: 2 Pokey, 1 Fang".
+ * with its `count` (`catchUpMonsters.ts`, `HOUSING.Cull()`): "Not enough
+ * housing: 3 monsters left your yard (2 Pokey, 1 Fang)", every type with its
+ * count, even 1 (#347).
  */
 const CULL = "cull";
 
@@ -236,7 +237,7 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
     const id = String(job.id);
     const count = countOf(job);
     const name = monsterEntry(id)?.name ?? id;
-    return { label: count === 1 ? name : `${formatAmount(count)} ${name}`, buildingId: null };
+    return { label: count === 1 && job.kind === HATCH ? name : `${formatAmount(count)} ${name}`, buildingId: null };
   }
   if (job.kind === "train") {
     // "Fang 4", pointing at the academy that trained it (`catchUpTraining.ts`).
@@ -298,8 +299,9 @@ export const groupCompletedJobs = (completed: readonly CompletedJob[]): JobNotic
         : kind === CULL
           ? {
               kind,
-              heading: lost === 1 ? "1 monster was lost, housing was too small" : `${formatAmount(lost)} monsters were lost, housing was too small`,
+              heading: `Not enough housing: ${formatAmount(lost)} monster${lost === 1 ? "" : "s"} left your yard (`,
               items,
+              tail: ")",
             }
         : kind === HATCH
           ? { kind, heading: hatched === 1 ? "A monster hatched" : `${formatAmount(hatched)} monsters hatched`, items }
