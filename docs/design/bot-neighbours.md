@@ -221,8 +221,9 @@ Later owner decision (2026-10-04, from the #245 leak audit):
   attacked gets no notice today**, from a bot or a player.
 - **Truces** (#203): 7 days, a 2-day wait after a rejection (`services/mail/truceRules.ts:23-29`),
   answered through `handleTruceResponse` (`services/mail/handleTruceResponse.ts:25`). The Map Room
-  1 target card has no Truce or Message button yet (`web/src/ui/maproom1/TargetCard.ts:33`), so
-  today a truce or message can reach a Map Room 1 player only from an existing mail thread.
+  1 target card has Message and Truce buttons on every neighbour, bot or player alike (#349,
+  `web/src/ui/maproom1/TargetCard.ts`); they open the same mailbox compose and truce screens as
+  the Map Room 2 cell panel, so a bot gets the same treatment as decisions 14 and 18 below.
 - **Alliances** need a world: inviting a player without one is refused
   (`controllers/alliance/inviteUser.ts:51`), and suggested members are drawn from world players
   only (`services/alliance/suggestedMembers.ts:48`). A Map Room 1 bot has no world, so it can never
