@@ -1,6 +1,7 @@
 # Defence replays (Map Room 2) — Design
 
-Status: planning, 2026-10-16. Owner decisions of 2026-10-16 are final. Points are marked **[owner]**
+Status: planning, 2026-10-16. Owner decisions of 2026-10-16 are final (§1, and §12 answered later
+the same day). Points are marked **[owner]**
 (decided), **[fact]** (checked in code on `revamp` db87084b) or **[suggested]** (our proposal, taken
 unless the owner objects). Facts gathered in `agent-handoffs/reports/facts-defence-replays.md`.
 Parent issue #357.
@@ -24,7 +25,7 @@ auto-attack Watch.
 ## 2. In one paragraph
 
 When another player's attack on your Map Room 2 main yard lands, the server keeps one record of it:
-who, when, the damage it left, the loot you lost, and (compressed) everything needed to play the
+who, when, the damage it did, the loot you lost, and (compressed) everything needed to play the
 battle again: the yard as the battle found it, the attacker's drops, the seed, both sides' levels and
 the rules version. The newest 20 per defender are kept. You get the same "X attacked your yard"
 notice MR1 players get. A new Defences screen lists the 20 with a Watch button; Watch opens the attack
@@ -49,7 +50,7 @@ server's DB):
 | `map_version` smallint | 2 now; 1 when #246 turns MR1 on |
 | `attacker_userid`, `attacker_username`, `attacker_pic_square` | frozen at landing, as `attack_logs` |
 | `attacked_at`, `landed_at` timestamptz | session start; when it landed (the list sorts by this) |
-| `damage` int | % the yard was LEFT at (same figure as the notice) |
+| `damage_before`, `damage_after` int | the yard's whole % damage before and after; the screens show `after - before`, the damage THIS attack did [owner, §12.5] |
 | `loot` jsonb | what the defender lost (`defenderDelta`) |
 | `housed_lost` int | housed monsters lost (`lostCount(housingLoss)`) |
 | `left` boolean | the attacker left / tab closed (finaliser landing) |
@@ -97,7 +98,7 @@ and pic cleared, as `attack_logs` does today. New Redis key added to `accountRed
   different moments. The server also sends `playable` from its own version, for a client that has
   not reloaded since a server update; Watch needs both.
 - Trade-off: any edit to any rules file, even one that does not change behaviour, hides all older
-  replays. See OPEN question 4.
+  replays. Owner: OK (§12.4).
 
 ## 5. Recording: how the attacker's final save feeds it
 
@@ -119,7 +120,7 @@ and pic cleared, as `attack_logs` does today. New Redis key added to `accountRed
 ## 6. API [suggested]
 
 - `GET /api/:v/defences` → `{ defences: [{ id, attacker: { name, pic }, attackedAt, landedAt,
-  damage, loot, housedLost, left, rulesVersion, hasReplay, playable }] }`: the caller's newest 20,
+  damageDone, damageAfter, loot, housedLost, left, rulesVersion, hasReplay, playable }] }`: the caller's newest 20,
   MR2 main yard only. Small (no payload), no cache needed.
 - `GET /api/:v/defences/:id/replay` → the unzipped payload + `rulesVersion` + the stored result
   figures. 404 unless `defender_userid` is the caller (never another player's), 410 when
@@ -141,10 +142,9 @@ and pic cleared, as `attack_logs` does today. New Redis key added to `accountRed
   drawing, in slices per frame so the page never freezes, then shows the final yard and the result.
 - **Dock:** "Defence replay: <attacker>", the time, 1x / 2x / 4x, Skip to end. No pause, no Retreat,
   no revenge button [owner].
-- **Result panel:** the STORED figures, in the same words as the notice (`costText` in
-  `outpostNotices.ts`): "<attacker> attacked your yard. It was left 63% damaged, and 1,234 Twigs were
-  looted." Plus "They
-  left the attack" when `left`. Buttons: Watch again, Back (to the Defences screen).
+- **Result panel:** the STORED figures: "<attacker> attacked your yard and did 35% damage. 1,234
+  Twigs were looted." (housed monsters lost added as the notice words them), plus "They left the
+  attack" when `left`. Buttons: Watch again, Back (to the Defences screen).
 - **Drift check:** at the end, if the engine's damage differs from the stored damage, log it
   (`defence-replay-drift`, console + client telemetry if any); the panel still shows the stored result.
 
@@ -152,17 +152,25 @@ and pic cleared, as `attack_logs` does today. New Redis key added to `accountRed
 
 **Defences screen [owner decision 4, look suggested]:** a modal in the style of `MailboxScreen`.
 One row per attack, newest first: attacker avatar + name, time ("3 h ago", full date on hover),
-damage %, loot lost (resource icons), housed monsters lost if any, and **Watch**. When the version no
+damage this attack did ("35%"), loot lost (resource icons), housed monsters lost if any, and **Watch**. When the version no
 longer matches: Watch hidden, grey text "Replay not available after a game update" [owner]. When
 `hasReplay` is false: "Replay not available". Empty: "Nobody has attacked your yard yet." Only shown
-to MR2 players until #246. Entry point: OPEN question 1.
+to MR2 players until #246. Opened from a **Defences button next to Mail on the yard screen**, and
+from a link on the attack notice [owner, §12.1].
 
 **Message [owner decision 4]:** `afterYardDefended` (`services/base/afterYardDefended.ts:48`) today
 returns unless the yard is on MR1. Widen it so a REAL defender's MR2 main yard also gets
 `noticeYardAttack`, the very same words and kind (`YARD_ATTACKED`: "X attacked your yard", "It was
 left 63% damaged, and ... were looted."). Bot jobs (repair, revenge) stay MR1 only. "While you were
 away" then shows it with no client change (`JobNotices.ts` already knows `yardAttacked`); WP4 checks
-it on an MR2 own-yard load. Wording "yard" vs "base" and a Watch button on the notice: OPEN 2 and 3.
+it on an MR2 own-yard load. Wording stays "attacked your yard" [owner, §12.2]; the notice's body
+is left exactly as MR1's (it would change MR1's too); only the Defences screen and the result panel
+show the damage this attack did.
+
+**Watch on the notice [owner, §12.3]:** the landing records the replay FIRST and hands its id to
+`noticeYardAttack`; the message gets a nullable `replayid` column (migration in WP1), the mail API
+returns it, and the mailbox shows **Watch** (opens that replay, same version check as the list) and
+**Defences** (opens the screen) on that notice. No Watch when `replayid` is null.
 
 ## 9. Edge cases
 
@@ -198,7 +206,8 @@ it on an MR2 own-yard load. Wording "yard" vs "base" and a Watch button on the n
 - **Client:** 4x speed only in playback; Skip to end reaches the same final state as playing through;
   Watch hidden on version mismatch; result panel shows stored figures; Defences list states.
 - **Notice:** MR2 main-yard defence writes `YARD_ATTACKED`, shows in mailbox and once in "While you
-  were away"; bot jobs not booked on MR2.
+  were away"; bot jobs not booked on MR2; the notice carries the replay id and its Watch opens that
+  replay; damage shown is `after - before`.
 - **Live browser check** (one headless `bymr` session, two seeded MR2 accounts): attack B's main yard
   from A, close the tab mid-attack once, then log in as B: notice, Defences list, Watch at 1x/2x/4x,
   Skip to end, result matches.
@@ -207,24 +216,22 @@ it on an MR2 own-yard load. Wording "yard" vs "base" and a Watch button on the n
 
 | WP | Issue | What | Depends on | Size |
 |---|---|---|---|---|
-| WP1 | #358 | Server storage: rules version in MANIFEST (sync tool) + `REPLAY_FORMAT`; migration + entity `defence_replay`; gzip payload helpers; insert + prune to 20; account deletion; unit/DB tests | none | M |
-| WP2 | #359 | Server recording: load key at attack load; `recordDefenceReplay` from save and finaliser; gate; never fails landing; Redis key in account keys; landing-path + determinism tests | WP1 | M |
+| WP1 | #358 | Server storage: rules version in MANIFEST (sync tool) + `REPLAY_FORMAT`; migration + entity `defence_replay` (damage before/after) + `message.replayid`; gzip payload helpers; insert + prune to 20; account deletion; unit/DB tests | none | M |
+| WP2 | #359 | Server recording: load key at attack load; `recordDefenceReplay` from save and finaliser (damage before/after; replay id to the notice); gate; never fails landing; Redis key in account keys; landing-path + determinism tests | WP1 | M |
 | WP3 | #360 | Server API: `GET defences`, `GET defences/:id/replay`, limiter, ownership, tests | WP1 | S |
-| WP4 | #361 | MR2 "attacked your yard" notice (widen `afterYardDefended`, bot jobs stay MR1) + "While you were away" check | none | S |
+| WP4 | #361 | MR2 "attacked your yard" notice (widen `afterYardDefended`, bot jobs stay MR1) + "While you were away" check; mail API returns `replayid` | WP1 (column) | S |
 | WP5 | #362 | Client viewer: defence watch source, roster with champion/siege, 4x playback speed, `skipToEnd`, defence dock + result panel (stored figures), version check, drift log | WP1 (version field); API mocked until WP3 | M |
-| WP6 | #363 | Client Defences screen + API client + entry point (OPEN 1), Watch into the viewer, "not available" states | WP3, WP5 | M |
+| WP6 | #363 | Client Defences screen + API client + button next to Mail; Watch and Defences buttons on the mailbox notice; Watch into the viewer, "not available" states | WP3, WP4, WP5 | M |
 | WP7 | #364 | Golden defence-replay fixture + version guard test; end-to-end live browser check (§10) | WP2, WP4, WP6 | S |
 
-WP1 and WP4 can start at once; WP3 and WP5 in parallel after WP1.
+WP1 starts first; WP3, WP4 and WP5 in parallel after it (WP4's notice change itself needs nothing).
 
-## 12. OPEN for owner
+## 12. Owner decisions on the open questions (2026-10-16, final)
 
-1. **Where is the Defences screen opened from?** Suggest a "Defences" button on the yard HUD next to
-   Mail, plus a link from the attack notice.
-2. **Wording:** MR1 says "X attacked your **yard**". Use the same on MR2 (suggested), or "your base"?
-3. **Watch on the notice:** bot-neighbours decision 21 planned a Watch button on MR1's defence
-   notice. Add one on the MR2 notice too (opening that replay), or only via the Defences screen?
-4. **Version strictness:** any battle-code update (even one that would not change the replay) hides
-   all older replays. OK for now (suggested), or worth extra work to hide only on real changes?
-5. **Damage figure:** the list and panel show the % the yard was LEFT at (as the notice does), not
-   the % this attack added. OK?
+1. **Entry point:** a Defences button next to Mail on the yard screen, plus a link from the attack
+   notice.
+2. **Wording:** "attacked your yard", the same as MR1.
+3. **Watch on the notice:** yes, the notice gets its own Watch button (§8).
+4. **Version strictness:** strict hiding is OK: any battle-code update hides older replays.
+5. **Damage figure:** show the damage THIS attack did ("did 35% damage"), not the % the yard was
+   left at; WP1 stores the damage before and after (§3).
