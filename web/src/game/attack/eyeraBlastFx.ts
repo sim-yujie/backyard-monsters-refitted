@@ -39,20 +39,31 @@ const STYLE_NAMES: Readonly<Record<string, BlastStyle>> = {
 export const blastStyleNamed = (raw: string | null | undefined): BlastStyle | null =>
   (raw ? STYLE_NAMES[raw.trim().toLowerCase()] : undefined) ?? null;
 
-/**
- * The style to draw: the address's `?blast=` first, saved for next time,
- * then the saved one, then today's rings.
- */
-export const readBlastStyle = (): BlastStyle => {
+/** Saves the address's `?blast=` choice, if it makes one; the choice or null. */
+const rememberAsked = (): BlastStyle | null => {
   try {
     const asked =
       typeof location === "undefined"
         ? null
         : blastStyleNamed(new URLSearchParams(location.search).get("blast"));
-    if (asked) {
-      localStorage.setItem(BLAST_STYLE_KEY, asked);
-      return asked;
-    }
+    if (asked) localStorage.setItem(BLAST_STYLE_KEY, asked);
+    return asked;
+  } catch {
+    return null;
+  }
+};
+
+// On the page's first load too: logging in drops the address's query.
+rememberAsked();
+
+/**
+ * The style to draw: the address's `?blast=` first, saved for next time,
+ * then the saved one, then today's rings.
+ */
+export const readBlastStyle = (): BlastStyle => {
+  const asked = rememberAsked();
+  if (asked) return asked;
+  try {
     return blastStyleNamed(localStorage.getItem(BLAST_STYLE_KEY)) ?? "ring";
   } catch {
     return "ring";
@@ -471,8 +482,8 @@ export class EyeraBlastFx {
         at: { x: at.x + Math.cos(angle) * spread, y: at.y + Math.sin(angle) * spread * 0.5 },
         delay: index % 3, life: 20 + Math.round(blastNoise(tick, index + 340) * 10),
         z: 8 + blastNoise(tick, index + 360) * 10, vz: 0.6 + blastNoise(tick, index + 380) * 0.6,
-        size0: radius * 0.35, size1: radius * 0.75, easeOut: true, hold: 0.2,
-        colours: [0xfff4b0, 0xffb030, 0xff5a10, 0x8a1a00],
+        size0: radius * 0.35, size1: radius * 0.75, easeOut: true, hold: 0.2, peak: 0.8,
+        colours: [0xffe090, 0xff8a20, 0xe0400c, 0x701000],
       });
     }
     const embers = many(18);
@@ -493,7 +504,7 @@ export class EyeraBlastFx {
   /* ── C: Eye-ra goo ──────────────────────────────────────────────────── */
 
   private goo(tick: number, at: Point, radius: number, scale: number, many: (n: number) => number): void {
-    this.mark(tick, "stain", at, radius * 1.25, 0.9, 200);
+    this.mark(tick, "stain", at, radius * 1.25, 0.75, 200);
     const lift = { x: at.x, y: at.y - 10 };
     this.add(tick, { look: "soft", at: lift, add: true, life: 8, size0: radius * 0.5, size1: radius * 1.3, easeOut: true, colours: [0xffffff, 0xe0a0ff, 0xa040e0] });
     this.add(tick, { look: "ring", at, add: true, life: 14, size0: radius * 0.25, size1: radius * 1.9, squash: 0.5, easeOut: true, peak: 0.85, colours: [0xd8ff90, 0x8be03a, 0x5a9a20] });
