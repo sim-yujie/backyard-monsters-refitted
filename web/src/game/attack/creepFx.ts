@@ -135,6 +135,17 @@ export const labelPose = (age: number): { rise: number; alpha: number } => {
   };
 };
 
+/**
+ * How much bigger a `pop` number is drawn `age` ticks in: it bursts in to
+ * 2.3 times the size in four ticks, then settles at 1.6 by the tenth.
+ */
+export const popScale = (age: number): number => {
+  if (age <= 0) return 1;
+  if (age < 4) return 1 + (age / 4) * 1.3;
+  if (age < 10) return 2.3 - ((age - 4) / 6) * 0.7;
+  return 1.6;
+};
+
 /** Where a target's `index`-th number within the window sits sideways: 0, right, left. */
 export const labelShift = (index: number, digits: number): number => {
   if (index === 1) return LABEL_DIGIT_SHIFT * digits;
@@ -231,6 +242,8 @@ interface Label {
   amount: number;
   /** Sideways shift for the second and third number of a target. */
   shiftX: number;
+  /** Drawn big, with a pop as it appears: an Eye-ra's blast (feat/eyera-explosion). */
+  pop: boolean;
   /** Where it was last anchored, for after the creep is gone. */
   x: number;
   y: number;
@@ -318,9 +331,18 @@ export class CreepFx {
    * creep gained. `key` names the target for the per-target cap; `follow` is
    * the creep the number rides on, or -1 to stay where it was made. A fourth
    * number for one target inside the window, or a twenty-first anywhere, is
-   * not shown, as Flash dropped them.
+   * not shown, as Flash dropped them. A `pop` number is drawn big, bursting
+   * in larger still before it settles.
    */
-  number(tick: number, key: string, follow: number, amount: number, at: Point, kind: NumberKind): void {
+  number(
+    tick: number,
+    key: string,
+    follow: number,
+    amount: number,
+    at: Point,
+    kind: NumberKind,
+    pop = false,
+  ): void {
     const shown = Math.max(1, Math.round(Math.abs(amount)));
     const siblings = (this.labelsByKey.get(key) ?? []).filter(
       (label) => tick - label.bornTick < LABEL_WINDOW_TICKS,
@@ -333,6 +355,7 @@ export class CreepFx {
     label.bornTick = tick;
     label.amount = kind === "heal" ? shown : -shown;
     label.shiftX = labelShift(siblings.length, String(shown).length);
+    label.pop = pop;
     label.x = at.x;
     label.y = at.y;
     label.text.text = kind === "heal" ? `+${shown}` : String(shown);
@@ -540,7 +563,7 @@ export class CreepFx {
     text.anchor.set(0.5, 1);
     text.eventMode = "none";
     this.labels.addChild(text);
-    return { text, key: "", follow: -1, bornTick: 0, amount: 0, shiftX: 0, x: 0, y: 0 };
+    return { text, key: "", follow: -1, bornTick: 0, amount: 0, shiftX: 0, pop: false, x: 0, y: 0 };
   }
 
   private forget(label: Label): void {
@@ -572,7 +595,7 @@ export class CreepFx {
       }
       const pose = labelPose(age);
       const rise = this.reducedMotion ? 0 : pose.rise;
-      label.text.scale.set(scale);
+      label.text.scale.set(label.pop ? scale * popScale(age) : scale);
       label.text.position.set(
         Math.round(label.x + label.shiftX * scale),
         Math.round(label.y - rise),
