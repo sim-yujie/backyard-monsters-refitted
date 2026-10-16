@@ -38,12 +38,13 @@ export const playerKeys = (userid: number, email: string): string[] => [
   `bot-check:stay:${userid}`,
 ];
 
-/** Keys named by one of the player's saves (`services/base/attackCheckpoint.ts`, `attackSession.ts`, `takeoverGrantStore.ts`). */
+/** Keys named by one of the player's saves (`services/base/attackCheckpoint.ts`, `attackSession.ts`, `takeoverGrantStore.ts`, `services/defences/defenceReplayLoad.ts`). */
 export const saveKeys = (basesaveid: number): string[] => [
   `attack-checkpoint:${basesaveid}`,
   `attack-final:${basesaveid}`,
   `attack-session:${basesaveid}`,
   `takeover-grant:${basesaveid}`,
+  `defence-replay-load:${basesaveid}`,
 ];
 
 /** SCAN patterns for the player's keys with more after the id. */

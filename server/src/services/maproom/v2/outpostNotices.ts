@@ -130,6 +130,8 @@ export interface OutpostNoticeInput {
   readonly cell: OutpostCell | null;
   readonly baseid: string;
   readonly now: number;
+  /** The defence replay a yard attack notice opens (defence replays, #359); none on any other. */
+  readonly replayid?: number | null;
 }
 
 /**
@@ -138,7 +140,7 @@ export interface OutpostNoticeInput {
  * attacker. Flushes `em`; inside a transaction it lands with it.
  */
 export const writeOutpostNotice = async (em: EntityManager, input: OutpostNoticeInput): Promise<void> => {
-  const { ownerId, byUserId, type, text, cell, baseid, now } = input;
+  const { ownerId, byUserId, type, text, cell, baseid, now, replayid } = input;
   if (!ownerId || ownerId === byUserId) return;
 
   const [last] = await em.find(Thread, {}, { orderBy: { threadid: "DESC" }, limit: 1 });
@@ -159,6 +161,7 @@ export const writeOutpostNotice = async (em: EntityManager, input: OutpostNotice
     coords: cell ? [cell.x, cell.y] : null,
     baseid,
     updatetime: now,
+    ...(replayid != null && { replayid }),
   });
   thread.lastMessage = message;
   em.persist(thread);
@@ -279,9 +282,11 @@ export const noticeYardAttack = async (
     /** Housed monsters lost with the yard's fallen Housings (issue #160). */
     housedLost?: number;
     now: number;
+    /** The defence replay the landing recorded, for the notice's Watch button (#359). */
+    replayId?: number | null;
   },
 ): Promise<void> => {
-  const { yard, attacker, defenderDelta, housedLost, now } = input;
+  const { yard, attacker, defenderDelta, housedLost, now, replayId } = input;
   await writeOutpostNotice(em, {
     ownerId: yard.saveuserid,
     byUserId: attacker.userid,
@@ -290,6 +295,7 @@ export const noticeYardAttack = async (
     cell: null,
     baseid: yard.baseid,
     now,
+    replayid: replayId ?? null,
   });
 };
 

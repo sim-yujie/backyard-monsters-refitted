@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
+import { gzipSync } from "node:zlib";
 import type { BrainWeights } from "../../../game-rules/combat/index.js";
 
 /**
@@ -33,6 +34,8 @@ let attackerSave: Record<string, any>;
 const store = new Map<string, string>();
 /** Plans written (issue #221). */
 const upsert = mock(async (_entity: unknown, _row: Record<string, any>) => {});
+/** Defence replays written (issue #359). */
+const replays: Record<string, any>[] = [];
 
 mock.module("../../../server.js", () => ({
   postgres: {
@@ -62,6 +65,12 @@ mock.module("../../../server.js", () => ({
           findOne: async (_entity: unknown, where: Record<string, unknown>) =>
             where.basesaveid === attackerSave.basesaveid ? attackerSave : null,
           flush: async () => {},
+          // A defence replay's row, and its prune to the newest 20 (#359).
+          insert: async (_entity: unknown, row: Record<string, any>) => {
+            replays.push(row);
+            return replays.length;
+          },
+          execute: async () => [],
         }),
     },
   },
@@ -139,6 +148,8 @@ const setMode = (mode: typeof MODE) => {
 const { attackLootOf } = await import("../../../services/base/combat/attackLoot.js");
 const { replayAbandonedAttack } = await import("../../../services/base/combat/abandonedAttack.js");
 const { battleReplayInput, battleTick, foughtLoot } = await import("../../../services/base/combat/battle.js");
+const { decodeReplay } = await import("../../../services/defences/defenceReplayStore.js");
+const { defenceReplayInput } = await import("../../../services/defences/recordDefenceReplay.js");
 
 const ctxFor = (body: Record<string, string>) =>
   ({
@@ -184,6 +195,7 @@ beforeEach(() => {
   sessionBrains = undefined;
   setMode("log");
   reports.length = 0;
+  replays.length = 0;
   store.clear();
   defender = {
     basesaveid: 9,
@@ -951,5 +963,87 @@ describe("the defence lands (#195)", () => {
 
     expect(reports.some((line) => line.includes("champion"))).toBe(true);
     expect((defender.champion as { hp: number }[])[0]!.hp).toBeLessThan(3000);
+  });
+});
+
+describe("the defence replay a save lands (issue #359)", () => {
+  const LOAD_KEY = "defence-replay-load:9";
+  /** The defender as another player's Map Room 2 main yard, its attack load kept. */
+  const asPlayerYard = () => {
+    Object.assign(defender, { type: "main", mapversion: 2, damage: 7, attacks: [], protected: 0 });
+    attackerSave.mapversion = 2;
+    store.set(
+      LOAD_KEY,
+      JSON.stringify({
+        attackid: ATTACK_ID,
+        load: gzipSync(JSON.stringify({ type: "main", basename: "Their yard", buildingdata: YARD, credits: 5 })).toString("base64"),
+      })
+    );
+  };
+
+  test("the save that ends the attack records it once, from the battle the server fought", async () => {
+    asPlayerYard();
+
+    await baseSave(ctxFor({ over: "1", tick: "3200", flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(replays).toHaveLength(1);
+    const row = replays[0]!;
+    expect(row).toMatchObject({
+      defender_userid: DEFENDER_OWNER,
+      baseid: "1234",
+      map_version: 2,
+      attacker_userid: ATTACKER,
+      attacker_username: "attacker",
+      damage_before: 7,
+      damage_after: defender.damage,
+      attacker_left: false,
+    });
+    expect(defender.damage).toBeGreaterThan(7);
+    const payload = decodeReplay(row.replay);
+    expect(payload).toMatchObject({ seed: LOG.seed, tick: 3200, events: LOG.events });
+    expect(payload.load.basename).toBe("Their yard");
+    expect(payload.load).not.toHaveProperty("credits");
+
+    // Played again from what was stored, it is the battle that landed.
+    const again = replayAbandonedAttack(defenceReplayInput(payload));
+    expect(Math.trunc(again.damage)).toBe(defender.damage);
+    expect(again.buildinghealthdata).toEqual(defender.buildinghealthdata);
+
+    // The kept load goes with the checkpoint.
+    expect(store.has(LOAD_KEY)).toBe(false);
+  });
+
+  test("a save that left the attack says so", async () => {
+    asPlayerYard();
+    await baseSave(ctxFor({ over: "1", left: "1", tick: "3200", flinglog: JSON.stringify(LOG) }), async () => {});
+    expect(replays[0]).toMatchObject({ attacker_left: true });
+  });
+
+  test("a save that does not end the attack records nothing and keeps the load", async () => {
+    asPlayerYard();
+    await baseSave(ctxFor({ tick: "800", flinglog: JSON.stringify(LOG) }), async () => {});
+    expect(replays).toEqual([]);
+    expect(store.has(LOAD_KEY)).toBe(true);
+  });
+
+  test("a save past its replay deadline records nothing and leaves the load to the finaliser", async () => {
+    asPlayerYard();
+    replayTimesOut = true;
+    await baseSave(ctxFor({ over: "1", flinglog: JSON.stringify(LOG) }), async () => {}).catch(() => {});
+    expect(replays).toEqual([]);
+    expect(store.has(LOAD_KEY)).toBe(true);
+  });
+
+  test.each([
+    ["a Map Room 1 main yard", { mapversion: 1 }],
+    ["an outpost", { type: "outpost" }],
+    ["a camp", { type: "tribe" }],
+    ["the attacker's own yard", { saveuserid: ATTACKER }],
+  ])("%s is not recorded", async (_name, overrides) => {
+    asPlayerYard();
+    Object.assign(defender, overrides);
+    // The attacker's own yard is not an attack at all: that save is refused.
+    await baseSave(ctxFor({ over: "1", tick: "3200", flinglog: JSON.stringify(LOG) }), async () => {}).catch(() => {});
+    expect(replays).toEqual([]);
   });
 });

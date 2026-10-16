@@ -58,6 +58,11 @@ import type { AcademyLevels, AcademyRanks, ChampionBrains } from "../../../servi
 import { touchLastSeen } from "../../../services/user/lastSeen.js";
 import { logger } from "../../../utils/logger.js";
 import { cancelRaidOnYardLoad, presenceLapsed } from "../../../services/raids/raidStore.js";
+import {
+  defenceReplayLoadOf,
+  isDefenceReplayTarget,
+  keepDefenceReplayLoad,
+} from "../../../services/defences/defenceReplayLoad.js";
 
 type Stronghold = { level: number; cell?: { x: number; y: number } | null };
 
@@ -516,6 +521,16 @@ export const baseLoad: KoaController = async (ctx) => {
 
     response.resources = filteredSave.iresources;
     response.wmstatus = wmstatus;
+  }
+
+  // The yard as this attack is served it, kept for the defender's replay of
+  // it should the attack land (defence replays, #359): another account's Map
+  // Room 2 main yard only. A failure is logged and the attack goes ahead.
+  if (attacking && isDefenceReplayTarget(baseSave, user.userid)) {
+    const { basesaveid, baseid: defenderBaseid, attackid } = baseSave;
+    await keepDefenceReplayLoad(basesaveid, attackid, defenceReplayLoadOf(response)).catch((err) =>
+      logger.error(`Defence replay load not kept for base ${defenderBaseid}: ${err}`)
+    );
   }
 
   ctx.status = Status.OK;

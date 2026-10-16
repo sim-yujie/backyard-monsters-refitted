@@ -11,6 +11,8 @@ import { isDeclareWarRunning } from "../alliance/powerups.js";
 import { protectAfterAttack } from "../maproom/v2/damageProtection.js";
 import { noticeOutpostAttack } from "../maproom/v2/outpostNotices.js";
 import { afterYardDefended } from "./afterYardDefended.js";
+import { discardDefenceReplayLoad } from "../defences/defenceReplayLoad.js";
+import { recordDefenceReplay } from "../defences/recordDefenceReplay.js";
 import { isMR3Structure } from "../maproom/v3/utils/isMR3Structure.js";
 import { advanceBuildingTimers } from "./advanceBuildingTimers.js";
 import { checkpointExpired, checkpointSession, type AttackCheckpoint } from "./attackCheckpoint.js";
@@ -328,6 +330,20 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
       housedLost: lostCount(housingLoss),
       now,
     });
+    // A Map Room 2 main yard's defence replay, ending where the attacker
+    // left, recorded before the notice so the notice can open it (#359).
+    const replayId = await recordDefenceReplay(postgres.em, {
+      yard: defender,
+      attacker,
+      session,
+      input,
+      report: (defender as unknown as { attackreport: unknown }).attackreport,
+      damageBefore,
+      damageAfter: defender.damage ?? 0,
+      defenderDelta: loot.defenderDelta,
+      housedLost: lostCount(housingLoss),
+      now,
+    });
     // And a Map Room 1 main yard's, the same; an attacked bot books its
     // repair and maybe a revenge (bot neighbours, #241).
     await afterYardDefended(postgres.em, {
@@ -336,6 +352,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
       defenderDelta: loot.defenderDelta,
       housedLost: lostCount(housingLoss),
       now,
+      replayId,
     });
   }
 
@@ -350,6 +367,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
 
   await endAttackSession(basesaveid);
   await discardCheckpoint(basesaveid);
+  await discardDefenceReplayLoad(basesaveid);
 
   // An attack played by hand on a Map Room 2 camp is the attacker's plan for
   // its tribe and level from now on (issue #221); an auto-attack never is.

@@ -19,6 +19,8 @@ export interface YardDefence {
   readonly housedLost?: number;
   /** When the attack landed, in seconds. */
   readonly now: number;
+  /** The defence replay the landing recorded first, for the notice's Watch button (#359); null for none. */
+  readonly replayId?: number | null;
 }
 
 /**
