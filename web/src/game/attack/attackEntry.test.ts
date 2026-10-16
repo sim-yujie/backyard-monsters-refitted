@@ -388,6 +388,37 @@ describe("ownCellsIn and targetKind", () => {
     expect(own.map((entry) => [entry.col, entry.row, entry.cell.bid])).toEqual([[710, 347, "1000"]]);
   });
 
+  it("counts a yard on a zone edge once, though both zones carry it", () => {
+    // The home cell at (706, 140) is in zone (700, 130) and in zone (700, 140):
+    // each `getarea` covers `y..y+10` inclusive. Both copies used to count,
+    // so 25 housed Teratorns showed as 50 and the save was refused.
+    const home = ownCell(706, 140, { bid: "4106", m: { housed: { C14: 25, C15: 2 } } });
+    const zone = (fetchedAt: number, cell = home) => ({
+      data: { "706": { "140": cell.cell } },
+      fetchedAt,
+    });
+    const own = ownCellsIn([zone(1), zone(2)]);
+    expect(own.map((entry) => [entry.col, entry.row, entry.cell.bid])).toEqual([[706, 140, "4106"]]);
+
+    const roster = rosterInRange({ col: 707, row: 139 }, own, null);
+    expect(roster.monsters).toEqual({ C14: 25, C15: 2 });
+    expect(roster.sources?.map((source) => source.baseid)).toEqual(["4106"]);
+  });
+
+  it("reads an edge cell from the zone fetched last", () => {
+    const before = ownCell(706, 140, { bid: "4106", m: { housed: { C14: 25 } } });
+    const after = ownCell(706, 140, { bid: "4106", m: { housed: { C14: 5 } } });
+    const zone = (fetchedAt: number, cell: PlayerCell | MapCell) => ({
+      data: { "706": { "140": cell } },
+      fetchedAt,
+    });
+    expect(ownCellsIn([zone(2, after.cell), zone(1, before.cell)])[0]?.cell.m).toEqual({ housed: { C14: 5 } });
+    expect(ownCellsIn([zone(1, before.cell), zone(2, after.cell)])[0]?.cell.m).toEqual({ housed: { C14: 5 } });
+    // An outpost lost since the older zone came in is no longer counted.
+    const lost = playerCell({ mine: 0, uid: 2, bid: "4106" });
+    expect(ownCellsIn([zone(1, before.cell), zone(2, lost)])).toEqual([]);
+  });
+
   it("names the load mode family a cell takes", () => {
     expect(targetKind(camp)).toBe("wild");
     expect(targetKind(playerCell())).toBe("main");
