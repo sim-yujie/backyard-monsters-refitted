@@ -174,11 +174,13 @@ const cellRow = (baseid: string, uid: number, x: number, y: number, over: Partia
   ...over,
 });
 
-const run = async (authUser: Row, body: Row): Promise<Row> => {
+const runCtx = async (authUser: Row, body: Row): Promise<Context> => {
   const ctx = { authUser, request: { body }, state: {} } as unknown as Context;
   await getArea(ctx, async () => {});
-  return ctx.body as Row;
+  return ctx;
 };
+
+const run = async (authUser: Row, body: Row): Promise<Row> => (await runCtx(authUser, body)).body as Row;
 
 beforeEach(() => {
   tables = new Map();
@@ -295,6 +297,27 @@ describe("getArea: an attacker's base", () => {
     const data = body.data as Record<number, Record<number, unknown>>;
 
     expect(data[9]![0]).toEqual({ uid: 6, baseid: "attacker-base", username: "attacker", alliance_id: null });
+  });
+
+  // The red "attacked you" plate (#350): `ctx.state.attackers` is what
+  // `userCell` reads to tag a cell `ak`, covered by its own tests.
+  test("hands the cell builder every visible owner who attacked the viewer, near or revealed, and no one else", async () => {
+    const p = viewer(1, { flinger: 1, homebase: ["1", "1"] }); // reach 4
+    tables.set(AttackLogs, [
+      { defender_userid: 1, attacker_userid: 6 },
+      { defender_userid: 1, attacker_userid: 7 },
+      { defender_userid: 3, attacker_userid: 1 }, // the viewer attacked 3: not the other way round
+    ]);
+    tables.set(User, [ownerRow(3, "victim"), ownerRow(6, "far-attacker"), ownerRow(7, "near-attacker")]);
+    tables.set(WorldMapCell, [
+      cellRow("victim-base", 3, 3, 1), // in reach
+      cellRow("near-attacker-base", 7, 2, 2), // in reach
+      cellRow("far-attacker-base", 6, 9, 0), // out of reach, revealed as an attacker's
+    ]);
+
+    const ctx = await runCtx(p, { x: 0, y: 0 });
+
+    expect([...(ctx.state.attackers as Set<number>)].sort()).toEqual([6, 7]);
   });
 });
 
