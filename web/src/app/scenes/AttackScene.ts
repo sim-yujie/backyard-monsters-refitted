@@ -27,7 +27,7 @@ import {
   watchTarget,
   type WatchRun,
 } from "@/game/autoAttack/watchRun";
-import { DEFENCE_REFUSAL_TEXT, type DefenceRefusal } from "@/game/defences/defenceWatch";
+import { DEFENCE_REFUSAL_TEXT, defenceReadout, type DefenceRefusal } from "@/game/defences/defenceWatch";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { consumeRaidRun, raidTarget, type RaidRun } from "@/game/raid/raidSession";
 import { tribeTitle } from "@/game/raid/raidText";
@@ -870,14 +870,24 @@ export class AttackScene implements Scene {
       this.clock.setAttribute("aria-live", reading.warning ? "polite" : "off");
     }
     // What the screen has dealt, not what the engine has booked (#148).
+    const damageShown = this.presentation.damageShown(state);
+    // A defence replay reads the defender's side, and ends on the stored figures (#362).
+    const readout = isDefenceWatch(this.watchRun)
+      ? defenceReadout(
+          this.watchRun.defence,
+          damageShown,
+          state.defenderLoss,
+          state.phase === "ended" && this.session?.endedBy !== "left",
+        )
+      : { damage: Math.floor(damageShown), loot: state.loot };
     if (this.damage) {
-      this.damage.textContent = `${Math.floor(this.presentation.damageShown(state))}% damage`;
+      this.damage.textContent = `${readout.damage}% damage`;
     }
     if (this.loot) {
-      const { r1, r2, r3, r4 } = state.loot;
+      const { r1, r2, r3, r4 } = readout.loot;
       RESOURCE_KEYS.forEach((key, index) => {
         const value = this.lootValues[index];
-        if (value) value.textContent = formatAmount(state.loot[key]);
+        if (value) value.textContent = formatAmount(readout.loot[key]);
       });
       this.loot.title = `Twigs ${r1}, pebbles ${r2}, putty ${r3}, goo ${r4}`;
     }

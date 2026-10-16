@@ -8,6 +8,7 @@ import {
   CLIENT_RULES_VERSION,
   DEFENCE_REFUSAL_TEXT,
   defenceDrift,
+  defenceReadout,
   defenceRefusal,
   defenceWatchOf,
   logDefenceDrift,
@@ -116,11 +117,48 @@ describe("the drift check", () => {
     });
   });
 
+  it("checks the defender's loss too, when given it, and names both sides of a loot drift", () => {
+    const stored = fixture.defence.damageAfter;
+    const loot = fixture.defence.loot as { r1: number; r2: number; r3: number; r4: number };
+    expect(defenceDrift(run(), stored, 33_600, { ...loot, r1: loot.r1 + 0.7 })).toBeNull();
+    const drift = defenceDrift(run(), stored, 33_600, { ...loot, r1: loot.r1 + 5_000 });
+    expect(drift).toMatchObject({ stored, replayed: stored, tick: 33_600 });
+    expect(drift?.loot).toEqual({ stored: loot, replayed: { ...loot, r1: loot.r1 + 5_000 } });
+    // A damage drift alone carries no loot.
+    expect(defenceDrift(run(), stored - 3, 33_600, loot)?.loot).toBeUndefined();
+  });
+
   it("logs a drift as defence-replay-drift", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const drift = { id: 1, rulesVersion: "abc", stored: 30, replayed: 29, tick: 100 };
     logDefenceDrift(drift);
     expect(warn).toHaveBeenCalledWith("defence-replay-drift", drift);
     warn.mockRestore();
+  });
+});
+
+describe("the attack strip on a defence replay", () => {
+  /** A yard already 20% damaged before the attack, which took it to 55%. */
+  const defence = { damageDone: 35, damageAfter: 55, loot: { r1: 1_000, r2: 2_000 } };
+  const loss = (r1: number, r2 = 0) => ({ r1, r2, r3: 0, r4: 0 });
+
+  it("reads what the defender has lost so far, not the attacker's gain", () => {
+    expect(defenceReadout(defence, 40, loss(612.9, 3), false).loot).toEqual({ r1: 612, r2: 3, r3: 0, r4: 0 });
+  });
+
+  it("reads this attack's damage alone, not the yard's whole damage", () => {
+    expect(defenceReadout(defence, 20, loss(0), false).damage).toBe(0);
+    expect(defenceReadout(defence, 40.9, loss(0), false).damage).toBe(20);
+    expect(defenceReadout(defence, 55.2, loss(0), false).damage).toBe(35);
+    // A yard the engine found a little less damaged than the server did never reads below nothing.
+    expect(defenceReadout(defence, 18, loss(0), false).damage).toBe(0);
+    expect(defenceReadout(defence, Number.NaN, loss(0), false).damage).toBe(0);
+  });
+
+  it("ends on the stored figures, whatever the engine reached", () => {
+    expect(defenceReadout(defence, 61, loss(1_300, 1_900), true)).toEqual({
+      damage: 35,
+      loot: { r1: 1_000, r2: 2_000, r3: 0, r4: 0 },
+    });
   });
 });

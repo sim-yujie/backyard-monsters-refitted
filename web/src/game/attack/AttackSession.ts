@@ -198,6 +198,11 @@ export interface AttackSessionState {
   readonly buildingsDestroyed: number;
   /** What the attacker has gained, before the storage cap. */
   readonly loot: ResourceAmounts;
+  /**
+   * What the defender has lost so far: less than `loot` when the attacker's
+   * low-level bonus is on it. A defence replay shows this one (#362).
+   */
+  readonly defenderLoss: ResourceAmounts;
   readonly creepsFlung: number;
   readonly creepsAlive: number;
   readonly creepsKilled: number;
@@ -972,6 +977,7 @@ export class AttackSession {
       damagePercent: battleState ? this.damageOf(battleState) : 0,
       buildingsDestroyed: battleState?.destroyedIds.length ?? 0,
       loot: battleState?.loot ?? { r1: 0, r2: 0, r3: 0, r4: 0 },
+      defenderLoss: battleState?.defenderLoss ?? { r1: 0, r2: 0, r3: 0, r4: 0 },
       creepsFlung: battleState?.creepsFlung ?? 0,
       creepsAlive: battleState?.creepsAlive ?? 0,
       creepsKilled: battleState?.creepsKilled ?? 0,

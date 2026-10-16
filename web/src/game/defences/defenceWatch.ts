@@ -2,7 +2,7 @@ import type { ChampionSaveEntry } from "@/api/types";
 import type { Defence, DefenceReplayPayload, DefenceReplayResponse } from "@/api/defences";
 import type { AttackRoster, AttackTarget, SiegeInventory } from "@/game/attack/attackTarget";
 import { flungOf } from "@/game/attack/attackSave";
-import type { FlingEvent } from "@/game/combat/rules";
+import { RESOURCE_KEYS, type FlingEvent, type ResourceAmounts } from "@/game/combat/rules";
 import manifest from "@/game/combat/rules/MANIFEST.json";
 
 /**
@@ -153,24 +153,83 @@ export const defenceTarget = (run: DefenceWatch, events: readonly FlingEvent[]):
 export const storedDamageOf = (percent: number): number =>
   Number.isFinite(percent) ? Math.min(100, Math.max(0, Math.trunc(percent))) : 0;
 
-/** The engine's end damage against the stored one, when they differ. */
+/** Whole amounts by resource, as the server stores a defence's loot. */
+export type WholeLoot = Readonly<Record<"r1" | "r2" | "r3" | "r4", number>>;
+
+const wholeLoot = (amounts: Partial<Record<"r1" | "r2" | "r3" | "r4", number>>): WholeLoot => {
+  const out = { r1: 0, r2: 0, r3: 0, r4: 0 };
+  for (const key of RESOURCE_KEYS) out[key] = Math.max(0, Math.floor(Number(amounts[key] ?? 0)) || 0);
+  return out;
+};
+
+/** The engine's end damage against the stored one, and its loot when that differs too. */
 export interface DefenceDrift {
   readonly id: number;
   readonly rulesVersion: string;
   readonly stored: number;
   readonly replayed: number;
   readonly tick: number;
+  /** The defender's loss stored and replayed, when they differ. */
+  readonly loot?: { readonly stored: WholeLoot; readonly replayed: WholeLoot };
 }
 
 /**
  * The drift between the stored result and the one the engine played to, or
  * null when they agree. The screen shows the stored result either way.
+ *
+ * @param defenderLoss - The engine's defender loss at the end; the loot is
+ *   not checked without it.
  */
-export const defenceDrift = (run: DefenceWatch, damagePercent: number, tick: number): DefenceDrift | null => {
+export const defenceDrift = (
+  run: DefenceWatch,
+  damagePercent: number,
+  tick: number,
+  defenderLoss?: ResourceAmounts,
+): DefenceDrift | null => {
   const replayed = storedDamageOf(damagePercent);
   const stored = run.defence.damageAfter;
-  if (replayed === stored) return null;
-  return { id: run.defence.id, rulesVersion: run.defence.rulesVersion, stored, replayed, tick };
+  const loot = defenderLoss ? { stored: wholeLoot(run.defence.loot), replayed: wholeLoot(defenderLoss) } : null;
+  const lootDrifts = loot !== null && RESOURCE_KEYS.some((key) => loot.stored[key] !== loot.replayed[key]);
+  if (replayed === stored && !lootDrifts) return null;
+  return {
+    id: run.defence.id,
+    rulesVersion: run.defence.rulesVersion,
+    stored,
+    replayed,
+    tick,
+    ...(lootDrifts && loot ? { loot } : {}),
+  };
+};
+
+/** What the attack strip reads on a defence replay: this attack's damage and the defender's loss. */
+export interface DefenceReadout {
+  /** Whole % damage this attack has done. */
+  readonly damage: number;
+  readonly loot: WholeLoot;
+}
+
+/**
+ * The attack strip's figures on a defence replay (#362). Not the attacker's
+ * view: the loot is what the defender lost, without the attacker's low-level
+ * bonus, and the damage is this attack's alone, not the yard's whole damage.
+ * Once the battle is over it reads the STORED figures, as the result panel
+ * does, so the two never disagree (owner decision).
+ *
+ * @param defence - The stored figures.
+ * @param damageShown - The whole yard's % damage on screen now.
+ * @param defenderLoss - What the engine has taken from the defender so far.
+ * @param over - The battle has ended.
+ */
+export const defenceReadout = (
+  defence: Pick<Defence, "damageDone" | "damageAfter" | "loot">,
+  damageShown: number,
+  defenderLoss: ResourceAmounts,
+  over: boolean,
+): DefenceReadout => {
+  if (over) return { damage: Math.max(0, Math.round(defence.damageDone)), loot: wholeLoot(defence.loot) };
+  const before = defence.damageAfter - defence.damageDone;
+  const shown = Number.isFinite(damageShown) ? Math.floor(damageShown) : 0;
+  return { damage: Math.min(100, Math.max(0, shown - before)), loot: wholeLoot(defenderLoss) };
 };
 
 /** Logs a drift as `defence-replay-drift`; there is no client telemetry to send it to. */
