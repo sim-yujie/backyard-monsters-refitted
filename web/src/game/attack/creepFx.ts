@@ -44,6 +44,16 @@ export const BURST_TICKS = 6;
 /** World px the arc rises at its middle. */
 const ARC_HEIGHT = 12;
 
+/**
+ * A ranked Teratorn's fireball jumping on to the next building (#352) flies
+ * as Flash's did: the same `FIREBALL` carries on at its 6 px a loop
+ * (`creeps/Teratorn.as:19`, `FIREBALL.as:127-137`, ticked every loop at
+ * `GLOBAL.as:1291`), so a jump of 60 px is in the air for 10 ticks.
+ */
+export const JUMP_PX_PER_TICK = 6;
+/** The fewest ticks a jump is in the air, so a short one is still seen. */
+const JUMP_MIN_TICKS = 4;
+
 /** Ticks a struck building is drawn flashed. */
 export const FLASH_TICKS = 3;
 /** Ticks before the same building may flash again, so a mob does not strobe it. */
@@ -108,9 +118,13 @@ export const lungeOffset = (age: number): number => {
   return Math.sin((age / LUNGE_TICKS) * Math.PI) * LUNGE_PX;
 };
 
-/** Where a projectile is `age` ticks into its flight: a line with a small arc. */
-export const flightPoint = (from: Point, to: Point, age: number): Point => {
-  const t = Math.max(0, Math.min(1, age / PROJECTILE_TICKS));
+/** Ticks a fireball's jump from one building to the next is in the air. */
+export const jumpTicks = (from: Point, to: Point): number =>
+  Math.max(JUMP_MIN_TICKS, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / JUMP_PX_PER_TICK));
+
+/** Where a projectile is `age` ticks into a `flight`-tick flight: a line with a small arc. */
+export const flightPoint = (from: Point, to: Point, age: number, flight = PROJECTILE_TICKS): Point => {
+  const t = Math.max(0, Math.min(1, age / flight));
   return {
     x: from.x + (to.x - from.x) * t,
     y: from.y + (to.y - from.y) * t - Math.sin(t * Math.PI) * ARC_HEIGHT,
@@ -203,6 +217,8 @@ interface Projectile {
   readonly big: boolean;
   /** Health the swing took off, shown over the building when it lands. */
   readonly amount: number;
+  /** Ticks it is in the air. */
+  readonly flight: number;
   landed: boolean;
 }
 
@@ -269,6 +285,8 @@ export class CreepFx {
   /**
    * A projectile from a monster's body to a target. On arrival it flashes
    * `buildingId` and shows `amount` over it, so the number lands with the shot.
+   * `tick` may be ahead of now: a fireball's jump leaves when the one before
+   * it lands, and nothing is drawn until then.
    */
   projectile(
     tick: number,
@@ -277,8 +295,9 @@ export class CreepFx {
     buildingId: number,
     big: boolean,
     amount = 0,
+    flight = PROJECTILE_TICKS,
   ): void {
-    this.projectiles.push({ tick, from, to, buildingId, big, amount, landed: false });
+    this.projectiles.push({ tick, from, to, buildingId, big, amount, flight, landed: false });
   }
 
   /** Flashes a building for `FLASH_TICKS`, unless it flashed a moment ago. */
@@ -381,6 +400,13 @@ export class CreepFx {
     return this.projectiles.length;
   }
 
+  /** The shots in the air, waiting to be thrown, or bursting, for tests. */
+  get shots(): ReadonlyArray<
+    Readonly<Pick<Projectile, "tick" | "from" | "to" | "buildingId" | "amount" | "flight">>
+  > {
+    return this.projectiles;
+  }
+
   get labelCount(): number {
     return this.active.length;
   }
@@ -421,10 +447,8 @@ export class CreepFx {
     let keep = 0;
     for (const shot of this.projectiles) {
       const age = tick - shot.tick;
-      if (age > PROJECTILE_TICKS + BURST_TICKS) continue;
-      this.projectiles[keep] = shot;
-      keep += 1;
-      if (age >= PROJECTILE_TICKS && !shot.landed) {
+      // A frame that skips past the burst still lands the shot, so the damage it holds is let go.
+      if (age >= shot.flight && !shot.landed) {
         shot.landed = true;
         this.flash(shot.buildingId, tick);
         if (shot.buildingId >= 0 && shot.amount > 0) {
@@ -433,13 +457,18 @@ export class CreepFx {
           this.number(tick, `building:${shot.buildingId}`, -1, shot.amount, over, "damage");
         }
       }
+      if (age > shot.flight + BURST_TICKS) continue;
+      this.projectiles[keep] = shot;
+      keep += 1;
+      // Not yet thrown: a jump waiting for the fireball before it to land.
+      if (age < 0) continue;
       const radius = shot.big ? 6 : 4.5;
-      if (age < PROJECTILE_TICKS) {
-        const at = flightPoint(shot.from, shot.to, age);
+      if (age < shot.flight) {
+        const at = flightPoint(shot.from, shot.to, age, shot.flight);
         if (!this.reducedMotion) {
           // Three tail beads along the path just flown, fading back.
           for (let back = 1; back <= 3; back += 1) {
-            const trail = flightPoint(shot.from, shot.to, age - back * 1.5);
+            const trail = flightPoint(shot.from, shot.to, age - back * 1.5, shot.flight);
             fire
               .circle(trail.x, trail.y, radius * (1 - back * 0.22))
               .fill({ color: FIREBALL_TAIL, alpha: 0.5 - back * 0.13 });
@@ -448,7 +477,7 @@ export class CreepFx {
         fire.circle(at.x, at.y, radius).fill({ color: FIREBALL_BODY, alpha: 0.95 });
         fire.circle(at.x, at.y, radius * 0.5).fill({ color: FIREBALL_CORE, alpha: 1 });
       } else {
-        const burst = (age - PROJECTILE_TICKS) / BURST_TICKS;
+        const burst = (age - shot.flight) / BURST_TICKS;
         fire
           .circle(shot.to.x, shot.to.y, radius + burst * radius * 2)
           .fill({ color: FIREBALL_BODY, alpha: 0.8 * (1 - burst) });

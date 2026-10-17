@@ -30,7 +30,9 @@ import {
   BUILDING_NUMBER_LIFT,
   CreepFx,
   HURT_TICKS,
+  PROJECTILE_TICKS,
   drawsProjectile,
+  jumpTicks,
   lungeOffset,
   mouthPoint,
 } from "./creepFx";
@@ -607,10 +609,9 @@ const SHADOW_ALPHA = 0.8;
 const SPLAT_COLOUR = 0x5da832;
 /** `G4QuakeGraphic`'s line colour, 15893760 (`champions/Korath.as:233`). */
 const QUAKE_COLOUR = 0xf28500;
-/** The special moves' bursts (issue #352): a splash, a Bolt's hop, a Teratorn's jump, the venom drop. */
+/** The special moves' bursts (issue #352): a splash, a Bolt's hop, the venom drop. */
 const SPLASH_COLOUR = 0xe8d44d;
 const BLINK_COLOUR = 0x9fd4ff;
-const BOUNCE_COLOUR = 0xff7a1a;
 const VENOM_COLOUR = 0x7bd62a;
 /** Blink.as:78: a hopping Bolt is drawn at this alpha. A cloaked Brain is drawn the same. */
 const UNSEEN_ALPHA = 0.3;
@@ -694,6 +695,11 @@ export class AttackBattleLayer {
   private readonly ledger = new ShotLedger<DeathEvent>();
   /** Building health a ranged creep's projectile has taken but not yet landed. */
   private readonly heldBuildingHp = new Map<number, number>();
+  /** Each Teratorn's latest fireball jump (#352), so the next jump leaves when it lands. */
+  private readonly lastJump = new Map<
+    number,
+    { tick: number; toBuildingId: number; landsAt: number }
+  >();
 
   /* Resource bombs (#87): the rain, and the health its particles still carry. */
   private readonly bombFx: BombFx;
@@ -917,6 +923,7 @@ export class AttackBattleLayer {
     this.leavers.clear();
     this.ledger.clear();
     this.heldBuildingHp.clear();
+    this.lastJump.clear();
     this.towerFx.standDown();
     this.fx.dropProjectiles();
     this.damageDirty = true;
@@ -1069,6 +1076,7 @@ export class AttackBattleLayer {
     this.blastFx.destroy();
     this.ledger.clear();
     this.heldBuildingHp.clear();
+    this.lastJump.clear();
     this.fx.destroy();
     this.bombFx.destroy();
     this.heldBombHp.clear();
@@ -1637,6 +1645,40 @@ export class AttackBattleLayer {
     }
   }
 
+  /**
+   * A ranked Teratorn's fireball jumped on to the next building (#352). The
+   * engine deals every jump on the swing's tick; Flash's one `FIREBALL` flew
+   * on from each building it hit to the next (`FIREBALL.as:173-179`). So the
+   * jump is drawn as the same fireball leaving when the shot before it lands
+   * (the swing's fireball for the first) and flying at Flash's speed, and the
+   * building shows the damage when it arrives. Drawing only.
+   */
+  private onBounce(event: Extract<BattleVisualEvent, { kind: "bounce" }>): void {
+    const from =
+      this.host.centreOf(event.fromBuildingId) ??
+      groundWorld(event.fromIx, event.fromIy, this.origin);
+    const to =
+      this.host.centreOf(event.toBuildingId) ?? groundWorld(event.toIx, event.toIy, this.origin);
+    const last = this.lastJump.get(event.creepId);
+    const leaves =
+      last && last.tick === event.tick && last.toBuildingId === event.fromBuildingId
+        ? last.landsAt
+        : event.tick + PROJECTILE_TICKS;
+    const flight = jumpTicks(from, to);
+    this.lastJump.set(event.creepId, {
+      tick: event.tick,
+      toBuildingId: event.toBuildingId,
+      landsAt: leaves + flight,
+    });
+    if (event.amount > 0) {
+      this.heldBuildingHp.set(
+        event.toBuildingId,
+        (this.heldBuildingHp.get(event.toBuildingId) ?? 0) + event.amount,
+      );
+    }
+    this.fx.projectile(leaves, from, to, event.toBuildingId, false, event.amount, flight);
+  }
+
   /** A ranged creep's fireball reached its building: show the damage it carried. */
   private onFireballLanded(buildingId: number, amount: number): void {
     const held = (this.heldBuildingHp.get(buildingId) ?? 0) - amount;
@@ -1661,8 +1703,10 @@ export class AttackBattleLayer {
         if (hp === undefined) continue;
         const maxHp = this.maxHpById.get(id) ?? Number.POSITIVE_INFINITY;
         // The engine lets a building's health run below zero; the amount held is
-        // what it actually lost, counted from what it had.
-        shown[String(id)] = Math.min(maxHp, Math.max(0, hp) + held);
+        // what it actually lost, counted from what it had. Its health comes whole
+        // (truncated), so a held half point is rounded up: a fireball's jump of
+        // 37.5 must not leave the building a hair under full before it lands.
+        shown[String(id)] = Math.min(maxHp, Math.ceil(Math.max(0, hp) + held));
       }
     }
     return shown;
@@ -1846,9 +1890,7 @@ export class AttackBattleLayer {
       return;
     }
     if (event.kind === "bounce") {
-      const to = groundWorld(event.toIx, event.toIy, this.origin);
-      this.spawnRing(event.tick, groundWorld(event.fromIx, event.fromIy, this.origin), 14, BOUNCE_COLOUR);
-      this.spawnRing(event.tick, to, 26, BOUNCE_COLOUR);
+      this.onBounce(event);
       return;
     }
     if (event.kind !== "death") return;
@@ -1923,6 +1965,11 @@ export class AttackBattleLayer {
   /** The drawn explosions, for tests and the dev hook. */
   get blasts(): BlastFx {
     return this.blastFx;
+  }
+
+  /** Rings on the ground (a splash, a Bolt's hop, a quake), for tests. */
+  get ringCount(): number {
+    return this.bursts.length;
   }
 
   private makeGib(): Sprite {
