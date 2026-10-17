@@ -165,6 +165,7 @@ import {
   isFlyingMovement,
   oldStyleTargets,
   towerTargets,
+  shellBlastTargets,
   TRAP_TARGETS,
 } from "./targeting.js";
 import {
@@ -291,7 +292,8 @@ import {
  * 5. **Burrowers do not pick a side.** `_movement == "burrow"` picks one of a
  *    building's four sides at random (`MonsterBase.as:1093-1119`). The engine
  *    treats a burrower as a ground creep that ignores walls, which is the part
- *    that matters for damage.
+ *    that matters for damage. It does tunnel as Flash's does: underground and
+ *    untargetable whenever it is not swinging ({@link tickBurrow}).
  * 6. **Only the closest target is routed to.** The client asks the grid for a
  *    route to the closest *and* the second closest and takes whichever answers
  *    first, because its flood is asynchronous (`MonsterBase.as:1163-1169`). The
@@ -731,6 +733,8 @@ export interface CreepSnapshot {
   readonly rank?: number;
   /** A Brain that cannot be targeted: drawn see-through (issue #352). */
   readonly invisible?: boolean;
+  /** A Wormzer tunnelling: drawn as nothing but its dirt, and untargetable. */
+  readonly burrowed?: boolean;
   /** A Bolt in mid-blink, flickering and untargetable (issue #352). */
   readonly blinking?: boolean;
   /** Fang's venom stacks on it; absent when it is not poisoned (issue #352). */
@@ -949,6 +953,11 @@ interface Creep {
   targetGroup: number;
   flying: boolean;
   ignoreWalls: boolean;
+  /**
+   * `_movement == "burrow"` (Wormzer): it tunnels while it is not swinging
+   * ({@link tickBurrow}), and underground it is `invisible`.
+   */
+  burrows: boolean;
   explode: boolean;
   /** `MonsterBase.lootingMultiplier`: resource drawn per point of damage. */
   lootMultiplier: number;
@@ -1004,7 +1013,10 @@ interface Creep {
   rank: number;
   /** Wormzer's `m_lastTarget`: its last splash's target ({@link splashKey}); -1 for none. */
   lastSplash: number;
-  /** A Brain that is cloaked: it carries `TARGETS_INVISIBLE` in `flags` (issue #352). */
+  /**
+   * A Brain that is cloaked or a Wormzer underground: it carries
+   * `TARGETS_INVISIBLE` in `flags` (issue #352).
+   */
   invisible: boolean;
   /** The tick a cloaked, arrived Brain shows itself; -1 until it has arrived. */
   cloakEnds: number;
@@ -2083,6 +2095,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       targetGroup,
       flying,
       ignoreWalls: movement === "burrow" || movement === "jump",
+      burrows: movement === "burrow",
       explode: monsterStat(monsterId, "explode", level) > 0,
       lootMultiplier: lootingMultiplier(targetGroup, false),
       flags: defenseFlags(friendly, flying, false),
@@ -2184,6 +2197,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       targetGroup: championStat(id, "targetGroup", level) || TARGET_GROUP.ALL,
       flying,
       ignoreWalls: false,
+      burrows: false,
       explode: false,
       // Every champion, Krallen included, loots at 2 (`ChampionBase.as:221`).
       lootMultiplier: lootingMultiplier(TARGET_GROUP.RESOURCES, true),
@@ -2267,6 +2281,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       targetGroup: TARGET_GROUP.ALL,
       flying,
       ignoreWalls: false,
+      burrows: false,
       explode: false,
       lootMultiplier: 0,
       flags: defenseFlags(true, flying, false),
@@ -3921,6 +3936,26 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
   };
 
+  /**
+   * `MonsterBase.renderBurrow` (`MonsterBase.as:625-691`): an attacking
+   * burrower is underground whenever its `_speed` is above 0, and `move()`
+   * zeroes that only while it is `_attacking` (`CreepBase.as:1456-1471`). So it
+   * digs in as it sets off, tunnels to its target, pops up to swing and goes
+   * back under for the next. Underground it is `invisible` (`:663`), which
+   * takes `TARGETS_INVISIBLE` into its flags, so no tower picks it, no
+   * defender or bunker sees it, and only what reaches the invisible (a trap,
+   * the cannon's blast, the Laser, the Railgun) hurts it. Run after its tick,
+   * so it surfaces on the tick it starts to swing. A defending burrower is
+   * left above ground: the defence's chase is the owner's rule, not Flash's.
+   */
+  const tickBurrow = (creep: Creep): void => {
+    const under = !creep.friendly && creep.behaviour === "attack" && !creep.attacking;
+    if (under === creep.invisible) return;
+    creep.invisible = under;
+    if (under) creep.flags |= TARGETS_INVISIBLE;
+    else creep.flags &= ~TARGETS_INVISIBLE;
+  };
+
   /** Ends a blink: the creep can be shot again. */
   const stopBlink = (creep: Creep): void => {
     creep.blinkHops = 0;
@@ -4170,7 +4205,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         fireRailgun(tower, creep, damage * towerHealthScale(building.hp, building.maxHp));
         continue;
       }
-      fireShell(tower, creep, shot, splash, scan.flags);
+      fireShell(tower, creep, shot, splash, shellBlastTargets(building.type));
     }
   };
 
@@ -4974,7 +5009,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       for (const creep of creeps) if (creep.friendly && creep.hp > 0) defendersOut += 1;
     }
     tickPutty();
-    for (const creep of creeps) tickCreep(creep);
+    for (const creep of creeps) {
+      tickCreep(creep);
+      if (creep.burrows) tickBurrow(creep);
+    }
     tickLeaving();
 
     if (creeps.length > 0) {
@@ -5082,7 +5120,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       lootBoosted: creep.lootBuffedBy >= 0,
       quaking: creep.quaking,
       ...(creep.rank > 0 ? { rank: creep.rank } : {}),
-      ...(creep.invisible ? { invisible: true } : {}),
+      ...(creep.invisible && !creep.burrows ? { invisible: true } : {}),
+      ...(creep.invisible && creep.burrows ? { burrowed: true } : {}),
       ...(creep.blinkHops > 0 ? { blinking: true } : {}),
       ...(creep.venomStacks > 0 ? { poisonStacks: creep.venomStacks } : {}),
     }));

@@ -70,6 +70,19 @@ export const towerTargets = (type: number): number => oldStyleTargets(flyerMode(
 /** The trap's fixed mode, which no props entry carries (`BTRAP.as:26`). */
 export const TRAP_TARGETS = oldStyleTargets(-1);
 
+/** The Cannon and the Inferno Cannon, whose shells blast with the trap's flags. */
+const INVISIBLE_BLAST_TOWERS: ReadonlySet<number> = new Set([20, 130]);
+
+/**
+ * What a tower's shell blast may hurt. The Cannon and the Inferno Cannon hand
+ * their shells the trap's mode (`BUILDING20.as:43`, `INFERNO_CANNON_TOWER.as:41`,
+ * read by `PROJECTILE.Splash`, `PROJECTILE.as:64-69`), so the blast reaches a
+ * tunnelling Wormzer or a cloaked Brain the tower itself cannot pick; every
+ * other tower's blast hits what the tower aims at.
+ */
+export const shellBlastTargets = (type: number): number =>
+  INVISIBLE_BLAST_TOWERS.has(type) ? TRAP_TARGETS : towerTargets(type);
+
 /**
  * `Targeting.canHitCreep` (`:322-325`): every flag the defender carries must be
  * one the attacker can reach.
