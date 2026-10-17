@@ -1,0 +1,232 @@
+/*
+ * The Defences screen (#363): the yard's Defences button
+ * (`web/src/ui/defences/DefencesButton.ts`) and the list behind it
+ * (`DefencesScreen.ts`), the attacks other players landed on the yard.
+ *
+ * Same rule as ui.css: every value comes from tokens.css. The button is one
+ * of the dock's round buttons (yard-hud.css), beside Mail; the list is the
+ * shared `.panel`, docked where the mailbox and the notification list dock,
+ * its rows dressed as theirs.
+ */
+
+/* ── The button: beside Mail, the bell one place further left ───────────── */
+
+.yard-dock__right > .yard-dock__button--defences {
+  right: 330px;
+  bottom: 30px;
+}
+
+.yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--bell {
+  right: 420px;
+}
+
+/* ── The frame: docked right under the HUD ──────────────────────────────── */
+
+.defences-screen {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  right: var(--space-4);
+  z-index: var(--z-hud);
+  width: min(480px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100% - var(--hud-height) - var(--space-3) - var(--space-4));
+  max-width: none;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.defences-screen[hidden] {
+  display: none;
+}
+
+.defences-screen .panel__titlebar {
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
+.defences-screen .panel__title {
+  margin-right: auto;
+  font-size: var(--text-xl);
+}
+
+.defences-screen .panel__body {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.defences-intro {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--colour-border-subtle);
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.defences-status {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--colour-border-subtle);
+  color: var(--colour-danger);
+  font-size: var(--text-sm);
+}
+
+/* ── The rows ───────────────────────────────────────────────────────────── */
+
+.defences-list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.defences-list__empty {
+  padding: var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.defences-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--colour-border-subtle);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.defences-row__picture {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--colour-avatar-ground);
+  overflow: hidden;
+}
+
+.defences-row__picture img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.defences-row__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.defences-row__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.defences-row__name {
+  overflow: hidden;
+  color: var(--colour-text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.defences-row__time {
+  flex: none;
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.defences-row__facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-3);
+}
+
+.defences-row__damage {
+  color: var(--colour-text);
+  font-weight: 600;
+}
+
+.defences-row__loot {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px var(--space-2);
+}
+
+.defences-row__loot--none,
+.defences-row__housed,
+.defences-row__left {
+  color: var(--colour-text-muted);
+}
+
+.defences-row__watch {
+  flex: none;
+}
+
+/* The owner's grey words in place of Watch. */
+.defences-row__unavailable {
+  flex: none;
+  max-width: 132px;
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+  text-align: right;
+}
+
+/* ── A notice's Watch and Defences, in the mailbox ─────────────────────── */
+
+.mail-message__defence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.mail-message__defence-note {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* ── A phone: a bottom sheet, the button beside Mail ───────────────────── */
+
+@media (width <= 620px) {
+  .defences-screen {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: min(82vh, calc(100vh - var(--hud-height)));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom: 0;
+  }
+
+  .yard-dock__right > .yard-dock__button--defences {
+    right: 268px;
+    bottom: 18px;
+  }
+
+  .yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--bell {
+    right: 192px;
+  }
+
+  /* The sheet has the yard's round buttons' place, as the mailbox does. */
+  .overlay__layer:has(> .defences-screen:not([hidden])) > .yard-dock {
+    display: none;
+  }
+}

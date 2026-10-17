@@ -55,12 +55,18 @@ let userSave: Record<string, any>;
 let outpost: Record<string, any>;
 const flush = mock(async () => {});
 const upsert = mock(async (_entity: unknown, _row: Record<string, any>) => {});
+/** Defence replays written (issue #359). */
+const replays: Record<string, any>[] = [];
+/** Messages the landing leaves in a mailbox (#187, #361). */
+const notices: Record<string, any>[] = [];
 
 const reset = () => {
   store.clear();
   sets.clear();
   flush.mockClear();
   upsert.mockClear();
+  replays.length = 0;
+  notices.length = 0;
   defender = {
     basesaveid: BASESAVEID,
     baseid: "2000241208",
@@ -99,21 +105,43 @@ mock.module("../../server.js", () => ({
   postgres: {
     orm: { em: {} },
     em: {
+      // `isBot` asks the request's context (bot neighbours, #241).
+      global: false,
+      getContext() {
+        return this;
+      },
       findOne: async (entity: { name: string }, where: Record<string, unknown>) => {
         if (entity.name === "User") return where.userid === ATTACKER ? attacker() : null;
         return where.basesaveid === BASESAVEID || where.baseid === defender.baseid ? defender : null;
       },
-      find: async (_entity: unknown, where: { baseid: { $in: string[] } }) =>
-        where.baseid.$in.includes(OUTPOST) ? [outpost] : [],
+      find: async (entity: { name: string }, where: { baseid: { $in: string[] } }) =>
+        entity.name === "Thread" ? [] : where.baseid.$in.includes(OUTPOST) ? [outpost] : [],
+      // The defender's mail: a yard notice's message, its unread count (#361).
+      create: (_entity: unknown, data: Record<string, any>) => {
+        notices.push(data);
+        return data;
+      },
+      count: async () => 0,
+      nativeUpdate: async () => 0,
       persist: () => {},
       upsert,
       flush,
+      // A defence replay is written in a context of its own (#359).
+      fork() {
+        return this;
+      },
       // The attacker's main row, locked for an achievement event (#204).
       transactional: async (cb: (tx: unknown) => Promise<unknown>) =>
         cb({
           findOne: async (_entity: unknown, where: Record<string, unknown>) =>
             where.basesaveid === userSave.basesaveid ? userSave : null,
           flush: async () => {},
+          // A defence replay's row, and its prune to the newest 20 (#359).
+          insert: async (_entity: unknown, row: Record<string, any>) => {
+            replays.push(row);
+            return replays.length;
+          },
+          execute: async () => [],
         }),
     },
   },
@@ -144,6 +172,11 @@ const { replayAbandonedAttack } = await import("./combat/abandonedAttack.js");
 const { attackLootOf } = await import("./combat/attackLoot.js");
 const { foughtLoot } = await import("./combat/battle.js");
 const { housingLossOf, housingLossLine } = await import("./combat/housingLoss.js");
+const { defenceReplayLoadKey, defenceReplayLoadOf, keepDefenceReplayLoad } = await import(
+  "../defences/defenceReplayLoad.js"
+);
+const { decodeReplay } = await import("../defences/defenceReplayStore.js");
+const { defenceReplayInput } = await import("../defences/recordDefenceReplay.js");
 
 const LOG = {
   v: 1 as const,
@@ -717,5 +750,97 @@ describe("the champion's learning brain (issue #219)", () => {
     // Its first attack in a Mode only sets the baseline.
     expect(userSave.champion[0].b).toEqual({ tower: 0, loot: 0, finish: 0, focus: 0, threat: 0 });
     expect(userSave.champion[0].bs).toMatchObject({ n: 1 });
+  }, REPLAY_TIMEOUT_MS);
+});
+
+describe("the defence replay an abandoned attack lands (issue #359)", () => {
+  /** The defender as another player's Map Room 2 main yard, its attack load kept. */
+  const asPlayerYard = async ({ keepLoad = true } = {}) => {
+    Object.assign(defender, { type: "main", mapversion: 2, damage: 4 });
+    if (keepLoad) await keepDefenceReplayLoad(BASESAVEID, ATTACK_ID, defenceReplayLoadOf(sandbox));
+  };
+
+  test("is recorded once, as left, ending where the attacker left", async () => {
+    await asPlayerYard();
+    await arm();
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    expect(replays).toHaveLength(1);
+    const row = replays[0]!;
+    expect(row).toMatchObject({
+      defender_userid: DEFENDER_OWNER,
+      baseid: defender.baseid,
+      map_version: 2,
+      attacker_userid: ATTACKER,
+      attacker_username: "yardtester",
+      damage_before: 4,
+      damage_after: defender.damage,
+      attacker_left: true,
+    });
+    const payload = decodeReplay(row.replay);
+    expect(payload).toMatchObject({ seed: LOG.seed, tick: TICK, levels: { C1: 3 } });
+    expect(payload.load.attackerlevel).toBe(LEVEL);
+    expect(payload.load.basename).toBe(sandbox.basename);
+    expect(payload.load).not.toHaveProperty("credits");
+
+    // Played again from what was stored, it is the battle that landed.
+    const again = replayAbandonedAttack(defenceReplayInput(payload));
+    expect(Math.trunc(again.damage)).toBe(defender.damage);
+    expect(again.buildinghealthdata).toEqual(defender.buildinghealthdata);
+
+    // The kept load goes with the checkpoint, and a second pass records nothing.
+    expect(store.has(defenceReplayLoadKey(BASESAVEID))).toBe(false);
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("none");
+    expect(replays).toHaveLength(1);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("its owner is told once, as a Map Room 1 player is, the notice carrying the replay (#361)", async () => {
+    await asPlayerYard();
+    await arm();
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("none");
+
+    expect(notices).toEqual([
+      expect.objectContaining({
+        userid: 0,
+        targetid: DEFENDER_OWNER,
+        messagetype: "yardattacked",
+        subject: "yardtester attacked your yard",
+        coords: null,
+        baseid: defender.baseid,
+        replayid: 1,
+      }),
+    ]);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("after Redis lost the kept load, the row is written with no replay", async () => {
+    await asPlayerYard({ keepLoad: false });
+    await arm();
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    expect(replays).toHaveLength(1);
+    expect(replays[0]).toMatchObject({ replay: null, replay_bytes: 0, attacker_left: true });
+  }, REPLAY_TIMEOUT_MS);
+
+  test("a load kept for another attack on the yard is not this one's", async () => {
+    await asPlayerYard({ keepLoad: false });
+    await keepDefenceReplayLoad(BASESAVEID, ATTACK_ID + 1, defenceReplayLoadOf(sandbox));
+    await arm();
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    expect(replays[0]).toMatchObject({ replay: null });
+  }, REPLAY_TIMEOUT_MS);
+
+  // Map Room 1, outposts and own yards are refused by the same gate on the
+  // save's landing (`baseSave.attack.test.ts`) and in `recordDefenceReplay.test.ts`.
+  test("a camp is not recorded", async () => {
+    await arm();
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    expect(replays).toEqual([]);
   }, REPLAY_TIMEOUT_MS);
 });

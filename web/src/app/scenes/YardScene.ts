@@ -72,6 +72,8 @@ import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
 import { ShopScreen } from "@/ui/yard/ShopScreen";
 import { MailDoor } from "@/ui/mail/MailDoor";
 import { NotificationDoor } from "@/ui/notifications/NotificationDoor";
+import { DefencesDoor } from "@/ui/defences/DefencesDoor";
+import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { ChatBox } from "@/ui/chat/ChatBox";
 import {
   MONSTERS_TAB_ORDER,
@@ -92,6 +94,7 @@ import { describeUpgradeReport } from "@/ui/yard/upgradeText";
 import { YardDock } from "@/ui/yard/YardDock";
 import { StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
+import { askForWorker } from "@/ui/yard/WorkersBusyBox";
 import { icon } from "@/ui/icons";
 import { ZoomControl } from "@/ui/ZoomControl";
 import { YardPlanner, type AppliedStorage, type CompareVisuals } from "./YardPlanner";
@@ -217,6 +220,9 @@ const RAID_FIGHT_NOTICE = "raid-in-progress";
 /** What it says when the refusal carried no sentence of its own. */
 const RAID_FIGHT_TEXT = "Wild monsters are raiding your yard right now. Try again when the raid is over.";
 
+/** How far inside the screen edge, in screen pixels, a building just put down is kept. */
+const PLACED_MARGIN = 96;
+
 /** Zoom the yard opens at, over the town hall. 1 is art at native size. */
 const OPENING_ZOOM = 0.9;
 
@@ -261,6 +267,8 @@ export class YardScene implements Scene {
   private mail: MailDoor | null = null;
   /** The bell and its notification list (#257): the own yard only, as Mail is. */
   private bell: NotificationDoor | null = null;
+  /** The Defences button and screen (#363): the own yard of a Map Room 2 player. */
+  private defences: DefencesDoor | null = null;
   /** World chat's box (#282), on every yard; the connection is `worldChat`'s and outlives it. */
   private chat: ChatBox | null = null;
   /** The Starter Kit picker, while open (outposts WP9). */
@@ -464,6 +472,12 @@ export class YardScene implements Scene {
         },
         // An invitation to move accepted here (#205): its price left the pool, which the server now holds.
         onInviteAccepted: () => void this.store?.refresh(),
+        // A Map Room 2 attack notice's Watch and Defences (#363).
+        onWatchDefence: (id) => this.defences?.watch(id) ?? Promise.resolve(null),
+        onOpenDefences: () => {
+          this.mail?.close();
+          void this.defences?.open();
+        },
       });
       this.dock.placeBesideMonsters(tutTarget(this.mail.button.element, TutTarget.DOCK_MAIL));
       this.bell = new NotificationDoor({
@@ -476,6 +490,19 @@ export class YardScene implements Scene {
         selectBuilding: (id) => this.focusBuilding(id),
       });
       this.mail.button.element.after(this.bell.bell.element);
+      // Defences (#363, owner §12.1): beside Mail, shown once the load says Map Room 2.
+      this.defences = new DefencesDoor({
+        container: context.overlay.content,
+        onOpen: () => {
+          this.mail?.close();
+          this.makeRoomForMail();
+        },
+        onWatch: (run) => {
+          setWatchRun(run);
+          context.goTo(SceneName.WATCH);
+        },
+      });
+      this.mail.button.element.after(this.defences.button.element);
     }
     context.overlay.content.append(this.status);
     this.inset = { top: this.hud.element.getBoundingClientRect().bottom, bottom: 0 };
@@ -507,6 +534,8 @@ export class YardScene implements Scene {
     this.mail = null;
     this.bell?.destroy();
     this.bell = null;
+    this.defences?.destroy();
+    this.defences = null;
     this.chat?.destroy();
     this.chat = null;
     this.dock?.destroy();
@@ -1200,6 +1229,7 @@ export class YardScene implements Scene {
     this.shop?.close();
     this.mail?.close();
     this.bell?.close();
+    this.defences?.close();
     this.hud?.achievements?.close();
     this.monsters ??= new MonstersScreen({ binding, tabs }).mount(context.overlay.content);
     this.monsters.besidePanel(this.panel !== null);
@@ -1235,6 +1265,7 @@ export class YardScene implements Scene {
    */
   private makeRoomForMail(): void {
     this.bell?.close();
+    this.defences?.close();
     this.hud?.achievements?.close();
     this.endPlacement();
     this.select(null);
@@ -1257,6 +1288,7 @@ export class YardScene implements Scene {
     this.monsters?.close();
     this.mail?.close();
     this.bell?.close();
+    this.defences?.close();
     this.hud?.achievements?.close();
     this.shop ??= new ShopScreen({ binding }).mount(context.overlay.content);
     this.shop.besidePanel(this.panel !== null);
@@ -1297,6 +1329,7 @@ export class YardScene implements Scene {
     this.shop?.close();
     this.mail?.close();
     this.bell?.close();
+    this.defences?.close();
     this.hud?.achievements?.close();
     this.buildMenu ??= new BuildMenu({
       binding,
@@ -1373,11 +1406,18 @@ export class YardScene implements Scene {
     showBuildMapRoom(context.overlay.modal, () => this.openBuildMenu(MAP_ROOM_TYPE));
   }
 
+  /** The Defences button: only Map Room 2 keeps defence replays (until #246); an outpost is a Map Room 2 cell. */
+  private showDefences(store: YardStore): void {
+    this.defences?.setAvailable(store.kind === "outpost" || mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2);
+  }
+
   /** Carries out what another screen asked the own yard to open (`yardIntent.ts`). */
   private applyIntent(intent: YardIntent | null): void {
     if (!intent) return;
     if (intent.kind === "build") this.openBuildMenu(intent.type);
-    else if (intent.kind === "baiter") {
+    else if (intent.kind === "defences") {
+      if (this.defences && !this.defences.button.element.hidden) void this.defences.open();
+    } else if (intent.kind === "baiter") {
       const baiter = this.yard?.buildings.find((one) => one.type === BAITER_TYPE);
       if (!baiter) return;
       this.focusBuilding(baiter.id);
@@ -1455,6 +1495,18 @@ export class YardScene implements Scene {
           check?.problem ? spotSentence(check, (id) => placement.grid.nameOf(id)) : null,
         ),
       onDrop: async (x, y) => {
+        // Every worker busy: the building waits on its spot under the "all
+        // workers busy" box, and is built there once one is free (#345).
+        // Closing the box puts it back in hand, with nothing spent on it.
+        const binding = this.binding;
+        if (!storage && !instant && binding && buildOffer(type, store)?.gate?.reason === "workers") {
+          const freed = await askForWorker(binding);
+          if (this.placement !== placement) return "refused";
+          if (!freed) {
+            bar.setMessage("Not built: every worker is still busy.", "bad");
+            return "refused";
+          }
+        }
         // A one-off building is down; the bar says so until the answer (#277).
         if (!repeat) bar.setBuilding(true);
         const result = storage
@@ -1478,7 +1530,7 @@ export class YardScene implements Scene {
       onDone: () => {
         this.endPlacement();
         // The new building's panel: its countdown, Finish now and Cancel build.
-        if (placed !== null) this.focusBuilding(placed);
+        if (placed !== null) this.showPlaced(placed);
       },
     });
     this.placement = placement;
@@ -1537,6 +1589,7 @@ export class YardScene implements Scene {
     this.shop?.close();
     this.mail?.close();
     this.bell?.close();
+    this.defences?.close();
     this.hud?.achievements?.close();
     this.endPlacement();
     this.buildMenu?.close();
@@ -1884,6 +1937,7 @@ export class YardScene implements Scene {
     this.dock?.bind(this.binding);
     this.mail?.setSaveUnread(store.save.unreadmessages);
     this.bell?.setSaveCount(store.save.notifications);
+    this.showDefences(store);
     // Mushrooms are picked in the main yard only (the route refuses an outpost).
     this.mushroomPicker =
       store.kind === "main" ? new MushroomPicker(store, this.mushroomView(context)) : null;
@@ -2171,6 +2225,7 @@ export class YardScene implements Scene {
     this.save = store.save;
     this.mail?.setSaveUnread(store.save.unreadmessages);
     this.bell?.setSaveCount(store.save.notifications);
+    this.showDefences(store);
     // While the planner is open its drawer's stored decorations are drawn too.
     const shown = (this.planner && this.plannerYard()) || yard;
     // A mushroom a building landed on comes back somewhere else, and pops up there (#263).
@@ -2222,6 +2277,20 @@ export class YardScene implements Scene {
     if (!camera || !building || this.planner) return;
     camera.centreOn({ x: building.centreX, y: building.centreY });
     camera.dirty = true;
+    this.select(building);
+  }
+
+  /**
+   * Opens the panel of a building the player has just put down. It went where
+   * they were looking, so the camera stays put: centring on it, as
+   * `focusBuilding` does, jerked the whole yard sideways the moment a build
+   * started. It pans only to bring one dropped at the very edge on screen.
+   */
+  private showPlaced(id: number): void {
+    const camera = this.camera;
+    const building = this.yard?.buildings.find((one) => one.id === id) ?? null;
+    if (!camera || !building || this.planner) return;
+    camera.reveal({ x: building.centreX, y: building.centreY }, PLACED_MARGIN);
     this.select(building);
   }
 

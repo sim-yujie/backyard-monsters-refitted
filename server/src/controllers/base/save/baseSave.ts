@@ -84,6 +84,8 @@ import { championsAfterDefence } from "../../../services/base/combat/defenderCha
 import { championsAfterLessons, withStoredBrains } from "../../../services/base/combat/championBrain.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
+import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
+import { recordDefenceReplay } from "../../../services/defences/recordDefenceReplay.js";
 import { recordAttackAchievements } from "../../../services/achievements/events.js";
 
 /**
@@ -308,6 +310,8 @@ const saveBase = async (
   if (verdict) await recordEconomyVerdict(ctx, user, baseSave, verdict, economyConfig.mode);
 
   const storedHealthData = baseSave.buildinghealthdata;
+  // The yard's damage before this attack, for its defence replay (#359).
+  const damageBefore = baseSave.damage ?? 0;
 
   // Standard save logic
   for (const key of isAttack ? Save.attackSaveKeys : Save.saveKeys) {
@@ -577,14 +581,33 @@ const saveBase = async (
         housedLost: lostCount(housingLoss),
         now,
       });
-      // A Map Room 1 main yard's owner is told the same, and an attacked bot
-      // books its repair and maybe a revenge (bot neighbours, #241).
+      // A Map Room 2 main yard's defence replay, recorded before the notice
+      // so the notice can open it (defence replays, #359).
+      const replayId =
+        battle && battleInput
+          ? await recordDefenceReplay(postgres.em, {
+              yard: baseSave,
+              attacker: user,
+              session,
+              input: battleInput,
+              report: (baseSave as unknown as { attackreport: unknown }).attackreport,
+              damageBefore,
+              damageAfter: baseSave.damage ?? 0,
+              defenderDelta,
+              housedLost: lostCount(housingLoss),
+              now,
+            })
+          : null;
+      // A Map Room 1 or 2 main yard's owner is told the same (#361), and an
+      // attacked Map Room 1 bot books its repair and maybe a revenge (bot
+      // neighbours, #241).
       await afterYardDefended(postgres.em, {
         yard: baseSave,
         attacker: user,
         defenderDelta,
         housedLost: lostCount(housingLoss),
         now,
+        replayId,
       });
     }
   }
@@ -596,8 +619,10 @@ const saveBase = async (
   // times out (issue #25).
   if (isAttack && saveData.over) {
     await endAttackSession(baseSave.basesaveid);
-    // Nothing is left for the server to finish from (issue #138).
+    // Nothing is left for the server to finish from (issue #138), nor to
+    // keep a defence replay of (#359).
     await discardCheckpoint(baseSave.basesaveid);
+    await discardDefenceReplayLoad(baseSave.basesaveid);
   }
 
   // Attack saves store health from the attacker's replay but keep buildingdata from the DB,

@@ -25,6 +25,7 @@ import {
   takeoverQuoteLimiter,
   autoAttackLimiter,
   autoAttackPlanLimiter,
+  defencesLimiter,
   botCheckReadLimiter,
   botCheckAnswerLimiter,
   chatReportLimiter,
@@ -109,6 +110,7 @@ import {
 } from "./controllers/notifications/routes.js";
 import { chatPlayerYard, reportChatMessage } from "./controllers/chat/routes.js";
 import { playerAchievements } from "./controllers/achievements/routes.js";
+import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
@@ -292,6 +294,13 @@ router.get("/api/:apiVersion/bm/chat/yard", apiVersion, verifyUserAuth, chatPlay
 *    The player's own are yard actions (`controllers/yard/achievements.ts`).
 * ──────────────────────────────────────────────── */
 router.get("/api/:apiVersion/bm/achievements/player/:userid", apiVersion, verifyUserAuth, playerAchievementsLimiter, playerAchievements);
+
+/**  ────────────────────────────────────────────────
+* 📦 Defences: attacks on the player's Map Room 2 main yard and their replays
+*    (issue #360, `controllers/defences/defences.ts`). The caller's own only.
+* ──────────────────────────────────────────────── */
+router.get("/api/:apiVersion/defences", apiVersion, verifyUserAuth, verifyAccountStatus, defencesLimiter, getDefences);
+router.get("/api/:apiVersion/defences/:id/replay", apiVersion, verifyUserAuth, verifyAccountStatus, defencesLimiter, getDefenceReplay);
 
 /**  ────────────────────────────────────────────────
 * 📦 Leaderboards & Attack Logs

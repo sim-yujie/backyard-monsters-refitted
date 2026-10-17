@@ -27,6 +27,7 @@ import { Bot } from "./database/models/bot.model.js";
 import { BotJob } from "./database/models/botjob.model.js";
 import { Notification } from "./database/models/notification.model.js";
 import { ChatReport } from "./database/models/chatReport.model.js";
+import { DefenceReplay } from "./database/models/defencereplay.model.js";
 
 /**
  * List of entities to be used with MikroORM.
@@ -57,6 +58,7 @@ const entities = [
   BotJob,
   Notification,
   ChatReport,
+  DefenceReplay,
 ];
 
 /**

@@ -832,6 +832,13 @@ body {
   display: none;
 }
 
+/* The HUD and the yard's zoom rail share `--z-hud`, and the rail comes later,
+   so the open list would hang under it whatever its own z-index (#355): the
+   HUD goes up a level while its list is open. */
+.hud:has(.account-menu__list:not([hidden])) {
+  z-index: var(--z-popup);
+}
+
 .account-menu__who {
   display: flex;
   flex-direction: column;

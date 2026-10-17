@@ -10,10 +10,12 @@ import {
 } from "pixi.js";
 import {
   BOMBS,
+  EYE_RA_ID,
   TICKS_PER_SECOND,
   battleDefence,
   isSpurtzCannon,
   parseDefenderForces,
+  type Battle,
   type BattleVisualEvent,
   type CreepSnapshot,
 } from "@/game/combat/rules";
@@ -28,15 +30,19 @@ import {
   BUILDING_NUMBER_LIFT,
   CreepFx,
   HURT_TICKS,
+  PROJECTILE_TICKS,
   drawsProjectile,
+  jumpTicks,
   lungeOffset,
   mouthPoint,
 } from "./creepFx";
 import { FOMOR_ID } from "@/game/combat/rules/champions";
+import { BlastFx } from "./blastFx";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
-import { BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
+import { aimLift, BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
 import { TrapReveal } from "./trapReveal";
+import { WALK_OFF_PAUSE_TICKS, WALK_OFF_TICKS, planWalkOff, walkOffAt, type WalkOff } from "./walkOff";
 import {
   anchorOffset,
   attackRow,
@@ -565,6 +571,12 @@ interface CreepView {
 
 type DeathEvent = Extract<BattleVisualEvent, { kind: "death" }>;
 
+/** A creep the engine let go of alive, walking off the field on screen. */
+interface Leaver {
+  readonly view: CreepView;
+  readonly plan: WalkOff;
+}
+
 /** A trap going off: a ring that grows and fades over a scorch that stays. */
 interface Burst {
   readonly tick: number;
@@ -591,13 +603,15 @@ interface Gib {
 /** A creep with no sheet, or whose sheet has not arrived: a marker this big. */
 const MARKER_SIZE = 8;
 
+/** A flyer's shadow, at rest. */
+const SHADOW_ALPHA = 0.8;
+
 const SPLAT_COLOUR = 0x5da832;
 /** `G4QuakeGraphic`'s line colour, 15893760 (`champions/Korath.as:233`). */
 const QUAKE_COLOUR = 0xf28500;
-/** The special moves' bursts (issue #352): a splash, a Bolt's hop, a Teratorn's jump, the venom drop. */
+/** The special moves' bursts (issue #352): a splash, a Bolt's hop, the venom drop. */
 const SPLASH_COLOUR = 0xe8d44d;
 const BLINK_COLOUR = 0x9fd4ff;
-const BOUNCE_COLOUR = 0xff7a1a;
 const VENOM_COLOUR = 0x7bd62a;
 /** Blink.as:78: a hopping Bolt is drawn at this alpha. A cloaked Brain is drawn the same. */
 const UNSEEN_ALPHA = 0.3;
@@ -646,6 +660,9 @@ export class AttackBattleLayer {
   private readonly shadows: Container;
   /** In the overlay, in this order. */
   private readonly effects = new Container();
+  /** Drawn explosions, Eye-ra's fiery one (feat/eyera-explosion); inside `effects`. */
+  private readonly blastAir = new Container();
+  private readonly blastFx: BlastFx;
   private readonly fire = new Graphics();
   /** The Spurtz Cannon's shells, off their sheet, just over `fire` (issue #313). */
   private readonly shells = new Container();
@@ -653,6 +670,16 @@ export class AttackBattleLayer {
 
   private readonly views = new Map<number, CreepView>();
   private readonly pool: CreepView[] = [];
+  /** Creeps walking off the field: out of `views`, not yet back in `pool`. */
+  private readonly leavers = new Map<number, Leaver>();
+  /** Every creep that has walked off or is walking, so the frozen field never redraws it. */
+  private readonly departed = new Set<number>();
+  /** Creeps the engine reported dead: they splat rather than walk off. */
+  private readonly died = new Set<number>();
+  /** The shown tick the last walk-off ends on, plus the pause before the end panel. */
+  private walkOffUntil = Number.NEGATIVE_INFINITY;
+  /** Whether the attackers left standing at the end have been sent walking. */
+  private endWalked = false;
   private readonly splats: Splat[] = [];
   private readonly gibPool: Sprite[] = [];
   private readonly damageApplied = new Map<number, number>();
@@ -668,6 +695,11 @@ export class AttackBattleLayer {
   private readonly ledger = new ShotLedger<DeathEvent>();
   /** Building health a ranged creep's projectile has taken but not yet landed. */
   private readonly heldBuildingHp = new Map<number, number>();
+  /** Each Teratorn's latest fireball jump (#352), so the next jump leaves when it lands. */
+  private readonly lastJump = new Map<
+    number,
+    { tick: number; toBuildingId: number; landsAt: number }
+  >();
 
   /* Resource bombs (#87): the rain, and the health its particles still carry. */
   private readonly bombFx: BombFx;
@@ -724,10 +756,20 @@ export class AttackBattleLayer {
 
     this.depth = this.host.depthSortedLayer();
     this.shadows = this.host.groundShadowLayer?.() ?? this.depth;
-    for (const layer of [this.effects, this.fire, this.shells, this.bars]) layer.eventMode = "none";
+    for (const layer of [this.effects, this.blastAir, this.fire, this.shells, this.bars]) {
+      layer.eventMode = "none";
+    }
     // Our own children only: the drop ring and anything else already in the
     // overlay stays where it is.
     this.overlay.addChild(this.effects, this.fire, this.shells, this.bars);
+    this.blastFx = new BlastFx(
+      {
+        air: this.blastAir,
+        ground: () => this.debrisLayer(),
+        shake: (dx, dy) => this.shakeYard(dx, dy),
+      },
+      this.reducedMotion,
+    );
     this.bombFx = new BombFx(
       {
         air: () => this.airLayer(),
@@ -775,6 +817,8 @@ export class AttackBattleLayer {
       (id) => this.maxHpById.get(id),
     );
     this.effects.addChild(this.buildingBars.root);
+    // The blast over the bars; the splats it leaves come after, over it.
+    this.effects.addChild(this.blastAir);
 
     // Once a frame, inside the render the scene already drives, after the
     // scene's own `session.advance`. The renderer comes with the call.
@@ -795,6 +839,10 @@ export class AttackBattleLayer {
     if (this.destroyed) return;
     const battle = this.session.battle();
     if (!battle) return;
+    // Skip to end (issue #362) draws nothing until the battle is over, and
+    // then only the yard as it was left: none of what happened on the way.
+    if (this.session.skipping) return;
+    if (this.session.skipped && !this.settled) this.restAfterSkip(battle);
     const tick = battle.tick;
     // The effects' clock: the battle's, and after the end the wall's.
     const shown = this.shownTick(tick);
@@ -811,10 +859,13 @@ export class AttackBattleLayer {
       this.towerFx.update(tick, (id) => this.views.get(id)?.snapshot ?? undefined);
       this.showReleased(this.ledger.expire(tick), tick);
       this.paintCreeps(tick);
+      if (this.session.ended && !this.endWalked) this.walkOffAtEnd(shown);
+      this.walkOff(shown);
     }
     // Once put to rest, what is left — splats, trap rings — fades out on the wall clock.
     this.drawSplats(this.settled ? shown : tick);
     this.drawBursts(this.settled ? shown : tick);
+    this.blastFx.update(this.settled ? shown : tick);
     this.fx.update(shown);
     this.bombFx.update(shown);
     this.showBombNumbers(shown);
@@ -868,11 +919,29 @@ export class AttackBattleLayer {
     this.settled = true;
     for (const view of this.views.values()) this.release(view);
     this.views.clear();
+    for (const leaver of this.leavers.values()) this.release(leaver.view);
+    this.leavers.clear();
     this.ledger.clear();
     this.heldBuildingHp.clear();
+    this.lastJump.clear();
     this.towerFx.standDown();
     this.fx.dropProjectiles();
     this.damageDirty = true;
+  }
+
+  /**
+   * The end of a playback that skipped to it (issue #362): every event on the
+   * way is taken as seen, so no bomb rains and no shot plays after the fact,
+   * and the battle is put to rest ({@link settle}), with each building at the
+   * engine's own health. Nobody walks off: the yard is shown as it was left.
+   */
+  private restAfterSkip(battle: Battle): void {
+    this.eventsSeen = this.session.flingLog().events.length;
+    this.lastEventTick = battle.tick;
+    this.heldBombHp.clear();
+    this.rains.clear();
+    this.endWalked = true;
+    this.settle();
   }
 
   /** Whether {@link settle} has put the battle to rest. */
@@ -885,13 +954,38 @@ export class AttackBattleLayer {
    * the end panel waits while this is true (#148).
    */
   get settling(): boolean {
-    if (this.destroyed) return false;
+    // A playback that skipped to its end has nothing left to play out (#362).
+    if (this.destroyed || this.session.skipped) return false;
     if (this.bombFx.airborne > 0) return true;
     const events = this.session.flingLog().events;
     for (let index = this.eventsSeen; index < events.length; index += 1) {
       if (events[index]?.kind === "bomb") return true;
     }
-    return false;
+    return this.walkingOff();
+  }
+
+  /**
+   * Whether the monsters of an ended attack are still walking off, or in the
+   * short pause after them: the end panel waits for it. The wait is one
+   * walk-off long however many walk, since they all set off together; a
+   * Retreat the player chose does not wait at all, the walk plays behind the
+   * panel. Asked before the frame that sends them walking, it answers for
+   * the attackers still standing.
+   */
+  private walkingOff(): boolean {
+    const reason = this.session.endedBy;
+    if (this.settled || reason === null || reason === "retreat" || reason === "left") return false;
+    const battle = this.session.battle();
+    if (!battle) return false;
+    if (!this.endWalked) {
+      for (const view of this.views.values()) if (this.walksOffAtEnd(view)) return true;
+    }
+    return this.shownTick(battle.tick) < this.walkOffUntil;
+  }
+
+  /** How many creeps are walking off right now. */
+  get walkingOffCount(): number {
+    return this.leavers.size;
   }
 
   /**
@@ -903,6 +997,10 @@ export class AttackBattleLayer {
     const battle = this.session.battle();
     if (this.destroyed || !battle) return 0;
     const state = battle.state();
+    // A skipped playback shows the engine's figure: nothing on the way was drawn.
+    if (this.session.skipping || this.session.skipped) {
+      return this.session.damageFor(state.health, state.firedTraps);
+    }
     // A bomb fired since the last frame is held back now, not a frame late:
     // the scene reads this the moment the session says the bomb went in.
     if (this.eventsSeen < this.session.flingLog().events.length) {
@@ -913,9 +1011,9 @@ export class AttackBattleLayer {
     return this.session.damageFor(this.shownHealth(state.health), state.firedTraps);
   }
 
-  /** How many creeps have a sprite right now. */
+  /** How many creeps have a sprite right now, walkers included. */
   get creepCount(): number {
-    return this.views.size;
+    return this.views.size + this.leavers.size;
   }
 
   /** The projectiles, smoke and damage numbers, for a test or the dev hook to read. */
@@ -956,7 +1054,9 @@ export class AttackBattleLayer {
     this.effects.onRender = null;
 
     for (const view of [...this.views.values(), ...this.pool]) this.dispose(view);
+    for (const leaver of this.leavers.values()) this.dispose(leaver.view);
     this.views.clear();
+    this.leavers.clear();
     this.pool.length = 0;
 
     for (const splat of this.splats) {
@@ -973,8 +1073,10 @@ export class AttackBattleLayer {
     this.bursts.length = 0;
     for (const scorch of this.scorches) scorch.destroy();
     this.scorches.length = 0;
+    this.blastFx.destroy();
     this.ledger.clear();
     this.heldBuildingHp.clear();
+    this.lastJump.clear();
     this.fx.destroy();
     this.bombFx.destroy();
     this.heldBombHp.clear();
@@ -1044,6 +1146,8 @@ export class AttackBattleLayer {
   private syncCreeps(creeps: readonly CreepSnapshot[], tick: number): Set<number> {
     const seen = new Set<number>();
     for (const creep of creeps) {
+      // An ended battle still lists the attackers it froze; theirs walk off.
+      if (this.departed.has(creep.id)) continue;
       seen.add(creep.id);
       let view = this.views.get(creep.id);
       if (!view) {
@@ -1057,8 +1161,9 @@ export class AttackBattleLayer {
 
   /**
    * The views of creeps the engine no longer has: kept standing where they
-   * were last seen while a bullet is still on its way to them (#77), let go
-   * otherwise.
+   * were last seen while a bullet is still on its way to them (#77). An
+   * attacker that left alive (nothing left to attack, or its champion
+   * called back) walks off; the rest are let go.
    */
   private settleGone(seen: ReadonlySet<number>, tick: number): void {
     if (seen.size === this.views.size) return;
@@ -1069,7 +1174,84 @@ export class AttackBattleLayer {
         continue;
       }
       this.views.delete(id);
+      const creep = view.snapshot;
+      if (creep && !creep.friendly && creep.hp > 0 && !this.died.has(id)) {
+        this.startWalkOff(view, creep, this.shownTick(tick));
+        continue;
+      }
+      this.died.delete(id);
       this.release(view);
+    }
+  }
+
+  /* ── Walking off ────────────────────────────────────────────────────── */
+
+  /** Whether a creep still standing when the attack ends walks off: any living attacker. */
+  private walksOffAtEnd(view: CreepView): boolean {
+    const creep = view.snapshot;
+    return creep !== null && !creep.friendly && creep.hp > 0 && !this.ledger.holdsDeath(view.id);
+  }
+
+  /**
+   * Sends the attackers the ended battle froze walking off, rather than
+   * leaving them standing under the end panel. Nothing walks for a player
+   * leaving the screen, which tears the layer down anyway.
+   */
+  private walkOffAtEnd(shown: number): void {
+    this.endWalked = true;
+    if (this.session.endedBy === "left") return;
+    for (const [id, view] of this.views) {
+      if (!this.walksOffAtEnd(view) || !view.snapshot) continue;
+      this.views.delete(id);
+      this.startWalkOff(view, view.snapshot, shown);
+    }
+  }
+
+  private startWalkOff(view: CreepView, creep: CreepSnapshot, shown: number): void {
+    const bounds = this.yard.bounds;
+    const plan = planWalkOff(
+      creep.ix,
+      creep.iy,
+      creep.flying,
+      shown,
+      bounds.yardWidth / 2,
+      bounds.yardHeight / 2,
+    );
+    this.departed.add(view.id);
+    this.leavers.set(view.id, { view, plan });
+    this.walkOffUntil = Math.max(this.walkOffUntil, shown + WALK_OFF_TICKS + WALK_OFF_PAUSE_TICKS);
+    // Whatever it was doing, it is only walking now: no hurt tint, no venom.
+    view.body.tint = view.baseTint;
+    view.venom.visible = false;
+  }
+
+  /** Moves and fades every walker; one that is done goes back to the pool. */
+  private walkOff(shown: number): void {
+    for (const [id, { view, plan }] of this.leavers) {
+      const frame = walkOffAt(plan, shown, this.reducedMotion);
+      if (frame.done || !view.snapshot) {
+        this.leavers.delete(id);
+        this.release(view);
+        continue;
+      }
+      const walking: CreepSnapshot = {
+        ...view.snapshot,
+        ix: frame.ix,
+        iy: frame.iy,
+        state: "walking",
+        targetBuilding: -1,
+        targetCreep: -1,
+      };
+      this.place(view, walking, shown);
+      if (frame.climb > 0) {
+        view.body.y = Math.round(view.body.y - frame.climb);
+        view.barBack.y = Math.round(view.barBack.y - frame.climb);
+        view.barFront.y = view.barBack.y;
+      }
+      view.body.alpha = frame.alpha;
+      view.barBack.alpha = frame.alpha;
+      view.barFront.alpha = frame.alpha;
+      if (view.shadow) view.shadow.alpha = SHADOW_ALPHA * frame.alpha;
     }
   }
 
@@ -1202,7 +1384,13 @@ export class AttackBattleLayer {
     view.barBack.visible = false;
     view.barFront.visible = false;
     view.venom.visible = false;
-    if (view.shadow) view.shadow.visible = false;
+    // A walker leaves faded; the next creep to use the view starts whole.
+    view.barBack.alpha = 1;
+    view.barFront.alpha = 1;
+    if (view.shadow) {
+      view.shadow.visible = false;
+      view.shadow.alpha = SHADOW_ALPHA;
+    }
     view.id = -1;
     view.snapshot = null;
     this.pool.push(view);
@@ -1342,7 +1530,7 @@ export class AttackBattleLayer {
     if (!shadow) {
       shadow = new Sprite(cell);
       shadow.eventMode = "none";
-      shadow.alpha = 0.8;
+      shadow.alpha = SHADOW_ALPHA;
       this.shadows.addChild(shadow);
       view.shadow = shadow;
     } else if (shadow.texture !== cell) {
@@ -1380,7 +1568,8 @@ export class AttackBattleLayer {
     } else if (event.creepTargetId >= 0) {
       const other = this.views.get(event.creepTargetId);
       const at = other ? { x: other.lastX, y: other.lastY } : groundWorld(event.targetIx, event.targetIy, this.origin);
-      target = { x: at.x, y: at.y - BODY_HEIGHT };
+      // A flying quarry is hit in the air, where it is drawn, as towers aim (`aimLift`).
+      target = { x: at.x, y: at.y - aimLift(other?.snapshot) };
     }
     if (!target) target = groundWorld(event.targetIx, event.targetIy, this.origin);
 
@@ -1456,6 +1645,40 @@ export class AttackBattleLayer {
     }
   }
 
+  /**
+   * A ranked Teratorn's fireball jumped on to the next building (#352). The
+   * engine deals every jump on the swing's tick; Flash's one `FIREBALL` flew
+   * on from each building it hit to the next (`FIREBALL.as:173-179`). So the
+   * jump is drawn as the same fireball leaving when the shot before it lands
+   * (the swing's fireball for the first) and flying at Flash's speed, and the
+   * building shows the damage when it arrives. Drawing only.
+   */
+  private onBounce(event: Extract<BattleVisualEvent, { kind: "bounce" }>): void {
+    const from =
+      this.host.centreOf(event.fromBuildingId) ??
+      groundWorld(event.fromIx, event.fromIy, this.origin);
+    const to =
+      this.host.centreOf(event.toBuildingId) ?? groundWorld(event.toIx, event.toIy, this.origin);
+    const last = this.lastJump.get(event.creepId);
+    const leaves =
+      last && last.tick === event.tick && last.toBuildingId === event.fromBuildingId
+        ? last.landsAt
+        : event.tick + PROJECTILE_TICKS;
+    const flight = jumpTicks(from, to);
+    this.lastJump.set(event.creepId, {
+      tick: event.tick,
+      toBuildingId: event.toBuildingId,
+      landsAt: leaves + flight,
+    });
+    if (event.amount > 0) {
+      this.heldBuildingHp.set(
+        event.toBuildingId,
+        (this.heldBuildingHp.get(event.toBuildingId) ?? 0) + event.amount,
+      );
+    }
+    this.fx.projectile(leaves, from, to, event.toBuildingId, false, event.amount, flight);
+  }
+
   /** A ranged creep's fireball reached its building: show the damage it carried. */
   private onFireballLanded(buildingId: number, amount: number): void {
     const held = (this.heldBuildingHp.get(buildingId) ?? 0) - amount;
@@ -1480,8 +1703,10 @@ export class AttackBattleLayer {
         if (hp === undefined) continue;
         const maxHp = this.maxHpById.get(id) ?? Number.POSITIVE_INFINITY;
         // The engine lets a building's health run below zero; the amount held is
-        // what it actually lost, counted from what it had.
-        shown[String(id)] = Math.min(maxHp, Math.max(0, hp) + held);
+        // what it actually lost, counted from what it had. Its health comes whole
+        // (truncated), so a held half point is rounded up: a fireball's jump of
+        // 37.5 must not leave the building a hair under full before it lands.
+        shown[String(id)] = Math.min(maxHp, Math.ceil(Math.max(0, hp) + held));
       }
     }
     return shown;
@@ -1652,6 +1877,11 @@ export class AttackBattleLayer {
       return;
     }
     if (event.kind === "splash") {
+      // Eye-ra's blast is a fireball (feat/eyera-explosion); other splashes keep the rings.
+      if (event.moveId === EYE_RA_ID) {
+        this.blastFx.fiery(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius);
+        return;
+      }
       this.spawnRing(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius, SPLASH_COLOUR);
       return;
     }
@@ -1660,12 +1890,11 @@ export class AttackBattleLayer {
       return;
     }
     if (event.kind === "bounce") {
-      const to = groundWorld(event.toIx, event.toIy, this.origin);
-      this.spawnRing(event.tick, groundWorld(event.fromIx, event.fromIy, this.origin), 14, BOUNCE_COLOUR);
-      this.spawnRing(event.tick, to, 26, BOUNCE_COLOUR);
+      this.onBounce(event);
       return;
     }
     if (event.kind !== "death") return;
+    this.died.add(event.creepId);
     // A death a held bullet dealt waits for it to land; the rest splat now.
     if (this.ledger.death(event)) return;
     const at = groundWorld(event.ix, event.iy, this.origin);
@@ -1720,6 +1949,27 @@ export class AttackBattleLayer {
     rings.position.set(at.x, at.y);
     this.effects.addChild(rings);
     this.splats.push({ tick, at, radius, disc: rings, gibs: [] });
+  }
+
+  /**
+   * Shakes the yard on screen for a punchy blast: the renderer's root, by its
+   * pivot, which the camera leaves alone. `dx`, `dy` are screen px.
+   */
+  private shakeYard(dx: number, dy: number): void {
+    const root = this.overlay.parent;
+    if (!root) return;
+    const zoom = this.host.zoom ?? 1;
+    root.pivot.set(dx / (zoom > 0 ? zoom : 1), dy / (zoom > 0 ? zoom : 1));
+  }
+
+  /** The drawn explosions, for tests and the dev hook. */
+  get blasts(): BlastFx {
+    return this.blastFx;
+  }
+
+  /** Rings on the ground (a splash, a Bolt's hop, a quake), for tests. */
+  get ringCount(): number {
+    return this.bursts.length;
   }
 
   private makeGib(): Sprite {

@@ -9,11 +9,25 @@ import { clockReading, formatClock } from "@/game/attack/attackClock";
 import { withLoot } from "@/game/attack/attackerPool";
 import { attackYardHandlers } from "@/game/attack/AttackInput";
 import { AttackPresentation } from "@/game/attack/attackPresentation";
-import { AttackSession, type AttackSessionState } from "@/game/attack/AttackSession";
+import {
+  AttackSession,
+  LIVE_SPEEDS,
+  PLAYBACK_SPEEDS,
+  type AttackSessionState,
+  type AttackSpeed,
+} from "@/game/attack/AttackSession";
 import { consumeAttackTarget, type AttackTarget } from "@/game/attack/attackTarget";
 import { targetLabel } from "@/game/attack/attackSave";
 import { baiterTarget, consumeBaiterRun, setBaiterRun, type BaiterRun } from "@/game/baiter/baiterSession";
-import { consumeWatchRun, setWatchRun, watchTarget, type WatchRun } from "@/game/autoAttack/watchRun";
+import {
+  consumeWatchRun,
+  isDefenceWatch,
+  setWatchRun,
+  watchRefusal,
+  watchTarget,
+  type WatchRun,
+} from "@/game/autoAttack/watchRun";
+import { DEFENCE_REFUSAL_TEXT, defenceReadout, type DefenceRefusal } from "@/game/defences/defenceWatch";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { consumeRaidRun, raidTarget, type RaidRun } from "@/game/raid/raidSession";
 import { tribeTitle } from "@/game/raid/raidText";
@@ -106,6 +120,8 @@ export class AttackScene implements Scene {
    */
   private readonly watching: boolean;
   private watchRun: WatchRun | null = null;
+  /** Why the chosen replay cannot be played here (a defence fought under other rules, #362). */
+  private watchRefused: DefenceRefusal | null = null;
   /**
    * A wild monster raid on the player's own yard (issue #226 WP4): the raid
    * scene is this scene with `RAID_PLUGINS` and this set. The server fought
@@ -139,7 +155,7 @@ export class AttackScene implements Scene {
   /** The loot readout's four amounts, twigs to goo. */
   private lootValues: HTMLElement[] = [];
   private hudSlot: HTMLElement | null = null;
-  private speedButtons = new Map<1 | 2, HTMLButtonElement>();
+  private speedButtons = new Map<AttackSpeed, HTMLButtonElement>();
   private retreatButton: HTMLButtonElement | null = null;
   private menu: AttackMenu | null = null;
   private confirm: Panel | null = null;
@@ -182,7 +198,9 @@ export class AttackScene implements Scene {
       this.target = this.run ? baiterTarget(this.run) : null;
     } else if (this.watching) {
       this.watchRun = consumeWatchRun();
-      this.target = this.watchRun ? watchTarget(this.watchRun) : null;
+      // A defence fought under other rules is refused before anything is built (#362).
+      this.watchRefused = this.watchRun ? watchRefusal(this.watchRun) : null;
+      this.target = this.watchRun && !this.watchRefused ? watchTarget(this.watchRun) : null;
     } else if (this.raiding) {
       this.raidRun = consumeRaidRun();
       this.target = this.raidRun ? raidTarget(this.raidRun) : null;
@@ -232,6 +250,15 @@ export class AttackScene implements Scene {
     if (!target && this.raiding) {
       this.status.textContent = "No raid to play.";
       this.notices.show("attack-load", "The wild monsters are not here.", {
+        level: "info",
+        actionLabel: "Back to the yard",
+        onAction: () => context.goTo(SceneName.YARD),
+      });
+      return;
+    }
+    if (!target && this.watching && this.watchRefused) {
+      this.status.textContent = `${DEFENCE_REFUSAL_TEXT[this.watchRefused]}.`;
+      this.notices.show("attack-load", `${DEFENCE_REFUSAL_TEXT[this.watchRefused]}.`, {
         level: "info",
         actionLabel: "Back to the yard",
         onAction: () => context.goTo(SceneName.YARD),
@@ -313,6 +340,7 @@ export class AttackScene implements Scene {
     this.life = null;
     this.lifeDestroyed = 0;
     this.raidRun = null;
+    this.watchRefused = null;
     this.target = null;
     this.context = null;
   }
@@ -401,8 +429,8 @@ export class AttackScene implements Scene {
     this.renderer.show(yard);
     // An attacker never sees a trap until it fires (`BTRAP.as:33-43`, #66);
     // the battle layer reveals each one as the engine reports it going off.
-    // The player's own traps are no secret to them.
-    if (!this.practice && !this.raiding) concealTraps(this.renderer, yard);
+    // The player's own traps are no secret to them, on a defence replay too.
+    if (!this.practice && !this.raiding && !isDefenceWatch(this.watchRun)) concealTraps(this.renderer, yard);
     // The defender's pens, as Flash drew them on an attacked yard (#159):
     // scenery in the yard's own containers, never in the battle layer, so no
     // creep targets them and no count includes them. No caged champion: the
@@ -493,6 +521,15 @@ export class AttackScene implements Scene {
           }
         : {}),
       ...(this.watchRun ? { watch: this.watchRun } : {}),
+      // A defence replay goes back to the yard it was fought on, on the Defences screen (#362, #363).
+      ...(isDefenceWatch(this.watchRun)
+        ? {
+            goToYard: () => {
+              setYardIntent({ kind: "defences" });
+              context.goTo(SceneName.YARD);
+            },
+          }
+        : {}),
       ...(this.raidRun ? { raid: this.raidRun, goToYard: () => context.goTo(SceneName.YARD) } : {}),
       openWatch: (run: WatchRun) => {
         setWatchRun(run);
@@ -508,8 +545,9 @@ export class AttackScene implements Scene {
       if (teardown) this.teardowns.push(teardown);
     }
     this.measureDock();
-    // No tips over a raid: the player has nothing to do on it.
-    if (this.raiding) return;
+    // No tips over a raid or a replay (an auto-attack's or a defence's): the
+    // player has no army to pick or drop on it.
+    if (this.raiding || this.watching) return;
     // The tutorial's tips (issue #227); the attack strip is the screen's header.
     guideBus.emit("screen", {
       id: GuideScreen.ATTACK,
@@ -592,11 +630,13 @@ export class AttackScene implements Scene {
         ? this.raidRun
           ? `${tribeTitle(this.raidRun.raid.tribe)} raid`
           : "Wild monster raid"
-        : this.watching && this.target
-          ? `Replay: ${this.target.name} camp`
-          : this.target
-            ? `Attacking ${this.target.name}`
-            : "Attack";
+        : isDefenceWatch(this.watchRun)
+          ? `Defence replay: ${this.watchRun.defence.attacker.name}`
+          : this.watching && this.target
+            ? `Replay: ${this.target.name} camp`
+            : this.target
+              ? `Attacking ${this.target.name}`
+              : "Attack";
 
     const clock = document.createElement("span");
     clock.className = "attack-strip__clock";
@@ -635,13 +675,19 @@ export class AttackScene implements Scene {
     speed.setAttribute("role", "group");
     speed.setAttribute("aria-label", "Battle speed");
     tutTarget(speed, TutTarget.ATTACK_SPEED);
-    for (const value of [1, 2] as const) {
+    // A replay also has 4x (#362); an attack the player fights keeps 1x and 2x.
+    for (const value of this.watching ? PLAYBACK_SPEEDS : LIVE_SPEEDS) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "btn btn--ghost attack-strip__speed-button";
       button.textContent = `${value}x`;
       button.setAttribute("aria-pressed", String(value === 1));
-      button.title = value === 1 ? "Real speed" : "Twice real speed — the clock runs faster too";
+      button.title =
+        value === 1
+          ? "Real speed"
+          : value === 2
+            ? "Twice real speed — the clock runs faster too"
+            : "Four times real speed — the clock runs faster too";
       button.addEventListener("click", () => this.session?.setSpeed(value));
       speed.append(button);
       this.speedButtons.set(value, button);
@@ -664,8 +710,9 @@ export class AttackScene implements Scene {
       { label: "Log out", run: () => this.leaveFor(SceneName.LOGIN, logout) },
     ]);
 
-    // A raid cannot be stopped or left (quitting the game cancels it).
-    retreat.hidden = this.raiding;
+    // A raid cannot be stopped or left (quitting the game cancels it). A
+    // defence replay has no Retreat either (owner, #362): Skip to end, or leave.
+    retreat.hidden = this.raiding || isDefenceWatch(this.watchRun);
     this.menu.element.hidden = this.raiding;
 
     strip.append(title, clock, damage, loot, spacer, hudSlot, speed, retreat, this.menu.element);
@@ -824,20 +871,31 @@ export class AttackScene implements Scene {
       this.clock.setAttribute("aria-live", reading.warning ? "polite" : "off");
     }
     // What the screen has dealt, not what the engine has booked (#148).
+    const damageShown = this.presentation.damageShown(state);
+    // A defence replay reads the defender's side, and ends on the stored figures (#362).
+    const readout = isDefenceWatch(this.watchRun)
+      ? defenceReadout(
+          this.watchRun.defence,
+          damageShown,
+          state.defenderLoss,
+          state.phase === "ended" && this.session?.endedBy !== "left",
+        )
+      : { damage: Math.floor(damageShown), loot: state.loot };
     if (this.damage) {
-      this.damage.textContent = `${Math.floor(this.presentation.damageShown(state))}% damage`;
+      this.damage.textContent = `${readout.damage}% damage`;
     }
     if (this.loot) {
-      const { r1, r2, r3, r4 } = state.loot;
+      const { r1, r2, r3, r4 } = readout.loot;
       RESOURCE_KEYS.forEach((key, index) => {
         const value = this.lootValues[index];
-        if (value) value.textContent = formatAmount(state.loot[key]);
+        if (value) value.textContent = formatAmount(readout.loot[key]);
       });
       this.loot.title = `Twigs ${r1}, pebbles ${r2}, putty ${r3}, goo ${r4}`;
     }
+    const skipping = this.session?.skipping ?? false;
     for (const [value, button] of this.speedButtons) {
       button.setAttribute("aria-pressed", String(value === state.speed));
-      button.disabled = state.phase === "ended";
+      button.disabled = state.phase === "ended" || skipping;
     }
     if (this.retreatButton) {
       this.retreatButton.disabled = state.phase !== "running" && state.phase !== "loaded";
@@ -854,6 +912,12 @@ export class AttackScene implements Scene {
       // An ended test has put its battle to rest (#308): nobody is left attacking on screen.
       status.textContent =
         `Test on your yard · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
+        (state.phase === "ended" ? "over" : `${state.creepsAlive} attacking`);
+      return;
+    }
+    if (isDefenceWatch(this.watchRun)) {
+      status.textContent =
+        `Your yard · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
         (state.phase === "ended" ? "over" : `${state.creepsAlive} attacking`);
       return;
     }
@@ -932,9 +996,11 @@ export class AttackScene implements Scene {
     if (!context || this.raiding) return;
     const session = this.session;
     const phase = session?.state().phase;
-    // A practice attack or a replay is simply left: nothing was going to be saved.
+    // A practice attack or a replay is simply left: nothing was going to be
+    // saved. A defence replay stops where it stands, with no result (#362).
     if (this.practice || this.watching) {
-      session?.retreat();
+      if (isDefenceWatch(this.watchRun)) session?.leave();
+      else session?.retreat();
       before?.();
       context.goTo(scene);
       return;

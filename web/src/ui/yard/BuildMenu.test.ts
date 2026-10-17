@@ -219,6 +219,18 @@ describe("BuildMenu", () => {
     );
   });
 
+  it("every worker busy: Build still picks the building up, and the box waits for the spot (#345)", () => {
+    const { menu, onPick } = setup([HALL, building(2, 20, { l: 1, cU: 600 })]);
+    menu.open(BuildCategory.DEFENSIVE);
+    tile(menu, 20).click();
+    const build = info(menu).querySelector<HTMLButtonElement>(".build-info__build")!;
+    expect(build.disabled).toBe(false);
+    expect(build.getAttribute("aria-label")).toContain("busy");
+    build.click();
+    expect(onPick).toHaveBeenCalledWith(20, false);
+    expect(document.body.querySelector(".workers-busy")).toBeNull();
+  });
+
   it("Build hands the type over; Build instantly only on the second tap", () => {
     const { menu, onPick } = setup([HALL]);
     menu.open(BuildCategory.DEFENSIVE);

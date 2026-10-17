@@ -640,9 +640,15 @@ export class YardBuildings {
   }
 
   /**
-   * The highest world y a building's art is drawn at: its picture (or
-   * placeholder) and any animation layer that has arrived. Where a bar over
-   * the building goes (#139). Offsets included.
+   * The highest world y a building's art is drawn at: its picture and its
+   * animation layers. Where a bar over the building goes (#139). Offsets
+   * included.
+   *
+   * Read from the art table, not from what has been drawn so far: every
+   * `show` starts each building on its placeholder, and the bar used to sit
+   * on that until the next second's redraw lifted it to the picture — 50 to
+   * 70 pixels each time the yard was redrawn, which a build or an upgrade
+   * does. Only art that will never arrive falls back to what is drawn.
    *
    * Not the countdown badge: it stands a fixed height above the footprint
    * whatever the art does, so over a low building — a Railgun, a Putty
@@ -652,9 +658,14 @@ export class YardBuildings {
   crownOf(id: number): number | null {
     const view = this.byId.get(id);
     if (!view) return null;
-    let top = view.top.y;
+    const picture = view.swap?.top ?? view.art?.top;
+    let top =
+      picture && !this.textures.isMissing(picture)
+        ? view.building.worldY + picture.y + view.offsetY
+        : view.top.y;
+    // A strip's sprite stands where it will be drawn from the start.
     for (const layer of view.anims) {
-      if (layer.resolved) top = Math.min(top, layer.sprite.y);
+      if (!this.textures.isStripMissing(layer.anim)) top = Math.min(top, layer.sprite.y);
     }
     return top;
   }

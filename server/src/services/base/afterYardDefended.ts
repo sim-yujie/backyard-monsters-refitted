@@ -19,13 +19,16 @@ export interface YardDefence {
   readonly housedLost?: number;
   /** When the attack landed, in seconds. */
   readonly now: number;
+  /** The defence replay the landing recorded first, for the notice's Watch button (#359); null for none. */
+  readonly replayId?: number | null;
 }
 
 /**
- * Runs once a Map Room 1 main yard's defence has landed, from both landings:
- * the attacker's final save (`baseSave.ts`) and the server finishing it from a
- * checkpoint (`finaliseAttack.ts`, which a bot's revenge lands through too).
- * Issue #241, `docs/design/bot-neighbours.md` §4.5 and §4.8.
+ * Runs once a Map Room 1 or Map Room 2 main yard's defence has landed, from
+ * both landings: the attacker's final save (`baseSave.ts`) and the server
+ * finishing it from a checkpoint (`finaliseAttack.ts`, which a bot's revenge
+ * lands through too). Issue #241, `docs/design/bot-neighbours.md` §4.5 and
+ * §4.8; Map Room 2 by issue #361, `docs/design/defence-replays.md` §8.
  *
  * - A real defender is sent the defence notice, whoever attacked: a real
  *   player or a bot's revenge get the same words, so the notice can never
@@ -39,14 +42,23 @@ export interface YardDefence {
  *   never a revenge. `db:seed:mr2` leaves their saves on `mapversion` 1 (the
  *   column's default) though they sit on a Map Room 2 world, so they come
  *   through here.
+ * - On Map Room 2 a real defender gets the very same notice, carrying the
+ *   defence replay the landing recorded for its Watch button; nothing else
+ *   happens there: bot jobs (repair, revenge) stay Map Room 1 only.
  *
  * Nothing it learns reaches the attacker's response: it returns nothing, and a
  * failure to book bot jobs is logged, never thrown into the landing.
  */
 export const afterYardDefended = async (em: EntityManager, defence: YardDefence): Promise<void> => {
   const { yard, attacker } = defence;
-  if (yard.type !== BaseType.MAIN || yard.mapversion !== MapRoomVersion.V1) return;
+  if (yard.type !== BaseType.MAIN) return;
+  if (yard.mapversion !== MapRoomVersion.V1 && yard.mapversion !== MapRoomVersion.V2) return;
   if (!yard.saveuserid || yard.saveuserid === attacker.userid) return;
+
+  if (yard.mapversion === MapRoomVersion.V2) {
+    if (!(await isBot(yard.saveuserid, em))) await noticeYardAttack(em, defence);
+    return;
+  }
 
   if (!(await isBot(yard.saveuserid, em))) {
     await noticeYardAttack(em, defence);

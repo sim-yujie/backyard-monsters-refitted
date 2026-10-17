@@ -6,6 +6,7 @@ import {
   CreepFx,
   FLASH_COOLDOWN_TICKS,
   FLASH_TICKS,
+  JUMP_PX_PER_TICK,
   LABEL_DIGIT_SHIFT,
   LABEL_MAX,
   LABEL_PER_TARGET,
@@ -19,6 +20,7 @@ import {
   SMOKE_TICKS,
   drawsProjectile,
   flightPoint,
+  jumpTicks,
   labelPose,
   labelShift,
   lungeOffset,
@@ -155,6 +157,57 @@ describe("CreepFx", () => {
     expect(landings).toEqual([{ id: 7, amount: 45 }]);
     fx.update(10 + PROJECTILE_TICKS + 2);
     expect(landings).toHaveLength(1);
+    fx.destroy();
+  });
+
+  it("times a fireball's jump at Flash's 6 px a tick, never under 4 ticks (#352)", () => {
+    expect(JUMP_PX_PER_TICK).toBe(6);
+    expect(jumpTicks({ x: 0, y: 0 }, { x: 60, y: 0 })).toBe(10);
+    expect(jumpTicks({ x: 0, y: 0 }, { x: 60, y: 80 })).toBe(17);
+    expect(jumpTicks({ x: 0, y: 0 }, { x: 5, y: 0 })).toBe(4);
+    // A longer flight still starts and ends on its two buildings.
+    const start = flightPoint({ x: 0, y: 0 }, { x: 60, y: 0 }, 0, 10);
+    const end = flightPoint({ x: 0, y: 0 }, { x: 60, y: 0 }, 10, 10);
+    expect([start.x, start.y, end.x, end.y].map((n) => Math.round(n) + 0)).toEqual([0, 0, 60, 0]);
+    // Halfway through a 10-tick jump is halfway across, not done as a 16-tick shot would be.
+    expect(flightPoint({ x: 0, y: 0 }, { x: 60, y: 0 }, 5, 10).x).toBeCloseTo(30, 6);
+  });
+
+  it("holds a jump thrown later until its tick, then flies it for its own flight (#352)", () => {
+    const landings: Array<{ id: number; amount: number }> = [];
+    const host: CreepFxHost = {
+      ...hostOf(),
+      landed: (id, amount) => landings.push({ id, amount }),
+    };
+    const fx = new CreepFx(host);
+    // Thrown at 30, ten ticks in the air.
+    fx.projectile(30, { x: 0, y: 0 }, { x: 60, y: 0 }, 4, false, 25, 10);
+    fx.update(12);
+    expect(fx.projectileCount).toBe(1);
+    expect(landings).toEqual([]);
+    fx.update(39);
+    expect(landings).toEqual([]);
+    fx.update(40);
+    expect(landings).toEqual([{ id: 4, amount: 25 }]);
+    expect(fx.labelsFor("building:4")).toEqual([
+      { amount: -25, x: 60, y: -BUILDING_NUMBER_LIFT },
+    ]);
+    fx.update(40 + BURST_TICKS + 1);
+    expect(fx.projectileCount).toBe(0);
+    fx.destroy();
+  });
+
+  it("still lands a shot when one frame jumps past its burst", () => {
+    const landings: Array<{ id: number; amount: number }> = [];
+    const host: CreepFxHost = {
+      ...hostOf(),
+      landed: (id, amount) => landings.push({ id, amount }),
+    };
+    const fx = new CreepFx(host);
+    fx.projectile(10, { x: 0, y: 0 }, { x: 80, y: 40 }, 7, false, 45);
+    fx.update(10 + PROJECTILE_TICKS + BURST_TICKS + 50);
+    expect(landings).toEqual([{ id: 7, amount: 45 }]);
+    expect(fx.projectileCount).toBe(0);
     fx.destroy();
   });
 

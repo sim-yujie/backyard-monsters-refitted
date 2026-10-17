@@ -277,9 +277,29 @@ export function directionColumn(angleRadians: number, directions: number, offset
   return (Math.floor(degrees / (360 / directions)) % directions) + 0;
 }
 
-/** `directionColumn` with the sheet's own column count and offset. */
+/**
+ * Repainted sheets whose headings were painted mirror-image, by original file
+ * (the same key as `REPAINTED_SHEETS`). Their column `c` shows the monster
+ * heading `180° - c × width` instead of `c × width`: column 0 faces left and
+ * the middle column right, while straight down and straight up are where
+ * they belong. Read without correction, the monster walks one way facing the
+ * other. The held animated sheets were built from the same frames, so the
+ * entry stays right for them.
+ */
+export const MIRRORED_HEADINGS: ReadonlySet<string> = new Set([
+  "monsters/ichi.png", // Ichi repaint and its animated sheet
+  "monsters/fang.png", // Fang repaint and its animated sheet
+]);
+
+/**
+ * `directionColumn` with the sheet's own column count and offset, read through
+ * the mirror for a sheet in {@link MIRRORED_HEADINGS}: column `c` swaps with
+ * `directions / 2 - c`, which pairs each heading with its left-right mirror.
+ */
 export function sheetColumn(sheet: MonsterSheet, angleRadians: number): number {
-  return directionColumn(angleRadians, sheet.directions, sheet.directionOffset);
+  const column = directionColumn(angleRadians, sheet.directions, sheet.directionOffset);
+  if (!MIRRORED_HEADINGS.has(sheet.file)) return column;
+  return (sheet.directions / 2 - column + sheet.directions) % sheet.directions;
 }
 
 /** The row a cycle shows at `tick`: `first + floor(tick / ticksPerFrame) % count`. */

@@ -815,8 +815,9 @@ export type BattleVisualEvent =
   | {
       /**
        * A ranked splash went off (issue #352): a Fink's, Wormzer's or Bandito's
-       * swing, or a Project X's death blast, `moveId` the monster's id. Round
-       * the striker's yard point, `radius` screen px; `hits` is how many it reached.
+       * swing, or a Project X's death blast, `moveId` the monster's id; or an
+       * Eye-ra's blast, ranked or not. Round the striker's yard point, `radius`
+       * screen px; `hits` is how many it reached.
        */
       readonly kind: "splash";
       readonly tick: number;
@@ -923,6 +924,9 @@ export interface Battle {
 /* ── Internals ────────────────────────────────────────────────────────────── */
 
 type Behaviour = "attack" | "defend" | "bunker" | "heal" | "retreat";
+
+/** A building an Eye-ra's blast reached, and the health it took. */
+type BlastHit = readonly [EngineBuilding, number];
 
 interface Creep {
   id: number;
@@ -3055,7 +3059,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const airburst = (creep: Creep, originX: number, originY: number): void => {
     const boosted = (creep.damage * airburstPercent(creep.rank)) / 100;
     const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
-    if (aim && aim.hp > 0) damageBuilding(aim, boosted, creep);
+    const struck: BlastHit[] = [];
+    if (aim && aim.hp > 0) struck.push([aim, damageBuilding(aim, boosted, creep)]);
     const buildingRadius = airburstRadius(AIRBURST_BUILDING_RADIUS, creep.rank);
     const buildingReach = buildingRadius * buildingRadius;
     for (const building of yard.buildings) {
@@ -3065,8 +3070,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const squared = distanceSquared(originX, originY, building.cx, building.cy);
       if (squared >= buildingReach) continue;
       const share = (boosted * (buildingReach - squared)) / buildingReach;
-      damageBuilding(building, Math.trunc(share), creep);
+      struck.push([building, damageBuilding(building, Math.trunc(share), creep)]);
     }
+    noteBlast(creep, originX, originY, buildingRadius, struck);
     const creepRadius = airburstRadius(AIRBURST_CREEP_RADIUS, creep.rank);
     const creepCircle = creepRadius * creepRadius;
     const foe = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
@@ -3077,6 +3083,49 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const share = (boosted * (creepCircle - squared)) / creepCircle;
       damageCreep(other, other === foe ? boosted : Math.trunc(share), null, creep);
     }
+  };
+
+  /**
+   * What an Eye-ra's blast shows: a hit on every building it reached, for the
+   * flash and the red number, then a ring the blast's size. Drawing only. A
+   * blast with no wall in it used to leave nothing on screen but the creep's
+   * splat, so the Eye-ra seemed to vanish (fix/eyera-nowalls).
+   */
+  const noteBlast = (
+    creep: Creep,
+    originX: number,
+    originY: number,
+    radius: number,
+    struck: readonly BlastHit[],
+  ): void => {
+    for (const [building, amount] of struck) {
+      visual.push({
+        kind: "hit",
+        tick,
+        creepId: creep.id,
+        buildingId: building.id,
+        creepTargetId: -1,
+        ix: creep.ix,
+        iy: creep.iy,
+        targetIx: building.x,
+        targetIy: building.y,
+        ranged: false,
+        flying: creep.flying,
+        amount,
+      });
+    }
+    // The blast is a circle in cartesian; on screen it is twice as wide as it
+    // is tall, with a half-width of the radius times root two.
+    visual.push({
+      kind: "splash",
+      tick,
+      creepId: creep.id,
+      moveId: creep.monsterId,
+      ix: originX,
+      iy: originY,
+      radius: Math.round(radius * Math.SQRT2),
+      hits: struck.length,
+    });
   };
 
   /** Eye-ra's blast: radius 60 in cartesian, linear in the squared distance. */
@@ -3092,14 +3141,28 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       onDeath(creep);
       return;
     }
+    // The building it walked to takes the whole blast, as a ranked airburst's
+    // does. Flash's own test, below, measures to the building's anchor corner,
+    // so an Eye-ra that came at any other side blew up and hurt nothing: about
+    // two blasts in five on a yard with no walls (fix/eyera-nowalls).
+    const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
+    const struck: BlastHit[] = [];
+    if (aim && aim.hp > 0) struck.push([aim, damageBuilding(aim, creep.damage, creep)]);
     for (const building of yard.buildings) {
+      if (building === aim) continue;
       if (building.hp <= 0 || building.kind === "decoration" || building.kind === "enemy") continue;
       // `tmpPointB.add(tmpPointC)` at `CreepBase.as:797` discards its result, so
       // the `_middle` offset the client meant to apply never reaches the test.
       const squared = distanceSquared(originX, originY, building.cx, building.cy);
       if (squared >= 3600) continue;
-      damageBuilding(building, Math.round(creep.damage * ((3600 - squared) / 3600)), creep);
+      const dealt = damageBuilding(
+        building,
+        Math.round(creep.damage * ((3600 - squared) / 3600)),
+        creep,
+      );
+      struck.push([building, dealt]);
     }
+    noteBlast(creep, originX, originY, 60, struck);
     creep.hp = 0;
     creep.gone = true;
     countLost(creep);

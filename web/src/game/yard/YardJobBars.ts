@@ -196,7 +196,7 @@ export class YardJobBars {
     }
   }
 
-  /** Puts every bar back over its building: after a planner move, or once art has arrived. */
+  /** Puts every bar back over its building: after a planner move or a drawer change. */
   reposition(): void {
     for (const [id, bar] of this.bars) {
       const anchor = this.anchorOf(id);
@@ -275,7 +275,7 @@ export class YardJobBars {
       if (!state) bar.done = true;
       else paint(bar, state);
     }
-    // Art that has arrived since moves a bar up to its real top.
+    // Hides a bar whose time is up; its place is the art table's and holds still.
     this.reposition();
   }
 

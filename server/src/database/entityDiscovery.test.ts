@@ -76,6 +76,27 @@ describe("entity discovery", () => {
         read_at: { type: "timestamptz", nullable: true },
         created_at: { type: "timestamptz", nullable: false },
       });
+      // Defence replays (issue #358), against their migration.
+      expect(columns("DefenceReplay")).toEqual({
+        id: { type: "bigserial", nullable: false },
+        defender_userid: { type: "int", nullable: false },
+        baseid: { type: "varchar(255)", nullable: false },
+        map_version: { type: "smallint", nullable: false },
+        attacker_userid: { type: "int", nullable: false },
+        attacker_username: { type: "varchar(255)", nullable: false },
+        attacker_pic_square: { type: "text", nullable: true },
+        attacked_at: { type: "timestamptz", nullable: false },
+        landed_at: { type: "timestamptz", nullable: false },
+        damage_before: { type: "int", nullable: false },
+        damage_after: { type: "int", nullable: false },
+        loot: { type: "jsonb", nullable: false },
+        housed_lost: { type: "int", nullable: false },
+        attacker_left: { type: "boolean", nullable: false },
+        rules_version: { type: "varchar(32)", nullable: false },
+        replay: { type: "bytea", nullable: true },
+        replay_bytes: { type: "int", nullable: false },
+      });
+      expect(columns("Message").replayid).toEqual({ type: "bigint", nullable: true });
       expect(columns("User").last_seen_at).toEqual({ type: "timestamptz", nullable: true });
       // The attack cap's dropped neighbours (issue #247), against its migration.
       expect(columns("Maproom").dropped_neighbours).toEqual({ type: "jsonb", nullable: false });

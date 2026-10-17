@@ -4,7 +4,7 @@ import type { BaseLoadResponse, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
 import { YardStore } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
-import { openWorkersBusyBox, workersBusyModel, workersBusyText } from "./WorkersBusyBox";
+import { askForWorker, openWorkersBusyBox, workersBusyModel, workersBusyText } from "./WorkersBusyBox";
 
 const T0 = 2_000_000;
 const never = <R>() => new Promise<R>(() => undefined);
@@ -77,5 +77,73 @@ describe("openWorkersBusyBox", () => {
     expect(speedUp).toHaveBeenCalledWith(2, "SP1");
     expect(onFreed).toHaveBeenCalled();
     expect(document.body.querySelector(".workers-busy")).toBeNull();
+  });
+
+  it("names each Shiny button once, as it reads on screen", () => {
+    const popup = openWorkersBusyBox({ store: setup(5_400), scene: { selectBuilding: vi.fn() }, notices: {} as Notices });
+    const names = [...popup.body.querySelectorAll("button")].map((one) => one.getAttribute("aria-label"));
+    expect(names).toEqual(["Buy a worker, 250 Shiny", expect.stringMatching(/^Finish soonest job, \d+ Shiny$/)]);
+  });
+
+  const freeFinish = (): HTMLButtonElement =>
+    [...document.body.querySelectorAll<HTMLButtonElement>(".workers-busy button")].find(
+      (one) => one.textContent === "Finish soonest job free",
+    )!;
+  const binding = (store: YardStore) => ({ store, scene: { selectBuilding: vi.fn() }, notices: {} as Notices });
+
+  it("closed with every worker still busy: onDismissed, never onFreed", () => {
+    const onFreed = vi.fn();
+    const onDismissed = vi.fn();
+    const popup = openWorkersBusyBox(binding(setup(5_400)), onFreed, onDismissed);
+    popup.close();
+    expect(onDismissed).toHaveBeenCalledTimes(1);
+    expect(onFreed).not.toHaveBeenCalled();
+  });
+
+  it("a failed finish keeps the box up with the reason, and frees nothing", async () => {
+    const store = setup(120);
+    vi.spyOn(store, "speedUp").mockResolvedValue({ ok: false, refusal: { reason: "credits", message: "Not enough Shiny." } } as never);
+    const onFreed = vi.fn();
+    const onDismissed = vi.fn();
+    const popup = openWorkersBusyBox(binding(store), onFreed, onDismissed);
+    freeFinish().click();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(popup.body.querySelector(".workers-busy__status")?.textContent).toBe("Not enough Shiny.");
+    expect(document.body.querySelector(".workers-busy")).not.toBeNull();
+    expect(onFreed).not.toHaveBeenCalled();
+    expect(onDismissed).not.toHaveBeenCalled();
+  });
+
+  it("a job ending on its own while the box is up frees the action once", async () => {
+    const store = setup(5_400);
+    let listener: (() => void) | null = null;
+    vi.spyOn(store, "subscribe").mockImplementation((one) => {
+      listener = one as () => void;
+      return () => (listener = null);
+    });
+    const onFreed = vi.fn();
+    const onDismissed = vi.fn();
+    openWorkersBusyBox(binding(store), onFreed, onDismissed);
+    expect(listener).not.toBeNull();
+    vi.spyOn(store, "workers", "get").mockReturnValue({ total: 1, busy: 0 });
+    listener!();
+    expect(onFreed).toHaveBeenCalledTimes(1);
+    expect(onDismissed).not.toHaveBeenCalled();
+    expect(document.body.querySelector(".workers-busy")).toBeNull();
+    // Closed, so it stopped listening.
+    expect(listener).toBeNull();
+  });
+
+  it("askForWorker answers true once a worker is free, false when closed", async () => {
+    const store = setup(120);
+    vi.spyOn(store, "speedUp").mockResolvedValue({ ok: true, report: {} as never, completed: [] });
+    const freed = askForWorker(binding(store));
+    freeFinish().click();
+    await expect(freed).resolves.toBe(true);
+
+    const closed = askForWorker(binding(setup(5_400)));
+    document.body.querySelector<HTMLButtonElement>(".workers-busy [aria-label='Close']")!.click();
+    await expect(closed).resolves.toBe(false);
   });
 });

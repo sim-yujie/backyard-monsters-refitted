@@ -130,6 +130,8 @@ export interface OutpostNoticeInput {
   readonly cell: OutpostCell | null;
   readonly baseid: string;
   readonly now: number;
+  /** The defence replay a yard attack notice opens (defence replays, #359); none on any other. */
+  readonly replayid?: number | null;
 }
 
 /**
@@ -138,7 +140,7 @@ export interface OutpostNoticeInput {
  * attacker. Flushes `em`; inside a transaction it lands with it.
  */
 export const writeOutpostNotice = async (em: EntityManager, input: OutpostNoticeInput): Promise<void> => {
-  const { ownerId, byUserId, type, text, cell, baseid, now } = input;
+  const { ownerId, byUserId, type, text, cell, baseid, now, replayid } = input;
   if (!ownerId || ownerId === byUserId) return;
 
   const [last] = await em.find(Thread, {}, { orderBy: { threadid: "DESC" }, limit: 1 });
@@ -159,6 +161,7 @@ export const writeOutpostNotice = async (em: EntityManager, input: OutpostNotice
     coords: cell ? [cell.x, cell.y] : null,
     baseid,
     updatetime: now,
+    ...(replayid != null && { replayid }),
   });
   thread.lastMessage = message;
   em.persist(thread);
@@ -265,10 +268,11 @@ export const noticeOutpostAttack = async (
 };
 
 /**
- * At the end of an attack on a Map Room 1 main yard, live or finished by the
- * server: tells its owner who attacked it, the damage it was left at, what was
- * looted and the housed monsters lost (bot neighbours §4.8, #241). Sent for
- * every such defence, so no notice tells one kind of attacker from another.
+ * At the end of an attack on a Map Room 1 or 2 main yard, live or finished by
+ * the server: tells its owner who attacked it, the damage it was left at, what
+ * was looted and the housed monsters lost (bot neighbours §4.8, #241; Map Room
+ * 2 by #361). Sent for every such defence, so no notice tells one kind of
+ * attacker from another. Like Map Room 1's, a Map Room 2 notice has no cell.
  */
 export const noticeYardAttack = async (
   em: EntityManager,
@@ -279,9 +283,11 @@ export const noticeYardAttack = async (
     /** Housed monsters lost with the yard's fallen Housings (issue #160). */
     housedLost?: number;
     now: number;
+    /** The defence replay the landing recorded, for the notice's Watch button (#359). */
+    replayId?: number | null;
   },
 ): Promise<void> => {
-  const { yard, attacker, defenderDelta, housedLost, now } = input;
+  const { yard, attacker, defenderDelta, housedLost, now, replayId } = input;
   await writeOutpostNotice(em, {
     ownerId: yard.saveuserid,
     byUserId: attacker.userid,
@@ -290,6 +296,7 @@ export const noticeYardAttack = async (
     cell: null,
     baseid: yard.baseid,
     now,
+    replayid: replayId ?? null,
   });
 };
 
