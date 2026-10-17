@@ -4,6 +4,7 @@ import { Save } from "../../../database/models/save.model.js";
 import { World } from "../../../database/models/world.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { Maproom } from "../../../database/models/maproom.model.js";
+import { User } from "../../../database/models/user.model.js";
 import { MR1_TRIBES } from "../../../enums/Tribes.js";
 import { currentMR1Tribes } from "../../../services/maproom/v1/mr1TribeRules.js";
 import { generateBaseId } from "../../../utils/generateBaseId.js";
@@ -276,5 +277,34 @@ describe("playerMapVersion", () => {
 
   test("a player with no save yet is new, and on Map Room 1", () => {
     expect(playerMapVersion(null)).toBe(1);
+  });
+});
+
+describe("the attack load kept for a defence replay (issue #359)", () => {
+  const neighbour = campId(243, 207);
+  const playerYard = (extra: Row = {}): Row => ({
+    ...attackerRow(),
+    basesaveid: 700,
+    baseid: neighbour,
+    userid: 77,
+    saveuserid: 77,
+    homebase: ["243", "207"],
+    ...extra,
+  });
+
+  test("an attack on another player's Map Room 2 main yard keeps its load", async () => {
+    tables.set(Save, [attackerRow(), playerYard()]);
+    tables.set(User, [{ userid: 77, username: "neighbour" }]);
+
+    expect(await load(neighbour, 2)).toBeNull();
+
+    expect(sessionKeys).toContain("defence-replay-load:700");
+  });
+
+  test("an attack on a camp keeps none", async () => {
+    await load(campId(243, 209), 2);
+
+    expect(created).toHaveLength(1);
+    expect(sessionKeys.some((key) => key.startsWith("defence-replay-load:"))).toBe(false);
   });
 });

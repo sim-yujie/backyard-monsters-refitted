@@ -15,6 +15,7 @@ import {
   battleDefence,
   isSpurtzCannon,
   parseDefenderForces,
+  type Battle,
   type BattleVisualEvent,
   type CreepSnapshot,
 } from "@/game/combat/rules";
@@ -832,6 +833,10 @@ export class AttackBattleLayer {
     if (this.destroyed) return;
     const battle = this.session.battle();
     if (!battle) return;
+    // Skip to end (issue #362) draws nothing until the battle is over, and
+    // then only the yard as it was left: none of what happened on the way.
+    if (this.session.skipping) return;
+    if (this.session.skipped && !this.settled) this.restAfterSkip(battle);
     const tick = battle.tick;
     // The effects' clock: the battle's, and after the end the wall's.
     const shown = this.shownTick(tick);
@@ -917,6 +922,21 @@ export class AttackBattleLayer {
     this.damageDirty = true;
   }
 
+  /**
+   * The end of a playback that skipped to it (issue #362): every event on the
+   * way is taken as seen, so no bomb rains and no shot plays after the fact,
+   * and the battle is put to rest ({@link settle}), with each building at the
+   * engine's own health. Nobody walks off: the yard is shown as it was left.
+   */
+  private restAfterSkip(battle: Battle): void {
+    this.eventsSeen = this.session.flingLog().events.length;
+    this.lastEventTick = battle.tick;
+    this.heldBombHp.clear();
+    this.rains.clear();
+    this.endWalked = true;
+    this.settle();
+  }
+
   /** Whether {@link settle} has put the battle to rest. */
   get isSettled(): boolean {
     return this.settled;
@@ -927,7 +947,8 @@ export class AttackBattleLayer {
    * the end panel waits while this is true (#148).
    */
   get settling(): boolean {
-    if (this.destroyed) return false;
+    // A playback that skipped to its end has nothing left to play out (#362).
+    if (this.destroyed || this.session.skipped) return false;
     if (this.bombFx.airborne > 0) return true;
     const events = this.session.flingLog().events;
     for (let index = this.eventsSeen; index < events.length; index += 1) {
@@ -969,6 +990,10 @@ export class AttackBattleLayer {
     const battle = this.session.battle();
     if (this.destroyed || !battle) return 0;
     const state = battle.state();
+    // A skipped playback shows the engine's figure: nothing on the way was drawn.
+    if (this.session.skipping || this.session.skipped) {
+      return this.session.damageFor(state.health, state.firedTraps);
+    }
     // A bomb fired since the last frame is held back now, not a frame late:
     // the scene reads this the moment the session says the bomb went in.
     if (this.eventsSeen < this.session.flingLog().events.length) {

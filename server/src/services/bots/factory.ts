@@ -450,8 +450,8 @@ export type DeleteScope = "retired" | "all";
  * - `retired` (`delete-retired`, §10): retired bots that nothing in the mail
  *   references (no message, thread or truce), so no thread loses a name.
  * - `all` (dev only, `remove-all`): every bot, active or retired, and the
- *   mail, truces and attack logs it is part of, so a dev database is as it
- *   was before the bots.
+ *   mail, truces, attack logs and defence replays it is part of, so a dev
+ *   database is as it was before the bots.
  *
  * Neither touches a seeded Map Room 2 dev player's row (issue #233): those
  * accounts are the dev world map, not bots.
@@ -476,6 +476,9 @@ export const deleteBots = async (em: EntityManager, scope: DeleteScope): Promise
       await tx.execute(`DELETE FROM bym.truce WHERE initiator_userid IN ${doomed} OR recipient_userid IN ${doomed}`);
       await tx.execute(
         `DELETE FROM bym.attack_logs WHERE attacker_userid IN ${doomed} OR defender_userid IN ${doomed}`
+      );
+      await tx.execute(
+        `DELETE FROM bym.defence_replay WHERE attacker_userid IN ${doomed} OR defender_userid IN ${doomed}`
       );
     }
     await tx.execute(`DELETE FROM bym.bot_job WHERE bot_userid IN ${doomed}`);

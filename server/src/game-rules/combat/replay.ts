@@ -55,6 +55,16 @@ import type {
 /** How often the engine's state is folded into a digest. */
 export const CHECKPOINT_TICKS = 800;
 
+/**
+ * The defence replay format (`docs/design/defence-replays.md` §4). A stored
+ * replay carries this module's manifest `version`, a hash over every rules
+ * file, so any change here hides older replays. Bump this when playback or
+ * the conversion from a stored attack load to a battle changes OUTSIDE the
+ * rules folder: the edit changes the hash, and replays recorded before it
+ * stop being offered rather than play a different battle.
+ */
+export const REPLAY_FORMAT = 1;
+
 /** What {@link replayAttack} is handed. */
 export interface ReplayInput {
   readonly buildingdata: CombatBuildingDataMap;

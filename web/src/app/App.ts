@@ -27,6 +27,8 @@ import { WATCH_PLUGINS } from "@/game/autoAttack/watchPlugin";
 import { makeRaidDue } from "@/api/raid";
 import { RAID_PLUGINS } from "@/game/raid/raidPlugin";
 import { raidWatch } from "@/game/raid/raidWatch";
+// A type only: the dev hook's code is loaded on demand, in DEV alone.
+import type { DevDefenceOptions } from "@/game/defences/devWatchDefence";
 
 /** Loads Titan One (#223) before anything draws canvas text with it; see the
  * comment in `start()`. `document.fonts` is missing in some test environments
@@ -245,6 +247,17 @@ export class App {
       dev["__botCheck"] = { watch: botCheck, force: forceBotCheck };
       // `__raid.watch.simulate({...})` pins a raid by hand; `__raid.due()` asks a local server for one now (#226).
       dev["__raid"] = { watch: raidWatch, due: makeRaidDue };
+      // `__defenceReplay.watch()` plays the stored defence fixture on the watch scene (#362).
+      dev["__defenceReplay"] = {
+        watch: async (options?: DevDefenceOptions) => {
+          const [{ devDefenceRun }, { setWatchRun }] = await Promise.all([
+            import("@/game/defences/devWatchDefence"),
+            import("@/game/autoAttack/watchRun"),
+          ]);
+          setWatchRun(await devDefenceRun(options));
+          scenes.goTo(SceneName.WATCH);
+        },
+      };
     }
 
     // Every screen past sign-in keeps the player online (#242, `presenceScene.ts`)
@@ -303,6 +316,7 @@ export class App {
       delete dev["__yardAttack"];
       delete dev["__botCheck"];
       delete dev["__raid"];
+      delete dev["__defenceReplay"];
     }
     this.idleWarning?.hide();
     this.idleWarning = null;

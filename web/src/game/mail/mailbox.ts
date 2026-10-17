@@ -83,6 +83,8 @@ export interface MailItem {
   readonly cell: OffsetCell | null;
   /** On an invitation to move, the invitation (#205); null on anything else. */
   readonly invite: MessageInvite | null;
+  /** On an "attacked your yard" notice with a kept defence, its id (#363); null on anything else. */
+  readonly defenceId: number | null;
 }
 
 /** A past contact, for a new message's recipient list. */
@@ -157,6 +159,12 @@ export const noticeCell = (message: Pick<MailMessage, "coords">): OffsetCell | n
   return Number.isInteger(x) && Number.isInteger(y) ? { col: x as number, row: y as number } : null;
 };
 
+/** A yard notice's defence id (`replayid`), or null when it has none. */
+export const defenceIdOf = (message: Pick<MailMessage, "replayid">): number | null => {
+  const id = Number(message.replayid);
+  return message.replayid != null && Number.isInteger(id) && id > 0 ? id : null;
+};
+
 /** An open thread, oldest first, each message the player's or the other side's. */
 export const threadItems = (messages: readonly MailMessage[], myId: number): MailItem[] =>
   messages.map((message) => {
@@ -170,6 +178,7 @@ export const threadItems = (messages: readonly MailMessage[], myId: number): Mai
       time: Number(message.updatetime) || 0,
       cell: notice && message.messagetype !== YARD_ATTACKED ? noticeCell(message) : null,
       invite: message.messagetype === "migraterequest" ? inviteOf(message) : null,
+      defenceId: notice && message.messagetype === YARD_ATTACKED ? defenceIdOf(message) : null,
     };
   });
 

@@ -68,6 +68,11 @@ export interface MailMessage {
   readonly migratestate?: string | null;
   /** When that invitation lapses unanswered, unix seconds (#205). */
   readonly migrateexpire?: number | null;
+  /**
+   * On a Map Room 2 "attacked your yard" notice (#361): the defence it is
+   * about, whose replay its Watch opens (#363). Null on everything else.
+   */
+  readonly replayid?: number | null;
 }
 
 /** One name `getmessagetargets` gives, by user id. */

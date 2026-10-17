@@ -145,8 +145,13 @@ and pic cleared, as `attack_logs` does today. New Redis key added to `accountRed
 - **Result panel:** the STORED figures: "<attacker> attacked your yard and did 35% damage. 1,234
   Twigs were looted." (housed monsters lost added as the notice words them), plus "They left the
   attack" when `left`. Buttons: Watch again, Back (to the Defences screen).
-- **Drift check:** at the end, if the engine's damage differs from the stored damage, log it
-  (`defence-replay-drift`, console + client telemetry if any); the panel still shows the stored result.
+- **Drift check:** at the end, if the engine's damage or the defender's loss differs from the stored
+  one, log it (`defence-replay-drift`, console + client telemetry if any); the panel still shows the
+  stored result.
+- **Top strip:** the defender's side, not the attacker's: the damage this attack has done (the yard's
+  damage minus the stored `damage_before`) and what the defender has lost (`defenderLoss`, without the
+  attacker's low-level loot bonus). Once the battle ends it reads the stored figures, like the panel
+  [owner, fix/replay-loot].
 
 ## 8. Defences screen and the message
 
@@ -202,6 +207,11 @@ returns it, and the mailbox shows **Watch** (opens that replay, same version che
   stored damage and building health.
 - **Version guard:** a golden defence-replay fixture with its `rules_version`; a test fails if the
   fixture's outcome changes while the version did not (catches a missed `REPLAY_FORMAT` bump).
+  Built (#364): `web/test/fixtures/defence-replay-mixed-waves.json`, guarded by
+  `web/src/game/defences/defenceGolden.test.ts` (web engine) and
+  `server/src/services/defences/defenceGolden.test.ts` (server replay). Once the rules change, the
+  stamp test fails until the fixture is re-recorded on purpose:
+  `cd server && RECORD_DEFENCE_GOLDEN=1 bun test src/services/defences/defenceGolden.test.ts`.
 - **API:** list shape; other player's id 404; NULL payload 410; MR1 player gets an empty list.
 - **Client:** 4x speed only in playback; Skip to end reaches the same final state as playing through;
   Watch hidden on version mismatch; result panel shows stored figures; Defences list states.

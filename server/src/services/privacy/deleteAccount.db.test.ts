@@ -13,6 +13,7 @@ import {
   planAccountDeletion,
   type CommandRedis,
 } from "./deleteAccount.js";
+import { storeDefenceReplay } from "../defences/defenceReplayStore.js";
 
 /**
  * Deleting one player's account on request (deleteAccount.ts) against a real
@@ -94,6 +95,7 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     await sql(`DELETE FROM bym.attack_logs WHERE attacker_userid IN (${list}) OR defender_userid IN (${list})`);
     await sql(`DELETE FROM bym.chat_report WHERE reporter_id IN (${list}) OR reported_id IN (${list})`);
     await sql(`DELETE FROM bym.notification WHERE userid IN (${list})`);
+    await sql(`DELETE FROM bym.defence_replay WHERE attacker_userid IN (${list}) OR defender_userid IN (${list})`);
     await sql(`DELETE FROM bym.attack_plan WHERE userid IN (${list})`);
     await sql(`DELETE FROM bym.maproom WHERE userid IN (${list})`);
     await sql(`DELETE FROM bym.report WHERE userid IN (${list})`);
@@ -158,6 +160,23 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
       [attacker, attacker, defender, defender]
     );
 
+  /** A defence replay of `attacker`'s landed attack on `defender`'s yard. */
+  const defence = (attacker: number, defender: number) =>
+    storeDefenceReplay(orm.em, {
+      defenderUserid: defender,
+      baseid: String(defender),
+      mapVersion: 2,
+      attacker: { userid: attacker, username: `name_${attacker}`, picSquare: "pic" },
+      attackedAt: new Date(),
+      landedAt: new Date(),
+      damageBefore: 0,
+      damageAfter: 30,
+      loot: { r1: 10 },
+      housedLost: 0,
+      left: false,
+      payload: { v: 1, load: {}, seed: 1, events: [], tick: 10, levels: {}, declareWar: false },
+    });
+
   /**
    * P, the player who asked to be deleted, leads an alliance with Q, mails Q
    * (with a truce asked for in that thread), fought Q and R, has land on the
@@ -196,6 +215,9 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     await attack(p, q);
     await attack(r, p);
     await attack(q, r);
+    await defence(p, q);
+    await defence(r, p);
+    await defence(q, r);
     await sql(`UPDATE bym.save SET lastattackername = 'zz_del_p' WHERE userid = ? AND type = 'main'`, [q]);
     await sql(`UPDATE bym."user" SET blocked_users = ?::jsonb WHERE userid = ?`, [JSON.stringify([p, 5]), r]);
     await sql(
@@ -274,6 +296,8 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
       "saves (yards, outposts, inferno)": 1,
       "battle records where they attacked (name replaced)": 1,
       "battle records where they defended (name replaced)": 1,
+      "defence replays of attacks on them": 1,
+      "defence replays where they attacked (name replaced)": 1,
       "other bases last attacked by them (name replaced)": 1,
       "other players' block lists (id removed)": 1,
       [`mail threads kept for the other player (shown as "${DELETED_PLAYER_NAME}", truce cleared)`]: 1,
@@ -359,6 +383,17 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
       DELETED_PLAYER_NAME
     );
     expect((await one(`SELECT blocked_users FROM bym."user" WHERE userid = ?`, [r]))!.blocked_users).toEqual([5]);
+
+    // Defence replays of attacks on P go; the one P made on Q stays, watchable, without P's name.
+    const replays = await sql<{ attacker_username: string; attacker_pic_square: string | null; defender_userid: number; replay_bytes: number }>(
+      `SELECT attacker_username, attacker_pic_square, defender_userid, replay_bytes FROM bym.defence_replay
+        WHERE attacker_userid IN (?, ?, ?) ORDER BY id`,
+      [p, q, r]
+    );
+    expect(replays.map(({ replay_bytes, ...row }) => ({ ...row, stored: replay_bytes > 0 }))).toEqual([
+      { attacker_username: DELETED_PLAYER_NAME, attacker_pic_square: null, defender_userid: q, stored: true },
+      { attacker_username: `name_${q}`, attacker_pic_square: "pic", defender_userid: r, stored: true },
+    ]);
 
     // Chat reports are kept until the daily clean-up.
     expect(await countOf(`bym.chat_report WHERE reported_id = ?`, [p])).toBe(1);

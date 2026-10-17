@@ -28,6 +28,10 @@ export interface MailDoorOptions {
   readonly onInviteAccepted?: (coords: readonly [number, number] | null) => void;
   /** An invitation to move was sent or withdrawn (#205): the map's pending marks are out of date. */
   readonly onInviteChanged?: () => void;
+  /** An attack notice's Watch (#363): resolves to null once it plays, or the words to show instead. */
+  readonly onWatchDefence?: (id: number) => Promise<string | null>;
+  /** An attack notice's Defences (#363). */
+  readonly onOpenDefences?: () => void;
   /** The mail routes, for a test. */
   readonly api?: MailApi;
 }
@@ -98,6 +102,8 @@ export class MailDoor {
       ...(this.options.onTruceAccepted ? { onTruceAccepted: this.options.onTruceAccepted } : {}),
       ...(this.options.onInviteAccepted ? { onInviteAccepted: this.options.onInviteAccepted } : {}),
       ...(this.options.onInviteChanged ? { onInviteChanged: this.options.onInviteChanged } : {}),
+      ...(this.options.onWatchDefence ? { onWatchDefence: this.options.onWatchDefence } : {}),
+      ...(this.options.onOpenDefences ? { onOpenDefences: this.options.onOpenDefences } : {}),
       onUnreadChange: (count) => {
         this.mailboxCount = count;
         this.show();

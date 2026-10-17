@@ -96,6 +96,14 @@ export interface MailboxScreenOptions {
   readonly onInviteAccepted?: (coords: readonly [number, number] | null) => void;
   /** An invitation was sent or withdrawn here: the map's pending marks are out of date (#205). */
   readonly onInviteChanged?: () => void;
+  /**
+   * An attack notice's Watch (#363): play that defence's replay. Resolves to
+   * null once it is on its way, or the words to show instead ("Replay not
+   * available after a game update"). Absent: no Watch.
+   */
+  readonly onWatchDefence?: (id: number) => Promise<string | null>;
+  /** An attack notice's Defences: open the Defences screen (#363). Absent: no such button. */
+  readonly onOpenDefences?: () => void;
 }
 
 /** A new message's recipient when the map opened it: the player whose yard it was. */
@@ -149,6 +157,9 @@ const buttonOf = (className: string, text: string, onClick: () => void): HTMLBut
   node.addEventListener("click", onClick);
   return node;
 };
+
+/** What an attack notice's Watch says while its replay loads. */
+const WATCH_LOADING = "Loading…";
 
 export class MailboxScreen {
   readonly element: HTMLElement;
@@ -491,6 +502,10 @@ export class MailboxScreen {
         bubble.append(invite);
       }
       bubble.append(make("span", "mail-message__time", sentText(item.time, now)));
+      if (item.defenceId !== null) {
+        const defence = this.defenceButtons(item.defenceId);
+        if (defence) bubble.append(defence);
+      }
       const cell = item.cell;
       if (cell && this.options.onShowOnMap) {
         bubble.append(
@@ -602,6 +617,42 @@ export class MailboxScreen {
    * Decline and View on map for the one invited while it waits, Withdraw for
    * the one who invited.
    */
+  /**
+   * A Map Room 2 attack notice's Watch and Defences (#363): Watch plays the
+   * defence's replay, or says in its place why it cannot; Defences opens the
+   * list of them. Null when the scene offers neither.
+   */
+  private defenceButtons(id: number): HTMLElement | null {
+    const { onWatchDefence, onOpenDefences } = this.options;
+    if (!onWatchDefence && !onOpenDefences) return null;
+    const row = make("div", "mail-message__defence");
+    if (onWatchDefence) {
+      const watch = buttonOf("btn btn--primary mail-message__watch", "Watch", () => {
+        watch.disabled = true;
+        watch.textContent = WATCH_LOADING;
+        void onWatchDefence(id).then(
+          (refusal) => {
+            if (refusal === null) {
+              watch.disabled = false;
+              watch.textContent = "Watch";
+              return;
+            }
+            watch.replaceWith(make("span", "mail-message__defence-note", refusal));
+          },
+          () => {
+            watch.disabled = false;
+            watch.textContent = "Watch";
+          },
+        );
+      });
+      row.append(watch);
+    }
+    if (onOpenDefences) {
+      row.append(buttonOf("btn btn--outline mail-message__defences", "Defences", () => onOpenDefences()));
+    }
+    return row;
+  }
+
   private inviteCardFor(thread: MailThread, item: MailItem, now: number): HTMLElement | null {
     const invite = item.invite;
     const state = inviteState(invite, now);

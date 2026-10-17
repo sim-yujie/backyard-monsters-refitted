@@ -47,6 +47,7 @@ const OWNERS: [file: string, template: string][] = [
   ["services/base/attackCheckpoint.ts", "`attack-final:${basesaveid}`"],
   ["services/base/attackSession.ts", "`attack-session:${basesaveid}`"],
   ["services/maproom/v2/takeoverGrantStore.ts", "`takeover-grant:${basesaveid}`"],
+  ["services/defences/defenceReplayLoad.ts", "`defence-replay-load:${basesaveid}`"],
   ["services/maproom/v1/mr1TribeSession.ts", "`attack-session:mr1:${userid}:${baseid}`"],
   ["services/maproom/v1/mr1TribeSession.ts", "`attack-final:mr1:${userid}:${baseid}`"],
   ["controllers/attacklogs/getAttackLogs.ts", "`attackLogs:${userid}:${filter}`"],
@@ -84,7 +85,7 @@ describe("the Redis keys account deletion removes (accountRedisKeys.ts)", () => 
   });
 
   test("keys by save, the patterns with more after the id, and the shared ones", () => {
-    expect(saveKeys(7)).toEqual(["attack-checkpoint:7", "attack-final:7", "attack-session:7", "takeover-grant:7"]);
+    expect(saveKeys(7)).toEqual(["attack-checkpoint:7", "attack-final:7", "attack-session:7", "takeover-grant:7", "defence-replay-load:7"]);
     expect(playerKeyPatterns(42)).toEqual([
       "bot-check:routes:42:*",
       "attackLogs:42:*",

@@ -27,12 +27,13 @@ import {
  * player's Map Room land, mail no one else will read (the game's notices to
  * them, mail with bots or with players already deleted, and threads the other
  * player had blocked), truces, alliance chat and invites, notifications,
- * attack plans, neighbour lists, the anti-cheat report and every Redis key of
- * theirs, including login sessions, so they are logged out. Their lines are
- * taken out of world chat history and the fair-play log.
+ * the replays of attacks on them, attack plans, neighbour lists, the
+ * anti-cheat report and every Redis key of theirs, including login sessions,
+ * so they are logged out. Their lines are taken out of world chat history and
+ * the fair-play log.
  *
- * Kept, without their name: other players' battle records show
- * {@link DELETED_PLAYER_NAME} in their place, and so does a base's "last
+ * Kept, without their name: other players' battle records and defence replays
+ * show {@link DELETED_PLAYER_NAME} in their place, and so does a base's "last
  * attacked by". Other players keep their mail threads with them: a thread is
  * one shared copy, so only the deleted side goes (its truce is cleared), and
  * `getmessagetargets` names a partner with no account
@@ -183,6 +184,7 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "alliance chat messages", table: "alliance_message", where: `user_id = ?`, params: [u] },
   { label: "alliance invites", table: "alliance_invite", where: `user_id = ?`, params: [u] },
   { label: "notifications", table: "notification", where: `userid = ?`, params: [u] },
+  { label: "defence replays of attacks on them", table: "defence_replay", where: `defender_userid = ?`, params: [u] },
   { label: "attack plans", table: "attack_plan", where: `userid = ?`, params: [u] },
   { label: "Map Room 1 neighbour lists", table: "maproom", where: `userid = ?`, params: [u] },
   { label: "inferno neighbour lists", table: "maproom_inferno", where: `userid = ?`, params: [u] },
@@ -216,6 +218,14 @@ const updateSteps = (u: number, username: string): UpdateStep[] => [
     set: `defender_username = ?, defender_pic_square = NULL`,
     setParams: [DELETED_PLAYER_NAME],
     where: `defender_userid = ?`,
+    params: [u],
+  },
+  {
+    label: "defence replays where they attacked (name replaced)",
+    table: "defence_replay",
+    set: `attacker_username = ?, attacker_pic_square = NULL`,
+    setParams: [DELETED_PLAYER_NAME],
+    where: `attacker_userid = ?`,
     params: [u],
   },
   {
