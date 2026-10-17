@@ -20,7 +20,7 @@ import {
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import type { Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
-import { flyerAltitude } from "./monsterSprites";
+import { championFlightTop, flyerAltitude, spriteFor } from "./monsterSprites";
 import { ShellSprites } from "./spurtzShell";
 
 /**
@@ -269,6 +269,24 @@ const RAIL_GONE_FRAME = 15;
 const RAIL_SEGMENT = 32;
 /** World px a walking creep's body middle sits above its ground point: where shots land and leave. */
 export const BODY_HEIGHT = 10;
+
+/**
+ * How far above its ground point a shot at a creep lands: a walker's body
+ * middle, or the middle of the cell a flyer is drawn in, as `layoutCreep`
+ * places it at the bottom of its bob. Towers and ranged creeps aim alike, so
+ * a shot at any flyer meets it in the air, not the ground under it: a Vorg,
+ * whose cell hangs above its anchor, and a flying Fomor, whose cell top is
+ * fixed, as well as a Teratorn. A flyer with no sheet gets its altitude.
+ */
+export function aimLift(
+  creep: Pick<CreepSnapshot, "flying" | "monsterId" | "level" | "champion"> | null | undefined,
+): number {
+  if (!creep?.flying) return BODY_HEIGHT;
+  const sheet = spriteFor(creep.monsterId, creep.level);
+  if (!sheet) return flyerAltitude(creep.monsterId);
+  const top = creep.champion ? -championFlightTop(0) : flyerAltitude(creep.monsterId) + sheet.anchorY;
+  return top - sheet.frameHeight / 2;
+}
 
 const BOLT_COLOUR = 0x30c8fa; // `EFFECTS.Lightning` default 3197178
 const BEAM_GLOW = 0xfca133; // `LASER.Tick` 16555315
@@ -690,8 +708,7 @@ export class TowerFx {
   private aimAt(creep: CreepSnapshot | undefined, ix: number, iy: number): Point {
     const x = (creep?.ix ?? ix) - (creep?.iy ?? iy) + this.origin.x;
     const y = ((creep?.ix ?? ix) + (creep?.iy ?? iy)) / 2 + this.origin.y;
-    const lift = creep?.flying ? flyerAltitude(creep.monsterId) : BODY_HEIGHT;
-    return { x, y: y - lift };
+    return { x, y: y - aimLift(creep) };
   }
 
   private drawFlashes(tick: number): void {

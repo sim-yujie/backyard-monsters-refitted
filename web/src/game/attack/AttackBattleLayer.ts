@@ -38,7 +38,7 @@ import { FOMOR_ID } from "@/game/combat/rules/champions";
 import { BlastFx } from "./blastFx";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
-import { BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
+import { aimLift, BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
 import { TrapReveal } from "./trapReveal";
 import { WALK_OFF_PAUSE_TICKS, WALK_OFF_TICKS, planWalkOff, walkOffAt, type WalkOff } from "./walkOff";
 import {
@@ -1560,7 +1560,8 @@ export class AttackBattleLayer {
     } else if (event.creepTargetId >= 0) {
       const other = this.views.get(event.creepTargetId);
       const at = other ? { x: other.lastX, y: other.lastY } : groundWorld(event.targetIx, event.targetIy, this.origin);
-      target = { x: at.x, y: at.y - BODY_HEIGHT };
+      // A flying quarry is hit in the air, where it is drawn, as towers aim (`aimLift`).
+      target = { x: at.x, y: at.y - aimLift(other?.snapshot) };
     }
     if (!target) target = groundWorld(event.targetIx, event.targetIy, this.origin);
 
