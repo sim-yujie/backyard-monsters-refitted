@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { closeSync, existsSync, openSync, readSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { MONSTER_SPRITES, type MonsterSheet } from "./monsterSpriteData";
-import { REPAINT_LAYOUTS, REPAINTED_SHEETS } from "./monsterSprites";
+import { REPAINT_LAYOUTS, REPAINTED_SHEETS, sheetUrl } from "./monsterSprites";
 
 /**
  * The generated sprite table, checked against the PNGs on the game server's
@@ -210,6 +210,19 @@ describe("MONSTER_SPRITES", () => {
       expect(pngSize(`${ASSETS}${repaint}`), repaint).toEqual({
         width: width * scale,
         height: height * scale,
+      });
+    }
+  });
+
+  it("has a half-size copy of every sheet it serves at half size", () => {
+    for (const one of sheets) {
+      const full = sheetUrl(one, false);
+      const half = sheetUrl(one, true);
+      if (half === full) continue;
+      const size = pngSize(`${ASSETS}${full.replace("/assets/", "")}`);
+      expect(pngSize(`${ASSETS}${half.replace("/assets/", "")}`), half).toEqual({
+        width: size.width / 2,
+        height: size.height / 2,
       });
     }
   });

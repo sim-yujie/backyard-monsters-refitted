@@ -475,11 +475,47 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/dragon_1.png": "monsters/dragon_1-repaint@4x.png", // Drull level 1 repaint (all 16 headings painted, idle + walk + attack)
 };
 
+/**
+ * Half-size monster art (memory trial): every `@4x` repaint is served from its
+ * `@2x` copy, and the oversized Korath 5 and 6 sheets from a `@0.5x` copy, at
+ * a quarter of the memory each. Pixi reads the scale from the name, so the
+ * table's 1x cells still frame them. `tools/halfsize-sheets` makes the copies;
+ * the full sheets stay on disk. False goes back to the full sheets, and
+ * `?sheets=full` in the address does the same for one visit, to compare.
+ */
+export const HALF_SIZE_SHEETS = true;
+
+/** The original sheets with a half-size copy of their own (not repaints). */
+const HALF_SIZE_ORIGINALS: Readonly<Record<string, string>> = {
+  "monsters/korath_5.png": "monsters/korath_5@0.5x.png",
+  "monsters/korath_6.png": "monsters/korath_6@0.5x.png",
+};
+
+/** Whether this visit draws the half-size sheets: {@link HALF_SIZE_SHEETS}, unless `?sheets=full`. */
+export const halfSizeSheetsFor = (search: string): boolean =>
+  HALF_SIZE_SHEETS && new URLSearchParams(search).get("sheets") !== "full";
+
+const halfSizeThisVisit = halfSizeSheetsFor(
+  typeof location === "undefined" ? "" : location.search,
+);
+
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */
 export const isHighResolutionSheet = (url: string): boolean => /@\d+x\.\w+$/.test(url);
 
-/** The URL the sheet is served from: `/assets/monsters/<file>`, or its repaint. */
-export function sheetUrl(sheet: MonsterSheet | string): string {
+/** The scale a sheet URL is drawn at (`name@2x.png` is 2), 1 for a plain name. */
+export const sheetScale = (url: string): number => {
+  const scale = Number(/@([\d.]+)x\.\w+$/.exec(url)?.[1]);
+  return Number.isFinite(scale) && scale > 0 ? scale : 1;
+};
+
+/**
+ * The URL the sheet is served from: `/assets/monsters/<file>`, or its repaint,
+ * or the half-size copy of either when `halfSize` is on.
+ */
+export function sheetUrl(sheet: MonsterSheet | string, halfSize = halfSizeThisVisit): string {
   const file = typeof sheet === "string" ? sheet : sheet.file;
-  return `${ASSET_ROOT}${REPAINTED_SHEETS[file] ?? file}`;
+  const served = REPAINTED_SHEETS[file] ?? file;
+  if (!halfSize) return `${ASSET_ROOT}${served}`;
+  const half = HALF_SIZE_ORIGINALS[served] ?? served.replace(/@4x\.png$/, "@2x.png");
+  return `${ASSET_ROOT}${half}`;
 }

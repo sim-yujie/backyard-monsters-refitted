@@ -770,13 +770,14 @@ describe("AttackBattleLayer over a session", () => {
   });
 
   it("cuts an oversized sheet through a canvas rather than framing it, and says so", () => {
-    const textures = new MonsterSheetTextures(() => new Promise(() => {}), 4096);
+    // Korath 5 is 3184x4860, served as a 1592x2430 half-size copy.
+    const textures = new MonsterSheetTextures(() => new Promise(() => {}), 2048);
     const korath = MONSTER_SPRITES["G4_5"];
     const gorgo = MONSTER_SPRITES["G1_1"];
     if (!korath || !gorgo) throw new Error("champion sheets missing");
     expect(textures.oversized(korath)).toBe(true);
     expect(textures.oversized(gorgo)).toBe(false);
-    textures.setMaxTextureSize(8192);
+    textures.setMaxTextureSize(4096);
     expect(textures.oversized(korath)).toBe(false);
     textures.destroy();
   });

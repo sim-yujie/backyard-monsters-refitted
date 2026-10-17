@@ -54,6 +54,7 @@ import {
   isHighResolutionSheet,
   shadowOffset,
   sheetColumn,
+  sheetScale,
   sheetUrl,
   spriteFor,
 } from "./monsterSprites";
@@ -367,9 +368,13 @@ export class MonsterSheetTextures {
     return this.limit;
   }
 
-  /** Whether a sheet needs cutting through a canvas rather than framing. */
+  /**
+   * Whether a sheet needs cutting through a canvas rather than framing. A
+   * down-scaled copy (Korath's `@0.5x`) is measured at the size it is served.
+   */
   oversized(sheet: MonsterSheet): boolean {
-    return sheet.width > this.limit || sheet.height > this.limit;
+    const scale = Math.min(1, sheetScale(sheetUrl(sheet)));
+    return sheet.width * scale > this.limit || sheet.height * scale > this.limit;
   }
 
   /** Starts fetching a sheet, so its first cell is ready sooner. */

@@ -8,12 +8,15 @@ import {
   frameRect,
   frameRow,
   championFlightTop,
+  HALF_SIZE_SHEETS,
+  halfSizeSheetsFor,
   hoverOffset,
   isHighResolutionSheet,
   MIRRORED_HEADINGS,
   REPAINTED_SHEETS,
   shadowOffset,
   sheetColumn,
+  sheetScale,
   sheetUrl,
   spriteFor,
 } from "./monsterSprites";
@@ -247,10 +250,31 @@ describe("sheetUrl", () => {
   it("serves a repainted sheet in place of the original", () => {
     for (const one of Object.values(MONSTER_SPRITES)) {
       const repaint = REPAINTED_SHEETS[one.file];
-      expect(sheetUrl(one)).toBe(`/assets/${repaint ?? one.file}`);
+      expect(sheetUrl(one, false)).toBe(`/assets/${repaint ?? one.file}`);
     }
     expect(isHighResolutionSheet("/assets/monsters/14-repaint@4x.png")).toBe(true);
     expect(isHighResolutionSheet(sheetUrl(sheet("C1")))).toBe(true);
     expect(isHighResolutionSheet(sheetUrl(sheet("IC1")))).toBe(false);
+  });
+
+  it("serves the half-size copy of a repaint and of Korath 5 and 6 when asked", () => {
+    expect(HALF_SIZE_SHEETS).toBe(true);
+    expect(sheetUrl("monsters/ape_1.png", true)).toBe("/assets/monsters/ape_1-repaint@2x.png");
+    expect(sheetUrl("monsters/ape_1.png", false)).toBe("/assets/monsters/ape_1-repaint@4x.png");
+    expect(sheetUrl("monsters/korath_6.png", true)).toBe("/assets/monsters/korath_6@0.5x.png");
+    expect(sheetUrl("monsters/korath_4.png", true)).toBe("/assets/monsters/korath_4.png");
+    expect(sheetUrl(sheet("IC1"), true)).toBe("/assets/monsters/spurtz.png");
+    expect(sheetScale(sheetUrl("monsters/ape_1.png", true))).toBe(2);
+    expect(sheetScale("/assets/monsters/korath_6@0.5x.png")).toBe(0.5);
+    expect(sheetScale("/assets/monsters/spurtz.png")).toBe(1);
+    // Mipmaps for the 2x copies too, not for Korath's.
+    expect(isHighResolutionSheet(sheetUrl("monsters/ape_1.png", true))).toBe(true);
+    expect(isHighResolutionSheet("/assets/monsters/korath_6@0.5x.png")).toBe(false);
+  });
+
+  it("goes back to the full sheets for one visit with ?sheets=full", () => {
+    expect(halfSizeSheetsFor("")).toBe(true);
+    expect(halfSizeSheetsFor("?perf")).toBe(true);
+    expect(halfSizeSheetsFor("?sheets=full")).toBe(false);
   });
 });
