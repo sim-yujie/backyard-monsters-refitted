@@ -8,8 +8,8 @@ import type { Point } from "@/game/yard/YardGrid";
  * - `fiery`: a fireball, embers that arc and fall, dark smoke that lingers
  *   about a second, and a scorch on the ground that fades. Eye-ra's blast.
  * - `punchy`: a white-yellow flash, a fast shockwave ring and sparks, and a
- *   short shake of the yard. Kept for other monsters' big hits; nothing
- *   uses it yet.
+ *   short shake of the yard (`full`); or just the flash and the shockwave
+ *   (`light`), for a move that goes off every swing (feat/punchy-trial).
  *
  * Every particle is a pooled sprite placed from its age alone, so 1x and 2x
  * play the same path, at their own speed.
@@ -19,6 +19,11 @@ import type { Point } from "@/game/yard/YardGrid";
 export const MAX_BITS = 260;
 /** Ground marks (scorches, stains) kept at once; the oldest goes first. */
 export const MAX_MARKS = 14;
+/** The most the yard is ever shaken, screen px, however many blasts go off. */
+export const MAX_SHAKE = 8;
+
+/** A punchy blast in full (flash, shockwave, sparks, shake), or light (flash and shockwave). */
+export type PunchyStrength = "full" | "light";
 
 /** A blast's own screen size for a level-1 Eye-ra: 60 cartesian, root two wide. */
 const BASE_RADIUS = 85;
@@ -230,7 +235,8 @@ export class BlastFx {
   private readonly bits: Bit[] = [];
   private readonly pool: Sprite[] = [];
   private readonly marks: Mark[] = [];
-  private readonly shakes: Shake[] = [];
+  /** One shake at a time: blasts together never add up (feat/punchy-trial). */
+  private shake: Shake | null = null;
   private shaking = false;
   private made = 0;
 
@@ -251,6 +257,11 @@ export class BlastFx {
   /** Blasts drawn so far. */
   get blastsMade(): number {
     return this.made;
+  }
+
+  /** How hard the running shake started, screen px; 0 when none runs. */
+  get shakeAmp(): number {
+    return this.shake?.amp ?? 0;
   }
 
   /**
@@ -306,7 +317,7 @@ export class BlastFx {
     this.pool.length = 0;
     for (const mark of this.marks) mark.sprite.destroy();
     this.marks.length = 0;
-    this.shakes.length = 0;
+    this.shake = null;
     if (this.shaking) this.host.shake?.(0, 0);
     this.shaking = false;
   }
@@ -315,15 +326,18 @@ export class BlastFx {
 
   /**
    * A punchy blast at the ground point `at`, `radius` screen px wide: a flash,
-   * a shockwave, sparks and a short shake. For a big hit; nothing calls it yet.
+   * a shockwave, and in `full` the fire glow, sparks and a short shake.
    */
-  punchy(tick: number, at: Point, radius: number): void {
+  punchy(tick: number, at: Point, radius: number, strength: PunchyStrength = "full"): void {
     const { scale, many } = this.begin(radius);
     const lift = { x: at.x, y: at.y - 12 };
     this.add(tick, { look: "soft", at: lift, add: true, life: 9, size0: radius * 0.5, size1: radius * 1.5, easeOut: true, colours: [0xffffff, 0xfff3a0, 0xffc040] });
-    this.add(tick, { look: "soft", at: lift, add: true, life: 16, size0: radius * 0.6, size1: radius * 0.9, colours: [0xfff6c0, 0xffa020, 0xff6000], peak: 0.9 });
+    if (strength === "full") {
+      this.add(tick, { look: "soft", at: lift, add: true, life: 16, size0: radius * 0.6, size1: radius * 0.9, colours: [0xfff6c0, 0xffa020, 0xff6000], peak: 0.9 });
+    }
     this.add(tick, { look: "ring", at, add: true, life: 18, size0: radius * 0.2, size1: radius * 2.2, squash: 0.5, easeOut: true, hold: 0.15, colours: [0xffffff, 0xfff0a0, 0xffb040] });
     this.add(tick, { look: "ring", at, add: true, delay: 3, life: 16, size0: radius * 0.15, size1: radius * 1.6, squash: 0.5, easeOut: true, peak: 0.55, colours: [0xffffff, 0xffe080] });
+    if (strength === "light") return;
     const sparks = many(16);
     for (let index = 0; index < sparks; index += 1) {
       const angle = ((index + blastNoise(tick, index)) / sparks) * Math.PI * 2;
@@ -336,7 +350,7 @@ export class BlastFx {
         colours: [0xffffff, 0xffe070, 0xff8020],
       });
     }
-    if (!this.reducedMotion) this.shakes.push({ born: tick, life: 14, amp: 5 * Math.min(1.4, scale) });
+    if (!this.reducedMotion) this.startShake({ born: tick, life: 14, amp: Math.min(MAX_SHAKE, 5 * Math.min(1.4, scale)) });
   }
 
   /* ── Fiery ──────────────────────────────────────────────────────────── */
@@ -488,30 +502,37 @@ export class BlastFx {
     this.marks.push({ sprite, born: tick, life, peak });
   }
 
+  /** How hard `shake` still shakes at `tick`, easing off over its life; 0 outside it. */
+  private static shakeLeft(shake: Shake, tick: number): number {
+    const age = tick - shake.born;
+    if (age > shake.life || age < 0) return 0;
+    const left = 1 - age / shake.life;
+    return shake.amp * left * left;
+  }
+
+  /**
+   * Starts `shake` unless the one running still shakes harder: one shake at
+   * a time, so blasts going off together never add up.
+   */
+  private startShake(shake: Shake): void {
+    if (this.shake && BlastFx.shakeLeft(this.shake, shake.born) >= shake.amp) return;
+    this.shake = shake;
+  }
+
   private drawShake(tick: number): void {
     if (!this.host.shake) return;
-    let dx = 0;
-    let dy = 0;
-    let keep = 0;
-    for (const shake of this.shakes) {
-      const age = tick - shake.born;
-      if (age > shake.life || age < 0) continue;
-      this.shakes[keep] = shake;
-      keep += 1;
-      const left = 1 - age / shake.life;
-      const amp = shake.amp * left * left;
-      dx += Math.sin(age * 1.9 + shake.born) * amp;
-      dy += Math.cos(age * 2.7 + shake.born) * amp * 0.7;
-    }
-    this.shakes.length = keep;
-    if (keep === 0) {
+    const shake = this.shake;
+    if (!shake || tick - shake.born >= shake.life) {
+      this.shake = null;
       if (this.shaking) this.host.shake(0, 0);
       this.shaking = false;
       return;
     }
-    // Several at once shake no harder than the cap.
-    const cap = 8;
-    this.host.shake(Math.max(-cap, Math.min(cap, dx)), Math.max(-cap, Math.min(cap, dy)));
+    const age = tick - shake.born;
+    const amp = BlastFx.shakeLeft(shake, tick);
+    const dx = Math.sin(age * 1.9 + shake.born) * amp;
+    const dy = Math.cos(age * 2.7 + shake.born) * amp * 0.7;
+    this.host.shake(Math.max(-MAX_SHAKE, Math.min(MAX_SHAKE, dx)), Math.max(-MAX_SHAKE, Math.min(MAX_SHAKE, dy)));
     this.shaking = true;
   }
 }

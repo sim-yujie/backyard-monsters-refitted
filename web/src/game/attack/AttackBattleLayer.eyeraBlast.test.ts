@@ -121,7 +121,10 @@ describe("an Eye-ra's blast, drawn as a fireball (feat/eyera-explosion)", () => 
     const { session, layer } = setUp([{ id: 1, t: 14, l: 1, X: 0, Y: 0 }], { C5: 2 });
     session.appendFling({ x: -150, y: -150, monsters: { C5: 1 } });
     untilBlast(session, layer);
-    expect(layer.blasts.blastsMade).toBe(1);
+    // The fireball, and the punchy blast of the Town Hall it brings down
+    // (feat/punchy-trial) when it falls to that one blast.
+    const hallDown = (session.battle()?.state().health["1"] ?? 1) <= 0;
+    expect(layer.blasts.blastsMade).toBe(hallDown ? 2 : 1);
     expect(layer.blasts.bitCount).toBeGreaterThan(0);
     expect(layer.blasts.markCount).toBe(1);
   });
